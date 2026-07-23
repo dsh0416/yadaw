@@ -1,0 +1,52 @@
+monorepo_root = true
+
+[tools]
+"github:microsoft/apm" = "latest"
+node = "26"
+pnpm = "11.9.0"
+rust = "1.97"
+
+[settings]
+lockfile = true
+
+[tasks.install]
+description = "Install monorepo dependencies from the pnpm lockfile"
+run = "pnpm install --frozen-lockfile"
+sources = [
+  "package.json",
+  "pnpm-lock.yaml",
+  "pnpm-workspace.yaml",
+  "apps/*/package.json",
+  "packages/*/package.json",
+  "crates/*/package.json",
+]
+outputs = ["node_modules/.pnpm/lock.yaml"]
+
+[tasks.dev]
+description = "Build the native addon and start Electron with Vite watchers"
+depends = ["install"]
+run = "pnpm dev"
+
+[tasks.check]
+description = "Run Rust, napi-rs, TypeScript, and Vue checks"
+depends = ["install"]
+run = "pnpm check"
+
+[tasks.build]
+description = "Build the native addon and all Electron bundles"
+depends = ["install"]
+run = "pnpm build"
+
+[tasks.pack]
+description = "Create an unpacked Electron application"
+depends = ["install"]
+run = "pnpm --filter @yadaw/desktop pack"
+
+[tasks.format]
+description = "Format the Rust workspace"
+run = "pnpm format"
+
+[tasks."native:asio"]
+description = "Build the Windows native addon with cpal ASIO support"
+depends = ["install"]
+run = "pnpm --filter @yadaw/dsp-node build:asio"

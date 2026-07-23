@@ -1,0 +1,27 @@
+{
+  "name": "@yadaw/project-db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./schema": "./src/schema.ts",
+    "./proxy": "./src/proxy.ts",
+    "./protocol": "./src/protocol.ts",
+    "./migrations": "./src/migrations.ts",
+    "./node": "./src/node.ts"
+  },
+  "scripts": {
+    "check": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:integration": "vitest run src/__tests__/project-database.test.ts"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "0.5.4",
+    "drizzle-orm": "0.45.2"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "4.1.10"
+  }
+}

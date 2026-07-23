@@ -1,0 +1,1284 @@
+lockfile_version: '1'
+generated_at: '2026-07-22T08:33:01.557723+00:00'
+apm_version: 0.26.0
+dependencies:
+- repo_url: antfu/skills
+  name: pinia
+  host: github.com
+  resolved_commit: a74f281a27dadc02397bc1a174b0f2c97531b6ae
+  version: unknown
+  virtual_path: skills/pinia
+  is_virtual: true
+  package_type: claude_skill
+  deployed_files:
+  - .agents/skills/pinia
+  - .agents/skills/pinia/GENERATION.md
+  - .agents/skills/pinia/SKILL.md
+  - .agents/skills/pinia/references/advanced-hmr.md
+  - .agents/skills/pinia/references/advanced-nuxt.md
+  - .agents/skills/pinia/references/advanced-ssr.md
+  - .agents/skills/pinia/references/best-practices-outside-component.md
+  - .agents/skills/pinia/references/best-practices-testing.md
+  - .agents/skills/pinia/references/core-stores.md
+  - .agents/skills/pinia/references/features-composables.md
+  - .agents/skills/pinia/references/features-composing-stores.md
+  - .agents/skills/pinia/references/features-plugins.md
+  deployed_file_hashes:
+    .agents/skills/pinia/GENERATION.md: sha256:90053e5f51c2f060aeef398125da3633ec3dc9a90169379096c7ebe3c514225d
+    .agents/skills/pinia/SKILL.md: sha256:fba52570068a715fef7d306e582a5993bf08a838b55465d3c3c7bff8ba70f731
+    .agents/skills/pinia/references/advanced-hmr.md: sha256:661ff58636eaca335805df317c93848aba710e5957aab5f921eba9b57b69192d
+    .agents/skills/pinia/references/advanced-nuxt.md: sha256:e12dd48df259c97c38722e87b368808188fcbc28208398505624007529b0e3a2
+    .agents/skills/pinia/references/advanced-ssr.md: sha256:9fbc7b11da5cb7b1d4ef8b320935712ba3d356f7847344c56b01e80a3e1e3132
+    .agents/skills/pinia/references/best-practices-outside-component.md: sha256:1354224a5a9e41b2b7dea712b79ec948690a0d65e90dde905298e8b17e7ed49e
+    .agents/skills/pinia/references/best-practices-testing.md: sha256:634ccd1d076c509af0fa9bae4ac428a536c2ba42a2ef11eda7fe7af683fa5252
+    .agents/skills/pinia/references/core-stores.md: sha256:41627453eb019d1755dac787924bde52be162a3bdfc555119f88a8e59dda8f21
+    .agents/skills/pinia/references/features-composables.md: sha256:e218809b50506ca8177eee9e3926a8e3601f636ea13b661c9a432b3af2251653
+    .agents/skills/pinia/references/features-composing-stores.md: sha256:2c4245338e3e3f368c6665775909eef5e062645e0252a6f760817a73f677df7e
+    .agents/skills/pinia/references/features-plugins.md: sha256:f5cc105231d80f1fdf5e54369f283fda3acbad7da27f3a0b61c9b0c62fd6c3d7
+  content_hash: sha256:b2fe5e5a8bfce301114a1e0bd40244cda310572a1804cf49e3fd64e4e5852e0a
+- repo_url: antfu/skills
+  name: pnpm
+  host: github.com
+  resolved_commit: a74f281a27dadc02397bc1a174b0f2c97531b6ae
+  version: unknown
+  virtual_path: skills/pnpm
+  is_virtual: true
+  package_type: claude_skill
+  deployed_files:
+  - .agents/skills/pnpm
+  - .agents/skills/pnpm/GENERATION.md
+  - .agents/skills/pnpm/SKILL.md
+  - .agents/skills/pnpm/references/best-practices-ci.md
+  - .agents/skills/pnpm/references/best-practices-migration.md
+  - .agents/skills/pnpm/references/best-practices-performance.md
+  - .agents/skills/pnpm/references/core-cli.md
+  - .agents/skills/pnpm/references/core-config.md
+  - .agents/skills/pnpm/references/core-store.md
+  - .agents/skills/pnpm/references/core-workspaces.md
+  - .agents/skills/pnpm/references/features-aliases.md
+  - .agents/skills/pnpm/references/features-catalogs.md
+  - .agents/skills/pnpm/references/features-config-dependencies.md
+  - .agents/skills/pnpm/references/features-global-virtual-store.md
+  - .agents/skills/pnpm/references/features-hooks.md
+  - .agents/skills/pnpm/references/features-overrides.md
+  - .agents/skills/pnpm/references/features-patches.md
+  - .agents/skills/pnpm/references/features-peer-deps.md
+  - .agents/skills/pnpm/references/features-supply-chain-security.md
+  deployed_file_hashes:
+    .agents/skills/pnpm/GENERATION.md: sha256:ea0b4108d31f967be39e42282d9cd97d55f3a3e4900bd0be5834f90ef6005266
+    .agents/skills/pnpm/SKILL.md: sha256:e7f6c224184cb125e7dce8f1562c3c76a4cd6afd6326958ea1c75f92eca413dc
+    .agents/skills/pnpm/references/best-practices-ci.md: sha256:51105aafda72159c7130bb3af1cc5cd8f79b95ba6b8c2b653550348f2424fdca
+    .agents/skills/pnpm/references/best-practices-migration.md: sha256:d4fdee694fd80c2db2a53a08fbbab2c4d556b30db6e67369fa397e1073f12668
+    .agents/skills/pnpm/references/best-practices-performance.md: sha256:25ef647e5cc8df5432a86f69502a3a4101b022208ea5392a6d25475ecc60ff69
+    .agents/skills/pnpm/references/core-cli.md: sha256:b315a23c83606baf70814f7fb021a7cbc000a5f2106833ae7899d40277d83a73
+    .agents/skills/pnpm/references/core-config.md: sha256:fde08642de233986b5700fae436ba4d9a12d80daa488da0c3b193d8719f9baba
+    .agents/skills/pnpm/references/core-store.md: sha256:9348b4c72945a1f97b2b49e0017336bc8497b2e2f2092d9d53c6f842a9ac5225
+    .agents/skills/pnpm/references/core-workspaces.md: sha256:42d28109235b03bfc9a5c74e89ab83779086b3d19c1e8c78af58c37a4e15357a
+    .agents/skills/pnpm/references/features-aliases.md: sha256:39a967a7c65f2287f5aea1166f900a000fd31431ff799f23c86553b062c79058
+    .agents/skills/pnpm/references/features-catalogs.md: sha256:45496d9e236a0cb59f97be228378353f92369ae574c756ba9f27dc9b88ac9d0a
+    .agents/skills/pnpm/references/features-config-dependencies.md: sha256:52baeb9628523a9acda1a93c8adfbbdfa1e9bf900011ed07d3640826c3e7d813
+    .agents/skills/pnpm/references/features-global-virtual-store.md: sha256:697bb5bde881252d5f3d252e02e25799cbb985da70435564349bea52c61fb662
+    .agents/skills/pnpm/references/features-hooks.md: sha256:3d6e2e3410aecd16bbe01be8bbbdbd84b700aa74094b402bbcb1ebb984318a6f
+    .agents/skills/pnpm/references/features-overrides.md: sha256:a375afb519c967fbb83be1d85091048e7c5b3d0ed6bb4da0d726b582276cd5df
+    .agents/skills/pnpm/references/features-patches.md: sha256:2b1146c3f1e33abb7e18bdaa413753719e96dd47a564f4a922468a0f85e98cca
+    .agents/skills/pnpm/references/features-peer-deps.md: sha256:8ad2c691f1e577ed0e4874786e2f64410c976a1a2f76759e5f4f80d97fae83cb
+    .agents/skills/pnpm/references/features-supply-chain-security.md: sha256:d4150af2f526319349a7d18ccdd4fcb712e5ef30b7e98e6f8ff0a3e33819bf54
+  content_hash: sha256:958942320cc486c87f355f21f799bf21177ecda58ef37f069b99cf064166f57d
+- repo_url: antfu/skills
+  name: vite
+  host: github.com
+  resolved_commit: a74f281a27dadc02397bc1a174b0f2c97531b6ae
+  version: unknown
+  virtual_path: skills/vite
+  is_virtual: true
+  package_type: claude_skill
+  deployed_files:
+  - .agents/skills/vite
+  - .agents/skills/vite/GENERATION.md
+  - .agents/skills/vite/SKILL.md
+  - .agents/skills/vite/references/build-and-ssr.md
+  - .agents/skills/vite/references/core-config.md
+  - .agents/skills/vite/references/core-features.md
+  - .agents/skills/vite/references/core-plugin-api.md
+  - .agents/skills/vite/references/environment-api.md
+  - .agents/skills/vite/references/rolldown-migration.md
+  deployed_file_hashes:
+    .agents/skills/vite/GENERATION.md: sha256:69dfd9d99eafc33f4580b902ad794166f4adcc76f80917f129613d6bbb60b93e
+    .agents/skills/vite/SKILL.md: sha256:3cb7a75336e338faa9be15dd8b97479721ac8ceac6f1ff4061c9b9eefccd9983
+    .agents/skills/vite/references/build-and-ssr.md: sha256:69c262c9bbc78676c66018f33b82d66c85d94bbf5178b2d6968494aa7bed8fe2
+    .agents/skills/vite/references/core-config.md: sha256:d207a85730c32eff47e343ea69644a6c7898af251098a60255efe8f1c922fb4b
+    .agents/skills/vite/references/core-features.md: sha256:5e784faa5314592bdbc9e918813d76dec94391a777fe2f32cfa048d5c0fa70f4
+    .agents/skills/vite/references/core-plugin-api.md: sha256:594520b9adcf610b4f3378d3ef6c68c10327c93c33a7b73b3103a5fcd58e8611
+    .agents/skills/vite/references/environment-api.md: sha256:658e4597b9cfe21b22c1677025a7a30866933f586d86c434ec139cd5149afaa2
+    .agents/skills/vite/references/rolldown-migration.md: sha256:ba9860f8960e9794c880454b238a3a3c1962c80f9b3860399938618730bf7f72
+  content_hash: sha256:7a96b654c210b97a50498495ebbb69f6f3c4a7dc9e403ad8e89efa17c25e8825
+- repo_url: antfu/skills
+  name: vue
+  host: github.com
+  resolved_commit: a74f281a27dadc02397bc1a174b0f2c97531b6ae
+  version: unknown
+  virtual_path: skills/vue
+  is_virtual: true
+  package_type: claude_skill
+  deployed_files:
+  - .agents/skills/vue
+  - .agents/skills/vue/GENERATION.md
+  - .agents/skills/vue/SKILL.md
+  - .agents/skills/vue/references/advanced-patterns.md
+  - .agents/skills/vue/references/core-new-apis.md
+  - .agents/skills/vue/references/script-setup-macros.md
+  deployed_file_hashes:
+    .agents/skills/vue/GENERATION.md: sha256:e600ea01783f3066f990707ff96a88aaa53327902bfff3f876cfcda800f8bb7d
+    .agents/skills/vue/SKILL.md: sha256:eba0d129cc4c2cf9c08116d4b136cc6800322985e831a9e04da4e97f3dca137a
+    .agents/skills/vue/references/advanced-patterns.md: sha256:f6b9e26e3ae582dca1dfe01261c9800cd8f8dec511384d6bc816848209d2bc51
+    .agents/skills/vue/references/core-new-apis.md: sha256:4afa9fdcdf62d2300d86686f890e4a52cbbed48e4c13a3e15f3e4572185c90ed
+    .agents/skills/vue/references/script-setup-macros.md: sha256:ad47db85f8fbda6c055cedcc1d4175cd79d414e9be3ebf1e631d0e493eb4480a
+  content_hash: sha256:64c5282303420a497eab1347e97845ec772ccdcac56104cbe1e0d35a1db6ce79
+- repo_url: antfu/skills
+  name: vue-best-practices
+  host: github.com
+  resolved_commit: a74f281a27dadc02397bc1a174b0f2c97531b6ae
+  version: unknown
+  virtual_path: skills/vue-best-practices
+  is_virtual: true
+  package_type: claude_skill
+  deployed_files:
+  - .agents/skills/vue-best-practices
+  - .agents/skills/vue-best-practices/LICENSE.md
+  - .agents/skills/vue-best-practices/SKILL.md
+  - .agents/skills/vue-best-practices/SYNC.md
+  - .agents/skills/vue-best-practices/references/animation-class-based-technique.md
+  - .agents/skills/vue-best-practices/references/animation-state-driven-technique.md
+  - .agents/skills/vue-best-practices/references/component-async.md
+  - .agents/skills/vue-best-practices/references/component-data-flow.md
+  - .agents/skills/vue-best-practices/references/component-fallthrough-attrs.md
+  - .agents/skills/vue-best-practices/references/component-keep-alive.md
+  - .agents/skills/vue-best-practices/references/component-slots.md
+  - .agents/skills/vue-best-practices/references/component-suspense.md
+  - .agents/skills/vue-best-practices/references/component-teleport.md
+  - .agents/skills/vue-best-practices/references/component-transition-group.md
+  - .agents/skills/vue-best-practices/references/component-transition.md
+  - .agents/skills/vue-best-practices/references/composables.md
+  - .agents/skills/vue-best-practices/references/directives.md
+  - .agents/skills/vue-best-practices/references/perf-avoid-component-abstraction-in-lists.md
+  - .agents/skills/vue-best-practices/references/perf-v-once-v-memo-directives.md
+  - .agents/skills/vue-best-practices/references/perf-virtualize-large-lists.md
+  - .agents/skills/vue-best-practices/references/plugins.md
+  - .agents/skills/vue-best-practices/references/reactivity.md
+  - .agents/skills/vue-best-practices/references/render-functions.md
+  - .agents/skills/vue-best-practices/references/sfc.md
+  - .agents/skills/vue-best-practices/references/state-management.md
+  - .agents/skills/vue-best-practices/references/updated-hook-performance.md
+  deployed_file_hashes:
+    .agents/skills/vue-best-practices/LICENSE.md: sha256:2ea4e714425cf682879c4dea3d0d0a1a379a1418f463063f9eea1aa709ad946d
+    .agents/skills/vue-best-practices/SKILL.md: sha256:05b373713e6bbd216fb3ee9709289b68bcdeb9eac8ffea477e35bdbd8e0f9acd
+    .agents/skills/vue-best-practices/SYNC.md: sha256:58921f403470acbb47a8145e8e8f06844f888a213edc0d117ec01f0e89c80285
+    .agents/skills/vue-best-practices/references/animation-class-based-technique.md: sha256:d37e4ae4f124454fc5dfa54d23816edb16d337228641a77ec04c8ee9fe5a32fe
+    .agents/skills/vue-best-practices/references/animation-state-driven-technique.md: sha256:9a17a15356b32c8cd8669c3ede28dd890e9a48c03101047738a5c6dec7c716d6
+    .agents/skills/vue-best-practices/references/component-async.md: sha256:e20036c6622a1647d9e1c23f1fe871b2465cf4bab434422e17eb05710c8878f3
+    .agents/skills/vue-best-practices/references/component-data-flow.md: sha256:81277341d7dfe240721c2324548b9d404354d3ce270515acb130e8ac0c7396aa
+    .agents/skills/vue-best-practices/references/component-fallthrough-attrs.md: sha256:62d291508df9997d3b6c5adfde251d6c722926ecf5f7168dea0272564f119919
+    .agents/skills/vue-best-practices/references/component-keep-alive.md: sha256:8738608665ad42baa6d2d7548d46b3ecd318a85f4ec3a0afac5f728948ade3ca
+    .agents/skills/vue-best-practices/references/component-slots.md: sha256:726fdac036fcdb6071e669f1ed90af5b3bdc5fc150ad82ff41afa0af5e39f481
+    .agents/skills/vue-best-practices/references/component-suspense.md: sha256:6a5a98dcc6a2093f038f877eb6fefeedb199aba058a5dea71b139017c557bdd1
+    .agents/skills/vue-best-practices/references/component-teleport.md: sha256:4e48748842262df50c293ab23857c22c107e3e8360c87da482d23f0eb88b2c3f
+    .agents/skills/vue-best-practices/references/component-transition-group.md: sha256:cfdd76e2466a8c0ef8a965674a74924e5cf25e538e75ce97d02213472442ccb2
+    .agents/skills/vue-best-practices/references/component-transition.md: sha256:bc59a19f2e8eed7a228bdb6383d423a57c6dd75704ae11c9596018c9fb1cac42
+    .agents/skills/vue-best-practices/references/composables.md: sha256:8fcb3ede4ecb13f8dc7e4c7db07561652f6d306c85a91bc6736fda4fae2b624d
+    .agents/skills/vue-best-practices/references/directives.md: sha256:70d4c68ea15a961eec6471c42b4c44d37adfeb094f694b6811fb718eab7b2cf7
+    .agents/skills/vue-best-practices/references/perf-avoid-component-abstraction-in-lists.md: sha256:a5fb787065cbaa4731a12d3ab2f40284d058a4d6a45972b48b3052931e4f80da
+    .agents/skills/vue-best-practices/references/perf-v-once-v-memo-directives.md: sha256:066a45e60f6faa702cb75b76724c391d7e560aa6805c9bc379c06f2c64d97677
+    .agents/skills/vue-best-practices/references/perf-virtualize-large-lists.md: sha256:69712f1f296cf03401c47f936e1a9c32481bfd82623f536b1fe08d05c846bada
+    .agents/skills/vue-best-practices/references/plugins.md: sha256:b1583522aca059c4295708517ba987530dd6a13134f6046aed9fd7327fb9c936
+    .agents/skills/vue-best-practices/references/reactivity.md: sha256:48c97831e72f0b82bfae0344cf02a181c7723e1ee4a29a58a85009aab7d60a4b
+    .agents/skills/vue-best-practices/references/render-functions.md: sha256:01b35e671f7890939fa5acda52c5cf0a50b398e153d80cc9fc9f74c19e460357
+    .agents/skills/vue-best-practices/references/sfc.md: sha256:dfe09f28869a2bc44e618068c3b6269f55d925d096714df25e253d2bbb58c28f
+    .agents/skills/vue-best-practices/references/state-management.md: sha256:9e98a1c6d9009c0c8ef7228b6b3bcf10d30be6b713ffcef448ab7db3b419a851
+    .agents/skills/vue-best-practices/references/updated-hook-performance.md: sha256:ded08ce93f9b23082538846f84e8d159d84af757c27b2c6b43a9283df803a32b
+  content_hash: sha256:66bf09d99563e5ae1c695c8b0fb48ad9a9c061a25439803e1a326ad04bed2251
+- repo_url: antfu/skills
+  name: vue-testing-best-practices
+  host: github.com
+  resolved_commit: a74f281a27dadc02397bc1a174b0f2c97531b6ae
+  version: unknown
+  virtual_path: skills/vue-testing-best-practices
+  is_virtual: true
+  package_type: claude_skill
+  deployed_files:
+  - .agents/skills/vue-testing-best-practices
+  - .agents/skills/vue-testing-best-practices/LICENSE.md
+  - .agents/skills/vue-testing-best-practices/SKILL.md
+  - .agents/skills/vue-testing-best-practices/SYNC.md
+  - .agents/skills/vue-testing-best-practices/reference/async-component-testing.md
+  - .agents/skills/vue-testing-best-practices/reference/teleport-testing-complexity.md
+  - .agents/skills/vue-testing-best-practices/reference/testing-async-await-flushpromises.md
+  - .agents/skills/vue-testing-best-practices/reference/testing-browser-vs-node-runners.md
+  - .agents/skills/vue-testing-best-practices/reference/testing-component-blackbox-approach.md
+  - .agents/skills/vue-testing-best-practices/reference/testing-composables-helper-wrapper.md
+  - .agents/skills/vue-testing-best-practices/reference/testing-e2e-playwright-recommended.md
+  - .agents/skills/vue-testing-best-practices/reference/testing-no-snapshot-only.md
+  - .agents/skills/vue-testing-best-practices/reference/testing-pinia-store-setup.md
+  - .agents/skills/vue-testing-best-practices/reference/testing-suspense-async-components.md
+  - .agents/skills/vue-testing-best-practices/reference/testing-vitest-recommended-for-vue.md
+  deployed_file_hashes:
+    .agents/skills/vue-testing-best-practices/LICENSE.md: sha256:2ea4e714425cf682879c4dea3d0d0a1a379a1418f463063f9eea1aa709ad946d
+    .agents/skills/vue-testing-best-practices/SKILL.md: sha256:376fd21d6adfd37f7d102fa17ca099abddef16943389f37588405b013cef23b8
+    .agents/skills/vue-testing-best-practices/SYNC.md: sha256:05b20c8f6cc487107ee7693e21f2747def24974fbd96de0e771385e46d193e20
+    .agents/skills/vue-testing-best-practices/reference/async-component-testing.md: sha256:75b1c7b3949a5f0211824c525fd7b3f8a6b2cdd4933592ada65f37ecaa4146d3
+    .agents/skills/vue-testing-best-practices/reference/teleport-testing-complexity.md: sha256:5a42ce8eb5497b5165b09cd758b647ddf4bb537be9cf808a84bee7ae8c3aca39
+    .agents/skills/vue-testing-best-practices/reference/testing-async-await-flushpromises.md: sha256:2dd5099b32cf2626d19aab2ef4b365cc26102cfb5a0aedc5667efc06d2070cab
+    .agents/skills/vue-testing-best-practices/reference/testing-browser-vs-node-runners.md: sha256:ffc13da105aadfca0bded6d955f79f9c02c5548ee699f274ff5976cb7484ac98
+    .agents/skills/vue-testing-best-practices/reference/testing-component-blackbox-approach.md: sha256:16ac94d67addf1cb60177a81a5c5c01318daa310216261ffb2d60b396112f86d
+    .agents/skills/vue-testing-best-practices/reference/testing-composables-helper-wrapper.md: sha256:57af3ae779cf0770ed53034575d783463d2b9e790c29fbc9bb80f166be3255bd
+    .agents/skills/vue-testing-best-practices/reference/testing-e2e-playwright-recommended.md: sha256:d415a403c6851cb57666b9143cb3acec6eba53af269cf765918c108dd0c96355
+    .agents/skills/vue-testing-best-practices/reference/testing-no-snapshot-only.md: sha256:d541b490b8c9c0f822a2ca0d8184d7325b07918e76124d717fb480bc7a488995
+    .agents/skills/vue-testing-best-practices/reference/testing-pinia-store-setup.md: sha256:005a375c587bd33d1eb3a1b7fe1c89e42daf4c115014e49cf327ab5af5d0ed4e
+    .agents/skills/vue-testing-best-practices/reference/testing-suspense-async-components.md: sha256:12307929380fcf0e8bcbd6be23a6bc1710904c9462cec945f80ce4b5aa0b7f12
+    .agents/skills/vue-testing-best-practices/reference/testing-vitest-recommended-for-vue.md: sha256:acfa0b3986e092f43d4cd8090864860cff07ffa3aaa62a10c5a622770ccaeb6b
+  content_hash: sha256:c847c2529ce512210ce2b5541b1d4e1cc06f7f38b605e1646564f964fd0abbe2
+- repo_url: anthropics/skills
+  name: frontend-design
+  host: github.com
+  resolved_commit: fa0fa64bdc967915dc8399e803be67759e1e62b8
+  version: unknown
+  virtual_path: skills/frontend-design
+  is_virtual: true
+  package_type: claude_skill
+  deployed_files:
+  - .agents/skills/frontend-design
+  - .agents/skills/frontend-design/LICENSE.txt
+  - .agents/skills/frontend-design/SKILL.md
+  deployed_file_hashes:
+    .agents/skills/frontend-design/LICENSE.txt: sha256:0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594
+    .agents/skills/frontend-design/SKILL.md: sha256:1608ea77fbb6fc30d13a97d12cfa8ebf31358d40f0dd97beed24829d6b3f45dd
+  content_hash: sha256:4eabc66183767153e404b39d1b839b1c37f2d82d86f0a0d7e880a579d8d62336
+- repo_url: anthropics/skills
+  name: skill-creator
+  host: github.com
+  resolved_commit: fa0fa64bdc967915dc8399e803be67759e1e62b8
+  version: unknown
+  virtual_path: skills/skill-creator
+  is_virtual: true
+  package_type: claude_skill
+  deployed_files:
+  - .agents/skills/skill-creator
+  - .agents/skills/skill-creator/LICENSE.txt
+  - .agents/skills/skill-creator/SKILL.md
+  - .agents/skills/skill-creator/agents/analyzer.md
+  - .agents/skills/skill-creator/agents/comparator.md
+  - .agents/skills/skill-creator/agents/grader.md
+  - .agents/skills/skill-creator/assets/eval_review.html
+  - .agents/skills/skill-creator/eval-viewer/generate_review.py
+  - .agents/skills/skill-creator/eval-viewer/viewer.html
+  - .agents/skills/skill-creator/references/schemas.md
+  - .agents/skills/skill-creator/scripts/__init__.py
+  - .agents/skills/skill-creator/scripts/aggregate_benchmark.py
+  - .agents/skills/skill-creator/scripts/generate_report.py
+  - .agents/skills/skill-creator/scripts/improve_description.py
+  - .agents/skills/skill-creator/scripts/package_skill.py
+  - .agents/skills/skill-creator/scripts/quick_validate.py
+  - .agents/skills/skill-creator/scripts/run_eval.py
+  - .agents/skills/skill-creator/scripts/run_loop.py
+  - .agents/skills/skill-creator/scripts/utils.py
+  deployed_file_hashes:
+    .agents/skills/skill-creator/LICENSE.txt: sha256:bc6b3af2f331cbc7fb0da1344efb2cbe5877a31498b4d70dbc7000f3405a1362
+    .agents/skills/skill-creator/SKILL.md: sha256:dcd4803e61e913e6fc27294184cd3a71f09f5e924ff20c8a9a20173e7b3c2bcf
+    .agents/skills/skill-creator/agents/analyzer.md: sha256:bf68f4cac5a56c673a928c2e6d619586c5b93ea364026ab37547772cb45a663a
+    .agents/skills/skill-creator/agents/comparator.md: sha256:fe1fc9787c495d864c5d6eada47396478572325fde1b33a96d78bf4b849b7a3e
+    .agents/skills/skill-creator/agents/grader.md: sha256:57134da0c1a4eea33fbd74a1c9c44aa814f07d6bc64de303edb586f941e5d21a
+    .agents/skills/skill-creator/assets/eval_review.html: sha256:ce477dcc74dc1c0d1d3352646a79167b5a63634e936b1019160025065974e452
+    .agents/skills/skill-creator/eval-viewer/generate_review.py: sha256:fc9d1b9243fe5ab6012ebd579bd76d0035de1b79fd3b969de114defab26478fb
+    .agents/skills/skill-creator/eval-viewer/viewer.html: sha256:a53213426ee1100441d701a3a0d49cda7a842f992d2c36463f4d3cc0258575fa
+    .agents/skills/skill-creator/references/schemas.md: sha256:8e8876180a8989b406a4d3edddf875b04cdfd5805cc8616686d552b11ce4455f
+    .agents/skills/skill-creator/scripts/__init__.py: sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+    .agents/skills/skill-creator/scripts/aggregate_benchmark.py: sha256:123ef128ea5ccc01a4b1ac212ef5567f21e9c13d3d240609780beeb3200c49aa
+    .agents/skills/skill-creator/scripts/generate_report.py: sha256:13df7118a3c50c83c4c3250a606d5f2b20b25a3d44cbc392b3d669ec75281453
+    .agents/skills/skill-creator/scripts/improve_description.py: sha256:87d864570220b699fac52da309d2d6efdb060647bfebc74f768128e646accf80
+    .agents/skills/skill-creator/scripts/package_skill.py: sha256:1a33059b0db1ef73375d46d513e5ea81369d2e8838c970597b0d52ddef8d1c0f
+    .agents/skills/skill-creator/scripts/quick_validate.py: sha256:67cf5703402013936c8fb75ad6a1afecd8841d45cc5e606b634eb05825fde365
+    .agents/skills/skill-creator/scripts/run_eval.py: sha256:43e3b8f80dbf69c343967ba77e268fae991d9fa3ed68b32a0ff02532cd48657f
+    .agents/skills/skill-creator/scripts/run_loop.py: sha256:7bd6f674203168520517eec94c55f493c0d154339b061b4d7c0f0dad187d0f21
+    .agents/skills/skill-creator/scripts/utils.py: sha256:3af8ae62c40c73ab712207436a0d9a981e845f25c5a7040229eb189cc8e45bb1
+  content_hash: sha256:b2bfe91d69ca99994c0566baede889e7d2b9bb8791c6b6106c5d387392f717f6
+deployments:
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/frontend-design
+  runtime: null
+  scope: project
+  owners:
+  - anthropics/skills/skills/frontend-design
+  active_owner: anthropics/skills/skills/frontend-design
+  content_hash: null
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/frontend-design/LICENSE.txt
+  runtime: null
+  scope: project
+  owners:
+  - anthropics/skills/skills/frontend-design
+  active_owner: anthropics/skills/skills/frontend-design
+  content_hash: sha256:0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/frontend-design/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - anthropics/skills/skills/frontend-design
+  active_owner: anthropics/skills/skills/frontend-design
+  content_hash: sha256:1608ea77fbb6fc30d13a97d12cfa8ebf31358d40f0dd97beed24829d6b3f45dd
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/pinia
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/pinia
+  active_owner: antfu/skills/skills/pinia
+  content_hash: null
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/pinia/GENERATION.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/pinia
+  active_owner: antfu/skills/skills/pinia
+  content_hash: sha256:90053e5f51c2f060aeef398125da3633ec3dc9a90169379096c7ebe3c514225d
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/pinia/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/pinia
+  active_owner: antfu/skills/skills/pinia
+  content_hash: sha256:fba52570068a715fef7d306e582a5993bf08a838b55465d3c3c7bff8ba70f731
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/pinia/references/advanced-hmr.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/pinia
+  active_owner: antfu/skills/skills/pinia
+  content_hash: sha256:661ff58636eaca335805df317c93848aba710e5957aab5f921eba9b57b69192d
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/pinia/references/advanced-nuxt.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/pinia
+  active_owner: antfu/skills/skills/pinia
+  content_hash: sha256:e12dd48df259c97c38722e87b368808188fcbc28208398505624007529b0e3a2
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/pinia/references/advanced-ssr.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/pinia
+  active_owner: antfu/skills/skills/pinia
+  content_hash: sha256:9fbc7b11da5cb7b1d4ef8b320935712ba3d356f7847344c56b01e80a3e1e3132
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/pinia/references/best-practices-outside-component.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/pinia
+  active_owner: antfu/skills/skills/pinia
+  content_hash: sha256:1354224a5a9e41b2b7dea712b79ec948690a0d65e90dde905298e8b17e7ed49e
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/pinia/references/best-practices-testing.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/pinia
+  active_owner: antfu/skills/skills/pinia
+  content_hash: sha256:634ccd1d076c509af0fa9bae4ac428a536c2ba42a2ef11eda7fe7af683fa5252
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/pinia/references/core-stores.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/pinia
+  active_owner: antfu/skills/skills/pinia
+  content_hash: sha256:41627453eb019d1755dac787924bde52be162a3bdfc555119f88a8e59dda8f21
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/pinia/references/features-composables.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/pinia
+  active_owner: antfu/skills/skills/pinia
+  content_hash: sha256:e218809b50506ca8177eee9e3926a8e3601f636ea13b661c9a432b3af2251653
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/pinia/references/features-composing-stores.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/pinia
+  active_owner: antfu/skills/skills/pinia
+  content_hash: sha256:2c4245338e3e3f368c6665775909eef5e062645e0252a6f760817a73f677df7e
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/pinia/references/features-plugins.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/pinia
+  active_owner: antfu/skills/skills/pinia
+  content_hash: sha256:f5cc105231d80f1fdf5e54369f283fda3acbad7da27f3a0b61c9b0c62fd6c3d7
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/pnpm
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/pnpm
+  active_owner: antfu/skills/skills/pnpm
+  content_hash: null
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/pnpm/GENERATION.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/pnpm
+  active_owner: antfu/skills/skills/pnpm
+  content_hash: sha256:ea0b4108d31f967be39e42282d9cd97d55f3a3e4900bd0be5834f90ef6005266
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/pnpm/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/pnpm
+  active_owner: antfu/skills/skills/pnpm
+  content_hash: sha256:e7f6c224184cb125e7dce8f1562c3c76a4cd6afd6326958ea1c75f92eca413dc
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/pnpm/references/best-practices-ci.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/pnpm
+  active_owner: antfu/skills/skills/pnpm
+  content_hash: sha256:51105aafda72159c7130bb3af1cc5cd8f79b95ba6b8c2b653550348f2424fdca
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/pnpm/references/best-practices-migration.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/pnpm
+  active_owner: antfu/skills/skills/pnpm
+  content_hash: sha256:d4fdee694fd80c2db2a53a08fbbab2c4d556b30db6e67369fa397e1073f12668
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/pnpm/references/best-practices-performance.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/pnpm
+  active_owner: antfu/skills/skills/pnpm
+  content_hash: sha256:25ef647e5cc8df5432a86f69502a3a4101b022208ea5392a6d25475ecc60ff69
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/pnpm/references/core-cli.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/pnpm
+  active_owner: antfu/skills/skills/pnpm
+  content_hash: sha256:b315a23c83606baf70814f7fb021a7cbc000a5f2106833ae7899d40277d83a73
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/pnpm/references/core-config.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/pnpm
+  active_owner: antfu/skills/skills/pnpm
+  content_hash: sha256:fde08642de233986b5700fae436ba4d9a12d80daa488da0c3b193d8719f9baba
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/pnpm/references/core-store.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/pnpm
+  active_owner: antfu/skills/skills/pnpm
+  content_hash: sha256:9348b4c72945a1f97b2b49e0017336bc8497b2e2f2092d9d53c6f842a9ac5225
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/pnpm/references/core-workspaces.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/pnpm
+  active_owner: antfu/skills/skills/pnpm
+  content_hash: sha256:42d28109235b03bfc9a5c74e89ab83779086b3d19c1e8c78af58c37a4e15357a
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/pnpm/references/features-aliases.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/pnpm
+  active_owner: antfu/skills/skills/pnpm
+  content_hash: sha256:39a967a7c65f2287f5aea1166f900a000fd31431ff799f23c86553b062c79058
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/pnpm/references/features-catalogs.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/pnpm
+  active_owner: antfu/skills/skills/pnpm
+  content_hash: sha256:45496d9e236a0cb59f97be228378353f92369ae574c756ba9f27dc9b88ac9d0a
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/pnpm/references/features-config-dependencies.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/pnpm
+  active_owner: antfu/skills/skills/pnpm
+  content_hash: sha256:52baeb9628523a9acda1a93c8adfbbdfa1e9bf900011ed07d3640826c3e7d813
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/pnpm/references/features-global-virtual-store.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/pnpm
+  active_owner: antfu/skills/skills/pnpm
+  content_hash: sha256:697bb5bde881252d5f3d252e02e25799cbb985da70435564349bea52c61fb662
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/pnpm/references/features-hooks.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/pnpm
+  active_owner: antfu/skills/skills/pnpm
+  content_hash: sha256:3d6e2e3410aecd16bbe01be8bbbdbd84b700aa74094b402bbcb1ebb984318a6f
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/pnpm/references/features-overrides.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/pnpm
+  active_owner: antfu/skills/skills/pnpm
+  content_hash: sha256:a375afb519c967fbb83be1d85091048e7c5b3d0ed6bb4da0d726b582276cd5df
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/pnpm/references/features-patches.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/pnpm
+  active_owner: antfu/skills/skills/pnpm
+  content_hash: sha256:2b1146c3f1e33abb7e18bdaa413753719e96dd47a564f4a922468a0f85e98cca
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/pnpm/references/features-peer-deps.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/pnpm
+  active_owner: antfu/skills/skills/pnpm
+  content_hash: sha256:8ad2c691f1e577ed0e4874786e2f64410c976a1a2f76759e5f4f80d97fae83cb
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/pnpm/references/features-supply-chain-security.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/pnpm
+  active_owner: antfu/skills/skills/pnpm
+  content_hash: sha256:d4150af2f526319349a7d18ccdd4fcb712e5ef30b7e98e6f8ff0a3e33819bf54
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/skill-creator
+  runtime: null
+  scope: project
+  owners:
+  - anthropics/skills/skills/skill-creator
+  active_owner: anthropics/skills/skills/skill-creator
+  content_hash: null
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/skill-creator/LICENSE.txt
+  runtime: null
+  scope: project
+  owners:
+  - anthropics/skills/skills/skill-creator
+  active_owner: anthropics/skills/skills/skill-creator
+  content_hash: sha256:bc6b3af2f331cbc7fb0da1344efb2cbe5877a31498b4d70dbc7000f3405a1362
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/skill-creator/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - anthropics/skills/skills/skill-creator
+  active_owner: anthropics/skills/skills/skill-creator
+  content_hash: sha256:dcd4803e61e913e6fc27294184cd3a71f09f5e924ff20c8a9a20173e7b3c2bcf
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/skill-creator/agents/analyzer.md
+  runtime: null
+  scope: project
+  owners:
+  - anthropics/skills/skills/skill-creator
+  active_owner: anthropics/skills/skills/skill-creator
+  content_hash: sha256:bf68f4cac5a56c673a928c2e6d619586c5b93ea364026ab37547772cb45a663a
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/skill-creator/agents/comparator.md
+  runtime: null
+  scope: project
+  owners:
+  - anthropics/skills/skills/skill-creator
+  active_owner: anthropics/skills/skills/skill-creator
+  content_hash: sha256:fe1fc9787c495d864c5d6eada47396478572325fde1b33a96d78bf4b849b7a3e
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/skill-creator/agents/grader.md
+  runtime: null
+  scope: project
+  owners:
+  - anthropics/skills/skills/skill-creator
+  active_owner: anthropics/skills/skills/skill-creator
+  content_hash: sha256:57134da0c1a4eea33fbd74a1c9c44aa814f07d6bc64de303edb586f941e5d21a
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/skill-creator/assets/eval_review.html
+  runtime: null
+  scope: project
+  owners:
+  - anthropics/skills/skills/skill-creator
+  active_owner: anthropics/skills/skills/skill-creator
+  content_hash: sha256:ce477dcc74dc1c0d1d3352646a79167b5a63634e936b1019160025065974e452
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/skill-creator/eval-viewer/generate_review.py
+  runtime: null
+  scope: project
+  owners:
+  - anthropics/skills/skills/skill-creator
+  active_owner: anthropics/skills/skills/skill-creator
+  content_hash: sha256:fc9d1b9243fe5ab6012ebd579bd76d0035de1b79fd3b969de114defab26478fb
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/skill-creator/eval-viewer/viewer.html
+  runtime: null
+  scope: project
+  owners:
+  - anthropics/skills/skills/skill-creator
+  active_owner: anthropics/skills/skills/skill-creator
+  content_hash: sha256:a53213426ee1100441d701a3a0d49cda7a842f992d2c36463f4d3cc0258575fa
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/skill-creator/references/schemas.md
+  runtime: null
+  scope: project
+  owners:
+  - anthropics/skills/skills/skill-creator
+  active_owner: anthropics/skills/skills/skill-creator
+  content_hash: sha256:8e8876180a8989b406a4d3edddf875b04cdfd5805cc8616686d552b11ce4455f
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/skill-creator/scripts/__init__.py
+  runtime: null
+  scope: project
+  owners:
+  - anthropics/skills/skills/skill-creator
+  active_owner: anthropics/skills/skills/skill-creator
+  content_hash: sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/skill-creator/scripts/aggregate_benchmark.py
+  runtime: null
+  scope: project
+  owners:
+  - anthropics/skills/skills/skill-creator
+  active_owner: anthropics/skills/skills/skill-creator
+  content_hash: sha256:123ef128ea5ccc01a4b1ac212ef5567f21e9c13d3d240609780beeb3200c49aa
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/skill-creator/scripts/generate_report.py
+  runtime: null
+  scope: project
+  owners:
+  - anthropics/skills/skills/skill-creator
+  active_owner: anthropics/skills/skills/skill-creator
+  content_hash: sha256:13df7118a3c50c83c4c3250a606d5f2b20b25a3d44cbc392b3d669ec75281453
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/skill-creator/scripts/improve_description.py
+  runtime: null
+  scope: project
+  owners:
+  - anthropics/skills/skills/skill-creator
+  active_owner: anthropics/skills/skills/skill-creator
+  content_hash: sha256:87d864570220b699fac52da309d2d6efdb060647bfebc74f768128e646accf80
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/skill-creator/scripts/package_skill.py
+  runtime: null
+  scope: project
+  owners:
+  - anthropics/skills/skills/skill-creator
+  active_owner: anthropics/skills/skills/skill-creator
+  content_hash: sha256:1a33059b0db1ef73375d46d513e5ea81369d2e8838c970597b0d52ddef8d1c0f
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/skill-creator/scripts/quick_validate.py
+  runtime: null
+  scope: project
+  owners:
+  - anthropics/skills/skills/skill-creator
+  active_owner: anthropics/skills/skills/skill-creator
+  content_hash: sha256:67cf5703402013936c8fb75ad6a1afecd8841d45cc5e606b634eb05825fde365
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/skill-creator/scripts/run_eval.py
+  runtime: null
+  scope: project
+  owners:
+  - anthropics/skills/skills/skill-creator
+  active_owner: anthropics/skills/skills/skill-creator
+  content_hash: sha256:43e3b8f80dbf69c343967ba77e268fae991d9fa3ed68b32a0ff02532cd48657f
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/skill-creator/scripts/run_loop.py
+  runtime: null
+  scope: project
+  owners:
+  - anthropics/skills/skills/skill-creator
+  active_owner: anthropics/skills/skills/skill-creator
+  content_hash: sha256:7bd6f674203168520517eec94c55f493c0d154339b061b4d7c0f0dad187d0f21
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/skill-creator/scripts/utils.py
+  runtime: null
+  scope: project
+  owners:
+  - anthropics/skills/skills/skill-creator
+  active_owner: anthropics/skills/skills/skill-creator
+  content_hash: sha256:3af8ae62c40c73ab712207436a0d9a981e845f25c5a7040229eb189cc8e45bb1
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vite
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vite
+  active_owner: antfu/skills/skills/vite
+  content_hash: null
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vite/GENERATION.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vite
+  active_owner: antfu/skills/skills/vite
+  content_hash: sha256:69dfd9d99eafc33f4580b902ad794166f4adcc76f80917f129613d6bbb60b93e
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vite/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vite
+  active_owner: antfu/skills/skills/vite
+  content_hash: sha256:3cb7a75336e338faa9be15dd8b97479721ac8ceac6f1ff4061c9b9eefccd9983
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vite/references/build-and-ssr.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vite
+  active_owner: antfu/skills/skills/vite
+  content_hash: sha256:69c262c9bbc78676c66018f33b82d66c85d94bbf5178b2d6968494aa7bed8fe2
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vite/references/core-config.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vite
+  active_owner: antfu/skills/skills/vite
+  content_hash: sha256:d207a85730c32eff47e343ea69644a6c7898af251098a60255efe8f1c922fb4b
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vite/references/core-features.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vite
+  active_owner: antfu/skills/skills/vite
+  content_hash: sha256:5e784faa5314592bdbc9e918813d76dec94391a777fe2f32cfa048d5c0fa70f4
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vite/references/core-plugin-api.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vite
+  active_owner: antfu/skills/skills/vite
+  content_hash: sha256:594520b9adcf610b4f3378d3ef6c68c10327c93c33a7b73b3103a5fcd58e8611
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vite/references/environment-api.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vite
+  active_owner: antfu/skills/skills/vite
+  content_hash: sha256:658e4597b9cfe21b22c1677025a7a30866933f586d86c434ec139cd5149afaa2
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vite/references/rolldown-migration.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vite
+  active_owner: antfu/skills/skills/vite
+  content_hash: sha256:ba9860f8960e9794c880454b238a3a3c1962c80f9b3860399938618730bf7f72
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue
+  active_owner: antfu/skills/skills/vue
+  content_hash: null
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue-best-practices
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue-best-practices
+  active_owner: antfu/skills/skills/vue-best-practices
+  content_hash: null
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue-best-practices/LICENSE.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue-best-practices
+  active_owner: antfu/skills/skills/vue-best-practices
+  content_hash: sha256:2ea4e714425cf682879c4dea3d0d0a1a379a1418f463063f9eea1aa709ad946d
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue-best-practices/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue-best-practices
+  active_owner: antfu/skills/skills/vue-best-practices
+  content_hash: sha256:05b373713e6bbd216fb3ee9709289b68bcdeb9eac8ffea477e35bdbd8e0f9acd
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue-best-practices/SYNC.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue-best-practices
+  active_owner: antfu/skills/skills/vue-best-practices
+  content_hash: sha256:58921f403470acbb47a8145e8e8f06844f888a213edc0d117ec01f0e89c80285
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue-best-practices/references/animation-class-based-technique.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue-best-practices
+  active_owner: antfu/skills/skills/vue-best-practices
+  content_hash: sha256:d37e4ae4f124454fc5dfa54d23816edb16d337228641a77ec04c8ee9fe5a32fe
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue-best-practices/references/animation-state-driven-technique.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue-best-practices
+  active_owner: antfu/skills/skills/vue-best-practices
+  content_hash: sha256:9a17a15356b32c8cd8669c3ede28dd890e9a48c03101047738a5c6dec7c716d6
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue-best-practices/references/component-async.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue-best-practices
+  active_owner: antfu/skills/skills/vue-best-practices
+  content_hash: sha256:e20036c6622a1647d9e1c23f1fe871b2465cf4bab434422e17eb05710c8878f3
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue-best-practices/references/component-data-flow.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue-best-practices
+  active_owner: antfu/skills/skills/vue-best-practices
+  content_hash: sha256:81277341d7dfe240721c2324548b9d404354d3ce270515acb130e8ac0c7396aa
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue-best-practices/references/component-fallthrough-attrs.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue-best-practices
+  active_owner: antfu/skills/skills/vue-best-practices
+  content_hash: sha256:62d291508df9997d3b6c5adfde251d6c722926ecf5f7168dea0272564f119919
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue-best-practices/references/component-keep-alive.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue-best-practices
+  active_owner: antfu/skills/skills/vue-best-practices
+  content_hash: sha256:8738608665ad42baa6d2d7548d46b3ecd318a85f4ec3a0afac5f728948ade3ca
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue-best-practices/references/component-slots.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue-best-practices
+  active_owner: antfu/skills/skills/vue-best-practices
+  content_hash: sha256:726fdac036fcdb6071e669f1ed90af5b3bdc5fc150ad82ff41afa0af5e39f481
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue-best-practices/references/component-suspense.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue-best-practices
+  active_owner: antfu/skills/skills/vue-best-practices
+  content_hash: sha256:6a5a98dcc6a2093f038f877eb6fefeedb199aba058a5dea71b139017c557bdd1
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue-best-practices/references/component-teleport.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue-best-practices
+  active_owner: antfu/skills/skills/vue-best-practices
+  content_hash: sha256:4e48748842262df50c293ab23857c22c107e3e8360c87da482d23f0eb88b2c3f
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue-best-practices/references/component-transition-group.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue-best-practices
+  active_owner: antfu/skills/skills/vue-best-practices
+  content_hash: sha256:cfdd76e2466a8c0ef8a965674a74924e5cf25e538e75ce97d02213472442ccb2
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue-best-practices/references/component-transition.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue-best-practices
+  active_owner: antfu/skills/skills/vue-best-practices
+  content_hash: sha256:bc59a19f2e8eed7a228bdb6383d423a57c6dd75704ae11c9596018c9fb1cac42
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue-best-practices/references/composables.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue-best-practices
+  active_owner: antfu/skills/skills/vue-best-practices
+  content_hash: sha256:8fcb3ede4ecb13f8dc7e4c7db07561652f6d306c85a91bc6736fda4fae2b624d
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue-best-practices/references/directives.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue-best-practices
+  active_owner: antfu/skills/skills/vue-best-practices
+  content_hash: sha256:70d4c68ea15a961eec6471c42b4c44d37adfeb094f694b6811fb718eab7b2cf7
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue-best-practices/references/perf-avoid-component-abstraction-in-lists.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue-best-practices
+  active_owner: antfu/skills/skills/vue-best-practices
+  content_hash: sha256:a5fb787065cbaa4731a12d3ab2f40284d058a4d6a45972b48b3052931e4f80da
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue-best-practices/references/perf-v-once-v-memo-directives.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue-best-practices
+  active_owner: antfu/skills/skills/vue-best-practices
+  content_hash: sha256:066a45e60f6faa702cb75b76724c391d7e560aa6805c9bc379c06f2c64d97677
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue-best-practices/references/perf-virtualize-large-lists.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue-best-practices
+  active_owner: antfu/skills/skills/vue-best-practices
+  content_hash: sha256:69712f1f296cf03401c47f936e1a9c32481bfd82623f536b1fe08d05c846bada
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue-best-practices/references/plugins.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue-best-practices
+  active_owner: antfu/skills/skills/vue-best-practices
+  content_hash: sha256:b1583522aca059c4295708517ba987530dd6a13134f6046aed9fd7327fb9c936
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue-best-practices/references/reactivity.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue-best-practices
+  active_owner: antfu/skills/skills/vue-best-practices
+  content_hash: sha256:48c97831e72f0b82bfae0344cf02a181c7723e1ee4a29a58a85009aab7d60a4b
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue-best-practices/references/render-functions.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue-best-practices
+  active_owner: antfu/skills/skills/vue-best-practices
+  content_hash: sha256:01b35e671f7890939fa5acda52c5cf0a50b398e153d80cc9fc9f74c19e460357
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue-best-practices/references/sfc.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue-best-practices
+  active_owner: antfu/skills/skills/vue-best-practices
+  content_hash: sha256:dfe09f28869a2bc44e618068c3b6269f55d925d096714df25e253d2bbb58c28f
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue-best-practices/references/state-management.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue-best-practices
+  active_owner: antfu/skills/skills/vue-best-practices
+  content_hash: sha256:9e98a1c6d9009c0c8ef7228b6b3bcf10d30be6b713ffcef448ab7db3b419a851
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue-best-practices/references/updated-hook-performance.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue-best-practices
+  active_owner: antfu/skills/skills/vue-best-practices
+  content_hash: sha256:ded08ce93f9b23082538846f84e8d159d84af757c27b2c6b43a9283df803a32b
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue-testing-best-practices
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue-testing-best-practices
+  active_owner: antfu/skills/skills/vue-testing-best-practices
+  content_hash: null
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue-testing-best-practices/LICENSE.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue-testing-best-practices
+  active_owner: antfu/skills/skills/vue-testing-best-practices
+  content_hash: sha256:2ea4e714425cf682879c4dea3d0d0a1a379a1418f463063f9eea1aa709ad946d
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue-testing-best-practices/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue-testing-best-practices
+  active_owner: antfu/skills/skills/vue-testing-best-practices
+  content_hash: sha256:376fd21d6adfd37f7d102fa17ca099abddef16943389f37588405b013cef23b8
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue-testing-best-practices/SYNC.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue-testing-best-practices
+  active_owner: antfu/skills/skills/vue-testing-best-practices
+  content_hash: sha256:05b20c8f6cc487107ee7693e21f2747def24974fbd96de0e771385e46d193e20
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue-testing-best-practices/reference/async-component-testing.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue-testing-best-practices
+  active_owner: antfu/skills/skills/vue-testing-best-practices
+  content_hash: sha256:75b1c7b3949a5f0211824c525fd7b3f8a6b2cdd4933592ada65f37ecaa4146d3
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue-testing-best-practices/reference/teleport-testing-complexity.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue-testing-best-practices
+  active_owner: antfu/skills/skills/vue-testing-best-practices
+  content_hash: sha256:5a42ce8eb5497b5165b09cd758b647ddf4bb537be9cf808a84bee7ae8c3aca39
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue-testing-best-practices/reference/testing-async-await-flushpromises.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue-testing-best-practices
+  active_owner: antfu/skills/skills/vue-testing-best-practices
+  content_hash: sha256:2dd5099b32cf2626d19aab2ef4b365cc26102cfb5a0aedc5667efc06d2070cab
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue-testing-best-practices/reference/testing-browser-vs-node-runners.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue-testing-best-practices
+  active_owner: antfu/skills/skills/vue-testing-best-practices
+  content_hash: sha256:ffc13da105aadfca0bded6d955f79f9c02c5548ee699f274ff5976cb7484ac98
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue-testing-best-practices/reference/testing-component-blackbox-approach.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue-testing-best-practices
+  active_owner: antfu/skills/skills/vue-testing-best-practices
+  content_hash: sha256:16ac94d67addf1cb60177a81a5c5c01318daa310216261ffb2d60b396112f86d
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue-testing-best-practices/reference/testing-composables-helper-wrapper.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue-testing-best-practices
+  active_owner: antfu/skills/skills/vue-testing-best-practices
+  content_hash: sha256:57af3ae779cf0770ed53034575d783463d2b9e790c29fbc9bb80f166be3255bd
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue-testing-best-practices/reference/testing-e2e-playwright-recommended.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue-testing-best-practices
+  active_owner: antfu/skills/skills/vue-testing-best-practices
+  content_hash: sha256:d415a403c6851cb57666b9143cb3acec6eba53af269cf765918c108dd0c96355
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue-testing-best-practices/reference/testing-no-snapshot-only.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue-testing-best-practices
+  active_owner: antfu/skills/skills/vue-testing-best-practices
+  content_hash: sha256:d541b490b8c9c0f822a2ca0d8184d7325b07918e76124d717fb480bc7a488995
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue-testing-best-practices/reference/testing-pinia-store-setup.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue-testing-best-practices
+  active_owner: antfu/skills/skills/vue-testing-best-practices
+  content_hash: sha256:005a375c587bd33d1eb3a1b7fe1c89e42daf4c115014e49cf327ab5af5d0ed4e
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue-testing-best-practices/reference/testing-suspense-async-components.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue-testing-best-practices
+  active_owner: antfu/skills/skills/vue-testing-best-practices
+  content_hash: sha256:12307929380fcf0e8bcbd6be23a6bc1710904c9462cec945f80ce4b5aa0b7f12
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue-testing-best-practices/reference/testing-vitest-recommended-for-vue.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue-testing-best-practices
+  active_owner: antfu/skills/skills/vue-testing-best-practices
+  content_hash: sha256:acfa0b3986e092f43d4cd8090864860cff07ffa3aaa62a10c5a622770ccaeb6b
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue/GENERATION.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue
+  active_owner: antfu/skills/skills/vue
+  content_hash: sha256:e600ea01783f3066f990707ff96a88aaa53327902bfff3f876cfcda800f8bb7d
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue
+  active_owner: antfu/skills/skills/vue
+  content_hash: sha256:eba0d129cc4c2cf9c08116d4b136cc6800322985e831a9e04da4e97f3dca137a
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue/references/advanced-patterns.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue
+  active_owner: antfu/skills/skills/vue
+  content_hash: sha256:f6b9e26e3ae582dca1dfe01261c9800cd8f8dec511384d6bc816848209d2bc51
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue/references/core-new-apis.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue
+  active_owner: antfu/skills/skills/vue
+  content_hash: sha256:4afa9fdcdf62d2300d86686f890e4a52cbbed48e4c13a3e15f3e4572185c90ed
+- kind: project-relative
+  target: agent-skills
+  value: .agents/skills/vue/references/script-setup-macros.md
+  runtime: null
+  scope: project
+  owners:
+  - antfu/skills/skills/vue
+  active_owner: antfu/skills/skills/vue
+  content_hash: sha256:ad47db85f8fbda6c055cedcc1d4175cd79d414e9be3ebf1e631d0e493eb4480a

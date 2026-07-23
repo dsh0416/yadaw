@@ -1,0 +1,15 @@
+node_modules/
+.pnpm-store/
+target/
+out/
+dist/
+release/
+test-results/
+playwright-report/
+*.node
+*.log
+.DS_Store
+
+
+# APM dependencies
+apm_modules/

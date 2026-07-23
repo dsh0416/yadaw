@@ -1,0 +1,21 @@
+{
+  "name": "yadaw",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@11.9.0",
+  "engines": {
+    "node": "26.x",
+    "pnpm": ">=11"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @yadaw/desktop dev",
+    "build": "pnpm --filter @yadaw/dsp-node build && pnpm --filter @yadaw/desktop build",
+    "build:native": "pnpm --filter @yadaw/dsp-node build",
+    "check": "pnpm check:rust && pnpm -r --if-present check && pnpm --filter @yadaw/desktop test:unit && pnpm --filter @yadaw/project-db test:integration",
+    "check:rust": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace",
+    "test:unit": "cargo test --workspace && pnpm --filter @yadaw/desktop test:unit",
+    "test:integration": "pnpm --filter @yadaw/project-db test:integration",
+    "test:e2e": "pnpm --filter @yadaw/desktop test:e2e",
+    "format": "cargo fmt --all"
+  }
+}

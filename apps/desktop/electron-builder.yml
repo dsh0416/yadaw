@@ -1,0 +1,34 @@
+appId: dev.yadaw.studio
+productName: YADAW
+asar: true
+asarUnpack:
+  - "**/*.node"
+  - "**/@electric-sql/pglite/dist/*.wasm"
+  - "**/@electric-sql/pglite/dist/*.data"
+npmRebuild: false
+
+directories:
+  output: ../../release
+
+files:
+  - out/**/*
+  - package.json
+  - node_modules/**/*
+  - "!node_modules/@yadaw/dsp-node/src/**/*"
+  - "!node_modules/@yadaw/dsp-node/Cargo.toml"
+  - "!node_modules/@yadaw/dsp-node/build.rs"
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+
+mac:
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+
+linux:
+  target:
+    - target: AppImage
+      arch: [x64, arm64]

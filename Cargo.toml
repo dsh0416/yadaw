@@ -1,0 +1,23 @@
+[workspace]
+members = ["crates/dsp-core", "crates/dsp-node"]
+resolver = "3"
+
+[workspace.package]
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.97"
+
+[workspace.dependencies]
+bwavfile = "2.0.1"
+cpal = "0.18"
+napi = { version = "3", features = ["napi8"] }
+napi-build = "2"
+napi-derive = "3"
+ringbuf = "0.5"
+rubato = "4.0.0"
+sha2 = "0.10.9"
+yadaw-dsp-core = { path = "crates/dsp-core" }
+
+[profile.release]
+codegen-units = 1
+lto = "thin"

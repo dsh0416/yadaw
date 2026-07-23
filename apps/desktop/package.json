@@ -1,0 +1,48 @@
+{
+  "name": "@yadaw/desktop",
+  "version": "0.0.0",
+  "description": "A browser-technology digital audio workstation with a Rust DSP core.",
+  "private": true,
+  "type": "module",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "predev": "pnpm --filter @yadaw/dsp-node build:debug",
+    "dev": "node scripts/dev.mjs",
+    "build": "pnpm build:main && pnpm build:preload && pnpm build:renderer",
+    "build:main": "vite build --config vite.main.config.ts",
+    "build:preload": "vite build --config vite.preload.config.ts",
+    "build:renderer": "vite build --config vite.renderer.config.ts",
+    "check": "vue-tsc --noEmit -p tsconfig.json",
+    "test:unit": "vitest run",
+    "test:e2e": "pnpm build && playwright test",
+    "pack": "pnpm build && electron-builder --dir --publish never",
+    "dist": "pnpm build && electron-builder --publish never"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "0.5.4",
+    "@lucide/vue": "^1.25.0",
+    "@yadaw/dsp-node": "workspace:*",
+    "@yadaw/project-db": "workspace:*",
+    "drizzle-orm": "0.45.2"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "@pinia/testing": "2.0.1",
+    "@playwright/test": "1.61.1",
+    "@vue/test-utils": "2.4.11",
+    "@vitejs/plugin-vue": "^6.0.8",
+    "@vueuse/core": "^14.3.0",
+    "@yadaw/contracts": "workspace:*",
+    "electron": "^43.1.1",
+    "electron-builder": "^26.15.3",
+    "happy-dom": "20.11.0",
+    "pinia": "^3.0.4",
+    "reka-ui": "^2.10.1",
+    "typescript": "^5.9.3",
+    "vitest": "4.1.10",
+    "vite": "^8.1.5",
+    "vue": "^3.5.40",
+    "vue-router": "^5.2.0",
+    "vue-tsc": "^3.3.7"
+  }
+}

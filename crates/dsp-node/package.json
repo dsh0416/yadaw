@@ -1,0 +1,35 @@
+{
+  "name": "@yadaw/dsp-node",
+  "version": "0.0.0",
+  "private": true,
+  "main": "index.js",
+  "types": "index.d.ts",
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "*.node"
+  ],
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "build": "napi build --platform --release",
+    "build:asio": "napi build --platform --release --features asio",
+    "build:debug": "napi build --platform",
+    "build:debug:asio": "napi build --platform --features asio",
+    "check": "napi build --platform"
+  },
+  "napi": {
+    "binaryName": "yadaw-dsp-node",
+    "targets": [
+      "x86_64-pc-windows-msvc",
+      "x86_64-apple-darwin",
+      "aarch64-apple-darwin",
+      "x86_64-unknown-linux-gnu",
+      "aarch64-unknown-linux-gnu"
+    ]
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^3.0.0"
+  }
+}

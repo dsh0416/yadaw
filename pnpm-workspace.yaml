@@ -1,0 +1,10 @@
+packages:
+  - apps/*
+  - packages/*
+  - crates/*
+allowBuilds:
+  electron: true
+  electron-winstaller: false
+  vue-demi: true
+minimumReleaseAgeExclude:
+  - vue@3.5.40
