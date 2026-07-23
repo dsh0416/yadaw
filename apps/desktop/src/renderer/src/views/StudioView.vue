@@ -1,50 +1,130 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue"
+import { onBeforeUnmount, onMounted } from "vue"
+import { useEventListener } from "@vueuse/core"
 import { storeToRefs } from "pinia"
 import { useRouter } from "vue-router"
 import ArrangementWorkspace from "../components/studio/ArrangementWorkspace.vue"
-import EngineInspector from "../components/studio/EngineInspector.vue"
-import SoundBrowser from "../components/studio/SoundBrowser.vue"
+import StudioPlaceholderPanel from "../components/studio/StudioPlaceholderPanel.vue"
 import StudioStatusbar from "../components/studio/StudioStatusbar.vue"
 import StudioTopbar from "../components/studio/StudioTopbar.vue"
 import { useEngineStore } from "../stores/engine"
 import { useAudioRuntimeStore } from "../stores/audioRuntime"
 import { useProjectStore } from "../stores/project"
 import { useRecordingStore } from "../stores/recording"
+import { useTransportStore } from "../stores/transport"
 
 const router = useRouter()
 const engineStore = useEngineStore()
-const { nativeInfo, peak, error } = storeToRefs(engineStore)
+const { nativeInfo } = storeToRefs(engineStore)
 const audioRuntimeStore = useAudioRuntimeStore()
 const {
   runtime: audioRuntime,
   statistics: audioStatistics,
   warnings: audioWarnings
 } = storeToRefs(audioRuntimeStore)
-const gainValues = ref([0.5])
 const projectStore = useProjectStore()
 const recordingStore = useRecordingStore()
-const { session, projectAssets } = storeToRefs(projectStore)
-const { active: activeRecording } = storeToRefs(recordingStore)
+const transportStore = useTransportStore()
+const { session } = storeToRefs(projectStore)
+const {
+  active: activeRecording,
+  busy: recordingBusy,
+  error: recordingError
+} = storeToRefs(recordingStore)
+const {
+  playing,
+  loading: playLoading,
+  canPlay,
+  playheadSeconds
+} = storeToRefs(transportStore)
 
 onMounted(() => {
   if (!session.value) void router.replace({ name: "welcome" })
+  else void projectStore.refreshAssets()
   void engineStore.initialize()
 })
-function openPreferences(): void { void router.push({ name: "preferences" }) }
-function openProjectSettings(): void { void router.push({ name: "project-settings" }) }
-function runNativePreview(): void { void engineStore.runPreview(gainValues.value[0] ?? 0.5) }
-async function closeProject(): Promise<void> {
-  if (await projectStore.close()) void router.push({ name: "welcome" })
+async function openPreferences(): Promise<void> {
+  if (activeRecording.value) await toggleRecording()
+  if (activeRecording.value) return
+  void router.push({ name: "preferences" })
 }
+async function openProjectSettings(): Promise<void> {
+  if (activeRecording.value) await toggleRecording()
+  if (activeRecording.value) return
+  void router.push({ name: "project-settings" })
+}
+async function saveProject(): Promise<void> {
+  if (activeRecording.value) await toggleRecording()
+  if (activeRecording.value) return
+  await projectStore.save()
+}
+async function closeProject(): Promise<void> {
+  transportStore.stop()
+  if (activeRecording.value) await recordingStore.toggle()
+  if (activeRecording.value) return
+  if (await projectStore.close()) {
+    transportStore.reset()
+    void router.push({ name: "welcome" })
+  }
+}
+
+async function toggleRecording(): Promise<void> {
+  if (recordingBusy.value) return
+  if (!activeRecording.value) transportStore.stop()
+  const completed = await recordingStore.toggle()
+  if (completed) transportStore.selectAndRevealClip(completed.id)
+}
+
+function isEditableTarget(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement &&
+    (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
+}
+
+function handleShortcut(event: KeyboardEvent): void {
+  if (isEditableTarget(event.target) || event.repeat) return
+  if (event.code === "Space") {
+    event.preventDefault()
+    if (!activeRecording.value) void transportStore.toggle()
+  } else if (event.code === "Home") {
+    event.preventDefault()
+    transportStore.goToStart()
+  } else if (event.code === "KeyR") {
+    event.preventDefault()
+    void toggleRecording()
+  }
+}
+
+useEventListener(window, "keydown", handleShortcut)
+onBeforeUnmount(() => transportStore.stop())
 </script>
 
 <template>
   <main v-if="session" class="studio-shell">
-    <StudioTopbar :native-info="nativeInfo" :engine-running="audioRuntime.state === 'running'" :project="session.configuration" :recording="Boolean(activeRecording)" :dirty="session.dirty" @open-preferences="openPreferences" @toggle-recording="recordingStore.toggle" @save="projectStore.save" @close="closeProject" @open-project-settings="openProjectSettings" />
-    <SoundBrowser :assets="projectAssets" />
-    <ArrangementWorkspace />
-    <EngineInspector v-model="gainValues" :runtime="audioRuntime" :peak="peak" :error="error" @run-preview="runNativePreview" />
+    <StudioTopbar
+      :native-info="nativeInfo"
+      :engine-running="audioRuntime.state === 'running'"
+      :project="session.configuration"
+      :recording="Boolean(activeRecording)"
+      :recording-busy="recordingBusy"
+      :dirty="session.dirty"
+      :playing="playing"
+      :play-loading="playLoading"
+      :can-play="canPlay && !activeRecording"
+      :playhead-seconds="playheadSeconds"
+      @open-preferences="openPreferences"
+      @toggle-recording="toggleRecording"
+      @toggle-playback="transportStore.toggle"
+      @go-to-start="transportStore.goToStart"
+      @save="saveProject"
+      @close="closeProject"
+      @open-project-settings="openProjectSettings"
+    />
+    <StudioPlaceholderPanel side="left" />
+    <ArrangementWorkspace
+      :recording-started-at="activeRecording?.startedAt ?? null"
+      :recording-error="recordingError"
+    />
+    <StudioPlaceholderPanel side="right" />
     <StudioStatusbar :runtime="audioRuntime" :statistics="audioStatistics" :audio-warnings="audioWarnings" />
   </main>
 </template>

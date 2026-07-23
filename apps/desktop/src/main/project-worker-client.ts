@@ -91,6 +91,10 @@ export class ProjectWorkerClient {
     return this.call({ type: "import-large-object", filePath, operationId, asset })
   }
 
+  readLargeObject(assetId: string): Promise<Uint8Array> {
+    return this.call({ type: "read-large-object", assetId })
+  }
+
   cancel(operationId: string): Promise<void> {
     return this.call({ type: "cancel", operationId })
   }

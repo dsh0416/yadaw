@@ -185,6 +185,18 @@ export class ProjectDatabase {
     })
   }
 
+  async readLargeObject(assetId: string): Promise<Uint8Array> {
+    const result = await this.db.query<{ data: Uint8Array }>(
+      `SELECT lo_get(large_object_oid) AS data
+       FROM assets
+       WHERE id = $1`,
+      [assetId]
+    )
+    const data = result.rows[0]?.data
+    if (!data) throw new Error(`Audio asset '${assetId}' was not found`)
+    return new Uint8Array(data)
+  }
+
   async dumpTo(outputPath: string): Promise<void> {
     const dump = await this.db.dumpDataDir("none")
     const handle = await open(outputPath, "w")

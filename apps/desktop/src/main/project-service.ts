@@ -216,6 +216,11 @@ export class ProjectService {
     }
   }
 
+  readAssetAudio(assetId: string): Promise<Uint8Array> {
+    if (!this.session) throw new Error("No project is open")
+    return this.worker.readLargeObject(assetId)
+  }
+
   cancelOperation(operationId: string): Promise<void> {
     return this.worker.cancel(operationId)
   }

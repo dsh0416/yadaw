@@ -1,25 +1,134 @@
 <script setup lang="ts">
-import { Plus } from "@lucide/vue"
-const bars = [1, 2, 3, 4, 5, 6, 7, 8]
+import { computed, shallowRef } from "vue"
+import { storeToRefs } from "pinia"
+import { useIntervalFn } from "@vueuse/core"
+import { AudioLines } from "@lucide/vue"
+import { useProjectStore } from "../../stores/project"
+import { useTransportStore } from "../../stores/transport"
+import type { TimelineClip } from "../../stores/transport"
+import ArrangementTrack from "./ArrangementTrack.vue"
+import TimelineRuler from "./TimelineRuler.vue"
+
+const props = defineProps<{
+  recordingStartedAt: number | null
+  recordingError: string
+}>()
+
+const projectStore = useProjectStore()
+const transportStore = useTransportStore()
+const { session } = storeToRefs(projectStore)
+const {
+  clips,
+  playheadSeconds,
+  selectedClipId,
+  playing,
+  loading,
+  error,
+  contentEndSeconds,
+  timelineDurationSeconds
+} = storeToRefs(transportStore)
+
+const clock = shallowRef(Date.now())
+useIntervalFn(() => {
+  if (props.recordingStartedAt !== null) clock.value = Date.now()
+}, 100)
+
+const tempo = computed(() => session.value?.configuration.tempo ?? 120)
+const beatsPerBar = computed(() => session.value?.configuration.timeSignatureNumerator ?? 4)
+const recordingDuration = computed(() =>
+  props.recordingStartedAt === null
+    ? 0
+    : Math.max(0.05, (clock.value - props.recordingStartedAt) / 1000)
+)
+const liveClip = computed<TimelineClip | null>(() =>
+  props.recordingStartedAt === null
+    ? null
+    : {
+        id: "recording-live",
+        assetId: "recording-live",
+        name: "New recording",
+        startSeconds: contentEndSeconds.value,
+        durationSeconds: recordingDuration.value,
+        endSeconds: contentEndSeconds.value + recordingDuration.value,
+        channels: 2,
+        sampleRate: session.value?.configuration.sampleRate ?? 48_000
+      }
+)
+const visibleDuration = computed(() =>
+  Math.max(
+    timelineDurationSeconds.value,
+    (liveClip.value?.endSeconds ?? contentEndSeconds.value) + 2
+  )
+)
+const selectedClip = computed(() =>
+  clips.value.find((clip) => clip.id === selectedClipId.value) ?? null
+)
+
+function handleSeek(seconds: number): void {
+  transportStore.clearSelection()
+  transportStore.seek(seconds)
+}
 </script>
 
 <template>
   <section class="arrangement" aria-label="Arrangement timeline">
-    <div class="arrangement-toolbar"><div class="arrangement-title"><span>ARRANGEMENT</span><strong>Main timeline</strong></div><div class="zoom-scale"><span>1 / 16</span><i /><span>100%</span></div></div>
-    <div class="timeline-grid">
-      <div class="ruler-corner"><span>TRACKS</span></div>
-      <div class="ruler"><span v-for="bar in bars" :key="bar">{{ String(bar).padStart(2, "0") }}</span></div>
-      <div class="track-header">
-        <span class="track-color" /><strong>01</strong><div class="track-copy"><b>Analog Bloom</b><small>Instrument · Stereo</small></div>
-        <div class="track-controls"><button aria-label="Mute track">M</button><button aria-label="Solo track">S</button></div>
+    <div class="arrangement-toolbar">
+      <div class="arrangement-title">
+        <span>ARRANGEMENT</span>
+        <strong>{{ selectedClip ? selectedClip.name : "Main timeline" }}</strong>
       </div>
-      <div class="track-lane"><div class="playhead" aria-hidden="true"><span /></div><div class="clip clip-one"><span>Verse texture</span><small>A BLOOM 01</small></div><div class="clip clip-two"><span>Verse texture</span><small>A BLOOM 02</small></div></div>
-      <button class="add-track" aria-label="Add a track"><Plus :size="13" /><span>Add track</span></button>
-      <div class="empty-lane"><div class="empty-message"><Plus :size="14" /><span>Drop audio, MIDI, or a device to build the session</span></div></div>
+      <div class="transport-state" role="status">
+        <i :class="{ active: playing, loading, recording: recordingStartedAt !== null }" />
+        <span v-if="recordingStartedAt !== null">Recording {{ recordingDuration.toFixed(1) }} s</span>
+        <span v-else-if="loading">Preparing audio…</span>
+        <span v-else-if="playing">Playing</span>
+        <span v-else>{{ clips.length }} {{ clips.length === 1 ? "clip" : "clips" }}</span>
+      </div>
     </div>
+
+    <div class="timeline-grid">
+      <div class="ruler-corner">TRACKS</div>
+      <TimelineRuler
+        :duration-seconds="visibleDuration"
+        :tempo="tempo"
+        :beats-per-bar="beatsPerBar"
+        @seek="handleSeek"
+      />
+
+      <div class="track-header">
+        <span class="track-color" />
+        <strong>01</strong>
+        <div class="track-copy">
+          <b>Audio 01</b>
+          <small>INPUT 1–2 · STEREO</small>
+        </div>
+        <AudioLines :size="13" aria-hidden="true" />
+      </div>
+      <ArrangementTrack
+        :clips="clips"
+        :timeline-duration-seconds="visibleDuration"
+        :playhead-seconds="playheadSeconds"
+        :selected-clip-id="selectedClipId"
+        :live-clip="liveClip"
+        :tempo="tempo"
+        :beats-per-bar="beatsPerBar"
+        @seek="handleSeek"
+        @select-clip="transportStore.selectClip"
+      />
+
+      <div class="track-spacer">
+        <span>01 TRACK</span>
+      </div>
+      <div class="empty-lane">
+        <span v-if="clips.length === 0">Record audio to begin the arrangement.</span>
+        <span v-else>Click the timeline to move the playhead. Press Space to play.</span>
+      </div>
+    </div>
+
+    <p v-if="recordingError || error" class="playback-error" role="alert">{{ recordingError || error }}</p>
   </section>
 </template>
 
 <style scoped>
-.arrangement{position:relative;display:grid;grid-template-rows:43px 1fr;min-width:0;min-height:0;overflow:hidden;background:#0a0e16}.arrangement-toolbar{display:flex;align-items:center;justify-content:space-between;padding:0 13px 0 15px;border-bottom:1px solid var(--line-soft);background:#111722}.arrangement-title span,.arrangement-title strong{display:block}.arrangement-title span{color:var(--accent);font:700 7px var(--font-utility);letter-spacing:.16em}.arrangement-title strong{margin-top:3px;color:var(--text-secondary);font-size:10px}.zoom-scale{display:flex;align-items:center;gap:8px;color:var(--text-faint);font:7px var(--font-utility)}.zoom-scale i{width:45px;height:2px;border-radius:2px;background:linear-gradient(90deg,var(--accent) 55%,#344056 55%)}.timeline-grid{display:grid;grid-template:27px 101px minmax(64px,1fr)/178px minmax(0,1fr);min-height:0}.ruler-corner{display:flex;align-items:center;padding:0 12px;border-right:1px solid var(--line-soft);border-bottom:1px solid var(--line-strong);color:#536075;background:#101620;font:700 7px var(--font-utility);letter-spacing:.14em}.ruler{position:relative;display:grid;grid-template-columns:repeat(8,1fr);border-bottom:1px solid var(--line-strong);background:#101620}.ruler::after{content:"";position:absolute;inset:0;pointer-events:none;background-image:repeating-linear-gradient(90deg,transparent 0 calc(3.125% - 1px),#222c3b calc(3.125% - 1px) 3.125%);opacity:.65}.ruler span{position:relative;z-index:1;padding:8px 7px;border-left:1px solid #293344;color:#6d788c;font:8px var(--font-utility)}.track-header{display:grid;grid-template-columns:3px 23px minmax(0,1fr);grid-template-rows:1fr auto;align-items:center;gap:0 8px;padding:10px 9px 9px;border-right:1px solid var(--line-soft);border-bottom:1px solid var(--line-strong);background:#151b27}.track-color{grid-row:1/3;align-self:stretch;border-radius:2px;background:linear-gradient(var(--accent-soft),var(--signal-cyan));box-shadow:0 0 10px #8c83ff44}.track-header>strong{color:#68758a;font:9px var(--font-utility)}.track-copy b,.track-copy small{display:block}.track-copy b{color:var(--text-primary);font-size:10px}.track-copy small{margin-top:4px;color:var(--text-faint);font:7px var(--font-utility)}.track-controls{grid-column:2/4;display:flex;justify-content:flex-end;gap:4px;margin-top:7px}.track-controls button{width:24px;height:20px;padding:0;border:1px solid #333d50;border-radius:4px;color:#758197;background:#1b2331;cursor:pointer;font:7px var(--font-utility)}.track-controls button:hover,.track-controls button:focus-visible{border-color:#6d66c4;color:#d2ceff;outline:none}.track-lane,.empty-lane{position:relative;overflow:hidden;border-bottom:1px solid var(--line-strong);background-color:#0c111a;background-image:linear-gradient(90deg,#242d3c 1px,transparent 1px),repeating-linear-gradient(0deg,transparent 0 24px,#17202c 25px);background-size:12.5% 100%,100% 25px}.track-lane::after{content:"";position:absolute;inset:0;pointer-events:none;background-image:repeating-linear-gradient(90deg,transparent 0 calc(3.125% - 1px),#171f2b calc(3.125% - 1px) 3.125%)}.playhead{position:absolute;z-index:5;top:0;bottom:-100vh;left:17.25%;width:1px;background:var(--record);box-shadow:0 0 8px #ff657755}.playhead span{position:absolute;top:0;left:-4px;width:9px;height:7px;background:var(--record);clip-path:polygon(0 0,100% 0,50% 100%)}.clip{position:absolute;z-index:2;top:9px;bottom:9px;overflow:hidden;border:1px solid #8c83ff;border-radius:4px;background:linear-gradient(180deg,#544eb7e8,#2f347ccc);box-shadow:0 1px 0 #ffffff22 inset,0 7px 18px #02040a55}.clip::after{content:"";position:absolute;inset:31px 7px 6px;opacity:.7;background:repeating-linear-gradient(90deg,#b9e9ff 0 2px,transparent 2px 5px);clip-path:polygon(0 52%,8% 22%,14% 70%,22% 37%,31% 63%,39% 18%,48% 77%,56% 42%,66% 59%,75% 28%,84% 72%,92% 40%,100% 55%,100% 100%,0 100%)}.clip span,.clip small{position:relative;z-index:1;display:block;padding-left:7px}.clip span{padding-top:6px;color:#f0efff;font-size:8px;font-weight:650}.clip small{margin-top:3px;color:#b6b7e9;font:6px var(--font-utility);letter-spacing:.08em}.clip-one{left:1.5%;width:31%}.clip-two{left:38%;width:25%;border-color:#5dcbd8;background:linear-gradient(180deg,#246d86e8,#28426fcc)}.add-track{display:flex;align-items:center;gap:7px;padding:0 12px;border:0;border-right:1px solid var(--line-soft);color:#58667b;background:#111720;cursor:pointer;font-size:8px;text-align:left}.add-track:hover,.add-track:focus-visible{color:var(--text-secondary);background:#161e2a;outline:none}.empty-lane{display:grid;place-items:center;border-bottom:0;background-color:#090e16;opacity:.85}.empty-message{display:flex;align-items:center;gap:7px;padding:9px 13px;border:1px dashed #2e394c;border-radius:6px;color:#536076;font-size:8px}@media(max-width:1100px){.timeline-grid{grid-template-columns:152px minmax(0,1fr)}}
+.arrangement{position:relative;display:grid;grid-template-rows:43px 1fr;min-width:0;min-height:0;overflow:hidden;background:#0a0e16}.arrangement-toolbar{display:flex;align-items:center;justify-content:space-between;padding:0 14px 0 15px;border-bottom:1px solid var(--line-soft);background:#111722}.arrangement-title span,.arrangement-title strong{display:block}.arrangement-title span{color:var(--accent);font:700 7px var(--font-utility);letter-spacing:.16em}.arrangement-title strong{max-width:340px;overflow:hidden;margin-top:3px;color:var(--text-secondary);font-size:10px;text-overflow:ellipsis;white-space:nowrap}.transport-state{display:flex;align-items:center;gap:7px;color:#657287;font:7px var(--font-utility);letter-spacing:.04em}.transport-state i{width:6px;height:6px;border-radius:50%;background:#465267}.transport-state i.active{background:var(--signal-cyan);box-shadow:0 0 7px var(--signal-cyan)}.transport-state i.loading{background:var(--warning);box-shadow:0 0 7px var(--warning)}.transport-state i.recording{background:var(--record);box-shadow:0 0 7px var(--record)}.timeline-grid{display:grid;grid-template:27px 101px minmax(64px,1fr)/178px minmax(0,1fr);min-height:0}.ruler-corner{display:flex;align-items:center;padding:0 12px;border-right:1px solid var(--line-soft);border-bottom:1px solid var(--line-strong);color:#536075;background:#101620;font:700 7px var(--font-utility);letter-spacing:.14em}.track-header{display:grid;grid-template-columns:3px 25px minmax(0,1fr) auto;align-items:center;gap:8px;padding:12px 10px;border-right:1px solid var(--line-soft);border-bottom:1px solid var(--line-strong);background:#151b27}.track-color{align-self:stretch;border-radius:2px;background:linear-gradient(var(--accent-soft),var(--signal-cyan));box-shadow:0 0 10px #8c83ff44}.track-header>strong{color:#68758a;font:9px var(--font-utility)}.track-copy b,.track-copy small{display:block}.track-copy b{color:var(--text-primary);font-size:10px}.track-copy small{margin-top:4px;color:var(--text-faint);font:6px var(--font-utility);letter-spacing:.04em}.track-header>svg{color:#68758a}.track-spacer{display:flex;align-items:flex-start;padding:13px 12px;border-right:1px solid var(--line-soft);color:#3e4a5d;background:#101620;font:6px var(--font-utility);letter-spacing:.12em}.empty-lane{display:grid;place-items:center;background-color:#090e16;background-image:linear-gradient(90deg,#171f2b 1px,transparent 1px);background-size:12.5% 100%;color:#435066;font-size:8px}.playback-error{position:absolute;right:12px;bottom:12px;max-width:360px;margin:0;padding:8px 10px;border:1px solid #71394a;border-radius:5px;color:#ffc3cb;background:#321722;font-size:8px;line-height:1.4}@media(max-width:1100px){.timeline-grid{grid-template-columns:152px minmax(0,1fr)}}
 </style>

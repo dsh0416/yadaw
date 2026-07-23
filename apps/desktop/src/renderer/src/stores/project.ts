@@ -78,6 +78,10 @@ export const useProjectStore = defineStore("project", () => {
     projectAssets.value = await proxy.select().from(assets).orderBy(assets.createdAt)
   }
 
+  function markDirty(): void {
+    if (session.value) session.value.dirty = true
+  }
+
   return {
     session,
     projectAssets,
@@ -89,6 +93,7 @@ export const useProjectStore = defineStore("project", () => {
     save,
     close,
     updateConfiguration,
-    refreshAssets
+    refreshAssets,
+    markDirty
   }
 })

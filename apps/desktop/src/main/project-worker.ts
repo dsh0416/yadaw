@@ -71,6 +71,8 @@ async function handle(request: WorkerRequest): Promise<unknown> {
         cancelledOperations.delete(request.operationId)
       }
     }
+    case "read-large-object":
+      return requireDatabase().readLargeObject(request.assetId)
     case "cancel":
       cancelledOperations.add(request.operationId)
       return null

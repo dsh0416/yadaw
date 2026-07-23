@@ -46,6 +46,7 @@ const api: YadawDesktopApi = {
   recoverRecording: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.recordingRecover, id),
   deletePendingRecording: (id: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.recordingDeletePending, id),
+  readAssetAudio: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.assetAudioRead, id),
   subscribeOperations: (listener) => {
     const handler = (_event: Electron.IpcRendererEvent, operation: Parameters<typeof listener>[0]) => listener(operation)
     ipcRenderer.on(IPC_CHANNELS.operationEvent, handler)

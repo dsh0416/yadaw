@@ -22,6 +22,7 @@ export const IPC_CHANNELS = {
   recordingPendingList: "recording:pending-list",
   recordingRecover: "recording:recover",
   recordingDeletePending: "recording:delete-pending",
+  assetAudioRead: "asset:audio-read",
   operationCancel: "operation:cancel",
   operationEvent: "operation:event"
 } as const
@@ -66,6 +67,7 @@ export interface YadawDesktopApi {
   listPendingRecordings(): Promise<PendingRecording[]>
   recoverRecording(id: string): Promise<void>
   deletePendingRecording(id: string): Promise<void>
+  readAssetAudio(id: string): Promise<Uint8Array>
   subscribeOperations(listener: (event: OperationEvent) => void): () => void
   cancelOperation(id: string): Promise<void>
 }

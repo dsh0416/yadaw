@@ -132,6 +132,10 @@ describe("ProjectDatabase", () => {
       method: "all"
     })
     expect(asset.rows).toEqual([[oid, 2_500_000]])
+    const restoredAudio = await database.readLargeObject("recording")
+    expect(restoredAudio).toHaveLength(2_500_000)
+    expect(restoredAudio.slice(0, 4)).toEqual(new Uint8Array([0x5a, 0x5a, 0x5a, 0x5a]))
+    await expect(database.readLargeObject("missing")).rejects.toThrow("was not found")
     const proxy = createProjectDbProxy({ query: (request) => database.query(request) })
     const typed = await proxy.select().from(assets)
     expect(typed[0]).toMatchObject({

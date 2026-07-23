@@ -24,6 +24,7 @@ export type WorkerRequest =
   | { id: number; type: "transaction"; request: ProjectTransactionRequest }
   | { id: number; type: "dump"; outputPath: string }
   | { id: number; type: "import-large-object"; filePath: string; operationId: string; asset: LargeObjectAssetInput }
+  | { id: number; type: "read-large-object"; assetId: string }
   | { id: number; type: "cancel"; operationId: string }
   | { id: number; type: "close" }
 
