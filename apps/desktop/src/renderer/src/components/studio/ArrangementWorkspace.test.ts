@@ -33,7 +33,8 @@ describe("ArrangementWorkspace", () => {
         sampleRate: 48_000,
         tempo: 120,
         timeSignatureNumerator: 4,
-        timeSignatureDenominator: 4
+        timeSignatureDenominator: 4,
+        waveformDisplayMode: "separate"
       },
       dirty: true,
       recoveredWorkingCopy: false
@@ -41,7 +42,7 @@ describe("ArrangementWorkspace", () => {
     project.projectAssets = [recordingAsset]
 
     const wrapper = mount(ArrangementWorkspace, {
-      props: { recordingStartedAt: null, recordingError: "" },
+      props: { recordingId: null, recordingStartedAt: null, recordingError: "" },
       global: { plugins: [pinia] }
     })
 
@@ -51,6 +52,9 @@ describe("ArrangementWorkspace", () => {
     expect(clip.attributes("aria-pressed")).toBe("true")
     expect(wrapper.text()).toContain("First take")
     expect(wrapper.text()).toContain("1 clip")
+    expect(wrapper.get(".waveform").attributes("style")).toContain("width: 1px")
+    expect(wrapper.get('[aria-label="2 channels audio"]').findAll("path")).toHaveLength(2)
+    expect(wrapper.text()).not.toContain("2 CH")
   })
 
   it("shows a growing capture clip while recording", () => {
@@ -65,14 +69,19 @@ describe("ArrangementWorkspace", () => {
         sampleRate: 48_000,
         tempo: 120,
         timeSignatureNumerator: 4,
-        timeSignatureDenominator: 4
+        timeSignatureDenominator: 4,
+        waveformDisplayMode: "separate"
       },
       dirty: false,
       recoveredWorkingCopy: false
     }
 
     const wrapper = mount(ArrangementWorkspace, {
-      props: { recordingStartedAt: Date.now() - 1_000, recordingError: "" },
+      props: {
+        recordingId: "recording-live",
+        recordingStartedAt: Date.now() - 1_000,
+        recordingError: ""
+      },
       global: { plugins: [pinia] }
     })
 

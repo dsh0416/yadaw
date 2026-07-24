@@ -66,7 +66,8 @@ export const useProjectStore = defineStore("project", () => {
       sampleRate: configuration.sampleRate,
       tempo: configuration.tempo,
       timeSignatureNumerator: configuration.timeSignatureNumerator,
-      timeSignatureDenominator: configuration.timeSignatureDenominator
+      timeSignatureDenominator: configuration.timeSignatureDenominator,
+      waveformDisplayMode: configuration.waveformDisplayMode
     }).where(eq(projectTable.id, "project"))
     if (session.value) {
       session.value.configuration = { ...configuration }

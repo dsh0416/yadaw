@@ -10,7 +10,8 @@ function createProject(): void {
     sampleRate: 48_000,
     tempo: 120,
     timeSignatureNumerator: 4,
-    timeSignatureDenominator: 4
+    timeSignatureDenominator: 4,
+    waveformDisplayMode: "separate"
   })
 }
 </script>

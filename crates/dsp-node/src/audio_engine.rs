@@ -19,8 +19,8 @@ use ringbuf::{
 };
 
 use crate::recording::{
-    NativeRecordingResult, NativeRecordingStartConfig, RecorderController, RecordingTap,
-    StereoFrame,
+    NativeRecordingResult, NativeRecordingStartConfig, NativeWaveformSnapshot, RecorderController,
+    RecordingTap, StereoFrame,
 };
 
 const UNKNOWN_LATENCY_US: u64 = u64::MAX;
@@ -648,6 +648,23 @@ pub fn stop_recording() -> Result<NativeRecordingResult> {
         .as_ref()
         .ok_or_else(|| invalid_config("audio engine is not running"))?;
     engine.recorder.stop()
+}
+
+#[napi]
+pub fn recording_waveform_snapshot(
+    start_frame: i64,
+    end_frame: i64,
+    max_buckets: u32,
+) -> Result<NativeWaveformSnapshot> {
+    let guard = engine_slot()
+        .lock()
+        .map_err(|_| audio_error("audio engine lock", "poisoned"))?;
+    let engine = guard
+        .as_ref()
+        .ok_or_else(|| invalid_config("audio engine is not running"))?;
+    engine
+        .recorder
+        .waveform_snapshot(start_frame, end_frame, max_buckets)
 }
 
 #[cfg(test)]

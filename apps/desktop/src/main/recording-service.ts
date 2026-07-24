@@ -4,7 +4,9 @@ import { basename, join } from "node:path"
 import type {
   OperationSnapshot,
   PendingRecording,
-  RecordingSession
+  RecordingSession,
+  WaveformPeakWindow,
+  WaveformWindowRequest
 } from "@yadaw/contracts"
 import {
   audioEngineSnapshot,
@@ -14,6 +16,7 @@ import {
   stopRecording as stopNativeRecording,
   writeDeterministicTestRecording
 } from "@yadaw/dsp-node"
+import { recordingWaveformSnapshot as nativeRecordingWaveformSnapshot } from "@yadaw/dsp-node"
 import type { ApplicationSettingsStore } from "./application-settings"
 import type { OperationService } from "./operation-service"
 import type { ProjectService } from "./project-service"
@@ -34,6 +37,7 @@ function utcFields(date: Date): { date: string; time: string } {
 
 export class RecordingService {
   private active: RecordingSidecar | null = null
+  private lastWaveformSnapshot: WaveformPeakWindow | null = null
 
   constructor(
     private readonly settings: ApplicationSettingsStore,
@@ -49,6 +53,7 @@ export class RecordingService {
 
   async start(): Promise<RecordingSession> {
     if (this.active) throw new Error("A recording is already active")
+    this.lastWaveformSnapshot = null
     const project = this.projects.current
     if (!project) throw new Error("Open a project before recording")
     const deterministicTestCapture = process.env.YADAW_TEST_CAPTURE_SOURCE === "1"
@@ -116,6 +121,13 @@ export class RecordingService {
     this.operations.upsert(operation, true)
     try {
       const startedUtc = utcFields(new Date(recording.startedAt))
+      const deterministicFrameCount = Math.min(
+        0xffff_ffff,
+        Math.max(
+          4_800,
+          Math.round((Date.now() - recording.startedAt) / 1_000 * recording.sampleRate)
+        )
+      )
       const captured = process.env.YADAW_TEST_CAPTURE_SOURCE === "1"
         ? writeDeterministicTestRecording({
             path: recording.audioPath,
@@ -124,7 +136,7 @@ export class RecordingService {
             originationDate: startedUtc.date,
             originationTime: startedUtc.time,
             timeReference: 0
-          }, recording.sampleRate, 4_800)
+          }, recording.sampleRate, deterministicFrameCount)
         : stopNativeRecording()
       recording.frameCount = captured.frameCount
       recording.dropoutFrames = captured.dropoutFrames
@@ -140,6 +152,76 @@ export class RecordingService {
       this.operations.patch(operationId, { state: "failed", message, cancellable: false }, true)
       throw error
     }
+  }
+
+  waveformSnapshot(request: WaveformWindowRequest): WaveformPeakWindow {
+    const recording = this.active
+    if (!recording || recording.id !== request.id) {
+      if (this.lastWaveformSnapshot?.id === request.id) {
+        return structuredClone(this.lastWaveformSnapshot)
+      }
+      throw new Error("Recording is no longer active")
+    }
+    if (
+      request.startFrame < 0 ||
+      request.endFrame < request.startFrame ||
+      request.maxBuckets < 1 ||
+      request.maxBuckets > 4_096
+    ) {
+      throw new TypeError("Invalid recording waveform request")
+    }
+    if (process.env.YADAW_TEST_CAPTURE_SOURCE === "1") {
+      const frameCount = Math.max(1, Math.floor((Date.now() - recording.startedAt) / 1_000 * recording.sampleRate))
+      const start = Math.min(frameCount, request.startFrame)
+      const end = Math.min(frameCount, Math.max(start, request.endFrame))
+      let framesPerBucket = 64
+      while (Math.ceil((end - start) / framesPerBucket) > request.maxBuckets) framesPerBucket *= 4
+      const bucketCount = Math.ceil((end - start) / framesPerBucket)
+      const values = new Float32Array(bucketCount * 4)
+      for (let bucket = 0; bucket < bucketCount; bucket += 1) {
+        let minimum = 1
+        let maximum = -1
+        const bucketStart = start + bucket * framesPerBucket
+        const bucketEnd = Math.min(end, bucketStart + framesPerBucket)
+        for (let frame = bucketStart; frame < bucketEnd; frame += 1) {
+          const sample = Math.sin(Math.PI * 2 * 1_000 * frame / recording.sampleRate) * 0.25
+          minimum = Math.min(minimum, sample)
+          maximum = Math.max(maximum, sample)
+        }
+        values.set([minimum, maximum, minimum, maximum], bucket * 4)
+      }
+      const result: WaveformPeakWindow = {
+        id: request.id,
+        sampleRate: recording.sampleRate,
+        channels: 2,
+        frameCount,
+        startFrame: start,
+        endFrame: end,
+        framesPerBucket,
+        bucketCount,
+        peaks: new Uint8Array(values.buffer)
+      }
+      this.lastWaveformSnapshot = result
+      return result
+    }
+    const snapshot = nativeRecordingWaveformSnapshot(
+      request.startFrame,
+      request.endFrame,
+      request.maxBuckets
+    )
+    const result: WaveformPeakWindow = {
+      id: request.id,
+      sampleRate: snapshot.sampleRate,
+      channels: snapshot.channels,
+      frameCount: snapshot.frameCount,
+      startFrame: snapshot.startFrame,
+      endFrame: snapshot.endFrame,
+      framesPerBucket: snapshot.framesPerBucket,
+      bucketCount: snapshot.bucketCount,
+      peaks: new Uint8Array(snapshot.peaks)
+    }
+    this.lastWaveformSnapshot = result
+    return result
   }
 
   private async finalizeAndCommit(recording: RecordingSidecar, operationId: string): Promise<void> {
@@ -188,7 +270,12 @@ export class RecordingService {
       channels: finalized.channels,
       bitDepth: finalized.bitDepth as RecordingSidecar["bitDepth"],
       frameCount: BigInt(finalized.frameCount),
-      bwfTimeReference: BigInt(finalized.timeReference)
+      bwfTimeReference: BigInt(finalized.timeReference),
+      waveformLevels: finalized.waveformLevels.map((level) => ({
+        framesPerBucket: level.framesPerBucket,
+        bucketCount: level.bucketCount,
+        peaks: new Uint8Array(level.peaks)
+      }))
     }, (completed, total) => {
       if (total > 0 && completed >= total) {
         // All LO chunks are in the transaction. From this point onward cancellation

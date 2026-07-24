@@ -8,6 +8,13 @@ import { assets, project } from "../schema"
 
 const databases: ProjectDatabase[] = []
 
+function encodePeaks(values: number[]): Uint8Array {
+  const bytes = new Uint8Array(values.length * 4)
+  const view = new DataView(bytes.buffer)
+  values.forEach((value, index) => view.setFloat32(index * 4, value, true))
+  return bytes
+}
+
 async function createDatabase(name = "Test project") {
   const directory = await mkdtemp(join(tmpdir(), "yadaw-project-db-"))
   const database = await ProjectDatabase.create(join(directory, "pgdata"), {
@@ -15,7 +22,8 @@ async function createDatabase(name = "Test project") {
     sampleRate: 48_000,
     tempo: 120,
     numerator: 4,
-    denominator: 4
+    denominator: 4,
+    waveformDisplayMode: "separate"
   })
   databases.push(database)
   return { database, directory }
@@ -38,7 +46,12 @@ describe("ProjectDatabase", () => {
 
     const proxy = createProjectDbProxy({ query: (request) => database.query(request) })
     const typed = await proxy.select().from(project)
-    expect(typed[0]).toMatchObject({ name: "Test project", sampleRate: 48_000, tempo: 120 })
+    expect(typed[0]).toMatchObject({
+      name: "Test project",
+      sampleRate: 48_000,
+      tempo: 120,
+      waveformDisplayMode: "separate"
+    })
   })
 
   it("rolls an entire query batch back when one statement fails", async () => {
@@ -144,6 +157,121 @@ describe("ProjectDatabase", () => {
       byteLength: 2_500_000n,
       createdAt: expect.any(Date)
     })
+  })
+
+  it("stores, slices, selects, archives, and cascade-deletes arbitrary-channel waveform levels", async () => {
+    const { database, directory } = await createDatabase()
+    const audio = join(directory, "surround.wav")
+    const archive = join(directory, "surround.yadaw")
+    await writeFile(audio, Buffer.alloc(256, 0x22))
+    const baseValues = [
+      -0.125, 0.125, -0.25, 0.25, -0.375, 0.375,
+      -0.5, 0.5, -0.625, 0.625, -0.75, 0.75,
+      -0.875, 0.875, -1, 1, -0.25, 0.25,
+      -0.75, 0.75, -0.5, 0.5, -0.125, 0.125
+    ]
+    await database.importLargeObject(audio, {
+      id: "surround",
+      name: "Surround.wav",
+      mimeType: "audio/x-bwf",
+      contentHash: "surround-hash",
+      sampleRate: 96_000,
+      channels: 3,
+      bitDepth: "pcm24",
+      frameCount: 256n,
+      bwfTimeReference: 0n,
+      waveformLevels: [
+        { framesPerBucket: 64, bucketCount: 4, peaks: encodePeaks(baseValues) },
+        {
+          framesPerBucket: 256,
+          bucketCount: 1,
+          peaks: encodePeaks([-0.875, 0.875, -1, 1, -0.75, 0.75])
+        }
+      ]
+    })
+
+    const detail = await database.readWaveform("surround", 64, 192, 100)
+    expect(detail).toMatchObject({
+      channels: 3,
+      startFrame: 64,
+      endFrame: 192,
+      framesPerBucket: 64,
+      bucketCount: 2
+    })
+    expect(detail?.peaks).toEqual(encodePeaks(baseValues.slice(6, 18)))
+    const overview = await database.readWaveform("surround", 0, 256, 1)
+    expect(overview).toMatchObject({ framesPerBucket: 256, bucketCount: 1 })
+
+    await database.dumpTo(archive)
+    await database.close()
+    databases.splice(databases.indexOf(database), 1)
+    const restored = await ProjectDatabase.open(join(directory, "restored-waveform"), archive)
+    databases.push(restored)
+    expect(await restored.readWaveform("surround", 0, 256, 1)).toMatchObject({
+      channels: 3,
+      frameCount: 256,
+      framesPerBucket: 256,
+      bucketCount: 1
+    })
+    await restored.query({
+      sql: "DELETE FROM assets WHERE id = 'surround'",
+      params: [],
+      method: "execute"
+    })
+    const cached = await restored.query({
+      sql: "SELECT count(*)::int FROM asset_waveform_levels WHERE asset_id = 'surround'",
+      params: [],
+      method: "all"
+    })
+    expect(cached.rows).toEqual([[0]])
+  })
+
+  it("treats an outdated cache version as missing and rolls cache/import failures back together", async () => {
+    const { database, directory } = await createDatabase()
+    const audio = join(directory, "rollback.wav")
+    await writeFile(audio, Buffer.alloc(64, 0x11))
+    const base = {
+      name: "Rollback.wav",
+      mimeType: "audio/x-bwf" as const,
+      contentHash: "rollback-hash",
+      sampleRate: 48_000,
+      channels: 2,
+      bitDepth: "float32" as const,
+      frameCount: 64n,
+      bwfTimeReference: 0n
+    }
+    await expect(database.importLargeObject(audio, {
+      id: "broken",
+      ...base,
+      waveformLevels: [{ framesPerBucket: 64, bucketCount: 1, peaks: new Uint8Array(1) }]
+    })).rejects.toThrow()
+    expect((await database.query({
+      sql: "SELECT count(*)::int FROM assets WHERE id = 'broken'",
+      params: [],
+      method: "all"
+    })).rows).toEqual([[0]])
+    expect((await database.query({
+      sql: "SELECT count(*)::int FROM pg_largeobject_metadata",
+      params: [],
+      method: "all"
+    })).rows).toEqual([[0]])
+
+    await database.importLargeObject(audio, {
+      id: "versioned",
+      ...base,
+      contentHash: "versioned-hash",
+      waveformLevels: [{
+        framesPerBucket: 64,
+        bucketCount: 1,
+        peaks: encodePeaks([-0.5, 0.5, -0.25, 0.25])
+      }]
+    })
+    await database.query({
+      sql: "UPDATE asset_waveform_levels SET cache_version = 99 WHERE asset_id = 'versioned'",
+      params: [],
+      method: "execute"
+    })
+    expect(await database.readWaveform("versioned", 0, 64, 10)).toBeNull()
   })
 
   it("rolls back a cancelled or duplicate LO import without leaving an orphan", async () => {

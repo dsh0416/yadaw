@@ -23,7 +23,8 @@ const dirty = computed(() =>
   draft.value.sampleRate !== props.configuration.sampleRate ||
   draft.value.tempo !== props.configuration.tempo ||
   draft.value.timeSignatureNumerator !== props.configuration.timeSignatureNumerator ||
-  draft.value.timeSignatureDenominator !== props.configuration.timeSignatureDenominator
+  draft.value.timeSignatureDenominator !== props.configuration.timeSignatureDenominator ||
+  draft.value.waveformDisplayMode !== props.configuration.waveformDisplayMode
 )
 </script>
 

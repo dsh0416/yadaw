@@ -17,7 +17,8 @@ import type {
   ProjectQueryRequest,
   ProjectTransactionRequest,
   StorageSpaceSnapshot,
-  SystemPerformanceSnapshot
+  SystemPerformanceSnapshot,
+  WaveformWindowRequest
 } from "@yadaw/contracts"
 import {
   audioEngineSnapshot,
@@ -32,6 +33,7 @@ import { ApplicationSettingsStore } from "./application-settings"
 import { OperationService } from "./operation-service"
 import { ProjectService } from "./project-service"
 import { RecordingService } from "./recording-service"
+import { WaveformService } from "./waveform-service"
 
 const rendererDirectory = join(import.meta.dirname, "../renderer")
 
@@ -185,9 +187,23 @@ function validateCreateProject(value: unknown): CreateProjectRequest {
   if (typeof request.name !== "string" || typeof request.sampleRate !== "number" ||
       typeof request.tempo !== "number" || typeof request.timeSignatureNumerator !== "number" ||
       typeof request.timeSignatureDenominator !== "number" ||
+      (request.waveformDisplayMode !== "separate" && request.waveformDisplayMode !== "aggregate") ||
       (request.path !== undefined && typeof request.path !== "string")) {
     throw new TypeError("Invalid project options")
   }
+  return request
+}
+
+function validateWaveformRequest(value: unknown): WaveformWindowRequest {
+  if (typeof value !== "object" || value === null) throw new TypeError("Waveform request must be an object")
+  const request = value as WaveformWindowRequest
+  if (
+    typeof request.id !== "string" || request.id.length === 0 || request.id.length > 256 ||
+    !Number.isSafeInteger(request.startFrame) || request.startFrame < 0 ||
+    !Number.isSafeInteger(request.endFrame) || request.endFrame < request.startFrame ||
+    !Number.isInteger(request.maxBuckets) ||
+    request.maxBuckets < 1 || request.maxBuckets > 4_096
+  ) throw new TypeError("Invalid waveform request")
   return request
 }
 
@@ -337,7 +353,8 @@ function registerIpcHandlers(
   settings: ApplicationSettingsStore,
   projects: ProjectService,
   recordings: RecordingService,
-  operations: OperationService
+  operations: OperationService,
+  waveforms: WaveformService
 ): void {
   ipcMain.handle(IPC_CHANNELS.engineInfo, (event) => {
     assertTrustedSender(event)
@@ -454,7 +471,9 @@ function registerIpcHandlers(
       recover = choice.response === 0
     }
     try {
-      return await projects.open(path, recover)
+      const opened = await projects.open(path, recover)
+      waveforms.rebuildMissingInBackground()
+      return opened
     } catch (error) {
       const code = (error as Error & { code?: string }).code
       if (code === "newer-project") {
@@ -575,6 +594,16 @@ function registerIpcHandlers(
     return projects.readAssetAudio(value)
   })
 
+  ipcMain.handle(IPC_CHANNELS.assetWaveformRead, (event, value: unknown) => {
+    assertTrustedSender(event)
+    return waveforms.readAsset(validateWaveformRequest(value))
+  })
+
+  ipcMain.handle(IPC_CHANNELS.recordingWaveformSnapshot, (event, value: unknown) => {
+    assertTrustedSender(event)
+    return recordings.waveformSnapshot(validateWaveformRequest(value))
+  })
+
   ipcMain.handle(IPC_CHANNELS.operationCancel, (event, value: unknown) => {
     assertTrustedSender(event)
     if (typeof value !== "string") throw new TypeError("Operation id must be a string")
@@ -627,7 +656,8 @@ app.whenReady().then(() => {
   projectService = new ProjectService(app.getPath("userData"), settings)
   const operations = new OperationService()
   const recordings = new RecordingService(settings, projectService, operations)
-  registerIpcHandlers(settings, projectService, recordings, operations)
+  const waveforms = new WaveformService(settings, projectService)
+  registerIpcHandlers(settings, projectService, recordings, operations, waveforms)
   createMainWindow()
 
   app.on("activate", () => {

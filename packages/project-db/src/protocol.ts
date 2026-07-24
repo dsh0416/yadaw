@@ -18,13 +18,15 @@ export interface ProjectTransactionRequest {
 }
 
 export type WorkerRequest =
-  | { id: number; type: "create"; dataDir: string; name: string; sampleRate: number; tempo: number; numerator: number; denominator: number }
+  | { id: number; type: "create"; dataDir: string; name: string; sampleRate: number; tempo: number; numerator: number; denominator: number; waveformDisplayMode: "separate" | "aggregate" }
   | { id: number; type: "open"; dataDir: string; archivePath?: string }
   | { id: number; type: "query"; query: ProjectQueryRequest }
   | { id: number; type: "transaction"; request: ProjectTransactionRequest }
   | { id: number; type: "dump"; outputPath: string }
   | { id: number; type: "import-large-object"; filePath: string; operationId: string; asset: LargeObjectAssetInput }
   | { id: number; type: "read-large-object"; assetId: string }
+  | { id: number; type: "read-waveform"; assetId: string; startFrame: number; endFrame: number; maxBuckets: number }
+  | { id: number; type: "store-waveform"; assetId: string; waveform: WaveformAssetInput }
   | { id: number; type: "cancel"; operationId: string }
   | { id: number; type: "close" }
 
@@ -42,6 +44,31 @@ export interface LargeObjectAssetInput {
   bitDepth: "float32" | "pcm24" | "pcm16"
   frameCount: bigint
   bwfTimeReference: bigint
+  waveformLevels?: WaveformLevelInput[]
+}
+
+export interface WaveformLevelInput {
+  framesPerBucket: number
+  bucketCount: number
+  peaks: Uint8Array
+}
+
+export interface WaveformAssetInput {
+  sampleRate: number
+  channels: number
+  frameCount: bigint
+  levels: WaveformLevelInput[]
+}
+
+export interface StoredWaveformWindow {
+  sampleRate: number
+  channels: number
+  frameCount: number
+  startFrame: number
+  endFrame: number
+  framesPerBucket: number
+  bucketCount: number
+  peaks: Uint8Array
 }
 
 export interface WorkerProgress {

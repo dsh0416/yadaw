@@ -36,7 +36,8 @@ async function handle(request: WorkerRequest): Promise<unknown> {
         sampleRate: request.sampleRate,
         tempo: request.tempo,
         numerator: request.numerator,
-        denominator: request.denominator
+        denominator: request.denominator,
+        waveformDisplayMode: request.waveformDisplayMode
       })
       return null
     case "open":
@@ -73,6 +74,16 @@ async function handle(request: WorkerRequest): Promise<unknown> {
     }
     case "read-large-object":
       return requireDatabase().readLargeObject(request.assetId)
+    case "read-waveform":
+      return requireDatabase().readWaveform(
+        request.assetId,
+        request.startFrame,
+        request.endFrame,
+        request.maxBuckets
+      )
+    case "store-waveform":
+      await requireDatabase().storeWaveform(request.assetId, request.waveform)
+      return null
     case "cancel":
       cancelledOperations.add(request.operationId)
       return null

@@ -8,10 +8,12 @@ mod recording;
 
 pub use audio::{list_audio_backends, list_audio_devices};
 pub use audio_engine::{
-    audio_engine_snapshot, start_audio_engine, start_recording, stop_audio_engine, stop_recording,
+    audio_engine_snapshot, recording_waveform_snapshot, start_audio_engine, start_recording,
+    stop_audio_engine, stop_recording,
 };
 pub use recording::{
-    finalize_recording, repair_recording_header, write_deterministic_test_recording,
+    analyze_waveform, finalize_recording, repair_recording_header,
+    write_deterministic_test_recording,
 };
 
 #[napi(object)]

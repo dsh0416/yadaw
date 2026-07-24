@@ -12,6 +12,8 @@ import { useAudioRuntimeStore } from "../stores/audioRuntime"
 import { useProjectStore } from "../stores/project"
 import { useRecordingStore } from "../stores/recording"
 import { useTransportStore } from "../stores/transport"
+import { useArrangementViewStore } from "../stores/arrangementView"
+import { useWaveformStore } from "../stores/waveform"
 
 const router = useRouter()
 const engineStore = useEngineStore()
@@ -25,6 +27,8 @@ const {
 const projectStore = useProjectStore()
 const recordingStore = useRecordingStore()
 const transportStore = useTransportStore()
+const arrangementViewStore = useArrangementViewStore()
+const waveformStore = useWaveformStore()
 const { session } = storeToRefs(projectStore)
 const {
   active: activeRecording,
@@ -64,6 +68,8 @@ async function closeProject(): Promise<void> {
   if (activeRecording.value) return
   if (await projectStore.close()) {
     transportStore.reset()
+    arrangementViewStore.reset()
+    waveformStore.clear()
     void router.push({ name: "welcome" })
   }
 }
@@ -121,6 +127,7 @@ onBeforeUnmount(() => transportStore.stop())
     />
     <StudioPlaceholderPanel side="left" />
     <ArrangementWorkspace
+      :recording-id="activeRecording?.id ?? null"
       :recording-started-at="activeRecording?.startedAt ?? null"
       :recording-error="recordingError"
     />
@@ -130,6 +137,7 @@ onBeforeUnmount(() => transportStore.stop())
 </template>
 
 <style scoped>
-.studio-shell{display:grid;grid-template:56px minmax(0,1fr) 25px/214px minmax(0,1fr) 258px;width:100vw;height:100vh;color:var(--text-primary);background:var(--canvas)}
+.studio-shell{display:grid;grid-template:56px minmax(0,1fr) 25px/214px minmax(0,1fr) 258px;width:100vw;height:100vh;color:var(--text-primary);background:var(--canvas);-webkit-user-select:none;user-select:none}
+.studio-shell :deep(:is(input,textarea,select,[contenteditable]:not([contenteditable="false"]))){-webkit-user-select:text;user-select:text}
 @media(max-width:1100px){.studio-shell{grid-template-columns:184px minmax(0,1fr) 228px}}
 </style>

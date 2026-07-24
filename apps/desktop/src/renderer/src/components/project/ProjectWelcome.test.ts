@@ -11,7 +11,8 @@ describe("ProjectWelcome", () => {
       sampleRate: 48_000,
       tempo: 120,
       timeSignatureNumerator: 4,
-      timeSignatureDenominator: 4
+      timeSignatureDenominator: 4,
+      waveformDisplayMode: "separate"
     })
     expect(wrapper.find("input").exists()).toBe(false)
   })

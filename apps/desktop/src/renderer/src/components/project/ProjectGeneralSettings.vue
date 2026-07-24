@@ -62,6 +62,23 @@ function numberValue(event: Event): number {
         </label>
       </div>
     </section>
+
+    <section class="settings-section">
+      <header class="section-header">
+        <span>WAVEFORMS</span>
+        <div><h2>Channel display</h2><p>Choose how multichannel audio is represented inside timeline clips.</p></div>
+      </header>
+      <div class="field-grid">
+        <label class="field wide">
+          <span>Waveform channels</span>
+          <select :value="configuration.waveformDisplayMode" @change="update({ waveformDisplayMode: textValue($event) as ProjectConfiguration['waveformDisplayMode'] })">
+            <option value="separate">Separate channels</option>
+            <option value="aggregate">Combined peak envelope</option>
+          </select>
+          <small>Separate mode creates one lane per channel and remains compatible with future surround formats.</small>
+        </label>
+      </div>
+    </section>
   </div>
 </template>
 

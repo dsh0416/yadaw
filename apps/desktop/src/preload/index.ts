@@ -9,6 +9,7 @@ import type {
   ProjectCloseDisposition,
   ProjectQueryRequest,
   ProjectTransactionRequest,
+  WaveformWindowRequest,
   YadawDesktopApi
 } from "@yadaw/contracts"
 
@@ -47,6 +48,10 @@ const api: YadawDesktopApi = {
   deletePendingRecording: (id: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.recordingDeletePending, id),
   readAssetAudio: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.assetAudioRead, id),
+  readAssetWaveform: (request: WaveformWindowRequest) =>
+    ipcRenderer.invoke(IPC_CHANNELS.assetWaveformRead, request),
+  recordingWaveformSnapshot: (request: WaveformWindowRequest) =>
+    ipcRenderer.invoke(IPC_CHANNELS.recordingWaveformSnapshot, request),
   subscribeOperations: (listener) => {
     const handler = (_event: Electron.IpcRendererEvent, operation: Parameters<typeof listener>[0]) => listener(operation)
     ipcRenderer.on(IPC_CHANNELS.operationEvent, handler)

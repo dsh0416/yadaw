@@ -4,7 +4,13 @@ import { dirname } from "node:path"
 import { PGlite } from "@electric-sql/pglite"
 import type { PGliteInterface, Results } from "@electric-sql/pglite"
 import { MIGRATION_JOURNAL_TABLE, PROJECT_MIGRATIONS } from "./migrations"
-import type { ProjectQueryRequest, ProjectQueryResult, ProjectTransactionRequest } from "./protocol"
+import type {
+  ProjectQueryRequest,
+  ProjectQueryResult,
+  ProjectTransactionRequest,
+  StoredWaveformWindow,
+  WaveformAssetInput
+} from "./protocol"
 import { PROJECT_ID, PROJECT_SAMPLE_RATES } from "./schema"
 
 export class ProjectCompatibilityError extends Error {
@@ -36,7 +42,14 @@ export class ProjectDatabase {
 
   static async create(
     dataDir: string,
-    project: { name: string; sampleRate: number; tempo: number; numerator: number; denominator: number }
+    project: {
+      name: string
+      sampleRate: number
+      tempo: number
+      numerator: number
+      denominator: number
+      waveformDisplayMode: "separate" | "aggregate"
+    }
   ): Promise<ProjectDatabase> {
     if (!PROJECT_SAMPLE_RATES.includes(project.sampleRate as (typeof PROJECT_SAMPLE_RATES)[number])) {
       throw new RangeError("Unsupported project sample rate")
@@ -45,9 +58,14 @@ export class ProjectDatabase {
     try {
       await instance.migrate()
       await instance.db.query(
-        `INSERT INTO project (id, name, sample_rate, tempo, time_signature_numerator, time_signature_denominator)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [PROJECT_ID, project.name, project.sampleRate, project.tempo, project.numerator, project.denominator]
+        `INSERT INTO project (
+          id, name, sample_rate, tempo, time_signature_numerator,
+          time_signature_denominator, waveform_display_mode
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [
+          PROJECT_ID, project.name, project.sampleRate, project.tempo,
+          project.numerator, project.denominator, project.waveformDisplayMode
+        ]
       )
       return instance
     } catch (error) {
@@ -138,6 +156,7 @@ export class ProjectDatabase {
       bitDepth: "float32" | "pcm24" | "pcm16"
       frameCount: bigint
       bwfTimeReference: bigint
+      waveformLevels?: Array<{ framesPerBucket: number; bucketCount: number; peaks: Uint8Array }>
     },
     onProgress?: (completed: number, total: number) => void,
     isCancelled?: () => boolean
@@ -181,6 +200,18 @@ export class ProjectDatabase {
           asset.channels, asset.bitDepth, asset.frameCount, asset.bwfTimeReference, oid
         ]
       )
+      for (const [level, waveform] of (asset.waveformLevels ?? []).entries()) {
+        await tx.query(
+          `INSERT INTO asset_waveform_levels (
+            asset_id, cache_version, level, frames_per_bucket, bucket_count,
+            channels, sample_rate, frame_count, peaks
+          ) VALUES ($1, 1, $2, $3, $4, $5, $6, $7, $8)`,
+          [
+            asset.id, level, waveform.framesPerBucket, waveform.bucketCount,
+            asset.channels, asset.sampleRate, asset.frameCount, waveform.peaks
+          ]
+        )
+      }
       return oid
     })
   }
@@ -195,6 +226,76 @@ export class ProjectDatabase {
     const data = result.rows[0]?.data
     if (!data) throw new Error(`Audio asset '${assetId}' was not found`)
     return new Uint8Array(data)
+  }
+
+  async storeWaveform(assetId: string, waveform: WaveformAssetInput): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      await tx.query(
+        "DELETE FROM asset_waveform_levels WHERE asset_id = $1",
+        [assetId]
+      )
+      for (const [level, value] of waveform.levels.entries()) {
+        await tx.query(
+          `INSERT INTO asset_waveform_levels (
+            asset_id, cache_version, level, frames_per_bucket, bucket_count,
+            channels, sample_rate, frame_count, peaks
+          ) VALUES ($1, 1, $2, $3, $4, $5, $6, $7, $8)`,
+          [
+            assetId, level, value.framesPerBucket, value.bucketCount,
+            waveform.channels, waveform.sampleRate, waveform.frameCount, value.peaks
+          ]
+        )
+      }
+    })
+  }
+
+  async readWaveform(
+    assetId: string,
+    startFrame: number,
+    endFrame: number,
+    maxBuckets: number
+  ): Promise<StoredWaveformWindow | null> {
+    const result = await this.db.query<{
+      frames_per_bucket: number
+      bucket_count: number
+      channels: number
+      sample_rate: number
+      frame_count: string
+      peaks: Uint8Array
+    }>(
+      `SELECT frames_per_bucket, bucket_count, channels, sample_rate, frame_count, peaks
+       FROM asset_waveform_levels
+       WHERE asset_id = $1 AND cache_version = 1
+       ORDER BY frames_per_bucket`,
+      [assetId]
+    )
+    if (result.rows.length === 0) return null
+    const target = Math.max(1, Math.ceil((endFrame - startFrame) / Math.max(1, maxBuckets)))
+    const selected = [...result.rows].reverse()
+      .find((level) => level.frames_per_bucket <= target) ?? result.rows[0]!
+    const frameCount = Number(selected.frame_count)
+    const start = Math.max(0, Math.min(frameCount, startFrame))
+    const end = Math.max(start, Math.min(frameCount, endFrame))
+    const firstBucket = Math.floor(start / selected.frames_per_bucket)
+    const lastBucket = Math.min(
+      selected.bucket_count,
+      Math.ceil(end / selected.frames_per_bucket)
+    )
+    const bytesPerBucket = selected.channels * 8
+    const peaks = new Uint8Array(selected.peaks).slice(
+      firstBucket * bytesPerBucket,
+      lastBucket * bytesPerBucket
+    )
+    return {
+      sampleRate: selected.sample_rate,
+      channels: selected.channels,
+      frameCount,
+      startFrame: firstBucket * selected.frames_per_bucket,
+      endFrame: Math.min(frameCount, lastBucket * selected.frames_per_bucket),
+      framesPerBucket: selected.frames_per_bucket,
+      bucketCount: lastBucket - firstBucket,
+      peaks
+    }
   }
 
   async dumpTo(outputPath: string): Promise<void> {

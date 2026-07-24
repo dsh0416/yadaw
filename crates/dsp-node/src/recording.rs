@@ -2,7 +2,7 @@ use std::{
     fs::{File, OpenOptions},
     io::{BufWriter, Read, Seek, SeekFrom, Write},
     sync::{
-        Arc,
+        Arc, Mutex,
         atomic::{AtomicBool, AtomicU64, Ordering},
         mpsc::{self, Receiver, Sender, SyncSender},
     },
@@ -11,7 +11,7 @@ use std::{
 };
 
 use bwavfile::{AudioFrameWriter, Bext, WAVE_TAG_FLOAT, WaveFmt, WaveReader, WaveWriter};
-use napi::{Error, Result, Status, Task};
+use napi::{Error, Result, Status, Task, bindgen_prelude::Buffer};
 use napi_derive::napi;
 use ringbuf::{
     HeapCons, HeapProd, HeapRb,
@@ -24,6 +24,35 @@ pub type StereoFrame = [f32; 2];
 
 const RECORDING_RING_SECONDS: usize = 8;
 const WRITER_BLOCK_FRAMES: usize = 2_048;
+const WAVEFORM_BASE_FRAMES: usize = 64;
+const WAVEFORM_LEVEL_FACTOR: usize = 4;
+
+#[napi(object)]
+pub struct NativeWaveformLevel {
+    pub frames_per_bucket: u32,
+    pub bucket_count: u32,
+    pub peaks: Buffer,
+}
+
+#[napi(object)]
+pub struct NativeWaveformSnapshot {
+    pub sample_rate: u32,
+    pub channels: u32,
+    pub frame_count: i64,
+    pub start_frame: i64,
+    pub end_frame: i64,
+    pub frames_per_bucket: u32,
+    pub bucket_count: u32,
+    pub peaks: Buffer,
+}
+
+#[napi(object)]
+pub struct NativeAnalyzedWaveform {
+    pub sample_rate: u32,
+    pub channels: u32,
+    pub frame_count: i64,
+    pub waveform_levels: Vec<NativeWaveformLevel>,
+}
 
 #[napi(object)]
 pub struct NativeRecordingStartConfig {
@@ -66,6 +95,175 @@ pub struct NativeFinalizedRecording {
     pub bit_depth: String,
     pub frame_count: i64,
     pub time_reference: i64,
+    pub waveform_levels: Vec<NativeWaveformLevel>,
+}
+
+fn finite_sample(value: f32) -> f32 {
+    if value.is_finite() {
+        value.clamp(-1.0, 1.0)
+    } else {
+        0.0
+    }
+}
+
+fn encode_peaks(values: &[f32]) -> Buffer {
+    let mut bytes = Vec::with_capacity(std::mem::size_of_val(values));
+    for value in values {
+        bytes.extend_from_slice(&value.to_le_bytes());
+    }
+    bytes.into()
+}
+
+fn aggregate_peak_level(source: &[f32], channels: usize) -> Vec<f32> {
+    let stride = channels * 2;
+    let buckets = source.len() / stride;
+    let mut result = Vec::with_capacity(buckets.div_ceil(WAVEFORM_LEVEL_FACTOR) * stride);
+    for group_start in (0..buckets).step_by(WAVEFORM_LEVEL_FACTOR) {
+        let group_end = (group_start + WAVEFORM_LEVEL_FACTOR).min(buckets);
+        for channel in 0..channels {
+            let mut minimum = 1.0_f32;
+            let mut maximum = -1.0_f32;
+            for bucket in group_start..group_end {
+                let offset = bucket * stride + channel * 2;
+                minimum = minimum.min(source[offset]);
+                maximum = maximum.max(source[offset + 1]);
+            }
+            result.extend_from_slice(&[minimum, maximum]);
+        }
+    }
+    result
+}
+
+fn base_peak_level(samples: &[f32], channels: usize) -> Vec<f32> {
+    let frames = samples.len() / channels;
+    let mut peaks = Vec::with_capacity(frames.div_ceil(WAVEFORM_BASE_FRAMES) * channels * 2);
+    for start in (0..frames).step_by(WAVEFORM_BASE_FRAMES) {
+        let end = (start + WAVEFORM_BASE_FRAMES).min(frames);
+        for channel in 0..channels {
+            let mut minimum = 1.0_f32;
+            let mut maximum = -1.0_f32;
+            for frame in start..end {
+                let sample = finite_sample(samples[frame * channels + channel]);
+                minimum = minimum.min(sample);
+                maximum = maximum.max(sample);
+            }
+            peaks.extend_from_slice(&[minimum, maximum]);
+        }
+    }
+    peaks
+}
+
+fn build_waveform_levels(samples: &[f32], channels: usize) -> Vec<NativeWaveformLevel> {
+    if channels == 0 || samples.is_empty() {
+        return Vec::new();
+    }
+    let mut frames_per_bucket = WAVEFORM_BASE_FRAMES;
+    let mut values = base_peak_level(samples, channels);
+    let mut result = Vec::new();
+    loop {
+        let bucket_count = values.len() / (channels * 2);
+        result.push(NativeWaveformLevel {
+            frames_per_bucket: frames_per_bucket as u32,
+            bucket_count: bucket_count as u32,
+            peaks: encode_peaks(&values),
+        });
+        if bucket_count <= 1 {
+            break;
+        }
+        values = aggregate_peak_level(&values, channels);
+        frames_per_bucket *= WAVEFORM_LEVEL_FACTOR;
+    }
+    result
+}
+
+#[derive(Default)]
+struct LiveWaveform {
+    sample_rate: u32,
+    channels: usize,
+    frame_count: usize,
+    base_peaks: Vec<f32>,
+    pending_peaks: Vec<f32>,
+    pending_frames: usize,
+}
+
+impl LiveWaveform {
+    fn reset_pending(&mut self) {
+        self.pending_peaks.clear();
+        for _ in 0..self.channels {
+            self.pending_peaks.extend_from_slice(&[1.0, -1.0]);
+        }
+        self.pending_frames = 0;
+    }
+
+    fn reset(&mut self, sample_rate: u32, channels: usize) {
+        self.sample_rate = sample_rate;
+        self.channels = channels;
+        self.frame_count = 0;
+        self.base_peaks.clear();
+        self.reset_pending();
+    }
+
+    fn push(&mut self, samples: &[f32]) {
+        if self.channels == 0 {
+            return;
+        }
+        for frame in samples.chunks_exact(self.channels) {
+            for (channel, sample) in frame.iter().enumerate() {
+                let value = finite_sample(*sample);
+                let offset = channel * 2;
+                self.pending_peaks[offset] = self.pending_peaks[offset].min(value);
+                self.pending_peaks[offset + 1] = self.pending_peaks[offset + 1].max(value);
+            }
+            self.frame_count += 1;
+            self.pending_frames += 1;
+            if self.pending_frames == WAVEFORM_BASE_FRAMES {
+                self.base_peaks.extend_from_slice(&self.pending_peaks);
+                self.reset_pending();
+            }
+        }
+    }
+
+    fn snapshot(
+        &self,
+        start_frame: usize,
+        end_frame: usize,
+        max_buckets: usize,
+    ) -> NativeWaveformSnapshot {
+        let end = end_frame
+            .min(self.frame_count)
+            .max(start_frame.min(self.frame_count));
+        let start = start_frame.min(end);
+        let stride = self.channels * 2;
+        let mut all_peaks = self.base_peaks.clone();
+        if self.pending_frames > 0 {
+            all_peaks.extend_from_slice(&self.pending_peaks);
+        }
+        let total_buckets = all_peaks.len() / stride.max(1);
+        let first_bucket = (start / WAVEFORM_BASE_FRAMES).min(total_buckets);
+        let last_bucket = end
+            .div_ceil(WAVEFORM_BASE_FRAMES)
+            .min(total_buckets)
+            .max(first_bucket);
+        let mut values = all_peaks[first_bucket * stride..last_bucket * stride].to_vec();
+        let mut frames_per_bucket = WAVEFORM_BASE_FRAMES;
+        while values.len() / stride.max(1) > max_buckets.max(1) {
+            values = aggregate_peak_level(&values, self.channels);
+            frames_per_bucket *= WAVEFORM_LEVEL_FACTOR;
+        }
+        let bucket_count = values.len() / stride.max(1);
+        let coverage_start = first_bucket * WAVEFORM_BASE_FRAMES;
+        let coverage_end = (last_bucket * WAVEFORM_BASE_FRAMES).min(self.frame_count);
+        NativeWaveformSnapshot {
+            sample_rate: self.sample_rate,
+            channels: self.channels as u32,
+            frame_count: self.frame_count.min(i64::MAX as usize) as i64,
+            start_frame: coverage_start.min(i64::MAX as usize) as i64,
+            end_frame: coverage_end.min(i64::MAX as usize) as i64,
+            frames_per_bucket: frames_per_bucket as u32,
+            bucket_count: bucket_count as u32,
+            peaks: encode_peaks(&values),
+        }
+    }
 }
 
 fn recording_error(context: &str, error: impl std::fmt::Display) -> Error {
@@ -149,6 +347,7 @@ fn write_available(
     consumer: &mut HeapCons<StereoFrame>,
     active: &mut ActiveWriter,
     scratch: &mut Vec<f32>,
+    waveform: &Arc<Mutex<LiveWaveform>>,
 ) -> std::result::Result<(), String> {
     scratch.clear();
     while scratch.len() < WRITER_BLOCK_FRAMES * 2 {
@@ -164,6 +363,10 @@ fn write_available(
         .writer
         .write_frames(scratch)
         .map_err(|error| error.to_string())?;
+    waveform
+        .lock()
+        .map_err(|_| "waveform state is poisoned".to_owned())?
+        .push(scratch);
     active.frames += (scratch.len() / 2) as u64;
     Ok(())
 }
@@ -174,12 +377,13 @@ fn writer_thread(
     active_flag: Arc<AtomicBool>,
     dropout_frames: Arc<AtomicU64>,
     sample_rate: u32,
+    waveform: Arc<Mutex<LiveWaveform>>,
 ) {
     let mut current: Option<ActiveWriter> = None;
     let mut scratch = Vec::with_capacity(WRITER_BLOCK_FRAMES * 2);
     loop {
         if let Some(active) = current.as_mut()
-            && write_available(&mut consumer, active, &mut scratch).is_err()
+            && write_available(&mut consumer, active, &mut scratch, &waveform).is_err()
         {
             active_flag.store(false, Ordering::Release);
         }
@@ -192,6 +396,10 @@ fn writer_thread(
                     }
                     while consumer.try_pop().is_some() {}
                     dropout_frames.store(0, Ordering::Relaxed);
+                    waveform
+                        .lock()
+                        .map_err(|_| "waveform state is poisoned".to_owned())?
+                        .reset(sample_rate, 2);
                     let mut writer =
                         WaveWriter::create(&config.path, float_stereo_format(sample_rate))
                             .map_err(|error| error.to_string())?;
@@ -224,7 +432,7 @@ fn writer_thread(
                         .take()
                         .ok_or_else(|| "no recording is active".to_owned())?;
                     while consumer.occupied_len() > 0 {
-                        write_available(&mut consumer, &mut writer, &mut scratch)?;
+                        write_available(&mut consumer, &mut writer, &mut scratch, &waveform)?;
                     }
                     let path = writer.path.clone();
                     let frames = writer.frames;
@@ -250,7 +458,8 @@ fn writer_thread(
                 active_flag.store(false, Ordering::Release);
                 if let Some(mut writer) = current.take() {
                     while consumer.occupied_len() > 0 {
-                        let _ = write_available(&mut consumer, &mut writer, &mut scratch);
+                        let _ =
+                            write_available(&mut consumer, &mut writer, &mut scratch, &waveform);
                     }
                     let _ = writer.writer.end();
                 }
@@ -266,6 +475,7 @@ pub struct RecorderController {
     sender: Sender<WriterCommand>,
     active: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
+    waveform: Arc<Mutex<LiveWaveform>>,
 }
 
 impl RecorderController {
@@ -276,6 +486,8 @@ impl RecorderController {
         let active = Arc::new(AtomicBool::new(false));
         let dropout_frames = Arc::new(AtomicU64::new(0));
         let (sender, receiver) = mpsc::channel();
+        let waveform = Arc::new(Mutex::new(LiveWaveform::default()));
+        let thread_waveform = Arc::clone(&waveform);
         let thread_active = Arc::clone(&active);
         let thread_dropouts = Arc::clone(&dropout_frames);
         let thread = thread::Builder::new()
@@ -287,6 +499,7 @@ impl RecorderController {
                     thread_active,
                     thread_dropouts,
                     sample_rate,
+                    thread_waveform,
                 );
             })
             .expect("recording writer thread must start");
@@ -295,6 +508,7 @@ impl RecorderController {
                 sender,
                 active: Arc::clone(&active),
                 thread: Some(thread),
+                waveform,
             },
             RecordingTap {
                 producer,
@@ -325,6 +539,26 @@ impl RecorderController {
             .recv()
             .map_err(|error| recording_error("recording writer stopped", error))?
             .map_err(|error| recording_error("failed to stop recording", error))
+    }
+
+    pub fn waveform_snapshot(
+        &self,
+        start_frame: i64,
+        end_frame: i64,
+        max_buckets: u32,
+    ) -> Result<NativeWaveformSnapshot> {
+        if start_frame < 0 || end_frame < start_frame || max_buckets == 0 {
+            return Err(Error::new(Status::InvalidArg, "invalid waveform window"));
+        }
+        let waveform = self
+            .waveform
+            .lock()
+            .map_err(|_| recording_error("waveform state", "poisoned"))?;
+        Ok(waveform.snapshot(
+            start_frame as usize,
+            end_frame as usize,
+            max_buckets as usize,
+        ))
     }
 }
 
@@ -460,23 +694,21 @@ fn finalize(config: &NativeFinalizeRecordingConfig) -> Result<NativeFinalizedRec
             ),
         ))
         .map_err(|error| recording_error("failed to write BWF metadata", error))?;
+    let final_samples = if config.bit_depth == "float32" {
+        processed
+    } else {
+        let mut dither = TpdfDither::new(config.asset_id.as_bytes());
+        processed
+            .iter()
+            .map(|sample| dither.apply(*sample, bits as u32))
+            .collect()
+    };
     let mut audio = writer
         .audio_frame_writer()
         .map_err(|error| recording_error("failed to start final BWF audio", error))?;
-    if config.bit_depth == "float32" {
-        audio
-            .write_frames(&processed)
-            .map_err(|error| recording_error("failed to write float recording", error))?;
-    } else {
-        let mut dither = TpdfDither::new(config.asset_id.as_bytes());
-        let dithered: Vec<f32> = processed
-            .iter()
-            .map(|sample| dither.apply(*sample, bits as u32))
-            .collect();
-        audio
-            .write_frames(&dithered)
-            .map_err(|error| recording_error("failed to write integer recording", error))?;
-    }
+    audio
+        .write_frames(&final_samples)
+        .map_err(|error| recording_error("failed to write final recording", error))?;
     audio
         .end()
         .map_err(|error| recording_error("failed to finalize BWF", error))?;
@@ -486,6 +718,9 @@ fn finalize(config: &NativeFinalizeRecordingConfig) -> Result<NativeFinalizedRec
         .open(&config.output_path)
         .and_then(|file| file.sync_all())
         .map_err(|error| recording_error("failed to flush final BWF", error))?;
+    // Read the encoded file back so PCM16/PCM24 peak caches describe the exact
+    // quantized samples on disk, not their pre-quantization floating values.
+    let analyzed = analyze_waveform_path(&config.output_path)?;
 
     let mut file = File::open(&config.output_path)
         .map_err(|error| recording_error("failed to hash final BWF", error))?;
@@ -506,9 +741,67 @@ fn finalize(config: &NativeFinalizeRecordingConfig) -> Result<NativeFinalizedRec
         sample_rate: config.target_sample_rate,
         channels: channels as u32,
         bit_depth: config.bit_depth.clone(),
-        frame_count: (processed.len() / channels).min(i64::MAX as usize) as i64,
+        frame_count: analyzed.frame_count,
         time_reference: config.time_reference.max(0),
+        waveform_levels: analyzed.waveform_levels,
     })
+}
+
+fn analyze_waveform_path(path: &str) -> Result<NativeAnalyzedWaveform> {
+    let mut reader = WaveReader::open(path)
+        .map_err(|error| recording_error("failed to open waveform source", error))?;
+    let format = reader
+        .format()
+        .map_err(|error| recording_error("failed to read waveform format", error))?;
+    let frame_count = reader
+        .frame_length()
+        .map_err(|error| recording_error("failed to read waveform length", error))?
+        as usize;
+    let channels = format.channel_count as usize;
+    if channels == 0 {
+        return Err(Error::new(
+            Status::InvalidArg,
+            "waveform source has no channels",
+        ));
+    }
+    let mut samples = vec![0.0_f32; frame_count * channels];
+    let mut frame_reader = reader
+        .audio_frame_reader()
+        .map_err(|error| recording_error("failed to open waveform audio", error))?;
+    let read_frames = frame_reader
+        .read_frames(&mut samples)
+        .map_err(|error| recording_error("failed to read waveform audio", error))?
+        as usize;
+    samples.truncate(read_frames * channels);
+    Ok(NativeAnalyzedWaveform {
+        sample_rate: format.sample_rate,
+        channels: channels as u32,
+        frame_count: read_frames.min(i64::MAX as usize) as i64,
+        waveform_levels: build_waveform_levels(&samples, channels),
+    })
+}
+
+pub struct AnalyzeWaveformTask {
+    path: String,
+}
+
+#[napi]
+impl Task for AnalyzeWaveformTask {
+    type Output = NativeAnalyzedWaveform;
+    type JsValue = NativeAnalyzedWaveform;
+
+    fn compute(&mut self) -> Result<Self::Output> {
+        analyze_waveform_path(&self.path)
+    }
+
+    fn resolve(&mut self, _env: napi::Env, output: Self::Output) -> Result<Self::JsValue> {
+        Ok(output)
+    }
+}
+
+#[napi]
+pub fn analyze_waveform(path: String) -> napi::bindgen_prelude::AsyncTask<AnalyzeWaveformTask> {
+    napi::bindgen_prelude::AsyncTask::new(AnalyzeWaveformTask { path })
 }
 
 pub struct FinalizeRecordingTask {
@@ -693,8 +986,9 @@ mod tests {
     use bwavfile::{WaveReader, WaveWriter};
 
     use super::{
-        NativeFinalizeRecordingConfig, NativeRecordingStartConfig, RecorderController, TpdfDither,
-        broadcast_metadata, finalize, float_stereo_format, repair_recording_header,
+        LiveWaveform, NativeFinalizeRecordingConfig, NativeRecordingStartConfig,
+        RecorderController, TpdfDither, analyze_waveform_path, base_peak_level, broadcast_metadata,
+        finalize, float_stereo_format, repair_recording_header,
     };
 
     fn temporary_file(label: &str) -> PathBuf {
@@ -714,6 +1008,55 @@ mod tests {
             origination_time: "12:00:00".to_owned(),
             time_reference: 42,
         }
+    }
+
+    fn decode_peaks(bytes: &[u8]) -> Vec<f32> {
+        bytes
+            .chunks_exact(4)
+            .map(|value| f32::from_le_bytes(value.try_into().unwrap()))
+            .collect()
+    }
+
+    #[test]
+    fn base_waveform_uses_exact_multichannel_extrema_and_sanitizes_samples() {
+        let mut samples = vec![0.0_f32; 65 * 3];
+        samples[0..3].copy_from_slice(&[-1.0, 0.25, f32::NAN]);
+        samples[63 * 3..63 * 3 + 3].copy_from_slice(&[0.5, f32::INFINITY, -0.75]);
+        samples[64 * 3..64 * 3 + 3].copy_from_slice(&[0.125, -0.5, 1.5]);
+        assert_eq!(
+            base_peak_level(&samples, 3),
+            vec![
+                -1.0, 0.5, 0.0, 0.25, -0.75, 0.0, 0.125, 0.125, -0.5, -0.5, 1.0, 1.0
+            ]
+        );
+    }
+
+    #[test]
+    fn live_waveform_keeps_the_final_partial_bucket_and_preserves_peaks_when_zoomed_out() {
+        let mut waveform = LiveWaveform::default();
+        waveform.reset(48_000, 2);
+        let mut samples = vec![0.0_f32; 65 * 2];
+        samples[0..2].copy_from_slice(&[-1.0, 0.5]);
+        samples[64 * 2..64 * 2 + 2].copy_from_slice(&[0.25, -0.75]);
+        waveform.push(&samples);
+
+        let detailed = waveform.snapshot(0, 65, 10);
+        assert_eq!(detailed.frame_count, 65);
+        assert_eq!(detailed.end_frame, 65);
+        assert_eq!(detailed.frames_per_bucket, 64);
+        assert_eq!(detailed.bucket_count, 2);
+        assert_eq!(
+            decode_peaks(detailed.peaks.as_ref()),
+            vec![-1.0, 0.0, 0.0, 0.5, 0.25, 0.25, -0.75, -0.75]
+        );
+
+        let overview = waveform.snapshot(0, 65, 1);
+        assert_eq!(overview.frames_per_bucket, 256);
+        assert_eq!(overview.bucket_count, 1);
+        assert_eq!(
+            decode_peaks(overview.peaks.as_ref()),
+            vec![-1.0, 0.25, -0.75, 0.5]
+        );
     }
 
     #[test]
@@ -890,6 +1233,20 @@ mod tests {
                 assert!((peak - 0.5).abs() < 0.01);
             }
             assert_eq!(finalized.content_hash.len(), 64);
+            let analyzed = analyze_waveform_path(output.to_str().unwrap()).unwrap();
+            assert_eq!(
+                finalized.waveform_levels.len(),
+                analyzed.waveform_levels.len()
+            );
+            for (cached, actual) in finalized
+                .waveform_levels
+                .iter()
+                .zip(analyzed.waveform_levels.iter())
+            {
+                assert_eq!(cached.frames_per_bucket, actual.frames_per_bucket);
+                assert_eq!(cached.bucket_count, actual.bucket_count);
+                assert_eq!(cached.peaks.as_ref(), actual.peaks.as_ref());
+            }
             fs::remove_file(output).unwrap();
         }
         fs::remove_file(source).unwrap();

@@ -23,7 +23,8 @@ export const project = pgTable("project", {
   sampleRate: integer("sample_rate").notNull(),
   tempo: doublePrecision("tempo").notNull(),
   timeSignatureNumerator: smallint("time_signature_numerator").notNull(),
-  timeSignatureDenominator: smallint("time_signature_denominator").notNull()
+  timeSignatureDenominator: smallint("time_signature_denominator").notNull(),
+  waveformDisplayMode: text("waveform_display_mode").notNull()
 })
 
 export const assets = pgTable("assets", {

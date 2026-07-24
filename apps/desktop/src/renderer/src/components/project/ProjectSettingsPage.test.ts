@@ -7,7 +7,8 @@ const configuration = {
   sampleRate: 48_000 as const,
   tempo: 120,
   timeSignatureNumerator: 4,
-  timeSignatureDenominator: 4
+  timeSignatureDenominator: 4,
+  waveformDisplayMode: "separate" as const
 }
 
 describe("ProjectSettingsPage", () => {
@@ -18,12 +19,14 @@ describe("ProjectSettingsPage", () => {
     await wrapper.get('input[required]').setValue("Session")
     await wrapper.get("select").setValue("44100")
     await wrapper.findAll('input[type="number"]')[0]!.setValue("132.5")
+    await wrapper.findAll("select").at(-1)!.setValue("aggregate")
     await wrapper.get("form").trigger("submit")
 
     expect(wrapper.emitted("save")?.[0]?.[0]).toMatchObject({
       name: "Session",
       sampleRate: 44_100,
-      tempo: 132.5
+      tempo: 132.5,
+      waveformDisplayMode: "aggregate"
     })
   })
 

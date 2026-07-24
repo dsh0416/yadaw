@@ -11,7 +11,11 @@ import type {
   ProjectTransactionRequest
 } from "@yadaw/contracts"
 import { PROJECT_SAMPLE_RATES } from "@yadaw/contracts"
-import type { LargeObjectAssetInput } from "@yadaw/project-db/protocol"
+import type {
+  LargeObjectAssetInput,
+  StoredWaveformWindow,
+  WaveformAssetInput
+} from "@yadaw/project-db/protocol"
 import type { ApplicationSettingsStore } from "./application-settings"
 import { ProjectWorkerClient } from "./project-worker-client"
 
@@ -38,12 +42,16 @@ function validateConfiguration(value: CreateProjectRequest): ProjectConfiguratio
   if (![1, 2, 4, 8, 16, 32].includes(value.timeSignatureDenominator)) {
     throw new TypeError("Invalid time signature denominator")
   }
+  if (value.waveformDisplayMode !== "separate" && value.waveformDisplayMode !== "aggregate") {
+    throw new TypeError("Invalid waveform display mode")
+  }
   return {
     name: value.name.trim(),
     sampleRate: value.sampleRate,
     tempo: value.tempo,
     timeSignatureNumerator: value.timeSignatureNumerator,
-    timeSignatureDenominator: value.timeSignatureDenominator
+    timeSignatureDenominator: value.timeSignatureDenominator,
+    waveformDisplayMode: value.waveformDisplayMode
   }
 }
 
@@ -79,7 +87,7 @@ export class ProjectService {
 
   private async stateFromDatabase(id: string, projectPath: string, recoveredWorkingCopy: boolean): Promise<ProjectSession> {
     const result = await this.worker.query({
-      sql: `SELECT name, sample_rate, tempo, time_signature_numerator, time_signature_denominator
+      sql: `SELECT name, sample_rate, tempo, time_signature_numerator, time_signature_denominator, waveform_display_mode
             FROM project WHERE id = 'project'`,
       params: [],
       method: "all"
@@ -94,7 +102,8 @@ export class ProjectService {
         sampleRate: Number(row[1]) as ProjectConfiguration["sampleRate"],
         tempo: Number(row[2]),
         timeSignatureNumerator: Number(row[3]),
-        timeSignatureDenominator: Number(row[4])
+        timeSignatureDenominator: Number(row[4]),
+        waveformDisplayMode: String(row[5]) as ProjectConfiguration["waveformDisplayMode"]
       },
       dirty: recoveredWorkingCopy,
       recoveredWorkingCopy
@@ -114,7 +123,8 @@ export class ProjectService {
       sampleRate: configuration.sampleRate,
       tempo: configuration.tempo,
       numerator: configuration.timeSignatureNumerator,
-      denominator: configuration.timeSignatureDenominator
+      denominator: configuration.timeSignatureDenominator,
+      waveformDisplayMode: configuration.waveformDisplayMode
     })
     this.session = { id, path: projectPath, configuration, dirty: true, recoveredWorkingCopy: false }
     await this.persistCurrentState()
@@ -219,6 +229,16 @@ export class ProjectService {
   readAssetAudio(assetId: string): Promise<Uint8Array> {
     if (!this.session) throw new Error("No project is open")
     return this.worker.readLargeObject(assetId)
+  }
+
+  readAssetWaveform(assetId: string, startFrame: number, endFrame: number, maxBuckets: number): Promise<StoredWaveformWindow | null> {
+    if (!this.session) throw new Error("No project is open")
+    return this.worker.readWaveform(assetId, startFrame, endFrame, maxBuckets)
+  }
+
+  storeAssetWaveform(assetId: string, waveform: WaveformAssetInput): Promise<void> {
+    if (!this.session) throw new Error("No project is open")
+    return this.worker.storeWaveform(assetId, waveform).then(() => this.markDirty())
   }
 
   cancelOperation(operationId: string): Promise<void> {

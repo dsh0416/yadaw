@@ -4,6 +4,8 @@ import type {
   ProjectQueryRequest,
   ProjectQueryResult,
   ProjectTransactionRequest,
+  StoredWaveformWindow,
+  WaveformAssetInput,
   WorkerProgress,
   WorkerRequest,
   WorkerResponse
@@ -67,7 +69,14 @@ export class ProjectWorkerClient {
     })
   }
 
-  create(dataDir: string, project: { name: string; sampleRate: number; tempo: number; numerator: number; denominator: number }): Promise<void> {
+  create(dataDir: string, project: {
+    name: string
+    sampleRate: number
+    tempo: number
+    numerator: number
+    denominator: number
+    waveformDisplayMode: "separate" | "aggregate"
+  }): Promise<void> {
     return this.call({ type: "create", dataDir, ...project })
   }
 
@@ -93,6 +102,14 @@ export class ProjectWorkerClient {
 
   readLargeObject(assetId: string): Promise<Uint8Array> {
     return this.call({ type: "read-large-object", assetId })
+  }
+
+  readWaveform(assetId: string, startFrame: number, endFrame: number, maxBuckets: number): Promise<StoredWaveformWindow | null> {
+    return this.call({ type: "read-waveform", assetId, startFrame, endFrame, maxBuckets })
+  }
+
+  storeWaveform(assetId: string, waveform: WaveformAssetInput): Promise<void> {
+    return this.call({ type: "store-waveform", assetId, waveform })
   }
 
   cancel(operationId: string): Promise<void> {

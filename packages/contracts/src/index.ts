@@ -23,6 +23,8 @@ export const IPC_CHANNELS = {
   recordingRecover: "recording:recover",
   recordingDeletePending: "recording:delete-pending",
   assetAudioRead: "asset:audio-read",
+  assetWaveformRead: "asset:waveform-read",
+  recordingWaveformSnapshot: "recording:waveform-snapshot",
   operationCancel: "operation:cancel",
   operationEvent: "operation:event"
 } as const
@@ -68,6 +70,8 @@ export interface YadawDesktopApi {
   recoverRecording(id: string): Promise<void>
   deletePendingRecording(id: string): Promise<void>
   readAssetAudio(id: string): Promise<Uint8Array>
+  readAssetWaveform(request: WaveformWindowRequest): Promise<WaveformPeakWindow>
+  recordingWaveformSnapshot(request: WaveformWindowRequest): Promise<WaveformPeakWindow>
   subscribeOperations(listener: (event: OperationEvent) => void): () => void
   cancelOperation(id: string): Promise<void>
 }
@@ -82,6 +86,28 @@ export interface ProjectConfiguration {
   tempo: number
   timeSignatureNumerator: number
   timeSignatureDenominator: number
+  waveformDisplayMode: WaveformDisplayMode
+}
+
+export type WaveformDisplayMode = "separate" | "aggregate"
+
+export interface WaveformWindowRequest {
+  id: string
+  startFrame: number
+  endFrame: number
+  maxBuckets: number
+}
+
+export interface WaveformPeakWindow {
+  id: string
+  sampleRate: number
+  channels: number
+  frameCount: number
+  startFrame: number
+  endFrame: number
+  framesPerBucket: number
+  bucketCount: number
+  peaks: Uint8Array
 }
 
 export interface CreateProjectRequest extends ProjectConfiguration {

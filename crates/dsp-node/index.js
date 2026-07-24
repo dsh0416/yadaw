@@ -587,12 +587,14 @@ if (!nativeBinding) {
 }
 
 module.exports = nativeBinding
+module.exports.analyzeWaveform = nativeBinding.analyzeWaveform
 module.exports.audioEngineSnapshot = nativeBinding.audioEngineSnapshot
 module.exports.engineInfo = nativeBinding.engineInfo
 module.exports.finalizeRecording = nativeBinding.finalizeRecording
 module.exports.listAudioBackends = nativeBinding.listAudioBackends
 module.exports.listAudioDevices = nativeBinding.listAudioDevices
 module.exports.processGain = nativeBinding.processGain
+module.exports.recordingWaveformSnapshot = nativeBinding.recordingWaveformSnapshot
 module.exports.repairRecordingHeader = nativeBinding.repairRecordingHeader
 module.exports.startAudioEngine = nativeBinding.startAudioEngine
 module.exports.startRecording = nativeBinding.startRecording
