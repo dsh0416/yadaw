@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, useTemplateRef } from "vue"
+import { computed, nextTick, shallowRef, useTemplateRef } from "vue"
 import { useParameterGesture } from "../../composables/useParameterGesture"
 
 const props = defineProps<{
@@ -12,8 +12,8 @@ const emit = defineEmits<{
   commit: [value: number]
 }>()
 
-const editing = ref(false)
-const editValue = ref("")
+const editing = shallowRef(false)
+const editValue = shallowRef("")
 const editInput = useTemplateRef<HTMLInputElement>("editInput")
 
 function normalizedToPanUnits(value: number): number {
@@ -39,7 +39,7 @@ const knobStyle = computed(() => {
 
   return {
     "--pan-angle": `${value * 135}deg`,
-    "--pan-progress": `conic-gradient(from 225deg, transparent 0deg ${start}deg, #72d28a ${start}deg ${end}deg, transparent ${end}deg 270deg)`
+    "--pan-progress": `conic-gradient(from 225deg, transparent 0deg ${start}deg, var(--mixer-pan) ${start}deg ${end}deg, transparent ${end}deg 270deg)`
   }
 })
 
@@ -142,20 +142,20 @@ function onRangeKeydown(event: KeyboardEvent): void {
   display: block;
   width: 35px;
   height: 35px;
-  border: 1px solid #13171d;
+  border: 1px solid var(--line-strong);
   border-radius: 50%;
-  background: linear-gradient(145deg, #50575f, #252a30 68%);
+  background: linear-gradient(145deg,var(--daw-control-hover),var(--daw-control) 68%);
   box-shadow:
     0 1px 0 #ffffff1a inset,
-    0 -2px 4px #080a0d80 inset,
-    0 3px 7px #0008;
+    0 -2px 4px var(--shadow) inset,
+    0 3px 7px var(--shadow);
 }
 
 .rotary-track {
   position: absolute;
   inset: -6px;
   border-radius: 50%;
-  background: conic-gradient(from 225deg, #46505b 0deg 270deg, transparent 270deg);
+  background: conic-gradient(from 225deg,var(--text-faint) 0deg 270deg,transparent 270deg);
   mask: radial-gradient(circle, transparent 67%, #000 69% 78%, transparent 80%);
 }
 
@@ -164,7 +164,7 @@ function onRangeKeydown(event: KeyboardEvent): void {
   inset: -6px;
   border-radius: 50%;
   background: var(--pan-progress);
-  filter: drop-shadow(0 0 2px #72d28a99);
+  filter: drop-shadow(0 0 2px color-mix(in srgb,var(--mixer-pan) 60%,transparent));
   mask: radial-gradient(circle, transparent 66%, #000 68% 79%, transparent 81%);
 }
 
@@ -183,7 +183,7 @@ function onRangeKeydown(event: KeyboardEvent): void {
   width: 2px;
   height: 8px;
   border-radius: 1px;
-  background: #e8edf2;
+  background: var(--text-primary);
   box-shadow: 0 0 3px #fff7;
   transform: translateX(-50%);
 }
@@ -196,7 +196,7 @@ function onRangeKeydown(event: KeyboardEvent): void {
   z-index: 1;
   width: 25px;
   transform: translate(-50%, -50%);
-  color: #d8dde2;
+  color: var(--text-primary);
   font: 700 7px var(--font-utility);
   letter-spacing: -.03em;
   text-align: center;
@@ -206,10 +206,10 @@ function onRangeKeydown(event: KeyboardEvent): void {
   z-index: 4;
   height: 15px;
   padding: 0 1px;
-  border: 1px solid #72d28a;
+  border: 1px solid var(--mixer-pan);
   border-radius: 2px;
-  color: #eef3f0;
-  background: #141a17;
+  color: var(--text-primary);
+  background: var(--daw-control);
   appearance: textfield;
 }
 
@@ -232,8 +232,8 @@ function onRangeKeydown(event: KeyboardEvent): void {
 }
 
 .pan-knob:focus-within .rotary-shell {
-  border-color: #65707a;
-  box-shadow: 0 0 0 1px #9c94ff80, 0 3px 7px #0008;
+  border-color: var(--line-strong);
+  box-shadow: 0 0 0 1px color-mix(in srgb,var(--focus) 50%,transparent),0 3px 7px var(--shadow);
 }
 
 .pan-editor:focus-visible {

@@ -8,12 +8,17 @@ describe("ApplicationSettingsStore", () => {
   it("creates defaults and atomically persists validated recording settings", async () => {
     const userData = await mkdtemp(join(tmpdir(), "yadaw-settings-"))
     const first = new ApplicationSettingsStore(userData)
-    expect(await first.get()).toMatchObject({ recordingBitDepth: "float32" })
-    await first.update({ swapDirectory: join(userData, "custom-swap"), recordingBitDepth: "pcm24" })
+    expect(await first.get()).toMatchObject({ recordingBitDepth: "float32", theme: "system" })
+    await first.update({
+      swapDirectory: join(userData, "custom-swap"),
+      recordingBitDepth: "pcm24",
+      theme: "light"
+    })
     const reloaded = await new ApplicationSettingsStore(userData).get()
     expect(reloaded).toMatchObject({
       swapDirectory: join(userData, "custom-swap"),
-      recordingBitDepth: "pcm24"
+      recordingBitDepth: "pcm24",
+      theme: "light"
     })
   })
 })

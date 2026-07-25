@@ -1,9 +1,18 @@
 import { mkdir, open, readFile, rename } from "node:fs/promises"
 import { dirname, join } from "node:path"
-import type { ApplicationSettings, ApplicationSettingsPatch, RecordingBitDepth } from "@yadaw/contracts"
+import type {
+  ApplicationSettings,
+  ApplicationSettingsPatch,
+  RecordingBitDepth,
+  ThemePreference
+} from "@yadaw/contracts"
 
 function isRecordingBitDepth(value: unknown): value is RecordingBitDepth {
   return value === "float32" || value === "pcm24" || value === "pcm16"
+}
+
+function isThemePreference(value: unknown): value is ThemePreference {
+  return value === "light" || value === "dark" || value === "system"
 }
 
 async function syncDirectory(path: string): Promise<void> {
@@ -32,6 +41,7 @@ export class ApplicationSettingsStore {
     return {
       swapDirectory: join(this.userData, "swap"),
       recordingBitDepth: "float32",
+      theme: "system",
       recentProjects: []
     }
   }
@@ -48,6 +58,7 @@ export class ApplicationSettingsStore {
         recordingBitDepth: isRecordingBitDepth(raw.recordingBitDepth)
           ? raw.recordingBitDepth
           : value.recordingBitDepth,
+        theme: isThemePreference(raw.theme) ? raw.theme : value.theme,
         recentProjects: Array.isArray(raw.recentProjects)
           ? raw.recentProjects.filter((recent) =>
             typeof recent?.path === "string" &&
@@ -74,6 +85,10 @@ export class ApplicationSettingsStore {
     if (patch.recordingBitDepth !== undefined) {
       if (!isRecordingBitDepth(patch.recordingBitDepth)) throw new TypeError("Unsupported recording bit depth")
       current.recordingBitDepth = patch.recordingBitDepth
+    }
+    if (patch.theme !== undefined) {
+      if (!isThemePreference(patch.theme)) throw new TypeError("Unsupported theme preference")
+      current.theme = patch.theme
     }
     return this.write(current)
   }

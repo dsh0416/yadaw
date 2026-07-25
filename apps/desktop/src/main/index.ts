@@ -223,6 +223,10 @@ function validateSettingsPatch(value: unknown): ApplicationSettingsPatch {
       patch.recordingBitDepth !== "float32" && patch.recordingBitDepth !== "pcm24" && patch.recordingBitDepth !== "pcm16") {
     throw new TypeError("Unsupported recording bit depth")
   }
+  if (patch.theme !== undefined &&
+      patch.theme !== "light" && patch.theme !== "dark" && patch.theme !== "system") {
+    throw new TypeError("Unsupported theme preference")
+  }
   return patch
 }
 

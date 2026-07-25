@@ -94,6 +94,7 @@ function beginFaderGesture(event: PointerEvent): void {
 <template>
   <article
     :class="['channel-strip', density, channel.kind, { selected }]"
+    :style="{ '--strip-color': channel.color }"
     :aria-label="`${channel.name} ${channel.kind} channel`"
     @pointerdown="emit('select', channel.id)"
   >
@@ -205,7 +206,7 @@ function beginFaderGesture(event: PointerEvent): void {
 
 <style scoped>
 .channel-strip {
-  --strip-color: #8c83ff;
+  --strip-color: var(--accent);
   position: relative;
   display: grid;
   grid-template-rows: 39px 72px minmax(120px, 1fr) 61px 38px;
@@ -213,8 +214,8 @@ function beginFaderGesture(event: PointerEvent): void {
   min-width: 116px;
   height: 100%;
   overflow: hidden;
-  border-right: 1px solid #20252d;
-  background: linear-gradient(180deg, #242a32, #171b21 70%, #13171c);
+  border-right: 1px solid var(--line-strong);
+  background: var(--daw-mixer-strip);
   box-shadow: 1px 0 0 #ffffff08 inset;
 }
 
@@ -231,22 +232,20 @@ function beginFaderGesture(event: PointerEvent): void {
 }
 
 .channel-strip.bus {
-  --strip-color: #d7a84f;
-  background: linear-gradient(180deg, #29282b, #19191d 70%, #151519);
+  background: var(--daw-mixer-strip-bus);
 }
 
 .channel-strip.master {
-  --strip-color: #67d9e7;
   position: sticky;
   right: 0;
   z-index: 5;
-  border-left: 1px solid #36404a;
-  background: linear-gradient(180deg, #273034, #182125 70%, #141b1e);
-  box-shadow: -12px 0 22px #04070db8;
+  border-left: 1px solid var(--line-strong);
+  background: var(--daw-mixer-strip-master);
+  box-shadow: -12px 0 22px var(--shadow);
 }
 
 .channel-strip.selected {
-  background: linear-gradient(180deg, #303740, #20262d 72%, #191e24);
+  background: var(--daw-mixer-strip-selected);
   box-shadow: 3px 0 0 var(--strip-color) inset;
 }
 
@@ -255,9 +254,9 @@ function beginFaderGesture(event: PointerEvent): void {
   align-content: center;
   gap: 5px;
   padding: 5px 8px;
-  border-bottom: 1px solid #171b20;
-  color: #7d8691;
-  background: #1a1f25a8;
+  border-bottom: 1px solid var(--line-soft);
+  color: var(--text-muted);
+  background: color-mix(in srgb,var(--surface-2) 82%,transparent);
   font: 6px var(--font-utility);
   letter-spacing: .06em;
 }
@@ -272,16 +271,16 @@ function beginFaderGesture(event: PointerEvent): void {
   width: 100%;
   min-height: 18px;
   padding: 1px 4px;
-  border: 1px solid #343b43;
+  border: 1px solid var(--line-strong);
   border-radius: 2px;
-  color: #b6bdc5;
-  background: #171b20;
+  color: var(--text-secondary);
+  background: var(--daw-control);
   font-size: 7px;
 }
 
 .pan-control {
   padding: 7px 10px 8px;
-  border-bottom: 1px solid #171b20;
+  border-bottom: 1px solid var(--line-soft);
 }
 
 .strip-core {
@@ -303,16 +302,16 @@ function beginFaderGesture(event: PointerEvent): void {
   width: 18px;
   gap: 2px;
   padding: 2px;
-  border: 1px solid #303741;
+  border: 1px solid var(--line-strong);
   border-radius: 2px;
-  background: #0b0e11;
+  background: var(--daw-meter-well);
 }
 
 .meter span {
   position: relative;
   flex: 1;
   overflow: hidden;
-  background: linear-gradient(to top, #50b86d 0 68%, #e4b93f 79%, #e54b58 100%);
+  background: linear-gradient(to top,var(--meter-green) 0 68%,var(--meter-yellow) 79%,var(--meter-red) 100%);
   opacity: .26;
 }
 
@@ -320,13 +319,13 @@ function beginFaderGesture(event: PointerEvent): void {
   content: "";
   position: absolute;
   inset: 0 0 var(--meter-level) 0;
-  background: #0b0e11;
+  background: var(--daw-meter-well);
   transition: inset 55ms linear;
 }
 
 .meter.clipped {
   border-color: var(--mixer-record);
-  box-shadow: 0 0 8px #e54b584d;
+  box-shadow: 0 0 8px color-mix(in srgb,var(--mixer-record) 35%,transparent);
 }
 
 .fader {
@@ -343,7 +342,7 @@ function beginFaderGesture(event: PointerEvent): void {
   margin: 0;
   writing-mode: vertical-lr;
   direction: rtl;
-  accent-color: #aeb4bb;
+  accent-color: var(--accent);
 }
 
 .fader > input:first-child:focus {
@@ -351,7 +350,7 @@ function beginFaderGesture(event: PointerEvent): void {
 }
 
 .fader > input:first-child:focus-visible::-webkit-slider-thumb {
-  box-shadow: 0 0 0 2px #9c94ff80;
+  box-shadow: 0 0 0 2px color-mix(in srgb,var(--focus) 50%,transparent);
 }
 
 .parameter-value {
@@ -362,10 +361,10 @@ function beginFaderGesture(event: PointerEvent): void {
   height: 20px;
   margin: 0;
   padding: 0 2px;
-  border: 1px solid #343b43;
+  border: 1px solid var(--line-strong);
   border-radius: 2px;
-  color: #c8cdd3;
-  background: #171b20;
+  color: var(--text-primary);
+  background: var(--daw-control);
   font: 8px var(--font-utility);
   text-align: center;
   writing-mode: horizontal-tb;
@@ -387,17 +386,17 @@ function beginFaderGesture(event: PointerEvent): void {
   width: 35px;
   height: 20px;
   overflow: hidden;
-  border: 1px solid #2e353d;
+  border: 1px solid var(--line-strong);
   border-radius: 2px;
-  color: #626c76;
-  background: #101419;
+  color: var(--text-faint);
+  background: var(--daw-meter-well);
   font: 8px var(--font-utility);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
 .live-meter-value.active {
-  color: #72d28a;
+  color: var(--mixer-pan);
 }
 
 .live-meter-value.hot {
@@ -406,8 +405,8 @@ function beginFaderGesture(event: PointerEvent): void {
 
 .live-meter-value.clipped {
   border-color: var(--mixer-record);
-  color: #ff7c87;
-  background: #2a1519;
+  color: var(--record);
+  background: color-mix(in srgb,var(--record) 14%,var(--daw-meter-well));
 }
 
 .channel-actions {
@@ -416,8 +415,8 @@ function beginFaderGesture(event: PointerEvent): void {
   align-content: center;
   justify-items: center;
   gap: 4px;
-  border-top: 1px solid #171b20;
-  background: #181c22;
+  border-top: 1px solid var(--line-soft);
+  background: color-mix(in srgb,var(--daw-mixer-strip) 70%,var(--daw-control));
 }
 
 .input-actions,
@@ -442,11 +441,11 @@ function beginFaderGesture(event: PointerEvent): void {
   display: grid;
   place-items: center;
   padding: 0;
-  border: 1px solid #3a414a;
+  border: 1px solid var(--line-strong);
   border-radius: 3px;
-  color: #8d969f;
-  background: linear-gradient(#30363d, #24292f);
-  box-shadow: 0 1px 0 #ffffff12 inset, 0 1px 2px #0008;
+  color: var(--text-muted);
+  background: var(--daw-control);
+  box-shadow: 0 1px 0 #ffffff12 inset,0 1px 2px var(--shadow);
   font: 700 9px var(--font-utility);
   cursor: pointer;
 }
@@ -473,15 +472,15 @@ function beginFaderGesture(event: PointerEvent): void {
 }
 
 .channel-actions .mute {
-  color: #77bfe2;
+  color: color-mix(in srgb,var(--mixer-mute) 76%,var(--text-secondary));
 }
 
 .channel-actions .solo {
-  color: #e7c66c;
+  color: color-mix(in srgb,var(--mixer-solo) 78%,var(--text-secondary));
 }
 
 .channel-actions .record {
-  color: #e88791;
+  color: color-mix(in srgb,var(--mixer-record) 76%,var(--text-secondary));
 }
 
 .channel-actions .monitor {
@@ -489,30 +488,30 @@ function beginFaderGesture(event: PointerEvent): void {
 }
 
 .channel-actions .mute.active {
-  border-color: #66bce5;
+  border-color: color-mix(in srgb,var(--mixer-mute) 72%,white);
   color: #fff;
-  background: linear-gradient(#38a9dc, var(--mixer-mute));
-  box-shadow: 0 0 8px #2f9ed077, 0 1px 0 #ffffff40 inset;
+  background: var(--mixer-mute);
+  box-shadow: 0 0 8px color-mix(in srgb,var(--mixer-mute) 46%,transparent),0 1px 0 #ffffff40 inset;
 }
 
 .channel-actions .solo.active {
-  border-color: #f1cf66;
+  border-color: color-mix(in srgb,var(--mixer-solo) 72%,white);
   color: #221c08;
-  background: linear-gradient(#f0c957, var(--mixer-solo));
-  box-shadow: 0 0 8px #e4b93f66, 0 1px 0 #ffffff5c inset;
+  background: var(--mixer-solo);
+  box-shadow: 0 0 8px color-mix(in srgb,var(--mixer-solo) 40%,transparent),0 1px 0 #ffffff5c inset;
 }
 
 .channel-actions .record.active {
-  border-color: #f07a83;
+  border-color: color-mix(in srgb,var(--mixer-record) 72%,white);
   color: #fff;
-  background: linear-gradient(#ef6470, var(--mixer-record));
-  box-shadow: 0 0 8px #e54b5877, 0 1px 0 #ffffff40 inset;
+  background: var(--mixer-record);
+  box-shadow: 0 0 8px color-mix(in srgb,var(--mixer-record) 46%,transparent),0 1px 0 #ffffff40 inset;
 }
 
 .channel-actions .monitor:disabled {
-  border-color: #684328;
+  border-color: color-mix(in srgb,var(--mixer-input) 45%,var(--line-strong));
   color: var(--mixer-input);
-  background: linear-gradient(#34291f, #282018);
+  background: color-mix(in srgb,var(--mixer-input) 10%,var(--daw-control));
   cursor: not-allowed;
   opacity: .78;
 }
@@ -524,9 +523,9 @@ function beginFaderGesture(event: PointerEvent): void {
   gap: 7px;
   padding: 0 8px;
   border: 0;
-  border-top: 1px solid #303740;
-  color: #eef1f4;
-  background: #20262d;
+  border-top: 1px solid var(--line-strong);
+  color: var(--text-primary);
+  background: var(--daw-control);
   text-align: left;
   cursor: pointer;
 }
@@ -544,7 +543,7 @@ function beginFaderGesture(event: PointerEvent): void {
 }
 
 .channel-name small {
-  color: #818a94;
+  color: var(--text-muted);
   font: 6px var(--font-utility);
   text-transform: uppercase;
 }

@@ -27,5 +27,5 @@ function formatLatency(value: number | null): string { return value === null ? "
 </template>
 
 <style scoped>
-.statusbar{grid-column:1/-1;display:flex;align-items:center;gap:16px;min-width:0;padding:0 6px 0 13px;border-top:1px solid var(--line-strong);color:#59667a;background:#0c111a;font:7px var(--font-utility);letter-spacing:.02em}.statusbar>span{display:flex;align-items:center;gap:5px;white-space:nowrap}.engine-state{color:#758197}.engine-state i{width:5px;height:5px;border-radius:50%;background:#545f70}.engine-state i.active{background:var(--signal-cyan);box-shadow:0 0 6px var(--signal-cyan)}.status-spacer{flex:1}.statusbar .alert{color:var(--record)}
+.statusbar{grid-column:1/-1;display:flex;align-items:center;gap:16px;min-width:0;padding:0 6px 0 13px;border-top:1px solid var(--line-strong);color:var(--text-muted);background:var(--daw-statusbar);font:7px var(--font-utility);letter-spacing:.02em}.statusbar>span{display:flex;align-items:center;gap:5px;white-space:nowrap}.engine-state{color:var(--text-secondary)}.engine-state i{width:5px;height:5px;border-radius:50%;background:var(--text-faint)}.engine-state i.active{background:var(--signal-cyan);box-shadow:0 0 6px var(--signal-cyan)}.status-spacer{flex:1}.statusbar .alert{color:var(--record)}
 </style>

@@ -33,6 +33,7 @@ import type {
 } from "@yadaw/contracts"
 import PreferencesHeader from "./PreferencesHeader.vue"
 import PreferencesNavigation from "./PreferencesNavigation.vue"
+import DisplayPreferences from "./DisplayPreferences.vue"
 import RecordingPreferences from "./RecordingPreferences.vue"
 
 const props = defineProps<{
@@ -46,7 +47,7 @@ const emit = defineEmits<{
   cancel: []
   save: [preferences: AudioPreferences]
 }>()
-const activePage = ref<"devices" | "recording">("devices")
+const activePage = ref<"devices" | "recording" | "appearance">("devices")
 
 const backendOptions: ReadonlyArray<{
   value: AudioBackend
@@ -254,7 +255,13 @@ watch(supportedBufferSizes, (sizes) => {
 
 <template>
   <main class="preferences-page">
-    <PreferencesHeader :applying="applying" :can-save="backendAvailability[draft.backend] && Boolean(draft.outputDeviceId) && Boolean(draft.inputDeviceId)" @cancel="emit('cancel')" @save="save" />
+    <PreferencesHeader
+      :applying="applying"
+      :can-save="backendAvailability[draft.backend] && Boolean(draft.outputDeviceId) && Boolean(draft.inputDeviceId)"
+      :show-audio-apply="activePage !== 'appearance'"
+      @cancel="emit('cancel')"
+      @save="save"
+    />
     <PreferencesNavigation :active-page="activePage" @select="activePage = $event" />
 
     <section v-if="activePage === 'devices'" class="preferences-content">
@@ -439,7 +446,8 @@ watch(supportedBufferSizes, (sizes) => {
       <p v-if="applyError" class="apply-error">{{ applyError }}</p>
       <p v-if="applyNotice" class="apply-notice">{{ applyNotice }}</p>
     </section>
-    <RecordingPreferences v-else />
+    <RecordingPreferences v-else-if="activePage === 'recording'" />
+    <DisplayPreferences v-else />
   </main>
 </template>
 

@@ -19,7 +19,7 @@ describe("ProjectWelcome", () => {
 
   it("opens a recent project through its public button", async () => {
     const wrapper = mount(ProjectWelcome, { props: { settings: {
-      swapDirectory: "swap", recordingBitDepth: "float32",
+      swapDirectory: "swap", recordingBitDepth: "float32", theme: "system",
       recentProjects: [{ path: "C:/song.yadaw", name: "Song", openedAt: 1 }]
     }, busy: false, error: "" } })
     await wrapper.findAll(".recent-item")[0]?.trigger("click")

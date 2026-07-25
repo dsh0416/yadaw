@@ -34,5 +34,5 @@ function seekFromPointer(event: PointerEvent): void {
 </template>
 
 <style scoped>
-.ruler{position:relative;height:27px;overflow:hidden;border-bottom:1px solid var(--line-strong);background:#101620;cursor:text;user-select:none}.bar-mark{position:absolute;top:0;bottom:0;min-width:28px;padding:8px 0 0 7px;border-left:1px solid #293344;color:#6d788c;font:8px var(--font-utility);pointer-events:none}.bar-mark::after{position:absolute;top:15px;left:25%;width:1px;height:4px;background:#293344;box-shadow:7px 0 #293344,14px 0 #293344;content:""}
+.ruler{position:relative;height:27px;overflow:hidden;border-bottom:1px solid var(--line-strong);background:var(--daw-ruler);cursor:text;user-select:none}.bar-mark{position:absolute;top:0;bottom:0;min-width:28px;padding:8px 0 0 7px;border-left:1px solid var(--daw-grid-line);color:var(--text-muted);font:8px var(--font-utility);pointer-events:none}.bar-mark::after{position:absolute;top:15px;left:25%;width:1px;height:4px;background:var(--daw-grid-line);box-shadow:7px 0 var(--daw-grid-line),14px 0 var(--daw-grid-line);content:""}
 </style>

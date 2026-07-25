@@ -95,6 +95,7 @@ export interface YadawDesktopApi {
 export const PROJECT_SAMPLE_RATES = [44_100, 48_000, 88_200, 96_000, 176_400, 192_000] as const
 export type ProjectSampleRate = (typeof PROJECT_SAMPLE_RATES)[number]
 export type RecordingBitDepth = "float32" | "pcm24" | "pcm16"
+export type ThemePreference = "light" | "dark" | "system"
 
 export interface ProjectConfiguration {
   name: string
@@ -167,10 +168,13 @@ export interface RecentProject {
 export interface ApplicationSettings {
   swapDirectory: string
   recordingBitDepth: RecordingBitDepth
+  theme: ThemePreference
   recentProjects: RecentProject[]
 }
 
-export type ApplicationSettingsPatch = Partial<Pick<ApplicationSettings, "swapDirectory" | "recordingBitDepth">>
+export type ApplicationSettingsPatch = Partial<
+  Pick<ApplicationSettings, "swapDirectory" | "recordingBitDepth" | "theme">
+>
 
 export type OperationPhase =
   | "closing-recording"

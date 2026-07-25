@@ -19,6 +19,7 @@ const props = defineProps<{
   tempo: number
   beatsPerBar: number
   trackId: string
+  trackColor: string
 }>()
 
 const emit = defineEmits<{
@@ -84,6 +85,7 @@ function moveClip(event: DragEvent): void {
       v-for="clip in displayedClips"
       :key="clip.id"
       :clip="clip"
+      :track-color="trackColor"
       :pixels-per-second="pixelsPerSecond"
       :viewport-start-seconds="viewportStartSeconds"
       :viewport-end-seconds="viewportEndSeconds"
@@ -101,5 +103,5 @@ function moveClip(event: DragEvent): void {
 </template>
 
 <style scoped>
-.track-lane{position:relative;min-width:100%;overflow:hidden;border-bottom:1px solid var(--line-strong);background-color:#0c111a;background-image:repeating-linear-gradient(0deg,transparent 0 24px,#17202c 25px);cursor:crosshair}.bar-line{position:absolute;z-index:0;top:0;bottom:0;width:1px;background:#222c3b;pointer-events:none}.playhead{position:absolute;z-index:8;top:0;bottom:0;width:1px;background:#ff6577;box-shadow:0 0 8px #ff657788;pointer-events:none}.playhead span{position:absolute;top:0;left:-4px;width:9px;height:7px;background:#ff6577;clip-path:polygon(0 0,100% 0,50% 100%)}.empty-message{position:absolute;inset:0;display:grid;place-items:center;color:#48566c;font-size:8px;pointer-events:none}
+.track-lane{position:relative;min-width:100%;overflow:hidden;border-bottom:1px solid var(--line-strong);background-color:var(--daw-lane);background-image:repeating-linear-gradient(0deg,transparent 0 24px,var(--daw-lane-stripe) 25px);cursor:crosshair}.bar-line{position:absolute;z-index:0;top:0;bottom:0;width:1px;background:var(--daw-grid-line);pointer-events:none}.playhead{position:absolute;z-index:8;top:0;bottom:0;width:1px;background:var(--record);box-shadow:0 0 8px color-mix(in srgb,var(--record) 55%,transparent);pointer-events:none}.playhead span{position:absolute;top:0;left:-4px;width:9px;height:7px;background:var(--record);clip-path:polygon(0 0,100% 0,50% 100%)}.empty-message{position:absolute;inset:0;display:grid;place-items:center;color:var(--text-faint);font-size:8px;pointer-events:none}
 </style>

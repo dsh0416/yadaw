@@ -6,14 +6,14 @@ import RecordingPreferences from "./RecordingPreferences.vue"
 describe("RecordingPreferences", () => {
   beforeEach(() => {
     window.yadaw.getApplicationSettings = vi.fn().mockResolvedValue({
-      swapDirectory: "C:/swap", recordingBitDepth: "float32", recentProjects: []
+      swapDirectory: "C:/swap", recordingBitDepth: "float32", theme: "system", recentProjects: []
     })
     window.yadaw.listPendingRecordings = vi.fn().mockResolvedValue([])
     window.yadaw.updateApplicationSettings = vi.fn().mockResolvedValue({
-      swapDirectory: "C:/swap", recordingBitDepth: "pcm24", recentProjects: []
+      swapDirectory: "C:/swap", recordingBitDepth: "pcm24", theme: "system", recentProjects: []
     })
     window.yadaw.chooseSwapDirectory = vi.fn().mockResolvedValue({
-      swapDirectory: "D:/recording-swap", recordingBitDepth: "pcm24", recentProjects: []
+      swapDirectory: "D:/recording-swap", recordingBitDepth: "pcm24", theme: "system", recentProjects: []
     })
   })
 

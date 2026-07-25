@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { ConfigProvider, TooltipProvider } from "reka-ui"
-import { onMounted, onUnmounted } from "vue"
+import { computed, onMounted, onUnmounted } from "vue"
+import { storeToRefs } from "pinia"
 import { RouterView } from "vue-router"
+import { useTheme } from "./composables/useTheme"
+import { useApplicationSettingsStore } from "./stores/applicationSettings"
 import { useAudioPreferencesStore } from "./stores/audioPreferences"
 import { useAudioRuntimeStore } from "./stores/audioRuntime"
 import { useSystemPerformanceStore } from "./stores/systemPerformance"
@@ -12,11 +15,17 @@ import AudioBenchmarkHost from "./components/benchmark/AudioBenchmarkHost.vue"
 const audioPreferencesStore = useAudioPreferencesStore()
 const audioRuntimeStore = useAudioRuntimeStore()
 const systemPerformanceStore = useSystemPerformanceStore()
+const applicationSettingsStore = useApplicationSettingsStore()
+const { settings } = storeToRefs(applicationSettingsStore)
+const themePreference = computed(() => settings.value?.theme ?? "system")
+
+useTheme(themePreference)
 
 onMounted(() => {
   audioRuntimeStore.startPolling()
   systemPerformanceStore.startPolling()
   void audioPreferencesStore.restore()
+  void applicationSettingsStore.load()
 })
 
 onUnmounted(() => {

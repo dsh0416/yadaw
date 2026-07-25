@@ -14,6 +14,7 @@ const props = defineProps<{
   amplitudeScale: number
   displayMode: WaveformDisplayMode
   selected: boolean
+  trackColor: string
   recording?: boolean
 }>()
 
@@ -24,7 +25,8 @@ const emit = defineEmits<{
 
 const clipStyle = computed(() => ({
   left: `${props.clip.startSeconds * props.pixelsPerSecond}px`,
-  width: `max(${props.clip.durationSeconds * props.pixelsPerSecond}px, 12px)`
+  width: `max(${props.clip.durationSeconds * props.pixelsPerSecond}px, 12px)`,
+  "--clip-color": props.trackColor
 }))
 const visibleStartSeconds = computed(() =>
   Math.max(props.clip.startSeconds, props.viewportStartSeconds)
@@ -107,5 +109,5 @@ function startDrag(event: DragEvent): void {
 </template>
 
 <style scoped>
-.audio-clip{position:absolute;z-index:2;top:9px;bottom:9px;display:block;min-width:12px;overflow:hidden;padding:0;border:1px solid #716be0;border-radius:4px;color:#f0efff;background:linear-gradient(180deg,#4b47a8ed,#283373ed);box-shadow:0 1px 0 #ffffff24 inset,0 7px 18px #02040a55;cursor:pointer;text-align:left}.audio-clip:hover{border-color:#a7a1ff;filter:brightness(1.08)}.audio-clip:focus-visible{outline:2px solid #d2ceff;outline-offset:-3px}.audio-clip.selected{z-index:3;border-color:#e4e2ff;box-shadow:0 0 0 2px #a49cff99 inset,0 0 20px #8179ff66}.audio-clip.recording{border-color:#ff6d7d;background:linear-gradient(180deg,#a23850ed,#59283fed);box-shadow:0 0 18px #ff65774d}.clip-heading{position:absolute;z-index:3;top:0;right:0;left:0;display:flex;align-items:center;gap:5px;height:23px;padding:4px 6px 5px;color:#f7f7ff;background:linear-gradient(180deg,#29285dcf 0%,#29285d8f 72%,transparent 100%);pointer-events:none;white-space:nowrap}.recording .clip-heading{background:linear-gradient(180deg,#602239d9 0%,#60223991 72%,transparent 100%)}.clip-name{min-width:0;flex:1;overflow:hidden;font-size:9px;font-weight:650;line-height:13px;text-overflow:ellipsis;text-shadow:0 1px 2px #050815a8}.channel-format{color:#d9d7ff;filter:drop-shadow(0 1px 1px #080a16)}.recording .channel-format{color:#ffe0e4}.capture-dot{flex:none;width:6px;height:6px;border:1px solid #ffe5e9;border-radius:50%;background:#ff5b70;box-shadow:0 0 5px #ff5b70}.waveform{position:absolute;z-index:1;top:22px;right:0;bottom:3px;overflow:hidden;opacity:.94}
+.audio-clip{--clip-color:var(--accent);position:absolute;z-index:2;top:9px;bottom:9px;display:block;min-width:12px;overflow:hidden;padding:0;border:1px solid color-mix(in srgb,var(--clip-color) 72%,white);border-radius:4px;color:#f7f8f8;background:linear-gradient(180deg,color-mix(in srgb,var(--clip-color) 65%,#303436),color-mix(in srgb,var(--clip-color) 38%,#17191a));box-shadow:0 1px 0 #ffffff24 inset,0 7px 18px var(--shadow);cursor:pointer;text-align:left}.audio-clip:hover{border-color:color-mix(in srgb,var(--clip-color) 55%,white);filter:brightness(1.08)}.audio-clip:focus-visible{outline:2px solid var(--focus);outline-offset:-3px}.audio-clip.selected{z-index:3;border-color:#fff;box-shadow:0 0 0 2px color-mix(in srgb,var(--clip-color) 60%,transparent) inset,0 0 20px color-mix(in srgb,var(--clip-color) 45%,transparent)}.audio-clip.recording{border-color:color-mix(in srgb,var(--record) 72%,white);background:linear-gradient(180deg,color-mix(in srgb,var(--record) 72%,#303436),color-mix(in srgb,var(--record) 42%,#17191a));box-shadow:0 0 18px color-mix(in srgb,var(--record) 35%,transparent)}.clip-heading{position:absolute;z-index:3;top:0;right:0;left:0;display:flex;align-items:center;gap:5px;height:23px;padding:4px 6px 5px;color:#f7f8f8;background:linear-gradient(180deg,color-mix(in srgb,var(--clip-color) 34%,#111111e8) 0%,color-mix(in srgb,var(--clip-color) 24%,#111111b8) 72%,transparent 100%);pointer-events:none;white-space:nowrap}.recording .clip-heading{background:linear-gradient(180deg,color-mix(in srgb,var(--record) 34%,#111111e8) 0%,color-mix(in srgb,var(--record) 24%,#111111b8) 72%,transparent 100%)}.clip-name{min-width:0;flex:1;overflow:hidden;font-size:9px;font-weight:650;line-height:13px;text-overflow:ellipsis;text-shadow:0 1px 2px #000a}.channel-format{color:#f0f4f5;filter:drop-shadow(0 1px 1px #0008)}.recording .channel-format{color:#ffe0e4}.capture-dot{flex:none;width:6px;height:6px;border:1px solid #ffe5e9;border-radius:50%;background:var(--record);box-shadow:0 0 5px var(--record)}.waveform{position:absolute;z-index:1;top:22px;right:0;bottom:3px;overflow:hidden;opacity:.94}
 </style>
