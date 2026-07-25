@@ -5,12 +5,13 @@ import GlobalOperationHost from "./GlobalOperationHost.vue"
 import { useOperationStore } from "../../stores/operations"
 
 describe("GlobalOperationHost", () => {
-  it("renders its Teleport in document.body and unsubscribes", async () => {
+  it("renders subscribed operation state without owning the subscription", async () => {
     const unsubscribe = vi.fn()
     window.yadaw.subscribeOperations = vi.fn(() => unsubscribe)
     const pinia = createPinia()
     const wrapper = mount(GlobalOperationHost, { attachTo: document.body, global: { plugins: [pinia] } })
     const store = useOperationStore(pinia)
+    store.startSubscription()
     store.apply({ type: "upsert", operation: {
       id: "save", title: "Saving", phase: "saving-archive", state: "running",
       completedUnits: null, totalUnits: null, cancellable: false, message: null, dropoutFrames: 0
@@ -18,6 +19,8 @@ describe("GlobalOperationHost", () => {
     await wrapper.vm.$nextTick()
     expect(document.body.querySelector("[role=dialog]")?.textContent).toContain("Saving")
     wrapper.unmount()
+    expect(unsubscribe).not.toHaveBeenCalled()
+    store.stopSubscription()
     expect(unsubscribe).toHaveBeenCalledOnce()
   })
 

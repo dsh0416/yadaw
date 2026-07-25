@@ -1,18 +1,10 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted } from "vue"
 import { storeToRefs } from "pinia"
 import OperationProgressDialog from "./OperationProgressDialog.vue"
 import { useOperationStore } from "../../stores/operations"
 
 const store = useOperationStore()
 const { active } = storeToRefs(store)
-let unsubscribe: (() => void) | null = null
-
-onMounted(() => {
-  unsubscribe = window.yadaw.subscribeOperations(store.apply)
-})
-onUnmounted(() => unsubscribe?.())
-
 function dismissTerminalOperation(): void {
   const operation = active.value
   if (operation && operation.state !== "running") store.dismiss(operation.id)

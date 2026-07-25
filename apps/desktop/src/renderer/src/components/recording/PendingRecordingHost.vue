@@ -1,14 +1,24 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue"
 import { storeToRefs } from "pinia"
+import { useRouter } from "vue-router"
 import { useRecordingStore } from "../../stores/recording"
+import { useStudioWorkflowStore } from "../../stores/studioWorkflow"
 
 const store = useRecordingStore()
+const workflowStore = useStudioWorkflowStore()
+const router = useRouter()
 const { pending } = storeToRefs(store)
 const visible = ref(true)
 const actionable = computed(() => pending.value.filter((recording) => !recording.assetExists))
 
 onMounted(() => void store.refreshPending())
+
+async function recover(recording: (typeof pending.value)[number]): Promise<void> {
+  if (await workflowStore.recoverRecording(recording)) {
+    void router.push({ name: "studio" })
+  }
+}
 </script>
 
 <template>
@@ -21,7 +31,7 @@ onMounted(() => void store.refreshPending())
         <ul>
           <li v-for="recording in actionable" :key="recording.id">
             <div><b>{{ new Date(recording.startedAt).toLocaleString() }}</b><small>{{ recording.state }} · {{ recording.projectPath }}</small></div>
-            <button @click="store.recover(recording)">Recover</button>
+            <button @click="recover(recording)">Recover</button>
             <button class="danger" @click="store.remove(recording)">Delete</button>
           </li>
         </ul>

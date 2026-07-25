@@ -5,7 +5,7 @@ import type {
   AudioBenchmarkReport,
   AudioBenchmarkScenario
 } from "@yadaw/contracts"
-import type { AudioBenchmarkStatus } from "../../composables/useAudioBenchmark"
+import type { AudioBenchmarkStatus } from "../../stores/audioBenchmark"
 
 const props = defineProps<{
   status: AudioBenchmarkStatus

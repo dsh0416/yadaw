@@ -1,25 +1,19 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted } from "vue"
+import { storeToRefs } from "pinia"
 import AudioBenchmarkDialog from "./AudioBenchmarkDialog.vue"
-import { useAudioBenchmark } from "../../composables/useAudioBenchmark"
+import { useAudioBenchmarkStore } from "../../stores/audioBenchmark"
 
-const benchmark = useAudioBenchmark()
-let unsubscribe: (() => void) | null = null
-
-onMounted(() => {
-  unsubscribe = window.yadaw.subscribeAudioBenchmarkRequests(benchmark.open)
-})
-
-onUnmounted(() => unsubscribe?.())
+const benchmark = useAudioBenchmarkStore()
+const { isOpen, status, report, errorMessage } = storeToRefs(benchmark)
 </script>
 
 <template>
   <Teleport to="body">
-    <div v-if="benchmark.isOpen.value" class="benchmark-overlay" @click.self="benchmark.close">
+    <div v-if="isOpen" class="benchmark-overlay" @click.self="benchmark.close">
       <AudioBenchmarkDialog
-        :status="benchmark.status.value"
-        :report="benchmark.report.value"
-        :error-message="benchmark.errorMessage.value"
+        :status="status"
+        :report="report"
+        :error-message="errorMessage"
         @close="benchmark.close"
         @run="benchmark.run"
       />

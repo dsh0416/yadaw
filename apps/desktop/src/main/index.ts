@@ -37,6 +37,7 @@ import { createAudioBenchmarkReport } from "./audio-benchmark-service"
 import { installApplicationMenu } from "./application-menu"
 import { OperationService } from "./operation-service"
 import { MixerService } from "./mixer-service"
+import { LifecycleCoordinator } from "./lifecycle-coordinator"
 import { ProjectService } from "./project-service"
 import { RecordingService } from "./recording-service"
 import { WaveformService } from "./waveform-service"
@@ -374,7 +375,8 @@ function registerIpcHandlers(
   recordings: RecordingService,
   operations: OperationService,
   waveforms: WaveformService,
-  mixer: MixerService
+  mixer: MixerService,
+  lifecycle: LifecycleCoordinator
 ): void {
   ipcMain.handle(IPC_CHANNELS.engineInfo, (event) => {
     assertTrustedSender(event)
@@ -399,37 +401,63 @@ function registerIpcHandlers(
 
   ipcMain.handle(IPC_CHANNELS.audioStart, async (event, value: unknown) => {
     assertTrustedSender(event)
-    const snapshot = normalizeAudioRuntime(startAudioEngine(validateAudioPreferences(value)))
-    if (projects.current) await mixer.load()
-    return snapshot
+    const transition = lifecycle.snapshot().audio.status === "running"
+      ? "reconfiguring"
+      : "starting"
+    lifecycle.beginAudio(transition)
+    try {
+      const snapshot = normalizeAudioRuntime(startAudioEngine(validateAudioPreferences(value)))
+      if (projects.current) await mixer.load()
+      lifecycle.completeAudio(snapshot)
+      return snapshot
+    } catch (error) {
+      lifecycle.failAudio(error, normalizeAudioRuntime(audioEngineSnapshot()))
+      throw error
+    }
   })
 
   ipcMain.handle(IPC_CHANNELS.audioStop, (event) => {
     assertTrustedSender(event)
-    return normalizeAudioRuntime(stopAudioEngine())
+    lifecycle.beginAudio("stopping")
+    try {
+      const snapshot = normalizeAudioRuntime(stopAudioEngine())
+      lifecycle.completeAudio(snapshot)
+      return snapshot
+    } catch (error) {
+      lifecycle.failAudio(error, normalizeAudioRuntime(audioEngineSnapshot()))
+      throw error
+    }
   })
 
   ipcMain.handle(IPC_CHANNELS.audioSnapshot, (event) => {
     assertTrustedSender(event)
-    return normalizeAudioRuntime(audioEngineSnapshot())
+    const snapshot = normalizeAudioRuntime(audioEngineSnapshot())
+    lifecycle.refreshAudio(snapshot)
+    return snapshot
   })
 
   ipcMain.handle(IPC_CHANNELS.mixerLoad, (event) => {
     assertTrustedSender(event)
+    lifecycle.assertMixerLoadAllowed()
     return mixer.load()
   })
 
-  ipcMain.handle(IPC_CHANNELS.mixerExecute, (event, value: unknown) => {
+  ipcMain.handle(IPC_CHANNELS.mixerExecute, async (event, value: unknown) => {
     assertTrustedSender(event)
     if (!value || typeof value !== "object" || typeof (value as { type?: unknown }).type !== "string") {
       throw new TypeError("Project command must be an object with a type")
     }
-    return mixer.execute(value as ProjectCommand)
+    const command = value as ProjectCommand
+    lifecycle.assertMixerCommandAllowed(command)
+    const result = await mixer.execute(command)
+    lifecycle.syncProject(projects.current)
+    return result
   })
 
   ipcMain.handle(IPC_CHANNELS.mixerPreview, (event, value: unknown) => {
     assertTrustedSender(event)
     if (!value || typeof value !== "object") throw new TypeError("Mixer preview must be an object")
+    lifecycle.assertMixerPreviewAllowed()
     mixer.preview(value as MixerParameterPreview)
   })
 
@@ -438,17 +466,29 @@ function registerIpcHandlers(
     return mixer.runtimeSnapshot()
   })
 
+  ipcMain.handle(IPC_CHANNELS.mixerClearMeterClips, (event) => {
+    assertTrustedSender(event)
+    return mixer.clearMeterClips()
+  })
+
   ipcMain.handle(IPC_CHANNELS.transportCommand, (event, value: unknown) => {
     assertTrustedSender(event)
     if (!value || typeof value !== "object" || typeof (value as { type?: unknown }).type !== "string") {
       throw new TypeError("Transport command must be an object with a type")
     }
-    return mixer.transport(value as TransportCommand)
+    const command = value as TransportCommand
+    lifecycle.assertTransportAllowed(command)
+    return mixer.transport(command)
   })
 
   ipcMain.handle(IPC_CHANNELS.transportSnapshot, (event) => {
     assertTrustedSender(event)
     return mixer.transportSnapshot()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.lifecycleSnapshot, (event) => {
+    assertTrustedSender(event)
+    return lifecycle.snapshot()
   })
 
   ipcMain.handle(IPC_CHANNELS.systemPerformanceSnapshot, (event) => {
@@ -493,63 +533,85 @@ function registerIpcHandlers(
 
   ipcMain.handle(IPC_CHANNELS.projectCreate, async (event, value: unknown) => {
     assertTrustedSender(event)
-    const request = validateCreateProject(value)
-    let path = request.path
-    path ??= process.env.YADAW_TEST_PROJECT_PATH
-    if (!path) {
-      const result = await dialog.showSaveDialog({
-        title: "Create YADAW project",
-        defaultPath: `${request.name}.yadaw`,
-        filters: [{ name: "YADAW project", extensions: ["yadaw"] }]
-      })
-      if (result.canceled || !result.filePath) throw new Error("Project creation cancelled")
-      path = result.filePath
+    lifecycle.beginProject("creating")
+    try {
+      const request = validateCreateProject(value)
+      let path = request.path
+      path ??= process.env.YADAW_TEST_PROJECT_PATH
+      if (!path) {
+        const result = await dialog.showSaveDialog({
+          title: "Create YADAW project",
+          defaultPath: `${request.name}.yadaw`,
+          filters: [{ name: "YADAW project", extensions: ["yadaw"] }]
+        })
+        if (result.canceled || !result.filePath) {
+          lifecycle.cancelProject()
+          throw new Error("Project creation cancelled")
+        }
+        path = result.filePath
+      }
+      const created = await projects.create({ ...request, path })
+      await mixer.load()
+      lifecycle.completeProject(created)
+      return created
+    } catch (error) {
+      try {
+        await projects.abortOpen()
+      } catch {
+        // Preserve the original create failure; shutdown will terminate a stuck worker.
+      }
+      if (lifecycle.snapshot().project.status === "creating") lifecycle.failProject(error)
+      throw error
     }
-    const created = await projects.create({ ...request, path })
-    await mixer.load()
-    return created
   })
 
   ipcMain.handle(IPC_CHANNELS.projectOpen, async (event, value: unknown) => {
     assertTrustedSender(event)
-    let path = typeof value === "string" ? value : undefined
-    if (!path) {
-      const result = await dialog.showOpenDialog({
-        title: "Open YADAW project",
-        properties: ["openFile"],
-        filters: [{ name: "YADAW project", extensions: ["yadaw"] }]
-      })
-      path = result.filePaths[0]
-      if (result.canceled || !path) return null
-    }
-    let recover = false
-    if (await projects.hasRecoverableWorkingCopy(path)) {
-      const choice = await dialog.showMessageBox({
-        type: "warning",
-        title: "Recover unsaved project?",
-        message: "A newer working copy contains changes that were not saved to the .yadaw archive.",
-        detail: "Recover it, open the last saved archive, or cancel without changing either copy.",
-        buttons: ["Recover Working Copy", "Open Last Saved", "Cancel"],
-        defaultId: 0,
-        cancelId: 2
-      })
-      if (choice.response === 2) return null
-      recover = choice.response === 0
-    }
-    const operationId = "open-project"
-    const projectName = basename(path).replace(/\.yadaw$/i, "")
-    operations.upsert({
-      id: operationId,
-      title: `Opening ${projectName}`,
-      phase: recover ? "loading-project-database" : "loading-project-archive",
-      state: "running",
-      completedUnits: 0,
-      totalUnits: 4,
-      cancellable: false,
-      message: null,
-      dropoutFrames: 0
-    }, true)
+    lifecycle.beginProject("opening")
     try {
+      let path = typeof value === "string" ? value : undefined
+      if (!path) {
+        const result = await dialog.showOpenDialog({
+          title: "Open YADAW project",
+          properties: ["openFile"],
+          filters: [{ name: "YADAW project", extensions: ["yadaw"] }]
+        })
+        path = result.filePaths[0]
+        if (result.canceled || !path) {
+          lifecycle.cancelProject()
+          return null
+        }
+      }
+      let recover = false
+      if (await projects.hasRecoverableWorkingCopy(path)) {
+        const choice = await dialog.showMessageBox({
+          type: "warning",
+          title: "Recover unsaved project?",
+          message: "A newer working copy contains changes that were not saved to the .yadaw archive.",
+          detail: "Recover it, open the last saved archive, or cancel without changing either copy.",
+          buttons: ["Recover Working Copy", "Open Last Saved", "Cancel"],
+          defaultId: 0,
+          cancelId: 2
+        })
+        if (choice.response === 2) {
+          lifecycle.cancelProject()
+          return null
+        }
+        recover = choice.response === 0
+      }
+      const operationId = "open-project"
+      const projectName = basename(path).replace(/\.yadaw$/i, "")
+      operations.upsert({
+        id: operationId,
+        title: `Opening ${projectName}`,
+        phase: recover ? "loading-project-database" : "loading-project-archive",
+        state: "running",
+        completedUnits: 0,
+        totalUnits: 4,
+        cancellable: false,
+        message: null,
+        dropoutFrames: 0
+      }, true)
       const opened = await projects.open(path, recover, ({ phase, completedUnits }) => {
         operations.patch(operationId, { phase, completedUnits }, true)
       })
@@ -567,12 +629,26 @@ function registerIpcHandlers(
         state: "completed",
         completedUnits: 4
       }, true)
+      lifecycle.completeProject(opened)
       return opened
     } catch (error) {
-      operations.patch(operationId, {
-        state: "failed",
-        message: error instanceof Error ? error.message : String(error)
-      }, true)
+      try {
+        await projects.abortOpen()
+      } catch {
+        // Preserve the original open failure; shutdown will terminate a stuck worker.
+      }
+      lifecycle.failProject(error)
+      const activeOperation = lifecycle.snapshot().project.status === "closed"
+      if (activeOperation) {
+        try {
+          operations.patch("open-project", {
+            state: "failed",
+            message: error instanceof Error ? error.message : String(error)
+          }, true)
+        } catch {
+          // The file chooser or recovery prompt may have failed before the operation existed.
+        }
+      }
       const code = (error as Error & { code?: string }).code
       if (code === "newer-project") {
         await dialog.showMessageBox({
@@ -595,6 +671,7 @@ function registerIpcHandlers(
     assertTrustedSender(event)
     const current = projects.current
     if (!current) return null
+    lifecycle.beginProject("saving")
     const operationId = `save:${current.id}`
     operations.upsert({
       id: operationId,
@@ -612,8 +689,10 @@ function registerIpcHandlers(
       operations.patch(operationId, { phase: "cleaning-up" }, true)
       await recordings.cleanupCommittedForProject(saved.path)
       operations.patch(operationId, { state: "completed" }, true)
+      lifecycle.completeProject(saved)
       return saved
     } catch (error) {
+      lifecycle.failProject(error)
       operations.patch(operationId, {
         state: "failed",
         message: error instanceof Error ? error.message : String(error)
@@ -624,54 +703,92 @@ function registerIpcHandlers(
 
   ipcMain.handle(IPC_CHANNELS.projectClose, async (event, value: unknown) => {
     assertTrustedSender(event)
-    let disposition = value as ProjectCloseDisposition | undefined
     const current = projects.current
     if (!current) return true
-    if (current.dirty && !disposition) {
-      const choice = await dialog.showMessageBox({
-        type: "question",
-        title: "Save project?",
-        message: `Save changes to ${current.configuration.name}?`,
-        buttons: ["Save", "Don't Save", "Cancel"],
-        defaultId: 0,
-        cancelId: 2
-      })
-      disposition = (["save", "discard", "cancel"] as const)[choice.response]
-    }
-    disposition ??= "discard"
-    if (disposition !== "save" && disposition !== "discard" && disposition !== "cancel") {
-      throw new TypeError("Invalid close disposition")
-    }
-    const closed = await projects.close(disposition)
-    if (closed) {
+    lifecycle.beginProject("closing")
+    try {
+      let disposition = value as ProjectCloseDisposition | undefined
+      if (current.dirty && !disposition) {
+        const choice = await dialog.showMessageBox({
+          type: "question",
+          title: "Save project?",
+          message: `Save changes to ${current.configuration.name}?`,
+          buttons: ["Save", "Don't Save", "Cancel"],
+          defaultId: 0,
+          cancelId: 2
+        })
+        disposition = (["save", "discard", "cancel"] as const)[choice.response]
+      }
+      disposition ??= "discard"
+      if (disposition !== "save" && disposition !== "discard" && disposition !== "cancel") {
+        throw new TypeError("Invalid close disposition")
+      }
+      const closed = await projects.close(disposition)
+      if (!closed) {
+        lifecycle.cancelProject()
+        return false
+      }
       try {
         mixer.transport({ type: "stop" })
       } catch {
         // The audio engine may already be stopped.
       }
+      if (disposition === "save") await recordings.cleanupCommittedForProject(current.path)
+      lifecycle.completeProject(null)
+      return true
+    } catch (error) {
+      lifecycle.failProject(error)
+      throw error
     }
-    if (closed && disposition === "save") await recordings.cleanupCommittedForProject(current.path)
-    return closed
   })
 
-  ipcMain.handle(IPC_CHANNELS.projectQuery, (event, value: unknown) => {
+  ipcMain.handle(IPC_CHANNELS.projectQuery, async (event, value: unknown) => {
     assertTrustedSender(event)
-    return projects.query(validateProjectQuery(value))
+    const request = validateProjectQuery(value)
+    if (request.method === "execute") lifecycle.assertProjectWriteAllowed()
+    const result = await projects.query(request)
+    if (request.method === "execute") lifecycle.syncProject(projects.current)
+    return result
   })
 
-  ipcMain.handle(IPC_CHANNELS.projectTransaction, (event, value: unknown) => {
+  ipcMain.handle(IPC_CHANNELS.projectTransaction, async (event, value: unknown) => {
     assertTrustedSender(event)
-    return projects.transaction(validateProjectTransaction(value))
+    const request = validateProjectTransaction(value)
+    if (request.queries.some((query) => query.method === "execute")) {
+      lifecycle.assertProjectWriteAllowed()
+    }
+    const result = await projects.transaction(request)
+    if (request.queries.some((query) => query.method === "execute")) {
+      lifecycle.syncProject(projects.current)
+    }
+    return result
   })
 
-  ipcMain.handle(IPC_CHANNELS.recordingStart, (event) => {
+  ipcMain.handle(IPC_CHANNELS.recordingStart, async (event) => {
     assertTrustedSender(event)
-    return recordings.start()
+    lifecycle.beginRecordingStart()
+    try {
+      const session = await recordings.start()
+      lifecycle.completeRecordingStart(session)
+      return session
+    } catch (error) {
+      lifecycle.failRecordingStart(error)
+      throw error
+    }
   })
 
-  ipcMain.handle(IPC_CHANNELS.recordingStop, (event) => {
+  ipcMain.handle(IPC_CHANNELS.recordingStop, async (event) => {
     assertTrustedSender(event)
-    return recordings.stop()
+    const session = lifecycle.beginRecordingStop()
+    try {
+      const completed = await recordings.stop(() => lifecycle.markRecordingFinalizing(session))
+      lifecycle.completeRecordingStop()
+      lifecycle.syncProject(projects.current)
+      return completed
+    } catch (error) {
+      lifecycle.failRecordingStop(error)
+      throw error
+    }
   })
 
   ipcMain.handle(IPC_CHANNELS.recordingPendingList, (event) => {
@@ -679,15 +796,24 @@ function registerIpcHandlers(
     return recordings.listPending()
   })
 
-  ipcMain.handle(IPC_CHANNELS.recordingRecover, (event, value: unknown) => {
+  ipcMain.handle(IPC_CHANNELS.recordingRecover, async (event, value: unknown) => {
     assertTrustedSender(event)
     if (typeof value !== "string") throw new TypeError("Recording id must be a string")
-    return recordings.recover(value)
+    lifecycle.beginRecordingRecovery(value)
+    try {
+      await recordings.recover(value)
+      lifecycle.completeRecordingRecovery()
+      lifecycle.syncProject(projects.current)
+    } catch (error) {
+      lifecycle.failRecordingRecovery(error)
+      throw error
+    }
   })
 
   ipcMain.handle(IPC_CHANNELS.recordingDeletePending, (event, value: unknown) => {
     assertTrustedSender(event)
     if (typeof value !== "string") throw new TypeError("Recording id must be a string")
+    lifecycle.assertRecordingIdle()
     return recordings.deletePending(value)
   })
 
@@ -763,7 +889,20 @@ app.whenReady().then(() => {
   const mixer = new MixerService(app.getPath("userData"), projectService)
   const recordings = new RecordingService(settings, projectService, operations, mixer)
   const waveforms = new WaveformService(settings, projectService)
-  registerIpcHandlers(settings, projectService, recordings, operations, waveforms, mixer)
+  const lifecycle = new LifecycleCoordinator(
+    projectService.current,
+    normalizeAudioRuntime(audioEngineSnapshot()),
+    { allowRecordingWithoutAudio: process.env.YADAW_TEST_CAPTURE_SOURCE === "1" }
+  )
+  registerIpcHandlers(
+    settings,
+    projectService,
+    recordings,
+    operations,
+    waveforms,
+    mixer,
+    lifecycle
+  )
   createMainWindow()
   installApplicationMenu()
 

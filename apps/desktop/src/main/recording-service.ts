@@ -63,6 +63,20 @@ export class RecordingService {
     private readonly mixer: MixerService
   ) {}
 
+  get current(): RecordingSession | null {
+    return this.active ? this.toSession(this.active) : null
+  }
+
+  private toSession(recording: RecordingSidecar): RecordingSession {
+    return {
+      id: recording.id,
+      startedAt: recording.startedAt,
+      swapPath: recording.audioPath,
+      startFrame: recording.startFrame,
+      trackIds: recording.tracks.map((track) => track.trackId)
+    }
+  }
+
   private async writeSidecar(recording: RecordingSidecar): Promise<void> {
     const temporary = `${recording.sidecarPath}.tmp`
     await writeFile(temporary, `${JSON.stringify(recording, null, 2)}\n`, "utf8")
@@ -144,16 +158,10 @@ export class RecordingService {
       throw error
     }
     this.active = sidecar
-    return {
-      id,
-      startedAt,
-      swapPath: partialPath,
-      startFrame,
-      trackIds: sidecar.tracks.map((track) => track.trackId)
-    }
+    return this.toSession(sidecar)
   }
 
-  async stop(): Promise<PendingRecording> {
+  async stop(onFinalizing?: () => void): Promise<PendingRecording> {
     const recording = this.active
     if (!recording) throw new Error("No recording is active")
     this.active = null
@@ -204,6 +212,7 @@ export class RecordingService {
       recording.audioPath = readyPath
       recording.state = "ready"
       await this.writeSidecar(recording)
+      onFinalizing?.()
       await this.finalizeAndCommit(recording, operationId)
       return this.toPending(recording)
     } catch (error) {

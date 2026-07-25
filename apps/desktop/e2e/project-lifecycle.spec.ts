@@ -93,12 +93,15 @@ test("records into a Large Object and reopens the PGlite project archive", async
     expect(mixerBeforeSave.sends).toHaveLength(1)
     await page.getByRole("button", { name: "Arrangement", exact: true }).click()
 
-    await page.getByRole("button", { name: "Zoom time in" }).click()
-    await expect(page.getByRole("button", { name: "Reset time zoom" })).toContainText("125 px/s")
-    await page.getByRole("button", { name: "Increase track height" }).click()
-    await expect(page.getByRole("button", { name: "Reset track height" })).toContainText("120 px")
-    await page.getByRole("button", { name: "Increase waveform amplitude" }).click()
-    await expect(page.getByRole("button", { name: "Reset waveform amplitude" })).toContainText("1.4×")
+    const timeZoom = page.getByRole("slider", { name: "Time zoom" })
+    await timeZoom.fill("50")
+    await expect(timeZoom).toHaveAttribute("aria-valuetext", "200 pixels per second")
+    const trackHeight = page.getByRole("slider", { name: "Track height" })
+    await trackHeight.fill("50")
+    await expect(trackHeight).toHaveAttribute("aria-valuetext", "196 pixels")
+    const waveformGain = page.getByRole("slider", { name: "Waveform gain" })
+    await waveformGain.fill("50")
+    await expect(waveformGain).toHaveAttribute("aria-valuetext", "2.0 times")
 
     const recordButton = page.getByRole("button", { name: "Record", exact: true })
     await recordButton.evaluate((button) => {

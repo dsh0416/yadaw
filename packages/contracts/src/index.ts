@@ -10,8 +10,11 @@ export const IPC_CHANNELS = {
   mixerExecute: "mixer:execute",
   mixerPreview: "mixer:preview",
   mixerSnapshot: "mixer:snapshot",
+  mixerClearMeterClips: "mixer:clear-meter-clips",
   transportCommand: "transport:command",
   transportSnapshot: "transport:snapshot",
+  lifecycleSnapshot: "lifecycle:snapshot",
+  lifecycleEvent: "lifecycle:event",
   systemPerformanceSnapshot: "system:performance-snapshot",
   audioBenchmarkRun: "audio-benchmark:run",
   audioBenchmarkMenuOpen: "audio-benchmark:menu-open",
@@ -65,8 +68,11 @@ export interface YadawDesktopApi {
   executeProjectCommand(command: ProjectCommand): Promise<ProjectCommandResult>
   previewMixerParameter(preview: MixerParameterPreview): Promise<void>
   mixerSnapshot(): Promise<MixerRuntimeSnapshot>
+  clearMixerMeterClips(): Promise<MixerRuntimeSnapshot>
   transportCommand(command: TransportCommand): Promise<TransportSnapshot>
   transportSnapshot(): Promise<TransportSnapshot>
+  lifecycleSnapshot(): Promise<DesktopLifecycleSnapshot>
+  subscribeLifecycle(listener: (event: DesktopLifecycleEvent) => void): () => void
   systemPerformanceSnapshot(): Promise<SystemPerformanceSnapshot>
   runAudioBenchmark(): Promise<AudioBenchmarkReport>
   subscribeAudioBenchmarkRequests(listener: () => void): () => void
@@ -138,6 +144,14 @@ export interface ProjectSession {
   dirty: boolean
   recoveredWorkingCopy: boolean
 }
+
+export type ProjectLifecycleState =
+  | { status: "closed"; error: string | null }
+  | { status: "creating"; error: null }
+  | { status: "opening"; error: null }
+  | { status: "open"; session: ProjectSession; error: string | null }
+  | { status: "saving"; session: ProjectSession; error: null }
+  | { status: "closing"; session: ProjectSession; error: null }
 
 export type ProjectCloseDisposition = "save" | "discard" | "cancel"
 
@@ -226,6 +240,14 @@ export interface RecordingSession {
   startFrame: number
   trackIds: string[]
 }
+
+export type RecordingLifecycleState =
+  | { status: "idle"; error: string | null }
+  | { status: "starting"; error: null }
+  | { status: "recording"; session: RecordingSession; error: null }
+  | { status: "stopping"; session: RecordingSession; error: null }
+  | { status: "finalizing"; session: RecordingSession; error: null }
+  | { status: "recovering"; recordingId: string; error: null }
 
 export type PendingRecordingState = "partial" | "ready" | "committed"
 
@@ -403,6 +425,38 @@ export const INITIAL_AUDIO_RUNTIME_SNAPSHOT: Readonly<AudioRuntimeSnapshot> = {
   bufferFallback: false
 }
 
+export type AudioLifecycleState =
+  | { status: "stopped"; runtime: AudioRuntimeSnapshot; error: string | null }
+  | { status: "starting"; runtime: AudioRuntimeSnapshot; error: null }
+  | { status: "running"; runtime: AudioRuntimeSnapshot; error: string | null }
+  | { status: "reconfiguring"; runtime: AudioRuntimeSnapshot; error: null }
+  | { status: "stopping"; runtime: AudioRuntimeSnapshot; error: null }
+  | { status: "error"; runtime: AudioRuntimeSnapshot; error: string }
+
+export interface DesktopLifecycleSnapshot {
+  revision: number
+  project: ProjectLifecycleState
+  audio: AudioLifecycleState
+  recording: RecordingLifecycleState
+}
+
+export type DesktopLifecycleEvent =
+  | {
+      type: "project"
+      revision: number
+      state: ProjectLifecycleState
+    }
+  | {
+      type: "audio"
+      revision: number
+      state: AudioLifecycleState
+    }
+  | {
+      type: "recording"
+      revision: number
+      state: RecordingLifecycleState
+    }
+
 export type MixerChannelKind = "audio" | "bus" | "master" | "output"
 export type MixerInputFormat = "mono" | "stereo"
 export type MixerSendTap = "pre" | "post"
@@ -516,4 +570,3 @@ export type TransportCommand =
   | { type: "pause" }
   | { type: "stop" }
   | { type: "seek"; positionFrames: number }
-  | { type: "clear-meter-clips" }

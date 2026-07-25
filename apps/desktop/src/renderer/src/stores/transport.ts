@@ -52,6 +52,10 @@ export const useTransportStore = defineStore("transport", () => {
   const selectedClipId = shallowRef<string | null>(null)
   const loading = shallowRef(false)
   const error = shallowRef("")
+  let commandTail: Promise<void> = Promise.resolve()
+  let requestGeneration = 0
+  let pendingSeekFrames: number | null = null
+  let seekFlush: Promise<void> | null = null
 
   const clips = computed<TimelineClip[]>(() =>
     mixerStore.graph.clips.map((clip) => {
@@ -86,18 +90,26 @@ export const useTransportStore = defineStore("transport", () => {
   )
   const canPlay = computed(() => clips.value.length > 0 && !loading.value)
 
-  async function command(value: Parameters<typeof window.yadaw.transportCommand>[0]): Promise<void> {
-    try {
-      snapshot.value = await window.yadaw.transportCommand(value)
-      error.value = ""
-    } catch (reason) {
-      error.value = reason instanceof Error ? reason.message : "Transport command failed."
-    }
+  function command(value: Parameters<typeof window.yadaw.transportCommand>[0]): Promise<void> {
+    const generation = ++requestGeneration
+    const result = commandTail.then(async () => {
+      try {
+        const next = await window.yadaw.transportCommand(value)
+        if (generation >= requestGeneration) snapshot.value = next
+        error.value = ""
+      } catch (reason) {
+        error.value = reason instanceof Error ? reason.message : "Transport command failed."
+      }
+    })
+    commandTail = result.then(() => undefined, () => undefined)
+    return result
   }
 
   async function refresh(): Promise<void> {
+    const generation = ++requestGeneration
     try {
-      snapshot.value = await window.yadaw.transportSnapshot()
+      const next = await window.yadaw.transportSnapshot()
+      if (generation === requestGeneration) snapshot.value = next
     } catch {
       // Existing audio runtime state owns device-level errors.
     }
@@ -117,12 +129,15 @@ export const useTransportStore = defineStore("transport", () => {
   async function play(): Promise<void> {
     if (!canPlay.value || playing.value) return
     loading.value = true
-    await command({ type: "play" })
-    loading.value = false
+    try {
+      await command({ type: "play" })
+    } finally {
+      loading.value = false
+    }
   }
 
-  function stop(): void {
-    void command({ type: "pause" })
+  function stop(): Promise<void> {
+    return command({ type: "pause" })
   }
 
   function toggle(): Promise<void> | void {
@@ -135,14 +150,19 @@ export const useTransportStore = defineStore("transport", () => {
       timelineDurationSeconds.value,
       Math.max(0, Number.isFinite(seconds) ? seconds : 0)
     )
-    void command({
-      type: "seek",
-      positionFrames: Math.round(safeSeconds * mixerStore.graph.sampleRate)
-    })
+    pendingSeekFrames = Math.round(safeSeconds * mixerStore.graph.sampleRate)
+    if (!seekFlush) {
+      seekFlush = Promise.resolve().then(async () => {
+        const positionFrames = pendingSeekFrames
+        pendingSeekFrames = null
+        seekFlush = null
+        if (positionFrames !== null) await command({ type: "seek", positionFrames })
+      })
+    }
   }
 
-  function goToStart(): void {
-    void command({ type: "seek", positionFrames: 0 })
+  function goToStart(): Promise<void> {
+    return command({ type: "seek", positionFrames: 0 })
   }
 
   function selectClip(id: string): void {
@@ -161,7 +181,6 @@ export const useTransportStore = defineStore("transport", () => {
 
   function reset(): void {
     stopPolling()
-    void command({ type: "stop" })
     snapshot.value = { ...EMPTY_TRANSPORT }
     selectedClipId.value = null
     error.value = ""
@@ -179,6 +198,7 @@ export const useTransportStore = defineStore("transport", () => {
     contentEndSeconds,
     timelineDurationSeconds,
     canPlay,
+    refresh,
     startPolling,
     stopPolling,
     play,

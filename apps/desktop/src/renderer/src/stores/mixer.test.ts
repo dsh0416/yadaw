@@ -62,7 +62,11 @@ const session: ProjectSession = {
 describe("mixer store", () => {
   beforeEach(() => {
     setActivePinia(createPinia())
-    useProjectStore().session = structuredClone(session)
+    useProjectStore().applyLifecycleState({
+      status: "open",
+      session: structuredClone(session),
+      error: null
+    })
   })
 
   it("records one history entry and applies the inverse on undo", async () => {
@@ -142,8 +146,50 @@ describe("mixer store", () => {
     })
   })
 
+  it("serializes committed commands before starting the next mutation", async () => {
+    const initial = graph()
+    const firstGraph = structuredClone(initial)
+    firstGraph.channels[0]!.gainDb = -3
+    const secondGraph = structuredClone(firstGraph)
+    secondGraph.channels[0]!.pan = 0.5
+    let resolveFirst!: (value: unknown) => void
+    window.yadaw.executeProjectCommand = vi.fn()
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve }))
+      .mockResolvedValueOnce({
+        graph: secondGraph,
+        inverse: { type: "update-channel", channelId: "audio", patch: { pan: 0 } }
+      })
+    const mixer = useMixerStore()
+    mixer.graph = initial
+
+    const first = mixer.updateChannel("audio", { gainDb: -3 })
+    const second = mixer.updateChannel("audio", { pan: 0.5 })
+    await vi.waitFor(() => {
+      expect(window.yadaw.executeProjectCommand).toHaveBeenCalledTimes(1)
+    })
+
+    resolveFirst({
+      graph: firstGraph,
+      inverse: { type: "update-channel", channelId: "audio", patch: { gainDb: 0 } }
+    })
+    await first
+    await second
+
+    expect(window.yadaw.executeProjectCommand).toHaveBeenCalledTimes(2)
+    expect(mixer.graph.channels[0]).toMatchObject({ gainDb: -3, pan: 0.5 })
+  })
+
   it("clears latched meter clipping in the UI and native engine", async () => {
-    window.yadaw.transportCommand = vi.fn().mockResolvedValue(undefined)
+    window.yadaw.clearMixerMeterClips = vi.fn().mockResolvedValue({
+      capturedAt: 2,
+      meters: [{
+        channelId: "audio",
+        preFaderPeak: [1, 1],
+        postFaderPeak: [1, 1],
+        heldPeak: [0, 0],
+        clipped: false
+      }]
+    })
     const mixer = useMixerStore()
     mixer.runtime = {
       capturedAt: 1,
@@ -162,8 +208,6 @@ describe("mixer store", () => {
       heldPeak: [0, 0],
       clipped: false
     })
-    expect(window.yadaw.transportCommand).toHaveBeenCalledWith({
-      type: "clear-meter-clips"
-    })
+    expect(window.yadaw.clearMixerMeterClips).toHaveBeenCalledOnce()
   })
 })

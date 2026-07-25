@@ -22,7 +22,7 @@ function setBitDepth(event: Event): void {
 }
 
 function openSwapDirectory(): void {
-  void window.yadaw.openSwapDirectory()
+  void settingsStore.openSwapDirectory()
 }
 </script>
 

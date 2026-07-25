@@ -487,6 +487,7 @@ function deletedChannelIds(command: ProjectCommand): Set<string> {
 
 export class MixerService {
   private readonly cacheDirectory: string
+  private mutationTail: Promise<void> = Promise.resolve()
   private testTransport: TransportSnapshot = {
     state: "stopped",
     positionFrames: 0,
@@ -498,6 +499,12 @@ export class MixerService {
     private readonly projects: ProjectService
   ) {
     this.cacheDirectory = join(userData, "mixer-cache")
+  }
+
+  private enqueueMutation<T>(task: () => Promise<T>): Promise<T> {
+    const result = this.mutationTail.then(task, task)
+    this.mutationTail = result.then(() => undefined, () => undefined)
+    return result
   }
 
   async snapshot(): Promise<MixerGraphSnapshot> {
@@ -604,7 +611,11 @@ export class MixerService {
     return result
   }
 
-  async load(): Promise<MixerGraphSnapshot> {
+  load(): Promise<MixerGraphSnapshot> {
+    return this.enqueueMutation(() => this.loadNow())
+  }
+
+  private async loadNow(): Promise<MixerGraphSnapshot> {
     const graph = await this.snapshot()
     if (process.env.YADAW_TEST_CAPTURE_SOURCE === "1") {
       this.testTransport.sampleRate = graph.sampleRate
@@ -654,7 +665,11 @@ export class MixerService {
     return graph
   }
 
-  async execute(command: ProjectCommand): Promise<ProjectCommandResult> {
+  execute(command: ProjectCommand): Promise<ProjectCommandResult> {
+    return this.enqueueMutation(() => this.executeNow(command))
+  }
+
+  private async executeNow(command: ProjectCommand): Promise<ProjectCommandResult> {
     const before = await this.snapshot()
     const inverse = inverseFor(before, command)
     const candidate = applyToGraph(before, command)
@@ -670,7 +685,7 @@ export class MixerService {
       if (onlyRealtimeParameters(command)) {
         await this.previewCommitted(command)
       } else {
-        await this.load()
+        await this.loadNow()
       }
     } catch (error) {
       const rollback = commandQueries(inverse, fallbackOutput.id)
@@ -731,6 +746,11 @@ export class MixerService {
       })),
       capturedAt: Date.now()
     }
+  }
+
+  clearMeterClips(): MixerRuntimeSnapshot {
+    transportCommand("clear-meter-clips")
+    return this.runtimeSnapshot()
   }
 
   transport(command: TransportCommand): TransportSnapshot {

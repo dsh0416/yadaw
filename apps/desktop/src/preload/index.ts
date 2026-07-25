@@ -28,8 +28,18 @@ const api: YadawDesktopApi = {
   executeProjectCommand: (command) => ipcRenderer.invoke(IPC_CHANNELS.mixerExecute, command),
   previewMixerParameter: (preview) => ipcRenderer.invoke(IPC_CHANNELS.mixerPreview, preview),
   mixerSnapshot: () => ipcRenderer.invoke(IPC_CHANNELS.mixerSnapshot),
+  clearMixerMeterClips: () => ipcRenderer.invoke(IPC_CHANNELS.mixerClearMeterClips),
   transportCommand: (command) => ipcRenderer.invoke(IPC_CHANNELS.transportCommand, command),
   transportSnapshot: () => ipcRenderer.invoke(IPC_CHANNELS.transportSnapshot),
+  lifecycleSnapshot: () => ipcRenderer.invoke(IPC_CHANNELS.lifecycleSnapshot),
+  subscribeLifecycle: (listener) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      lifecycleEvent: Parameters<typeof listener>[0]
+    ) => listener(lifecycleEvent)
+    ipcRenderer.on(IPC_CHANNELS.lifecycleEvent, handler)
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.lifecycleEvent, handler)
+  },
   systemPerformanceSnapshot: () =>
     ipcRenderer.invoke(IPC_CHANNELS.systemPerformanceSnapshot),
   runAudioBenchmark: () => ipcRenderer.invoke(IPC_CHANNELS.audioBenchmarkRun),

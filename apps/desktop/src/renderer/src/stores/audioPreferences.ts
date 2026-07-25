@@ -7,7 +7,9 @@ import {
 } from "@yadaw/contracts"
 import type {
   AudioBackend,
+  AudioBackendDescriptor,
   AudioBufferSize,
+  AudioDeviceDescriptor,
   AudioPreferences
 } from "@yadaw/contracts"
 import { useAudioRuntimeStore } from "./audioRuntime"
@@ -63,7 +65,13 @@ export const useAudioPreferencesStore = defineStore("audio-preferences", () => {
   const applyError = ref("")
   const applyNotice = ref("")
   const applying = ref(false)
+  const backends = ref<AudioBackendDescriptor[]>([])
+  const inputDevices = ref<AudioDeviceDescriptor[]>([])
+  const outputDevices = ref<AudioDeviceDescriptor[]>([])
+  const discoveryState = ref<"idle" | "loading" | "ready" | "unavailable">("idle")
+  const discoveryError = ref("")
   let restoreAttempted = false
+  let discoveryGeneration = 0
 
   preferences.value = normalizePreferences(preferences.value)
 
@@ -104,13 +112,67 @@ export const useAudioPreferencesStore = defineStore("audio-preferences", () => {
     }
   }
 
+  async function discoverBackends(): Promise<AudioBackendDescriptor[]> {
+    const generation = ++discoveryGeneration
+    discoveryState.value = "loading"
+    discoveryError.value = ""
+    try {
+      const result = await window.yadaw.listAudioBackends()
+      if (generation !== discoveryGeneration) return backends.value
+      backends.value = result
+      discoveryState.value = "ready"
+      return result
+    } catch (error) {
+      if (generation !== discoveryGeneration) return backends.value
+      backends.value = []
+      discoveryState.value = "unavailable"
+      discoveryError.value = error instanceof Error ? error.message : "Unable to query cpal backends."
+      return []
+    }
+  }
+
+  async function discoverDevices(backend: AudioBackend): Promise<void> {
+    const generation = ++discoveryGeneration
+    discoveryState.value = "loading"
+    discoveryError.value = ""
+    try {
+      const devices = await window.yadaw.listAudioDevices(backend)
+      if (generation !== discoveryGeneration) return
+      inputDevices.value = devices.inputs
+      outputDevices.value = devices.outputs
+      discoveryState.value = "ready"
+    } catch (error) {
+      if (generation !== discoveryGeneration) return
+      inputDevices.value = []
+      outputDevices.value = []
+      discoveryState.value = "unavailable"
+      discoveryError.value = error instanceof Error ? error.message : "cpal device enumeration failed."
+    }
+  }
+
+  function markBackendUnavailable(message: string): void {
+    discoveryGeneration += 1
+    inputDevices.value = []
+    outputDevices.value = []
+    discoveryState.value = "unavailable"
+    discoveryError.value = message
+  }
+
   return {
     preferences,
     applyError,
     applyNotice,
     applying,
+    backends,
+    inputDevices,
+    outputDevices,
+    discoveryState,
+    discoveryError,
     apply,
-    restore
+    restore,
+    discoverBackends,
+    discoverDevices,
+    markBackendUnavailable
   }
 })
 

@@ -28,7 +28,7 @@ describe("ArrangementWorkspace", () => {
     const pinia = createPinia()
     setActivePinia(pinia)
     const project = useProjectStore()
-    project.session = {
+    project.applyLifecycleState({ status: "open", session: {
       id: "project",
       path: "project.yadaw",
       configuration: {
@@ -41,7 +41,7 @@ describe("ArrangementWorkspace", () => {
       },
       dirty: true,
       recoveredWorkingCopy: false
-    }
+    }, error: null })
     project.projectAssets = [recordingAsset]
     const mixer = useMixerStore()
     mixer.graph = {
@@ -147,7 +147,7 @@ describe("ArrangementWorkspace", () => {
     const pinia = createPinia()
     setActivePinia(pinia)
     const project = useProjectStore()
-    project.session = {
+    project.applyLifecycleState({ status: "open", session: {
       id: "project",
       path: "project.yadaw",
       configuration: {
@@ -160,7 +160,7 @@ describe("ArrangementWorkspace", () => {
       },
       dirty: false,
       recoveredWorkingCopy: false
-    }
+    }, error: null })
     const mixer = useMixerStore()
     mixer.graph = {
       sampleRate: 48_000,

@@ -1,63 +1,114 @@
 import { acceptHMRUpdate, defineStore } from "pinia"
-import { computed, ref } from "vue"
+import { computed, ref, shallowRef } from "vue"
 import type { Asset } from "@yadaw/project-db/schema"
 import { assets, project as projectTable } from "@yadaw/project-db/schema"
 import { createProjectDbProxy } from "@yadaw/project-db/proxy"
 import { eq } from "drizzle-orm"
-import type { CreateProjectRequest, ProjectConfiguration, ProjectSession } from "@yadaw/contracts"
+import type {
+  CreateProjectRequest,
+  ProjectConfiguration,
+  ProjectLifecycleState,
+  ProjectSession
+} from "@yadaw/contracts"
 
 const proxy = createProjectDbProxy({ query: (request) => window.yadaw.projectQuery(request) })
 
+function openState(session: ProjectSession, error: string | null = null): ProjectLifecycleState {
+  return { status: "open", session: structuredClone(session), error }
+}
+
 export const useProjectStore = defineStore("project", () => {
-  const session = ref<ProjectSession | null>(null)
+  const lifecycle = shallowRef<ProjectLifecycleState>({ status: "closed", error: null })
   const projectAssets = ref<Asset[]>([])
-  const busy = ref(false)
-  const error = ref("")
+
+  const session = computed(() => "session" in lifecycle.value ? lifecycle.value.session : null)
+  const busy = computed(() =>
+    lifecycle.value.status === "creating" || lifecycle.value.status === "opening" ||
+    lifecycle.value.status === "saving" || lifecycle.value.status === "closing"
+  )
+  const error = computed(() => lifecycle.value.error ?? "")
   const isOpen = computed(() => session.value !== null)
 
+  function applyLifecycleState(state: ProjectLifecycleState): void {
+    lifecycle.value = structuredClone(state)
+    if (state.status === "closed") projectAssets.value = []
+  }
+
   async function create(request: CreateProjectRequest): Promise<boolean> {
-    busy.value = true
-    error.value = ""
+    if (lifecycle.value.status !== "closed") return false
+    lifecycle.value = { status: "creating", error: null }
     try {
-      session.value = await window.yadaw.createProject(request)
+      const created = await window.yadaw.createProject(request)
+      lifecycle.value = openState(created)
       projectAssets.value = []
       return true
     } catch (reason) {
-      error.value = reason instanceof Error ? reason.message : "Unable to create project."
+      const message = reason instanceof Error ? reason.message : "Unable to create project."
+      lifecycle.value = {
+        status: "closed",
+        error: /cancelled/i.test(message) ? null : message
+      }
       return false
-    } finally {
-      busy.value = false
     }
   }
 
   async function open(path?: string): Promise<boolean> {
-    busy.value = true
-    error.value = ""
+    if (lifecycle.value.status !== "closed") return false
+    lifecycle.value = { status: "opening", error: null }
     try {
-      session.value = await window.yadaw.openProject(path)
-      if (!session.value) return false
+      const opened = await window.yadaw.openProject(path)
+      if (!opened) {
+        lifecycle.value = { status: "closed", error: null }
+        return false
+      }
+      lifecycle.value = openState(opened)
       await refreshAssets()
       return true
     } catch (reason) {
-      error.value = reason instanceof Error ? reason.message : "Unable to open project."
+      lifecycle.value = {
+        status: "closed",
+        error: reason instanceof Error ? reason.message : "Unable to open project."
+      }
       return false
-    } finally {
-      busy.value = false
     }
   }
 
   async function save(): Promise<void> {
-    const saved = await window.yadaw.saveProject()
-    if (saved) session.value = saved
+    if (lifecycle.value.status !== "open") return
+    const previous = lifecycle.value.session
+    lifecycle.value = { status: "saving", session: structuredClone(previous), error: null }
+    try {
+      const saved = await window.yadaw.saveProject()
+      lifecycle.value = openState(saved ?? previous)
+    } catch (reason) {
+      lifecycle.value = openState(
+        previous,
+        reason instanceof Error ? reason.message : "Unable to save project."
+      )
+    }
   }
 
   async function close(disposition?: "save" | "discard" | "cancel"): Promise<boolean> {
-    const closed = await window.yadaw.closeProject(disposition)
-    if (closed) {
-      session.value = null
+    if (lifecycle.value.status === "closed") return true
+    if (lifecycle.value.status !== "open") return false
+    const previous = lifecycle.value.session
+    lifecycle.value = { status: "closing", session: structuredClone(previous), error: null }
+    try {
+      const closed = await window.yadaw.closeProject(disposition)
+      if (!closed) {
+        lifecycle.value = openState(previous)
+        return false
+      }
+      lifecycle.value = { status: "closed", error: null }
       projectAssets.value = []
+      return true
+    } catch (reason) {
+      lifecycle.value = openState(
+        previous,
+        reason instanceof Error ? reason.message : "Unable to close project."
+      )
+      return false
     }
-    return closed
   }
 
   async function updateConfiguration(configuration: ProjectConfiguration): Promise<void> {
@@ -69,26 +120,34 @@ export const useProjectStore = defineStore("project", () => {
       timeSignatureDenominator: configuration.timeSignatureDenominator,
       waveformDisplayMode: configuration.waveformDisplayMode
     }).where(eq(projectTable.id, "project"))
-    if (session.value) {
-      session.value.configuration = { ...configuration }
-      session.value.dirty = true
+    if (lifecycle.value.status === "open") {
+      lifecycle.value = openState({
+        ...lifecycle.value.session,
+        configuration: { ...configuration },
+        dirty: true
+      })
     }
   }
 
   async function refreshAssets(): Promise<void> {
+    if (!session.value) return
     projectAssets.value = await proxy.select().from(assets).orderBy(assets.createdAt)
   }
 
   function markDirty(): void {
-    if (session.value) session.value.dirty = true
+    if (lifecycle.value.status === "open" && !lifecycle.value.session.dirty) {
+      lifecycle.value = openState({ ...lifecycle.value.session, dirty: true })
+    }
   }
 
   return {
+    lifecycle,
     session,
     projectAssets,
     busy,
     error,
     isOpen,
+    applyLifecycleState,
     create,
     open,
     save,

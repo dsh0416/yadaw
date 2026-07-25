@@ -8,6 +8,16 @@ export const useOperationStore = defineStore("operations", () => {
   const active = computed(() =>
     operations.value.find((operation) => operation.state === "running") ?? operations.value[0] ?? null
   )
+  let unsubscribe: (() => void) | null = null
+
+  function startSubscription(): void {
+    unsubscribe ??= window.yadaw.subscribeOperations(apply)
+  }
+
+  function stopSubscription(): void {
+    unsubscribe?.()
+    unsubscribe = null
+  }
 
   function apply(event: OperationEvent): void {
     const index = operations.value.findIndex((operation) => operation.id === event.operation.id)
@@ -49,7 +59,15 @@ export const useOperationStore = defineStore("operations", () => {
     if (index >= 0 && operations.value[index]?.state !== "running") operations.value.splice(index, 1)
   }
 
-  return { operations, active, apply, cancel, dismiss }
+  return {
+    operations,
+    active,
+    apply,
+    cancel,
+    dismiss,
+    startSubscription,
+    stopSubscription
+  }
 })
 
 if (import.meta.hot) {

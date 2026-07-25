@@ -279,6 +279,7 @@ export class ProjectService {
 
   async save(path?: string): Promise<ProjectSession> {
     if (!this.session) throw new Error("No project is open")
+    const originalPath = this.session.path
     if (path) this.session.path = resolve(path.endsWith(".yadaw") ? path : `${path}.yadaw`)
     const target = this.session.path
     await mkdir(dirname(target), { recursive: true })
@@ -297,6 +298,7 @@ export class ProjectService {
       if (targetExists && await fileMtime(target) === null && await fileMtime(backup) !== null) {
         await rename(backup, target)
       }
+      this.session.path = originalPath
       throw error
     }
     this.session.dirty = false
@@ -319,6 +321,13 @@ export class ProjectService {
     this.session = null
     this.workingRoot = null
     return true
+  }
+
+  async abortOpen(): Promise<void> {
+    if (!this.session) return
+    await this.worker.close()
+    this.session = null
+    this.workingRoot = null
   }
 
   async shutdown(): Promise<void> {

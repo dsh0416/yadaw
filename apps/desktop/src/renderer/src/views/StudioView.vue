@@ -15,8 +15,7 @@ import { useRecordingStore } from "../stores/recording"
 import { useTransportStore } from "../stores/transport"
 import { useMixerStore } from "../stores/mixer"
 import { useStudioWorkspaceStore } from "../stores/studioWorkspace"
-import { useArrangementViewStore } from "../stores/arrangementView"
-import { useWaveformStore } from "../stores/waveform"
+import { useStudioWorkflowStore } from "../stores/studioWorkflow"
 
 const router = useRouter()
 const engineStore = useEngineStore()
@@ -32,8 +31,7 @@ const recordingStore = useRecordingStore()
 const transportStore = useTransportStore()
 const mixerStore = useMixerStore()
 const workspaceStore = useStudioWorkspaceStore()
-const arrangementViewStore = useArrangementViewStore()
-const waveformStore = useWaveformStore()
+const studioWorkflowStore = useStudioWorkflowStore()
 const { session } = storeToRefs(projectStore)
 const {
   active: activeRecording,
@@ -56,36 +54,25 @@ onMounted(() => {
   transportStore.startPolling()
 })
 async function openPreferences(): Promise<void> {
-  if (activeRecording.value) await toggleRecording()
-  if (activeRecording.value) return
+  if (!await studioWorkflowStore.prepareToLeaveStudio()) return
   void router.push({ name: "preferences" })
 }
 async function openProjectSettings(): Promise<void> {
-  if (activeRecording.value) await toggleRecording()
-  if (activeRecording.value) return
+  if (!await studioWorkflowStore.prepareToLeaveStudio()) return
   void router.push({ name: "project-settings" })
 }
 async function saveProject(): Promise<void> {
-  if (activeRecording.value) await toggleRecording()
-  if (activeRecording.value) return
-  await projectStore.save()
+  await studioWorkflowStore.saveProject()
 }
 async function closeProject(): Promise<void> {
-  transportStore.stop()
-  if (activeRecording.value) await recordingStore.toggle()
-  if (activeRecording.value) return
-  if (await projectStore.close()) {
-    transportStore.reset()
-    mixerStore.reset()
-    arrangementViewStore.reset()
-    waveformStore.clear()
+  if (await studioWorkflowStore.closeProject()) {
     void router.push({ name: "welcome" })
   }
 }
 
 async function toggleRecording(): Promise<void> {
   if (recordingBusy.value) return
-  const completed = await recordingStore.toggle()
+  const completed = await studioWorkflowStore.toggleRecording()
   if (completed) transportStore.selectAndRevealClip(completed.id)
 }
 
@@ -128,7 +115,7 @@ function handleShortcut(event: KeyboardEvent): void {
 
 useEventListener(window, "keydown", handleShortcut)
 onBeforeUnmount(() => {
-  transportStore.stop()
+  if (projectStore.isOpen) void transportStore.stop()
   transportStore.stopPolling()
   mixerStore.stopMetering()
 })

@@ -2,7 +2,7 @@ import { useIntervalFn } from "@vueuse/core"
 import { acceptHMRUpdate, defineStore } from "pinia"
 import { computed, ref, shallowRef } from "vue"
 import { INITIAL_AUDIO_RUNTIME_SNAPSHOT } from "@yadaw/contracts"
-import type { AudioPreferences, AudioRuntimeSnapshot } from "@yadaw/contracts"
+import type { AudioLifecycleState, AudioPreferences, AudioRuntimeSnapshot } from "@yadaw/contracts"
 
 const POLLING_INTERVAL_MS = 500
 const TELEMETRY_HISTORY_LIMIT = 240
@@ -59,12 +59,18 @@ function formatRate(sampleRate: number): string {
 }
 
 export const useAudioRuntimeStore = defineStore("audio-runtime", () => {
-  const runtime = ref<AudioRuntimeSnapshot>({ ...INITIAL_AUDIO_RUNTIME_SNAPSHOT })
+  const lifecycle = shallowRef<AudioLifecycleState>({
+    status: "stopped",
+    runtime: { ...INITIAL_AUDIO_RUNTIME_SNAPSHOT },
+    error: null
+  })
+  const runtime = computed(() => lifecycle.value.runtime)
   const latencyHistory = shallowRef<AudioTelemetrySample[]>([])
-  const lastError = ref("")
+  const lastError = computed(() => lifecycle.value.error ?? "")
   const lastUpdatedAt = ref<number | null>(null)
   const xrunBaseline = ref(0)
   let sessionStartedAt = 0
+  let requestGeneration = 0
 
   function record(snapshot: AudioRuntimeSnapshot, capturedAt: number): void {
     if (snapshot.state !== "running") return
@@ -96,41 +102,79 @@ export const useAudioRuntimeStore = defineStore("audio-runtime", () => {
       xrunBaseline.value = snapshot.xruns
     }
 
-    runtime.value = snapshot
+    lifecycle.value = snapshot.state === "running"
+      ? { status: "running", runtime: snapshot, error: null }
+      : snapshot.state === "error"
+        ? {
+            status: "error",
+            runtime: snapshot,
+            error: lifecycle.value.error ?? "The native audio engine stopped unexpectedly."
+          }
+        : { status: "stopped", runtime: snapshot, error: null }
     lastUpdatedAt.value = capturedAt
     record(snapshot, capturedAt)
   }
 
   async function refresh(): Promise<void> {
+    const generation = ++requestGeneration
     try {
-      updateRuntime(await window.yadaw.audioEngineSnapshot())
+      const snapshot = await window.yadaw.audioEngineSnapshot()
+      if (generation === requestGeneration) updateRuntime(snapshot)
     } catch (error) {
-      lastError.value = error instanceof Error ? error.message : "Unable to read audio engine state."
+      if (generation !== requestGeneration) return
+      lifecycle.value = {
+        status: "error",
+        runtime: runtime.value,
+        error: error instanceof Error ? error.message : "Unable to read audio engine state."
+      }
     }
   }
 
   async function startEngine(preferences: AudioPreferences): Promise<AudioRuntimeSnapshot> {
+    const generation = ++requestGeneration
+    lifecycle.value = {
+      status: lifecycle.value.status === "running" ? "reconfiguring" : "starting",
+      runtime: runtime.value,
+      error: null
+    }
     try {
       const snapshot = await window.yadaw.startAudioEngine(preferences)
-      lastError.value = ""
-      updateRuntime(snapshot)
+      if (generation === requestGeneration) updateRuntime(snapshot)
       return snapshot
     } catch (error) {
-      lastError.value = error instanceof Error ? error.message : "Unable to start the native audio engine."
+      if (generation !== requestGeneration) throw error
+      lifecycle.value = {
+        status: "error",
+        runtime: runtime.value,
+        error: error instanceof Error ? error.message : "Unable to start the native audio engine."
+      }
       throw error
     }
   }
 
   async function stopEngine(): Promise<AudioRuntimeSnapshot> {
+    const generation = ++requestGeneration
+    lifecycle.value = { status: "stopping", runtime: runtime.value, error: null }
     try {
       const snapshot = await window.yadaw.stopAudioEngine()
-      lastError.value = ""
-      updateRuntime(snapshot)
+      if (generation === requestGeneration) updateRuntime(snapshot)
       return snapshot
     } catch (error) {
-      lastError.value = error instanceof Error ? error.message : "Unable to stop the native audio engine."
+      if (generation !== requestGeneration) throw error
+      lifecycle.value = {
+        status: "error",
+        runtime: runtime.value,
+        error: error instanceof Error ? error.message : "Unable to stop the native audio engine."
+      }
       throw error
     }
+  }
+
+  function applyLifecycleState(state: AudioLifecycleState): void {
+    requestGeneration += 1
+    const accepted = structuredClone(state)
+    updateRuntime(accepted.runtime)
+    lifecycle.value = accepted
   }
 
   const polling = useIntervalFn(
@@ -269,11 +313,13 @@ export const useAudioRuntimeStore = defineStore("audio-runtime", () => {
 
   return {
     runtime,
+    lifecycle,
     latencyHistory,
     statistics,
     warnings,
     lastError,
     lastUpdatedAt,
+    applyLifecycleState,
     refresh,
     startEngine,
     stopEngine,

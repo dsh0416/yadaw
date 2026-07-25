@@ -97,7 +97,7 @@ function removeChannel(): void {
 }
 
 function clearMeterClips(): void {
-  void window.yadaw.transportCommand({ type: "clear-meter-clips" })
+  void mixerStore.clearMeterClips()
 }
 </script>
 

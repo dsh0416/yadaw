@@ -79,6 +79,10 @@ export const useApplicationSettingsStore = defineStore("application-settings", (
     settings.value = await window.yadaw.chooseSwapDirectory()
   }
 
+  async function openSwapDirectory(): Promise<void> {
+    await window.yadaw.openSwapDirectory()
+  }
+
   return {
     settings,
     loading,
@@ -88,7 +92,8 @@ export const useApplicationSettingsStore = defineStore("application-settings", (
     setTheme,
     setMeterPeakHold,
     setMeterReturnRate,
-    chooseSwapDirectory
+    chooseSwapDirectory,
+    openSwapDirectory
   }
 })
 

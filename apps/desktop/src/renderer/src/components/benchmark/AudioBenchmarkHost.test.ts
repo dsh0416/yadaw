@@ -1,10 +1,12 @@
 import { flushPromises, mount } from "@vue/test-utils"
 import { nextTick } from "vue"
+import { createPinia } from "pinia"
 import { describe, expect, it, vi } from "vitest"
 import AudioBenchmarkHost from "./AudioBenchmarkHost.vue"
+import { useAudioBenchmarkStore } from "../../stores/audioBenchmark"
 
 describe("AudioBenchmarkHost", () => {
-  it("opens from the native Help menu request and unsubscribes on teardown", async () => {
+  it("renders store state while the app owns the native subscription", async () => {
     let requestOpen = () => undefined
     const unsubscribe = vi.fn()
     window.yadaw.subscribeAudioBenchmarkRequests = vi.fn((listener) => {
@@ -12,20 +14,21 @@ describe("AudioBenchmarkHost", () => {
       return unsubscribe
     })
 
-    const wrapper = mount(AudioBenchmarkHost)
+    const pinia = createPinia()
+    const benchmark = useAudioBenchmarkStore(pinia)
+    benchmark.startSubscription()
+    const wrapper = mount(AudioBenchmarkHost, { global: { plugins: [pinia] } })
     requestOpen()
     await nextTick()
 
     expect(document.body.textContent).toContain("Audio performance benchmark")
     wrapper.unmount()
+    expect(unsubscribe).not.toHaveBeenCalled()
+    benchmark.stopSubscription()
     expect(unsubscribe).toHaveBeenCalledOnce()
   })
 
   it("runs the desktop benchmark API from the dialog action", async () => {
-    window.yadaw.subscribeAudioBenchmarkRequests = vi.fn((listener) => {
-      listener()
-      return () => undefined
-    })
     window.yadaw.runAudioBenchmark = vi.fn().mockResolvedValue({
       measuredAt: 1,
       durationMs: 600,
@@ -40,7 +43,10 @@ describe("AudioBenchmarkHost", () => {
       scenarios: []
     })
 
-    const wrapper = mount(AudioBenchmarkHost)
+    const pinia = createPinia()
+    const benchmark = useAudioBenchmarkStore(pinia)
+    benchmark.open()
+    const wrapper = mount(AudioBenchmarkHost, { global: { plugins: [pinia] } })
     await nextTick()
     const runButton = Array.from(document.body.querySelectorAll("button"))
       .find((button) => button.textContent === "Run benchmark")

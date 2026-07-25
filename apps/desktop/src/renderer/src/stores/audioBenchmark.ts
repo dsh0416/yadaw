@@ -1,13 +1,15 @@
-import { readonly, shallowRef } from "vue"
+import { acceptHMRUpdate, defineStore } from "pinia"
+import { shallowRef } from "vue"
 import type { AudioBenchmarkReport } from "@yadaw/contracts"
 
 export type AudioBenchmarkStatus = "idle" | "running" | "complete" | "error"
 
-export function useAudioBenchmark() {
+export const useAudioBenchmarkStore = defineStore("audio-benchmark", () => {
   const isOpen = shallowRef(false)
   const status = shallowRef<AudioBenchmarkStatus>("idle")
   const report = shallowRef<AudioBenchmarkReport | null>(null)
   const errorMessage = shallowRef("")
+  let unsubscribe: (() => void) | null = null
 
   function open(): void {
     isOpen.value = true
@@ -17,12 +19,20 @@ export function useAudioBenchmark() {
     isOpen.value = false
   }
 
+  function startSubscription(): void {
+    unsubscribe ??= window.yadaw.subscribeAudioBenchmarkRequests(open)
+  }
+
+  function stopSubscription(): void {
+    unsubscribe?.()
+    unsubscribe = null
+  }
+
   async function run(): Promise<void> {
     if (status.value === "running") return
     status.value = "running"
     report.value = null
     errorMessage.value = ""
-
     try {
       report.value = await window.yadaw.runAudioBenchmark()
       status.value = "complete"
@@ -35,12 +45,18 @@ export function useAudioBenchmark() {
   }
 
   return {
-    isOpen: readonly(isOpen),
-    status: readonly(status),
-    report: readonly(report),
-    errorMessage: readonly(errorMessage),
+    isOpen,
+    status,
+    report,
+    errorMessage,
     open,
     close,
-    run
+    run,
+    startSubscription,
+    stopSubscription
   }
+})
+
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(useAudioBenchmarkStore, import.meta.hot))
 }

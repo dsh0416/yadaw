@@ -79,6 +79,9 @@ export const useMixerStore = defineStore("mixer", () => {
   const error = shallowRef("")
   const undoHistory = shallowRef<HistoryEntry[]>([])
   const redoHistory = shallowRef<HistoryEntry[]>([])
+  let mutationTail: Promise<void> = Promise.resolve()
+  const pendingPreviews = new Map<string, MixerParameterPreview>()
+  let previewFlush: Promise<void> | null = null
 
   const channels = computed(() => graph.value.channels)
   const audioTracks = computed(() =>
@@ -105,7 +108,17 @@ export const useMixerStore = defineStore("mixer", () => {
   const canUndo = computed(() => undoHistory.value.length > 0)
   const canRedo = computed(() => redoHistory.value.length > 0)
 
-  async function load(): Promise<void> {
+  function enqueueMutation<T>(task: () => Promise<T>): Promise<T> {
+    const result = mutationTail.then(task, task)
+    mutationTail = result.then(() => undefined, () => undefined)
+    return result
+  }
+
+  function load(): Promise<void> {
+    return enqueueMutation(loadNow)
+  }
+
+  async function loadNow(): Promise<void> {
     if (!projectStore.session) return
     loading.value = true
     error.value = ""
@@ -121,9 +134,14 @@ export const useMixerStore = defineStore("mixer", () => {
     }
   }
 
-  async function execute(command: ProjectCommand, recordHistory = true): Promise<boolean> {
+  function execute(command: ProjectCommand, recordHistory = true): Promise<boolean> {
+    return enqueueMutation(() => executeNow(command, recordHistory))
+  }
+
+  async function executeNow(command: ProjectCommand, recordHistory = true): Promise<boolean> {
     error.value = ""
     try {
+      await flushPreviews()
       const result = await window.yadaw.executeProjectCommand(command)
       graph.value = result.graph
       projectStore.markDirty()
@@ -134,24 +152,32 @@ export const useMixerStore = defineStore("mixer", () => {
       return true
     } catch (reason) {
       error.value = reason instanceof Error ? reason.message : "Mixer change could not be applied."
-      await load()
+      await loadNow()
       return false
     }
   }
 
-  async function undo(): Promise<void> {
+  function undo(): Promise<void> {
+    return enqueueMutation(undoNow)
+  }
+
+  async function undoNow(): Promise<void> {
     const entry = undoHistory.value.at(-1)
     if (!entry) return
-    if (await execute(entry.inverse, false)) {
+    if (await executeNow(entry.inverse, false)) {
       undoHistory.value = undoHistory.value.slice(0, -1)
       redoHistory.value = [...redoHistory.value, entry]
     }
   }
 
-  async function redo(): Promise<void> {
+  function redo(): Promise<void> {
+    return enqueueMutation(redoNow)
+  }
+
+  async function redoNow(): Promise<void> {
     const entry = redoHistory.value.at(-1)
     if (!entry) return
-    if (await execute(entry.forward, false)) {
+    if (await executeNow(entry.forward, false)) {
       redoHistory.value = redoHistory.value.slice(0, -1)
       undoHistory.value = [...undoHistory.value, entry]
     }
@@ -164,9 +190,22 @@ export const useMixerStore = defineStore("mixer", () => {
       previewValue.id,
       { [previewValue.parameter]: previewValue.value }
     )
-    void window.yadaw.previewMixerParameter(previewValue).catch((reason: unknown) => {
-      error.value = reason instanceof Error ? reason.message : "Mixer preview failed."
-    })
+    const key = `${previewValue.target}:${previewValue.id}:${previewValue.parameter}`
+    pendingPreviews.set(key, previewValue)
+    previewFlush ??= Promise.resolve().then(flushPreviews)
+  }
+
+  async function flushPreviews(): Promise<void> {
+    while (pendingPreviews.size > 0) {
+      const previews = [...pendingPreviews.values()]
+      pendingPreviews.clear()
+      try {
+        await Promise.all(previews.map((value) => window.yadaw.previewMixerParameter(value)))
+      } catch (reason) {
+        error.value = reason instanceof Error ? reason.message : "Mixer preview failed."
+      }
+    }
+    previewFlush = null
   }
 
   function updateChannel(channelId: string, patch: MixerChannelPatch): Promise<boolean> {
@@ -357,7 +396,7 @@ export const useMixerStore = defineStore("mixer", () => {
       }))
     }
     try {
-      await window.yadaw.transportCommand({ type: "clear-meter-clips" })
+      runtime.value = await window.yadaw.clearMixerMeterClips()
     } catch (reason) {
       error.value = reason instanceof Error
         ? reason.message

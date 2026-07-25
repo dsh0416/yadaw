@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from "vue"
+import { storeToRefs } from "pinia"
 import {
   Check,
   ChevronDown,
@@ -25,7 +26,6 @@ import {
 import { AUDIO_BUFFER_SIZES } from "@yadaw/contracts"
 import type {
   AudioBackend,
-  AudioBackendDescriptor,
   AudioBufferSize,
   AudioDeviceDescriptor,
   AudioPreferences,
@@ -36,6 +36,7 @@ import PreferencesNavigation from "./PreferencesNavigation.vue"
 import DisplayPreferences from "./DisplayPreferences.vue"
 import MixerDisplayPreferences from "./MixerDisplayPreferences.vue"
 import RecordingPreferences from "./RecordingPreferences.vue"
+import { useAudioPreferencesStore } from "../../stores/audioPreferences"
 
 const props = defineProps<{
   modelValue: AudioPreferences
@@ -51,6 +52,13 @@ const emit = defineEmits<{
 const activePage = ref<
   "devices" | "recording" | "display-general" | "display-mixer"
 >("devices")
+const audioPreferencesStore = useAudioPreferencesStore()
+const {
+  inputDevices,
+  outputDevices,
+  discoveryState,
+  discoveryError
+} = storeToRefs(audioPreferencesStore)
 
 const backendOptions: ReadonlyArray<{
   value: AudioBackend
@@ -91,12 +99,6 @@ const backendAvailability = reactive<Record<AudioBackend, boolean>>({
   coreaudio: false,
   alsa: false
 })
-const inputDevices = ref<AudioDeviceDescriptor[]>([])
-const outputDevices = ref<AudioDeviceDescriptor[]>([])
-const discoveryState = ref<"loading" | "ready" | "unavailable">("loading")
-const discoveryError = ref("")
-let refreshGeneration = 0
-
 const availableBackendOptions = computed(() =>
   backendOptions.filter((backend) => backendAvailability[backend.value])
 )
@@ -173,67 +175,45 @@ function preferredDeviceId(
 
 async function refreshDevices(): Promise<void> {
   const backend = draft.backend
-  const generation = ++refreshGeneration
 
   if (!backendAvailability[backend]) {
-    inputDevices.value = []
-    outputDevices.value = []
     draft.inputDeviceId = ""
     draft.outputDeviceId = ""
-    discoveryState.value = "unavailable"
-    discoveryError.value = "This cpal host is not available in the current native build."
+    audioPreferencesStore.markBackendUnavailable(
+      "This cpal host is not available in the current native build."
+    )
     return
   }
 
-  discoveryState.value = "loading"
-  discoveryError.value = ""
-  try {
-    const devices = await window.yadaw.listAudioDevices(backend)
-    if (generation !== refreshGeneration || backend !== draft.backend) return
-
-    inputDevices.value = devices.inputs
-    outputDevices.value = devices.outputs
-    draft.inputDeviceId = preferredDeviceId(draft.inputDeviceId, devices.inputs)
-    draft.outputDeviceId = preferredDeviceId(draft.outputDeviceId, devices.outputs)
-    discoveryState.value = "ready"
-  } catch (error) {
-    if (generation !== refreshGeneration) return
-
-    inputDevices.value = []
-    outputDevices.value = []
+  await audioPreferencesStore.discoverDevices(backend)
+  if (backend !== draft.backend || discoveryState.value !== "ready") {
     draft.inputDeviceId = ""
     draft.outputDeviceId = ""
-    discoveryState.value = "unavailable"
-    discoveryError.value = error instanceof Error ? error.message : "cpal device enumeration failed."
+    return
   }
+  draft.inputDeviceId = preferredDeviceId(draft.inputDeviceId, inputDevices.value)
+  draft.outputDeviceId = preferredDeviceId(draft.outputDeviceId, outputDevices.value)
 }
 
 async function loadBackends(): Promise<void> {
-  discoveryState.value = "loading"
-  discoveryError.value = ""
+  const backends = await audioPreferencesStore.discoverBackends()
+  for (const backend of backends) {
+    backendAvailability[backend.id] = backend.available
+  }
 
-  try {
-    const backends: AudioBackendDescriptor[] = await window.yadaw.listAudioBackends()
-    for (const backend of backends) {
-      backendAvailability[backend.id] = backend.available
-    }
-
-    if (!backendAvailability[draft.backend]) {
-      const firstAvailable = backends.find((backend) => backend.available)
-      if (!firstAvailable) {
-        discoveryState.value = "unavailable"
-        discoveryError.value = "cpal did not report an available audio host."
-        return
-      }
-      draft.backend = firstAvailable.id
+  if (!backendAvailability[draft.backend]) {
+    const firstAvailable = backends.find((backend) => backend.available)
+    if (!firstAvailable) {
+      audioPreferencesStore.markBackendUnavailable(
+        "cpal did not report an available audio host."
+      )
       return
     }
-
-    await refreshDevices()
-  } catch (error) {
-    discoveryState.value = "unavailable"
-    discoveryError.value = error instanceof Error ? error.message : "Unable to query cpal backends."
+    draft.backend = firstAvailable.id
+    return
   }
+
+  await refreshDevices()
 }
 
 function save(): void {
