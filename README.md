@@ -20,10 +20,13 @@ renderer. Device IDs and buffer capabilities come from cpal. Applying the
 preferences opens native input/output streams and a preallocated SPSC bridge in
 Rust; the UI only polls an atomic runtime and latency snapshot.
 
-ASIO support is opt-in because cpal's ASIO backend needs the ASIO SDK and
-LLVM/Clang. On a configured Windows build host, use
-`pnpm --filter @yadaw/dsp-node build:asio`; unavailable backends are disabled in
-the preferences UI.
+Windows builds always include cpal's ASIO backend. ASIO is part of the standard
+Windows product rather than an optional build variant; WASAPI remains available
+alongside it. Building on Windows therefore requires LLVM/Clang for bindgen.
+`asio-sys` downloads the Steinberg ASIO SDK automatically unless
+`CPAL_ASIO_DIR` points to a local SDK. Running the ASIO backend additionally
+requires a 64-bit ASIO driver supplied by the audio-interface vendor or a
+development fallback such as ASIO4ALL.
 
 The desktop build uses three repository-owned Vite configurations (main,
 preload, and renderer). `electron-builder` only packages their outputs and the
@@ -34,6 +37,16 @@ native addon; no Electron-specific Vite framework owns the build pipeline.
 ```powershell
 mise install
 ```
+
+On Windows, install Visual Studio's **Desktop development with C++** workload
+and LLVM/Clang, then expose libclang to the build:
+
+```powershell
+$env:LIBCLANG_PATH = "C:\Program Files\LLVM\bin"
+```
+
+To use an already-downloaded ASIO SDK instead of the automatic download, also
+set `CPAL_ASIO_DIR` to its extracted root.
 
 ## Development
 

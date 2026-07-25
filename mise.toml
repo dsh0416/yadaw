@@ -6,6 +6,11 @@ node = "26"
 pnpm = "11.9.0"
 rust = "1.97"
 
+[tools."github:llvm/llvm-project"]
+version = "llvmorg-22.1"
+os = ["windows"]
+matching = "clang+llvm"
+
 [settings]
 lockfile = true
 
@@ -46,7 +51,7 @@ run = "pnpm --filter @yadaw/desktop pack"
 description = "Format the Rust workspace"
 run = "pnpm format"
 
-[tasks."native:asio"]
-description = "Build the Windows native addon with cpal ASIO support"
+[tasks.native]
+description = "Build the native addon (ASIO is always included on Windows)"
 depends = ["install"]
-run = "pnpm --filter @yadaw/dsp-node build:asio"
+run = "pnpm --filter @yadaw/dsp-node build"

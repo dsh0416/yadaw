@@ -15,9 +15,7 @@
   },
   "scripts": {
     "build": "napi build --platform --release",
-    "build:asio": "napi build --platform --release --features asio",
     "build:debug": "napi build --platform",
-    "build:debug:asio": "napi build --platform --features asio",
     "check": "napi build --platform"
   },
   "napi": {
