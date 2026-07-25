@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, shell } from "electron"
 import type { IpcMainInvokeEvent } from "electron"
 import { statfs } from "node:fs/promises"
 import { cpus, freemem, totalmem } from "node:os"
-import { join } from "node:path"
+import { basename, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { AUDIO_BACKENDS, IPC_CHANNELS } from "@yadaw/contracts"
 import type {
@@ -522,7 +522,7 @@ function registerIpcHandlers(
       path = result.filePaths[0]
       if (result.canceled || !path) return null
     }
-    let recover = true
+    let recover = false
     if (await projects.hasRecoverableWorkingCopy(path)) {
       const choice = await dialog.showMessageBox({
         type: "warning",
@@ -536,12 +536,43 @@ function registerIpcHandlers(
       if (choice.response === 2) return null
       recover = choice.response === 0
     }
+    const operationId = "open-project"
+    const projectName = basename(path).replace(/\.yadaw$/i, "")
+    operations.upsert({
+      id: operationId,
+      title: `Opening ${projectName}`,
+      phase: recover ? "loading-project-database" : "loading-project-archive",
+      state: "running",
+      completedUnits: 0,
+      totalUnits: 4,
+      cancellable: false,
+      message: null,
+      dropoutFrames: 0
+    }, true)
     try {
-      const opened = await projects.open(path, recover)
+      const opened = await projects.open(path, recover, ({ phase, completedUnits }) => {
+        operations.patch(operationId, { phase, completedUnits }, true)
+      })
+      operations.patch(operationId, {
+        phase: "loading-mixer",
+        completedUnits: 2
+      }, true)
       await mixer.load()
+      operations.patch(operationId, {
+        phase: "preparing-waveforms",
+        completedUnits: 3
+      }, true)
       waveforms.rebuildMissingInBackground()
+      operations.patch(operationId, {
+        state: "completed",
+        completedUnits: 4
+      }, true)
       return opened
     } catch (error) {
+      operations.patch(operationId, {
+        state: "failed",
+        message: error instanceof Error ? error.message : String(error)
+      }, true)
       const code = (error as Error & { code?: string }).code
       if (code === "newer-project") {
         await dialog.showMessageBox({
@@ -570,8 +601,8 @@ function registerIpcHandlers(
       title: `Saving ${current.configuration.name}`,
       phase: "saving-archive",
       state: "running",
-      completedBytes: null,
-      totalBytes: null,
+      completedUnits: null,
+      totalUnits: null,
       cancellable: false,
       message: null,
       dropoutFrames: 0

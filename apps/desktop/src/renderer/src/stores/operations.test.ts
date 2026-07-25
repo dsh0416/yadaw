@@ -8,8 +8,8 @@ const running: OperationSnapshot = {
   title: "Import audio",
   phase: "writing-large-object",
   state: "running",
-  completedBytes: 5,
-  totalBytes: 10,
+  completedUnits: 5,
+  totalUnits: 10,
   cancellable: true,
   message: null,
   dropoutFrames: 0

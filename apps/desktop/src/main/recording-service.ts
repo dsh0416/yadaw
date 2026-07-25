@@ -163,8 +163,8 @@ export class RecordingService {
       title: `Finalizing ${basename(recording.audioPath)}`,
       phase: "closing-recording",
       state: "running",
-      completedBytes: null,
-      totalBytes: null,
+      completedUnits: null,
+      totalUnits: null,
       cancellable: false,
       message: null,
       dropoutFrames: 0
@@ -314,8 +314,8 @@ export class RecordingService {
     const utc = utcFields(started)
     this.operations.patch(operationId, {
       phase: "resampling",
-      completedBytes: null,
-      totalBytes: null,
+      completedUnits: null,
+      totalUnits: null,
       cancellable: false
     }, true)
     const finalizedTracks = []
@@ -351,8 +351,8 @@ export class RecordingService {
 
     this.operations.patch(operationId, {
       phase: "writing-large-object",
-      completedBytes: 0,
-      totalBytes: null,
+      completedUnits: 0,
+      totalUnits: null,
       cancellable: true
     }, true)
     this.operations.setCancelHandler(operationId, () => this.projects.cancelOperation(operationId))
@@ -379,12 +379,12 @@ export class RecordingService {
             this.operations.setCancelHandler(operationId, null)
             this.operations.patch(operationId, {
               phase: "committing-database",
-              completedBytes: null,
-              totalBytes: null,
+              completedUnits: null,
+              totalUnits: null,
               cancellable: false
             }, true)
           } else {
-            this.operations.patch(operationId, { completedBytes: completed, totalBytes: total })
+            this.operations.patch(operationId, { completedUnits: completed, totalUnits: total })
           }
         })
         imported.push(track.assetId)
@@ -514,8 +514,8 @@ export class RecordingService {
         title: `Recovering ${basename(recording.audioPath)}`,
         phase: "repairing-header",
         state: "running",
-        completedBytes: null,
-        totalBytes: null,
+        completedUnits: null,
+        totalUnits: null,
         cancellable: false,
         message: null,
         dropoutFrames: recording.dropoutFrames
@@ -532,8 +532,8 @@ export class RecordingService {
         title: `Recovering ${basename(recording.audioPath)}`,
         phase: "hashing",
         state: "running",
-        completedBytes: null,
-        totalBytes: null,
+        completedUnits: null,
+        totalUnits: null,
         cancellable: false,
         message: null,
         dropoutFrames: recording.dropoutFrames

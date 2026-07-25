@@ -28,6 +28,11 @@ interface WorkingCopyState {
   updatedAt: number
 }
 
+interface ProjectOpenProgress {
+  phase: "loading-project-archive" | "loading-project-database" | "restoring-project-state"
+  completedUnits: number
+}
+
 function workspaceId(projectPath: string): string {
   return createHash("sha256").update(resolve(projectPath).toLowerCase()).digest("hex").slice(0, 24)
 }
@@ -148,7 +153,11 @@ export class ProjectService {
     }
   }
 
-  async open(projectPathValue: string, recoverWorkingCopy = true): Promise<ProjectSession> {
+  async open(
+    projectPathValue: string,
+    recoverWorkingCopy = true,
+    onProgress?: (progress: ProjectOpenProgress) => void
+  ): Promise<ProjectSession> {
     if (this.session) throw new Error("Close the current project before opening another")
     const projectPath = resolve(projectPathValue)
     const id = workspaceId(projectPath)
@@ -166,6 +175,10 @@ export class ProjectService {
       previous.projectPath === projectPath &&
       previous.archiveMtimeMs === archiveMtimeMs
     )
+    onProgress?.({
+      phase: recover ? "loading-project-database" : "loading-project-archive",
+      completedUnits: 0
+    })
     if (recover) {
       await this.worker.open(join(this.workingRoot, "pgdata"))
     } else {
@@ -173,6 +186,7 @@ export class ProjectService {
       await mkdir(this.workingRoot, { recursive: true })
       await this.worker.open(join(this.workingRoot, "pgdata"), projectPath)
     }
+    onProgress?.({ phase: "restoring-project-state", completedUnits: 1 })
     this.session = await this.stateFromDatabase(id, projectPath, recover)
     await this.persistCurrentState()
     await this.settings.addRecent(projectPath, this.session.configuration.name)

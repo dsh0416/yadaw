@@ -6,9 +6,10 @@ describe("OperationProgressDialog", () => {
   it("exposes determinate progress and a cancellable action", async () => {
     const wrapper = mount(OperationProgressDialog, { props: { operation: {
       id: "import", title: "Import", phase: "writing-large-object", state: "running",
-      completedBytes: 50, totalBytes: 100, cancellable: true, message: null, dropoutFrames: 0
+      completedUnits: 50, totalUnits: 100, cancellable: true, message: null, dropoutFrames: 0
     } } })
     expect(wrapper.get("[role=progressbar]").attributes("aria-valuenow")).toBe("50")
+    expect(wrapper.text()).toContain("50%")
     await wrapper.get("button").trigger("click")
     expect(wrapper.emitted("cancel")).toHaveLength(1)
   })
@@ -16,21 +17,30 @@ describe("OperationProgressDialog", () => {
   it("makes commit indeterminate and non-cancellable, then reports dropout warnings", () => {
     const wrapper = mount(OperationProgressDialog, { props: { operation: {
       id: "commit", title: "Commit", phase: "committing-database", state: "running",
-      completedBytes: null, totalBytes: null, cancellable: false, message: null, dropoutFrames: 8
+      completedUnits: null, totalUnits: null, cancellable: false, message: null, dropoutFrames: 8
     } } })
     expect(wrapper.get("[role=progressbar]").classes()).toContain("indeterminate")
-    expect(wrapper.get("button").attributes("disabled")).toBeDefined()
+    expect(wrapper.find("button").exists()).toBe(false)
     expect(wrapper.text()).toContain("8 captured frames were dropped")
   })
 
-  it("renders a successful terminal operation as completed at 100 percent", async () => {
+  it("renders a successful terminal operation without a close button", () => {
     const wrapper = mount(OperationProgressDialog, { props: { operation: {
       id: "done", title: "Finalize", phase: "committing-database", state: "completed",
-      completedBytes: null, totalBytes: null, cancellable: false, message: null, dropoutFrames: 0
+      completedUnits: null, totalUnits: null, cancellable: false, message: null, dropoutFrames: 0
     } } })
     expect(wrapper.text()).toContain("Completed")
     expect(wrapper.get("[role=progressbar]").attributes("aria-valuenow")).toBe("100")
-    await wrapper.get("button").trigger("click")
-    expect(wrapper.emitted("dismiss")).toHaveLength(1)
+    expect(wrapper.find("button").exists()).toBe(false)
+  })
+
+  it("labels project opening phases and exposes step progress", () => {
+    const wrapper = mount(OperationProgressDialog, { props: { operation: {
+      id: "open-project", title: "Opening Demo", phase: "loading-mixer", state: "running",
+      completedUnits: 2, totalUnits: 4, cancellable: false, message: null, dropoutFrames: 0
+    } } })
+    expect(wrapper.text()).toContain("Loading mixer")
+    expect(wrapper.text()).toContain("50%")
+    expect(wrapper.get("[role=progressbar]").attributes("aria-label")).toBe("Loading mixer")
   })
 })

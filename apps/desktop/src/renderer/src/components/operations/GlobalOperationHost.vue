@@ -12,15 +12,19 @@ onMounted(() => {
   unsubscribe = window.yadaw.subscribeOperations(store.apply)
 })
 onUnmounted(() => unsubscribe?.())
+
+function dismissTerminalOperation(): void {
+  const operation = active.value
+  if (operation && operation.state !== "running") store.dismiss(operation.id)
+}
 </script>
 
 <template>
   <Teleport to="body">
-    <div v-if="active" class="operation-overlay">
+    <div v-if="active" class="operation-overlay" @click.self="dismissTerminalOperation">
       <OperationProgressDialog
         :operation="active"
         @cancel="store.cancel(active.id)"
-        @dismiss="store.dismiss(active.id)"
       />
     </div>
   </Teleport>

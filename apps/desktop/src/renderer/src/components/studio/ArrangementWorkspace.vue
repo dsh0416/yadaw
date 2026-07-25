@@ -8,6 +8,7 @@ import { useTransportStore } from "../../stores/transport"
 import { useArrangementViewStore } from "../../stores/arrangementView"
 import { useMixerStore } from "../../stores/mixer"
 import type { TimelineClip } from "../../stores/transport"
+import { clipStartSecondsFromPointer, findNearestTrackId } from "../../utils/clipDrag"
 import ArrangementTrack from "./ArrangementTrack.vue"
 import ArrangementZoomControls from "./ArrangementZoomControls.vue"
 import InlineTrackNameEditor from "../InlineTrackNameEditor.vue"
@@ -32,9 +33,16 @@ const {
 const { pixelsPerSecond, trackHeight, amplitudeScale } = storeToRefs(viewStore)
 const rail = useTemplateRef<HTMLElement>("rail")
 const viewport = useTemplateRef<HTMLElement>("viewport")
+const content = useTemplateRef<HTMLElement>("content")
 const viewportWidth = shallowRef(1)
 const scrollLeft = shallowRef(0)
 const liveDurationSeconds = shallowRef(0)
+const clipDrag = shallowRef<{
+  clipId: string
+  offsetSeconds: number
+  trackId: string
+  startSeconds: number
+} | null>(null)
 let timeZoomAnchor: { seconds: number; viewportX: number } | null = null
 
 const tempo = computed(() => session.value?.configuration.tempo ?? 120)
@@ -85,6 +93,18 @@ const viewportEndSeconds = computed(() =>
   (scrollLeft.value + viewportWidth.value) / pixelsPerSecond.value
 )
 const selectedClip = computed(() => clips.value.find((clip) => clip.id === selectedClipId.value) ?? null)
+const dragPreview = computed<TimelineClip | null>(() => {
+  const drag = clipDrag.value
+  if (!drag) return null
+  const clip = clips.value.find((candidate) => candidate.id === drag.clipId)
+  if (!clip) return null
+  return {
+    ...clip,
+    trackId: drag.trackId,
+    startSeconds: drag.startSeconds,
+    endSeconds: drag.startSeconds + clip.durationSeconds
+  }
+})
 const trackRows = computed(() => mixerStore.audioTracks.map((track) => ({
   track,
   clips: clips.value.filter((clip) => clip.trackId === track.id),
@@ -164,6 +184,55 @@ function handleMoveClip(clipId: string, trackId: string, startSeconds: number): 
     trackId,
     startFrame: Math.round(startSeconds * mixerStore.graph.sampleRate)
   })
+}
+function handleClipDragStart(clipId: string, offsetSeconds: number): void {
+  const clip = clips.value.find((candidate) => candidate.id === clipId)
+  if (!clip) return
+  clipDrag.value = {
+    clipId,
+    offsetSeconds,
+    trackId: clip.trackId,
+    startSeconds: clip.startSeconds
+  }
+}
+function updateClipDrag(event: DragEvent): void {
+  const drag = clipDrag.value
+  const contentElement = content.value
+  if (!drag || !contentElement) return
+
+  const lanes = Array.from(
+    contentElement.querySelectorAll<HTMLElement>("[data-track-id]")
+  ).map((lane) => {
+    const bounds = lane.getBoundingClientRect()
+    return {
+      trackId: lane.dataset.trackId!,
+      top: bounds.top,
+      bottom: bounds.bottom
+    }
+  })
+  const trackId = findNearestTrackId(lanes, event.clientY)
+  if (!trackId) return
+
+  event.preventDefault()
+  if (event.dataTransfer) event.dataTransfer.dropEffect = "move"
+  const startSeconds = clipStartSecondsFromPointer(
+    event.clientX,
+    contentElement.getBoundingClientRect().left,
+    pixelsPerSecond.value,
+    drag.offsetSeconds
+  )
+  clipDrag.value = { ...drag, trackId, startSeconds }
+}
+function handleClipDrop(event: DragEvent): void {
+  if (!clipDrag.value) return
+  updateClipDrag(event)
+  const drag = clipDrag.value
+  if (!drag) return
+  handleMoveClip(drag.clipId, drag.trackId, drag.startSeconds)
+  clipDrag.value = null
+}
+function handleClipDragEnd(): void {
+  clipDrag.value = null
 }
 function reorderTrack(index: number, direction: -1 | 1): void {
   const targetIndex = index + direction
@@ -277,7 +346,13 @@ function handleWheel(event: WheelEvent): void {
         @scroll="handleScroll"
         @wheel="handleWheel"
       >
-        <div class="timeline-content" :style="contentStyle">
+        <div
+          ref="content"
+          class="timeline-content"
+          :style="contentStyle"
+          @dragover="updateClipDrag"
+          @drop="handleClipDrop"
+        >
           <TimelineRuler
             :content-width="contentWidth"
             :pixels-per-second="pixelsPerSecond"
@@ -290,6 +365,8 @@ function handleWheel(event: WheelEvent): void {
             :key="track.id"
             :track-id="track.id"
             :track-color="track.color"
+            :drag-preview="dragPreview?.trackId === track.id ? dragPreview : null"
+            :dragging-clip-id="clipDrag?.clipId ?? null"
             :clips="trackClips"
             :content-width="contentWidth"
             :pixels-per-second="pixelsPerSecond"
@@ -305,7 +382,8 @@ function handleWheel(event: WheelEvent): void {
             @seek="handleSeek"
             @select-clip="transportStore.selectClip"
             @waveform-frame-count="handleWaveformFrameCount"
-            @move-clip="handleMoveClip"
+            @clip-drag-start="handleClipDragStart"
+            @clip-drag-end="handleClipDragEnd"
           />
           <div
             class="timeline-playhead"

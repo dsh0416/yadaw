@@ -1,8 +1,4 @@
 import { createRouter, createWebHashHistory } from "vue-router"
-import PreferencesView from "../views/PreferencesView.vue"
-import ProjectSettingsView from "../views/ProjectSettingsView.vue"
-import StudioView from "../views/StudioView.vue"
-import WelcomeView from "../views/WelcomeView.vue"
 
 export const router = createRouter({
   history: createWebHashHistory(),
@@ -10,22 +6,22 @@ export const router = createRouter({
     {
       path: "/",
       name: "welcome",
-      component: WelcomeView
+      component: () => import("../views/WelcomeView.vue")
     },
     {
       path: "/studio",
       name: "studio",
-      component: StudioView
+      component: () => import("../views/StudioView.vue")
     },
     {
       path: "/project-settings",
       name: "project-settings",
-      component: ProjectSettingsView
+      component: () => import("../views/ProjectSettingsView.vue")
     },
     {
       path: "/preferences",
       name: "preferences",
-      component: PreferencesView
+      component: () => import("../views/PreferencesView.vue")
     }
   ]
 })

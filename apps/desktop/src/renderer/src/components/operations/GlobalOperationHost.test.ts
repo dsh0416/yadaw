@@ -13,7 +13,7 @@ describe("GlobalOperationHost", () => {
     const store = useOperationStore(pinia)
     store.apply({ type: "upsert", operation: {
       id: "save", title: "Saving", phase: "saving-archive", state: "running",
-      completedBytes: null, totalBytes: null, cancellable: false, message: null, dropoutFrames: 0
+      completedUnits: null, totalUnits: null, cancellable: false, message: null, dropoutFrames: 0
     } })
     await wrapper.vm.$nextTick()
     expect(document.body.querySelector("[role=dialog]")?.textContent).toContain("Saving")
@@ -21,19 +21,18 @@ describe("GlobalOperationHost", () => {
     expect(unsubscribe).toHaveBeenCalledOnce()
   })
 
-  it("closes a retained completed warning when its Close button is clicked", async () => {
+  it("dismisses a retained completed warning when its backdrop is clicked", async () => {
     window.yadaw.subscribeOperations = vi.fn(() => vi.fn())
     const pinia = createPinia()
     const wrapper = mount(GlobalOperationHost, { attachTo: document.body, global: { plugins: [pinia] } })
     const store = useOperationStore(pinia)
     store.apply({ type: "upsert", operation: {
       id: "warning", title: "Finalizing", phase: "committing-database", state: "completed",
-      completedBytes: null, totalBytes: null, cancellable: false, message: null, dropoutFrames: 4
+      completedUnits: null, totalUnits: null, cancellable: false, message: null, dropoutFrames: 4
     } })
     await wrapper.vm.$nextTick()
-    const close = document.body.querySelector<HTMLButtonElement>("[role=dialog] button")
-    expect(close?.textContent).toContain("Close")
-    close?.click()
+    expect(document.body.querySelector("[role=dialog] button")).toBeNull()
+    document.body.querySelector<HTMLElement>(".operation-overlay")?.click()
     await wrapper.vm.$nextTick()
     expect(document.body.querySelector("[role=dialog]")).toBeNull()
     wrapper.unmount()

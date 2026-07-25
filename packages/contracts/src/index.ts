@@ -193,6 +193,11 @@ export type OperationPhase =
   | "writing-large-object"
   | "committing-database"
   | "saving-archive"
+  | "loading-project-archive"
+  | "loading-project-database"
+  | "restoring-project-state"
+  | "loading-mixer"
+  | "preparing-waveforms"
   | "cleaning-up"
 
 export type OperationState = "running" | "completed" | "failed" | "cancelled"
@@ -202,8 +207,8 @@ export interface OperationSnapshot {
   title: string
   phase: OperationPhase
   state: OperationState
-  completedBytes: number | null
-  totalBytes: number | null
+  completedUnits: number | null
+  totalUnits: number | null
   cancellable: boolean
   message: string | null
   dropoutFrames: number
