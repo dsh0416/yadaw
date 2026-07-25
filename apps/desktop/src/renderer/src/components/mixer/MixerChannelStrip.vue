@@ -13,7 +13,15 @@ import type {
 import { usePeakMeterDisplay } from "../../composables/usePeakMeterDisplay"
 import { useParameterGesture } from "../../composables/useParameterGesture"
 import { useApplicationSettingsStore } from "../../stores/applicationSettings"
+import {
+  dbToLevelPercent,
+  FADER_MAX_DB,
+  FADER_MIN_DB,
+  FADER_SCALE_MARKS,
+  METER_SCALE_MARKS
+} from "../../utils/mixerDbScale"
 import InlineTrackNameEditor from "../InlineTrackNameEditor.vue"
+import MixerDbScale from "./MixerDbScale.vue"
 import MixerPanKnob from "./MixerPanKnob.vue"
 
 const props = defineProps<{
@@ -65,7 +73,11 @@ const meterStyle = computed(() => ({
   "--held-meter-level": `${meterDisplay.heldMeterLevelPercent.value}%`
 }))
 const faderStyle = computed(() => ({
-  "--fader-level": `${Math.max(0, Math.min(100, (props.channel.gainDb + 90) / 102 * 100))}%`
+  "--fader-level": `${dbToLevelPercent(
+    props.channel.gainDb,
+    FADER_MIN_DB,
+    FADER_MAX_DB
+  )}%`
 }))
 
 function preview(parameter: "gainDb" | "pan", value: number): void {
@@ -146,8 +158,8 @@ function beginFaderGesture(event: PointerEvent): void {
       <input
         class="parameter-value"
         type="number"
-        min="-90"
-        max="12"
+        :min="FADER_MIN_DB"
+        :max="FADER_MAX_DB"
         step="0.1"
         :value="channel.gainDb"
         :aria-label="`${channel.name} volume value in decibels`"
@@ -162,15 +174,15 @@ function beginFaderGesture(event: PointerEvent): void {
         @pointerdown.stop
         @click.stop="resetMaximumPeak"
       >{{ maximumPeakLabel }}</button>
-      <label class="fader">
+      <label class="fader" :style="faderStyle">
+        <MixerDbScale class="fader-scale" :marks="FADER_SCALE_MARKS" side="left" />
         <input
           class="fader-control"
           type="range"
-          min="-90"
-          max="12"
+          :min="FADER_MIN_DB"
+          :max="FADER_MAX_DB"
           step="0.1"
           :value="channel.gainDb"
-          :style="faderStyle"
           :aria-label="`${channel.name} volume`"
           @pointerdown="beginFaderGesture"
           @input="gainGesture.preview"
@@ -179,16 +191,19 @@ function beginFaderGesture(event: PointerEvent): void {
           @dblclick="gainGesture.reset(0)"
         >
       </label>
-      <div
-        class="meter"
-        :class="{
-          clipped: meterDisplay.clipped.value,
-          'has-held-peak': Number.isFinite(meterDisplay.heldPeakDb.value)
-        }"
-        :style="meterStyle"
-        aria-hidden="true"
-      >
-        <span /><span />
+      <div class="meter-rack">
+        <MixerDbScale class="meter-scale" :marks="METER_SCALE_MARKS" side="left" />
+        <div
+          class="meter"
+          :class="{
+            clipped: meterDisplay.clipped.value,
+            'has-held-peak': Number.isFinite(meterDisplay.heldPeakDb.value)
+          }"
+          :style="meterStyle"
+          aria-hidden="true"
+        >
+          <span /><span />
+        </div>
       </div>
     </div>
 
@@ -322,21 +337,30 @@ function beginFaderGesture(event: PointerEvent): void {
 
 .strip-core {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 35px;
+  grid-template-columns: minmax(0, 1fr) 39px;
   grid-template-rows: 20px minmax(0, 1fr);
-  column-gap: 6px;
+  column-gap: 4px;
   row-gap: 6px;
   min-height: 0;
   padding: 10px 10px 8px;
 }
 
+.meter-rack {
+  display: grid;
+  grid-column: 2;
+  grid-row: 2;
+  grid-template-columns: 18px 18px;
+  align-self: stretch;
+  justify-self: center;
+  gap: 2px;
+  margin-block: 8px;
+  min-height: 0;
+}
+
 .meter {
   position: relative;
   display: flex;
-  grid-column: 2;
-  grid-row: 2;
   align-self: stretch;
-  justify-self: center;
   width: 18px;
   gap: 2px;
   padding: 2px;
@@ -384,18 +408,41 @@ function beginFaderGesture(event: PointerEvent): void {
 }
 
 .fader {
+  --fader-level: 0%;
+  position: relative;
   display: grid;
   grid-column: 1;
   grid-row: 2;
-  justify-items: center;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 1px;
+  margin-block: 8px;
   min-height: 0;
 }
 
+.fader::after {
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  bottom: 0;
+  left: calc(50% + 9.5px);
+  width: 4px;
+  border: 1px solid var(--line-strong);
+  background: linear-gradient(
+    to top,
+    var(--accent) 0 var(--fader-level),
+    var(--daw-meter-well) var(--fader-level) 100%
+  );
+  box-shadow: 0 0 0 1px #0006 inset;
+  content: "";
+  transform: translateX(-50%);
+}
+
 .fader-control {
-  --fader-level: 0%;
+  position: relative;
+  z-index: 1;
   width: 100%;
-  height: 100%;
-  margin: 0;
+  height: calc(100% + 16px);
+  margin: -8px 0;
   appearance: none;
   background: transparent;
   writing-mode: vertical-lr;
@@ -406,14 +453,10 @@ function beginFaderGesture(event: PointerEvent): void {
 .fader-control::-webkit-slider-runnable-track {
   width: 4px;
   height: 100%;
-  border: 1px solid var(--line-strong);
+  border: 0;
   border-radius: 0;
-  background: linear-gradient(
-    to top,
-    var(--accent) 0 var(--fader-level),
-    var(--daw-meter-well) var(--fader-level) 100%
-  );
-  box-shadow: 0 0 0 1px #0006 inset;
+  background: transparent;
+  box-shadow: none;
 }
 
 .fader-control::-webkit-slider-thumb {
@@ -436,15 +479,15 @@ function beginFaderGesture(event: PointerEvent): void {
 .fader-control::-moz-range-track {
   width: 4px;
   height: 100%;
-  border: 1px solid var(--line-strong);
+  border: 0;
   border-radius: 0;
-  background: var(--daw-meter-well);
-  box-shadow: 0 0 0 1px #0006 inset;
+  background: transparent;
+  box-shadow: none;
 }
 
 .fader-control::-moz-range-progress {
   width: 4px;
-  background: var(--accent);
+  background: transparent;
 }
 
 .fader-control::-moz-range-thumb {
@@ -502,7 +545,7 @@ function beginFaderGesture(event: PointerEvent): void {
   grid-column: 2;
   grid-row: 1;
   place-items: center;
-  width: 35px;
+  width: 39px;
   height: 20px;
   overflow: hidden;
   border: 1px solid var(--line-strong);
@@ -688,8 +731,8 @@ function beginFaderGesture(event: PointerEvent): void {
 }
 
 .dock .strip-core {
-  grid-template-columns: minmax(0, 1fr) 35px;
-  gap: 5px;
+  grid-template-columns: minmax(0, 1fr) 39px;
+  gap: 3px;
   padding: 7px;
 }
 

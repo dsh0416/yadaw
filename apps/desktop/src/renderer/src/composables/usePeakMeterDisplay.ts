@@ -1,8 +1,7 @@
 import { computed, shallowRef, watch } from "vue"
 import type { Ref } from "vue"
 import type { MeterPeakHold, MeterReturnRate, MixerChannelMeter } from "@yadaw/contracts"
-
-const METER_FLOOR_DB = -60
+import { dbToLevelPercent, METER_MAX_DB, METER_MIN_DB } from "../utils/mixerDbScale"
 
 const PEAK_HOLD_DURATION_MS: Record<MeterPeakHold, number> = {
   "800ms": 800,
@@ -22,13 +21,7 @@ function amplitudeToDb(amplitude: number): number {
 function decay(db: number, elapsedSeconds: number, rate: number): number {
   if (!Number.isFinite(db)) return Number.NEGATIVE_INFINITY
   const next = db - elapsedSeconds * rate
-  return next <= METER_FLOOR_DB ? Number.NEGATIVE_INFINITY : next
-}
-
-function dbToLevelPercent(db: number): number {
-  return Number.isFinite(db)
-    ? Math.min(100, Math.max(0, (db + 60) / 60 * 100))
-    : 0
+  return next <= METER_MIN_DB ? Number.NEGATIVE_INFINITY : next
 }
 
 export function usePeakMeterDisplay(options: {
@@ -84,8 +77,12 @@ export function usePeakMeterDisplay(options: {
     { immediate: true }
   )
 
-  const meterLevelPercent = computed(() => dbToLevelPercent(displayedPeakDb.value))
-  const heldMeterLevelPercent = computed(() => dbToLevelPercent(heldPeakDb.value))
+  const meterLevelPercent = computed(() =>
+    dbToLevelPercent(displayedPeakDb.value, METER_MIN_DB, METER_MAX_DB)
+  )
+  const heldMeterLevelPercent = computed(() =>
+    dbToLevelPercent(heldPeakDb.value, METER_MIN_DB, METER_MAX_DB)
+  )
 
   function resetPeakAndClip(): void {
     ignoreClipUntilCleared = true

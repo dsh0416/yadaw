@@ -134,6 +134,10 @@ describe("MixerChannelStrip", () => {
     expect(wrapper.get('button[aria-label="Arm Vocal"]').attributes("aria-pressed")).toBe("false")
     expect(wrapper.get('button[aria-label="Input monitoring unavailable"]').attributes("disabled")).toBeDefined()
     expect(wrapper.find(".pan-heading").exists()).toBe(false)
+    expect(wrapper.findAll(".fader-scale .db-scale-mark").map((mark) => mark.text()))
+      .toEqual(["+12", "0", "−12", "−30", "−60", "−∞"])
+    expect(wrapper.findAll(".meter-scale .db-scale-mark").map((mark) => mark.text()))
+      .toEqual(["0", "−6", "−12", "−24", "−48", "−∞"])
 
     await wrapper.get('button[aria-label="Vocal channel name; double-click to rename"]').trigger("dblclick")
     const nameEditor = wrapper.get('input[aria-label="Rename Vocal"]')
