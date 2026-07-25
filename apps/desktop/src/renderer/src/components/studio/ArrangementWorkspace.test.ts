@@ -1,6 +1,7 @@
 import { createPinia, setActivePinia } from "pinia"
 import { mount } from "@vue/test-utils"
 import { describe, expect, it, vi } from "vitest"
+import type { MixerChannelState } from "@yadaw/contracts"
 import type { Asset } from "@yadaw/project-db/schema"
 import { useProjectStore } from "../../stores/project"
 import { useMixerStore } from "../../stores/mixer"
@@ -157,5 +158,74 @@ describe("ArrangementWorkspace", () => {
     expect(wrapper.get('button[aria-label="Recording New recording"]').attributes("aria-label"))
       .toBe("Recording New recording")
     expect(wrapper.text()).toContain("Recording")
+  })
+
+  it("keeps the track rail aligned with vertical timeline scrolling", async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const mixer = useMixerStore()
+    const channels: MixerChannelState[] = [
+      ...Array.from({ length: 8 }, (_, index) => ({
+        id: `audio-${index + 1}`,
+        kind: "audio" as const,
+        name: `Audio ${index + 1}`,
+        color: "#8C83FF",
+        sortOrder: index,
+        channelFormat: "stereo" as const,
+        gainDb: 0,
+        pan: 0,
+        muted: false,
+        soloed: false,
+        outputChannelId: "master",
+        recordArmed: false,
+        inputChannels: [1, 2]
+      })),
+      {
+        id: "master",
+        kind: "master",
+        name: "Master",
+        color: "#67D9E7",
+        sortOrder: 0,
+        channelFormat: "stereo",
+        gainDb: 0,
+        pan: 0,
+        muted: false,
+        soloed: false,
+        outputChannelId: null,
+        recordArmed: false,
+        inputChannels: []
+      }
+    ]
+    mixer.graph = {
+      sampleRate: 48_000,
+      channels,
+      clips: [],
+      sends: []
+    }
+
+    const wrapper = mount(ArrangementWorkspace, {
+      props: {
+        recordingId: null,
+        recordingStartedAt: null,
+        recordingStartFrame: null,
+        recordingError: ""
+      },
+      global: { plugins: [pinia] }
+    })
+    const viewport = wrapper.get<HTMLElement>('[data-testid="timeline-viewport"]')
+    const rail = wrapper.get<HTMLElement>('[data-testid="timeline-rail"]')
+
+    Object.defineProperties(viewport.element, {
+      offsetHeight: { configurable: true, value: 400 },
+      clientHeight: { configurable: true, value: 384 }
+    })
+    viewport.element.scrollTop = 240
+    await viewport.trigger("scroll")
+    expect(rail.element.scrollTop).toBe(240)
+    expect(rail.element.style.paddingBottom).toBe("16px")
+
+    await rail.trigger("wheel", { deltaY: 80 })
+    expect(viewport.element.scrollTop).toBe(320)
+    expect(rail.element.scrollTop).toBe(320)
   })
 })
