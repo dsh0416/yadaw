@@ -4,9 +4,13 @@ import { shallowRef } from "vue"
 const clamp = (value: number, minimum: number, maximum: number): number =>
   Math.min(maximum, Math.max(minimum, value))
 
+const MIN_TRACK_SCALE = 0.5
+const MAX_TRACK_SCALE = 4
+
 export const useArrangementViewStore = defineStore("arrangement-view", () => {
   const pixelsPerSecond = shallowRef(100)
   const trackHeight = shallowRef(104)
+  const trackScales = shallowRef<Record<string, number>>({})
   const amplitudeScale = shallowRef(1)
 
   function zoomTime(direction: number): void {
@@ -18,6 +22,22 @@ export const useArrangementViewStore = defineStore("arrangement-view", () => {
   }
   function zoomTrack(direction: number): void {
     trackHeight.value = clamp(trackHeight.value + (direction > 0 ? 16 : -16), 72, 320)
+  }
+  function trackScale(trackId: string): number {
+    return trackScales.value[trackId] ?? 1
+  }
+  function effectiveTrackHeight(trackId: string): number {
+    return trackHeight.value * trackScale(trackId)
+  }
+  function setTrackScale(trackId: string, scale: number): void {
+    const nextScale = clamp(scale, MIN_TRACK_SCALE, MAX_TRACK_SCALE)
+    const nextScales = { ...trackScales.value }
+    if (nextScale === 1) delete nextScales[trackId]
+    else nextScales[trackId] = nextScale
+    trackScales.value = nextScales
+  }
+  function resetTrackScale(trackId: string): void {
+    setTrackScale(trackId, 1)
   }
   function zoomAmplitude(direction: number): void {
     amplitudeScale.value = clamp(
@@ -32,15 +52,21 @@ export const useArrangementViewStore = defineStore("arrangement-view", () => {
   function reset(): void {
     resetTime()
     resetTrack()
+    trackScales.value = {}
     resetAmplitude()
   }
 
   return {
     pixelsPerSecond,
     trackHeight,
+    trackScales,
     amplitudeScale,
     zoomTime,
     zoomTrack,
+    trackScale,
+    effectiveTrackHeight,
+    setTrackScale,
+    resetTrackScale,
     zoomAmplitude,
     resetTime,
     resetTrack,

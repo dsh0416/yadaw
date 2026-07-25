@@ -2,6 +2,7 @@ import { useIntervalFn } from "@vueuse/core"
 import { acceptHMRUpdate, defineStore } from "pinia"
 import { computed, shallowRef } from "vue"
 import type {
+  MixerChannelKind,
   MixerChannelPatch,
   MixerChannelState,
   MixerGraphSnapshot,
@@ -25,7 +26,12 @@ const EMPTY_GRAPH: MixerGraphSnapshot = {
   sends: []
 }
 
-const TRACK_COLORS = ["#8C83FF", "#67D9E7", "#E8B85F", "#EF7C95", "#73D6A2", "#B691F1"]
+const DEFAULT_CHANNEL_COLORS: Record<MixerChannelKind, string> = {
+  audio: "#4F8CFF",
+  bus: "#E8B85F",
+  master: "#8C83FF",
+  output: "#EF7C95"
+}
 
 function patchGraph(
   graph: MixerGraphSnapshot,
@@ -178,7 +184,7 @@ export const useMixerStore = defineStore("mixer", () => {
       id: crypto.randomUUID(),
       kind: "audio",
       name: `Audio ${index + 1}`,
-      color: TRACK_COLORS[index % TRACK_COLORS.length]!,
+      color: DEFAULT_CHANNEL_COLORS.audio,
       sortOrder: index,
       inputFormat,
       gainDb: 0,
@@ -201,7 +207,7 @@ export const useMixerStore = defineStore("mixer", () => {
       id: crypto.randomUUID(),
       kind: "bus",
       name: `Bus ${index + 1}`,
-      color: "#E8B85F",
+      color: DEFAULT_CHANNEL_COLORS.bus,
       sortOrder: index,
       inputFormat: null,
       gainDb: 0,
@@ -237,7 +243,7 @@ export const useMixerStore = defineStore("mixer", () => {
       id: crypto.randomUUID(),
       kind: "output",
       name: `Output ${firstHardwareChannel}–${firstHardwareChannel + 1}`,
-      color: "#73D6A2",
+      color: DEFAULT_CHANNEL_COLORS.output,
       sortOrder: index,
       inputFormat: null,
       gainDb: 0,

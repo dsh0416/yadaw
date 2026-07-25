@@ -5,6 +5,7 @@ import type { MixerChannelState } from "@yadaw/contracts"
 import type { Asset } from "@yadaw/project-db/schema"
 import { useProjectStore } from "../../stores/project"
 import { useMixerStore } from "../../stores/mixer"
+import { useArrangementViewStore } from "../../stores/arrangementView"
 import ArrangementWorkspace from "./ArrangementWorkspace.vue"
 
 const recordingAsset: Asset = {
@@ -106,6 +107,28 @@ describe("ArrangementWorkspace", () => {
     expect(wrapper.get(".waveform").attributes("style")).toContain("width: 1px")
     expect(wrapper.get('[aria-label="2 channels audio"]').findAll("path")).toHaveLength(2)
     expect(wrapper.text()).not.toContain("2 CH")
+
+    const arrangementView = useArrangementViewStore()
+    const resizeHandles = wrapper.findAll('[role="separator"]')
+    expect(resizeHandles).toHaveLength(2)
+    expect(wrapper.findAll<HTMLElement>(".track-lane")[0]?.element.style.height).toBe("104px")
+    expect(wrapper.findAll<HTMLElement>(".track-lane")[1]?.element.style.height).toBe("104px")
+
+    await resizeHandles[0]?.trigger("keydown", { key: "ArrowDown" })
+    expect(arrangementView.trackScale("audio-1")).toBe(1.25)
+    expect(wrapper.findAll<HTMLElement>(".track-lane")[0]?.element.style.height).toBe("130px")
+    expect(wrapper.findAll<HTMLElement>(".track-lane")[1]?.element.style.height).toBe("104px")
+
+    arrangementView.zoomTrack(1)
+    await wrapper.vm.$nextTick()
+    expect(wrapper.findAll<HTMLElement>(".track-lane")[0]?.element.style.height).toBe("150px")
+    expect(wrapper.findAll<HTMLElement>(".track-lane")[1]?.element.style.height).toBe("120px")
+    expect(wrapper.get<HTMLElement>('[data-testid="timeline-rail"]').element.style.gridTemplateRows)
+      .toContain("150px 120px")
+
+    await resizeHandles[0]?.trigger("dblclick")
+    expect(arrangementView.trackScale("audio-1")).toBe(1)
+    expect(wrapper.findAll<HTMLElement>(".track-lane")[0]?.element.style.height).toBe("120px")
 
     const updateChannel = vi.spyOn(mixer, "updateChannel").mockResolvedValue(true)
     await wrapper

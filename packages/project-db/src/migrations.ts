@@ -216,6 +216,18 @@ const outputRoutingSql = [
     ON mixer_channels (hardware_output_channels) WHERE kind = 'output'`
 ] as const
 
+const channelTypeColorsSql = [
+  `UPDATE mixer_channels
+    SET color = '#4F8CFF'
+    WHERE id = 'audio-1' AND kind = 'audio' AND color = '#8C83FF'`,
+  `UPDATE mixer_channels
+    SET color = '#8C83FF'
+    WHERE id = 'master' AND kind = 'master' AND color = '#67D9E7'`,
+  `UPDATE mixer_channels
+    SET color = '#EF7C95'
+    WHERE id = 'output-1-2' AND kind = 'output' AND color = '#73D6A2'`
+] as const
+
 function hashStatements(statements: readonly string[]): string {
   return createHash("sha256").update(statements.join("\n-- statement boundary --\n")).digest("hex")
 }
@@ -228,6 +240,11 @@ export const PROJECT_MIGRATIONS: readonly ProjectMigration[] = [
     id: "0003_output_routing",
     hash: hashStatements(outputRoutingSql),
     sql: outputRoutingSql
+  },
+  {
+    id: "0004_channel_type_colors",
+    hash: hashStatements(channelTypeColorsSql),
+    sql: channelTypeColorsSql
   }
 ]
 

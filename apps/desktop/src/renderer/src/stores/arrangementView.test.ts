@@ -19,8 +19,39 @@ describe("arrangement view store", () => {
     expect(store.$state).toMatchObject({
       pixelsPerSecond: 100,
       trackHeight: 104,
+      trackScales: {},
       amplitudeScale: 1
     })
+  })
+
+  it("multiplies the global height by each track's independent scale", () => {
+    const store = useArrangementViewStore()
+
+    store.setTrackScale("drums", 1.5)
+    expect(store.trackScale("drums")).toBe(1.5)
+    expect(store.trackScale("bass")).toBe(1)
+    expect(store.effectiveTrackHeight("drums")).toBe(156)
+    expect(store.effectiveTrackHeight("bass")).toBe(104)
+
+    store.zoomTrack(1)
+    expect(store.effectiveTrackHeight("drums")).toBe(180)
+    expect(store.effectiveTrackHeight("bass")).toBe(120)
+
+    store.resetTrackScale("drums")
+    expect(store.trackScales).toEqual({})
+    expect(store.effectiveTrackHeight("drums")).toBe(120)
+  })
+
+  it("bounds individual track scales and clears them during a full reset", () => {
+    const store = useArrangementViewStore()
+
+    store.setTrackScale("audio-1", 100)
+    store.setTrackScale("audio-2", 0)
+    expect(store.trackScale("audio-1")).toBe(4)
+    expect(store.trackScale("audio-2")).toBe(0.5)
+
+    store.reset()
+    expect(store.trackScales).toEqual({})
   })
 
   it("enforces all zoom bounds", () => {

@@ -53,15 +53,15 @@ describe("ProjectDatabase", () => {
       waveformDisplayMode: "separate"
     })
     const mixer = await database.query({
-      sql: `SELECT id, kind, input_format, output_channel_id, hardware_output_channels
+      sql: `SELECT id, kind, color, input_format, output_channel_id, hardware_output_channels
         FROM mixer_channels ORDER BY kind`,
       params: [],
       method: "all"
     })
     expect(mixer.rows).toEqual([
-      ["audio-1", "audio", "stereo", "output-1-2", []],
-      ["master", "master", null, null, []],
-      ["output-1-2", "output", null, null, [1, 2]]
+      ["audio-1", "audio", "#4F8CFF", "stereo", "output-1-2", []],
+      ["master", "master", "#8C83FF", null, null, []],
+      ["output-1-2", "output", "#EF7C95", null, null, [1, 2]]
     ])
   })
 

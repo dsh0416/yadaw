@@ -108,6 +108,40 @@ describe("mixer store", () => {
     expect(mixer.availableSendTargets("master")).toEqual([])
   })
 
+  it("uses one default color per channel type and still accepts custom colors", async () => {
+    const initial = graph()
+    window.yadaw.executeProjectCommand = vi.fn().mockImplementation((command) =>
+      Promise.resolve({ graph: initial, inverse: command })
+    )
+    const mixer = useMixerStore()
+    mixer.graph = initial
+
+    await mixer.createAudioTrack()
+    await mixer.createBus()
+    await mixer.createOutput()
+    await mixer.updateChannel("audio", { color: "#123456" })
+
+    const commands = vi.mocked(window.yadaw.executeProjectCommand).mock.calls
+      .map(([command]) => command)
+    expect(commands[0]).toMatchObject({
+      type: "create-channel",
+      channel: { kind: "audio", color: "#4F8CFF" }
+    })
+    expect(commands[1]).toMatchObject({
+      type: "create-channel",
+      channel: { kind: "bus", color: "#E8B85F" }
+    })
+    expect(commands[2]).toMatchObject({
+      type: "create-channel",
+      channel: { kind: "output", color: "#EF7C95" }
+    })
+    expect(commands[3]).toEqual({
+      type: "update-channel",
+      channelId: "audio",
+      patch: { color: "#123456" }
+    })
+  })
+
   it("clears latched meter clipping in the UI and native engine", async () => {
     window.yadaw.transportCommand = vi.fn().mockResolvedValue(undefined)
     const mixer = useMixerStore()
