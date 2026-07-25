@@ -20,6 +20,10 @@
   --signal-cyan: #67d9e7;
   --record: #ff6577;
   --warning: #e8b75f;
+  --mixer-mute: #2f9ed0;
+  --mixer-solo: #e4b93f;
+  --mixer-record: #e54b58;
+  --mixer-input: #e8892f;
   --focus: #9c94ff;
   --font-display: Bahnschrift, "Arial Narrow", sans-serif;
   --font-utility: Consolas, "Cascadia Mono", monospace;

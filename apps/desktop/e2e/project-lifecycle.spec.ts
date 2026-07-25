@@ -62,6 +62,15 @@ test("records into a Large Object and reopens the PGlite project archive", async
     await page.getByRole("button", { name: "Add mono audio track" }).click()
     await page.getByRole("button", { name: "Add bus" }).click()
     await expect(visibleMixer.getByText("2 tracks · 1 buses")).toBeVisible()
+    const audioOneVolume = visibleMixer.getByRole("slider", { name: "Audio 1 volume", exact: true })
+    const volumeBounds = await audioOneVolume.boundingBox()
+    expect(volumeBounds).not.toBeNull()
+    await page.mouse.click(
+      volumeBounds!.x + volumeBounds!.width / 2,
+      volumeBounds!.y + volumeBounds!.height - 10
+    )
+    await expect(audioOneVolume).toHaveValue("0")
+    expect(await audioOneVolume.evaluate((input) => getComputedStyle(input).outlineStyle)).toBe("none")
     await page.getByRole("button", { name: "Undo mixer change" }).click()
     await expect(visibleMixer.getByText("2 tracks · 0 buses")).toBeVisible()
     await page.getByRole("button", { name: "Redo mixer change" }).click()
