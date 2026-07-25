@@ -55,6 +55,8 @@ pub struct NativeMidiTrack {
     pub length_ticks: i64,
     pub notes: Vec<NativeMidiNote>,
     pub events: Vec<NativeMidiEvent>,
+    pub tempo_events: Vec<NativeTempoEvent>,
+    pub time_signature_events: Vec<NativeTimeSignatureEvent>,
     pub warnings: Vec<String>,
 }
 
@@ -176,6 +178,16 @@ fn into_native(value: NormalizedSmf) -> Result<NativeNormalizedSmf> {
                                 data: event.data.into(),
                             })
                         })
+                        .collect::<Result<Vec<_>>>()?,
+                    tempo_events: track
+                        .tempo_events
+                        .into_iter()
+                        .map(native_tempo_event)
+                        .collect::<Result<Vec<_>>>()?,
+                    time_signature_events: track
+                        .time_signature_events
+                        .into_iter()
+                        .map(native_signature)
                         .collect::<Result<Vec<_>>>()?,
                     warnings: track.warnings,
                 })

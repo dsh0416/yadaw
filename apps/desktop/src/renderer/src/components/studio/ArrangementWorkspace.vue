@@ -2,6 +2,7 @@
 import { computed, nextTick, shallowRef, useTemplateRef, watch } from "vue"
 import { storeToRefs } from "pinia"
 import { useResizeObserver } from "@vueuse/core"
+import type { TempoMapSnapshot } from "@yadaw/contracts"
 import { useProjectStore } from "../../stores/project"
 import { useTransportStore } from "../../stores/transport"
 import { useArrangementViewStore } from "../../stores/arrangementView"
@@ -16,6 +17,12 @@ import TrackQuickControls from "./TrackQuickControls.vue"
 import TrackHeightResizeHandle from "./TrackHeightResizeHandle.vue"
 import MidiArrangementTrack from "./MidiArrangementTrack.vue"
 import { secondsToTick, tempoAtTick, tickToSeconds, timeSignatureAtTick } from "../../utils/tempoMap"
+import GlobalLaneHeader from "./global-lanes/GlobalLaneHeader.vue"
+import TempoTrackLane from "./global-lanes/TempoTrackLane.vue"
+import {
+  secondsToTimelineX,
+  timelineXToSeconds
+} from "../../utils/timelineCoordinates"
 
 const props = defineProps<{
   recordingId: string | null
@@ -32,16 +39,19 @@ const {
   clips, playheadSeconds, selectedClipId, error,
   contentEndSeconds, timelineDurationSeconds
 } = storeToRefs(transportStore)
-const { pixelsPerSecond, trackHeight, amplitudeScale } = storeToRefs(viewStore)
+const {
+  pixelsPerQuarter, trackHeight, amplitudeScale, tempoLaneExpanded, tempoLaneHeight
+} = storeToRefs(viewStore)
 const rail = useTemplateRef<HTMLElement>("rail")
 const viewport = useTemplateRef<HTMLElement>("viewport")
 const content = useTemplateRef<HTMLElement>("content")
 const viewportWidth = shallowRef(1)
 const scrollLeft = shallowRef(0)
 const liveDurationSeconds = shallowRef(0)
+const selectedTempoTick = shallowRef<number | null>(0)
 const clipDrag = shallowRef<{
   clipId: string
-  offsetSeconds: number
+  offsetPixels: number
   trackId: string
   startSeconds: number
 } | null>(null)
@@ -51,10 +61,14 @@ const playheadTick = computed(() =>
   secondsToTick(mixerStore.graph.tempoMap, playheadSeconds.value)
 )
 const tempo = computed(() => tempoAtTick(mixerStore.graph.tempoMap, playheadTick.value))
+const selectedTempo = computed(() =>
+  mixerStore.graph.tempoMap.tempoEvents.find((event) => event.tick === selectedTempoTick.value)
+    ?? mixerStore.graph.tempoMap.tempoEvents[0]
+    ?? { tick: 0, beatsPerMinute: 120 }
+)
 const signature = computed(() =>
   timeSignatureAtTick(mixerStore.graph.tempoMap, playheadTick.value)
 )
-const beatsPerBar = computed(() => signature.value.numerator)
 const displayMode = computed(() => session.value?.configuration.waveformDisplayMode ?? "separate")
 const recordingDuration = computed(() => {
   if (liveDurationSeconds.value > 0) return liveDurationSeconds.value
@@ -97,11 +111,28 @@ const visibleDuration = computed(() =>
   )
 )
 const contentWidth = computed(() =>
-  Math.max(viewportWidth.value, visibleDuration.value * pixelsPerSecond.value)
+  Math.max(
+    viewportWidth.value,
+    secondsToTimelineX(
+      mixerStore.graph.tempoMap,
+      visibleDuration.value,
+      pixelsPerQuarter.value
+    )
+  )
 )
-const viewportStartSeconds = computed(() => scrollLeft.value / pixelsPerSecond.value)
+const viewportStartSeconds = computed(() =>
+  timelineXToSeconds(
+    mixerStore.graph.tempoMap,
+    scrollLeft.value,
+    pixelsPerQuarter.value
+  )
+)
 const viewportEndSeconds = computed(() =>
-  (scrollLeft.value + viewportWidth.value) / pixelsPerSecond.value
+  timelineXToSeconds(
+    mixerStore.graph.tempoMap,
+    scrollLeft.value + viewportWidth.value,
+    pixelsPerQuarter.value
+  )
 )
 const dragPreview = computed<TimelineClip | null>(() => {
   const drag = clipDrag.value
@@ -126,7 +157,7 @@ const trackGridRows = computed(() => {
   const rows = trackRows.value.length > 0
     ? trackRows.value.map(({ height }) => `${height}px`).join(" ")
     : `${trackHeight.value}px`
-  return `43px ${rows} minmax(64px, 1fr)`
+  return `43px ${tempoLaneHeight.value}px ${rows} minmax(64px, 1fr)`
 })
 const railStyle = computed(() => ({
   gridTemplateRows: trackGridRows.value
@@ -136,7 +167,13 @@ const contentStyle = computed(() => ({
   gridTemplateRows: trackGridRows.value
 }))
 const playheadStyle = computed(() => ({
-  left: `${playheadSeconds.value * pixelsPerSecond.value}px`
+  left: `${
+    secondsToTimelineX(
+      mixerStore.graph.tempoMap,
+      playheadSeconds.value,
+      pixelsPerQuarter.value
+    )
+  }px`
 }))
 
 useResizeObserver(viewport, (entries) => {
@@ -144,16 +181,27 @@ useResizeObserver(viewport, (entries) => {
   if (viewport.value) syncRailScroll(viewport.value)
 })
 watch(() => props.recordingStartedAt, () => { liveDurationSeconds.value = 0 })
-watch(pixelsPerSecond, (value, previous) => {
+watch(pixelsPerQuarter, (value, previous) => {
   const element = viewport.value
   if (!element || !previous) return
   const anchor = timeZoomAnchor ?? {
-    seconds: (element.scrollLeft + element.clientWidth / 2) / previous,
+    seconds: timelineXToSeconds(
+      mixerStore.graph.tempoMap,
+      element.scrollLeft + element.clientWidth / 2,
+      previous
+    ),
     viewportX: element.clientWidth / 2
   }
   timeZoomAnchor = null
   void nextTick(() => {
-    element.scrollLeft = Math.max(0, anchor.seconds * value - anchor.viewportX)
+    element.scrollLeft = Math.max(
+      0,
+      secondsToTimelineX(
+        mixerStore.graph.tempoMap,
+        anchor.seconds,
+        value
+      ) - anchor.viewportX
+    )
     scrollLeft.value = element.scrollLeft
   })
 })
@@ -196,12 +244,12 @@ function handleMoveClip(clipId: string, trackId: string, startSeconds: number): 
     startFrame: Math.round(startSeconds * mixerStore.graph.sampleRate)
   })
 }
-function handleClipDragStart(clipId: string, offsetSeconds: number): void {
+function handleClipDragStart(clipId: string, offsetPixels: number): void {
   const clip = clips.value.find((candidate) => candidate.id === clipId)
   if (!clip) return
   clipDrag.value = {
     clipId,
-    offsetSeconds,
+    offsetPixels,
     trackId: clip.trackId,
     startSeconds: clip.startSeconds
   }
@@ -229,8 +277,9 @@ function updateClipDrag(event: DragEvent): void {
   const startSeconds = clipStartSecondsFromPointer(
     event.clientX,
     contentElement.getBoundingClientRect().left,
-    pixelsPerSecond.value,
-    drag.offsetSeconds
+    mixerStore.graph.tempoMap,
+    pixelsPerQuarter.value,
+    drag.offsetPixels
   )
   clipDrag.value = { ...drag, trackId, startSeconds }
 }
@@ -273,7 +322,11 @@ function handleWheel(event: WheelEvent): void {
       const bounds = element.getBoundingClientRect()
       const viewportX = Math.max(0, Math.min(element.clientWidth, event.clientX - bounds.left))
       timeZoomAnchor = {
-        seconds: (element.scrollLeft + viewportX) / pixelsPerSecond.value,
+        seconds: timelineXToSeconds(
+          mixerStore.graph.tempoMap,
+          element.scrollLeft + viewportX,
+          pixelsPerQuarter.value
+        ),
         viewportX
       }
     }
@@ -288,6 +341,24 @@ function handleWheel(event: WheelEvent): void {
 function removeMidiClip(clipId: string): void {
   void mixerStore.execute({ type: "delete-midi-clip", clipId })
 }
+
+function moveMidiClip(clipId: string, trackId: string, startTick: number): void {
+  void mixerStore.execute({ type: "move-midi-clip", clipId, trackId, startTick })
+}
+
+function replaceTempoMap(tempoMap: TempoMapSnapshot): void {
+  void mixerStore.execute({ type: "replace-tempo-map", tempoMap })
+}
+
+function updateSelectedTempo(beatsPerMinute: number): void {
+  const tick = selectedTempo.value.tick
+  replaceTempoMap({
+    ...mixerStore.graph.tempoMap,
+    tempoEvents: mixerStore.graph.tempoMap.tempoEvents.map((event) =>
+      event.tick === tick ? { ...event, beatsPerMinute } : event
+    )
+  })
+}
 </script>
 
 <template>
@@ -299,7 +370,7 @@ function removeMidiClip(clipId: string): void {
       </div>
       <ArrangementZoomControls
         class="arrangement-zoom-controls"
-        :pixels-per-second="pixelsPerSecond"
+        :pixels-per-quarter="pixelsPerQuarter"
         :track-height="trackHeight"
         :amplitude-scale="amplitudeScale"
         @set-time="viewStore.setTimeZoom"
@@ -320,6 +391,18 @@ function removeMidiClip(clipId: string): void {
         @wheel="handleRailWheel"
       >
         <div class="ruler-corner">TRACKS</div>
+        <GlobalLaneHeader
+          label="Tempo"
+          eyebrow="GLOBAL TRACK"
+          :value="selectedTempo.beatsPerMinute"
+          unit="BPM"
+          :minimum="20"
+          :maximum="300"
+          :expanded="tempoLaneExpanded"
+          color="#65A8FF"
+          @toggle="viewStore.toggleTempoLane"
+          @update-value="updateSelectedTempo"
+        />
         <div
           v-for="({ track, scale }, index) in trackRows"
           :key="track.id"
@@ -369,11 +452,19 @@ function removeMidiClip(clipId: string): void {
         >
           <TimelineRuler
             :content-width="contentWidth"
-            :pixels-per-second="pixelsPerSecond"
-            :tempo="tempo"
-            :beats-per-bar="beatsPerBar"
+            :pixels-per-quarter="pixelsPerQuarter"
             :tempo-map="mixerStore.graph.tempoMap"
             @seek="handleSeek"
+          />
+          <TempoTrackLane
+            :tempo-map="mixerStore.graph.tempoMap"
+            :selected-tick="selectedTempoTick"
+            :content-width="contentWidth"
+            :pixels-per-quarter="pixelsPerQuarter"
+            :height="tempoLaneHeight"
+            :expanded="tempoLaneExpanded"
+            @replace="replaceTempoMap"
+            @select="selectedTempoTick = $event"
           />
           <template
             v-for="{ track, clips: trackClips, midiClips, height } in trackRows"
@@ -386,8 +477,9 @@ function removeMidiClip(clipId: string): void {
             :drag-preview="dragPreview?.trackId === track.id ? dragPreview : null"
             :dragging-clip-id="clipDrag?.clipId ?? null"
             :clips="trackClips"
+            :tempo-map="mixerStore.graph.tempoMap"
             :content-width="contentWidth"
-            :pixels-per-second="pixelsPerSecond"
+            :pixels-per-quarter="pixelsPerQuarter"
             :track-height="height"
             :amplitude-scale="amplitudeScale"
             :display-mode="displayMode"
@@ -395,8 +487,6 @@ function removeMidiClip(clipId: string): void {
             :viewport-end-seconds="viewportEndSeconds"
             :selected-clip-id="selectedClipId"
             :live-clip="liveClips.find((clip) => clip.trackId === track.id) ?? null"
-            :tempo="tempo"
-            :beats-per-bar="beatsPerBar"
             @seek="handleSeek"
             @select-clip="transportStore.selectClip"
             @waveform-frame-count="handleWaveformFrameCount"
@@ -410,8 +500,9 @@ function removeMidiClip(clipId: string): void {
             :clips="midiClips"
             :tempo-map="mixerStore.graph.tempoMap"
             :content-width="contentWidth"
-            :pixels-per-second="pixelsPerSecond"
+            :pixels-per-quarter="pixelsPerQuarter"
             :track-height="height"
+            @move="moveMidiClip"
             @remove="removeMidiClip"
           />
           </template>

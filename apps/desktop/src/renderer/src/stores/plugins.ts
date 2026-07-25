@@ -1,8 +1,10 @@
 import { acceptHMRUpdate, defineStore } from "pinia"
-import { computed, onScopeDispose, shallowRef } from "vue"
+import { computed, onScopeDispose, shallowRef, watch } from "vue"
 import type {
   PluginCatalogSnapshot,
   PluginDescriptor,
+  PluginParameterChange,
+  PluginParameterInfo,
   PluginRuntimeStatus,
   PluginScanEvent
 } from "@yadaw/contracts"
@@ -19,6 +21,8 @@ export const usePluginStore = defineStore("plugins", () => {
   const mixerStore = useMixerStore()
   const catalog = shallowRef<PluginCatalogSnapshot>(structuredClone(EMPTY_CATALOG))
   const runtime = shallowRef<Record<string, PluginRuntimeStatus>>({})
+  const parameters = shallowRef<Record<string, PluginParameterInfo[]>>({})
+  const genericPanelId = shallowRef<string | null>(null)
   const scanProgress = shallowRef<{ completed: number; total: number; path: string } | null>(null)
   const loading = shallowRef(false)
   const error = shallowRef("")
@@ -37,6 +41,38 @@ export const usePluginStore = defineStore("plugins", () => {
   const quarantined = computed(() =>
     catalog.value.plugins.filter((plugin) => plugin.compatibility === "quarantined")
   )
+  const genericPlugin = computed(() =>
+    mixerStore.graph.plugins.find((plugin) => plugin.id === genericPanelId.value) ?? null
+  )
+
+  function reconcileRuntime(): void {
+    const next = { ...runtime.value }
+    for (const instance of mixerStore.graph.plugins) {
+      const descriptor = catalog.value.plugins.find((plugin) =>
+        plugin.classId === instance.classId && plugin.modulePath === instance.descriptor.modulePath
+      )
+      if (!descriptor) {
+        next[instance.id] = {
+          instanceId: instance.id,
+          state: "missing",
+          editorOpen: false,
+          latencySamples: 0,
+          tailSamples: 0,
+          error: "The saved VST3 module is missing."
+        }
+      } else if (descriptor.compatibility === "quarantined") {
+        next[instance.id] = {
+          instanceId: instance.id,
+          state: "quarantined",
+          editorOpen: false,
+          latencySamples: 0,
+          tailSamples: 0,
+          error: descriptor.compatibilityReason
+        }
+      }
+    }
+    runtime.value = next
+  }
 
   function handleScanEvent(event: PluginScanEvent): void {
     if (event.type === "started") {
@@ -51,6 +87,7 @@ export const usePluginStore = defineStore("plugins", () => {
     } else if (event.type === "completed") {
       catalog.value = event.catalog
       scanProgress.value = null
+      reconcileRuntime()
     }
   }
 
@@ -60,6 +97,7 @@ export const usePluginStore = defineStore("plugins", () => {
     unsubscribe ??= window.yadaw.subscribePluginScan(handleScanEvent)
     try {
       catalog.value = await window.yadaw.listPlugins()
+      reconcileRuntime()
     } catch (reason) {
       error.value = reason instanceof Error ? reason.message : "Unable to load the plugin catalog."
     } finally {
@@ -139,14 +177,52 @@ export const usePluginStore = defineStore("plugins", () => {
     try {
       const status = await window.yadaw.openPluginEditor(instanceId)
       runtime.value = { ...runtime.value, [instanceId]: status }
+      if (!status.editorOpen) {
+        genericPanelId.value = instanceId
+        parameters.value = {
+          ...parameters.value,
+          [instanceId]: await window.yadaw.getPluginParameters(instanceId)
+        }
+      }
     } catch (reason) {
       error.value = reason instanceof Error ? reason.message : "Unable to open the plugin editor."
+      genericPanelId.value = instanceId
     }
   }
+
+  async function setParameter(change: PluginParameterChange): Promise<void> {
+    const list = parameters.value[change.instanceId]
+    if (list) {
+      parameters.value = {
+        ...parameters.value,
+        [change.instanceId]: list.map((parameter) =>
+          parameter.id === change.parameterId
+            ? { ...parameter, normalized: change.normalized }
+            : parameter
+        )
+      }
+    }
+    try {
+      await window.yadaw.setPluginParameter(change)
+    } catch (reason) {
+      error.value = reason instanceof Error ? reason.message : "Unable to change the parameter."
+    }
+  }
+
+  function closeGenericPanel(): void {
+    genericPanelId.value = null
+  }
+
+  watch(
+    () => mixerStore.graph.plugins.map((plugin) => `${plugin.id}:${plugin.classId}`).join("|"),
+    reconcileRuntime
+  )
 
   function reset(): void {
     catalog.value = structuredClone(EMPTY_CATALOG)
     runtime.value = {}
+    parameters.value = {}
+    genericPanelId.value = null
     scanProgress.value = null
     error.value = ""
   }
@@ -159,18 +235,23 @@ export const usePluginStore = defineStore("plugins", () => {
   return {
     catalog,
     runtime,
+    parameters,
+    genericPanelId,
     scanProgress,
     loading,
     error,
     compatibleInstruments,
     compatibleEffects,
     quarantined,
+    genericPlugin,
     load,
     scan,
     activate,
     addInstrument,
     addEffect,
     openEditor,
+    setParameter,
+    closeGenericPanel,
     reset
   }
 })

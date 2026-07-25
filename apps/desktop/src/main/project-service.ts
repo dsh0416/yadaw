@@ -3,16 +3,20 @@ import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises"
 import { basename, dirname, join, resolve } from "node:path"
 import type {
   CreateProjectRequest,
+  MixerGraphSnapshot,
+  ProjectAssetSummary,
   ProjectCloseDisposition,
+  ProjectCommand,
   ProjectConfiguration,
-  ProjectQueryRequest,
-  ProjectQueryResult,
-  ProjectSession,
-  ProjectTransactionRequest
+  ProjectSession
 } from "@yadaw/contracts"
 import { PROJECT_SAMPLE_RATES } from "@yadaw/contracts"
 import type {
+  AssetContentHash,
+  DefaultRecordingTrack,
   LargeObjectAssetInput,
+  MidiSourceInput,
+  PluginStateInput,
   StoredWaveformWindow,
   WaveformAssetInput
 } from "@yadaw/project-db/protocol"
@@ -37,10 +41,14 @@ function workspaceId(projectPath: string): string {
   return createHash("sha256").update(resolve(projectPath).toLowerCase()).digest("hex").slice(0, 24)
 }
 
+function commandChangesConfiguration(command: ProjectCommand): boolean {
+  if (command.type === "replace-tempo-map") return true
+  return command.type === "batch" && command.commands.some(commandChangesConfiguration)
+}
+
 function validateConfiguration(value: CreateProjectRequest): ProjectConfiguration {
   if (!value.name.trim()) throw new TypeError("Project name cannot be empty")
   if (!PROJECT_SAMPLE_RATES.includes(value.sampleRate)) throw new TypeError("Unsupported sample rate")
-  if (!Number.isFinite(value.tempo) || value.tempo <= 0) throw new TypeError("Tempo must be positive")
   if (!Number.isInteger(value.timeSignatureNumerator) || value.timeSignatureNumerator < 1 || value.timeSignatureNumerator > 32) {
     throw new TypeError("Invalid time signature numerator")
   }
@@ -53,7 +61,6 @@ function validateConfiguration(value: CreateProjectRequest): ProjectConfiguratio
   return {
     name: value.name.trim(),
     sampleRate: value.sampleRate,
-    tempo: value.tempo,
     timeSignatureNumerator: value.timeSignatureNumerator,
     timeSignatureDenominator: value.timeSignatureDenominator,
     waveformDisplayMode: value.waveformDisplayMode
@@ -91,31 +98,10 @@ export class ProjectService {
   }
 
   private async stateFromDatabase(id: string, projectPath: string, recoveredWorkingCopy: boolean): Promise<ProjectSession> {
-    const result = await this.worker.query({
-      sql: `SELECT p.name, p.sample_rate,
-              COALESCE((SELECT beats_per_minute FROM tempo_events WHERE tick = 0), p.tempo),
-              COALESCE((SELECT numerator FROM time_signature_events WHERE tick = 0),
-                p.time_signature_numerator),
-              COALESCE((SELECT denominator FROM time_signature_events WHERE tick = 0),
-                p.time_signature_denominator),
-              p.waveform_display_mode
-            FROM project p WHERE p.id = 'project'`,
-      params: [],
-      method: "all"
-    })
-    const row = result.rows[0]
-    if (!row) throw new Error("Project configuration is missing")
     return {
       id,
       path: projectPath,
-      configuration: {
-        name: String(row[0]),
-        sampleRate: Number(row[1]) as ProjectConfiguration["sampleRate"],
-        tempo: Number(row[2]),
-        timeSignatureNumerator: Number(row[3]),
-        timeSignatureDenominator: Number(row[4]),
-        waveformDisplayMode: String(row[5]) as ProjectConfiguration["waveformDisplayMode"]
-      },
+      configuration: await this.worker.getConfiguration(),
       dirty: recoveredWorkingCopy,
       recoveredWorkingCopy
     }
@@ -132,7 +118,6 @@ export class ProjectService {
     await this.worker.create(join(this.workingRoot, "pgdata"), {
       name: configuration.name,
       sampleRate: configuration.sampleRate,
-      tempo: configuration.tempo,
       numerator: configuration.timeSignatureNumerator,
       denominator: configuration.timeSignatureDenominator,
       waveformDisplayMode: configuration.waveformDisplayMode
@@ -199,30 +184,92 @@ export class ProjectService {
     return structuredClone(this.session)
   }
 
-  async query(request: ProjectQueryRequest): Promise<ProjectQueryResult> {
+  listAssets(): Promise<ProjectAssetSummary[]> {
     if (!this.session) throw new Error("No project is open")
-    const result = await this.worker.query(request)
-    if (request.method === "execute") {
-      await this.refreshSessionConfiguration()
-      await this.markDirty()
-    }
-    return result
+    return this.worker.listAssets()
   }
 
-  async transaction(request: ProjectTransactionRequest): Promise<ProjectQueryResult[]> {
+  async updateConfiguration(configuration: ProjectConfiguration): Promise<ProjectSession> {
     if (!this.session) throw new Error("No project is open")
-    const result = await this.worker.transaction(request)
-    if (request.queries.some((query) => query.method === "execute")) {
-      await this.refreshSessionConfiguration()
-      await this.markDirty()
-    }
-    return result
+    this.session.configuration = await this.worker.updateConfiguration(
+      validateConfiguration(configuration)
+    )
+    await this.completeMutation(true)
+    return structuredClone(this.session)
+  }
+
+  mixerSnapshot(): Promise<MixerGraphSnapshot> {
+    if (!this.session) throw new Error("No project is open")
+    return this.worker.mixerSnapshot()
+  }
+
+  async applyProjectCommand(command: ProjectCommand, fallbackOutputId: string): Promise<void> {
+    if (!this.session) throw new Error("No project is open")
+    await this.worker.applyProjectCommand(command, fallbackOutputId)
+    await this.completeMutation(commandChangesConfiguration(command))
+  }
+
+  async importMidi(
+    source: MidiSourceInput,
+    command: ProjectCommand,
+    fallbackOutputId: string
+  ): Promise<void> {
+    if (!this.session) throw new Error("No project is open")
+    await this.worker.importMidi(source, command, fallbackOutputId)
+    await this.completeMutation(commandChangesConfiguration(command))
+  }
+
+  async rollbackMidi(
+    sourceId: string,
+    command: ProjectCommand,
+    fallbackOutputId: string
+  ): Promise<void> {
+    if (!this.session) throw new Error("No project is open")
+    await this.worker.rollbackMidi(sourceId, command, fallbackOutputId)
+    await this.completeMutation(commandChangesConfiguration(command))
+  }
+
+  async savePluginStates(states: PluginStateInput[]): Promise<void> {
+    if (!this.session) throw new Error("No project is open")
+    if (states.length === 0) return
+    await this.worker.savePluginStates(states)
+    await this.completeMutation(false)
+  }
+
+  assetContentHashes(ids: string[]): Promise<AssetContentHash[]> {
+    if (!this.session) throw new Error("No project is open")
+    return this.worker.assetContentHashes(ids)
+  }
+
+  defaultRecordingTrack(): Promise<DefaultRecordingTrack | null> {
+    if (!this.session) throw new Error("No project is open")
+    return this.worker.defaultRecordingTrack()
+  }
+
+  assetsMissingWaveform(cacheVersion = 1): Promise<string[]> {
+    if (!this.session) throw new Error("No project is open")
+    return this.worker.assetsMissingWaveform(cacheVersion)
+  }
+
+  async deleteAssets(ids: string[]): Promise<void> {
+    if (!this.session) throw new Error("No project is open")
+    if (ids.length === 0) return
+    await this.worker.deleteAssets(ids)
+    await this.completeMutation(false)
   }
 
   private async refreshSessionConfiguration(): Promise<void> {
     if (!this.session) return
     const refreshed = await this.stateFromDatabase(this.session.id, this.session.path, this.session.recoveredWorkingCopy)
     this.session.configuration = refreshed.configuration
+  }
+
+  private async completeMutation(refreshConfiguration: boolean): Promise<void> {
+    if (!this.session) return
+    if (refreshConfiguration) await this.refreshSessionConfiguration()
+    const wasDirty = this.session.dirty
+    this.session.dirty = true
+    if (!wasDirty || refreshConfiguration) await this.persistCurrentState()
   }
 
   async importLargeObject(

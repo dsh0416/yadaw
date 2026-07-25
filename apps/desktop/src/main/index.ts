@@ -15,8 +15,7 @@ import type {
   ProcessGainRequest,
   ProjectCommand,
   ProjectCloseDisposition,
-  ProjectQueryRequest,
-  ProjectTransactionRequest,
+  ProjectConfiguration,
   MixerParameterPreview,
   MidiImportPlan,
   PluginParameterChange,
@@ -159,52 +158,28 @@ async function sampleSystemPerformance(settings: ApplicationSettingsStore): Prom
   }
 }
 
-function validateProjectQuery(value: unknown): ProjectQueryRequest {
-  if (typeof value !== "object" || value === null) throw new TypeError("Project query must be an object")
-  const request = value as Partial<ProjectQueryRequest>
-  if (typeof request.sql !== "string" || !request.sql.trim() || request.sql.length > 1_000_000) {
-    throw new TypeError("Project SQL must be a non-empty string")
-  }
-  if (!Array.isArray(request.params) || request.params.length > 100_000) {
-    throw new TypeError("Project query parameters must be an array")
-  }
-  if (request.method !== "all" && request.method !== "execute") {
-    throw new TypeError("Unsupported project query method")
-  }
-  for (const parameter of request.params) {
-    if (
-      parameter !== null &&
-      typeof parameter !== "string" &&
-      typeof parameter !== "number" &&
-      typeof parameter !== "bigint" &&
-      typeof parameter !== "boolean" &&
-      !(parameter instanceof Date) &&
-      !(parameter instanceof Uint8Array)
-    ) throw new TypeError("Project query contains an unserializable parameter")
-  }
-  return { sql: request.sql, params: request.params, method: request.method }
-}
-
-function validateProjectTransaction(value: unknown): ProjectTransactionRequest {
-  if (typeof value !== "object" || value === null) throw new TypeError("Project transaction must be an object")
-  const queries = (value as Partial<ProjectTransactionRequest>).queries
-  if (!Array.isArray(queries) || queries.length === 0 || queries.length > 1_000) {
-    throw new TypeError("Project transaction must contain between 1 and 1,000 queries")
-  }
-  return { queries: queries.map(validateProjectQuery) }
-}
-
 function validateCreateProject(value: unknown): CreateProjectRequest {
   if (typeof value !== "object" || value === null) throw new TypeError("Project options must be an object")
   const request = value as CreateProjectRequest
   if (typeof request.name !== "string" || typeof request.sampleRate !== "number" ||
-      typeof request.tempo !== "number" || typeof request.timeSignatureNumerator !== "number" ||
+      typeof request.timeSignatureNumerator !== "number" ||
       typeof request.timeSignatureDenominator !== "number" ||
       (request.waveformDisplayMode !== "separate" && request.waveformDisplayMode !== "aggregate") ||
       (request.path !== undefined && typeof request.path !== "string")) {
     throw new TypeError("Invalid project options")
   }
   return request
+}
+
+function validateProjectConfiguration(value: unknown): ProjectConfiguration {
+  const request = validateCreateProject(value)
+  return {
+    name: request.name,
+    sampleRate: request.sampleRate,
+    timeSignatureNumerator: request.timeSignatureNumerator,
+    timeSignatureDenominator: request.timeSignatureDenominator,
+    waveformDisplayMode: request.waveformDisplayMode
+  }
 }
 
 function validateWaveformRequest(value: unknown): WaveformWindowRequest {
@@ -391,6 +366,25 @@ function registerIpcHandlers(
       window.webContents.send(IPC_CHANNELS.pluginsScanEvent, scanEvent)
     }
   })
+  const synchronizePluginStates = async (): Promise<void> => {
+    if (!audioHostService) return
+    const graph = await mixer.snapshot()
+    const states = []
+    for (const plugin of graph.plugins) {
+      try {
+        await audioHostService.loadPlugin(plugin, graph.sampleRate)
+        const state = await audioHostService.savePluginState(plugin.id)
+        states.push({
+          id: plugin.id,
+          componentState: state.componentState,
+          controllerState: state.controllerState
+        })
+      } catch (error) {
+        console.error(`Could not synchronize VST3 state for ${plugin.id}:`, error)
+      }
+    }
+    if (states.length > 0) await projects.savePluginStates(states)
+  }
   ipcMain.handle(IPC_CHANNELS.engineInfo, (event) => {
     assertTrustedSender(event)
     return engineInfo()
@@ -750,6 +744,7 @@ function registerIpcHandlers(
       dropoutFrames: 0
     }, true)
     try {
+      await synchronizePluginStates()
       const saved = await projects.save(typeof value === "string" ? value : undefined)
       operations.patch(operationId, { phase: "cleaning-up" }, true)
       await recordings.cleanupCommittedForProject(saved.path)
@@ -781,6 +776,7 @@ function registerIpcHandlers(
       if (disposition !== "save" && disposition !== "discard" && disposition !== "cancel") {
         throw new TypeError("Invalid close disposition")
       }
+      if (disposition === "save") await synchronizePluginStates()
       const closed = await projects.close(disposition)
       if (!closed) {
         lifecycle.cancelProject()
@@ -800,26 +796,17 @@ function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle(IPC_CHANNELS.projectQuery, async (event, value: unknown) => {
+  ipcMain.handle(IPC_CHANNELS.projectAssetsList, async (event) => {
     assertTrustedSender(event)
-    const request = validateProjectQuery(value)
-    if (request.method === "execute") lifecycle.assertProjectWriteAllowed()
-    const result = await projects.query(request)
-    if (request.method === "execute") lifecycle.syncProject(projects.current)
-    return result
+    return projects.listAssets()
   })
 
-  ipcMain.handle(IPC_CHANNELS.projectTransaction, async (event, value: unknown) => {
+  ipcMain.handle(IPC_CHANNELS.projectConfigurationUpdate, async (event, value: unknown) => {
     assertTrustedSender(event)
-    const request = validateProjectTransaction(value)
-    if (request.queries.some((query) => query.method === "execute")) {
-      lifecycle.assertProjectWriteAllowed()
-    }
-    const result = await projects.transaction(request)
-    if (request.queries.some((query) => query.method === "execute")) {
-      lifecycle.syncProject(projects.current)
-    }
-    return result
+    lifecycle.assertProjectWriteAllowed()
+    const session = await projects.updateConfiguration(validateProjectConfiguration(value))
+    lifecycle.syncProject(session)
+    return session
   })
 
   ipcMain.handle(IPC_CHANNELS.recordingStart, async (event) => {
@@ -967,7 +954,23 @@ app.whenReady().then(async () => {
         "debug",
         `yadaw-audio-host${executableSuffix}`
       )
-  audioHostService = new AudioHostService(audioHostPath, (message) => {
+  const bridgeFilename = process.platform === "win32"
+    ? "yadaw-vst3-bridge.dll"
+    : process.platform === "darwin"
+      ? "libyadaw-vst3-bridge.dylib"
+      : "libyadaw-vst3-bridge.so"
+  const bridgePath = app.isPackaged
+    ? join(process.resourcesPath, bridgeFilename)
+    : resolve(
+        app.getAppPath(),
+        "..",
+        "..",
+        "target",
+        "vst3-bridge-build",
+        "bin",
+        bridgeFilename
+      )
+  audioHostService = new AudioHostService(audioHostPath, bridgePath, (message) => {
     console.error(`YADAW audio helper failure: ${message}`)
     for (const window of BrowserWindow.getAllWindows().slice(1)) window.close()
   })
@@ -977,8 +980,42 @@ app.whenReady().then(async () => {
   const mixer = new MixerService(
     app.getPath("userData"),
     projectService,
-    (revision) => audioHostService?.loadGraph(revision) ?? Promise.resolve()
+    async (revision, graph) => {
+      if (!audioHostService) return
+      await audioHostService.loadGraph(revision)
+      const loaded = await Promise.allSettled(graph.plugins.map((plugin) =>
+        audioHostService!.loadPlugin(plugin, graph.sampleRate)
+      ))
+      for (const [index, result] of loaded.entries()) {
+        if (result.status === "rejected") {
+          console.error(
+            `Could not restore VST3 instance ${graph.plugins[index]?.id}:`,
+            result.reason
+          )
+        }
+      }
+    }
   )
+  plugins.attachRuntime({
+    resolveInstance: async (instanceId) => {
+      const graph = await mixer.snapshot()
+      const plugin = graph.plugins.find((candidate) => candidate.id === instanceId)
+      if (!plugin) throw new Error(`Plugin instance '${instanceId}' was not found`)
+      return { plugin, sampleRate: graph.sampleRate }
+    },
+    load: (plugin, sampleRate) => {
+      if (!audioHostService) return Promise.reject(new Error("Audio host is not running"))
+      return audioHostService.loadPlugin(plugin, sampleRate)
+    },
+    parameters: (instanceId) => {
+      if (!audioHostService) return Promise.resolve([])
+      return audioHostService.pluginParameters(instanceId)
+    },
+    setParameter: (change) => {
+      if (!audioHostService) return Promise.reject(new Error("Audio host is not running"))
+      return audioHostService.setPluginParameter(change)
+    }
+  })
   const midiImport = new MidiImportService(mixer, plugins)
   const recordings = new RecordingService(settings, projectService, operations, mixer)
   const waveforms = new WaveformService(settings, projectService)

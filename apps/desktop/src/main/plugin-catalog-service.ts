@@ -9,9 +9,23 @@ import type {
   PluginParameterChange,
   PluginParameterInfo,
   PluginRuntimeStatus,
+  PluginInstanceState,
   PluginScanEvent,
   PluginScanRequest
 } from "@yadaw/contracts"
+
+interface PluginRuntime {
+  resolveInstance(instanceId: string): Promise<{
+    plugin: PluginInstanceState
+    sampleRate: number
+  }>
+  load(plugin: PluginInstanceState, sampleRate: number): Promise<{
+    latencySamples: number
+    tailSamples: number | null
+  }>
+  parameters(instanceId: string): Promise<PluginParameterInfo[]>
+  setParameter(change: PluginParameterChange): Promise<void>
+}
 
 const SCANNER_VERSION = 1
 const execFileAsync = promisify(execFile)
@@ -267,12 +281,17 @@ export class PluginCatalogService {
   private readonly listeners = new Set<ScanListener>()
   private fingerprints: Record<string, PluginFingerprint> = {}
   private scanPromise: Promise<PluginCatalogSnapshot> | null = null
+  private runtime: PluginRuntime | null = null
 
   constructor(
     userData: string,
     private readonly probePath: string
   ) {
     this.catalogPath = join(userData, "plugin-catalog.json")
+  }
+
+  attachRuntime(runtime: PluginRuntime): void {
+    this.runtime = runtime
   }
 
   async initialize(): Promise<void> {
@@ -395,29 +414,34 @@ export class PluginCatalogService {
     return descriptors
   }
 
-  openEditor(instanceId: string): PluginRuntimeStatus {
+  async openEditor(instanceId: string): Promise<PluginRuntimeStatus> {
+    if (!this.runtime) throw new Error("The native VST3 bridge is not running")
+    const { plugin, sampleRate } = await this.runtime.resolveInstance(instanceId)
+    const status = await this.runtime.load(plugin, sampleRate)
     return {
       instanceId,
-      state: "failed",
+      state: plugin.enabled ? "active" : "bypassed",
       editorOpen: false,
-      latencySamples: 0,
-      tailSamples: 0,
-      error: "The native VST3 bridge is not running"
+      latencySamples: status.latencySamples,
+      tailSamples: status.tailSamples,
+      error: null
     }
   }
 
   closeEditor(_instanceId: string): void {}
 
-  parameters(_instanceId: string): PluginParameterInfo[] {
-    return []
+  parameters(instanceId: string): Promise<PluginParameterInfo[]> {
+    if (!this.runtime) return Promise.resolve([])
+    return this.runtime.parameters(instanceId)
   }
 
-  setParameter(change: PluginParameterChange): void {
+  async setParameter(change: PluginParameterChange): Promise<void> {
     if (!Number.isInteger(change.parameterId) ||
         !Number.isFinite(change.normalized) ||
         change.normalized < 0 || change.normalized > 1) {
       throw new TypeError("Invalid VST3 parameter change")
     }
-    throw new Error("The native VST3 bridge is not running")
+    if (!this.runtime) throw new Error("The native VST3 bridge is not running")
+    await this.runtime.setParameter(change)
   }
 }

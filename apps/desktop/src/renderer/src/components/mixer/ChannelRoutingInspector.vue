@@ -7,6 +7,7 @@ import { useGlobalDialog } from "../../composables/useGlobalDialog"
 import { useMixerStore } from "../../stores/mixer"
 import { usePluginStore } from "../../stores/plugins"
 import InstrumentSlot from "../plugins/InstrumentSlot.vue"
+import PluginParameterPanel from "../plugins/PluginParameterPanel.vue"
 import PluginRack from "../plugins/PluginRack.vue"
 
 const mixerStore = useMixerStore()
@@ -184,6 +185,32 @@ function removePlugin(instanceId: string): void {
         @open="pluginStore.openEditor"
         @toggle="togglePlugin"
         @remove="removePlugin"
+      />
+
+      <PluginParameterPanel
+        v-if="pluginStore.genericPlugin?.channelId === channel.id"
+        :plugin="pluginStore.genericPlugin"
+        :parameters="pluginStore.parameters[pluginStore.genericPlugin.id] ?? []"
+        :error="pluginStore.runtime[pluginStore.genericPlugin.id]?.error ?? pluginStore.error"
+        @close="pluginStore.closeGenericPanel"
+        @begin="(id, value) => pluginStore.setParameter({
+          instanceId: pluginStore.genericPlugin!.id,
+          parameterId: id,
+          normalized: value,
+          gesture: 'begin'
+        })"
+        @perform="(id, value) => pluginStore.setParameter({
+          instanceId: pluginStore.genericPlugin!.id,
+          parameterId: id,
+          normalized: value,
+          gesture: 'perform'
+        })"
+        @end="(id, value) => pluginStore.setParameter({
+          instanceId: pluginStore.genericPlugin!.id,
+          parameterId: id,
+          normalized: value,
+          gesture: 'end'
+        })"
       />
 
       <section v-if="channel.kind === 'audio'">

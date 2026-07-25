@@ -5,11 +5,8 @@ import type {
   MixerGraphSnapshot,
   MixerParameterPreview,
   MixerRuntimeSnapshot,
-  MixerSendPatch,
   MixerSendState,
-  MixerChannelPatch,
   MixerChannelState,
-  PluginInstancePatch,
   PluginInstanceState,
   ProjectCommand,
   ProjectCommandResult,
@@ -24,27 +21,13 @@ import {
   transportCommand,
   transportSnapshot
 } from "@yadaw/dsp-node"
-import type { ProjectQueryRequest } from "@yadaw/contracts"
 import type { ProjectService } from "./project-service"
-
-interface AssetCacheRow {
-  id: string
-  contentHash: string
-}
 
 export interface MidiSourceImport {
   id: string
   name: string
   contentHash: string
   rawBytes: Uint8Array
-}
-
-function bytes(value: unknown): Uint8Array {
-  if (value instanceof Uint8Array) return value
-  if (ArrayBuffer.isView(value)) {
-    return new Uint8Array(value.buffer, value.byteOffset, value.byteLength)
-  }
-  return new Uint8Array()
 }
 
 function finiteRange(value: number, minimum: number, maximum: number, label: string): void {
@@ -517,272 +500,6 @@ function validateGraph(graph: MixerGraphSnapshot): void {
   for (const id of ids) visit(id)
 }
 
-function insertChannel(channel: MixerChannelState): ProjectQueryRequest {
-  return {
-    sql: `INSERT INTO mixer_channels (
-      id, kind, name, color, sort_order, input_format, gain_db, pan, muted,
-      soloed, output_channel_id, record_armed, input_channels, hardware_output_channels
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
-    params: [
-      channel.id, channel.kind, channel.name, channel.color, channel.sortOrder,
-      channel.inputFormat, channel.gainDb, channel.pan, channel.muted, channel.soloed,
-      channel.outputChannelId, channel.recordArmed, `{${channel.inputChannels.join(",")}}`,
-      `{${channel.hardwareOutputChannels.join(",")}}`
-    ],
-    method: "execute"
-  }
-}
-
-function insertSend(send: MixerSendState): ProjectQueryRequest {
-  return {
-    sql: `INSERT INTO mixer_sends (
-      id, source_channel_id, target_channel_id, sort_order, enabled, tap, level_db, pan
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-    params: [
-      send.id, send.sourceChannelId, send.targetChannelId, send.sortOrder,
-      send.enabled, send.tap, send.levelDb, send.pan
-    ],
-    method: "execute"
-  }
-}
-
-function insertClip(clip: TimelineClipState): ProjectQueryRequest {
-  return {
-    sql: `INSERT INTO timeline_clips (
-      id, asset_id, track_id, name, start_frame, source_offset_frames, length_frames
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-    params: [
-      clip.id, clip.assetId, clip.trackId, clip.name, BigInt(clip.startFrame),
-      BigInt(clip.sourceOffsetFrames), BigInt(clip.lengthFrames)
-    ],
-    method: "execute"
-  }
-}
-
-function insertPlugin(plugin: PluginInstanceState): ProjectQueryRequest {
-  return {
-    sql: `INSERT INTO plugin_instances (
-      id, channel_id, role, slot_order, class_id, descriptor_snapshot, enabled,
-      component_state, controller_state
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-    params: [
-      plugin.id, plugin.channelId, plugin.role, plugin.slotOrder, plugin.classId,
-      JSON.stringify(plugin.descriptor), plugin.enabled,
-      plugin.componentState, plugin.controllerState
-    ],
-    method: "execute"
-  }
-}
-
-function insertMidiClip(clip: MidiClipState): ProjectQueryRequest[] {
-  return [
-    {
-      sql: `INSERT INTO midi_clips (
-        id, source_id, track_id, name, start_tick, length_ticks, source_offset_ticks
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      params: [
-        clip.id, clip.sourceId, clip.trackId, clip.name, BigInt(clip.startTick),
-        BigInt(clip.lengthTicks), BigInt(clip.sourceOffsetTicks)
-      ],
-      method: "execute"
-    },
-    ...clip.notes.map<ProjectQueryRequest>((note) => ({
-      sql: `INSERT INTO midi_notes (
-        id, clip_id, start_tick, duration_ticks, channel, key, velocity, release_velocity
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-      params: [
-        note.id, clip.id, BigInt(note.startTick), BigInt(note.durationTicks),
-        note.channel, note.key, note.velocity, note.releaseVelocity
-      ],
-      method: "execute"
-    })),
-    ...clip.events.map<ProjectQueryRequest>((event) => ({
-      sql: `INSERT INTO midi_events (id, clip_id, tick, channel, kind, data)
-        VALUES ($1,$2,$3,$4,$5,$6)`,
-      params: [event.id, clip.id, BigInt(event.tick), event.channel, event.kind, event.data],
-      method: "execute"
-    }))
-  ]
-}
-
-const channelColumns: Record<keyof MixerChannelPatch, string> = {
-  name: "name",
-  color: "color",
-  sortOrder: "sort_order",
-  inputFormat: "input_format",
-  gainDb: "gain_db",
-  pan: "pan",
-  muted: "muted",
-  soloed: "soloed",
-  outputChannelId: "output_channel_id",
-  recordArmed: "record_armed",
-  inputChannels: "input_channels",
-  hardwareOutputChannels: "hardware_output_channels"
-}
-
-const sendColumns: Record<keyof MixerSendPatch, string> = {
-  targetChannelId: "target_channel_id",
-  sortOrder: "sort_order",
-  enabled: "enabled",
-  tap: "tap",
-  levelDb: "level_db",
-  pan: "pan"
-}
-
-const pluginColumns: Record<keyof PluginInstancePatch, string> = {
-  slotOrder: "slot_order",
-  enabled: "enabled",
-  componentState: "component_state",
-  controllerState: "controller_state"
-}
-
-function updateQuery(
-  table: string,
-  id: string,
-  patch: Record<string, unknown>,
-  columns: Record<string, string>
-): ProjectQueryRequest[] {
-  const entries = Object.entries(patch)
-  if (entries.length === 0) return []
-  const values = entries.map(([, value]) =>
-    Array.isArray(value) ? `{${value.join(",")}}` : value
-  )
-  return [{
-    sql: `UPDATE ${table} SET ${entries.map(([key], index) =>
-      `${columns[key]} = $${index + 1}`).join(", ")} WHERE id = $${entries.length + 1}`,
-    params: [...values, id] as ProjectQueryRequest["params"],
-    method: "execute"
-  }]
-}
-
-function commandQueries(command: ProjectCommand, fallbackOutputId: string): ProjectQueryRequest[] {
-  switch (command.type) {
-    case "create-channel":
-      return [insertChannel(command.channel)]
-    case "delete-channel":
-      return [
-        {
-          sql: "UPDATE mixer_channels SET output_channel_id = $1 WHERE output_channel_id = $2",
-          params: [fallbackOutputId, command.channelId],
-          method: "execute"
-        },
-        {
-          sql: "DELETE FROM mixer_sends WHERE target_channel_id = $1",
-          params: [command.channelId],
-          method: "execute"
-        },
-        {
-          sql: "DELETE FROM mixer_channels WHERE id = $1",
-          params: [command.channelId],
-          method: "execute"
-        }
-      ]
-    case "update-channel":
-      return updateQuery(
-        "mixer_channels",
-        command.channelId,
-        command.patch,
-        channelColumns
-      )
-    case "create-send":
-      return [insertSend(command.send)]
-    case "delete-send":
-      return [{
-        sql: "DELETE FROM mixer_sends WHERE id = $1",
-        params: [command.sendId],
-        method: "execute"
-      }]
-    case "update-send":
-      return updateQuery("mixer_sends", command.sendId, command.patch, sendColumns)
-    case "create-clip":
-      return [insertClip(command.clip)]
-    case "delete-clip":
-      return [{
-        sql: "DELETE FROM timeline_clips WHERE id = $1",
-        params: [command.clipId],
-        method: "execute"
-      }]
-    case "move-clip":
-      return [{
-        sql: "UPDATE timeline_clips SET track_id = $1, start_frame = $2 WHERE id = $3",
-        params: [command.trackId, BigInt(command.startFrame), command.clipId],
-        method: "execute"
-      }]
-    case "create-plugin":
-      return [insertPlugin(command.plugin)]
-    case "delete-plugin":
-      return [{
-        sql: "DELETE FROM plugin_instances WHERE id = $1",
-        params: [command.pluginId],
-        method: "execute"
-      }]
-    case "update-plugin":
-      return updateQuery("plugin_instances", command.pluginId, command.patch, pluginColumns)
-    case "move-plugin":
-      return [{
-        sql: `UPDATE plugin_instances
-          SET channel_id = $1, role = $2, slot_order = $3 WHERE id = $4`,
-        params: [command.channelId, command.role, command.slotOrder, command.pluginId],
-        method: "execute"
-      }]
-    case "replace-plugin":
-      return [
-        {
-          sql: "DELETE FROM plugin_instances WHERE id = $1",
-          params: [command.pluginId],
-          method: "execute"
-        },
-        insertPlugin(command.plugin)
-      ]
-    case "create-midi-clip":
-      return insertMidiClip(command.clip)
-    case "delete-midi-clip":
-      return [{
-        sql: "DELETE FROM midi_clips WHERE id = $1",
-        params: [command.clipId],
-        method: "execute"
-      }]
-    case "move-midi-clip":
-      return [{
-        sql: "UPDATE midi_clips SET track_id = $1, start_tick = $2 WHERE id = $3",
-        params: [command.trackId, BigInt(command.startTick), command.clipId],
-        method: "execute"
-      }]
-    case "replace-tempo-map": {
-      const initialTempo = command.tempoMap.tempoEvents[0]
-      const initialSignature = command.tempoMap.timeSignatureEvents[0]
-      if (!initialTempo || !initialSignature) throw new Error("Tempo map requires tick 0 events")
-      return [
-        { sql: "DELETE FROM tempo_events", params: [], method: "execute" },
-        ...command.tempoMap.tempoEvents.map<ProjectQueryRequest>((event) => ({
-          sql: "INSERT INTO tempo_events (tick, beats_per_minute) VALUES ($1, $2)",
-          params: [BigInt(event.tick), event.beatsPerMinute],
-          method: "execute"
-        })),
-        { sql: "DELETE FROM time_signature_events", params: [], method: "execute" },
-        ...command.tempoMap.timeSignatureEvents.map<ProjectQueryRequest>((event) => ({
-          sql: `INSERT INTO time_signature_events (tick, numerator, denominator)
-            VALUES ($1, $2, $3)`,
-          params: [BigInt(event.tick), event.numerator, event.denominator],
-          method: "execute"
-        })),
-        {
-          sql: `UPDATE project SET tempo = $1, time_signature_numerator = $2,
-            time_signature_denominator = $3 WHERE id = 'project'`,
-          params: [
-            initialTempo.beatsPerMinute,
-            initialSignature.numerator,
-            initialSignature.denominator
-          ],
-          method: "execute"
-        }
-      ]
-    }
-    case "batch":
-      return command.commands.flatMap((nested) => commandQueries(nested, fallbackOutputId))
-  }
-}
-
 function onlyRealtimeParameters(command: ProjectCommand): boolean {
   if (command.type === "batch") return command.commands.every(onlyRealtimeParameters)
   if (command.type === "update-channel") {
@@ -813,7 +530,10 @@ export class MixerService {
   constructor(
     userData: string,
     private readonly projects: ProjectService,
-    private readonly onGraphLoaded: (revision: number) => Promise<void> = async () => {}
+    private readonly onGraphLoaded: (
+      revision: number,
+      graph: MixerGraphSnapshot
+    ) => Promise<void> = async () => {}
   ) {
     this.cacheDirectory = join(userData, "mixer-cache")
   }
@@ -825,205 +545,20 @@ export class MixerService {
   }
 
   async snapshot(): Promise<MixerGraphSnapshot> {
-    const current = this.projects.current
-    if (!current) throw new Error("No project is open")
-    const [
-      channelResult,
-      clipResult,
-      sendResult,
-      pluginResult,
-      midiClipResult,
-      midiNoteResult,
-      midiEventResult,
-      tempoResult,
-      signatureResult
-    ] = await Promise.all([
-      this.projects.query({
-        sql: `SELECT id, kind, name, color, sort_order, input_format, gain_db, pan,
-          muted, soloed, output_channel_id, record_armed, input_channels,
-          hardware_output_channels
-          FROM mixer_channels
-          ORDER BY CASE kind
-            WHEN 'audio' THEN 0 WHEN 'instrument' THEN 1 WHEN 'bus' THEN 2
-            WHEN 'master' THEN 3 ELSE 4
-          END, sort_order, id`,
-        params: [],
-        method: "all"
-      }),
-      this.projects.query({
-        sql: `SELECT c.id, c.asset_id, c.track_id, c.name, c.start_frame, c.source_offset_frames,
-          c.length_frames, a.sample_rate, a.channels
-          FROM timeline_clips c JOIN assets a ON a.id = c.asset_id
-          ORDER BY c.start_frame, c.id`,
-        params: [],
-        method: "all"
-      }),
-      this.projects.query({
-        sql: `SELECT id, source_channel_id, target_channel_id, sort_order, enabled, tap, level_db, pan
-          FROM mixer_sends ORDER BY source_channel_id, sort_order, id`,
-        params: [],
-        method: "all"
-      }),
-      this.projects.query({
-        sql: `SELECT id, channel_id, role, slot_order, class_id, descriptor_snapshot,
-          enabled, component_state, controller_state
-          FROM plugin_instances ORDER BY channel_id, role, slot_order, id`,
-        params: [],
-        method: "all"
-      }),
-      this.projects.query({
-        sql: `SELECT id, source_id, track_id, name, start_tick, length_ticks,
-          source_offset_ticks FROM midi_clips ORDER BY start_tick, id`,
-        params: [],
-        method: "all"
-      }),
-      this.projects.query({
-        sql: `SELECT id, clip_id, start_tick, duration_ticks, channel, key, velocity,
-          release_velocity FROM midi_notes ORDER BY clip_id, start_tick, id`,
-        params: [],
-        method: "all"
-      }),
-      this.projects.query({
-        sql: `SELECT id, clip_id, tick, channel, kind, data
-          FROM midi_events ORDER BY clip_id, tick, id`,
-        params: [],
-        method: "all"
-      }),
-      this.projects.query({
-        sql: "SELECT tick, beats_per_minute FROM tempo_events ORDER BY tick",
-        params: [],
-        method: "all"
-      }),
-      this.projects.query({
-        sql: `SELECT tick, numerator, denominator
-          FROM time_signature_events ORDER BY tick`,
-        params: [],
-        method: "all"
-      })
-    ])
-    const notesByClip = new Map<string, MidiClipState["notes"]>()
-    for (const row of midiNoteResult.rows) {
-      const clipId = String(row[1])
-      const notes = notesByClip.get(clipId) ?? []
-      notes.push({
-        id: String(row[0]),
-        startTick: Number(row[2]),
-        durationTicks: Number(row[3]),
-        channel: Number(row[4]),
-        key: Number(row[5]),
-        velocity: Number(row[6]),
-        releaseVelocity: Number(row[7])
-      })
-      notesByClip.set(clipId, notes)
-    }
-    const eventsByClip = new Map<string, MidiClipState["events"]>()
-    for (const row of midiEventResult.rows) {
-      const clipId = String(row[1])
-      const events = eventsByClip.get(clipId) ?? []
-      events.push({
-        id: String(row[0]),
-        tick: Number(row[2]),
-        channel: row[3] === null ? null : Number(row[3]),
-        kind: String(row[4]) as MidiClipState["events"][number]["kind"],
-        data: bytes(row[5])
-      })
-      eventsByClip.set(clipId, events)
-    }
-    return {
-      sampleRate: current.configuration.sampleRate,
-      channels: channelResult.rows.map((row) => ({
-        id: String(row[0]),
-        kind: String(row[1]) as MixerChannelState["kind"],
-        name: String(row[2]),
-        color: String(row[3]),
-        sortOrder: Number(row[4]),
-        inputFormat: row[5] === null ? null : String(row[5]) as MixerChannelState["inputFormat"],
-        gainDb: Number(row[6]),
-        pan: Number(row[7]),
-        muted: Boolean(row[8]),
-        soloed: Boolean(row[9]),
-        outputChannelId: row[10] === null ? null : String(row[10]),
-        recordArmed: Boolean(row[11]),
-        inputChannels: Array.isArray(row[12]) ? row[12].map(Number) : [],
-        hardwareOutputChannels: Array.isArray(row[13]) ? row[13].map(Number) : []
-      })),
-      clips: clipResult.rows.map((row) => ({
-        id: String(row[0]),
-        assetId: String(row[1]),
-        trackId: String(row[2]),
-        name: String(row[3]),
-        startFrame: Number(row[4]),
-        sourceOffsetFrames: Number(row[5]),
-        lengthFrames: Number(row[6]),
-        assetSampleRate: Number(row[7]),
-        assetChannels: Number(row[8])
-      })),
-      sends: sendResult.rows.map((row) => ({
-        id: String(row[0]),
-        sourceChannelId: String(row[1]),
-        targetChannelId: String(row[2]),
-        sortOrder: Number(row[3]),
-        enabled: Boolean(row[4]),
-        tap: String(row[5]) as MixerSendState["tap"],
-        levelDb: Number(row[6]),
-        pan: Number(row[7])
-      })),
-      plugins: pluginResult.rows.map((row) => ({
-        id: String(row[0]),
-        channelId: String(row[1]),
-        role: String(row[2]) as PluginInstanceState["role"],
-        slotOrder: Number(row[3]),
-        classId: String(row[4]),
-        descriptor: JSON.parse(String(row[5])) as PluginInstanceState["descriptor"],
-        enabled: Boolean(row[6]),
-        componentState: bytes(row[7]),
-        controllerState: bytes(row[8])
-      })),
-      midiClips: midiClipResult.rows.map((row) => {
-        const id = String(row[0])
-        return {
-          id,
-          sourceId: String(row[1]),
-          trackId: String(row[2]),
-          name: String(row[3]),
-          startTick: Number(row[4]),
-          lengthTicks: Number(row[5]),
-          sourceOffsetTicks: Number(row[6]),
-          notes: notesByClip.get(id) ?? [],
-          events: eventsByClip.get(id) ?? []
-        }
-      }),
-      tempoMap: {
-        ticksPerQuarter: 960,
-        tempoEvents: tempoResult.rows.map((row) => ({
-          tick: Number(row[0]),
-          beatsPerMinute: Number(row[1])
-        })),
-        timeSignatureEvents: signatureResult.rows.map((row) => ({
-          tick: Number(row[0]),
-          numerator: Number(row[1]),
-          denominator: Number(row[2])
-        }))
-      }
-    }
+    if (!this.projects.current) throw new Error("No project is open")
+    return this.projects.mixerSnapshot()
   }
-
   private async cacheAssets(graph: MixerGraphSnapshot): Promise<Map<string, string>> {
     await mkdir(this.cacheDirectory, { recursive: true })
     const ids = [...new Set(graph.clips.map((clip) => clip.assetId))]
+    const contentHashes = new Map(
+      (await this.projects.assetContentHashes(ids)).map((asset) => [asset.id, asset.contentHash])
+    )
     const result = new Map<string, string>()
     for (const id of ids) {
-      const hashResult = await this.projects.query({
-        sql: "SELECT content_hash FROM assets WHERE id = $1",
-        params: [id],
-        method: "all"
-      })
-      const row: AssetCacheRow = {
-        id,
-        contentHash: String(hashResult.rows[0]?.[0] ?? "unknown")
-      }
-      const safeId = row.id.replace(/[^a-zA-Z0-9_-]/g, "_")
-      const path = join(this.cacheDirectory, `${safeId}-${row.contentHash}.bwf`)
+      const contentHash = contentHashes.get(id) ?? "unknown"
+      const safeId = id.replace(/[^a-zA-Z0-9_-]/g, "_")
+      const path = join(this.cacheDirectory, `${safeId}-${contentHash}.bwf`)
       try {
         await access(path)
       } catch {
@@ -1039,7 +574,6 @@ export class MixerService {
     }
     return result
   }
-
   load(): Promise<MixerGraphSnapshot> {
     return this.enqueueMutation(() => this.loadNow())
   }
@@ -1092,7 +626,7 @@ export class MixerService {
       }))
     })
     this.graphRevision += 1
-    await this.onGraphLoaded(this.graphRevision)
+    await this.onGraphLoaded(this.graphRevision, graph)
     return graph
   }
 
@@ -1111,29 +645,11 @@ export class MixerService {
       validateGraph(candidate)
       const fallbackOutput = before.channels.find((channel) => channel.kind === "output")
       if (!fallbackOutput) throw new Error("Mixer hardware Output is missing")
-      const queries: ProjectQueryRequest[] = [
-        {
-          sql: `INSERT INTO midi_sources (id, name, content_hash, raw_bytes)
-            VALUES ($1, $2, $3, $4)`,
-          params: [source.id, source.name, source.contentHash, source.rawBytes],
-          method: "execute"
-        },
-        ...commandQueries(command, fallbackOutput.id)
-      ]
-      await this.projects.transaction({ queries })
+      await this.projects.importMidi(source, command, fallbackOutput.id)
       try {
         await this.loadNow()
       } catch (error) {
-        await this.projects.transaction({
-          queries: [
-            ...commandQueries(inverse, fallbackOutput.id),
-            {
-              sql: "DELETE FROM midi_sources WHERE id = $1",
-              params: [source.id],
-              method: "execute"
-            }
-          ]
-        })
+        await this.projects.rollbackMidi(source.id, inverse, fallbackOutput.id)
         throw error
       }
       return { graph: await this.snapshot(), inverse }
@@ -1150,8 +666,7 @@ export class MixerService {
       channel.kind === "output" && !deletedIds.has(channel.id)
     )
     if (!fallbackOutput) throw new Error("Mixer hardware Output is missing")
-    const queries = commandQueries(command, fallbackOutput.id)
-    if (queries.length > 0) await this.projects.transaction({ queries })
+    await this.projects.applyProjectCommand(command, fallbackOutput.id)
     try {
       if (onlyRealtimeParameters(command)) {
         await this.previewCommitted(command)
@@ -1159,13 +674,11 @@ export class MixerService {
         await this.loadNow()
       }
     } catch (error) {
-      const rollback = commandQueries(inverse, fallbackOutput.id)
-      if (rollback.length > 0) await this.projects.transaction({ queries: rollback })
+      await this.projects.applyProjectCommand(inverse, fallbackOutput.id)
       throw error
     }
     return { graph: await this.snapshot(), inverse }
   }
-
   private async previewCommitted(command: ProjectCommand): Promise<void> {
     if (command.type === "batch") {
       for (const nested of command.commands) await this.previewCommitted(nested)

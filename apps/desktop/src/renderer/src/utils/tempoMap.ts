@@ -1,4 +1,8 @@
-import type { TempoMapSnapshot, TimeSignatureEventState } from "@yadaw/contracts"
+import type {
+  TempoEventState,
+  TempoMapSnapshot,
+  TimeSignatureEventState
+} from "@yadaw/contracts"
 
 export function tickToSeconds(map: TempoMapSnapshot, tick: number): number {
   let seconds = 0
@@ -31,13 +35,31 @@ export function secondsToTick(map: TempoMapSnapshot, seconds: number): number {
   return Math.round(previousTick + remaining * beatsPerMinute / 60 * map.ticksPerQuarter)
 }
 
-export function tempoAtTick(map: TempoMapSnapshot, tick: number): number {
-  let current = map.tempoEvents[0]?.beatsPerMinute ?? 120
+export function tempoEventAtTick(map: TempoMapSnapshot, tick: number): TempoEventState {
+  let current = map.tempoEvents[0] ?? { tick: 0, beatsPerMinute: 120 }
   for (const event of map.tempoEvents) {
     if (event.tick > tick) break
-    current = event.beatsPerMinute
+    current = event
   }
   return current
+}
+
+export function tempoAtTick(map: TempoMapSnapshot, tick: number): number {
+  return tempoEventAtTick(map, tick).beatsPerMinute
+}
+
+export function replaceTempoEventAtTick(
+  map: TempoMapSnapshot,
+  tick: number,
+  beatsPerMinute: number
+): TempoMapSnapshot {
+  const activeTick = tempoEventAtTick(map, tick).tick
+  return {
+    ...map,
+    tempoEvents: map.tempoEvents.map((event) =>
+      event.tick === activeTick ? { ...event, beatsPerMinute } : event
+    )
+  }
 }
 
 export function timeSignatureAtTick(
@@ -76,4 +98,36 @@ export function musicalPositionAtTick(
     beat: Math.floor(inBar / ticksPerBeat) + 1,
     tick: Math.floor(inBar % ticksPerBeat)
   }
+}
+
+export function barTicksWithinSeconds(
+  map: TempoMapSnapshot,
+  durationSeconds: number,
+  limit = 2_048
+): number[] {
+  return barTicksThroughTick(map, secondsToTick(map, durationSeconds), limit)
+}
+
+export function barTicksThroughTick(
+  map: TempoMapSnapshot,
+  maximumTick: number,
+  limit = 2_048
+): number[] {
+  const ticks: number[] = []
+  let tick = 0
+  for (let index = 0; index < limit; index += 1) {
+    if (tick > maximumTick) break
+    ticks.push(tick)
+    const signature = timeSignatureAtTick(map, tick)
+    const ticksPerBar = Math.max(
+      1,
+      signature.numerator * map.ticksPerQuarter * 4 / signature.denominator
+    )
+    const nextSignature = map.timeSignatureEvents.find((event) => event.tick > tick)
+    const nextBar = tick + ticksPerBar
+    tick = nextSignature && nextSignature.tick < nextBar
+      ? nextSignature.tick
+      : nextBar
+  }
+  return ticks
 }

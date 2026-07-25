@@ -6,8 +6,15 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
+libloading.workspace = true
 yadaw-dsp-core.workspace = true
 yadaw-dsp-runtime.workspace = true
 
+[target.'cfg(target_os = "windows")'.dependencies]
+cpal = { workspace = true, features = ["asio"] }
+
+[target.'cfg(not(target_os = "windows"))'.dependencies]
+cpal.workspace = true
+
 [lints.rust]
-unsafe_code = "forbid"
+unsafe_code = "allow"

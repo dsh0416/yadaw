@@ -71,6 +71,18 @@ export class MidiImportService {
         noteCount: track.notes.length,
         eventCount: track.events.length,
         lengthTicks: track.lengthTicks,
+        tempoMap: {
+          ticksPerQuarter: MUSICAL_TICKS_PER_QUARTER,
+          tempoEvents: track.tempoEvents.map((event) => ({
+            tick: event.tick,
+            beatsPerMinute: event.beatsPerMinute
+          })),
+          timeSignatureEvents: track.timeSignatureEvents.map((event) => ({
+            tick: event.tick,
+            numerator: event.numerator,
+            denominator: event.denominator
+          }))
+        },
         warnings: track.warnings
       })),
       tempoMap: tempoMapFromNative(parsed),
@@ -100,9 +112,16 @@ export class MidiImportService {
     const sourceId = randomUUID()
     const commands: ProjectCommand[] = []
     if (plan.importTempoMap) {
+      const selectedSequenceMap = prepared.preview.format === 2
+        ? prepared.preview.tracks.find((track) =>
+            selectedPlans.some((mapping) =>
+              mapping.sourceTrack === track.sourceTrack && mapping.sequence === track.sequence
+            )
+          )?.tempoMap
+        : undefined
       commands.push({
         type: "replace-tempo-map",
-        tempoMap: structuredClone(prepared.preview.tempoMap)
+        tempoMap: structuredClone(selectedSequenceMap ?? prepared.preview.tempoMap)
       })
     }
     let nextInstrumentOrder = graph.channels.filter((channel) =>

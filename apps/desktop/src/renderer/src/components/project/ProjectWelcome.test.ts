@@ -9,7 +9,6 @@ describe("ProjectWelcome", () => {
     expect(wrapper.emitted("create")?.[0]?.[0]).toEqual({
       name: "Untitled project",
       sampleRate: 48_000,
-      tempo: 120,
       timeSignatureNumerator: 4,
       timeSignatureDenominator: 4,
       waveformDisplayMode: "separate"

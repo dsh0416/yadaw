@@ -2,7 +2,7 @@ import { useIntervalFn } from "@vueuse/core"
 import { acceptHMRUpdate, defineStore } from "pinia"
 import { computed, shallowRef } from "vue"
 import type { TransportSnapshot } from "@yadaw/contracts"
-import type { Asset } from "@yadaw/project-db/schema"
+import type { ProjectAssetSummary as Asset } from "@yadaw/contracts"
 import { useMixerStore } from "./mixer"
 
 const MINIMUM_TIMELINE_SECONDS = 8

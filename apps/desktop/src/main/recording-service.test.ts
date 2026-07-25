@@ -36,7 +36,7 @@ describe("RecordingService archive cleanup", () => {
     const settings = { get: vi.fn().mockResolvedValue({ swapDirectory }) }
     const projects = {
       current: { path: projectPath },
-      query: vi.fn().mockResolvedValue({ rows: [["hash"]] })
+      assetContentHashes: vi.fn().mockResolvedValue([{ id, contentHash: "hash" }])
     }
     const service = new RecordingService(
       settings as never, projects as never, {} as never, {} as never
@@ -72,7 +72,10 @@ describe("RecordingService archive cleanup", () => {
     const settings = { get: vi.fn().mockResolvedValue({ swapDirectory }) }
     const projects = {
       current: { path: projectPath },
-      query: vi.fn().mockResolvedValue({ rows: [["existing-hash"]] }),
+      assetContentHashes: vi.fn().mockResolvedValue([{
+        id,
+        contentHash: "existing-hash"
+      }]),
       importLargeObject: vi.fn()
     }
     const operations = { upsert: vi.fn(), patch: vi.fn() }
@@ -82,7 +85,7 @@ describe("RecordingService archive cleanup", () => {
 
     await service.recover(id)
 
-    expect(projects.query).toHaveBeenCalledOnce()
+    expect(projects.assetContentHashes).toHaveBeenCalledOnce()
     expect(projects.importLargeObject).not.toHaveBeenCalled()
     expect(operations.upsert).not.toHaveBeenCalled()
   })

@@ -21,7 +21,6 @@ watch(() => props.configuration, (value) => {
 const dirty = computed(() =>
   draft.value.name !== props.configuration.name ||
   draft.value.sampleRate !== props.configuration.sampleRate ||
-  draft.value.tempo !== props.configuration.tempo ||
   draft.value.timeSignatureNumerator !== props.configuration.timeSignatureNumerator ||
   draft.value.timeSignatureDenominator !== props.configuration.timeSignatureDenominator ||
   draft.value.waveformDisplayMode !== props.configuration.waveformDisplayMode

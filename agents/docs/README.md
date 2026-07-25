@@ -13,3 +13,4 @@ copies under `.agents/skills/`.
 
 - [Development environment](environment.md)
 - [Native call boundary](native-call-boundary.md)
+- [Project database development rules](project-database.md)

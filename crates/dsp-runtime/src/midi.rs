@@ -62,7 +62,7 @@ pub struct NormalizedMidiNote {
     pub release_velocity: u8,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NormalizedMidiEventKind {
     ControlChange,
     PitchBend,
@@ -80,7 +80,7 @@ pub struct NormalizedMidiEvent {
     pub data: Vec<u8>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct NormalizedMidiTrack {
     pub source_track: usize,
     pub sequence: usize,
@@ -88,6 +88,8 @@ pub struct NormalizedMidiTrack {
     pub length_ticks: u64,
     pub notes: Vec<NormalizedMidiNote>,
     pub events: Vec<NormalizedMidiEvent>,
+    pub tempo_events: Vec<TempoEvent>,
+    pub time_signature_events: Vec<TimeSignatureEvent>,
     pub warnings: Vec<String>,
 }
 
@@ -99,6 +101,90 @@ pub struct NormalizedSmf {
     pub tempo_events: Vec<TempoEvent>,
     pub time_signature_events: Vec<TimeSignatureEvent>,
     pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ChasedMidiMessage {
+    NoteOn { channel: u8, key: u8, velocity: u8 },
+    NoteOff { channel: u8, key: u8, velocity: u8 },
+    Event(NormalizedMidiEvent),
+}
+
+pub fn chase_track(track: &NormalizedMidiTrack, tick: u64) -> Vec<ChasedMidiMessage> {
+    let mut state = BTreeMap::<(u8, u8, u8), NormalizedMidiEvent>::new();
+    for event in track.events.iter().filter(|event| event.tick <= tick) {
+        let Some(channel) = event.channel else {
+            continue;
+        };
+        let key = match event.kind {
+            NormalizedMidiEventKind::ControlChange => {
+                (0, channel, event.data.first().copied().unwrap_or(0))
+            }
+            NormalizedMidiEventKind::PitchBend => (1, channel, 0),
+            NormalizedMidiEventKind::ProgramChange => (2, channel, 0),
+            NormalizedMidiEventKind::ChannelPressure => (3, channel, 0),
+            NormalizedMidiEventKind::PolyPressure => {
+                (4, channel, event.data.first().copied().unwrap_or(0))
+            }
+            NormalizedMidiEventKind::SysEx => continue,
+        };
+        state.insert(key, event.clone());
+    }
+    let mut messages = state
+        .into_values()
+        .map(ChasedMidiMessage::Event)
+        .collect::<Vec<_>>();
+    messages.extend(
+        track
+            .notes
+            .iter()
+            .filter(|note| {
+                note.start_tick <= tick
+                    && note.start_tick.saturating_add(note.duration_ticks) > tick
+            })
+            .map(|note| ChasedMidiMessage::NoteOn {
+                channel: note.channel,
+                key: note.key,
+                velocity: note.velocity,
+            }),
+    );
+    messages
+}
+
+pub fn stop_chased_messages(messages: &[ChasedMidiMessage]) -> Vec<ChasedMidiMessage> {
+    let mut channels = BTreeMap::<u8, ()>::new();
+    let mut result = Vec::new();
+    for message in messages {
+        match message {
+            ChasedMidiMessage::NoteOn { channel, key, .. } => {
+                channels.insert(*channel, ());
+                result.push(ChasedMidiMessage::NoteOff {
+                    channel: *channel,
+                    key: *key,
+                    velocity: 0,
+                });
+            }
+            ChasedMidiMessage::Event(event) => {
+                if let Some(channel) = event.channel {
+                    channels.insert(channel, ());
+                }
+            }
+            ChasedMidiMessage::NoteOff { channel, .. } => {
+                channels.insert(*channel, ());
+            }
+        }
+    }
+    for channel in channels.into_keys() {
+        for (controller, value) in [(64, 0), (121, 0), (123, 0)] {
+            result.push(ChasedMidiMessage::Event(NormalizedMidiEvent {
+                tick: 0,
+                channel: Some(channel),
+                kind: NormalizedMidiEventKind::ControlChange,
+                data: vec![controller, value],
+            }));
+        }
+    }
+    result
 }
 
 pub fn preview_smf(bytes: &[u8]) -> Result<MidiFilePreview, MidiImportError> {
@@ -187,6 +273,8 @@ pub fn normalize_smf(
         let mut notes = Vec::new();
         let mut events = Vec::new();
         let mut warnings = Vec::new();
+        let mut track_tempo_events = BTreeMap::new();
+        let mut track_time_signature_events = BTreeMap::new();
         let mut open_notes: BTreeMap<(u8, u8), VecDeque<(u64, u8)>> = BTreeMap::new();
         for event in track {
             source_tick += u64::from(event.delta.as_int());
@@ -273,21 +361,27 @@ pub fn normalize_smf(
                     }
                     MetaMessage::Tempo(microseconds) => {
                         let value = microseconds.as_int();
-                        if value > 0 && (format != MidiFileFormat::Format2 || source_track == 0) {
-                            tempo_events.insert(tick, 60_000_000.0 / f64::from(value));
+                        if value > 0 {
+                            let beats_per_minute = 60_000_000.0 / f64::from(value);
+                            track_tempo_events.insert(tick, beats_per_minute);
+                            if format != MidiFileFormat::Format2 || source_track == 0 {
+                                tempo_events.insert(tick, beats_per_minute);
+                            }
                         }
                     }
                     MetaMessage::TimeSignature(numerator, denominator_power, _, _) => {
-                        if format != MidiFileFormat::Format2 || source_track == 0 {
-                            let denominator =
-                                1_u16.checked_shl(u32::from(denominator_power)).unwrap_or(0);
-                            if denominator <= 32 {
+                        let denominator =
+                            1_u16.checked_shl(u32::from(denominator_power)).unwrap_or(0);
+                        if denominator <= 32 {
+                            track_time_signature_events
+                                .insert(tick, (numerator, denominator as u8));
+                            if format != MidiFileFormat::Format2 || source_track == 0 {
                                 time_signature_events.insert(tick, (numerator, denominator as u8));
-                            } else {
-                                warnings.push(format!(
-                                    "Ignored unsupported time signature {numerator}/{denominator}"
-                                ));
                             }
+                        } else {
+                            warnings.push(format!(
+                                "Ignored unsupported time signature {numerator}/{denominator}"
+                            ));
                         }
                     }
                     _ => {}
@@ -320,6 +414,8 @@ pub fn normalize_smf(
             length_ticks,
             notes,
             events,
+            tempo_events: with_initial_tempo(track_tempo_events),
+            time_signature_events: with_initial_signature(track_time_signature_events),
             warnings,
         });
     }
@@ -397,8 +493,8 @@ fn with_initial_signature(values: BTreeMap<u64, (u8, u8)>) -> Vec<TimeSignatureE
 #[cfg(test)]
 mod tests {
     use midly::{
-        Format, Header, MetaMessage, Smf, Timing, TrackEvent, TrackEventKind,
-        num::{u15, u24, u28},
+        Format, Fps, Header, MetaMessage, MidiMessage, Smf, Timing, TrackEvent, TrackEventKind,
+        num::{u4, u7, u15, u24, u28},
     };
 
     use super::*;
@@ -425,5 +521,139 @@ mod tests {
         assert_eq!(preview.timing, "480 PPQ");
         assert_eq!(preview.tracks[0].name, "Keys");
         assert_eq!(preview.tracks[0].length_source_ticks, 480);
+    }
+
+    #[test]
+    fn normalizes_smpte_time_through_the_project_tempo_map() {
+        let smf = Smf {
+            header: Header::new(Format::SingleTrack, Timing::Timecode(Fps::Fps25, 40)),
+            tracks: vec![vec![
+                TrackEvent {
+                    delta: u28::new(0),
+                    kind: TrackEventKind::Midi {
+                        channel: u4::new(0),
+                        message: MidiMessage::NoteOn {
+                            key: u7::new(60),
+                            vel: u7::new(100),
+                        },
+                    },
+                },
+                TrackEvent {
+                    delta: u28::new(1_000),
+                    kind: TrackEventKind::Midi {
+                        channel: u4::new(0),
+                        message: MidiMessage::NoteOff {
+                            key: u7::new(60),
+                            vel: u7::new(40),
+                        },
+                    },
+                },
+            ]],
+        };
+        let mut bytes = Vec::new();
+        smf.write_std(&mut bytes).unwrap();
+
+        let normalized = normalize_smf(&bytes, &TempoMap::default_120_bpm()).unwrap();
+
+        assert_eq!(normalized.source_timing, "25 fps / 40 subframes");
+        assert_eq!(normalized.tracks[0].notes[0].duration_ticks, 1_920);
+        assert_eq!(normalized.tracks[0].notes[0].release_velocity, 40);
+    }
+
+    #[test]
+    fn preserves_independent_format_two_sequence_tempo_maps() {
+        let smf = Smf {
+            header: Header::new(Format::Sequential, Timing::Metrical(u15::new(960))),
+            tracks: vec![
+                vec![TrackEvent {
+                    delta: u28::new(0),
+                    kind: TrackEventKind::Meta(MetaMessage::Tempo(u24::new(500_000))),
+                }],
+                vec![TrackEvent {
+                    delta: u28::new(0),
+                    kind: TrackEventKind::Meta(MetaMessage::Tempo(u24::new(1_000_000))),
+                }],
+            ],
+        };
+        let mut bytes = Vec::new();
+        smf.write_std(&mut bytes).unwrap();
+
+        let normalized = normalize_smf(&bytes, &TempoMap::default_120_bpm()).unwrap();
+
+        assert_eq!(normalized.tracks[0].tempo_events[0].beats_per_minute, 120.0);
+        assert_eq!(normalized.tracks[1].tempo_events[0].beats_per_minute, 60.0);
+        assert_eq!(normalized.tempo_events[0].beats_per_minute, 120.0);
+    }
+
+    #[test]
+    fn chase_restores_controller_state_and_active_notes_then_resets_on_stop() {
+        let track = NormalizedMidiTrack {
+            source_track: 0,
+            sequence: 0,
+            name: "Keys".into(),
+            length_ticks: 1_920,
+            notes: vec![NormalizedMidiNote {
+                start_tick: 0,
+                duration_ticks: 1_920,
+                channel: 2,
+                key: 64,
+                velocity: 96,
+                release_velocity: 0,
+            }],
+            events: vec![
+                NormalizedMidiEvent {
+                    tick: 0,
+                    channel: Some(2),
+                    kind: NormalizedMidiEventKind::ControlChange,
+                    data: vec![1, 10],
+                },
+                NormalizedMidiEvent {
+                    tick: 480,
+                    channel: Some(2),
+                    kind: NormalizedMidiEventKind::ControlChange,
+                    data: vec![1, 80],
+                },
+            ],
+            tempo_events: vec![TempoEvent {
+                tick: 0,
+                beats_per_minute: 120.0,
+            }],
+            time_signature_events: vec![TimeSignatureEvent {
+                tick: 0,
+                numerator: 4,
+                denominator: 4,
+            }],
+            warnings: vec![],
+        };
+
+        let chased = chase_track(&track, 960);
+
+        assert!(
+            chased.contains(&ChasedMidiMessage::Event(NormalizedMidiEvent {
+                tick: 480,
+                channel: Some(2),
+                kind: NormalizedMidiEventKind::ControlChange,
+                data: vec![1, 80],
+            }))
+        );
+        assert!(chased.contains(&ChasedMidiMessage::NoteOn {
+            channel: 2,
+            key: 64,
+            velocity: 96,
+        }));
+        let stopped = stop_chased_messages(&chased);
+        assert!(stopped.contains(&ChasedMidiMessage::NoteOff {
+            channel: 2,
+            key: 64,
+            velocity: 0,
+        }));
+        assert!(stopped.iter().any(|message| matches!(
+            message,
+            ChasedMidiMessage::Event(NormalizedMidiEvent {
+                kind: NormalizedMidiEventKind::ControlChange,
+                data,
+                ..
+            }) if data.as_slice() == [123, 0]
+        )));
     }
 }

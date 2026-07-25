@@ -30,8 +30,15 @@ export function findNearestTrackId(
 export function clipStartSecondsFromPointer(
   clientX: number,
   contentLeft: number,
-  pixelsPerSecond: number,
-  dragOffsetSeconds: number
+  tempoMap: TempoMapSnapshot,
+  pixelsPerQuarter: number,
+  dragOffsetPixels: number
 ): number {
-  return Math.max(0, (clientX - contentLeft) / pixelsPerSecond - dragOffsetSeconds)
+  return timelineXToSeconds(
+    tempoMap,
+    Math.max(0, clientX - contentLeft - dragOffsetPixels),
+    pixelsPerQuarter
+  )
 }
+import type { TempoMapSnapshot } from "@yadaw/contracts"
+import { timelineXToSeconds } from "./timelineCoordinates"

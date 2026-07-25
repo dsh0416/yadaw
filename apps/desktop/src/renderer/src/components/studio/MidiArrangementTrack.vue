@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue"
 import type { MidiClipState, TempoMapSnapshot } from "@yadaw/contracts"
-import { tickToSeconds } from "../../utils/tempoMap"
+import { timelineXToTick } from "../../utils/timelineCoordinates"
 
 const props = defineProps<{
   trackId: string
@@ -9,7 +9,7 @@ const props = defineProps<{
   clips: MidiClipState[]
   tempoMap: TempoMapSnapshot
   contentWidth: number
-  pixelsPerSecond: number
+  pixelsPerQuarter: number
   trackHeight: number
 }>()
 
@@ -24,11 +24,10 @@ const style = computed(() => ({
 }))
 
 function clipStyle(clip: MidiClipState) {
-  const start = tickToSeconds(props.tempoMap, clip.startTick)
-  const end = tickToSeconds(props.tempoMap, clip.startTick + clip.lengthTicks)
+  const pixelsPerTick = props.pixelsPerQuarter / props.tempoMap.ticksPerQuarter
   return {
-    left: `${start * props.pixelsPerSecond}px`,
-    width: `${Math.max(9, (end - start) * props.pixelsPerSecond)}px`,
+    left: `${clip.startTick * pixelsPerTick}px`,
+    width: `${Math.max(9, clip.lengthTicks * pixelsPerTick)}px`,
     borderColor: props.trackColor,
     background: `color-mix(in srgb, ${props.trackColor} 20%, var(--surface-sunken))`
   }
@@ -51,6 +50,23 @@ function handleKeydown(event: KeyboardEvent, clip: MidiClipState): void {
     emit("remove", clip.id)
   }
 }
+
+function startDrag(event: DragEvent, clip: MidiClipState): void {
+  event.dataTransfer?.setData("application/x-yadaw-midi-clip", clip.id)
+  if (event.dataTransfer) event.dataTransfer.effectAllowed = "move"
+}
+
+function dropClip(event: DragEvent): void {
+  const clipId = event.dataTransfer?.getData("application/x-yadaw-midi-clip")
+  if (!clipId) return
+  const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  const tick = timelineXToTick(
+    props.tempoMap,
+    Math.max(0, event.clientX - bounds.left),
+    props.pixelsPerQuarter
+  )
+  emit("move", clipId, props.trackId, tick)
+}
 </script>
 
 <template>
@@ -59,13 +75,17 @@ function handleKeydown(event: KeyboardEvent, clip: MidiClipState): void {
     :style="style"
     :data-track-id="trackId"
     data-track-kind="instrument"
+    @dragover.prevent
+    @drop.prevent="dropClip"
   >
     <button
       v-for="clip in clips"
       :key="clip.id"
       class="midi-clip"
+      draggable="true"
       :style="clipStyle(clip)"
       :aria-label="`${clip.name}, MIDI clip`"
+      @dragstart="startDrag($event, clip)"
       @keydown="handleKeydown($event, clip)"
     >
       <strong>{{ clip.name }}</strong>
@@ -80,5 +100,5 @@ function handleKeydown(event: KeyboardEvent, clip: MidiClipState): void {
 </template>
 
 <style scoped>
-.midi-track{position:relative;overflow:hidden;border-bottom:1px solid var(--line-strong);background:var(--daw-lane);background-image:linear-gradient(90deg,color-mix(in srgb,var(--text-primary) 3%,transparent) 1px,transparent 1px);background-size:48px 100%}.midi-clip{position:absolute;top:5px;bottom:5px;overflow:hidden;min-width:9px;padding:4px 5px;border:1px solid;border-radius:3px;color:var(--text-primary);text-align:left;cursor:grab}.midi-clip:focus-visible{outline:2px solid var(--focus);outline-offset:1px}.midi-clip strong{position:relative;z-index:2;display:block;overflow:hidden;font:700 7px var(--font-utility);text-overflow:ellipsis;white-space:nowrap}.midi-note{position:absolute;height:2px;min-width:1px;border-radius:1px;opacity:.9;pointer-events:none}
+.midi-track{position:relative;overflow:hidden;border-bottom:1px solid var(--line-strong);background:var(--daw-lane);background-image:linear-gradient(90deg,color-mix(in srgb,var(--text-primary) 3%,transparent) 1px,transparent 1px);background-size:48px 100%}.midi-clip{position:absolute;top:5px;bottom:5px;overflow:hidden;min-width:9px;padding:4px 5px;border:1px solid;border-radius:3px;color:var(--text-primary);text-align:left;cursor:grab}.midi-clip:active{cursor:grabbing}.midi-clip:focus-visible{outline:2px solid var(--focus);outline-offset:1px}.midi-clip strong{position:relative;z-index:2;display:block;overflow:hidden;font:700 7px var(--font-utility);text-overflow:ellipsis;white-space:nowrap}.midi-note{position:absolute;height:2px;min-width:1px;border-radius:1px;opacity:.9;pointer-events:none}
 </style>

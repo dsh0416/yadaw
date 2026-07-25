@@ -69,6 +69,7 @@ mise exec -- pnpm check:rust
 - [Rust performance benchmarks](docs/benchmarks.md)
 - [Development environment](agents/docs/environment.md)
 - [Renderer/native-call boundary](agents/docs/native-call-boundary.md)
+- [Project database development rules](agents/docs/project-database.md)
 - [Agent development notes](agents/docs/README.md)
 - [Agent skill dependencies](apm.yml)
 

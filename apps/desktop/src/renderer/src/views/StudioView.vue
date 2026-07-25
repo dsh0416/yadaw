@@ -18,6 +18,7 @@ import { useStudioWorkspaceStore } from "../stores/studioWorkspace"
 import { useStudioWorkflowStore } from "../stores/studioWorkflow"
 import { useMidiImportStore } from "../stores/midiImport"
 import MidiImportDialog from "../components/midi/MidiImportDialog.vue"
+import { replaceTempoEventAtTick, secondsToTick } from "../utils/tempoMap"
 
 const router = useRouter()
 const engineStore = useEngineStore()
@@ -71,6 +72,15 @@ async function closeProject(): Promise<void> {
   if (await studioWorkflowStore.closeProject()) {
     void router.push({ name: "welcome" })
   }
+}
+
+function updateCurrentTempo(beatsPerMinute: number): void {
+  const tempoMap = replaceTempoEventAtTick(
+    mixerStore.graph.tempoMap,
+    secondsToTick(mixerStore.graph.tempoMap, playheadSeconds.value),
+    beatsPerMinute
+  )
+  void mixerStore.execute({ type: "replace-tempo-map", tempoMap })
 }
 
 async function toggleRecording(): Promise<void> {
@@ -146,6 +156,7 @@ onBeforeUnmount(() => {
       @close="closeProject"
       @open-project-settings="openProjectSettings"
       @import-midi="midiImportStore.prepare()"
+      @update-tempo="updateCurrentTempo"
     />
     <StudioPlaceholderPanel side="left" />
     <StudioWorkspace

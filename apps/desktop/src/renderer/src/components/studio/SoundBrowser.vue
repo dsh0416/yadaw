@@ -2,7 +2,7 @@
 import { computed, onMounted, shallowRef } from "vue"
 import { AudioWaveform, Piano, Plug, Search, SlidersHorizontal } from "@lucide/vue"
 import { ScrollAreaRoot, ScrollAreaScrollbar, ScrollAreaThumb, ScrollAreaViewport, Separator, TabsContent, TabsList, TabsRoot, TabsTrigger } from "reka-ui"
-import type { Asset } from "@yadaw/project-db/schema"
+import type { ProjectAssetSummary as Asset } from "@yadaw/contracts"
 import type { PluginDescriptor } from "@yadaw/contracts"
 import { usePluginStore } from "../../stores/plugins"
 

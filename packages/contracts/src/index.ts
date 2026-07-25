@@ -23,8 +23,8 @@ export const IPC_CHANNELS = {
   projectOpen: "project:open",
   projectSave: "project:save",
   projectClose: "project:close",
-  projectQuery: "project:query",
-  projectTransaction: "project:transaction",
+  projectAssetsList: "project:assets-list",
+  projectConfigurationUpdate: "project:configuration-update",
   settingsGet: "settings:get",
   settingsUpdate: "settings:update",
   settingsChooseSwap: "settings:choose-swap",
@@ -91,8 +91,8 @@ export interface YadawDesktopApi {
   openProject(path: string, recover?: boolean): Promise<ProjectSession>
   saveProject(path?: string): Promise<ProjectSession | null>
   closeProject(disposition?: ProjectCloseDisposition): Promise<boolean>
-  projectQuery(request: ProjectQueryRequest): Promise<ProjectQueryResult>
-  projectTransaction(request: ProjectTransactionRequest): Promise<ProjectQueryResult[]>
+  listProjectAssets(): Promise<ProjectAssetSummary[]>
+  updateProjectConfiguration(configuration: ProjectConfiguration): Promise<ProjectSession>
   getApplicationSettings(): Promise<ApplicationSettings>
   updateApplicationSettings(patch: ApplicationSettingsPatch): Promise<ApplicationSettings>
   chooseSwapDirectory(): Promise<ApplicationSettings>
@@ -126,7 +126,6 @@ export type ThemePreference = "light" | "dark" | "system"
 export interface ProjectConfiguration {
   name: string
   sampleRate: ProjectSampleRate
-  tempo: number
   timeSignatureNumerator: number
   timeSignatureDenominator: number
   waveformDisplayMode: WaveformDisplayMode
@@ -180,22 +179,13 @@ export type ProjectLifecycleState =
 
 export type ProjectCloseDisposition = "save" | "discard" | "cancel"
 
-export type SqlParameter = string | number | bigint | boolean | null | Date | Uint8Array
-export type ProjectQueryMethod = "all" | "execute"
-
-export interface ProjectQueryRequest {
-  sql: string
-  params: SqlParameter[]
-  method: ProjectQueryMethod
-}
-
-export interface ProjectQueryResult {
-  rows: unknown[][]
-  rowCount: number
-}
-
-export interface ProjectTransactionRequest {
-  queries: ProjectQueryRequest[]
+export interface ProjectAssetSummary {
+  id: string
+  name: string
+  sampleRate: number
+  channels: number
+  bitDepth: RecordingBitDepth
+  frameCount: bigint
 }
 
 export interface RecentProject {
@@ -649,6 +639,7 @@ export interface MidiImportTrackPreview {
   noteCount: number
   eventCount: number
   lengthTicks: number
+  tempoMap: TempoMapSnapshot
   warnings: string[]
 }
 

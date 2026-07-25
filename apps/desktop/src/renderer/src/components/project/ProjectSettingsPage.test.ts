@@ -5,7 +5,6 @@ import ProjectSettingsPage from "./ProjectSettingsPage.vue"
 const configuration = {
   name: "Untitled project",
   sampleRate: 48_000 as const,
-  tempo: 120,
   timeSignatureNumerator: 4,
   timeSignatureDenominator: 4,
   waveformDisplayMode: "separate" as const
@@ -18,16 +17,17 @@ describe("ProjectSettingsPage", () => {
     })
     await wrapper.get('input[required]').setValue("Session")
     await wrapper.get("select").setValue("44100")
-    await wrapper.findAll('input[type="number"]')[0]!.setValue("132.5")
+    await wrapper.findAll('input[type="number"]')[0]!.setValue("7")
     await wrapper.findAll("select").at(-1)!.setValue("aggregate")
     await wrapper.get("form").trigger("submit")
 
     expect(wrapper.emitted("save")?.[0]?.[0]).toMatchObject({
       name: "Session",
       sampleRate: 44_100,
-      tempo: 132.5,
+      timeSignatureNumerator: 7,
       waveformDisplayMode: "aggregate"
     })
+    expect(wrapper.findAll(".field > span").map((field) => field.text())).not.toContain("Tempo")
   })
 
   it("provides a back-to-studio action instead of a modal cancel action", async () => {

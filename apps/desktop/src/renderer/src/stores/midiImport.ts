@@ -13,12 +13,14 @@ function key(sourceTrack: number, sequence: number): string {
   return `${sequence}:${sourceTrack}`
 }
 
+export type MidiTempoMode = "project" | "midi"
+
 export const useMidiImportStore = defineStore("midi-import", () => {
   const mixerStore = useMixerStore()
   const transportStore = useTransportStore()
   const preview = shallowRef<MidiImportPreview | null>(null)
   const targets = shallowRef<Record<string, MidiImportTrackTarget>>({})
-  const importTempoMap = shallowRef(false)
+  const tempoMode = shallowRef<MidiTempoMode>("project")
   const busy = shallowRef(false)
   const error = shallowRef("")
   const open = computed(() => preview.value !== null)
@@ -34,7 +36,7 @@ export const useMidiImportStore = defineStore("midi-import", () => {
         key(track.sourceTrack, track.sequence),
         { type: track.noteCount > 0 ? "new" : "ignore" }
       ]))
-      importTempoMap.value = false
+      tempoMode.value = "project"
     } catch (reason) {
       error.value = reason instanceof Error ? reason.message : "Unable to read the MIDI file."
     } finally {
@@ -61,8 +63,8 @@ export const useMidiImportStore = defineStore("midi-import", () => {
     error.value = ""
     const plan: MidiImportPlan = {
       token: current.token,
-      importTempoMap: importTempoMap.value,
-      insertionTick: importTempoMap.value
+      importTempoMap: tempoMode.value === "midi",
+      insertionTick: tempoMode.value === "midi"
         ? 0
         : secondsToTick(mixerStore.graph.tempoMap, transportStore.playheadSeconds),
       tracks: current.tracks.map((track) => ({
@@ -94,7 +96,7 @@ export const useMidiImportStore = defineStore("midi-import", () => {
   return {
     preview,
     targets,
-    importTempoMap,
+    tempoMode,
     busy,
     error,
     open,

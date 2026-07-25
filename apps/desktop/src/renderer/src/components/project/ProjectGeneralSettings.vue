@@ -35,7 +35,7 @@ function numberValue(event: Event): number {
     <section class="settings-section">
       <header class="section-header">
         <span>SESSION FORMAT</span>
-        <div><h2>Timing and audio basis</h2><p>These values define new media and the musical grid for this project.</p></div>
+        <div><h2>Meter and audio basis</h2><p>Tempo is edited on the Tempo Track; these values define new media and the initial musical meter.</p></div>
       </header>
       <div class="field-grid">
         <label class="field wide">
@@ -44,11 +44,6 @@ function numberValue(event: Event): number {
             <option v-for="rate in PROJECT_SAMPLE_RATES" :key="rate" :value="rate">{{ rate.toLocaleString() }} Hz</option>
           </select>
           <small>Existing assets remain unchanged.</small>
-        </label>
-        <label class="field">
-          <span>Tempo</span>
-          <input :value="configuration.tempo" type="number" min="1" max="999" step="0.01" @input="update({ tempo: numberValue($event) })" />
-          <small>Beats per minute</small>
         </label>
         <label class="field">
           <span>Meter numerator</span>

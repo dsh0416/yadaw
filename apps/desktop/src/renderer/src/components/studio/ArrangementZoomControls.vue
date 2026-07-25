@@ -2,12 +2,12 @@
 import { computed } from "vue"
 
 const props = defineProps<{
-  pixelsPerSecond: number
+  pixelsPerQuarter: number
   trackHeight: number
   amplitudeScale: number
 }>()
 const emit = defineEmits<{
-  setTime: [pixelsPerSecond: number]
+  setTime: [pixelsPerQuarter: number]
   setTrack: [height: number]
   setAmplitude: [scale: number]
   resetTime: []
@@ -16,15 +16,15 @@ const emit = defineEmits<{
 }>()
 
 const SLIDER_MAX = 100
-const TIME_MIN = 25
-const TIME_MAX = 1_600
+const TIME_MIN = 12.5
+const TIME_MAX = 800
 const TRACK_MIN = 72
 const TRACK_MAX = 320
 const AMPLITUDE_MIN = 0.5
 const AMPLITUDE_MAX = 8
 
 const timePosition = computed(() =>
-  logarithmicPosition(props.pixelsPerSecond, TIME_MIN, TIME_MAX)
+  logarithmicPosition(props.pixelsPerQuarter, TIME_MIN, TIME_MAX)
 )
 const trackPosition = computed(() =>
   linearPosition(props.trackHeight, TRACK_MIN, TRACK_MAX)
@@ -74,7 +74,7 @@ function setAmplitude(event: Event): void {
         :value="timePosition"
         :style="{ '--zoom-fill': `${timePosition}%` }"
         aria-label="Time zoom"
-        :aria-valuetext="`${Math.round(pixelsPerSecond)} pixels per second`"
+        :aria-valuetext="`${Math.round(pixelsPerQuarter)} pixels per quarter note`"
         title="Double-click to reset time zoom"
         @input="setTime"
         @dblclick="emit('resetTime')"

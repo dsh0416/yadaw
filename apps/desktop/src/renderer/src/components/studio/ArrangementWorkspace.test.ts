@@ -2,7 +2,7 @@ import { createPinia, setActivePinia } from "pinia"
 import { mount } from "@vue/test-utils"
 import { describe, expect, it, vi } from "vitest"
 import type { MixerChannelState } from "@yadaw/contracts"
-import type { Asset } from "@yadaw/project-db/schema"
+import type { ProjectAssetSummary as Asset } from "@yadaw/contracts"
 import { useProjectStore } from "../../stores/project"
 import { useMixerStore } from "../../stores/mixer"
 import { useArrangementViewStore } from "../../stores/arrangementView"
@@ -11,16 +11,10 @@ import ArrangementWorkspace from "./ArrangementWorkspace.vue"
 const recordingAsset: Asset = {
   id: "recording-1",
   name: "First take.bwf",
-  mimeType: "audio/x-bwf",
-  contentHash: "hash",
-  byteLength: 100n,
   sampleRate: 48_000,
   channels: 2,
   bitDepth: "float32",
-  frameCount: 48_000n,
-  bwfTimeReference: 0n,
-  largeObjectOid: 1,
-  createdAt: new Date()
+  frameCount: 48_000n
 }
 
 describe("ArrangementWorkspace", () => {
@@ -34,7 +28,6 @@ describe("ArrangementWorkspace", () => {
       configuration: {
         name: "Session",
         sampleRate: 48_000,
-        tempo: 120,
         timeSignatureNumerator: 4,
         timeSignatureDenominator: 4,
         waveformDisplayMode: "separate"
@@ -105,8 +98,20 @@ describe("ArrangementWorkspace", () => {
 
     expect(wrapper.findAll(".track-lane")).toHaveLength(2)
     expect(wrapper.findAll('[data-testid="timeline-playhead"]')).toHaveLength(1)
+    expect(wrapper.get('[aria-label="Tempo global track"]').text()).toContain("Tempo")
+    expect(wrapper.findAll('.point-handle')).toHaveLength(1)
     const clip = wrapper.get('button[aria-label="Audio clip First take"]')
     expect(clip.attributes("aria-pressed")).toBe("false")
+    expect(clip.attributes("style")).toContain("width: 100px")
+    mixer.graph = {
+      ...mixer.graph,
+      tempoMap: {
+        ...mixer.graph.tempoMap,
+        tempoEvents: [{ tick: 0, beatsPerMinute: 180 }]
+      }
+    }
+    await wrapper.vm.$nextTick()
+    expect(clip.attributes("style")).toContain("width: 150px")
     await clip.trigger("click")
     expect(clip.attributes("aria-pressed")).toBe("true")
     expect(wrapper.text()).toContain("First take")
@@ -121,6 +126,11 @@ describe("ArrangementWorkspace", () => {
     expect(wrapper.text()).not.toContain("2 CH")
 
     const arrangementView = useArrangementViewStore()
+    await wrapper.get('button[aria-label="Collapse Tempo track"]').trigger("click")
+    expect(arrangementView.tempoLaneExpanded).toBe(false)
+    expect(wrapper.get<HTMLElement>('[data-testid="timeline-rail"]').element.style.gridTemplateRows)
+      .toContain("30px")
+    await wrapper.get('button[aria-label="Expand Tempo track"]').trigger("click")
     const resizeHandles = wrapper.findAll('[role="separator"]')
     expect(resizeHandles).toHaveLength(2)
     expect(wrapper.findAll<HTMLElement>(".track-lane")[0]?.element.style.height).toBe("104px")
@@ -162,7 +172,6 @@ describe("ArrangementWorkspace", () => {
       configuration: {
         name: "Session",
         sampleRate: 48_000,
-        tempo: 120,
         timeSignatureNumerator: 4,
         timeSignatureDenominator: 4,
         waveformDisplayMode: "separate"

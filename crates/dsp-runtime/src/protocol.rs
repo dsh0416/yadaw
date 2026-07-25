@@ -21,7 +21,53 @@ pub struct ControlRequest {
 pub enum ControlCommand {
     Ping,
     Shutdown,
-    LoadGraph { revision: u64 },
+    LoadGraph {
+        revision: u64,
+    },
+    LoadPlugin {
+        instance_id: String,
+        module_path: String,
+        class_id: String,
+        sample_rate: f64,
+        #[serde(with = "serde_bytes")]
+        component_state: Vec<u8>,
+        #[serde(with = "serde_bytes")]
+        controller_state: Vec<u8>,
+    },
+    UnloadPlugin {
+        instance_id: String,
+    },
+    PluginParameters {
+        instance_id: String,
+    },
+    SetPluginParameter {
+        instance_id: String,
+        parameter_id: u32,
+        normalized: f64,
+        gesture: ParameterGesture,
+    },
+    SavePluginState {
+        instance_id: String,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ParameterGesture {
+    Begin,
+    Perform,
+    End,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PluginParameter {
+    pub id: u32,
+    pub title: String,
+    pub units: String,
+    pub step_count: i32,
+    pub default_normalized: f64,
+    pub normalized: f64,
+    pub flags: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -36,7 +82,22 @@ pub struct ControlResponse {
 pub enum ControlResult {
     Pong,
     Accepted,
-    Error { message: String },
+    PluginLoaded {
+        latency_samples: u32,
+        tail_samples: Option<u32>,
+    },
+    PluginParameters {
+        parameters: Vec<PluginParameter>,
+    },
+    PluginState {
+        #[serde(with = "serde_bytes")]
+        component_state: Vec<u8>,
+        #[serde(with = "serde_bytes")]
+        controller_state: Vec<u8>,
+    },
+    Error {
+        message: String,
+    },
 }
 
 #[derive(Debug)]

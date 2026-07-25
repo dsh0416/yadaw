@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { createPinia, setActivePinia } from "pinia"
 import type { MixerGraphSnapshot, TransportSnapshot } from "@yadaw/contracts"
-import type { Asset } from "@yadaw/project-db/schema"
+import type { ProjectAssetSummary as Asset } from "@yadaw/contracts"
 import { assetsToTimelineClips, useTransportStore } from "./transport"
 import { useMixerStore } from "./mixer"
 
@@ -9,16 +9,10 @@ function asset(id: string, frameCount: bigint, sampleRate = 48_000): Asset {
   return {
     id,
     name: `${id}.bwf`,
-    mimeType: "audio/x-bwf",
-    contentHash: `hash-${id}`,
-    byteLength: 100n,
     sampleRate,
     channels: 2,
     bitDepth: "float32",
-    frameCount,
-    bwfTimeReference: 0n,
-    largeObjectOid: 1,
-    createdAt: new Date()
+    frameCount
   }
 }
 

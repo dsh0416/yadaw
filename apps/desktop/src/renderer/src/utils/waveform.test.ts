@@ -3,6 +3,7 @@ import type { WaveformPeakWindow } from "@yadaw/contracts"
 import {
   aggregateWaveformPeaks,
   buildWaveformGeometry,
+  buildWarpedWaveformGeometry,
   decodeWaveformPeaks,
   mergeWaveformChannels
 } from "./waveform"
@@ -85,5 +86,29 @@ describe("waveform utilities", () => {
       .toEqual({ lanes: 1, lines: [] })
     expect(() => buildWaveformGeometry({ ...window, peaks: new Uint8Array() }, "separate", 10, 20, 1))
       .toThrow("incomplete")
+  })
+
+  it("stretches and compresses source buckets across piecewise timeline segments", () => {
+    const window = peakWindow([
+      -1, 1,
+      -0.75, 0.75,
+      -0.5, 0.5,
+      -0.25, 0.25
+    ], 4, 1)
+    const geometry = buildWarpedWaveformGeometry(
+      window,
+      "separate",
+      4,
+      20,
+      1,
+      (x) => x <= 2 ? x / 2 * 64 : 64 + (x - 2) / 2 * 192
+    )
+
+    expect(geometry.lines).toEqual([
+      { x: 0.5, minimumY: 20, maximumY: 0, lane: 0 },
+      { x: 1.5, minimumY: 20, maximumY: 0, lane: 0 },
+      { x: 2.5, minimumY: 17.5, maximumY: 2.5, lane: 0 },
+      { x: 3.5, minimumY: 15, maximumY: 5, lane: 0 }
+    ])
   })
 })

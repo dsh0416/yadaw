@@ -7,8 +7,7 @@ import type {
   CreateProjectRequest,
   ProcessGainRequest,
   ProjectCloseDisposition,
-  ProjectQueryRequest,
-  ProjectTransactionRequest,
+  ProjectConfiguration,
   WaveformWindowRequest,
   YadawDesktopApi
 } from "@yadaw/contracts"
@@ -57,10 +56,9 @@ const api: YadawDesktopApi = {
   saveProject: (path?: string) => ipcRenderer.invoke(IPC_CHANNELS.projectSave, path),
   closeProject: (disposition?: ProjectCloseDisposition) =>
     ipcRenderer.invoke(IPC_CHANNELS.projectClose, disposition),
-  projectQuery: (request: ProjectQueryRequest) =>
-    ipcRenderer.invoke(IPC_CHANNELS.projectQuery, request),
-  projectTransaction: (request: ProjectTransactionRequest) =>
-    ipcRenderer.invoke(IPC_CHANNELS.projectTransaction, request),
+  listProjectAssets: () => ipcRenderer.invoke(IPC_CHANNELS.projectAssetsList),
+  updateProjectConfiguration: (configuration: ProjectConfiguration) =>
+    ipcRenderer.invoke(IPC_CHANNELS.projectConfigurationUpdate, configuration),
   getApplicationSettings: () => ipcRenderer.invoke(IPC_CHANNELS.settingsGet),
   updateApplicationSettings: (patch: ApplicationSettingsPatch) =>
     ipcRenderer.invoke(IPC_CHANNELS.settingsUpdate, patch),

@@ -7,7 +7,7 @@
   "type": "module",
   "main": "./out/main/index.js",
   "scripts": {
-    "predev": "pnpm --filter @yadaw/dsp-node build:debug && cargo build -p yadaw-audio-host",
+    "predev": "pnpm --filter @yadaw/dsp-node build:debug && cargo build -p yadaw-audio-host && cmake -S ../.. -B ../../target/vst3-bridge-build && cmake --build ../../target/vst3-bridge-build --config Debug --target yadaw-vst3-probe yadaw-vst3-bridge",
     "dev": "node scripts/dev.mjs",
     "build": "pnpm build:main && pnpm build:preload && pnpm build:renderer",
     "build:main": "vite build --config vite.main.config.ts",
@@ -15,6 +15,7 @@
     "build:renderer": "vite build --config vite.renderer.config.ts",
     "check": "vue-tsc --noEmit -p tsconfig.json",
     "test:unit": "vitest run",
+    "test:vst3-helper": "node scripts/vst3-helper-smoke.mjs",
     "test:e2e": "pnpm build && playwright test",
     "pack": "pnpm build && electron-builder --dir --publish never",
     "dist": "pnpm build && electron-builder --publish never"
@@ -24,8 +25,7 @@
     "@lucide/vue": "^1.25.0",
     "@msgpack/msgpack": "3.1.3",
     "@yadaw/dsp-node": "workspace:*",
-    "@yadaw/project-db": "workspace:*",
-    "drizzle-orm": "0.45.2"
+    "@yadaw/project-db": "workspace:*"
   },
   "devDependencies": {
     "@pinia/testing": "2.0.1",

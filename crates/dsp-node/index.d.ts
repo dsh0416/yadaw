@@ -145,6 +145,8 @@ export interface NativeMidiTrack {
   lengthTicks: number
   notes: Array<NativeMidiNote>
   events: Array<NativeMidiEvent>
+  tempoEvents: Array<NativeTempoEvent>
+  timeSignatureEvents: Array<NativeTimeSignatureEvent>
   warnings: Array<string>
 }
 

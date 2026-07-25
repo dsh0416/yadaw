@@ -8,7 +8,6 @@ function createProject(): void {
   emit("create", {
     name: "Untitled project",
     sampleRate: 48_000,
-    tempo: 120,
     timeSignatureNumerator: 4,
     timeSignatureDenominator: 4,
     waveformDisplayMode: "separate"
@@ -27,7 +26,7 @@ function createProject(): void {
       <section class="new-project">
         <span>NEW PROJECT</span>
         <h2>Start with a clean session.</h2>
-        <p>48 kHz · 120 BPM · 4/4. Name and format can be changed later in Project Settings.</p>
+        <p>48 kHz · 4/4 · Tempo Track starts at 120 BPM. Name and format can be changed later in Project Settings.</p>
         <button :disabled="busy" type="button" @click="createProject">{{ busy ? "Creating…" : "Create project" }}</button>
       </section>
       <section class="recent-projects">

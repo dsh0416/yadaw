@@ -1,49 +1,22 @@
 import { acceptHMRUpdate, defineStore } from "pinia"
 import { computed, ref, shallowRef } from "vue"
-import type { Asset } from "@yadaw/project-db/schema"
-import { assets } from "@yadaw/project-db/schema"
-import { createProjectDbProxy } from "@yadaw/project-db/proxy"
 import type {
   CreateProjectRequest,
+  ProjectAssetSummary,
   ProjectConfiguration,
   ProjectLifecycleState,
   ProjectSession
 } from "@yadaw/contracts"
-import type { GlobalAlertOptions } from "../composables/useGlobalDialog"
 import { useGlobalDialog } from "../composables/useGlobalDialog"
-
-const proxy = createProjectDbProxy({ query: (request) => window.yadaw.projectQuery(request) })
 
 function openState(session: ProjectSession, error: string | null = null): ProjectLifecycleState {
   return { status: "open", session: structuredClone(session), error }
 }
 
-function compatibilityAlert(message: string): GlobalAlertOptions | null {
-  if (/migrations newer|unknown migration/i.test(message)) {
-    return {
-      eyebrow: "Project compatibility",
-      tone: "warning",
-      title: "Project requires a newer YADAW",
-      description: "This project contains migrations unknown to this version.",
-      detail: "Upgrade YADAW to open it."
-    }
-  }
-  if (/migration .+ unexpected hash/i.test(message)) {
-    return {
-      eyebrow: "Project integrity",
-      tone: "danger",
-      title: "Project migration journal is damaged",
-      description: "A known migration has a different hash.",
-      detail: "The project was not opened."
-    }
-  }
-  return null
-}
-
 export const useProjectStore = defineStore("project", () => {
-  const { alert, showDialog } = useGlobalDialog()
+  const { showDialog } = useGlobalDialog()
   const lifecycle = shallowRef<ProjectLifecycleState>({ status: "closed", error: null })
-  const projectAssets = ref<Asset[]>([])
+  const projectAssets = ref<ProjectAssetSummary[]>([])
 
   const session = computed(() => "session" in lifecycle.value ? lifecycle.value.session : null)
   const busy = computed(() =>
@@ -116,8 +89,6 @@ export const useProjectStore = defineStore("project", () => {
         status: "closed",
         error: message
       }
-      const alertOptions = compatibilityAlert(message)
-      if (alertOptions) await alert(alertOptions)
       return false
     }
   }
@@ -177,50 +148,13 @@ export const useProjectStore = defineStore("project", () => {
   }
 
   async function updateConfiguration(configuration: ProjectConfiguration): Promise<void> {
-    await window.yadaw.projectTransaction({
-      queries: [
-        {
-          sql: `UPDATE project SET name = $1, sample_rate = $2, tempo = $3,
-            time_signature_numerator = $4, time_signature_denominator = $5,
-            waveform_display_mode = $6 WHERE id = 'project'`,
-          params: [
-            configuration.name,
-            configuration.sampleRate,
-            configuration.tempo,
-            configuration.timeSignatureNumerator,
-            configuration.timeSignatureDenominator,
-            configuration.waveformDisplayMode
-          ],
-          method: "execute"
-        },
-        {
-          sql: "UPDATE tempo_events SET beats_per_minute = $1 WHERE tick = 0",
-          params: [configuration.tempo],
-          method: "execute"
-        },
-        {
-          sql: `UPDATE time_signature_events
-            SET numerator = $1, denominator = $2 WHERE tick = 0`,
-          params: [
-            configuration.timeSignatureNumerator,
-            configuration.timeSignatureDenominator
-          ],
-          method: "execute"
-        }
-      ]
-    })
-    if (lifecycle.value.status === "open") {
-      lifecycle.value = openState({
-        ...lifecycle.value.session,
-        configuration: { ...configuration },
-        dirty: true
-      })
-    }
+    const updated = await window.yadaw.updateProjectConfiguration(configuration)
+    lifecycle.value = openState(updated)
   }
 
   async function refreshAssets(): Promise<void> {
     if (!session.value) return
-    projectAssets.value = await proxy.select().from(assets).orderBy(assets.createdAt)
+    projectAssets.value = await window.yadaw.listProjectAssets()
   }
 
   function markDirty(): void {

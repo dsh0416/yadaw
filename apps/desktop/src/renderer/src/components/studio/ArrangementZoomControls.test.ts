@@ -6,7 +6,7 @@ describe("ArrangementZoomControls", () => {
   it("renders three accessible sliders without numeric buttons", async () => {
     const wrapper = mount(ArrangementZoomControls, {
       props: {
-        pixelsPerSecond: 100,
+        pixelsPerQuarter: 50,
         trackHeight: 104,
         amplitudeScale: 1
       }
@@ -22,7 +22,7 @@ describe("ArrangementZoomControls", () => {
     await track.setValue(50)
     await gain.setValue(0)
 
-    expect(wrapper.emitted("setTime")?.[0]?.[0]).toBeCloseTo(1_600)
+    expect(wrapper.emitted("setTime")?.[0]?.[0]).toBeCloseTo(800)
     expect(wrapper.emitted("setTrack")?.[0]).toEqual([196])
     expect(wrapper.emitted("setAmplitude")?.[0]?.[0]).toBeCloseTo(0.5)
 

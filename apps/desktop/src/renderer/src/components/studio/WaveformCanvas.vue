@@ -1,8 +1,16 @@
 <script setup lang="ts">
 import { computed, nextTick, useTemplateRef, watch } from "vue"
 import { useResizeObserver } from "@vueuse/core"
-import type { WaveformDisplayMode, WaveformPeakWindow } from "@yadaw/contracts"
-import { buildWaveformGeometry } from "../../utils/waveform"
+import type {
+  TempoMapSnapshot,
+  WaveformDisplayMode,
+  WaveformPeakWindow
+} from "@yadaw/contracts"
+import {
+  buildWarpedWaveformGeometry,
+  buildWaveformGeometry
+} from "../../utils/waveform"
+import { timelineXToSeconds } from "../../utils/timelineCoordinates"
 
 const props = defineProps<{
   window: WaveformPeakWindow | null
@@ -10,6 +18,10 @@ const props = defineProps<{
   amplitudeScale: number
   loading: boolean
   recording?: boolean
+  tempoMap?: TempoMapSnapshot
+  pixelsPerQuarter?: number
+  timelineStartX?: number
+  clipStartSeconds?: number
 }>()
 
 const canvas = useTemplateRef<HTMLCanvasElement>("canvas")
@@ -33,13 +45,32 @@ function draw(): void {
   context.setTransform(ratio, 0, 0, ratio, 0, 0)
   context.clearRect(0, 0, width, height)
   if (!props.window) return
-  const geometry = buildWaveformGeometry(
-    props.window,
-    props.displayMode,
-    width,
-    height,
-    props.amplitudeScale
-  )
+  const canWarp = props.tempoMap !== undefined &&
+    props.pixelsPerQuarter !== undefined &&
+    props.timelineStartX !== undefined &&
+    props.clipStartSeconds !== undefined
+  const geometry = canWarp
+    ? buildWarpedWaveformGeometry(
+        props.window,
+        props.displayMode,
+        width,
+        height,
+        props.amplitudeScale,
+        (x) => (
+          timelineXToSeconds(
+            props.tempoMap!,
+            props.timelineStartX! + x,
+            props.pixelsPerQuarter!
+          ) - props.clipStartSeconds!
+        ) * props.window!.sampleRate
+      )
+    : buildWaveformGeometry(
+        props.window,
+        props.displayMode,
+        width,
+        height,
+        props.amplitudeScale
+      )
   context.strokeStyle = props.recording ? "#ffb3be" : "#87a8b7"
   context.globalAlpha = 0.28
   context.lineWidth = 1
@@ -69,7 +100,16 @@ useResizeObserver(canvas, (entries) => {
   draw()
 })
 watch(
-  () => [props.window, props.displayMode, props.amplitudeScale, props.recording],
+  () => [
+    props.window,
+    props.displayMode,
+    props.amplitudeScale,
+    props.recording,
+    props.tempoMap,
+    props.pixelsPerQuarter,
+    props.timelineStartX,
+    props.clipStartSeconds
+  ],
   () => void nextTick(draw),
   { immediate: true }
 )

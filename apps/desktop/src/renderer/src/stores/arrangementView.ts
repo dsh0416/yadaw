@@ -6,18 +6,22 @@ const clamp = (value: number, minimum: number, maximum: number): number =>
 
 const MIN_TRACK_SCALE = 0.5
 const MAX_TRACK_SCALE = 4
+const TEMPO_LANE_EXPANDED_HEIGHT = 112
+const TEMPO_LANE_COLLAPSED_HEIGHT = 30
 
 export const useArrangementViewStore = defineStore("arrangement-view", () => {
-  const pixelsPerSecond = shallowRef(100)
+  const pixelsPerQuarter = shallowRef(50)
   const trackHeight = shallowRef(104)
   const trackScales = shallowRef<Record<string, number>>({})
   const amplitudeScale = shallowRef(1)
+  const tempoLaneExpanded = shallowRef(true)
+  const tempoLaneHeight = shallowRef(TEMPO_LANE_EXPANDED_HEIGHT)
 
   function setTimeZoom(value: number): void {
-    pixelsPerSecond.value = clamp(value, 25, 1_600)
+    pixelsPerQuarter.value = clamp(value, 12.5, 800)
   }
   function zoomTime(direction: number): void {
-    setTimeZoom(pixelsPerSecond.value * (direction > 0 ? 1.25 : 1 / 1.25))
+    setTimeZoom(pixelsPerQuarter.value * (direction > 0 ? 1.25 : 1 / 1.25))
   }
   function setTrackHeight(value: number): void {
     trackHeight.value = clamp(value, 72, 320)
@@ -47,21 +51,33 @@ export const useArrangementViewStore = defineStore("arrangement-view", () => {
   function zoomAmplitude(direction: number): void {
     setAmplitudeScale(amplitudeScale.value * (direction > 0 ? Math.SQRT2 : 1 / Math.SQRT2))
   }
-  function resetTime(): void { pixelsPerSecond.value = 100 }
+  function resetTime(): void { pixelsPerQuarter.value = 50 }
   function resetTrack(): void { trackHeight.value = 104 }
   function resetAmplitude(): void { amplitudeScale.value = 1 }
+  function setTempoLaneExpanded(expanded: boolean): void {
+    tempoLaneExpanded.value = expanded
+    tempoLaneHeight.value = expanded
+      ? TEMPO_LANE_EXPANDED_HEIGHT
+      : TEMPO_LANE_COLLAPSED_HEIGHT
+  }
+  function toggleTempoLane(): void {
+    setTempoLaneExpanded(!tempoLaneExpanded.value)
+  }
   function reset(): void {
     resetTime()
     resetTrack()
     trackScales.value = {}
     resetAmplitude()
+    setTempoLaneExpanded(true)
   }
 
   return {
-    pixelsPerSecond,
+    pixelsPerQuarter,
     trackHeight,
     trackScales,
     amplitudeScale,
+    tempoLaneExpanded,
+    tempoLaneHeight,
     setTimeZoom,
     zoomTime,
     setTrackHeight,
@@ -75,6 +91,8 @@ export const useArrangementViewStore = defineStore("arrangement-view", () => {
     resetTime,
     resetTrack,
     resetAmplitude,
+    setTempoLaneExpanded,
+    toggleTempoLane,
     reset
   }
 })

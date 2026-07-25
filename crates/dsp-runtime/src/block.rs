@@ -43,8 +43,9 @@ pub fn plan_process_blocks(
     let mut cursor = start_frame;
     for boundary in boundaries {
         while cursor < boundary {
-            let frame_count =
-                usize::try_from(boundary - cursor).unwrap_or(usize::MAX).min(MAX_PLUGIN_BLOCK_FRAMES);
+            let frame_count = usize::try_from(boundary - cursor)
+                .unwrap_or(usize::MAX)
+                .min(MAX_PLUGIN_BLOCK_FRAMES);
             result.push(ProcessBlock {
                 start_frame: cursor,
                 frame_count,
@@ -219,9 +220,7 @@ impl TailState {
     }
 
     pub fn should_process(&self) -> bool {
-        !self.input_ended
-            || matches!(self.length, TailLength::Infinite)
-            || self.remaining > 0
+        !self.input_ended || matches!(self.length, TailLength::Infinite) || self.remaining > 0
     }
 
     pub fn advance(&mut self, frame_count: usize) {

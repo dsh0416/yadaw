@@ -11,7 +11,9 @@
   "scripts": {
     "dev": "pnpm --filter @yadaw/desktop dev",
     "build": "pnpm build:native && pnpm --filter @yadaw/desktop build",
-    "build:native": "pnpm --filter @yadaw/dsp-node build && cargo build -p yadaw-audio-host --release && cmake -S . -B target/vst3-bridge-build -DSMTG_ENABLE_VST3_PLUGIN_EXAMPLES=OFF -DSMTG_ENABLE_VST3_HOSTING_EXAMPLES=OFF -DSMTG_ENABLE_VSTGUI_SUPPORT=OFF && cmake --build target/vst3-bridge-build --config Release --target yadaw-vst3-probe",
+    "build:native": "pnpm --filter @yadaw/dsp-node build && cargo build -p yadaw-audio-host --release && cmake -S . -B target/vst3-bridge-build -DSMTG_ENABLE_VST3_PLUGIN_EXAMPLES=OFF -DSMTG_ENABLE_VST3_HOSTING_EXAMPLES=OFF -DSMTG_ENABLE_VSTGUI_SUPPORT=OFF && cmake --build target/vst3-bridge-build --config Release --target yadaw-vst3-probe yadaw-vst3-bridge",
+    "db:generate": "pnpm --filter @yadaw/project-db db:generate",
+    "db:check": "pnpm --filter @yadaw/project-db db:check",
     "check": "pnpm check:rust && pnpm -r --if-present check && pnpm --filter @yadaw/desktop test:unit && pnpm --filter @yadaw/project-db test:integration",
     "check:rust": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace && cargo test -p yadaw-dsp-node --features bench-internals --test realtime_allocations && cargo bench --workspace --bench mixer_graph --bench native_render --bench media_streaming --bench recording --features yadaw-dsp-node/bench-internals --no-run",
     "bench:rust": "cargo bench --workspace --bench mixer_graph --bench native_render --bench media_streaming --bench recording --features yadaw-dsp-node/bench-internals",
@@ -20,6 +22,7 @@
     "bench:rust:compare": "cargo bench --workspace --bench mixer_graph --bench native_render --bench media_streaming --bench recording --features yadaw-dsp-node/bench-internals -- --baseline main",
     "test:unit": "cargo test --workspace && pnpm --filter @yadaw/desktop test:unit",
     "test:integration": "pnpm --filter @yadaw/project-db test:integration",
+    "test:vst3-fixtures": "cmake -S . -B target/vst3-fixtures -DYADAW_BUILD_VST3_FIXTURES=ON && cmake --build target/vst3-fixtures/third_party/vst3sdk/public.sdk/samples/vst/again --config Debug --target again && cmake --build target/vst3-fixtures/third_party/vst3sdk/public.sdk/samples/vst/note_expression_synth --config Debug --target note-expression-synth && cmake --build target/vst3-fixtures --config Debug --target yadaw-vst3-probe yadaw-vst3-bridge yadaw-vst3-smoke && cargo build -p yadaw-audio-host && pnpm --filter @yadaw/desktop test:vst3-helper",
     "test:e2e": "pnpm --filter @yadaw/desktop test:e2e",
     "format": "cargo fmt --all"
   }

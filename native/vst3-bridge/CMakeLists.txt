@@ -17,6 +17,37 @@ add_executable(yadaw-vst3-probe
   ${YADAW_VST3_PLATFORM_SOURCE}
 )
 
+add_library(yadaw-vst3-bridge SHARED
+  src/bridge.cpp
+  "${YADAW_VST3_SDK_ROOT}/public.sdk/source/common/memorystream.cpp"
+  "${YADAW_VST3_SDK_ROOT}/public.sdk/source/vst/hosting/plugprovider.cpp"
+  ${YADAW_VST3_PLATFORM_SOURCE}
+)
+
+add_executable(yadaw-vst3-smoke tests/bridge_smoke.cpp)
+target_compile_features(yadaw-vst3-smoke PRIVATE cxx_std_17)
+target_link_libraries(yadaw-vst3-smoke PRIVATE yadaw-vst3-bridge)
+target_include_directories(yadaw-vst3-smoke PRIVATE include)
+set_target_properties(yadaw-vst3-smoke PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+  RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}/bin"
+  RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/bin"
+)
+
+target_compile_features(yadaw-vst3-bridge PRIVATE cxx_std_17)
+target_link_libraries(yadaw-vst3-bridge PRIVATE sdk_hosting)
+target_include_directories(yadaw-vst3-bridge
+  PUBLIC include
+  PRIVATE "${YADAW_VST3_SDK_ROOT}"
+)
+set_target_properties(yadaw-vst3-bridge PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+  RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}/bin"
+  RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/bin"
+  LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+  ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
+)
+
 target_compile_features(yadaw-vst3-probe PRIVATE cxx_std_17)
 target_link_libraries(yadaw-vst3-probe PRIVATE sdk_hosting)
 target_include_directories(yadaw-vst3-probe PRIVATE "${YADAW_VST3_SDK_ROOT}")
@@ -27,19 +58,13 @@ set_target_properties(yadaw-vst3-probe PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${CMAKE_BINARY_DIR}/bin"
   RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${CMAKE_BINARY_DIR}/bin"
 )
-set_target_properties(yadaw-vst3-probe PROPERTIES
-  RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-  RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}/bin"
-  RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/bin"
-  RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${CMAKE_BINARY_DIR}/bin"
-  RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${CMAKE_BINARY_DIR}/bin"
-)
-
 if(APPLE)
   set_source_files_properties(${YADAW_VST3_PLATFORM_SOURCE}
     PROPERTIES COMPILE_FLAGS "-fobjc-arc")
   find_library(COCOA_FRAMEWORK Cocoa REQUIRED)
   target_link_libraries(yadaw-vst3-probe PRIVATE ${COCOA_FRAMEWORK})
+  target_link_libraries(yadaw-vst3-bridge PRIVATE ${COCOA_FRAMEWORK})
 endif()
 
 smtg_target_setup_universal_binary(yadaw-vst3-probe)
+smtg_target_setup_universal_binary(yadaw-vst3-bridge)

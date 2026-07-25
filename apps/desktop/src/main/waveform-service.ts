@@ -78,21 +78,11 @@ export class WaveformService {
     const projectId = this.projects.current?.id
     if (!projectId) return
     void (async () => {
-      const missing = await this.projects.query({
-        sql: `SELECT asset.id
-              FROM assets AS asset
-              WHERE NOT EXISTS (
-                SELECT 1 FROM asset_waveform_levels AS waveform
-                WHERE waveform.asset_id = asset.id AND waveform.cache_version = 1
-              )
-              ORDER BY asset.created_at`,
-        params: [],
-        method: "all"
-      })
-      for (const row of missing.rows) {
+      const missing = await this.projects.assetsMissingWaveform(1)
+      for (const assetId of missing) {
         if (this.projects.current?.id !== projectId) return
         try {
-          await this.rebuild(String(row[0]))
+          await this.rebuild(assetId)
         } catch {
           // Derived caches never prevent a project from opening or playing.
         }

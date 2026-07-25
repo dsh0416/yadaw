@@ -8,7 +8,7 @@ describe("arrangement view store", () => {
   it("keeps time, track, and amplitude zoom independent and resettable", () => {
     const store = useArrangementViewStore()
     store.zoomTime(1)
-    expect(store.pixelsPerSecond).toBe(125)
+    expect(store.pixelsPerQuarter).toBe(62.5)
     expect(store.trackHeight).toBe(104)
     expect(store.amplitudeScale).toBe(1)
     store.zoomTrack(1)
@@ -17,10 +17,12 @@ describe("arrangement view store", () => {
     expect(store.amplitudeScale).toBeCloseTo(Math.SQRT2)
     store.reset()
     expect(store.$state).toMatchObject({
-      pixelsPerSecond: 100,
+      pixelsPerQuarter: 50,
       trackHeight: 104,
       trackScales: {},
-      amplitudeScale: 1
+      amplitudeScale: 1,
+      tempoLaneExpanded: true,
+      tempoLaneHeight: 112
     })
   })
 
@@ -59,13 +61,13 @@ describe("arrangement view store", () => {
     store.setTimeZoom(0)
     store.setTrackHeight(0)
     store.setAmplitudeScale(0)
-    expect(store.pixelsPerSecond).toBe(25)
+    expect(store.pixelsPerQuarter).toBe(12.5)
     expect(store.trackHeight).toBe(72)
     expect(store.amplitudeScale).toBe(0.5)
     store.setTimeZoom(Number.POSITIVE_INFINITY)
     store.setTrackHeight(Number.POSITIVE_INFINITY)
     store.setAmplitudeScale(Number.POSITIVE_INFINITY)
-    expect(store.pixelsPerSecond).toBe(1_600)
+    expect(store.pixelsPerQuarter).toBe(800)
     expect(store.trackHeight).toBe(320)
     expect(store.amplitudeScale).toBe(8)
     for (let index = 0; index < 100; index += 1) {
@@ -73,7 +75,7 @@ describe("arrangement view store", () => {
       store.zoomTrack(1)
       store.zoomAmplitude(1)
     }
-    expect(store.pixelsPerSecond).toBe(1_600)
+    expect(store.pixelsPerQuarter).toBe(800)
     expect(store.trackHeight).toBe(320)
     expect(store.amplitudeScale).toBe(8)
     for (let index = 0; index < 100; index += 1) {
@@ -81,8 +83,20 @@ describe("arrangement view store", () => {
       store.zoomTrack(-1)
       store.zoomAmplitude(-1)
     }
-    expect(store.pixelsPerSecond).toBe(25)
+    expect(store.pixelsPerQuarter).toBe(12.5)
     expect(store.trackHeight).toBe(72)
     expect(store.amplitudeScale).toBe(0.5)
+  })
+
+  it("keeps the global tempo lane expanded state and height together", () => {
+    const store = useArrangementViewStore()
+
+    store.toggleTempoLane()
+    expect(store.tempoLaneExpanded).toBe(false)
+    expect(store.tempoLaneHeight).toBe(30)
+
+    store.setTempoLaneExpanded(true)
+    expect(store.tempoLaneExpanded).toBe(true)
+    expect(store.tempoLaneHeight).toBe(112)
   })
 })

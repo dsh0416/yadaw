@@ -298,20 +298,14 @@ export class RecordingService {
       throw new Error("Open the recording's project before recovering it")
     }
     if (!recording.tracks?.length) {
-      const fallback = await this.projects.query({
-        sql: `SELECT id, name, input_channels FROM mixer_channels
-          WHERE kind = 'audio' ORDER BY sort_order, id LIMIT 1`,
-        params: [],
-        method: "all"
-      })
-      const row = fallback.rows[0]
-      if (!row) throw new Error("The recording project has no audio track")
+      const fallback = await this.projects.defaultRecordingTrack()
+      if (!fallback) throw new Error("The recording project has no audio track")
       recording.startFrame ??= 0
       recording.tracks = [{
         assetId: recording.id,
-        trackId: String(row[0]),
-        trackName: String(row[1]),
-        inputChannels: Array.isArray(row[2]) ? row[2].map(Number) : [1, 2],
+        trackId: fallback.id,
+        trackName: fallback.name,
+        inputChannels: fallback.inputChannels,
         finalPath: recording.finalPath,
         contentHash: recording.contentHash,
         sampleRate: null,
@@ -400,13 +394,7 @@ export class RecordingService {
       }
     } catch (error) {
       if (imported.length > 0) {
-        await this.projects.transaction({
-          queries: imported.map((id) => ({
-            sql: "DELETE FROM assets WHERE id = $1",
-            params: [id],
-            method: "execute" as const
-          }))
-        })
+        await this.projects.deleteAssets(imported)
       }
       throw error
     }
@@ -486,21 +474,17 @@ export class RecordingService {
     const tracks = recording.tracks?.length
       ? recording.tracks
       : [{ assetId: recording.id, contentHash: recording.contentHash }]
-    let committed = 0
+    const contentHashes = new Map(
+      (await this.projects.assetContentHashes(tracks.map((track) => track.assetId)))
+        .map((asset) => [asset.id, asset.contentHash])
+    )
     for (const track of tracks) {
-      const result = await this.projects.query({
-        sql: "SELECT content_hash FROM assets WHERE id = $1",
-        params: [track.assetId],
-        method: "all"
-      })
-      const row = result.rows[0]
-      if (!row) continue
-      if (track.contentHash && String(row[0]) !== track.contentHash) {
+      const contentHash = contentHashes.get(track.assetId)
+      if (!contentHash) return false
+      if (track.contentHash && contentHash !== track.contentHash) {
         throw new Error("A recording asset ID exists with different audio content")
       }
-      committed += 1
     }
-    if (committed !== tracks.length) return false
     recording.state = "committed"
     recording.assetExists = true
     return true
@@ -510,13 +494,7 @@ export class RecordingService {
     const recording = await this.readSidecar(id)
     if (recording.assetExists || recording.state === "committed" || await this.assetAlreadyCommitted(recording)) return
     const recoverableIds = recording.tracks?.map((track) => track.assetId) ?? [recording.id]
-    await this.projects.transaction({
-      queries: recoverableIds.map((assetId) => ({
-        sql: "DELETE FROM assets WHERE id = $1",
-        params: [assetId],
-        method: "execute" as const
-      }))
-    })
+    await this.projects.deleteAssets(recoverableIds)
     if (recording.state === "partial") {
       this.operations.upsert({
         id: `recording:${id}`,

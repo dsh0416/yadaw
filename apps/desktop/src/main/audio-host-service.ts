@@ -1,6 +1,11 @@
 import { spawn } from "node:child_process"
 import type { ChildProcessWithoutNullStreams } from "node:child_process"
 import { decode, encode } from "@msgpack/msgpack"
+import type {
+  PluginInstanceState,
+  PluginParameterChange,
+  PluginParameterInfo
+} from "@yadaw/contracts"
 
 const PROTOCOL_VERSION = 1
 const MAX_MESSAGE_BYTES = 64 * 1024 * 1024
@@ -10,7 +15,29 @@ const HEARTBEAT_TIMEOUT_MS = 2_000
 interface ControlResponse {
   version: number
   request_id: number
-  result: { type: "pong" | "accepted" | "error"; message?: string }
+  result: {
+    type:
+      | "pong"
+      | "accepted"
+      | "plugin-loaded"
+      | "plugin-parameters"
+      | "plugin-state"
+      | "error"
+    message?: string
+    latency_samples?: number
+    tail_samples?: number | null
+    parameters?: Array<{
+      id: number
+      title: string
+      units: string
+      step_count: number
+      default_normalized: number
+      normalized: number
+      flags: number
+    }>
+    component_state?: Uint8Array
+    controller_state?: Uint8Array
+  }
 }
 
 interface PendingRequest {
@@ -28,15 +55,20 @@ export class AudioHostService {
   private restartBudget = 1
   private stopping = false
   private lastGraphRevision: number | null = null
+  private readonly loadedPlugins = new Map<string, {
+    latencySamples: number
+    tailSamples: number | null
+  }>()
 
   constructor(
     private readonly executablePath: string,
+    private readonly bridgePath: string,
     private readonly onFailure: (message: string) => void
   ) {}
 
   start(): void {
     if (this.child || this.stopping) return
-    const child = spawn(this.executablePath, [], {
+    const child = spawn(this.executablePath, ["--vst3-bridge", this.bridgePath], {
       stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true
     })
@@ -67,6 +99,79 @@ export class AudioHostService {
   async loadGraph(revision: number): Promise<void> {
     this.lastGraphRevision = revision
     await this.request({ type: "load-graph", revision })
+  }
+
+  async loadPlugin(plugin: PluginInstanceState, sampleRate: number): Promise<{
+    latencySamples: number
+    tailSamples: number | null
+  }> {
+    const existing = this.loadedPlugins.get(plugin.id)
+    if (existing) return existing
+    const response = await this.request({
+      type: "load-plugin",
+      instance_id: plugin.id,
+      module_path: plugin.descriptor.modulePath,
+      class_id: plugin.classId,
+      sample_rate: sampleRate,
+      component_state: plugin.componentState,
+      controller_state: plugin.controllerState
+    })
+    if (response.result.type !== "plugin-loaded") {
+      throw new Error("audio host returned an invalid plugin load response")
+    }
+    const status = {
+      latencySamples: response.result.latency_samples ?? 0,
+      tailSamples: response.result.tail_samples ?? null
+    }
+    this.loadedPlugins.set(plugin.id, status)
+    return status
+  }
+
+  async pluginParameters(instanceId: string): Promise<PluginParameterInfo[]> {
+    const response = await this.request({
+      type: "plugin-parameters",
+      instance_id: instanceId
+    })
+    if (response.result.type !== "plugin-parameters") {
+      throw new Error("audio host returned an invalid parameter response")
+    }
+    return (response.result.parameters ?? []).map((parameter) => ({
+      id: parameter.id,
+      title: parameter.title,
+      shortTitle: parameter.title,
+      units: parameter.units,
+      stepCount: parameter.step_count,
+      defaultNormalized: parameter.default_normalized,
+      normalized: parameter.normalized,
+      flags: parameter.flags
+    }))
+  }
+
+  async setPluginParameter(change: PluginParameterChange): Promise<void> {
+    await this.request({
+      type: "set-plugin-parameter",
+      instance_id: change.instanceId,
+      parameter_id: change.parameterId,
+      normalized: change.normalized,
+      gesture: change.gesture
+    })
+  }
+
+  async savePluginState(instanceId: string): Promise<{
+    componentState: Uint8Array
+    controllerState: Uint8Array
+  }> {
+    const response = await this.request({
+      type: "save-plugin-state",
+      instance_id: instanceId
+    })
+    if (response.result.type !== "plugin-state") {
+      throw new Error("audio host returned an invalid plugin state response")
+    }
+    return {
+      componentState: response.result.component_state ?? new Uint8Array(),
+      controllerState: response.result.controller_state ?? new Uint8Array()
+    }
   }
 
   private request(command: Record<string, unknown>): Promise<ControlResponse> {
@@ -138,6 +243,7 @@ export class AudioHostService {
     const child = this.child
     if (!child) return
     this.child = null
+    this.loadedPlugins.clear()
     child.removeAllListeners()
     if (!child.killed) child.kill()
     if (this.heartbeat) clearInterval(this.heartbeat)

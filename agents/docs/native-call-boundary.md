@@ -40,7 +40,7 @@ but product behavior should normally be exercised through the UI.
 | Audio hosts and devices | `audioPreferences` | latest-wins generation | clear stale device lists |
 | Audio engine lifecycle and telemetry | `audioRuntime` | exclusive lifecycle; latest telemetry | main state is authoritative |
 | Desktop lifecycle subscription | `lifecycle` | monotonic revision | ignore older events/snapshots |
-| Project lifecycle and database proxy | `project` | exclusive lifecycle | rollback to prior stable state |
+| Project lifecycle and named persistence operations | `project` | exclusive lifecycle | rollback to prior stable state |
 | Mixer graph and history | `mixer` | FIFO committed mutations; coalesced previews | rollback/reload before next mutation |
 | Transport | `transport` | FIFO state commands; coalesced seek; latest polling | ignore stale snapshots |
 | Recording and recovery | `recording` | exclusive lifecycle | return to idle and retain recoverable media |

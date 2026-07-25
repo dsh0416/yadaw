@@ -1,10 +1,26 @@
+import { cp, rm } from "node:fs/promises"
 import { builtinModules } from "node:module"
 import { resolve } from "node:path"
 import { defineConfig } from "vite"
+import type { Plugin } from "vite"
 
 const nodeBuiltins = [...builtinModules, ...builtinModules.map((name) => `node:${name}`)]
+const migrationsDirectory = resolve(import.meta.dirname, "../../packages/project-db/drizzle")
+const bundledMigrationsDirectory = resolve(import.meta.dirname, "out/drizzle")
+
+const projectMigrations: Plugin = {
+  name: "yadaw-project-migrations",
+  buildStart() {
+    this.addWatchFile(migrationsDirectory)
+  },
+  async writeBundle() {
+    await rm(bundledMigrationsDirectory, { force: true, recursive: true })
+    await cp(migrationsDirectory, bundledMigrationsDirectory, { recursive: true })
+  }
+}
 
 export default defineConfig({
+  plugins: [projectMigrations],
   build: {
     emptyOutDir: true,
     lib: {

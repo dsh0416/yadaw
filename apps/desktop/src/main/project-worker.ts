@@ -34,7 +34,6 @@ async function handle(request: WorkerRequest): Promise<unknown> {
       database = await ProjectDatabase.create(request.dataDir, {
         name: request.name,
         sampleRate: request.sampleRate,
-        tempo: request.tempo,
         numerator: request.numerator,
         denominator: request.denominator,
         waveformDisplayMode: request.waveformDisplayMode
@@ -44,10 +43,38 @@ async function handle(request: WorkerRequest): Promise<unknown> {
       await closeCurrentDatabase()
       database = await (await loadProjectDatabase()).ProjectDatabase.open(request.dataDir, request.archivePath)
       return null
-    case "query":
-      return requireDatabase().query(request.query)
-    case "transaction":
-      return requireDatabase().transaction(request.request)
+    case "get-configuration":
+      return requireDatabase().getConfiguration()
+    case "update-configuration":
+      return requireDatabase().updateConfiguration(request.configuration)
+    case "list-assets":
+      return requireDatabase().listAssets()
+    case "mixer-snapshot":
+      return requireDatabase().mixerSnapshot()
+    case "apply-project-command":
+      return requireDatabase().applyCommand(request.command, request.fallbackOutputId)
+    case "import-midi":
+      return requireDatabase().importMidi(
+        request.source,
+        request.command,
+        request.fallbackOutputId
+      )
+    case "rollback-midi":
+      return requireDatabase().rollbackMidi(
+        request.sourceId,
+        request.command,
+        request.fallbackOutputId
+      )
+    case "save-plugin-states":
+      return requireDatabase().savePluginStates(request.states)
+    case "asset-content-hashes":
+      return requireDatabase().assetContentHashes(request.ids)
+    case "default-recording-track":
+      return requireDatabase().defaultRecordingTrack()
+    case "assets-missing-waveform":
+      return requireDatabase().assetsMissingWaveform(request.cacheVersion)
+    case "delete-assets":
+      return requireDatabase().deleteAssets(request.ids)
     case "dump":
       await requireDatabase().dumpTo(request.outputPath)
       return null

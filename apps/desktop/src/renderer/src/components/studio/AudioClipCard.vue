@@ -1,14 +1,17 @@
 <script setup lang="ts">
 import { computed, watch } from "vue"
-import type { WaveformDisplayMode } from "@yadaw/contracts"
+import type { TempoMapSnapshot, WaveformDisplayMode } from "@yadaw/contracts"
 import type { TimelineClip } from "../../stores/transport"
 import { useClipWaveform } from "../../composables/useClipWaveform"
+import { secondsToTimelineX } from "../../utils/timelineCoordinates"
+import { secondsToTick, tempoAtTick } from "../../utils/tempoMap"
 import ChannelFormatIcon from "./ChannelFormatIcon.vue"
 import WaveformCanvas from "./WaveformCanvas.vue"
 
 const props = defineProps<{
   clip: TimelineClip
-  pixelsPerSecond: number
+  tempoMap: TempoMapSnapshot
+  pixelsPerQuarter: number
   viewportStartSeconds: number
   viewportEndSeconds: number
   amplitudeScale: number
@@ -22,13 +25,19 @@ const props = defineProps<{
 const emit = defineEmits<{
   select: [id: string]
   waveformFrameCount: [frameCount: number, sampleRate: number]
-  dragStart: [clipId: string, offsetSeconds: number]
+  dragStart: [clipId: string, offsetPixels: number]
   dragEnd: []
 }>()
 
+const clipStartX = computed(() =>
+  secondsToTimelineX(props.tempoMap, props.clip.startSeconds, props.pixelsPerQuarter)
+)
+const clipEndX = computed(() =>
+  secondsToTimelineX(props.tempoMap, props.clip.endSeconds, props.pixelsPerQuarter)
+)
 const clipStyle = computed(() => ({
-  left: `${props.clip.startSeconds * props.pixelsPerSecond}px`,
-  width: `max(${props.clip.durationSeconds * props.pixelsPerSecond}px, 12px)`,
+  left: `${clipStartX.value}px`,
+  width: `${Math.max(12, clipEndX.value - clipStartX.value)}px`,
   "--clip-color": props.trackColor
 }))
 const visibleStartSeconds = computed(() =>
@@ -38,10 +47,39 @@ const visibleEndSeconds = computed(() =>
   Math.min(props.clip.endSeconds, props.viewportEndSeconds)
 )
 const visibleWidth = computed(() =>
-  Math.max(1, (visibleEndSeconds.value - visibleStartSeconds.value) * props.pixelsPerSecond)
+  Math.max(
+    1,
+    secondsToTimelineX(props.tempoMap, visibleEndSeconds.value, props.pixelsPerQuarter) -
+      secondsToTimelineX(props.tempoMap, visibleStartSeconds.value, props.pixelsPerQuarter)
+  )
 )
+const waveformTimelineStartX = computed(() =>
+  secondsToTimelineX(
+    props.tempoMap,
+    visibleStartSeconds.value,
+    props.pixelsPerQuarter
+  )
+)
+const waveformSourceResolution = computed(() => {
+  const startTick = secondsToTick(props.tempoMap, visibleStartSeconds.value)
+  const endTick = secondsToTick(props.tempoMap, visibleEndSeconds.value)
+  const maximumTempo = Math.max(
+    tempoAtTick(props.tempoMap, startTick),
+    ...props.tempoMap.tempoEvents
+      .filter((event) => event.tick > startTick && event.tick < endTick)
+      .map((event) => event.beatsPerMinute)
+  )
+  return Math.max(
+    visibleWidth.value,
+    Math.max(0, visibleEndSeconds.value - visibleStartSeconds.value) *
+      maximumTempo / 60 * props.pixelsPerQuarter
+  )
+})
 const waveformStyle = computed(() => ({
-  left: `${(visibleStartSeconds.value - props.clip.startSeconds) * props.pixelsPerSecond}px`,
+  left: `${
+    secondsToTimelineX(props.tempoMap, visibleStartSeconds.value, props.pixelsPerQuarter) -
+    clipStartX.value
+  }px`,
   width: `${visibleWidth.value}px`
 }))
 const startFrame = computed(() =>
@@ -60,7 +98,7 @@ const { data: waveformData, loading: waveformLoading } = useClipWaveform({
   recording: () => Boolean(props.recording),
   startFrame,
   endFrame,
-  pixelWidth: visibleWidth
+  pixelWidth: waveformSourceResolution
 })
 
 watch(() => waveformData.value?.frameCount, (frameCount) => {
@@ -81,12 +119,12 @@ function startDrag(event: DragEvent): void {
   if (dragImage && typeof event.dataTransfer.setDragImage === "function") {
     event.dataTransfer.setDragImage(dragImage, 0, 0)
   }
-  const offsetSeconds = Math.max(0, (event.clientX - bounds.left) / props.pixelsPerSecond)
+  const offsetPixels = Math.max(0, event.clientX - bounds.left)
   event.dataTransfer.setData("application/x-yadaw-clip", JSON.stringify({
     id: props.clip.id,
-    offsetSeconds
+    offsetPixels
   }))
-  emit("dragStart", props.clip.id, offsetSeconds)
+  emit("dragStart", props.clip.id, offsetPixels)
 }
 </script>
 
@@ -115,6 +153,10 @@ function startDrag(event: DragEvent): void {
         :amplitude-scale="amplitudeScale"
         :loading="waveformLoading"
         :recording="recording"
+        :tempo-map="tempoMap"
+        :pixels-per-quarter="pixelsPerQuarter"
+        :timeline-start-x="waveformTimelineStartX"
+        :clip-start-seconds="clip.startSeconds"
       />
     </span>
   </button>

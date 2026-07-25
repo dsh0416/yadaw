@@ -1,12 +1,17 @@
-import { mkdtemp, readFile, writeFile } from "node:fs/promises"
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { PGlite } from "@electric-sql/pglite"
+import type { MixerChannelState, ProjectCommand } from "@yadaw/contracts"
 import { afterEach, describe, expect, it } from "vitest"
 import { ProjectDatabase } from "../node"
-import { createProjectDbProxy } from "../proxy"
-import { assets, project } from "../schema"
 
-const databases: ProjectDatabase[] = []
+interface TestDatabase {
+  database: ProjectDatabase
+  directory: string
+}
+
+const databases: TestDatabase[] = []
 
 function encodePeaks(values: number[]): Uint8Array {
   const bytes = new Uint8Array(values.length * 4)
@@ -15,338 +20,261 @@ function encodePeaks(values: number[]): Uint8Array {
   return bytes
 }
 
-async function createDatabase(name = "Test project") {
+async function createDatabase(name = "Test project"): Promise<TestDatabase> {
   const directory = await mkdtemp(join(tmpdir(), "yadaw-project-db-"))
   const database = await ProjectDatabase.create(join(directory, "pgdata"), {
     name,
     sampleRate: 48_000,
-    tempo: 120,
     numerator: 4,
     denominator: 4,
     waveformDisplayMode: "separate"
   })
-  databases.push(database)
-  return { database, directory }
+  const result = { database, directory }
+  databases.push(result)
+  return result
 }
 
 afterEach(async () => {
-  await Promise.all(databases.splice(0).map((database) => database.close()))
+  for (const resource of databases.splice(0)) {
+    await resource.database.close()
+    await rm(resource.directory, { force: true, recursive: true })
+  }
 })
 
 describe("ProjectDatabase", () => {
-  it("creates a migrated project and returns array rows for pg-proxy", async () => {
+  it("runs generated migrations, seeds the graph, and updates normalized configuration", async () => {
     const { database } = await createDatabase()
-    const result = await database.query({
-      sql: "SELECT name, sample_rate, tempo FROM project",
-      params: [],
-      method: "all"
-    })
 
-    expect(result.rows).toEqual([["Test project", 48_000, 120]])
-
-    const proxy = createProjectDbProxy({ query: (request) => database.query(request) })
-    const typed = await proxy.select().from(project)
-    expect(typed[0]).toMatchObject({
+    await database.migrate()
+    expect(await database.getConfiguration()).toEqual({
       name: "Test project",
       sampleRate: 48_000,
-      tempo: 120,
+      timeSignatureNumerator: 4,
+      timeSignatureDenominator: 4,
       waveformDisplayMode: "separate"
     })
-    const mixer = await database.query({
-      sql: `SELECT id, kind, color, input_format, output_channel_id, hardware_output_channels
-        FROM mixer_channels ORDER BY kind`,
-      params: [],
-      method: "all"
+    expect(await database.defaultRecordingTrack()).toEqual({
+      id: "audio-1",
+      name: "Audio 1",
+      inputChannels: [1, 2]
     })
-    expect(mixer.rows).toEqual([
-      ["audio-1", "audio", "#4F8CFF", "stereo", "output-1-2", []],
-      ["master", "master", "#8C83FF", null, null, []],
-      ["output-1-2", "output", "#EF7C95", null, null, [1, 2]]
-    ])
+
+    const seeded = await database.mixerSnapshot()
+    expect(seeded.channels.map(({ id }) => id)).toEqual(["audio-1", "master", "output-1-2"])
+    expect(seeded.tempoMap).toEqual({
+      ticksPerQuarter: 960,
+      tempoEvents: [{ tick: 0, beatsPerMinute: 120 }],
+      timeSignatureEvents: [{ tick: 0, numerator: 4, denominator: 4 }]
+    })
+
+    await database.updateConfiguration({
+      name: "Renamed",
+      sampleRate: 44_100,
+      timeSignatureNumerator: 7,
+      timeSignatureDenominator: 8,
+      waveformDisplayMode: "aggregate"
+    })
+    await database.applyCommand({
+      type: "update-channel",
+      channelId: "audio-1",
+      patch: {}
+    }, "output-1-2")
+
+    expect(await database.getConfiguration()).toEqual({
+      name: "Renamed",
+      sampleRate: 44_100,
+      timeSignatureNumerator: 7,
+      timeSignatureDenominator: 8,
+      waveformDisplayMode: "aggregate"
+    })
+    expect((await database.mixerSnapshot()).tempoMap.timeSignatureEvents[0]).toEqual({
+      tick: 0,
+      numerator: 7,
+      denominator: 8
+    })
   })
 
-  it("rolls an entire query batch back when one statement fails", async () => {
+  it("enforces relations and rolls back failed command batches", async () => {
     const { database } = await createDatabase()
-    await expect(database.transaction({ queries: [
-      { sql: "UPDATE project SET tempo = 90", params: [], method: "execute" },
-      { sql: "INSERT INTO missing_table VALUES (1)", params: [], method: "execute" }
-    ] })).rejects.toThrow()
+    const bus: MixerChannelState = {
+      id: "bus-1",
+      kind: "bus",
+      name: "Bus 1",
+      color: "#112233",
+      sortOrder: 0,
+      inputFormat: null,
+      gainDb: 0,
+      pan: 0,
+      muted: false,
+      soloed: false,
+      outputChannelId: "output-1-2",
+      recordArmed: false,
+      inputChannels: [],
+      hardwareOutputChannels: []
+    }
 
-    const result = await database.query({ sql: "SELECT tempo FROM project", params: [], method: "all" })
-    expect(result.rows).toEqual([[120]])
+    await database.applyCommand({ type: "create-channel", channel: bus }, "output-1-2")
+    await database.applyCommand({
+      type: "update-channel",
+      channelId: "audio-1",
+      patch: { outputChannelId: bus.id }
+    }, "output-1-2")
+    await database.applyCommand({ type: "delete-channel", channelId: bus.id }, "output-1-2")
+    expect((await database.mixerSnapshot()).channels.find(({ id }) => id === "audio-1"))
+      .toMatchObject({ outputChannelId: "output-1-2" })
+
+    const invalidBatch: ProjectCommand = {
+      type: "batch",
+      commands: [
+        { type: "create-channel", channel: { ...bus, id: "rolled-back-bus" } },
+        {
+          type: "create-send",
+          send: {
+            id: "invalid-send",
+            sourceChannelId: "missing-channel",
+            targetChannelId: "output-1-2",
+            sortOrder: 0,
+            enabled: true,
+            tap: "post",
+            levelDb: 0,
+            pan: 0
+          }
+        }
+      ]
+    }
+    await expect(database.applyCommand(invalidBatch, "output-1-2")).rejects.toThrow()
+    expect((await database.mixerSnapshot()).channels).not.toContainEqual(
+      expect.objectContaining({ id: "rolled-back-bus" })
+    )
+
+    await expect(database.applyCommand({
+      type: "replace-tempo-map",
+      tempoMap: {
+        ticksPerQuarter: 960,
+        tempoEvents: [{ tick: 240, beatsPerMinute: 90 }],
+        timeSignatureEvents: [{ tick: 0, numerator: 3, denominator: 4 }]
+      }
+    }, "output-1-2")).rejects.toThrow("tick 0")
+    expect((await database.mixerSnapshot()).tempoMap.tempoEvents)
+      .toEqual([{ tick: 0, beatsPerMinute: 120 }])
   })
 
-  it("supports transactional large objects, sparse seek, rollback, and unlink trigger", async () => {
-    const { database } = await createDatabase()
-    const [created, opened, written, sought, sparseWritten, closed] = await database.transaction({ queries: [
-      { sql: "SELECT lo_create(0)", params: [], method: "all" },
-      { sql: "SELECT lo_open((SELECT oid FROM pg_largeobject_metadata LIMIT 1), 131072)", params: [], method: "all" },
-      { sql: "SELECT lowrite(0, $1)", params: [new Uint8Array([1, 2, 3, 4])], method: "all" },
-      { sql: "SELECT lo_lseek64(0, $1, 0)", params: [1_073_741_947], method: "all" },
-      { sql: "SELECT lowrite(0, $1)", params: [new Uint8Array([9])], method: "all" },
-      { sql: "SELECT lo_close(0)", params: [], method: "all" }
-    ] })
-    expect(created?.rows[0]?.[0]).toEqual(expect.any(Number))
-    expect(opened?.rows).toEqual([[0]])
-    expect(written?.rows).toEqual([[4]])
-    expect(sought?.rows).toEqual([[1_073_741_947]])
-    expect(sparseWritten?.rows).toEqual([[1]])
-    expect(closed?.rows).toEqual([[0]])
-
-    const oid = Number(created?.rows[0]?.[0])
-    await database.query({
-      sql: `INSERT INTO assets VALUES ($1, 'test.wav', 'audio/x-bwf', 'hash', 5, 48000, 2, 'float32', 1, 0, $2, now())`,
-      params: ["asset", oid],
-      method: "execute"
-    })
-    await database.query({ sql: "DELETE FROM assets WHERE id = 'asset'", params: [], method: "execute" })
-    const removed = await database.query({
-      sql: "SELECT count(*)::int FROM pg_largeobject_metadata WHERE oid = $1",
-      params: [oid],
-      method: "all"
-    })
-    expect(removed.rows).toEqual([[0]])
-
-    await expect(database.transaction({ queries: [
-      { sql: "SELECT lo_create(0)", params: [], method: "all" },
-      { sql: "SELECT definitely_missing_function()", params: [], method: "all" }
-    ] })).rejects.toThrow()
-    const count = await database.query({
-      sql: "SELECT count(*)::int FROM pg_largeobject_metadata",
-      params: [],
-      method: "all"
-    })
-    expect(count.rows).toEqual([[0]])
-  })
-
-  it("round-trips an uncompressed data-dir archive", async () => {
-    const { database, directory } = await createDatabase("Archived")
-    const archive = join(directory, "project.yadaw")
-    await database.dumpTo(archive)
-    expect((await readFile(archive)).byteLength).toBeGreaterThan(0)
-    await database.close()
-    databases.splice(databases.indexOf(database), 1)
-
-    const restored = await ProjectDatabase.open(join(directory, "restored"), archive)
-    databases.push(restored)
-    const result = await restored.query({ sql: "SELECT name FROM project", params: [], method: "all" })
-    expect(result.rows).toEqual([["Archived"]])
-  })
-
-  it("streams a final BWF into an LO and deletes it with the asset", async () => {
+  it("persists assets, waveform caches, and large objects through an archive", async () => {
     const { database, directory } = await createDatabase()
-    const audio = join(directory, "final.wav")
-    await writeFile(audio, Buffer.alloc(2_500_000, 0x5a))
-    const progress: number[] = []
-    const oid = await database.importLargeObject(audio, {
-      id: "recording",
-      name: "Recording.wav",
+    const audioPath = join(directory, "audio.bwf")
+    const archivePath = join(directory, "project.dump")
+    const audio = new Uint8Array([1, 3, 5, 7, 9, 11])
+    await writeFile(audioPath, audio)
+
+    await database.importLargeObject(audioPath, {
+      id: "asset-1",
+      name: "Audio",
       mimeType: "audio/x-bwf",
-      contentHash: "sha256",
+      contentHash: "hash-1",
       sampleRate: 48_000,
       channels: 2,
       bitDepth: "float32",
-      frameCount: 312_500n,
-      bwfTimeReference: 0n
-    }, (completed) => progress.push(completed))
-    expect(progress.at(-1)).toBe(2_500_000)
-    const asset = await database.query({
-      sql: "SELECT large_object_oid, byte_length::bigint FROM assets WHERE id = 'recording'",
-      params: [],
-      method: "all"
-    })
-    expect(asset.rows).toEqual([[oid, 2_500_000]])
-    const restoredAudio = await database.readLargeObject("recording")
-    expect(restoredAudio).toHaveLength(2_500_000)
-    expect(restoredAudio.slice(0, 4)).toEqual(new Uint8Array([0x5a, 0x5a, 0x5a, 0x5a]))
-    await expect(database.readLargeObject("missing")).rejects.toThrow("was not found")
-    const proxy = createProjectDbProxy({ query: (request) => database.query(request) })
-    const typed = await proxy.select().from(assets)
-    expect(typed[0]).toMatchObject({
-      id: "recording",
-      largeObjectOid: oid,
-      byteLength: 2_500_000n,
-      createdAt: expect.any(Date)
-    })
-  })
-
-  it("stores, slices, selects, archives, and cascade-deletes arbitrary-channel waveform levels", async () => {
-    const { database, directory } = await createDatabase()
-    const audio = join(directory, "surround.wav")
-    const archive = join(directory, "surround.yadaw")
-    await writeFile(audio, Buffer.alloc(256, 0x22))
-    const baseValues = [
-      -0.125, 0.125, -0.25, 0.25, -0.375, 0.375,
-      -0.5, 0.5, -0.625, 0.625, -0.75, 0.75,
-      -0.875, 0.875, -1, 1, -0.25, 0.25,
-      -0.75, 0.75, -0.5, 0.5, -0.125, 0.125
-    ]
-    await database.importLargeObject(audio, {
-      id: "surround",
-      name: "Surround.wav",
-      mimeType: "audio/x-bwf",
-      contentHash: "surround-hash",
-      sampleRate: 96_000,
-      channels: 3,
-      bitDepth: "pcm24",
-      frameCount: 256n,
+      frameCount: 2n,
       bwfTimeReference: 0n,
-      waveformLevels: [
-        { framesPerBucket: 64, bucketCount: 4, peaks: encodePeaks(baseValues) },
-        {
-          framesPerBucket: 256,
-          bucketCount: 1,
-          peaks: encodePeaks([-0.875, 0.875, -1, 1, -0.75, 0.75])
-        }
-      ]
-    })
-
-    const detail = await database.readWaveform("surround", 64, 192, 100)
-    expect(detail).toMatchObject({
-      channels: 3,
-      startFrame: 64,
-      endFrame: 192,
-      framesPerBucket: 64,
-      bucketCount: 2
-    })
-    expect(detail?.peaks).toEqual(encodePeaks(baseValues.slice(6, 18)))
-    const overview = await database.readWaveform("surround", 0, 256, 1)
-    expect(overview).toMatchObject({ framesPerBucket: 256, bucketCount: 1 })
-
-    await database.dumpTo(archive)
-    await database.close()
-    databases.splice(databases.indexOf(database), 1)
-    const restored = await ProjectDatabase.open(join(directory, "restored-waveform"), archive)
-    databases.push(restored)
-    expect(await restored.readWaveform("surround", 0, 256, 1)).toMatchObject({
-      channels: 3,
-      frameCount: 256,
-      framesPerBucket: 256,
-      bucketCount: 1
-    })
-    await restored.query({
-      sql: "DELETE FROM assets WHERE id = 'surround'",
-      params: [],
-      method: "execute"
-    })
-    const cached = await restored.query({
-      sql: "SELECT count(*)::int FROM asset_waveform_levels WHERE asset_id = 'surround'",
-      params: [],
-      method: "all"
-    })
-    expect(cached.rows).toEqual([[0]])
-  })
-
-  it("treats an outdated cache version as missing and rolls cache/import failures back together", async () => {
-    const { database, directory } = await createDatabase()
-    const audio = join(directory, "rollback.wav")
-    await writeFile(audio, Buffer.alloc(64, 0x11))
-    const base = {
-      name: "Rollback.wav",
-      mimeType: "audio/x-bwf" as const,
-      contentHash: "rollback-hash",
-      sampleRate: 48_000,
-      channels: 2,
-      bitDepth: "float32" as const,
-      frameCount: 64n,
-      bwfTimeReference: 0n
-    }
-    await expect(database.importLargeObject(audio, {
-      id: "broken",
-      ...base,
-      waveformLevels: [{ framesPerBucket: 64, bucketCount: 1, peaks: new Uint8Array(1) }]
-    })).rejects.toThrow()
-    expect((await database.query({
-      sql: "SELECT count(*)::int FROM assets WHERE id = 'broken'",
-      params: [],
-      method: "all"
-    })).rows).toEqual([[0]])
-    expect((await database.query({
-      sql: "SELECT count(*)::int FROM pg_largeobject_metadata",
-      params: [],
-      method: "all"
-    })).rows).toEqual([[0]])
-
-    await database.importLargeObject(audio, {
-      id: "versioned",
-      ...base,
-      contentHash: "versioned-hash",
       waveformLevels: [{
-        framesPerBucket: 64,
+        framesPerBucket: 2,
         bucketCount: 1,
-        peaks: encodePeaks([-0.5, 0.5, -0.25, 0.25])
+        peaks: encodePeaks([-1, 1, -0.5, 0.5])
       }]
     })
-    await database.query({
-      sql: "UPDATE asset_waveform_levels SET cache_version = 99 WHERE asset_id = 'versioned'",
-      params: [],
-      method: "execute"
-    })
-    expect(await database.readWaveform("versioned", 0, 64, 10)).toBeNull()
-  })
 
-  it("rolls back a cancelled or duplicate LO import without leaving an orphan", async () => {
-    const { database, directory } = await createDatabase()
-    const audio = join(directory, "cancelled.wav")
-    await writeFile(audio, Buffer.alloc(1_500_000, 0x31))
-    const base = {
-      name: "Recording.wav",
-      mimeType: "audio/x-bwf" as const,
-      contentHash: "same-hash",
+    expect(await database.readLargeObject("asset-1")).toEqual(audio)
+    expect(await database.listAssets()).toEqual([{
+      id: "asset-1",
+      name: "Audio",
       sampleRate: 48_000,
       channels: 2,
-      bitDepth: "float32" as const,
-      frameCount: 187_500n,
-      bwfTimeReference: 0n
+      bitDepth: "float32",
+      frameCount: 2n
+    }])
+    expect(await database.assetsMissingWaveform()).toEqual([])
+    expect(await database.readWaveform("asset-1", 0, 2, 100)).toMatchObject({
+      sampleRate: 48_000,
+      channels: 2,
+      frameCount: 2,
+      framesPerBucket: 2,
+      bucketCount: 1
+    })
+
+    await database.dumpTo(archivePath)
+    expect([...(await readFile(archivePath)).subarray(0, 2)]).not.toEqual([0x1f, 0x8b])
+    const restoredDirectory = await mkdtemp(join(tmpdir(), "yadaw-project-db-restored-"))
+    const restored = await ProjectDatabase.open(join(restoredDirectory, "pgdata"), archivePath)
+    databases.push({ database: restored, directory: restoredDirectory })
+
+    expect(await restored.readLargeObject("asset-1")).toEqual(audio)
+    await restored.storeWaveform("asset-1", {
+      sampleRate: 48_000,
+      channels: 2,
+      frameCount: 2n,
+      levels: []
+    })
+    expect(await restored.assetsMissingWaveform()).toEqual(["asset-1"])
+    await restored.deleteAssets(["asset-1"])
+    expect(await restored.listAssets()).toEqual([])
+    await expect(restored.readLargeObject("asset-1")).rejects.toThrow("was not found")
+  })
+
+  it("reclaims orphaned large objects before writing the archive", async () => {
+    const resource = await createDatabase()
+    await resource.database.close()
+    databases.splice(databases.indexOf(resource), 1)
+
+    const raw = new PGlite(join(resource.directory, "pgdata"))
+    try {
+      await raw.query("select lo_from_bytea(0, $1)", [
+        new Uint8Array([1, 2, 3, 4])
+      ])
+      const before = await raw.query<{ count: number }>(
+        "select count(*)::int as count from pg_catalog.pg_largeobject_metadata"
+      )
+      expect(before.rows[0]?.count).toBe(1)
+    } finally {
+      await raw.close()
     }
-    await expect(database.importLargeObject(audio, { id: "cancelled", ...base }, undefined, () => true))
-      .rejects.toThrow("cancelled")
-    let count = await database.query({
-      sql: "SELECT count(*)::int FROM pg_largeobject_metadata",
-      params: [], method: "all"
-    })
-    expect(count.rows).toEqual([[0]])
 
-    await database.importLargeObject(audio, { id: "first", ...base })
-    const existingOid = await database.importLargeObject(audio, { id: "first", ...base })
-    const original = await database.query({
-      sql: "SELECT large_object_oid FROM assets WHERE id = 'first'",
-      params: [], method: "all"
+    const database = await ProjectDatabase.open(join(resource.directory, "pgdata"))
+    databases.push({ database, directory: resource.directory })
+    const archivePath = join(resource.directory, "maintained-project.dump")
+    await database.dumpTo(archivePath)
+
+    const verificationDirectory = await mkdtemp(join(tmpdir(), "yadaw-maintained-archive-"))
+    const verifier = await PGlite.create({
+      dataDir: join(verificationDirectory, "pgdata"),
+      loadDataDir: new Blob([await readFile(archivePath)])
     })
-    expect(existingOid).toBe(original.rows[0]?.[0])
-    await expect(database.importLargeObject(audio, { id: "duplicate", ...base })).rejects.toThrow()
-    count = await database.query({
-      sql: "SELECT count(*)::int FROM pg_largeobject_metadata",
-      params: [], method: "all"
-    })
-    expect(count.rows).toEqual([[1]])
+    try {
+      const after = await verifier.query<{ count: number }>(
+        "select count(*)::int as count from pg_catalog.pg_largeobject_metadata"
+      )
+      expect(after.rows[0]?.count).toBe(0)
+    } finally {
+      await verifier.close()
+      await rm(verificationDirectory, { force: true, recursive: true })
+    }
   })
 
-  it("rejects a known migration id with a conflicting hash", async () => {
+  it("rolls back a cancelled large-object import", async () => {
     const { database, directory } = await createDatabase()
-    await database.query({
-      sql: "UPDATE __drizzle_migrations SET hash = 'tampered' WHERE id = '0000_initial'",
-      params: [],
-      method: "execute"
-    })
-    await database.close()
-    databases.splice(databases.indexOf(database), 1)
-    await expect(ProjectDatabase.open(join(directory, "pgdata"))).rejects.toMatchObject({
-      code: "migration-conflict"
-    })
-  })
+    const audioPath = join(directory, "cancelled.bwf")
+    await writeFile(audioPath, new Uint8Array([1, 2, 3, 4]))
 
-  it("rejects a project with an unknown newer migration", async () => {
-    const { database, directory } = await createDatabase()
-    await database.query({
-      sql: "INSERT INTO __drizzle_migrations (id, hash) VALUES ('9999_future', 'future')",
-      params: [],
-      method: "execute"
-    })
-    await database.close()
-    databases.splice(databases.indexOf(database), 1)
-    await expect(ProjectDatabase.open(join(directory, "pgdata"))).rejects.toMatchObject({
-      code: "newer-project"
-    })
+    await expect(database.importLargeObject(audioPath, {
+      id: "cancelled",
+      name: "Cancelled",
+      mimeType: "audio/x-bwf",
+      contentHash: "cancelled-hash",
+      sampleRate: 48_000,
+      channels: 1,
+      bitDepth: "pcm16",
+      frameCount: 2n,
+      bwfTimeReference: 0n
+    }, undefined, () => true)).rejects.toThrow("cancelled")
+    expect(await database.listAssets()).toEqual([])
   })
 })

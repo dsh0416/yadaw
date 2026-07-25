@@ -126,3 +126,69 @@ export function buildWaveformGeometry(
   }
   return { lanes, lines }
 }
+
+export function buildWarpedWaveformGeometry(
+  window: WaveformPeakWindow,
+  displayMode: WaveformDisplayMode,
+  width: number,
+  height: number,
+  amplitudeScale: number,
+  frameAtX: (x: number) => number
+): WaveformGeometry {
+  const channels = Math.max(1, window.channels)
+  const lanes = displayMode === "aggregate" ? 1 : channels
+  if (window.bucketCount === 0 || width <= 0 || height <= 0) return { lanes, lines: [] }
+  const columns = Math.max(1, Math.floor(width))
+  const decoded = decodeWaveformPeaks(window.peaks)
+  const channelValues = displayMode === "aggregate"
+    ? mergeWaveformChannels(decoded, window.bucketCount, channels)
+    : decoded
+  const geometryChannels = displayMode === "aggregate" ? 1 : channels
+  const stride = geometryChannels * 2
+  const framesPerBucket = Math.max(1, window.framesPerBucket)
+  const laneHeight = height / lanes
+  const lines: WaveformLine[] = []
+
+  for (let column = 0; column < columns; column += 1) {
+    const xStart = column / columns * width
+    const xEnd = (column + 1) / columns * width
+    const mappedStart = frameAtX(xStart)
+    const mappedEnd = frameAtX(xEnd)
+    const frameStart = Math.max(window.startFrame, Math.min(mappedStart, mappedEnd))
+    const frameEnd = Math.min(window.endFrame, Math.max(mappedStart, mappedEnd))
+    if (frameEnd <= window.startFrame || frameStart >= window.endFrame) continue
+    const firstBucket = Math.max(
+      0,
+      Math.min(
+        window.bucketCount - 1,
+        Math.floor((frameStart - window.startFrame) / framesPerBucket)
+      )
+    )
+    const endBucket = Math.max(
+      firstBucket + 1,
+      Math.min(
+        window.bucketCount,
+        Math.ceil((frameEnd - window.startFrame) / framesPerBucket)
+      )
+    )
+
+    for (let lane = 0; lane < geometryChannels; lane += 1) {
+      let minimum = 1
+      let maximum = -1
+      for (let bucket = firstBucket; bucket < endBucket; bucket += 1) {
+        const offset = bucket * stride + lane * 2
+        minimum = Math.min(minimum, finitePeak(channelValues[offset] ?? 0))
+        maximum = Math.max(maximum, finitePeak(channelValues[offset + 1] ?? 0))
+      }
+      const center = lane * laneHeight + laneHeight / 2
+      const radius = laneHeight / 2
+      lines.push({
+        x: (column + 0.5) / columns * width,
+        minimumY: center - Math.max(-1, Math.min(1, minimum * amplitudeScale)) * radius,
+        maximumY: center - Math.max(-1, Math.min(1, maximum * amplitudeScale)) * radius,
+        lane
+      })
+    }
+  }
+  return { lanes, lines }
+}

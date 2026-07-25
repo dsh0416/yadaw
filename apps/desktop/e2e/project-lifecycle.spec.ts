@@ -145,26 +145,19 @@ test("records into a Large Object and reopens the PGlite project archive", async
     expect(pendingAfterCommit[0]?.assetExists).toBe(true)
     await page.evaluate((id) => window.yadaw.recoverRecording(id), pendingAfterCommit[0]!.id)
     await expect(page.getByRole("dialog")).toBeHidden()
-    const importedAsset = await page.evaluate(() => window.yadaw.projectQuery({
-      sql: `SELECT content_hash, sample_rate, channels, bit_depth,
-        (SELECT count(*)::int FROM pg_largeobject_metadata)
-        FROM assets ORDER BY content_hash`,
-      params: [],
-      method: "all"
-    }))
-    expect(importedAsset.rows).toHaveLength(2)
-    expect(importedAsset.rows.map((row) => row[1])).toEqual([44_100, 44_100])
-    expect(importedAsset.rows.map((row) => row[2]).sort()).toEqual([1, 2])
-    expect(importedAsset.rows.map((row) => row[3])).toEqual(["float32", "float32"])
-    expect(importedAsset.rows[0]?.[4]).toBe(2)
-    const importedAssets = importedAsset.rows.map((row) => row.slice(0, 4))
-    const waveformCache = await page.evaluate(() => window.yadaw.projectQuery({
-      sql: "SELECT count(*)::int, min(cache_version)::int FROM asset_waveform_levels",
-      params: [],
-      method: "all"
-    }))
-    expect(Number(waveformCache.rows[0]?.[0])).toBeGreaterThan(0)
-    expect(waveformCache.rows[0]?.[1]).toBe(1)
+    const importedAssets = await page.evaluate(async () => {
+      const assets = await window.yadaw.listProjectAssets()
+      return Promise.all(assets.map(async (asset) => ({
+        ...asset,
+        frameCount: String(asset.frameCount),
+        audioByteLength: (await window.yadaw.readAssetAudio(asset.id)).byteLength
+      })))
+    })
+    expect(importedAssets).toHaveLength(2)
+    expect(importedAssets.map(({ sampleRate }) => sampleRate)).toEqual([44_100, 44_100])
+    expect(importedAssets.map(({ channels }) => channels).sort()).toEqual([1, 2])
+    expect(importedAssets.map(({ bitDepth }) => bitDepth)).toEqual(["float32", "float32"])
+    expect(importedAssets.every(({ audioByteLength }) => audioByteLength > 0)).toBe(true)
     const mixerAtSave = await page.evaluate(() => window.yadaw.loadMixerGraph())
 
     await page.getByRole("button", { name: "Save project" }).click()
@@ -181,24 +174,25 @@ test("records into a Large Object and reopens the PGlite project archive", async
     await expect(page.getByLabel("Sample rate")).toHaveValue("44100")
     await expect(page.getByLabel("Tempo")).toHaveValue("132.5")
     await expect(page.getByLabel("Waveform channels")).toHaveValue("aggregate")
-    const reopenedAsset = await page.evaluate(() => window.yadaw.projectQuery({
-      sql: "SELECT content_hash, sample_rate, channels, bit_depth FROM assets ORDER BY content_hash",
-      params: [],
-      method: "all"
-    }))
-    expect(reopenedAsset.rows).toEqual(importedAssets)
+    const reopenedAssets = await page.evaluate(async () =>
+      (await window.yadaw.listProjectAssets()).map((asset) => ({
+        ...asset,
+        frameCount: String(asset.frameCount)
+      }))
+    )
+    expect(reopenedAssets).toEqual(
+      importedAssets.map(({ audioByteLength: _audioByteLength, ...asset }) => asset)
+    )
     const reopenedMixer = await page.evaluate(() => window.yadaw.loadMixerGraph())
     expect(reopenedMixer.channels).toEqual(mixerAtSave.channels)
     expect(reopenedMixer.sends).toEqual(mixerAtSave.sends)
     expect(reopenedMixer.clips).toHaveLength(2)
     const reopenedWaveform = await page.evaluate(async () => {
-      const asset = await window.yadaw.projectQuery({
-        sql: "SELECT id FROM assets LIMIT 1",
-        params: [],
-        method: "all"
-      })
+      const assets = await window.yadaw.listProjectAssets()
+      const asset = assets.find(({ channels }) => channels === 2)
+      if (!asset) throw new Error("Expected a stereo recording asset")
       const peakWindow = await window.yadaw.readAssetWaveform({
-        id: String(asset.rows[0]?.[0]),
+        id: asset.id,
         startFrame: 0,
         endFrame: Number.MAX_SAFE_INTEGER,
         maxBuckets: 100

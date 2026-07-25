@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest"
 import type { TempoMapSnapshot } from "@yadaw/contracts"
 import {
+  barTicksWithinSeconds,
   musicalPositionAtTick,
+  replaceTempoEventAtTick,
   secondsToTick,
+  tempoEventAtTick,
   tempoAtTick,
   tickToSeconds,
   timeSignatureAtTick
@@ -28,6 +31,10 @@ describe("tempo map", () => {
   })
 
   it("reports values and musical position at the playhead", () => {
+    expect(tempoEventAtTick(map, 4_800)).toEqual({
+      tick: 3_840,
+      beatsPerMinute: 60
+    })
     expect(tempoAtTick(map, 4_800)).toBe(60)
     expect(timeSignatureAtTick(map, 4_800)).toMatchObject({
       numerator: 3,
@@ -38,5 +45,19 @@ describe("tempo map", () => {
       beat: 2,
       tick: 0
     })
+  })
+
+  it("replaces the active event without inserting a marker at the playhead", () => {
+    const replaced = replaceTempoEventAtTick(map, 4_800, 72.5)
+
+    expect(replaced.tempoEvents).toEqual([
+      { tick: 0, beatsPerMinute: 120 },
+      { tick: 3_840, beatsPerMinute: 72.5 }
+    ])
+    expect(map.tempoEvents[1]?.beatsPerMinute).toBe(60)
+  })
+
+  it("places bar guides using both tempo and time-signature changes", () => {
+    expect(barTicksWithinSeconds(map, 5)).toEqual([0, 3_840, 6_720])
   })
 })

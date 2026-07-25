@@ -10,7 +10,6 @@ const session: ProjectSession = {
   configuration: {
     name: "Session",
     sampleRate: 48_000,
-    tempo: 120,
     timeSignatureNumerator: 4,
     timeSignatureDenominator: 4,
     waveformDisplayMode: "separate"
@@ -32,7 +31,7 @@ describe("project store dialogs", () => {
       dirty: false,
       recoveredWorkingCopy: true
     })
-    window.yadaw.projectQuery = vi.fn().mockResolvedValue({ rows: [], rowCount: 0 })
+    window.yadaw.listProjectAssets = vi.fn().mockResolvedValue([])
     const store = useProjectStore()
     const { activeDialog, selectDialogAction } = useGlobalDialog()
 
@@ -45,7 +44,7 @@ describe("project store dialogs", () => {
     expect(store.session?.recoveredWorkingCopy).toBe(true)
   })
 
-  it("shows project compatibility failures in the global Vue dialog", async () => {
+  it("reports archive open failures without a legacy compatibility branch", async () => {
     window.yadaw.prepareOpenProject = vi.fn().mockResolvedValue({
       path: "future.yadaw",
       recoverableWorkingCopy: false
@@ -54,14 +53,12 @@ describe("project store dialogs", () => {
       new Error("Project contains migrations newer than this application")
     )
     const store = useProjectStore()
-    const { activeDialog, dismissDialog } = useGlobalDialog()
+    const { activeDialog } = useGlobalDialog()
 
-    const opening = store.open("future.yadaw")
-    await vi.waitFor(() => expect(activeDialog.value?.title).toBe("Project requires a newer YADAW"))
-    dismissDialog()
-
-    await expect(opening).resolves.toBe(false)
+    await expect(store.open("future.yadaw")).resolves.toBe(false)
+    expect(activeDialog.value).toBeNull()
     expect(store.lifecycle.status).toBe("closed")
+    expect(store.error).toContain("migrations newer")
   })
 
   it("passes the selected dirty-project disposition to the native close operation", async () => {

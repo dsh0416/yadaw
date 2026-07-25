@@ -1,32 +1,98 @@
-export type ProjectQueryMethod = "all" | "execute"
+import type {
+  MixerGraphSnapshot,
+  ProjectAssetSummary,
+  ProjectCommand,
+  ProjectConfiguration
+} from "@yadaw/contracts"
 
-export type SerializableSqlParameter = string | number | bigint | boolean | null | Date | Uint8Array
-
-export interface ProjectQueryRequest {
-  sql: string
-  params: SerializableSqlParameter[]
-  method: ProjectQueryMethod
+export interface MidiSourceInput {
+  id: string
+  name: string
+  contentHash: string
+  rawBytes: Uint8Array
 }
 
-export interface ProjectQueryResult {
-  rows: unknown[][]
-  rowCount: number
+export interface PluginStateInput {
+  id: string
+  componentState: Uint8Array
+  controllerState: Uint8Array
 }
 
-export interface ProjectTransactionRequest {
-  queries: ProjectQueryRequest[]
+export interface AssetContentHash {
+  id: string
+  contentHash: string
+}
+
+export interface DefaultRecordingTrack {
+  id: string
+  name: string
+  inputChannels: number[]
 }
 
 export type WorkerRequest =
-  | { id: number; type: "create"; dataDir: string; name: string; sampleRate: number; tempo: number; numerator: number; denominator: number; waveformDisplayMode: "separate" | "aggregate" }
+  | {
+      id: number
+      type: "create"
+      dataDir: string
+      name: string
+      sampleRate: number
+      numerator: number
+      denominator: number
+      waveformDisplayMode: "separate" | "aggregate"
+    }
   | { id: number; type: "open"; dataDir: string; archivePath?: string }
-  | { id: number; type: "query"; query: ProjectQueryRequest }
-  | { id: number; type: "transaction"; request: ProjectTransactionRequest }
+  | { id: number; type: "get-configuration" }
+  | { id: number; type: "update-configuration"; configuration: ProjectConfiguration }
+  | { id: number; type: "list-assets" }
+  | { id: number; type: "mixer-snapshot" }
+  | {
+      id: number
+      type: "apply-project-command"
+      command: ProjectCommand
+      fallbackOutputId: string
+    }
+  | {
+      id: number
+      type: "import-midi"
+      source: MidiSourceInput
+      command: ProjectCommand
+      fallbackOutputId: string
+    }
+  | {
+      id: number
+      type: "rollback-midi"
+      sourceId: string
+      command: ProjectCommand
+      fallbackOutputId: string
+    }
+  | { id: number; type: "save-plugin-states"; states: PluginStateInput[] }
+  | { id: number; type: "asset-content-hashes"; ids: string[] }
+  | { id: number; type: "default-recording-track" }
+  | { id: number; type: "assets-missing-waveform"; cacheVersion: number }
+  | { id: number; type: "delete-assets"; ids: string[] }
   | { id: number; type: "dump"; outputPath: string }
-  | { id: number; type: "import-large-object"; filePath: string; operationId: string; asset: LargeObjectAssetInput }
+  | {
+      id: number
+      type: "import-large-object"
+      filePath: string
+      operationId: string
+      asset: LargeObjectAssetInput
+    }
   | { id: number; type: "read-large-object"; assetId: string }
-  | { id: number; type: "read-waveform"; assetId: string; startFrame: number; endFrame: number; maxBuckets: number }
-  | { id: number; type: "store-waveform"; assetId: string; waveform: WaveformAssetInput }
+  | {
+      id: number
+      type: "read-waveform"
+      assetId: string
+      startFrame: number
+      endFrame: number
+      maxBuckets: number
+    }
+  | {
+      id: number
+      type: "store-waveform"
+      assetId: string
+      waveform: WaveformAssetInput
+    }
   | { id: number; type: "cancel"; operationId: string }
   | { id: number; type: "close" }
 
@@ -77,3 +143,7 @@ export interface WorkerProgress {
   completed: number
   total: number
 }
+
+export type ProjectWorkerConfiguration = ProjectConfiguration
+export type ProjectWorkerAssetSummary = ProjectAssetSummary
+export type ProjectWorkerMixerSnapshot = MixerGraphSnapshot

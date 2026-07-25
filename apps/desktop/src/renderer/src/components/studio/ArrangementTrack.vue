@@ -1,13 +1,20 @@
 <script setup lang="ts">
 import { computed } from "vue"
-import type { WaveformDisplayMode } from "@yadaw/contracts"
+import type { TempoMapSnapshot, WaveformDisplayMode } from "@yadaw/contracts"
 import type { TimelineClip } from "../../stores/transport"
+import { barTicksThroughTick } from "../../utils/tempoMap"
+import {
+  secondsToTimelineX,
+  timelineXToSeconds,
+  timelineXToTick
+} from "../../utils/timelineCoordinates"
 import AudioClipCard from "./AudioClipCard.vue"
 
 const props = defineProps<{
   clips: TimelineClip[]
   contentWidth: number
-  pixelsPerSecond: number
+  tempoMap: TempoMapSnapshot
+  pixelsPerQuarter: number
   trackHeight: number
   amplitudeScale: number
   displayMode: WaveformDisplayMode
@@ -15,8 +22,6 @@ const props = defineProps<{
   viewportEndSeconds: number
   selectedClipId: string | null
   liveClip: TimelineClip | null
-  tempo: number
-  beatsPerBar: number
   trackId: string
   trackColor: string
   dragPreview: TimelineClip | null
@@ -27,7 +32,7 @@ const emit = defineEmits<{
   seek: [seconds: number]
   selectClip: [id: string]
   waveformFrameCount: [frameCount: number, sampleRate: number]
-  clipDragStart: [clipId: string, offsetSeconds: number]
+  clipDragStart: [clipId: string, offsetPixels: number]
   clipDragEnd: []
 }>()
 
@@ -36,9 +41,13 @@ const laneStyle = computed(() => ({
   height: `${props.trackHeight}px`
 }))
 const barLines = computed(() => {
-  const barDuration = 60 / props.tempo * props.beatsPerBar
-  const count = Math.min(2_048, Math.ceil(props.contentWidth / props.pixelsPerSecond / barDuration))
-  return Array.from({ length: count }, (_, index) => index * barDuration * props.pixelsPerSecond)
+  const maximumTick = timelineXToTick(
+    props.tempoMap,
+    props.contentWidth,
+    props.pixelsPerQuarter
+  )
+  return barTicksThroughTick(props.tempoMap, maximumTick)
+    .map((tick) => tick / props.tempoMap.ticksPerQuarter * props.pixelsPerQuarter)
 })
 const displayedClips = computed(() => props.liveClip
   ? [...props.clips.filter((clip) => clip.id !== props.liveClip?.id), props.liveClip]
@@ -46,8 +55,24 @@ const displayedClips = computed(() => props.liveClip
 )
 const dragPreviewStyle = computed(() => props.dragPreview
   ? {
-      left: `${props.dragPreview.startSeconds * props.pixelsPerSecond}px`,
-      width: `max(${props.dragPreview.durationSeconds * props.pixelsPerSecond}px, 12px)`,
+      left: `${
+        secondsToTimelineX(
+          props.tempoMap,
+          props.dragPreview.startSeconds,
+          props.pixelsPerQuarter
+        )
+      }px`,
+      width: `max(${
+        secondsToTimelineX(
+          props.tempoMap,
+          props.dragPreview.endSeconds,
+          props.pixelsPerQuarter
+        ) - secondsToTimelineX(
+          props.tempoMap,
+          props.dragPreview.startSeconds,
+          props.pixelsPerQuarter
+        )
+      }px, 12px)`,
       "--clip-color": props.trackColor
     }
   : {})
@@ -55,13 +80,20 @@ const dragPreviewStyle = computed(() => props.dragPreview
 function seekFromPointer(event: PointerEvent): void {
   const target = event.currentTarget as HTMLElement
   const bounds = target.getBoundingClientRect()
-  emit("seek", Math.max(0, (event.clientX - bounds.left) / props.pixelsPerSecond))
+  emit(
+    "seek",
+    timelineXToSeconds(
+      props.tempoMap,
+      Math.max(0, event.clientX - bounds.left),
+      props.pixelsPerQuarter
+    )
+  )
 }
 function relayWaveformFrameCount(frameCount: number, sampleRate: number): void {
   emit("waveformFrameCount", frameCount, sampleRate)
 }
-function relayClipDragStart(clipId: string, offsetSeconds: number): void {
-  emit("clipDragStart", clipId, offsetSeconds)
+function relayClipDragStart(clipId: string, offsetPixels: number): void {
+  emit("clipDragStart", clipId, offsetPixels)
 }
 </script>
 
@@ -79,7 +111,8 @@ function relayClipDragStart(clipId: string, offsetSeconds: number): void {
       :key="clip.id"
       :clip="clip"
       :track-color="trackColor"
-      :pixels-per-second="pixelsPerSecond"
+      :tempo-map="tempoMap"
+      :pixels-per-quarter="pixelsPerQuarter"
       :viewport-start-seconds="viewportStartSeconds"
       :viewport-end-seconds="viewportEndSeconds"
       :amplitude-scale="amplitudeScale"

@@ -1,9 +1,16 @@
 import { Worker } from "node:worker_threads"
 import type {
+  MixerGraphSnapshot,
+  ProjectAssetSummary,
+  ProjectCommand,
+  ProjectConfiguration
+} from "@yadaw/contracts"
+import type {
+  AssetContentHash,
+  DefaultRecordingTrack,
   LargeObjectAssetInput,
-  ProjectQueryRequest,
-  ProjectQueryResult,
-  ProjectTransactionRequest,
+  MidiSourceInput,
+  PluginStateInput,
   StoredWaveformWindow,
   WaveformAssetInput,
   WorkerProgress,
@@ -69,34 +76,90 @@ export class ProjectWorkerClient {
     })
   }
 
-  create(dataDir: string, project: {
+  create(dataDir: string, configuration: {
     name: string
     sampleRate: number
-    tempo: number
     numerator: number
     denominator: number
     waveformDisplayMode: "separate" | "aggregate"
   }): Promise<void> {
-    return this.call({ type: "create", dataDir, ...project })
+    return this.call({ type: "create", dataDir, ...configuration })
   }
 
   open(dataDir: string, archivePath?: string): Promise<void> {
     return this.call({ type: "open", dataDir, archivePath })
   }
 
-  query(query: ProjectQueryRequest): Promise<ProjectQueryResult> {
-    return this.call({ type: "query", query })
+  getConfiguration(): Promise<ProjectConfiguration> {
+    return this.call({ type: "get-configuration" })
   }
 
-  transaction(request: ProjectTransactionRequest): Promise<ProjectQueryResult[]> {
-    return this.call({ type: "transaction", request })
+  updateConfiguration(configuration: ProjectConfiguration): Promise<ProjectConfiguration> {
+    return this.call({ type: "update-configuration", configuration })
+  }
+
+  listAssets(): Promise<ProjectAssetSummary[]> {
+    return this.call({ type: "list-assets" })
+  }
+
+  mixerSnapshot(): Promise<MixerGraphSnapshot> {
+    return this.call({ type: "mixer-snapshot" })
+  }
+
+  applyProjectCommand(command: ProjectCommand, fallbackOutputId: string): Promise<void> {
+    return this.call({ type: "apply-project-command", command, fallbackOutputId })
+  }
+
+  importMidi(
+    source: MidiSourceInput,
+    command: ProjectCommand,
+    fallbackOutputId: string
+  ): Promise<void> {
+    return this.call({ type: "import-midi", source, command, fallbackOutputId })
+  }
+
+  rollbackMidi(
+    sourceId: string,
+    command: ProjectCommand,
+    fallbackOutputId: string
+  ): Promise<void> {
+    return this.call({
+      type: "rollback-midi",
+      sourceId,
+      command,
+      fallbackOutputId
+    })
+  }
+
+  savePluginStates(states: PluginStateInput[]): Promise<void> {
+    return this.call({ type: "save-plugin-states", states })
+  }
+
+  assetContentHashes(ids: string[]): Promise<AssetContentHash[]> {
+    return this.call({ type: "asset-content-hashes", ids })
+  }
+
+  defaultRecordingTrack(): Promise<DefaultRecordingTrack | null> {
+    return this.call({ type: "default-recording-track" })
+  }
+
+  assetsMissingWaveform(cacheVersion: number): Promise<string[]> {
+    return this.call({ type: "assets-missing-waveform", cacheVersion })
+  }
+
+  deleteAssets(ids: string[]): Promise<void> {
+    return this.call({ type: "delete-assets", ids })
   }
 
   dump(outputPath: string): Promise<void> {
     return this.call({ type: "dump", outputPath })
   }
 
-  importLargeObject(filePath: string, operationId: string, asset: LargeObjectAssetInput): Promise<number> {
+  importLargeObject(
+    filePath: string,
+    operationId: string,
+    asset: LargeObjectAssetInput
+  ): Promise<number> {
     return this.call({ type: "import-large-object", filePath, operationId, asset })
   }
 
@@ -104,8 +167,19 @@ export class ProjectWorkerClient {
     return this.call({ type: "read-large-object", assetId })
   }
 
-  readWaveform(assetId: string, startFrame: number, endFrame: number, maxBuckets: number): Promise<StoredWaveformWindow | null> {
-    return this.call({ type: "read-waveform", assetId, startFrame, endFrame, maxBuckets })
+  readWaveform(
+    assetId: string,
+    startFrame: number,
+    endFrame: number,
+    maxBuckets: number
+  ): Promise<StoredWaveformWindow | null> {
+    return this.call({
+      type: "read-waveform",
+      assetId,
+      startFrame,
+      endFrame,
+      maxBuckets
+    })
   }
 
   storeWaveform(assetId: string, waveform: WaveformAssetInput): Promise<void> {
