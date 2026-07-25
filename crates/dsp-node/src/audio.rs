@@ -27,6 +27,7 @@ pub struct NativeAudioDevice {
     pub default_sample_rate: Option<u32>,
     pub min_buffer_size: Option<u32>,
     pub max_buffer_size: Option<u32>,
+    pub channel_count: Option<u32>,
 }
 
 #[napi(object)]
@@ -41,14 +42,17 @@ fn cpal_error(context: &str, error: impl std::fmt::Display) -> Error {
 
 fn stream_capabilities(
     config: std::result::Result<SupportedStreamConfig, cpal::Error>,
-) -> (Option<u32>, Option<u32>, Option<u32>) {
+) -> (Option<u32>, Option<u32>, Option<u32>, Option<u32>) {
     let Ok(config) = config else {
-        return (None, None, None);
+        return (None, None, None, None);
     };
     let sample_rate = Some(config.sample_rate());
+    let channel_count = Some(u32::from(config.channels()));
     match config.buffer_size() {
-        SupportedBufferSize::Range { min, max } => (sample_rate, Some(*min), Some(*max)),
-        SupportedBufferSize::Unknown => (sample_rate, None, None),
+        SupportedBufferSize::Range { min, max } => {
+            (sample_rate, Some(*min), Some(*max), channel_count)
+        }
+        SupportedBufferSize::Unknown => (sample_rate, None, None, channel_count),
     }
 }
 
@@ -97,7 +101,7 @@ pub fn list_audio_devices(backend: String) -> Result<NativeAudioDeviceList> {
                 .id()
                 .map_err(|error| cpal_error("failed to read cpal input device id", error))?;
             let is_default = default_input_id.as_ref() == Some(&id);
-            let (default_sample_rate, min_buffer_size, max_buffer_size) =
+            let (default_sample_rate, min_buffer_size, max_buffer_size, channel_count) =
                 stream_capabilities(device.default_input_config());
             Ok(NativeAudioDevice {
                 id: id.to_string(),
@@ -106,6 +110,7 @@ pub fn list_audio_devices(backend: String) -> Result<NativeAudioDeviceList> {
                 default_sample_rate,
                 min_buffer_size,
                 max_buffer_size,
+                channel_count,
             })
         })
         .collect::<Result<Vec<_>>>()?;
@@ -118,7 +123,7 @@ pub fn list_audio_devices(backend: String) -> Result<NativeAudioDeviceList> {
                 .id()
                 .map_err(|error| cpal_error("failed to read cpal output device id", error))?;
             let is_default = default_output_id.as_ref() == Some(&id);
-            let (default_sample_rate, min_buffer_size, max_buffer_size) =
+            let (default_sample_rate, min_buffer_size, max_buffer_size, channel_count) =
                 stream_capabilities(device.default_output_config());
             Ok(NativeAudioDevice {
                 id: id.to_string(),
@@ -127,6 +132,7 @@ pub fn list_audio_devices(backend: String) -> Result<NativeAudioDeviceList> {
                 default_sample_rate,
                 min_buffer_size,
                 max_buffer_size,
+                channel_count,
             })
         })
         .collect::<Result<Vec<_>>>()?;

@@ -63,6 +63,19 @@ watch(() => waveformData.value?.frameCount, (frameCount) => {
     emit("waveformFrameCount", frameCount, waveformData.value.sampleRate)
   }
 })
+
+function startDrag(event: DragEvent): void {
+  if (props.recording || !event.dataTransfer) {
+    event.preventDefault()
+    return
+  }
+  const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  event.dataTransfer.effectAllowed = "move"
+  event.dataTransfer.setData("application/x-yadaw-clip", JSON.stringify({
+    id: props.clip.id,
+    offsetSeconds: Math.max(0, (event.clientX - bounds.left) / props.pixelsPerSecond)
+  }))
+}
 </script>
 
 <template>
@@ -71,8 +84,10 @@ watch(() => waveformData.value?.frameCount, (frameCount) => {
     :style="clipStyle"
     :aria-label="`${recording ? 'Recording' : 'Audio clip'} ${clip.name}`"
     :aria-pressed="selected"
+    :draggable="!recording"
     @pointerdown.stop
     @click.stop="emit('select', clip.id)"
+    @dragstart.stop="startDrag"
   >
     <span class="clip-heading" :title="clip.name">
       <b class="clip-name">{{ clip.name }}</b>

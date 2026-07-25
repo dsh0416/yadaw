@@ -3,15 +3,18 @@ import { onBeforeUnmount, onMounted } from "vue"
 import { useEventListener } from "@vueuse/core"
 import { storeToRefs } from "pinia"
 import { useRouter } from "vue-router"
-import ArrangementWorkspace from "../components/studio/ArrangementWorkspace.vue"
+import ChannelRoutingInspector from "../components/mixer/ChannelRoutingInspector.vue"
 import StudioPlaceholderPanel from "../components/studio/StudioPlaceholderPanel.vue"
 import StudioStatusbar from "../components/studio/StudioStatusbar.vue"
 import StudioTopbar from "../components/studio/StudioTopbar.vue"
+import StudioWorkspace from "../components/studio/StudioWorkspace.vue"
 import { useEngineStore } from "../stores/engine"
 import { useAudioRuntimeStore } from "../stores/audioRuntime"
 import { useProjectStore } from "../stores/project"
 import { useRecordingStore } from "../stores/recording"
 import { useTransportStore } from "../stores/transport"
+import { useMixerStore } from "../stores/mixer"
+import { useStudioWorkspaceStore } from "../stores/studioWorkspace"
 import { useArrangementViewStore } from "../stores/arrangementView"
 import { useWaveformStore } from "../stores/waveform"
 
@@ -27,6 +30,8 @@ const {
 const projectStore = useProjectStore()
 const recordingStore = useRecordingStore()
 const transportStore = useTransportStore()
+const mixerStore = useMixerStore()
+const workspaceStore = useStudioWorkspaceStore()
 const arrangementViewStore = useArrangementViewStore()
 const waveformStore = useWaveformStore()
 const { session } = storeToRefs(projectStore)
@@ -46,6 +51,9 @@ onMounted(() => {
   if (!session.value) void router.replace({ name: "welcome" })
   else void projectStore.refreshAssets()
   void engineStore.initialize()
+  void mixerStore.load()
+  mixerStore.startMetering()
+  transportStore.startPolling()
 })
 async function openPreferences(): Promise<void> {
   if (activeRecording.value) await toggleRecording()
@@ -68,6 +76,7 @@ async function closeProject(): Promise<void> {
   if (activeRecording.value) return
   if (await projectStore.close()) {
     transportStore.reset()
+    mixerStore.reset()
     arrangementViewStore.reset()
     waveformStore.clear()
     void router.push({ name: "welcome" })
@@ -76,7 +85,6 @@ async function closeProject(): Promise<void> {
 
 async function toggleRecording(): Promise<void> {
   if (recordingBusy.value) return
-  if (!activeRecording.value) transportStore.stop()
   const completed = await recordingStore.toggle()
   if (completed) transportStore.selectAndRevealClip(completed.id)
 }
@@ -88,6 +96,20 @@ function isEditableTarget(target: EventTarget | null): boolean {
 
 function handleShortcut(event: KeyboardEvent): void {
   if (isEditableTarget(event.target) || event.repeat) return
+  if ((event.ctrlKey || event.metaKey) && event.code === "KeyZ") {
+    event.preventDefault()
+    if (event.shiftKey) void mixerStore.redo()
+    else void mixerStore.undo()
+    return
+  }
+  if ((event.code === "Delete" || event.code === "Backspace") && transportStore.selectedClipId) {
+    event.preventDefault()
+    const clipId = transportStore.selectedClipId
+    void mixerStore.execute({ type: "delete-clip", clipId }).then((deleted) => {
+      if (deleted) transportStore.clearSelection()
+    })
+    return
+  }
   if (event.code === "Space") {
     event.preventDefault()
     if (!activeRecording.value) void transportStore.toggle()
@@ -97,11 +119,19 @@ function handleShortcut(event: KeyboardEvent): void {
   } else if (event.code === "KeyR") {
     event.preventDefault()
     void toggleRecording()
+  } else if (event.code === "KeyM") {
+    event.preventDefault()
+    if (workspaceStore.mode === "mixer") workspaceStore.showArrangement()
+    else workspaceStore.showMixer()
   }
 }
 
 useEventListener(window, "keydown", handleShortcut)
-onBeforeUnmount(() => transportStore.stop())
+onBeforeUnmount(() => {
+  transportStore.stop()
+  transportStore.stopPolling()
+  mixerStore.stopMetering()
+})
 </script>
 
 <template>
@@ -126,12 +156,13 @@ onBeforeUnmount(() => transportStore.stop())
       @open-project-settings="openProjectSettings"
     />
     <StudioPlaceholderPanel side="left" />
-    <ArrangementWorkspace
+    <StudioWorkspace
       :recording-id="activeRecording?.id ?? null"
       :recording-started-at="activeRecording?.startedAt ?? null"
+      :recording-start-frame="activeRecording?.startFrame ?? null"
       :recording-error="recordingError"
     />
-    <StudioPlaceholderPanel side="right" />
+    <ChannelRoutingInspector />
     <StudioStatusbar :runtime="audioRuntime" :statistics="audioStatistics" :audio-warnings="audioWarnings" />
   </main>
 </template>

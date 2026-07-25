@@ -52,6 +52,15 @@ describe("ProjectDatabase", () => {
       tempo: 120,
       waveformDisplayMode: "separate"
     })
+    const mixer = await database.query({
+      sql: "SELECT id, kind, channel_format, output_channel_id FROM mixer_channels ORDER BY kind",
+      params: [],
+      method: "all"
+    })
+    expect(mixer.rows).toEqual([
+      ["audio-1", "audio", "stereo", "master"],
+      ["master", "master", "stereo", null]
+    ])
   })
 
   it("rolls an entire query batch back when one statement fails", async () => {

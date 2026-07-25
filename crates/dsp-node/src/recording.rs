@@ -21,6 +21,8 @@ use rubato::{Fft, FixedSync, Resampler, audioadapter_buffers::direct::Interleave
 use sha2::{Digest, Sha256};
 
 pub type StereoFrame = [f32; 2];
+pub const MAX_INPUT_CHANNELS: usize = 32;
+pub type InputFrame = [f32; MAX_INPUT_CHANNELS];
 
 const RECORDING_RING_SECONDS: usize = 8;
 const WRITER_BLOCK_FRAMES: usize = 2_048;
@@ -84,6 +86,7 @@ pub struct NativeFinalizeRecordingConfig {
     pub origination_date: String,
     pub origination_time: String,
     pub time_reference: i64,
+    pub channel_indices: Option<Vec<u32>>,
 }
 
 #[napi(object)]
@@ -270,16 +273,22 @@ fn recording_error(context: &str, error: impl std::fmt::Display) -> Error {
     Error::new(Status::GenericFailure, format!("{context}: {error}"))
 }
 
-fn float_stereo_format(sample_rate: u32) -> WaveFmt {
+fn float_format(sample_rate: u32, channels: usize) -> WaveFmt {
+    let channels = channels.clamp(1, u16::MAX as usize) as u16;
+    let block_alignment = channels.saturating_mul(4);
     WaveFmt {
         tag: WAVE_TAG_FLOAT,
-        channel_count: 2,
+        channel_count: channels,
         sample_rate,
-        bytes_per_second: sample_rate * 8,
-        block_alignment: 8,
+        bytes_per_second: sample_rate.saturating_mul(u32::from(block_alignment)),
+        block_alignment,
         bits_per_sample: 32,
         extended_format: None,
     }
+}
+
+fn float_stereo_format(sample_rate: u32) -> WaveFmt {
+    float_format(sample_rate, 2)
 }
 
 fn pcm_stereo_format(sample_rate: u32, bits_per_sample: u16) -> WaveFmt {
@@ -313,14 +322,24 @@ fn broadcast_metadata(
 }
 
 pub struct RecordingTap {
-    producer: HeapProd<StereoFrame>,
+    producer: HeapProd<InputFrame>,
     active: Arc<AtomicBool>,
     dropout_frames: Arc<AtomicU64>,
+    channel_count: usize,
 }
 
 impl RecordingTap {
-    pub fn push(&mut self, frame: StereoFrame) {
-        if self.active.load(Ordering::Relaxed) && self.producer.try_push(frame).is_err() {
+    pub fn push(&mut self, channels: &[f32]) {
+        if !self.active.load(Ordering::Relaxed) {
+            return;
+        }
+        let mut frame = [0.0_f32; MAX_INPUT_CHANNELS];
+        let count = channels
+            .len()
+            .min(self.channel_count)
+            .min(MAX_INPUT_CHANNELS);
+        frame[..count].copy_from_slice(&channels[..count]);
+        if self.producer.try_push(frame).is_err() {
             self.dropout_frames.fetch_add(1, Ordering::Relaxed);
         }
     }
@@ -344,17 +363,18 @@ struct ActiveWriter {
 }
 
 fn write_available(
-    consumer: &mut HeapCons<StereoFrame>,
+    consumer: &mut HeapCons<InputFrame>,
     active: &mut ActiveWriter,
     scratch: &mut Vec<f32>,
     waveform: &Arc<Mutex<LiveWaveform>>,
+    channel_count: usize,
 ) -> std::result::Result<(), String> {
     scratch.clear();
-    while scratch.len() < WRITER_BLOCK_FRAMES * 2 {
+    while scratch.len() < WRITER_BLOCK_FRAMES * channel_count {
         let Some(frame) = consumer.try_pop() else {
             break;
         };
-        scratch.extend_from_slice(&frame);
+        scratch.extend_from_slice(&frame[..channel_count]);
     }
     if scratch.is_empty() {
         return Ok(());
@@ -367,23 +387,31 @@ fn write_available(
         .lock()
         .map_err(|_| "waveform state is poisoned".to_owned())?
         .push(scratch);
-    active.frames += (scratch.len() / 2) as u64;
+    active.frames += (scratch.len() / channel_count) as u64;
     Ok(())
 }
 
 fn writer_thread(
-    mut consumer: HeapCons<StereoFrame>,
+    mut consumer: HeapCons<InputFrame>,
     receiver: Receiver<WriterCommand>,
     active_flag: Arc<AtomicBool>,
     dropout_frames: Arc<AtomicU64>,
     sample_rate: u32,
+    channel_count: usize,
     waveform: Arc<Mutex<LiveWaveform>>,
 ) {
     let mut current: Option<ActiveWriter> = None;
-    let mut scratch = Vec::with_capacity(WRITER_BLOCK_FRAMES * 2);
+    let mut scratch = Vec::with_capacity(WRITER_BLOCK_FRAMES * channel_count);
     loop {
         if let Some(active) = current.as_mut()
-            && write_available(&mut consumer, active, &mut scratch, &waveform).is_err()
+            && write_available(
+                &mut consumer,
+                active,
+                &mut scratch,
+                &waveform,
+                channel_count,
+            )
+            .is_err()
         {
             active_flag.store(false, Ordering::Release);
         }
@@ -399,9 +427,9 @@ fn writer_thread(
                     waveform
                         .lock()
                         .map_err(|_| "waveform state is poisoned".to_owned())?
-                        .reset(sample_rate, 2);
+                        .reset(sample_rate, channel_count);
                     let mut writer =
-                        WaveWriter::create(&config.path, float_stereo_format(sample_rate))
+                        WaveWriter::create(&config.path, float_format(sample_rate, channel_count))
                             .map_err(|error| error.to_string())?;
                     writer
                         .write_broadcast_metadata(&broadcast_metadata(
@@ -410,7 +438,9 @@ fn writer_thread(
                             &config.origination_date,
                             &config.origination_time,
                             config.time_reference.max(0) as u64,
-                            format!("A=PCM,F={sample_rate},W=32,M=stereo,T=YADAW swap\r\n"),
+                            format!(
+                                "A=PCM,F={sample_rate},W=32,M={channel_count} channel,T=YADAW swap\r\n"
+                            ),
                         ))
                         .map_err(|error| error.to_string())?;
                     current = Some(ActiveWriter {
@@ -432,7 +462,13 @@ fn writer_thread(
                         .take()
                         .ok_or_else(|| "no recording is active".to_owned())?;
                     while consumer.occupied_len() > 0 {
-                        write_available(&mut consumer, &mut writer, &mut scratch, &waveform)?;
+                        write_available(
+                            &mut consumer,
+                            &mut writer,
+                            &mut scratch,
+                            &waveform,
+                            channel_count,
+                        )?;
                     }
                     let path = writer.path.clone();
                     let frames = writer.frames;
@@ -446,7 +482,7 @@ fn writer_thread(
                     Ok(NativeRecordingResult {
                         path,
                         sample_rate,
-                        channels: 2,
+                        channels: channel_count as u32,
                         frame_count: frames.min(i64::MAX as u64) as i64,
                         dropout_frames: dropout_frames.load(Ordering::Relaxed).min(i64::MAX as u64)
                             as i64,
@@ -458,8 +494,13 @@ fn writer_thread(
                 active_flag.store(false, Ordering::Release);
                 if let Some(mut writer) = current.take() {
                     while consumer.occupied_len() > 0 {
-                        let _ =
-                            write_available(&mut consumer, &mut writer, &mut scratch, &waveform);
+                        let _ = write_available(
+                            &mut consumer,
+                            &mut writer,
+                            &mut scratch,
+                            &waveform,
+                            channel_count,
+                        );
                     }
                     let _ = writer.writer.end();
                 }
@@ -479,9 +520,10 @@ pub struct RecorderController {
 }
 
 impl RecorderController {
-    pub fn new(sample_rate: u32) -> (Self, RecordingTap) {
+    pub fn new(sample_rate: u32, channel_count: usize) -> (Self, RecordingTap) {
+        let channel_count = channel_count.clamp(1, MAX_INPUT_CHANNELS);
         let capacity = sample_rate as usize * RECORDING_RING_SECONDS;
-        let ring = HeapRb::<StereoFrame>::new(capacity.max(8_192));
+        let ring = HeapRb::<InputFrame>::new(capacity.max(8_192));
         let (producer, consumer) = ring.split();
         let active = Arc::new(AtomicBool::new(false));
         let dropout_frames = Arc::new(AtomicU64::new(0));
@@ -499,6 +541,7 @@ impl RecorderController {
                     thread_active,
                     thread_dropouts,
                     sample_rate,
+                    channel_count,
                     thread_waveform,
                 );
             })
@@ -514,6 +557,7 @@ impl RecorderController {
                 producer,
                 active,
                 dropout_frames,
+                channel_count,
             },
         )
     }
@@ -615,11 +659,11 @@ fn finalize(config: &NativeFinalizeRecordingConfig) -> Result<NativeFinalizedRec
         .frame_length()
         .map_err(|error| recording_error("failed to read swap length", error))?
         as usize;
-    let channels = source_format.channel_count as usize;
-    if channels == 0 {
+    let source_channels = source_format.channel_count as usize;
+    if source_channels == 0 {
         return Err(Error::new(Status::InvalidArg, "recording has no channels"));
     }
-    let mut samples = vec![0.0_f32; source_frames * channels];
+    let mut samples = vec![0.0_f32; source_frames * source_channels];
     let mut frame_reader = reader
         .audio_frame_reader()
         .map_err(|error| recording_error("failed to open swap audio", error))?;
@@ -627,7 +671,37 @@ fn finalize(config: &NativeFinalizeRecordingConfig) -> Result<NativeFinalizedRec
         .read_frames(&mut samples)
         .map_err(|error| recording_error("failed to read swap audio", error))?
         as usize;
-    samples.truncate(read_frames * channels);
+    samples.truncate(read_frames * source_channels);
+    let selected_channels = config.channel_indices.as_ref().map_or_else(
+        || (0..source_channels).collect::<Vec<_>>(),
+        |indices| {
+            indices
+                .iter()
+                .map(|index| index.saturating_sub(1) as usize)
+                .collect()
+        },
+    );
+    if selected_channels.is_empty()
+        || selected_channels.len() > 2
+        || selected_channels
+            .iter()
+            .any(|&index| index >= source_channels)
+    {
+        return Err(Error::new(
+            Status::InvalidArg,
+            "recording route must select one or two available input channels",
+        ));
+    }
+    let channels = selected_channels.len();
+    if selected_channels != (0..source_channels).collect::<Vec<_>>() {
+        let mut routed = Vec::with_capacity(read_frames * channels);
+        for frame in samples.chunks_exact(source_channels) {
+            for &index in &selected_channels {
+                routed.push(frame[index]);
+            }
+        }
+        samples = routed;
+    }
 
     let processed = if source_format.sample_rate == config.target_sample_rate {
         samples
@@ -974,6 +1048,188 @@ pub fn repair_recording_header(path: String, channels: u32) -> Result<i64> {
     Ok(frame_count.min(i64::MAX as u64) as i64)
 }
 
+#[cfg(feature = "bench-internals")]
+#[doc(hidden)]
+pub mod bench_support {
+    use std::{
+        f32::consts::TAU,
+        path::Path,
+        sync::{
+            Arc,
+            atomic::{AtomicBool, AtomicU64},
+        },
+    };
+
+    use bwavfile::{WaveFmt, WaveWriter};
+    use ringbuf::{
+        HeapCons, HeapRb,
+        traits::{Consumer, Split},
+    };
+
+    use super::{
+        InputFrame, LiveWaveform, MAX_INPUT_CHANNELS, NativeFinalizeRecordingConfig,
+        NativeRecordingStartConfig, RecorderController, RecordingTap, finalize, float_format,
+    };
+
+    pub fn write_float_fixture(
+        path: &Path,
+        sample_rate: u32,
+        channels: usize,
+        frames: usize,
+    ) -> u64 {
+        let channels = channels.clamp(1, MAX_INPUT_CHANNELS);
+        let format: WaveFmt = float_format(sample_rate, channels);
+        let writer = WaveWriter::create(path, format).expect("create benchmark BWF fixture");
+        let mut audio = writer
+            .audio_frame_writer()
+            .expect("start benchmark fixture audio");
+        let mut samples = Vec::with_capacity(frames.saturating_mul(channels));
+        for frame in 0..frames {
+            let phase = frame as f32 / sample_rate as f32 * 440.0 * TAU;
+            for channel in 0..channels {
+                samples.push(phase.sin() * (0.25 - channel as f32 * 0.002));
+            }
+        }
+        audio
+            .write_frames(&samples)
+            .expect("write benchmark fixture samples");
+        audio.end().expect("finish benchmark fixture");
+        std::fs::metadata(path)
+            .expect("inspect benchmark fixture")
+            .len()
+    }
+
+    pub struct TapHarness {
+        tap: RecordingTap,
+        consumer: HeapCons<InputFrame>,
+        block: Vec<f32>,
+        block_frames: usize,
+        channel_count: usize,
+    }
+
+    impl TapHarness {
+        pub fn new(channel_count: usize, block_frames: usize) -> Self {
+            let channel_count = channel_count.clamp(1, MAX_INPUT_CHANNELS);
+            let ring = HeapRb::<InputFrame>::new(block_frames.max(1) + 1);
+            let (producer, consumer) = ring.split();
+            let active = Arc::new(AtomicBool::new(true));
+            let dropout_frames = Arc::new(AtomicU64::new(0));
+            let tap = RecordingTap {
+                producer,
+                active,
+                dropout_frames,
+                channel_count,
+            };
+            let block = (0..block_frames.saturating_mul(channel_count))
+                .map(|index| (index % 31) as f32 / 31.0 - 0.5)
+                .collect();
+            Self {
+                tap,
+                consumer,
+                block,
+                block_frames,
+                channel_count,
+            }
+        }
+
+        pub fn push_block(&mut self) {
+            for frame in self.block.chunks_exact(self.channel_count) {
+                self.tap.push(frame);
+            }
+        }
+
+        pub fn drain(&mut self) -> usize {
+            let mut frames = 0;
+            while self.consumer.try_pop().is_some() {
+                frames += 1;
+            }
+            frames
+        }
+
+        pub fn block_frames(&self) -> usize {
+            self.block_frames
+        }
+    }
+
+    pub struct WaveformHarness {
+        waveform: LiveWaveform,
+        samples: Vec<f32>,
+    }
+
+    impl WaveformHarness {
+        pub fn new(sample_rate: u32, channels: usize, frames: usize) -> Self {
+            let channels = channels.clamp(1, MAX_INPUT_CHANNELS);
+            let mut waveform = LiveWaveform::default();
+            waveform.reset(sample_rate, channels);
+            let samples = (0..frames.saturating_mul(channels))
+                .map(|index| (index % 101) as f32 / 101.0)
+                .collect();
+            Self { waveform, samples }
+        }
+
+        pub fn push(&mut self) {
+            self.waveform.push(&self.samples);
+        }
+    }
+
+    pub fn write_recording_session(
+        path: &Path,
+        sample_rate: u32,
+        channels: usize,
+        frames: usize,
+        callback_frames: usize,
+    ) -> i64 {
+        let (controller, mut tap) = RecorderController::new(sample_rate, channels);
+        controller
+            .start(NativeRecordingStartConfig {
+                path: path.to_string_lossy().into_owned(),
+                asset_id: "benchmark-writer".to_owned(),
+                originator: "YADAW benchmark".to_owned(),
+                origination_date: "2026-01-01".to_owned(),
+                origination_time: "00:00:00".to_owned(),
+                time_reference: 0,
+            })
+            .expect("start benchmark recording");
+        let channel_count = channels.clamp(1, MAX_INPUT_CHANNELS);
+        let block = vec![0.125_f32; callback_frames.saturating_mul(channel_count)];
+        let mut written = 0;
+        while written < frames {
+            let take = callback_frames.min(frames - written);
+            for frame in block[..take * channel_count].chunks_exact(channel_count) {
+                tap.push(frame);
+            }
+            written += take;
+        }
+        controller
+            .stop()
+            .expect("stop benchmark recording")
+            .frame_count
+    }
+
+    pub fn finalize_fixture(
+        input: &Path,
+        output: &Path,
+        target_sample_rate: u32,
+        bit_depth: &str,
+        channel_indices: Option<Vec<u32>>,
+    ) -> i64 {
+        finalize(&NativeFinalizeRecordingConfig {
+            input_path: input.to_string_lossy().into_owned(),
+            output_path: output.to_string_lossy().into_owned(),
+            target_sample_rate,
+            bit_depth: bit_depth.to_owned(),
+            asset_id: format!("benchmark-{target_sample_rate}-{bit_depth}"),
+            originator: "YADAW benchmark".to_owned(),
+            origination_date: "2026-01-01".to_owned(),
+            origination_time: "00:00:00".to_owned(),
+            time_reference: 0,
+            channel_indices,
+        })
+        .expect("finalize benchmark recording")
+        .frame_count
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::{
@@ -1096,11 +1352,11 @@ mod tests {
     #[test]
     fn recording_ring_drains_all_deterministic_frames_without_hardware() {
         let path = temporary_file("ring-drain");
-        let (controller, mut tap) = RecorderController::new(48_000);
+        let (controller, mut tap) = RecorderController::new(48_000, 2);
         controller.start(start_config(&path)).unwrap();
         for index in 0..4_096 {
             let value = index as f32 / 4_096.0;
-            tap.push([value, -value]);
+            tap.push(&[value, -value]);
         }
         let result = controller.stop().unwrap();
         assert_eq!(result.frame_count, 4_096);
@@ -1121,10 +1377,10 @@ mod tests {
     #[test]
     fn recording_ring_marks_overrun_as_dropout() {
         let path = temporary_file("ring-overrun");
-        let (controller, mut tap) = RecorderController::new(1);
+        let (controller, mut tap) = RecorderController::new(1, 2);
         controller.start(start_config(&path)).unwrap();
         for _ in 0..20_000 {
-            tap.push([0.25, -0.25]);
+            tap.push(&[0.25, -0.25]);
         }
         let result = controller.stop().unwrap();
         assert!(result.dropout_frames > 0);
@@ -1183,6 +1439,7 @@ mod tests {
                 origination_date: "2026-07-22".to_owned(),
                 origination_time: "12:00:00".to_owned(),
                 time_reference: 123,
+                channel_indices: None,
             })
             .unwrap();
             assert!((finalized.frame_count - 4_800).abs() <= 1);

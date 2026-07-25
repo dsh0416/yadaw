@@ -13,9 +13,12 @@ import type {
   ApplicationSettingsPatch,
   CreateProjectRequest,
   ProcessGainRequest,
+  ProjectCommand,
   ProjectCloseDisposition,
   ProjectQueryRequest,
   ProjectTransactionRequest,
+  MixerParameterPreview,
+  TransportCommand,
   StorageSpaceSnapshot,
   SystemPerformanceSnapshot,
   WaveformWindowRequest
@@ -31,6 +34,7 @@ import {
 } from "@yadaw/dsp-node"
 import { ApplicationSettingsStore } from "./application-settings"
 import { OperationService } from "./operation-service"
+import { MixerService } from "./mixer-service"
 import { ProjectService } from "./project-service"
 import { RecordingService } from "./recording-service"
 import { WaveformService } from "./waveform-service"
@@ -309,7 +313,8 @@ function normalizeAudioDeviceList(
     isDefault: device.isDefault,
     defaultSampleRate: device.defaultSampleRate ?? null,
     minBufferSize: device.minBufferSize ?? null,
-    maxBufferSize: device.maxBufferSize ?? null
+    maxBufferSize: device.maxBufferSize ?? null,
+    channelCount: device.channelCount ?? null
   })
 
   return {
@@ -354,7 +359,8 @@ function registerIpcHandlers(
   projects: ProjectService,
   recordings: RecordingService,
   operations: OperationService,
-  waveforms: WaveformService
+  waveforms: WaveformService,
+  mixer: MixerService
 ): void {
   ipcMain.handle(IPC_CHANNELS.engineInfo, (event) => {
     assertTrustedSender(event)
@@ -377,9 +383,11 @@ function registerIpcHandlers(
     return normalizeAudioDeviceList(listAudioDevices(validateAudioBackend(value)))
   })
 
-  ipcMain.handle(IPC_CHANNELS.audioStart, (event, value: unknown) => {
+  ipcMain.handle(IPC_CHANNELS.audioStart, async (event, value: unknown) => {
     assertTrustedSender(event)
-    return normalizeAudioRuntime(startAudioEngine(validateAudioPreferences(value)))
+    const snapshot = normalizeAudioRuntime(startAudioEngine(validateAudioPreferences(value)))
+    if (projects.current) await mixer.load()
+    return snapshot
   })
 
   ipcMain.handle(IPC_CHANNELS.audioStop, (event) => {
@@ -390,6 +398,43 @@ function registerIpcHandlers(
   ipcMain.handle(IPC_CHANNELS.audioSnapshot, (event) => {
     assertTrustedSender(event)
     return normalizeAudioRuntime(audioEngineSnapshot())
+  })
+
+  ipcMain.handle(IPC_CHANNELS.mixerLoad, (event) => {
+    assertTrustedSender(event)
+    return mixer.load()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.mixerExecute, (event, value: unknown) => {
+    assertTrustedSender(event)
+    if (!value || typeof value !== "object" || typeof (value as { type?: unknown }).type !== "string") {
+      throw new TypeError("Project command must be an object with a type")
+    }
+    return mixer.execute(value as ProjectCommand)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.mixerPreview, (event, value: unknown) => {
+    assertTrustedSender(event)
+    if (!value || typeof value !== "object") throw new TypeError("Mixer preview must be an object")
+    mixer.preview(value as MixerParameterPreview)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.mixerSnapshot, (event) => {
+    assertTrustedSender(event)
+    return mixer.runtimeSnapshot()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.transportCommand, (event, value: unknown) => {
+    assertTrustedSender(event)
+    if (!value || typeof value !== "object" || typeof (value as { type?: unknown }).type !== "string") {
+      throw new TypeError("Transport command must be an object with a type")
+    }
+    return mixer.transport(value as TransportCommand)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.transportSnapshot, (event) => {
+    assertTrustedSender(event)
+    return mixer.transportSnapshot()
   })
 
   ipcMain.handle(IPC_CHANNELS.systemPerformanceSnapshot, (event) => {
@@ -441,7 +486,9 @@ function registerIpcHandlers(
       if (result.canceled || !result.filePath) throw new Error("Project creation cancelled")
       path = result.filePath
     }
-    return projects.create({ ...request, path })
+    const created = await projects.create({ ...request, path })
+    await mixer.load()
+    return created
   })
 
   ipcMain.handle(IPC_CHANNELS.projectOpen, async (event, value: unknown) => {
@@ -472,6 +519,7 @@ function registerIpcHandlers(
     }
     try {
       const opened = await projects.open(path, recover)
+      await mixer.load()
       waveforms.rebuildMissingInBackground()
       return opened
     } catch (error) {
@@ -545,6 +593,13 @@ function registerIpcHandlers(
       throw new TypeError("Invalid close disposition")
     }
     const closed = await projects.close(disposition)
+    if (closed) {
+      try {
+        mixer.transport({ type: "stop" })
+      } catch {
+        // The audio engine may already be stopped.
+      }
+    }
     if (closed && disposition === "save") await recordings.cleanupCommittedForProject(current.path)
     return closed
   })
@@ -655,9 +710,10 @@ app.whenReady().then(() => {
   const settings = new ApplicationSettingsStore(app.getPath("userData"))
   projectService = new ProjectService(app.getPath("userData"), settings)
   const operations = new OperationService()
-  const recordings = new RecordingService(settings, projectService, operations)
+  const mixer = new MixerService(app.getPath("userData"), projectService)
+  const recordings = new RecordingService(settings, projectService, operations, mixer)
   const waveforms = new WaveformService(settings, projectService)
-  registerIpcHandlers(settings, projectService, recordings, operations, waveforms)
+  registerIpcHandlers(settings, projectService, recordings, operations, waveforms, mixer)
   createMainWindow()
 
   app.on("activate", () => {

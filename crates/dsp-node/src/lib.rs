@@ -6,10 +6,23 @@ mod audio;
 mod audio_engine;
 mod recording;
 
+#[cfg(feature = "bench-internals")]
+#[doc(hidden)]
+pub mod bench_support {
+    pub use crate::audio_engine::bench_support::{
+        GraphSwapHarness, ParameterQueueHarness, RenderHarness, RenderScenario, ResamplerHarness,
+        StreamingHarness, decode_clip,
+    };
+    pub use crate::recording::bench_support::{
+        TapHarness, WaveformHarness, finalize_fixture, write_float_fixture, write_recording_session,
+    };
+}
+
 pub use audio::{list_audio_backends, list_audio_devices};
 pub use audio_engine::{
-    audio_engine_snapshot, recording_waveform_snapshot, start_audio_engine, start_recording,
-    stop_audio_engine, stop_recording,
+    audio_engine_snapshot, load_mixer_graph, mixer_snapshot, preview_mixer_parameter,
+    recording_waveform_snapshot, start_audio_engine, start_recording, stop_audio_engine,
+    stop_recording, transport_command, transport_snapshot,
 };
 pub use recording::{
     analyze_waveform, finalize_recording, repair_recording_header,

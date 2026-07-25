@@ -18,12 +18,14 @@ const props = defineProps<{
   liveClip: TimelineClip | null
   tempo: number
   beatsPerBar: number
+  trackId: string
 }>()
 
 const emit = defineEmits<{
   seek: [seconds: number]
   selectClip: [id: string]
   waveformFrameCount: [frameCount: number, sampleRate: number]
+  moveClip: [clipId: string, trackId: string, startSeconds: number]
 }>()
 
 const laneStyle = computed(() => ({
@@ -51,10 +53,31 @@ function seekFromPointer(event: PointerEvent): void {
 function relayWaveformFrameCount(frameCount: number, sampleRate: number): void {
   emit("waveformFrameCount", frameCount, sampleRate)
 }
+function moveClip(event: DragEvent): void {
+  const encoded = event.dataTransfer?.getData("application/x-yadaw-clip")
+  if (!encoded) return
+  try {
+    const value = JSON.parse(encoded) as { id: string; offsetSeconds: number }
+    const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect()
+    const startSeconds = Math.max(
+      0,
+      (event.clientX - bounds.left) / props.pixelsPerSecond - value.offsetSeconds
+    )
+    emit("moveClip", value.id, props.trackId, startSeconds)
+  } catch {
+    // Ignore drag payloads from outside YADAW.
+  }
+}
 </script>
 
 <template>
-  <div class="track-lane" :style="laneStyle" @pointerdown="seekFromPointer">
+  <div
+    class="track-lane"
+    :style="laneStyle"
+    @pointerdown="seekFromPointer"
+    @dragover.prevent
+    @drop.prevent="moveClip"
+  >
     <i v-for="(left, index) in barLines" :key="index" class="bar-line" :style="{ left: `${left}px` }" />
     <div class="playhead" :style="playheadStyle" aria-hidden="true"><span /></div>
     <AudioClipCard

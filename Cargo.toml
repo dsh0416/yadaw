@@ -10,6 +10,7 @@ rust-version = "1.97"
 [workspace.dependencies]
 bwavfile = "2.0.1"
 cpal = "0.18"
+criterion = { version = "0.8.2", features = ["csv_output", "html_reports"] }
 napi = { version = "3", features = ["napi8"] }
 napi-build = "2"
 napi-derive = "3"

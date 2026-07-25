@@ -12,6 +12,10 @@ export declare function listAudioBackends(): Array<NativeAudioBackend>
 
 export declare function listAudioDevices(backend: string): NativeAudioDeviceList
 
+export declare function loadMixerGraph(graph: NativeMixerGraph): void
+
+export declare function mixerSnapshot(): NativeMixerSnapshot
+
 export interface NativeAnalyzedWaveform {
   sampleRate: number
   channels: number
@@ -32,6 +36,7 @@ export interface NativeAudioDevice {
   defaultSampleRate?: number
   minBufferSize?: number
   maxBufferSize?: number
+  channelCount?: number
 }
 
 export interface NativeAudioDeviceList {
@@ -92,6 +97,68 @@ export interface NativeFinalizeRecordingConfig {
   originationDate: string
   originationTime: string
   timeReference: number
+  channelIndices?: Array<number>
+}
+
+export interface NativeMixerChannel {
+  id: string
+  kind: string
+  channelFormat: string
+  gainDb: number
+  pan: number
+  muted: boolean
+  soloed: boolean
+  outputIndex?: number
+  recordArmed: boolean
+  inputChannels: Array<number>
+}
+
+export interface NativeMixerChannelMeter {
+  channelId: string
+  preLeft: number
+  preRight: number
+  postLeft: number
+  postRight: number
+  heldLeft: number
+  heldRight: number
+  clipped: boolean
+}
+
+export interface NativeMixerClip {
+  id: string
+  trackInputIndex: number
+  startFrame: number
+  sourceOffsetFrames: number
+  lengthFrames: number
+  path: string
+}
+
+export interface NativeMixerGraph {
+  sampleRate: number
+  channels: Array<NativeMixerChannel>
+  sends: Array<NativeMixerSend>
+  clips: Array<NativeMixerClip>
+}
+
+export interface NativeMixerParameterPreview {
+  target: string
+  id: string
+  parameter: string
+  value: number
+}
+
+export interface NativeMixerSend {
+  id: string
+  sourceIndex: number
+  targetIndex: number
+  enabled: boolean
+  tap: string
+  levelDb: number
+  pan: number
+}
+
+export interface NativeMixerSnapshot {
+  meters: Array<NativeMixerChannelMeter>
 }
 
 export interface NativeRecordingResult {
@@ -111,6 +178,12 @@ export interface NativeRecordingStartConfig {
   timeReference: number
 }
 
+export interface NativeTransportSnapshot {
+  state: string
+  positionFrames: number
+  sampleRate: number
+}
+
 export interface NativeWaveformLevel {
   framesPerBucket: number
   bucketCount: number
@@ -127,6 +200,8 @@ export interface NativeWaveformSnapshot {
   bucketCount: number
   peaks: Buffer
 }
+
+export declare function previewMixerParameter(preview: NativeMixerParameterPreview): void
 
 export declare function processGain(samples: Array<number>, gain: number): ProcessGainResult
 
@@ -146,5 +221,9 @@ export declare function startRecording(config: NativeRecordingStartConfig): void
 export declare function stopAudioEngine(): NativeAudioRuntimeSnapshot
 
 export declare function stopRecording(): NativeRecordingResult
+
+export declare function transportCommand(kind: string, positionFrames?: number | undefined | null): NativeTransportSnapshot
+
+export declare function transportSnapshot(): NativeTransportSnapshot
 
 export declare function writeDeterministicTestRecording(config: NativeRecordingStartConfig, sampleRate: number, frameCount: number): NativeRecordingResult

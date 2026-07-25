@@ -6,6 +6,12 @@ export const IPC_CHANNELS = {
   audioStart: "audio:start",
   audioStop: "audio:stop",
   audioSnapshot: "audio:snapshot",
+  mixerLoad: "mixer:load",
+  mixerExecute: "mixer:execute",
+  mixerPreview: "mixer:preview",
+  mixerSnapshot: "mixer:snapshot",
+  transportCommand: "transport:command",
+  transportSnapshot: "transport:snapshot",
   systemPerformanceSnapshot: "system:performance-snapshot",
   projectCreate: "project:create",
   projectOpen: "project:open",
@@ -53,6 +59,12 @@ export interface YadawDesktopApi {
   startAudioEngine(preferences: AudioPreferences): Promise<AudioRuntimeSnapshot>
   stopAudioEngine(): Promise<AudioRuntimeSnapshot>
   audioEngineSnapshot(): Promise<AudioRuntimeSnapshot>
+  loadMixerGraph(): Promise<MixerGraphSnapshot>
+  executeProjectCommand(command: ProjectCommand): Promise<ProjectCommandResult>
+  previewMixerParameter(preview: MixerParameterPreview): Promise<void>
+  mixerSnapshot(): Promise<MixerRuntimeSnapshot>
+  transportCommand(command: TransportCommand): Promise<TransportSnapshot>
+  transportSnapshot(): Promise<TransportSnapshot>
   systemPerformanceSnapshot(): Promise<SystemPerformanceSnapshot>
   createProject(request: CreateProjectRequest): Promise<ProjectSession>
   openProject(path?: string): Promise<ProjectSession | null>
@@ -190,9 +202,20 @@ export interface RecordingSession {
   id: string
   startedAt: number
   swapPath: string
+  startFrame: number
+  trackIds: string[]
 }
 
 export type PendingRecordingState = "partial" | "ready" | "committed"
+
+export interface RecordedTrackAsset {
+  assetId: string
+  trackId: string
+  name: string
+  sampleRate: number
+  channels: number
+  frameCount: number
+}
 
 export interface PendingRecording {
   id: string
@@ -205,6 +228,7 @@ export interface PendingRecording {
   startedAt: number
   dropoutFrames: number
   assetExists: boolean
+  recordedTracks: RecordedTrackAsset[]
 }
 
 export interface CpuCoreSnapshot {
@@ -258,6 +282,7 @@ export interface AudioDeviceDescriptor {
   defaultSampleRate: number | null
   minBufferSize: number | null
   maxBufferSize: number | null
+  channelCount: number | null
 }
 
 export interface AudioDeviceList {
@@ -322,3 +347,116 @@ export const INITIAL_AUDIO_RUNTIME_SNAPSHOT: Readonly<AudioRuntimeSnapshot> = {
   clockSync: "inactive",
   bufferFallback: false
 }
+
+export type MixerChannelKind = "audio" | "bus" | "master"
+export type MixerChannelFormat = "mono" | "stereo"
+export type MixerSendTap = "pre" | "post"
+
+export interface MixerChannelState {
+  id: string
+  kind: MixerChannelKind
+  name: string
+  color: string
+  sortOrder: number
+  channelFormat: MixerChannelFormat
+  gainDb: number
+  pan: number
+  muted: boolean
+  soloed: boolean
+  outputChannelId: string | null
+  recordArmed: boolean
+  inputChannels: number[]
+}
+
+export interface TimelineClipState {
+  id: string
+  assetId: string
+  trackId: string
+  name: string
+  startFrame: number
+  sourceOffsetFrames: number
+  lengthFrames: number
+  assetSampleRate: number
+  assetChannels: number
+}
+
+export interface MixerSendState {
+  id: string
+  sourceChannelId: string
+  targetChannelId: string
+  sortOrder: number
+  enabled: boolean
+  tap: MixerSendTap
+  levelDb: number
+  pan: number
+}
+
+export interface MixerGraphSnapshot {
+  sampleRate: number
+  channels: MixerChannelState[]
+  clips: TimelineClipState[]
+  sends: MixerSendState[]
+}
+
+export type MixerChannelPatch = Partial<Pick<
+  MixerChannelState,
+  "name" | "color" | "sortOrder" | "channelFormat" | "gainDb" | "pan" |
+  "muted" | "soloed" | "outputChannelId" | "recordArmed" | "inputChannels"
+>>
+
+export type MixerSendPatch = Partial<Pick<
+  MixerSendState,
+  "targetChannelId" | "sortOrder" | "enabled" | "tap" | "levelDb" | "pan"
+>>
+
+export type ProjectCommand =
+  | { type: "create-channel"; channel: MixerChannelState }
+  | { type: "delete-channel"; channelId: string }
+  | { type: "update-channel"; channelId: string; patch: MixerChannelPatch }
+  | { type: "create-send"; send: MixerSendState }
+  | { type: "delete-send"; sendId: string }
+  | { type: "update-send"; sendId: string; patch: MixerSendPatch }
+  | { type: "create-clip"; clip: TimelineClipState }
+  | { type: "delete-clip"; clipId: string }
+  | { type: "move-clip"; clipId: string; trackId: string; startFrame: number }
+  | { type: "batch"; commands: ProjectCommand[] }
+
+export interface ProjectCommandResult {
+  graph: MixerGraphSnapshot
+  inverse: ProjectCommand
+}
+
+export interface MixerParameterPreview {
+  target: "channel" | "send"
+  id: string
+  parameter: "gainDb" | "pan" | "levelDb"
+  value: number
+}
+
+export interface MixerChannelMeter {
+  channelId: string
+  preFaderPeak: [number, number]
+  postFaderPeak: [number, number]
+  heldPeak: [number, number]
+  clipped: boolean
+}
+
+export interface MixerRuntimeSnapshot {
+  meters: MixerChannelMeter[]
+  capturedAt: number
+}
+
+export type TransportState = "stopped" | "playing" | "recording"
+export interface TransportSnapshot {
+  state: TransportState
+  positionFrames: number
+  sampleRate: number
+}
+
+export type TransportCommand =
+  | { type: "play" }
+  | { type: "record" }
+  | { type: "pause" }
+  | { type: "stop" }
+  | { type: "seek"; positionFrames: number }
+  | { type: "clear-meter-clips" }

@@ -7,3 +7,9 @@ rust-version.workspace = true
 [lib]
 path = "src/lib.rs"
 
+[dev-dependencies]
+criterion.workspace = true
+
+[[bench]]
+name = "mixer_graph"
+harness = false

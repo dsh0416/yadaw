@@ -1,5 +1,7 @@
 use std::{error::Error, fmt};
 
+pub mod mixer;
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ProcessStats {
     pub peak: f32,

@@ -6,6 +6,7 @@ import { AudioLines } from "@lucide/vue"
 import { useProjectStore } from "../../stores/project"
 import { useTransportStore } from "../../stores/transport"
 import { useArrangementViewStore } from "../../stores/arrangementView"
+import { useMixerStore } from "../../stores/mixer"
 import type { TimelineClip } from "../../stores/transport"
 import ArrangementTrack from "./ArrangementTrack.vue"
 import ArrangementZoomControls from "./ArrangementZoomControls.vue"
@@ -14,11 +15,13 @@ import TimelineRuler from "./TimelineRuler.vue"
 const props = defineProps<{
   recordingId: string | null
   recordingStartedAt: number | null
+  recordingStartFrame: number | null
   recordingError: string
 }>()
 const projectStore = useProjectStore()
 const transportStore = useTransportStore()
 const viewStore = useArrangementViewStore()
+const mixerStore = useMixerStore()
 const { session } = storeToRefs(projectStore)
 const {
   clips, playheadSeconds, selectedClipId, playing, loading, error,
@@ -38,23 +41,38 @@ const recordingDuration = computed(() => {
   if (liveDurationSeconds.value > 0) return liveDurationSeconds.value
   return props.recordingStartedAt === null ? 0 : 0.05
 })
-const recordingStartSeconds = computed(() => clips.value
-  .filter((clip) => clip.id !== props.recordingId)
-  .reduce((latest, clip) => Math.max(latest, clip.endSeconds), 0)
+const recordingStartSeconds = computed(() =>
+  props.recordingStartFrame === null
+    ? playheadSeconds.value
+    : props.recordingStartFrame / (session.value?.configuration.sampleRate ?? 48_000)
 )
-const liveClip = computed<TimelineClip | null>(() =>
-  props.recordingStartedAt === null || props.recordingId === null ? null : {
-  id: props.recordingId,
-  assetId: props.recordingId,
-  name: "New recording",
-  startSeconds: recordingStartSeconds.value,
-  durationSeconds: recordingDuration.value,
-  endSeconds: recordingStartSeconds.value + recordingDuration.value,
-  channels: 2,
-  sampleRate: session.value?.configuration.sampleRate ?? 48_000
+const recordingTracks = computed(() => {
+  const armed = mixerStore.audioTracks.filter((track) => track.recordArmed)
+  if (armed.length > 0) return armed
+  return mixerStore.audioTracks
+    .filter((track) => track.id === mixerStore.selectedChannelId)
+    .slice(0, 1)
 })
+const liveClips = computed<TimelineClip[]>(() =>
+  props.recordingStartedAt === null || props.recordingId === null
+    ? []
+    : recordingTracks.value.map((track) => ({
+        id: `${props.recordingId}-${track.id}`,
+        assetId: props.recordingId!,
+        trackId: track.id,
+        name: "New recording",
+        startSeconds: recordingStartSeconds.value,
+        durationSeconds: recordingDuration.value,
+        endSeconds: recordingStartSeconds.value + recordingDuration.value,
+        channels: track.channelFormat === "mono" ? 1 : 2,
+        sampleRate: session.value?.configuration.sampleRate ?? 48_000
+      }))
+)
 const visibleDuration = computed(() =>
-  Math.max(timelineDurationSeconds.value, (liveClip.value?.endSeconds ?? contentEndSeconds.value) + 2)
+  Math.max(
+    timelineDurationSeconds.value,
+    (liveClips.value[0]?.endSeconds ?? contentEndSeconds.value) + 2
+  )
 )
 const contentWidth = computed(() =>
   Math.max(viewportWidth.value, visibleDuration.value * pixelsPerSecond.value)
@@ -64,12 +82,19 @@ const viewportEndSeconds = computed(() =>
   (scrollLeft.value + viewportWidth.value) / pixelsPerSecond.value
 )
 const selectedClip = computed(() => clips.value.find((clip) => clip.id === selectedClipId.value) ?? null)
+const trackRows = computed(() => mixerStore.audioTracks.map((track) => ({
+  track,
+  clips: clips.value.filter((clip) => clip.trackId === track.id)
+})))
+const trackGridRows = computed(() =>
+  `27px repeat(${Math.max(1, trackRows.value.length)}, ${trackHeight.value}px) minmax(64px, 1fr)`
+)
 const railStyle = computed(() => ({
-  gridTemplateRows: `27px ${trackHeight.value}px minmax(64px, 1fr)`
+  gridTemplateRows: trackGridRows.value
 }))
 const contentStyle = computed(() => ({
   width: `${contentWidth.value}px`,
-  gridTemplateRows: `27px ${trackHeight.value}px minmax(64px, 1fr)`
+  gridTemplateRows: trackGridRows.value
 }))
 
 useResizeObserver(viewport, (entries) => {
@@ -100,6 +125,32 @@ function handleSeek(seconds: number): void {
 function handleWaveformFrameCount(frameCount: number, sampleRate: number): void {
   if (sampleRate > 0) liveDurationSeconds.value = frameCount / sampleRate
 }
+function handleMoveClip(clipId: string, trackId: string, startSeconds: number): void {
+  void mixerStore.execute({
+    type: "move-clip",
+    clipId,
+    trackId,
+    startFrame: Math.round(startSeconds * mixerStore.graph.sampleRate)
+  })
+}
+function reorderTrack(index: number, direction: -1 | 1): void {
+  const targetIndex = index + direction
+  const source = mixerStore.audioTracks[index]
+  const target = mixerStore.audioTracks[targetIndex]
+  if (!source || !target) return
+  void mixerStore.execute({
+    type: "batch",
+    commands: [
+      { type: "update-channel", channelId: source.id, patch: { sortOrder: target.sortOrder } },
+      { type: "update-channel", channelId: target.id, patch: { sortOrder: source.sortOrder } }
+    ]
+  })
+}
+function handleTrackKeydown(event: KeyboardEvent, index: number): void {
+  if (!event.altKey || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) return
+  event.preventDefault()
+  reorderTrack(index, event.key === "ArrowUp" ? -1 : 1)
+}
 function handleWheel(event: WheelEvent): void {
   if ((event.ctrlKey || event.metaKey) && event.altKey) {
     viewStore.zoomAmplitude(event.deltaY < 0 ? 1 : -1)
@@ -128,7 +179,7 @@ function handleWheel(event: WheelEvent): void {
     <div class="arrangement-toolbar">
       <div class="arrangement-title">
         <span>ARRANGEMENT</span>
-        <strong>{{ selectedClip ? selectedClip.name : "Main timeline" }}</strong>
+        <strong>{{ selectedClip ? selectedClip.name : mixerStore.selectedChannel?.name ?? "Main timeline" }}</strong>
       </div>
       <ArrangementZoomControls
         :pixels-per-second="pixelsPerSecond"
@@ -146,19 +197,29 @@ function handleWheel(event: WheelEvent): void {
         <span v-if="recordingStartedAt !== null">Recording {{ recordingDuration.toFixed(1) }} s</span>
         <span v-else-if="loading">Preparing audio…</span>
         <span v-else-if="playing">Playing</span>
-        <span v-else>{{ clips.length }} {{ clips.length === 1 ? "clip" : "clips" }}</span>
+        <span v-else>{{ mixerStore.audioTracks.length }} tracks · {{ clips.length }} clips</span>
       </div>
     </div>
 
     <div class="timeline-grid">
       <div class="timeline-rail" :style="railStyle">
         <div class="ruler-corner">TRACKS</div>
-        <div class="track-header">
-          <span class="track-color" /><strong>01</strong>
-          <div class="track-copy"><b>Audio 01</b><small>INPUT 1–2 · MULTICHANNEL</small></div>
+        <button
+          v-for="({ track }, index) in trackRows"
+          :key="track.id"
+          :class="['track-header', { selected: track.id === mixerStore.selectedChannelId }]"
+          :aria-label="`${track.name}, Alt+Arrow Up or Down to reorder`"
+          @click="mixerStore.selectedChannelId = track.id"
+          @keydown="handleTrackKeydown($event, index)"
+        >
+          <span class="track-color" :style="{ background: track.color }" /><strong>{{ String(index + 1).padStart(2, "0") }}</strong>
+          <div class="track-copy">
+            <b>{{ track.name }}</b>
+            <small>INPUT {{ track.inputChannels.join("–") }} · {{ track.channelFormat.toUpperCase() }}</small>
+          </div>
           <AudioLines :size="13" />
-        </div>
-        <div class="track-spacer"><span>01 TRACK</span></div>
+        </button>
+        <div class="track-spacer"><span>{{ mixerStore.audioTracks.length }} TRACKS</span></div>
       </div>
       <div ref="viewport" class="timeline-viewport" @scroll="handleScroll" @wheel="handleWheel">
         <div class="timeline-content" :style="contentStyle">
@@ -170,7 +231,10 @@ function handleWheel(event: WheelEvent): void {
             @seek="handleSeek"
           />
           <ArrangementTrack
-            :clips="clips"
+            v-for="{ track, clips: trackClips } in trackRows"
+            :key="track.id"
+            :track-id="track.id"
+            :clips="trackClips"
             :content-width="contentWidth"
             :pixels-per-second="pixelsPerSecond"
             :track-height="trackHeight"
@@ -180,12 +244,13 @@ function handleWheel(event: WheelEvent): void {
             :viewport-end-seconds="viewportEndSeconds"
             :playhead-seconds="playheadSeconds"
             :selected-clip-id="selectedClipId"
-            :live-clip="liveClip"
+            :live-clip="liveClips.find((clip) => clip.trackId === track.id) ?? null"
             :tempo="tempo"
             :beats-per-bar="beatsPerBar"
             @seek="handleSeek"
             @select-clip="transportStore.selectClip"
             @waveform-frame-count="handleWaveformFrameCount"
+            @move-clip="handleMoveClip"
           />
           <div class="empty-lane">
             <span>{{ clips.length === 0 ? "Record audio to begin the arrangement." : "Click the timeline to move the playhead. Press Space to play." }}</span>
@@ -198,5 +263,5 @@ function handleWheel(event: WheelEvent): void {
 </template>
 
 <style scoped>
-.arrangement{position:relative;display:grid;grid-template-rows:43px minmax(0,1fr);min-width:0;min-height:0;overflow:hidden;background:#0a0e16}.arrangement-toolbar{display:grid;grid-template-columns:minmax(120px,1fr) auto minmax(100px,1fr);align-items:center;gap:12px;padding:0 14px 0 15px;border-bottom:1px solid var(--line-soft);background:#111722}.arrangement-title span,.arrangement-title strong{display:block}.arrangement-title span{color:var(--accent);font:700 7px var(--font-utility);letter-spacing:.16em}.arrangement-title strong{max-width:220px;overflow:hidden;margin-top:3px;color:var(--text-secondary);font-size:10px;text-overflow:ellipsis;white-space:nowrap}.transport-state{display:flex;justify-self:end;align-items:center;gap:7px;color:#657287;font:7px var(--font-utility)}.transport-state i{width:6px;height:6px;border-radius:50%;background:#465267}.transport-state i.active{background:var(--signal-cyan)}.transport-state i.loading{background:var(--warning)}.transport-state i.recording{background:var(--record);box-shadow:0 0 7px var(--record)}.timeline-grid{display:grid;grid-template-columns:178px minmax(0,1fr);min-height:0}.timeline-rail,.timeline-content{display:grid;min-height:100%}.timeline-rail{border-right:1px solid var(--line-soft)}.timeline-viewport{min-width:0;min-height:0;overflow-x:auto;overflow-y:hidden}.ruler-corner{display:flex;align-items:center;padding:0 12px;border-bottom:1px solid var(--line-strong);color:#536075;background:#101620;font:700 7px var(--font-utility);letter-spacing:.14em}.track-header{display:grid;grid-template-columns:3px 25px minmax(0,1fr) auto;align-items:center;gap:8px;padding:12px 10px;border-bottom:1px solid var(--line-strong);background:#151b27}.track-color{align-self:stretch;border-radius:2px;background:linear-gradient(var(--accent-soft),var(--signal-cyan))}.track-header>strong{color:#68758a;font:9px var(--font-utility)}.track-copy b,.track-copy small{display:block}.track-copy b{font-size:10px}.track-copy small{margin-top:4px;color:var(--text-faint);font:6px var(--font-utility)}.track-header>svg{color:#68758a}.track-spacer{padding:13px 12px;color:#3e4a5d;background:#101620;font:6px var(--font-utility)}.empty-lane{display:grid;place-items:center;background:#090e16;color:#435066;font-size:8px}.playback-error{position:absolute;right:12px;bottom:12px;margin:0;padding:8px 10px;border:1px solid #71394a;border-radius:5px;color:#ffc3cb;background:#321722;font-size:8px}@media(max-width:1100px){.timeline-grid{grid-template-columns:152px minmax(0,1fr)}.arrangement-toolbar{grid-template-columns:1fr auto}.arrangement-title{display:none}}
+.arrangement{position:relative;display:grid;grid-template-rows:43px minmax(0,1fr);min-width:0;min-height:0;overflow:hidden;background:#0a0e16}.arrangement-toolbar{display:grid;grid-template-columns:minmax(120px,1fr) auto minmax(100px,1fr);align-items:center;gap:12px;padding:0 14px 0 15px;border-bottom:1px solid var(--line-soft);background:#111722}.arrangement-title span,.arrangement-title strong{display:block}.arrangement-title span{color:var(--accent);font:700 7px var(--font-utility);letter-spacing:.16em}.arrangement-title strong{max-width:220px;overflow:hidden;margin-top:3px;color:var(--text-secondary);font-size:10px;text-overflow:ellipsis;white-space:nowrap}.transport-state{display:flex;justify-self:end;align-items:center;gap:7px;color:#657287;font:7px var(--font-utility)}.transport-state i{width:6px;height:6px;border-radius:50%;background:#465267}.transport-state i.active{background:var(--signal-cyan)}.transport-state i.loading{background:var(--warning)}.transport-state i.recording{background:var(--record);box-shadow:0 0 7px var(--record)}.timeline-grid{display:grid;grid-template-columns:178px minmax(0,1fr);min-height:0}.timeline-rail,.timeline-content{display:grid;min-height:100%}.timeline-rail{border-right:1px solid var(--line-soft)}.timeline-viewport{min-width:0;min-height:0;overflow:auto}.ruler-corner{display:flex;align-items:center;padding:0 12px;border-bottom:1px solid var(--line-strong);color:#536075;background:#101620;font:700 7px var(--font-utility);letter-spacing:.14em}.track-header{display:grid;grid-template-columns:3px 25px minmax(0,1fr) auto;align-items:center;gap:8px;padding:12px 10px;border:0;border-bottom:1px solid var(--line-strong);color:var(--text-primary);background:#151b27;text-align:left;cursor:pointer}.track-header:hover{background:#1a2230}.track-header.selected{background:#20283a;box-shadow:3px 0 0 var(--accent) inset}.track-header:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}.track-color{align-self:stretch;border-radius:2px}.track-header>strong{color:#68758a;font:9px var(--font-utility)}.track-copy b,.track-copy small{display:block}.track-copy{min-width:0}.track-copy b{overflow:hidden;font-size:10px;text-overflow:ellipsis;white-space:nowrap}.track-copy small{margin-top:4px;color:var(--text-faint);font:6px var(--font-utility)}.track-header>svg{color:#68758a}.track-spacer{padding:13px 12px;color:#3e4a5d;background:#101620;font:6px var(--font-utility)}.empty-lane{display:grid;place-items:center;background:#090e16;color:#435066;font-size:8px}.playback-error{position:absolute;right:12px;bottom:12px;margin:0;padding:8px 10px;border:1px solid #71394a;border-radius:5px;color:#ffc3cb;background:#321722;font-size:8px}@media(max-width:1100px){.timeline-grid{grid-template-columns:152px minmax(0,1fr)}.arrangement-toolbar{grid-template-columns:1fr auto}.arrangement-title{display:none}}
 </style>

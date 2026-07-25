@@ -36,9 +36,11 @@ describe("RecordingService archive cleanup", () => {
     const settings = { get: vi.fn().mockResolvedValue({ swapDirectory }) }
     const projects = {
       current: { path: projectPath },
-      query: vi.fn().mockResolvedValue({ rows: [[true]] })
+      query: vi.fn().mockResolvedValue({ rows: [["hash"]] })
     }
-    const service = new RecordingService(settings as never, projects as never, {} as never)
+    const service = new RecordingService(
+      settings as never, projects as never, {} as never, {} as never
+    )
     await service.cleanupCommittedForProject(projectPath)
 
     await expect(stat(audioPath)).rejects.toMatchObject({ code: "ENOENT" })
@@ -74,7 +76,9 @@ describe("RecordingService archive cleanup", () => {
       importLargeObject: vi.fn()
     }
     const operations = { upsert: vi.fn(), patch: vi.fn() }
-    const service = new RecordingService(settings as never, projects as never, operations as never)
+    const service = new RecordingService(
+      settings as never, projects as never, operations as never, {} as never
+    )
 
     await service.recover(id)
 

@@ -3,6 +3,7 @@ import { mount } from "@vue/test-utils"
 import { describe, expect, it } from "vitest"
 import type { Asset } from "@yadaw/project-db/schema"
 import { useProjectStore } from "../../stores/project"
+import { useMixerStore } from "../../stores/mixer"
 import ArrangementWorkspace from "./ArrangementWorkspace.vue"
 
 const recordingAsset: Asset = {
@@ -40,9 +41,42 @@ describe("ArrangementWorkspace", () => {
       recoveredWorkingCopy: false
     }
     project.projectAssets = [recordingAsset]
+    const mixer = useMixerStore()
+    mixer.graph = {
+      sampleRate: 48_000,
+      channels: [
+        {
+          id: "audio-1", kind: "audio", name: "Audio 1", color: "#8C83FF",
+          sortOrder: 0, channelFormat: "stereo", gainDb: 0, pan: 0, muted: false,
+          soloed: false, outputChannelId: "master", recordArmed: false, inputChannels: [1, 2]
+        },
+        {
+          id: "master", kind: "master", name: "Master", color: "#67D9E7",
+          sortOrder: 0, channelFormat: "stereo", gainDb: 0, pan: 0, muted: false,
+          soloed: false, outputChannelId: null, recordArmed: false, inputChannels: []
+        }
+      ],
+      clips: [{
+        id: recordingAsset.id,
+        assetId: recordingAsset.id,
+        trackId: "audio-1",
+        name: "First take",
+        startFrame: 0,
+        sourceOffsetFrames: 0,
+        lengthFrames: 48_000,
+        assetSampleRate: 48_000,
+        assetChannels: 2
+      }],
+      sends: []
+    }
 
     const wrapper = mount(ArrangementWorkspace, {
-      props: { recordingId: null, recordingStartedAt: null, recordingError: "" },
+      props: {
+        recordingId: null,
+        recordingStartedAt: null,
+        recordingStartFrame: null,
+        recordingError: ""
+      },
       global: { plugins: [pinia] }
     })
 
@@ -75,11 +109,30 @@ describe("ArrangementWorkspace", () => {
       dirty: false,
       recoveredWorkingCopy: false
     }
+    const mixer = useMixerStore()
+    mixer.graph = {
+      sampleRate: 48_000,
+      channels: [
+        {
+          id: "audio-1", kind: "audio", name: "Audio 1", color: "#8C83FF",
+          sortOrder: 0, channelFormat: "stereo", gainDb: 0, pan: 0, muted: false,
+          soloed: false, outputChannelId: "master", recordArmed: true, inputChannels: [1, 2]
+        },
+        {
+          id: "master", kind: "master", name: "Master", color: "#67D9E7",
+          sortOrder: 0, channelFormat: "stereo", gainDb: 0, pan: 0, muted: false,
+          soloed: false, outputChannelId: null, recordArmed: false, inputChannels: []
+        }
+      ],
+      clips: [],
+      sends: []
+    }
 
     const wrapper = mount(ArrangementWorkspace, {
       props: {
         recordingId: "recording-live",
         recordingStartedAt: Date.now() - 1_000,
+        recordingStartFrame: 0,
         recordingError: ""
       },
       global: { plugins: [pinia] }

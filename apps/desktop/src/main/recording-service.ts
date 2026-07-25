@@ -4,6 +4,7 @@ import { basename, join } from "node:path"
 import type {
   OperationSnapshot,
   PendingRecording,
+  RecordedTrackAsset,
   RecordingSession,
   WaveformPeakWindow,
   WaveformWindowRequest
@@ -20,12 +21,28 @@ import { recordingWaveformSnapshot as nativeRecordingWaveformSnapshot } from "@y
 import type { ApplicationSettingsStore } from "./application-settings"
 import type { OperationService } from "./operation-service"
 import type { ProjectService } from "./project-service"
+import type { MixerService } from "./mixer-service"
+
+interface RecordingTrackSidecar {
+  assetId: string
+  trackId: string
+  trackName: string
+  inputChannels: number[]
+  finalPath: string | null
+  contentHash: string | null
+  sampleRate: number | null
+  channels: number | null
+  frameCount: number | null
+}
 
 interface RecordingSidecar extends PendingRecording {
   finalPath: string | null
   bitDepth: "float32" | "pcm24" | "pcm16"
   frameCount: number
   contentHash: string | null
+  startFrame: number
+  tracks: RecordingTrackSidecar[]
+  resumePlaybackAfterRecording: boolean
 }
 
 function utcFields(date: Date): { date: string; time: string } {
@@ -42,7 +59,8 @@ export class RecordingService {
   constructor(
     private readonly settings: ApplicationSettingsStore,
     private readonly projects: ProjectService,
-    private readonly operations: OperationService
+    private readonly operations: OperationService,
+    private readonly mixer: MixerService
   ) {}
 
   private async writeSidecar(recording: RecordingSidecar): Promise<void> {
@@ -62,9 +80,19 @@ export class RecordingService {
       throw new Error("Start the audio engine before recording")
     }
     const applicationSettings = await this.settings.get()
+    const graph = await this.mixer.snapshot()
+    const armed = graph.channels.filter((channel) =>
+      channel.kind === "audio" && channel.recordArmed
+    )
+    const targets = armed.length > 0
+      ? armed
+      : graph.channels.filter((channel) => channel.kind === "audio").slice(0, 1)
+    if (targets.length === 0) throw new Error("Arm an audio track before recording")
     await mkdir(applicationSettings.swapDirectory, { recursive: true })
     const id = randomUUID()
     const startedAt = Date.now()
+    const transportBeforeRecording = this.mixer.transportSnapshot()
+    const startFrame = transportBeforeRecording.positionFrames
     const partialPath = join(applicationSettings.swapDirectory, `${id}.partial.bwf`)
     const sidecarPath = join(applicationSettings.swapDirectory, `${id}.recording.json`)
     const sidecar: RecordingSidecar = {
@@ -81,7 +109,21 @@ export class RecordingService {
       finalPath: null,
       bitDepth: applicationSettings.recordingBitDepth,
       frameCount: 0,
-      contentHash: null
+      contentHash: null,
+      startFrame,
+      recordedTracks: [],
+      resumePlaybackAfterRecording: transportBeforeRecording.state === "playing",
+      tracks: targets.map((track, index) => ({
+        assetId: index === 0 ? id : randomUUID(),
+        trackId: track.id,
+        trackName: track.name,
+        inputChannels: [...track.inputChannels],
+        finalPath: null,
+        contentHash: null,
+        sampleRate: null,
+        channels: null,
+        frameCount: null
+      }))
     }
     await this.writeSidecar(sidecar)
     const utc = utcFields(new Date(startedAt))
@@ -92,14 +134,23 @@ export class RecordingService {
         originator: "YADAW",
         originationDate: utc.date,
         originationTime: utc.time,
-        timeReference: 0
+        timeReference: Math.round(
+          startFrame * sidecar.sampleRate / project.configuration.sampleRate
+        )
       })
+      this.mixer.transport({ type: "record" })
     } catch (error) {
       await rm(sidecarPath, { force: true })
       throw error
     }
     this.active = sidecar
-    return { id, startedAt, swapPath: partialPath }
+    return {
+      id,
+      startedAt,
+      swapPath: partialPath,
+      startFrame,
+      trackIds: sidecar.tracks.map((track) => track.trackId)
+    }
   }
 
   async stop(): Promise<PendingRecording> {
@@ -128,18 +179,26 @@ export class RecordingService {
           Math.round((Date.now() - recording.startedAt) / 1_000 * recording.sampleRate)
         )
       )
-      const captured = process.env.YADAW_TEST_CAPTURE_SOURCE === "1"
-        ? writeDeterministicTestRecording({
-            path: recording.audioPath,
-            assetId: recording.id,
-            originator: "YADAW test",
-            originationDate: startedUtc.date,
-            originationTime: startedUtc.time,
-            timeReference: 0
-          }, recording.sampleRate, deterministicFrameCount)
-        : stopNativeRecording()
+      let captured
+      try {
+        captured = process.env.YADAW_TEST_CAPTURE_SOURCE === "1"
+          ? writeDeterministicTestRecording({
+              path: recording.audioPath,
+              assetId: recording.id,
+              originator: "YADAW test",
+              originationDate: startedUtc.date,
+              originationTime: startedUtc.time,
+              timeReference: recording.startFrame
+            }, recording.sampleRate, deterministicFrameCount)
+          : stopNativeRecording()
+      } finally {
+        this.mixer.transport({
+          type: recording.resumePlaybackAfterRecording ? "play" : "pause"
+        })
+      }
       recording.frameCount = captured.frameCount
       recording.dropoutFrames = captured.dropoutFrames
+      recording.channels = captured.channels
       const readyPath = recording.audioPath.replace(".partial.bwf", ".ready.bwf")
       await rename(recording.audioPath, readyPath)
       recording.audioPath = readyPath
@@ -229,29 +288,65 @@ export class RecordingService {
     if (!project || project.path !== recording.projectPath) {
       throw new Error("Open the recording's project before recovering it")
     }
+    if (!recording.tracks?.length) {
+      const fallback = await this.projects.query({
+        sql: `SELECT id, name, input_channels FROM mixer_channels
+          WHERE kind = 'audio' ORDER BY sort_order, id LIMIT 1`,
+        params: [],
+        method: "all"
+      })
+      const row = fallback.rows[0]
+      if (!row) throw new Error("The recording project has no audio track")
+      recording.startFrame ??= 0
+      recording.tracks = [{
+        assetId: recording.id,
+        trackId: String(row[0]),
+        trackName: String(row[1]),
+        inputChannels: Array.isArray(row[2]) ? row[2].map(Number) : [1, 2],
+        finalPath: recording.finalPath,
+        contentHash: recording.contentHash,
+        sampleRate: null,
+        channels: null,
+        frameCount: null
+      }]
+    }
     const started = new Date(recording.startedAt)
     const utc = utcFields(started)
-    const finalPath = recording.audioPath.replace(".ready.bwf", `.final-${recording.bitDepth}.bwf`)
     this.operations.patch(operationId, {
       phase: "resampling",
       completedBytes: null,
       totalBytes: null,
       cancellable: false
     }, true)
-    const finalized = await finalizeRecording({
-      inputPath: recording.audioPath,
-      outputPath: finalPath,
-      targetSampleRate: project.configuration.sampleRate,
-      bitDepth: recording.bitDepth,
-      assetId: recording.id,
-      originator: "YADAW",
-      originationDate: utc.date,
-      originationTime: utc.time,
-      timeReference: 0
-    })
-    recording.finalPath = finalPath
-    recording.contentHash = finalized.contentHash
-    recording.frameCount = finalized.frameCount
+    const finalizedTracks = []
+    for (const [index, track] of recording.tracks.entries()) {
+      const finalPath = recording.audioPath.replace(
+        ".ready.bwf",
+        `.track-${index + 1}.final-${recording.bitDepth}.bwf`
+      )
+      const finalized = await finalizeRecording({
+        inputPath: recording.audioPath,
+        outputPath: finalPath,
+        targetSampleRate: project.configuration.sampleRate,
+        bitDepth: recording.bitDepth,
+        assetId: track.assetId,
+        originator: "YADAW",
+        originationDate: utc.date,
+        originationTime: utc.time,
+        timeReference: recording.startFrame,
+        channelIndices: track.inputChannels
+      })
+      track.finalPath = finalPath
+      track.contentHash = finalized.contentHash
+      track.sampleRate = finalized.sampleRate
+      track.channels = finalized.channels
+      track.frameCount = finalized.frameCount
+      finalizedTracks.push({ track, finalized })
+    }
+    const primary = finalizedTracks[0]!
+    recording.finalPath = primary.track.finalPath
+    recording.contentHash = primary.finalized.contentHash
+    recording.frameCount = primary.finalized.frameCount
     await this.writeSidecar(recording)
 
     this.operations.patch(operationId, {
@@ -261,39 +356,55 @@ export class RecordingService {
       cancellable: true
     }, true)
     this.operations.setCancelHandler(operationId, () => this.projects.cancelOperation(operationId))
-    await this.projects.importLargeObject(finalPath, operationId, {
-      id: recording.id,
-      name: `Recording ${new Date(recording.startedAt).toLocaleString()}.bwf`,
-      mimeType: "audio/x-bwf",
-      contentHash: finalized.contentHash,
-      sampleRate: finalized.sampleRate,
-      channels: finalized.channels,
-      bitDepth: finalized.bitDepth as RecordingSidecar["bitDepth"],
-      frameCount: BigInt(finalized.frameCount),
-      bwfTimeReference: BigInt(finalized.timeReference),
-      waveformLevels: finalized.waveformLevels.map((level) => ({
-        framesPerBucket: level.framesPerBucket,
-        bucketCount: level.bucketCount,
-        peaks: new Uint8Array(level.peaks)
-      }))
-    }, (completed, total) => {
-      if (total > 0 && completed >= total) {
-        // All LO chunks are in the transaction. From this point onward cancellation
-        // would race the asset insert/commit, so publish the real commit phase now.
-        this.operations.setCancelHandler(operationId, null)
-        this.operations.patch(operationId, {
-          phase: "committing-database",
-          completedBytes: null,
-          totalBytes: null,
-          cancellable: false
-        }, true)
-      } else {
-        this.operations.patch(operationId, { completedBytes: completed, totalBytes: total })
+    const imported: string[] = []
+    try {
+      for (const { track, finalized } of finalizedTracks) {
+        await this.projects.importLargeObject(track.finalPath!, operationId, {
+          id: track.assetId,
+          name: `Recording ${track.trackName} ${new Date(recording.startedAt).toLocaleString()}.bwf`,
+          mimeType: "audio/x-bwf",
+          contentHash: finalized.contentHash,
+          sampleRate: finalized.sampleRate,
+          channels: finalized.channels,
+          bitDepth: finalized.bitDepth as RecordingSidecar["bitDepth"],
+          frameCount: BigInt(finalized.frameCount),
+          bwfTimeReference: BigInt(finalized.timeReference),
+          waveformLevels: finalized.waveformLevels.map((level) => ({
+            framesPerBucket: level.framesPerBucket,
+            bucketCount: level.bucketCount,
+            peaks: new Uint8Array(level.peaks)
+          }))
+        }, (completed, total) => {
+          if (total > 0 && completed >= total) {
+            this.operations.setCancelHandler(operationId, null)
+            this.operations.patch(operationId, {
+              phase: "committing-database",
+              completedBytes: null,
+              totalBytes: null,
+              cancellable: false
+            }, true)
+          } else {
+            this.operations.patch(operationId, { completedBytes: completed, totalBytes: total })
+          }
+        })
+        imported.push(track.assetId)
       }
-    })
+    } catch (error) {
+      if (imported.length > 0) {
+        await this.projects.transaction({
+          queries: imported.map((id) => ({
+            sql: "DELETE FROM assets WHERE id = $1",
+            params: [id],
+            method: "execute" as const
+          }))
+        })
+      }
+      throw error
+    }
     this.operations.setCancelHandler(operationId, null)
     recording.state = "committed"
     recording.assetExists = true
+    recording.recordedTracks = this.toPending(recording).recordedTracks
     // The worker returning is the database commit boundary. Do not block completion
     // on a second sidecar rewrite: swap may live on a slow/network-scanned volume.
     // Keeping the durable sidecar as `ready` is intentional until the archive save;
@@ -308,8 +419,26 @@ export class RecordingService {
   }
 
   private toPending(recording: RecordingSidecar): PendingRecording {
-    const { id, state, audioPath, sidecarPath, projectPath, sampleRate, channels, startedAt, dropoutFrames, assetExists } = recording
-    return { id, state, audioPath, sidecarPath, projectPath, sampleRate, channels, startedAt, dropoutFrames, assetExists }
+    const {
+      id, state, audioPath, sidecarPath, projectPath, sampleRate, channels,
+      startedAt, dropoutFrames, assetExists
+    } = recording
+    const recordedTracks: RecordedTrackAsset[] = (recording.tracks ?? [])
+      .filter((track) =>
+        track.sampleRate !== null && track.channels !== null && track.frameCount !== null
+      )
+      .map((track) => ({
+        assetId: track.assetId,
+        trackId: track.trackId,
+        name: `Recording ${track.trackName}`,
+        sampleRate: track.sampleRate!,
+        channels: track.channels!,
+        frameCount: track.frameCount!
+      }))
+    return {
+      id, state, audioPath, sidecarPath, projectPath, sampleRate, channels,
+      startedAt, dropoutFrames, assetExists, recordedTracks
+    }
   }
 
   async listPending(): Promise<PendingRecording[]> {
@@ -326,13 +455,7 @@ export class RecordingService {
       try {
         const sidecar = JSON.parse(await readFile(join(applicationSettings.swapDirectory, file), "utf8")) as RecordingSidecar
         if (this.projects.current?.path === sidecar.projectPath) {
-          const result = await this.projects.query({
-            sql: "SELECT EXISTS(SELECT 1 FROM assets WHERE id = $1)",
-            params: [sidecar.id],
-            method: "all"
-          })
-          sidecar.assetExists = Boolean(result.rows[0]?.[0])
-          if (sidecar.assetExists) sidecar.state = "committed"
+          sidecar.assetExists = await this.assetAlreadyCommitted(sidecar)
         }
         pending.push(this.toPending(sidecar))
       } catch {
@@ -351,16 +474,24 @@ export class RecordingService {
   private async assetAlreadyCommitted(recording: RecordingSidecar): Promise<boolean> {
     const project = this.projects.current
     if (!project || project.path !== recording.projectPath) return false
-    const result = await this.projects.query({
-      sql: "SELECT content_hash FROM assets WHERE id = $1",
-      params: [recording.id],
-      method: "all"
-    })
-    const row = result.rows[0]
-    if (!row) return false
-    if (recording.contentHash && String(row[0]) !== recording.contentHash) {
-      throw new Error("The recording ID already exists with different audio content")
+    const tracks = recording.tracks?.length
+      ? recording.tracks
+      : [{ assetId: recording.id, contentHash: recording.contentHash }]
+    let committed = 0
+    for (const track of tracks) {
+      const result = await this.projects.query({
+        sql: "SELECT content_hash FROM assets WHERE id = $1",
+        params: [track.assetId],
+        method: "all"
+      })
+      const row = result.rows[0]
+      if (!row) continue
+      if (track.contentHash && String(row[0]) !== track.contentHash) {
+        throw new Error("A recording asset ID exists with different audio content")
+      }
+      committed += 1
     }
+    if (committed !== tracks.length) return false
     recording.state = "committed"
     recording.assetExists = true
     return true
@@ -369,6 +500,14 @@ export class RecordingService {
   async recover(id: string): Promise<void> {
     const recording = await this.readSidecar(id)
     if (recording.assetExists || recording.state === "committed" || await this.assetAlreadyCommitted(recording)) return
+    const recoverableIds = recording.tracks?.map((track) => track.assetId) ?? [recording.id]
+    await this.projects.transaction({
+      queries: recoverableIds.map((assetId) => ({
+        sql: "DELETE FROM assets WHERE id = $1",
+        params: [assetId],
+        method: "execute" as const
+      }))
+    })
     if (recording.state === "partial") {
       this.operations.upsert({
         id: `recording:${id}`,
@@ -408,6 +547,9 @@ export class RecordingService {
     await Promise.all([
       rm(recording.audioPath, { force: true }),
       recording.finalPath ? rm(recording.finalPath, { force: true }) : Promise.resolve(),
+      ...(recording.tracks ?? [])
+        .filter((track) => track.finalPath && track.finalPath !== recording.finalPath)
+        .map((track) => rm(track.finalPath!, { force: true })),
       rm(recording.sidecarPath, { force: true })
     ])
   }
@@ -421,12 +563,7 @@ export class RecordingService {
         if (sidecar.projectPath !== projectPath) continue
         let assetExists = sidecar.state === "committed"
         if (!assetExists && this.projects.current?.path === projectPath) {
-          const result = await this.projects.query({
-            sql: "SELECT EXISTS(SELECT 1 FROM assets WHERE id = $1)",
-            params: [sidecar.id],
-            method: "all"
-          })
-          assetExists = Boolean(result.rows[0]?.[0])
+          assetExists = await this.assetAlreadyCommitted(sidecar)
         }
         if (assetExists) {
           await this.deletePending(sidecar.id)

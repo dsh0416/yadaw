@@ -6,11 +6,12 @@ rust-version.workspace = true
 build = "build.rs"
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [features]
 default = []
 asio = ["cpal/asio"]
+bench-internals = []
 
 [dependencies]
 bwavfile.workspace = true
@@ -24,3 +25,21 @@ yadaw-dsp-core.workspace = true
 
 [build-dependencies]
 napi-build.workspace = true
+
+[dev-dependencies]
+criterion.workspace = true
+
+[[bench]]
+name = "native_render"
+harness = false
+required-features = ["bench-internals"]
+
+[[bench]]
+name = "media_streaming"
+harness = false
+required-features = ["bench-internals"]
+
+[[bench]]
+name = "recording"
+harness = false
+required-features = ["bench-internals"]
