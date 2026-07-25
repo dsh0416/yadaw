@@ -32,6 +32,12 @@ const api: YadawDesktopApi = {
   transportSnapshot: () => ipcRenderer.invoke(IPC_CHANNELS.transportSnapshot),
   systemPerformanceSnapshot: () =>
     ipcRenderer.invoke(IPC_CHANNELS.systemPerformanceSnapshot),
+  runAudioBenchmark: () => ipcRenderer.invoke(IPC_CHANNELS.audioBenchmarkRun),
+  subscribeAudioBenchmarkRequests: (listener) => {
+    const handler = () => listener()
+    ipcRenderer.on(IPC_CHANNELS.audioBenchmarkMenuOpen, handler)
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.audioBenchmarkMenuOpen, handler)
+  },
   createProject: (request: CreateProjectRequest) =>
     ipcRenderer.invoke(IPC_CHANNELS.projectCreate, request),
   openProject: (path?: string) => ipcRenderer.invoke(IPC_CHANNELS.projectOpen, path),

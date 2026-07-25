@@ -599,6 +599,7 @@ module.exports.previewMixerParameter = nativeBinding.previewMixerParameter
 module.exports.processGain = nativeBinding.processGain
 module.exports.recordingWaveformSnapshot = nativeBinding.recordingWaveformSnapshot
 module.exports.repairRecordingHeader = nativeBinding.repairRecordingHeader
+module.exports.runAudioBenchmark = nativeBinding.runAudioBenchmark
 module.exports.startAudioEngine = nativeBinding.startAudioEngine
 module.exports.startRecording = nativeBinding.startRecording
 module.exports.stopAudioEngine = nativeBinding.stopAudioEngine

@@ -19,6 +19,22 @@ baselines. The directories are ignored by Git and should not be copied between
 machines. `pnpm check:rust` compiles every benchmark without measuring it and
 runs the real-time allocation invariants.
 
+## User-facing audio performance test
+
+The packaged desktop application also exposes a short native DSP test from
+**Help → Audio Performance Benchmark…**. Unlike the Criterion suite, this test
+does not require a Rust toolchain or repository checkout. It renders three
+reference mixer graphs on a worker thread and reports:
+
+- real-time headroom for low-latency tracking, production mix, and dense-session
+  scenarios;
+- average processing time compared with each scenario's audio buffer deadline;
+- the processor, logical-core count, platform, and measurement time.
+
+This report helps users choose practical project density and buffer settings on
+their own computer. It does not open an audio device and is not a substitute for
+the repeatable Criterion regression suite.
+
 Criterion writes HTML indexes to
 `crates/dsp-core/target/criterion/report/index.html` and
 `crates/dsp-node/target/criterion/report/index.html`; CSV measurements sit below

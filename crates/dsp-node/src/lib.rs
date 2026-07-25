@@ -4,6 +4,7 @@ use yadaw_dsp_core::apply_gain;
 
 mod audio;
 mod audio_engine;
+mod benchmark;
 mod recording;
 
 #[cfg(feature = "bench-internals")]
@@ -24,6 +25,7 @@ pub use audio_engine::{
     recording_waveform_snapshot, start_audio_engine, start_recording, stop_audio_engine,
     stop_recording, transport_command, transport_snapshot,
 };
+pub use benchmark::run_audio_benchmark;
 pub use recording::{
     analyze_waveform, finalize_recording, repair_recording_header,
     write_deterministic_test_recording,

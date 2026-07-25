@@ -29,6 +29,28 @@ export interface NativeAudioBackend {
   available: boolean
 }
 
+export interface NativeAudioBenchmarkReport {
+  durationMs: number
+  overallRealtimeFactor: number
+  scenarios: Array<NativeAudioBenchmarkScenario>
+}
+
+export interface NativeAudioBenchmarkScenario {
+  id: string
+  label: string
+  description: string
+  sampleRate: number
+  blockSize: number
+  tracks: number
+  buses: number
+  sends: number
+  elapsedMs: number
+  audioDurationMs: number
+  averageBlockMs: number
+  bufferBudgetMs: number
+  realtimeFactor: number
+}
+
 export interface NativeAudioDevice {
   id: string
   name: string
@@ -213,6 +235,8 @@ export interface ProcessGainResult {
 export declare function recordingWaveformSnapshot(startFrame: number, endFrame: number, maxBuckets: number): NativeWaveformSnapshot
 
 export declare function repairRecordingHeader(path: string, channels: number): number
+
+export declare function runAudioBenchmark(): Promise<NativeAudioBenchmarkReport>
 
 export declare function startAudioEngine(config: NativeAudioEngineConfig): NativeAudioRuntimeSnapshot
 

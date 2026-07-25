@@ -13,6 +13,8 @@ export const IPC_CHANNELS = {
   transportCommand: "transport:command",
   transportSnapshot: "transport:snapshot",
   systemPerformanceSnapshot: "system:performance-snapshot",
+  audioBenchmarkRun: "audio-benchmark:run",
+  audioBenchmarkMenuOpen: "audio-benchmark:menu-open",
   projectCreate: "project:create",
   projectOpen: "project:open",
   projectSave: "project:save",
@@ -66,6 +68,8 @@ export interface YadawDesktopApi {
   transportCommand(command: TransportCommand): Promise<TransportSnapshot>
   transportSnapshot(): Promise<TransportSnapshot>
   systemPerformanceSnapshot(): Promise<SystemPerformanceSnapshot>
+  runAudioBenchmark(): Promise<AudioBenchmarkReport>
+  subscribeAudioBenchmarkRequests(listener: () => void): () => void
   createProject(request: CreateProjectRequest): Promise<ProjectSession>
   openProject(path?: string): Promise<ProjectSession | null>
   saveProject(path?: string): Promise<ProjectSession | null>
@@ -264,6 +268,40 @@ export interface SystemPerformanceSnapshot {
   cpu: CpuSnapshot
   memory: MemorySnapshot
   storage: StorageSpaceSnapshot[]
+}
+
+export type AudioBenchmarkRating = "limited" | "basic" | "good" | "excellent"
+
+export interface AudioBenchmarkScenario {
+  id: string
+  label: string
+  description: string
+  sampleRate: number
+  blockSize: number
+  tracks: number
+  buses: number
+  sends: number
+  elapsedMs: number
+  audioDurationMs: number
+  averageBlockMs: number
+  bufferBudgetMs: number
+  realtimeFactor: number
+}
+
+export interface AudioBenchmarkSystemInfo {
+  cpuModel: string
+  logicalCores: number
+  platform: string
+  architecture: string
+}
+
+export interface AudioBenchmarkReport {
+  measuredAt: number
+  durationMs: number
+  overallRealtimeFactor: number
+  rating: AudioBenchmarkRating
+  system: AudioBenchmarkSystemInfo
+  scenarios: readonly AudioBenchmarkScenario[]
 }
 
 export const AUDIO_BACKENDS = ["wasapi", "asio", "coreaudio", "alsa"] as const

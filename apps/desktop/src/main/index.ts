@@ -33,6 +33,8 @@ import {
   stopAudioEngine
 } from "@yadaw/dsp-node"
 import { ApplicationSettingsStore } from "./application-settings"
+import { createAudioBenchmarkReport } from "./audio-benchmark-service"
+import { installApplicationMenu } from "./application-menu"
 import { OperationService } from "./operation-service"
 import { MixerService } from "./mixer-service"
 import { ProjectService } from "./project-service"
@@ -442,6 +444,11 @@ function registerIpcHandlers(
     return sampleSystemPerformance(settings)
   })
 
+  ipcMain.handle(IPC_CHANNELS.audioBenchmarkRun, (event) => {
+    assertTrustedSender(event)
+    return createAudioBenchmarkReport()
+  })
+
   ipcMain.handle(IPC_CHANNELS.settingsGet, (event) => {
     assertTrustedSender(event)
     return settings.get()
@@ -715,6 +722,7 @@ app.whenReady().then(() => {
   const waveforms = new WaveformService(settings, projectService)
   registerIpcHandlers(settings, projectService, recordings, operations, waveforms, mixer)
   createMainWindow()
+  installApplicationMenu()
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
