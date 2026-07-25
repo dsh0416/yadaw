@@ -1,4 +1,4 @@
-import { defineStore } from "pinia"
+import { acceptHMRUpdate, defineStore } from "pinia"
 import { computed, ref } from "vue"
 import type { OperationEvent, OperationSnapshot } from "@yadaw/contracts"
 
@@ -51,3 +51,7 @@ export const useOperationStore = defineStore("operations", () => {
 
   return { operations, active, apply, cancel, dismiss }
 })
+
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(useOperationStore, import.meta.hot))
+}

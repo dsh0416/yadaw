@@ -1,4 +1,4 @@
-import { defineStore } from "pinia"
+import { acceptHMRUpdate, defineStore } from "pinia"
 import { ref } from "vue"
 import type { NativeEngineInfo } from "@yadaw/contracts"
 
@@ -36,3 +36,7 @@ export const useEngineStore = defineStore("engine", () => {
 
   return { nativeInfo, peak, error, initialize, runPreview }
 })
+
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(useEngineStore, import.meta.hot))
+}

@@ -1,4 +1,4 @@
-import { defineStore } from "pinia"
+import { acceptHMRUpdate, defineStore } from "pinia"
 import type { WaveformPeakWindow, WaveformWindowRequest } from "@yadaw/contracts"
 
 const CACHE_LIMIT = 96
@@ -41,3 +41,7 @@ export const useWaveformStore = defineStore("waveform", () => {
 
   return { loadAsset, loadRecording, clear }
 })
+
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(useWaveformStore, import.meta.hot))
+}

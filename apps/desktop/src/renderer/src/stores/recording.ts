@@ -1,4 +1,4 @@
-import { defineStore } from "pinia"
+import { acceptHMRUpdate, defineStore } from "pinia"
 import { ref, shallowRef } from "vue"
 import type { PendingRecording, RecordingSession } from "@yadaw/contracts"
 import { useProjectStore } from "./project"
@@ -95,3 +95,7 @@ export const useRecordingStore = defineStore("recording", () => {
 
   return { active, pending, error, busy, toggle, refreshPending, recover, remove }
 })
+
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(useRecordingStore, import.meta.hot))
+}

@@ -64,6 +64,9 @@ const meterStyle = computed(() => ({
   "--meter-level": `${meterDisplay.meterLevelPercent.value}%`,
   "--held-meter-level": `${meterDisplay.heldMeterLevelPercent.value}%`
 }))
+const faderStyle = computed(() => ({
+  "--fader-level": `${Math.max(0, Math.min(100, (props.channel.gainDb + 90) / 102 * 100))}%`
+}))
 
 function preview(parameter: "gainDb" | "pan", value: number): void {
   emit("preview", {
@@ -161,11 +164,13 @@ function beginFaderGesture(event: PointerEvent): void {
       >{{ livePeakLabel }}</button>
       <label class="fader">
         <input
+          class="fader-control"
           type="range"
           min="-90"
           max="12"
           step="0.1"
           :value="channel.gainDb"
+          :style="faderStyle"
           :aria-label="`${channel.name} volume`"
           @pointerdown="beginFaderGesture"
           @input="gainGesture.preview"
@@ -386,20 +391,84 @@ function beginFaderGesture(event: PointerEvent): void {
   min-height: 0;
 }
 
-.fader > input:first-child {
+.fader-control {
+  --fader-level: 0%;
   width: 100%;
   height: 100%;
   margin: 0;
+  appearance: none;
+  background: transparent;
   writing-mode: vertical-lr;
   direction: rtl;
-  accent-color: var(--accent);
+  cursor: ns-resize;
 }
 
-.fader > input:first-child:focus {
+.fader-control::-webkit-slider-runnable-track {
+  width: 4px;
+  height: 100%;
+  border: 1px solid var(--line-strong);
+  border-radius: 0;
+  background: linear-gradient(
+    to top,
+    var(--accent) 0 var(--fader-level),
+    var(--daw-meter-well) var(--fader-level) 100%
+  );
+  box-shadow: 0 0 0 1px #0006 inset;
+}
+
+.fader-control::-webkit-slider-thumb {
+  width: 28px;
+  height: 13px;
+  margin-left: -13px;
+  border: 1px solid var(--text-muted);
+  border-radius: 1px;
+  appearance: none;
+  background: linear-gradient(
+    to bottom,
+    var(--daw-control-hover) 0 calc(50% - 1px),
+    var(--text-primary) calc(50% - 1px) calc(50% + 1px),
+    var(--daw-control-hover) calc(50% + 1px) 100%
+  );
+  box-shadow: 0 1px 3px #0009, 0 0 0 1px var(--surface-1);
+  cursor: ns-resize;
+}
+
+.fader-control::-moz-range-track {
+  width: 4px;
+  height: 100%;
+  border: 1px solid var(--line-strong);
+  border-radius: 0;
+  background: var(--daw-meter-well);
+  box-shadow: 0 0 0 1px #0006 inset;
+}
+
+.fader-control::-moz-range-progress {
+  width: 4px;
+  background: var(--accent);
+}
+
+.fader-control::-moz-range-thumb {
+  width: 28px;
+  height: 13px;
+  border: 1px solid var(--text-muted);
+  border-radius: 1px;
+  background: linear-gradient(
+    to bottom,
+    var(--daw-control-hover) 0 calc(50% - 1px),
+    var(--text-primary) calc(50% - 1px) calc(50% + 1px),
+    var(--daw-control-hover) calc(50% + 1px) 100%
+  );
+  box-shadow: 0 1px 3px #0009, 0 0 0 1px var(--surface-1);
+  cursor: ns-resize;
+}
+
+.fader-control:focus {
   outline: none;
 }
 
-.fader > input:first-child:focus-visible::-webkit-slider-thumb {
+.fader-control:focus-visible::-webkit-slider-thumb,
+.fader-control:focus-visible::-moz-range-thumb {
+  border-color: var(--focus);
   box-shadow: 0 0 0 2px color-mix(in srgb,var(--focus) 50%,transparent);
 }
 

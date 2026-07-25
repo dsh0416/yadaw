@@ -56,6 +56,18 @@ describe("arrangement view store", () => {
 
   it("enforces all zoom bounds", () => {
     const store = useArrangementViewStore()
+    store.setTimeZoom(0)
+    store.setTrackHeight(0)
+    store.setAmplitudeScale(0)
+    expect(store.pixelsPerSecond).toBe(25)
+    expect(store.trackHeight).toBe(72)
+    expect(store.amplitudeScale).toBe(0.5)
+    store.setTimeZoom(Number.POSITIVE_INFINITY)
+    store.setTrackHeight(Number.POSITIVE_INFINITY)
+    store.setAmplitudeScale(Number.POSITIVE_INFINITY)
+    expect(store.pixelsPerSecond).toBe(1_600)
+    expect(store.trackHeight).toBe(320)
+    expect(store.amplitudeScale).toBe(8)
     for (let index = 0; index < 100; index += 1) {
       store.zoomTime(1)
       store.zoomTrack(1)

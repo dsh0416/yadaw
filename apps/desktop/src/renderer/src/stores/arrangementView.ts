@@ -1,4 +1,4 @@
-import { defineStore } from "pinia"
+import { acceptHMRUpdate, defineStore } from "pinia"
 import { shallowRef } from "vue"
 
 const clamp = (value: number, minimum: number, maximum: number): number =>
@@ -13,15 +13,17 @@ export const useArrangementViewStore = defineStore("arrangement-view", () => {
   const trackScales = shallowRef<Record<string, number>>({})
   const amplitudeScale = shallowRef(1)
 
+  function setTimeZoom(value: number): void {
+    pixelsPerSecond.value = clamp(value, 25, 1_600)
+  }
   function zoomTime(direction: number): void {
-    pixelsPerSecond.value = clamp(
-      pixelsPerSecond.value * (direction > 0 ? 1.25 : 1 / 1.25),
-      25,
-      1_600
-    )
+    setTimeZoom(pixelsPerSecond.value * (direction > 0 ? 1.25 : 1 / 1.25))
+  }
+  function setTrackHeight(value: number): void {
+    trackHeight.value = clamp(value, 72, 320)
   }
   function zoomTrack(direction: number): void {
-    trackHeight.value = clamp(trackHeight.value + (direction > 0 ? 16 : -16), 72, 320)
+    setTrackHeight(trackHeight.value + (direction > 0 ? 16 : -16))
   }
   function trackScale(trackId: string): number {
     return trackScales.value[trackId] ?? 1
@@ -39,12 +41,11 @@ export const useArrangementViewStore = defineStore("arrangement-view", () => {
   function resetTrackScale(trackId: string): void {
     setTrackScale(trackId, 1)
   }
+  function setAmplitudeScale(value: number): void {
+    amplitudeScale.value = clamp(value, 0.5, 8)
+  }
   function zoomAmplitude(direction: number): void {
-    amplitudeScale.value = clamp(
-      amplitudeScale.value * (direction > 0 ? Math.SQRT2 : 1 / Math.SQRT2),
-      0.5,
-      8
-    )
+    setAmplitudeScale(amplitudeScale.value * (direction > 0 ? Math.SQRT2 : 1 / Math.SQRT2))
   }
   function resetTime(): void { pixelsPerSecond.value = 100 }
   function resetTrack(): void { trackHeight.value = 104 }
@@ -61,12 +62,15 @@ export const useArrangementViewStore = defineStore("arrangement-view", () => {
     trackHeight,
     trackScales,
     amplitudeScale,
+    setTimeZoom,
     zoomTime,
+    setTrackHeight,
     zoomTrack,
     trackScale,
     effectiveTrackHeight,
     setTrackScale,
     resetTrackScale,
+    setAmplitudeScale,
     zoomAmplitude,
     resetTime,
     resetTrack,
@@ -74,3 +78,7 @@ export const useArrangementViewStore = defineStore("arrangement-view", () => {
     reset
   }
 })
+
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(useArrangementViewStore, import.meta.hot))
+}

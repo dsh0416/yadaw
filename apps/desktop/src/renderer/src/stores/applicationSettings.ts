@@ -1,4 +1,4 @@
-import { defineStore } from "pinia"
+import { acceptHMRUpdate, defineStore } from "pinia"
 import { shallowRef } from "vue"
 import type {
   ApplicationSettings,
@@ -91,3 +91,7 @@ export const useApplicationSettingsStore = defineStore("application-settings", (
     chooseSwapDirectory
   }
 })
+
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(useApplicationSettingsStore, import.meta.hot))
+}

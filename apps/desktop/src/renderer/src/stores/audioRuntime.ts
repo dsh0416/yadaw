@@ -1,5 +1,5 @@
 import { useIntervalFn } from "@vueuse/core"
-import { defineStore } from "pinia"
+import { acceptHMRUpdate, defineStore } from "pinia"
 import { computed, ref, shallowRef } from "vue"
 import { INITIAL_AUDIO_RUNTIME_SNAPSHOT } from "@yadaw/contracts"
 import type { AudioPreferences, AudioRuntimeSnapshot } from "@yadaw/contracts"
@@ -281,3 +281,7 @@ export const useAudioRuntimeStore = defineStore("audio-runtime", () => {
     stopPolling
   }
 })
+
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(useAudioRuntimeStore, import.meta.hot))
+}

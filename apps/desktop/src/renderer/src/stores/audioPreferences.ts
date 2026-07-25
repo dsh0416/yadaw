@@ -1,5 +1,5 @@
 import { useStorage } from "@vueuse/core"
-import { defineStore } from "pinia"
+import { acceptHMRUpdate, defineStore } from "pinia"
 import { ref } from "vue"
 import {
   AUDIO_BACKENDS,
@@ -113,3 +113,7 @@ export const useAudioPreferencesStore = defineStore("audio-preferences", () => {
     restore
   }
 })
+
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(useAudioPreferencesStore, import.meta.hot))
+}

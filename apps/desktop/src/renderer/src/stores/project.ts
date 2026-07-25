@@ -1,4 +1,4 @@
-import { defineStore } from "pinia"
+import { acceptHMRUpdate, defineStore } from "pinia"
 import { computed, ref } from "vue"
 import type { Asset } from "@yadaw/project-db/schema"
 import { assets, project as projectTable } from "@yadaw/project-db/schema"
@@ -98,3 +98,7 @@ export const useProjectStore = defineStore("project", () => {
     markDirty
   }
 })
+
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(useProjectStore, import.meta.hot))
+}

@@ -1,5 +1,5 @@
 import { useIntervalFn } from "@vueuse/core"
-import { defineStore } from "pinia"
+import { acceptHMRUpdate, defineStore } from "pinia"
 import { computed, shallowRef } from "vue"
 import type { StorageSpaceSnapshot, SystemPerformanceSnapshot } from "@yadaw/contracts"
 
@@ -202,3 +202,7 @@ export const useSystemPerformanceStore = defineStore("system-performance", () =>
     stopPolling
   }
 })
+
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(useSystemPerformanceStore, import.meta.hot))
+}
