@@ -15,12 +15,12 @@ const mixerStore = useMixerStore()
     <header class="mixer-toolbar">
       <div>
         <span>MIXER</span>
-        <strong>{{ mixerStore.audioTracks.length }} tracks · {{ mixerStore.buses.length }} buses</strong>
+        <strong>{{ mixerStore.audioTracks.length }} tracks · {{ mixerStore.buses.length }} buses · {{ mixerStore.outputs.length }} outputs</strong>
       </div>
       <nav aria-label="Mixer actions">
-        <button aria-label="Add mono audio track" @click="mixerStore.createAudioTrack('mono')"><Plus :size="12" />Mono</button>
-        <button aria-label="Add stereo audio track" @click="mixerStore.createAudioTrack('stereo')"><Plus :size="12" />Stereo</button>
+        <button aria-label="Add audio track" @click="mixerStore.createAudioTrack()"><Plus :size="12" />Audio</button>
         <button aria-label="Add bus" @click="mixerStore.createBus"><Plus :size="12" />Bus</button>
+        <button aria-label="Add hardware output" @click="mixerStore.createOutput"><Plus :size="12" />Output</button>
         <button aria-label="Undo mixer change" :disabled="!mixerStore.canUndo" @click="mixerStore.undo"><RotateCcw :size="13" /></button>
         <button aria-label="Redo mixer change" :disabled="!mixerStore.canRedo" @click="mixerStore.redo"><RotateCw :size="13" /></button>
       </nav>

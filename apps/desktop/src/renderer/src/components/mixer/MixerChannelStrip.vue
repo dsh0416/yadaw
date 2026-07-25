@@ -120,14 +120,15 @@ function beginFaderGesture(event: PointerEvent): void {
     <div class="routing-summary">
       <span><RadioTower :size="10" />{{ sends.length }} SEND{{ sends.length === 1 ? "" : "S" }}</span>
       <select
-        v-if="channel.kind !== 'master'"
+        v-if="channel.kind === 'audio' || channel.kind === 'bus'"
         :value="channel.outputChannelId ?? ''"
         :aria-label="`${channel.name} output`"
         @change="emit('updateChannel', channel.id, { outputChannelId: ($event.target as HTMLSelectElement).value })"
       >
         <option v-for="output in outputs" :key="output.id" :value="output.id">{{ output.name }}</option>
       </select>
-      <span v-else>DEVICE OUT</span>
+      <span v-else-if="channel.kind === 'master'">GLOBAL</span>
+      <span v-else>HW {{ channel.hardwareOutputChannels.join('–') }}</span>
     </div>
 
     <MixerPanKnob
@@ -213,6 +214,7 @@ function beginFaderGesture(event: PointerEvent): void {
           @click.stop="emit('updateChannel', channel.id, { muted: !channel.muted })"
         >M</button>
         <button
+          v-if="channel.kind !== 'master'"
           :class="['solo', { active: channel.soloed }]"
           :aria-pressed="channel.soloed"
           :aria-label="`Solo ${channel.name}`"
@@ -229,7 +231,7 @@ function beginFaderGesture(event: PointerEvent): void {
         :label="`${channel.name} channel name; double-click to rename`"
         @rename="emit('updateChannel', channel.id, { name: $event })"
       />
-      <small>{{ channel.channelFormat }}</small>
+      <small>{{ channel.kind === "audio" ? channel.inputFormat : channel.kind }}</small>
     </div>
   </article>
 </template>

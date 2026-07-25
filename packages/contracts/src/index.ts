@@ -398,8 +398,8 @@ export const INITIAL_AUDIO_RUNTIME_SNAPSHOT: Readonly<AudioRuntimeSnapshot> = {
   bufferFallback: false
 }
 
-export type MixerChannelKind = "audio" | "bus" | "master"
-export type MixerChannelFormat = "mono" | "stereo"
+export type MixerChannelKind = "audio" | "bus" | "master" | "output"
+export type MixerInputFormat = "mono" | "stereo"
 export type MixerSendTap = "pre" | "post"
 
 export interface MixerChannelState {
@@ -408,7 +408,7 @@ export interface MixerChannelState {
   name: string
   color: string
   sortOrder: number
-  channelFormat: MixerChannelFormat
+  inputFormat: MixerInputFormat | null
   gainDb: number
   pan: number
   muted: boolean
@@ -416,6 +416,7 @@ export interface MixerChannelState {
   outputChannelId: string | null
   recordArmed: boolean
   inputChannels: number[]
+  hardwareOutputChannels: number[]
 }
 
 export interface TimelineClipState {
@@ -450,8 +451,9 @@ export interface MixerGraphSnapshot {
 
 export type MixerChannelPatch = Partial<Pick<
   MixerChannelState,
-  "name" | "color" | "sortOrder" | "channelFormat" | "gainDb" | "pan" |
-  "muted" | "soloed" | "outputChannelId" | "recordArmed" | "inputChannels"
+  "name" | "color" | "sortOrder" | "inputFormat" | "gainDb" | "pan" |
+  "muted" | "soloed" | "outputChannelId" | "recordArmed" | "inputChannels" |
+  "hardwareOutputChannels"
 >>
 
 export type MixerSendPatch = Partial<Pick<

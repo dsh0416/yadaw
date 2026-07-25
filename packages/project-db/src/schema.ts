@@ -56,18 +56,19 @@ export const assets = pgTable("assets", {
 
 export const mixerChannels = pgTable("mixer_channels", {
   id: text("id").primaryKey(),
-  kind: text("kind").$type<"audio" | "bus" | "master">().notNull(),
+  kind: text("kind").$type<"audio" | "bus" | "master" | "output">().notNull(),
   name: text("name").notNull(),
   color: text("color").notNull(),
   sortOrder: integer("sort_order").notNull(),
-  channelFormat: text("channel_format").$type<"mono" | "stereo">().notNull(),
+  inputFormat: text("input_format").$type<"mono" | "stereo">(),
   gainDb: doublePrecision("gain_db").notNull(),
   pan: doublePrecision("pan").notNull(),
   muted: boolean("muted").notNull(),
   soloed: boolean("soloed").notNull(),
   outputChannelId: text("output_channel_id"),
   recordArmed: boolean("record_armed").notNull(),
-  inputChannels: smallint("input_channels").array().$type<number[]>().notNull()
+  inputChannels: smallint("input_channels").array().$type<number[]>().notNull(),
+  hardwareOutputChannels: smallint("hardware_output_channels").array().$type<number[]>().notNull()
 })
 
 export const timelineClips = pgTable("timeline_clips", {

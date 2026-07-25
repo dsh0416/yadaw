@@ -84,10 +84,14 @@ export const useMixerStore = defineStore("mixer", () => {
   const master = computed(() =>
     channels.value.find((channel) => channel.kind === "master") ?? null
   )
+  const outputs = computed(() =>
+    channels.value.filter((channel) => channel.kind === "output")
+  )
   const orderedChannels = computed(() => [
     ...audioTracks.value,
     ...buses.value,
-    ...(master.value ? [master.value] : [])
+    ...(master.value ? [master.value] : []),
+    ...outputs.value
   ])
   const selectedChannel = computed(() =>
     channels.value.find((channel) => channel.id === selectedChannelId.value) ?? null
@@ -167,22 +171,24 @@ export const useMixerStore = defineStore("mixer", () => {
     return execute({ type: "update-send", sendId, patch })
   }
 
-  function createAudioTrack(format: "mono" | "stereo" = "stereo"): Promise<boolean> {
+  function createAudioTrack(inputFormat: "mono" | "stereo" = "stereo"): Promise<boolean> {
     const index = audioTracks.value.length
+    const defaultOutput = outputs.value[0]
     const channel: MixerChannelState = {
       id: crypto.randomUUID(),
       kind: "audio",
       name: `Audio ${index + 1}`,
       color: TRACK_COLORS[index % TRACK_COLORS.length]!,
       sortOrder: index,
-      channelFormat: format,
+      inputFormat,
       gainDb: 0,
       pan: 0,
       muted: false,
       soloed: false,
-      outputChannelId: master.value?.id ?? null,
+      outputChannelId: defaultOutput?.id ?? null,
       recordArmed: false,
-      inputChannels: format === "mono" ? [1] : [1, 2]
+      inputChannels: inputFormat === "mono" ? [1] : [1, 2],
+      hardwareOutputChannels: []
     }
     selectedChannelId.value = channel.id
     return execute({ type: "create-channel", channel })
@@ -190,20 +196,58 @@ export const useMixerStore = defineStore("mixer", () => {
 
   function createBus(): Promise<boolean> {
     const index = buses.value.length
+    const defaultOutput = outputs.value[0]
     const channel: MixerChannelState = {
       id: crypto.randomUUID(),
       kind: "bus",
       name: `Bus ${index + 1}`,
       color: "#E8B85F",
       sortOrder: index,
-      channelFormat: "stereo",
+      inputFormat: null,
       gainDb: 0,
       pan: 0,
       muted: false,
       soloed: false,
-      outputChannelId: master.value?.id ?? null,
+      outputChannelId: defaultOutput?.id ?? null,
       recordArmed: false,
-      inputChannels: []
+      inputChannels: [],
+      hardwareOutputChannels: []
+    }
+    selectedChannelId.value = channel.id
+    return execute({ type: "create-channel", channel })
+  }
+
+  function createOutput(): Promise<boolean> {
+    const index = outputs.value.length
+    const usedMappings = new Set(
+      outputs.value.map((output) => output.hardwareOutputChannels.join(","))
+    )
+    let firstHardwareChannel = 1
+    while (
+      firstHardwareChannel < 32 &&
+      usedMappings.has(`${firstHardwareChannel},${firstHardwareChannel + 1}`)
+    ) {
+      firstHardwareChannel += 2
+    }
+    if (firstHardwareChannel > 31) {
+      error.value = "All 16 hardware output pairs are already in use."
+      return Promise.resolve(false)
+    }
+    const channel: MixerChannelState = {
+      id: crypto.randomUUID(),
+      kind: "output",
+      name: `Output ${firstHardwareChannel}–${firstHardwareChannel + 1}`,
+      color: "#73D6A2",
+      sortOrder: index,
+      inputFormat: null,
+      gainDb: 0,
+      pan: 0,
+      muted: false,
+      soloed: false,
+      outputChannelId: null,
+      recordArmed: false,
+      inputChannels: [],
+      hardwareOutputChannels: [firstHardwareChannel, firstHardwareChannel + 1]
     }
     selectedChannelId.value = channel.id
     return execute({ type: "create-channel", channel })
@@ -254,9 +298,12 @@ export const useMixerStore = defineStore("mixer", () => {
 
   function availableOutputs(channelId: string): MixerChannelState[] {
     const source = channels.value.find((channel) => channel.id === channelId)
-    if (!source || source.kind === "master") return []
+    if (!source || (source.kind !== "audio" && source.kind !== "bus")) return []
     return channels.value.filter((target) => {
-      if (target.id === source.id || target.kind === "audio") return false
+      if (
+        target.id === source.id ||
+        (target.kind !== "bus" && target.kind !== "output")
+      ) return false
       const candidate = structuredClone(graph.value)
       const candidateSource = candidate.channels.find((channel) => channel.id === source.id)
       if (!candidateSource) return false
@@ -266,6 +313,8 @@ export const useMixerStore = defineStore("mixer", () => {
   }
 
   function availableSendTargets(channelId: string): MixerChannelState[] {
+    const source = channels.value.find((channel) => channel.id === channelId)
+    if (!source || (source.kind !== "audio" && source.kind !== "bus")) return []
     const existing = new Set(sendsFor(channelId).map((send) => send.targetChannelId))
     return buses.value.filter((target) => {
       if (target.id === channelId || existing.has(target.id)) return false
@@ -341,6 +390,7 @@ export const useMixerStore = defineStore("mixer", () => {
     audioTracks,
     buses,
     master,
+    outputs,
     orderedChannels,
     selectedChannel,
     canUndo,
@@ -354,6 +404,7 @@ export const useMixerStore = defineStore("mixer", () => {
     updateSend,
     createAudioTrack,
     createBus,
+    createOutput,
     deleteChannel,
     addSend,
     deleteSend,

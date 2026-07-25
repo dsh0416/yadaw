@@ -48,18 +48,27 @@ describe("ArrangementWorkspace", () => {
       channels: [
         {
           id: "audio-1", kind: "audio", name: "Audio 1", color: "#8C83FF",
-          sortOrder: 0, channelFormat: "stereo", gainDb: 0, pan: 0, muted: false,
-          soloed: false, outputChannelId: "master", recordArmed: false, inputChannels: [1, 2]
+          sortOrder: 0, inputFormat: "stereo", gainDb: 0, pan: 0, muted: false,
+          soloed: false, outputChannelId: "output", recordArmed: false,
+          inputChannels: [1, 2], hardwareOutputChannels: []
         },
         {
           id: "audio-2", kind: "audio", name: "Audio 2", color: "#67D9E7",
-          sortOrder: 1, channelFormat: "mono", gainDb: 0, pan: 0, muted: false,
-          soloed: false, outputChannelId: "master", recordArmed: false, inputChannels: [1]
+          sortOrder: 1, inputFormat: "mono", gainDb: 0, pan: 0, muted: false,
+          soloed: false, outputChannelId: "output", recordArmed: false,
+          inputChannels: [1], hardwareOutputChannels: []
         },
         {
           id: "master", kind: "master", name: "Master", color: "#67D9E7",
-          sortOrder: 0, channelFormat: "stereo", gainDb: 0, pan: 0, muted: false,
-          soloed: false, outputChannelId: null, recordArmed: false, inputChannels: []
+          sortOrder: 0, inputFormat: null, gainDb: 0, pan: 0, muted: false,
+          soloed: false, outputChannelId: null, recordArmed: false, inputChannels: [],
+          hardwareOutputChannels: []
+        },
+        {
+          id: "output", kind: "output", name: "Output 1–2", color: "#73D6A2",
+          sortOrder: 0, inputFormat: null, gainDb: 0, pan: 0, muted: false,
+          soloed: false, outputChannelId: null, recordArmed: false, inputChannels: [],
+          hardwareOutputChannels: [1, 2]
         }
       ],
       clips: [{
@@ -132,13 +141,21 @@ describe("ArrangementWorkspace", () => {
       channels: [
         {
           id: "audio-1", kind: "audio", name: "Audio 1", color: "#8C83FF",
-          sortOrder: 0, channelFormat: "stereo", gainDb: 0, pan: 0, muted: false,
-          soloed: false, outputChannelId: "master", recordArmed: true, inputChannels: [1, 2]
+          sortOrder: 0, inputFormat: "stereo", gainDb: 0, pan: 0, muted: false,
+          soloed: false, outputChannelId: "output", recordArmed: true,
+          inputChannels: [1, 2], hardwareOutputChannels: []
         },
         {
           id: "master", kind: "master", name: "Master", color: "#67D9E7",
-          sortOrder: 0, channelFormat: "stereo", gainDb: 0, pan: 0, muted: false,
-          soloed: false, outputChannelId: null, recordArmed: false, inputChannels: []
+          sortOrder: 0, inputFormat: null, gainDb: 0, pan: 0, muted: false,
+          soloed: false, outputChannelId: null, recordArmed: false, inputChannels: [],
+          hardwareOutputChannels: []
+        },
+        {
+          id: "output", kind: "output", name: "Output 1–2", color: "#73D6A2",
+          sortOrder: 0, inputFormat: null, gainDb: 0, pan: 0, muted: false,
+          soloed: false, outputChannelId: null, recordArmed: false, inputChannels: [],
+          hardwareOutputChannels: [1, 2]
         }
       ],
       clips: [],
@@ -171,14 +188,15 @@ describe("ArrangementWorkspace", () => {
         name: `Audio ${index + 1}`,
         color: "#8C83FF",
         sortOrder: index,
-        channelFormat: "stereo" as const,
+        inputFormat: "stereo" as const,
         gainDb: 0,
         pan: 0,
         muted: false,
         soloed: false,
-        outputChannelId: "master",
+        outputChannelId: "output",
         recordArmed: false,
-        inputChannels: [1, 2]
+        inputChannels: [1, 2],
+        hardwareOutputChannels: []
       })),
       {
         id: "master",
@@ -186,14 +204,31 @@ describe("ArrangementWorkspace", () => {
         name: "Master",
         color: "#67D9E7",
         sortOrder: 0,
-        channelFormat: "stereo",
+        inputFormat: null,
         gainDb: 0,
         pan: 0,
         muted: false,
         soloed: false,
         outputChannelId: null,
         recordArmed: false,
-        inputChannels: []
+        inputChannels: [],
+        hardwareOutputChannels: []
+      },
+      {
+        id: "output",
+        kind: "output",
+        name: "Output 1–2",
+        color: "#73D6A2",
+        sortOrder: 0,
+        inputFormat: null,
+        gainDb: 0,
+        pan: 0,
+        muted: false,
+        soloed: false,
+        outputChannelId: null,
+        recordArmed: false,
+        inputChannels: [],
+        hardwareOutputChannels: [1, 2]
       }
     ]
     mixer.graph = {

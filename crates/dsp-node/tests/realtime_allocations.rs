@@ -6,7 +6,7 @@ use std::{
     hint::black_box,
 };
 
-use yadaw_dsp_core::mixer::{ChannelFormat, ChannelKind, ChannelSpec, MixerGraph};
+use yadaw_dsp_core::mixer::{ChannelKind, ChannelSpec, MixerGraph};
 use yadaw_dsp_node::bench_support::{
     ParameterQueueHarness, RenderHarness, RenderScenario, TapHarness,
 };
@@ -83,22 +83,32 @@ fn realtime_mixer_render_preview_and_capture_do_not_allocate() {
         ChannelSpec {
             id: "audio-0".to_owned(),
             kind: ChannelKind::Audio,
-            format: ChannelFormat::Stereo,
             gain_db: 0.0,
             pan: 0.0,
             muted: false,
             soloed: false,
-            output: Some(1),
+            output: Some(2),
+            hardware_output: None,
         },
         ChannelSpec {
             id: "master".to_owned(),
             kind: ChannelKind::Master,
-            format: ChannelFormat::Stereo,
             gain_db: 0.0,
             pan: 0.0,
             muted: false,
             soloed: false,
             output: None,
+            hardware_output: None,
+        },
+        ChannelSpec {
+            id: "output".to_owned(),
+            kind: ChannelKind::Output,
+            gain_db: 0.0,
+            pan: 0.0,
+            muted: false,
+            soloed: false,
+            output: None,
+            hardware_output: Some([0, 1]),
         },
     ];
     let mut graph = MixerGraph::new(48_000, channels, Vec::new()).expect("valid graph");

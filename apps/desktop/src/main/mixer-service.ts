@@ -70,6 +70,12 @@ function inverseFor(graph: MixerGraphSnapshot, command: ProjectCommand): Project
     case "delete-channel": {
       const channel = channelById(graph, command.channelId)
       if (channel.kind === "master") throw new Error("Master cannot be deleted")
+      if (
+        channel.kind === "output" &&
+        graph.channels.some((candidate) => candidate.outputChannelId === channel.id)
+      ) {
+        throw new Error("An Output must be unused before it can be deleted")
+      }
       const affectedOutputs = graph.channels
         .filter((candidate) => candidate.outputChannelId === channel.id)
         .map<ProjectCommand>((candidate) => ({
@@ -147,9 +153,22 @@ function applyToGraph(graph: MixerGraphSnapshot, command: ProjectCommand): Mixer
     case "delete-channel": {
       const master = next.channels.find((channel) => channel.kind === "master")
       if (!master || command.channelId === master.id) throw new Error("Master cannot be deleted")
+      const removed = channelById(next, command.channelId)
+      const fallbackOutput = next.channels.find((channel) =>
+        channel.kind === "output" && channel.id !== removed.id
+      )
+      if (
+        removed.kind === "output" &&
+        next.channels.some((channel) => channel.outputChannelId === removed.id)
+      ) {
+        throw new Error("An Output must be unused before it can be deleted")
+      }
       next.channels = next.channels.filter((channel) => channel.id !== command.channelId)
       for (const channel of next.channels) {
-        if (channel.outputChannelId === command.channelId) channel.outputChannelId = master.id
+        if (channel.outputChannelId === command.channelId) {
+          if (!fallbackOutput) throw new Error("Mixer graph requires a hardware Output")
+          channel.outputChannelId = fallbackOutput.id
+        }
       }
       next.sends = next.sends.filter((send) =>
         send.sourceChannelId !== command.channelId && send.targetChannelId !== command.channelId
@@ -197,22 +216,40 @@ function validateGraph(graph: MixerGraphSnapshot): void {
     ids.add(channel.id)
     finiteRange(channel.gainDb, -90, 12, "Channel gain")
     finiteRange(channel.pan, -1, 1, "Channel pan")
-    if (channel.kind !== "audio" && channel.channelFormat !== "stereo") {
-      throw new Error("Bus and Master channels must be stereo")
-    }
     if (
       channel.kind === "audio" &&
-      channel.inputChannels.length !== (channel.channelFormat === "mono" ? 1 : 2)
+      channel.inputChannels.length !== (channel.inputFormat === "mono" ? 1 : 2)
     ) {
-      throw new Error("Audio track input mapping does not match its channel format")
+      throw new Error("Audio track input mapping does not match its input format")
     }
     if (channel.kind === "audio" && channel.inputChannels.some((input) =>
       !Number.isInteger(input) || input < 1 || input > 32
     )) {
       throw new Error("Audio track inputs must be hardware channels 1 through 32")
     }
-    if (channel.kind !== "audio" && (channel.inputChannels.length > 0 || channel.recordArmed)) {
+    if (channel.kind !== "audio" && (
+      channel.inputFormat !== null || channel.inputChannels.length > 0 || channel.recordArmed
+    )) {
       throw new Error("Only audio tracks can map or arm hardware inputs")
+    }
+    if (channel.kind === "master" && channel.soloed) {
+      throw new Error("Master cannot be soloed")
+    }
+    if (channel.kind === "audio" && channel.inputFormat === null) {
+      throw new Error("Audio tracks require an input format")
+    }
+    if (channel.kind === "output") {
+      if (
+        channel.hardwareOutputChannels.length !== 2 ||
+        channel.hardwareOutputChannels[0] === channel.hardwareOutputChannels[1] ||
+        channel.hardwareOutputChannels.some((output) =>
+          !Number.isInteger(output) || output < 1 || output > 32
+        )
+      ) {
+        throw new Error("Output channels must map two distinct hardware channels 1 through 32")
+      }
+    } else if (channel.hardwareOutputChannels.length > 0) {
+      throw new Error("Only Output channels can map hardware outputs")
     }
     if (!Number.isSafeInteger(channel.sortOrder) || channel.sortOrder < 0) {
       throw new Error("Mixer channel order must be a non-negative safe integer")
@@ -220,14 +257,23 @@ function validateGraph(graph: MixerGraphSnapshot): void {
   }
   const masters = graph.channels.filter((channel) => channel.kind === "master")
   if (masters.length !== 1) throw new Error("Mixer graph requires exactly one Master")
-  const master = masters[0]!
+  const outputs = graph.channels.filter((channel) => channel.kind === "output")
+  if (outputs.length === 0) throw new Error("Mixer graph requires at least one hardware Output")
+  const outputMappings = new Set(outputs.map((channel) => channel.hardwareOutputChannels.join(",")))
+  if (outputMappings.size !== outputs.length) {
+    throw new Error("Hardware Output channel pairs must be unique")
+  }
   const edges = new Map(graph.channels.map((channel) => [channel.id, [] as string[]]))
   for (const channel of graph.channels) {
-    if (channel.kind === "master") {
-      if (channel.outputChannelId !== null) throw new Error("Master cannot have an output bus")
+    if (channel.kind === "master" || channel.kind === "output") {
+      if (channel.outputChannelId !== null) {
+        throw new Error("Master and hardware Outputs cannot route onward")
+      }
     } else {
       const output = channel.outputChannelId && channelById(graph, channel.outputChannelId)
-      if (!output || output.kind === "audio") throw new Error("Channel output must target a Bus or Master")
+      if (!output || (output.kind !== "bus" && output.kind !== "output")) {
+        throw new Error("Audio and Bus channels must target a Bus or hardware Output")
+      }
       edges.get(channel.id)!.push(output.id)
     }
   }
@@ -240,8 +286,11 @@ function validateGraph(graph: MixerGraphSnapshot): void {
     sendIds.add(send.id)
     const source = channelById(graph, send.sourceChannelId)
     const target = channelById(graph, send.targetChannelId)
-    if (source.kind === "master" || target.kind !== "bus" || source.id === target.id) {
-      throw new Error("Sends must route a non-Master channel to a Bus")
+    if (
+      source.kind === "master" || source.kind === "output" ||
+      target.kind !== "bus" || source.id === target.id
+    ) {
+      throw new Error("Sends must route an Audio or Bus channel to a Bus")
     }
     finiteRange(send.levelDb, -90, 12, "Send level")
     finiteRange(send.pan, -1, 1, "Send pan")
@@ -274,19 +323,19 @@ function validateGraph(graph: MixerGraphSnapshot): void {
     visited.add(id)
   }
   for (const id of ids) visit(id)
-  if (master.outputChannelId !== null) throw new Error("Master output is fixed to the audio device")
 }
 
 function insertChannel(channel: MixerChannelState): ProjectQueryRequest {
   return {
     sql: `INSERT INTO mixer_channels (
-      id, kind, name, color, sort_order, channel_format, gain_db, pan, muted,
-      soloed, output_channel_id, record_armed, input_channels
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+      id, kind, name, color, sort_order, input_format, gain_db, pan, muted,
+      soloed, output_channel_id, record_armed, input_channels, hardware_output_channels
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
     params: [
       channel.id, channel.kind, channel.name, channel.color, channel.sortOrder,
-      channel.channelFormat, channel.gainDb, channel.pan, channel.muted, channel.soloed,
-      channel.outputChannelId, channel.recordArmed, `{${channel.inputChannels.join(",")}}`
+      channel.inputFormat, channel.gainDb, channel.pan, channel.muted, channel.soloed,
+      channel.outputChannelId, channel.recordArmed, `{${channel.inputChannels.join(",")}}`,
+      `{${channel.hardwareOutputChannels.join(",")}}`
     ],
     method: "execute"
   }
@@ -322,14 +371,15 @@ const channelColumns: Record<keyof MixerChannelPatch, string> = {
   name: "name",
   color: "color",
   sortOrder: "sort_order",
-  channelFormat: "channel_format",
+  inputFormat: "input_format",
   gainDb: "gain_db",
   pan: "pan",
   muted: "muted",
   soloed: "soloed",
   outputChannelId: "output_channel_id",
   recordArmed: "record_armed",
-  inputChannels: "input_channels"
+  inputChannels: "input_channels",
+  hardwareOutputChannels: "hardware_output_channels"
 }
 
 const sendColumns: Record<keyof MixerSendPatch, string> = {
@@ -360,7 +410,7 @@ function updateQuery(
   }]
 }
 
-function commandQueries(command: ProjectCommand, masterId: string): ProjectQueryRequest[] {
+function commandQueries(command: ProjectCommand, fallbackOutputId: string): ProjectQueryRequest[] {
   switch (command.type) {
     case "create-channel":
       return [insertChannel(command.channel)]
@@ -368,7 +418,7 @@ function commandQueries(command: ProjectCommand, masterId: string): ProjectQuery
       return [
         {
           sql: "UPDATE mixer_channels SET output_channel_id = $1 WHERE output_channel_id = $2",
-          params: [masterId, command.channelId],
+          params: [fallbackOutputId, command.channelId],
           method: "execute"
         },
         {
@@ -414,7 +464,7 @@ function commandQueries(command: ProjectCommand, masterId: string): ProjectQuery
         method: "execute"
       }]
     case "batch":
-      return command.commands.flatMap((nested) => commandQueries(nested, masterId))
+      return command.commands.flatMap((nested) => commandQueries(nested, fallbackOutputId))
   }
 }
 
@@ -427,6 +477,12 @@ function onlyRealtimeParameters(command: ProjectCommand): boolean {
     return Object.keys(command.patch).every((key) => key === "levelDb" || key === "pan")
   }
   return false
+}
+
+function deletedChannelIds(command: ProjectCommand): Set<string> {
+  if (command.type === "delete-channel") return new Set([command.channelId])
+  if (command.type !== "batch") return new Set()
+  return new Set(command.commands.flatMap((nested) => [...deletedChannelIds(nested)]))
 }
 
 export class MixerService {
@@ -449,10 +505,13 @@ export class MixerService {
     if (!current) throw new Error("No project is open")
     const [channelResult, clipResult, sendResult] = await Promise.all([
       this.projects.query({
-        sql: `SELECT id, kind, name, color, sort_order, channel_format, gain_db, pan,
-          muted, soloed, output_channel_id, record_armed, input_channels
+        sql: `SELECT id, kind, name, color, sort_order, input_format, gain_db, pan,
+          muted, soloed, output_channel_id, record_armed, input_channels,
+          hardware_output_channels
           FROM mixer_channels
-          ORDER BY CASE kind WHEN 'audio' THEN 0 WHEN 'bus' THEN 1 ELSE 2 END, sort_order, id`,
+          ORDER BY CASE kind
+            WHEN 'audio' THEN 0 WHEN 'bus' THEN 1 WHEN 'master' THEN 2 ELSE 3
+          END, sort_order, id`,
         params: [],
         method: "all"
       }),
@@ -479,14 +538,15 @@ export class MixerService {
         name: String(row[2]),
         color: String(row[3]),
         sortOrder: Number(row[4]),
-        channelFormat: String(row[5]) as MixerChannelState["channelFormat"],
+        inputFormat: row[5] === null ? null : String(row[5]) as MixerChannelState["inputFormat"],
         gainDb: Number(row[6]),
         pan: Number(row[7]),
         muted: Boolean(row[8]),
         soloed: Boolean(row[9]),
         outputChannelId: row[10] === null ? null : String(row[10]),
         recordArmed: Boolean(row[11]),
-        inputChannels: Array.isArray(row[12]) ? row[12].map(Number) : []
+        inputChannels: Array.isArray(row[12]) ? row[12].map(Number) : [],
+        hardwareOutputChannels: Array.isArray(row[13]) ? row[13].map(Number) : []
       })),
       clips: clipResult.rows.map((row) => ({
         id: String(row[0]),
@@ -562,13 +622,13 @@ export class MixerService {
       channels: graph.channels.map((channel) => ({
         id: channel.id,
         kind: channel.kind,
-        channelFormat: channel.channelFormat,
         gainDb: channel.gainDb,
         pan: channel.pan,
         muted: channel.muted,
         soloed: channel.soloed,
         recordArmed: channel.recordArmed,
         inputChannels: channel.inputChannels,
+        hardwareOutputChannels: channel.hardwareOutputChannels,
         outputIndex: channel.outputChannelId === null
           ? undefined
           : channelIndex.get(channel.outputChannelId)
@@ -599,9 +659,12 @@ export class MixerService {
     const inverse = inverseFor(before, command)
     const candidate = applyToGraph(before, command)
     validateGraph(candidate)
-    const master = before.channels.find((channel) => channel.kind === "master")
-    if (!master) throw new Error("Mixer Master is missing")
-    const queries = commandQueries(command, master.id)
+    const deletedIds = deletedChannelIds(command)
+    const fallbackOutput = before.channels.find((channel) =>
+      channel.kind === "output" && !deletedIds.has(channel.id)
+    )
+    if (!fallbackOutput) throw new Error("Mixer hardware Output is missing")
+    const queries = commandQueries(command, fallbackOutput.id)
     if (queries.length > 0) await this.projects.transaction({ queries })
     try {
       if (onlyRealtimeParameters(command)) {
@@ -610,7 +673,7 @@ export class MixerService {
         await this.load()
       }
     } catch (error) {
-      const rollback = commandQueries(inverse, master.id)
+      const rollback = commandQueries(inverse, fallbackOutput.id)
       if (rollback.length > 0) await this.projects.transaction({ queries: rollback })
       throw error
     }

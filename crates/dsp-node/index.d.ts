@@ -125,7 +125,6 @@ export interface NativeFinalizeRecordingConfig {
 export interface NativeMixerChannel {
   id: string
   kind: string
-  channelFormat: string
   gainDb: number
   pan: number
   muted: boolean
@@ -133,6 +132,7 @@ export interface NativeMixerChannel {
   outputIndex?: number
   recordArmed: boolean
   inputChannels: Array<number>
+  hardwareOutputChannels: Array<number>
 }
 
 export interface NativeMixerChannelMeter {

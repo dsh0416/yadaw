@@ -66,15 +66,22 @@ function updateInput(index: number, event: Event): void {
   void mixerStore.updateChannel(channel.value.id, { inputChannels: inputs })
 }
 
-function changeFormat(event: Event): void {
+function changeInputFormat(event: Event): void {
   if (!channel.value) return
-  const channelFormat = stringValue(event) as "mono" | "stereo"
+  const inputFormat = stringValue(event) as "mono" | "stereo"
   void mixerStore.updateChannel(channel.value.id, {
-    channelFormat,
-    inputChannels: channelFormat === "mono"
+    inputFormat,
+    inputChannels: inputFormat === "mono"
       ? [channel.value.inputChannels[0] ?? 1]
       : [channel.value.inputChannels[0] ?? 1, channel.value.inputChannels[1] ?? 2]
   })
+}
+
+function updateHardwareOutput(index: number, event: Event): void {
+  if (!channel.value) return
+  const hardwareOutputChannels = [...channel.value.hardwareOutputChannels]
+  hardwareOutputChannels[index] = numberValue(event)
+  void mixerStore.updateChannel(channel.value.id, { hardwareOutputChannels })
 }
 
 function createSend(): void {
@@ -130,15 +137,15 @@ function clearMeterClips(): void {
       <section v-if="channel.kind === 'audio'">
         <div class="section-heading"><span>INPUT</span><b>{{ channel.recordArmed ? "ARMED" : "SAFE" }}</b></div>
         <label>
-          <span>Track format</span>
-          <select :value="channel.channelFormat" aria-label="Track format" @change="changeFormat">
+          <span>Input format</span>
+          <select :value="channel.inputFormat ?? 'stereo'" aria-label="Input format" @change="changeInputFormat">
             <option value="mono">Mono</option>
             <option value="stereo">Stereo</option>
           </select>
         </label>
         <div class="input-grid">
           <label v-for="(_, index) in channel.inputChannels" :key="index">
-            <span>{{ channel.channelFormat === "mono" ? "Input" : index === 0 ? "Left" : "Right" }}</span>
+            <span>{{ channel.inputFormat === "mono" ? "Input" : index === 0 ? "Left" : "Right" }}</span>
             <select
               :value="channel.inputChannels[index]"
               :aria-label="`${channel.name} input channel ${index + 1}`"
@@ -150,7 +157,23 @@ function clearMeterClips(): void {
         </div>
       </section>
 
-      <section v-if="channel.kind !== 'master'">
+      <section v-if="channel.kind === 'output'">
+        <div class="section-heading"><span>HARDWARE OUTPUT</span><b>STEREO PAIR</b></div>
+        <div class="input-grid">
+          <label v-for="(_, index) in channel.hardwareOutputChannels" :key="index">
+            <span>{{ index === 0 ? "Left" : "Right" }}</span>
+            <select
+              :value="channel.hardwareOutputChannels[index]"
+              :aria-label="`${channel.name} hardware output ${index + 1}`"
+              @change="updateHardwareOutput(index, $event)"
+            >
+              <option v-for="output in inputOptions" :key="output" :value="output">Output {{ output }}</option>
+            </select>
+          </label>
+        </div>
+      </section>
+
+      <section v-if="channel.kind === 'audio' || channel.kind === 'bus'">
         <div class="section-heading"><span>OUTPUT</span><b>MAIN PATH</b></div>
         <label>
           <span>Destination</span>
@@ -164,7 +187,7 @@ function clearMeterClips(): void {
         </label>
       </section>
 
-      <section v-if="channel.kind !== 'master'" class="send-section">
+      <section v-if="channel.kind === 'audio' || channel.kind === 'bus'" class="send-section">
         <div class="section-heading"><span>SENDS</span><b>{{ sends.length }}</b></div>
         <article v-for="send in sends" :key="send.id" class="send-card">
           <div class="send-card-head">

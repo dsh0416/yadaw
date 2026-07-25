@@ -22,7 +22,8 @@ use ringbuf::{
     traits::{Consumer, Observer, Producer, Split},
 };
 use yadaw_dsp_core::mixer::{
-    ChannelFormat, ChannelKind, ChannelPeak, ChannelSpec, MixerGraph, SendSpec, SendTap,
+    ChannelKind, ChannelPeak, ChannelSpec, HardwareOutputFrame, MAX_OUTPUT_CHANNELS, MixerGraph,
+    SendSpec, SendTap,
 };
 
 use crate::recording::{
@@ -89,7 +90,6 @@ pub struct NativeAudioRuntimeSnapshot {
 pub struct NativeMixerChannel {
     pub id: String,
     pub kind: String,
-    pub channel_format: String,
     pub gain_db: f64,
     pub pan: f64,
     pub muted: bool,
@@ -97,6 +97,7 @@ pub struct NativeMixerChannel {
     pub output_index: Option<u32>,
     pub record_armed: bool,
     pub input_channels: Vec<u32>,
+    pub hardware_output_channels: Vec<u32>,
 }
 
 #[napi(object)]
@@ -840,15 +841,8 @@ fn parse_channel_kind(value: &str) -> Result<ChannelKind> {
         "audio" => Ok(ChannelKind::Audio),
         "bus" => Ok(ChannelKind::Bus),
         "master" => Ok(ChannelKind::Master),
+        "output" => Ok(ChannelKind::Output),
         _ => Err(invalid_config("unknown mixer channel kind")),
-    }
-}
-
-fn parse_channel_format(value: &str) -> Result<ChannelFormat> {
-    match value {
-        "mono" => Ok(ChannelFormat::Mono),
-        "stereo" => Ok(ChannelFormat::Stereo),
-        _ => Err(invalid_config("unknown mixer channel format")),
     }
 }
 
@@ -891,12 +885,18 @@ fn build_mixer_runtime(
             Ok(ChannelSpec {
                 id: channel.id.clone(),
                 kind: parse_channel_kind(&channel.kind)?,
-                format: parse_channel_format(&channel.channel_format)?,
                 gain_db: channel.gain_db as f32,
                 pan: channel.pan as f32,
                 muted: channel.muted,
                 soloed: channel.soloed,
                 output: channel.output_index.map(|index| index as usize),
+                hardware_output: match channel.hardware_output_channels.as_slice() {
+                    [] => None,
+                    [left, right] if *left > 0 && *right > 0 => {
+                        Some([(*left - 1) as usize, (*right - 1) as usize])
+                    }
+                    _ => return Err(invalid_config("invalid hardware output mapping")),
+                },
             })
         })
         .collect::<Result<Vec<_>>>()?;
@@ -1048,10 +1048,10 @@ impl NativeMixerRuntime {
         None
     }
 
-    fn render_frame(&mut self) -> (StereoFrame, bool) {
+    fn render_frame(&mut self) -> (HardwareOutputFrame, bool) {
         let state = self.transport.state.load(Ordering::Relaxed);
         if state == TRANSPORT_STOPPED {
-            return ([0.0, 0.0], false);
+            return ([0.0; MAX_OUTPUT_CHANNELS], false);
         }
         let position = self.transport.position_frames.load(Ordering::Relaxed);
         self.audio_inputs.fill([0.0, 0.0]);
@@ -1403,7 +1403,9 @@ where
                     });
                     let (rendered, stream_underrun) = mixer
                         .as_mut()
-                        .map_or(([0.0, 0.0], false), |runtime| runtime.render_frame());
+                        .map_or(([0.0; MAX_OUTPUT_CHANNELS], false), |runtime| {
+                            runtime.render_frame()
+                        });
                     underrun |= stream_underrun;
                     for (channel, sample) in frame.iter_mut().enumerate() {
                         // Input monitoring remains intentionally muted. The bridge is consumed
@@ -1413,12 +1415,11 @@ where
                             1 => input[1],
                             _ => 0.0,
                         };
-                        let value = match channel {
-                            0 => rendered[0],
-                            1 => rendered[1],
-                            _ => 0.0,
-                        }
-                        .clamp(-1.0, 1.0);
+                        let value = rendered
+                            .get(channel)
+                            .copied()
+                            .unwrap_or(0.0)
+                            .clamp(-1.0, 1.0);
                         *sample = T::from_sample(value);
                     }
                 }
@@ -1837,9 +1838,7 @@ pub mod bench_support {
         HeapCons, HeapProd, HeapRb,
         traits::{Consumer, Producer, Split},
     };
-    use yadaw_dsp_core::mixer::{
-        ChannelFormat, ChannelKind, ChannelPeak, ChannelSpec, MixerGraph, StereoFrame,
-    };
+    use yadaw_dsp_core::mixer::{ChannelKind, ChannelPeak, ChannelSpec, MixerGraph, StereoFrame};
 
     use super::{
         AdaptiveResampler, ClipSamples, EngineCommand, InputPeakBank, LoadedClip, MeterAtomics,
@@ -1861,37 +1860,44 @@ pub mod bench_support {
         assert!(scenario.tracks > 0);
         assert!(scenario.active_clips <= scenario.total_clips);
         let master = scenario.tracks;
-        let mut channels = Vec::with_capacity(master + 1);
+        let output = master + 1;
+        let mut channels = Vec::with_capacity(master + 2);
         for index in 0..scenario.tracks {
             channels.push(ChannelSpec {
                 id: format!("audio-{index}"),
                 kind: ChannelKind::Audio,
-                format: if index % 2 == 0 {
-                    ChannelFormat::Stereo
-                } else {
-                    ChannelFormat::Mono
-                },
                 gain_db: -3.0,
                 pan: 0.0,
                 muted: false,
                 soloed: false,
-                output: Some(master),
+                output: Some(output),
+                hardware_output: None,
             });
         }
         channels.push(ChannelSpec {
             id: "master".to_owned(),
             kind: ChannelKind::Master,
-            format: ChannelFormat::Stereo,
             gain_db: 0.0,
             pan: 0.0,
             muted: false,
             soloed: false,
             output: None,
+            hardware_output: None,
+        });
+        channels.push(ChannelSpec {
+            id: "output".to_owned(),
+            kind: ChannelKind::Output,
+            gain_db: 0.0,
+            pan: 0.0,
+            muted: false,
+            soloed: false,
+            output: None,
+            hardware_output: Some([0, 1]),
         });
         let graph = MixerGraph::new(scenario.sample_rate, channels, Vec::new())
             .expect("benchmark graph must be valid");
         let meter_bank = Arc::new(MeterBank {
-            channels: (0..=scenario.tracks)
+            channels: (0..scenario.tracks + 2)
                 .map(|index| MeterAtomics::new(format!("channel-{index}")))
                 .collect(),
         });
@@ -1934,7 +1940,7 @@ pub mod bench_support {
             sample_rate: scenario.sample_rate,
             content_end_frame: u64::MAX,
             input_peaks,
-            input_meter_routes: vec![None; scenario.tracks + 1],
+            input_meter_routes: vec![None; scenario.tracks + 2],
             input_peak_scratch: [0.0; super::MAX_INPUT_CHANNELS],
             meter_frame_clock: 0,
         })
@@ -1960,7 +1966,7 @@ pub mod bench_support {
             for _ in 0..frames {
                 let (frame, underrun) = self.runtime.render_frame();
                 debug_assert!(!underrun);
-                output = frame;
+                output = [frame[0], frame[1]];
             }
             output
         }

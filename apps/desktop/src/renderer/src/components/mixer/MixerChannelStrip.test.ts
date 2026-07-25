@@ -10,14 +10,15 @@ const channel: MixerChannelState = {
   name: "Vocal",
   color: "#8C83FF",
   sortOrder: 0,
-  channelFormat: "mono",
+  inputFormat: "mono",
   gainDb: 0,
   pan: 0,
   muted: false,
   soloed: false,
-  outputChannelId: "master",
+  outputChannelId: "output",
   recordArmed: false,
-  inputChannels: [1]
+  inputChannels: [1],
+  hardwareOutputChannels: []
 }
 
 describe("MixerChannelStrip", () => {
@@ -36,12 +37,13 @@ describe("MixerChannelStrip", () => {
         },
         outputs: [{
           ...channel,
-          id: "master",
-          kind: "master",
-          name: "Master",
-          channelFormat: "stereo",
+          id: "output",
+          kind: "output",
+          name: "Output 1–2",
+          inputFormat: null,
           outputChannelId: null,
-          inputChannels: []
+          inputChannels: [],
+          hardwareOutputChannels: [1, 2]
         }],
         selected: false,
         density: "full"
@@ -172,5 +174,37 @@ describe("MixerChannelStrip", () => {
     expect(wrapper.get('button[aria-label="Arm Vocal"]').classes()).toContain("active")
     expect(wrapper.get('button[aria-label="Input monitoring unavailable"]').classes()).toContain("monitor")
     expect(wrapper.get(".input-actions").findAll("button")).toHaveLength(2)
+  })
+
+  it("keeps Master outside explicit routing and send controls", () => {
+    const wrapper = mount(MixerChannelStrip, {
+      props: {
+        channel: {
+          ...channel,
+          id: "master",
+          kind: "master",
+          name: "Master",
+          inputFormat: null,
+          outputChannelId: null,
+          inputChannels: []
+        },
+        sends: [],
+        meter: {
+          channelId: "master",
+          preFaderPeak: [0, 0],
+          postFaderPeak: [0, 0],
+          heldPeak: [0, 0],
+          clipped: false
+        },
+        outputs: [],
+        selected: false,
+        density: "full"
+      },
+      global: { plugins: [createPinia()] }
+    })
+
+    expect(wrapper.text()).toContain("GLOBAL")
+    expect(wrapper.find('select[aria-label="Master output"]').exists()).toBe(false)
+    expect(wrapper.find('button[aria-label="Solo Master"]').exists()).toBe(false)
   })
 })

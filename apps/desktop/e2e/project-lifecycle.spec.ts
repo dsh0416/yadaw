@@ -59,9 +59,9 @@ test("records into a Large Object and reopens the PGlite project archive", async
 
     await page.getByRole("button", { name: "Mixer", exact: true }).click()
     const visibleMixer = page.locator(".mixer-console:visible")
-    await page.getByRole("button", { name: "Add mono audio track" }).click()
+    await page.getByRole("button", { name: "Add audio track" }).click()
     await page.getByRole("button", { name: "Add bus" }).click()
-    await expect(visibleMixer.getByText("2 tracks · 1 buses")).toBeVisible()
+    await expect(visibleMixer.getByText("2 tracks · 1 buses · 1 outputs")).toBeVisible()
     const audioOneVolume = visibleMixer.getByRole("slider", { name: "Audio 1 volume", exact: true })
     const volumeBounds = await audioOneVolume.boundingBox()
     expect(volumeBounds).not.toBeNull()
@@ -72,18 +72,23 @@ test("records into a Large Object and reopens the PGlite project archive", async
     await expect(audioOneVolume).toHaveValue("0")
     expect(await audioOneVolume.evaluate((input) => getComputedStyle(input).outlineStyle)).toBe("none")
     await page.getByRole("button", { name: "Undo mixer change" }).click()
-    await expect(visibleMixer.getByText("2 tracks · 0 buses")).toBeVisible()
+    await expect(visibleMixer.getByText("2 tracks · 0 buses · 1 outputs")).toBeVisible()
     await page.getByRole("button", { name: "Redo mixer change" }).click()
-    await expect(visibleMixer.getByText("2 tracks · 1 buses")).toBeVisible()
+    await expect(visibleMixer.getByText("2 tracks · 1 buses · 1 outputs")).toBeVisible()
     await visibleMixer.getByLabel("Audio 1 output").selectOption({ label: "Bus 1" })
     await visibleMixer.getByLabel("Audio 2 audio channel").click()
+    await page.getByLabel("Input format").selectOption("mono")
+    await expect.poll(async () => {
+      const graph = await page.evaluate(() => window.yadaw.loadMixerGraph())
+      return graph.channels.find((channel) => channel.name === "Audio 2")?.inputFormat
+    }).toBe("mono")
     await page.getByRole("button", { name: "Add send" }).click()
     await page.getByRole("button", { name: "Enable send" }).click()
     await visibleMixer.getByRole("button", { name: "Arm Audio 1" }).click()
     await visibleMixer.getByRole("button", { name: "Arm Audio 2" }).click()
     const mixerBeforeSave = await page.evaluate(() => window.yadaw.loadMixerGraph())
     expect(mixerBeforeSave.channels.map((channel) => channel.kind)).toEqual([
-      "audio", "audio", "bus", "master"
+      "audio", "audio", "bus", "master", "output"
     ])
     expect(mixerBeforeSave.sends).toHaveLength(1)
     await page.getByRole("button", { name: "Arrangement", exact: true }).click()

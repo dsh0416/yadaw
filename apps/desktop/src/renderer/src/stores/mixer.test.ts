@@ -10,23 +10,33 @@ function graph(): MixerGraphSnapshot {
     channels: [
       {
         id: "audio", kind: "audio", name: "Audio", color: "#8C83FF", sortOrder: 0,
-        channelFormat: "stereo", gainDb: 0, pan: 0, muted: false, soloed: false,
-        outputChannelId: "bus-a", recordArmed: false, inputChannels: [1, 2]
+        inputFormat: "stereo", gainDb: 0, pan: 0, muted: false, soloed: false,
+        outputChannelId: "bus-a", recordArmed: false, inputChannels: [1, 2],
+        hardwareOutputChannels: []
       },
       {
         id: "bus-a", kind: "bus", name: "Bus A", color: "#E8B85F", sortOrder: 0,
-        channelFormat: "stereo", gainDb: 0, pan: 0, muted: false, soloed: false,
-        outputChannelId: "bus-b", recordArmed: false, inputChannels: []
+        inputFormat: null, gainDb: 0, pan: 0, muted: false, soloed: false,
+        outputChannelId: "bus-b", recordArmed: false, inputChannels: [],
+        hardwareOutputChannels: []
       },
       {
         id: "bus-b", kind: "bus", name: "Bus B", color: "#E8B85F", sortOrder: 1,
-        channelFormat: "stereo", gainDb: 0, pan: 0, muted: false, soloed: false,
-        outputChannelId: "master", recordArmed: false, inputChannels: []
+        inputFormat: null, gainDb: 0, pan: 0, muted: false, soloed: false,
+        outputChannelId: "output", recordArmed: false, inputChannels: [],
+        hardwareOutputChannels: []
       },
       {
         id: "master", kind: "master", name: "Master", color: "#67D9E7", sortOrder: 0,
-        channelFormat: "stereo", gainDb: 0, pan: 0, muted: false, soloed: false,
-        outputChannelId: null, recordArmed: false, inputChannels: []
+        inputFormat: null, gainDb: 0, pan: 0, muted: false, soloed: false,
+        outputChannelId: null, recordArmed: false, inputChannels: [],
+        hardwareOutputChannels: []
+      },
+      {
+        id: "output", kind: "output", name: "Output 1–2", color: "#73D6A2", sortOrder: 0,
+        inputFormat: null, gainDb: 0, pan: 0, muted: false, soloed: false,
+        outputChannelId: null, recordArmed: false, inputChannels: [],
+        hardwareOutputChannels: [1, 2]
       }
     ],
     clips: [],
@@ -91,9 +101,11 @@ describe("mixer store", () => {
     mixer.graph = graph()
 
     expect(mixer.availableOutputs("bus-b").map((channel) => channel.id))
-      .toEqual(["master"])
+      .toEqual(["output"])
     expect(mixer.availableSendTargets("bus-b").map((channel) => channel.id))
       .toEqual([])
+    expect(mixer.availableOutputs("master")).toEqual([])
+    expect(mixer.availableSendTargets("master")).toEqual([])
   })
 
   it("clears latched meter clipping in the UI and native engine", async () => {

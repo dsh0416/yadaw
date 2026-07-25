@@ -1,18 +1,15 @@
 use std::{collections::VecDeque, error::Error, fmt};
 
 pub type StereoFrame = [f32; 2];
+pub const MAX_OUTPUT_CHANNELS: usize = 32;
+pub type HardwareOutputFrame = [f32; MAX_OUTPUT_CHANNELS];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ChannelKind {
     Audio,
     Bus,
     Master,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ChannelFormat {
-    Mono,
-    Stereo,
+    Output,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -25,12 +22,12 @@ pub enum SendTap {
 pub struct ChannelSpec {
     pub id: String,
     pub kind: ChannelKind,
-    pub format: ChannelFormat,
     pub gain_db: f32,
     pub pan: f32,
     pub muted: bool,
     pub soloed: bool,
     pub output: Option<usize>,
+    pub hardware_output: Option<[usize; 2]>,
 }
 
 #[derive(Debug, Clone)]
@@ -54,6 +51,7 @@ pub struct ChannelPeak {
 pub enum GraphError {
     MissingMaster,
     MultipleMasters,
+    MissingOutput,
     InvalidOutput,
     InvalidSend,
     RoutingCycle,
@@ -65,6 +63,7 @@ impl fmt::Display for GraphError {
         formatter.write_str(match self {
             Self::MissingMaster => "mixer graph requires one master channel",
             Self::MultipleMasters => "mixer graph contains more than one master channel",
+            Self::MissingOutput => "mixer graph requires at least one hardware output channel",
             Self::InvalidOutput => "mixer channel has an invalid output",
             Self::InvalidSend => "mixer send has an invalid source or target",
             Self::RoutingCycle => "mixer routing must not contain a cycle",
@@ -161,13 +160,6 @@ pub fn balance_stereo(frame: StereoFrame, pan: f32) -> StereoFrame {
     ]
 }
 
-fn apply_pan(frame: StereoFrame, format: ChannelFormat, pan: f32) -> StereoFrame {
-    match format {
-        ChannelFormat::Mono => pan_mono((frame[0] + frame[1]) * 0.5, pan),
-        ChannelFormat::Stereo => balance_stereo(frame, pan),
-    }
-}
-
 fn add(target: &mut StereoFrame, source: StereoFrame) {
     target[0] += source[0];
     target[1] += source[1];
@@ -184,9 +176,17 @@ fn graph_edges(
     let mut edges = vec![Vec::new(); channels.len()];
     for (index, channel) in channels.iter().enumerate() {
         match (channel.kind, channel.output) {
-            (ChannelKind::Master, None) => {}
-            (ChannelKind::Master, Some(_)) | (_, None) => return Err(GraphError::InvalidOutput),
+            (ChannelKind::Master | ChannelKind::Output, None) => {}
+            (ChannelKind::Master | ChannelKind::Output, Some(_)) | (_, None) => {
+                return Err(GraphError::InvalidOutput);
+            }
             (_, Some(output)) if output >= channels.len() || output == index => {
+                return Err(GraphError::InvalidOutput);
+            }
+            (_, Some(output))
+                if channels[output].kind != ChannelKind::Bus
+                    && channels[output].kind != ChannelKind::Output =>
+            {
                 return Err(GraphError::InvalidOutput);
             }
             (_, Some(output)) => edges[index].push(output),
@@ -196,7 +196,9 @@ fn graph_edges(
         if send.source >= channels.len()
             || send.target >= channels.len()
             || send.source == send.target
-            || channels[send.target].kind == ChannelKind::Audio
+            || channels[send.source].kind == ChannelKind::Master
+            || channels[send.source].kind == ChannelKind::Output
+            || channels[send.target].kind != ChannelKind::Bus
         {
             return Err(GraphError::InvalidSend);
         }
@@ -242,7 +244,9 @@ fn solo_audibility(
     let soloed: Vec<_> = channels
         .iter()
         .enumerate()
-        .filter_map(|(index, channel)| channel.soloed.then_some(index))
+        .filter_map(|(index, channel)| {
+            (channel.kind != ChannelKind::Master && channel.soloed).then_some(index)
+        })
         .collect();
     if soloed.is_empty() {
         return (
@@ -328,6 +332,20 @@ impl MixerGraph {
             [master] => *master,
             _ => return Err(GraphError::MultipleMasters),
         };
+        if !channels
+            .iter()
+            .any(|channel| channel.kind == ChannelKind::Output)
+        {
+            return Err(GraphError::MissingOutput);
+        }
+        if channels.iter().any(|channel| match channel.kind {
+            ChannelKind::Output => channel.hardware_output.is_none_or(|[left, right]| {
+                left >= MAX_OUTPUT_CHANNELS || right >= MAX_OUTPUT_CHANNELS || left == right
+            }),
+            _ => channel.hardware_output.is_some(),
+        }) {
+            return Err(GraphError::InvalidOutput);
+        }
         let edges = graph_edges(&channels, &sends)?;
         let order = topological_order(&edges)?;
         let (audible, output_audible, send_audible) = solo_audibility(&channels, &edges, &sends);
@@ -417,8 +435,15 @@ impl MixerGraph {
         Ok(())
     }
 
-    pub fn process_frame(&mut self, audio_inputs: &[StereoFrame]) -> StereoFrame {
+    pub fn process_frame(&mut self, audio_inputs: &[StereoFrame]) -> HardwareOutputFrame {
         self.accumulation.fill([0.0, 0.0]);
+        let mut hardware_output = [0.0; MAX_OUTPUT_CHANNELS];
+        let master = &self.channels[self.master];
+        let master_gate = if master.muted { 0.0 } else { 1.0 };
+        let master_gain = self.channel_runtime[self.master].gain.next() * master_gate;
+        let master_pan = self.channel_runtime[self.master].pan.next();
+        let mut master_pre = [0.0_f32, 0.0_f32];
+        let mut master_post = [0.0_f32, 0.0_f32];
         for (input_index, channel_index) in self
             .channels
             .iter()
@@ -432,6 +457,9 @@ impl MixerGraph {
         }
 
         for &index in &self.order {
+            if index == self.master {
+                continue;
+            }
             let channel = &self.channels[index];
             let pre = self.accumulation[index];
             self.peaks[index].pre = [
@@ -455,21 +483,13 @@ impl MixerGraph {
                     SendTap::Post => post_fader,
                 };
                 let sent = scale(
-                    apply_pan(
-                        tap,
-                        channel.format,
-                        self.send_runtime[send_index].pan.next(),
-                    ),
+                    balance_stereo(tap, self.send_runtime[send_index].pan.next()),
                     self.send_runtime[send_index].gain.next(),
                 );
                 add(&mut self.accumulation[send.target], sent);
             }
 
-            let post = apply_pan(
-                post_fader,
-                channel.format,
-                self.channel_runtime[index].pan.next(),
-            );
+            let post = balance_stereo(post_fader, self.channel_runtime[index].pan.next());
             self.peaks[index].post = [
                 self.peaks[index].post[0].max(post[0].abs()),
                 self.peaks[index].post[1].max(post[1].abs()),
@@ -477,8 +497,25 @@ impl MixerGraph {
             if let Some(output) = channel.output.filter(|_| self.output_audible[index]) {
                 add(&mut self.accumulation[output], post);
             }
+            if let Some([left, right]) = channel.hardware_output {
+                master_pre[0] = master_pre[0].max(post[0].abs());
+                master_pre[1] = master_pre[1].max(post[1].abs());
+                let mastered = balance_stereo(scale(post, master_gain), master_pan);
+                master_post[0] = master_post[0].max(mastered[0].abs());
+                master_post[1] = master_post[1].max(mastered[1].abs());
+                hardware_output[left] += mastered[0];
+                hardware_output[right] += mastered[1];
+            }
         }
-        self.accumulation[self.master]
+        self.peaks[self.master].pre = [
+            self.peaks[self.master].pre[0].max(master_pre[0]),
+            self.peaks[self.master].pre[1].max(master_pre[1]),
+        ];
+        self.peaks[self.master].post = [
+            self.peaks[self.master].post[0].max(master_post[0]),
+            self.peaks[self.master].post[1].max(master_post[1]),
+        ];
+        hardware_output
     }
 
     pub fn write_peaks(&mut self, target: &mut [ChannelPeak]) {
@@ -492,26 +529,26 @@ impl MixerGraph {
 #[cfg(test)]
 mod tests {
     use super::{
-        ChannelFormat, ChannelKind, ChannelSpec, GraphError, MixerGraph, SendSpec, SendTap,
-        balance_stereo, pan_mono,
+        ChannelKind, ChannelSpec, GraphError, MixerGraph, SendSpec, SendTap, balance_stereo,
+        pan_mono,
     };
 
-    fn channel(
-        id: &str,
-        kind: ChannelKind,
-        format: ChannelFormat,
-        output: Option<usize>,
-    ) -> ChannelSpec {
+    fn channel(id: &str, kind: ChannelKind, output: Option<usize>) -> ChannelSpec {
         ChannelSpec {
             id: id.to_owned(),
             kind,
-            format,
             gain_db: 0.0,
             pan: 0.0,
             muted: false,
             soloed: false,
             output,
+            hardware_output: (kind == ChannelKind::Output).then_some([0, 1]),
         }
+    }
+
+    fn rendered(graph: &mut MixerGraph, inputs: &[super::StereoFrame]) -> super::StereoFrame {
+        let output = graph.process_frame(inputs);
+        [output[0], output[1]]
     }
 
     #[test]
@@ -529,11 +566,54 @@ mod tests {
     }
 
     #[test]
+    fn renders_independent_stereo_pairs_to_multiple_hardware_outputs() {
+        let mut second_output = channel("headphones", ChannelKind::Output, None);
+        second_output.hardware_output = Some([2, 3]);
+        let channels = vec![
+            channel("speakers-track", ChannelKind::Audio, Some(3)),
+            channel("headphones-track", ChannelKind::Audio, Some(4)),
+            channel("master", ChannelKind::Master, None),
+            channel("speakers", ChannelKind::Output, None),
+            second_output,
+        ];
+        let mut graph = MixerGraph::new(48_000, channels, vec![]).unwrap();
+
+        let output = graph.process_frame(&[[0.25, 0.5], [0.75, 1.0]]);
+
+        assert_eq!(&output[..4], &[0.25, 0.5, 0.75, 1.0]);
+    }
+
+    #[test]
+    fn master_is_an_unrouted_global_output_control() {
+        let mut master = channel("master", ChannelKind::Master, None);
+        master.muted = true;
+        let channels = vec![
+            channel("audio", ChannelKind::Audio, Some(2)),
+            master,
+            channel("speakers", ChannelKind::Output, None),
+        ];
+        let mut graph = MixerGraph::new(48_000, channels, vec![]).unwrap();
+
+        assert_eq!(rendered(&mut graph, &[[1.0, 0.5]]), [0.0, 0.0]);
+
+        let invalid_channels = vec![
+            channel("audio", ChannelKind::Audio, Some(1)),
+            channel("master", ChannelKind::Master, None),
+            channel("speakers", ChannelKind::Output, None),
+        ];
+        assert!(matches!(
+            MixerGraph::new(48_000, invalid_channels, vec![]),
+            Err(GraphError::InvalidOutput)
+        ));
+    }
+
+    #[test]
     fn rejects_output_and_send_cycles() {
         let channels = vec![
-            channel("bus-a", ChannelKind::Bus, ChannelFormat::Stereo, Some(1)),
-            channel("bus-b", ChannelKind::Bus, ChannelFormat::Stereo, Some(0)),
-            channel("master", ChannelKind::Master, ChannelFormat::Stereo, None),
+            channel("bus-a", ChannelKind::Bus, Some(1)),
+            channel("bus-b", ChannelKind::Bus, Some(0)),
+            channel("master", ChannelKind::Master, None),
+            channel("output", ChannelKind::Output, None),
         ];
         assert!(matches!(
             MixerGraph::new(48_000, channels, vec![]),
@@ -543,13 +623,14 @@ mod tests {
 
     #[test]
     fn pre_send_bypasses_source_fader_and_mute() {
-        let mut source = channel("audio", ChannelKind::Audio, ChannelFormat::Stereo, Some(2));
+        let mut source = channel("audio", ChannelKind::Audio, Some(3));
         source.gain_db = -90.0;
         source.muted = true;
         let channels = vec![
             source,
-            channel("bus", ChannelKind::Bus, ChannelFormat::Stereo, Some(2)),
-            channel("master", ChannelKind::Master, ChannelFormat::Stereo, None),
+            channel("bus", ChannelKind::Bus, Some(3)),
+            channel("master", ChannelKind::Master, None),
+            channel("output", ChannelKind::Output, None),
         ];
         let sends = vec![SendSpec {
             id: "send".to_owned(),
@@ -561,18 +642,19 @@ mod tests {
             pan: 0.0,
         }];
         let mut graph = MixerGraph::new(48_000, channels, sends).unwrap();
-        let output = graph.process_frame(&[[1.0, 1.0]]);
+        let output = rendered(&mut graph, &[[1.0, 1.0]]);
         assert_eq!(output, [1.0, 1.0]);
     }
 
     #[test]
     fn post_send_follows_source_mute() {
-        let mut source = channel("audio", ChannelKind::Audio, ChannelFormat::Stereo, Some(2));
+        let mut source = channel("audio", ChannelKind::Audio, Some(3));
         source.muted = true;
         let channels = vec![
             source,
-            channel("bus", ChannelKind::Bus, ChannelFormat::Stereo, Some(2)),
-            channel("master", ChannelKind::Master, ChannelFormat::Stereo, None),
+            channel("bus", ChannelKind::Bus, Some(3)),
+            channel("master", ChannelKind::Master, None),
+            channel("output", ChannelKind::Output, None),
         ];
         let sends = vec![SendSpec {
             id: "send".to_owned(),
@@ -584,18 +666,19 @@ mod tests {
             pan: 0.0,
         }];
         let mut graph = MixerGraph::new(48_000, channels, sends).unwrap();
-        assert_eq!(graph.process_frame(&[[1.0, 1.0]]), [0.0, 0.0]);
+        assert_eq!(rendered(&mut graph, &[[1.0, 1.0]]), [0.0, 0.0]);
     }
 
     #[test]
     fn send_pan_is_independent_from_the_source_pan() {
-        let mut source = channel("audio", ChannelKind::Audio, ChannelFormat::Stereo, Some(2));
+        let mut source = channel("audio", ChannelKind::Audio, Some(3));
         source.muted = true;
         source.pan = -1.0;
         let channels = vec![
             source,
-            channel("bus", ChannelKind::Bus, ChannelFormat::Stereo, Some(2)),
-            channel("master", ChannelKind::Master, ChannelFormat::Stereo, None),
+            channel("bus", ChannelKind::Bus, Some(3)),
+            channel("master", ChannelKind::Master, None),
+            channel("output", ChannelKind::Output, None),
         ];
         let sends = vec![SendSpec {
             id: "send".to_owned(),
@@ -607,46 +690,49 @@ mod tests {
             pan: 1.0,
         }];
         let mut graph = MixerGraph::new(48_000, channels, sends).unwrap();
-        assert_eq!(graph.process_frame(&[[1.0, 1.0]]), [0.0, 1.0]);
+        assert_eq!(rendered(&mut graph, &[[1.0, 1.0]]), [0.0, 1.0]);
     }
 
     #[test]
     fn solo_keeps_only_participating_route_edges_and_mute_wins() {
-        let mut soloed = channel("soloed", ChannelKind::Audio, ChannelFormat::Stereo, Some(3));
+        let mut soloed = channel("soloed", ChannelKind::Audio, Some(4));
         soloed.soloed = true;
         let channels = vec![
             soloed,
-            channel("other", ChannelKind::Audio, ChannelFormat::Stereo, Some(3)),
-            channel("bus", ChannelKind::Bus, ChannelFormat::Stereo, Some(3)),
-            channel("master", ChannelKind::Master, ChannelFormat::Stereo, None),
+            channel("other", ChannelKind::Audio, Some(4)),
+            channel("bus", ChannelKind::Bus, Some(4)),
+            channel("master", ChannelKind::Master, None),
+            channel("output", ChannelKind::Output, None),
         ];
         let mut graph = MixerGraph::new(48_000, channels, vec![]).unwrap();
         assert_eq!(
-            graph.process_frame(&[[0.25, 0.25], [0.75, 0.75]]),
+            rendered(&mut graph, &[[0.25, 0.25], [0.75, 0.75]]),
             [0.25, 0.25]
         );
 
-        let mut source = channel("source", ChannelKind::Audio, ChannelFormat::Stereo, Some(2));
+        let mut source = channel("source", ChannelKind::Audio, Some(3));
         source.muted = true;
         source.soloed = true;
         let channels = vec![
             source,
-            channel("other", ChannelKind::Audio, ChannelFormat::Stereo, Some(2)),
-            channel("master", ChannelKind::Master, ChannelFormat::Stereo, None),
+            channel("other", ChannelKind::Audio, Some(3)),
+            channel("master", ChannelKind::Master, None),
+            channel("output", ChannelKind::Output, None),
         ];
         let mut graph = MixerGraph::new(48_000, channels, vec![]).unwrap();
-        assert_eq!(graph.process_frame(&[[1.0, 1.0], [1.0, 1.0]]), [0.0, 0.0]);
+        assert_eq!(rendered(&mut graph, &[[1.0, 1.0], [1.0, 1.0]]), [0.0, 0.0]);
     }
 
     #[test]
     fn soloed_bus_receives_inputs_without_leaking_their_direct_outputs() {
-        let source = channel("source", ChannelKind::Audio, ChannelFormat::Stereo, Some(2));
-        let mut bus = channel("bus", ChannelKind::Bus, ChannelFormat::Stereo, Some(2));
+        let source = channel("source", ChannelKind::Audio, Some(3));
+        let mut bus = channel("bus", ChannelKind::Bus, Some(3));
         bus.soloed = true;
         let channels = vec![
             source,
             bus,
-            channel("master", ChannelKind::Master, ChannelFormat::Stereo, None),
+            channel("master", ChannelKind::Master, None),
+            channel("output", ChannelKind::Output, None),
         ];
         let sends = vec![SendSpec {
             id: "send".to_owned(),
@@ -658,23 +744,24 @@ mod tests {
             pan: 0.0,
         }];
         let mut graph = MixerGraph::new(48_000, channels, sends).unwrap();
-        assert_eq!(graph.process_frame(&[[0.5, 0.5]]), [0.5, 0.5]);
+        assert_eq!(rendered(&mut graph, &[[0.5, 0.5]]), [0.5, 0.5]);
     }
 
     #[test]
     fn parameter_changes_are_smoothed_and_meters_reset_after_snapshot() {
         let channels = vec![
-            channel("audio", ChannelKind::Audio, ChannelFormat::Stereo, Some(1)),
-            channel("master", ChannelKind::Master, ChannelFormat::Stereo, None),
+            channel("audio", ChannelKind::Audio, Some(2)),
+            channel("master", ChannelKind::Master, None),
+            channel("output", ChannelKind::Output, None),
         ];
         let mut graph = MixerGraph::new(1_000, channels, vec![]).unwrap();
         graph.set_channel_gain(0, -90.0).unwrap();
-        let first = graph.process_frame(&[[1.0, 0.5]]);
+        let first = rendered(&mut graph, &[[1.0, 0.5]]);
         assert!(first[0] > 0.0 && first[0] < 1.0);
         for _ in 0..200 {
             graph.process_frame(&[[1.0, 0.5]]);
         }
-        assert!(graph.process_frame(&[[1.0, 0.5]])[0] < 1.0e-6);
+        assert!(rendered(&mut graph, &[[1.0, 0.5]])[0] < 1.0e-6);
 
         let mut peaks = vec![Default::default(); graph.channel_count()];
         graph.write_peaks(&mut peaks);

@@ -66,7 +66,7 @@ const liveClips = computed<TimelineClip[]>(() =>
         startSeconds: recordingStartSeconds.value,
         durationSeconds: recordingDuration.value,
         endSeconds: recordingStartSeconds.value + recordingDuration.value,
-        channels: track.channelFormat === "mono" ? 1 : 2,
+        channels: track.inputFormat === "mono" ? 1 : 2,
         sampleRate: session.value?.configuration.sampleRate ?? 48_000
       }))
 )
@@ -251,7 +251,7 @@ function handleWheel(event: WheelEvent): void {
               :label="`${track.name}; double-click to rename; Alt+Arrow Up or Down to reorder`"
               @rename="mixerStore.updateChannel(track.id, { name: $event })"
             />
-            <small>INPUT {{ track.inputChannels.join("–") }} · {{ track.channelFormat.toUpperCase() }}</small>
+            <small>INPUT {{ track.inputChannels.join("–") }} · {{ track.inputFormat?.toUpperCase() }}</small>
           </div>
           <AudioLines :size="13" />
         </div>

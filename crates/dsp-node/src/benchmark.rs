@@ -5,9 +5,7 @@ use std::{
 
 use napi::{Result, Task, bindgen_prelude::AsyncTask};
 use napi_derive::napi;
-use yadaw_dsp_core::mixer::{
-    ChannelFormat, ChannelKind, ChannelSpec, MixerGraph, SendSpec, SendTap, StereoFrame,
-};
+use yadaw_dsp_core::mixer::{ChannelKind, ChannelSpec, MixerGraph, SendSpec, SendTap, StereoFrame};
 
 const SAMPLE_RATE: u32 = 48_000;
 const TARGET_MEASUREMENT_TIME: Duration = Duration::from_millis(200);
@@ -80,22 +78,19 @@ pub struct NativeAudioBenchmarkReport {
 
 fn build_graph(scenario: Scenario) -> MixerGraph {
     let master = scenario.tracks + scenario.buses;
-    let mut channels = Vec::with_capacity(master + 1);
+    let output = master + 1;
+    let mut channels = Vec::with_capacity(master + 2);
 
     for index in 0..scenario.tracks {
         channels.push(ChannelSpec {
             id: format!("track-{index}"),
             kind: ChannelKind::Audio,
-            format: if index % 3 == 0 {
-                ChannelFormat::Mono
-            } else {
-                ChannelFormat::Stereo
-            },
             gain_db: -3.0,
             pan: (index % 5) as f32 * 0.2 - 0.4,
             muted: false,
             soloed: false,
             output: Some(scenario.tracks + index % scenario.buses),
+            hardware_output: None,
         });
     }
 
@@ -103,24 +98,34 @@ fn build_graph(scenario: Scenario) -> MixerGraph {
         channels.push(ChannelSpec {
             id: format!("bus-{index}"),
             kind: ChannelKind::Bus,
-            format: ChannelFormat::Stereo,
             gain_db: -1.5,
             pan: 0.0,
             muted: false,
             soloed: false,
-            output: Some(master),
+            output: Some(output),
+            hardware_output: None,
         });
     }
 
     channels.push(ChannelSpec {
         id: "master".to_owned(),
         kind: ChannelKind::Master,
-        format: ChannelFormat::Stereo,
         gain_db: 0.0,
         pan: 0.0,
         muted: false,
         soloed: false,
         output: None,
+        hardware_output: None,
+    });
+    channels.push(ChannelSpec {
+        id: "output".to_owned(),
+        kind: ChannelKind::Output,
+        gain_db: 0.0,
+        pan: 0.0,
+        muted: false,
+        soloed: false,
+        output: None,
+        hardware_output: Some([0, 1]),
     });
 
     let sends = (0..scenario.sends)
@@ -246,7 +251,7 @@ mod tests {
     fn benchmark_scenarios_build_valid_graphs() {
         for scenario in SCENARIOS {
             let graph = build_graph(scenario);
-            assert_eq!(graph.channel_count(), scenario.tracks + scenario.buses + 1);
+            assert_eq!(graph.channel_count(), scenario.tracks + scenario.buses + 2);
         }
     }
 

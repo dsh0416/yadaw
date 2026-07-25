@@ -60,6 +60,27 @@ There is one audio-device namespace. cpal supplies the available hosts, device
 names, stable IDs, and defaults. Chromium `MediaDevices` and Web Audio devices
 must not be mixed into project settings.
 
+## Mixer channel and hardware routing
+
+Mixer channels and physical device channels are separate concepts:
+
+- `Audio` and `Bus` are stereo processing channels. They route to another
+  `Bus` or directly to an `Output`.
+- The singleton `Master` is not a routable graph node: it cannot be a main-path
+  destination, cannot route onward, and cannot source or receive a send. Its
+  gain, pan, mute, and meters form an implicit global final-control stage that
+  is applied independently after each `Output` channel's processing.
+- `Output` is a stereo sink mapped to two distinct, one-based hardware output
+  channels. A project can define multiple outputs, such as speakers on 1–2 and
+  headphones on 3–4, and route tracks or buses to either mix.
+
+Audio tracks have no mono/stereo processing mode. Only their hardware input
+selection has an `input_format`: mono selects one input and stereo selects a
+left/right pair. Mono recordings remain mono assets on disk, then expand to a
+stereo frame when they enter the track processing graph. Everything downstream
+stays stereo, so a future plug-in can produce different left and right signals
+without the track collapsing them back to mono.
+
 ## Dependency direction
 
 ```text

@@ -147,6 +147,75 @@ const mixerGraphSql = [
     ON mixer_sends (source_channel_id, sort_order)`
 ] as const
 
+const outputRoutingSql = [
+  `ALTER TABLE mixer_channels RENAME COLUMN channel_format TO input_format`,
+  `ALTER TABLE mixer_channels ALTER COLUMN input_format DROP NOT NULL`,
+  `ALTER TABLE mixer_channels
+    ADD COLUMN hardware_output_channels smallint[] NOT NULL DEFAULT ARRAY[]::smallint[]`,
+  `DO $$
+    DECLARE constraint_name text;
+    BEGIN
+      FOR constraint_name IN
+        SELECT conname
+        FROM pg_constraint
+        WHERE conrelid = 'mixer_channels'::regclass AND contype = 'c'
+      LOOP
+        EXECUTE format('ALTER TABLE mixer_channels DROP CONSTRAINT %I', constraint_name);
+      END LOOP;
+    END
+    $$`,
+  `UPDATE mixer_channels SET input_format = NULL WHERE kind <> 'audio'`,
+  `INSERT INTO mixer_channels (
+    id, kind, name, color, sort_order, input_format, gain_db, pan,
+    muted, soloed, output_channel_id, record_armed, input_channels,
+    hardware_output_channels
+  ) VALUES (
+    'output-1-2', 'output', 'Output 1–2', '#73D6A2', 0, NULL, 0, 0,
+    false, false, NULL, false, ARRAY[]::smallint[], ARRAY[1, 2]::smallint[]
+  )`,
+  `UPDATE mixer_channels
+    SET output_channel_id = 'output-1-2'
+    WHERE output_channel_id = 'master'`,
+  `ALTER TABLE mixer_channels
+    ADD CONSTRAINT mixer_channels_kind_check
+      CHECK (kind IN ('audio', 'bus', 'master', 'output')),
+    ADD CONSTRAINT mixer_channels_name_check
+      CHECK (length(trim(name)) > 0),
+    ADD CONSTRAINT mixer_channels_color_check
+      CHECK (color ~ '^#[0-9A-Fa-f]{6}$'),
+    ADD CONSTRAINT mixer_channels_sort_order_check
+      CHECK (sort_order >= 0),
+    ADD CONSTRAINT mixer_channels_gain_db_check
+      CHECK (gain_db BETWEEN -90 AND 12),
+    ADD CONSTRAINT mixer_channels_pan_check
+      CHECK (pan BETWEEN -1 AND 1),
+    ADD CONSTRAINT mixer_channels_master_solo_check
+      CHECK (kind <> 'master' OR NOT soloed),
+    ADD CONSTRAINT mixer_channels_output_route_check
+      CHECK ((kind IN ('master', 'output')) = (output_channel_id IS NULL)),
+    ADD CONSTRAINT mixer_channels_input_check
+      CHECK (
+        (kind = 'audio' AND input_format IS NOT NULL AND (
+          (input_format = 'mono' AND cardinality(input_channels) = 1) OR
+          (input_format = 'stereo' AND cardinality(input_channels) = 2)
+        )) OR
+        (kind <> 'audio' AND input_format IS NULL
+          AND cardinality(input_channels) = 0 AND NOT record_armed)
+      ),
+    ADD CONSTRAINT mixer_channels_input_channels_check
+      CHECK (0 < ALL(input_channels)),
+    ADD CONSTRAINT mixer_channels_hardware_output_check
+      CHECK (
+        (kind = 'output'
+          AND cardinality(hardware_output_channels) = 2
+          AND hardware_output_channels[1] <> hardware_output_channels[2]
+          AND 0 < ALL(hardware_output_channels)) OR
+        (kind <> 'output' AND cardinality(hardware_output_channels) = 0)
+      )`,
+  `CREATE UNIQUE INDEX mixer_output_channels_unique
+    ON mixer_channels (hardware_output_channels) WHERE kind = 'output'`
+] as const
+
 function hashStatements(statements: readonly string[]): string {
   return createHash("sha256").update(statements.join("\n-- statement boundary --\n")).digest("hex")
 }
@@ -154,7 +223,12 @@ function hashStatements(statements: readonly string[]): string {
 export const PROJECT_MIGRATIONS: readonly ProjectMigration[] = [
   { id: "0000_initial", hash: hashStatements(initialSql), sql: initialSql },
   { id: "0001_waveform_cache", hash: hashStatements(waveformCacheSql), sql: waveformCacheSql },
-  { id: "0002_mixer_graph", hash: hashStatements(mixerGraphSql), sql: mixerGraphSql }
+  { id: "0002_mixer_graph", hash: hashStatements(mixerGraphSql), sql: mixerGraphSql },
+  {
+    id: "0003_output_routing",
+    hash: hashStatements(outputRoutingSql),
+    sql: outputRoutingSql
+  }
 ]
 
 export const MIGRATION_JOURNAL_TABLE = "__drizzle_migrations"

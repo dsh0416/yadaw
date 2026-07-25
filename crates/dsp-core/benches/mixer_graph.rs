@@ -2,7 +2,7 @@ use std::{hint::black_box, time::Duration};
 
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use yadaw_dsp_core::mixer::{
-    ChannelFormat, ChannelKind, ChannelPeak, ChannelSpec, GraphError, MixerGraph, SendSpec,
+    ChannelKind, ChannelPeak, ChannelSpec, GraphError, HardwareOutputFrame, MixerGraph, SendSpec,
     SendTap, StereoFrame,
 };
 
@@ -31,53 +31,60 @@ fn scenario(
     soloed: bool,
 ) -> (Vec<ChannelSpec>, Vec<SendSpec>) {
     let master = tracks + buses;
-    let mut channels = Vec::with_capacity(master + 1);
+    let output = master + 1;
+    let mut channels = Vec::with_capacity(master + 2);
     for index in 0..tracks {
         let output = match topology {
-            Topology::Direct => master,
+            Topology::Direct => output,
             Topology::Cascaded | Topology::SendHeavy if buses > 0 => tracks + index % buses,
-            Topology::Cascaded | Topology::SendHeavy => master,
+            Topology::Cascaded | Topology::SendHeavy => output,
         };
         channels.push(ChannelSpec {
             id: format!("audio-{index}"),
             kind: ChannelKind::Audio,
-            format: if index % 2 == 0 {
-                ChannelFormat::Stereo
-            } else {
-                ChannelFormat::Mono
-            },
             gain_db: -3.0,
             pan: (index % 5) as f32 * 0.2 - 0.4,
             muted: index % 17 == 16,
             soloed: soloed && index == 0,
             output: Some(output),
+            hardware_output: None,
         });
     }
     for index in 0..buses {
         let output = match topology {
             Topology::Cascaded if index + 1 < buses => tracks + index + 1,
-            _ => master,
+            _ => output,
         };
         channels.push(ChannelSpec {
             id: format!("bus-{index}"),
             kind: ChannelKind::Bus,
-            format: ChannelFormat::Stereo,
             gain_db: -1.0,
             pan: 0.0,
             muted: false,
             soloed: false,
             output: Some(output),
+            hardware_output: None,
         });
     }
     channels.push(ChannelSpec {
         id: "master".to_owned(),
         kind: ChannelKind::Master,
-        format: ChannelFormat::Stereo,
         gain_db: 0.0,
         pan: 0.0,
         muted: false,
         soloed: false,
         output: None,
+        hardware_output: None,
+    });
+    channels.push(ChannelSpec {
+        id: "output".to_owned(),
+        kind: ChannelKind::Output,
+        gain_db: 0.0,
+        pan: 0.0,
+        muted: false,
+        soloed: false,
+        output: None,
+        hardware_output: Some([0, 1]),
     });
 
     let mut sends = Vec::with_capacity(tracks.saturating_mul(sends_per_track));
@@ -108,8 +115,8 @@ fn process_block(
     graph: &mut MixerGraph,
     inputs: &[StereoFrame],
     block_frames: usize,
-) -> StereoFrame {
-    let mut result = [0.0, 0.0];
+) -> HardwareOutputFrame {
+    let mut result = [0.0; 32];
     for _ in 0..block_frames {
         result = graph.process_frame(black_box(inputs));
     }
