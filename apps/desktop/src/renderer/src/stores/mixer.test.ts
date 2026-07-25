@@ -95,4 +95,29 @@ describe("mixer store", () => {
     expect(mixer.availableSendTargets("bus-b").map((channel) => channel.id))
       .toEqual([])
   })
+
+  it("clears latched meter clipping in the UI and native engine", async () => {
+    window.yadaw.transportCommand = vi.fn().mockResolvedValue(undefined)
+    const mixer = useMixerStore()
+    mixer.runtime = {
+      capturedAt: 1,
+      meters: [{
+        channelId: "audio",
+        preFaderPeak: [1, 1],
+        postFaderPeak: [1, 1],
+        heldPeak: [1, 1],
+        clipped: true
+      }]
+    }
+
+    await mixer.clearMeterClips()
+
+    expect(mixer.runtime.meters[0]).toMatchObject({
+      heldPeak: [0, 0],
+      clipped: false
+    })
+    expect(window.yadaw.transportCommand).toHaveBeenCalledWith({
+      type: "clear-meter-clips"
+    })
+  })
 })

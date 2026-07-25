@@ -13,7 +13,6 @@ const props = defineProps<{
   displayMode: WaveformDisplayMode
   viewportStartSeconds: number
   viewportEndSeconds: number
-  playheadSeconds: number
   selectedClipId: string | null
   liveClip: TimelineClip | null
   tempo: number
@@ -32,9 +31,6 @@ const emit = defineEmits<{
 const laneStyle = computed(() => ({
   width: `${props.contentWidth}px`,
   height: `${props.trackHeight}px`
-}))
-const playheadStyle = computed(() => ({
-  left: `${props.playheadSeconds * props.pixelsPerSecond}px`
 }))
 const barLines = computed(() => {
   const barDuration = 60 / props.tempo * props.beatsPerBar
@@ -80,7 +76,6 @@ function moveClip(event: DragEvent): void {
     @drop.prevent="moveClip"
   >
     <i v-for="(left, index) in barLines" :key="index" class="bar-line" :style="{ left: `${left}px` }" />
-    <div class="playhead" :style="playheadStyle" aria-hidden="true"><span /></div>
     <AudioClipCard
       v-for="clip in displayedClips"
       :key="clip.id"
@@ -103,5 +98,5 @@ function moveClip(event: DragEvent): void {
 </template>
 
 <style scoped>
-.track-lane{position:relative;min-width:100%;overflow:hidden;border-bottom:1px solid var(--line-strong);background-color:var(--daw-lane);background-image:repeating-linear-gradient(0deg,transparent 0 24px,var(--daw-lane-stripe) 25px);cursor:crosshair}.bar-line{position:absolute;z-index:0;top:0;bottom:0;width:1px;background:var(--daw-grid-line);pointer-events:none}.playhead{position:absolute;z-index:8;top:0;bottom:0;width:1px;background:var(--record);box-shadow:0 0 8px color-mix(in srgb,var(--record) 55%,transparent);pointer-events:none}.playhead span{position:absolute;top:0;left:-4px;width:9px;height:7px;background:var(--record);clip-path:polygon(0 0,100% 0,50% 100%)}.empty-message{position:absolute;inset:0;display:grid;place-items:center;color:var(--text-faint);font-size:8px;pointer-events:none}
+.track-lane{position:relative;min-width:100%;overflow:hidden;border-bottom:1px solid var(--line-strong);background-color:var(--daw-lane);background-image:repeating-linear-gradient(0deg,transparent 0 24px,var(--daw-lane-stripe) 25px);cursor:crosshair}.bar-line{position:absolute;z-index:0;top:0;bottom:0;width:1px;background:var(--daw-grid-line);pointer-events:none}.empty-message{position:absolute;inset:0;display:grid;place-items:center;color:var(--text-faint);font-size:8px;pointer-events:none}
 </style>

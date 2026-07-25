@@ -3,6 +3,8 @@ import { dirname, join } from "node:path"
 import type {
   ApplicationSettings,
   ApplicationSettingsPatch,
+  MeterPeakHold,
+  MeterReturnRate,
   RecordingBitDepth,
   ThemePreference
 } from "@yadaw/contracts"
@@ -13,6 +15,14 @@ function isRecordingBitDepth(value: unknown): value is RecordingBitDepth {
 
 function isThemePreference(value: unknown): value is ThemePreference {
   return value === "light" || value === "dark" || value === "system"
+}
+
+function isMeterPeakHold(value: unknown): value is MeterPeakHold {
+  return value === "800ms" || value === "2s" || value === "4s" || value === "infinite"
+}
+
+function isMeterReturnRate(value: unknown): value is MeterReturnRate {
+  return value === "iec-type-i"
 }
 
 async function syncDirectory(path: string): Promise<void> {
@@ -42,6 +52,8 @@ export class ApplicationSettingsStore {
       swapDirectory: join(this.userData, "swap"),
       recordingBitDepth: "float32",
       theme: "system",
+      meterPeakHold: "800ms",
+      meterReturnRate: "iec-type-i",
       recentProjects: []
     }
   }
@@ -59,6 +71,12 @@ export class ApplicationSettingsStore {
           ? raw.recordingBitDepth
           : value.recordingBitDepth,
         theme: isThemePreference(raw.theme) ? raw.theme : value.theme,
+        meterPeakHold: isMeterPeakHold(raw.meterPeakHold)
+          ? raw.meterPeakHold
+          : value.meterPeakHold,
+        meterReturnRate: isMeterReturnRate(raw.meterReturnRate)
+          ? raw.meterReturnRate
+          : value.meterReturnRate,
         recentProjects: Array.isArray(raw.recentProjects)
           ? raw.recentProjects.filter((recent) =>
             typeof recent?.path === "string" &&
@@ -89,6 +107,14 @@ export class ApplicationSettingsStore {
     if (patch.theme !== undefined) {
       if (!isThemePreference(patch.theme)) throw new TypeError("Unsupported theme preference")
       current.theme = patch.theme
+    }
+    if (patch.meterPeakHold !== undefined) {
+      if (!isMeterPeakHold(patch.meterPeakHold)) throw new TypeError("Unsupported meter peak hold")
+      current.meterPeakHold = patch.meterPeakHold
+    }
+    if (patch.meterReturnRate !== undefined) {
+      if (!isMeterReturnRate(patch.meterReturnRate)) throw new TypeError("Unsupported meter return rate")
+      current.meterReturnRate = patch.meterReturnRate
     }
     return this.write(current)
   }

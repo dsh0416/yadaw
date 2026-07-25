@@ -34,6 +34,7 @@ import type {
 import PreferencesHeader from "./PreferencesHeader.vue"
 import PreferencesNavigation from "./PreferencesNavigation.vue"
 import DisplayPreferences from "./DisplayPreferences.vue"
+import MixerDisplayPreferences from "./MixerDisplayPreferences.vue"
 import RecordingPreferences from "./RecordingPreferences.vue"
 
 const props = defineProps<{
@@ -47,7 +48,9 @@ const emit = defineEmits<{
   cancel: []
   save: [preferences: AudioPreferences]
 }>()
-const activePage = ref<"devices" | "recording" | "appearance">("devices")
+const activePage = ref<
+  "devices" | "recording" | "display-general" | "display-mixer"
+>("devices")
 
 const backendOptions: ReadonlyArray<{
   value: AudioBackend
@@ -258,7 +261,7 @@ watch(supportedBufferSizes, (sizes) => {
     <PreferencesHeader
       :applying="applying"
       :can-save="backendAvailability[draft.backend] && Boolean(draft.outputDeviceId) && Boolean(draft.inputDeviceId)"
-      :show-audio-apply="activePage !== 'appearance'"
+      :show-audio-apply="!activePage.startsWith('display-')"
       @cancel="emit('cancel')"
       @save="save"
     />
@@ -447,7 +450,8 @@ watch(supportedBufferSizes, (sizes) => {
       <p v-if="applyNotice" class="apply-notice">{{ applyNotice }}</p>
     </section>
     <RecordingPreferences v-else-if="activePage === 'recording'" />
-    <DisplayPreferences v-else />
+    <DisplayPreferences v-else-if="activePage === 'display-general'" />
+    <MixerDisplayPreferences v-else />
   </main>
 </template>
 

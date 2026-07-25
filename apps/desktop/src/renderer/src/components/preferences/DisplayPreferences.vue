@@ -43,8 +43,8 @@ onMounted(() => {
 <template>
   <section class="display-preferences">
     <div class="settings-intro">
-      <span class="section-kicker">Display <b>/</b> Theme</span>
-      <h2>Appearance</h2>
+      <span class="section-kicker">Display <b>/</b> General</span>
+      <h2>General</h2>
       <p>Choose a comfortable workspace for long editing and mixing sessions.</p>
     </div>
 

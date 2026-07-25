@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { mount } from "@vue/test-utils"
+import { createPinia } from "pinia"
 import type { MixerChannelState } from "@yadaw/contracts"
 import MixerChannelStrip from "./MixerChannelStrip.vue"
 
@@ -44,7 +45,8 @@ describe("MixerChannelStrip", () => {
         }],
         selected: false,
         density: "full"
-      }
+      },
+      global: { plugins: [createPinia()] }
     })
 
     const volume = wrapper.get('input[aria-label="Vocal volume"]')
@@ -97,7 +99,12 @@ describe("MixerChannelStrip", () => {
 
     await wrapper.get('input[aria-label="Vocal volume value in decibels"]').setValue("-3.5")
     expect(wrapper.emitted("updateChannel")?.at(-1)).toEqual(["audio", { gainDb: -3.5 }])
-    expect(wrapper.get('output[aria-label="Vocal live post-fader level in decibels"]').text()).toBe("-6.0")
+    const meterReadout = wrapper.get(
+      'button[aria-label="Vocal live post-fader level in decibels"]'
+    )
+    expect(meterReadout.text()).toBe("-6.0")
+    await meterReadout.trigger("click")
+    expect(wrapper.emitted("resetMeterClips")).toHaveLength(1)
 
     const pan = wrapper.get('input[aria-label="Vocal pan"]')
     await pan.setValue("-32")
@@ -153,7 +160,8 @@ describe("MixerChannelStrip", () => {
         outputs: [],
         selected: true,
         density: "full"
-      }
+      },
+      global: { plugins: [createPinia()] }
     })
 
     expect(wrapper.get('button[aria-label="Mute Vocal"]').classes()).toContain("mute")

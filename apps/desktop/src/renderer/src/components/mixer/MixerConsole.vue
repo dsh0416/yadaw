@@ -38,6 +38,7 @@ const mixerStore = useMixerStore()
         @select="mixerStore.selectedChannelId = $event"
         @preview="mixerStore.preview"
         @update-channel="mixerStore.updateChannel"
+        @reset-meter-clips="mixerStore.clearMeterClips"
       />
     </div>
     <p v-if="mixerStore.error" class="mixer-error" role="alert">{{ mixerStore.error }}</p>

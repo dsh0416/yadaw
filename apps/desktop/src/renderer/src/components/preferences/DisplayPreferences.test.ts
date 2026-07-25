@@ -9,12 +9,16 @@ describe("DisplayPreferences", () => {
       swapDirectory: "C:/swap",
       recordingBitDepth: "float32",
       theme: "dark",
+      meterPeakHold: "800ms",
+      meterReturnRate: "iec-type-i",
       recentProjects: []
     })
     window.yadaw.updateApplicationSettings = vi.fn().mockResolvedValue({
       swapDirectory: "C:/swap",
       recordingBitDepth: "float32",
       theme: "light",
+      meterPeakHold: "800ms",
+      meterReturnRate: "iec-type-i",
       recentProjects: []
     })
   })

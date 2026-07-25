@@ -292,6 +292,24 @@ export const useMixerStore = defineStore("mixer", () => {
     }
   }
 
+  async function clearMeterClips(): Promise<void> {
+    runtime.value = {
+      ...runtime.value,
+      meters: runtime.value.meters.map((meter) => ({
+        ...meter,
+        heldPeak: [0, 0],
+        clipped: false
+      }))
+    }
+    try {
+      await window.yadaw.transportCommand({ type: "clear-meter-clips" })
+    } catch (reason) {
+      error.value = reason instanceof Error
+        ? reason.message
+        : "Unable to reset mixer clipping indicators."
+    }
+  }
+
   const meterPolling = useIntervalFn(() => void refreshMeters(), 33, { immediate: false })
 
   function startMetering(): void {
@@ -343,6 +361,7 @@ export const useMixerStore = defineStore("mixer", () => {
     meterFor,
     availableOutputs,
     availableSendTargets,
+    clearMeterClips,
     startMetering,
     stopMetering,
     reset

@@ -227,6 +227,14 @@ function validateSettingsPatch(value: unknown): ApplicationSettingsPatch {
       patch.theme !== "light" && patch.theme !== "dark" && patch.theme !== "system") {
     throw new TypeError("Unsupported theme preference")
   }
+  if (patch.meterPeakHold !== undefined &&
+      patch.meterPeakHold !== "800ms" && patch.meterPeakHold !== "2s" &&
+      patch.meterPeakHold !== "4s" && patch.meterPeakHold !== "infinite") {
+    throw new TypeError("Unsupported meter peak hold")
+  }
+  if (patch.meterReturnRate !== undefined && patch.meterReturnRate !== "iec-type-i") {
+    throw new TypeError("Unsupported meter return rate")
+  }
   return patch
 }
 

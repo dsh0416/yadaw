@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed } from "vue"
-import { AudioLines, Cable, CircleDot, Keyboard, Music2, Palette, Plug } from "@lucide/vue"
+import { AudioLines, Cable, CircleDot, Gauge, Keyboard, Music2, Palette, Plug } from "@lucide/vue"
 
-type PreferencesPageId = "devices" | "recording" | "appearance"
+type PreferencesPageId = "devices" | "recording" | "display-general" | "display-mixer"
 
 const props = defineProps<{ activePage: PreferencesPageId }>()
 const emit = defineEmits<{ select: [page: PreferencesPageId] }>()
@@ -10,10 +10,10 @@ const categories = [
   { id: "audio", label: "Audio", icon: AudioLines, disabled: false, page: "devices" },
   { id: "midi", label: "MIDI", icon: Music2, disabled: true, page: null },
   { id: "plugins", label: "Plugins", icon: Plug, disabled: true, page: null },
-  { id: "appearance", label: "Display", icon: Palette, disabled: false, page: "appearance" },
+  { id: "display", label: "Display", icon: Palette, disabled: false, page: "display-general" },
   { id: "keyboard", label: "Keyboard", icon: Keyboard, disabled: true, page: null }
 ] as const
-const activeCategory = computed(() => props.activePage === "appearance" ? "appearance" : "audio")
+const activeCategory = computed(() => props.activePage.startsWith("display-") ? "display" : "audio")
 
 function selectCategory(page: PreferencesPageId | null): void {
   if (page) emit("select", page)
@@ -45,7 +45,8 @@ function selectCategory(page: PreferencesPageId | null): void {
       <button :class="['settings-page-item',{active:activePage==='recording'}]" :aria-current="activePage==='recording'?'page':undefined" @click="emit('select','recording')"><CircleDot :size="15" /><span><b>Recording</b><small>Swap, format & recovery</small></span></button>
     </nav>
     <nav v-else aria-label="Display preference pages">
-      <button class="settings-page-item active" aria-current="page"><Palette :size="15" /><span><b>Theme</b><small>Light, dark & system</small></span></button>
+      <button :class="['settings-page-item',{active:activePage==='display-general'}]" :aria-current="activePage==='display-general'?'page':undefined" @click="emit('select','display-general')"><Palette :size="15" /><span><b>General</b><small>Light, dark & system</small></span></button>
+      <button :class="['settings-page-item',{active:activePage==='display-mixer'}]" :aria-current="activePage==='display-mixer'?'page':undefined" @click="emit('select','display-mixer')"><Gauge :size="15" /><span><b>Mixer</b><small>Meter hold & return</small></span></button>
     </nav>
     <div v-if="activeCategory === 'audio'" class="signal-route" aria-hidden="true"><span>HOST</span><i /><span>I/O</span><i /><span>DSP</span></div>
   </aside>

@@ -165,15 +165,23 @@ export interface RecentProject {
   openedAt: number
 }
 
+export type MeterPeakHold = "800ms" | "2s" | "4s" | "infinite"
+export type MeterReturnRate = "iec-type-i"
+
 export interface ApplicationSettings {
   swapDirectory: string
   recordingBitDepth: RecordingBitDepth
   theme: ThemePreference
+  meterPeakHold: MeterPeakHold
+  meterReturnRate: MeterReturnRate
   recentProjects: RecentProject[]
 }
 
 export type ApplicationSettingsPatch = Partial<
-  Pick<ApplicationSettings, "swapDirectory" | "recordingBitDepth" | "theme">
+  Pick<
+    ApplicationSettings,
+    "swapDirectory" | "recordingBitDepth" | "theme" | "meterPeakHold" | "meterReturnRate"
+  >
 >
 
 export type OperationPhase =

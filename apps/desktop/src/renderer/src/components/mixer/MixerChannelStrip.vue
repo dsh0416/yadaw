@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed } from "vue"
+import { storeToRefs } from "pinia"
 import { RadioTower } from "@lucide/vue"
+import type { MeterPeakHold, MeterReturnRate } from "@yadaw/contracts"
 import type {
   MixerChannelMeter,
   MixerChannelPatch,
@@ -8,7 +10,9 @@ import type {
   MixerParameterPreview,
   MixerSendState
 } from "@yadaw/contracts"
+import { usePeakMeterDisplay } from "../../composables/usePeakMeterDisplay"
 import { useParameterGesture } from "../../composables/useParameterGesture"
+import { useApplicationSettingsStore } from "../../stores/applicationSettings"
 import InlineTrackNameEditor from "../InlineTrackNameEditor.vue"
 import MixerPanKnob from "./MixerPanKnob.vue"
 
@@ -25,31 +29,41 @@ const emit = defineEmits<{
   select: [channelId: string]
   preview: [preview: MixerParameterPreview]
   updateChannel: [channelId: string, patch: MixerChannelPatch]
+  resetMeterClips: []
 }>()
+
+const settingsStore = useApplicationSettingsStore()
+const { settings } = storeToRefs(settingsStore)
+const meter = computed(() => props.meter)
+const peakHold = computed<MeterPeakHold>(() =>
+  settings.value?.meterPeakHold ?? "800ms"
+)
+const returnRate = computed<MeterReturnRate>(() =>
+  settings.value?.meterReturnRate ?? "iec-type-i"
+)
+const meterDisplay = usePeakMeterDisplay({
+  meter,
+  peakHold,
+  returnRate
+})
 
 const gainLabel = computed(() =>
   props.channel.gainDb <= -90 ? "−∞" : `${props.channel.gainDb.toFixed(1)} dB`
 )
-const livePeakDb = computed(() => {
-  const peak = Math.max(...props.meter.postFaderPeak)
-  return peak > 0 ? 20 * Math.log10(peak) : Number.NEGATIVE_INFINITY
-})
 const livePeakLabel = computed(() =>
-  Number.isFinite(livePeakDb.value) ? livePeakDb.value.toFixed(1) : "−∞"
+  Number.isFinite(meterDisplay.heldPeakDb.value)
+    ? meterDisplay.heldPeakDb.value.toFixed(1)
+    : "−∞"
 )
 const livePeakState = computed(() => ({
-  active: Number.isFinite(livePeakDb.value),
-  hot: livePeakDb.value >= -6,
-  clipped: props.meter.clipped
+  active: Number.isFinite(meterDisplay.heldPeakDb.value),
+  hot: meterDisplay.heldPeakDb.value >= -6,
+  clipped: meterDisplay.clipped.value
 }))
-const meterStyle = computed(() => {
-  const value = Math.max(
-    ...props.meter.preFaderPeak,
-    ...props.meter.postFaderPeak
-  )
-  const db = value > 0 ? 20 * Math.log10(value) : -60
-  return { "--meter-level": `${Math.min(100, Math.max(0, (db + 60) / 60 * 100))}%` }
-})
+const meterStyle = computed(() => ({
+  "--meter-level": `${meterDisplay.meterLevelPercent.value}%`,
+  "--held-meter-level": `${meterDisplay.heldMeterLevelPercent.value}%`
+}))
 
 function preview(parameter: "gainDb" | "pan", value: number): void {
   emit("preview", {
@@ -58,6 +72,11 @@ function preview(parameter: "gainDb" | "pan", value: number): void {
     parameter,
     value
   })
+}
+
+function resetMeterClips(): void {
+  meterDisplay.resetClip()
+  emit("resetMeterClips")
 }
 
 const gainGesture = useParameterGesture({
@@ -131,11 +150,14 @@ function beginFaderGesture(event: PointerEvent): void {
         :title="`Fader: ${gainLabel}`"
         @change="gainGesture.reset(Number(($event.target as HTMLInputElement).value))"
       >
-      <output
+      <button
+        type="button"
         :class="['live-meter-value', livePeakState]"
         :aria-label="`${channel.name} live post-fader level in decibels`"
-        :title="`Live post-fader peak: ${livePeakLabel} dB`"
-      >{{ livePeakLabel }}</output>
+        :title="`Held post-fader peak: ${livePeakLabel} dB · Click to reset clipping`"
+        @pointerdown.stop
+        @click.stop="resetMeterClips"
+      >{{ livePeakLabel }}</button>
       <label class="fader">
         <input
           type="range"
@@ -151,7 +173,15 @@ function beginFaderGesture(event: PointerEvent): void {
           @dblclick="gainGesture.reset(0)"
         >
       </label>
-      <div class="meter" :class="{ clipped: meter.clipped }" :style="meterStyle" aria-hidden="true">
+      <div
+        class="meter"
+        :class="{
+          clipped: meterDisplay.clipped.value,
+          'has-held-peak': Number.isFinite(meterDisplay.heldPeakDb.value)
+        }"
+        :style="meterStyle"
+        aria-hidden="true"
+      >
         <span /><span />
       </div>
     </div>
@@ -294,6 +324,7 @@ function beginFaderGesture(event: PointerEvent): void {
 }
 
 .meter {
+  position: relative;
   display: flex;
   grid-column: 2;
   grid-row: 2;
@@ -305,6 +336,23 @@ function beginFaderGesture(event: PointerEvent): void {
   border: 1px solid var(--line-strong);
   border-radius: 2px;
   background: var(--daw-meter-well);
+}
+
+.meter::after {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  right: 2px;
+  bottom: var(--held-meter-level);
+  left: 2px;
+  height: 1px;
+  background: var(--meter-yellow);
+  box-shadow: 0 0 2px color-mix(in srgb,var(--meter-yellow) 65%,transparent);
+  opacity: 0;
+}
+
+.meter.has-held-peak::after {
+  opacity: .9;
 }
 
 .meter span {
@@ -393,6 +441,7 @@ function beginFaderGesture(event: PointerEvent): void {
   font: 8px var(--font-utility);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  cursor: pointer;
 }
 
 .live-meter-value.active {
@@ -407,6 +456,11 @@ function beginFaderGesture(event: PointerEvent): void {
   border-color: var(--mixer-record);
   color: var(--record);
   background: color-mix(in srgb,var(--record) 14%,var(--daw-meter-well));
+}
+
+.live-meter-value:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
 }
 
 .channel-actions {

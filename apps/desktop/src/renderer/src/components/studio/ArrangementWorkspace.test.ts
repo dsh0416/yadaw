@@ -51,6 +51,11 @@ describe("ArrangementWorkspace", () => {
           soloed: false, outputChannelId: "master", recordArmed: false, inputChannels: [1, 2]
         },
         {
+          id: "audio-2", kind: "audio", name: "Audio 2", color: "#67D9E7",
+          sortOrder: 1, channelFormat: "mono", gainDb: 0, pan: 0, muted: false,
+          soloed: false, outputChannelId: "master", recordArmed: false, inputChannels: [1]
+        },
+        {
           id: "master", kind: "master", name: "Master", color: "#67D9E7",
           sortOrder: 0, channelFormat: "stereo", gainDb: 0, pan: 0, muted: false,
           soloed: false, outputChannelId: null, recordArmed: false, inputChannels: []
@@ -80,6 +85,8 @@ describe("ArrangementWorkspace", () => {
       global: { plugins: [pinia] }
     })
 
+    expect(wrapper.findAll(".track-lane")).toHaveLength(2)
+    expect(wrapper.findAll('[data-testid="timeline-playhead"]')).toHaveLength(1)
     const clip = wrapper.get('button[aria-label="Audio clip First take"]')
     expect(clip.attributes("aria-pressed")).toBe("false")
     await clip.trigger("click")
