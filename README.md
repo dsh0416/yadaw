@@ -49,3 +49,8 @@ pnpm scripts remain available for package-level development.
 
 See [docs/architecture.md](docs/architecture.md) for the process boundaries and
 the next implementation milestones.
+
+## License
+
+YADAW is licensed under the
+[GNU General Public License v3.0](LICENSE).

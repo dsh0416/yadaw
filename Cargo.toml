@@ -6,6 +6,7 @@ resolver = "3"
 version = "0.0.0"
 edition = "2024"
 rust-version = "1.97"
+license = "GPL-3.0-only"
 
 [workspace.dependencies]
 bwavfile = "2.0.1"
