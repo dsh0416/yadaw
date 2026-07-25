@@ -200,7 +200,7 @@ describe("ArrangementWorkspace", () => {
 
     expect(wrapper.get('button[aria-label="Recording New recording"]').attributes("aria-label"))
       .toBe("Recording New recording")
-    expect(wrapper.text()).toContain("Recording")
+    expect(wrapper.find('[role="status"]').exists()).toBe(false)
   })
 
   it("keeps the track rail aligned with vertical timeline scrolling", async () => {

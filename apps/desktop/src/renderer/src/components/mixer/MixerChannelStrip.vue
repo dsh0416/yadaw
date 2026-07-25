@@ -50,14 +50,14 @@ const meterDisplay = usePeakMeterDisplay({
 const gainLabel = computed(() =>
   props.channel.gainDb <= -90 ? "−∞" : `${props.channel.gainDb.toFixed(1)} dB`
 )
-const livePeakLabel = computed(() =>
-  Number.isFinite(meterDisplay.heldPeakDb.value)
-    ? meterDisplay.heldPeakDb.value.toFixed(1)
+const maximumPeakLabel = computed(() =>
+  Number.isFinite(meterDisplay.latchedPeakDb.value)
+    ? meterDisplay.latchedPeakDb.value.toFixed(1)
     : "−∞"
 )
-const livePeakState = computed(() => ({
-  active: Number.isFinite(meterDisplay.heldPeakDb.value),
-  hot: meterDisplay.heldPeakDb.value >= -6,
+const maximumPeakState = computed(() => ({
+  active: Number.isFinite(meterDisplay.latchedPeakDb.value),
+  hot: meterDisplay.latchedPeakDb.value >= -6,
   clipped: meterDisplay.clipped.value
 }))
 const meterStyle = computed(() => ({
@@ -77,8 +77,8 @@ function preview(parameter: "gainDb" | "pan", value: number): void {
   })
 }
 
-function resetMeterClips(): void {
-  meterDisplay.resetClip()
+function resetMaximumPeak(): void {
+  meterDisplay.resetPeakAndClip()
   emit("resetMeterClips")
 }
 
@@ -156,12 +156,12 @@ function beginFaderGesture(event: PointerEvent): void {
       >
       <button
         type="button"
-        :class="['live-meter-value', livePeakState]"
-        :aria-label="`${channel.name} live post-fader level in decibels`"
-        :title="`Held post-fader peak: ${livePeakLabel} dB · Click to reset clipping`"
+        :class="['maximum-peak-value', maximumPeakState]"
+        :aria-label="`${channel.name} latched maximum post-fader level in decibels`"
+        :title="`Maximum post-fader peak: ${maximumPeakLabel} dB · Click to reset peak and clipping`"
         @pointerdown.stop
-        @click.stop="resetMeterClips"
-      >{{ livePeakLabel }}</button>
+        @click.stop="resetMaximumPeak"
+      >{{ maximumPeakLabel }}</button>
       <label class="fader">
         <input
           class="fader-control"
@@ -497,7 +497,7 @@ function beginFaderGesture(event: PointerEvent): void {
   appearance: none;
 }
 
-.live-meter-value {
+.maximum-peak-value {
   display: grid;
   grid-column: 2;
   grid-row: 1;
@@ -515,21 +515,21 @@ function beginFaderGesture(event: PointerEvent): void {
   cursor: pointer;
 }
 
-.live-meter-value.active {
+.maximum-peak-value.active {
   color: var(--mixer-pan);
 }
 
-.live-meter-value.hot {
+.maximum-peak-value.hot {
   color: var(--mixer-solo);
 }
 
-.live-meter-value.clipped {
+.maximum-peak-value.clipped {
   border-color: var(--mixer-record);
   color: var(--record);
   background: color-mix(in srgb,var(--record) 14%,var(--daw-meter-well));
 }
 
-.live-meter-value:focus-visible {
+.maximum-peak-value:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 1px;
 }

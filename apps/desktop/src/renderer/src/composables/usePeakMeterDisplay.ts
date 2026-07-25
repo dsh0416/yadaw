@@ -40,6 +40,7 @@ export function usePeakMeterDisplay(options: {
   const now = options.now ?? (() => performance.now())
   const displayedPeakDb = shallowRef(Number.NEGATIVE_INFINITY)
   const heldPeakDb = shallowRef(Number.NEGATIVE_INFINITY)
+  const latchedPeakDb = shallowRef(Number.NEGATIVE_INFINITY)
   const clipped = shallowRef(false)
   let lastUpdate = now()
   let holdUntil = 0
@@ -55,6 +56,7 @@ export function usePeakMeterDisplay(options: {
       const returnedPeak = decay(displayedPeakDb.value, elapsedSeconds, rate)
 
       displayedPeakDb.value = Math.max(inputPeakDb, returnedPeak)
+      latchedPeakDb.value = Math.max(latchedPeakDb.value, inputPeakDb)
 
       if (
         !Number.isFinite(heldPeakDb.value) ||
@@ -85,19 +87,19 @@ export function usePeakMeterDisplay(options: {
   const meterLevelPercent = computed(() => dbToLevelPercent(displayedPeakDb.value))
   const heldMeterLevelPercent = computed(() => dbToLevelPercent(heldPeakDb.value))
 
-  function resetClip(): void {
+  function resetPeakAndClip(): void {
     ignoreClipUntilCleared = true
     clipped.value = false
-    heldPeakDb.value = displayedPeakDb.value
-    holdUntil = now() + PEAK_HOLD_DURATION_MS[options.peakHold.value]
+    latchedPeakDb.value = Number.NEGATIVE_INFINITY
   }
 
   return {
     displayedPeakDb,
     heldPeakDb,
+    latchedPeakDb,
     clipped,
     meterLevelPercent,
     heldMeterLevelPercent,
-    resetClip
+    resetPeakAndClip
   }
 }

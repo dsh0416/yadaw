@@ -50,7 +50,10 @@ const api: YadawDesktopApi = {
   },
   createProject: (request: CreateProjectRequest) =>
     ipcRenderer.invoke(IPC_CHANNELS.projectCreate, request),
-  openProject: (path?: string) => ipcRenderer.invoke(IPC_CHANNELS.projectOpen, path),
+  prepareOpenProject: (path?: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.projectPrepareOpen, path),
+  openProject: (path: string, recover?: boolean) =>
+    ipcRenderer.invoke(IPC_CHANNELS.projectOpen, path, recover),
   saveProject: (path?: string) => ipcRenderer.invoke(IPC_CHANNELS.projectSave, path),
   closeProject: (disposition?: ProjectCloseDisposition) =>
     ipcRenderer.invoke(IPC_CHANNELS.projectClose, disposition),

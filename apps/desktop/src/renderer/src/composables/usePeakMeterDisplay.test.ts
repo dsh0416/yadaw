@@ -39,6 +39,11 @@ describe("usePeakMeterDisplay", () => {
     await nextTick()
     expect(display.heldPeakDb.value).toBeCloseTo(-8.38, 2)
     expect(display.displayedPeakDb.value).toBeCloseTo(-16.64, 2)
+    expect(display.latchedPeakDb.value).toBeCloseTo(-6.02, 2)
+
+    display.resetPeakAndClip()
+    expect(display.latchedPeakDb.value).toBe(Number.NEGATIVE_INFINITY)
+    expect(display.heldPeakDb.value).toBeCloseTo(-8.38, 2)
 
     scope.stop()
   })
@@ -54,7 +59,7 @@ describe("usePeakMeterDisplay", () => {
     }))!
 
     expect(display.clipped.value).toBe(true)
-    display.resetClip()
+    display.resetPeakAndClip()
     expect(display.clipped.value).toBe(false)
 
     meterSample.value = meter(1, true)

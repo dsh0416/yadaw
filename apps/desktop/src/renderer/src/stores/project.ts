@@ -10,6 +10,8 @@ import type {
   ProjectLifecycleState,
   ProjectSession
 } from "@yadaw/contracts"
+import type { GlobalAlertOptions } from "../composables/useGlobalDialog"
+import { useGlobalDialog } from "../composables/useGlobalDialog"
 
 const proxy = createProjectDbProxy({ query: (request) => window.yadaw.projectQuery(request) })
 
@@ -17,7 +19,30 @@ function openState(session: ProjectSession, error: string | null = null): Projec
   return { status: "open", session: structuredClone(session), error }
 }
 
+function compatibilityAlert(message: string): GlobalAlertOptions | null {
+  if (/migrations newer|unknown migration/i.test(message)) {
+    return {
+      eyebrow: "Project compatibility",
+      tone: "warning",
+      title: "Project requires a newer YADAW",
+      description: "This project contains migrations unknown to this version.",
+      detail: "Upgrade YADAW to open it."
+    }
+  }
+  if (/migration .+ unexpected hash/i.test(message)) {
+    return {
+      eyebrow: "Project integrity",
+      tone: "danger",
+      title: "Project migration journal is damaged",
+      description: "A known migration has a different hash.",
+      detail: "The project was not opened."
+    }
+  }
+  return null
+}
+
 export const useProjectStore = defineStore("project", () => {
+  const { alert, showDialog } = useGlobalDialog()
   const lifecycle = shallowRef<ProjectLifecycleState>({ status: "closed", error: null })
   const projectAssets = ref<Asset[]>([])
 
@@ -56,19 +81,44 @@ export const useProjectStore = defineStore("project", () => {
     if (lifecycle.value.status !== "closed") return false
     lifecycle.value = { status: "opening", error: null }
     try {
-      const opened = await window.yadaw.openProject(path)
-      if (!opened) {
+      const preparation = await window.yadaw.prepareOpenProject(path)
+      if (!preparation) {
         lifecycle.value = { status: "closed", error: null }
         return false
       }
+      let recover = false
+      if (preparation.recoverableWorkingCopy) {
+        const choice = await showDialog({
+          eyebrow: "Project recovery",
+          tone: "warning",
+          title: "Recover unsaved project?",
+          description: "A newer working copy contains changes that were not saved to the .yadaw archive.",
+          detail: "Recover it, open the last saved archive, or cancel without changing either copy.",
+          actions: [
+            { value: "recover", label: "Recover working copy", kind: "primary" },
+            { value: "saved", label: "Open last saved", kind: "secondary" },
+            { value: "cancel", label: "Cancel", kind: "cancel" }
+          ],
+          cancelValue: "cancel"
+        })
+        if (!choice || choice === "cancel") {
+          lifecycle.value = { status: "closed", error: null }
+          return false
+        }
+        recover = choice === "recover"
+      }
+      const opened = await window.yadaw.openProject(preparation.path, recover)
       lifecycle.value = openState(opened)
       await refreshAssets()
       return true
     } catch (reason) {
+      const message = reason instanceof Error ? reason.message : "Unable to open project."
       lifecycle.value = {
         status: "closed",
-        error: reason instanceof Error ? reason.message : "Unable to open project."
+        error: message
       }
+      const alertOptions = compatibilityAlert(message)
+      if (alertOptions) await alert(alertOptions)
       return false
     }
   }
@@ -92,6 +142,22 @@ export const useProjectStore = defineStore("project", () => {
     if (lifecycle.value.status === "closed") return true
     if (lifecycle.value.status !== "open") return false
     const previous = lifecycle.value.session
+    if (previous.dirty && !disposition) {
+      disposition = await showDialog<"save" | "discard" | "cancel">({
+        eyebrow: "Unsaved project",
+        tone: "warning",
+        title: "Save project before closing?",
+        description: `Save changes to ${previous.configuration.name}?`,
+        detail: "Closing without saving keeps the last saved archive unchanged.",
+        actions: [
+          { value: "save", label: "Save", kind: "primary" },
+          { value: "discard", label: "Don't save", kind: "secondary" },
+          { value: "cancel", label: "Cancel", kind: "cancel" }
+        ],
+        cancelValue: "cancel"
+      }) ?? "cancel"
+      if (disposition === "cancel") return false
+    }
     lifecycle.value = { status: "closing", session: structuredClone(previous), error: null }
     try {
       const closed = await window.yadaw.closeProject(disposition)

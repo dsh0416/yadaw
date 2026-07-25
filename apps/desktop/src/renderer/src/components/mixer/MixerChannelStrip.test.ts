@@ -102,10 +102,11 @@ describe("MixerChannelStrip", () => {
     await wrapper.get('input[aria-label="Vocal volume value in decibels"]').setValue("-3.5")
     expect(wrapper.emitted("updateChannel")?.at(-1)).toEqual(["audio", { gainDb: -3.5 }])
     const meterReadout = wrapper.get(
-      'button[aria-label="Vocal live post-fader level in decibels"]'
+      'button[aria-label="Vocal latched maximum post-fader level in decibels"]'
     )
     expect(meterReadout.text()).toBe("-6.0")
     await meterReadout.trigger("click")
+    expect(meterReadout.text()).toBe("−∞")
     expect(wrapper.emitted("resetMeterClips")).toHaveLength(1)
 
     const pan = wrapper.get('input[aria-label="Vocal pan"]')

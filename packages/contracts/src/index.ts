@@ -19,6 +19,7 @@ export const IPC_CHANNELS = {
   audioBenchmarkRun: "audio-benchmark:run",
   audioBenchmarkMenuOpen: "audio-benchmark:menu-open",
   projectCreate: "project:create",
+  projectPrepareOpen: "project:prepare-open",
   projectOpen: "project:open",
   projectSave: "project:save",
   projectClose: "project:close",
@@ -77,7 +78,8 @@ export interface YadawDesktopApi {
   runAudioBenchmark(): Promise<AudioBenchmarkReport>
   subscribeAudioBenchmarkRequests(listener: () => void): () => void
   createProject(request: CreateProjectRequest): Promise<ProjectSession>
-  openProject(path?: string): Promise<ProjectSession | null>
+  prepareOpenProject(path?: string): Promise<ProjectOpenPreparation | null>
+  openProject(path: string, recover?: boolean): Promise<ProjectSession>
   saveProject(path?: string): Promise<ProjectSession | null>
   closeProject(disposition?: ProjectCloseDisposition): Promise<boolean>
   projectQuery(request: ProjectQueryRequest): Promise<ProjectQueryResult>
@@ -143,6 +145,11 @@ export interface ProjectSession {
   configuration: ProjectConfiguration
   dirty: boolean
   recoveredWorkingCopy: boolean
+}
+
+export interface ProjectOpenPreparation {
+  path: string
+  recoverableWorkingCopy: boolean
 }
 
 export type ProjectLifecycleState =

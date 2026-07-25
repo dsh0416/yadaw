@@ -565,40 +565,40 @@ function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle(IPC_CHANNELS.projectOpen, async (event, value: unknown) => {
+  ipcMain.handle(IPC_CHANNELS.projectPrepareOpen, async (event, value: unknown) => {
     assertTrustedSender(event)
+    let path = typeof value === "string" && value.trim() ? value : undefined
+    if (!path) {
+      const result = await dialog.showOpenDialog({
+        title: "Open YADAW project",
+        properties: ["openFile"],
+        filters: [{ name: "YADAW project", extensions: ["yadaw"] }]
+      })
+      path = result.filePaths[0]
+      if (result.canceled || !path) return null
+    }
+    return {
+      path,
+      recoverableWorkingCopy: await projects.hasRecoverableWorkingCopy(path)
+    }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.projectOpen, async (
+    event,
+    value: unknown,
+    recoverValue: unknown
+  ) => {
+    assertTrustedSender(event)
+    if (typeof value !== "string" || !value.trim()) {
+      throw new TypeError("Project path must be a non-empty string")
+    }
+    if (recoverValue !== undefined && typeof recoverValue !== "boolean") {
+      throw new TypeError("Project recovery choice must be a boolean")
+    }
+    const path = value
+    const recover = recoverValue === true
     lifecycle.beginProject("opening")
     try {
-      let path = typeof value === "string" ? value : undefined
-      if (!path) {
-        const result = await dialog.showOpenDialog({
-          title: "Open YADAW project",
-          properties: ["openFile"],
-          filters: [{ name: "YADAW project", extensions: ["yadaw"] }]
-        })
-        path = result.filePaths[0]
-        if (result.canceled || !path) {
-          lifecycle.cancelProject()
-          return null
-        }
-      }
-      let recover = false
-      if (await projects.hasRecoverableWorkingCopy(path)) {
-        const choice = await dialog.showMessageBox({
-          type: "warning",
-          title: "Recover unsaved project?",
-          message: "A newer working copy contains changes that were not saved to the .yadaw archive.",
-          detail: "Recover it, open the last saved archive, or cancel without changing either copy.",
-          buttons: ["Recover Working Copy", "Open Last Saved", "Cancel"],
-          defaultId: 0,
-          cancelId: 2
-        })
-        if (choice.response === 2) {
-          lifecycle.cancelProject()
-          return null
-        }
-        recover = choice.response === 0
-      }
       const operationId = "open-project"
       const projectName = basename(path).replace(/\.yadaw$/i, "")
       operations.upsert({
@@ -649,20 +649,6 @@ function registerIpcHandlers(
           // The file chooser or recovery prompt may have failed before the operation existed.
         }
       }
-      const code = (error as Error & { code?: string }).code
-      if (code === "newer-project") {
-        await dialog.showMessageBox({
-          type: "warning",
-          title: "Project requires a newer YADAW",
-          message: "This project contains migrations unknown to this version. Upgrade YADAW to open it."
-        })
-      } else if (code === "migration-conflict") {
-        await dialog.showMessageBox({
-          type: "error",
-          title: "Project migration journal is damaged",
-          message: "A known migration has a different hash. The project was not opened."
-        })
-      }
       throw error
     }
   })
@@ -709,15 +695,8 @@ function registerIpcHandlers(
     try {
       let disposition = value as ProjectCloseDisposition | undefined
       if (current.dirty && !disposition) {
-        const choice = await dialog.showMessageBox({
-          type: "question",
-          title: "Save project?",
-          message: `Save changes to ${current.configuration.name}?`,
-          buttons: ["Save", "Don't Save", "Cancel"],
-          defaultId: 0,
-          cancelId: 2
-        })
-        disposition = (["save", "discard", "cancel"] as const)[choice.response]
+        lifecycle.cancelProject()
+        return false
       }
       disposition ??= "discard"
       if (disposition !== "save" && disposition !== "discard" && disposition !== "cancel") {

@@ -14,6 +14,7 @@ import { useAudioBenchmarkStore } from "./stores/audioBenchmark"
 import GlobalOperationHost from "./components/operations/GlobalOperationHost.vue"
 import PendingRecordingHost from "./components/recording/PendingRecordingHost.vue"
 import AudioBenchmarkHost from "./components/benchmark/AudioBenchmarkHost.vue"
+import GlobalDialogHost from "./components/dialog/GlobalDialogHost.vue"
 
 const audioPreferencesStore = useAudioPreferencesStore()
 const audioRuntimeStore = useAudioRuntimeStore()
@@ -54,6 +55,7 @@ onUnmounted(() => {
       <PendingRecordingHost v-if="lifecycleReady" />
       <GlobalOperationHost />
       <AudioBenchmarkHost />
+      <GlobalDialogHost />
     </TooltipProvider>
   </ConfigProvider>
 </template>

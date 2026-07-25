@@ -3,9 +3,11 @@ import { computed, shallowRef, watch } from "vue"
 import { Plus, Trash2, X } from "@lucide/vue"
 import type { MixerSendPatch, MixerSendState } from "@yadaw/contracts"
 import { useParameterGesture } from "../../composables/useParameterGesture"
+import { useGlobalDialog } from "../../composables/useGlobalDialog"
 import { useMixerStore } from "../../stores/mixer"
 
 const mixerStore = useMixerStore()
+const { confirm } = useGlobalDialog()
 const newSendTarget = shallowRef("")
 const inputOptions = Array.from({ length: 32 }, (_, index) => index + 1)
 const channel = computed(() => mixerStore.selectedChannel)
@@ -89,11 +91,19 @@ function createSend(): void {
   void mixerStore.addSend(channel.value.id, newSendTarget.value)
 }
 
-function removeChannel(): void {
-  if (!channel.value || channel.value.kind === "master") return
-  if (window.confirm(`Delete ${channel.value.name}? Its clips will be removed from the timeline, but media assets will be kept.`)) {
-    void mixerStore.deleteChannel(channel.value.id)
-  }
+async function removeChannel(): Promise<void> {
+  const selectedChannel = channel.value
+  if (!selectedChannel || selectedChannel.kind === "master") return
+  const confirmed = await confirm({
+    eyebrow: "Mixer routing",
+    tone: "danger",
+    title: `Delete ${selectedChannel.name}?`,
+    description: "Its clips will be removed from the timeline, but media assets will be kept.",
+    detail: "This change is added to the project history and can be undone.",
+    confirmLabel: "Delete channel",
+    destructive: true
+  })
+  if (confirmed) void mixerStore.deleteChannel(selectedChannel.id)
 }
 
 function clearMeterClips(): void {

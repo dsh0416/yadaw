@@ -27,7 +27,7 @@ const viewStore = useArrangementViewStore()
 const mixerStore = useMixerStore()
 const { session } = storeToRefs(projectStore)
 const {
-  clips, playheadSeconds, selectedClipId, playing, loading, error,
+  clips, playheadSeconds, selectedClipId, error,
   contentEndSeconds, timelineDurationSeconds
 } = storeToRefs(transportStore)
 const { pixelsPerSecond, trackHeight, amplitudeScale } = storeToRefs(viewStore)
@@ -91,9 +91,6 @@ const contentWidth = computed(() =>
 const viewportStartSeconds = computed(() => scrollLeft.value / pixelsPerSecond.value)
 const viewportEndSeconds = computed(() =>
   (scrollLeft.value + viewportWidth.value) / pixelsPerSecond.value
-)
-const transportActive = computed(() =>
-  props.recordingStartedAt !== null || loading.value || playing.value
 )
 const dragPreview = computed<TimelineClip | null>(() => {
   const drag = clipDrag.value
@@ -292,12 +289,6 @@ function handleWheel(event: WheelEvent): void {
         @reset-track="viewStore.resetTrack"
         @reset-amplitude="viewStore.resetAmplitude"
       />
-      <div v-if="transportActive" class="transport-state" role="status">
-        <i :class="{ active: playing, loading, recording: recordingStartedAt !== null }" />
-        <span v-if="recordingStartedAt !== null">Recording {{ recordingDuration.toFixed(1) }} s</span>
-        <span v-else-if="loading">Preparing audio…</span>
-        <span v-else>Playing</span>
-      </div>
     </div>
 
     <div class="timeline-grid">
@@ -400,7 +391,6 @@ function handleWheel(event: WheelEvent): void {
 </template>
 
 <style scoped>
-.arrangement{position:relative;display:grid;grid-template-rows:43px minmax(0,1fr);min-width:0;min-height:0;overflow:hidden;background:var(--daw-workspace)}.arrangement-toolbar{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:12px;padding:0 14px 0 15px;border-bottom:1px solid var(--line-soft);background:var(--surface-1)}.arrangement-zoom-controls{grid-column:2}.transport-state{display:flex;grid-column:3;justify-self:end;align-items:center;gap:7px;color:var(--text-muted);font:7px var(--font-utility)}.transport-state i{width:6px;height:6px;border-radius:50%;background:var(--text-faint)}.transport-state i.active{background:var(--signal-cyan)}.transport-state i.loading{background:var(--warning)}.transport-state i.recording{background:var(--record);box-shadow:0 0 7px var(--record)}.timeline-grid{display:grid;grid-template-columns:178px minmax(0,1fr);min-height:0}.timeline-rail,.timeline-content{display:grid}.timeline-content{position:relative;min-height:100%}.timeline-rail{min-height:0;overflow:hidden;border-right:1px solid var(--line-soft);background:var(--daw-track-header)}.timeline-viewport{min-width:0;min-height:0;overflow:auto;background:var(--daw-lane)}.ruler-corner{display:flex;align-items:center;padding:0 12px;border-bottom:1px solid var(--line-strong);color:var(--text-faint);background:var(--daw-ruler);font:700 7px var(--font-utility);letter-spacing:.14em}.track-header{position:relative;display:grid;grid-template-columns:3px 25px minmax(0,1fr) auto;align-items:center;gap:8px;padding:12px 10px;border:0;border-bottom:1px solid var(--line-strong);color:var(--text-primary);background:var(--daw-track-header);text-align:left;cursor:pointer}.track-header:hover{background:var(--daw-track-header-hover)}.track-header.selected{background:var(--daw-track-header-selected);box-shadow:3px 0 0 var(--accent) inset}.track-header:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}.track-color{align-self:stretch;border-radius:2px}.track-header>strong{color:var(--text-muted);font:9px var(--font-utility)}.track-copy b,.track-copy small{display:block}.track-copy{min-width:0}.track-copy b{overflow:hidden;font-size:10px;text-overflow:ellipsis;white-space:nowrap}.track-copy small{margin-top:4px;color:var(--text-faint);font:6px var(--font-utility)}.track-header>svg{color:var(--text-muted)}.track-spacer{background:var(--daw-ruler)}.timeline-playhead{position:absolute;z-index:8;top:27px;bottom:0;width:1px;background:var(--record);box-shadow:0 0 8px color-mix(in srgb,var(--record) 55%,transparent);pointer-events:none}.timeline-playhead span{position:absolute;top:0;left:-4px;width:9px;height:7px;background:var(--record);clip-path:polygon(0 0,100% 0,50% 100%)}.empty-lane{background:var(--daw-lane)}.playback-error{position:absolute;right:12px;bottom:12px;margin:0;padding:8px 10px;border:1px solid color-mix(in srgb,var(--record) 55%,var(--line-strong));border-radius:5px;color:var(--record);background:color-mix(in srgb,var(--record) 14%,var(--surface-1));font-size:8px}@media(max-width:1100px){.timeline-grid{grid-template-columns:152px minmax(0,1fr)}}
-.arrangement-zoom-controls{grid-column:3;justify-self:end}.transport-state{grid-column:1;justify-self:start}
+.arrangement{position:relative;display:grid;grid-template-rows:43px minmax(0,1fr);min-width:0;min-height:0;overflow:hidden;background:var(--daw-workspace)}.arrangement-toolbar{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:12px;padding:0 14px 0 15px;border-bottom:1px solid var(--line-soft);background:var(--surface-1)}.arrangement-zoom-controls{grid-column:3;justify-self:end}.timeline-grid{display:grid;grid-template-columns:178px minmax(0,1fr);min-height:0}.timeline-rail,.timeline-content{display:grid}.timeline-content{position:relative;min-height:100%}.timeline-rail{min-height:0;overflow:hidden;border-right:1px solid var(--line-soft);background:var(--daw-track-header)}.timeline-viewport{min-width:0;min-height:0;overflow:auto;background:var(--daw-lane)}.ruler-corner{display:flex;align-items:center;padding:0 12px;border-bottom:1px solid var(--line-strong);color:var(--text-faint);background:var(--daw-ruler);font:700 7px var(--font-utility);letter-spacing:.14em}.track-header{position:relative;display:grid;grid-template-columns:3px 25px minmax(0,1fr) auto;align-items:center;gap:8px;padding:12px 10px;border:0;border-bottom:1px solid var(--line-strong);color:var(--text-primary);background:var(--daw-track-header);text-align:left;cursor:pointer}.track-header:hover{background:var(--daw-track-header-hover)}.track-header.selected{background:var(--daw-track-header-selected);box-shadow:3px 0 0 var(--accent) inset}.track-header:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}.track-color{align-self:stretch;border-radius:2px}.track-header>strong{color:var(--text-muted);font:9px var(--font-utility)}.track-copy b,.track-copy small{display:block}.track-copy{min-width:0}.track-copy b{overflow:hidden;font-size:10px;text-overflow:ellipsis;white-space:nowrap}.track-copy small{margin-top:4px;color:var(--text-faint);font:6px var(--font-utility)}.track-header>svg{color:var(--text-muted)}.track-spacer{background:var(--daw-ruler)}.timeline-playhead{position:absolute;z-index:8;top:27px;bottom:0;width:1px;background:var(--record);box-shadow:0 0 8px color-mix(in srgb,var(--record) 55%,transparent);pointer-events:none}.timeline-playhead span{position:absolute;top:0;left:-4px;width:9px;height:7px;background:var(--record);clip-path:polygon(0 0,100% 0,50% 100%)}.empty-lane{background:var(--daw-lane)}.playback-error{position:absolute;right:12px;bottom:12px;margin:0;padding:8px 10px;border:1px solid color-mix(in srgb,var(--record) 55%,var(--line-strong));border-radius:5px;color:var(--record);background:color-mix(in srgb,var(--record) 14%,var(--surface-1));font-size:8px}@media(max-width:1100px){.timeline-grid{grid-template-columns:152px minmax(0,1fr)}}
 .track-name-editor{display:block;font-size:10px;font-weight:700}
 </style>
