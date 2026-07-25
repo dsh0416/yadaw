@@ -83,7 +83,14 @@ describe("ArrangementWorkspace", () => {
         assetSampleRate: 48_000,
         assetChannels: 2
       }],
-      sends: []
+      sends: [],
+      plugins: [],
+      midiClips: [],
+      tempoMap: {
+        ticksPerQuarter: 960,
+        tempoEvents: [{ tick: 0, beatsPerMinute: 120 }],
+        timeSignatureEvents: [{ tick: 0, numerator: 4, denominator: 4 }]
+      }
     }
 
     const wrapper = mount(ArrangementWorkspace, {
@@ -106,7 +113,9 @@ describe("ArrangementWorkspace", () => {
     expect(wrapper.text()).not.toContain("ARRANGEMENT")
     expect(wrapper.text()).not.toContain("2 TRACKS")
     expect(wrapper.text()).not.toContain("2 tracks · 1 clips")
+    expect(wrapper.text()).not.toContain("INPUT 1–2")
     expect(wrapper.find('[role="status"]').exists()).toBe(false)
+    expect(wrapper.findAll(".track-quick-controls")).toHaveLength(2)
     expect(wrapper.get(".waveform").attributes("style")).toContain("width: 1px")
     expect(wrapper.get('[aria-label="2 channels audio"]').findAll("path")).toHaveLength(2)
     expect(wrapper.text()).not.toContain("2 CH")
@@ -185,7 +194,14 @@ describe("ArrangementWorkspace", () => {
         }
       ],
       clips: [],
-      sends: []
+      sends: [],
+      plugins: [],
+      midiClips: [],
+      tempoMap: {
+        ticksPerQuarter: 960,
+        tempoEvents: [{ tick: 0, beatsPerMinute: 120 }],
+        timeSignatureEvents: [{ tick: 0, numerator: 4, denominator: 4 }]
+      }
     }
 
     const wrapper = mount(ArrangementWorkspace, {
@@ -261,7 +277,14 @@ describe("ArrangementWorkspace", () => {
       sampleRate: 48_000,
       channels,
       clips: [],
-      sends: []
+      sends: [],
+      plugins: [],
+      midiClips: [],
+      tempoMap: {
+        ticksPerQuarter: 960,
+        tempoEvents: [{ tick: 0, beatsPerMinute: 120 }],
+        timeSignatureEvents: [{ tick: 0, numerator: 4, denominator: 4 }]
+      }
     }
 
     const wrapper = mount(ArrangementWorkspace, {

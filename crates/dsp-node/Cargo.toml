@@ -21,6 +21,7 @@ ringbuf.workspace = true
 rubato.workspace = true
 sha2.workspace = true
 yadaw-dsp-core.workspace = true
+yadaw-dsp-runtime.workspace = true
 
 [target.'cfg(target_os = "windows")'.dependencies]
 cpal = { workspace = true, features = ["asio"] }

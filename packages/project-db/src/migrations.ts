@@ -228,6 +228,100 @@ const channelTypeColorsSql = [
     WHERE id = 'output-1-2' AND kind = 'output' AND color = '#73D6A2'`
 ] as const
 
+const pluginsMidiTempoSql = [
+  `ALTER TABLE mixer_channels DROP CONSTRAINT mixer_channels_kind_check`,
+  `ALTER TABLE mixer_channels
+    ADD CONSTRAINT mixer_channels_kind_check
+      CHECK (kind IN ('audio', 'instrument', 'bus', 'master', 'output'))`,
+  `CREATE TABLE plugin_instances (
+    id text PRIMARY KEY,
+    channel_id text NOT NULL REFERENCES mixer_channels(id) ON DELETE CASCADE,
+    role text NOT NULL CHECK (role IN ('instrument', 'insert')),
+    slot_order integer NOT NULL CHECK (slot_order >= 0),
+    class_id text NOT NULL,
+    descriptor_snapshot text NOT NULL,
+    enabled boolean NOT NULL DEFAULT true,
+    component_state bytea NOT NULL DEFAULT ''::bytea,
+    controller_state bytea NOT NULL DEFAULT ''::bytea,
+    UNIQUE (channel_id, role, slot_order),
+    CHECK (role <> 'instrument' OR slot_order = 0)
+  )`,
+  `CREATE UNIQUE INDEX plugin_instances_instrument_singleton
+    ON plugin_instances (channel_id) WHERE role = 'instrument'`,
+  `CREATE TABLE tempo_events (
+    tick bigint PRIMARY KEY CHECK (tick >= 0),
+    beats_per_minute double precision NOT NULL CHECK (beats_per_minute > 0)
+  )`,
+  `CREATE TABLE time_signature_events (
+    tick bigint PRIMARY KEY CHECK (tick >= 0),
+    numerator smallint NOT NULL CHECK (numerator BETWEEN 1 AND 32),
+    denominator smallint NOT NULL CHECK (denominator IN (1, 2, 4, 8, 16, 32))
+  )`,
+  `INSERT INTO tempo_events (tick, beats_per_minute)
+    SELECT 0, tempo FROM project`,
+  `INSERT INTO time_signature_events (tick, numerator, denominator)
+    SELECT 0, time_signature_numerator, time_signature_denominator FROM project`,
+  `CREATE TABLE midi_sources (
+    id text PRIMARY KEY,
+    name text NOT NULL CHECK (length(trim(name)) > 0),
+    content_hash text NOT NULL UNIQUE,
+    raw_bytes bytea NOT NULL
+  )`,
+  `CREATE TABLE midi_clips (
+    id text PRIMARY KEY,
+    source_id text NOT NULL REFERENCES midi_sources(id) ON DELETE RESTRICT,
+    track_id text NOT NULL REFERENCES mixer_channels(id) ON DELETE CASCADE,
+    name text NOT NULL CHECK (length(trim(name)) > 0),
+    start_tick bigint NOT NULL CHECK (start_tick >= 0),
+    length_ticks bigint NOT NULL CHECK (length_ticks > 0),
+    source_offset_ticks bigint NOT NULL DEFAULT 0 CHECK (source_offset_ticks >= 0)
+  )`,
+  `CREATE INDEX midi_clips_track_start ON midi_clips (track_id, start_tick)`,
+  `CREATE TABLE midi_notes (
+    id text PRIMARY KEY,
+    clip_id text NOT NULL REFERENCES midi_clips(id) ON DELETE CASCADE,
+    start_tick bigint NOT NULL CHECK (start_tick >= 0),
+    duration_ticks bigint NOT NULL CHECK (duration_ticks > 0),
+    channel smallint NOT NULL CHECK (channel BETWEEN 0 AND 15),
+    key smallint NOT NULL CHECK (key BETWEEN 0 AND 127),
+    velocity smallint NOT NULL CHECK (velocity BETWEEN 1 AND 127),
+    release_velocity smallint NOT NULL CHECK (release_velocity BETWEEN 0 AND 127)
+  )`,
+  `CREATE INDEX midi_notes_clip_start ON midi_notes (clip_id, start_tick)`,
+  `CREATE TABLE midi_events (
+    id text PRIMARY KEY,
+    clip_id text NOT NULL REFERENCES midi_clips(id) ON DELETE CASCADE,
+    tick bigint NOT NULL CHECK (tick >= 0),
+    channel smallint CHECK (channel BETWEEN 0 AND 15),
+    kind text NOT NULL CHECK (kind IN (
+      'control-change', 'pitch-bend', 'program-change',
+      'channel-pressure', 'poly-pressure', 'sysex'
+    )),
+    data bytea NOT NULL
+  )`,
+  `CREATE INDEX midi_events_clip_tick ON midi_events (clip_id, tick)`,
+  `CREATE FUNCTION yadaw_require_tempo_map_origin() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    DECLARE has_origin boolean;
+    BEGIN
+      IF TG_OP = 'DELETE' AND OLD.tick = 0 THEN
+        EXECUTE format('SELECT EXISTS (SELECT 1 FROM %I WHERE tick = 0)', TG_TABLE_NAME)
+          INTO has_origin;
+        IF NOT has_origin THEN
+          RAISE EXCEPTION 'tempo map requires an event at tick 0';
+        END IF;
+      END IF;
+      RETURN COALESCE(NEW, OLD);
+    END
+    $$`,
+  `CREATE CONSTRAINT TRIGGER tempo_events_require_origin
+    AFTER DELETE ON tempo_events DEFERRABLE INITIALLY DEFERRED
+    FOR EACH ROW EXECUTE FUNCTION yadaw_require_tempo_map_origin()`,
+  `CREATE CONSTRAINT TRIGGER time_signature_events_require_origin
+    AFTER DELETE ON time_signature_events DEFERRABLE INITIALLY DEFERRED
+    FOR EACH ROW EXECUTE FUNCTION yadaw_require_tempo_map_origin()`
+] as const
+
 function hashStatements(statements: readonly string[]): string {
   return createHash("sha256").update(statements.join("\n-- statement boundary --\n")).digest("hex")
 }
@@ -245,6 +339,11 @@ export const PROJECT_MIGRATIONS: readonly ProjectMigration[] = [
     id: "0004_channel_type_colors",
     hash: hashStatements(channelTypeColorsSql),
     sql: channelTypeColorsSql
+  },
+  {
+    id: "0005_plugins_midi_tempo",
+    hash: hashStatements(pluginsMidiTempoSql),
+    sql: pluginsMidiTempoSql
   }
 ]
 

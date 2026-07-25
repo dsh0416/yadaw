@@ -10,8 +10,8 @@
   },
   "scripts": {
     "dev": "pnpm --filter @yadaw/desktop dev",
-    "build": "pnpm --filter @yadaw/dsp-node build && pnpm --filter @yadaw/desktop build",
-    "build:native": "pnpm --filter @yadaw/dsp-node build",
+    "build": "pnpm build:native && pnpm --filter @yadaw/desktop build",
+    "build:native": "pnpm --filter @yadaw/dsp-node build && cargo build -p yadaw-audio-host --release && cmake -S . -B target/vst3-bridge-build -DSMTG_ENABLE_VST3_PLUGIN_EXAMPLES=OFF -DSMTG_ENABLE_VST3_HOSTING_EXAMPLES=OFF -DSMTG_ENABLE_VSTGUI_SUPPORT=OFF && cmake --build target/vst3-bridge-build --config Release --target yadaw-vst3-probe",
     "check": "pnpm check:rust && pnpm -r --if-present check && pnpm --filter @yadaw/desktop test:unit && pnpm --filter @yadaw/project-db test:integration",
     "check:rust": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace && cargo test -p yadaw-dsp-node --features bench-internals --test realtime_allocations && cargo bench --workspace --bench mixer_graph --bench native_render --bench media_streaming --bench recording --features yadaw-dsp-node/bench-internals --no-run",
     "bench:rust": "cargo bench --workspace --bench mixer_graph --bench native_render --bench media_streaming --bench recording --features yadaw-dsp-node/bench-internals",

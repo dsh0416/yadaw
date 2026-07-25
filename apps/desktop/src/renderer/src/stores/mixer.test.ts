@@ -40,7 +40,14 @@ function graph(): MixerGraphSnapshot {
       }
     ],
     clips: [],
-    sends: []
+    sends: [],
+    plugins: [],
+    midiClips: [],
+    tempoMap: {
+      ticksPerQuarter: 960,
+      tempoEvents: [{ tick: 0, beatsPerMinute: 120 }],
+      timeSignatureEvents: [{ tick: 0, numerator: 4, denominator: 4 }]
+    }
   }
 }
 
@@ -143,6 +150,30 @@ describe("mixer store", () => {
       type: "update-channel",
       channelId: "audio",
       patch: { color: "#123456" }
+    })
+  })
+
+  it("creates an unassigned green instrument track", async () => {
+    const initial = graph()
+    window.yadaw.executeProjectCommand = vi.fn().mockImplementation((command) =>
+      Promise.resolve({ graph: initial, inverse: command })
+    )
+    const mixer = useMixerStore()
+    mixer.graph = initial
+
+    await mixer.createInstrumentTrack()
+
+    expect(window.yadaw.executeProjectCommand).toHaveBeenCalledWith({
+      type: "create-channel",
+      channel: expect.objectContaining({
+        kind: "instrument",
+        name: "Instrument 1",
+        color: "#73D6A2",
+        inputFormat: null,
+        inputChannels: [],
+        recordArmed: false,
+        outputChannelId: "output"
+      })
     })
   })
 

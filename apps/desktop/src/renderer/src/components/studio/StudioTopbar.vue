@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed } from "vue"
-import { Circle, LoaderCircle, LogOut, Pause, Play, Save, Settings, SkipBack, SlidersHorizontal } from "@lucide/vue"
+import { Circle, FileMusic, LoaderCircle, LogOut, Pause, Play, Save, Settings, SkipBack, SlidersHorizontal } from "@lucide/vue"
 import { TooltipArrow, TooltipContent, TooltipPortal, TooltipRoot, TooltipTrigger } from "reka-ui"
-import type { NativeEngineInfo, ProjectConfiguration } from "@yadaw/contracts"
+import type { NativeEngineInfo, ProjectConfiguration, TempoMapSnapshot } from "@yadaw/contracts"
+import { musicalPositionAtTick, secondsToTick, tempoAtTick, timeSignatureAtTick } from "../../utils/tempoMap"
 
 const props = defineProps<{
   nativeInfo?: NativeEngineInfo
@@ -15,6 +16,7 @@ const props = defineProps<{
   playLoading: boolean
   canPlay: boolean
   playheadSeconds: number
+  tempoMap: TempoMapSnapshot
 }>()
 const emit = defineEmits<{
   openPreferences: []
@@ -24,16 +26,16 @@ const emit = defineEmits<{
   save: []
   close: []
   openProjectSettings: []
+  importMidi: []
 }>()
 
 const musicalPosition = computed(() => {
-  const beatPosition = props.playheadSeconds / (60 / props.project.tempo)
-  const bar = Math.floor(beatPosition / props.project.timeSignatureNumerator) + 1
-  const beatInBar = beatPosition % props.project.timeSignatureNumerator
-  const beat = Math.floor(beatInBar) + 1
-  const ticks = Math.floor((beatInBar % 1) * 960)
-  return `${String(bar).padStart(3, "0")}·${String(beat).padStart(2, "0")}·${String(ticks).padStart(3, "0")}`
+  const position = musicalPositionAtTick(props.tempoMap, playheadTick.value)
+  return `${String(position.bar).padStart(3, "0")}·${String(position.beat).padStart(2, "0")}·${String(position.tick).padStart(3, "0")}`
 })
+const playheadTick = computed(() => secondsToTick(props.tempoMap, props.playheadSeconds))
+const currentTempo = computed(() => tempoAtTick(props.tempoMap, playheadTick.value))
+const currentSignature = computed(() => timeSignatureAtTick(props.tempoMap, playheadTick.value))
 </script>
 
 <template>
@@ -70,7 +72,7 @@ const musicalPosition = computed(() => {
         </TooltipRoot>
       </div>
       <div class="time-display"><span>BAR · BEAT · TICK</span><strong>{{ musicalPosition }}</strong></div>
-      <div class="tempo-display"><span><b>{{ project.tempo.toFixed(2) }}</b>BPM</span><span><b>{{ project.timeSignatureNumerator }} / {{ project.timeSignatureDenominator }}</b>METER</span></div>
+      <div class="tempo-display"><span><b>{{ currentTempo.toFixed(2) }}</b>BPM</span><span><b>{{ currentSignature.numerator }} / {{ currentSignature.denominator }}</b>METER</span></div>
     </div>
 
     <div class="top-actions">
@@ -78,6 +80,7 @@ const musicalPosition = computed(() => {
         <span :class="['status-dot', { ready: nativeInfo && engineRunning }]" />
         <span class="engine-copy"><b>{{ engineRunning ? "Engine online" : "Engine standby" }}</b><small>{{ nativeInfo ? `${nativeInfo.backend} · N-API ${nativeInfo.nodeApi}` : "Connecting native core" }}</small></span>
       </div>
+      <button class="preferences-button" aria-label="Import MIDI file" @click="emit('importMidi')"><FileMusic :size="15" /></button>
       <button class="preferences-button" aria-label="Project settings" @click="emit('openProjectSettings')"><SlidersHorizontal :size="15" /></button>
       <button class="preferences-button" aria-label="Save project" :disabled="!dirty" @click="emit('save')"><Save :size="15" /></button>
       <button class="preferences-button" aria-label="Close project" @click="emit('close')"><LogOut :size="15" /></button>

@@ -1,6 +1,7 @@
 import { access, mkdir, rename, rm, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import type {
+  MidiClipState,
   MixerGraphSnapshot,
   MixerParameterPreview,
   MixerRuntimeSnapshot,
@@ -8,6 +9,8 @@ import type {
   MixerSendState,
   MixerChannelPatch,
   MixerChannelState,
+  PluginInstancePatch,
+  PluginInstanceState,
   ProjectCommand,
   ProjectCommandResult,
   TimelineClipState,
@@ -27,6 +30,21 @@ import type { ProjectService } from "./project-service"
 interface AssetCacheRow {
   id: string
   contentHash: string
+}
+
+export interface MidiSourceImport {
+  id: string
+  name: string
+  contentHash: string
+  rawBytes: Uint8Array
+}
+
+function bytes(value: unknown): Uint8Array {
+  if (value instanceof Uint8Array) return value
+  if (ArrayBuffer.isView(value)) {
+    return new Uint8Array(value.buffer, value.byteOffset, value.byteLength)
+  }
+  return new Uint8Array()
 }
 
 function finiteRange(value: number, minimum: number, maximum: number, label: string): void {
@@ -54,6 +72,18 @@ function sendById(graph: MixerGraphSnapshot, id: string): MixerSendState {
 function clipById(graph: MixerGraphSnapshot, id: string): TimelineClipState {
   const clip = graph.clips.find((candidate) => candidate.id === id)
   if (!clip) throw new Error(`Timeline clip '${id}' was not found`)
+  return clip
+}
+
+function pluginById(graph: MixerGraphSnapshot, id: string): PluginInstanceState {
+  const plugin = graph.plugins.find((candidate) => candidate.id === id)
+  if (!plugin) throw new Error(`Plugin instance '${id}' was not found`)
+  return plugin
+}
+
+function midiClipById(graph: MixerGraphSnapshot, id: string): MidiClipState {
+  const clip = graph.midiClips.find((candidate) => candidate.id === id)
+  if (!clip) throw new Error(`MIDI clip '${id}' was not found`)
   return clip
 }
 
@@ -89,13 +119,21 @@ function inverseFor(graph: MixerGraphSnapshot, command: ProjectCommand): Project
       const clips = graph.clips
         .filter((clip) => clip.trackId === channel.id)
         .map<ProjectCommand>((clip) => ({ type: "create-clip", clip }))
+      const plugins = graph.plugins
+        .filter((plugin) => plugin.channelId === channel.id)
+        .map<ProjectCommand>((plugin) => ({ type: "create-plugin", plugin }))
+      const midiClips = graph.midiClips
+        .filter((clip) => clip.trackId === channel.id)
+        .map<ProjectCommand>((clip) => ({ type: "create-midi-clip", clip }))
       return {
         type: "batch",
         commands: [
           { type: "create-channel", channel },
           ...affectedOutputs,
           ...sends,
-          ...clips
+          ...clips,
+          ...plugins,
+          ...midiClips
         ]
       }
     }
@@ -132,6 +170,49 @@ function inverseFor(graph: MixerGraphSnapshot, command: ProjectCommand): Project
         startFrame: clip.startFrame
       }
     }
+    case "create-plugin":
+      return { type: "delete-plugin", pluginId: command.plugin.id }
+    case "delete-plugin":
+      return { type: "create-plugin", plugin: pluginById(graph, command.pluginId) }
+    case "update-plugin": {
+      const plugin = pluginById(graph, command.pluginId)
+      return {
+        type: "update-plugin",
+        pluginId: command.pluginId,
+        patch: patchFromKeys(plugin, command.patch)
+      }
+    }
+    case "move-plugin": {
+      const plugin = pluginById(graph, command.pluginId)
+      return {
+        type: "move-plugin",
+        pluginId: plugin.id,
+        channelId: plugin.channelId,
+        role: plugin.role,
+        slotOrder: plugin.slotOrder
+      }
+    }
+    case "replace-plugin":
+      return {
+        type: "replace-plugin",
+        pluginId: command.pluginId,
+        plugin: pluginById(graph, command.pluginId)
+      }
+    case "create-midi-clip":
+      return { type: "delete-midi-clip", clipId: command.clip.id }
+    case "delete-midi-clip":
+      return { type: "create-midi-clip", clip: midiClipById(graph, command.clipId) }
+    case "move-midi-clip": {
+      const clip = midiClipById(graph, command.clipId)
+      return {
+        type: "move-midi-clip",
+        clipId: clip.id,
+        trackId: clip.trackId,
+        startTick: clip.startTick
+      }
+    }
+    case "replace-tempo-map":
+      return { type: "replace-tempo-map", tempoMap: structuredClone(graph.tempoMap) }
     case "batch": {
       let working = cloneGraph(graph)
       const inverses: ProjectCommand[] = []
@@ -174,6 +255,8 @@ function applyToGraph(graph: MixerGraphSnapshot, command: ProjectCommand): Mixer
         send.sourceChannelId !== command.channelId && send.targetChannelId !== command.channelId
       )
       next.clips = next.clips.filter((clip) => clip.trackId !== command.channelId)
+      next.plugins = next.plugins.filter((plugin) => plugin.channelId !== command.channelId)
+      next.midiClips = next.midiClips.filter((clip) => clip.trackId !== command.channelId)
       break
     }
     case "update-channel":
@@ -200,6 +283,43 @@ function applyToGraph(graph: MixerGraphSnapshot, command: ProjectCommand): Mixer
       clip.startFrame = command.startFrame
       break
     }
+    case "create-plugin":
+      next.plugins.push(structuredClone(command.plugin))
+      break
+    case "delete-plugin":
+      next.plugins = next.plugins.filter((plugin) => plugin.id !== command.pluginId)
+      break
+    case "update-plugin":
+      Object.assign(pluginById(next, command.pluginId), command.patch)
+      break
+    case "move-plugin": {
+      const plugin = pluginById(next, command.pluginId)
+      plugin.channelId = command.channelId
+      plugin.role = command.role
+      plugin.slotOrder = command.slotOrder
+      break
+    }
+    case "replace-plugin": {
+      const index = next.plugins.findIndex((plugin) => plugin.id === command.pluginId)
+      if (index < 0) throw new Error(`Plugin instance '${command.pluginId}' was not found`)
+      next.plugins[index] = structuredClone(command.plugin)
+      break
+    }
+    case "create-midi-clip":
+      next.midiClips.push(structuredClone(command.clip))
+      break
+    case "delete-midi-clip":
+      next.midiClips = next.midiClips.filter((clip) => clip.id !== command.clipId)
+      break
+    case "move-midi-clip": {
+      const clip = midiClipById(next, command.clipId)
+      clip.trackId = command.trackId
+      clip.startTick = command.startTick
+      break
+    }
+    case "replace-tempo-map":
+      next.tempoMap = structuredClone(command.tempoMap)
+      break
     case "batch":
       return command.commands.reduce(applyToGraph, next)
   }
@@ -272,7 +392,7 @@ function validateGraph(graph: MixerGraphSnapshot): void {
     } else {
       const output = channel.outputChannelId && channelById(graph, channel.outputChannelId)
       if (!output || (output.kind !== "bus" && output.kind !== "output")) {
-        throw new Error("Audio and Bus channels must target a Bus or hardware Output")
+        throw new Error("Audio, Instrument, and Bus channels must target a Bus or hardware Output")
       }
       edges.get(channel.id)!.push(output.id)
     }
@@ -290,7 +410,7 @@ function validateGraph(graph: MixerGraphSnapshot): void {
       source.kind === "master" || source.kind === "output" ||
       target.kind !== "bus" || source.id === target.id
     ) {
-      throw new Error("Sends must route an Audio or Bus channel to a Bus")
+      throw new Error("Sends must route an Audio, Instrument, or Bus channel to a Bus")
     }
     finiteRange(send.levelDb, -90, 12, "Send level")
     finiteRange(send.pan, -1, 1, "Send pan")
@@ -309,6 +429,78 @@ function validateGraph(graph: MixerGraphSnapshot): void {
     }
     if (channelById(graph, clip.trackId).kind !== "audio") {
       throw new Error("Timeline clips must belong to audio tracks")
+    }
+  }
+  const pluginIds = new Set<string>()
+  const pluginSlots = new Set<string>()
+  for (const plugin of graph.plugins) {
+    if (!plugin.id || pluginIds.has(plugin.id)) throw new Error("Plugin instance IDs must be unique")
+    pluginIds.add(plugin.id)
+    const channel = channelById(graph, plugin.channelId)
+    if (!Number.isSafeInteger(plugin.slotOrder) || plugin.slotOrder < 0) {
+      throw new Error("Plugin slot order must be a non-negative safe integer")
+    }
+    const slot = `${plugin.channelId}:${plugin.role}:${plugin.slotOrder}`
+    if (pluginSlots.has(slot)) throw new Error("Plugin slots must be unique within a channel")
+    pluginSlots.add(slot)
+    if (plugin.role === "instrument") {
+      if (channel.kind !== "instrument" || plugin.slotOrder !== 0 ||
+          plugin.descriptor.kind !== "instrument") {
+        throw new Error("An instrument slot requires an instrument plugin on an Instrument track")
+      }
+    } else if (plugin.descriptor.kind !== "effect") {
+      throw new Error("Insert slots only accept effect plugins")
+    }
+    if (plugin.classId !== plugin.descriptor.classId) {
+      throw new Error("Plugin class ID must match its descriptor snapshot")
+    }
+  }
+  if (graph.tempoMap.ticksPerQuarter !== 960) {
+    throw new Error("Project tempo maps must use 960 PPQ")
+  }
+  if (graph.tempoMap.tempoEvents[0]?.tick !== 0 ||
+      graph.tempoMap.timeSignatureEvents[0]?.tick !== 0) {
+    throw new Error("Tempo and time-signature maps require an event at tick 0")
+  }
+  let previousTempoTick = -1
+  for (const event of graph.tempoMap.tempoEvents) {
+    if (!Number.isSafeInteger(event.tick) || event.tick <= previousTempoTick ||
+        !Number.isFinite(event.beatsPerMinute) || event.beatsPerMinute <= 0) {
+      throw new Error("Tempo events must be ordered unique ticks with positive BPM")
+    }
+    previousTempoTick = event.tick
+  }
+  let previousSignatureTick = -1
+  for (const event of graph.tempoMap.timeSignatureEvents) {
+    if (!Number.isSafeInteger(event.tick) || event.tick <= previousSignatureTick ||
+        !Number.isInteger(event.numerator) || event.numerator < 1 || event.numerator > 32 ||
+        ![1, 2, 4, 8, 16, 32].includes(event.denominator)) {
+      throw new Error("Time-signature events contain invalid values")
+    }
+    previousSignatureTick = event.tick
+  }
+  const midiClipIds = new Set<string>()
+  for (const clip of graph.midiClips) {
+    if (!clip.id || midiClipIds.has(clip.id)) throw new Error("MIDI clip IDs must be unique")
+    midiClipIds.add(clip.id)
+    if (channelById(graph, clip.trackId).kind !== "instrument") {
+      throw new Error("MIDI clips must belong to Instrument tracks")
+    }
+    if (!Number.isSafeInteger(clip.startTick) || clip.startTick < 0 ||
+        !Number.isSafeInteger(clip.sourceOffsetTicks) || clip.sourceOffsetTicks < 0 ||
+        !Number.isSafeInteger(clip.lengthTicks) || clip.lengthTicks < 1) {
+      throw new Error("MIDI clip positions must use valid musical ticks")
+    }
+    for (const note of clip.notes) {
+      if (!Number.isSafeInteger(note.startTick) || note.startTick < 0 ||
+          !Number.isSafeInteger(note.durationTicks) || note.durationTicks < 1 ||
+          !Number.isInteger(note.channel) || note.channel < 0 || note.channel > 15 ||
+          !Number.isInteger(note.key) || note.key < 0 || note.key > 127 ||
+          !Number.isInteger(note.velocity) || note.velocity < 1 || note.velocity > 127 ||
+          !Number.isInteger(note.releaseVelocity) ||
+          note.releaseVelocity < 0 || note.releaseVelocity > 127) {
+        throw new Error("MIDI note contains invalid tick, channel, key, or velocity data")
+      }
     }
   }
 
@@ -367,6 +559,52 @@ function insertClip(clip: TimelineClipState): ProjectQueryRequest {
   }
 }
 
+function insertPlugin(plugin: PluginInstanceState): ProjectQueryRequest {
+  return {
+    sql: `INSERT INTO plugin_instances (
+      id, channel_id, role, slot_order, class_id, descriptor_snapshot, enabled,
+      component_state, controller_state
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+    params: [
+      plugin.id, plugin.channelId, plugin.role, plugin.slotOrder, plugin.classId,
+      JSON.stringify(plugin.descriptor), plugin.enabled,
+      plugin.componentState, plugin.controllerState
+    ],
+    method: "execute"
+  }
+}
+
+function insertMidiClip(clip: MidiClipState): ProjectQueryRequest[] {
+  return [
+    {
+      sql: `INSERT INTO midi_clips (
+        id, source_id, track_id, name, start_tick, length_ticks, source_offset_ticks
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      params: [
+        clip.id, clip.sourceId, clip.trackId, clip.name, BigInt(clip.startTick),
+        BigInt(clip.lengthTicks), BigInt(clip.sourceOffsetTicks)
+      ],
+      method: "execute"
+    },
+    ...clip.notes.map<ProjectQueryRequest>((note) => ({
+      sql: `INSERT INTO midi_notes (
+        id, clip_id, start_tick, duration_ticks, channel, key, velocity, release_velocity
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      params: [
+        note.id, clip.id, BigInt(note.startTick), BigInt(note.durationTicks),
+        note.channel, note.key, note.velocity, note.releaseVelocity
+      ],
+      method: "execute"
+    })),
+    ...clip.events.map<ProjectQueryRequest>((event) => ({
+      sql: `INSERT INTO midi_events (id, clip_id, tick, channel, kind, data)
+        VALUES ($1,$2,$3,$4,$5,$6)`,
+      params: [event.id, clip.id, BigInt(event.tick), event.channel, event.kind, event.data],
+      method: "execute"
+    }))
+  ]
+}
+
 const channelColumns: Record<keyof MixerChannelPatch, string> = {
   name: "name",
   color: "color",
@@ -389,6 +627,13 @@ const sendColumns: Record<keyof MixerSendPatch, string> = {
   tap: "tap",
   levelDb: "level_db",
   pan: "pan"
+}
+
+const pluginColumns: Record<keyof PluginInstancePatch, string> = {
+  slotOrder: "slot_order",
+  enabled: "enabled",
+  componentState: "component_state",
+  controllerState: "controller_state"
 }
 
 function updateQuery(
@@ -463,6 +708,76 @@ function commandQueries(command: ProjectCommand, fallbackOutputId: string): Proj
         params: [command.trackId, BigInt(command.startFrame), command.clipId],
         method: "execute"
       }]
+    case "create-plugin":
+      return [insertPlugin(command.plugin)]
+    case "delete-plugin":
+      return [{
+        sql: "DELETE FROM plugin_instances WHERE id = $1",
+        params: [command.pluginId],
+        method: "execute"
+      }]
+    case "update-plugin":
+      return updateQuery("plugin_instances", command.pluginId, command.patch, pluginColumns)
+    case "move-plugin":
+      return [{
+        sql: `UPDATE plugin_instances
+          SET channel_id = $1, role = $2, slot_order = $3 WHERE id = $4`,
+        params: [command.channelId, command.role, command.slotOrder, command.pluginId],
+        method: "execute"
+      }]
+    case "replace-plugin":
+      return [
+        {
+          sql: "DELETE FROM plugin_instances WHERE id = $1",
+          params: [command.pluginId],
+          method: "execute"
+        },
+        insertPlugin(command.plugin)
+      ]
+    case "create-midi-clip":
+      return insertMidiClip(command.clip)
+    case "delete-midi-clip":
+      return [{
+        sql: "DELETE FROM midi_clips WHERE id = $1",
+        params: [command.clipId],
+        method: "execute"
+      }]
+    case "move-midi-clip":
+      return [{
+        sql: "UPDATE midi_clips SET track_id = $1, start_tick = $2 WHERE id = $3",
+        params: [command.trackId, BigInt(command.startTick), command.clipId],
+        method: "execute"
+      }]
+    case "replace-tempo-map": {
+      const initialTempo = command.tempoMap.tempoEvents[0]
+      const initialSignature = command.tempoMap.timeSignatureEvents[0]
+      if (!initialTempo || !initialSignature) throw new Error("Tempo map requires tick 0 events")
+      return [
+        { sql: "DELETE FROM tempo_events", params: [], method: "execute" },
+        ...command.tempoMap.tempoEvents.map<ProjectQueryRequest>((event) => ({
+          sql: "INSERT INTO tempo_events (tick, beats_per_minute) VALUES ($1, $2)",
+          params: [BigInt(event.tick), event.beatsPerMinute],
+          method: "execute"
+        })),
+        { sql: "DELETE FROM time_signature_events", params: [], method: "execute" },
+        ...command.tempoMap.timeSignatureEvents.map<ProjectQueryRequest>((event) => ({
+          sql: `INSERT INTO time_signature_events (tick, numerator, denominator)
+            VALUES ($1, $2, $3)`,
+          params: [BigInt(event.tick), event.numerator, event.denominator],
+          method: "execute"
+        })),
+        {
+          sql: `UPDATE project SET tempo = $1, time_signature_numerator = $2,
+            time_signature_denominator = $3 WHERE id = 'project'`,
+          params: [
+            initialTempo.beatsPerMinute,
+            initialSignature.numerator,
+            initialSignature.denominator
+          ],
+          method: "execute"
+        }
+      ]
+    }
     case "batch":
       return command.commands.flatMap((nested) => commandQueries(nested, fallbackOutputId))
   }
@@ -488,6 +803,7 @@ function deletedChannelIds(command: ProjectCommand): Set<string> {
 export class MixerService {
   private readonly cacheDirectory: string
   private mutationTail: Promise<void> = Promise.resolve()
+  private graphRevision = 0
   private testTransport: TransportSnapshot = {
     state: "stopped",
     positionFrames: 0,
@@ -496,7 +812,8 @@ export class MixerService {
 
   constructor(
     userData: string,
-    private readonly projects: ProjectService
+    private readonly projects: ProjectService,
+    private readonly onGraphLoaded: (revision: number) => Promise<void> = async () => {}
   ) {
     this.cacheDirectory = join(userData, "mixer-cache")
   }
@@ -510,14 +827,25 @@ export class MixerService {
   async snapshot(): Promise<MixerGraphSnapshot> {
     const current = this.projects.current
     if (!current) throw new Error("No project is open")
-    const [channelResult, clipResult, sendResult] = await Promise.all([
+    const [
+      channelResult,
+      clipResult,
+      sendResult,
+      pluginResult,
+      midiClipResult,
+      midiNoteResult,
+      midiEventResult,
+      tempoResult,
+      signatureResult
+    ] = await Promise.all([
       this.projects.query({
         sql: `SELECT id, kind, name, color, sort_order, input_format, gain_db, pan,
           muted, soloed, output_channel_id, record_armed, input_channels,
           hardware_output_channels
           FROM mixer_channels
           ORDER BY CASE kind
-            WHEN 'audio' THEN 0 WHEN 'bus' THEN 1 WHEN 'master' THEN 2 ELSE 3
+            WHEN 'audio' THEN 0 WHEN 'instrument' THEN 1 WHEN 'bus' THEN 2
+            WHEN 'master' THEN 3 ELSE 4
           END, sort_order, id`,
         params: [],
         method: "all"
@@ -535,8 +863,72 @@ export class MixerService {
           FROM mixer_sends ORDER BY source_channel_id, sort_order, id`,
         params: [],
         method: "all"
+      }),
+      this.projects.query({
+        sql: `SELECT id, channel_id, role, slot_order, class_id, descriptor_snapshot,
+          enabled, component_state, controller_state
+          FROM plugin_instances ORDER BY channel_id, role, slot_order, id`,
+        params: [],
+        method: "all"
+      }),
+      this.projects.query({
+        sql: `SELECT id, source_id, track_id, name, start_tick, length_ticks,
+          source_offset_ticks FROM midi_clips ORDER BY start_tick, id`,
+        params: [],
+        method: "all"
+      }),
+      this.projects.query({
+        sql: `SELECT id, clip_id, start_tick, duration_ticks, channel, key, velocity,
+          release_velocity FROM midi_notes ORDER BY clip_id, start_tick, id`,
+        params: [],
+        method: "all"
+      }),
+      this.projects.query({
+        sql: `SELECT id, clip_id, tick, channel, kind, data
+          FROM midi_events ORDER BY clip_id, tick, id`,
+        params: [],
+        method: "all"
+      }),
+      this.projects.query({
+        sql: "SELECT tick, beats_per_minute FROM tempo_events ORDER BY tick",
+        params: [],
+        method: "all"
+      }),
+      this.projects.query({
+        sql: `SELECT tick, numerator, denominator
+          FROM time_signature_events ORDER BY tick`,
+        params: [],
+        method: "all"
       })
     ])
+    const notesByClip = new Map<string, MidiClipState["notes"]>()
+    for (const row of midiNoteResult.rows) {
+      const clipId = String(row[1])
+      const notes = notesByClip.get(clipId) ?? []
+      notes.push({
+        id: String(row[0]),
+        startTick: Number(row[2]),
+        durationTicks: Number(row[3]),
+        channel: Number(row[4]),
+        key: Number(row[5]),
+        velocity: Number(row[6]),
+        releaseVelocity: Number(row[7])
+      })
+      notesByClip.set(clipId, notes)
+    }
+    const eventsByClip = new Map<string, MidiClipState["events"]>()
+    for (const row of midiEventResult.rows) {
+      const clipId = String(row[1])
+      const events = eventsByClip.get(clipId) ?? []
+      events.push({
+        id: String(row[0]),
+        tick: Number(row[2]),
+        channel: row[3] === null ? null : Number(row[3]),
+        kind: String(row[4]) as MidiClipState["events"][number]["kind"],
+        data: bytes(row[5])
+      })
+      eventsByClip.set(clipId, events)
+    }
     return {
       sampleRate: current.configuration.sampleRate,
       channels: channelResult.rows.map((row) => ({
@@ -575,7 +967,44 @@ export class MixerService {
         tap: String(row[5]) as MixerSendState["tap"],
         levelDb: Number(row[6]),
         pan: Number(row[7])
-      }))
+      })),
+      plugins: pluginResult.rows.map((row) => ({
+        id: String(row[0]),
+        channelId: String(row[1]),
+        role: String(row[2]) as PluginInstanceState["role"],
+        slotOrder: Number(row[3]),
+        classId: String(row[4]),
+        descriptor: JSON.parse(String(row[5])) as PluginInstanceState["descriptor"],
+        enabled: Boolean(row[6]),
+        componentState: bytes(row[7]),
+        controllerState: bytes(row[8])
+      })),
+      midiClips: midiClipResult.rows.map((row) => {
+        const id = String(row[0])
+        return {
+          id,
+          sourceId: String(row[1]),
+          trackId: String(row[2]),
+          name: String(row[3]),
+          startTick: Number(row[4]),
+          lengthTicks: Number(row[5]),
+          sourceOffsetTicks: Number(row[6]),
+          notes: notesByClip.get(id) ?? [],
+          events: eventsByClip.get(id) ?? []
+        }
+      }),
+      tempoMap: {
+        ticksPerQuarter: 960,
+        tempoEvents: tempoResult.rows.map((row) => ({
+          tick: Number(row[0]),
+          beatsPerMinute: Number(row[1])
+        })),
+        timeSignatureEvents: signatureResult.rows.map((row) => ({
+          tick: Number(row[0]),
+          numerator: Number(row[1]),
+          denominator: Number(row[2])
+        }))
+      }
     }
   }
 
@@ -662,11 +1091,53 @@ export class MixerService {
         path: paths.get(clip.assetId)!
       }))
     })
+    this.graphRevision += 1
+    await this.onGraphLoaded(this.graphRevision)
     return graph
   }
 
   execute(command: ProjectCommand): Promise<ProjectCommandResult> {
     return this.enqueueMutation(() => this.executeNow(command))
+  }
+
+  executeMidiImport(
+    source: MidiSourceImport,
+    command: ProjectCommand
+  ): Promise<ProjectCommandResult> {
+    return this.enqueueMutation(async () => {
+      const before = await this.snapshot()
+      const inverse = inverseFor(before, command)
+      const candidate = applyToGraph(before, command)
+      validateGraph(candidate)
+      const fallbackOutput = before.channels.find((channel) => channel.kind === "output")
+      if (!fallbackOutput) throw new Error("Mixer hardware Output is missing")
+      const queries: ProjectQueryRequest[] = [
+        {
+          sql: `INSERT INTO midi_sources (id, name, content_hash, raw_bytes)
+            VALUES ($1, $2, $3, $4)`,
+          params: [source.id, source.name, source.contentHash, source.rawBytes],
+          method: "execute"
+        },
+        ...commandQueries(command, fallbackOutput.id)
+      ]
+      await this.projects.transaction({ queries })
+      try {
+        await this.loadNow()
+      } catch (error) {
+        await this.projects.transaction({
+          queries: [
+            ...commandQueries(inverse, fallbackOutput.id),
+            {
+              sql: "DELETE FROM midi_sources WHERE id = $1",
+              params: [source.id],
+              method: "execute"
+            }
+          ]
+        })
+        throw error
+      }
+      return { graph: await this.snapshot(), inverse }
+    })
   }
 
   private async executeNow(command: ProjectCommand): Promise<ProjectCommandResult> {

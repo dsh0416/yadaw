@@ -1,0 +1,232 @@
+use std::fs;
+
+use napi::{
+    Error, Result, Status, Task,
+    bindgen_prelude::{AsyncTask, Buffer},
+};
+use napi_derive::napi;
+use yadaw_dsp_runtime::{
+    midi::{MidiFileFormat, NormalizedMidiEventKind, NormalizedSmf, normalize_smf},
+    tempo::{TempoEvent, TempoMap, TimeSignatureEvent},
+};
+
+#[napi(object)]
+pub struct NativeTempoEvent {
+    pub tick: i64,
+    pub beats_per_minute: f64,
+}
+
+#[napi(object)]
+pub struct NativeTimeSignatureEvent {
+    pub tick: i64,
+    pub numerator: u32,
+    pub denominator: u32,
+}
+
+#[napi(object)]
+pub struct NativeTempoMap {
+    pub tempo_events: Vec<NativeTempoEvent>,
+    pub time_signature_events: Vec<NativeTimeSignatureEvent>,
+}
+
+#[napi(object)]
+pub struct NativeMidiNote {
+    pub start_tick: i64,
+    pub duration_ticks: i64,
+    pub channel: u32,
+    pub key: u32,
+    pub velocity: u32,
+    pub release_velocity: u32,
+}
+
+#[napi(object)]
+pub struct NativeMidiEvent {
+    pub tick: i64,
+    pub channel: Option<u32>,
+    pub kind: String,
+    pub data: Buffer,
+}
+
+#[napi(object)]
+pub struct NativeMidiTrack {
+    pub source_track: u32,
+    pub sequence: u32,
+    pub name: String,
+    pub length_ticks: i64,
+    pub notes: Vec<NativeMidiNote>,
+    pub events: Vec<NativeMidiEvent>,
+    pub warnings: Vec<String>,
+}
+
+#[napi(object)]
+pub struct NativeNormalizedSmf {
+    pub format: u32,
+    pub source_timing: String,
+    pub tracks: Vec<NativeMidiTrack>,
+    pub tempo_events: Vec<NativeTempoEvent>,
+    pub time_signature_events: Vec<NativeTimeSignatureEvent>,
+    pub warnings: Vec<String>,
+}
+
+fn convert_tick(value: u64) -> Result<i64> {
+    i64::try_from(value)
+        .map_err(|_| Error::new(Status::InvalidArg, "MIDI tick exceeds the supported range"))
+}
+
+fn tempo_map(value: &NativeTempoMap) -> Result<TempoMap> {
+    TempoMap::new(
+        value
+            .tempo_events
+            .iter()
+            .map(|event| {
+                Ok(TempoEvent {
+                    tick: u64::try_from(event.tick).map_err(|_| {
+                        Error::new(Status::InvalidArg, "Tempo tick must be non-negative")
+                    })?,
+                    beats_per_minute: event.beats_per_minute,
+                })
+            })
+            .collect::<Result<Vec<_>>>()?,
+        value
+            .time_signature_events
+            .iter()
+            .map(|event| {
+                Ok(TimeSignatureEvent {
+                    tick: u64::try_from(event.tick).map_err(|_| {
+                        Error::new(
+                            Status::InvalidArg,
+                            "Time-signature tick must be non-negative",
+                        )
+                    })?,
+                    numerator: u8::try_from(event.numerator).map_err(|_| {
+                        Error::new(Status::InvalidArg, "Time-signature numerator is invalid")
+                    })?,
+                    denominator: u8::try_from(event.denominator).map_err(|_| {
+                        Error::new(Status::InvalidArg, "Time-signature denominator is invalid")
+                    })?,
+                })
+            })
+            .collect::<Result<Vec<_>>>()?,
+    )
+    .map_err(|error| Error::new(Status::InvalidArg, error.to_string()))
+}
+
+fn native_tempo_event(event: TempoEvent) -> Result<NativeTempoEvent> {
+    Ok(NativeTempoEvent {
+        tick: convert_tick(event.tick)?,
+        beats_per_minute: event.beats_per_minute,
+    })
+}
+
+fn native_signature(event: TimeSignatureEvent) -> Result<NativeTimeSignatureEvent> {
+    Ok(NativeTimeSignatureEvent {
+        tick: convert_tick(event.tick)?,
+        numerator: u32::from(event.numerator),
+        denominator: u32::from(event.denominator),
+    })
+}
+
+fn into_native(value: NormalizedSmf) -> Result<NativeNormalizedSmf> {
+    Ok(NativeNormalizedSmf {
+        format: match value.format {
+            MidiFileFormat::Format0 => 0,
+            MidiFileFormat::Format1 => 1,
+            MidiFileFormat::Format2 => 2,
+        },
+        source_timing: value.source_timing,
+        tracks: value
+            .tracks
+            .into_iter()
+            .map(|track| {
+                Ok(NativeMidiTrack {
+                    source_track: track.source_track as u32,
+                    sequence: track.sequence as u32,
+                    name: track.name,
+                    length_ticks: convert_tick(track.length_ticks)?,
+                    notes: track
+                        .notes
+                        .into_iter()
+                        .map(|note| {
+                            Ok(NativeMidiNote {
+                                start_tick: convert_tick(note.start_tick)?,
+                                duration_ticks: convert_tick(note.duration_ticks)?,
+                                channel: u32::from(note.channel),
+                                key: u32::from(note.key),
+                                velocity: u32::from(note.velocity),
+                                release_velocity: u32::from(note.release_velocity),
+                            })
+                        })
+                        .collect::<Result<Vec<_>>>()?,
+                    events: track
+                        .events
+                        .into_iter()
+                        .map(|event| {
+                            Ok(NativeMidiEvent {
+                                tick: convert_tick(event.tick)?,
+                                channel: event.channel.map(u32::from),
+                                kind: match event.kind {
+                                    NormalizedMidiEventKind::ControlChange => "control-change",
+                                    NormalizedMidiEventKind::PitchBend => "pitch-bend",
+                                    NormalizedMidiEventKind::ProgramChange => "program-change",
+                                    NormalizedMidiEventKind::ChannelPressure => "channel-pressure",
+                                    NormalizedMidiEventKind::PolyPressure => "poly-pressure",
+                                    NormalizedMidiEventKind::SysEx => "sysex",
+                                }
+                                .to_owned(),
+                                data: event.data.into(),
+                            })
+                        })
+                        .collect::<Result<Vec<_>>>()?,
+                    warnings: track.warnings,
+                })
+            })
+            .collect::<Result<Vec<_>>>()?,
+        tempo_events: value
+            .tempo_events
+            .into_iter()
+            .map(native_tempo_event)
+            .collect::<Result<Vec<_>>>()?,
+        time_signature_events: value
+            .time_signature_events
+            .into_iter()
+            .map(native_signature)
+            .collect::<Result<Vec<_>>>()?,
+        warnings: value.warnings,
+    })
+}
+
+pub struct ParseMidiTask {
+    path: String,
+    project_tempo_map: NativeTempoMap,
+}
+
+#[napi]
+impl Task for ParseMidiTask {
+    type Output = NativeNormalizedSmf;
+    type JsValue = NativeNormalizedSmf;
+
+    fn compute(&mut self) -> Result<Self::Output> {
+        let bytes = fs::read(&self.path)
+            .map_err(|error| Error::new(Status::GenericFailure, error.to_string()))?;
+        let map = tempo_map(&self.project_tempo_map)?;
+        into_native(
+            normalize_smf(&bytes, &map)
+                .map_err(|error| Error::new(Status::InvalidArg, error.to_string()))?,
+        )
+    }
+
+    fn resolve(&mut self, _env: napi::Env, output: Self::Output) -> Result<Self::JsValue> {
+        Ok(output)
+    }
+}
+
+#[napi]
+pub fn parse_midi_file(
+    path: String,
+    project_tempo_map: NativeTempoMap,
+) -> AsyncTask<ParseMidiTask> {
+    AsyncTask::new(ParseMidiTask {
+        path,
+        project_tempo_map,
+    })
+}

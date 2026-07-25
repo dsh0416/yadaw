@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue"
+import { computed, nextTick, shallowRef, useTemplateRef, watch } from "vue"
 import { storeToRefs } from "pinia"
 import { RadioTower } from "@lucide/vue"
 import type { MeterPeakHold, MeterReturnRate } from "@yadaw/contracts"
@@ -58,6 +58,9 @@ const meterDisplay = usePeakMeterDisplay({
 const gainLabel = computed(() =>
   props.channel.gainDb <= -90 ? "−∞" : `${props.channel.gainDb.toFixed(1)} dB`
 )
+const gainReadoutLabel = computed(() =>
+  props.channel.gainDb <= -90 ? "−∞" : props.channel.gainDb.toFixed(1)
+)
 const maximumPeakLabel = computed(() =>
   Number.isFinite(meterDisplay.latchedPeakDb.value)
     ? meterDisplay.latchedPeakDb.value.toFixed(1)
@@ -79,6 +82,17 @@ const faderStyle = computed(() => ({
     FADER_MAX_DB
   )}%`
 }))
+const gainInputValue = shallowRef(String(props.channel.gainDb))
+const gainInputEditing = shallowRef(false)
+const faderTooltipVisible = shallowRef(false)
+const gainInput = useTemplateRef<HTMLInputElement>("gainInput")
+
+watch(
+  () => props.channel.gainDb,
+  (value) => {
+    if (!gainInputEditing.value) gainInputValue.value = String(value)
+  }
+)
 
 function preview(parameter: "gainDb" | "pan", value: number): void {
   emit("preview", {
@@ -92,6 +106,59 @@ function preview(parameter: "gainDb" | "pan", value: number): void {
 function resetMaximumPeak(): void {
   meterDisplay.resetPeakAndClip()
   emit("resetMeterClips")
+}
+
+async function beginGainInputEdit(): Promise<void> {
+  gainInputEditing.value = true
+  gainInputValue.value = String(props.channel.gainDb)
+  await nextTick()
+  gainInput.value?.focus()
+  gainInput.value?.select()
+}
+
+function updateGainInputValue(event: Event): void {
+  gainInputEditing.value = true
+  gainInputValue.value = (event.currentTarget as HTMLInputElement).value
+}
+
+function finishGainInputEdit(): void {
+  if (!gainInputEditing.value) return
+  gainInputEditing.value = false
+  gainInputValue.value = String(props.channel.gainDb)
+}
+
+function commitGainInputValue(event: Event): void {
+  const input = event.currentTarget as HTMLInputElement
+  const value = Number(input.value)
+
+  if (input.value.trim() === "" || !Number.isFinite(value)) {
+    finishGainInputEdit()
+    input.value = gainInputValue.value
+    return
+  }
+
+  const clampedValue = Math.max(FADER_MIN_DB, Math.min(FADER_MAX_DB, value))
+  gainInputValue.value = String(clampedValue)
+  preview("gainDb", clampedValue)
+  gainInputEditing.value = false
+  gainGesture.reset(clampedValue)
+}
+
+function cancelGainInputEdit(event: KeyboardEvent): void {
+  if (event.key !== "Escape") return
+  event.preventDefault()
+  event.stopPropagation()
+  const input = event.currentTarget as HTMLInputElement
+  gainInputValue.value = String(props.channel.gainDb)
+  gainInputEditing.value = false
+  input.value = gainInputValue.value
+  input.blur()
+}
+
+function submitGainInput(event: KeyboardEvent): void {
+  if (event.key !== "Enter") return
+  event.preventDefault()
+  ;(event.currentTarget as HTMLInputElement).blur()
 }
 
 const gainGesture = useParameterGesture({
@@ -122,6 +189,22 @@ function beginFaderGesture(event: PointerEvent): void {
   }
 
   gainGesture.begin()
+  faderTooltipVisible.value = true
+}
+
+function previewFaderGesture(event: Event): void {
+  faderTooltipVisible.value = true
+  gainGesture.preview(event)
+}
+
+function commitFaderGesture(event: Event): void {
+  gainGesture.commit(event)
+  faderTooltipVisible.value = false
+}
+
+function handleFaderKeydown(event: KeyboardEvent): void {
+  gainGesture.keydown(event)
+  if (event.key === "Escape") faderTooltipVisible.value = false
 }
 </script>
 
@@ -155,16 +238,31 @@ function beginFaderGesture(event: PointerEvent): void {
     />
 
     <div class="strip-core">
+      <button
+        v-if="!gainInputEditing"
+        type="button"
+        class="parameter-value parameter-value-button"
+        :aria-label="`${channel.name} volume value in decibels`"
+        :title="`Fader: ${gainLabel} · Double-click to edit`"
+        @pointerdown.stop
+        @dblclick.stop.prevent="beginGainInputEdit"
+      >{{ gainReadoutLabel }}</button>
       <input
+        v-else
+        ref="gainInput"
         class="parameter-value"
         type="number"
         :min="FADER_MIN_DB"
         :max="FADER_MAX_DB"
         step="0.1"
-        :value="channel.gainDb"
+        :value="gainInputValue"
         :aria-label="`${channel.name} volume value in decibels`"
         :title="`Fader: ${gainLabel}`"
-        @change="gainGesture.reset(Number(($event.target as HTMLInputElement).value))"
+        @input="updateGainInputValue"
+        @change="commitGainInputValue"
+        @blur="finishGainInputEdit"
+        @keydown="cancelGainInputEdit"
+        @keydown.enter="submitGainInput"
       >
       <button
         type="button"
@@ -185,11 +283,15 @@ function beginFaderGesture(event: PointerEvent): void {
           :value="channel.gainDb"
           :aria-label="`${channel.name} volume`"
           @pointerdown="beginFaderGesture"
-          @input="gainGesture.preview"
-          @change="gainGesture.commit"
-          @keydown="gainGesture.keydown"
-          @dblclick="gainGesture.reset(0)"
+          @input="previewFaderGesture"
+          @change="commitFaderGesture"
+          @blur="faderTooltipVisible = false"
+          @keydown="handleFaderKeydown"
+          @dblclick.prevent="gainGesture.reset(0)"
         >
+        <output v-if="faderTooltipVisible" class="fader-tooltip" aria-hidden="true">
+          {{ gainLabel }}
+        </output>
       </label>
       <div class="meter-rack">
         <MixerDbScale class="meter-scale" :marks="METER_SCALE_MARKS" side="left" />
@@ -515,6 +617,34 @@ function beginFaderGesture(event: PointerEvent): void {
   box-shadow: 0 0 0 2px color-mix(in srgb,var(--focus) 50%,transparent);
 }
 
+.fader-tooltip {
+  position: absolute;
+  z-index: 8;
+  bottom: -5px;
+  left: calc(50% + 9.5px);
+  min-width: 38px;
+  padding: 3px 5px;
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  color: var(--text-primary);
+  background: var(--surface-3);
+  box-shadow: 0 4px 10px var(--shadow);
+  font: 7px var(--font-utility);
+  text-align: center;
+  transform: translate(-50%, 100%);
+  white-space: nowrap;
+}
+
+.fader-tooltip::before {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  border: 3px solid transparent;
+  border-bottom-color: var(--line-strong);
+  content: "";
+  transform: translateX(-50%);
+}
+
 .parameter-value {
   grid-column: 1;
   grid-row: 1;
@@ -532,6 +662,10 @@ function beginFaderGesture(event: PointerEvent): void {
   writing-mode: horizontal-tb;
   direction: ltr;
   appearance: textfield;
+}
+
+.parameter-value-button {
+  cursor: text;
 }
 
 .parameter-value::-webkit-inner-spin-button,
@@ -757,7 +891,7 @@ function beginFaderGesture(event: PointerEvent): void {
 
 .channel-actions button:focus-visible,
 .routing-summary select:focus-visible,
-.fader .parameter-value:focus-visible {
+.parameter-value:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: -1px;
 }

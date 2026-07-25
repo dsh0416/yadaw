@@ -69,6 +69,7 @@ function relayClipDragStart(clipId: string, offsetSeconds: number): void {
   <div
     :class="['track-lane', { 'drag-target': dragPreview }]"
     :data-track-id="trackId"
+    data-track-kind="audio"
     :style="laneStyle"
     @pointerdown="seekFromPointer"
   >

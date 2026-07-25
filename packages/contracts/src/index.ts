@@ -37,6 +37,15 @@ export const IPC_CHANNELS = {
   assetAudioRead: "asset:audio-read",
   assetWaveformRead: "asset:waveform-read",
   recordingWaveformSnapshot: "recording:waveform-snapshot",
+  pluginsList: "plugins:list",
+  pluginsScan: "plugins:scan",
+  pluginsScanEvent: "plugins:scan-event",
+  pluginEditorOpen: "plugin-editor:open",
+  pluginEditorClose: "plugin-editor:close",
+  pluginParametersGet: "plugin-parameters:get",
+  pluginParameterSet: "plugin-parameter:set",
+  midiImportPrepare: "midi-import:prepare",
+  midiImportCommit: "midi-import:commit",
   operationCancel: "operation:cancel",
   operationEvent: "operation:event"
 } as const
@@ -96,6 +105,15 @@ export interface YadawDesktopApi {
   readAssetAudio(id: string): Promise<Uint8Array>
   readAssetWaveform(request: WaveformWindowRequest): Promise<WaveformPeakWindow>
   recordingWaveformSnapshot(request: WaveformWindowRequest): Promise<WaveformPeakWindow>
+  listPlugins(): Promise<PluginCatalogSnapshot>
+  scanPlugins(request?: PluginScanRequest): Promise<PluginCatalogSnapshot>
+  subscribePluginScan(listener: (event: PluginScanEvent) => void): () => void
+  openPluginEditor(instanceId: string): Promise<PluginRuntimeStatus>
+  closePluginEditor(instanceId: string): Promise<void>
+  getPluginParameters(instanceId: string): Promise<PluginParameterInfo[]>
+  setPluginParameter(request: PluginParameterChange): Promise<void>
+  prepareMidiImport(path?: string): Promise<MidiImportPreview | null>
+  commitMidiImport(plan: MidiImportPlan): Promise<ProjectCommandResult>
   subscribeOperations(listener: (event: OperationEvent) => void): () => void
   cancelOperation(id: string): Promise<void>
 }
@@ -464,9 +482,201 @@ export type DesktopLifecycleEvent =
       state: RecordingLifecycleState
     }
 
-export type MixerChannelKind = "audio" | "bus" | "master" | "output"
+export const MUSICAL_TICKS_PER_QUARTER = 960
+export const DEFAULT_INSTRUMENT_COLOR = "#73D6A2"
+
+export type MixerChannelKind = "audio" | "instrument" | "bus" | "master" | "output"
 export type MixerInputFormat = "mono" | "stereo"
 export type MixerSendTap = "pre" | "post"
+export type PluginKind = "effect" | "instrument"
+export type PluginInstanceRole = "instrument" | "insert"
+export type PluginCompatibility =
+  | "compatible"
+  | "unsupported-architecture"
+  | "unsupported-buses"
+  | "unsupported-sample-format"
+  | "quarantined"
+  | "load-error"
+
+export interface PluginAudioBusInfo {
+  direction: "input" | "output"
+  kind: "main" | "aux"
+  name: string
+  channels: number
+  defaultActive: boolean
+}
+
+export interface PluginDescriptor {
+  classId: string
+  modulePath: string
+  name: string
+  vendor: string
+  version: string
+  category: string
+  kind: PluginKind
+  architecture: string
+  buses: PluginAudioBusInfo[]
+  hasEditor: boolean
+  compatibility: PluginCompatibility
+  compatibilityReason: string | null
+}
+
+export interface PluginCatalogSnapshot {
+  scannerVersion: number
+  scanning: boolean
+  scannedAt: number | null
+  plugins: PluginDescriptor[]
+}
+
+export interface PluginScanRequest {
+  paths?: string[]
+  retryQuarantined?: boolean
+}
+
+export type PluginScanEvent =
+  | { type: "started"; total: number }
+  | { type: "progress"; completed: number; total: number; path: string }
+  | { type: "quarantined"; path: string; reason: string }
+  | { type: "completed"; catalog: PluginCatalogSnapshot }
+
+export interface PluginInstanceState {
+  id: string
+  channelId: string
+  role: PluginInstanceRole
+  slotOrder: number
+  classId: string
+  descriptor: PluginDescriptor
+  enabled: boolean
+  componentState: Uint8Array
+  controllerState: Uint8Array
+}
+
+export type PluginRuntimeState =
+  | "unloaded"
+  | "loading"
+  | "active"
+  | "bypassed"
+  | "missing"
+  | "quarantined"
+  | "failed"
+
+export interface PluginRuntimeStatus {
+  instanceId: string
+  state: PluginRuntimeState
+  editorOpen: boolean
+  latencySamples: number
+  tailSamples: number | null
+  error: string | null
+}
+
+export interface PluginParameterInfo {
+  id: number
+  title: string
+  shortTitle: string
+  units: string
+  stepCount: number
+  defaultNormalized: number
+  normalized: number
+  flags: number
+}
+
+export interface PluginParameterChange {
+  instanceId: string
+  parameterId: number
+  normalized: number
+  gesture: "begin" | "perform" | "end"
+}
+
+export interface TempoEventState {
+  tick: number
+  beatsPerMinute: number
+}
+
+export interface TimeSignatureEventState {
+  tick: number
+  numerator: number
+  denominator: number
+}
+
+export interface TempoMapSnapshot {
+  ticksPerQuarter: typeof MUSICAL_TICKS_PER_QUARTER
+  tempoEvents: TempoEventState[]
+  timeSignatureEvents: TimeSignatureEventState[]
+}
+
+export interface MidiNoteState {
+  id: string
+  startTick: number
+  durationTicks: number
+  channel: number
+  key: number
+  velocity: number
+  releaseVelocity: number
+}
+
+export type MidiEventKind =
+  | "control-change"
+  | "pitch-bend"
+  | "program-change"
+  | "channel-pressure"
+  | "poly-pressure"
+  | "sysex"
+
+export interface MidiEventState {
+  id: string
+  tick: number
+  channel: number | null
+  kind: MidiEventKind
+  data: Uint8Array
+}
+
+export interface MidiClipState {
+  id: string
+  sourceId: string
+  trackId: string
+  name: string
+  startTick: number
+  lengthTicks: number
+  sourceOffsetTicks: number
+  notes: MidiNoteState[]
+  events: MidiEventState[]
+}
+
+export interface MidiImportTrackPreview {
+  sourceTrack: number
+  sequence: number
+  name: string
+  noteCount: number
+  eventCount: number
+  lengthTicks: number
+  warnings: string[]
+}
+
+export interface MidiImportPreview {
+  token: string
+  path: string
+  format: 0 | 1 | 2
+  sourceTiming: string
+  tracks: MidiImportTrackPreview[]
+  tempoMap: TempoMapSnapshot
+  warnings: string[]
+}
+
+export type MidiImportTrackTarget =
+  | { type: "ignore" }
+  | { type: "existing"; channelId: string; instrumentClassId?: string }
+  | { type: "new"; name?: string; instrumentClassId?: string }
+
+export interface MidiImportPlan {
+  token: string
+  importTempoMap: boolean
+  insertionTick: number
+  tracks: Array<{
+    sourceTrack: number
+    sequence: number
+    target: MidiImportTrackTarget
+  }>
+}
 
 export interface MixerChannelState {
   id: string
@@ -513,6 +723,9 @@ export interface MixerGraphSnapshot {
   channels: MixerChannelState[]
   clips: TimelineClipState[]
   sends: MixerSendState[]
+  plugins: PluginInstanceState[]
+  midiClips: MidiClipState[]
+  tempoMap: TempoMapSnapshot
 }
 
 export type MixerChannelPatch = Partial<Pick<
@@ -527,6 +740,11 @@ export type MixerSendPatch = Partial<Pick<
   "targetChannelId" | "sortOrder" | "enabled" | "tap" | "levelDb" | "pan"
 >>
 
+export type PluginInstancePatch = Partial<Pick<
+  PluginInstanceState,
+  "slotOrder" | "enabled" | "componentState" | "controllerState"
+>>
+
 export type ProjectCommand =
   | { type: "create-channel"; channel: MixerChannelState }
   | { type: "delete-channel"; channelId: string }
@@ -537,6 +755,21 @@ export type ProjectCommand =
   | { type: "create-clip"; clip: TimelineClipState }
   | { type: "delete-clip"; clipId: string }
   | { type: "move-clip"; clipId: string; trackId: string; startFrame: number }
+  | { type: "create-plugin"; plugin: PluginInstanceState }
+  | { type: "delete-plugin"; pluginId: string }
+  | { type: "update-plugin"; pluginId: string; patch: PluginInstancePatch }
+  | {
+      type: "move-plugin"
+      pluginId: string
+      channelId: string
+      role: PluginInstanceRole
+      slotOrder: number
+    }
+  | { type: "replace-plugin"; pluginId: string; plugin: PluginInstanceState }
+  | { type: "create-midi-clip"; clip: MidiClipState }
+  | { type: "delete-midi-clip"; clipId: string }
+  | { type: "move-midi-clip"; clipId: string; trackId: string; startTick: number }
+  | { type: "replace-tempo-map"; tempoMap: TempoMapSnapshot }
   | { type: "batch"; commands: ProjectCommand[] }
 
 export interface ProjectCommandResult {

@@ -12,6 +12,7 @@ import type {
   MixerSendState,
   ProjectCommand
 } from "@yadaw/contracts"
+import { DEFAULT_INSTRUMENT_COLOR, MUSICAL_TICKS_PER_QUARTER } from "@yadaw/contracts"
 import { useProjectStore } from "./project"
 
 interface HistoryEntry {
@@ -23,11 +24,19 @@ const EMPTY_GRAPH: MixerGraphSnapshot = {
   sampleRate: 48_000,
   channels: [],
   clips: [],
-  sends: []
+  sends: [],
+  plugins: [],
+  midiClips: [],
+  tempoMap: {
+    ticksPerQuarter: MUSICAL_TICKS_PER_QUARTER,
+    tempoEvents: [{ tick: 0, beatsPerMinute: 120 }],
+    timeSignatureEvents: [{ tick: 0, numerator: 4, denominator: 4 }]
+  }
 }
 
 const DEFAULT_CHANNEL_COLORS: Record<MixerChannelKind, string> = {
   audio: "#4F8CFF",
+  instrument: DEFAULT_INSTRUMENT_COLOR,
   bus: "#E8B85F",
   master: "#8C83FF",
   output: "#EF7C95"
@@ -87,6 +96,13 @@ export const useMixerStore = defineStore("mixer", () => {
   const audioTracks = computed(() =>
     channels.value.filter((channel) => channel.kind === "audio")
   )
+  const instrumentTracks = computed(() =>
+    channels.value.filter((channel) => channel.kind === "instrument")
+  )
+  const timelineTracks = computed(() => [
+    ...audioTracks.value,
+    ...instrumentTracks.value
+  ].sort((left, right) => left.sortOrder - right.sortOrder))
   const buses = computed(() =>
     channels.value.filter((channel) => channel.kind === "bus")
   )
@@ -98,6 +114,7 @@ export const useMixerStore = defineStore("mixer", () => {
   )
   const orderedChannels = computed(() => [
     ...audioTracks.value,
+    ...instrumentTracks.value,
     ...buses.value,
     ...(master.value ? [master.value] : []),
     ...outputs.value
@@ -239,6 +256,29 @@ export const useMixerStore = defineStore("mixer", () => {
     return execute({ type: "create-channel", channel })
   }
 
+  function createInstrumentTrack(): Promise<boolean> {
+    const index = instrumentTracks.value.length
+    const defaultOutput = outputs.value[0]
+    const channel: MixerChannelState = {
+      id: crypto.randomUUID(),
+      kind: "instrument",
+      name: `Instrument ${index + 1}`,
+      color: DEFAULT_CHANNEL_COLORS.instrument,
+      sortOrder: index,
+      inputFormat: null,
+      gainDb: 0,
+      pan: 0,
+      muted: false,
+      soloed: false,
+      outputChannelId: defaultOutput?.id ?? null,
+      recordArmed: false,
+      inputChannels: [],
+      hardwareOutputChannels: []
+    }
+    selectedChannelId.value = channel.id
+    return execute({ type: "create-channel", channel })
+  }
+
   function createBus(): Promise<boolean> {
     const index = buses.value.length
     const defaultOutput = outputs.value[0]
@@ -343,7 +383,9 @@ export const useMixerStore = defineStore("mixer", () => {
 
   function availableOutputs(channelId: string): MixerChannelState[] {
     const source = channels.value.find((channel) => channel.id === channelId)
-    if (!source || (source.kind !== "audio" && source.kind !== "bus")) return []
+    if (!source || (
+      source.kind !== "audio" && source.kind !== "instrument" && source.kind !== "bus"
+    )) return []
     return channels.value.filter((target) => {
       if (
         target.id === source.id ||
@@ -359,7 +401,9 @@ export const useMixerStore = defineStore("mixer", () => {
 
   function availableSendTargets(channelId: string): MixerChannelState[] {
     const source = channels.value.find((channel) => channel.id === channelId)
-    if (!source || (source.kind !== "audio" && source.kind !== "bus")) return []
+    if (!source || (
+      source.kind !== "audio" && source.kind !== "instrument" && source.kind !== "bus"
+    )) return []
     const existing = new Set(sendsFor(channelId).map((send) => send.targetChannelId))
     return buses.value.filter((target) => {
       if (target.id === channelId || existing.has(target.id)) return false
@@ -433,6 +477,8 @@ export const useMixerStore = defineStore("mixer", () => {
     error,
     channels,
     audioTracks,
+    instrumentTracks,
+    timelineTracks,
     buses,
     master,
     outputs,
@@ -448,6 +494,7 @@ export const useMixerStore = defineStore("mixer", () => {
     updateChannel,
     updateSend,
     createAudioTrack,
+    createInstrumentTrack,
     createBus,
     createOutput,
     deleteChannel,

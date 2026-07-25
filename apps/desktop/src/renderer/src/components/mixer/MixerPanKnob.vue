@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import { computed, nextTick, shallowRef, useTemplateRef } from "vue"
 import { useParameterGesture } from "../../composables/useParameterGesture"
+import { useRotaryParameterGesture } from "../../composables/useRotaryParameterGesture"
+import {
+  normalizedToPanUnits,
+  panLabelFromNormalized,
+  panUnitsToNormalized
+} from "../../utils/mixerPan"
 
 const props = defineProps<{
   channelName: string
@@ -14,25 +20,36 @@ const emit = defineEmits<{
 
 const editing = shallowRef(false)
 const editValue = shallowRef("")
+const tooltipVisible = shallowRef(false)
 const editInput = useTemplateRef<HTMLInputElement>("editInput")
-
-function normalizedToPanUnits(value: number): number {
-  const normalized = Math.max(-1, Math.min(1, value))
-  return Math.round(normalized < 0 ? normalized * 64 : normalized * 63)
-}
-
-function panUnitsToNormalized(value: number): number {
-  const units = Math.max(-64, Math.min(63, Math.round(value)))
-  return units < 0 ? units / 64 : units / 63
-}
 
 const panUnits = computed(() => normalizedToPanUnits(props.value))
 const panLabel = computed(() => {
   if (panUnits.value > 0) return `+${panUnits.value}`
   return String(panUnits.value)
 })
+
+const gesture = useParameterGesture({
+  currentValue: () => panUnits.value,
+  preview: (value) => emit("preview", panUnitsToNormalized(value)),
+  commit: (value) => emit("commit", panUnitsToNormalized(value))
+})
+
+const rotaryGesture = useRotaryParameterGesture({
+  currentValue: () => panUnits.value,
+  minimum: -64,
+  maximum: 63,
+  pixelsPerStep: 2,
+  preview: (value) => emit("preview", panUnitsToNormalized(value)),
+  commit: (value) => emit("commit", panUnitsToNormalized(value))
+})
+const { dragging, dragValue } = rotaryGesture
+const displayedPan = computed(() =>
+  dragging.value ? panUnitsToNormalized(dragValue.value) : props.value
+)
+const panTooltipLabel = computed(() => panLabelFromNormalized(displayedPan.value))
 const knobStyle = computed(() => {
-  const value = Math.max(-1, Math.min(1, props.value))
+  const value = Math.max(-1, Math.min(1, displayedPan.value))
   const position = 135 + value * 135
   const start = Math.min(135, position)
   const end = Math.max(135, position)
@@ -43,13 +60,8 @@ const knobStyle = computed(() => {
   }
 })
 
-const gesture = useParameterGesture({
-  currentValue: () => panUnits.value,
-  preview: (value) => emit("preview", panUnitsToNormalized(value)),
-  commit: (value) => emit("commit", panUnitsToNormalized(value))
-})
-
 async function beginEditing(): Promise<void> {
+  tooltipVisible.value = false
   editValue.value = String(panUnits.value)
   editing.value = true
   await nextTick()
@@ -70,6 +82,16 @@ function cancelEditing(): void {
   editing.value = false
 }
 
+function previewKeyboardGesture(event: Event): void {
+  tooltipVisible.value = true
+  gesture.preview(event)
+}
+
+function commitKeyboardGesture(event: Event): void {
+  gesture.commit(event)
+  tooltipVisible.value = false
+}
+
 function onRangeKeydown(event: KeyboardEvent): void {
   if (event.key === "Enter" || event.key === "F2") {
     event.preventDefault()
@@ -77,6 +99,7 @@ function onRangeKeydown(event: KeyboardEvent): void {
     return
   }
   gesture.keydown(event)
+  if (event.key === "Escape") tooltipVisible.value = false
 }
 </script>
 
@@ -87,9 +110,8 @@ function onRangeKeydown(event: KeyboardEvent): void {
         <span class="rotary-track" aria-hidden="true" />
         <span class="rotary-progress" aria-hidden="true" />
         <i aria-hidden="true" />
-        <output v-if="!editing" class="pan-readout" aria-hidden="true">{{ panLabel }}</output>
         <input
-          v-else
+          v-if="editing"
           ref="editInput"
           v-model="editValue"
           class="pan-editor"
@@ -112,12 +134,19 @@ function onRangeKeydown(event: KeyboardEvent): void {
         :value="panUnits"
         :aria-label="`${channelName} pan`"
         :aria-valuetext="panLabel"
-        @pointerdown="gesture.begin"
-        @input="gesture.preview"
-        @change="gesture.commit"
+        @pointerdown="rotaryGesture.begin"
+        @pointermove="rotaryGesture.move"
+        @pointerup="rotaryGesture.end"
+        @pointercancel="rotaryGesture.cancel"
+        @input="previewKeyboardGesture"
+        @change="commitKeyboardGesture"
+        @blur="tooltipVisible = false"
         @keydown="onRangeKeydown"
         @dblclick.prevent="beginEditing"
       >
+      <output v-if="(dragging || tooltipVisible) && !editing" class="parameter-tooltip" aria-hidden="true">
+        {{ panTooltipLabel }}
+      </output>
     </span>
   </label>
 </template>
@@ -131,17 +160,17 @@ function onRangeKeydown(event: KeyboardEvent): void {
 
 .pan-body {
   position: relative;
-  width: 47px;
-  height: 47px;
+  width: 53px;
+  height: 53px;
 }
 
 .rotary-shell {
   position: absolute;
-  top: 6px;
-  left: 6px;
+  top: 7px;
+  left: 7px;
   display: block;
-  width: 35px;
-  height: 35px;
+  width: 39px;
+  height: 39px;
   border: 1px solid var(--line-strong);
   border-radius: 50%;
   background: linear-gradient(145deg,var(--daw-control-hover),var(--daw-control) 68%);
@@ -188,7 +217,6 @@ function onRangeKeydown(event: KeyboardEvent): void {
   transform: translateX(-50%);
 }
 
-.pan-readout,
 .pan-editor {
   position: absolute;
   top: 50%;
@@ -200,6 +228,34 @@ function onRangeKeydown(event: KeyboardEvent): void {
   font: 700 7px var(--font-utility);
   letter-spacing: -.03em;
   text-align: center;
+}
+
+.parameter-tooltip {
+  position: absolute;
+  z-index: 8;
+  top: calc(100% + 3px);
+  left: 50%;
+  min-width: 27px;
+  padding: 3px 5px;
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  color: var(--text-primary);
+  background: var(--surface-3);
+  box-shadow: 0 4px 10px var(--shadow);
+  font: 7px var(--font-utility);
+  text-align: center;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.parameter-tooltip::before {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  border: 3px solid transparent;
+  border-bottom-color: var(--line-strong);
+  content: "";
+  transform: translateX(-50%);
 }
 
 .pan-editor {
@@ -224,11 +280,12 @@ function onRangeKeydown(event: KeyboardEvent): void {
   top: 0;
   left: 0;
   z-index: 2;
-  width: 47px;
-  height: 47px;
+  width: 53px;
+  height: 53px;
   margin: 0;
-  cursor: ew-resize;
+  cursor: ns-resize;
   opacity: 0;
+  touch-action: none;
 }
 
 .pan-knob:focus-within .rotary-shell {

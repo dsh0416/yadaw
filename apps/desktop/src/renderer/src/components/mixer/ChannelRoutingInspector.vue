@@ -5,8 +5,12 @@ import type { MixerSendPatch, MixerSendState } from "@yadaw/contracts"
 import { useParameterGesture } from "../../composables/useParameterGesture"
 import { useGlobalDialog } from "../../composables/useGlobalDialog"
 import { useMixerStore } from "../../stores/mixer"
+import { usePluginStore } from "../../stores/plugins"
+import InstrumentSlot from "../plugins/InstrumentSlot.vue"
+import PluginRack from "../plugins/PluginRack.vue"
 
 const mixerStore = useMixerStore()
+const pluginStore = usePluginStore()
 const { confirm } = useGlobalDialog()
 const newSendTarget = shallowRef("")
 const inputOptions = Array.from({ length: 32 }, (_, index) => index + 1)
@@ -20,6 +24,18 @@ const outputs = computed(() =>
 const sendTargets = computed(() =>
   channel.value ? mixerStore.availableSendTargets(channel.value.id) : []
 )
+const instrument = computed(() => {
+  if (!channel.value || channel.value.kind !== "instrument") return null
+  return mixerStore.graph.plugins.find((plugin) =>
+    plugin.channelId === channel.value?.id && plugin.role === "instrument"
+  ) ?? null
+})
+const inserts = computed(() => {
+  if (!channel.value) return []
+  return mixerStore.graph.plugins
+    .filter((plugin) => plugin.channelId === channel.value?.id && plugin.role === "insert")
+    .sort((left, right) => left.slotOrder - right.slotOrder)
+})
 
 watch(() => channel.value?.id, () => {
   newSendTarget.value = sendTargets.value[0]?.id ?? ""
@@ -109,6 +125,14 @@ async function removeChannel(): Promise<void> {
 function clearMeterClips(): void {
   void mixerStore.clearMeterClips()
 }
+
+function togglePlugin(instanceId: string, enabled: boolean): void {
+  void mixerStore.execute({ type: "update-plugin", pluginId: instanceId, patch: { enabled } })
+}
+
+function removePlugin(instanceId: string): void {
+  void mixerStore.execute({ type: "delete-plugin", pluginId: instanceId })
+}
 </script>
 
 <template>
@@ -143,6 +167,24 @@ function clearMeterClips(): void {
           >
         </label>
       </section>
+
+      <InstrumentSlot
+        v-if="channel.kind === 'instrument'"
+        :plugin="instrument"
+        :runtime="instrument ? pluginStore.runtime[instrument.id] : undefined"
+        @open="pluginStore.openEditor"
+        @toggle="togglePlugin"
+        @remove="removePlugin"
+      />
+
+      <PluginRack
+        v-if="channel.kind !== 'master'"
+        :plugins="inserts"
+        :runtime="pluginStore.runtime"
+        @open="pluginStore.openEditor"
+        @toggle="togglePlugin"
+        @remove="removePlugin"
+      />
 
       <section v-if="channel.kind === 'audio'">
         <div class="section-heading"><span>INPUT</span><b>{{ channel.recordArmed ? "ARMED" : "SAFE" }}</b></div>
@@ -183,7 +225,7 @@ function clearMeterClips(): void {
         </div>
       </section>
 
-      <section v-if="channel.kind === 'audio' || channel.kind === 'bus'">
+      <section v-if="channel.kind === 'audio' || channel.kind === 'instrument' || channel.kind === 'bus'">
         <div class="section-heading"><span>OUTPUT</span><b>MAIN PATH</b></div>
         <label>
           <span>Destination</span>
@@ -197,7 +239,7 @@ function clearMeterClips(): void {
         </label>
       </section>
 
-      <section v-if="channel.kind === 'audio' || channel.kind === 'bus'" class="send-section">
+      <section v-if="channel.kind === 'audio' || channel.kind === 'instrument' || channel.kind === 'bus'" class="send-section">
         <div class="section-heading"><span>SENDS</span><b>{{ sends.length }}</b></div>
         <article v-for="send in sends" :key="send.id" class="send-card">
           <div class="send-card-head">

@@ -7,6 +7,7 @@ pub type HardwareOutputFrame = [f32; MAX_OUTPUT_CHANNELS];
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ChannelKind {
     Audio,
+    Instrument,
     Bus,
     Master,
     Output,

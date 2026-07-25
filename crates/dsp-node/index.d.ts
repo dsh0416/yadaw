@@ -122,6 +122,32 @@ export interface NativeFinalizeRecordingConfig {
   channelIndices?: Array<number>
 }
 
+export interface NativeMidiEvent {
+  tick: number
+  channel?: number
+  kind: string
+  data: Buffer
+}
+
+export interface NativeMidiNote {
+  startTick: number
+  durationTicks: number
+  channel: number
+  key: number
+  velocity: number
+  releaseVelocity: number
+}
+
+export interface NativeMidiTrack {
+  sourceTrack: number
+  sequence: number
+  name: string
+  lengthTicks: number
+  notes: Array<NativeMidiNote>
+  events: Array<NativeMidiEvent>
+  warnings: Array<string>
+}
+
 export interface NativeMixerChannel {
   id: string
   kind: string
@@ -183,6 +209,15 @@ export interface NativeMixerSnapshot {
   meters: Array<NativeMixerChannelMeter>
 }
 
+export interface NativeNormalizedSmf {
+  format: number
+  sourceTiming: string
+  tracks: Array<NativeMidiTrack>
+  tempoEvents: Array<NativeTempoEvent>
+  timeSignatureEvents: Array<NativeTimeSignatureEvent>
+  warnings: Array<string>
+}
+
 export interface NativeRecordingResult {
   path: string
   sampleRate: number
@@ -198,6 +233,22 @@ export interface NativeRecordingStartConfig {
   originationDate: string
   originationTime: string
   timeReference: number
+}
+
+export interface NativeTempoEvent {
+  tick: number
+  beatsPerMinute: number
+}
+
+export interface NativeTempoMap {
+  tempoEvents: Array<NativeTempoEvent>
+  timeSignatureEvents: Array<NativeTimeSignatureEvent>
+}
+
+export interface NativeTimeSignatureEvent {
+  tick: number
+  numerator: number
+  denominator: number
 }
 
 export interface NativeTransportSnapshot {
@@ -222,6 +273,8 @@ export interface NativeWaveformSnapshot {
   bucketCount: number
   peaks: Buffer
 }
+
+export declare function parseMidiFile(path: string, projectTempoMap: NativeTempoMap): Promise<NativeNormalizedSmf>
 
 export declare function previewMixerParameter(preview: NativeMixerParameterPreview): void
 

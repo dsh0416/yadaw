@@ -81,7 +81,6 @@ describe("MixerChannelStrip", () => {
     expect(volume.element.dispatchEvent(thumbPointer)).toBe(true)
 
     await volume.setValue("-6")
-    await volume.trigger("change")
     expect(wrapper.emitted("preview")?.at(-1)?.[0]).toMatchObject({
       target: "channel", id: "audio", parameter: "gainDb", value: -6
     })
@@ -99,7 +98,23 @@ describe("MixerChannelStrip", () => {
     await volume.trigger("dblclick")
     expect(wrapper.emitted("updateChannel")?.at(-1)).toEqual(["audio", { gainDb: 0 }])
 
-    await wrapper.get('input[aria-label="Vocal volume value in decibels"]').setValue("-3.5")
+    const gainReadout = wrapper.get('button[aria-label="Vocal volume value in decibels"]')
+    expect(gainReadout.text()).toBe("0.0")
+    await gainReadout.trigger("dblclick")
+    const gainEditor = wrapper.get('input[aria-label="Vocal volume value in decibels"]')
+    ;(gainEditor.element as HTMLInputElement).value = "-3.5"
+    await gainEditor.trigger("input")
+    await wrapper.setProps({
+      meter: {
+        ...wrapper.props("meter"),
+        postFaderPeak: [0.4, 0.4]
+      }
+    })
+    expect((gainEditor.element as HTMLInputElement).value).toBe("-3.5")
+    await gainEditor.trigger("change")
+    expect(wrapper.emitted("preview")?.at(-1)?.[0]).toMatchObject({
+      target: "channel", id: "audio", parameter: "gainDb", value: -3.5
+    })
     expect(wrapper.emitted("updateChannel")?.at(-1)).toEqual(["audio", { gainDb: -3.5 }])
     const meterReadout = wrapper.get(
       'button[aria-label="Vocal latched maximum post-fader level in decibels"]'
@@ -121,7 +136,7 @@ describe("MixerChannelStrip", () => {
 
     expect(wrapper.find('input[aria-label="Vocal pan value"]').exists()).toBe(false)
     await wrapper.setProps({ channel: { ...channel, pan: 1 } })
-    expect(wrapper.get(".pan-readout").text()).toBe("+63")
+    expect(wrapper.find(".pan-readout").exists()).toBe(false)
     await pan.trigger("dblclick")
     const panEditor = wrapper.get('input[aria-label="Vocal pan value"]')
     expect((panEditor.element as HTMLInputElement).value).toBe("63")

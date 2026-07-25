@@ -839,6 +839,7 @@ fn spawn_streaming_clip(
 fn parse_channel_kind(value: &str) -> Result<ChannelKind> {
     match value {
         "audio" => Ok(ChannelKind::Audio),
+        "instrument" => Ok(ChannelKind::Instrument),
         "bus" => Ok(ChannelKind::Bus),
         "master" => Ok(ChannelKind::Master),
         "output" => Ok(ChannelKind::Output),

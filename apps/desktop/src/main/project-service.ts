@@ -92,8 +92,14 @@ export class ProjectService {
 
   private async stateFromDatabase(id: string, projectPath: string, recoveredWorkingCopy: boolean): Promise<ProjectSession> {
     const result = await this.worker.query({
-      sql: `SELECT name, sample_rate, tempo, time_signature_numerator, time_signature_denominator, waveform_display_mode
-            FROM project WHERE id = 'project'`,
+      sql: `SELECT p.name, p.sample_rate,
+              COALESCE((SELECT beats_per_minute FROM tempo_events WHERE tick = 0), p.tempo),
+              COALESCE((SELECT numerator FROM time_signature_events WHERE tick = 0),
+                p.time_signature_numerator),
+              COALESCE((SELECT denominator FROM time_signature_events WHERE tick = 0),
+                p.time_signature_denominator),
+              p.waveform_display_mode
+            FROM project p WHERE p.id = 'project'`,
       params: [],
       method: "all"
     })

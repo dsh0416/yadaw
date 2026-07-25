@@ -595,6 +595,7 @@ module.exports.listAudioBackends = nativeBinding.listAudioBackends
 module.exports.listAudioDevices = nativeBinding.listAudioDevices
 module.exports.loadMixerGraph = nativeBinding.loadMixerGraph
 module.exports.mixerSnapshot = nativeBinding.mixerSnapshot
+module.exports.parseMidiFile = nativeBinding.parseMidiFile
 module.exports.previewMixerParameter = nativeBinding.previewMixerParameter
 module.exports.processGain = nativeBinding.processGain
 module.exports.recordingWaveformSnapshot = nativeBinding.recordingWaveformSnapshot

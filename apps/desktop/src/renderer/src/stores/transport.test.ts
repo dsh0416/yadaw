@@ -26,7 +26,14 @@ const emptyGraph: MixerGraphSnapshot = {
   sampleRate: 48_000,
   channels: [],
   clips: [],
-  sends: []
+  sends: [],
+  plugins: [],
+  midiClips: [],
+  tempoMap: {
+    ticksPerQuarter: 960,
+    tempoEvents: [{ tick: 0, beatsPerMinute: 120 }],
+    timeSignatureEvents: [{ tick: 0, numerator: 4, denominator: 4 }]
+  }
 }
 
 describe("transport store", () => {

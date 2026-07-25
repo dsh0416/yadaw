@@ -16,6 +16,8 @@ import { useTransportStore } from "../stores/transport"
 import { useMixerStore } from "../stores/mixer"
 import { useStudioWorkspaceStore } from "../stores/studioWorkspace"
 import { useStudioWorkflowStore } from "../stores/studioWorkflow"
+import { useMidiImportStore } from "../stores/midiImport"
+import MidiImportDialog from "../components/midi/MidiImportDialog.vue"
 
 const router = useRouter()
 const engineStore = useEngineStore()
@@ -32,6 +34,7 @@ const transportStore = useTransportStore()
 const mixerStore = useMixerStore()
 const workspaceStore = useStudioWorkspaceStore()
 const studioWorkflowStore = useStudioWorkflowStore()
+const midiImportStore = useMidiImportStore()
 const { session } = storeToRefs(projectStore)
 const {
   active: activeRecording,
@@ -134,6 +137,7 @@ onBeforeUnmount(() => {
       :play-loading="playLoading"
       :can-play="canPlay && !activeRecording"
       :playhead-seconds="playheadSeconds"
+      :tempo-map="mixerStore.graph.tempoMap"
       @open-preferences="openPreferences"
       @toggle-recording="toggleRecording"
       @toggle-playback="transportStore.toggle"
@@ -141,6 +145,7 @@ onBeforeUnmount(() => {
       @save="saveProject"
       @close="closeProject"
       @open-project-settings="openProjectSettings"
+      @import-midi="midiImportStore.prepare()"
     />
     <StudioPlaceholderPanel side="left" />
     <StudioWorkspace
@@ -151,6 +156,7 @@ onBeforeUnmount(() => {
     />
     <ChannelRoutingInspector />
     <StudioStatusbar :runtime="audioRuntime" :statistics="audioStatistics" :audio-warnings="audioWarnings" />
+    <MidiImportDialog />
   </main>
 </template>
 

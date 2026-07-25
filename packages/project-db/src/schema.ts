@@ -17,6 +17,16 @@ export const pgOid = customType<{ data: number; driverData: number }>({
   }
 })
 
+export const bytea = customType<{ data: Uint8Array; driverData: Uint8Array }>({
+  dataType: () => "bytea"
+})
+
+export const int8Number = customType<{ data: number; driverData: string }>({
+  dataType: () => "bigint",
+  fromDriver: (value) => Number(value),
+  toDriver: (value) => String(value)
+})
+
 export const project = pgTable("project", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
@@ -56,7 +66,7 @@ export const assets = pgTable("assets", {
 
 export const mixerChannels = pgTable("mixer_channels", {
   id: text("id").primaryKey(),
-  kind: text("kind").$type<"audio" | "bus" | "master" | "output">().notNull(),
+  kind: text("kind").$type<"audio" | "instrument" | "bus" | "master" | "output">().notNull(),
   name: text("name").notNull(),
   color: text("color").notNull(),
   sortOrder: integer("sort_order").notNull(),
@@ -104,8 +114,78 @@ export const mixerSends = pgTable("mixer_sends", {
   pan: doublePrecision("pan").notNull()
 })
 
+export const pluginInstances = pgTable("plugin_instances", {
+  id: text("id").primaryKey(),
+  channelId: text("channel_id").notNull(),
+  role: text("role").$type<"instrument" | "insert">().notNull(),
+  slotOrder: integer("slot_order").notNull(),
+  classId: text("class_id").notNull(),
+  descriptorSnapshot: text("descriptor_snapshot").notNull(),
+  enabled: boolean("enabled").notNull(),
+  componentState: bytea("component_state").notNull(),
+  controllerState: bytea("controller_state").notNull()
+})
+
+export const tempoEvents = pgTable("tempo_events", {
+  tick: int8Number("tick").primaryKey(),
+  beatsPerMinute: doublePrecision("beats_per_minute").notNull()
+})
+
+export const timeSignatureEvents = pgTable("time_signature_events", {
+  tick: int8Number("tick").primaryKey(),
+  numerator: smallint("numerator").notNull(),
+  denominator: smallint("denominator").notNull()
+})
+
+export const midiSources = pgTable("midi_sources", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  contentHash: text("content_hash").notNull().unique(),
+  rawBytes: bytea("raw_bytes").notNull()
+})
+
+export const midiClips = pgTable("midi_clips", {
+  id: text("id").primaryKey(),
+  sourceId: text("source_id").notNull(),
+  trackId: text("track_id").notNull(),
+  name: text("name").notNull(),
+  startTick: int8Number("start_tick").notNull(),
+  lengthTicks: int8Number("length_ticks").notNull(),
+  sourceOffsetTicks: int8Number("source_offset_ticks").notNull()
+})
+
+export const midiNotes = pgTable("midi_notes", {
+  id: text("id").primaryKey(),
+  clipId: text("clip_id").notNull(),
+  startTick: int8Number("start_tick").notNull(),
+  durationTicks: int8Number("duration_ticks").notNull(),
+  channel: smallint("channel").notNull(),
+  key: smallint("key").notNull(),
+  velocity: smallint("velocity").notNull(),
+  releaseVelocity: smallint("release_velocity").notNull()
+})
+
+export const midiEvents = pgTable("midi_events", {
+  id: text("id").primaryKey(),
+  clipId: text("clip_id").notNull(),
+  tick: int8Number("tick").notNull(),
+  channel: smallint("channel"),
+  kind: text("kind").$type<
+    "control-change" | "pitch-bend" | "program-change" |
+    "channel-pressure" | "poly-pressure" | "sysex"
+  >().notNull(),
+  data: bytea("data").notNull()
+})
+
 export type Project = typeof project.$inferSelect
 export type Asset = typeof assets.$inferSelect
 export type MixerChannel = typeof mixerChannels.$inferSelect
 export type TimelineClip = typeof timelineClips.$inferSelect
 export type MixerSend = typeof mixerSends.$inferSelect
+export type PluginInstance = typeof pluginInstances.$inferSelect
+export type TempoEvent = typeof tempoEvents.$inferSelect
+export type TimeSignatureEvent = typeof timeSignatureEvents.$inferSelect
+export type MidiSource = typeof midiSources.$inferSelect
+export type MidiClip = typeof midiClips.$inferSelect
+export type MidiNote = typeof midiNotes.$inferSelect
+export type MidiEvent = typeof midiEvents.$inferSelect

@@ -19,16 +19,34 @@ files:
   - "!node_modules/@yadaw/dsp-node/build.rs"
 
 win:
+  extraResources:
+    - from: ../../target/release/yadaw-audio-host.exe
+      to: yadaw-audio-host.exe
+    - from: ../../target/vst3-bridge-build/bin/yadaw-vst3-probe.exe
+      to: yadaw-vst3-probe.exe
   target:
     - target: nsis
       arch: [x64]
 
 mac:
+  hardenedRuntime: true
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  extraResources:
+    - from: ../../target/release/yadaw-audio-host
+      to: yadaw-audio-host
+    - from: ../../target/vst3-bridge-build/bin/yadaw-vst3-probe
+      to: yadaw-vst3-probe
   target:
     - target: dmg
       arch: [x64, arm64]
 
 linux:
+  extraResources:
+    - from: ../../target/release/yadaw-audio-host
+      to: yadaw-audio-host
+    - from: ../../target/vst3-bridge-build/bin/yadaw-vst3-probe
+      to: yadaw-vst3-probe
   target:
     - target: AppImage
       arch: [x64, arm64]

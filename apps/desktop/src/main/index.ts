@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, shell } from "electron"
 import type { IpcMainInvokeEvent } from "electron"
 import { statfs } from "node:fs/promises"
 import { cpus, freemem, totalmem } from "node:os"
-import { basename, join } from "node:path"
+import { basename, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { AUDIO_BACKENDS, IPC_CHANNELS } from "@yadaw/contracts"
 import type {
@@ -18,6 +18,9 @@ import type {
   ProjectQueryRequest,
   ProjectTransactionRequest,
   MixerParameterPreview,
+  MidiImportPlan,
+  PluginParameterChange,
+  PluginScanRequest,
   TransportCommand,
   StorageSpaceSnapshot,
   SystemPerformanceSnapshot,
@@ -33,12 +36,15 @@ import {
   stopAudioEngine
 } from "@yadaw/dsp-node"
 import { ApplicationSettingsStore } from "./application-settings"
+import { AudioHostService } from "./audio-host-service"
 import { createAudioBenchmarkReport } from "./audio-benchmark-service"
 import { installApplicationMenu } from "./application-menu"
 import { OperationService } from "./operation-service"
 import { MixerService } from "./mixer-service"
+import { MidiImportService } from "./midi-import-service"
 import { LifecycleCoordinator } from "./lifecycle-coordinator"
 import { ProjectService } from "./project-service"
+import { PluginCatalogService } from "./plugin-catalog-service"
 import { RecordingService } from "./recording-service"
 import { WaveformService } from "./waveform-service"
 
@@ -376,8 +382,15 @@ function registerIpcHandlers(
   operations: OperationService,
   waveforms: WaveformService,
   mixer: MixerService,
+  plugins: PluginCatalogService,
+  midiImport: MidiImportService,
   lifecycle: LifecycleCoordinator
 ): void {
+  plugins.subscribe((scanEvent) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      window.webContents.send(IPC_CHANNELS.pluginsScanEvent, scanEvent)
+    }
+  })
   ipcMain.handle(IPC_CHANNELS.engineInfo, (event) => {
     assertTrustedSender(event)
     return engineInfo()
@@ -469,6 +482,72 @@ function registerIpcHandlers(
   ipcMain.handle(IPC_CHANNELS.mixerClearMeterClips, (event) => {
     assertTrustedSender(event)
     return mixer.clearMeterClips()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.pluginsList, (event) => {
+    assertTrustedSender(event)
+    return plugins.list()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.pluginsScan, (event, value: unknown) => {
+    assertTrustedSender(event)
+    if (value !== undefined && (typeof value !== "object" || value === null)) {
+      throw new TypeError("Plugin scan request must be an object")
+    }
+    return plugins.scan((value ?? {}) as PluginScanRequest)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.pluginEditorOpen, (event, value: unknown) => {
+    assertTrustedSender(event)
+    if (typeof value !== "string" || !value) throw new TypeError("Plugin instance ID is required")
+    return plugins.openEditor(value)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.pluginEditorClose, (event, value: unknown) => {
+    assertTrustedSender(event)
+    if (typeof value !== "string" || !value) throw new TypeError("Plugin instance ID is required")
+    plugins.closeEditor(value)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.pluginParametersGet, (event, value: unknown) => {
+    assertTrustedSender(event)
+    if (typeof value !== "string" || !value) throw new TypeError("Plugin instance ID is required")
+    return plugins.parameters(value)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.pluginParameterSet, (event, value: unknown) => {
+    assertTrustedSender(event)
+    if (typeof value !== "object" || value === null) {
+      throw new TypeError("Plugin parameter change must be an object")
+    }
+    plugins.setParameter(value as PluginParameterChange)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.midiImportPrepare, async (event, value: unknown) => {
+    assertTrustedSender(event)
+    lifecycle.assertProjectWriteAllowed()
+    let path = typeof value === "string" && value.trim() ? value : undefined
+    if (!path) {
+      const result = await dialog.showOpenDialog({
+        title: "Import Standard MIDI File",
+        properties: ["openFile"],
+        filters: [{ name: "Standard MIDI File", extensions: ["mid", "midi"] }]
+      })
+      path = result.filePaths[0]
+      if (result.canceled || !path) return null
+    }
+    return midiImport.prepare(path)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.midiImportCommit, async (event, value: unknown) => {
+    assertTrustedSender(event)
+    lifecycle.assertProjectWriteAllowed()
+    if (typeof value !== "object" || value === null) {
+      throw new TypeError("MIDI import plan must be an object")
+    }
+    const result = await midiImport.commit(value as MidiImportPlan)
+    lifecycle.syncProject(projects.current)
+    return result
   })
 
   ipcMain.handle(IPC_CHANNELS.transportCommand, (event, value: unknown) => {
@@ -860,12 +939,47 @@ function createMainWindow(): BrowserWindow {
 }
 
 let projectService: ProjectService | null = null
+let audioHostService: AudioHostService | null = null
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   const settings = new ApplicationSettingsStore(app.getPath("userData"))
+  const executableSuffix = process.platform === "win32" ? ".exe" : ""
+  const probePath = app.isPackaged
+    ? join(process.resourcesPath, `yadaw-vst3-probe${executableSuffix}`)
+    : resolve(
+        app.getAppPath(),
+        "..",
+        "..",
+        "target",
+        "vst3-bridge-build",
+        "bin",
+        `yadaw-vst3-probe${executableSuffix}`
+      )
+  const plugins = new PluginCatalogService(app.getPath("userData"), probePath)
+  await plugins.initialize()
+  const audioHostPath = app.isPackaged
+    ? join(process.resourcesPath, `yadaw-audio-host${executableSuffix}`)
+    : resolve(
+        app.getAppPath(),
+        "..",
+        "..",
+        "target",
+        "debug",
+        `yadaw-audio-host${executableSuffix}`
+      )
+  audioHostService = new AudioHostService(audioHostPath, (message) => {
+    console.error(`YADAW audio helper failure: ${message}`)
+    for (const window of BrowserWindow.getAllWindows().slice(1)) window.close()
+  })
+  audioHostService.start()
   projectService = new ProjectService(app.getPath("userData"), settings)
   const operations = new OperationService()
-  const mixer = new MixerService(app.getPath("userData"), projectService)
+  const mixer = new MixerService(
+    app.getPath("userData"),
+    projectService,
+    (revision) => audioHostService?.loadGraph(revision) ?? Promise.resolve()
+  )
+  const midiImport = new MidiImportService(mixer, plugins)
   const recordings = new RecordingService(settings, projectService, operations, mixer)
   const waveforms = new WaveformService(settings, projectService)
   const lifecycle = new LifecycleCoordinator(
@@ -880,6 +994,8 @@ app.whenReady().then(() => {
     operations,
     waveforms,
     mixer,
+    plugins,
+    midiImport,
     lifecycle
   )
   createMainWindow()
@@ -900,5 +1016,6 @@ app.on("window-all-closed", () => {
 
 app.on("before-quit", () => {
   stopAudioEngine()
+  if (audioHostService) void audioHostService.stop()
   if (projectService) void projectService.shutdown()
 })

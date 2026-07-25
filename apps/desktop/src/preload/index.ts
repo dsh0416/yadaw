@@ -77,6 +77,28 @@ const api: YadawDesktopApi = {
     ipcRenderer.invoke(IPC_CHANNELS.assetWaveformRead, request),
   recordingWaveformSnapshot: (request: WaveformWindowRequest) =>
     ipcRenderer.invoke(IPC_CHANNELS.recordingWaveformSnapshot, request),
+  listPlugins: () => ipcRenderer.invoke(IPC_CHANNELS.pluginsList),
+  scanPlugins: (request) => ipcRenderer.invoke(IPC_CHANNELS.pluginsScan, request),
+  subscribePluginScan: (listener) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      scanEvent: Parameters<typeof listener>[0]
+    ) => listener(scanEvent)
+    ipcRenderer.on(IPC_CHANNELS.pluginsScanEvent, handler)
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.pluginsScanEvent, handler)
+  },
+  openPluginEditor: (instanceId) =>
+    ipcRenderer.invoke(IPC_CHANNELS.pluginEditorOpen, instanceId),
+  closePluginEditor: (instanceId) =>
+    ipcRenderer.invoke(IPC_CHANNELS.pluginEditorClose, instanceId),
+  getPluginParameters: (instanceId) =>
+    ipcRenderer.invoke(IPC_CHANNELS.pluginParametersGet, instanceId),
+  setPluginParameter: (request) =>
+    ipcRenderer.invoke(IPC_CHANNELS.pluginParameterSet, request),
+  prepareMidiImport: (path) =>
+    ipcRenderer.invoke(IPC_CHANNELS.midiImportPrepare, path),
+  commitMidiImport: (plan) =>
+    ipcRenderer.invoke(IPC_CHANNELS.midiImportCommit, plan),
   subscribeOperations: (listener) => {
     const handler = (_event: Electron.IpcRendererEvent, operation: Parameters<typeof listener>[0]) => listener(operation)
     ipcRenderer.on(IPC_CHANNELS.operationEvent, handler)

@@ -1,0 +1,11 @@
+cmake_minimum_required(VERSION 3.25)
+
+project(yadaw-native LANGUAGES C CXX)
+
+set(SMTG_ENABLE_VST3_PLUGIN_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(SMTG_ENABLE_VST3_HOSTING_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(SMTG_ENABLE_VSTGUI_SUPPORT OFF CACHE BOOL "" FORCE)
+set(SMTG_CREATE_PLUGIN_LINK OFF CACHE BOOL "" FORCE)
+
+add_subdirectory(third_party/vst3sdk EXCLUDE_FROM_ALL)
+add_subdirectory(native/vst3-bridge)

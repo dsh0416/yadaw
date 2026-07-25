@@ -5,6 +5,7 @@ monorepo_root = true
 node = "26"
 pnpm = "11.9.0"
 rust = "1.97"
+cmake = "3.31.12"
 
 [tools."github:llvm/llvm-project"]
 version = "llvmorg-22.1"
@@ -52,6 +53,10 @@ description = "Format the Rust workspace"
 run = "pnpm format"
 
 [tasks.native]
-description = "Build the native addon (ASIO is always included on Windows)"
+description = "Build the native addon and VST3 probe (ASIO is always included on Windows)"
 depends = ["install"]
-run = "pnpm --filter @yadaw/dsp-node build"
+run = [
+  "pnpm --filter @yadaw/dsp-node build",
+  "cmake -S . -B target/vst3-bridge-build -DSMTG_ENABLE_VST3_PLUGIN_EXAMPLES=OFF -DSMTG_ENABLE_VST3_HOSTING_EXAMPLES=OFF -DSMTG_ENABLE_VSTGUI_SUPPORT=OFF",
+  "cmake --build target/vst3-bridge-build --config Release --target yadaw-vst3-probe",
+]

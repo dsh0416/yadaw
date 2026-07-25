@@ -1,9 +1,8 @@
 import { acceptHMRUpdate, defineStore } from "pinia"
 import { computed, ref, shallowRef } from "vue"
 import type { Asset } from "@yadaw/project-db/schema"
-import { assets, project as projectTable } from "@yadaw/project-db/schema"
+import { assets } from "@yadaw/project-db/schema"
 import { createProjectDbProxy } from "@yadaw/project-db/proxy"
-import { eq } from "drizzle-orm"
 import type {
   CreateProjectRequest,
   ProjectConfiguration,
@@ -178,14 +177,38 @@ export const useProjectStore = defineStore("project", () => {
   }
 
   async function updateConfiguration(configuration: ProjectConfiguration): Promise<void> {
-    await proxy.update(projectTable).set({
-      name: configuration.name,
-      sampleRate: configuration.sampleRate,
-      tempo: configuration.tempo,
-      timeSignatureNumerator: configuration.timeSignatureNumerator,
-      timeSignatureDenominator: configuration.timeSignatureDenominator,
-      waveformDisplayMode: configuration.waveformDisplayMode
-    }).where(eq(projectTable.id, "project"))
+    await window.yadaw.projectTransaction({
+      queries: [
+        {
+          sql: `UPDATE project SET name = $1, sample_rate = $2, tempo = $3,
+            time_signature_numerator = $4, time_signature_denominator = $5,
+            waveform_display_mode = $6 WHERE id = 'project'`,
+          params: [
+            configuration.name,
+            configuration.sampleRate,
+            configuration.tempo,
+            configuration.timeSignatureNumerator,
+            configuration.timeSignatureDenominator,
+            configuration.waveformDisplayMode
+          ],
+          method: "execute"
+        },
+        {
+          sql: "UPDATE tempo_events SET beats_per_minute = $1 WHERE tick = 0",
+          params: [configuration.tempo],
+          method: "execute"
+        },
+        {
+          sql: `UPDATE time_signature_events
+            SET numerator = $1, denominator = $2 WHERE tick = 0`,
+          params: [
+            configuration.timeSignatureNumerator,
+            configuration.timeSignatureDenominator
+          ],
+          method: "execute"
+        }
+      ]
+    })
     if (lifecycle.value.status === "open") {
       lifecycle.value = openState({
         ...lifecycle.value.session,

@@ -2,7 +2,6 @@
 import { computed, nextTick, shallowRef, useTemplateRef, watch } from "vue"
 import { storeToRefs } from "pinia"
 import { useResizeObserver } from "@vueuse/core"
-import { AudioLines } from "@lucide/vue"
 import { useProjectStore } from "../../stores/project"
 import { useTransportStore } from "../../stores/transport"
 import { useArrangementViewStore } from "../../stores/arrangementView"
@@ -13,7 +12,10 @@ import ArrangementTrack from "./ArrangementTrack.vue"
 import ArrangementZoomControls from "./ArrangementZoomControls.vue"
 import InlineTrackNameEditor from "../InlineTrackNameEditor.vue"
 import TimelineRuler from "./TimelineRuler.vue"
+import TrackQuickControls from "./TrackQuickControls.vue"
 import TrackHeightResizeHandle from "./TrackHeightResizeHandle.vue"
+import MidiArrangementTrack from "./MidiArrangementTrack.vue"
+import { secondsToTick, tempoAtTick, tickToSeconds, timeSignatureAtTick } from "../../utils/tempoMap"
 
 const props = defineProps<{
   recordingId: string | null
@@ -45,8 +47,14 @@ const clipDrag = shallowRef<{
 } | null>(null)
 let timeZoomAnchor: { seconds: number; viewportX: number } | null = null
 
-const tempo = computed(() => session.value?.configuration.tempo ?? 120)
-const beatsPerBar = computed(() => session.value?.configuration.timeSignatureNumerator ?? 4)
+const playheadTick = computed(() =>
+  secondsToTick(mixerStore.graph.tempoMap, playheadSeconds.value)
+)
+const tempo = computed(() => tempoAtTick(mixerStore.graph.tempoMap, playheadTick.value))
+const signature = computed(() =>
+  timeSignatureAtTick(mixerStore.graph.tempoMap, playheadTick.value)
+)
+const beatsPerBar = computed(() => signature.value.numerator)
 const displayMode = computed(() => session.value?.configuration.waveformDisplayMode ?? "separate")
 const recordingDuration = computed(() => {
   if (liveDurationSeconds.value > 0) return liveDurationSeconds.value
@@ -82,6 +90,9 @@ const liveClips = computed<TimelineClip[]>(() =>
 const visibleDuration = computed(() =>
   Math.max(
     timelineDurationSeconds.value,
+    ...mixerStore.graph.midiClips.map((clip) =>
+      tickToSeconds(mixerStore.graph.tempoMap, clip.startTick + clip.lengthTicks)
+    ),
     (liveClips.value[0]?.endSeconds ?? contentEndSeconds.value) + 2
   )
 )
@@ -104,9 +115,10 @@ const dragPreview = computed<TimelineClip | null>(() => {
     endSeconds: drag.startSeconds + clip.durationSeconds
   }
 })
-const trackRows = computed(() => mixerStore.audioTracks.map((track) => ({
+const trackRows = computed(() => mixerStore.timelineTracks.map((track) => ({
   track,
   clips: clips.value.filter((clip) => clip.trackId === track.id),
+  midiClips: mixerStore.graph.midiClips.filter((clip) => clip.trackId === track.id),
   scale: viewStore.trackScale(track.id),
   height: viewStore.effectiveTrackHeight(track.id)
 })))
@@ -114,7 +126,7 @@ const trackGridRows = computed(() => {
   const rows = trackRows.value.length > 0
     ? trackRows.value.map(({ height }) => `${height}px`).join(" ")
     : `${trackHeight.value}px`
-  return `27px ${rows} minmax(64px, 1fr)`
+  return `43px ${rows} minmax(64px, 1fr)`
 })
 const railStyle = computed(() => ({
   gridTemplateRows: trackGridRows.value
@@ -200,7 +212,7 @@ function updateClipDrag(event: DragEvent): void {
   if (!drag || !contentElement) return
 
   const lanes = Array.from(
-    contentElement.querySelectorAll<HTMLElement>("[data-track-id]")
+    contentElement.querySelectorAll<HTMLElement>("[data-track-id][data-track-kind='audio']")
   ).map((lane) => {
     const bounds = lane.getBoundingClientRect()
     return {
@@ -235,8 +247,8 @@ function handleClipDragEnd(): void {
 }
 function reorderTrack(index: number, direction: -1 | 1): void {
   const targetIndex = index + direction
-  const source = mixerStore.audioTracks[index]
-  const target = mixerStore.audioTracks[targetIndex]
+  const source = mixerStore.timelineTracks[index]
+  const target = mixerStore.timelineTracks[targetIndex]
   if (!source || !target) return
   void mixerStore.execute({
     type: "batch",
@@ -272,11 +284,19 @@ function handleWheel(event: WheelEvent): void {
   else return
   event.preventDefault()
 }
+
+function removeMidiClip(clipId: string): void {
+  void mixerStore.execute({ type: "delete-midi-clip", clipId })
+}
 </script>
 
 <template>
   <section class="arrangement" aria-label="Arrangement timeline">
     <div class="arrangement-toolbar">
+      <div class="tempo-readout">
+        <span>TEMPO MAP</span>
+        <strong>{{ tempo.toFixed(2) }} BPM · {{ signature.numerator }}/{{ signature.denominator }}</strong>
+      </div>
       <ArrangementZoomControls
         class="arrangement-zoom-controls"
         :pixels-per-second="pixelsPerSecond"
@@ -315,9 +335,14 @@ function handleWheel(event: WheelEvent): void {
               :label="`${track.name}; double-click to rename; Alt+Arrow Up or Down to reorder`"
               @rename="mixerStore.updateChannel(track.id, { name: $event })"
             />
-            <small>INPUT {{ track.inputChannels.join("–") }} · {{ track.inputFormat?.toUpperCase() }}</small>
           </div>
-          <AudioLines :size="13" />
+          <TrackQuickControls
+            class="track-quick-controls"
+            :channel="track"
+            :meter="mixerStore.meterFor(track.id)"
+            @preview="mixerStore.preview"
+            @update-channel="mixerStore.updateChannel"
+          />
           <TrackHeightResizeHandle
             :base-height="trackHeight"
             :scale="scale"
@@ -347,11 +372,15 @@ function handleWheel(event: WheelEvent): void {
             :pixels-per-second="pixelsPerSecond"
             :tempo="tempo"
             :beats-per-bar="beatsPerBar"
+            :tempo-map="mixerStore.graph.tempoMap"
             @seek="handleSeek"
           />
-          <ArrangementTrack
-            v-for="{ track, clips: trackClips, height } in trackRows"
+          <template
+            v-for="{ track, clips: trackClips, midiClips, height } in trackRows"
             :key="track.id"
+          >
+          <ArrangementTrack
+            v-if="track.kind === 'audio'"
             :track-id="track.id"
             :track-color="track.color"
             :drag-preview="dragPreview?.trackId === track.id ? dragPreview : null"
@@ -374,6 +403,18 @@ function handleWheel(event: WheelEvent): void {
             @clip-drag-start="handleClipDragStart"
             @clip-drag-end="handleClipDragEnd"
           />
+          <MidiArrangementTrack
+            v-else
+            :track-id="track.id"
+            :track-color="track.color"
+            :clips="midiClips"
+            :tempo-map="mixerStore.graph.tempoMap"
+            :content-width="contentWidth"
+            :pixels-per-second="pixelsPerSecond"
+            :track-height="height"
+            @remove="removeMidiClip"
+          />
+          </template>
           <div
             class="timeline-playhead"
             data-testid="timeline-playhead"
@@ -391,6 +432,5 @@ function handleWheel(event: WheelEvent): void {
 </template>
 
 <style scoped>
-.arrangement{position:relative;display:grid;grid-template-rows:43px minmax(0,1fr);min-width:0;min-height:0;overflow:hidden;background:var(--daw-workspace)}.arrangement-toolbar{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:12px;padding:0 14px 0 15px;border-bottom:1px solid var(--line-soft);background:var(--surface-1)}.arrangement-zoom-controls{grid-column:3;justify-self:end}.timeline-grid{display:grid;grid-template-columns:178px minmax(0,1fr);min-height:0}.timeline-rail,.timeline-content{display:grid}.timeline-content{position:relative;min-height:100%}.timeline-rail{min-height:0;overflow:hidden;border-right:1px solid var(--line-soft);background:var(--daw-track-header)}.timeline-viewport{min-width:0;min-height:0;overflow:auto;background:var(--daw-lane)}.ruler-corner{display:flex;align-items:center;padding:0 12px;border-bottom:1px solid var(--line-strong);color:var(--text-faint);background:var(--daw-ruler);font:700 7px var(--font-utility);letter-spacing:.14em}.track-header{position:relative;display:grid;grid-template-columns:3px 25px minmax(0,1fr) auto;align-items:center;gap:8px;padding:12px 10px;border:0;border-bottom:1px solid var(--line-strong);color:var(--text-primary);background:var(--daw-track-header);text-align:left;cursor:pointer}.track-header:hover{background:var(--daw-track-header-hover)}.track-header.selected{background:var(--daw-track-header-selected);box-shadow:3px 0 0 var(--accent) inset}.track-header:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}.track-color{align-self:stretch;border-radius:2px}.track-header>strong{color:var(--text-muted);font:9px var(--font-utility)}.track-copy b,.track-copy small{display:block}.track-copy{min-width:0}.track-copy b{overflow:hidden;font-size:10px;text-overflow:ellipsis;white-space:nowrap}.track-copy small{margin-top:4px;color:var(--text-faint);font:6px var(--font-utility)}.track-header>svg{color:var(--text-muted)}.track-spacer{background:var(--daw-ruler)}.timeline-playhead{position:absolute;z-index:8;top:27px;bottom:0;width:1px;background:var(--record);box-shadow:0 0 8px color-mix(in srgb,var(--record) 55%,transparent);pointer-events:none}.timeline-playhead span{position:absolute;top:0;left:-4px;width:9px;height:7px;background:var(--record);clip-path:polygon(0 0,100% 0,50% 100%)}.empty-lane{background:var(--daw-lane)}.playback-error{position:absolute;right:12px;bottom:12px;margin:0;padding:8px 10px;border:1px solid color-mix(in srgb,var(--record) 55%,var(--line-strong));border-radius:5px;color:var(--record);background:color-mix(in srgb,var(--record) 14%,var(--surface-1));font-size:8px}@media(max-width:1100px){.timeline-grid{grid-template-columns:152px minmax(0,1fr)}}
-.track-name-editor{display:block;font-size:10px;font-weight:700}
+.arrangement{position:relative;display:grid;grid-template-rows:43px minmax(0,1fr);min-width:0;min-height:0;overflow:hidden;background:var(--daw-workspace)}.arrangement-toolbar{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:12px;padding:0 14px 0 15px;border-bottom:1px solid var(--line-soft);background:var(--surface-1)}.tempo-readout{grid-column:1}.tempo-readout span,.tempo-readout strong{display:block}.tempo-readout span{color:var(--accent);font:700 6px var(--font-utility);letter-spacing:.15em}.tempo-readout strong{margin-top:3px;color:var(--text-muted);font:8px var(--font-utility)}.arrangement-zoom-controls{grid-column:3;justify-self:end}.timeline-grid{display:grid;grid-template-columns:220px minmax(0,1fr);min-height:0}.timeline-rail,.timeline-content{display:grid}.timeline-content{position:relative;min-height:100%}.timeline-rail{min-height:0;overflow:hidden;border-right:1px solid var(--line-soft);background:var(--daw-track-header)}.timeline-viewport{min-width:0;min-height:0;overflow:auto;background:var(--daw-lane)}.ruler-corner{display:flex;align-items:center;padding:0 12px;border-bottom:1px solid var(--line-strong);color:var(--text-faint);background:var(--daw-ruler);font:700 7px var(--font-utility);letter-spacing:.14em}.track-header{position:relative;display:grid;grid-template-columns:3px 20px minmax(0,1fr);grid-template-rows:minmax(9px,auto) 23px;align-content:center;align-items:center;column-gap:6px;row-gap:1px;padding:1px 8px;border:0;border-bottom:1px solid var(--line-strong);color:var(--text-primary);background:var(--daw-track-header);text-align:left;cursor:pointer}.track-header:hover,.track-header:focus-within{z-index:3}.track-header:hover{background:var(--daw-track-header-hover)}.track-header.selected{background:var(--daw-track-header-selected);box-shadow:3px 0 0 var(--accent) inset}.track-header:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}.track-color{grid-row:1/3;align-self:stretch;border-radius:2px}.track-header>strong{grid-column:2;grid-row:1;color:var(--text-muted);font:8px var(--font-utility)}.track-copy{grid-column:3;grid-row:1;min-width:0}.track-copy b{display:block;overflow:hidden;font-size:9px;text-overflow:ellipsis;white-space:nowrap}.track-quick-controls{grid-column:2/4;grid-row:2}.track-spacer{background:var(--daw-ruler)}.timeline-playhead{position:absolute;z-index:8;top:43px;bottom:0;width:1px;background:var(--record);box-shadow:0 0 8px color-mix(in srgb,var(--record) 55%,transparent);pointer-events:none}.timeline-playhead span{position:absolute;top:0;left:-4px;width:9px;height:7px;background:var(--record);clip-path:polygon(0 0,100% 0,50% 100%)}.empty-lane{background:var(--daw-lane)}.playback-error{position:absolute;right:12px;bottom:12px;margin:0;padding:8px 10px;border:1px solid color-mix(in srgb,var(--record) 55%,var(--line-strong));border-radius:5px;color:var(--record);background:color-mix(in srgb,var(--record) 14%,var(--surface-1));font-size:8px}@media(max-width:1100px){.timeline-grid{grid-template-columns:204px minmax(0,1fr)}}.track-name-editor{display:block;font-size:9px;font-weight:700}
 </style>
