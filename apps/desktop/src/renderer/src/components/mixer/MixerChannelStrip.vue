@@ -9,6 +9,7 @@ import type {
   MixerSendState
 } from "@yadaw/contracts"
 import { useParameterGesture } from "../../composables/useParameterGesture"
+import InlineTrackNameEditor from "../InlineTrackNameEditor.vue"
 import MixerPanKnob from "./MixerPanKnob.vue"
 
 const props = defineProps<{
@@ -189,11 +190,16 @@ function beginFaderGesture(event: PointerEvent): void {
       </div>
     </div>
 
-    <button class="channel-name" :title="channel.name" @click="emit('select', channel.id)">
+    <div class="channel-name" @click="emit('select', channel.id)">
       <i :style="{ backgroundColor: channel.color }" />
-      <span>{{ channel.name }}</span>
+      <InlineTrackNameEditor
+        class="channel-name-editor"
+        :name="channel.name"
+        :label="`${channel.name} channel name; double-click to rename`"
+        @rename="emit('updateChannel', channel.id, { name: $event })"
+      />
       <small>{{ channel.channelFormat }}</small>
-    </button>
+    </div>
   </article>
 </template>
 
@@ -531,12 +537,10 @@ function beginFaderGesture(event: PointerEvent): void {
   border-radius: 1px;
 }
 
-.channel-name span {
-  overflow: hidden;
+.channel-name-editor {
+  min-width: 0;
   font-size: 9px;
   font-weight: 700;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .channel-name small {
@@ -584,7 +588,6 @@ function beginFaderGesture(event: PointerEvent): void {
   height: 22px;
 }
 
-.channel-name:focus-visible,
 .channel-actions button:focus-visible,
 .routing-summary select:focus-visible,
 .fader .parameter-value:focus-visible {

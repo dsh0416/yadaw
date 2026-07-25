@@ -22,6 +22,7 @@ const channel: MixerChannelState = {
 describe("MixerChannelStrip", () => {
   it("exposes accessible controls and emits preview/commit gestures", async () => {
     const wrapper = mount(MixerChannelStrip, {
+      attachTo: document.body,
       props: {
         channel,
         sends: [],
@@ -123,6 +124,13 @@ describe("MixerChannelStrip", () => {
     expect(wrapper.get('button[aria-label="Arm Vocal"]').attributes("aria-pressed")).toBe("false")
     expect(wrapper.get('button[aria-label="Input monitoring unavailable"]').attributes("disabled")).toBeDefined()
     expect(wrapper.find(".pan-heading").exists()).toBe(false)
+
+    await wrapper.get('button[aria-label="Vocal channel name; double-click to rename"]').trigger("dblclick")
+    const nameEditor = wrapper.get('input[aria-label="Rename Vocal"]')
+    expect(document.activeElement).toBe(nameEditor.element)
+    await nameEditor.setValue("  Lead Vocal  ")
+    await nameEditor.trigger("keydown", { key: "Enter" })
+    expect(wrapper.emitted("updateChannel")?.at(-1)).toEqual(["audio", { name: "Lead Vocal" }])
   })
 
   it("uses the conventional M/S/R/I action roles", () => {

@@ -1,6 +1,6 @@
 import { createPinia, setActivePinia } from "pinia"
 import { mount } from "@vue/test-utils"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import type { Asset } from "@yadaw/project-db/schema"
 import { useProjectStore } from "../../stores/project"
 import { useMixerStore } from "../../stores/mixer"
@@ -89,6 +89,15 @@ describe("ArrangementWorkspace", () => {
     expect(wrapper.get(".waveform").attributes("style")).toContain("width: 1px")
     expect(wrapper.get('[aria-label="2 channels audio"]').findAll("path")).toHaveLength(2)
     expect(wrapper.text()).not.toContain("2 CH")
+
+    const updateChannel = vi.spyOn(mixer, "updateChannel").mockResolvedValue(true)
+    await wrapper
+      .get('button[aria-label="Audio 1; double-click to rename; Alt+Arrow Up or Down to reorder"]')
+      .trigger("dblclick")
+    const nameEditor = wrapper.get('input[aria-label="Rename Audio 1"]')
+    await nameEditor.setValue("  Rhythm Guitar  ")
+    await nameEditor.trigger("blur")
+    expect(updateChannel).toHaveBeenCalledWith("audio-1", { name: "Rhythm Guitar" })
   })
 
   it("shows a growing capture clip while recording", () => {
