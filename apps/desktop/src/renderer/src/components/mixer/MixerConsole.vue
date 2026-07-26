@@ -152,6 +152,8 @@ async function deleteChannel(channelId: string): Promise<void> {
         :send-targets="mixerStore.availableSendTargets(channel.id)"
         :plugins="pluginsFor(channel.id)"
         :plugin-runtime="pluginStore.runtime"
+        :effect-plugins="pluginStore.compatibleEffects"
+        :instrument-plugins="pluginStore.compatibleInstruments"
         :plugin-slot-rows="pluginSlotRows"
         :send-slot-rows="sendSlotRows"
         :selected="channel.id === mixerStore.selectedChannelId"

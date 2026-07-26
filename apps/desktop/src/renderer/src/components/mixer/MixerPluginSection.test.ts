@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { mount } from "@vue/test-utils"
+import { DOMWrapper, flushPromises, mount } from "@vue/test-utils"
 import type { MixerChannelState, PluginDescriptor, PluginInstanceState } from "@yadaw/contracts"
 import { PLUGIN_DRAG_TYPE } from "../plugins/plugin-drag"
 import MixerPluginSection from "./MixerPluginSection.vue"
@@ -49,19 +49,25 @@ const plugin: PluginInstanceState = {
 }
 
 describe("MixerPluginSection", () => {
-  it("offers compact open, bypass, remove, and catalog drop actions", async () => {
+  it("offers compact open, bypass, remove, catalog drop, and empty-slot picker actions", async () => {
+    const nextDescriptor = { ...descriptor, classId: "delay", name: "Delay" }
     const wrapper = mount(MixerPluginSection, {
+      attachTo: document.body,
       props: {
         channel,
         instrument: null,
         inserts: [plugin],
         runtime: {},
+        effectPlugins: [nextDescriptor],
+        instrumentPlugins: [],
         slotRows: 4
       }
     })
 
     await wrapper.get('button[aria-label="Open Compressor editor"]').trigger("click")
     expect(wrapper.emitted("open")?.at(-1)).toEqual(["plugin"])
+    expect(wrapper.get('[aria-label="Compressor plugin active"]').classes()).toContain("active")
+    expect(wrapper.get('[aria-label="Compressor plugin active"]').find("i").exists()).toBe(false)
     await wrapper.get('button[aria-label="Bypass Compressor"]').trigger("click")
     expect(wrapper.emitted("toggle")?.at(-1)).toEqual(["plugin", false])
     await wrapper.get('button[aria-label="Remove Compressor"]').trigger("click")
@@ -69,7 +75,6 @@ describe("MixerPluginSection", () => {
     expect(wrapper.findAll(".plugin-row.empty")).toHaveLength(1)
     expect(wrapper.findAll(".plugin-row.alignment-spacer")).toHaveLength(2)
 
-    const nextDescriptor = { ...descriptor, classId: "delay", name: "Delay" }
     await wrapper.find(".plugin-row.empty").trigger("drop", {
       dataTransfer: {
         types: [PLUGIN_DRAG_TYPE],
@@ -81,5 +86,64 @@ describe("MixerPluginSection", () => {
       }
     })
     expect(wrapper.emitted("insert")?.at(-1)).toEqual([nextDescriptor, 1])
+
+    await wrapper.get('button[aria-label="Add VST3 audio effect"]').trigger("click")
+    await flushPromises()
+    const delayButton = document.body.querySelector<HTMLButtonElement>(
+      'button[aria-label="Add Delay"]'
+    )
+    expect(delayButton).not.toBeNull()
+    await new DOMWrapper(delayButton).trigger("click")
+    expect(wrapper.emitted("insert")?.at(-1)).toEqual([nextDescriptor, 1])
+
+    await wrapper.setProps({ inserts: [{ ...plugin, enabled: false }] })
+    expect(wrapper.get('[aria-label="Compressor plugin bypassed"]').classes()).toContain("bypassed")
+
+    await wrapper.setProps({
+      runtime: {
+        plugin: {
+          instanceId: "plugin",
+          state: "failed",
+          editorOpen: false,
+          latencySamples: 0,
+          tailSamples: 0,
+          error: "Could not load"
+        }
+      }
+    })
+    expect(wrapper.get('[aria-label="Compressor plugin failed"]').classes()).toContain("failed")
+  })
+
+  it("assigns a VST3 instrument from the empty instrument slot", async () => {
+    const instrumentDescriptor: PluginDescriptor = {
+      ...descriptor,
+      classId: "synth",
+      modulePath: "synth.vst3",
+      name: "Synth",
+      category: "Instrument",
+      kind: "instrument"
+    }
+    const wrapper = mount(MixerPluginSection, {
+      attachTo: document.body,
+      props: {
+        channel: { ...channel, id: "instrument", kind: "instrument", inputFormat: null },
+        instrument: null,
+        inserts: [],
+        runtime: {},
+        effectPlugins: [],
+        instrumentPlugins: [instrumentDescriptor],
+        slotRows: 2
+      }
+    })
+
+    await wrapper.get('button[aria-label="Assign VST3 instrument"]').trigger("click")
+    await flushPromises()
+    const synthButton = document.body.querySelector<HTMLButtonElement>(
+      'button[aria-label="Add Synth"]'
+    )
+    expect(synthButton).not.toBeNull()
+    await new DOMWrapper(synthButton).trigger("click")
+
+    expect(wrapper.emitted("assignInstrument")?.at(-1)).toEqual([instrumentDescriptor])
   })
 })

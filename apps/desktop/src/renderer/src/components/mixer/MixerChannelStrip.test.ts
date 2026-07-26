@@ -51,6 +51,8 @@ describe("MixerChannelStrip", () => {
         sendTargets: [],
         plugins: [],
         pluginRuntime: {},
+        effectPlugins: [],
+        instrumentPlugins: [],
         pluginSlotRows: 4,
         sendSlotRows: 2,
         selected: false
@@ -229,6 +231,8 @@ describe("MixerChannelStrip", () => {
         sendTargets: [],
         plugins: [],
         pluginRuntime: {},
+        effectPlugins: [],
+        instrumentPlugins: [],
         pluginSlotRows: 4,
         sendSlotRows: 2,
         selected: true
@@ -273,6 +277,8 @@ describe("MixerChannelStrip", () => {
         sendTargets: [],
         plugins: [],
         pluginRuntime: {},
+        effectPlugins: [],
+        instrumentPlugins: [],
         pluginSlotRows: 4,
         sendSlotRows: 2,
         selected: false

@@ -8,12 +8,15 @@ import type {
   PluginRuntimeStatus
 } from "@yadaw/contracts"
 import { PLUGIN_DRAG_TYPE, readPluginDrag, writePluginDrag } from "../plugins/plugin-drag"
+import MixerPluginPicker from "./MixerPluginPicker.vue"
 
 const props = defineProps<{
   channel: MixerChannelState
   instrument: PluginInstanceState | null
   inserts: PluginInstanceState[]
   runtime: Record<string, PluginRuntimeStatus>
+  effectPlugins: PluginDescriptor[]
+  instrumentPlugins: PluginDescriptor[]
   slotRows: number
 }>()
 
@@ -35,6 +38,10 @@ const usedRows = computed(
 const emptyRows = computed(() => Math.max(0, props.slotRows - usedRows.value))
 const alignmentRows = computed(() => Math.max(0, emptyRows.value - 1))
 const acceptsPlugins = computed(() => props.channel.kind !== "master")
+
+function pluginState(plugin: PluginInstanceState): PluginRuntimeStatus["state"] {
+  return props.runtime[plugin.id]?.state ?? (plugin.enabled ? "active" : "bypassed")
+}
 
 function accepts(event: DragEvent): boolean {
   return [...(event.dataTransfer?.types ?? [])].includes(PLUGIN_DRAG_TYPE)
@@ -72,51 +79,65 @@ function dropInsert(event: DragEvent, slotOrder: number): void {
   <section class="plugin-section" data-section="plugins" aria-label="Audio effects">
     <template v-if="acceptsPlugins">
       <article
-        v-if="channel.kind === 'instrument'"
-        :class="['plugin-row', 'instrument-row', { empty: !instrument }]"
+        v-if="channel.kind === 'instrument' && instrument"
+        :class="['plugin-row', 'instrument-row', pluginState(instrument)]"
+        :aria-label="`${instrument.descriptor.name} plugin ${pluginState(instrument)}`"
         @dragenter="allowDrop"
         @dragover="allowDrop"
         @drop="dropInstrument"
       >
-        <template v-if="instrument">
-          <i
-            :class="runtime[instrument.id]?.state ?? (instrument.enabled ? 'active' : 'bypassed')"
-          />
-          <button
-            class="plugin-name"
-            draggable="false"
-            :title="instrument.descriptor.name"
-            @click="emit('open', instrument.id)"
-          >
-            {{ instrument.descriptor.name }}
-          </button>
-          <button
-            :aria-label="`${instrument.enabled ? 'Bypass' : 'Enable'} ${instrument.descriptor.name}`"
-            @click="emit('toggle', instrument.id, !instrument.enabled)"
-          >
-            <Power :size="9" />
-          </button>
-          <button
-            :aria-label="`Remove ${instrument.descriptor.name}`"
-            @click="emit('remove', instrument.id)"
-          >
-            <Trash2 :size="9" />
-          </button>
-        </template>
-        <span v-else>DROP INSTRUMENT</span>
+        <button
+          class="plugin-name"
+          draggable="false"
+          :title="instrument.descriptor.name"
+          @click="emit('open', instrument.id)"
+        >
+          {{ instrument.descriptor.name }}
+        </button>
+        <button
+          :aria-label="`${instrument.enabled ? 'Bypass' : 'Enable'} ${instrument.descriptor.name}`"
+          @click="emit('toggle', instrument.id, !instrument.enabled)"
+        >
+          <Power :size="9" />
+        </button>
+        <button
+          :aria-label="`Remove ${instrument.descriptor.name}`"
+          @click="emit('remove', instrument.id)"
+        >
+          <Trash2 :size="9" />
+        </button>
       </article>
+      <MixerPluginPicker
+        v-else-if="channel.kind === 'instrument'"
+        :plugins="instrumentPlugins"
+        title="Choose instrument"
+        search-label="Search VST3 instruments"
+        empty-message="No compatible VST3 instruments found. Rescan from the Sound Browser."
+        @select="emit('assignInstrument', $event)"
+      >
+        <button
+          type="button"
+          class="plugin-row instrument-row empty picker-trigger"
+          aria-label="Assign VST3 instrument"
+          @dragenter="allowDrop"
+          @dragover="allowDrop"
+          @drop="dropInstrument"
+        >
+          <span>EMPTY INSTRUMENT</span>
+        </button>
+      </MixerPluginPicker>
 
       <article
         v-for="(plugin, index) in orderedInserts"
         :key="plugin.id"
-        class="plugin-row"
+        :class="['plugin-row', pluginState(plugin)]"
+        :aria-label="`${plugin.descriptor.name} plugin ${pluginState(plugin)}`"
         draggable="true"
         @dragstart="writePluginDrag($event, { source: 'rack', instanceId: plugin.id })"
         @dragenter="allowDrop"
         @dragover="allowDrop"
         @drop="dropInsert($event, index)"
       >
-        <i :class="runtime[plugin.id]?.state ?? (plugin.enabled ? 'active' : 'bypassed')" />
         <button
           class="plugin-name"
           :title="`${plugin.descriptor.name} · ${plugin.descriptor.vendor}`"
@@ -136,15 +157,25 @@ function dropInsert(event: DragEvent, slotOrder: number): void {
         </button>
       </article>
 
-      <article
+      <MixerPluginPicker
         v-if="emptyRows > 0"
-        class="plugin-row empty"
-        @dragenter="allowDrop"
-        @dragover="allowDrop"
-        @drop="dropInsert($event, orderedInserts.length)"
+        :plugins="effectPlugins"
+        title="Add audio effect"
+        search-label="Search VST3 audio effects"
+        empty-message="No compatible VST3 effects found. Rescan from the Sound Browser."
+        @select="emit('insert', $event, orderedInserts.length)"
       >
-        <span>EMPTY SLOT</span>
-      </article>
+        <button
+          type="button"
+          class="plugin-row empty picker-trigger"
+          aria-label="Add VST3 audio effect"
+          @dragenter="allowDrop"
+          @dragover="allowDrop"
+          @drop="dropInsert($event, orderedInserts.length)"
+        >
+          <span>EMPTY SLOT</span>
+        </button>
+      </MixerPluginPicker>
       <span
         v-for="index in alignmentRows"
         :key="`alignment-${index}`"
@@ -178,7 +209,7 @@ function dropInsert(event: DragEvent, slotOrder: number): void {
 }
 .plugin-row {
   display: grid;
-  grid-template-columns: 6px minmax(0, 1fr) 18px 18px;
+  grid-template-columns: minmax(0, 1fr) 18px 18px;
   align-items: center;
   min-width: 0;
   height: 23px;
@@ -192,23 +223,25 @@ function dropInsert(event: DragEvent, slotOrder: number): void {
   border-color: #697654;
   background: linear-gradient(#7e9362, #63764d);
 }
-.plugin-row i {
-  justify-self: center;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: #8cf59a;
-  box-shadow: 0 0 4px #8cf59a;
+.plugin-row.bypassed {
+  border-color: #505050;
+  color: #a7a7a7;
+  background: linear-gradient(#5b5b5b, #4b4b4b);
+  box-shadow: 0 1px 0 #ffffff12 inset;
 }
-.plugin-row i.bypassed {
-  background: #b8b8b8;
-  box-shadow: none;
+.plugin-row.loading,
+.plugin-row.unloaded {
+  border-color: #566a78;
+  color: #c5d0d7;
+  background: linear-gradient(#617685, #526573);
 }
-.plugin-row i.failed,
-.plugin-row i.missing,
-.plugin-row i.quarantined {
-  background: #ff7a68;
-  box-shadow: 0 0 4px #ff7a68;
+.plugin-row.failed,
+.plugin-row.missing,
+.plugin-row.quarantined {
+  border-color: #8d4a43;
+  color: #ffd4ce;
+  background: linear-gradient(#884f49, #6d3e39);
+  box-shadow: 0 1px 0 #ffffff16 inset;
 }
 .plugin-row button {
   display: grid;
@@ -217,7 +250,7 @@ function dropInsert(event: DragEvent, slotOrder: number): void {
   height: 20px;
   padding: 0;
   border: 0;
-  color: #f8f8f8;
+  color: inherit;
   background: transparent;
   cursor: pointer;
 }
@@ -255,6 +288,17 @@ function dropInsert(event: DragEvent, slotOrder: number): void {
 .plugin-row.empty:not(.disabled):hover {
   border-color: #4e8dbf;
   color: #b7d9f3;
+}
+.plugin-row.picker-trigger {
+  width: 100%;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+}
+.plugin-row.picker-trigger:focus-visible {
+  border-color: var(--focus);
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
 }
 .plugin-row.alignment-spacer {
   border-color: transparent;

@@ -39,6 +39,8 @@ const props = defineProps<{
   sendTargets: MixerChannelState[]
   plugins: PluginInstanceState[]
   pluginRuntime: Record<string, PluginRuntimeStatus>
+  effectPlugins: PluginDescriptor[]
+  instrumentPlugins: PluginDescriptor[]
   pluginSlotRows: number
   sendSlotRows: number
   selected: boolean
@@ -242,6 +244,8 @@ function handleFaderKeydown(event: KeyboardEvent): void {
       :instrument="instrument"
       :inserts="inserts"
       :runtime="pluginRuntime"
+      :effect-plugins="effectPlugins"
+      :instrument-plugins="instrumentPlugins"
       :slot-rows="pluginSlotRows"
       @open="emit('openPlugin', $event)"
       @toggle="(id, enabled) => emit('togglePlugin', id, enabled)"
