@@ -3,7 +3,7 @@ import { onMounted, shallowRef } from "vue"
 import { storeToRefs } from "pinia"
 import { useRouter } from "vue-router"
 import type { ProjectConfiguration } from "@yadaw/contracts"
-import ProjectSettingsPage from "../components/project/ProjectSettingsPage.vue"
+import ProjectSettingsPage from "../components/project-settings/ProjectSettingsPage.vue"
 import { useProjectStore } from "../stores/project"
 
 const router = useRouter()

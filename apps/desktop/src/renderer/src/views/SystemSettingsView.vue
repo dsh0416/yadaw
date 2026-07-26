@@ -1,20 +1,20 @@
 <script setup lang="ts">
+import { computed, onMounted } from "vue"
 import { storeToRefs } from "pinia"
-import { onMounted } from "vue"
 import { useRouter } from "vue-router"
 import type { AudioHostRuntimePreferences, AudioPreferences } from "@yadaw/contracts"
-import PreferencesPage from "../components/preferences/PreferencesPage.vue"
+import SystemSettingsPage from "../components/system-settings/SystemSettingsPage.vue"
+import { useApplicationSettingsStore } from "../stores/applicationSettings"
 import { useAudioPreferencesStore } from "../stores/audioPreferences"
 import { useAudioRuntimeStore } from "../stores/audioRuntime"
 import { useProjectStore } from "../stores/project"
-import { useApplicationSettingsStore } from "../stores/applicationSettings"
 
 const router = useRouter()
 const audioPreferencesStore = useAudioPreferencesStore()
 const audioRuntimeStore = useAudioRuntimeStore()
 const projectStore = useProjectStore()
 const applicationSettingsStore = useApplicationSettingsStore()
-const { preferences, applyError, applyNotice, applying } = storeToRefs(audioPreferencesStore)
+const { preferences, applyError, applying } = storeToRefs(audioPreferencesStore)
 const { runtime } = storeToRefs(audioRuntimeStore)
 const {
   settings: applicationSettings,
@@ -23,14 +23,14 @@ const {
   resolvedAudioHostRuntime
 } = storeToRefs(applicationSettingsStore)
 
+const backLabel = computed(() => (projectStore.session ? "Back to studio" : "Back to welcome"))
+
 function close(): void {
   void router.push({ name: projectStore.session ? "studio" : "welcome" })
 }
 
-async function save(nextPreferences: AudioPreferences): Promise<void> {
-  if (await audioPreferencesStore.apply(nextPreferences)) {
-    close()
-  }
+async function applyAudio(nextPreferences: AudioPreferences): Promise<void> {
+  if (await audioPreferencesStore.apply(nextPreferences)) close()
 }
 
 async function refreshRuntimeDiagnostics(): Promise<void> {
@@ -48,11 +48,10 @@ onMounted(async () => {
 </script>
 
 <template>
-  <PreferencesPage
+  <SystemSettingsPage
     :model-value="preferences"
     :runtime="runtime"
     :apply-error="applyError"
-    :apply-notice="applyNotice"
     :applying="applying"
     :audio-host-runtime="
       applicationSettings?.audioHostRuntime ?? {
@@ -64,8 +63,9 @@ onMounted(async () => {
     :resolved-audio-host-runtime="resolvedAudioHostRuntime"
     :audio-host-runtime-applying="applyingAudioRuntime"
     :audio-host-runtime-error="applicationSettingsError"
-    @cancel="close"
-    @save="save"
+    :back-label="backLabel"
+    @close="close"
+    @apply-audio="applyAudio"
     @configure-runtime="configureRuntime"
   />
 </template>

@@ -1,7 +1,7 @@
 import { flushPromises, mount } from "@vue/test-utils"
 import { createPinia } from "pinia"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import MixerDisplayPreferences from "./MixerDisplayPreferences.vue"
+import MixerDisplaySettings from "./MixerDisplaySettings.vue"
 
 const settings = {
   swapDirectory: "C:/swap",
@@ -12,7 +12,7 @@ const settings = {
   recentProjects: []
 }
 
-describe("MixerDisplayPreferences", () => {
+describe("MixerDisplaySettings", () => {
   beforeEach(() => {
     window.yadaw.getApplicationSettings = vi.fn().mockResolvedValue(settings)
     window.yadaw.updateApplicationSettings = vi
@@ -21,7 +21,7 @@ describe("MixerDisplayPreferences", () => {
   })
 
   it("persists the selected peak hold time and shows the IEC return default", async () => {
-    const wrapper = mount(MixerDisplayPreferences, {
+    const wrapper = mount(MixerDisplaySettings, {
       global: { plugins: [createPinia()] }
     })
     await flushPromises()

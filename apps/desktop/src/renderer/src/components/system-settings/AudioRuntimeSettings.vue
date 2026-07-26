@@ -4,6 +4,8 @@ import type {
   AudioHostRuntimePreferences,
   ResolvedAudioHostRuntimePreferences
 } from "@yadaw/contracts"
+import SettingsPage from "../settings/SettingsPage.vue"
+import SettingsSection from "../settings/SettingsSection.vue"
 
 const props = defineProps<{
   modelValue: AudioHostRuntimePreferences
@@ -11,6 +13,7 @@ const props = defineProps<{
   applying: boolean
   error: string
 }>()
+
 const emit = defineEmits<{
   apply: [preferences: AudioHostRuntimePreferences]
 }>()
@@ -47,18 +50,14 @@ function setNumber(
 </script>
 
 <template>
-  <section class="engine-runtime-preferences">
-    <div class="settings-intro">
-      <span class="section-kicker">Audio <b>/</b> Engine</span>
-      <h2>Runtime scheduling</h2>
-      <p>
-        Bound helper concurrency without changing the real-time callback. Changes restart only the
-        audio helper, then restore devices, plug-ins, graph and transport.
-      </p>
-    </div>
-
+  <SettingsPage
+    category="System"
+    page="Engine"
+    title="Runtime scheduling"
+    description="Bound helper concurrency without changing the real-time callback. Changes restart only the audio helper, then restore devices, plug-ins, graph and transport."
+  >
     <div class="runtime-strip" aria-label="Resolved audio helper threads">
-      <span>RESOLVED</span>
+      <span>Resolved</span>
       <b>{{ resolved?.workerThreads ?? "—" }} workers</b>
       <i />
       <b>{{ resolved?.maxBlockingThreads ?? "—" }} blocking</b>
@@ -66,11 +65,10 @@ function setNumber(
       <b>{{ resolved?.egressConcurrency ?? "—" }} egress</b>
     </div>
 
-    <section class="runtime-setting">
-      <div>
-        <h3>Async worker threads</h3>
-        <p>Runs protocol, Engine, background I/O and telemetry tasks. VST3 stays thread-affine.</p>
-      </div>
+    <SettingsSection
+      title="Async worker threads"
+      description="Runs protocol, engine, background I/O and telemetry tasks. VST3 stays thread-affine."
+    >
       <div class="thread-control">
         <select
           aria-label="Worker thread mode"
@@ -91,13 +89,12 @@ function setNumber(
         />
         <small>1–8</small>
       </div>
-    </section>
+    </SettingsSection>
 
-    <section class="runtime-setting">
-      <div>
-        <h3>Blocking thread ceiling</h3>
-        <p>Caps synchronous IPC sends, arena copies and other controlled blocking jobs.</p>
-      </div>
+    <SettingsSection
+      title="Blocking thread ceiling"
+      description="Caps synchronous IPC sends, arena copies and other controlled blocking jobs."
+    >
       <div class="thread-control">
         <select
           aria-label="Blocking thread mode"
@@ -118,15 +115,12 @@ function setNumber(
         />
         <small>2–16</small>
       </div>
-    </section>
+    </SettingsSection>
 
-    <section class="runtime-setting">
-      <div>
-        <h3>IPC egress concurrency</h3>
-        <p>
-          Allows independent responses to encode and send concurrently; runtime events stay ordered.
-        </p>
-      </div>
+    <SettingsSection
+      title="IPC egress concurrency"
+      description="Allows independent responses to encode and send concurrently; runtime events stay ordered."
+    >
       <div class="thread-control">
         <select
           aria-label="Egress concurrency mode"
@@ -147,100 +141,56 @@ function setNumber(
         />
         <small>1–4</small>
       </div>
-    </section>
+    </SettingsSection>
 
-    <div class="restart-note">
-      <span>CONTROLLED RESTART</span>
-      <p>
-        Unavailable while recording, finalizing or recovering. Playback is paused briefly and
-        resumes at the same sample frame after the new graph is published.
-      </p>
-      <button :disabled="applying || !dirty" @click="emit('apply', { ...draft })">
+    <div class="runtime-actions">
+      <button type="button" :disabled="applying || !dirty" @click="emit('apply', { ...draft })">
         {{ applying ? "Restarting helper…" : "Apply runtime settings" }}
       </button>
     </div>
     <p v-if="error" class="runtime-error" role="alert">{{ error }}</p>
-  </section>
+  </SettingsPage>
 </template>
 
 <style scoped>
-.engine-runtime-preferences {
-  min-width: 0;
-  overflow: auto;
-  padding: 38px clamp(30px, 4.5vw, 68px) 60px;
-  background: radial-gradient(circle at 72% 0, #173b3a24, transparent 32%), var(--canvas);
-}
-.settings-intro,
-.runtime-strip,
-.runtime-setting,
-.restart-note,
-.runtime-error {
-  max-width: 900px;
-}
-.section-kicker {
-  color: var(--accent);
-  font: 700 7px var(--font-utility);
-  letter-spacing: 0.17em;
-}
-.section-kicker b {
-  color: #465267;
-}
-.settings-intro h2 {
-  margin: 8px 0 6px;
-  font: 560 27px var(--font-display);
-}
-.settings-intro p,
-.runtime-setting p,
-.restart-note p {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: 9px;
-  line-height: 1.55;
-}
 .runtime-strip {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-top: 24px;
+  margin-bottom: 1px;
   padding: 10px 12px;
-  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--line-soft));
-  border-radius: 7px;
-  background: color-mix(in srgb, var(--accent) 6%, var(--surface-1));
+  border-bottom: 1px solid var(--line-soft);
+  color: var(--text-secondary);
   font: 8px var(--font-utility);
 }
+
 .runtime-strip span {
   color: var(--accent);
+  font-weight: 700;
   letter-spacing: 0.13em;
+  text-transform: uppercase;
 }
+
 .runtime-strip b {
-  color: var(--text-secondary);
   font-weight: 600;
 }
+
 .runtime-strip i {
   width: 1px;
   height: 11px;
   background: var(--line-strong);
 }
-.runtime-setting {
-  display: grid;
-  grid-template-columns: minmax(190px, 260px) minmax(330px, 1fr);
-  gap: 48px;
-  padding: 24px 0;
-  border-bottom: 1px solid var(--line-soft);
-}
-.runtime-setting h3 {
-  margin: 0 0 6px;
-  font: 600 11px var(--font-display);
-}
+
 .thread-control {
   display: grid;
   grid-template-columns: minmax(130px, 1fr) 92px 32px;
   align-items: center;
   gap: 8px;
 }
+
 .thread-control select,
 .thread-control input,
-.restart-note button {
+.runtime-actions button {
   height: 36px;
   border: 1px solid var(--line-strong);
   border-radius: 7px;
@@ -248,52 +198,44 @@ function setNumber(
   background: var(--surface-3);
   font: 9px var(--font-utility);
 }
+
 .thread-control select,
 .thread-control input {
+  min-width: 0;
   padding: 0 10px;
 }
+
 .thread-control small {
   color: var(--text-faint);
   font: 7px var(--font-utility);
 }
-.restart-note {
-  display: grid;
-  grid-template-columns: 120px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 16px;
+
+.runtime-actions {
+  display: flex;
+  justify-content: flex-end;
   margin-top: 24px;
-  padding: 14px;
-  border: 1px solid #d7a94b42;
-  border-radius: 8px;
-  background: #2a2416;
 }
-.restart-note > span {
-  color: var(--warning);
-  font: 700 7px var(--font-utility);
-  letter-spacing: 0.12em;
-}
-.restart-note button {
+
+.runtime-actions button {
   padding: 0 14px;
   cursor: pointer;
 }
-.restart-note button:disabled {
+
+.runtime-actions button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.runtime-actions button:disabled {
   opacity: 0.45;
   cursor: default;
 }
+
 .runtime-error {
   padding: 11px;
   border-radius: 7px;
-  color: #ff9dab;
-  background: #321923;
+  color: var(--record);
+  background: color-mix(in srgb, var(--record) 9%, var(--surface-1));
   font-size: 9px;
-}
-@media (max-width: 1120px) {
-  .runtime-setting {
-    grid-template-columns: 1fr;
-    gap: 17px;
-  }
-  .restart-note {
-    grid-template-columns: 1fr;
-  }
 }
 </style>

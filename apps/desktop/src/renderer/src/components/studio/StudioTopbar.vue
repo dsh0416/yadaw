@@ -35,7 +35,7 @@ const props = defineProps<{
   tempoMap: TempoMapSnapshot
 }>()
 const emit = defineEmits<{
-  openPreferences: []
+  openSystemSettings: []
   toggleRecording: []
   togglePlayback: []
   goToStart: []
@@ -188,39 +188,40 @@ function commitTempoEdit(): void {
           }}</small></span
         >
       </div>
-      <button class="preferences-button" aria-label="Import MIDI file" @click="emit('importMidi')">
+      <button class="settings-button" aria-label="Import MIDI file" @click="emit('importMidi')">
         <FileMusic :size="15" />
       </button>
       <button
-        class="preferences-button"
+        class="settings-button"
         aria-label="Project settings"
         @click="emit('openProjectSettings')"
       >
         <SlidersHorizontal :size="15" />
       </button>
       <button
-        class="preferences-button"
+        class="settings-button"
         aria-label="Save project"
         :disabled="!dirty"
         @click="emit('save')"
       >
         <Save :size="15" />
       </button>
-      <button class="preferences-button" aria-label="Close project" @click="emit('close')">
+      <button class="settings-button" aria-label="Close project" @click="emit('close')">
         <LogOut :size="15" />
       </button>
       <TooltipRoot>
         <TooltipTrigger as-child
           ><button
-            class="preferences-button"
-            aria-label="Open preferences"
-            @click="emit('openPreferences')"
+            class="settings-button"
+            aria-label="System settings"
+            @click="emit('openSystemSettings')"
           >
             <Settings :size="16" /></button
         ></TooltipTrigger>
         <TooltipPortal
           ><TooltipContent class="tooltip-content" :side-offset="9"
-            >Preferences <span>Ctrl+,</span><TooltipArrow class="tooltip-arrow" /></TooltipContent
+            >System settings <span>Ctrl+,</span
+            ><TooltipArrow class="tooltip-arrow" /></TooltipContent
         ></TooltipPortal>
       </TooltipRoot>
     </div>
@@ -321,7 +322,7 @@ function commitTempoEdit(): void {
   padding: 4px;
 }
 .transport-buttons button,
-.preferences-button {
+.settings-button {
   display: grid;
   place-items: center;
   width: 31px;
@@ -334,13 +335,13 @@ function commitTempoEdit(): void {
   cursor: pointer;
 }
 .transport-buttons button:hover,
-.preferences-button:hover {
+.settings-button:hover {
   border-color: var(--line-strong);
   color: var(--text-primary);
   background: var(--surface-3);
 }
 .transport-buttons button:focus-visible,
-.preferences-button:focus-visible {
+.settings-button:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
@@ -475,7 +476,7 @@ function commitTempoEdit(): void {
   background: var(--record);
   box-shadow: 0 0 16px color-mix(in srgb, var(--record) 60%, transparent);
 }
-.preferences-button:disabled {
+.settings-button:disabled {
   cursor: not-allowed;
   opacity: 0.35;
 }

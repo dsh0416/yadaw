@@ -1,9 +1,9 @@
 import { mount } from "@vue/test-utils"
 import { createPinia } from "pinia"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import RecordingPreferences from "./RecordingPreferences.vue"
+import RecordingSettings from "./RecordingSettings.vue"
 
-describe("RecordingPreferences", () => {
+describe("RecordingSettings", () => {
   beforeEach(() => {
     window.yadaw.getApplicationSettings = vi.fn().mockResolvedValue({
       swapDirectory: "C:/swap",
@@ -33,13 +33,15 @@ describe("RecordingPreferences", () => {
   })
 
   it("persists final bit depth and delegates swap selection", async () => {
-    const wrapper = mount(RecordingPreferences, { global: { plugins: [createPinia()] } })
+    const wrapper = mount(RecordingSettings, { global: { plugins: [createPinia()] } })
     await vi.waitFor(() => expect(wrapper.text()).toContain("C:/swap"))
+
     await wrapper.get("select").setValue("pcm24")
     expect(window.yadaw.updateApplicationSettings).toHaveBeenCalledWith({
       recordingBitDepth: "pcm24"
     })
-    await wrapper.get("button").trigger("click")
+
+    await wrapper.get('button[type="button"]').trigger("click")
     expect(window.yadaw.chooseSwapDirectory).toHaveBeenCalledOnce()
   })
 })

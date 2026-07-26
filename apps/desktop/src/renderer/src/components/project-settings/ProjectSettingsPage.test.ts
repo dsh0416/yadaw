@@ -15,6 +15,7 @@ describe("ProjectSettingsPage", () => {
     const wrapper = mount(ProjectSettingsPage, {
       props: { configuration, saving: false, error: "", saved: false }
     })
+
     await wrapper.get("input[required]").setValue("Session")
     await wrapper.get("select").setValue("44100")
     await wrapper.findAll('input[type="number"]')[0]!.setValue("7")
@@ -27,14 +28,18 @@ describe("ProjectSettingsPage", () => {
       timeSignatureNumerator: 7,
       waveformDisplayMode: "aggregate"
     })
-    expect(wrapper.findAll(".field > span").map((field) => field.text())).not.toContain("Tempo")
+    expect(wrapper.findAll("label > span").map((field) => field.text())).not.toContain("Tempo")
   })
 
-  it("provides a back-to-studio action instead of a modal cancel action", async () => {
+  it("provides shared two-level navigation and a back-to-studio action", async () => {
     const wrapper = mount(ProjectSettingsPage, {
       props: { configuration, saving: false, error: "", saved: false }
     })
-    await wrapper.get(".back-button").trigger("click")
+
+    expect(wrapper.get('nav[aria-label="Project settings categories"]').text()).toContain("Timing")
+    expect(wrapper.get('nav[aria-label="Project settings pages"]').text()).toContain("General")
+    await wrapper.get('button[aria-label="Back to studio"]').trigger("click")
+
     expect(wrapper.emitted("close")).toHaveLength(1)
     expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
   })

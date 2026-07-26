@@ -52,9 +52,9 @@ onMounted(() => {
   mixerStore.startMetering()
   transportStore.startPolling()
 })
-async function openPreferences(): Promise<void> {
+async function openSystemSettings(): Promise<void> {
   if (!(await studioWorkflowStore.prepareToLeaveStudio())) return
-  void router.push({ name: "preferences" })
+  void router.push({ name: "system-settings" })
 }
 async function openProjectSettings(): Promise<void> {
   if (!(await studioWorkflowStore.prepareToLeaveStudio())) return
@@ -145,7 +145,7 @@ onBeforeUnmount(() => {
       :can-play="canPlay && !activeRecording"
       :playhead-seconds="playheadSeconds"
       :tempo-map="mixerStore.graph.tempoMap"
-      @open-preferences="openPreferences"
+      @open-system-settings="openSystemSettings"
       @toggle-recording="toggleRecording"
       @toggle-playback="transportStore.toggle"
       @go-to-start="transportStore.goToStart"

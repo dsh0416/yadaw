@@ -31,7 +31,7 @@ function createProject(): void {
         <h2>Start with a clean session.</h2>
         <p>
           48 kHz · 4/4 · Tempo Track starts at 120 BPM. Name and format can be changed later in
-          Project Settings.
+          Project settings.
         </p>
         <button :disabled="busy" type="button" @click="createProject">
           {{ busy ? "Creating…" : "Create project" }}

@@ -226,7 +226,7 @@ export const useAudioRuntimeStore = defineStore("audio-runtime", () => {
         id: "engine-error",
         severity: "critical",
         title: "Audio engine stopped unexpectedly",
-        message: "Open Preferences to select a working device configuration."
+        message: "Open system settings to select a working device configuration."
       })
     }
 

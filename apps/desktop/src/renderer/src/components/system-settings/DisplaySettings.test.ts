@@ -1,9 +1,9 @@
 import { flushPromises, mount } from "@vue/test-utils"
 import { createPinia } from "pinia"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import DisplayPreferences from "./DisplayPreferences.vue"
+import DisplaySettings from "./DisplaySettings.vue"
 
-describe("DisplayPreferences", () => {
+describe("DisplaySettings", () => {
   beforeEach(() => {
     window.yadaw.getApplicationSettings = vi.fn().mockResolvedValue({
       swapDirectory: "C:/swap",
@@ -24,7 +24,7 @@ describe("DisplayPreferences", () => {
   })
 
   it("persists a theme selected by the user", async () => {
-    const wrapper = mount(DisplayPreferences, {
+    const wrapper = mount(DisplaySettings, {
       global: { plugins: [createPinia()] }
     })
     await flushPromises()

@@ -32,6 +32,26 @@ test("records into a Large Object and reopens the PGlite project archive", async
     page.on("pageerror", (error) => console.log(`renderer error: ${error.message}`))
     await page.waitForLoadState("domcontentloaded")
     console.log(`renderer url: ${page.url()}`)
+
+    async function expectSettingsLayoutToFit(): Promise<void> {
+      for (const viewport of [
+        { width: 1440, height: 900 },
+        { width: 1120, height: 700 },
+        { width: 960, height: 640 }
+      ]) {
+        await page.setViewportSize(viewport)
+        const overflows = await page
+          .getByRole("main")
+          .evaluate(
+            (main) =>
+              main.scrollWidth > main.clientWidth ||
+              document.documentElement.scrollWidth > document.documentElement.clientWidth
+          )
+        expect(overflows).toBe(false)
+      }
+      await page.setViewportSize({ width: 1440, height: 900 })
+    }
+
     await expect(page.getByRole("heading", { name: /Build a session/ })).toBeVisible()
     await page.getByRole("button", { name: "Create project" }).click()
     await expect(page.getByText("Untitled project", { exact: false }).first()).toBeVisible()
@@ -48,7 +68,8 @@ test("records into a Large Object and reopens the PGlite project archive", async
     expect(selectionPolicy).toEqual({ shell: "none", input: "text" })
 
     await page.getByRole("button", { name: "Project settings" }).click()
-    await expect(page.getByRole("heading", { name: "Project Settings" })).toBeVisible()
+    await expect(page.getByRole("heading", { name: "Project settings" })).toBeVisible()
+    await expectSettingsLayoutToFit()
     await page.getByLabel("Project name").fill("Lifecycle")
     await page.getByLabel("Sample rate").selectOption("44100")
     await page.getByLabel("Waveform channels").selectOption("aggregate")
@@ -165,9 +186,16 @@ test("records into a Large Object and reopens the PGlite project archive", async
     await playButton.click()
     await expect(page.getByRole("button", { name: "Pause" })).toBeVisible()
 
-    await page.getByRole("button", { name: "Open preferences" }).click()
-    await expect(page.getByRole("heading", { name: "Preferences" })).toBeVisible()
-    await page.getByRole("button", { name: /Engine/ }).click()
+    await page.getByRole("button", { name: "System settings" }).click()
+    await expect(page.getByRole("heading", { name: "System settings" })).toBeVisible()
+    await page.getByRole("button", { name: "Display", exact: true }).click()
+    await page.getByRole("radio", { name: /Light/ }).click()
+    await expect.poll(() => page.locator("html").getAttribute("data-theme")).toBe("light")
+    await expectSettingsLayoutToFit()
+    await page.getByRole("radio", { name: /Dark/ }).click()
+    await expect.poll(() => page.locator("html").getAttribute("data-theme")).toBe("dark")
+    await expectSettingsLayoutToFit()
+    await page.getByRole("button", { name: "System", exact: true }).click()
     await expect(page.getByRole("heading", { name: "Runtime scheduling" })).toBeVisible()
     await page.getByLabel("Worker thread mode").selectOption("manual")
     await page.getByLabel("Worker threads").fill("1")
@@ -178,7 +206,7 @@ test("records into a Large Object and reopens the PGlite project archive", async
         return snapshot.audioIpc?.runtime.resolved.workerThreads
       })
       .toBe(1)
-    await page.getByRole("button", { name: "Back to session" }).click()
+    await page.getByRole("button", { name: "Back to studio" }).click()
     await expect(page.getByText("Lifecycle", { exact: false }).first()).toBeVisible()
     await expect(page.getByRole("button", { name: "Pause" })).toBeVisible()
     const mixerAfterRuntimeRestart = await page.evaluate(() => window.yadaw.loadMixerGraph())

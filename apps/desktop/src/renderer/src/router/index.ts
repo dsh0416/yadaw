@@ -14,14 +14,14 @@ export const router = createRouter({
       component: () => import("../views/StudioView.vue")
     },
     {
-      path: "/project-settings",
+      path: "/settings/project",
       name: "project-settings",
       component: () => import("../views/ProjectSettingsView.vue")
     },
     {
-      path: "/preferences",
-      name: "preferences",
-      component: () => import("../views/PreferencesView.vue")
+      path: "/settings/system",
+      name: "system-settings",
+      component: () => import("../views/SystemSettingsView.vue")
     }
   ]
 })
