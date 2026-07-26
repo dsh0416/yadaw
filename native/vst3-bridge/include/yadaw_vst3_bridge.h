@@ -89,6 +89,12 @@ YADAW_VST3_EXPORT int32_t yadaw_vst3_parameter_info(
 
 YADAW_VST3_EXPORT uint32_t yadaw_vst3_latency_samples(const YadawVst3Instance* instance);
 YADAW_VST3_EXPORT uint32_t yadaw_vst3_tail_samples(const YadawVst3Instance* instance);
+YADAW_VST3_EXPORT int32_t yadaw_vst3_consume_latency_changed(YadawVst3Instance* instance);
+YADAW_VST3_EXPORT int32_t yadaw_vst3_consume_latency_changed(YadawVst3Instance* instance);
+YADAW_VST3_EXPORT int32_t yadaw_vst3_open_editor(YadawVst3Instance* instance);
+YADAW_VST3_EXPORT void yadaw_vst3_close_editor(YadawVst3Instance* instance);
+YADAW_VST3_EXPORT int32_t yadaw_vst3_editor_open(const YadawVst3Instance* instance);
+YADAW_VST3_EXPORT void yadaw_vst3_pump_editor_events(void);
 
 YADAW_VST3_EXPORT size_t yadaw_vst3_component_state_size(YadawVst3Instance* instance);
 YADAW_VST3_EXPORT size_t yadaw_vst3_controller_state_size(YadawVst3Instance* instance);

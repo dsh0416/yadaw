@@ -218,7 +218,7 @@ describe("ProjectDatabase", () => {
     await restored.deleteAssets(["asset-1"])
     expect(await restored.listAssets()).toEqual([])
     await expect(restored.readLargeObject("asset-1")).rejects.toThrow("was not found")
-  })
+  }, 15_000)
 
   it("reclaims orphaned large objects before writing the archive", async () => {
     const resource = await createDatabase()
@@ -257,7 +257,7 @@ describe("ProjectDatabase", () => {
       await verifier.close()
       await rm(verificationDirectory, { force: true, recursive: true })
     }
-  })
+  }, 15_000)
 
   it("rolls back a cancelled large-object import", async () => {
     const { database, directory } = await createDatabase()

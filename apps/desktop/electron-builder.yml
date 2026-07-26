@@ -22,7 +22,7 @@ win:
   extraResources:
     - from: ../../target/release/yadaw-audio-host.exe
       to: yadaw-audio-host.exe
-    - from: ../../target/vst3-bridge-build/bin/yadaw-vst3-probe.exe
+    - from: ../../target/release/yadaw-vst3-probe.exe
       to: yadaw-vst3-probe.exe
     - from: ../../target/vst3-bridge-build/bin/yadaw-vst3-bridge.dll
       to: yadaw-vst3-bridge.dll
@@ -37,7 +37,7 @@ mac:
   extraResources:
     - from: ../../target/release/yadaw-audio-host
       to: yadaw-audio-host
-    - from: ../../target/vst3-bridge-build/bin/yadaw-vst3-probe
+    - from: ../../target/release/yadaw-vst3-probe
       to: yadaw-vst3-probe
     - from: ../../target/vst3-bridge-build/bin/libyadaw-vst3-bridge.dylib
       to: libyadaw-vst3-bridge.dylib
@@ -49,7 +49,7 @@ linux:
   extraResources:
     - from: ../../target/release/yadaw-audio-host
       to: yadaw-audio-host
-    - from: ../../target/vst3-bridge-build/bin/yadaw-vst3-probe
+    - from: ../../target/release/yadaw-vst3-probe
       to: yadaw-vst3-probe
     - from: ../../target/vst3-bridge-build/bin/libyadaw-vst3-bridge.so
       to: libyadaw-vst3-bridge.so

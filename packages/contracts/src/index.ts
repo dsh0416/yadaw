@@ -554,6 +554,9 @@ export interface PluginRuntimeStatus {
   instanceId: string
   state: PluginRuntimeState
   editorOpen: boolean
+  editorKind?: "native" | "generic"
+  recoveryState?: "none" | "recovered-bypassed"
+  failureStage?: "initialize" | "restore" | "process" | "editor" | "state-save" | null
   latencySamples: number
   tailSamples: number | null
   error: string | null

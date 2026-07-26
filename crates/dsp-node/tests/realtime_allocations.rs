@@ -6,10 +6,11 @@ use std::{
     hint::black_box,
 };
 
-use yadaw_dsp_core::mixer::{ChannelKind, ChannelSpec, MixerGraph};
-use yadaw_dsp_node::bench_support::{
-    ParameterQueueHarness, RenderHarness, RenderScenario, TapHarness,
+use yadaw_audio_host::engine::bench_support::{
+    ParameterQueueHarness, RenderHarness, RenderScenario,
 };
+use yadaw_dsp_core::mixer::{ChannelKind, ChannelSpec, MixerGraph};
+use yadaw_dsp_node::bench_support::TapHarness;
 
 thread_local! {
     static TRACKING: Cell<bool> = const { Cell::new(false) };

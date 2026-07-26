@@ -7,8 +7,41 @@ const appDirectory = resolve(import.meta.dirname, "..")
 let electronProcess = null
 let rendererServer = null
 let shuttingDown = false
+let restartInProgress = false
 let restartTimer = null
+let shutdownPromise = null
 const watchers = []
+
+function waitForExit(child, timeoutMs = 5_000) {
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve()
+  return new Promise((resolveExit) => {
+    const timer = setTimeout(resolveExit, timeoutMs)
+    timer.unref()
+    child.once("exit", () => {
+      clearTimeout(timer)
+      resolveExit()
+    })
+  })
+}
+
+async function terminateElectron(child) {
+  if (!child || child.exitCode !== null || child.signalCode !== null) return
+  const exited = waitForExit(child)
+  if (process.platform === "win32") {
+    await new Promise((resolveKill) => {
+      const killer = spawn(
+        "taskkill",
+        ["/pid", String(child.pid), "/t", "/f"],
+        { stdio: "ignore", windowsHide: true }
+      )
+      killer.once("error", resolveKill)
+      killer.once("exit", resolveKill)
+    })
+  } else {
+    child.kill("SIGTERM")
+  }
+  await exited
+}
 
 async function createBuildWatcher(configName, onRebuild) {
   const watcher = await build({
@@ -47,14 +80,16 @@ function launchElectron() {
   const rendererUrl = rendererServer?.resolvedUrls?.local[0]
   if (!rendererUrl) throw new Error("Vite renderer URL is unavailable")
 
-  electronProcess = spawn(electronPath, [appDirectory], {
+  const launchedProcess = spawn(electronPath, [appDirectory], {
     env: { ...process.env, YADAW_RENDERER_URL: rendererUrl },
-    stdio: "inherit"
+    stdio: "inherit",
+    windowsHide: true
   })
+  electronProcess = launchedProcess
 
-  electronProcess.once("exit", () => {
-    electronProcess = null
-    if (!shuttingDown && restartTimer === null) {
+  launchedProcess.once("exit", () => {
+    if (electronProcess === launchedProcess) electronProcess = null
+    if (!shuttingDown && !restartInProgress && restartTimer === null) {
       void shutdown(0)
     }
   })
@@ -62,26 +97,33 @@ function launchElectron() {
 
 function scheduleElectronRestart() {
   if (restartTimer !== null) clearTimeout(restartTimer)
-  restartTimer = setTimeout(() => {
+  restartTimer = setTimeout(async () => {
     restartTimer = null
     if (!electronProcess) {
       launchElectron()
       return
     }
 
-    electronProcess.once("exit", launchElectron)
-    electronProcess.kill()
+    restartInProgress = true
+    const child = electronProcess
+    await terminateElectron(child)
+    if (!shuttingDown) launchElectron()
+    restartInProgress = false
   }, 120)
 }
 
-async function shutdown(exitCode) {
-  if (shuttingDown) return
+function shutdown(exitCode) {
+  if (shutdownPromise) return shutdownPromise
   shuttingDown = true
-  if (restartTimer !== null) clearTimeout(restartTimer)
-  electronProcess?.kill()
-  await Promise.allSettled(watchers.map((watcher) => watcher.close()))
-  await rendererServer?.close()
-  process.exit(exitCode)
+  shutdownPromise = (async () => {
+    if (restartTimer !== null) clearTimeout(restartTimer)
+    const child = electronProcess
+    await terminateElectron(child)
+    await Promise.allSettled(watchers.map((watcher) => watcher.close()))
+    await rendererServer?.close()
+    process.exit(exitCode)
+  })()
+  return shutdownPromise
 }
 
 process.once("SIGINT", () => void shutdown(0))
@@ -105,4 +147,3 @@ try {
   console.error(error)
   await shutdown(1)
 }
-

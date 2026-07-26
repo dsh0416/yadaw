@@ -1,0 +1,199 @@
+use std::{
+    fs::OpenOptions,
+    io,
+    path::Path,
+    ptr,
+    sync::{
+        OnceLock,
+        atomic::{AtomicU64, Ordering},
+    },
+};
+
+const MARKER_BYTES: u64 = 40;
+const MAGIC: u64 = 0x5941_4441_5756_5354;
+const CHECKSUM_SALT: u64 = 0x4352_4153_484D_4152;
+
+pub const STAGE_CLEAN: u64 = 0;
+pub const STAGE_PROCESS: u64 = 3;
+
+struct CrashMarker {
+    pointer: *mut u8,
+    #[cfg(windows)]
+    mapping: *mut std::ffi::c_void,
+    #[cfg(unix)]
+    length: usize,
+}
+
+unsafe impl Send for CrashMarker {}
+unsafe impl Sync for CrashMarker {}
+
+impl CrashMarker {
+    fn atomic(&self, offset: usize) -> &AtomicU64 {
+        // SAFETY: The mapping is page-aligned, the offsets are u64-aligned and remain mapped
+        // for the process lifetime.
+        unsafe { AtomicU64::from_ptr(self.pointer.add(offset).cast::<u64>()) }
+    }
+
+    fn write(&self, generation: u64, plugin_index: u64, stage: u64) {
+        self.atomic(0).store(MAGIC, Ordering::Relaxed);
+        self.atomic(8).store(generation, Ordering::Relaxed);
+        self.atomic(16).store(plugin_index, Ordering::Relaxed);
+        self.atomic(24).store(stage, Ordering::Release);
+        self.atomic(32).store(
+            MAGIC ^ generation ^ plugin_index ^ stage ^ CHECKSUM_SALT,
+            Ordering::Release,
+        );
+    }
+}
+
+#[cfg(windows)]
+impl Drop for CrashMarker {
+    fn drop(&mut self) {
+        unsafe {
+            UnmapViewOfFile(self.pointer.cast());
+            CloseHandle(self.mapping);
+        }
+    }
+}
+
+#[cfg(unix)]
+impl Drop for CrashMarker {
+    fn drop(&mut self) {
+        unsafe {
+            munmap(self.pointer.cast(), self.length);
+        }
+    }
+}
+
+static MARKER: OnceLock<CrashMarker> = OnceLock::new();
+
+pub fn initialize(path: &Path) -> io::Result<()> {
+    let file = OpenOptions::new()
+        .create(true)
+        .truncate(true)
+        .read(true)
+        .write(true)
+        .open(path)?;
+    file.set_len(MARKER_BYTES)?;
+    let marker = map_file(&file)?;
+    marker.write(0, u64::MAX, STAGE_CLEAN);
+    MARKER.set(marker).map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            "crash marker already initialized",
+        )
+    })
+}
+
+pub fn mark(generation: u64, plugin_index: usize, stage: u64) {
+    if let Some(marker) = MARKER.get() {
+        marker.write(generation, plugin_index as u64, stage);
+    }
+}
+
+pub fn clean(generation: u64) {
+    if let Some(marker) = MARKER.get() {
+        marker.write(generation, u64::MAX, STAGE_CLEAN);
+    }
+}
+
+#[cfg(windows)]
+fn map_file(file: &std::fs::File) -> io::Result<CrashMarker> {
+    use std::os::windows::io::AsRawHandle;
+
+    let mapping = unsafe {
+        CreateFileMappingW(
+            file.as_raw_handle(),
+            ptr::null(),
+            PAGE_READWRITE,
+            0,
+            MARKER_BYTES as u32,
+            ptr::null(),
+        )
+    };
+    if mapping.is_null() {
+        return Err(io::Error::last_os_error());
+    }
+    let pointer =
+        unsafe { MapViewOfFile(mapping, FILE_MAP_ALL_ACCESS, 0, 0, MARKER_BYTES as usize) };
+    if pointer.is_null() {
+        unsafe {
+            CloseHandle(mapping);
+        }
+        return Err(io::Error::last_os_error());
+    }
+    Ok(CrashMarker {
+        pointer: pointer.cast(),
+        mapping,
+    })
+}
+
+#[cfg(windows)]
+const PAGE_READWRITE: u32 = 0x04;
+#[cfg(windows)]
+const FILE_MAP_ALL_ACCESS: u32 = 0x000F_001F;
+
+#[cfg(windows)]
+#[link(name = "kernel32")]
+unsafe extern "system" {
+    fn CreateFileMappingW(
+        file: *mut std::ffi::c_void,
+        attributes: *const std::ffi::c_void,
+        protect: u32,
+        maximum_size_high: u32,
+        maximum_size_low: u32,
+        name: *const u16,
+    ) -> *mut std::ffi::c_void;
+    fn MapViewOfFile(
+        mapping: *mut std::ffi::c_void,
+        access: u32,
+        offset_high: u32,
+        offset_low: u32,
+        bytes: usize,
+    ) -> *mut std::ffi::c_void;
+    fn UnmapViewOfFile(address: *const std::ffi::c_void) -> i32;
+    fn CloseHandle(handle: *mut std::ffi::c_void) -> i32;
+}
+
+#[cfg(unix)]
+fn map_file(file: &std::fs::File) -> io::Result<CrashMarker> {
+    use std::os::fd::AsRawFd;
+
+    let pointer = unsafe {
+        mmap(
+            ptr::null_mut(),
+            MARKER_BYTES as usize,
+            PROT_READ | PROT_WRITE,
+            MAP_SHARED,
+            file.as_raw_fd(),
+            0,
+        )
+    };
+    if pointer as isize == -1 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(CrashMarker {
+        pointer: pointer.cast(),
+        length: MARKER_BYTES as usize,
+    })
+}
+
+#[cfg(unix)]
+const PROT_READ: i32 = 0x1;
+#[cfg(unix)]
+const PROT_WRITE: i32 = 0x2;
+#[cfg(unix)]
+const MAP_SHARED: i32 = 0x01;
+
+#[cfg(unix)]
+unsafe extern "C" {
+    fn mmap(
+        address: *mut std::ffi::c_void,
+        length: usize,
+        protection: i32,
+        flags: i32,
+        file: i32,
+        offset: isize,
+    ) -> *mut std::ffi::c_void;
+    fn munmap(address: *mut std::ffi::c_void, length: usize) -> i32;
+}

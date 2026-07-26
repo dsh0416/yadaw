@@ -36,7 +36,13 @@ export default defineConfig({
     minify: false,
     outDir: resolve(import.meta.dirname, "out/main"),
     rolldownOptions: {
-      external: ["electron", "@electric-sql/pglite", "@yadaw/dsp-node", ...nodeBuiltins]
+      external: [
+        "electron",
+        "@electric-sql/pglite",
+        "@yadaw/audio-host-client",
+        "@yadaw/dsp-node",
+        ...nodeBuiltins
+      ]
     },
     sourcemap: true,
     target: "node22"

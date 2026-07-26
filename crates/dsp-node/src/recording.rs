@@ -1,6 +1,10 @@
 use std::{
     fs::{File, OpenOptions},
-    io::{BufWriter, Read, Seek, SeekFrom, Write},
+    io::{Read, Seek, SeekFrom, Write},
+};
+#[cfg(any(test, feature = "bench-internals"))]
+use std::{
+    io::BufWriter,
     sync::{
         Arc, Mutex,
         atomic::{AtomicBool, AtomicU64, Ordering},
@@ -10,9 +14,12 @@ use std::{
     time::Duration,
 };
 
-use bwavfile::{AudioFrameWriter, Bext, WAVE_TAG_FLOAT, WaveFmt, WaveReader, WaveWriter};
+#[cfg(any(test, feature = "bench-internals"))]
+use bwavfile::AudioFrameWriter;
+use bwavfile::{Bext, WAVE_TAG_FLOAT, WaveFmt, WaveReader, WaveWriter};
 use napi::{Error, Result, Status, Task, bindgen_prelude::Buffer};
 use napi_derive::napi;
+#[cfg(any(test, feature = "bench-internals"))]
 use ringbuf::{
     HeapCons, HeapProd, HeapRb,
     traits::{Consumer, Observer, Producer, Split},
@@ -20,11 +27,17 @@ use ringbuf::{
 use rubato::{Fft, FixedSync, Resampler, audioadapter_buffers::direct::InterleavedSlice};
 use sha2::{Digest, Sha256};
 
+#[cfg(any(test, feature = "bench-internals"))]
+#[allow(dead_code)]
 pub type StereoFrame = [f32; 2];
+#[cfg(any(test, feature = "bench-internals"))]
 pub const MAX_INPUT_CHANNELS: usize = 32;
+#[cfg(any(test, feature = "bench-internals"))]
 pub type InputFrame = [f32; MAX_INPUT_CHANNELS];
 
+#[cfg(any(test, feature = "bench-internals"))]
 const RECORDING_RING_SECONDS: usize = 8;
+#[cfg(any(test, feature = "bench-internals"))]
 const WRITER_BLOCK_FRAMES: usize = 2_048;
 const WAVEFORM_BASE_FRAMES: usize = 64;
 const WAVEFORM_LEVEL_FACTOR: usize = 4;
@@ -37,6 +50,7 @@ pub struct NativeWaveformLevel {
 }
 
 #[napi(object)]
+#[cfg(any(test, feature = "bench-internals"))]
 pub struct NativeWaveformSnapshot {
     pub sample_rate: u32,
     pub channels: u32,
@@ -180,6 +194,7 @@ fn build_waveform_levels(samples: &[f32], channels: usize) -> Vec<NativeWaveform
 }
 
 #[derive(Default)]
+#[cfg(any(test, feature = "bench-internals"))]
 struct LiveWaveform {
     sample_rate: u32,
     channels: usize,
@@ -189,6 +204,7 @@ struct LiveWaveform {
     pending_frames: usize,
 }
 
+#[cfg(any(test, feature = "bench-internals"))]
 impl LiveWaveform {
     fn reset_pending(&mut self) {
         self.pending_peaks.clear();
@@ -321,6 +337,7 @@ fn broadcast_metadata(
     }
 }
 
+#[cfg(any(test, feature = "bench-internals"))]
 pub struct RecordingTap {
     producer: HeapProd<InputFrame>,
     active: Arc<AtomicBool>,
@@ -328,6 +345,7 @@ pub struct RecordingTap {
     channel_count: usize,
 }
 
+#[cfg(any(test, feature = "bench-internals"))]
 impl RecordingTap {
     pub fn push(&mut self, channels: &[f32]) {
         if !self.active.load(Ordering::Relaxed) {
@@ -345,6 +363,7 @@ impl RecordingTap {
     }
 }
 
+#[cfg(any(test, feature = "bench-internals"))]
 enum WriterCommand {
     Start {
         config: NativeRecordingStartConfig,
@@ -356,12 +375,14 @@ enum WriterCommand {
     Shutdown,
 }
 
+#[cfg(any(test, feature = "bench-internals"))]
 struct ActiveWriter {
     path: String,
     frames: u64,
     writer: AudioFrameWriter<BufWriter<File>>,
 }
 
+#[cfg(any(test, feature = "bench-internals"))]
 fn write_available(
     consumer: &mut HeapCons<InputFrame>,
     active: &mut ActiveWriter,
@@ -391,6 +412,7 @@ fn write_available(
     Ok(())
 }
 
+#[cfg(any(test, feature = "bench-internals"))]
 fn writer_thread(
     mut consumer: HeapCons<InputFrame>,
     receiver: Receiver<WriterCommand>,
@@ -512,13 +534,16 @@ fn writer_thread(
     }
 }
 
+#[cfg(any(test, feature = "bench-internals"))]
 pub struct RecorderController {
     sender: Sender<WriterCommand>,
     active: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
+    #[allow(dead_code)]
     waveform: Arc<Mutex<LiveWaveform>>,
 }
 
+#[cfg(any(test, feature = "bench-internals"))]
 impl RecorderController {
     pub fn new(sample_rate: u32, channel_count: usize) -> (Self, RecordingTap) {
         let channel_count = channel_count.clamp(1, MAX_INPUT_CHANNELS);
@@ -585,6 +610,7 @@ impl RecorderController {
             .map_err(|error| recording_error("failed to stop recording", error))
     }
 
+    #[allow(dead_code)]
     pub fn waveform_snapshot(
         &self,
         start_frame: i64,
@@ -606,6 +632,7 @@ impl RecorderController {
     }
 }
 
+#[cfg(any(test, feature = "bench-internals"))]
 impl Drop for RecorderController {
     fn drop(&mut self) {
         self.active.store(false, Ordering::Release);

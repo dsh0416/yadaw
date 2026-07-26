@@ -6,9 +6,17 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
+bwavfile.workspace = true
+futures-util.workspace = true
+ipc-channel.workspace = true
 libloading.workspace = true
+ringbuf.workspace = true
+rmp-serde.workspace = true
+tokio.workspace = true
+winit.workspace = true
 yadaw-dsp-core.workspace = true
 yadaw-dsp-runtime.workspace = true
+yadaw-vst3-host.workspace = true
 
 [target.'cfg(target_os = "windows")'.dependencies]
 cpal = { workspace = true, features = ["asio"] }
@@ -18,3 +26,7 @@ cpal.workspace = true
 
 [lints.rust]
 unsafe_code = "allow"
+
+[features]
+default = []
+bench-internals = []

@@ -287,11 +287,69 @@ async function applyProjectCommand(
       return
     }
     case "move-plugin":
-      await tx.update(pluginInstances).set({
-        channelId: command.channelId,
-        role: command.role,
-        slotOrder: command.slotOrder
-      }).where(eq(pluginInstances.id, command.pluginId))
+      {
+        const rows = await tx.select({
+          id: pluginInstances.id,
+          channelId: pluginInstances.channelId,
+          role: pluginInstances.role,
+          slotOrder: pluginInstances.slotOrder
+        }).from(pluginInstances)
+        const moving = rows.find((plugin) => plugin.id === command.pluginId)
+        if (!moving) throw new Error(`Plugin instance '${command.pluginId}' was not found`)
+        const source = rows
+          .filter((plugin) =>
+            plugin.id !== moving.id &&
+            plugin.channelId === moving.channelId &&
+            plugin.role === moving.role
+          )
+          .sort((left, right) => left.slotOrder - right.slotOrder)
+        const destination = rows
+          .filter((plugin) =>
+            plugin.id !== moving.id &&
+            plugin.channelId === command.channelId &&
+            plugin.role === command.role
+          )
+          .sort((left, right) => left.slotOrder - right.slotOrder)
+        if (command.role === "instrument" && destination.length > 0) {
+          throw new Error("Replace the assigned instrument instead of moving into an occupied slot")
+        }
+        const insertionIndex = command.role === "instrument"
+          ? 0
+          : Math.max(0, Math.min(command.slotOrder, destination.length))
+        destination.splice(insertionIndex, 0, {
+          ...moving,
+          channelId: command.channelId,
+          role: command.role,
+          slotOrder: insertionIndex
+        })
+
+        // Vacate every affected unique slot before assigning compact final positions.
+        const affected = new Set([
+          moving.id,
+          ...source.map((plugin) => plugin.id),
+          ...destination.map((plugin) => plugin.id)
+        ])
+        let temporarySlot = 1_000_000
+        for (const id of affected) {
+          await tx.update(pluginInstances)
+            .set({ slotOrder: temporarySlot++ })
+            .where(eq(pluginInstances.id, id))
+        }
+        for (const [index, plugin] of source.entries()) {
+          await tx.update(pluginInstances).set({
+            channelId: moving.channelId,
+            role: moving.role,
+            slotOrder: moving.role === "instrument" ? 0 : index
+          }).where(eq(pluginInstances.id, plugin.id))
+        }
+        for (const [index, plugin] of destination.entries()) {
+          await tx.update(pluginInstances).set({
+            channelId: command.channelId,
+            role: command.role,
+            slotOrder: command.role === "instrument" ? 0 : index
+          }).where(eq(pluginInstances.id, plugin.id))
+        }
+      }
       return
     case "replace-plugin":
       await tx.delete(pluginInstances).where(eq(pluginInstances.id, command.pluginId))

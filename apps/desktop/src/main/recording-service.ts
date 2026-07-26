@@ -10,14 +10,11 @@ import type {
   WaveformWindowRequest
 } from "@yadaw/contracts"
 import {
-  audioEngineSnapshot,
   finalizeRecording,
   repairRecordingHeader,
-  startRecording as startNativeRecording,
-  stopRecording as stopNativeRecording,
   writeDeterministicTestRecording
 } from "@yadaw/dsp-node"
-import { recordingWaveformSnapshot as nativeRecordingWaveformSnapshot } from "@yadaw/dsp-node"
+import type { AudioHostService } from "./audio-host-service"
 import type { ApplicationSettingsStore } from "./application-settings"
 import type { OperationService } from "./operation-service"
 import type { ProjectService } from "./project-service"
@@ -60,7 +57,8 @@ export class RecordingService {
     private readonly settings: ApplicationSettingsStore,
     private readonly projects: ProjectService,
     private readonly operations: OperationService,
-    private readonly mixer: MixerService
+    private readonly mixer: MixerService,
+    private readonly audioHost: AudioHostService | null = null
   ) {}
 
   get current(): RecordingSession | null {
@@ -89,8 +87,14 @@ export class RecordingService {
     const project = this.projects.current
     if (!project) throw new Error("Open a project before recording")
     const deterministicTestCapture = process.env.YADAW_TEST_CAPTURE_SOURCE === "1"
-    const runtime = audioEngineSnapshot()
-    if (!deterministicTestCapture && (runtime.state !== "running" || !runtime.inputSampleRate)) {
+    const runtime = deterministicTestCapture
+      ? {
+          state: "running" as const,
+          inputSampleRate: 48_000
+        }
+      : await this.audioHost?.audioEngineSnapshot()
+    if (!runtime || (!deterministicTestCapture &&
+        (runtime.state !== "running" || !runtime.inputSampleRate))) {
       throw new Error("Start the audio engine before recording")
     }
     const applicationSettings = await this.settings.get()
@@ -105,7 +109,7 @@ export class RecordingService {
     await mkdir(applicationSettings.swapDirectory, { recursive: true })
     const id = randomUUID()
     const startedAt = Date.now()
-    const transportBeforeRecording = this.mixer.transportSnapshot()
+    const transportBeforeRecording = await this.mixer.transportSnapshot()
     const startFrame = transportBeforeRecording.positionFrames
     const partialPath = join(applicationSettings.swapDirectory, `${id}.partial.bwf`)
     const sidecarPath = join(applicationSettings.swapDirectory, `${id}.recording.json`)
@@ -142,7 +146,7 @@ export class RecordingService {
     await this.writeSidecar(sidecar)
     const utc = utcFields(new Date(startedAt))
     try {
-      if (!deterministicTestCapture) startNativeRecording({
+      if (!deterministicTestCapture) await this.audioHost!.startRecording({
         path: partialPath,
         assetId: id,
         originator: "YADAW",
@@ -152,7 +156,7 @@ export class RecordingService {
           startFrame * sidecar.sampleRate / project.configuration.sampleRate
         )
       })
-      this.mixer.transport({ type: "record" })
+      await this.mixer.transport({ type: "record" })
     } catch (error) {
       await rm(sidecarPath, { force: true })
       throw error
@@ -198,9 +202,9 @@ export class RecordingService {
               originationTime: startedUtc.time,
               timeReference: recording.startFrame
             }, recording.sampleRate, deterministicFrameCount)
-          : stopNativeRecording()
+          : await this.audioHost!.stopRecording()
       } finally {
-        this.mixer.transport({
+        await this.mixer.transport({
           type: recording.resumePlaybackAfterRecording ? "play" : "pause"
         })
       }
@@ -222,7 +226,7 @@ export class RecordingService {
     }
   }
 
-  waveformSnapshot(request: WaveformWindowRequest): WaveformPeakWindow {
+  async waveformSnapshot(request: WaveformWindowRequest): Promise<WaveformPeakWindow> {
     const recording = this.active
     if (!recording || recording.id !== request.id) {
       if (this.lastWaveformSnapshot?.id === request.id) {
@@ -272,7 +276,8 @@ export class RecordingService {
       this.lastWaveformSnapshot = result
       return result
     }
-    const snapshot = nativeRecordingWaveformSnapshot(
+    if (!this.audioHost) throw new Error("Audio host is not running")
+    const snapshot = await this.audioHost.recordingWaveform(
       request.startFrame,
       request.endFrame,
       request.maxBuckets

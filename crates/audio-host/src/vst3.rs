@@ -35,11 +35,43 @@ type SamplesFn = unsafe extern "C" fn(*const c_void) -> u32;
 type StateSizeFn = unsafe extern "C" fn(*mut c_void) -> usize;
 type StateCopyFn = unsafe extern "C" fn(*mut c_void, *mut u8, usize) -> usize;
 type RestoreStateFn = unsafe extern "C" fn(*mut c_void, *const u8, usize, *const u8, usize) -> i32;
+type OpenEditorFn = unsafe extern "C" fn(*mut c_void) -> i32;
+type CloseEditorFn = unsafe extern "C" fn(*mut c_void);
+type EditorOpenFn = unsafe extern "C" fn(*const c_void) -> i32;
+type ConsumeChangedFn = unsafe extern "C" fn(*mut c_void) -> i32;
+type PumpEditorEventsFn = unsafe extern "C" fn();
+type ProcessStereoFn = unsafe extern "C" fn(
+    *mut c_void,
+    *const f32,
+    *const f32,
+    *mut f32,
+    *mut f32,
+    u32,
+    *const ProcessContext,
+) -> i32;
+type NoteFn = unsafe extern "C" fn(*mut c_void, i16, i16, i16, f32, i32, i32) -> i32;
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct ProcessContext {
+    pub project_time_samples: i64,
+    pub continuous_time_samples: i64,
+    pub project_time_quarters: f64,
+    pub bar_position_quarters: f64,
+    pub tempo: f64,
+    pub time_signature_numerator: i32,
+    pub time_signature_denominator: i32,
+    pub playing: u8,
+    pub recording: u8,
+}
 
 #[derive(Clone, Copy)]
 struct Functions {
     create: CreateFn,
     destroy: DestroyFn,
+    process_stereo: ProcessStereoFn,
+    note_on: NoteFn,
+    note_off: NoteFn,
     set_parameter: SetParameterFn,
     flush_parameters: FlushParametersFn,
     parameter_count: ParameterCountFn,
@@ -51,6 +83,74 @@ struct Functions {
     copy_component_state: StateCopyFn,
     copy_controller_state: StateCopyFn,
     restore_state: RestoreStateFn,
+    open_editor: OpenEditorFn,
+    close_editor: CloseEditorFn,
+    editor_open: EditorOpenFn,
+    consume_latency_changed: ConsumeChangedFn,
+    pump_editor_events: PumpEditorEventsFn,
+}
+
+#[derive(Clone, Copy)]
+pub struct Vst3ProcessorHandle {
+    pointer: NonNull<c_void>,
+    functions: Functions,
+}
+
+// The bridge instance is created on the helper control thread and processed only by the
+// helper audio thread. Its controller entry points are required by VST3 to be callable from
+// the host UI/control thread.
+unsafe impl Send for Vst3ProcessorHandle {}
+unsafe impl Sync for Vst3ProcessorHandle {}
+
+impl Vst3ProcessorHandle {
+    pub fn process_frame(&self, input: [f32; 2], context: &ProcessContext) -> Option<[f32; 2]> {
+        let mut left = 0.0_f32;
+        let mut right = 0.0_f32;
+        // SAFETY: The instance remains owned by Vst3Runtime for the helper lifetime, and all
+        // buffers contain exactly the single frame advertised to the bridge.
+        let processed = unsafe {
+            (self.functions.process_stereo)(
+                self.pointer.as_ptr(),
+                &input[0],
+                &input[1],
+                &mut left,
+                &mut right,
+                1,
+                context,
+            )
+        };
+        (processed != 0).then_some([left, right])
+    }
+
+    pub fn note_on(&self, channel: u8, key: u8, velocity: u8, note_id: i32) -> bool {
+        // SAFETY: The bridge copies the event into its preallocated input event list.
+        unsafe {
+            (self.functions.note_on)(
+                self.pointer.as_ptr(),
+                0,
+                i16::from(channel),
+                i16::from(key),
+                f32::from(velocity) / 127.0,
+                note_id,
+                0,
+            ) != 0
+        }
+    }
+
+    pub fn note_off(&self, channel: u8, key: u8, velocity: u8, note_id: i32) -> bool {
+        // SAFETY: The bridge copies the event into its preallocated input event list.
+        unsafe {
+            (self.functions.note_off)(
+                self.pointer.as_ptr(),
+                0,
+                i16::from(channel),
+                i16::from(key),
+                f32::from(velocity) / 127.0,
+                note_id,
+                0,
+            ) != 0
+        }
+    }
 }
 
 pub struct Vst3Runtime {
@@ -83,6 +183,15 @@ impl Vst3Runtime {
                     .map_err(|error| error.to_string())?,
                 destroy: *library
                     .get(b"yadaw_vst3_destroy\0")
+                    .map_err(|error| error.to_string())?,
+                process_stereo: *library
+                    .get(b"yadaw_vst3_process_stereo\0")
+                    .map_err(|error| error.to_string())?,
+                note_on: *library
+                    .get(b"yadaw_vst3_note_on\0")
+                    .map_err(|error| error.to_string())?,
+                note_off: *library
+                    .get(b"yadaw_vst3_note_off\0")
                     .map_err(|error| error.to_string())?,
                 set_parameter: *library
                     .get(b"yadaw_vst3_set_parameter\0")
@@ -117,6 +226,21 @@ impl Vst3Runtime {
                 restore_state: *library
                     .get(b"yadaw_vst3_restore_state\0")
                     .map_err(|error| error.to_string())?,
+                open_editor: *library
+                    .get(b"yadaw_vst3_open_editor\0")
+                    .map_err(|error| error.to_string())?,
+                close_editor: *library
+                    .get(b"yadaw_vst3_close_editor\0")
+                    .map_err(|error| error.to_string())?,
+                editor_open: *library
+                    .get(b"yadaw_vst3_editor_open\0")
+                    .map_err(|error| error.to_string())?,
+                consume_latency_changed: *library
+                    .get(b"yadaw_vst3_consume_latency_changed\0")
+                    .map_err(|error| error.to_string())?,
+                pump_editor_events: *library
+                    .get(b"yadaw_vst3_pump_editor_events\0")
+                    .map_err(|error| error.to_string())?,
             }
         };
         Ok(Self {
@@ -143,8 +267,10 @@ impl Vst3Runtime {
                 component_state,
                 controller_state,
             ),
-            ControlCommand::UnloadPlugin { instance_id } => {
-                self.instances.remove(&instance_id);
+            ControlCommand::UnloadPlugin { .. } => {
+                // Realtime graphs hold stable bridge handles and are retired asynchronously.
+                // Keep the instance alive until helper shutdown rather than invalidating a
+                // pointer that an outgoing callback generation may still be using.
                 ControlResult::Accepted
             }
             ControlCommand::PluginParameters { instance_id } => {
@@ -157,10 +283,42 @@ impl Vst3Runtime {
                 gesture,
             } => self.set_parameter(&instance_id, parameter_id, normalized, gesture),
             ControlCommand::SavePluginState { instance_id } => self.save_state(&instance_id),
+            ControlCommand::OpenPluginEditor { instance_id } => self.open_editor(&instance_id),
+            ControlCommand::ClosePluginEditor { instance_id } => self.close_editor(&instance_id),
             _ => ControlResult::Error {
                 message: "command is not a VST3 runtime command".into(),
             },
         }
+    }
+
+    pub fn processor_handle(&self, instance_id: &str) -> Option<Vst3ProcessorHandle> {
+        self.instances
+            .get(instance_id)
+            .map(|instance| Vst3ProcessorHandle {
+                pointer: instance.pointer,
+                functions: instance.functions,
+            })
+    }
+
+    pub fn take_timing_changes(&self) -> Vec<(String, u32, Option<u32>)> {
+        self.instances
+            .iter()
+            .filter_map(|(id, instance)| {
+                let changed = unsafe {
+                    (self.functions.consume_latency_changed)(instance.pointer.as_ptr()) != 0
+                };
+                changed.then(|| {
+                    let latency =
+                        unsafe { (self.functions.latency_samples)(instance.pointer.as_ptr()) };
+                    let tail = unsafe { (self.functions.tail_samples)(instance.pointer.as_ptr()) };
+                    (id.clone(), latency, (tail != INFINITE_TAIL).then_some(tail))
+                })
+            })
+            .collect()
+    }
+
+    pub fn pump_editor_events(&self) {
+        unsafe { (self.functions.pump_editor_events)() };
     }
 
     fn load_plugin(
@@ -172,6 +330,16 @@ impl Vst3Runtime {
         component_state: Vec<u8>,
         controller_state: Vec<u8>,
     ) -> ControlResult {
+        if let Some(instance) = self.instances.get(&instance_id) {
+            // Graph rebuilds deliberately reuse the existing processor and editor instance.
+            let latency_samples =
+                unsafe { (self.functions.latency_samples)(instance.pointer.as_ptr()) };
+            let tail = unsafe { (self.functions.tail_samples)(instance.pointer.as_ptr()) };
+            return ControlResult::PluginLoaded {
+                latency_samples,
+                tail_samples: (tail != INFINITE_TAIL).then_some(tail),
+            };
+        }
         let module_path = match CString::new(module_path) {
             Ok(value) => value,
             Err(_) => return error("VST3 module path contains an embedded NUL"),
@@ -321,6 +489,28 @@ impl Vst3Runtime {
         ControlResult::PluginState {
             component_state,
             controller_state,
+        }
+    }
+
+    fn open_editor(&self, instance_id: &str) -> ControlResult {
+        let Some(instance) = self.instances.get(instance_id) else {
+            return error("VST3 instance is not loaded");
+        };
+        let open = unsafe { (self.functions.open_editor)(instance.pointer.as_ptr()) != 0 };
+        ControlResult::PluginEditor {
+            editor_kind: if open { "native" } else { "generic" }.into(),
+            open,
+        }
+    }
+
+    fn close_editor(&self, instance_id: &str) -> ControlResult {
+        let Some(instance) = self.instances.get(instance_id) else {
+            return ControlResult::Accepted;
+        };
+        unsafe { (self.functions.close_editor)(instance.pointer.as_ptr()) };
+        ControlResult::PluginEditor {
+            editor_kind: "native".into(),
+            open: unsafe { (self.functions.editor_open)(instance.pointer.as_ptr()) != 0 },
         }
     }
 }

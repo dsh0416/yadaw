@@ -6,7 +6,8 @@ use std::{
 };
 
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use yadaw_dsp_node::bench_support::{StreamingHarness, decode_clip, write_float_fixture};
+use yadaw_audio_host::engine::bench_support::{StreamingHarness, decode_clip};
+use yadaw_dsp_node::bench_support::write_float_fixture;
 
 struct FixtureDirectory {
     path: PathBuf,

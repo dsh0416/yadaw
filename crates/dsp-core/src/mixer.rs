@@ -109,12 +109,45 @@ impl SmoothedValue {
 struct ChannelRuntime {
     gain: SmoothedValue,
     pan: SmoothedValue,
+    output_delay: StereoDelay,
 }
 
 #[derive(Debug, Clone)]
 struct SendRuntime {
     gain: SmoothedValue,
     pan: SmoothedValue,
+    delay: StereoDelay,
+}
+
+#[derive(Debug, Clone, Default)]
+struct StereoDelay {
+    frames: Vec<StereoFrame>,
+    cursor: usize,
+}
+
+impl StereoDelay {
+    fn set_frames(&mut self, frames: usize) {
+        self.frames = vec![[0.0; 2]; frames];
+        self.cursor = 0;
+    }
+
+    fn process(&mut self, input: StereoFrame) -> StereoFrame {
+        if self.frames.is_empty() {
+            return input;
+        }
+        let output = self.frames[self.cursor];
+        self.frames[self.cursor] = input;
+        self.cursor += 1;
+        if self.cursor == self.frames.len() {
+            self.cursor = 0;
+        }
+        output
+    }
+
+    fn clear(&mut self) {
+        self.frames.fill([0.0; 2]);
+        self.cursor = 0;
+    }
 }
 
 pub struct MixerGraph {
@@ -355,6 +388,7 @@ impl MixerGraph {
             .map(|channel| ChannelRuntime {
                 gain: SmoothedValue::new(db_to_gain(channel.gain_db), sample_rate),
                 pan: SmoothedValue::new(channel.pan, sample_rate),
+                output_delay: StereoDelay::default(),
             })
             .collect();
         let send_runtime = sends
@@ -362,6 +396,7 @@ impl MixerGraph {
             .map(|send| SendRuntime {
                 gain: SmoothedValue::new(db_to_gain(send.level_db), sample_rate),
                 pan: SmoothedValue::new(send.pan, sample_rate),
+                delay: StereoDelay::default(),
             })
             .collect();
         let mut sends_by_source = vec![Vec::new(); channels.len()];
@@ -436,15 +471,37 @@ impl MixerGraph {
         Ok(())
     }
 
+    pub fn set_channel_output_delay(
+        &mut self,
+        index: usize,
+        frames: usize,
+    ) -> Result<(), GraphError> {
+        let Some(runtime) = self.channel_runtime.get_mut(index) else {
+            return Err(GraphError::InvalidOutput);
+        };
+        runtime.output_delay.set_frames(frames);
+        Ok(())
+    }
+
+    pub fn set_send_delay(&mut self, index: usize, frames: usize) -> Result<(), GraphError> {
+        let Some(runtime) = self.send_runtime.get_mut(index) else {
+            return Err(GraphError::InvalidSend);
+        };
+        runtime.delay.set_frames(frames);
+        Ok(())
+    }
+
+    pub fn clear_delays(&mut self) {
+        for runtime in &mut self.channel_runtime {
+            runtime.output_delay.clear();
+        }
+        for runtime in &mut self.send_runtime {
+            runtime.delay.clear();
+        }
+    }
+
     pub fn process_frame(&mut self, audio_inputs: &[StereoFrame]) -> HardwareOutputFrame {
         self.accumulation.fill([0.0, 0.0]);
-        let mut hardware_output = [0.0; MAX_OUTPUT_CHANNELS];
-        let master = &self.channels[self.master];
-        let master_gate = if master.muted { 0.0 } else { 1.0 };
-        let master_gain = self.channel_runtime[self.master].gain.next() * master_gate;
-        let master_pan = self.channel_runtime[self.master].pan.next();
-        let mut master_pre = [0.0_f32, 0.0_f32];
-        let mut master_post = [0.0_f32, 0.0_f32];
         for (input_index, channel_index) in self
             .channels
             .iter()
@@ -456,13 +513,39 @@ impl MixerGraph {
                 self.accumulation[channel_index] = *input;
             }
         }
+        self.process_accumulated(&mut |_, frame| frame)
+    }
+
+    pub fn process_frame_with_sources(
+        &mut self,
+        channel_sources: &[StereoFrame],
+        processor: &mut impl FnMut(usize, StereoFrame) -> StereoFrame,
+    ) -> HardwareOutputFrame {
+        self.accumulation.fill([0.0, 0.0]);
+        for (target, source) in self.accumulation.iter_mut().zip(channel_sources) {
+            *target = *source;
+        }
+        self.process_accumulated(processor)
+    }
+
+    fn process_accumulated(
+        &mut self,
+        processor: &mut impl FnMut(usize, StereoFrame) -> StereoFrame,
+    ) -> HardwareOutputFrame {
+        let mut hardware_output = [0.0; MAX_OUTPUT_CHANNELS];
+        let master = &self.channels[self.master];
+        let master_gate = if master.muted { 0.0 } else { 1.0 };
+        let master_gain = self.channel_runtime[self.master].gain.next() * master_gate;
+        let master_pan = self.channel_runtime[self.master].pan.next();
+        let mut master_pre = [0.0_f32, 0.0_f32];
+        let mut master_post = [0.0_f32, 0.0_f32];
 
         for &index in &self.order {
             if index == self.master {
                 continue;
             }
             let channel = &self.channels[index];
-            let pre = self.accumulation[index];
+            let pre = processor(index, self.accumulation[index]);
             self.peaks[index].pre = [
                 self.peaks[index].pre[0].max(pre[0].abs()),
                 self.peaks[index].pre[1].max(pre[1].abs()),
@@ -487,6 +570,7 @@ impl MixerGraph {
                     balance_stereo(tap, self.send_runtime[send_index].pan.next()),
                     self.send_runtime[send_index].gain.next(),
                 );
+                let sent = self.send_runtime[send_index].delay.process(sent);
                 add(&mut self.accumulation[send.target], sent);
             }
 
@@ -496,7 +580,8 @@ impl MixerGraph {
                 self.peaks[index].post[1].max(post[1].abs()),
             ];
             if let Some(output) = channel.output.filter(|_| self.output_audible[index]) {
-                add(&mut self.accumulation[output], post);
+                let routed = self.channel_runtime[index].output_delay.process(post);
+                add(&mut self.accumulation[output], routed);
             }
             if let Some([left, right]) = channel.hardware_output {
                 master_pre[0] = master_pre[0].max(post[0].abs());

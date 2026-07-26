@@ -11,12 +11,27 @@
 #include "pluginterfaces/vst/ivstaudioprocessor.h"
 #include "pluginterfaces/vst/ivstcomponent.h"
 #include "pluginterfaces/vst/ivsteditcontroller.h"
+#include "pluginterfaces/gui/iplugview.h"
+#include "pluginterfaces/gui/iplugviewcontentscalesupport.h"
 
 #include <algorithm>
+#include <array>
+#include <atomic>
+#include <condition_variable>
+#include <cstdio>
 #include <cstring>
 #include <memory>
+#include <mutex>
 #include <string>
+#include <thread>
 #include <vector>
+
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 
 using namespace Steinberg;
 using namespace Steinberg::Vst;
@@ -53,6 +68,335 @@ std::vector<uint8_t> streamBytes(MemoryStream& stream)
 
 } // namespace
 
+#if defined(_WIN32)
+class NativeEditorWindow;
+
+static tresult safeAttachPlugView(IPlugView* view, HWND window)
+{
+#if defined(_MSC_VER)
+    __try
+    {
+        return view->attached(window, kPlatformTypeHWND);
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER)
+    {
+        return kResultFalse;
+    }
+#else
+    return view->attached(window, kPlatformTypeHWND);
+#endif
+}
+
+class NativePlugFrame : public IPlugFrame
+{
+public:
+    explicit NativePlugFrame(NativeEditorWindow& owner) : owner(owner) {}
+    tresult PLUGIN_API resizeView(IPlugView* view, ViewRect* newSize) override;
+    tresult PLUGIN_API queryInterface(const TUID iid, void** object) override
+    {
+        if (!object)
+            return kInvalidArgument;
+        *object = nullptr;
+        if (FUnknownPrivate::iidEqual(iid, IPlugFrame::iid) ||
+            FUnknownPrivate::iidEqual(iid, FUnknown::iid))
+        {
+            *object = static_cast<IPlugFrame*>(this);
+            addRef();
+            return kResultTrue;
+        }
+        return kNoInterface;
+    }
+    uint32 PLUGIN_API addRef() override { return 1000; }
+    uint32 PLUGIN_API release() override { return 1000; }
+
+private:
+    NativeEditorWindow& owner;
+};
+
+class NativeEditorWindow
+{
+public:
+    explicit NativeEditorWindow(IEditController* controller)
+        : controller(controller), frame(*this)
+    {
+        if (controller)
+            controller->addRef();
+    }
+
+    ~NativeEditorWindow() { close(); if (controller) controller->release(); }
+
+    bool open()
+    {
+        if (window)
+        {
+            ShowWindow(window, SW_RESTORE);
+            SetForegroundWindow(window);
+            return true;
+        }
+        return createAndAttach();
+    }
+
+    void close()
+    {
+        detach();
+        if (window)
+            DestroyWindow(window);
+        window = nullptr;
+        if (oleInitialized)
+        {
+            OleUninitialize();
+            oleInitialized = false;
+        }
+    }
+
+    bool isOpen() const { return window != nullptr; }
+
+    void resize(ViewRect rectangle)
+    {
+        if (!window)
+            return;
+        RECT bounds {0, 0, rectangle.getWidth(), rectangle.getHeight()};
+        AdjustWindowRect(&bounds, WS_OVERLAPPEDWINDOW, FALSE);
+        resizing = true;
+        SetWindowPos(window, nullptr, 0, 0, bounds.right - bounds.left,
+                     bounds.bottom - bounds.top, SWP_NOMOVE | SWP_NOZORDER);
+        resizing = false;
+    }
+
+private:
+    static LRESULT CALLBACK windowProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
+    {
+        auto* editor = reinterpret_cast<NativeEditorWindow*>(
+            GetWindowLongPtrW(window, GWLP_USERDATA));
+        if (!editor)
+            return DefWindowProcW(window, message, wparam, lparam);
+        switch (message)
+        {
+            case WM_SIZE:
+                if (editor->view && !editor->resizing)
+                {
+                    RECT client {};
+                    GetClientRect(window, &client);
+                    ViewRect size {0, 0, client.right, client.bottom};
+                    editor->view->onSize(&size);
+                }
+                return 0;
+            case WM_CLOSE:
+                editor->detach();
+                DestroyWindow(window);
+                return 0;
+            case WM_DESTROY:
+                editor->window = nullptr;
+                return 0;
+            default:
+                return DefWindowProcW(window, message, wparam, lparam);
+        }
+    }
+
+    bool createAndAttach()
+    {
+        const auto oleResult = OleInitialize(nullptr);
+        oleInitialized = SUCCEEDED(oleResult);
+        const wchar_t* className = L"YadawVst3EditorWindow";
+        WNDCLASSW windowClass {};
+        windowClass.lpfnWndProc = windowProc;
+        windowClass.hInstance = GetModuleHandleW(nullptr);
+        windowClass.lpszClassName = className;
+        windowClass.hCursor = LoadCursor(nullptr, IDC_ARROW);
+        RegisterClassW(&windowClass);
+
+        view = owned(controller ? controller->createView(ViewType::kEditor) : nullptr);
+        ViewRect size {};
+        if (!view || view->getSize(&size) != kResultTrue)
+        {
+            view = nullptr;
+            if (oleInitialized)
+            {
+                OleUninitialize();
+                oleInitialized = false;
+            }
+            return false;
+        }
+        const DWORD windowStyle =
+            WS_CAPTION | WS_SYSMENU | WS_CLIPCHILDREN | WS_CLIPSIBLINGS |
+            (view->canResize() == kResultTrue ? WS_SIZEBOX | WS_MAXIMIZEBOX : 0);
+        RECT bounds {0, 0, size.getWidth(), size.getHeight()};
+        AdjustWindowRectEx(&bounds, windowStyle, FALSE, WS_EX_APPWINDOW);
+        window = CreateWindowExW(
+            WS_EX_APPWINDOW, className, L"YADAW VST3", windowStyle,
+            CW_USEDEFAULT, CW_USEDEFAULT, bounds.right - bounds.left, bounds.bottom - bounds.top,
+            nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
+        if (window)
+            SetWindowLongPtrW(window, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(this));
+        if (!window || view->isPlatformTypeSupported(kPlatformTypeHWND) != kResultTrue)
+        {
+            if (window)
+                DestroyWindow(window);
+            window = nullptr;
+            view = nullptr;
+            if (oleInitialized)
+            {
+                OleUninitialize();
+                oleInitialized = false;
+            }
+            return false;
+        }
+        if (auto scaleSupport = U::cast<IPlugViewContentScaleSupport>(view))
+        {
+            const auto dpi = GetDpiForWindow(window);
+            scaleSupport->setContentScaleFactor(
+                static_cast<float>(dpi) / static_cast<float>(USER_DEFAULT_SCREEN_DPI));
+        }
+        const auto frameResult = window ? view->setFrame(&frame) : kResultFalse;
+        const auto attachResult = window && frameResult == kResultTrue
+            ? safeAttachPlugView(view, window) : kResultFalse;
+        if (!window || frameResult != kResultTrue || attachResult != kResultTrue)
+        {
+            if (window)
+                DestroyWindow(window);
+            window = nullptr;
+            view = nullptr;
+            if (oleInitialized)
+            {
+                OleUninitialize();
+                oleInitialized = false;
+            }
+            return false;
+        }
+        ShowWindow(window, SW_SHOW);
+        return true;
+    }
+
+    void detach()
+    {
+        if (view)
+        {
+            view->removed();
+            view->setFrame(nullptr);
+            view = nullptr;
+        }
+    }
+
+    IEditController* controller {nullptr};
+    IPtr<IPlugView> view;
+    NativePlugFrame frame;
+    HWND window {nullptr};
+    bool oleInitialized {false};
+    bool resizing {false};
+
+    friend class NativePlugFrame;
+};
+
+tresult PLUGIN_API NativePlugFrame::resizeView(IPlugView* view, ViewRect* newSize)
+{
+    if (!view || !newSize)
+        return kInvalidArgument;
+    owner.resize(*newSize);
+    return kResultTrue;
+}
+
+static int32_t safeOpenNativeEditor(NativeEditorWindow* editor)
+{
+#if defined(_MSC_VER)
+    __try
+    {
+        return editor && editor->open() ? 1 : 0;
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER)
+    {
+        return 0;
+    }
+#else
+    return editor && editor->open() ? 1 : 0;
+#endif
+}
+
+static void safeCloseNativeEditor(std::unique_ptr<NativeEditorWindow>& editor)
+{
+#if defined(_MSC_VER)
+    __try
+    {
+        editor.reset();
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER)
+    {
+        editor.release();
+    }
+#else
+    editor.reset();
+#endif
+}
+#endif
+
+struct YadawVst3Instance;
+
+struct QueuedParameter
+{
+    ParamID id {0};
+    ParamValue value {0.0};
+    int32 sampleOffset {0};
+};
+
+class RealtimeParameterQueue
+{
+public:
+    bool push(QueuedParameter value)
+    {
+        std::lock_guard<std::mutex> lock(producerMutex);
+        const auto write = writeIndex.load(std::memory_order_relaxed);
+        if (write - readIndex.load(std::memory_order_acquire) >= values.size())
+            return false;
+        values[write % values.size()] = value;
+        writeIndex.store(write + 1, std::memory_order_release);
+        return true;
+    }
+
+    bool pop(QueuedParameter& value)
+    {
+        const auto read = readIndex.load(std::memory_order_relaxed);
+        if (read == writeIndex.load(std::memory_order_acquire))
+            return false;
+        value = values[read % values.size()];
+        readIndex.store(read + 1, std::memory_order_release);
+        return true;
+    }
+
+private:
+    std::array<QueuedParameter, 1024> values {};
+    std::atomic<uint64_t> writeIndex {0};
+    std::atomic<uint64_t> readIndex {0};
+    std::mutex producerMutex;
+};
+
+class YadawComponentHandler : public IComponentHandler
+{
+public:
+    explicit YadawComponentHandler(YadawVst3Instance& instance) : instance(instance) {}
+    tresult PLUGIN_API beginEdit(ParamID id) override;
+    tresult PLUGIN_API performEdit(ParamID id, ParamValue valueNormalized) override;
+    tresult PLUGIN_API endEdit(ParamID id) override;
+    tresult PLUGIN_API restartComponent(int32 flags) override;
+    tresult PLUGIN_API queryInterface(const TUID iid, void** object) override
+    {
+        if (!object)
+            return kInvalidArgument;
+        *object = nullptr;
+        if (FUnknownPrivate::iidEqual(iid, IComponentHandler::iid) ||
+            FUnknownPrivate::iidEqual(iid, FUnknown::iid))
+        {
+            *object = static_cast<IComponentHandler*>(this);
+            addRef();
+            return kResultTrue;
+        }
+        return kNoInterface;
+    }
+    uint32 PLUGIN_API addRef() override { return 1000; }
+    uint32 PLUGIN_API release() override { return 1000; }
+
+private:
+    YadawVst3Instance& instance;
+};
+
 struct YadawVst3Instance
 {
     VST3::Hosting::Module::Ptr module;
@@ -69,9 +413,21 @@ struct YadawVst3Instance
     bool processing {false};
     std::vector<uint8_t> componentStateCache;
     std::vector<uint8_t> controllerStateCache;
+    RealtimeParameterQueue realtimeParameters;
+    std::unique_ptr<YadawComponentHandler> componentHandler;
+    std::atomic<bool> latencyChanged {false};
+#if defined(_WIN32)
+    std::unique_ptr<NativeEditorWindow> editor;
+#endif
 
     ~YadawVst3Instance()
     {
+#if defined(_WIN32)
+        editor.reset();
+#endif
+        if (controller)
+            controller->setComponentHandler(nullptr);
+        componentHandler.reset();
         if (processor && processing)
             processor->setProcessing(false);
         if (component)
@@ -79,6 +435,29 @@ struct YadawVst3Instance
         processData.unprepare();
     }
 };
+
+tresult PLUGIN_API YadawComponentHandler::beginEdit(ParamID)
+{
+    return kResultTrue;
+}
+
+tresult PLUGIN_API YadawComponentHandler::performEdit(ParamID id, ParamValue valueNormalized)
+{
+    return instance.realtimeParameters.push({id, valueNormalized, 0})
+        ? kResultTrue : kResultFalse;
+}
+
+tresult PLUGIN_API YadawComponentHandler::endEdit(ParamID)
+{
+    return kResultTrue;
+}
+
+tresult PLUGIN_API YadawComponentHandler::restartComponent(int32 flags)
+{
+    if (flags & kLatencyChanged)
+        instance.latencyChanged.store(true, std::memory_order_release);
+    return kResultTrue;
+}
 
 YadawVst3Instance* yadaw_vst3_create(
     const char* modulePath,
@@ -170,6 +549,11 @@ YadawVst3Instance* yadaw_vst3_create(
     instance->processData.outputParameterChanges = &instance->outputParameterChanges;
     instance->processData.processContext = &instance->processContext;
     instance->processContext.sampleRate = sampleRate;
+    if (instance->controller)
+    {
+        instance->componentHandler = std::make_unique<YadawComponentHandler>(*instance);
+        instance->controller->setComponentHandler(instance->componentHandler.get());
+    }
     return instance.release();
 }
 
@@ -213,6 +597,16 @@ int32_t yadaw_vst3_process_stereo(
         processContext.timeSigDenominator = context->time_signature_denominator;
     }
     instance->processData.numSamples = static_cast<int32>(frameCount);
+    QueuedParameter parameter {};
+    while (instance->realtimeParameters.pop(parameter))
+    {
+        int32 queueIndex = 0;
+        auto* queue =
+            instance->inputParameterChanges.addParameterData(parameter.id, queueIndex);
+        int32 pointIndex = 0;
+        if (queue)
+            queue->addPoint(parameter.sampleOffset, parameter.value, pointIndex);
+    }
     Sample32* inputs[] = {const_cast<Sample32*>(inputLeft), const_cast<Sample32*>(inputRight)};
     Sample32* outputs[] = {outputLeft, outputRight};
     if (instance->processData.numInputs > 0)
@@ -302,11 +696,8 @@ int32_t yadaw_vst3_set_parameter(
     if (!instance || normalizedValue < 0.0 || normalizedValue > 1.0 ||
         sampleOffset > instance->maximumBlockFrames)
         return 0;
-    int32 queueIndex = 0;
-    auto* queue = instance->inputParameterChanges.addParameterData(parameterId, queueIndex);
-    int32 pointIndex = 0;
-    if (!queue ||
-        queue->addPoint(static_cast<int32>(sampleOffset), normalizedValue, pointIndex) != kResultOk)
+    if (!instance->realtimeParameters.push(
+            {parameterId, normalizedValue, static_cast<int32>(sampleOffset)}))
         return 0;
     if (instance->controller)
         instance->controller->setParamNormalized(parameterId, normalizedValue);
@@ -349,6 +740,58 @@ uint32_t yadaw_vst3_latency_samples(const YadawVst3Instance* instance)
 uint32_t yadaw_vst3_tail_samples(const YadawVst3Instance* instance)
 {
     return instance && instance->processor ? instance->processor->getTailSamples() : 0;
+}
+
+int32_t yadaw_vst3_consume_latency_changed(YadawVst3Instance* instance)
+{
+    return instance && instance->latencyChanged.exchange(false, std::memory_order_acq_rel)
+        ? 1 : 0;
+}
+
+int32_t yadaw_vst3_open_editor(YadawVst3Instance* instance)
+{
+#if defined(_WIN32)
+    if (!instance || !instance->controller)
+        return 0;
+    if (!instance->editor)
+        instance->editor = std::make_unique<NativeEditorWindow>(instance->controller);
+    return safeOpenNativeEditor(instance->editor.get());
+#else
+    (void)instance;
+    return 0;
+#endif
+}
+
+void yadaw_vst3_close_editor(YadawVst3Instance* instance)
+{
+#if defined(_WIN32)
+    if (instance)
+        safeCloseNativeEditor(instance->editor);
+#else
+    (void)instance;
+#endif
+}
+
+int32_t yadaw_vst3_editor_open(const YadawVst3Instance* instance)
+{
+#if defined(_WIN32)
+    return instance && instance->editor && instance->editor->isOpen() ? 1 : 0;
+#else
+    (void)instance;
+    return 0;
+#endif
+}
+
+void yadaw_vst3_pump_editor_events()
+{
+#if defined(_WIN32)
+    MSG message {};
+    while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE))
+    {
+        TranslateMessage(&message);
+        DispatchMessageW(&message);
+    }
+#endif
 }
 
 size_t yadaw_vst3_component_state_size(YadawVst3Instance* instance)

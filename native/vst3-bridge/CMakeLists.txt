@@ -36,6 +36,9 @@ set_target_properties(yadaw-vst3-smoke PROPERTIES
 
 target_compile_features(yadaw-vst3-bridge PRIVATE cxx_std_17)
 target_link_libraries(yadaw-vst3-bridge PRIVATE sdk_hosting)
+if(WIN32)
+  target_link_libraries(yadaw-vst3-bridge PRIVATE user32 ole32)
+endif()
 target_include_directories(yadaw-vst3-bridge
   PUBLIC include
   PRIVATE "${YADAW_VST3_SDK_ROOT}"

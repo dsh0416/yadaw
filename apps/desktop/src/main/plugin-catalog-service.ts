@@ -25,6 +25,8 @@ interface PluginRuntime {
   }>
   parameters(instanceId: string): Promise<PluginParameterInfo[]>
   setParameter(change: PluginParameterChange): Promise<void>
+  openEditor(instanceId: string): Promise<{ editorKind: "native" | "generic"; open: boolean }>
+  closeEditor(instanceId: string): Promise<void>
 }
 
 const SCANNER_VERSION = 1
@@ -418,17 +420,21 @@ export class PluginCatalogService {
     if (!this.runtime) throw new Error("The native VST3 bridge is not running")
     const { plugin, sampleRate } = await this.runtime.resolveInstance(instanceId)
     const status = await this.runtime.load(plugin, sampleRate)
+    const editor = await this.runtime.openEditor(instanceId)
     return {
       instanceId,
       state: plugin.enabled ? "active" : "bypassed",
-      editorOpen: false,
+      editorOpen: editor.open,
+      editorKind: editor.editorKind,
       latencySamples: status.latencySamples,
       tailSamples: status.tailSamples,
       error: null
     }
   }
 
-  closeEditor(_instanceId: string): void {}
+  async closeEditor(instanceId: string): Promise<void> {
+    await this.runtime?.closeEditor(instanceId)
+  }
 
   parameters(instanceId: string): Promise<PluginParameterInfo[]> {
     if (!this.runtime) return Promise.resolve([])

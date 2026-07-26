@@ -5,6 +5,7 @@ import { ScrollAreaRoot, ScrollAreaScrollbar, ScrollAreaThumb, ScrollAreaViewpor
 import type { ProjectAssetSummary as Asset } from "@yadaw/contracts"
 import type { PluginDescriptor } from "@yadaw/contracts"
 import { usePluginStore } from "../../stores/plugins"
+import { writePluginDrag } from "../plugins/plugin-drag"
 
 const props = defineProps<{ assets: Asset[] }>()
 const pluginStore = usePluginStore()
@@ -57,7 +58,7 @@ onMounted(() => void pluginStore.load())
         <ScrollAreaRoot class="library-scroll" type="auto">
           <ScrollAreaViewport class="library-viewport">
             <div class="library-heading">VST3 instruments</div>
-            <button v-for="plugin in instruments" :key="plugin.classId" class="library-item" @dblclick="activate(plugin)"><span class="library-item-icon"><Piano :size="13" /></span><span class="library-item-copy"><b>{{ plugin.name }}</b><small>{{ plugin.vendor }} · {{ plugin.category }}</small></span><span class="item-dot compatible" /></button>
+            <button v-for="plugin in instruments" :key="plugin.classId" class="library-item" draggable="true" @dragstart="writePluginDrag($event, { source: 'catalog', descriptor: plugin })" @dblclick="activate(plugin)"><span class="library-item-icon"><Piano :size="13" /></span><span class="library-item-copy"><b>{{ plugin.name }}</b><small>{{ plugin.vendor }} · {{ plugin.category }}</small></span><span class="item-dot compatible" /></button>
             <p v-if="!instruments.length" class="library-empty">No compatible VST3 instruments found.</p>
           </ScrollAreaViewport>
           <ScrollAreaScrollbar class="library-scrollbar" orientation="vertical"><ScrollAreaThumb class="library-scroll-thumb" /></ScrollAreaScrollbar>
@@ -67,7 +68,7 @@ onMounted(() => void pluginStore.load())
         <ScrollAreaRoot class="library-scroll" type="auto">
           <ScrollAreaViewport class="library-viewport">
             <div class="library-heading">VST3 audio effects</div>
-            <button v-for="plugin in effects" :key="plugin.classId" class="library-item" @dblclick="activate(plugin)"><span class="library-item-icon"><SlidersHorizontal :size="13" /></span><span class="library-item-copy"><b>{{ plugin.name }}</b><small>{{ plugin.vendor }} · {{ plugin.category }}</small></span><span class="item-dot compatible" /></button>
+            <button v-for="plugin in effects" :key="plugin.classId" class="library-item" draggable="true" @dragstart="writePluginDrag($event, { source: 'catalog', descriptor: plugin })" @dblclick="activate(plugin)"><span class="library-item-icon"><SlidersHorizontal :size="13" /></span><span class="library-item-copy"><b>{{ plugin.name }}</b><small>{{ plugin.vendor }} · {{ plugin.category }}</small></span><span class="item-dot compatible" /></button>
             <p v-if="!effects.length" class="library-empty">No compatible VST3 effects found.</p>
           </ScrollAreaViewport>
           <ScrollAreaScrollbar class="library-scrollbar" orientation="vertical"><ScrollAreaThumb class="library-scroll-thumb" /></ScrollAreaScrollbar>

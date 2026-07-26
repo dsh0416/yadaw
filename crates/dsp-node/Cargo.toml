@@ -23,17 +23,12 @@ sha2.workspace = true
 yadaw-dsp-core.workspace = true
 yadaw-dsp-runtime.workspace = true
 
-[target.'cfg(target_os = "windows")'.dependencies]
-cpal = { workspace = true, features = ["asio"] }
-
-[target.'cfg(not(target_os = "windows"))'.dependencies]
-cpal.workspace = true
-
 [build-dependencies]
 napi-build.workspace = true
 
 [dev-dependencies]
 criterion.workspace = true
+yadaw-audio-host = { path = "../audio-host", features = ["bench-internals"] }
 
 [[bench]]
 name = "native_render"

@@ -26,13 +26,8 @@ import type {
   WaveformWindowRequest
 } from "@yadaw/contracts"
 import {
-  audioEngineSnapshot,
   engineInfo,
-  listAudioBackends,
-  listAudioDevices,
-  processGain,
-  startAudioEngine,
-  stopAudioEngine
+  processGain
 } from "@yadaw/dsp-node"
 import { ApplicationSettingsStore } from "./application-settings"
 import { AudioHostService } from "./audio-host-service"
@@ -300,54 +295,12 @@ function validateAudioPreferences(value: unknown): AudioPreferences {
   }
 }
 
-function normalizeAudioDeviceList(
-  devices: ReturnType<typeof listAudioDevices>
-): AudioDeviceList {
-  const normalizeDevice = (device: ReturnType<typeof listAudioDevices>["inputs"][number]) => ({
-    id: device.id,
-    name: device.name,
-    isDefault: device.isDefault,
-    defaultSampleRate: device.defaultSampleRate ?? null,
-    minBufferSize: device.minBufferSize ?? null,
-    maxBufferSize: device.maxBufferSize ?? null,
-    channelCount: device.channelCount ?? null
-  })
-
-  return {
-    inputs: devices.inputs.map(normalizeDevice),
-    outputs: devices.outputs.map(normalizeDevice)
-  }
+function normalizeAudioDeviceList(devices: AudioDeviceList): AudioDeviceList {
+  return devices
 }
 
-function normalizeAudioRuntime(
-  snapshot: ReturnType<typeof audioEngineSnapshot>
-): AudioRuntimeSnapshot {
-  const state = snapshot.state === "running" || snapshot.state === "error"
-    ? snapshot.state
-    : "stopped"
-  const clockSync = snapshot.clockSync === "shared-device" ||
-    snapshot.clockSync === "adaptive-resampled"
-    ? snapshot.clockSync
-    : "inactive"
-
-  return {
-    state,
-    requestedBufferSize: snapshot.requestedBufferSize ?? null,
-    sampleRate: snapshot.sampleRate ?? null,
-    inputSampleRate: snapshot.inputSampleRate ?? null,
-    inputBufferSize: snapshot.inputBufferSize ?? null,
-    outputBufferSize: snapshot.outputBufferSize ?? null,
-    ringBufferCapacityFrames: snapshot.ringBufferCapacityFrames ?? null,
-    ringBufferFillFrames: snapshot.ringBufferFillFrames ?? null,
-    inputLatencyMs: snapshot.inputLatencyMs ?? null,
-    outputLatencyMs: snapshot.outputLatencyMs ?? null,
-    ringBufferLatencyMs: snapshot.ringBufferLatencyMs ?? null,
-    engineLatencyMs: snapshot.engineLatencyMs ?? null,
-    estimatedRoundTripLatencyMs: snapshot.estimatedRoundTripLatencyMs ?? null,
-    xruns: snapshot.xruns,
-    clockSync,
-    bufferFallback: snapshot.bufferFallback
-  }
+function normalizeAudioRuntime(snapshot: AudioRuntimeSnapshot): AudioRuntimeSnapshot {
+  return snapshot
 }
 
 function registerIpcHandlers(
@@ -396,14 +349,18 @@ function registerIpcHandlers(
     return processGain(request.samples, request.gain)
   })
 
-  ipcMain.handle(IPC_CHANNELS.audioBackends, (event) => {
+  ipcMain.handle(IPC_CHANNELS.audioBackends, async (event) => {
     assertTrustedSender(event)
-    return listAudioBackends()
+    if (!audioHostService) throw new Error("Audio host is not running")
+    return audioHostService.listAudioBackends()
   })
 
-  ipcMain.handle(IPC_CHANNELS.audioDevices, (event, value: unknown) => {
+  ipcMain.handle(IPC_CHANNELS.audioDevices, async (event, value: unknown) => {
     assertTrustedSender(event)
-    return normalizeAudioDeviceList(listAudioDevices(validateAudioBackend(value)))
+    if (!audioHostService) throw new Error("Audio host is not running")
+    return normalizeAudioDeviceList(
+      await audioHostService.listAudioDevices(validateAudioBackend(value))
+    )
   })
 
   ipcMain.handle(IPC_CHANNELS.audioStart, async (event, value: unknown) => {
@@ -413,32 +370,43 @@ function registerIpcHandlers(
       : "starting"
     lifecycle.beginAudio(transition)
     try {
-      const snapshot = normalizeAudioRuntime(startAudioEngine(validateAudioPreferences(value)))
+      if (!audioHostService) throw new Error("Audio host is not running")
+      const snapshot = normalizeAudioRuntime(
+        await audioHostService.startAudioEngine(validateAudioPreferences(value))
+      )
       if (projects.current) await mixer.load()
       lifecycle.completeAudio(snapshot)
       return snapshot
     } catch (error) {
-      lifecycle.failAudio(error, normalizeAudioRuntime(audioEngineSnapshot()))
+      const snapshot = audioHostService
+        ? await audioHostService.audioEngineSnapshot().catch(() => lifecycle.snapshot().audio.runtime)
+        : lifecycle.snapshot().audio.runtime
+      lifecycle.failAudio(error, normalizeAudioRuntime(snapshot))
       throw error
     }
   })
 
-  ipcMain.handle(IPC_CHANNELS.audioStop, (event) => {
+  ipcMain.handle(IPC_CHANNELS.audioStop, async (event) => {
     assertTrustedSender(event)
     lifecycle.beginAudio("stopping")
     try {
-      const snapshot = normalizeAudioRuntime(stopAudioEngine())
+      if (!audioHostService) throw new Error("Audio host is not running")
+      const snapshot = normalizeAudioRuntime(await audioHostService.stopAudioEngine())
       lifecycle.completeAudio(snapshot)
       return snapshot
     } catch (error) {
-      lifecycle.failAudio(error, normalizeAudioRuntime(audioEngineSnapshot()))
+      const snapshot = audioHostService
+        ? await audioHostService.audioEngineSnapshot().catch(() => lifecycle.snapshot().audio.runtime)
+        : lifecycle.snapshot().audio.runtime
+      lifecycle.failAudio(error, normalizeAudioRuntime(snapshot))
       throw error
     }
   })
 
-  ipcMain.handle(IPC_CHANNELS.audioSnapshot, (event) => {
+  ipcMain.handle(IPC_CHANNELS.audioSnapshot, async (event) => {
     assertTrustedSender(event)
-    const snapshot = normalizeAudioRuntime(audioEngineSnapshot())
+    if (!audioHostService) throw new Error("Audio host is not running")
+    const snapshot = normalizeAudioRuntime(await audioHostService.audioEngineSnapshot())
     lifecycle.refreshAudio(snapshot)
     return snapshot
   })
@@ -465,7 +433,7 @@ function registerIpcHandlers(
     assertTrustedSender(event)
     if (!value || typeof value !== "object") throw new TypeError("Mixer preview must be an object")
     lifecycle.assertMixerPreviewAllowed()
-    mixer.preview(value as MixerParameterPreview)
+    return mixer.preview(value as MixerParameterPreview)
   })
 
   ipcMain.handle(IPC_CHANNELS.mixerSnapshot, (event) => {
@@ -500,7 +468,7 @@ function registerIpcHandlers(
   ipcMain.handle(IPC_CHANNELS.pluginEditorClose, (event, value: unknown) => {
     assertTrustedSender(event)
     if (typeof value !== "string" || !value) throw new TypeError("Plugin instance ID is required")
-    plugins.closeEditor(value)
+    return plugins.closeEditor(value)
   })
 
   ipcMain.handle(IPC_CHANNELS.pluginParametersGet, (event, value: unknown) => {
@@ -783,7 +751,7 @@ function registerIpcHandlers(
         return false
       }
       try {
-        mixer.transport({ type: "stop" })
+        await mixer.transport({ type: "stop" })
       } catch {
         // The audio engine may already be stopped.
       }
@@ -927,6 +895,24 @@ function createMainWindow(): BrowserWindow {
 
 let projectService: ProjectService | null = null
 let audioHostService: AudioHostService | null = null
+let shutdownComplete = false
+let shutdownPromise: Promise<void> | null = null
+
+async function shutdownServices(): Promise<void> {
+  await Promise.allSettled([
+    (async () => {
+      const service = audioHostService
+      if (!service) return
+      try {
+        await service.stopAudioEngine()
+      } catch {
+        // The helper may already be stopping or unavailable.
+      }
+      await service.stop()
+    })(),
+    projectService?.shutdown()
+  ])
+}
 
 app.whenReady().then(async () => {
   const settings = new ApplicationSettingsStore(app.getPath("userData"))
@@ -938,8 +924,7 @@ app.whenReady().then(async () => {
         "..",
         "..",
         "target",
-        "vst3-bridge-build",
-        "bin",
+        "debug",
         `yadaw-vst3-probe${executableSuffix}`
       )
   const plugins = new PluginCatalogService(app.getPath("userData"), probePath)
@@ -970,32 +955,19 @@ app.whenReady().then(async () => {
         "bin",
         bridgeFilename
       )
-  audioHostService = new AudioHostService(audioHostPath, bridgePath, (message) => {
+  audioHostService = new AudioHostService(
+    audioHostPath,
+    bridgePath,
+    join(app.getPath("userData"), "audio-host-crash-marker.bin"),
+    (message) => {
     console.error(`YADAW audio helper failure: ${message}`)
     for (const window of BrowserWindow.getAllWindows().slice(1)) window.close()
-  })
+    }
+  )
   audioHostService.start()
   projectService = new ProjectService(app.getPath("userData"), settings)
   const operations = new OperationService()
-  const mixer = new MixerService(
-    app.getPath("userData"),
-    projectService,
-    async (revision, graph) => {
-      if (!audioHostService) return
-      await audioHostService.loadGraph(revision)
-      const loaded = await Promise.allSettled(graph.plugins.map((plugin) =>
-        audioHostService!.loadPlugin(plugin, graph.sampleRate)
-      ))
-      for (const [index, result] of loaded.entries()) {
-        if (result.status === "rejected") {
-          console.error(
-            `Could not restore VST3 instance ${graph.plugins[index]?.id}:`,
-            result.reason
-          )
-        }
-      }
-    }
-  )
+  const mixer = new MixerService(app.getPath("userData"), projectService, audioHostService)
   plugins.attachRuntime({
     resolveInstance: async (instanceId) => {
       const graph = await mixer.snapshot()
@@ -1014,14 +986,31 @@ app.whenReady().then(async () => {
     setParameter: (change) => {
       if (!audioHostService) return Promise.reject(new Error("Audio host is not running"))
       return audioHostService.setPluginParameter(change)
+    },
+    openEditor: (instanceId) => {
+      if (!audioHostService) {
+        return Promise.resolve({ editorKind: "generic" as const, open: false })
+      }
+      return audioHostService.openPluginEditor(instanceId)
+    },
+    closeEditor: (instanceId) => {
+      if (!audioHostService) return Promise.resolve()
+      return audioHostService.closePluginEditor(instanceId)
     }
   })
   const midiImport = new MidiImportService(mixer, plugins)
-  const recordings = new RecordingService(settings, projectService, operations, mixer)
+  const recordings = new RecordingService(
+    settings,
+    projectService,
+    operations,
+    mixer,
+    audioHostService
+  )
   const waveforms = new WaveformService(settings, projectService)
+  const initialAudioRuntime = await audioHostService.audioEngineSnapshot()
   const lifecycle = new LifecycleCoordinator(
     projectService.current,
-    normalizeAudioRuntime(audioEngineSnapshot()),
+    normalizeAudioRuntime(initialAudioRuntime),
     { allowRecordingWithoutAudio: process.env.YADAW_TEST_CAPTURE_SOURCE === "1" }
   )
   registerIpcHandlers(
@@ -1051,8 +1040,12 @@ app.on("window-all-closed", () => {
   }
 })
 
-app.on("before-quit", () => {
-  stopAudioEngine()
-  if (audioHostService) void audioHostService.stop()
-  if (projectService) void projectService.shutdown()
+app.on("before-quit", (event) => {
+  if (shutdownComplete) return
+  event.preventDefault()
+  if (shutdownPromise) return
+  shutdownPromise = shutdownServices().finally(() => {
+    shutdownComplete = true
+    app.quit()
+  })
 })

@@ -7,7 +7,7 @@
   "type": "module",
   "main": "./out/main/index.js",
   "scripts": {
-    "predev": "pnpm --filter @yadaw/dsp-node build:debug && cargo build -p yadaw-audio-host && cmake -S ../.. -B ../../target/vst3-bridge-build && cmake --build ../../target/vst3-bridge-build --config Debug --target yadaw-vst3-probe yadaw-vst3-bridge",
+    "predev": "pnpm --filter @yadaw/dsp-node build:debug && pnpm --filter @yadaw/audio-host-client build:debug && cargo build -p yadaw-audio-host && cargo build -p yadaw-vst3-host --bin yadaw-vst3-probe && cmake -S ../.. -B ../../target/vst3-bridge-build && cmake --build ../../target/vst3-bridge-build --config Debug --target yadaw-vst3-bridge",
     "dev": "node scripts/dev.mjs",
     "build": "pnpm build:main && pnpm build:preload && pnpm build:renderer",
     "build:main": "vite build --config vite.main.config.ts",
@@ -24,6 +24,7 @@
     "@electric-sql/pglite": "0.5.4",
     "@lucide/vue": "^1.25.0",
     "@msgpack/msgpack": "3.1.3",
+    "@yadaw/audio-host-client": "workspace:*",
     "@yadaw/dsp-node": "workspace:*",
     "@yadaw/project-db": "workspace:*"
   },

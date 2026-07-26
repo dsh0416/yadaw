@@ -12,7 +12,8 @@ Vue component or composable
   -> window.yadaw typed preload API
   -> validated Electron main handler
   -> authoritative main-process service/lifecycle coordinator
-  -> @yadaw/dsp-node
+      ├─ live playback -> @yadaw/audio-host-client -> ipc-channel -> audio-host
+      └─ offline tools -> @yadaw/dsp-node
 ```
 
 - Production renderer code may invoke or subscribe to `window.yadaw` only from
@@ -24,10 +25,17 @@ Vue component or composable
 - Pinia is the renderer projection, not a security boundary. Main validates the
   sender, payload, lifecycle transition, and cross-domain preconditions for
   every request.
-- Only Electron main may import `@yadaw/dsp-node`. The renderer and preload may
-  not load the addon directly.
+- Only Electron main may import `@yadaw/audio-host-client` or
+  `@yadaw/dsp-node`. The renderer and preload may not load either addon
+  directly.
+- `audio-host-client` owns the live helper lifecycle, typed cross-process
+  protocol, watchdog, and restart coordination. `dsp-node` owns offline tools
+  only and must not regain a cpal stream, transport, recording session,
+  playback graph, or VST3 instance.
 - IPC, filesystem work, Vue reactivity, allocation, and blocking synchronization
-  remain outside real-time audio callbacks. See `docs/architecture.md`.
+  remain outside real-time audio callbacks. The normative graph, actor, worker,
+  and thread rules are in [Playback runtime architecture](playback-runtime.md).
+  See also `docs/architecture.md`.
 
 Tests may mock `window.yadaw`. E2E tests may call it to inspect native state,
 but product behavior should normally be exercised through the UI.
@@ -79,13 +87,18 @@ Before adding or changing a native call:
    method. Do not add a stringly typed generic command.
 2. Assign exactly one owner Pinia store and update the table above.
 3. Validate the sender and all untrusted payload fields in Electron main.
-4. Choose and document one concurrency rule: exclusive state transition, FIFO,
+4. Route live playback through `audio-host-client`; route only offline work
+   through `dsp-node`. Do not add a temporary direct helper or plugin call.
+5. Choose and document one concurrency rule: exclusive state transition, FIFO,
    latest-wins, coalesced, or sampled telemetry.
-5. Define the stable state after success, cancellation, and failure. Main must
+6. Define the stable state after success, cancellation, and failure. Main must
    reject illegal transitions even if the renderer bypasses its store guard.
-6. Add store tests, main guard/transition tests, and a reversed-completion race
+7. If the operation reaches the playback helper, assign an actor owner,
+   bounded-mailbox behavior, deadline, cancellation behavior, and confirm that
+   no part executes in the real-time callback.
+8. Add store tests, main guard/transition tests, and a reversed-completion race
    test when the operation is asynchronous.
-7. Run the renderer boundary test and the repository validation path.
+9. Run the renderer boundary test and the repository validation path.
 
 Any production exception to this boundary requires an explicit update to this
 document and `AGENTS.md`; a local bypass is not acceptable.

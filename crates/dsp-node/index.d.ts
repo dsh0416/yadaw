@@ -2,31 +2,15 @@
 /* eslint-disable */
 export declare function analyzeWaveform(path: string): Promise<NativeAnalyzedWaveform>
 
-export declare function audioEngineSnapshot(): NativeAudioRuntimeSnapshot
-
 export declare function engineInfo(): NativeEngineInfo
 
 export declare function finalizeRecording(config: NativeFinalizeRecordingConfig): Promise<NativeFinalizedRecording>
-
-export declare function listAudioBackends(): Array<NativeAudioBackend>
-
-export declare function listAudioDevices(backend: string): NativeAudioDeviceList
-
-export declare function loadMixerGraph(graph: NativeMixerGraph): void
-
-export declare function mixerSnapshot(): NativeMixerSnapshot
 
 export interface NativeAnalyzedWaveform {
   sampleRate: number
   channels: number
   frameCount: number
   waveformLevels: Array<NativeWaveformLevel>
-}
-
-export interface NativeAudioBackend {
-  id: string
-  label: string
-  available: boolean
 }
 
 export interface NativeAudioBenchmarkReport {
@@ -49,47 +33,6 @@ export interface NativeAudioBenchmarkScenario {
   averageBlockMs: number
   bufferBudgetMs: number
   realtimeFactor: number
-}
-
-export interface NativeAudioDevice {
-  id: string
-  name: string
-  isDefault: boolean
-  defaultSampleRate?: number
-  minBufferSize?: number
-  maxBufferSize?: number
-  channelCount?: number
-}
-
-export interface NativeAudioDeviceList {
-  inputs: Array<NativeAudioDevice>
-  outputs: Array<NativeAudioDevice>
-}
-
-export interface NativeAudioEngineConfig {
-  backend: string
-  inputDeviceId: string
-  outputDeviceId: string
-  bufferSize: number
-}
-
-export interface NativeAudioRuntimeSnapshot {
-  state: string
-  requestedBufferSize?: number
-  sampleRate?: number
-  inputSampleRate?: number
-  inputBufferSize?: number
-  outputBufferSize?: number
-  ringBufferCapacityFrames?: number
-  ringBufferFillFrames?: number
-  inputLatencyMs?: number
-  outputLatencyMs?: number
-  ringBufferLatencyMs?: number
-  engineLatencyMs?: number
-  estimatedRoundTripLatencyMs?: number
-  xruns: number
-  clockSync: string
-  bufferFallback: boolean
 }
 
 export interface NativeEngineInfo {
@@ -150,67 +93,6 @@ export interface NativeMidiTrack {
   warnings: Array<string>
 }
 
-export interface NativeMixerChannel {
-  id: string
-  kind: string
-  gainDb: number
-  pan: number
-  muted: boolean
-  soloed: boolean
-  outputIndex?: number
-  recordArmed: boolean
-  inputChannels: Array<number>
-  hardwareOutputChannels: Array<number>
-}
-
-export interface NativeMixerChannelMeter {
-  channelId: string
-  preLeft: number
-  preRight: number
-  postLeft: number
-  postRight: number
-  heldLeft: number
-  heldRight: number
-  clipped: boolean
-}
-
-export interface NativeMixerClip {
-  id: string
-  trackInputIndex: number
-  startFrame: number
-  sourceOffsetFrames: number
-  lengthFrames: number
-  path: string
-}
-
-export interface NativeMixerGraph {
-  sampleRate: number
-  channels: Array<NativeMixerChannel>
-  sends: Array<NativeMixerSend>
-  clips: Array<NativeMixerClip>
-}
-
-export interface NativeMixerParameterPreview {
-  target: string
-  id: string
-  parameter: string
-  value: number
-}
-
-export interface NativeMixerSend {
-  id: string
-  sourceIndex: number
-  targetIndex: number
-  enabled: boolean
-  tap: string
-  levelDb: number
-  pan: number
-}
-
-export interface NativeMixerSnapshot {
-  meters: Array<NativeMixerChannelMeter>
-}
-
 export interface NativeNormalizedSmf {
   format: number
   sourceTiming: string
@@ -253,32 +135,13 @@ export interface NativeTimeSignatureEvent {
   denominator: number
 }
 
-export interface NativeTransportSnapshot {
-  state: string
-  positionFrames: number
-  sampleRate: number
-}
-
 export interface NativeWaveformLevel {
   framesPerBucket: number
   bucketCount: number
   peaks: Buffer
 }
 
-export interface NativeWaveformSnapshot {
-  sampleRate: number
-  channels: number
-  frameCount: number
-  startFrame: number
-  endFrame: number
-  framesPerBucket: number
-  bucketCount: number
-  peaks: Buffer
-}
-
 export declare function parseMidiFile(path: string, projectTempoMap: NativeTempoMap): Promise<NativeNormalizedSmf>
-
-export declare function previewMixerParameter(preview: NativeMixerParameterPreview): void
 
 export declare function processGain(samples: Array<number>, gain: number): ProcessGainResult
 
@@ -287,22 +150,8 @@ export interface ProcessGainResult {
   peak: number
 }
 
-export declare function recordingWaveformSnapshot(startFrame: number, endFrame: number, maxBuckets: number): NativeWaveformSnapshot
-
 export declare function repairRecordingHeader(path: string, channels: number): number
 
 export declare function runAudioBenchmark(): Promise<NativeAudioBenchmarkReport>
-
-export declare function startAudioEngine(config: NativeAudioEngineConfig): NativeAudioRuntimeSnapshot
-
-export declare function startRecording(config: NativeRecordingStartConfig): void
-
-export declare function stopAudioEngine(): NativeAudioRuntimeSnapshot
-
-export declare function stopRecording(): NativeRecordingResult
-
-export declare function transportCommand(kind: string, positionFrames?: number | undefined | null): NativeTransportSnapshot
-
-export declare function transportSnapshot(): NativeTransportSnapshot
 
 export declare function writeDeterministicTestRecording(config: NativeRecordingStartConfig, sampleRate: number, frameCount: number): NativeRecordingResult

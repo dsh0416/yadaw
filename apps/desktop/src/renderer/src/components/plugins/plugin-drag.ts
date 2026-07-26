@@ -1,0 +1,34 @@
+import type { PluginDescriptor } from "@yadaw/contracts"
+
+export const PLUGIN_DRAG_TYPE = "application/x-yadaw-plugin"
+
+export type PluginDragPayload =
+  | { source: "catalog"; descriptor: PluginDescriptor }
+  | { source: "rack"; instanceId: string }
+
+export function writePluginDrag(event: DragEvent, payload: PluginDragPayload): void {
+  if (!event.dataTransfer) return
+  event.dataTransfer.effectAllowed = payload.source === "catalog" ? "copy" : "move"
+  event.dataTransfer.setData(PLUGIN_DRAG_TYPE, JSON.stringify(payload))
+}
+
+export function readPluginDrag(event: DragEvent): PluginDragPayload | null {
+  const value = event.dataTransfer?.getData(PLUGIN_DRAG_TYPE)
+  if (!value) return null
+  try {
+    const payload = JSON.parse(value) as Partial<PluginDragPayload>
+    if (payload.source === "rack" && typeof payload.instanceId === "string") {
+      return { source: "rack", instanceId: payload.instanceId }
+    }
+    if (
+      payload.source === "catalog" &&
+      typeof payload.descriptor === "object" &&
+      payload.descriptor !== null
+    ) {
+      return { source: "catalog", descriptor: payload.descriptor as PluginDescriptor }
+    }
+  } catch {
+    // Untrusted native drag data is ignored.
+  }
+  return null
+}

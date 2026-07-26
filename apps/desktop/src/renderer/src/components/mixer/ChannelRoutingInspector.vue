@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, shallowRef, watch } from "vue"
 import { Plus, Trash2, X } from "@lucide/vue"
-import type { MixerSendPatch, MixerSendState } from "@yadaw/contracts"
+import type { MixerSendPatch, MixerSendState, PluginDescriptor } from "@yadaw/contracts"
 import { useParameterGesture } from "../../composables/useParameterGesture"
 import { useGlobalDialog } from "../../composables/useGlobalDialog"
 import { useMixerStore } from "../../stores/mixer"
@@ -134,6 +134,36 @@ function togglePlugin(instanceId: string, enabled: boolean): void {
 function removePlugin(instanceId: string): void {
   void mixerStore.execute({ type: "delete-plugin", pluginId: instanceId })
 }
+
+function insertEffect(descriptor: PluginDescriptor, slotOrder: number): void {
+  const selectedChannel = channel.value
+  if (!selectedChannel) return
+  void pluginStore.addEffectAt(descriptor, selectedChannel.id, slotOrder)
+}
+
+function moveEffect(instanceId: string, slotOrder: number): void {
+  const selectedChannel = channel.value
+  if (!selectedChannel) return
+  void pluginStore.moveInsert(instanceId, selectedChannel.id, slotOrder)
+}
+
+async function assignInstrument(descriptor: PluginDescriptor): Promise<void> {
+  const selectedChannel = channel.value
+  if (!selectedChannel || selectedChannel.kind !== "instrument") return
+  if (instrument.value) {
+    const confirmed = await confirm({
+      eyebrow: "Instrument slot",
+      tone: "warning",
+      title: `Replace ${instrument.value.descriptor.name}?`,
+      description: `The instrument will be replaced with ${descriptor.name}.`,
+      detail: "The previous component and controller state remain available through undo.",
+      confirmLabel: "Replace instrument",
+      destructive: false
+    })
+    if (!confirmed) return
+  }
+  await pluginStore.assignInstrument(descriptor, selectedChannel.id)
+}
 </script>
 
 <template>
@@ -176,15 +206,19 @@ function removePlugin(instanceId: string): void {
         @open="pluginStore.openEditor"
         @toggle="togglePlugin"
         @remove="removePlugin"
+        @assign="assignInstrument"
       />
 
       <PluginRack
         v-if="channel.kind !== 'master'"
+        :channel-id="channel.id"
         :plugins="inserts"
         :runtime="pluginStore.runtime"
         @open="pluginStore.openEditor"
         @toggle="togglePlugin"
         @remove="removePlugin"
+        @insert="insertEffect"
+        @move="moveEffect"
       />
 
       <PluginParameterPanel

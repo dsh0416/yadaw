@@ -13,4 +13,5 @@ copies under `.agents/skills/`.
 
 - [Development environment](environment.md)
 - [Native call boundary](native-call-boundary.md)
+- [Playback runtime architecture](playback-runtime.md)
 - [Project database development rules](project-database.md)

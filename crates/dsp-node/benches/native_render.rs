@@ -1,7 +1,7 @@
 use std::{hint::black_box, time::Duration};
 
 use criterion::{BatchSize, BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use yadaw_dsp_node::bench_support::{
+use yadaw_audio_host::engine::bench_support::{
     GraphSwapHarness, ParameterQueueHarness, RenderHarness, RenderScenario, ResamplerHarness,
 };
 

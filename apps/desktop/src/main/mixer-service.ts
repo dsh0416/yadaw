@@ -15,12 +15,9 @@ import type {
   TransportSnapshot
 } from "@yadaw/contracts"
 import {
-  loadMixerGraph,
-  mixerSnapshot,
-  previewMixerParameter,
-  transportCommand,
-  transportSnapshot
-} from "@yadaw/dsp-node"
+  type AudioHostGraph,
+  AudioHostService
+} from "./audio-host-service"
 import type { ProjectService } from "./project-service"
 
 export interface MidiSourceImport {
@@ -68,6 +65,48 @@ function midiClipById(graph: MixerGraphSnapshot, id: string): MidiClipState {
   const clip = graph.midiClips.find((candidate) => candidate.id === id)
   if (!clip) throw new Error(`MIDI clip '${id}' was not found`)
   return clip
+}
+
+function movePluginInGraph(
+  graph: MixerGraphSnapshot,
+  pluginId: string,
+  channelId: string,
+  role: PluginInstanceState["role"],
+  slotOrder: number
+): void {
+  const plugin = pluginById(graph, pluginId)
+  const sourceChannelId = plugin.channelId
+  const sourceRole = plugin.role
+  const source = graph.plugins
+    .filter((candidate) =>
+      candidate.id !== pluginId &&
+      candidate.channelId === sourceChannelId &&
+      candidate.role === sourceRole
+    )
+    .sort((left, right) => left.slotOrder - right.slotOrder)
+  source.forEach((candidate, index) => {
+    candidate.slotOrder = sourceRole === "instrument" ? 0 : index
+  })
+
+  const destination = graph.plugins
+    .filter((candidate) =>
+      candidate.id !== pluginId &&
+      candidate.channelId === channelId &&
+      candidate.role === role
+    )
+    .sort((left, right) => left.slotOrder - right.slotOrder)
+  if (role === "instrument" && destination.length > 0) {
+    throw new Error("Replace the assigned instrument instead of moving into an occupied slot")
+  }
+  const insertionIndex = role === "instrument"
+    ? 0
+    : Math.max(0, Math.min(slotOrder, destination.length))
+  destination.splice(insertionIndex, 0, plugin)
+  destination.forEach((candidate, index) => {
+    candidate.channelId = channelId
+    candidate.role = role
+    candidate.slotOrder = role === "instrument" ? 0 : index
+  })
 }
 
 function patchFromKeys<T extends object>(source: T, patch: Partial<T>): Partial<T> {
@@ -276,10 +315,13 @@ function applyToGraph(graph: MixerGraphSnapshot, command: ProjectCommand): Mixer
       Object.assign(pluginById(next, command.pluginId), command.patch)
       break
     case "move-plugin": {
-      const plugin = pluginById(next, command.pluginId)
-      plugin.channelId = command.channelId
-      plugin.role = command.role
-      plugin.slotOrder = command.slotOrder
+      movePluginInGraph(
+        next,
+        command.pluginId,
+        command.channelId,
+        command.role,
+        command.slotOrder
+      )
       break
     }
     case "replace-plugin": {
@@ -530,10 +572,7 @@ export class MixerService {
   constructor(
     userData: string,
     private readonly projects: ProjectService,
-    private readonly onGraphLoaded: (
-      revision: number,
-      graph: MixerGraphSnapshot
-    ) => Promise<void> = async () => {}
+    private readonly audioHost: AudioHostService | null = null
   ) {
     this.cacheDirectory = join(userData, "mixer-cache")
   }
@@ -586,47 +625,75 @@ export class MixerService {
     validateGraph(graph)
     const paths = await this.cacheAssets(graph)
     const channelIndex = new Map(graph.channels.map((channel, index) => [channel.id, index]))
-    const audioIndex = new Map(
-      graph.channels
-        .filter((channel) => channel.kind === "audio")
-        .map((channel, index) => [channel.id, index])
-    )
-    loadMixerGraph({
-      sampleRate: graph.sampleRate,
+    const runtimeGraph: AudioHostGraph = {
+      sample_rate: graph.sampleRate,
       channels: graph.channels.map((channel) => ({
         id: channel.id,
         kind: channel.kind,
-        gainDb: channel.gainDb,
+        gain_db: channel.gainDb,
         pan: channel.pan,
         muted: channel.muted,
         soloed: channel.soloed,
-        recordArmed: channel.recordArmed,
-        inputChannels: channel.inputChannels,
-        hardwareOutputChannels: channel.hardwareOutputChannels,
-        outputIndex: channel.outputChannelId === null
+        record_armed: channel.recordArmed,
+        input_channels: channel.inputChannels,
+        hardware_output_channels: channel.hardwareOutputChannels,
+        output_index: channel.outputChannelId === null
           ? undefined
           : channelIndex.get(channel.outputChannelId)
       })),
       sends: graph.sends.map((send) => ({
         id: send.id,
-        sourceIndex: channelIndex.get(send.sourceChannelId)!,
-        targetIndex: channelIndex.get(send.targetChannelId)!,
+        source_index: channelIndex.get(send.sourceChannelId)!,
+        target_index: channelIndex.get(send.targetChannelId)!,
         enabled: send.enabled,
         tap: send.tap,
-        levelDb: send.levelDb,
+        level_db: send.levelDb,
         pan: send.pan
       })),
       clips: graph.clips.map((clip) => ({
         id: clip.id,
-        trackInputIndex: audioIndex.get(clip.trackId)!,
-        startFrame: clip.startFrame,
-        sourceOffsetFrames: clip.sourceOffsetFrames,
-        lengthFrames: clip.lengthFrames,
+        channel_index: channelIndex.get(clip.trackId)!,
+        start_frame: clip.startFrame,
+        source_offset_frames: clip.sourceOffsetFrames,
+        length_frames: clip.lengthFrames,
         path: paths.get(clip.assetId)!
+      })),
+      plugins: graph.plugins.map((plugin) => ({
+        instance_id: plugin.id,
+        channel_index: channelIndex.get(plugin.channelId)!,
+        role: plugin.role,
+        slot_order: plugin.slotOrder,
+        enabled: plugin.enabled,
+        latency_samples: 0,
+        tail_samples: 0
+      })),
+      midi_clips: graph.midiClips.map((clip) => ({
+        id: clip.id,
+        channel_index: channelIndex.get(clip.trackId)!,
+        start_tick: clip.startTick,
+        source_offset_ticks: clip.sourceOffsetTicks,
+        length_ticks: clip.lengthTicks,
+        notes: clip.notes.map((note) => ({
+          start_tick: note.startTick,
+          duration_ticks: note.durationTicks,
+          channel: note.channel,
+          key: note.key,
+          velocity: note.velocity,
+          release_velocity: note.releaseVelocity
+        }))
+      })),
+      tempo_events: graph.tempoMap.tempoEvents.map((event) => ({
+        tick: event.tick,
+        beats_per_minute: event.beatsPerMinute
+      })),
+      time_signature_events: graph.tempoMap.timeSignatureEvents.map((event) => ({
+        tick: event.tick,
+        numerator: event.numerator,
+        denominator: event.denominator
       }))
-    })
+    }
     this.graphRevision += 1
-    await this.onGraphLoaded(this.graphRevision, graph)
+    await this.audioHost?.loadGraph(this.graphRevision, graph, runtimeGraph)
     return graph
   }
 
@@ -686,58 +753,48 @@ export class MixerService {
     }
     if (command.type === "update-channel") {
       if (command.patch.gainDb !== undefined) {
-        previewMixerParameter({
+        await this.audioHost?.previewMixerParameter({
           target: "channel", id: command.channelId, parameter: "gainDb", value: command.patch.gainDb
         })
       }
       if (command.patch.pan !== undefined) {
-        previewMixerParameter({
+        await this.audioHost?.previewMixerParameter({
           target: "channel", id: command.channelId, parameter: "pan", value: command.patch.pan
         })
       }
     } else if (command.type === "update-send") {
       if (command.patch.levelDb !== undefined) {
-        previewMixerParameter({
+        await this.audioHost?.previewMixerParameter({
           target: "send", id: command.sendId, parameter: "levelDb", value: command.patch.levelDb
         })
       }
       if (command.patch.pan !== undefined) {
-        previewMixerParameter({
+        await this.audioHost?.previewMixerParameter({
           target: "send", id: command.sendId, parameter: "pan", value: command.patch.pan
         })
       }
     }
   }
 
-  preview(preview: MixerParameterPreview): void {
+  async preview(preview: MixerParameterPreview): Promise<void> {
     finiteRange(
       preview.value,
       preview.parameter === "pan" ? -1 : -90,
       preview.parameter === "pan" ? 1 : 12,
       "Mixer preview"
     )
-    previewMixerParameter(preview)
+    await this.audioHost?.previewMixerParameter(preview)
   }
 
-  runtimeSnapshot(): MixerRuntimeSnapshot {
-    return {
-      meters: mixerSnapshot().meters.map((meter) => ({
-        channelId: meter.channelId,
-        preFaderPeak: [meter.preLeft, meter.preRight],
-        postFaderPeak: [meter.postLeft, meter.postRight],
-        heldPeak: [meter.heldLeft, meter.heldRight],
-        clipped: meter.clipped
-      })),
-      capturedAt: Date.now()
-    }
+  async runtimeSnapshot(): Promise<MixerRuntimeSnapshot> {
+    return this.audioHost?.mixerSnapshot() ?? { meters: [], capturedAt: Date.now() }
   }
 
-  clearMeterClips(): MixerRuntimeSnapshot {
-    transportCommand("clear-meter-clips")
-    return this.runtimeSnapshot()
+  async clearMeterClips(): Promise<MixerRuntimeSnapshot> {
+    return this.audioHost?.clearMeterClips() ?? { meters: [], capturedAt: Date.now() }
   }
 
-  transport(command: TransportCommand): TransportSnapshot {
+  async transport(command: TransportCommand): Promise<TransportSnapshot> {
     if (process.env.YADAW_TEST_CAPTURE_SOURCE === "1") {
       if (command.type === "seek") {
         this.testTransport.positionFrames = command.positionFrames
@@ -753,25 +810,17 @@ export class MixerService {
       }
       return { ...this.testTransport }
     }
-    const native = command.type === "seek"
-      ? transportCommand("seek", command.positionFrames)
-      : transportCommand(command.type)
-    return {
-      state: native.state as TransportSnapshot["state"],
-      positionFrames: native.positionFrames,
-      sampleRate: native.sampleRate
-    }
+    if (!this.audioHost) throw new Error("Audio host is not running")
+    return this.audioHost.transport(command)
   }
 
-  transportSnapshot(): TransportSnapshot {
+  async transportSnapshot(): Promise<TransportSnapshot> {
     if (process.env.YADAW_TEST_CAPTURE_SOURCE === "1") {
       return { ...this.testTransport }
     }
-    const native = transportSnapshot()
-    return {
-      state: native.state as TransportSnapshot["state"],
-      positionFrames: native.positionFrames,
-      sampleRate: native.sampleRate
+    if (!this.audioHost) {
+      return { state: "stopped", positionFrames: 0, sampleRate: 0 }
     }
+    return this.audioHost.transportSnapshot()
   }
 }

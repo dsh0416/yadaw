@@ -142,29 +142,93 @@ export const usePluginStore = defineStore("plugins", () => {
     })
   }
 
-  function addEffect(descriptor: PluginDescriptor): Promise<boolean> {
-    const channel = mixerStore.selectedChannel
+  function addEffectAt(
+    descriptor: PluginDescriptor,
+    channelId?: string,
+    slotOrder?: number
+  ): Promise<boolean> {
+    const channel = channelId
+      ? mixerStore.graph.channels.find((candidate) => candidate.id === channelId) ?? null
+      : mixerStore.selectedChannel
     if (!channel || channel.kind === "master") {
       error.value = "Select an Audio, Instrument, Bus, or Output channel first."
       return Promise.resolve(false)
     }
-    const slotOrder = mixerStore.graph.plugins.filter((plugin) =>
+    const inserts = mixerStore.graph.plugins.filter((plugin) =>
       plugin.channelId === channel.id && plugin.role === "insert"
-    ).length
-    return mixerStore.execute({
+    )
+    const insertionIndex = Math.max(0, Math.min(slotOrder ?? inserts.length, inserts.length))
+    const plugin = {
+      id: crypto.randomUUID(),
+      channelId: channel.id,
+      role: "insert" as const,
+      slotOrder: inserts.length,
+      classId: descriptor.classId,
+      descriptor: structuredClone(descriptor),
+      enabled: true,
+      componentState: new Uint8Array(),
+      controllerState: new Uint8Array()
+    }
+    return mixerStore.execute(insertionIndex === inserts.length ? {
       type: "create-plugin",
-      plugin: {
-        id: crypto.randomUUID(),
-        channelId: channel.id,
-        role: "insert",
-        slotOrder,
-        classId: descriptor.classId,
-        descriptor: structuredClone(descriptor),
-        enabled: true,
-        componentState: new Uint8Array(),
-        controllerState: new Uint8Array()
-      }
+      plugin
+    } : {
+      type: "batch",
+      commands: [
+        { type: "create-plugin", plugin },
+        {
+          type: "move-plugin",
+          pluginId: plugin.id,
+          channelId: channel.id,
+          role: "insert",
+          slotOrder: insertionIndex
+        }
+      ]
     })
+  }
+
+  function addEffect(descriptor: PluginDescriptor): Promise<boolean> {
+    return addEffectAt(descriptor)
+  }
+
+  function moveInsert(instanceId: string, channelId: string, slotOrder: number): Promise<boolean> {
+    const plugin = mixerStore.graph.plugins.find((candidate) => candidate.id === instanceId)
+    if (!plugin || plugin.role !== "insert" || plugin.descriptor.kind !== "effect") {
+      error.value = "Only effect insert slots can be reordered."
+      return Promise.resolve(false)
+    }
+    return mixerStore.execute({
+      type: "move-plugin",
+      pluginId: instanceId,
+      channelId,
+      role: "insert",
+      slotOrder
+    })
+  }
+
+  function assignInstrument(descriptor: PluginDescriptor, channelId: string): Promise<boolean> {
+    const channel = mixerStore.graph.channels.find((candidate) => candidate.id === channelId)
+    if (!channel || channel.kind !== "instrument" || descriptor.kind !== "instrument") {
+      error.value = "Instruments can only be assigned to Instrument tracks."
+      return Promise.resolve(false)
+    }
+    const current = mixerStore.graph.plugins.find((plugin) =>
+      plugin.channelId === channelId && plugin.role === "instrument"
+    )
+    const plugin = {
+      id: current?.id ?? crypto.randomUUID(),
+      channelId,
+      role: "instrument" as const,
+      slotOrder: 0,
+      classId: descriptor.classId,
+      descriptor: structuredClone(descriptor),
+      enabled: true,
+      componentState: new Uint8Array(),
+      controllerState: new Uint8Array()
+    }
+    return mixerStore.execute(current
+      ? { type: "replace-plugin", pluginId: current.id, plugin }
+      : { type: "create-plugin", plugin })
   }
 
   function activate(descriptor: PluginDescriptor): Promise<boolean> {
@@ -249,6 +313,9 @@ export const usePluginStore = defineStore("plugins", () => {
     activate,
     addInstrument,
     addEffect,
+    addEffectAt,
+    moveInsert,
+    assignInstrument,
     openEditor,
     setParameter,
     closeGenericPanel,

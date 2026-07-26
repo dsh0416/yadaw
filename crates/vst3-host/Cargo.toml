@@ -1,0 +1,21 @@
+[package]
+name = "yadaw-vst3-host"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+libloading.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+yadaw-vst3-host-sys.workspace = true
+
+[lints.rust]
+unsafe_code = "allow"
+unsafe_op_in_unsafe_fn = "deny"
+
+[[bin]]
+name = "yadaw-vst3-probe"
+path = "src/bin/probe.rs"

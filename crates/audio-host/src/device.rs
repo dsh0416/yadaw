@@ -1,9 +1,8 @@
+use crate::{HostError as Error, HostResult as Result, Status};
 use cpal::{
     SupportedBufferSize, SupportedStreamConfig,
     traits::{DeviceTrait, HostTrait},
 };
-use napi::{Error, Result, Status};
-use napi_derive::napi;
 
 const KNOWN_BACKENDS: [(&str, &str); 4] = [
     ("wasapi", "WASAPI"),
@@ -12,14 +11,12 @@ const KNOWN_BACKENDS: [(&str, &str); 4] = [
     ("alsa", "ALSA"),
 ];
 
-#[napi(object)]
 pub struct NativeAudioBackend {
     pub id: String,
     pub label: String,
     pub available: bool,
 }
 
-#[napi(object)]
 pub struct NativeAudioDevice {
     pub id: String,
     pub name: String,
@@ -30,7 +27,6 @@ pub struct NativeAudioDevice {
     pub channel_count: Option<u32>,
 }
 
-#[napi(object)]
 pub struct NativeAudioDeviceList {
     pub inputs: Vec<NativeAudioDevice>,
     pub outputs: Vec<NativeAudioDevice>,
@@ -56,11 +52,10 @@ fn stream_capabilities(
     }
 }
 
-#[napi]
 pub fn list_audio_backends() -> Vec<NativeAudioBackend> {
     let available_hosts = cpal::available_hosts();
 
-    KNOWN_BACKENDS
+    let mut backends = KNOWN_BACKENDS
         .iter()
         .map(|(id, label)| NativeAudioBackend {
             id: (*id).to_owned(),
@@ -69,11 +64,33 @@ pub fn list_audio_backends() -> Vec<NativeAudioBackend> {
                 .iter()
                 .any(|host_id| host_id.to_string().eq_ignore_ascii_case(id)),
         })
-        .collect()
+        .collect::<Vec<_>>();
+    if std::env::var_os("YADAW_TEST_VIRTUAL_AUDIO").is_some() {
+        backends.push(NativeAudioBackend {
+            id: "virtual".to_owned(),
+            label: "Virtual (test)".to_owned(),
+            available: true,
+        });
+    }
+    backends
 }
 
-#[napi]
 pub fn list_audio_devices(backend: String) -> Result<NativeAudioDeviceList> {
+    if backend == "virtual" && std::env::var_os("YADAW_TEST_VIRTUAL_AUDIO").is_some() {
+        let device = || NativeAudioDevice {
+            id: "virtual-stereo".to_owned(),
+            name: "Virtual Stereo".to_owned(),
+            is_default: true,
+            default_sample_rate: Some(48_000),
+            min_buffer_size: Some(32),
+            max_buffer_size: Some(2_048),
+            channel_count: Some(2),
+        };
+        return Ok(NativeAudioDeviceList {
+            inputs: vec![device()],
+            outputs: vec![device()],
+        });
+    }
     let host_id = cpal::available_hosts()
         .into_iter()
         .find(|host_id| host_id.to_string().eq_ignore_ascii_case(&backend))
