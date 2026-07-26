@@ -79,6 +79,18 @@ High-frequency meter, transport-position, performance, and waveform samples
 are observations rather than lifecycle states. They use sampling and stale
 response suppression and never run inside the audio callback.
 
+Live meter and transport snapshots are an exception to the usual asynchronous
+native-call shape: Electron main synchronously reads the addon-owned coherent
+telemetry page, and the existing preload methods return that observation. They
+must not be reimplemented as 30 Hz request/reply IPC. Plugin and mixer preview
+parameters similarly use the addon-owned SPSC producer; only gesture-boundary
+fallbacks and wake/lifecycle messages use priority IPC.
+
+Large `Uint8Array` values remain ordinary values at this boundary. The native
+addon decides whether to inline or attach them and always returns an ordinary
+Node Buffer after one validated copy. Renderer, preload, and project database
+code must not retain a shared-memory handle or lease ID.
+
 ## Adding a native call
 
 Before adding or changing a native call:
@@ -96,9 +108,13 @@ Before adding or changing a native call:
 7. If the operation reaches the playback helper, assign an actor owner,
    bounded-mailbox behavior, deadline, cancellation behavior, and confirm that
    no part executes in the real-time callback.
-8. Add store tests, main guard/transition tests, and a reversed-completion race
+8. Classify its transport: small control MessagePack, temporary shared blob,
+   sampled telemetry, SPSC parameter command, or stable-ID graph patch. Do not
+   place a large byte vector or high-frequency observation on normal request
+   IPC.
+9. Add store tests, main guard/transition tests, and a reversed-completion race
    test when the operation is asynchronous.
-9. Run the renderer boundary test and the repository validation path.
+10. Run the renderer boundary test and the repository validation path.
 
 Any production exception to this boundary requires an explicit update to this
 document and `AGENTS.md`; a local bypass is not acceptable.

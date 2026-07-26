@@ -3,5 +3,10 @@
 export declare class AudioHostIpcClient {
   constructor(executablePath: string, bridgePath: string, crashMarkerPath: string)
   request(messagePackRequest: Buffer): Promise<Buffer>
+  heartbeat(messagePackRequest: Buffer): Promise<Buffer>
+  readTelemetry(): Buffer
+  enqueueParameter(targetKind: string, runtimeHandle: number, parameterId: number, normalized: number, gesture: string): string
+  get sessionEpoch(): number
+  drainEvents(): Array<Buffer>
   close(): void
 }

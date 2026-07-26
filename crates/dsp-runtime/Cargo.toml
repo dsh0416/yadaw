@@ -6,7 +6,6 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
-ipc-channel.workspace = true
 midly.workspace = true
 rmp-serde.workspace = true
 serde.workspace = true

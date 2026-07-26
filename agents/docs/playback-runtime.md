@@ -21,8 +21,10 @@ Vue / Pinia
   -> window.yadaw
   -> Electron main services
   -> audio-host-client (.node)
-       ├─ napi-rs async tasks on the Node worker pool
-       ├─ helper lifecycle and serialized request correlation
+       ├─ request_id -> JsDeferred response router (up to 256 in flight)
+       ├─ independent normal, priority-heartbeat, and event channels
+       ├─ shared telemetry reader and parameter-ring producer
+       ├─ helper lifecycle and lease ownership
        └─ servo/ipc-channel
             |
             v
@@ -106,30 +108,93 @@ errors.
 
 ## IPC boundary
 
-Cross-process messages use `servo/ipc-channel`. The channel payload is a
-bounded MessagePack byte envelope because Servo's internal postcard codec does
-not support serde internally-tagged enums. The addon and helper decode that
-envelope immediately into the typed protocol values:
+Cross-process messages use protocol v2 over `servo/ipc-channel`. The outer
+value is `WirePacket { body, regions }`: `body` is a bounded MessagePack
+request/reply/event and `regions` contains zero or more
+`IpcSharedMemory` handles. Protocol v1 is intentionally rejected because addon
+and helper are a lockstep application resource.
 
 ```text
-HostRequest { version, request_id, command }
-HostReply   { version, request_id, result }
-HostEvent
+WirePacket
+  body: ControlRequest | ControlResponse | PriorityRequest | PriorityResponse | HostEvent
+  regions: IpcSharedMemory[]
 ```
 
-The client creates an `IpcOneShotServer`, starts the helper or probe with
-`std::process::Command`, then receives persistent request, reply, and event
-channels during bootstrap.
+Binary fields use `BinaryPayload::Inline` through 64 KiB and
+`BinaryPayload::Shared` above 64 KiB. Shared references contain the packet
+region index, checked offset and length, XXH3-64 checksum, and lease ID.
+Component/controller state, waveform peaks, raw MIDI/SysEx, and encoded large
+MIDI batches use this path. The addon validates and copies a received temporary
+blob exactly once into an ordinary Node Buffer; Electron never owns an external
+Buffer backed by a cross-process mapping.
+
+Attachments in one packet are 8-byte aligned and packed into as few regions as
+possible. A blob and a packet are each limited to 64 MiB. Each side permits at
+most 256 outstanding temporary leases and 512 MiB. The sender retains a
+mapping until `ReleaseLeases`; a 30-second expiry is a transport fault and
+releases the sender copy. Session close releases every temporary and persistent
+lease. Telemetry pages and the parameter ring are persistent session leases and
+do not use the temporary timeout.
+
+Bootstrap transfers these independent paths:
+
+```text
+normal requests  -> normal replies
+priority requests -> priority replies
+events
+telemetry page (persistent)
+parameter SPSC ring (persistent)
+session epoch
+```
+
+The addon response router owns the blocking normal receiver and resolves
+`request_id -> JsDeferred` in any order. Deadlines are scanned by the router;
+helper exit rejects all pending promises at once. Event and priority response
+routers have separate receivers. No request occupies libuv's worker pool while
+waiting for IPC.
 
 `ipc-channel` receive operations are blocking and its internal send queue is
 not the application's backpressure mechanism. Each process therefore has
-supervised ingress and egress bridge threads around bounded actor mailboxes.
-The ingress bridge may block on `blocking_send`; the Tokio runtime and winit
-thread must not.
+supervised blocking ingress/egress bridge threads around bounded actor
+mailboxes. Normal ingress uses `try_send` into the 256-entry Tokio protocol
+mailbox and returns `Busy` when saturated. Priority ingress answers heartbeat
+directly from liveness atomics; it never waits for Tokio, VST3, graph building,
+or the normal mailbox. Shutdown, lease release, parameter wake, and gesture
+boundary fallbacks use its reserved mailbox. Tokio actors enqueue replies to a
+bounded outbound mailbox; only the egress bridge calls blocking
+`ipc-channel::send`.
 
-Plugin state, raw MIDI, and large waveform payloads use `IpcSharedMemory`.
-Graphs and individual blobs have an application limit of 64 MiB. Standard
-output and error are logs only and never carry structured protocol data.
+Heartbeat reports independent IPC-receive, Tokio-dispatch, winit-dispatch, and
+audio-callback generations. This makes a control-runtime hang distinguishable
+from a plugin editor hang or audio callback stall.
+
+### Persistent real-time pages
+
+Telemetry is a dynamically sized shared page with a fixed ABI: magic, layout
+version, session/page epoch, power-of-two capacity, graph revision, transport
+snapshot, callback generation, and atomic meter slots. The writer brackets a
+snapshot with an atomic generation seqlock; every payload field is itself
+atomic, so the implementation never creates a Rust/C++ data race and does not
+pretend a seqlock makes ordinary shared memory safe. The addon retries a
+snapshot at most eight times and otherwise returns its last coherent value.
+The existing 30 Hz renderer polling API reads this page synchronously and does
+not generate normal request IPC.
+
+When a graph needs more meter slots, the helper creates a larger power-of-two
+page and sends `TelemetryPageOffer(epoch)`. The addon maps it and acknowledges
+on the priority path. Publication switches at a graph/block boundary; the old
+page stays mapped until the reader releases it. There is no product-level
+track-count limit derived from the initial 64 slots.
+
+The parameter page is a 4096-entry cross-process SPSC ring. Electron
+main/addon is the sole producer and helper is the sole consumer. Entries carry
+session epoch, sequence, target kind, session-scoped runtime handle, parameter
+ID, normalized bits, and gesture. The last 64 entries are reserved for
+`Begin`/`End`; `Perform` values stop entering before that reserve and
+`AudioHostService` coalesces the newest value per target/parameter. A hard-full
+gesture boundary falls back to the priority channel. A transition from empty
+to non-empty emits one `ParameterWake`. A helper restart changes the session
+epoch, so stale ring entries and handles are ignored.
 
 No IPC operation, serialization, channel send, or event construction occurs in
 an audio callback.
@@ -139,16 +204,28 @@ an audio callback.
 ### Build and publication
 
 ```text
-project snapshot
-  -> validated LoadGraph generation
+project snapshot or semantic patch
+  -> validated GraphUpdate revision
   -> VST3 registry resolves stable processor leases
   -> graph worker compiles routing, schedules, PDC, buffers
   -> EngineActor validates generation
-  -> LoadGraph command enters SPSC ring
+  -> graph publication command enters SPSC ring
   -> callback swaps graph at a block boundary
   -> old graph enters retirement SPSC
   -> EngineActor destroys old graph off the callback
 ```
+
+Project graph transport uses stable string IDs; array indices exist only in the
+compiled helper graph. `GraphUpdate::Patch` carries ID-based upsert/remove
+operations plus `base_revision` and new `revision`. The helper applies a patch
+only when its current revision equals `base_revision`; otherwise it returns
+`RevisionMismatch` and Electron retries its already-computed candidate as a
+full `Replace`. One project command batch is one atomic patch.
+
+`GraphAccepted` means compilation succeeded and the graph is queued for
+block-boundary publication. `GraphPublished` is the later event that makes the
+revision observable in telemetry. Large MIDI batches inside either a replace
+or patch use shared attachments.
 
 Every build has a monotonically increasing `GraphGeneration`. A newer build
 cancels older queued builds. A completed stale build is discarded without
@@ -338,7 +415,8 @@ Recovery policy is:
 
 Orderly shutdown:
 
-1. stop accepting ordinary protocol work;
+1. send idempotent `Shutdown` through the priority channel and stop accepting
+   ordinary protocol work;
 2. cancel graph and streaming generations;
 3. stop transport and send MIDI reset;
 4. disable and drain recording, then finalize the file;
@@ -346,7 +424,10 @@ Orderly shutdown:
 6. close VST3 editors on winit;
 7. deactivate and release plugin instances;
 8. drain retired graphs and stop background workers;
-9. close IPC channels and exit the winit event loop.
+9. reject addon pending promises and discard stale session handles/pages;
+10. close IPC channels and exit the winit event loop;
+11. join response/event routers before egress threads, because routers own
+    egress sender clones; reap the helper process last.
 
 Shutdown is idempotent. Repeating it must not start new work or double-finalize
 a recording.
@@ -375,3 +456,13 @@ During review, reject changes that:
 - make callback safety depend on Tokio, a lock, filesystem state, or Electron;
 - publish a graph or streaming window without generation validation;
 - save or restore plugin state from the callback.
+
+For a local transport baseline, run:
+
+```sh
+mise exec -- cargo run -p yadaw-ipc-transport --bin yadaw-ipc-benchmark --release
+```
+
+It launches a child process and reports inline/shared round-trip throughput at
+the 64 KiB threshold, a 256-request pipeline, and shared telemetry read rate.
+It is intentionally a developer benchmark rather than a GitHub Actions gate.

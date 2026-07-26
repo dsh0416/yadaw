@@ -4,18 +4,46 @@ use std::{
     io::{self, Read, Write},
 };
 
-use ipc_channel::ipc::{IpcReceiver, IpcSender};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
-pub const PROTOCOL_VERSION: u16 = 1;
+pub const PROTOCOL_VERSION: u16 = 2;
 pub const MAX_MESSAGE_BYTES: usize = 64 * 1024 * 1024;
+pub const INLINE_BLOB_LIMIT: usize = 64 * 1024;
 
-/// The channels transferred exactly once when the helper connects.
-#[derive(Serialize, Deserialize)]
-pub struct HostBootstrap {
-    pub requests: IpcReceiver<Vec<u8>>,
-    pub responses: IpcSender<Vec<u8>>,
-    pub events: IpcSender<Vec<u8>>,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct SharedBlobRef {
+    pub region: u16,
+    pub offset: u64,
+    pub length: u64,
+    pub checksum: u64,
+    pub lease_id: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "storage", rename_all = "kebab-case")]
+pub enum BinaryPayload {
+    Inline {
+        #[serde(with = "serde_bytes")]
+        bytes: Vec<u8>,
+    },
+    Shared {
+        reference: SharedBlobRef,
+    },
+}
+
+impl BinaryPayload {
+    #[must_use]
+    pub fn inline(bytes: Vec<u8>) -> Self {
+        Self::Inline { bytes }
+    }
+
+    #[must_use]
+    pub fn as_inline(&self) -> Option<&[u8]> {
+        match self {
+            Self::Inline { bytes } => Some(bytes),
+            Self::Shared { .. } => None,
+        }
+    }
 }
 
 /// Unsolicited helper notifications use a separate channel so editor and
@@ -24,6 +52,16 @@ pub struct HostBootstrap {
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum HostEvent {
     Ready,
+    ReleaseLeases {
+        lease_ids: Vec<u64>,
+    },
+    TelemetryPageOffer {
+        epoch: u64,
+        capacity: u32,
+    },
+    GraphPublished {
+        revision: u64,
+    },
     RuntimeFailure {
         message: String,
         plugin_instance_id: Option<String>,
@@ -44,6 +82,48 @@ pub struct ControlRequest {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PriorityRequest {
+    pub version: u16,
+    pub request_id: u64,
+    pub command: PriorityCommand,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "kebab-case")]
+pub enum PriorityCommand {
+    Heartbeat,
+    Shutdown,
+    ParameterWake,
+    ParameterBoundary { command: ParameterCommand },
+    ReleaseLeases { lease_ids: Vec<u64> },
+    TelemetryPageReady { epoch: u64 },
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PriorityResponse {
+    pub version: u16,
+    pub request_id: u64,
+    pub result: PriorityResult,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "kebab-case")]
+pub enum PriorityResult {
+    Heartbeat {
+        ipc_generation: u64,
+        tokio_generation: u64,
+        winit_generation: u64,
+        callback_generation: u64,
+        transport_state: String,
+    },
+    Accepted,
+    Busy,
+    Error {
+        message: String,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum ControlCommand {
     Ping,
@@ -57,9 +137,8 @@ pub enum ControlCommand {
     },
     StopAudioEngine,
     AudioEngineSnapshot,
-    LoadGraph {
-        revision: u64,
-        graph: LiveMixerGraph,
+    UpdateGraph {
+        update: GraphUpdate,
     },
     PreviewMixerParameter {
         preview: MixerParameterPreview,
@@ -84,10 +163,8 @@ pub enum ControlCommand {
         module_path: String,
         class_id: String,
         sample_rate: f64,
-        #[serde(with = "serde_bytes")]
-        component_state: Vec<u8>,
-        #[serde(with = "serde_bytes")]
-        controller_state: Vec<u8>,
+        component_state: BinaryPayload,
+        controller_state: BinaryPayload,
     },
     UnloadPlugin {
         instance_id: String,
@@ -172,7 +249,7 @@ pub struct LiveMixerChannel {
     pub pan: f64,
     pub muted: bool,
     pub soloed: bool,
-    pub output_index: Option<u32>,
+    pub output_channel_id: Option<String>,
     pub record_armed: bool,
     pub input_channels: Vec<u32>,
     pub hardware_output_channels: Vec<u32>,
@@ -181,8 +258,8 @@ pub struct LiveMixerChannel {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LiveMixerSend {
     pub id: String,
-    pub source_index: u32,
-    pub target_index: u32,
+    pub source_channel_id: String,
+    pub target_channel_id: String,
     pub enabled: bool,
     pub tap: String,
     pub level_db: f64,
@@ -192,7 +269,7 @@ pub struct LiveMixerSend {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LiveMixerClip {
     pub id: String,
-    pub channel_index: u32,
+    pub channel_id: String,
     pub start_frame: i64,
     pub source_offset_frames: i64,
     pub length_frames: i64,
@@ -202,7 +279,7 @@ pub struct LiveMixerClip {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LivePluginInstance {
     pub instance_id: String,
-    pub channel_index: u32,
+    pub channel_id: String,
     pub role: String,
     pub slot_order: u32,
     pub enabled: bool,
@@ -223,11 +300,34 @@ pub struct LiveMidiNote {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LiveMidiClip {
     pub id: String,
-    pub channel_index: u32,
+    pub channel_id: String,
     pub start_tick: u64,
     pub source_offset_ticks: u64,
     pub length_ticks: u64,
-    pub notes: Vec<LiveMidiNote>,
+    pub notes: MidiNoteBatch,
+    pub events: MidiEventBatch,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "storage", rename_all = "kebab-case")]
+pub enum MidiNoteBatch {
+    Inline { notes: Vec<LiveMidiNote> },
+    Shared { reference: SharedBlobRef },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LiveMidiEvent {
+    pub tick: u64,
+    pub channel: Option<u8>,
+    pub kind: String,
+    pub data: BinaryPayload,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "storage", rename_all = "kebab-case")]
+pub enum MidiEventBatch {
+    Inline { events: Vec<LiveMidiEvent> },
+    Shared { reference: SharedBlobRef },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -253,6 +353,128 @@ pub struct LiveMixerGraph {
     pub midi_clips: Vec<LiveMidiClip>,
     pub tempo_events: Vec<LiveTempoEvent>,
     pub time_signature_events: Vec<LiveTimeSignatureEvent>,
+}
+
+impl LiveMixerGraph {
+    pub fn apply_ops(&mut self, ops: Vec<GraphOp>) {
+        for op in ops {
+            match op {
+                GraphOp::UpsertChannel { value } => {
+                    upsert_by(&mut self.channels, value, |item| &item.id);
+                }
+                GraphOp::RemoveChannel { id } => {
+                    self.channels.retain(|item| item.id != id);
+                }
+                GraphOp::UpsertSend { value } => {
+                    upsert_by(&mut self.sends, value, |item| &item.id);
+                }
+                GraphOp::RemoveSend { id } => {
+                    self.sends.retain(|item| item.id != id);
+                }
+                GraphOp::UpsertClip { value } => {
+                    upsert_by(&mut self.clips, value, |item| &item.id);
+                }
+                GraphOp::RemoveClip { id } => {
+                    self.clips.retain(|item| item.id != id);
+                }
+                GraphOp::UpsertPlugin { value } => {
+                    upsert_by(&mut self.plugins, value, |item| &item.instance_id);
+                }
+                GraphOp::RemovePlugin { id } => {
+                    self.plugins.retain(|item| item.instance_id != id);
+                }
+                GraphOp::UpsertMidiClip { value } => {
+                    upsert_by(&mut self.midi_clips, value, |item| &item.id);
+                }
+                GraphOp::RemoveMidiClip { id } => {
+                    self.midi_clips.retain(|item| item.id != id);
+                }
+                GraphOp::ReplaceTempoMap {
+                    tempo_events,
+                    time_signature_events,
+                } => {
+                    self.tempo_events = tempo_events;
+                    self.time_signature_events = time_signature_events;
+                }
+            }
+        }
+    }
+}
+
+fn upsert_by<T, F>(values: &mut Vec<T>, value: T, id: F)
+where
+    F: Fn(&T) -> &str,
+{
+    if let Some(index) = values
+        .iter()
+        .position(|candidate| id(candidate) == id(&value))
+    {
+        values[index] = value;
+    } else {
+        values.push(value);
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "kebab-case")]
+pub enum GraphUpdate {
+    Replace {
+        revision: u64,
+        graph: LiveMixerGraph,
+    },
+    Patch {
+        base_revision: u64,
+        revision: u64,
+        ops: Vec<GraphOp>,
+    },
+}
+
+impl GraphUpdate {
+    #[must_use]
+    pub fn revision(&self) -> u64 {
+        match self {
+            Self::Replace { revision, .. } | Self::Patch { revision, .. } => *revision,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "kebab-case")]
+pub enum GraphOp {
+    UpsertChannel {
+        value: LiveMixerChannel,
+    },
+    RemoveChannel {
+        id: String,
+    },
+    UpsertSend {
+        value: LiveMixerSend,
+    },
+    RemoveSend {
+        id: String,
+    },
+    UpsertClip {
+        value: LiveMixerClip,
+    },
+    RemoveClip {
+        id: String,
+    },
+    UpsertPlugin {
+        value: LivePluginInstance,
+    },
+    RemovePlugin {
+        id: String,
+    },
+    UpsertMidiClip {
+        value: LiveMidiClip,
+    },
+    RemoveMidiClip {
+        id: String,
+    },
+    ReplaceTempoMap {
+        tempo_events: Vec<LiveTempoEvent>,
+        time_signature_events: Vec<LiveTimeSignatureEvent>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -316,8 +538,7 @@ pub struct RecordingWaveform {
     pub end_frame: i64,
     pub frames_per_bucket: u32,
     pub bucket_count: u32,
-    #[serde(with = "serde_bytes")]
-    pub peaks: Vec<u8>,
+    pub peaks: BinaryPayload,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -326,6 +547,26 @@ pub enum ParameterGesture {
     Begin,
     Perform,
     End,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[repr(u32)]
+#[serde(rename_all = "kebab-case")]
+pub enum ParameterTargetKind {
+    Plugin = 1,
+    MixerChannel = 2,
+    MixerSend = 3,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct ParameterCommand {
+    pub session_epoch: u64,
+    pub sequence: u64,
+    pub target_kind: ParameterTargetKind,
+    pub runtime_handle: u32,
+    pub parameter_id: u32,
+    pub normalized: f64,
+    pub gesture: ParameterGesture,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -351,6 +592,9 @@ pub struct ControlResponse {
 pub enum ControlResult {
     Pong,
     Heartbeat {
+        ipc_generation: u64,
+        tokio_generation: u64,
+        winit_generation: u64,
         callback_generation: u64,
         transport_state: String,
     },
@@ -377,6 +621,7 @@ pub enum ControlResult {
         waveform: RecordingWaveform,
     },
     PluginLoaded {
+        runtime_handle: u32,
         latency_samples: u32,
         tail_samples: Option<u32>,
     },
@@ -384,11 +629,16 @@ pub enum ControlResult {
         parameters: Vec<PluginParameter>,
     },
     PluginState {
-        #[serde(with = "serde_bytes")]
-        component_state: Vec<u8>,
-        #[serde(with = "serde_bytes")]
-        controller_state: Vec<u8>,
+        component_state: BinaryPayload,
+        controller_state: BinaryPayload,
     },
+    GraphAccepted {
+        revision: u64,
+    },
+    RevisionMismatch {
+        current_revision: u64,
+    },
+    Busy,
     PluginEditor {
         editor_kind: String,
         open: bool,
@@ -474,24 +724,26 @@ mod tests {
         let request = ControlRequest {
             version: PROTOCOL_VERSION,
             request_id: 42,
-            command: ControlCommand::LoadGraph {
-                revision: 7,
-                graph: LiveMixerGraph {
-                    sample_rate: 48_000,
-                    channels: vec![],
-                    sends: vec![],
-                    clips: vec![],
-                    plugins: vec![],
-                    midi_clips: vec![],
-                    tempo_events: vec![LiveTempoEvent {
-                        tick: 0,
-                        beats_per_minute: 120.0,
-                    }],
-                    time_signature_events: vec![LiveTimeSignatureEvent {
-                        tick: 0,
-                        numerator: 4,
-                        denominator: 4,
-                    }],
+            command: ControlCommand::UpdateGraph {
+                update: GraphUpdate::Replace {
+                    revision: 7,
+                    graph: LiveMixerGraph {
+                        sample_rate: 48_000,
+                        channels: vec![],
+                        sends: vec![],
+                        clips: vec![],
+                        plugins: vec![],
+                        midi_clips: vec![],
+                        tempo_events: vec![LiveTempoEvent {
+                            tick: 0,
+                            beats_per_minute: 120.0,
+                        }],
+                        time_signature_events: vec![LiveTimeSignatureEvent {
+                            tick: 0,
+                            numerator: 4,
+                            denominator: 4,
+                        }],
+                    },
                 },
             },
         };
@@ -511,5 +763,75 @@ mod tests {
             read_message::<ControlRequest>(&mut bytes.as_slice()),
             Err(ProtocolError::MessageTooLarge(_))
         ));
+    }
+
+    #[test]
+    fn stable_id_patch_matches_the_equivalent_full_graph() {
+        let output = LiveMixerChannel {
+            id: "output".into(),
+            kind: "output".into(),
+            gain_db: 0.0,
+            pan: 0.0,
+            muted: false,
+            soloed: false,
+            output_channel_id: None,
+            record_armed: false,
+            input_channels: vec![],
+            hardware_output_channels: vec![0, 1],
+        };
+        let mut patched = LiveMixerGraph {
+            sample_rate: 48_000,
+            channels: vec![output.clone()],
+            sends: vec![],
+            clips: vec![],
+            plugins: vec![],
+            midi_clips: vec![],
+            tempo_events: vec![LiveTempoEvent {
+                tick: 0,
+                beats_per_minute: 120.0,
+            }],
+            time_signature_events: vec![LiveTimeSignatureEvent {
+                tick: 0,
+                numerator: 4,
+                denominator: 4,
+            }],
+        };
+        let audio = LiveMixerChannel {
+            id: "audio-1".into(),
+            kind: "audio".into(),
+            gain_db: -3.0,
+            pan: 0.25,
+            muted: false,
+            soloed: false,
+            output_channel_id: Some("output".into()),
+            record_armed: false,
+            input_channels: vec![],
+            hardware_output_channels: vec![],
+        };
+        patched.apply_ops(vec![
+            GraphOp::UpsertChannel {
+                value: audio.clone(),
+            },
+            GraphOp::ReplaceTempoMap {
+                tempo_events: vec![
+                    LiveTempoEvent {
+                        tick: 0,
+                        beats_per_minute: 120.0,
+                    },
+                    LiveTempoEvent {
+                        tick: 960,
+                        beats_per_minute: 90.0,
+                    },
+                ],
+                time_signature_events: vec![LiveTimeSignatureEvent {
+                    tick: 0,
+                    numerator: 4,
+                    denominator: 4,
+                }],
+            },
+        ]);
+        let mut full = patched.clone();
+        full.channels = vec![output, audio];
+        assert_eq!(patched, full);
     }
 }

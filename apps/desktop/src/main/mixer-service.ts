@@ -624,7 +624,6 @@ export class MixerService {
     }
     validateGraph(graph)
     const paths = await this.cacheAssets(graph)
-    const channelIndex = new Map(graph.channels.map((channel, index) => [channel.id, index]))
     const runtimeGraph: AudioHostGraph = {
       sample_rate: graph.sampleRate,
       channels: graph.channels.map((channel) => ({
@@ -637,14 +636,12 @@ export class MixerService {
         record_armed: channel.recordArmed,
         input_channels: channel.inputChannels,
         hardware_output_channels: channel.hardwareOutputChannels,
-        output_index: channel.outputChannelId === null
-          ? undefined
-          : channelIndex.get(channel.outputChannelId)
+        output_channel_id: channel.outputChannelId ?? undefined
       })),
       sends: graph.sends.map((send) => ({
         id: send.id,
-        source_index: channelIndex.get(send.sourceChannelId)!,
-        target_index: channelIndex.get(send.targetChannelId)!,
+        source_channel_id: send.sourceChannelId,
+        target_channel_id: send.targetChannelId,
         enabled: send.enabled,
         tap: send.tap,
         level_db: send.levelDb,
@@ -652,7 +649,7 @@ export class MixerService {
       })),
       clips: graph.clips.map((clip) => ({
         id: clip.id,
-        channel_index: channelIndex.get(clip.trackId)!,
+        channel_id: clip.trackId,
         start_frame: clip.startFrame,
         source_offset_frames: clip.sourceOffsetFrames,
         length_frames: clip.lengthFrames,
@@ -660,7 +657,7 @@ export class MixerService {
       })),
       plugins: graph.plugins.map((plugin) => ({
         instance_id: plugin.id,
-        channel_index: channelIndex.get(plugin.channelId)!,
+        channel_id: plugin.channelId,
         role: plugin.role,
         slot_order: plugin.slotOrder,
         enabled: plugin.enabled,
@@ -669,18 +666,33 @@ export class MixerService {
       })),
       midi_clips: graph.midiClips.map((clip) => ({
         id: clip.id,
-        channel_index: channelIndex.get(clip.trackId)!,
+        channel_id: clip.trackId,
         start_tick: clip.startTick,
         source_offset_ticks: clip.sourceOffsetTicks,
         length_ticks: clip.lengthTicks,
-        notes: clip.notes.map((note) => ({
-          start_tick: note.startTick,
-          duration_ticks: note.durationTicks,
-          channel: note.channel,
-          key: note.key,
-          velocity: note.velocity,
-          release_velocity: note.releaseVelocity
-        }))
+        notes: {
+          storage: "inline",
+          notes: clip.notes.map((note) => ({
+            start_tick: note.startTick,
+            duration_ticks: note.durationTicks,
+            channel: note.channel,
+            key: note.key,
+            velocity: note.velocity,
+            release_velocity: note.releaseVelocity
+          }))
+        },
+        events: {
+          storage: "inline",
+          events: clip.events.map((event) => ({
+            tick: event.tick,
+            channel: event.channel,
+            kind: event.kind,
+            data: {
+              storage: "inline",
+              bytes: event.data
+            }
+          }))
+        }
       })),
       tempo_events: graph.tempoMap.tempoEvents.map((event) => ({
         tick: event.tick,

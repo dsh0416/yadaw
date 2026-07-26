@@ -3,6 +3,7 @@ members = [
     "crates/dsp-core",
     "crates/dsp-node",
     "crates/dsp-runtime",
+    "crates/ipc-transport",
     "crates/audio-host",
     "crates/audio-host-client",
     "crates/vst3-host-sys",
@@ -40,8 +41,10 @@ thiserror = "2"
 tokio = { version = "1.53.0", default-features = false, features = ["macros", "rt", "sync", "time"] }
 tokio-util = { version = "0.7", default-features = false, features = ["rt"] }
 winit = { version = "0.30.13", default-features = false, features = ["rwh_06", "x11", "wayland"] }
+xxhash-rust = { version = "0.8.15", features = ["xxh3"] }
 yadaw-dsp-core = { path = "crates/dsp-core" }
 yadaw-dsp-runtime = { path = "crates/dsp-runtime" }
+yadaw-ipc-transport = { path = "crates/ipc-transport" }
 yadaw-audio-host-client = { path = "crates/audio-host-client" }
 yadaw-vst3-host = { path = "crates/vst3-host" }
 yadaw-vst3-host-sys = { path = "crates/vst3-host-sys" }

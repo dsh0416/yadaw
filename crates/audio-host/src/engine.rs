@@ -623,6 +623,7 @@ struct RuntimeMetrics {
     output_latency_us: AtomicU64,
     xruns: AtomicU32,
     callback_generation: AtomicU64,
+    published_graph_generation: AtomicU64,
     faulted: AtomicBool,
     buffer_fallback: AtomicBool,
     clock_sync: &'static str,
@@ -1840,16 +1841,23 @@ where
 
                 while let Some(command) = commands.try_pop() {
                     if let Some(runtime) = mixer.as_mut() {
-                        if let Some(replacement) = runtime.handle_command(command)
-                            && let Some(retired) = mixer.replace(replacement)
-                            && let Err(retired) = retired_mixers.try_push(retired)
-                        {
-                            // Graph retirement should never block the audio callback. A saturated
-                            // queue means the control thread has stopped polling; leaking is safer
-                            // than deallocating an arbitrarily large graph on the real-time thread.
-                            std::mem::forget(retired);
+                        if let Some(replacement) = runtime.handle_command(command) {
+                            callback_metrics
+                                .published_graph_generation
+                                .store(replacement.generation, Ordering::Release);
+                            if let Some(retired) = mixer.replace(replacement)
+                                && let Err(retired) = retired_mixers.try_push(retired)
+                            {
+                                // Graph retirement should never block the audio callback. A
+                                // saturated queue means the control thread has stopped polling;
+                                // leaking is safer than deallocating a large graph here.
+                                std::mem::forget(retired);
+                            }
                         }
                     } else if let EngineCommand::LoadMixer(runtime) = command {
+                        callback_metrics
+                            .published_graph_generation
+                            .store(runtime.generation, Ordering::Release);
                         mixer = Some(runtime);
                     }
                 }
@@ -2017,6 +2025,7 @@ pub fn start_audio_engine(config: NativeAudioEngineConfig) -> Result<NativeAudio
         output_latency_us: AtomicU64::new(UNKNOWN_LATENCY_US),
         xruns: AtomicU32::new(0),
         callback_generation: AtomicU64::new(0),
+        published_graph_generation: AtomicU64::new(0),
         faulted: AtomicBool::new(false),
         buffer_fallback: AtomicBool::new(input_buffer.fell_back || output_buffer.fell_back),
         clock_sync: if config.input_device_id == config.output_device_id
@@ -2033,6 +2042,11 @@ pub fn start_audio_engine(config: NativeAudioEngineConfig) -> Result<NativeAudio
         .lock()
         .map_err(|_| audio_error("pending mixer lock", "poisoned"))?
         .take();
+    if let Some(runtime) = initial_mixer.as_ref() {
+        metrics
+            .published_graph_generation
+            .store(runtime.generation, Ordering::Release);
+    }
     let transport = initial_mixer.as_ref().map_or_else(
         || {
             Arc::new(TransportShared {
@@ -2140,6 +2154,7 @@ fn start_virtual_audio_engine(key: AudioEngineKey) -> Result<NativeAudioRuntimeS
         output_latency_us: AtomicU64::new(0),
         xruns: AtomicU32::new(0),
         callback_generation: AtomicU64::new(0),
+        published_graph_generation: AtomicU64::new(0),
         faulted: AtomicBool::new(false),
         buffer_fallback: AtomicBool::new(false),
         clock_sync: "shared-device",
@@ -2149,6 +2164,11 @@ fn start_virtual_audio_engine(key: AudioEngineKey) -> Result<NativeAudioRuntimeS
         .lock()
         .map_err(|_| audio_error("pending mixer lock", "poisoned"))?
         .take();
+    if let Some(runtime) = initial_mixer.as_ref() {
+        metrics
+            .published_graph_generation
+            .store(runtime.generation, Ordering::Release);
+    }
     let transport = initial_mixer.as_ref().map_or_else(
         || {
             Arc::new(TransportShared {
@@ -2182,13 +2202,20 @@ fn start_virtual_audio_engine(key: AudioEngineKey) -> Result<NativeAudioRuntimeS
             while !worker_shutdown.load(Ordering::Acquire) {
                 while let Some(command) = command_consumer.try_pop() {
                     if let Some(runtime) = mixer.as_mut() {
-                        if let Some(replacement) = runtime.handle_command(command)
-                            && let Some(retired) = mixer.replace(replacement)
-                            && let Err(retired) = retirement_producer.try_push(retired)
-                        {
-                            std::mem::forget(retired);
+                        if let Some(replacement) = runtime.handle_command(command) {
+                            worker_metrics
+                                .published_graph_generation
+                                .store(replacement.generation, Ordering::Release);
+                            if let Some(retired) = mixer.replace(replacement)
+                                && let Err(retired) = retirement_producer.try_push(retired)
+                            {
+                                std::mem::forget(retired);
+                            }
                         }
                     } else if let EngineCommand::LoadMixer(runtime) = command {
+                        worker_metrics
+                            .published_graph_generation
+                            .store(runtime.generation, Ordering::Release);
                         mixer = Some(runtime);
                     }
                 }
@@ -2404,6 +2431,21 @@ pub fn heartbeat_snapshot() -> (u64, String) {
             engine.transport.snapshot().state,
         )
     })
+}
+
+pub fn published_graph_generation() -> u64 {
+    engine_slot()
+        .lock()
+        .ok()
+        .and_then(|engine| {
+            engine.as_ref().map(|engine| {
+                engine
+                    .metrics
+                    .published_graph_generation
+                    .load(Ordering::Acquire)
+            })
+        })
+        .unwrap_or(0)
 }
 
 pub fn start_recording(config: NativeRecordingStartConfig) -> Result<()> {

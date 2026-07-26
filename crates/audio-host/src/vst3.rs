@@ -7,7 +7,8 @@ use std::{
 
 use libloading::Library;
 use yadaw_dsp_runtime::protocol::{
-    ControlCommand, ControlResult, ParameterGesture, PluginParameter,
+    BinaryPayload, ControlCommand, ControlResult, ParameterCommand, ParameterGesture,
+    PluginParameter,
 };
 
 const INFINITE_TAIL: u32 = u32::MAX;
@@ -155,12 +156,14 @@ impl Vst3ProcessorHandle {
 
 pub struct Vst3Runtime {
     instances: HashMap<String, Instance>,
+    next_runtime_handle: u32,
     _library: Library,
     functions: Functions,
 }
 
 struct Instance {
     pointer: NonNull<c_void>,
+    runtime_handle: u32,
     functions: Functions,
 }
 
@@ -245,6 +248,7 @@ impl Vst3Runtime {
         };
         Ok(Self {
             instances: HashMap::new(),
+            next_runtime_handle: 1,
             _library: library,
             functions,
         })
@@ -300,6 +304,21 @@ impl Vst3Runtime {
             })
     }
 
+    pub fn apply_parameter_command(&mut self, command: ParameterCommand) -> ControlResult {
+        let instance_id = self.instances.iter().find_map(|(id, instance)| {
+            (instance.runtime_handle == command.runtime_handle).then(|| id.clone())
+        });
+        match instance_id {
+            Some(instance_id) => self.set_parameter(
+                &instance_id,
+                command.parameter_id,
+                command.normalized,
+                command.gesture,
+            ),
+            None => error("VST3 runtime handle is stale"),
+        }
+    }
+
     pub fn take_timing_changes(&self) -> Vec<(String, u32, Option<u32>)> {
         self.instances
             .iter()
@@ -327,15 +346,28 @@ impl Vst3Runtime {
         module_path: String,
         class_id: String,
         sample_rate: f64,
-        component_state: Vec<u8>,
-        controller_state: Vec<u8>,
+        component_state: BinaryPayload,
+        controller_state: BinaryPayload,
     ) -> ControlResult {
+        let component_state = match component_state {
+            BinaryPayload::Inline { bytes } => bytes,
+            BinaryPayload::Shared { .. } => {
+                return error("shared VST3 component state was not materialized");
+            }
+        };
+        let controller_state = match controller_state {
+            BinaryPayload::Inline { bytes } => bytes,
+            BinaryPayload::Shared { .. } => {
+                return error("shared VST3 controller state was not materialized");
+            }
+        };
         if let Some(instance) = self.instances.get(&instance_id) {
             // Graph rebuilds deliberately reuse the existing processor and editor instance.
             let latency_samples =
                 unsafe { (self.functions.latency_samples)(instance.pointer.as_ptr()) };
             let tail = unsafe { (self.functions.tail_samples)(instance.pointer.as_ptr()) };
             return ControlResult::PluginLoaded {
+                runtime_handle: instance.runtime_handle,
                 latency_samples,
                 tail_samples: (tail != INFINITE_TAIL).then_some(tail),
             };
@@ -374,8 +406,10 @@ impl Vst3Runtime {
         };
         let instance = Instance {
             pointer,
+            runtime_handle: self.next_runtime_handle,
             functions: self.functions,
         };
+        self.next_runtime_handle = self.next_runtime_handle.wrapping_add(1).max(1);
         if !component_state.is_empty() {
             // SAFETY: State byte slices and the live opaque instance are valid for the call.
             let restored = unsafe {
@@ -394,8 +428,10 @@ impl Vst3Runtime {
         // SAFETY: The instance is live and owned by the map below.
         let latency_samples = unsafe { (self.functions.latency_samples)(pointer.as_ptr()) };
         let tail = unsafe { (self.functions.tail_samples)(pointer.as_ptr()) };
+        let runtime_handle = instance.runtime_handle;
         self.instances.insert(instance_id, instance);
         ControlResult::PluginLoaded {
+            runtime_handle,
             latency_samples,
             tail_samples: (tail != INFINITE_TAIL).then_some(tail),
         }
@@ -487,8 +523,8 @@ impl Vst3Runtime {
             self.functions.copy_controller_state,
         );
         ControlResult::PluginState {
-            component_state,
-            controller_state,
+            component_state: BinaryPayload::inline(component_state),
+            controller_state: BinaryPayload::inline(controller_state),
         }
     }
 

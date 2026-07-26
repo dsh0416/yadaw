@@ -1,14 +1,18 @@
 use std::{
+    collections::HashMap,
     env,
     io::{self, BufReader, BufWriter},
     path::PathBuf,
     process::ExitCode,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, AtomicU64, Ordering},
+    },
     thread,
 };
 
-use futures_util::StreamExt;
 use ipc_channel::ipc::{self, IpcSender};
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{Semaphore, mpsc, oneshot};
 use winit::{
     application::ApplicationHandler,
     event::WindowEvent,
@@ -21,12 +25,18 @@ use yadaw_audio_host::{
     vst3,
 };
 use yadaw_dsp_runtime::protocol::{
-    AudioBackend, AudioDevice, AudioDeviceList, AudioRuntime, ControlCommand, ControlRequest,
-    ControlResponse, ControlResult, HostBootstrap, HostEvent, LiveMixerGraph, MixerChannelMeter,
-    PROTOCOL_VERSION, RecordingResult, RecordingWaveform, TransportState, read_message,
-    validate_version, write_message,
+    AudioBackend, AudioDevice, AudioDeviceList, AudioRuntime, BinaryPayload, ControlCommand,
+    ControlRequest, ControlResponse, ControlResult, GraphUpdate, HostEvent, LiveMixerGraph,
+    MidiEventBatch, MidiNoteBatch, MixerChannelMeter, PROTOCOL_VERSION, PriorityCommand,
+    PriorityRequest, PriorityResponse, PriorityResult, RecordingResult, RecordingWaveform,
+    TransportState, read_message, validate_version, write_message,
 };
 use yadaw_dsp_runtime::tempo::{TempoEvent, TimeSignatureEvent};
+use yadaw_ipc_transport::{
+    HostBootstrap, LeaseRegistry, ParameterConsumer, TelemetryMeter, TelemetrySnapshot,
+    TelemetryWriter, WirePacket, create_telemetry_page, decode_body, decode_request, encode_event,
+    encode_priority, encode_response,
+};
 
 fn audio_runtime(value: engine::NativeAudioRuntimeSnapshot) -> AudioRuntime {
     AudioRuntime {
@@ -53,76 +63,109 @@ fn live_graph(
     generation: u64,
     value: LiveMixerGraph,
     vst3: Option<&vst3::Vst3Runtime>,
-) -> engine::NativeMixerGraph {
-    engine::NativeMixerGraph {
-        generation,
-        sample_rate: value.sample_rate,
-        channels: value
-            .channels
-            .into_iter()
-            .map(|channel| engine::NativeMixerChannel {
+) -> Result<engine::NativeMixerGraph, String> {
+    let channel_indexes = value
+        .channels
+        .iter()
+        .enumerate()
+        .map(|(index, channel)| (channel.id.clone(), index as u32))
+        .collect::<HashMap<_, _>>();
+    let channel_index = |id: &str| {
+        channel_indexes
+            .get(id)
+            .copied()
+            .ok_or_else(|| format!("mixer graph references missing channel `{id}`"))
+    };
+    let channels = value
+        .channels
+        .into_iter()
+        .map(|channel| {
+            Ok(engine::NativeMixerChannel {
                 id: channel.id,
                 kind: channel.kind,
                 gain_db: channel.gain_db,
                 pan: channel.pan,
                 muted: channel.muted,
                 soloed: channel.soloed,
-                output_index: channel.output_index,
+                output_index: channel
+                    .output_channel_id
+                    .as_deref()
+                    .map(channel_index)
+                    .transpose()?,
                 record_armed: channel.record_armed,
                 input_channels: channel.input_channels,
                 hardware_output_channels: channel.hardware_output_channels,
             })
-            .collect(),
-        sends: value
-            .sends
-            .into_iter()
-            .map(|send| engine::NativeMixerSend {
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    let sends = value
+        .sends
+        .into_iter()
+        .map(|send| {
+            Ok(engine::NativeMixerSend {
                 id: send.id,
-                source_index: send.source_index,
-                target_index: send.target_index,
+                source_index: channel_index(&send.source_channel_id)?,
+                target_index: channel_index(&send.target_channel_id)?,
                 enabled: send.enabled,
                 tap: send.tap,
                 level_db: send.level_db,
                 pan: send.pan,
             })
-            .collect(),
-        clips: value
-            .clips
-            .into_iter()
-            .map(|clip| engine::NativeMixerClip {
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    let clips = value
+        .clips
+        .into_iter()
+        .map(|clip| {
+            Ok(engine::NativeMixerClip {
                 id: clip.id,
-                channel_index: clip.channel_index,
+                channel_index: channel_index(&clip.channel_id)?,
                 start_frame: clip.start_frame,
                 source_offset_frames: clip.source_offset_frames,
                 length_frames: clip.length_frames,
                 path: clip.path,
             })
-            .collect(),
-        plugins: value
-            .plugins
-            .into_iter()
-            .map(|plugin| engine::NativePluginInstance {
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    let plugins = value
+        .plugins
+        .into_iter()
+        .map(|plugin| {
+            Ok(engine::NativePluginInstance {
                 processor: vst3.and_then(|runtime| runtime.processor_handle(&plugin.instance_id)),
                 instance_id: plugin.instance_id,
-                channel_index: plugin.channel_index,
+                channel_index: channel_index(&plugin.channel_id)?,
                 role: plugin.role,
                 slot_order: plugin.slot_order,
                 enabled: plugin.enabled,
                 latency_samples: plugin.latency_samples,
                 tail_samples: plugin.tail_samples,
             })
-            .collect(),
-        midi_clips: value
-            .midi_clips
-            .into_iter()
-            .map(|clip| engine::NativeMidiClip {
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    let midi_clips = value
+        .midi_clips
+        .into_iter()
+        .map(|clip| {
+            let notes = match clip.notes {
+                MidiNoteBatch::Inline { notes } => notes,
+                MidiNoteBatch::Shared { .. } => {
+                    return Err("shared MIDI note batch was not materialized".into());
+                }
+            };
+            let _events = match clip.events {
+                MidiEventBatch::Inline { events } => events,
+                MidiEventBatch::Shared { .. } => {
+                    return Err("shared MIDI event batch was not materialized".into());
+                }
+            };
+            Ok(engine::NativeMidiClip {
                 id: clip.id,
-                channel_index: clip.channel_index,
+                channel_index: channel_index(&clip.channel_id)?,
                 start_tick: clip.start_tick,
                 source_offset_ticks: clip.source_offset_ticks,
                 length_ticks: clip.length_ticks,
-                notes: clip
-                    .notes
+                notes: notes
                     .into_iter()
                     .map(|note| engine::NativeMidiNote {
                         start_tick: note.start_tick,
@@ -134,7 +177,16 @@ fn live_graph(
                     })
                     .collect(),
             })
-            .collect(),
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok(engine::NativeMixerGraph {
+        generation,
+        sample_rate: value.sample_rate,
+        channels,
+        sends,
+        clips,
+        plugins,
+        midi_clips,
         tempo_events: value
             .tempo_events
             .into_iter()
@@ -152,7 +204,7 @@ fn live_graph(
                 denominator: event.denominator,
             })
             .collect(),
-    }
+    })
 }
 
 fn recording_result(value: NativeRecordingResult) -> RecordingResult {
@@ -174,7 +226,7 @@ fn recording_waveform(value: NativeWaveformSnapshot) -> RecordingWaveform {
         end_frame: value.end_frame,
         frames_per_bucket: value.frames_per_bucket,
         bucket_count: value.bucket_count,
-        peaks: value.peaks,
+        peaks: BinaryPayload::inline(value.peaks),
     }
 }
 
@@ -249,14 +301,21 @@ fn engine_command(
                 message: error.to_string(),
             },
         },
-        ControlCommand::LoadGraph { revision, graph } => {
-            match engine::load_mixer_graph(live_graph(revision, graph, vst3)) {
-                Ok(()) => ControlResult::Accepted,
-                Err(error) => ControlResult::Error {
-                    message: error.to_string(),
-                },
+        ControlCommand::UpdateGraph {
+            update: GraphUpdate::Replace { revision, graph },
+        } => {
+            match live_graph(revision, graph, vst3).and_then(|graph| {
+                engine::load_mixer_graph(graph).map_err(|error| error.to_string())
+            }) {
+                Ok(()) => ControlResult::GraphAccepted { revision },
+                Err(error) => ControlResult::Error { message: error },
             }
         }
+        ControlCommand::UpdateGraph {
+            update: GraphUpdate::Patch { .. },
+        } => ControlResult::Error {
+            message: "graph patches require the IPC protocol actor".into(),
+        },
         ControlCommand::PreviewMixerParameter { preview } => {
             match engine::preview_mixer_parameter(engine::NativeMixerParameterPreview {
                 target: preview.target,
@@ -405,6 +464,9 @@ fn run_legacy() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     let (callback_generation, transport_state) = engine::heartbeat_snapshot();
                     ControlResult::Heartbeat {
+                        ipc_generation: 0,
+                        tokio_generation: 0,
+                        winit_generation: 0,
                         callback_generation,
                         transport_state,
                     }
@@ -459,24 +521,141 @@ fn run_legacy() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 struct ActorRequest {
-    command: ControlCommand,
+    command: ActorCommand,
     reply: oneshot::Sender<ControlResult>,
 }
 
-async fn engine_actor(mut inbox: mpsc::Receiver<ActorRequest>) {
+enum ActorCommand {
+    Control(ControlCommand),
+    Parameter(yadaw_dsp_runtime::protocol::ParameterCommand),
+}
+
+#[derive(Default)]
+struct GraphParameterHandles {
+    channels: HashMap<u32, String>,
+    sends: HashMap<u32, String>,
+}
+
+fn stable_runtime_handle(namespace: u8, id: &str) -> u32 {
+    let mut value = 2_166_136_261_u32 ^ u32::from(namespace);
+    for byte in id.bytes() {
+        value ^= u32::from(byte);
+        value = value.wrapping_mul(16_777_619);
+    }
+    value.max(1)
+}
+
+fn refresh_graph_handles(handles: &Mutex<GraphParameterHandles>, graph: &LiveMixerGraph) {
+    if let Ok(mut handles) = handles.lock() {
+        handles.channels = graph
+            .channels
+            .iter()
+            .map(|channel| (stable_runtime_handle(1, &channel.id), channel.id.clone()))
+            .collect();
+        handles.sends = graph
+            .sends
+            .iter()
+            .map(|send| (stable_runtime_handle(2, &send.id), send.id.clone()))
+            .collect();
+    }
+}
+
+fn mixer_parameter_command(
+    handles: &Mutex<GraphParameterHandles>,
+    command: yadaw_dsp_runtime::protocol::ParameterCommand,
+) -> ControlResult {
+    let mapping = handles.lock().ok();
+    let (target, id, parameter, value) = match command.target_kind {
+        yadaw_dsp_runtime::protocol::ParameterTargetKind::MixerChannel => {
+            let Some(id) = mapping
+                .as_ref()
+                .and_then(|values| values.channels.get(&command.runtime_handle))
+                .cloned()
+            else {
+                return ControlResult::Error {
+                    message: "mixer channel runtime handle is stale".into(),
+                };
+            };
+            let (parameter, value) = match command.parameter_id {
+                0 => ("gainDb", -60.0 + command.normalized * 72.0),
+                1 => ("pan", command.normalized * 2.0 - 1.0),
+                _ => {
+                    return ControlResult::Error {
+                        message: "unknown mixer channel parameter".into(),
+                    };
+                }
+            };
+            ("channel", id, parameter, value)
+        }
+        yadaw_dsp_runtime::protocol::ParameterTargetKind::MixerSend => {
+            let Some(id) = mapping
+                .as_ref()
+                .and_then(|values| values.sends.get(&command.runtime_handle))
+                .cloned()
+            else {
+                return ControlResult::Error {
+                    message: "mixer send runtime handle is stale".into(),
+                };
+            };
+            let (parameter, value) = match command.parameter_id {
+                0 => ("levelDb", -60.0 + command.normalized * 72.0),
+                1 => ("pan", command.normalized * 2.0 - 1.0),
+                _ => {
+                    return ControlResult::Error {
+                        message: "unknown mixer send parameter".into(),
+                    };
+                }
+            };
+            ("send", id, parameter, value)
+        }
+        yadaw_dsp_runtime::protocol::ParameterTargetKind::Plugin => {
+            return ControlResult::Error {
+                message: "plugin parameter was routed to the engine actor".into(),
+            };
+        }
+    };
+    match engine::preview_mixer_parameter(engine::NativeMixerParameterPreview {
+        target: target.into(),
+        id,
+        parameter: parameter.into(),
+        value,
+    }) {
+        Ok(()) => ControlResult::Accepted,
+        Err(error) => ControlResult::Error {
+            message: error.to_string(),
+        },
+    }
+}
+
+async fn engine_actor(
+    mut inbox: mpsc::Receiver<ActorRequest>,
+    handles: Arc<Mutex<GraphParameterHandles>>,
+) {
     while let Some(message) = inbox.recv().await {
-        let result = engine_command(message.command, None).unwrap_or(ControlResult::Error {
-            message: "unsupported engine command".into(),
-        });
+        let result = match message.command {
+            ActorCommand::Control(command) => {
+                engine_command(command, None).unwrap_or(ControlResult::Error {
+                    message: "unsupported engine command".into(),
+                })
+            }
+            ActorCommand::Parameter(command) => mixer_parameter_command(&handles, command),
+        };
         let _ = message.reply.send(result);
     }
 }
 
 async fn background_io_actor(mut inbox: mpsc::Receiver<ActorRequest>) {
     while let Some(message) = inbox.recv().await {
-        let result = engine_command(message.command, None).unwrap_or(ControlResult::Error {
-            message: "unsupported background I/O command".into(),
-        });
+        let result = match message.command {
+            ActorCommand::Control(command) => {
+                engine_command(command, None).unwrap_or(ControlResult::Error {
+                    message: "unsupported background I/O command".into(),
+                })
+            }
+            ActorCommand::Parameter(_) => ControlResult::Error {
+                message: "background I/O actor does not own parameters".into(),
+            },
+        };
         let _ = message.reply.send(result);
     }
 }
@@ -485,6 +664,7 @@ async fn vst3_actor(
     mut inbox: mpsc::Receiver<ActorRequest>,
     bridge_path: Option<PathBuf>,
     ui_proxy: EventLoopProxy<UiEvent>,
+    handles: Arc<Mutex<GraphParameterHandles>>,
 ) {
     let mut runtime = match bridge_path
         .as_deref()
@@ -497,44 +677,89 @@ async fn vst3_actor(
             None
         }
     };
+    let mut graph_revision = 0_u64;
+    let mut graph_snapshot: Option<LiveMixerGraph> = None;
     while let Some(message) = inbox.recv().await {
         let result = match message.command {
-            ControlCommand::Ping => {
-                if let Some(runtime) = runtime.as_ref() {
-                    for (instance_id, latency, tail) in runtime.take_timing_changes() {
-                        if let Err(error) =
-                            engine::update_plugin_timing(&instance_id, latency, tail)
-                        {
-                            eprintln!(
-                                "audio-host: could not rebuild dynamic plugin latency: {error}"
-                            );
-                        }
-                    }
-                }
-                let (callback_generation, transport_state) = engine::heartbeat_snapshot();
-                ControlResult::Heartbeat {
-                    callback_generation,
-                    transport_state,
-                }
-            }
-            command @ (ControlCommand::LoadPlugin { .. }
-            | ControlCommand::UnloadPlugin { .. }
-            | ControlCommand::PluginParameters { .. }
-            | ControlCommand::SetPluginParameter { .. }
-            | ControlCommand::SavePluginState { .. }
-            | ControlCommand::OpenPluginEditor { .. }
-            | ControlCommand::ClosePluginEditor { .. }) => match runtime.as_mut() {
-                Some(runtime) => runtime.execute(command),
+            ActorCommand::Parameter(command) => match runtime.as_mut() {
+                Some(runtime) => runtime.apply_parameter_command(command),
                 None => ControlResult::Error {
                     message: "VST3 runtime is not configured".into(),
                 },
             },
-            command @ ControlCommand::LoadGraph { .. } => engine_command(command, runtime.as_ref())
-                .unwrap_or(ControlResult::Error {
-                    message: "could not compile mixer graph".into(),
-                }),
-            _ => ControlResult::Error {
-                message: "unsupported VST3 actor command".into(),
+            ActorCommand::Control(command) => match command {
+                ControlCommand::Ping => {
+                    if let Some(runtime) = runtime.as_ref() {
+                        for (instance_id, latency, tail) in runtime.take_timing_changes() {
+                            if let Err(error) =
+                                engine::update_plugin_timing(&instance_id, latency, tail)
+                            {
+                                eprintln!(
+                                    "audio-host: could not rebuild dynamic plugin latency: {error}"
+                                );
+                            }
+                        }
+                    }
+                    let (callback_generation, transport_state) = engine::heartbeat_snapshot();
+                    ControlResult::Heartbeat {
+                        ipc_generation: 0,
+                        tokio_generation: 0,
+                        winit_generation: 0,
+                        callback_generation,
+                        transport_state,
+                    }
+                }
+                command @ (ControlCommand::LoadPlugin { .. }
+                | ControlCommand::UnloadPlugin { .. }
+                | ControlCommand::PluginParameters { .. }
+                | ControlCommand::SetPluginParameter { .. }
+                | ControlCommand::SavePluginState { .. }
+                | ControlCommand::OpenPluginEditor { .. }
+                | ControlCommand::ClosePluginEditor { .. }) => match runtime.as_mut() {
+                    Some(runtime) => runtime.execute(command),
+                    None => ControlResult::Error {
+                        message: "VST3 runtime is not configured".into(),
+                    },
+                },
+                ControlCommand::UpdateGraph { update } => {
+                    let (revision, candidate) = match update {
+                        GraphUpdate::Replace { revision, graph } => (revision, graph),
+                        GraphUpdate::Patch {
+                            base_revision,
+                            revision,
+                            ops,
+                        } => {
+                            if base_revision != graph_revision {
+                                let _ = message.reply.send(ControlResult::RevisionMismatch {
+                                    current_revision: graph_revision,
+                                });
+                                continue;
+                            }
+                            let Some(mut graph) = graph_snapshot.clone() else {
+                                let _ = message.reply.send(ControlResult::RevisionMismatch {
+                                    current_revision: graph_revision,
+                                });
+                                continue;
+                            };
+                            graph.apply_ops(ops);
+                            (revision, graph)
+                        }
+                    };
+                    match live_graph(revision, candidate.clone(), runtime.as_ref()).and_then(
+                        |graph| engine::load_mixer_graph(graph).map_err(|error| error.to_string()),
+                    ) {
+                        Ok(()) => {
+                            refresh_graph_handles(&handles, &candidate);
+                            graph_revision = revision;
+                            graph_snapshot = Some(candidate);
+                            ControlResult::GraphAccepted { revision }
+                        }
+                        Err(message) => ControlResult::Error { message },
+                    }
+                }
+                _ => ControlResult::Error {
+                    message: "unsupported VST3 actor command".into(),
+                },
             },
         };
         if let Some(runtime) = runtime.as_ref() {
@@ -550,7 +775,14 @@ async fn dispatch_actor(
     command: ControlCommand,
 ) -> ControlResult {
     let (reply, response) = oneshot::channel();
-    if sender.send(ActorRequest { command, reply }).await.is_err() {
+    if sender
+        .send(ActorRequest {
+            command: ActorCommand::Control(command),
+            reply,
+        })
+        .await
+        .is_err()
+    {
         return ControlResult::Error {
             message: "audio-host actor stopped".into(),
         };
@@ -560,11 +792,33 @@ async fn dispatch_actor(
     })
 }
 
+async fn dispatch_parameter(
+    sender: &mpsc::Sender<ActorRequest>,
+    command: yadaw_dsp_runtime::protocol::ParameterCommand,
+) -> ControlResult {
+    let (reply, response) = oneshot::channel();
+    if sender
+        .send(ActorRequest {
+            command: ActorCommand::Parameter(command),
+            reply,
+        })
+        .await
+        .is_err()
+    {
+        return ControlResult::Error {
+            message: "audio-host parameter actor stopped".into(),
+        };
+    }
+    response.await.unwrap_or(ControlResult::Error {
+        message: "audio-host parameter actor dropped its response".into(),
+    })
+}
+
 fn is_vst3_command(command: &ControlCommand) -> bool {
     matches!(
         command,
         ControlCommand::Ping
-            | ControlCommand::LoadGraph { .. }
+            | ControlCommand::UpdateGraph { .. }
             | ControlCommand::LoadPlugin { .. }
             | ControlCommand::UnloadPlugin { .. }
             | ControlCommand::PluginParameters { .. }
@@ -582,62 +836,591 @@ fn is_background_io_command(command: &ControlCommand) -> bool {
     )
 }
 
+fn protocol_deadline(command: &ControlCommand) -> std::time::Duration {
+    if matches!(
+        command,
+        ControlCommand::UpdateGraph { .. }
+            | ControlCommand::LoadPlugin { .. }
+            | ControlCommand::UnloadPlugin { .. }
+            | ControlCommand::SavePluginState { .. }
+            | ControlCommand::OpenPluginEditor { .. }
+            | ControlCommand::ClosePluginEditor { .. }
+    ) {
+        std::time::Duration::from_secs(15)
+    } else {
+        std::time::Duration::from_secs(2)
+    }
+}
+
+struct InboundRequest {
+    request: ControlRequest,
+    received_leases: Vec<u64>,
+}
+
+enum PriorityIngress {
+    ParameterWake,
+    ParameterBoundary(yadaw_dsp_runtime::protocol::ParameterCommand),
+    Shutdown,
+    TelemetryPageReady,
+}
+
+enum OutboundMessage {
+    Response(ControlResponse),
+    Event(WirePacket),
+}
+
+fn response(request_id: u64, result: ControlResult) -> ControlResponse {
+    ControlResponse {
+        version: PROTOCOL_VERSION,
+        request_id,
+        result,
+    }
+}
+
+fn spawn_egress(
+    mut outbound: mpsc::Receiver<OutboundMessage>,
+    responses: ipc_channel::ipc::IpcSender<WirePacket>,
+    events: ipc_channel::ipc::IpcSender<WirePacket>,
+    leases: Arc<Mutex<LeaseRegistry>>,
+) -> thread::JoinHandle<()> {
+    thread::Builder::new()
+        .name("yadaw-ipc-egress".into())
+        .spawn(move || {
+            loop {
+                let message = match outbound.try_recv() {
+                    Ok(message) => message,
+                    Err(mpsc::error::TryRecvError::Empty) => {
+                        if let Ok(mut leases) = leases.lock() {
+                            for lease_id in leases.reap_expired() {
+                                eprintln!(
+                                    "audio-host: temporary shared-memory lease {lease_id} expired"
+                                );
+                            }
+                        }
+                        thread::sleep(std::time::Duration::from_millis(1));
+                        continue;
+                    }
+                    Err(mpsc::error::TryRecvError::Disconnected) => break,
+                };
+                let sent = match message {
+                    OutboundMessage::Response(value) => leases
+                        .lock()
+                        .map_err(|_| "response lease registry is poisoned".to_owned())
+                        .and_then(|mut leases| {
+                            encode_response(value, &mut leases).map_err(|error| error.to_string())
+                        })
+                        .and_then(|packet| {
+                            responses.send(packet).map_err(|error| error.to_string())
+                        }),
+                    OutboundMessage::Event(packet) => {
+                        events.send(packet).map_err(|error| error.to_string())
+                    }
+                };
+                if let Err(error) = sent {
+                    eprintln!("audio-host: IPC egress stopped: {error}");
+                    break;
+                }
+            }
+        })
+        .expect("IPC egress thread must start")
+}
+
+struct Liveness {
+    ipc: Arc<AtomicU64>,
+    tokio: Arc<AtomicU64>,
+    winit: Arc<AtomicU64>,
+}
+
+struct IngressChannels {
+    requests: ipc_channel::ipc::IpcReceiver<WirePacket>,
+    priority_requests: ipc_channel::ipc::IpcReceiver<WirePacket>,
+    priority_responses: ipc_channel::ipc::IpcSender<WirePacket>,
+}
+
+struct IngressMailboxes {
+    inbound: mpsc::Sender<InboundRequest>,
+    priority: mpsc::Sender<PriorityIngress>,
+    outbound: mpsc::Sender<OutboundMessage>,
+}
+
+fn spawn_ingress(
+    channels: IngressChannels,
+    mailboxes: IngressMailboxes,
+    leases: Arc<Mutex<LeaseRegistry>>,
+    liveness: Liveness,
+) -> thread::JoinHandle<()> {
+    thread::Builder::new()
+        .name("yadaw-ipc-ingress".into())
+        .spawn(move || {
+            let mut receivers = match ipc_channel::ipc::IpcReceiverSet::new() {
+                Ok(value) => value,
+                Err(error) => {
+                    eprintln!("audio-host: could not create IPC receiver set: {error}");
+                    return;
+                }
+            };
+            let normal_id = match receivers.add(channels.requests) {
+                Ok(value) => value,
+                Err(error) => {
+                    eprintln!("audio-host: could not register normal IPC receiver: {error}");
+                    return;
+                }
+            };
+            let priority_id = match receivers.add(channels.priority_requests) {
+                Ok(value) => value,
+                Err(error) => {
+                    eprintln!("audio-host: could not register priority IPC receiver: {error}");
+                    return;
+                }
+            };
+            let mut normal_open = true;
+            let mut priority_open = true;
+            while normal_open || priority_open {
+                let mut selected = match receivers.select() {
+                    Ok(value) => value,
+                    Err(error) => {
+                        eprintln!("audio-host: IPC receiver set stopped: {error}");
+                        break;
+                    }
+                };
+                // A heartbeat that arrived in the same kernel wake is always handled
+                // before ordinary work is offered to Tokio.
+                selected.sort_by_key(|selection| match selection {
+                    ipc_channel::ipc::IpcSelectionResult::MessageReceived(id, _)
+                    | ipc_channel::ipc::IpcSelectionResult::ChannelClosed(id) => {
+                        usize::from(*id != priority_id)
+                    }
+                });
+                for selection in selected {
+                    let (id, message) = match selection {
+                        ipc_channel::ipc::IpcSelectionResult::MessageReceived(id, message) => {
+                            (id, message)
+                        }
+                        ipc_channel::ipc::IpcSelectionResult::ChannelClosed(id) => {
+                            if id == normal_id {
+                                normal_open = false;
+                            } else if id == priority_id {
+                                priority_open = false;
+                            }
+                            continue;
+                        }
+                    };
+                    let packet = match message.to::<WirePacket>() {
+                        Ok(value) => value,
+                        Err(error) => {
+                            eprintln!("audio-host: invalid IPC packet: {error}");
+                            continue;
+                        }
+                    };
+                    let ipc_generation = liveness.ipc.fetch_add(1, Ordering::AcqRel) + 1;
+                    if id == normal_id {
+                        let (request, received_leases) = match decode_request(packet) {
+                            Ok(value) => value,
+                            Err(error) => {
+                                eprintln!("audio-host: rejected invalid request packet: {error}");
+                                continue;
+                            }
+                        };
+                        let request_id = request.request_id;
+                        match mailboxes.inbound.try_send(InboundRequest {
+                            request,
+                            received_leases,
+                        }) {
+                            Ok(()) => {}
+                            Err(mpsc::error::TrySendError::Full(_)) => {
+                                let _ = mailboxes.outbound.try_send(OutboundMessage::Response(
+                                    response(request_id, ControlResult::Busy),
+                                ));
+                            }
+                            Err(mpsc::error::TrySendError::Closed(_)) => return,
+                        }
+                        continue;
+                    }
+                    let request = match decode_body::<PriorityRequest>(&packet.body) {
+                        Ok(request) => request,
+                        Err(error) => {
+                            eprintln!("audio-host: invalid priority request: {error}");
+                            continue;
+                        }
+                    };
+                    let result = if request.version != PROTOCOL_VERSION {
+                        PriorityResult::Error {
+                            message: format!(
+                                "unsupported helper protocol version {}",
+                                request.version
+                            ),
+                        }
+                    } else {
+                        match request.command {
+                            PriorityCommand::Heartbeat => {
+                                let (callback_generation, transport_state) =
+                                    engine::heartbeat_snapshot();
+                                PriorityResult::Heartbeat {
+                                    ipc_generation,
+                                    tokio_generation: liveness.tokio.load(Ordering::Acquire),
+                                    winit_generation: liveness.winit.load(Ordering::Acquire),
+                                    callback_generation,
+                                    transport_state,
+                                }
+                            }
+                            PriorityCommand::ReleaseLeases { lease_ids } => {
+                                if let Ok(mut leases) = leases.lock() {
+                                    leases.release(&lease_ids);
+                                }
+                                PriorityResult::Accepted
+                            }
+                            PriorityCommand::ParameterWake => {
+                                match mailboxes.priority.try_send(PriorityIngress::ParameterWake) {
+                                    Ok(()) => PriorityResult::Accepted,
+                                    Err(_) => PriorityResult::Busy,
+                                }
+                            }
+                            PriorityCommand::ParameterBoundary { command } => {
+                                match mailboxes
+                                    .priority
+                                    .try_send(PriorityIngress::ParameterBoundary(command))
+                                {
+                                    Ok(()) => PriorityResult::Accepted,
+                                    Err(_) => PriorityResult::Busy,
+                                }
+                            }
+                            PriorityCommand::Shutdown => {
+                                match mailboxes.priority.try_send(PriorityIngress::Shutdown) {
+                                    Ok(()) => PriorityResult::Accepted,
+                                    Err(_) => PriorityResult::Busy,
+                                }
+                            }
+                            PriorityCommand::TelemetryPageReady { .. } => {
+                                match mailboxes
+                                    .priority
+                                    .try_send(PriorityIngress::TelemetryPageReady)
+                                {
+                                    Ok(()) => PriorityResult::Accepted,
+                                    Err(_) => PriorityResult::Busy,
+                                }
+                            }
+                        }
+                    };
+                    let reply = PriorityResponse {
+                        version: PROTOCOL_VERSION,
+                        request_id: request.request_id,
+                        result,
+                    };
+                    let packet = match encode_priority(&reply) {
+                        Ok(packet) => packet,
+                        Err(error) => {
+                            eprintln!("audio-host: could not encode priority response: {error}");
+                            continue;
+                        }
+                    };
+                    if let Err(error) = channels.priority_responses.send(packet) {
+                        eprintln!("audio-host: priority response failed: {error}");
+                        return;
+                    }
+                }
+            }
+        })
+        .expect("IPC ingress thread must start")
+}
+
+fn transport_state_code(state: &str) -> u32 {
+    match state {
+        "playing" => 1,
+        "recording" => 2,
+        "paused" => 3,
+        _ => 0,
+    }
+}
+
+async fn publish_telemetry(
+    writer: &Arc<Mutex<TelemetryWriter>>,
+    outbound: &mpsc::Sender<OutboundMessage>,
+    graph_revision: u64,
+    session_epoch: u64,
+    page_epoch: &AtomicU64,
+) {
+    let (callback_generation, transport_state) = engine::heartbeat_snapshot();
+    let transport = engine::transport_snapshot().ok();
+    let meter_values = engine::mixer_snapshot()
+        .map(|snapshot| snapshot.meters)
+        .unwrap_or_default();
+    let meters = meter_values
+        .iter()
+        .map(|meter| TelemetryMeter {
+            runtime_handle: stable_runtime_handle(1, &meter.channel_id),
+            pre_left: meter.pre_left as f32,
+            pre_right: meter.pre_right as f32,
+            post_left: meter.post_left as f32,
+            post_right: meter.post_right as f32,
+            held_left: meter.held_left as f32,
+            held_right: meter.held_right as f32,
+            clipped: meter.clipped,
+        })
+        .collect::<Vec<_>>();
+    let current_capacity = writer
+        .lock()
+        .map(|writer| writer.capacity())
+        .unwrap_or_default();
+    if meters.len() > current_capacity as usize {
+        let Some(capacity) = u32::try_from(meters.len())
+            .ok()
+            .and_then(u32::checked_next_power_of_two)
+        else {
+            return;
+        };
+        let epoch = session_epoch.wrapping_add(page_epoch.fetch_add(1, Ordering::AcqRel) + 1);
+        if let Ok(memory) = create_telemetry_page(capacity, epoch)
+            && let Ok(next) = TelemetryWriter::map(memory.clone())
+        {
+            if let Ok(mut current) = writer.lock() {
+                *current = next;
+            }
+            if let Ok(packet) = encode_event(
+                &HostEvent::TelemetryPageOffer { epoch, capacity },
+                vec![memory],
+            ) {
+                let _ = outbound.send(OutboundMessage::Event(packet)).await;
+            }
+        }
+    }
+    let snapshot = TelemetrySnapshot {
+        epoch: writer
+            .lock()
+            .map(|value| value.epoch())
+            .unwrap_or(session_epoch),
+        graph_revision,
+        callback_generation,
+        transport_state: transport_state_code(&transport_state),
+        position_frames: transport.as_ref().map_or(0, |value| value.position_frames),
+        sample_rate: transport.as_ref().map_or(0, |value| value.sample_rate),
+        meters,
+    };
+    if let Ok(writer) = writer.lock() {
+        let _ = writer.publish(&snapshot);
+    }
+}
+
 async fn run_protocol_actor(
     bootstrap: HostBootstrap,
     bridge_path: Option<PathBuf>,
     ui_proxy: EventLoopProxy<UiEvent>,
+    winit_generation: Arc<AtomicU64>,
 ) -> Result<(), String> {
     const ACTOR_CAPACITY: usize = 64;
+    const PROTOCOL_CAPACITY: usize = 256;
+    let HostBootstrap {
+        protocol_version,
+        requests,
+        responses,
+        priority_requests,
+        priority_responses,
+        events,
+        telemetry_page,
+        parameter_ring,
+        session_epoch,
+    } = bootstrap;
+    if protocol_version != PROTOCOL_VERSION {
+        return Err(format!(
+            "unsupported helper bootstrap protocol {protocol_version}"
+        ));
+    }
+    let telemetry = Arc::new(Mutex::new(
+        TelemetryWriter::map(telemetry_page).map_err(|error| error.to_string())?,
+    ));
+    let parameter_consumer =
+        ParameterConsumer::map(parameter_ring).map_err(|error| error.to_string())?;
+    let response_leases = Arc::new(Mutex::new(LeaseRegistry::new()));
+    let ipc_generation = Arc::new(AtomicU64::new(0));
+    let tokio_generation = Arc::new(AtomicU64::new(0));
+    let published_event_revision = Arc::new(AtomicU64::new(0));
+    let page_epoch = Arc::new(AtomicU64::new(0));
+
+    let (outbound, outbound_inbox) = mpsc::channel(PROTOCOL_CAPACITY);
+    let egress_thread = spawn_egress(outbound_inbox, responses, events, response_leases.clone());
+    let (inbound, mut inbound_inbox) = mpsc::channel(PROTOCOL_CAPACITY);
+    let (priority, mut priority_inbox) = mpsc::channel(64);
+    let ingress_thread = spawn_ingress(
+        IngressChannels {
+            requests,
+            priority_requests,
+            priority_responses,
+        },
+        IngressMailboxes {
+            inbound,
+            priority,
+            outbound: outbound.clone(),
+        },
+        response_leases,
+        Liveness {
+            ipc: ipc_generation.clone(),
+            tokio: tokio_generation.clone(),
+            winit: winit_generation,
+        },
+    );
+
+    let handles = Arc::new(Mutex::new(GraphParameterHandles::default()));
     let (engine_sender, engine_inbox) = mpsc::channel(ACTOR_CAPACITY);
     let (vst3_sender, vst3_inbox) = mpsc::channel(ACTOR_CAPACITY);
     let (background_sender, background_inbox) = mpsc::channel(ACTOR_CAPACITY);
-    tokio::task::spawn_local(engine_actor(engine_inbox));
-    tokio::task::spawn_local(vst3_actor(vst3_inbox, bridge_path, ui_proxy.clone()));
+    tokio::task::spawn_local(engine_actor(engine_inbox, handles.clone()));
+    tokio::task::spawn_local(vst3_actor(
+        vst3_inbox,
+        bridge_path,
+        ui_proxy.clone(),
+        handles,
+    ));
     tokio::task::spawn_local(background_io_actor(background_inbox));
 
-    bootstrap
-        .events
-        .send(rmp_serde::to_vec_named(&HostEvent::Ready).map_err(|error| error.to_string())?)
-        .map_err(|error| error.to_string())?;
-    let mut requests = bootstrap.requests.to_stream();
-    while let Some(message) = requests.next().await {
-        let payload = message.map_err(|error| error.to_string())?;
-        if payload.len() > yadaw_dsp_runtime::protocol::MAX_MESSAGE_BYTES {
-            return Err("audio-host IPC request exceeds 64 MiB".into());
+    outbound
+        .send(OutboundMessage::Event(
+            encode_event(&HostEvent::Ready, Vec::new()).map_err(|error| error.to_string())?,
+        ))
+        .await
+        .map_err(|_| "audio-host egress stopped before Ready".to_owned())?;
+
+    let telemetry_writer = telemetry.clone();
+    let telemetry_outbound = outbound.clone();
+    let telemetry_event_revision = published_event_revision.clone();
+    let telemetry_page_epoch = page_epoch.clone();
+    tokio::task::spawn_local(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_millis(33));
+        loop {
+            interval.tick().await;
+            let published_revision = engine::published_graph_generation();
+            publish_telemetry(
+                &telemetry_writer,
+                &telemetry_outbound,
+                published_revision,
+                session_epoch,
+                &telemetry_page_epoch,
+            )
+            .await;
+            if published_revision != 0
+                && telemetry_event_revision.swap(published_revision, Ordering::AcqRel)
+                    != published_revision
+                && let Ok(packet) = encode_event(
+                    &HostEvent::GraphPublished {
+                        revision: published_revision,
+                    },
+                    Vec::new(),
+                )
+            {
+                let _ = telemetry_outbound
+                    .send(OutboundMessage::Event(packet))
+                    .await;
+            }
         }
-        let request: ControlRequest =
-            rmp_serde::from_slice(&payload).map_err(|error| error.to_string())?;
-        let shutdown = matches!(request.command, ControlCommand::Shutdown);
-        let result = match validate_version(request.version) {
-            Err(error) => ControlResult::Error {
-                message: error.to_string(),
-            },
-            Ok(()) if shutdown => {
-                let _ = engine::stop_audio_engine();
-                ControlResult::Accepted
+    });
+
+    let shutting_down = Arc::new(AtomicBool::new(false));
+    let inflight = Arc::new(Semaphore::new(PROTOCOL_CAPACITY));
+    while !shutting_down.load(Ordering::Acquire) {
+        tokio::select! {
+            inbound = inbound_inbox.recv() => {
+                let Some(inbound) = inbound else { break };
+                tokio_generation.fetch_add(1, Ordering::Release);
+                if !inbound.received_leases.is_empty()
+                    && let Ok(packet) = encode_event(
+                        &HostEvent::ReleaseLeases { lease_ids: inbound.received_leases },
+                        Vec::new(),
+                    )
+                {
+                    let _ = outbound.send(OutboundMessage::Event(packet)).await;
+                }
+                let permit = match inflight.clone().try_acquire_owned() {
+                    Ok(permit) => permit,
+                    Err(_) => {
+                        let _ = outbound
+                            .send(OutboundMessage::Response(response(
+                                inbound.request.request_id,
+                                ControlResult::Busy,
+                            )))
+                            .await;
+                        continue;
+                    }
+                };
+                let engine_sender = engine_sender.clone();
+                let vst3_sender = vst3_sender.clone();
+                let background_sender = background_sender.clone();
+                let outbound = outbound.clone();
+                let ui_proxy = ui_proxy.clone();
+                let shutting_down = shutting_down.clone();
+                tokio::task::spawn_local(async move {
+                    let _permit = permit;
+                    let ControlRequest {
+                        version,
+                        request_id,
+                        command,
+                    } = inbound.request;
+                    let shutdown = matches!(command, ControlCommand::Shutdown);
+                    let deadline = protocol_deadline(&command);
+                    let work = async move {
+                        match validate_version(version) {
+                            Err(error) => ControlResult::Error { message: error.to_string() },
+                            Ok(()) if shutdown => {
+                                let _ = engine::stop_audio_engine();
+                                ControlResult::Accepted
+                            }
+                            Ok(()) if is_vst3_command(&command) => {
+                                dispatch_actor(&vst3_sender, command).await
+                            }
+                            Ok(()) if is_background_io_command(&command) => {
+                                dispatch_actor(&background_sender, command).await
+                            }
+                            Ok(()) => dispatch_actor(&engine_sender, command).await,
+                        }
+                    };
+                    let result = match tokio::time::timeout(deadline, work).await {
+                        Ok(result) => result,
+                        Err(_) => ControlResult::Error {
+                            message: "audio-host request deadline exceeded".into(),
+                        },
+                    };
+                    let _ = outbound
+                        .send(OutboundMessage::Response(response(request_id, result)))
+                        .await;
+                    if shutdown {
+                        shutting_down.store(true, Ordering::Release);
+                        let _ = ui_proxy.send_event(UiEvent::Exit);
+                    }
+                });
             }
-            Ok(()) if is_vst3_command(&request.command) => {
-                dispatch_actor(&vst3_sender, request.command).await
+            priority = priority_inbox.recv() => {
+                let Some(priority) = priority else { break };
+                tokio_generation.fetch_add(1, Ordering::Release);
+                match priority {
+                    PriorityIngress::ParameterWake => {
+                        let mut commands = Vec::new();
+                        parameter_consumer.drain(4096, &mut commands);
+                        for command in commands {
+                            let sender = match command.target_kind {
+                                yadaw_dsp_runtime::protocol::ParameterTargetKind::Plugin => &vst3_sender,
+                                _ => &engine_sender,
+                            };
+                            let _ = dispatch_parameter(sender, command).await;
+                        }
+                    }
+                    PriorityIngress::ParameterBoundary(command) => {
+                        let sender = match command.target_kind {
+                            yadaw_dsp_runtime::protocol::ParameterTargetKind::Plugin => &vst3_sender,
+                            _ => &engine_sender,
+                        };
+                        let _ = dispatch_parameter(sender, command).await;
+                    }
+                    PriorityIngress::Shutdown => {
+                        let _ = engine::stop_audio_engine();
+                        shutting_down.store(true, Ordering::Release);
+                        let _ = ui_proxy.send_event(UiEvent::Exit);
+                    }
+                    PriorityIngress::TelemetryPageReady => {}
+                }
             }
-            Ok(()) if is_background_io_command(&request.command) => {
-                dispatch_actor(&background_sender, request.command).await
-            }
-            Ok(()) => dispatch_actor(&engine_sender, request.command).await,
-        };
-        let response = ControlResponse {
-            version: PROTOCOL_VERSION,
-            request_id: request.request_id,
-            result,
-        };
-        bootstrap
-            .responses
-            .send(rmp_serde::to_vec_named(&response).map_err(|error| error.to_string())?)
-            .map_err(|error| error.to_string())?;
-        if shutdown {
-            let _ = ui_proxy.send_event(UiEvent::Exit);
-            break;
         }
     }
+    // The blocking IPC receivers are deliberately detached. Joining them here would
+    // deadlock a clean shutdown while the parent still owns channel handles. Process
+    // teardown closes those handles after the Tokio actor and winit loop have exited.
+    drop((outbound, ingress_thread, egress_thread));
     Ok(())
 }
 
@@ -646,13 +1429,15 @@ enum UiEvent {
     Exit,
 }
 
-#[derive(Default)]
-struct WinitHost;
+struct WinitHost {
+    generation: Arc<AtomicU64>,
+}
 
 impl ApplicationHandler<UiEvent> for WinitHost {
     fn resumed(&mut self, _event_loop: &ActiveEventLoop) {}
 
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: UiEvent) {
+        self.generation.fetch_add(1, Ordering::Release);
         if matches!(event, UiEvent::Exit) {
             event_loop.exit();
         }
@@ -693,6 +1478,8 @@ fn run_ipc() -> Result<(), Box<dyn std::error::Error>> {
 
     let event_loop = EventLoop::<UiEvent>::with_user_event().build()?;
     let proxy = event_loop.create_proxy();
+    let winit_generation = Arc::new(AtomicU64::new(0));
+    let protocol_winit_generation = winit_generation.clone();
     let protocol_thread = thread::Builder::new()
         .name("yadaw-control".into())
         .spawn(move || {
@@ -702,14 +1489,22 @@ fn run_ipc() -> Result<(), Box<dyn std::error::Error>> {
                 .expect("single-thread Tokio runtime must start");
             let local = tokio::task::LocalSet::new();
             local.block_on(&runtime, async move {
-                if let Err(error) = run_protocol_actor(bootstrap, bridge_path, proxy.clone()).await
+                if let Err(error) = run_protocol_actor(
+                    bootstrap,
+                    bridge_path,
+                    proxy.clone(),
+                    protocol_winit_generation,
+                )
+                .await
                 {
                     eprintln!("audio-host: protocol actor stopped: {error}");
                     let _ = proxy.send_event(UiEvent::Exit);
                 }
             });
         })?;
-    let mut application = WinitHost;
+    let mut application = WinitHost {
+        generation: winit_generation,
+    };
     event_loop.run_app(&mut application)?;
     protocol_thread
         .join()
