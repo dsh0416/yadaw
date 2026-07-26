@@ -207,7 +207,7 @@ function handleKeydown(event: KeyboardEvent): void {
 
 <style scoped>
 .value-lane {
-  --lane-color: #65a8ff;
+  --lane-color: var(--ui-domain-color-65a8ff);
   position: relative;
   min-width: 100%;
   overflow: hidden;
@@ -247,7 +247,7 @@ function handleKeydown(event: KeyboardEvent): void {
 }
 .lane-line-shadow {
   fill: none;
-  stroke: color-mix(in srgb, #000 62%, transparent);
+  stroke: color-mix(in srgb, var(--ui-domain-color-000) 62%, transparent);
   stroke-width: 4;
 }
 .lane-line {
@@ -258,7 +258,7 @@ function handleKeydown(event: KeyboardEvent): void {
 }
 .point-handle {
   position: absolute;
-  z-index: 2;
+  z-index: var(--ui-z-local-raised);
   width: 9px;
   height: 9px;
   margin: 0;
@@ -266,7 +266,7 @@ function handleKeydown(event: KeyboardEvent): void {
   border: 2px solid var(--daw-lane);
   border-radius: 50%;
   background: var(--lane-color);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--lane-color) 66%, #000);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--lane-color) 66%, var(--ui-domain-color-000));
   transform: translate(-50%, -50%);
   cursor: grab;
 }
@@ -274,7 +274,7 @@ function handleKeydown(event: KeyboardEvent): void {
 .point-handle.selected {
   width: 11px;
   height: 11px;
-  border-color: #f7fbff;
+  border-color: var(--ui-domain-color-f7fbff);
   box-shadow:
     0 0 0 2px var(--lane-color),
     0 0 8px color-mix(in srgb, var(--lane-color) 55%, transparent);

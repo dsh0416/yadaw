@@ -1,0 +1,12 @@
+import { Meta } from "@storybook/addon-docs/blocks"
+
+<Meta title="Foundations/Motion" />
+
+# Motion
+
+Motion confirms state change; it does not decorate static UI. Standard transitions use 100ms or
+180ms durations. Storybook disables animation by default for deterministic tests. Choose **Motion
+enabled** in the toolbar only when reviewing production motion.
+
+All motion must respect `prefers-reduced-motion`. Indeterminate progress may move; determinate
+progress must communicate the same information without animation.

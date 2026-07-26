@@ -145,7 +145,7 @@ function numberValue(event: Event): number {
 .field input:focus-visible,
 .field select:focus-visible {
   border-color: var(--focus);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--focus) 14%, transparent);
+  box-shadow: var(--ui-focus-ring);
 }
 
 .field small {

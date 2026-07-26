@@ -74,6 +74,7 @@ describe("AudioBenchmarkDialog", () => {
       props: { status: "idle", report: null, errorMessage: "" }
     })
 
+    expect(wrapper.text()).not.toContain("Audio performance benchmark")
     expect(wrapper.text()).toContain("Measure DSP deadlines and IPC")
     await wrapper.get(".primary-button").trigger("click")
     expect(wrapper.emitted("run")).toHaveLength(1)

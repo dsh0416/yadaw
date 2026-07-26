@@ -1,13 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue"
-import {
-  DialogClose,
-  DialogContent,
-  DialogOverlay,
-  DialogPortal,
-  DialogRoot,
-  DialogTitle
-} from "reka-ui"
+import { UiButton, UiDialog, UiStatusNotice } from "@yadaw/ui"
 import type { MidiImportTrackTarget } from "@yadaw/contracts"
 import { useMidiImportStore } from "../../stores/midiImport"
 import { useMixerStore } from "../../stores/mixer"
@@ -17,6 +10,21 @@ const midiImportStore = useMidiImportStore()
 const mixerStore = useMixerStore()
 const pluginStore = usePluginStore()
 const instrumentTracks = computed(() => mixerStore.instrumentTracks)
+const open = computed({
+  get: () => midiImportStore.open,
+  set: (value: boolean) => {
+    if (!value) midiImportStore.close()
+  }
+})
+const title = computed(
+  () => midiImportStore.preview?.path.split(/[\\/]/).at(-1) ?? "Import MIDI file"
+)
+const description = computed(
+  () =>
+    `${midiImportStore.preview?.sourceTiming ?? "Unknown timing"} · Format ${
+      midiImportStore.preview?.format ?? "—"
+    }`
+)
 
 function targetValue(sourceTrack: number, sequence: number): string {
   const target = midiImportStore.targetFor(sourceTrack, sequence)
@@ -48,126 +56,121 @@ function updateInstrument(sourceTrack: number, sequence: number, event: Event): 
 </script>
 
 <template>
-  <DialogRoot
-    :open="midiImportStore.open"
-    @update:open="
-      (value) => {
-        if (!value) midiImportStore.close()
-      }
-    "
+  <UiDialog
+    v-model="open"
+    :title="title"
+    :description="description"
+    size="lg"
+    :dismissible="!midiImportStore.busy"
   >
-    <DialogPortal>
-      <DialogOverlay class="midi-overlay" />
-      <DialogContent class="midi-dialog" aria-describedby="midi-import-description">
-        <header>
+    <div class="midi-dialog-content">
+      <div class="mapping-list">
+        <article
+          v-for="track in midiImportStore.preview?.tracks"
+          :key="`${track.sequence}:${track.sourceTrack}`"
+        >
           <div>
-            <span>MIDI IMPORT</span
-            ><DialogTitle>{{ midiImportStore.preview?.path.split(/[\\/]/).at(-1) }}</DialogTitle>
+            <strong>{{ track.name }}</strong
+            ><small
+              >{{ track.noteCount }} notes · {{ track.eventCount }} events<span
+                v-if="midiImportStore.preview?.format === 2"
+              >
+                · sequence {{ track.sequence + 1 }}</span
+              ></small
+            >
           </div>
-          <DialogClose aria-label="Close MIDI import" :disabled="midiImportStore.busy"
-            >×</DialogClose
+          <select
+            :value="targetValue(track.sourceTrack, track.sequence)"
+            :aria-label="`${track.name} target`"
+            @change="updateTarget(track.sourceTrack, track.sequence, $event)"
           >
-        </header>
-        <p id="midi-import-description">
-          {{ midiImportStore.preview?.sourceTiming }} · Format {{ midiImportStore.preview?.format }}
-        </p>
-        <div class="mapping-list">
-          <article
-            v-for="track in midiImportStore.preview?.tracks"
-            :key="`${track.sequence}:${track.sourceTrack}`"
+            <option value="ignore">Ignore</option>
+            <option value="new">New Instrument track</option>
+            <option
+              v-for="target in instrumentTracks"
+              :key="target.id"
+              :value="`existing:${target.id}`"
+            >
+              {{ target.name }}
+            </option>
+          </select>
+          <select
+            :value="instrumentValue(track.sourceTrack, track.sequence)"
+            :disabled="targetValue(track.sourceTrack, track.sequence) === 'ignore'"
+            :aria-label="`${track.name} VST3 instrument`"
+            @change="updateInstrument(track.sourceTrack, track.sequence, $event)"
           >
-            <div>
-              <strong>{{ track.name }}</strong
-              ><small
-                >{{ track.noteCount }} notes · {{ track.eventCount }} events<span
-                  v-if="midiImportStore.preview?.format === 2"
-                >
-                  · sequence {{ track.sequence + 1 }}</span
-                ></small
-              >
-            </div>
-            <select
-              :value="targetValue(track.sourceTrack, track.sequence)"
-              :aria-label="`${track.name} target`"
-              @change="updateTarget(track.sourceTrack, track.sequence, $event)"
+            <option value="">No instrument assigned</option>
+            <option
+              v-for="plugin in pluginStore.compatibleInstruments"
+              :key="plugin.classId"
+              :value="plugin.classId"
             >
-              <option value="ignore">Ignore</option>
-              <option value="new">New Instrument track</option>
-              <option
-                v-for="target in instrumentTracks"
-                :key="target.id"
-                :value="`existing:${target.id}`"
-              >
-                {{ target.name }}
-              </option>
-            </select>
-            <select
-              :value="instrumentValue(track.sourceTrack, track.sequence)"
-              :disabled="targetValue(track.sourceTrack, track.sequence) === 'ignore'"
-              :aria-label="`${track.name} VST3 instrument`"
-              @change="updateInstrument(track.sourceTrack, track.sequence, $event)"
+              {{ plugin.name }} · {{ plugin.vendor }}
+            </option>
+          </select>
+          <small v-for="warning in track.warnings" :key="warning" class="warning">{{
+            warning
+          }}</small>
+        </article>
+      </div>
+      <fieldset class="tempo-choice">
+        <legend>Tempo for imported MIDI</legend>
+        <label :class="{ selected: midiImportStore.tempoMode === 'project' }">
+          <input v-model="midiImportStore.tempoMode" type="radio" value="project" />
+          <span>
+            <strong>Keep the project Tempo Track</strong>
+            <small
+              >Place the MIDI at the playhead and follow the current project Tempo Track.</small
             >
-              <option value="">No instrument assigned</option>
-              <option
-                v-for="plugin in pluginStore.compatibleInstruments"
-                :key="plugin.classId"
-                :value="plugin.classId"
-              >
-                {{ plugin.name }} · {{ plugin.vendor }}
-              </option>
-            </select>
-            <small v-for="warning in track.warnings" :key="warning" class="warning">{{
-              warning
-            }}</small>
-          </article>
-        </div>
-        <fieldset class="tempo-choice">
-          <legend>Tempo for imported MIDI</legend>
-          <label :class="{ selected: midiImportStore.tempoMode === 'project' }">
-            <input v-model="midiImportStore.tempoMode" type="radio" value="project" />
-            <span>
-              <strong>Keep the project Tempo Track</strong>
-              <small
-                >Place the MIDI at the playhead and follow the current project Tempo Track.</small
-              >
-            </span>
-          </label>
-          <label :class="{ selected: midiImportStore.tempoMode === 'midi' }">
-            <input v-model="midiImportStore.tempoMode" type="radio" value="midi" />
-            <span>
-              <strong>Import MIDI tempo into project</strong>
-              <small
-                >Start at tick 0 and replace the project Tempo Track with the MIDI tempo map.</small
-              >
-            </span>
-          </label>
-        </fieldset>
-        <p v-for="warning in midiImportStore.preview?.warnings" :key="warning" class="warning">
-          {{ warning }}
-        </p>
-        <p v-if="midiImportStore.error" class="error" role="alert">{{ midiImportStore.error }}</p>
-        <footer>
-          <button :disabled="midiImportStore.busy" @click="midiImportStore.close">Cancel</button>
-          <button class="primary" :disabled="midiImportStore.busy" @click="midiImportStore.commit">
-            {{ midiImportStore.busy ? "Importing…" : "Import MIDI" }}
-          </button>
-        </footer>
-      </DialogContent>
-    </DialogPortal>
-  </DialogRoot>
+          </span>
+        </label>
+        <label :class="{ selected: midiImportStore.tempoMode === 'midi' }">
+          <input v-model="midiImportStore.tempoMode" type="radio" value="midi" />
+          <span>
+            <strong>Import MIDI tempo into project</strong>
+            <small
+              >Start at tick 0 and replace the project Tempo Track with the MIDI tempo map.</small
+            >
+          </span>
+        </label>
+      </fieldset>
+      <UiStatusNotice
+        v-for="warning in midiImportStore.preview?.warnings"
+        :key="warning"
+        tone="warning"
+      >
+        {{ warning }}
+      </UiStatusNotice>
+      <UiStatusNotice v-if="midiImportStore.error" tone="danger" live="assertive">
+        {{ midiImportStore.error }}
+      </UiStatusNotice>
+    </div>
+    <template #actions>
+      <UiButton :disabled="midiImportStore.busy" @click="midiImportStore.close">Cancel</UiButton>
+      <UiButton
+        variant="primary"
+        :loading="midiImportStore.busy"
+        loading-label="Importing MIDI"
+        @click="midiImportStore.commit"
+      >
+        Import MIDI
+      </UiButton>
+    </template>
+  </UiDialog>
 </template>
 
 <style scoped>
 :global(.midi-overlay) {
   position: fixed;
-  z-index: 80;
+  z-index: var(--ui-z-overlay);
   inset: 0;
-  background: #05070bbb;
+  background: var(--ui-domain-color-05070bbb);
   backdrop-filter: blur(3px);
 }
 :global(.midi-dialog) {
   position: fixed;
-  z-index: 81;
+  z-index: var(--ui-z-dialog);
   top: 50%;
   left: 50%;
   display: grid;
@@ -179,7 +182,7 @@ function updateInstrument(sourceTrack: number, sequence: number, event: Event): 
   border-radius: 8px;
   color: var(--text-primary);
   background: var(--surface-1);
-  box-shadow: 0 24px 70px #000a;
+  box-shadow: var(--ui-shadow-lg);
   transform: translate(-50%, -50%);
 }
 .midi-dialog > header {
@@ -193,7 +196,7 @@ function updateInstrument(sourceTrack: number, sequence: number, event: Event): 
   margin: 0;
 }
 .midi-dialog header span {
-  color: #73d6a2;
+  color: var(--ui-domain-color-73d6a2);
   font: 700 7px var(--font-utility);
   letter-spacing: 0.16em;
 }
@@ -284,13 +287,13 @@ function updateInstrument(sourceTrack: number, sequence: number, event: Event): 
   cursor: pointer;
 }
 .tempo-choice label.selected {
-  border-color: color-mix(in srgb, #73d6a2 58%, var(--line-strong));
-  background: color-mix(in srgb, #73d6a2 7%, var(--surface-sunken));
-  box-shadow: 0 0 0 1px color-mix(in srgb, #73d6a2 12%, transparent) inset;
+  border-color: color-mix(in srgb, var(--ui-domain-color-73d6a2) 58%, var(--line-strong));
+  background: color-mix(in srgb, var(--ui-domain-color-73d6a2) 7%, var(--surface-sunken));
+  box-shadow: var(--ui-shadow-selected-outline);
 }
 .tempo-choice input {
   margin: 2px 0 0;
-  accent-color: #73d6a2;
+  accent-color: var(--ui-domain-color-73d6a2);
 }
 .tempo-choice strong,
 .tempo-choice small {
@@ -329,9 +332,9 @@ function updateInstrument(sourceTrack: number, sequence: number, event: Event): 
   cursor: pointer;
 }
 .midi-dialog footer .primary {
-  border-color: color-mix(in srgb, #73d6a2 55%, var(--line-strong));
-  color: #08120d;
-  background: #73d6a2;
+  border-color: color-mix(in srgb, var(--ui-domain-color-73d6a2) 55%, var(--line-strong));
+  color: var(--ui-domain-color-08120d);
+  background: var(--ui-domain-color-73d6a2);
   font-weight: 700;
 }
 </style>

@@ -1,32 +1,31 @@
 <script setup lang="ts">
+import { computed } from "vue"
 import { storeToRefs } from "pinia"
+import { UiDialog } from "@yadaw/ui"
 import OperationProgressDialog from "./OperationProgressDialog.vue"
 import { useOperationStore } from "../../stores/operations"
 
 const store = useOperationStore()
 const { active } = storeToRefs(store)
-function dismissTerminalOperation(): void {
-  const operation = active.value
-  if (operation && operation.state !== "running") store.dismiss(operation.id)
-}
+
+const open = computed({
+  get: () => Boolean(active.value),
+  set: (value: boolean) => {
+    const operation = active.value
+    if (!value && operation && operation.state !== "running") store.dismiss(operation.id)
+  }
+})
 </script>
 
 <template>
-  <Teleport to="body">
-    <div v-if="active" class="operation-overlay" @click.self="dismissTerminalOperation">
-      <OperationProgressDialog :operation="active" @cancel="store.cancel(active.id)" />
-    </div>
-  </Teleport>
+  <UiDialog
+    v-if="active"
+    v-model="open"
+    :title="active.title"
+    description="Track progress and review any warnings before returning to the project."
+    size="md"
+    :dismissible="active.state !== 'running'"
+  >
+    <OperationProgressDialog :operation="active" @cancel="store.cancel(active.id)" />
+  </UiDialog>
 </template>
-
-<style scoped>
-.operation-overlay {
-  position: fixed;
-  z-index: 300;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  background: #02050bb8;
-  backdrop-filter: blur(6px);
-}
-</style>

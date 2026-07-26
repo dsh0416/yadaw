@@ -104,7 +104,7 @@ function preview(parameter: "gainDb" | "pan", value: number): void {
   border-radius: 2px;
   color: var(--text-muted);
   background: var(--daw-control);
-  box-shadow: 0 1px 0 #ffffff12 inset;
+  box-shadow: 0 1px 0 var(--ui-domain-color-ffffff12) inset;
   font: 700 7px var(--font-utility);
   cursor: pointer;
 }
@@ -127,19 +127,19 @@ function preview(parameter: "gainDb" | "pan", value: number): void {
 
 .track-quick-controls .mute.active {
   border-color: color-mix(in srgb, var(--mixer-mute) 72%, white);
-  color: #fff;
+  color: var(--ui-domain-color-fff);
   background: var(--mixer-mute);
 }
 
 .track-quick-controls .solo.active {
   border-color: color-mix(in srgb, var(--mixer-solo) 72%, white);
-  color: #221c08;
+  color: var(--ui-domain-color-221c08);
   background: var(--mixer-solo);
 }
 
 .track-quick-controls .record.active {
   border-color: color-mix(in srgb, var(--mixer-record) 72%, white);
-  color: #fff;
+  color: var(--ui-domain-color-fff);
   background: var(--mixer-record);
 }
 

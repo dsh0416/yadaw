@@ -111,7 +111,7 @@ function drop(event: DragEvent, index: number): void {
   position: relative;
   height: 4px;
   margin: -2px 0;
-  z-index: 1;
+  z-index: var(--ui-z-local-content);
 }
 .drop-zone::after {
   position: absolute;

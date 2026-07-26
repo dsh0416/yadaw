@@ -1,0 +1,40 @@
+html,
+body,
+#storybook-root {
+  min-height: 100%;
+}
+
+body {
+  color: var(--ui-color-text);
+  background: var(--ui-color-canvas);
+}
+
+.storybook-stage {
+  min-height: 100vh;
+  padding: clamp(1rem, 4vw, 3rem);
+  color: var(--ui-color-text);
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--ui-color-action) 5%, transparent),
+      transparent 38%
+    ),
+    var(--ui-color-canvas);
+}
+
+.storybook-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  gap: var(--ui-space-4);
+}
+
+.storybook-stack {
+  display: grid;
+  max-width: 48rem;
+  gap: var(--ui-space-4);
+}
+
+.product-recent-button {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

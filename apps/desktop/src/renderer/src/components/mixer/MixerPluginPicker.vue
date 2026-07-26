@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, shallowRef, watch } from "vue"
 import { Search } from "@lucide/vue"
-import { PopoverContent, PopoverPortal, PopoverRoot, PopoverTrigger } from "reka-ui"
+import { UiPopover } from "@yadaw/ui"
 import type { PluginDescriptor } from "@yadaw/contracts"
 
 const props = defineProps<{
@@ -42,45 +42,35 @@ function selectPlugin(descriptor: PluginDescriptor): void {
 </script>
 
 <template>
-  <PopoverRoot v-model:open="open">
-    <PopoverTrigger as-child>
+  <UiPopover v-model="open" side="top" align="start" :side-offset="7" :collision-padding="8">
+    <template #trigger>
       <slot />
-    </PopoverTrigger>
-    <PopoverPortal>
-      <PopoverContent
-        class="mixer-popover-layer"
-        side="top"
-        align="start"
-        :side-offset="7"
-        :collision-padding="8"
-      >
-        <div class="plugin-picker">
-          <header>
-            <span>VST3</span><strong>{{ title }}</strong>
-          </header>
-          <label>
-            <Search :size="12" aria-hidden="true" />
-            <input v-model="query" :aria-label="searchLabel" placeholder="Search plug-ins" />
-          </label>
-          <div class="plugin-list">
-            <button
-              v-for="plugin in filteredPlugins"
-              :key="`${plugin.modulePath}:${plugin.classId}`"
-              type="button"
-              :aria-label="`Add ${plugin.name}`"
-              @click="selectPlugin(plugin)"
-            >
-              <b>{{ plugin.name }}</b>
-              <small>{{ plugin.vendor }} · {{ plugin.category }}</small>
-            </button>
-            <p v-if="filteredPlugins.length === 0">
-              {{ plugins.length === 0 ? emptyMessage : "No plug-ins match this search." }}
-            </p>
-          </div>
-        </div>
-      </PopoverContent>
-    </PopoverPortal>
-  </PopoverRoot>
+    </template>
+    <div class="plugin-picker">
+      <header>
+        <span>VST3</span><strong>{{ title }}</strong>
+      </header>
+      <label>
+        <Search :size="12" aria-hidden="true" />
+        <input v-model="query" :aria-label="searchLabel" placeholder="Search plug-ins" />
+      </label>
+      <div class="plugin-list">
+        <button
+          v-for="plugin in filteredPlugins"
+          :key="`${plugin.modulePath}:${plugin.classId}`"
+          type="button"
+          :aria-label="`Add ${plugin.name}`"
+          @click="selectPlugin(plugin)"
+        >
+          <b>{{ plugin.name }}</b>
+          <small>{{ plugin.vendor }} · {{ plugin.category }}</small>
+        </button>
+        <p v-if="filteredPlugins.length === 0">
+          {{ plugins.length === 0 ? emptyMessage : "No plug-ins match this search." }}
+        </p>
+      </div>
+    </div>
+  </UiPopover>
 </template>
 
 <style scoped>
@@ -95,7 +85,7 @@ function selectPlugin(descriptor: PluginDescriptor): void {
   border-radius: 6px;
   color: var(--text-primary);
   background: var(--surface-1);
-  box-shadow: 0 14px 36px #00000075;
+  box-shadow: 0 14px 36px var(--ui-domain-color-00000075);
 }
 .plugin-picker header span,
 .plugin-picker header strong {

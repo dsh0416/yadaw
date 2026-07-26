@@ -97,8 +97,8 @@ function cancel(): void {
   border-radius: 3px;
   outline: none;
   color: var(--text-primary);
-  background: #090e16;
-  box-shadow: 0 0 0 2px #8c83ff2e;
+  background: var(--ui-domain-color-090e16);
+  box-shadow: var(--ui-focus-ring);
   font: inherit;
 }
 </style>

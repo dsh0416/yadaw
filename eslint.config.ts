@@ -44,9 +44,11 @@ export default tseslint.config(
           "./tsconfig.config.json",
           "./apps/desktop/tsconfig.eslint.json",
           "./apps/desktop/tsconfig.scripts.json",
+          "./apps/design-system/tsconfig.json",
           "./packages/audio-engine/tsconfig.json",
           "./packages/contracts/tsconfig.json",
-          "./packages/project-db/tsconfig.eslint.json"
+          "./packages/project-db/tsconfig.eslint.json",
+          "./packages/ui/tsconfig.json"
         ],
         tsconfigRootDir: import.meta.dirname
       }
@@ -88,6 +90,16 @@ export default tseslint.config(
     }
   },
   {
+    files: ["**/*.stories.ts", "apps/design-system/.storybook/**/*.ts"],
+    rules: {
+      "@typescript-eslint/no-unsafe-argument": "off",
+      "@typescript-eslint/no-unsafe-assignment": "off",
+      "@typescript-eslint/no-unsafe-call": "off",
+      "@typescript-eslint/no-unsafe-member-access": "off",
+      "@typescript-eslint/no-unsafe-return": "off"
+    }
+  },
+  {
     files: ["apps/desktop/src/renderer/src/main.ts"],
     rules: {
       "@typescript-eslint/no-unsafe-argument": "off"
@@ -100,6 +112,7 @@ export default tseslint.config(
       "apps/desktop/scripts/**/*.{cjs,js,mjs,ts}",
       "apps/desktop/src/main/**/*.ts",
       "apps/desktop/src/preload/**/*.ts",
+      "scripts/**/*.ts",
       "packages/project-db/**/*.ts"
     ],
     languageOptions: {

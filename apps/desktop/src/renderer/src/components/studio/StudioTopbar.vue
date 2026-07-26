@@ -12,7 +12,7 @@ import {
   SkipBack,
   SlidersHorizontal
 } from "@lucide/vue"
-import { TooltipArrow, TooltipContent, TooltipPortal, TooltipRoot, TooltipTrigger } from "reka-ui"
+import { UiTooltip } from "@yadaw/ui"
 import type { NativeEngineInfo, ProjectConfiguration, TempoMapSnapshot } from "@yadaw/contracts"
 import {
   musicalPositionAtTick,
@@ -92,50 +92,33 @@ function commitTempoEdit(): void {
 
     <div class="transport" aria-label="Transport controls">
       <div class="transport-buttons">
-        <TooltipRoot>
-          <TooltipTrigger as-child
-            ><button aria-label="Go to start" @click="emit('goToStart')">
-              <SkipBack :size="15" /></button
-          ></TooltipTrigger>
-          <TooltipPortal
-            ><TooltipContent class="tooltip-content" :side-offset="9"
-              >Go to start <span>Home</span><TooltipArrow class="tooltip-arrow" /></TooltipContent
-          ></TooltipPortal>
-        </TooltipRoot>
-        <TooltipRoot>
-          <TooltipTrigger as-child>
-            <button
-              :aria-label="playing ? 'Pause' : 'Play'"
-              :class="['play', { active: playing }]"
-              :disabled="!canPlay && !playing && !playLoading"
-              @click="emit('togglePlayback')"
-            >
-              <LoaderCircle v-if="playLoading" :size="15" class="spin" />
-              <Pause v-else-if="playing" :size="15" fill="currentColor" />
-              <Play v-else :size="15" fill="currentColor" />
-            </button>
-          </TooltipTrigger>
-          <TooltipPortal
-            ><TooltipContent class="tooltip-content" :side-offset="9"
-              >{{ playing ? "Pause" : "Play" }} <span>Space</span
-              ><TooltipArrow class="tooltip-arrow" /></TooltipContent
-          ></TooltipPortal>
-        </TooltipRoot>
-        <TooltipRoot>
-          <TooltipTrigger as-child
-            ><button
-              aria-label="Record"
-              :class="['record', { active: recording }]"
-              :disabled="(!engineRunning && !recording) || recordingBusy"
-              @click="emit('toggleRecording')"
-            >
-              <Circle :size="12" fill="currentColor" /></button
-          ></TooltipTrigger>
-          <TooltipPortal
-            ><TooltipContent class="tooltip-content" :side-offset="9"
-              >Record <span>R</span><TooltipArrow class="tooltip-arrow" /></TooltipContent
-          ></TooltipPortal>
-        </TooltipRoot>
+        <UiTooltip text="Go to start" shortcut="Home">
+          <button aria-label="Go to start" @click="emit('goToStart')">
+            <SkipBack :size="15" />
+          </button>
+        </UiTooltip>
+        <UiTooltip :text="playing ? 'Pause' : 'Play'" shortcut="Space">
+          <button
+            :aria-label="playing ? 'Pause' : 'Play'"
+            :class="['play', { active: playing }]"
+            :disabled="!canPlay && !playing && !playLoading"
+            @click="emit('togglePlayback')"
+          >
+            <LoaderCircle v-if="playLoading" :size="15" class="spin" />
+            <Pause v-else-if="playing" :size="15" fill="currentColor" />
+            <Play v-else :size="15" fill="currentColor" />
+          </button>
+        </UiTooltip>
+        <UiTooltip text="Record" shortcut="R">
+          <button
+            aria-label="Record"
+            :class="['record', { active: recording }]"
+            :disabled="(!engineRunning && !recording) || recordingBusy"
+            @click="emit('toggleRecording')"
+          >
+            <Circle :size="12" fill="currentColor" />
+          </button>
+        </UiTooltip>
       </div>
       <div class="time-display">
         <span>BAR · BEAT · TICK</span><strong>{{ musicalPosition }}</strong>
@@ -209,21 +192,15 @@ function commitTempoEdit(): void {
       <button class="settings-button" aria-label="Close project" @click="emit('close')">
         <LogOut :size="15" />
       </button>
-      <TooltipRoot>
-        <TooltipTrigger as-child
-          ><button
-            class="settings-button"
-            aria-label="System settings"
-            @click="emit('openSystemSettings')"
-          >
-            <Settings :size="16" /></button
-        ></TooltipTrigger>
-        <TooltipPortal
-          ><TooltipContent class="tooltip-content" :side-offset="9"
-            >System settings <span>Ctrl+,</span
-            ><TooltipArrow class="tooltip-arrow" /></TooltipContent
-        ></TooltipPortal>
-      </TooltipRoot>
+      <UiTooltip text="System settings" shortcut="Ctrl+,">
+        <button
+          class="settings-button"
+          aria-label="System settings"
+          @click="emit('openSystemSettings')"
+        >
+          <Settings :size="16" />
+        </button>
+      </UiTooltip>
     </div>
   </header>
 </template>
@@ -239,7 +216,7 @@ function commitTempoEdit(): void {
   border-bottom: 1px solid var(--line-strong);
   background: color-mix(in srgb, var(--surface-1) 94%, transparent);
   box-shadow:
-    0 1px 0 #ffffff05 inset,
+    0 1px 0 var(--ui-domain-color-ffffff05) inset,
     0 10px 28px var(--shadow);
   -webkit-app-region: drag;
 }
@@ -272,7 +249,7 @@ function commitTempoEdit(): void {
   border-radius: 9px;
   background: linear-gradient(145deg, var(--surface-3), var(--surface-1));
   box-shadow:
-    0 0 0 1px #ffffff08 inset,
+    0 0 0 1px var(--ui-domain-color-ffffff08) inset,
     0 8px 20px var(--shadow);
 }
 .brand-mark span {
@@ -313,7 +290,7 @@ function commitTempoEdit(): void {
   border-radius: 10px;
   background: var(--surface-sunken);
   box-shadow:
-    0 1px 0 #ffffff08 inset,
+    0 1px 0 var(--ui-domain-color-ffffff08) inset,
     0 8px 24px var(--shadow);
   overflow: hidden;
 }
@@ -472,7 +449,7 @@ function commitTempoEdit(): void {
   }
 }
 .transport-buttons .record.active {
-  color: #fff;
+  color: var(--ui-domain-color-fff);
   background: var(--record);
   box-shadow: 0 0 16px color-mix(in srgb, var(--record) 60%, transparent);
 }
@@ -481,7 +458,7 @@ function commitTempoEdit(): void {
   opacity: 0.35;
 }
 .transport-buttons .play.active {
-  color: #081116;
+  color: var(--ui-domain-color-081116);
   background: var(--signal-cyan);
   box-shadow: 0 0 14px color-mix(in srgb, var(--signal-cyan) 40%, transparent);
 }

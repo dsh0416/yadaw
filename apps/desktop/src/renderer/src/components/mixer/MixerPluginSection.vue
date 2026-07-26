@@ -204,8 +204,8 @@ function dropInsert(event: DragEvent, slotOrder: number): void {
   align-content: start;
   min-width: 0;
   padding: 6px 7px;
-  border-bottom: 1px solid #444;
-  background: #575757;
+  border-bottom: 1px solid var(--ui-domain-color-444);
+  background: var(--ui-domain-color-575757);
 }
 .plugin-row {
   display: grid;
@@ -213,35 +213,35 @@ function dropInsert(event: DragEvent, slotOrder: number): void {
   align-items: center;
   min-width: 0;
   height: 23px;
-  border: 1px solid #2e5d86;
+  border: 1px solid var(--ui-domain-color-2e5d86);
   border-radius: 4px;
-  color: #fff;
-  background: linear-gradient(#3f91d4, #2871ae);
-  box-shadow: 0 1px 0 #ffffff28 inset;
+  color: var(--ui-domain-color-fff);
+  background: linear-gradient(var(--ui-domain-color-3f91d4), var(--ui-domain-color-2871ae));
+  box-shadow: 0 1px 0 var(--ui-domain-color-ffffff28) inset;
 }
 .plugin-row.instrument-row {
-  border-color: #697654;
-  background: linear-gradient(#7e9362, #63764d);
+  border-color: var(--ui-domain-color-697654);
+  background: linear-gradient(var(--ui-domain-color-7e9362), var(--ui-domain-color-63764d));
 }
 .plugin-row.bypassed {
-  border-color: #505050;
-  color: #a7a7a7;
-  background: linear-gradient(#5b5b5b, #4b4b4b);
-  box-shadow: 0 1px 0 #ffffff12 inset;
+  border-color: var(--ui-domain-color-505050);
+  color: var(--ui-domain-color-a7a7a7);
+  background: linear-gradient(var(--ui-domain-color-5b5b5b), var(--ui-domain-color-4b4b4b));
+  box-shadow: 0 1px 0 var(--ui-domain-color-ffffff12) inset;
 }
 .plugin-row.loading,
 .plugin-row.unloaded {
-  border-color: #566a78;
-  color: #c5d0d7;
-  background: linear-gradient(#617685, #526573);
+  border-color: var(--ui-domain-color-566a78);
+  color: var(--ui-domain-color-c5d0d7);
+  background: linear-gradient(var(--ui-domain-color-617685), var(--ui-domain-color-526573));
 }
 .plugin-row.failed,
 .plugin-row.missing,
 .plugin-row.quarantined {
-  border-color: #8d4a43;
-  color: #ffd4ce;
-  background: linear-gradient(#884f49, #6d3e39);
-  box-shadow: 0 1px 0 #ffffff16 inset;
+  border-color: var(--ui-domain-color-8d4a43);
+  color: var(--ui-domain-color-ffd4ce);
+  background: linear-gradient(var(--ui-domain-color-884f49), var(--ui-domain-color-6d3e39));
+  box-shadow: 0 1px 0 var(--ui-domain-color-ffffff16) inset;
 }
 .plugin-row button {
   display: grid;
@@ -266,7 +266,7 @@ function dropInsert(event: DragEvent, slotOrder: number): void {
   white-space: nowrap;
 }
 .plugin-row button:hover {
-  background: #ffffff22;
+  background: var(--ui-domain-color-ffffff22);
 }
 .plugin-row button:focus-visible {
   outline: 2px solid var(--focus);
@@ -276,18 +276,18 @@ function dropInsert(event: DragEvent, slotOrder: number): void {
   display: grid;
   grid-template-columns: 1fr;
   place-items: center;
-  border-color: #4c4c4c;
-  color: #8f8f8f;
-  background: #4d4d4d;
-  box-shadow: 0 1px 2px #00000038 inset;
+  border-color: var(--ui-domain-color-4c4c4c);
+  color: var(--ui-domain-color-8f8f8f);
+  background: var(--ui-domain-color-4d4d4d);
+  box-shadow: 0 1px 2px var(--ui-domain-color-00000038) inset;
 }
 .plugin-row.empty span {
   font: 6px var(--font-utility);
   letter-spacing: 0.08em;
 }
 .plugin-row.empty:not(.disabled):hover {
-  border-color: #4e8dbf;
-  color: #b7d9f3;
+  border-color: var(--ui-domain-color-4e8dbf);
+  color: var(--ui-domain-color-b7d9f3);
 }
 .plugin-row.picker-trigger {
   width: 100%;

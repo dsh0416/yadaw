@@ -1,0 +1,26 @@
+import { Meta } from "@storybook/addon-docs/blocks"
+
+<Meta title="Foundations/Spacing" />
+
+# Spacing
+
+Spacing follows a 4px base scale. Components use the named scale so density changes remain
+coherent. The 24px minimum target is reserved for dense professional controls; primary controls
+use 32–48px heights.
+
+<div style={{ display: "grid", gap: "0.75rem" }}>
+  {[1, 2, 3, 4, 5, 6, 8, 10, 12, 16].map((step) => (
+    <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+      <code style={{ width: "7rem" }}>--ui-space-{step}</code>
+      <span
+        style={{
+          display: "block",
+          width: `var(--ui-space-${step})`,
+          height: "1rem",
+          background: "var(--ui-color-action)",
+          borderRadius: "2px"
+        }}
+      />
+    </div>
+  ))}
+</div>

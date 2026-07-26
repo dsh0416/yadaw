@@ -153,7 +153,7 @@ function relayClipDragStart(clipId: string, offsetPixels: number): void {
 }
 .bar-line {
   position: absolute;
-  z-index: 0;
+  z-index: var(--ui-z-local-base);
   top: 0;
   bottom: 0;
   width: 1px;
@@ -163,7 +163,7 @@ function relayClipDragStart(clipId: string, offsetPixels: number): void {
 .clip-drop-preview {
   --clip-color: var(--accent);
   position: absolute;
-  z-index: 5;
+  z-index: var(--ui-z-local-sticky);
   top: 9px;
   bottom: 9px;
   min-width: 12px;
@@ -172,11 +172,11 @@ function relayClipDragStart(clipId: string, offsetPixels: number): void {
   border-radius: 4px;
   background: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--clip-color) 65%, #303436),
-    color-mix(in srgb, var(--clip-color) 38%, #17191a)
+    color-mix(in srgb, var(--clip-color) 65%, var(--ui-domain-color-303436)),
+    color-mix(in srgb, var(--clip-color) 38%, var(--ui-domain-color-17191a))
   );
   box-shadow:
-    0 0 0 1px #ffffff7a inset,
+    0 0 0 1px var(--ui-domain-color-ffffff7a) inset,
     0 0 18px color-mix(in srgb, var(--clip-color) 48%, transparent);
   opacity: 0.92;
   pointer-events: none;
@@ -185,7 +185,7 @@ function relayClipDragStart(clipId: string, offsetPixels: number): void {
   display: block;
   overflow: hidden;
   padding: 5px 6px;
-  color: #fff;
+  color: var(--ui-domain-color-fff);
   font-size: 9px;
   font-weight: 650;
   text-overflow: ellipsis;

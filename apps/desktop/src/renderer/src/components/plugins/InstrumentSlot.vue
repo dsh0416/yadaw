@@ -78,17 +78,25 @@ function drop(event: DragEvent): void {
   gap: 7px;
   padding: 11px 13px;
   border-bottom: 1px solid var(--line-soft);
-  background: linear-gradient(90deg, color-mix(in srgb, #73d6a2 5%, transparent), transparent 55%);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--ui-domain-color-73d6a2) 5%, transparent),
+    transparent 55%
+  );
 }
 .instrument-slot.dragging {
-  background: linear-gradient(90deg, color-mix(in srgb, #73d6a2 17%, transparent), transparent 70%);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, #73d6a2 65%, transparent);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--ui-domain-color-73d6a2) 17%, transparent),
+    transparent 70%
+  );
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-domain-color-73d6a2) 65%, transparent);
 }
 .slot-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  color: #73d6a2;
+  color: var(--ui-domain-color-73d6a2);
   font: 700 7px var(--font-utility);
   letter-spacing: 0.13em;
 }
@@ -106,14 +114,14 @@ function drop(event: DragEvent): void {
   border: 1px solid var(--line-strong);
   border-radius: 4px;
   background: var(--surface-sunken);
-  box-shadow: inset 2px 0 0 color-mix(in srgb, #73d6a2 72%, transparent);
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--ui-domain-color-73d6a2) 72%, transparent);
 }
 .slot-body i {
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: #73d6a2;
-  box-shadow: 0 0 5px color-mix(in srgb, #73d6a2 60%, transparent);
+  background: var(--ui-domain-color-73d6a2);
+  box-shadow: 0 0 5px color-mix(in srgb, var(--ui-domain-color-73d6a2) 60%, transparent);
 }
 .slot-body i.bypassed {
   background: var(--text-faint);

@@ -85,7 +85,7 @@ useEventListener(window, "pointerup", stopResize)
 }
 .dock-resizer {
   position: relative;
-  z-index: 8;
+  z-index: var(--ui-z-local-controls);
   flex: none;
   height: 5px;
   margin-top: -2px;

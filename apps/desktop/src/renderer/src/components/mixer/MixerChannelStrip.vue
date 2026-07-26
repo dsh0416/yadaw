@@ -443,15 +443,15 @@ function handleFaderKeydown(event: KeyboardEvent): void {
   min-width: 136px;
   height: max-content;
   overflow: hidden;
-  border-right: 1px solid #303030;
-  background: #575757;
-  box-shadow: 1px 0 0 #ffffff0c inset;
+  border-right: 1px solid var(--ui-domain-color-303030);
+  background: var(--ui-domain-color-575757);
+  box-shadow: 1px 0 0 var(--ui-domain-color-ffffff0c) inset;
 }
 
 .channel-strip::before {
   content: "";
   position: absolute;
-  z-index: 2;
+  z-index: var(--ui-z-local-raised);
   top: 0;
   right: 0;
   left: 0;
@@ -461,20 +461,20 @@ function handleFaderKeydown(event: KeyboardEvent): void {
 }
 
 .channel-strip.bus {
-  background: #53575a;
+  background: var(--ui-domain-color-53575a);
 }
 
 .channel-strip.master {
   position: sticky;
   right: 0;
-  z-index: 5;
-  border-left: 1px solid #2e2e2e;
-  background: #505050;
-  box-shadow: -12px 0 22px #0000005c;
+  z-index: var(--ui-z-local-sticky);
+  border-left: 1px solid var(--ui-domain-color-2e2e2e);
+  background: var(--ui-domain-color-505050);
+  box-shadow: -12px 0 22px var(--ui-domain-color-0000005c);
 }
 
 .channel-strip.selected {
-  background: #626262;
+  background: var(--ui-domain-color-626262);
   box-shadow: 3px 0 0 var(--strip-color) inset;
 }
 
@@ -482,37 +482,37 @@ function handleFaderKeydown(event: KeyboardEvent): void {
   display: grid;
   align-items: center;
   padding: 4px 7px;
-  border-bottom: 1px solid #444;
-  background: #575757;
+  border-bottom: 1px solid var(--ui-domain-color-444);
+  background: var(--ui-domain-color-575757);
 }
 
 .placeholder-section button {
   width: 100%;
   height: 25px;
-  border: 1px solid #6b6b6b;
+  border: 1px solid var(--ui-domain-color-6b6b6b);
   border-radius: 4px;
-  color: #bcbcbc;
-  background: linear-gradient(#666, #595959);
+  color: var(--ui-domain-color-bcbcbc);
+  background: linear-gradient(var(--ui-domain-color-666), var(--ui-domain-color-595959));
   font-size: 8px;
 }
 
 .automation-section button {
-  color: #81ed8b;
-  text-shadow: 0 0 5px #5fe66b5c;
+  color: var(--ui-domain-color-81ed8b);
+  text-shadow: 0 0 5px var(--ui-domain-color-5fe66b5c);
 }
 
 .pan-control {
   padding: 8px 12px;
-  border-bottom: 1px solid #444;
-  background: #565656;
+  border-bottom: 1px solid var(--ui-domain-color-444);
+  background: var(--ui-domain-color-565656);
 }
 
 .volume-section {
   display: grid;
   grid-template-rows: 221px 61px;
   min-height: 0;
-  border-bottom: 1px solid #444;
-  background: #555;
+  border-bottom: 1px solid var(--ui-domain-color-444);
+  background: var(--ui-domain-color-555);
 }
 
 .strip-core {
@@ -552,7 +552,7 @@ function handleFaderKeydown(event: KeyboardEvent): void {
 .meter::after {
   content: "";
   position: absolute;
-  z-index: 2;
+  z-index: var(--ui-z-local-raised);
   right: 2px;
   bottom: var(--held-meter-level);
   left: 2px;
@@ -606,7 +606,7 @@ function handleFaderKeydown(event: KeyboardEvent): void {
 
 .fader::after {
   position: absolute;
-  z-index: 0;
+  z-index: var(--ui-z-local-base);
   top: 0;
   bottom: 0;
   left: calc(50% + 9.5px);
@@ -617,14 +617,14 @@ function handleFaderKeydown(event: KeyboardEvent): void {
     var(--accent) 0 var(--fader-level),
     var(--daw-meter-well) var(--fader-level) 100%
   );
-  box-shadow: 0 0 0 1px #0006 inset;
+  box-shadow: 0 0 0 1px var(--ui-domain-color-0006) inset;
   content: "";
   transform: translateX(-50%);
 }
 
 .fader-control {
   position: relative;
-  z-index: 1;
+  z-index: var(--ui-z-local-content);
   width: 100%;
   height: calc(100% + 16px);
   margin: -8px 0;
@@ -658,7 +658,7 @@ function handleFaderKeydown(event: KeyboardEvent): void {
     var(--daw-control-hover) calc(50% + 1px) 100%
   );
   box-shadow:
-    0 1px 3px #0009,
+    0 1px 3px var(--ui-domain-color-0009),
     0 0 0 1px var(--surface-1);
   cursor: ns-resize;
 }
@@ -689,7 +689,7 @@ function handleFaderKeydown(event: KeyboardEvent): void {
     var(--daw-control-hover) calc(50% + 1px) 100%
   );
   box-shadow:
-    0 1px 3px #0009,
+    0 1px 3px var(--ui-domain-color-0009),
     0 0 0 1px var(--surface-1);
   cursor: ns-resize;
 }
@@ -706,7 +706,7 @@ function handleFaderKeydown(event: KeyboardEvent): void {
 
 .fader-tooltip {
   position: absolute;
-  z-index: 8;
+  z-index: var(--ui-z-local-controls);
   bottom: -5px;
   left: calc(50% + 9.5px);
   min-width: 38px;
@@ -804,8 +804,8 @@ function handleFaderKeydown(event: KeyboardEvent): void {
   align-content: center;
   justify-items: center;
   gap: 4px;
-  border-top: 1px solid #444;
-  background: #525252;
+  border-top: 1px solid var(--ui-domain-color-444);
+  background: var(--ui-domain-color-525252);
 }
 
 .input-actions,
@@ -835,7 +835,7 @@ function handleFaderKeydown(event: KeyboardEvent): void {
   color: var(--text-muted);
   background: var(--daw-control);
   box-shadow:
-    0 1px 0 #ffffff12 inset,
+    0 1px 0 var(--ui-domain-color-ffffff12) inset,
     0 1px 2px var(--shadow);
   font: 700 9px var(--font-utility);
   cursor: pointer;
@@ -880,29 +880,29 @@ function handleFaderKeydown(event: KeyboardEvent): void {
 
 .channel-actions .mute.active {
   border-color: color-mix(in srgb, var(--mixer-mute) 72%, white);
-  color: #fff;
+  color: var(--ui-domain-color-fff);
   background: var(--mixer-mute);
   box-shadow:
     0 0 8px color-mix(in srgb, var(--mixer-mute) 46%, transparent),
-    0 1px 0 #ffffff40 inset;
+    0 1px 0 var(--ui-domain-color-ffffff40) inset;
 }
 
 .channel-actions .solo.active {
   border-color: color-mix(in srgb, var(--mixer-solo) 72%, white);
-  color: #221c08;
+  color: var(--ui-domain-color-221c08);
   background: var(--mixer-solo);
   box-shadow:
     0 0 8px color-mix(in srgb, var(--mixer-solo) 40%, transparent),
-    0 1px 0 #ffffff5c inset;
+    0 1px 0 var(--ui-domain-color-ffffff5c) inset;
 }
 
 .channel-actions .record.active {
   border-color: color-mix(in srgb, var(--mixer-record) 72%, white);
-  color: #fff;
+  color: var(--ui-domain-color-fff);
   background: var(--mixer-record);
   box-shadow:
     0 0 8px color-mix(in srgb, var(--mixer-record) 46%, transparent),
-    0 1px 0 #ffffff40 inset;
+    0 1px 0 var(--ui-domain-color-ffffff40) inset;
 }
 
 .channel-actions .monitor:disabled {
@@ -922,7 +922,7 @@ function handleFaderKeydown(event: KeyboardEvent): void {
   border: 0;
   border-top: 1px solid var(--line-strong);
   color: var(--text-primary);
-  background: color-mix(in srgb, var(--strip-color) 72%, #484848);
+  background: color-mix(in srgb, var(--strip-color) 72%, var(--ui-domain-color-484848));
   text-align: left;
   cursor: pointer;
 }

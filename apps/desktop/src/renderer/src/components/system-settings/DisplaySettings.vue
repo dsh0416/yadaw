@@ -112,7 +112,7 @@ onMounted(() => {
 
 .theme-option.selected {
   border-color: var(--accent);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent) inset;
+  box-shadow: var(--ui-shadow-selected-outline);
 }
 
 .theme-option:focus-visible {
@@ -163,33 +163,49 @@ onMounted(() => {
 }
 
 .theme-preview-light {
-  --canvas: #d8d9db;
-  --surface-panel: #c5c7ca;
-  --line-strong: #a4a8ae;
-  --accent: #657f8d;
+  --canvas: var(--ui-domain-color-d8d9db);
+  --surface-panel: var(--ui-domain-color-c5c7ca);
+  --line-strong: var(--ui-domain-color-a4a8ae);
+  --accent: var(--ui-domain-color-657f8d);
 }
 
 .theme-preview-dark {
-  --canvas: #202020;
-  --surface-panel: #171717;
-  --line-strong: #414141;
-  --accent: #8ba6b4;
+  --canvas: var(--ui-domain-color-202020);
+  --surface-panel: var(--ui-domain-color-171717);
+  --line-strong: var(--ui-domain-color-414141);
+  --accent: var(--ui-domain-color-8ba6b4);
 }
 
 .theme-preview-system {
-  background: linear-gradient(90deg, #d8d9db 0 50%, #202020 50%);
+  background: linear-gradient(
+    90deg,
+    var(--ui-domain-color-d8d9db) 0 50%,
+    var(--ui-domain-color-202020) 50%
+  );
 }
 
 .theme-preview-system .preview-sidebar {
-  background: linear-gradient(90deg, #c5c7ca 0 50%, #171717 50%);
+  background: linear-gradient(
+    90deg,
+    var(--ui-domain-color-c5c7ca) 0 50%,
+    var(--ui-domain-color-171717) 50%
+  );
 }
 
 .theme-preview-system .preview-content i {
-  background: linear-gradient(90deg, #a4a8ae 0 50%, #414141 50%);
+  background: linear-gradient(
+    90deg,
+    var(--ui-domain-color-a4a8ae) 0 50%,
+    var(--ui-domain-color-414141) 50%
+  );
 }
 
 .theme-preview-system .preview-content i:first-child {
-  background: linear-gradient(90deg, #657f8d 0 50%, #8ba6b4 50%);
+  background: linear-gradient(
+    90deg,
+    var(--ui-domain-color-657f8d) 0 50%,
+    var(--ui-domain-color-8ba6b4) 50%
+  );
 }
 
 .theme-option-copy {
@@ -234,7 +250,7 @@ onMounted(() => {
 .selected .selection-dot {
   border-color: var(--accent);
   background: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+  box-shadow: var(--ui-focus-ring);
 }
 
 .display-error {

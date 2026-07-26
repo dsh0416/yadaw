@@ -1,0 +1,41 @@
+import { Meta } from "@storybook/addon-docs/blocks"
+
+<Meta title="Foundations/Color" />
+
+# Color
+
+YADAW uses color to explain hierarchy and signal state. Large surfaces stay neutral; saturated
+color is reserved for primary actions, feedback, recording, MIDI, audio, meters, and focus.
+
+## Semantic roles
+
+<div className="storybook-grid">
+  {[
+    ["Canvas", "var(--ui-color-canvas)"],
+    ["Surface", "var(--ui-color-surface)"],
+    ["Raised", "var(--ui-color-surface-raised)"],
+    ["Action", "var(--ui-color-action)"],
+    ["Success", "var(--ui-color-success)"],
+    ["Warning", "var(--ui-color-warning)"],
+    ["Danger", "var(--ui-color-danger)"]
+  ].map(([name, color]) => (
+    <div
+      style={{
+        padding: "1rem",
+        border: "1px solid var(--ui-color-border)",
+        borderRadius: "var(--ui-radius-md)",
+        background: color,
+        color:
+          name === "Action" || name === "Warning" || name === "Danger"
+            ? "var(--ui-color-text-inverse)"
+            : "var(--ui-color-text)"
+      }}
+    >
+      <strong>{name}</strong>
+      <div style={{ fontSize: "0.75rem", marginTop: "0.5rem" }}>{color}</div>
+    </div>
+  ))}
+</div>
+
+Never use a raw color in a component. Domain data such as waveforms and meters uses the signal
+palette or a documented runtime CSS custom property.

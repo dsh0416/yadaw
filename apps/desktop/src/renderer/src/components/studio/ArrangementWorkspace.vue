@@ -409,7 +409,7 @@ function updateSelectedTempo(beatsPerMinute: number): void {
           :minimum="20"
           :maximum="300"
           :expanded="tempoLaneExpanded"
-          color="#65A8FF"
+          color="var(--ui-domain-color-65a8ff)"
           @toggle="viewStore.toggleTempoLane"
           @update-value="updateSelectedTempo"
         />
@@ -652,7 +652,7 @@ function updateSelectedTempo(beatsPerMinute: number): void {
 }
 .track-header:hover,
 .track-header:focus-within {
-  z-index: 3;
+  z-index: var(--ui-z-local-selection);
 }
 .track-header:hover {
   background: var(--daw-track-header-hover);
@@ -697,7 +697,7 @@ function updateSelectedTempo(beatsPerMinute: number): void {
 }
 .timeline-playhead {
   position: absolute;
-  z-index: 8;
+  z-index: var(--ui-z-local-controls);
   top: 43px;
   bottom: 0;
   width: 1px;

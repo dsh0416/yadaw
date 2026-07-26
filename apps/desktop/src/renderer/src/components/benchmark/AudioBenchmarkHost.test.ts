@@ -21,7 +21,11 @@ describe("AudioBenchmarkHost", () => {
     requestOpen()
     await nextTick()
 
-    expect(document.body.textContent).toContain("Audio performance benchmark")
+    const dialog = document.body.querySelector("[role=dialog]")
+    expect(dialog?.querySelectorAll(".ui-dialog__title")).toHaveLength(1)
+    expect(dialog?.querySelector(".ui-dialog__title")?.textContent).toBe(
+      "Audio performance benchmark"
+    )
     wrapper.unmount()
     expect(unsubscribe).not.toHaveBeenCalled()
     benchmark.stopSubscription()

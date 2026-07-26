@@ -30,14 +30,16 @@ describe("GlobalOperationHost", () => {
       }
     })
     await wrapper.vm.$nextTick()
-    expect(document.body.querySelector("[role=dialog]")?.textContent).toContain("Saving")
+    const dialog = document.body.querySelector("[role=dialog]")
+    expect(dialog?.querySelectorAll(".ui-dialog__title")).toHaveLength(1)
+    expect(dialog?.querySelector(".ui-dialog__title")?.textContent).toBe("Saving")
     wrapper.unmount()
     expect(unsubscribe).not.toHaveBeenCalled()
     store.stopSubscription()
     expect(unsubscribe).toHaveBeenCalledOnce()
   })
 
-  it("dismisses a retained completed warning when its backdrop is clicked", async () => {
+  it("dismisses a retained completed warning through the shared dialog close action", async () => {
     window.yadaw.subscribeOperations = vi.fn(() => vi.fn())
     const pinia = createPinia()
     const wrapper = mount(GlobalOperationHost, {
@@ -60,8 +62,11 @@ describe("GlobalOperationHost", () => {
       }
     })
     await wrapper.vm.$nextTick()
-    expect(document.body.querySelector("[role=dialog] button")).toBeNull()
-    document.body.querySelector<HTMLElement>(".operation-overlay")?.click()
+    const close = document.body.querySelector<HTMLButtonElement>(
+      '[role=dialog] button[aria-label="Close dialog"]'
+    )
+    expect(close).not.toBeNull()
+    close?.click()
     await wrapper.vm.$nextTick()
     expect(document.body.querySelector("[role=dialog]")).toBeNull()
     wrapper.unmount()

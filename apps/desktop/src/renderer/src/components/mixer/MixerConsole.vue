@@ -246,7 +246,7 @@ async function deleteChannel(channelId: string): Promise<void> {
   min-width: 0;
   min-height: 0;
   overflow: auto;
-  background-color: #4f4f4f;
+  background-color: var(--ui-domain-color-4f4f4f);
   background-image: linear-gradient(
     90deg,
     color-mix(in srgb, var(--text-primary) 3%, transparent) 1px,

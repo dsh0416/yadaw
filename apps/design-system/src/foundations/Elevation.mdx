@@ -1,0 +1,25 @@
+import { Meta } from "@storybook/addon-docs/blocks"
+
+<Meta title="Foundations/Elevation" />
+
+# Elevation
+
+Borders establish most hierarchy. Shadows are reserved for content that moves above the normal
+layout: raised cards, popovers, and modal dialogs. Numeric z-index values only exist in tokens.
+
+<div className="storybook-grid">
+  {["sm", "md", "lg"].map((level) => (
+    <div
+      style={{
+        minHeight: "8rem",
+        padding: "1rem",
+        background: "var(--ui-color-surface-raised)",
+        border: "1px solid var(--ui-color-border)",
+        borderRadius: "var(--ui-radius-lg)",
+        boxShadow: `var(--ui-shadow-${level})`
+      }}
+    >
+      <strong>{level} elevation</strong>
+    </div>
+  ))}
+</div>

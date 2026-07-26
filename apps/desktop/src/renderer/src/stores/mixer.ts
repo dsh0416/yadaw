@@ -13,6 +13,7 @@ import type {
   ProjectCommand
 } from "@yadaw/contracts"
 import { DEFAULT_INSTRUMENT_COLOR, MUSICAL_TICKS_PER_QUARTER } from "@yadaw/contracts"
+import { UI_DOMAIN_COLORS } from "@yadaw/ui"
 import { useProjectStore } from "./project"
 
 interface HistoryEntry {
@@ -35,11 +36,11 @@ const EMPTY_GRAPH: MixerGraphSnapshot = {
 }
 
 const DEFAULT_CHANNEL_COLORS: Record<MixerChannelKind, string> = {
-  audio: "#4F8CFF",
+  audio: UI_DOMAIN_COLORS.audioChannel,
   instrument: DEFAULT_INSTRUMENT_COLOR,
-  bus: "#E8B85F",
-  master: "#8C83FF",
-  output: "#EF7C95"
+  bus: UI_DOMAIN_COLORS.busChannel,
+  master: UI_DOMAIN_COLORS.masterChannel,
+  output: UI_DOMAIN_COLORS.outputChannel
 }
 
 function patchGraph(

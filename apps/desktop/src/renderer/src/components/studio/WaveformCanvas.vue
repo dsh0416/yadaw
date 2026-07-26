@@ -56,7 +56,9 @@ function draw(): void {
           props.window!.sampleRate
       )
     : buildWaveformGeometry(props.window, props.displayMode, width, height, props.amplitudeScale)
-  context.strokeStyle = props.recording ? "#ffb3be" : "#87a8b7"
+  context.strokeStyle = props.recording
+    ? "var(--ui-domain-color-ffb3be)"
+    : "var(--ui-domain-color-87a8b7)"
   context.globalAlpha = 0.28
   context.lineWidth = 1
   context.beginPath()
@@ -66,7 +68,9 @@ function draw(): void {
     context.lineTo(width, center)
   }
   context.stroke()
-  context.strokeStyle = props.recording ? "#ffd2d8" : "#b7e9fa"
+  context.strokeStyle = props.recording
+    ? "var(--ui-domain-color-ffd2d8)"
+    : "var(--ui-domain-color-b7e9fa)"
   context.globalAlpha = 0.86
   context.lineWidth = 1
   context.beginPath()

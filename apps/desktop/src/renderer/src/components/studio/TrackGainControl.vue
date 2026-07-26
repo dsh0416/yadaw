@@ -115,7 +115,7 @@ function reset(): void {
     var(--meter-yellow) 86%,
     var(--meter-red) 100%
   );
-  box-shadow: 0 0 0 1px #0006 inset;
+  box-shadow: 0 0 0 1px var(--ui-domain-color-0006) inset;
 }
 
 .gain-meter i {
@@ -128,7 +128,7 @@ function reset(): void {
 
 .track-gain input {
   position: absolute;
-  z-index: 2;
+  z-index: var(--ui-z-local-raised);
   inset: 0;
   width: 100%;
   height: 15px;
@@ -156,7 +156,7 @@ function reset(): void {
     var(--text-primary) calc(50% - 1px) calc(50% + 1px),
     var(--daw-control-hover) calc(50% + 1px) 100%
   );
-  box-shadow: 0 1px 2px #000b;
+  box-shadow: 0 1px 2px var(--ui-domain-color-000b);
 }
 
 .track-gain input::-moz-range-track {
@@ -175,7 +175,7 @@ function reset(): void {
   border: 1px solid var(--text-muted);
   border-radius: 1px;
   background: var(--daw-control-hover);
-  box-shadow: 0 1px 2px #000b;
+  box-shadow: 0 1px 2px var(--ui-domain-color-000b);
 }
 
 .track-gain input:focus-visible {
@@ -185,7 +185,7 @@ function reset(): void {
 
 .parameter-tooltip {
   position: absolute;
-  z-index: 20;
+  z-index: var(--ui-z-floating-control);
   top: calc(100% + 4px);
   left: 50%;
   min-width: 36px;

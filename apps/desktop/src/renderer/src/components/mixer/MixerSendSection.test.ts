@@ -66,6 +66,10 @@ describe("MixerSendSection", () => {
     const tapButtons = Array.from(
       document.body.querySelectorAll<HTMLButtonElement>(".tap-options button")
     )
+    const enabledToggle = document.body.querySelector<HTMLButtonElement>(
+      'button[aria-label="Disable send"]'
+    )
+    expect(enabledToggle?.getAttribute("aria-pressed")).toBe("true")
     expect(tapButtons.map((button) => button.textContent?.trim())).toEqual(["PRE", "POST", "PAN"])
     await new DOMWrapper(tapButtons[2]).trigger("click")
     expect(wrapper.emitted("updateSend")?.at(-1)).toEqual(["send", { tap: "post-pan" }])

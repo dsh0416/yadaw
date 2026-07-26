@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ConfigProvider, TooltipProvider } from "reka-ui"
+import { UiProvider } from "@yadaw/ui"
 import { computed, onMounted, onUnmounted } from "vue"
 import { storeToRefs } from "pinia"
 import { RouterView } from "vue-router"
@@ -55,13 +55,11 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <ConfigProvider dir="ltr">
-    <TooltipProvider :delay-duration="350" :skip-delay-duration="100">
-      <RouterView v-if="lifecycleReady" />
-      <PendingRecordingHost v-if="lifecycleReady" />
-      <GlobalOperationHost />
-      <AudioBenchmarkHost />
-      <GlobalDialogHost />
-    </TooltipProvider>
-  </ConfigProvider>
+  <UiProvider dir="ltr" :tooltip-delay="350" :tooltip-skip-delay="100">
+    <RouterView v-if="lifecycleReady" />
+    <PendingRecordingHost v-if="lifecycleReady" />
+    <GlobalOperationHost />
+    <AudioBenchmarkHost />
+    <GlobalDialogHost />
+  </UiProvider>
 </template>

@@ -170,7 +170,7 @@ watch(
   padding: 0 18px;
   border-bottom: 1px solid var(--line-strong);
   background: var(--surface-1);
-  box-shadow: 0 10px 28px var(--shadow);
+  box-shadow: var(--ui-shadow-md);
   -webkit-app-region: drag;
 }
 
@@ -241,7 +241,7 @@ watch(
   border-color: var(--accent-strong);
   color: var(--button-primary-text);
   background: var(--button-primary);
-  box-shadow: 0 1px 0 color-mix(in srgb, var(--text-primary) 14%, transparent) inset;
+  box-shadow: var(--ui-shadow-highlight-inset);
 }
 
 .settings-actions :deep(.settings-action:disabled) {
@@ -298,7 +298,7 @@ watch(
   border-color: color-mix(in srgb, var(--accent) 28%, transparent);
   color: var(--text-primary);
   background: var(--surface-active);
-  box-shadow: 2px 0 0 var(--accent) inset;
+  box-shadow: var(--ui-shadow-selected-edge);
 }
 
 .settings-category:disabled,

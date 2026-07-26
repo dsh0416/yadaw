@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, useTemplateRef } from "vue"
+import { computed } from "vue"
 import type {
   AudioBenchmarkRating,
   AudioBenchmarkReport,
@@ -18,8 +18,6 @@ const emit = defineEmits<{
   close: []
   run: []
 }>()
-
-const dialog = useTemplateRef<HTMLElement>("dialog")
 
 const ratingCopy: Record<AudioBenchmarkRating, { label: string; summary: string }> = {
   limited: {
@@ -74,34 +72,10 @@ function ipcRate(scenario: AudioIpcBenchmarkScenario): string {
     ? `${format(scenario.operationsPerSecond / 1_000, 1)}k reads/s`
     : `${format(scenario.throughputMiBPerSecond, 1)} MiB/s`
 }
-
-function handleKeydown(event: KeyboardEvent): void {
-  if (event.key === "Escape") emit("close")
-}
-
-onMounted(() => dialog.value?.focus())
 </script>
 
 <template>
-  <section
-    ref="dialog"
-    class="benchmark-dialog"
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="audio-benchmark-title"
-    tabindex="-1"
-    @keydown="handleKeydown"
-  >
-    <header class="dialog-header">
-      <div>
-        <span class="kicker">SYSTEM / AUDIO ENGINE</span>
-        <h2 id="audio-benchmark-title">Audio performance benchmark</h2>
-      </div>
-      <button class="icon-button" type="button" aria-label="Close benchmark" @click="emit('close')">
-        ×
-      </button>
-    </header>
-
+  <section class="benchmark-dialog">
     <div v-if="status === 'idle'" class="intro-state">
       <div class="signal-map" aria-hidden="true">
         <span v-for="track in 6" :key="track" class="signal-track" />
@@ -248,18 +222,8 @@ onMounted(() => dialog.value?.focus())
 
 <style scoped>
 .benchmark-dialog {
-  width: min(860px, calc(100vw - 48px));
-  max-height: calc(100vh - 56px);
-  overflow: auto;
-  border: 1px solid #303b4c;
-  border-radius: 14px;
-  outline: none;
+  width: 100%;
   color: var(--text-primary);
-  background: #0d131dcf;
-  box-shadow:
-    0 34px 110px #000e,
-    inset 0 1px #ffffff08;
-  backdrop-filter: blur(22px);
 }
 
 .ipc-diagnostics-note {
@@ -272,49 +236,10 @@ onMounted(() => dialog.value?.focus())
   color: var(--signal-cyan);
 }
 
-.dialog-header {
-  position: sticky;
-  z-index: 2;
-  top: 0;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  padding: 22px 24px 17px;
-  border-bottom: 1px solid var(--line-soft);
-  background: #0d131df2;
-  backdrop-filter: blur(18px);
-}
-
 .kicker {
   color: var(--signal-cyan);
   font: 700 7px var(--font-utility);
   letter-spacing: 0.18em;
-}
-
-.dialog-header h2 {
-  margin: 7px 0 0;
-  font: 600 20px var(--font-display);
-  letter-spacing: 0.015em;
-}
-
-.icon-button {
-  width: 28px;
-  height: 28px;
-  border: 1px solid transparent;
-  border-radius: 7px;
-  color: var(--text-muted);
-  background: transparent;
-  font-size: 20px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.icon-button:hover,
-.icon-button:focus-visible {
-  border-color: var(--line-strong);
-  color: var(--text-primary);
-  background: var(--surface-3);
-  outline: none;
 }
 
 .intro-state,
@@ -356,11 +281,11 @@ onMounted(() => dialog.value?.focus())
 .signal-track {
   width: 34px;
   height: 42px;
-  border: 1px solid #2c3849;
+  border: 1px solid var(--ui-domain-color-2c3849);
   border-radius: 6px;
   background:
-    linear-gradient(90deg, transparent 46%, #657187 47% 53%, transparent 54%),
-    linear-gradient(#151d29, #101722);
+    linear-gradient(90deg, transparent 46%, var(--ui-domain-color-657187) 47% 53%, transparent 54%),
+    linear-gradient(var(--ui-domain-color-151d29), var(--ui-domain-color-101722));
 }
 
 .signal-track::after {
@@ -371,17 +296,17 @@ onMounted(() => dialog.value?.focus())
   margin: 7px auto;
   border-radius: 50%;
   background: var(--signal-cyan);
-  box-shadow: 0 0 10px #67d9e799;
+  box-shadow: 0 0 10px var(--ui-domain-color-67d9e799);
 }
 
 .signal-bus {
   display: grid;
   place-items: center;
   height: 56px;
-  border: 1px solid #5d57a1;
+  border: 1px solid var(--ui-domain-color-5d57a1);
   border-radius: 8px;
   color: var(--accent-soft);
-  background: #211f3a;
+  background: var(--ui-domain-color-211f3a);
   font: 700 8px var(--font-utility);
   letter-spacing: 0.12em;
 }
@@ -391,17 +316,17 @@ onMounted(() => dialog.value?.focus())
   height: 8px;
   border-radius: 999px;
   background: linear-gradient(90deg, var(--accent), var(--signal-cyan));
-  box-shadow: 0 0 18px #8c83ff55;
+  box-shadow: 0 0 18px var(--ui-domain-color-8c83ff55);
 }
 
 .notice {
   width: min(500px, 100%);
   margin: 27px 0 22px;
   padding: 12px 14px;
-  border: 1px solid #3a3443;
+  border: 1px solid var(--ui-domain-color-3a3443);
   border-radius: 8px;
   text-align: left;
-  background: #17151d;
+  background: var(--ui-domain-color-17151d);
 }
 
 .notice span {
@@ -427,15 +352,15 @@ onMounted(() => dialog.value?.focus())
 }
 
 .primary-button {
-  color: #fff;
-  background: linear-gradient(135deg, #7168e8, #625bc4);
-  box-shadow: 0 8px 22px #514aa544;
+  color: var(--ui-domain-color-fff);
+  background: linear-gradient(135deg, var(--ui-domain-color-7168e8), var(--ui-domain-color-625bc4));
+  box-shadow: 0 8px 22px var(--ui-domain-color-514aa544);
 }
 
 .primary-button:hover,
 .primary-button:focus-visible {
-  border-color: #b7b1ff;
-  background: linear-gradient(135deg, #8279f4, #6d65d4);
+  border-color: var(--ui-domain-color-b7b1ff);
+  background: linear-gradient(135deg, var(--ui-domain-color-8279f4), var(--ui-domain-color-6d65d4));
   outline: none;
 }
 
@@ -475,7 +400,7 @@ onMounted(() => dialog.value?.focus())
   padding: 22px;
   border: 1px solid var(--line-soft);
   border-radius: 10px;
-  background: #080d14;
+  background: var(--ui-domain-color-080d14);
   overflow: hidden;
 }
 
@@ -489,7 +414,7 @@ onMounted(() => dialog.value?.focus())
     transparent 19px 28px,
     var(--accent) 29px 32px
   );
-  filter: drop-shadow(0 0 5px #67d9e788);
+  filter: drop-shadow(0 0 5px var(--ui-domain-color-67d9e788));
   animation: scope-flow 1.1s linear infinite;
   animation-delay: calc(var(--lane) * -170ms);
 }
@@ -519,17 +444,17 @@ onMounted(() => dialog.value?.focus())
   grid-template-columns: 230px 1fr;
   align-items: center;
   min-height: 122px;
-  border: 1px solid #3f4263;
+  border: 1px solid var(--ui-domain-color-3f4263);
   border-radius: 10px;
   background:
-    radial-gradient(circle at 18% 50%, #625bc42b, transparent 42%),
-    linear-gradient(110deg, #16172a, #111923);
+    radial-gradient(circle at 18% 50%, var(--ui-domain-color-625bc42b), transparent 42%),
+    linear-gradient(110deg, var(--ui-domain-color-16172a), var(--ui-domain-color-111923));
   overflow: hidden;
 }
 
 .score-copy {
   padding: 22px 24px;
-  border-right: 1px solid #34374e;
+  border-right: 1px solid var(--ui-domain-color-34374e);
 }
 
 .score-copy strong {
@@ -537,7 +462,7 @@ onMounted(() => dialog.value?.focus())
   align-items: baseline;
   gap: 7px;
   margin-top: 8px;
-  color: #f1f0ff;
+  color: var(--ui-domain-color-f1f0ff);
   font: 600 34px var(--font-display);
 }
 
@@ -565,16 +490,16 @@ onMounted(() => dialog.value?.focus())
 }
 
 .rating-limited {
-  border-color: #76404b;
+  border-color: var(--ui-domain-color-76404b);
 }
 .rating-basic {
-  border-color: #65543e;
+  border-color: var(--ui-domain-color-65543e);
 }
 .rating-good {
-  border-color: #3a5961;
+  border-color: var(--ui-domain-color-3a5961);
 }
 .rating-excellent {
-  border-color: #514b88;
+  border-color: var(--ui-domain-color-514b88);
 }
 
 .scenario-list {
@@ -606,7 +531,7 @@ onMounted(() => dialog.value?.focus())
   padding: 14px 15px 12px;
   border: 1px solid var(--line-soft);
   border-radius: 8px;
-  background: #0b111a;
+  background: var(--ui-domain-color-0b111a);
 }
 
 .scenario-card header {
@@ -643,7 +568,7 @@ onMounted(() => dialog.value?.focus())
   height: 5px;
   margin: 12px 0 10px;
   border-radius: 999px;
-  background: #202a38;
+  background: var(--ui-domain-color-202a38);
   overflow: hidden;
 }
 
@@ -681,7 +606,7 @@ onMounted(() => dialog.value?.focus())
 .ipc-table {
   border: 1px solid var(--line-soft);
   border-radius: 8px;
-  background: #090f17;
+  background: var(--ui-domain-color-090f17);
   overflow: hidden;
 }
 
@@ -706,7 +631,7 @@ onMounted(() => dialog.value?.focus())
 
 .ipc-table-header {
   min-height: 28px;
-  background: #101823;
+  background: var(--ui-domain-color-101823);
 }
 
 .ipc-table-header > span {
@@ -815,7 +740,7 @@ onMounted(() => dialog.value?.focus())
   }
   .score-copy {
     border-right: 0;
-    border-bottom: 1px solid #34374e;
+    border-bottom: 1px solid var(--ui-domain-color-34374e);
   }
   .report-footer {
     align-items: stretch;

@@ -25,7 +25,7 @@ afterEach(() => {
 })
 
 describe("MixerInputSection", () => {
-  it("keeps teleported routing content inside a scoped surface", async () => {
+  it("keeps portalled routing content inside the shared popover surface", async () => {
     const wrapper = mount(MixerInputSection, {
       attachTo: document.body,
       props: { channel }
@@ -34,7 +34,7 @@ describe("MixerInputSection", () => {
     await wrapper.get('button[aria-label="Audio 1 input routing"]').trigger("click")
     await flushPromises()
 
-    const layer = document.body.querySelector<HTMLElement>(".mixer-popover-layer")
+    const layer = document.body.querySelector<HTMLElement>(".ui-popover")
     const popover = document.body.querySelector<HTMLElement>(".input-popover")
     expect(layer).not.toBeNull()
     expect(popover).not.toBeNull()

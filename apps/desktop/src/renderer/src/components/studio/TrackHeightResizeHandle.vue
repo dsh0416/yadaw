@@ -79,7 +79,7 @@ function handleKeydown(event: KeyboardEvent): void {
 <style scoped>
 .track-height-resize-handle {
   position: absolute;
-  z-index: 2;
+  z-index: var(--ui-z-local-raised);
   right: 0;
   bottom: -3px;
   left: 0;

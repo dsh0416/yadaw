@@ -1,115 +1,3 @@
-:root {
-  color: #e8e8e8;
-  background: #151515;
-  font-family: "Segoe UI Variable Text", "Segoe UI", sans-serif;
-  font-synthesis: none;
-  text-rendering: geometricPrecision;
-  color-scheme: dark;
-  --canvas: #151515;
-  --surface-1: #1b1b1b;
-  --surface-2: #202020;
-  --surface-3: #282828;
-  --surface-panel: #181818;
-  --surface-sunken: #111111;
-  --surface-active: #2a2d2f;
-  --daw-workspace: #101010;
-  --daw-lane: #141414;
-  --daw-lane-stripe: #1c1c1c;
-  --daw-grid-line: #292929;
-  --daw-ruler: #191919;
-  --daw-track-header: #1c1c1c;
-  --daw-track-header-hover: #232323;
-  --daw-track-header-selected: #292d2f;
-  --daw-mixer-strip: #202020;
-  --daw-mixer-strip-bus: #23211e;
-  --daw-mixer-strip-master: #1c2324;
-  --daw-mixer-strip-selected: #2b2d2e;
-  --daw-control: #292929;
-  --daw-control-hover: #333333;
-  --daw-meter-well: #0b0b0b;
-  --daw-statusbar: #121212;
-  --daw-resizer: #2a2a2a;
-  --line-soft: #2b2b2b;
-  --line-strong: #3a3a3a;
-  --text-primary: #e8e8e8;
-  --text-secondary: #b8b8b8;
-  --text-muted: #8c8c8c;
-  --text-faint: #686868;
-  --accent: #8da8b5;
-  --accent-soft: #b6cbd3;
-  --accent-strong: #6f929f;
-  --signal-cyan: #72c3c7;
-  --record: #ff6577;
-  --warning: #e8b75f;
-  --mixer-mute: #2f9ed0;
-  --mixer-solo: #e4b93f;
-  --mixer-record: #e54b58;
-  --mixer-input: #e8892f;
-  --mixer-pan: #69c68b;
-  --meter-green: #50b86d;
-  --meter-yellow: #e4b93f;
-  --meter-red: #e54b58;
-  --focus: #8eb9c8;
-  --button-primary: #44636d;
-  --button-primary-text: #f5fbfc;
-  --shadow: #00000066;
-  --font-display: Bahnschrift, "Arial Narrow", sans-serif;
-  --font-utility: Consolas, "Cascadia Mono", monospace;
-}
-
-:root[data-theme="light"] {
-  color: #202224;
-  background: #d8d9db;
-  color-scheme: light;
-  --canvas: #d8d9db;
-  --surface-1: #e4e5e7;
-  --surface-2: #ececee;
-  --surface-3: #f3f3f4;
-  --surface-panel: #d0d1d3;
-  --surface-sunken: #c7c9cc;
-  --surface-active: #c8d0d4;
-  --daw-workspace: #c9cbcd;
-  --daw-lane: #d5d6d8;
-  --daw-lane-stripe: #ced0d2;
-  --daw-grid-line: #b5b8bb;
-  --daw-ruler: #d0d1d3;
-  --daw-track-header: #dcdddf;
-  --daw-track-header-hover: #e6e7e8;
-  --daw-track-header-selected: #c6d0d4;
-  --daw-mixer-strip: #d5d6d8;
-  --daw-mixer-strip-bus: #d8d5cf;
-  --daw-mixer-strip-master: #ccd5d6;
-  --daw-mixer-strip-selected: #e2e3e4;
-  --daw-control: #e8e8e9;
-  --daw-control-hover: #f2f2f3;
-  --daw-meter-well: #25282a;
-  --daw-statusbar: #c5c7c9;
-  --daw-resizer: #b5b8bb;
-  --line-soft: #c4c5c7;
-  --line-strong: #aaadb0;
-  --text-primary: #202224;
-  --text-secondary: #45494c;
-  --text-muted: #676c70;
-  --text-faint: #858a8e;
-  --accent: #456d7a;
-  --accent-soft: #355d6b;
-  --accent-strong: #365e6b;
-  --signal-cyan: #287982;
-  --record: #c13e50;
-  --warning: #9a681d;
-  --mixer-pan: #28744b;
-  --meter-green: #33804b;
-  --meter-yellow: #a77818;
-  --meter-red: #bd3d4b;
-  --focus: #2f758b;
-  --button-primary: #426d7a;
-  --button-primary-text: #ffffff;
-  --shadow: #34383d24;
-}
-
-* {
-  box-sizing: border-box;
-}
 html,
 body,
 #root {
@@ -118,8 +6,6 @@ body,
 }
 body {
   margin: 0;
-  min-width: 960px;
-  min-height: 640px;
   overflow: hidden;
   color: var(--text-primary);
   background: var(--canvas);
@@ -160,7 +46,7 @@ button,
 }
 
 .tooltip-content {
-  z-index: 110;
+  z-index: var(--ui-z-tooltip);
   display: flex;
   align-items: center;
   gap: 10px;
@@ -169,7 +55,7 @@ button,
   border-radius: 6px;
   color: var(--text-primary);
   background: var(--surface-2);
-  box-shadow: 0 10px 28px var(--shadow);
+  box-shadow: var(--ui-shadow-md);
   font-size: 9px;
   animation: floating-surface-in 100ms ease-out;
 }
@@ -185,7 +71,7 @@ button,
 .mixer-popover-layer,
 .send-popover-layer,
 .channel-menu-layer {
-  z-index: 120;
+  z-index: var(--ui-z-popover);
 }
 
 /* The large DAW surfaces stay deliberately neutral; color is reserved for signal state. */
@@ -195,14 +81,14 @@ button,
 }
 
 .settings-device-select-content {
-  z-index: 100;
+  z-index: var(--ui-z-dropdown);
   min-width: var(--reka-select-trigger-width);
   overflow: hidden;
   border: 1px solid var(--line-strong);
   border-radius: 7px;
   color: var(--text-primary);
   background: var(--surface-2);
-  box-shadow: 0 14px 40px var(--shadow);
+  box-shadow: var(--ui-shadow-md);
 }
 
 .settings-device-select-viewport {
@@ -243,7 +129,7 @@ button,
 
 :root[data-theme] .welcome-card {
   background: var(--line-soft);
-  box-shadow: 0 35px 100px var(--shadow);
+  box-shadow: var(--ui-shadow-lg);
 }
 
 :root[data-theme] :is(.new-project button, .save-button, .primary-action) {
@@ -277,7 +163,7 @@ button,
 :root[data-theme] .backend-card[data-state="checked"] {
   border-color: var(--accent-strong);
   background: var(--surface-active);
-  box-shadow: 2px 0 0 var(--accent) inset;
+  box-shadow: var(--ui-shadow-selected-edge);
 }
 
 :root[data-theme] .select-content {

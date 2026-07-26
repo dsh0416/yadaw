@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue"
-import { PopoverContent, PopoverPortal, PopoverRoot, PopoverTrigger } from "reka-ui"
+import { UiPopover } from "@yadaw/ui"
 import type { MixerChannelPatch, MixerChannelState } from "@yadaw/contracts"
 
 const props = defineProps<{
@@ -47,49 +47,45 @@ function updateInput(index: number, event: Event): void {
 
 <template>
   <section class="strip-section input-section" data-section="input">
-    <PopoverRoot v-if="channel.kind === 'audio'">
-      <PopoverTrigger as-child>
+    <UiPopover v-if="channel.kind === 'audio'" side="top" :side-offset="7">
+      <template #trigger>
         <button class="section-control input-trigger" :aria-label="`${channel.name} input routing`">
           <i aria-hidden="true" />
           <span>{{ inputSummary }}</span>
         </button>
-      </PopoverTrigger>
-      <PopoverPortal>
-        <PopoverContent class="mixer-popover-layer" side="top" :side-offset="7">
-          <div class="mixer-popover input-popover">
-            <header>
-              <span>INPUT ROUTING</span>
-              <strong>{{ channel.name }}</strong>
-            </header>
-            <label>
-              <span>Format</span>
-              <select
-                :value="channel.inputFormat ?? 'stereo'"
-                aria-label="Input format"
-                @change="changeInputFormat"
-              >
-                <option value="mono">Mono</option>
-                <option value="stereo">Stereo</option>
-              </select>
-            </label>
-            <label v-for="(_, index) in channel.inputChannels" :key="index">
-              <span>{{
-                channel.inputFormat === "mono" ? "Input" : index === 0 ? "Left" : "Right"
-              }}</span>
-              <select
-                :value="channel.inputChannels[index]"
-                :aria-label="`${channel.name} input channel ${index + 1}`"
-                @change="updateInput(index, $event)"
-              >
-                <option v-for="input in inputOptions" :key="input" :value="input">
-                  Input {{ input }}
-                </option>
-              </select>
-            </label>
-          </div>
-        </PopoverContent>
-      </PopoverPortal>
-    </PopoverRoot>
+      </template>
+      <div class="mixer-popover input-popover">
+        <header>
+          <span>INPUT ROUTING</span>
+          <strong>{{ channel.name }}</strong>
+        </header>
+        <label>
+          <span>Format</span>
+          <select
+            :value="channel.inputFormat ?? 'stereo'"
+            aria-label="Input format"
+            @change="changeInputFormat"
+          >
+            <option value="mono">Mono</option>
+            <option value="stereo">Stereo</option>
+          </select>
+        </label>
+        <label v-for="(_, index) in channel.inputChannels" :key="index">
+          <span>{{
+            channel.inputFormat === "mono" ? "Input" : index === 0 ? "Left" : "Right"
+          }}</span>
+          <select
+            :value="channel.inputChannels[index]"
+            :aria-label="`${channel.name} input channel ${index + 1}`"
+            @change="updateInput(index, $event)"
+          >
+            <option v-for="input in inputOptions" :key="input" :value="input">
+              Input {{ input }}
+            </option>
+          </select>
+        </label>
+      </div>
+    </UiPopover>
     <button v-else class="section-control" disabled aria-disabled="true">
       {{ inputSummary }}
     </button>
@@ -102,8 +98,8 @@ function updateInput(index: number, event: Event): void {
   align-items: center;
   min-width: 0;
   padding: 7px;
-  border-bottom: 1px solid #444;
-  background: #595959;
+  border-bottom: 1px solid var(--ui-domain-color-444);
+  background: var(--ui-domain-color-595959);
 }
 .section-control {
   display: flex;
@@ -114,17 +110,17 @@ function updateInput(index: number, event: Event): void {
   min-width: 0;
   padding: 0 7px;
   overflow: hidden;
-  border: 1px solid #777;
+  border: 1px solid var(--ui-domain-color-777);
   border-radius: 4px;
-  color: #ededed;
-  background: linear-gradient(#707070, #606060);
+  color: var(--ui-domain-color-ededed);
+  background: linear-gradient(var(--ui-domain-color-707070), var(--ui-domain-color-606060));
   font: 8px var(--font-utility);
   text-overflow: ellipsis;
   white-space: nowrap;
   cursor: pointer;
 }
 .section-control:disabled {
-  color: #b8b8b8;
+  color: var(--ui-domain-color-b8b8b8);
   cursor: default;
   opacity: 0.78;
 }
@@ -132,7 +128,7 @@ function updateInput(index: number, event: Event): void {
   flex: none;
   width: 7px;
   height: 7px;
-  border: 1px solid #dedede;
+  border: 1px solid var(--ui-domain-color-dedede);
   border-radius: 50%;
 }
 .section-control:focus-visible {
@@ -148,7 +144,7 @@ function updateInput(index: number, event: Event): void {
   border-radius: 6px;
   color: var(--text-primary);
   background: var(--surface-1);
-  box-shadow: 0 14px 36px #00000075;
+  box-shadow: 0 14px 36px var(--ui-domain-color-00000075);
 }
 .mixer-popover header span,
 .mixer-popover header strong {

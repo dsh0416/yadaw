@@ -179,7 +179,7 @@ function onRangeKeydown(event: KeyboardEvent): void {
   border-radius: 50%;
   background: linear-gradient(145deg, var(--daw-control-hover), var(--daw-control) 68%);
   box-shadow:
-    0 1px 0 #ffffff1a inset,
+    0 1px 0 var(--ui-domain-color-ffffff1a) inset,
     0 -2px 4px var(--shadow) inset,
     0 3px 7px var(--shadow);
 }
@@ -189,7 +189,12 @@ function onRangeKeydown(event: KeyboardEvent): void {
   inset: -6px;
   border-radius: 50%;
   background: conic-gradient(from 225deg, var(--text-faint) 0deg 270deg, transparent 270deg);
-  mask: radial-gradient(circle, transparent 67%, #000 69% 78%, transparent 80%);
+  mask: radial-gradient(
+    circle,
+    transparent 67%,
+    var(--ui-domain-color-000) 69% 78%,
+    transparent 80%
+  );
 }
 
 .rotary-progress {
@@ -198,7 +203,12 @@ function onRangeKeydown(event: KeyboardEvent): void {
   border-radius: 50%;
   background: var(--pan-progress);
   filter: drop-shadow(0 0 2px color-mix(in srgb, var(--mixer-pan) 60%, transparent));
-  mask: radial-gradient(circle, transparent 66%, #000 68% 79%, transparent 81%);
+  mask: radial-gradient(
+    circle,
+    transparent 66%,
+    var(--ui-domain-color-000) 68% 79%,
+    transparent 81%
+  );
 }
 
 .rotary-shell i {
@@ -217,7 +227,7 @@ function onRangeKeydown(event: KeyboardEvent): void {
   height: 8px;
   border-radius: 1px;
   background: var(--text-primary);
-  box-shadow: 0 0 3px #fff7;
+  box-shadow: 0 0 3px var(--ui-domain-color-fff7);
   transform: translateX(-50%);
 }
 
@@ -225,7 +235,7 @@ function onRangeKeydown(event: KeyboardEvent): void {
   position: absolute;
   top: 50%;
   left: 50%;
-  z-index: 1;
+  z-index: var(--ui-z-local-content);
   width: 25px;
   transform: translate(-50%, -50%);
   color: var(--text-primary);
@@ -236,7 +246,7 @@ function onRangeKeydown(event: KeyboardEvent): void {
 
 .parameter-tooltip {
   position: absolute;
-  z-index: 8;
+  z-index: var(--ui-z-local-controls);
   top: calc(100% + 3px);
   left: 50%;
   min-width: 27px;
@@ -263,7 +273,7 @@ function onRangeKeydown(event: KeyboardEvent): void {
 }
 
 .pan-editor {
-  z-index: 4;
+  z-index: var(--ui-z-local-handle);
   height: 15px;
   padding: 0 1px;
   border: 1px solid var(--mixer-pan);
@@ -283,7 +293,7 @@ function onRangeKeydown(event: KeyboardEvent): void {
   position: absolute;
   top: 0;
   left: 0;
-  z-index: 2;
+  z-index: var(--ui-z-local-raised);
   width: 53px;
   height: 53px;
   margin: 0;

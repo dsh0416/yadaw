@@ -1,17 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, shallowRef } from "vue"
 import { AudioWaveform, Piano, Plug, Search, SlidersHorizontal } from "@lucide/vue"
-import {
-  ScrollAreaRoot,
-  ScrollAreaScrollbar,
-  ScrollAreaThumb,
-  ScrollAreaViewport,
-  Separator,
-  TabsContent,
-  TabsList,
-  TabsRoot,
-  TabsTrigger
-} from "reka-ui"
 import type { ProjectAssetSummary as Asset } from "@yadaw/contracts"
 import type { PluginDescriptor } from "@yadaw/contracts"
 import { usePluginStore } from "../../stores/plugins"
@@ -20,6 +9,8 @@ import { writePluginDrag } from "../plugins/plugin-drag"
 const props = defineProps<{ assets: Asset[] }>()
 const pluginStore = usePluginStore()
 const query = shallowRef("")
+type BrowserSection = "instruments" | "effects" | "samples" | "plugins"
+const activeSection = shallowRef<BrowserSection>("instruments")
 
 function matches(value: string): boolean {
   return value.toLocaleLowerCase().includes(query.value.trim().toLocaleLowerCase())
@@ -41,7 +32,9 @@ const allPlugins = computed(() =>
     matches(`${plugin.name} ${plugin.vendor} ${plugin.category}`)
   )
 )
-const browserSections = computed(() => [
+const browserSections = computed<
+  ReadonlyArray<{ value: BrowserSection; icon: typeof Piano; label: string; count: number }>
+>(() => [
   { value: "instruments", icon: Piano, label: "Instruments", count: instruments.value.length },
   {
     value: "effects",
@@ -73,21 +66,25 @@ onMounted(() => void pluginStore.load())
         placeholder="Search sounds & devices"
       /><kbd>/</kbd></label
     >
-    <TabsRoot class="browser-tabs" default-value="instruments" orientation="vertical">
-      <TabsList class="browser-nav" aria-label="Sound browser">
-        <TabsTrigger
+    <div class="browser-tabs">
+      <div class="browser-nav" role="tablist" aria-label="Sound browser">
+        <button
           v-for="section in browserSections"
           :key="section.value"
           class="browser-tab"
-          :value="section.value"
-          ><component :is="section.icon" :size="14" /><span>{{ section.label }}</span
-          ><small>{{ section.count }}</small></TabsTrigger
+          role="tab"
+          :aria-selected="activeSection === section.value"
+          :tabindex="activeSection === section.value ? 0 : -1"
+          @click="activeSection = section.value"
         >
-      </TabsList>
-      <Separator class="panel-separator" orientation="horizontal" />
-      <TabsContent class="browser-content" value="instruments">
-        <ScrollAreaRoot class="library-scroll" type="auto">
-          <ScrollAreaViewport class="library-viewport">
+          <component :is="section.icon" :size="14" /><span>{{ section.label }}</span
+          ><small>{{ section.count }}</small>
+        </button>
+      </div>
+      <hr class="panel-separator" />
+      <section v-show="activeSection === 'instruments'" class="browser-content" role="tabpanel">
+        <div class="library-scroll">
+          <div class="library-viewport">
             <div class="library-heading">VST3 instruments</div>
             <button
               v-for="plugin in instruments"
@@ -106,15 +103,12 @@ onMounted(() => void pluginStore.load())
             <p v-if="!instruments.length" class="library-empty">
               No compatible VST3 instruments found.
             </p>
-          </ScrollAreaViewport>
-          <ScrollAreaScrollbar class="library-scrollbar" orientation="vertical"
-            ><ScrollAreaThumb class="library-scroll-thumb"
-          /></ScrollAreaScrollbar>
-        </ScrollAreaRoot>
-      </TabsContent>
-      <TabsContent class="browser-content" value="effects">
-        <ScrollAreaRoot class="library-scroll" type="auto">
-          <ScrollAreaViewport class="library-viewport">
+          </div>
+        </div>
+      </section>
+      <section v-show="activeSection === 'effects'" class="browser-content" role="tabpanel">
+        <div class="library-scroll">
+          <div class="library-viewport">
             <div class="library-heading">VST3 audio effects</div>
             <button
               v-for="plugin in effects"
@@ -131,15 +125,12 @@ onMounted(() => void pluginStore.load())
               ><span class="item-dot compatible" />
             </button>
             <p v-if="!effects.length" class="library-empty">No compatible VST3 effects found.</p>
-          </ScrollAreaViewport>
-          <ScrollAreaScrollbar class="library-scrollbar" orientation="vertical"
-            ><ScrollAreaThumb class="library-scroll-thumb"
-          /></ScrollAreaScrollbar>
-        </ScrollAreaRoot>
-      </TabsContent>
-      <TabsContent class="browser-content" value="samples">
-        <ScrollAreaRoot class="library-scroll" type="auto">
-          <ScrollAreaViewport class="library-viewport">
+          </div>
+        </div>
+      </section>
+      <section v-show="activeSection === 'samples'" class="browser-content" role="tabpanel">
+        <div class="library-scroll">
+          <div class="library-viewport">
             <div class="library-heading">Project audio</div>
             <button v-for="asset in samples" :key="asset.id" class="library-item">
               <span class="library-item-icon"><AudioWaveform :size="13" /></span
@@ -150,13 +141,10 @@ onMounted(() => void pluginStore.load())
                 ></span
               ><span class="item-dot" />
             </button>
-          </ScrollAreaViewport>
-          <ScrollAreaScrollbar class="library-scrollbar" orientation="vertical"
-            ><ScrollAreaThumb class="library-scroll-thumb"
-          /></ScrollAreaScrollbar>
-        </ScrollAreaRoot>
-      </TabsContent>
-      <TabsContent class="browser-content" value="plugins">
+          </div>
+        </div>
+      </section>
+      <section v-show="activeSection === 'plugins'" class="browser-content" role="tabpanel">
         <div class="plugin-scan">
           <button :disabled="pluginStore.catalog.scanning" @click="pluginStore.scan(false)">
             {{ pluginStore.catalog.scanning ? "Scanning…" : "Rescan VST3" }}
@@ -165,8 +153,8 @@ onMounted(() => void pluginStore.load())
             >{{ pluginStore.scanProgress.completed }}/{{ pluginStore.scanProgress.total }}</small
           >
         </div>
-        <ScrollAreaRoot class="library-scroll" type="auto">
-          <ScrollAreaViewport class="library-viewport">
+        <div class="library-scroll">
+          <div class="library-viewport">
             <div class="library-heading">Plugin catalog</div>
             <article
               v-for="plugin in allPlugins"
@@ -180,13 +168,10 @@ onMounted(() => void pluginStore.load())
               ><span :class="['item-dot', plugin.compatibility]" />
             </article>
             <p v-if="pluginStore.error" class="library-empty error">{{ pluginStore.error }}</p>
-          </ScrollAreaViewport>
-          <ScrollAreaScrollbar class="library-scrollbar" orientation="vertical"
-            ><ScrollAreaThumb class="library-scroll-thumb"
-          /></ScrollAreaScrollbar>
-        </ScrollAreaRoot>
-      </TabsContent>
-    </TabsRoot>
+          </div>
+        </div>
+      </section>
+    </div>
   </aside>
 </template>
 
@@ -299,7 +284,7 @@ onMounted(() => void pluginStore.load())
   outline: 2px solid var(--focus);
   outline-offset: 1px;
 }
-.browser-tab[data-state="active"] {
+.browser-tab[aria-selected="true"] {
   border-color: var(--line-strong);
   color: var(--text-primary);
   background: var(--surface-active);
@@ -308,7 +293,7 @@ onMounted(() => void pluginStore.load())
 .browser-tab > svg {
   color: var(--text-muted);
 }
-.browser-tab[data-state="active"] > svg {
+.browser-tab[aria-selected="true"] > svg {
   color: var(--accent);
 }
 .browser-tab small {
@@ -320,6 +305,7 @@ onMounted(() => void pluginStore.load())
   height: 1px;
   margin: 12px 0;
   background: var(--line-soft);
+  border: 0;
 }
 .browser-content {
   min-height: 0;
@@ -332,7 +318,7 @@ onMounted(() => void pluginStore.load())
   height: 100%;
 }
 .library-scroll {
-  overflow: hidden;
+  overflow-y: auto;
 }
 .library-heading {
   padding: 1px 6px 7px;
@@ -421,8 +407,8 @@ onMounted(() => void pluginStore.load())
   color: var(--record);
 }
 .item-dot.compatible {
-  background: #73d6a2;
-  box-shadow: 0 0 5px color-mix(in srgb, #73d6a2 55%, transparent);
+  background: var(--ui-domain-color-73d6a2);
+  box-shadow: 0 0 5px color-mix(in srgb, var(--ui-domain-color-73d6a2) 55%, transparent);
 }
 .item-dot.quarantined,
 .item-dot.load-error {

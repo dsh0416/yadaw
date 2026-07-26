@@ -1,0 +1,20 @@
+export type UiActionVariant = "primary" | "secondary" | "ghost" | "danger"
+export type UiControlSize = "sm" | "md" | "lg"
+export type UiNoticeTone = "neutral" | "info" | "success" | "warning" | "danger"
+
+export interface UiSelectOption {
+  label: string
+  value: string
+  disabled?: boolean
+}
+
+export interface UiRadioOption extends UiSelectOption {
+  description?: string
+}
+
+export interface UiAlertAction {
+  value: string
+  label: string
+  variant?: UiActionVariant
+  cancel?: boolean
+}

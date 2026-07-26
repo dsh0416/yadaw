@@ -150,8 +150,8 @@ function cancelEditing(): void {
   border-radius: 50%;
   background: linear-gradient(145deg, var(--daw-control-hover), var(--daw-control));
   box-shadow:
-    0 1px 0 #ffffff14 inset,
-    0 1px 2px #0009;
+    0 1px 0 var(--ui-domain-color-ffffff14) inset,
+    0 1px 2px var(--ui-domain-color-0009);
 }
 
 .pan-knob i {
@@ -174,7 +174,7 @@ function cancelEditing(): void {
 
 .pan-range {
   position: absolute;
-  z-index: 2;
+  z-index: var(--ui-z-local-raised);
   inset: 0;
   width: 23px;
   height: 23px;
@@ -186,7 +186,7 @@ function cancelEditing(): void {
 
 .pan-editor {
   position: absolute;
-  z-index: 30;
+  z-index: var(--ui-z-floating-menu);
   top: -1px;
   right: -1px;
   width: 31px;
@@ -210,7 +210,7 @@ function cancelEditing(): void {
 
 .parameter-tooltip {
   position: absolute;
-  z-index: 20;
+  z-index: var(--ui-z-floating-control);
   top: calc(100% + 4px);
   left: 50%;
   min-width: 24px;

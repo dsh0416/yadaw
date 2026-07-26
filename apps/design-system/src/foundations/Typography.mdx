@@ -1,0 +1,23 @@
+import { Meta } from "@storybook/addon-docs/blocks"
+
+<Meta title="Foundations/Typography" />
+
+# Typography
+
+UI copy uses the system sans stack; timecode, sample counts, and aligned measurements use the
+monospace stack. Body text starts at 14px. Text needed to operate the product must remain legible
+at 200% zoom and may not be replaced by an unlabeled icon.
+
+<div style={{ display: "grid", gap: "1rem" }}>
+  <div style={{ fontSize: "var(--ui-font-size-2xl)", fontWeight: "var(--ui-weight-semibold)" }}>
+    Project title · 28px
+  </div>
+  <div style={{ fontSize: "var(--ui-font-size-xl)", fontWeight: "var(--ui-weight-semibold)" }}>
+    Dialog title · 22px
+  </div>
+  <div style={{ fontSize: "var(--ui-font-size-md)" }}>Body copy · 16px</div>
+  <div style={{ fontSize: "var(--ui-font-size-sm)", color: "var(--ui-color-text-muted)" }}>
+    Control and supporting copy · 14px
+  </div>
+  <div style={{ fontFamily: "var(--ui-font-mono)" }}>01:42:16.083 · 48,000 Hz</div>
+</div>

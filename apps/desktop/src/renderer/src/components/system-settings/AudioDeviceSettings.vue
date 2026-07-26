@@ -1,22 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, watch } from "vue"
 import { storeToRefs } from "pinia"
-import { Check, ChevronDown, RefreshCw } from "@lucide/vue"
-import {
-  RadioGroupIndicator,
-  RadioGroupItem,
-  RadioGroupRoot,
-  SelectContent,
-  SelectIcon,
-  SelectItem,
-  SelectItemIndicator,
-  SelectItemText,
-  SelectPortal,
-  SelectRoot,
-  SelectTrigger,
-  SelectValue,
-  SelectViewport
-} from "reka-ui"
+import { RefreshCw } from "@lucide/vue"
+import { UiRadioGroup, UiSelect } from "@yadaw/ui"
+import type { UiRadioOption, UiSelectOption } from "@yadaw/ui"
 import { AUDIO_BUFFER_SIZES } from "@yadaw/contracts"
 import type {
   AudioBackend,
@@ -101,6 +88,31 @@ const inputDeviceModel = computed({
 const availableBackendOptions = computed(() =>
   backendOptions.filter((backend) => backendAvailability[backend.value])
 )
+const backendSelection = computed({
+  get: () => backendModel.value,
+  set: (value: string) => {
+    backendModel.value = value as AudioBackend
+  }
+})
+const backendUiOptions = computed<readonly UiRadioOption[]>(() =>
+  availableBackendOptions.value.map((backend) => ({
+    value: backend.value,
+    label: `${backend.label} · ${backend.platform}`,
+    description: backend.description
+  }))
+)
+const outputDeviceOptions = computed<readonly UiSelectOption[]>(() =>
+  outputDevices.value.map((device) => ({
+    value: device.id,
+    label: `${device.name}${device.isDefault ? " · Default" : ""}`
+  }))
+)
+const inputDeviceOptions = computed<readonly UiSelectOption[]>(() =>
+  inputDevices.value.map((device) => ({
+    value: device.id,
+    label: `${device.name}${device.isDefault ? " · Default" : ""}`
+  }))
+)
 
 const selectedInputDevice = computed(() =>
   inputDevices.value.find((device) => device.id === preferences.value.inputDeviceId)
@@ -148,6 +160,12 @@ const bufferSizeModel = computed({
     if (supportedBufferSizes.value.includes(bufferSize)) updatePreferences({ bufferSize })
   }
 })
+const bufferSizeOptions = computed<readonly UiSelectOption[]>(() =>
+  supportedBufferSizes.value.map((size) => ({
+    value: String(size),
+    label: `${size} samples`
+  }))
+)
 
 const canApply = computed(
   () =>
@@ -245,24 +263,12 @@ watch(canApply, (valid) => emit("validityChange", valid), { immediate: true })
       title="Backend"
       description="Select the host API used by the native audio engine."
     >
-      <RadioGroupRoot v-model="backendModel" class="backend-grid" aria-label="Audio backend">
-        <RadioGroupItem
-          v-for="backend in availableBackendOptions"
-          :key="backend.value"
-          class="backend-card"
-          :value="backend.value"
-        >
-          <span class="radio-control" aria-hidden="true">
-            <RadioGroupIndicator class="radio-indicator"><span /></RadioGroupIndicator>
-          </span>
-          <span class="backend-card-copy">
-            <span class="backend-card-title">
-              <b>{{ backend.label }}</b>
-              <small>{{ backend.platform }}</small>
-            </span>
-            <em>{{ backend.description }}</em>
-          </span>
-        </RadioGroupItem>
+      <div class="backend-grid">
+        <UiRadioGroup
+          v-model="backendSelection"
+          label="Audio backend"
+          :options="backendUiOptions"
+        />
         <p v-if="availableBackendOptions.length === 0" class="backend-empty">
           {{
             discoveryState === "loading"
@@ -270,7 +276,7 @@ watch(canApply, (valid) => emit("validityChange", valid), { immediate: true })
               : "No CPAL audio backend is available."
           }}
         </p>
-      </RadioGroupRoot>
+      </div>
     </SettingsSection>
 
     <SettingsSection
@@ -289,80 +295,26 @@ watch(canApply, (valid) => emit("validityChange", valid), { immediate: true })
       <p v-if="discoveryError" class="discovery-error">{{ discoveryError }}</p>
       <label class="device-field">
         <span>Device</span>
-        <SelectRoot
+        <UiSelect
           v-model="outputDeviceModel"
+          :options="outputDeviceOptions"
+          :placeholder="outputDevices.length ? 'Choose an output' : 'No CPAL output devices'"
+          aria-label="Output device"
           :disabled="discoveryState !== 'ready' || outputDevices.length === 0"
-        >
-          <SelectTrigger class="select-trigger" aria-label="Output device">
-            <SelectValue
-              :placeholder="outputDevices.length ? 'Choose an output' : 'No CPAL output devices'"
-            />
-            <SelectIcon class="select-icon"><ChevronDown :size="14" /></SelectIcon>
-          </SelectTrigger>
-          <SelectPortal>
-            <SelectContent
-              class="settings-device-select-content"
-              position="popper"
-              :side-offset="6"
-            >
-              <SelectViewport class="settings-device-select-viewport">
-                <SelectItem
-                  v-for="device in outputDevices"
-                  :key="device.id"
-                  class="settings-device-select-item"
-                  :value="device.id"
-                >
-                  <SelectItemIndicator class="settings-device-select-indicator">
-                    <Check :size="13" />
-                  </SelectItemIndicator>
-                  <SelectItemText>
-                    {{ device.name }}{{ device.isDefault ? " · Default" : "" }}
-                  </SelectItemText>
-                </SelectItem>
-              </SelectViewport>
-            </SelectContent>
-          </SelectPortal>
-        </SelectRoot>
+        />
       </label>
     </SettingsSection>
 
     <SettingsSection title="Input device" description="Select the CPAL device used for recording.">
       <label class="device-field">
         <span>Device</span>
-        <SelectRoot
+        <UiSelect
           v-model="inputDeviceModel"
+          :options="inputDeviceOptions"
+          :placeholder="inputDevices.length ? 'Choose an input' : 'No CPAL input devices'"
+          aria-label="Input device"
           :disabled="discoveryState !== 'ready' || inputDevices.length === 0"
-        >
-          <SelectTrigger class="select-trigger" aria-label="Input device">
-            <SelectValue
-              :placeholder="inputDevices.length ? 'Choose an input' : 'No CPAL input devices'"
-            />
-            <SelectIcon class="select-icon"><ChevronDown :size="14" /></SelectIcon>
-          </SelectTrigger>
-          <SelectPortal>
-            <SelectContent
-              class="settings-device-select-content"
-              position="popper"
-              :side-offset="6"
-            >
-              <SelectViewport class="settings-device-select-viewport">
-                <SelectItem
-                  v-for="device in inputDevices"
-                  :key="device.id"
-                  class="settings-device-select-item"
-                  :value="device.id"
-                >
-                  <SelectItemIndicator class="settings-device-select-indicator">
-                    <Check :size="13" />
-                  </SelectItemIndicator>
-                  <SelectItemText>
-                    {{ device.name }}{{ device.isDefault ? " · Default" : "" }}
-                  </SelectItemText>
-                </SelectItem>
-              </SelectViewport>
-            </SelectContent>
-          </SelectPortal>
-        </SelectRoot>
+        />
       </label>
     </SettingsSection>
 
@@ -372,33 +324,11 @@ watch(canApply, (valid) => emit("validityChange", valid), { immediate: true })
     >
       <label class="buffer-field">
         <span>Samples</span>
-        <SelectRoot v-model="bufferSizeModel">
-          <SelectTrigger class="select-trigger" aria-label="I/O buffer size">
-            <SelectValue />
-            <SelectIcon class="select-icon"><ChevronDown :size="14" /></SelectIcon>
-          </SelectTrigger>
-          <SelectPortal>
-            <SelectContent
-              class="settings-device-select-content"
-              position="popper"
-              :side-offset="6"
-            >
-              <SelectViewport class="settings-device-select-viewport">
-                <SelectItem
-                  v-for="size in supportedBufferSizes"
-                  :key="size"
-                  class="settings-device-select-item"
-                  :value="String(size)"
-                >
-                  <SelectItemIndicator class="settings-device-select-indicator">
-                    <Check :size="13" />
-                  </SelectItemIndicator>
-                  <SelectItemText>{{ size }} samples</SelectItemText>
-                </SelectItem>
-              </SelectViewport>
-            </SelectContent>
-          </SelectPortal>
-        </SelectRoot>
+        <UiSelect
+          v-model="bufferSizeModel"
+          :options="bufferSizeOptions"
+          aria-label="I/O buffer size"
+        />
       </label>
     </SettingsSection>
 
@@ -466,7 +396,7 @@ watch(canApply, (valid) => emit("validityChange", valid), { immediate: true })
 .backend-card[data-state="checked"] {
   border-color: var(--accent);
   background: var(--surface-active);
-  box-shadow: 2px 0 0 var(--accent) inset;
+  box-shadow: var(--ui-shadow-selected-edge);
 }
 
 .backend-card:focus-visible,

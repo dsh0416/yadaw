@@ -1,0 +1,39 @@
+{
+  "name": "@yadaw/design-system",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "storybook dev -p 6006",
+    "build": "storybook build --output-dir dist",
+    "check": "vue-tsc --noEmit",
+    "test": "pnpm test:stories && pnpm test:visual",
+    "test:stories": "vitest run --project storybook",
+    "test:visual": "playwright test"
+  },
+  "dependencies": {
+    "@yadaw/ui": "workspace:*",
+    "pinia": "4.0.2",
+    "vue": "3.5.40"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.61.1",
+    "@storybook/addon-a11y": "10.5.4",
+    "@storybook/addon-docs": "10.5.4",
+    "@storybook/addon-themes": "10.5.4",
+    "@storybook/addon-vitest": "10.5.4",
+    "@storybook/vue3-vite": "10.5.4",
+    "@types/react": "19.2.17",
+    "@vitejs/plugin-vue": "6.0.8",
+    "@vitest/browser-playwright": "4.1.10",
+    "playwright": "1.61.1",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "storybook": "10.5.4",
+    "typescript": "5.9.3",
+    "vite": "8.1.5",
+    "vitest": "4.1.10",
+    "vue-component-meta": "3.3.7",
+    "vue-tsc": "3.3.7"
+  }
+}

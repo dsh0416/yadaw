@@ -19,6 +19,7 @@ describe("OperationProgressDialog", () => {
         }
       }
     })
+    expect(wrapper.text()).not.toContain("Import")
     expect(wrapper.get("[role=progressbar]").attributes("aria-valuenow")).toBe("50")
     expect(wrapper.text()).toContain("50%")
     await wrapper.get("button").trigger("click")
@@ -41,7 +42,7 @@ describe("OperationProgressDialog", () => {
         }
       }
     })
-    expect(wrapper.get("[role=progressbar]").classes()).toContain("indeterminate")
+    expect(wrapper.get("[role=progressbar]").classes()).toContain("ui-progress--indeterminate")
     expect(wrapper.find("button").exists()).toBe(false)
     expect(wrapper.text()).toContain("8 captured frames were dropped")
   })

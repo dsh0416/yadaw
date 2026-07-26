@@ -114,7 +114,7 @@ function removePoint(id: string): void {
     :maximum="tempoRange.maximum"
     :guides="guides"
     :vertical-guides="verticalGuides"
-    color="#65A8FF"
+    color="var(--ui-domain-color-65a8ff)"
     :expanded="expanded"
     value-label="Tempo"
     position-label="beats"

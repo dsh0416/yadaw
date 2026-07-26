@@ -1,13 +1,19 @@
 <script setup lang="ts">
 import { computed } from "vue"
 import { Activity, Cpu, Zap } from "@lucide/vue"
-import { Separator, SliderRange, SliderRoot, SliderThumb, SliderTrack } from "reka-ui"
+import { UiButton, UiSlider } from "@yadaw/ui"
 import type { AudioRuntimeSnapshot } from "@yadaw/contracts"
 
 const props = defineProps<{ runtime: AudioRuntimeSnapshot; peak?: number; error?: string }>()
 const emit = defineEmits<{ runPreview: [] }>()
 const gainValues = defineModel<number[]>({ required: true })
 const gain = computed(() => gainValues.value[0] ?? 0.5)
+const gainValue = computed({
+  get: () => gain.value,
+  set: (value: number) => {
+    gainValues.value = [value]
+  }
+})
 const meterLevel = computed(() =>
   Math.max(1, Math.min(12, Math.round((props.peak ?? gain.value / 2) * 12)))
 )
@@ -39,14 +45,20 @@ const meterSegments = Array.from({ length: 12 }, (_, index) => index)
     <label class="gain-label" for="gain"
       >Offline gain <output>{{ gain.toFixed(2) }}</output></label
     >
-    <SliderRoot id="gain" v-model="gainValues" class="gain-slider" :min="0" :max="2" :step="0.01"
-      ><SliderTrack class="gain-slider-track"><SliderRange class="gain-slider-range" /></SliderTrack
-      ><SliderThumb class="gain-slider-thumb" aria-label="Offline gain"
-    /></SliderRoot>
-    <button class="primary-action" @click="emit('runPreview')">
+    <UiSlider
+      id="gain"
+      v-model="gainValue"
+      class="gain-slider"
+      label="Offline gain"
+      :value-text="gain.toFixed(2)"
+      :min="0"
+      :max="2"
+      :step="0.01"
+    />
+    <UiButton class="primary-action" variant="primary" @click="emit('runPreview')">
       <Zap :size="13" />Run signal check
-    </button>
-    <Separator class="panel-separator" orientation="horizontal" />
+    </UiButton>
+    <hr class="panel-separator" />
     <div class="telemetry-heading"><Cpu :size="12" /><span>Native telemetry</span></div>
     <dl>
       <div>
@@ -113,7 +125,7 @@ const meterSegments = Array.from({ length: 12 }, (_, index) => index)
   border: 1px solid var(--line-soft);
   border-radius: 7px;
   background: var(--surface-sunken);
-  box-shadow: 0 1px 0 #ffffff05 inset;
+  box-shadow: 0 1px 0 var(--ui-domain-color-ffffff05) inset;
 }
 .signal-card-header,
 .gain-label {
@@ -173,68 +185,13 @@ const meterSegments = Array.from({ length: 12 }, (_, index) => index)
   margin-top: 17px;
 }
 .gain-slider {
-  position: relative;
-  display: flex;
-  align-items: center;
-  width: 100%;
-  height: 25px;
   margin: 5px 0 12px;
-  touch-action: none;
-  user-select: none;
-}
-.gain-slider-track {
-  position: relative;
-  flex: 1;
-  height: 3px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: var(--daw-control);
-}
-.gain-slider-range {
-  position: absolute;
-  height: 100%;
-  background: linear-gradient(90deg, var(--accent), var(--signal-cyan));
-}
-.gain-slider-thumb {
-  display: block;
-  width: 13px;
-  height: 13px;
-  border: 2px solid var(--accent-soft);
-  border-radius: 50%;
-  background: var(--daw-control);
-  box-shadow: 0 2px 8px var(--shadow);
-  cursor: grab;
-}
-.gain-slider-thumb:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 3px;
 }
 .primary-action {
-  display: flex;
-  align-items: center;
-  justify-content: center;
   width: 100%;
-  gap: 7px;
-  padding: 9px;
-  border: 1px solid var(--accent-strong);
-  border-radius: 7px;
-  color: var(--button-primary-text);
-  background: var(--button-primary);
-  box-shadow:
-    0 1px 0 #ffffff24 inset,
-    0 7px 18px var(--shadow);
-  cursor: pointer;
-  font-size: 9px;
-  font-weight: 650;
-}
-.primary-action:hover {
-  filter: brightness(1.08);
-}
-.primary-action:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
 }
 .panel-separator {
+  border: 0;
   width: 100%;
   height: 1px;
   margin: 18px 0 12px;

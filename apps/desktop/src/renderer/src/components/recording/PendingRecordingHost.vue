@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue"
+import { computed, onMounted, shallowRef } from "vue"
 import { storeToRefs } from "pinia"
 import { useRouter } from "vue-router"
+import { UiButton, UiDialog, UiStatusNotice } from "@yadaw/ui"
 import { useRecordingStore } from "../../stores/recording"
 import { useStudioWorkflowStore } from "../../stores/studioWorkflow"
 
@@ -9,8 +10,14 @@ const store = useRecordingStore()
 const workflowStore = useStudioWorkflowStore()
 const router = useRouter()
 const { pending } = storeToRefs(store)
-const visible = ref(true)
+const visible = shallowRef(true)
 const actionable = computed(() => pending.value.filter((recording) => !recording.assetExists))
+const open = computed({
+  get: () => visible.value && actionable.value.length > 0,
+  set: (value: boolean) => {
+    visible.value = value
+  }
+})
 
 onMounted(() => void store.refreshPending())
 
@@ -22,107 +29,85 @@ async function recover(recording: (typeof pending.value)[number]): Promise<void>
 </script>
 
 <template>
-  <Teleport to="body">
-    <div v-if="visible && actionable.length" class="recovery-overlay">
-      <section
-        class="recovery-dialog"
-        role="alertdialog"
-        aria-modal="true"
-        aria-labelledby="recovery-title"
-      >
-        <span>RECOVERY</span>
-        <h2 id="recovery-title">Unfinished recordings found</h2>
-        <p>These swap recordings are kept until you recover or explicitly delete them.</p>
-        <ul>
-          <li v-for="recording in actionable" :key="recording.id">
-            <div>
-              <b>{{ new Date(recording.startedAt).toLocaleString() }}</b
-              ><small>{{ recording.state }} · {{ recording.projectPath }}</small>
-            </div>
-            <button @click="recover(recording)">Recover</button>
-            <button class="danger" @click="store.remove(recording)">Delete</button>
-          </li>
-        </ul>
-        <button class="keep" @click="visible = false">Keep for later</button>
-      </section>
-    </div>
-  </Teleport>
+  <UiDialog
+    v-if="actionable.length"
+    v-model="open"
+    title="Unfinished recordings found"
+    description="Swap recordings are kept until you recover or explicitly delete them."
+    size="lg"
+  >
+    <UiStatusNotice tone="warning" title="Recovery available">
+      Review every take before continuing. Deleting a take cannot be undone from YADAW.
+    </UiStatusNotice>
+    <ul class="recovery-list">
+      <li v-for="recording in actionable" :key="recording.id">
+        <div>
+          <b>{{ new Date(recording.startedAt).toLocaleString() }}</b>
+          <small>{{ recording.state }} · {{ recording.projectPath }}</small>
+        </div>
+        <div class="recovery-actions">
+          <UiButton size="sm" variant="primary" @click="recover(recording)">Recover</UiButton>
+          <UiButton size="sm" variant="danger" @click="store.remove(recording)">Delete</UiButton>
+        </div>
+      </li>
+    </ul>
+    <template #actions>
+      <UiButton @click="visible = false">Keep for later</UiButton>
+    </template>
+  </UiDialog>
 </template>
 
 <style scoped>
-.recovery-overlay {
-  position: fixed;
-  z-index: 290;
-  inset: 0;
+.recovery-list {
   display: grid;
-  place-items: center;
-  background: #02050bd9;
-}
-.recovery-dialog {
-  width: min(680px, calc(100vw - 48px));
-  max-height: calc(100vh - 80px);
-  overflow: auto;
-  padding: 26px;
-  border: 1px solid var(--line-strong);
-  border-radius: 12px;
-  background: #111824;
-  box-shadow: 0 30px 90px #000;
-}
-.recovery-dialog > span {
-  color: var(--warning);
-  font: 700 7px var(--font-utility);
-  letter-spacing: 0.16em;
-}
-.recovery-dialog h2 {
-  margin: 8px 0 6px;
-  font: 600 20px var(--font-display);
-}
-.recovery-dialog > p {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: 10px;
-}
-.recovery-dialog ul {
-  display: grid;
-  gap: 8px;
-  margin: 20px 0;
+  gap: var(--ui-space-3);
   padding: 0;
+  margin: var(--ui-space-5) 0 0;
   list-style: none;
 }
-.recovery-dialog li {
-  display: grid;
-  grid-template-columns: 1fr auto auto;
+
+.recovery-list li {
+  display: flex;
+  min-width: 0;
   align-items: center;
-  gap: 8px;
-  padding: 12px;
-  border: 1px solid var(--line-soft);
-  border-radius: 8px;
-  background: #0d131d;
+  justify-content: space-between;
+  gap: var(--ui-space-4);
+  padding: var(--ui-space-3);
+  background: var(--ui-color-canvas-subtle);
+  border: 1px solid var(--ui-color-border);
+  border-radius: var(--ui-radius-md);
 }
-.recovery-dialog b,
-.recovery-dialog small {
+
+.recovery-list b,
+.recovery-list small {
   display: block;
 }
-.recovery-dialog b {
-  font-size: 10px;
+
+.recovery-list b {
+  font-size: var(--ui-font-size-sm);
 }
-.recovery-dialog small {
-  margin-top: 4px;
-  color: var(--text-faint);
-  font: 7px var(--font-utility);
+
+.recovery-list small {
+  margin-top: var(--ui-space-1);
+  overflow-wrap: anywhere;
+  color: var(--ui-color-text-muted);
+  font: var(--ui-font-size-xs) var(--ui-font-mono);
 }
-.recovery-dialog button {
-  padding: 7px 10px;
-  border: 1px solid var(--line-strong);
-  border-radius: 6px;
-  color: var(--text-secondary);
-  background: var(--surface-3);
-  cursor: pointer;
+
+.recovery-actions {
+  display: flex;
+  flex: none;
+  gap: var(--ui-space-2);
 }
-.recovery-dialog button.danger {
-  color: #ff9dab;
-}
-.recovery-dialog .keep {
-  float: right;
+
+@media (max-width: 30rem) {
+  .recovery-list li {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .recovery-actions > * {
+    flex: 1;
+  }
 }
 </style>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { MoreHorizontal, Trash2 } from "@lucide/vue"
-import { PopoverContent, PopoverPortal, PopoverRoot, PopoverTrigger } from "reka-ui"
+import { UiPopover } from "@yadaw/ui"
 
 defineProps<{
   channelName: string
@@ -15,38 +15,34 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <PopoverRoot>
-    <PopoverTrigger as-child>
+  <UiPopover side="top" align="end" :side-offset="6">
+    <template #trigger>
       <button class="menu-trigger" :aria-label="`${channelName} channel menu`">
         <MoreHorizontal :size="13" />
       </button>
-    </PopoverTrigger>
-    <PopoverPortal>
-      <PopoverContent class="channel-menu-layer" side="top" align="end" :side-offset="6">
-        <div class="channel-menu">
-          <label>
-            <span>Channel color</span>
-            <input
-              type="color"
-              :value="color"
-              :aria-label="`${channelName} channel color`"
-              @change="
-                emit('updateColor', ($event.currentTarget as HTMLInputElement).value.toUpperCase())
-              "
-            />
-          </label>
-          <button
-            v-if="deletable"
-            class="delete-action"
-            :aria-label="`Delete ${channelName}`"
-            @click="emit('delete')"
-          >
-            <Trash2 :size="12" />Delete channel
-          </button>
-        </div>
-      </PopoverContent>
-    </PopoverPortal>
-  </PopoverRoot>
+    </template>
+    <div class="channel-menu">
+      <label>
+        <span>Channel color</span>
+        <input
+          type="color"
+          :value="color"
+          :aria-label="`${channelName} channel color`"
+          @change="
+            emit('updateColor', ($event.currentTarget as HTMLInputElement).value.toUpperCase())
+          "
+        />
+      </label>
+      <button
+        v-if="deletable"
+        class="delete-action"
+        :aria-label="`Delete ${channelName}`"
+        @click="emit('delete')"
+      >
+        <Trash2 :size="12" />Delete channel
+      </button>
+    </div>
+  </UiPopover>
 </template>
 
 <style scoped>
@@ -57,10 +53,10 @@ const emit = defineEmits<{
   width: 22px;
   height: 22px;
   padding: 0;
-  border: 1px solid #ffffff2c;
+  border: 1px solid var(--ui-domain-color-ffffff2c);
   border-radius: 3px;
-  color: #fff;
-  background: #00000024;
+  color: var(--ui-domain-color-fff);
+  background: var(--ui-domain-color-00000024);
   cursor: pointer;
 }
 .menu-trigger:focus-visible {
@@ -76,7 +72,7 @@ const emit = defineEmits<{
   border-radius: 6px;
   color: var(--text-primary);
   background: var(--surface-1);
-  box-shadow: 0 14px 36px #00000075;
+  box-shadow: 0 14px 36px var(--ui-domain-color-00000075);
 }
 .channel-menu label {
   display: flex;

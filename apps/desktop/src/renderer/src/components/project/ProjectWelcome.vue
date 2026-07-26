@@ -67,8 +67,9 @@ function createProject(): void {
   height: 100vh;
   padding: 38px;
   background:
-    radial-gradient(circle at 20% 10%, #2e285f66, transparent 34%),
-    radial-gradient(circle at 80% 90%, #17394355, transparent 36%), var(--canvas);
+    radial-gradient(circle at 20% 10%, var(--ui-domain-color-2e285f66), transparent 34%),
+    radial-gradient(circle at 80% 90%, var(--ui-domain-color-17394355), transparent 36%),
+    var(--canvas);
 }
 .welcome-card {
   display: grid;
@@ -79,18 +80,18 @@ function createProject(): void {
   border: 1px solid var(--line-strong);
   border-radius: 16px;
   background: var(--line-soft);
-  box-shadow: 0 35px 100px #000b;
+  box-shadow: var(--ui-shadow-lg);
   overflow: auto;
 }
 .welcome-brand,
 .new-project,
 .recent-projects {
   padding: 34px;
-  background: #101620;
+  background: var(--ui-domain-color-101620);
 }
 .welcome-brand {
   grid-row: span 2;
-  background: linear-gradient(155deg, #171735, #0d1620);
+  background: linear-gradient(155deg, var(--ui-domain-color-171735), var(--ui-domain-color-0d1620));
 }
 .welcome-brand > span,
 .new-project > span,
@@ -126,10 +127,10 @@ function createProject(): void {
 .new-project button,
 .recent-heading button {
   padding: 9px 13px;
-  border: 1px solid #7770d0;
+  border: 1px solid var(--ui-domain-color-7770d0);
   border-radius: 7px;
-  color: #f2f0ff;
-  background: #423d83;
+  color: var(--ui-domain-color-f2f0ff);
+  background: var(--ui-domain-color-423d83);
   cursor: pointer;
 }
 .new-project button {
@@ -159,7 +160,7 @@ function createProject(): void {
   border: 1px solid var(--line-soft);
   border-radius: 7px;
   color: var(--text-secondary);
-  background: #0c121b;
+  background: var(--ui-domain-color-0c121b);
   text-align: left;
   cursor: pointer;
 }
@@ -178,8 +179,8 @@ function createProject(): void {
   grid-column: 1/-1;
   margin: 0;
   padding: 10px 18px;
-  color: #ff9dab;
-  background: #321923;
+  color: var(--ui-domain-color-ff9dab);
+  background: var(--ui-domain-color-321923);
   font-size: 9px;
 }
 @media (max-width: 800px) {

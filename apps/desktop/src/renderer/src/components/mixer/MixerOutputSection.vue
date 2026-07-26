@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue"
-import { PopoverContent, PopoverPortal, PopoverRoot, PopoverTrigger } from "reka-ui"
+import { UiPopover } from "@yadaw/ui"
 import type { MixerChannelPatch, MixerChannelState } from "@yadaw/contracts"
 
 const props = defineProps<{
@@ -41,35 +41,31 @@ function updateHardwareOutput(index: number, event: Event): void {
         {{ output.name }}
       </option>
     </select>
-    <PopoverRoot v-else-if="channel.kind === 'output'">
-      <PopoverTrigger as-child>
+    <UiPopover v-else-if="channel.kind === 'output'" side="top" :side-offset="7">
+      <template #trigger>
         <button class="output-control" :aria-label="`${channel.name} hardware output routing`">
           {{ hardwareSummary }}
         </button>
-      </PopoverTrigger>
-      <PopoverPortal>
-        <PopoverContent class="mixer-popover-layer" side="top" :side-offset="7">
-          <div class="mixer-popover output-popover">
-            <header>
-              <span>HARDWARE OUTPUT</span>
-              <strong>{{ channel.name }}</strong>
-            </header>
-            <label v-for="(_, index) in channel.hardwareOutputChannels" :key="index">
-              <span>{{ index === 0 ? "Left" : "Right" }}</span>
-              <select
-                :value="channel.hardwareOutputChannels[index]"
-                :aria-label="`${channel.name} hardware output ${index + 1}`"
-                @change="updateHardwareOutput(index, $event)"
-              >
-                <option v-for="output in hardwareOptions" :key="output" :value="output">
-                  Output {{ output }}
-                </option>
-              </select>
-            </label>
-          </div>
-        </PopoverContent>
-      </PopoverPortal>
-    </PopoverRoot>
+      </template>
+      <div class="mixer-popover output-popover">
+        <header>
+          <span>HARDWARE OUTPUT</span>
+          <strong>{{ channel.name }}</strong>
+        </header>
+        <label v-for="(_, index) in channel.hardwareOutputChannels" :key="index">
+          <span>{{ index === 0 ? "Left" : "Right" }}</span>
+          <select
+            :value="channel.hardwareOutputChannels[index]"
+            :aria-label="`${channel.name} hardware output ${index + 1}`"
+            @change="updateHardwareOutput(index, $event)"
+          >
+            <option v-for="output in hardwareOptions" :key="output" :value="output">
+              Output {{ output }}
+            </option>
+          </select>
+        </label>
+      </div>
+    </UiPopover>
     <button v-else class="output-control" disabled aria-disabled="true">GLOBAL</button>
   </section>
 </template>
@@ -80,8 +76,8 @@ function updateHardwareOutput(index: number, event: Event): void {
   align-items: center;
   min-width: 0;
   padding: 6px 7px;
-  border-bottom: 1px solid #444;
-  background: #555;
+  border-bottom: 1px solid var(--ui-domain-color-444);
+  background: var(--ui-domain-color-555);
 }
 .output-select,
 .output-control {
@@ -90,10 +86,10 @@ function updateHardwareOutput(index: number, event: Event): void {
   min-width: 0;
   padding: 0 7px;
   overflow: hidden;
-  border: 1px solid #747474;
+  border: 1px solid var(--ui-domain-color-747474);
   border-radius: 4px;
-  color: #f2f2f2;
-  background: linear-gradient(#6d6d6d, #5d5d5d);
+  color: var(--ui-domain-color-f2f2f2);
+  background: linear-gradient(var(--ui-domain-color-6d6d6d), var(--ui-domain-color-5d5d5d));
   font-size: 8px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -102,7 +98,7 @@ function updateHardwareOutput(index: number, event: Event): void {
   cursor: pointer;
 }
 .output-control:disabled {
-  color: #b8b8b8;
+  color: var(--ui-domain-color-b8b8b8);
   cursor: default;
 }
 .output-select:focus-visible,
@@ -119,7 +115,7 @@ function updateHardwareOutput(index: number, event: Event): void {
   border-radius: 6px;
   color: var(--text-primary);
   background: var(--surface-1);
-  box-shadow: 0 14px 36px #00000075;
+  box-shadow: 0 14px 36px var(--ui-domain-color-00000075);
 }
 .mixer-popover header span,
 .mixer-popover header strong {

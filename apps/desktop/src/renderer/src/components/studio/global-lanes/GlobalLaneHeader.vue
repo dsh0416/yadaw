@@ -62,7 +62,7 @@ function updateValue(event: Event): void {
 
 <style scoped>
 .global-lane-header {
-  --lane-color: #65a8ff;
+  --lane-color: var(--ui-domain-color-65a8ff);
   position: relative;
   display: grid;
   grid-template-columns: 20px minmax(0, 1fr);

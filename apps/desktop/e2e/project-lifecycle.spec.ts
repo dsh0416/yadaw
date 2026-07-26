@@ -87,7 +87,11 @@ test("records into a Large Object and reopens the PGlite project archive", async
     )
     expect(virtualRuntime.state).toBe("running")
 
-    await page.getByRole("button", { name: "Mixer", exact: true }).click()
+    const mixerDockToggle = page.getByRole("button", { name: "Toggle mixer dock" })
+    await expect(mixerDockToggle).toBeVisible()
+    if ((await mixerDockToggle.getAttribute("aria-pressed")) !== "true") {
+      await mixerDockToggle.click()
+    }
     const visibleMixer = page.locator(".mixer-console:visible")
     await page.getByRole("button", { name: "Add audio track" }).click()
     await page.getByRole("button", { name: "Add bus" }).click()
@@ -114,7 +118,7 @@ test("records into a Large Object and reopens the PGlite project archive", async
       visibleMixer.getByText("2 audio · 0 instrument · 1 buses · 1 outputs")
     ).toBeVisible()
     await visibleMixer.getByLabel("Audio 1 output").selectOption({ label: "Bus 1" })
-    await visibleMixer.getByLabel("Audio 2 audio channel").click()
+    await visibleMixer.getByRole("button", { name: "Audio 2 input routing" }).click()
     await page.getByLabel("Input format").selectOption("mono")
     await expect
       .poll(async () => {
@@ -122,7 +126,15 @@ test("records into a Large Object and reopens the PGlite project archive", async
         return graph.channels.find((channel) => channel.name === "Audio 2")?.inputFormat
       })
       .toBe("mono")
-    await page.getByRole("button", { name: "Add send" }).click()
+    await visibleMixer
+      .getByRole("article", { name: "Audio 1 audio channel" })
+      .getByRole("button", { name: "Add send in empty slot" })
+      .click()
+    await page.getByRole("button", { name: "Add", exact: true }).click()
+    await visibleMixer
+      .getByRole("article", { name: "Audio 1 audio channel" })
+      .getByRole("button", { name: "Edit send to Bus 1" })
+      .click()
     await page.getByRole("button", { name: "Enable send" }).click()
     await visibleMixer.getByRole("button", { name: "Arm Audio 1" }).click()
     await visibleMixer.getByRole("button", { name: "Arm Audio 2" }).click()
@@ -135,7 +147,7 @@ test("records into a Large Object and reopens the PGlite project archive", async
       "output"
     ])
     expect(mixerBeforeSave.sends).toHaveLength(1)
-    await page.getByRole("button", { name: "Arrangement", exact: true }).click()
+    await expect(page.getByRole("region", { name: "Arrangement timeline" })).toBeVisible()
 
     const timeZoom = page.getByRole("slider", { name: "Time zoom" })
     await timeZoom.fill("50")

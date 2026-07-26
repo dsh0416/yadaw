@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, shallowRef, watch } from "vue"
 import { Trash2 } from "@lucide/vue"
-import { PopoverContent, PopoverPortal, PopoverRoot, PopoverTrigger } from "reka-ui"
+import { UiPopover } from "@yadaw/ui"
 import type {
   MixerChannelState,
   MixerParameterPreview,
@@ -96,8 +96,8 @@ function createSend(): void {
 <template>
   <section class="send-section" data-section="sends" aria-label="Channel sends">
     <template v-if="supportsSends">
-      <PopoverRoot v-for="send in sends" :key="send.id">
-        <PopoverTrigger as-child>
+      <UiPopover v-for="send in sends" :key="send.id" side="top" :side-offset="7">
+        <template #trigger>
           <button
             :class="['send-row', { disabled: !send.enabled }]"
             :aria-label="`Edit send to ${targetName(send)}`"
@@ -107,119 +107,112 @@ function createSend(): void {
             <b>{{ tapLabel(send.tap) }}</b>
             <output>{{ sendLevel(send) }}</output>
           </button>
-        </PopoverTrigger>
-        <PopoverPortal>
-          <PopoverContent class="send-popover-layer" side="top" :side-offset="7">
-            <div class="send-popover">
-              <header>
-                <div>
-                  <span>SEND</span><strong>{{ targetName(send) }}</strong>
-                </div>
-                <button
-                  class="delete-send"
-                  :aria-label="`Delete send to ${targetName(send)}`"
-                  @click="emit('deleteSend', send.id)"
-                >
-                  <Trash2 :size="12" />
-                </button>
-              </header>
-              <label class="toggle-row">
-                <span>Enabled</span>
-                <button
-                  :class="{ active: send.enabled }"
-                  :aria-pressed="send.enabled"
-                  @click="updateSend(send, { enabled: !send.enabled })"
-                >
-                  {{ send.enabled ? "ON" : "OFF" }}
-                </button>
-              </label>
-              <label>
-                <span>Destination</span>
-                <select
-                  :value="send.targetChannelId"
-                  aria-label="Send target"
-                  @change="
-                    updateSend(send, {
-                      targetChannelId: ($event.currentTarget as HTMLSelectElement).value
-                    })
-                  "
-                >
-                  <option
-                    v-for="bus in buses"
-                    :key="bus.id"
-                    :value="bus.id"
-                    :disabled="
-                      bus.id !== send.targetChannelId &&
-                      !sendTargets.some((target) => target.id === bus.id)
-                    "
-                  >
-                    {{ bus.name }}
-                  </option>
-                </select>
-              </label>
-              <div class="tap-options" aria-label="Send position">
-                <button
-                  v-for="option in ['pre', 'post', 'post-pan'] as MixerSendTap[]"
-                  :key="option"
-                  :class="{ active: send.tap === option }"
-                  :aria-pressed="send.tap === option"
-                  @click="updateSend(send, { tap: option })"
-                >
-                  {{ tapLabel(option) }}
-                </button>
-              </div>
-              <label class="parameter-row">
-                <span
-                  >Level <b>{{ sendLevel(send) }} dB</b></span
-                >
-                <input
-                  type="range"
-                  min="-90"
-                  max="12"
-                  step="0.1"
-                  :value="send.levelDb"
-                  aria-label="Send level"
-                  @pointerdown="sendLevelGesture(send).begin"
-                  @input="sendLevelGesture(send).preview"
-                  @change="sendLevelGesture(send).commit"
-                  @keydown="sendLevelGesture(send).keydown"
-                  @dblclick="sendLevelGesture(send).reset(-90)"
-                />
-                <input
-                  type="number"
-                  min="-90"
-                  max="12"
-                  step="0.1"
-                  :value="send.levelDb"
-                  aria-label="Send level value in decibels"
-                  @change="sendLevelGesture(send).reset(numberValue($event))"
-                />
-              </label>
+        </template>
+        <div class="send-popover">
+          <header>
+            <div>
+              <span>SEND</span><strong>{{ targetName(send) }}</strong>
             </div>
-          </PopoverContent>
-        </PopoverPortal>
-      </PopoverRoot>
+            <button
+              class="delete-send"
+              :aria-label="`Delete send to ${targetName(send)}`"
+              @click="emit('deleteSend', send.id)"
+            >
+              <Trash2 :size="12" />
+            </button>
+          </header>
+          <label class="toggle-row">
+            <span>Enabled</span>
+            <button
+              :class="{ active: send.enabled }"
+              :aria-label="send.enabled ? 'Disable send' : 'Enable send'"
+              :aria-pressed="send.enabled"
+              @click="updateSend(send, { enabled: !send.enabled })"
+            >
+              {{ send.enabled ? "ON" : "OFF" }}
+            </button>
+          </label>
+          <label>
+            <span>Destination</span>
+            <select
+              :value="send.targetChannelId"
+              aria-label="Send target"
+              @change="
+                updateSend(send, {
+                  targetChannelId: ($event.currentTarget as HTMLSelectElement).value
+                })
+              "
+            >
+              <option
+                v-for="bus in buses"
+                :key="bus.id"
+                :value="bus.id"
+                :disabled="
+                  bus.id !== send.targetChannelId &&
+                  !sendTargets.some((target) => target.id === bus.id)
+                "
+              >
+                {{ bus.name }}
+              </option>
+            </select>
+          </label>
+          <div class="tap-options" aria-label="Send position">
+            <button
+              v-for="option in ['pre', 'post', 'post-pan'] as MixerSendTap[]"
+              :key="option"
+              :class="{ active: send.tap === option }"
+              :aria-pressed="send.tap === option"
+              @click="updateSend(send, { tap: option })"
+            >
+              {{ tapLabel(option) }}
+            </button>
+          </div>
+          <label class="parameter-row">
+            <span
+              >Level <b>{{ sendLevel(send) }} dB</b></span
+            >
+            <input
+              type="range"
+              min="-90"
+              max="12"
+              step="0.1"
+              :value="send.levelDb"
+              aria-label="Send level"
+              @pointerdown="sendLevelGesture(send).begin"
+              @input="sendLevelGesture(send).preview"
+              @change="sendLevelGesture(send).commit"
+              @keydown="sendLevelGesture(send).keydown"
+              @dblclick="sendLevelGesture(send).reset(-90)"
+            />
+            <input
+              type="number"
+              min="-90"
+              max="12"
+              step="0.1"
+              :value="send.levelDb"
+              aria-label="Send level value in decibels"
+              @change="sendLevelGesture(send).reset(numberValue($event))"
+            />
+          </label>
+        </div>
+      </UiPopover>
 
-      <PopoverRoot v-if="emptyRows > 0 && canAddSend">
-        <PopoverTrigger as-child>
+      <UiPopover v-if="emptyRows > 0 && canAddSend" side="top" :side-offset="7">
+        <template #trigger>
           <button class="send-row empty empty-slot" aria-label="Add send in empty slot">
             EMPTY SEND
           </button>
-        </PopoverTrigger>
-        <PopoverPortal>
-          <PopoverContent class="send-popover-layer" side="top" :side-offset="7">
-            <div class="add-send-popover">
-              <strong>Add send</strong>
-              <select v-model="newSendTarget" aria-label="New send target">
-                <option v-for="target in sendTargets" :key="target.id" :value="target.id">
-                  {{ target.name }}
-                </option>
-              </select>
-              <button :disabled="!newSendTarget" @click="createSend">Add</button>
-            </div>
-          </PopoverContent>
-        </PopoverPortal>
-      </PopoverRoot>
+        </template>
+        <div class="add-send-popover">
+          <strong>Add send</strong>
+          <select v-model="newSendTarget" aria-label="New send target">
+            <option v-for="target in sendTargets" :key="target.id" :value="target.id">
+              {{ target.name }}
+            </option>
+          </select>
+          <button :disabled="!newSendTarget" @click="createSend">Add</button>
+        </div>
+      </UiPopover>
       <span
         v-for="index in alignmentRows"
         :key="`alignment-${index}`"
@@ -246,8 +239,8 @@ function createSend(): void {
   align-content: start;
   min-width: 0;
   padding: 6px 7px;
-  border-bottom: 1px solid #444;
-  background: #585858;
+  border-bottom: 1px solid var(--ui-domain-color-444);
+  background: var(--ui-domain-color-585858);
 }
 .send-row {
   display: grid;
@@ -257,10 +250,10 @@ function createSend(): void {
   height: 25px;
   min-width: 0;
   padding: 0 3px;
-  border: 1px solid #4a6b80;
+  border: 1px solid var(--ui-domain-color-4a6b80);
   border-radius: 4px;
-  color: #f5f5f5;
-  background: linear-gradient(#4f83a4, #3f6b87);
+  color: var(--ui-domain-color-f5f5f5);
+  background: linear-gradient(var(--ui-domain-color-4f83a4), var(--ui-domain-color-3f6b87));
   font-size: 7px;
   cursor: pointer;
 }
@@ -268,8 +261,8 @@ function createSend(): void {
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background: #86e7ff;
-  box-shadow: 0 0 4px #86e7ff;
+  background: var(--ui-domain-color-86e7ff);
+  box-shadow: 0 0 4px var(--ui-domain-color-86e7ff);
 }
 .send-row span {
   min-width: 0;
@@ -282,7 +275,7 @@ function createSend(): void {
   font: 700 6px var(--font-utility);
 }
 .send-row output {
-  color: #dceeff;
+  color: var(--ui-domain-color-dceeff);
   font: 6px var(--font-utility);
   text-align: right;
 }
@@ -294,10 +287,10 @@ function createSend(): void {
   display: grid;
   grid-template-columns: 1fr;
   place-items: center;
-  border-color: #494949;
-  color: #929292;
-  background: #4d4d4d;
-  box-shadow: 0 1px 2px #00000038 inset;
+  border-color: var(--ui-domain-color-494949);
+  color: var(--ui-domain-color-929292);
+  background: var(--ui-domain-color-4d4d4d);
+  box-shadow: 0 1px 2px var(--ui-domain-color-00000038) inset;
   font: 6px var(--font-utility);
   cursor: default;
 }
@@ -305,8 +298,8 @@ function createSend(): void {
   cursor: pointer;
 }
 .send-row.empty-slot:hover {
-  border-color: #4e8dbf;
-  color: #b7d9f3;
+  border-color: var(--ui-domain-color-4e8dbf);
+  color: var(--ui-domain-color-b7d9f3);
 }
 .send-row.alignment-spacer {
   border-color: transparent;
@@ -328,7 +321,7 @@ function createSend(): void {
   border-radius: 6px;
   color: var(--text-primary);
   background: var(--surface-1);
-  box-shadow: 0 14px 36px #00000075;
+  box-shadow: 0 14px 36px var(--ui-domain-color-00000075);
 }
 .send-popover header {
   display: flex;
@@ -394,9 +387,9 @@ function createSend(): void {
 }
 .toggle-row button.active,
 .tap-options button.active {
-  border-color: #4d8fc0;
-  color: #fff;
-  background: #377aa8;
+  border-color: var(--ui-domain-color-4d8fc0);
+  color: var(--ui-domain-color-fff);
+  background: var(--ui-domain-color-377aa8);
 }
 .tap-options {
   display: grid;
@@ -436,10 +429,10 @@ function createSend(): void {
   font-size: 10px;
 }
 .add-send-popover button {
-  border: 1px solid #4d8fc0;
+  border: 1px solid var(--ui-domain-color-4d8fc0);
   border-radius: 3px;
-  color: #fff;
-  background: #377aa8;
+  color: var(--ui-domain-color-fff);
+  background: var(--ui-domain-color-377aa8);
   font-size: 8px;
   cursor: pointer;
 }

@@ -170,7 +170,7 @@ function startDrag(event: DragEvent): void {
 .audio-clip {
   --clip-color: var(--accent);
   position: absolute;
-  z-index: 2;
+  z-index: var(--ui-z-local-raised);
   top: 9px;
   bottom: 9px;
   display: block;
@@ -179,14 +179,14 @@ function startDrag(event: DragEvent): void {
   padding: 0;
   border: 1px solid color-mix(in srgb, var(--clip-color) 72%, white);
   border-radius: 4px;
-  color: #f7f8f8;
+  color: var(--ui-domain-color-f7f8f8);
   background: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--clip-color) 65%, #303436),
-    color-mix(in srgb, var(--clip-color) 38%, #17191a)
+    color-mix(in srgb, var(--clip-color) 65%, var(--ui-domain-color-303436)),
+    color-mix(in srgb, var(--clip-color) 38%, var(--ui-domain-color-17191a))
   );
   box-shadow:
-    0 1px 0 #ffffff24 inset,
+    0 1px 0 var(--ui-domain-color-ffffff24) inset,
     0 7px 18px var(--shadow);
   cursor: grab;
   text-align: left;
@@ -200,8 +200,8 @@ function startDrag(event: DragEvent): void {
   outline-offset: -3px;
 }
 .audio-clip.selected {
-  z-index: 3;
-  border-color: #fff;
+  z-index: var(--ui-z-local-selection);
+  border-color: var(--ui-domain-color-fff);
   box-shadow:
     0 0 0 2px color-mix(in srgb, var(--clip-color) 60%, transparent) inset,
     0 0 20px color-mix(in srgb, var(--clip-color) 45%, transparent);
@@ -214,8 +214,8 @@ function startDrag(event: DragEvent): void {
   border-color: color-mix(in srgb, var(--record) 72%, white);
   background: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--record) 72%, #303436),
-    color-mix(in srgb, var(--record) 42%, #17191a)
+    color-mix(in srgb, var(--record) 72%, var(--ui-domain-color-303436)),
+    color-mix(in srgb, var(--record) 42%, var(--ui-domain-color-17191a))
   );
   box-shadow: 0 0 18px color-mix(in srgb, var(--record) 35%, transparent);
 }
@@ -228,7 +228,7 @@ function startDrag(event: DragEvent): void {
 }
 .clip-heading {
   position: absolute;
-  z-index: 3;
+  z-index: var(--ui-z-local-selection);
   top: 0;
   right: 0;
   left: 0;
@@ -237,11 +237,11 @@ function startDrag(event: DragEvent): void {
   gap: 5px;
   height: 23px;
   padding: 4px 6px 5px;
-  color: #f7f8f8;
+  color: var(--ui-domain-color-f7f8f8);
   background: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--clip-color) 34%, #111111e8) 0%,
-    color-mix(in srgb, var(--clip-color) 24%, #111111b8) 72%,
+    color-mix(in srgb, var(--clip-color) 34%, var(--ui-domain-color-111111e8)) 0%,
+    color-mix(in srgb, var(--clip-color) 24%, var(--ui-domain-color-111111b8)) 72%,
     transparent 100%
   );
   pointer-events: none;
@@ -250,8 +250,8 @@ function startDrag(event: DragEvent): void {
 .recording .clip-heading {
   background: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--record) 34%, #111111e8) 0%,
-    color-mix(in srgb, var(--record) 24%, #111111b8) 72%,
+    color-mix(in srgb, var(--record) 34%, var(--ui-domain-color-111111e8)) 0%,
+    color-mix(in srgb, var(--record) 24%, var(--ui-domain-color-111111b8)) 72%,
     transparent 100%
   );
 }
@@ -263,27 +263,27 @@ function startDrag(event: DragEvent): void {
   font-weight: 650;
   line-height: 13px;
   text-overflow: ellipsis;
-  text-shadow: 0 1px 2px #000a;
+  text-shadow: 0 1px 2px var(--ui-domain-color-000a);
 }
 .channel-format {
-  color: #f0f4f5;
-  filter: drop-shadow(0 1px 1px #0008);
+  color: var(--ui-domain-color-f0f4f5);
+  filter: drop-shadow(0 1px 1px var(--ui-domain-color-0008));
 }
 .recording .channel-format {
-  color: #ffe0e4;
+  color: var(--ui-domain-color-ffe0e4);
 }
 .capture-dot {
   flex: none;
   width: 6px;
   height: 6px;
-  border: 1px solid #ffe5e9;
+  border: 1px solid var(--ui-domain-color-ffe5e9);
   border-radius: 50%;
   background: var(--record);
   box-shadow: 0 0 5px var(--record);
 }
 .waveform {
   position: absolute;
-  z-index: 1;
+  z-index: var(--ui-z-local-content);
   top: 22px;
   right: 0;
   bottom: 3px;

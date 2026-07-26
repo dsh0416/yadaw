@@ -134,7 +134,7 @@ function dropClip(event: DragEvent): void {
 }
 .midi-clip strong {
   position: relative;
-  z-index: 2;
+  z-index: var(--ui-z-local-raised);
   display: block;
   overflow: hidden;
   font: 700 7px var(--font-utility);

@@ -1,0 +1,18 @@
+import { Meta } from "@storybook/addon-docs/blocks"
+
+<Meta title="Foundations/Accessibility" />
+
+# Accessibility
+
+WCAG 2.2 AA is a release requirement.
+
+- Every control has a programmatic name and visible focus.
+- Dense domain controls have at least a 24×24 CSS pixel target.
+- Status changes use `status` or `alert` only when interruption is appropriate.
+- Dialogs trap and restore focus; Escape behavior is consistent and documented.
+- Welcome, settings, documentation, and overlays reflow at 320 CSS pixels.
+- Studio and mixer canvases may scroll in two dimensions, but their controls and overlays still reflow.
+- Color is never the only carrier of state.
+
+Every story is checked by Axe. Keyboard behavior belongs in a `play` test rather than a prose-only
+claim.
