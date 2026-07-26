@@ -1,15 +1,16 @@
 <script setup lang="ts">
 import { computed, nextTick, shallowRef, useTemplateRef, watch } from "vue"
 import { storeToRefs } from "pinia"
-import { RadioTower } from "@lucide/vue"
 import type { MeterPeakHold, MeterReturnRate } from "@yadaw/contracts"
 import type {
   MixerChannelMeter,
   MixerChannelPatch,
   MixerChannelState,
   MixerParameterPreview,
+  MixerSendPatch,
   MixerSendState
 } from "@yadaw/contracts"
+import type { PluginDescriptor, PluginInstanceState, PluginRuntimeStatus } from "@yadaw/contracts"
 import { usePeakMeterDisplay } from "../../composables/usePeakMeterDisplay"
 import { useParameterGesture } from "../../composables/useParameterGesture"
 import { useApplicationSettingsStore } from "../../stores/applicationSettings"
@@ -22,21 +23,41 @@ import {
 } from "../../utils/mixerDbScale"
 import InlineTrackNameEditor from "../InlineTrackNameEditor.vue"
 import MixerDbScale from "./MixerDbScale.vue"
+import MixerChannelMenu from "./MixerChannelMenu.vue"
+import MixerInputSection from "./MixerInputSection.vue"
+import MixerOutputSection from "./MixerOutputSection.vue"
 import MixerPanKnob from "./MixerPanKnob.vue"
+import MixerPluginSection from "./MixerPluginSection.vue"
+import MixerSendSection from "./MixerSendSection.vue"
 
 const props = defineProps<{
   channel: MixerChannelState
   sends: MixerSendState[]
   meter: MixerChannelMeter
   outputs: MixerChannelState[]
+  buses: MixerChannelState[]
+  sendTargets: MixerChannelState[]
+  plugins: PluginInstanceState[]
+  pluginRuntime: Record<string, PluginRuntimeStatus>
+  pluginSlotRows: number
+  sendSlotRows: number
   selected: boolean
-  density: "full" | "dock"
 }>()
 
 const emit = defineEmits<{
   select: [channelId: string]
   preview: [preview: MixerParameterPreview]
   updateChannel: [channelId: string, patch: MixerChannelPatch]
+  updateSend: [sendId: string, patch: MixerSendPatch]
+  addSend: [sourceChannelId: string, targetChannelId: string]
+  deleteSend: [sendId: string]
+  openPlugin: [instanceId: string]
+  togglePlugin: [instanceId: string, enabled: boolean]
+  removePlugin: [instanceId: string]
+  insertPlugin: [channelId: string, descriptor: PluginDescriptor, slotOrder: number]
+  movePlugin: [instanceId: string, channelId: string, slotOrder: number]
+  assignInstrument: [channelId: string, descriptor: PluginDescriptor]
+  deleteChannel: [channelId: string]
   resetMeterClips: []
 }>()
 
@@ -50,6 +71,10 @@ const meterDisplay = usePeakMeterDisplay({
   peakHold,
   returnRate
 })
+const instrument = computed(
+  () => props.plugins.find((plugin) => plugin.role === "instrument") ?? null
+)
+const inserts = computed(() => props.plugins.filter((plugin) => plugin.role === "insert"))
 
 const gainLabel = computed(() =>
   props.channel.gainDb <= -90 ? "−∞" : `${props.channel.gainDb.toFixed(1)} dB`
@@ -202,162 +227,188 @@ function handleFaderKeydown(event: KeyboardEvent): void {
 
 <template>
   <article
-    :class="['channel-strip', density, channel.kind, { selected }]"
+    :class="['channel-strip', channel.kind, { selected }]"
     :style="{ '--strip-color': channel.color }"
     :aria-label="`${channel.name} ${channel.kind} channel`"
     @pointerdown="emit('select', channel.id)"
   >
-    <div class="routing-summary">
-      <span
-        ><RadioTower :size="10" />{{ sends.length }} SEND{{ sends.length === 1 ? "" : "S" }}</span
-      >
-      <select
-        v-if="channel.kind === 'audio' || channel.kind === 'bus'"
-        :value="channel.outputChannelId ?? ''"
-        :aria-label="`${channel.name} output`"
-        @change="
-          emit('updateChannel', channel.id, {
-            outputChannelId: ($event.target as HTMLSelectElement).value
-          })
-        "
-      >
-        <option v-for="output in outputs" :key="output.id" :value="output.id">
-          {{ output.name }}
-        </option>
-      </select>
-      <span v-else-if="channel.kind === 'master'">GLOBAL</span>
-      <span v-else>HW {{ channel.hardwareOutputChannels.join("–") }}</span>
-    </div>
+    <MixerInputSection
+      :channel="channel"
+      @update-channel="emit('updateChannel', channel.id, $event)"
+    />
+
+    <MixerPluginSection
+      :channel="channel"
+      :instrument="instrument"
+      :inserts="inserts"
+      :runtime="pluginRuntime"
+      :slot-rows="pluginSlotRows"
+      @open="emit('openPlugin', $event)"
+      @toggle="(id, enabled) => emit('togglePlugin', id, enabled)"
+      @remove="emit('removePlugin', $event)"
+      @insert="(descriptor, slotOrder) => emit('insertPlugin', channel.id, descriptor, slotOrder)"
+      @move="(instanceId, slotOrder) => emit('movePlugin', instanceId, channel.id, slotOrder)"
+      @assign-instrument="emit('assignInstrument', channel.id, $event)"
+    />
+
+    <MixerSendSection
+      :channel="channel"
+      :sends="sends"
+      :buses="buses"
+      :send-targets="sendTargets"
+      :slot-rows="sendSlotRows"
+      @preview="emit('preview', $event)"
+      @update-send="(sendId, patch) => emit('updateSend', sendId, patch)"
+      @add-send="emit('addSend', channel.id, $event)"
+      @delete-send="emit('deleteSend', $event)"
+    />
+
+    <MixerOutputSection
+      :channel="channel"
+      :outputs="outputs"
+      @update-channel="emit('updateChannel', channel.id, $event)"
+    />
+
+    <section class="placeholder-section" data-section="group">
+      <button disabled aria-disabled="true">No Group</button>
+    </section>
+
+    <section class="placeholder-section automation-section" data-section="automation">
+      <button disabled aria-disabled="true">Read</button>
+    </section>
 
     <MixerPanKnob
       class="pan-control"
+      data-section="pan"
       :channel-name="channel.name"
       :value="channel.pan"
       @preview="preview('pan', $event)"
       @commit="emit('updateChannel', channel.id, { pan: $event })"
     />
 
-    <div class="strip-core">
-      <button
-        v-if="!gainInputEditing"
-        type="button"
-        class="parameter-value parameter-value-button"
-        :aria-label="`${channel.name} volume value in decibels`"
-        :title="`Fader: ${gainLabel} · Double-click to edit`"
-        @pointerdown.stop
-        @dblclick.stop.prevent="beginGainInputEdit"
-      >
-        {{ gainReadoutLabel }}
-      </button>
-      <input
-        v-else
-        ref="gainInput"
-        class="parameter-value"
-        type="number"
-        :min="FADER_MIN_DB"
-        :max="FADER_MAX_DB"
-        step="0.1"
-        :value="gainInputValue"
-        :aria-label="`${channel.name} volume value in decibels`"
-        :title="`Fader: ${gainLabel}`"
-        @input="updateGainInputValue"
-        @change="commitGainInputValue"
-        @blur="finishGainInputEdit"
-        @keydown="cancelGainInputEdit"
-        @keydown.enter="submitGainInput"
-      />
-      <button
-        type="button"
-        :class="['maximum-peak-value', maximumPeakState]"
-        :aria-label="`${channel.name} latched maximum post-fader level in decibels`"
-        :title="`Maximum post-fader peak: ${maximumPeakLabel} dB · Click to reset peak and clipping`"
-        @pointerdown.stop
-        @click.stop="resetMaximumPeak"
-      >
-        {{ maximumPeakLabel }}
-      </button>
-      <label class="fader" :style="faderStyle">
-        <MixerDbScale class="fader-scale" :marks="FADER_SCALE_MARKS" side="left" />
+    <section class="volume-section" data-section="volume">
+      <div class="strip-core">
+        <button
+          v-if="!gainInputEditing"
+          type="button"
+          class="parameter-value parameter-value-button"
+          :aria-label="`${channel.name} volume value in decibels`"
+          :title="`Fader: ${gainLabel} · Double-click to edit`"
+          @pointerdown.stop
+          @dblclick.stop.prevent="beginGainInputEdit"
+        >
+          {{ gainReadoutLabel }}
+        </button>
         <input
-          class="fader-control"
-          type="range"
+          v-else
+          ref="gainInput"
+          class="parameter-value"
+          type="number"
           :min="FADER_MIN_DB"
           :max="FADER_MAX_DB"
           step="0.1"
-          :value="channel.gainDb"
-          :aria-label="`${channel.name} volume`"
-          @pointerdown="beginFaderGesture"
-          @input="previewFaderGesture"
-          @change="commitFaderGesture"
-          @blur="faderTooltipVisible = false"
-          @keydown="handleFaderKeydown"
-          @dblclick.prevent="gainGesture.reset(0)"
+          :value="gainInputValue"
+          :aria-label="`${channel.name} volume value in decibels`"
+          :title="`Fader: ${gainLabel}`"
+          @input="updateGainInputValue"
+          @change="commitGainInputValue"
+          @blur="finishGainInputEdit"
+          @keydown="cancelGainInputEdit"
+          @keydown.enter="submitGainInput"
         />
-        <output v-if="faderTooltipVisible" class="fader-tooltip" aria-hidden="true">
-          {{ gainLabel }}
-        </output>
-      </label>
-      <div class="meter-rack">
-        <MixerDbScale class="meter-scale" :marks="METER_SCALE_MARKS" side="left" />
-        <div
-          class="meter"
-          :class="{
-            clipped: meterDisplay.clipped.value,
-            'has-held-peak': Number.isFinite(meterDisplay.heldPeakDb.value)
-          }"
-          :style="meterStyle"
-          aria-hidden="true"
+        <button
+          type="button"
+          :class="['maximum-peak-value', maximumPeakState]"
+          :aria-label="`${channel.name} latched maximum post-fader level in decibels`"
+          :title="`Maximum post-fader peak: ${maximumPeakLabel} dB · Click to reset peak and clipping`"
+          @pointerdown.stop
+          @click.stop="resetMaximumPeak"
         >
-          <span /><span />
+          {{ maximumPeakLabel }}
+        </button>
+        <label class="fader" :style="faderStyle">
+          <MixerDbScale class="fader-scale" :marks="FADER_SCALE_MARKS" side="left" />
+          <input
+            class="fader-control"
+            type="range"
+            :min="FADER_MIN_DB"
+            :max="FADER_MAX_DB"
+            step="0.1"
+            :value="channel.gainDb"
+            :aria-label="`${channel.name} volume`"
+            @pointerdown="beginFaderGesture"
+            @input="previewFaderGesture"
+            @change="commitFaderGesture"
+            @blur="faderTooltipVisible = false"
+            @keydown="handleFaderKeydown"
+            @dblclick.prevent="gainGesture.reset(0)"
+          />
+          <output v-if="faderTooltipVisible" class="fader-tooltip" aria-hidden="true">
+            {{ gainLabel }}
+          </output>
+        </label>
+        <div class="meter-rack">
+          <MixerDbScale class="meter-scale" :marks="METER_SCALE_MARKS" side="left" />
+          <div
+            class="meter"
+            :class="{
+              clipped: meterDisplay.clipped.value,
+              'has-held-peak': Number.isFinite(meterDisplay.heldPeakDb.value)
+            }"
+            :style="meterStyle"
+            aria-hidden="true"
+          >
+            <span /><span />
+          </div>
         </div>
       </div>
-    </div>
 
-    <div :class="['channel-actions', { 'has-input': channel.kind === 'audio' }]">
-      <div class="input-actions">
-        <template v-if="channel.kind === 'audio'">
+      <div :class="['channel-actions', { 'has-input': channel.kind === 'audio' }]">
+        <div class="input-actions">
+          <template v-if="channel.kind === 'audio'">
+            <button
+              :class="['record', { active: channel.recordArmed }]"
+              :aria-pressed="channel.recordArmed"
+              :aria-label="`Arm ${channel.name}`"
+              title="Record enable"
+              @click.stop="emit('updateChannel', channel.id, { recordArmed: !channel.recordArmed })"
+            >
+              R
+            </button>
+            <button
+              class="monitor"
+              aria-label="Input monitoring unavailable"
+              aria-disabled="true"
+              title="Input monitoring is not available yet"
+              disabled
+            >
+              I
+            </button>
+          </template>
+        </div>
+        <div class="mix-actions">
           <button
-            :class="['record', { active: channel.recordArmed }]"
-            :aria-pressed="channel.recordArmed"
-            :aria-label="`Arm ${channel.name}`"
-            title="Record enable"
-            @click.stop="emit('updateChannel', channel.id, { recordArmed: !channel.recordArmed })"
+            :class="['mute', { active: channel.muted }]"
+            :aria-pressed="channel.muted"
+            :aria-label="`Mute ${channel.name}`"
+            @click.stop="emit('updateChannel', channel.id, { muted: !channel.muted })"
           >
-            R
+            M
           </button>
           <button
-            class="monitor"
-            aria-label="Input monitoring unavailable"
-            aria-disabled="true"
-            title="Input monitoring is not available yet"
-            disabled
+            v-if="channel.kind !== 'master'"
+            :class="['solo', { active: channel.soloed }]"
+            :aria-pressed="channel.soloed"
+            :aria-label="`Solo ${channel.name}`"
+            @click.stop="emit('updateChannel', channel.id, { soloed: !channel.soloed })"
           >
-            I
+            S
           </button>
-        </template>
+        </div>
       </div>
-      <div class="mix-actions">
-        <button
-          :class="['mute', { active: channel.muted }]"
-          :aria-pressed="channel.muted"
-          :aria-label="`Mute ${channel.name}`"
-          @click.stop="emit('updateChannel', channel.id, { muted: !channel.muted })"
-        >
-          M
-        </button>
-        <button
-          v-if="channel.kind !== 'master'"
-          :class="['solo', { active: channel.soloed }]"
-          :aria-pressed="channel.soloed"
-          :aria-label="`Solo ${channel.name}`"
-          @click.stop="emit('updateChannel', channel.id, { soloed: !channel.soloed })"
-        >
-          S
-        </button>
-      </div>
-    </div>
+    </section>
 
-    <div class="channel-name" @click="emit('select', channel.id)">
+    <div class="channel-name" data-section="name" @click="emit('select', channel.id)">
       <i :style="{ backgroundColor: channel.color }" />
       <InlineTrackNameEditor
         class="channel-name-editor"
@@ -365,7 +416,13 @@ function handleFaderKeydown(event: KeyboardEvent): void {
         :label="`${channel.name} channel name; double-click to rename`"
         @rename="emit('updateChannel', channel.id, { name: $event })"
       />
-      <small>{{ channel.kind === "audio" ? channel.inputFormat : channel.kind }}</small>
+      <MixerChannelMenu
+        :channel-name="channel.name"
+        :color="channel.color"
+        :deletable="channel.kind !== 'master'"
+        @update-color="emit('updateChannel', channel.id, { color: $event })"
+        @delete="emit('deleteChannel', channel.id)"
+      />
     </div>
   </article>
 </template>
@@ -375,14 +432,16 @@ function handleFaderKeydown(event: KeyboardEvent): void {
   --strip-color: var(--accent);
   position: relative;
   display: grid;
-  grid-template-rows: 39px 72px minmax(120px, 1fr) 61px 38px;
-  flex: 0 0 116px;
-  min-width: 116px;
-  height: 100%;
+  grid-template-rows:
+    54px var(--plugin-section-height) var(--send-section-height) 44px 34px 34px 78px
+    282px 40px;
+  flex: 0 0 136px;
+  min-width: 136px;
+  height: max-content;
   overflow: hidden;
-  border-right: 1px solid var(--line-strong);
-  background: var(--daw-mixer-strip);
-  box-shadow: 1px 0 0 #ffffff08 inset;
+  border-right: 1px solid #303030;
+  background: #575757;
+  box-shadow: 1px 0 0 #ffffff0c inset;
 }
 
 .channel-strip::before {
@@ -398,55 +457,58 @@ function handleFaderKeydown(event: KeyboardEvent): void {
 }
 
 .channel-strip.bus {
-  background: var(--daw-mixer-strip-bus);
+  background: #53575a;
 }
 
 .channel-strip.master {
   position: sticky;
   right: 0;
   z-index: 5;
-  border-left: 1px solid var(--line-strong);
-  background: var(--daw-mixer-strip-master);
-  box-shadow: -12px 0 22px var(--shadow);
+  border-left: 1px solid #2e2e2e;
+  background: #505050;
+  box-shadow: -12px 0 22px #0000005c;
 }
 
 .channel-strip.selected {
-  background: var(--daw-mixer-strip-selected);
+  background: #626262;
   box-shadow: 3px 0 0 var(--strip-color) inset;
 }
 
-.routing-summary {
+.placeholder-section {
   display: grid;
-  align-content: center;
-  gap: 5px;
-  padding: 5px 8px;
-  border-bottom: 1px solid var(--line-soft);
-  color: var(--text-muted);
-  background: color-mix(in srgb, var(--surface-2) 82%, transparent);
-  font: 6px var(--font-utility);
-  letter-spacing: 0.06em;
-}
-
-.routing-summary span {
-  display: flex;
   align-items: center;
-  gap: 4px;
+  padding: 4px 7px;
+  border-bottom: 1px solid #444;
+  background: #575757;
 }
 
-.routing-summary select {
+.placeholder-section button {
   width: 100%;
-  min-height: 18px;
-  padding: 1px 4px;
-  border: 1px solid var(--line-strong);
-  border-radius: 2px;
-  color: var(--text-secondary);
-  background: var(--daw-control);
-  font-size: 7px;
+  height: 25px;
+  border: 1px solid #6b6b6b;
+  border-radius: 4px;
+  color: #bcbcbc;
+  background: linear-gradient(#666, #595959);
+  font-size: 8px;
+}
+
+.automation-section button {
+  color: #81ed8b;
+  text-shadow: 0 0 5px #5fe66b5c;
 }
 
 .pan-control {
-  padding: 7px 10px 8px;
-  border-bottom: 1px solid var(--line-soft);
+  padding: 8px 12px;
+  border-bottom: 1px solid #444;
+  background: #565656;
+}
+
+.volume-section {
+  display: grid;
+  grid-template-rows: 221px 61px;
+  min-height: 0;
+  border-bottom: 1px solid #444;
+  background: #555;
 }
 
 .strip-core {
@@ -456,7 +518,7 @@ function handleFaderKeydown(event: KeyboardEvent): void {
   column-gap: 4px;
   row-gap: 6px;
   min-height: 0;
-  padding: 10px 10px 8px;
+  padding: 9px 10px 7px;
 }
 
 .meter-rack {
@@ -738,8 +800,8 @@ function handleFaderKeydown(event: KeyboardEvent): void {
   align-content: center;
   justify-items: center;
   gap: 4px;
-  border-top: 1px solid var(--line-soft);
-  background: color-mix(in srgb, var(--daw-mixer-strip) 70%, var(--daw-control));
+  border-top: 1px solid #444;
+  background: #525252;
 }
 
 .input-actions,
@@ -852,11 +914,11 @@ function handleFaderKeydown(event: KeyboardEvent): void {
   grid-template-columns: 4px minmax(0, 1fr) auto;
   align-items: center;
   gap: 7px;
-  padding: 0 8px;
+  padding: 0 6px;
   border: 0;
   border-top: 1px solid var(--line-strong);
   color: var(--text-primary);
-  background: var(--daw-control);
+  background: color-mix(in srgb, var(--strip-color) 72%, #484848);
   text-align: left;
   cursor: pointer;
 }
@@ -873,53 +935,7 @@ function handleFaderKeydown(event: KeyboardEvent): void {
   font-weight: 700;
 }
 
-.channel-name small {
-  color: var(--text-muted);
-  font: 6px var(--font-utility);
-  text-transform: uppercase;
-}
-
-.channel-strip.dock {
-  grid-template-rows: 31px 59px minmax(88px, 1fr) 53px 34px;
-  flex-basis: 104px;
-  min-width: 104px;
-}
-
-.dock .routing-summary span {
-  display: none;
-}
-
-.dock .pan-control {
-  padding: 5px 7px;
-}
-
-.dock .strip-core {
-  grid-template-columns: minmax(0, 1fr) 39px;
-  gap: 3px;
-  padding: 7px;
-}
-
-.dock .channel-actions {
-  grid-template-rows: 18px 22px;
-  gap: 3px;
-}
-
-.dock .input-actions button {
-  width: 19px;
-  height: 17px;
-}
-
-.dock .input-actions {
-  margin-right: 7px;
-}
-
-.dock .mix-actions button {
-  width: 30px;
-  height: 22px;
-}
-
 .channel-actions button:focus-visible,
-.routing-summary select:focus-visible,
 .parameter-value:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: -1px;

@@ -1,17 +1,99 @@
 <script setup lang="ts">
+import { computed } from "vue"
 import { Plus, RotateCcw, RotateCw } from "@lucide/vue"
+import type { PluginDescriptor } from "@yadaw/contracts"
+import { useGlobalDialog } from "../../composables/useGlobalDialog"
 import { useMixerStore } from "../../stores/mixer"
+import { usePluginStore } from "../../stores/plugins"
 import MixerChannelStrip from "./MixerChannelStrip.vue"
-
-defineProps<{
-  density: "full" | "dock"
-}>()
+import MixerSectionLabels from "./MixerSectionLabels.vue"
 
 const mixerStore = useMixerStore()
+const pluginStore = usePluginStore()
+const { confirm } = useGlobalDialog()
+
+const pluginSlotRows = computed(() =>
+  Math.max(
+    4,
+    ...mixerStore.orderedChannels.map(
+      (channel) =>
+        mixerStore.graph.plugins.filter((plugin) => plugin.channelId === channel.id).length
+    )
+  )
+)
+const sendSlotRows = computed(() =>
+  Math.max(
+    2,
+    ...mixerStore.orderedChannels.map((channel) => mixerStore.sendsFor(channel.id).length)
+  )
+)
+const sectionStyle = computed(() => ({
+  "--plugin-section-height": `${12 + pluginSlotRows.value * 24}px`,
+  "--send-section-height": `${39 + sendSlotRows.value * 26}px`
+}))
+
+function pluginsFor(channelId: string) {
+  return mixerStore.graph.plugins
+    .filter((plugin) => plugin.channelId === channelId)
+    .sort((left, right) => {
+      if (left.role !== right.role) return left.role === "instrument" ? -1 : 1
+      return left.slotOrder - right.slotOrder
+    })
+}
+
+function togglePlugin(instanceId: string, enabled: boolean): void {
+  void mixerStore.execute({ type: "update-plugin", pluginId: instanceId, patch: { enabled } })
+}
+
+function removePlugin(instanceId: string): void {
+  void mixerStore.execute({ type: "delete-plugin", pluginId: instanceId })
+}
+
+function insertPlugin(channelId: string, descriptor: PluginDescriptor, slotOrder: number): void {
+  void pluginStore.addEffectAt(descriptor, channelId, slotOrder)
+}
+
+function movePlugin(instanceId: string, channelId: string, slotOrder: number): void {
+  void pluginStore.moveInsert(instanceId, channelId, slotOrder)
+}
+
+async function assignInstrument(channelId: string, descriptor: PluginDescriptor): Promise<void> {
+  const current = mixerStore.graph.plugins.find(
+    (plugin) => plugin.channelId === channelId && plugin.role === "instrument"
+  )
+  if (current) {
+    const confirmed = await confirm({
+      eyebrow: "Instrument slot",
+      tone: "warning",
+      title: `Replace ${current.descriptor.name}?`,
+      description: `The instrument will be replaced with ${descriptor.name}.`,
+      detail: "The previous component and controller state remain available through undo.",
+      confirmLabel: "Replace instrument",
+      destructive: false
+    })
+    if (!confirmed) return
+  }
+  await pluginStore.assignInstrument(descriptor, channelId)
+}
+
+async function deleteChannel(channelId: string): Promise<void> {
+  const channel = mixerStore.channels.find((candidate) => candidate.id === channelId)
+  if (!channel || channel.kind === "master") return
+  const confirmed = await confirm({
+    eyebrow: "Mixer routing",
+    tone: "danger",
+    title: `Delete ${channel.name}?`,
+    description: "Its clips will be removed from the timeline, but media assets will be kept.",
+    detail: "This change is added to the project history and can be undone.",
+    confirmLabel: "Delete channel",
+    destructive: true
+  })
+  if (confirmed) void mixerStore.deleteChannel(channel.id)
+}
 </script>
 
 <template>
-  <section :class="['mixer-console', density]" aria-label="Mixer console">
+  <section class="mixer-console" aria-label="Mixer console">
     <header class="mixer-toolbar">
       <div>
         <span>MIXER</span>
@@ -48,7 +130,8 @@ const mixerStore = useMixerStore()
         </button>
       </nav>
     </header>
-    <div class="channel-scroll">
+    <div class="channel-scroll" :style="sectionStyle">
+      <MixerSectionLabels />
       <MixerChannelStrip
         v-for="channel in mixerStore.orderedChannels"
         :key="channel.id"
@@ -56,11 +139,26 @@ const mixerStore = useMixerStore()
         :sends="mixerStore.sendsFor(channel.id)"
         :meter="mixerStore.meterFor(channel.id)"
         :outputs="mixerStore.availableOutputs(channel.id)"
+        :buses="mixerStore.buses"
+        :send-targets="mixerStore.availableSendTargets(channel.id)"
+        :plugins="pluginsFor(channel.id)"
+        :plugin-runtime="pluginStore.runtime"
+        :plugin-slot-rows="pluginSlotRows"
+        :send-slot-rows="sendSlotRows"
         :selected="channel.id === mixerStore.selectedChannelId"
-        :density="density"
         @select="mixerStore.selectedChannelId = $event"
         @preview="mixerStore.preview"
         @update-channel="mixerStore.updateChannel"
+        @update-send="mixerStore.updateSend"
+        @add-send="mixerStore.addSend"
+        @delete-send="mixerStore.deleteSend"
+        @open-plugin="pluginStore.openEditor"
+        @toggle-plugin="togglePlugin"
+        @remove-plugin="removePlugin"
+        @insert-plugin="insertPlugin"
+        @move-plugin="movePlugin"
+        @assign-instrument="assignInstrument"
+        @delete-channel="deleteChannel"
         @reset-meter-clips="mixerStore.clearMeterClips"
       />
     </div>
@@ -133,32 +231,17 @@ const mixerStore = useMixerStore()
 }
 .channel-scroll {
   display: flex;
-  align-items: stretch;
+  align-items: flex-start;
   min-width: 0;
   min-height: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-  background-color: var(--daw-workspace);
+  overflow: auto;
+  background-color: #4f4f4f;
   background-image: linear-gradient(
     90deg,
     color-mix(in srgb, var(--text-primary) 3%, transparent) 1px,
     transparent 1px
   );
-  background-size: 112px 100%;
-}
-.dock .mixer-toolbar {
-  grid-template-columns: 1fr auto;
-  height: 36px;
-}
-.dock .mixer-toolbar > div strong {
-  display: none;
-}
-.dock .mixer-toolbar button {
-  height: 23px;
-  padding: 0 6px;
-}
-.dock {
-  grid-template-rows: 36px minmax(0, 1fr);
+  background-size: 136px 100%;
 }
 .mixer-error {
   position: absolute;

@@ -2,11 +2,13 @@
 import { computed, nextTick, shallowRef, useTemplateRef, watch } from "vue"
 import { storeToRefs } from "pinia"
 import { useResizeObserver } from "@vueuse/core"
+import { PanelBottomClose, PanelBottomOpen } from "@lucide/vue"
 import type { TempoMapSnapshot } from "@yadaw/contracts"
 import { useProjectStore } from "../../stores/project"
 import { useTransportStore } from "../../stores/transport"
 import { useArrangementViewStore } from "../../stores/arrangementView"
 import { useMixerStore } from "../../stores/mixer"
+import { useStudioWorkspaceStore } from "../../stores/studioWorkspace"
 import type { TimelineClip } from "../../stores/transport"
 import { clipStartSecondsFromPointer, findNearestTrackId } from "../../utils/clipDrag"
 import ArrangementTrack from "./ArrangementTrack.vue"
@@ -36,6 +38,7 @@ const projectStore = useProjectStore()
 const transportStore = useTransportStore()
 const viewStore = useArrangementViewStore()
 const mixerStore = useMixerStore()
+const workspaceStore = useStudioWorkspaceStore()
 const { session } = storeToRefs(projectStore)
 const {
   clips,
@@ -365,6 +368,16 @@ function updateSelectedTempo(beatsPerMinute: number): void {
           }}</strong
         >
       </div>
+      <button
+        class="mixer-dock-toggle"
+        :aria-pressed="workspaceStore.mixerDockOpen"
+        aria-label="Toggle mixer dock"
+        @click="workspaceStore.toggleMixerDock"
+      >
+        <PanelBottomClose v-if="workspaceStore.mixerDockOpen" :size="13" />
+        <PanelBottomOpen v-else :size="13" />
+        {{ workspaceStore.mixerDockOpen ? "Hide mixer" : "Show mixer" }}
+      </button>
       <ArrangementZoomControls
         class="arrangement-zoom-controls"
         :pixels-per-quarter="pixelsPerQuarter"
@@ -544,6 +557,28 @@ function updateSelectedTempo(beatsPerMinute: number): void {
 }
 .tempo-readout {
   grid-column: 1;
+}
+.mixer-dock-toggle {
+  display: flex;
+  grid-column: 2;
+  align-items: center;
+  gap: 5px;
+  height: 25px;
+  padding: 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  color: var(--text-muted);
+  background: var(--daw-control);
+  font-size: 7px;
+  cursor: pointer;
+}
+.mixer-dock-toggle:hover {
+  color: var(--text-primary);
+  background: var(--daw-control-hover);
+}
+.mixer-dock-toggle:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
 }
 .tempo-readout span,
 .tempo-readout strong {

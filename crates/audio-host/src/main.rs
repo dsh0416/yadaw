@@ -112,7 +112,7 @@ fn live_graph(
                 source_index: channel_index(&send.source_channel_id)?,
                 target_index: channel_index(&send.target_channel_id)?,
                 enabled: send.enabled,
-                tap: send.tap.clone(),
+                tap: send.tap,
                 level_db: send.level_db,
                 pan: send.pan,
             })

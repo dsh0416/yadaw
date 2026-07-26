@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { shallowRef } from "vue"
 import { useEventListener } from "@vueuse/core"
-import { Columns3, PanelBottomClose, PanelBottomOpen, Rows3 } from "@lucide/vue"
 import { useStudioWorkspaceStore } from "../../stores/studioWorkspace"
 import ArrangementWorkspace from "./ArrangementWorkspace.vue"
 import MixerConsole from "../mixer/MixerConsole.vue"
@@ -37,35 +36,7 @@ useEventListener(window, "pointerup", stopResize)
 
 <template>
   <section class="studio-workspace">
-    <nav class="workspace-switcher" aria-label="Studio workspace">
-      <button
-        :class="{ active: workspaceStore.mode === 'arrangement' }"
-        :aria-pressed="workspaceStore.mode === 'arrangement'"
-        @click="workspaceStore.showArrangement"
-      >
-        <Rows3 :size="12" />Arrangement
-      </button>
-      <button
-        :class="{ active: workspaceStore.mode === 'mixer' }"
-        :aria-pressed="workspaceStore.mode === 'mixer'"
-        @click="workspaceStore.showMixer"
-      >
-        <Columns3 :size="12" />Mixer
-      </button>
-      <span />
-      <button
-        v-if="workspaceStore.mode === 'arrangement'"
-        :aria-pressed="workspaceStore.mixerDockOpen"
-        aria-label="Toggle mixer dock"
-        @click="workspaceStore.toggleMixerDock"
-      >
-        <PanelBottomClose v-if="workspaceStore.mixerDockOpen" :size="13" />
-        <PanelBottomOpen v-else :size="13" />
-        {{ workspaceStore.mixerDockOpen ? "Hide mixer" : "Show mixer" }}
-      </button>
-    </nav>
-
-    <div v-show="workspaceStore.mode === 'arrangement'" class="arrangement-mode">
+    <div class="arrangement-mode">
       <ArrangementWorkspace
         :recording-id="recordingId"
         :recording-started-at="recordingStartedAt"
@@ -83,66 +54,26 @@ useEventListener(window, "pointerup", stopResize)
       <MixerConsole
         v-if="workspaceStore.mixerDockOpen"
         class="mixer-dock"
-        density="dock"
         :style="workspaceStore.dockStyle"
       />
     </div>
-    <MixerConsole v-show="workspaceStore.mode === 'mixer'" density="full" />
   </section>
 </template>
 
 <style scoped>
 .studio-workspace {
-  display: grid;
-  grid-template-rows: 34px minmax(0, 1fr);
+  display: block;
   min-width: 0;
   min-height: 0;
   background: var(--daw-workspace);
   overflow: hidden;
-}
-.workspace-switcher {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  padding: 0 7px;
-  border-bottom: 1px solid var(--line-strong);
-  background: var(--surface-1);
-}
-.workspace-switcher > span {
-  flex: 1;
-}
-.workspace-switcher button {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  height: 25px;
-  padding: 0 8px;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  color: var(--text-muted);
-  background: transparent;
-  font-size: 7px;
-  cursor: pointer;
-}
-.workspace-switcher button:hover {
-  color: var(--text-primary);
-  background: var(--daw-control-hover);
-}
-.workspace-switcher button.active {
-  border-color: var(--line-strong);
-  color: var(--text-primary);
-  background: var(--surface-active);
-  box-shadow: 0 1px 0 #ffffff0a inset;
-}
-.workspace-switcher button:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 1px;
 }
 .arrangement-mode {
   position: relative;
   display: flex;
   min-width: 0;
   min-height: 0;
+  height: 100%;
   flex-direction: column;
 }
 .arrangement-mode > :first-child {

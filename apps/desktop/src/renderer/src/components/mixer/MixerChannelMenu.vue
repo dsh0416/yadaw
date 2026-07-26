@@ -1,0 +1,109 @@
+<script setup lang="ts">
+import { MoreHorizontal, Trash2 } from "@lucide/vue"
+import { PopoverContent, PopoverPortal, PopoverRoot, PopoverTrigger } from "reka-ui"
+
+defineProps<{
+  channelName: string
+  color: string
+  deletable: boolean
+}>()
+
+const emit = defineEmits<{
+  updateColor: [color: string]
+  delete: []
+}>()
+</script>
+
+<template>
+  <PopoverRoot>
+    <PopoverTrigger as-child>
+      <button class="menu-trigger" :aria-label="`${channelName} channel menu`">
+        <MoreHorizontal :size="13" />
+      </button>
+    </PopoverTrigger>
+    <PopoverPortal>
+      <PopoverContent class="channel-menu-layer" side="top" align="end" :side-offset="6">
+        <div class="channel-menu">
+          <label>
+            <span>Channel color</span>
+            <input
+              type="color"
+              :value="color"
+              :aria-label="`${channelName} channel color`"
+              @change="
+                emit('updateColor', ($event.currentTarget as HTMLInputElement).value.toUpperCase())
+              "
+            />
+          </label>
+          <button
+            v-if="deletable"
+            class="delete-action"
+            :aria-label="`Delete ${channelName}`"
+            @click="emit('delete')"
+          >
+            <Trash2 :size="12" />Delete channel
+          </button>
+        </div>
+      </PopoverContent>
+    </PopoverPortal>
+  </PopoverRoot>
+</template>
+
+<style scoped>
+.menu-trigger {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid #ffffff2c;
+  border-radius: 3px;
+  color: #fff;
+  background: #00000024;
+  cursor: pointer;
+}
+.menu-trigger:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+.channel-menu {
+  display: grid;
+  width: 168px;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  color: var(--text-primary);
+  background: var(--surface-1);
+  box-shadow: 0 14px 36px #00000075;
+}
+.channel-menu label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--text-muted);
+  font-size: 8px;
+}
+.channel-menu input {
+  width: 36px;
+  height: 24px;
+  padding: 1px;
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  background: var(--daw-control);
+}
+.delete-action {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 27px;
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--record) 55%, var(--line-strong));
+  border-radius: 3px;
+  color: var(--record);
+  background: color-mix(in srgb, var(--record) 9%, var(--daw-control));
+  font-size: 8px;
+  cursor: pointer;
+}
+</style>

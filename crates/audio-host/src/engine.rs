@@ -26,6 +26,7 @@ use yadaw_dsp_core::mixer::{
 use yadaw_dsp_runtime::{
     MUSICAL_TICKS_PER_QUARTER,
     block::{LatencyNode, StereoDelayLine, plan_latency_compensation},
+    protocol::LiveMixerSendTap,
     tempo::{TempoEvent, TempoMap, TimeSignatureEvent},
 };
 
@@ -110,7 +111,7 @@ pub struct NativeMixerSend {
     pub source_index: u32,
     pub target_index: u32,
     pub enabled: bool,
-    pub tap: String,
+    pub tap: LiveMixerSendTap,
     pub level_db: f64,
     pub pan: f64,
 }
@@ -1056,10 +1057,10 @@ fn build_mixer_runtime(
                 source: send.source_index as usize,
                 target: send.target_index as usize,
                 enabled: send.enabled,
-                tap: match send.tap.as_str() {
-                    "pre" => SendTap::Pre,
-                    "post" => SendTap::Post,
-                    _ => return Err(invalid_config("unknown mixer send tap")),
+                tap: match send.tap {
+                    LiveMixerSendTap::Pre => SendTap::Pre,
+                    LiveMixerSendTap::Post => SendTap::Post,
+                    LiveMixerSendTap::PostPan => SendTap::PostPan,
                 },
                 level_db: send.level_db as f32,
                 pan: send.pan as f32,

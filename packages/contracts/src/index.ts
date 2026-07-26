@@ -598,7 +598,7 @@ export const DEFAULT_INSTRUMENT_COLOR = "#73D6A2"
 
 export type MixerChannelKind = "audio" | "instrument" | "bus" | "master" | "output"
 export type MixerInputFormat = "mono" | "stereo"
-export type MixerSendTap = "pre" | "post"
+export type MixerSendTap = "pre" | "post" | "post-pan"
 export type PluginKind = "effect" | "instrument"
 export type PluginInstanceRole = "instrument" | "insert"
 export type PluginCompatibility =

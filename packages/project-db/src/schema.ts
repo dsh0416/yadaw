@@ -253,7 +253,7 @@ export const mixerSends = pgTable(
       .references(() => mixerChannels.id, { onDelete: "cascade" }),
     sortOrder: integer("sort_order").notNull(),
     enabled: boolean("enabled").notNull().default(false),
-    tap: text("tap").$type<"pre" | "post">().notNull().default("post"),
+    tap: text("tap").$type<"pre" | "post" | "post-pan">().notNull().default("post-pan"),
     levelDb: doublePrecision("level_db").notNull().default(-90),
     pan: doublePrecision("pan").notNull().default(0)
   },
@@ -264,7 +264,7 @@ export const mixerSends = pgTable(
     ),
     index("mixer_sends_source_order").on(table.sourceChannelId, table.sortOrder),
     check("mixer_sends_sort_order_check", sql`${table.sortOrder} >= 0`),
-    check("mixer_sends_tap_check", sql`${table.tap} in ('pre', 'post')`),
+    check("mixer_sends_tap_check", sql`${table.tap} in ('pre', 'post', 'post-pan')`),
     check("mixer_sends_level_db_check", sql`${table.levelDb} between -90 and 12`),
     check("mixer_sends_pan_check", sql`${table.pan} between -1 and 1`),
     check(

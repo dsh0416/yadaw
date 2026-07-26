@@ -167,6 +167,29 @@ describe("mixer store", () => {
     expect(mixer.availableSendTargets("master")).toEqual([])
   })
 
+  it("creates new sends at the post-pan tap", async () => {
+    const initial = graph()
+    window.yadaw.executeProjectCommand = vi
+      .fn()
+      .mockImplementation((command) => Promise.resolve({ graph: initial, inverse: command }))
+    const mixer = useMixerStore()
+    mixer.graph = initial
+
+    await mixer.addSend("audio", "bus-b")
+
+    expect(window.yadaw.executeProjectCommand).toHaveBeenCalledWith({
+      type: "create-send",
+      send: expect.objectContaining({
+        sourceChannelId: "audio",
+        targetChannelId: "bus-b",
+        enabled: false,
+        tap: "post-pan",
+        levelDb: -90,
+        pan: 0
+      })
+    })
+  })
+
   it("uses one default color per channel type and still accepts custom colors", async () => {
     const initial = graph()
     window.yadaw.executeProjectCommand = vi

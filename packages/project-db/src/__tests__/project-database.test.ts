@@ -119,6 +119,25 @@ describe("ProjectDatabase", () => {
     await database.applyCommand({ type: "create-channel", channel: bus }, "output-1-2")
     await database.applyCommand(
       {
+        type: "create-send",
+        send: {
+          id: "post-pan-send",
+          sourceChannelId: "audio-1",
+          targetChannelId: bus.id,
+          sortOrder: 0,
+          enabled: true,
+          tap: "post-pan",
+          levelDb: -3,
+          pan: 0.25
+        }
+      },
+      "output-1-2"
+    )
+    expect((await database.mixerSnapshot()).sends).toContainEqual(
+      expect.objectContaining({ id: "post-pan-send", tap: "post-pan" })
+    )
+    await database.applyCommand(
+      {
         type: "update-channel",
         channelId: "audio-1",
         patch: { outputChannelId: bus.id }

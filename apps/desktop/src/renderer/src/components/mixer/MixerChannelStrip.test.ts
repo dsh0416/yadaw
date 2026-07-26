@@ -47,8 +47,13 @@ describe("MixerChannelStrip", () => {
             hardwareOutputChannels: [1, 2]
           }
         ],
-        selected: false,
-        density: "full"
+        buses: [],
+        sendTargets: [],
+        plugins: [],
+        pluginRuntime: {},
+        pluginSlotRows: 4,
+        sendSlotRows: 2,
+        selected: false
       },
       global: { plugins: [createPinia()] }
     })
@@ -162,6 +167,19 @@ describe("MixerChannelStrip", () => {
       wrapper.get('button[aria-label="Input monitoring unavailable"]').attributes("disabled")
     ).toBeDefined()
     expect(wrapper.find(".pan-heading").exists()).toBe(false)
+    expect(
+      wrapper.findAll("[data-section]").map((section) => section.attributes("data-section"))
+    ).toEqual([
+      "input",
+      "plugins",
+      "sends",
+      "output",
+      "group",
+      "automation",
+      "pan",
+      "volume",
+      "name"
+    ])
     expect(wrapper.findAll(".fader-scale .db-scale-mark").map((mark) => mark.text())).toEqual([
       "+12",
       "0",
@@ -207,8 +225,13 @@ describe("MixerChannelStrip", () => {
           clipped: false
         },
         outputs: [],
-        selected: true,
-        density: "full"
+        buses: [],
+        sendTargets: [],
+        plugins: [],
+        pluginRuntime: {},
+        pluginSlotRows: 4,
+        sendSlotRows: 2,
+        selected: true
       },
       global: { plugins: [createPinia()] }
     })
@@ -246,8 +269,13 @@ describe("MixerChannelStrip", () => {
           clipped: false
         },
         outputs: [],
-        selected: false,
-        density: "full"
+        buses: [],
+        sendTargets: [],
+        plugins: [],
+        pluginRuntime: {},
+        pluginSlotRows: 4,
+        sendSlotRows: 2,
+        selected: false
       },
       global: { plugins: [createPinia()] }
     })

@@ -351,7 +351,7 @@ export const useMixerStore = defineStore("mixer", () => {
         (candidate) => candidate.sourceChannelId === sourceChannelId
       ).length,
       enabled: false,
-      tap: "post",
+      tap: "post-pan",
       levelDb: -90,
       pan: 0
     }
@@ -413,7 +413,7 @@ export const useMixerStore = defineStore("mixer", () => {
         targetChannelId: target.id,
         sortOrder: 0,
         enabled: false,
-        tap: "post",
+        tap: "post-pan",
         levelDb: -90,
         pan: 0
       })

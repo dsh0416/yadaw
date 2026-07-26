@@ -3,8 +3,7 @@ import { onBeforeUnmount, onMounted } from "vue"
 import { useEventListener } from "@vueuse/core"
 import { storeToRefs } from "pinia"
 import { useRouter } from "vue-router"
-import ChannelRoutingInspector from "../components/mixer/ChannelRoutingInspector.vue"
-import StudioPlaceholderPanel from "../components/studio/StudioPlaceholderPanel.vue"
+import SoundBrowser from "../components/studio/SoundBrowser.vue"
 import StudioStatusbar from "../components/studio/StudioStatusbar.vue"
 import StudioTopbar from "../components/studio/StudioTopbar.vue"
 import StudioWorkspace from "../components/studio/StudioWorkspace.vue"
@@ -18,6 +17,7 @@ import { useStudioWorkspaceStore } from "../stores/studioWorkspace"
 import { useStudioWorkflowStore } from "../stores/studioWorkflow"
 import { useMidiImportStore } from "../stores/midiImport"
 import MidiImportDialog from "../components/midi/MidiImportDialog.vue"
+import GenericPluginParameterDialog from "../components/plugins/GenericPluginParameterDialog.vue"
 import { replaceTempoEventAtTick, secondsToTick } from "../utils/tempoMap"
 
 const router = useRouter()
@@ -36,7 +36,7 @@ const mixerStore = useMixerStore()
 const workspaceStore = useStudioWorkspaceStore()
 const studioWorkflowStore = useStudioWorkflowStore()
 const midiImportStore = useMidiImportStore()
-const { session } = storeToRefs(projectStore)
+const { session, projectAssets } = storeToRefs(projectStore)
 const {
   active: activeRecording,
   busy: recordingBusy,
@@ -119,8 +119,7 @@ function handleShortcut(event: KeyboardEvent): void {
     void toggleRecording()
   } else if (event.code === "KeyM") {
     event.preventDefault()
-    if (workspaceStore.mode === "mixer") workspaceStore.showArrangement()
-    else workspaceStore.showMixer()
+    workspaceStore.toggleMixerDock()
   }
 }
 
@@ -155,27 +154,27 @@ onBeforeUnmount(() => {
       @import-midi="midiImportStore.prepare()"
       @update-tempo="updateCurrentTempo"
     />
-    <StudioPlaceholderPanel side="left" />
+    <SoundBrowser :assets="projectAssets" />
     <StudioWorkspace
       :recording-id="activeRecording?.id ?? null"
       :recording-started-at="activeRecording?.startedAt ?? null"
       :recording-start-frame="activeRecording?.startFrame ?? null"
       :recording-error="recordingError"
     />
-    <ChannelRoutingInspector />
     <StudioStatusbar
       :runtime="audioRuntime"
       :statistics="audioStatistics"
       :audio-warnings="audioWarnings"
     />
     <MidiImportDialog />
+    <GenericPluginParameterDialog />
   </main>
 </template>
 
 <style scoped>
 .studio-shell {
   display: grid;
-  grid-template: 56px minmax(0, 1fr) 25px/214px minmax(0, 1fr) 258px;
+  grid-template: 56px minmax(0, 1fr) 25px/214px minmax(0, 1fr);
   width: 100vw;
   height: 100vh;
   color: var(--text-primary);
@@ -190,7 +189,7 @@ onBeforeUnmount(() => {
 }
 @media (max-width: 1100px) {
   .studio-shell {
-    grid-template-columns: 184px minmax(0, 1fr) 228px;
+    grid-template-columns: 184px minmax(0, 1fr);
   }
 }
 </style>

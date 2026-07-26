@@ -276,13 +276,21 @@ pub struct LiveMixerChannel {
     pub hardware_output_channels: Vec<u32>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum LiveMixerSendTap {
+    Pre,
+    Post,
+    PostPan,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LiveMixerSend {
     pub id: String,
     pub source_channel_id: String,
     pub target_channel_id: String,
     pub enabled: bool,
-    pub tap: String,
+    pub tap: LiveMixerSendTap,
     pub level_db: f64,
     pub pan: f64,
 }
@@ -773,6 +781,25 @@ mod tests {
                 .bytes()
                 .all(|byte| byte.is_ascii_hexdigit())
         );
+    }
+
+    #[test]
+    fn mixer_send_taps_use_stable_kebab_case_wire_values() {
+        for (tap, wire_value) in [
+            (LiveMixerSendTap::Pre, "pre"),
+            (LiveMixerSendTap::Post, "post"),
+            (LiveMixerSendTap::PostPan, "post-pan"),
+        ] {
+            let bytes = rmp_serde::to_vec(&tap).unwrap();
+            assert_eq!(rmp_serde::from_slice::<String>(&bytes).unwrap(), wire_value);
+            assert_eq!(
+                rmp_serde::from_slice::<LiveMixerSendTap>(&bytes).unwrap(),
+                tap
+            );
+        }
+
+        let unknown = rmp_serde::to_vec(&"unknown").unwrap();
+        assert!(rmp_serde::from_slice::<LiveMixerSendTap>(&unknown).is_err());
     }
 
     #[test]
