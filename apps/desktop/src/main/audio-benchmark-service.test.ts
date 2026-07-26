@@ -3,11 +3,11 @@ import { classifyAudioBenchmark } from "./audio-benchmark-service"
 
 describe("classifyAudioBenchmark", () => {
   it.each([
-    [1.99, "limited"],
-    [2, "basic"],
-    [4, "good"],
-    [8, "excellent"]
-  ] as const)("classifies %s× real-time headroom as %s", (factor, rating) => {
-    expect(classifyAudioBenchmark(factor)).toBe(rating)
+    [70.01, "limited"],
+    [70, "basic"],
+    [40, "good"],
+    [20, "excellent"]
+  ] as const)("classifies %s%% p99 deadline use as %s", (utilization, rating) => {
+    expect(classifyAudioBenchmark(utilization)).toBe(rating)
   })
 })

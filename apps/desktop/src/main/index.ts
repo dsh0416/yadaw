@@ -540,7 +540,8 @@ function registerIpcHandlers(
 
   ipcMain.handle(IPC_CHANNELS.audioBenchmarkRun, (event) => {
     assertTrustedSender(event)
-    return createAudioBenchmarkReport()
+    if (!audioHostService) throw new Error("Audio host is not running")
+    return createAudioBenchmarkReport(audioHostService)
   })
 
   ipcMain.handle(IPC_CHANNELS.settingsGet, (event) => {

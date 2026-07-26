@@ -3,7 +3,8 @@ import { computed, onMounted, useTemplateRef } from "vue"
 import type {
   AudioBenchmarkRating,
   AudioBenchmarkReport,
-  AudioBenchmarkScenario
+  AudioBenchmarkScenario,
+  AudioIpcBenchmarkScenario
 } from "@yadaw/contracts"
 import type { AudioBenchmarkStatus } from "../../stores/audioBenchmark"
 
@@ -49,7 +50,29 @@ function format(value: number, digits = 1): string {
 }
 
 function budgetUsePercent(scenario: AudioBenchmarkScenario): number {
-  return Math.min(100, scenario.averageBlockMs / scenario.bufferBudgetMs * 100)
+  return Math.min(100, scenario.p99DeadlineUtilizationPercent)
+}
+
+function deadlineHeadroom(report: AudioBenchmarkReport): number {
+  return Math.max(0, 100 - report.worstP99DeadlineUtilizationPercent)
+}
+
+function formatLatency(value: number | null): string {
+  if (value === null) return "—"
+  return value >= 1_000 ? `${format(value / 1_000, 2)} ms` : `${format(value, 1)} µs`
+}
+
+function formatPayload(bytes: number): string {
+  if (bytes === 0) return "shared page"
+  if (bytes >= 1024 * 1024) return `${format(bytes / (1024 * 1024), 1)} MiB`
+  if (bytes >= 1024) return `${format(bytes / 1024, bytes % 1024 === 0 ? 0 : 1)} KiB`
+  return `${bytes} B`
+}
+
+function ipcRate(scenario: AudioIpcBenchmarkScenario): string {
+  return scenario.throughputMiBPerSecond === null
+    ? `${format(scenario.operationsPerSecond / 1_000, 1)}k reads/s`
+    : `${format(scenario.throughputMiBPerSecond, 1)} MiB/s`
 }
 
 function handleKeydown(event: KeyboardEvent): void {
@@ -83,10 +106,10 @@ onMounted(() => dialog.value?.focus())
         <span class="signal-bus">DSP</span>
         <span class="signal-output" />
       </div>
-      <h3>Measure native DSP headroom</h3>
+      <h3>Measure DSP deadlines and IPC</h3>
       <p>
-        YADAW will render three increasingly dense sessions through the native mixer.
-        The test takes about a second and does not use your audio devices.
+        YADAW will measure block deadline stability, shared-memory transfers,
+        concurrent request routing, and telemetry reads. It does not use your audio devices.
       </p>
       <div class="notice">
         <span>Before you run it</span>
@@ -100,22 +123,30 @@ onMounted(() => dialog.value?.focus())
         <span v-for="lane in 3" :key="lane" :style="{ '--lane': lane }" />
       </div>
       <span class="kicker">MEASURING</span>
-      <h3>Rendering reference sessions…</h3>
-      <p>Low-latency tracking · Production mix · Dense session</p>
+      <h3>Measuring engine paths…</h3>
+      <p>Block deadlines · IPC round trips · Shared pages</p>
       <div class="progress-track"><span /></div>
     </div>
 
     <div v-else-if="status === 'complete' && report && rating" class="report-state">
       <section class="score-panel" :class="`rating-${report.rating}`">
         <div class="score-copy">
-          <span class="kicker">SLOWEST SCENARIO</span>
-          <strong>{{ format(report.overallRealtimeFactor) }}<small>× real time</small></strong>
+          <span class="kicker">WORST P99 DEADLINE</span>
+          <strong>{{ format(deadlineHeadroom(report), 0) }}<small>% headroom</small></strong>
         </div>
         <div class="rating-copy">
           <span>{{ rating.label }}</span>
           <p>{{ rating.summary }}</p>
         </div>
       </section>
+
+      <div class="result-heading">
+        <div>
+          <span class="kicker">REAL-TIME DSP</span>
+          <h3>Block deadline stability</h3>
+        </div>
+        <small>p99 timing is primary · real-time factor is diagnostic</small>
+      </div>
 
       <div class="scenario-list">
         <article v-for="scenario in report.scenarios" :key="scenario.id" class="scenario-card">
@@ -124,7 +155,7 @@ onMounted(() => dialog.value?.focus())
               <h3>{{ scenario.label }}</h3>
               <p>{{ scenario.description }}</p>
             </div>
-            <strong>{{ format(scenario.realtimeFactor) }}×</strong>
+            <strong>{{ format(scenario.p99BlockMs, 3) }}<small> ms p99</small></strong>
           </header>
           <div class="timing-lane">
             <span class="timing-fill" :style="{ width: `${budgetUsePercent(scenario)}%` }" />
@@ -135,9 +166,39 @@ onMounted(() => dialog.value?.focus())
             <span>{{ scenario.buses }} buses</span>
             <span>{{ scenario.sends }} sends</span>
             <span>{{ scenario.blockSize }} samples</span>
-            <span>{{ format(scenario.averageBlockMs, 3) }} ms / block</span>
+            <span>{{ format(scenario.bufferBudgetMs, 3) }} ms budget</span>
+            <span>{{ scenario.deadlineMisses }} / {{ scenario.measuredBlocks }} late</span>
+            <span>{{ format(scenario.realtimeFactor) }}× real time</span>
           </div>
         </article>
+      </div>
+
+      <div class="result-heading ipc-heading">
+        <div>
+          <span class="kicker">PROCESS BOUNDARY</span>
+          <h3>IPC transport</h3>
+        </div>
+        <small>{{ format(report.ipc.durationMs, 0) }} ms suite</small>
+      </div>
+
+      <div class="ipc-table">
+        <div class="ipc-row ipc-table-header" aria-hidden="true">
+          <span>Path</span>
+          <span>Payload</span>
+          <span>P50</span>
+          <span>P99</span>
+          <span>Rate</span>
+        </div>
+        <div v-for="scenario in report.ipc.scenarios" :key="scenario.id" class="ipc-row">
+          <span class="ipc-name">
+            <strong>{{ scenario.label }}</strong>
+            <small>{{ scenario.description }}</small>
+          </span>
+          <span>{{ formatPayload(scenario.payloadBytes) }}</span>
+          <span>{{ formatLatency(scenario.latencyP50Us) }}</span>
+          <span>{{ formatLatency(scenario.latencyP99Us) }}</span>
+          <span class="ipc-rate">{{ ipcRate(scenario) }}</span>
+        </div>
       </div>
 
       <footer class="report-footer">
@@ -167,7 +228,7 @@ onMounted(() => dialog.value?.focus())
 
 <style scoped>
 .benchmark-dialog {
-  width: min(760px, calc(100vw - 48px));
+  width: min(860px, calc(100vw - 48px));
   max-height: calc(100vh - 56px);
   overflow: auto;
   border: 1px solid #303b4c;
@@ -473,7 +534,26 @@ onMounted(() => dialog.value?.focus())
 .scenario-list {
   display: grid;
   gap: 8px;
-  margin-top: 14px;
+}
+
+.result-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin: 22px 2px 10px;
+}
+
+.result-heading h3 {
+  margin: 5px 0 0;
+  font: 600 13px var(--font-display);
+}
+
+.result-heading > small {
+  color: var(--text-faint);
+  font: 7px var(--font-utility);
+  text-transform: uppercase;
+  letter-spacing: .04em;
 }
 
 .scenario-card {
@@ -504,6 +584,12 @@ onMounted(() => dialog.value?.focus())
 .scenario-card header strong {
   color: var(--signal-cyan);
   font: 600 18px var(--font-display);
+}
+
+.scenario-card header strong small {
+  color: var(--text-faint);
+  font: 7px var(--font-utility);
+  text-transform: uppercase;
 }
 
 .timing-lane {
@@ -540,6 +626,69 @@ onMounted(() => dialog.value?.focus())
   font: 7px var(--font-utility);
   text-transform: uppercase;
   letter-spacing: .04em;
+}
+
+.ipc-heading {
+  margin-top: 24px;
+}
+
+.ipc-table {
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #090f17;
+  overflow: hidden;
+}
+
+.ipc-row {
+  display: grid;
+  grid-template-columns: minmax(210px, 1.7fr) .65fr .65fr .65fr .8fr;
+  align-items: center;
+  min-height: 42px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.ipc-row:first-child {
+  border-top: 0;
+}
+
+.ipc-row > span {
+  padding: 8px 10px;
+  color: var(--text-muted);
+  font: 8px var(--font-utility);
+  font-variant-numeric: tabular-nums;
+}
+
+.ipc-table-header {
+  min-height: 28px;
+  background: #101823;
+}
+
+.ipc-table-header > span {
+  color: var(--text-faint);
+  font-size: 7px;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+}
+
+.ipc-name strong,
+.ipc-name small {
+  display: block;
+}
+
+.ipc-name strong {
+  color: var(--text-secondary);
+  font: 600 9px var(--font-display);
+}
+
+.ipc-name small {
+  margin-top: 3px;
+  color: var(--text-faint);
+  font-size: 7px;
+  line-height: 1.35;
+}
+
+.ipc-row .ipc-rate {
+  color: var(--signal-cyan);
 }
 
 .report-footer {
@@ -607,5 +756,7 @@ onMounted(() => dialog.value?.focus())
   .score-copy { border-right: 0; border-bottom: 1px solid #34374e; }
   .report-footer { align-items: stretch; flex-direction: column; }
   .report-actions { justify-content: flex-end; }
+  .ipc-table { overflow-x: auto; }
+  .ipc-row { min-width: 720px; }
 }
 </style>

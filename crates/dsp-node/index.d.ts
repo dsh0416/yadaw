@@ -16,6 +16,7 @@ export interface NativeAnalyzedWaveform {
 export interface NativeAudioBenchmarkReport {
   durationMs: number
   overallRealtimeFactor: number
+  worstP99DeadlineUtilizationPercent: number
   scenarios: Array<NativeAudioBenchmarkScenario>
 }
 
@@ -31,7 +32,13 @@ export interface NativeAudioBenchmarkScenario {
   elapsedMs: number
   audioDurationMs: number
   averageBlockMs: number
+  p95BlockMs: number
+  p99BlockMs: number
+  maxBlockMs: number
   bufferBudgetMs: number
+  p99DeadlineUtilizationPercent: number
+  deadlineMisses: number
+  measuredBlocks: number
   realtimeFactor: number
 }
 

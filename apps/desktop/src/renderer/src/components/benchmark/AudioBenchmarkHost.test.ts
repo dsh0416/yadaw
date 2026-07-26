@@ -33,6 +33,7 @@ describe("AudioBenchmarkHost", () => {
       measuredAt: 1,
       durationMs: 600,
       overallRealtimeFactor: 3,
+      worstP99DeadlineUtilizationPercent: 50,
       rating: "basic",
       system: {
         cpuModel: "Host Test CPU",
@@ -40,7 +41,8 @@ describe("AudioBenchmarkHost", () => {
         platform: "test",
         architecture: "x64"
       },
-      scenarios: []
+      scenarios: [],
+      ipc: { durationMs: 80, scenarios: [] }
     })
 
     const pinia = createPinia()
@@ -54,7 +56,7 @@ describe("AudioBenchmarkHost", () => {
     await flushPromises()
 
     expect(window.yadaw.runAudioBenchmark).toHaveBeenCalledOnce()
-    expect(document.body.textContent).toContain("3.0× real time")
+    expect(document.body.textContent).toContain("50% headroom")
     wrapper.unmount()
   })
 })

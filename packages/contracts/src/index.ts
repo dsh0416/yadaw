@@ -385,8 +385,41 @@ export interface AudioBenchmarkScenario {
   elapsedMs: number
   audioDurationMs: number
   averageBlockMs: number
+  p95BlockMs: number
+  p99BlockMs: number
+  maxBlockMs: number
   bufferBudgetMs: number
+  p99DeadlineUtilizationPercent: number
+  deadlineMisses: number
+  measuredBlocks: number
   realtimeFactor: number
+}
+
+export type AudioIpcBenchmarkKind =
+  | "inline-round-trip"
+  | "shared-round-trip"
+  | "concurrent-routing"
+  | "telemetry-read"
+
+export interface AudioIpcBenchmarkScenario {
+  id: string
+  label: string
+  description: string
+  kind: AudioIpcBenchmarkKind
+  payloadBytes: number
+  iterations: number
+  concurrency: number
+  elapsedMs: number
+  operationsPerSecond: number
+  throughputMiBPerSecond: number | null
+  latencyP50Us: number | null
+  latencyP95Us: number | null
+  latencyP99Us: number | null
+}
+
+export interface AudioIpcBenchmarkReport {
+  durationMs: number
+  scenarios: readonly AudioIpcBenchmarkScenario[]
 }
 
 export interface AudioBenchmarkSystemInfo {
@@ -400,9 +433,11 @@ export interface AudioBenchmarkReport {
   measuredAt: number
   durationMs: number
   overallRealtimeFactor: number
+  worstP99DeadlineUtilizationPercent: number
   rating: AudioBenchmarkRating
   system: AudioBenchmarkSystemInfo
   scenarios: readonly AudioBenchmarkScenario[]
+  ipc: AudioIpcBenchmarkReport
 }
 
 export const AUDIO_BACKENDS = ["wasapi", "asio", "coreaudio", "alsa"] as const

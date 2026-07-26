@@ -24,16 +24,24 @@ runs the real-time allocation invariants.
 The packaged desktop application also exposes a short native DSP test from
 **Help → Audio Performance Benchmark…**. Unlike the Criterion suite, this test
 does not require a Rust toolchain or repository checkout. It renders three
-reference mixer graphs on a worker thread and reports:
+reference mixer graphs on a worker thread, then runs an IPC suite against the
+live audio helper. The two suites run sequentially so they do not distort each
+other. The report includes:
 
-- real-time headroom for low-latency tracking, production mix, and dense-session
-  scenarios;
-- average processing time compared with each scenario's audio buffer deadline;
+- p95, p99, maximum block processing time, deadline utilization, and deadline
+  misses for low-latency tracking, production mix, and dense-session scenarios;
+- real-time factor as a secondary diagnostic rather than the score;
+- inline and shared-memory round-trip latency and throughput at the 64 KiB
+  boundary and for a 4 MiB plug-in-state-shaped payload;
+- concurrent request routing and synchronous telemetry-page read throughput;
 - the processor, logical-core count, platform, and measurement time.
 
-This report helps users choose practical project density and buffer settings on
-their own computer. It does not open an audio device and is not a substitute for
-the repeatable Criterion regression suite.
+The headline rating is based on the worst p99 block-deadline utilization.
+Real-time factor alone can make a deliberately heavy graph look informative
+while hiding jitter that actually causes dropouts. This report helps users
+evaluate both practical buffer stability and process-boundary overhead. It does
+not open an audio device and is not a substitute for the repeatable Criterion
+regression suite.
 
 Criterion writes HTML indexes to
 `crates/dsp-core/target/criterion/report/index.html` and
@@ -63,12 +71,23 @@ must be reproduced before it is treated as actionable. The seek refill
 benchmark intentionally includes worker wake-up and filesystem cache behavior;
 it is not a claim about cold-disk latency.
 
-## Real-time interpretation
+## Deadline and throughput interpretation
 
-At 48 kHz the engine must sustain at least 48,000 rendered frames per second; at
-96 kHz it must sustain at least 96,000. Divide the reported throughput by the
-sample rate to estimate real-time headroom. For example, 2,400,000 frames/s at
-48 kHz is approximately 50 times real time.
+For live playback, a block must finish before its buffer deadline. Average block
+time and aggregate real-time factor can hide occasional slow blocks, so use p99
+deadline utilization and deadline misses as the first stability signal. A p99
+utilization of 30% means 99% of measured blocks completed within roughly 30% of
+the available callback budget.
+
+IPC latency and throughput answer different questions. Small inline payloads
+show request-routing overhead, shared payloads show large-state transfer cost,
+the concurrent case exercises request-ID routing, and telemetry reads represent
+the 30 Hz meter/transport polling path. Shared-memory results still include the
+intentional single copy at the native-addon/Node Buffer boundary.
+
+At 48 kHz the engine must still sustain at least 48,000 rendered frames per
+second; at 96 kHz it must sustain at least 96,000. Divide frame throughput by
+sample rate to estimate real-time factor, but treat it as supporting context.
 
 Criterion measures timing distributions, while the allocation integration test
 enforces a separate invariant: after warm-up, mixer processing, in-memory

@@ -127,6 +127,9 @@ pub enum PriorityResult {
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum ControlCommand {
     Ping,
+    BenchmarkEcho {
+        payload: BinaryPayload,
+    },
     Shutdown,
     ListAudioBackends,
     ListAudioDevices {
@@ -591,6 +594,9 @@ pub struct ControlResponse {
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum ControlResult {
     Pong,
+    BenchmarkEcho {
+        payload: BinaryPayload,
+    },
     Heartbeat {
         ipc_generation: u64,
         tokio_generation: u64,

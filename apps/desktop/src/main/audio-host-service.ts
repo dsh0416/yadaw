@@ -4,6 +4,8 @@ import { AudioHostIpcClient } from "@yadaw/audio-host-client"
 import type {
   AudioBackendDescriptor,
   AudioDeviceList,
+  AudioIpcBenchmarkReport,
+  AudioIpcBenchmarkScenario,
   AudioIpcPerformanceSnapshot,
   AudioPreferences,
   AudioRuntimeSnapshot,
@@ -29,6 +31,7 @@ interface ControlResponse {
   result: {
     type:
       | "pong"
+      | "benchmark-echo"
       | "heartbeat"
       | "accepted"
       | "audio-backends"
@@ -68,6 +71,7 @@ interface ControlResponse {
     }>
     component_state?: BinaryPayloadWire
     controller_state?: BinaryPayloadWire
+    payload?: BinaryPayloadWire
     editor_kind?: string
     open?: boolean
     backends?: AudioBackendDescriptor[]
@@ -222,6 +226,12 @@ function inlineBinary(bytes: Uint8Array): BinaryPayloadWire {
 
 function binaryBytes(payload?: BinaryPayloadWire): Uint8Array {
   return payload?.storage === "inline" ? payload.bytes : new Uint8Array()
+}
+
+function percentile(values: readonly number[], fraction: number): number {
+  if (values.length === 0) return 0
+  const sorted = [...values].sort((left, right) => left - right)
+  return sorted[Math.round(Math.max(0, Math.min(1, fraction)) * (sorted.length - 1))] ?? 0
 }
 
 export interface AudioHostGraph {
@@ -744,6 +754,182 @@ export class AudioHostService {
     const client = this.client
     if (!client) throw new Error("audio host is not running")
     return decode(client.readTelemetry()) as TelemetryWire
+  }
+
+  async runIpcBenchmark(): Promise<AudioIpcBenchmarkReport> {
+    const started = performance.now()
+    const scenarios: AudioIpcBenchmarkScenario[] = []
+    scenarios.push(await this.measureEchoRoundTrip(
+      "inline-control",
+      "Inline control payload",
+      "256-byte MessagePack request/reply through the helper router",
+      "inline-round-trip",
+      256,
+      200,
+      8
+    ))
+    scenarios.push(await this.measureEchoRoundTrip(
+      "inline-threshold",
+      "Inline threshold",
+      "64 KiB payload at the inline/shared-memory boundary",
+      "inline-round-trip",
+      64 * 1024,
+      80,
+      4
+    ))
+    scenarios.push(await this.measureEchoRoundTrip(
+      "shared-threshold",
+      "Shared-memory threshold",
+      "64 KiB + 1 byte payload using an IpcSharedMemory attachment",
+      "shared-round-trip",
+      64 * 1024 + 1,
+      80,
+      4
+    ))
+    scenarios.push(await this.measureEchoRoundTrip(
+      "shared-plugin-state",
+      "Large shared state",
+      "4 MiB payload representative of a large plug-in state",
+      "shared-round-trip",
+      4 * 1024 * 1024,
+      12,
+      2
+    ))
+    scenarios.push(await this.measureConcurrentRouting())
+    scenarios.push(this.measureTelemetryReads())
+    return {
+      durationMs: performance.now() - started,
+      scenarios
+    }
+  }
+
+  private async measureEchoRoundTrip(
+    id: string,
+    label: string,
+    description: string,
+    kind: "inline-round-trip" | "shared-round-trip",
+    payloadBytes: number,
+    iterations: number,
+    warmupIterations: number
+  ): Promise<AudioIpcBenchmarkScenario> {
+    const payload = new Uint8Array(payloadBytes)
+    payload.fill(0xa5)
+    const echo = async (): Promise<void> => {
+      const response = await this.request({
+        type: "benchmark-echo",
+        payload: inlineBinary(payload)
+      })
+      if (
+        response.result.type !== "benchmark-echo" ||
+        binaryBytes(response.result.payload).byteLength !== payloadBytes
+      ) {
+        throw new Error("audio host returned an invalid benchmark echo")
+      }
+    }
+    for (let index = 0; index < warmupIterations; index += 1) await echo()
+    const latencyUs: number[] = []
+    const started = performance.now()
+    for (let index = 0; index < iterations; index += 1) {
+      const iterationStarted = performance.now()
+      await echo()
+      latencyUs.push((performance.now() - iterationStarted) * 1_000)
+    }
+    const elapsedMs = performance.now() - started
+    return this.ipcScenario({
+      id,
+      label,
+      description,
+      kind,
+      payloadBytes,
+      iterations,
+      concurrency: 1,
+      elapsedMs,
+      latencyUs
+    })
+  }
+
+  private async measureConcurrentRouting(): Promise<AudioIpcBenchmarkScenario> {
+    const concurrency = 128
+    const payload = new Uint8Array(256)
+    const latencyUs: number[] = []
+    const started = performance.now()
+    await Promise.all(Array.from({ length: concurrency }, async () => {
+      const requestStarted = performance.now()
+      const response = await this.request({
+        type: "benchmark-echo",
+        payload: inlineBinary(payload)
+      })
+      latencyUs.push((performance.now() - requestStarted) * 1_000)
+      if (response.result.type !== "benchmark-echo") {
+        throw new Error("audio host returned an invalid concurrent benchmark echo")
+      }
+    }))
+    const elapsedMs = performance.now() - started
+    return this.ipcScenario({
+      id: "concurrent-router",
+      label: "Concurrent response routing",
+      description: "128 simultaneous requests resolved by request ID",
+      kind: "concurrent-routing",
+      payloadBytes: payload.byteLength,
+      iterations: concurrency,
+      concurrency,
+      elapsedMs,
+      latencyUs
+    })
+  }
+
+  private measureTelemetryReads(): AudioIpcBenchmarkScenario {
+    const iterations = 10_000
+    const latencyUs: number[] = []
+    const started = performance.now()
+    for (let index = 0; index < iterations; index += 1) {
+      const iterationStarted = performance.now()
+      this.readTelemetry()
+      latencyUs.push((performance.now() - iterationStarted) * 1_000)
+    }
+    return this.ipcScenario({
+      id: "telemetry-page",
+      label: "Telemetry shared page",
+      description: "Synchronous seqlock reads through the native addon",
+      kind: "telemetry-read",
+      payloadBytes: 0,
+      iterations,
+      concurrency: 1,
+      elapsedMs: performance.now() - started,
+      latencyUs
+    })
+  }
+
+  private ipcScenario(input: {
+    id: string
+    label: string
+    description: string
+    kind: AudioIpcBenchmarkScenario["kind"]
+    payloadBytes: number
+    iterations: number
+    concurrency: number
+    elapsedMs: number
+    latencyUs: readonly number[]
+  }): AudioIpcBenchmarkScenario {
+    const elapsedSeconds = input.elapsedMs / 1_000
+    const transferredBytes = input.payloadBytes * input.iterations * 2
+    return {
+      id: input.id,
+      label: input.label,
+      description: input.description,
+      kind: input.kind,
+      payloadBytes: input.payloadBytes,
+      iterations: input.iterations,
+      concurrency: input.concurrency,
+      elapsedMs: input.elapsedMs,
+      operationsPerSecond: input.iterations / Math.max(elapsedSeconds, Number.EPSILON),
+      throughputMiBPerSecond: input.payloadBytes === 0
+        ? null
+        : transferredBytes / (1024 * 1024) / Math.max(elapsedSeconds, Number.EPSILON),
+      latencyP50Us: percentile(input.latencyUs, 0.5),
+      latencyP95Us: percentile(input.latencyUs, 0.95),
+      latencyP99Us: percentile(input.latencyUs, 0.99)
+    }
   }
 
   performanceDiagnostics(): AudioIpcPerformanceSnapshot | null {

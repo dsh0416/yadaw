@@ -450,6 +450,9 @@ fn run_legacy() -> Result<(), Box<dyn std::error::Error>> {
         let request: ControlRequest = read_message(&mut input)?;
         let result = match validate_version(request.version) {
             Ok(()) => match request.command {
+                ControlCommand::BenchmarkEcho { payload } => {
+                    ControlResult::BenchmarkEcho { payload }
+                }
                 ControlCommand::Ping => {
                     if let Some(runtime) = vst3.as_ref() {
                         for (instance_id, latency, tail) in runtime.take_timing_changes() {
@@ -1361,13 +1364,18 @@ async fn run_protocol_actor(
                                 let _ = engine::stop_audio_engine();
                                 ControlResult::Accepted
                             }
-                            Ok(()) if is_vst3_command(&command) => {
-                                dispatch_actor(&vst3_sender, command).await
-                            }
-                            Ok(()) if is_background_io_command(&command) => {
-                                dispatch_actor(&background_sender, command).await
-                            }
-                            Ok(()) => dispatch_actor(&engine_sender, command).await,
+                            Ok(()) => match command {
+                                ControlCommand::BenchmarkEcho { payload } => {
+                                    ControlResult::BenchmarkEcho { payload }
+                                }
+                                command if is_vst3_command(&command) => {
+                                    dispatch_actor(&vst3_sender, command).await
+                                }
+                                command if is_background_io_command(&command) => {
+                                    dispatch_actor(&background_sender, command).await
+                                }
+                                command => dispatch_actor(&engine_sender, command).await,
+                            },
                         }
                     };
                     let result = match tokio::time::timeout(deadline, work).await {

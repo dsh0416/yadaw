@@ -319,6 +319,9 @@ pub fn encode_request(
     let lease_id = leases.next_lease_id();
     let mut builder = AttachmentBuilder::new(lease_id);
     match &mut request.command {
+        ControlCommand::BenchmarkEcho { payload } => {
+            externalize_binary(payload, &mut builder)?;
+        }
         ControlCommand::LoadPlugin {
             component_state,
             controller_state,
@@ -342,6 +345,9 @@ pub fn encode_response(
     let lease_id = leases.next_lease_id();
     let mut builder = AttachmentBuilder::new(lease_id);
     match &mut response.result {
+        ControlResult::BenchmarkEcho { payload } => {
+            externalize_binary(payload, &mut builder)?;
+        }
         ControlResult::RecordingWaveform { waveform } => {
             externalize_binary(&mut waveform.peaks, &mut builder)?;
         }
@@ -380,6 +386,9 @@ pub fn decode_request(packet: WirePacket) -> Result<(ControlRequest, Vec<u64>), 
     let mut request: ControlRequest = decode_body(&packet.body)?;
     let mut leases = HashSet::new();
     match &mut request.command {
+        ControlCommand::BenchmarkEcho { payload } => {
+            materialize_binary(payload, &packet.regions, &mut leases)?;
+        }
         ControlCommand::LoadPlugin {
             component_state,
             controller_state,
@@ -400,6 +409,9 @@ pub fn decode_response(packet: WirePacket) -> Result<(ControlResponse, Vec<u64>)
     let mut response: ControlResponse = decode_body(&packet.body)?;
     let mut leases = HashSet::new();
     match &mut response.result {
+        ControlResult::BenchmarkEcho { payload } => {
+            materialize_binary(payload, &packet.regions, &mut leases)?;
+        }
         ControlResult::RecordingWaveform { waveform } => {
             materialize_binary(&mut waveform.peaks, &packet.regions, &mut leases)?;
         }
@@ -1012,6 +1024,50 @@ mod tests {
             component_state.as_inline().map(<[u8]>::len),
             Some(INLINE_BLOB_LIMIT + 1)
         );
+    }
+
+    #[test]
+    fn benchmark_echo_uses_the_same_shared_memory_path_in_both_directions() {
+        let payload = vec![0xa5; INLINE_BLOB_LIMIT + 1];
+        let request = ControlRequest {
+            version: PROTOCOL_VERSION,
+            request_id: 42,
+            command: ControlCommand::BenchmarkEcho {
+                payload: BinaryPayload::inline(payload.clone()),
+            },
+        };
+        let mut request_leases = LeaseRegistry::new();
+        let request_packet = encode_request(request, &mut request_leases).unwrap();
+        assert_eq!(request_packet.regions.len(), 1);
+        let (decoded, release) = decode_request(request_packet).unwrap();
+        assert_eq!(release.len(), 1);
+        let ControlCommand::BenchmarkEcho {
+            payload: decoded_payload,
+        } = decoded.command
+        else {
+            panic!("wrong benchmark command");
+        };
+        assert_eq!(decoded_payload.as_inline(), Some(payload.as_slice()));
+
+        let response = ControlResponse {
+            version: PROTOCOL_VERSION,
+            request_id: 42,
+            result: ControlResult::BenchmarkEcho {
+                payload: decoded_payload,
+            },
+        };
+        let mut response_leases = LeaseRegistry::new();
+        let response_packet = encode_response(response, &mut response_leases).unwrap();
+        assert_eq!(response_packet.regions.len(), 1);
+        let (decoded, release) = decode_response(response_packet).unwrap();
+        assert_eq!(release.len(), 1);
+        let ControlResult::BenchmarkEcho {
+            payload: decoded_payload,
+        } = decoded.result
+        else {
+            panic!("wrong benchmark result");
+        };
+        assert_eq!(decoded_payload.as_inline(), Some(payload.as_slice()));
     }
 
     #[test]

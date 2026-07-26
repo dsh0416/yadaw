@@ -65,7 +65,13 @@ pub struct NativeAudioBenchmarkScenario {
     pub elapsed_ms: f64,
     pub audio_duration_ms: f64,
     pub average_block_ms: f64,
+    pub p95_block_ms: f64,
+    pub p99_block_ms: f64,
+    pub max_block_ms: f64,
     pub buffer_budget_ms: f64,
+    pub p99_deadline_utilization_percent: f64,
+    pub deadline_misses: u32,
+    pub measured_blocks: u32,
     pub realtime_factor: f64,
 }
 
@@ -73,7 +79,16 @@ pub struct NativeAudioBenchmarkScenario {
 pub struct NativeAudioBenchmarkReport {
     pub duration_ms: f64,
     pub overall_realtime_factor: f64,
+    pub worst_p99_deadline_utilization_percent: f64,
     pub scenarios: Vec<NativeAudioBenchmarkScenario>,
+}
+
+fn percentile(sorted: &[f64], percentile: f64) -> f64 {
+    if sorted.is_empty() {
+        return 0.0;
+    }
+    let index = (percentile.clamp(0.0, 1.0) * (sorted.len() - 1) as f64).round() as usize;
+    sorted[index]
 }
 
 fn build_graph(scenario: Scenario) -> MixerGraph {
@@ -169,10 +184,13 @@ fn measure_scenario(
     let started = Instant::now();
     let mut rendered_frames = 0_usize;
     let mut rendered_blocks = 0_usize;
+    let mut block_times_ms = Vec::new();
     while rendered_frames < max_virtual_frames {
+        let block_started = Instant::now();
         for _ in 0..scenario.block_frames {
             black_box(graph.process_frame(black_box(&inputs)));
         }
+        block_times_ms.push(block_started.elapsed().as_secs_f64() * 1_000.0);
         rendered_frames += scenario.block_frames;
         rendered_blocks += 1;
         if started.elapsed() >= target_time {
@@ -184,6 +202,14 @@ fn measure_scenario(
     let audio_duration_ms = rendered_frames as f64 / f64::from(SAMPLE_RATE) * 1_000.0;
     let average_block_ms = elapsed_ms / rendered_blocks.max(1) as f64;
     let buffer_budget_ms = scenario.block_frames as f64 / f64::from(SAMPLE_RATE) * 1_000.0;
+    block_times_ms.sort_by(f64::total_cmp);
+    let p95_block_ms = percentile(&block_times_ms, 0.95);
+    let p99_block_ms = percentile(&block_times_ms, 0.99);
+    let max_block_ms = block_times_ms.last().copied().unwrap_or_default();
+    let deadline_misses = block_times_ms
+        .iter()
+        .filter(|block_ms| **block_ms > buffer_budget_ms)
+        .count() as u32;
 
     NativeAudioBenchmarkScenario {
         id: scenario.id.to_owned(),
@@ -197,7 +223,13 @@ fn measure_scenario(
         elapsed_ms,
         audio_duration_ms,
         average_block_ms,
+        p95_block_ms,
+        p99_block_ms,
+        max_block_ms,
         buffer_budget_ms,
+        p99_deadline_utilization_percent: p99_block_ms / buffer_budget_ms * 100.0,
+        deadline_misses,
+        measured_blocks: rendered_blocks as u32,
         realtime_factor: audio_duration_ms / elapsed_ms.max(f64::EPSILON),
     }
 }
@@ -212,10 +244,15 @@ fn run_suite(target_time: Duration, max_virtual_frames: usize) -> NativeAudioBen
         .iter()
         .map(|scenario| scenario.realtime_factor)
         .fold(f64::INFINITY, f64::min);
+    let worst_p99_deadline_utilization_percent = scenarios
+        .iter()
+        .map(|scenario| scenario.p99_deadline_utilization_percent)
+        .fold(0.0, f64::max);
 
     NativeAudioBenchmarkReport {
         duration_ms: started.elapsed().as_secs_f64() * 1_000.0,
         overall_realtime_factor,
+        worst_p99_deadline_utilization_percent,
         scenarios,
     }
 }
@@ -263,9 +300,14 @@ mod tests {
         assert!(report.duration_ms > 0.0);
         assert!(report.overall_realtime_factor.is_finite());
         assert!(report.overall_realtime_factor > 0.0);
+        assert!(report.worst_p99_deadline_utilization_percent.is_finite());
         for result in report.scenarios {
             assert!(result.average_block_ms > 0.0);
+            assert!(result.p95_block_ms > 0.0);
+            assert!(result.p99_block_ms >= result.p95_block_ms);
+            assert!(result.max_block_ms >= result.p99_block_ms);
             assert!(result.buffer_budget_ms > 0.0);
+            assert!(result.deadline_misses <= result.measured_blocks);
             assert!(result.realtime_factor.is_finite());
         }
     }
