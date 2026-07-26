@@ -6,7 +6,7 @@ use std::{
 
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
-pub const PROTOCOL_VERSION: u16 = 3;
+pub const NATIVE_BUILD_FINGERPRINT: &str = env!("YADAW_NATIVE_BUILD_FINGERPRINT");
 pub const MAX_MESSAGE_BYTES: usize = 64 * 1024 * 1024;
 pub const INLINE_BLOB_LIMIT: usize = 64 * 1024;
 
@@ -84,14 +84,12 @@ pub enum HostEvent {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ControlRequest {
-    pub version: u16,
     pub request_id: u64,
     pub command: ControlCommand,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PriorityRequest {
-    pub version: u16,
     pub request_id: u64,
     pub command: PriorityCommand,
 }
@@ -109,7 +107,6 @@ pub enum PriorityCommand {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PriorityResponse {
-    pub version: u16,
     pub request_id: u64,
     pub result: PriorityResult,
 }
@@ -606,7 +603,6 @@ pub struct PluginParameter {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ControlResponse {
-    pub version: u16,
     pub request_id: u64,
     pub result: ControlResult,
 }
@@ -681,7 +677,6 @@ pub enum ProtocolError {
     Encode(rmp_serde::encode::Error),
     Decode(rmp_serde::decode::Error),
     MessageTooLarge(usize),
-    VersionMismatch(u16),
 }
 
 impl fmt::Display for ProtocolError {
@@ -692,9 +687,6 @@ impl fmt::Display for ProtocolError {
             Self::Decode(error) => write!(formatter, "helper message decoding failed: {error}"),
             Self::MessageTooLarge(size) => {
                 write!(formatter, "helper message exceeds 64 MiB: {size}")
-            }
-            Self::VersionMismatch(version) => {
-                write!(formatter, "unsupported helper protocol version {version}")
             }
         }
     }
@@ -734,14 +726,6 @@ pub fn read_message<T: DeserializeOwned>(reader: &mut impl Read) -> Result<T, Pr
     rmp_serde::from_slice(&payload).map_err(ProtocolError::Decode)
 }
 
-pub fn validate_version(version: u16) -> Result<(), ProtocolError> {
-    if version == PROTOCOL_VERSION {
-        Ok(())
-    } else {
-        Err(ProtocolError::VersionMismatch(version))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -749,7 +733,6 @@ mod tests {
     #[test]
     fn messagepack_frame_round_trips() {
         let request = ControlRequest {
-            version: PROTOCOL_VERSION,
             request_id: 42,
             command: ControlCommand::UpdateGraph {
                 update: GraphUpdate::Replace {
@@ -779,6 +762,16 @@ mod tests {
         assert_eq!(
             read_message::<ControlRequest>(&mut bytes.as_slice()).unwrap(),
             request
+        );
+    }
+
+    #[test]
+    fn native_build_fingerprint_is_a_stable_hex_identifier() {
+        assert_eq!(NATIVE_BUILD_FINGERPRINT.len(), 16);
+        assert!(
+            NATIVE_BUILD_FINGERPRINT
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit())
         );
     }
 

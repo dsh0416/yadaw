@@ -30,9 +30,9 @@ use yadaw_audio_host::{
 use yadaw_dsp_runtime::protocol::{
     AudioBackend, AudioDevice, AudioDeviceList, AudioRuntime, BinaryPayload, ControlCommand,
     ControlRequest, ControlResponse, ControlResult, GraphUpdate, HostEvent, LiveMixerGraph,
-    MixerChannelMeter, PROTOCOL_VERSION, PriorityCommand, PriorityRequest, PriorityResponse,
-    PriorityResult, RecordingResult, RecordingWaveform, TransportState, read_message,
-    validate_version, write_message,
+    MixerChannelMeter, NATIVE_BUILD_FINGERPRINT, PriorityCommand, PriorityRequest,
+    PriorityResponse, PriorityResult, RecordingResult, RecordingWaveform, TransportState,
+    read_message, write_message,
 };
 use yadaw_dsp_runtime::tempo::{TempoEvent, TimeSignatureEvent};
 use yadaw_ipc_transport::{
@@ -457,65 +457,57 @@ fn run_legacy() -> Result<(), Box<dyn std::error::Error>> {
     let mut output = BufWriter::new(io::stdout().lock());
     loop {
         let request: ControlRequest = read_message(&mut input)?;
-        let result = match validate_version(request.version) {
-            Ok(()) => match request.command {
-                ControlCommand::BenchmarkEcho { payload } => {
-                    ControlResult::BenchmarkEcho { payload }
-                }
-                ControlCommand::Ping => {
-                    if let Some(runtime) = vst3.as_ref() {
-                        for (instance_id, latency, tail) in runtime.take_timing_changes() {
-                            if let Err(error) =
-                                engine::update_plugin_timing(&instance_id, latency, tail)
-                            {
-                                eprintln!(
-                                    "audio-host: could not rebuild dynamic plugin latency: {error}"
-                                );
-                            }
+        let result = match request.command {
+            ControlCommand::BenchmarkEcho { payload } => ControlResult::BenchmarkEcho { payload },
+            ControlCommand::Ping => {
+                if let Some(runtime) = vst3.as_ref() {
+                    for (instance_id, latency, tail) in runtime.take_timing_changes() {
+                        if let Err(error) =
+                            engine::update_plugin_timing(&instance_id, latency, tail)
+                        {
+                            eprintln!(
+                                "audio-host: could not rebuild dynamic plugin latency: {error}"
+                            );
                         }
                     }
-                    let (callback_generation, transport_state) = engine::heartbeat_snapshot();
-                    ControlResult::Heartbeat {
-                        ipc_generation: 0,
-                        tokio_generation: 0,
-                        winit_generation: 0,
-                        callback_generation,
-                        transport_state,
-                    }
                 }
-                command @ (ControlCommand::LoadPlugin { .. }
-                | ControlCommand::UnloadPlugin { .. }
-                | ControlCommand::PluginParameters { .. }
-                | ControlCommand::SetPluginParameter { .. }
-                | ControlCommand::SavePluginState { .. }
-                | ControlCommand::OpenPluginEditor { .. }
-                | ControlCommand::ClosePluginEditor { .. }) => match vst3.as_mut() {
-                    Some(runtime) => runtime.execute(command),
-                    None => ControlResult::Error {
-                        message: "VST3 bridge is not configured".into(),
-                    },
-                },
-                ControlCommand::Shutdown => {
-                    let _ = engine::stop_audio_engine();
-                    write_message(
-                        &mut output,
-                        &ControlResponse {
-                            version: PROTOCOL_VERSION,
-                            request_id: request.request_id,
-                            result: ControlResult::Accepted,
-                        },
-                    )?;
-                    return Ok(());
+                let (callback_generation, transport_state) = engine::heartbeat_snapshot();
+                ControlResult::Heartbeat {
+                    ipc_generation: 0,
+                    tokio_generation: 0,
+                    winit_generation: 0,
+                    callback_generation,
+                    transport_state,
                 }
-                command => match engine_command(command, vst3.as_ref()) {
-                    Some(result) => result,
-                    None => ControlResult::Error {
-                        message: "unsupported audio-host command".into(),
-                    },
+            }
+            command @ (ControlCommand::LoadPlugin { .. }
+            | ControlCommand::UnloadPlugin { .. }
+            | ControlCommand::PluginParameters { .. }
+            | ControlCommand::SetPluginParameter { .. }
+            | ControlCommand::SavePluginState { .. }
+            | ControlCommand::OpenPluginEditor { .. }
+            | ControlCommand::ClosePluginEditor { .. }) => match vst3.as_mut() {
+                Some(runtime) => runtime.execute(command),
+                None => ControlResult::Error {
+                    message: "VST3 bridge is not configured".into(),
                 },
             },
-            Err(error) => ControlResult::Error {
-                message: error.to_string(),
+            ControlCommand::Shutdown => {
+                let _ = engine::stop_audio_engine();
+                write_message(
+                    &mut output,
+                    &ControlResponse {
+                        request_id: request.request_id,
+                        result: ControlResult::Accepted,
+                    },
+                )?;
+                return Ok(());
+            }
+            command => match engine_command(command, vst3.as_ref()) {
+                Some(result) => result,
+                None => ControlResult::Error {
+                    message: "unsupported audio-host command".into(),
+                },
             },
         };
         if let Some(runtime) = vst3.as_ref() {
@@ -524,7 +516,6 @@ fn run_legacy() -> Result<(), Box<dyn std::error::Error>> {
         write_message(
             &mut output,
             &ControlResponse {
-                version: PROTOCOL_VERSION,
                 request_id: request.request_id,
                 result,
             },
@@ -957,11 +948,7 @@ enum OutboundMessage {
 }
 
 fn response(request_id: u64, result: ControlResult) -> ControlResponse {
-    ControlResponse {
-        version: PROTOCOL_VERSION,
-        request_id,
-        result,
-    }
+    ControlResponse { request_id, result }
 }
 
 #[derive(Clone)]
@@ -1287,109 +1274,96 @@ fn spawn_ingress(
                             continue;
                         }
                     };
-                    let result = if request.version != PROTOCOL_VERSION {
-                        PriorityResult::Error {
-                            message: format!(
-                                "unsupported helper protocol version {}",
-                                request.version
-                            ),
+                    let result = match request.command {
+                        PriorityCommand::Heartbeat => {
+                            let (callback_generation, transport_state) =
+                                engine::heartbeat_snapshot();
+                            PriorityResult::Heartbeat {
+                                ipc_generation,
+                                tokio_generation: liveness.tokio.load(Ordering::Acquire),
+                                winit_generation: liveness.winit.load(Ordering::Acquire),
+                                callback_generation,
+                                transport_state,
+                                egress_active: liveness.egress.active.load(Ordering::Acquire),
+                                egress_queue_depth: liveness
+                                    .egress
+                                    .queue_depth
+                                    .load(Ordering::Acquire),
+                                egress_queue_high_water: liveness
+                                    .egress
+                                    .queue_high_water
+                                    .load(Ordering::Acquire),
+                                egress_batches: liveness.egress.batches.load(Ordering::Acquire),
+                                blocking_jobs: liveness
+                                    .egress
+                                    .blocking_jobs
+                                    .load(Ordering::Acquire),
+                                arena_regions: liveness
+                                    .egress
+                                    .arena_regions
+                                    .load(Ordering::Acquire),
+                                arena_capacity_bytes: liveness
+                                    .egress
+                                    .arena_capacity_bytes
+                                    .load(Ordering::Acquire),
+                                arena_used_bytes: liveness
+                                    .egress
+                                    .arena_used_bytes
+                                    .load(Ordering::Acquire),
+                                arena_high_water_bytes: liveness
+                                    .egress
+                                    .arena_high_water_bytes
+                                    .load(Ordering::Acquire),
+                                arena_offers: liveness.egress.arena_offers.load(Ordering::Acquire),
+                                arena_busy: liveness.egress.arena_busy.load(Ordering::Acquire),
+                                arena_quarantined_regions: liveness
+                                    .egress
+                                    .arena_quarantined_regions
+                                    .load(Ordering::Acquire),
+                                arena_copied_bytes: liveness
+                                    .egress
+                                    .arena_copied_bytes
+                                    .load(Ordering::Acquire),
+                            }
                         }
-                    } else {
-                        match request.command {
-                            PriorityCommand::Heartbeat => {
-                                let (callback_generation, transport_state) =
-                                    engine::heartbeat_snapshot();
-                                PriorityResult::Heartbeat {
-                                    ipc_generation,
-                                    tokio_generation: liveness.tokio.load(Ordering::Acquire),
-                                    winit_generation: liveness.winit.load(Ordering::Acquire),
-                                    callback_generation,
-                                    transport_state,
-                                    egress_active: liveness.egress.active.load(Ordering::Acquire),
-                                    egress_queue_depth: liveness
-                                        .egress
-                                        .queue_depth
-                                        .load(Ordering::Acquire),
-                                    egress_queue_high_water: liveness
-                                        .egress
-                                        .queue_high_water
-                                        .load(Ordering::Acquire),
-                                    egress_batches: liveness.egress.batches.load(Ordering::Acquire),
-                                    blocking_jobs: liveness
-                                        .egress
-                                        .blocking_jobs
-                                        .load(Ordering::Acquire),
-                                    arena_regions: liveness
-                                        .egress
-                                        .arena_regions
-                                        .load(Ordering::Acquire),
-                                    arena_capacity_bytes: liveness
-                                        .egress
-                                        .arena_capacity_bytes
-                                        .load(Ordering::Acquire),
-                                    arena_used_bytes: liveness
-                                        .egress
-                                        .arena_used_bytes
-                                        .load(Ordering::Acquire),
-                                    arena_high_water_bytes: liveness
-                                        .egress
-                                        .arena_high_water_bytes
-                                        .load(Ordering::Acquire),
-                                    arena_offers: liveness
-                                        .egress
-                                        .arena_offers
-                                        .load(Ordering::Acquire),
-                                    arena_busy: liveness.egress.arena_busy.load(Ordering::Acquire),
-                                    arena_quarantined_regions: liveness
-                                        .egress
-                                        .arena_quarantined_regions
-                                        .load(Ordering::Acquire),
-                                    arena_copied_bytes: liveness
-                                        .egress
-                                        .arena_copied_bytes
-                                        .load(Ordering::Acquire),
-                                }
+                        PriorityCommand::ReleaseLeases { lease_ids } => {
+                            if let Ok(mut leases) = leases.lock() {
+                                leases.release(&lease_ids);
                             }
-                            PriorityCommand::ReleaseLeases { lease_ids } => {
-                                if let Ok(mut leases) = leases.lock() {
-                                    leases.release(&lease_ids);
-                                }
-                                PriorityResult::Accepted
+                            PriorityResult::Accepted
+                        }
+                        PriorityCommand::ParameterWake => {
+                            match mailboxes.priority.try_send(PriorityIngress::ParameterWake) {
+                                Ok(()) => PriorityResult::Accepted,
+                                Err(_) => PriorityResult::Busy,
                             }
-                            PriorityCommand::ParameterWake => {
-                                match mailboxes.priority.try_send(PriorityIngress::ParameterWake) {
-                                    Ok(()) => PriorityResult::Accepted,
-                                    Err(_) => PriorityResult::Busy,
-                                }
+                        }
+                        PriorityCommand::ParameterBoundary { command } => {
+                            match mailboxes
+                                .priority
+                                .try_send(PriorityIngress::ParameterBoundary(command))
+                            {
+                                Ok(()) => PriorityResult::Accepted,
+                                Err(_) => PriorityResult::Busy,
                             }
-                            PriorityCommand::ParameterBoundary { command } => {
-                                match mailboxes
-                                    .priority
-                                    .try_send(PriorityIngress::ParameterBoundary(command))
-                                {
-                                    Ok(()) => PriorityResult::Accepted,
-                                    Err(_) => PriorityResult::Busy,
-                                }
+                        }
+                        PriorityCommand::Shutdown => {
+                            match mailboxes.priority.try_send(PriorityIngress::Shutdown) {
+                                Ok(()) => PriorityResult::Accepted,
+                                Err(_) => PriorityResult::Busy,
                             }
-                            PriorityCommand::Shutdown => {
-                                match mailboxes.priority.try_send(PriorityIngress::Shutdown) {
-                                    Ok(()) => PriorityResult::Accepted,
-                                    Err(_) => PriorityResult::Busy,
-                                }
-                            }
-                            PriorityCommand::TelemetryPageReady { .. } => {
-                                match mailboxes
-                                    .priority
-                                    .try_send(PriorityIngress::TelemetryPageReady)
-                                {
-                                    Ok(()) => PriorityResult::Accepted,
-                                    Err(_) => PriorityResult::Busy,
-                                }
+                        }
+                        PriorityCommand::TelemetryPageReady { .. } => {
+                            match mailboxes
+                                .priority
+                                .try_send(PriorityIngress::TelemetryPageReady)
+                            {
+                                Ok(()) => PriorityResult::Accepted,
+                                Err(_) => PriorityResult::Busy,
                             }
                         }
                     };
                     let reply = PriorityResponse {
-                        version: PROTOCOL_VERSION,
                         request_id: request.request_id,
                         result,
                     };
@@ -1493,6 +1467,16 @@ async fn publish_telemetry(
     }
 }
 
+fn validate_native_build_fingerprint(value: &str) -> Result<(), String> {
+    if value == NATIVE_BUILD_FINGERPRINT {
+        Ok(())
+    } else {
+        Err(format!(
+            "audio-host native build mismatch: addon={value}, helper={NATIVE_BUILD_FINGERPRINT}"
+        ))
+    }
+}
+
 async fn run_protocol_actor(
     bootstrap: HostBootstrap,
     bridge_path: Option<PathBuf>,
@@ -1503,7 +1487,7 @@ async fn run_protocol_actor(
     const ACTOR_CAPACITY: usize = 64;
     const PROTOCOL_CAPACITY: usize = 256;
     let HostBootstrap {
-        protocol_version,
+        native_build_fingerprint,
         requests,
         responses,
         priority_requests,
@@ -1513,11 +1497,7 @@ async fn run_protocol_actor(
         parameter_ring,
         session_epoch,
     } = bootstrap;
-    if protocol_version != PROTOCOL_VERSION {
-        return Err(format!(
-            "unsupported helper bootstrap protocol {protocol_version}"
-        ));
-    }
+    validate_native_build_fingerprint(&native_build_fingerprint)?;
     let telemetry = Arc::new(Mutex::new(
         TelemetryWriter::map(telemetry_page).map_err(|error| error.to_string())?,
     ));
@@ -1654,7 +1634,6 @@ async fn run_protocol_actor(
                 tokio::spawn(async move {
                     let _permit = permit;
                     let ControlRequest {
-                        version,
                         request_id,
                         command,
                     } = inbound.request;
@@ -1662,25 +1641,21 @@ async fn run_protocol_actor(
                     let shutdown = matches!(command, ControlCommand::Shutdown);
                     let deadline = protocol_deadline(&command);
                     let work = async move {
-                        match validate_version(version) {
-                            Err(error) => ControlResult::Error { message: error.to_string() },
-                            Ok(()) if shutdown => {
-                                let _ = engine::stop_audio_engine();
-                                ControlResult::Accepted
-                            }
-                            Ok(()) => {
-                                match command {
-                                    ControlCommand::BenchmarkEcho { payload } => {
-                                        ControlResult::BenchmarkEcho { payload }
-                                    }
-                                    command if is_vst3_command(&command) => {
-                                        dispatch_actor(&vst3_sender, command).await
-                                    }
-                                    command if is_background_io_command(&command) => {
-                                        dispatch_actor(&background_sender, command).await
-                                    }
-                                    command => dispatch_actor(&engine_sender, command).await,
+                        if shutdown {
+                            let _ = engine::stop_audio_engine();
+                            ControlResult::Accepted
+                        } else {
+                            match command {
+                                ControlCommand::BenchmarkEcho { payload } => {
+                                    ControlResult::BenchmarkEcho { payload }
                                 }
+                                command if is_vst3_command(&command) => {
+                                    dispatch_actor(&vst3_sender, command).await
+                                }
+                                command if is_background_io_command(&command) => {
+                                    dispatch_actor(&background_sender, command).await
+                                }
+                                command => dispatch_actor(&engine_sender, command).await,
                             }
                         }
                     };
@@ -1901,5 +1876,16 @@ fn main() -> ExitCode {
             eprintln!("audio-host: {error}");
             ExitCode::FAILURE
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bootstrap_rejects_a_stale_native_build() {
+        assert!(validate_native_build_fingerprint(NATIVE_BUILD_FINGERPRINT).is_ok());
+        assert!(validate_native_build_fingerprint("stale-build").is_err());
     }
 }

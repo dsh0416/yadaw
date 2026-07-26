@@ -20,14 +20,12 @@ import type {
   TransportSnapshot
 } from "@yadaw/contracts"
 
-const PROTOCOL_VERSION = 3
 const MAX_MESSAGE_BYTES = 64 * 1024 * 1024
 const MAX_LOGICAL_REQUEST_BYTES = MAX_MESSAGE_BYTES * 2
 const HEARTBEAT_INTERVAL_MS = 250
 const HEARTBEAT_TIMEOUT_MS = 2_000
 
 interface ControlResponse {
-  version: number
   request_id: number
   result: {
     type:
@@ -139,7 +137,6 @@ interface AudioHostTransport {
 }
 
 interface PriorityResponse {
-  version: number
   request_id: number
   result: {
     type: "heartbeat" | "accepted" | "busy" | "error"
@@ -187,7 +184,7 @@ type TelemetryWire = [
 ]
 
 type TransportDiagnosticsWire = [
-  protocolVersion: number,
+  nativeBuildFingerprint: string,
   sessionEpoch: string,
   requests: [normalPending: number, priorityPending: number, capacity: number, timeouts: number],
   sharedMemory: [
@@ -631,14 +628,13 @@ export class AudioHostService {
     const requestId = this.nextRequestId++
     const payload = Buffer.from(
       encode({
-        version: PROTOCOL_VERSION,
         request_id: requestId,
         command
       })
     )
     const wireResponse = await client.heartbeat(payload)
     const response = decode(wireResponse.body) as PriorityResponse
-    if (response.version !== PROTOCOL_VERSION || response.request_id !== requestId) {
+    if (response.request_id !== requestId) {
       throw new Error("audio host returned an invalid priority response")
     }
     if (response.result.type === "error") {
@@ -1000,7 +996,6 @@ export class AudioHostService {
 
   private benchmarkMessagePackBodyBytes(payloadBytes: number): number {
     const request = {
-      version: PROTOCOL_VERSION,
       request_id: 0,
       command: {
         type: "benchmark-echo",
@@ -1188,7 +1183,7 @@ export class AudioHostService {
     try {
       const diagnostics = decode(client.transportDiagnostics()) as TransportDiagnosticsWire
       return {
-        protocolVersion: diagnostics[0],
+        nativeBuildFingerprint: diagnostics[0],
         sessionEpoch: diagnostics[1],
         heartbeat: {
           ageMs: this.lastHeartbeatAt === null ? null : Date.now() - this.lastHeartbeatAt,
@@ -1497,7 +1492,6 @@ export class AudioHostService {
     if (!client) throw new Error("audio host is not running")
     const requestId = this.nextRequestId++
     const request = {
-      version: PROTOCOL_VERSION,
       request_id: requestId,
       command
     }
@@ -1512,9 +1506,6 @@ export class AudioHostService {
     hydrateAttachments(response, wireResponse.attachments)
     if (response.request_id !== requestId) {
       throw new Error("audio host returned an out-of-order response")
-    }
-    if (response.version !== PROTOCOL_VERSION) {
-      throw new Error(`unsupported audio host protocol ${response.version}`)
     }
     if (response.result.type === "error") {
       throw new Error(response.result.message ?? "audio host request failed")

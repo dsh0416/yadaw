@@ -342,7 +342,7 @@ export interface SystemPerformanceSnapshot {
 }
 
 export interface AudioIpcPerformanceSnapshot {
-  protocolVersion: number
+  nativeBuildFingerprint: string
   sessionEpoch: string
   heartbeat: {
     ageMs: number | null

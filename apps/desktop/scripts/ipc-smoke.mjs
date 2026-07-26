@@ -14,7 +14,7 @@ const bridgeFilename =
 const client = new AudioHostIpcClient(
   resolve(repositoryRoot, "target", "debug", `yadaw-audio-host${executableSuffix}`),
   resolve(repositoryRoot, "target", "vst3-bridge-build", "bin", bridgeFilename),
-  resolve(tmpdir(), `yadaw-ipc-v3-${process.pid}.marker`),
+  resolve(tmpdir(), `yadaw-ipc-${process.pid}.marker`),
   2,
   4,
   2
@@ -25,7 +25,6 @@ async function request(command, attachments = []) {
   const response = await client.request(
     Buffer.from(
       encode({
-        version: 3,
         request_id: requestId++,
         command
       })
@@ -41,7 +40,6 @@ try {
       await client.heartbeat(
         Buffer.from(
           encode({
-            version: 3,
             request_id: requestId++,
             command: { type: "heartbeat" }
           })
@@ -85,18 +83,22 @@ try {
   }
 
   const diagnostics = decode(client.transportDiagnostics())
-  if (diagnostics[0] !== 3 || diagnostics[8][0] !== 2 || diagnostics[8][2] !== 2) {
+  if (
+    typeof diagnostics[0] !== "string" ||
+    diagnostics[0].length !== 16 ||
+    diagnostics[8][0] !== 2 ||
+    diagnostics[8][2] !== 2
+  ) {
     throw new Error("runtime diagnostics mismatch")
   }
   console.log(
-    `IPC v3 smoke passed (${returned.byteLength} bytes, ${diagnostics[8][3]} client arena region)`
+    `IPC smoke passed (build ${diagnostics[0].slice(0, 8)}, ${returned.byteLength} bytes, ${diagnostics[8][3]} client arena region)`
   )
 
   const shutdownId = requestId++
   await client.heartbeat(
     Buffer.from(
       encode({
-        version: 3,
         request_id: shutdownId,
         command: { type: "shutdown" }
       })

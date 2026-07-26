@@ -230,7 +230,7 @@ pub struct RegionOffer {
 /// Channels and persistent pages transferred during the one-shot rendezvous.
 #[derive(Serialize, Deserialize)]
 pub struct HostBootstrap {
-    pub protocol_version: u16,
+    pub native_build_fingerprint: String,
     pub requests: IpcReceiver<WirePacket>,
     pub responses: IpcSender<WirePacket>,
     pub priority_requests: IpcReceiver<WirePacket>,
@@ -2190,13 +2190,12 @@ mod tests {
     use yadaw_dsp_runtime::protocol::{
         ControlCommand, ControlRequest, GraphUpdate, LiveMidiClip, LiveMidiEvent, LiveMidiNote,
         LiveMixerGraph, LiveTempoEvent, LiveTimeSignatureEvent, MidiEventBatch, MidiNoteBatch,
-        PROTOCOL_VERSION, RecordingWaveform,
+        RecordingWaveform,
     };
 
     #[test]
     fn payload_at_threshold_stays_inline_and_larger_payload_uses_shared_memory() {
         let request = |size| ControlRequest {
-            version: PROTOCOL_VERSION,
             request_id: size as u64,
             command: ControlCommand::LoadPlugin {
                 instance_id: "plugin".into(),
@@ -2231,7 +2230,6 @@ mod tests {
     fn benchmark_echo_uses_the_same_shared_memory_path_in_both_directions() {
         let payload = vec![0xa5; INLINE_BLOB_LIMIT + 1];
         let request = ControlRequest {
-            version: PROTOCOL_VERSION,
             request_id: 42,
             command: ControlCommand::BenchmarkEcho {
                 payload: BinaryPayload::inline(payload.clone()),
@@ -2256,7 +2254,6 @@ mod tests {
         assert_eq!(request_receiver.resolve(reference).unwrap(), payload);
 
         let response = ControlResponse {
-            version: PROTOCOL_VERSION,
             request_id: 42,
             result: ControlResult::BenchmarkEcho {
                 payload: BinaryPayload::Shared { reference },
@@ -2281,7 +2278,6 @@ mod tests {
     #[test]
     fn multiple_large_fields_share_one_aligned_persistent_region() {
         let request = ControlRequest {
-            version: PROTOCOL_VERSION,
             request_id: 4,
             command: ControlCommand::LoadPlugin {
                 instance_id: "plugin".into(),
@@ -2332,7 +2328,6 @@ mod tests {
     #[test]
     fn large_midi_sysex_batch_uses_and_restores_a_shared_attachment() {
         let request = ControlRequest {
-            version: PROTOCOL_VERSION,
             request_id: 5,
             command: ControlCommand::UpdateGraph {
                 update: GraphUpdate::Replace {
@@ -2406,7 +2401,6 @@ mod tests {
             })
             .collect::<Vec<_>>();
         let request = ControlRequest {
-            version: PROTOCOL_VERSION,
             request_id: 6,
             command: ControlCommand::UpdateGraph {
                 update: GraphUpdate::Replace {
@@ -2500,7 +2494,6 @@ mod tests {
     #[test]
     fn invalid_shared_range_and_stale_allocation_are_rejected() {
         let response = ControlResponse {
-            version: PROTOCOL_VERSION,
             request_id: 9,
             result: ControlResult::RecordingWaveform {
                 waveform: RecordingWaveform {
@@ -2616,7 +2609,6 @@ mod tests {
     fn four_megabyte_napi_attachment_keeps_messagepack_body_small() {
         let bytes = vec![0x7f; 4 * 1024 * 1024];
         let request = ControlRequest {
-            version: PROTOCOL_VERSION,
             request_id: 77,
             command: ControlCommand::BenchmarkEcho {
                 payload: BinaryPayload::Attachment {
@@ -2674,7 +2666,6 @@ mod tests {
     #[test]
     fn stale_allocation_generation_is_rejected() {
         let response = ControlResponse {
-            version: PROTOCOL_VERSION,
             request_id: 1,
             result: ControlResult::RecordingWaveform {
                 waveform: RecordingWaveform {
@@ -2704,7 +2695,6 @@ mod tests {
         reference.allocation_generation = reference.allocation_generation.wrapping_add(1);
         waveform.peaks = BinaryPayload::Shared { reference };
         packet.body = encode_body(&ControlResponse {
-            version: PROTOCOL_VERSION,
             request_id: 1,
             result: ControlResult::RecordingWaveform { waveform },
         })

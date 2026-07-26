@@ -4,9 +4,9 @@ This document is the agent-facing specification for YADAW's playback graph,
 threads, asynchronous control plane, background workers, and VST3 runtime. It
 defines ownership and real-time invariants for the VST3/Tokio migration.
 
-The helper control plane uses protocol v3 over `ipc-channel`, a configurable
-Tokio multi-thread runtime, bounded actor mailboxes, persistent bulk arenas,
-and a winit process main thread.
+The helper control plane uses lockstep application messages over `ipc-channel`,
+a configurable Tokio multi-thread runtime, bounded actor mailboxes, persistent
+bulk arenas, and a winit process main thread.
 Streaming clips are cooperatively serviced by a fixed pool of two to four
 background lanes; there is no production prefetch thread per clip. Graph
 construction is still synchronous inside the VST3 actor and must move to the
@@ -120,11 +120,18 @@ errors.
 
 ## IPC boundary
 
-Cross-process messages use protocol v3 over `servo/ipc-channel`. The outer
-value is `WirePacket { body, region_offers }`: `body` is a bounded MessagePack
-request/reply/event and `region_offers` contains only mappings not already
-registered by the receiver. Protocol v2 and earlier are intentionally rejected
-because addon and helper are lockstep application resources.
+Cross-process messages use `servo/ipc-channel`. There is no message-level
+protocol version and no compatibility branch: addon and helper are lockstep
+application resources. Bootstrap compares a generated native build fingerprint
+once before actors or shared pages start; a mismatch means stale build artifacts
+and terminates the helper. The fingerprint is derived from the native protocol,
+transport, helper, addon, manifests, and lockfile.
+
+The outer value is `WirePacket { body, region_offers }`: `body` is a bounded
+MessagePack request/reply/event and `region_offers` contains only mappings not
+already registered by the receiver. Shared-page and MIDI layout versions remain
+independent safety invariants for typed memory access; they are not message
+compatibility versions.
 
 ```text
 WirePacket

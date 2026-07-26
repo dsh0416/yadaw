@@ -91,6 +91,10 @@ const memoryUsage = computed(() => snapshot.value?.memory.usagePercent ?? null)
 const workspaceSpace = computed(() => findStorage("workspace"))
 const swapSpace = computed(() => findStorage("swap"))
 const audioIpc = computed(() => snapshot.value?.audioIpc ?? null)
+const audioIpcBuildLabel = computed(() => {
+  const fingerprint = audioIpc.value?.nativeBuildFingerprint
+  return fingerprint ? `Build ${fingerprint.slice(0, 8)}` : "Unavailable"
+})
 
 function findStorage(id: StorageSpaceSnapshot["id"]): StorageSpaceSnapshot | null {
   return snapshot.value?.storage.find((space) => space.id === id) ?? null
@@ -316,7 +320,7 @@ function coreSeverity(usagePercent: number | null): HealthSeverity {
         <section class="performance-section ipc-section">
           <div class="section-heading">
             <div><Activity :size="13" /><strong>Audio IPC transport</strong></div>
-            <span>{{ audioIpc ? `Protocol v${audioIpc.protocolVersion}` : "Unavailable" }}</span>
+            <span>{{ audioIpcBuildLabel }}</span>
           </div>
           <dl v-if="audioIpc" class="ipc-diagnostics-grid">
             <div>

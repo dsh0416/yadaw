@@ -66,7 +66,6 @@ function send(command) {
     pending.set(requestId, { resolve, reject })
     const payload = Buffer.from(
       encode({
-        version: 3,
         request_id: requestId,
         command
       })

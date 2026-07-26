@@ -22,7 +22,7 @@ use napi::{
 };
 use napi_derive::napi;
 use yadaw_dsp_runtime::protocol::{
-    ControlCommand, ControlRequest, HostEvent, MAX_MESSAGE_BYTES, PROTOCOL_VERSION,
+    ControlCommand, ControlRequest, HostEvent, MAX_MESSAGE_BYTES, NATIVE_BUILD_FINGERPRINT,
     ParameterCommand, ParameterGesture, ParameterTargetKind, PriorityCommand, PriorityRequest,
     PriorityResponse,
 };
@@ -197,7 +197,7 @@ impl AudioHostIpcClient {
         })?;
         bootstrap_sender
             .send(HostBootstrap {
-                protocol_version: PROTOCOL_VERSION,
+                native_build_fingerprint: NATIVE_BUILD_FINGERPRINT.to_owned(),
                 requests: request_receiver,
                 responses: response_sender,
                 priority_requests: priority_request_receiver,
@@ -319,12 +319,6 @@ impl AudioHostIpcClient {
         }
         let request = rmp_serde::from_slice::<ControlRequest>(&message_pack_request)
             .map_err(|error| failure("invalid audio-host request", error))?;
-        if request.version != PROTOCOL_VERSION {
-            return Err(failure(
-                "audio-host request",
-                format!("unsupported protocol {}", request.version),
-            ));
-        }
         let request_id = request.request_id;
         let deadline = Instant::now() + request_deadline(&request.command);
         let packet = {
@@ -353,9 +347,6 @@ impl AudioHostIpcClient {
     ) -> Result<Object<'env>> {
         let request = rmp_serde::from_slice::<PriorityRequest>(&message_pack_request)
             .map_err(|error| failure("invalid heartbeat request", error))?;
-        if request.version != PROTOCOL_VERSION {
-            return Err(failure("priority request", "invalid protocol version"));
-        }
         let request_id = request.request_id;
         let packet = encode_priority(&request)
             .map_err(|error| failure("could not encode heartbeat request", error))?;
@@ -545,7 +536,7 @@ impl AudioHostIpcClient {
         };
         let (parameter_ring_used, parameter_ring_capacity) = self.state.parameters.usage();
         rmp_serde::to_vec_named(&(
-            PROTOCOL_VERSION,
+            NATIVE_BUILD_FINGERPRINT,
             self.state.session_epoch.to_string(),
             (
                 normal_pending,
@@ -694,7 +685,6 @@ impl AudioHostIpcClient {
 
     fn send_internal_priority(&self, command: PriorityCommand) -> Result<()> {
         let request = PriorityRequest {
-            version: PROTOCOL_VERSION,
             request_id: self
                 .state
                 .internal_request_id
@@ -914,7 +904,6 @@ fn spawn_event_router(
                                 *current = reader;
                             }
                             let request = PriorityRequest {
-                                version: PROTOCOL_VERSION,
                                 request_id: 0,
                                 command: PriorityCommand::TelemetryPageReady { epoch: *epoch },
                             };
@@ -939,7 +928,6 @@ fn spawn_event_router(
 
 fn send_release_leases(outbound: &SyncSender<WirePacket>, lease_ids: Vec<u64>) {
     let request = PriorityRequest {
-        version: PROTOCOL_VERSION,
         request_id: 0,
         command: PriorityCommand::ReleaseLeases { lease_ids },
     };
