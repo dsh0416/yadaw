@@ -854,7 +854,10 @@ export class MixerService {
   }
 
   async transport(command: TransportCommand): Promise<TransportSnapshot> {
-    if (process.env.YADAW_TEST_CAPTURE_SOURCE === "1") {
+    if (
+      process.env.YADAW_TEST_CAPTURE_SOURCE === "1" &&
+      process.env.YADAW_TEST_VIRTUAL_AUDIO !== "1"
+    ) {
       if (command.type === "seek") {
         this.testTransport.positionFrames = command.positionFrames
       } else if (command.type === "stop") {
@@ -870,11 +873,30 @@ export class MixerService {
       return { ...this.testTransport }
     }
     if (!this.audioHost) throw new Error("Audio host is not running")
-    return this.audioHost.transport(command)
+    try {
+      return await this.audioHost.transport(command)
+    } catch (error) {
+      if (
+        (command.type === "stop" || command.type === "pause") &&
+        error instanceof Error &&
+        error.message.includes("audio engine must be running before transport")
+      ) {
+        return {
+          state: "stopped",
+          positionFrames: 0,
+          sampleRate:
+            this.projects.current?.configuration.sampleRate ?? this.testTransport.sampleRate
+        }
+      }
+      throw error
+    }
   }
 
   async transportSnapshot(): Promise<TransportSnapshot> {
-    if (process.env.YADAW_TEST_CAPTURE_SOURCE === "1") {
+    if (
+      process.env.YADAW_TEST_CAPTURE_SOURCE === "1" &&
+      process.env.YADAW_TEST_VIRTUAL_AUDIO !== "1"
+    ) {
       return { ...this.testTransport }
     }
     if (!this.audioHost) {

@@ -2,7 +2,7 @@
 import { computed } from "vue"
 import { AudioLines, Cable, CircleDot, Gauge, Keyboard, Music2, Palette, Plug } from "@lucide/vue"
 
-type PreferencesPageId = "devices" | "recording" | "display-general" | "display-mixer"
+type PreferencesPageId = "devices" | "engine" | "recording" | "display-general" | "display-mixer"
 
 const props = defineProps<{ activePage: PreferencesPageId }>()
 const emit = defineEmits<{ select: [page: PreferencesPageId] }>()
@@ -26,6 +26,13 @@ function selectCategory(page: PreferencesPageId | null): void {
   <aside class="prefs-primary-nav">
     <div class="sidebar-label">SETTINGS</div>
     <nav class="settings-primary-nav" aria-label="Preference categories">
+      <button
+        :class="['settings-page-item', { active: activePage === 'engine' }]"
+        :aria-current="activePage === 'engine' ? 'page' : undefined"
+        @click="emit('select', 'engine')"
+      >
+        <Gauge :size="15" /><span><b>Engine</b><small>Async workers & IPC egress</small></span>
+      </button>
       <button
         v-for="category in categories"
         :key="category.id"

@@ -215,7 +215,8 @@ export const useSystemPerformanceStore = defineStore("system-performance", () =>
       const requestUtilization = Math.max(
         utilizationPercent(audioIpc.requests.normalPending, audioIpc.requests.capacity),
         utilizationPercent(audioIpc.requests.priorityPending, audioIpc.requests.capacity),
-        utilizationPercent(audioIpc.eventQueueDepth, audioIpc.requests.capacity)
+        utilizationPercent(audioIpc.eventQueueDepth, audioIpc.requests.capacity),
+        utilizationPercent(audioIpc.runtime.egressQueueDepth, audioIpc.requests.capacity)
       )
       const requestSeverity = classifyUpperBound(
         requestUtilization,
@@ -239,13 +240,23 @@ export const useSystemPerformanceStore = defineStore("system-performance", () =>
           audioIpc.sharedMemory.outstandingLeases,
           audioIpc.sharedMemory.maxLeases
         ),
-        utilizationPercent(audioIpc.sharedMemory.outstandingBytes, audioIpc.sharedMemory.maxBytes)
+        utilizationPercent(audioIpc.sharedMemory.outstandingBytes, audioIpc.sharedMemory.maxBytes),
+        utilizationPercent(
+          audioIpc.sharedMemory.arenaUsedBytes,
+          audioIpc.sharedMemory.arenaCapacityBytes
+        )
       )
-      const sharedMemorySeverity = classifyUpperBound(
+      let sharedMemorySeverity = classifyUpperBound(
         sharedMemoryUtilization,
         PERFORMANCE_THRESHOLDS.audioIpc.warningUtilizationPercent,
         PERFORMANCE_THRESHOLDS.audioIpc.criticalUtilizationPercent
       )
+      if (
+        sharedMemorySeverity === "normal" &&
+        (audioIpc.sharedMemory.arenaBusy > 0 || audioIpc.sharedMemory.arenaQuarantinedRegions > 0)
+      ) {
+        sharedMemorySeverity = "warning"
+      }
       if (sharedMemorySeverity !== "normal") {
         result.push({
           id: "audio-ipc-shared-memory-pressure",
@@ -254,7 +265,10 @@ export const useSystemPerformanceStore = defineStore("system-performance", () =>
             sharedMemorySeverity === "critical"
               ? "Shared-memory leases are saturated"
               : "Shared-memory lease pressure is high",
-          message: `${Math.round(sharedMemoryUtilization)}% of the shared attachment budget is in use.`
+          message:
+            `${Math.round(sharedMemoryUtilization)}% of the shared attachment budget is in use. ` +
+            `${audioIpc.sharedMemory.arenaBusy} busy and ` +
+            `${audioIpc.sharedMemory.arenaQuarantinedRegions} quarantined events were observed.`
         })
       }
 

@@ -66,7 +66,7 @@ function send(command) {
     pending.set(requestId, { resolve, reject })
     const payload = Buffer.from(
       encode({
-        version: 1,
+        version: 3,
         request_id: requestId,
         command
       })
@@ -101,8 +101,8 @@ try {
     module_path: resolvedPlugin,
     class_id: "84E8DE5F92554F5396FAE4133C935A18",
     sample_rate: 48_000,
-    component_state: new Uint8Array(),
-    controller_state: new Uint8Array()
+    component_state: { storage: "inline", bytes: new Uint8Array() },
+    controller_state: { storage: "inline", bytes: new Uint8Array() }
   })
   if (loaded.type !== "plugin-loaded") throw new Error("load response mismatch")
   const synthLoaded = await send({
@@ -111,8 +111,8 @@ try {
     module_path: resolvedSynth,
     class_id: "41466D9BB0654576B641098F686371B3",
     sample_rate: 48_000,
-    component_state: new Uint8Array(),
-    controller_state: new Uint8Array()
+    component_state: { storage: "inline", bytes: new Uint8Array() },
+    controller_state: { storage: "inline", bytes: new Uint8Array() }
   })
   if (synthLoaded.type !== "plugin-loaded") throw new Error("synth load response mismatch")
   const listed = await send({ type: "plugin-parameters", instance_id: "again-1" })
@@ -139,7 +139,7 @@ try {
     })
   }
   const state = await send({ type: "save-plugin-state", instance_id: "again-1" })
-  if (state.type !== "plugin-state" || !(state.component_state instanceof Uint8Array)) {
+  if (state.type !== "plugin-state" || !(state.component_state?.bytes instanceof Uint8Array)) {
     throw new Error("state response mismatch")
   }
   await send({
@@ -247,7 +247,7 @@ try {
   await send({ type: "stop-audio-engine" })
   console.log(
     `VST3 helper live graph passed (${listed.parameters.length} parameters, ` +
-      `${state.component_state.length} component bytes, meter ` +
+      `${state.component_state.bytes.length} component bytes, meter ` +
       `${Math.max(instrumentMeter.held_left, instrumentMeter.held_right).toFixed(4)})`
   )
   await send({ type: "shutdown" })

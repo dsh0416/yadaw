@@ -27,6 +27,7 @@ export const IPC_CHANNELS = {
   projectConfigurationUpdate: "project:configuration-update",
   settingsGet: "settings:get",
   settingsUpdate: "settings:update",
+  settingsConfigureAudioHostRuntime: "settings:configure-audio-host-runtime",
   settingsChooseSwap: "settings:choose-swap",
   settingsOpenSwap: "settings:open-swap",
   recordingStart: "recording:start",
@@ -95,6 +96,7 @@ export interface YadawDesktopApi {
   updateProjectConfiguration(configuration: ProjectConfiguration): Promise<ProjectSession>
   getApplicationSettings(): Promise<ApplicationSettings>
   updateApplicationSettings(patch: ApplicationSettingsPatch): Promise<ApplicationSettings>
+  configureAudioHostRuntime(preferences: AudioHostRuntimePreferences): Promise<ApplicationSettings>
   chooseSwapDirectory(): Promise<ApplicationSettings>
   openSwapDirectory(): Promise<void>
   startRecording(): Promise<RecordingSession>
@@ -196,6 +198,19 @@ export interface RecentProject {
 
 export type MeterPeakHold = "800ms" | "2s" | "4s" | "infinite"
 export type MeterReturnRate = "iec-type-i"
+export type AudioHostThreadSetting = "auto" | number
+
+export interface AudioHostRuntimePreferences {
+  workerThreads: AudioHostThreadSetting
+  maxBlockingThreads: AudioHostThreadSetting
+  egressConcurrency: AudioHostThreadSetting
+}
+
+export interface ResolvedAudioHostRuntimePreferences {
+  workerThreads: number
+  maxBlockingThreads: number
+  egressConcurrency: number
+}
 
 export interface ApplicationSettings {
   swapDirectory: string
@@ -203,6 +218,7 @@ export interface ApplicationSettings {
   theme: ThemePreference
   meterPeakHold: MeterPeakHold
   meterReturnRate: MeterReturnRate
+  audioHostRuntime: AudioHostRuntimePreferences
   recentProjects: RecentProject[]
 }
 
@@ -351,6 +367,23 @@ export interface AudioIpcPerformanceSnapshot {
     sharedPackets: number
     sharedRegions: number
     sharedBytes: number
+    arenaRegions: number
+    arenaCapacityBytes: number
+    arenaUsedBytes: number
+    arenaHighWaterBytes: number
+    arenaOffers: number
+    arenaBusy: number
+    arenaQuarantinedRegions: number
+    copiedBytes: number
+  }
+  runtime: {
+    requested: AudioHostRuntimePreferences
+    resolved: ResolvedAudioHostRuntimePreferences
+    egressActive: number
+    egressQueueDepth: number
+    egressQueueHighWater: number
+    egressBatches: number
+    blockingJobs: number
   }
   eventQueueDepth: number
   telemetry: {
@@ -396,7 +429,12 @@ export interface AudioBenchmarkScenario {
 }
 
 export type AudioIpcBenchmarkKind =
-  "inline-round-trip" | "shared-round-trip" | "concurrent-routing" | "telemetry-read"
+  | "inline-round-trip"
+  | "shared-cold"
+  | "shared-warm-sequential"
+  | "shared-saturated"
+  | "concurrent-routing"
+  | "telemetry-read"
 
 export interface AudioIpcBenchmarkScenario {
   id: string
@@ -416,6 +454,10 @@ export interface AudioIpcBenchmarkScenario {
 
 export interface AudioIpcBenchmarkReport {
   durationMs: number
+  buildProfile: "debug" | "release"
+  runtime: ResolvedAudioHostRuntimePreferences
+  arenaOffers: number
+  messagePackBodyBytes: number
   scenarios: readonly AudioIpcBenchmarkScenario[]
 }
 

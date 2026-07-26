@@ -25,6 +25,11 @@ describe("ProjectWelcome", () => {
           theme: "system",
           meterPeakHold: "800ms",
           meterReturnRate: "iec-type-i",
+          audioHostRuntime: {
+            workerThreads: "auto",
+            maxBlockingThreads: "auto",
+            egressConcurrency: "auto"
+          },
           recentProjects: [{ path: "C:/song.yadaw", name: "Song", openedAt: 1 }]
         },
         busy: false,

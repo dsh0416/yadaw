@@ -29,6 +29,11 @@ const themePreference = computed(() => settings.value?.theme ?? "system")
 
 useTheme(themePreference)
 
+function stopRuntimePolling(): void {
+  audioRuntimeStore.stopPolling()
+  systemPerformanceStore.stopPolling()
+}
+
 onMounted(() => {
   operationStore.startSubscription()
   audioBenchmarkStore.startSubscription()
@@ -37,14 +42,15 @@ onMounted(() => {
   systemPerformanceStore.startPolling()
   void audioPreferencesStore.restore()
   void applicationSettingsStore.load()
+  window.addEventListener("beforeunload", stopRuntimePolling)
 })
 
 onUnmounted(() => {
+  window.removeEventListener("beforeunload", stopRuntimePolling)
   lifecycleStore.dispose()
   operationStore.stopSubscription()
   audioBenchmarkStore.stopSubscription()
-  audioRuntimeStore.stopPolling()
-  systemPerformanceStore.stopPolling()
+  stopRuntimePolling()
 })
 </script>
 

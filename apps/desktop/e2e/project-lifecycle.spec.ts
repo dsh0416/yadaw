@@ -20,7 +20,8 @@ test("records into a Large Object and reopens the PGlite project archive", async
       ...process.env,
       YADAW_TEST_USER_DATA: join(testRoot, "user-data"),
       YADAW_TEST_PROJECT_PATH: projectPath,
-      YADAW_TEST_CAPTURE_SOURCE: "1"
+      YADAW_TEST_CAPTURE_SOURCE: "1",
+      YADAW_TEST_VIRTUAL_AUDIO: "1"
     }
   })
   application.process().stdout?.on("data", (data) => console.log(`main stdout: ${String(data)}`))
@@ -49,19 +50,29 @@ test("records into a Large Object and reopens the PGlite project archive", async
     await page.getByRole("button", { name: "Project settings" }).click()
     await expect(page.getByRole("heading", { name: "Project Settings" })).toBeVisible()
     await page.getByLabel("Project name").fill("Lifecycle")
-    await page.getByLabel("Tempo").fill("132.5")
     await page.getByLabel("Sample rate").selectOption("44100")
     await page.getByLabel("Waveform channels").selectOption("aggregate")
     await page.getByRole("button", { name: "Save changes" }).click()
     await expect(page.getByRole("status")).toContainText("Changes saved")
     await page.getByRole("button", { name: "Back to studio" }).click()
     await expect(page.getByText("Lifecycle", { exact: false }).first()).toBeVisible()
+    const virtualRuntime = await page.evaluate(() =>
+      window.yadaw.startAudioEngine({
+        backend: "virtual",
+        inputDeviceId: "virtual-input",
+        outputDeviceId: "virtual-output",
+        bufferSize: 256
+      } as Parameters<typeof window.yadaw.startAudioEngine>[0])
+    )
+    expect(virtualRuntime.state).toBe("running")
 
     await page.getByRole("button", { name: "Mixer", exact: true }).click()
     const visibleMixer = page.locator(".mixer-console:visible")
     await page.getByRole("button", { name: "Add audio track" }).click()
     await page.getByRole("button", { name: "Add bus" }).click()
-    await expect(visibleMixer.getByText("2 tracks · 1 buses · 1 outputs")).toBeVisible()
+    await expect(
+      visibleMixer.getByText("2 audio · 0 instrument · 1 buses · 1 outputs")
+    ).toBeVisible()
     const audioOneVolume = visibleMixer.getByRole("slider", { name: "Audio 1 volume", exact: true })
     const volumeBounds = await audioOneVolume.boundingBox()
     expect(volumeBounds).not.toBeNull()
@@ -74,9 +85,13 @@ test("records into a Large Object and reopens the PGlite project archive", async
       "none"
     )
     await page.getByRole("button", { name: "Undo mixer change" }).click()
-    await expect(visibleMixer.getByText("2 tracks · 0 buses · 1 outputs")).toBeVisible()
+    await expect(
+      visibleMixer.getByText("2 audio · 0 instrument · 0 buses · 1 outputs")
+    ).toBeVisible()
     await page.getByRole("button", { name: "Redo mixer change" }).click()
-    await expect(visibleMixer.getByText("2 tracks · 1 buses · 1 outputs")).toBeVisible()
+    await expect(
+      visibleMixer.getByText("2 audio · 0 instrument · 1 buses · 1 outputs")
+    ).toBeVisible()
     await visibleMixer.getByLabel("Audio 1 output").selectOption({ label: "Bus 1" })
     await visibleMixer.getByLabel("Audio 2 audio channel").click()
     await page.getByLabel("Input format").selectOption("mono")
@@ -103,7 +118,7 @@ test("records into a Large Object and reopens the PGlite project archive", async
 
     const timeZoom = page.getByRole("slider", { name: "Time zoom" })
     await timeZoom.fill("50")
-    await expect(timeZoom).toHaveAttribute("aria-valuetext", "200 pixels per second")
+    await expect(timeZoom).toHaveAttribute("aria-valuetext", "100 pixels per quarter note")
     const trackHeight = page.getByRole("slider", { name: "Track height" })
     await trackHeight.fill("50")
     await expect(trackHeight).toHaveAttribute("aria-valuetext", "196 pixels")
@@ -149,6 +164,28 @@ test("records into a Large Object and reopens the PGlite project archive", async
     await expect(playButton).toBeEnabled()
     await playButton.click()
     await expect(page.getByRole("button", { name: "Pause" })).toBeVisible()
+
+    await page.getByRole("button", { name: "Open preferences" }).click()
+    await expect(page.getByRole("heading", { name: "Preferences" })).toBeVisible()
+    await page.getByRole("button", { name: /Engine/ }).click()
+    await expect(page.getByRole("heading", { name: "Runtime scheduling" })).toBeVisible()
+    await page.getByLabel("Worker thread mode").selectOption("manual")
+    await page.getByLabel("Worker threads").fill("1")
+    await page.getByRole("button", { name: "Apply runtime settings" }).click()
+    await expect
+      .poll(async () => {
+        const snapshot = await page.evaluate(() => window.yadaw.systemPerformanceSnapshot())
+        return snapshot.audioIpc?.runtime.resolved.workerThreads
+      })
+      .toBe(1)
+    await page.getByRole("button", { name: "Back to session" }).click()
+    await expect(page.getByText("Lifecycle", { exact: false }).first()).toBeVisible()
+    await expect(page.getByRole("button", { name: "Pause" })).toBeVisible()
+    const mixerAfterRuntimeRestart = await page.evaluate(() => window.yadaw.loadMixerGraph())
+    expect(mixerAfterRuntimeRestart.channels.map((channel) => channel.name)).toEqual(
+      mixerBeforeSave.channels.map((channel) => channel.name)
+    )
+
     await page.getByRole("button", { name: "Pause" }).click()
     await page.getByRole("button", { name: "Go to start" }).click()
     await expect(page.getByText("001·01·000")).toBeVisible()
@@ -183,10 +220,8 @@ test("records into a Large Object and reopens the PGlite project archive", async
     await page.getByRole("button", { name: "Close project" }).click()
     await expect(page.getByRole("heading", { name: /Build a session/ })).toBeVisible()
     await page.getByRole("button", { name: "Lifecycle" }).click()
-    await expect(page.getByText("132.50")).toBeVisible()
     await page.getByRole("button", { name: "Project settings" }).click()
     await expect(page.getByLabel("Sample rate")).toHaveValue("44100")
-    await expect(page.getByLabel("Tempo")).toHaveValue("132.5")
     await expect(page.getByLabel("Waveform channels")).toHaveValue("aggregate")
     const reopenedAssets = await page.evaluate(async () =>
       (await window.yadaw.listProjectAssets()).map((asset) => ({

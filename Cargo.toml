@@ -38,10 +38,10 @@ serde = { version = "1", features = ["derive"] }
 serde_bytes = "0.11"
 serde_json = "1"
 thiserror = "2"
-tokio = { version = "1.53.0", default-features = false, features = ["macros", "rt", "sync", "time"] }
+tokio = { version = "1.53.0", default-features = false, features = ["macros", "rt-multi-thread", "sync", "time"] }
 tokio-util = { version = "0.7", default-features = false, features = ["rt"] }
 winit = { version = "0.30.13", default-features = false, features = ["rwh_06", "x11", "wayland"] }
-xxhash-rust = { version = "0.8.15", features = ["xxh3"] }
+zerocopy = { version = "0.8.55", features = ["derive"] }
 yadaw-dsp-core = { path = "crates/dsp-core" }
 yadaw-dsp-runtime = { path = "crates/dsp-runtime" }
 yadaw-ipc-transport = { path = "crates/ipc-transport" }

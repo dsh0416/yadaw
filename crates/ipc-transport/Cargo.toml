@@ -10,8 +10,8 @@ ipc-channel.workspace = true
 rmp-serde.workspace = true
 serde.workspace = true
 thiserror.workspace = true
-xxhash-rust.workspace = true
 yadaw-dsp-runtime.workspace = true
+zerocopy.workspace = true
 
 [dev-dependencies]
 loom = "0.7.2"

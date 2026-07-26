@@ -6,16 +6,19 @@ use std::{
 
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
-pub const PROTOCOL_VERSION: u16 = 2;
+pub const PROTOCOL_VERSION: u16 = 3;
 pub const MAX_MESSAGE_BYTES: usize = 64 * 1024 * 1024;
 pub const INLINE_BLOB_LIMIT: usize = 64 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct SharedBlobRef {
-    pub region: u16,
+    pub session_epoch: u64,
+    pub region_id: u32,
+    pub region_generation: u64,
+    pub slot: u16,
+    pub allocation_generation: u64,
     pub offset: u64,
     pub length: u64,
-    pub checksum: u64,
     pub lease_id: u64,
 }
 
@@ -29,6 +32,11 @@ pub enum BinaryPayload {
     Shared {
         reference: SharedBlobRef,
     },
+    Attachment {
+        index: u16,
+        offset: u64,
+        length: u64,
+    },
 }
 
 impl BinaryPayload {
@@ -41,7 +49,7 @@ impl BinaryPayload {
     pub fn as_inline(&self) -> Option<&[u8]> {
         match self {
             Self::Inline { bytes } => Some(bytes),
-            Self::Shared { .. } => None,
+            Self::Shared { .. } | Self::Attachment { .. } => None,
         }
     }
 }
@@ -115,6 +123,19 @@ pub enum PriorityResult {
         winit_generation: u64,
         callback_generation: u64,
         transport_state: String,
+        egress_active: u64,
+        egress_queue_depth: u64,
+        egress_queue_high_water: u64,
+        egress_batches: u64,
+        blocking_jobs: u64,
+        arena_regions: u64,
+        arena_capacity_bytes: u64,
+        arena_used_bytes: u64,
+        arena_high_water_bytes: u64,
+        arena_offers: u64,
+        arena_busy: u64,
+        arena_quarantined_regions: u64,
+        arena_copied_bytes: u64,
     },
     Accepted,
     Busy,

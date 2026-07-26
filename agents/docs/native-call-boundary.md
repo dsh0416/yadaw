@@ -54,7 +54,7 @@ but product behavior should normally be exercised through the UI.
 | Recording and recovery                             | `recording`           | exclusive lifecycle                                 | return to idle and retain recoverable media |
 | Cross-domain studio operations                     | `studioWorkflow`      | explicit awaited sequence                           | stop at the first failed guard/action       |
 | Waveforms                                          | `waveform`            | cached/latest request generation                    | stale results are discarded                 |
-| Settings                                           | `applicationSettings` | store-owned actions                                 | optimistic changes roll back                |
+| Settings                                           | `applicationSettings` | ordinary patches; exclusive helper restart          | persist only after restart; rollback config |
 | Operations                                         | `operations`          | one application-owned subscription                  | main events are authoritative               |
 | Benchmark                                          | `audioBenchmark`      | single running benchmark                            | retain terminal report/error                |
 | System telemetry                                   | `systemPerformance`   | latest-wins polling                                 | retain last usable snapshot                 |
@@ -90,14 +90,32 @@ The one-second `systemPerformance` sample also includes an audio IPC diagnostic
 snapshot. `AudioHostService` combines its cached priority-heartbeat generations
 with addon-local counters for pending requests, leases, event depth, telemetry
 capacity/fallbacks, parameter-ring pressure, and cumulative inline/shared
-normal-request packet and byte traffic. This read must stay local to
+normal-request packet and byte traffic, resolved Tokio thread counts, egress
+queue/activity, and both persistent bulk-arena directions. This read must stay local to
 Electron/addon atomics and mutexes; performance monitoring must never send a
 diagnostic request to the helper it is trying to observe.
 
-Large `Uint8Array` values remain ordinary values at this boundary. The native
-addon decides whether to inline or attach them and always returns an ordinary
-Node Buffer after one validated copy. Renderer, preload, and project database
-code must not retain a shared-memory handle or lease ID.
+Large `Uint8Array` values remain ordinary values at the renderer/preload
+boundary. Electron main replaces values above 64 KiB with attachment indexes
+before MessagePack encoding and calls the addon with `{ body, attachments }`.
+The addon copies attachments synchronously into its persistent arena and always
+returns ordinary Node Buffers after one validated copy. Renderer, preload, and
+project database code must not retain a shared-memory handle, region ID,
+generation, or lease ID.
+
+Large structured MIDI arrays are a native-wire exception to MessagePack
+materialization. Electron still submits the same typed graph request, but the
+native transport externalizes large note/event batches into the fixed MIDI ABI
+documented in `playback-runtime.md`. The helper borrows validated records from
+the mapping while compiling the native graph and only creates an owned copy for
+the retained graph-patch snapshot. This optimization is contained below the
+preload API and does not expose shared-memory lifetimes to JavaScript.
+
+`configureAudioHostRuntime` is intentionally separate from the ordinary
+settings patch API. The `applicationSettings` store owns its loading/error
+state; main owns the recording/recovery guard and the complete helper
+restart/restore/rollback transaction. The new settings file is written only
+after the replacement helper has published the restored graph.
 
 ## Adding a native call
 
@@ -116,7 +134,8 @@ Before adding or changing a native call:
 7. If the operation reaches the playback helper, assign an actor owner,
    bounded-mailbox behavior, deadline, cancellation behavior, and confirm that
    no part executes in the real-time callback.
-8. Classify its transport: small control MessagePack, temporary shared blob,
+8. Classify its transport: small control MessagePack, persistent-arena
+   attachment,
    sampled telemetry, SPSC parameter command, or stable-ID graph patch. Do not
    place a large byte vector or high-frequency observation on normal request
    IPC.

@@ -58,6 +58,7 @@ async function openPreferences(): Promise<void> {
 }
 async function openProjectSettings(): Promise<void> {
   if (!(await studioWorkflowStore.prepareToLeaveStudio())) return
+  await transportStore.stop()
   void router.push({ name: "project-settings" })
 }
 async function saveProject(): Promise<void> {
@@ -125,7 +126,6 @@ function handleShortcut(event: KeyboardEvent): void {
 
 useEventListener(window, "keydown", handleShortcut)
 onBeforeUnmount(() => {
-  if (projectStore.isOpen) void transportStore.stop()
   transportStore.stopPolling()
   mixerStore.stopMetering()
 })

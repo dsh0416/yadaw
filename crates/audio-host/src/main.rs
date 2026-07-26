@@ -12,7 +12,10 @@ use std::{
 };
 
 use ipc_channel::ipc::{self, IpcSender};
-use tokio::sync::{Semaphore, mpsc, oneshot};
+use tokio::{
+    sync::{Semaphore, mpsc, oneshot, watch},
+    task::JoinSet,
+};
 use winit::{
     application::ApplicationHandler,
     event::WindowEvent,
@@ -27,15 +30,16 @@ use yadaw_audio_host::{
 use yadaw_dsp_runtime::protocol::{
     AudioBackend, AudioDevice, AudioDeviceList, AudioRuntime, BinaryPayload, ControlCommand,
     ControlRequest, ControlResponse, ControlResult, GraphUpdate, HostEvent, LiveMixerGraph,
-    MidiEventBatch, MidiNoteBatch, MixerChannelMeter, PROTOCOL_VERSION, PriorityCommand,
-    PriorityRequest, PriorityResponse, PriorityResult, RecordingResult, RecordingWaveform,
-    TransportState, read_message, validate_version, write_message,
+    MixerChannelMeter, PROTOCOL_VERSION, PriorityCommand, PriorityRequest, PriorityResponse,
+    PriorityResult, RecordingResult, RecordingWaveform, TransportState, read_message,
+    validate_version, write_message,
 };
 use yadaw_dsp_runtime::tempo::{TempoEvent, TimeSignatureEvent};
 use yadaw_ipc_transport::{
-    HostBootstrap, LeaseRegistry, ParameterConsumer, TelemetryMeter, TelemetrySnapshot,
-    TelemetryWriter, WirePacket, create_telemetry_page, decode_body, decode_request, encode_event,
-    encode_priority, encode_response,
+    ArenaReceiver, HostBootstrap, LeaseRegistry, MidiNoteBatchView, ParameterConsumer, RegionOffer,
+    ResolvedBlob, TelemetryMeter, TelemetrySnapshot, TelemetryWriter, WirePacket,
+    create_telemetry_page, decode_body, decode_request_deferred, encode_event, encode_priority,
+    encode_response_from_arena, materialize_mixer_graph, resolve_midi_note_batch,
 };
 
 fn audio_runtime(value: engine::NativeAudioRuntimeSnapshot) -> AudioRuntime {
@@ -61,8 +65,9 @@ fn audio_runtime(value: engine::NativeAudioRuntimeSnapshot) -> AudioRuntime {
 
 fn live_graph(
     generation: u64,
-    value: LiveMixerGraph,
+    value: &LiveMixerGraph,
     vst3: Option<&vst3::Vst3Runtime>,
+    request_arena: &ArenaReceiver,
 ) -> Result<engine::NativeMixerGraph, String> {
     let channel_indexes = value
         .channels
@@ -78,11 +83,11 @@ fn live_graph(
     };
     let channels = value
         .channels
-        .into_iter()
+        .iter()
         .map(|channel| {
             Ok(engine::NativeMixerChannel {
-                id: channel.id,
-                kind: channel.kind,
+                id: channel.id.clone(),
+                kind: channel.kind.clone(),
                 gain_db: channel.gain_db,
                 pan: channel.pan,
                 muted: channel.muted,
@@ -93,21 +98,21 @@ fn live_graph(
                     .map(channel_index)
                     .transpose()?,
                 record_armed: channel.record_armed,
-                input_channels: channel.input_channels,
-                hardware_output_channels: channel.hardware_output_channels,
+                input_channels: channel.input_channels.clone(),
+                hardware_output_channels: channel.hardware_output_channels.clone(),
             })
         })
         .collect::<Result<Vec<_>, String>>()?;
     let sends = value
         .sends
-        .into_iter()
+        .iter()
         .map(|send| {
             Ok(engine::NativeMixerSend {
-                id: send.id,
+                id: send.id.clone(),
                 source_index: channel_index(&send.source_channel_id)?,
                 target_index: channel_index(&send.target_channel_id)?,
                 enabled: send.enabled,
-                tap: send.tap,
+                tap: send.tap.clone(),
                 level_db: send.level_db,
                 pan: send.pan,
             })
@@ -115,27 +120,27 @@ fn live_graph(
         .collect::<Result<Vec<_>, String>>()?;
     let clips = value
         .clips
-        .into_iter()
+        .iter()
         .map(|clip| {
             Ok(engine::NativeMixerClip {
-                id: clip.id,
+                id: clip.id.clone(),
                 channel_index: channel_index(&clip.channel_id)?,
                 start_frame: clip.start_frame,
                 source_offset_frames: clip.source_offset_frames,
                 length_frames: clip.length_frames,
-                path: clip.path,
+                path: clip.path.clone(),
             })
         })
         .collect::<Result<Vec<_>, String>>()?;
     let plugins = value
         .plugins
-        .into_iter()
+        .iter()
         .map(|plugin| {
             Ok(engine::NativePluginInstance {
                 processor: vst3.and_then(|runtime| runtime.processor_handle(&plugin.instance_id)),
-                instance_id: plugin.instance_id,
+                instance_id: plugin.instance_id.clone(),
                 channel_index: channel_index(&plugin.channel_id)?,
-                role: plugin.role,
+                role: plugin.role.clone(),
                 slot_order: plugin.slot_order,
                 enabled: plugin.enabled,
                 latency_samples: plugin.latency_samples,
@@ -145,37 +150,40 @@ fn live_graph(
         .collect::<Result<Vec<_>, String>>()?;
     let midi_clips = value
         .midi_clips
-        .into_iter()
+        .iter()
         .map(|clip| {
-            let notes = match clip.notes {
-                MidiNoteBatch::Inline { notes } => notes,
-                MidiNoteBatch::Shared { .. } => {
-                    return Err("shared MIDI note batch was not materialized".into());
-                }
-            };
-            let _events = match clip.events {
-                MidiEventBatch::Inline { events } => events,
-                MidiEventBatch::Shared { .. } => {
-                    return Err("shared MIDI event batch was not materialized".into());
-                }
-            };
-            Ok(engine::NativeMidiClip {
-                id: clip.id,
-                channel_index: channel_index(&clip.channel_id)?,
-                start_tick: clip.start_tick,
-                source_offset_ticks: clip.source_offset_ticks,
-                length_ticks: clip.length_ticks,
-                notes: notes
-                    .into_iter()
-                    .map(|note| engine::NativeMidiNote {
+            let notes = resolve_midi_note_batch(&clip.notes, request_arena)
+                .map_err(|error| error.to_string())?;
+            let mut native_notes = Vec::with_capacity(notes.len());
+            match notes {
+                MidiNoteBatchView::Inline(notes) => {
+                    native_notes.extend(notes.iter().map(|note| engine::NativeMidiNote {
                         start_tick: note.start_tick,
                         duration_ticks: note.duration_ticks,
                         channel: note.channel,
                         key: note.key,
                         velocity: note.velocity,
                         release_velocity: note.release_velocity,
-                    })
-                    .collect(),
+                    }));
+                }
+                MidiNoteBatchView::Shared(notes) => {
+                    native_notes.extend(notes.iter().copied().map(|note| engine::NativeMidiNote {
+                        start_tick: note.start_tick(),
+                        duration_ticks: note.duration_ticks(),
+                        channel: note.channel(),
+                        key: note.key(),
+                        velocity: note.velocity(),
+                        release_velocity: note.release_velocity(),
+                    }));
+                }
+            }
+            Ok(engine::NativeMidiClip {
+                id: clip.id.clone(),
+                channel_index: channel_index(&clip.channel_id)?,
+                start_tick: clip.start_tick,
+                source_offset_ticks: clip.source_offset_ticks,
+                length_ticks: clip.length_ticks,
+                notes: native_notes,
             })
         })
         .collect::<Result<Vec<_>, String>>()?;
@@ -189,7 +197,7 @@ fn live_graph(
         midi_clips,
         tempo_events: value
             .tempo_events
-            .into_iter()
+            .iter()
             .map(|event| TempoEvent {
                 tick: event.tick,
                 beats_per_minute: event.beats_per_minute,
@@ -197,7 +205,7 @@ fn live_graph(
             .collect(),
         time_signature_events: value
             .time_signature_events
-            .into_iter()
+            .iter()
             .map(|event| TimeSignatureEvent {
                 tick: event.tick,
                 numerator: event.numerator,
@@ -304,7 +312,8 @@ fn engine_command(
         ControlCommand::UpdateGraph {
             update: GraphUpdate::Replace { revision, graph },
         } => {
-            match live_graph(revision, graph, vst3).and_then(|graph| {
+            let inline_arena = ArenaReceiver::new(1);
+            match live_graph(revision, &graph, vst3, &inline_arena).and_then(|graph| {
                 engine::load_mixer_graph(graph).map_err(|error| error.to_string())
             }) {
                 Ok(()) => ControlResult::GraphAccepted { revision },
@@ -663,11 +672,44 @@ async fn background_io_actor(mut inbox: mpsc::Receiver<ActorRequest>) {
     }
 }
 
+enum DeferredBinary {
+    Inline(Vec<u8>),
+    Shared(ResolvedBlob),
+}
+
+impl DeferredBinary {
+    fn as_slice(&self) -> &[u8] {
+        match self {
+            Self::Inline(bytes) => bytes,
+            Self::Shared(blob) => blob.as_slice(),
+        }
+    }
+}
+
+fn resolve_deferred_binary(
+    payload: BinaryPayload,
+    arena: &Arc<Mutex<ArenaReceiver>>,
+) -> Result<DeferredBinary, String> {
+    match payload {
+        BinaryPayload::Inline { bytes } => Ok(DeferredBinary::Inline(bytes)),
+        BinaryPayload::Shared { reference } => arena
+            .lock()
+            .map_err(|_| "request arena is poisoned".to_owned())?
+            .acquire(reference)
+            .map(DeferredBinary::Shared)
+            .map_err(|error| error.to_string()),
+        BinaryPayload::Attachment { .. } => {
+            Err("VST3 state still references a Node attachment".to_owned())
+        }
+    }
+}
+
 async fn vst3_actor(
     mut inbox: mpsc::Receiver<ActorRequest>,
     bridge_path: Option<PathBuf>,
     ui_proxy: EventLoopProxy<UiEvent>,
     handles: Arc<Mutex<GraphParameterHandles>>,
+    request_arena: Arc<Mutex<ArenaReceiver>>,
 ) {
     let mut runtime = match bridge_path
         .as_deref()
@@ -712,8 +754,39 @@ async fn vst3_actor(
                         transport_state,
                     }
                 }
-                command @ (ControlCommand::LoadPlugin { .. }
-                | ControlCommand::UnloadPlugin { .. }
+                ControlCommand::LoadPlugin {
+                    instance_id,
+                    module_path,
+                    class_id,
+                    sample_rate,
+                    component_state,
+                    controller_state,
+                } => match runtime.as_mut() {
+                    Some(runtime) => {
+                        let component_state =
+                            resolve_deferred_binary(component_state, &request_arena);
+                        let controller_state =
+                            resolve_deferred_binary(controller_state, &request_arena);
+                        match (component_state, controller_state) {
+                            (Ok(component_state), Ok(controller_state)) => runtime
+                                .load_plugin_bytes(
+                                    instance_id,
+                                    module_path,
+                                    class_id,
+                                    sample_rate,
+                                    component_state.as_slice(),
+                                    controller_state.as_slice(),
+                                ),
+                            (Err(message), _) | (_, Err(message)) => {
+                                ControlResult::Error { message }
+                            }
+                        }
+                    }
+                    None => ControlResult::Error {
+                        message: "VST3 runtime is not configured".into(),
+                    },
+                },
+                command @ (ControlCommand::UnloadPlugin { .. }
                 | ControlCommand::PluginParameters { .. }
                 | ControlCommand::SetPluginParameter { .. }
                 | ControlCommand::SavePluginState { .. }
@@ -725,7 +798,7 @@ async fn vst3_actor(
                     },
                 },
                 ControlCommand::UpdateGraph { update } => {
-                    let (revision, candidate) = match update {
+                    let (revision, mut candidate) = match update {
                         GraphUpdate::Replace { revision, graph } => (revision, graph),
                         GraphUpdate::Patch {
                             base_revision,
@@ -748,9 +821,17 @@ async fn vst3_actor(
                             (revision, graph)
                         }
                     };
-                    match live_graph(revision, candidate.clone(), runtime.as_ref()).and_then(
-                        |graph| engine::load_mixer_graph(graph).map_err(|error| error.to_string()),
-                    ) {
+                    let arena = request_arena
+                        .lock()
+                        .map_err(|_| "request arena is poisoned".to_owned())
+                        .map(|arena| arena.clone());
+                    let compiled = arena.and_then(|arena| {
+                        let graph = live_graph(revision, &candidate, runtime.as_ref(), &arena)?;
+                        materialize_mixer_graph(&mut candidate, &arena)
+                            .map_err(|error| error.to_string())?;
+                        engine::load_mixer_graph(graph).map_err(|error| error.to_string())
+                    });
+                    match compiled {
                         Ok(()) => {
                             refresh_graph_handles(&handles, &candidate);
                             graph_revision = revision;
@@ -868,7 +949,10 @@ enum PriorityIngress {
 }
 
 enum OutboundMessage {
-    Response(ControlResponse),
+    Response {
+        value: ControlResponse,
+        request_leases: Vec<u64>,
+    },
     Event(WirePacket),
 }
 
@@ -880,58 +964,206 @@ fn response(request_id: u64, result: ControlResult) -> ControlResponse {
     }
 }
 
-fn spawn_egress(
+#[derive(Clone)]
+struct EgressArenas {
+    responses: Arc<Mutex<LeaseRegistry>>,
+    requests: Arc<Mutex<ArenaReceiver>>,
+}
+
+async fn run_egress(
     mut outbound: mpsc::Receiver<OutboundMessage>,
     responses: ipc_channel::ipc::IpcSender<WirePacket>,
     events: ipc_channel::ipc::IpcSender<WirePacket>,
-    leases: Arc<Mutex<LeaseRegistry>>,
-) -> thread::JoinHandle<()> {
-    thread::Builder::new()
-        .name("yadaw-ipc-egress".into())
-        .spawn(move || {
-            loop {
-                let message = match outbound.try_recv() {
-                    Ok(message) => message,
-                    Err(mpsc::error::TryRecvError::Empty) => {
-                        if let Ok(mut leases) = leases.lock() {
-                            for lease_id in leases.reap_expired() {
-                                eprintln!(
-                                    "audio-host: temporary shared-memory lease {lease_id} expired"
-                                );
-                            }
-                        }
-                        thread::sleep(std::time::Duration::from_millis(1));
-                        continue;
+    arenas: EgressArenas,
+    concurrency: usize,
+    mut shutdown: watch::Receiver<bool>,
+    metrics: Arc<EgressMetrics>,
+) {
+    let permits = Arc::new(Semaphore::new(concurrency.max(1)));
+    let mut responses_inflight = JoinSet::new();
+    let mut lease_reaper = tokio::time::interval(std::time::Duration::from_secs(1));
+    loop {
+        let queue_depth = outbound.len() as u64;
+        metrics.queue_depth.store(queue_depth, Ordering::Release);
+        metrics
+            .queue_high_water
+            .fetch_max(queue_depth, Ordering::AcqRel);
+        tokio::select! {
+            biased;
+            changed = shutdown.changed() => {
+                if changed.is_err() || *shutdown.borrow() {
+                    while let Ok(message) = outbound.try_recv() {
+                        dispatch_egress(
+                            message,
+                            &responses,
+                            &events,
+                            &arenas,
+                            &permits,
+                            &mut responses_inflight,
+                            &metrics,
+                        ).await;
                     }
-                    Err(mpsc::error::TryRecvError::Disconnected) => break,
-                };
-                let sent = match message {
-                    OutboundMessage::Response(value) => leases
-                        .lock()
-                        .map_err(|_| "response lease registry is poisoned".to_owned())
-                        .and_then(|mut leases| {
-                            encode_response(value, &mut leases).map_err(|error| error.to_string())
-                        })
-                        .and_then(|packet| {
-                            responses.send(packet).map_err(|error| error.to_string())
-                        }),
-                    OutboundMessage::Event(packet) => {
-                        events.send(packet).map_err(|error| error.to_string())
-                    }
-                };
-                if let Err(error) = sent {
-                    eprintln!("audio-host: IPC egress stopped: {error}");
                     break;
                 }
             }
-        })
-        .expect("IPC egress thread must start")
+            Some(result) = responses_inflight.join_next(), if !responses_inflight.is_empty() => {
+                if let Err(error) = result {
+                    eprintln!("audio-host: IPC response task failed: {error}");
+                }
+            }
+            _ = lease_reaper.tick() => {
+                if let Ok(mut leases) = arenas.responses.lock() {
+                    for lease_id in leases.reap_expired() {
+                        eprintln!("audio-host: arena lease {lease_id} expired; region quarantined");
+                    }
+                    publish_arena_metrics(&metrics, &leases);
+                }
+            }
+            message = outbound.recv() => {
+                let Some(message) = message else { break };
+                dispatch_egress(
+                    message,
+                    &responses,
+                    &events,
+                    &arenas,
+                    &permits,
+                    &mut responses_inflight,
+                    &metrics,
+                ).await;
+            }
+        }
+    }
+    while let Some(result) = responses_inflight.join_next().await {
+        if let Err(error) = result {
+            eprintln!("audio-host: IPC response task failed during drain: {error}");
+        }
+    }
+}
+
+async fn dispatch_egress(
+    message: OutboundMessage,
+    responses: &ipc_channel::ipc::IpcSender<WirePacket>,
+    events: &ipc_channel::ipc::IpcSender<WirePacket>,
+    arenas: &EgressArenas,
+    permits: &Arc<Semaphore>,
+    inflight: &mut JoinSet<()>,
+    metrics: &Arc<EgressMetrics>,
+) {
+    metrics.batches.fetch_add(1, Ordering::Relaxed);
+    match message {
+        OutboundMessage::Response {
+            value,
+            request_leases,
+        } => {
+            let Ok(permit) = permits.clone().acquire_owned().await else {
+                return;
+            };
+            let responses = responses.clone();
+            let events = events.clone();
+            let leases = arenas.responses.clone();
+            let request_arena = arenas.requests.clone();
+            let metrics = metrics.clone();
+            metrics.active.fetch_add(1, Ordering::AcqRel);
+            metrics.blocking_jobs.fetch_add(1, Ordering::AcqRel);
+            inflight.spawn_blocking(move || {
+                let _permit = permit;
+                let sent = request_arena
+                    .lock()
+                    .map_err(|_| "request arena is poisoned".to_owned())
+                    .and_then(|source| {
+                        leases
+                            .lock()
+                            .map_err(|_| "response arena is poisoned".to_owned())
+                            .and_then(|mut arena| {
+                                let result = encode_response_from_arena(value, &mut arena, &source)
+                                    .map_err(|error| error.to_string());
+                                publish_arena_metrics(&metrics, &arena);
+                                result
+                            })
+                    })
+                    .and_then(|packet| responses.send(packet).map_err(|error| error.to_string()));
+                if let Err(error) = sent {
+                    eprintln!("audio-host: IPC response stopped: {error}");
+                } else if !request_leases.is_empty()
+                    && let Ok(packet) = encode_event(
+                        &HostEvent::ReleaseLeases {
+                            lease_ids: request_leases,
+                        },
+                        Vec::new(),
+                    )
+                    && let Err(error) = events.send(packet)
+                {
+                    eprintln!("audio-host: request lease release event stopped: {error}");
+                }
+                metrics.active.fetch_sub(1, Ordering::AcqRel);
+                metrics.blocking_jobs.fetch_sub(1, Ordering::AcqRel);
+            });
+        }
+        OutboundMessage::Event(packet) => {
+            let events = events.clone();
+            metrics.blocking_jobs.fetch_add(1, Ordering::AcqRel);
+            let sent = tokio::task::spawn_blocking(move || events.send(packet))
+                .await
+                .map_err(|error| error.to_string())
+                .and_then(|result| result.map_err(|error| error.to_string()));
+            metrics.blocking_jobs.fetch_sub(1, Ordering::AcqRel);
+            if let Err(error) = sent {
+                eprintln!("audio-host: IPC event lane stopped: {error}");
+            }
+        }
+    }
+}
+
+#[derive(Default)]
+struct EgressMetrics {
+    active: AtomicU64,
+    queue_depth: AtomicU64,
+    queue_high_water: AtomicU64,
+    batches: AtomicU64,
+    blocking_jobs: AtomicU64,
+    arena_regions: AtomicU64,
+    arena_capacity_bytes: AtomicU64,
+    arena_used_bytes: AtomicU64,
+    arena_high_water_bytes: AtomicU64,
+    arena_offers: AtomicU64,
+    arena_busy: AtomicU64,
+    arena_quarantined_regions: AtomicU64,
+    arena_copied_bytes: AtomicU64,
+}
+
+fn publish_arena_metrics(metrics: &EgressMetrics, arena: &LeaseRegistry) {
+    let diagnostics = arena.diagnostics();
+    metrics
+        .arena_regions
+        .store(u64::from(diagnostics.region_count), Ordering::Release);
+    metrics
+        .arena_capacity_bytes
+        .store(diagnostics.capacity_bytes, Ordering::Release);
+    metrics
+        .arena_used_bytes
+        .store(diagnostics.used_bytes, Ordering::Release);
+    metrics
+        .arena_high_water_bytes
+        .store(diagnostics.high_water_bytes, Ordering::Release);
+    metrics
+        .arena_offers
+        .store(diagnostics.offers, Ordering::Release);
+    metrics
+        .arena_busy
+        .store(diagnostics.busy, Ordering::Release);
+    metrics
+        .arena_quarantined_regions
+        .store(diagnostics.quarantined_regions, Ordering::Release);
+    metrics
+        .arena_copied_bytes
+        .store(diagnostics.copied_bytes, Ordering::Release);
 }
 
 struct Liveness {
     ipc: Arc<AtomicU64>,
     tokio: Arc<AtomicU64>,
     winit: Arc<AtomicU64>,
+    egress: Arc<EgressMetrics>,
 }
 
 struct IngressChannels {
@@ -950,6 +1182,7 @@ fn spawn_ingress(
     channels: IngressChannels,
     mailboxes: IngressMailboxes,
     leases: Arc<Mutex<LeaseRegistry>>,
+    request_arena: Arc<Mutex<ArenaReceiver>>,
     liveness: Liveness,
 ) -> thread::JoinHandle<()> {
     thread::Builder::new()
@@ -1017,7 +1250,14 @@ fn spawn_ingress(
                     };
                     let ipc_generation = liveness.ipc.fetch_add(1, Ordering::AcqRel) + 1;
                     if id == normal_id {
-                        let (request, received_leases) = match decode_request(packet) {
+                        let decoded = request_arena
+                            .lock()
+                            .map_err(|_| "request arena is poisoned".to_owned())
+                            .and_then(|mut arena| {
+                                decode_request_deferred(packet, &mut arena)
+                                    .map_err(|error| error.to_string())
+                            });
+                        let (request, received_leases) = match decoded {
                             Ok(value) => value,
                             Err(error) => {
                                 eprintln!("audio-host: rejected invalid request packet: {error}");
@@ -1030,10 +1270,11 @@ fn spawn_ingress(
                             received_leases,
                         }) {
                             Ok(()) => {}
-                            Err(mpsc::error::TrySendError::Full(_)) => {
-                                let _ = mailboxes.outbound.try_send(OutboundMessage::Response(
-                                    response(request_id, ControlResult::Busy),
-                                ));
+                            Err(mpsc::error::TrySendError::Full(inbound)) => {
+                                let _ = mailboxes.outbound.try_send(OutboundMessage::Response {
+                                    value: response(request_id, ControlResult::Busy),
+                                    request_leases: inbound.received_leases,
+                                });
                             }
                             Err(mpsc::error::TrySendError::Closed(_)) => return,
                         }
@@ -1064,6 +1305,49 @@ fn spawn_ingress(
                                     winit_generation: liveness.winit.load(Ordering::Acquire),
                                     callback_generation,
                                     transport_state,
+                                    egress_active: liveness.egress.active.load(Ordering::Acquire),
+                                    egress_queue_depth: liveness
+                                        .egress
+                                        .queue_depth
+                                        .load(Ordering::Acquire),
+                                    egress_queue_high_water: liveness
+                                        .egress
+                                        .queue_high_water
+                                        .load(Ordering::Acquire),
+                                    egress_batches: liveness.egress.batches.load(Ordering::Acquire),
+                                    blocking_jobs: liveness
+                                        .egress
+                                        .blocking_jobs
+                                        .load(Ordering::Acquire),
+                                    arena_regions: liveness
+                                        .egress
+                                        .arena_regions
+                                        .load(Ordering::Acquire),
+                                    arena_capacity_bytes: liveness
+                                        .egress
+                                        .arena_capacity_bytes
+                                        .load(Ordering::Acquire),
+                                    arena_used_bytes: liveness
+                                        .egress
+                                        .arena_used_bytes
+                                        .load(Ordering::Acquire),
+                                    arena_high_water_bytes: liveness
+                                        .egress
+                                        .arena_high_water_bytes
+                                        .load(Ordering::Acquire),
+                                    arena_offers: liveness
+                                        .egress
+                                        .arena_offers
+                                        .load(Ordering::Acquire),
+                                    arena_busy: liveness.egress.arena_busy.load(Ordering::Acquire),
+                                    arena_quarantined_regions: liveness
+                                        .egress
+                                        .arena_quarantined_regions
+                                        .load(Ordering::Acquire),
+                                    arena_copied_bytes: liveness
+                                        .egress
+                                        .arena_copied_bytes
+                                        .load(Ordering::Acquire),
                                 }
                             }
                             PriorityCommand::ReleaseLeases { lease_ids } => {
@@ -1180,7 +1464,13 @@ async fn publish_telemetry(
             }
             if let Ok(packet) = encode_event(
                 &HostEvent::TelemetryPageOffer { epoch, capacity },
-                vec![memory],
+                vec![RegionOffer {
+                    session_epoch,
+                    region_id: 0,
+                    region_generation: epoch,
+                    capacity: memory.len() as u64,
+                    memory,
+                }],
             ) {
                 let _ = outbound.send(OutboundMessage::Event(packet)).await;
             }
@@ -1208,6 +1498,7 @@ async fn run_protocol_actor(
     bridge_path: Option<PathBuf>,
     ui_proxy: EventLoopProxy<UiEvent>,
     winit_generation: Arc<AtomicU64>,
+    runtime_config: RuntimeConfig,
 ) -> Result<(), String> {
     const ACTOR_CAPACITY: usize = 64;
     const PROTOCOL_CAPACITY: usize = 256;
@@ -1232,14 +1523,28 @@ async fn run_protocol_actor(
     ));
     let parameter_consumer =
         ParameterConsumer::map(parameter_ring).map_err(|error| error.to_string())?;
-    let response_leases = Arc::new(Mutex::new(LeaseRegistry::new()));
+    let response_leases = Arc::new(Mutex::new(LeaseRegistry::with_session_epoch(session_epoch)));
+    let request_arena = Arc::new(Mutex::new(ArenaReceiver::new(session_epoch)));
     let ipc_generation = Arc::new(AtomicU64::new(0));
     let tokio_generation = Arc::new(AtomicU64::new(0));
     let published_event_revision = Arc::new(AtomicU64::new(0));
     let page_epoch = Arc::new(AtomicU64::new(0));
+    let egress_metrics = Arc::new(EgressMetrics::default());
 
     let (outbound, outbound_inbox) = mpsc::channel(PROTOCOL_CAPACITY);
-    let egress_thread = spawn_egress(outbound_inbox, responses, events, response_leases.clone());
+    let (egress_shutdown, egress_shutdown_rx) = watch::channel(false);
+    let egress_task = tokio::spawn(run_egress(
+        outbound_inbox,
+        responses,
+        events,
+        EgressArenas {
+            responses: response_leases.clone(),
+            requests: request_arena.clone(),
+        },
+        runtime_config.egress_concurrency,
+        egress_shutdown_rx,
+        egress_metrics.clone(),
+    ));
     let (inbound, mut inbound_inbox) = mpsc::channel(PROTOCOL_CAPACITY);
     let (priority, mut priority_inbox) = mpsc::channel(64);
     let ingress_thread = spawn_ingress(
@@ -1254,10 +1559,12 @@ async fn run_protocol_actor(
             outbound: outbound.clone(),
         },
         response_leases,
+        request_arena.clone(),
         Liveness {
             ipc: ipc_generation.clone(),
             tokio: tokio_generation.clone(),
             winit: winit_generation,
+            egress: egress_metrics,
         },
     );
 
@@ -1265,14 +1572,15 @@ async fn run_protocol_actor(
     let (engine_sender, engine_inbox) = mpsc::channel(ACTOR_CAPACITY);
     let (vst3_sender, vst3_inbox) = mpsc::channel(ACTOR_CAPACITY);
     let (background_sender, background_inbox) = mpsc::channel(ACTOR_CAPACITY);
-    tokio::task::spawn_local(engine_actor(engine_inbox, handles.clone()));
+    tokio::spawn(engine_actor(engine_inbox, handles.clone()));
     tokio::task::spawn_local(vst3_actor(
         vst3_inbox,
         bridge_path,
         ui_proxy.clone(),
         handles,
+        request_arena.clone(),
     ));
-    tokio::task::spawn_local(background_io_actor(background_inbox));
+    tokio::spawn(background_io_actor(background_inbox));
 
     outbound
         .send(OutboundMessage::Event(
@@ -1285,7 +1593,7 @@ async fn run_protocol_actor(
     let telemetry_outbound = outbound.clone();
     let telemetry_event_revision = published_event_revision.clone();
     let telemetry_page_epoch = page_epoch.clone();
-    tokio::task::spawn_local(async move {
+    tokio::spawn(async move {
         let mut interval = tokio::time::interval(std::time::Duration::from_millis(33));
         loop {
             interval.tick().await;
@@ -1322,22 +1630,17 @@ async fn run_protocol_actor(
             inbound = inbound_inbox.recv() => {
                 let Some(inbound) = inbound else { break };
                 tokio_generation.fetch_add(1, Ordering::Release);
-                if !inbound.received_leases.is_empty()
-                    && let Ok(packet) = encode_event(
-                        &HostEvent::ReleaseLeases { lease_ids: inbound.received_leases },
-                        Vec::new(),
-                    )
-                {
-                    let _ = outbound.send(OutboundMessage::Event(packet)).await;
-                }
                 let permit = match inflight.clone().try_acquire_owned() {
                     Ok(permit) => permit,
                     Err(_) => {
                         let _ = outbound
-                            .send(OutboundMessage::Response(response(
-                                inbound.request.request_id,
-                                ControlResult::Busy,
-                            )))
+                            .send(OutboundMessage::Response {
+                                value: response(
+                                    inbound.request.request_id,
+                                    ControlResult::Busy,
+                                ),
+                                request_leases: inbound.received_leases,
+                            })
                             .await;
                         continue;
                     }
@@ -1348,13 +1651,14 @@ async fn run_protocol_actor(
                 let outbound = outbound.clone();
                 let ui_proxy = ui_proxy.clone();
                 let shutting_down = shutting_down.clone();
-                tokio::task::spawn_local(async move {
+                tokio::spawn(async move {
                     let _permit = permit;
                     let ControlRequest {
                         version,
                         request_id,
                         command,
                     } = inbound.request;
+                    let received_leases = inbound.received_leases;
                     let shutdown = matches!(command, ControlCommand::Shutdown);
                     let deadline = protocol_deadline(&command);
                     let work = async move {
@@ -1364,18 +1668,20 @@ async fn run_protocol_actor(
                                 let _ = engine::stop_audio_engine();
                                 ControlResult::Accepted
                             }
-                            Ok(()) => match command {
-                                ControlCommand::BenchmarkEcho { payload } => {
-                                    ControlResult::BenchmarkEcho { payload }
+                            Ok(()) => {
+                                match command {
+                                    ControlCommand::BenchmarkEcho { payload } => {
+                                        ControlResult::BenchmarkEcho { payload }
+                                    }
+                                    command if is_vst3_command(&command) => {
+                                        dispatch_actor(&vst3_sender, command).await
+                                    }
+                                    command if is_background_io_command(&command) => {
+                                        dispatch_actor(&background_sender, command).await
+                                    }
+                                    command => dispatch_actor(&engine_sender, command).await,
                                 }
-                                command if is_vst3_command(&command) => {
-                                    dispatch_actor(&vst3_sender, command).await
-                                }
-                                command if is_background_io_command(&command) => {
-                                    dispatch_actor(&background_sender, command).await
-                                }
-                                command => dispatch_actor(&engine_sender, command).await,
-                            },
+                            }
                         }
                     };
                     let result = match tokio::time::timeout(deadline, work).await {
@@ -1385,7 +1691,10 @@ async fn run_protocol_actor(
                         },
                     };
                     let _ = outbound
-                        .send(OutboundMessage::Response(response(request_id, result)))
+                        .send(OutboundMessage::Response {
+                            value: response(request_id, result),
+                            request_leases: received_leases,
+                        })
                         .await;
                     if shutdown {
                         shutting_down.store(true, Ordering::Release);
@@ -1428,8 +1737,47 @@ async fn run_protocol_actor(
     // The blocking IPC receivers are deliberately detached. Joining them here would
     // deadlock a clean shutdown while the parent still owns channel handles. Process
     // teardown closes those handles after the Tokio actor and winit loop have exited.
-    drop((outbound, ingress_thread, egress_thread));
+    let _ = egress_shutdown.send(true);
+    let _ = egress_task.await;
+    drop((outbound, ingress_thread));
     Ok(())
+}
+
+#[derive(Debug, Clone, Copy)]
+struct RuntimeConfig {
+    worker_threads: usize,
+    max_blocking_threads: usize,
+    egress_concurrency: usize,
+}
+
+impl RuntimeConfig {
+    fn auto() -> Self {
+        let logical = thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get);
+        let worker_threads = logical.div_ceil(4).clamp(1, 4);
+        let max_blocking_threads = (worker_threads * 2).clamp(2, 8);
+        Self {
+            worker_threads,
+            max_blocking_threads,
+            egress_concurrency: 2.min(max_blocking_threads),
+        }
+    }
+
+    fn validate(self) -> Result<Self, String> {
+        if !(1..=8).contains(&self.worker_threads) {
+            return Err("worker threads must be between 1 and 8".into());
+        }
+        if !(2..=16).contains(&self.max_blocking_threads) {
+            return Err("blocking threads must be between 2 and 16".into());
+        }
+        if !(1..=4).contains(&self.egress_concurrency)
+            || self.egress_concurrency > self.max_blocking_threads
+        {
+            return Err(
+                "egress concurrency must be between 1 and 4 and not exceed blocking threads".into(),
+            );
+        }
+        Ok(self)
+    }
 }
 
 enum UiEvent {
@@ -1465,6 +1813,7 @@ fn run_ipc() -> Result<(), Box<dyn std::error::Error>> {
     let mut ipc_token = None;
     let mut bridge_path = None;
     let mut crash_marker_path = None;
+    let mut runtime_config = RuntimeConfig::auto();
     while let Some(argument) = arguments.next() {
         if argument == "--ipc-token" {
             ipc_token = arguments.next().and_then(|value| value.into_string().ok());
@@ -1472,8 +1821,27 @@ fn run_ipc() -> Result<(), Box<dyn std::error::Error>> {
             bridge_path = arguments.next().map(PathBuf::from);
         } else if argument == "--crash-marker" {
             crash_marker_path = arguments.next().map(PathBuf::from);
+        } else if argument == "--worker-threads" {
+            runtime_config.worker_threads = arguments
+                .next()
+                .and_then(|value| value.into_string().ok())
+                .ok_or("missing --worker-threads value")?
+                .parse()?;
+        } else if argument == "--max-blocking-threads" {
+            runtime_config.max_blocking_threads = arguments
+                .next()
+                .and_then(|value| value.into_string().ok())
+                .ok_or("missing --max-blocking-threads value")?
+                .parse()?;
+        } else if argument == "--egress-concurrency" {
+            runtime_config.egress_concurrency = arguments
+                .next()
+                .and_then(|value| value.into_string().ok())
+                .ok_or("missing --egress-concurrency value")?
+                .parse()?;
         }
     }
+    let runtime_config = runtime_config.validate()?;
     if let Some(path) = crash_marker_path.as_deref() {
         crash_marker::initialize(path)
             .map_err(|error| format!("could not initialize crash marker: {error}"))?;
@@ -1491,10 +1859,13 @@ fn run_ipc() -> Result<(), Box<dyn std::error::Error>> {
     let protocol_thread = thread::Builder::new()
         .name("yadaw-control".into())
         .spawn(move || {
-            let runtime = tokio::runtime::Builder::new_current_thread()
-                .enable_time()
+            let runtime = tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(runtime_config.worker_threads)
+                .max_blocking_threads(runtime_config.max_blocking_threads)
+                .thread_name("yadaw-tokio")
+                .enable_all()
                 .build()
-                .expect("single-thread Tokio runtime must start");
+                .expect("multi-thread Tokio runtime must start");
             let local = tokio::task::LocalSet::new();
             local.block_on(&runtime, async move {
                 if let Err(error) = run_protocol_actor(
@@ -1502,6 +1873,7 @@ fn run_ipc() -> Result<(), Box<dyn std::error::Error>> {
                     bridge_path,
                     proxy.clone(),
                     protocol_winit_generation,
+                    runtime_config,
                 )
                 .await
                 {

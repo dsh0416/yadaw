@@ -365,16 +365,35 @@ impl Vst3Runtime {
     ) -> ControlResult {
         let component_state = match component_state {
             BinaryPayload::Inline { bytes } => bytes,
-            BinaryPayload::Shared { .. } => {
-                return error("shared VST3 component state was not materialized");
+            BinaryPayload::Shared { .. } | BinaryPayload::Attachment { .. } => {
+                return error("external VST3 component state was not materialized");
             }
         };
         let controller_state = match controller_state {
             BinaryPayload::Inline { bytes } => bytes,
-            BinaryPayload::Shared { .. } => {
-                return error("shared VST3 controller state was not materialized");
+            BinaryPayload::Shared { .. } | BinaryPayload::Attachment { .. } => {
+                return error("external VST3 controller state was not materialized");
             }
         };
+        self.load_plugin_bytes(
+            instance_id,
+            module_path,
+            class_id,
+            sample_rate,
+            &component_state,
+            &controller_state,
+        )
+    }
+
+    pub fn load_plugin_bytes(
+        &mut self,
+        instance_id: String,
+        module_path: String,
+        class_id: String,
+        sample_rate: f64,
+        component_state: &[u8],
+        controller_state: &[u8],
+    ) -> ControlResult {
         if let Some(instance) = self.instances.get(&instance_id) {
             // Graph rebuilds deliberately reuse the existing processor and editor instance.
             // SAFETY: The instance remains live for both read-only timing queries.

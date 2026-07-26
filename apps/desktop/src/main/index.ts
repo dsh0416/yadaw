@@ -9,6 +9,7 @@ import type {
   AudioBackend,
   AudioDeviceList,
   AudioPreferences,
+  AudioHostRuntimePreferences,
   AudioRuntimeSnapshot,
   ApplicationSettingsPatch,
   CreateProjectRequest,
@@ -25,7 +26,10 @@ import type {
   WaveformWindowRequest
 } from "@yadaw/contracts"
 import { engineInfo, processGain } from "@yadaw/dsp-node"
-import { ApplicationSettingsStore } from "./application-settings"
+import {
+  ApplicationSettingsStore,
+  validateAudioHostRuntimePreferences
+} from "./application-settings"
 import { AudioHostService } from "./audio-host-service"
 import { createAudioBenchmarkReport } from "./audio-benchmark-service"
 import { installApplicationMenu } from "./application-menu"
@@ -278,6 +282,9 @@ function validateGainRequest(value: unknown): ProcessGainRequest {
 }
 
 function validateAudioBackend(value: unknown): AudioBackend {
+  if (process.env.YADAW_TEST_VIRTUAL_AUDIO === "1" && value === "virtual") {
+    return value as AudioBackend
+  }
   if (typeof value !== "string" || !AUDIO_BACKENDS.includes(value as AudioBackend)) {
     throw new TypeError("Unknown audio backend")
   }
@@ -428,6 +435,7 @@ function registerIpcHandlers(
 
   ipcMain.handle(IPC_CHANNELS.audioSnapshot, async (event) => {
     assertTrustedSender(event)
+    if (shutdownPromise) return lifecycle.snapshot().audio.runtime
     if (!audioHostService) throw new Error("Audio host is not running")
     const snapshot = normalizeAudioRuntime(await audioHostService.audioEngineSnapshot())
     lifecycle.refreshAudio(snapshot)
@@ -465,6 +473,7 @@ function registerIpcHandlers(
 
   ipcMain.handle(IPC_CHANNELS.mixerSnapshot, (event) => {
     assertTrustedSender(event)
+    if (shutdownPromise) return { meters: [], capturedAt: Date.now() }
     return mixer.runtimeSnapshot()
   })
 
@@ -550,11 +559,25 @@ function registerIpcHandlers(
     }
     const command = value as TransportCommand
     lifecycle.assertTransportAllowed(command)
+    if (shutdownPromise) {
+      return {
+        state: "stopped" as const,
+        positionFrames: 0,
+        sampleRate: lifecycle.snapshot().audio.runtime.sampleRate ?? 0
+      }
+    }
     return mixer.transport(command)
   })
 
   ipcMain.handle(IPC_CHANNELS.transportSnapshot, (event) => {
     assertTrustedSender(event)
+    if (shutdownPromise) {
+      return {
+        state: "stopped" as const,
+        positionFrames: 0,
+        sampleRate: lifecycle.snapshot().audio.runtime.sampleRate ?? 0
+      }
+    }
     return mixer.transportSnapshot()
   })
 
@@ -582,6 +605,24 @@ function registerIpcHandlers(
   ipcMain.handle(IPC_CHANNELS.settingsUpdate, (event, value: unknown) => {
     assertTrustedSender(event)
     return settings.update(validateSettingsPatch(value))
+  })
+
+  ipcMain.handle(IPC_CHANNELS.settingsConfigureAudioHostRuntime, async (event, value: unknown) => {
+    assertTrustedSender(event)
+    if (
+      recordings.current ||
+      operations.activeCount > 0 ||
+      audioHostService?.configurationRestarting
+    ) {
+      throw new Error("Audio host runtime configuration is busy")
+    }
+    if (!audioHostService) throw new Error("Audio host is not running")
+    const preferences = validateAudioHostRuntimePreferences(
+      value
+    ) satisfies AudioHostRuntimePreferences
+    await synchronizePluginStates()
+    await audioHostService.configureRuntime(preferences)
+    return settings.configureAudioHostRuntime(preferences)
   })
 
   ipcMain.handle(IPC_CHANNELS.settingsChooseSwap, async (event) => {
@@ -982,6 +1023,7 @@ async function shutdownServices(): Promise<void> {
 
 void app.whenReady().then(async () => {
   const settings = new ApplicationSettingsStore(app.getPath("userData"))
+  const applicationSettings = await settings.get()
   const executableSuffix = process.platform === "win32" ? ".exe" : ""
   const probePath = app.isPackaged
     ? join(process.resourcesPath, `yadaw-vst3-probe${executableSuffix}`)
@@ -1018,6 +1060,7 @@ void app.whenReady().then(async () => {
     audioHostPath,
     bridgePath,
     join(app.getPath("userData"), "audio-host-crash-marker.bin"),
+    applicationSettings.audioHostRuntime,
     (message) => {
       console.error(`YADAW audio helper failure: ${message}`)
       for (const window of BrowserWindow.getAllWindows().slice(1)) window.close()

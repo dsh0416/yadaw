@@ -7,7 +7,7 @@ function audioIpc(
   overrides: Partial<AudioIpcPerformanceSnapshot> = {}
 ): AudioIpcPerformanceSnapshot {
   return {
-    protocolVersion: 2,
+    protocolVersion: 3,
     sessionEpoch: "1",
     heartbeat: {
       ageMs: 100,
@@ -31,7 +31,28 @@ function audioIpc(
       inlineBytes: 2_048,
       sharedPackets: 1,
       sharedRegions: 1,
-      sharedBytes: 128 * 1024
+      sharedBytes: 128 * 1024,
+      arenaRegions: 1,
+      arenaCapacityBytes: 1024 * 1024,
+      arenaUsedBytes: 0,
+      arenaHighWaterBytes: 128 * 1024,
+      arenaOffers: 1,
+      arenaBusy: 0,
+      arenaQuarantinedRegions: 0,
+      copiedBytes: 128 * 1024
+    },
+    runtime: {
+      requested: {
+        workerThreads: "auto",
+        maxBlockingThreads: "auto",
+        egressConcurrency: "auto"
+      },
+      resolved: { workerThreads: 2, maxBlockingThreads: 4, egressConcurrency: 2 },
+      egressActive: 0,
+      egressQueueDepth: 0,
+      egressQueueHighWater: 0,
+      egressBatches: 0,
+      blockingJobs: 0
     },
     eventQueueDepth: 0,
     telemetry: {
@@ -100,7 +121,15 @@ describe("system performance store audio IPC health", () => {
           inlineBytes: 2_048,
           sharedPackets: 1,
           sharedRegions: 1,
-          sharedBytes: 128 * 1024
+          sharedBytes: 128 * 1024,
+          arenaRegions: 32,
+          arenaCapacityBytes: 256 * 1024 * 1024,
+          arenaUsedBytes: 0,
+          arenaHighWaterBytes: 128 * 1024,
+          arenaOffers: 32,
+          arenaBusy: 1,
+          arenaQuarantinedRegions: 0,
+          copiedBytes: 128 * 1024
         },
         parameterRing: {
           used: 3_800,

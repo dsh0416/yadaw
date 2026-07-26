@@ -7,6 +7,14 @@ export class OperationService {
   private readonly cancelHandlers = new Map<string, () => Promise<void>>()
   private readonly lastPublished = new Map<string, number>()
 
+  get activeCount(): number {
+    let count = 0
+    for (const operation of this.operations.values()) {
+      if (operation.state === "running") count += 1
+    }
+    return count
+  }
+
   private publish(operation: OperationSnapshot, force = false): void {
     const now = Date.now()
     const last = this.lastPublished.get(operation.id) ?? 0

@@ -22,7 +22,9 @@ import { AUDIO_BUFFER_SIZES } from "@yadaw/contracts"
 import type {
   AudioBackend,
   AudioDeviceDescriptor,
+  AudioHostRuntimePreferences,
   AudioPreferences,
+  ResolvedAudioHostRuntimePreferences,
   AudioRuntimeSnapshot
 } from "@yadaw/contracts"
 import PreferencesHeader from "./PreferencesHeader.vue"
@@ -30,6 +32,7 @@ import PreferencesNavigation from "./PreferencesNavigation.vue"
 import DisplayPreferences from "./DisplayPreferences.vue"
 import MixerDisplayPreferences from "./MixerDisplayPreferences.vue"
 import RecordingPreferences from "./RecordingPreferences.vue"
+import AudioEngineRuntimePreferences from "./AudioEngineRuntimePreferences.vue"
 import { useAudioPreferencesStore } from "../../stores/audioPreferences"
 
 const props = defineProps<{
@@ -38,12 +41,19 @@ const props = defineProps<{
   applyError: string
   applyNotice: string
   applying: boolean
+  audioHostRuntime: AudioHostRuntimePreferences
+  resolvedAudioHostRuntime: ResolvedAudioHostRuntimePreferences | null
+  audioHostRuntimeApplying: boolean
+  audioHostRuntimeError: string
 }>()
 const emit = defineEmits<{
   cancel: []
   save: [preferences: AudioPreferences]
+  configureRuntime: [preferences: AudioHostRuntimePreferences]
 }>()
-const activePage = ref<"devices" | "recording" | "display-general" | "display-mixer">("devices")
+const activePage = ref<"devices" | "engine" | "recording" | "display-general" | "display-mixer">(
+  "devices"
+)
 const audioPreferencesStore = useAudioPreferencesStore()
 const { inputDevices, outputDevices, discoveryState, discoveryError } =
   storeToRefs(audioPreferencesStore)
@@ -227,7 +237,7 @@ watch(supportedBufferSizes, (sizes) => {
         Boolean(draft.outputDeviceId) &&
         Boolean(draft.inputDeviceId)
       "
-      :show-audio-apply="!activePage.startsWith('display-')"
+      :show-audio-apply="activePage === 'devices'"
       @cancel="emit('cancel')"
       @save="save"
     />
@@ -463,6 +473,14 @@ watch(supportedBufferSizes, (sizes) => {
       <p v-if="applyError" class="apply-error">{{ applyError }}</p>
       <p v-if="applyNotice" class="apply-notice">{{ applyNotice }}</p>
     </section>
+    <AudioEngineRuntimePreferences
+      v-else-if="activePage === 'engine'"
+      :model-value="audioHostRuntime"
+      :resolved="resolvedAudioHostRuntime"
+      :applying="audioHostRuntimeApplying"
+      :error="audioHostRuntimeError"
+      @apply="emit('configureRuntime', $event)"
+    />
     <RecordingPreferences v-else-if="activePage === 'recording'" />
     <DisplayPreferences v-else-if="activePage === 'display-general'" />
     <MixerDisplayPreferences v-else />

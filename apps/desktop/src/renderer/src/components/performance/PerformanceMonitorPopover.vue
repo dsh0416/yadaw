@@ -328,7 +328,7 @@ function coreSeverity(usagePercent: number | null): HealthSeverity {
               <small>{{ audioIpc.requests.capacity }} slots per channel</small>
             </div>
             <div>
-              <dt>Shared blobs</dt>
+              <dt>Arena leases</dt>
               <dd>
                 {{
                   formatOccupancy(
@@ -343,6 +343,42 @@ function coreSeverity(usagePercent: number | null): HealthSeverity {
                 {{ formatBytes(audioIpc.sharedMemory.maxBytes) }} live ·
                 {{ audioIpc.sharedMemory.sharedPackets }} packets /
                 {{ formatBytes(audioIpc.sharedMemory.sharedBytes) }} total</small
+              >
+            </div>
+            <div>
+              <dt>Bulk arena</dt>
+              <dd>
+                {{ formatBytes(audioIpc.sharedMemory.arenaUsedBytes) }} /
+                {{ formatBytes(audioIpc.sharedMemory.arenaCapacityBytes) }}
+              </dd>
+              <small
+                >{{ audioIpc.sharedMemory.arenaRegions }} regions ·
+                {{ audioIpc.sharedMemory.arenaOffers }} offers ·
+                {{ audioIpc.sharedMemory.arenaBusy }} busy ·
+                {{ audioIpc.sharedMemory.arenaQuarantinedRegions }} quarantine</small
+              >
+            </div>
+            <div>
+              <dt>Runtime workers</dt>
+              <dd>
+                {{ audioIpc.runtime.resolved.workerThreads }} async ·
+                {{ audioIpc.runtime.resolved.maxBlockingThreads }} blocking
+              </dd>
+              <small
+                >{{ audioIpc.runtime.resolved.egressConcurrency }} egress concurrency ·
+                {{ audioIpc.runtime.blockingJobs }} blocking active</small
+              >
+            </div>
+            <div>
+              <dt>Async egress</dt>
+              <dd>
+                {{ audioIpc.runtime.egressActive }} active ·
+                {{ audioIpc.runtime.egressQueueDepth }} queued
+              </dd>
+              <small
+                >{{ audioIpc.runtime.egressQueueHighWater }} high-water ·
+                {{ audioIpc.runtime.egressBatches }} batches ·
+                {{ formatBytes(audioIpc.sharedMemory.copiedBytes) }} copied</small
               >
             </div>
             <div>

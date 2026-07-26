@@ -7,6 +7,7 @@ import type {
   AudioIpcBenchmarkReport,
   AudioIpcBenchmarkScenario,
   AudioIpcPerformanceSnapshot,
+  AudioHostRuntimePreferences,
   AudioPreferences,
   AudioRuntimeSnapshot,
   MixerGraphSnapshot,
@@ -19,7 +20,7 @@ import type {
   TransportSnapshot
 } from "@yadaw/contracts"
 
-const PROTOCOL_VERSION = 2
+const PROTOCOL_VERSION = 3
 const MAX_MESSAGE_BYTES = 64 * 1024 * 1024
 const MAX_LOGICAL_REQUEST_BYTES = MAX_MESSAGE_BYTES * 2
 const HEARTBEAT_INTERVAL_MS = 250
@@ -127,10 +128,9 @@ interface AudioHostMeter {
   clipped: boolean
 }
 
-interface BinaryPayloadWire {
-  storage: "inline"
-  bytes: Uint8Array
-}
+type BinaryPayloadWire =
+  | { storage: "inline"; bytes: Uint8Array }
+  | { storage: "attachment"; index: number; offset: number; length: number }
 
 interface AudioHostTransport {
   state: string
@@ -149,6 +149,19 @@ interface PriorityResponse {
     winit_generation?: number
     callback_generation?: number
     transport_state?: string
+    egress_active?: number
+    egress_queue_depth?: number
+    egress_queue_high_water?: number
+    egress_batches?: number
+    blocking_jobs?: number
+    arena_regions?: number
+    arena_capacity_bytes?: number
+    arena_used_bytes?: number
+    arena_high_water_bytes?: number
+    arena_offers?: number
+    arena_busy?: number
+    arena_quarantined_regions?: number
+    arena_copied_bytes?: number
   }
 }
 
@@ -205,7 +218,20 @@ type TransportDiagnosticsWire = [
     boundaryFallbacks: number,
     staleEpoch: number
   ],
-  closing: boolean
+  closing: boolean,
+  runtimeAndArena: [
+    workerThreads: number,
+    maxBlockingThreads: number,
+    egressConcurrency: number,
+    arenaRegions: number,
+    arenaCapacityBytes: number,
+    arenaUsedBytes: number,
+    arenaHighWaterBytes: number,
+    arenaOffers: number,
+    arenaBusy: number,
+    arenaQuarantinedRegions: number,
+    copiedBytes: number
+  ]
 ]
 
 function stableRuntimeHandle(namespace: number, id: string): number {
@@ -223,6 +249,77 @@ function inlineBinary(bytes: Uint8Array): BinaryPayloadWire {
 
 function binaryBytes(payload?: BinaryPayloadWire): Uint8Array {
   return payload?.storage === "inline" ? payload.bytes : new Uint8Array()
+}
+
+function extractLargeAttachments(value: unknown, attachments: Buffer[]): void {
+  if (!value || typeof value !== "object") return
+  if (
+    "storage" in value &&
+    "bytes" in value &&
+    value.storage === "inline" &&
+    value.bytes instanceof Uint8Array &&
+    value.bytes.byteLength > 64 * 1024
+  ) {
+    const payload = value as {
+      storage: string
+      bytes?: Uint8Array
+      index?: number
+      offset?: number
+      length?: number
+    }
+    const bytes = Buffer.from(
+      payload.bytes!.buffer,
+      payload.bytes!.byteOffset,
+      payload.bytes!.byteLength
+    )
+    payload.storage = "attachment"
+    payload.index = attachments.length
+    payload.offset = 0
+    payload.length = bytes.byteLength
+    delete payload.bytes
+    attachments.push(bytes)
+    return
+  }
+  if (Array.isArray(value)) {
+    for (const child of value) extractLargeAttachments(child, attachments)
+    return
+  }
+  for (const child of Object.values(value)) extractLargeAttachments(child, attachments)
+}
+
+function hydrateAttachments(value: unknown, attachments: readonly Buffer[]): void {
+  if (!value || typeof value !== "object") return
+  if (
+    "storage" in value &&
+    "index" in value &&
+    value.storage === "attachment" &&
+    typeof value.index === "number"
+  ) {
+    const payload = value as {
+      storage: string
+      index?: number
+      offset?: number
+      length?: number
+      bytes?: Uint8Array
+    }
+    const attachment = attachments[payload.index!]
+    const offset = payload.offset ?? 0
+    const length = payload.length ?? attachment?.byteLength ?? 0
+    if (!attachment || offset < 0 || length < 0 || offset + length > attachment.byteLength) {
+      throw new Error("audio host returned an invalid attachment reference")
+    }
+    payload.storage = "inline"
+    payload.bytes = attachment.subarray(offset, offset + length)
+    delete payload.index
+    delete payload.offset
+    delete payload.length
+    return
+  }
+  if (Array.isArray(value)) {
+    for (const child of value) hydrateAttachments(child, attachments)
+    return
+  }
+  for (const child of Object.values(value)) hydrateAttachments(child, attachments)
 }
 
 function percentile(values: readonly number[], fraction: number): number {
@@ -368,6 +465,21 @@ export class AudioHostService {
     winit: 0,
     callback: 0
   }
+  private lastHostIpcMetrics = {
+    egressActive: 0,
+    egressQueueDepth: 0,
+    egressQueueHighWater: 0,
+    egressBatches: 0,
+    blockingJobs: 0,
+    arenaRegions: 0,
+    arenaCapacityBytes: 0,
+    arenaUsedBytes: 0,
+    arenaHighWaterBytes: 0,
+    arenaOffers: 0,
+    arenaBusy: 0,
+    arenaQuarantinedRegions: 0,
+    arenaCopiedBytes: 0
+  }
   private restartBudget = 1
   private readonly recoveryBypassed = new Set<string>()
   private stopping = false
@@ -399,19 +511,35 @@ export class AudioHostService {
     }
   >()
   private parameterFlush: NodeJS.Timeout | null = null
+  private lastAudioPreferences: AudioPreferences | null = null
+  private reconfiguring = false
 
   constructor(
     private readonly executablePath: string,
     private readonly bridgePath: string,
     private readonly crashMarkerPath: string,
+    private runtimePreferences: AudioHostRuntimePreferences,
     private readonly onFailure: (message: string) => void
   ) {}
 
-  start(): void {
+  start(restoreGraph = true): void {
     if (this.client || this.stopping) return
     let client: AudioHostIpcClient
     try {
-      client = new AudioHostIpcClient(this.executablePath, this.bridgePath, this.crashMarkerPath)
+      client = new AudioHostIpcClient(
+        this.executablePath,
+        this.bridgePath,
+        this.crashMarkerPath,
+        this.runtimePreferences.workerThreads === "auto"
+          ? undefined
+          : this.runtimePreferences.workerThreads,
+        this.runtimePreferences.maxBlockingThreads === "auto"
+          ? undefined
+          : this.runtimePreferences.maxBlockingThreads,
+        this.runtimePreferences.egressConcurrency === "auto"
+          ? undefined
+          : this.runtimePreferences.egressConcurrency
+      )
     } catch (error) {
       this.onFailure(`could not start audio host: ${String(error)}`)
       return
@@ -421,6 +549,21 @@ export class AudioHostService {
     this.callbackStagnantSince = 0
     this.lastHeartbeatAt = null
     this.lastHeartbeatGenerations = { ipc: 0, tokio: 0, winit: 0, callback: 0 }
+    this.lastHostIpcMetrics = {
+      egressActive: 0,
+      egressQueueDepth: 0,
+      egressQueueHighWater: 0,
+      egressBatches: 0,
+      blockingJobs: 0,
+      arenaRegions: 0,
+      arenaCapacityBytes: 0,
+      arenaUsedBytes: 0,
+      arenaHighWaterBytes: 0,
+      arenaOffers: 0,
+      arenaBusy: 0,
+      arenaQuarantinedRegions: 0,
+      arenaCopiedBytes: 0
+    }
     this.heartbeat = setInterval(() => {
       void this.performHeartbeat()
         .then((response) => {
@@ -432,6 +575,21 @@ export class AudioHostService {
             tokio: response.result.tokio_generation ?? 0,
             winit: response.result.winit_generation ?? 0,
             callback: generation
+          }
+          this.lastHostIpcMetrics = {
+            egressActive: response.result.egress_active ?? 0,
+            egressQueueDepth: response.result.egress_queue_depth ?? 0,
+            egressQueueHighWater: response.result.egress_queue_high_water ?? 0,
+            egressBatches: response.result.egress_batches ?? 0,
+            blockingJobs: response.result.blocking_jobs ?? 0,
+            arenaRegions: response.result.arena_regions ?? 0,
+            arenaCapacityBytes: response.result.arena_capacity_bytes ?? 0,
+            arenaUsedBytes: response.result.arena_used_bytes ?? 0,
+            arenaHighWaterBytes: response.result.arena_high_water_bytes ?? 0,
+            arenaOffers: response.result.arena_offers ?? 0,
+            arenaBusy: response.result.arena_busy ?? 0,
+            arenaQuarantinedRegions: response.result.arena_quarantined_regions ?? 0,
+            arenaCopiedBytes: response.result.arena_copied_bytes ?? 0
           }
           const active =
             response.result.transport_state === "playing" ||
@@ -456,7 +614,7 @@ export class AudioHostService {
       if (this.client === client) this.restartBudget = 1
     }, 5_000)
     this.stableTimer.unref()
-    if (this.lastGraph)
+    if (restoreGraph && this.lastGraph)
       void this.restoreGraph().catch((error: unknown) => {
         const message = error instanceof Error ? error.message : String(error)
         this.handleExit(`could not restore graph: ${message}`)
@@ -478,7 +636,8 @@ export class AudioHostService {
         command
       })
     )
-    const response = decode(await client.heartbeat(payload)) as PriorityResponse
+    const wireResponse = await client.heartbeat(payload)
+    const response = decode(wireResponse.body) as PriorityResponse
     if (response.version !== PROTOCOL_VERSION || response.request_id !== requestId) {
       throw new Error("audio host returned an invalid priority response")
     }
@@ -654,6 +813,7 @@ export class AudioHostService {
   }
 
   async startAudioEngine(preferences: AudioPreferences): Promise<AudioRuntimeSnapshot> {
+    this.lastAudioPreferences = structuredClone(preferences)
     const response = await this.request({
       type: "start-audio-engine",
       config: {
@@ -780,6 +940,7 @@ export class AudioHostService {
 
   async runIpcBenchmark(): Promise<AudioIpcBenchmarkReport> {
     const started = performance.now()
+    const before = this.performanceDiagnostics()
     const scenarios: AudioIpcBenchmarkScenario[] = []
     scenarios.push(
       await this.measureEchoRoundTrip(
@@ -794,50 +955,68 @@ export class AudioHostService {
     )
     scenarios.push(
       await this.measureEchoRoundTrip(
-        "inline-threshold",
-        "Inline threshold",
-        "64 KiB payload at the inline/shared-memory boundary",
-        "inline-round-trip",
-        64 * 1024,
-        80,
-        4
-      )
-    )
-    scenarios.push(
-      await this.measureEchoRoundTrip(
-        "shared-threshold",
-        "Shared-memory threshold",
-        "64 KiB + 1 byte payload using an IpcSharedMemory attachment",
-        "shared-round-trip",
-        64 * 1024 + 1,
-        80,
-        4
-      )
-    )
-    scenarios.push(
-      await this.measureEchoRoundTrip(
-        "shared-plugin-state",
-        "Large shared state",
-        "4 MiB payload representative of a large plug-in state",
-        "shared-round-trip",
+        "shared-cold-4m",
+        "Shared cold first use",
+        "First 4 MiB transfer includes lazy arena creation and region-handle mapping",
+        "shared-cold",
         4 * 1024 * 1024,
-        12,
+        1,
+        0
+      )
+    )
+    scenarios.push(
+      await this.measureEchoRoundTrip(
+        "shared-warm-sequential-4m",
+        "Warm sequential effective throughput",
+        "Sequential 4 MiB duplex requests reuse the registered persistent arena",
+        "shared-warm-sequential",
+        4 * 1024 * 1024,
+        24,
         2
       )
     )
+    for (const concurrency of [1, 4, 8, 16]) {
+      scenarios.push(await this.measureSaturatedArena(concurrency))
+    }
     scenarios.push(await this.measureConcurrentRouting())
     scenarios.push(this.measureTelemetryReads())
+    const after = this.performanceDiagnostics()
     return {
       durationMs: performance.now() - started,
+      buildProfile:
+        this.executablePath.includes("\\release\\") || this.executablePath.includes("/release/")
+          ? "release"
+          : "debug",
+      runtime: after?.runtime.resolved ?? {
+        workerThreads: 1,
+        maxBlockingThreads: 2,
+        egressConcurrency: 1
+      },
+      arenaOffers: (after?.sharedMemory.arenaOffers ?? 0) - (before?.sharedMemory.arenaOffers ?? 0),
+      messagePackBodyBytes: this.benchmarkMessagePackBodyBytes(4 * 1024 * 1024),
       scenarios
     }
+  }
+
+  private benchmarkMessagePackBodyBytes(payloadBytes: number): number {
+    const request = {
+      version: PROTOCOL_VERSION,
+      request_id: 0,
+      command: {
+        type: "benchmark-echo",
+        payload: inlineBinary(new Uint8Array(payloadBytes))
+      }
+    }
+    const attachments: Buffer[] = []
+    extractLargeAttachments(request, attachments)
+    return encode(request).byteLength
   }
 
   private async measureEchoRoundTrip(
     id: string,
     label: string,
     description: string,
-    kind: "inline-round-trip" | "shared-round-trip",
+    kind: "inline-round-trip" | "shared-cold" | "shared-warm-sequential",
     payloadBytes: number,
     iterations: number,
     warmupIterations: number
@@ -874,6 +1053,44 @@ export class AudioHostService {
       iterations,
       concurrency: 1,
       elapsedMs,
+      latencyUs
+    })
+  }
+
+  private async measureSaturatedArena(concurrency: number): Promise<AudioIpcBenchmarkScenario> {
+    const payload = new Uint8Array(4 * 1024 * 1024)
+    payload.fill(0x5a)
+    const rounds = Math.max(2, Math.ceil(32 / concurrency))
+    const latencyUs: number[] = []
+    const echo = async (): Promise<void> => {
+      const requestStarted = performance.now()
+      const response = await this.request({
+        type: "benchmark-echo",
+        payload: inlineBinary(payload)
+      })
+      latencyUs.push((performance.now() - requestStarted) * 1_000)
+      if (
+        response.result.type !== "benchmark-echo" ||
+        binaryBytes(response.result.payload).byteLength !== payload.byteLength
+      ) {
+        throw new Error("audio host returned an invalid saturated benchmark echo")
+      }
+    }
+    await echo()
+    latencyUs.length = 0
+    const started = performance.now()
+    for (let round = 0; round < rounds; round += 1) {
+      await Promise.all(Array.from({ length: concurrency }, echo))
+    }
+    return this.ipcScenario({
+      id: `shared-saturated-4m-${concurrency}`,
+      label: `Warm saturated duplex · ${concurrency} in flight`,
+      description: "4 MiB persistent-arena duplex bandwidth with concurrent response routing",
+      kind: "shared-saturated",
+      payloadBytes: payload.byteLength,
+      iterations: rounds * concurrency,
+      concurrency,
+      elapsedMs: performance.now() - started,
       latencyUs
     })
   }
@@ -995,7 +1212,29 @@ export class AudioHostService {
           inlineBytes: diagnostics[3][5],
           sharedPackets: diagnostics[3][6],
           sharedRegions: diagnostics[3][7],
-          sharedBytes: diagnostics[3][8]
+          sharedBytes: diagnostics[3][8],
+          arenaRegions: diagnostics[8][3] + this.lastHostIpcMetrics.arenaRegions,
+          arenaCapacityBytes: diagnostics[8][4] + this.lastHostIpcMetrics.arenaCapacityBytes,
+          arenaUsedBytes: diagnostics[8][5] + this.lastHostIpcMetrics.arenaUsedBytes,
+          arenaHighWaterBytes: diagnostics[8][6] + this.lastHostIpcMetrics.arenaHighWaterBytes,
+          arenaOffers: diagnostics[8][7] + this.lastHostIpcMetrics.arenaOffers,
+          arenaBusy: diagnostics[8][8] + this.lastHostIpcMetrics.arenaBusy,
+          arenaQuarantinedRegions:
+            diagnostics[8][9] + this.lastHostIpcMetrics.arenaQuarantinedRegions,
+          copiedBytes: diagnostics[8][10] + this.lastHostIpcMetrics.arenaCopiedBytes
+        },
+        runtime: {
+          requested: structuredClone(this.runtimePreferences),
+          resolved: {
+            workerThreads: diagnostics[8][0],
+            maxBlockingThreads: diagnostics[8][1],
+            egressConcurrency: diagnostics[8][2]
+          },
+          egressActive: this.lastHostIpcMetrics.egressActive,
+          egressQueueDepth: this.lastHostIpcMetrics.egressQueueDepth,
+          egressQueueHighWater: this.lastHostIpcMetrics.egressQueueHighWater,
+          egressBatches: this.lastHostIpcMetrics.egressBatches,
+          blockingJobs: this.lastHostIpcMetrics.blockingJobs
         },
         eventQueueDepth: diagnostics[4],
         telemetry: {
@@ -1257,17 +1496,20 @@ export class AudioHostService {
     const client = this.client
     if (!client) throw new Error("audio host is not running")
     const requestId = this.nextRequestId++
-    const payload = Buffer.from(
-      encode({
-        version: PROTOCOL_VERSION,
-        request_id: requestId,
-        command
-      })
-    )
+    const request = {
+      version: PROTOCOL_VERSION,
+      request_id: requestId,
+      command
+    }
+    const attachments: Buffer[] = []
+    extractLargeAttachments(request, attachments)
+    const payload = Buffer.from(encode(request))
     if (payload.length > MAX_LOGICAL_REQUEST_BYTES) {
       throw new Error("audio host logical request exceeds 128 MiB")
     }
-    const response = decode(await client.request(payload)) as ControlResponse
+    const wireResponse = await client.request(payload, attachments)
+    const response = decode(wireResponse.body) as ControlResponse
+    hydrateAttachments(response, wireResponse.attachments)
     if (response.request_id !== requestId) {
       throw new Error("audio host returned an out-of-order response")
     }
@@ -1348,8 +1590,96 @@ export class AudioHostService {
     }
   }
 
-  async stop(): Promise<void> {
-    this.stopping = true
+  get configurationRestarting(): boolean {
+    return this.reconfiguring
+  }
+
+  async configureRuntime(preferences: AudioHostRuntimePreferences): Promise<void> {
+    if (this.reconfiguring || this.stopping) {
+      throw new Error("Audio host runtime configuration is busy")
+    }
+    this.reconfiguring = true
+    const previousPreferences = structuredClone(this.runtimePreferences)
+    const transport = await this.transportSnapshot()
+    const audioRuntime = await this.audioEngineSnapshot()
+    const audioEngineWasRunning = audioRuntime.state === "running"
+    const audioPreferences = this.lastAudioPreferences
+      ? structuredClone(this.lastAudioPreferences)
+      : null
+    try {
+      await this.capturePluginStatesForRestart()
+      if (transport.state !== "stopped") await this.transport({ type: "pause" })
+      for (const instanceId of this.loadedPlugins.keys()) {
+        try {
+          await this.closePluginEditor(instanceId)
+        } catch {
+          // An editor may already have been closed by the plug-in.
+        }
+      }
+      if (audioEngineWasRunning) await this.stopAudioEngine()
+      await this.shutdownCurrentClient()
+      this.runtimePreferences = structuredClone(preferences)
+      await this.restartAfterConfiguration(audioPreferences, transport, audioEngineWasRunning)
+    } catch (error) {
+      try {
+        await this.shutdownCurrentClient()
+        this.runtimePreferences = previousPreferences
+        await this.restartAfterConfiguration(audioPreferences, transport, audioEngineWasRunning)
+      } catch (rollbackError) {
+        this.onFailure(
+          `audio runtime configuration and rollback failed: ${String(error)}; ${String(rollbackError)}`
+        )
+      }
+      throw error
+    } finally {
+      this.reconfiguring = false
+    }
+  }
+
+  private async capturePluginStatesForRestart(): Promise<void> {
+    const graph = this.lastGraph
+    if (!graph) return
+    for (const plugin of graph.project.plugins) {
+      if (!this.loadedPlugins.has(plugin.id)) continue
+      try {
+        const state = await this.savePluginState(plugin.id)
+        plugin.componentState = state.componentState
+        plugin.controllerState = state.controllerState
+      } catch (error) {
+        console.warn(`Could not capture VST3 state for runtime restart (${plugin.id})`, error)
+      }
+    }
+  }
+
+  private async restartAfterConfiguration(
+    audioPreferences: AudioPreferences | null,
+    transport: TransportSnapshot,
+    audioEngineWasRunning: boolean
+  ): Promise<void> {
+    this.start(false)
+    if (!this.client) throw new Error("Audio helper did not restart")
+    await this.audioEngineSnapshot()
+    const audioEngineRestored = audioEngineWasRunning && audioPreferences !== null
+    if (audioEngineRestored) await this.startAudioEngine(audioPreferences)
+    await this.restoreGraph()
+    if (audioEngineRestored && this.lastGraph) {
+      await this.waitForGraphPublication(this.lastGraph.revision)
+    }
+    await this.transport({ type: "seek", positionFrames: transport.positionFrames })
+    if (transport.state === "playing") await this.transport({ type: "play" })
+  }
+
+  private async waitForGraphPublication(revision: number): Promise<void> {
+    const deadline = Date.now() + 5_000
+    while (Date.now() < deadline) {
+      const telemetry = this.readTelemetry()
+      if (telemetry[1] === revision) return
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    }
+    throw new Error(`Audio graph revision ${revision} was not published after restart`)
+  }
+
+  private async shutdownCurrentClient(): Promise<void> {
     if (this.heartbeat) clearInterval(this.heartbeat)
     this.heartbeat = null
     if (this.stableTimer) clearTimeout(this.stableTimer)
@@ -1357,17 +1687,23 @@ export class AudioHostService {
     if (this.parameterFlush) clearTimeout(this.parameterFlush)
     this.parameterFlush = null
     const client = this.client
-    if (client) {
-      try {
-        await this.performPriority({ type: "shutdown" })
-      } catch {
-        // A helper that has already closed its IPC channel still needs to be reaped below.
-      }
+    if (!client) return
+    try {
+      await this.performPriority({ type: "shutdown" })
+    } catch {
+      // Closing the client below also reaps a helper that exited early.
     }
     await Promise.allSettled([...this.pendingRequests])
-    if (client) {
-      if (this.client === client) this.client = null
-      client.close()
-    }
+    if (this.client === client) this.client = null
+    client.close()
+    this.loadedPlugins.clear()
+    this.publishedGraph = null
+    this.channelIdsByHandle.clear()
+    this.coalescedParameters.clear()
+  }
+
+  async stop(): Promise<void> {
+    this.stopping = true
+    await this.shutdownCurrentClient()
   }
 }

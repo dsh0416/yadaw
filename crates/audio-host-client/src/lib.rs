@@ -27,25 +27,31 @@ use yadaw_dsp_runtime::protocol::{
     PriorityResponse,
 };
 use yadaw_ipc_transport::{
-    HostBootstrap, LeaseRegistry, MAX_OUTSTANDING_LEASE_BYTES, MAX_OUTSTANDING_LEASES,
-    ParameterEnqueue, ParameterProducer, TelemetryReader, TelemetrySnapshot, WirePacket,
-    create_parameter_ring, create_telemetry_page, decode_body, decode_response, encode_body,
-    encode_priority, encode_request,
+    ArenaReceiver, HostBootstrap, LeaseRegistry, MAX_OUTSTANDING_LEASE_BYTES,
+    MAX_OUTSTANDING_LEASES, ParameterEnqueue, ParameterProducer, TelemetryReader,
+    TelemetrySnapshot, WirePacket, create_parameter_ring, create_telemetry_page, decode_body,
+    decode_response_to_attachments, encode_body, encode_priority, encode_request_with_attachments,
 };
 
 const OUTBOUND_CAPACITY: usize = 256;
 const ROUTER_POLL: Duration = Duration::from_millis(50);
 const MAX_LOGICAL_REQUEST_BYTES: usize = MAX_MESSAGE_BYTES * 2;
 
-type BufferResolver = Box<dyn FnOnce(Env) -> Result<Buffer> + Send>;
-type BufferDeferred = JsDeferred<Buffer, BufferResolver>;
+#[napi(object)]
+pub struct IpcResponse {
+    pub body: Buffer,
+    pub attachments: Vec<Buffer>,
+}
+
+type ResponseResolver = Box<dyn FnOnce(Env) -> Result<IpcResponse> + Send>;
+type ResponseDeferred = JsDeferred<IpcResponse, ResponseResolver>;
 
 fn failure(context: &str, error: impl std::fmt::Display) -> Error {
     Error::new(Status::GenericFailure, format!("{context}: {error}"))
 }
 
 struct Pending {
-    deferred: BufferDeferred,
+    deferred: ResponseDeferred,
     deadline: Instant,
 }
 
@@ -81,6 +87,42 @@ struct ClientState {
     parameter_stale_epoch: AtomicU64,
     request_timeouts: Arc<AtomicU64>,
     transport_traffic: Arc<TransportTraffic>,
+    runtime_config: ResolvedRuntimeConfig,
+}
+
+#[derive(Clone, Copy)]
+struct ResolvedRuntimeConfig {
+    worker_threads: u32,
+    max_blocking_threads: u32,
+    egress_concurrency: u32,
+}
+
+fn resolve_runtime_config(
+    worker_threads: Option<u32>,
+    max_blocking_threads: Option<u32>,
+    egress_concurrency: Option<u32>,
+) -> Result<ResolvedRuntimeConfig> {
+    let logical = thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get);
+    let worker_threads =
+        worker_threads.unwrap_or_else(|| u32::try_from(logical.div_ceil(4).clamp(1, 4)).unwrap());
+    let max_blocking_threads =
+        max_blocking_threads.unwrap_or_else(|| (worker_threads.saturating_mul(2)).clamp(2, 8));
+    let egress_concurrency = egress_concurrency.unwrap_or_else(|| 2.min(max_blocking_threads));
+    if !(1..=8).contains(&worker_threads)
+        || !(2..=16).contains(&max_blocking_threads)
+        || !(1..=4).contains(&egress_concurrency)
+        || egress_concurrency > max_blocking_threads
+    {
+        return Err(Error::new(
+            Status::InvalidArg,
+            "invalid audio-host runtime thread configuration",
+        ));
+    }
+    Ok(ResolvedRuntimeConfig {
+        worker_threads,
+        max_blocking_threads,
+        egress_concurrency,
+    })
 }
 
 #[napi]
@@ -95,7 +137,12 @@ impl AudioHostIpcClient {
         executable_path: String,
         bridge_path: String,
         crash_marker_path: String,
+        worker_threads: Option<u32>,
+        max_blocking_threads: Option<u32>,
+        egress_concurrency: Option<u32>,
     ) -> Result<Self> {
+        let runtime_config =
+            resolve_runtime_config(worker_threads, max_blocking_threads, egress_concurrency)?;
         let (server, token) = IpcOneShotServer::<IpcSender<HostBootstrap>>::new()
             .map_err(|error| failure("could not create helper IPC server", error))?;
         let mut child = Command::new(&executable_path)
@@ -105,6 +152,12 @@ impl AudioHostIpcClient {
             .arg(bridge_path)
             .arg("--crash-marker")
             .arg(crash_marker_path)
+            .arg("--worker-threads")
+            .arg(runtime_config.worker_threads.to_string())
+            .arg("--max-blocking-threads")
+            .arg(runtime_config.max_blocking_threads.to_string())
+            .arg("--egress-concurrency")
+            .arg(runtime_config.egress_concurrency.to_string())
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::inherit())
@@ -164,7 +217,8 @@ impl AudioHostIpcClient {
         let (priority_outbound, priority_inbox) = mpsc::sync_channel(OUTBOUND_CAPACITY);
         let pending = Arc::new(Mutex::new(HashMap::new()));
         let priority_pending = Arc::new(Mutex::new(HashMap::new()));
-        let leases = Arc::new(Mutex::new(LeaseRegistry::new()));
+        let leases = Arc::new(Mutex::new(LeaseRegistry::with_session_epoch(session_epoch)));
+        let response_arena = Arc::new(Mutex::new(ArenaReceiver::new(session_epoch)));
         let telemetry = Arc::new(RwLock::new(telemetry));
         let event_queue = Arc::new(Mutex::new(VecDeque::new()));
         let closing = Arc::new(AtomicBool::new(false));
@@ -184,6 +238,7 @@ impl AudioHostIpcClient {
             Arc::clone(&closing),
             Arc::clone(&request_timeouts),
             Arc::clone(&transport_traffic),
+            Arc::clone(&response_arena),
         );
         let priority_router = spawn_priority_router(
             priority_responses,
@@ -241,15 +296,17 @@ impl AudioHostIpcClient {
                 parameter_stale_epoch: AtomicU64::new(0),
                 request_timeouts,
                 transport_traffic,
+                runtime_config,
             }),
         })
     }
 
-    #[napi(ts_return_type = "Promise<Buffer>")]
+    #[napi(ts_return_type = "Promise<IpcResponse>")]
     pub fn request<'env>(
         &self,
         env: &'env Env,
         message_pack_request: Buffer,
+        attachments: Option<Vec<Buffer>>,
     ) -> Result<Object<'env>> {
         if self.state.closing.load(Ordering::Acquire) {
             return Err(failure("audio-host request", "client is closing"));
@@ -271,19 +328,24 @@ impl AudioHostIpcClient {
         let request_id = request.request_id;
         let deadline = Instant::now() + request_deadline(&request.command);
         let packet = {
+            let attachments = attachments.unwrap_or_default();
+            let attachment_slices = attachments
+                .iter()
+                .map(|attachment| attachment.as_ref())
+                .collect::<Vec<_>>();
             let mut leases = self
                 .state
                 .leases
                 .lock()
                 .map_err(|_| failure("audio-host lease registry", "poisoned"))?;
-            encode_request(request, &mut leases)
+            encode_request_with_attachments(request, &attachment_slices, &mut leases)
                 .map_err(|error| failure("could not encode audio-host request", error))?
         };
         record_packet(&packet, &self.state.transport_traffic);
         self.create_request_promise(env, request_id, deadline, packet, false)
     }
 
-    #[napi(ts_return_type = "Promise<Buffer>")]
+    #[napi(ts_return_type = "Promise<IpcResponse>")]
     pub fn heartbeat<'env>(
         &self,
         env: &'env Env,
@@ -438,13 +500,13 @@ impl AudioHostIpcClient {
             .lock()
             .map_err(|_| failure("priority pending requests", "poisoned"))?
             .len();
-        let (outstanding_leases, outstanding_lease_bytes) = {
+        let (outstanding_leases, outstanding_lease_bytes, arena_diagnostics) = {
             let leases = self
                 .state
                 .leases
                 .lock()
                 .map_err(|_| failure("lease registry", "poisoned"))?;
-            (leases.len(), leases.bytes())
+            (leases.len(), leases.bytes(), leases.diagnostics())
         };
         let event_queue_depth = self
             .state
@@ -537,6 +599,19 @@ impl AudioHostIpcClient {
                 self.state.parameter_stale_epoch.load(Ordering::Relaxed),
             ),
             self.state.closing.load(Ordering::Acquire),
+            (
+                self.state.runtime_config.worker_threads,
+                self.state.runtime_config.max_blocking_threads,
+                self.state.runtime_config.egress_concurrency,
+                arena_diagnostics.region_count,
+                arena_diagnostics.capacity_bytes,
+                arena_diagnostics.used_bytes,
+                arena_diagnostics.high_water_bytes,
+                arena_diagnostics.offers,
+                arena_diagnostics.busy,
+                arena_diagnostics.quarantined_regions,
+                arena_diagnostics.copied_bytes,
+            ),
         ))
         .map(Buffer::from)
         .map_err(|error| failure("could not encode transport diagnostics", error))
@@ -572,7 +647,7 @@ impl AudioHostIpcClient {
         packet: WirePacket,
         priority: bool,
     ) -> Result<Object<'env>> {
-        let (deferred, promise) = env.create_deferred::<Buffer, BufferResolver>()?;
+        let (deferred, promise) = env.create_deferred::<IpcResponse, ResponseResolver>()?;
         let map = if priority {
             &self.state.priority_pending
         } else {
@@ -658,7 +733,7 @@ fn request_deadline(command: &ControlCommand) -> Duration {
 }
 
 fn record_packet(packet: &WirePacket, traffic: &TransportTraffic) {
-    if packet.regions.is_empty() {
+    if packet.region_offers.is_empty() {
         traffic.inline_packets.fetch_add(1, Ordering::Relaxed);
         traffic
             .inline_bytes
@@ -668,12 +743,12 @@ fn record_packet(packet: &WirePacket, traffic: &TransportTraffic) {
     traffic.shared_packets.fetch_add(1, Ordering::Relaxed);
     traffic
         .shared_regions
-        .fetch_add(packet.regions.len() as u64, Ordering::Relaxed);
+        .fetch_add(packet.region_offers.len() as u64, Ordering::Relaxed);
     traffic.shared_bytes.fetch_add(
         packet
-            .regions
+            .region_offers
             .iter()
-            .map(|region| region.len() as u64)
+            .map(|offer| offer.capacity)
             .sum(),
         Ordering::Relaxed,
     );
@@ -712,6 +787,7 @@ fn spawn_response_router(
     closing: Arc<AtomicBool>,
     request_timeouts: Arc<AtomicU64>,
     transport_traffic: Arc<TransportTraffic>,
+    response_arena: Arc<Mutex<ArenaReceiver>>,
 ) -> JoinHandle<()> {
     thread::Builder::new()
         .name("yadaw-ipc-response-router".into())
@@ -720,14 +796,23 @@ fn spawn_response_router(
                 match receiver.try_recv_timeout(router_timeout(&pending)) {
                     Ok(packet) => {
                         record_packet(&packet, &transport_traffic);
-                        match decode_response(packet) {
-                            Ok((response, lease_ids)) => {
+                        let decoded = response_arena
+                            .lock()
+                            .map_err(|_| failure("response arena", "poisoned"))
+                            .and_then(|mut arena| {
+                                decode_response_to_attachments(packet, &mut arena)
+                                    .map_err(|error| failure("invalid audio-host response", error))
+                            });
+                        match decoded {
+                            Ok((response, attachments, lease_ids)) => {
                                 if !lease_ids.is_empty() {
                                     send_release_leases(&priority_outbound, lease_ids);
                                 }
                                 let request_id = response.request_id;
                                 match encode_body(&response) {
-                                    Ok(bytes) => resolve_pending(&pending, request_id, bytes),
+                                    Ok(bytes) => {
+                                        resolve_pending(&pending, request_id, bytes, attachments)
+                                    }
                                     Err(error) => reject_pending(
                                         &pending,
                                         request_id,
@@ -735,9 +820,7 @@ fn spawn_response_router(
                                     ),
                                 }
                             }
-                            Err(error) => {
-                                reject_all(&pending, failure("invalid audio-host response", error));
-                            }
+                            Err(error) => reject_all(&pending, error),
                         }
                     }
                     Err(TryRecvError::Empty) => expire_pending(&pending, &request_timeouts),
@@ -766,7 +849,9 @@ fn spawn_priority_router(
             while !closing.load(Ordering::Acquire) {
                 match receiver.try_recv_timeout(router_timeout(&pending)) {
                     Ok(packet) => match decode_body::<PriorityResponse>(&packet.body) {
-                        Ok(response) => resolve_pending(&pending, response.request_id, packet.body),
+                        Ok(response) => {
+                            resolve_pending(&pending, response.request_id, packet.body, Vec::new())
+                        }
                         Err(error) => {
                             reject_all(&pending, failure("invalid priority response", error));
                         }
@@ -818,7 +903,11 @@ fn spawn_event_router(
                         }
                     }
                     HostEvent::TelemetryPageOffer { epoch, .. } => {
-                        if let Some(memory) = packet.regions.into_iter().next()
+                        if let Some(memory) = packet
+                            .region_offers
+                            .into_iter()
+                            .next()
+                            .map(|offer| offer.memory)
                             && let Ok(reader) = TelemetryReader::map(memory)
                         {
                             if let Ok(mut current) = telemetry.write() {
@@ -859,15 +948,23 @@ fn send_release_leases(outbound: &SyncSender<WirePacket>, lease_ids: Vec<u64>) {
     }
 }
 
-fn resolve_pending(pending: &Mutex<HashMap<u64, Pending>>, request_id: u64, bytes: Vec<u8>) {
+fn resolve_pending(
+    pending: &Mutex<HashMap<u64, Pending>>,
+    request_id: u64,
+    bytes: Vec<u8>,
+    attachments: Vec<Vec<u8>>,
+) {
     let value = pending
         .lock()
         .ok()
         .and_then(|mut values| values.remove(&request_id));
     if let Some(value) = value {
-        value
-            .deferred
-            .resolve(Box::new(move |_env| Ok(bytes.into())));
+        value.deferred.resolve(Box::new(move |_env| {
+            Ok(IpcResponse {
+                body: bytes.into(),
+                attachments: attachments.into_iter().map(Buffer::from).collect(),
+            })
+        }));
     }
 }
 
@@ -945,11 +1042,19 @@ fn close_state(state: &ClientState) -> Result<()> {
         .child
         .lock()
         .map_err(|_| failure("audio host process lock", "poisoned"))?;
-    if child
+    let deadline = Instant::now() + Duration::from_secs(2);
+    let mut exited = child
         .try_wait()
         .map_err(|error| failure("could not inspect audio host", error))?
-        .is_none()
-    {
+        .is_some();
+    while !exited && Instant::now() < deadline {
+        thread::sleep(Duration::from_millis(10));
+        exited = child
+            .try_wait()
+            .map_err(|error| failure("could not inspect audio host", error))?
+            .is_some();
+    }
+    if !exited {
         child
             .kill()
             .map_err(|error| failure("could not stop audio host", error))?;
@@ -983,6 +1088,7 @@ impl Drop for ClientState {
 mod tests {
     use super::*;
     use ipc_channel::ipc::IpcSharedMemory;
+    use yadaw_ipc_transport::RegionOffer;
 
     #[test]
     fn transport_traffic_separates_inline_and_shared_packets() {
@@ -990,14 +1096,20 @@ mod tests {
         record_packet(
             &WirePacket {
                 body: vec![1, 2, 3],
-                regions: Vec::new(),
+                region_offers: Vec::new(),
             },
             &traffic,
         );
         record_packet(
             &WirePacket {
                 body: vec![4],
-                regions: vec![IpcSharedMemory::from_bytes(&[0; 17])],
+                region_offers: vec![RegionOffer {
+                    session_epoch: 1,
+                    region_id: 1,
+                    region_generation: 1,
+                    capacity: 17,
+                    memory: IpcSharedMemory::from_bytes(&[0; 17]),
+                }],
             },
             &traffic,
         );

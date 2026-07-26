@@ -42,7 +42,18 @@ describe("AudioBenchmarkHost", () => {
         architecture: "x64"
       },
       scenarios: [],
-      ipc: { durationMs: 80, scenarios: [] }
+      ipc: {
+        durationMs: 80,
+        buildProfile: "debug",
+        runtime: {
+          workerThreads: 1,
+          maxBlockingThreads: 2,
+          egressConcurrency: 1
+        },
+        arenaOffers: 0,
+        messagePackBodyBytes: 128,
+        scenarios: []
+      }
     })
 
     const pinia = createPinia()

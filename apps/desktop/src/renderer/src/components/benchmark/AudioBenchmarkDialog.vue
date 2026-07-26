@@ -205,6 +205,16 @@ onMounted(() => dialog.value?.focus())
           <span class="ipc-rate">{{ ipcRate(scenario) }}</span>
         </div>
       </div>
+      <p class="ipc-diagnostics-note">
+        <b>{{ report.ipc.buildProfile.toUpperCase() }}</b>
+        · {{ report.ipc.runtime.workerThreads }} workers /
+        {{ report.ipc.runtime.maxBlockingThreads }} blocking /
+        {{ report.ipc.runtime.egressConcurrency }} egress · {{ report.ipc.arenaOffers }} arena
+        offers · {{ formatPayload(report.ipc.messagePackBodyBytes) }} MessagePack body
+        <template v-if="report.ipc.buildProfile === 'debug'">
+          · Diagnostic only; formal bandwidth grading uses a release build.
+        </template>
+      </p>
 
       <footer class="report-footer">
         <div>
@@ -250,6 +260,16 @@ onMounted(() => dialog.value?.focus())
     0 34px 110px #000e,
     inset 0 1px #ffffff08;
   backdrop-filter: blur(22px);
+}
+
+.ipc-diagnostics-note {
+  margin: 10px 0 0;
+  color: var(--text-faint);
+  font: 7px var(--font-utility);
+  letter-spacing: 0.02em;
+}
+.ipc-diagnostics-note b {
+  color: var(--signal-cyan);
 }
 
 .dialog-header {

@@ -31,12 +31,18 @@ other. The report includes:
 - p95, p99, maximum block processing time, deadline utilization, and deadline
   misses for low-latency tracking, production mix, and dense-session scenarios;
 - real-time factor as a secondary diagnostic rather than the score;
-- inline and shared-memory round-trip latency and throughput at the 64 KiB
-  boundary and for a 4 MiB plug-in-state-shaped payload;
-- concurrent request routing and synchronous telemetry-page read throughput;
+- inline sequential RTT;
+- cold 4 MiB shared-arena first-use latency, including mapping the first offer;
+- warm 4 MiB sequential effective throughput;
+- warm saturated 4 MiB duplex bandwidth at 1, 4, 8, and 16 requests in flight;
+- concurrent request-ID routing and synchronous telemetry-page read throughput;
+- debug/release profile, resolved Tokio runtime settings, arena offers, and the
+  actual MessagePack body size after attachments are removed;
 - the processor, logical-core count, platform, and measurement time.
 
-The headline rating is based on the worst p99 block-deadline utilization.
+The headline rating uses the worse of p99 block-deadline stability and the
+release IPC targets. Debug IPC numbers are explicitly diagnostic and do not
+lower the rating.
 Real-time factor alone can make a deliberately heavy graph look informative
 while hiding jitter that actually causes dropouts. This report helps users
 evaluate both practical buffer stability and process-boundary overhead. It does
@@ -80,10 +86,21 @@ utilization of 30% means 99% of measured blocks completed within roughly 30% of
 the available callback budget.
 
 IPC latency and throughput answer different questions. Small inline payloads
-show request-routing overhead, shared payloads show large-state transfer cost,
-the concurrent case exercises request-ID routing, and telemetry reads represent
-the 30 Hz meter/transport polling path. Shared-memory results still include the
-intentional single copy at the native-addon/Node Buffer boundary.
+show request-routing overhead. Cold shared latency includes lazy region
+creation and handle transfer. Warm sequential throughput is an effective
+request/reply number and must not be presented as the channel's saturated
+bandwidth. The 1/4/8/16 in-flight cases measure saturated duplex behavior and
+response routing; telemetry reads represent the 30 Hz meter/transport polling
+path. Shared-memory results still include the intentional one copy in each
+direction at the native-addon/Node Buffer boundary.
+
+The Windows reference release targets are 750 MiB/s for warm sequential 4 MiB
+duplex, 1.5 GiB/s at eight in-flight, and p99 inline RTT at or below 1 ms.
+During saturation, priority heartbeat p99 must remain at or below 500 ms and
+the audio callback generation must continue advancing. Always report arena
+offers and MessagePack body bytes with bandwidth: a 4 MiB attachment request
+whose body is no longer below 8 KiB indicates a regression back into payload
+serialization.
 
 At 48 kHz the engine must still sustain at least 48,000 rendered frames per
 second; at 96 kHz it must sustain at least 96,000. Divide frame throughput by

@@ -3,6 +3,7 @@ import { dirname, join } from "node:path"
 import type {
   ApplicationSettings,
   ApplicationSettingsPatch,
+  AudioHostRuntimePreferences,
   MeterPeakHold,
   MeterReturnRate,
   RecordingBitDepth,
@@ -23,6 +24,39 @@ function isMeterPeakHold(value: unknown): value is MeterPeakHold {
 
 function isMeterReturnRate(value: unknown): value is MeterReturnRate {
   return value === "iec-type-i"
+}
+
+function runtimeThreadSetting(
+  value: unknown,
+  minimum: number,
+  maximum: number,
+  name: string
+): "auto" | number {
+  if (value === "auto") return value
+  if (!Number.isInteger(value) || (value as number) < minimum || (value as number) > maximum) {
+    throw new TypeError(`${name} must be Auto or an integer from ${minimum} to ${maximum}`)
+  }
+  return value as number
+}
+
+export function validateAudioHostRuntimePreferences(value: unknown): AudioHostRuntimePreferences {
+  if (!value || typeof value !== "object") {
+    throw new TypeError("Audio host runtime preferences must be an object")
+  }
+  const input = value as Partial<AudioHostRuntimePreferences>
+  const preferences = {
+    workerThreads: runtimeThreadSetting(input.workerThreads, 1, 8, "Worker threads"),
+    maxBlockingThreads: runtimeThreadSetting(input.maxBlockingThreads, 2, 16, "Blocking threads"),
+    egressConcurrency: runtimeThreadSetting(input.egressConcurrency, 1, 4, "Egress concurrency")
+  }
+  if (
+    typeof preferences.egressConcurrency === "number" &&
+    typeof preferences.maxBlockingThreads === "number" &&
+    preferences.egressConcurrency > preferences.maxBlockingThreads
+  ) {
+    throw new TypeError("Egress concurrency cannot exceed blocking threads")
+  }
+  return preferences
 }
 
 async function syncDirectory(path: string): Promise<void> {
@@ -54,6 +88,11 @@ export class ApplicationSettingsStore {
       theme: "system",
       meterPeakHold: "800ms",
       meterReturnRate: "iec-type-i",
+      audioHostRuntime: {
+        workerThreads: "auto",
+        maxBlockingThreads: "auto",
+        egressConcurrency: "auto"
+      },
       recentProjects: []
     }
   }
@@ -76,6 +115,13 @@ export class ApplicationSettingsStore {
         meterReturnRate: isMeterReturnRate(raw.meterReturnRate)
           ? raw.meterReturnRate
           : value.meterReturnRate,
+        audioHostRuntime: (() => {
+          try {
+            return validateAudioHostRuntimePreferences(raw.audioHostRuntime)
+          } catch {
+            return value.audioHostRuntime
+          }
+        })(),
         recentProjects: Array.isArray(raw.recentProjects)
           ? raw.recentProjects
               .filter(
@@ -129,6 +175,14 @@ export class ApplicationSettingsStore {
       { path, name, openedAt: Date.now() },
       ...current.recentProjects.filter((recent) => recent.path !== path)
     ].slice(0, 20)
+    return this.write(current)
+  }
+
+  async configureAudioHostRuntime(
+    preferences: AudioHostRuntimePreferences
+  ): Promise<ApplicationSettings> {
+    const current = await this.get()
+    current.audioHostRuntime = validateAudioHostRuntimePreferences(preferences)
     return this.write(current)
   }
 

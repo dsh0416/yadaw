@@ -3,6 +3,8 @@ import { shallowRef } from "vue"
 import type {
   ApplicationSettings,
   ApplicationSettingsPatch,
+  AudioHostRuntimePreferences,
+  ResolvedAudioHostRuntimePreferences,
   MeterPeakHold,
   MeterReturnRate,
   ThemePreference
@@ -12,6 +14,8 @@ export const useApplicationSettingsStore = defineStore("application-settings", (
   const settings = shallowRef<ApplicationSettings | null>(null)
   const loading = shallowRef(false)
   const error = shallowRef("")
+  const applyingAudioRuntime = shallowRef(false)
+  const resolvedAudioHostRuntime = shallowRef<ResolvedAudioHostRuntimePreferences | null>(null)
   let loadPromise: Promise<void> | null = null
 
   function load(): Promise<void> {
@@ -85,17 +89,43 @@ export const useApplicationSettingsStore = defineStore("application-settings", (
     await window.yadaw.openSwapDirectory()
   }
 
+  async function configureAudioHostRuntime(
+    preferences: AudioHostRuntimePreferences
+  ): Promise<void> {
+    if (applyingAudioRuntime.value) return
+    applyingAudioRuntime.value = true
+    error.value = ""
+    try {
+      settings.value = await window.yadaw.configureAudioHostRuntime(preferences)
+      await refreshAudioHostRuntimeDiagnostics()
+    } catch (reason) {
+      error.value = reason instanceof Error ? reason.message : "Unable to restart the audio helper."
+      throw reason
+    } finally {
+      applyingAudioRuntime.value = false
+    }
+  }
+
+  async function refreshAudioHostRuntimeDiagnostics(): Promise<void> {
+    const snapshot = await window.yadaw.systemPerformanceSnapshot()
+    resolvedAudioHostRuntime.value = snapshot.audioIpc?.runtime.resolved ?? null
+  }
+
   return {
     settings,
     loading,
     error,
+    applyingAudioRuntime,
+    resolvedAudioHostRuntime,
     load,
     update,
     setTheme,
     setMeterPeakHold,
     setMeterReturnRate,
     chooseSwapDirectory,
-    openSwapDirectory
+    openSwapDirectory,
+    configureAudioHostRuntime,
+    refreshAudioHostRuntimeDiagnostics
   }
 })
 

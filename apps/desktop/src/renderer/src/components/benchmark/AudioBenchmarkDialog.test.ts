@@ -40,12 +40,20 @@ const report: AudioBenchmarkReport = {
   ],
   ipc: {
     durationMs: 140,
+    buildProfile: "release",
+    runtime: {
+      workerThreads: 2,
+      maxBlockingThreads: 4,
+      egressConcurrency: 2
+    },
+    arenaOffers: 1,
+    messagePackBodyBytes: 128,
     scenarios: [
       {
         id: "shared-plugin-state",
         label: "Large shared state",
         description: "4 MiB payload representative of a large plug-in state",
-        kind: "shared-round-trip",
+        kind: "shared-warm-sequential",
         payloadBytes: 4 * 1024 * 1024,
         iterations: 12,
         concurrency: 1,

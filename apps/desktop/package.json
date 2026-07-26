@@ -16,6 +16,7 @@
     "check": "vue-tsc --noEmit -p tsconfig.json",
     "test:unit": "vitest run",
     "test:vst3-helper": "node scripts/vst3-helper-smoke.mjs",
+    "test:ipc-v3": "node scripts/ipc-v3-smoke.mjs",
     "test:e2e": "pnpm build && playwright test",
     "pack": "pnpm build && electron-builder --dir --publish never",
     "dist": "pnpm build && electron-builder --publish never"

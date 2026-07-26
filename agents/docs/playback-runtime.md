@@ -4,8 +4,9 @@ This document is the agent-facing specification for YADAW's playback graph,
 threads, asynchronous control plane, background workers, and VST3 runtime. It
 defines ownership and real-time invariants for the VST3/Tokio migration.
 
-The helper control plane now uses `ipc-channel`, a dedicated current-thread
-Tokio runtime, bounded actor mailboxes, and a winit process main thread.
+The helper control plane uses protocol v3 over `ipc-channel`, a configurable
+Tokio multi-thread runtime, bounded actor mailboxes, persistent bulk arenas,
+and a winit process main thread.
 Streaming clips are cooperatively serviced by a fixed pool of two to four
 background lanes; there is no production prefetch thread per clip. Graph
 construction is still synchronous inside the VST3 actor and must move to the
@@ -30,8 +31,10 @@ Vue / Pinia
             v
        yadaw-audio-host process
        ├─ process main thread: winit + VST3 controller/editor/windows
-       ├─ yadaw-control: current-thread Tokio runtime + actors
-       ├─ IPC ingress/egress bridge threads
+       ├─ yadaw-control: LocalSet for VST3/thread-affine work
+       ├─ yadaw-tokio workers: Engine, protocol tasks, I/O, telemetry
+       ├─ dedicated priority/normal IPC ingress thread
+       ├─ async outbound actor + bounded blocking sends
        ├─ cpal-owned real-time callback threads
        └─ supervised background workers
             ├─ one recording lane
@@ -64,15 +67,24 @@ sender, immutable metadata, or atomics; it is not a second owner of the domain.
 
 ## Control runtime and actors
 
-The helper has exactly one Tokio runtime. It runs on the dedicated
-`yadaw-control` thread using a current-thread scheduler and a `LocalSet`. The
-runtime stays inside one long-lived `block_on`; winit is never used to
-periodically poll Tokio.
+The helper has exactly one explicitly constructed Tokio multi-thread runtime.
+The `yadaw-control` thread enters it through one long-lived `LocalSet` for VST3
+and other thread-affine objects. `EngineActor`, background I/O, telemetry,
+request tasks, response encoding, and egress scheduling use `tokio::spawn`.
+winit is never used to periodically poll Tokio.
+
+Resolved defaults are conservative: workers are
+`clamp(ceil(logical cores / 4), 1, 4)`, the blocking ceiling is
+`clamp(workers × 2, 2, 8)`, and egress concurrency is
+`min(2, blocking ceiling)`. Advanced settings may request workers 1–8,
+blocking threads 2–16, and egress concurrency 1–4 (never above the blocking
+ceiling). Applying them is a controlled helper restart, not an Electron
+restart.
 
 Production helper code must not use:
 
-- a Tokio multi-thread runtime;
-- `tokio::spawn_blocking` or `tokio::fs`;
+- the implicit Tokio runtime defaults or an unbounded worker count;
+- `spawn_blocking` outside the configured blocking budget;
 - an unbounded Tokio channel;
 - an ad hoc worker thread outside the runtime/bootstrap/worker modules;
 - a mutex or read/write lock guard held across `.await`.
@@ -83,9 +95,9 @@ The control-plane actors are:
 | ------------------- | ---------------: | ------------------------------------------------------ |
 | `ProtocolActor`     |              256 | version validation, request IDs, deadlines, routing    |
 | `EngineActor`       |               64 | devices, streams, transport, graph publication, meters |
-| `Vst3Actor`         |               64 | instances, parameters, state, editor, latency events   |
+| `Vst3Actor`         |               64 | LocalSet-only instances, state, editor, latency events |
 | `BackgroundIoActor` |              128 | recording, streaming registry, graph and waveform jobs |
-| `OutboundActor`     |              256 | replies and coalesced runtime events                   |
+| `OutboundActor`     |              256 | async replies and strictly ordered runtime events      |
 
 Request/response operations carry a Tokio one-shot sender. The caller owns the
 deadline and cancellation token. A dropped receiver cancels work when the
@@ -108,33 +120,62 @@ errors.
 
 ## IPC boundary
 
-Cross-process messages use protocol v2 over `servo/ipc-channel`. The outer
-value is `WirePacket { body, regions }`: `body` is a bounded MessagePack
-request/reply/event and `regions` contains zero or more
-`IpcSharedMemory` handles. Protocol v1 is intentionally rejected because addon
-and helper are a lockstep application resource.
+Cross-process messages use protocol v3 over `servo/ipc-channel`. The outer
+value is `WirePacket { body, region_offers }`: `body` is a bounded MessagePack
+request/reply/event and `region_offers` contains only mappings not already
+registered by the receiver. Protocol v2 and earlier are intentionally rejected
+because addon and helper are lockstep application resources.
 
 ```text
 WirePacket
   body: ControlRequest | ControlResponse | PriorityRequest | PriorityResponse | HostEvent
-  regions: IpcSharedMemory[]
+  region_offers: RegionOffer[]
 ```
 
-Binary fields use `BinaryPayload::Inline` through 64 KiB and
-`BinaryPayload::Shared` above 64 KiB. Shared references contain the packet
-region index, checked offset and length, XXH3-64 checksum, and lease ID.
+Binary fields use `BinaryPayload::Inline` through 64 KiB, an addon-only
+`Attachment` index at the Node boundary, and `BinaryPayload::Shared` on the
+native wire. Shared references contain session epoch, stable region ID and
+generation, allocation slot and generation, checked offset/length, and lease
+ID. There is intentionally no checksum: both processes are trusted application
+resources, while stale/session/bounds/publication checks prevent accidental
+reuse.
 Component/controller state, waveform peaks, raw MIDI/SysEx, and encoded large
 MIDI batches use this path. The addon validates and copies a received temporary
 blob exactly once into an ordinary Node Buffer; Electron never owns an external
 Buffer backed by a cross-process mapping.
 
-Attachments in one packet are 8-byte aligned and packed into as few regions as
-possible. A blob and a packet are each limited to 64 MiB. Each side permits at
-most 256 outstanding temporary leases and 512 MiB. The sender retains a
-mapping until `ReleaseLeases`; a 30-second expiry is a transport fault and
-releases the sender copy. Session close releases every temporary and persistent
-lease. Telemetry pages and the parameter ring are persistent session leases and
-do not use the temporary timeout.
+Large MIDI batches are not MessagePack documents inside the shared blob. They
+use a versioned, little-endian fixed ABI with a 32-byte magic/version/count
+header. Notes are a contiguous array of 24-byte POD records. Non-note events
+use fixed 40-byte descriptors whose checked offsets reference UTF-8 event-kind
+and payload bytes in a trailing data area. `yadaw-ipc-transport` validates the
+header, element size, total length, reserved fields, UTF-8, and every offset
+before exposing a `zerocopy` borrowed slice.
+
+The graph compiler reads shared notes directly from that borrowed slice into
+the final preallocated native graph buffer; it must not first deserialize a
+temporary `Vec<LiveMidiNote>`. A separate owned protocol snapshot is
+materialized once before the request lease is released because later
+stable-ID patches need a baseline that outlives the request. The real-time
+graph never retains a temporary bulk-arena lease. If persistent zero-copy
+graph data is introduced later, it requires a separate immutable graph arena
+with graph-retirement ownership, not the attachment arena.
+
+Each direction owns a separate, lazily grown arena with 1, 4, 16, and 64 MiB
+data-region classes. A region has at most 64 allocation slots and an aligned
+extent allocator that supports out-of-order release and adjacent-extent
+coalescing. Each direction is limited to 32 regions, 256 MiB mapped capacity,
+256 in-flight leases, and a 64 MiB blob/packet. The producer writes an
+unpublished extent, then publishes slot metadata with Release; the consumer
+validates it with Acquire before reading.
+
+The sender retains an allocation until `ReleaseLeases`. Release happens after
+the final command consumer completes, or after the addon copies a response
+into its owned `Vec`/Node Buffer. A 30-second timeout quarantines the whole
+region until session close; it is never reused, preventing a late-reader
+use-after-free. Arena exhaustion returns typed `Busy`; there is no unbounded
+wait queue. Telemetry pages and the parameter ring remain separate persistent
+mappings.
 
 Bootstrap transfers these independent paths:
 
@@ -147,6 +188,13 @@ parameter SPSC ring (persistent)
 session epoch
 ```
 
+Electron main calls the addon with `{ body, attachments }`. The addon copies
+each Node Buffer into the client→host arena synchronously on the calling
+thread, so no background Rust task reads a Buffer JavaScript can still mutate.
+On responses it makes one arena→`Vec` copy and transfers that allocation into
+a Node Buffer. Large payload bytes are therefore never MessagePack-encoded at
+the Node/Rust boundary.
+
 The addon response router owns the blocking normal receiver and resolves
 `request_id -> JsDeferred` in any order. Deadlines are scanned by the router;
 helper exit rejects all pending promises at once. Event and priority response
@@ -154,15 +202,18 @@ routers have separate receivers. No request occupies libuv's worker pool while
 waiting for IPC.
 
 `ipc-channel` receive operations are blocking and its internal send queue is
-not the application's backpressure mechanism. Each process therefore has
-supervised blocking ingress/egress bridge threads around bounded actor
-mailboxes. Normal ingress uses `try_send` into the 256-entry Tokio protocol
+not the application's backpressure mechanism. A dedicated ingress thread
+wraps bounded actor mailboxes. Normal ingress uses `try_send` into the
+256-entry Tokio protocol
 mailbox and returns `Busy` when saturated. Priority ingress answers heartbeat
 directly from liveness atomics; it never waits for Tokio, VST3, graph building,
 or the normal mailbox. Shutdown, lease release, parameter wake, and gesture
 boundary fallbacks use its reserved mailbox. Tokio actors enqueue replies to a
-bounded outbound mailbox; only the egress bridge calls blocking
-`ipc-channel::send`.
+bounded async outbound mailbox. Responses may encode and send out of order up
+to the configured egress concurrency; the independent event lane stays
+strictly ordered. Arena copies, encoding, and synchronous
+`ipc-channel::send` run as bounded blocking jobs and never occupy async
+workers.
 
 Heartbeat reports independent IPC-receive, Tokio-dispatch, winit-dispatch, and
 audio-callback generations. This makes a control-runtime hang distinguishable
@@ -185,9 +236,13 @@ snapshot. It reports normal/priority pending counts and timeouts, temporary
 lease count/bytes, cumulative inline/shared normal-request packet and byte
 traffic, event queue depth, telemetry epoch/revision/capacity and coherent-read
 fallbacks, plus parameter-ring occupancy and saturation/fallback counters.
-`AudioHostService` adds the age and generation tuple from the most recent
-priority heartbeat. These values are observational only and are never written
-or sampled from the audio callback.
+`AudioHostService` adds the age/generation tuple and helper-side egress active
+count, queue depth/high-water, batch/blocking counts, both arena directions'
+capacity/used/high-water/offers/busy/quarantine counts, and copied bytes from
+the most recent priority heartbeat. Heartbeat reads atomics directly on the
+priority ingress thread, so diagnostics remain available while Tokio, VST3, an
+arena, or normal egress is saturated. These values are observational only and
+are never written or sampled from the audio callback.
 
 When a graph needs more meter slots, the helper creates a larger power-of-two
 page and sends `TelemetryPageOffer(epoch)`. The addon maps it and acknowledges
@@ -207,6 +262,25 @@ epoch, so stale ring entries and handles are ignored.
 
 No IPC operation, serialization, channel send, or event construction occurs in
 an audio callback.
+
+### Runtime reconfiguration and shutdown
+
+Changing advanced thread settings is one exclusive transaction. Electron main
+rejects it while recording, finalization, recovery, or another configuration
+restart is active. It synchronizes dirty plugin state, remembers device and
+transport state, pauses transport, sends note-off/reset through the normal
+engine stop path, closes native editors, and asks the helper to shut down. The
+new helper must reach Ready, restore devices/plugins/full graph, and publish
+the expected graph revision before the saved sample position and playing state
+are restored. Settings are persisted only after success. Failure restarts with
+the previous settings; only a failed rollback enters audio error. This planned
+restart does not consume crash-recovery quota or mark a plugin suspicious.
+
+Normal shutdown stops new ingress, signals the async outbound actor, drains
+queued responses and ordered events, waits for blocking sends, releases arena
+mappings, then closes VST3/UI and joins the runtime. The addon waits up to two
+seconds for the helper to exit by itself before using process termination.
+Crash and watchdog paths may still terminate immediately.
 
 ## Playback graph lifecycle
 
@@ -445,7 +519,7 @@ a recording.
 
 Any playback-runtime change should cover the applicable items:
 
-- current-thread Tokio tests for actor ordering, timeout, cancellation, mailbox
+- multi-thread Tokio and LocalSet tests for actor ordering, timeout, cancellation, mailbox
   saturation, stale generations, and actor failure;
 - tests proving 1, 32, and 256 streaming clips use the same thread count;
 - seek-storm tests proving only the latest prefetch generation publishes;
@@ -472,6 +546,11 @@ For a local transport baseline, run:
 mise exec -- cargo run -p yadaw-ipc-transport --bin yadaw-ipc-benchmark --release
 ```
 
-It launches a child process and reports inline/shared round-trip throughput at
-the 64 KiB threshold, a 256-request pipeline, and shared telemetry read rate.
-It is intentionally a developer benchmark rather than a GitHub Actions gate.
+It launches a child process and reports 128-byte sequential RTT, the first
+bidirectional 4 MiB arena mapping, warm sequential shared-reference throughput,
+1/4/8/16 in-flight saturation, MessagePack control-body size, region-offer
+count, and shared telemetry read rate. The warm numbers are explicitly logical
+referenced bytes: this transport-only binary does not cross the Node boundary
+and therefore does not perform the addon's intentional arena-to-Buffer copy.
+Use the desktop performance benchmark for end-to-end addon/helper bandwidth.
+This remains a developer benchmark rather than a GitHub Actions gate.

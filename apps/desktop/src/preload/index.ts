@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from "electron"
 import { IPC_CHANNELS } from "@yadaw/contracts"
 import type {
   ApplicationSettingsPatch,
+  AudioHostRuntimePreferences,
   AudioBackend,
   AudioPreferences,
   CreateProjectRequest,
@@ -60,6 +61,8 @@ const api: YadawDesktopApi = {
   getApplicationSettings: () => ipcRenderer.invoke(IPC_CHANNELS.settingsGet),
   updateApplicationSettings: (patch: ApplicationSettingsPatch) =>
     ipcRenderer.invoke(IPC_CHANNELS.settingsUpdate, patch),
+  configureAudioHostRuntime: (preferences: AudioHostRuntimePreferences) =>
+    ipcRenderer.invoke(IPC_CHANNELS.settingsConfigureAudioHostRuntime, preferences),
   chooseSwapDirectory: () => ipcRenderer.invoke(IPC_CHANNELS.settingsChooseSwap),
   openSwapDirectory: () => ipcRenderer.invoke(IPC_CHANNELS.settingsOpenSwap),
   startRecording: () => ipcRenderer.invoke(IPC_CHANNELS.recordingStart),
