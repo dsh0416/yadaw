@@ -34,8 +34,11 @@ describe("MixerInputSection", () => {
     await wrapper.get('button[aria-label="Audio 1 input routing"]').trigger("click")
     await flushPromises()
 
+    const layer = document.body.querySelector<HTMLElement>(".mixer-popover-layer")
     const popover = document.body.querySelector<HTMLElement>(".input-popover")
+    expect(layer).not.toBeNull()
     expect(popover).not.toBeNull()
+    expect(layer!.contains(popover)).toBe(true)
     expect(popover!.getAttributeNames().some((name) => name.startsWith("data-v-"))).toBe(true)
   })
 })

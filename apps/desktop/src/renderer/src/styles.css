@@ -181,6 +181,13 @@ button,
   font: 7px var(--font-utility);
 }
 
+/* Reka copies this computed value to its portal positioning wrapper on mount. */
+.mixer-popover-layer,
+.send-popover-layer,
+.channel-menu-layer {
+  z-index: 120;
+}
+
 /* The large DAW surfaces stay deliberately neutral; color is reserved for signal state. */
 :root[data-theme] :is(.settings-page, .welcome-shell) {
   color: var(--text-primary);
