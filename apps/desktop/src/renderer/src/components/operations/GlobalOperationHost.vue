@@ -21,8 +21,9 @@ const open = computed({
   <UiDialog
     v-if="active"
     v-model="open"
+    eyebrow="Background operation"
     :title="active.title"
-    description="Track progress and review any warnings before returning to the project."
+    :description="active.description ?? undefined"
     size="md"
     :dismissible="active.state !== 'running'"
   >

@@ -33,21 +33,24 @@ const progressLabel = computed(() =>
   progress.value === null ? null : `${Math.round(progress.value)}%`
 )
 
-const statusLabel = computed(() => {
+const stateLabel = computed(() => {
   if (props.operation.state === "completed") return "Completed"
   if (props.operation.state === "failed") return "Failed"
-  return phaseLabels[props.operation.phase]
+  if (props.operation.state === "cancelled") return "Cancelled"
+  return "In progress"
 })
+
+const phaseLabel = computed(() => phaseLabels[props.operation.phase])
 </script>
 
 <template>
   <section class="operation-dialog">
-    <span class="operation-kicker">OPERATION IN PROGRESS</span>
+    <span class="operation-kicker">{{ stateLabel }}</span>
     <div class="operation-status">
-      <p>{{ statusLabel }}</p>
+      <h3>{{ phaseLabel }}</h3>
       <span v-if="progressLabel">{{ progressLabel }}</span>
     </div>
-    <UiProgress :value="progress" :label="statusLabel" :value-text="progressLabel ?? undefined" />
+    <UiProgress :value="progress" :label="phaseLabel" :value-text="progressLabel ?? undefined" />
     <UiStatusNotice
       v-if="operation.message"
       :tone="operation.state === 'failed' ? 'danger' : 'info'"
@@ -70,29 +73,32 @@ const statusLabel = computed(() => {
   gap: var(--ui-space-4);
 }
 .operation-kicker {
-  color: var(--accent);
-  font: 700 7px var(--font-utility);
-  letter-spacing: 0.16em;
+  color: var(--ui-color-action);
+  font: var(--ui-weight-semibold) var(--ui-font-size-xs) var(--ui-font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
-.operation-dialog p {
+.operation-status h3 {
   margin: 0;
-  color: var(--text-muted);
-  font-size: 10px;
+  color: var(--ui-color-text);
+  font-size: var(--ui-font-size-lg);
+  font-weight: var(--ui-weight-semibold);
+  line-height: var(--ui-line-tight);
 }
 .operation-status {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: var(--ui-space-4);
 }
 .operation-status span {
-  color: var(--text-secondary);
-  font: 700 9px var(--font-utility);
+  color: var(--ui-color-text-muted);
+  font: var(--ui-weight-semibold) var(--ui-font-size-sm) var(--ui-font-mono);
   font-variant-numeric: tabular-nums;
 }
 .operation-actions {
   display: flex;
   justify-content: flex-end;
-  margin-top: 20px;
+  margin-top: var(--ui-space-5);
 }
 </style>

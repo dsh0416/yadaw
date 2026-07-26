@@ -236,23 +236,27 @@ function handleFaderKeydown(event: KeyboardEvent): void {
   >
     <MixerInputSection
       :channel="channel"
+      :instrument="instrument"
+      :plugin-runtime="pluginRuntime"
+      :instrument-plugins="instrumentPlugins"
       @update-channel="emit('updateChannel', channel.id, $event)"
+      @open-plugin="emit('openPlugin', $event)"
+      @toggle-plugin="(id, enabled) => emit('togglePlugin', id, enabled)"
+      @remove-plugin="emit('removePlugin', $event)"
+      @assign-instrument="emit('assignInstrument', channel.id, $event)"
     />
 
     <MixerPluginSection
       :channel="channel"
-      :instrument="instrument"
       :inserts="inserts"
       :runtime="pluginRuntime"
       :effect-plugins="effectPlugins"
-      :instrument-plugins="instrumentPlugins"
       :slot-rows="pluginSlotRows"
       @open="emit('openPlugin', $event)"
       @toggle="(id, enabled) => emit('togglePlugin', id, enabled)"
       @remove="emit('removePlugin', $event)"
       @insert="(descriptor, slotOrder) => emit('insertPlugin', channel.id, descriptor, slotOrder)"
       @move="(instanceId, slotOrder) => emit('movePlugin', instanceId, channel.id, slotOrder)"
-      @assign-instrument="emit('assignInstrument', channel.id, $event)"
     />
 
     <MixerSendSection

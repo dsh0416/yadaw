@@ -176,7 +176,8 @@ export class RecordingService {
     const operationId = `recording:${recording.id}`
     const operation: OperationSnapshot = {
       id: operationId,
-      title: `Finalizing ${basename(recording.audioPath)}`,
+      title: "Finalizing recording",
+      description: basename(recording.audioPath),
       phase: "closing-recording",
       state: "running",
       completedUnits: null,
@@ -565,7 +566,8 @@ export class RecordingService {
       this.operations.upsert(
         {
           id: `recording:${id}`,
-          title: `Recovering ${basename(recording.audioPath)}`,
+          title: "Recovering recording",
+          description: basename(recording.audioPath),
           phase: "repairing-header",
           state: "running",
           completedUnits: null,
@@ -586,7 +588,8 @@ export class RecordingService {
       this.operations.upsert(
         {
           id: `recording:${id}`,
-          title: `Recovering ${basename(recording.audioPath)}`,
+          title: "Recovering recording",
+          description: basename(recording.audioPath),
           phase: "hashing",
           state: "running",
           completedUnits: null,

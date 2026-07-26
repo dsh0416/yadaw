@@ -89,7 +89,7 @@ export const MidiImport: Story = {
     data: () => ({ tempo: true, markers: true }),
     template: `
       <UiSurface style="max-width:42rem">
-        <UiSectionHeading title="Import Midnight Keys.mid" description="4 tracks · 126 bars · 120 BPM" />
+        <UiSectionHeading title="Import MIDI" description="Midnight Keys.mid · 4 tracks · 126 bars · 120 BPM" />
         <div class="storybook-stack" style="margin-top:var(--ui-space-5)">
           <UiCheckbox v-model="tempo" label="Import tempo map" />
           <UiCheckbox v-model="markers" label="Import markers" />

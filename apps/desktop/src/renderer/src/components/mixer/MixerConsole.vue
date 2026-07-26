@@ -21,7 +21,7 @@ const pluginSlotRows = computed(
         const insertCount = mixerStore.graph.plugins.filter(
           (plugin) => plugin.channelId === channel.id && plugin.role === "insert"
         ).length
-        return insertCount + (channel.kind === "instrument" ? 1 : 0)
+        return insertCount
       })
     ) + 1
 )
@@ -74,8 +74,8 @@ async function assignInstrument(channelId: string, descriptor: PluginDescriptor)
     const confirmed = await confirm({
       eyebrow: "Instrument slot",
       tone: "warning",
-      title: `Replace ${current.descriptor.name}?`,
-      description: `The instrument will be replaced with ${descriptor.name}.`,
+      title: "Replace instrument?",
+      description: `${current.descriptor.name} will be replaced with ${descriptor.name}.`,
       detail: "The previous component and controller state remain available through undo.",
       confirmLabel: "Replace instrument",
       destructive: false
@@ -91,8 +91,8 @@ async function deleteChannel(channelId: string): Promise<void> {
   const confirmed = await confirm({
     eyebrow: "Mixer routing",
     tone: "danger",
-    title: `Delete ${channel.name}?`,
-    description: "Its clips will be removed from the timeline, but media assets will be kept.",
+    title: "Delete channel?",
+    description: `The ${channel.name} channel and its clips will be removed from the timeline. Media assets will be kept.`,
     detail: "This change is added to the project history and can be undone.",
     confirmLabel: "Delete channel",
     destructive: true

@@ -721,7 +721,8 @@ function registerIpcHandlers(
       operations.upsert(
         {
           id: operationId,
-          title: `Opening ${projectName}`,
+          title: "Opening project",
+          description: projectName,
           phase: recover ? "loading-project-database" : "loading-project-archive",
           state: "running",
           completedUnits: 0,
@@ -798,7 +799,8 @@ function registerIpcHandlers(
     operations.upsert(
       {
         id: operationId,
-        title: `Saving ${current.configuration.name}`,
+        title: "Saving project",
+        description: current.configuration.name,
         phase: "saving-archive",
         state: "running",
         completedUnits: null,

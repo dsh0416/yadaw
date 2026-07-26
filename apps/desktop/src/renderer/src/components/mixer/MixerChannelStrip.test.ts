@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { mount } from "@vue/test-utils"
 import { createPinia } from "pinia"
-import type { MixerChannelState } from "@yadaw/contracts"
+import type { MixerChannelState, PluginDescriptor, PluginInstanceState } from "@yadaw/contracts"
 import MixerChannelStrip from "./MixerChannelStrip.vue"
 
 const channel: MixerChannelState = {
@@ -289,5 +289,69 @@ describe("MixerChannelStrip", () => {
     expect(wrapper.text()).toContain("GLOBAL")
     expect(wrapper.find('select[aria-label="Master output"]').exists()).toBe(false)
     expect(wrapper.find('button[aria-label="Solo Master"]').exists()).toBe(false)
+  })
+
+  it("places an instrument in Input while keeping Audio FX rows aligned", () => {
+    const instrumentDescriptor: PluginDescriptor = {
+      classId: "synth",
+      modulePath: "synth.vst3",
+      name: "Synth",
+      vendor: "YADAW",
+      version: "1.0",
+      category: "Instrument",
+      kind: "instrument",
+      architecture: "x86_64",
+      buses: [],
+      hasEditor: true,
+      compatibility: "compatible",
+      compatibilityReason: null
+    }
+    const instrument: PluginInstanceState = {
+      id: "instrument-plugin",
+      channelId: "instrument",
+      role: "instrument",
+      slotOrder: 0,
+      classId: instrumentDescriptor.classId,
+      descriptor: instrumentDescriptor,
+      enabled: true,
+      componentState: new Uint8Array(),
+      controllerState: new Uint8Array()
+    }
+    const wrapper = mount(MixerChannelStrip, {
+      props: {
+        channel: {
+          ...channel,
+          id: "instrument",
+          kind: "instrument",
+          name: "Keys",
+          inputFormat: null,
+          inputChannels: []
+        },
+        sends: [],
+        meter: {
+          channelId: "instrument",
+          preFaderPeak: [0, 0],
+          postFaderPeak: [0, 0],
+          heldPeak: [0, 0],
+          clipped: false
+        },
+        outputs: [],
+        buses: [],
+        sendTargets: [],
+        plugins: [instrument],
+        pluginRuntime: {},
+        effectPlugins: [],
+        instrumentPlugins: [instrumentDescriptor],
+        pluginSlotRows: 2,
+        sendSlotRows: 2,
+        selected: false
+      },
+      global: { plugins: [createPinia()] }
+    })
+
+    expect(wrapper.get('[data-section="input"]').text()).toContain("Synth")
+    expect(wrapper.get('[data-section="input"]').text()).not.toContain("MIDI")
+    expect(wrapper.get('[data-section="plugins"]').text()).not.toContain("Synth")
+    expect(wrapper.get('[data-section="plugins"]').findAll(".plugin-row")).toHaveLength(2)
   })
 })

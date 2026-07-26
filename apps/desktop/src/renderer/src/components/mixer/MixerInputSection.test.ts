@@ -28,7 +28,12 @@ describe("MixerInputSection", () => {
   it("keeps portalled routing content inside the shared popover surface", async () => {
     const wrapper = mount(MixerInputSection, {
       attachTo: document.body,
-      props: { channel }
+      props: {
+        channel,
+        instrument: null,
+        pluginRuntime: {},
+        instrumentPlugins: []
+      }
     })
 
     await wrapper.get('button[aria-label="Audio 1 input routing"]').trigger("click")

@@ -55,11 +55,9 @@ describe("MixerPluginSection", () => {
       attachTo: document.body,
       props: {
         channel,
-        instrument: null,
         inserts: [plugin],
         runtime: {},
         effectPlugins: [nextDescriptor],
-        instrumentPlugins: [],
         slotRows: 4
       }
     })
@@ -112,38 +110,5 @@ describe("MixerPluginSection", () => {
       }
     })
     expect(wrapper.get('[aria-label="Compressor plugin failed"]').classes()).toContain("failed")
-  })
-
-  it("assigns a VST3 instrument from the empty instrument slot", async () => {
-    const instrumentDescriptor: PluginDescriptor = {
-      ...descriptor,
-      classId: "synth",
-      modulePath: "synth.vst3",
-      name: "Synth",
-      category: "Instrument",
-      kind: "instrument"
-    }
-    const wrapper = mount(MixerPluginSection, {
-      attachTo: document.body,
-      props: {
-        channel: { ...channel, id: "instrument", kind: "instrument", inputFormat: null },
-        instrument: null,
-        inserts: [],
-        runtime: {},
-        effectPlugins: [],
-        instrumentPlugins: [instrumentDescriptor],
-        slotRows: 2
-      }
-    })
-
-    await wrapper.get('button[aria-label="Assign VST3 instrument"]').trigger("click")
-    await flushPromises()
-    const synthButton = document.body.querySelector<HTMLButtonElement>(
-      'button[aria-label="Add Synth"]'
-    )
-    expect(synthButton).not.toBeNull()
-    await new DOMWrapper(synthButton).trigger("click")
-
-    expect(wrapper.emitted("assignInstrument")?.at(-1)).toEqual([instrumentDescriptor])
   })
 })

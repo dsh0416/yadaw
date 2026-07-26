@@ -184,7 +184,10 @@ test("records into a Large Object and reopens the PGlite project archive", async
       .toBeGreaterThan(firstLiveFrames)
     await recordButton.click()
     const recordingDialog = page.getByRole("dialog")
-    await expect(recordingDialog).toContainText("Finalizing")
+    await expect(
+      recordingDialog.getByRole("heading", { name: "Finalizing recording" })
+    ).toBeVisible()
+    await expect(recordingDialog.getByRole("heading", { name: "Closing recording" })).toBeVisible()
     await expect(recordingDialog).toContainText("Completed")
     await expect(recordingDialog).toBeHidden({ timeout: 3_000 })
     const timelineClip = page.getByRole("button", { name: /Audio clip Recording/ }).first()
@@ -253,7 +256,9 @@ test("records into a Large Object and reopens the PGlite project archive", async
 
     await page.getByRole("button", { name: "Save project" }).click()
     const saveDialog = page.getByRole("dialog")
-    await expect(saveDialog).toContainText("Saving Lifecycle")
+    await expect(saveDialog.getByRole("heading", { name: "Saving project" })).toBeVisible()
+    await expect(saveDialog).toContainText("Lifecycle")
+    await expect(saveDialog.getByRole("heading", { name: "Saving project archive" })).toBeVisible()
     await expect(saveDialog).toContainText("Completed")
     await expect(saveDialog).toBeHidden({ timeout: 3_000 })
 

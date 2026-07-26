@@ -34,15 +34,13 @@ const actions = computed<readonly UiAlertAction[]>(() =>
   <UiAlertDialog
     v-if="activeDialog"
     v-model="open"
+    :eyebrow="activeDialog.eyebrow"
     :title="activeDialog.title"
     :description="activeDialog.description"
     :tone="tone"
     :actions="actions"
     @action="selectDialogAction"
   >
-    <p v-if="activeDialog.eyebrow" class="global-dialog-eyebrow">
-      {{ activeDialog.eyebrow }}
-    </p>
     <p v-if="activeDialog.detail" class="global-dialog-detail">
       {{ activeDialog.detail }}
     </p>
@@ -50,14 +48,6 @@ const actions = computed<readonly UiAlertAction[]>(() =>
 </template>
 
 <style scoped>
-.global-dialog-eyebrow {
-  margin: 0 0 var(--ui-space-2);
-  color: var(--ui-color-text-subtle);
-  font: var(--ui-weight-semibold) var(--ui-font-size-xs) var(--ui-font-mono);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
 .global-dialog-detail {
   margin: 0;
 }

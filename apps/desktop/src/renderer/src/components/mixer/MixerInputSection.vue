@@ -1,14 +1,28 @@
 <script setup lang="ts">
 import { computed } from "vue"
 import { UiPopover } from "@yadaw/ui"
-import type { MixerChannelPatch, MixerChannelState } from "@yadaw/contracts"
+import type {
+  MixerChannelPatch,
+  MixerChannelState,
+  PluginDescriptor,
+  PluginInstanceState,
+  PluginRuntimeStatus
+} from "@yadaw/contracts"
+import MixerInstrumentInput from "./MixerInstrumentInput.vue"
 
 const props = defineProps<{
   channel: MixerChannelState
+  instrument: PluginInstanceState | null
+  pluginRuntime: Record<string, PluginRuntimeStatus>
+  instrumentPlugins: PluginDescriptor[]
 }>()
 
 const emit = defineEmits<{
   updateChannel: [patch: MixerChannelPatch]
+  openPlugin: [instanceId: string]
+  togglePlugin: [instanceId: string, enabled: boolean]
+  removePlugin: [instanceId: string]
+  assignInstrument: [descriptor: PluginDescriptor]
 }>()
 
 const inputOptions = Array.from({ length: 32 }, (_, index) => index + 1)
@@ -17,7 +31,6 @@ const inputSummary = computed(() => {
     const inputs = props.channel.inputChannels.join("–")
     return `${props.channel.inputFormat === "mono" ? "MONO" : "ST"} ${inputs}`
   }
-  if (props.channel.kind === "instrument") return "MIDI · ALL"
   if (props.channel.kind === "bus") return "BUS RETURN"
   if (props.channel.kind === "master") return "GLOBAL"
   return "MIX BUS"
@@ -47,7 +60,17 @@ function updateInput(index: number, event: Event): void {
 
 <template>
   <section class="strip-section input-section" data-section="input">
-    <UiPopover v-if="channel.kind === 'audio'" side="top" :side-offset="7">
+    <MixerInstrumentInput
+      v-if="channel.kind === 'instrument'"
+      :instrument="instrument"
+      :runtime="pluginRuntime"
+      :plugins="instrumentPlugins"
+      @open="emit('openPlugin', $event)"
+      @toggle="(id, enabled) => emit('togglePlugin', id, enabled)"
+      @remove="emit('removePlugin', $event)"
+      @assign="emit('assignInstrument', $event)"
+    />
+    <UiPopover v-else-if="channel.kind === 'audio'" side="top" :side-offset="7">
       <template #trigger>
         <button class="section-control input-trigger" :aria-label="`${channel.name} input routing`">
           <i aria-hidden="true" />

@@ -11,15 +11,22 @@ describe("GlobalDialogHost", () => {
     const result = confirm({
       eyebrow: "Mixer routing",
       tone: "danger",
-      title: "Delete Vocals?",
-      description: "Its clips will be removed from the timeline.",
+      title: "Delete channel?",
+      description: "Vocals and its clips will be removed from the timeline.",
       confirmLabel: "Delete channel",
       destructive: true
     })
     await wrapper.vm.$nextTick()
 
     const dialog = document.body.querySelector<HTMLElement>("[role=alertdialog]")
-    expect(dialog?.textContent).toContain("Delete Vocals?")
+    expect(dialog?.querySelector(".ui-alert-dialog__eyebrow")?.textContent?.trim()).toBe(
+      "Mixer routing"
+    )
+    expect(dialog?.querySelector(".ui-alert-dialog__title")?.textContent?.trim()).toBe(
+      "Delete channel?"
+    )
+    expect(dialog?.querySelector(".ui-alert-dialog__description")?.textContent).toContain("Vocals")
+    expect(dialog?.querySelector(".ui-alert-dialog__title")?.textContent).not.toContain("Vocals")
     expect(dialog?.dataset.tone).toBe("danger")
 
     const deleteButton = [...document.body.querySelectorAll<HTMLButtonElement>("button")].find(

@@ -13,6 +13,7 @@ import {
 const open = defineModel<boolean>({ default: false })
 const props = withDefaults(
   defineProps<{
+    eyebrow?: string
     title: string
     description?: string
     size?: "sm" | "md" | "lg"
@@ -21,6 +22,7 @@ const props = withDefaults(
     dismissible?: boolean
   }>(),
   {
+    eyebrow: undefined,
     description: undefined,
     size: "md",
     modal: true,
@@ -54,6 +56,9 @@ defineSlots<{
         <header class="ui-dialog__header">
           <slot name="header">
             <div class="ui-dialog__heading">
+              <span v-if="props.eyebrow" class="ui-dialog__eyebrow">
+                {{ props.eyebrow }}
+              </span>
               <DialogTitle class="ui-dialog__title">{{ props.title }}</DialogTitle>
               <DialogDescription v-if="props.description" class="ui-dialog__description">
                 {{ props.description }}
@@ -132,6 +137,13 @@ defineSlots<{
   display: grid;
   min-width: 0;
   gap: var(--ui-space-2);
+}
+
+.ui-dialog__eyebrow {
+  color: var(--ui-color-text-subtle);
+  font: var(--ui-weight-semibold) var(--ui-font-size-xs) var(--ui-font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .ui-dialog__title {

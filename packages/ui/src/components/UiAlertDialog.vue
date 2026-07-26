@@ -16,6 +16,7 @@ import type { UiAlertAction, UiNoticeTone } from "../types"
 const open = defineModel<boolean>({ default: false })
 const props = withDefaults(
   defineProps<{
+    eyebrow?: string
     title: string
     description: string
     confirmLabel?: string
@@ -25,6 +26,7 @@ const props = withDefaults(
     actions?: readonly UiAlertAction[]
   }>(),
   {
+    eyebrow: undefined,
     confirmLabel: "Continue",
     cancelLabel: "Cancel",
     tone: "neutral",
@@ -55,6 +57,9 @@ const emit = defineEmits<{
       >
         <div class="ui-alert-dialog__marker" aria-hidden="true">!</div>
         <div class="ui-alert-dialog__copy">
+          <span v-if="props.eyebrow" class="ui-alert-dialog__eyebrow">
+            {{ props.eyebrow }}
+          </span>
           <AlertDialogTitle class="ui-alert-dialog__title">
             {{ props.title }}
           </AlertDialogTitle>
@@ -159,7 +164,15 @@ const emit = defineEmits<{
   gap: var(--ui-space-2);
 }
 
+.ui-alert-dialog__eyebrow {
+  color: var(--ui-color-text-subtle);
+  font: var(--ui-weight-semibold) var(--ui-font-size-xs) var(--ui-font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
 .ui-alert-dialog__title {
+  margin: 0;
   font-size: var(--ui-font-size-lg);
   font-weight: var(--ui-weight-semibold);
   line-height: var(--ui-line-tight);
@@ -167,6 +180,7 @@ const emit = defineEmits<{
 
 .ui-alert-dialog__description,
 .ui-alert-dialog__detail {
+  margin: 0;
   color: var(--ui-color-text-muted);
   font-size: var(--ui-font-size-sm);
   line-height: var(--ui-line-normal);

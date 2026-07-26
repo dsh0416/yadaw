@@ -12,11 +12,9 @@ import MixerPluginPicker from "./MixerPluginPicker.vue"
 
 const props = defineProps<{
   channel: MixerChannelState
-  instrument: PluginInstanceState | null
   inserts: PluginInstanceState[]
   runtime: Record<string, PluginRuntimeStatus>
   effectPlugins: PluginDescriptor[]
-  instrumentPlugins: PluginDescriptor[]
   slotRows: number
 }>()
 
@@ -26,16 +24,12 @@ const emit = defineEmits<{
   remove: [instanceId: string]
   insert: [descriptor: PluginDescriptor, slotOrder: number]
   move: [instanceId: string, slotOrder: number]
-  assignInstrument: [descriptor: PluginDescriptor]
 }>()
 
 const orderedInserts = computed(() =>
   [...props.inserts].sort((left, right) => left.slotOrder - right.slotOrder)
 )
-const usedRows = computed(
-  () => orderedInserts.value.length + (props.channel.kind === "instrument" ? 1 : 0)
-)
-const emptyRows = computed(() => Math.max(0, props.slotRows - usedRows.value))
+const emptyRows = computed(() => Math.max(0, props.slotRows - orderedInserts.value.length))
 const alignmentRows = computed(() => Math.max(0, emptyRows.value - 1))
 const acceptsPlugins = computed(() => props.channel.kind !== "master")
 
@@ -51,14 +45,6 @@ function allowDrop(event: DragEvent): void {
   if (!acceptsPlugins.value || !accepts(event)) return
   event.preventDefault()
   if (event.dataTransfer) event.dataTransfer.dropEffect = "move"
-}
-
-function dropInstrument(event: DragEvent): void {
-  event.preventDefault()
-  const payload = readPluginDrag(event)
-  if (payload?.source === "catalog" && payload.descriptor.kind === "instrument") {
-    emit("assignInstrument", payload.descriptor)
-  }
 }
 
 function dropInsert(event: DragEvent, slotOrder: number): void {
@@ -78,55 +64,6 @@ function dropInsert(event: DragEvent, slotOrder: number): void {
 <template>
   <section class="plugin-section" data-section="plugins" aria-label="Audio effects">
     <template v-if="acceptsPlugins">
-      <article
-        v-if="channel.kind === 'instrument' && instrument"
-        :class="['plugin-row', 'instrument-row', pluginState(instrument)]"
-        :aria-label="`${instrument.descriptor.name} plugin ${pluginState(instrument)}`"
-        @dragenter="allowDrop"
-        @dragover="allowDrop"
-        @drop="dropInstrument"
-      >
-        <button
-          class="plugin-name"
-          draggable="false"
-          :title="instrument.descriptor.name"
-          @click="emit('open', instrument.id)"
-        >
-          {{ instrument.descriptor.name }}
-        </button>
-        <button
-          :aria-label="`${instrument.enabled ? 'Bypass' : 'Enable'} ${instrument.descriptor.name}`"
-          @click="emit('toggle', instrument.id, !instrument.enabled)"
-        >
-          <Power :size="9" />
-        </button>
-        <button
-          :aria-label="`Remove ${instrument.descriptor.name}`"
-          @click="emit('remove', instrument.id)"
-        >
-          <Trash2 :size="9" />
-        </button>
-      </article>
-      <MixerPluginPicker
-        v-else-if="channel.kind === 'instrument'"
-        :plugins="instrumentPlugins"
-        title="Choose instrument"
-        search-label="Search VST3 instruments"
-        empty-message="No compatible VST3 instruments found. Rescan from the Sound Browser."
-        @select="emit('assignInstrument', $event)"
-      >
-        <button
-          type="button"
-          class="plugin-row instrument-row empty picker-trigger"
-          aria-label="Assign VST3 instrument"
-          @dragenter="allowDrop"
-          @dragover="allowDrop"
-          @drop="dropInstrument"
-        >
-          <span>EMPTY INSTRUMENT</span>
-        </button>
-      </MixerPluginPicker>
-
       <article
         v-for="(plugin, index) in orderedInserts"
         :key="plugin.id"
@@ -218,10 +155,6 @@ function dropInsert(event: DragEvent, slotOrder: number): void {
   color: var(--ui-domain-color-fff);
   background: linear-gradient(var(--ui-domain-color-3f91d4), var(--ui-domain-color-2871ae));
   box-shadow: 0 1px 0 var(--ui-domain-color-ffffff28) inset;
-}
-.plugin-row.instrument-row {
-  border-color: var(--ui-domain-color-697654);
-  background: linear-gradient(var(--ui-domain-color-7e9362), var(--ui-domain-color-63764d));
 }
 .plugin-row.bypassed {
   border-color: var(--ui-domain-color-505050);

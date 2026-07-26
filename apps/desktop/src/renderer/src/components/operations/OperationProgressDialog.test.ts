@@ -20,6 +20,8 @@ describe("OperationProgressDialog", () => {
       }
     })
     expect(wrapper.text()).not.toContain("Import")
+    expect(wrapper.get("h3").text()).toBe("Writing project asset")
+    expect(wrapper.text()).toContain("In progress")
     expect(wrapper.get("[role=progressbar]").attributes("aria-valuenow")).toBe("50")
     expect(wrapper.text()).toContain("50%")
     await wrapper.get("button").trigger("click")
@@ -73,7 +75,8 @@ describe("OperationProgressDialog", () => {
       props: {
         operation: {
           id: "open-project",
-          title: "Opening Demo",
+          title: "Opening project",
+          description: "Demo",
           phase: "loading-mixer",
           state: "running",
           completedUnits: 2,
@@ -86,6 +89,7 @@ describe("OperationProgressDialog", () => {
     })
     expect(wrapper.text()).toContain("Loading mixer")
     expect(wrapper.text()).toContain("50%")
+    expect(wrapper.get("h3").text()).toBe("Loading mixer")
     expect(wrapper.get("[role=progressbar]").attributes("aria-label")).toBe("Loading mixer")
   })
 })

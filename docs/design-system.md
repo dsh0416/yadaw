@@ -85,6 +85,11 @@ complete value. Disabled controls remain named.
   dismissal, reflow, and modal behavior.
 - `UiAlertDialog` is only for a decision that interrupts the workflow. Destructive actions name
   the object and consequence.
+- Dialog hierarchy is always eyebrow (optional category), short stable action title, contextual
+  description, then body content. File names, project names, plug-in names, paths, counts, and
+  changing progress phases do not become the dialog title.
+- A body section that names the current phase or result uses a real heading at normal reading
+  size. Eyebrows label categories or states; they never substitute for the content heading.
 - `UiPopover` contains non-modal contextual controls. It is not a small dialog.
 - `UiTooltip` contains short supplemental text and optional shortcut notation. It cannot contain
   an essential action.
@@ -120,8 +125,9 @@ what failed, whether data is safe, and a recovery action. Avoid error codes as t
 
 ### Destructive confirmation
 
-The title names the action and object. The description states the irreversible consequence.
-The destructive button repeats the verb; the safe action is plainly “Cancel”.
+The title names the action (“Delete channel?”). The description names the object and states the
+irreversible consequence. The destructive button repeats the verb; the safe action is plainly
+“Cancel”.
 
 ### Two-dimensional workspaces
 

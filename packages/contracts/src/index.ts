@@ -257,6 +257,7 @@ export type OperationState = "running" | "completed" | "failed" | "cancelled"
 export interface OperationSnapshot {
   id: string
   title: string
+  description?: string | null
   phase: OperationPhase
   state: OperationState
   completedUnits: number | null

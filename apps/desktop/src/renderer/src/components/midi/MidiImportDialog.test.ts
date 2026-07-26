@@ -33,6 +33,13 @@ describe("MidiImportDialog", () => {
     })
     await flushPromises()
 
+    const dialog = document.body.querySelector<HTMLElement>("[role=dialog]")
+    expect(dialog?.querySelector(".ui-dialog__eyebrow")?.textContent?.trim()).toBe("MIDI import")
+    expect(dialog?.querySelector(".ui-dialog__title")?.textContent).toBe("Import MIDI")
+    expect(dialog?.querySelector(".ui-dialog__description")?.textContent).toContain(
+      "tempo-song.mid · PPQ 480 · Format 1"
+    )
+    expect(dialog?.querySelector(".ui-dialog__title")?.textContent).not.toContain("tempo-song.mid")
     expect(document.body.textContent).toContain("Keep the project Tempo Track")
     expect(document.body.textContent).toContain("Import MIDI tempo into project")
     const radios = document.body.querySelectorAll<HTMLInputElement>('input[type="radio"]')

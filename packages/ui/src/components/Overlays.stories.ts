@@ -16,7 +16,7 @@ const meta = {
   render: () => ({
     components: { UiButton, UiDialog },
     template: `
-      <UiDialog title="Import MIDI file" description="Choose how the selected MIDI tracks should be added.">
+      <UiDialog eyebrow="MIDI import" title="Import MIDI" description="tempo-song.mid · PPQ 480 · Format 1">
         <template #trigger><UiButton variant="primary">Open import dialog</UiButton></template>
         <p style="margin:0;color:var(--ui-color-text-muted)">Two tracks and four tempo events were found.</p>
         <template #actions>
@@ -37,9 +37,9 @@ export const Interactive: Story = {
     await userEvent.click(canvas.getByRole("button", { name: "Open import dialog" }))
 
     const page = within(canvasElement.ownerDocument.body)
-    await expect(page.getByRole("dialog", { name: "Import MIDI file" })).toBeVisible()
+    await expect(page.getByRole("dialog", { name: "Import MIDI" })).toBeVisible()
     await userEvent.keyboard("{Escape}")
-    await expect(page.queryByRole("dialog", { name: "Import MIDI file" })).toBeNull()
+    await expect(page.queryByRole("dialog", { name: "Import MIDI" })).toBeNull()
   }
 }
 
@@ -50,6 +50,7 @@ export const DestructiveConfirmation: Story = {
     template: `
       <UiAlertDialog
         v-model="open"
+        eyebrow="Recording recovery"
         title="Delete recording?"
         description="This removes the take from the project. The source file cannot be restored from YADAW."
         confirm-label="Delete recording"

@@ -16,14 +16,14 @@ const open = computed({
     if (!value) midiImportStore.close()
   }
 })
-const title = computed(
+const sourceFileName = computed(
   () => midiImportStore.preview?.path.split(/[\\/]/).at(-1) ?? "Import MIDI file"
 )
 const description = computed(
   () =>
-    `${midiImportStore.preview?.sourceTiming ?? "Unknown timing"} · Format ${
-      midiImportStore.preview?.format ?? "—"
-    }`
+    `${sourceFileName.value} · ${
+      midiImportStore.preview?.sourceTiming ?? "Unknown timing"
+    } · Format ${midiImportStore.preview?.format ?? "—"}`
 )
 
 function targetValue(sourceTrack: number, sequence: number): string {
@@ -58,7 +58,8 @@ function updateInstrument(sourceTrack: number, sequence: number, event: Event): 
 <template>
   <UiDialog
     v-model="open"
-    :title="title"
+    eyebrow="MIDI import"
+    title="Import MIDI"
     :description="description"
     size="lg"
     :dismissible="!midiImportStore.busy"
