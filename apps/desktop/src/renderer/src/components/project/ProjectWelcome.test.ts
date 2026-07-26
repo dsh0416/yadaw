@@ -30,6 +30,7 @@ describe("ProjectWelcome", () => {
             maxBlockingThreads: "auto",
             egressConcurrency: "auto"
           },
+          pluginEditors: {},
           recentProjects: [{ path: "C:/song.yadaw", name: "Song", openedAt: 1 }]
         },
         busy: false,

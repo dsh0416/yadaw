@@ -7,9 +7,9 @@
 use std::ffi::c_void;
 
 use crate::Steinberg::{
-    self, FIDString, FUnknown, IBStream, IPlugFrame, IPlugView, IPluginBase, IPluginFactory,
-    IPluginFactory2, IPluginFactory3, PClassInfo, PClassInfo2, PClassInfoW, PFactoryInfo, TBool,
-    TUID, ViewRect,
+    self, FIDString, FUnknown, IBStream, IPlugFrame, IPlugView, IPlugViewContentScaleSupport,
+    IPluginBase, IPluginFactory, IPluginFactory2, IPluginFactory3, PClassInfo, PClassInfo2,
+    PClassInfoW, PFactoryInfo, TBool, TUID, ViewRect,
     Vst::{
         AudioBusBuffers, BusDirection, BusInfo, Event, IAudioProcessor, IComponent,
         IComponentHandler, IConnectionPoint, IEditController, IEventList, IHostApplication,
@@ -353,6 +353,13 @@ pub struct PlugFrameVTable {
         view: *mut IPlugView,
         size: *mut ViewRect,
     ) -> tresult,
+}
+
+#[repr(C)]
+pub struct PlugViewContentScaleSupportVTable {
+    pub base: FUnknownVTable,
+    pub set_content_scale_factor:
+        unsafe extern "system" fn(this: *mut IPlugViewContentScaleSupport, factor: f32) -> tresult,
 }
 
 pub type GetPluginFactory = unsafe extern "system" fn() -> *mut IPluginFactory;

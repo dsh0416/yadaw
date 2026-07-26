@@ -506,7 +506,7 @@ impl LivePlugin {
         if !self.enabled {
             return self.bypass_delay.process(input);
         }
-        let Some(processor) = self.processor else {
+        let Some(processor) = self.processor.as_mut() else {
             return if self.is_instrument { [0.0; 2] } else { input };
         };
         processor
@@ -1473,19 +1473,19 @@ impl NativeMixerRuntime {
             tempo,
             time_signature_numerator: i32::from(signature.numerator),
             time_signature_denominator: i32::from(signature.denominator),
-            playing: u8::from(state == TRANSPORT_PLAYING),
-            recording: u8::from(state == TRANSPORT_RECORDING),
+            playing: state == TRANSPORT_PLAYING,
+            recording: state == TRANSPORT_RECORDING,
         }
     }
 
     fn dispatch_midi_event(&mut self, event: ScheduledMidiEvent) {
         let Some(plugin) = self.plugins_by_channel[event.channel_index]
-            .iter()
+            .iter_mut()
             .find(|plugin| plugin.is_instrument)
         else {
             return;
         };
-        let Some(processor) = plugin.processor else {
+        let Some(processor) = plugin.processor.as_mut() else {
             return;
         };
         if event.note_on {

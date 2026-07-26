@@ -7,7 +7,7 @@
   "type": "module",
   "main": "./out/main/index.js",
   "scripts": {
-    "predev": "pnpm --filter @yadaw/dsp-node build:debug && pnpm --filter @yadaw/audio-host-client build:debug && cargo build -p yadaw-audio-host && cargo build -p yadaw-vst3-host --bin yadaw-vst3-probe && cmake -S ../.. -B ../../target/vst3-bridge-build && cmake --build ../../target/vst3-bridge-build --config Debug --target yadaw-vst3-bridge",
+    "predev": "pnpm --filter @yadaw/dsp-node build:debug && pnpm --filter @yadaw/audio-host-client build:debug && cargo build -p yadaw-audio-host && cargo build -p yadaw-vst3-host --bin yadaw-vst3-probe",
     "dev": "node scripts/dev.ts",
     "build": "pnpm build:main && pnpm build:preload && pnpm build:renderer",
     "build:main": "vite build --config vite.main.config.ts",
@@ -16,6 +16,7 @@
     "check": "vue-tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.scripts.json",
     "test:unit": "vitest run",
     "test:vst3-helper": "node scripts/vst3-helper-smoke.ts",
+    "test:vst3-editor": "node scripts/vst3-editor-smoke.ts",
     "test:ipc": "node scripts/ipc-smoke.ts",
     "test:e2e": "pnpm build && playwright test",
     "pack": "pnpm build && electron-builder --dir --publish never",

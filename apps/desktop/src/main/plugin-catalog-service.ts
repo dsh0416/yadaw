@@ -6,6 +6,7 @@ import { basename, dirname, join } from "node:path"
 import type {
   PluginCatalogSnapshot,
   PluginDescriptor,
+  PluginEditorMode,
   PluginParameterChange,
   PluginParameterInfo,
   PluginRuntimeStatus,
@@ -28,7 +29,7 @@ interface PluginRuntime {
   }>
   parameters(instanceId: string): Promise<PluginParameterInfo[]>
   setParameter(change: PluginParameterChange): Promise<void>
-  openEditor(instanceId: string): Promise<{ editorKind: "native" | "generic"; open: boolean }>
+  openEditor(instanceId: string): Promise<{ editorMode: PluginEditorMode; open: boolean }>
   closeEditor(instanceId: string): Promise<void>
 }
 
@@ -455,7 +456,7 @@ export class PluginCatalogService {
   }
 
   async openEditor(instanceId: string): Promise<PluginRuntimeStatus> {
-    if (!this.runtime) throw new Error("The native VST3 bridge is not running")
+    if (!this.runtime) throw new Error("The native VST3 runtime is not running")
     const { plugin, sampleRate } = await this.runtime.resolveInstance(instanceId)
     const status = await this.runtime.load(plugin, sampleRate)
     const editor = await this.runtime.openEditor(instanceId)
@@ -463,7 +464,7 @@ export class PluginCatalogService {
       instanceId,
       state: plugin.enabled ? "active" : "bypassed",
       editorOpen: editor.open,
-      editorKind: editor.editorKind,
+      editorMode: editor.editorMode,
       latencySamples: status.latencySamples,
       tailSamples: status.tailSamples,
       error: null
@@ -488,7 +489,7 @@ export class PluginCatalogService {
     ) {
       throw new TypeError("Invalid VST3 parameter change")
     }
-    if (!this.runtime) throw new Error("The native VST3 bridge is not running")
+    if (!this.runtime) throw new Error("The native VST3 runtime is not running")
     await this.runtime.setParameter(change)
   }
 }

@@ -1,4 +1,4 @@
-import { spawn, spawnSync } from "node:child_process"
+import { spawn } from "node:child_process"
 import { fileURLToPath } from "node:url"
 import { resolve } from "node:path"
 import { tmpdir } from "node:os"
@@ -17,7 +17,7 @@ interface AudioHostMeter {
 interface WireResult {
   type: string
   message?: string
-  editor_kind?: string
+  active_mode?: "native" | "parameters"
   open?: boolean
   parameters?: PluginParameter[]
   component_state?: { bytes?: Uint8Array }
@@ -38,17 +38,9 @@ interface PendingRequest {
 
 const repositoryRoot = fileURLToPath(new URL("../../..", import.meta.url))
 const executableSuffix = process.platform === "win32" ? ".exe" : ""
-const bridgeFilename =
-  process.platform === "win32"
-    ? "yadaw-vst3-bridge.dll"
-    : process.platform === "darwin"
-      ? "libyadaw-vst3-bridge.dylib"
-      : "libyadaw-vst3-bridge.so"
-const [helperPath, bridgePath, pluginPath] = process.argv.slice(2)
+const [helperPath, pluginPath] = process.argv.slice(2)
 const resolvedHelper =
   helperPath ?? resolve(repositoryRoot, "target", "debug", `yadaw-audio-host${executableSuffix}`)
-const resolvedBridge =
-  bridgePath ?? resolve(repositoryRoot, "target", "vst3-fixtures", "bin", bridgeFilename)
 const resolvedPlugin =
   pluginPath ?? resolve(repositoryRoot, "target", "vst3-fixtures", "VST3", "Debug", "again.vst3")
 const resolvedSynth = resolve(
@@ -59,29 +51,11 @@ const resolvedSynth = resolve(
   "Debug",
   "note-expression-synth.vst3"
 )
-const smokeExecutable = resolve(
-  repositoryRoot,
-  "target",
-  "vst3-fixtures",
-  "bin",
-  `yadaw-vst3-smoke${executableSuffix}`
-)
-const smoke = spawnSync(smokeExecutable, [resolvedPlugin, resolvedSynth], {
-  stdio: "inherit"
-})
-if (smoke.status !== 0) {
-  throw new Error(`VST3 block-processing smoke test exited with ${smoke.status}`)
-}
-
 const crashMarker = resolve(tmpdir(), `yadaw-vst3-smoke-${process.pid}.marker`)
-const child = spawn(
-  resolvedHelper,
-  ["--vst3-bridge", resolvedBridge, "--crash-marker", crashMarker],
-  {
-    stdio: ["pipe", "pipe", "inherit"],
-    env: { ...process.env, YADAW_TEST_VIRTUAL_AUDIO: "1" }
-  }
-)
+const child = spawn(resolvedHelper, ["--crash-marker", crashMarker], {
+  stdio: ["pipe", "pipe", "inherit"],
+  env: { ...process.env, YADAW_TEST_VIRTUAL_AUDIO: "1" }
+})
 let nextRequestId = 1
 let received = Buffer.alloc(0)
 const pending = new Map<number, PendingRequest>()
@@ -134,6 +108,7 @@ try {
     instance_id: "again-1",
     module_path: resolvedPlugin,
     class_id: "84E8DE5F92554F5396FAE4133C935A18",
+    plugin_kind: "effect",
     sample_rate: 48_000,
     component_state: { storage: "inline", bytes: new Uint8Array() },
     controller_state: { storage: "inline", bytes: new Uint8Array() }
@@ -144,6 +119,7 @@ try {
     instance_id: "synth-1",
     module_path: resolvedSynth,
     class_id: "41466D9BB0654576B641098F686371B3",
+    plugin_kind: "instrument",
     sample_rate: 48_000,
     component_state: { storage: "inline", bytes: new Uint8Array() },
     controller_state: { storage: "inline", bytes: new Uint8Array() }
@@ -154,13 +130,22 @@ try {
   if (listed.type !== "plugin-parameters" || !listedParameters?.length) {
     throw new Error("AGain did not expose parameters")
   }
-  const editor = await send({ type: "open-plugin-editor", instance_id: "again-1" })
-  const editorKind = editor.editor_kind
-  if (editorKind !== "native" && editorKind !== "generic") {
-    throw new Error("plugin editor did not report native or generic fallback")
+  const editorPreference = { mode: "native", zoom_percent: 100 }
+  const editor = await send({
+    type: "open-plugin-editor",
+    instance_id: "again-1",
+    preference: editorPreference
+  })
+  const editorMode = editor.active_mode
+  if (editorMode !== "native" && editorMode !== "parameters") {
+    throw new Error("plugin editor did not report native or parameter fallback")
   }
-  const focused = await send({ type: "open-plugin-editor", instance_id: "again-1" })
-  if (editorKind === "native" && !focused.open) {
+  const focused = await send({
+    type: "open-plugin-editor",
+    instance_id: "again-1",
+    preference: editorPreference
+  })
+  if (editor.open && !focused.open) {
     throw new Error("opening the existing editor did not focus/reuse it")
   }
   await send({ type: "close-plugin-editor", instance_id: "again-1" })
@@ -181,89 +166,98 @@ try {
     throw new Error("state response mismatch")
   }
   await send({
-    type: "load-graph",
-    revision: 1,
-    graph: {
-      sample_rate: 48_000,
-      channels: [
-        {
-          id: "instrument-1",
-          kind: "instrument",
-          gain_db: 0,
-          pan: 0,
-          muted: false,
-          soloed: false,
-          output_index: 2,
-          record_armed: false,
-          input_channels: [],
-          hardware_output_channels: []
-        },
-        {
-          id: "master",
-          kind: "master",
-          gain_db: 0,
-          pan: 0,
-          muted: false,
-          soloed: false,
-          record_armed: false,
-          input_channels: [],
-          hardware_output_channels: []
-        },
-        {
-          id: "output",
-          kind: "output",
-          gain_db: 0,
-          pan: 0,
-          muted: false,
-          soloed: false,
-          record_armed: false,
-          input_channels: [],
-          hardware_output_channels: [1, 2]
-        }
-      ],
-      sends: [],
-      clips: [],
-      plugins: [
-        {
-          instance_id: "synth-1",
-          channel_index: 0,
-          role: "instrument",
-          slot_order: 0,
-          enabled: true,
-          latency_samples: synthLoaded.latency_samples ?? 0,
-          tail_samples: synthLoaded.tail_samples ?? 0
-        },
-        {
-          instance_id: "again-1",
-          channel_index: 0,
-          role: "insert",
-          slot_order: 0,
-          enabled: true,
-          latency_samples: loaded.latency_samples ?? 0,
-          tail_samples: loaded.tail_samples ?? 0
-        }
-      ],
-      midi_clips: [
-        {
-          id: "clip-1",
-          channel_index: 0,
-          start_tick: 0,
-          source_offset_ticks: 0,
-          length_ticks: 960,
-          notes: [
-            {
-              start_tick: 0,
-              duration_ticks: 960,
-              channel: 0,
-              key: 60,
-              velocity: 110,
-              release_velocity: 0
-            }
-          ]
-        }
-      ],
-      tempo_events: [{ tick: 0, beats_per_minute: 120 }],
-      time_signature_events: [{ tick: 0, numerator: 4, denominator: 4 }]
+    type: "update-graph",
+    update: {
+      type: "replace",
+      revision: 1,
+      graph: {
+        sample_rate: 48_000,
+        channels: [
+          {
+            id: "instrument-1",
+            kind: "instrument",
+            gain_db: 0,
+            pan: 0,
+            muted: false,
+            soloed: false,
+            output_channel_id: "output",
+            record_armed: false,
+            input_channels: [],
+            hardware_output_channels: []
+          },
+          {
+            id: "master",
+            kind: "master",
+            gain_db: 0,
+            pan: 0,
+            muted: false,
+            soloed: false,
+            output_channel_id: null,
+            record_armed: false,
+            input_channels: [],
+            hardware_output_channels: []
+          },
+          {
+            id: "output",
+            kind: "output",
+            gain_db: 0,
+            pan: 0,
+            muted: false,
+            soloed: false,
+            output_channel_id: null,
+            record_armed: false,
+            input_channels: [],
+            hardware_output_channels: [1, 2]
+          }
+        ],
+        sends: [],
+        clips: [],
+        plugins: [
+          {
+            instance_id: "synth-1",
+            channel_id: "instrument-1",
+            role: "instrument",
+            slot_order: 0,
+            enabled: true,
+            latency_samples: synthLoaded.latency_samples ?? 0,
+            tail_samples: synthLoaded.tail_samples ?? 0
+          },
+          {
+            instance_id: "again-1",
+            channel_id: "instrument-1",
+            role: "insert",
+            slot_order: 0,
+            enabled: true,
+            latency_samples: loaded.latency_samples ?? 0,
+            tail_samples: loaded.tail_samples ?? 0
+          }
+        ],
+        midi_clips: [
+          {
+            id: "clip-1",
+            channel_id: "instrument-1",
+            start_tick: 0,
+            source_offset_ticks: 0,
+            length_ticks: 960,
+            notes: {
+              storage: "inline",
+              notes: [
+                {
+                  start_tick: 0,
+                  duration_ticks: 960,
+                  channel: 0,
+                  key: 60,
+                  velocity: 110,
+                  release_velocity: 0
+                }
+              ]
+            },
+            events: { storage: "inline", events: [] }
+          }
+        ],
+        tempo_events: [{ tick: 0, beats_per_minute: 120 }],
+        time_signature_events: [{ tick: 0, numerator: 4, denominator: 4 }]
+      }
     }
   })
   await send({

@@ -1,263 +1,52 @@
-use std::{
-    collections::HashMap,
-    ffi::{CStr, CString, c_char, c_void},
-    path::Path,
-    ptr::NonNull,
-};
+use std::{collections::HashMap, path::Path};
 
-use libloading::Library;
 use yadaw_dsp_runtime::protocol::{
     BinaryPayload, ControlCommand, ControlResult, ParameterCommand, ParameterGesture,
-    PluginParameter,
+    PluginEditorPreference, PluginParameter,
+};
+use yadaw_vst3_host::{
+    ClassId, HostProcessContext, HostedPlugin, PlugView, PluginKind, ProcessorLease,
 };
 
-const INFINITE_TAIL: u32 = u32::MAX;
-
-#[repr(C)]
-#[derive(Clone, Copy)]
-struct ParameterInfo {
-    id: u32,
-    default_normalized: f64,
-    normalized: f64,
-    step_count: i32,
-    flags: u32,
-    title: [c_char; 128],
-    units: [c_char; 128],
-}
-
-type CreateFn =
-    unsafe extern "C" fn(*const c_char, *const c_char, f64, u32, *mut c_char, usize) -> *mut c_void;
-type DestroyFn = unsafe extern "C" fn(*mut c_void);
-type SetParameterFn = unsafe extern "C" fn(*mut c_void, u32, f64, u32) -> i32;
-type FlushParametersFn = unsafe extern "C" fn(*mut c_void) -> i32;
-type ParameterCountFn = unsafe extern "C" fn(*const c_void) -> u32;
-type ParameterInfoFn = unsafe extern "C" fn(*const c_void, u32, *mut ParameterInfo) -> i32;
-type SamplesFn = unsafe extern "C" fn(*const c_void) -> u32;
-type StateSizeFn = unsafe extern "C" fn(*mut c_void) -> usize;
-type StateCopyFn = unsafe extern "C" fn(*mut c_void, *mut u8, usize) -> usize;
-type RestoreStateFn = unsafe extern "C" fn(*mut c_void, *const u8, usize, *const u8, usize) -> i32;
-type OpenEditorFn = unsafe extern "C" fn(*mut c_void) -> i32;
-type CloseEditorFn = unsafe extern "C" fn(*mut c_void);
-type EditorOpenFn = unsafe extern "C" fn(*const c_void) -> i32;
-type ConsumeChangedFn = unsafe extern "C" fn(*mut c_void) -> i32;
-type PumpEditorEventsFn = unsafe extern "C" fn();
-type ProcessStereoFn = unsafe extern "C" fn(
-    *mut c_void,
-    *const f32,
-    *const f32,
-    *mut f32,
-    *mut f32,
-    u32,
-    *const ProcessContext,
-) -> i32;
-type NoteFn = unsafe extern "C" fn(*mut c_void, i16, i16, i16, f32, i32, i32) -> i32;
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug)]
-pub struct ProcessContext {
-    pub project_time_samples: i64,
-    pub continuous_time_samples: i64,
-    pub project_time_quarters: f64,
-    pub bar_position_quarters: f64,
-    pub tempo: f64,
-    pub time_signature_numerator: i32,
-    pub time_signature_denominator: i32,
-    pub playing: u8,
-    pub recording: u8,
-}
-
-#[derive(Clone, Copy)]
-struct Functions {
-    create: CreateFn,
-    destroy: DestroyFn,
-    process_stereo: ProcessStereoFn,
-    note_on: NoteFn,
-    note_off: NoteFn,
-    set_parameter: SetParameterFn,
-    flush_parameters: FlushParametersFn,
-    parameter_count: ParameterCountFn,
-    parameter_info: ParameterInfoFn,
-    latency_samples: SamplesFn,
-    tail_samples: SamplesFn,
-    component_state_size: StateSizeFn,
-    controller_state_size: StateSizeFn,
-    copy_component_state: StateCopyFn,
-    copy_controller_state: StateCopyFn,
-    restore_state: RestoreStateFn,
-    open_editor: OpenEditorFn,
-    close_editor: CloseEditorFn,
-    editor_open: EditorOpenFn,
-    consume_latency_changed: ConsumeChangedFn,
-    pump_editor_events: PumpEditorEventsFn,
-}
-
-#[derive(Clone, Copy)]
-pub struct Vst3ProcessorHandle {
-    pointer: NonNull<c_void>,
-    functions: Functions,
-}
-
-// The bridge instance is created on the helper control thread and processed only by the
-// helper audio thread. Its controller entry points are required by VST3 to be callable from
-// the host UI/control thread.
-// SAFETY: The bridge owns the pointed-to instance and documents these entry points as safe to
-// invoke from the designated helper threads for the lifetime of Vst3Runtime.
-unsafe impl Send for Vst3ProcessorHandle {}
-// SAFETY: Shared access only invokes bridge functions that internally synchronize controller
-// state; instance destruction remains exclusively owned by Vst3Runtime.
-unsafe impl Sync for Vst3ProcessorHandle {}
-
-impl Vst3ProcessorHandle {
-    pub fn process_frame(&self, input: [f32; 2], context: &ProcessContext) -> Option<[f32; 2]> {
-        let mut left = 0.0_f32;
-        let mut right = 0.0_f32;
-        // SAFETY: The instance remains owned by Vst3Runtime for the helper lifetime, and all
-        // buffers contain exactly the single frame advertised to the bridge.
-        let processed = unsafe {
-            (self.functions.process_stereo)(
-                self.pointer.as_ptr(),
-                &input[0],
-                &input[1],
-                &mut left,
-                &mut right,
-                1,
-                context,
-            )
-        };
-        (processed != 0).then_some([left, right])
-    }
-
-    pub fn note_on(&self, channel: u8, key: u8, velocity: u8, note_id: i32) -> bool {
-        // SAFETY: The bridge copies the event into its preallocated input event list.
-        unsafe {
-            (self.functions.note_on)(
-                self.pointer.as_ptr(),
-                0,
-                i16::from(channel),
-                i16::from(key),
-                f32::from(velocity) / 127.0,
-                note_id,
-                0,
-            ) != 0
-        }
-    }
-
-    pub fn note_off(&self, channel: u8, key: u8, velocity: u8, note_id: i32) -> bool {
-        // SAFETY: The bridge copies the event into its preallocated input event list.
-        unsafe {
-            (self.functions.note_off)(
-                self.pointer.as_ptr(),
-                0,
-                i16::from(channel),
-                i16::from(key),
-                f32::from(velocity) / 127.0,
-                note_id,
-                0,
-            ) != 0
-        }
-    }
-}
+pub type ProcessContext = HostProcessContext;
+pub type Vst3ProcessorHandle = ProcessorLease;
 
 pub struct Vst3Runtime {
     instances: HashMap<String, Instance>,
+    retired_instances: Vec<Instance>,
     next_runtime_handle: u32,
-    _library: Library,
-    functions: Functions,
 }
 
 struct Instance {
-    pointer: NonNull<c_void>,
+    plugin: HostedPlugin,
     runtime_handle: u32,
-    functions: Functions,
+    display_name: String,
 }
 
-impl Drop for Instance {
-    fn drop(&mut self) {
-        // SAFETY: The pointer was returned by the matching bridge create function and is owned here.
-        unsafe { (self.functions.destroy)(self.pointer.as_ptr()) };
+struct LoadPluginRequest {
+    instance_id: String,
+    module_path: String,
+    class_id: String,
+    plugin_kind: String,
+    sample_rate: f64,
+    component_state: Vec<u8>,
+    controller_state: Vec<u8>,
+}
+
+impl Default for Vst3Runtime {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
 impl Vst3Runtime {
-    pub fn load(path: &Path) -> Result<Self, String> {
-        // SAFETY: The bridge path is application-owned and all symbols are copied while the
-        // library handle remains stored in this runtime.
-        let library = unsafe { Library::new(path) }.map_err(|error| error.to_string())?;
-        // SAFETY: Every requested symbol has the exact ABI declared by the companion bridge, and
-        // the Library is retained by Vst3Runtime for longer than the copied function pointers.
-        let functions = unsafe {
-            Functions {
-                create: *library
-                    .get(b"yadaw_vst3_create\0")
-                    .map_err(|error| error.to_string())?,
-                destroy: *library
-                    .get(b"yadaw_vst3_destroy\0")
-                    .map_err(|error| error.to_string())?,
-                process_stereo: *library
-                    .get(b"yadaw_vst3_process_stereo\0")
-                    .map_err(|error| error.to_string())?,
-                note_on: *library
-                    .get(b"yadaw_vst3_note_on\0")
-                    .map_err(|error| error.to_string())?,
-                note_off: *library
-                    .get(b"yadaw_vst3_note_off\0")
-                    .map_err(|error| error.to_string())?,
-                set_parameter: *library
-                    .get(b"yadaw_vst3_set_parameter\0")
-                    .map_err(|error| error.to_string())?,
-                flush_parameters: *library
-                    .get(b"yadaw_vst3_flush_parameters\0")
-                    .map_err(|error| error.to_string())?,
-                parameter_count: *library
-                    .get(b"yadaw_vst3_parameter_count\0")
-                    .map_err(|error| error.to_string())?,
-                parameter_info: *library
-                    .get(b"yadaw_vst3_parameter_info\0")
-                    .map_err(|error| error.to_string())?,
-                latency_samples: *library
-                    .get(b"yadaw_vst3_latency_samples\0")
-                    .map_err(|error| error.to_string())?,
-                tail_samples: *library
-                    .get(b"yadaw_vst3_tail_samples\0")
-                    .map_err(|error| error.to_string())?,
-                component_state_size: *library
-                    .get(b"yadaw_vst3_component_state_size\0")
-                    .map_err(|error| error.to_string())?,
-                controller_state_size: *library
-                    .get(b"yadaw_vst3_controller_state_size\0")
-                    .map_err(|error| error.to_string())?,
-                copy_component_state: *library
-                    .get(b"yadaw_vst3_copy_component_state\0")
-                    .map_err(|error| error.to_string())?,
-                copy_controller_state: *library
-                    .get(b"yadaw_vst3_copy_controller_state\0")
-                    .map_err(|error| error.to_string())?,
-                restore_state: *library
-                    .get(b"yadaw_vst3_restore_state\0")
-                    .map_err(|error| error.to_string())?,
-                open_editor: *library
-                    .get(b"yadaw_vst3_open_editor\0")
-                    .map_err(|error| error.to_string())?,
-                close_editor: *library
-                    .get(b"yadaw_vst3_close_editor\0")
-                    .map_err(|error| error.to_string())?,
-                editor_open: *library
-                    .get(b"yadaw_vst3_editor_open\0")
-                    .map_err(|error| error.to_string())?,
-                consume_latency_changed: *library
-                    .get(b"yadaw_vst3_consume_latency_changed\0")
-                    .map_err(|error| error.to_string())?,
-                pump_editor_events: *library
-                    .get(b"yadaw_vst3_pump_editor_events\0")
-                    .map_err(|error| error.to_string())?,
-            }
-        };
-        Ok(Self {
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
             instances: HashMap::new(),
+            retired_instances: Vec::new(),
             next_runtime_handle: 1,
-            _library: library,
-            functions,
-        })
+        }
     }
 
     pub fn execute(&mut self, command: ControlCommand) -> ControlResult {
@@ -266,21 +55,36 @@ impl Vst3Runtime {
                 instance_id,
                 module_path,
                 class_id,
+                plugin_kind,
                 sample_rate,
                 component_state,
                 controller_state,
-            } => self.load_plugin(
-                instance_id,
-                module_path,
-                class_id,
-                sample_rate,
-                component_state,
-                controller_state,
-            ),
-            ControlCommand::UnloadPlugin { .. } => {
-                // Realtime graphs hold stable bridge handles and are retired asynchronously.
-                // Keep the instance alive until helper shutdown rather than invalidating a
-                // pointer that an outgoing callback generation may still be using.
+            } => {
+                let component_state = match inline_bytes(component_state) {
+                    Ok(bytes) => bytes,
+                    Err(message) => return control_error(message),
+                };
+                let controller_state = match inline_bytes(controller_state) {
+                    Ok(bytes) => bytes,
+                    Err(message) => return control_error(message),
+                };
+                self.load_plugin(LoadPluginRequest {
+                    instance_id,
+                    module_path,
+                    class_id,
+                    plugin_kind,
+                    sample_rate,
+                    component_state,
+                    controller_state,
+                })
+            }
+            ControlCommand::UnloadPlugin { instance_id } => {
+                // Retired audio graphs may still hold a processor lease. Remove the instance from
+                // the live UI registry immediately, but retain its allocation until helper
+                // shutdown, after the audio engine and every graph generation have stopped.
+                if let Some(instance) = self.instances.remove(&instance_id) {
+                    self.retired_instances.push(instance);
+                }
                 ControlResult::Accepted
             }
             ControlCommand::PluginParameters { instance_id } => {
@@ -293,21 +97,86 @@ impl Vst3Runtime {
                 gesture,
             } => self.set_parameter(&instance_id, parameter_id, normalized, gesture),
             ControlCommand::SavePluginState { instance_id } => self.save_state(&instance_id),
-            ControlCommand::OpenPluginEditor { instance_id } => self.open_editor(&instance_id),
-            ControlCommand::ClosePluginEditor { instance_id } => self.close_editor(&instance_id),
-            _ => ControlResult::Error {
-                message: "command is not a VST3 runtime command".into(),
-            },
+            ControlCommand::OpenPluginEditor {
+                instance_id,
+                preference,
+            } => self.editor_result(&instance_id, preference),
+            ControlCommand::ClosePluginEditor { .. } => ControlResult::Accepted,
+            _ => control_error("command is not a VST3 runtime command"),
         }
     }
 
     pub fn processor_handle(&self, instance_id: &str) -> Option<Vst3ProcessorHandle> {
         self.instances
             .get(instance_id)
-            .map(|instance| Vst3ProcessorHandle {
-                pointer: instance.pointer,
-                functions: instance.functions,
+            .map(|instance| instance.plugin.processor_lease())
+    }
+
+    pub fn processor_handles(&self) -> HashMap<String, Vst3ProcessorHandle> {
+        self.instances
+            .iter()
+            .map(|(id, instance)| (id.clone(), instance.plugin.processor_lease()))
+            .collect()
+    }
+
+    pub fn create_view(&self, instance_id: &str) -> Result<PlugView, String> {
+        self.instances
+            .get(instance_id)
+            .ok_or_else(|| "VST3 instance is not loaded".to_owned())?
+            .plugin
+            .create_view()
+            .map_err(|error| error.to_string())
+    }
+
+    pub fn display_name(&self, instance_id: &str) -> Option<&str> {
+        self.instances
+            .get(instance_id)
+            .map(|instance| instance.display_name.as_str())
+    }
+
+    pub fn class_id(&self, instance_id: &str) -> Option<String> {
+        self.instances
+            .get(instance_id)
+            .map(|instance| instance.plugin.class_id().to_string())
+    }
+
+    pub fn parameters(&self, instance_id: &str) -> Result<Vec<PluginParameter>, String> {
+        let instance = self
+            .instances
+            .get(instance_id)
+            .ok_or_else(|| "VST3 instance is not loaded".to_owned())?;
+        instance
+            .plugin
+            .parameters()
+            .map(|parameters| {
+                parameters
+                    .into_iter()
+                    .map(|parameter| PluginParameter {
+                        id: parameter.id,
+                        title: parameter.title,
+                        units: parameter.units,
+                        step_count: parameter.step_count,
+                        default_normalized: parameter.default_normalized,
+                        normalized: parameter.normalized,
+                        flags: parameter.flags,
+                    })
+                    .collect()
             })
+            .map_err(|error| error.to_string())
+    }
+
+    pub fn set_parameter_from_editor(
+        &mut self,
+        instance_id: &str,
+        parameter_id: u32,
+        normalized: f64,
+        gesture: ParameterGesture,
+    ) -> Result<(), String> {
+        match self.set_parameter(instance_id, parameter_id, normalized, gesture) {
+            ControlResult::Accepted => Ok(()),
+            ControlResult::Error { message } => Err(message),
+            _ => Err("unexpected VST3 parameter result".into()),
+        }
     }
 
     pub fn apply_parameter_command(&mut self, command: ParameterCommand) -> ControlResult {
@@ -321,200 +190,88 @@ impl Vst3Runtime {
                 command.normalized,
                 command.gesture,
             ),
-            None => error("VST3 runtime handle is stale"),
+            None => control_error("VST3 runtime handle is stale"),
         }
     }
 
     pub fn take_timing_changes(&self) -> Vec<(String, u32, Option<u32>)> {
         self.instances
             .iter()
-            .filter_map(|(id, instance)| {
-                // SAFETY: The instance pointer is live while borrowed from self.instances and the
-                // function pointer comes from the retained companion bridge library.
-                let changed = unsafe {
-                    (self.functions.consume_latency_changed)(instance.pointer.as_ptr()) != 0
-                };
-                changed.then(|| {
-                    // SAFETY: The instance remains live for both read-only timing queries.
-                    let (latency, tail) = unsafe {
-                        (
-                            (self.functions.latency_samples)(instance.pointer.as_ptr()),
-                            (self.functions.tail_samples)(instance.pointer.as_ptr()),
-                        )
-                    };
-                    (id.clone(), latency, (tail != INFINITE_TAIL).then_some(tail))
-                })
+            .filter(|(_, instance)| instance.plugin.take_latency_changed())
+            .map(|(id, instance)| {
+                (
+                    id.clone(),
+                    instance.plugin.latency_samples(),
+                    instance.plugin.tail_samples(),
+                )
             })
             .collect()
     }
 
-    pub fn pump_editor_events(&self) {
-        // SAFETY: The function pointer comes from the retained bridge library and takes no
-        // borrowed application data.
-        unsafe { (self.functions.pump_editor_events)() };
-    }
-
-    fn load_plugin(
-        &mut self,
-        instance_id: String,
-        module_path: String,
-        class_id: String,
-        sample_rate: f64,
-        component_state: BinaryPayload,
-        controller_state: BinaryPayload,
-    ) -> ControlResult {
-        let component_state = match component_state {
-            BinaryPayload::Inline { bytes } => bytes,
-            BinaryPayload::Shared { .. } | BinaryPayload::Attachment { .. } => {
-                return error("external VST3 component state was not materialized");
-            }
-        };
-        let controller_state = match controller_state {
-            BinaryPayload::Inline { bytes } => bytes,
-            BinaryPayload::Shared { .. } | BinaryPayload::Attachment { .. } => {
-                return error("external VST3 controller state was not materialized");
-            }
-        };
-        self.load_plugin_bytes(
+    fn load_plugin(&mut self, request: LoadPluginRequest) -> ControlResult {
+        let LoadPluginRequest {
             instance_id,
             module_path,
             class_id,
+            plugin_kind,
             sample_rate,
-            &component_state,
-            &controller_state,
-        )
-    }
-
-    pub fn load_plugin_bytes(
-        &mut self,
-        instance_id: String,
-        module_path: String,
-        class_id: String,
-        sample_rate: f64,
-        component_state: &[u8],
-        controller_state: &[u8],
-    ) -> ControlResult {
+            component_state,
+            controller_state,
+        } = request;
         if let Some(instance) = self.instances.get(&instance_id) {
-            // Graph rebuilds deliberately reuse the existing processor and editor instance.
-            // SAFETY: The instance remains live for both read-only timing queries.
-            let (latency_samples, tail) = unsafe {
-                (
-                    (self.functions.latency_samples)(instance.pointer.as_ptr()),
-                    (self.functions.tail_samples)(instance.pointer.as_ptr()),
-                )
-            };
             return ControlResult::PluginLoaded {
                 runtime_handle: instance.runtime_handle,
-                latency_samples,
-                tail_samples: (tail != INFINITE_TAIL).then_some(tail),
+                latency_samples: instance.plugin.latency_samples(),
+                tail_samples: instance.plugin.tail_samples(),
             };
         }
-        let module_path = match CString::new(module_path) {
-            Ok(value) => value,
-            Err(_) => return error("VST3 module path contains an embedded NUL"),
+        let class_id = match class_id.parse::<ClassId>() {
+            Ok(class_id) => class_id,
+            Err(error) => return control_error(&error.to_string()),
         };
-        let class_id = match CString::new(class_id) {
-            Ok(value) => value,
-            Err(_) => return error("VST3 class ID contains an embedded NUL"),
+        let kind = match plugin_kind.as_str() {
+            "effect" => PluginKind::Effect,
+            "instrument" => PluginKind::Instrument,
+            _ => return control_error("unsupported VST3 plugin kind"),
         };
-        let mut message = [0_i8; 1024];
-        // SAFETY: All pointers are valid for the duration of the call and the bridge validates
-        // configuration before constructing the owned opaque instance.
-        let pointer = unsafe {
-            (self.functions.create)(
-                module_path.as_ptr(),
-                class_id.as_ptr(),
-                sample_rate,
-                4096,
-                message.as_mut_ptr(),
-                message.len(),
-            )
+        let plugin = match HostedPlugin::create(&module_path, class_id, sample_rate, kind) {
+            Ok(plugin) => plugin,
+            Err(error) => return control_error(&error.to_string()),
         };
-        let Some(pointer) = NonNull::new(pointer) else {
-            // SAFETY: The bridge always NUL-terminates the fixed error buffer.
-            let message = unsafe { CStr::from_ptr(message.as_ptr()) }
-                .to_string_lossy()
-                .into_owned();
-            return error(if message.is_empty() {
-                "VST3 instance creation failed"
-            } else {
-                &message
-            });
-        };
-        let instance = Instance {
-            pointer,
-            runtime_handle: self.next_runtime_handle,
-            functions: self.functions,
-        };
+        if (!component_state.is_empty() || !controller_state.is_empty())
+            && let Err(error) = plugin.restore_state(&component_state, &controller_state)
+        {
+            return control_error(&error.to_string());
+        }
+        let latency_samples = plugin.latency_samples();
+        let tail_samples = plugin.tail_samples();
+        let runtime_handle = self.next_runtime_handle;
         self.next_runtime_handle = self.next_runtime_handle.wrapping_add(1).max(1);
-        if !component_state.is_empty() {
-            // SAFETY: State byte slices and the live opaque instance are valid for the call.
-            let restored = unsafe {
-                (self.functions.restore_state)(
-                    pointer.as_ptr(),
-                    component_state.as_ptr(),
-                    component_state.len(),
-                    controller_state.as_ptr(),
-                    controller_state.len(),
-                )
-            };
-            if restored == 0 {
-                return error("VST3 state restoration failed");
-            }
-        }
-        // SAFETY: The newly created instance is live for both read-only timing queries and is
-        // transferred into the map immediately below.
-        let (latency_samples, tail) = unsafe {
-            (
-                (self.functions.latency_samples)(pointer.as_ptr()),
-                (self.functions.tail_samples)(pointer.as_ptr()),
-            )
-        };
-        let runtime_handle = instance.runtime_handle;
-        self.instances.insert(instance_id, instance);
+        let display_name = Path::new(&module_path)
+            .file_stem()
+            .and_then(|name| name.to_str())
+            .unwrap_or("VST3 plug-in")
+            .to_owned();
+        self.instances.insert(
+            instance_id,
+            Instance {
+                plugin,
+                runtime_handle,
+                display_name,
+            },
+        );
         ControlResult::PluginLoaded {
             runtime_handle,
             latency_samples,
-            tail_samples: (tail != INFINITE_TAIL).then_some(tail),
+            tail_samples,
         }
     }
 
     fn plugin_parameters(&self, instance_id: &str) -> ControlResult {
-        let Some(instance) = self.instances.get(instance_id) else {
-            return error("VST3 instance is not loaded");
-        };
-        // SAFETY: The opaque instance remains live for every bridge query in this function.
-        let count = unsafe { (self.functions.parameter_count)(instance.pointer.as_ptr()) };
-        let mut parameters = Vec::with_capacity(count as usize);
-        for index in 0..count {
-            let mut info = ParameterInfo {
-                id: 0,
-                default_normalized: 0.0,
-                normalized: 0.0,
-                step_count: 0,
-                flags: 0,
-                title: [0; 128],
-                units: [0; 128],
-            };
-            // SAFETY: The instance is live, index is below the bridge-reported count, and info is
-            // writable storage with the ABI layout expected by the bridge.
-            let valid = unsafe {
-                (self.functions.parameter_info)(instance.pointer.as_ptr(), index, &mut info)
-            };
-            if valid == 0 {
-                continue;
-            }
-            parameters.push(PluginParameter {
-                id: info.id,
-                title: c_string(&info.title),
-                units: c_string(&info.units),
-                step_count: info.step_count,
-                default_normalized: info.default_normalized,
-                normalized: info.normalized,
-                flags: info.flags,
-            });
+        match self.parameters(instance_id) {
+            Ok(parameters) => ControlResult::PluginParameters { parameters },
+            Err(error) => control_error(&error),
         }
-        ControlResult::PluginParameters { parameters }
     }
 
     fn set_parameter(
@@ -525,111 +282,81 @@ impl Vst3Runtime {
         gesture: ParameterGesture,
     ) -> ControlResult {
         let Some(instance) = self.instances.get(instance_id) else {
-            return error("VST3 instance is not loaded");
+            return control_error("VST3 instance is not loaded");
         };
-        if !normalized.is_finite() || !(0.0..=1.0).contains(&normalized) {
-            return error("VST3 parameter value is outside 0...1");
-        }
-        if gesture != ParameterGesture::Begin {
-            // SAFETY: The instance is live, the value was validated, and the bridge copies the
-            // scalar parameter command during the call.
-            let changed = unsafe {
-                (self.functions.set_parameter)(
-                    instance.pointer.as_ptr(),
-                    parameter_id,
-                    normalized,
-                    0,
-                )
-            };
-            if changed == 0 {
-                return error("VST3 parameter change was rejected");
-            }
-        }
-        if gesture == ParameterGesture::End {
-            // SAFETY: The instance remains live and the bridge flushes its own parameter queue.
-            let flushed = unsafe { (self.functions.flush_parameters)(instance.pointer.as_ptr()) };
-            if flushed == 0 {
-                return error("VST3 stopped-state parameter flush failed");
-            }
-        }
-        ControlResult::Accepted
-    }
-
-    fn save_state(&mut self, instance_id: &str) -> ControlResult {
-        let Some(instance) = self.instances.get(instance_id) else {
-            return error("VST3 instance is not loaded");
-        };
-        let component_state = copy_state(
-            instance.pointer,
-            self.functions.component_state_size,
-            self.functions.copy_component_state,
-        );
-        let controller_state = copy_state(
-            instance.pointer,
-            self.functions.controller_state_size,
-            self.functions.copy_controller_state,
-        );
-        ControlResult::PluginState {
-            component_state: BinaryPayload::inline(component_state),
-            controller_state: BinaryPayload::inline(controller_state),
-        }
-    }
-
-    fn open_editor(&self, instance_id: &str) -> ControlResult {
-        let Some(instance) = self.instances.get(instance_id) else {
-            return error("VST3 instance is not loaded");
-        };
-        // SAFETY: The instance is live and the bridge owns the native editor lifecycle.
-        let open = unsafe { (self.functions.open_editor)(instance.pointer.as_ptr()) != 0 };
-        ControlResult::PluginEditor {
-            editor_kind: if open { "native" } else { "generic" }.into(),
-            open,
-        }
-    }
-
-    fn close_editor(&self, instance_id: &str) -> ControlResult {
-        let Some(instance) = self.instances.get(instance_id) else {
+        if gesture == ParameterGesture::Begin {
             return ControlResult::Accepted;
+        }
+        match instance.plugin.set_parameter(
+            parameter_id,
+            normalized,
+            gesture == ParameterGesture::End,
+        ) {
+            Ok(()) => ControlResult::Accepted,
+            Err(error) => control_error(&error.to_string()),
+        }
+    }
+
+    fn save_state(&self, instance_id: &str) -> ControlResult {
+        let Some(instance) = self.instances.get(instance_id) else {
+            return control_error("VST3 instance is not loaded");
         };
-        // SAFETY: The instance is live and the bridge owns the native editor lifecycle.
-        unsafe { (self.functions.close_editor)(instance.pointer.as_ptr()) };
-        // SAFETY: The same live instance may be queried after the synchronous close request.
-        let open = unsafe { (self.functions.editor_open)(instance.pointer.as_ptr()) != 0 };
+        match instance.plugin.save_state() {
+            Ok((component_state, controller_state)) => ControlResult::PluginState {
+                component_state: BinaryPayload::inline(component_state),
+                controller_state: BinaryPayload::inline(controller_state),
+            },
+            Err(error) => control_error(&error.to_string()),
+        }
+    }
+
+    fn editor_result(
+        &self,
+        instance_id: &str,
+        preference: PluginEditorPreference,
+    ) -> ControlResult {
+        if !self.instances.contains_key(instance_id) {
+            return control_error("VST3 instance is not loaded");
+        }
+        if !preference.is_valid() {
+            return control_error("VST3 editor zoom is outside 50...400");
+        }
         ControlResult::PluginEditor {
-            editor_kind: "native".into(),
-            open,
+            active_mode: preference.mode,
+            open: false,
         }
     }
 }
 
-fn copy_state(pointer: NonNull<c_void>, size: StateSizeFn, copy: StateCopyFn) -> Vec<u8> {
-    // SAFETY: The opaque instance is live and the returned size is used to allocate the
-    // destination passed directly back to the same bridge.
-    let length = unsafe { size(pointer.as_ptr()) };
-    let mut state = vec![0; length];
-    if length > 0 {
-        // SAFETY: state has exactly the capacity reported by the same live bridge instance, and
-        // the bridge writes at most the supplied slice length.
-        let copied = unsafe { copy(pointer.as_ptr(), state.as_mut_ptr(), state.len()) };
-        state.truncate(copied);
+fn inline_bytes(payload: BinaryPayload) -> Result<Vec<u8>, &'static str> {
+    match payload {
+        BinaryPayload::Inline { bytes } => Ok(bytes),
+        BinaryPayload::Shared { .. } | BinaryPayload::Attachment { .. } => {
+            Err("external VST3 state was not materialized")
+        }
     }
-    state
 }
 
-fn c_string(value: &[c_char]) -> String {
-    let length = value
-        .iter()
-        .position(|character| *character == 0)
-        .unwrap_or(value.len());
-    let bytes = value[..length]
-        .iter()
-        .map(|character| *character as u8)
-        .collect::<Vec<_>>();
-    String::from_utf8_lossy(&bytes).into_owned()
-}
-
-fn error(message: &str) -> ControlResult {
+fn control_error(message: &str) -> ControlResult {
     ControlResult::Error {
-        message: message.into(),
+        message: message.to_owned(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn invalid_preferences_are_rejected_before_window_creation() {
+        let runtime = Vst3Runtime::new();
+        let result = runtime.editor_result(
+            "missing",
+            PluginEditorPreference {
+                mode: yadaw_dsp_runtime::protocol::PluginEditorMode::Native,
+                zoom_percent: 401,
+            },
+        );
+        assert!(matches!(result, ControlResult::Error { .. }));
     }
 }

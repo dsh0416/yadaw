@@ -1047,23 +1047,16 @@ void app.whenReady().then(async () => {
         "debug",
         `yadaw-audio-host${executableSuffix}`
       )
-  const bridgeFilename =
-    process.platform === "win32"
-      ? "yadaw-vst3-bridge.dll"
-      : process.platform === "darwin"
-        ? "libyadaw-vst3-bridge.dylib"
-        : "libyadaw-vst3-bridge.so"
-  const bridgePath = app.isPackaged
-    ? join(process.resourcesPath, bridgeFilename)
-    : resolve(app.getAppPath(), "..", "..", "target", "vst3-bridge-build", "bin", bridgeFilename)
   audioHostService = new AudioHostService(
     audioHostPath,
-    bridgePath,
     join(app.getPath("userData"), "audio-host-crash-marker.bin"),
     applicationSettings.audioHostRuntime,
     (message) => {
       console.error(`YADAW audio helper failure: ${message}`)
       for (const window of BrowserWindow.getAllWindows().slice(1)) window.close()
+    },
+    async (classId, preference) => {
+      await settings.setPluginEditorPreference(classId, preference)
     }
   )
   audioHostService.start()
@@ -1089,11 +1082,15 @@ void app.whenReady().then(async () => {
       if (!audioHostService) return Promise.reject(new Error("Audio host is not running"))
       return audioHostService.setPluginParameter(change)
     },
-    openEditor: (instanceId) => {
+    openEditor: async (instanceId) => {
       if (!audioHostService) {
-        return Promise.resolve({ editorKind: "generic" as const, open: false })
+        return { editorMode: "parameters" as const, open: false }
       }
-      return audioHostService.openPluginEditor(instanceId)
+      const graph = await mixer.snapshot()
+      const plugin = graph.plugins.find((candidate) => candidate.id === instanceId)
+      if (!plugin) throw new Error(`Plugin instance '${instanceId}' was not found`)
+      const preference = await settings.pluginEditorPreference(plugin.classId)
+      return audioHostService.openPluginEditor(instanceId, preference)
     },
     closeEditor: (instanceId) => {
       if (!audioHostService) return Promise.resolve()

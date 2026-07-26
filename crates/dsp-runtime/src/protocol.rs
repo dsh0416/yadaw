@@ -80,6 +80,39 @@ pub enum HostEvent {
         kind: String,
         value: String,
     },
+    PluginEditorPreferenceChanged {
+        class_id: String,
+        preference: PluginEditorPreference,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PluginEditorMode {
+    Native,
+    Parameters,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PluginEditorPreference {
+    pub mode: PluginEditorMode,
+    pub zoom_percent: u16,
+}
+
+impl Default for PluginEditorPreference {
+    fn default() -> Self {
+        Self {
+            mode: PluginEditorMode::Native,
+            zoom_percent: 100,
+        }
+    }
+}
+
+impl PluginEditorPreference {
+    #[must_use]
+    pub const fn is_valid(self) -> bool {
+        self.zoom_percent >= 50 && self.zoom_percent <= 400
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -183,6 +216,7 @@ pub enum ControlCommand {
         instance_id: String,
         module_path: String,
         class_id: String,
+        plugin_kind: String,
         sample_rate: f64,
         component_state: BinaryPayload,
         controller_state: BinaryPayload,
@@ -204,6 +238,7 @@ pub enum ControlCommand {
     },
     OpenPluginEditor {
         instance_id: String,
+        preference: PluginEditorPreference,
     },
     ClosePluginEditor {
         instance_id: String,
@@ -670,7 +705,7 @@ pub enum ControlResult {
     },
     Busy,
     PluginEditor {
-        editor_kind: String,
+        active_mode: PluginEditorMode,
         open: bool,
     },
     Error {

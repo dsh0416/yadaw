@@ -7,10 +7,14 @@ license.workspace = true
 
 [dependencies]
 libloading.workspace = true
+ringbuf.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 yadaw-vst3-host-sys.workspace = true
+
+[build-dependencies]
+cc.workspace = true
 
 [lints]
 workspace = true

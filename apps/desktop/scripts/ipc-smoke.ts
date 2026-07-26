@@ -40,15 +40,8 @@ function decodeWire<T>(bytes: Uint8Array): T {
 
 const repositoryRoot = resolve(import.meta.dirname, "..", "..", "..")
 const executableSuffix = process.platform === "win32" ? ".exe" : ""
-const bridgeFilename =
-  process.platform === "win32"
-    ? "yadaw-vst3-bridge.dll"
-    : process.platform === "darwin"
-      ? "libyadaw-vst3-bridge.dylib"
-      : "libyadaw-vst3-bridge.so"
 const client = new AudioHostIpcClient(
   resolve(repositoryRoot, "target", "debug", `yadaw-audio-host${executableSuffix}`),
-  resolve(repositoryRoot, "target", "vst3-bridge-build", "bin", bridgeFilename),
   resolve(tmpdir(), `yadaw-ipc-${process.pid}.marker`),
   2,
   4,

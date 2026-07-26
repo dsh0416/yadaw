@@ -2,6 +2,8 @@ use std::{error::Error, fmt};
 
 pub mod crash_marker;
 pub mod device;
+pub mod editor_platform;
+pub mod editor_window;
 pub mod engine;
 pub mod recording;
 pub mod vst3;

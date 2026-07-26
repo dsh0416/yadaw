@@ -199,6 +199,12 @@ export interface RecentProject {
 export type MeterPeakHold = "800ms" | "2s" | "4s" | "infinite"
 export type MeterReturnRate = "iec-type-i"
 export type AudioHostThreadSetting = "auto" | number
+export type PluginEditorMode = "native" | "parameters"
+
+export interface PluginEditorPreference {
+  mode: PluginEditorMode
+  zoomPercent: number
+}
 
 export interface AudioHostRuntimePreferences {
   workerThreads: AudioHostThreadSetting
@@ -219,6 +225,7 @@ export interface ApplicationSettings {
   meterPeakHold: MeterPeakHold
   meterReturnRate: MeterReturnRate
   audioHostRuntime: AudioHostRuntimePreferences
+  pluginEditors: Record<string, PluginEditorPreference>
   recentProjects: RecentProject[]
 }
 
@@ -669,7 +676,7 @@ export interface PluginRuntimeStatus {
   instanceId: string
   state: PluginRuntimeState
   editorOpen: boolean
-  editorKind?: "native" | "generic"
+  editorMode?: PluginEditorMode
   recoveryState?: "none" | "recovered-bypassed"
   failureStage?: "initialize" | "restore" | "process" | "editor" | "state-save" | null
   latencySamples: number

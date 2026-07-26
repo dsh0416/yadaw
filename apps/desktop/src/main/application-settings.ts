@@ -6,9 +6,17 @@ import type {
   AudioHostRuntimePreferences,
   MeterPeakHold,
   MeterReturnRate,
+  PluginEditorPreference,
   RecordingBitDepth,
   ThemePreference
 } from "@yadaw/contracts"
+
+export const DEFAULT_PLUGIN_EDITOR_PREFERENCE: Readonly<PluginEditorPreference> = {
+  mode: "native",
+  zoomPercent: 100
+}
+
+const VST3_CLASS_ID = /^[0-9A-F]{32}$/u
 
 function isRecordingBitDepth(value: unknown): value is RecordingBitDepth {
   return value === "float32" || value === "pcm24" || value === "pcm16"
@@ -59,6 +67,49 @@ export function validateAudioHostRuntimePreferences(value: unknown): AudioHostRu
   return preferences
 }
 
+function normalizePluginClassId(value: string): string {
+  const classId = value.trim().toUpperCase()
+  if (!VST3_CLASS_ID.test(classId)) {
+    throw new TypeError("VST3 class ID must contain exactly 32 hexadecimal characters")
+  }
+  return classId
+}
+
+export function validatePluginEditorPreference(value: unknown): PluginEditorPreference {
+  if (!value || typeof value !== "object") {
+    throw new TypeError("Plugin editor preference must be an object")
+  }
+  const input = value as Partial<PluginEditorPreference>
+  if (input.mode !== "native" && input.mode !== "parameters") {
+    throw new TypeError("Unsupported plugin editor mode")
+  }
+  if (
+    !Number.isInteger(input.zoomPercent) ||
+    (input.zoomPercent as number) < 50 ||
+    (input.zoomPercent as number) > 400
+  ) {
+    throw new TypeError("Plugin editor zoom must be an integer from 50 to 400")
+  }
+  return {
+    mode: input.mode,
+    zoomPercent: input.zoomPercent as number
+  }
+}
+
+function pluginEditorPreferences(value: unknown): Record<string, PluginEditorPreference> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {}
+  const preferences: Record<string, PluginEditorPreference> = {}
+  for (const [rawClassId, rawPreference] of Object.entries(value)) {
+    try {
+      const classId = normalizePluginClassId(rawClassId)
+      preferences[classId] = validatePluginEditorPreference(rawPreference)
+    } catch {
+      // Settings are user-editable; ignore only the malformed per-plugin entry.
+    }
+  }
+  return preferences
+}
+
 async function syncDirectory(path: string): Promise<void> {
   try {
     const handle = await open(path, "r")
@@ -93,6 +144,7 @@ export class ApplicationSettingsStore {
         maxBlockingThreads: "auto",
         egressConcurrency: "auto"
       },
+      pluginEditors: {},
       recentProjects: []
     }
   }
@@ -122,6 +174,7 @@ export class ApplicationSettingsStore {
             return value.audioHostRuntime
           }
         })(),
+        pluginEditors: pluginEditorPreferences(raw.pluginEditors),
         recentProjects: Array.isArray(raw.recentProjects)
           ? raw.recentProjects
               .filter(
@@ -183,6 +236,24 @@ export class ApplicationSettingsStore {
   ): Promise<ApplicationSettings> {
     const current = await this.get()
     current.audioHostRuntime = validateAudioHostRuntimePreferences(preferences)
+    return this.write(current)
+  }
+
+  async pluginEditorPreference(classId: string): Promise<PluginEditorPreference> {
+    const normalizedClassId = normalizePluginClassId(classId)
+    const current = await this.get()
+    return structuredClone(
+      current.pluginEditors[normalizedClassId] ?? DEFAULT_PLUGIN_EDITOR_PREFERENCE
+    )
+  }
+
+  async setPluginEditorPreference(
+    classId: string,
+    preference: PluginEditorPreference
+  ): Promise<ApplicationSettings> {
+    const normalizedClassId = normalizePluginClassId(classId)
+    const current = await this.get()
+    current.pluginEditors[normalizedClassId] = validatePluginEditorPreference(preference)
     return this.write(current)
   }
 

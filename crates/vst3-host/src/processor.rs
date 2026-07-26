@@ -1,11 +1,16 @@
 use std::rc::Rc;
 
+use ringbuf::{
+    HeapCons, HeapProd, HeapRb,
+    traits::{Consumer, Split},
+};
 use yadaw_vst3_host_sys::{
     Steinberg::{
         IPluginBase,
         Vst::{
             self, AudioBusBuffers, AudioBusBuffers__bindgen_ty_1, Event, Event__bindgen_ty_1,
-            IAudioProcessor, IComponent, NoteOffEvent, NoteOnEvent, ProcessData, ProcessSetup,
+            IAudioProcessor, IComponent, NoteOffEvent, NoteOnEvent, ProcessContext, ProcessData,
+            ProcessSetup,
         },
     },
     abi::{AudioProcessorVTable, ComponentVTable},
@@ -13,7 +18,7 @@ use yadaw_vst3_host_sys::{
 
 use crate::{
     ClassId, ComPtr, HostError, HostResult, Module, event_list::EventList,
-    host_context::HostContext,
+    host_context::HostContext, parameter_changes::ParameterChanges,
 };
 
 const MAX_BLOCK_FRAMES: i32 = 4096;
@@ -24,12 +29,36 @@ pub enum PluginKind {
     Instrument,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct HostProcessContext {
+    pub project_time_samples: i64,
+    pub continuous_time_samples: i64,
+    pub project_time_quarters: f64,
+    pub bar_position_quarters: f64,
+    pub tempo: f64,
+    pub time_signature_numerator: i32,
+    pub time_signature_denominator: i32,
+    pub playing: bool,
+    pub recording: bool,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct QueuedParameter {
+    pub(crate) id: u32,
+    pub(crate) value: f64,
+    pub(crate) sample_offset: i32,
+}
+
 /// A stereo sample32 VST3 component with explicit lifecycle ownership.
 pub struct StereoProcessor {
     processor: ComPtr<IAudioProcessor>,
     component: ComPtr<IComponent>,
     host: Box<HostContext>,
     input_events: Box<EventList>,
+    input_parameters: Box<ParameterChanges>,
+    output_parameters: Box<ParameterChanges>,
+    process_context: Box<ProcessContext>,
+    parameter_consumer: HeapCons<QueuedParameter>,
     module: Rc<Module>,
     kind: PluginKind,
     active: bool,
@@ -42,9 +71,28 @@ impl StereoProcessor {
         sample_rate: f64,
         kind: PluginKind,
     ) -> HostResult<Self> {
+        Self::create_with_parameter_queue(module, class_id, sample_rate, kind)
+            .map(|(processor, _producer)| processor)
+    }
+
+    pub(crate) fn create_with_parameter_queue(
+        module: Rc<Module>,
+        class_id: ClassId,
+        sample_rate: f64,
+        kind: PluginKind,
+    ) -> HostResult<(Self, HeapProd<QueuedParameter>)> {
         let component = module.create::<IComponent>(class_id)?;
         let host = HostContext::new();
         let input_events = EventList::new();
+        let input_parameters = ParameterChanges::new();
+        let output_parameters = ParameterChanges::new();
+        let parameter_ring = HeapRb::new(1024);
+        let (parameter_producer, parameter_consumer) = parameter_ring.split();
+        let process_context = Box::new(unsafe {
+            // SAFETY: VST3 ProcessContext is a plain SDK data structure for which an all-zero
+            // value represents no active flags and neutral optional fields.
+            std::mem::MaybeUninit::<ProcessContext>::zeroed().assume_init()
+        });
         let component_table = component_table(&component);
         check("IComponent::initialize", unsafe {
             // SAFETY: component and host are live and owned by this
@@ -120,15 +168,22 @@ impl StereoProcessor {
             // SAFETY: component is active.
             ((*processor_table).set_processing)(processor.as_ptr(), 1)
         })?;
-        Ok(Self {
-            processor,
-            component,
-            host,
-            input_events,
-            module,
-            kind,
-            active: true,
-        })
+        Ok((
+            Self {
+                processor,
+                component,
+                host,
+                input_events,
+                input_parameters,
+                output_parameters,
+                process_context,
+                parameter_consumer,
+                module,
+                kind,
+                active: true,
+            },
+            parameter_producer,
+        ))
     }
 
     #[must_use]
@@ -162,6 +217,17 @@ impl StereoProcessor {
         output_left: &mut [f32],
         output_right: &mut [f32],
     ) -> HostResult<()> {
+        self.process_stereo_with_context(input_left, input_right, output_left, output_right, None)
+    }
+
+    pub fn process_stereo_with_context(
+        &mut self,
+        input_left: &mut [f32],
+        input_right: &mut [f32],
+        output_left: &mut [f32],
+        output_right: &mut [f32],
+        context: Option<&HostProcessContext>,
+    ) -> HostResult<()> {
         let frames = input_left.len();
         if frames > MAX_BLOCK_FRAMES as usize
             || input_right.len() != frames
@@ -190,6 +256,39 @@ impl StereoProcessor {
             },
         };
         let event_list = (!self.input_events.is_empty()).then(|| self.input_events.as_interface());
+        self.input_parameters.clear();
+        while let Some(parameter) = self.parameter_consumer.try_pop() {
+            let _ = self.input_parameters.add_value(
+                parameter.id,
+                parameter.sample_offset,
+                parameter.value,
+            );
+        }
+        self.output_parameters.clear();
+        let parameter_changes = self.input_parameters.as_interface();
+        let output_parameter_changes = self.output_parameters.as_interface();
+        let process_context = context.map(|context| {
+            let value = &mut self.process_context;
+            value.state = Vst::ProcessContext_StatesAndFlags_kContTimeValid as u32
+                | Vst::ProcessContext_StatesAndFlags_kProjectTimeMusicValid as u32
+                | Vst::ProcessContext_StatesAndFlags_kBarPositionValid as u32
+                | Vst::ProcessContext_StatesAndFlags_kTempoValid as u32
+                | Vst::ProcessContext_StatesAndFlags_kTimeSigValid as u32;
+            if context.playing {
+                value.state |= Vst::ProcessContext_StatesAndFlags_kPlaying as u32;
+            }
+            if context.recording {
+                value.state |= Vst::ProcessContext_StatesAndFlags_kRecording as u32;
+            }
+            value.projectTimeSamples = context.project_time_samples;
+            value.continousTimeSamples = context.continuous_time_samples;
+            value.projectTimeMusic = context.project_time_quarters;
+            value.barPositionMusic = context.bar_position_quarters;
+            value.tempo = context.tempo;
+            value.timeSigNumerator = context.time_signature_numerator;
+            value.timeSigDenominator = context.time_signature_denominator;
+            std::ptr::from_mut(value.as_mut())
+        });
         let mut data = ProcessData {
             processMode: Vst::ProcessModes_kRealtime,
             symbolicSampleSize: Vst::SymbolicSampleSizes_kSample32,
@@ -202,11 +301,11 @@ impl StereoProcessor {
                 std::ptr::null_mut()
             },
             outputs: std::ptr::addr_of_mut!(output_bus),
-            inputParameterChanges: std::ptr::null_mut(),
-            outputParameterChanges: std::ptr::null_mut(),
+            inputParameterChanges: parameter_changes,
+            outputParameterChanges: output_parameter_changes,
             inputEvents: event_list.unwrap_or(std::ptr::null_mut()),
             outputEvents: std::ptr::null_mut(),
-            processContext: std::ptr::null_mut(),
+            processContext: process_context.unwrap_or(std::ptr::null_mut()),
         };
         let result = check("process", unsafe {
             // SAFETY: all channel arrays and ProcessData storage remain
@@ -217,6 +316,52 @@ impl StereoProcessor {
             )
         });
         self.input_events.clear();
+        self.input_parameters.clear();
+        self.output_parameters.clear();
+        result
+    }
+
+    pub(crate) fn component(&self) -> &ComPtr<IComponent> {
+        &self.component
+    }
+
+    pub(crate) fn host(&self) -> &HostContext {
+        &self.host
+    }
+
+    pub(crate) fn flush_parameters(&mut self) -> HostResult<()> {
+        self.input_parameters.clear();
+        while let Some(parameter) = self.parameter_consumer.try_pop() {
+            let _ = self.input_parameters.add_value(
+                parameter.id,
+                parameter.sample_offset,
+                parameter.value,
+            );
+        }
+        self.output_parameters.clear();
+        let mut data = ProcessData {
+            processMode: Vst::ProcessModes_kRealtime,
+            symbolicSampleSize: Vst::SymbolicSampleSizes_kSample32,
+            numSamples: 0,
+            numInputs: 0,
+            numOutputs: 0,
+            inputs: std::ptr::null_mut(),
+            outputs: std::ptr::null_mut(),
+            inputParameterChanges: self.input_parameters.as_interface(),
+            outputParameterChanges: self.output_parameters.as_interface(),
+            inputEvents: std::ptr::null_mut(),
+            outputEvents: std::ptr::null_mut(),
+            processContext: std::ptr::null_mut(),
+        };
+        let result = check("process(parameter flush)", unsafe {
+            // SAFETY: zero-sample ProcessData contains live parameter interfaces and no buffers.
+            ((*processor_table(&self.processor)).process)(
+                self.processor.as_ptr(),
+                std::ptr::addr_of_mut!(data),
+            )
+        });
+        self.input_parameters.clear();
+        self.output_parameters.clear();
         result
     }
 

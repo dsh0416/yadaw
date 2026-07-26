@@ -17,7 +17,6 @@ import { useStudioWorkspaceStore } from "../stores/studioWorkspace"
 import { useStudioWorkflowStore } from "../stores/studioWorkflow"
 import { useMidiImportStore } from "../stores/midiImport"
 import MidiImportDialog from "../components/midi/MidiImportDialog.vue"
-import GenericPluginParameterDialog from "../components/plugins/GenericPluginParameterDialog.vue"
 import { replaceTempoEventAtTick, secondsToTick } from "../utils/tempoMap"
 
 const router = useRouter()
@@ -167,7 +166,6 @@ onBeforeUnmount(() => {
       :audio-warnings="audioWarnings"
     />
     <MidiImportDialog />
-    <GenericPluginParameterDialog />
   </main>
 </template>
 

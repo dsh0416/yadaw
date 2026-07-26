@@ -13,6 +13,8 @@ import type {
   MixerGraphSnapshot,
   MixerParameterPreview,
   MixerRuntimeSnapshot,
+  PluginEditorMode,
+  PluginEditorPreference,
   PluginInstanceState,
   PluginParameterChange,
   PluginParameterInfo,
@@ -71,7 +73,7 @@ interface ControlResponse {
     component_state?: BinaryPayloadWire
     controller_state?: BinaryPayloadWire
     payload?: BinaryPayloadWire
-    editor_kind?: string
+    active_mode?: PluginEditorMode
     open?: boolean
     backends?: AudioBackendDescriptor[]
     devices?: {
@@ -491,11 +493,13 @@ export class AudioHostService {
   private readonly loadedPlugins = new Map<
     string,
     {
+      classId: string
       runtimeHandle: number
       latencySamples: number
       tailSamples: number | null
     }
   >()
+  private readonly pendingPreferenceWrites = new Set<Promise<void>>()
   private readonly channelIdsByHandle = new Map<number, string>()
   private readonly coalescedParameters = new Map<
     string,
@@ -512,10 +516,13 @@ export class AudioHostService {
 
   constructor(
     private readonly executablePath: string,
-    private readonly bridgePath: string,
     private readonly crashMarkerPath: string,
     private runtimePreferences: AudioHostRuntimePreferences,
-    private readonly onFailure: (message: string) => void
+    private readonly onFailure: (message: string) => void,
+    private readonly onEditorPreferenceChanged: (
+      classId: string,
+      preference: PluginEditorPreference
+    ) => Promise<void>
   ) {}
 
   start(restoreGraph = true): void {
@@ -524,7 +531,6 @@ export class AudioHostService {
     try {
       client = new AudioHostIpcClient(
         this.executablePath,
-        this.bridgePath,
         this.crashMarkerPath,
         this.runtimePreferences.workerThreads === "auto"
           ? undefined
@@ -639,14 +645,45 @@ export class AudioHostService {
     if (response.result.type === "error") {
       throw new Error(response.result.message ?? "audio host heartbeat failed")
     }
+    this.drainHostEvents(client)
+    return response
+  }
+
+  private drainHostEvents(client: AudioHostIpcClient): void {
+    const latestPreferences = new Map<string, PluginEditorPreference>()
     for (const event of client.drainEvents()) {
-      const decoded = decode(event) as { type?: string; revision?: number }
+      const decoded = decode(event) as {
+        type?: string
+        revision?: number
+        class_id?: string
+        preference?: {
+          mode?: string
+          zoom_percent?: number
+        }
+      }
       if (decoded.type === "graph-published" && decoded.revision !== undefined) {
         // The telemetry page carries the same revision. Draining here prevents
         // lifecycle events from accumulating when the renderer is idle.
+      } else if (
+        decoded.type === "plugin-editor-preference-changed" &&
+        typeof decoded.class_id === "string" &&
+        (decoded.preference?.mode === "native" || decoded.preference?.mode === "parameters") &&
+        Number.isInteger(decoded.preference.zoom_percent) &&
+        (decoded.preference.zoom_percent as number) >= 50 &&
+        (decoded.preference.zoom_percent as number) <= 400
+      ) {
+        latestPreferences.set(decoded.class_id, {
+          mode: decoded.preference.mode,
+          zoomPercent: decoded.preference.zoom_percent as number
+        })
       }
     }
-    return response
+    for (const [classId, preference] of latestPreferences) {
+      const write = this.onEditorPreferenceChanged(classId, preference).finally(() => {
+        this.pendingPreferenceWrites.delete(write)
+      })
+      this.pendingPreferenceWrites.add(write)
+    }
   }
 
   async loadGraph(
@@ -1335,6 +1372,7 @@ export class AudioHostService {
       instance_id: plugin.id,
       module_path: plugin.descriptor.modulePath,
       class_id: plugin.classId,
+      plugin_kind: plugin.descriptor.kind,
       sample_rate: sampleRate,
       component_state: inlineBinary(plugin.componentState),
       controller_state: inlineBinary(plugin.controllerState)
@@ -1343,6 +1381,7 @@ export class AudioHostService {
       throw new Error("audio host returned an invalid plugin load response")
     }
     const status = {
+      classId: plugin.classId,
       runtimeHandle: response.result.runtime_handle ?? 0,
       latencySamples: response.result.latency_samples ?? 0,
       tailSamples: response.result.tail_samples ?? null
@@ -1371,19 +1410,26 @@ export class AudioHostService {
     }))
   }
 
-  async openPluginEditor(instanceId: string): Promise<{
-    editorKind: "native" | "generic"
+  async openPluginEditor(
+    instanceId: string,
+    preference: PluginEditorPreference
+  ): Promise<{
+    editorMode: PluginEditorMode
     open: boolean
   }> {
     const response = await this.request({
       type: "open-plugin-editor",
-      instance_id: instanceId
+      instance_id: instanceId,
+      preference: {
+        mode: preference.mode,
+        zoom_percent: preference.zoomPercent
+      }
     })
     if (response.result.type !== "plugin-editor") {
       throw new Error("audio host returned an invalid plugin editor response")
     }
     return {
-      editorKind: response.result.editor_kind === "native" ? "native" : "generic",
+      editorMode: response.result.active_mode === "native" ? "native" : "parameters",
       open: response.result.open === true
     }
   }
@@ -1684,6 +1730,8 @@ export class AudioHostService {
       // Closing the client below also reaps a helper that exited early.
     }
     await Promise.allSettled([...this.pendingRequests])
+    this.drainHostEvents(client)
+    await Promise.allSettled([...this.pendingPreferenceWrites])
     if (this.client === client) this.client = null
     client.close()
     this.loadedPlugins.clear()

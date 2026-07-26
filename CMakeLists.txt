@@ -10,4 +10,3 @@ set(SMTG_ENABLE_VSTGUI_SUPPORT ${YADAW_BUILD_VST3_FIXTURES} CACHE BOOL "" FORCE)
 set(SMTG_CREATE_PLUGIN_LINK OFF CACHE BOOL "" FORCE)
 
 add_subdirectory(third_party/vst3sdk EXCLUDE_FROM_ALL)
-add_subdirectory(native/vst3-bridge)

@@ -22,7 +22,6 @@ export const usePluginStore = defineStore("plugins", () => {
   const catalog = shallowRef<PluginCatalogSnapshot>(structuredClone(EMPTY_CATALOG))
   const runtime = shallowRef<Record<string, PluginRuntimeStatus>>({})
   const parameters = shallowRef<Record<string, PluginParameterInfo[]>>({})
-  const genericPanelId = shallowRef<string | null>(null)
   const scanProgress = shallowRef<{ completed: number; total: number; path: string } | null>(null)
   const loading = shallowRef(false)
   const error = shallowRef("")
@@ -40,9 +39,6 @@ export const usePluginStore = defineStore("plugins", () => {
   )
   const quarantined = computed(() =>
     catalog.value.plugins.filter((plugin) => plugin.compatibility === "quarantined")
-  )
-  const genericPlugin = computed(
-    () => mixerStore.graph.plugins.find((plugin) => plugin.id === genericPanelId.value) ?? null
   )
 
   function reconcileRuntime(): void {
@@ -247,16 +243,8 @@ export const usePluginStore = defineStore("plugins", () => {
     try {
       const status = await window.yadaw.openPluginEditor(instanceId)
       runtime.value = { ...runtime.value, [instanceId]: status }
-      if (!status.editorOpen) {
-        genericPanelId.value = instanceId
-        parameters.value = {
-          ...parameters.value,
-          [instanceId]: await window.yadaw.getPluginParameters(instanceId)
-        }
-      }
     } catch (reason) {
       error.value = reason instanceof Error ? reason.message : "Unable to open the plugin editor."
-      genericPanelId.value = instanceId
     }
   }
 
@@ -279,10 +267,6 @@ export const usePluginStore = defineStore("plugins", () => {
     }
   }
 
-  function closeGenericPanel(): void {
-    genericPanelId.value = null
-  }
-
   watch(
     () => mixerStore.graph.plugins.map((plugin) => `${plugin.id}:${plugin.classId}`).join("|"),
     reconcileRuntime
@@ -292,7 +276,6 @@ export const usePluginStore = defineStore("plugins", () => {
     catalog.value = structuredClone(EMPTY_CATALOG)
     runtime.value = {}
     parameters.value = {}
-    genericPanelId.value = null
     scanProgress.value = null
     error.value = ""
   }
@@ -306,14 +289,12 @@ export const usePluginStore = defineStore("plugins", () => {
     catalog,
     runtime,
     parameters,
-    genericPanelId,
     scanProgress,
     loading,
     error,
     compatibleInstruments,
     compatibleEffects,
     quarantined,
-    genericPlugin,
     load,
     scan,
     activate,
@@ -324,7 +305,6 @@ export const usePluginStore = defineStore("plugins", () => {
     assignInstrument,
     openEditor,
     setParameter,
-    closeGenericPanel,
     reset
   }
 })

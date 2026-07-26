@@ -12,7 +12,7 @@ JavaScript and Rust workspaces:
 - Node.js
 - pnpm
 - Rust, including Cargo
-- CMake 3.31 for the pinned VST3 SDK bridge
+- CMake 3.31 for building the pinned VST3 SDK test fixtures
 
 The requested versions and version policies are defined in the repository-root
 `mise.toml`. `mise.lock` resolves those policies to concrete tool versions and
@@ -42,8 +42,9 @@ and LLVM/Clang with `LIBCLANG_PATH` set to the directory containing
 `libclang.dll`. `asio-sys` downloads the Steinberg ASIO SDK automatically;
 set `CPAL_ASIO_DIR` only when using a preinstalled SDK. Runtime ASIO validation
 also requires a 64-bit vendor ASIO driver or a fallback such as ASIO4ALL.
-The same C++ workload is used by CMake to build `yadaw-vst3-probe` against the
-recursive `third_party/vst3sdk` submodule.
+The production VST3 probe and host are Rust binaries. CMake and the C++ workload
+are only required when building Steinberg SDK fixtures such as AGain and
+NoteExpressionSynth from the recursive `third_party/vst3sdk` submodule.
 
 ## Running Commands
 

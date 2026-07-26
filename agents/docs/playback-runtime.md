@@ -450,10 +450,9 @@ threads.
 `vst3-host-sys` generates target ABI bindings directly from the pinned VST3
 SDK 3.8.0 headers. `vst3-host` owns COM references, module lifetime, class
 enumeration, component activation, stereo sample32 block processing, latency,
-and tail queries. The production scanner uses the Rust
-`yadaw-vst3-probe` binary. Parameter/state/event/editor support is still
-provided by the transitional bridge while those interfaces move into
-`vst3-host`; do not add new features to that bridge.
+tail queries, parameter/state exchange, controller connections, and editor
+interfaces. The production scanner uses the Rust `yadaw-vst3-probe` binary.
+There is no production C++ bridge or bridge path argument.
 
 VST3 component/controller and processor ownership is split deliberately:
 
@@ -464,22 +463,57 @@ VST3 component/controller and processor ownership is split deliberately:
 - parameter input/output and latency notifications cross the boundary through
   bounded queues or atomics.
 
-The Tokio `Vst3Handle` writes a bounded mailbox and wakes winit through
-`EventLoopProxy`. Winit drains a bounded batch per wake so plugin traffic cannot
-starve native window events.
+The Tokio control actor writes a capacity-64 mailbox and wakes winit through
+`EventLoopProxy`. Winit drains at most 16 requests per wake and wakes itself
+again while work remains, so plug-in traffic cannot starve native window
+events.
 
-There is one native window per plugin instance. Reopening focuses it. Closing
-uses this order:
+The native UI context outlives the complete winit-owned VST3 runtime. On
+Windows it calls `OleInitialize` before the first module load, because
+`InitDll` can synchronously initialize VSTGUI and create its WIC factory.
+Initializing OLE only when the first view is attached is too late: the module
+would retain a null graphics factory for its lifetime.
+
+There is one winit top-level editor per plug-in instance. Reopening focuses it.
+iced 0.14 and `iced_tiny_skia` draw the toolbar and parameter list without
+starting another event loop. Native mode creates a platform child below the
+toolbar: an HWND with child/clip styles, an NSView, or an X11 window carrying
+XEmbed information. Closing uses this order:
 
 ```text
 IPlugView::removed
   -> IPlugView::setFrame(null)
   -> release view
+  -> destroy platform child
   -> destroy winit window
+  -> release controller/component
 ```
 
-Win32, AppKit, and X11 use their native raw window handles. Wayland uses the
-generic parameter panel until `IWaylandHost` is implemented.
+An unload removes the instance from the live UI registry immediately. Because
+an already-published audio graph may still contain its `Send + !Sync`
+processor lease, the controller/component allocation moves to a UI-owned
+retirement list. Helper shutdown stops the audio engine first and then drops
+that retirement list, preserving this ordering without exposing an unloaded
+instance to later editor or parameter commands.
+
+Switching to parameter mode performs the same detach sequence through child
+destruction but keeps the winit window. Switching back creates and attaches a
+fresh view. Attach failure and absent editors fall back in place without
+overwriting the saved native preference. Wayland always uses this fallback
+until `IWaylandHost` is implemented.
+
+The iced/parameter scale is `winit monitor scale × user zoom`. Windows and X11
+send that same factor to `IPlugViewContentScaleSupport`; AppKit already applies
+the backing scale, so macOS sends only user zoom. Windows/X11 `ViewRect` values
+are physical pixels and AppKit values are logical points. A plug-in that
+rejects the scale interface keeps its native pixel size—there is no bitmap
+stretch—while iced still scales and reports the limitation.
+
+`IPlugFrame::resizeView` may synchronously reenter during `attached`. Its frame
+callback uses stable external window/container cells, applies the requested
+size, and calls `onSize` without holding a mutex or borrowing the host's
+`PlugView`. User-driven resize runs `checkSizeConstraint` before resizing the
+child and notifying the view.
 
 ## Failure and shutdown
 

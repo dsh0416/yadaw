@@ -71,6 +71,4 @@ run = [
   "pnpm --filter @yadaw/audio-host-client build",
   "cargo build -p yadaw-audio-host --release",
   "cargo build -p yadaw-vst3-host --bin yadaw-vst3-probe --release",
-  "cmake -S . -B target/vst3-bridge-build -DSMTG_ENABLE_VST3_PLUGIN_EXAMPLES=OFF -DSMTG_ENABLE_VST3_HOSTING_EXAMPLES=OFF -DSMTG_ENABLE_VSTGUI_SUPPORT=OFF",
-  "cmake --build target/vst3-bridge-build --config Release --target yadaw-vst3-bridge",
 ]

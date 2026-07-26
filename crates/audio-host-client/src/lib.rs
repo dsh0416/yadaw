@@ -135,7 +135,6 @@ impl AudioHostIpcClient {
     #[napi(constructor)]
     pub fn new(
         executable_path: String,
-        bridge_path: String,
         crash_marker_path: String,
         worker_threads: Option<u32>,
         max_blocking_threads: Option<u32>,
@@ -148,8 +147,6 @@ impl AudioHostIpcClient {
         let mut child = Command::new(&executable_path)
             .arg("--ipc-token")
             .arg(token)
-            .arg("--vst3-bridge")
-            .arg(bridge_path)
             .arg("--crash-marker")
             .arg(crash_marker_path)
             .arg("--worker-threads")

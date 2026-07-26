@@ -2,8 +2,8 @@ use std::{ffi::c_void, marker::PhantomData, ptr::NonNull};
 
 use yadaw_vst3_host_sys::{
     Steinberg::{
-        FUnknown, IBStream, IPlugFrame, IPlugView, IPluginBase, IPluginFactory, IPluginFactory2,
-        IPluginFactory3,
+        FUnknown, IBStream, IPlugFrame, IPlugView, IPlugViewContentScaleSupport, IPluginBase,
+        IPluginFactory, IPluginFactory2, IPluginFactory3,
         Vst::{
             IAudioProcessor, IComponent, IComponentHandler, IConnectionPoint, IEditController,
             IEventList, IHostApplication, IParamValueQueue, IParameterChanges,
@@ -54,6 +54,10 @@ interface!(IParamValueQueue, iid::IPARAM_VALUE_QUEUE);
 interface!(IConnectionPoint, iid::ICONNECTION_POINT);
 interface!(IPlugView, iid::IPLUG_VIEW);
 interface!(IPlugFrame, iid::IPLUG_FRAME);
+interface!(
+    IPlugViewContentScaleSupport,
+    iid::IPLUG_VIEW_CONTENT_SCALE_SUPPORT
+);
 
 /// An owning reference-counted pointer to one VST3 interface.
 #[repr(transparent)]

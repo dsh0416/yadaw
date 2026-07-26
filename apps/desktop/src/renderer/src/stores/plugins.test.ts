@@ -98,36 +98,26 @@ describe("plugin store", () => {
     setActivePinia(createPinia())
   })
 
-  it("opens the generic parameter panel when a native editor is unavailable", async () => {
+  it("reports the helper editor state without creating an Electron parameter panel", async () => {
+    window.yadaw.getPluginParameters = vi.fn()
     window.yadaw.openPluginEditor = vi.fn().mockResolvedValue({
       instanceId: "plugin-1",
       state: "active",
-      editorOpen: false,
+      editorOpen: true,
+      editorMode: "parameters",
       latencySamples: 64,
       tailSamples: 0,
       error: null
     })
-    window.yadaw.getPluginParameters = vi.fn().mockResolvedValue([
-      {
-        id: 7,
-        title: "Mix",
-        shortTitle: "Mix",
-        units: "%",
-        stepCount: 0,
-        defaultNormalized: 1,
-        normalized: 0.5,
-        flags: 0
-      }
-    ])
     const store = usePluginStore()
 
     await store.openEditor("plugin-1")
 
-    expect(store.genericPanelId).toBe("plugin-1")
-    expect(store.parameters["plugin-1"]?.[0]).toMatchObject({
-      id: 7,
-      normalized: 0.5
+    expect(store.runtime["plugin-1"]).toMatchObject({
+      editorOpen: true,
+      editorMode: "parameters"
     })
+    expect(window.yadaw.getPluginParameters).not.toHaveBeenCalled()
   })
 
   it("updates parameter feedback while preserving gesture boundaries", async () => {

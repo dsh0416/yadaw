@@ -8,19 +8,35 @@ Vue renderer
   └─ window.yadaw (narrow, typed preload API)
           │ structured-clone IPC
 Electron main process
-  └─ @yadaw/dsp-node (.node addon)
-          │ napi-rs
-Rust audio service
-  ├─ cpal host + stable device IDs
-  ├─ cpal input callback → preallocated SPSC ring → output callback
-  ├─ callback timestamps + atomic latency/xrun telemetry
-  └─ dsp-core
+  ├─ @yadaw/audio-host-client (.node IPC transport)
+  │       │ ipc-channel
+  │       ▼
+  │   audio-host
+  │     ├─ winit main thread: VST3 controller/editor ownership
+  │     ├─ iced/tiny-skia: editor chrome and parameter mode
+  │     ├─ cpal callbacks + preallocated parameter/audio queues
+  │     └─ dsp-core
+  └─ @yadaw/dsp-node (.node offline tools)
 ```
 
 The `.node` binary is a Node addon, not a browser module. It is loaded in the
 Electron main process and deliberately excluded from the renderer bundle.
 `contextIsolation` and Chromium sandboxing remain enabled, and the preload only
 exposes named, validated operations.
+
+VST3 editor windows are not Electron windows. Clicking a plug-in sends one
+typed request through preload and Electron main; `audio-host` creates or focuses
+one winit top-level window per instance. The winit main thread also owns the
+controller, `IComponentHandler`, `IPlugView`, and `IPlugFrame`. iced draws the
+toolbar and generic parameter editor in that same event loop, while a native
+plug-in editor is attached to a child HWND, NSView, or X11 XEmbed window below
+the toolbar. Wayland falls back to the parameter editor.
+
+On Windows, the winit main thread initializes OLE before loading any VST3
+module and keeps it initialized until every view, controller, component, and
+module has been released. This ordering is required because a plug-in may
+create COM-backed VSTGUI resources such as its WIC imaging factory from
+`InitDll`, before `IPlugView::attached` is called.
 
 ## Real-time rule
 

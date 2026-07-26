@@ -7,10 +7,12 @@ use std::{
     sync::{
         Arc, Mutex,
         atomic::{AtomicBool, AtomicU64, Ordering},
+        mpsc as std_mpsc,
     },
     thread,
 };
 
+use iced_tiny_skia::window::Compositor as TinySkiaCompositor;
 use ipc_channel::ipc::{self, IpcSender};
 use tokio::{
     sync::{Semaphore, mpsc, oneshot, watch},
@@ -18,21 +20,25 @@ use tokio::{
 };
 use winit::{
     application::ApplicationHandler,
+    dpi::LogicalSize,
     event::WindowEvent,
     event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy},
-    window::WindowId,
+    window::{WindowAttributes, WindowId},
 };
 use yadaw_audio_host::{
-    crash_marker, device, engine,
+    crash_marker, device,
+    editor_platform::NativeUiContext,
+    editor_window::{EditorAction, EditorWindow},
+    engine,
     recording::{NativeRecordingResult, NativeRecordingStartConfig, NativeWaveformSnapshot},
     vst3,
 };
 use yadaw_dsp_runtime::protocol::{
     AudioBackend, AudioDevice, AudioDeviceList, AudioRuntime, BinaryPayload, ControlCommand,
     ControlRequest, ControlResponse, ControlResult, GraphUpdate, HostEvent, LiveMixerGraph,
-    MixerChannelMeter, NATIVE_BUILD_FINGERPRINT, PriorityCommand, PriorityRequest,
-    PriorityResponse, PriorityResult, RecordingResult, RecordingWaveform, TransportState,
-    read_message, write_message,
+    MixerChannelMeter, NATIVE_BUILD_FINGERPRINT, PluginEditorPreference, PriorityCommand,
+    PriorityRequest, PriorityResponse, PriorityResult, RecordingResult, RecordingWaveform,
+    TransportState, read_message, write_message,
 };
 use yadaw_dsp_runtime::tempo::{TempoEvent, TimeSignatureEvent};
 use yadaw_ipc_transport::{
@@ -66,7 +72,7 @@ fn audio_runtime(value: engine::NativeAudioRuntimeSnapshot) -> AudioRuntime {
 fn live_graph(
     generation: u64,
     value: &LiveMixerGraph,
-    vst3: Option<&vst3::Vst3Runtime>,
+    processors: Option<&HashMap<String, vst3::Vst3ProcessorHandle>>,
     request_arena: &ArenaReceiver,
 ) -> Result<engine::NativeMixerGraph, String> {
     let channel_indexes = value
@@ -136,7 +142,9 @@ fn live_graph(
         .iter()
         .map(|plugin| {
             Ok(engine::NativePluginInstance {
-                processor: vst3.and_then(|runtime| runtime.processor_handle(&plugin.instance_id)),
+                processor: processors
+                    .and_then(|processors| processors.get(&plugin.instance_id))
+                    .cloned(),
                 instance_id: plugin.instance_id.clone(),
                 channel_index: channel_index(&plugin.channel_id)?,
                 role: plugin.role.clone(),
@@ -239,7 +247,7 @@ fn recording_waveform(value: NativeWaveformSnapshot) -> RecordingWaveform {
 
 fn engine_command(
     command: ControlCommand,
-    vst3: Option<&vst3::Vst3Runtime>,
+    processors: Option<&HashMap<String, vst3::Vst3ProcessorHandle>>,
 ) -> Option<ControlResult> {
     let result = match command {
         ControlCommand::ListAudioBackends => ControlResult::AudioBackends {
@@ -312,7 +320,7 @@ fn engine_command(
             update: GraphUpdate::Replace { revision, graph },
         } => {
             let inline_arena = ArenaReceiver::new(1);
-            match live_graph(revision, &graph, vst3, &inline_arena).and_then(|graph| {
+            match live_graph(revision, &graph, processors, &inline_arena).and_then(|graph| {
                 engine::load_mixer_graph(graph).map_err(|error| error.to_string())
             }) {
                 Ok(()) => ControlResult::GraphAccepted { revision },
@@ -434,12 +442,9 @@ fn engine_command(
 
 fn run_legacy() -> Result<(), Box<dyn std::error::Error>> {
     let mut arguments = env::args_os().skip(1);
-    let mut bridge_path: Option<PathBuf> = None;
     let mut crash_marker_path: Option<PathBuf> = None;
     while let Some(argument) = arguments.next() {
-        if argument == "--vst3-bridge" {
-            bridge_path = arguments.next().map(PathBuf::from);
-        } else if argument == "--crash-marker" {
+        if argument == "--crash-marker" {
             crash_marker_path = arguments.next().map(PathBuf::from);
         }
     }
@@ -447,11 +452,7 @@ fn run_legacy() -> Result<(), Box<dyn std::error::Error>> {
         crash_marker::initialize(path)
             .map_err(|error| format!("could not initialize crash marker: {error}"))?;
     }
-    let mut vst3 = bridge_path
-        .as_deref()
-        .map(vst3::Vst3Runtime::load)
-        .transpose()
-        .map_err(|error| format!("could not load VST3 bridge: {error}"))?;
+    let mut vst3 = Some(vst3::Vst3Runtime::new());
     let mut input = BufReader::new(io::stdin().lock());
     let mut output = BufWriter::new(io::stdout().lock());
     loop {
@@ -488,7 +489,7 @@ fn run_legacy() -> Result<(), Box<dyn std::error::Error>> {
             | ControlCommand::ClosePluginEditor { .. }) => match vst3.as_mut() {
                 Some(runtime) => runtime.execute(command),
                 None => ControlResult::Error {
-                    message: "VST3 bridge is not configured".into(),
+                    message: "VST3 runtime is not configured".into(),
                 },
             },
             ControlCommand::Shutdown => {
@@ -502,16 +503,16 @@ fn run_legacy() -> Result<(), Box<dyn std::error::Error>> {
                 )?;
                 return Ok(());
             }
-            command => match engine_command(command, vst3.as_ref()) {
-                Some(result) => result,
-                None => ControlResult::Error {
-                    message: "unsupported audio-host command".into(),
-                },
-            },
+            command => {
+                let processors = vst3.as_ref().map(vst3::Vst3Runtime::processor_handles);
+                match engine_command(command, processors.as_ref()) {
+                    Some(result) => result,
+                    None => ControlResult::Error {
+                        message: "unsupported audio-host command".into(),
+                    },
+                }
+            }
         };
-        if let Some(runtime) = vst3.as_ref() {
-            runtime.pump_editor_events();
-        }
         write_message(
             &mut output,
             &ControlResponse {
@@ -525,6 +526,31 @@ fn run_legacy() -> Result<(), Box<dyn std::error::Error>> {
 struct ActorRequest {
     command: ActorCommand,
     reply: oneshot::Sender<ControlResult>,
+}
+
+async fn forward_to_ui(
+    sender: &std_mpsc::SyncSender<ActorRequest>,
+    proxy: &EventLoopProxy<UiEvent>,
+    mut request: ActorRequest,
+) {
+    loop {
+        match sender.try_send(request) {
+            Ok(()) => {
+                let _ = proxy.send_event(UiEvent::Wake);
+                return;
+            }
+            Err(std_mpsc::TrySendError::Full(returned)) => {
+                request = returned;
+                tokio::task::yield_now().await;
+            }
+            Err(std_mpsc::TrySendError::Disconnected(returned)) => {
+                let _ = returned.reply.send(ControlResult::Error {
+                    message: "winit VST3 UI mailbox stopped".into(),
+                });
+                return;
+            }
+        }
+    }
 }
 
 enum ActorCommand {
@@ -696,97 +722,98 @@ fn resolve_deferred_binary(
 
 async fn vst3_actor(
     mut inbox: mpsc::Receiver<ActorRequest>,
-    bridge_path: Option<PathBuf>,
     ui_proxy: EventLoopProxy<UiEvent>,
+    ui_sender: std_mpsc::SyncSender<ActorRequest>,
+    processors: Arc<Mutex<HashMap<String, vst3::Vst3ProcessorHandle>>>,
     handles: Arc<Mutex<GraphParameterHandles>>,
     request_arena: Arc<Mutex<ArenaReceiver>>,
 ) {
-    let mut runtime = match bridge_path
-        .as_deref()
-        .map(vst3::Vst3Runtime::load)
-        .transpose()
-    {
-        Ok(runtime) => runtime,
-        Err(error) => {
-            eprintln!("audio-host: could not load transitional VST3 runtime: {error}");
-            None
-        }
-    };
     let mut graph_revision = 0_u64;
     let mut graph_snapshot: Option<LiveMixerGraph> = None;
     while let Some(message) = inbox.recv().await {
         let result = match message.command {
-            ActorCommand::Parameter(command) => match runtime.as_mut() {
-                Some(runtime) => runtime.apply_parameter_command(command),
-                None => ControlResult::Error {
-                    message: "VST3 runtime is not configured".into(),
-                },
-            },
+            ActorCommand::Parameter(command) => {
+                forward_to_ui(
+                    &ui_sender,
+                    &ui_proxy,
+                    ActorRequest {
+                        command: ActorCommand::Parameter(command),
+                        reply: message.reply,
+                    },
+                )
+                .await;
+                continue;
+            }
             ActorCommand::Control(command) => match command {
                 ControlCommand::Ping => {
-                    if let Some(runtime) = runtime.as_ref() {
-                        for (instance_id, latency, tail) in runtime.take_timing_changes() {
-                            if let Err(error) =
-                                engine::update_plugin_timing(&instance_id, latency, tail)
-                            {
-                                eprintln!(
-                                    "audio-host: could not rebuild dynamic plugin latency: {error}"
-                                );
-                            }
-                        }
-                    }
-                    let (callback_generation, transport_state) = engine::heartbeat_snapshot();
-                    ControlResult::Heartbeat {
-                        ipc_generation: 0,
-                        tokio_generation: 0,
-                        winit_generation: 0,
-                        callback_generation,
-                        transport_state,
-                    }
+                    forward_to_ui(
+                        &ui_sender,
+                        &ui_proxy,
+                        ActorRequest {
+                            command: ActorCommand::Control(ControlCommand::Ping),
+                            reply: message.reply,
+                        },
+                    )
+                    .await;
+                    continue;
                 }
                 ControlCommand::LoadPlugin {
                     instance_id,
                     module_path,
                     class_id,
+                    plugin_kind,
                     sample_rate,
                     component_state,
                     controller_state,
-                } => match runtime.as_mut() {
-                    Some(runtime) => {
-                        let component_state =
-                            resolve_deferred_binary(component_state, &request_arena);
-                        let controller_state =
-                            resolve_deferred_binary(controller_state, &request_arena);
-                        match (component_state, controller_state) {
-                            (Ok(component_state), Ok(controller_state)) => runtime
-                                .load_plugin_bytes(
-                                    instance_id,
-                                    module_path,
-                                    class_id,
-                                    sample_rate,
-                                    component_state.as_slice(),
-                                    controller_state.as_slice(),
-                                ),
-                            (Err(message), _) | (_, Err(message)) => {
-                                ControlResult::Error { message }
-                            }
+                } => {
+                    let component_state = resolve_deferred_binary(component_state, &request_arena);
+                    let controller_state =
+                        resolve_deferred_binary(controller_state, &request_arena);
+                    match (component_state, controller_state) {
+                        (Ok(component_state), Ok(controller_state)) => {
+                            forward_to_ui(
+                                &ui_sender,
+                                &ui_proxy,
+                                ActorRequest {
+                                    command: ActorCommand::Control(ControlCommand::LoadPlugin {
+                                        instance_id,
+                                        module_path,
+                                        class_id,
+                                        plugin_kind,
+                                        sample_rate,
+                                        component_state: BinaryPayload::inline(
+                                            component_state.as_slice().to_vec(),
+                                        ),
+                                        controller_state: BinaryPayload::inline(
+                                            controller_state.as_slice().to_vec(),
+                                        ),
+                                    }),
+                                    reply: message.reply,
+                                },
+                            )
+                            .await;
+                            continue;
                         }
+                        (Err(message), _) | (_, Err(message)) => ControlResult::Error { message },
                     }
-                    None => ControlResult::Error {
-                        message: "VST3 runtime is not configured".into(),
-                    },
-                },
+                }
                 command @ (ControlCommand::UnloadPlugin { .. }
                 | ControlCommand::PluginParameters { .. }
                 | ControlCommand::SetPluginParameter { .. }
                 | ControlCommand::SavePluginState { .. }
                 | ControlCommand::OpenPluginEditor { .. }
-                | ControlCommand::ClosePluginEditor { .. }) => match runtime.as_mut() {
-                    Some(runtime) => runtime.execute(command),
-                    None => ControlResult::Error {
-                        message: "VST3 runtime is not configured".into(),
-                    },
-                },
+                | ControlCommand::ClosePluginEditor { .. }) => {
+                    forward_to_ui(
+                        &ui_sender,
+                        &ui_proxy,
+                        ActorRequest {
+                            command: ActorCommand::Control(command),
+                            reply: message.reply,
+                        },
+                    )
+                    .await;
+                    continue;
+                }
                 ControlCommand::UpdateGraph { update } => {
                     let (revision, mut candidate) = match update {
                         GraphUpdate::Replace { revision, graph } => (revision, graph),
@@ -816,7 +843,11 @@ async fn vst3_actor(
                         .map_err(|_| "request arena is poisoned".to_owned())
                         .map(|arena| arena.clone());
                     let compiled = arena.and_then(|arena| {
-                        let graph = live_graph(revision, &candidate, runtime.as_ref(), &arena)?;
+                        let processors = processors
+                            .lock()
+                            .map_err(|_| "VST3 processor registry is poisoned".to_owned())?
+                            .clone();
+                        let graph = live_graph(revision, &candidate, Some(&processors), &arena)?;
                         materialize_mixer_graph(&mut candidate, &arena)
                             .map_err(|error| error.to_string())?;
                         engine::load_mixer_graph(graph).map_err(|error| error.to_string())
@@ -836,10 +867,6 @@ async fn vst3_actor(
                 },
             },
         };
-        if let Some(runtime) = runtime.as_ref() {
-            runtime.pump_editor_events();
-        }
-        let _ = ui_proxy.send_event(UiEvent::Wake);
         let _ = message.reply.send(result);
     }
 }
@@ -1478,8 +1505,10 @@ fn validate_native_build_fingerprint(value: &str) -> Result<(), String> {
 
 async fn run_protocol_actor(
     bootstrap: HostBootstrap,
-    bridge_path: Option<PathBuf>,
     ui_proxy: EventLoopProxy<UiEvent>,
+    ui_sender: std_mpsc::SyncSender<ActorRequest>,
+    host_event_inbox: std_mpsc::Receiver<HostEvent>,
+    processors: Arc<Mutex<HashMap<String, vst3::Vst3ProcessorHandle>>>,
     winit_generation: Arc<AtomicU64>,
     runtime_config: RuntimeConfig,
 ) -> Result<(), String> {
@@ -1509,6 +1538,7 @@ async fn run_protocol_actor(
     let published_event_revision = Arc::new(AtomicU64::new(0));
     let page_epoch = Arc::new(AtomicU64::new(0));
     let egress_metrics = Arc::new(EgressMetrics::default());
+    let host_event_inbox = Arc::new(Mutex::new(host_event_inbox));
 
     let (outbound, outbound_inbox) = mpsc::channel(PROTOCOL_CAPACITY);
     let (egress_shutdown, egress_shutdown_rx) = watch::channel(false);
@@ -1554,8 +1584,9 @@ async fn run_protocol_actor(
     tokio::spawn(engine_actor(engine_inbox, handles.clone()));
     tokio::task::spawn_local(vst3_actor(
         vst3_inbox,
-        bridge_path,
         ui_proxy.clone(),
+        ui_sender,
+        processors,
         handles,
         request_arena.clone(),
     ));
@@ -1570,12 +1601,24 @@ async fn run_protocol_actor(
 
     let telemetry_writer = telemetry.clone();
     let telemetry_outbound = outbound.clone();
+    let telemetry_host_events = host_event_inbox.clone();
     let telemetry_event_revision = published_event_revision.clone();
     let telemetry_page_epoch = page_epoch.clone();
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(std::time::Duration::from_millis(33));
         loop {
             interval.tick().await;
+            let editor_events = telemetry_host_events
+                .lock()
+                .map(|inbox| inbox.try_iter().collect::<Vec<_>>())
+                .unwrap_or_default();
+            for event in editor_events {
+                if let Ok(packet) = encode_event(&event, Vec::new()) {
+                    let _ = telemetry_outbound
+                        .send(OutboundMessage::Event(packet))
+                        .await;
+                }
+            }
             let published_revision = engine::published_graph_generation();
             publish_telemetry(
                 &telemetry_writer,
@@ -1711,6 +1754,15 @@ async fn run_protocol_actor(
     // The blocking IPC receivers are deliberately detached. Joining them here would
     // deadlock a clean shutdown while the parent still owns channel handles. Process
     // teardown closes those handles after the Tokio actor and winit loop have exited.
+    let final_editor_events = host_event_inbox
+        .lock()
+        .map(|inbox| inbox.try_iter().collect::<Vec<_>>())
+        .unwrap_or_default();
+    for event in final_editor_events {
+        if let Ok(packet) = encode_event(&event, Vec::new()) {
+            let _ = outbound.send(OutboundMessage::Event(packet)).await;
+        }
+    }
     let _ = egress_shutdown.send(true);
     let _ = egress_task.await;
     drop((outbound, ingress_thread));
@@ -1761,6 +1813,191 @@ enum UiEvent {
 
 struct WinitHost {
     generation: Arc<AtomicU64>,
+    proxy: EventLoopProxy<UiEvent>,
+    inbox: std_mpsc::Receiver<ActorRequest>,
+    processors: Arc<Mutex<HashMap<String, vst3::Vst3ProcessorHandle>>>,
+    host_events: std_mpsc::SyncSender<HostEvent>,
+    vst3: Option<vst3::Vst3Runtime>,
+    compositor: TinySkiaCompositor,
+    editors: HashMap<WindowId, EditorWindow>,
+    editor_instances: HashMap<String, WindowId>,
+}
+
+impl WinitHost {
+    const UI_BATCH: usize = 16;
+
+    fn open_editor(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        instance_id: String,
+        preference: PluginEditorPreference,
+    ) -> ControlResult {
+        if !preference.is_valid() {
+            return ControlResult::Error {
+                message: "VST3 editor zoom is outside 50...400".into(),
+            };
+        }
+        if let Some(window_id) = self.editor_instances.get(&instance_id).copied()
+            && let Some(editor) = self.editors.get(&window_id)
+        {
+            editor.focus();
+            return ControlResult::PluginEditor {
+                active_mode: editor.active_mode(),
+                open: true,
+            };
+        }
+        let Some(runtime) = self.vst3.as_ref() else {
+            return ControlResult::Error {
+                message: "VST3 UI runtime is shutting down".into(),
+            };
+        };
+        let Some(class_id) = runtime.class_id(&instance_id) else {
+            return ControlResult::Error {
+                message: "VST3 instance is not loaded".into(),
+            };
+        };
+        let display_name = runtime
+            .display_name(&instance_id)
+            .unwrap_or("VST3 plug-in")
+            .to_owned();
+        let parameters = match runtime.parameters(&instance_id) {
+            Ok(parameters) => parameters,
+            Err(message) => {
+                return ControlResult::Error { message };
+            }
+        };
+        let attributes = WindowAttributes::default()
+            .with_title(format!("{display_name} — YADAW"))
+            .with_inner_size(LogicalSize::new(720.0, 640.0));
+        let window = match event_loop.create_window(attributes) {
+            Ok(window) => Arc::new(window),
+            Err(error) => {
+                return ControlResult::Error {
+                    message: format!("could not create VST3 editor window: {error}"),
+                };
+            }
+        };
+        let window_id = window.id();
+        let mut editor = EditorWindow::new(
+            instance_id.clone(),
+            class_id,
+            preference,
+            parameters,
+            window,
+            &mut self.compositor,
+        );
+        editor.activate_initial_mode(runtime);
+        let active_mode = editor.active_mode();
+        self.editor_instances.insert(instance_id, window_id);
+        self.editors.insert(window_id, editor);
+        ControlResult::PluginEditor {
+            active_mode,
+            open: true,
+        }
+    }
+
+    fn close_editor(&mut self, instance_id: &str) {
+        let Some(window_id) = self.editor_instances.remove(instance_id) else {
+            return;
+        };
+        if let Some(mut editor) = self.editors.remove(&window_id) {
+            editor.close();
+        }
+    }
+
+    fn execute_vst3_request(&mut self, event_loop: &ActiveEventLoop, request: ActorRequest) {
+        let ActorRequest { command, reply } = request;
+        let command = match command {
+            ActorCommand::Control(ControlCommand::OpenPluginEditor {
+                instance_id,
+                preference,
+            }) => {
+                let _ = reply.send(self.open_editor(event_loop, instance_id, preference));
+                return;
+            }
+            ActorCommand::Control(ControlCommand::ClosePluginEditor { instance_id }) => {
+                self.close_editor(&instance_id);
+                let _ = reply.send(ControlResult::Accepted);
+                return;
+            }
+            ActorCommand::Control(ControlCommand::UnloadPlugin { instance_id }) => {
+                self.close_editor(&instance_id);
+                ActorCommand::Control(ControlCommand::UnloadPlugin { instance_id })
+            }
+            command => command,
+        };
+        let Some(runtime) = self.vst3.as_mut() else {
+            let _ = reply.send(ControlResult::Error {
+                message: "VST3 UI runtime is shutting down".into(),
+            });
+            return;
+        };
+        let result = match command {
+            ActorCommand::Parameter(command) => runtime.apply_parameter_command(command),
+            ActorCommand::Control(ControlCommand::Ping) => {
+                for (instance_id, latency, tail) in runtime.take_timing_changes() {
+                    if let Err(error) = engine::update_plugin_timing(&instance_id, latency, tail) {
+                        eprintln!("audio-host: could not rebuild dynamic plugin latency: {error}");
+                    }
+                }
+                let (callback_generation, transport_state) = engine::heartbeat_snapshot();
+                ControlResult::Heartbeat {
+                    ipc_generation: 0,
+                    tokio_generation: 0,
+                    winit_generation: 0,
+                    callback_generation,
+                    transport_state,
+                }
+            }
+            ActorCommand::Control(command) => {
+                let loaded_id = match &command {
+                    ControlCommand::LoadPlugin { instance_id, .. } => Some(instance_id.clone()),
+                    _ => None,
+                };
+                let result = runtime.execute(command);
+                if matches!(result, ControlResult::PluginLoaded { .. })
+                    && let Some(instance_id) = loaded_id
+                    && let Some(processor) = runtime.processor_handle(&instance_id)
+                    && let Ok(mut processors) = self.processors.lock()
+                {
+                    processors.insert(instance_id, processor);
+                }
+                result
+            }
+        };
+        let _ = reply.send(result);
+    }
+
+    fn drain_ui_mailbox(&mut self, event_loop: &ActiveEventLoop) {
+        let mut drained = 0;
+        while drained < Self::UI_BATCH {
+            match self.inbox.try_recv() {
+                Ok(request) => {
+                    self.execute_vst3_request(event_loop, request);
+                    drained += 1;
+                }
+                Err(std_mpsc::TryRecvError::Empty) => return,
+                Err(std_mpsc::TryRecvError::Disconnected) => return,
+            }
+        }
+        let _ = self.proxy.send_event(UiEvent::Wake);
+    }
+
+    fn shutdown(&mut self) {
+        self.editor_instances.clear();
+        for (_, mut editor) in self.editors.drain() {
+            editor.close();
+        }
+        if let Ok(mut processors) = self.processors.lock() {
+            processors.clear();
+        }
+        self.vst3.take();
+        while let Ok(request) = self.inbox.try_recv() {
+            let _ = request.reply.send(ControlResult::Error {
+                message: "VST3 UI runtime shut down".into(),
+            });
+        }
+    }
 }
 
 impl ApplicationHandler<UiEvent> for WinitHost {
@@ -1768,31 +2005,78 @@ impl ApplicationHandler<UiEvent> for WinitHost {
 
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: UiEvent) {
         self.generation.fetch_add(1, Ordering::Release);
-        if matches!(event, UiEvent::Exit) {
-            event_loop.exit();
+        match event {
+            UiEvent::Wake => self.drain_ui_mailbox(event_loop),
+            UiEvent::Exit => {
+                self.shutdown();
+                event_loop.exit();
+            }
         }
     }
 
     fn window_event(
         &mut self,
         _event_loop: &ActiveEventLoop,
-        _window_id: WindowId,
-        _event: WindowEvent,
+        window_id: WindowId,
+        event: WindowEvent,
     ) {
+        if matches!(event, WindowEvent::RedrawRequested) {
+            if let Some(editor) = self.editors.get_mut(&window_id) {
+                editor.draw(&mut self.compositor);
+            }
+            return;
+        }
+        let actions = match self.editors.get_mut(&window_id) {
+            Some(editor) => editor.handle_event(event, &mut self.compositor),
+            None => return,
+        };
+        let mut close = false;
+        for action in actions {
+            if matches!(action, EditorAction::Close) {
+                close = true;
+                continue;
+            }
+            let (editors, runtime) = (&mut self.editors, &mut self.vst3);
+            let (Some(editor), Some(runtime)) = (editors.get_mut(&window_id), runtime.as_mut())
+            else {
+                continue;
+            };
+            let class_id = editor.class_id.clone();
+            if let Some(preference) = editor.apply_action(action, runtime) {
+                let _ = self
+                    .host_events
+                    .try_send(HostEvent::PluginEditorPreferenceChanged {
+                        class_id,
+                        preference,
+                    });
+            }
+        }
+        if close
+            && let Some(instance_id) = self
+                .editors
+                .get(&window_id)
+                .map(|editor| editor.instance_id.clone())
+        {
+            self.close_editor(&instance_id);
+        }
     }
 }
 
 fn run_ipc() -> Result<(), Box<dyn std::error::Error>> {
+    const UI_MAILBOX_CAPACITY: usize = 64;
+    // VSTGUI performs process-thread platform initialization from InitDll. On
+    // Windows that includes COM-backed WIC creation, so OLE must already be
+    // initialized before any plug-in module is loaded. Keep this guard alive
+    // until after every editor, controller, and module owned below is dropped.
+    let _native_ui_context = NativeUiContext::initialize()
+        .map_err(|error| format!("could not initialize native UI context: {error}"))?;
     let mut arguments = env::args_os().skip(1);
     let mut ipc_token = None;
-    let mut bridge_path = None;
     let mut crash_marker_path = None;
     let mut runtime_config = RuntimeConfig::auto();
     while let Some(argument) = arguments.next() {
         if argument == "--ipc-token" {
             ipc_token = arguments.next().and_then(|value| value.into_string().ok());
-        } else if argument == "--vst3-bridge" {
-            bridge_path = arguments.next().map(PathBuf::from);
         } else if argument == "--crash-marker" {
             crash_marker_path = arguments.next().map(PathBuf::from);
         } else if argument == "--worker-threads" {
@@ -1827,7 +2111,16 @@ fn run_ipc() -> Result<(), Box<dyn std::error::Error>> {
     let bootstrap = bootstrap_receiver.recv()?;
 
     let event_loop = EventLoop::<UiEvent>::with_user_event().build()?;
+    let compositor = iced_tiny_skia::window::compositor::new(
+        iced_tiny_skia::Settings::default(),
+        event_loop.owned_display_handle(),
+    );
     let proxy = event_loop.create_proxy();
+    let application_proxy = proxy.clone();
+    let (ui_sender, ui_inbox) = std_mpsc::sync_channel(UI_MAILBOX_CAPACITY);
+    let (host_event_sender, host_event_inbox) = std_mpsc::sync_channel(UI_MAILBOX_CAPACITY);
+    let processors = Arc::new(Mutex::new(HashMap::new()));
+    let protocol_processors = processors.clone();
     let winit_generation = Arc::new(AtomicU64::new(0));
     let protocol_winit_generation = winit_generation.clone();
     let protocol_thread = thread::Builder::new()
@@ -1844,8 +2137,10 @@ fn run_ipc() -> Result<(), Box<dyn std::error::Error>> {
             local.block_on(&runtime, async move {
                 if let Err(error) = run_protocol_actor(
                     bootstrap,
-                    bridge_path,
                     proxy.clone(),
+                    ui_sender,
+                    host_event_inbox,
+                    protocol_processors,
                     protocol_winit_generation,
                     runtime_config,
                 )
@@ -1858,6 +2153,14 @@ fn run_ipc() -> Result<(), Box<dyn std::error::Error>> {
         })?;
     let mut application = WinitHost {
         generation: winit_generation,
+        proxy: application_proxy,
+        inbox: ui_inbox,
+        processors,
+        host_events: host_event_sender,
+        vst3: Some(vst3::Vst3Runtime::new()),
+        compositor,
+        editors: HashMap::new(),
+        editor_instances: HashMap::new(),
     };
     event_loop.run_app(&mut application)?;
     protocol_thread

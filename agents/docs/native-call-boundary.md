@@ -117,6 +117,15 @@ state; main owns the recording/recovery guard and the complete helper
 restart/restore/rollback transaction. The new settings file is written only
 after the replacement helper has published the restored graph.
 
+Plug-in editor preferences follow a similarly narrow path. Renderer code only
+calls `openPluginEditor(instanceId)` through the plug-in Pinia store. Electron
+main resolves the class-ID preference and sends it to `audio-host`; the helper
+owns both native and parameter editor windows. A
+`PluginEditorPreferenceChanged` host event returns mode and zoom changes for an
+atomic, class-ID-keyed settings merge. `pluginEditors` is deliberately excluded
+from the generic settings patch API, and no Vue component may create an
+in-renderer generic parameter dialog.
+
 ## Adding a native call
 
 Before adding or changing a native call:
