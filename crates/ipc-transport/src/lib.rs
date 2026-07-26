@@ -183,6 +183,11 @@ impl LeaseRegistry {
     }
 
     #[must_use]
+    pub fn bytes(&self) -> usize {
+        self.bytes
+    }
+
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
@@ -680,6 +685,16 @@ impl TelemetryReader {
         }
         None
     }
+
+    #[must_use]
+    pub fn capacity(&self) -> u32 {
+        self.capacity
+    }
+
+    #[must_use]
+    pub fn epoch(&self) -> u64 {
+        self.epoch
+    }
 }
 
 pub fn create_parameter_ring(epoch: u64) -> Result<IpcSharedMemory, TransportError> {
@@ -744,6 +759,14 @@ impl ParameterProducer {
         write_parameter(&page, (head % self.capacity) as usize, command);
         page.store_u64(RING_OFFSET_HEAD, head.wrapping_add(1), Ordering::Release);
         ParameterEnqueue::Queued { wake: head == tail }
+    }
+
+    #[must_use]
+    pub fn usage(&self) -> (u64, u64) {
+        let page = AtomicPage::new(&self.memory);
+        let head = page.load_u64(RING_OFFSET_HEAD, Ordering::Acquire);
+        let tail = page.load_u64(RING_OFFSET_TAIL, Ordering::Acquire);
+        (head.saturating_sub(tail).min(self.capacity), self.capacity)
     }
 }
 
@@ -1142,10 +1165,14 @@ mod tests {
         let memory = IpcSharedMemory::from_bytes(&[1, 2, 3]);
         let mut registry = LeaseRegistry::new();
         registry.retain(7, memory.clone()).unwrap();
+        assert_eq!(registry.len(), 1);
+        assert_eq!(registry.bytes(), 3);
         assert!(matches!(
             registry.retain(7, memory),
             Err(TransportError::DuplicateLease)
         ));
+        registry.release(&[7]);
+        assert_eq!(registry.bytes(), 0);
     }
 
     #[test]
@@ -1197,6 +1224,8 @@ mod tests {
         let memory = create_telemetry_page(64, 9).unwrap();
         let writer = TelemetryWriter::map(memory.clone()).unwrap();
         let reader = TelemetryReader::map(memory).unwrap();
+        assert_eq!(reader.capacity(), 64);
+        assert_eq!(reader.epoch(), 9);
         let expected = TelemetrySnapshot {
             epoch: 9,
             graph_revision: 4,
@@ -1256,6 +1285,13 @@ mod tests {
                 ParameterEnqueue::Queued { .. }
             ));
         }
+        assert_eq!(
+            producer.usage(),
+            (
+                u64::from(PARAMETER_RING_CAPACITY) - PARAMETER_BOUNDARY_RESERVE,
+                u64::from(PARAMETER_RING_CAPACITY)
+            )
+        );
         assert_eq!(
             producer.enqueue(command(9000, ParameterGesture::Perform)),
             ParameterEnqueue::SoftFull

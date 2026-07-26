@@ -322,6 +322,53 @@ export interface SystemPerformanceSnapshot {
   cpu: CpuSnapshot
   memory: MemorySnapshot
   storage: StorageSpaceSnapshot[]
+  audioIpc: AudioIpcPerformanceSnapshot | null
+}
+
+export interface AudioIpcPerformanceSnapshot {
+  protocolVersion: number
+  sessionEpoch: string
+  heartbeat: {
+    ageMs: number | null
+    ipcGeneration: number
+    tokioGeneration: number
+    winitGeneration: number
+    callbackGeneration: number
+  }
+  requests: {
+    normalPending: number
+    priorityPending: number
+    capacity: number
+    timeouts: number
+  }
+  sharedMemory: {
+    outstandingLeases: number
+    outstandingBytes: number
+    maxLeases: number
+    maxBytes: number
+    inlinePackets: number
+    inlineBytes: number
+    sharedPackets: number
+    sharedRegions: number
+    sharedBytes: number
+  }
+  eventQueueDepth: number
+  telemetry: {
+    epoch: string
+    graphRevision: number
+    callbackGeneration: number
+    meterSlots: number
+    capacity: number
+    fallbackReads: number
+  }
+  parameterRing: {
+    used: number
+    capacity: number
+    softFull: number
+    hardFull: number
+    boundaryFallbacks: number
+    staleEpoch: number
+  }
 }
 
 export type AudioBenchmarkRating = "limited" | "basic" | "good" | "excellent"

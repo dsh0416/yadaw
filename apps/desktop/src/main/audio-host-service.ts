@@ -4,6 +4,7 @@ import { AudioHostIpcClient } from "@yadaw/audio-host-client"
 import type {
   AudioBackendDescriptor,
   AudioDeviceList,
+  AudioIpcPerformanceSnapshot,
   AudioPreferences,
   AudioRuntimeSnapshot,
   MixerGraphSnapshot,
@@ -166,6 +167,46 @@ type TelemetryWire = [
   ]>
 ]
 
+type TransportDiagnosticsWire = [
+  protocolVersion: number,
+  sessionEpoch: string,
+  requests: [
+    normalPending: number,
+    priorityPending: number,
+    capacity: number,
+    timeouts: number
+  ],
+  sharedMemory: [
+    outstandingLeases: number,
+    outstandingBytes: number,
+    maxLeases: number,
+    maxBytes: number,
+    inlinePackets: number,
+    inlineBytes: number,
+    sharedPackets: number,
+    sharedRegions: number,
+    sharedBytes: number
+  ],
+  eventQueueDepth: number,
+  telemetry: [
+    epoch: string,
+    capacity: number,
+    graphRevision: number,
+    callbackGeneration: number,
+    meterSlots: number,
+    fallbackReads: number
+  ],
+  parameterRing: [
+    used: number,
+    capacity: number,
+    softFull: number,
+    hardFull: number,
+    boundaryFallbacks: number,
+    staleEpoch: number
+  ],
+  closing: boolean
+]
+
 function stableRuntimeHandle(namespace: number, id: string): number {
   let value = (2_166_136_261 ^ namespace) >>> 0
   for (const byte of Buffer.from(id)) {
@@ -313,6 +354,13 @@ export class AudioHostService {
   private stableTimer: NodeJS.Timeout | null = null
   private lastCallbackGeneration: number | null = null
   private callbackStagnantSince = 0
+  private lastHeartbeatAt: number | null = null
+  private lastHeartbeatGenerations = {
+    ipc: 0,
+    tokio: 0,
+    winit: 0,
+    callback: 0
+  }
   private restartBudget = 1
   private readonly recoveryBypassed = new Set<string>()
   private stopping = false
@@ -362,10 +410,19 @@ export class AudioHostService {
     this.client = client
     this.lastCallbackGeneration = null
     this.callbackStagnantSince = 0
+    this.lastHeartbeatAt = null
+    this.lastHeartbeatGenerations = { ipc: 0, tokio: 0, winit: 0, callback: 0 }
     this.heartbeat = setInterval(() => {
       void this.performHeartbeat().then((response) => {
         if (response.result.type !== "heartbeat") return
         const generation = response.result.callback_generation ?? 0
+        this.lastHeartbeatAt = Date.now()
+        this.lastHeartbeatGenerations = {
+          ipc: response.result.ipc_generation ?? 0,
+          tokio: response.result.tokio_generation ?? 0,
+          winit: response.result.winit_generation ?? 0,
+          callback: generation
+        }
         const active = response.result.transport_state === "playing" ||
           response.result.transport_state === "recording"
         if (!active || generation !== this.lastCallbackGeneration) {
@@ -687,6 +744,61 @@ export class AudioHostService {
     const client = this.client
     if (!client) throw new Error("audio host is not running")
     return decode(client.readTelemetry()) as TelemetryWire
+  }
+
+  performanceDiagnostics(): AudioIpcPerformanceSnapshot | null {
+    const client = this.client
+    if (!client) return null
+    try {
+      const diagnostics = decode(client.transportDiagnostics()) as TransportDiagnosticsWire
+      return {
+        protocolVersion: diagnostics[0],
+        sessionEpoch: diagnostics[1],
+        heartbeat: {
+          ageMs: this.lastHeartbeatAt === null ? null : Date.now() - this.lastHeartbeatAt,
+          ipcGeneration: this.lastHeartbeatGenerations.ipc,
+          tokioGeneration: this.lastHeartbeatGenerations.tokio,
+          winitGeneration: this.lastHeartbeatGenerations.winit,
+          callbackGeneration: this.lastHeartbeatGenerations.callback
+        },
+        requests: {
+          normalPending: diagnostics[2][0],
+          priorityPending: diagnostics[2][1],
+          capacity: diagnostics[2][2],
+          timeouts: diagnostics[2][3]
+        },
+        sharedMemory: {
+          outstandingLeases: diagnostics[3][0],
+          outstandingBytes: diagnostics[3][1],
+          maxLeases: diagnostics[3][2],
+          maxBytes: diagnostics[3][3],
+          inlinePackets: diagnostics[3][4],
+          inlineBytes: diagnostics[3][5],
+          sharedPackets: diagnostics[3][6],
+          sharedRegions: diagnostics[3][7],
+          sharedBytes: diagnostics[3][8]
+        },
+        eventQueueDepth: diagnostics[4],
+        telemetry: {
+          epoch: diagnostics[5][0],
+          capacity: diagnostics[5][1],
+          graphRevision: diagnostics[5][2],
+          callbackGeneration: diagnostics[5][3],
+          meterSlots: diagnostics[5][4],
+          fallbackReads: diagnostics[5][5]
+        },
+        parameterRing: {
+          used: diagnostics[6][0],
+          capacity: diagnostics[6][1],
+          softFull: diagnostics[6][2],
+          hardFull: diagnostics[6][3],
+          boundaryFallbacks: diagnostics[6][4],
+          staleEpoch: diagnostics[6][5]
+        }
+      }
+    } catch {
+      return null
+    }
   }
 
   private transportResult(response: ControlResponse): TransportSnapshot {

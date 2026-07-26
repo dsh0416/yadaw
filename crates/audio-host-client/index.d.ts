@@ -6,6 +6,7 @@ export declare class AudioHostIpcClient {
   heartbeat(messagePackRequest: Buffer): Promise<Buffer>
   readTelemetry(): Buffer
   enqueueParameter(targetKind: string, runtimeHandle: number, parameterId: number, normalized: number, gesture: string): string
+  transportDiagnostics(): Buffer
   get sessionEpoch(): number
   drainEvents(): Array<Buffer>
   close(): void

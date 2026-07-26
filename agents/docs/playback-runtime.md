@@ -180,6 +180,15 @@ snapshot at most eight times and otherwise returns its last coherent value.
 The existing 30 Hz renderer polling API reads this page synchronously and does
 not generate normal request IPC.
 
+The lower-frequency performance poll reads a separate addon-local diagnostic
+snapshot. It reports normal/priority pending counts and timeouts, temporary
+lease count/bytes, cumulative inline/shared normal-request packet and byte
+traffic, event queue depth, telemetry epoch/revision/capacity and coherent-read
+fallbacks, plus parameter-ring occupancy and saturation/fallback counters.
+`AudioHostService` adds the age and generation tuple from the most recent
+priority heartbeat. These values are observational only and are never written
+or sampled from the audio callback.
+
 When a graph needs more meter slots, the helper creates a larger power-of-two
 page and sends `TelemetryPageOffer(epoch)`. The addon maps it and acknowledges
 on the priority path. Publication switches at a graph/block boundary; the old

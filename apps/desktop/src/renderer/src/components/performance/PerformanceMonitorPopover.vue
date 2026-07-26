@@ -2,6 +2,7 @@
 import { storeToRefs } from "pinia"
 import { computed } from "vue"
 import {
+  Activity,
   CircleAlert,
   Cpu,
   HardDrive,
@@ -91,6 +92,7 @@ const cpuUsage = computed(() => snapshot.value?.cpu.overallUsagePercent ?? null)
 const memoryUsage = computed(() => snapshot.value?.memory.usagePercent ?? null)
 const workspaceSpace = computed(() => findStorage("workspace"))
 const swapSpace = computed(() => findStorage("swap"))
+const audioIpc = computed(() => snapshot.value?.audioIpc ?? null)
 
 function findStorage(id: StorageSpaceSnapshot["id"]): StorageSpaceSnapshot | null {
   return snapshot.value?.storage.find((space) => space.id === id) ?? null
@@ -102,6 +104,14 @@ function formatPercent(value: number | null): string {
 
 function formatLatency(value: number | null): string {
   return value === null ? "—" : `${value.toFixed(1)} ms`
+}
+
+function formatHeartbeatAge(value: number | null): string {
+  return value === null ? "Waiting" : `${Math.round(value)} ms`
+}
+
+function formatOccupancy(used: number, capacity: number): string {
+  return `${used.toLocaleString()} / ${capacity.toLocaleString()}`
 }
 
 function formatBytes(value: number | null): string {
@@ -252,6 +262,51 @@ function coreSeverity(usagePercent: number | null): HealthSeverity {
           </dl>
         </section>
 
+        <section class="performance-section ipc-section">
+          <div class="section-heading">
+            <div><Activity :size="13" /><strong>Audio IPC transport</strong></div>
+            <span>{{ audioIpc ? `Protocol v${audioIpc.protocolVersion}` : "Unavailable" }}</span>
+          </div>
+          <dl v-if="audioIpc" class="ipc-diagnostics-grid">
+            <div>
+              <dt>Request router</dt>
+              <dd>{{ audioIpc.requests.normalPending }} normal · {{ audioIpc.requests.priorityPending }} priority</dd>
+              <small>{{ audioIpc.requests.capacity }} slots per channel</small>
+            </div>
+            <div>
+              <dt>Shared blobs</dt>
+              <dd>{{ formatOccupancy(audioIpc.sharedMemory.outstandingLeases, audioIpc.sharedMemory.maxLeases) }} leases</dd>
+              <small>{{ formatBytes(audioIpc.sharedMemory.outstandingBytes) }} / {{ formatBytes(audioIpc.sharedMemory.maxBytes) }} live · {{ audioIpc.sharedMemory.sharedPackets }} packets / {{ formatBytes(audioIpc.sharedMemory.sharedBytes) }} total</small>
+            </div>
+            <div>
+              <dt>Inline payload</dt>
+              <dd>{{ audioIpc.sharedMemory.inlinePackets.toLocaleString() }} packets</dd>
+              <small>{{ formatBytes(audioIpc.sharedMemory.inlineBytes) }} serialized · {{ audioIpc.sharedMemory.sharedRegions }} shared regions</small>
+            </div>
+            <div>
+              <dt>Telemetry page</dt>
+              <dd>{{ formatOccupancy(audioIpc.telemetry.meterSlots, audioIpc.telemetry.capacity) }} meters</dd>
+              <small>rev {{ audioIpc.telemetry.graphRevision }} · {{ audioIpc.telemetry.fallbackReads }} fallback reads</small>
+            </div>
+            <div>
+              <dt>Parameter SPSC</dt>
+              <dd>{{ formatOccupancy(audioIpc.parameterRing.used, audioIpc.parameterRing.capacity) }}</dd>
+              <small>{{ audioIpc.parameterRing.softFull }} soft · {{ audioIpc.parameterRing.hardFull }} full · {{ audioIpc.parameterRing.boundaryFallbacks }} boundary</small>
+            </div>
+            <div>
+              <dt>Priority heartbeat</dt>
+              <dd>{{ formatHeartbeatAge(audioIpc.heartbeat.ageMs) }}</dd>
+              <small>IPC {{ audioIpc.heartbeat.ipcGeneration }} · Tokio {{ audioIpc.heartbeat.tokioGeneration }} · UI {{ audioIpc.heartbeat.winitGeneration }}</small>
+            </div>
+            <div>
+              <dt>Router health</dt>
+              <dd>{{ audioIpc.eventQueueDepth }} events · {{ audioIpc.requests.timeouts }} timeouts</dd>
+              <small>callback {{ audioIpc.telemetry.callbackGeneration }} · stale {{ audioIpc.parameterRing.staleEpoch }}</small>
+            </div>
+          </dl>
+          <div v-else class="monitor-placeholder">Audio helper diagnostics are unavailable.</div>
+        </section>
+
         <footer class="threshold-note">
           Warning / critical · CPU {{ PERFORMANCE_THRESHOLDS.cpu.warningPercent }}/{{ PERFORMANCE_THRESHOLDS.cpu.criticalPercent }}% · MEM {{ PERFORMANCE_THRESHOLDS.memory.warningPercent }}/{{ PERFORMANCE_THRESHOLDS.memory.criticalPercent }}% · RTL {{ PERFORMANCE_THRESHOLDS.audioRoundTrip.warningMs }}/{{ PERFORMANCE_THRESHOLDS.audioRoundTrip.criticalMs }} ms
         </footer>
@@ -268,8 +323,9 @@ function coreSeverity(usagePercent: number | null): HealthSeverity {
 .performance-section{padding:12px 15px;border-bottom:1px solid var(--line-soft)}.section-heading{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}.section-heading>div{display:flex;align-items:center;gap:7px;color:var(--text-secondary)}.section-heading strong{font-size:9px}.section-heading>span{color:var(--text-faint);font:7px var(--font-utility);text-transform:uppercase;letter-spacing:.06em}.core-bank{display:grid;grid-template-columns:repeat(auto-fit,minmax(30px,1fr));gap:5px}.core-channel{display:grid;grid-template-rows:10px 46px 10px;justify-items:center;gap:4px;min-width:0}.core-value,.core-label{color:var(--text-faint);font:6px var(--font-utility)}.core-meter{position:relative;width:9px;height:46px;overflow:hidden;border:1px solid var(--line-strong);border-radius:2px;background:repeating-linear-gradient(to top,var(--daw-control) 0,var(--daw-control) 4px,var(--daw-meter-well) 4px,var(--daw-meter-well) 6px)}.core-meter i{position:absolute;right:0;bottom:0;left:0;height:var(--core-load);background:linear-gradient(to top,var(--accent),var(--signal-cyan));box-shadow:0 0 7px color-mix(in srgb,var(--signal-cyan) 40%,transparent)}.core-channel.warning .core-meter i{background:var(--warning);box-shadow:0 0 7px color-mix(in srgb,var(--warning) 53%,transparent)}.core-channel.critical .core-meter i{background:var(--record);box-shadow:0 0 7px color-mix(in srgb,var(--record) 60%,transparent)}.core-channel.warning .core-value{color:var(--warning)}.core-channel.critical .core-value{color:var(--record)}.monitor-placeholder{padding:15px;border:1px dashed var(--line-strong);border-radius:6px;color:var(--text-faint);font-size:8px;text-align:center}
 .memory-readout{display:grid;grid-template-columns:minmax(0,1fr) repeat(3,auto);align-items:center;gap:10px}.linear-meter{height:6px;overflow:hidden;border:1px solid var(--line-strong);border-radius:2px;background:var(--daw-meter-well)}.linear-meter i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--signal-cyan));box-shadow:0 0 8px color-mix(in srgb,var(--signal-cyan) 40%,transparent)}.memory-readout>span{color:var(--text-faint);font:7px var(--font-utility)}.storage-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.storage-space{min-width:0;padding:9px 10px;border:1px solid var(--line-soft);border-radius:6px;background:var(--surface-1)}.storage-space>span,.storage-space>strong,.storage-space>small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.storage-space>span{color:var(--text-faint);font:7px var(--font-utility);text-transform:uppercase;letter-spacing:.07em}.storage-space>strong{margin-top:5px;color:var(--text-secondary);font:9px var(--font-utility)}.storage-space>small{margin-top:4px;color:var(--text-muted);font-size:7px}.storage-space.warning{border-color:color-mix(in srgb,var(--warning) 42%,var(--line-strong));background:color-mix(in srgb,var(--warning) 10%,var(--surface-1))}.storage-space.warning>strong{color:var(--warning)}.storage-space.critical{border-color:color-mix(in srgb,var(--record) 45%,var(--line-strong));background:color-mix(in srgb,var(--record) 10%,var(--surface-1))}.storage-space.critical>strong{color:var(--record)}
 .audio-timing-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin:0;gap:6px}.audio-timing-grid>div{min-width:0;padding:8px;border:1px solid var(--line-soft);border-radius:5px;background:var(--surface-1)}.audio-timing-grid dt{color:var(--text-faint);font-size:7px}.audio-timing-grid dd{margin:4px 0 0;color:var(--signal-cyan);font:8px var(--font-utility);white-space:nowrap}.audio-timing-grid .warning{border-color:color-mix(in srgb,var(--warning) 42%,var(--line-strong))}.audio-timing-grid .warning dd{color:var(--warning)}.threshold-note{padding:8px 15px;color:var(--text-faint);background:var(--surface-sunken);font:6px var(--font-utility);line-height:1.5}.performance-popover-arrow{fill:var(--line-strong)}
+.ipc-diagnostics-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.ipc-diagnostics-grid>div{min-width:0;padding:8px;border:1px solid var(--line-soft);border-radius:5px;background:var(--surface-1)}.ipc-diagnostics-grid dt{color:var(--text-faint);font-size:7px}.ipc-diagnostics-grid dd{overflow:hidden;margin:4px 0 0;color:var(--signal-cyan);font:8px var(--font-utility);text-overflow:ellipsis;white-space:nowrap}.ipc-diagnostics-grid small{display:block;overflow:hidden;margin-top:4px;color:var(--text-faint);font:6px var(--font-utility);line-height:1.35;text-overflow:ellipsis;white-space:nowrap}
 @keyframes monitor-spin{to{transform:rotate(360deg)}}
 @keyframes performance-surface-in{from{opacity:0;transform:translateY(3px) scale(.98)}}
-@media(max-width:700px){.memory-readout{grid-template-columns:1fr 1fr}.linear-meter{grid-column:1/-1}.storage-grid{grid-template-columns:1fr}.audio-timing-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:700px){.memory-readout{grid-template-columns:1fr 1fr}.linear-meter{grid-column:1/-1}.storage-grid{grid-template-columns:1fr}.audio-timing-grid,.ipc-diagnostics-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(prefers-reduced-motion:reduce){.spinning{animation:none}}
 </style>

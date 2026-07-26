@@ -25,9 +25,10 @@ use yadaw_dsp_runtime::protocol::{
     PriorityResponse,
 };
 use yadaw_ipc_transport::{
-    HostBootstrap, LeaseRegistry, ParameterEnqueue, ParameterProducer, TelemetryReader,
-    TelemetrySnapshot, WirePacket, create_parameter_ring, create_telemetry_page, decode_body,
-    decode_response, encode_body, encode_priority, encode_request,
+    HostBootstrap, LeaseRegistry, MAX_OUTSTANDING_LEASE_BYTES, MAX_OUTSTANDING_LEASES,
+    ParameterEnqueue, ParameterProducer, TelemetryReader, TelemetrySnapshot, WirePacket,
+    create_parameter_ring, create_telemetry_page, decode_body, decode_response, encode_body,
+    encode_priority, encode_request,
 };
 
 const OUTBOUND_CAPACITY: usize = 256;
@@ -46,6 +47,15 @@ struct Pending {
     deadline: Instant,
 }
 
+#[derive(Default)]
+struct TransportTraffic {
+    inline_packets: AtomicU64,
+    inline_bytes: AtomicU64,
+    shared_packets: AtomicU64,
+    shared_regions: AtomicU64,
+    shared_bytes: AtomicU64,
+}
+
 struct ClientState {
     normal_outbound: Mutex<Option<SyncSender<WirePacket>>>,
     priority_outbound: Mutex<Option<SyncSender<WirePacket>>>,
@@ -62,6 +72,13 @@ struct ClientState {
     session_epoch: u64,
     parameter_sequence: AtomicU64,
     internal_request_id: AtomicU64,
+    telemetry_fallback_reads: AtomicU64,
+    parameter_soft_full: AtomicU64,
+    parameter_hard_full: AtomicU64,
+    parameter_boundary_fallbacks: AtomicU64,
+    parameter_stale_epoch: AtomicU64,
+    request_timeouts: Arc<AtomicU64>,
+    transport_traffic: Arc<TransportTraffic>,
 }
 
 #[napi]
@@ -149,6 +166,8 @@ impl AudioHostIpcClient {
         let telemetry = Arc::new(RwLock::new(telemetry));
         let event_queue = Arc::new(Mutex::new(VecDeque::new()));
         let closing = Arc::new(AtomicBool::new(false));
+        let request_timeouts = Arc::new(AtomicU64::new(0));
+        let transport_traffic = Arc::new(TransportTraffic::default());
 
         let normal_egress = spawn_egress("yadaw-ipc-request", requests, normal_inbox);
         let priority_egress = spawn_egress(
@@ -161,11 +180,14 @@ impl AudioHostIpcClient {
             Arc::clone(&pending),
             priority_outbound.clone(),
             Arc::clone(&closing),
+            Arc::clone(&request_timeouts),
+            Arc::clone(&transport_traffic),
         );
         let priority_router = spawn_priority_router(
             priority_responses,
             Arc::clone(&priority_pending),
             Arc::clone(&closing),
+            Arc::clone(&request_timeouts),
         );
         let event_router = spawn_event_router(
             events,
@@ -210,6 +232,13 @@ impl AudioHostIpcClient {
                 session_epoch,
                 parameter_sequence: AtomicU64::new(1),
                 internal_request_id: AtomicU64::new(u64::MAX / 2),
+                telemetry_fallback_reads: AtomicU64::new(0),
+                parameter_soft_full: AtomicU64::new(0),
+                parameter_hard_full: AtomicU64::new(0),
+                parameter_boundary_fallbacks: AtomicU64::new(0),
+                parameter_stale_epoch: AtomicU64::new(0),
+                request_timeouts,
+                transport_traffic,
             }),
         })
     }
@@ -248,6 +277,7 @@ impl AudioHostIpcClient {
             encode_request(request, &mut leases)
                 .map_err(|error| failure("could not encode audio-host request", error))?
         };
+        record_packet(&packet, &self.state.transport_traffic);
         self.create_request_promise(env, request_id, deadline, packet, false)
     }
 
@@ -289,12 +319,16 @@ impl AudioHostIpcClient {
                 }
                 snapshot
             }
-            None => self
-                .state
-                .last_telemetry
-                .lock()
-                .map_err(|_| failure("last telemetry snapshot", "poisoned"))?
-                .clone(),
+            None => {
+                self.state
+                    .telemetry_fallback_reads
+                    .fetch_add(1, Ordering::Relaxed);
+                self.state
+                    .last_telemetry
+                    .lock()
+                    .map_err(|_| failure("last telemetry snapshot", "poisoned"))?
+                    .clone()
+            }
         };
         rmp_serde::to_vec_named(&(
             snapshot.epoch,
@@ -359,17 +393,151 @@ impl AudioHostIpcClient {
                 }
                 Ok("queued".into())
             }
-            ParameterEnqueue::SoftFull => Ok("soft-full".into()),
+            ParameterEnqueue::SoftFull => {
+                self.state
+                    .parameter_soft_full
+                    .fetch_add(1, Ordering::Relaxed);
+                Ok("soft-full".into())
+            }
             ParameterEnqueue::Full => {
+                self.state
+                    .parameter_hard_full
+                    .fetch_add(1, Ordering::Relaxed);
                 if matches!(gesture, ParameterGesture::Begin | ParameterGesture::End) {
                     self.send_internal_priority(PriorityCommand::ParameterBoundary { command })?;
+                    self.state
+                        .parameter_boundary_fallbacks
+                        .fetch_add(1, Ordering::Relaxed);
                     Ok("fallback".into())
                 } else {
                     Ok("full".into())
                 }
             }
-            ParameterEnqueue::StaleEpoch => Ok("stale".into()),
+            ParameterEnqueue::StaleEpoch => {
+                self.state
+                    .parameter_stale_epoch
+                    .fetch_add(1, Ordering::Relaxed);
+                Ok("stale".into())
+            }
         }
+    }
+
+    #[napi]
+    pub fn transport_diagnostics(&self) -> Result<Buffer> {
+        let normal_pending = self
+            .state
+            .pending
+            .lock()
+            .map_err(|_| failure("normal pending requests", "poisoned"))?
+            .len();
+        let priority_pending = self
+            .state
+            .priority_pending
+            .lock()
+            .map_err(|_| failure("priority pending requests", "poisoned"))?
+            .len();
+        let (outstanding_leases, outstanding_lease_bytes) = {
+            let leases = self
+                .state
+                .leases
+                .lock()
+                .map_err(|_| failure("lease registry", "poisoned"))?;
+            (leases.len(), leases.bytes())
+        };
+        let event_queue_depth = self
+            .state
+            .events
+            .lock()
+            .map_err(|_| failure("event queue", "poisoned"))?
+            .len();
+        let (telemetry_epoch, telemetry_capacity, telemetry_snapshot) = {
+            let telemetry = self
+                .state
+                .telemetry
+                .read()
+                .map_err(|_| failure("telemetry page", "poisoned"))?;
+            (telemetry.epoch(), telemetry.capacity(), telemetry.read())
+        };
+        let telemetry = match telemetry_snapshot {
+            Some(snapshot) => {
+                *self
+                    .state
+                    .last_telemetry
+                    .lock()
+                    .map_err(|_| failure("last telemetry snapshot", "poisoned"))? =
+                    snapshot.clone();
+                snapshot
+            }
+            None => {
+                self.state
+                    .telemetry_fallback_reads
+                    .fetch_add(1, Ordering::Relaxed);
+                self.state
+                    .last_telemetry
+                    .lock()
+                    .map_err(|_| failure("last telemetry snapshot", "poisoned"))?
+                    .clone()
+            }
+        };
+        let (parameter_ring_used, parameter_ring_capacity) = self.state.parameters.usage();
+        rmp_serde::to_vec_named(&(
+            PROTOCOL_VERSION,
+            self.state.session_epoch.to_string(),
+            (
+                normal_pending,
+                priority_pending,
+                OUTBOUND_CAPACITY,
+                self.state.request_timeouts.load(Ordering::Relaxed),
+            ),
+            (
+                outstanding_leases,
+                outstanding_lease_bytes,
+                MAX_OUTSTANDING_LEASES,
+                MAX_OUTSTANDING_LEASE_BYTES,
+                self.state
+                    .transport_traffic
+                    .inline_packets
+                    .load(Ordering::Relaxed),
+                self.state
+                    .transport_traffic
+                    .inline_bytes
+                    .load(Ordering::Relaxed),
+                self.state
+                    .transport_traffic
+                    .shared_packets
+                    .load(Ordering::Relaxed),
+                self.state
+                    .transport_traffic
+                    .shared_regions
+                    .load(Ordering::Relaxed),
+                self.state
+                    .transport_traffic
+                    .shared_bytes
+                    .load(Ordering::Relaxed),
+            ),
+            event_queue_depth,
+            (
+                telemetry_epoch.to_string(),
+                telemetry_capacity,
+                telemetry.graph_revision,
+                telemetry.callback_generation,
+                telemetry.meters.len(),
+                self.state.telemetry_fallback_reads.load(Ordering::Relaxed),
+            ),
+            (
+                parameter_ring_used,
+                parameter_ring_capacity,
+                self.state.parameter_soft_full.load(Ordering::Relaxed),
+                self.state.parameter_hard_full.load(Ordering::Relaxed),
+                self.state
+                    .parameter_boundary_fallbacks
+                    .load(Ordering::Relaxed),
+                self.state.parameter_stale_epoch.load(Ordering::Relaxed),
+            ),
+            self.state.closing.load(Ordering::Acquire),
+        ))
+        .map(Buffer::from)
+        .map_err(|error| failure("could not encode transport diagnostics", error))
     }
 
     #[napi(getter)]
@@ -487,6 +655,28 @@ fn request_deadline(command: &ControlCommand) -> Duration {
     }
 }
 
+fn record_packet(packet: &WirePacket, traffic: &TransportTraffic) {
+    if packet.regions.is_empty() {
+        traffic.inline_packets.fetch_add(1, Ordering::Relaxed);
+        traffic
+            .inline_bytes
+            .fetch_add(packet.body.len() as u64, Ordering::Relaxed);
+        return;
+    }
+    traffic.shared_packets.fetch_add(1, Ordering::Relaxed);
+    traffic
+        .shared_regions
+        .fetch_add(packet.regions.len() as u64, Ordering::Relaxed);
+    traffic.shared_bytes.fetch_add(
+        packet
+            .regions
+            .iter()
+            .map(|region| region.len() as u64)
+            .sum(),
+        Ordering::Relaxed,
+    );
+}
+
 fn parse_gesture(value: &str) -> Result<ParameterGesture> {
     match value {
         "begin" => Ok(ParameterGesture::Begin),
@@ -518,32 +708,37 @@ fn spawn_response_router(
     pending: Arc<Mutex<HashMap<u64, Pending>>>,
     priority_outbound: SyncSender<WirePacket>,
     closing: Arc<AtomicBool>,
+    request_timeouts: Arc<AtomicU64>,
+    transport_traffic: Arc<TransportTraffic>,
 ) -> JoinHandle<()> {
     thread::Builder::new()
         .name("yadaw-ipc-response-router".into())
         .spawn(move || {
             while !closing.load(Ordering::Acquire) {
                 match receiver.try_recv_timeout(router_timeout(&pending)) {
-                    Ok(packet) => match decode_response(packet) {
-                        Ok((response, lease_ids)) => {
-                            if !lease_ids.is_empty() {
-                                send_release_leases(&priority_outbound, lease_ids);
+                    Ok(packet) => {
+                        record_packet(&packet, &transport_traffic);
+                        match decode_response(packet) {
+                            Ok((response, lease_ids)) => {
+                                if !lease_ids.is_empty() {
+                                    send_release_leases(&priority_outbound, lease_ids);
+                                }
+                                let request_id = response.request_id;
+                                match encode_body(&response) {
+                                    Ok(bytes) => resolve_pending(&pending, request_id, bytes),
+                                    Err(error) => reject_pending(
+                                        &pending,
+                                        request_id,
+                                        failure("could not encode audio-host response", error),
+                                    ),
+                                }
                             }
-                            let request_id = response.request_id;
-                            match encode_body(&response) {
-                                Ok(bytes) => resolve_pending(&pending, request_id, bytes),
-                                Err(error) => reject_pending(
-                                    &pending,
-                                    request_id,
-                                    failure("could not encode audio-host response", error),
-                                ),
+                            Err(error) => {
+                                reject_all(&pending, failure("invalid audio-host response", error));
                             }
                         }
-                        Err(error) => {
-                            reject_all(&pending, failure("invalid audio-host response", error));
-                        }
-                    },
-                    Err(TryRecvError::Empty) => expire_pending(&pending),
+                    }
+                    Err(TryRecvError::Empty) => expire_pending(&pending, &request_timeouts),
                     Err(TryRecvError::IpcError(error)) => {
                         reject_all(
                             &pending,
@@ -561,6 +756,7 @@ fn spawn_priority_router(
     receiver: IpcReceiver<WirePacket>,
     pending: Arc<Mutex<HashMap<u64, Pending>>>,
     closing: Arc<AtomicBool>,
+    request_timeouts: Arc<AtomicU64>,
 ) -> JoinHandle<()> {
     thread::Builder::new()
         .name("yadaw-ipc-priority-router".into())
@@ -573,7 +769,7 @@ fn spawn_priority_router(
                             reject_all(&pending, failure("invalid priority response", error));
                         }
                     },
-                    Err(TryRecvError::Empty) => expire_pending(&pending),
+                    Err(TryRecvError::Empty) => expire_pending(&pending, &request_timeouts),
                     Err(TryRecvError::IpcError(error)) => {
                         reject_all(&pending, failure("priority response channel closed", error));
                         break;
@@ -683,7 +879,7 @@ fn reject_pending(pending: &Mutex<HashMap<u64, Pending>>, request_id: u64, error
     }
 }
 
-fn expire_pending(pending: &Mutex<HashMap<u64, Pending>>) {
+fn expire_pending(pending: &Mutex<HashMap<u64, Pending>>, request_timeouts: &AtomicU64) {
     let now = Instant::now();
     let expired = pending
         .lock()
@@ -694,6 +890,9 @@ fn expire_pending(pending: &Mutex<HashMap<u64, Pending>>) {
                 .collect::<Vec<_>>()
         })
         .unwrap_or_default();
+    if !expired.is_empty() {
+        request_timeouts.fetch_add(expired.len() as u64, Ordering::Relaxed);
+    }
     for request_id in expired {
         reject_pending(
             pending,
@@ -775,5 +974,36 @@ fn close_state(state: &ClientState) -> Result<()> {
 impl Drop for ClientState {
     fn drop(&mut self) {
         let _ = close_state(self);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ipc_channel::ipc::IpcSharedMemory;
+
+    #[test]
+    fn transport_traffic_separates_inline_and_shared_packets() {
+        let traffic = TransportTraffic::default();
+        record_packet(
+            &WirePacket {
+                body: vec![1, 2, 3],
+                regions: Vec::new(),
+            },
+            &traffic,
+        );
+        record_packet(
+            &WirePacket {
+                body: vec![4],
+                regions: vec![IpcSharedMemory::from_bytes(&[0; 17])],
+            },
+            &traffic,
+        );
+
+        assert_eq!(traffic.inline_packets.load(Ordering::Relaxed), 1);
+        assert_eq!(traffic.inline_bytes.load(Ordering::Relaxed), 3);
+        assert_eq!(traffic.shared_packets.load(Ordering::Relaxed), 1);
+        assert_eq!(traffic.shared_regions.load(Ordering::Relaxed), 1);
+        assert_eq!(traffic.shared_bytes.load(Ordering::Relaxed), 17);
     }
 }

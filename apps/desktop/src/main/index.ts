@@ -149,7 +149,8 @@ async function sampleSystemPerformance(settings: ApplicationSettingsStore): Prom
       freeBytes,
       usagePercent: percentage(totalBytes - freeBytes, totalBytes)
     },
-    storage: [workspace, swap]
+    storage: [workspace, swap],
+    audioIpc: audioHostService?.performanceDiagnostics() ?? null
   }
 }
 
@@ -855,7 +856,15 @@ function registerIpcHandlers(
   })
 }
 
+let mainWindow: BrowserWindow | null = null
+
 function createMainWindow(): BrowserWindow {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.show()
+    mainWindow.focus()
+    return mainWindow
+  }
+
   const window = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -869,6 +878,10 @@ function createMainWindow(): BrowserWindow {
       nodeIntegration: false,
       sandbox: true
     }
+  })
+  mainWindow = window
+  window.once("closed", () => {
+    if (mainWindow === window) mainWindow = null
   })
 
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }))
@@ -1028,8 +1041,11 @@ app.whenReady().then(async () => {
   installApplicationMenu()
 
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
+    if (!mainWindow || mainWindow.isDestroyed()) {
       createMainWindow()
+    } else {
+      mainWindow.show()
+      mainWindow.focus()
     }
   })
 })

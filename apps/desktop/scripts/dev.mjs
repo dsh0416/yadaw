@@ -82,8 +82,7 @@ function launchElectron() {
 
   const launchedProcess = spawn(electronPath, [appDirectory], {
     env: { ...process.env, YADAW_RENDERER_URL: rendererUrl },
-    stdio: "inherit",
-    windowsHide: true
+    stdio: "inherit"
   })
   electronProcess = launchedProcess
 

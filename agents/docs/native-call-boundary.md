@@ -86,6 +86,14 @@ must not be reimplemented as 30 Hz request/reply IPC. Plugin and mixer preview
 parameters similarly use the addon-owned SPSC producer; only gesture-boundary
 fallbacks and wake/lifecycle messages use priority IPC.
 
+The one-second `systemPerformance` sample also includes an audio IPC diagnostic
+snapshot. `AudioHostService` combines its cached priority-heartbeat generations
+with addon-local counters for pending requests, leases, event depth, telemetry
+capacity/fallbacks, parameter-ring pressure, and cumulative inline/shared
+normal-request packet and byte traffic. This read must stay local to
+Electron/addon atomics and mutexes; performance monitoring must never send a
+diagnostic request to the helper it is trying to observe.
+
 Large `Uint8Array` values remain ordinary values at this boundary. The native
 addon decides whether to inline or attach them and always returns an ordinary
 Node Buffer after one validated copy. Renderer, preload, and project database
