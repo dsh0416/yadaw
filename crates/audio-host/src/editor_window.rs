@@ -240,11 +240,17 @@ impl EditorWindow {
     pub fn activate_initial_mode(&mut self, runtime: &Vst3Runtime) {
         if self.preference.mode == PluginEditorMode::Native {
             if let Err(error) = self.attach_native(runtime) {
-                self.warning = Some(error);
+                self.warning = Some(match self.refresh_parameters(runtime) {
+                    Ok(()) => error,
+                    Err(parameter_error) => format!("{error} {parameter_error}"),
+                });
                 self.active_mode = PluginEditorMode::Parameters;
                 self.request_parameter_window_size();
             }
         } else {
+            if let Err(error) = self.refresh_parameters(runtime) {
+                self.warning = Some(error);
+            }
             self.request_parameter_window_size();
         }
         self.window.request_redraw();
@@ -546,7 +552,11 @@ impl EditorWindow {
             zoom_percent: self.preference.zoom_percent,
             active_mode: self.active_mode,
             warning: self.warning.clone(),
-            parameters: self.parameters.clone(),
+            parameters: if self.active_mode == PluginEditorMode::Parameters {
+                self.parameters.clone()
+            } else {
+                Vec::new()
+            },
         }
     }
 
@@ -672,14 +682,35 @@ impl EditorWindow {
                 if let Err(error) = self.attach_native(runtime) {
                     // The saved preference remains native. This fallback only describes the
                     // currently active view and is not written back to settings.
-                    self.warning = Some(error);
+                    self.warning = Some(match self.refresh_parameters(runtime) {
+                        Ok(()) => error,
+                        Err(parameter_error) => format!("{error} {parameter_error}"),
+                    });
                     self.active_mode = PluginEditorMode::Parameters;
                     self.request_parameter_window_size();
+                } else {
+                    self.parameters.clear();
                 }
             }
             PluginEditorMode::Parameters => {
+                if let Err(error) = self.refresh_parameters(runtime) {
+                    self.warning = Some(error);
+                }
                 self.active_mode = PluginEditorMode::Parameters;
                 self.request_parameter_window_size();
+            }
+        }
+    }
+
+    fn refresh_parameters(&mut self, runtime: &Vst3Runtime) -> Result<(), String> {
+        match runtime.parameters(&self.instance_id) {
+            Ok(parameters) => {
+                self.parameters = parameters;
+                Ok(())
+            }
+            Err(error) => {
+                self.parameters.clear();
+                Err(format!("Could not read the plug-in parameters: {error}"))
             }
         }
     }

@@ -1827,7 +1827,11 @@ struct WinitHost {
 }
 
 impl WinitHost {
-    const UI_BATCH: usize = 16;
+    // VST3 controller calls must stay on this thread, but the same thread also
+    // owns every native editor window. Bound each mailbox turn so plug-in code
+    // cannot indefinitely delay the next platform-message dispatch.
+    const UI_BATCH: usize = 4;
+    const UI_BUDGET: std::time::Duration = std::time::Duration::from_millis(2);
 
     fn open_editor(
         &mut self,
@@ -1863,12 +1867,6 @@ impl WinitHost {
             .display_name(&instance_id)
             .unwrap_or("VST3 plug-in")
             .to_owned();
-        let parameters = match runtime.parameters(&instance_id) {
-            Ok(parameters) => parameters,
-            Err(message) => {
-                return ControlResult::Error { message };
-            }
-        };
         let attributes = WindowAttributes::default()
             .with_title(format!("{display_name} — YADAW"))
             .with_inner_size(LogicalSize::new(720.0, 640.0));
@@ -1886,7 +1884,7 @@ impl WinitHost {
             instance_id.clone(),
             class_id,
             preference,
-            parameters,
+            Vec::new(),
             window,
             &mut self.compositor,
         );
@@ -1973,8 +1971,9 @@ impl WinitHost {
     }
 
     fn drain_ui_mailbox(&mut self, event_loop: &ActiveEventLoop) {
+        let started = std::time::Instant::now();
         let mut drained = 0;
-        while drained < Self::UI_BATCH {
+        while should_drain_ui_request(drained, started.elapsed()) {
             match self.inbox.try_recv() {
                 Ok(request) => {
                     self.execute_vst3_request(event_loop, request);
@@ -2002,6 +2001,10 @@ impl WinitHost {
             });
         }
     }
+}
+
+fn should_drain_ui_request(drained: usize, elapsed: std::time::Duration) -> bool {
+    drained < WinitHost::UI_BATCH && (drained == 0 || elapsed < WinitHost::UI_BUDGET)
 }
 
 impl ApplicationHandler<UiEvent> for WinitHost {
@@ -2254,5 +2257,22 @@ mod tests {
         assert_eq!(parse_editor_owner_window("4660"), Ok(4660));
         assert!(parse_editor_owner_window("0").is_err());
         assert!(parse_editor_owner_window("not-a-handle").is_err());
+    }
+
+    #[test]
+    fn ui_mailbox_always_services_one_request_but_respects_fairness_limits() {
+        assert!(should_drain_ui_request(
+            0,
+            WinitHost::UI_BUDGET.saturating_mul(10)
+        ));
+        assert!(should_drain_ui_request(
+            WinitHost::UI_BATCH - 1,
+            WinitHost::UI_BUDGET.saturating_sub(std::time::Duration::from_nanos(1))
+        ));
+        assert!(!should_drain_ui_request(1, WinitHost::UI_BUDGET));
+        assert!(!should_drain_ui_request(
+            WinitHost::UI_BATCH,
+            std::time::Duration::ZERO
+        ));
     }
 }
