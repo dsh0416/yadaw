@@ -47,11 +47,16 @@ export class LifecycleCoordinator {
       ? { status: "open", session: structuredClone(project), error: null }
       : { status: "closed", error: null }
     const initial = structuredClone(runtime ?? INITIAL_AUDIO_RUNTIME_SNAPSHOT)
-    this.audioState = initial.state === "running"
-      ? { status: "running", runtime: initial, error: null }
-      : initial.state === "error"
-        ? { status: "error", runtime: initial, error: "The native audio engine is in an error state." }
-        : { status: "stopped", runtime: initial, error: null }
+    this.audioState =
+      initial.state === "running"
+        ? { status: "running", runtime: initial, error: null }
+        : initial.state === "error"
+          ? {
+              status: "error",
+              runtime: initial,
+              error: "The native audio engine is in an error state."
+            }
+          : { status: "stopped", runtime: initial, error: null }
   }
 
   snapshot(): DesktopLifecycleSnapshot {
@@ -106,7 +111,9 @@ export class LifecycleCoordinator {
       return
     }
     if (this.projectState.status !== "open") {
-      throw new Error(`Cannot ${transition === "saving" ? "save" : "close"} the project while it is ${this.projectState.status}`)
+      throw new Error(
+        `Cannot ${transition === "saving" ? "save" : "close"} the project while it is ${this.projectState.status}`
+      )
     }
     this.projectRollback = this.projectState
     this.setProject({
@@ -118,9 +125,11 @@ export class LifecycleCoordinator {
 
   completeProject(session: ProjectSession | null): void {
     this.projectRollback = null
-    this.setProject(session
-      ? { status: "open", session: structuredClone(session), error: null }
-      : { status: "closed", error: null })
+    this.setProject(
+      session
+        ? { status: "open", session: structuredClone(session), error: null }
+        : { status: "closed", error: null }
+    )
   }
 
   cancelProject(): void {
@@ -133,30 +142,41 @@ export class LifecycleCoordinator {
     const rollback = this.projectRollback ?? { status: "closed", error: null }
     this.projectRollback = null
     const failure = message(error)
-    this.setProject(rollback.status === "open"
-      ? { ...rollback, error: failure }
-      : { status: "closed", error: failure })
+    this.setProject(
+      rollback.status === "open"
+        ? { ...rollback, error: failure }
+        : { status: "closed", error: failure }
+    )
   }
 
   syncProject(session: ProjectSession | null): void {
-    if (this.projectState.status === "creating" || this.projectState.status === "opening" ||
-        this.projectState.status === "saving" || this.projectState.status === "closing") return
+    if (
+      this.projectState.status === "creating" ||
+      this.projectState.status === "opening" ||
+      this.projectState.status === "saving" ||
+      this.projectState.status === "closing"
+    )
+      return
     this.completeProject(session)
   }
 
   beginAudio(transition: AudioTransition): void {
     if (this.recordingBusy) throw new Error("Stop recording before changing the audio engine")
     if (this.projectState.status === "saving" || this.projectState.status === "closing") {
-      throw new Error(`Cannot change the audio engine while the project is ${this.projectState.status}`)
+      throw new Error(
+        `Cannot change the audio engine while the project is ${this.projectState.status}`
+      )
     }
     const runtime = structuredClone(this.audioState.runtime)
     if (transition === "stopping" && this.audioState.status !== "running") {
       throw new Error(`Cannot stop the audio engine while it is ${this.audioState.status}`)
     }
-    if (transition !== "stopping" &&
-        this.audioState.status !== "stopped" &&
-        this.audioState.status !== "running" &&
-        this.audioState.status !== "error") {
+    if (
+      transition !== "stopping" &&
+      this.audioState.status !== "stopped" &&
+      this.audioState.status !== "running" &&
+      this.audioState.status !== "error"
+    ) {
       throw new Error(`Cannot start the audio engine while it is ${this.audioState.status}`)
     }
     this.setAudio({ status: transition, runtime, error: null })
@@ -166,7 +186,11 @@ export class LifecycleCoordinator {
     if (runtime.state === "running") {
       this.setAudio({ status: "running", runtime, error: null })
     } else if (runtime.state === "error") {
-      this.setAudio({ status: "error", runtime, error: "The native audio engine stopped unexpectedly." })
+      this.setAudio({
+        status: "error",
+        runtime,
+        error: "The native audio engine stopped unexpectedly."
+      })
     } else {
       this.setAudio({ status: "stopped", runtime, error: null })
     }
@@ -177,13 +201,14 @@ export class LifecycleCoordinator {
   }
 
   refreshAudio(runtime: AudioRuntimeSnapshot): void {
-    if (this.audioState.status === "starting" || this.audioState.status === "reconfiguring" ||
-        this.audioState.status === "stopping") return
-    const nextStatus = runtime.state === "running"
-      ? "running"
-      : runtime.state === "error"
-        ? "error"
-        : "stopped"
+    if (
+      this.audioState.status === "starting" ||
+      this.audioState.status === "reconfiguring" ||
+      this.audioState.status === "stopping"
+    )
+      return
+    const nextStatus =
+      runtime.state === "running" ? "running" : runtime.state === "error" ? "error" : "stopped"
     if (nextStatus === this.audioState.status && runtime.state === this.audioState.runtime.state) {
       this.audioState = { ...this.audioState, runtime }
       return
@@ -257,7 +282,9 @@ export class LifecycleCoordinator {
 
   assertMixerCommandAllowed(command: ProjectCommand): void {
     if (this.projectState.status !== "open") {
-      throw new Error(`Mixer commands are unavailable while the project is ${this.projectState.status}`)
+      throw new Error(
+        `Mixer commands are unavailable while the project is ${this.projectState.status}`
+      )
     }
     if (this.recordingBusy && !realtimeOnly(command)) {
       throw new Error("Mixer structure cannot change while recording")
@@ -266,21 +293,30 @@ export class LifecycleCoordinator {
 
   assertMixerPreviewAllowed(): void {
     if (this.projectState.status !== "open") {
-      throw new Error(`Mixer preview is unavailable while the project is ${this.projectState.status}`)
+      throw new Error(
+        `Mixer preview is unavailable while the project is ${this.projectState.status}`
+      )
     }
   }
 
   assertMixerLoadAllowed(): void {
     if (this.recordingBusy) throw new Error("The mixer graph cannot reload while recording")
-    if (this.projectState.status !== "open" &&
-        this.projectState.status !== "creating" && this.projectState.status !== "opening") {
-      throw new Error(`The mixer graph cannot load while the project is ${this.projectState.status}`)
+    if (
+      this.projectState.status !== "open" &&
+      this.projectState.status !== "creating" &&
+      this.projectState.status !== "opening"
+    ) {
+      throw new Error(
+        `The mixer graph cannot load while the project is ${this.projectState.status}`
+      )
     }
   }
 
   assertRecordingIdle(): void {
     if (this.recordingBusy) {
-      throw new Error(`Recording operation is unavailable while recording is ${this.recordingState.status}`)
+      throw new Error(
+        `Recording operation is unavailable while recording is ${this.recordingState.status}`
+      )
     }
   }
 

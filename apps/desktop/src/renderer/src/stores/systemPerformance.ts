@@ -41,7 +41,7 @@ function severityRank(severity: HealthSeverity): number {
 
 export function highestSeverity(severities: HealthSeverity[]): HealthSeverity {
   return severities.reduce<HealthSeverity>(
-    (highest, severity) => severityRank(severity) > severityRank(highest) ? severity : highest,
+    (highest, severity) => (severityRank(severity) > severityRank(highest) ? severity : highest),
     "normal"
   )
 }
@@ -58,7 +58,7 @@ export function classifyUpperBound(
 }
 
 function utilizationPercent(used: number, capacity: number): number {
-  return capacity > 0 ? used / capacity * 100 : 0
+  return capacity > 0 ? (used / capacity) * 100 : 0
 }
 
 export function storageSeverity(space: StorageSpaceSnapshot): HealthSeverity {
@@ -72,7 +72,7 @@ export function storageSeverity(space: StorageSpaceSnapshot): HealthSeverity {
     return "normal"
   }
 
-  const freePercent = space.freeBytes / space.totalBytes * 100
+  const freePercent = (space.freeBytes / space.totalBytes) * 100
   if (
     freePercent <= PERFORMANCE_THRESHOLDS.storage.criticalFreePercent ||
     space.freeBytes <= PERFORMANCE_THRESHOLDS.storage.criticalFreeBytes
@@ -100,19 +100,14 @@ export const useSystemPerformanceStore = defineStore("system-performance", () =>
       snapshot.value = await window.yadaw.systemPerformanceSnapshot()
       lastError.value = ""
     } catch (error) {
-      lastError.value = error instanceof Error
-        ? error.message
-        : "Unable to read system performance."
+      lastError.value =
+        error instanceof Error ? error.message : "Unable to read system performance."
     } finally {
       isRefreshing.value = false
     }
   }
 
-  const polling = useIntervalFn(
-    () => void refresh(),
-    POLLING_INTERVAL_MS,
-    { immediate: false }
-  )
+  const polling = useIntervalFn(() => void refresh(), POLLING_INTERVAL_MS, { immediate: false })
 
   function startPolling(): void {
     void refresh()
@@ -124,9 +119,10 @@ export const useSystemPerformanceStore = defineStore("system-performance", () =>
   }
 
   const maximumCoreUsagePercent = computed<number | null>(() => {
-    const values = snapshot.value?.cpu.cores
-      .map((core) => core.usagePercent)
-      .filter((value): value is number => value !== null) ?? []
+    const values =
+      snapshot.value?.cpu.cores
+        .map((core) => core.usagePercent)
+        .filter((value): value is number => value !== null) ?? []
     return values.length > 0 ? Math.max(...values) : null
   })
 
@@ -186,10 +182,14 @@ export const useSystemPerformanceStore = defineStore("system-performance", () =>
       result.push({
         id: `${space.id}-storage`,
         severity,
-        title: space.state === "unavailable" ? `${label} storage unavailable` : `${label} storage is low`,
-        message: space.state === "unavailable"
-          ? "The configured path could not be measured. Check that the location is mounted and accessible."
-          : "Free space has crossed the configured recording safety threshold."
+        title:
+          space.state === "unavailable"
+            ? `${label} storage unavailable`
+            : `${label} storage is low`,
+        message:
+          space.state === "unavailable"
+            ? "The configured path could not be measured. Check that the location is mounted and accessible."
+            : "Free space has crossed the configured recording safety threshold."
       })
     }
 
@@ -204,9 +204,10 @@ export const useSystemPerformanceStore = defineStore("system-performance", () =>
         result.push({
           id: "audio-ipc-heartbeat",
           severity: heartbeatSeverity,
-          title: heartbeatSeverity === "critical"
-            ? "Audio helper heartbeat is stalled"
-            : "Audio helper heartbeat is late",
+          title:
+            heartbeatSeverity === "critical"
+              ? "Audio helper heartbeat is stalled"
+              : "Audio helper heartbeat is late",
           message: `The priority heartbeat is ${Math.round(audioIpc.heartbeat.ageMs ?? 0)} ms old.`
         })
       }
@@ -225,9 +226,10 @@ export const useSystemPerformanceStore = defineStore("system-performance", () =>
         result.push({
           id: "audio-ipc-router-pressure",
           severity: requestSeverity,
-          title: requestSeverity === "critical"
-            ? "Audio IPC router is saturated"
-            : "Audio IPC router pressure is high",
+          title:
+            requestSeverity === "critical"
+              ? "Audio IPC router is saturated"
+              : "Audio IPC router pressure is high",
           message: `${Math.round(requestUtilization)}% of a request or event queue is occupied.`
         })
       }
@@ -237,10 +239,7 @@ export const useSystemPerformanceStore = defineStore("system-performance", () =>
           audioIpc.sharedMemory.outstandingLeases,
           audioIpc.sharedMemory.maxLeases
         ),
-        utilizationPercent(
-          audioIpc.sharedMemory.outstandingBytes,
-          audioIpc.sharedMemory.maxBytes
-        )
+        utilizationPercent(audioIpc.sharedMemory.outstandingBytes, audioIpc.sharedMemory.maxBytes)
       )
       const sharedMemorySeverity = classifyUpperBound(
         sharedMemoryUtilization,
@@ -251,9 +250,10 @@ export const useSystemPerformanceStore = defineStore("system-performance", () =>
         result.push({
           id: "audio-ipc-shared-memory-pressure",
           severity: sharedMemorySeverity,
-          title: sharedMemorySeverity === "critical"
-            ? "Shared-memory leases are saturated"
-            : "Shared-memory lease pressure is high",
+          title:
+            sharedMemorySeverity === "critical"
+              ? "Shared-memory leases are saturated"
+              : "Shared-memory lease pressure is high",
           message: `${Math.round(sharedMemoryUtilization)}% of the shared attachment budget is in use.`
         })
       }
@@ -271,9 +271,10 @@ export const useSystemPerformanceStore = defineStore("system-performance", () =>
         result.push({
           id: "audio-ipc-parameter-ring-pressure",
           severity: parameterRingSeverity,
-          title: parameterRingSeverity === "critical"
-            ? "Parameter command ring is saturated"
-            : "Parameter command ring pressure is high",
+          title:
+            parameterRingSeverity === "critical"
+              ? "Parameter command ring is saturated"
+              : "Parameter command ring pressure is high",
           message: `${Math.round(parameterRingUtilization)}% of the real-time command ring is occupied.`
         })
       }
@@ -282,9 +283,9 @@ export const useSystemPerformanceStore = defineStore("system-performance", () =>
     return result
   })
 
-  const severity = computed<HealthSeverity>(() => highestSeverity(
-    warnings.value.map((warning) => warning.severity)
-  ))
+  const severity = computed<HealthSeverity>(() =>
+    highestSeverity(warnings.value.map((warning) => warning.severity))
+  )
 
   return {
     snapshot,

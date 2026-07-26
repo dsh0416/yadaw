@@ -37,10 +37,7 @@ describe("transport store", () => {
   })
 
   it("lays project recordings out consecutively using their real frame durations", () => {
-    const clips = assetsToTimelineClips([
-      asset("take-one", 96_000n),
-      asset("take-two", 24_000n)
-    ])
+    const clips = assetsToTimelineClips([asset("take-one", 96_000n), asset("take-two", 24_000n)])
 
     expect(clips).toMatchObject([
       { id: "take-one", name: "take-one", startSeconds: 0, durationSeconds: 2, endSeconds: 2 },
@@ -50,8 +47,11 @@ describe("transport store", () => {
 
   it("ignores a stale polling response that resolves last", async () => {
     let resolveOld!: (value: TransportSnapshot) => void
-    const old = new Promise<TransportSnapshot>((resolve) => { resolveOld = resolve })
-    window.yadaw.transportSnapshot = vi.fn()
+    const old = new Promise<TransportSnapshot>((resolve) => {
+      resolveOld = resolve
+    })
+    window.yadaw.transportSnapshot = vi
+      .fn()
       .mockReturnValueOnce(old)
       .mockResolvedValueOnce({ state: "playing", positionFrames: 200, sampleRate: 48_000 })
     const transport = useTransportStore()

@@ -25,8 +25,8 @@ cpal = { workspace = true, features = ["asio"] }
 [target.'cfg(not(target_os = "windows"))'.dependencies]
 cpal.workspace = true
 
-[lints.rust]
-unsafe_code = "allow"
+[lints]
+workspace = true
 
 [features]
 default = []

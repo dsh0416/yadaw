@@ -35,16 +35,18 @@ describe("MixerChannelStrip", () => {
           heldPeak: [0.75, 0.75],
           clipped: false
         },
-        outputs: [{
-          ...channel,
-          id: "output",
-          kind: "output",
-          name: "Output 1–2",
-          inputFormat: null,
-          outputChannelId: null,
-          inputChannels: [],
-          hardwareOutputChannels: [1, 2]
-        }],
+        outputs: [
+          {
+            ...channel,
+            id: "output",
+            kind: "output",
+            name: "Output 1–2",
+            inputFormat: null,
+            outputChannelId: null,
+            inputChannels: [],
+            hardwareOutputChannels: [1, 2]
+          }
+        ],
         selected: false,
         density: "full"
       },
@@ -82,7 +84,10 @@ describe("MixerChannelStrip", () => {
 
     await volume.setValue("-6")
     expect(wrapper.emitted("preview")?.at(-1)?.[0]).toMatchObject({
-      target: "channel", id: "audio", parameter: "gainDb", value: -6
+      target: "channel",
+      id: "audio",
+      parameter: "gainDb",
+      value: -6
     })
     expect(wrapper.emitted("updateChannel")?.at(-1)).toEqual(["audio", { gainDb: -6 }])
 
@@ -113,7 +118,10 @@ describe("MixerChannelStrip", () => {
     expect((gainEditor.element as HTMLInputElement).value).toBe("-3.5")
     await gainEditor.trigger("change")
     expect(wrapper.emitted("preview")?.at(-1)?.[0]).toMatchObject({
-      target: "channel", id: "audio", parameter: "gainDb", value: -3.5
+      target: "channel",
+      id: "audio",
+      parameter: "gainDb",
+      value: -3.5
     })
     expect(wrapper.emitted("updateChannel")?.at(-1)).toEqual(["audio", { gainDb: -3.5 }])
     const meterReadout = wrapper.get(
@@ -127,7 +135,10 @@ describe("MixerChannelStrip", () => {
     const pan = wrapper.get('input[aria-label="Vocal pan"]')
     await pan.setValue("-32")
     expect(wrapper.emitted("preview")?.at(-1)?.[0]).toMatchObject({
-      target: "channel", id: "audio", parameter: "pan", value: -0.5
+      target: "channel",
+      id: "audio",
+      parameter: "pan",
+      value: -0.5
     })
     expect(wrapper.emitted("updateChannel")?.at(-1)).toEqual(["audio", { pan: -0.5 }])
 
@@ -147,14 +158,30 @@ describe("MixerChannelStrip", () => {
     await wrapper.get('button[aria-label="Mute Vocal"]').trigger("click")
     expect(wrapper.emitted("updateChannel")?.at(-1)).toEqual(["audio", { muted: true }])
     expect(wrapper.get('button[aria-label="Arm Vocal"]').attributes("aria-pressed")).toBe("false")
-    expect(wrapper.get('button[aria-label="Input monitoring unavailable"]').attributes("disabled")).toBeDefined()
+    expect(
+      wrapper.get('button[aria-label="Input monitoring unavailable"]').attributes("disabled")
+    ).toBeDefined()
     expect(wrapper.find(".pan-heading").exists()).toBe(false)
-    expect(wrapper.findAll(".fader-scale .db-scale-mark").map((mark) => mark.text()))
-      .toEqual(["+12", "0", "−12", "−30", "−60", "−∞"])
-    expect(wrapper.findAll(".meter-scale .db-scale-mark").map((mark) => mark.text()))
-      .toEqual(["0", "−6", "−12", "−24", "−48", "−∞"])
+    expect(wrapper.findAll(".fader-scale .db-scale-mark").map((mark) => mark.text())).toEqual([
+      "+12",
+      "0",
+      "−12",
+      "−30",
+      "−60",
+      "−∞"
+    ])
+    expect(wrapper.findAll(".meter-scale .db-scale-mark").map((mark) => mark.text())).toEqual([
+      "0",
+      "−6",
+      "−12",
+      "−24",
+      "−48",
+      "−∞"
+    ])
 
-    await wrapper.get('button[aria-label="Vocal channel name; double-click to rename"]').trigger("dblclick")
+    await wrapper
+      .get('button[aria-label="Vocal channel name; double-click to rename"]')
+      .trigger("dblclick")
     const nameEditor = wrapper.get('input[aria-label="Rename Vocal"]')
     expect(document.activeElement).toBe(nameEditor.element)
     await nameEditor.setValue("  Lead Vocal  ")
@@ -192,7 +219,9 @@ describe("MixerChannelStrip", () => {
     expect(wrapper.get('button[aria-label="Solo Vocal"]').classes()).toContain("active")
     expect(wrapper.get('button[aria-label="Arm Vocal"]').classes()).toContain("record")
     expect(wrapper.get('button[aria-label="Arm Vocal"]').classes()).toContain("active")
-    expect(wrapper.get('button[aria-label="Input monitoring unavailable"]').classes()).toContain("monitor")
+    expect(wrapper.get('button[aria-label="Input monitoring unavailable"]').classes()).toContain(
+      "monitor"
+    )
     expect(wrapper.get(".input-actions").findAll("button")).toHaveLength(2)
   })
 

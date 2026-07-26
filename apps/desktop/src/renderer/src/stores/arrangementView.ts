@@ -51,14 +51,18 @@ export const useArrangementViewStore = defineStore("arrangement-view", () => {
   function zoomAmplitude(direction: number): void {
     setAmplitudeScale(amplitudeScale.value * (direction > 0 ? Math.SQRT2 : 1 / Math.SQRT2))
   }
-  function resetTime(): void { pixelsPerQuarter.value = 50 }
-  function resetTrack(): void { trackHeight.value = 104 }
-  function resetAmplitude(): void { amplitudeScale.value = 1 }
+  function resetTime(): void {
+    pixelsPerQuarter.value = 50
+  }
+  function resetTrack(): void {
+    trackHeight.value = 104
+  }
+  function resetAmplitude(): void {
+    amplitudeScale.value = 1
+  }
   function setTempoLaneExpanded(expanded: boolean): void {
     tempoLaneExpanded.value = expanded
-    tempoLaneHeight.value = expanded
-      ? TEMPO_LANE_EXPANDED_HEIGHT
-      : TEMPO_LANE_COLLAPSED_HEIGHT
+    tempoLaneHeight.value = expanded ? TEMPO_LANE_EXPANDED_HEIGHT : TEMPO_LANE_COLLAPSED_HEIGHT
   }
   function toggleTempoLane(): void {
     setTempoLaneExpanded(!tempoLaneExpanded.value)

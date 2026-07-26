@@ -159,27 +159,24 @@ type TelemetryWire = [
   transportState: number,
   positionFrames: number,
   sampleRate: number,
-  meters: Array<[
-    runtimeHandle: number,
-    preLeft: number,
-    preRight: number,
-    postLeft: number,
-    postRight: number,
-    heldLeft: number,
-    heldRight: number,
-    clipped: boolean
-  ]>
+  meters: Array<
+    [
+      runtimeHandle: number,
+      preLeft: number,
+      preRight: number,
+      postLeft: number,
+      postRight: number,
+      heldLeft: number,
+      heldRight: number,
+      clipped: boolean
+    ]
+  >
 ]
 
 type TransportDiagnosticsWire = [
   protocolVersion: number,
   sessionEpoch: string,
-  requests: [
-    normalPending: number,
-    priorityPending: number,
-    capacity: number,
-    timeouts: number
-  ],
+  requests: [normalPending: number, priorityPending: number, capacity: number, timeouts: number],
   sharedMemory: [
     outstandingLeases: number,
     outstandingBytes: number,
@@ -383,18 +380,24 @@ export class AudioHostService {
     revision: number
     runtime: AudioHostGraph
   } | null = null
-  private readonly loadedPlugins = new Map<string, {
-    runtimeHandle: number
-    latencySamples: number
-    tailSamples: number | null
-  }>()
+  private readonly loadedPlugins = new Map<
+    string,
+    {
+      runtimeHandle: number
+      latencySamples: number
+      tailSamples: number | null
+    }
+  >()
   private readonly channelIdsByHandle = new Map<number, string>()
-  private readonly coalescedParameters = new Map<string, {
-    targetKind: "plugin" | "mixer-channel" | "mixer-send"
-    runtimeHandle: number
-    parameterId: number
-    normalized: number
-  }>()
+  private readonly coalescedParameters = new Map<
+    string,
+    {
+      targetKind: "plugin" | "mixer-channel" | "mixer-send"
+      runtimeHandle: number
+      parameterId: number
+      normalized: number
+    }
+  >()
   private parameterFlush: NodeJS.Timeout | null = null
 
   constructor(
@@ -408,11 +411,7 @@ export class AudioHostService {
     if (this.client || this.stopping) return
     let client: AudioHostIpcClient
     try {
-      client = new AudioHostIpcClient(
-        this.executablePath,
-        this.bridgePath,
-        this.crashMarkerPath
-      )
+      client = new AudioHostIpcClient(this.executablePath, this.bridgePath, this.crashMarkerPath)
     } catch (error) {
       this.onFailure(`could not start audio host: ${String(error)}`)
       return
@@ -423,39 +422,45 @@ export class AudioHostService {
     this.lastHeartbeatAt = null
     this.lastHeartbeatGenerations = { ipc: 0, tokio: 0, winit: 0, callback: 0 }
     this.heartbeat = setInterval(() => {
-      void this.performHeartbeat().then((response) => {
-        if (response.result.type !== "heartbeat") return
-        const generation = response.result.callback_generation ?? 0
-        this.lastHeartbeatAt = Date.now()
-        this.lastHeartbeatGenerations = {
-          ipc: response.result.ipc_generation ?? 0,
-          tokio: response.result.tokio_generation ?? 0,
-          winit: response.result.winit_generation ?? 0,
-          callback: generation
-        }
-        const active = response.result.transport_state === "playing" ||
-          response.result.transport_state === "recording"
-        if (!active || generation !== this.lastCallbackGeneration) {
-          this.lastCallbackGeneration = generation
-          this.callbackStagnantSince = Date.now()
-          return
-        }
-        if (this.callbackStagnantSince === 0) this.callbackStagnantSince = Date.now()
-        if (Date.now() - this.callbackStagnantSince >= HEARTBEAT_TIMEOUT_MS) {
-          this.handleExit("audio callback made no progress for 2 seconds")
-        }
-      }).catch((error) => {
-        this.handleExit(`heartbeat failed: ${error.message}`)
-      })
+      void this.performHeartbeat()
+        .then((response) => {
+          if (response.result.type !== "heartbeat") return
+          const generation = response.result.callback_generation ?? 0
+          this.lastHeartbeatAt = Date.now()
+          this.lastHeartbeatGenerations = {
+            ipc: response.result.ipc_generation ?? 0,
+            tokio: response.result.tokio_generation ?? 0,
+            winit: response.result.winit_generation ?? 0,
+            callback: generation
+          }
+          const active =
+            response.result.transport_state === "playing" ||
+            response.result.transport_state === "recording"
+          if (!active || generation !== this.lastCallbackGeneration) {
+            this.lastCallbackGeneration = generation
+            this.callbackStagnantSince = Date.now()
+            return
+          }
+          if (this.callbackStagnantSince === 0) this.callbackStagnantSince = Date.now()
+          if (Date.now() - this.callbackStagnantSince >= HEARTBEAT_TIMEOUT_MS) {
+            this.handleExit("audio callback made no progress for 2 seconds")
+          }
+        })
+        .catch((error: unknown) => {
+          const message = error instanceof Error ? error.message : String(error)
+          this.handleExit(`heartbeat failed: ${message}`)
+        })
     }, HEARTBEAT_INTERVAL_MS)
     this.heartbeat.unref()
     this.stableTimer = setTimeout(() => {
       if (this.client === client) this.restartBudget = 1
     }, 5_000)
     this.stableTimer.unref()
-    if (this.lastGraph) void this.restoreGraph().catch((error) => {
-      this.handleExit(`could not restore graph: ${error.message}`)
-    })
+    if (this.lastGraph)
+      void this.restoreGraph().catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error)
+        this.handleExit(`could not restore graph: ${message}`)
+      })
   }
 
   private async performHeartbeat(): Promise<PriorityResponse> {
@@ -466,11 +471,13 @@ export class AudioHostService {
     const client = this.client
     if (!client) throw new Error("audio host is not running")
     const requestId = this.nextRequestId++
-    const payload = Buffer.from(encode({
-      version: PROTOCOL_VERSION,
-      request_id: requestId,
-      command
-    }))
+    const payload = Buffer.from(
+      encode({
+        version: PROTOCOL_VERSION,
+        request_id: requestId,
+        command
+      })
+    )
     const response = decode(await client.heartbeat(payload)) as PriorityResponse
     if (response.version !== PROTOCOL_VERSION || response.request_id !== requestId) {
       throw new Error("audio host returned an invalid priority response")
@@ -530,18 +537,19 @@ export class AudioHostService {
       this.channelIdsByHandle.set(stableRuntimeHandle(1, channel.id), channel.id)
     }
     const previous = this.publishedGraph
-    const update = previous && previous.runtime.sample_rate === runtime.sample_rate
-      ? {
-          type: "patch",
-          base_revision: previous.revision,
-          revision: graph.revision,
-          ops: this.graphDiff(previous.runtime, runtime)
-        }
-      : {
-          type: "replace",
-          revision: graph.revision,
-          graph: runtime
-        }
+    const update =
+      previous && previous.runtime.sample_rate === runtime.sample_rate
+        ? {
+            type: "patch",
+            base_revision: previous.revision,
+            revision: graph.revision,
+            ops: this.graphDiff(previous.runtime, runtime)
+          }
+        : {
+            type: "replace",
+            revision: graph.revision,
+            graph: runtime
+          }
     let response = await this.request({ type: "update-graph", update })
     if (response.result.type === "revision-mismatch") {
       response = await this.request({
@@ -558,7 +566,10 @@ export class AudioHostService {
     }
   }
 
-  private graphDiff(previous: AudioHostGraph, next: AudioHostGraph): Array<Record<string, unknown>> {
+  private graphDiff(
+    previous: AudioHostGraph,
+    next: AudioHostGraph
+  ): Array<Record<string, unknown>> {
     const operations: Array<Record<string, unknown>> = []
     const diffCollection = <T>(
       before: T[],
@@ -578,19 +589,33 @@ export class AudioHostService {
         if (!afterById.has(key)) operations.push({ type: removeType, id: key })
       }
     }
-    diffCollection(previous.channels, next.channels, (value) => value.id,
-      "upsert-channel", "remove-channel")
-    diffCollection(previous.sends, next.sends, (value) => value.id,
-      "upsert-send", "remove-send")
-    diffCollection(previous.clips, next.clips, (value) => value.id,
-      "upsert-clip", "remove-clip")
-    diffCollection(previous.plugins, next.plugins, (value) => value.instance_id,
-      "upsert-plugin", "remove-plugin")
-    diffCollection(previous.midi_clips, next.midi_clips, (value) => value.id,
-      "upsert-midi-clip", "remove-midi-clip")
-    if (JSON.stringify(previous.tempo_events) !== JSON.stringify(next.tempo_events) ||
-        JSON.stringify(previous.time_signature_events) !==
-          JSON.stringify(next.time_signature_events)) {
+    diffCollection(
+      previous.channels,
+      next.channels,
+      (value) => value.id,
+      "upsert-channel",
+      "remove-channel"
+    )
+    diffCollection(previous.sends, next.sends, (value) => value.id, "upsert-send", "remove-send")
+    diffCollection(previous.clips, next.clips, (value) => value.id, "upsert-clip", "remove-clip")
+    diffCollection(
+      previous.plugins,
+      next.plugins,
+      (value) => value.instance_id,
+      "upsert-plugin",
+      "remove-plugin"
+    )
+    diffCollection(
+      previous.midi_clips,
+      next.midi_clips,
+      (value) => value.id,
+      "upsert-midi-clip",
+      "remove-midi-clip"
+    )
+    if (
+      JSON.stringify(previous.tempo_events) !== JSON.stringify(next.tempo_events) ||
+      JSON.stringify(previous.time_signature_events) !== JSON.stringify(next.time_signature_events)
+    ) {
       operations.push({
         type: "replace-tempo-map",
         tempo_events: next.tempo_events,
@@ -669,10 +694,10 @@ export class AudioHostService {
       engineLatencyMs: value.engine_latency_ms,
       estimatedRoundTripLatencyMs: value.estimated_round_trip_latency_ms,
       xruns: value.xruns,
-      clockSync: value.clock_sync === "shared-device" ||
-        value.clock_sync === "adaptive-resampled"
-        ? value.clock_sync
-        : "inactive",
+      clockSync:
+        value.clock_sync === "shared-device" || value.clock_sync === "adaptive-resampled"
+          ? value.clock_sync
+          : "inactive",
       bufferFallback: value.buffer_fallback
     }
   }
@@ -682,9 +707,8 @@ export class AudioHostService {
     if (!client) throw new Error("audio host is not running")
     const targetKind = preview.target === "channel" ? "mixer-channel" : "mixer-send"
     const parameterId = preview.parameter === "pan" ? 1 : 0
-    const normalized = preview.parameter === "pan"
-      ? (preview.value + 1) / 2
-      : (preview.value + 60) / 72
+    const normalized =
+      preview.parameter === "pan" ? (preview.value + 1) / 2 : (preview.value + 60) / 72
     const result = client.enqueueParameter(
       targetKind,
       stableRuntimeHandle(preview.target === "channel" ? 1 : 2, preview.id),
@@ -708,13 +732,15 @@ export class AudioHostService {
       meters: telemetry[6].flatMap((meter) => {
         const channelId = this.channelIdsByHandle.get(meter[0])
         return channelId
-          ? [{
-              channelId,
-              preFaderPeak: [meter[1], meter[2]] as [number, number],
-              postFaderPeak: [meter[3], meter[4]] as [number, number],
-              heldPeak: [meter[5], meter[6]] as [number, number],
-              clipped: meter[7]
-            }]
+          ? [
+              {
+                channelId,
+                preFaderPeak: [meter[1], meter[2]] as [number, number],
+                postFaderPeak: [meter[3], meter[4]] as [number, number],
+                heldPeak: [meter[5], meter[6]] as [number, number],
+                clipped: meter[7]
+              }
+            ]
           : []
       }),
       capturedAt: Date.now()
@@ -740,11 +766,7 @@ export class AudioHostService {
   async transportSnapshot(): Promise<TransportSnapshot> {
     const telemetry = this.readTelemetry()
     return {
-      state: telemetry[3] === 1
-        ? "playing"
-        : telemetry[3] === 2
-          ? "recording"
-          : "stopped",
+      state: telemetry[3] === 1 ? "playing" : telemetry[3] === 2 ? "recording" : "stopped",
       positionFrames: telemetry[4],
       sampleRate: telemetry[5]
     }
@@ -759,42 +781,50 @@ export class AudioHostService {
   async runIpcBenchmark(): Promise<AudioIpcBenchmarkReport> {
     const started = performance.now()
     const scenarios: AudioIpcBenchmarkScenario[] = []
-    scenarios.push(await this.measureEchoRoundTrip(
-      "inline-control",
-      "Inline control payload",
-      "256-byte MessagePack request/reply through the helper router",
-      "inline-round-trip",
-      256,
-      200,
-      8
-    ))
-    scenarios.push(await this.measureEchoRoundTrip(
-      "inline-threshold",
-      "Inline threshold",
-      "64 KiB payload at the inline/shared-memory boundary",
-      "inline-round-trip",
-      64 * 1024,
-      80,
-      4
-    ))
-    scenarios.push(await this.measureEchoRoundTrip(
-      "shared-threshold",
-      "Shared-memory threshold",
-      "64 KiB + 1 byte payload using an IpcSharedMemory attachment",
-      "shared-round-trip",
-      64 * 1024 + 1,
-      80,
-      4
-    ))
-    scenarios.push(await this.measureEchoRoundTrip(
-      "shared-plugin-state",
-      "Large shared state",
-      "4 MiB payload representative of a large plug-in state",
-      "shared-round-trip",
-      4 * 1024 * 1024,
-      12,
-      2
-    ))
+    scenarios.push(
+      await this.measureEchoRoundTrip(
+        "inline-control",
+        "Inline control payload",
+        "256-byte MessagePack request/reply through the helper router",
+        "inline-round-trip",
+        256,
+        200,
+        8
+      )
+    )
+    scenarios.push(
+      await this.measureEchoRoundTrip(
+        "inline-threshold",
+        "Inline threshold",
+        "64 KiB payload at the inline/shared-memory boundary",
+        "inline-round-trip",
+        64 * 1024,
+        80,
+        4
+      )
+    )
+    scenarios.push(
+      await this.measureEchoRoundTrip(
+        "shared-threshold",
+        "Shared-memory threshold",
+        "64 KiB + 1 byte payload using an IpcSharedMemory attachment",
+        "shared-round-trip",
+        64 * 1024 + 1,
+        80,
+        4
+      )
+    )
+    scenarios.push(
+      await this.measureEchoRoundTrip(
+        "shared-plugin-state",
+        "Large shared state",
+        "4 MiB payload representative of a large plug-in state",
+        "shared-round-trip",
+        4 * 1024 * 1024,
+        12,
+        2
+      )
+    )
     scenarios.push(await this.measureConcurrentRouting())
     scenarios.push(this.measureTelemetryReads())
     return {
@@ -853,17 +883,19 @@ export class AudioHostService {
     const payload = new Uint8Array(256)
     const latencyUs: number[] = []
     const started = performance.now()
-    await Promise.all(Array.from({ length: concurrency }, async () => {
-      const requestStarted = performance.now()
-      const response = await this.request({
-        type: "benchmark-echo",
-        payload: inlineBinary(payload)
+    await Promise.all(
+      Array.from({ length: concurrency }, async () => {
+        const requestStarted = performance.now()
+        const response = await this.request({
+          type: "benchmark-echo",
+          payload: inlineBinary(payload)
+        })
+        latencyUs.push((performance.now() - requestStarted) * 1_000)
+        if (response.result.type !== "benchmark-echo") {
+          throw new Error("audio host returned an invalid concurrent benchmark echo")
+        }
       })
-      latencyUs.push((performance.now() - requestStarted) * 1_000)
-      if (response.result.type !== "benchmark-echo") {
-        throw new Error("audio host returned an invalid concurrent benchmark echo")
-      }
-    }))
+    )
     const elapsedMs = performance.now() - started
     return this.ipcScenario({
       id: "concurrent-router",
@@ -923,9 +955,10 @@ export class AudioHostService {
       concurrency: input.concurrency,
       elapsedMs: input.elapsedMs,
       operationsPerSecond: input.iterations / Math.max(elapsedSeconds, Number.EPSILON),
-      throughputMiBPerSecond: input.payloadBytes === 0
-        ? null
-        : transferredBytes / (1024 * 1024) / Math.max(elapsedSeconds, Number.EPSILON),
+      throughputMiBPerSecond:
+        input.payloadBytes === 0
+          ? null
+          : transferredBytes / (1024 * 1024) / Math.max(elapsedSeconds, Number.EPSILON),
       latencyP50Us: percentile(input.latencyUs, 0.5),
       latencyP95Us: percentile(input.latencyUs, 0.95),
       latencyP99Us: percentile(input.latencyUs, 0.99)
@@ -993,9 +1026,7 @@ export class AudioHostService {
       throw new Error("audio host returned an invalid transport snapshot")
     }
     return {
-      state: value.state === "playing" || value.state === "recording"
-        ? value.state
-        : "stopped",
+      state: value.state === "playing" || value.state === "recording" ? value.state : "stopped",
       positionFrames: value.position_frames,
       sampleRate: value.sample_rate
     }
@@ -1057,7 +1088,10 @@ export class AudioHostService {
     }
   }
 
-  async loadPlugin(plugin: PluginInstanceState, sampleRate: number): Promise<{
+  async loadPlugin(
+    plugin: PluginInstanceState,
+    sampleRate: number
+  ): Promise<{
     latencySamples: number
     tailSamples: number | null
   }> {
@@ -1223,11 +1257,13 @@ export class AudioHostService {
     const client = this.client
     if (!client) throw new Error("audio host is not running")
     const requestId = this.nextRequestId++
-    const payload = Buffer.from(encode({
-      version: PROTOCOL_VERSION,
-      request_id: requestId,
-      command
-    }))
+    const payload = Buffer.from(
+      encode({
+        version: PROTOCOL_VERSION,
+        request_id: requestId,
+        command
+      })
+    )
     if (payload.length > MAX_LOGICAL_REQUEST_BYTES) {
       throw new Error("audio host logical request exceeds 128 MiB")
     }
@@ -1292,16 +1328,19 @@ export class AudioHostService {
       const stage = marker.readBigUInt64LE(24)
       const checksum = marker.readBigUInt64LE(32)
       const salt = 0x43524153484d4152n
-      if (magic !== 0x5941444157565354n ||
-          checksum !== (magic ^ generation ^ pluginIndex ^ stage ^ salt) ||
-          stage === 0n ||
-          generation !== BigInt(this.lastGraph?.revision ?? -1)) {
+      if (
+        magic !== 0x5941444157565354n ||
+        checksum !== (magic ^ generation ^ pluginIndex ^ stage ^ salt) ||
+        stage === 0n ||
+        generation !== BigInt(this.lastGraph?.revision ?? -1)
+      ) {
         return null
       }
-      const plugins = [...(this.lastGraph?.runtime.plugins ?? [])].sort((left, right) =>
-        left.channel_id.localeCompare(right.channel_id) ||
-        Number(left.role !== "instrument") - Number(right.role !== "instrument") ||
-        left.slot_order - right.slot_order
+      const plugins = [...(this.lastGraph?.runtime.plugins ?? [])].sort(
+        (left, right) =>
+          left.channel_id.localeCompare(right.channel_id) ||
+          Number(left.role !== "instrument") - Number(right.role !== "instrument") ||
+          left.slot_order - right.slot_order
       )
       return plugins[Number(pluginIndex)]?.instance_id ?? null
     } catch {

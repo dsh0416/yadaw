@@ -1,15 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, useTemplateRef, watch } from "vue"
 import { useResizeObserver } from "@vueuse/core"
-import type {
-  TempoMapSnapshot,
-  WaveformDisplayMode,
-  WaveformPeakWindow
-} from "@yadaw/contracts"
-import {
-  buildWarpedWaveformGeometry,
-  buildWaveformGeometry
-} from "../../utils/waveform"
+import type { TempoMapSnapshot, WaveformDisplayMode, WaveformPeakWindow } from "@yadaw/contracts"
+import { buildWarpedWaveformGeometry, buildWaveformGeometry } from "../../utils/waveform"
 import { timelineXToSeconds } from "../../utils/timelineCoordinates"
 
 const props = defineProps<{
@@ -45,7 +38,8 @@ function draw(): void {
   context.setTransform(ratio, 0, 0, ratio, 0, 0)
   context.clearRect(0, 0, width, height)
   if (!props.window) return
-  const canWarp = props.tempoMap !== undefined &&
+  const canWarp =
+    props.tempoMap !== undefined &&
     props.pixelsPerQuarter !== undefined &&
     props.timelineStartX !== undefined &&
     props.clipStartSeconds !== undefined
@@ -56,27 +50,18 @@ function draw(): void {
         width,
         height,
         props.amplitudeScale,
-        (x) => (
-          timelineXToSeconds(
-            props.tempoMap!,
-            props.timelineStartX! + x,
-            props.pixelsPerQuarter!
-          ) - props.clipStartSeconds!
-        ) * props.window!.sampleRate
+        (x) =>
+          (timelineXToSeconds(props.tempoMap!, props.timelineStartX! + x, props.pixelsPerQuarter!) -
+            props.clipStartSeconds!) *
+          props.window!.sampleRate
       )
-    : buildWaveformGeometry(
-        props.window,
-        props.displayMode,
-        width,
-        height,
-        props.amplitudeScale
-      )
+    : buildWaveformGeometry(props.window, props.displayMode, width, height, props.amplitudeScale)
   context.strokeStyle = props.recording ? "#ffb3be" : "#87a8b7"
   context.globalAlpha = 0.28
   context.lineWidth = 1
   context.beginPath()
   for (let lane = 0; lane < geometry.lanes; lane += 1) {
-    const center = (lane + 0.5) / geometry.lanes * height
+    const center = ((lane + 0.5) / geometry.lanes) * height
     context.moveTo(0, center)
     context.lineTo(width, center)
   }
@@ -116,14 +101,14 @@ watch(
 </script>
 
 <template>
-  <canvas
-    ref="canvas"
-    class="waveform-canvas"
-    role="img"
-    :aria-label="accessibleLabel"
-  />
+  <canvas ref="canvas" class="waveform-canvas" role="img" :aria-label="accessibleLabel" />
 </template>
 
 <style scoped>
-.waveform-canvas{display:block;width:100%;height:100%;pointer-events:none}
+.waveform-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
 </style>

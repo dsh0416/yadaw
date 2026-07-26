@@ -42,22 +42,22 @@ but product behavior should normally be exercised through the UI.
 
 ## Ownership and concurrency
 
-| API area | Owner store | Concurrency rule | Failure behavior |
-| --- | --- | --- | --- |
-| Engine info and gain preview | `engine` | latest result | retain error in store |
-| Audio hosts and devices | `audioPreferences` | latest-wins generation | clear stale device lists |
-| Audio engine lifecycle and telemetry | `audioRuntime` | exclusive lifecycle; latest telemetry | main state is authoritative |
-| Desktop lifecycle subscription | `lifecycle` | monotonic revision | ignore older events/snapshots |
-| Project lifecycle and named persistence operations | `project` | exclusive lifecycle | rollback to prior stable state |
-| Mixer graph and history | `mixer` | FIFO committed mutations; coalesced previews | rollback/reload before next mutation |
-| Transport | `transport` | FIFO state commands; coalesced seek; latest polling | ignore stale snapshots |
-| Recording and recovery | `recording` | exclusive lifecycle | return to idle and retain recoverable media |
-| Cross-domain studio operations | `studioWorkflow` | explicit awaited sequence | stop at the first failed guard/action |
-| Waveforms | `waveform` | cached/latest request generation | stale results are discarded |
-| Settings | `applicationSettings` | store-owned actions | optimistic changes roll back |
-| Operations | `operations` | one application-owned subscription | main events are authoritative |
-| Benchmark | `audioBenchmark` | single running benchmark | retain terminal report/error |
-| System telemetry | `systemPerformance` | latest-wins polling | retain last usable snapshot |
+| API area                                           | Owner store           | Concurrency rule                                    | Failure behavior                            |
+| -------------------------------------------------- | --------------------- | --------------------------------------------------- | ------------------------------------------- |
+| Engine info and gain preview                       | `engine`              | latest result                                       | retain error in store                       |
+| Audio hosts and devices                            | `audioPreferences`    | latest-wins generation                              | clear stale device lists                    |
+| Audio engine lifecycle and telemetry               | `audioRuntime`        | exclusive lifecycle; latest telemetry               | main state is authoritative                 |
+| Desktop lifecycle subscription                     | `lifecycle`           | monotonic revision                                  | ignore older events/snapshots               |
+| Project lifecycle and named persistence operations | `project`             | exclusive lifecycle                                 | rollback to prior stable state              |
+| Mixer graph and history                            | `mixer`               | FIFO committed mutations; coalesced previews        | rollback/reload before next mutation        |
+| Transport                                          | `transport`           | FIFO state commands; coalesced seek; latest polling | ignore stale snapshots                      |
+| Recording and recovery                             | `recording`           | exclusive lifecycle                                 | return to idle and retain recoverable media |
+| Cross-domain studio operations                     | `studioWorkflow`      | explicit awaited sequence                           | stop at the first failed guard/action       |
+| Waveforms                                          | `waveform`            | cached/latest request generation                    | stale results are discarded                 |
+| Settings                                           | `applicationSettings` | store-owned actions                                 | optimistic changes roll back                |
+| Operations                                         | `operations`          | one application-owned subscription                  | main events are authoritative               |
+| Benchmark                                          | `audioBenchmark`      | single running benchmark                            | retain terminal report/error                |
+| System telemetry                                   | `systemPerformance`   | latest-wins polling                                 | retain last usable snapshot                 |
 
 The number of IPC channels is not reduced by creating an untyped command bus.
 Named, narrow methods remain preferable because they preserve validation and

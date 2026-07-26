@@ -39,8 +39,7 @@ const api: YadawDesktopApi = {
     ipcRenderer.on(IPC_CHANNELS.lifecycleEvent, handler)
     return () => ipcRenderer.removeListener(IPC_CHANNELS.lifecycleEvent, handler)
   },
-  systemPerformanceSnapshot: () =>
-    ipcRenderer.invoke(IPC_CHANNELS.systemPerformanceSnapshot),
+  systemPerformanceSnapshot: () => ipcRenderer.invoke(IPC_CHANNELS.systemPerformanceSnapshot),
   runAudioBenchmark: () => ipcRenderer.invoke(IPC_CHANNELS.audioBenchmarkRun),
   subscribeAudioBenchmarkRequests: (listener) => {
     const handler = () => listener()
@@ -49,8 +48,7 @@ const api: YadawDesktopApi = {
   },
   createProject: (request: CreateProjectRequest) =>
     ipcRenderer.invoke(IPC_CHANNELS.projectCreate, request),
-  prepareOpenProject: (path?: string) =>
-    ipcRenderer.invoke(IPC_CHANNELS.projectPrepareOpen, path),
+  prepareOpenProject: (path?: string) => ipcRenderer.invoke(IPC_CHANNELS.projectPrepareOpen, path),
   openProject: (path: string, recover?: boolean) =>
     ipcRenderer.invoke(IPC_CHANNELS.projectOpen, path, recover),
   saveProject: (path?: string) => ipcRenderer.invoke(IPC_CHANNELS.projectSave, path),
@@ -85,20 +83,18 @@ const api: YadawDesktopApi = {
     ipcRenderer.on(IPC_CHANNELS.pluginsScanEvent, handler)
     return () => ipcRenderer.removeListener(IPC_CHANNELS.pluginsScanEvent, handler)
   },
-  openPluginEditor: (instanceId) =>
-    ipcRenderer.invoke(IPC_CHANNELS.pluginEditorOpen, instanceId),
-  closePluginEditor: (instanceId) =>
-    ipcRenderer.invoke(IPC_CHANNELS.pluginEditorClose, instanceId),
+  openPluginEditor: (instanceId) => ipcRenderer.invoke(IPC_CHANNELS.pluginEditorOpen, instanceId),
+  closePluginEditor: (instanceId) => ipcRenderer.invoke(IPC_CHANNELS.pluginEditorClose, instanceId),
   getPluginParameters: (instanceId) =>
     ipcRenderer.invoke(IPC_CHANNELS.pluginParametersGet, instanceId),
-  setPluginParameter: (request) =>
-    ipcRenderer.invoke(IPC_CHANNELS.pluginParameterSet, request),
-  prepareMidiImport: (path) =>
-    ipcRenderer.invoke(IPC_CHANNELS.midiImportPrepare, path),
-  commitMidiImport: (plan) =>
-    ipcRenderer.invoke(IPC_CHANNELS.midiImportCommit, plan),
+  setPluginParameter: (request) => ipcRenderer.invoke(IPC_CHANNELS.pluginParameterSet, request),
+  prepareMidiImport: (path) => ipcRenderer.invoke(IPC_CHANNELS.midiImportPrepare, path),
+  commitMidiImport: (plan) => ipcRenderer.invoke(IPC_CHANNELS.midiImportCommit, plan),
   subscribeOperations: (listener) => {
-    const handler = (_event: Electron.IpcRendererEvent, operation: Parameters<typeof listener>[0]) => listener(operation)
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      operation: Parameters<typeof listener>[0]
+    ) => listener(operation)
     ipcRenderer.on(IPC_CHANNELS.operationEvent, handler)
     return () => ipcRenderer.removeListener(IPC_CHANNELS.operationEvent, handler)
   },

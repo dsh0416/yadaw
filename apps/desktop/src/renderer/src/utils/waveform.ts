@@ -40,8 +40,8 @@ export function aggregateWaveformPeaks(
   const outputBuckets = Math.min(bucketCount, targetBuckets)
   const result = new Float32Array(outputBuckets * stride)
   for (let output = 0; output < outputBuckets; output += 1) {
-    const start = Math.floor(output * bucketCount / outputBuckets)
-    const end = Math.max(start + 1, Math.ceil((output + 1) * bucketCount / outputBuckets))
+    const start = Math.floor((output * bucketCount) / outputBuckets)
+    const end = Math.max(start + 1, Math.ceil(((output + 1) * bucketCount) / outputBuckets))
     for (let channel = 0; channel < channels; channel += 1) {
       let minimum = 1
       let maximum = -1
@@ -95,9 +95,10 @@ export function buildWaveformGeometry(
   if (window.bucketCount === 0 || width <= 0 || height <= 0) return { lanes, lines: [] }
   const columns = Math.max(1, Math.min(window.bucketCount, Math.floor(width)))
   const decoded = decodeWaveformPeaks(window.peaks)
-  const channelValues = displayMode === "aggregate"
-    ? mergeWaveformChannels(decoded, window.bucketCount, channels)
-    : decoded
+  const channelValues =
+    displayMode === "aggregate"
+      ? mergeWaveformChannels(decoded, window.bucketCount, channels)
+      : decoded
   const geometryChannels = displayMode === "aggregate" ? 1 : channels
   const values = aggregateWaveformPeaks(
     channelValues,
@@ -117,7 +118,7 @@ export function buildWaveformGeometry(
       const center = lane * laneHeight + laneHeight / 2
       const radius = laneHeight / 2
       lines.push({
-        x: (column + 0.5) / columns * width,
+        x: ((column + 0.5) / columns) * width,
         minimumY: center - Math.max(-1, Math.min(1, minimum * amplitudeScale)) * radius,
         maximumY: center - Math.max(-1, Math.min(1, maximum * amplitudeScale)) * radius,
         lane
@@ -140,9 +141,10 @@ export function buildWarpedWaveformGeometry(
   if (window.bucketCount === 0 || width <= 0 || height <= 0) return { lanes, lines: [] }
   const columns = Math.max(1, Math.floor(width))
   const decoded = decodeWaveformPeaks(window.peaks)
-  const channelValues = displayMode === "aggregate"
-    ? mergeWaveformChannels(decoded, window.bucketCount, channels)
-    : decoded
+  const channelValues =
+    displayMode === "aggregate"
+      ? mergeWaveformChannels(decoded, window.bucketCount, channels)
+      : decoded
   const geometryChannels = displayMode === "aggregate" ? 1 : channels
   const stride = geometryChannels * 2
   const framesPerBucket = Math.max(1, window.framesPerBucket)
@@ -150,8 +152,8 @@ export function buildWarpedWaveformGeometry(
   const lines: WaveformLine[] = []
 
   for (let column = 0; column < columns; column += 1) {
-    const xStart = column / columns * width
-    const xEnd = (column + 1) / columns * width
+    const xStart = (column / columns) * width
+    const xEnd = ((column + 1) / columns) * width
     const mappedStart = frameAtX(xStart)
     const mappedEnd = frameAtX(xEnd)
     const frameStart = Math.max(window.startFrame, Math.min(mappedStart, mappedEnd))
@@ -166,10 +168,7 @@ export function buildWarpedWaveformGeometry(
     )
     const endBucket = Math.max(
       firstBucket + 1,
-      Math.min(
-        window.bucketCount,
-        Math.ceil((frameEnd - window.startFrame) / framesPerBucket)
-      )
+      Math.min(window.bucketCount, Math.ceil((frameEnd - window.startFrame) / framesPerBucket))
     )
 
     for (let lane = 0; lane < geometryChannels; lane += 1) {
@@ -183,7 +182,7 @@ export function buildWarpedWaveformGeometry(
       const center = lane * laneHeight + laneHeight / 2
       const radius = laneHeight / 2
       lines.push({
-        x: (column + 0.5) / columns * width,
+        x: ((column + 0.5) / columns) * width,
         minimumY: center - Math.max(-1, Math.min(1, minimum * amplitudeScale)) * radius,
         maximumY: center - Math.max(-1, Math.min(1, maximum * amplitudeScale)) * radius,
         lane

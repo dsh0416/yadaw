@@ -11,5 +11,5 @@ rmp-serde.workspace = true
 serde.workspace = true
 serde_bytes.workspace = true
 
-[lints.rust]
-unsafe_code = "forbid"
+[lints]
+workspace = true

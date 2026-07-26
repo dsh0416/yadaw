@@ -22,7 +22,8 @@ export const useApplicationSettingsStore = defineStore("application-settings", (
       try {
         settings.value = await window.yadaw.getApplicationSettings()
       } catch (reason) {
-        error.value = reason instanceof Error ? reason.message : "Unable to load application settings."
+        error.value =
+          reason instanceof Error ? reason.message : "Unable to load application settings."
       } finally {
         loading.value = false
         loadPromise = null
@@ -63,7 +64,8 @@ export const useApplicationSettingsStore = defineStore("application-settings", (
       settings.value = await window.yadaw.updateApplicationSettings(patch)
     } catch (reason) {
       settings.value = previous
-      error.value = reason instanceof Error ? reason.message : "Unable to save mixer display settings."
+      error.value =
+        reason instanceof Error ? reason.message : "Unable to save mixer display settings."
     }
   }
 

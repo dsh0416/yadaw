@@ -41,41 +41,32 @@ const laneStyle = computed(() => ({
   height: `${props.trackHeight}px`
 }))
 const barLines = computed(() => {
-  const maximumTick = timelineXToTick(
-    props.tempoMap,
-    props.contentWidth,
-    props.pixelsPerQuarter
+  const maximumTick = timelineXToTick(props.tempoMap, props.contentWidth, props.pixelsPerQuarter)
+  return barTicksThroughTick(props.tempoMap, maximumTick).map(
+    (tick) => (tick / props.tempoMap.ticksPerQuarter) * props.pixelsPerQuarter
   )
-  return barTicksThroughTick(props.tempoMap, maximumTick)
-    .map((tick) => tick / props.tempoMap.ticksPerQuarter * props.pixelsPerQuarter)
 })
-const displayedClips = computed(() => props.liveClip
-  ? [...props.clips.filter((clip) => clip.id !== props.liveClip?.id), props.liveClip]
-  : props.clips
+const displayedClips = computed(() =>
+  props.liveClip
+    ? [...props.clips.filter((clip) => clip.id !== props.liveClip?.id), props.liveClip]
+    : props.clips
 )
-const dragPreviewStyle = computed(() => props.dragPreview
-  ? {
-      left: `${
-        secondsToTimelineX(
+const dragPreviewStyle = computed(() =>
+  props.dragPreview
+    ? {
+        left: `${secondsToTimelineX(
           props.tempoMap,
           props.dragPreview.startSeconds,
           props.pixelsPerQuarter
-        )
-      }px`,
-      width: `max(${
-        secondsToTimelineX(
-          props.tempoMap,
-          props.dragPreview.endSeconds,
-          props.pixelsPerQuarter
-        ) - secondsToTimelineX(
-          props.tempoMap,
-          props.dragPreview.startSeconds,
-          props.pixelsPerQuarter
-        )
-      }px, 12px)`,
-      "--clip-color": props.trackColor
-    }
-  : {})
+        )}px`,
+        width: `max(${
+          secondsToTimelineX(props.tempoMap, props.dragPreview.endSeconds, props.pixelsPerQuarter) -
+          secondsToTimelineX(props.tempoMap, props.dragPreview.startSeconds, props.pixelsPerQuarter)
+        }px, 12px)`,
+        "--clip-color": props.trackColor
+      }
+    : {}
+)
 
 function seekFromPointer(event: PointerEvent): void {
   const target = event.currentTarget as HTMLElement
@@ -105,7 +96,12 @@ function relayClipDragStart(clipId: string, offsetPixels: number): void {
     :style="laneStyle"
     @pointerdown="seekFromPointer"
   >
-    <i v-for="(left, index) in barLines" :key="index" class="bar-line" :style="{ left: `${left}px` }" />
+    <i
+      v-for="(left, index) in barLines"
+      :key="index"
+      class="bar-line"
+      :style="{ left: `${left}px` }"
+    />
     <AudioClipCard
       v-for="clip in displayedClips"
       :key="clip.id"
@@ -138,5 +134,61 @@ function relayClipDragStart(clipId: string, offsetPixels: number): void {
 </template>
 
 <style scoped>
-.track-lane{position:relative;min-width:100%;overflow:hidden;border-bottom:1px solid var(--line-strong);background-color:var(--daw-lane);background-image:repeating-linear-gradient(0deg,transparent 0 24px,var(--daw-lane-stripe) 25px);cursor:crosshair}.track-lane.drag-target{background-color:color-mix(in srgb,var(--clip-color,var(--accent)) 8%,var(--daw-lane));box-shadow:0 0 0 1px color-mix(in srgb,var(--accent) 50%,transparent) inset}.bar-line{position:absolute;z-index:0;top:0;bottom:0;width:1px;background:var(--daw-grid-line);pointer-events:none}.clip-drop-preview{--clip-color:var(--accent);position:absolute;z-index:5;top:9px;bottom:9px;min-width:12px;overflow:hidden;border:1px solid color-mix(in srgb,var(--clip-color) 48%,white);border-radius:4px;background:linear-gradient(180deg,color-mix(in srgb,var(--clip-color) 65%,#303436),color-mix(in srgb,var(--clip-color) 38%,#17191a));box-shadow:0 0 0 1px #ffffff7a inset,0 0 18px color-mix(in srgb,var(--clip-color) 48%,transparent);opacity:.92;pointer-events:none}.clip-drop-preview span{display:block;overflow:hidden;padding:5px 6px;color:#fff;font-size:9px;font-weight:650;text-overflow:ellipsis;white-space:nowrap}
+.track-lane {
+  position: relative;
+  min-width: 100%;
+  overflow: hidden;
+  border-bottom: 1px solid var(--line-strong);
+  background-color: var(--daw-lane);
+  background-image: repeating-linear-gradient(
+    0deg,
+    transparent 0 24px,
+    var(--daw-lane-stripe) 25px
+  );
+  cursor: crosshair;
+}
+.track-lane.drag-target {
+  background-color: color-mix(in srgb, var(--clip-color, var(--accent)) 8%, var(--daw-lane));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent) inset;
+}
+.bar-line {
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--daw-grid-line);
+  pointer-events: none;
+}
+.clip-drop-preview {
+  --clip-color: var(--accent);
+  position: absolute;
+  z-index: 5;
+  top: 9px;
+  bottom: 9px;
+  min-width: 12px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--clip-color) 48%, white);
+  border-radius: 4px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--clip-color) 65%, #303436),
+    color-mix(in srgb, var(--clip-color) 38%, #17191a)
+  );
+  box-shadow:
+    0 0 0 1px #ffffff7a inset,
+    0 0 18px color-mix(in srgb, var(--clip-color) 48%, transparent);
+  opacity: 0.92;
+  pointer-events: none;
+}
+.clip-drop-preview span {
+  display: block;
+  overflow: hidden;
+  padding: 5px 6px;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 </style>

@@ -19,7 +19,10 @@ interface PluginRuntime {
     plugin: PluginInstanceState
     sampleRate: number
   }>
-  load(plugin: PluginInstanceState, sampleRate: number): Promise<{
+  load(
+    plugin: PluginInstanceState,
+    sampleRate: number
+  ): Promise<{
     latencySamples: number
     tailSamples: number | null
   }>
@@ -47,7 +50,12 @@ function defaultPluginPaths(): string[] {
   if (process.platform === "win32") {
     return [
       join(process.env.COMMONPROGRAMFILES ?? "C:\\Program Files\\Common Files", "VST3"),
-      join(process.env.LOCALAPPDATA ?? join(homedir(), "AppData", "Local"), "Programs", "Common", "VST3")
+      join(
+        process.env.LOCALAPPDATA ?? join(homedir(), "AppData", "Local"),
+        "Programs",
+        "Common",
+        "VST3"
+      )
     ]
   }
   if (process.platform === "darwin") {
@@ -57,7 +65,7 @@ function defaultPluginPaths(): string[] {
 }
 
 function record(value: unknown): Record<string, unknown> | null {
-  return typeof value === "object" && value !== null ? value as Record<string, unknown> : null
+  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : null
 }
 
 function textValue(value: unknown, fallback = ""): string {
@@ -65,7 +73,9 @@ function textValue(value: unknown, fallback = ""): string {
 }
 
 function stringList(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : []
 }
 
 async function discoverBundles(root: string): Promise<string[]> {
@@ -115,65 +125,75 @@ function descriptorsFromModuleInfo(
   const vendor = textValue(factory?.["Vendor"], "Unknown vendor")
   const fallbackName = basename(bundlePath).replace(/\.vst3$/i, "")
   if (classes.length === 0) {
-    return [{
-      classId: `unprobed:${bundlePath}`,
-      modulePath: bundlePath,
-      name: fallbackName,
-      vendor,
-      version: textValue(moduleInfo?.["Version"], ""),
-      category: "Audio Module Class",
-      kind: "effect",
-      architecture: process.arch,
-      buses: [],
-      hasEditor: false,
-      compatibility: "load-error",
-      compatibilityReason: "Native VST3 probing is required for this module"
-    }]
+    return [
+      {
+        classId: `unprobed:${bundlePath}`,
+        modulePath: bundlePath,
+        name: fallbackName,
+        vendor,
+        version: textValue(moduleInfo?.["Version"], ""),
+        category: "Audio Module Class",
+        kind: "effect",
+        architecture: process.arch,
+        buses: [],
+        hasEditor: false,
+        compatibility: "load-error",
+        compatibilityReason: "Native VST3 probing is required for this module"
+      }
+    ]
   }
   return classes.flatMap((value) => {
     const classInfo = record(value)
     if (!classInfo || textValue(classInfo["Category"]) !== "Audio Module Class") return []
     const subCategories = stringList(classInfo["Sub Categories"])
-    const kind = subCategories.some((category) =>
-      category.toLowerCase().includes("instrument") || category.toLowerCase().includes("synth")
-    ) ? "instrument" : "effect"
-    return [{
-      classId: textValue(classInfo["CID"], `unprobed:${bundlePath}`),
-      modulePath: bundlePath,
-      name: textValue(classInfo["Name"], fallbackName),
-      vendor: textValue(classInfo["Vendor"], vendor),
-      version: textValue(classInfo["Version"], textValue(moduleInfo?.["Version"])),
-      category: subCategories.join("|") || (kind === "instrument" ? "Instrument" : "Fx"),
-      kind,
-      architecture: process.arch,
-      buses: kind === "instrument"
-        ? [{
-            direction: "output" as const,
-            kind: "main" as const,
-            name: "Stereo Out",
-            channels: 2,
-            defaultActive: true
-          }]
-        : [
-            {
-              direction: "input" as const,
-              kind: "main" as const,
-              name: "Stereo In",
-              channels: 2,
-              defaultActive: true
-            },
-            {
-              direction: "output" as const,
-              kind: "main" as const,
-              name: "Stereo Out",
-              channels: 2,
-              defaultActive: true
-            }
-          ],
-      hasEditor: true,
-      compatibility: "compatible" as const,
-      compatibilityReason: null
-    }]
+    const kind = subCategories.some(
+      (category) =>
+        category.toLowerCase().includes("instrument") || category.toLowerCase().includes("synth")
+    )
+      ? "instrument"
+      : "effect"
+    return [
+      {
+        classId: textValue(classInfo["CID"], `unprobed:${bundlePath}`),
+        modulePath: bundlePath,
+        name: textValue(classInfo["Name"], fallbackName),
+        vendor: textValue(classInfo["Vendor"], vendor),
+        version: textValue(classInfo["Version"], textValue(moduleInfo?.["Version"])),
+        category: subCategories.join("|") || (kind === "instrument" ? "Instrument" : "Fx"),
+        kind,
+        architecture: process.arch,
+        buses:
+          kind === "instrument"
+            ? [
+                {
+                  direction: "output" as const,
+                  kind: "main" as const,
+                  name: "Stereo Out",
+                  channels: 2,
+                  defaultActive: true
+                }
+              ]
+            : [
+                {
+                  direction: "input" as const,
+                  kind: "main" as const,
+                  name: "Stereo In",
+                  channels: 2,
+                  defaultActive: true
+                },
+                {
+                  direction: "output" as const,
+                  kind: "main" as const,
+                  name: "Stereo Out",
+                  channels: 2,
+                  defaultActive: true
+                }
+              ],
+        hasEditor: true,
+        compatibility: "compatible" as const,
+        compatibilityReason: null
+      }
+    ]
   })
 }
 
@@ -216,20 +236,23 @@ function descriptorFromProbe(
   } else if (!value.sample32) {
     compatibility = "unsupported-sample-format"
     compatibilityReason = "Plugin does not support 32-bit floating-point processing"
-  } else if (kind === "instrument" && (
-    (value.audioInputs ?? 0) !== 0 ||
-    (value.eventInputs ?? 0) < 1 ||
-    (value.audioOutputs ?? 0) !== 1 ||
-    !value.stereoMainOutput
-  )) {
+  } else if (
+    kind === "instrument" &&
+    ((value.audioInputs ?? 0) !== 0 ||
+      (value.eventInputs ?? 0) < 1 ||
+      (value.audioOutputs ?? 0) !== 1 ||
+      !value.stereoMainOutput)
+  ) {
     compatibility = "unsupported-buses"
-    compatibilityReason = "Instrument requires event input, no audio input, and one stereo main output"
-  } else if (kind === "effect" && (
-    (value.audioInputs ?? 0) !== 1 ||
-    (value.audioOutputs ?? 0) !== 1 ||
-    !value.stereoMainInput ||
-    !value.stereoMainOutput
-  )) {
+    compatibilityReason =
+      "Instrument requires event input, no audio input, and one stereo main output"
+  } else if (
+    kind === "effect" &&
+    ((value.audioInputs ?? 0) !== 1 ||
+      (value.audioOutputs ?? 0) !== 1 ||
+      !value.stereoMainInput ||
+      !value.stereoMainOutput)
+  ) {
     compatibility = "unsupported-buses"
     compatibilityReason = "Effect requires one stereo main input and output"
   }
@@ -242,30 +265,33 @@ function descriptorFromProbe(
     category: category || (kind === "instrument" ? "Instrument" : "Fx"),
     kind,
     architecture: process.arch,
-    buses: kind === "instrument"
-      ? [{
-          direction: "output",
-          kind: "main",
-          name: "Stereo Out",
-          channels: 2,
-          defaultActive: true
-        }]
-      : [
-          {
-            direction: "input",
-            kind: "main",
-            name: "Stereo In",
-            channels: 2,
-            defaultActive: true
-          },
-          {
-            direction: "output",
-            kind: "main",
-            name: "Stereo Out",
-            channels: 2,
-            defaultActive: true
-          }
-        ],
+    buses:
+      kind === "instrument"
+        ? [
+            {
+              direction: "output",
+              kind: "main",
+              name: "Stereo Out",
+              channels: 2,
+              defaultActive: true
+            }
+          ]
+        : [
+            {
+              direction: "input",
+              kind: "main",
+              name: "Stereo In",
+              channels: 2,
+              defaultActive: true
+            },
+            {
+              direction: "output",
+              kind: "main",
+              name: "Stereo Out",
+              channels: 2,
+              defaultActive: true
+            }
+          ],
     hasEditor: value.hasEditor === true,
     compatibility,
     compatibilityReason
@@ -346,10 +372,11 @@ export class PluginCatalogService {
       const fingerprint = { mtimeMs: bundleStat.mtimeMs, size: bundleStat.size }
       fingerprints[bundlePath] = fingerprint
       const previousFingerprint = this.fingerprints[bundlePath]
-      const previousPlugins = this.catalog.plugins.filter((plugin) =>
-        plugin.modulePath === bundlePath
+      const previousPlugins = this.catalog.plugins.filter(
+        (plugin) => plugin.modulePath === bundlePath
       )
-      const unchanged = previousFingerprint?.mtimeMs === fingerprint.mtimeMs &&
+      const unchanged =
+        previousFingerprint?.mtimeMs === fingerprint.mtimeMs &&
         previousFingerprint.size === fingerprint.size &&
         previousPlugins.length > 0 &&
         (!request.retryQuarantined ||
@@ -359,16 +386,18 @@ export class PluginCatalogService {
         continue
       }
       try {
-        plugins.push(...await this.probe(bundlePath))
+        plugins.push(...(await this.probe(bundlePath)))
       } catch (error) {
         const reason = error instanceof Error ? error.message : "VST3 probe failed"
         this.publish({ type: "quarantined", path: bundlePath, reason })
         const fallback = descriptorsFromModuleInfo(bundlePath, await readModuleInfo(bundlePath))
-        plugins.push(...fallback.map((plugin) => ({
-          ...plugin,
-          compatibility: "quarantined" as const,
-          compatibilityReason: reason
-        })))
+        plugins.push(
+          ...fallback.map((plugin) => ({
+            ...plugin,
+            compatibility: "quarantined" as const,
+            compatibilityReason: reason
+          }))
+        )
       }
     }
     const unique = new Map<string, PluginDescriptor>()
@@ -379,17 +408,26 @@ export class PluginCatalogService {
       scannerVersion: SCANNER_VERSION,
       scanning: false,
       scannedAt: Date.now(),
-      plugins: [...unique.values()].sort((left, right) =>
-        left.name.localeCompare(right.name) || left.vendor.localeCompare(right.vendor)
+      plugins: [...unique.values()].sort(
+        (left, right) =>
+          left.name.localeCompare(right.name) || left.vendor.localeCompare(right.vendor)
       )
     }
     this.fingerprints = fingerprints
     await mkdir(dirname(this.catalogPath), { recursive: true })
     const temporary = `${this.catalogPath}.${process.pid}.tmp`
-    await writeFile(temporary, `${JSON.stringify({
-      ...this.catalog,
-      fingerprints: this.fingerprints
-    }, null, 2)}\n`, "utf8")
+    await writeFile(
+      temporary,
+      `${JSON.stringify(
+        {
+          ...this.catalog,
+          fingerprints: this.fingerprints
+        },
+        null,
+        2
+      )}\n`,
+      "utf8"
+    )
     await rename(temporary, this.catalogPath)
     this.publish({ type: "completed", catalog: this.list() })
     return this.list()
@@ -442,9 +480,12 @@ export class PluginCatalogService {
   }
 
   async setParameter(change: PluginParameterChange): Promise<void> {
-    if (!Number.isInteger(change.parameterId) ||
-        !Number.isFinite(change.normalized) ||
-        change.normalized < 0 || change.normalized > 1) {
+    if (
+      !Number.isInteger(change.parameterId) ||
+      !Number.isFinite(change.normalized) ||
+      change.normalized < 0 ||
+      change.normalized > 1
+    ) {
       throw new TypeError("Invalid VST3 parameter change")
     }
     if (!this.runtime) throw new Error("The native VST3 bridge is not running")

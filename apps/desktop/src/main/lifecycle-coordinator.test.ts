@@ -59,17 +59,22 @@ describe("LifecycleCoordinator", () => {
 
     expect(() => lifecycle.beginProject("saving")).toThrow(/Stop recording/)
     expect(() => lifecycle.beginAudio("stopping")).toThrow(/Stop recording/)
-    expect(() => lifecycle.assertTransportAllowed({ type: "seek", positionFrames: 1 }))
-      .toThrow(/recording workflow/)
-    expect(() => lifecycle.assertMixerCommandAllowed({
-      type: "delete-channel",
-      channelId: "audio-1"
-    })).toThrow(/cannot change/)
-    expect(() => lifecycle.assertMixerCommandAllowed({
-      type: "update-channel",
-      channelId: "audio-1",
-      patch: { gainDb: -3 }
-    })).not.toThrow()
+    expect(() => lifecycle.assertTransportAllowed({ type: "seek", positionFrames: 1 })).toThrow(
+      /recording workflow/
+    )
+    expect(() =>
+      lifecycle.assertMixerCommandAllowed({
+        type: "delete-channel",
+        channelId: "audio-1"
+      })
+    ).toThrow(/cannot change/)
+    expect(() =>
+      lifecycle.assertMixerCommandAllowed({
+        type: "update-channel",
+        channelId: "audio-1",
+        patch: { gainDb: -3 }
+      })
+    ).not.toThrow()
   })
 
   it("leaves a recoverable idle state when finalization fails", () => {

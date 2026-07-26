@@ -28,14 +28,14 @@ const { isOpen, status, report, errorMessage } = storeToRefs(benchmark)
   inset: 0;
   display: grid;
   place-items: center;
-  background:
-    radial-gradient(circle at 50% 45%, #18213270, transparent 54%),
-    #02050bc9;
+  background: radial-gradient(circle at 50% 45%, #18213270, transparent 54%), #02050bc9;
   backdrop-filter: blur(8px);
   animation: benchmark-overlay-in 120ms ease-out;
 }
 
 @keyframes benchmark-overlay-in {
-  from { opacity: 0; }
+  from {
+    opacity: 0;
+  }
 }
 </style>

@@ -23,12 +23,8 @@ const TRACK_MAX = 320
 const AMPLITUDE_MIN = 0.5
 const AMPLITUDE_MAX = 8
 
-const timePosition = computed(() =>
-  logarithmicPosition(props.pixelsPerQuarter, TIME_MIN, TIME_MAX)
-)
-const trackPosition = computed(() =>
-  linearPosition(props.trackHeight, TRACK_MIN, TRACK_MAX)
-)
+const timePosition = computed(() => logarithmicPosition(props.pixelsPerQuarter, TIME_MIN, TIME_MAX))
+const trackPosition = computed(() => linearPosition(props.trackHeight, TRACK_MIN, TRACK_MAX))
 const amplitudePosition = computed(() =>
   logarithmicPosition(props.amplitudeScale, AMPLITUDE_MIN, AMPLITUDE_MAX)
 )
@@ -37,13 +33,13 @@ function clampPosition(value: number): number {
   return Math.min(SLIDER_MAX, Math.max(0, value))
 }
 function linearPosition(value: number, minimum: number, maximum: number): number {
-  return clampPosition((value - minimum) / (maximum - minimum) * SLIDER_MAX)
+  return clampPosition(((value - minimum) / (maximum - minimum)) * SLIDER_MAX)
 }
 function logarithmicPosition(value: number, minimum: number, maximum: number): number {
-  return clampPosition(Math.log(value / minimum) / Math.log(maximum / minimum) * SLIDER_MAX)
+  return clampPosition((Math.log(value / minimum) / Math.log(maximum / minimum)) * SLIDER_MAX)
 }
 function linearValue(position: number, minimum: number, maximum: number): number {
-  return minimum + clampPosition(position) / SLIDER_MAX * (maximum - minimum)
+  return minimum + (clampPosition(position) / SLIDER_MAX) * (maximum - minimum)
 }
 function logarithmicValue(position: number, minimum: number, maximum: number): number {
   return minimum * (maximum / minimum) ** (clampPosition(position) / SLIDER_MAX)
@@ -116,5 +112,80 @@ function setAmplitude(event: Event): void {
 </template>
 
 <style scoped>
-.zoom-controls{display:flex;align-items:center;justify-content:flex-end;gap:14px}.zoom-control{display:grid;grid-template-columns:auto 86px;align-items:center;gap:7px}.zoom-control>span{color:var(--text-faint);font:650 6px var(--font-utility);letter-spacing:.1em}.zoom-control input{--zoom-fill:0%;width:86px;height:14px;margin:0;appearance:none;background:transparent;cursor:pointer}.zoom-control input::-webkit-slider-runnable-track{height:3px;border-radius:0;background:linear-gradient(to right,var(--accent) 0 var(--zoom-fill),var(--line-strong) var(--zoom-fill) 100%)}.zoom-control input::-webkit-slider-thumb{width:7px;height:13px;margin-top:-5px;border:1px solid var(--text-muted);border-radius:1px;appearance:none;background:var(--daw-control);box-shadow:0 0 0 1px var(--surface-1)}.zoom-control input:hover::-webkit-slider-thumb{border-color:var(--text-primary)}.zoom-control input:focus-visible{outline:none}.zoom-control input:focus-visible::-webkit-slider-thumb{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 28%,transparent)}.zoom-control input::-moz-range-track{height:3px;border-radius:0;background:var(--line-strong)}.zoom-control input::-moz-range-progress{height:3px;background:var(--accent)}.zoom-control input::-moz-range-thumb{width:7px;height:13px;border:1px solid var(--text-muted);border-radius:1px;background:var(--daw-control);box-shadow:0 0 0 1px var(--surface-1)}.zoom-control input:focus-visible::-moz-range-thumb{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 28%,transparent)}
+.zoom-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+}
+.zoom-control {
+  display: grid;
+  grid-template-columns: auto 86px;
+  align-items: center;
+  gap: 7px;
+}
+.zoom-control > span {
+  color: var(--text-faint);
+  font: 650 6px var(--font-utility);
+  letter-spacing: 0.1em;
+}
+.zoom-control input {
+  --zoom-fill: 0%;
+  width: 86px;
+  height: 14px;
+  margin: 0;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+.zoom-control input::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 0;
+  background: linear-gradient(
+    to right,
+    var(--accent) 0 var(--zoom-fill),
+    var(--line-strong) var(--zoom-fill) 100%
+  );
+}
+.zoom-control input::-webkit-slider-thumb {
+  width: 7px;
+  height: 13px;
+  margin-top: -5px;
+  border: 1px solid var(--text-muted);
+  border-radius: 1px;
+  appearance: none;
+  background: var(--daw-control);
+  box-shadow: 0 0 0 1px var(--surface-1);
+}
+.zoom-control input:hover::-webkit-slider-thumb {
+  border-color: var(--text-primary);
+}
+.zoom-control input:focus-visible {
+  outline: none;
+}
+.zoom-control input:focus-visible::-webkit-slider-thumb {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 28%, transparent);
+}
+.zoom-control input::-moz-range-track {
+  height: 3px;
+  border-radius: 0;
+  background: var(--line-strong);
+}
+.zoom-control input::-moz-range-progress {
+  height: 3px;
+  background: var(--accent);
+}
+.zoom-control input::-moz-range-thumb {
+  width: 7px;
+  height: 13px;
+  border: 1px solid var(--text-muted);
+  border-radius: 1px;
+  background: var(--daw-control);
+  box-shadow: 0 0 0 1px var(--surface-1);
+}
+.zoom-control input:focus-visible::-moz-range-thumb {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 28%, transparent);
+}
 </style>

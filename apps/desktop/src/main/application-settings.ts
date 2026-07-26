@@ -64,25 +64,27 @@ export class ApplicationSettingsStore {
     try {
       const raw = JSON.parse(await readFile(this.path, "utf8")) as Partial<ApplicationSettings>
       value = {
-        swapDirectory: typeof raw.swapDirectory === "string" && raw.swapDirectory
-          ? raw.swapDirectory
-          : value.swapDirectory,
+        swapDirectory:
+          typeof raw.swapDirectory === "string" && raw.swapDirectory
+            ? raw.swapDirectory
+            : value.swapDirectory,
         recordingBitDepth: isRecordingBitDepth(raw.recordingBitDepth)
           ? raw.recordingBitDepth
           : value.recordingBitDepth,
         theme: isThemePreference(raw.theme) ? raw.theme : value.theme,
-        meterPeakHold: isMeterPeakHold(raw.meterPeakHold)
-          ? raw.meterPeakHold
-          : value.meterPeakHold,
+        meterPeakHold: isMeterPeakHold(raw.meterPeakHold) ? raw.meterPeakHold : value.meterPeakHold,
         meterReturnRate: isMeterReturnRate(raw.meterReturnRate)
           ? raw.meterReturnRate
           : value.meterReturnRate,
         recentProjects: Array.isArray(raw.recentProjects)
-          ? raw.recentProjects.filter((recent) =>
-            typeof recent?.path === "string" &&
-            typeof recent.name === "string" &&
-            typeof recent.openedAt === "number"
-          ).slice(0, 20)
+          ? raw.recentProjects
+              .filter(
+                (recent) =>
+                  typeof recent?.path === "string" &&
+                  typeof recent.name === "string" &&
+                  typeof recent.openedAt === "number"
+              )
+              .slice(0, 20)
           : []
       }
     } catch (error) {
@@ -101,7 +103,8 @@ export class ApplicationSettingsStore {
       current.swapDirectory = patch.swapDirectory
     }
     if (patch.recordingBitDepth !== undefined) {
-      if (!isRecordingBitDepth(patch.recordingBitDepth)) throw new TypeError("Unsupported recording bit depth")
+      if (!isRecordingBitDepth(patch.recordingBitDepth))
+        throw new TypeError("Unsupported recording bit depth")
       current.recordingBitDepth = patch.recordingBitDepth
     }
     if (patch.theme !== undefined) {
@@ -113,7 +116,8 @@ export class ApplicationSettingsStore {
       current.meterPeakHold = patch.meterPeakHold
     }
     if (patch.meterReturnRate !== undefined) {
-      if (!isMeterReturnRate(patch.meterReturnRate)) throw new TypeError("Unsupported meter return rate")
+      if (!isMeterReturnRate(patch.meterReturnRate))
+        throw new TypeError("Unsupported meter return rate")
       current.meterReturnRate = patch.meterReturnRate
     }
     return this.write(current)

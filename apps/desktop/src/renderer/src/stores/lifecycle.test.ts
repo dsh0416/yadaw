@@ -43,9 +43,12 @@ describe("lifecycle store", () => {
       return vi.fn()
     })
     let resolveSnapshot!: (value: DesktopLifecycleSnapshot) => void
-    window.yadaw.lifecycleSnapshot = vi.fn(() => new Promise<DesktopLifecycleSnapshot>((resolve) => {
-      resolveSnapshot = resolve
-    }))
+    window.yadaw.lifecycleSnapshot = vi.fn(
+      () =>
+        new Promise<DesktopLifecycleSnapshot>((resolve) => {
+          resolveSnapshot = resolve
+        })
+    )
     const lifecycle = useLifecycleStore()
     const project = useProjectStore()
     const audio = useAudioRuntimeStore()

@@ -20,12 +20,14 @@ describe("usePeakMeterDisplay", () => {
     const peakHold = shallowRef<MeterPeakHold>("800ms")
     const returnRate = shallowRef<MeterReturnRate>("iec-type-i")
     const scope = effectScope()
-    const display = scope.run(() => usePeakMeterDisplay({
-      meter: meterSample,
-      peakHold,
-      returnRate,
-      now: () => timestamp
-    }))!
+    const display = scope.run(() =>
+      usePeakMeterDisplay({
+        meter: meterSample,
+        peakHold,
+        returnRate,
+        now: () => timestamp
+      })
+    )!
 
     expect(display.heldPeakDb.value).toBeCloseTo(-6.02, 2)
 
@@ -51,12 +53,14 @@ describe("usePeakMeterDisplay", () => {
   it("clears a latched clip until the native meter reports its cleared state", async () => {
     const meterSample = shallowRef(meter(1, true))
     const scope = effectScope()
-    const display = scope.run(() => usePeakMeterDisplay({
-      meter: meterSample,
-      peakHold: shallowRef<MeterPeakHold>("800ms"),
-      returnRate: shallowRef<MeterReturnRate>("iec-type-i"),
-      now: () => 0
-    }))!
+    const display = scope.run(() =>
+      usePeakMeterDisplay({
+        meter: meterSample,
+        peakHold: shallowRef<MeterPeakHold>("800ms"),
+        returnRate: shallowRef<MeterReturnRate>("iec-type-i"),
+        now: () => 0
+      })
+    )!
 
     expect(display.clipped.value).toBe(true)
     display.resetPeakAndClip()

@@ -9,20 +9,23 @@ describe("useTheme", () => {
   let changeListener: ((event: MediaQueryListEvent) => void) | null = null
 
   beforeEach(() => {
-    vi.stubGlobal("matchMedia", vi.fn(() => ({
-      get matches() {
-        return systemDark
-      },
-      media: "(prefers-color-scheme: dark)",
-      onchange: null,
-      addEventListener: vi.fn((_type, listener) => {
-        changeListener = listener as (event: MediaQueryListEvent) => void
-      }),
-      removeEventListener: vi.fn(),
-      addListener: vi.fn(),
-      removeListener: vi.fn(),
-      dispatchEvent: vi.fn()
-    })))
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn(() => ({
+        get matches() {
+          return systemDark
+        },
+        media: "(prefers-color-scheme: dark)",
+        onchange: null,
+        addEventListener: vi.fn((_type, listener) => {
+          changeListener = listener as (event: MediaQueryListEvent) => void
+        }),
+        removeEventListener: vi.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        dispatchEvent: vi.fn()
+      }))
+    )
   })
 
   afterEach(() => {
@@ -33,12 +36,14 @@ describe("useTheme", () => {
 
   it("resolves the system theme and responds to system changes", async () => {
     const preference = shallowRef<ThemePreference>("system")
-    const wrapper = mount(defineComponent({
-      setup() {
-        useTheme(preference)
-        return () => null
-      }
-    }))
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          useTheme(preference)
+          return () => null
+        }
+      })
+    )
 
     expect(document.documentElement.dataset.theme).toBe("dark")
 
@@ -52,12 +57,14 @@ describe("useTheme", () => {
 
   it("applies an explicit preference immediately", async () => {
     const preference = shallowRef<ThemePreference>("light")
-    const wrapper = mount(defineComponent({
-      setup() {
-        useTheme(preference)
-        return () => null
-      }
-    }))
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          useTheme(preference)
+          return () => null
+        }
+      })
+    )
 
     expect(document.documentElement.dataset.theme).toBe("light")
     preference.value = "dark"

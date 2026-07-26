@@ -1,3 +1,5 @@
+#![deny(unsafe_code)]
+
 use std::{
     collections::{HashMap, VecDeque},
     process::{Child, Command, Stdio},

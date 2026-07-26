@@ -1,10 +1,7 @@
 import { useStorage } from "@vueuse/core"
 import { acceptHMRUpdate, defineStore } from "pinia"
 import { ref } from "vue"
-import {
-  AUDIO_BACKENDS,
-  DEFAULT_AUDIO_PREFERENCES
-} from "@yadaw/contracts"
+import { AUDIO_BACKENDS, DEFAULT_AUDIO_PREFERENCES } from "@yadaw/contracts"
 import type {
   AudioBackend,
   AudioBackendDescriptor,
@@ -48,10 +45,12 @@ function normalizePreferences(value: unknown): AudioPreferences {
 }
 
 function samePreferences(left: AudioPreferences, right: AudioPreferences): boolean {
-  return left.backend === right.backend &&
+  return (
+    left.backend === right.backend &&
     left.inputDeviceId === right.inputDeviceId &&
     left.outputDeviceId === right.outputDeviceId &&
     left.bufferSize === right.bufferSize
+  )
 }
 
 export const useAudioPreferencesStore = defineStore("audio-preferences", () => {
@@ -77,7 +76,10 @@ export const useAudioPreferencesStore = defineStore("audio-preferences", () => {
 
   async function apply(nextPreferences: AudioPreferences): Promise<boolean> {
     const normalized = normalizePreferences(nextPreferences)
-    if (audioRuntimeStore.runtime.state === "running" && samePreferences(normalized, preferences.value)) {
+    if (
+      audioRuntimeStore.runtime.state === "running" &&
+      samePreferences(normalized, preferences.value)
+    ) {
       applyError.value = ""
       return true
     }
@@ -94,7 +96,8 @@ export const useAudioPreferencesStore = defineStore("audio-preferences", () => {
       }
       return true
     } catch (error) {
-      applyError.value = error instanceof Error ? error.message : "Unable to start the native audio engine."
+      applyError.value =
+        error instanceof Error ? error.message : "Unable to start the native audio engine."
       return false
     } finally {
       applying.value = false
@@ -126,7 +129,8 @@ export const useAudioPreferencesStore = defineStore("audio-preferences", () => {
       if (generation !== discoveryGeneration) return backends.value
       backends.value = []
       discoveryState.value = "unavailable"
-      discoveryError.value = error instanceof Error ? error.message : "Unable to query cpal backends."
+      discoveryError.value =
+        error instanceof Error ? error.message : "Unable to query cpal backends."
       return []
     }
   }
@@ -146,7 +150,8 @@ export const useAudioPreferencesStore = defineStore("audio-preferences", () => {
       inputDevices.value = []
       outputDevices.value = []
       discoveryState.value = "unavailable"
-      discoveryError.value = error instanceof Error ? error.message : "cpal device enumeration failed."
+      discoveryError.value =
+        error instanceof Error ? error.message : "cpal device enumeration failed."
     }
   }
 

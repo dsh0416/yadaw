@@ -34,7 +34,7 @@ depends = ["install"]
 run = "pnpm dev"
 
 [tasks.check]
-description = "Run Rust, napi-rs, TypeScript, and Vue checks"
+description = "Run formatting, lint, Rust, napi-rs, TypeScript, and Vue checks"
 depends = ["install"]
 run = "pnpm check"
 
@@ -49,8 +49,19 @@ depends = ["install"]
 run = "pnpm --filter @yadaw/desktop pack"
 
 [tasks.format]
-description = "Format the Rust workspace"
+description = "Format TypeScript, JavaScript, Vue, configuration, docs, and Rust"
+depends = ["install"]
 run = "pnpm format"
+
+[tasks.format-check]
+description = "Check Prettier and Rust formatting without modifying files"
+depends = ["install"]
+run = "pnpm format:check"
+
+[tasks.lint]
+description = "Run ESLint and Clippy"
+depends = ["install"]
+run = "pnpm lint"
 
 [tasks.native]
 description = "Build the native addon and VST3 probe (ASIO is always included on Windows)"

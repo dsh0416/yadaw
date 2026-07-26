@@ -49,7 +49,9 @@ function drop(event: DragEvent, index: number): void {
 
 <template>
   <section class="plugin-rack" aria-label="Plugin insert rack">
-    <div class="rack-heading"><span>INSERTS</span><b>{{ plugins.length }}</b></div>
+    <div class="rack-heading">
+      <span>INSERTS</span><b>{{ plugins.length }}</b>
+    </div>
     <template v-for="(plugin, index) in plugins" :key="plugin.id">
       <div
         :class="['drop-zone', { active: dropIndex === index }]"
@@ -80,5 +82,54 @@ function drop(event: DragEvent, index: number): void {
 </template>
 
 <style scoped>
-.plugin-rack{display:grid;gap:2px;padding:11px 13px;border-bottom:1px solid var(--line-soft)}.rack-heading{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;color:var(--text-muted);font:700 7px var(--font-utility);letter-spacing:.14em}.rack-heading b{display:grid;place-items:center;min-width:16px;height:15px;border:1px solid var(--line-soft);border-radius:3px;color:var(--text-faint);font-size:6px}.drop-zone{position:relative;height:4px;margin:-2px 0;z-index:1}.drop-zone::after{position:absolute;inset:1px 0 auto;height:2px;border-radius:999px;background:transparent;content:"";pointer-events:none}.drop-zone.active::after{background:var(--signal-cyan);box-shadow:0 0 6px color-mix(in srgb,var(--signal-cyan) 58%,transparent)}.plugin-rack>p{margin:3px 0;color:var(--text-faint);font-size:8px;line-height:1.45}
+.plugin-rack {
+  display: grid;
+  gap: 2px;
+  padding: 11px 13px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.rack-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+  color: var(--text-muted);
+  font: 700 7px var(--font-utility);
+  letter-spacing: 0.14em;
+}
+.rack-heading b {
+  display: grid;
+  place-items: center;
+  min-width: 16px;
+  height: 15px;
+  border: 1px solid var(--line-soft);
+  border-radius: 3px;
+  color: var(--text-faint);
+  font-size: 6px;
+}
+.drop-zone {
+  position: relative;
+  height: 4px;
+  margin: -2px 0;
+  z-index: 1;
+}
+.drop-zone::after {
+  position: absolute;
+  inset: 1px 0 auto;
+  height: 2px;
+  border-radius: 999px;
+  background: transparent;
+  content: "";
+  pointer-events: none;
+}
+.drop-zone.active::after {
+  background: var(--signal-cyan);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--signal-cyan) 58%, transparent);
+}
+.plugin-rack > p {
+  margin: 3px 0;
+  color: var(--text-faint);
+  font-size: 8px;
+  line-height: 1.45;
+}
 </style>

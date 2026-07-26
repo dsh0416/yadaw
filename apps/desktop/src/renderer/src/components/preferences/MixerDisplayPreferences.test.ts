@@ -15,9 +15,9 @@ const settings = {
 describe("MixerDisplayPreferences", () => {
   beforeEach(() => {
     window.yadaw.getApplicationSettings = vi.fn().mockResolvedValue(settings)
-    window.yadaw.updateApplicationSettings = vi.fn().mockImplementation(
-      async (patch) => ({ ...settings, ...patch })
-    )
+    window.yadaw.updateApplicationSettings = vi
+      .fn()
+      .mockImplementation(async (patch) => ({ ...settings, ...patch }))
   })
 
   it("persists the selected peak hold time and shows the IEC return default", async () => {
@@ -33,7 +33,8 @@ describe("MixerDisplayPreferences", () => {
     expect(window.yadaw.updateApplicationSettings).toHaveBeenCalledWith({
       meterPeakHold: "4s"
     })
-    expect(wrapper.get('select[aria-label="Mixer meter return time"]').text())
-      .toContain("IEC Type I (11.8 dB/s)")
+    expect(wrapper.get('select[aria-label="Mixer meter return time"]').text()).toContain(
+      "IEC Type I (11.8 dB/s)"
+    )
   })
 })

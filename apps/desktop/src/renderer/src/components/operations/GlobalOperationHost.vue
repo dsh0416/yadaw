@@ -14,14 +14,19 @@ function dismissTerminalOperation(): void {
 <template>
   <Teleport to="body">
     <div v-if="active" class="operation-overlay" @click.self="dismissTerminalOperation">
-      <OperationProgressDialog
-        :operation="active"
-        @cancel="store.cancel(active.id)"
-      />
+      <OperationProgressDialog :operation="active" @cancel="store.cancel(active.id)" />
     </div>
   </Teleport>
 </template>
 
 <style scoped>
-.operation-overlay{position:fixed;z-index:300;inset:0;display:grid;place-items:center;background:#02050bb8;backdrop-filter:blur(6px)}
+.operation-overlay {
+  position: fixed;
+  z-index: 300;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: #02050bb8;
+  backdrop-filter: blur(6px);
+}
 </style>

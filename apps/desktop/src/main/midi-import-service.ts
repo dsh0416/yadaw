@@ -101,8 +101,10 @@ export class MidiImportService {
     }
     const selectedPlans = plan.tracks.filter((mapping) => mapping.target.type !== "ignore")
     if (selectedPlans.length === 0) throw new Error("Select at least one MIDI track to import")
-    if (prepared.preview.format === 2 &&
-        new Set(selectedPlans.map((mapping) => mapping.sequence)).size > 1) {
+    if (
+      prepared.preview.format === 2 &&
+      new Set(selectedPlans.map((mapping) => mapping.sequence)).size > 1
+    ) {
       throw new Error("Import one Format 2 sequence at a time")
     }
 
@@ -112,26 +114,28 @@ export class MidiImportService {
     const sourceId = randomUUID()
     const commands: ProjectCommand[] = []
     if (plan.importTempoMap) {
-      const selectedSequenceMap = prepared.preview.format === 2
-        ? prepared.preview.tracks.find((track) =>
-            selectedPlans.some((mapping) =>
-              mapping.sourceTrack === track.sourceTrack && mapping.sequence === track.sequence
-            )
-          )?.tempoMap
-        : undefined
+      const selectedSequenceMap =
+        prepared.preview.format === 2
+          ? prepared.preview.tracks.find((track) =>
+              selectedPlans.some(
+                (mapping) =>
+                  mapping.sourceTrack === track.sourceTrack && mapping.sequence === track.sequence
+              )
+            )?.tempoMap
+          : undefined
       commands.push({
         type: "replace-tempo-map",
         tempoMap: structuredClone(selectedSequenceMap ?? prepared.preview.tempoMap)
       })
     }
-    let nextInstrumentOrder = graph.channels.filter((channel) =>
-      channel.kind === "instrument"
+    let nextInstrumentOrder = graph.channels.filter(
+      (channel) => channel.kind === "instrument"
     ).length
     for (const mapping of selectedPlans) {
       const targetPlan = mapping.target
       if (targetPlan.type === "ignore") continue
-      const parsedTrack = prepared.parsed.tracks.find((track) =>
-        track.sourceTrack === mapping.sourceTrack && track.sequence === mapping.sequence
+      const parsedTrack = prepared.parsed.tracks.find(
+        (track) => track.sourceTrack === mapping.sourceTrack && track.sequence === mapping.sequence
       )
       if (!parsedTrack) throw new Error(`MIDI source track ${mapping.sourceTrack} was not found`)
       let channelId: string
@@ -140,9 +144,8 @@ export class MidiImportService {
         const channel: MixerChannelState = {
           id: channelId,
           kind: "instrument",
-          name: targetPlan.name?.trim() ||
-            parsedTrack.name ||
-            `Instrument ${nextInstrumentOrder + 1}`,
+          name:
+            targetPlan.name?.trim() || parsedTrack.name || `Instrument ${nextInstrumentOrder + 1}`,
           color: DEFAULT_INSTRUMENT_COLOR,
           sortOrder: nextInstrumentOrder++,
           inputFormat: null,
@@ -195,12 +198,15 @@ export class MidiImportService {
       }
       commands.push({ type: "create-midi-clip", clip })
     }
-    const result = await this.mixer.executeMidiImport({
-      id: sourceId,
-      name: basename(prepared.preview.path),
-      contentHash: createHash("sha256").update(prepared.rawBytes).digest("hex"),
-      rawBytes: prepared.rawBytes
-    }, { type: "batch", commands })
+    const result = await this.mixer.executeMidiImport(
+      {
+        id: sourceId,
+        name: basename(prepared.preview.path),
+        contentHash: createHash("sha256").update(prepared.rawBytes).digest("hex"),
+        rawBytes: prepared.rawBytes
+      },
+      { type: "batch", commands }
+    )
     this.prepared.delete(plan.token)
     return result
   }
@@ -212,8 +218,8 @@ export class MidiImportService {
   ): ProjectCommand[] {
     const descriptor = this.plugins.list().plugins.find((plugin) => plugin.classId === classId)
     this.validateInstrument(descriptor)
-    const existing = existingPlugins.find((plugin) =>
-      plugin.channelId === channelId && plugin.role === "instrument"
+    const existing = existingPlugins.find(
+      (plugin) => plugin.channelId === channelId && plugin.role === "instrument"
     )
     const plugin: PluginInstanceState = {
       id: existing?.id ?? randomUUID(),
@@ -234,8 +240,11 @@ export class MidiImportService {
   private validateInstrument(
     descriptor: PluginDescriptor | undefined
   ): asserts descriptor is PluginDescriptor {
-    if (!descriptor || descriptor.kind !== "instrument" ||
-        descriptor.compatibility !== "compatible") {
+    if (
+      !descriptor ||
+      descriptor.kind !== "instrument" ||
+      descriptor.compatibility !== "compatible"
+    ) {
       throw new Error("Selected VST3 instrument is not available or compatible")
     }
   }

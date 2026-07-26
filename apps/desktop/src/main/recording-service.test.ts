@@ -15,22 +15,25 @@ describe("RecordingService archive cleanup", () => {
     await Promise.all([
       writeFile(audioPath, "swap"),
       writeFile(finalPath, "final"),
-      writeFile(sidecarPath, JSON.stringify({
-        id,
-        state: "ready",
-        audioPath,
+      writeFile(
         sidecarPath,
-        projectPath,
-        sampleRate: 48_000,
-        channels: 2,
-        startedAt: Date.now(),
-        dropoutFrames: 0,
-        assetExists: false,
-        finalPath,
-        bitDepth: "float32",
-        frameCount: 4_800,
-        contentHash: "hash"
-      }))
+        JSON.stringify({
+          id,
+          state: "ready",
+          audioPath,
+          sidecarPath,
+          projectPath,
+          sampleRate: 48_000,
+          channels: 2,
+          startedAt: Date.now(),
+          dropoutFrames: 0,
+          assetExists: false,
+          finalPath,
+          bitDepth: "float32",
+          frameCount: 4_800,
+          contentHash: "hash"
+        })
+      )
     ])
 
     const settings = { get: vi.fn().mockResolvedValue({ swapDirectory }) }
@@ -39,7 +42,10 @@ describe("RecordingService archive cleanup", () => {
       assetContentHashes: vi.fn().mockResolvedValue([{ id, contentHash: "hash" }])
     }
     const service = new RecordingService(
-      settings as never, projects as never, {} as never, {} as never
+      settings as never,
+      projects as never,
+      {} as never,
+      {} as never
     )
     await service.cleanupCommittedForProject(projectPath)
 
@@ -53,34 +59,42 @@ describe("RecordingService archive cleanup", () => {
     const projectPath = join(swapDirectory, "project.yadaw")
     const id = "already-imported"
     const sidecarPath = join(swapDirectory, `${id}.recording.json`)
-    await writeFile(sidecarPath, JSON.stringify({
-      id,
-      state: "ready",
-      audioPath: join(swapDirectory, `${id}.ready.bwf`),
+    await writeFile(
       sidecarPath,
-      projectPath,
-      sampleRate: 48_000,
-      channels: 2,
-      startedAt: Date.now(),
-      dropoutFrames: 0,
-      assetExists: false,
-      finalPath: join(swapDirectory, `${id}.final-float32.bwf`),
-      bitDepth: "float32",
-      frameCount: 4_800,
-      contentHash: "existing-hash"
-    }))
+      JSON.stringify({
+        id,
+        state: "ready",
+        audioPath: join(swapDirectory, `${id}.ready.bwf`),
+        sidecarPath,
+        projectPath,
+        sampleRate: 48_000,
+        channels: 2,
+        startedAt: Date.now(),
+        dropoutFrames: 0,
+        assetExists: false,
+        finalPath: join(swapDirectory, `${id}.final-float32.bwf`),
+        bitDepth: "float32",
+        frameCount: 4_800,
+        contentHash: "existing-hash"
+      })
+    )
     const settings = { get: vi.fn().mockResolvedValue({ swapDirectory }) }
     const projects = {
       current: { path: projectPath },
-      assetContentHashes: vi.fn().mockResolvedValue([{
-        id,
-        contentHash: "existing-hash"
-      }]),
+      assetContentHashes: vi.fn().mockResolvedValue([
+        {
+          id,
+          contentHash: "existing-hash"
+        }
+      ]),
       importLargeObject: vi.fn()
     }
     const operations = { upsert: vi.fn(), patch: vi.fn() }
     const service = new RecordingService(
-      settings as never, projects as never, operations as never, {} as never
+      settings as never,
+      projects as never,
+      operations as never,
+      {} as never
     )
 
     await service.recover(id)

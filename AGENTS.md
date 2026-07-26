@@ -37,12 +37,15 @@ mise run dev
 mise run check
 mise run build
 mise run format
+mise run format-check
+mise run lint
 ```
 
-`mise run check` is the full validation path: Rust formatting, Clippy, tests,
-real-time allocation invariants, benchmark compilation, napi-rs builds,
-TypeScript checks, Vue unit tests, and project-database integration tests.
-`mise run format` currently formats only the Rust workspace.
+`mise run check` is the full validation path: Prettier, ESLint, Rust formatting,
+Clippy, tests, real-time allocation invariants, benchmark compilation, napi-rs
+builds, TypeScript checks, Vue unit tests, and project-database integration
+tests. `mise run format` applies Prettier and rustfmt; `mise run format-check`
+and `mise run lint` provide the corresponding non-mutating checks.
 
 When running from a non-login shell, use `mise exec --` so commands resolve the
 repository-managed Node.js, pnpm, Rust, and APM versions:
@@ -60,6 +63,8 @@ mise exec -- pnpm --filter @yadaw/desktop test:unit
 mise exec -- pnpm --filter @yadaw/project-db test:integration
 mise exec -- pnpm test:e2e
 mise exec -- pnpm check:rust
+mise exec -- pnpm format:check
+mise exec -- pnpm lint
 ```
 
 ## Supporting Notes

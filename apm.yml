@@ -3,17 +3,17 @@ version: 1.0.0
 description: APM project for yadaw
 author: Delton Ding
 targets:
-- agent-skills
+  - agent-skills
 dependencies:
   apm:
-  - anthropics/skills/skills/frontend-design
-  - anthropics/skills/skills/skill-creator
-  - antfu/skills/skills/vue
-  - antfu/skills/skills/vite
-  - antfu/skills/skills/pnpm
-  - antfu/skills/skills/pinia
-  - antfu/skills/skills/vue-best-practices
-  - antfu/skills/skills/vue-testing-best-practices
-  - leonardomso/rust-skills
+    - anthropics/skills/skills/frontend-design
+    - anthropics/skills/skills/skill-creator
+    - antfu/skills/skills/vue
+    - antfu/skills/skills/vite
+    - antfu/skills/skills/pnpm
+    - antfu/skills/skills/pinia
+    - antfu/skills/skills/vue-best-practices
+    - antfu/skills/skills/vue-testing-best-practices
+    - leonardomso/rust-skills
 includes: auto
 scripts: {}

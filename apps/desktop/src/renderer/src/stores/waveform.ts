@@ -14,7 +14,7 @@ export const useWaveformStore = defineStore("waveform", () => {
     cache.delete(key)
     cache.set(key, value)
     if (cache.size > CACHE_LIMIT) {
-      const oldest = cache.keys().next().value as string | undefined
+      const oldest = cache.keys().next().value
       if (oldest) cache.delete(oldest)
     }
   }

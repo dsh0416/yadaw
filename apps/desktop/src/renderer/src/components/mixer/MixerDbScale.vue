@@ -12,10 +12,7 @@ defineProps<{
     <span
       v-for="mark in marks"
       :key="mark.value"
-      :class="[
-        'db-scale-mark',
-        { emphasis: mark.emphasis }
-      ]"
+      :class="['db-scale-mark', { emphasis: mark.emphasis }]"
       :style="{ top: `${mark.position}%` }"
     >
       <i />
@@ -31,16 +28,13 @@ defineProps<{
   min-height: 0;
   color: var(--text-faint);
   font-family:
-    "Bahnschrift Condensed",
-    "Avenir Next Condensed",
-    "Arial Narrow",
-    "Liberation Sans Narrow",
+    "Bahnschrift Condensed", "Avenir Next Condensed", "Arial Narrow", "Liberation Sans Narrow",
     sans-serif;
   font-size: 6px;
   font-stretch: condensed;
   font-weight: 300;
   font-variant-numeric: tabular-nums;
-  letter-spacing: .01em;
+  letter-spacing: 0.01em;
   pointer-events: none;
   user-select: none;
 }
@@ -56,7 +50,7 @@ defineProps<{
   position: absolute;
   top: 0;
   width: 5px;
-  border-top: 1px solid color-mix(in srgb,var(--text-faint) 70%,transparent);
+  border-top: 1px solid color-mix(in srgb, var(--text-faint) 70%, transparent);
 }
 
 .db-scale-mark small {
@@ -76,7 +70,7 @@ defineProps<{
 
 .db-scale-mark.emphasis i {
   width: 7px;
-  border-color: color-mix(in srgb,var(--text-secondary) 85%,transparent);
+  border-color: color-mix(in srgb, var(--text-secondary) 85%, transparent);
 }
 
 .db-scale.left .db-scale-mark i {

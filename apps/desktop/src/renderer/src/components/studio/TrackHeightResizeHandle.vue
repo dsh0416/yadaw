@@ -21,8 +21,8 @@ const dragStart = shallowRef<{
 } | null>(null)
 
 const effectiveHeight = computed(() => props.baseHeight * props.scale)
-const resizeLabel = computed(() =>
-  `Resize ${props.trackName} track height; current scale ${props.scale.toFixed(2)} times`
+const resizeLabel = computed(
+  () => `Resize ${props.trackName} track height; current scale ${props.scale.toFixed(2)} times`
 )
 
 function startResize(event: PointerEvent): void {
@@ -77,5 +77,31 @@ function handleKeydown(event: KeyboardEvent): void {
 </template>
 
 <style scoped>
-.track-height-resize-handle{position:absolute;z-index:2;right:0;bottom:-3px;left:0;height:7px;cursor:row-resize;touch-action:none}.track-height-resize-handle::after{position:absolute;right:8px;bottom:3px;left:8px;height:1px;background:transparent;content:"";transition:background 100ms ease}.track-height-resize-handle:hover::after,.track-height-resize-handle:focus-visible::after{background:var(--accent-strong)}.track-height-resize-handle:focus-visible{outline:none}
+.track-height-resize-handle {
+  position: absolute;
+  z-index: 2;
+  right: 0;
+  bottom: -3px;
+  left: 0;
+  height: 7px;
+  cursor: row-resize;
+  touch-action: none;
+}
+.track-height-resize-handle::after {
+  position: absolute;
+  right: 8px;
+  bottom: 3px;
+  left: 8px;
+  height: 1px;
+  background: transparent;
+  content: "";
+  transition: background 100ms ease;
+}
+.track-height-resize-handle:hover::after,
+.track-height-resize-handle:focus-visible::after {
+  background: var(--accent-strong);
+}
+.track-height-resize-handle:focus-visible {
+  outline: none;
+}
 </style>

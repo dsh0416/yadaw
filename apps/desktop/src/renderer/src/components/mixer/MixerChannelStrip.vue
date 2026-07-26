@@ -43,12 +43,8 @@ const emit = defineEmits<{
 const settingsStore = useApplicationSettingsStore()
 const { settings } = storeToRefs(settingsStore)
 const meter = computed(() => props.meter)
-const peakHold = computed<MeterPeakHold>(() =>
-  settings.value?.meterPeakHold ?? "800ms"
-)
-const returnRate = computed<MeterReturnRate>(() =>
-  settings.value?.meterReturnRate ?? "iec-type-i"
-)
+const peakHold = computed<MeterPeakHold>(() => settings.value?.meterPeakHold ?? "800ms")
+const returnRate = computed<MeterReturnRate>(() => settings.value?.meterReturnRate ?? "iec-type-i")
 const meterDisplay = usePeakMeterDisplay({
   meter,
   peakHold,
@@ -76,11 +72,7 @@ const meterStyle = computed(() => ({
   "--held-meter-level": `${meterDisplay.heldMeterLevelPercent.value}%`
 }))
 const faderStyle = computed(() => ({
-  "--fader-level": `${dbToLevelPercent(
-    props.channel.gainDb,
-    FADER_MIN_DB,
-    FADER_MAX_DB
-  )}%`
+  "--fader-level": `${dbToLevelPercent(props.channel.gainDb, FADER_MIN_DB, FADER_MAX_DB)}%`
 }))
 const gainInputValue = shallowRef(String(props.channel.gainDb))
 const gainInputEditing = shallowRef(false)
@@ -216,17 +208,25 @@ function handleFaderKeydown(event: KeyboardEvent): void {
     @pointerdown="emit('select', channel.id)"
   >
     <div class="routing-summary">
-      <span><RadioTower :size="10" />{{ sends.length }} SEND{{ sends.length === 1 ? "" : "S" }}</span>
+      <span
+        ><RadioTower :size="10" />{{ sends.length }} SEND{{ sends.length === 1 ? "" : "S" }}</span
+      >
       <select
         v-if="channel.kind === 'audio' || channel.kind === 'bus'"
         :value="channel.outputChannelId ?? ''"
         :aria-label="`${channel.name} output`"
-        @change="emit('updateChannel', channel.id, { outputChannelId: ($event.target as HTMLSelectElement).value })"
+        @change="
+          emit('updateChannel', channel.id, {
+            outputChannelId: ($event.target as HTMLSelectElement).value
+          })
+        "
       >
-        <option v-for="output in outputs" :key="output.id" :value="output.id">{{ output.name }}</option>
+        <option v-for="output in outputs" :key="output.id" :value="output.id">
+          {{ output.name }}
+        </option>
       </select>
       <span v-else-if="channel.kind === 'master'">GLOBAL</span>
-      <span v-else>HW {{ channel.hardwareOutputChannels.join('–') }}</span>
+      <span v-else>HW {{ channel.hardwareOutputChannels.join("–") }}</span>
     </div>
 
     <MixerPanKnob
@@ -246,7 +246,9 @@ function handleFaderKeydown(event: KeyboardEvent): void {
         :title="`Fader: ${gainLabel} · Double-click to edit`"
         @pointerdown.stop
         @dblclick.stop.prevent="beginGainInputEdit"
-      >{{ gainReadoutLabel }}</button>
+      >
+        {{ gainReadoutLabel }}
+      </button>
       <input
         v-else
         ref="gainInput"
@@ -263,7 +265,7 @@ function handleFaderKeydown(event: KeyboardEvent): void {
         @blur="finishGainInputEdit"
         @keydown="cancelGainInputEdit"
         @keydown.enter="submitGainInput"
-      >
+      />
       <button
         type="button"
         :class="['maximum-peak-value', maximumPeakState]"
@@ -271,7 +273,9 @@ function handleFaderKeydown(event: KeyboardEvent): void {
         :title="`Maximum post-fader peak: ${maximumPeakLabel} dB · Click to reset peak and clipping`"
         @pointerdown.stop
         @click.stop="resetMaximumPeak"
-      >{{ maximumPeakLabel }}</button>
+      >
+        {{ maximumPeakLabel }}
+      </button>
       <label class="fader" :style="faderStyle">
         <MixerDbScale class="fader-scale" :marks="FADER_SCALE_MARKS" side="left" />
         <input
@@ -288,7 +292,7 @@ function handleFaderKeydown(event: KeyboardEvent): void {
           @blur="faderTooltipVisible = false"
           @keydown="handleFaderKeydown"
           @dblclick.prevent="gainGesture.reset(0)"
-        >
+        />
         <output v-if="faderTooltipVisible" class="fader-tooltip" aria-hidden="true">
           {{ gainLabel }}
         </output>
@@ -318,14 +322,18 @@ function handleFaderKeydown(event: KeyboardEvent): void {
             :aria-label="`Arm ${channel.name}`"
             title="Record enable"
             @click.stop="emit('updateChannel', channel.id, { recordArmed: !channel.recordArmed })"
-          >R</button>
+          >
+            R
+          </button>
           <button
             class="monitor"
             aria-label="Input monitoring unavailable"
             aria-disabled="true"
             title="Input monitoring is not available yet"
             disabled
-          >I</button>
+          >
+            I
+          </button>
         </template>
       </div>
       <div class="mix-actions">
@@ -334,14 +342,18 @@ function handleFaderKeydown(event: KeyboardEvent): void {
           :aria-pressed="channel.muted"
           :aria-label="`Mute ${channel.name}`"
           @click.stop="emit('updateChannel', channel.id, { muted: !channel.muted })"
-        >M</button>
+        >
+          M
+        </button>
         <button
           v-if="channel.kind !== 'master'"
           :class="['solo', { active: channel.soloed }]"
           :aria-pressed="channel.soloed"
           :aria-label="`Solo ${channel.name}`"
           @click.stop="emit('updateChannel', channel.id, { soloed: !channel.soloed })"
-        >S</button>
+        >
+          S
+        </button>
       </div>
     </div>
 
@@ -382,7 +394,7 @@ function handleFaderKeydown(event: KeyboardEvent): void {
   left: 0;
   height: 2px;
   background: var(--strip-color);
-  opacity: .75;
+  opacity: 0.75;
 }
 
 .channel-strip.bus {
@@ -410,9 +422,9 @@ function handleFaderKeydown(event: KeyboardEvent): void {
   padding: 5px 8px;
   border-bottom: 1px solid var(--line-soft);
   color: var(--text-muted);
-  background: color-mix(in srgb,var(--surface-2) 82%,transparent);
+  background: color-mix(in srgb, var(--surface-2) 82%, transparent);
   font: 6px var(--font-utility);
-  letter-spacing: .06em;
+  letter-spacing: 0.06em;
 }
 
 .routing-summary span {
@@ -480,20 +492,25 @@ function handleFaderKeydown(event: KeyboardEvent): void {
   left: 2px;
   height: 1px;
   background: var(--meter-yellow);
-  box-shadow: 0 0 2px color-mix(in srgb,var(--meter-yellow) 65%,transparent);
+  box-shadow: 0 0 2px color-mix(in srgb, var(--meter-yellow) 65%, transparent);
   opacity: 0;
 }
 
 .meter.has-held-peak::after {
-  opacity: .9;
+  opacity: 0.9;
 }
 
 .meter span {
   position: relative;
   flex: 1;
   overflow: hidden;
-  background: linear-gradient(to top,var(--meter-green) 0 68%,var(--meter-yellow) 79%,var(--meter-red) 100%);
-  opacity: .26;
+  background: linear-gradient(
+    to top,
+    var(--meter-green) 0 68%,
+    var(--meter-yellow) 79%,
+    var(--meter-red) 100%
+  );
+  opacity: 0.26;
 }
 
 .meter span::after {
@@ -506,7 +523,7 @@ function handleFaderKeydown(event: KeyboardEvent): void {
 
 .meter.clipped {
   border-color: var(--mixer-record);
-  box-shadow: 0 0 8px color-mix(in srgb,var(--mixer-record) 35%,transparent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--mixer-record) 35%, transparent);
 }
 
 .fader {
@@ -574,7 +591,9 @@ function handleFaderKeydown(event: KeyboardEvent): void {
     var(--text-primary) calc(50% - 1px) calc(50% + 1px),
     var(--daw-control-hover) calc(50% + 1px) 100%
   );
-  box-shadow: 0 1px 3px #0009, 0 0 0 1px var(--surface-1);
+  box-shadow:
+    0 1px 3px #0009,
+    0 0 0 1px var(--surface-1);
   cursor: ns-resize;
 }
 
@@ -603,7 +622,9 @@ function handleFaderKeydown(event: KeyboardEvent): void {
     var(--text-primary) calc(50% - 1px) calc(50% + 1px),
     var(--daw-control-hover) calc(50% + 1px) 100%
   );
-  box-shadow: 0 1px 3px #0009, 0 0 0 1px var(--surface-1);
+  box-shadow:
+    0 1px 3px #0009,
+    0 0 0 1px var(--surface-1);
   cursor: ns-resize;
 }
 
@@ -614,7 +635,7 @@ function handleFaderKeydown(event: KeyboardEvent): void {
 .fader-control:focus-visible::-webkit-slider-thumb,
 .fader-control:focus-visible::-moz-range-thumb {
   border-color: var(--focus);
-  box-shadow: 0 0 0 2px color-mix(in srgb,var(--focus) 50%,transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--focus) 50%, transparent);
 }
 
 .fader-tooltip {
@@ -703,7 +724,7 @@ function handleFaderKeydown(event: KeyboardEvent): void {
 .maximum-peak-value.clipped {
   border-color: var(--mixer-record);
   color: var(--record);
-  background: color-mix(in srgb,var(--record) 14%,var(--daw-meter-well));
+  background: color-mix(in srgb, var(--record) 14%, var(--daw-meter-well));
 }
 
 .maximum-peak-value:focus-visible {
@@ -718,7 +739,7 @@ function handleFaderKeydown(event: KeyboardEvent): void {
   justify-items: center;
   gap: 4px;
   border-top: 1px solid var(--line-soft);
-  background: color-mix(in srgb,var(--daw-mixer-strip) 70%,var(--daw-control));
+  background: color-mix(in srgb, var(--daw-mixer-strip) 70%, var(--daw-control));
 }
 
 .input-actions,
@@ -747,7 +768,9 @@ function handleFaderKeydown(event: KeyboardEvent): void {
   border-radius: 3px;
   color: var(--text-muted);
   background: var(--daw-control);
-  box-shadow: 0 1px 0 #ffffff12 inset,0 1px 2px var(--shadow);
+  box-shadow:
+    0 1px 0 #ffffff12 inset,
+    0 1px 2px var(--shadow);
   font: 700 9px var(--font-utility);
   cursor: pointer;
 }
@@ -774,15 +797,15 @@ function handleFaderKeydown(event: KeyboardEvent): void {
 }
 
 .channel-actions .mute {
-  color: color-mix(in srgb,var(--mixer-mute) 76%,var(--text-secondary));
+  color: color-mix(in srgb, var(--mixer-mute) 76%, var(--text-secondary));
 }
 
 .channel-actions .solo {
-  color: color-mix(in srgb,var(--mixer-solo) 78%,var(--text-secondary));
+  color: color-mix(in srgb, var(--mixer-solo) 78%, var(--text-secondary));
 }
 
 .channel-actions .record {
-  color: color-mix(in srgb,var(--mixer-record) 76%,var(--text-secondary));
+  color: color-mix(in srgb, var(--mixer-record) 76%, var(--text-secondary));
 }
 
 .channel-actions .monitor {
@@ -790,32 +813,38 @@ function handleFaderKeydown(event: KeyboardEvent): void {
 }
 
 .channel-actions .mute.active {
-  border-color: color-mix(in srgb,var(--mixer-mute) 72%,white);
+  border-color: color-mix(in srgb, var(--mixer-mute) 72%, white);
   color: #fff;
   background: var(--mixer-mute);
-  box-shadow: 0 0 8px color-mix(in srgb,var(--mixer-mute) 46%,transparent),0 1px 0 #ffffff40 inset;
+  box-shadow:
+    0 0 8px color-mix(in srgb, var(--mixer-mute) 46%, transparent),
+    0 1px 0 #ffffff40 inset;
 }
 
 .channel-actions .solo.active {
-  border-color: color-mix(in srgb,var(--mixer-solo) 72%,white);
+  border-color: color-mix(in srgb, var(--mixer-solo) 72%, white);
   color: #221c08;
   background: var(--mixer-solo);
-  box-shadow: 0 0 8px color-mix(in srgb,var(--mixer-solo) 40%,transparent),0 1px 0 #ffffff5c inset;
+  box-shadow:
+    0 0 8px color-mix(in srgb, var(--mixer-solo) 40%, transparent),
+    0 1px 0 #ffffff5c inset;
 }
 
 .channel-actions .record.active {
-  border-color: color-mix(in srgb,var(--mixer-record) 72%,white);
+  border-color: color-mix(in srgb, var(--mixer-record) 72%, white);
   color: #fff;
   background: var(--mixer-record);
-  box-shadow: 0 0 8px color-mix(in srgb,var(--mixer-record) 46%,transparent),0 1px 0 #ffffff40 inset;
+  box-shadow:
+    0 0 8px color-mix(in srgb, var(--mixer-record) 46%, transparent),
+    0 1px 0 #ffffff40 inset;
 }
 
 .channel-actions .monitor:disabled {
-  border-color: color-mix(in srgb,var(--mixer-input) 45%,var(--line-strong));
+  border-color: color-mix(in srgb, var(--mixer-input) 45%, var(--line-strong));
   color: var(--mixer-input);
-  background: color-mix(in srgb,var(--mixer-input) 10%,var(--daw-control));
+  background: color-mix(in srgb, var(--mixer-input) 10%, var(--daw-control));
   cursor: not-allowed;
-  opacity: .78;
+  opacity: 0.78;
 }
 
 .channel-name {

@@ -22,8 +22,9 @@ describe("GlobalDialogHost", () => {
     expect(dialog?.textContent).toContain("Delete Vocals?")
     expect(dialog?.dataset.tone).toBe("danger")
 
-    const deleteButton = [...document.body.querySelectorAll<HTMLButtonElement>("button")]
-      .find((button) => button.textContent?.trim() === "Delete channel")
+    const deleteButton = [...document.body.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent?.trim() === "Delete channel"
+    )
     deleteButton?.click()
 
     await expect(result).resolves.toBe(true)

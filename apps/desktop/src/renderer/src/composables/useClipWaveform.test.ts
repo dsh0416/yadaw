@@ -31,7 +31,8 @@ describe("useClipWaveform", () => {
   })
 
   it("polls staging every 50 ms and stops after unmount", async () => {
-    const read = vi.fn()
+    const read = vi
+      .fn()
       .mockResolvedValueOnce(response("recording", 2_400))
       .mockResolvedValue(response("recording", 4_800))
     window.yadaw.recordingWaveformSnapshot = read
@@ -65,9 +66,20 @@ describe("useClipWaveform", () => {
     const startFrame = ref(0)
     let resolveFirst!: (value: WaveformPeakWindow) => void
     let resolveSecond!: (value: WaveformPeakWindow) => void
-    window.yadaw.readAssetWaveform = vi.fn()
-      .mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve }))
-      .mockImplementationOnce(() => new Promise((resolve) => { resolveSecond = resolve }))
+    window.yadaw.readAssetWaveform = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFirst = resolve
+          })
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveSecond = resolve
+          })
+      )
     const component = defineComponent({
       setup() {
         const waveform = useClipWaveform({
@@ -102,10 +114,13 @@ describe("useClipWaveform", () => {
   it("keeps the last live frame until the finalized asset response takes over", async () => {
     const recording = ref(true)
     let resolveAsset!: (value: WaveformPeakWindow) => void
-    window.yadaw.recordingWaveformSnapshot = vi.fn()
-      .mockResolvedValue(response("take", 4_800))
-    window.yadaw.readAssetWaveform = vi.fn()
-      .mockImplementation(() => new Promise((resolve) => { resolveAsset = resolve }))
+    window.yadaw.recordingWaveformSnapshot = vi.fn().mockResolvedValue(response("take", 4_800))
+    window.yadaw.readAssetWaveform = vi.fn().mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveAsset = resolve
+        })
+    )
     const component = defineComponent({
       setup() {
         const waveform = useClipWaveform({

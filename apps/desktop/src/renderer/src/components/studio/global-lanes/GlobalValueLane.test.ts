@@ -25,8 +25,15 @@ function mountLane() {
   })
   const editor = wrapper.get<HTMLElement>('[role="application"]')
   editor.element.getBoundingClientRect = () => ({
-    x: 0, y: 0, left: 0, top: 0, right: 800, bottom: 100,
-    width: 800, height: 100, toJSON: () => ({})
+    x: 0,
+    y: 0,
+    left: 0,
+    top: 0,
+    right: 800,
+    bottom: 100,
+    width: 800,
+    height: 100,
+    toJSON: () => ({})
   })
   return { wrapper, editor }
 }
@@ -35,8 +42,7 @@ describe("GlobalValueLane", () => {
   it("renders a stepped value curve and creates points from the lane surface", async () => {
     const { wrapper, editor } = mountLane()
 
-    expect(wrapper.get(".lane-line").attributes("d"))
-      .toBe("M 0 50 H 200 V 25 H 800")
+    expect(wrapper.get(".lane-line").attributes("d")).toBe("M 0 50 H 200 V 25 H 800")
 
     await editor.trigger("dblclick", { clientX: 350, clientY: 75 })
     expect(wrapper.emitted("create")?.[0]).toEqual([3.5, 100])

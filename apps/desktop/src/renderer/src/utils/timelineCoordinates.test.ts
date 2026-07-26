@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { TempoMapSnapshot } from "@yadaw/contracts"
-import {
-  secondsToTimelineX,
-  timelineXToSeconds
-} from "./timelineCoordinates"
+import { secondsToTimelineX, timelineXToSeconds } from "./timelineCoordinates"
 
 const map = (beatsPerMinute: number): TempoMapSnapshot => ({
   ticksPerQuarter: 960,

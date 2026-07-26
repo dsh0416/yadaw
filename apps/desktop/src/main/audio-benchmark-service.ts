@@ -1,8 +1,5 @@
 import { arch, cpus, platform, release } from "node:os"
-import type {
-  AudioBenchmarkRating,
-  AudioBenchmarkReport
-} from "@yadaw/contracts"
+import type { AudioBenchmarkRating, AudioBenchmarkReport } from "@yadaw/contracts"
 import { runAudioBenchmark } from "@yadaw/dsp-node"
 import type { AudioHostService } from "./audio-host-service"
 

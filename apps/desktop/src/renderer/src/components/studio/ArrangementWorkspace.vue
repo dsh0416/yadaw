@@ -16,13 +16,15 @@ import TimelineRuler from "./TimelineRuler.vue"
 import TrackQuickControls from "./TrackQuickControls.vue"
 import TrackHeightResizeHandle from "./TrackHeightResizeHandle.vue"
 import MidiArrangementTrack from "./MidiArrangementTrack.vue"
-import { secondsToTick, tempoAtTick, tickToSeconds, timeSignatureAtTick } from "../../utils/tempoMap"
+import {
+  secondsToTick,
+  tempoAtTick,
+  tickToSeconds,
+  timeSignatureAtTick
+} from "../../utils/tempoMap"
 import GlobalLaneHeader from "./global-lanes/GlobalLaneHeader.vue"
 import TempoTrackLane from "./global-lanes/TempoTrackLane.vue"
-import {
-  secondsToTimelineX,
-  timelineXToSeconds
-} from "../../utils/timelineCoordinates"
+import { secondsToTimelineX, timelineXToSeconds } from "../../utils/timelineCoordinates"
 
 const props = defineProps<{
   recordingId: string | null
@@ -36,12 +38,15 @@ const viewStore = useArrangementViewStore()
 const mixerStore = useMixerStore()
 const { session } = storeToRefs(projectStore)
 const {
-  clips, playheadSeconds, selectedClipId, error,
-  contentEndSeconds, timelineDurationSeconds
+  clips,
+  playheadSeconds,
+  selectedClipId,
+  error,
+  contentEndSeconds,
+  timelineDurationSeconds
 } = storeToRefs(transportStore)
-const {
-  pixelsPerQuarter, trackHeight, amplitudeScale, tempoLaneExpanded, tempoLaneHeight
-} = storeToRefs(viewStore)
+const { pixelsPerQuarter, trackHeight, amplitudeScale, tempoLaneExpanded, tempoLaneHeight } =
+  storeToRefs(viewStore)
 const rail = useTemplateRef<HTMLElement>("rail")
 const viewport = useTemplateRef<HTMLElement>("viewport")
 const content = useTemplateRef<HTMLElement>("content")
@@ -57,18 +62,14 @@ const clipDrag = shallowRef<{
 } | null>(null)
 let timeZoomAnchor: { seconds: number; viewportX: number } | null = null
 
-const playheadTick = computed(() =>
-  secondsToTick(mixerStore.graph.tempoMap, playheadSeconds.value)
-)
+const playheadTick = computed(() => secondsToTick(mixerStore.graph.tempoMap, playheadSeconds.value))
 const tempo = computed(() => tempoAtTick(mixerStore.graph.tempoMap, playheadTick.value))
-const selectedTempo = computed(() =>
-  mixerStore.graph.tempoMap.tempoEvents.find((event) => event.tick === selectedTempoTick.value)
-    ?? mixerStore.graph.tempoMap.tempoEvents[0]
-    ?? { tick: 0, beatsPerMinute: 120 }
+const selectedTempo = computed(
+  () =>
+    mixerStore.graph.tempoMap.tempoEvents.find((event) => event.tick === selectedTempoTick.value) ??
+    mixerStore.graph.tempoMap.tempoEvents[0] ?? { tick: 0, beatsPerMinute: 120 }
 )
-const signature = computed(() =>
-  timeSignatureAtTick(mixerStore.graph.tempoMap, playheadTick.value)
-)
+const signature = computed(() => timeSignatureAtTick(mixerStore.graph.tempoMap, playheadTick.value))
 const displayMode = computed(() => session.value?.configuration.waveformDisplayMode ?? "separate")
 const recordingDuration = computed(() => {
   if (liveDurationSeconds.value > 0) return liveDurationSeconds.value
@@ -113,19 +114,11 @@ const visibleDuration = computed(() =>
 const contentWidth = computed(() =>
   Math.max(
     viewportWidth.value,
-    secondsToTimelineX(
-      mixerStore.graph.tempoMap,
-      visibleDuration.value,
-      pixelsPerQuarter.value
-    )
+    secondsToTimelineX(mixerStore.graph.tempoMap, visibleDuration.value, pixelsPerQuarter.value)
   )
 )
 const viewportStartSeconds = computed(() =>
-  timelineXToSeconds(
-    mixerStore.graph.tempoMap,
-    scrollLeft.value,
-    pixelsPerQuarter.value
-  )
+  timelineXToSeconds(mixerStore.graph.tempoMap, scrollLeft.value, pixelsPerQuarter.value)
 )
 const viewportEndSeconds = computed(() =>
   timelineXToSeconds(
@@ -146,17 +139,20 @@ const dragPreview = computed<TimelineClip | null>(() => {
     endSeconds: drag.startSeconds + clip.durationSeconds
   }
 })
-const trackRows = computed(() => mixerStore.timelineTracks.map((track) => ({
-  track,
-  clips: clips.value.filter((clip) => clip.trackId === track.id),
-  midiClips: mixerStore.graph.midiClips.filter((clip) => clip.trackId === track.id),
-  scale: viewStore.trackScale(track.id),
-  height: viewStore.effectiveTrackHeight(track.id)
-})))
+const trackRows = computed(() =>
+  mixerStore.timelineTracks.map((track) => ({
+    track,
+    clips: clips.value.filter((clip) => clip.trackId === track.id),
+    midiClips: mixerStore.graph.midiClips.filter((clip) => clip.trackId === track.id),
+    scale: viewStore.trackScale(track.id),
+    height: viewStore.effectiveTrackHeight(track.id)
+  }))
+)
 const trackGridRows = computed(() => {
-  const rows = trackRows.value.length > 0
-    ? trackRows.value.map(({ height }) => `${height}px`).join(" ")
-    : `${trackHeight.value}px`
+  const rows =
+    trackRows.value.length > 0
+      ? trackRows.value.map(({ height }) => `${height}px`).join(" ")
+      : `${trackHeight.value}px`
   return `43px ${tempoLaneHeight.value}px ${rows} minmax(64px, 1fr)`
 })
 const railStyle = computed(() => ({
@@ -167,20 +163,23 @@ const contentStyle = computed(() => ({
   gridTemplateRows: trackGridRows.value
 }))
 const playheadStyle = computed(() => ({
-  left: `${
-    secondsToTimelineX(
-      mixerStore.graph.tempoMap,
-      playheadSeconds.value,
-      pixelsPerQuarter.value
-    )
-  }px`
+  left: `${secondsToTimelineX(
+    mixerStore.graph.tempoMap,
+    playheadSeconds.value,
+    pixelsPerQuarter.value
+  )}px`
 }))
 
 useResizeObserver(viewport, (entries) => {
   viewportWidth.value = Math.max(1, entries[0]?.contentRect.width ?? 1)
   if (viewport.value) syncRailScroll(viewport.value)
 })
-watch(() => props.recordingStartedAt, () => { liveDurationSeconds.value = 0 })
+watch(
+  () => props.recordingStartedAt,
+  () => {
+    liveDurationSeconds.value = 0
+  }
+)
 watch(pixelsPerQuarter, (value, previous) => {
   const element = viewport.value
   if (!element || !previous) return
@@ -196,11 +195,7 @@ watch(pixelsPerQuarter, (value, previous) => {
   void nextTick(() => {
     element.scrollLeft = Math.max(
       0,
-      secondsToTimelineX(
-        mixerStore.graph.tempoMap,
-        anchor.seconds,
-        value
-      ) - anchor.viewportX
+      secondsToTimelineX(mixerStore.graph.tempoMap, anchor.seconds, value) - anchor.viewportX
     )
     scrollLeft.value = element.scrollLeft
   })
@@ -315,8 +310,7 @@ function handleTrackKeydown(event: KeyboardEvent, index: number): void {
 function handleWheel(event: WheelEvent): void {
   if ((event.ctrlKey || event.metaKey) && event.altKey) {
     viewStore.zoomAmplitude(event.deltaY < 0 ? 1 : -1)
-  }
-  else if (event.ctrlKey || event.metaKey) {
+  } else if (event.ctrlKey || event.metaKey) {
     const element = viewport.value
     if (element) {
       const bounds = element.getBoundingClientRect()
@@ -331,8 +325,7 @@ function handleWheel(event: WheelEvent): void {
       }
     }
     viewStore.zoomTime(event.deltaY < 0 ? 1 : -1)
-  }
-  else if (event.altKey) viewStore.zoomTrack(event.deltaY < 0 ? 1 : -1)
+  } else if (event.altKey) viewStore.zoomTrack(event.deltaY < 0 ? 1 : -1)
   else if (event.shiftKey && viewport.value) viewport.value.scrollLeft += event.deltaY
   else return
   event.preventDefault()
@@ -366,7 +359,11 @@ function updateSelectedTempo(beatsPerMinute: number): void {
     <div class="arrangement-toolbar">
       <div class="tempo-readout">
         <span>TEMPO MAP</span>
-        <strong>{{ tempo.toFixed(2) }} BPM · {{ signature.numerator }}/{{ signature.denominator }}</strong>
+        <strong
+          >{{ tempo.toFixed(2) }} BPM · {{ signature.numerator }}/{{
+            signature.denominator
+          }}</strong
+        >
       </div>
       <ArrangementZoomControls
         class="arrangement-zoom-controls"
@@ -410,7 +407,9 @@ function updateSelectedTempo(beatsPerMinute: number): void {
           @click="mixerStore.selectedChannelId = track.id"
           @keydown="handleTrackKeydown($event, index)"
         >
-          <span class="track-color" :style="{ background: track.color }" /><strong>{{ String(index + 1).padStart(2, "0") }}</strong>
+          <span class="track-color" :style="{ background: track.color }" /><strong>{{
+            String(index + 1).padStart(2, "0")
+          }}</strong>
           <div class="track-copy">
             <InlineTrackNameEditor
               class="track-name-editor"
@@ -470,41 +469,41 @@ function updateSelectedTempo(beatsPerMinute: number): void {
             v-for="{ track, clips: trackClips, midiClips, height } in trackRows"
             :key="track.id"
           >
-          <ArrangementTrack
-            v-if="track.kind === 'audio'"
-            :track-id="track.id"
-            :track-color="track.color"
-            :drag-preview="dragPreview?.trackId === track.id ? dragPreview : null"
-            :dragging-clip-id="clipDrag?.clipId ?? null"
-            :clips="trackClips"
-            :tempo-map="mixerStore.graph.tempoMap"
-            :content-width="contentWidth"
-            :pixels-per-quarter="pixelsPerQuarter"
-            :track-height="height"
-            :amplitude-scale="amplitudeScale"
-            :display-mode="displayMode"
-            :viewport-start-seconds="viewportStartSeconds"
-            :viewport-end-seconds="viewportEndSeconds"
-            :selected-clip-id="selectedClipId"
-            :live-clip="liveClips.find((clip) => clip.trackId === track.id) ?? null"
-            @seek="handleSeek"
-            @select-clip="transportStore.selectClip"
-            @waveform-frame-count="handleWaveformFrameCount"
-            @clip-drag-start="handleClipDragStart"
-            @clip-drag-end="handleClipDragEnd"
-          />
-          <MidiArrangementTrack
-            v-else
-            :track-id="track.id"
-            :track-color="track.color"
-            :clips="midiClips"
-            :tempo-map="mixerStore.graph.tempoMap"
-            :content-width="contentWidth"
-            :pixels-per-quarter="pixelsPerQuarter"
-            :track-height="height"
-            @move="moveMidiClip"
-            @remove="removeMidiClip"
-          />
+            <ArrangementTrack
+              v-if="track.kind === 'audio'"
+              :track-id="track.id"
+              :track-color="track.color"
+              :drag-preview="dragPreview?.trackId === track.id ? dragPreview : null"
+              :dragging-clip-id="clipDrag?.clipId ?? null"
+              :clips="trackClips"
+              :tempo-map="mixerStore.graph.tempoMap"
+              :content-width="contentWidth"
+              :pixels-per-quarter="pixelsPerQuarter"
+              :track-height="height"
+              :amplitude-scale="amplitudeScale"
+              :display-mode="displayMode"
+              :viewport-start-seconds="viewportStartSeconds"
+              :viewport-end-seconds="viewportEndSeconds"
+              :selected-clip-id="selectedClipId"
+              :live-clip="liveClips.find((clip) => clip.trackId === track.id) ?? null"
+              @seek="handleSeek"
+              @select-clip="transportStore.selectClip"
+              @waveform-frame-count="handleWaveformFrameCount"
+              @clip-drag-start="handleClipDragStart"
+              @clip-drag-end="handleClipDragEnd"
+            />
+            <MidiArrangementTrack
+              v-else
+              :track-id="track.id"
+              :track-color="track.color"
+              :clips="midiClips"
+              :tempo-map="mixerStore.graph.tempoMap"
+              :content-width="contentWidth"
+              :pixels-per-quarter="pixelsPerQuarter"
+              :track-height="height"
+              @move="moveMidiClip"
+              @remove="removeMidiClip"
+            />
           </template>
           <div
             class="timeline-playhead"
@@ -518,10 +517,191 @@ function updateSelectedTempo(beatsPerMinute: number): void {
         </div>
       </div>
     </div>
-    <p v-if="recordingError || error" class="playback-error" role="alert">{{ recordingError || error }}</p>
+    <p v-if="recordingError || error" class="playback-error" role="alert">
+      {{ recordingError || error }}
+    </p>
   </section>
 </template>
 
 <style scoped>
-.arrangement{position:relative;display:grid;grid-template-rows:43px minmax(0,1fr);min-width:0;min-height:0;overflow:hidden;background:var(--daw-workspace)}.arrangement-toolbar{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:12px;padding:0 14px 0 15px;border-bottom:1px solid var(--line-soft);background:var(--surface-1)}.tempo-readout{grid-column:1}.tempo-readout span,.tempo-readout strong{display:block}.tempo-readout span{color:var(--accent);font:700 6px var(--font-utility);letter-spacing:.15em}.tempo-readout strong{margin-top:3px;color:var(--text-muted);font:8px var(--font-utility)}.arrangement-zoom-controls{grid-column:3;justify-self:end}.timeline-grid{display:grid;grid-template-columns:220px minmax(0,1fr);min-height:0}.timeline-rail,.timeline-content{display:grid}.timeline-content{position:relative;min-height:100%}.timeline-rail{min-height:0;overflow:hidden;border-right:1px solid var(--line-soft);background:var(--daw-track-header)}.timeline-viewport{min-width:0;min-height:0;overflow:auto;background:var(--daw-lane)}.ruler-corner{display:flex;align-items:center;padding:0 12px;border-bottom:1px solid var(--line-strong);color:var(--text-faint);background:var(--daw-ruler);font:700 7px var(--font-utility);letter-spacing:.14em}.track-header{position:relative;display:grid;grid-template-columns:3px 20px minmax(0,1fr);grid-template-rows:minmax(9px,auto) 23px;align-content:center;align-items:center;column-gap:6px;row-gap:1px;padding:1px 8px;border:0;border-bottom:1px solid var(--line-strong);color:var(--text-primary);background:var(--daw-track-header);text-align:left;cursor:pointer}.track-header:hover,.track-header:focus-within{z-index:3}.track-header:hover{background:var(--daw-track-header-hover)}.track-header.selected{background:var(--daw-track-header-selected);box-shadow:3px 0 0 var(--accent) inset}.track-header:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}.track-color{grid-row:1/3;align-self:stretch;border-radius:2px}.track-header>strong{grid-column:2;grid-row:1;color:var(--text-muted);font:8px var(--font-utility)}.track-copy{grid-column:3;grid-row:1;min-width:0}.track-copy b{display:block;overflow:hidden;font-size:9px;text-overflow:ellipsis;white-space:nowrap}.track-quick-controls{grid-column:2/4;grid-row:2}.track-spacer{background:var(--daw-ruler)}.timeline-playhead{position:absolute;z-index:8;top:43px;bottom:0;width:1px;background:var(--record);box-shadow:0 0 8px color-mix(in srgb,var(--record) 55%,transparent);pointer-events:none}.timeline-playhead span{position:absolute;top:0;left:-4px;width:9px;height:7px;background:var(--record);clip-path:polygon(0 0,100% 0,50% 100%)}.empty-lane{background:var(--daw-lane)}.playback-error{position:absolute;right:12px;bottom:12px;margin:0;padding:8px 10px;border:1px solid color-mix(in srgb,var(--record) 55%,var(--line-strong));border-radius:5px;color:var(--record);background:color-mix(in srgb,var(--record) 14%,var(--surface-1));font-size:8px}@media(max-width:1100px){.timeline-grid{grid-template-columns:204px minmax(0,1fr)}}.track-name-editor{display:block;font-size:9px;font-weight:700}
+.arrangement {
+  position: relative;
+  display: grid;
+  grid-template-rows: 43px minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--daw-workspace);
+}
+.arrangement-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 0 14px 0 15px;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--surface-1);
+}
+.tempo-readout {
+  grid-column: 1;
+}
+.tempo-readout span,
+.tempo-readout strong {
+  display: block;
+}
+.tempo-readout span {
+  color: var(--accent);
+  font: 700 6px var(--font-utility);
+  letter-spacing: 0.15em;
+}
+.tempo-readout strong {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font: 8px var(--font-utility);
+}
+.arrangement-zoom-controls {
+  grid-column: 3;
+  justify-self: end;
+}
+.timeline-grid {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  min-height: 0;
+}
+.timeline-rail,
+.timeline-content {
+  display: grid;
+}
+.timeline-content {
+  position: relative;
+  min-height: 100%;
+}
+.timeline-rail {
+  min-height: 0;
+  overflow: hidden;
+  border-right: 1px solid var(--line-soft);
+  background: var(--daw-track-header);
+}
+.timeline-viewport {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  background: var(--daw-lane);
+}
+.ruler-corner {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--line-strong);
+  color: var(--text-faint);
+  background: var(--daw-ruler);
+  font: 700 7px var(--font-utility);
+  letter-spacing: 0.14em;
+}
+.track-header {
+  position: relative;
+  display: grid;
+  grid-template-columns: 3px 20px minmax(0, 1fr);
+  grid-template-rows: minmax(9px, auto) 23px;
+  align-content: center;
+  align-items: center;
+  column-gap: 6px;
+  row-gap: 1px;
+  padding: 1px 8px;
+  border: 0;
+  border-bottom: 1px solid var(--line-strong);
+  color: var(--text-primary);
+  background: var(--daw-track-header);
+  text-align: left;
+  cursor: pointer;
+}
+.track-header:hover,
+.track-header:focus-within {
+  z-index: 3;
+}
+.track-header:hover {
+  background: var(--daw-track-header-hover);
+}
+.track-header.selected {
+  background: var(--daw-track-header-selected);
+  box-shadow: 3px 0 0 var(--accent) inset;
+}
+.track-header:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+.track-color {
+  grid-row: 1/3;
+  align-self: stretch;
+  border-radius: 2px;
+}
+.track-header > strong {
+  grid-column: 2;
+  grid-row: 1;
+  color: var(--text-muted);
+  font: 8px var(--font-utility);
+}
+.track-copy {
+  grid-column: 3;
+  grid-row: 1;
+  min-width: 0;
+}
+.track-copy b {
+  display: block;
+  overflow: hidden;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.track-quick-controls {
+  grid-column: 2/4;
+  grid-row: 2;
+}
+.track-spacer {
+  background: var(--daw-ruler);
+}
+.timeline-playhead {
+  position: absolute;
+  z-index: 8;
+  top: 43px;
+  bottom: 0;
+  width: 1px;
+  background: var(--record);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--record) 55%, transparent);
+  pointer-events: none;
+}
+.timeline-playhead span {
+  position: absolute;
+  top: 0;
+  left: -4px;
+  width: 9px;
+  height: 7px;
+  background: var(--record);
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+}
+.empty-lane {
+  background: var(--daw-lane);
+}
+.playback-error {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--record) 55%, var(--line-strong));
+  border-radius: 5px;
+  color: var(--record);
+  background: color-mix(in srgb, var(--record) 14%, var(--surface-1));
+  font-size: 8px;
+}
+@media (max-width: 1100px) {
+  .timeline-grid {
+    grid-template-columns: 204px minmax(0, 1fr);
+  }
+}
+.track-name-editor {
+  display: block;
+  font-size: 9px;
+  font-weight: 700;
+}
 </style>

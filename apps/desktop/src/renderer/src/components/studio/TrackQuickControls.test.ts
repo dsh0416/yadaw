@@ -36,16 +36,14 @@ describe("TrackQuickControls", () => {
     })
 
     await wrapper.get('button[aria-label="Mute Vocal"]').trigger("click")
-    expect(wrapper.emitted("updateChannel")?.at(-1))
-      .toEqual(["audio", { muted: true }])
+    expect(wrapper.emitted("updateChannel")?.at(-1)).toEqual(["audio", { muted: true }])
     await wrapper.get('button[aria-label="Solo Vocal"]').trigger("click")
-    expect(wrapper.emitted("updateChannel")?.at(-1))
-      .toEqual(["audio", { soloed: true }])
+    expect(wrapper.emitted("updateChannel")?.at(-1)).toEqual(["audio", { soloed: true }])
     await wrapper.get('button[aria-label="Arm Vocal"]').trigger("click")
-    expect(wrapper.emitted("updateChannel")?.at(-1))
-      .toEqual(["audio", { recordArmed: true }])
-    expect(wrapper.get('button[aria-label="Input monitoring unavailable"]').attributes("disabled"))
-      .toBeDefined()
+    expect(wrapper.emitted("updateChannel")?.at(-1)).toEqual(["audio", { recordArmed: true }])
+    expect(
+      wrapper.get('button[aria-label="Input monitoring unavailable"]').attributes("disabled")
+    ).toBeDefined()
 
     const gain = wrapper.get('input[aria-label="Vocal quick volume"]')
     await gain.trigger("pointerdown")
@@ -55,25 +53,32 @@ describe("TrackQuickControls", () => {
     await gain.trigger("change")
     await gain.setValue("-6")
     expect(wrapper.emitted("preview")?.at(-1)?.[0]).toMatchObject({
-      target: "channel", id: "audio", parameter: "gainDb", value: -6
+      target: "channel",
+      id: "audio",
+      parameter: "gainDb",
+      value: -6
     })
-    expect(wrapper.emitted("updateChannel")?.at(-1))
-      .toEqual(["audio", { gainDb: -6 }])
+    expect(wrapper.emitted("updateChannel")?.at(-1)).toEqual(["audio", { gainDb: -6 }])
     expect(wrapper.get(".track-gain").attributes("style")).toContain("--meter-level:")
 
     const pan = wrapper.get('input[aria-label="Vocal quick pan"]')
     expect(wrapper.find(".track-pan output").exists()).toBe(false)
     await pan.setValue("-32")
     expect(wrapper.emitted("preview")?.at(-1)?.[0]).toMatchObject({
-      target: "channel", id: "audio", parameter: "pan", value: -0.5
+      target: "channel",
+      id: "audio",
+      parameter: "pan",
+      value: -0.5
     })
-    expect(wrapper.emitted("updateChannel")?.at(-1))
-      .toEqual(["audio", { pan: -0.5 }])
+    expect(wrapper.emitted("updateChannel")?.at(-1)).toEqual(["audio", { pan: -0.5 }])
 
     await pan.trigger("pointerdown", { button: 0, pointerId: 7, clientY: 100 })
     await pan.trigger("pointermove", { pointerId: 7, clientY: 80 })
     expect(wrapper.emitted("preview")?.at(-1)?.[0]).toMatchObject({
-      target: "channel", id: "audio", parameter: "pan", value: 10 / 63
+      target: "channel",
+      id: "audio",
+      parameter: "pan",
+      value: 10 / 63
     })
     await pan.trigger("pointerup", { pointerId: 7, clientY: 80 })
     expect(wrapper.emitted("updateChannel")?.at(-1)?.[1]).toMatchObject({

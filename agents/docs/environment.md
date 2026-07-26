@@ -32,8 +32,9 @@ with:
 mise run install
 ```
 
-The `dev`, `check`, `build`, `pack`, and `native` tasks depend on the `install`
-task, so they install locked pnpm dependencies when necessary.
+The `dev`, `check`, `build`, `pack`, `format`, `format-check`, `lint`, and
+`native` tasks depend on the `install` task, so they install locked pnpm
+dependencies when necessary.
 
 Windows native builds always include cpal's ASIO backend. Windows development
 hosts therefore require Visual Studio's Desktop development with C++ workload
@@ -54,6 +55,8 @@ mise run dev
 mise run check
 mise run build
 mise run format
+mise run format-check
+mise run lint
 ```
 
 Other repository tasks include:
@@ -91,10 +94,18 @@ Use pnpm workspace filters for package-level commands:
 mise exec -- pnpm --filter @yadaw/desktop test:unit
 mise exec -- pnpm --filter @yadaw/project-db test:integration
 mise exec -- pnpm --filter @yadaw/dsp-node build
+mise exec -- pnpm format:check
+mise exec -- pnpm lint
 ```
 
 Prefer the root `mise run check` task before handing off a completed change
 because it is the repository's full validation path.
+
+Prettier formats the tracked TypeScript, JavaScript, Vue, JSON, YAML, Markdown,
+and CSS sources. ESLint performs type-aware TypeScript and Vue checks, while
+rustfmt and Clippy cover every Rust workspace crate. Generated napi-rs bindings,
+Drizzle migration metadata, lockfiles, build output, and third-party sources are
+excluded from the JavaScript formatting and linting paths.
 
 ## Dependency Versions
 

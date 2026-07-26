@@ -96,21 +96,25 @@ export const useAudioRuntimeStore = defineStore("audio-runtime", () => {
     if (startedSession || restartedCounters) {
       sessionStartedAt = capturedAt
       xrunBaseline.value = snapshot.xruns
-    } else if (snapshot.state === "running" && capturedAt - sessionStartedAt < STARTUP_XRUN_GRACE_MS) {
+    } else if (
+      snapshot.state === "running" &&
+      capturedAt - sessionStartedAt < STARTUP_XRUN_GRACE_MS
+    ) {
       // A few callbacks can miss the pre-roll while the two CPAL streams settle.
       // Keep those startup artifacts out of the user-facing fault count.
       xrunBaseline.value = snapshot.xruns
     }
 
-    lifecycle.value = snapshot.state === "running"
-      ? { status: "running", runtime: snapshot, error: null }
-      : snapshot.state === "error"
-        ? {
-            status: "error",
-            runtime: snapshot,
-            error: lifecycle.value.error ?? "The native audio engine stopped unexpectedly."
-          }
-        : { status: "stopped", runtime: snapshot, error: null }
+    lifecycle.value =
+      snapshot.state === "running"
+        ? { status: "running", runtime: snapshot, error: null }
+        : snapshot.state === "error"
+          ? {
+              status: "error",
+              runtime: snapshot,
+              error: lifecycle.value.error ?? "The native audio engine stopped unexpectedly."
+            }
+          : { status: "stopped", runtime: snapshot, error: null }
     lastUpdatedAt.value = capturedAt
     record(snapshot, capturedAt)
   }
@@ -177,11 +181,7 @@ export const useAudioRuntimeStore = defineStore("audio-runtime", () => {
     lifecycle.value = accepted
   }
 
-  const polling = useIntervalFn(
-    () => void refresh(),
-    POLLING_INTERVAL_MS,
-    { immediate: false }
-  )
+  const polling = useIntervalFn(() => void refresh(), POLLING_INTERVAL_MS, { immediate: false })
 
   function startPolling(): void {
     void refresh()
@@ -258,7 +258,8 @@ export const useAudioRuntimeStore = defineStore("audio-runtime", () => {
         id: "independent-device-clocks",
         severity: "warning",
         title: "Independent device clocks",
-        message: "Input and output use separate hardware clocks, so adaptive drift correction is active."
+        message:
+          "Input and output use separate hardware clocks, so adaptive drift correction is active."
       })
     }
 
@@ -280,7 +281,8 @@ export const useAudioRuntimeStore = defineStore("audio-runtime", () => {
         id: "xruns",
         severity: sessionXruns.value >= 5 ? "critical" : "warning",
         title: `${sessionXruns.value} real-time ${sessionXruns.value === 1 ? "dropout" : "dropouts"}`,
-        message: "The audio callback could not consume or produce data on time. Try a larger buffer or close CPU-heavy work."
+        message:
+          "The audio callback could not consume or produce data on time. Try a larger buffer or close CPU-heavy work."
       })
     }
 
@@ -296,7 +298,8 @@ export const useAudioRuntimeStore = defineStore("audio-runtime", () => {
           id: "ring-underrun-risk",
           severity: "warning",
           title: "Ring buffer is nearly empty",
-          message: "The output callback is close to starving. This may become an audible dropout under additional load."
+          message:
+            "The output callback is close to starving. This may become an audible dropout under additional load."
         })
       } else if (fillRatio >= 0.95) {
         result.push({

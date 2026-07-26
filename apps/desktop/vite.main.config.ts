@@ -29,9 +29,8 @@ export default defineConfig({
         "project-worker": resolve(import.meta.dirname, "src/main/project-worker.ts")
       },
       formats: ["es"],
-      fileName: (_format, entryName) => entryName === "project-worker"
-        ? `${entryName}.mjs`
-        : `${entryName}.js`
+      fileName: (_format, entryName) =>
+        entryName === "project-worker" ? `${entryName}.mjs` : `${entryName}.js`
     },
     minify: false,
     outDir: resolve(import.meta.dirname, "out/main"),

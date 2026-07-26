@@ -49,7 +49,7 @@ function cancel(): void {
       @keydown.enter.stop.prevent="commit"
       @keydown.esc.stop.prevent="cancel"
       @pointerdown.stop
-    >
+    />
     <button
       v-else
       class="inline-track-name-value"
@@ -58,7 +58,9 @@ function cancel(): void {
       :title="`${name} — Double-click to rename`"
       @dblclick.stop.prevent="beginEditing"
       @keydown.f2.stop.prevent="beginEditing"
-    >{{ name }}</button>
+    >
+      {{ name }}
+    </button>
   </span>
 </template>
 

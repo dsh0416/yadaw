@@ -9,33 +9,83 @@ function graph(): MixerGraphSnapshot {
     sampleRate: 48_000,
     channels: [
       {
-        id: "audio", kind: "audio", name: "Audio", color: "#8C83FF", sortOrder: 0,
-        inputFormat: "stereo", gainDb: 0, pan: 0, muted: false, soloed: false,
-        outputChannelId: "bus-a", recordArmed: false, inputChannels: [1, 2],
+        id: "audio",
+        kind: "audio",
+        name: "Audio",
+        color: "#8C83FF",
+        sortOrder: 0,
+        inputFormat: "stereo",
+        gainDb: 0,
+        pan: 0,
+        muted: false,
+        soloed: false,
+        outputChannelId: "bus-a",
+        recordArmed: false,
+        inputChannels: [1, 2],
         hardwareOutputChannels: []
       },
       {
-        id: "bus-a", kind: "bus", name: "Bus A", color: "#E8B85F", sortOrder: 0,
-        inputFormat: null, gainDb: 0, pan: 0, muted: false, soloed: false,
-        outputChannelId: "bus-b", recordArmed: false, inputChannels: [],
+        id: "bus-a",
+        kind: "bus",
+        name: "Bus A",
+        color: "#E8B85F",
+        sortOrder: 0,
+        inputFormat: null,
+        gainDb: 0,
+        pan: 0,
+        muted: false,
+        soloed: false,
+        outputChannelId: "bus-b",
+        recordArmed: false,
+        inputChannels: [],
         hardwareOutputChannels: []
       },
       {
-        id: "bus-b", kind: "bus", name: "Bus B", color: "#E8B85F", sortOrder: 1,
-        inputFormat: null, gainDb: 0, pan: 0, muted: false, soloed: false,
-        outputChannelId: "output", recordArmed: false, inputChannels: [],
+        id: "bus-b",
+        kind: "bus",
+        name: "Bus B",
+        color: "#E8B85F",
+        sortOrder: 1,
+        inputFormat: null,
+        gainDb: 0,
+        pan: 0,
+        muted: false,
+        soloed: false,
+        outputChannelId: "output",
+        recordArmed: false,
+        inputChannels: [],
         hardwareOutputChannels: []
       },
       {
-        id: "master", kind: "master", name: "Master", color: "#67D9E7", sortOrder: 0,
-        inputFormat: null, gainDb: 0, pan: 0, muted: false, soloed: false,
-        outputChannelId: null, recordArmed: false, inputChannels: [],
+        id: "master",
+        kind: "master",
+        name: "Master",
+        color: "#67D9E7",
+        sortOrder: 0,
+        inputFormat: null,
+        gainDb: 0,
+        pan: 0,
+        muted: false,
+        soloed: false,
+        outputChannelId: null,
+        recordArmed: false,
+        inputChannels: [],
         hardwareOutputChannels: []
       },
       {
-        id: "output", kind: "output", name: "Output 1–2", color: "#73D6A2", sortOrder: 0,
-        inputFormat: null, gainDb: 0, pan: 0, muted: false, soloed: false,
-        outputChannelId: null, recordArmed: false, inputChannels: [],
+        id: "output",
+        kind: "output",
+        name: "Output 1–2",
+        color: "#73D6A2",
+        sortOrder: 0,
+        inputFormat: null,
+        gainDb: 0,
+        pan: 0,
+        muted: false,
+        soloed: false,
+        outputChannelId: null,
+        recordArmed: false,
+        inputChannels: [],
         hardwareOutputChannels: [1, 2]
       }
     ],
@@ -80,7 +130,8 @@ describe("mixer store", () => {
     const changed = structuredClone(initial)
     changed.channels[0]!.gainDb = -6
     window.yadaw.loadMixerGraph = vi.fn().mockResolvedValue(initial)
-    window.yadaw.executeProjectCommand = vi.fn()
+    window.yadaw.executeProjectCommand = vi
+      .fn()
       .mockResolvedValueOnce({
         graph: changed,
         inverse: { type: "update-channel", channelId: "audio", patch: { gainDb: 0 } }
@@ -110,19 +161,17 @@ describe("mixer store", () => {
     const mixer = useMixerStore()
     mixer.graph = graph()
 
-    expect(mixer.availableOutputs("bus-b").map((channel) => channel.id))
-      .toEqual(["output"])
-    expect(mixer.availableSendTargets("bus-b").map((channel) => channel.id))
-      .toEqual([])
+    expect(mixer.availableOutputs("bus-b").map((channel) => channel.id)).toEqual(["output"])
+    expect(mixer.availableSendTargets("bus-b").map((channel) => channel.id)).toEqual([])
     expect(mixer.availableOutputs("master")).toEqual([])
     expect(mixer.availableSendTargets("master")).toEqual([])
   })
 
   it("uses one default color per channel type and still accepts custom colors", async () => {
     const initial = graph()
-    window.yadaw.executeProjectCommand = vi.fn().mockImplementation((command) =>
-      Promise.resolve({ graph: initial, inverse: command })
-    )
+    window.yadaw.executeProjectCommand = vi
+      .fn()
+      .mockImplementation((command) => Promise.resolve({ graph: initial, inverse: command }))
     const mixer = useMixerStore()
     mixer.graph = initial
 
@@ -131,8 +180,9 @@ describe("mixer store", () => {
     await mixer.createOutput()
     await mixer.updateChannel("audio", { color: "#123456" })
 
-    const commands = vi.mocked(window.yadaw.executeProjectCommand).mock.calls
-      .map(([command]) => command)
+    const commands = vi
+      .mocked(window.yadaw.executeProjectCommand)
+      .mock.calls.map(([command]) => command)
     expect(commands[0]).toMatchObject({
       type: "create-channel",
       channel: { kind: "audio", color: "#4F8CFF" }
@@ -154,9 +204,9 @@ describe("mixer store", () => {
 
   it("creates an unassigned green instrument track", async () => {
     const initial = graph()
-    window.yadaw.executeProjectCommand = vi.fn().mockImplementation((command) =>
-      Promise.resolve({ graph: initial, inverse: command })
-    )
+    window.yadaw.executeProjectCommand = vi
+      .fn()
+      .mockImplementation((command) => Promise.resolve({ graph: initial, inverse: command }))
     const mixer = useMixerStore()
     mixer.graph = initial
 
@@ -183,8 +233,14 @@ describe("mixer store", () => {
     const secondGraph = structuredClone(firstGraph)
     secondGraph.channels[0]!.pan = 0.5
     let resolveFirst!: (value: unknown) => void
-    window.yadaw.executeProjectCommand = vi.fn()
-      .mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve }))
+    window.yadaw.executeProjectCommand = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFirst = resolve
+          })
+      )
       .mockResolvedValueOnce({
         graph: secondGraph,
         inverse: { type: "update-channel", channelId: "audio", patch: { pan: 0 } }
@@ -212,24 +268,28 @@ describe("mixer store", () => {
   it("clears latched meter clipping in the UI and native engine", async () => {
     window.yadaw.clearMixerMeterClips = vi.fn().mockResolvedValue({
       capturedAt: 2,
-      meters: [{
-        channelId: "audio",
-        preFaderPeak: [1, 1],
-        postFaderPeak: [1, 1],
-        heldPeak: [0, 0],
-        clipped: false
-      }]
+      meters: [
+        {
+          channelId: "audio",
+          preFaderPeak: [1, 1],
+          postFaderPeak: [1, 1],
+          heldPeak: [0, 0],
+          clipped: false
+        }
+      ]
     })
     const mixer = useMixerStore()
     mixer.runtime = {
       capturedAt: 1,
-      meters: [{
-        channelId: "audio",
-        preFaderPeak: [1, 1],
-        postFaderPeak: [1, 1],
-        heldPeak: [1, 1],
-        clipped: true
-      }]
+      meters: [
+        {
+          channelId: "audio",
+          preFaderPeak: [1, 1],
+          postFaderPeak: [1, 1],
+          heldPeak: [1, 1],
+          clipped: true
+        }
+      ]
     }
 
     await mixer.clearMeterClips()

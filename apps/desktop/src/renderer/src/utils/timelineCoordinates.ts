@@ -6,7 +6,7 @@ export function tickToTimelineX(
   tick: number,
   pixelsPerQuarter: number
 ): number {
-  return tick / map.ticksPerQuarter * pixelsPerQuarter
+  return (tick / map.ticksPerQuarter) * pixelsPerQuarter
 }
 
 export function timelineXToTick(
@@ -15,7 +15,7 @@ export function timelineXToTick(
   pixelsPerQuarter: number
 ): number {
   if (pixelsPerQuarter <= 0) return 0
-  return Math.max(0, Math.round(x / pixelsPerQuarter * map.ticksPerQuarter))
+  return Math.max(0, Math.round((x / pixelsPerQuarter) * map.ticksPerQuarter))
 }
 
 export function secondsToTimelineX(

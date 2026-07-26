@@ -56,9 +56,11 @@ mise run dev
 
 The development task installs locked pnpm dependencies when needed, builds the
 native addon in debug mode, and then starts Electron with the repository-owned
-Vite watchers. Use `mise run check` for Rust tests, Clippy, formatting, napi-rs,
-and TypeScript checks, or `mise run build` for a production build. The underlying
-pnpm scripts remain available for package-level development.
+Vite watchers. Use `mise run format` to apply Prettier and rustfmt,
+`mise run lint` for ESLint and Clippy, and `mise run check` for the complete
+formatting, lint, Rust test, napi-rs, and TypeScript validation path. Use
+`mise run build` for a production build. The underlying pnpm scripts remain
+available for package-level development.
 
 See [docs/architecture.md](docs/architecture.md) for the process boundaries and
 the next implementation milestones.

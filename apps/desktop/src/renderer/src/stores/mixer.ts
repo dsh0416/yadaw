@@ -93,25 +93,18 @@ export const useMixerStore = defineStore("mixer", () => {
   let previewFlush: Promise<void> | null = null
 
   const channels = computed(() => graph.value.channels)
-  const audioTracks = computed(() =>
-    channels.value.filter((channel) => channel.kind === "audio")
-  )
+  const audioTracks = computed(() => channels.value.filter((channel) => channel.kind === "audio"))
   const instrumentTracks = computed(() =>
     channels.value.filter((channel) => channel.kind === "instrument")
   )
-  const timelineTracks = computed(() => [
-    ...audioTracks.value,
-    ...instrumentTracks.value
-  ].sort((left, right) => left.sortOrder - right.sortOrder))
-  const buses = computed(() =>
-    channels.value.filter((channel) => channel.kind === "bus")
+  const timelineTracks = computed(() =>
+    [...audioTracks.value, ...instrumentTracks.value].sort(
+      (left, right) => left.sortOrder - right.sortOrder
+    )
   )
-  const master = computed(() =>
-    channels.value.find((channel) => channel.kind === "master") ?? null
-  )
-  const outputs = computed(() =>
-    channels.value.filter((channel) => channel.kind === "output")
-  )
+  const buses = computed(() => channels.value.filter((channel) => channel.kind === "bus"))
+  const master = computed(() => channels.value.find((channel) => channel.kind === "master") ?? null)
+  const outputs = computed(() => channels.value.filter((channel) => channel.kind === "output"))
   const orderedChannels = computed(() => [
     ...audioTracks.value,
     ...instrumentTracks.value,
@@ -119,15 +112,18 @@ export const useMixerStore = defineStore("mixer", () => {
     ...(master.value ? [master.value] : []),
     ...outputs.value
   ])
-  const selectedChannel = computed(() =>
-    channels.value.find((channel) => channel.id === selectedChannelId.value) ?? null
+  const selectedChannel = computed(
+    () => channels.value.find((channel) => channel.id === selectedChannelId.value) ?? null
   )
   const canUndo = computed(() => undoHistory.value.length > 0)
   const canRedo = computed(() => redoHistory.value.length > 0)
 
   function enqueueMutation<T>(task: () => Promise<T>): Promise<T> {
     const result = mutationTail.then(task, task)
-    mutationTail = result.then(() => undefined, () => undefined)
+    mutationTail = result.then(
+      () => undefined,
+      () => undefined
+    )
     return result
   }
 
@@ -141,9 +137,10 @@ export const useMixerStore = defineStore("mixer", () => {
     error.value = ""
     try {
       graph.value = await window.yadaw.loadMixerGraph()
-      selectedChannelId.value ??= graph.value.channels.find((channel) => channel.kind === "audio")?.id
-        ?? graph.value.channels[0]?.id
-        ?? null
+      selectedChannelId.value ??=
+        graph.value.channels.find((channel) => channel.kind === "audio")?.id ??
+        graph.value.channels[0]?.id ??
+        null
     } catch (reason) {
       error.value = reason instanceof Error ? reason.message : "Unable to load the mixer."
     } finally {
@@ -201,12 +198,9 @@ export const useMixerStore = defineStore("mixer", () => {
   }
 
   function preview(previewValue: MixerParameterPreview): void {
-    graph.value = patchGraph(
-      graph.value,
-      previewValue.target,
-      previewValue.id,
-      { [previewValue.parameter]: previewValue.value }
-    )
+    graph.value = patchGraph(graph.value, previewValue.target, previewValue.id, {
+      [previewValue.parameter]: previewValue.value
+    })
     const key = `${previewValue.target}:${previewValue.id}:${previewValue.parameter}`
     pendingPreviews.set(key, previewValue)
     previewFlush ??= Promise.resolve().then(flushPreviews)
@@ -353,8 +347,9 @@ export const useMixerStore = defineStore("mixer", () => {
       id: crypto.randomUUID(),
       sourceChannelId,
       targetChannelId,
-      sortOrder: graph.value.sends.filter((candidate) =>
-        candidate.sourceChannelId === sourceChannelId).length,
+      sortOrder: graph.value.sends.filter(
+        (candidate) => candidate.sourceChannelId === sourceChannelId
+      ).length,
       enabled: false,
       tap: "post",
       levelDb: -90,
@@ -372,25 +367,27 @@ export const useMixerStore = defineStore("mixer", () => {
   }
 
   function meterFor(channelId: string) {
-    return runtime.value.meters.find((meter) => meter.channelId === channelId) ?? {
-      channelId,
-      preFaderPeak: [0, 0] as [number, number],
-      postFaderPeak: [0, 0] as [number, number],
-      heldPeak: [0, 0] as [number, number],
-      clipped: false
-    }
+    return (
+      runtime.value.meters.find((meter) => meter.channelId === channelId) ?? {
+        channelId,
+        preFaderPeak: [0, 0] as [number, number],
+        postFaderPeak: [0, 0] as [number, number],
+        heldPeak: [0, 0] as [number, number],
+        clipped: false
+      }
+    )
   }
 
   function availableOutputs(channelId: string): MixerChannelState[] {
     const source = channels.value.find((channel) => channel.id === channelId)
-    if (!source || (
-      source.kind !== "audio" && source.kind !== "instrument" && source.kind !== "bus"
-    )) return []
+    if (
+      !source ||
+      (source.kind !== "audio" && source.kind !== "instrument" && source.kind !== "bus")
+    )
+      return []
     return channels.value.filter((target) => {
-      if (
-        target.id === source.id ||
-        (target.kind !== "bus" && target.kind !== "output")
-      ) return false
+      if (target.id === source.id || (target.kind !== "bus" && target.kind !== "output"))
+        return false
       const candidate = structuredClone(graph.value)
       const candidateSource = candidate.channels.find((channel) => channel.id === source.id)
       if (!candidateSource) return false
@@ -401,9 +398,11 @@ export const useMixerStore = defineStore("mixer", () => {
 
   function availableSendTargets(channelId: string): MixerChannelState[] {
     const source = channels.value.find((channel) => channel.id === channelId)
-    if (!source || (
-      source.kind !== "audio" && source.kind !== "instrument" && source.kind !== "bus"
-    )) return []
+    if (
+      !source ||
+      (source.kind !== "audio" && source.kind !== "instrument" && source.kind !== "bus")
+    )
+      return []
     const existing = new Set(sendsFor(channelId).map((send) => send.targetChannelId))
     return buses.value.filter((target) => {
       if (target.id === channelId || existing.has(target.id)) return false
@@ -442,9 +441,8 @@ export const useMixerStore = defineStore("mixer", () => {
     try {
       runtime.value = await window.yadaw.clearMixerMeterClips()
     } catch (reason) {
-      error.value = reason instanceof Error
-        ? reason.message
-        : "Unable to reset mixer clipping indicators."
+      error.value =
+        reason instanceof Error ? reason.message : "Unable to reset mixer clipping indicators."
     }
   }
 

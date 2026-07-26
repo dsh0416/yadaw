@@ -28,7 +28,7 @@ function requireDatabase(): ProjectDatabaseInstance {
 
 async function handle(request: WorkerRequest): Promise<unknown> {
   switch (request.type) {
-    case "create":
+    case "create": {
       await closeCurrentDatabase()
       const { ProjectDatabase } = await loadProjectDatabase()
       database = await ProjectDatabase.create(request.dataDir, {
@@ -39,9 +39,12 @@ async function handle(request: WorkerRequest): Promise<unknown> {
         waveformDisplayMode: request.waveformDisplayMode
       })
       return null
+    }
     case "open":
       await closeCurrentDatabase()
-      database = await (await loadProjectDatabase()).ProjectDatabase.open(request.dataDir, request.archivePath)
+      database = await (
+        await loadProjectDatabase()
+      ).ProjectDatabase.open(request.dataDir, request.archivePath)
       return null
     case "get-configuration":
       return requireDatabase().getConfiguration()
@@ -54,11 +57,7 @@ async function handle(request: WorkerRequest): Promise<unknown> {
     case "apply-project-command":
       return requireDatabase().applyCommand(request.command, request.fallbackOutputId)
     case "import-midi":
-      return requireDatabase().importMidi(
-        request.source,
-        request.command,
-        request.fallbackOutputId
-      )
+      return requireDatabase().importMidi(request.source, request.command, request.fallbackOutputId)
     case "rollback-midi":
       return requireDatabase().rollbackMidi(
         request.sourceId,
@@ -136,9 +135,10 @@ function respond(request: WorkerRequest): Promise<void> {
         error: {
           message: normalized.message,
           stack: normalized.stack,
-          code: typeof (normalized as Error & { code?: unknown }).code === "string"
-            ? (normalized as Error & { code: string }).code
-            : undefined
+          code:
+            typeof (normalized as Error & { code?: unknown }).code === "string"
+              ? (normalized as Error & { code: string }).code
+              : undefined
         }
       }
       port.postMessage(response)

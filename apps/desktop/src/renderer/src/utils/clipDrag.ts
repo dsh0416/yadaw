@@ -16,9 +16,7 @@ export function findNearestTrackId(
   let nearestTrackId = lanes[0]!.trackId
   let nearestDistance = Number.POSITIVE_INFINITY
   for (const lane of lanes) {
-    const distance = clientY < lane.top
-      ? lane.top - clientY
-      : clientY - lane.bottom
+    const distance = clientY < lane.top ? lane.top - clientY : clientY - lane.bottom
     if (distance < nearestDistance) {
       nearestTrackId = lane.trackId
       nearestDistance = distance

@@ -9,13 +9,26 @@ describe("GlobalOperationHost", () => {
     const unsubscribe = vi.fn()
     window.yadaw.subscribeOperations = vi.fn(() => unsubscribe)
     const pinia = createPinia()
-    const wrapper = mount(GlobalOperationHost, { attachTo: document.body, global: { plugins: [pinia] } })
+    const wrapper = mount(GlobalOperationHost, {
+      attachTo: document.body,
+      global: { plugins: [pinia] }
+    })
     const store = useOperationStore(pinia)
     store.startSubscription()
-    store.apply({ type: "upsert", operation: {
-      id: "save", title: "Saving", phase: "saving-archive", state: "running",
-      completedUnits: null, totalUnits: null, cancellable: false, message: null, dropoutFrames: 0
-    } })
+    store.apply({
+      type: "upsert",
+      operation: {
+        id: "save",
+        title: "Saving",
+        phase: "saving-archive",
+        state: "running",
+        completedUnits: null,
+        totalUnits: null,
+        cancellable: false,
+        message: null,
+        dropoutFrames: 0
+      }
+    })
     await wrapper.vm.$nextTick()
     expect(document.body.querySelector("[role=dialog]")?.textContent).toContain("Saving")
     wrapper.unmount()
@@ -27,12 +40,25 @@ describe("GlobalOperationHost", () => {
   it("dismisses a retained completed warning when its backdrop is clicked", async () => {
     window.yadaw.subscribeOperations = vi.fn(() => vi.fn())
     const pinia = createPinia()
-    const wrapper = mount(GlobalOperationHost, { attachTo: document.body, global: { plugins: [pinia] } })
+    const wrapper = mount(GlobalOperationHost, {
+      attachTo: document.body,
+      global: { plugins: [pinia] }
+    })
     const store = useOperationStore(pinia)
-    store.apply({ type: "upsert", operation: {
-      id: "warning", title: "Finalizing", phase: "committing-database", state: "completed",
-      completedUnits: null, totalUnits: null, cancellable: false, message: null, dropoutFrames: 4
-    } })
+    store.apply({
+      type: "upsert",
+      operation: {
+        id: "warning",
+        title: "Finalizing",
+        phase: "committing-database",
+        state: "completed",
+        completedUnits: null,
+        totalUnits: null,
+        cancellable: false,
+        message: null,
+        dropoutFrames: 4
+      }
+    })
     await wrapper.vm.$nextTick()
     expect(document.body.querySelector("[role=dialog] button")).toBeNull()
     document.body.querySelector<HTMLElement>(".operation-overlay")?.click()

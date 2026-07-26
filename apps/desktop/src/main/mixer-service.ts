@@ -14,10 +14,7 @@ import type {
   TransportCommand,
   TransportSnapshot
 } from "@yadaw/contracts"
-import {
-  type AudioHostGraph,
-  AudioHostService
-} from "./audio-host-service"
+import { type AudioHostGraph, AudioHostService } from "./audio-host-service"
 import type { ProjectService } from "./project-service"
 
 export interface MidiSourceImport {
@@ -78,10 +75,11 @@ function movePluginInGraph(
   const sourceChannelId = plugin.channelId
   const sourceRole = plugin.role
   const source = graph.plugins
-    .filter((candidate) =>
-      candidate.id !== pluginId &&
-      candidate.channelId === sourceChannelId &&
-      candidate.role === sourceRole
+    .filter(
+      (candidate) =>
+        candidate.id !== pluginId &&
+        candidate.channelId === sourceChannelId &&
+        candidate.role === sourceRole
     )
     .sort((left, right) => left.slotOrder - right.slotOrder)
   source.forEach((candidate, index) => {
@@ -89,18 +87,16 @@ function movePluginInGraph(
   })
 
   const destination = graph.plugins
-    .filter((candidate) =>
-      candidate.id !== pluginId &&
-      candidate.channelId === channelId &&
-      candidate.role === role
+    .filter(
+      (candidate) =>
+        candidate.id !== pluginId && candidate.channelId === channelId && candidate.role === role
     )
     .sort((left, right) => left.slotOrder - right.slotOrder)
   if (role === "instrument" && destination.length > 0) {
     throw new Error("Replace the assigned instrument instead of moving into an occupied slot")
   }
-  const insertionIndex = role === "instrument"
-    ? 0
-    : Math.max(0, Math.min(slotOrder, destination.length))
+  const insertionIndex =
+    role === "instrument" ? 0 : Math.max(0, Math.min(slotOrder, destination.length))
   destination.splice(insertionIndex, 0, plugin)
   destination.forEach((candidate, index) => {
     candidate.channelId = channelId
@@ -136,7 +132,9 @@ function inverseFor(graph: MixerGraphSnapshot, command: ProjectCommand): Project
           patch: { outputChannelId: channel.id }
         }))
       const sends = graph.sends
-        .filter((send) => send.sourceChannelId === channel.id || send.targetChannelId === channel.id)
+        .filter(
+          (send) => send.sourceChannelId === channel.id || send.targetChannelId === channel.id
+        )
         .map<ProjectCommand>((send) => ({ type: "create-send", send }))
       const clips = graph.clips
         .filter((clip) => clip.trackId === channel.id)
@@ -257,8 +255,8 @@ function applyToGraph(graph: MixerGraphSnapshot, command: ProjectCommand): Mixer
       const master = next.channels.find((channel) => channel.kind === "master")
       if (!master || command.channelId === master.id) throw new Error("Master cannot be deleted")
       const removed = channelById(next, command.channelId)
-      const fallbackOutput = next.channels.find((channel) =>
-        channel.kind === "output" && channel.id !== removed.id
+      const fallbackOutput = next.channels.find(
+        (channel) => channel.kind === "output" && channel.id !== removed.id
       )
       if (
         removed.kind === "output" &&
@@ -273,8 +271,9 @@ function applyToGraph(graph: MixerGraphSnapshot, command: ProjectCommand): Mixer
           channel.outputChannelId = fallbackOutput.id
         }
       }
-      next.sends = next.sends.filter((send) =>
-        send.sourceChannelId !== command.channelId && send.targetChannelId !== command.channelId
+      next.sends = next.sends.filter(
+        (send) =>
+          send.sourceChannelId !== command.channelId && send.targetChannelId !== command.channelId
       )
       next.clips = next.clips.filter((clip) => clip.trackId !== command.channelId)
       next.plugins = next.plugins.filter((plugin) => plugin.channelId !== command.channelId)
@@ -315,13 +314,7 @@ function applyToGraph(graph: MixerGraphSnapshot, command: ProjectCommand): Mixer
       Object.assign(pluginById(next, command.pluginId), command.patch)
       break
     case "move-plugin": {
-      movePluginInGraph(
-        next,
-        command.pluginId,
-        command.channelId,
-        command.role,
-        command.slotOrder
-      )
+      movePluginInGraph(next, command.pluginId, command.channelId, command.role, command.slotOrder)
       break
     }
     case "replace-plugin": {
@@ -367,14 +360,16 @@ function validateGraph(graph: MixerGraphSnapshot): void {
     ) {
       throw new Error("Audio track input mapping does not match its input format")
     }
-    if (channel.kind === "audio" && channel.inputChannels.some((input) =>
-      !Number.isInteger(input) || input < 1 || input > 32
-    )) {
+    if (
+      channel.kind === "audio" &&
+      channel.inputChannels.some((input) => !Number.isInteger(input) || input < 1 || input > 32)
+    ) {
       throw new Error("Audio track inputs must be hardware channels 1 through 32")
     }
-    if (channel.kind !== "audio" && (
-      channel.inputFormat !== null || channel.inputChannels.length > 0 || channel.recordArmed
-    )) {
+    if (
+      channel.kind !== "audio" &&
+      (channel.inputFormat !== null || channel.inputChannels.length > 0 || channel.recordArmed)
+    ) {
       throw new Error("Only audio tracks can map or arm hardware inputs")
     }
     if (channel.kind === "master" && channel.soloed) {
@@ -387,8 +382,8 @@ function validateGraph(graph: MixerGraphSnapshot): void {
       if (
         channel.hardwareOutputChannels.length !== 2 ||
         channel.hardwareOutputChannels[0] === channel.hardwareOutputChannels[1] ||
-        channel.hardwareOutputChannels.some((output) =>
-          !Number.isInteger(output) || output < 1 || output > 32
+        channel.hardwareOutputChannels.some(
+          (output) => !Number.isInteger(output) || output < 1 || output > 32
         )
       ) {
         throw new Error("Output channels must map two distinct hardware channels 1 through 32")
@@ -432,8 +427,10 @@ function validateGraph(graph: MixerGraphSnapshot): void {
     const source = channelById(graph, send.sourceChannelId)
     const target = channelById(graph, send.targetChannelId)
     if (
-      source.kind === "master" || source.kind === "output" ||
-      target.kind !== "bus" || source.id === target.id
+      source.kind === "master" ||
+      source.kind === "output" ||
+      target.kind !== "bus" ||
+      source.id === target.id
     ) {
       throw new Error("Sends must route an Audio, Instrument, or Bus channel to a Bus")
     }
@@ -448,8 +445,12 @@ function validateGraph(graph: MixerGraphSnapshot): void {
     if (!Number.isSafeInteger(clip.startFrame) || clip.startFrame < 0) {
       throw new Error("Clip start frame must be a non-negative safe integer")
     }
-    if (!Number.isSafeInteger(clip.sourceOffsetFrames) || clip.sourceOffsetFrames < 0 ||
-        !Number.isSafeInteger(clip.lengthFrames) || clip.lengthFrames < 1) {
+    if (
+      !Number.isSafeInteger(clip.sourceOffsetFrames) ||
+      clip.sourceOffsetFrames < 0 ||
+      !Number.isSafeInteger(clip.lengthFrames) ||
+      clip.lengthFrames < 1
+    ) {
       throw new Error("Clip source offset and length must use valid sample frames")
     }
     if (channelById(graph, clip.trackId).kind !== "audio") {
@@ -459,7 +460,8 @@ function validateGraph(graph: MixerGraphSnapshot): void {
   const pluginIds = new Set<string>()
   const pluginSlots = new Set<string>()
   for (const plugin of graph.plugins) {
-    if (!plugin.id || pluginIds.has(plugin.id)) throw new Error("Plugin instance IDs must be unique")
+    if (!plugin.id || pluginIds.has(plugin.id))
+      throw new Error("Plugin instance IDs must be unique")
     pluginIds.add(plugin.id)
     const channel = channelById(graph, plugin.channelId)
     if (!Number.isSafeInteger(plugin.slotOrder) || plugin.slotOrder < 0) {
@@ -469,8 +471,11 @@ function validateGraph(graph: MixerGraphSnapshot): void {
     if (pluginSlots.has(slot)) throw new Error("Plugin slots must be unique within a channel")
     pluginSlots.add(slot)
     if (plugin.role === "instrument") {
-      if (channel.kind !== "instrument" || plugin.slotOrder !== 0 ||
-          plugin.descriptor.kind !== "instrument") {
+      if (
+        channel.kind !== "instrument" ||
+        plugin.slotOrder !== 0 ||
+        plugin.descriptor.kind !== "instrument"
+      ) {
         throw new Error("An instrument slot requires an instrument plugin on an Instrument track")
       }
     } else if (plugin.descriptor.kind !== "effect") {
@@ -483,23 +488,34 @@ function validateGraph(graph: MixerGraphSnapshot): void {
   if (graph.tempoMap.ticksPerQuarter !== 960) {
     throw new Error("Project tempo maps must use 960 PPQ")
   }
-  if (graph.tempoMap.tempoEvents[0]?.tick !== 0 ||
-      graph.tempoMap.timeSignatureEvents[0]?.tick !== 0) {
+  if (
+    graph.tempoMap.tempoEvents[0]?.tick !== 0 ||
+    graph.tempoMap.timeSignatureEvents[0]?.tick !== 0
+  ) {
     throw new Error("Tempo and time-signature maps require an event at tick 0")
   }
   let previousTempoTick = -1
   for (const event of graph.tempoMap.tempoEvents) {
-    if (!Number.isSafeInteger(event.tick) || event.tick <= previousTempoTick ||
-        !Number.isFinite(event.beatsPerMinute) || event.beatsPerMinute <= 0) {
+    if (
+      !Number.isSafeInteger(event.tick) ||
+      event.tick <= previousTempoTick ||
+      !Number.isFinite(event.beatsPerMinute) ||
+      event.beatsPerMinute <= 0
+    ) {
       throw new Error("Tempo events must be ordered unique ticks with positive BPM")
     }
     previousTempoTick = event.tick
   }
   let previousSignatureTick = -1
   for (const event of graph.tempoMap.timeSignatureEvents) {
-    if (!Number.isSafeInteger(event.tick) || event.tick <= previousSignatureTick ||
-        !Number.isInteger(event.numerator) || event.numerator < 1 || event.numerator > 32 ||
-        ![1, 2, 4, 8, 16, 32].includes(event.denominator)) {
+    if (
+      !Number.isSafeInteger(event.tick) ||
+      event.tick <= previousSignatureTick ||
+      !Number.isInteger(event.numerator) ||
+      event.numerator < 1 ||
+      event.numerator > 32 ||
+      ![1, 2, 4, 8, 16, 32].includes(event.denominator)
+    ) {
       throw new Error("Time-signature events contain invalid values")
     }
     previousSignatureTick = event.tick
@@ -511,19 +527,35 @@ function validateGraph(graph: MixerGraphSnapshot): void {
     if (channelById(graph, clip.trackId).kind !== "instrument") {
       throw new Error("MIDI clips must belong to Instrument tracks")
     }
-    if (!Number.isSafeInteger(clip.startTick) || clip.startTick < 0 ||
-        !Number.isSafeInteger(clip.sourceOffsetTicks) || clip.sourceOffsetTicks < 0 ||
-        !Number.isSafeInteger(clip.lengthTicks) || clip.lengthTicks < 1) {
+    if (
+      !Number.isSafeInteger(clip.startTick) ||
+      clip.startTick < 0 ||
+      !Number.isSafeInteger(clip.sourceOffsetTicks) ||
+      clip.sourceOffsetTicks < 0 ||
+      !Number.isSafeInteger(clip.lengthTicks) ||
+      clip.lengthTicks < 1
+    ) {
       throw new Error("MIDI clip positions must use valid musical ticks")
     }
     for (const note of clip.notes) {
-      if (!Number.isSafeInteger(note.startTick) || note.startTick < 0 ||
-          !Number.isSafeInteger(note.durationTicks) || note.durationTicks < 1 ||
-          !Number.isInteger(note.channel) || note.channel < 0 || note.channel > 15 ||
-          !Number.isInteger(note.key) || note.key < 0 || note.key > 127 ||
-          !Number.isInteger(note.velocity) || note.velocity < 1 || note.velocity > 127 ||
-          !Number.isInteger(note.releaseVelocity) ||
-          note.releaseVelocity < 0 || note.releaseVelocity > 127) {
+      if (
+        !Number.isSafeInteger(note.startTick) ||
+        note.startTick < 0 ||
+        !Number.isSafeInteger(note.durationTicks) ||
+        note.durationTicks < 1 ||
+        !Number.isInteger(note.channel) ||
+        note.channel < 0 ||
+        note.channel > 15 ||
+        !Number.isInteger(note.key) ||
+        note.key < 0 ||
+        note.key > 127 ||
+        !Number.isInteger(note.velocity) ||
+        note.velocity < 1 ||
+        note.velocity > 127 ||
+        !Number.isInteger(note.releaseVelocity) ||
+        note.releaseVelocity < 0 ||
+        note.releaseVelocity > 127
+      ) {
         throw new Error("MIDI note contains invalid tick, channel, key, or velocity data")
       }
     }
@@ -579,7 +611,10 @@ export class MixerService {
 
   private enqueueMutation<T>(task: () => Promise<T>): Promise<T> {
     const result = this.mutationTail.then(task, task)
-    this.mutationTail = result.then(() => undefined, () => undefined)
+    this.mutationTail = result.then(
+      () => undefined,
+      () => undefined
+    )
     return result
   }
 
@@ -741,8 +776,8 @@ export class MixerService {
     const candidate = applyToGraph(before, command)
     validateGraph(candidate)
     const deletedIds = deletedChannelIds(command)
-    const fallbackOutput = before.channels.find((channel) =>
-      channel.kind === "output" && !deletedIds.has(channel.id)
+    const fallbackOutput = before.channels.find(
+      (channel) => channel.kind === "output" && !deletedIds.has(channel.id)
     )
     if (!fallbackOutput) throw new Error("Mixer hardware Output is missing")
     await this.projects.applyProjectCommand(command, fallbackOutput.id)
@@ -766,23 +801,35 @@ export class MixerService {
     if (command.type === "update-channel") {
       if (command.patch.gainDb !== undefined) {
         await this.audioHost?.previewMixerParameter({
-          target: "channel", id: command.channelId, parameter: "gainDb", value: command.patch.gainDb
+          target: "channel",
+          id: command.channelId,
+          parameter: "gainDb",
+          value: command.patch.gainDb
         })
       }
       if (command.patch.pan !== undefined) {
         await this.audioHost?.previewMixerParameter({
-          target: "channel", id: command.channelId, parameter: "pan", value: command.patch.pan
+          target: "channel",
+          id: command.channelId,
+          parameter: "pan",
+          value: command.patch.pan
         })
       }
     } else if (command.type === "update-send") {
       if (command.patch.levelDb !== undefined) {
         await this.audioHost?.previewMixerParameter({
-          target: "send", id: command.sendId, parameter: "levelDb", value: command.patch.levelDb
+          target: "send",
+          id: command.sendId,
+          parameter: "levelDb",
+          value: command.patch.levelDb
         })
       }
       if (command.patch.pan !== undefined) {
         await this.audioHost?.previewMixerParameter({
-          target: "send", id: command.sendId, parameter: "pan", value: command.patch.pan
+          target: "send",
+          id: command.sendId,
+          parameter: "pan",
+          value: command.patch.pan
         })
       }
     }

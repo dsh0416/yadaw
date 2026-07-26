@@ -1,10 +1,6 @@
 import { acceptHMRUpdate, defineStore } from "pinia"
 import { computed, shallowRef } from "vue"
-import type {
-  MidiImportPlan,
-  MidiImportPreview,
-  MidiImportTrackTarget
-} from "@yadaw/contracts"
+import type { MidiImportPlan, MidiImportPreview, MidiImportTrackTarget } from "@yadaw/contracts"
 import { secondsToTick } from "../utils/tempoMap"
 import { useMixerStore } from "./mixer"
 import { useTransportStore } from "./transport"
@@ -32,10 +28,12 @@ export const useMidiImportStore = defineStore("midi-import", () => {
       const value = await window.yadaw.prepareMidiImport(path)
       if (!value) return
       preview.value = value
-      targets.value = Object.fromEntries(value.tracks.map((track) => [
-        key(track.sourceTrack, track.sequence),
-        { type: track.noteCount > 0 ? "new" : "ignore" }
-      ]))
+      targets.value = Object.fromEntries(
+        value.tracks.map((track) => [
+          key(track.sourceTrack, track.sequence),
+          { type: track.noteCount > 0 ? "new" : "ignore" }
+        ])
+      )
       tempoMode.value = "project"
     } catch (reason) {
       error.value = reason instanceof Error ? reason.message : "Unable to read the MIDI file."
@@ -48,11 +46,7 @@ export const useMidiImportStore = defineStore("midi-import", () => {
     return targets.value[key(sourceTrack, sequence)] ?? { type: "ignore" }
   }
 
-  function setTarget(
-    sourceTrack: number,
-    sequence: number,
-    target: MidiImportTrackTarget
-  ): void {
+  function setTarget(sourceTrack: number, sequence: number, target: MidiImportTrackTarget): void {
     targets.value = { ...targets.value, [key(sourceTrack, sequence)]: target }
   }
 
@@ -64,9 +58,10 @@ export const useMidiImportStore = defineStore("midi-import", () => {
     const plan: MidiImportPlan = {
       token: current.token,
       importTempoMap: tempoMode.value === "midi",
-      insertionTick: tempoMode.value === "midi"
-        ? 0
-        : secondsToTick(mixerStore.graph.tempoMap, transportStore.playheadSeconds),
+      insertionTick:
+        tempoMode.value === "midi"
+          ? 0
+          : secondsToTick(mixerStore.graph.tempoMap, transportStore.playheadSeconds),
       tracks: current.tracks.map((track) => ({
         sourceTrack: track.sourceTrack,
         sequence: track.sequence,

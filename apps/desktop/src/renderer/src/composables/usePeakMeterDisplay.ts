@@ -51,19 +51,13 @@ export function usePeakMeterDisplay(options: {
       displayedPeakDb.value = Math.max(inputPeakDb, returnedPeak)
       latchedPeakDb.value = Math.max(latchedPeakDb.value, inputPeakDb)
 
-      if (
-        !Number.isFinite(heldPeakDb.value) ||
-        inputPeakDb >= heldPeakDb.value
-      ) {
+      if (!Number.isFinite(heldPeakDb.value) || inputPeakDb >= heldPeakDb.value) {
         heldPeakDb.value = inputPeakDb
         holdUntil = Number.isFinite(PEAK_HOLD_DURATION_MS[peakHold])
           ? timestamp + PEAK_HOLD_DURATION_MS[peakHold]
           : Number.POSITIVE_INFINITY
       } else if (timestamp >= holdUntil) {
-        heldPeakDb.value = Math.max(
-          inputPeakDb,
-          decay(heldPeakDb.value, elapsedSeconds, rate)
-        )
+        heldPeakDb.value = Math.max(inputPeakDb, decay(heldPeakDb.value, elapsedSeconds, rate))
       }
 
       if (!meter.clipped) {

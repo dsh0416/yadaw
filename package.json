@@ -14,8 +14,10 @@
     "build:native": "pnpm --filter @yadaw/dsp-node build && pnpm --filter @yadaw/audio-host-client build && cargo build -p yadaw-audio-host --release && cargo build -p yadaw-vst3-host --bin yadaw-vst3-probe --release && cmake -S . -B target/vst3-bridge-build -DSMTG_ENABLE_VST3_PLUGIN_EXAMPLES=OFF -DSMTG_ENABLE_VST3_HOSTING_EXAMPLES=OFF -DSMTG_ENABLE_VSTGUI_SUPPORT=OFF && cmake --build target/vst3-bridge-build --config Release --target yadaw-vst3-bridge",
     "db:generate": "pnpm --filter @yadaw/project-db db:generate",
     "db:check": "pnpm --filter @yadaw/project-db db:check",
-    "check": "pnpm check:rust && pnpm -r --if-present check && pnpm --filter @yadaw/desktop test:unit && pnpm --filter @yadaw/project-db test:integration",
-    "check:rust": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace && cargo test -p yadaw-dsp-node --features bench-internals --test realtime_allocations && cargo bench --workspace --bench mixer_graph --bench native_render --bench media_streaming --bench recording --features yadaw-dsp-node/bench-internals --no-run",
+    "check": "pnpm format:prettier:check && pnpm lint:eslint && pnpm check:rust && pnpm -r --if-present check && pnpm --filter @yadaw/desktop test:unit && pnpm --filter @yadaw/project-db test:integration",
+    "check:rust": "pnpm format:rust:check && pnpm lint:rust && pnpm test:rust && pnpm bench:rust:check",
+    "test:rust": "cargo test --workspace && cargo test -p yadaw-dsp-node --features bench-internals --test realtime_allocations",
+    "bench:rust:check": "cargo bench --workspace --bench mixer_graph --bench native_render --bench media_streaming --bench recording --features yadaw-dsp-node/bench-internals --no-run",
     "bench:rust": "cargo bench --workspace --bench mixer_graph --bench native_render --bench media_streaming --bench recording --features yadaw-dsp-node/bench-internals",
     "bench:rust:quick": "cargo bench --workspace --bench mixer_graph --bench native_render --bench media_streaming --bench recording --features yadaw-dsp-node/bench-internals -- --quick",
     "bench:rust:save": "cargo bench --workspace --bench mixer_graph --bench native_render --bench media_streaming --bench recording --features yadaw-dsp-node/bench-internals -- --save-baseline main",
@@ -24,6 +26,24 @@
     "test:integration": "pnpm --filter @yadaw/project-db test:integration",
     "test:vst3-fixtures": "cmake -S . -B target/vst3-fixtures -DYADAW_BUILD_VST3_FIXTURES=ON && cmake --build target/vst3-fixtures/third_party/vst3sdk/public.sdk/samples/vst/again --config Debug --target again && cmake --build target/vst3-fixtures/third_party/vst3sdk/public.sdk/samples/vst/note_expression_synth --config Debug --target note-expression-synth && cmake --build target/vst3-fixtures --config Debug --target yadaw-vst3-probe yadaw-vst3-bridge yadaw-vst3-smoke && cargo build -p yadaw-audio-host && pnpm --filter @yadaw/desktop test:vst3-helper",
     "test:e2e": "pnpm --filter @yadaw/desktop test:e2e",
-    "format": "cargo fmt --all"
+    "format": "pnpm format:prettier && pnpm format:rust",
+    "format:check": "pnpm format:prettier:check && pnpm format:rust:check",
+    "format:prettier": "prettier --write .",
+    "format:prettier:check": "prettier --check .",
+    "format:rust": "cargo fmt --all",
+    "format:rust:check": "cargo fmt --all --check",
+    "lint": "pnpm lint:eslint && pnpm lint:rust",
+    "lint:eslint": "eslint \"*.{js,mjs,ts}\" \"apps/**/*.{cjs,js,mjs,ts,vue}\" \"packages/**/*.{cjs,js,mjs,ts,vue}\" --max-warnings 0",
+    "lint:eslint:fix": "eslint \"*.{js,mjs,ts}\" \"apps/**/*.{cjs,js,mjs,ts,vue}\" \"packages/**/*.{cjs,js,mjs,ts,vue}\" --fix --max-warnings 0",
+    "lint:rust": "cargo clippy --workspace --all-targets -- -D warnings"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.8.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-vue": "^10.10.0",
+    "globals": "^17.7.0",
+    "prettier": "^3.9.6",
+    "typescript-eslint": "^8.65.0"
   }
 }

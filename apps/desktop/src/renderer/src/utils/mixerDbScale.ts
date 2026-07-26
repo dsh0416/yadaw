@@ -12,7 +12,7 @@ export const METER_MAX_DB = 0
 
 export function dbToLevelPercent(db: number, minDb: number, maxDb: number): number {
   if (!Number.isFinite(db)) return 0
-  return Math.min(100, Math.max(0, (db - minDb) / (maxDb - minDb) * 100))
+  return Math.min(100, Math.max(0, ((db - minDb) / (maxDb - minDb)) * 100))
 }
 
 function scaleMark(

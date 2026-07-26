@@ -34,8 +34,8 @@ function clipStyle(clip: MidiClipState) {
 }
 
 function noteStyle(clip: MidiClipState, note: MidiClipState["notes"][number]) {
-  const left = note.startTick / clip.lengthTicks * 100
-  const width = Math.max(0.8, note.durationTicks / clip.lengthTicks * 100)
+  const left = (note.startTick / clip.lengthTicks) * 100
+  const width = Math.max(0.8, (note.durationTicks / clip.lengthTicks) * 100)
   return {
     left: `${left}%`,
     width: `${width}%`,
@@ -100,5 +100,53 @@ function dropClip(event: DragEvent): void {
 </template>
 
 <style scoped>
-.midi-track{position:relative;overflow:hidden;border-bottom:1px solid var(--line-strong);background:var(--daw-lane);background-image:linear-gradient(90deg,color-mix(in srgb,var(--text-primary) 3%,transparent) 1px,transparent 1px);background-size:48px 100%}.midi-clip{position:absolute;top:5px;bottom:5px;overflow:hidden;min-width:9px;padding:4px 5px;border:1px solid;border-radius:3px;color:var(--text-primary);text-align:left;cursor:grab}.midi-clip:active{cursor:grabbing}.midi-clip:focus-visible{outline:2px solid var(--focus);outline-offset:1px}.midi-clip strong{position:relative;z-index:2;display:block;overflow:hidden;font:700 7px var(--font-utility);text-overflow:ellipsis;white-space:nowrap}.midi-note{position:absolute;height:2px;min-width:1px;border-radius:1px;opacity:.9;pointer-events:none}
+.midi-track {
+  position: relative;
+  overflow: hidden;
+  border-bottom: 1px solid var(--line-strong);
+  background: var(--daw-lane);
+  background-image: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--text-primary) 3%, transparent) 1px,
+    transparent 1px
+  );
+  background-size: 48px 100%;
+}
+.midi-clip {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  overflow: hidden;
+  min-width: 9px;
+  padding: 4px 5px;
+  border: 1px solid;
+  border-radius: 3px;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: grab;
+}
+.midi-clip:active {
+  cursor: grabbing;
+}
+.midi-clip:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+.midi-clip strong {
+  position: relative;
+  z-index: 2;
+  display: block;
+  overflow: hidden;
+  font: 700 7px var(--font-utility);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.midi-note {
+  position: absolute;
+  height: 2px;
+  min-width: 1px;
+  border-radius: 1px;
+  opacity: 0.9;
+  pointer-events: none;
+}
 </style>

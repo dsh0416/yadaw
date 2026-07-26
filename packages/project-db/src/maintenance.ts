@@ -12,14 +12,10 @@ export async function listLargeObjectOids(
   const result = await executor.execute(
     sql`select oid from pg_catalog.pg_largeobject_metadata order by oid`
   )
-  return result.rows.map((row) => Number(row.oid)).filter((oid) =>
-    Number.isInteger(oid) && oid > 0
-  )
+  return result.rows.map((row) => Number(row.oid)).filter((oid) => Number.isInteger(oid) && oid > 0)
 }
 
-export async function vacuumAndAnalyze(
-  executor: DatabaseMaintenanceExecutor
-): Promise<void> {
+export async function vacuumAndAnalyze(executor: DatabaseMaintenanceExecutor): Promise<void> {
   // VACUUM cannot run inside a transaction. Keep this as a separate save-time
   // maintenance step after orphan cleanup has committed.
   await executor.execute(sql`vacuum (analyze)`)

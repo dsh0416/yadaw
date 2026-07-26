@@ -107,13 +107,40 @@
   --shadow: #34383d24;
 }
 
-* { box-sizing: border-box; }
-html, body, #root { width: 100%; height: 100%; }
-body { margin: 0; min-width: 960px; min-height: 640px; overflow: hidden; color: var(--text-primary); background: var(--canvas); }
-button, input { font: inherit; }
-button { color: inherit; }
-button, [role="tab"], [role="radio"], [role="combobox"] { -webkit-tap-highlight-color: transparent; }
-::selection { color: var(--button-primary-text); background: var(--accent-strong); }
+* {
+  box-sizing: border-box;
+}
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+}
+body {
+  margin: 0;
+  min-width: 960px;
+  min-height: 640px;
+  overflow: hidden;
+  color: var(--text-primary);
+  background: var(--canvas);
+}
+button,
+input {
+  font: inherit;
+}
+button {
+  color: inherit;
+}
+button,
+[role="tab"],
+[role="radio"],
+[role="combobox"] {
+  -webkit-tap-highlight-color: transparent;
+}
+::selection {
+  color: var(--button-primary-text);
+  background: var(--accent-strong);
+}
 
 .preferences-button {
   position: relative;
@@ -128,7 +155,9 @@ button, [role="tab"], [role="radio"], [role="combobox"] { -webkit-tap-highlight-
   background: transparent;
   cursor: pointer;
 }
-.tooltip-arrow { fill: var(--line-strong); }
+.tooltip-arrow {
+  fill: var(--line-strong);
+}
 
 .tooltip-content {
   z-index: 110;
@@ -144,24 +173,22 @@ button, [role="tab"], [role="radio"], [role="combobox"] { -webkit-tap-highlight-
   font-size: 9px;
   animation: floating-surface-in 100ms ease-out;
 }
-.tooltip-content span { padding: 2px 4px; border: 1px solid var(--line-strong); border-radius: 3px; color: var(--text-muted); font: 7px var(--font-utility); }
+.tooltip-content span {
+  padding: 2px 4px;
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  color: var(--text-muted);
+  font: 7px var(--font-utility);
+}
 
 /* The large DAW surfaces stay deliberately neutral; color is reserved for signal state. */
-:root[data-theme] :is(
-  .preferences-content,
-  .recording-preferences,
-  .display-preferences,
-  .welcome-shell
-) {
+:root[data-theme]
+  :is(.preferences-content, .recording-preferences, .display-preferences, .welcome-shell) {
   color: var(--text-primary);
   background: var(--canvas);
 }
 
-:root[data-theme] :is(
-  .welcome-brand,
-  .new-project,
-  .recent-projects
-) {
+:root[data-theme] :is(.welcome-brand, .new-project, .recent-projects) {
   background: var(--surface-1);
 }
 
@@ -195,7 +222,8 @@ button, [role="tab"], [role="radio"], [role="combobox"] { -webkit-tap-highlight-
   background: var(--surface-active);
 }
 
-:root[data-theme] :is(.path-control code, .path-control button, .recording-setting select, .select-trigger) {
+:root[data-theme]
+  :is(.path-control code, .path-control button, .recording-setting select, .select-trigger) {
   border-color: var(--line-strong);
   color: var(--text-secondary);
   background: var(--surface-2);
@@ -235,5 +263,19 @@ button, [role="tab"], [role="radio"], [role="combobox"] { -webkit-tap-highlight-
   color: var(--accent);
 }
 
-@keyframes floating-surface-in { from { opacity: 0; transform: translateY(3px) scale(.98); } }
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
+@keyframes floating-surface-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px) scale(0.98);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

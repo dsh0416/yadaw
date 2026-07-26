@@ -1,9 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue"
 import type { TempoEventState, TempoMapSnapshot } from "@yadaw/contracts"
-import {
-  barTicksThroughTick
-} from "../../../utils/tempoMap"
+import { barTicksThroughTick } from "../../../utils/tempoMap"
 import GlobalValueLane, { type GlobalLanePoint } from "./GlobalValueLane.vue"
 
 const MINIMUM_TEMPO = 20
@@ -50,14 +48,12 @@ const points = computed<GlobalLanePoint[]>(() =>
     lockRemoval: event.tick === 0
   }))
 )
-const selectedId = computed(() =>
-  props.selectedTick === null ? null : String(props.selectedTick)
-)
+const selectedId = computed(() => (props.selectedTick === null ? null : String(props.selectedTick)))
 const verticalGuides = computed(() => {
-  const maximumTick = props.contentWidth / props.pixelsPerQuarter *
-    props.tempoMap.ticksPerQuarter
-  return barTicksThroughTick(props.tempoMap, maximumTick)
-    .map((tick) => tick / props.tempoMap.ticksPerQuarter * props.pixelsPerQuarter)
+  const maximumTick = (props.contentWidth / props.pixelsPerQuarter) * props.tempoMap.ticksPerQuarter
+  return barTicksThroughTick(props.tempoMap, maximumTick).map(
+    (tick) => (tick / props.tempoMap.ticksPerQuarter) * props.pixelsPerQuarter
+  )
 })
 
 function normalizeTempo(value: number): number {
@@ -82,17 +78,13 @@ function replaceEvents(events: TempoEventState[], selectedTick: number | null): 
 
 function createPoint(position: number, value: number): void {
   const tick = Math.max(0, Math.round(position * props.tempoMap.ticksPerQuarter))
-  replaceEvents(
-    [...props.tempoMap.tempoEvents, { tick, beatsPerMinute: value }],
-    tick
-  )
+  replaceEvents([...props.tempoMap.tempoEvents, { tick, beatsPerMinute: value }], tick)
 }
 
 function updatePoint(id: string, position: number, value: number): void {
   const previousTick = Number(id)
-  const nextTick = previousTick === 0
-    ? 0
-    : Math.max(0, Math.round(position * props.tempoMap.ticksPerQuarter))
+  const nextTick =
+    previousTick === 0 ? 0 : Math.max(0, Math.round(position * props.tempoMap.ticksPerQuarter))
   replaceEvents(
     props.tempoMap.tempoEvents
       .filter((event) => event.tick !== previousTick)

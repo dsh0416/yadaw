@@ -50,8 +50,9 @@ describe("AudioBenchmarkHost", () => {
     benchmark.open()
     const wrapper = mount(AudioBenchmarkHost, { global: { plugins: [pinia] } })
     await nextTick()
-    const runButton = Array.from(document.body.querySelectorAll("button"))
-      .find((button) => button.textContent === "Run benchmark")
+    const runButton = Array.from(document.body.querySelectorAll("button")).find(
+      (button) => button.textContent === "Run benchmark"
+    )
     runButton?.click()
     await flushPromises()
 

@@ -100,7 +100,11 @@ pub struct Vst3ProcessorHandle {
 // The bridge instance is created on the helper control thread and processed only by the
 // helper audio thread. Its controller entry points are required by VST3 to be callable from
 // the host UI/control thread.
+// SAFETY: The bridge owns the pointed-to instance and documents these entry points as safe to
+// invoke from the designated helper threads for the lifetime of Vst3Runtime.
 unsafe impl Send for Vst3ProcessorHandle {}
+// SAFETY: Shared access only invokes bridge functions that internally synchronize controller
+// state; instance destruction remains exclusively owned by Vst3Runtime.
 unsafe impl Sync for Vst3ProcessorHandle {}
 
 impl Vst3ProcessorHandle {
@@ -179,6 +183,8 @@ impl Vst3Runtime {
         // SAFETY: The bridge path is application-owned and all symbols are copied while the
         // library handle remains stored in this runtime.
         let library = unsafe { Library::new(path) }.map_err(|error| error.to_string())?;
+        // SAFETY: Every requested symbol has the exact ABI declared by the companion bridge, and
+        // the Library is retained by Vst3Runtime for longer than the copied function pointers.
         let functions = unsafe {
             Functions {
                 create: *library
@@ -323,13 +329,19 @@ impl Vst3Runtime {
         self.instances
             .iter()
             .filter_map(|(id, instance)| {
+                // SAFETY: The instance pointer is live while borrowed from self.instances and the
+                // function pointer comes from the retained companion bridge library.
                 let changed = unsafe {
                     (self.functions.consume_latency_changed)(instance.pointer.as_ptr()) != 0
                 };
                 changed.then(|| {
-                    let latency =
-                        unsafe { (self.functions.latency_samples)(instance.pointer.as_ptr()) };
-                    let tail = unsafe { (self.functions.tail_samples)(instance.pointer.as_ptr()) };
+                    // SAFETY: The instance remains live for both read-only timing queries.
+                    let (latency, tail) = unsafe {
+                        (
+                            (self.functions.latency_samples)(instance.pointer.as_ptr()),
+                            (self.functions.tail_samples)(instance.pointer.as_ptr()),
+                        )
+                    };
                     (id.clone(), latency, (tail != INFINITE_TAIL).then_some(tail))
                 })
             })
@@ -337,6 +349,8 @@ impl Vst3Runtime {
     }
 
     pub fn pump_editor_events(&self) {
+        // SAFETY: The function pointer comes from the retained bridge library and takes no
+        // borrowed application data.
         unsafe { (self.functions.pump_editor_events)() };
     }
 
@@ -363,9 +377,13 @@ impl Vst3Runtime {
         };
         if let Some(instance) = self.instances.get(&instance_id) {
             // Graph rebuilds deliberately reuse the existing processor and editor instance.
-            let latency_samples =
-                unsafe { (self.functions.latency_samples)(instance.pointer.as_ptr()) };
-            let tail = unsafe { (self.functions.tail_samples)(instance.pointer.as_ptr()) };
+            // SAFETY: The instance remains live for both read-only timing queries.
+            let (latency_samples, tail) = unsafe {
+                (
+                    (self.functions.latency_samples)(instance.pointer.as_ptr()),
+                    (self.functions.tail_samples)(instance.pointer.as_ptr()),
+                )
+            };
             return ControlResult::PluginLoaded {
                 runtime_handle: instance.runtime_handle,
                 latency_samples,
@@ -425,9 +443,14 @@ impl Vst3Runtime {
                 return error("VST3 state restoration failed");
             }
         }
-        // SAFETY: The instance is live and owned by the map below.
-        let latency_samples = unsafe { (self.functions.latency_samples)(pointer.as_ptr()) };
-        let tail = unsafe { (self.functions.tail_samples)(pointer.as_ptr()) };
+        // SAFETY: The newly created instance is live for both read-only timing queries and is
+        // transferred into the map immediately below.
+        let (latency_samples, tail) = unsafe {
+            (
+                (self.functions.latency_samples)(pointer.as_ptr()),
+                (self.functions.tail_samples)(pointer.as_ptr()),
+            )
+        };
         let runtime_handle = instance.runtime_handle;
         self.instances.insert(instance_id, instance);
         ControlResult::PluginLoaded {
@@ -454,6 +477,8 @@ impl Vst3Runtime {
                 title: [0; 128],
                 units: [0; 128],
             };
+            // SAFETY: The instance is live, index is below the bridge-reported count, and info is
+            // writable storage with the ABI layout expected by the bridge.
             let valid = unsafe {
                 (self.functions.parameter_info)(instance.pointer.as_ptr(), index, &mut info)
             };
@@ -487,6 +512,8 @@ impl Vst3Runtime {
             return error("VST3 parameter value is outside 0...1");
         }
         if gesture != ParameterGesture::Begin {
+            // SAFETY: The instance is live, the value was validated, and the bridge copies the
+            // scalar parameter command during the call.
             let changed = unsafe {
                 (self.functions.set_parameter)(
                     instance.pointer.as_ptr(),
@@ -500,6 +527,7 @@ impl Vst3Runtime {
             }
         }
         if gesture == ParameterGesture::End {
+            // SAFETY: The instance remains live and the bridge flushes its own parameter queue.
             let flushed = unsafe { (self.functions.flush_parameters)(instance.pointer.as_ptr()) };
             if flushed == 0 {
                 return error("VST3 stopped-state parameter flush failed");
@@ -532,6 +560,7 @@ impl Vst3Runtime {
         let Some(instance) = self.instances.get(instance_id) else {
             return error("VST3 instance is not loaded");
         };
+        // SAFETY: The instance is live and the bridge owns the native editor lifecycle.
         let open = unsafe { (self.functions.open_editor)(instance.pointer.as_ptr()) != 0 };
         ControlResult::PluginEditor {
             editor_kind: if open { "native" } else { "generic" }.into(),
@@ -543,10 +572,13 @@ impl Vst3Runtime {
         let Some(instance) = self.instances.get(instance_id) else {
             return ControlResult::Accepted;
         };
+        // SAFETY: The instance is live and the bridge owns the native editor lifecycle.
         unsafe { (self.functions.close_editor)(instance.pointer.as_ptr()) };
+        // SAFETY: The same live instance may be queried after the synchronous close request.
+        let open = unsafe { (self.functions.editor_open)(instance.pointer.as_ptr()) != 0 };
         ControlResult::PluginEditor {
             editor_kind: "native".into(),
-            open: unsafe { (self.functions.editor_open)(instance.pointer.as_ptr()) != 0 },
+            open,
         }
     }
 }
@@ -557,6 +589,8 @@ fn copy_state(pointer: NonNull<c_void>, size: StateSizeFn, copy: StateCopyFn) ->
     let length = unsafe { size(pointer.as_ptr()) };
     let mut state = vec![0; length];
     if length > 0 {
+        // SAFETY: state has exactly the capacity reported by the same live bridge instance, and
+        // the bridge writes at most the supplied slice length.
         let copied = unsafe { copy(pointer.as_ptr(), state.as_mut_ptr(), state.len()) };
         state.truncate(copied);
     }

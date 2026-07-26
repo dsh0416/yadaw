@@ -19,16 +19,12 @@ import type {
   MixerParameterPreview,
   MidiImportPlan,
   PluginParameterChange,
-  PluginScanRequest,
   TransportCommand,
   StorageSpaceSnapshot,
   SystemPerformanceSnapshot,
   WaveformWindowRequest
 } from "@yadaw/contracts"
-import {
-  engineInfo,
-  processGain
-} from "@yadaw/dsp-node"
+import { engineInfo, processGain } from "@yadaw/dsp-node"
 import { ApplicationSettingsStore } from "./application-settings"
 import { AudioHostService } from "./audio-host-service"
 import { createAudioBenchmarkReport } from "./audio-benchmark-service"
@@ -59,7 +55,7 @@ let previousCpuTicks: CpuTicks[] | null = null
 
 function percentage(numerator: number, denominator: number): number {
   if (denominator <= 0) return 0
-  return Math.min(100, Math.max(0, numerator / denominator * 100))
+  return Math.min(100, Math.max(0, (numerator / denominator) * 100))
 }
 
 function sampleCpu(): SystemPerformanceSnapshot["cpu"] {
@@ -80,9 +76,7 @@ function sampleCpu(): SystemPerformanceSnapshot["cpu"] {
     return {
       index,
       speedMhz: processor.speed,
-      usagePercent: prior && totalDelta > 0
-        ? percentage(totalDelta - idleDelta, totalDelta)
-        : null
+      usagePercent: prior && totalDelta > 0 ? percentage(totalDelta - idleDelta, totalDelta) : null
     }
   })
 
@@ -102,9 +96,8 @@ function sampleCpu(): SystemPerformanceSnapshot["cpu"] {
   )
 
   return {
-    overallUsagePercent: totals.total > 0
-      ? percentage(totals.total - totals.idle, totals.total)
-      : null,
+    overallUsagePercent:
+      totals.total > 0 ? percentage(totals.total - totals.idle, totals.total) : null,
     cores
   }
 }
@@ -131,7 +124,9 @@ async function sampleStorageSpace(
   }
 }
 
-async function sampleSystemPerformance(settings: ApplicationSettingsStore): Promise<SystemPerformanceSnapshot> {
+async function sampleSystemPerformance(
+  settings: ApplicationSettingsStore
+): Promise<SystemPerformanceSnapshot> {
   const totalBytes = totalmem()
   const freeBytes = freemem()
   const applicationSettings = await settings.get()
@@ -155,13 +150,17 @@ async function sampleSystemPerformance(settings: ApplicationSettingsStore): Prom
 }
 
 function validateCreateProject(value: unknown): CreateProjectRequest {
-  if (typeof value !== "object" || value === null) throw new TypeError("Project options must be an object")
+  if (typeof value !== "object" || value === null)
+    throw new TypeError("Project options must be an object")
   const request = value as CreateProjectRequest
-  if (typeof request.name !== "string" || typeof request.sampleRate !== "number" ||
-      typeof request.timeSignatureNumerator !== "number" ||
-      typeof request.timeSignatureDenominator !== "number" ||
-      (request.waveformDisplayMode !== "separate" && request.waveformDisplayMode !== "aggregate") ||
-      (request.path !== undefined && typeof request.path !== "string")) {
+  if (
+    typeof request.name !== "string" ||
+    typeof request.sampleRate !== "number" ||
+    typeof request.timeSignatureNumerator !== "number" ||
+    typeof request.timeSignatureDenominator !== "number" ||
+    (request.waveformDisplayMode !== "separate" && request.waveformDisplayMode !== "aggregate") ||
+    (request.path !== undefined && typeof request.path !== "string")
+  ) {
     throw new TypeError("Invalid project options")
   }
   return request
@@ -179,35 +178,55 @@ function validateProjectConfiguration(value: unknown): ProjectConfiguration {
 }
 
 function validateWaveformRequest(value: unknown): WaveformWindowRequest {
-  if (typeof value !== "object" || value === null) throw new TypeError("Waveform request must be an object")
+  if (typeof value !== "object" || value === null)
+    throw new TypeError("Waveform request must be an object")
   const request = value as WaveformWindowRequest
   if (
-    typeof request.id !== "string" || request.id.length === 0 || request.id.length > 256 ||
-    !Number.isSafeInteger(request.startFrame) || request.startFrame < 0 ||
-    !Number.isSafeInteger(request.endFrame) || request.endFrame < request.startFrame ||
+    typeof request.id !== "string" ||
+    request.id.length === 0 ||
+    request.id.length > 256 ||
+    !Number.isSafeInteger(request.startFrame) ||
+    request.startFrame < 0 ||
+    !Number.isSafeInteger(request.endFrame) ||
+    request.endFrame < request.startFrame ||
     !Number.isInteger(request.maxBuckets) ||
-    request.maxBuckets < 1 || request.maxBuckets > 4_096
-  ) throw new TypeError("Invalid waveform request")
+    request.maxBuckets < 1 ||
+    request.maxBuckets > 4_096
+  )
+    throw new TypeError("Invalid waveform request")
   return request
 }
 
 function validateSettingsPatch(value: unknown): ApplicationSettingsPatch {
-  if (typeof value !== "object" || value === null) throw new TypeError("Settings patch must be an object")
+  if (typeof value !== "object" || value === null)
+    throw new TypeError("Settings patch must be an object")
   const patch = value as ApplicationSettingsPatch
   if (patch.swapDirectory !== undefined && typeof patch.swapDirectory !== "string") {
     throw new TypeError("Swap directory must be a string")
   }
-  if (patch.recordingBitDepth !== undefined &&
-      patch.recordingBitDepth !== "float32" && patch.recordingBitDepth !== "pcm24" && patch.recordingBitDepth !== "pcm16") {
+  if (
+    patch.recordingBitDepth !== undefined &&
+    patch.recordingBitDepth !== "float32" &&
+    patch.recordingBitDepth !== "pcm24" &&
+    patch.recordingBitDepth !== "pcm16"
+  ) {
     throw new TypeError("Unsupported recording bit depth")
   }
-  if (patch.theme !== undefined &&
-      patch.theme !== "light" && patch.theme !== "dark" && patch.theme !== "system") {
+  if (
+    patch.theme !== undefined &&
+    patch.theme !== "light" &&
+    patch.theme !== "dark" &&
+    patch.theme !== "system"
+  ) {
     throw new TypeError("Unsupported theme preference")
   }
-  if (patch.meterPeakHold !== undefined &&
-      patch.meterPeakHold !== "800ms" && patch.meterPeakHold !== "2s" &&
-      patch.meterPeakHold !== "4s" && patch.meterPeakHold !== "infinite") {
+  if (
+    patch.meterPeakHold !== undefined &&
+    patch.meterPeakHold !== "800ms" &&
+    patch.meterPeakHold !== "2s" &&
+    patch.meterPeakHold !== "4s" &&
+    patch.meterPeakHold !== "infinite"
+  ) {
     throw new TypeError("Unsupported meter peak hold")
   }
   if (patch.meterReturnRate !== undefined && patch.meterReturnRate !== "iec-type-i") {
@@ -292,7 +311,7 @@ function validateAudioPreferences(value: unknown): AudioPreferences {
     backend,
     inputDeviceId: preferences.inputDeviceId,
     outputDeviceId: preferences.outputDeviceId,
-    bufferSize: preferences.bufferSize as AudioPreferences["bufferSize"]
+    bufferSize: preferences.bufferSize
   }
 }
 
@@ -366,9 +385,8 @@ function registerIpcHandlers(
 
   ipcMain.handle(IPC_CHANNELS.audioStart, async (event, value: unknown) => {
     assertTrustedSender(event)
-    const transition = lifecycle.snapshot().audio.status === "running"
-      ? "reconfiguring"
-      : "starting"
+    const transition =
+      lifecycle.snapshot().audio.status === "running" ? "reconfiguring" : "starting"
     lifecycle.beginAudio(transition)
     try {
       if (!audioHostService) throw new Error("Audio host is not running")
@@ -380,7 +398,9 @@ function registerIpcHandlers(
       return snapshot
     } catch (error) {
       const snapshot = audioHostService
-        ? await audioHostService.audioEngineSnapshot().catch(() => lifecycle.snapshot().audio.runtime)
+        ? await audioHostService
+            .audioEngineSnapshot()
+            .catch(() => lifecycle.snapshot().audio.runtime)
         : lifecycle.snapshot().audio.runtime
       lifecycle.failAudio(error, normalizeAudioRuntime(snapshot))
       throw error
@@ -397,7 +417,9 @@ function registerIpcHandlers(
       return snapshot
     } catch (error) {
       const snapshot = audioHostService
-        ? await audioHostService.audioEngineSnapshot().catch(() => lifecycle.snapshot().audio.runtime)
+        ? await audioHostService
+            .audioEngineSnapshot()
+            .catch(() => lifecycle.snapshot().audio.runtime)
         : lifecycle.snapshot().audio.runtime
       lifecycle.failAudio(error, normalizeAudioRuntime(snapshot))
       throw error
@@ -420,7 +442,11 @@ function registerIpcHandlers(
 
   ipcMain.handle(IPC_CHANNELS.mixerExecute, async (event, value: unknown) => {
     assertTrustedSender(event)
-    if (!value || typeof value !== "object" || typeof (value as { type?: unknown }).type !== "string") {
+    if (
+      !value ||
+      typeof value !== "object" ||
+      typeof (value as { type?: unknown }).type !== "string"
+    ) {
       throw new TypeError("Project command must be an object with a type")
     }
     const command = value as ProjectCommand
@@ -457,7 +483,7 @@ function registerIpcHandlers(
     if (value !== undefined && (typeof value !== "object" || value === null)) {
       throw new TypeError("Plugin scan request must be an object")
     }
-    return plugins.scan((value ?? {}) as PluginScanRequest)
+    return plugins.scan(value ?? {})
   })
 
   ipcMain.handle(IPC_CHANNELS.pluginEditorOpen, (event, value: unknown) => {
@@ -483,7 +509,7 @@ function registerIpcHandlers(
     if (typeof value !== "object" || value === null) {
       throw new TypeError("Plugin parameter change must be an object")
     }
-    plugins.setParameter(value as PluginParameterChange)
+    void plugins.setParameter(value as PluginParameterChange)
   })
 
   ipcMain.handle(IPC_CHANNELS.midiImportPrepare, async (event, value: unknown) => {
@@ -515,7 +541,11 @@ function registerIpcHandlers(
 
   ipcMain.handle(IPC_CHANNELS.transportCommand, (event, value: unknown) => {
     assertTrustedSender(event)
-    if (!value || typeof value !== "object" || typeof (value as { type?: unknown }).type !== "string") {
+    if (
+      !value ||
+      typeof value !== "object" ||
+      typeof (value as { type?: unknown }).type !== "string"
+    ) {
       throw new TypeError("Transport command must be an object with a type")
     }
     const command = value as TransportCommand
@@ -626,11 +656,7 @@ function registerIpcHandlers(
     }
   })
 
-  ipcMain.handle(IPC_CHANNELS.projectOpen, async (
-    event,
-    value: unknown,
-    recoverValue: unknown
-  ) => {
+  ipcMain.handle(IPC_CHANNELS.projectOpen, async (event, value: unknown, recoverValue: unknown) => {
     assertTrustedSender(event)
     if (typeof value !== "string" || !value.trim()) {
       throw new TypeError("Project path must be a non-empty string")
@@ -644,34 +670,49 @@ function registerIpcHandlers(
     try {
       const operationId = "open-project"
       const projectName = basename(path).replace(/\.yadaw$/i, "")
-      operations.upsert({
-        id: operationId,
-        title: `Opening ${projectName}`,
-        phase: recover ? "loading-project-database" : "loading-project-archive",
-        state: "running",
-        completedUnits: 0,
-        totalUnits: 4,
-        cancellable: false,
-        message: null,
-        dropoutFrames: 0
-      }, true)
+      operations.upsert(
+        {
+          id: operationId,
+          title: `Opening ${projectName}`,
+          phase: recover ? "loading-project-database" : "loading-project-archive",
+          state: "running",
+          completedUnits: 0,
+          totalUnits: 4,
+          cancellable: false,
+          message: null,
+          dropoutFrames: 0
+        },
+        true
+      )
       const opened = await projects.open(path, recover, ({ phase, completedUnits }) => {
         operations.patch(operationId, { phase, completedUnits }, true)
       })
-      operations.patch(operationId, {
-        phase: "loading-mixer",
-        completedUnits: 2
-      }, true)
+      operations.patch(
+        operationId,
+        {
+          phase: "loading-mixer",
+          completedUnits: 2
+        },
+        true
+      )
       await mixer.load()
-      operations.patch(operationId, {
-        phase: "preparing-waveforms",
-        completedUnits: 3
-      }, true)
+      operations.patch(
+        operationId,
+        {
+          phase: "preparing-waveforms",
+          completedUnits: 3
+        },
+        true
+      )
       waveforms.rebuildMissingInBackground()
-      operations.patch(operationId, {
-        state: "completed",
-        completedUnits: 4
-      }, true)
+      operations.patch(
+        operationId,
+        {
+          state: "completed",
+          completedUnits: 4
+        },
+        true
+      )
       lifecycle.completeProject(opened)
       return opened
     } catch (error) {
@@ -684,10 +725,14 @@ function registerIpcHandlers(
       const activeOperation = lifecycle.snapshot().project.status === "closed"
       if (activeOperation) {
         try {
-          operations.patch("open-project", {
-            state: "failed",
-            message: error instanceof Error ? error.message : String(error)
-          }, true)
+          operations.patch(
+            "open-project",
+            {
+              state: "failed",
+              message: error instanceof Error ? error.message : String(error)
+            },
+            true
+          )
         } catch {
           // The file chooser or recovery prompt may have failed before the operation existed.
         }
@@ -702,17 +747,20 @@ function registerIpcHandlers(
     if (!current) return null
     lifecycle.beginProject("saving")
     const operationId = `save:${current.id}`
-    operations.upsert({
-      id: operationId,
-      title: `Saving ${current.configuration.name}`,
-      phase: "saving-archive",
-      state: "running",
-      completedUnits: null,
-      totalUnits: null,
-      cancellable: false,
-      message: null,
-      dropoutFrames: 0
-    }, true)
+    operations.upsert(
+      {
+        id: operationId,
+        title: `Saving ${current.configuration.name}`,
+        phase: "saving-archive",
+        state: "running",
+        completedUnits: null,
+        totalUnits: null,
+        cancellable: false,
+        message: null,
+        dropoutFrames: 0
+      },
+      true
+    )
     try {
       await synchronizePluginStates()
       const saved = await projects.save(typeof value === "string" ? value : undefined)
@@ -723,10 +771,14 @@ function registerIpcHandlers(
       return saved
     } catch (error) {
       lifecycle.failProject(error)
-      operations.patch(operationId, {
-        state: "failed",
-        message: error instanceof Error ? error.message : String(error)
-      }, true)
+      operations.patch(
+        operationId,
+        {
+          state: "failed",
+          message: error instanceof Error ? error.message : String(error)
+        },
+        true
+      )
       throw error
     }
   })
@@ -928,7 +980,7 @@ async function shutdownServices(): Promise<void> {
   ])
 }
 
-app.whenReady().then(async () => {
+void app.whenReady().then(async () => {
   const settings = new ApplicationSettingsStore(app.getPath("userData"))
   const executableSuffix = process.platform === "win32" ? ".exe" : ""
   const probePath = app.isPackaged
@@ -953,29 +1005,22 @@ app.whenReady().then(async () => {
         "debug",
         `yadaw-audio-host${executableSuffix}`
       )
-  const bridgeFilename = process.platform === "win32"
-    ? "yadaw-vst3-bridge.dll"
-    : process.platform === "darwin"
-      ? "libyadaw-vst3-bridge.dylib"
-      : "libyadaw-vst3-bridge.so"
+  const bridgeFilename =
+    process.platform === "win32"
+      ? "yadaw-vst3-bridge.dll"
+      : process.platform === "darwin"
+        ? "libyadaw-vst3-bridge.dylib"
+        : "libyadaw-vst3-bridge.so"
   const bridgePath = app.isPackaged
     ? join(process.resourcesPath, bridgeFilename)
-    : resolve(
-        app.getAppPath(),
-        "..",
-        "..",
-        "target",
-        "vst3-bridge-build",
-        "bin",
-        bridgeFilename
-      )
+    : resolve(app.getAppPath(), "..", "..", "target", "vst3-bridge-build", "bin", bridgeFilename)
   audioHostService = new AudioHostService(
     audioHostPath,
     bridgePath,
     join(app.getPath("userData"), "audio-host-crash-marker.bin"),
     (message) => {
-    console.error(`YADAW audio helper failure: ${message}`)
-    for (const window of BrowserWindow.getAllWindows().slice(1)) window.close()
+      console.error(`YADAW audio helper failure: ${message}`)
+      for (const window of BrowserWindow.getAllWindows().slice(1)) window.close()
     }
   )
   audioHostService.start()

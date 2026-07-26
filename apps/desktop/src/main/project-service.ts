@@ -48,8 +48,13 @@ function commandChangesConfiguration(command: ProjectCommand): boolean {
 
 function validateConfiguration(value: CreateProjectRequest): ProjectConfiguration {
   if (!value.name.trim()) throw new TypeError("Project name cannot be empty")
-  if (!PROJECT_SAMPLE_RATES.includes(value.sampleRate)) throw new TypeError("Unsupported sample rate")
-  if (!Number.isInteger(value.timeSignatureNumerator) || value.timeSignatureNumerator < 1 || value.timeSignatureNumerator > 32) {
+  if (!PROJECT_SAMPLE_RATES.includes(value.sampleRate))
+    throw new TypeError("Unsupported sample rate")
+  if (
+    !Number.isInteger(value.timeSignatureNumerator) ||
+    value.timeSignatureNumerator < 1 ||
+    value.timeSignatureNumerator > 32
+  ) {
     throw new TypeError("Invalid time signature numerator")
   }
   if (![1, 2, 4, 8, 16, 32].includes(value.timeSignatureDenominator)) {
@@ -77,7 +82,9 @@ async function fileMtime(path: string): Promise<number | null> {
 }
 
 export class ProjectService {
-  private readonly worker = new ProjectWorkerClient(new URL(/* @vite-ignore */ "./project-worker.mjs", import.meta.url))
+  private readonly worker = new ProjectWorkerClient(
+    new URL(/* @vite-ignore */ "./project-worker.mjs", import.meta.url)
+  )
   private session: ProjectSession | null = null
   private workingRoot: string | null = null
 
@@ -97,7 +104,11 @@ export class ProjectService {
     await rename(`${path}.tmp`, path)
   }
 
-  private async stateFromDatabase(id: string, projectPath: string, recoveredWorkingCopy: boolean): Promise<ProjectSession> {
+  private async stateFromDatabase(
+    id: string,
+    projectPath: string,
+    recoveredWorkingCopy: boolean
+  ): Promise<ProjectSession> {
     return {
       id,
       path: projectPath,
@@ -110,7 +121,9 @@ export class ProjectService {
   async create(request: CreateProjectRequest & { path: string }): Promise<ProjectSession> {
     if (this.session) throw new Error("Close the current project before creating another")
     const configuration = validateConfiguration(request)
-    const projectPath = resolve(request.path.endsWith(".yadaw") ? request.path : `${request.path}.yadaw`)
+    const projectPath = resolve(
+      request.path.endsWith(".yadaw") ? request.path : `${request.path}.yadaw`
+    )
     const id = workspaceId(projectPath)
     this.workingRoot = join(this.userData, "workspaces", id)
     await rm(this.workingRoot, { recursive: true, force: true })
@@ -122,7 +135,13 @@ export class ProjectService {
       denominator: configuration.timeSignatureDenominator,
       waveformDisplayMode: configuration.waveformDisplayMode
     })
-    this.session = { id, path: projectPath, configuration, dirty: true, recoveredWorkingCopy: false }
+    this.session = {
+      id,
+      path: projectPath,
+      configuration,
+      dirty: true,
+      recoveredWorkingCopy: false
+    }
     await this.persistCurrentState()
     await this.settings.addRecent(projectPath, configuration.name)
     return structuredClone(this.session)
@@ -135,9 +154,11 @@ export class ProjectService {
       const previous = JSON.parse(
         await readFile(join(this.userData, "workspaces", id, "session.json"), "utf8")
       ) as WorkingCopyState
-      return previous.dirty &&
+      return (
+        previous.dirty &&
         previous.projectPath === projectPath &&
-        previous.archiveMtimeMs === await fileMtime(projectPath)
+        previous.archiveMtimeMs === (await fileMtime(projectPath))
+      )
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") return false
       throw error
@@ -161,11 +182,13 @@ export class ProjectService {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error
     }
     const archiveMtimeMs = await fileMtime(projectPath)
-    const recover = recoverWorkingCopy && Boolean(
-      previous?.dirty &&
-      previous.projectPath === projectPath &&
-      previous.archiveMtimeMs === archiveMtimeMs
-    )
+    const recover =
+      recoverWorkingCopy &&
+      Boolean(
+        previous?.dirty &&
+        previous.projectPath === projectPath &&
+        previous.archiveMtimeMs === archiveMtimeMs
+      )
     onProgress?.({
       phase: recover ? "loading-project-database" : "loading-project-archive",
       completedUnits: 0
@@ -260,7 +283,11 @@ export class ProjectService {
 
   private async refreshSessionConfiguration(): Promise<void> {
     if (!this.session) return
-    const refreshed = await this.stateFromDatabase(this.session.id, this.session.path, this.session.recoveredWorkingCopy)
+    const refreshed = await this.stateFromDatabase(
+      this.session.id,
+      this.session.path,
+      this.session.recoveredWorkingCopy
+    )
     this.session.configuration = refreshed.configuration
   }
 
@@ -298,7 +325,12 @@ export class ProjectService {
     return this.worker.readLargeObject(assetId)
   }
 
-  readAssetWaveform(assetId: string, startFrame: number, endFrame: number, maxBuckets: number): Promise<StoredWaveformWindow | null> {
+  readAssetWaveform(
+    assetId: string,
+    startFrame: number,
+    endFrame: number,
+    maxBuckets: number
+  ): Promise<StoredWaveformWindow | null> {
     if (!this.session) throw new Error("No project is open")
     return this.worker.readWaveform(assetId, startFrame, endFrame, maxBuckets)
   }
@@ -339,7 +371,7 @@ export class ProjectService {
     const temporary = join(dirname(target), `.${basename(target)}.${randomUUID()}.tmp`)
     const backup = `${target}.bak`
     await this.worker.dump(temporary)
-    const targetExists = await fileMtime(target) !== null
+    const targetExists = (await fileMtime(target)) !== null
     try {
       if (targetExists) {
         await rm(backup, { force: true })
@@ -348,7 +380,11 @@ export class ProjectService {
       await rename(temporary, target)
     } catch (error) {
       await rm(temporary, { force: true })
-      if (targetExists && await fileMtime(target) === null && await fileMtime(backup) !== null) {
+      if (
+        targetExists &&
+        (await fileMtime(target)) === null &&
+        (await fileMtime(backup)) !== null
+      ) {
         await rename(backup, target)
       }
       this.session.path = originalPath

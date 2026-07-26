@@ -26,7 +26,10 @@ describe("operation store", () => {
     const store = useOperationStore()
     store.apply({ type: "upsert", operation: running })
     expect(store.active?.phase).toBe("writing-large-object")
-    store.apply({ type: "upsert", operation: { ...running, state: "completed", phase: "committing-database" } })
+    store.apply({
+      type: "upsert",
+      operation: { ...running, state: "completed", phase: "committing-database" }
+    })
     expect(store.operations).toHaveLength(1)
     vi.advanceTimersByTime(750)
     expect(store.operations).toHaveLength(0)

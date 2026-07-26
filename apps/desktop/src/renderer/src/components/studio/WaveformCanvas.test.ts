@@ -37,16 +37,22 @@ describe("WaveformCanvas", () => {
     Object.values(context).forEach((value) => {
       if (typeof value === "function" && "mockClear" in value) value.mockClear()
     })
-    vi.spyOn(HTMLCanvasElement.prototype, "getContext")
-      .mockReturnValue(context as unknown as CanvasRenderingContext2D)
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(
+      context as unknown as CanvasRenderingContext2D
+    )
     Object.defineProperty(window, "devicePixelRatio", { configurable: true, value: 2 })
     class TestResizeObserver {
       constructor(private readonly callback: ResizeObserverCallback) {}
       observe(target: Element): void {
-        this.callback([{
-          target,
-          contentRect: { width: 120, height: 60 }
-        } as ResizeObserverEntry], this as unknown as ResizeObserver)
+        this.callback(
+          [
+            {
+              target,
+              contentRect: { width: 120, height: 60 }
+            } as ResizeObserverEntry
+          ],
+          this
+        )
       }
       unobserve(): void {}
       disconnect(): void {}

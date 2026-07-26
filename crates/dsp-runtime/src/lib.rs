@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 pub mod block;
 pub mod midi;
 pub mod protocol;

@@ -35,9 +35,7 @@ describe("MidiImportDialog", () => {
 
     expect(document.body.textContent).toContain("Keep the project Tempo Track")
     expect(document.body.textContent).toContain("Import MIDI tempo into project")
-    const radios = document.body.querySelectorAll<HTMLInputElement>(
-      'input[type="radio"]'
-    )
+    const radios = document.body.querySelectorAll<HTMLInputElement>('input[type="radio"]')
     expect(radios).toHaveLength(2)
     expect(radios[0]?.checked).toBe(true)
 

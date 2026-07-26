@@ -42,12 +42,7 @@ const {
   busy: recordingBusy,
   error: recordingError
 } = storeToRefs(recordingStore)
-const {
-  playing,
-  loading: playLoading,
-  canPlay,
-  playheadSeconds
-} = storeToRefs(transportStore)
+const { playing, loading: playLoading, canPlay, playheadSeconds } = storeToRefs(transportStore)
 
 onMounted(() => {
   if (!session.value) void router.replace({ name: "welcome" })
@@ -58,11 +53,11 @@ onMounted(() => {
   transportStore.startPolling()
 })
 async function openPreferences(): Promise<void> {
-  if (!await studioWorkflowStore.prepareToLeaveStudio()) return
+  if (!(await studioWorkflowStore.prepareToLeaveStudio())) return
   void router.push({ name: "preferences" })
 }
 async function openProjectSettings(): Promise<void> {
-  if (!await studioWorkflowStore.prepareToLeaveStudio()) return
+  if (!(await studioWorkflowStore.prepareToLeaveStudio())) return
   void router.push({ name: "project-settings" })
 }
 async function saveProject(): Promise<void> {
@@ -90,8 +85,10 @@ async function toggleRecording(): Promise<void> {
 }
 
 function isEditableTarget(target: EventTarget | null): boolean {
-  return target instanceof HTMLElement &&
+  return (
+    target instanceof HTMLElement &&
     (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
+  )
 }
 
 function handleShortcut(event: KeyboardEvent): void {
@@ -115,7 +112,7 @@ function handleShortcut(event: KeyboardEvent): void {
     if (!activeRecording.value) void transportStore.toggle()
   } else if (event.code === "Home") {
     event.preventDefault()
-    transportStore.goToStart()
+    void transportStore.goToStart()
   } else if (event.code === "KeyR") {
     event.preventDefault()
     void toggleRecording()
@@ -166,13 +163,34 @@ onBeforeUnmount(() => {
       :recording-error="recordingError"
     />
     <ChannelRoutingInspector />
-    <StudioStatusbar :runtime="audioRuntime" :statistics="audioStatistics" :audio-warnings="audioWarnings" />
+    <StudioStatusbar
+      :runtime="audioRuntime"
+      :statistics="audioStatistics"
+      :audio-warnings="audioWarnings"
+    />
     <MidiImportDialog />
   </main>
 </template>
 
 <style scoped>
-.studio-shell{display:grid;grid-template:56px minmax(0,1fr) 25px/214px minmax(0,1fr) 258px;width:100vw;height:100vh;color:var(--text-primary);background:var(--canvas);-webkit-user-select:none;user-select:none}
-.studio-shell :deep(:is(input,textarea,select,[contenteditable]:not([contenteditable="false"]))){-webkit-user-select:text;user-select:text}
-@media(max-width:1100px){.studio-shell{grid-template-columns:184px minmax(0,1fr) 228px}}
+.studio-shell {
+  display: grid;
+  grid-template: 56px minmax(0, 1fr) 25px/214px minmax(0, 1fr) 258px;
+  width: 100vw;
+  height: 100vh;
+  color: var(--text-primary);
+  background: var(--canvas);
+  -webkit-user-select: none;
+  user-select: none;
+}
+.studio-shell
+  :deep(:is(input, textarea, select, [contenteditable]:not([contenteditable="false"]))) {
+  -webkit-user-select: text;
+  user-select: text;
+}
+@media (max-width: 1100px) {
+  .studio-shell {
+    grid-template-columns: 184px minmax(0, 1fr) 228px;
+  }
+}
 </style>

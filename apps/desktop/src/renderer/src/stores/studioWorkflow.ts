@@ -18,13 +18,14 @@ export const useStudioWorkflowStore = defineStore("studio-workflow", () => {
   async function startRecording(): Promise<boolean> {
     if (recordingStore.lifecycle.status !== "idle") return false
     if (mixerStore.audioTracks.length === 0) {
-      if (!await mixerStore.createAudioTrack("stereo")) return false
+      if (!(await mixerStore.createAudioTrack("stereo"))) return false
     }
     if (!mixerStore.audioTracks.some((track) => track.recordArmed)) {
-      const target = mixerStore.audioTracks.find((track) =>
-        track.id === mixerStore.selectedChannelId
-      ) ?? mixerStore.audioTracks[0]
-      if (target && !await mixerStore.updateChannel(target.id, { recordArmed: true })) return false
+      const target =
+        mixerStore.audioTracks.find((track) => track.id === mixerStore.selectedChannelId) ??
+        mixerStore.audioTracks[0]
+      if (target && !(await mixerStore.updateChannel(target.id, { recordArmed: true })))
+        return false
     }
     return Boolean(await recordingStore.start())
   }
@@ -50,7 +51,7 @@ export const useStudioWorkflowStore = defineStore("studio-workflow", () => {
             sourceOffsetFrames: 0,
             lengthFrames: Math.max(
               1,
-              Math.round(asset.frameCount * mixerStore.graph.sampleRate / asset.sampleRate)
+              Math.round((asset.frameCount * mixerStore.graph.sampleRate) / asset.sampleRate)
             ),
             assetSampleRate: asset.sampleRate,
             assetChannels: asset.channels
@@ -75,15 +76,15 @@ export const useStudioWorkflowStore = defineStore("studio-workflow", () => {
   }
 
   async function saveProject(): Promise<boolean> {
-    if (!await prepareToLeaveStudio()) return false
+    if (!(await prepareToLeaveStudio())) return false
     await projectStore.save()
     return projectStore.lifecycle.status === "open" && !projectStore.error
   }
 
   async function closeProject(): Promise<boolean> {
-    if (!await prepareToLeaveStudio()) return false
+    if (!(await prepareToLeaveStudio())) return false
     await transportStore.stop()
-    if (!await projectStore.close()) return false
+    if (!(await projectStore.close())) return false
     transportStore.reset()
     mixerStore.reset()
     arrangementViewStore.reset()
@@ -93,11 +94,11 @@ export const useStudioWorkflowStore = defineStore("studio-workflow", () => {
 
   async function recoverRecording(recording: PendingRecording): Promise<boolean> {
     if (projectStore.session?.path !== recording.projectPath) {
-      if (projectStore.session && !await closeProject()) return false
-      if (!await projectStore.open(recording.projectPath)) return false
+      if (projectStore.session && !(await closeProject())) return false
+      if (!(await projectStore.open(recording.projectPath))) return false
       await mixerStore.load()
     }
-    if (!await recordingStore.recover(recording)) return false
+    if (!(await recordingStore.recover(recording))) return false
     await projectStore.refreshAssets()
     projectStore.markDirty()
     await mixerStore.load()

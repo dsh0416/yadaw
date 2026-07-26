@@ -50,11 +50,81 @@ function normalized(event: Event): number {
         @pointerdown="emit('begin', parameter.id, parameter.normalized)"
         @input="emit('perform', parameter.id, normalized($event))"
         @change="emit('end', parameter.id, normalized($event))"
-      >
+      />
     </label>
   </section>
 </template>
 
 <style scoped>
-.parameter-panel{display:grid;gap:10px;padding:11px 13px;border-bottom:1px solid var(--line-soft);background:var(--surface-1)}.parameter-panel header{display:flex;align-items:center;justify-content:space-between}.parameter-panel header span,.parameter-panel header strong{display:block}.parameter-panel header span{color:var(--accent);font:700 7px var(--font-utility);letter-spacing:.13em}.parameter-panel header strong{margin-top:3px;font-size:9px}.parameter-panel header button{display:grid;place-items:center;width:24px;height:24px;padding:0;border:1px solid var(--line-soft);border-radius:3px;color:var(--text-muted);background:var(--daw-control);cursor:pointer}.parameter-panel label{display:grid;gap:5px}.parameter-panel label>span{display:flex;justify-content:space-between;gap:8px;color:var(--text-muted);font-size:7px}.parameter-panel label b{overflow:hidden;color:var(--text-secondary);text-overflow:ellipsis;white-space:nowrap}.parameter-panel output{white-space:nowrap}.parameter-panel input{width:100%;accent-color:var(--accent)}.parameter-error,.parameter-empty{margin:0;color:var(--text-faint);font-size:8px;line-height:1.5}.parameter-error{color:var(--record)}
+.parameter-panel {
+  display: grid;
+  gap: 10px;
+  padding: 11px 13px;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--surface-1);
+}
+.parameter-panel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.parameter-panel header span,
+.parameter-panel header strong {
+  display: block;
+}
+.parameter-panel header span {
+  color: var(--accent);
+  font: 700 7px var(--font-utility);
+  letter-spacing: 0.13em;
+}
+.parameter-panel header strong {
+  margin-top: 3px;
+  font-size: 9px;
+}
+.parameter-panel header button {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 3px;
+  color: var(--text-muted);
+  background: var(--daw-control);
+  cursor: pointer;
+}
+.parameter-panel label {
+  display: grid;
+  gap: 5px;
+}
+.parameter-panel label > span {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 7px;
+}
+.parameter-panel label b {
+  overflow: hidden;
+  color: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.parameter-panel output {
+  white-space: nowrap;
+}
+.parameter-panel input {
+  width: 100%;
+  accent-color: var(--accent);
+}
+.parameter-error,
+.parameter-empty {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 8px;
+  line-height: 1.5;
+}
+.parameter-error {
+  color: var(--record);
+}
 </style>

@@ -37,30 +37,23 @@ describe("waveform utilities", () => {
 
   it("re-aggregates with min-of-min and max-of-max for every channel", () => {
     const source = new Float32Array([
-      -0.125, 0.25, -0.5, 0.5,
-      -0.75, 0.125, -0.25, 0.75,
-      -0.5, 0.625, -0.625, 0.25,
-      -1, 0.5, -0.125, 1
+      -0.125, 0.25, -0.5, 0.5, -0.75, 0.125, -0.25, 0.75, -0.5, 0.625, -0.625, 0.25, -1, 0.5,
+      -0.125, 1
     ])
     expect([...aggregateWaveformPeaks(source, 4, 2, 2)]).toEqual([
-      -0.75, 0.25, -0.5, 0.75,
-      -1, 0.625, -0.625, 1
+      -0.75, 0.25, -0.5, 0.75, -1, 0.625, -0.625, 1
     ])
   })
 
   it("merges any number of channels conservatively", () => {
     const source = new Float32Array([
-      -0.25, 0.5, -0.75, 0.125, -0.125, 0.875,
-      -1, 0.25, -0.5, 1, -0.625, 0.5
+      -0.25, 0.5, -0.75, 0.125, -0.125, 0.875, -1, 0.25, -0.5, 1, -0.625, 0.5
     ])
     expect([...mergeWaveformChannels(source, 2, 3)]).toEqual([-0.75, 0.875, -1, 1])
   })
 
   it("produces exact separate and aggregate canvas coordinates", () => {
-    const window = peakWindow([
-      -1, 0.5, -0.25, 0.25,
-      -0.5, 0.75, -0.75, 1
-    ], 2, 2)
+    const window = peakWindow([-1, 0.5, -0.25, 0.25, -0.5, 0.75, -0.75, 1], 2, 2)
     expect(buildWaveformGeometry(window, "separate", 1, 100, 1)).toEqual({
       lanes: 2,
       lines: [
@@ -82,26 +75,24 @@ describe("waveform utilities", () => {
       maximumY: 0,
       lane: 0
     })
-    expect(buildWaveformGeometry({ ...window, bucketCount: 0, peaks: new Uint8Array() }, "separate", 10, 20, 1))
-      .toEqual({ lanes: 1, lines: [] })
-    expect(() => buildWaveformGeometry({ ...window, peaks: new Uint8Array() }, "separate", 10, 20, 1))
-      .toThrow("incomplete")
+    expect(
+      buildWaveformGeometry(
+        { ...window, bucketCount: 0, peaks: new Uint8Array() },
+        "separate",
+        10,
+        20,
+        1
+      )
+    ).toEqual({ lanes: 1, lines: [] })
+    expect(() =>
+      buildWaveformGeometry({ ...window, peaks: new Uint8Array() }, "separate", 10, 20, 1)
+    ).toThrow("incomplete")
   })
 
   it("stretches and compresses source buckets across piecewise timeline segments", () => {
-    const window = peakWindow([
-      -1, 1,
-      -0.75, 0.75,
-      -0.5, 0.5,
-      -0.25, 0.25
-    ], 4, 1)
-    const geometry = buildWarpedWaveformGeometry(
-      window,
-      "separate",
-      4,
-      20,
-      1,
-      (x) => x <= 2 ? x / 2 * 64 : 64 + (x - 2) / 2 * 192
+    const window = peakWindow([-1, 1, -0.75, 0.75, -0.5, 0.5, -0.25, 0.25], 4, 1)
+    const geometry = buildWarpedWaveformGeometry(window, "separate", 4, 20, 1, (x) =>
+      x <= 2 ? (x / 2) * 64 : 64 + ((x - 2) / 2) * 192
     )
 
     expect(geometry.lines).toEqual([

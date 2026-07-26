@@ -10,5 +10,5 @@ build = "build.rs"
 [build-dependencies]
 bindgen.workspace = true
 
-[lints.rust]
-unsafe_code = "allow"
+[lints]
+workspace = true

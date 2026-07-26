@@ -110,7 +110,7 @@ function cancelEditing(): void {
       @blur="tooltipVisible = false"
       @keydown="handleKeydown"
       @dblclick.stop.prevent="beginEditing"
-    >
+    />
     <input
       v-if="editing"
       ref="editInput"
@@ -124,8 +124,12 @@ function cancelEditing(): void {
       @blur="commitEditing"
       @keydown.enter.prevent="commitEditing"
       @keydown.esc.prevent="cancelEditing"
+    />
+    <output
+      v-if="(dragging || tooltipVisible) && !editing"
+      class="parameter-tooltip"
+      aria-hidden="true"
     >
-    <output v-if="(dragging || tooltipVisible) && !editing" class="parameter-tooltip" aria-hidden="true">
       {{ panLabel }}
     </output>
   </label>
@@ -144,8 +148,10 @@ function cancelEditing(): void {
   inset: 1px;
   border: 1px solid var(--line-strong);
   border-radius: 50%;
-  background: linear-gradient(145deg,var(--daw-control-hover),var(--daw-control));
-  box-shadow: 0 1px 0 #ffffff14 inset,0 1px 2px #0009;
+  background: linear-gradient(145deg, var(--daw-control-hover), var(--daw-control));
+  box-shadow:
+    0 1px 0 #ffffff14 inset,
+    0 1px 2px #0009;
 }
 
 .pan-knob i {
@@ -161,7 +167,7 @@ function cancelEditing(): void {
   width: 1px;
   height: 5px;
   background: var(--mixer-pan);
-  box-shadow: 0 0 2px color-mix(in srgb,var(--mixer-pan) 65%,transparent);
+  box-shadow: 0 0 2px color-mix(in srgb, var(--mixer-pan) 65%, transparent);
   content: "";
   transform: translateX(-50%);
 }
@@ -232,7 +238,7 @@ function cancelEditing(): void {
 
 .track-pan:focus-within .pan-knob {
   border-color: var(--focus);
-  box-shadow: 0 0 0 1px color-mix(in srgb,var(--focus) 45%,transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--focus) 45%, transparent);
 }
 
 .pan-editor:focus-visible {

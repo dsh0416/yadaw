@@ -41,9 +41,11 @@ const drag = shallowRef<{
 const sortedPoints = computed(() =>
   [...props.points].sort((left, right) => left.position - right.position)
 )
-const renderedPoints = computed(() => sortedPoints.value.map((point) =>
-  drag.value?.id === point.id ? { ...point, ...drag.value } : point
-))
+const renderedPoints = computed(() =>
+  sortedPoints.value.map((point) =>
+    drag.value?.id === point.id ? { ...point, ...drag.value } : point
+  )
+)
 const linePath = computed(() => {
   const points = renderedPoints.value
   if (points.length === 0) return ""
@@ -55,9 +57,7 @@ const linePath = computed(() => {
   }
   return `${path} H ${props.contentWidth}`
 })
-const fillPath = computed(() =>
-  linePath.value ? `${linePath.value} V ${props.height} H 0 Z` : ""
-)
+const fillPath = computed(() => (linePath.value ? `${linePath.value} V ${props.height} H 0 Z` : ""))
 
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value))
@@ -69,7 +69,7 @@ function positionToX(position: number): number {
 
 function valueToY(value: number): number {
   const range = Math.max(1, props.maximum - props.minimum)
-  return (props.maximum - clamp(value, props.minimum, props.maximum)) / range * props.height
+  return ((props.maximum - clamp(value, props.minimum, props.maximum)) / range) * props.height
 }
 
 function pointFromPointer(event: PointerEvent | MouseEvent): {
@@ -82,7 +82,7 @@ function pointFromPointer(event: PointerEvent | MouseEvent): {
   const y = clamp(event.clientY - bounds.top, 0, props.height)
   return {
     position: x / props.pixelsPerUnit,
-    value: props.maximum - y / props.height * (props.maximum - props.minimum)
+    value: props.maximum - (y / props.height) * (props.maximum - props.minimum)
   }
 }
 
@@ -154,7 +154,13 @@ function handleKeydown(event: KeyboardEvent): void {
     @keydown="handleKeydown"
     @pointerdown.self="emit('select', null)"
   >
-    <svg v-if="expanded" class="lane-graph" :width="contentWidth" :height="height" aria-hidden="true">
+    <svg
+      v-if="expanded"
+      class="lane-graph"
+      :width="contentWidth"
+      :height="height"
+      aria-hidden="true"
+    >
       <line
         v-for="guide in verticalGuides"
         :key="`x-${guide}`"
@@ -200,5 +206,96 @@ function handleKeydown(event: KeyboardEvent): void {
 </template>
 
 <style scoped>
-.value-lane{--lane-color:#65a8ff;position:relative;min-width:100%;overflow:hidden;border-bottom:1px solid var(--line-strong);background:var(--daw-lane);cursor:crosshair;outline:none;user-select:none}.value-lane:focus-visible{box-shadow:0 0 0 1px var(--focus) inset}.lane-graph{position:absolute;inset:0;overflow:visible;pointer-events:none}.vertical-guide{stroke:var(--daw-grid-line);stroke-width:1}.value-guide{stroke:color-mix(in srgb,var(--line-soft) 72%,transparent);stroke-width:1;stroke-dasharray:2 4}.guide-label{fill:var(--text-faint);font:6px var(--font-utility);paint-order:stroke;stroke:var(--daw-lane);stroke-width:3px}.lane-fill{fill:color-mix(in srgb,var(--lane-color) 15%,transparent)}.lane-line-shadow{fill:none;stroke:color-mix(in srgb,#000 62%,transparent);stroke-width:4}.lane-line{fill:none;stroke:var(--lane-color);stroke-width:1.5;shape-rendering:geometricPrecision}.point-handle{position:absolute;z-index:2;width:9px;height:9px;margin:0;padding:0;border:2px solid var(--daw-lane);border-radius:50%;background:var(--lane-color);box-shadow:0 0 0 1px color-mix(in srgb,var(--lane-color) 66%,#000);transform:translate(-50%,-50%);cursor:grab}.point-handle:hover,.point-handle.selected{width:11px;height:11px;border-color:#f7fbff;box-shadow:0 0 0 2px var(--lane-color),0 0 8px color-mix(in srgb,var(--lane-color) 55%,transparent)}.point-handle:active{cursor:grabbing}.point-handle:focus-visible{outline:2px solid var(--focus);outline-offset:3px}.value-lane.collapsed{cursor:default;background:color-mix(in srgb,var(--lane-color) 4%,var(--daw-ruler))}.collapsed-rule{position:absolute;top:50%;right:0;left:0;height:1px;background:color-mix(in srgb,var(--lane-color) 28%,var(--line-soft))}
+.value-lane {
+  --lane-color: #65a8ff;
+  position: relative;
+  min-width: 100%;
+  overflow: hidden;
+  border-bottom: 1px solid var(--line-strong);
+  background: var(--daw-lane);
+  cursor: crosshair;
+  outline: none;
+  user-select: none;
+}
+.value-lane:focus-visible {
+  box-shadow: 0 0 0 1px var(--focus) inset;
+}
+.lane-graph {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+.vertical-guide {
+  stroke: var(--daw-grid-line);
+  stroke-width: 1;
+}
+.value-guide {
+  stroke: color-mix(in srgb, var(--line-soft) 72%, transparent);
+  stroke-width: 1;
+  stroke-dasharray: 2 4;
+}
+.guide-label {
+  fill: var(--text-faint);
+  font: 6px var(--font-utility);
+  paint-order: stroke;
+  stroke: var(--daw-lane);
+  stroke-width: 3px;
+}
+.lane-fill {
+  fill: color-mix(in srgb, var(--lane-color) 15%, transparent);
+}
+.lane-line-shadow {
+  fill: none;
+  stroke: color-mix(in srgb, #000 62%, transparent);
+  stroke-width: 4;
+}
+.lane-line {
+  fill: none;
+  stroke: var(--lane-color);
+  stroke-width: 1.5;
+  shape-rendering: geometricPrecision;
+}
+.point-handle {
+  position: absolute;
+  z-index: 2;
+  width: 9px;
+  height: 9px;
+  margin: 0;
+  padding: 0;
+  border: 2px solid var(--daw-lane);
+  border-radius: 50%;
+  background: var(--lane-color);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--lane-color) 66%, #000);
+  transform: translate(-50%, -50%);
+  cursor: grab;
+}
+.point-handle:hover,
+.point-handle.selected {
+  width: 11px;
+  height: 11px;
+  border-color: #f7fbff;
+  box-shadow:
+    0 0 0 2px var(--lane-color),
+    0 0 8px color-mix(in srgb, var(--lane-color) 55%, transparent);
+}
+.point-handle:active {
+  cursor: grabbing;
+}
+.point-handle:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+.value-lane.collapsed {
+  cursor: default;
+  background: color-mix(in srgb, var(--lane-color) 4%, var(--daw-ruler));
+}
+.collapsed-rule {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  left: 0;
+  height: 1px;
+  background: color-mix(in srgb, var(--lane-color) 28%, var(--line-soft));
+}
 </style>

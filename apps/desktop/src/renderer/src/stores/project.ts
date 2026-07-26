@@ -18,10 +18,13 @@ export const useProjectStore = defineStore("project", () => {
   const lifecycle = shallowRef<ProjectLifecycleState>({ status: "closed", error: null })
   const projectAssets = ref<ProjectAssetSummary[]>([])
 
-  const session = computed(() => "session" in lifecycle.value ? lifecycle.value.session : null)
-  const busy = computed(() =>
-    lifecycle.value.status === "creating" || lifecycle.value.status === "opening" ||
-    lifecycle.value.status === "saving" || lifecycle.value.status === "closing"
+  const session = computed(() => ("session" in lifecycle.value ? lifecycle.value.session : null))
+  const busy = computed(
+    () =>
+      lifecycle.value.status === "creating" ||
+      lifecycle.value.status === "opening" ||
+      lifecycle.value.status === "saving" ||
+      lifecycle.value.status === "closing"
   )
   const error = computed(() => lifecycle.value.error ?? "")
   const isOpen = computed(() => session.value !== null)
@@ -64,8 +67,10 @@ export const useProjectStore = defineStore("project", () => {
           eyebrow: "Project recovery",
           tone: "warning",
           title: "Recover unsaved project?",
-          description: "A newer working copy contains changes that were not saved to the .yadaw archive.",
-          detail: "Recover it, open the last saved archive, or cancel without changing either copy.",
+          description:
+            "A newer working copy contains changes that were not saved to the .yadaw archive.",
+          detail:
+            "Recover it, open the last saved archive, or cancel without changing either copy.",
           actions: [
             { value: "recover", label: "Recover working copy", kind: "primary" },
             { value: "saved", label: "Open last saved", kind: "secondary" },
@@ -113,19 +118,20 @@ export const useProjectStore = defineStore("project", () => {
     if (lifecycle.value.status !== "open") return false
     const previous = lifecycle.value.session
     if (previous.dirty && !disposition) {
-      disposition = await showDialog<"save" | "discard" | "cancel">({
-        eyebrow: "Unsaved project",
-        tone: "warning",
-        title: "Save project before closing?",
-        description: `Save changes to ${previous.configuration.name}?`,
-        detail: "Closing without saving keeps the last saved archive unchanged.",
-        actions: [
-          { value: "save", label: "Save", kind: "primary" },
-          { value: "discard", label: "Don't save", kind: "secondary" },
-          { value: "cancel", label: "Cancel", kind: "cancel" }
-        ],
-        cancelValue: "cancel"
-      }) ?? "cancel"
+      disposition =
+        (await showDialog<"save" | "discard" | "cancel">({
+          eyebrow: "Unsaved project",
+          tone: "warning",
+          title: "Save project before closing?",
+          description: `Save changes to ${previous.configuration.name}?`,
+          detail: "Closing without saving keeps the last saved archive unchanged.",
+          actions: [
+            { value: "save", label: "Save", kind: "primary" },
+            { value: "discard", label: "Don't save", kind: "secondary" },
+            { value: "cancel", label: "Cancel", kind: "cancel" }
+          ],
+          cancelValue: "cancel"
+        })) ?? "cancel"
       if (disposition === "cancel") return false
     }
     lifecycle.value = { status: "closing", session: structuredClone(previous), error: null }

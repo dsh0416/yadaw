@@ -66,11 +66,13 @@ test("records into a Large Object and reopens the PGlite project archive", async
     const volumeBounds = await audioOneVolume.boundingBox()
     expect(volumeBounds).not.toBeNull()
     await page.mouse.click(
-      volumeBounds!.x + volumeBounds!.width / 2,
-      volumeBounds!.y + volumeBounds!.height - 10
+      volumeBounds.x + volumeBounds.width / 2,
+      volumeBounds.y + volumeBounds.height - 10
     )
     await expect(audioOneVolume).toHaveValue("0")
-    expect(await audioOneVolume.evaluate((input) => getComputedStyle(input).outlineStyle)).toBe("none")
+    expect(await audioOneVolume.evaluate((input) => getComputedStyle(input).outlineStyle)).toBe(
+      "none"
+    )
     await page.getByRole("button", { name: "Undo mixer change" }).click()
     await expect(visibleMixer.getByText("2 tracks · 0 buses · 1 outputs")).toBeVisible()
     await page.getByRole("button", { name: "Redo mixer change" }).click()
@@ -78,17 +80,23 @@ test("records into a Large Object and reopens the PGlite project archive", async
     await visibleMixer.getByLabel("Audio 1 output").selectOption({ label: "Bus 1" })
     await visibleMixer.getByLabel("Audio 2 audio channel").click()
     await page.getByLabel("Input format").selectOption("mono")
-    await expect.poll(async () => {
-      const graph = await page.evaluate(() => window.yadaw.loadMixerGraph())
-      return graph.channels.find((channel) => channel.name === "Audio 2")?.inputFormat
-    }).toBe("mono")
+    await expect
+      .poll(async () => {
+        const graph = await page.evaluate(() => window.yadaw.loadMixerGraph())
+        return graph.channels.find((channel) => channel.name === "Audio 2")?.inputFormat
+      })
+      .toBe("mono")
     await page.getByRole("button", { name: "Add send" }).click()
     await page.getByRole("button", { name: "Enable send" }).click()
     await visibleMixer.getByRole("button", { name: "Arm Audio 1" }).click()
     await visibleMixer.getByRole("button", { name: "Arm Audio 2" }).click()
     const mixerBeforeSave = await page.evaluate(() => window.yadaw.loadMixerGraph())
     expect(mixerBeforeSave.channels.map((channel) => channel.kind)).toEqual([
-      "audio", "audio", "bus", "master", "output"
+      "audio",
+      "audio",
+      "bus",
+      "master",
+      "output"
     ])
     expect(mixerBeforeSave.sends).toHaveLength(1)
     await page.getByRole("button", { name: "Arrangement", exact: true }).click()
@@ -111,17 +119,21 @@ test("records into a Large Object and reopens the PGlite project archive", async
     await expect(page.getByText("Recording", { exact: false }).first()).toBeVisible()
     const liveWaveform = page.getByRole("img", { name: /Waveform, 2 channels/ })
     await expect(liveWaveform).toBeVisible()
-    await expect.poll(async () => {
-      const label = await liveWaveform.getAttribute("aria-label")
-      return Number(label?.match(/(\d+) frames/)?.[1] ?? 0)
-    }).toBeGreaterThan(0)
+    await expect
+      .poll(async () => {
+        const label = await liveWaveform.getAttribute("aria-label")
+        return Number(label?.match(/(\d+) frames/)?.[1] ?? 0)
+      })
+      .toBeGreaterThan(0)
     const firstLiveFrames = Number(
       (await liveWaveform.getAttribute("aria-label"))?.match(/(\d+) frames/)?.[1] ?? 0
     )
-    await expect.poll(async () => {
-      const label = await liveWaveform.getAttribute("aria-label")
-      return Number(label?.match(/(\d+) frames/)?.[1] ?? 0)
-    }).toBeGreaterThan(firstLiveFrames)
+    await expect
+      .poll(async () => {
+        const label = await liveWaveform.getAttribute("aria-label")
+        return Number(label?.match(/(\d+) frames/)?.[1] ?? 0)
+      })
+      .toBeGreaterThan(firstLiveFrames)
     await recordButton.click()
     const recordingDialog = page.getByRole("dialog")
     await expect(recordingDialog).toContainText("Finalizing")
@@ -147,11 +159,13 @@ test("records into a Large Object and reopens the PGlite project archive", async
     await expect(page.getByRole("dialog")).toBeHidden()
     const importedAssets = await page.evaluate(async () => {
       const assets = await window.yadaw.listProjectAssets()
-      return Promise.all(assets.map(async (asset) => ({
-        ...asset,
-        frameCount: String(asset.frameCount),
-        audioByteLength: (await window.yadaw.readAssetAudio(asset.id)).byteLength
-      })))
+      return Promise.all(
+        assets.map(async (asset) => ({
+          ...asset,
+          frameCount: String(asset.frameCount),
+          audioByteLength: (await window.yadaw.readAssetAudio(asset.id)).byteLength
+        }))
+      )
     })
     expect(importedAssets).toHaveLength(2)
     expect(importedAssets.map(({ sampleRate }) => sampleRate)).toEqual([44_100, 44_100])

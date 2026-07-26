@@ -44,20 +44,20 @@ device, transport, recording session, playback graph, or plugin instance.
 
 ## Ownership map
 
-| Domain | Sole owner | Other access |
-| --- | --- | --- |
-| Helper request lifecycle | `ProtocolActor` | typed handles and one-shot replies |
-| Audio devices and cpal streams | `EngineActor` | atomic runtime snapshots |
-| Active playback graph | cpal output callback | SPSC graph commands |
-| Graph construction and PDC calculation | supervised graph worker | immutable build input |
-| Retired graphs | control side of `EngineActor` | callback pushes to retirement SPSC |
-| VST3 controller and editor | winit main thread / `Vst3Actor` | bounded mailbox |
-| VST3 processor | active playback graph | stable processor registry/lease |
-| Transport position while running | audio callback | atomic snapshot |
-| Streaming file readers | background worker registry | atomic window controls |
-| Streaming sample windows | source state shared with callback | double-buffered atomic publication |
-| Recording file writer | dedicated recording lane | recording SPSC consumer |
-| Plugin/project persistence | Electron main | explicit state-save requests |
+| Domain                                 | Sole owner                        | Other access                       |
+| -------------------------------------- | --------------------------------- | ---------------------------------- |
+| Helper request lifecycle               | `ProtocolActor`                   | typed handles and one-shot replies |
+| Audio devices and cpal streams         | `EngineActor`                     | atomic runtime snapshots           |
+| Active playback graph                  | cpal output callback              | SPSC graph commands                |
+| Graph construction and PDC calculation | supervised graph worker           | immutable build input              |
+| Retired graphs                         | control side of `EngineActor`     | callback pushes to retirement SPSC |
+| VST3 controller and editor             | winit main thread / `Vst3Actor`   | bounded mailbox                    |
+| VST3 processor                         | active playback graph             | stable processor registry/lease    |
+| Transport position while running       | audio callback                    | atomic snapshot                    |
+| Streaming file readers                 | background worker registry        | atomic window controls             |
+| Streaming sample windows               | source state shared with callback | double-buffered atomic publication |
+| Recording file writer                  | dedicated recording lane          | recording SPSC consumer            |
+| Plugin/project persistence             | Electron main                     | explicit state-save requests       |
 
 An object must not have two mutable owners. A cloneable handle contains a
 sender, immutable metadata, or atomics; it is not a second owner of the domain.
@@ -79,13 +79,13 @@ Production helper code must not use:
 
 The control-plane actors are:
 
-| Actor | Mailbox capacity | Responsibilities |
-| --- | ---: | --- |
-| `ProtocolActor` | 256 | version validation, request IDs, deadlines, routing |
-| `EngineActor` | 64 | devices, streams, transport, graph publication, meters |
-| `Vst3Actor` | 64 | instances, parameters, state, editor, latency events |
-| `BackgroundIoActor` | 128 | recording, streaming registry, graph and waveform jobs |
-| `OutboundActor` | 256 | replies and coalesced runtime events |
+| Actor               | Mailbox capacity | Responsibilities                                       |
+| ------------------- | ---------------: | ------------------------------------------------------ |
+| `ProtocolActor`     |              256 | version validation, request IDs, deadlines, routing    |
+| `EngineActor`       |               64 | devices, streams, transport, graph publication, meters |
+| `Vst3Actor`         |               64 | instances, parameters, state, editor, latency events   |
+| `BackgroundIoActor` |              128 | recording, streaming registry, graph and waveform jobs |
+| `OutboundActor`     |              256 | replies and coalesced runtime events                   |
 
 Request/response operations carry a Tokio one-shot sender. The caller owns the
 deadline and cancellation token. A dropped receiver cancels work when the

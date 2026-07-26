@@ -24,7 +24,10 @@ struct CrashMarker {
     length: usize,
 }
 
+// SAFETY: CrashMarker owns a process-lifetime shared mapping. Access to its contents is
+// synchronized exclusively through AtomicU64 operations.
 unsafe impl Send for CrashMarker {}
+// SAFETY: The mapped pointer is stable, and every concurrent read or write uses atomics.
 unsafe impl Sync for CrashMarker {}
 
 impl CrashMarker {
@@ -49,6 +52,8 @@ impl CrashMarker {
 #[cfg(windows)]
 impl Drop for CrashMarker {
     fn drop(&mut self) {
+        // SAFETY: Both handles were returned by the matching mapping APIs and remain exclusively
+        // owned by this CrashMarker until drop.
         unsafe {
             UnmapViewOfFile(self.pointer.cast());
             CloseHandle(self.mapping);
@@ -59,6 +64,8 @@ impl Drop for CrashMarker {
 #[cfg(unix)]
 impl Drop for CrashMarker {
     fn drop(&mut self) {
+        // SAFETY: The address and length are the unchanged values returned by mmap and are owned
+        // by this CrashMarker until drop.
         unsafe {
             munmap(self.pointer.cast(), self.length);
         }
@@ -101,6 +108,8 @@ pub fn clean(generation: u64) {
 fn map_file(file: &std::fs::File) -> io::Result<CrashMarker> {
     use std::os::windows::io::AsRawHandle;
 
+    // SAFETY: The file handle is live for the call, the mapping is unnamed, and its requested
+    // length matches the file length established by initialize.
     let mapping = unsafe {
         CreateFileMappingW(
             file.as_raw_handle(),
@@ -114,9 +123,12 @@ fn map_file(file: &std::fs::File) -> io::Result<CrashMarker> {
     if mapping.is_null() {
         return Err(io::Error::last_os_error());
     }
+    // SAFETY: mapping is a valid handle returned above and the requested view is within its
+    // MARKER_BYTES extent.
     let pointer =
         unsafe { MapViewOfFile(mapping, FILE_MAP_ALL_ACCESS, 0, 0, MARKER_BYTES as usize) };
     if pointer.is_null() {
+        // SAFETY: mapping is still owned locally because MapViewOfFile failed.
         unsafe {
             CloseHandle(mapping);
         }
@@ -159,6 +171,8 @@ unsafe extern "system" {
 fn map_file(file: &std::fs::File) -> io::Result<CrashMarker> {
     use std::os::fd::AsRawFd;
 
+    // SAFETY: The descriptor is live for the call, the file was extended to MARKER_BYTES, and the
+    // returned mapping is checked against MAP_FAILED before use.
     let pointer = unsafe {
         mmap(
             ptr::null_mut(),

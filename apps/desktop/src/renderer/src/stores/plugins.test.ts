@@ -16,16 +16,18 @@ describe("plugin store", () => {
       tailSamples: 0,
       error: null
     })
-    window.yadaw.getPluginParameters = vi.fn().mockResolvedValue([{
-      id: 7,
-      title: "Mix",
-      shortTitle: "Mix",
-      units: "%",
-      stepCount: 0,
-      defaultNormalized: 1,
-      normalized: 0.5,
-      flags: 0
-    }])
+    window.yadaw.getPluginParameters = vi.fn().mockResolvedValue([
+      {
+        id: 7,
+        title: "Mix",
+        shortTitle: "Mix",
+        units: "%",
+        stepCount: 0,
+        defaultNormalized: 1,
+        normalized: 0.5,
+        flags: 0
+      }
+    ])
     const store = usePluginStore()
 
     await store.openEditor("plugin-1")
@@ -41,16 +43,18 @@ describe("plugin store", () => {
     window.yadaw.setPluginParameter = vi.fn().mockResolvedValue(undefined)
     const store = usePluginStore()
     store.parameters = {
-      "plugin-1": [{
-        id: 7,
-        title: "Mix",
-        shortTitle: "Mix",
-        units: "%",
-        stepCount: 0,
-        defaultNormalized: 1,
-        normalized: 0.5,
-        flags: 0
-      }]
+      "plugin-1": [
+        {
+          id: 7,
+          title: "Mix",
+          shortTitle: "Mix",
+          units: "%",
+          stepCount: 0,
+          defaultNormalized: 1,
+          normalized: 0.5,
+          flags: 0
+        }
+      ]
     }
 
     await store.setParameter({

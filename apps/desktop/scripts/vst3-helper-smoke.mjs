@@ -6,33 +6,19 @@ import { decode, encode } from "@msgpack/msgpack"
 
 const repositoryRoot = fileURLToPath(new URL("../../..", import.meta.url))
 const executableSuffix = process.platform === "win32" ? ".exe" : ""
-const bridgeFilename = process.platform === "win32"
-  ? "yadaw-vst3-bridge.dll"
-  : process.platform === "darwin"
-    ? "libyadaw-vst3-bridge.dylib"
-    : "libyadaw-vst3-bridge.so"
+const bridgeFilename =
+  process.platform === "win32"
+    ? "yadaw-vst3-bridge.dll"
+    : process.platform === "darwin"
+      ? "libyadaw-vst3-bridge.dylib"
+      : "libyadaw-vst3-bridge.so"
 const [helperPath, bridgePath, pluginPath] = process.argv.slice(2)
-const resolvedHelper = helperPath ?? resolve(
-  repositoryRoot,
-  "target",
-  "debug",
-  `yadaw-audio-host${executableSuffix}`
-)
-const resolvedBridge = bridgePath ?? resolve(
-  repositoryRoot,
-  "target",
-  "vst3-fixtures",
-  "bin",
-  bridgeFilename
-)
-const resolvedPlugin = pluginPath ?? resolve(
-  repositoryRoot,
-  "target",
-  "vst3-fixtures",
-  "VST3",
-  "Debug",
-  "again.vst3"
-)
+const resolvedHelper =
+  helperPath ?? resolve(repositoryRoot, "target", "debug", `yadaw-audio-host${executableSuffix}`)
+const resolvedBridge =
+  bridgePath ?? resolve(repositoryRoot, "target", "vst3-fixtures", "bin", bridgeFilename)
+const resolvedPlugin =
+  pluginPath ?? resolve(repositoryRoot, "target", "vst3-fixtures", "VST3", "Debug", "again.vst3")
 const resolvedSynth = resolve(
   repositoryRoot,
   "target",
@@ -56,15 +42,14 @@ if (smoke.status !== 0) {
 }
 
 const crashMarker = resolve(tmpdir(), `yadaw-vst3-smoke-${process.pid}.marker`)
-const child = spawn(resolvedHelper, [
-  "--vst3-bridge",
-  resolvedBridge,
-  "--crash-marker",
-  crashMarker
-], {
-  stdio: ["pipe", "pipe", "inherit"],
-  env: { ...process.env, YADAW_TEST_VIRTUAL_AUDIO: "1" }
-})
+const child = spawn(
+  resolvedHelper,
+  ["--vst3-bridge", resolvedBridge, "--crash-marker", crashMarker],
+  {
+    stdio: ["pipe", "pipe", "inherit"],
+    env: { ...process.env, YADAW_TEST_VIRTUAL_AUDIO: "1" }
+  }
+)
 let nextRequestId = 1
 let received = Buffer.alloc(0)
 const pending = new Map()
@@ -79,11 +64,13 @@ function send(command) {
   return new Promise((resolve, reject) => {
     const requestId = nextRequestId++
     pending.set(requestId, { resolve, reject })
-    const payload = Buffer.from(encode({
-      version: 1,
-      request_id: requestId,
-      command
-    }))
+    const payload = Buffer.from(
+      encode({
+        version: 1,
+        request_id: requestId,
+        command
+      })
+    )
     const frame = Buffer.alloc(payload.length + 4)
     frame.writeUInt32BE(payload.length, 0)
     payload.copy(frame, 4)
@@ -218,21 +205,25 @@ try {
           tail_samples: loaded.tail_samples ?? 0
         }
       ],
-      midi_clips: [{
-        id: "clip-1",
-        channel_index: 0,
-        start_tick: 0,
-        source_offset_ticks: 0,
-        length_ticks: 960,
-        notes: [{
+      midi_clips: [
+        {
+          id: "clip-1",
+          channel_index: 0,
           start_tick: 0,
-          duration_ticks: 960,
-          channel: 0,
-          key: 60,
-          velocity: 110,
-          release_velocity: 0
-        }]
-      }],
+          source_offset_ticks: 0,
+          length_ticks: 960,
+          notes: [
+            {
+              start_tick: 0,
+              duration_ticks: 960,
+              channel: 0,
+              key: 60,
+              velocity: 110,
+              release_velocity: 0
+            }
+          ]
+        }
+      ],
       tempo_events: [{ tick: 0, beats_per_minute: 120 }],
       time_signature_events: [{ tick: 0, numerator: 4, denominator: 4 }]
     }
@@ -256,8 +247,8 @@ try {
   await send({ type: "stop-audio-engine" })
   console.log(
     `VST3 helper live graph passed (${listed.parameters.length} parameters, ` +
-    `${state.component_state.length} component bytes, meter ` +
-    `${Math.max(instrumentMeter.held_left, instrumentMeter.held_right).toFixed(4)})`
+      `${state.component_state.length} component bytes, meter ` +
+      `${Math.max(instrumentMeter.held_left, instrumentMeter.held_right).toFixed(4)})`
   )
   await send({ type: "shutdown" })
 } catch (error) {

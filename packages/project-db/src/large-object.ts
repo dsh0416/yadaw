@@ -19,13 +19,8 @@ export async function createLargeObject(executor: LargeObjectExecutor): Promise<
   return requiredNumber(result.rows[0]?.oid, "creation")
 }
 
-export async function openLargeObject(
-  executor: LargeObjectExecutor,
-  oid: number
-): Promise<number> {
-  const result = await executor.execute(
-    sql`select lo_open(${oid}, 131072) as descriptor`
-  )
+export async function openLargeObject(executor: LargeObjectExecutor, oid: number): Promise<number> {
+  const result = await executor.execute(sql`select lo_open(${oid}, 131072) as descriptor`)
   return requiredNumber(result.rows[0]?.descriptor, "open", 0)
 }
 
@@ -48,9 +43,7 @@ export async function readLargeObject(
   executor: LargeObjectExecutor,
   oid: number
 ): Promise<Uint8Array> {
-  const result = await executor.execute(
-    sql`select lo_get(${oid}) as data`
-  )
+  const result = await executor.execute(sql`select lo_get(${oid}) as data`)
   const data = result.rows[0]?.data
   if (!data) throw new Error(`PostgreSQL large object '${oid}' was not found`)
   if (data instanceof Uint8Array) return data
@@ -61,9 +54,6 @@ export async function readLargeObject(
   throw new Error(`PostgreSQL large object '${oid}' returned invalid data`)
 }
 
-export async function unlinkLargeObject(
-  executor: LargeObjectExecutor,
-  oid: number
-): Promise<void> {
+export async function unlinkLargeObject(executor: LargeObjectExecutor, oid: number): Promise<void> {
   await executor.execute(sql`select lo_unlink(${oid})`)
 }

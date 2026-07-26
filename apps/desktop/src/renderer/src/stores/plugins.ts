@@ -29,27 +29,29 @@ export const usePluginStore = defineStore("plugins", () => {
   let unsubscribe: (() => void) | null = null
 
   const compatibleInstruments = computed(() =>
-    catalog.value.plugins.filter((plugin) =>
-      plugin.kind === "instrument" && plugin.compatibility === "compatible"
+    catalog.value.plugins.filter(
+      (plugin) => plugin.kind === "instrument" && plugin.compatibility === "compatible"
     )
   )
   const compatibleEffects = computed(() =>
-    catalog.value.plugins.filter((plugin) =>
-      plugin.kind === "effect" && plugin.compatibility === "compatible"
+    catalog.value.plugins.filter(
+      (plugin) => plugin.kind === "effect" && plugin.compatibility === "compatible"
     )
   )
   const quarantined = computed(() =>
     catalog.value.plugins.filter((plugin) => plugin.compatibility === "quarantined")
   )
-  const genericPlugin = computed(() =>
-    mixerStore.graph.plugins.find((plugin) => plugin.id === genericPanelId.value) ?? null
+  const genericPlugin = computed(
+    () => mixerStore.graph.plugins.find((plugin) => plugin.id === genericPanelId.value) ?? null
   )
 
   function reconcileRuntime(): void {
     const next = { ...runtime.value }
     for (const instance of mixerStore.graph.plugins) {
-      const descriptor = catalog.value.plugins.find((plugin) =>
-        plugin.classId === instance.classId && plugin.modulePath === instance.descriptor.modulePath
+      const descriptor = catalog.value.plugins.find(
+        (plugin) =>
+          plugin.classId === instance.classId &&
+          plugin.modulePath === instance.descriptor.modulePath
       )
       if (!descriptor) {
         next[instance.id] = {
@@ -117,12 +119,12 @@ export const usePluginStore = defineStore("plugins", () => {
   async function addInstrument(descriptor: PluginDescriptor): Promise<boolean> {
     let channel = mixerStore.selectedChannel
     const hasInstrument = channel
-      ? mixerStore.graph.plugins.some((plugin) =>
-          plugin.channelId === channel?.id && plugin.role === "instrument"
+      ? mixerStore.graph.plugins.some(
+          (plugin) => plugin.channelId === channel?.id && plugin.role === "instrument"
         )
       : false
     if (channel?.kind !== "instrument" || hasInstrument) {
-      if (!await mixerStore.createInstrumentTrack()) return false
+      if (!(await mixerStore.createInstrumentTrack())) return false
       channel = mixerStore.selectedChannel
     }
     if (!channel || channel.kind !== "instrument") return false
@@ -148,14 +150,14 @@ export const usePluginStore = defineStore("plugins", () => {
     slotOrder?: number
   ): Promise<boolean> {
     const channel = channelId
-      ? mixerStore.graph.channels.find((candidate) => candidate.id === channelId) ?? null
+      ? (mixerStore.graph.channels.find((candidate) => candidate.id === channelId) ?? null)
       : mixerStore.selectedChannel
     if (!channel || channel.kind === "master") {
       error.value = "Select an Audio, Instrument, Bus, or Output channel first."
       return Promise.resolve(false)
     }
-    const inserts = mixerStore.graph.plugins.filter((plugin) =>
-      plugin.channelId === channel.id && plugin.role === "insert"
+    const inserts = mixerStore.graph.plugins.filter(
+      (plugin) => plugin.channelId === channel.id && plugin.role === "insert"
     )
     const insertionIndex = Math.max(0, Math.min(slotOrder ?? inserts.length, inserts.length))
     const plugin = {
@@ -169,22 +171,26 @@ export const usePluginStore = defineStore("plugins", () => {
       componentState: new Uint8Array(),
       controllerState: new Uint8Array()
     }
-    return mixerStore.execute(insertionIndex === inserts.length ? {
-      type: "create-plugin",
-      plugin
-    } : {
-      type: "batch",
-      commands: [
-        { type: "create-plugin", plugin },
-        {
-          type: "move-plugin",
-          pluginId: plugin.id,
-          channelId: channel.id,
-          role: "insert",
-          slotOrder: insertionIndex
-        }
-      ]
-    })
+    return mixerStore.execute(
+      insertionIndex === inserts.length
+        ? {
+            type: "create-plugin",
+            plugin
+          }
+        : {
+            type: "batch",
+            commands: [
+              { type: "create-plugin", plugin },
+              {
+                type: "move-plugin",
+                pluginId: plugin.id,
+                channelId: channel.id,
+                role: "insert",
+                slotOrder: insertionIndex
+              }
+            ]
+          }
+    )
   }
 
   function addEffect(descriptor: PluginDescriptor): Promise<boolean> {
@@ -212,8 +218,8 @@ export const usePluginStore = defineStore("plugins", () => {
       error.value = "Instruments can only be assigned to Instrument tracks."
       return Promise.resolve(false)
     }
-    const current = mixerStore.graph.plugins.find((plugin) =>
-      plugin.channelId === channelId && plugin.role === "instrument"
+    const current = mixerStore.graph.plugins.find(
+      (plugin) => plugin.channelId === channelId && plugin.role === "instrument"
     )
     const plugin = {
       id: current?.id ?? crypto.randomUUID(),
@@ -226,15 +232,15 @@ export const usePluginStore = defineStore("plugins", () => {
       componentState: new Uint8Array(),
       controllerState: new Uint8Array()
     }
-    return mixerStore.execute(current
-      ? { type: "replace-plugin", pluginId: current.id, plugin }
-      : { type: "create-plugin", plugin })
+    return mixerStore.execute(
+      current
+        ? { type: "replace-plugin", pluginId: current.id, plugin }
+        : { type: "create-plugin", plugin }
+    )
   }
 
   function activate(descriptor: PluginDescriptor): Promise<boolean> {
-    return descriptor.kind === "instrument"
-      ? addInstrument(descriptor)
-      : addEffect(descriptor)
+    return descriptor.kind === "instrument" ? addInstrument(descriptor) : addEffect(descriptor)
   }
 
   async function openEditor(instanceId: string): Promise<void> {

@@ -15,7 +15,7 @@ describe("ProjectSettingsPage", () => {
     const wrapper = mount(ProjectSettingsPage, {
       props: { configuration, saving: false, error: "", saved: false }
     })
-    await wrapper.get('input[required]').setValue("Session")
+    await wrapper.get("input[required]").setValue("Session")
     await wrapper.get("select").setValue("44100")
     await wrapper.findAll('input[type="number"]')[0]!.setValue("7")
     await wrapper.findAll("select").at(-1)!.setValue("aggregate")

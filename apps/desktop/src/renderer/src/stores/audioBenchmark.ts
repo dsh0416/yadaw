@@ -37,9 +37,8 @@ export const useAudioBenchmarkStore = defineStore("audio-benchmark", () => {
       report.value = await window.yadaw.runAudioBenchmark()
       status.value = "complete"
     } catch (error) {
-      errorMessage.value = error instanceof Error
-        ? error.message
-        : "The audio benchmark could not be completed."
+      errorMessage.value =
+        error instanceof Error ? error.message : "The audio benchmark could not be completed."
       status.value = "error"
     }
   }

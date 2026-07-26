@@ -74,11 +74,14 @@ describe("ProjectDatabase", () => {
       timeSignatureDenominator: 8,
       waveformDisplayMode: "aggregate"
     })
-    await database.applyCommand({
-      type: "update-channel",
-      channelId: "audio-1",
-      patch: {}
-    }, "output-1-2")
+    await database.applyCommand(
+      {
+        type: "update-channel",
+        channelId: "audio-1",
+        patch: {}
+      },
+      "output-1-2"
+    )
 
     expect(await database.getConfiguration()).toEqual({
       name: "Renamed",
@@ -114,14 +117,18 @@ describe("ProjectDatabase", () => {
     }
 
     await database.applyCommand({ type: "create-channel", channel: bus }, "output-1-2")
-    await database.applyCommand({
-      type: "update-channel",
-      channelId: "audio-1",
-      patch: { outputChannelId: bus.id }
-    }, "output-1-2")
+    await database.applyCommand(
+      {
+        type: "update-channel",
+        channelId: "audio-1",
+        patch: { outputChannelId: bus.id }
+      },
+      "output-1-2"
+    )
     await database.applyCommand({ type: "delete-channel", channelId: bus.id }, "output-1-2")
-    expect((await database.mixerSnapshot()).channels.find(({ id }) => id === "audio-1"))
-      .toMatchObject({ outputChannelId: "output-1-2" })
+    expect(
+      (await database.mixerSnapshot()).channels.find(({ id }) => id === "audio-1")
+    ).toMatchObject({ outputChannelId: "output-1-2" })
 
     const invalidBatch: ProjectCommand = {
       type: "batch",
@@ -147,16 +154,22 @@ describe("ProjectDatabase", () => {
       expect.objectContaining({ id: "rolled-back-bus" })
     )
 
-    await expect(database.applyCommand({
-      type: "replace-tempo-map",
-      tempoMap: {
-        ticksPerQuarter: 960,
-        tempoEvents: [{ tick: 240, beatsPerMinute: 90 }],
-        timeSignatureEvents: [{ tick: 0, numerator: 3, denominator: 4 }]
-      }
-    }, "output-1-2")).rejects.toThrow("tick 0")
-    expect((await database.mixerSnapshot()).tempoMap.tempoEvents)
-      .toEqual([{ tick: 0, beatsPerMinute: 120 }])
+    await expect(
+      database.applyCommand(
+        {
+          type: "replace-tempo-map",
+          tempoMap: {
+            ticksPerQuarter: 960,
+            tempoEvents: [{ tick: 240, beatsPerMinute: 90 }],
+            timeSignatureEvents: [{ tick: 0, numerator: 3, denominator: 4 }]
+          }
+        },
+        "output-1-2"
+      )
+    ).rejects.toThrow("tick 0")
+    expect((await database.mixerSnapshot()).tempoMap.tempoEvents).toEqual([
+      { tick: 0, beatsPerMinute: 120 }
+    ])
   })
 
   it("persists assets, waveform caches, and large objects through an archive", async () => {
@@ -176,22 +189,26 @@ describe("ProjectDatabase", () => {
       bitDepth: "float32",
       frameCount: 2n,
       bwfTimeReference: 0n,
-      waveformLevels: [{
-        framesPerBucket: 2,
-        bucketCount: 1,
-        peaks: encodePeaks([-1, 1, -0.5, 0.5])
-      }]
+      waveformLevels: [
+        {
+          framesPerBucket: 2,
+          bucketCount: 1,
+          peaks: encodePeaks([-1, 1, -0.5, 0.5])
+        }
+      ]
     })
 
     expect(await database.readLargeObject("asset-1")).toEqual(audio)
-    expect(await database.listAssets()).toEqual([{
-      id: "asset-1",
-      name: "Audio",
-      sampleRate: 48_000,
-      channels: 2,
-      bitDepth: "float32",
-      frameCount: 2n
-    }])
+    expect(await database.listAssets()).toEqual([
+      {
+        id: "asset-1",
+        name: "Audio",
+        sampleRate: 48_000,
+        channels: 2,
+        bitDepth: "float32",
+        frameCount: 2n
+      }
+    ])
     expect(await database.assetsMissingWaveform()).toEqual([])
     expect(await database.readWaveform("asset-1", 0, 2, 100)).toMatchObject({
       sampleRate: 48_000,
@@ -227,9 +244,7 @@ describe("ProjectDatabase", () => {
 
     const raw = new PGlite(join(resource.directory, "pgdata"))
     try {
-      await raw.query("select lo_from_bytea(0, $1)", [
-        new Uint8Array([1, 2, 3, 4])
-      ])
+      await raw.query("select lo_from_bytea(0, $1)", [new Uint8Array([1, 2, 3, 4])])
       const before = await raw.query<{ count: number }>(
         "select count(*)::int as count from pg_catalog.pg_largeobject_metadata"
       )
@@ -264,17 +279,24 @@ describe("ProjectDatabase", () => {
     const audioPath = join(directory, "cancelled.bwf")
     await writeFile(audioPath, new Uint8Array([1, 2, 3, 4]))
 
-    await expect(database.importLargeObject(audioPath, {
-      id: "cancelled",
-      name: "Cancelled",
-      mimeType: "audio/x-bwf",
-      contentHash: "cancelled-hash",
-      sampleRate: 48_000,
-      channels: 1,
-      bitDepth: "pcm16",
-      frameCount: 2n,
-      bwfTimeReference: 0n
-    }, undefined, () => true)).rejects.toThrow("cancelled")
+    await expect(
+      database.importLargeObject(
+        audioPath,
+        {
+          id: "cancelled",
+          name: "Cancelled",
+          mimeType: "audio/x-bwf",
+          contentHash: "cancelled-hash",
+          sampleRate: 48_000,
+          channels: 1,
+          bitDepth: "pcm16",
+          frameCount: 2n,
+          bwfTimeReference: 0n
+        },
+        undefined,
+        () => true
+      )
+    ).rejects.toThrow("cancelled")
     expect(await database.listAssets()).toEqual([])
   })
 })

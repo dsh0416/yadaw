@@ -12,9 +12,8 @@ serde_json.workspace = true
 thiserror.workspace = true
 yadaw-vst3-host-sys.workspace = true
 
-[lints.rust]
-unsafe_code = "allow"
-unsafe_op_in_unsafe_fn = "deny"
+[lints]
+workspace = true
 
 [[bin]]
 name = "yadaw-vst3-probe"

@@ -50,7 +50,8 @@ export const useLifecycleStore = defineStore("lifecycle", () => {
       } catch (reason) {
         unsubscribe?.()
         unsubscribe = null
-        error.value = reason instanceof Error ? reason.message : "Unable to restore native lifecycle state."
+        error.value =
+          reason instanceof Error ? reason.message : "Unable to restore native lifecycle state."
         ready.value = true
       } finally {
         initializePromise = null

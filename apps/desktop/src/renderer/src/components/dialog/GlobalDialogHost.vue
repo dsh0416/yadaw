@@ -12,11 +12,7 @@ import { AlertTriangle, CircleAlert, Info, X } from "@lucide/vue"
 import { computed } from "vue"
 import { useGlobalDialog } from "../../composables/useGlobalDialog"
 
-const {
-  activeDialog,
-  selectDialogAction,
-  dismissDialog
-} = useGlobalDialog()
+const { activeDialog, selectDialogAction, dismissDialog } = useGlobalDialog()
 
 const toneIcon = computed(() => {
   if (activeDialog.value?.tone === "danger") return CircleAlert
@@ -118,7 +114,7 @@ function handleOpenChange(open: boolean): void {
   box-shadow: 0 28px 90px var(--shadow);
   overflow: hidden;
   transform: translate(-50%, -50%);
-  animation: global-dialog-content-in 140ms cubic-bezier(.2, .8, .2, 1);
+  animation: global-dialog-content-in 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .global-dialog-signal {
@@ -137,7 +133,7 @@ function handleOpenChange(open: boolean): void {
   min-height: 46px;
   border-radius: 999px;
   background: currentColor;
-  opacity: .48;
+  opacity: 0.48;
 }
 
 .global-dialog[data-tone="warning"] .global-dialog-signal {
@@ -163,7 +159,7 @@ function handleOpenChange(open: boolean): void {
 .global-dialog-header > span {
   color: var(--text-faint);
   font: 700 7px var(--font-utility);
-  letter-spacing: .18em;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
 }
 
@@ -188,7 +184,7 @@ function handleOpenChange(open: boolean): void {
 .global-dialog-title {
   margin: 11px 0 7px;
   font: 560 20px/1.15 var(--font-display);
-  letter-spacing: -.01em;
+  letter-spacing: -0.01em;
 }
 
 .global-dialog-description,
@@ -247,10 +243,15 @@ function handleOpenChange(open: boolean): void {
 }
 
 @keyframes global-dialog-overlay-in {
-  from { opacity: 0; }
+  from {
+    opacity: 0;
+  }
 }
 
 @keyframes global-dialog-content-in {
-  from { opacity: 0; transform: translate(-50%, calc(-50% + 8px)) scale(.985); }
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 8px)) scale(0.985);
+  }
 }
 </style>

@@ -23,7 +23,8 @@ const forbiddenApi = [
   "projectQuery",
   "projectTransaction"
 ]
-const sqlStatement = /(?:\bSELECT\b[\s\S]{0,200}\bFROM\b|\bINSERT\s+INTO\b|\bUPDATE\s+\w+\s+SET\b|\bDELETE\s+FROM\b|\bCREATE\s+TABLE\b|\bALTER\s+TABLE\b)/i
+const sqlStatement =
+  /(?:\bSELECT\b[\s\S]{0,200}\bFROM\b|\bINSERT\s+INTO\b|\bUPDATE\s+\w+\s+SET\b|\bDELETE\s+FROM\b|\bCREATE\s+TABLE\b|\bALTER\s+TABLE\b)/i
 const lowLevelDatabaseCall = /\.(?:query|exec)\s*\(/
 
 function containsSqlLiteral(source: string, file: string): boolean {
@@ -45,21 +46,23 @@ function containsSqlLiteral(source: string, file: string): boolean {
 
 async function typescriptFiles(directory: string): Promise<string[]> {
   const entries = await readdir(directory, { withFileTypes: true })
-  const nested = await Promise.all(entries.map(async (entry) => {
-    const path = resolve(directory, entry.name)
-    if (entry.isDirectory()) {
-      return entry.name === "__tests__" ? [] : typescriptFiles(path)
-    }
-    return /\.tsx?$/.test(entry.name) && !/\.(?:test|spec)\.tsx?$/.test(entry.name) ? [path] : []
-  }))
+  const nested = await Promise.all(
+    entries.map(async (entry) => {
+      const path = resolve(directory, entry.name)
+      if (entry.isDirectory()) {
+        return entry.name === "__tests__" ? [] : typescriptFiles(path)
+      }
+      return /\.tsx?$/.test(entry.name) && !/\.(?:test|spec)\.tsx?$/.test(entry.name) ? [path] : []
+    })
+  )
   return nested.flat()
 }
 
 describe("project database architecture boundary", () => {
   it("keeps generic database APIs and handwritten SQL out of production code", async () => {
-    const files = (await Promise.all(
-      roots.map((root) => typescriptFiles(resolve(workspace, root)))
-    )).flat()
+    const files = (
+      await Promise.all(roots.map((root) => typescriptFiles(resolve(workspace, root))))
+    ).flat()
     const violations: string[] = []
 
     for (const file of files) {

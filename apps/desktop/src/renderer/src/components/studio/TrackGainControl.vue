@@ -88,7 +88,7 @@ function reset(): void {
       @blur="tooltipVisible = false"
       @keydown="handleKeydown"
       @dblclick.stop.prevent="reset"
-    >
+    />
     <output v-if="tooltipVisible" class="parameter-tooltip" aria-hidden="true">
       {{ valueLabel }}
     </output>
@@ -122,7 +122,7 @@ function reset(): void {
   position: absolute;
   inset: 0 0 0 var(--meter-level);
   background: var(--daw-meter-well);
-  opacity: .88;
+  opacity: 0.88;
   transition: left 55ms linear;
 }
 

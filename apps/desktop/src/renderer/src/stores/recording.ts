@@ -1,10 +1,6 @@
 import { acceptHMRUpdate, defineStore } from "pinia"
 import { computed, ref, shallowRef } from "vue"
-import type {
-  PendingRecording,
-  RecordingLifecycleState,
-  RecordingSession
-} from "@yadaw/contracts"
+import type { PendingRecording, RecordingLifecycleState, RecordingSession } from "@yadaw/contracts"
 
 export const useRecordingStore = defineStore("recording", () => {
   const lifecycle = shallowRef<RecordingLifecycleState>({ status: "idle", error: null })
@@ -13,7 +9,9 @@ export const useRecordingStore = defineStore("recording", () => {
   const active = computed<RecordingSession | null>(() =>
     "session" in lifecycle.value ? lifecycle.value.session : null
   )
-  const busy = computed(() => lifecycle.value.status !== "idle" && lifecycle.value.status !== "recording")
+  const busy = computed(
+    () => lifecycle.value.status !== "idle" && lifecycle.value.status !== "recording"
+  )
   const error = computed(() => lifecycle.value.error ?? "")
 
   function applyLifecycleState(state: RecordingLifecycleState): void {

@@ -49,6 +49,20 @@ yadaw-audio-host-client = { path = "crates/audio-host-client" }
 yadaw-vst3-host = { path = "crates/vst3-host" }
 yadaw-vst3-host-sys = { path = "crates/vst3-host-sys" }
 
+[workspace.lints.rust]
+unexpected_cfgs = "warn"
+unsafe_op_in_unsafe_fn = "deny"
+
+[workspace.lints.clippy]
+correctness = { level = "deny", priority = -1 }
+suspicious = { level = "warn", priority = -1 }
+style = { level = "warn", priority = -1 }
+complexity = { level = "warn", priority = -1 }
+perf = { level = "warn", priority = -1 }
+dbg_macro = "warn"
+todo = "warn"
+undocumented_unsafe_blocks = "warn"
+
 [profile.release]
 codegen-units = 1
 lto = "thin"

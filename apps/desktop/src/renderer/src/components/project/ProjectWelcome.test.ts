@@ -17,11 +17,20 @@ describe("ProjectWelcome", () => {
   })
 
   it("opens a recent project through its public button", async () => {
-    const wrapper = mount(ProjectWelcome, { props: { settings: {
-      swapDirectory: "swap", recordingBitDepth: "float32", theme: "system",
-      meterPeakHold: "800ms", meterReturnRate: "iec-type-i",
-      recentProjects: [{ path: "C:/song.yadaw", name: "Song", openedAt: 1 }]
-    }, busy: false, error: "" } })
+    const wrapper = mount(ProjectWelcome, {
+      props: {
+        settings: {
+          swapDirectory: "swap",
+          recordingBitDepth: "float32",
+          theme: "system",
+          meterPeakHold: "800ms",
+          meterReturnRate: "iec-type-i",
+          recentProjects: [{ path: "C:/song.yadaw", name: "Song", openedAt: 1 }]
+        },
+        busy: false,
+        error: ""
+      }
+    })
     await wrapper.findAll(".recent-item")[0]?.trigger("click")
     expect(wrapper.emitted("open")?.[0]).toEqual(["C:/song.yadaw"])
   })

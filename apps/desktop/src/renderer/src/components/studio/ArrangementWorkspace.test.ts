@@ -22,60 +22,106 @@ describe("ArrangementWorkspace", () => {
     const pinia = createPinia()
     setActivePinia(pinia)
     const project = useProjectStore()
-    project.applyLifecycleState({ status: "open", session: {
-      id: "project",
-      path: "project.yadaw",
-      configuration: {
-        name: "Session",
-        sampleRate: 48_000,
-        timeSignatureNumerator: 4,
-        timeSignatureDenominator: 4,
-        waveformDisplayMode: "separate"
+    project.applyLifecycleState({
+      status: "open",
+      session: {
+        id: "project",
+        path: "project.yadaw",
+        configuration: {
+          name: "Session",
+          sampleRate: 48_000,
+          timeSignatureNumerator: 4,
+          timeSignatureDenominator: 4,
+          waveformDisplayMode: "separate"
+        },
+        dirty: true,
+        recoveredWorkingCopy: false
       },
-      dirty: true,
-      recoveredWorkingCopy: false
-    }, error: null })
+      error: null
+    })
     project.projectAssets = [recordingAsset]
     const mixer = useMixerStore()
     mixer.graph = {
       sampleRate: 48_000,
       channels: [
         {
-          id: "audio-1", kind: "audio", name: "Audio 1", color: "#8C83FF",
-          sortOrder: 0, inputFormat: "stereo", gainDb: 0, pan: 0, muted: false,
-          soloed: false, outputChannelId: "output", recordArmed: false,
-          inputChannels: [1, 2], hardwareOutputChannels: []
-        },
-        {
-          id: "audio-2", kind: "audio", name: "Audio 2", color: "#67D9E7",
-          sortOrder: 1, inputFormat: "mono", gainDb: 0, pan: 0, muted: false,
-          soloed: false, outputChannelId: "output", recordArmed: false,
-          inputChannels: [1], hardwareOutputChannels: []
-        },
-        {
-          id: "master", kind: "master", name: "Master", color: "#67D9E7",
-          sortOrder: 0, inputFormat: null, gainDb: 0, pan: 0, muted: false,
-          soloed: false, outputChannelId: null, recordArmed: false, inputChannels: [],
+          id: "audio-1",
+          kind: "audio",
+          name: "Audio 1",
+          color: "#8C83FF",
+          sortOrder: 0,
+          inputFormat: "stereo",
+          gainDb: 0,
+          pan: 0,
+          muted: false,
+          soloed: false,
+          outputChannelId: "output",
+          recordArmed: false,
+          inputChannels: [1, 2],
           hardwareOutputChannels: []
         },
         {
-          id: "output", kind: "output", name: "Output 1–2", color: "#73D6A2",
-          sortOrder: 0, inputFormat: null, gainDb: 0, pan: 0, muted: false,
-          soloed: false, outputChannelId: null, recordArmed: false, inputChannels: [],
+          id: "audio-2",
+          kind: "audio",
+          name: "Audio 2",
+          color: "#67D9E7",
+          sortOrder: 1,
+          inputFormat: "mono",
+          gainDb: 0,
+          pan: 0,
+          muted: false,
+          soloed: false,
+          outputChannelId: "output",
+          recordArmed: false,
+          inputChannels: [1],
+          hardwareOutputChannels: []
+        },
+        {
+          id: "master",
+          kind: "master",
+          name: "Master",
+          color: "#67D9E7",
+          sortOrder: 0,
+          inputFormat: null,
+          gainDb: 0,
+          pan: 0,
+          muted: false,
+          soloed: false,
+          outputChannelId: null,
+          recordArmed: false,
+          inputChannels: [],
+          hardwareOutputChannels: []
+        },
+        {
+          id: "output",
+          kind: "output",
+          name: "Output 1–2",
+          color: "#73D6A2",
+          sortOrder: 0,
+          inputFormat: null,
+          gainDb: 0,
+          pan: 0,
+          muted: false,
+          soloed: false,
+          outputChannelId: null,
+          recordArmed: false,
+          inputChannels: [],
           hardwareOutputChannels: [1, 2]
         }
       ],
-      clips: [{
-        id: recordingAsset.id,
-        assetId: recordingAsset.id,
-        trackId: "audio-1",
-        name: "First take",
-        startFrame: 0,
-        sourceOffsetFrames: 0,
-        lengthFrames: 48_000,
-        assetSampleRate: 48_000,
-        assetChannels: 2
-      }],
+      clips: [
+        {
+          id: recordingAsset.id,
+          assetId: recordingAsset.id,
+          trackId: "audio-1",
+          name: "First take",
+          startFrame: 0,
+          sourceOffsetFrames: 0,
+          lengthFrames: 48_000,
+          assetSampleRate: 48_000,
+          assetChannels: 2
+        }
+      ],
       sends: [],
       plugins: [],
       midiClips: [],
@@ -99,7 +145,7 @@ describe("ArrangementWorkspace", () => {
     expect(wrapper.findAll(".track-lane")).toHaveLength(2)
     expect(wrapper.findAll('[data-testid="timeline-playhead"]')).toHaveLength(1)
     expect(wrapper.get('[aria-label="Tempo global track"]').text()).toContain("Tempo")
-    expect(wrapper.findAll('.point-handle')).toHaveLength(1)
+    expect(wrapper.findAll(".point-handle")).toHaveLength(1)
     const clip = wrapper.get('button[aria-label="Audio clip First take"]')
     expect(clip.attributes("aria-pressed")).toBe("false")
     expect(clip.attributes("style")).toContain("width: 100px")
@@ -128,8 +174,9 @@ describe("ArrangementWorkspace", () => {
     const arrangementView = useArrangementViewStore()
     await wrapper.get('button[aria-label="Collapse Tempo track"]').trigger("click")
     expect(arrangementView.tempoLaneExpanded).toBe(false)
-    expect(wrapper.get<HTMLElement>('[data-testid="timeline-rail"]').element.style.gridTemplateRows)
-      .toContain("30px")
+    expect(
+      wrapper.get<HTMLElement>('[data-testid="timeline-rail"]').element.style.gridTemplateRows
+    ).toContain("30px")
     await wrapper.get('button[aria-label="Expand Tempo track"]').trigger("click")
     const resizeHandles = wrapper.findAll('[role="separator"]')
     expect(resizeHandles).toHaveLength(2)
@@ -145,8 +192,9 @@ describe("ArrangementWorkspace", () => {
     await wrapper.vm.$nextTick()
     expect(wrapper.findAll<HTMLElement>(".track-lane")[0]?.element.style.height).toBe("150px")
     expect(wrapper.findAll<HTMLElement>(".track-lane")[1]?.element.style.height).toBe("120px")
-    expect(wrapper.get<HTMLElement>('[data-testid="timeline-rail"]').element.style.gridTemplateRows)
-      .toContain("150px 120px")
+    expect(
+      wrapper.get<HTMLElement>('[data-testid="timeline-rail"]').element.style.gridTemplateRows
+    ).toContain("150px 120px")
 
     await resizeHandles[0]?.trigger("dblclick")
     expect(arrangementView.trackScale("audio-1")).toBe(1)
@@ -166,39 +214,73 @@ describe("ArrangementWorkspace", () => {
     const pinia = createPinia()
     setActivePinia(pinia)
     const project = useProjectStore()
-    project.applyLifecycleState({ status: "open", session: {
-      id: "project",
-      path: "project.yadaw",
-      configuration: {
-        name: "Session",
-        sampleRate: 48_000,
-        timeSignatureNumerator: 4,
-        timeSignatureDenominator: 4,
-        waveformDisplayMode: "separate"
+    project.applyLifecycleState({
+      status: "open",
+      session: {
+        id: "project",
+        path: "project.yadaw",
+        configuration: {
+          name: "Session",
+          sampleRate: 48_000,
+          timeSignatureNumerator: 4,
+          timeSignatureDenominator: 4,
+          waveformDisplayMode: "separate"
+        },
+        dirty: false,
+        recoveredWorkingCopy: false
       },
-      dirty: false,
-      recoveredWorkingCopy: false
-    }, error: null })
+      error: null
+    })
     const mixer = useMixerStore()
     mixer.graph = {
       sampleRate: 48_000,
       channels: [
         {
-          id: "audio-1", kind: "audio", name: "Audio 1", color: "#8C83FF",
-          sortOrder: 0, inputFormat: "stereo", gainDb: 0, pan: 0, muted: false,
-          soloed: false, outputChannelId: "output", recordArmed: true,
-          inputChannels: [1, 2], hardwareOutputChannels: []
-        },
-        {
-          id: "master", kind: "master", name: "Master", color: "#67D9E7",
-          sortOrder: 0, inputFormat: null, gainDb: 0, pan: 0, muted: false,
-          soloed: false, outputChannelId: null, recordArmed: false, inputChannels: [],
+          id: "audio-1",
+          kind: "audio",
+          name: "Audio 1",
+          color: "#8C83FF",
+          sortOrder: 0,
+          inputFormat: "stereo",
+          gainDb: 0,
+          pan: 0,
+          muted: false,
+          soloed: false,
+          outputChannelId: "output",
+          recordArmed: true,
+          inputChannels: [1, 2],
           hardwareOutputChannels: []
         },
         {
-          id: "output", kind: "output", name: "Output 1–2", color: "#73D6A2",
-          sortOrder: 0, inputFormat: null, gainDb: 0, pan: 0, muted: false,
-          soloed: false, outputChannelId: null, recordArmed: false, inputChannels: [],
+          id: "master",
+          kind: "master",
+          name: "Master",
+          color: "#67D9E7",
+          sortOrder: 0,
+          inputFormat: null,
+          gainDb: 0,
+          pan: 0,
+          muted: false,
+          soloed: false,
+          outputChannelId: null,
+          recordArmed: false,
+          inputChannels: [],
+          hardwareOutputChannels: []
+        },
+        {
+          id: "output",
+          kind: "output",
+          name: "Output 1–2",
+          color: "#73D6A2",
+          sortOrder: 0,
+          inputFormat: null,
+          gainDb: 0,
+          pan: 0,
+          muted: false,
+          soloed: false,
+          outputChannelId: null,
+          recordArmed: false,
+          inputChannels: [],
           hardwareOutputChannels: [1, 2]
         }
       ],
@@ -223,8 +305,9 @@ describe("ArrangementWorkspace", () => {
       global: { plugins: [pinia] }
     })
 
-    expect(wrapper.get('button[aria-label="Recording New recording"]').attributes("aria-label"))
-      .toBe("Recording New recording")
+    expect(
+      wrapper.get('button[aria-label="Recording New recording"]').attributes("aria-label")
+    ).toBe("Recording New recording")
     expect(wrapper.find('[role="status"]').exists()).toBe(false)
   })
 

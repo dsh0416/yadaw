@@ -71,18 +71,21 @@ export class ProjectWorkerClient {
   private call<T>(request: RequestWithoutId): Promise<T> {
     const id = this.nextId++
     return new Promise<T>((resolve, reject) => {
-      this.pending.set(id, { resolve: resolve as (value: unknown) => void, reject })
+      this.pending.set(id, { resolve: resolve, reject })
       this.worker.postMessage({ id, ...request } satisfies WorkerRequest)
     })
   }
 
-  create(dataDir: string, configuration: {
-    name: string
-    sampleRate: number
-    numerator: number
-    denominator: number
-    waveformDisplayMode: "separate" | "aggregate"
-  }): Promise<void> {
+  create(
+    dataDir: string,
+    configuration: {
+      name: string
+      sampleRate: number
+      numerator: number
+      denominator: number
+      waveformDisplayMode: "separate" | "aggregate"
+    }
+  ): Promise<void> {
     return this.call({ type: "create", dataDir, ...configuration })
   }
 
@@ -118,11 +121,7 @@ export class ProjectWorkerClient {
     return this.call({ type: "import-midi", source, command, fallbackOutputId })
   }
 
-  rollbackMidi(
-    sourceId: string,
-    command: ProjectCommand,
-    fallbackOutputId: string
-  ): Promise<void> {
+  rollbackMidi(sourceId: string, command: ProjectCommand, fallbackOutputId: string): Promise<void> {
     return this.call({
       type: "rollback-midi",
       sourceId,

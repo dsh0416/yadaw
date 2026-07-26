@@ -3,15 +3,7 @@ import { open, readFile, rm, stat } from "node:fs/promises"
 import { fileURLToPath } from "node:url"
 import { dirname } from "node:path"
 import { PGlite } from "@electric-sql/pglite"
-import {
-  and,
-  asc,
-  eq,
-  inArray,
-  ne,
-  notExists,
-  or
-} from "drizzle-orm"
+import { and, asc, eq, inArray, ne, notExists, or } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/pglite"
 import type { PgliteDatabase } from "drizzle-orm/pglite"
 import { migrate as runMigrations } from "drizzle-orm/pglite/migrator"
@@ -63,9 +55,7 @@ import {
 import * as schema from "./schema"
 
 const DEFAULT_INITIAL_TEMPO = 120
-const MIGRATIONS_FOLDER = fileURLToPath(
-  new URL(/* @vite-ignore */ "../drizzle", import.meta.url)
-)
+const MIGRATIONS_FOLDER = fileURLToPath(new URL(/* @vite-ignore */ "../drizzle", import.meta.url))
 
 type ProjectDb = PgliteDatabase<typeof schema>
 type ProjectTransaction = Parameters<Parameters<ProjectDb["transaction"]>[0]>[0]
@@ -197,26 +187,30 @@ async function insertMidiClip(
     sourceOffsetTicks: clip.sourceOffsetTicks
   })
   if (clip.notes.length > 0) {
-    await tx.insert(midiNotes).values(clip.notes.map((note) => ({
-      id: note.id,
-      clipId: clip.id,
-      startTick: note.startTick,
-      durationTicks: note.durationTicks,
-      channel: note.channel,
-      key: note.key,
-      velocity: note.velocity,
-      releaseVelocity: note.releaseVelocity
-    })))
+    await tx.insert(midiNotes).values(
+      clip.notes.map((note) => ({
+        id: note.id,
+        clipId: clip.id,
+        startTick: note.startTick,
+        durationTicks: note.durationTicks,
+        channel: note.channel,
+        key: note.key,
+        velocity: note.velocity,
+        releaseVelocity: note.releaseVelocity
+      }))
+    )
   }
   if (clip.events.length > 0) {
-    await tx.insert(midiEvents).values(clip.events.map((event) => ({
-      id: event.id,
-      clipId: clip.id,
-      tick: event.tick,
-      channel: event.channel,
-      kind: event.kind,
-      data: event.data
-    })))
+    await tx.insert(midiEvents).values(
+      clip.events.map((event) => ({
+        id: event.id,
+        clipId: clip.id,
+        tick: event.tick,
+        channel: event.channel,
+        kind: event.kind,
+        data: event.data
+      }))
+    )
   }
 }
 
@@ -230,7 +224,8 @@ async function applyProjectCommand(
       await tx.insert(mixerChannels).values(channelValue(command.channel))
       return
     case "delete-channel":
-      await tx.update(mixerChannels)
+      await tx
+        .update(mixerChannels)
         .set({ outputChannelId: fallbackOutputId })
         .where(eq(mixerChannels.outputChannelId, command.channelId))
       await tx.delete(mixerSends).where(eq(mixerSends.targetChannelId, command.channelId))
@@ -239,9 +234,7 @@ async function applyProjectCommand(
     case "update-channel": {
       const patch = channelPatch(command.patch)
       if (Object.keys(patch).length > 0) {
-        await tx.update(mixerChannels)
-          .set(patch)
-          .where(eq(mixerChannels.id, command.channelId))
+        await tx.update(mixerChannels).set(patch).where(eq(mixerChannels.id, command.channelId))
       }
       return
     }
@@ -254,9 +247,7 @@ async function applyProjectCommand(
     case "update-send": {
       const patch = sendPatch(command.patch)
       if (Object.keys(patch).length > 0) {
-        await tx.update(mixerSends)
-          .set(patch)
-          .where(eq(mixerSends.id, command.sendId))
+        await tx.update(mixerSends).set(patch).where(eq(mixerSends.id, command.sendId))
       }
       return
     }
@@ -267,7 +258,8 @@ async function applyProjectCommand(
       await tx.delete(timelineClips).where(eq(timelineClips.id, command.clipId))
       return
     case "move-clip":
-      await tx.update(timelineClips)
+      await tx
+        .update(timelineClips)
         .set({ trackId: command.trackId, startFrame: BigInt(command.startFrame) })
         .where(eq(timelineClips.id, command.clipId))
       return
@@ -280,42 +272,45 @@ async function applyProjectCommand(
     case "update-plugin": {
       const patch = pluginPatch(command.patch)
       if (Object.keys(patch).length > 0) {
-        await tx.update(pluginInstances)
-          .set(patch)
-          .where(eq(pluginInstances.id, command.pluginId))
+        await tx.update(pluginInstances).set(patch).where(eq(pluginInstances.id, command.pluginId))
       }
       return
     }
     case "move-plugin":
       {
-        const rows = await tx.select({
-          id: pluginInstances.id,
-          channelId: pluginInstances.channelId,
-          role: pluginInstances.role,
-          slotOrder: pluginInstances.slotOrder
-        }).from(pluginInstances)
+        const rows = await tx
+          .select({
+            id: pluginInstances.id,
+            channelId: pluginInstances.channelId,
+            role: pluginInstances.role,
+            slotOrder: pluginInstances.slotOrder
+          })
+          .from(pluginInstances)
         const moving = rows.find((plugin) => plugin.id === command.pluginId)
         if (!moving) throw new Error(`Plugin instance '${command.pluginId}' was not found`)
         const source = rows
-          .filter((plugin) =>
-            plugin.id !== moving.id &&
-            plugin.channelId === moving.channelId &&
-            plugin.role === moving.role
+          .filter(
+            (plugin) =>
+              plugin.id !== moving.id &&
+              plugin.channelId === moving.channelId &&
+              plugin.role === moving.role
           )
           .sort((left, right) => left.slotOrder - right.slotOrder)
         const destination = rows
-          .filter((plugin) =>
-            plugin.id !== moving.id &&
-            plugin.channelId === command.channelId &&
-            plugin.role === command.role
+          .filter(
+            (plugin) =>
+              plugin.id !== moving.id &&
+              plugin.channelId === command.channelId &&
+              plugin.role === command.role
           )
           .sort((left, right) => left.slotOrder - right.slotOrder)
         if (command.role === "instrument" && destination.length > 0) {
           throw new Error("Replace the assigned instrument instead of moving into an occupied slot")
         }
-        const insertionIndex = command.role === "instrument"
-          ? 0
-          : Math.max(0, Math.min(command.slotOrder, destination.length))
+        const insertionIndex =
+          command.role === "instrument"
+            ? 0
+            : Math.max(0, Math.min(command.slotOrder, destination.length))
         destination.splice(insertionIndex, 0, {
           ...moving,
           channelId: command.channelId,
@@ -331,23 +326,30 @@ async function applyProjectCommand(
         ])
         let temporarySlot = 1_000_000
         for (const id of affected) {
-          await tx.update(pluginInstances)
+          await tx
+            .update(pluginInstances)
             .set({ slotOrder: temporarySlot++ })
             .where(eq(pluginInstances.id, id))
         }
         for (const [index, plugin] of source.entries()) {
-          await tx.update(pluginInstances).set({
-            channelId: moving.channelId,
-            role: moving.role,
-            slotOrder: moving.role === "instrument" ? 0 : index
-          }).where(eq(pluginInstances.id, plugin.id))
+          await tx
+            .update(pluginInstances)
+            .set({
+              channelId: moving.channelId,
+              role: moving.role,
+              slotOrder: moving.role === "instrument" ? 0 : index
+            })
+            .where(eq(pluginInstances.id, plugin.id))
         }
         for (const [index, plugin] of destination.entries()) {
-          await tx.update(pluginInstances).set({
-            channelId: command.channelId,
-            role: command.role,
-            slotOrder: command.role === "instrument" ? 0 : index
-          }).where(eq(pluginInstances.id, plugin.id))
+          await tx
+            .update(pluginInstances)
+            .set({
+              channelId: command.channelId,
+              role: command.role,
+              slotOrder: command.role === "instrument" ? 0 : index
+            })
+            .where(eq(pluginInstances.id, plugin.id))
         }
       }
       return
@@ -362,31 +364,42 @@ async function applyProjectCommand(
       await tx.delete(midiClips).where(eq(midiClips.id, command.clipId))
       return
     case "move-midi-clip":
-      await tx.update(midiClips)
+      await tx
+        .update(midiClips)
         .set({ trackId: command.trackId, startTick: command.startTick })
         .where(eq(midiClips.id, command.clipId))
       return
     case "replace-tempo-map": {
       const initialTempo = command.tempoMap.tempoEvents[0]
       const initialSignature = command.tempoMap.timeSignatureEvents[0]
-      if (!initialTempo || initialTempo.tick !== 0 ||
-          !initialSignature || initialSignature.tick !== 0) {
+      if (
+        !initialTempo ||
+        initialTempo.tick !== 0 ||
+        !initialSignature ||
+        initialSignature.tick !== 0
+      ) {
         throw new Error("Tempo map requires tick 0 events")
       }
-      await tx.update(tempoEvents)
+      await tx
+        .update(tempoEvents)
         .set({ beatsPerMinute: initialTempo.beatsPerMinute })
         .where(eq(tempoEvents.tick, 0))
       await tx.delete(tempoEvents).where(ne(tempoEvents.tick, 0))
       if (command.tempoMap.tempoEvents.length > 1) {
-        await tx.insert(tempoEvents).values(command.tempoMap.tempoEvents.slice(1).map((event) => ({
-          tick: event.tick,
-          beatsPerMinute: event.beatsPerMinute
-        })))
+        await tx.insert(tempoEvents).values(
+          command.tempoMap.tempoEvents.slice(1).map((event) => ({
+            tick: event.tick,
+            beatsPerMinute: event.beatsPerMinute
+          }))
+        )
       }
-      await tx.update(timeSignatureEvents).set({
-        numerator: initialSignature.numerator,
-        denominator: initialSignature.denominator
-      }).where(eq(timeSignatureEvents.tick, 0))
+      await tx
+        .update(timeSignatureEvents)
+        .set({
+          numerator: initialSignature.numerator,
+          denominator: initialSignature.denominator
+        })
+        .where(eq(timeSignatureEvents.tick, 0))
       await tx.delete(timeSignatureEvents).where(ne(timeSignatureEvents.tick, 0))
       if (command.tempoMap.timeSignatureEvents.length > 1) {
         await tx.insert(timeSignatureEvents).values(
@@ -423,9 +436,11 @@ export class ProjectDatabase {
       waveformDisplayMode: "separate" | "aggregate"
     }
   ): Promise<ProjectDatabase> {
-    if (!PROJECT_SAMPLE_RATES.includes(
-      configuration.sampleRate as (typeof PROJECT_SAMPLE_RATES)[number]
-    )) {
+    if (
+      !PROJECT_SAMPLE_RATES.includes(
+        configuration.sampleRate as (typeof PROJECT_SAMPLE_RATES)[number]
+      )
+    ) {
       throw new RangeError("Unsupported project sample rate")
     }
     const instance = new ProjectDatabase(new PGlite(dataDir))
@@ -528,15 +543,23 @@ export class ProjectDatabase {
 
   async getConfiguration(): Promise<ProjectConfiguration> {
     const [projectRows, signatureRows] = await Promise.all([
-      this.db.select({
-        name: project.name,
-        sampleRate: project.sampleRate,
-        waveformDisplayMode: project.waveformDisplayMode
-      }).from(project).where(eq(project.id, PROJECT_ID)).limit(1),
-      this.db.select({
-        numerator: timeSignatureEvents.numerator,
-        denominator: timeSignatureEvents.denominator
-      }).from(timeSignatureEvents).where(eq(timeSignatureEvents.tick, 0)).limit(1)
+      this.db
+        .select({
+          name: project.name,
+          sampleRate: project.sampleRate,
+          waveformDisplayMode: project.waveformDisplayMode
+        })
+        .from(project)
+        .where(eq(project.id, PROJECT_ID))
+        .limit(1),
+      this.db
+        .select({
+          numerator: timeSignatureEvents.numerator,
+          denominator: timeSignatureEvents.denominator
+        })
+        .from(timeSignatureEvents)
+        .where(eq(timeSignatureEvents.tick, 0))
+        .limit(1)
     ])
     const projectRow = projectRows[0]
     const signature = signatureRows[0]
@@ -552,28 +575,37 @@ export class ProjectDatabase {
 
   async updateConfiguration(configuration: ProjectConfiguration): Promise<ProjectConfiguration> {
     await this.db.transaction(async (tx) => {
-      await tx.update(project).set({
-        name: configuration.name,
-        sampleRate: configuration.sampleRate,
-        waveformDisplayMode: configuration.waveformDisplayMode
-      }).where(eq(project.id, PROJECT_ID))
-      await tx.update(timeSignatureEvents).set({
-        numerator: configuration.timeSignatureNumerator,
-        denominator: configuration.timeSignatureDenominator
-      }).where(eq(timeSignatureEvents.tick, 0))
+      await tx
+        .update(project)
+        .set({
+          name: configuration.name,
+          sampleRate: configuration.sampleRate,
+          waveformDisplayMode: configuration.waveformDisplayMode
+        })
+        .where(eq(project.id, PROJECT_ID))
+      await tx
+        .update(timeSignatureEvents)
+        .set({
+          numerator: configuration.timeSignatureNumerator,
+          denominator: configuration.timeSignatureDenominator
+        })
+        .where(eq(timeSignatureEvents.tick, 0))
     })
     return this.getConfiguration()
   }
 
   listAssets(): Promise<ProjectAssetSummary[]> {
-    return this.db.select({
-      id: assets.id,
-      name: assets.name,
-      sampleRate: assets.sampleRate,
-      channels: assets.channels,
-      bitDepth: assets.bitDepth,
-      frameCount: assets.frameCount
-    }).from(assets).orderBy(asc(assets.createdAt), asc(assets.id))
+    return this.db
+      .select({
+        id: assets.id,
+        name: assets.name,
+        sampleRate: assets.sampleRate,
+        channels: assets.channels,
+        bitDepth: assets.bitDepth,
+        frameCount: assets.frameCount
+      })
+      .from(assets)
+      .orderBy(asc(assets.createdAt), asc(assets.id))
   }
 
   async mixerSnapshot(): Promise<MixerGraphSnapshot> {
@@ -589,23 +621,32 @@ export class ProjectDatabase {
       tempoRows,
       signatureRows
     ] = await Promise.all([
-      this.db.select().from(mixerChannels).orderBy(asc(mixerChannels.sortOrder), asc(mixerChannels.id)),
-      this.db.select({
-        id: timelineClips.id,
-        assetId: timelineClips.assetId,
-        trackId: timelineClips.trackId,
-        name: timelineClips.name,
-        startFrame: timelineClips.startFrame,
-        sourceOffsetFrames: timelineClips.sourceOffsetFrames,
-        lengthFrames: timelineClips.lengthFrames,
-        assetSampleRate: assets.sampleRate,
-        assetChannels: assets.channels
-      }).from(timelineClips)
+      this.db
+        .select()
+        .from(mixerChannels)
+        .orderBy(asc(mixerChannels.sortOrder), asc(mixerChannels.id)),
+      this.db
+        .select({
+          id: timelineClips.id,
+          assetId: timelineClips.assetId,
+          trackId: timelineClips.trackId,
+          name: timelineClips.name,
+          startFrame: timelineClips.startFrame,
+          sourceOffsetFrames: timelineClips.sourceOffsetFrames,
+          lengthFrames: timelineClips.lengthFrames,
+          assetSampleRate: assets.sampleRate,
+          assetChannels: assets.channels
+        })
+        .from(timelineClips)
         .innerJoin(assets, eq(assets.id, timelineClips.assetId))
         .orderBy(asc(timelineClips.startFrame), asc(timelineClips.id)),
-      this.db.select().from(mixerSends)
+      this.db
+        .select()
+        .from(mixerSends)
         .orderBy(asc(mixerSends.sourceChannelId), asc(mixerSends.sortOrder), asc(mixerSends.id)),
-      this.db.select().from(pluginInstances)
+      this.db
+        .select()
+        .from(pluginInstances)
         .orderBy(
           asc(pluginInstances.channelId),
           asc(pluginInstances.role),
@@ -613,9 +654,13 @@ export class ProjectDatabase {
           asc(pluginInstances.id)
         ),
       this.db.select().from(midiClips).orderBy(asc(midiClips.startTick), asc(midiClips.id)),
-      this.db.select().from(midiNotes)
+      this.db
+        .select()
+        .from(midiNotes)
         .orderBy(asc(midiNotes.clipId), asc(midiNotes.startTick), asc(midiNotes.id)),
-      this.db.select().from(midiEvents)
+      this.db
+        .select()
+        .from(midiEvents)
         .orderBy(asc(midiEvents.clipId), asc(midiEvents.tick), asc(midiEvents.id)),
       this.db.select().from(tempoEvents).orderBy(asc(tempoEvents.tick)),
       this.db.select().from(timeSignatureEvents).orderBy(asc(timeSignatureEvents.tick))
@@ -628,10 +673,11 @@ export class ProjectDatabase {
       ["master", 3],
       ["output", 4]
     ])
-    channelRows.sort((left, right) =>
-      (kindOrder.get(left.kind) ?? 5) - (kindOrder.get(right.kind) ?? 5) ||
-      left.sortOrder - right.sortOrder ||
-      left.id.localeCompare(right.id)
+    channelRows.sort(
+      (left, right) =>
+        (kindOrder.get(left.kind) ?? 5) - (kindOrder.get(right.kind) ?? 5) ||
+        left.sortOrder - right.sortOrder ||
+        left.id.localeCompare(right.id)
     )
 
     const notesByClip = new Map<string, MixerGraphSnapshot["midiClips"][number]["notes"]>()
@@ -692,7 +738,9 @@ export class ProjectDatabase {
         role: plugin.role,
         slotOrder: plugin.slotOrder,
         classId: plugin.classId,
-        descriptor: JSON.parse(plugin.descriptorSnapshot) as MixerGraphSnapshot["plugins"][number]["descriptor"],
+        descriptor: JSON.parse(
+          plugin.descriptorSnapshot
+        ) as MixerGraphSnapshot["plugins"][number]["descriptor"],
         enabled: plugin.enabled,
         componentState: bytes(plugin.componentState),
         controllerState: bytes(plugin.controllerState)
@@ -734,11 +782,7 @@ export class ProjectDatabase {
     })
   }
 
-  rollbackMidi(
-    sourceId: string,
-    command: ProjectCommand,
-    fallbackOutputId: string
-  ): Promise<void> {
+  rollbackMidi(sourceId: string, command: ProjectCommand, fallbackOutputId: string): Promise<void> {
     return this.db.transaction(async (tx) => {
       await applyProjectCommand(tx, command, fallbackOutputId)
       await tx.delete(midiSources).where(eq(midiSources.id, sourceId))
@@ -749,28 +793,36 @@ export class ProjectDatabase {
     if (states.length === 0) return Promise.resolve()
     return this.db.transaction(async (tx) => {
       for (const state of states) {
-        await tx.update(pluginInstances).set({
-          componentState: state.componentState,
-          controllerState: state.controllerState
-        }).where(eq(pluginInstances.id, state.id))
+        await tx
+          .update(pluginInstances)
+          .set({
+            componentState: state.componentState,
+            controllerState: state.controllerState
+          })
+          .where(eq(pluginInstances.id, state.id))
       }
     })
   }
 
   async assetContentHashes(ids: string[]): Promise<AssetContentHash[]> {
     if (ids.length === 0) return []
-    return this.db.select({
-      id: assets.id,
-      contentHash: assets.contentHash
-    }).from(assets).where(inArray(assets.id, ids))
+    return this.db
+      .select({
+        id: assets.id,
+        contentHash: assets.contentHash
+      })
+      .from(assets)
+      .where(inArray(assets.id, ids))
   }
 
   async defaultRecordingTrack(): Promise<DefaultRecordingTrack | null> {
-    const rows = await this.db.select({
-      id: mixerChannels.id,
-      name: mixerChannels.name,
-      inputChannels: mixerChannels.inputChannels
-    }).from(mixerChannels)
+    const rows = await this.db
+      .select({
+        id: mixerChannels.id,
+        name: mixerChannels.name,
+        inputChannels: mixerChannels.inputChannels
+      })
+      .from(mixerChannels)
       .where(eq(mixerChannels.kind, "audio"))
       .orderBy(asc(mixerChannels.sortOrder), asc(mixerChannels.id))
       .limit(1)
@@ -778,16 +830,22 @@ export class ProjectDatabase {
   }
 
   assetsMissingWaveform(cacheVersion = WAVEFORM_CACHE_VERSION): Promise<string[]> {
-    return this.db.select({ id: assets.id })
+    return this.db
+      .select({ id: assets.id })
       .from(assets)
-      .where(notExists(
-        this.db.select({ assetId: assetWaveformLevels.assetId })
-          .from(assetWaveformLevels)
-          .where(and(
-            eq(assetWaveformLevels.assetId, assets.id),
-            eq(assetWaveformLevels.cacheVersion, cacheVersion)
-          ))
-      ))
+      .where(
+        notExists(
+          this.db
+            .select({ assetId: assetWaveformLevels.assetId })
+            .from(assetWaveformLevels)
+            .where(
+              and(
+                eq(assetWaveformLevels.assetId, assets.id),
+                eq(assetWaveformLevels.cacheVersion, cacheVersion)
+              )
+            )
+        )
+      )
       .orderBy(asc(assets.createdAt), asc(assets.id))
       .then((rows) => rows.map((row) => row.id))
   }
@@ -795,10 +853,13 @@ export class ProjectDatabase {
   async deleteAssets(ids: string[]): Promise<void> {
     if (ids.length === 0) return
     await this.db.transaction(async (tx) => {
-      const rows = await tx.select({
-        id: assets.id,
-        oid: assets.largeObjectOid
-      }).from(assets).where(inArray(assets.id, ids))
+      const rows = await tx
+        .select({
+          id: assets.id,
+          oid: assets.largeObjectOid
+        })
+        .from(assets)
+        .where(inArray(assets.id, ids))
       await tx.delete(assets).where(inArray(assets.id, ids))
       for (const row of rows) await unlinkLargeObject(tx, row.oid)
     })
@@ -812,11 +873,13 @@ export class ProjectDatabase {
   ): Promise<number> {
     const file = await stat(filePath)
     return this.db.transaction(async (tx) => {
-      const existing = await tx.select({
-        id: assets.id,
-        contentHash: assets.contentHash,
-        largeObjectOid: assets.largeObjectOid
-      }).from(assets)
+      const existing = await tx
+        .select({
+          id: assets.id,
+          contentHash: assets.contentHash,
+          largeObjectOid: assets.largeObjectOid
+        })
+        .from(assets)
         .where(or(eq(assets.id, asset.id), eq(assets.contentHash, asset.contentHash)))
         .limit(1)
       const existingAsset = existing[0]
@@ -853,26 +916,32 @@ export class ProjectDatabase {
         largeObjectOid: oid
       })
       if (asset.waveformLevels?.length) {
-        await tx.insert(assetWaveformLevels).values(asset.waveformLevels.map((waveform, level) => ({
-          assetId: asset.id,
-          cacheVersion: WAVEFORM_CACHE_VERSION,
-          level,
-          framesPerBucket: waveform.framesPerBucket,
-          bucketCount: waveform.bucketCount,
-          channels: asset.channels,
-          sampleRate: asset.sampleRate,
-          frameCount: asset.frameCount,
-          peaks: waveform.peaks
-        })))
+        await tx.insert(assetWaveformLevels).values(
+          asset.waveformLevels.map((waveform, level) => ({
+            assetId: asset.id,
+            cacheVersion: WAVEFORM_CACHE_VERSION,
+            level,
+            framesPerBucket: waveform.framesPerBucket,
+            bucketCount: waveform.bucketCount,
+            channels: asset.channels,
+            sampleRate: asset.sampleRate,
+            frameCount: asset.frameCount,
+            peaks: waveform.peaks
+          }))
+        )
       }
       return oid
     })
   }
 
   async readLargeObject(assetId: string): Promise<Uint8Array> {
-    const rows = await this.db.select({
-      oid: assets.largeObjectOid
-    }).from(assets).where(eq(assets.id, assetId)).limit(1)
+    const rows = await this.db
+      .select({
+        oid: assets.largeObjectOid
+      })
+      .from(assets)
+      .where(eq(assets.id, assetId))
+      .limit(1)
     const row = rows[0]
     if (!row) throw new Error(`Audio asset '${assetId}' was not found`)
     return readLargeObjectData(this.db, row.oid)
@@ -882,17 +951,19 @@ export class ProjectDatabase {
     await this.db.transaction(async (tx) => {
       await tx.delete(assetWaveformLevels).where(eq(assetWaveformLevels.assetId, assetId))
       if (waveform.levels.length > 0) {
-        await tx.insert(assetWaveformLevels).values(waveform.levels.map((value, level) => ({
-          assetId,
-          cacheVersion: WAVEFORM_CACHE_VERSION,
-          level,
-          framesPerBucket: value.framesPerBucket,
-          bucketCount: value.bucketCount,
-          channels: waveform.channels,
-          sampleRate: waveform.sampleRate,
-          frameCount: waveform.frameCount,
-          peaks: value.peaks
-        })))
+        await tx.insert(assetWaveformLevels).values(
+          waveform.levels.map((value, level) => ({
+            assetId,
+            cacheVersion: WAVEFORM_CACHE_VERSION,
+            level,
+            framesPerBucket: value.framesPerBucket,
+            bucketCount: value.bucketCount,
+            channels: waveform.channels,
+            sampleRate: waveform.sampleRate,
+            frameCount: waveform.frameCount,
+            peaks: value.peaks
+          }))
+        )
       }
     })
   }
@@ -903,29 +974,32 @@ export class ProjectDatabase {
     endFrame: number,
     maxBuckets: number
   ): Promise<StoredWaveformWindow | null> {
-    const rows = await this.db.select({
-      framesPerBucket: assetWaveformLevels.framesPerBucket,
-      bucketCount: assetWaveformLevels.bucketCount,
-      channels: assetWaveformLevels.channels,
-      sampleRate: assetWaveformLevels.sampleRate,
-      frameCount: assetWaveformLevels.frameCount,
-      peaks: assetWaveformLevels.peaks
-    }).from(assetWaveformLevels).where(and(
-      eq(assetWaveformLevels.assetId, assetId),
-      eq(assetWaveformLevels.cacheVersion, WAVEFORM_CACHE_VERSION)
-    )).orderBy(asc(assetWaveformLevels.framesPerBucket))
+    const rows = await this.db
+      .select({
+        framesPerBucket: assetWaveformLevels.framesPerBucket,
+        bucketCount: assetWaveformLevels.bucketCount,
+        channels: assetWaveformLevels.channels,
+        sampleRate: assetWaveformLevels.sampleRate,
+        frameCount: assetWaveformLevels.frameCount,
+        peaks: assetWaveformLevels.peaks
+      })
+      .from(assetWaveformLevels)
+      .where(
+        and(
+          eq(assetWaveformLevels.assetId, assetId),
+          eq(assetWaveformLevels.cacheVersion, WAVEFORM_CACHE_VERSION)
+        )
+      )
+      .orderBy(asc(assetWaveformLevels.framesPerBucket))
     if (rows.length === 0) return null
     const target = Math.max(1, Math.ceil((endFrame - startFrame) / Math.max(1, maxBuckets)))
-    const selected = [...rows].reverse()
-      .find((level) => level.framesPerBucket <= target) ?? rows[0]!
+    const selected =
+      [...rows].reverse().find((level) => level.framesPerBucket <= target) ?? rows[0]!
     const frameCount = Number(selected.frameCount)
     const start = Math.max(0, Math.min(frameCount, startFrame))
     const end = Math.max(start, Math.min(frameCount, endFrame))
     const firstBucket = Math.floor(start / selected.framesPerBucket)
-    const lastBucket = Math.min(
-      selected.bucketCount,
-      Math.ceil(end / selected.framesPerBucket)
-    )
+    const lastBucket = Math.min(selected.bucketCount, Math.ceil(end / selected.framesPerBucket))
     const bytesPerBucket = selected.channels * 8
     const peaks = bytes(selected.peaks).slice(
       firstBucket * bytesPerBucket,
@@ -945,9 +1019,11 @@ export class ProjectDatabase {
 
   private async maintainForSave(): Promise<{ orphanedLargeObjectsRemoved: number }> {
     const orphanedLargeObjectsRemoved = await this.db.transaction(async (tx) => {
-      const referencedRows = await tx.select({
-        oid: assets.largeObjectOid
-      }).from(assets)
+      const referencedRows = await tx
+        .select({
+          oid: assets.largeObjectOid
+        })
+        .from(assets)
       const referenced = new Set(referencedRows.map((row) => row.oid))
       const largeObjectOids = await listLargeObjectOids(tx)
       const orphaned = largeObjectOids.filter((oid) => !referenced.has(oid))

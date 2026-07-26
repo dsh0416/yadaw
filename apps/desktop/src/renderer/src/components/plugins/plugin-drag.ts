@@ -3,8 +3,7 @@ import type { PluginDescriptor } from "@yadaw/contracts"
 export const PLUGIN_DRAG_TYPE = "application/x-yadaw-plugin"
 
 export type PluginDragPayload =
-  | { source: "catalog"; descriptor: PluginDescriptor }
-  | { source: "rack"; instanceId: string }
+  { source: "catalog"; descriptor: PluginDescriptor } | { source: "rack"; instanceId: string }
 
 export function writePluginDrag(event: DragEvent, payload: PluginDragPayload): void {
   if (!event.dataTransfer) return
@@ -25,7 +24,7 @@ export function readPluginDrag(event: DragEvent): PluginDragPayload | null {
       typeof payload.descriptor === "object" &&
       payload.descriptor !== null
     ) {
-      return { source: "catalog", descriptor: payload.descriptor as PluginDescriptor }
+      return { source: "catalog", descriptor: payload.descriptor }
     }
   } catch {
     // Untrusted native drag data is ignored.

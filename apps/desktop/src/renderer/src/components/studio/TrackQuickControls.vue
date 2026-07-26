@@ -36,21 +36,27 @@ function preview(parameter: "gainDb" | "pan", value: number): void {
       :aria-label="`Mute ${channel.name}`"
       title="Mute"
       @click.stop="emit('updateChannel', channel.id, { muted: !channel.muted })"
-    >M</button>
+    >
+      M
+    </button>
     <button
       :class="['solo', { active: channel.soloed }]"
       :aria-pressed="channel.soloed"
       :aria-label="`Solo ${channel.name}`"
       title="Solo"
       @click.stop="emit('updateChannel', channel.id, { soloed: !channel.soloed })"
-    >S</button>
+    >
+      S
+    </button>
     <button
       :class="['record', { active: channel.recordArmed }]"
       :aria-pressed="channel.recordArmed"
       :aria-label="`Arm ${channel.name}`"
       title="Record enable"
       @click.stop="emit('updateChannel', channel.id, { recordArmed: !channel.recordArmed })"
-    >R</button>
+    >
+      R
+    </button>
     <button
       class="monitor"
       aria-label="Input monitoring unavailable"
@@ -58,7 +64,9 @@ function preview(parameter: "gainDb" | "pan", value: number): void {
       title="Input monitoring is not available yet"
       disabled
       @click.stop
-    >I</button>
+    >
+      I
+    </button>
 
     <TrackGainControl
       :channel-name="channel.name"
@@ -102,15 +110,15 @@ function preview(parameter: "gainDb" | "pan", value: number): void {
 }
 
 .track-quick-controls .mute {
-  color: color-mix(in srgb,var(--mixer-mute) 76%,var(--text-secondary));
+  color: color-mix(in srgb, var(--mixer-mute) 76%, var(--text-secondary));
 }
 
 .track-quick-controls .solo {
-  color: color-mix(in srgb,var(--mixer-solo) 78%,var(--text-secondary));
+  color: color-mix(in srgb, var(--mixer-solo) 78%, var(--text-secondary));
 }
 
 .track-quick-controls .record {
-  color: color-mix(in srgb,var(--mixer-record) 76%,var(--text-secondary));
+  color: color-mix(in srgb, var(--mixer-record) 76%, var(--text-secondary));
 }
 
 .track-quick-controls .monitor {
@@ -118,28 +126,28 @@ function preview(parameter: "gainDb" | "pan", value: number): void {
 }
 
 .track-quick-controls .mute.active {
-  border-color: color-mix(in srgb,var(--mixer-mute) 72%,white);
+  border-color: color-mix(in srgb, var(--mixer-mute) 72%, white);
   color: #fff;
   background: var(--mixer-mute);
 }
 
 .track-quick-controls .solo.active {
-  border-color: color-mix(in srgb,var(--mixer-solo) 72%,white);
+  border-color: color-mix(in srgb, var(--mixer-solo) 72%, white);
   color: #221c08;
   background: var(--mixer-solo);
 }
 
 .track-quick-controls .record.active {
-  border-color: color-mix(in srgb,var(--mixer-record) 72%,white);
+  border-color: color-mix(in srgb, var(--mixer-record) 72%, white);
   color: #fff;
   background: var(--mixer-record);
 }
 
 .track-quick-controls .monitor:disabled {
-  border-color: color-mix(in srgb,var(--mixer-input) 35%,var(--line-strong));
-  background: color-mix(in srgb,var(--mixer-input) 8%,var(--daw-control));
+  border-color: color-mix(in srgb, var(--mixer-input) 35%, var(--line-strong));
+  background: color-mix(in srgb, var(--mixer-input) 8%, var(--daw-control));
   cursor: not-allowed;
-  opacity: .7;
+  opacity: 0.7;
 }
 
 .track-quick-controls button:focus-visible {

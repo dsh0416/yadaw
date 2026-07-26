@@ -5,8 +5,11 @@ import type { OperationEvent, OperationSnapshot } from "@yadaw/contracts"
 export const useOperationStore = defineStore("operations", () => {
   const operations = ref<OperationSnapshot[]>([])
   const completionTimers = new Map<string, ReturnType<typeof setTimeout>>()
-  const active = computed(() =>
-    operations.value.find((operation) => operation.state === "running") ?? operations.value[0] ?? null
+  const active = computed(
+    () =>
+      operations.value.find((operation) => operation.state === "running") ??
+      operations.value[0] ??
+      null
   )
   let unsubscribe: (() => void) | null = null
 
@@ -40,13 +43,16 @@ export const useOperationStore = defineStore("operations", () => {
   function scheduleCompletionCleanup(operation: OperationSnapshot): void {
     clearCompletionTimer(operation.id)
     if (operation.state !== "completed" || operation.message || operation.dropoutFrames > 0) return
-    completionTimers.set(operation.id, setTimeout(() => {
-      completionTimers.delete(operation.id)
-      const index = operations.value.findIndex((item) => item.id === operation.id)
-      if (index >= 0 && operations.value[index]?.state === "completed") {
-        operations.value.splice(index, 1)
-      }
-    }, 750))
+    completionTimers.set(
+      operation.id,
+      setTimeout(() => {
+        completionTimers.delete(operation.id)
+        const index = operations.value.findIndex((item) => item.id === operation.id)
+        if (index >= 0 && operations.value[index]?.state === "completed") {
+          operations.value.splice(index, 1)
+        }
+      }, 750)
+    )
   }
 
   async function cancel(id: string): Promise<void> {
@@ -56,7 +62,8 @@ export const useOperationStore = defineStore("operations", () => {
   function dismiss(id: string): void {
     clearCompletionTimer(id)
     const index = operations.value.findIndex((operation) => operation.id === id)
-    if (index >= 0 && operations.value[index]?.state !== "running") operations.value.splice(index, 1)
+    if (index >= 0 && operations.value[index]?.state !== "running")
+      operations.value.splice(index, 1)
   }
 
   return {

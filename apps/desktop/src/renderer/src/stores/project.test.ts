@@ -49,9 +49,9 @@ describe("project store dialogs", () => {
       path: "future.yadaw",
       recoverableWorkingCopy: false
     })
-    window.yadaw.openProject = vi.fn().mockRejectedValue(
-      new Error("Project contains migrations newer than this application")
-    )
+    window.yadaw.openProject = vi
+      .fn()
+      .mockRejectedValue(new Error("Project contains migrations newer than this application"))
     const store = useProjectStore()
     const { activeDialog } = useGlobalDialog()
 

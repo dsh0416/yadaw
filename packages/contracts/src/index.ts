@@ -396,10 +396,7 @@ export interface AudioBenchmarkScenario {
 }
 
 export type AudioIpcBenchmarkKind =
-  | "inline-round-trip"
-  | "shared-round-trip"
-  | "concurrent-routing"
-  | "telemetry-read"
+  "inline-round-trip" | "shared-round-trip" | "concurrent-routing" | "telemetry-read"
 
 export interface AudioIpcBenchmarkScenario {
   id: string
@@ -624,13 +621,7 @@ export interface PluginInstanceState {
 }
 
 export type PluginRuntimeState =
-  | "unloaded"
-  | "loading"
-  | "active"
-  | "bypassed"
-  | "missing"
-  | "quarantined"
-  | "failed"
+  "unloaded" | "loading" | "active" | "bypassed" | "missing" | "quarantined" | "failed"
 
 export interface PluginRuntimeStatus {
   instanceId: string
@@ -804,22 +795,31 @@ export interface MixerGraphSnapshot {
   tempoMap: TempoMapSnapshot
 }
 
-export type MixerChannelPatch = Partial<Pick<
-  MixerChannelState,
-  "name" | "color" | "sortOrder" | "inputFormat" | "gainDb" | "pan" |
-  "muted" | "soloed" | "outputChannelId" | "recordArmed" | "inputChannels" |
-  "hardwareOutputChannels"
->>
+export type MixerChannelPatch = Partial<
+  Pick<
+    MixerChannelState,
+    | "name"
+    | "color"
+    | "sortOrder"
+    | "inputFormat"
+    | "gainDb"
+    | "pan"
+    | "muted"
+    | "soloed"
+    | "outputChannelId"
+    | "recordArmed"
+    | "inputChannels"
+    | "hardwareOutputChannels"
+  >
+>
 
-export type MixerSendPatch = Partial<Pick<
-  MixerSendState,
-  "targetChannelId" | "sortOrder" | "enabled" | "tap" | "levelDb" | "pan"
->>
+export type MixerSendPatch = Partial<
+  Pick<MixerSendState, "targetChannelId" | "sortOrder" | "enabled" | "tap" | "levelDb" | "pan">
+>
 
-export type PluginInstancePatch = Partial<Pick<
-  PluginInstanceState,
-  "slotOrder" | "enabled" | "componentState" | "controllerState"
->>
+export type PluginInstancePatch = Partial<
+  Pick<PluginInstanceState, "slotOrder" | "enabled" | "componentState" | "controllerState">
+>
 
 export type ProjectCommand =
   | { type: "create-channel"; channel: MixerChannelState }

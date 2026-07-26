@@ -14,16 +14,18 @@ function validateRequest(request: WaveformWindowRequest): void {
   if (!Number.isSafeInteger(request.endFrame) || request.endFrame < request.startFrame) {
     throw new TypeError("Waveform end frame must not precede its start")
   }
-  if (!Number.isInteger(request.maxBuckets) || request.maxBuckets < 1 || request.maxBuckets > 4_096) {
+  if (
+    !Number.isInteger(request.maxBuckets) ||
+    request.maxBuckets < 1 ||
+    request.maxBuckets > 4_096
+  ) {
     throw new TypeError("Waveform bucket count must be between 1 and 4096")
   }
 }
 
 type WaveformWindowPayload = Omit<WaveformPeakWindow, "id">
 
-function isValidWindow(
-  window: WaveformWindowPayload | null
-): window is WaveformWindowPayload {
+function isValidWindow(window: WaveformWindowPayload | null): window is WaveformWindowPayload {
   if (!window) return false
   return (
     window.sampleRate > 0 &&

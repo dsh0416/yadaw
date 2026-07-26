@@ -29,11 +29,10 @@ async function terminateElectron(child) {
   const exited = waitForExit(child)
   if (process.platform === "win32") {
     await new Promise((resolveKill) => {
-      const killer = spawn(
-        "taskkill",
-        ["/pid", String(child.pid), "/t", "/f"],
-        { stdio: "ignore", windowsHide: true }
-      )
+      const killer = spawn("taskkill", ["/pid", String(child.pid), "/t", "/f"], {
+        stdio: "ignore",
+        windowsHide: true
+      })
       killer.once("error", resolveKill)
       killer.once("exit", resolveKill)
     })

@@ -11,9 +11,7 @@ function requestAudioBenchmark(): void {
 
 export function installApplicationMenu(): void {
   const template: MenuItemConstructorOptions[] = [
-    ...(process.platform === "darwin"
-      ? [{ role: "appMenu" as const }]
-      : []),
+    ...(process.platform === "darwin" ? [{ role: "appMenu" as const }] : []),
     { role: "fileMenu" },
     { role: "editMenu" },
     { role: "viewMenu" },

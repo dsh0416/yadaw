@@ -1,8 +1,4 @@
-import type {
-  TempoEventState,
-  TempoMapSnapshot,
-  TimeSignatureEventState
-} from "@yadaw/contracts"
+import type { TempoEventState, TempoMapSnapshot, TimeSignatureEventState } from "@yadaw/contracts"
 
 export function tickToSeconds(map: TempoMapSnapshot, tick: number): number {
   let seconds = 0
@@ -10,12 +6,14 @@ export function tickToSeconds(map: TempoMapSnapshot, tick: number): number {
   let beatsPerMinute = map.tempoEvents[0]?.beatsPerMinute ?? 120
   for (const event of map.tempoEvents.slice(1)) {
     if (event.tick >= tick) break
-    seconds += (event.tick - previousTick) / map.ticksPerQuarter * 60 / beatsPerMinute
+    seconds += (((event.tick - previousTick) / map.ticksPerQuarter) * 60) / beatsPerMinute
     previousTick = event.tick
     beatsPerMinute = event.beatsPerMinute
   }
-  return seconds + (Math.max(previousTick, tick) - previousTick) /
-    map.ticksPerQuarter * 60 / beatsPerMinute
+  return (
+    seconds +
+    (((Math.max(previousTick, tick) - previousTick) / map.ticksPerQuarter) * 60) / beatsPerMinute
+  )
 }
 
 export function secondsToTick(map: TempoMapSnapshot, seconds: number): number {
@@ -23,16 +21,16 @@ export function secondsToTick(map: TempoMapSnapshot, seconds: number): number {
   let previousTick = 0
   let beatsPerMinute = map.tempoEvents[0]?.beatsPerMinute ?? 120
   for (const event of map.tempoEvents.slice(1)) {
-    const segmentSeconds = (event.tick - previousTick) /
-      map.ticksPerQuarter * 60 / beatsPerMinute
+    const segmentSeconds =
+      (((event.tick - previousTick) / map.ticksPerQuarter) * 60) / beatsPerMinute
     if (remaining <= segmentSeconds) {
-      return Math.round(previousTick + remaining * beatsPerMinute / 60 * map.ticksPerQuarter)
+      return Math.round(previousTick + ((remaining * beatsPerMinute) / 60) * map.ticksPerQuarter)
     }
     remaining -= segmentSeconds
     previousTick = event.tick
     beatsPerMinute = event.beatsPerMinute
   }
-  return Math.round(previousTick + remaining * beatsPerMinute / 60 * map.ticksPerQuarter)
+  return Math.round(previousTick + ((remaining * beatsPerMinute) / 60) * map.ticksPerQuarter)
 }
 
 export function tempoEventAtTick(map: TempoMapSnapshot, tick: number): TempoEventState {
@@ -62,10 +60,7 @@ export function replaceTempoEventAtTick(
   }
 }
 
-export function timeSignatureAtTick(
-  map: TempoMapSnapshot,
-  tick: number
-): TimeSignatureEventState {
+export function timeSignatureAtTick(map: TempoMapSnapshot, tick: number): TimeSignatureEventState {
   let current = map.timeSignatureEvents[0] ?? { tick: 0, numerator: 4, denominator: 4 }
   for (const event of map.timeSignatureEvents) {
     if (event.tick > tick) break
@@ -83,12 +78,12 @@ export function musicalPositionAtTick(
   let signature = map.timeSignatureEvents[0] ?? { tick: 0, numerator: 4, denominator: 4 }
   for (const event of map.timeSignatureEvents.slice(1)) {
     if (event.tick > tick) break
-    const ticksPerBar = signature.numerator * map.ticksPerQuarter * 4 / signature.denominator
+    const ticksPerBar = (signature.numerator * map.ticksPerQuarter * 4) / signature.denominator
     bar += Math.floor((event.tick - segmentStart) / ticksPerBar)
     segmentStart = event.tick
     signature = event
   }
-  const ticksPerBeat = map.ticksPerQuarter * 4 / signature.denominator
+  const ticksPerBeat = (map.ticksPerQuarter * 4) / signature.denominator
   const ticksPerBar = signature.numerator * ticksPerBeat
   const inSegment = Math.max(0, tick - segmentStart)
   bar += Math.floor(inSegment / ticksPerBar)
@@ -121,13 +116,11 @@ export function barTicksThroughTick(
     const signature = timeSignatureAtTick(map, tick)
     const ticksPerBar = Math.max(
       1,
-      signature.numerator * map.ticksPerQuarter * 4 / signature.denominator
+      (signature.numerator * map.ticksPerQuarter * 4) / signature.denominator
     )
     const nextSignature = map.timeSignatureEvents.find((event) => event.tick > tick)
     const nextBar = tick + ticksPerBar
-    tick = nextSignature && nextSignature.tick < nextBar
-      ? nextSignature.tick
-      : nextBar
+    tick = nextSignature && nextSignature.tick < nextBar ? nextSignature.tick : nextBar
   }
   return ticks
 }

@@ -109,7 +109,9 @@ unsafe extern "system" fn event(
     }) else {
         return 1;
     };
-    if index as usize >= unsafe { (*list).len } {
+    // SAFETY: processor receives the EventList interface created above.
+    let len = unsafe { (*list).len };
+    if index as usize >= len {
         return 1;
     }
     unsafe {

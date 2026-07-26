@@ -23,4 +23,6 @@ async function open(path?: string): Promise<void> {
 }
 </script>
 
-<template><ProjectWelcome :settings="settings" :busy="busy" :error="error" @create="create" @open="open" /></template>
+<template>
+  <ProjectWelcome :settings="settings" :busy="busy" :error="error" @create="create" @open="open" />
+</template>

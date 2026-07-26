@@ -40,10 +40,10 @@ const ratingCopy: Record<AudioBenchmarkRating, { label: string; summary: string 
   }
 }
 
-const rating = computed(() => props.report ? ratingCopy[props.report.rating] : null)
-const measuredAt = computed(() => props.report
-  ? new Date(props.report.measuredAt).toLocaleString()
-  : "")
+const rating = computed(() => (props.report ? ratingCopy[props.report.rating] : null))
+const measuredAt = computed(() =>
+  props.report ? new Date(props.report.measuredAt).toLocaleString() : ""
+)
 
 function format(value: number, digits = 1): string {
   return value.toFixed(digits)
@@ -97,7 +97,9 @@ onMounted(() => dialog.value?.focus())
         <span class="kicker">SYSTEM / AUDIO ENGINE</span>
         <h2 id="audio-benchmark-title">Audio performance benchmark</h2>
       </div>
-      <button class="icon-button" type="button" aria-label="Close benchmark" @click="emit('close')">×</button>
+      <button class="icon-button" type="button" aria-label="Close benchmark" @click="emit('close')">
+        ×
+      </button>
     </header>
 
     <div v-if="status === 'idle'" class="intro-state">
@@ -108,12 +110,15 @@ onMounted(() => dialog.value?.focus())
       </div>
       <h3>Measure DSP deadlines and IPC</h3>
       <p>
-        YADAW will measure block deadline stability, shared-memory transfers,
-        concurrent request routing, and telemetry reads. It does not use your audio devices.
+        YADAW will measure block deadline stability, shared-memory transfers, concurrent request
+        routing, and telemetry reads. It does not use your audio devices.
       </p>
       <div class="notice">
         <span>Before you run it</span>
-        <p>Pause playback and close CPU-heavy apps. Audio may stutter while the processor is under test.</p>
+        <p>
+          Pause playback and close CPU-heavy apps. Audio may stutter while the processor is under
+          test.
+        </p>
       </div>
       <button class="primary-button" type="button" @click="emit('run')">Run benchmark</button>
     </div>
@@ -204,12 +209,17 @@ onMounted(() => dialog.value?.focus())
       <footer class="report-footer">
         <div>
           <span>{{ report.system.cpuModel }}</span>
-          <small>{{ report.system.logicalCores }} logical cores · {{ report.system.platform }} · {{ report.system.architecture }}</small>
+          <small
+            >{{ report.system.logicalCores }} logical cores · {{ report.system.platform }} ·
+            {{ report.system.architecture }}</small
+          >
           <small>Measured {{ measuredAt }} in {{ format(report.durationMs / 1_000, 2) }} s</small>
         </div>
         <div class="report-actions">
           <button class="secondary-button" type="button" @click="emit('close')">Close</button>
-          <button class="primary-button compact" type="button" @click="emit('run')">Run again</button>
+          <button class="primary-button compact" type="button" @click="emit('run')">
+            Run again
+          </button>
         </div>
       </footer>
     </div>
@@ -236,7 +246,9 @@ onMounted(() => dialog.value?.focus())
   outline: none;
   color: var(--text-primary);
   background: #0d131dcf;
-  box-shadow: 0 34px 110px #000e, inset 0 1px #ffffff08;
+  box-shadow:
+    0 34px 110px #000e,
+    inset 0 1px #ffffff08;
   backdrop-filter: blur(22px);
 }
 
@@ -256,13 +268,13 @@ onMounted(() => dialog.value?.focus())
 .kicker {
   color: var(--signal-cyan);
   font: 700 7px var(--font-utility);
-  letter-spacing: .18em;
+  letter-spacing: 0.18em;
 }
 
 .dialog-header h2 {
   margin: 7px 0 0;
   font: 600 20px var(--font-display);
-  letter-spacing: .015em;
+  letter-spacing: 0.015em;
 }
 
 .icon-button {
@@ -351,7 +363,7 @@ onMounted(() => dialog.value?.focus())
   color: var(--accent-soft);
   background: #211f3a;
   font: 700 8px var(--font-utility);
-  letter-spacing: .12em;
+  letter-spacing: 0.12em;
 }
 
 .signal-output {
@@ -376,7 +388,7 @@ onMounted(() => dialog.value?.focus())
   color: var(--warning);
   font: 700 8px var(--font-utility);
   text-transform: uppercase;
-  letter-spacing: .08em;
+  letter-spacing: 0.08em;
 }
 
 .notice p {
@@ -450,7 +462,13 @@ onMounted(() => dialog.value?.focus())
 .scope span {
   width: 160%;
   height: 2px;
-  background: repeating-linear-gradient(90deg, transparent 0 15px, var(--signal-cyan) 16px 18px, transparent 19px 28px, var(--accent) 29px 32px);
+  background: repeating-linear-gradient(
+    90deg,
+    transparent 0 15px,
+    var(--signal-cyan) 16px 18px,
+    transparent 19px 28px,
+    var(--accent) 29px 32px
+  );
   filter: drop-shadow(0 0 5px #67d9e788);
   animation: scope-flow 1.1s linear infinite;
   animation-delay: calc(var(--lane) * -170ms);
@@ -507,7 +525,7 @@ onMounted(() => dialog.value?.focus())
   color: var(--text-muted);
   font: 8px var(--font-utility);
   text-transform: uppercase;
-  letter-spacing: .08em;
+  letter-spacing: 0.08em;
 }
 
 .rating-copy {
@@ -526,10 +544,18 @@ onMounted(() => dialog.value?.focus())
   line-height: 1.6;
 }
 
-.rating-limited { border-color: #76404b; }
-.rating-basic { border-color: #65543e; }
-.rating-good { border-color: #3a5961; }
-.rating-excellent { border-color: #514b88; }
+.rating-limited {
+  border-color: #76404b;
+}
+.rating-basic {
+  border-color: #65543e;
+}
+.rating-good {
+  border-color: #3a5961;
+}
+.rating-excellent {
+  border-color: #514b88;
+}
 
 .scenario-list {
   display: grid;
@@ -553,7 +579,7 @@ onMounted(() => dialog.value?.focus())
   color: var(--text-faint);
   font: 7px var(--font-utility);
   text-transform: uppercase;
-  letter-spacing: .04em;
+  letter-spacing: 0.04em;
 }
 
 .scenario-card {
@@ -625,7 +651,7 @@ onMounted(() => dialog.value?.focus())
   color: var(--text-muted);
   font: 7px var(--font-utility);
   text-transform: uppercase;
-  letter-spacing: .04em;
+  letter-spacing: 0.04em;
 }
 
 .ipc-heading {
@@ -641,7 +667,7 @@ onMounted(() => dialog.value?.focus())
 
 .ipc-row {
   display: grid;
-  grid-template-columns: minmax(210px, 1.7fr) .65fr .65fr .65fr .8fr;
+  grid-template-columns: minmax(210px, 1.7fr) 0.65fr 0.65fr 0.65fr 0.8fr;
   align-items: center;
   min-height: 42px;
   border-top: 1px solid var(--line-soft);
@@ -667,7 +693,7 @@ onMounted(() => dialog.value?.focus())
   color: var(--text-faint);
   font-size: 7px;
   text-transform: uppercase;
-  letter-spacing: .07em;
+  letter-spacing: 0.07em;
 }
 
 .ipc-name strong,
@@ -738,25 +764,51 @@ onMounted(() => dialog.value?.focus())
 }
 
 @keyframes scope-flow {
-  from { transform: translateX(-36%); }
-  to { transform: translateX(0); }
+  from {
+    transform: translateX(-36%);
+  }
+  to {
+    transform: translateX(0);
+  }
 }
 
 @keyframes benchmark-progress {
-  from { transform: translateX(-110%); }
-  to { transform: translateX(410%); }
+  from {
+    transform: translateX(-110%);
+  }
+  to {
+    transform: translateX(410%);
+  }
 }
 
 @media (max-width: 700px) {
   .intro-state,
   .running-state,
-  .error-state { padding-inline: 24px; }
-  .signal-map { transform: scale(.82); }
-  .score-panel { grid-template-columns: 1fr; }
-  .score-copy { border-right: 0; border-bottom: 1px solid #34374e; }
-  .report-footer { align-items: stretch; flex-direction: column; }
-  .report-actions { justify-content: flex-end; }
-  .ipc-table { overflow-x: auto; }
-  .ipc-row { min-width: 720px; }
+  .error-state {
+    padding-inline: 24px;
+  }
+  .signal-map {
+    transform: scale(0.82);
+  }
+  .score-panel {
+    grid-template-columns: 1fr;
+  }
+  .score-copy {
+    border-right: 0;
+    border-bottom: 1px solid #34374e;
+  }
+  .report-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .report-actions {
+    justify-content: flex-end;
+  }
+  .ipc-table {
+    overflow-x: auto;
+  }
+  .ipc-row {
+    min-width: 720px;
+  }
 }
 </style>

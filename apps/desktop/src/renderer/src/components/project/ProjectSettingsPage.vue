@@ -14,16 +14,20 @@ const props = defineProps<{
 const emit = defineEmits<{ save: [configuration: ProjectConfiguration]; close: [] }>()
 const draft = ref<ProjectConfiguration>({ ...props.configuration })
 
-watch(() => props.configuration, (value) => {
-  draft.value = { ...value }
-})
+watch(
+  () => props.configuration,
+  (value) => {
+    draft.value = { ...value }
+  }
+)
 
-const dirty = computed(() =>
-  draft.value.name !== props.configuration.name ||
-  draft.value.sampleRate !== props.configuration.sampleRate ||
-  draft.value.timeSignatureNumerator !== props.configuration.timeSignatureNumerator ||
-  draft.value.timeSignatureDenominator !== props.configuration.timeSignatureDenominator ||
-  draft.value.waveformDisplayMode !== props.configuration.waveformDisplayMode
+const dirty = computed(
+  () =>
+    draft.value.name !== props.configuration.name ||
+    draft.value.sampleRate !== props.configuration.sampleRate ||
+    draft.value.timeSignatureNumerator !== props.configuration.timeSignatureNumerator ||
+    draft.value.timeSignatureDenominator !== props.configuration.timeSignatureDenominator ||
+    draft.value.waveformDisplayMode !== props.configuration.waveformDisplayMode
 )
 </script>
 
@@ -54,18 +58,97 @@ const dirty = computed(() =>
 </template>
 
 <style scoped>
-.project-settings-shell{display:grid;grid-template-columns:244px minmax(0,1fr);width:100vw;height:100vh;color:var(--text-primary);background:var(--canvas)}
-.settings-workspace{display:grid;grid-template-rows:auto minmax(0,1fr);min-width:0}
-.workspace-header{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;padding:26px 34px 22px;border-bottom:1px solid var(--line-soft);background:#0d131c}
-.workspace-header span,.workspace-header h1,.workspace-header p{display:block}
-.workspace-header>div>span{color:var(--accent);font:700 7px var(--font-utility);letter-spacing:.17em}
-.workspace-header h1{margin:8px 0 5px;font:580 27px/1 var(--font-display);letter-spacing:-.01em}
-.workspace-header p{margin:0;color:var(--text-muted);font-size:9px}
-.header-actions{display:flex;align-items:center;gap:13px}
-.header-actions button{display:flex;align-items:center;gap:7px;padding:9px 13px;border:1px solid #7770d0;border-radius:7px;color:#f5f3ff;background:#423d83;font-size:9px;cursor:pointer}
-.header-actions button:disabled{border-color:var(--line-strong);color:var(--text-faint);background:#181f2b;cursor:not-allowed}
-.save-status{color:#7be3ed!important;font:8px var(--font-utility)!important;letter-spacing:0!important}
-.save-error{max-width:280px;color:#ff9dab!important;font:8px var(--font-utility)!important;letter-spacing:0!important}
-.workspace-scroll{overflow:auto;padding:28px 34px 46px}
-@media(max-width:820px){.project-settings-shell{grid-template-columns:200px minmax(0,1fr)}.workspace-header{align-items:flex-start;flex-direction:column}.header-actions{width:100%;justify-content:flex-end}}
+.project-settings-shell {
+  display: grid;
+  grid-template-columns: 244px minmax(0, 1fr);
+  width: 100vw;
+  height: 100vh;
+  color: var(--text-primary);
+  background: var(--canvas);
+}
+.settings-workspace {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+}
+.workspace-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 26px 34px 22px;
+  border-bottom: 1px solid var(--line-soft);
+  background: #0d131c;
+}
+.workspace-header span,
+.workspace-header h1,
+.workspace-header p {
+  display: block;
+}
+.workspace-header > div > span {
+  color: var(--accent);
+  font: 700 7px var(--font-utility);
+  letter-spacing: 0.17em;
+}
+.workspace-header h1 {
+  margin: 8px 0 5px;
+  font: 580 27px/1 var(--font-display);
+  letter-spacing: -0.01em;
+}
+.workspace-header p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 9px;
+}
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+}
+.header-actions button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 13px;
+  border: 1px solid #7770d0;
+  border-radius: 7px;
+  color: #f5f3ff;
+  background: #423d83;
+  font-size: 9px;
+  cursor: pointer;
+}
+.header-actions button:disabled {
+  border-color: var(--line-strong);
+  color: var(--text-faint);
+  background: #181f2b;
+  cursor: not-allowed;
+}
+.save-status {
+  color: #7be3ed !important;
+  font: 8px var(--font-utility) !important;
+  letter-spacing: 0 !important;
+}
+.save-error {
+  max-width: 280px;
+  color: #ff9dab !important;
+  font: 8px var(--font-utility) !important;
+  letter-spacing: 0 !important;
+}
+.workspace-scroll {
+  overflow: auto;
+  padding: 28px 34px 46px;
+}
+@media (max-width: 820px) {
+  .project-settings-shell {
+    grid-template-columns: 200px minmax(0, 1fr);
+  }
+  .workspace-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .header-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
 </style>

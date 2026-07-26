@@ -1,6 +1,13 @@
 <script setup lang="ts">
 import { computed } from "vue"
-import { DialogClose, DialogContent, DialogOverlay, DialogPortal, DialogRoot, DialogTitle } from "reka-ui"
+import {
+  DialogClose,
+  DialogContent,
+  DialogOverlay,
+  DialogPortal,
+  DialogRoot,
+  DialogTitle
+} from "reka-ui"
 import type { MidiImportTrackTarget } from "@yadaw/contracts"
 import { useMidiImportStore } from "../../stores/midiImport"
 import { useMixerStore } from "../../stores/mixer"
@@ -29,7 +36,7 @@ function updateTarget(sourceTrack: number, sequence: number, event: Event): void
 
 function instrumentValue(sourceTrack: number, sequence: number): string {
   const target = midiImportStore.targetFor(sourceTrack, sequence)
-  return target.type === "ignore" ? "" : target.instrumentClassId ?? ""
+  return target.type === "ignore" ? "" : (target.instrumentClassId ?? "")
 }
 
 function updateInstrument(sourceTrack: number, sequence: number, event: Event): void {
@@ -41,54 +48,109 @@ function updateInstrument(sourceTrack: number, sequence: number, event: Event): 
 </script>
 
 <template>
-  <DialogRoot :open="midiImportStore.open" @update:open="value => { if (!value) midiImportStore.close() }">
+  <DialogRoot
+    :open="midiImportStore.open"
+    @update:open="
+      (value) => {
+        if (!value) midiImportStore.close()
+      }
+    "
+  >
     <DialogPortal>
       <DialogOverlay class="midi-overlay" />
       <DialogContent class="midi-dialog" aria-describedby="midi-import-description">
         <header>
-          <div><span>MIDI IMPORT</span><DialogTitle>{{ midiImportStore.preview?.path.split(/[\\/]/).at(-1) }}</DialogTitle></div>
-          <DialogClose aria-label="Close MIDI import" :disabled="midiImportStore.busy">×</DialogClose>
+          <div>
+            <span>MIDI IMPORT</span
+            ><DialogTitle>{{ midiImportStore.preview?.path.split(/[\\/]/).at(-1) }}</DialogTitle>
+          </div>
+          <DialogClose aria-label="Close MIDI import" :disabled="midiImportStore.busy"
+            >×</DialogClose
+          >
         </header>
         <p id="midi-import-description">
           {{ midiImportStore.preview?.sourceTiming }} · Format {{ midiImportStore.preview?.format }}
         </p>
         <div class="mapping-list">
-          <article v-for="track in midiImportStore.preview?.tracks" :key="`${track.sequence}:${track.sourceTrack}`">
-            <div><strong>{{ track.name }}</strong><small>{{ track.noteCount }} notes · {{ track.eventCount }} events<span v-if="midiImportStore.preview?.format === 2"> · sequence {{ track.sequence + 1 }}</span></small></div>
-            <select :value="targetValue(track.sourceTrack, track.sequence)" :aria-label="`${track.name} target`" @change="updateTarget(track.sourceTrack, track.sequence, $event)">
+          <article
+            v-for="track in midiImportStore.preview?.tracks"
+            :key="`${track.sequence}:${track.sourceTrack}`"
+          >
+            <div>
+              <strong>{{ track.name }}</strong
+              ><small
+                >{{ track.noteCount }} notes · {{ track.eventCount }} events<span
+                  v-if="midiImportStore.preview?.format === 2"
+                >
+                  · sequence {{ track.sequence + 1 }}</span
+                ></small
+              >
+            </div>
+            <select
+              :value="targetValue(track.sourceTrack, track.sequence)"
+              :aria-label="`${track.name} target`"
+              @change="updateTarget(track.sourceTrack, track.sequence, $event)"
+            >
               <option value="ignore">Ignore</option>
               <option value="new">New Instrument track</option>
-              <option v-for="target in instrumentTracks" :key="target.id" :value="`existing:${target.id}`">{{ target.name }}</option>
+              <option
+                v-for="target in instrumentTracks"
+                :key="target.id"
+                :value="`existing:${target.id}`"
+              >
+                {{ target.name }}
+              </option>
             </select>
-            <select :value="instrumentValue(track.sourceTrack, track.sequence)" :disabled="targetValue(track.sourceTrack, track.sequence) === 'ignore'" :aria-label="`${track.name} VST3 instrument`" @change="updateInstrument(track.sourceTrack, track.sequence, $event)">
+            <select
+              :value="instrumentValue(track.sourceTrack, track.sequence)"
+              :disabled="targetValue(track.sourceTrack, track.sequence) === 'ignore'"
+              :aria-label="`${track.name} VST3 instrument`"
+              @change="updateInstrument(track.sourceTrack, track.sequence, $event)"
+            >
               <option value="">No instrument assigned</option>
-              <option v-for="plugin in pluginStore.compatibleInstruments" :key="plugin.classId" :value="plugin.classId">{{ plugin.name }} · {{ plugin.vendor }}</option>
+              <option
+                v-for="plugin in pluginStore.compatibleInstruments"
+                :key="plugin.classId"
+                :value="plugin.classId"
+              >
+                {{ plugin.name }} · {{ plugin.vendor }}
+              </option>
             </select>
-            <small v-for="warning in track.warnings" :key="warning" class="warning">{{ warning }}</small>
+            <small v-for="warning in track.warnings" :key="warning" class="warning">{{
+              warning
+            }}</small>
           </article>
         </div>
         <fieldset class="tempo-choice">
           <legend>Tempo for imported MIDI</legend>
           <label :class="{ selected: midiImportStore.tempoMode === 'project' }">
-            <input v-model="midiImportStore.tempoMode" type="radio" value="project">
+            <input v-model="midiImportStore.tempoMode" type="radio" value="project" />
             <span>
               <strong>Keep the project Tempo Track</strong>
-              <small>Place the MIDI at the playhead and follow the current project Tempo Track.</small>
+              <small
+                >Place the MIDI at the playhead and follow the current project Tempo Track.</small
+              >
             </span>
           </label>
           <label :class="{ selected: midiImportStore.tempoMode === 'midi' }">
-            <input v-model="midiImportStore.tempoMode" type="radio" value="midi">
+            <input v-model="midiImportStore.tempoMode" type="radio" value="midi" />
             <span>
               <strong>Import MIDI tempo into project</strong>
-              <small>Start at tick 0 and replace the project Tempo Track with the MIDI tempo map.</small>
+              <small
+                >Start at tick 0 and replace the project Tempo Track with the MIDI tempo map.</small
+              >
             </span>
           </label>
         </fieldset>
-        <p v-for="warning in midiImportStore.preview?.warnings" :key="warning" class="warning">{{ warning }}</p>
+        <p v-for="warning in midiImportStore.preview?.warnings" :key="warning" class="warning">
+          {{ warning }}
+        </p>
         <p v-if="midiImportStore.error" class="error" role="alert">{{ midiImportStore.error }}</p>
         <footer>
           <button :disabled="midiImportStore.busy" @click="midiImportStore.close">Cancel</button>
-          <button class="primary" :disabled="midiImportStore.busy" @click="midiImportStore.commit">{{ midiImportStore.busy ? "Importing…" : "Import MIDI" }}</button>
+          <button class="primary" :disabled="midiImportStore.busy" @click="midiImportStore.commit">
+            {{ midiImportStore.busy ? "Importing…" : "Import MIDI" }}
+          </button>
         </footer>
       </DialogContent>
     </DialogPortal>
@@ -96,5 +158,180 @@ function updateInstrument(sourceTrack: number, sequence: number, event: Event): 
 </template>
 
 <style scoped>
-:global(.midi-overlay){position:fixed;z-index:80;inset:0;background:#05070bbb;backdrop-filter:blur(3px)}:global(.midi-dialog){position:fixed;z-index:81;top:50%;left:50%;display:grid;width:min(760px,calc(100vw - 40px));max-height:min(720px,calc(100vh - 40px));gap:12px;padding:15px;border:1px solid var(--line-strong);border-radius:8px;color:var(--text-primary);background:var(--surface-1);box-shadow:0 24px 70px #000a;transform:translate(-50%,-50%)}.midi-dialog>header{display:flex;align-items:center;justify-content:space-between}.midi-dialog header span,.midi-dialog header h2{display:block;margin:0}.midi-dialog header span{color:#73D6A2;font:700 7px var(--font-utility);letter-spacing:.16em}.midi-dialog header h2{margin-top:4px;font-family:var(--font-display);font-size:14px}.midi-dialog header button{width:28px;height:28px;border:1px solid var(--line-soft);border-radius:4px;color:var(--text-secondary);background:var(--daw-control);cursor:pointer}.midi-dialog>p{margin:0;color:var(--text-muted);font-size:8px}.mapping-list{display:grid;gap:6px;min-height:0;overflow:auto}.mapping-list article{display:grid;grid-template-columns:minmax(130px,1fr) 165px 190px;align-items:center;gap:8px;padding:8px;border:1px solid var(--line-soft);border-radius:4px;background:var(--surface-sunken)}.mapping-list strong,.mapping-list small{display:block}.mapping-list strong{font-size:9px}.mapping-list small{margin-top:3px;color:var(--text-faint);font-size:7px}.mapping-list select{min-width:0;height:29px;border:1px solid var(--line-strong);border-radius:3px;color:var(--text-secondary);background:var(--daw-control);font-size:8px}.mapping-list .warning{grid-column:1/-1}.tempo-choice{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:0;padding:0;border:0}.tempo-choice legend{grid-column:1/-1;margin-bottom:2px;color:var(--text-muted);font:700 7px var(--font-utility);letter-spacing:.11em;text-transform:uppercase}.tempo-choice label{display:grid;grid-template-columns:17px 1fr;align-items:start;gap:7px;padding:9px;border:1px solid var(--line-soft);border-radius:4px;background:var(--surface-sunken);cursor:pointer}.tempo-choice label.selected{border-color:color-mix(in srgb,#73D6A2 58%,var(--line-strong));background:color-mix(in srgb,#73D6A2 7%,var(--surface-sunken));box-shadow:0 0 0 1px color-mix(in srgb,#73D6A2 12%,transparent) inset}.tempo-choice input{margin:2px 0 0;accent-color:#73D6A2}.tempo-choice strong,.tempo-choice small{display:block}.tempo-choice strong{color:var(--text-primary);font-size:8px}.tempo-choice small{margin-top:4px;color:var(--text-faint);font-size:7px;line-height:1.35}.warning{color:var(--warning)!important;font-size:7px!important}.error{color:var(--record)!important}.midi-dialog footer{display:flex;justify-content:flex-end;gap:7px}.midi-dialog footer button{height:30px;padding:0 12px;border:1px solid var(--line-strong);border-radius:4px;color:var(--text-secondary);background:var(--daw-control);font-size:8px;cursor:pointer}.midi-dialog footer .primary{border-color:color-mix(in srgb,#73D6A2 55%,var(--line-strong));color:#08120d;background:#73D6A2;font-weight:700}
+:global(.midi-overlay) {
+  position: fixed;
+  z-index: 80;
+  inset: 0;
+  background: #05070bbb;
+  backdrop-filter: blur(3px);
+}
+:global(.midi-dialog) {
+  position: fixed;
+  z-index: 81;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  width: min(760px, calc(100vw - 40px));
+  max-height: min(720px, calc(100vh - 40px));
+  gap: 12px;
+  padding: 15px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  color: var(--text-primary);
+  background: var(--surface-1);
+  box-shadow: 0 24px 70px #000a;
+  transform: translate(-50%, -50%);
+}
+.midi-dialog > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.midi-dialog header span,
+.midi-dialog header h2 {
+  display: block;
+  margin: 0;
+}
+.midi-dialog header span {
+  color: #73d6a2;
+  font: 700 7px var(--font-utility);
+  letter-spacing: 0.16em;
+}
+.midi-dialog header h2 {
+  margin-top: 4px;
+  font-family: var(--font-display);
+  font-size: 14px;
+}
+.midi-dialog header button {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  background: var(--daw-control);
+  cursor: pointer;
+}
+.midi-dialog > p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 8px;
+}
+.mapping-list {
+  display: grid;
+  gap: 6px;
+  min-height: 0;
+  overflow: auto;
+}
+.mapping-list article {
+  display: grid;
+  grid-template-columns: minmax(130px, 1fr) 165px 190px;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--surface-sunken);
+}
+.mapping-list strong,
+.mapping-list small {
+  display: block;
+}
+.mapping-list strong {
+  font-size: 9px;
+}
+.mapping-list small {
+  margin-top: 3px;
+  color: var(--text-faint);
+  font-size: 7px;
+}
+.mapping-list select {
+  min-width: 0;
+  height: 29px;
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  color: var(--text-secondary);
+  background: var(--daw-control);
+  font-size: 8px;
+}
+.mapping-list .warning {
+  grid-column: 1/-1;
+}
+.tempo-choice {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.tempo-choice legend {
+  grid-column: 1/-1;
+  margin-bottom: 2px;
+  color: var(--text-muted);
+  font: 700 7px var(--font-utility);
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+.tempo-choice label {
+  display: grid;
+  grid-template-columns: 17px 1fr;
+  align-items: start;
+  gap: 7px;
+  padding: 9px;
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  background: var(--surface-sunken);
+  cursor: pointer;
+}
+.tempo-choice label.selected {
+  border-color: color-mix(in srgb, #73d6a2 58%, var(--line-strong));
+  background: color-mix(in srgb, #73d6a2 7%, var(--surface-sunken));
+  box-shadow: 0 0 0 1px color-mix(in srgb, #73d6a2 12%, transparent) inset;
+}
+.tempo-choice input {
+  margin: 2px 0 0;
+  accent-color: #73d6a2;
+}
+.tempo-choice strong,
+.tempo-choice small {
+  display: block;
+}
+.tempo-choice strong {
+  color: var(--text-primary);
+  font-size: 8px;
+}
+.tempo-choice small {
+  margin-top: 4px;
+  color: var(--text-faint);
+  font-size: 7px;
+  line-height: 1.35;
+}
+.warning {
+  color: var(--warning) !important;
+  font-size: 7px !important;
+}
+.error {
+  color: var(--record) !important;
+}
+.midi-dialog footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
+}
+.midi-dialog footer button {
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  background: var(--daw-control);
+  font-size: 8px;
+  cursor: pointer;
+}
+.midi-dialog footer .primary {
+  border-color: color-mix(in srgb, #73d6a2 55%, var(--line-strong));
+  color: #08120d;
+  background: #73d6a2;
+  font-weight: 700;
+}
 </style>

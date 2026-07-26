@@ -7,13 +7,10 @@ const visibleChannels = computed(() => Math.min(4, Math.max(1, Math.round(props.
 const lanePositions = computed(() => {
   const count = visibleChannels.value
   const spacing = count === 1 ? 0 : Math.min(4, 9 / (count - 1))
-  return Array.from(
-    { length: count },
-    (_, index) => 7 + (index - (count - 1) / 2) * spacing
-  )
+  return Array.from({ length: count }, (_, index) => 7 + (index - (count - 1) / 2) * spacing)
 })
-const accessibleLabel = computed(() =>
-  `${props.channels} ${props.channels === 1 ? "channel" : "channels"} audio`
+const accessibleLabel = computed(
+  () => `${props.channels} ${props.channels === 1 ? "channel" : "channels"} audio`
 )
 
 function waveformPath(center: number): string {
@@ -33,17 +30,32 @@ function waveformPath(center: number): string {
 <template>
   <span class="channel-format" role="img" :aria-label="accessibleLabel">
     <svg viewBox="0 0 16 14" aria-hidden="true">
-      <path
-        v-for="(position, index) in lanePositions"
-        :key="index"
-        :d="waveformPath(position)"
-      />
+      <path v-for="(position, index) in lanePositions" :key="index" :d="waveformPath(position)" />
     </svg>
   </span>
 </template>
 
 <style scoped>
-.channel-format{display:grid;flex:none;place-items:center;width:18px;height:15px;color:currentColor}
-.channel-format svg{display:block;width:16px;height:14px;overflow:visible}
-.channel-format path{fill:none;stroke:currentColor;stroke-width:1.15;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+.channel-format {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 18px;
+  height: 15px;
+  color: currentColor;
+}
+.channel-format svg {
+  display: block;
+  width: 16px;
+  height: 14px;
+  overflow: visible;
+}
+.channel-format path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.15;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
 </style>

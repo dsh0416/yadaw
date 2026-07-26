@@ -16,5 +16,5 @@ yadaw-dsp-runtime.workspace = true
 [dev-dependencies]
 loom = "0.7.2"
 
-[lints.rust]
-unsafe_code = "allow"
+[lints]
+workspace = true

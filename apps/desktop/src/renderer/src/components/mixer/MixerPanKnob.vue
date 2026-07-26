@@ -123,7 +123,7 @@ function onRangeKeydown(event: KeyboardEvent): void {
           @blur="commitEditing"
           @keydown.enter.prevent="commitEditing"
           @keydown.esc.prevent="cancelEditing"
-        >
+        />
       </span>
       <input
         class="rotary-input"
@@ -143,8 +143,12 @@ function onRangeKeydown(event: KeyboardEvent): void {
         @blur="tooltipVisible = false"
         @keydown="onRangeKeydown"
         @dblclick.prevent="beginEditing"
+      />
+      <output
+        v-if="(dragging || tooltipVisible) && !editing"
+        class="parameter-tooltip"
+        aria-hidden="true"
       >
-      <output v-if="(dragging || tooltipVisible) && !editing" class="parameter-tooltip" aria-hidden="true">
         {{ panTooltipLabel }}
       </output>
     </span>
@@ -173,7 +177,7 @@ function onRangeKeydown(event: KeyboardEvent): void {
   height: 39px;
   border: 1px solid var(--line-strong);
   border-radius: 50%;
-  background: linear-gradient(145deg,var(--daw-control-hover),var(--daw-control) 68%);
+  background: linear-gradient(145deg, var(--daw-control-hover), var(--daw-control) 68%);
   box-shadow:
     0 1px 0 #ffffff1a inset,
     0 -2px 4px var(--shadow) inset,
@@ -184,7 +188,7 @@ function onRangeKeydown(event: KeyboardEvent): void {
   position: absolute;
   inset: -6px;
   border-radius: 50%;
-  background: conic-gradient(from 225deg,var(--text-faint) 0deg 270deg,transparent 270deg);
+  background: conic-gradient(from 225deg, var(--text-faint) 0deg 270deg, transparent 270deg);
   mask: radial-gradient(circle, transparent 67%, #000 69% 78%, transparent 80%);
 }
 
@@ -193,7 +197,7 @@ function onRangeKeydown(event: KeyboardEvent): void {
   inset: -6px;
   border-radius: 50%;
   background: var(--pan-progress);
-  filter: drop-shadow(0 0 2px color-mix(in srgb,var(--mixer-pan) 60%,transparent));
+  filter: drop-shadow(0 0 2px color-mix(in srgb, var(--mixer-pan) 60%, transparent));
   mask: radial-gradient(circle, transparent 66%, #000 68% 79%, transparent 81%);
 }
 
@@ -226,7 +230,7 @@ function onRangeKeydown(event: KeyboardEvent): void {
   transform: translate(-50%, -50%);
   color: var(--text-primary);
   font: 700 7px var(--font-utility);
-  letter-spacing: -.03em;
+  letter-spacing: -0.03em;
   text-align: center;
 }
 
@@ -290,7 +294,9 @@ function onRangeKeydown(event: KeyboardEvent): void {
 
 .pan-knob:focus-within .rotary-shell {
   border-color: var(--line-strong);
-  box-shadow: 0 0 0 1px color-mix(in srgb,var(--focus) 50%,transparent),0 3px 7px var(--shadow);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--focus) 50%, transparent),
+    0 3px 7px var(--shadow);
 }
 
 .pan-editor:focus-visible {

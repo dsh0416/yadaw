@@ -29,9 +29,9 @@ describe("DisplayPreferences", () => {
     })
     await flushPromises()
 
-    const lightOption = wrapper.findAll('[role="radio"]').find((option) =>
-      option.text().includes("Light")
-    )
+    const lightOption = wrapper
+      .findAll('[role="radio"]')
+      .find((option) => option.text().includes("Light"))
     expect(lightOption).toBeDefined()
     await lightOption!.trigger("click")
     await flushPromises()

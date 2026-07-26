@@ -10,20 +10,22 @@ const preview: MidiImportPreview = {
   path: "song.mid",
   format: 1,
   sourceTiming: "PPQ 480",
-  tracks: [{
-    sourceTrack: 0,
-    sequence: 0,
-    name: "Piano",
-    noteCount: 4,
-    eventCount: 8,
-    lengthTicks: 3_840,
-    tempoMap: {
-      ticksPerQuarter: 960,
-      tempoEvents: [{ tick: 0, beatsPerMinute: 132 }],
-      timeSignatureEvents: [{ tick: 0, numerator: 4, denominator: 4 }]
-    },
-    warnings: []
-  }],
+  tracks: [
+    {
+      sourceTrack: 0,
+      sequence: 0,
+      name: "Piano",
+      noteCount: 4,
+      eventCount: 8,
+      lengthTicks: 3_840,
+      tempoMap: {
+        ticksPerQuarter: 960,
+        tempoEvents: [{ tick: 0, beatsPerMinute: 132 }],
+        timeSignatureEvents: [{ tick: 0, numerator: 4, denominator: 4 }]
+      },
+      warnings: []
+    }
+  ],
   tempoMap: {
     ticksPerQuarter: 960,
     tempoEvents: [{ tick: 0, beatsPerMinute: 132 }],
@@ -56,10 +58,12 @@ describe("MIDI import tempo choice", () => {
 
     await store.commit()
 
-    expect(window.yadaw.commitMidiImport).toHaveBeenCalledWith(expect.objectContaining({
-      importTempoMap: false,
-      insertionTick: 7_680
-    }))
+    expect(window.yadaw.commitMidiImport).toHaveBeenCalledWith(
+      expect.objectContaining({
+        importTempoMap: false,
+        insertionTick: 7_680
+      })
+    )
   })
 
   it("imports the MIDI tempo map from tick zero when selected", async () => {
@@ -75,9 +79,11 @@ describe("MIDI import tempo choice", () => {
 
     await store.commit()
 
-    expect(window.yadaw.commitMidiImport).toHaveBeenCalledWith(expect.objectContaining({
-      importTempoMap: true,
-      insertionTick: 0
-    }))
+    expect(window.yadaw.commitMidiImport).toHaveBeenCalledWith(
+      expect.objectContaining({
+        importTempoMap: true,
+        insertionTick: 0
+      })
+    )
   })
 })

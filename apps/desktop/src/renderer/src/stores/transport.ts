@@ -76,9 +76,7 @@ export const useTransportStore = defineStore("transport", () => {
     })
   )
   const playheadSeconds = computed(() =>
-    snapshot.value.sampleRate > 0
-      ? snapshot.value.positionFrames / snapshot.value.sampleRate
-      : 0
+    snapshot.value.sampleRate > 0 ? snapshot.value.positionFrames / snapshot.value.sampleRate : 0
   )
   const playing = computed(() => snapshot.value.state === "playing")
   const recording = computed(() => snapshot.value.state === "recording")
@@ -101,7 +99,10 @@ export const useTransportStore = defineStore("transport", () => {
         error.value = reason instanceof Error ? reason.message : "Transport command failed."
       }
     })
-    commandTail = result.then(() => undefined, () => undefined)
+    commandTail = result.then(
+      () => undefined,
+      () => undefined
+    )
     return result
   }
 

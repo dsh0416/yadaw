@@ -99,11 +99,13 @@ function showDialog<Value extends string>(
 async function alert(options: GlobalAlertOptions): Promise<void> {
   await showDialog({
     ...options,
-    actions: [{
-      value: "dismiss",
-      label: options.actionLabel ?? "OK",
-      kind: "cancel"
-    }],
+    actions: [
+      {
+        value: "dismiss",
+        label: options.actionLabel ?? "OK",
+        kind: "cancel"
+      }
+    ],
     cancelValue: "dismiss"
   })
 }

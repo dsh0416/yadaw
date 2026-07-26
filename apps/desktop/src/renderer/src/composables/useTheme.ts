@@ -8,9 +8,7 @@ export function useTheme(preference: Readonly<Ref<ThemePreference>>) {
   const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)")
   const systemDark = shallowRef(mediaQuery.matches)
   const resolvedTheme = computed<ResolvedTheme>(() =>
-    preference.value === "system"
-      ? (systemDark.value ? "dark" : "light")
-      : preference.value
+    preference.value === "system" ? (systemDark.value ? "dark" : "light") : preference.value
   )
   function readSystemTheme(event?: MediaQueryListEvent): void {
     systemDark.value = event?.matches ?? mediaQuery.matches
