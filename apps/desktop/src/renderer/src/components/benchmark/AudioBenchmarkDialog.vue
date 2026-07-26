@@ -77,24 +77,17 @@ function ipcRate(scenario: AudioIpcBenchmarkScenario): string {
 <template>
   <section class="benchmark-dialog">
     <div v-if="status === 'idle'" class="intro-state">
-      <div class="signal-map" aria-hidden="true">
-        <span v-for="track in 6" :key="track" class="signal-track" />
-        <span class="signal-bus">DSP</span>
-        <span class="signal-output" />
-      </div>
-      <h3>Measure DSP deadlines and IPC</h3>
-      <p>
-        YADAW will measure block deadline stability, shared-memory transfers, concurrent request
-        routing, and telemetry reads. It does not use your audio devices.
+      <p class="intro-summary">
+        Runs a short local test of DSP deadlines and process-boundary transfers. It does not use
+        your audio devices or change the project.
       </p>
-      <div class="notice">
-        <span>Before you run it</span>
-        <p>
-          Pause playback and close CPU-heavy apps. Audio may stutter while the processor is under
-          test.
-        </p>
+      <p class="intro-guidance">
+        <strong>Before you start</strong>
+        <span>Pause playback and close CPU-heavy apps for a representative result.</span>
+      </p>
+      <div class="intro-actions">
+        <button class="primary-button" type="button" @click="emit('run')">Run benchmark</button>
       </div>
-      <button class="primary-button" type="button" @click="emit('run')">Run benchmark</button>
     </div>
 
     <div v-else-if="status === 'running'" class="running-state" aria-live="polite">
@@ -242,7 +235,6 @@ function ipcRate(scenario: AudioIpcBenchmarkScenario): string {
   letter-spacing: 0.18em;
 }
 
-.intro-state,
 .running-state,
 .error-state {
   display: flex;
@@ -252,14 +244,12 @@ function ipcRate(scenario: AudioIpcBenchmarkScenario): string {
   text-align: center;
 }
 
-.intro-state h3,
 .running-state h3,
 .error-state h3 {
   margin: 24px 0 8px;
   font: 600 22px var(--font-display);
 }
 
-.intro-state > p,
 .running-state > p,
 .error-state > p {
   max-width: 510px;
@@ -269,78 +259,44 @@ function ipcRate(scenario: AudioIpcBenchmarkScenario): string {
   line-height: 1.7;
 }
 
-.signal-map {
-  position: relative;
+.intro-state {
   display: grid;
-  grid-template-columns: repeat(6, 34px) 68px 44px;
-  align-items: center;
-  gap: 8px;
-  height: 72px;
+  gap: 18px;
 }
 
-.signal-track {
-  width: 34px;
-  height: 42px;
-  border: 1px solid var(--ui-domain-color-2c3849);
-  border-radius: 6px;
-  background:
-    linear-gradient(90deg, transparent 46%, var(--ui-domain-color-657187) 47% 53%, transparent 54%),
-    linear-gradient(var(--ui-domain-color-151d29), var(--ui-domain-color-101722));
+.intro-summary {
+  max-width: 38rem;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.65;
 }
 
-.signal-track::after {
-  content: "";
-  display: block;
-  width: 4px;
-  height: 4px;
-  margin: 7px auto;
-  border-radius: 50%;
-  background: var(--signal-cyan);
-  box-shadow: 0 0 10px var(--ui-domain-color-67d9e799);
-}
-
-.signal-bus {
+.intro-guidance {
   display: grid;
-  place-items: center;
-  height: 56px;
-  border: 1px solid var(--ui-domain-color-5d57a1);
-  border-radius: 8px;
-  color: var(--accent-soft);
-  background: var(--ui-domain-color-211f3a);
-  font: 700 8px var(--font-utility);
-  letter-spacing: 0.12em;
-}
-
-.signal-output {
-  width: 34px;
-  height: 8px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, var(--accent), var(--signal-cyan));
-  box-shadow: 0 0 18px var(--ui-domain-color-8c83ff55);
-}
-
-.notice {
-  width: min(500px, 100%);
-  margin: 27px 0 22px;
-  padding: 12px 14px;
-  border: 1px solid var(--ui-domain-color-3a3443);
-  border-radius: 8px;
+  gap: 4px;
+  margin: 0;
+  padding-left: 12px;
+  border-left: 2px solid var(--warning);
   text-align: left;
-  background: var(--ui-domain-color-17151d);
 }
 
-.notice span {
+.intro-guidance strong {
   color: var(--warning);
   font: 700 8px var(--font-utility);
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
 
-.notice p {
-  margin: 5px 0 0;
+.intro-guidance span {
   color: var(--text-muted);
   font-size: 9px;
   line-height: 1.5;
+}
+
+.intro-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .primary-button,
@@ -727,13 +683,9 @@ function ipcRate(scenario: AudioIpcBenchmarkScenario): string {
 }
 
 @media (max-width: 700px) {
-  .intro-state,
   .running-state,
   .error-state {
     padding-inline: 24px;
-  }
-  .signal-map {
-    transform: scale(0.82);
   }
   .score-panel {
     grid-template-columns: 1fr;

@@ -68,7 +68,7 @@ defineSlots<{
             <span aria-hidden="true">×</span>
           </DialogClose>
         </header>
-        <div class="ui-dialog__body">
+        <div class="ui-dialog__body" tabindex="0">
           <slot />
         </div>
         <footer v-if="$slots.actions" class="ui-dialog__actions">
@@ -94,6 +94,7 @@ defineSlots<{
   top: 50%;
   left: 50%;
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   width: calc(100vw - 2rem);
   max-height: min(46rem, calc(100dvh - 2rem));
   overflow: hidden;
@@ -169,8 +170,16 @@ defineSlots<{
 
 .ui-dialog__body {
   min-width: 0;
+  min-height: 0;
   overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   padding: var(--ui-space-6);
+}
+
+.ui-dialog__body:focus-visible {
+  outline: var(--ui-focus-width) solid var(--ui-color-focus);
+  outline-offset: calc(var(--ui-focus-width) * -1);
 }
 
 .ui-dialog__actions {

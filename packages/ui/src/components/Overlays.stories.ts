@@ -61,6 +61,36 @@ export const DestructiveConfirmation: Story = {
   })
 }
 
+export const ScrollableContent: Story = {
+  render: () => ({
+    components: { UiDialog },
+    data: () => ({
+      open: true,
+      sections: Array.from({ length: 24 }, (_, index) => `Result section ${index + 1}`)
+    }),
+    template: `
+      <UiDialog v-model="open" title="Benchmark results" description="All measurements remain available in the dialog." size="sm">
+        <ol style="display:grid;gap:var(--ui-space-3);margin:0;padding-left:var(--ui-space-5)">
+          <li v-for="section in sections" :key="section" style="min-height:2.5rem">{{ section }}</li>
+        </ol>
+      </UiDialog>
+    `
+  }),
+  play: async ({ canvasElement }) => {
+    const page = within(canvasElement.ownerDocument.body)
+    const dialog = page.getByRole("dialog", { name: "Benchmark results" })
+    const scrollBody = dialog.querySelector<HTMLElement>(".ui-dialog__body")
+
+    await expect(scrollBody).not.toBeNull()
+    if (!scrollBody) return
+
+    await expect(scrollBody.scrollHeight).toBeGreaterThan(scrollBody.clientHeight)
+    scrollBody.scrollTop = scrollBody.scrollHeight
+    await expect(scrollBody.scrollTop).toBeGreaterThan(0)
+    await expect(page.getByText("Result section 24")).toBeVisible()
+  }
+}
+
 export const Popover: Story = {
   render: () => ({
     components: { UiButton, UiPopover },

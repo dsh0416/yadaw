@@ -75,7 +75,9 @@ describe("AudioBenchmarkDialog", () => {
     })
 
     expect(wrapper.text()).not.toContain("Audio performance benchmark")
-    expect(wrapper.text()).toContain("Measure DSP deadlines and IPC")
+    expect(wrapper.text()).toContain("Runs a short local test")
+    expect(wrapper.text()).toContain("Pause playback and close CPU-heavy apps")
+    expect(wrapper.find(".signal-map").exists()).toBe(false)
     await wrapper.get(".primary-button").trigger("click")
     expect(wrapper.emitted("run")).toHaveLength(1)
   })

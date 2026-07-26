@@ -100,6 +100,7 @@
   --ui-shadow-selected-outline: 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent) inset;
   --ui-shadow-highlight-inset: 0 1px 0 color-mix(in srgb, var(--ui-color-text) 14%, transparent)
     inset;
+  --ui-focus-width: 2px;
   --ui-focus-ring: 0 0 0 3px color-mix(in srgb, var(--ui-color-focus) 38%, transparent);
 
   --ui-motion-fast: 100ms;
