@@ -18,6 +18,8 @@ use tokio::{
     sync::{Semaphore, mpsc, oneshot, watch},
     task::JoinSet,
 };
+#[cfg(target_os = "macos")]
+use winit::platform::macos::{ActivationPolicy, EventLoopBuilderExtMacOS};
 use winit::{
     application::ApplicationHandler,
     dpi::LogicalSize,
@@ -27,7 +29,7 @@ use winit::{
 };
 use yadaw_audio_host::{
     crash_marker, device,
-    editor_platform::NativeUiContext,
+    editor_platform::{self, NativeUiContext},
     editor_window::{EditorAction, EditorWindow},
     engine,
     recording::{NativeRecordingResult, NativeRecordingStartConfig, NativeWaveformSnapshot},
@@ -1819,6 +1821,7 @@ struct WinitHost {
     host_events: std_mpsc::SyncSender<HostEvent>,
     vst3: Option<vst3::Vst3Runtime>,
     compositor: TinySkiaCompositor,
+    editor_owner_window: Option<usize>,
     editors: HashMap<WindowId, EditorWindow>,
     editor_instances: HashMap<String, WindowId>,
 }
@@ -1869,6 +1872,7 @@ impl WinitHost {
         let attributes = WindowAttributes::default()
             .with_title(format!("{display_name} — YADAW"))
             .with_inner_size(LogicalSize::new(720.0, 640.0));
+        let attributes = configure_editor_window_attributes(attributes, self.editor_owner_window);
         let window = match event_loop.create_window(attributes) {
             Ok(window) => Arc::new(window),
             Err(error) => {
@@ -2062,8 +2066,50 @@ impl ApplicationHandler<UiEvent> for WinitHost {
     }
 }
 
+fn configure_editor_window_attributes(
+    attributes: WindowAttributes,
+    _editor_owner_window: Option<usize>,
+) -> WindowAttributes {
+    #[cfg(target_os = "windows")]
+    {
+        use winit::platform::windows::WindowAttributesExtWindows;
+
+        match _editor_owner_window {
+            Some(owner) => attributes
+                .with_owner_window(owner as isize)
+                .with_skip_taskbar(true),
+            None => attributes,
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        use winit::platform::{wayland::WindowAttributesExtWayland, x11::WindowAttributesExtX11};
+
+        let attributes =
+            WindowAttributesExtX11::with_name(attributes, editor_platform::APPLICATION_ID, "yadaw");
+        WindowAttributesExtWayland::with_name(attributes, editor_platform::APPLICATION_ID, "yadaw")
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+    attributes
+}
+
+fn parse_editor_owner_window(value: &str) -> Result<usize, &'static str> {
+    let handle = value
+        .parse::<usize>()
+        .map_err(|_| "invalid --editor-owner-window value")?;
+    if handle == 0 {
+        Err("--editor-owner-window must not be null")
+    } else {
+        Ok(handle)
+    }
+}
+
 fn run_ipc() -> Result<(), Box<dyn std::error::Error>> {
     const UI_MAILBOX_CAPACITY: usize = 64;
+    editor_platform::configure_process_application_identity()
+        .map_err(|error| format!("could not configure application identity: {error}"))?;
     // VSTGUI performs process-thread platform initialization from InitDll. On
     // Windows that includes COM-backed WIC creation, so OLE must already be
     // initialized before any plug-in module is loaded. Keep this guard alive
@@ -2073,6 +2119,7 @@ fn run_ipc() -> Result<(), Box<dyn std::error::Error>> {
     let mut arguments = env::args_os().skip(1);
     let mut ipc_token = None;
     let mut crash_marker_path = None;
+    let mut editor_owner_window = None;
     let mut runtime_config = RuntimeConfig::auto();
     while let Some(argument) = arguments.next() {
         if argument == "--ipc-token" {
@@ -2097,6 +2144,13 @@ fn run_ipc() -> Result<(), Box<dyn std::error::Error>> {
                 .and_then(|value| value.into_string().ok())
                 .ok_or("missing --egress-concurrency value")?
                 .parse()?;
+        } else if argument == "--editor-owner-window" {
+            editor_owner_window = Some(parse_editor_owner_window(
+                &arguments
+                    .next()
+                    .and_then(|value| value.into_string().ok())
+                    .ok_or("missing --editor-owner-window value")?,
+            )?);
         }
     }
     let runtime_config = runtime_config.validate()?;
@@ -2110,7 +2164,10 @@ fn run_ipc() -> Result<(), Box<dyn std::error::Error>> {
     rendezvous.send(bootstrap_sender)?;
     let bootstrap = bootstrap_receiver.recv()?;
 
-    let event_loop = EventLoop::<UiEvent>::with_user_event().build()?;
+    let mut event_loop_builder = EventLoop::<UiEvent>::with_user_event();
+    #[cfg(target_os = "macos")]
+    event_loop_builder.with_activation_policy(ActivationPolicy::Accessory);
+    let event_loop = event_loop_builder.build()?;
     let compositor = iced_tiny_skia::window::compositor::new(
         iced_tiny_skia::Settings::default(),
         event_loop.owned_display_handle(),
@@ -2159,6 +2216,7 @@ fn run_ipc() -> Result<(), Box<dyn std::error::Error>> {
         host_events: host_event_sender,
         vst3: Some(vst3::Vst3Runtime::new()),
         compositor,
+        editor_owner_window,
         editors: HashMap::new(),
         editor_instances: HashMap::new(),
     };
@@ -2189,5 +2247,12 @@ mod tests {
     fn bootstrap_rejects_a_stale_native_build() {
         assert!(validate_native_build_fingerprint(NATIVE_BUILD_FINGERPRINT).is_ok());
         assert!(validate_native_build_fingerprint("stale-build").is_err());
+    }
+
+    #[test]
+    fn editor_owner_window_rejects_null_and_invalid_handles() {
+        assert_eq!(parse_editor_owner_window("4660"), Ok(4660));
+        assert!(parse_editor_owner_window("0").is_err());
+        assert!(parse_editor_owner_window("not-a-handle").is_err());
     }
 }

@@ -32,6 +32,15 @@ toolbar and generic parameter editor in that same event loop, while a native
 plug-in editor is attached to a child HWND, NSView, or X11 XEmbed window below
 the toolbar. Wayland falls back to the parameter editor.
 
+Desktop-shell identity remains owned by Electron even though editor windows
+live in `audio-host`. Both processes use the stable `dev.yadaw.studio`
+application ID. On Windows, Electron passes its main-window HWND through the
+native client only at helper bootstrap; winit creates each editor as an owned
+window and omits its independent taskbar item. On macOS the helper uses the
+Accessory activation policy so it does not create a second Dock application.
+On X11 and Wayland the Electron class and winit `WM_CLASS`/application ID use
+the same value. The helper never creates a tray icon.
+
 On Windows, the winit main thread initializes OLE before loading any VST3
 module and keeps it initialized until every view, controller, component, and
 module has been released. This ordering is required because a plug-in may

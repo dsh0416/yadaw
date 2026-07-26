@@ -126,6 +126,12 @@ atomic, class-ID-keyed settings merge. `pluginEditors` is deliberately excluded
 from the generic settings patch API, and no Vue component may create an
 in-renderer generic parameter dialog.
 
+Window ownership is also confined to this native boundary. Electron main passes
+its native HWND directly to `audio-host-client` during Windows helper startup;
+the handle is never serialized into renderer IPC or exposed through preload.
+The helper uses it only to create owned winit editor windows without a second
+taskbar entry. Electron remains the sole tray/Dock identity owner.
+
 ## Adding a native call
 
 Before adding or changing a native call:

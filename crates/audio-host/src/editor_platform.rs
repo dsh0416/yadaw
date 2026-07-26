@@ -9,6 +9,37 @@ use winit::window::Window;
 #[cfg(target_os = "linux")]
 use raw_window_handle::HasDisplayHandle;
 
+pub const APPLICATION_ID: &str = "dev.yadaw.studio";
+
+#[cfg(target_os = "windows")]
+pub fn configure_process_application_identity() -> Result<(), String> {
+    let mut application_id = APPLICATION_ID.encode_utf16().collect::<Vec<_>>();
+    application_id.push(0);
+    let result = unsafe {
+        // SAFETY: application_id is a live, null-terminated UTF-16 string.
+        SetCurrentProcessExplicitAppUserModelID(application_id.as_ptr())
+    };
+    if result < 0 {
+        Err(format!(
+            "SetCurrentProcessExplicitAppUserModelID failed: 0x{:08X}",
+            result as u32
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn configure_process_application_identity() -> Result<(), String> {
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+#[link(name = "shell32")]
+unsafe extern "system" {
+    fn SetCurrentProcessExplicitAppUserModelID(application_id: *const u16) -> i32;
+}
+
 /// A native child owned by an editor window. The VST3 view is attached to this
 /// child instead of the winit top-level window so iced can keep a toolbar above
 /// the plug-in without overlapping it.

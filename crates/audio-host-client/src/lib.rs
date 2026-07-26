@@ -125,6 +125,33 @@ fn resolve_runtime_config(
     })
 }
 
+fn decode_native_window_handle(handle: Option<&[u8]>) -> Result<Option<usize>> {
+    let Some(handle) = handle else {
+        return Ok(None);
+    };
+    if handle.len() != size_of::<usize>() {
+        return Err(failure(
+            "invalid editor owner window handle",
+            format!(
+                "expected {} bytes, received {}",
+                size_of::<usize>(),
+                handle.len()
+            ),
+        ));
+    }
+    let bytes: [u8; size_of::<usize>()] = handle
+        .try_into()
+        .map_err(|_| failure("invalid editor owner window handle", "invalid byte length"))?;
+    let handle = usize::from_ne_bytes(bytes);
+    if handle == 0 {
+        return Err(failure(
+            "invalid editor owner window handle",
+            "window handle is null",
+        ));
+    }
+    Ok(Some(handle))
+}
+
 #[napi]
 pub struct AudioHostIpcClient {
     state: Arc<ClientState>,
@@ -139,12 +166,16 @@ impl AudioHostIpcClient {
         worker_threads: Option<u32>,
         max_blocking_threads: Option<u32>,
         egress_concurrency: Option<u32>,
+        editor_owner_window_handle: Option<Buffer>,
     ) -> Result<Self> {
         let runtime_config =
             resolve_runtime_config(worker_threads, max_blocking_threads, egress_concurrency)?;
+        let editor_owner_window_handle =
+            decode_native_window_handle(editor_owner_window_handle.as_deref())?;
         let (server, token) = IpcOneShotServer::<IpcSender<HostBootstrap>>::new()
             .map_err(|error| failure("could not create helper IPC server", error))?;
-        let mut child = Command::new(&executable_path)
+        let mut command = Command::new(&executable_path);
+        command
             .arg("--ipc-token")
             .arg(token)
             .arg("--crash-marker")
@@ -154,7 +185,11 @@ impl AudioHostIpcClient {
             .arg("--max-blocking-threads")
             .arg(runtime_config.max_blocking_threads.to_string())
             .arg("--egress-concurrency")
-            .arg(runtime_config.egress_concurrency.to_string())
+            .arg(runtime_config.egress_concurrency.to_string());
+        if let Some(handle) = editor_owner_window_handle {
+            command.arg("--editor-owner-window").arg(handle.to_string());
+        }
+        let mut child = command
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::inherit())
@@ -1074,6 +1109,18 @@ mod tests {
     use super::*;
     use ipc_channel::ipc::IpcSharedMemory;
     use yadaw_ipc_transport::RegionOffer;
+
+    #[test]
+    fn native_window_handle_requires_one_nonzero_pointer() {
+        let handle = 0x1234usize;
+        assert_eq!(
+            decode_native_window_handle(Some(&handle.to_ne_bytes())).expect("valid handle"),
+            Some(handle)
+        );
+        assert!(decode_native_window_handle(Some(&[])).is_err());
+        assert!(decode_native_window_handle(Some(&0usize.to_ne_bytes())).is_err());
+        assert_eq!(decode_native_window_handle(None).expect("no handle"), None);
+    }
 
     #[test]
     fn transport_traffic_separates_inline_and_shared_packets() {

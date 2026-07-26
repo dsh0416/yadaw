@@ -518,6 +518,7 @@ export class AudioHostService {
     private readonly executablePath: string,
     private readonly crashMarkerPath: string,
     private runtimePreferences: AudioHostRuntimePreferences,
+    private readonly editorOwnerWindowHandle: Buffer | undefined,
     private readonly onFailure: (message: string) => void,
     private readonly onEditorPreferenceChanged: (
       classId: string,
@@ -540,7 +541,8 @@ export class AudioHostService {
           : this.runtimePreferences.maxBlockingThreads,
         this.runtimePreferences.egressConcurrency === "auto"
           ? undefined
-          : this.runtimePreferences.egressConcurrency
+          : this.runtimePreferences.egressConcurrency,
+        this.editorOwnerWindowHandle
       )
     } catch (error) {
       this.onFailure(`could not start audio host: ${String(error)}`)

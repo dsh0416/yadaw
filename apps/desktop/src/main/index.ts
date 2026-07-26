@@ -43,6 +43,13 @@ import { RecordingService } from "./recording-service"
 import { WaveformService } from "./waveform-service"
 
 const rendererDirectory = join(import.meta.dirname, "../renderer")
+const APPLICATION_ID = "dev.yadaw.studio"
+
+if (process.platform === "win32") {
+  app.setAppUserModelId(APPLICATION_ID)
+} else if (process.platform === "linux") {
+  app.commandLine.appendSwitch("class", APPLICATION_ID)
+}
 
 if (process.env.YADAW_TEST_USER_DATA) {
   app.disableHardwareAcceleration()
@@ -952,7 +959,15 @@ function registerIpcHandlers(
 
 let mainWindow: BrowserWindow | null = null
 
-function createMainWindow(): BrowserWindow {
+function loadMainWindow(window: BrowserWindow): void {
+  if (process.env.YADAW_RENDERER_URL) {
+    void window.loadURL(process.env.YADAW_RENDERER_URL)
+  } else {
+    void window.loadFile(join(rendererDirectory, "index.html"))
+  }
+}
+
+function createMainWindow(loadContent = true): BrowserWindow {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.show()
     mainWindow.focus()
@@ -960,6 +975,7 @@ function createMainWindow(): BrowserWindow {
   }
 
   const window = new BrowserWindow({
+    show: loadContent,
     width: 1440,
     height: 900,
     minWidth: 960,
@@ -991,11 +1007,7 @@ function createMainWindow(): BrowserWindow {
     console.error("YADAW renderer failed to load", { code, description })
   })
 
-  if (process.env.YADAW_RENDERER_URL) {
-    void window.loadURL(process.env.YADAW_RENDERER_URL)
-  } else {
-    void window.loadFile(join(rendererDirectory, "index.html"))
-  }
+  if (loadContent) loadMainWindow(window)
 
   return window
 }
@@ -1047,10 +1059,12 @@ void app.whenReady().then(async () => {
         "debug",
         `yadaw-audio-host${executableSuffix}`
       )
+  const window = createMainWindow(false)
   audioHostService = new AudioHostService(
     audioHostPath,
     join(app.getPath("userData"), "audio-host-crash-marker.bin"),
     applicationSettings.audioHostRuntime,
+    process.platform === "win32" ? window.getNativeWindowHandle() : undefined,
     (message) => {
       console.error(`YADAW audio helper failure: ${message}`)
       for (const window of BrowserWindow.getAllWindows().slice(1)) window.close()
@@ -1123,7 +1137,10 @@ void app.whenReady().then(async () => {
     midiImport,
     lifecycle
   )
-  createMainWindow()
+  window.once("ready-to-show", () => {
+    if (!window.isDestroyed()) window.show()
+  })
+  loadMainWindow(window)
   installApplicationMenu()
 
   app.on("activate", () => {
