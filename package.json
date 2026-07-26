@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "license": "GPL-3.0-only",
   "private": true,
+  "type": "module",
   "packageManager": "pnpm@11.9.0",
   "engines": {
     "node": "26.x",
@@ -14,7 +15,8 @@
     "build:native": "pnpm --filter @yadaw/dsp-node build && pnpm --filter @yadaw/audio-host-client build && cargo build -p yadaw-audio-host --release && cargo build -p yadaw-vst3-host --bin yadaw-vst3-probe --release && cmake -S . -B target/vst3-bridge-build -DSMTG_ENABLE_VST3_PLUGIN_EXAMPLES=OFF -DSMTG_ENABLE_VST3_HOSTING_EXAMPLES=OFF -DSMTG_ENABLE_VSTGUI_SUPPORT=OFF && cmake --build target/vst3-bridge-build --config Release --target yadaw-vst3-bridge",
     "db:generate": "pnpm --filter @yadaw/project-db db:generate",
     "db:check": "pnpm --filter @yadaw/project-db db:check",
-    "check": "pnpm format:prettier:check && pnpm lint:eslint && pnpm check:rust && pnpm -r --if-present check && pnpm --filter @yadaw/desktop test:unit && pnpm --filter @yadaw/project-db test:integration",
+    "check": "pnpm format:prettier:check && pnpm lint:eslint && pnpm check:configs && pnpm check:rust && pnpm -r --if-present check && pnpm --filter @yadaw/desktop test:unit && pnpm --filter @yadaw/project-db test:integration",
+    "check:configs": "tsc --noEmit -p tsconfig.config.json",
     "check:rust": "pnpm format:rust:check && pnpm lint:rust && pnpm test:rust && pnpm bench:rust:check",
     "test:rust": "cargo test --workspace && cargo test -p yadaw-dsp-node --features bench-internals --test realtime_allocations",
     "bench:rust:check": "cargo bench --workspace --bench mixer_graph --bench native_render --bench media_streaming --bench recording --features yadaw-dsp-node/bench-internals --no-run",
@@ -39,11 +41,13 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@types/node": "^26.0.0",
     "eslint": "^10.8.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-vue": "^10.10.0",
     "globals": "^17.7.0",
     "prettier": "^3.9.6",
+    "typescript": "^5.9.3",
     "typescript-eslint": "^8.65.0"
   }
 }

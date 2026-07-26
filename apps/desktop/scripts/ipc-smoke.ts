@@ -3,6 +3,41 @@ import { resolve } from "node:path"
 import { decode, encode } from "@msgpack/msgpack"
 import { AudioHostIpcClient } from "@yadaw/audio-host-client"
 
+interface AttachmentReference {
+  index: number
+  offset: number
+  length: number
+}
+
+interface WireResponse {
+  result: {
+    type: string
+    egress_active?: number
+    payload?: AttachmentReference
+  }
+}
+
+type TransportDiagnosticsWire = [
+  nativeBuildFingerprint: string,
+  sessionEpoch: string,
+  requests: [normalPending: number, priorityPending: number, capacity: number, timeouts: number],
+  sharedMemory: unknown,
+  eventQueueDepth: number,
+  telemetry: unknown,
+  parameterRing: unknown,
+  closing: boolean,
+  runtimeAndArena: [
+    workerThreads: number,
+    maxBlockingThreads: number,
+    egressConcurrency: number,
+    arenaRegions: number
+  ]
+]
+
+function decodeWire<T>(bytes: Uint8Array): T {
+  return decode(bytes) as T
+}
+
 const repositoryRoot = resolve(import.meta.dirname, "..", "..", "..")
 const executableSuffix = process.platform === "win32" ? ".exe" : ""
 const bridgeFilename =
@@ -21,7 +56,7 @@ const client = new AudioHostIpcClient(
 )
 let requestId = 1
 
-async function request(command, attachments = []) {
+async function request(command: unknown, attachments: Buffer[] = []) {
   const response = await client.request(
     Buffer.from(
       encode({
@@ -31,11 +66,14 @@ async function request(command, attachments = []) {
     ),
     attachments
   )
-  return { decoded: decode(response.body), attachments: response.attachments }
+  return {
+    decoded: decodeWire<WireResponse>(response.body),
+    attachments: response.attachments
+  }
 }
 
 try {
-  const heartbeat = decode(
+  const heartbeat = decodeWire<WireResponse>(
     (
       await client.heartbeat(
         Buffer.from(
@@ -70,6 +108,7 @@ try {
     [payload]
   )
   const reference = echoed.decoded.result.payload
+  if (!reference) throw new Error("benchmark response did not include an attachment reference")
   const returned = echoed.attachments[reference.index]?.subarray(
     reference.offset,
     reference.offset + reference.length
@@ -82,7 +121,7 @@ try {
     throw new Error("4 MiB attachment response mismatch")
   }
 
-  const diagnostics = decode(client.transportDiagnostics())
+  const diagnostics = decodeWire<TransportDiagnosticsWire>(client.transportDiagnostics())
   if (
     typeof diagnostics[0] !== "string" ||
     diagnostics[0].length !== 16 ||

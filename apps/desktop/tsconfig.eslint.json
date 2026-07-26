@@ -3,6 +3,7 @@
   "include": [
     "e2e/**/*.ts",
     "playwright.config.ts",
+    "scripts/**/*.ts",
     "src/**/*.ts",
     "src/**/*.vue",
     "vite.*.config.ts",

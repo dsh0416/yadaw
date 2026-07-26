@@ -1,18 +1,27 @@
 import { spawn } from "node:child_process"
+import type { ChildProcess } from "node:child_process"
+import { createRequire } from "node:module"
 import { resolve } from "node:path"
-import electronPath from "electron"
 import { build, createServer } from "vite"
+import type { ViteDevServer } from "vite"
 
 const appDirectory = resolve(import.meta.dirname, "..")
-let electronProcess = null
-let rendererServer = null
+const electronModule: unknown = createRequire(import.meta.url)("electron")
+if (typeof electronModule !== "string") {
+  throw new TypeError("electron did not resolve to its executable path")
+}
+const electronPath = electronModule
+type BuildWatcher = Extract<Awaited<ReturnType<typeof build>>, { close(): Promise<void> }>
+
+let electronProcess: ChildProcess | null = null
+let rendererServer: ViteDevServer | null = null
 let shuttingDown = false
 let restartInProgress = false
-let restartTimer = null
-let shutdownPromise = null
-const watchers = []
+let restartTimer: NodeJS.Timeout | null = null
+let shutdownPromise: Promise<never> | null = null
+const watchers: BuildWatcher[] = []
 
-function waitForExit(child, timeoutMs = 5_000) {
+function waitForExit(child: ChildProcess, timeoutMs = 5_000): Promise<void> {
   if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve()
   return new Promise((resolveExit) => {
     const timer = setTimeout(resolveExit, timeoutMs)
@@ -24,7 +33,7 @@ function waitForExit(child, timeoutMs = 5_000) {
   })
 }
 
-async function terminateElectron(child) {
+async function terminateElectron(child: ChildProcess | null): Promise<void> {
   if (!child || child.exitCode !== null || child.signalCode !== null) return
   const exited = waitForExit(child)
   if (process.platform === "win32") {
@@ -42,7 +51,7 @@ async function terminateElectron(child) {
   await exited
 }
 
-async function createBuildWatcher(configName, onRebuild) {
+async function createBuildWatcher(configName: string, onRebuild: () => void): Promise<void> {
   const watcher = await build({
     configFile: resolve(appDirectory, configName),
     mode: "development",
@@ -54,7 +63,7 @@ async function createBuildWatcher(configName, onRebuild) {
   }
 
   let firstBuild = true
-  const ready = new Promise((resolveReady, rejectReady) => {
+  const ready = new Promise<void>((resolveReady, rejectReady) => {
     watcher.on("event", (event) => {
       if (event.code === "ERROR") {
         if (firstBuild) rejectReady(event.error)
@@ -75,7 +84,7 @@ async function createBuildWatcher(configName, onRebuild) {
   return ready
 }
 
-function launchElectron() {
+function launchElectron(): void {
   const rendererUrl = rendererServer?.resolvedUrls?.local[0]
   if (!rendererUrl) throw new Error("Vite renderer URL is unavailable")
 
@@ -93,24 +102,26 @@ function launchElectron() {
   })
 }
 
-function scheduleElectronRestart() {
+function scheduleElectronRestart(): void {
   if (restartTimer !== null) clearTimeout(restartTimer)
-  restartTimer = setTimeout(async () => {
-    restartTimer = null
-    if (!electronProcess) {
-      launchElectron()
-      return
-    }
-
-    restartInProgress = true
-    const child = electronProcess
-    await terminateElectron(child)
-    if (!shuttingDown) launchElectron()
-    restartInProgress = false
-  }, 120)
+  restartTimer = setTimeout(() => void restartElectron(), 120)
 }
 
-function shutdown(exitCode) {
+async function restartElectron(): Promise<void> {
+  restartTimer = null
+  if (!electronProcess) {
+    launchElectron()
+    return
+  }
+
+  restartInProgress = true
+  const child = electronProcess
+  await terminateElectron(child)
+  if (!shuttingDown) launchElectron()
+  restartInProgress = false
+}
+
+function shutdown(exitCode: number): Promise<never> {
   if (shutdownPromise) return shutdownPromise
   shuttingDown = true
   shutdownPromise = (async () => {

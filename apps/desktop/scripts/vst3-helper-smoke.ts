@@ -4,6 +4,38 @@ import { resolve } from "node:path"
 import { tmpdir } from "node:os"
 import { decode, encode } from "@msgpack/msgpack"
 
+interface PluginParameter {
+  id: number
+}
+
+interface AudioHostMeter {
+  channel_id: string
+  held_left: number
+  held_right: number
+}
+
+interface WireResult {
+  type: string
+  message?: string
+  editor_kind?: string
+  open?: boolean
+  parameters?: PluginParameter[]
+  component_state?: { bytes?: Uint8Array }
+  latency_samples?: number
+  tail_samples?: number
+  meters?: AudioHostMeter[]
+}
+
+interface WireResponse {
+  request_id: number
+  result: WireResult
+}
+
+interface PendingRequest {
+  resolve: (result: WireResult) => void
+  reject: (reason?: unknown) => void
+}
+
 const repositoryRoot = fileURLToPath(new URL("../../..", import.meta.url))
 const executableSuffix = process.platform === "win32" ? ".exe" : ""
 const bridgeFilename =
@@ -52,7 +84,7 @@ const child = spawn(
 )
 let nextRequestId = 1
 let received = Buffer.alloc(0)
-const pending = new Map()
+const pending = new Map<number, PendingRequest>()
 child.once("exit", (code, signal) => {
   for (const waiter of pending.values()) {
     waiter.reject(new Error(`audio-host exited (${signal ?? code ?? "unknown"})`))
@@ -60,10 +92,10 @@ child.once("exit", (code, signal) => {
   pending.clear()
 })
 
-function send(command) {
-  return new Promise((resolve, reject) => {
+function send(command: unknown): Promise<WireResult> {
+  return new Promise((resolveResult, reject) => {
     const requestId = nextRequestId++
-    pending.set(requestId, { resolve, reject })
+    pending.set(requestId, { resolve: resolveResult, reject })
     const payload = Buffer.from(
       encode({
         request_id: requestId,
@@ -77,14 +109,17 @@ function send(command) {
   })
 }
 
-child.stdout.on("data", (chunk) => {
+child.stdout.on("data", (chunk: Buffer) => {
   received = Buffer.concat([received, chunk])
   while (received.length >= 4 && received.length >= received.readUInt32BE(0) + 4) {
     const length = received.readUInt32BE(0)
-    const response = decode(received.subarray(4, length + 4))
+    const response = decode(received.subarray(4, length + 4)) as WireResponse
     received = received.subarray(length + 4)
     const waiter = pending.get(response.request_id)
     pending.delete(response.request_id)
+    if (!waiter) {
+      throw new Error(`received response for unknown request ${response.request_id}`)
+    }
     if (response.result.type === "error") {
       waiter.reject(new Error(response.result.message))
     } else {
@@ -115,19 +150,22 @@ try {
   })
   if (synthLoaded.type !== "plugin-loaded") throw new Error("synth load response mismatch")
   const listed = await send({ type: "plugin-parameters", instance_id: "again-1" })
-  if (listed.type !== "plugin-parameters" || listed.parameters.length === 0) {
+  const listedParameters = listed.parameters
+  if (listed.type !== "plugin-parameters" || !listedParameters?.length) {
     throw new Error("AGain did not expose parameters")
   }
   const editor = await send({ type: "open-plugin-editor", instance_id: "again-1" })
-  if (!["native", "generic"].includes(editor.editor_kind)) {
+  const editorKind = editor.editor_kind
+  if (editorKind !== "native" && editorKind !== "generic") {
     throw new Error("plugin editor did not report native or generic fallback")
   }
   const focused = await send({ type: "open-plugin-editor", instance_id: "again-1" })
-  if (editor.editor_kind === "native" && !focused.open) {
+  if (editorKind === "native" && !focused.open) {
     throw new Error("opening the existing editor did not focus/reuse it")
   }
   await send({ type: "close-plugin-editor", instance_id: "again-1" })
-  const parameter = listed.parameters[0]
+  const parameter = listedParameters[0]
+  if (!parameter) throw new Error("AGain parameter list became empty")
   for (const gesture of ["begin", "perform", "end"]) {
     await send({
       type: "set-plugin-parameter",
@@ -138,7 +176,8 @@ try {
     })
   }
   const state = await send({ type: "save-plugin-state", instance_id: "again-1" })
-  if (state.type !== "plugin-state" || !(state.component_state?.bytes instanceof Uint8Array)) {
+  const componentState = state.component_state?.bytes
+  if (state.type !== "plugin-state" || !(componentState instanceof Uint8Array)) {
     throw new Error("state response mismatch")
   }
   await send({
@@ -245,8 +284,8 @@ try {
   }
   await send({ type: "stop-audio-engine" })
   console.log(
-    `VST3 helper live graph passed (${listed.parameters.length} parameters, ` +
-      `${state.component_state.bytes.length} component bytes, meter ` +
+    `VST3 helper live graph passed (${listedParameters.length} parameters, ` +
+      `${componentState.length} component bytes, meter ` +
       `${Math.max(instrumentMeter.held_left, instrumentMeter.held_right).toFixed(4)})`
   )
   await send({ type: "shutdown" })

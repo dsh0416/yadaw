@@ -26,6 +26,11 @@ skills under `.agents/skills/`.
   and blocking synchronization out of audio callbacks.
 - Runtime management: `mise` with locked Node.js, pnpm, Rust, and APM versions
   in `mise.toml` and `mise.lock`; pnpm manages the JavaScript monorepo.
+- Prefer TypeScript for hand-authored Node.js scripts and tool configuration.
+  Run erasable TypeScript directly with the locked Node.js 26 runtime and check
+  it with a dedicated `tsconfig` using `erasableSyntaxOnly`. Reserve `.mjs` and
+  `.cjs` for generated files or bundle outputs whose consumers require those
+  extensions.
 
 ## Common Commands
 

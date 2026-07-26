@@ -41,7 +41,9 @@ export default tseslint.config(
       parserOptions: {
         extraFileExtensions: [".vue"],
         project: [
+          "./tsconfig.config.json",
           "./apps/desktop/tsconfig.eslint.json",
+          "./apps/desktop/tsconfig.scripts.json",
           "./packages/audio-engine/tsconfig.json",
           "./packages/contracts/tsconfig.json",
           "./packages/project-db/tsconfig.eslint.json"

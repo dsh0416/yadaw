@@ -1,4 +1,5 @@
-/** @type {import("prettier").Config} */
+import type { Config } from "prettier"
+
 export default {
   arrowParens: "always",
   endOfLine: "lf",
@@ -10,4 +11,4 @@ export default {
   trailingComma: "none",
   useTabs: false,
   vueIndentScriptAndStyle: false
-}
+} satisfies Config
