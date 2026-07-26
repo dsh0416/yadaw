@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, shallowRef, watch } from "vue"
-import { Plus, Trash2 } from "@lucide/vue"
+import { Trash2 } from "@lucide/vue"
 import { PopoverContent, PopoverPortal, PopoverRoot, PopoverTrigger } from "reka-ui"
 import type {
   MixerChannelState,
@@ -30,6 +30,8 @@ const newSendTarget = shallowRef("")
 const sendGestures = new Map<string, ReturnType<typeof useParameterGesture>>()
 const supportsSends = computed(() => ["audio", "instrument", "bus"].includes(props.channel.kind))
 const emptyRows = computed(() => Math.max(0, props.slotRows - props.sends.length))
+const canAddSend = computed(() => props.sendTargets.length > 0)
+const alignmentRows = computed(() => Math.max(0, emptyRows.value - (canAddSend.value ? 1 : 0)))
 
 watch(
   () => [props.channel.id, props.sendTargets.map((target) => target.id).join("|")],
@@ -59,25 +61,24 @@ function updateSend(send: MixerSendState, patch: MixerSendPatch): void {
   emit("updateSend", send.id, patch)
 }
 
-function sendGesture(send: MixerSendState, parameter: "levelDb" | "pan") {
-  const key = `${send.id}:${parameter}`
-  let gesture = sendGestures.get(key)
+function sendLevelGesture(send: MixerSendState) {
+  let gesture = sendGestures.get(send.id)
   if (!gesture) {
     gesture = useParameterGesture({
       currentValue: () => {
         const current = props.sends.find((candidate) => candidate.id === send.id)
-        return current?.[parameter] ?? send[parameter]
+        return current?.levelDb ?? send.levelDb
       },
       preview: (value) =>
         emit("preview", {
           target: "send",
           id: send.id,
-          parameter,
+          parameter: "levelDb",
           value
         }),
-      commit: (value) => updateSend(send, { [parameter]: value })
+      commit: (value) => updateSend(send, { levelDb: value })
     })
-    sendGestures.set(key, gesture)
+    sendGestures.set(send.id, gesture)
   }
   return gesture
 }
@@ -178,11 +179,11 @@ function createSend(): void {
                   step="0.1"
                   :value="send.levelDb"
                   aria-label="Send level"
-                  @pointerdown="sendGesture(send, 'levelDb').begin"
-                  @input="sendGesture(send, 'levelDb').preview"
-                  @change="sendGesture(send, 'levelDb').commit"
-                  @keydown="sendGesture(send, 'levelDb').keydown"
-                  @dblclick="sendGesture(send, 'levelDb').reset(-90)"
+                  @pointerdown="sendLevelGesture(send).begin"
+                  @input="sendLevelGesture(send).preview"
+                  @change="sendLevelGesture(send).commit"
+                  @keydown="sendLevelGesture(send).keydown"
+                  @dblclick="sendLevelGesture(send).reset(-90)"
                 />
                 <input
                   type="number"
@@ -191,34 +192,7 @@ function createSend(): void {
                   step="0.1"
                   :value="send.levelDb"
                   aria-label="Send level value in decibels"
-                  @change="sendGesture(send, 'levelDb').reset(numberValue($event))"
-                />
-              </label>
-              <label class="parameter-row">
-                <span
-                  >Pan <b>{{ Math.round(send.pan * 100) }}</b></span
-                >
-                <input
-                  type="range"
-                  min="-1"
-                  max="1"
-                  step="0.01"
-                  :value="send.pan"
-                  aria-label="Send pan"
-                  @pointerdown="sendGesture(send, 'pan').begin"
-                  @input="sendGesture(send, 'pan').preview"
-                  @change="sendGesture(send, 'pan').commit"
-                  @keydown="sendGesture(send, 'pan').keydown"
-                  @dblclick="sendGesture(send, 'pan').reset(0)"
-                />
-                <input
-                  type="number"
-                  min="-1"
-                  max="1"
-                  step="0.01"
-                  :value="send.pan"
-                  aria-label="Send pan value"
-                  @change="sendGesture(send, 'pan').reset(numberValue($event))"
+                  @change="sendLevelGesture(send).reset(numberValue($event))"
                 />
               </label>
             </div>
@@ -226,14 +200,10 @@ function createSend(): void {
         </PopoverPortal>
       </PopoverRoot>
 
-      <span v-for="index in emptyRows" :key="`empty-${index}`" class="send-row empty"
-        >EMPTY SEND</span
-      >
-
-      <PopoverRoot>
+      <PopoverRoot v-if="emptyRows > 0 && canAddSend">
         <PopoverTrigger as-child>
-          <button class="add-send" :disabled="sendTargets.length === 0" aria-label="Add send">
-            <Plus :size="10" />ADD SEND
+          <button class="send-row empty empty-slot" aria-label="Add send in empty slot">
+            EMPTY SEND
           </button>
         </PopoverTrigger>
         <PopoverPortal>
@@ -250,10 +220,21 @@ function createSend(): void {
           </PopoverContent>
         </PopoverPortal>
       </PopoverRoot>
+      <span
+        v-for="index in alignmentRows"
+        :key="`alignment-${index}`"
+        class="send-row alignment-spacer"
+        aria-hidden="true"
+      />
     </template>
     <template v-else>
-      <span v-for="index in slotRows" :key="index" class="send-row empty disabled">NO SEND</span>
-      <button class="add-send" disabled><Plus :size="10" />ADD SEND</button>
+      <span class="send-row empty disabled">NO SEND</span>
+      <span
+        v-for="index in Math.max(0, slotRows - 1)"
+        :key="index"
+        class="send-row alignment-spacer"
+        aria-hidden="true"
+      />
     </template>
   </section>
 </template>
@@ -320,27 +301,20 @@ function createSend(): void {
   font: 6px var(--font-utility);
   cursor: default;
 }
-.add-send {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  height: 23px;
-  margin-top: 2px;
-  border: 1px solid #696969;
-  border-radius: 4px;
-  color: #d2d2d2;
-  background: #505050;
-  font: 700 6px var(--font-utility);
-  letter-spacing: 0.05em;
+.send-row.empty-slot {
   cursor: pointer;
 }
-.add-send:disabled {
-  opacity: 0.45;
-  cursor: default;
+.send-row.empty-slot:hover {
+  border-color: #4e8dbf;
+  color: #b7d9f3;
 }
-.send-row:focus-visible,
-.add-send:focus-visible {
+.send-row.alignment-spacer {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  pointer-events: none;
+}
+.send-row:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 1px;
 }

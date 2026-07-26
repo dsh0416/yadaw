@@ -292,7 +292,6 @@ pub struct LiveMixerSend {
     pub enabled: bool,
     pub tap: LiveMixerSendTap,
     pub level_db: f64,
-    pub pan: f64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

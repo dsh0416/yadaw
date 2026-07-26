@@ -113,7 +113,6 @@ pub struct NativeMixerSend {
     pub enabled: bool,
     pub tap: LiveMixerSendTap,
     pub level_db: f64,
-    pub pan: f64,
 }
 
 #[derive(Clone)]
@@ -557,7 +556,6 @@ enum RealtimeParameter {
     ChannelGain,
     ChannelPan,
     SendLevel,
-    SendPan,
 }
 
 #[derive(Clone, Copy)]
@@ -574,7 +572,6 @@ impl RealtimeParameterCommand {
             ("channel", "gainDb") => RealtimeParameter::ChannelGain,
             ("channel", "pan") => RealtimeParameter::ChannelPan,
             ("send", "levelDb") => RealtimeParameter::SendLevel,
-            ("send", "pan") => RealtimeParameter::SendPan,
             _ => return Err(invalid_config("unknown mixer preview parameter")),
         };
         let bytes = preview.id.as_bytes();
@@ -1063,7 +1060,6 @@ fn build_mixer_runtime(
                     LiveMixerSendTap::PostPan => SendTap::PostPan,
                 },
                 level_db: send.level_db as f32,
-                pan: send.pan as f32,
             })
         })
         .collect::<Result<Vec<_>>>()?;
@@ -1313,10 +1309,6 @@ impl NativeMixerRuntime {
                         .graph
                         .send_index(preview.id())
                         .and_then(|index| self.graph.set_send_level(index, preview.value).ok()),
-                    RealtimeParameter::SendPan => self
-                        .graph
-                        .send_index(preview.id())
-                        .and_then(|index| self.graph.set_send_pan(index, preview.value).ok()),
                 };
                 let _ = result;
             }

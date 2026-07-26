@@ -254,8 +254,7 @@ export const mixerSends = pgTable(
     sortOrder: integer("sort_order").notNull(),
     enabled: boolean("enabled").notNull().default(false),
     tap: text("tap").$type<"pre" | "post" | "post-pan">().notNull().default("post-pan"),
-    levelDb: doublePrecision("level_db").notNull().default(-90),
-    pan: doublePrecision("pan").notNull().default(0)
+    levelDb: doublePrecision("level_db").notNull().default(-90)
   },
   (table) => [
     uniqueIndex("mixer_sends_source_target_unique").on(
@@ -266,7 +265,6 @@ export const mixerSends = pgTable(
     check("mixer_sends_sort_order_check", sql`${table.sortOrder} >= 0`),
     check("mixer_sends_tap_check", sql`${table.tap} in ('pre', 'post', 'post-pan')`),
     check("mixer_sends_level_db_check", sql`${table.levelDb} between -90 and 12`),
-    check("mixer_sends_pan_check", sql`${table.pan} between -1 and 1`),
     check(
       "mixer_sends_distinct_channels_check",
       sql`${table.sourceChannelId} <> ${table.targetChannelId}`

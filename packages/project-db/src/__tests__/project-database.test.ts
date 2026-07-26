@@ -127,15 +127,16 @@ describe("ProjectDatabase", () => {
           sortOrder: 0,
           enabled: true,
           tap: "post-pan",
-          levelDb: -3,
-          pan: 0.25
+          levelDb: -3
         }
       },
       "output-1-2"
     )
-    expect((await database.mixerSnapshot()).sends).toContainEqual(
-      expect.objectContaining({ id: "post-pan-send", tap: "post-pan" })
+    const persistedSend = (await database.mixerSnapshot()).sends.find(
+      (send) => send.id === "post-pan-send"
     )
+    expect(persistedSend).toMatchObject({ id: "post-pan-send", tap: "post-pan" })
+    expect(persistedSend).not.toHaveProperty("pan")
     await database.applyCommand(
       {
         type: "update-channel",
@@ -162,8 +163,7 @@ describe("ProjectDatabase", () => {
             sortOrder: 0,
             enabled: true,
             tap: "post",
-            levelDb: 0,
-            pan: 0
+            levelDb: 0
           }
         }
       ]

@@ -435,7 +435,6 @@ function validateGraph(graph: MixerGraphSnapshot): void {
       throw new Error("Sends must route an Audio, Instrument, or Bus channel to a Bus")
     }
     finiteRange(send.levelDb, -90, 12, "Send level")
-    finiteRange(send.pan, -1, 1, "Send pan")
     if (!Number.isSafeInteger(send.sortOrder) || send.sortOrder < 0) {
       throw new Error("Mixer send order must be a non-negative safe integer")
     }
@@ -679,8 +678,7 @@ export class MixerService {
         target_channel_id: send.targetChannelId,
         enabled: send.enabled,
         tap: send.tap,
-        level_db: send.levelDb,
-        pan: send.pan
+        level_db: send.levelDb
       })),
       clips: graph.clips.map((clip) => ({
         id: clip.id,
@@ -822,14 +820,6 @@ export class MixerService {
           id: command.sendId,
           parameter: "levelDb",
           value: command.patch.levelDb
-        })
-      }
-      if (command.patch.pan !== undefined) {
-        await this.audioHost?.previewMixerParameter({
-          target: "send",
-          id: command.sendId,
-          parameter: "pan",
-          value: command.patch.pan
         })
       }
     }

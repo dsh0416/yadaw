@@ -1,3 +1,4 @@
+import { nextTick } from "vue"
 import { describe, expect, it } from "vitest"
 import { mount } from "@vue/test-utils"
 import { createPinia, setActivePinia } from "pinia"
@@ -40,7 +41,7 @@ function channel(id: string, kind: MixerChannelState["kind"]): MixerChannelState
 }
 
 describe("MixerConsole", () => {
-  it("uses shared plugin/send row heights and one scrolling console", () => {
+  it("keeps one trailing plugin/send slot and grows shared heights with new entries", async () => {
     const pinia = createPinia()
     setActivePinia(pinia)
     const mixerStore = useMixerStore()
@@ -62,8 +63,7 @@ describe("MixerConsole", () => {
         sortOrder: index,
         enabled: true,
         tap: "post-pan" as const,
-        levelDb: -12,
-        pan: 0
+        levelDb: -12
       })),
       plugins: Array.from({ length: 5 }, (_, index) => ({
         id: `plugin-${index}`,
@@ -86,10 +86,44 @@ describe("MixerConsole", () => {
 
     const wrapper = mount(MixerConsole, { global: { plugins: [pinia] } })
     const scroller = wrapper.get(".channel-scroll")
-    expect(scroller.attributes("style")).toContain("--plugin-section-height: 132px")
-    expect(scroller.attributes("style")).toContain("--send-section-height: 117px")
+    expect(scroller.attributes("style")).toContain("--plugin-section-height: 156px")
+    expect(scroller.attributes("style")).toContain("--send-section-height: 90px")
     expect(wrapper.find(".mixer-section-labels").exists()).toBe(true)
     expect(wrapper.findAll(".channel-strip")).toHaveLength(6)
     expect(wrapper.find(".channel-strip.master").classes()).toContain("master")
+
+    mixerStore.graph = {
+      ...mixerStore.graph,
+      plugins: [
+        ...mixerStore.graph.plugins,
+        {
+          id: "plugin-5",
+          channelId: "audio",
+          role: "insert",
+          slotOrder: 5,
+          classId: descriptor.classId,
+          descriptor,
+          enabled: true,
+          componentState: new Uint8Array(),
+          controllerState: new Uint8Array()
+        }
+      ],
+      sends: [
+        ...mixerStore.graph.sends,
+        {
+          id: "send-3",
+          sourceChannelId: "audio",
+          targetChannelId: "bus-a",
+          sortOrder: 3,
+          enabled: true,
+          tap: "post-pan",
+          levelDb: -12
+        }
+      ]
+    }
+    await nextTick()
+
+    expect(scroller.attributes("style")).toContain("--plugin-section-height: 180px")
+    expect(scroller.attributes("style")).toContain("--send-section-height: 116px")
   })
 })

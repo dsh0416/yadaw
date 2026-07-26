@@ -184,8 +184,7 @@ describe("mixer store", () => {
         targetChannelId: "bus-b",
         enabled: false,
         tap: "post-pan",
-        levelDb: -90,
-        pan: 0
+        levelDb: -90
       })
     })
   })

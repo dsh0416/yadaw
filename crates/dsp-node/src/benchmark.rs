@@ -155,7 +155,6 @@ fn build_graph(scenario: Scenario) -> MixerGraph {
                 SendTap::Post
             },
             level_db: -12.0,
-            pan: 0.0,
         })
         .collect();
 

@@ -40,7 +40,6 @@ pub struct SendSpec {
     pub enabled: bool,
     pub tap: SendTap,
     pub level_db: f32,
-    pub pan: f32,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
@@ -116,7 +115,6 @@ struct ChannelRuntime {
 #[derive(Debug, Clone)]
 struct SendRuntime {
     gain: SmoothedValue,
-    pan: SmoothedValue,
     delay: StereoDelay,
 }
 
@@ -351,9 +349,7 @@ impl MixerGraph {
             || channels
                 .iter()
                 .any(|channel| !valid_db(channel.gain_db) || !valid_pan(channel.pan))
-            || sends
-                .iter()
-                .any(|send| !valid_db(send.level_db) || !valid_pan(send.pan))
+            || sends.iter().any(|send| !valid_db(send.level_db))
         {
             return Err(GraphError::InvalidParameter);
         }
@@ -396,7 +392,6 @@ impl MixerGraph {
             .iter()
             .map(|send| SendRuntime {
                 gain: SmoothedValue::new(db_to_gain(send.level_db), sample_rate),
-                pan: SmoothedValue::new(send.pan, sample_rate),
                 delay: StereoDelay::default(),
             })
             .collect();
@@ -460,15 +455,6 @@ impl MixerGraph {
         self.send_runtime[index]
             .gain
             .set_target(db_to_gain(level_db));
-        Ok(())
-    }
-
-    pub fn set_send_pan(&mut self, index: usize, pan: f32) -> Result<(), GraphError> {
-        if index >= self.sends.len() || !valid_pan(pan) {
-            return Err(GraphError::InvalidParameter);
-        }
-        self.sends[index].pan = pan;
-        self.send_runtime[index].pan.set_target(pan);
         Ok(())
     }
 
@@ -569,10 +555,7 @@ impl MixerGraph {
                     SendTap::Post => post_fader,
                     SendTap::PostPan => post,
                 };
-                let sent = scale(
-                    balance_stereo(tap, self.send_runtime[send_index].pan.next()),
-                    self.send_runtime[send_index].gain.next(),
-                );
+                let sent = scale(tap, self.send_runtime[send_index].gain.next());
                 let sent = self.send_runtime[send_index].delay.process(sent);
                 add(&mut self.accumulation[send.target], sent);
             }
@@ -727,7 +710,6 @@ mod tests {
             enabled: true,
             tap: SendTap::Pre,
             level_db: 0.0,
-            pan: 0.0,
         }];
         let mut graph = MixerGraph::new(48_000, channels, sends).unwrap();
         let output = rendered(&mut graph, &[[1.0, 1.0]]);
@@ -751,7 +733,6 @@ mod tests {
             enabled: true,
             tap: SendTap::Post,
             level_db: 0.0,
-            pan: 0.0,
         }];
         let mut graph = MixerGraph::new(48_000, channels, sends).unwrap();
         assert_eq!(rendered(&mut graph, &[[1.0, 1.0]]), [0.0, 0.0]);
@@ -774,34 +755,9 @@ mod tests {
             enabled: true,
             tap: SendTap::PostPan,
             level_db: 0.0,
-            pan: 0.0,
         }];
         let mut graph = MixerGraph::new(48_000, channels, sends).unwrap();
         assert_eq!(rendered(&mut graph, &[[1.0, 1.0]]), [0.0, 2.0]);
-    }
-
-    #[test]
-    fn send_pan_is_independent_from_the_source_pan() {
-        let mut source = channel("audio", ChannelKind::Audio, Some(3));
-        source.muted = true;
-        source.pan = -1.0;
-        let channels = vec![
-            source,
-            channel("bus", ChannelKind::Bus, Some(3)),
-            channel("master", ChannelKind::Master, None),
-            channel("output", ChannelKind::Output, None),
-        ];
-        let sends = vec![SendSpec {
-            id: "send".to_owned(),
-            source: 0,
-            target: 1,
-            enabled: true,
-            tap: SendTap::Pre,
-            level_db: 0.0,
-            pan: 1.0,
-        }];
-        let mut graph = MixerGraph::new(48_000, channels, sends).unwrap();
-        assert_eq!(rendered(&mut graph, &[[1.0, 1.0]]), [0.0, 1.0]);
     }
 
     #[test]
@@ -852,7 +808,6 @@ mod tests {
             enabled: true,
             tap: SendTap::Post,
             level_db: 0.0,
-            pan: 0.0,
         }];
         let mut graph = MixerGraph::new(48_000, channels, sends).unwrap();
         assert_eq!(rendered(&mut graph, &[[0.5, 0.5]]), [0.5, 0.5]);

@@ -33,6 +33,7 @@ const usedRows = computed(
   () => orderedInserts.value.length + (props.channel.kind === "instrument" ? 1 : 0)
 )
 const emptyRows = computed(() => Math.max(0, props.slotRows - usedRows.value))
+const alignmentRows = computed(() => Math.max(0, emptyRows.value - 1))
 const acceptsPlugins = computed(() => props.channel.kind !== "master")
 
 function accepts(event: DragEvent): boolean {
@@ -136,20 +137,31 @@ function dropInsert(event: DragEvent, slotOrder: number): void {
       </article>
 
       <article
-        v-for="emptyIndex in emptyRows"
-        :key="`empty-${emptyIndex}`"
+        v-if="emptyRows > 0"
         class="plugin-row empty"
         @dragenter="allowDrop"
         @dragover="allowDrop"
-        @drop="dropInsert($event, orderedInserts.length + emptyIndex - 1)"
+        @drop="dropInsert($event, orderedInserts.length)"
       >
         <span>EMPTY SLOT</span>
       </article>
+      <span
+        v-for="index in alignmentRows"
+        :key="`alignment-${index}`"
+        class="plugin-row alignment-spacer"
+        aria-hidden="true"
+      />
     </template>
     <template v-else>
-      <article v-for="index in slotRows" :key="index" class="plugin-row empty disabled">
+      <article class="plugin-row empty disabled">
         <span>NO INSERT</span>
       </article>
+      <span
+        v-for="index in Math.max(0, slotRows - 1)"
+        :key="index"
+        class="plugin-row alignment-spacer"
+        aria-hidden="true"
+      />
     </template>
   </section>
 </template>
@@ -243,6 +255,12 @@ function dropInsert(event: DragEvent, slotOrder: number): void {
 .plugin-row.empty:not(.disabled):hover {
   border-color: #4e8dbf;
   color: #b7d9f3;
+}
+.plugin-row.alignment-spacer {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  pointer-events: none;
 }
 .plugin-row.disabled {
   opacity: 0.65;

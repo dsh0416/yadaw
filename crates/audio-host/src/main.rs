@@ -114,7 +114,6 @@ fn live_graph(
                 enabled: send.enabled,
                 tap: send.tap,
                 level_db: send.level_db,
-                pan: send.pan,
             })
         })
         .collect::<Result<Vec<_>, String>>()?;

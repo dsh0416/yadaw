@@ -352,8 +352,7 @@ export const useMixerStore = defineStore("mixer", () => {
       ).length,
       enabled: false,
       tap: "post-pan",
-      levelDb: -90,
-      pan: 0
+      levelDb: -90
     }
     return execute({ type: "create-send", send })
   }
@@ -414,8 +413,7 @@ export const useMixerStore = defineStore("mixer", () => {
         sortOrder: 0,
         enabled: false,
         tap: "post-pan",
-        levelDb: -90,
-        pan: 0
+        levelDb: -90
       })
       return isAcyclic(candidate)
     })

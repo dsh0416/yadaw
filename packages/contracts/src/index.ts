@@ -824,7 +824,6 @@ export interface MixerSendState {
   enabled: boolean
   tap: MixerSendTap
   levelDb: number
-  pan: number
 }
 
 export interface MixerGraphSnapshot {
@@ -856,7 +855,7 @@ export type MixerChannelPatch = Partial<
 >
 
 export type MixerSendPatch = Partial<
-  Pick<MixerSendState, "targetChannelId" | "sortOrder" | "enabled" | "tap" | "levelDb" | "pan">
+  Pick<MixerSendState, "targetChannelId" | "sortOrder" | "enabled" | "tap" | "levelDb">
 >
 
 export type PluginInstancePatch = Partial<
@@ -895,12 +894,19 @@ export interface ProjectCommandResult {
   inverse: ProjectCommand
 }
 
-export interface MixerParameterPreview {
-  target: "channel" | "send"
-  id: string
-  parameter: "gainDb" | "pan" | "levelDb"
-  value: number
-}
+export type MixerParameterPreview =
+  | {
+      target: "channel"
+      id: string
+      parameter: "gainDb" | "pan"
+      value: number
+    }
+  | {
+      target: "send"
+      id: string
+      parameter: "levelDb"
+      value: number
+    }
 
 export interface MixerChannelMeter {
   channelId: string

@@ -15,6 +15,13 @@
       "when": 1785067847231,
       "tag": "0001_silky_newton_destine",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1785070108361,
+      "tag": "0002_mixed_alice",
+      "breakpoints": true
     }
   ]
 }

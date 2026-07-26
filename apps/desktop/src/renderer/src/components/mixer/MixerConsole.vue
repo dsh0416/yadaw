@@ -12,24 +12,33 @@ const mixerStore = useMixerStore()
 const pluginStore = usePluginStore()
 const { confirm } = useGlobalDialog()
 
-const pluginSlotRows = computed(() =>
-  Math.max(
-    4,
-    ...mixerStore.orderedChannels.map(
-      (channel) =>
-        mixerStore.graph.plugins.filter((plugin) => plugin.channelId === channel.id).length
-    )
-  )
+const pluginSlotRows = computed(
+  () =>
+    Math.max(
+      0,
+      ...mixerStore.orderedChannels.map((channel) => {
+        if (channel.kind === "master") return 0
+        const insertCount = mixerStore.graph.plugins.filter(
+          (plugin) => plugin.channelId === channel.id && plugin.role === "insert"
+        ).length
+        return insertCount + (channel.kind === "instrument" ? 1 : 0)
+      })
+    ) + 1
 )
 const sendSlotRows = computed(() =>
   Math.max(
-    2,
-    ...mixerStore.orderedChannels.map((channel) => mixerStore.sendsFor(channel.id).length)
+    1,
+    ...mixerStore.orderedChannels.map((channel) =>
+      ["audio", "instrument", "bus"].includes(channel.kind)
+        ? mixerStore.sendsFor(channel.id).length +
+          (mixerStore.availableSendTargets(channel.id).length > 0 ? 1 : 0)
+        : 0
+    )
   )
 )
 const sectionStyle = computed(() => ({
   "--plugin-section-height": `${12 + pluginSlotRows.value * 24}px`,
-  "--send-section-height": `${39 + sendSlotRows.value * 26}px`
+  "--send-section-height": `${12 + sendSlotRows.value * 26}px`
 }))
 
 function pluginsFor(channelId: string) {

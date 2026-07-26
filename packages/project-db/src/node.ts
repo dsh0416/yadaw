@@ -94,7 +94,6 @@ function sendPatch(patch: MixerSendPatch): Partial<typeof mixerSends.$inferInser
   if (patch.enabled !== undefined) result.enabled = patch.enabled
   if (patch.tap !== undefined) result.tap = patch.tap
   if (patch.levelDb !== undefined) result.levelDb = patch.levelDb
-  if (patch.pan !== undefined) result.pan = patch.pan
   return result
 }
 
@@ -138,8 +137,7 @@ function sendValue(
     sortOrder: send.sortOrder,
     enabled: send.enabled,
     tap: send.tap,
-    levelDb: send.levelDb,
-    pan: send.pan
+    levelDb: send.levelDb
   }
 }
 

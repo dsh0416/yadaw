@@ -103,7 +103,6 @@ fn scenario(
                         SendTap::Post
                     },
                     level_db: -12.0,
-                    pan: (send_index % 3) as f32 * 0.5 - 0.5,
                 });
             }
         }

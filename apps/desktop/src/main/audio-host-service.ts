@@ -346,7 +346,6 @@ export interface AudioHostGraph {
     enabled: boolean
     tap: string
     level_db: number
-    pan: number
   }>
   clips: Array<{
     id: string

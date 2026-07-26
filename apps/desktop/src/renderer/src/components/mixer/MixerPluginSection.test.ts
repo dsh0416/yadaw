@@ -66,7 +66,8 @@ describe("MixerPluginSection", () => {
     expect(wrapper.emitted("toggle")?.at(-1)).toEqual(["plugin", false])
     await wrapper.get('button[aria-label="Remove Compressor"]').trigger("click")
     expect(wrapper.emitted("remove")?.at(-1)).toEqual(["plugin"])
-    expect(wrapper.findAll(".plugin-row.empty")).toHaveLength(3)
+    expect(wrapper.findAll(".plugin-row.empty")).toHaveLength(1)
+    expect(wrapper.findAll(".plugin-row.alignment-spacer")).toHaveLength(2)
 
     const nextDescriptor = { ...descriptor, classId: "delay", name: "Delay" }
     await wrapper.find(".plugin-row.empty").trigger("drop", {

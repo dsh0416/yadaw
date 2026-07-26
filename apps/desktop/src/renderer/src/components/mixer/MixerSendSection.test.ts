@@ -36,8 +36,7 @@ const send: MixerSendState = {
   sortOrder: 0,
   enabled: true,
   tap: "post",
-  levelDb: -12,
-  pan: 0
+  levelDb: -12
 }
 
 afterEach(() => {
@@ -58,6 +57,9 @@ describe("MixerSendSection", () => {
     })
 
     expect(wrapper.get('button[aria-label="Edit send to Reverb"]').text()).toContain("POST")
+    expect(wrapper.text()).not.toContain("EMPTY SEND")
+    expect(wrapper.find('button[aria-label="Add send in empty slot"]').exists()).toBe(false)
+    expect(wrapper.findAll(".send-row.alignment-spacer")).toHaveLength(1)
     await wrapper.get('button[aria-label="Edit send to Reverb"]').trigger("click")
     await flushPromises()
 
@@ -71,6 +73,7 @@ describe("MixerSendSection", () => {
     const level = new DOMWrapper(
       document.body.querySelector<HTMLInputElement>('input[aria-label="Send level"]')
     )
+    expect(document.body.querySelector('[aria-label="Send pan"]')).toBeNull()
     await level.setValue("-6")
     expect(wrapper.emitted("preview")?.at(-1)?.[0]).toMatchObject({
       target: "send",
@@ -89,11 +92,14 @@ describe("MixerSendSection", () => {
         sends: [],
         buses: [bus],
         sendTargets: [bus],
-        slotRows: 2
+        slotRows: 1
       }
     })
 
-    await wrapper.get('button[aria-label="Add send"]').trigger("click")
+    expect(wrapper.findAll(".send-row.empty")).toHaveLength(1)
+    expect(wrapper.find(".send-row.alignment-spacer").exists()).toBe(false)
+    expect(wrapper.find('button[aria-label="Add send"]').exists()).toBe(false)
+    await wrapper.get('button[aria-label="Add send in empty slot"]').trigger("click")
     await flushPromises()
     const addButton = Array.from(document.body.querySelectorAll<HTMLButtonElement>("button")).find(
       (button) => button.textContent?.trim() === "Add"
