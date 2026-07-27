@@ -453,6 +453,12 @@ function registerIpcHandlers(
   ipcMain.handle(IPC_CHANNELS.mixerLoad, (event) => {
     assertTrustedSender(event)
     lifecycle.assertMixerLoadAllowed()
+    return mixer.snapshot()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.mixerReload, (event) => {
+    assertTrustedSender(event)
+    lifecycle.assertMixerLoadAllowed()
     return mixer.load()
   })
 
@@ -673,9 +679,10 @@ function registerIpcHandlers(
         path = result.filePath
       }
       const created = await projects.create({ ...request, path })
-      await mixer.load()
+      const graph = await mixer.load()
+      const assets = await projects.listAssets()
       lifecycle.completeProject(created)
-      return created
+      return { session: created, graph, assets }
     } catch (error) {
       try {
         await projects.abortOpen()
@@ -727,7 +734,7 @@ function registerIpcHandlers(
           phase: recover ? "loading-project-database" : "loading-project-archive",
           state: "running",
           completedUnits: 0,
-          totalUnits: 4,
+          totalUnits: 5,
           cancellable: false,
           message: null,
           dropoutFrames: 0
@@ -745,26 +752,36 @@ function registerIpcHandlers(
         },
         true
       )
-      await mixer.load()
+      const graph = await mixer.load()
       operations.patch(
         operationId,
         {
-          phase: "preparing-waveforms",
+          phase: "loading-project-assets",
           completedUnits: 3
         },
         true
       )
-      waveforms.rebuildMissingInBackground()
+      const assets = await projects.listAssets()
       operations.patch(
         operationId,
         {
-          state: "completed",
+          phase: "preparing-waveforms",
           completedUnits: 4
         },
         true
       )
+      await waveforms.prepareMissing()
+      operations.patch(
+        operationId,
+        {
+          state: "completed",
+          completedUnits: 5
+        },
+        true
+      )
       lifecycle.completeProject(opened)
-      return opened
+      operations.remove(operationId)
+      return { session: opened, graph, assets }
     } catch (error) {
       try {
         await projects.abortOpen()

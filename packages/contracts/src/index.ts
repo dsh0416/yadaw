@@ -7,6 +7,7 @@ export const IPC_CHANNELS = {
   audioStop: "audio:stop",
   audioSnapshot: "audio:snapshot",
   mixerLoad: "mixer:load",
+  mixerReload: "mixer:reload",
   mixerExecute: "mixer:execute",
   mixerPreview: "mixer:preview",
   mixerSnapshot: "mixer:snapshot",
@@ -78,6 +79,7 @@ export interface YadawDesktopApi {
   stopAudioEngine(): Promise<AudioRuntimeSnapshot>
   audioEngineSnapshot(): Promise<AudioRuntimeSnapshot>
   loadMixerGraph(): Promise<MixerGraphSnapshot>
+  reloadMixerGraph(): Promise<MixerGraphSnapshot>
   executeProjectCommand(command: ProjectCommand): Promise<ProjectCommandResult>
   previewMixerParameter(preview: MixerParameterPreview): Promise<void>
   mixerSnapshot(): Promise<MixerRuntimeSnapshot>
@@ -91,9 +93,9 @@ export interface YadawDesktopApi {
   systemPerformanceSnapshot(): Promise<SystemPerformanceSnapshot>
   runAudioBenchmark(): Promise<AudioBenchmarkReport>
   subscribeAudioBenchmarkRequests(listener: () => void): () => void
-  createProject(request: CreateProjectRequest): Promise<ProjectSession>
+  createProject(request: CreateProjectRequest): Promise<ProjectWorkspaceSnapshot>
   prepareOpenProject(path?: string): Promise<ProjectOpenPreparation | null>
-  openProject(path: string, recover?: boolean): Promise<ProjectSession>
+  openProject(path: string, recover?: boolean): Promise<ProjectWorkspaceSnapshot>
   saveProject(path?: string): Promise<ProjectSession | null>
   closeProject(disposition?: ProjectCloseDisposition): Promise<boolean>
   listProjectAssets(): Promise<ProjectAssetSummary[]>
@@ -213,6 +215,12 @@ export interface ProjectAssetSummary {
   frameCount: bigint
 }
 
+export interface ProjectWorkspaceSnapshot {
+  session: ProjectSession
+  graph: MixerGraphSnapshot
+  assets: ProjectAssetSummary[]
+}
+
 export interface RecentProject {
   path: string
   name: string
@@ -272,6 +280,7 @@ export type OperationPhase =
   | "loading-project-database"
   | "restoring-project-state"
   | "loading-mixer"
+  | "loading-project-assets"
   | "preparing-waveforms"
   | "cleaning-up"
 

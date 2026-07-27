@@ -45,9 +45,7 @@ const { playing, loading: playLoading, canPlay, playheadSeconds } = storeToRefs(
 
 onMounted(() => {
   if (!session.value) void router.replace({ name: "welcome" })
-  else void projectStore.refreshAssets()
   void engineStore.initialize()
-  void mixerStore.load()
   mixerStore.startMetering()
   transportStore.startPolling()
 })

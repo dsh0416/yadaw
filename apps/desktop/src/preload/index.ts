@@ -25,6 +25,7 @@ const api: YadawDesktopApi = {
   stopAudioEngine: () => ipcRenderer.invoke(IPC_CHANNELS.audioStop),
   audioEngineSnapshot: () => ipcRenderer.invoke(IPC_CHANNELS.audioSnapshot),
   loadMixerGraph: () => ipcRenderer.invoke(IPC_CHANNELS.mixerLoad),
+  reloadMixerGraph: () => ipcRenderer.invoke(IPC_CHANNELS.mixerReload),
   executeProjectCommand: (command) => ipcRenderer.invoke(IPC_CHANNELS.mixerExecute, command),
   previewMixerParameter: (preview) => ipcRenderer.invoke(IPC_CHANNELS.mixerPreview, preview),
   mixerSnapshot: () => ipcRenderer.invoke(IPC_CHANNELS.mixerSnapshot),

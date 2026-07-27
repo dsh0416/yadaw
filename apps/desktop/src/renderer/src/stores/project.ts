@@ -5,7 +5,8 @@ import type {
   ProjectAssetSummary,
   ProjectConfiguration,
   ProjectLifecycleState,
-  ProjectSession
+  ProjectSession,
+  ProjectWorkspaceSnapshot
 } from "@yadaw/contracts"
 import { useGlobalDialog } from "../composables/useGlobalDialog"
 
@@ -34,32 +35,32 @@ export const useProjectStore = defineStore("project", () => {
     if (state.status === "closed") projectAssets.value = []
   }
 
-  async function create(request: CreateProjectRequest): Promise<boolean> {
-    if (lifecycle.value.status !== "closed") return false
+  async function create(request: CreateProjectRequest): Promise<ProjectWorkspaceSnapshot | null> {
+    if (lifecycle.value.status !== "closed") return null
     lifecycle.value = { status: "creating", error: null }
     try {
-      const created = await window.yadaw.createProject(request)
-      lifecycle.value = openState(created)
-      projectAssets.value = []
-      return true
+      const workspace = await window.yadaw.createProject(request)
+      lifecycle.value = openState(workspace.session)
+      projectAssets.value = structuredClone(workspace.assets)
+      return workspace
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : "Unable to create project."
       lifecycle.value = {
         status: "closed",
         error: /cancelled/i.test(message) ? null : message
       }
-      return false
+      return null
     }
   }
 
-  async function open(path?: string): Promise<boolean> {
-    if (lifecycle.value.status !== "closed") return false
+  async function open(path?: string): Promise<ProjectWorkspaceSnapshot | null> {
+    if (lifecycle.value.status !== "closed") return null
     lifecycle.value = { status: "opening", error: null }
     try {
       const preparation = await window.yadaw.prepareOpenProject(path)
       if (!preparation) {
         lifecycle.value = { status: "closed", error: null }
-        return false
+        return null
       }
       let recover = false
       if (preparation.recoverableWorkingCopy) {
@@ -80,21 +81,21 @@ export const useProjectStore = defineStore("project", () => {
         })
         if (!choice || choice === "cancel") {
           lifecycle.value = { status: "closed", error: null }
-          return false
+          return null
         }
         recover = choice === "recover"
       }
-      const opened = await window.yadaw.openProject(preparation.path, recover)
-      lifecycle.value = openState(opened)
-      await refreshAssets()
-      return true
+      const workspace = await window.yadaw.openProject(preparation.path, recover)
+      lifecycle.value = openState(workspace.session)
+      projectAssets.value = structuredClone(workspace.assets)
+      return workspace
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : "Unable to open project."
       lifecycle.value = {
         status: "closed",
         error: message
       }
-      return false
+      return null
     }
   }
 

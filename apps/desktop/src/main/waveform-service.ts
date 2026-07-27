@@ -76,10 +76,10 @@ export class WaveformService {
     return task
   }
 
-  rebuildMissingInBackground(): void {
+  async prepareMissing(): Promise<void> {
     const projectId = this.projects.current?.id
     if (!projectId) return
-    void (async () => {
+    try {
       const missing = await this.projects.assetsMissingWaveform(1)
       for (const assetId of missing) {
         if (this.projects.current?.id !== projectId) return
@@ -89,9 +89,9 @@ export class WaveformService {
           // Derived caches never prevent a project from opening or playing.
         }
       }
-    })().catch(() => {
+    } catch {
       // A damaged/missing cache remains an unavailable waveform, not an open failure.
-    })
+    }
   }
 
   async readAsset(request: WaveformWindowRequest): Promise<WaveformPeakWindow> {

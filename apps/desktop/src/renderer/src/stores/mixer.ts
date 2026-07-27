@@ -132,18 +132,51 @@ export const useMixerStore = defineStore("mixer", () => {
     return enqueueMutation(loadNow)
   }
 
+  function applyGraph(snapshot: MixerGraphSnapshot): void {
+    graph.value = structuredClone(snapshot)
+    const selectedStillExists = graph.value.channels.some(
+      (channel) => channel.id === selectedChannelId.value
+    )
+    if (!selectedStillExists) {
+      selectedChannelId.value =
+        graph.value.channels.find((channel) => channel.kind === "audio")?.id ??
+        graph.value.channels[0]?.id ??
+        null
+    }
+  }
+
+  function hydrate(snapshot: MixerGraphSnapshot): void {
+    applyGraph(snapshot)
+    undoHistory.value = []
+    redoHistory.value = []
+    error.value = ""
+  }
+
   async function loadNow(): Promise<void> {
     if (!projectStore.session) return
     loading.value = true
     error.value = ""
     try {
-      graph.value = await window.yadaw.loadMixerGraph()
-      selectedChannelId.value ??=
-        graph.value.channels.find((channel) => channel.kind === "audio")?.id ??
-        graph.value.channels[0]?.id ??
-        null
+      applyGraph(await window.yadaw.loadMixerGraph())
     } catch (reason) {
       error.value = reason instanceof Error ? reason.message : "Unable to load the mixer."
+    } finally {
+      loading.value = false
+    }
+  }
+
+  function reload(): Promise<void> {
+    return enqueueMutation(reloadNow)
+  }
+
+  async function reloadNow(): Promise<void> {
+    if (!projectStore.session) return
+    loading.value = true
+    error.value = ""
+    try {
+      applyGraph(await window.yadaw.reloadMixerGraph())
+    } catch (reason) {
+      error.value = reason instanceof Error ? reason.message : "Unable to reload the mixer."
     } finally {
       loading.value = false
     }
@@ -483,7 +516,9 @@ export const useMixerStore = defineStore("mixer", () => {
     selectedChannel,
     canUndo,
     canRedo,
+    hydrate,
     load,
+    reload,
     execute,
     undo,
     redo,

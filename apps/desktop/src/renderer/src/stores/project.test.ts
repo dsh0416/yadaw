@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { createPinia, setActivePinia } from "pinia"
-import type { ProjectSession } from "@yadaw/contracts"
+import type { ProjectSession, ProjectWorkspaceSnapshot } from "@yadaw/contracts"
 import { useGlobalDialog } from "../composables/useGlobalDialog"
 import { useProjectStore } from "./project"
 
@@ -18,6 +18,24 @@ const session: ProjectSession = {
   recoveredWorkingCopy: false
 }
 
+const workspace: ProjectWorkspaceSnapshot = {
+  session,
+  graph: {
+    sampleRate: 48_000,
+    channels: [],
+    clips: [],
+    sends: [],
+    plugins: [],
+    midiClips: [],
+    tempoMap: {
+      ticksPerQuarter: 960,
+      tempoEvents: [{ tick: 0, beatsPerMinute: 120 }],
+      timeSignatureEvents: [{ tick: 0, numerator: 4, denominator: 4 }]
+    }
+  },
+  assets: []
+}
+
 describe("project store dialogs", () => {
   beforeEach(() => setActivePinia(createPinia()))
 
@@ -27,11 +45,13 @@ describe("project store dialogs", () => {
       recoverableWorkingCopy: true
     })
     window.yadaw.openProject = vi.fn().mockResolvedValue({
-      ...session,
-      dirty: false,
-      recoveredWorkingCopy: true
+      ...workspace,
+      session: {
+        ...session,
+        dirty: false,
+        recoveredWorkingCopy: true
+      }
     })
-    window.yadaw.listProjectAssets = vi.fn().mockResolvedValue([])
     const store = useProjectStore()
     const { activeDialog, selectDialogAction } = useGlobalDialog()
 
@@ -39,7 +59,10 @@ describe("project store dialogs", () => {
     await vi.waitFor(() => expect(activeDialog.value?.title).toBe("Recover unsaved project?"))
     selectDialogAction("recover")
 
-    await expect(opening).resolves.toBe(true)
+    await expect(opening).resolves.toMatchObject({
+      session: { recoveredWorkingCopy: true },
+      graph: { sampleRate: 48_000 }
+    })
     expect(window.yadaw.openProject).toHaveBeenCalledWith("session.yadaw", true)
     expect(store.session?.recoveredWorkingCopy).toBe(true)
   })
@@ -55,7 +78,7 @@ describe("project store dialogs", () => {
     const store = useProjectStore()
     const { activeDialog } = useGlobalDialog()
 
-    await expect(store.open("future.yadaw")).resolves.toBe(false)
+    await expect(store.open("future.yadaw")).resolves.toBeNull()
     expect(activeDialog.value).toBeNull()
     expect(store.lifecycle.status).toBe("closed")
     expect(store.error).toContain("migrations newer")

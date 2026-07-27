@@ -19,6 +19,7 @@ const phaseLabels: Record<OperationSnapshot["phase"], string> = {
   "loading-project-database": "Loading project database",
   "restoring-project-state": "Restoring project state",
   "loading-mixer": "Loading mixer",
+  "loading-project-assets": "Loading project assets",
   "preparing-waveforms": "Preparing waveforms",
   "cleaning-up": "Cleaning swap files"
 }

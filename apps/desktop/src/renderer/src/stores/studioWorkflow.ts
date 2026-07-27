@@ -95,13 +95,14 @@ export const useStudioWorkflowStore = defineStore("studio-workflow", () => {
   async function recoverRecording(recording: PendingRecording): Promise<boolean> {
     if (projectStore.session?.path !== recording.projectPath) {
       if (projectStore.session && !(await closeProject())) return false
-      if (!(await projectStore.open(recording.projectPath))) return false
-      await mixerStore.load()
+      const workspace = await projectStore.open(recording.projectPath)
+      if (!workspace) return false
+      mixerStore.hydrate(workspace.graph)
     }
     if (!(await recordingStore.recover(recording))) return false
     await projectStore.refreshAssets()
     projectStore.markDirty()
-    await mixerStore.load()
+    await mixerStore.reload()
     return true
   }
 

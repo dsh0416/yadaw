@@ -157,6 +157,19 @@ describe("mixer store", () => {
     expect(mixer.canRedo).toBe(true)
   })
 
+  it("hydrates the ready workspace graph synchronously without reloading the audio host", () => {
+    const initial = graph()
+    window.yadaw.loadMixerGraph = vi.fn()
+    const mixer = useMixerStore()
+
+    mixer.hydrate(initial)
+
+    expect(mixer.graph).toEqual(initial)
+    expect(mixer.selectedChannelId).toBe("audio")
+    expect(mixer.loading).toBe(false)
+    expect(window.yadaw.loadMixerGraph).not.toHaveBeenCalled()
+  })
+
   it("hides output and send targets that would create a routing cycle", () => {
     const mixer = useMixerStore()
     mixer.graph = graph()

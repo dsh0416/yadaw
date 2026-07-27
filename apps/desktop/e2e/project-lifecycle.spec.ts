@@ -275,6 +275,21 @@ test("records into a Large Object and reopens the PGlite project archive", async
     await page.getByRole("button", { name: "Close project" }).click()
     await expect(page.getByRole("heading", { name: /Build a session/ })).toBeVisible()
     await page.getByRole("button", { name: "Lifecycle" }).click()
+    const openingDialog = page.getByRole("dialog")
+    await expect(
+      openingDialog.getByRole("heading", { name: "Opening project", exact: true })
+    ).toBeVisible()
+    await expect(page.locator(".studio-shell")).toBeHidden()
+    await expect(openingDialog).toBeHidden({ timeout: 10_000 })
+    await expect(page.locator(".studio-shell")).toBeVisible()
+    await page.getByRole("button", { name: "Add instrument track" }).click()
+    await expect(
+      visibleMixer.getByText("2 audio · 1 instrument · 1 buses · 1 outputs")
+    ).toBeVisible()
+    await page.getByRole("button", { name: "Undo mixer change" }).click()
+    await expect(
+      visibleMixer.getByText("2 audio · 0 instrument · 1 buses · 1 outputs")
+    ).toBeVisible()
     await page.getByRole("button", { name: "Project settings" }).click()
     await expect(page.getByLabel("Sample rate")).toHaveValue("44100")
     await expect(page.getByLabel("Waveform channels")).toHaveValue("aggregate")
