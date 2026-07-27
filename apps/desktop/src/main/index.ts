@@ -4,8 +4,9 @@ import { statfs } from "node:fs/promises"
 import { cpus, freemem, totalmem } from "node:os"
 import { basename, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
-import { AUDIO_BACKENDS, IPC_CHANNELS } from "@yadaw/contracts"
+import { APPLICATION_WINDOW_COMMAND_IDS, AUDIO_BACKENDS, IPC_CHANNELS } from "@yadaw/contracts"
 import type {
+  ApplicationWindowCommandId,
   AudioBackend,
   AudioDeviceList,
   AudioPreferences,
@@ -300,6 +301,16 @@ function validateAudioBackend(value: unknown): AudioBackend {
   return value as AudioBackend
 }
 
+function validateApplicationWindowCommand(value: unknown): ApplicationWindowCommandId {
+  if (
+    typeof value !== "string" ||
+    !APPLICATION_WINDOW_COMMAND_IDS.includes(value as ApplicationWindowCommandId)
+  ) {
+    throw new TypeError("Unknown application window command")
+  }
+  return value as ApplicationWindowCommandId
+}
+
 function validateAudioPreferences(value: unknown): AudioPreferences {
   if (typeof value !== "object" || value === null) {
     throw new TypeError("Audio preferences must be an object")
@@ -376,6 +387,62 @@ function registerIpcHandlers(
   ipcMain.handle(IPC_CHANNELS.engineInfo, (event) => {
     assertTrustedSender(event)
     return engineInfo()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.applicationWindowCommand, (event, value: unknown) => {
+    assertTrustedSender(event)
+    const command = validateApplicationWindowCommand(value)
+    const window = BrowserWindow.fromWebContents(event.sender)
+    switch (command) {
+      case "edit.undo":
+        event.sender.undo()
+        break
+      case "edit.redo":
+        event.sender.redo()
+        break
+      case "edit.cut":
+        event.sender.cut()
+        break
+      case "edit.copy":
+        event.sender.copy()
+        break
+      case "edit.paste":
+        event.sender.paste()
+        break
+      case "edit.select-all":
+        event.sender.selectAll()
+        break
+      case "window.minimize":
+        window?.minimize()
+        break
+      case "window.toggle-maximize":
+        if (window?.isMaximized()) window.unmaximize()
+        else window?.maximize()
+        break
+      case "window.close":
+        window?.close()
+        break
+      case "view.toggle-full-screen":
+        if (window) window.setFullScreen(!window.isFullScreen())
+        break
+      case "application.about":
+        app.showAboutPanel()
+        break
+    }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.applicationWindowTheme, (event, value: unknown) => {
+    assertTrustedSender(event)
+    if (value !== "light" && value !== "dark") {
+      throw new TypeError("Unknown application window theme")
+    }
+    const window = BrowserWindow.fromWebContents(event.sender)
+    if (!window || process.platform !== "linux") return
+    window.setTitleBarOverlay({
+      color: value === "dark" ? "#151515" : "#d8d9db",
+      symbolColor: value === "dark" ? "#e8e8e8" : "#202224",
+      height: 38
+    })
   })
 
   ipcMain.handle(IPC_CHANNELS.processGain, (event, value: unknown) => {
@@ -1037,6 +1104,8 @@ function createMainWindow(loadContent = true): BrowserWindow {
     return mainWindow
   }
 
+  const isMacOS = process.platform === "darwin"
+  const usesWindowControlsOverlay = process.platform === "linux"
   const window = new BrowserWindow({
     show: loadContent,
     width: 1440,
@@ -1044,7 +1113,18 @@ function createMainWindow(loadContent = true): BrowserWindow {
     minWidth: 960,
     minHeight: 640,
     backgroundColor: "#0b0e13",
-    titleBarStyle: "hiddenInset",
+    titleBarStyle: isMacOS ? "hiddenInset" : "hidden",
+    ...(isMacOS
+      ? { trafficLightPosition: { x: 12, y: 11 } }
+      : usesWindowControlsOverlay
+        ? {
+            titleBarOverlay: {
+              color: "#151515",
+              symbolColor: "#e8e8e8",
+              height: 38
+            }
+          }
+        : {}),
     webPreferences: {
       preload: join(import.meta.dirname, "../preload/index.cjs"),
       contextIsolation: true,

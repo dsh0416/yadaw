@@ -9,7 +9,6 @@ export const useAudioBenchmarkStore = defineStore("audio-benchmark", () => {
   const status = shallowRef<AudioBenchmarkStatus>("idle")
   const report = shallowRef<AudioBenchmarkReport | null>(null)
   const errorMessage = shallowRef("")
-  let unsubscribe: (() => void) | null = null
 
   function open(): void {
     isOpen.value = true
@@ -17,15 +16,6 @@ export const useAudioBenchmarkStore = defineStore("audio-benchmark", () => {
 
   function close(): void {
     isOpen.value = false
-  }
-
-  function startSubscription(): void {
-    unsubscribe ??= window.yadaw.subscribeAudioBenchmarkRequests(open)
-  }
-
-  function stopSubscription(): void {
-    unsubscribe?.()
-    unsubscribe = null
   }
 
   async function run(): Promise<void> {
@@ -50,9 +40,7 @@ export const useAudioBenchmarkStore = defineStore("audio-benchmark", () => {
     errorMessage,
     open,
     close,
-    run,
-    startSubscription,
-    stopSubscription
+    run
   }
 })
 

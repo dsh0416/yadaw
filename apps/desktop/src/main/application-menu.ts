@@ -1,36 +1,86 @@
-import { app, BrowserWindow, Menu } from "electron"
+import { BrowserWindow, Menu } from "electron"
 import type { MenuItemConstructorOptions } from "electron"
 import { IPC_CHANNELS } from "@yadaw/contracts"
+import type { ApplicationCommandId } from "@yadaw/contracts"
 
-function requestAudioBenchmark(): void {
+function requestApplicationCommand(command: ApplicationCommandId): void {
   const window = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
   if (!window) return
   window.show()
-  window.webContents.send(IPC_CHANNELS.audioBenchmarkMenuOpen)
+  window.webContents.send(IPC_CHANNELS.applicationCommandRequested, command)
 }
 
-export function installApplicationMenu(): void {
-  const template: MenuItemConstructorOptions[] = [
-    ...(process.platform === "darwin" ? [{ role: "appMenu" as const }] : []),
-    { role: "fileMenu" },
-    { role: "editMenu" },
-    { role: "viewMenu" },
+function commandItem(
+  label: string,
+  command: ApplicationCommandId,
+  accelerator?: string
+): MenuItemConstructorOptions {
+  return {
+    label,
+    accelerator,
+    click: () => requestApplicationCommand(command)
+  }
+}
+
+function macApplicationMenu(): MenuItemConstructorOptions[] {
+  return [
+    {
+      label: "YADAW",
+      submenu: [
+        { role: "about", label: "About YADAW" },
+        { type: "separator" },
+        commandItem("Preferences…", "application.preferences", "Command+,"),
+        { type: "separator" },
+        { role: "services" },
+        { type: "separator" },
+        { role: "hide" },
+        { role: "hideOthers" },
+        { role: "unhide" },
+        { type: "separator" },
+        { role: "quit" }
+      ]
+    },
+    {
+      label: "File",
+      submenu: [
+        commandItem("New Project", "project.new", "Command+N"),
+        commandItem("Open Project…", "project.open", "Command+O"),
+        { type: "separator" },
+        commandItem("Save Project", "project.save", "Command+S"),
+        commandItem("Close Project", "project.close", "Command+W"),
+        { type: "separator" },
+        commandItem("Project Settings…", "project.settings", "Command+Shift+,")
+      ]
+    },
+    {
+      label: "Edit",
+      submenu: [
+        commandItem("Undo", "edit.undo", "Command+Z"),
+        commandItem("Redo", "edit.redo", "Command+Shift+Z"),
+        { type: "separator" },
+        { role: "cut" },
+        { role: "copy" },
+        { role: "paste" },
+        { role: "selectAll" }
+      ]
+    },
+    {
+      label: "View",
+      submenu: [commandItem("Toggle Full Screen", "view.toggle-full-screen", "Control+Command+F")]
+    },
     { role: "windowMenu" },
     {
       role: "help",
-      submenu: [
-        {
-          label: "Audio Performance Benchmark…",
-          click: requestAudioBenchmark
-        },
-        { type: "separator" },
-        {
-          label: "About YADAW",
-          click: () => app.showAboutPanel()
-        }
-      ]
+      submenu: [commandItem("Audio Performance Benchmark…", "help.audio-benchmark")]
     }
   ]
+}
 
-  Menu.setApplicationMenu(Menu.buildFromTemplate(template))
+export function installApplicationMenu(platform: NodeJS.Platform = process.platform): void {
+  if (platform !== "darwin") {
+    Menu.setApplicationMenu(null)
+    return
+  }
+
+  Menu.setApplicationMenu(Menu.buildFromTemplate(macApplicationMenu()))
 }

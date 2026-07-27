@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron"
 import { IPC_CHANNELS } from "@yadaw/contracts"
 import type {
+  ApplicationWindowCommandId,
   ApplicationSettingsPatch,
   AudioHostRuntimePreferences,
   AudioBackend,
@@ -14,6 +15,7 @@ import type {
 } from "@yadaw/contracts"
 
 const api: YadawDesktopApi = {
+  platform: process.platform as YadawDesktopApi["platform"],
   engineInfo: () => ipcRenderer.invoke(IPC_CHANNELS.engineInfo),
   processGain: (request: ProcessGainRequest) =>
     ipcRenderer.invoke(IPC_CHANNELS.processGain, request),
@@ -50,11 +52,16 @@ const api: YadawDesktopApi = {
   },
   systemPerformanceSnapshot: () => ipcRenderer.invoke(IPC_CHANNELS.systemPerformanceSnapshot),
   runAudioBenchmark: () => ipcRenderer.invoke(IPC_CHANNELS.audioBenchmarkRun),
-  subscribeAudioBenchmarkRequests: (listener) => {
-    const handler = () => listener()
-    ipcRenderer.on(IPC_CHANNELS.audioBenchmarkMenuOpen, handler)
-    return () => ipcRenderer.removeListener(IPC_CHANNELS.audioBenchmarkMenuOpen, handler)
+  subscribeApplicationCommands: (listener) => {
+    const handler = (_event: Electron.IpcRendererEvent, command: Parameters<typeof listener>[0]) =>
+      listener(command)
+    ipcRenderer.on(IPC_CHANNELS.applicationCommandRequested, handler)
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.applicationCommandRequested, handler)
   },
+  executeApplicationWindowCommand: (command: ApplicationWindowCommandId) =>
+    ipcRenderer.invoke(IPC_CHANNELS.applicationWindowCommand, command),
+  setApplicationWindowTheme: (theme) =>
+    ipcRenderer.invoke(IPC_CHANNELS.applicationWindowTheme, theme),
   createProject: (request: CreateProjectRequest) =>
     ipcRenderer.invoke(IPC_CHANNELS.projectCreate, request),
   prepareOpenProject: (path?: string) => ipcRenderer.invoke(IPC_CHANNELS.projectPrepareOpen, path),

@@ -18,3 +18,17 @@ export interface UiAlertAction {
   variant?: UiActionVariant
   cancel?: boolean
 }
+
+export interface UiMenubarItem {
+  value: string
+  label: string
+  shortcut?: string
+  disabled?: boolean
+  separatorBefore?: boolean
+}
+
+export interface UiMenubarMenu {
+  value: string
+  label: string
+  items: UiMenubarItem[]
+}

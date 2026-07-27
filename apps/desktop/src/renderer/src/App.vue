@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { UiProvider } from "@yadaw/ui"
-import { computed, onMounted, onUnmounted } from "vue"
+import { computed, onMounted, onUnmounted, watch } from "vue"
 import { storeToRefs } from "pinia"
 import { RouterView } from "vue-router"
 import { useTheme } from "./composables/useTheme"
@@ -10,10 +10,11 @@ import { useAudioRuntimeStore } from "./stores/audioRuntime"
 import { useSystemPerformanceStore } from "./stores/systemPerformance"
 import { useLifecycleStore } from "./stores/lifecycle"
 import { useOperationStore } from "./stores/operations"
-import { useAudioBenchmarkStore } from "./stores/audioBenchmark"
+import { useApplicationWindowStore } from "./stores/applicationWindow"
 import GlobalOperationHost from "./components/operations/GlobalOperationHost.vue"
 import AudioBenchmarkHost from "./components/benchmark/AudioBenchmarkHost.vue"
 import GlobalDialogHost from "./components/dialog/GlobalDialogHost.vue"
+import AppChrome from "./components/application/AppChrome.vue"
 
 const audioPreferencesStore = useAudioPreferencesStore()
 const audioRuntimeStore = useAudioRuntimeStore()
@@ -21,12 +22,20 @@ const systemPerformanceStore = useSystemPerformanceStore()
 const applicationSettingsStore = useApplicationSettingsStore()
 const lifecycleStore = useLifecycleStore()
 const operationStore = useOperationStore()
-const audioBenchmarkStore = useAudioBenchmarkStore()
+const applicationWindowStore = useApplicationWindowStore()
 const { settings } = storeToRefs(applicationSettingsStore)
 const { ready: lifecycleReady } = storeToRefs(lifecycleStore)
 const themePreference = computed(() => settings.value?.theme ?? "system")
 
-useTheme(themePreference)
+const { resolvedTheme } = useTheme(themePreference)
+
+watch(
+  resolvedTheme,
+  (theme) => {
+    void applicationWindowStore.setTheme(theme)
+  },
+  { immediate: true }
+)
 
 function stopRuntimePolling(): void {
   audioRuntimeStore.stopPolling()
@@ -35,7 +44,6 @@ function stopRuntimePolling(): void {
 
 onMounted(() => {
   operationStore.startSubscription()
-  audioBenchmarkStore.startSubscription()
   void lifecycleStore.initialize()
   audioRuntimeStore.startPolling()
   systemPerformanceStore.startPolling()
@@ -48,14 +56,15 @@ onUnmounted(() => {
   window.removeEventListener("beforeunload", stopRuntimePolling)
   lifecycleStore.dispose()
   operationStore.stopSubscription()
-  audioBenchmarkStore.stopSubscription()
   stopRuntimePolling()
 })
 </script>
 
 <template>
   <UiProvider dir="ltr" :tooltip-delay="350" :tooltip-skip-delay="100">
-    <RouterView v-if="lifecycleReady" />
+    <AppChrome v-if="lifecycleReady">
+      <RouterView />
+    </AppChrome>
     <GlobalOperationHost />
     <AudioBenchmarkHost />
     <GlobalDialogHost />

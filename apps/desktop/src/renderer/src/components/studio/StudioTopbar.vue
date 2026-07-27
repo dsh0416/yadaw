@@ -184,7 +184,6 @@ const emit = defineEmits<{
   box-shadow:
     0 1px 0 var(--ui-domain-color-ffffff05) inset,
     0 8px 22px var(--shadow);
-  -webkit-app-region: drag;
 }
 .control-group {
   display: flex;

@@ -6,19 +6,11 @@ import AudioBenchmarkHost from "./AudioBenchmarkHost.vue"
 import { useAudioBenchmarkStore } from "../../stores/audioBenchmark"
 
 describe("AudioBenchmarkHost", () => {
-  it("renders store state while the app owns the native subscription", async () => {
-    let requestOpen = () => undefined
-    const unsubscribe = vi.fn()
-    window.yadaw.subscribeAudioBenchmarkRequests = vi.fn((listener) => {
-      requestOpen = listener
-      return unsubscribe
-    })
-
+  it("renders the benchmark dialog when application commands open the store", async () => {
     const pinia = createPinia()
     const benchmark = useAudioBenchmarkStore(pinia)
-    benchmark.startSubscription()
+    benchmark.open()
     const wrapper = mount(AudioBenchmarkHost, { global: { plugins: [pinia] } })
-    requestOpen()
     await nextTick()
 
     const dialog = document.body.querySelector("[role=dialog]")
@@ -27,9 +19,6 @@ describe("AudioBenchmarkHost", () => {
       "Audio performance benchmark"
     )
     wrapper.unmount()
-    expect(unsubscribe).not.toHaveBeenCalled()
-    benchmark.stopSubscription()
-    expect(unsubscribe).toHaveBeenCalledOnce()
   })
 
   it("runs the desktop benchmark API from the dialog action", async () => {

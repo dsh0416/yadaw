@@ -6,6 +6,7 @@ export { default as UiEmptyState } from "./components/UiEmptyState.vue"
 export { default as UiField } from "./components/UiField.vue"
 export { default as UiIconButton } from "./components/UiIconButton.vue"
 export { default as UiLoadingState } from "./components/UiLoadingState.vue"
+export { default as UiMenubar } from "./components/UiMenubar.vue"
 export { default as UiPopover } from "./components/UiPopover.vue"
 export { default as UiProgress } from "./components/UiProgress.vue"
 export { default as UiProvider } from "./components/UiProvider.vue"
@@ -24,6 +25,8 @@ export type {
   UiActionVariant,
   UiAlertAction,
   UiControlSize,
+  UiMenubarItem,
+  UiMenubarMenu,
   UiNoticeTone,
   UiRadioOption,
   UiSelectOption

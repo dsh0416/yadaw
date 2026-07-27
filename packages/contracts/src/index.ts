@@ -20,7 +20,9 @@ export const IPC_CHANNELS = {
   startupProgressEvent: "startup:progress-event",
   systemPerformanceSnapshot: "system:performance-snapshot",
   audioBenchmarkRun: "audio-benchmark:run",
-  audioBenchmarkMenuOpen: "audio-benchmark:menu-open",
+  applicationCommandRequested: "application-command:requested",
+  applicationWindowCommand: "application-window:command",
+  applicationWindowTheme: "application-window:theme",
   projectCreate: "project:create",
   projectPrepareOpen: "project:prepare-open",
   projectOpen: "project:open",
@@ -54,6 +56,43 @@ export const IPC_CHANNELS = {
   operationEvent: "operation:event"
 } as const
 
+export const APPLICATION_COMMAND_IDS = [
+  "project.new",
+  "project.open",
+  "project.save",
+  "project.close",
+  "project.settings",
+  "edit.undo",
+  "edit.redo",
+  "edit.cut",
+  "edit.copy",
+  "edit.paste",
+  "edit.select-all",
+  "application.preferences",
+  "view.toggle-full-screen",
+  "help.audio-benchmark",
+  "application.about"
+] as const
+
+export type ApplicationCommandId = (typeof APPLICATION_COMMAND_IDS)[number]
+export type DesktopPlatform = "darwin" | "win32" | "linux"
+
+export const APPLICATION_WINDOW_COMMAND_IDS = [
+  "edit.undo",
+  "edit.redo",
+  "edit.cut",
+  "edit.copy",
+  "edit.paste",
+  "edit.select-all",
+  "window.minimize",
+  "window.toggle-maximize",
+  "window.close",
+  "view.toggle-full-screen",
+  "application.about"
+] as const
+
+export type ApplicationWindowCommandId = (typeof APPLICATION_WINDOW_COMMAND_IDS)[number]
+
 export interface NativeEngineInfo {
   backend: string
   version: string
@@ -71,6 +110,7 @@ export interface ProcessGainResult {
 }
 
 export interface YadawDesktopApi {
+  readonly platform: DesktopPlatform
   engineInfo(): Promise<NativeEngineInfo>
   processGain(request: ProcessGainRequest): Promise<ProcessGainResult>
   listAudioBackends(): Promise<AudioBackendDescriptor[]>
@@ -92,7 +132,9 @@ export interface YadawDesktopApi {
   subscribeStartupProgress(listener: (progress: StartupProgressSnapshot) => void): () => void
   systemPerformanceSnapshot(): Promise<SystemPerformanceSnapshot>
   runAudioBenchmark(): Promise<AudioBenchmarkReport>
-  subscribeAudioBenchmarkRequests(listener: () => void): () => void
+  subscribeApplicationCommands(listener: (command: ApplicationCommandId) => void): () => void
+  executeApplicationWindowCommand(command: ApplicationWindowCommandId): Promise<void>
+  setApplicationWindowTheme(theme: "light" | "dark"): Promise<void>
   createProject(request: CreateProjectRequest): Promise<ProjectWorkspaceSnapshot>
   prepareOpenProject(path?: string): Promise<ProjectOpenPreparation | null>
   openProject(path: string, recover?: boolean): Promise<ProjectWorkspaceSnapshot>

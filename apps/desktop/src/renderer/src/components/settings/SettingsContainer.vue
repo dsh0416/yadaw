@@ -155,8 +155,8 @@ watch(
 .settings-container {
   display: grid;
   grid-template: 60px minmax(0, 1fr) / 174px 194px minmax(0, 1fr);
-  width: 100vw;
-  height: 100vh;
+  width: 100%;
+  height: 100%;
   color: var(--text-primary);
   background: var(--canvas);
 }
@@ -171,12 +171,6 @@ watch(
   border-bottom: 1px solid var(--line-strong);
   background: var(--surface-1);
   box-shadow: var(--ui-shadow-md);
-  -webkit-app-region: drag;
-}
-
-.settings-back-button,
-.settings-actions {
-  -webkit-app-region: no-drag;
 }
 
 .settings-back-button {

@@ -93,12 +93,6 @@ function isEditableTarget(target: EventTarget | null): boolean {
 
 function handleShortcut(event: KeyboardEvent): void {
   if (isEditableTarget(event.target) || event.repeat) return
-  if ((event.ctrlKey || event.metaKey) && event.code === "KeyZ") {
-    event.preventDefault()
-    if (event.shiftKey) void mixerStore.redo()
-    else void mixerStore.undo()
-    return
-  }
   if ((event.code === "Delete" || event.code === "Backspace") && transportStore.selectedClipId) {
     event.preventDefault()
     const clipId = transportStore.selectedClipId
@@ -178,8 +172,8 @@ onBeforeUnmount(() => {
 .studio-shell {
   display: grid;
   grid-template: 56px minmax(0, 1fr) 25px / minmax(0, 1fr);
-  width: 100vw;
-  height: 100vh;
+  width: 100%;
+  height: 100%;
   color: var(--text-primary);
   background: var(--canvas);
   -webkit-user-select: none;
