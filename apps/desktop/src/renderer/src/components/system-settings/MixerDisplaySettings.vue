@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted } from "vue"
 import { storeToRefs } from "pinia"
+import { UiSelect } from "@yadaw/ui"
 import type { MeterPeakHold, MeterReturnRate } from "@yadaw/contracts"
 import SettingsPage from "../settings/SettingsPage.vue"
 import SettingsSection from "../settings/SettingsSection.vue"
@@ -20,14 +21,12 @@ const returnRateOptions: ReadonlyArray<{ value: MeterReturnRate; label: string }
   { value: "iec-type-i", label: "IEC Type I (11.8 dB/s)" }
 ]
 
-function selectPeakHold(event: Event): void {
-  void settingsStore.setMeterPeakHold((event.target as HTMLSelectElement).value as MeterPeakHold)
+function selectPeakHold(value: string): void {
+  void settingsStore.setMeterPeakHold(value as MeterPeakHold)
 }
 
-function selectReturnRate(event: Event): void {
-  void settingsStore.setMeterReturnRate(
-    (event.target as HTMLSelectElement).value as MeterReturnRate
-  )
+function selectReturnRate(value: string): void {
+  void settingsStore.setMeterReturnRate(value as MeterReturnRate)
 }
 
 onMounted(() => {
@@ -48,16 +47,14 @@ onMounted(() => {
     >
       <label class="setting-field">
         <span>Duration</span>
-        <select
-          :value="settings?.meterPeakHold ?? '800ms'"
+        <UiSelect
+          :model-value="settings?.meterPeakHold ?? '800ms'"
+          :options="peakHoldOptions"
+          size="sm"
           :disabled="loading"
           aria-label="Mixer meter peak hold time"
-          @change="selectPeakHold"
-        >
-          <option v-for="option in peakHoldOptions" :key="option.value" :value="option.value">
-            {{ option.label }}
-          </option>
-        </select>
+          @update:model-value="selectPeakHold"
+        />
       </label>
     </SettingsSection>
 
@@ -67,16 +64,14 @@ onMounted(() => {
     >
       <label class="setting-field">
         <span>Response</span>
-        <select
-          :value="settings?.meterReturnRate ?? 'iec-type-i'"
+        <UiSelect
+          :model-value="settings?.meterReturnRate ?? 'iec-type-i'"
+          :options="returnRateOptions"
+          size="sm"
           :disabled="loading"
           aria-label="Mixer meter return time"
-          @change="selectReturnRate"
-        >
-          <option v-for="option in returnRateOptions" :key="option.value" :value="option.value">
-            {{ option.label }}
-          </option>
-        </select>
+          @update:model-value="selectReturnRate"
+        />
       </label>
     </SettingsSection>
 
@@ -93,27 +88,6 @@ onMounted(() => {
   color: var(--text-muted);
   font: var(--ui-type-size-caption) var(--ui-type-family-data);
   letter-spacing: var(--ui-type-tracking-wide);
-}
-
-.setting-field select {
-  width: 100%;
-  height: 36px;
-  padding: 0 10px;
-  border: 1px solid var(--line-strong);
-  border-radius: 7px;
-  color: var(--text-primary);
-  background: var(--surface-1);
-  font-size: var(--ui-type-size-body-compact);
-}
-
-.setting-field select:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
-}
-
-.setting-field select:disabled {
-  cursor: wait;
-  opacity: 0.6;
 }
 
 .display-error {

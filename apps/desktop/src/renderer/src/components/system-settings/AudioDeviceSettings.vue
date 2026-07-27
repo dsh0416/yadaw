@@ -299,6 +299,7 @@ watch(canApply, (valid) => emit("validityChange", valid), { immediate: true })
           v-model="outputDeviceModel"
           :options="outputDeviceOptions"
           :placeholder="outputDevices.length ? 'Choose an output' : 'No CPAL output devices'"
+          size="sm"
           aria-label="Output device"
           :disabled="discoveryState !== 'ready' || outputDevices.length === 0"
         />
@@ -312,6 +313,7 @@ watch(canApply, (valid) => emit("validityChange", valid), { immediate: true })
           v-model="inputDeviceModel"
           :options="inputDeviceOptions"
           :placeholder="inputDevices.length ? 'Choose an input' : 'No CPAL input devices'"
+          size="sm"
           aria-label="Input device"
           :disabled="discoveryState !== 'ready' || inputDevices.length === 0"
         />
@@ -327,6 +329,7 @@ watch(canApply, (valid) => emit("validityChange", valid), { immediate: true })
         <UiSelect
           v-model="bufferSizeModel"
           :options="bufferSizeOptions"
+          size="sm"
           aria-label="I/O buffer size"
         />
       </label>
@@ -400,7 +403,6 @@ watch(canApply, (valid) => emit("validityChange", valid), { immediate: true })
 }
 
 .backend-card:focus-visible,
-.select-trigger:focus-visible,
 .refresh-button:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
@@ -490,27 +492,6 @@ watch(canApply, (valid) => emit("validityChange", valid), { immediate: true })
 
 .buffer-field {
   width: min(220px, 100%);
-}
-
-.select-trigger {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  min-height: 36px;
-  padding: 0 12px;
-  border: 1px solid var(--line-strong);
-  border-radius: 7px;
-  color: var(--text-primary);
-  background: var(--surface-1);
-  cursor: pointer;
-  font-size: var(--ui-type-size-body-compact);
-  letter-spacing: var(--ui-type-tracking-normal);
-  text-transform: none;
-}
-
-.select-icon {
-  color: var(--text-faint);
 }
 
 .refresh-button {

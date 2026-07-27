@@ -119,7 +119,6 @@ const emit = defineEmits<{
   gap: 4px;
   min-width: 0;
 }
-.lane-controls :deep(select),
 .lane-controls :deep(input) {
   min-width: 0;
   height: 23px;
@@ -131,9 +130,12 @@ const emit = defineEmits<{
   font: var(--ui-type-size-control) var(--ui-type-family-data);
   outline: none;
 }
-.lane-controls :deep(select:focus),
 .lane-controls :deep(input:focus) {
   border-color: var(--lane-color);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--lane-color) 22%, transparent);
+}
+.lane-controls :deep(.ui-select-shell) {
+  flex: 1;
+  min-width: 0;
 }
 </style>

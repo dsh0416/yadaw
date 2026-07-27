@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, watch } from "vue"
+import { UiSelect } from "@yadaw/ui"
 import type {
   AudioHostRuntimePreferences,
   ResolvedAudioHostRuntimePreferences
@@ -33,8 +34,7 @@ const dirty = computed(
     draft.egressConcurrency !== props.modelValue.egressConcurrency
 )
 
-function setMode(key: keyof AudioHostRuntimePreferences, event: Event, fallback: number): void {
-  const mode = (event.target as HTMLSelectElement).value
+function setMode(key: keyof AudioHostRuntimePreferences, mode: string, fallback: number): void {
   draft[key] = mode === "auto" ? "auto" : fallback
 }
 
@@ -70,14 +70,15 @@ function setNumber(
       description="Runs protocol, engine, background I/O and telemetry tasks. VST3 stays thread-affine."
     >
       <div class="thread-control">
-        <select
+        <UiSelect
           aria-label="Worker thread mode"
-          :value="draft.workerThreads === 'auto' ? 'auto' : 'manual'"
-          @change="setMode('workerThreads', $event, resolved?.workerThreads ?? 2)"
+          :model-value="draft.workerThreads === 'auto' ? 'auto' : 'manual'"
+          size="sm"
+          @update:model-value="setMode('workerThreads', $event, resolved?.workerThreads ?? 2)"
         >
           <option value="auto">Auto</option>
           <option value="manual">Manual</option>
-        </select>
+        </UiSelect>
         <input
           v-if="draft.workerThreads !== 'auto'"
           type="number"
@@ -96,14 +97,17 @@ function setNumber(
       description="Caps synchronous IPC sends, arena copies and other controlled blocking jobs."
     >
       <div class="thread-control">
-        <select
+        <UiSelect
           aria-label="Blocking thread mode"
-          :value="draft.maxBlockingThreads === 'auto' ? 'auto' : 'manual'"
-          @change="setMode('maxBlockingThreads', $event, resolved?.maxBlockingThreads ?? 4)"
+          :model-value="draft.maxBlockingThreads === 'auto' ? 'auto' : 'manual'"
+          size="sm"
+          @update:model-value="
+            setMode('maxBlockingThreads', $event, resolved?.maxBlockingThreads ?? 4)
+          "
         >
           <option value="auto">Auto</option>
           <option value="manual">Manual</option>
-        </select>
+        </UiSelect>
         <input
           v-if="draft.maxBlockingThreads !== 'auto'"
           type="number"
@@ -122,14 +126,17 @@ function setNumber(
       description="Allows independent responses to encode and send concurrently; runtime events stay ordered."
     >
       <div class="thread-control">
-        <select
+        <UiSelect
           aria-label="Egress concurrency mode"
-          :value="draft.egressConcurrency === 'auto' ? 'auto' : 'manual'"
-          @change="setMode('egressConcurrency', $event, resolved?.egressConcurrency ?? 2)"
+          :model-value="draft.egressConcurrency === 'auto' ? 'auto' : 'manual'"
+          size="sm"
+          @update:model-value="
+            setMode('egressConcurrency', $event, resolved?.egressConcurrency ?? 2)
+          "
         >
           <option value="auto">Auto</option>
           <option value="manual">Manual</option>
-        </select>
+        </UiSelect>
         <input
           v-if="draft.egressConcurrency !== 'auto'"
           type="number"
@@ -188,7 +195,6 @@ function setNumber(
   gap: 8px;
 }
 
-.thread-control select,
 .thread-control input,
 .runtime-actions button {
   height: 36px;
@@ -199,10 +205,13 @@ function setNumber(
   font: var(--ui-type-size-body-compact) var(--ui-type-family-data);
 }
 
-.thread-control select,
 .thread-control input {
   min-width: 0;
   padding: 0 10px;
+}
+
+.thread-control :deep(.ui-select-shell) {
+  min-width: 0;
 }
 
 .thread-control small {

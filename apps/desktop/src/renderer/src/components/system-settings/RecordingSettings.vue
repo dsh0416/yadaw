@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted } from "vue"
 import { storeToRefs } from "pinia"
+import { UiSelect } from "@yadaw/ui"
 import type { RecordingBitDepth } from "@yadaw/contracts"
 import SettingsPage from "../settings/SettingsPage.vue"
 import SettingsSection from "../settings/SettingsSection.vue"
@@ -20,9 +21,8 @@ onMounted(async () => {
   await recordingStore.refreshPending()
 })
 
-function setBitDepth(event: Event): void {
-  const value = (event.target as HTMLSelectElement).value as RecordingBitDepth
-  void settingsStore.update({ recordingBitDepth: value })
+function setBitDepth(value: string): void {
+  void settingsStore.update({ recordingBitDepth: value as RecordingBitDepth })
 }
 </script>
 
@@ -54,11 +54,16 @@ function setBitDepth(event: Event): void {
     >
       <label class="recording-field">
         <span>Format</span>
-        <select :value="settings?.recordingBitDepth" @change="setBitDepth">
+        <UiSelect
+          :model-value="settings?.recordingBitDepth ?? 'float32'"
+          size="sm"
+          aria-label="Final recording bit depth"
+          @update:model-value="setBitDepth"
+        >
           <option value="float32">32-bit float</option>
           <option value="pcm24">24-bit PCM</option>
           <option value="pcm16">16-bit PCM</option>
-        </select>
+        </UiSelect>
       </label>
     </SettingsSection>
 
@@ -96,8 +101,7 @@ function setBitDepth(event: Event): void {
   white-space: nowrap;
 }
 
-.path-control button,
-.recording-field select {
+.path-control button {
   padding: 0 12px;
   border: 1px solid var(--line-strong);
   border-radius: 7px;
@@ -109,8 +113,7 @@ function setBitDepth(event: Event): void {
   cursor: pointer;
 }
 
-.path-control button:focus-visible,
-.recording-field select:focus-visible {
+.path-control button:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
@@ -127,10 +130,6 @@ function setBitDepth(event: Event): void {
   color: var(--text-muted);
   font: var(--ui-type-size-caption) var(--ui-type-family-data);
   letter-spacing: var(--ui-type-tracking-wide);
-}
-
-.recording-field select {
-  height: 38px;
 }
 
 .recovery-count {

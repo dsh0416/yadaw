@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/vue3-vite"
 
+import UiCascadingSelect from "./UiCascadingSelect.vue"
 import UiCheckbox from "./UiCheckbox.vue"
 import UiField from "./UiField.vue"
 import UiRadioGroup from "./UiRadioGroup.vue"
@@ -108,6 +109,108 @@ export const Disabled: Story = {
           </template>
         </UiField>
         <UiCheckbox label="Exclusive device access" disabled />
+      </div>
+    `
+  })
+}
+
+export const SelectSizesAndGroups: Story = {
+  render: () => ({
+    components: { UiCascadingSelect, UiField, UiSelect },
+    data: () => ({
+      compactValue: "post",
+      standardValue: "asio",
+      keyValue: "major:0",
+      routeValue: "output",
+      inputValue: "1",
+      routingOptions: [
+        { label: "Pre-fader", value: "pre" },
+        { label: "Post-fader", value: "post" },
+        { label: "Post-pan", value: "post-pan" }
+      ],
+      driverOptions: [
+        { label: "ASIO", value: "asio" },
+        { label: "WASAPI", value: "wasapi" }
+      ],
+      keyGroups: [
+        {
+          label: "Major keys",
+          options: [
+            { label: "C♯ Major", value: "major:7" },
+            { label: "C Major", value: "major:0" },
+            { label: "C♭ Major", value: "major:-7" }
+          ]
+        },
+        {
+          label: "Minor keys",
+          separatorBefore: true,
+          options: [
+            { label: "A♯ minor", value: "minor:7" },
+            { label: "A minor", value: "minor:0" },
+            { label: "A♭ minor", value: "minor:-7" }
+          ]
+        }
+      ],
+      routeGroups: [
+        {
+          label: "Outputs",
+          options: [
+            { label: "Output 1–2", value: "output" },
+            { label: "Headphones 3–4", value: "headphones" }
+          ]
+        },
+        {
+          label: "Buses",
+          options: [
+            { label: "Reverb", value: "reverb" },
+            { label: "Parallel compression", value: "parallel" }
+          ]
+        }
+      ],
+      inputOptions: [
+        { label: "IN 1–2", value: "1" },
+        { label: "IN 3–4", value: "3" },
+        { label: "IN 5–6", value: "5" },
+        { label: "IN 7–8", value: "7" }
+      ]
+    }),
+    template: `
+      <div class="storybook-stack" style="max-width:28rem">
+        <UiField label="Compact · timeline and mixer">
+          <template #default="{ controlId }">
+            <UiSelect v-model="compactValue" :id="controlId" :options="routingOptions" size="compact" />
+          </template>
+        </UiField>
+        <UiField label="Small · preference rows">
+          <template #default="{ controlId }">
+            <UiSelect v-model="standardValue" :id="controlId" :options="driverOptions" size="sm" />
+          </template>
+        </UiField>
+        <UiField label="Medium · project forms">
+          <template #default="{ controlId }">
+            <UiSelect v-model="standardValue" :id="controlId" :options="driverOptions" size="md" />
+          </template>
+        </UiField>
+        <UiField label="Large · spacious forms">
+          <template #default="{ controlId }">
+            <UiSelect v-model="standardValue" :id="controlId" :options="driverOptions" size="lg" />
+          </template>
+        </UiField>
+        <UiField label="Grouped values">
+          <template #default="{ controlId }">
+            <UiSelect v-model="keyValue" :id="controlId" :groups="keyGroups" size="md" />
+          </template>
+        </UiField>
+        <UiField label="Cascading route">
+          <template #default="{ controlId }">
+            <UiCascadingSelect v-model="routeValue" :id="controlId" :groups="routeGroups" size="compact" />
+          </template>
+        </UiField>
+        <UiField label="Direct menu">
+          <template #default="{ controlId }">
+            <UiCascadingSelect v-model="inputValue" :id="controlId" :options="inputOptions" size="compact" />
+          </template>
+        </UiField>
       </div>
     `
   })

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, shallowRef, watch } from "vue"
 import { Trash2 } from "@lucide/vue"
-import { UiPopover } from "@yadaw/ui"
+import { UiPopover, UiSelect } from "@yadaw/ui"
 import type {
   MixerChannelState,
   MixerParameterPreview,
@@ -134,14 +134,11 @@ function createSend(): void {
           </label>
           <label>
             <span>Destination</span>
-            <select
-              :value="send.targetChannelId"
+            <UiSelect
+              :model-value="send.targetChannelId"
+              size="compact"
               aria-label="Send target"
-              @change="
-                updateSend(send, {
-                  targetChannelId: ($event.currentTarget as HTMLSelectElement).value
-                })
-              "
+              @update:model-value="updateSend(send, { targetChannelId: $event })"
             >
               <option
                 v-for="bus in buses"
@@ -154,7 +151,7 @@ function createSend(): void {
               >
                 {{ bus.name }}
               </option>
-            </select>
+            </UiSelect>
           </label>
           <div class="tap-options" aria-label="Send position">
             <button
@@ -205,11 +202,11 @@ function createSend(): void {
         </template>
         <div class="add-send-popover">
           <strong>Add send</strong>
-          <select v-model="newSendTarget" aria-label="New send target">
+          <UiSelect v-model="newSendTarget" size="compact" aria-label="New send target">
             <option v-for="target in sendTargets" :key="target.id" :value="target.id">
               {{ target.name }}
             </option>
-          </select>
+          </UiSelect>
           <button :disabled="!newSendTarget" @click="createSend">Add</button>
         </div>
       </UiPopover>
@@ -362,8 +359,6 @@ function createSend(): void {
   display: flex;
   justify-content: space-between;
 }
-.send-popover select,
-.add-send-popover select,
 .parameter-row input[type="number"] {
   height: 25px;
   border: 1px solid var(--line-strong);

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue"
-import { UiButton, UiDialog, UiStatusNotice } from "@yadaw/ui"
+import { UiButton, UiDialog, UiSelect, UiStatusNotice } from "@yadaw/ui"
 import type { MidiImportTrackTarget } from "@yadaw/contracts"
 import { useMidiImportStore } from "../../stores/midiImport"
 import { useMixerStore } from "../../stores/mixer"
@@ -32,8 +32,7 @@ function targetValue(sourceTrack: number, sequence: number): string {
   return `existing:${target.channelId}`
 }
 
-function updateTarget(sourceTrack: number, sequence: number, event: Event): void {
-  const value = (event.target as HTMLSelectElement).value
+function updateTarget(sourceTrack: number, sequence: number, value: string): void {
   let target: MidiImportTrackTarget
   if (value === "new") target = { type: "new" }
   else if (value.startsWith("existing:")) {
@@ -47,10 +46,10 @@ function instrumentValue(sourceTrack: number, sequence: number): string {
   return target.type === "ignore" ? "" : (target.instrumentClassId ?? "")
 }
 
-function updateInstrument(sourceTrack: number, sequence: number, event: Event): void {
+function updateInstrument(sourceTrack: number, sequence: number, value: string): void {
   const current = midiImportStore.targetFor(sourceTrack, sequence)
   if (current.type === "ignore") return
-  const instrumentClassId = (event.target as HTMLSelectElement).value || undefined
+  const instrumentClassId = value || undefined
   midiImportStore.setTarget(sourceTrack, sequence, { ...current, instrumentClassId })
 }
 </script>
@@ -80,10 +79,11 @@ function updateInstrument(sourceTrack: number, sequence: number, event: Event): 
               ></small
             >
           </div>
-          <select
-            :value="targetValue(track.sourceTrack, track.sequence)"
+          <UiSelect
+            :model-value="targetValue(track.sourceTrack, track.sequence)"
+            size="compact"
             :aria-label="`${track.name} target`"
-            @change="updateTarget(track.sourceTrack, track.sequence, $event)"
+            @update:model-value="updateTarget(track.sourceTrack, track.sequence, $event)"
           >
             <option value="ignore">Ignore</option>
             <option value="new">New Instrument track</option>
@@ -94,12 +94,13 @@ function updateInstrument(sourceTrack: number, sequence: number, event: Event): 
             >
               {{ target.name }}
             </option>
-          </select>
-          <select
-            :value="instrumentValue(track.sourceTrack, track.sequence)"
+          </UiSelect>
+          <UiSelect
+            :model-value="instrumentValue(track.sourceTrack, track.sequence)"
+            size="compact"
             :disabled="targetValue(track.sourceTrack, track.sequence) === 'ignore'"
             :aria-label="`${track.name} VST3 instrument`"
-            @change="updateInstrument(track.sourceTrack, track.sequence, $event)"
+            @update:model-value="updateInstrument(track.sourceTrack, track.sequence, $event)"
           >
             <option value="">No instrument assigned</option>
             <option
@@ -109,7 +110,7 @@ function updateInstrument(sourceTrack: number, sequence: number, event: Event): 
             >
               {{ plugin.name }} · {{ plugin.vendor }}
             </option>
-          </select>
+          </UiSelect>
           <small v-for="warning in track.warnings" :key="warning" class="warning">{{
             warning
           }}</small>
@@ -247,15 +248,6 @@ function updateInstrument(sourceTrack: number, sequence: number, event: Event): 
   margin-top: 3px;
   color: var(--text-faint);
   font-size: var(--ui-type-size-caption);
-}
-.mapping-list select {
-  min-width: 0;
-  height: 29px;
-  border: 1px solid var(--line-strong);
-  border-radius: 3px;
-  color: var(--text-secondary);
-  background: var(--daw-control);
-  font-size: var(--ui-type-size-control);
 }
 .mapping-list .warning {
   grid-column: 1/-1;

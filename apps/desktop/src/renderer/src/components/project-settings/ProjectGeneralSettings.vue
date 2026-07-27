@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { UiSelect } from "@yadaw/ui"
 import { PROJECT_SAMPLE_RATES } from "@yadaw/contracts"
 import type { ProjectConfiguration } from "@yadaw/contracts"
 import SettingsPage from "../settings/SettingsPage.vue"
@@ -15,7 +16,7 @@ function textValue(event: Event): string {
 }
 
 function numberValue(event: Event): number {
-  return Number((event.target as HTMLInputElement | HTMLSelectElement).value)
+  return Number((event.target as HTMLInputElement).value)
 }
 </script>
 
@@ -45,16 +46,17 @@ function numberValue(event: Event): number {
       <div class="field-grid">
         <label class="field wide">
           <span>Sample rate</span>
-          <select
-            :value="configuration.sampleRate"
-            @change="
-              update({ sampleRate: numberValue($event) as ProjectConfiguration['sampleRate'] })
+          <UiSelect
+            :model-value="String(configuration.sampleRate)"
+            size="md"
+            @update:model-value="
+              update({ sampleRate: Number($event) as ProjectConfiguration['sampleRate'] })
             "
           >
-            <option v-for="rate in PROJECT_SAMPLE_RATES" :key="rate" :value="rate">
+            <option v-for="rate in PROJECT_SAMPLE_RATES" :key="rate" :value="String(rate)">
               {{ rate.toLocaleString() }} Hz
             </option>
-          </select>
+          </UiSelect>
           <small>Existing assets remain unchanged.</small>
         </label>
         <label class="field">
@@ -69,14 +71,15 @@ function numberValue(event: Event): number {
         </label>
         <label class="field">
           <span>Meter denominator</span>
-          <select
-            :value="configuration.timeSignatureDenominator"
-            @change="update({ timeSignatureDenominator: numberValue($event) })"
+          <UiSelect
+            :model-value="String(configuration.timeSignatureDenominator)"
+            size="md"
+            @update:model-value="update({ timeSignatureDenominator: Number($event) })"
           >
-            <option v-for="value in [1, 2, 4, 8, 16, 32]" :key="value" :value="value">
+            <option v-for="value in [1, 2, 4, 8, 16, 32]" :key="value" :value="String(value)">
               {{ value }}
             </option>
-          </select>
+          </UiSelect>
         </label>
       </div>
     </SettingsSection>
@@ -88,17 +91,18 @@ function numberValue(event: Event): number {
     >
       <label class="field">
         <span>Waveform channels</span>
-        <select
-          :value="configuration.waveformDisplayMode"
-          @change="
+        <UiSelect
+          :model-value="configuration.waveformDisplayMode"
+          size="md"
+          @update:model-value="
             update({
-              waveformDisplayMode: textValue($event) as ProjectConfiguration['waveformDisplayMode']
+              waveformDisplayMode: $event as ProjectConfiguration['waveformDisplayMode']
             })
           "
         >
           <option value="separate">Separate channels</option>
           <option value="aggregate">Combined peak envelope</option>
-        </select>
+        </UiSelect>
         <small>
           Separate mode creates one lane per channel and remains compatible with future surround
           formats.
@@ -129,8 +133,7 @@ function numberValue(event: Event): number {
   text-transform: uppercase;
 }
 
-.field input,
-.field select {
+.field input {
   width: 100%;
   height: 40px;
   padding: 0 11px;
@@ -142,8 +145,7 @@ function numberValue(event: Event): number {
   text-transform: none;
 }
 
-.field input:focus-visible,
-.field select:focus-visible {
+.field input:focus-visible {
   border-color: var(--focus);
   box-shadow: var(--ui-focus-ring);
 }

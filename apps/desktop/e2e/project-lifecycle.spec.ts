@@ -212,8 +212,7 @@ test("records into a Large Object and reopens the PGlite project archive", async
       visibleMixer.getByText("2 audio · 0 instrument · 1 buses · 1 outputs")
     ).toBeVisible()
     await visibleMixer.getByLabel("Audio 1 output").selectOption({ label: "Bus 1" })
-    await visibleMixer.getByRole("button", { name: "Audio 2 input routing" }).click()
-    await page.getByLabel("Input format").selectOption("mono")
+    await visibleMixer.getByRole("button", { name: "Use mono input for Audio 2" }).click()
     await expect
       .poll(async () => {
         const graph = await page.evaluate(() => window.yadaw.loadMixerGraph())

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue"
-import { UiPopover } from "@yadaw/ui"
+import { UiCascadingSelect, UiPopover, UiSelect } from "@yadaw/ui"
+import type { UiCascadingSelectGroup } from "@yadaw/ui"
 import type { MixerChannelPatch, MixerChannelState } from "@yadaw/contracts"
 
 const props = defineProps<{
@@ -16,31 +17,39 @@ const hardwareOptions = Array.from({ length: 32 }, (_, index) => index + 1)
 const hardwareSummary = computed(
   () => `HW ${props.channel.hardwareOutputChannels.join("–") || "—"}`
 )
+const routeGroups = computed<readonly UiCascadingSelectGroup[]>(() => [
+  {
+    label: "Outputs",
+    options: props.outputs
+      .filter((output) => output.kind === "output")
+      .map((output) => ({ value: output.id, label: output.name }))
+  },
+  {
+    label: "Buses",
+    options: props.outputs
+      .filter((output) => output.kind === "bus")
+      .map((output) => ({ value: output.id, label: output.name }))
+  }
+])
 
-function updateHardwareOutput(index: number, event: Event): void {
+function updateHardwareOutput(index: number, value: string): void {
   const hardwareOutputChannels = [...props.channel.hardwareOutputChannels]
-  hardwareOutputChannels[index] = Number((event.currentTarget as HTMLSelectElement).value)
+  hardwareOutputChannels[index] = Number(value)
   emit("updateChannel", { hardwareOutputChannels })
 }
 </script>
 
 <template>
   <section class="output-section" data-section="output">
-    <select
+    <UiCascadingSelect
       v-if="channel.kind === 'audio' || channel.kind === 'instrument' || channel.kind === 'bus'"
-      class="output-select"
-      :value="channel.outputChannelId ?? ''"
+      :model-value="channel.outputChannelId ?? ''"
+      :groups="routeGroups"
+      placeholder="No route"
+      size="compact"
       :aria-label="`${channel.name} output`"
-      @change="
-        emit('updateChannel', {
-          outputChannelId: ($event.currentTarget as HTMLSelectElement).value
-        })
-      "
-    >
-      <option v-for="output in outputs" :key="output.id" :value="output.id">
-        {{ output.name }}
-      </option>
-    </select>
+      @update:model-value="emit('updateChannel', { outputChannelId: $event })"
+    />
     <UiPopover v-else-if="channel.kind === 'output'" side="top" :side-offset="7">
       <template #trigger>
         <button class="output-control" :aria-label="`${channel.name} hardware output routing`">
@@ -54,15 +63,16 @@ function updateHardwareOutput(index: number, event: Event): void {
         </header>
         <label v-for="(_, index) in channel.hardwareOutputChannels" :key="index">
           <span>{{ index === 0 ? "Left" : "Right" }}</span>
-          <select
-            :value="channel.hardwareOutputChannels[index]"
+          <UiSelect
+            :model-value="String(channel.hardwareOutputChannels[index])"
+            size="compact"
             :aria-label="`${channel.name} hardware output ${index + 1}`"
-            @change="updateHardwareOutput(index, $event)"
+            @update:model-value="updateHardwareOutput(index, $event)"
           >
-            <option v-for="output in hardwareOptions" :key="output" :value="output">
+            <option v-for="output in hardwareOptions" :key="output" :value="String(output)">
               Output {{ output }}
             </option>
-          </select>
+          </UiSelect>
         </label>
       </div>
     </UiPopover>
@@ -79,7 +89,6 @@ function updateHardwareOutput(index: number, event: Event): void {
   border-bottom: 1px solid var(--ui-domain-color-444);
   background: var(--ui-domain-color-555);
 }
-.output-select,
 .output-control {
   width: 100%;
   height: 28px;
@@ -101,7 +110,6 @@ function updateHardwareOutput(index: number, event: Event): void {
   color: var(--ui-domain-color-b8b8b8);
   cursor: default;
 }
-.output-select:focus-visible,
 .output-control:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 1px;
@@ -136,15 +144,6 @@ function updateHardwareOutput(index: number, event: Event): void {
   align-items: center;
   gap: 8px;
   color: var(--text-muted);
-  font-size: var(--ui-type-size-control);
-}
-.mixer-popover select {
-  min-width: 0;
-  height: 25px;
-  border: 1px solid var(--line-strong);
-  border-radius: 3px;
-  color: var(--text-primary);
-  background: var(--daw-control);
   font-size: var(--ui-type-size-control);
 }
 </style>

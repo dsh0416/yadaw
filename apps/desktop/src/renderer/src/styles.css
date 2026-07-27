@@ -80,45 +80,6 @@ button,
   background: var(--canvas);
 }
 
-.settings-device-select-content {
-  z-index: var(--ui-z-dropdown);
-  min-width: var(--reka-select-trigger-width);
-  overflow: hidden;
-  border: 1px solid var(--line-strong);
-  border-radius: 7px;
-  color: var(--text-primary);
-  background: var(--surface-2);
-  box-shadow: var(--ui-shadow-md);
-}
-
-.settings-device-select-viewport {
-  padding: 5px;
-}
-
-.settings-device-select-item {
-  position: relative;
-  display: flex;
-  align-items: center;
-  min-height: 32px;
-  padding: 0 30px 0 28px;
-  border-radius: 5px;
-  outline: none;
-  cursor: pointer;
-  font-size: var(--ui-type-size-body-compact);
-  user-select: none;
-}
-
-.settings-device-select-item[data-highlighted] {
-  color: var(--text-primary);
-  background: var(--surface-active);
-}
-
-.settings-device-select-indicator {
-  position: absolute;
-  left: 9px;
-  color: var(--accent-soft);
-}
-
 :root[data-theme] :is(.welcome-brand, .new-project, .recent-projects) {
   background: var(--surface-1);
 }
@@ -153,8 +114,7 @@ button,
   background: var(--surface-active);
 }
 
-:root[data-theme]
-  :is(.path-control code, .path-control button, .recording-setting select, .select-trigger) {
+:root[data-theme] :is(.path-control code, .path-control button) {
   border-color: var(--line-strong);
   color: var(--text-secondary);
   background: var(--surface-2);
@@ -164,17 +124,6 @@ button,
   border-color: var(--accent-strong);
   background: var(--surface-active);
   box-shadow: var(--ui-shadow-selected-edge);
-}
-
-:root[data-theme] .select-content {
-  border-color: var(--line-strong);
-  color: var(--text-primary);
-  background: var(--surface-2);
-}
-
-:root[data-theme] .select-item[data-highlighted] {
-  color: var(--text-primary);
-  background: var(--surface-active);
 }
 
 :root[data-theme="light"] .prefs-primary-nav {
@@ -188,10 +137,6 @@ button,
 :root[data-theme="light"] :is(.backend-card-copy b, .settings-page-item.active) {
   color: var(--text-primary);
   text-shadow: none;
-}
-
-:root[data-theme="light"] .select-item-indicator {
-  color: var(--accent);
 }
 
 @keyframes floating-surface-in {

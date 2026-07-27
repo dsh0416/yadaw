@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it } from "vitest"
-import { flushPromises, mount } from "@vue/test-utils"
+import { describe, expect, it } from "vitest"
+import { mount } from "@vue/test-utils"
 import type { MixerChannelState } from "@yadaw/contracts"
 import MixerInputSection from "./MixerInputSection.vue"
 
@@ -21,14 +21,9 @@ const channel: MixerChannelState = {
   hardwareOutputChannels: []
 }
 
-afterEach(() => {
-  document.body.innerHTML = ""
-})
-
 describe("MixerInputSection", () => {
-  it("keeps portalled routing content inside the shared popover surface", async () => {
+  it("renders the audio input capsule and forwards its complete routing patch", async () => {
     const wrapper = mount(MixerInputSection, {
-      attachTo: document.body,
       props: {
         channel,
         instrument: null,
@@ -37,14 +32,15 @@ describe("MixerInputSection", () => {
       }
     })
 
-    await wrapper.get('button[aria-label="Audio 1 input routing"]').trigger("click")
-    await flushPromises()
+    const select = wrapper.get('button[aria-label="Audio 1 input channel"]')
+    expect(select.text()).toBe("IN 1–2")
 
-    const layer = document.body.querySelector<HTMLElement>(".ui-popover")
-    const popover = document.body.querySelector<HTMLElement>(".input-popover")
-    expect(layer).not.toBeNull()
-    expect(popover).not.toBeNull()
-    expect(layer!.contains(popover)).toBe(true)
-    expect(popover!.getAttributeNames().some((name) => name.startsWith("data-v-"))).toBe(true)
+    const stereoButton = wrapper.get('button[aria-label="Use mono input for Audio 1"]')
+    expect(stereoButton.attributes("aria-pressed")).toBe("true")
+    await stereoButton.trigger("click")
+
+    expect(wrapper.emitted("updateChannel")).toEqual([
+      [{ inputFormat: "mono", inputChannels: [1] }]
+    ])
   })
 })

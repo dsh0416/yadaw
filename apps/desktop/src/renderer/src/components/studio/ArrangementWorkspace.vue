@@ -2,6 +2,7 @@
 import { computed, nextTick, shallowRef, useTemplateRef, watch } from "vue"
 import { storeToRefs } from "pinia"
 import { useResizeObserver } from "@vueuse/core"
+import { UiSelect } from "@yadaw/ui"
 import type { KeySignatureEventState, TempoMapSnapshot } from "@yadaw/contracts"
 import { useProjectStore } from "../../stores/project"
 import { useTransportStore } from "../../stores/transport"
@@ -98,6 +99,17 @@ const selectedKeyValue = computed(() =>
   keySignatureValue(selectedKey.value.fifths, selectedKey.value.mode)
 )
 const meterDenominators = [1, 2, 4, 8, 16, 32] as const
+const keySignatureGroups = [
+  {
+    label: "Major keys",
+    options: MAJOR_KEY_SIGNATURE_CHOICES
+  },
+  {
+    label: "Minor keys",
+    options: MINOR_KEY_SIGNATURE_CHOICES,
+    separatorBefore: true
+  }
+] as const
 const displayMode = computed(() => session.value?.configuration.waveformDisplayMode ?? "separate")
 const recordingDuration = computed(() => {
   if (liveDurationSeconds.value > 0) return liveDurationSeconds.value
@@ -395,8 +407,8 @@ function replaceKeySignatureMap(events: KeySignatureEventState[]): void {
   void mixerStore.execute({ type: "replace-key-signature-map", events })
 }
 
-function updateSelectedKey(event: Event): void {
-  const choice = parseKeySignatureValue((event.target as HTMLSelectElement).value)
+function updateSelectedKey(value: string): void {
+  const choice = parseKeySignatureValue(value)
   if (!choice) return
   const tick = selectedKey.value.tick
   replaceKeySignatureMap(
@@ -449,7 +461,7 @@ function updateSelectedKey(event: Event): void {
           label="Meter"
           eyebrow="GLOBAL TRACK"
           :expanded="meterLaneExpanded"
-          color="var(--ui-domain-color-f2a65a, #f2a65a)"
+          color="var(--ui-domain-color-f2a65a)"
           @toggle="viewStore.toggleMeterLane"
         >
           <template #controls>
@@ -469,59 +481,41 @@ function updateSelectedKey(event: Event): void {
               "
             />
             <span aria-hidden="true">/</span>
-            <select
-              :value="selectedMeter.denominator"
+            <UiSelect
+              :model-value="String(selectedMeter.denominator)"
+              size="compact"
               aria-label="Selected Meter denominator"
-              @change="
+              @update:model-value="
                 updateSelectedMeter({
-                  denominator: Number(($event.target as HTMLSelectElement).value)
+                  denominator: Number($event)
                 })
               "
             >
               <option
                 v-for="denominator in meterDenominators"
                 :key="denominator"
-                :value="denominator"
+                :value="String(denominator)"
               >
                 {{ denominator }}
               </option>
-            </select>
+            </UiSelect>
           </template>
         </GlobalEventLaneHeader>
         <GlobalEventLaneHeader
           label="Key"
           eyebrow="GLOBAL TRACK"
           :expanded="keyLaneExpanded"
-          color="var(--ui-domain-color-b894ff, #b894ff)"
+          color="var(--ui-domain-color-b894ff)"
           @toggle="viewStore.toggleKeyLane"
         >
           <template #controls>
-            <select
-              class="key-signature-select"
-              :value="selectedKeyValue"
+            <UiSelect
+              :model-value="selectedKeyValue"
+              :groups="keySignatureGroups"
+              size="compact"
               aria-label="Selected Key signature"
-              @change="updateSelectedKey"
-            >
-              <optgroup label="Major keys">
-                <option
-                  v-for="choice in MAJOR_KEY_SIGNATURE_CHOICES"
-                  :key="choice.value"
-                  :value="choice.value"
-                >
-                  {{ choice.label }}
-                </option>
-              </optgroup>
-              <option class="key-signature-divider" disabled>────────────────</option>
-              <optgroup label="Minor keys">
-                <option
-                  v-for="choice in MINOR_KEY_SIGNATURE_CHOICES"
-                  :key="choice.value"
-                  :value="choice.value"
-                >
-                  {{ choice.label }}
-                </option>
-              </optgroup>
-            </select>
+              @update:model-value="updateSelectedKey"
+            />
           </template>
         </GlobalEventLaneHeader>
         <div
@@ -829,11 +823,5 @@ function updateSelectedKey(event: Event): void {
   display: block;
   font-size: var(--ui-type-size-body-compact);
   font-weight: var(--ui-type-weight-bold);
-}
-.key-signature-select {
-  width: 100%;
-}
-.key-signature-divider {
-  color: var(--line-strong);
 }
 </style>

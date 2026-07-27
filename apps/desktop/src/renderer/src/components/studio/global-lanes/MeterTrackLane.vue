@@ -131,7 +131,7 @@ function removePoint(id: string): void {
     :height="height"
     :beat-guides="beatGuides"
     :vertical-guides="verticalGuides"
-    color="var(--ui-domain-color-f2a65a, #f2a65a)"
+    color="var(--ui-domain-color-f2a65a)"
     :expanded="expanded"
     value-label="Meter"
     position-label="beats"
