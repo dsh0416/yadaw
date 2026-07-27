@@ -60,9 +60,68 @@ test("records into a Large Object and reopens the PGlite project archive", async
       await page.setViewportSize({ width: 1440, height: 900 })
     }
 
+    async function navigateTo(path: string): Promise<void> {
+      await page.evaluate((nextPath) => {
+        window.location.hash = nextPath
+      }, path)
+    }
+
+    async function expectStudioTopbarToFit(): Promise<void> {
+      const topbar = page.locator(".topbar")
+      await page.getByRole("button", { name: "Library" }).click()
+      await expect(page.locator(".browser-panel")).toBeHidden()
+      await page.getByRole("button", { name: "Library" }).click()
+      await expect(page.locator(".browser-panel")).toBeVisible()
+
+      const initialTheme = await page.locator("html").getAttribute("data-theme")
+      for (const theme of ["dark", "light"]) {
+        await page.locator("html").evaluate((element, nextTheme) => {
+          element.dataset.theme = nextTheme
+        }, theme)
+
+        await page.setViewportSize({ width: 1440, height: 900 })
+        await expect(topbar.locator("[data-topbar-group]:visible")).toHaveCount(8)
+        await expect(page.getByRole("button", { name: "Inspector" })).toHaveAttribute(
+          "aria-disabled",
+          "true"
+        )
+        expect(
+          await topbar.evaluate(
+            (element) =>
+              element.scrollWidth <= element.clientWidth &&
+              document.documentElement.scrollWidth <= document.documentElement.clientWidth
+          )
+        ).toBe(true)
+
+        await page.setViewportSize({ width: 960, height: 640 })
+        await expect(topbar.locator("[data-topbar-group]:visible")).toHaveCount(5)
+        await expect(page.getByRole("button", { name: "Library" })).toBeVisible()
+        await expect(page.getByRole("button", { name: "Mixer", exact: true })).toBeVisible()
+        await expect(topbar.getByRole("slider", { name: "Master quick volume" })).toBeVisible()
+        await expect(page.getByText("KEY", { exact: true })).toBeHidden()
+        expect(
+          await topbar.evaluate(
+            (element) =>
+              element.scrollWidth <= element.clientWidth &&
+              document.documentElement.scrollWidth <= document.documentElement.clientWidth
+          )
+        ).toBe(true)
+      }
+
+      await page.locator("html").evaluate((element, theme) => {
+        if (theme) {
+          element.dataset.theme = theme
+        } else {
+          delete element.dataset.theme
+        }
+      }, initialTheme)
+      await page.setViewportSize({ width: 1440, height: 900 })
+    }
+
     await expect(page.getByRole("heading", { name: /Build a session/ })).toBeVisible()
     await page.getByRole("button", { name: "Create project" }).click()
-    await expect(page.getByText("Untitled project", { exact: false }).first()).toBeVisible()
+    await expect(page.locator(".studio-shell")).toBeVisible()
+    await expectStudioTopbarToFit()
     const selectionPolicy = await page.locator(".studio-shell").evaluate((shell) => {
       const input = document.createElement("input")
       shell.append(input)
@@ -75,7 +134,7 @@ test("records into a Large Object and reopens the PGlite project archive", async
     })
     expect(selectionPolicy).toEqual({ shell: "none", input: "text" })
 
-    await page.getByRole("button", { name: "Project settings" }).click()
+    await navigateTo("/settings/project")
     await expect(page.getByRole("heading", { name: "Project settings" })).toBeVisible()
     await expectSettingsLayoutToFit()
     await page.getByLabel("Project name").fill("Lifecycle")
@@ -84,7 +143,7 @@ test("records into a Large Object and reopens the PGlite project archive", async
     await page.getByRole("button", { name: "Save changes" }).click()
     await expect(page.getByRole("status")).toContainText("Changes saved")
     await page.getByRole("button", { name: "Back to studio" }).click()
-    await expect(page.getByText("Lifecycle", { exact: false }).first()).toBeVisible()
+    await expect(page.locator(".studio-shell")).toBeVisible()
     const virtualRuntime = await page.evaluate(() =>
       window.yadaw.startAudioEngine({
         backend: "virtual",
@@ -95,7 +154,7 @@ test("records into a Large Object and reopens the PGlite project archive", async
     )
     expect(virtualRuntime.state).toBe("running")
 
-    const mixerDockToggle = page.getByRole("button", { name: "Toggle mixer dock" })
+    const mixerDockToggle = page.getByRole("button", { name: "Mixer", exact: true })
     await expect(mixerDockToggle).toBeVisible()
     if ((await mixerDockToggle.getAttribute("aria-pressed")) !== "true") {
       await mixerDockToggle.click()
@@ -209,7 +268,7 @@ test("records into a Large Object and reopens the PGlite project archive", async
     await playButton.click()
     await expect(page.getByRole("button", { name: "Pause" })).toBeVisible()
 
-    await page.getByRole("button", { name: "System settings" }).click()
+    await navigateTo("/settings/system")
     await expect(page.getByRole("heading", { name: "System settings" })).toBeVisible()
     await page.getByRole("button", { name: "Display", exact: true }).click()
     await page.getByRole("radio", { name: /Light/ }).click()
@@ -230,7 +289,7 @@ test("records into a Large Object and reopens the PGlite project archive", async
       })
       .toBe(1)
     await page.getByRole("button", { name: "Back to studio" }).click()
-    await expect(page.getByText("Lifecycle", { exact: false }).first()).toBeVisible()
+    await expect(page.locator(".studio-shell")).toBeVisible()
     await expect(page.getByRole("button", { name: "Pause" })).toBeVisible()
     const mixerAfterRuntimeRestart = await page.evaluate(() => window.yadaw.loadMixerGraph())
     expect(mixerAfterRuntimeRestart.channels.map((channel) => channel.name)).toEqual(
@@ -238,8 +297,8 @@ test("records into a Large Object and reopens the PGlite project archive", async
     )
 
     await page.getByRole("button", { name: "Pause" }).click()
-    await page.getByRole("button", { name: "Go to start" }).click()
-    await expect(page.getByText("001·01·000")).toBeVisible()
+    await page.getByRole("button", { name: "Go to beginning" }).click()
+    await expect(page.getByRole("region", { name: "Project musical display" })).toContainText("001")
     const pendingAfterCommit = await page.evaluate(() => window.yadaw.listPendingRecordings())
     expect(pendingAfterCommit).toHaveLength(1)
     expect(pendingAfterCommit[0]?.assetExists).toBe(true)
@@ -262,7 +321,7 @@ test("records into a Large Object and reopens the PGlite project archive", async
     expect(importedAssets.every(({ audioByteLength }) => audioByteLength > 0)).toBe(true)
     const mixerAtSave = await page.evaluate(() => window.yadaw.loadMixerGraph())
 
-    await page.getByRole("button", { name: "Save project" }).click()
+    const saveProject = page.evaluate(() => window.yadaw.saveProject())
     const saveDialog = page.getByRole("dialog")
     await expect(
       saveDialog.getByRole("heading", { name: "Saving project", exact: true })
@@ -271,8 +330,10 @@ test("records into a Large Object and reopens the PGlite project archive", async
     await expect(saveDialog.getByRole("heading", { name: "Saving project archive" })).toBeVisible()
     await expect(saveDialog).toContainText("Completed")
     await expect(saveDialog).toBeHidden({ timeout: 3_000 })
+    await saveProject
 
-    await page.getByRole("button", { name: "Close project" }).click()
+    expect(await page.evaluate(() => window.yadaw.closeProject())).toBe(true)
+    await navigateTo("/")
     await expect(page.getByRole("heading", { name: /Build a session/ })).toBeVisible()
     await page.getByRole("button", { name: "Lifecycle" }).click()
     const openingDialog = page.getByRole("dialog")
@@ -290,7 +351,7 @@ test("records into a Large Object and reopens the PGlite project archive", async
     await expect(
       visibleMixer.getByText("2 audio · 0 instrument · 1 buses · 1 outputs")
     ).toBeVisible()
-    await page.getByRole("button", { name: "Project settings" }).click()
+    await navigateTo("/settings/project")
     await expect(page.getByLabel("Sample rate")).toHaveValue("44100")
     await expect(page.getByLabel("Waveform channels")).toHaveValue("aggregate")
     const reopenedAssets = await page.evaluate(async () =>

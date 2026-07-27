@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted } from "vue"
+import { computed, onBeforeUnmount, onMounted } from "vue"
 import { useEventListener } from "@vueuse/core"
 import { storeToRefs } from "pinia"
 import { useRouter } from "vue-router"
+import type { MixerChannelMeter, MixerChannelPatch, MixerParameterPreview } from "@yadaw/contracts"
 import SoundBrowser from "../components/studio/SoundBrowser.vue"
 import StudioStatusbar from "../components/studio/StudioStatusbar.vue"
 import StudioTopbar from "../components/studio/StudioTopbar.vue"
@@ -15,13 +16,11 @@ import { useTransportStore } from "../stores/transport"
 import { useMixerStore } from "../stores/mixer"
 import { useStudioWorkspaceStore } from "../stores/studioWorkspace"
 import { useStudioWorkflowStore } from "../stores/studioWorkflow"
-import { useMidiImportStore } from "../stores/midiImport"
 import MidiImportDialog from "../components/midi/MidiImportDialog.vue"
 import { replaceTempoEventAtTick, secondsToTick } from "../utils/tempoMap"
 
 const router = useRouter()
 const engineStore = useEngineStore()
-const { nativeInfo } = storeToRefs(engineStore)
 const audioRuntimeStore = useAudioRuntimeStore()
 const {
   runtime: audioRuntime,
@@ -34,7 +33,6 @@ const transportStore = useTransportStore()
 const mixerStore = useMixerStore()
 const workspaceStore = useStudioWorkspaceStore()
 const studioWorkflowStore = useStudioWorkflowStore()
-const midiImportStore = useMidiImportStore()
 const { session, projectAssets } = storeToRefs(projectStore)
 const {
   active: activeRecording,
@@ -42,6 +40,16 @@ const {
   error: recordingError
 } = storeToRefs(recordingStore)
 const { playing, loading: playLoading, canPlay, playheadSeconds } = storeToRefs(transportStore)
+const EMPTY_MASTER_METER: MixerChannelMeter = {
+  channelId: "master",
+  preFaderPeak: [0, 0],
+  postFaderPeak: [0, 0],
+  heldPeak: [0, 0],
+  clipped: false
+}
+const masterMeter = computed(() =>
+  mixerStore.master ? mixerStore.meterFor(mixerStore.master.id) : EMPTY_MASTER_METER
+)
 
 onMounted(() => {
   if (!session.value) void router.replace({ name: "welcome" })
@@ -49,24 +57,6 @@ onMounted(() => {
   mixerStore.startMetering()
   transportStore.startPolling()
 })
-async function openSystemSettings(): Promise<void> {
-  if (!(await studioWorkflowStore.prepareToLeaveStudio())) return
-  void router.push({ name: "system-settings" })
-}
-async function openProjectSettings(): Promise<void> {
-  if (!(await studioWorkflowStore.prepareToLeaveStudio())) return
-  await transportStore.stop()
-  void router.push({ name: "project-settings" })
-}
-async function saveProject(): Promise<void> {
-  await studioWorkflowStore.saveProject()
-}
-async function closeProject(): Promise<void> {
-  if (await studioWorkflowStore.closeProject()) {
-    void router.push({ name: "welcome" })
-  }
-}
-
 function updateCurrentTempo(beatsPerMinute: number): void {
   const tempoMap = replaceTempoEventAtTick(
     mixerStore.graph.tempoMap,
@@ -74,6 +64,14 @@ function updateCurrentTempo(beatsPerMinute: number): void {
     beatsPerMinute
   )
   void mixerStore.execute({ type: "replace-tempo-map", tempoMap })
+}
+
+function previewMaster(preview: MixerParameterPreview): void {
+  mixerStore.preview(preview)
+}
+
+function updateMaster(channelId: string, patch: MixerChannelPatch): void {
+  void mixerStore.updateChannel(channelId, patch)
 }
 
 async function toggleRecording(): Promise<void> {
@@ -128,30 +126,33 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main v-if="session" class="studio-shell">
+  <main
+    v-if="session"
+    :class="['studio-shell', { 'sound-browser-open': workspaceStore.soundBrowserOpen }]"
+  >
     <StudioTopbar
-      :native-info="nativeInfo"
       :engine-running="audioRuntime.state === 'running'"
-      :project="session.configuration"
       :recording="Boolean(activeRecording)"
       :recording-busy="recordingBusy"
-      :dirty="session.dirty"
       :playing="playing"
       :play-loading="playLoading"
       :can-play="canPlay && !activeRecording"
       :playhead-seconds="playheadSeconds"
       :tempo-map="mixerStore.graph.tempoMap"
-      @open-system-settings="openSystemSettings"
+      :sound-browser-open="workspaceStore.soundBrowserOpen"
+      :mixer-dock-open="workspaceStore.mixerDockOpen"
+      :master-channel="mixerStore.master"
+      :master-meter="masterMeter"
+      @toggle-sound-browser="workspaceStore.toggleSoundBrowser"
+      @toggle-mixer-dock="workspaceStore.toggleMixerDock"
       @toggle-recording="toggleRecording"
       @toggle-playback="transportStore.toggle"
       @go-to-start="transportStore.goToStart"
-      @save="saveProject"
-      @close="closeProject"
-      @open-project-settings="openProjectSettings"
-      @import-midi="midiImportStore.prepare()"
       @update-tempo="updateCurrentTempo"
+      @preview-master="previewMaster"
+      @update-master="updateMaster"
     />
-    <SoundBrowser :assets="projectAssets" />
+    <SoundBrowser v-show="workspaceStore.soundBrowserOpen" :assets="projectAssets" />
     <StudioWorkspace
       :recording-id="activeRecording?.id ?? null"
       :recording-started-at="activeRecording?.startedAt ?? null"
@@ -170,7 +171,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .studio-shell {
   display: grid;
-  grid-template: 56px minmax(0, 1fr) 25px/214px minmax(0, 1fr);
+  grid-template: 56px minmax(0, 1fr) 25px / minmax(0, 1fr);
   width: 100vw;
   height: 100vh;
   color: var(--text-primary);
@@ -178,13 +179,16 @@ onBeforeUnmount(() => {
   -webkit-user-select: none;
   user-select: none;
 }
+.studio-shell.sound-browser-open {
+  grid-template-columns: 214px minmax(0, 1fr);
+}
 .studio-shell
   :deep(:is(input, textarea, select, [contenteditable]:not([contenteditable="false"]))) {
   -webkit-user-select: text;
   user-select: text;
 }
 @media (max-width: 1100px) {
-  .studio-shell {
+  .studio-shell.sound-browser-open {
     grid-template-columns: 184px minmax(0, 1fr);
   }
 }

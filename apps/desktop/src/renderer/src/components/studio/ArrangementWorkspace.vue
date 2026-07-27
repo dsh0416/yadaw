@@ -2,13 +2,11 @@
 import { computed, nextTick, shallowRef, useTemplateRef, watch } from "vue"
 import { storeToRefs } from "pinia"
 import { useResizeObserver } from "@vueuse/core"
-import { PanelBottomClose, PanelBottomOpen } from "@lucide/vue"
 import type { TempoMapSnapshot } from "@yadaw/contracts"
 import { useProjectStore } from "../../stores/project"
 import { useTransportStore } from "../../stores/transport"
 import { useArrangementViewStore } from "../../stores/arrangementView"
 import { useMixerStore } from "../../stores/mixer"
-import { useStudioWorkspaceStore } from "../../stores/studioWorkspace"
 import type { TimelineClip } from "../../stores/transport"
 import { clipStartSecondsFromPointer, findNearestTrackId } from "../../utils/clipDrag"
 import ArrangementTrack from "./ArrangementTrack.vue"
@@ -18,12 +16,7 @@ import TimelineRuler from "./TimelineRuler.vue"
 import TrackQuickControls from "./TrackQuickControls.vue"
 import TrackHeightResizeHandle from "./TrackHeightResizeHandle.vue"
 import MidiArrangementTrack from "./MidiArrangementTrack.vue"
-import {
-  secondsToTick,
-  tempoAtTick,
-  tickToSeconds,
-  timeSignatureAtTick
-} from "../../utils/tempoMap"
+import { tickToSeconds } from "../../utils/tempoMap"
 import GlobalLaneHeader from "./global-lanes/GlobalLaneHeader.vue"
 import TempoTrackLane from "./global-lanes/TempoTrackLane.vue"
 import { secondsToTimelineX, timelineXToSeconds } from "../../utils/timelineCoordinates"
@@ -38,7 +31,6 @@ const projectStore = useProjectStore()
 const transportStore = useTransportStore()
 const viewStore = useArrangementViewStore()
 const mixerStore = useMixerStore()
-const workspaceStore = useStudioWorkspaceStore()
 const { session } = storeToRefs(projectStore)
 const {
   clips,
@@ -65,14 +57,11 @@ const clipDrag = shallowRef<{
 } | null>(null)
 let timeZoomAnchor: { seconds: number; viewportX: number } | null = null
 
-const playheadTick = computed(() => secondsToTick(mixerStore.graph.tempoMap, playheadSeconds.value))
-const tempo = computed(() => tempoAtTick(mixerStore.graph.tempoMap, playheadTick.value))
 const selectedTempo = computed(
   () =>
     mixerStore.graph.tempoMap.tempoEvents.find((event) => event.tick === selectedTempoTick.value) ??
     mixerStore.graph.tempoMap.tempoEvents[0] ?? { tick: 0, beatsPerMinute: 120 }
 )
-const signature = computed(() => timeSignatureAtTick(mixerStore.graph.tempoMap, playheadTick.value))
 const displayMode = computed(() => session.value?.configuration.waveformDisplayMode ?? "separate")
 const recordingDuration = computed(() => {
   if (liveDurationSeconds.value > 0) return liveDurationSeconds.value
@@ -360,24 +349,6 @@ function updateSelectedTempo(beatsPerMinute: number): void {
 <template>
   <section class="arrangement" aria-label="Arrangement timeline">
     <div class="arrangement-toolbar">
-      <div class="tempo-readout">
-        <span>TEMPO MAP</span>
-        <strong
-          >{{ tempo.toFixed(2) }} BPM · {{ signature.numerator }}/{{
-            signature.denominator
-          }}</strong
-        >
-      </div>
-      <button
-        class="mixer-dock-toggle"
-        :aria-pressed="workspaceStore.mixerDockOpen"
-        aria-label="Toggle mixer dock"
-        @click="workspaceStore.toggleMixerDock"
-      >
-        <PanelBottomClose v-if="workspaceStore.mixerDockOpen" :size="13" />
-        <PanelBottomOpen v-else :size="13" />
-        {{ workspaceStore.mixerDockOpen ? "Hide mixer" : "Show mixer" }}
-      </button>
       <ArrangementZoomControls
         class="arrangement-zoom-controls"
         :pixels-per-quarter="pixelsPerQuarter"
@@ -547,56 +518,15 @@ function updateSelectedTempo(beatsPerMinute: number): void {
   background: var(--daw-workspace);
 }
 .arrangement-toolbar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: flex-end;
   padding: 0 14px 0 15px;
   border-bottom: 1px solid var(--line-soft);
   background: var(--surface-1);
 }
-.tempo-readout {
-  grid-column: 1;
-}
-.mixer-dock-toggle {
-  display: flex;
-  grid-column: 2;
-  align-items: center;
-  gap: 5px;
-  height: 25px;
-  padding: 0 8px;
-  border: 1px solid var(--line-strong);
-  border-radius: 4px;
-  color: var(--text-muted);
-  background: var(--daw-control);
-  font-size: 7px;
-  cursor: pointer;
-}
-.mixer-dock-toggle:hover {
-  color: var(--text-primary);
-  background: var(--daw-control-hover);
-}
-.mixer-dock-toggle:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 1px;
-}
-.tempo-readout span,
-.tempo-readout strong {
-  display: block;
-}
-.tempo-readout span {
-  color: var(--accent);
-  font: 700 6px var(--font-utility);
-  letter-spacing: 0.15em;
-}
-.tempo-readout strong {
-  margin-top: 3px;
-  color: var(--text-muted);
-  font: 8px var(--font-utility);
-}
 .arrangement-zoom-controls {
-  grid-column: 3;
-  justify-self: end;
+  margin-left: auto;
 }
 .timeline-grid {
   display: grid;

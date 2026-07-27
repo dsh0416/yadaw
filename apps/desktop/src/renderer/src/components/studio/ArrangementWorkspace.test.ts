@@ -142,6 +142,8 @@ describe("ArrangementWorkspace", () => {
       global: { plugins: [pinia] }
     })
 
+    expect(wrapper.find('button[aria-label="Toggle mixer dock"]').exists()).toBe(false)
+    expect(wrapper.find(".tempo-readout").exists()).toBe(false)
     expect(wrapper.findAll(".track-lane")).toHaveLength(2)
     expect(wrapper.findAll('[data-testid="timeline-playhead"]')).toHaveLength(1)
     expect(wrapper.get('[aria-label="Tempo global track"]').text()).toContain("Tempo")

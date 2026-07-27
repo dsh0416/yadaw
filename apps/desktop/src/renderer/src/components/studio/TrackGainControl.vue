@@ -14,6 +14,7 @@ const props = defineProps<{
   channelName: string
   value: number
   meter: MixerChannelMeter
+  disabled?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -67,7 +68,7 @@ function reset(): void {
 
 <template>
   <label
-    class="track-gain"
+    :class="['track-gain', { disabled }]"
     :style="meterStyle"
     :title="`${channelName} volume: ${valueLabel}`"
     @pointerdown.stop
@@ -80,6 +81,7 @@ function reset(): void {
       :max="FADER_MAX_DB"
       step="0.1"
       :value="value"
+      :disabled="disabled"
       :aria-label="`${channelName} quick volume`"
       :aria-valuetext="valueLabel"
       @pointerdown="beginGesture"
@@ -181,6 +183,14 @@ function reset(): void {
 .track-gain input:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 1px;
+}
+
+.track-gain input:disabled {
+  cursor: not-allowed;
+}
+
+.track-gain.disabled {
+  opacity: 0.45;
 }
 
 .parameter-tooltip {
