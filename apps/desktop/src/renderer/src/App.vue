@@ -12,7 +12,6 @@ import { useLifecycleStore } from "./stores/lifecycle"
 import { useOperationStore } from "./stores/operations"
 import { useAudioBenchmarkStore } from "./stores/audioBenchmark"
 import GlobalOperationHost from "./components/operations/GlobalOperationHost.vue"
-import PendingRecordingHost from "./components/recording/PendingRecordingHost.vue"
 import AudioBenchmarkHost from "./components/benchmark/AudioBenchmarkHost.vue"
 import GlobalDialogHost from "./components/dialog/GlobalDialogHost.vue"
 
@@ -57,7 +56,6 @@ onUnmounted(() => {
 <template>
   <UiProvider dir="ltr" :tooltip-delay="350" :tooltip-skip-delay="100">
     <RouterView v-if="lifecycleReady" />
-    <PendingRecordingHost v-if="lifecycleReady" />
     <GlobalOperationHost />
     <AudioBenchmarkHost />
     <GlobalDialogHost />
