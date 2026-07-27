@@ -58,7 +58,7 @@ const errorId = props.error ? `${controlId}-error` : undefined
 .ui-field__label {
   color: var(--ui-color-text);
   font-size: var(--ui-font-size-sm);
-  font-weight: var(--ui-weight-semibold);
+  font-weight: var(--ui-type-weight-semibold);
 }
 
 .ui-field__required,
@@ -70,7 +70,7 @@ const errorId = props.error ? `${controlId}-error` : undefined
 .ui-field__error {
   margin: 0;
   font-size: var(--ui-font-size-xs);
-  line-height: var(--ui-line-normal);
+  line-height: var(--ui-type-leading-normal);
 }
 
 .ui-field__description {

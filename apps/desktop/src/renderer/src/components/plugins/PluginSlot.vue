@@ -89,12 +89,12 @@ defineEmits<{
   white-space: nowrap;
 }
 .plugin-slot strong {
-  font-size: 8px;
+  font-size: var(--ui-type-size-control);
 }
 .plugin-slot small {
   margin-top: 2px;
   color: var(--text-faint);
-  font-size: 6px;
+  font-size: var(--ui-type-size-micro);
 }
 .plugin-slot button {
   display: grid;

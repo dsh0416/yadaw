@@ -225,15 +225,15 @@ onMounted(() => {
 }
 
 .theme-option-copy b {
-  font-size: 9px;
+  font-size: var(--ui-type-size-body-compact);
 }
 
 .theme-option-copy small {
   min-height: 29px;
   margin-top: 4px;
   color: var(--text-faint);
-  font-size: 7px;
-  line-height: 1.4;
+  font-size: var(--ui-type-size-caption);
+  line-height: var(--ui-type-leading-compact);
 }
 
 .selection-dot {
@@ -255,7 +255,7 @@ onMounted(() => {
 
 .display-error {
   color: var(--record);
-  font-size: 9px;
+  font-size: var(--ui-type-size-body-compact);
 }
 
 @media (max-width: 1120px) {

@@ -4,20 +4,78 @@ import { Meta } from "@storybook/addon-docs/blocks"
 
 # Typography
 
-UI copy uses the system sans stack; timecode, sample counts, and aligned measurements use the
-monospace stack. Body text starts at 14px. Text needed to operate the product must remain legible
-at 200% zoom and may not be replaced by an unlabeled icon.
+YADAW uses three deliberate families. Interface copy uses the system UI stack, headings use the
+condensed display stack, and aligned measurements use the data stack. Font family, size, weight,
+line height, and tracking must come from typography tokens rather than local numeric values.
+
+## Families
 
 <div style={{ display: "grid", gap: "1rem" }}>
-  <div style={{ fontSize: "var(--ui-font-size-2xl)", fontWeight: "var(--ui-weight-semibold)" }}>
-    Project title · 28px
+  <div style={{ fontFamily: "var(--ui-type-family-interface)" }}>
+    <strong>Interface</strong> · Navigation, controls, explanations
   </div>
-  <div style={{ fontSize: "var(--ui-font-size-xl)", fontWeight: "var(--ui-weight-semibold)" }}>
-    Dialog title · 22px
+  <div style={{ fontFamily: "var(--ui-type-family-display)" }}>
+    <strong>Display</strong> · Page, panel, and section titles
   </div>
-  <div style={{ fontSize: "var(--ui-font-size-md)" }}>Body copy · 16px</div>
-  <div style={{ fontSize: "var(--ui-font-size-sm)", color: "var(--ui-color-text-muted)" }}>
-    Control and supporting copy · 14px
+  <div style={{ fontFamily: "var(--ui-type-family-data)" }}>
+    <strong>Data</strong> · 01:42:16.083 · 48,000 Hz · −6.2 dB
   </div>
-  <div style={{ fontFamily: "var(--ui-font-mono)" }}>01:42:16.083 · 48,000 Hz</div>
 </div>
+
+## Dense application roles
+
+The desktop DAW uses a compact scale because many labels and measurements coexist onscreen.
+Micro and caption text are reserved for secondary metadata; anything needed to complete a task
+uses control size or larger.
+
+{[
+["Micro", "--ui-type-size-micro", "Nonessential badges"],
+["Caption", "--ui-type-size-caption", "Metadata and tertiary labels"],
+["Control", "--ui-type-size-control", "Compact controls and data"],
+["Body compact", "--ui-type-size-body-compact", "Primary DAW copy"],
+["Label", "--ui-type-size-label", "Emphasized labels"],
+["Section title", "--ui-type-size-section-title", "Local section headings"],
+["Panel title", "--ui-type-size-panel-title", "Dock and inspector titles"],
+["View title", "--ui-type-size-view-title", "Dialog and view headings"],
+["Feature title", "--ui-type-size-feature-title", "Feature headings"],
+["Page title", "--ui-type-size-page-title", "Page headings"],
+["Hero", "--ui-type-size-hero", "Welcome hero"],
+["Display", "--ui-type-size-display", "Large measurements"]
+].map(([name, token, usage]) => (
+
+  <div
+    key={token}
+    style={{
+      display: "grid",
+      gridTemplateColumns: "9rem minmax(12rem, 1fr) minmax(12rem, 1fr)",
+      alignItems: "baseline",
+      gap: "1rem",
+      padding: "0.75rem 0",
+      borderBottom: "1px solid var(--ui-color-border)"
+    }}
+  >
+    <code>{token}</code>
+    <span style={{ fontSize: `var(${token})` }}>{name}</span>
+    <span style={{ color: "var(--ui-color-text-muted)" }}>{usage}</span>
+  </div>
+))}
+
+## General UI scale
+
+Reusable controls and documentation use the rem-based `--ui-font-size-xs` through
+`--ui-font-size-5xl` scale. Use `xs` for supporting copy, `sm` for standard controls and body
+copy, `md` for comfortable body copy, and `lg` through `5xl` for progressively stronger
+headings. Product DAW surfaces use the dense roles above instead of inventing pixel values.
+
+## Weight, leading, and tracking
+
+- Use regular for body and measurements, medium for active controls, semibold for headings, and
+  bold only for compact uppercase labels.
+- Use normal leading for interface copy, compact leading for dense descriptions, and tight leading
+  for headings.
+- Use normal tracking by default. Wide, wider, and widest tracking are reserved for uppercase
+  utility labels. Tight tracking is reserved for large display text; tighter tracking is reserved
+  for tabular timecode.
+
+Text required to operate the product must remain legible at 200% zoom and may not be replaced by an
+unlabeled icon.

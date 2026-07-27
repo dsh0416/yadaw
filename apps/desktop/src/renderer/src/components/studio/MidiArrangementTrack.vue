@@ -137,7 +137,7 @@ function dropClip(event: DragEvent): void {
   z-index: var(--ui-z-local-raised);
   display: block;
   overflow: hidden;
-  font: 700 7px var(--font-utility);
+  font: var(--ui-type-weight-bold) var(--ui-type-size-caption) var(--ui-type-family-data);
   text-overflow: ellipsis;
   white-space: nowrap;
 }

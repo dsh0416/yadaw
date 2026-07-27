@@ -198,11 +198,11 @@ const emit = defineEmits<{
 }
 .letter-control,
 .count-in-control {
-  font: 700 9px var(--font-utility);
+  font: var(--ui-type-weight-bold) var(--ui-type-size-body-compact) var(--ui-type-family-data);
 }
 .count-in-control {
-  font-size: 7px;
-  letter-spacing: -0.08em;
+  font-size: var(--ui-type-size-caption);
+  letter-spacing: var(--ui-type-tracking-tighter);
 }
 @media (max-width: 1279px) {
   .topbar {

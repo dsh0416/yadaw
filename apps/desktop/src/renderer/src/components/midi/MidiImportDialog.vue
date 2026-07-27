@@ -198,13 +198,13 @@ function updateInstrument(sourceTrack: number, sequence: number, event: Event): 
 }
 .midi-dialog header span {
   color: var(--ui-domain-color-73d6a2);
-  font: 700 7px var(--font-utility);
-  letter-spacing: 0.16em;
+  font: var(--ui-type-weight-bold) var(--ui-type-size-caption) var(--ui-type-family-data);
+  letter-spacing: var(--ui-type-tracking-widest);
 }
 .midi-dialog header h2 {
   margin-top: 4px;
-  font-family: var(--font-display);
-  font-size: 14px;
+  font-family: var(--ui-type-family-display);
+  font-size: var(--ui-font-size-sm);
 }
 .midi-dialog header button {
   width: 28px;
@@ -218,7 +218,7 @@ function updateInstrument(sourceTrack: number, sequence: number, event: Event): 
 .midi-dialog > p {
   margin: 0;
   color: var(--text-muted);
-  font-size: 8px;
+  font-size: var(--ui-type-size-control);
 }
 .mapping-list {
   display: grid;
@@ -241,12 +241,12 @@ function updateInstrument(sourceTrack: number, sequence: number, event: Event): 
   display: block;
 }
 .mapping-list strong {
-  font-size: 9px;
+  font-size: var(--ui-type-size-body-compact);
 }
 .mapping-list small {
   margin-top: 3px;
   color: var(--text-faint);
-  font-size: 7px;
+  font-size: var(--ui-type-size-caption);
 }
 .mapping-list select {
   min-width: 0;
@@ -255,7 +255,7 @@ function updateInstrument(sourceTrack: number, sequence: number, event: Event): 
   border-radius: 3px;
   color: var(--text-secondary);
   background: var(--daw-control);
-  font-size: 8px;
+  font-size: var(--ui-type-size-control);
 }
 .mapping-list .warning {
   grid-column: 1/-1;
@@ -272,8 +272,8 @@ function updateInstrument(sourceTrack: number, sequence: number, event: Event): 
   grid-column: 1/-1;
   margin-bottom: 2px;
   color: var(--text-muted);
-  font: 700 7px var(--font-utility);
-  letter-spacing: 0.11em;
+  font: var(--ui-type-weight-bold) var(--ui-type-size-caption) var(--ui-type-family-data);
+  letter-spacing: var(--ui-type-tracking-wider);
   text-transform: uppercase;
 }
 .tempo-choice label {
@@ -302,17 +302,17 @@ function updateInstrument(sourceTrack: number, sequence: number, event: Event): 
 }
 .tempo-choice strong {
   color: var(--text-primary);
-  font-size: 8px;
+  font-size: var(--ui-type-size-control);
 }
 .tempo-choice small {
   margin-top: 4px;
   color: var(--text-faint);
-  font-size: 7px;
-  line-height: 1.35;
+  font-size: var(--ui-type-size-caption);
+  line-height: var(--ui-type-leading-compact);
 }
 .warning {
   color: var(--warning) !important;
-  font-size: 7px !important;
+  font-size: var(--ui-type-size-caption) !important;
 }
 .error {
   color: var(--record) !important;
@@ -329,13 +329,13 @@ function updateInstrument(sourceTrack: number, sequence: number, event: Event): 
   border-radius: 4px;
   color: var(--text-secondary);
   background: var(--daw-control);
-  font-size: 8px;
+  font-size: var(--ui-type-size-control);
   cursor: pointer;
 }
 .midi-dialog footer .primary {
   border-color: color-mix(in srgb, var(--ui-domain-color-73d6a2) 55%, var(--line-strong));
   color: var(--ui-domain-color-08120d);
   background: var(--ui-domain-color-73d6a2);
-  font-weight: 700;
+  font-weight: var(--ui-type-weight-bold);
 }
 </style>

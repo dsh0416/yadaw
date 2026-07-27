@@ -58,6 +58,6 @@ const props = withDefaults(
   margin: 0;
   color: var(--ui-color-text-muted);
   font-size: var(--ui-font-size-sm);
-  line-height: var(--ui-line-normal);
+  line-height: var(--ui-type-leading-normal);
 }
 </style>

@@ -50,12 +50,15 @@ const classes = computed(() => ["yadaw-logo", `yadaw-logo--${props.variant}`])
 
 <style scoped>
 .yadaw-logo {
+  --yadaw-logo-wordmark-size: 1em;
+  --yadaw-logo-lockup-wordmark-size: 0.68em;
+
   display: inline-flex;
   align-items: center;
   flex: none;
   gap: 0.46em;
   color: inherit;
-  line-height: 1;
+  line-height: var(--ui-type-leading-none);
   white-space: nowrap;
 }
 
@@ -78,13 +81,13 @@ const classes = computed(() => ["yadaw-logo", `yadaw-logo--${props.variant}`])
 .yadaw-logo__wordmark {
   display: var(--yadaw-logo-wordmark-display, inline);
   margin-right: -0.16em;
-  font-family: var(--font-utility, var(--ui-font-mono));
-  font-size: 1em;
-  font-weight: 700;
-  letter-spacing: 0.16em;
+  font-family: var(--ui-type-family-data);
+  font-size: var(--yadaw-logo-wordmark-size);
+  font-weight: var(--ui-type-weight-bold);
+  letter-spacing: var(--ui-type-tracking-widest);
 }
 
 .yadaw-logo--lockup .yadaw-logo__wordmark {
-  font-size: 0.68em;
+  font-size: var(--yadaw-logo-lockup-wordmark-size);
 }
 </style>

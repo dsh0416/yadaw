@@ -124,8 +124,8 @@ function numberValue(event: Event): number {
   align-content: start;
   gap: 7px;
   color: var(--text-muted);
-  font: 700 7px var(--font-utility);
-  letter-spacing: 0.08em;
+  font: var(--ui-type-weight-bold) var(--ui-type-size-caption) var(--ui-type-family-data);
+  letter-spacing: var(--ui-type-tracking-wide);
   text-transform: uppercase;
 }
 
@@ -150,9 +150,9 @@ function numberValue(event: Event): number {
 
 .field small {
   color: var(--text-faint);
-  font: normal 7px var(--font-utility);
-  letter-spacing: 0;
-  line-height: 1.45;
+  font: var(--ui-type-weight-regular) var(--ui-type-size-caption) var(--ui-type-family-data);
+  letter-spacing: var(--ui-type-tracking-normal);
+  line-height: var(--ui-type-leading-normal);
   text-transform: none;
 }
 

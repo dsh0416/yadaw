@@ -65,7 +65,7 @@ const props = withDefaults(
 .ui-empty-state p {
   color: var(--ui-color-text-muted);
   font-size: var(--ui-font-size-sm);
-  line-height: var(--ui-line-normal);
+  line-height: var(--ui-type-leading-normal);
 }
 
 .ui-empty-state__actions {

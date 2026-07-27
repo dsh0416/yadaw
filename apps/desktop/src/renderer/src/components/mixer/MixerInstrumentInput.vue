@@ -137,7 +137,7 @@ function dropInstrument(event: DragEvent): void {
   min-width: 0;
   padding: 0 7px;
   overflow: hidden;
-  font-size: 8px;
+  font-size: var(--ui-type-size-control);
   text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -162,8 +162,8 @@ function dropInstrument(event: DragEvent): void {
   cursor: pointer;
 }
 .instrument-input.empty span {
-  font: 6px var(--font-utility);
-  letter-spacing: 0.08em;
+  font: var(--ui-type-size-micro) var(--ui-type-family-data);
+  letter-spacing: var(--ui-type-tracking-wide);
 }
 .instrument-input.empty:hover {
   border-color: var(--ui-domain-color-768a61);

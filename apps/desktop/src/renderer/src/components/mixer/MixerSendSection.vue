@@ -254,7 +254,7 @@ function createSend(): void {
   border-radius: 4px;
   color: var(--ui-domain-color-f5f5f5);
   background: linear-gradient(var(--ui-domain-color-4f83a4), var(--ui-domain-color-3f6b87));
-  font-size: 7px;
+  font-size: var(--ui-type-size-caption);
   cursor: pointer;
 }
 .send-row i {
@@ -272,11 +272,11 @@ function createSend(): void {
   white-space: nowrap;
 }
 .send-row b {
-  font: 700 6px var(--font-utility);
+  font: var(--ui-type-weight-bold) var(--ui-type-size-micro) var(--ui-type-family-data);
 }
 .send-row output {
   color: var(--ui-domain-color-dceeff);
-  font: 6px var(--font-utility);
+  font: var(--ui-type-size-micro) var(--ui-type-family-data);
   text-align: right;
 }
 .send-row.disabled {
@@ -291,7 +291,7 @@ function createSend(): void {
   color: var(--ui-domain-color-929292);
   background: var(--ui-domain-color-4d4d4d);
   box-shadow: 0 1px 2px var(--ui-domain-color-00000038) inset;
-  font: 6px var(--font-utility);
+  font: var(--ui-type-size-micro) var(--ui-type-family-data);
   cursor: default;
 }
 .send-row.empty-slot {
@@ -334,12 +334,12 @@ function createSend(): void {
 }
 .send-popover header span {
   color: var(--accent);
-  font: 700 7px var(--font-utility);
-  letter-spacing: 0.14em;
+  font: var(--ui-type-weight-bold) var(--ui-type-size-caption) var(--ui-type-family-data);
+  letter-spacing: var(--ui-type-tracking-wider);
 }
 .send-popover header strong {
   margin-top: 3px;
-  font-size: 10px;
+  font-size: var(--ui-type-size-label);
 }
 .delete-send {
   display: grid;
@@ -356,7 +356,7 @@ function createSend(): void {
   display: grid;
   gap: 5px;
   color: var(--text-muted);
-  font-size: 8px;
+  font-size: var(--ui-type-size-control);
 }
 .send-popover label > span {
   display: flex;
@@ -370,7 +370,7 @@ function createSend(): void {
   border-radius: 3px;
   color: var(--text-primary);
   background: var(--daw-control);
-  font-size: 8px;
+  font-size: var(--ui-type-size-control);
 }
 .toggle-row {
   grid-template-columns: 1fr auto;
@@ -383,7 +383,7 @@ function createSend(): void {
   border-radius: 3px;
   color: var(--text-faint);
   background: var(--daw-control);
-  font: 700 7px var(--font-utility);
+  font: var(--ui-type-weight-bold) var(--ui-type-size-caption) var(--ui-type-family-data);
 }
 .toggle-row button.active,
 .tap-options button.active {
@@ -402,7 +402,7 @@ function createSend(): void {
   border-radius: 3px;
   color: var(--text-muted);
   background: var(--daw-control);
-  font: 700 7px var(--font-utility);
+  font: var(--ui-type-weight-bold) var(--ui-type-size-caption) var(--ui-type-family-data);
   cursor: pointer;
 }
 .parameter-row {
@@ -426,14 +426,14 @@ function createSend(): void {
 }
 .add-send-popover strong {
   grid-column: 1 / -1;
-  font-size: 10px;
+  font-size: var(--ui-type-size-label);
 }
 .add-send-popover button {
   border: 1px solid var(--ui-domain-color-4d8fc0);
   border-radius: 3px;
   color: var(--ui-domain-color-fff);
   background: var(--ui-domain-color-377aa8);
-  font-size: 8px;
+  font-size: var(--ui-type-size-control);
   cursor: pointer;
 }
 </style>

@@ -193,7 +193,7 @@ function dropInsert(event: DragEvent, slotOrder: number): void {
   min-width: 0;
   padding: 0 3px;
   overflow: hidden;
-  font-size: 8px;
+  font-size: var(--ui-type-size-control);
   text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -215,8 +215,8 @@ function dropInsert(event: DragEvent, slotOrder: number): void {
   box-shadow: 0 1px 2px var(--ui-domain-color-00000038) inset;
 }
 .plugin-row.empty span {
-  font: 6px var(--font-utility);
-  letter-spacing: 0.08em;
+  font: var(--ui-type-size-micro) var(--ui-type-family-data);
+  letter-spacing: var(--ui-type-tracking-wide);
 }
 .plugin-row.empty:not(.disabled):hover {
   border-color: var(--ui-domain-color-4e8dbf);

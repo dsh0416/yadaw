@@ -45,7 +45,7 @@ const props = withDefaults(
   border-radius: var(--ui-radius-sm);
   box-shadow: var(--ui-shadow-md);
   font-size: var(--ui-font-size-xs);
-  line-height: var(--ui-line-normal);
+  line-height: var(--ui-type-leading-normal);
 }
 
 .ui-tooltip kbd {

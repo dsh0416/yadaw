@@ -53,8 +53,8 @@ const attrs = useAttrs()
   gap: var(--ui-space-2);
   border: 1px solid transparent;
   border-radius: var(--ui-radius-md);
-  font-weight: var(--ui-weight-semibold);
-  line-height: var(--ui-line-tight);
+  font-weight: var(--ui-type-weight-semibold);
+  line-height: var(--ui-type-leading-tight);
   text-align: center;
   overflow-wrap: anywhere;
   cursor: pointer;

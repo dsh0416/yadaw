@@ -22,7 +22,7 @@ const meta = {
     template: `
       <YadawLogo
         v-bind="args"
-        style="--yadaw-logo-highlight:var(--ui-signal-midi);color:var(--ui-signal-audio);font-size:3rem"
+        style="--yadaw-logo-highlight:var(--ui-signal-midi);color:var(--ui-signal-audio);font-size:var(--ui-font-size-4xl)"
       />
     `
   })
@@ -39,10 +39,10 @@ export const OfficialVariants: Story = {
     template: `
       <div style="display:grid;gap:var(--ui-space-8)">
         <div v-for="variant in ['lockup', 'mark', 'wordmark']" :key="variant" style="display:grid;gap:var(--ui-space-2)">
-          <span style="color:var(--ui-color-text-subtle);font:var(--ui-font-size-xs) var(--ui-font-mono);text-transform:uppercase">{{ variant }}</span>
+          <span style="color:var(--ui-color-text-subtle);font:var(--ui-font-size-xs) var(--ui-type-family-data);text-transform:uppercase">{{ variant }}</span>
           <YadawLogo
             :variant="variant"
-            style="--yadaw-logo-highlight:var(--ui-signal-midi);color:var(--ui-signal-audio);font-size:3rem"
+            style="--yadaw-logo-highlight:var(--ui-signal-midi);color:var(--ui-signal-audio);font-size:var(--ui-font-size-4xl)"
           />
         </div>
       </div>

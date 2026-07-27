@@ -86,7 +86,7 @@ onMounted(() => void startup.load())
 :global(body) {
   color: var(--ui-color-text);
   background: var(--ui-color-canvas);
-  font-family: "Segoe UI Variable", "Aptos", "Helvetica Neue", sans-serif;
+  font-family: var(--ui-type-family-interface);
   user-select: none;
 }
 
@@ -176,28 +176,28 @@ onMounted(() => void startup.load())
   --yadaw-logo-highlight: var(--ui-signal-midi);
 
   color: var(--ui-signal-audio);
-  font-size: 30px;
+  font-size: var(--ui-font-size-2xl);
 }
 
 .brand p,
 .startup-status p,
 footer {
-  font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
-  letter-spacing: 0.13em;
+  font-family: var(--ui-type-family-data);
+  letter-spacing: var(--ui-type-tracking-wider);
 }
 
 .brand p {
   margin: 0 0 2px;
   color: var(--ui-color-text-subtle);
-  font-size: 7px;
-  font-weight: 700;
+  font-size: var(--ui-type-size-caption);
+  font-weight: var(--ui-type-weight-bold);
 }
 
 .brand h1 {
   margin: 0;
   color: var(--ui-color-text);
-  font-size: 23px;
-  line-height: 1;
+  font-size: var(--ui-type-size-page-title);
+  line-height: var(--ui-type-leading-none);
 }
 
 .brand > b {
@@ -206,11 +206,8 @@ footer {
   border: 1px solid var(--ui-color-border);
   color: var(--ui-color-text-subtle);
   background: color-mix(in srgb, var(--ui-color-canvas) 52%, transparent);
-  font:
-    600 7px "Cascadia Mono",
-    Consolas,
-    monospace;
-  letter-spacing: 0.08em;
+  font: var(--ui-type-weight-semibold) var(--ui-type-size-caption) var(--ui-type-family-data);
+  letter-spacing: var(--ui-type-tracking-wide);
 }
 
 .startup-status {
@@ -230,35 +227,34 @@ footer {
 .status-heading p {
   margin: 0 0 7px;
   color: var(--ui-signal-audio);
-  font-size: 7px;
-  font-weight: 700;
+  font-size: var(--ui-type-size-caption);
+  font-weight: var(--ui-type-weight-bold);
 }
 
 .status-heading h2 {
   max-width: 430px;
   margin: 0;
   overflow: hidden;
-  font-size: 19px;
-  font-weight: 520;
-  letter-spacing: -0.02em;
+  font-size: var(--ui-type-size-feature-title);
+  font-weight: var(--ui-type-weight-medium);
+  letter-spacing: var(--ui-type-tracking-tight);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .status-heading > strong {
   color: var(--ui-color-text);
-  font:
-    300 44px/0.9 "Segoe UI Variable",
-    sans-serif;
+  font: var(--ui-type-weight-regular) var(--ui-type-size-display) / var(--ui-type-leading-none)
+    var(--ui-type-family-interface);
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.07em;
+  letter-spacing: var(--ui-type-tracking-tighter);
 }
 
 .status-heading > strong small {
   margin-left: 3px;
   color: var(--ui-color-text-subtle);
-  font-size: 12px;
-  letter-spacing: 0;
+  font-size: var(--ui-font-size-xs);
+  letter-spacing: var(--ui-type-tracking-normal);
 }
 
 .progress-track {
@@ -313,16 +309,13 @@ footer {
   gap: 8px;
   min-height: 30px;
   color: var(--ui-color-text-subtle);
-  font:
-    8px "Cascadia Mono",
-    Consolas,
-    monospace;
+  font: var(--ui-type-size-control) var(--ui-type-family-data);
 }
 
 .progress-detail p {
   margin: 0;
   overflow: hidden;
-  letter-spacing: 0;
+  letter-spacing: var(--ui-type-tracking-normal);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -348,8 +341,8 @@ footer {
   padding-top: 12px;
   border-top: 1px solid var(--ui-color-border);
   color: var(--ui-color-text-subtle);
-  font-size: 6px;
-  font-weight: 700;
+  font-size: var(--ui-type-size-micro);
+  font-weight: var(--ui-type-weight-bold);
   z-index: var(--ui-z-local-content);
 }
 

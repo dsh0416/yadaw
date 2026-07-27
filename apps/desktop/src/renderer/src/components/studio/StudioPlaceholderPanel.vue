@@ -44,14 +44,14 @@ defineProps<{
 }
 .panel-heading span {
   color: var(--accent);
-  font: 700 7px var(--font-utility);
-  letter-spacing: 0.18em;
+  font: var(--ui-type-weight-bold) var(--ui-type-size-caption) var(--ui-type-family-data);
+  letter-spacing: var(--ui-type-tracking-widest);
 }
 .panel-heading strong {
   margin-top: 5px;
   color: var(--text-primary);
-  font-family: var(--font-display);
-  font-size: 13px;
+  font-family: var(--ui-type-family-display);
+  font-size: var(--ui-type-size-panel-title);
 }
 .placeholder-card {
   display: grid;
@@ -71,12 +71,12 @@ defineProps<{
   max-width: 150px;
   margin: 10px 0;
   color: var(--text-muted);
-  font-size: 8px;
-  line-height: 1.55;
+  font-size: var(--ui-type-size-control);
+  line-height: var(--ui-type-leading-normal);
 }
 .placeholder-card small {
   color: var(--text-faint);
-  font: 6px var(--font-utility);
-  letter-spacing: 0.16em;
+  font: var(--ui-type-size-micro) var(--ui-type-family-data);
+  letter-spacing: var(--ui-type-tracking-widest);
 }
 </style>

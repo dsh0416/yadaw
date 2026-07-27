@@ -105,7 +105,7 @@ function preview(parameter: "gainDb" | "pan", value: number): void {
   color: var(--text-muted);
   background: var(--daw-control);
   box-shadow: 0 1px 0 var(--ui-domain-color-ffffff12) inset;
-  font: 700 7px var(--font-utility);
+  font: var(--ui-type-weight-bold) var(--ui-type-size-caption) var(--ui-type-family-data);
   cursor: pointer;
 }
 

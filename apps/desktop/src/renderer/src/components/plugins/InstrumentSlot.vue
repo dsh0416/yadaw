@@ -90,12 +90,12 @@ function drop(event: DragEvent): void {
   align-items: center;
   justify-content: space-between;
   color: var(--ui-domain-color-73d6a2);
-  font: 700 7px var(--font-utility);
-  letter-spacing: 0.13em;
+  font: var(--ui-type-weight-bold) var(--ui-type-size-caption) var(--ui-type-family-data);
+  letter-spacing: var(--ui-type-tracking-wider);
 }
 .slot-heading b {
   color: var(--text-faint);
-  font-size: 6px;
+  font-size: var(--ui-type-size-micro);
 }
 .slot-body {
   display: grid;
@@ -134,12 +134,12 @@ function drop(event: DragEvent): void {
   white-space: nowrap;
 }
 .slot-body strong {
-  font-size: 8px;
+  font-size: var(--ui-type-size-control);
 }
 .slot-body small {
   margin-top: 2px;
   color: var(--text-faint);
-  font-size: 6px;
+  font-size: var(--ui-type-size-micro);
 }
 .slot-body button {
   display: grid;
@@ -156,11 +156,11 @@ function drop(event: DragEvent): void {
 .instrument-slot > p {
   margin: 0;
   color: var(--text-faint);
-  font-size: 8px;
-  line-height: 1.45;
+  font-size: var(--ui-type-size-control);
+  line-height: var(--ui-type-leading-normal);
 }
 .slot-error {
   color: var(--record);
-  font-size: 7px;
+  font-size: var(--ui-type-size-caption);
 }
 </style>

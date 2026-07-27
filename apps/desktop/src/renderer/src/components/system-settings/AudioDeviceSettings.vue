@@ -443,13 +443,13 @@ watch(canApply, (valid) => emit("validityChange", valid), { immediate: true })
 
 .backend-card-title b {
   color: var(--text-primary);
-  font-size: 10px;
+  font-size: var(--ui-type-size-label);
 }
 
 .backend-card-title small,
 .backend-card-copy em {
   color: var(--text-faint);
-  font-size: 7px;
+  font-size: var(--ui-type-size-caption);
 }
 
 .backend-card-title small {
@@ -460,7 +460,7 @@ watch(canApply, (valid) => emit("validityChange", valid), { immediate: true })
   display: block;
   margin-top: 8px;
   font-style: normal;
-  line-height: 1.4;
+  line-height: var(--ui-type-leading-compact);
 }
 
 .backend-empty {
@@ -471,7 +471,7 @@ watch(canApply, (valid) => emit("validityChange", valid), { immediate: true })
   border-radius: 7px;
   color: var(--text-muted);
   background: var(--surface-1);
-  font-size: 9px;
+  font-size: var(--ui-type-size-body-compact);
 }
 
 .device-field,
@@ -479,8 +479,8 @@ watch(canApply, (valid) => emit("validityChange", valid), { immediate: true })
   display: grid;
   gap: 7px;
   color: var(--text-muted);
-  font: 7px var(--font-utility);
-  letter-spacing: 0.08em;
+  font: var(--ui-type-size-caption) var(--ui-type-family-data);
+  letter-spacing: var(--ui-type-tracking-wide);
   text-transform: uppercase;
 }
 
@@ -504,8 +504,8 @@ watch(canApply, (valid) => emit("validityChange", valid), { immediate: true })
   color: var(--text-primary);
   background: var(--surface-1);
   cursor: pointer;
-  font-size: 9px;
-  letter-spacing: 0;
+  font-size: var(--ui-type-size-body-compact);
+  letter-spacing: var(--ui-type-tracking-normal);
   text-transform: none;
 }
 
@@ -522,7 +522,7 @@ watch(canApply, (valid) => emit("validityChange", valid), { immediate: true })
   color: var(--signal-cyan);
   background: transparent;
   cursor: pointer;
-  font-size: 8px;
+  font-size: var(--ui-type-size-control);
 }
 
 .refresh-button:disabled {
@@ -537,7 +537,7 @@ watch(canApply, (valid) => emit("validityChange", valid), { immediate: true })
 .discovery-error {
   margin: 8px 0 0;
   color: var(--record);
-  font-size: 8px;
+  font-size: var(--ui-type-size-control);
   overflow-wrap: anywhere;
 }
 
@@ -559,18 +559,18 @@ watch(canApply, (valid) => emit("validityChange", valid), { immediate: true })
 .latency-card span,
 .latency-card small {
   color: var(--text-faint);
-  font-size: 7px;
+  font-size: var(--ui-type-size-caption);
 }
 
 .latency-card strong {
   color: var(--signal-cyan);
-  font: 15px var(--font-utility);
+  font: var(--ui-type-size-view-title) var(--ui-type-family-data);
 }
 
 .apply-error {
   margin: 12px 0 0;
-  font-size: 9px;
-  line-height: 1.5;
+  font-size: var(--ui-type-size-body-compact);
+  line-height: var(--ui-type-leading-normal);
 }
 
 .apply-error {

@@ -237,7 +237,7 @@ function handleKeydown(event: KeyboardEvent): void {
 }
 .guide-label {
   fill: var(--text-faint);
-  font: 6px var(--font-utility);
+  font: var(--ui-type-size-micro) var(--ui-type-family-data);
   paint-order: stroke;
   stroke: var(--daw-lane);
   stroke-width: 3px;

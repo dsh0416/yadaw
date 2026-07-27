@@ -98,26 +98,27 @@ function createProject(): void {
 .new-project > span,
 .recent-heading > span {
   color: var(--accent);
-  font: 700 8px var(--font-utility);
-  letter-spacing: 0.18em;
+  font: var(--ui-type-weight-bold) var(--ui-type-size-control) var(--ui-type-family-data);
+  letter-spacing: var(--ui-type-tracking-widest);
 }
 .welcome-logo {
   --yadaw-logo-highlight: var(--signal-cyan);
 
-  font-size: 14px;
-  letter-spacing: normal;
+  font-size: var(--ui-font-size-sm);
+  letter-spacing: var(--ui-type-tracking-normal);
 }
 .welcome-brand h1 {
   margin: 18px 0 12px;
-  font: 560 34px/1.08 var(--font-display);
-  letter-spacing: -0.02em;
+  font: var(--ui-type-weight-semibold) var(--ui-type-size-hero) / var(--ui-type-leading-tight)
+    var(--ui-type-family-display);
+  letter-spacing: var(--ui-type-tracking-tight);
 }
 .welcome-brand p,
 .new-project p,
 .recent-projects > p {
   color: var(--text-muted);
-  font-size: 10px;
-  line-height: 1.6;
+  font-size: var(--ui-type-size-label);
+  line-height: var(--ui-type-leading-relaxed);
 }
 .new-project {
   display: grid;
@@ -126,7 +127,8 @@ function createProject(): void {
 }
 .new-project h2 {
   margin: 6px 0 0;
-  font: 560 21px/1.1 var(--font-display);
+  font: var(--ui-type-weight-semibold) var(--ui-type-size-page-title) / var(--ui-type-leading-tight)
+    var(--ui-type-family-display);
 }
 .new-project p {
   margin: 0;
@@ -159,7 +161,7 @@ function createProject(): void {
   border-color: var(--line-strong);
   color: var(--text-secondary);
   background: var(--surface-3);
-  font-size: 8px;
+  font-size: var(--ui-type-size-control);
 }
 .recent-item {
   display: grid;
@@ -172,13 +174,13 @@ function createProject(): void {
   cursor: pointer;
 }
 .recent-item b {
-  font-size: 10px;
+  font-size: var(--ui-type-size-label);
 }
 .recent-item small {
   margin-top: 4px;
   overflow: hidden;
   color: var(--text-faint);
-  font: 7px var(--font-utility);
+  font: var(--ui-type-size-caption) var(--ui-type-family-data);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -188,7 +190,7 @@ function createProject(): void {
   padding: 10px 18px;
   color: var(--ui-domain-color-ff9dab);
   background: var(--ui-domain-color-321923);
-  font-size: 9px;
+  font-size: var(--ui-type-size-body-compact);
 }
 @media (max-width: 800px) {
   .welcome-card {

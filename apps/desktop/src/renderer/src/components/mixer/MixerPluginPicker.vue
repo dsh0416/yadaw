@@ -96,12 +96,12 @@ function selectPlugin(descriptor: PluginDescriptor): void {
 }
 .plugin-picker header span {
   color: var(--accent);
-  font: 700 7px var(--font-utility);
-  letter-spacing: 0.14em;
+  font: var(--ui-type-weight-bold) var(--ui-type-size-caption) var(--ui-type-family-data);
+  letter-spacing: var(--ui-type-tracking-wider);
 }
 .plugin-picker header strong {
   margin-top: 3px;
-  font-size: 10px;
+  font-size: var(--ui-type-size-label);
 }
 .plugin-picker > label {
   display: grid;
@@ -124,7 +124,7 @@ function selectPlugin(descriptor: PluginDescriptor): void {
   outline: 0;
   color: var(--text-primary);
   background: transparent;
-  font-size: 8px;
+  font-size: var(--ui-type-size-control);
 }
 .plugin-list {
   display: grid;
@@ -154,21 +154,21 @@ function selectPlugin(descriptor: PluginDescriptor): void {
 }
 .plugin-list b {
   overflow: hidden;
-  font-size: 8px;
+  font-size: var(--ui-type-size-control);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .plugin-list small {
   overflow: hidden;
   color: var(--text-faint);
-  font: 6px var(--font-utility);
+  font: var(--ui-type-size-micro) var(--ui-type-family-data);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .plugin-list p {
   margin: 4px 2px;
   color: var(--text-faint);
-  font-size: 8px;
-  line-height: 1.45;
+  font-size: var(--ui-type-size-control);
+  line-height: var(--ui-type-leading-normal);
 }
 </style>

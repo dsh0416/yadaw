@@ -496,7 +496,7 @@ function handleFaderKeydown(event: KeyboardEvent): void {
   border-radius: 4px;
   color: var(--ui-domain-color-bcbcbc);
   background: linear-gradient(var(--ui-domain-color-666), var(--ui-domain-color-595959));
-  font-size: 8px;
+  font-size: var(--ui-type-size-control);
 }
 
 .automation-section button {
@@ -718,7 +718,7 @@ function handleFaderKeydown(event: KeyboardEvent): void {
   color: var(--text-primary);
   background: var(--surface-3);
   box-shadow: 0 4px 10px var(--shadow);
-  font: 7px var(--font-utility);
+  font: var(--ui-type-size-caption) var(--ui-type-family-data);
   text-align: center;
   transform: translate(-50%, 100%);
   white-space: nowrap;
@@ -746,7 +746,7 @@ function handleFaderKeydown(event: KeyboardEvent): void {
   border-radius: 2px;
   color: var(--text-primary);
   background: var(--daw-control);
-  font: 8px var(--font-utility);
+  font: var(--ui-type-size-control) var(--ui-type-family-data);
   text-align: center;
   writing-mode: horizontal-tb;
   direction: ltr;
@@ -775,7 +775,7 @@ function handleFaderKeydown(event: KeyboardEvent): void {
   border-radius: 2px;
   color: var(--text-faint);
   background: var(--daw-meter-well);
-  font: 8px var(--font-utility);
+  font: var(--ui-type-size-control) var(--ui-type-family-data);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   cursor: pointer;
@@ -839,7 +839,7 @@ function handleFaderKeydown(event: KeyboardEvent): void {
   box-shadow:
     0 1px 0 var(--ui-domain-color-ffffff12) inset,
     0 1px 2px var(--shadow);
-  font: 700 9px var(--font-utility);
+  font: var(--ui-type-weight-bold) var(--ui-type-size-body-compact) var(--ui-type-family-data);
   cursor: pointer;
 }
 
@@ -847,7 +847,7 @@ function handleFaderKeydown(event: KeyboardEvent): void {
   width: 21px;
   height: 19px;
   border-radius: 0;
-  font-size: 8px;
+  font-size: var(--ui-type-size-control);
 }
 
 .input-actions button:first-child {
@@ -937,8 +937,8 @@ function handleFaderKeydown(event: KeyboardEvent): void {
 
 .channel-name-editor {
   min-width: 0;
-  font-size: 9px;
-  font-weight: 700;
+  font-size: var(--ui-type-size-body-compact);
+  font-weight: var(--ui-type-weight-bold);
 }
 
 .channel-actions button:focus-visible,

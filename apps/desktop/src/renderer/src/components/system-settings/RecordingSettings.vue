@@ -91,7 +91,7 @@ function setBitDepth(event: Event): void {
   border-radius: 7px;
   color: var(--text-secondary);
   background: var(--surface-1);
-  font: 8px var(--font-utility);
+  font: var(--ui-type-size-control) var(--ui-type-family-data);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -125,8 +125,8 @@ function setBitDepth(event: Event): void {
   width: min(240px, 100%);
   gap: 7px;
   color: var(--text-muted);
-  font: 7px var(--font-utility);
-  letter-spacing: 0.06em;
+  font: var(--ui-type-size-caption) var(--ui-type-family-data);
+  letter-spacing: var(--ui-type-tracking-wide);
 }
 
 .recording-field select {
@@ -141,18 +141,18 @@ function setBitDepth(event: Event): void {
 
 .recovery-count b {
   color: var(--signal-cyan);
-  font: 24px var(--font-utility);
+  font: var(--ui-font-size-2xl) var(--ui-type-family-data);
 }
 
 .recovery-count span {
   color: var(--text-muted);
-  font-size: 9px;
+  font-size: var(--ui-type-size-body-compact);
 }
 
 .recording-error {
   padding: 11px;
   border-radius: 7px;
-  font-size: 9px;
+  font-size: var(--ui-type-size-body-compact);
 }
 
 .recording-error {

@@ -161,18 +161,18 @@ function setNumber(
   padding: 10px 12px;
   border-bottom: 1px solid var(--line-soft);
   color: var(--text-secondary);
-  font: 8px var(--font-utility);
+  font: var(--ui-type-size-control) var(--ui-type-family-data);
 }
 
 .runtime-strip span {
   color: var(--accent);
-  font-weight: 700;
-  letter-spacing: 0.13em;
+  font-weight: var(--ui-type-weight-bold);
+  letter-spacing: var(--ui-type-tracking-wider);
   text-transform: uppercase;
 }
 
 .runtime-strip b {
-  font-weight: 600;
+  font-weight: var(--ui-type-weight-semibold);
 }
 
 .runtime-strip i {
@@ -196,7 +196,7 @@ function setNumber(
   border-radius: 7px;
   color: var(--text-secondary);
   background: var(--surface-3);
-  font: 9px var(--font-utility);
+  font: var(--ui-type-size-body-compact) var(--ui-type-family-data);
 }
 
 .thread-control select,
@@ -207,7 +207,7 @@ function setNumber(
 
 .thread-control small {
   color: var(--text-faint);
-  font: 7px var(--font-utility);
+  font: var(--ui-type-size-caption) var(--ui-type-family-data);
 }
 
 .runtime-actions {
@@ -236,6 +236,6 @@ function setNumber(
   border-radius: 7px;
   color: var(--record);
   background: color-mix(in srgb, var(--record) 9%, var(--surface-1));
-  font-size: 9px;
+  font-size: var(--ui-type-size-body-compact);
 }
 </style>

@@ -64,12 +64,12 @@ const controlId = props.id ?? `ui-checkbox-${generatedId}`
 .ui-checkbox__copy {
   display: grid;
   gap: var(--ui-space-1);
-  line-height: var(--ui-line-normal);
+  line-height: var(--ui-type-leading-normal);
 }
 
 .ui-checkbox__label {
   font-size: var(--ui-font-size-sm);
-  font-weight: var(--ui-weight-medium);
+  font-weight: var(--ui-type-weight-medium);
 }
 
 .ui-checkbox__description {

@@ -239,8 +239,8 @@ function onRangeKeydown(event: KeyboardEvent): void {
   width: 25px;
   transform: translate(-50%, -50%);
   color: var(--text-primary);
-  font: 700 7px var(--font-utility);
-  letter-spacing: -0.03em;
+  font: var(--ui-type-weight-bold) var(--ui-type-size-caption) var(--ui-type-family-data);
+  letter-spacing: var(--ui-type-tracking-tight);
   text-align: center;
 }
 
@@ -256,7 +256,7 @@ function onRangeKeydown(event: KeyboardEvent): void {
   color: var(--text-primary);
   background: var(--surface-3);
   box-shadow: 0 4px 10px var(--shadow);
-  font: 7px var(--font-utility);
+  font: var(--ui-type-size-caption) var(--ui-type-family-data);
   text-align: center;
   transform: translateX(-50%);
   white-space: nowrap;

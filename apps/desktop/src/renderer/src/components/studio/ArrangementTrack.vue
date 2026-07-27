@@ -186,8 +186,8 @@ function relayClipDragStart(clipId: string, offsetPixels: number): void {
   overflow: hidden;
   padding: 5px 6px;
   color: var(--ui-domain-color-fff);
-  font-size: 9px;
-  font-weight: 650;
+  font-size: var(--ui-type-size-body-compact);
+  font-weight: var(--ui-type-weight-semibold);
   text-overflow: ellipsis;
   white-space: nowrap;
 }

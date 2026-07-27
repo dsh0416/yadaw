@@ -36,22 +36,23 @@ defineSlots<{
   display: block;
   margin-bottom: 7px;
   color: var(--accent);
-  font: 700 7px var(--font-utility);
-  letter-spacing: 0.14em;
+  font: var(--ui-type-weight-bold) var(--ui-type-size-caption) var(--ui-type-family-data);
+  letter-spacing: var(--ui-type-tracking-wider);
   text-transform: uppercase;
 }
 
 .settings-section-copy h3 {
   margin: 0 0 6px;
-  font: 600 11px var(--font-display);
-  letter-spacing: 0.01em;
+  font: var(--ui-type-weight-semibold) var(--ui-type-size-section-title)
+    var(--ui-type-family-display);
+  letter-spacing: var(--ui-type-tracking-wide);
 }
 
 .settings-section-copy p {
   margin: 0;
   color: var(--text-muted);
-  font-size: 9px;
-  line-height: 1.55;
+  font-size: var(--ui-type-size-body-compact);
+  line-height: var(--ui-type-leading-normal);
 }
 
 .settings-section-control {

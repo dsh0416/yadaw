@@ -50,8 +50,8 @@ function formatLatency(value: number | null): string {
   border-top: 1px solid var(--line-strong);
   color: var(--text-muted);
   background: var(--daw-statusbar);
-  font: 7px var(--font-utility);
-  letter-spacing: 0.02em;
+  font: var(--ui-type-size-caption) var(--ui-type-family-data);
+  letter-spacing: var(--ui-type-tracking-wide);
 }
 .statusbar > span {
   display: flex;

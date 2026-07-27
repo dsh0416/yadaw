@@ -126,8 +126,8 @@ function setAmplitude(event: Event): void {
 }
 .zoom-control > span {
   color: var(--text-faint);
-  font: 650 6px var(--font-utility);
-  letter-spacing: 0.1em;
+  font: var(--ui-type-weight-semibold) var(--ui-type-size-micro) var(--ui-type-family-data);
+  letter-spacing: var(--ui-type-tracking-wider);
 }
 .zoom-control input {
   --zoom-fill: 0%;

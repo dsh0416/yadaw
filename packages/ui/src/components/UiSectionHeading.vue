@@ -51,15 +51,15 @@ const props = withDefaults(
 .ui-section-heading__title {
   color: var(--ui-color-text);
   font-size: var(--ui-font-size-lg);
-  font-weight: var(--ui-weight-semibold);
-  line-height: var(--ui-line-tight);
+  font-weight: var(--ui-type-weight-semibold);
+  line-height: var(--ui-type-leading-tight);
 }
 
 .ui-section-heading__description {
   max-width: 48rem;
   color: var(--ui-color-text-muted);
   font-size: var(--ui-font-size-sm);
-  line-height: var(--ui-line-normal);
+  line-height: var(--ui-type-leading-normal);
 }
 
 .ui-section-heading__actions {

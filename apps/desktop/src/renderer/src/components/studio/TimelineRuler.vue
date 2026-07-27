@@ -74,7 +74,7 @@ function seekFromPointer(event: PointerEvent): void {
   padding: 8px 0 0 7px;
   border-left: 1px solid var(--daw-grid-line);
   color: var(--text-muted);
-  font: 8px var(--font-utility);
+  font: var(--ui-type-size-control) var(--ui-type-family-data);
   pointer-events: none;
 }
 .bar-mark::after {

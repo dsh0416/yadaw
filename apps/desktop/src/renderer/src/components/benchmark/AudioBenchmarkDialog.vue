@@ -222,8 +222,8 @@ function ipcRate(scenario: AudioIpcBenchmarkScenario): string {
 .ipc-diagnostics-note {
   margin: 10px 0 0;
   color: var(--text-faint);
-  font: 7px var(--font-utility);
-  letter-spacing: 0.02em;
+  font: var(--ui-type-size-caption) var(--ui-type-family-data);
+  letter-spacing: var(--ui-type-tracking-wide);
 }
 .ipc-diagnostics-note b {
   color: var(--signal-cyan);
@@ -231,8 +231,8 @@ function ipcRate(scenario: AudioIpcBenchmarkScenario): string {
 
 .kicker {
   color: var(--signal-cyan);
-  font: 700 7px var(--font-utility);
-  letter-spacing: 0.18em;
+  font: var(--ui-type-weight-bold) var(--ui-type-size-caption) var(--ui-type-family-data);
+  letter-spacing: var(--ui-type-tracking-widest);
 }
 
 .running-state,
@@ -247,7 +247,7 @@ function ipcRate(scenario: AudioIpcBenchmarkScenario): string {
 .running-state h3,
 .error-state h3 {
   margin: 24px 0 8px;
-  font: 600 22px var(--font-display);
+  font: var(--ui-type-weight-semibold) var(--ui-type-size-page-title) var(--ui-type-family-display);
 }
 
 .running-state > p,
@@ -255,8 +255,8 @@ function ipcRate(scenario: AudioIpcBenchmarkScenario): string {
   max-width: 510px;
   margin: 0;
   color: var(--text-muted);
-  font-size: 11px;
-  line-height: 1.7;
+  font-size: var(--ui-type-size-section-title);
+  line-height: var(--ui-type-leading-relaxed);
 }
 
 .intro-state {
@@ -268,8 +268,8 @@ function ipcRate(scenario: AudioIpcBenchmarkScenario): string {
   max-width: 38rem;
   margin: 0;
   color: var(--text-secondary);
-  font-size: 11px;
-  line-height: 1.65;
+  font-size: var(--ui-type-size-section-title);
+  line-height: var(--ui-type-leading-relaxed);
 }
 
 .intro-guidance {
@@ -283,15 +283,15 @@ function ipcRate(scenario: AudioIpcBenchmarkScenario): string {
 
 .intro-guidance strong {
   color: var(--warning);
-  font: 700 8px var(--font-utility);
+  font: var(--ui-type-weight-bold) var(--ui-type-size-control) var(--ui-type-family-data);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: var(--ui-type-tracking-wide);
 }
 
 .intro-guidance span {
   color: var(--text-muted);
-  font-size: 9px;
-  line-height: 1.5;
+  font-size: var(--ui-type-size-body-compact);
+  line-height: var(--ui-type-leading-normal);
 }
 
 .intro-actions {
@@ -323,7 +323,7 @@ function ipcRate(scenario: AudioIpcBenchmarkScenario): string {
 .primary-button.compact,
 .secondary-button {
   padding: 8px 12px;
-  font-size: 10px;
+  font-size: var(--ui-type-size-label);
 }
 
 .secondary-button {
@@ -419,14 +419,14 @@ function ipcRate(scenario: AudioIpcBenchmarkScenario): string {
   gap: 7px;
   margin-top: 8px;
   color: var(--ui-domain-color-f1f0ff);
-  font: 600 34px var(--font-display);
+  font: var(--ui-type-weight-semibold) var(--ui-type-size-hero) var(--ui-type-family-display);
 }
 
 .score-copy small {
   color: var(--text-muted);
-  font: 8px var(--font-utility);
+  font: var(--ui-type-size-control) var(--ui-type-family-data);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: var(--ui-type-tracking-wide);
 }
 
 .rating-copy {
@@ -435,14 +435,14 @@ function ipcRate(scenario: AudioIpcBenchmarkScenario): string {
 
 .rating-copy span {
   color: var(--accent-soft);
-  font: 600 15px var(--font-display);
+  font: var(--ui-type-weight-semibold) var(--ui-type-size-view-title) var(--ui-type-family-display);
 }
 
 .rating-copy p {
   margin: 6px 0 0;
   color: var(--text-muted);
-  font-size: 10px;
-  line-height: 1.6;
+  font-size: var(--ui-type-size-label);
+  line-height: var(--ui-type-leading-relaxed);
 }
 
 .rating-limited {
@@ -473,14 +473,14 @@ function ipcRate(scenario: AudioIpcBenchmarkScenario): string {
 
 .result-heading h3 {
   margin: 5px 0 0;
-  font: 600 13px var(--font-display);
+  font: var(--ui-type-weight-semibold) var(--ui-type-size-panel-title) var(--ui-type-family-display);
 }
 
 .result-heading > small {
   color: var(--text-faint);
-  font: 7px var(--font-utility);
+  font: var(--ui-type-size-caption) var(--ui-type-family-data);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: var(--ui-type-tracking-wide);
 }
 
 .scenario-card {
@@ -499,23 +499,25 @@ function ipcRate(scenario: AudioIpcBenchmarkScenario): string {
 
 .scenario-card h3 {
   margin: 0;
-  font: 600 11px var(--font-display);
+  font: var(--ui-type-weight-semibold) var(--ui-type-size-section-title)
+    var(--ui-type-family-display);
 }
 
 .scenario-card header p {
   margin: 3px 0 0;
   color: var(--text-faint);
-  font-size: 8px;
+  font-size: var(--ui-type-size-control);
 }
 
 .scenario-card header strong {
   color: var(--signal-cyan);
-  font: 600 18px var(--font-display);
+  font: var(--ui-type-weight-semibold) var(--ui-type-size-feature-title)
+    var(--ui-type-family-display);
 }
 
 .scenario-card header strong small {
   color: var(--text-faint);
-  font: 7px var(--font-utility);
+  font: var(--ui-type-size-caption) var(--ui-type-family-data);
   text-transform: uppercase;
 }
 
@@ -550,9 +552,9 @@ function ipcRate(scenario: AudioIpcBenchmarkScenario): string {
   flex-wrap: wrap;
   gap: 7px 14px;
   color: var(--text-muted);
-  font: 7px var(--font-utility);
+  font: var(--ui-type-size-caption) var(--ui-type-family-data);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: var(--ui-type-tracking-wide);
 }
 
 .ipc-heading {
@@ -581,7 +583,7 @@ function ipcRate(scenario: AudioIpcBenchmarkScenario): string {
 .ipc-row > span {
   padding: 8px 10px;
   color: var(--text-muted);
-  font: 8px var(--font-utility);
+  font: var(--ui-type-size-control) var(--ui-type-family-data);
   font-variant-numeric: tabular-nums;
 }
 
@@ -592,9 +594,9 @@ function ipcRate(scenario: AudioIpcBenchmarkScenario): string {
 
 .ipc-table-header > span {
   color: var(--text-faint);
-  font-size: 7px;
+  font-size: var(--ui-type-size-caption);
   text-transform: uppercase;
-  letter-spacing: 0.07em;
+  letter-spacing: var(--ui-type-tracking-wide);
 }
 
 .ipc-name strong,
@@ -604,14 +606,15 @@ function ipcRate(scenario: AudioIpcBenchmarkScenario): string {
 
 .ipc-name strong {
   color: var(--text-secondary);
-  font: 600 9px var(--font-display);
+  font: var(--ui-type-weight-semibold) var(--ui-type-size-body-compact)
+    var(--ui-type-family-display);
 }
 
 .ipc-name small {
   margin-top: 3px;
   color: var(--text-faint);
-  font-size: 7px;
-  line-height: 1.35;
+  font-size: var(--ui-type-size-caption);
+  line-height: var(--ui-type-leading-compact);
 }
 
 .ipc-row .ipc-rate {
@@ -636,13 +639,13 @@ function ipcRate(scenario: AudioIpcBenchmarkScenario): string {
 .report-footer span {
   max-width: 430px;
   color: var(--text-secondary);
-  font-size: 9px;
+  font-size: var(--ui-type-size-body-compact);
 }
 
 .report-footer small {
   margin-top: 4px;
   color: var(--text-faint);
-  font: 7px var(--font-utility);
+  font: var(--ui-type-size-caption) var(--ui-type-family-data);
 }
 
 .report-actions,

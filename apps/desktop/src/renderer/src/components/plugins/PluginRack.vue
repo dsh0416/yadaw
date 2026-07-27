@@ -94,8 +94,8 @@ function drop(event: DragEvent, index: number): void {
   justify-content: space-between;
   margin-bottom: 4px;
   color: var(--text-muted);
-  font: 700 7px var(--font-utility);
-  letter-spacing: 0.14em;
+  font: var(--ui-type-weight-bold) var(--ui-type-size-caption) var(--ui-type-family-data);
+  letter-spacing: var(--ui-type-tracking-wider);
 }
 .rack-heading b {
   display: grid;
@@ -105,7 +105,7 @@ function drop(event: DragEvent, index: number): void {
   border: 1px solid var(--line-soft);
   border-radius: 3px;
   color: var(--text-faint);
-  font-size: 6px;
+  font-size: var(--ui-type-size-micro);
 }
 .drop-zone {
   position: relative;
@@ -129,7 +129,7 @@ function drop(event: DragEvent, index: number): void {
 .plugin-rack > p {
   margin: 3px 0;
   color: var(--text-faint);
-  font-size: 8px;
-  line-height: 1.45;
+  font-size: var(--ui-type-size-control);
+  line-height: var(--ui-type-leading-normal);
 }
 </style>

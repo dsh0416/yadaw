@@ -76,7 +76,7 @@ const groupName = props.name ?? `ui-radio-${generatedId}`
   margin-bottom: var(--ui-space-2);
   color: var(--ui-color-text);
   font-size: var(--ui-font-size-sm);
-  font-weight: var(--ui-weight-semibold);
+  font-weight: var(--ui-type-weight-semibold);
 }
 
 .ui-radio-group__option {
@@ -103,12 +103,12 @@ const groupName = props.name ?? `ui-radio-${generatedId}`
 .ui-radio-group__label,
 .ui-radio-group__description {
   display: block;
-  line-height: var(--ui-line-normal);
+  line-height: var(--ui-type-leading-normal);
 }
 
 .ui-radio-group__label {
   font-size: var(--ui-font-size-sm);
-  font-weight: var(--ui-weight-medium);
+  font-weight: var(--ui-type-weight-medium);
 }
 
 .ui-radio-group__description {

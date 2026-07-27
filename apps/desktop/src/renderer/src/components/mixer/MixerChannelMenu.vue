@@ -79,7 +79,7 @@ const emit = defineEmits<{
   align-items: center;
   justify-content: space-between;
   color: var(--text-muted);
-  font-size: 8px;
+  font-size: var(--ui-type-size-control);
 }
 .channel-menu input {
   width: 36px;
@@ -99,7 +99,7 @@ const emit = defineEmits<{
   border-radius: 3px;
   color: var(--record);
   background: color-mix(in srgb, var(--record) 9%, var(--daw-control));
-  font-size: 8px;
+  font-size: var(--ui-type-size-control);
   cursor: pointer;
 }
 </style>

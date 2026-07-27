@@ -259,9 +259,9 @@ function startDrag(event: DragEvent): void {
   min-width: 0;
   flex: 1;
   overflow: hidden;
-  font-size: 9px;
-  font-weight: 650;
-  line-height: 13px;
+  font-size: var(--ui-type-size-body-compact);
+  font-weight: var(--ui-type-weight-semibold);
+  line-height: var(--ui-type-leading-normal);
   text-overflow: ellipsis;
   text-shadow: 0 1px 2px var(--ui-domain-color-000a);
 }

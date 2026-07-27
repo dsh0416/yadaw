@@ -75,16 +75,16 @@ const phaseLabel = computed(() => phaseLabels[props.operation.phase])
 }
 .operation-kicker {
   color: var(--ui-color-action);
-  font: var(--ui-weight-semibold) var(--ui-font-size-xs) var(--ui-font-mono);
-  letter-spacing: 0.12em;
+  font: var(--ui-type-weight-semibold) var(--ui-font-size-xs) var(--ui-type-family-data);
+  letter-spacing: var(--ui-type-tracking-wider);
   text-transform: uppercase;
 }
 .operation-status h3 {
   margin: 0;
   color: var(--ui-color-text);
   font-size: var(--ui-font-size-lg);
-  font-weight: var(--ui-weight-semibold);
-  line-height: var(--ui-line-tight);
+  font-weight: var(--ui-type-weight-semibold);
+  line-height: var(--ui-type-leading-tight);
 }
 .operation-status {
   display: flex;
@@ -94,7 +94,7 @@ const phaseLabel = computed(() => phaseLabels[props.operation.phase])
 }
 .operation-status span {
   color: var(--ui-color-text-muted);
-  font: var(--ui-weight-semibold) var(--ui-font-size-sm) var(--ui-font-mono);
+  font: var(--ui-type-weight-semibold) var(--ui-font-size-sm) var(--ui-type-family-data);
   font-variant-numeric: tabular-nums;
 }
 .operation-actions {

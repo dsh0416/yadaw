@@ -202,14 +202,14 @@ async function deleteChannel(channelId: string): Promise<void> {
 }
 .mixer-toolbar > div span {
   color: var(--accent);
-  font: 700 7px var(--font-utility);
-  letter-spacing: 0.17em;
+  font: var(--ui-type-weight-bold) var(--ui-type-size-caption) var(--ui-type-family-data);
+  letter-spacing: var(--ui-type-tracking-widest);
 }
 .mixer-toolbar > div strong {
   margin-top: 3px;
   color: var(--text-muted);
-  font-size: 9px;
-  font-weight: 600;
+  font-size: var(--ui-type-size-body-compact);
+  font-weight: var(--ui-type-weight-semibold);
 }
 .mixer-toolbar nav {
   display: flex;
@@ -225,7 +225,7 @@ async function deleteChannel(channelId: string): Promise<void> {
   border-radius: 4px;
   color: var(--text-secondary);
   background: var(--daw-control);
-  font-size: 7px;
+  font-size: var(--ui-type-size-caption);
   cursor: pointer;
 }
 .mixer-toolbar button:hover {
@@ -264,6 +264,6 @@ async function deleteChannel(channelId: string): Promise<void> {
   border-radius: 4px;
   color: var(--record);
   background: color-mix(in srgb, var(--record) 14%, var(--surface-1));
-  font-size: 8px;
+  font-size: var(--ui-type-size-control);
 }
 </style>

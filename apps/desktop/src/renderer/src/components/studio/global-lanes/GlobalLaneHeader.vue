@@ -92,7 +92,7 @@ function updateValue(event: Event): void {
   border-radius: 3px;
   color: var(--text-muted);
   background: var(--daw-control);
-  font: 8px var(--font-utility);
+  font: var(--ui-type-size-control) var(--ui-type-family-data);
   cursor: pointer;
 }
 .lane-toggle:hover {
@@ -114,13 +114,13 @@ function updateValue(event: Event): void {
 }
 .lane-copy span {
   color: var(--lane-color);
-  font: 700 6px var(--font-utility);
-  letter-spacing: 0.15em;
+  font: var(--ui-type-weight-bold) var(--ui-type-size-micro) var(--ui-type-family-data);
+  letter-spacing: var(--ui-type-tracking-wider);
 }
 .lane-copy strong {
   margin-top: 3px;
   color: var(--text-primary);
-  font: 10px var(--font-display);
+  font: var(--ui-type-size-label) var(--ui-type-family-display);
 }
 .collapsed .lane-copy {
   display: flex;
@@ -139,8 +139,8 @@ function updateValue(event: Event): void {
   display: block;
   margin-bottom: 4px;
   color: var(--text-faint);
-  font: 6px var(--font-utility);
-  letter-spacing: 0.1em;
+  font: var(--ui-type-size-micro) var(--ui-type-family-data);
+  letter-spacing: var(--ui-type-tracking-wider);
   text-transform: uppercase;
 }
 .value-control {
@@ -158,7 +158,7 @@ function updateValue(event: Event): void {
   border: 0;
   color: var(--text-primary);
   background: transparent;
-  font: 9px var(--font-utility);
+  font: var(--ui-type-size-body-compact) var(--ui-type-family-data);
   font-variant-numeric: tabular-nums;
   outline: none;
 }
@@ -167,8 +167,8 @@ function updateValue(event: Event): void {
   place-items: center;
   border-left: 1px solid var(--line-soft);
   color: var(--lane-color);
-  font: 700 6px var(--font-utility);
-  letter-spacing: 0.08em;
+  font: var(--ui-type-weight-bold) var(--ui-type-size-micro) var(--ui-type-family-data);
+  letter-spacing: var(--ui-type-tracking-wide);
 }
 .value-control:focus-within {
   border-color: var(--lane-color);

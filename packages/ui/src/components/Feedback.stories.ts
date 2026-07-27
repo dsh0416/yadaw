@@ -51,7 +51,7 @@ export const Empty: Story = {
     components: { UiButton, UiEmptyState },
     template: `
       <UiEmptyState title="No recent projects" description="Create a project or open an existing YADAW session to begin.">
-        <template #icon><span style="font-size:1.5rem">♪</span></template>
+        <template #icon><span style="font-size:var(--ui-type-size-page-title)">♪</span></template>
         <template #actions><UiButton variant="primary">Create project</UiButton><UiButton>Open project</UiButton></template>
       </UiEmptyState>
     `

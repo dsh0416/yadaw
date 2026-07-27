@@ -27,14 +27,12 @@ defineProps<{
   width: 18px;
   min-height: 0;
   color: var(--text-faint);
-  font-family:
-    "Bahnschrift Condensed", "Avenir Next Condensed", "Arial Narrow", "Liberation Sans Narrow",
-    sans-serif;
-  font-size: 6px;
+  font-family: var(--ui-type-family-display);
+  font-size: var(--ui-type-size-micro);
   font-stretch: condensed;
-  font-weight: 300;
+  font-weight: var(--ui-type-weight-regular);
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.01em;
+  letter-spacing: var(--ui-type-tracking-wide);
   pointer-events: none;
   user-select: none;
 }
@@ -58,14 +56,14 @@ defineProps<{
   top: 0;
   color: inherit;
   font: inherit;
-  line-height: 1;
+  line-height: var(--ui-type-leading-none);
   transform: translateY(-50%);
   white-space: nowrap;
 }
 
 .db-scale-mark.emphasis {
   color: var(--text-secondary);
-  font-weight: 500;
+  font-weight: var(--ui-type-weight-medium);
 }
 
 .db-scale-mark.emphasis i {

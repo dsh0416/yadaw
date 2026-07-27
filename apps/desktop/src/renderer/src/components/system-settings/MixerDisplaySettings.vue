@@ -91,8 +91,8 @@ onMounted(() => {
   width: min(420px, 100%);
   gap: 7px;
   color: var(--text-muted);
-  font: 7px var(--font-utility);
-  letter-spacing: 0.06em;
+  font: var(--ui-type-size-caption) var(--ui-type-family-data);
+  letter-spacing: var(--ui-type-tracking-wide);
 }
 
 .setting-field select {
@@ -103,7 +103,7 @@ onMounted(() => {
   border-radius: 7px;
   color: var(--text-primary);
   background: var(--surface-1);
-  font-size: 9px;
+  font-size: var(--ui-type-size-body-compact);
 }
 
 .setting-field select:focus-visible {
@@ -118,6 +118,6 @@ onMounted(() => {
 
 .display-error {
   color: var(--record);
-  font-size: 9px;
+  font-size: var(--ui-type-size-body-compact);
 }
 </style>

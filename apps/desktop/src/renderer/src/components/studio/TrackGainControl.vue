@@ -205,7 +205,7 @@ function reset(): void {
   color: var(--text-primary);
   background: var(--surface-3);
   box-shadow: 0 4px 10px var(--shadow);
-  font: 7px var(--font-utility);
+  font: var(--ui-type-size-caption) var(--ui-type-family-data);
   text-align: center;
   transform: translateX(-50%);
   white-space: nowrap;

@@ -73,11 +73,11 @@ const props = withDefaults(
   min-width: 0;
   gap: var(--ui-space-1);
   font-size: var(--ui-font-size-sm);
-  line-height: var(--ui-line-normal);
+  line-height: var(--ui-type-leading-normal);
 }
 
 .ui-status-notice__title {
-  font-weight: var(--ui-weight-semibold);
+  font-weight: var(--ui-type-weight-semibold);
 }
 
 .ui-status-notice__content {

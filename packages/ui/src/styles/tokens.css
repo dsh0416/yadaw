@@ -78,20 +78,66 @@
   --ui-control-lg: 3rem;
   --ui-target-min: 1.5rem;
 
-  --ui-font-sans:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --ui-font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  /* Typography foundations */
+  --ui-type-family-interface:
+    "Segoe UI Variable", Aptos, Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    sans-serif;
+  --ui-type-family-display:
+    "Bahnschrift Condensed", "Avenir Next Condensed", "Arial Narrow", "Liberation Sans Narrow",
+    sans-serif-condensed, sans-serif;
+  --ui-type-family-data: "Cascadia Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+
+  /* Dense application roles */
+  --ui-type-size-micro: 6px;
+  --ui-type-size-caption: 7px;
+  --ui-type-size-control: 8px;
+  --ui-type-size-body-compact: 9px;
+  --ui-type-size-label: 10px;
+  --ui-type-size-section-title: 11px;
+  --ui-type-size-panel-title: 13px;
+  --ui-type-size-view-title: 15px;
+  --ui-type-size-feature-title: 18px;
+  --ui-type-size-page-title: 22px;
+  --ui-type-size-hero: 34px;
+  --ui-type-size-display: 44px;
+
+  /* General UI scale */
   --ui-font-size-xs: 0.75rem;
   --ui-font-size-sm: 0.875rem;
   --ui-font-size-md: 1rem;
   --ui-font-size-lg: 1.125rem;
   --ui-font-size-xl: 1.375rem;
   --ui-font-size-2xl: 1.75rem;
-  --ui-line-tight: 1.2;
-  --ui-line-normal: 1.5;
-  --ui-weight-regular: 400;
-  --ui-weight-medium: 550;
-  --ui-weight-semibold: 650;
+  --ui-font-size-3xl: 2.25rem;
+  --ui-font-size-4xl: 3rem;
+  --ui-font-size-5xl: 4.5rem;
+
+  --ui-type-weight-regular: 400;
+  --ui-type-weight-medium: 500;
+  --ui-type-weight-semibold: 600;
+  --ui-type-weight-bold: 700;
+
+  --ui-type-leading-none: 1;
+  --ui-type-leading-tight: 1.2;
+  --ui-type-leading-compact: 1.35;
+  --ui-type-leading-normal: 1.5;
+  --ui-type-leading-relaxed: 1.6;
+
+  --ui-type-tracking-tighter: -0.08em;
+  --ui-type-tracking-tight: -0.02em;
+  --ui-type-tracking-normal: 0;
+  --ui-type-tracking-wide: 0.08em;
+  --ui-type-tracking-wider: 0.14em;
+  --ui-type-tracking-widest: 0.18em;
+
+  /* Compatibility aliases. New styles use the role tokens above. */
+  --ui-font-sans: var(--ui-type-family-interface);
+  --ui-font-mono: var(--ui-type-family-data);
+  --ui-line-tight: var(--ui-type-leading-tight);
+  --ui-line-normal: var(--ui-type-leading-normal);
+  --ui-weight-regular: var(--ui-type-weight-regular);
+  --ui-weight-medium: var(--ui-type-weight-medium);
+  --ui-weight-semibold: var(--ui-type-weight-semibold);
 
   --ui-shadow-sm: 0 1px 2px rgb(0 0 0 / 28%);
   --ui-shadow-md: 0 8px 24px rgb(0 0 0 / 34%);
@@ -100,6 +146,7 @@
   --ui-shadow-selected-outline: 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent) inset;
   --ui-shadow-highlight-inset: 0 1px 0 color-mix(in srgb, var(--ui-color-text) 14%, transparent)
     inset;
+  --ui-shadow-warning-ring: 0 0 0 2px color-mix(in srgb, var(--ui-color-warning) 15%, transparent);
   --ui-focus-width: 2px;
   --ui-focus-ring: 0 0 0 3px color-mix(in srgb, var(--ui-color-focus) 38%, transparent);
 
@@ -180,10 +227,10 @@
   --danger: var(--record);
   --success: var(--meter-green);
   --focus-ring: var(--ui-focus-ring);
-  --font-sans: var(--ui-font-sans);
-  --font-mono: var(--ui-font-mono);
-  --font-display: Bahnschrift, "Arial Narrow", sans-serif;
-  --font-utility: Consolas, "Cascadia Mono", monospace;
+  --font-sans: var(--ui-type-family-interface);
+  --font-mono: var(--ui-type-family-data);
+  --font-display: var(--ui-type-family-display);
+  --font-utility: var(--ui-type-family-data);
 }
 
 [data-theme="light"] {

@@ -36,8 +36,8 @@
   justify-content: flex-end;
   padding: 0 8px 0 4px;
   border-bottom: 1px solid var(--ui-domain-color-464646);
-  font: 700 7px var(--font-utility);
-  letter-spacing: 0.04em;
+  font: var(--ui-type-weight-bold) var(--ui-type-size-caption) var(--ui-type-family-data);
+  letter-spacing: var(--ui-type-tracking-wide);
   text-align: right;
 }
 </style>

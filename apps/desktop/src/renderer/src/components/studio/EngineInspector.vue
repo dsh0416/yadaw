@@ -101,14 +101,14 @@ const meterSegments = Array.from({ length: 12 }, (_, index) => index)
 }
 .panel-heading span {
   color: var(--accent);
-  font: 700 7px var(--font-utility);
-  letter-spacing: 0.18em;
+  font: var(--ui-type-weight-bold) var(--ui-type-size-caption) var(--ui-type-family-data);
+  letter-spacing: var(--ui-type-tracking-widest);
 }
 .panel-heading strong {
   margin-top: 5px;
   color: var(--text-primary);
-  font-family: var(--font-display);
-  font-size: 13px;
+  font-family: var(--ui-type-family-display);
+  font-size: var(--ui-type-size-panel-title);
 }
 .panel-heading > svg {
   color: var(--signal-cyan);
@@ -117,8 +117,8 @@ const meterSegments = Array.from({ length: 12 }, (_, index) => index)
 .panel-description {
   margin: 14px 0 17px;
   color: var(--text-muted);
-  font-size: 9px;
-  line-height: 1.55;
+  font-size: var(--ui-type-size-body-compact);
+  line-height: var(--ui-type-leading-normal);
 }
 .signal-card {
   padding: 11px;
@@ -136,12 +136,12 @@ const meterSegments = Array.from({ length: 12 }, (_, index) => index)
 .signal-card-header span,
 .gain-label {
   color: var(--text-muted);
-  font-size: 8px;
+  font-size: var(--ui-type-size-control);
 }
 .signal-card-header output,
 .gain-label output {
   color: var(--signal-cyan);
-  font: 9px var(--font-utility);
+  font: var(--ui-type-size-body-compact) var(--ui-type-family-data);
 }
 .meter {
   display: grid;
@@ -179,7 +179,7 @@ const meterSegments = Array.from({ length: 12 }, (_, index) => index)
   justify-content: space-between;
   margin-top: 5px;
   color: var(--text-faint);
-  font: 6px var(--font-utility);
+  font: var(--ui-type-size-micro) var(--ui-type-family-data);
 }
 .gain-label {
   margin-top: 17px;
@@ -202,8 +202,8 @@ const meterSegments = Array.from({ length: 12 }, (_, index) => index)
   align-items: center;
   gap: 6px;
   color: var(--text-muted);
-  font: 700 7px var(--font-utility);
-  letter-spacing: 0.12em;
+  font: var(--ui-type-weight-bold) var(--ui-type-size-caption) var(--ui-type-family-data);
+  letter-spacing: var(--ui-type-tracking-wider);
   text-transform: uppercase;
 }
 .inspector-panel dl {
@@ -215,7 +215,7 @@ const meterSegments = Array.from({ length: 12 }, (_, index) => index)
   gap: 10px;
   padding: 8px 0;
   border-bottom: 1px solid var(--line-soft);
-  font-size: 8px;
+  font-size: var(--ui-type-size-control);
 }
 .inspector-panel dt {
   color: var(--text-faint);
@@ -224,7 +224,7 @@ const meterSegments = Array.from({ length: 12 }, (_, index) => index)
   margin: 0;
   overflow: hidden;
   color: var(--text-secondary);
-  font: 7px var(--font-utility);
+  font: var(--ui-type-size-caption) var(--ui-type-family-data);
   text-align: right;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -236,7 +236,7 @@ const meterSegments = Array.from({ length: 12 }, (_, index) => index)
   border-radius: 6px;
   color: var(--record);
   background: color-mix(in srgb, var(--record) 12%, var(--surface-1));
-  font-size: 8px;
-  line-height: 1.5;
+  font-size: var(--ui-type-size-control);
+  line-height: var(--ui-type-leading-normal);
 }
 </style>

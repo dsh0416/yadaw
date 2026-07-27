@@ -80,7 +80,7 @@ const emit = defineEmits<{
 
 .window-control:focus-visible {
   border-color: var(--focus);
-  box-shadow: var(--focus-ring);
+  box-shadow: var(--ui-focus-ring);
 }
 
 .window-control--close:hover,

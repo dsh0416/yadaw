@@ -461,8 +461,8 @@ function coreSeverity(usagePercent: number | null): HealthSeverity {
   gap: 8px;
   color: var(--text-muted);
   background: transparent;
-  font: 7px var(--font-utility);
-  letter-spacing: 0.04em;
+  font: var(--ui-type-size-caption) var(--ui-type-family-data);
+  letter-spacing: var(--ui-type-tracking-wide);
   cursor: pointer;
 }
 .performance-trigger:hover {
@@ -535,13 +535,13 @@ function coreSeverity(usagePercent: number | null): HealthSeverity {
 }
 .performance-header > div:first-child > span {
   color: var(--accent);
-  font: 700 7px var(--font-utility);
+  font: var(--ui-type-weight-bold) var(--ui-type-size-caption) var(--ui-type-family-data);
   text-transform: uppercase;
-  letter-spacing: 0.16em;
+  letter-spacing: var(--ui-type-tracking-widest);
 }
 .performance-header > div:first-child > strong {
   margin-top: 4px;
-  font-size: 11px;
+  font-size: var(--ui-type-size-section-title);
 }
 .performance-header-actions {
   display: flex;
@@ -554,9 +554,9 @@ function coreSeverity(usagePercent: number | null): HealthSeverity {
   border-radius: 4px;
   color: var(--signal-cyan);
   background: color-mix(in srgb, var(--signal-cyan) 10%, var(--surface-2));
-  font: 7px var(--font-utility);
+  font: var(--ui-type-size-caption) var(--ui-type-family-data);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: var(--ui-type-tracking-wide);
 }
 .health-badge.warning {
   border-color: color-mix(in srgb, var(--warning) 45%, var(--line-strong));
@@ -622,13 +622,13 @@ function coreSeverity(usagePercent: number | null): HealthSeverity {
   display: block;
 }
 .performance-alert strong {
-  font-size: 8px;
+  font-size: var(--ui-type-size-control);
 }
 .performance-alert span {
   margin-top: 3px;
   color: var(--text-muted);
-  font-size: 7px;
-  line-height: 1.45;
+  font-size: var(--ui-type-size-caption);
+  line-height: var(--ui-type-leading-normal);
 }
 .performance-alert.critical span {
   color: var(--text-muted);
@@ -650,13 +650,13 @@ function coreSeverity(usagePercent: number | null): HealthSeverity {
   color: var(--text-secondary);
 }
 .section-heading strong {
-  font-size: 9px;
+  font-size: var(--ui-type-size-body-compact);
 }
 .section-heading > span {
   color: var(--text-faint);
-  font: 7px var(--font-utility);
+  font: var(--ui-type-size-caption) var(--ui-type-family-data);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: var(--ui-type-tracking-wide);
 }
 .core-bank {
   display: grid;
@@ -673,7 +673,7 @@ function coreSeverity(usagePercent: number | null): HealthSeverity {
 .core-value,
 .core-label {
   color: var(--text-faint);
-  font: 6px var(--font-utility);
+  font: var(--ui-type-size-micro) var(--ui-type-family-data);
 }
 .core-meter {
   position: relative;
@@ -718,7 +718,7 @@ function coreSeverity(usagePercent: number | null): HealthSeverity {
   border: 1px dashed var(--line-strong);
   border-radius: 6px;
   color: var(--text-faint);
-  font-size: 8px;
+  font-size: var(--ui-type-size-control);
   text-align: center;
 }
 .memory-readout {
@@ -742,7 +742,7 @@ function coreSeverity(usagePercent: number | null): HealthSeverity {
 }
 .memory-readout > span {
   color: var(--text-faint);
-  font: 7px var(--font-utility);
+  font: var(--ui-type-size-caption) var(--ui-type-family-data);
 }
 .storage-grid {
   display: grid;
@@ -766,19 +766,19 @@ function coreSeverity(usagePercent: number | null): HealthSeverity {
 }
 .storage-space > span {
   color: var(--text-faint);
-  font: 7px var(--font-utility);
+  font: var(--ui-type-size-caption) var(--ui-type-family-data);
   text-transform: uppercase;
-  letter-spacing: 0.07em;
+  letter-spacing: var(--ui-type-tracking-wide);
 }
 .storage-space > strong {
   margin-top: 5px;
   color: var(--text-secondary);
-  font: 9px var(--font-utility);
+  font: var(--ui-type-size-body-compact) var(--ui-type-family-data);
 }
 .storage-space > small {
   margin-top: 4px;
   color: var(--text-muted);
-  font-size: 7px;
+  font-size: var(--ui-type-size-caption);
 }
 .storage-space.warning {
   border-color: color-mix(in srgb, var(--warning) 42%, var(--line-strong));
@@ -809,12 +809,12 @@ function coreSeverity(usagePercent: number | null): HealthSeverity {
 }
 .audio-timing-grid dt {
   color: var(--text-faint);
-  font-size: 7px;
+  font-size: var(--ui-type-size-caption);
 }
 .audio-timing-grid dd {
   margin: 4px 0 0;
   color: var(--signal-cyan);
-  font: 8px var(--font-utility);
+  font: var(--ui-type-size-control) var(--ui-type-family-data);
   white-space: nowrap;
 }
 .audio-timing-grid .warning {
@@ -827,8 +827,8 @@ function coreSeverity(usagePercent: number | null): HealthSeverity {
   padding: 8px 15px;
   color: var(--text-faint);
   background: var(--surface-sunken);
-  font: 6px var(--font-utility);
-  line-height: 1.5;
+  font: var(--ui-type-size-micro) var(--ui-type-family-data);
+  line-height: var(--ui-type-leading-normal);
 }
 .performance-popover-arrow {
   fill: var(--line-strong);
@@ -847,13 +847,13 @@ function coreSeverity(usagePercent: number | null): HealthSeverity {
 }
 .ipc-diagnostics-grid dt {
   color: var(--text-faint);
-  font-size: 7px;
+  font-size: var(--ui-type-size-caption);
 }
 .ipc-diagnostics-grid dd {
   overflow: hidden;
   margin: 4px 0 0;
   color: var(--signal-cyan);
-  font: 8px var(--font-utility);
+  font: var(--ui-type-size-control) var(--ui-type-family-data);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -862,8 +862,8 @@ function coreSeverity(usagePercent: number | null): HealthSeverity {
   overflow: hidden;
   margin-top: 4px;
   color: var(--text-faint);
-  font: 6px var(--font-utility);
-  line-height: 1.35;
+  font: var(--ui-type-size-micro) var(--ui-type-family-data);
+  line-height: var(--ui-type-leading-compact);
   text-overflow: ellipsis;
   white-space: nowrap;
 }

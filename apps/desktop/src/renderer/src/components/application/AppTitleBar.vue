@@ -61,7 +61,7 @@ const emit = defineEmits<{
     color-mix(in srgb, var(--surface-2) 76%, var(--surface-1)),
     var(--surface-panel)
   );
-  box-shadow: 0 1px 0 color-mix(in srgb, var(--text-primary) 4%, transparent) inset;
+  box-shadow: var(--ui-shadow-highlight-inset);
   user-select: none;
 }
 
@@ -95,7 +95,7 @@ const emit = defineEmits<{
 
 .app-titlebar__logo {
   color: var(--accent);
-  font-size: 12px;
+  font-size: var(--ui-font-size-xs);
 }
 
 .app-titlebar__drag {
@@ -121,7 +121,7 @@ const emit = defineEmits<{
   gap: 6px;
   overflow: hidden;
   color: var(--text-muted);
-  font: 8px var(--font-utility);
+  font: var(--ui-type-size-control) var(--ui-type-family-data);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -132,7 +132,7 @@ const emit = defineEmits<{
   flex: none;
   border-radius: 50%;
   background: var(--warning);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--warning) 15%, transparent);
+  box-shadow: var(--ui-shadow-warning-ring);
 }
 
 .app-titlebar__project--empty {

@@ -32,7 +32,7 @@ import { RouterView } from "vue-router"
 }
 
 .app-route-enter-active {
-  z-index: 1;
+  z-index: var(--ui-z-local-content);
   transition:
     opacity 90ms linear,
     transform 110ms cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -40,7 +40,7 @@ import { RouterView } from "vue-router"
 }
 
 .app-route-leave-active {
-  z-index: 0;
+  z-index: var(--ui-z-local-base);
   pointer-events: none;
   transition:
     opacity 70ms linear,

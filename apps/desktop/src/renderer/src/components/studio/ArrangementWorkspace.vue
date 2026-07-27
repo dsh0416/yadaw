@@ -560,8 +560,8 @@ function updateSelectedTempo(beatsPerMinute: number): void {
   border-bottom: 1px solid var(--line-strong);
   color: var(--text-faint);
   background: var(--daw-ruler);
-  font: 700 7px var(--font-utility);
-  letter-spacing: 0.14em;
+  font: var(--ui-type-weight-bold) var(--ui-type-size-caption) var(--ui-type-family-data);
+  letter-spacing: var(--ui-type-tracking-wider);
 }
 .track-header {
   position: relative;
@@ -604,7 +604,7 @@ function updateSelectedTempo(beatsPerMinute: number): void {
   grid-column: 2;
   grid-row: 1;
   color: var(--text-muted);
-  font: 8px var(--font-utility);
+  font: var(--ui-type-size-control) var(--ui-type-family-data);
 }
 .track-copy {
   grid-column: 3;
@@ -614,7 +614,7 @@ function updateSelectedTempo(beatsPerMinute: number): void {
 .track-copy b {
   display: block;
   overflow: hidden;
-  font-size: 9px;
+  font-size: var(--ui-type-size-body-compact);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -657,7 +657,7 @@ function updateSelectedTempo(beatsPerMinute: number): void {
   border-radius: 5px;
   color: var(--record);
   background: color-mix(in srgb, var(--record) 14%, var(--surface-1));
-  font-size: 8px;
+  font-size: var(--ui-type-size-control);
 }
 @media (max-width: 1100px) {
   .timeline-grid {
@@ -666,7 +666,7 @@ function updateSelectedTempo(beatsPerMinute: number): void {
 }
 .track-name-editor {
   display: block;
-  font-size: 9px;
-  font-weight: 700;
+  font-size: var(--ui-type-size-body-compact);
+  font-weight: var(--ui-type-weight-bold);
 }
 </style>

@@ -141,23 +141,24 @@ function commitTempoEdit(): void {
 .tempo-input {
   height: 22px;
   color: var(--text-primary);
-  font: 500 17px/22px var(--font-utility);
-  letter-spacing: -0.04em;
+  font: var(--ui-type-weight-medium) var(--ui-type-size-feature-title) /
+    var(--ui-type-leading-compact) var(--ui-type-family-data);
+  letter-spacing: var(--ui-type-tracking-tight);
   text-shadow: 0 0 12px color-mix(in srgb, var(--signal-cyan) 23%, transparent);
 }
 .bar-cell strong {
-  font-size: 25px;
-  font-weight: 400;
-  letter-spacing: -0.08em;
+  font-size: var(--ui-font-size-2xl);
+  font-weight: var(--ui-type-weight-regular);
+  letter-spacing: var(--ui-type-tracking-tighter);
 }
 .beat-cell strong {
-  font-size: 20px;
+  font-size: var(--ui-type-size-feature-title);
 }
 .position-cell span,
 .lcd-cell span {
   color: var(--text-faint);
-  font: 600 6px var(--font-utility);
-  letter-spacing: 0.1em;
+  font: var(--ui-type-weight-semibold) var(--ui-type-size-micro) var(--ui-type-family-data);
+  letter-spacing: var(--ui-type-tracking-wider);
 }
 .tempo-value {
   width: 100%;

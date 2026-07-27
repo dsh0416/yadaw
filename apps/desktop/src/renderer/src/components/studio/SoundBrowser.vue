@@ -205,15 +205,15 @@ onMounted(() => void pluginStore.load())
 }
 .panel-heading span {
   color: var(--accent);
-  font: 700 7px var(--font-utility);
-  letter-spacing: 0.18em;
+  font: var(--ui-type-weight-bold) var(--ui-type-size-caption) var(--ui-type-family-data);
+  letter-spacing: var(--ui-type-tracking-widest);
 }
 .panel-heading strong {
   margin-top: 5px;
   color: var(--text-primary);
-  font-family: var(--font-display);
-  font-size: 13px;
-  letter-spacing: 0.01em;
+  font-family: var(--ui-type-family-display);
+  font-size: var(--ui-type-size-panel-title);
+  letter-spacing: var(--ui-type-tracking-wide);
 }
 .panel-heading > b {
   display: grid;
@@ -223,7 +223,7 @@ onMounted(() => void pluginStore.load())
   border: 1px solid var(--line-soft);
   border-radius: 5px;
   color: var(--text-faint);
-  font: 8px var(--font-utility);
+  font: var(--ui-type-size-control) var(--ui-type-family-data);
 }
 .search-field {
   display: grid;
@@ -247,7 +247,7 @@ onMounted(() => void pluginStore.load())
   outline: none;
   color: var(--text-primary);
   background: transparent;
-  font-size: 10px;
+  font-size: var(--ui-type-size-label);
 }
 .search-field input::placeholder {
   color: var(--text-faint);
@@ -258,7 +258,7 @@ onMounted(() => void pluginStore.load())
   border-radius: 4px;
   color: var(--text-muted);
   background: var(--daw-control);
-  font: 8px var(--font-utility);
+  font: var(--ui-type-size-control) var(--ui-type-family-data);
 }
 .browser-tabs {
   display: flex;
@@ -283,7 +283,7 @@ onMounted(() => void pluginStore.load())
   background: transparent;
   text-align: left;
   cursor: pointer;
-  font-size: 10px;
+  font-size: var(--ui-type-size-label);
 }
 .browser-tab:hover {
   color: var(--text-secondary);
@@ -307,7 +307,7 @@ onMounted(() => void pluginStore.load())
 }
 .browser-tab small {
   color: var(--text-faint);
-  font: 8px var(--font-utility);
+  font: var(--ui-type-size-control) var(--ui-type-family-data);
 }
 .panel-separator {
   width: 100%;
@@ -332,9 +332,9 @@ onMounted(() => void pluginStore.load())
 .library-heading {
   padding: 1px 6px 7px;
   color: var(--text-faint);
-  font: 700 7px var(--font-utility);
+  font: var(--ui-type-weight-bold) var(--ui-type-size-caption) var(--ui-type-family-data);
   text-transform: uppercase;
-  letter-spacing: 0.14em;
+  letter-spacing: var(--ui-type-tracking-wider);
 }
 .library-item {
   display: grid;
@@ -376,15 +376,15 @@ onMounted(() => void pluginStore.load())
 }
 .library-item-copy b {
   overflow: hidden;
-  font-size: 9px;
-  font-weight: 600;
+  font-size: var(--ui-type-size-body-compact);
+  font-weight: var(--ui-type-weight-semibold);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .library-item-copy small {
   margin-top: 3px;
   color: var(--text-faint);
-  font: 7px var(--font-utility);
+  font: var(--ui-type-size-caption) var(--ui-type-family-data);
 }
 .item-dot {
   width: 4px;
@@ -409,8 +409,8 @@ onMounted(() => void pluginStore.load())
 .library-empty {
   margin: 10px 6px;
   color: var(--text-faint);
-  font-size: 8px;
-  line-height: 1.5;
+  font-size: var(--ui-type-size-control);
+  line-height: var(--ui-type-leading-normal);
 }
 .library-empty.error {
   color: var(--record);
@@ -439,7 +439,7 @@ onMounted(() => void pluginStore.load())
   border-radius: 4px;
   color: var(--text-secondary);
   background: var(--daw-control);
-  font: 700 7px var(--font-utility);
+  font: var(--ui-type-weight-bold) var(--ui-type-size-caption) var(--ui-type-family-data);
   cursor: pointer;
 }
 .plugin-scan button:disabled {
@@ -447,6 +447,6 @@ onMounted(() => void pluginStore.load())
 }
 .plugin-scan small {
   color: var(--text-faint);
-  font: 7px var(--font-utility);
+  font: var(--ui-type-size-caption) var(--ui-type-family-data);
 }
 </style>

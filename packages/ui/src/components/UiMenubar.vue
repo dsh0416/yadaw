@@ -66,7 +66,8 @@ const emit = defineEmits<{
   border-radius: 4px;
   color: var(--text-muted);
   background: transparent;
-  font: 500 9px var(--font-sans);
+  font: var(--ui-type-weight-medium) var(--ui-type-size-body-compact)
+    var(--ui-type-family-interface);
   cursor: default;
   outline: none;
 }
@@ -105,7 +106,7 @@ const emit = defineEmits<{
   padding: 0 9px;
   border-radius: 4px;
   outline: none;
-  font-size: 9px;
+  font-size: var(--ui-type-size-body-compact);
   cursor: default;
 }
 
@@ -122,7 +123,7 @@ const emit = defineEmits<{
 .ui-menubar__shortcut {
   color: var(--text-faint);
   background: transparent;
-  font: 7px var(--font-utility);
+  font: var(--ui-type-size-caption) var(--ui-type-family-data);
 }
 
 .ui-menubar__item[data-highlighted] .ui-menubar__shortcut {

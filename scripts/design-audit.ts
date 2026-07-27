@@ -3,8 +3,9 @@ import { extname, join, relative, sep } from "node:path"
 
 const workspaceRoot = process.cwd()
 const rendererRoot = join(workspaceRoot, "apps/desktop/src/renderer/src")
+const designSystemRoot = join(workspaceRoot, "apps/design-system/src")
 const uiRoot = join(workspaceRoot, "packages/ui/src")
-const sourceExtensions = new Set([".css", ".ts", ".vue"])
+const sourceExtensions = new Set([".css", ".mdx", ".ts", ".vue"])
 const failures: string[] = []
 
 function collectFiles(directory: string): string[] {
@@ -20,9 +21,47 @@ function report(file: string, rule: string, detail: string): void {
 }
 
 const rendererFiles = collectFiles(rendererRoot)
+const designSystemFiles = collectFiles(designSystemRoot)
 const uiFiles = collectFiles(uiRoot)
 const rawColor = /#[0-9a-f]{3,8}\b|(?:rgb|hsl)a?\([^)]*\)/gi
 const numericZIndex = /z-index\s*:\s*-?\d+/gi
+const typographyProperty =
+  /\b(font-family|font-size|font-weight|line-height|letter-spacing)\s*:\s*([^;\r\n}"']+)/gi
+const typographyInlineProperty =
+  /\b(fontFamily|fontSize|fontWeight|lineHeight|letterSpacing)\s*:\s*["']([^"']+)["']/g
+const fontShorthand = /(?<!-)\bfont\s*:\s*([^;}\r\n]+)/gi
+const legacyTypographyToken =
+  /var\(--(?:font-(?:sans|mono|display|utility)|ui-font-(?:sans|mono)|ui-weight-[\w-]+|ui-line-[\w-]+)\)/g
+
+function auditTypography(file: string, source: string, isTokenSource = false): void {
+  if (isTokenSource) return
+
+  for (const match of source.matchAll(typographyProperty)) {
+    const value = match[2]?.trim() ?? ""
+    if (value !== "inherit" && !value.startsWith("var(") && !value.startsWith("clamp(var(")) {
+      report(file, "raw-typography", `${match[1]}: ${value}`)
+    }
+  }
+
+  for (const match of source.matchAll(typographyInlineProperty)) {
+    const value = match[2]?.trim() ?? ""
+    if (value !== "inherit" && !value.startsWith("var(") && !value.startsWith("clamp(var(")) {
+      report(file, "raw-typography", `${match[1]}: ${value}`)
+    }
+  }
+
+  for (const match of source.matchAll(fontShorthand)) {
+    const value = match[1]?.trim() ?? ""
+    const withoutTokens = value.replaceAll(/var\([^)]*\)/g, "")
+    if (value !== "inherit" && /(?:\d|\bnormal\b|["'])/.test(withoutTokens)) {
+      report(file, "raw-typography", `font: ${value}`)
+    }
+  }
+
+  for (const match of source.matchAll(legacyTypographyToken)) {
+    report(file, "legacy-typography-token", match[0])
+  }
+}
 
 for (const file of rendererFiles) {
   const source = readFileSync(file, "utf8")
@@ -42,6 +81,7 @@ for (const file of rendererFiles) {
   for (const match of source.matchAll(numericZIndex)) {
     report(file, "numeric-z-index", match[0])
   }
+  auditTypography(file, source)
 
   const normalized = file.split(sep).join("/")
   const domainShadow =
@@ -77,10 +117,15 @@ for (const file of uiFiles) {
       report(file, "numeric-z-index", match[0])
     }
   }
+  auditTypography(file, source, isTokenSource)
 
   if (/from\s+["'](?:pinia|vue-router|@yadaw\/contracts|electron)["']|window\.yadaw/.test(source)) {
     report(file, "ui-package-boundary", "UI primitives cannot depend on product state or runtime")
   }
+}
+
+for (const file of designSystemFiles) {
+  auditTypography(file, readFileSync(file, "utf8"))
 }
 
 const manifests = [
@@ -101,7 +146,7 @@ if (failures.length > 0) {
   process.exitCode = 1
 } else {
   console.log(
-    `Design audit passed: ${rendererFiles.length} renderer sources and ${uiFiles.length} UI sources checked.`
+    `Design audit passed: ${rendererFiles.length} renderer, ${uiFiles.length} UI, and ${designSystemFiles.length} design-system sources checked.`
   )
 }
 

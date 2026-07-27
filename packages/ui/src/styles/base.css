@@ -5,7 +5,10 @@
 }
 
 html {
-  font-family: var(--ui-font-sans);
+  font-family: var(--ui-type-family-interface);
+  font-size: var(--ui-font-size-md);
+  font-weight: var(--ui-type-weight-regular);
+  line-height: var(--ui-type-leading-normal);
   color: var(--ui-color-text);
   background: var(--ui-color-canvas);
   text-rendering: optimizeLegibility;

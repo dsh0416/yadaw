@@ -178,7 +178,7 @@ function save(): void {
 .save-status,
 .save-error {
   max-width: 280px;
-  font: 8px var(--font-utility);
+  font: var(--ui-type-size-control) var(--ui-type-family-data);
 }
 
 .save-status {

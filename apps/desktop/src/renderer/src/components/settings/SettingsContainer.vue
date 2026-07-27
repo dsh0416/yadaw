@@ -201,17 +201,17 @@ watch(
 
 .settings-title span {
   color: var(--accent);
-  font: 700 7px var(--font-utility);
-  letter-spacing: 0.17em;
+  font: var(--ui-type-weight-bold) var(--ui-type-size-caption) var(--ui-type-family-data);
+  letter-spacing: var(--ui-type-tracking-widest);
   text-transform: uppercase;
 }
 
 .settings-title h1 {
   margin: 3px 0 0;
-  font-family: var(--font-display);
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  font-family: var(--ui-type-family-display);
+  font-size: var(--ui-font-size-sm);
+  font-weight: var(--ui-type-weight-semibold);
+  letter-spacing: var(--ui-type-tracking-wide);
 }
 
 .settings-actions {
@@ -228,7 +228,7 @@ watch(
   color: var(--text-secondary);
   background: var(--surface-2);
   cursor: pointer;
-  font-size: 9px;
+  font-size: var(--ui-type-size-body-compact);
 }
 
 .settings-actions :deep(.settings-action-primary) {
@@ -262,8 +262,8 @@ watch(
 .settings-sidebar-label {
   margin: 0 9px 10px;
   color: var(--text-faint);
-  font: 700 7px var(--font-utility);
-  letter-spacing: 0.16em;
+  font: var(--ui-type-weight-bold) var(--ui-type-size-caption) var(--ui-type-family-data);
+  letter-spacing: var(--ui-type-tracking-widest);
   text-transform: uppercase;
 }
 
@@ -284,7 +284,7 @@ watch(
   color: var(--text-muted);
   background: transparent;
   text-align: left;
-  font-size: 9px;
+  font-size: var(--ui-type-size-body-compact);
   cursor: pointer;
 }
 
@@ -304,9 +304,9 @@ watch(
 .settings-category small,
 .settings-page-link em {
   color: var(--text-faint);
-  font: 6px var(--font-utility);
+  font: var(--ui-type-size-micro) var(--ui-type-family-data);
   font-style: normal;
-  letter-spacing: 0.08em;
+  letter-spacing: var(--ui-type-tracking-wide);
   text-transform: uppercase;
 }
 
@@ -316,8 +316,8 @@ watch(
   bottom: 18px;
   left: 20px;
   color: var(--text-faint);
-  font: 6px var(--font-utility);
-  letter-spacing: 0.06em;
+  font: var(--ui-type-size-micro) var(--ui-type-family-data);
+  letter-spacing: var(--ui-type-tracking-wide);
   text-transform: uppercase;
 }
 
@@ -332,16 +332,16 @@ watch(
 
 .settings-category-heading span {
   color: var(--accent);
-  font: 700 7px var(--font-utility);
-  letter-spacing: 0.17em;
+  font: var(--ui-type-weight-bold) var(--ui-type-size-caption) var(--ui-type-family-data);
+  letter-spacing: var(--ui-type-tracking-widest);
   text-transform: uppercase;
 }
 
 .settings-category-heading strong {
   margin-top: 6px;
   color: var(--text-primary);
-  font-family: var(--font-display);
-  font-size: 14px;
+  font-family: var(--ui-type-family-display);
+  font-size: var(--ui-font-size-sm);
 }
 
 .settings-page-link {
@@ -376,14 +376,14 @@ watch(
 }
 
 .settings-page-link b {
-  font-size: 9px;
+  font-size: var(--ui-type-size-body-compact);
 }
 
 .settings-page-link small {
   margin-top: 4px;
   color: var(--text-faint);
-  font-size: 7px;
-  line-height: 1.4;
+  font-size: var(--ui-type-size-caption);
+  line-height: var(--ui-type-leading-compact);
 }
 
 @media (max-width: 1120px) {
