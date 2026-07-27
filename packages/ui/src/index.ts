@@ -19,6 +19,7 @@ export { default as UiStatusNotice } from "./components/UiStatusNotice.vue"
 export { default as UiSurface } from "./components/UiSurface.vue"
 export { default as UiTextInput } from "./components/UiTextInput.vue"
 export { default as UiTooltip } from "./components/UiTooltip.vue"
+export { default as YadawLogo } from "./components/YadawLogo.vue"
 export { UI_DOMAIN_COLORS } from "./domainColors"
 
 export type {

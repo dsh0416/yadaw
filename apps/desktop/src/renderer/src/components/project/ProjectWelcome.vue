@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { ApplicationSettings, CreateProjectRequest } from "@yadaw/contracts"
+import { YadawLogo } from "@yadaw/ui"
 
 defineProps<{ settings: ApplicationSettings | null; busy: boolean; error: string }>()
 const emit = defineEmits<{ create: [request: CreateProjectRequest]; open: [path?: string] }>()
@@ -19,7 +20,7 @@ function createProject(): void {
   <main class="welcome-shell">
     <section class="welcome-card">
       <div class="welcome-brand">
-        <span>YADAW</span>
+        <YadawLogo class="welcome-logo" />
         <h1>Build a session that survives the unexpected.</h1>
         <p>
           Projects are self-contained PGlite archives. Recordings remain recoverable in swap until
@@ -93,12 +94,18 @@ function createProject(): void {
   grid-row: span 2;
   background: linear-gradient(155deg, var(--ui-domain-color-171735), var(--ui-domain-color-0d1620));
 }
-.welcome-brand > span,
+.welcome-logo,
 .new-project > span,
 .recent-heading > span {
   color: var(--accent);
   font: 700 8px var(--font-utility);
   letter-spacing: 0.18em;
+}
+.welcome-logo {
+  --yadaw-logo-highlight: var(--signal-cyan);
+
+  font-size: 14px;
+  letter-spacing: normal;
 }
 .welcome-brand h1 {
   margin: 18px 0 12px;

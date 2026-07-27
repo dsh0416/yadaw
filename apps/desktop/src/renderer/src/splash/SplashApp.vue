@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { YadawLogo } from "@yadaw/ui"
 import { computed, onMounted } from "vue"
 import { useStartupStore } from "../stores/startup"
 
@@ -20,15 +21,11 @@ onMounted(() => void startup.load())
 
     <header class="brand">
       <div class="brand-mark" aria-hidden="true">
-        <span />
-        <span />
-        <span />
-        <span />
-        <span />
+        <YadawLogo class="brand-mark-logo" variant="mark" decorative />
       </div>
       <div>
         <p>DIGITAL AUDIO WORKSTATION</p>
-        <h1>YADAW</h1>
+        <h1><YadawLogo variant="wordmark" /></h1>
       </div>
       <b>STARTUP / VST3 INDEX</b>
     </header>
@@ -175,20 +172,11 @@ onMounted(() => void startup.load())
   box-shadow: var(--ui-shadow-selected-outline);
 }
 
-.brand-mark span {
-  width: 2px;
-  height: 9px;
-  background: var(--ui-signal-audio);
-}
+.brand-mark-logo {
+  --yadaw-logo-highlight: var(--ui-signal-midi);
 
-.brand-mark span:nth-child(2),
-.brand-mark span:nth-child(4) {
-  height: 20px;
-}
-
-.brand-mark span:nth-child(3) {
-  height: 30px;
-  background: var(--ui-signal-midi);
+  color: var(--ui-signal-audio);
+  font-size: 30px;
 }
 
 .brand p,
@@ -207,9 +195,8 @@ footer {
 
 .brand h1 {
   margin: 0;
+  color: var(--ui-color-text);
   font-size: 23px;
-  font-stretch: condensed;
-  letter-spacing: 0.18em;
   line-height: 1;
 }
 

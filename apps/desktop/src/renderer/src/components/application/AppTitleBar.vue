@@ -4,7 +4,7 @@ import type {
   ApplicationWindowCommandId,
   DesktopPlatform
 } from "@yadaw/contracts"
-import type { UiMenubarMenu } from "@yadaw/ui"
+import { YadawLogo, type UiMenubarMenu } from "@yadaw/ui"
 import ApplicationMenuBar from "./ApplicationMenuBar.vue"
 import AppWindowControls from "./AppWindowControls.vue"
 
@@ -24,13 +24,8 @@ const emit = defineEmits<{
 <template>
   <header class="app-titlebar" :data-platform="platform">
     <div class="app-titlebar__safe-area">
-      <div class="app-titlebar__identity" aria-label="YADAW">
-        <span class="app-titlebar__mark" aria-hidden="true">
-          <i />
-          <i />
-          <i />
-        </span>
-        <b>YADAW</b>
+      <div class="app-titlebar__identity">
+        <YadawLogo class="app-titlebar__logo" />
       </div>
 
       <ApplicationMenuBar
@@ -95,39 +90,12 @@ const emit = defineEmits<{
   display: flex;
   align-items: center;
   flex: none;
-  gap: 6px;
   color: var(--text-secondary);
 }
 
-.app-titlebar__identity b {
-  font: 700 8px var(--font-utility);
-  letter-spacing: 0.14em;
-}
-
-.app-titlebar__mark {
-  display: flex;
-  align-items: end;
-  width: 12px;
-  height: 12px;
-  gap: 2px;
-}
-
-.app-titlebar__mark i {
-  width: 2px;
-  border-radius: 1px;
-  background: var(--accent);
-}
-
-.app-titlebar__mark i:nth-child(1) {
-  height: 6px;
-}
-
-.app-titlebar__mark i:nth-child(2) {
-  height: 11px;
-}
-
-.app-titlebar__mark i:nth-child(3) {
-  height: 8px;
+.app-titlebar__logo {
+  color: var(--accent);
+  font-size: 12px;
 }
 
 .app-titlebar__drag {
@@ -172,8 +140,8 @@ const emit = defineEmits<{
 }
 
 @media (max-width: 980px) {
-  .app-titlebar__identity b {
-    display: none;
+  .app-titlebar__logo {
+    --yadaw-logo-wordmark-display: none;
   }
 
   .app-titlebar__drag {

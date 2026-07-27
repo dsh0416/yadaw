@@ -8,7 +8,8 @@ import {
   UiSectionHeading,
   UiSelect,
   UiStatusNotice,
-  UiSurface
+  UiSurface,
+  YadawLogo
 } from "@yadaw/ui"
 
 const meta = {
@@ -24,7 +25,7 @@ type Story = StoryObj<typeof meta>
 
 export const Welcome: Story = {
   render: () => ({
-    components: { UiButton, UiSectionHeading, UiSurface },
+    components: { UiButton, UiSectionHeading, UiSurface, YadawLogo },
     data: () => ({
       projects: [
         { name: "Midnight Session", meta: "Modified 12 minutes ago · 48 kHz" },
@@ -35,7 +36,7 @@ export const Welcome: Story = {
       <main style="min-height:100vh;padding:clamp(1rem,6vw,5rem);background:var(--ui-color-canvas)">
         <div style="display:grid;max-width:68rem;margin:auto;gap:var(--ui-space-8)">
           <header>
-            <p style="margin:0;color:var(--ui-color-action);font-weight:var(--ui-weight-semibold);letter-spacing:.08em;text-transform:uppercase">YADAW</p>
+            <YadawLogo style="color:var(--ui-color-action);font-size:1rem" />
             <h1 style="margin:var(--ui-space-2) 0;font-size:clamp(2rem,7vw,4.5rem);line-height:1">Make the session audible.</h1>
             <p style="max-width:38rem;color:var(--ui-color-text-muted);line-height:var(--ui-line-normal)">Create a project or return to a recent session. Audio configuration remains available before opening the studio.</p>
           </header>
