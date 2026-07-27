@@ -293,6 +293,7 @@ describe("MixerChannelStrip", () => {
 
   it("places an instrument in Input while keeping Audio FX rows aligned", () => {
     const instrumentDescriptor: PluginDescriptor = {
+      source: { kind: "external" },
       classId: "synth",
       modulePath: "synth.vst3",
       name: "Synth",

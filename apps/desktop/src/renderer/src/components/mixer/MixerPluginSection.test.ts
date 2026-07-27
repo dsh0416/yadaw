@@ -22,6 +22,7 @@ const channel: MixerChannelState = {
 }
 
 const descriptor: PluginDescriptor = {
+  source: { kind: "external" },
   classId: "compressor",
   modulePath: "compressor.vst3",
   name: "Compressor",

@@ -609,6 +609,7 @@ export type MixerInputFormat = "mono" | "stereo"
 export type MixerSendTap = "pre" | "post" | "post-pan"
 export type PluginKind = "effect" | "instrument"
 export type PluginInstanceRole = "instrument" | "insert"
+export type PluginSource = { kind: "builtin"; id: string } | { kind: "external" }
 export type PluginCompatibility =
   | "compatible"
   | "unsupported-architecture"
@@ -626,6 +627,7 @@ export interface PluginAudioBusInfo {
 }
 
 export interface PluginDescriptor {
+  source: PluginSource
   classId: string
   modulePath: string
   name: string
@@ -638,6 +640,12 @@ export interface PluginDescriptor {
   hasEditor: boolean
   compatibility: PluginCompatibility
   compatibilityReason: string | null
+}
+
+export function pluginDescriptorKey(descriptor: PluginDescriptor): string {
+  return descriptor.source.kind === "builtin"
+    ? `${descriptor.source.id}:${descriptor.classId}`
+    : `${descriptor.modulePath}:${descriptor.classId}`
 }
 
 export interface PluginCatalogSnapshot {

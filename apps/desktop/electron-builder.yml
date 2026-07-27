@@ -24,6 +24,11 @@ win:
       to: yadaw-audio-host.exe
     - from: ../../target/release/yadaw-vst3-probe.exe
       to: yadaw-vst3-probe.exe
+    - from: ../../target/bundles
+      to: plugins
+      filter:
+        - YADAW Gain.vst3/**/*
+        - YADAW Sine.vst3/**/*
   target:
     - target: nsis
       arch: [x64]
@@ -37,6 +42,11 @@ mac:
       to: yadaw-audio-host
     - from: ../../target/release/yadaw-vst3-probe
       to: yadaw-vst3-probe
+    - from: ../../target/bundles
+      to: plugins
+      filter:
+        - YADAW Gain.vst3/**/*
+        - YADAW Sine.vst3/**/*
   target:
     - target: dmg
       arch: [x64, arm64]
@@ -47,6 +57,11 @@ linux:
       to: yadaw-audio-host
     - from: ../../target/release/yadaw-vst3-probe
       to: yadaw-vst3-probe
+    - from: ../../target/bundles
+      to: plugins
+      filter:
+        - YADAW Gain.vst3/**/*
+        - YADAW Sine.vst3/**/*
   target:
     - target: AppImage
       arch: [x64, arm64]

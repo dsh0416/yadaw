@@ -7,7 +7,7 @@
   "type": "module",
   "main": "./out/main/index.js",
   "scripts": {
-    "predev": "pnpm --filter @yadaw/dsp-node build:debug && pnpm --filter @yadaw/audio-host-client build:debug && cargo build -p yadaw-audio-host && cargo build -p yadaw-vst3-host --bin yadaw-vst3-probe",
+    "predev": "pnpm --filter @yadaw/dsp-node build:debug && pnpm --filter @yadaw/audio-host-client build:debug && cargo build -p yadaw-audio-host && cargo build -p yadaw-vst3-host --bin yadaw-vst3-probe && cargo truce build --vst3 --debug",
     "dev": "node scripts/dev.ts",
     "build": "pnpm build:main && pnpm build:preload && pnpm build:renderer",
     "build:main": "vite build --config vite.main.config.ts",
@@ -17,10 +17,11 @@
     "test:unit": "vitest run",
     "test:vst3-helper": "node scripts/vst3-helper-smoke.ts",
     "test:vst3-editor": "node scripts/vst3-editor-smoke.ts",
+    "test:builtin-vst3": "node scripts/builtin-vst3-smoke.ts",
     "test:ipc": "node scripts/ipc-smoke.ts",
-    "test:e2e": "pnpm build && playwright test",
-    "pack": "pnpm build && electron-builder --dir --publish never",
-    "dist": "pnpm build && electron-builder --publish never"
+    "test:e2e": "pnpm predev && pnpm build && playwright test",
+    "pack": "pnpm --workspace-root build:native && pnpm build && electron-builder --dir --publish never",
+    "dist": "pnpm --workspace-root build:native && pnpm build && electron-builder --publish never"
   },
   "dependencies": {
     "@electric-sql/pglite": "0.5.4",

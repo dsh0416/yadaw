@@ -15,6 +15,7 @@ import type {
   TransportSnapshot
 } from "@yadaw/contracts"
 import { type AudioHostGraph, AudioHostService } from "./audio-host-service"
+import type { PluginCatalogService } from "./plugin-catalog-service"
 import type { ProjectService } from "./project-service"
 
 export interface MidiSourceImport {
@@ -603,7 +604,8 @@ export class MixerService {
   constructor(
     userData: string,
     private readonly projects: ProjectService,
-    private readonly audioHost: AudioHostService | null = null
+    private readonly audioHost: AudioHostService | null = null,
+    private readonly plugins: PluginCatalogService | null = null
   ) {
     this.cacheDirectory = join(userData, "mixer-cache")
   }
@@ -619,7 +621,14 @@ export class MixerService {
 
   async snapshot(): Promise<MixerGraphSnapshot> {
     if (!this.projects.current) throw new Error("No project is open")
-    return this.projects.mixerSnapshot()
+    const graph = await this.projects.mixerSnapshot()
+    return {
+      ...graph,
+      plugins: graph.plugins.map((plugin) => ({
+        ...plugin,
+        descriptor: this.plugins?.resolveDescriptor(plugin.descriptor) ?? plugin.descriptor
+      }))
+    }
   }
   private async cacheAssets(graph: MixerGraphSnapshot): Promise<Map<string, string>> {
     await mkdir(this.cacheDirectory, { recursive: true })

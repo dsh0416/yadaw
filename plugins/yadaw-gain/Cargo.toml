@@ -1,0 +1,27 @@
+[package]
+name = "yadaw-gain"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[features]
+default = ["vst3"]
+vst3 = ["dep:truce-vst3"]
+rt-paranoid = ["truce/rt-paranoid"]
+
+[dependencies]
+truce.workspace = true
+truce-gui-types.workspace = true
+truce-iced.workspace = true
+truce-vst3 = { workspace = true, optional = true }
+yadaw-plugin-ui.workspace = true
+
+[dev-dependencies]
+truce-test.workspace = true
+
+[lints]
+workspace = true

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { shallowRef } from "vue"
-import { Power, SquareArrowOutUpRight, Trash2 } from "@lucide/vue"
+import { SquareArrowOutUpRight, Trash2 } from "@lucide/vue"
 import type { PluginDescriptor } from "@yadaw/contracts"
 import type { PluginInstanceState, PluginRuntimeStatus } from "@yadaw/contracts"
 import { PLUGIN_DRAG_TYPE, readPluginDrag } from "./plugin-drag"
@@ -12,7 +12,6 @@ defineProps<{
 
 const emit = defineEmits<{
   open: [instanceId: string]
-  toggle: [instanceId: string, enabled: boolean]
   remove: [instanceId: string]
   assign: [descriptor: PluginDescriptor]
 }>()
@@ -54,12 +53,6 @@ function drop(event: DragEvent): void {
         <strong>{{ plugin.descriptor.name }}</strong
         ><small>{{ plugin.descriptor.vendor }}</small>
       </div>
-      <button
-        :aria-label="`${plugin.enabled ? 'Bypass' : 'Enable'} instrument`"
-        @click="$emit('toggle', plugin.id, !plugin.enabled)"
-      >
-        <Power :size="11" />
-      </button>
       <button aria-label="Open instrument editor" @click="$emit('open', plugin.id)">
         <SquareArrowOutUpRight :size="11" />
       </button>
@@ -106,7 +99,7 @@ function drop(event: DragEvent): void {
 }
 .slot-body {
   display: grid;
-  grid-template-columns: 6px minmax(0, 1fr) repeat(3, 24px);
+  grid-template-columns: 6px minmax(0, 1fr) repeat(2, 24px);
   align-items: center;
   gap: 5px;
   min-height: 34px;

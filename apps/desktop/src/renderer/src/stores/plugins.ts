@@ -8,10 +8,11 @@ import type {
   PluginRuntimeStatus,
   PluginScanEvent
 } from "@yadaw/contracts"
+import { pluginDescriptorKey } from "@yadaw/contracts"
 import { useMixerStore } from "./mixer"
 
 const EMPTY_CATALOG: PluginCatalogSnapshot = {
-  scannerVersion: 1,
+  scannerVersion: 2,
   scanning: false,
   scannedAt: null,
   plugins: []
@@ -45,9 +46,7 @@ export const usePluginStore = defineStore("plugins", () => {
     const next = { ...runtime.value }
     for (const instance of mixerStore.graph.plugins) {
       const descriptor = catalog.value.plugins.find(
-        (plugin) =>
-          plugin.classId === instance.classId &&
-          plugin.modulePath === instance.descriptor.modulePath
+        (plugin) => pluginDescriptorKey(plugin) === pluginDescriptorKey(instance.descriptor)
       )
       if (!descriptor) {
         next[instance.id] = {

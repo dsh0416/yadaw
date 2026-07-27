@@ -8,6 +8,9 @@ members = [
     "crates/audio-host-client",
     "crates/vst3-host-sys",
     "crates/vst3-host",
+    "plugins/yadaw-plugin-ui",
+    "plugins/yadaw-gain",
+    "plugins/yadaw-sine",
 ]
 resolver = "3"
 
@@ -25,7 +28,7 @@ cpal = "0.18"
 criterion = { version = "0.8.2", features = ["csv_output", "html_reports"] }
 futures-util = "0.3"
 iced_core = "0.14.0"
-iced_renderer = { version = "0.14.0", features = ["tiny-skia"] }
+iced_renderer = { version = "0.14.0", features = ["wgpu-bare"] }
 iced_tiny_skia = "0.14.0"
 iced_widget = "0.14.0"
 iced_winit = "0.14.0"
@@ -46,6 +49,11 @@ serde_json = "1"
 thiserror = "2"
 tokio = { version = "1.53.0", default-features = false, features = ["macros", "rt-multi-thread", "sync", "time"] }
 tokio-util = { version = "0.7", default-features = false, features = ["rt"] }
+truce = { version = "=6.3.0", default-features = false }
+truce-gui-types = "=6.3.0"
+truce-iced = "=6.3.0"
+truce-test = "=6.3.0"
+truce-vst3 = "=6.3.0"
 winit = { version = "0.30.13", default-features = false, features = ["rwh_06", "x11", "wayland"] }
 zerocopy = { version = "0.8.55", features = ["derive"] }
 yadaw-dsp-core = { path = "crates/dsp-core" }
@@ -54,6 +62,7 @@ yadaw-ipc-transport = { path = "crates/ipc-transport" }
 yadaw-audio-host-client = { path = "crates/audio-host-client" }
 yadaw-vst3-host = { path = "crates/vst3-host" }
 yadaw-vst3-host-sys = { path = "crates/vst3-host-sys" }
+yadaw-plugin-ui = { path = "plugins/yadaw-plugin-ui" }
 
 [workspace.lints.rust]
 unexpected_cfgs = "warn"

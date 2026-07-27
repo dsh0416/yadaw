@@ -5,6 +5,7 @@ import { useMixerStore } from "./mixer"
 import { usePluginStore } from "./plugins"
 
 const effectDescriptor: PluginDescriptor = {
+  source: { kind: "external" },
   classId: "effect",
   modulePath: "effect.vst3",
   name: "Effect",

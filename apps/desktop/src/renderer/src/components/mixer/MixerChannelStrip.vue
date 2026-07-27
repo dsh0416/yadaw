@@ -241,7 +241,6 @@ function handleFaderKeydown(event: KeyboardEvent): void {
       :instrument-plugins="instrumentPlugins"
       @update-channel="emit('updateChannel', channel.id, $event)"
       @open-plugin="emit('openPlugin', $event)"
-      @toggle-plugin="(id, enabled) => emit('togglePlugin', id, enabled)"
       @remove-plugin="emit('removePlugin', $event)"
       @assign-instrument="emit('assignInstrument', channel.id, $event)"
     />

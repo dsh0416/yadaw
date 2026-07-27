@@ -5,6 +5,7 @@ import { PLUGIN_DRAG_TYPE } from "../plugins/plugin-drag"
 import MixerInstrumentInput from "./MixerInstrumentInput.vue"
 
 const descriptor: PluginDescriptor = {
+  source: { kind: "external" },
   classId: "synth",
   modulePath: "synth.vst3",
   name: "Synth",
@@ -49,8 +50,7 @@ describe("MixerInstrumentInput", () => {
     expect(wrapper.text()).not.toContain("MIDI")
     await wrapper.get('button[aria-label="Open Synth instrument editor"]').trigger("click")
     expect(wrapper.emitted("open")?.at(-1)).toEqual(["instrument-plugin"])
-    await wrapper.get('button[aria-label="Bypass Synth"]').trigger("click")
-    expect(wrapper.emitted("toggle")?.at(-1)).toEqual(["instrument-plugin", false])
+    expect(wrapper.find('button[aria-label="Bypass Synth"]').exists()).toBe(false)
     await wrapper.get('button[aria-label="Remove Synth"]').trigger("click")
     expect(wrapper.emitted("remove")?.at(-1)).toEqual(["instrument-plugin"])
   })

@@ -20,7 +20,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   updateChannel: [patch: MixerChannelPatch]
   openPlugin: [instanceId: string]
-  togglePlugin: [instanceId: string, enabled: boolean]
   removePlugin: [instanceId: string]
   assignInstrument: [descriptor: PluginDescriptor]
 }>()
@@ -66,7 +65,6 @@ function updateInput(index: number, event: Event): void {
       :runtime="pluginRuntime"
       :plugins="instrumentPlugins"
       @open="emit('openPlugin', $event)"
-      @toggle="(id, enabled) => emit('togglePlugin', id, enabled)"
       @remove="emit('removePlugin', $event)"
       @assign="emit('assignInstrument', $event)"
     />

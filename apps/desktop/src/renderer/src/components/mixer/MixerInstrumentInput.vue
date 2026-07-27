@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue"
-import { Power, Trash2 } from "@lucide/vue"
+import { Trash2 } from "@lucide/vue"
 import type { PluginDescriptor, PluginInstanceState, PluginRuntimeStatus } from "@yadaw/contracts"
 import { PLUGIN_DRAG_TYPE, readPluginDrag } from "../plugins/plugin-drag"
 import MixerPluginPicker from "./MixerPluginPicker.vue"
@@ -13,7 +13,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   open: [instanceId: string]
-  toggle: [instanceId: string, enabled: boolean]
   remove: [instanceId: string]
   assign: [descriptor: PluginDescriptor]
 }>()
@@ -58,12 +57,6 @@ function dropInstrument(event: DragEvent): void {
       {{ instrument.descriptor.name }}
     </button>
     <button
-      :aria-label="`${instrument.enabled ? 'Bypass' : 'Enable'} ${instrument.descriptor.name}`"
-      @click="emit('toggle', instrument.id, !instrument.enabled)"
-    >
-      <Power :size="10" />
-    </button>
-    <button
       :aria-label="`Remove ${instrument.descriptor.name}`"
       @click="emit('remove', instrument.id)"
     >
@@ -95,7 +88,7 @@ function dropInstrument(event: DragEvent): void {
 <style scoped>
 .instrument-input {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 22px 22px;
+  grid-template-columns: minmax(0, 1fr) 22px;
   align-items: center;
   width: 100%;
   height: 28px;

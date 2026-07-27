@@ -7,6 +7,7 @@ import { useMixerStore } from "../../stores/mixer"
 import MixerConsole from "./MixerConsole.vue"
 
 const descriptor: PluginDescriptor = {
+  source: { kind: "external" },
   classId: "effect",
   modulePath: "effect.vst3",
   name: "Effect",

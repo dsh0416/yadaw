@@ -1049,7 +1049,14 @@ void app.whenReady().then(async () => {
         "debug",
         `yadaw-vst3-probe${executableSuffix}`
       )
-  const plugins = new PluginCatalogService(app.getPath("userData"), probePath)
+  const builtinPluginDirectory = app.isPackaged
+    ? join(process.resourcesPath, "plugins")
+    : resolve(app.getAppPath(), "..", "..", "target", "bundles")
+  const plugins = new PluginCatalogService(
+    app.getPath("userData"),
+    probePath,
+    builtinPluginDirectory
+  )
   await plugins.initialize()
   const audioHostPath = app.isPackaged
     ? join(process.resourcesPath, `yadaw-audio-host${executableSuffix}`)
@@ -1078,7 +1085,7 @@ void app.whenReady().then(async () => {
   audioHostService.start()
   projectService = new ProjectService(app.getPath("userData"), settings)
   const operations = new OperationService()
-  const mixer = new MixerService(app.getPath("userData"), projectService, audioHostService)
+  const mixer = new MixerService(app.getPath("userData"), projectService, audioHostService, plugins)
   plugins.attachRuntime({
     resolveInstance: async (instanceId) => {
       const graph = await mixer.snapshot()

@@ -6,6 +6,7 @@ node = "26"
 pnpm = "11.9.0"
 rust = "1.97"
 cmake = "3.31.12"
+"cargo:cargo-truce" = "6.1.3"
 
 [tools."github:llvm/llvm-project"]
 version = "llvmorg-22.1"
@@ -46,7 +47,7 @@ run = "pnpm build"
 [tasks.pack]
 description = "Create an unpacked Electron application"
 depends = ["install"]
-run = "pnpm --filter @yadaw/desktop pack"
+run = "pnpm --filter @yadaw/desktop run pack"
 
 [tasks.format]
 description = "Format TypeScript, JavaScript, Vue, configuration, docs, and Rust"
@@ -71,4 +72,5 @@ run = [
   "pnpm --filter @yadaw/audio-host-client build",
   "cargo build -p yadaw-audio-host --release",
   "cargo build -p yadaw-vst3-host --bin yadaw-vst3-probe --release",
+  "cargo truce build --vst3",
 ]

@@ -2,7 +2,7 @@
 import { computed, onMounted, shallowRef } from "vue"
 import { AudioWaveform, Piano, Plug, Search, SlidersHorizontal } from "@lucide/vue"
 import type { ProjectAssetSummary as Asset } from "@yadaw/contracts"
-import type { PluginDescriptor } from "@yadaw/contracts"
+import { pluginDescriptorKey, type PluginDescriptor } from "@yadaw/contracts"
 import { usePluginStore } from "../../stores/plugins"
 import { writePluginDrag } from "../plugins/plugin-drag"
 
@@ -88,7 +88,7 @@ onMounted(() => void pluginStore.load())
             <div class="library-heading">VST3 instruments</div>
             <button
               v-for="plugin in instruments"
-              :key="plugin.classId"
+              :key="pluginDescriptorKey(plugin)"
               class="library-item"
               draggable="true"
               @dragstart="writePluginDrag($event, { source: 'catalog', descriptor: plugin })"
@@ -97,7 +97,10 @@ onMounted(() => void pluginStore.load())
               <span class="library-item-icon"><Piano :size="13" /></span
               ><span class="library-item-copy"
                 ><b>{{ plugin.name }}</b
-                ><small>{{ plugin.vendor }} · {{ plugin.category }}</small></span
+                ><small
+                  >{{ plugin.source.kind === "builtin" ? "Built-in · " : "" }}{{ plugin.vendor }} ·
+                  {{ plugin.category }}</small
+                ></span
               ><span class="item-dot compatible" />
             </button>
             <p v-if="!instruments.length" class="library-empty">
@@ -112,7 +115,7 @@ onMounted(() => void pluginStore.load())
             <div class="library-heading">VST3 audio effects</div>
             <button
               v-for="plugin in effects"
-              :key="plugin.classId"
+              :key="pluginDescriptorKey(plugin)"
               class="library-item"
               draggable="true"
               @dragstart="writePluginDrag($event, { source: 'catalog', descriptor: plugin })"
@@ -121,7 +124,10 @@ onMounted(() => void pluginStore.load())
               <span class="library-item-icon"><SlidersHorizontal :size="13" /></span
               ><span class="library-item-copy"
                 ><b>{{ plugin.name }}</b
-                ><small>{{ plugin.vendor }} · {{ plugin.category }}</small></span
+                ><small
+                  >{{ plugin.source.kind === "builtin" ? "Built-in · " : "" }}{{ plugin.vendor }} ·
+                  {{ plugin.category }}</small
+                ></span
               ><span class="item-dot compatible" />
             </button>
             <p v-if="!effects.length" class="library-empty">No compatible VST3 effects found.</p>
@@ -158,13 +164,16 @@ onMounted(() => void pluginStore.load())
             <div class="library-heading">Plugin catalog</div>
             <article
               v-for="plugin in allPlugins"
-              :key="`${plugin.modulePath}:${plugin.classId}`"
+              :key="pluginDescriptorKey(plugin)"
               class="library-item plugin-record"
             >
               <span class="library-item-icon"><Plug :size="13" /></span
               ><span class="library-item-copy"
                 ><b>{{ plugin.name }}</b
-                ><small>{{ plugin.vendor }} · {{ plugin.compatibility }}</small></span
+                ><small
+                  >{{ plugin.source.kind === "builtin" ? "Built-in · " : "" }}{{ plugin.vendor }} ·
+                  {{ plugin.compatibility }}</small
+                ></span
               ><span :class="['item-dot', plugin.compatibility]" />
             </article>
             <p v-if="pluginStore.error" class="library-empty error">{{ pluginStore.error }}</p>

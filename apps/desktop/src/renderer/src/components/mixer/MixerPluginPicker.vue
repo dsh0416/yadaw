@@ -2,7 +2,7 @@
 import { computed, shallowRef, watch } from "vue"
 import { Search } from "@lucide/vue"
 import { UiPopover } from "@yadaw/ui"
-import type { PluginDescriptor } from "@yadaw/contracts"
+import { pluginDescriptorKey, type PluginDescriptor } from "@yadaw/contracts"
 
 const props = defineProps<{
   plugins: PluginDescriptor[]
@@ -57,13 +57,16 @@ function selectPlugin(descriptor: PluginDescriptor): void {
       <div class="plugin-list">
         <button
           v-for="plugin in filteredPlugins"
-          :key="`${plugin.modulePath}:${plugin.classId}`"
+          :key="pluginDescriptorKey(plugin)"
           type="button"
           :aria-label="`Add ${plugin.name}`"
           @click="selectPlugin(plugin)"
         >
           <b>{{ plugin.name }}</b>
-          <small>{{ plugin.vendor }} · {{ plugin.category }}</small>
+          <small
+            >{{ plugin.source.kind === "builtin" ? "Built-in · " : "" }}{{ plugin.vendor }} ·
+            {{ plugin.category }}</small
+          >
         </button>
         <p v-if="filteredPlugins.length === 0">
           {{ plugins.length === 0 ? emptyMessage : "No plug-ins match this search." }}

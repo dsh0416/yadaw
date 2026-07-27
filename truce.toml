@@ -1,0 +1,23 @@
+[vendor]
+name = "YADAW"
+id = "dev.yadaw"
+url = "https://github.com/dsh0416/yadaw"
+au_manufacturer = "YDAW"
+
+[[plugin]]
+name = "YADAW Gain"
+bundle_id = "gain"
+crate = "yadaw-gain"
+category = "effect"
+fourcc = "YDGN"
+au_tag = "Effects"
+vst3_subcategory = "Tools"
+
+[[plugin]]
+name = "YADAW Sine"
+bundle_id = "sine"
+crate = "yadaw-sine"
+category = "instrument"
+fourcc = "YDSN"
+au_tag = "Synthesizer"
+vst3_subcategory = "Synth"

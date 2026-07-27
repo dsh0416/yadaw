@@ -33,8 +33,25 @@ interface PluginRuntime {
   closeEditor(instanceId: string): Promise<void>
 }
 
-const SCANNER_VERSION = 1
+const SCANNER_VERSION = 2
 const execFileAsync = promisify(execFile)
+
+const BUILTIN_PLUGINS = [
+  {
+    id: "dev.yadaw.gain",
+    bundleName: "YADAW Gain.vst3",
+    classId: "59CABE21E605B9C9EE928D6C3B236BBF",
+    name: "YADAW Gain",
+    kind: "effect" as const
+  },
+  {
+    id: "dev.yadaw.sine",
+    bundleName: "YADAW Sine.vst3",
+    classId: "F7BC8CA3E5E8B9C9EE928D7114950FBF",
+    name: "YADAW Sine",
+    kind: "instrument" as const
+  }
+] as const
 
 type ScanListener = (event: PluginScanEvent) => void
 
@@ -128,6 +145,7 @@ function descriptorsFromModuleInfo(
   if (classes.length === 0) {
     return [
       {
+        source: { kind: "external" },
         classId: `unprobed:${bundlePath}`,
         modulePath: bundlePath,
         name: fallbackName,
@@ -155,6 +173,7 @@ function descriptorsFromModuleInfo(
       : "effect"
     return [
       {
+        source: { kind: "external" },
         classId: textValue(classInfo["CID"], `unprobed:${bundlePath}`),
         modulePath: bundlePath,
         name: textValue(classInfo["Name"], fallbackName),
@@ -258,6 +277,7 @@ function descriptorFromProbe(
     compatibilityReason = "Effect requires one stereo main input and output"
   }
   return {
+    source: { kind: "external" },
     classId,
     modulePath: bundlePath,
     name: textValue(value.name, basename(bundlePath).replace(/\.vst3$/i, "")),
@@ -314,7 +334,8 @@ export class PluginCatalogService {
 
   constructor(
     userData: string,
-    private readonly probePath: string
+    private readonly probePath: string,
+    private readonly builtinDirectory: string
   ) {
     this.catalogPath = join(userData, "plugin-catalog.json")
   }
@@ -333,6 +354,79 @@ export class PluginCatalogService {
     } catch {
       // The catalog is a rebuildable cache.
     }
+    await this.refreshBuiltins()
+  }
+
+  private async refreshBuiltins(): Promise<void> {
+    const external = this.catalog.plugins.filter((plugin) => plugin.source.kind === "external")
+    const builtins: PluginDescriptor[] = []
+    for (const spec of BUILTIN_PLUGINS) {
+      const modulePath = join(this.builtinDirectory, spec.bundleName)
+      try {
+        const descriptors = await this.probe(modulePath)
+        const descriptor = descriptors.find((candidate) => candidate.classId === spec.classId)
+        if (!descriptor) throw new Error(`Built-in Class ID changed; expected ${spec.classId}`)
+        builtins.push({
+          ...descriptor,
+          source: { kind: "builtin", id: spec.id },
+          vendor: descriptor.vendor === "Unknown vendor" ? "YADAW" : descriptor.vendor
+        })
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : "Built-in VST3 probe failed"
+        const inputBus = {
+          direction: "input" as const,
+          kind: "main" as const,
+          name: "Stereo In",
+          channels: 2,
+          defaultActive: true
+        }
+        const outputBus = {
+          direction: "output" as const,
+          kind: "main" as const,
+          name: "Stereo Out",
+          channels: 2,
+          defaultActive: true
+        }
+        builtins.push({
+          source: { kind: "builtin", id: spec.id },
+          classId: spec.classId,
+          modulePath,
+          name: spec.name,
+          vendor: "YADAW",
+          version: "",
+          category: spec.kind === "instrument" ? "Instrument|Synth" : "Fx",
+          kind: spec.kind,
+          architecture: process.arch,
+          buses: spec.kind === "instrument" ? [outputBus] : [inputBus, outputBus],
+          hasEditor: true,
+          compatibility: "load-error",
+          compatibilityReason: reason
+        })
+      }
+    }
+    const builtinClassIds = new Set(builtins.map((plugin) => plugin.classId))
+    this.catalog = {
+      ...this.catalog,
+      plugins: [...builtins, ...external.filter((plugin) => !builtinClassIds.has(plugin.classId))]
+    }
+  }
+
+  resolveDescriptor(snapshot: PluginDescriptor): PluginDescriptor {
+    const descriptor = this.catalog.plugins.find((candidate) => {
+      if (snapshot.source.kind === "builtin") {
+        return (
+          candidate.source.kind === "builtin" &&
+          candidate.source.id === snapshot.source.id &&
+          candidate.classId === snapshot.classId
+        )
+      }
+      return (
+        candidate.source.kind === "external" &&
+        candidate.classId === snapshot.classId &&
+        candidate.modulePath === snapshot.modulePath
+      )
+    })
+    return descriptor ? structuredClone(descriptor) : snapshot
   }
 
   subscribe(listener: ScanListener): () => void {
@@ -401,9 +495,15 @@ export class PluginCatalogService {
         )
       }
     }
-    const unique = new Map<string, PluginDescriptor>()
+    const builtins = this.catalog.plugins.filter((plugin) => plugin.source.kind === "builtin")
+    const builtinClassIds = new Set(builtins.map((plugin) => plugin.classId))
+    const unique = new Map<string, PluginDescriptor>(
+      builtins.map((plugin) => [plugin.classId, plugin])
+    )
     for (const plugin of plugins) {
-      if (!unique.has(plugin.classId)) unique.set(plugin.classId, plugin)
+      if (!builtinClassIds.has(plugin.classId) && !unique.has(plugin.classId)) {
+        unique.set(plugin.classId, plugin)
+      }
     }
     this.catalog = {
       scannerVersion: SCANNER_VERSION,
@@ -411,7 +511,9 @@ export class PluginCatalogService {
       scannedAt: Date.now(),
       plugins: [...unique.values()].sort(
         (left, right) =>
-          left.name.localeCompare(right.name) || left.vendor.localeCompare(right.vendor)
+          Number(right.source.kind === "builtin") - Number(left.source.kind === "builtin") ||
+          left.name.localeCompare(right.name) ||
+          left.vendor.localeCompare(right.vendor)
       )
     }
     this.fingerprints = fingerprints
