@@ -297,10 +297,17 @@ pub struct AudioRuntime {
     pub buffer_fallback: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum LiveMixerSystemRole {
+    Metronome,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LiveMixerChannel {
     pub id: String,
     pub kind: String,
+    pub system_role: Option<LiveMixerSystemRole>,
     pub gain_db: f64,
     pub pan: f64,
     pub muted: bool,
@@ -851,6 +858,7 @@ mod tests {
         let output = LiveMixerChannel {
             id: "output".into(),
             kind: "output".into(),
+            system_role: None,
             gain_db: 0.0,
             pan: 0.0,
             muted: false,
@@ -880,6 +888,7 @@ mod tests {
         let audio = LiveMixerChannel {
             id: "audio-1".into(),
             kind: "audio".into(),
+            system_role: None,
             gain_db: -3.0,
             pan: 0.25,
             muted: false,

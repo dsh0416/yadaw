@@ -5,6 +5,7 @@ import StudioMasterControl from "./StudioMasterControl.vue"
 const channel = {
   id: "master",
   kind: "master" as const,
+  systemRole: null,
   name: "Master",
   color: "#67D9E7",
   sortOrder: 0,

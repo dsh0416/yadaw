@@ -637,6 +637,7 @@ export const MUSICAL_TICKS_PER_QUARTER = 960
 export const DEFAULT_INSTRUMENT_COLOR = "#73D6A2"
 
 export type MixerChannelKind = "audio" | "instrument" | "bus" | "master" | "output"
+export type MixerSystemRole = "metronome"
 export type MixerInputFormat = "mono" | "stereo"
 export type MixerSendTap = "pre" | "post" | "post-pan"
 export type PluginKind = "effect" | "instrument"
@@ -839,6 +840,7 @@ export interface MidiImportPlan {
 export interface MixerChannelState {
   id: string
   kind: MixerChannelKind
+  systemRole: MixerSystemRole | null
   name: string
   color: string
   sortOrder: number

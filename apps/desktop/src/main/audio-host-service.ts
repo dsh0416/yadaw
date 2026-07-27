@@ -332,6 +332,7 @@ export interface AudioHostGraph {
   channels: Array<{
     id: string
     kind: string
+    system_role?: "metronome"
     gain_db: number
     pan: number
     muted: boolean
@@ -453,6 +454,7 @@ export class AudioHostService {
   private readonly pendingRequests = new Set<Promise<ControlResponse>>()
   private nextRequestId = 1
   private heartbeat: NodeJS.Timeout | null = null
+  private heartbeatInFlight = false
   private stableTimer: NodeJS.Timeout | null = null
   private lastCallbackGeneration: number | null = null
   private callbackStagnantSince = 0
@@ -512,6 +514,13 @@ export class AudioHostService {
   >()
   private parameterFlush: NodeJS.Timeout | null = null
   private lastAudioPreferences: AudioPreferences | null = null
+  private audioEngineExpectedRunning = false
+  private lastTransport: TransportSnapshot = {
+    state: "stopped",
+    positionFrames: 0,
+    sampleRate: 0
+  }
+  private recovery: Promise<void> | null = null
   private reconfiguring = false
 
   constructor(
@@ -549,6 +558,7 @@ export class AudioHostService {
       return
     }
     this.client = client
+    this.heartbeatInFlight = false
     this.lastCallbackGeneration = null
     this.callbackStagnantSince = 0
     this.lastHeartbeatAt = null
@@ -569,9 +579,13 @@ export class AudioHostService {
       arenaCopiedBytes: 0
     }
     this.heartbeat = setInterval(() => {
-      void this.performHeartbeat()
+      if (this.client !== client || this.heartbeatInFlight) return
+      this.heartbeatInFlight = true
+      void this.performHeartbeat(client)
         .then((response) => {
+          if (this.client !== client) return
           if (response.result.type !== "heartbeat") return
+          this.captureTransport(client)
           const generation = response.result.callback_generation ?? 0
           this.lastHeartbeatAt = Date.now()
           this.lastHeartbeatGenerations = {
@@ -605,12 +619,15 @@ export class AudioHostService {
           }
           if (this.callbackStagnantSince === 0) this.callbackStagnantSince = Date.now()
           if (Date.now() - this.callbackStagnantSince >= HEARTBEAT_TIMEOUT_MS) {
-            this.handleExit("audio callback made no progress for 2 seconds")
+            this.handleExit(client, "audio callback made no progress for 2 seconds")
           }
         })
         .catch((error: unknown) => {
           const message = error instanceof Error ? error.message : String(error)
-          this.handleExit(`heartbeat failed: ${message}`)
+          this.handleExit(client, `heartbeat failed: ${message}`)
+        })
+        .finally(() => {
+          if (this.client === client) this.heartbeatInFlight = false
         })
     }, HEARTBEAT_INTERVAL_MS)
     this.heartbeat.unref()
@@ -621,16 +638,19 @@ export class AudioHostService {
     if (restoreGraph && this.lastGraph)
       void this.restoreGraph().catch((error: unknown) => {
         const message = error instanceof Error ? error.message : String(error)
-        this.handleExit(`could not restore graph: ${message}`)
+        this.handleExit(client, `could not restore graph: ${message}`)
       })
   }
 
-  private async performHeartbeat(): Promise<PriorityResponse> {
-    return this.performPriority({ type: "heartbeat" })
+  private async performHeartbeat(client: AudioHostIpcClient): Promise<PriorityResponse> {
+    return this.performPriority({ type: "heartbeat" }, client)
   }
 
-  private async performPriority(command: Record<string, unknown>): Promise<PriorityResponse> {
-    const client = this.client
+  private async performPriority(
+    command: Record<string, unknown>,
+    expectedClient?: AudioHostIpcClient
+  ): Promise<PriorityResponse> {
+    const client = expectedClient ?? this.client
     if (!client) throw new Error("audio host is not running")
     const requestId = this.nextRequestId++
     const payload = Buffer.from(
@@ -701,11 +721,13 @@ export class AudioHostService {
     await this.restoreGraph()
   }
 
-  private async restoreGraph(): Promise<void> {
+  private async restoreGraph(immediate = false): Promise<void> {
     const graph = this.lastGraph
     if (!graph) return
     const loaded = await Promise.allSettled(
-      graph.project.plugins.map((plugin) => this.loadPlugin(plugin, graph.project.sampleRate))
+      graph.project.plugins.map((plugin) =>
+        this.loadPluginWithRequest(plugin, graph.project.sampleRate, immediate)
+      )
     )
     for (const [index, result] of loaded.entries()) {
       if (result.status === "rejected") {
@@ -743,9 +765,11 @@ export class AudioHostService {
             revision: graph.revision,
             graph: runtime
           }
-    let response = await this.request({ type: "update-graph", update })
+    const request = (command: Record<string, unknown>) =>
+      immediate ? this.requestImmediately(command) : this.request(command)
+    let response = await request({ type: "update-graph", update })
     if (response.result.type === "revision-mismatch") {
-      response = await this.request({
+      response = await request({
         type: "update-graph",
         update: { type: "replace", revision: graph.revision, graph: runtime }
       })
@@ -847,7 +871,6 @@ export class AudioHostService {
   }
 
   async startAudioEngine(preferences: AudioPreferences): Promise<AudioRuntimeSnapshot> {
-    this.lastAudioPreferences = structuredClone(preferences)
     const response = await this.request({
       type: "start-audio-engine",
       config: {
@@ -857,11 +880,20 @@ export class AudioHostService {
         buffer_size: preferences.bufferSize
       }
     })
-    return this.runtimeResult(response)
+    const runtime = this.runtimeResult(response)
+    if (runtime.state === "running") {
+      this.lastAudioPreferences = structuredClone(preferences)
+      this.audioEngineExpectedRunning = true
+    }
+    return runtime
   }
 
   async stopAudioEngine(): Promise<AudioRuntimeSnapshot> {
-    return this.runtimeResult(await this.request({ type: "stop-audio-engine" }))
+    // Stopping is user intent. Do not resurrect the engine if the stop reply
+    // races with a helper failure after the engine has already shut down.
+    this.audioEngineExpectedRunning = false
+    const runtime = this.runtimeResult(await this.request({ type: "stop-audio-engine" }))
+    return runtime
   }
 
   async audioEngineSnapshot(): Promise<AudioRuntimeSnapshot> {
@@ -954,16 +986,16 @@ export class AudioHostService {
         position_frames: command.type === "seek" ? command.positionFrames : null
       }
     })
-    return this.transportResult(response)
+    return this.rememberTransport(this.transportResult(response))
   }
 
   async transportSnapshot(): Promise<TransportSnapshot> {
     const telemetry = this.readTelemetry()
-    return {
+    return this.rememberTransport({
       state: telemetry[3] === 1 ? "playing" : telemetry[3] === 2 ? "recording" : "stopped",
       positionFrames: telemetry[4],
       sampleRate: telemetry[5]
-    }
+    })
   }
 
   private readTelemetry(): TelemetryWire {
@@ -1304,6 +1336,24 @@ export class AudioHostService {
     }
   }
 
+  private rememberTransport(snapshot: TransportSnapshot): TransportSnapshot {
+    this.lastTransport = { ...snapshot }
+    return snapshot
+  }
+
+  private captureTransport(client: AudioHostIpcClient): void {
+    try {
+      const telemetry = decode(client.readTelemetry()) as TelemetryWire
+      this.rememberTransport({
+        state: telemetry[3] === 1 ? "playing" : telemetry[3] === 2 ? "recording" : "stopped",
+        positionFrames: telemetry[4],
+        sampleRate: telemetry[5]
+      })
+    } catch {
+      // Keep the most recent successfully observed transport intent.
+    }
+  }
+
   startRecording(config: AudioHostRecordingConfig): Promise<void> {
     return this.request({
       type: "start-recording",
@@ -1367,9 +1417,22 @@ export class AudioHostService {
     latencySamples: number
     tailSamples: number | null
   }> {
+    return this.loadPluginWithRequest(plugin, sampleRate, false)
+  }
+
+  private async loadPluginWithRequest(
+    plugin: PluginInstanceState,
+    sampleRate: number,
+    immediate: boolean
+  ): Promise<{
+    latencySamples: number
+    tailSamples: number | null
+  }> {
     const existing = this.loadedPlugins.get(plugin.id)
     if (existing) return existing
-    const response = await this.request({
+    const response = await (
+      immediate ? this.requestImmediately.bind(this) : this.request.bind(this)
+    )({
       type: "load-plugin",
       instance_id: plugin.id,
       module_path: plugin.descriptor.modulePath,
@@ -1528,14 +1591,28 @@ export class AudioHostService {
     if (this.stopping && command.type !== "shutdown") {
       return Promise.reject(new Error("audio host is stopping"))
     }
-    const pending = this.performRequest(command)
+    const recovery = this.recovery
+    if (recovery && command.type !== "shutdown") {
+      return recovery.then(() => this.requestImmediately(command))
+    }
+    return this.requestImmediately(command)
+  }
+
+  private requestImmediately(
+    command: Record<string, unknown>,
+    expectedClient?: AudioHostIpcClient
+  ): Promise<ControlResponse> {
+    const pending = this.performRequest(command, expectedClient)
     this.pendingRequests.add(pending)
     void pending.finally(() => this.pendingRequests.delete(pending)).catch(() => {})
     return pending
   }
 
-  private async performRequest(command: Record<string, unknown>): Promise<ControlResponse> {
-    const client = this.client
+  private async performRequest(
+    command: Record<string, unknown>,
+    expectedClient?: AudioHostIpcClient
+  ): Promise<ControlResponse> {
+    const client = expectedClient ?? this.client
     if (!client) throw new Error("audio host is not running")
     const requestId = this.nextRequestId++
     const request = {
@@ -1560,10 +1637,13 @@ export class AudioHostService {
     return response
   }
 
-  private handleExit(message: string): void {
-    const client = this.client
-    if (!client) return
+  private handleExit(client: AudioHostIpcClient, message: string): void {
+    // A timed-out request from an older helper may reject after its replacement
+    // is already running. It must never be allowed to tear down that new client.
+    if (this.client !== client) return
+    this.captureTransport(client)
     this.client = null
+    this.heartbeatInFlight = false
     this.loadedPlugins.clear()
     this.publishedGraph = null
     this.channelIdsByHandle.clear()
@@ -1579,22 +1659,92 @@ export class AudioHostService {
     this.heartbeat = null
     if (this.stableTimer) clearTimeout(this.stableTimer)
     this.stableTimer = null
-    if (!this.stopping) {
-      const suspect = this.readCrashMarker()
-      if (suspect) {
-        this.recoveryBypassed.add(suspect)
-        message = `${message}; recovering with plugin '${suspect}' bypassed`
-      } else if ((this.lastGraph?.runtime.plugins.length ?? 0) > 0) {
-        for (const plugin of this.lastGraph!.runtime.plugins) {
-          this.recoveryBypassed.add(plugin.instance_id)
-        }
-        message = `${message}; crash marker was inconclusive, recovering with all plugins bypassed`
+    if (this.stopping) return
+    const suspect = this.readCrashMarker()
+    if (suspect) {
+      this.recoveryBypassed.add(suspect)
+      message = `${message}; recovering with plugin '${suspect}' bypassed`
+    } else if ((this.lastGraph?.runtime.plugins.length ?? 0) > 0) {
+      for (const plugin of this.lastGraph!.runtime.plugins) {
+        this.recoveryBypassed.add(plugin.instance_id)
       }
-      this.onFailure(message)
+      message = `${message}; crash marker was inconclusive, recovering with all plugins bypassed`
     }
-    if (!this.stopping && this.restartBudget > 0) {
-      this.restartBudget -= 1
-      this.start()
+    this.onFailure(message)
+    if (this.reconfiguring || this.recovery || this.restartBudget <= 0) return
+
+    this.restartBudget -= 1
+    const audioPreferences = this.lastAudioPreferences
+      ? structuredClone(this.lastAudioPreferences)
+      : null
+    const transport = { ...this.lastTransport }
+    const recovery = this.recoverAfterFailure(
+      audioPreferences,
+      transport,
+      this.audioEngineExpectedRunning
+    )
+    this.recovery = recovery
+    void recovery
+      .catch((error: unknown) => {
+        if (!this.stopping) this.onFailure(`audio helper recovery failed: ${String(error)}`)
+      })
+      .finally(() => {
+        if (this.recovery === recovery) this.recovery = null
+      })
+  }
+
+  private async recoverAfterFailure(
+    audioPreferences: AudioPreferences | null,
+    transport: TransportSnapshot,
+    audioEngineWasRunning: boolean
+  ): Promise<void> {
+    this.start(false)
+    const client = this.client
+    if (!client) throw new Error("Audio helper did not restart")
+
+    this.runtimeResult(await this.requestImmediately({ type: "audio-engine-snapshot" }, client))
+    const audioEngineRestored = audioEngineWasRunning && audioPreferences !== null
+    if (audioEngineRestored) {
+      const runtime = this.runtimeResult(
+        await this.requestImmediately(
+          {
+            type: "start-audio-engine",
+            config: {
+              backend: audioPreferences.backend,
+              input_device_id: audioPreferences.inputDeviceId,
+              output_device_id: audioPreferences.outputDeviceId,
+              buffer_size: audioPreferences.bufferSize
+            }
+          },
+          client
+        )
+      )
+      if (runtime.state !== "running") {
+        throw new Error("Audio engine did not return to running state")
+      }
+    }
+
+    await this.restoreGraph(true)
+    if (!audioEngineRestored) return
+    if (this.lastGraph) await this.waitForGraphPublication(this.lastGraph.revision)
+
+    const seek = await this.requestImmediately(
+      {
+        type: "transport",
+        command: { kind: "seek", position_frames: transport.positionFrames }
+      },
+      client
+    )
+    this.rememberTransport(this.transportResult(seek))
+    if (transport.state === "playing") {
+      const play = await this.requestImmediately(
+        {
+          type: "transport",
+          command: { kind: "play", position_frames: null }
+        },
+        client
+      )
+      this.rememberTransport(this.transportResult(play))
     }
   }
 
@@ -1629,11 +1779,11 @@ export class AudioHostService {
   }
 
   get configurationRestarting(): boolean {
-    return this.reconfiguring
+    return this.reconfiguring || this.recovery !== null
   }
 
   async configureRuntime(preferences: AudioHostRuntimePreferences): Promise<void> {
-    if (this.reconfiguring || this.stopping) {
+    if (this.reconfiguring || this.recovery || this.stopping) {
       throw new Error("Audio host runtime configuration is busy")
     }
     this.reconfiguring = true
@@ -1703,8 +1853,10 @@ export class AudioHostService {
     if (audioEngineRestored && this.lastGraph) {
       await this.waitForGraphPublication(this.lastGraph.revision)
     }
-    await this.transport({ type: "seek", positionFrames: transport.positionFrames })
-    if (transport.state === "playing") await this.transport({ type: "play" })
+    if (audioEngineRestored) {
+      await this.transport({ type: "seek", positionFrames: transport.positionFrames })
+      if (transport.state === "playing") await this.transport({ type: "play" })
+    }
   }
 
   private async waitForGraphPublication(revision: number): Promise<void> {
@@ -1720,6 +1872,7 @@ export class AudioHostService {
   private async shutdownCurrentClient(): Promise<void> {
     if (this.heartbeat) clearInterval(this.heartbeat)
     this.heartbeat = null
+    this.heartbeatInFlight = false
     if (this.stableTimer) clearTimeout(this.stableTimer)
     this.stableTimer = null
     if (this.parameterFlush) clearTimeout(this.parameterFlush)
@@ -1727,15 +1880,15 @@ export class AudioHostService {
     const client = this.client
     if (!client) return
     try {
-      await this.performPriority({ type: "shutdown" })
+      await this.performPriority({ type: "shutdown" }, client)
     } catch {
       // Closing the client below also reaps a helper that exited early.
     }
-    await Promise.allSettled([...this.pendingRequests])
     this.drainHostEvents(client)
-    await Promise.allSettled([...this.pendingPreferenceWrites])
     if (this.client === client) this.client = null
     client.close()
+    await Promise.allSettled([...this.pendingRequests])
+    await Promise.allSettled([...this.pendingPreferenceWrites])
     this.loadedPlugins.clear()
     this.publishedGraph = null
     this.channelIdsByHandle.clear()

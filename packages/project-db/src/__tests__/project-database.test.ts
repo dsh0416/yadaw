@@ -60,7 +60,26 @@ describe("ProjectDatabase", () => {
     })
 
     const seeded = await database.mixerSnapshot()
-    expect(seeded.channels.map(({ id }) => id)).toEqual(["audio-1", "master", "output-1-2"])
+    expect(seeded.channels.map(({ id }) => id)).toEqual([
+      "audio-1",
+      "metronome",
+      "master",
+      "output-1-2"
+    ])
+    expect(seeded.channels.find(({ id }) => id === "metronome")).toMatchObject({
+      kind: "instrument",
+      systemRole: "metronome",
+      muted: true,
+      outputChannelId: "output-1-2"
+    })
+    expect(seeded.plugins.find(({ id }) => id === "metronome-instrument")).toMatchObject({
+      channelId: "metronome",
+      classId: "F310A5DEDA34820C9E068A5753F83ADE",
+      role: "instrument",
+      descriptor: {
+        source: { kind: "builtin", id: "dev.yadaw.metronome" }
+      }
+    })
     expect(seeded.tempoMap).toEqual({
       ticksPerQuarter: 960,
       tempoEvents: [{ tick: 0, beatsPerMinute: 120 }],
@@ -102,6 +121,7 @@ describe("ProjectDatabase", () => {
     const bus: MixerChannelState = {
       id: "bus-1",
       kind: "bus",
+      systemRole: null,
       name: "Bus 1",
       color: "#112233",
       sortOrder: 0,
@@ -188,6 +208,100 @@ describe("ProjectDatabase", () => {
     ).rejects.toThrow("tick 0")
     expect((await database.mixerSnapshot()).tempoMap.tempoEvents).toEqual([
       { tick: 0, beatsPerMinute: 120 }
+    ])
+  })
+
+  it("persists metronome mute while protecting the system channel and clip boundary", async () => {
+    const { database } = await createDatabase()
+    await database.applyCommand(
+      {
+        type: "update-channel",
+        channelId: "metronome",
+        patch: { muted: false, name: "Click" }
+      },
+      "output-1-2"
+    )
+    expect(
+      (await database.mixerSnapshot()).channels.find(({ id }) => id === "metronome")
+    ).toMatchObject({
+      name: "Click",
+      muted: false,
+      systemRole: "metronome"
+    })
+
+    await expect(
+      database.applyCommand({ type: "delete-channel", channelId: "metronome" }, "output-1-2")
+    ).rejects.toThrow("System channels cannot be deleted")
+    await expect(
+      database.applyCommand(
+        {
+          type: "batch",
+          commands: [{ type: "delete-channel", channelId: "metronome" }]
+        },
+        "output-1-2"
+      )
+    ).rejects.toThrow("System channels cannot be deleted")
+    await expect(
+      database.applyCommand(
+        {
+          type: "create-midi-clip",
+          clip: {
+            id: "invalid-metronome-clip",
+            sourceId: "missing-source",
+            trackId: "metronome",
+            name: "Invalid",
+            startTick: 0,
+            sourceOffsetTicks: 0,
+            lengthTicks: 960,
+            notes: [],
+            events: []
+          }
+        },
+        "output-1-2"
+      )
+    ).rejects.toThrow("System channels cannot contain clips")
+    expect((await database.mixerSnapshot()).channels).toContainEqual(
+      expect.objectContaining({ id: "metronome", systemRole: "metronome" })
+    )
+  })
+
+  it("adds the default muted metronome exactly once when an older project is migrated", async () => {
+    const resource = await createDatabase()
+    await resource.database.close()
+    databases.splice(databases.indexOf(resource), 1)
+
+    const raw = new PGlite(join(resource.directory, "pgdata"))
+    try {
+      await raw.exec(`
+        delete from "mixer_channels" where "id" = 'metronome';
+        drop index "mixer_system_role_singleton";
+        alter table "mixer_channels"
+          drop constraint "mixer_channels_system_role_check";
+        alter table "mixer_channels"
+          drop constraint "mixer_channels_system_role_kind_check";
+        alter table "mixer_channels" drop column "system_role";
+        delete from drizzle.__drizzle_migrations
+        where created_at = (select max(created_at) from drizzle.__drizzle_migrations);
+      `)
+    } finally {
+      await raw.close()
+    }
+
+    const migrated = await ProjectDatabase.open(join(resource.directory, "pgdata"))
+    databases.push({ database: migrated, directory: resource.directory })
+    const snapshot = await migrated.mixerSnapshot()
+    expect(snapshot.channels.filter((channel) => channel.systemRole === "metronome")).toEqual([
+      expect.objectContaining({
+        id: "metronome",
+        muted: true,
+        outputChannelId: "output-1-2"
+      })
+    ])
+    expect(snapshot.plugins.filter((plugin) => plugin.channelId === "metronome")).toEqual([
+      expect.objectContaining({
+        id: "metronome-instrument",
+        classId: "F310A5DEDA34820C9E068A5753F83ADE"
+      })
     ])
   })
 

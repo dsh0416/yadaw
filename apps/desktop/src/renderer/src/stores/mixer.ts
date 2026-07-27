@@ -94,9 +94,17 @@ export const useMixerStore = defineStore("mixer", () => {
   let previewFlush: Promise<void> | null = null
 
   const channels = computed(() => graph.value.channels)
-  const audioTracks = computed(() => channels.value.filter((channel) => channel.kind === "audio"))
+  const audioTracks = computed(() =>
+    channels.value.filter((channel) => channel.kind === "audio" && channel.systemRole === null)
+  )
   const instrumentTracks = computed(() =>
-    channels.value.filter((channel) => channel.kind === "instrument")
+    channels.value.filter((channel) => channel.kind === "instrument" && channel.systemRole === null)
+  )
+  const systemChannels = computed(() =>
+    channels.value.filter((channel) => channel.systemRole !== null)
+  )
+  const metronome = computed(
+    () => channels.value.find((channel) => channel.systemRole === "metronome") ?? null
   )
   const timelineTracks = computed(() =>
     [...audioTracks.value, ...instrumentTracks.value].sort(
@@ -109,6 +117,7 @@ export const useMixerStore = defineStore("mixer", () => {
   const orderedChannels = computed(() => [
     ...audioTracks.value,
     ...instrumentTracks.value,
+    ...systemChannels.value,
     ...buses.value,
     ...(master.value ? [master.value] : []),
     ...outputs.value
@@ -257,6 +266,19 @@ export const useMixerStore = defineStore("mixer", () => {
     return execute({ type: "update-channel", channelId, patch })
   }
 
+  function toggleMetronome(): Promise<boolean> {
+    const channel = metronome.value
+    if (!channel) return Promise.resolve(false)
+    return execute(
+      {
+        type: "update-channel",
+        channelId: channel.id,
+        patch: { muted: !channel.muted }
+      },
+      false
+    )
+  }
+
   function updateSend(sendId: string, patch: MixerSendPatch): Promise<boolean> {
     return execute({ type: "update-send", sendId, patch })
   }
@@ -267,6 +289,7 @@ export const useMixerStore = defineStore("mixer", () => {
     const channel: MixerChannelState = {
       id: crypto.randomUUID(),
       kind: "audio",
+      systemRole: null,
       name: `Audio ${index + 1}`,
       color: DEFAULT_CHANNEL_COLORS.audio,
       sortOrder: index,
@@ -290,6 +313,7 @@ export const useMixerStore = defineStore("mixer", () => {
     const channel: MixerChannelState = {
       id: crypto.randomUUID(),
       kind: "instrument",
+      systemRole: null,
       name: `Instrument ${index + 1}`,
       color: DEFAULT_CHANNEL_COLORS.instrument,
       sortOrder: index,
@@ -313,6 +337,7 @@ export const useMixerStore = defineStore("mixer", () => {
     const channel: MixerChannelState = {
       id: crypto.randomUUID(),
       kind: "bus",
+      systemRole: null,
       name: `Bus ${index + 1}`,
       color: DEFAULT_CHANNEL_COLORS.bus,
       sortOrder: index,
@@ -349,6 +374,7 @@ export const useMixerStore = defineStore("mixer", () => {
     const channel: MixerChannelState = {
       id: crypto.randomUUID(),
       kind: "output",
+      systemRole: null,
       name: `Output ${firstHardwareChannel}–${firstHardwareChannel + 1}`,
       color: DEFAULT_CHANNEL_COLORS.output,
       sortOrder: index,
@@ -368,7 +394,7 @@ export const useMixerStore = defineStore("mixer", () => {
 
   async function deleteChannel(channelId: string): Promise<boolean> {
     const channel = channels.value.find((candidate) => candidate.id === channelId)
-    if (!channel || channel.kind === "master") return false
+    if (!channel || channel.kind === "master" || channel.systemRole !== null) return false
     const completed = await execute({ type: "delete-channel", channelId })
     if (completed && selectedChannelId.value === channelId) {
       selectedChannelId.value = graph.value.channels[0]?.id ?? null
@@ -508,6 +534,8 @@ export const useMixerStore = defineStore("mixer", () => {
     channels,
     audioTracks,
     instrumentTracks,
+    systemChannels,
+    metronome,
     timelineTracks,
     buses,
     master,
@@ -524,6 +552,7 @@ export const useMixerStore = defineStore("mixer", () => {
     redo,
     preview,
     updateChannel,
+    toggleMetronome,
     updateSend,
     createAudioTrack,
     createInstrumentTrack,

@@ -37,6 +37,7 @@ defineProps<{
   tempoMap: TempoMapSnapshot
   soundBrowserOpen: boolean
   mixerDockOpen: boolean
+  metronomeChannel: MixerChannelState | null
   masterChannel: MixerChannelState | null
   masterMeter: MixerChannelMeter
 }>()
@@ -47,6 +48,7 @@ const emit = defineEmits<{
   togglePlayback: []
   goToStart: []
   updateTempo: [beatsPerMinute: number]
+  toggleMetronome: []
   previewMaster: [preview: MixerParameterPreview]
   updateMaster: [channelId: string, patch: MixerChannelPatch]
 }>()
@@ -127,11 +129,17 @@ const emit = defineEmits<{
       </StudioControlButton>
     </div>
 
-    <div class="control-group placeholder-only metronome-group" data-topbar-group="metronome">
-      <StudioControlButton label="Count-in" unavailable tone="accent">
+    <div class="control-group metronome-group" data-topbar-group="metronome">
+      <StudioControlButton label="Count-in" unavailable compact-hidden tone="accent">
         <span class="count-in-control">1234</span>
       </StudioControlButton>
-      <StudioControlButton label="Metronome" unavailable tone="accent">
+      <StudioControlButton
+        label="Metronome"
+        :pressed="metronomeChannel ? !metronomeChannel.muted : false"
+        :disabled="metronomeChannel === null"
+        tone="accent"
+        @activate="emit('toggleMetronome')"
+      >
         <BellRing :size="15" />
       </StudioControlButton>
     </div>

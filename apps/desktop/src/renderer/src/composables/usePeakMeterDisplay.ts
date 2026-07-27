@@ -31,7 +31,9 @@ export function usePeakMeterDisplay(options: {
   now?: () => number
 }) {
   const now = options.now ?? (() => performance.now())
-  const displayedPeakDb = shallowRef(Number.NEGATIVE_INFINITY)
+  const currentPeakDb = computed(() =>
+    amplitudeToDb(Math.max(...options.meter.value.postFaderPeak))
+  )
   const heldPeakDb = shallowRef(Number.NEGATIVE_INFINITY)
   const latchedPeakDb = shallowRef(Number.NEGATIVE_INFINITY)
   const clipped = shallowRef(false)
@@ -44,11 +46,9 @@ export function usePeakMeterDisplay(options: {
     ([meter, peakHold, returnRate]) => {
       const timestamp = now()
       const elapsedSeconds = Math.max(0, timestamp - lastUpdate) / 1_000
-      const inputPeakDb = amplitudeToDb(Math.max(...meter.postFaderPeak))
+      const inputPeakDb = currentPeakDb.value
       const rate = RETURN_RATE_DB_PER_SECOND[returnRate]
-      const returnedPeak = decay(displayedPeakDb.value, elapsedSeconds, rate)
 
-      displayedPeakDb.value = Math.max(inputPeakDb, returnedPeak)
       latchedPeakDb.value = Math.max(latchedPeakDb.value, inputPeakDb)
 
       if (!Number.isFinite(heldPeakDb.value) || inputPeakDb >= heldPeakDb.value) {
@@ -72,7 +72,7 @@ export function usePeakMeterDisplay(options: {
   )
 
   const meterLevelPercent = computed(() =>
-    dbToLevelPercent(displayedPeakDb.value, METER_MIN_DB, METER_MAX_DB)
+    dbToLevelPercent(currentPeakDb.value, METER_MIN_DB, METER_MAX_DB)
   )
   const heldMeterLevelPercent = computed(() =>
     dbToLevelPercent(heldPeakDb.value, METER_MIN_DB, METER_MAX_DB)
@@ -85,7 +85,7 @@ export function usePeakMeterDisplay(options: {
   }
 
   return {
-    displayedPeakDb,
+    currentPeakDb,
     heldPeakDb,
     latchedPeakDb,
     clipped,

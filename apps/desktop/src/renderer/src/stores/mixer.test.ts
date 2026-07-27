@@ -11,6 +11,7 @@ function graph(): MixerGraphSnapshot {
       {
         id: "audio",
         kind: "audio",
+        systemRole: null,
         name: "Audio",
         color: "#8C83FF",
         sortOrder: 0,
@@ -27,6 +28,7 @@ function graph(): MixerGraphSnapshot {
       {
         id: "bus-a",
         kind: "bus",
+        systemRole: null,
         name: "Bus A",
         color: "#E8B85F",
         sortOrder: 0,
@@ -41,8 +43,26 @@ function graph(): MixerGraphSnapshot {
         hardwareOutputChannels: []
       },
       {
+        id: "metronome",
+        kind: "instrument",
+        systemRole: "metronome",
+        name: "Metronome",
+        color: "#AD8CFF",
+        sortOrder: 0,
+        inputFormat: null,
+        gainDb: 0,
+        pan: 0,
+        muted: true,
+        soloed: false,
+        outputChannelId: "output",
+        recordArmed: false,
+        inputChannels: [],
+        hardwareOutputChannels: []
+      },
+      {
         id: "bus-b",
         kind: "bus",
+        systemRole: null,
         name: "Bus B",
         color: "#E8B85F",
         sortOrder: 1,
@@ -59,6 +79,7 @@ function graph(): MixerGraphSnapshot {
       {
         id: "master",
         kind: "master",
+        systemRole: null,
         name: "Master",
         color: "#67D9E7",
         sortOrder: 0,
@@ -75,6 +96,7 @@ function graph(): MixerGraphSnapshot {
       {
         id: "output",
         kind: "output",
+        systemRole: null,
         name: "Output 1–2",
         color: "#73D6A2",
         sortOrder: 0,
@@ -259,6 +281,34 @@ describe("mixer store", () => {
         outputChannelId: "output"
       })
     })
+  })
+
+  it("keeps the metronome in Mixer only and toggles mute without Undo history", async () => {
+    const initial = graph()
+    const enabled = structuredClone(initial)
+    const metronome = enabled.channels.find((channel) => channel.systemRole === "metronome")
+    if (!metronome) throw new Error("test graph requires metronome")
+    metronome.muted = false
+    window.yadaw.executeProjectCommand = vi.fn().mockResolvedValue({
+      graph: enabled,
+      inverse: { type: "update-channel", channelId: "metronome", patch: { muted: true } }
+    })
+    const mixer = useMixerStore()
+    mixer.graph = initial
+
+    expect(mixer.instrumentTracks).toEqual([])
+    expect(mixer.timelineTracks.map((channel) => channel.id)).toEqual(["audio"])
+    expect(mixer.orderedChannels.map((channel) => channel.id)).toContain("metronome")
+    await mixer.toggleMetronome()
+
+    expect(window.yadaw.executeProjectCommand).toHaveBeenCalledWith({
+      type: "update-channel",
+      channelId: "metronome",
+      patch: { muted: false }
+    })
+    expect(mixer.metronome?.muted).toBe(false)
+    expect(mixer.canUndo).toBe(false)
+    await expect(mixer.deleteChannel("metronome")).resolves.toBe(false)
   })
 
   it("serializes committed commands before starting the next mutation", async () => {

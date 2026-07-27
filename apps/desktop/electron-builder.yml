@@ -28,6 +28,7 @@ win:
       to: plugins
       filter:
         - YADAW Gain.vst3/**/*
+        - YADAW Metronome.vst3/**/*
         - YADAW Sine.vst3/**/*
   target:
     - target: nsis
@@ -46,6 +47,7 @@ mac:
       to: plugins
       filter:
         - YADAW Gain.vst3/**/*
+        - YADAW Metronome.vst3/**/*
         - YADAW Sine.vst3/**/*
   target:
     - target: dmg
@@ -61,6 +63,7 @@ linux:
       to: plugins
       filter:
         - YADAW Gain.vst3/**/*
+        - YADAW Metronome.vst3/**/*
         - YADAW Sine.vst3/**/*
   target:
     - target: AppImage

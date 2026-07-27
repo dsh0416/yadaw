@@ -35,6 +35,13 @@ const expected = [
     audioInputs: 0,
     audioOutputs: 1,
     eventInputs: 1
+  },
+  {
+    bundle: "YADAW Metronome.vst3",
+    classId: "F310A5DEDA34820C9E068A5753F83ADE",
+    audioInputs: 0,
+    audioOutputs: 1,
+    eventInputs: 1
   }
 ] as const
 

@@ -132,6 +132,7 @@ export const mixerChannels = pgTable(
   {
     id: text("id").primaryKey(),
     kind: text("kind").$type<"audio" | "instrument" | "bus" | "master" | "output">().notNull(),
+    systemRole: text("system_role").$type<"metronome">(),
     name: text("name").notNull(),
     color: text("color").notNull(),
     sortOrder: integer("sort_order").notNull(),
@@ -165,10 +166,21 @@ export const mixerChannels = pgTable(
     uniqueIndex("mixer_output_channels_unique")
       .on(table.hardwareOutputChannels)
       .where(sql`${table.kind} = 'output'`),
+    uniqueIndex("mixer_system_role_singleton")
+      .on(table.systemRole)
+      .where(sql`${table.systemRole} is not null`),
     index("mixer_channel_sort_order").on(table.kind, table.sortOrder),
     check(
       "mixer_channels_kind_check",
       sql`${table.kind} in ('audio', 'instrument', 'bus', 'master', 'output')`
+    ),
+    check(
+      "mixer_channels_system_role_check",
+      sql`${table.systemRole} is null or ${table.systemRole} = 'metronome'`
+    ),
+    check(
+      "mixer_channels_system_role_kind_check",
+      sql`${table.systemRole} is null or ${table.kind} = 'instrument'`
     ),
     check("mixer_channels_name_check", sql`length(trim(${table.name})) > 0`),
     check("mixer_channels_color_check", sql`${table.color} ~ '^#[0-9A-Fa-f]{6}$'`),

@@ -7,6 +7,7 @@ import MixerChannelStrip from "./MixerChannelStrip.vue"
 const channel: MixerChannelState = {
   id: "audio",
   kind: "audio",
+  systemRole: null,
   name: "Vocal",
   color: "#8C83FF",
   sortOrder: 0,

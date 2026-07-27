@@ -129,7 +129,7 @@ export class MidiImportService {
       })
     }
     let nextInstrumentOrder = graph.channels.filter(
-      (channel) => channel.kind === "instrument"
+      (channel) => channel.kind === "instrument" && channel.systemRole === null
     ).length
     for (const mapping of selectedPlans) {
       const targetPlan = mapping.target
@@ -144,6 +144,7 @@ export class MidiImportService {
         const channel: MixerChannelState = {
           id: channelId,
           kind: "instrument",
+          systemRole: null,
           name:
             targetPlan.name?.trim() || parsedTrack.name || `Instrument ${nextInstrumentOrder + 1}`,
           color: DEFAULT_INSTRUMENT_COLOR,
@@ -161,7 +162,7 @@ export class MidiImportService {
         commands.push({ type: "create-channel", channel })
       } else {
         const target = graph.channels.find((channel) => channel.id === targetPlan.channelId)
-        if (!target || target.kind !== "instrument") {
+        if (!target || target.kind !== "instrument" || target.systemRole !== null) {
           throw new Error("MIDI clips can only be imported to Instrument tracks")
         }
         channelId = target.id

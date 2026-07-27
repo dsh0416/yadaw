@@ -47,6 +47,7 @@ describe("ArrangementWorkspace", () => {
         {
           id: "audio-1",
           kind: "audio",
+          systemRole: null,
           name: "Audio 1",
           color: "#8C83FF",
           sortOrder: 0,
@@ -63,6 +64,7 @@ describe("ArrangementWorkspace", () => {
         {
           id: "audio-2",
           kind: "audio",
+          systemRole: null,
           name: "Audio 2",
           color: "#67D9E7",
           sortOrder: 1,
@@ -79,6 +81,7 @@ describe("ArrangementWorkspace", () => {
         {
           id: "master",
           kind: "master",
+          systemRole: null,
           name: "Master",
           color: "#67D9E7",
           sortOrder: 0,
@@ -95,6 +98,7 @@ describe("ArrangementWorkspace", () => {
         {
           id: "output",
           kind: "output",
+          systemRole: null,
           name: "Output 1–2",
           color: "#73D6A2",
           sortOrder: 0,
@@ -240,6 +244,7 @@ describe("ArrangementWorkspace", () => {
         {
           id: "audio-1",
           kind: "audio",
+          systemRole: null,
           name: "Audio 1",
           color: "#8C83FF",
           sortOrder: 0,
@@ -256,6 +261,7 @@ describe("ArrangementWorkspace", () => {
         {
           id: "master",
           kind: "master",
+          systemRole: null,
           name: "Master",
           color: "#67D9E7",
           sortOrder: 0,
@@ -272,6 +278,7 @@ describe("ArrangementWorkspace", () => {
         {
           id: "output",
           kind: "output",
+          systemRole: null,
           name: "Output 1–2",
           color: "#73D6A2",
           sortOrder: 0,
@@ -321,6 +328,7 @@ describe("ArrangementWorkspace", () => {
       ...Array.from({ length: 8 }, (_, index) => ({
         id: `audio-${index + 1}`,
         kind: "audio" as const,
+        systemRole: null,
         name: `Audio ${index + 1}`,
         color: "#8C83FF",
         sortOrder: index,
@@ -337,6 +345,7 @@ describe("ArrangementWorkspace", () => {
       {
         id: "master",
         kind: "master",
+        systemRole: null,
         name: "Master",
         color: "#67D9E7",
         sortOrder: 0,
@@ -353,6 +362,7 @@ describe("ArrangementWorkspace", () => {
       {
         id: "output",
         kind: "output",
+        systemRole: null,
         name: "Output 1–2",
         color: "#73D6A2",
         sortOrder: 0,

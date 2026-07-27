@@ -6,6 +6,7 @@ import MixerInputSection from "./MixerInputSection.vue"
 const channel: MixerChannelState = {
   id: "audio",
   kind: "audio",
+  systemRole: null,
   name: "Audio 1",
   color: "#4F8CFF",
   sortOrder: 0,

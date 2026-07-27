@@ -50,6 +50,13 @@ const BUILTIN_PLUGINS = [
     classId: "F7BC8CA3E5E8B9C9EE928D7114950FBF",
     name: "YADAW Sine",
     kind: "instrument" as const
+  },
+  {
+    id: "dev.yadaw.metronome",
+    bundleName: "YADAW Metronome.vst3",
+    classId: "F310A5DEDA34820C9E068A5753F83ADE",
+    name: "YADAW Metronome",
+    kind: "instrument" as const
   }
 ] as const
 

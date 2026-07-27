@@ -85,4 +85,41 @@ describe("transport store", () => {
       positionFrames: 144_000
     })
   })
+
+  it("can play an empty project while the metronome system channel is enabled", async () => {
+    const mixer = useMixerStore()
+    mixer.graph = {
+      ...structuredClone(emptyGraph),
+      channels: [
+        {
+          id: "metronome",
+          kind: "instrument",
+          systemRole: "metronome",
+          name: "Metronome",
+          color: "#AD8CFF",
+          sortOrder: 0,
+          inputFormat: null,
+          gainDb: 0,
+          pan: 0,
+          muted: false,
+          soloed: false,
+          outputChannelId: "output",
+          recordArmed: false,
+          inputChannels: [],
+          hardwareOutputChannels: []
+        }
+      ]
+    }
+    window.yadaw.transportCommand = vi.fn().mockResolvedValue({
+      state: "playing",
+      positionFrames: 0,
+      sampleRate: 48_000
+    })
+    const transport = useTransportStore()
+
+    expect(transport.canPlay).toBe(true)
+    await transport.play()
+
+    expect(window.yadaw.transportCommand).toHaveBeenCalledWith({ type: "play" })
+  })
 })

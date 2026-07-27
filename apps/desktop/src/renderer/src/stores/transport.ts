@@ -86,7 +86,11 @@ export const useTransportStore = defineStore("transport", () => {
   const timelineDurationSeconds = computed(() =>
     Math.max(MINIMUM_TIMELINE_SECONDS, contentEndSeconds.value + TIMELINE_TAIL_SECONDS)
   )
-  const canPlay = computed(() => clips.value.length > 0 && !loading.value)
+  const canPlay = computed(
+    () =>
+      (clips.value.length > 0 || (mixerStore.metronome !== null && !mixerStore.metronome.muted)) &&
+      !loading.value
+  )
 
   function command(value: Parameters<typeof window.yadaw.transportCommand>[0]): Promise<void> {
     const generation = ++requestGeneration

@@ -7,6 +7,7 @@ import MixerPluginSection from "./MixerPluginSection.vue"
 const channel: MixerChannelState = {
   id: "audio",
   kind: "audio",
+  systemRole: null,
   name: "Vocal",
   color: "#4F8CFF",
   sortOrder: 0,

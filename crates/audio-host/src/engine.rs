@@ -26,7 +26,7 @@ use yadaw_dsp_core::mixer::{
 use yadaw_dsp_runtime::{
     MUSICAL_TICKS_PER_QUARTER,
     block::{LatencyNode, StereoDelayLine, plan_latency_compensation},
-    protocol::LiveMixerSendTap,
+    protocol::{LiveMixerSendTap, LiveMixerSystemRole},
     tempo::{TempoEvent, TempoMap, TimeSignatureEvent},
 };
 
@@ -50,6 +50,10 @@ const STREAM_WINDOW_SECONDS: usize = 2;
 const TRANSPORT_STOPPED: u32 = 0;
 const TRANSPORT_PLAYING: u32 = 1;
 const TRANSPORT_RECORDING: u32 = 2;
+const METRONOME_ACCENT_NOTE: u8 = 84;
+const METRONOME_BEAT_NOTE: u8 = 72;
+const METRONOME_NOTE_ID: i32 = -1;
+const METRONOME_NOTE_LENGTH_MS: u64 = 20;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ClipStoragePolicy {
@@ -95,6 +99,7 @@ pub struct NativeAudioRuntimeSnapshot {
 pub struct NativeMixerChannel {
     pub id: String,
     pub kind: String,
+    pub system_role: Option<LiveMixerSystemRole>,
     pub gain_db: f64,
     pub pan: f64,
     pub muted: bool,
@@ -526,6 +531,172 @@ struct ScheduledMidiEvent {
     note_on: bool,
 }
 
+#[derive(Clone, Copy)]
+struct BeatBoundary {
+    tick: u64,
+    frame: u64,
+    accent: bool,
+}
+
+struct MetronomeScheduler {
+    channel_index: Option<usize>,
+    next: Option<BeatBoundary>,
+    active_key: Option<u8>,
+    note_off_frame: Option<u64>,
+}
+
+impl MetronomeScheduler {
+    fn new(
+        channel_index: Option<usize>,
+        tempo_map: &TempoMap,
+        sample_rate: u32,
+        position: u64,
+    ) -> Self {
+        let mut scheduler = Self {
+            channel_index,
+            next: None,
+            active_key: None,
+            note_off_frame: None,
+        };
+        scheduler.reposition(tempo_map, sample_rate, position, true);
+        scheduler
+    }
+
+    fn reposition(
+        &mut self,
+        tempo_map: &TempoMap,
+        sample_rate: u32,
+        position: u64,
+        include_current: bool,
+    ) {
+        self.active_key = None;
+        self.note_off_frame = None;
+        self.next = self.channel_index.and_then(|_| {
+            Self::boundary_at_or_after(tempo_map, sample_rate, position, include_current)
+        });
+    }
+
+    fn boundary_at_or_after(
+        tempo_map: &TempoMap,
+        sample_rate: u32,
+        position: u64,
+        include_current: bool,
+    ) -> Option<BeatBoundary> {
+        let position_tick = tempo_map.frame_to_tick(position, sample_rate).ok()?;
+        let signatures = tempo_map.time_signature_events();
+        let signature_index = signatures.partition_point(|event| event.tick <= position_tick);
+        let signature_index = signature_index.saturating_sub(1);
+        let signature = *signatures.get(signature_index)?;
+        let beat_ticks =
+            u64::from(MUSICAL_TICKS_PER_QUARTER) * 4 / u64::from(signature.denominator);
+        let relative = position_tick.saturating_sub(signature.tick);
+        let beat_index = relative / beat_ticks;
+        let mut tick = signature
+            .tick
+            .saturating_add(beat_index.saturating_mul(beat_ticks));
+        let mut frame = tempo_map.tick_to_frame(tick, sample_rate).ok()?;
+        if frame < position || (frame == position && !include_current) {
+            tick = tick.saturating_add(beat_ticks);
+            frame = tempo_map.tick_to_frame(tick, sample_rate).ok()?;
+        }
+
+        if let Some(marker) = signatures.get(signature_index + 1)
+            && marker.tick > position_tick
+        {
+            let marker_frame = tempo_map.tick_to_frame(marker.tick, sample_rate).ok()?;
+            if marker_frame <= frame {
+                return Some(BeatBoundary {
+                    tick: marker.tick,
+                    frame: marker_frame,
+                    accent: true,
+                });
+            }
+        }
+
+        let beat_in_bar = tick
+            .saturating_sub(signature.tick)
+            .checked_div(beat_ticks)?
+            % u64::from(signature.numerator);
+        Some(BeatBoundary {
+            tick,
+            frame,
+            accent: beat_in_bar == 0,
+        })
+    }
+
+    fn events_at(
+        &mut self,
+        tempo_map: &TempoMap,
+        sample_rate: u32,
+        position: u64,
+    ) -> [Option<ScheduledMidiEvent>; 2] {
+        let Some(channel_index) = self.channel_index else {
+            return [None, None];
+        };
+        if self.next.is_some_and(|boundary| boundary.frame < position) {
+            self.next = Self::boundary_at_or_after(tempo_map, sample_rate, position, true);
+        }
+        let beat_due = self.next.is_some_and(|boundary| boundary.frame == position);
+        let release_due = self.note_off_frame.is_some_and(|frame| frame <= position);
+        let note_off = (release_due || (beat_due && self.active_key.is_some()))
+            .then(|| self.note_off_event(channel_index))
+            .flatten();
+
+        let note_on = if let Some(boundary) = self.next.filter(|_| beat_due) {
+            let key = if boundary.accent {
+                METRONOME_ACCENT_NOTE
+            } else {
+                METRONOME_BEAT_NOTE
+            };
+            self.active_key = Some(key);
+            self.note_off_frame = Some(position.saturating_add(
+                u64::from(sample_rate).saturating_mul(METRONOME_NOTE_LENGTH_MS) / 1_000,
+            ));
+            let after_boundary = tempo_map
+                .tick_to_frame(boundary.tick.saturating_add(1), sample_rate)
+                .map_or(boundary.frame.saturating_add(1), |frame| {
+                    frame.max(boundary.frame.saturating_add(1))
+                });
+            self.next = Self::boundary_at_or_after(tempo_map, sample_rate, after_boundary, true);
+            Some(ScheduledMidiEvent {
+                frame: position,
+                channel_index,
+                note_id: METRONOME_NOTE_ID,
+                channel: 0,
+                key,
+                velocity: if boundary.accent { 127 } else { 100 },
+                note_on: true,
+            })
+        } else {
+            None
+        };
+        if note_off.is_some() {
+            [note_off, note_on]
+        } else {
+            [note_on, None]
+        }
+    }
+
+    fn note_off_event(&mut self, channel_index: usize) -> Option<ScheduledMidiEvent> {
+        let key = self.active_key.take()?;
+        self.note_off_frame = None;
+        Some(ScheduledMidiEvent {
+            frame: 0,
+            channel_index,
+            note_id: METRONOME_NOTE_ID,
+            channel: 0,
+            key,
+            velocity: 0,
+            note_on: false,
+        })
+    }
+
+    fn release(&mut self) -> Option<ScheduledMidiEvent> {
+        self.channel_index
+            .and_then(|channel_index| self.note_off_event(channel_index))
+    }
+}
+
 struct NativeMixerRuntime {
     generation: u64,
     graph: MixerGraph,
@@ -535,6 +706,7 @@ struct NativeMixerRuntime {
     midi_events: Vec<ScheduledMidiEvent>,
     midi_cursor: usize,
     active_notes: Vec<bool>,
+    metronome: MetronomeScheduler,
     tempo_map: TempoMap,
     peak_scratch: Vec<ChannelPeak>,
     held_peaks: Vec<StereoFrame>,
@@ -1068,6 +1240,10 @@ fn build_mixer_runtime(
         native.time_signature_events.clone(),
     )
     .map_err(|error| invalid_config(error.to_string()))?;
+    let metronome_channel_index = native
+        .channels
+        .iter()
+        .position(|channel| channel.system_role == Some(LiveMixerSystemRole::Metronome));
     let mut graph = MixerGraph::new(native.sample_rate, channels.clone(), sends)
         .map_err(|error| invalid_config(error.to_string()))?;
     let meter_bank = Arc::new(MeterBank {
@@ -1265,6 +1441,12 @@ fn build_mixer_runtime(
     let tail_end_frame =
         (!has_infinite_tail).then_some(content_end_frame.saturating_add(maximum_tail));
     let active_notes = vec![false; next_note_id as usize];
+    let metronome = MetronomeScheduler::new(
+        metronome_channel_index,
+        &tempo_map,
+        native.sample_rate,
+        transport.position_frames.load(Ordering::Relaxed),
+    );
     Ok(NativeMixerRuntime {
         generation: native.generation,
         peak_scratch: vec![ChannelPeak::default(); graph.channel_count()],
@@ -1275,6 +1457,7 @@ fn build_mixer_runtime(
         midi_events,
         midi_cursor: 0,
         active_notes,
+        metronome,
         tempo_map,
         graph,
         clips,
@@ -1294,7 +1477,16 @@ fn build_mixer_runtime(
 impl NativeMixerRuntime {
     fn handle_command(&mut self, command: EngineCommand) -> Option<Box<NativeMixerRuntime>> {
         match command {
-            EngineCommand::LoadMixer(runtime) => return Some(runtime),
+            EngineCommand::LoadMixer(mut runtime) => {
+                let position = runtime.transport.position_frames.load(Ordering::Relaxed);
+                runtime.metronome.reposition(
+                    &runtime.tempo_map,
+                    runtime.sample_rate,
+                    position,
+                    true,
+                );
+                return Some(runtime);
+            }
             EngineCommand::Preview(preview) => {
                 let result = match preview.parameter {
                     RealtimeParameter::ChannelGain => self
@@ -1337,6 +1529,8 @@ impl NativeMixerRuntime {
                         .store(TRANSPORT_STOPPED, Ordering::Relaxed);
                     self.transport.position_frames.store(0, Ordering::Relaxed);
                     self.midi_cursor = 0;
+                    self.metronome
+                        .reposition(&self.tempo_map, self.sample_rate, 0, true);
                 }
                 TransportAction::Seek => {
                     self.transport
@@ -1344,10 +1538,13 @@ impl NativeMixerRuntime {
                         .store(position, Ordering::Relaxed);
                     self.chase_notes(position);
                 }
-                TransportAction::Record => self
-                    .transport
-                    .state
-                    .store(TRANSPORT_RECORDING, Ordering::Relaxed),
+                TransportAction::Record => {
+                    let position = self.transport.position_frames.load(Ordering::Relaxed);
+                    self.chase_notes(position);
+                    self.transport
+                        .state
+                        .store(TRANSPORT_RECORDING, Ordering::Relaxed);
+                }
             },
             EngineCommand::ClearMeterClips => {
                 self.held_peaks.fill([0.0, 0.0]);
@@ -1395,6 +1592,12 @@ impl NativeMixerRuntime {
                 self.dispatch_midi_event(event);
             }
             self.midi_cursor += 1;
+        }
+        let metronome_events =
+            self.metronome
+                .events_at(&self.tempo_map, self.sample_rate, position);
+        for event in metronome_events.into_iter().flatten() {
+            self.dispatch_midi_event(event);
         }
         let context = self.process_context(position, state);
         let sources = &self.channel_sources;
@@ -1499,6 +1702,9 @@ impl NativeMixerRuntime {
     }
 
     fn all_notes_off(&mut self) {
+        if let Some(event) = self.metronome.release() {
+            self.dispatch_midi_event(event);
+        }
         for index in 0..self.midi_events.len() {
             let event = self.midi_events[index];
             if event.note_on
@@ -1541,6 +1747,8 @@ impl NativeMixerRuntime {
                 self.dispatch_midi_event(event);
             }
         }
+        self.metronome
+            .reposition(&self.tempo_map, self.sample_rate, position, true);
     }
 
     fn publish_peaks(&mut self, elapsed_frames: usize) {
@@ -1604,6 +1812,28 @@ fn find_device(host: &Host, id: &str, input: bool) -> Result<Device> {
                 .is_ok_and(|device_id| device_id.to_string() == id)
         })
         .ok_or_else(|| invalid_config(format!("audio device '{id}' is no longer available")))
+}
+
+fn resolve_stream_devices<T: Clone>(
+    backend: &str,
+    input_device_id: &str,
+    output_device_id: &str,
+    mut find: impl FnMut(&str, bool) -> Result<T>,
+) -> Result<(T, T)> {
+    if backend.eq_ignore_ascii_case("asio") {
+        if input_device_id != output_device_id {
+            return Err(invalid_config(
+                "ASIO input and output must use the same driver",
+            ));
+        }
+        // CPAL's ASIO Device clone shares the same AsioStreams allocation. ASIO requires input
+        // and output buffers to be created together; independently enumerated Device values own
+        // distinct stream state, so creating the output stream can invalidate the input buffers.
+        let device = find(input_device_id, true)?;
+        return Ok((device.clone(), device));
+    }
+
+    Ok((find(input_device_id, true)?, find(output_device_id, false)?))
 }
 
 struct BufferSelection {
@@ -1984,8 +2214,12 @@ pub fn start_audio_engine(config: NativeAudioEngineConfig) -> Result<NativeAudio
     }
 
     let host = host_for_backend(&config.backend)?;
-    let input_device = find_device(&host, &config.input_device_id, true)?;
-    let output_device = find_device(&host, &config.output_device_id, false)?;
+    let (input_device, output_device) = resolve_stream_devices(
+        &config.backend,
+        &config.input_device_id,
+        &config.output_device_id,
+        |id, input| find_device(&host, id, input),
+    )?;
     let input_supported = input_device
         .default_input_config()
         .map_err(|error| audio_error("failed to read default input configuration", error))?;
@@ -2491,8 +2725,9 @@ pub mod bench_support {
 
     use super::{
         AdaptiveResampler, ClipSamples, EngineCommand, InputPeakBank, LoadedClip, MeterAtomics,
-        MeterBank, NativeMixerRuntime, RealtimeParameter, RealtimeParameterCommand, StreamingClip,
-        TRANSPORT_PLAYING, TransportShared, decode_clip_audio, spawn_streaming_clip,
+        MeterBank, MetronomeScheduler, NativeMixerRuntime, RealtimeParameter,
+        RealtimeParameterCommand, StreamingClip, TRANSPORT_PLAYING, TransportShared,
+        decode_clip_audio, spawn_streaming_clip,
     };
 
     #[derive(Clone, Copy, Debug)]
@@ -2587,6 +2822,12 @@ pub mod bench_support {
             midi_events: Vec::new(),
             midi_cursor: 0,
             active_notes: Vec::new(),
+            metronome: MetronomeScheduler::new(
+                None,
+                &TempoMap::default_120_bpm(),
+                scenario.sample_rate,
+                0,
+            ),
             tempo_map: TempoMap::default_120_bpm(),
             graph,
             clips,
@@ -2806,7 +3047,8 @@ mod tests {
 
     use super::{
         AdaptiveResampler, BufferSelection, BufferSize, ClipStoragePolicy, InputPeakBank,
-        MAX_INPUT_CHANNELS, MEMORY_DECODE_LIMIT_BYTES, SupportedBufferSize, clip_storage_policy,
+        MAX_INPUT_CHANNELS, MEMORY_DECODE_LIMIT_BYTES, METRONOME_ACCENT_NOTE, METRONOME_BEAT_NOTE,
+        MetronomeScheduler, SupportedBufferSize, clip_storage_policy, resolve_stream_devices,
         select_buffer_size, spawn_streaming_clip,
     };
     use crate::recording::{NativeRecordingStartConfig, write_deterministic_test_recording};
@@ -2814,6 +3056,7 @@ mod tests {
         HeapRb,
         traits::{Producer, Split},
     };
+    use yadaw_dsp_runtime::tempo::{TempoEvent, TempoMap, TimeSignatureEvent};
 
     fn assert_fixed(selection: BufferSelection, expected: u32, fell_back: bool) {
         assert!(matches!(selection.buffer_size, BufferSize::Fixed(value) if value == expected));
@@ -2882,6 +3125,141 @@ mod tests {
         assert_eq!(&snapshot[..3], &[0.5, 0.75, 1.25]);
         peaks.take_all(&mut snapshot);
         assert_eq!(&snapshot[..3], &[0.0, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn asio_resolves_one_shared_device_for_duplex_streams() {
+        let mut calls = Vec::new();
+        let (input, output) =
+            resolve_stream_devices("asio", "us-1x2hr", "us-1x2hr", |id, input| {
+                calls.push((id.to_owned(), input));
+                Ok(id.to_owned())
+            })
+            .unwrap();
+
+        assert_eq!(input, "us-1x2hr");
+        assert_eq!(output, "us-1x2hr");
+        assert_eq!(calls, [("us-1x2hr".to_owned(), true)]);
+    }
+
+    #[test]
+    fn non_asio_backends_resolve_independent_input_and_output_devices() {
+        let mut calls = Vec::new();
+        resolve_stream_devices("wasapi", "microphone", "speakers", |id, input| {
+            calls.push((id.to_owned(), input));
+            Ok(id.to_owned())
+        })
+        .unwrap();
+
+        assert_eq!(
+            calls,
+            [
+                ("microphone".to_owned(), true),
+                ("speakers".to_owned(), false)
+            ]
+        );
+    }
+
+    #[test]
+    fn asio_rejects_different_input_and_output_drivers() {
+        let result = resolve_stream_devices("asio", "input-driver", "output-driver", |_, _| {
+            Ok(String::new())
+        });
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn metronome_starts_on_an_exact_beat_and_releases_after_twenty_ms() {
+        let map = TempoMap::default_120_bpm();
+        let mut scheduler = MetronomeScheduler::new(Some(2), &map, 48_000, 0);
+
+        let at_origin = scheduler.events_at(&map, 48_000, 0);
+        let note_on = at_origin.into_iter().flatten().find(|event| event.note_on);
+        assert!(note_on.is_some_and(|event| {
+            event.channel_index == 2 && event.key == METRONOME_ACCENT_NOTE
+        }));
+        assert!(scheduler.events_at(&map, 48_000, 959)[0].is_none());
+        let release = scheduler.events_at(&map, 48_000, 960);
+        assert!(
+            release
+                .into_iter()
+                .flatten()
+                .any(|event| !event.note_on && event.key == METRONOME_ACCENT_NOTE)
+        );
+        assert_eq!(scheduler.next.map(|boundary| boundary.frame), Some(24_000));
+    }
+
+    #[test]
+    fn metronome_seek_waits_for_the_next_beat_unless_seek_is_exact() {
+        let map = TempoMap::default_120_bpm();
+        let mut scheduler = MetronomeScheduler::new(Some(0), &map, 48_000, 12_000);
+        assert_eq!(scheduler.next.map(|boundary| boundary.frame), Some(24_000));
+        assert!(scheduler.events_at(&map, 48_000, 12_000)[0].is_none());
+
+        scheduler.reposition(&map, 48_000, 24_000, true);
+        let exact = scheduler.events_at(&map, 48_000, 24_000);
+        assert!(
+            exact
+                .into_iter()
+                .flatten()
+                .any(|event| event.note_on && event.key == METRONOME_BEAT_NOTE)
+        );
+    }
+
+    #[test]
+    fn metronome_uses_the_signature_denominator_and_restarts_at_markers() {
+        let map = TempoMap::new(
+            vec![TempoEvent {
+                tick: 0,
+                beats_per_minute: 120.0,
+            }],
+            vec![
+                TimeSignatureEvent {
+                    tick: 0,
+                    numerator: 6,
+                    denominator: 8,
+                },
+                TimeSignatureEvent {
+                    tick: 3_000,
+                    numerator: 3,
+                    denominator: 4,
+                },
+            ],
+        )
+        .unwrap();
+        let mut scheduler = MetronomeScheduler::new(Some(0), &map, 48_000, 1);
+        assert_eq!(scheduler.next.map(|boundary| boundary.tick), Some(480));
+        assert!(!scheduler.next.is_some_and(|boundary| boundary.accent));
+
+        scheduler.reposition(&map, 48_000, 73_000, true);
+        assert_eq!(scheduler.next.map(|boundary| boundary.tick), Some(3_000));
+        assert!(scheduler.next.is_some_and(|boundary| boundary.accent));
+    }
+
+    #[test]
+    fn metronome_frames_follow_step_tempo_changes() {
+        let map = TempoMap::new(
+            vec![
+                TempoEvent {
+                    tick: 0,
+                    beats_per_minute: 120.0,
+                },
+                TempoEvent {
+                    tick: 1_920,
+                    beats_per_minute: 60.0,
+                },
+            ],
+            vec![TimeSignatureEvent {
+                tick: 0,
+                numerator: 4,
+                denominator: 4,
+            }],
+        )
+        .unwrap();
+        let scheduler = MetronomeScheduler::new(Some(0), &map, 48_000, 48_001);
+        assert_eq!(scheduler.next.map(|boundary| boundary.tick), Some(2_880));
+        assert_eq!(scheduler.next.map(|boundary| boundary.frame), Some(96_000));
     }
 
     #[test]

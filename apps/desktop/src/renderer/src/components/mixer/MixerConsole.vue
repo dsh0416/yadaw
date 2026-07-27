@@ -87,7 +87,7 @@ async function assignInstrument(channelId: string, descriptor: PluginDescriptor)
 
 async function deleteChannel(channelId: string): Promise<void> {
   const channel = mixerStore.channels.find((candidate) => candidate.id === channelId)
-  if (!channel || channel.kind === "master") return
+  if (!channel || channel.kind === "master" || channel.systemRole !== null) return
   const confirmed = await confirm({
     eyebrow: "Mixer routing",
     tone: "danger",

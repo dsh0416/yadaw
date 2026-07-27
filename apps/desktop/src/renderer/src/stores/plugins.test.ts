@@ -36,6 +36,7 @@ function graph(): MixerGraphSnapshot {
       {
         id: "audio",
         kind: "audio",
+        systemRole: null,
         name: "Audio",
         color: "#4F8CFF",
         sortOrder: 0,
@@ -52,6 +53,7 @@ function graph(): MixerGraphSnapshot {
       {
         id: "instrument",
         kind: "instrument",
+        systemRole: null,
         name: "Instrument",
         color: "#9B7CF6",
         sortOrder: 0,
@@ -68,6 +70,7 @@ function graph(): MixerGraphSnapshot {
       {
         id: "output",
         kind: "output",
+        systemRole: null,
         name: "Output",
         color: "#EF7C95",
         sortOrder: 0,

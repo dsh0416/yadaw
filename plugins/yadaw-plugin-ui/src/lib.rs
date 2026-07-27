@@ -15,3 +15,5 @@ pub const AUDIO_ACCENT: [u8; 4] = [0x58, 0xC6, 0xC2, 0xFF];
 pub const SINE_EDITOR_SIZE: (u32, u32) = (520, 300);
 /// Logical editor size for YADAW Gain.
 pub const GAIN_EDITOR_SIZE: (u32, u32) = (380, 260);
+/// Logical editor size for YADAW Metronome.
+pub const METRONOME_EDITOR_SIZE: (u32, u32) = (600, 300);

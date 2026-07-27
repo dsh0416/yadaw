@@ -21,3 +21,12 @@ category = "instrument"
 fourcc = "YDSN"
 au_tag = "Synthesizer"
 vst3_subcategory = "Synth"
+
+[[plugin]]
+name = "YADAW Metronome"
+bundle_id = "metronome"
+crate = "yadaw-metronome"
+category = "instrument"
+fourcc = "YDMT"
+au_tag = "Synthesizer"
+vst3_subcategory = "Synth"

@@ -112,6 +112,7 @@ function channelValue(
   return {
     id: channel.id,
     kind: channel.kind,
+    systemRole: channel.systemRole,
     name: channel.name,
     color: channel.color,
     sortOrder: channel.sortOrder,
@@ -417,6 +418,56 @@ async function applyProjectCommand(
   }
 }
 
+async function assertProjectCommandAllowed(
+  tx: ProjectTransaction,
+  command: ProjectCommand
+): Promise<void> {
+  switch (command.type) {
+    case "delete-channel": {
+      const rows = await tx
+        .select({ systemRole: mixerChannels.systemRole })
+        .from(mixerChannels)
+        .where(eq(mixerChannels.id, command.channelId))
+        .limit(1)
+      if (rows[0]?.systemRole !== null && rows[0]?.systemRole !== undefined) {
+        throw new Error("System channels cannot be deleted")
+      }
+      return
+    }
+    case "create-clip":
+    case "create-midi-clip": {
+      const rows = await tx
+        .select({ systemRole: mixerChannels.systemRole })
+        .from(mixerChannels)
+        .where(eq(mixerChannels.id, command.clip.trackId))
+        .limit(1)
+      if (rows[0]?.systemRole !== null && rows[0]?.systemRole !== undefined) {
+        throw new Error("System channels cannot contain clips")
+      }
+      return
+    }
+    case "move-clip":
+    case "move-midi-clip": {
+      const rows = await tx
+        .select({ systemRole: mixerChannels.systemRole })
+        .from(mixerChannels)
+        .where(eq(mixerChannels.id, command.trackId))
+        .limit(1)
+      if (rows[0]?.systemRole !== null && rows[0]?.systemRole !== undefined) {
+        throw new Error("System channels cannot contain clips")
+      }
+      return
+    }
+    case "batch":
+      for (const nested of command.commands) {
+        await assertProjectCommandAllowed(tx, nested)
+      }
+      return
+    default:
+      return
+  }
+}
+
 export class ProjectDatabase {
   private readonly db: ProjectDb
 
@@ -464,6 +515,7 @@ export class ProjectDatabase {
           {
             id: "master",
             kind: "master",
+            systemRole: null,
             name: "Master",
             color: "#8C83FF",
             sortOrder: 0,
@@ -480,6 +532,7 @@ export class ProjectDatabase {
           {
             id: "output-1-2",
             kind: "output",
+            systemRole: null,
             name: "Output 1–2",
             color: "#EF7C95",
             sortOrder: 0,
@@ -496,6 +549,7 @@ export class ProjectDatabase {
           {
             id: "audio-1",
             kind: "audio",
+            systemRole: null,
             name: "Audio 1",
             color: "#4F8CFF",
             sortOrder: 0,
@@ -508,8 +562,58 @@ export class ProjectDatabase {
             recordArmed: false,
             inputChannels: [1, 2],
             hardwareOutputChannels: []
+          },
+          {
+            id: "metronome",
+            kind: "instrument",
+            systemRole: "metronome",
+            name: "Metronome",
+            color: "#AD8CFF",
+            sortOrder: 0,
+            inputFormat: null,
+            gainDb: 0,
+            pan: 0,
+            muted: true,
+            soloed: false,
+            outputChannelId: "output-1-2",
+            recordArmed: false,
+            inputChannels: [],
+            hardwareOutputChannels: []
           }
         ])
+        await tx.insert(pluginInstances).values({
+          id: "metronome-instrument",
+          channelId: "metronome",
+          role: "instrument",
+          slotOrder: 0,
+          classId: "F310A5DEDA34820C9E068A5753F83ADE",
+          descriptorSnapshot: JSON.stringify({
+            source: { kind: "builtin", id: "dev.yadaw.metronome" },
+            classId: "F310A5DEDA34820C9E068A5753F83ADE",
+            modulePath: "YADAW Metronome.vst3",
+            name: "YADAW Metronome",
+            vendor: "YADAW",
+            version: "",
+            category: "Instrument|Synth",
+            kind: "instrument",
+            architecture: process.arch,
+            buses: [
+              {
+                direction: "output",
+                kind: "main",
+                name: "Stereo Out",
+                channels: 2,
+                defaultActive: true
+              }
+            ],
+            hasEditor: true,
+            compatibility: "compatible",
+            compatibilityReason: null
+          }),
+          enabled: true,
+          componentState: new Uint8Array(),
+          controllerState: new Uint8Array()
+        })
       })
       return instance
     } catch (error) {
@@ -710,6 +814,7 @@ export class ProjectDatabase {
       channels: channelRows.map((channel) => ({
         id: channel.id,
         kind: channel.kind,
+        systemRole: channel.systemRole,
         name: channel.name,
         color: channel.color,
         sortOrder: channel.sortOrder,
@@ -766,7 +871,10 @@ export class ProjectDatabase {
   }
 
   applyCommand(command: ProjectCommand, fallbackOutputId: string): Promise<void> {
-    return this.db.transaction((tx) => applyProjectCommand(tx, command, fallbackOutputId))
+    return this.db.transaction(async (tx) => {
+      await assertProjectCommandAllowed(tx, command)
+      await applyProjectCommand(tx, command, fallbackOutputId)
+    })
   }
 
   importMidi(
@@ -775,6 +883,7 @@ export class ProjectDatabase {
     fallbackOutputId: string
   ): Promise<void> {
     return this.db.transaction(async (tx) => {
+      await assertProjectCommandAllowed(tx, command)
       await tx.insert(midiSources).values(source)
       await applyProjectCommand(tx, command, fallbackOutputId)
     })
@@ -782,6 +891,7 @@ export class ProjectDatabase {
 
   rollbackMidi(sourceId: string, command: ProjectCommand, fallbackOutputId: string): Promise<void> {
     return this.db.transaction(async (tx) => {
+      await assertProjectCommandAllowed(tx, command)
       await applyProjectCommand(tx, command, fallbackOutputId)
       await tx.delete(midiSources).where(eq(midiSources.id, sourceId))
     })

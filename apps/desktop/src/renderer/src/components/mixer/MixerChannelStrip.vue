@@ -426,7 +426,7 @@ function handleFaderKeydown(event: KeyboardEvent): void {
       <MixerChannelMenu
         :channel-name="channel.name"
         :color="channel.color"
-        :deletable="channel.kind !== 'master'"
+        :deletable="channel.kind !== 'master' && channel.systemRole === null"
         @update-color="emit('updateChannel', channel.id, { color: $event })"
         @delete="emit('deleteChannel', channel.id)"
       />
@@ -587,7 +587,6 @@ function handleFaderKeydown(event: KeyboardEvent): void {
   position: absolute;
   inset: 0 0 var(--meter-level) 0;
   background: var(--daw-meter-well);
-  transition: inset 55ms linear;
 }
 
 .meter.clipped {

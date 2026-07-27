@@ -14,7 +14,7 @@ function meter(peak: number, clipped = false): MixerChannelMeter {
 }
 
 describe("usePeakMeterDisplay", () => {
-  it("holds a transient for 800 ms and then returns at IEC Type I speed", async () => {
+  it("tracks the raw current peak while the held peak returns at IEC Type I speed", async () => {
     let timestamp = 0
     const meterSample = shallowRef(meter(0.5))
     const peakHold = shallowRef<MeterPeakHold>("800ms")
@@ -34,13 +34,14 @@ describe("usePeakMeterDisplay", () => {
     timestamp = 700
     meterSample.value = meter(0.1)
     await nextTick()
+    expect(display.currentPeakDb.value).toBeCloseTo(-20, 2)
     expect(display.heldPeakDb.value).toBeCloseTo(-6.02, 2)
 
     timestamp = 900
     meterSample.value = meter(0.1)
     await nextTick()
     expect(display.heldPeakDb.value).toBeCloseTo(-8.38, 2)
-    expect(display.displayedPeakDb.value).toBeCloseTo(-16.64, 2)
+    expect(display.currentPeakDb.value).toBeCloseTo(-20, 2)
     expect(display.latchedPeakDb.value).toBeCloseTo(-6.02, 2)
 
     display.resetPeakAndClip()

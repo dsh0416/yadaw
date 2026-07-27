@@ -74,6 +74,10 @@ function updateMaster(channelId: string, patch: MixerChannelPatch): void {
   void mixerStore.updateChannel(channelId, patch)
 }
 
+function toggleMetronome(): void {
+  void mixerStore.toggleMetronome()
+}
+
 async function toggleRecording(): Promise<void> {
   if (recordingBusy.value) return
   const completed = await studioWorkflowStore.toggleRecording()
@@ -141,6 +145,7 @@ onBeforeUnmount(() => {
       :tempo-map="mixerStore.graph.tempoMap"
       :sound-browser-open="workspaceStore.soundBrowserOpen"
       :mixer-dock-open="workspaceStore.mixerDockOpen"
+      :metronome-channel="mixerStore.metronome"
       :master-channel="mixerStore.master"
       :master-meter="masterMeter"
       @toggle-sound-browser="workspaceStore.toggleSoundBrowser"
@@ -149,6 +154,7 @@ onBeforeUnmount(() => {
       @toggle-playback="transportStore.toggle"
       @go-to-start="transportStore.goToStart"
       @update-tempo="updateCurrentTempo"
+      @toggle-metronome="toggleMetronome"
       @preview-master="previewMaster"
       @update-master="updateMaster"
     />

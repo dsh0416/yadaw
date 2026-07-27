@@ -94,9 +94,10 @@ test("records into a Large Object and reopens the PGlite project archive", async
         ).toBe(true)
 
         await page.setViewportSize({ width: 960, height: 640 })
-        await expect(topbar.locator("[data-topbar-group]:visible")).toHaveCount(5)
+        await expect(topbar.locator("[data-topbar-group]:visible")).toHaveCount(6)
         await expect(page.getByRole("button", { name: "Library" })).toBeVisible()
         await expect(page.getByRole("button", { name: "Mixer", exact: true })).toBeVisible()
+        await expect(page.getByRole("button", { name: "Metronome", exact: true })).toBeVisible()
         await expect(topbar.getByRole("slider", { name: "Master quick volume" })).toBeVisible()
         await expect(page.getByText("KEY", { exact: true })).toBeHidden()
         expect(
@@ -160,6 +161,32 @@ test("records into a Large Object and reopens the PGlite project archive", async
       await mixerDockToggle.click()
     }
     const visibleMixer = page.locator(".mixer-console:visible")
+    const metronomeStrip = visibleMixer.getByRole("article", {
+      name: "Metronome instrument channel"
+    })
+    await expect(metronomeStrip).toBeVisible()
+    await expect(
+      page.getByRole("region", { name: "Arrangement timeline" }).getByText("Metronome")
+    ).toHaveCount(0)
+    await metronomeStrip.getByRole("button", { name: "Metronome channel menu" }).click()
+    await expect(page.getByRole("button", { name: "Delete Metronome" })).toHaveCount(0)
+    await page.keyboard.press("Escape")
+
+    const metronomeToggle = page.getByRole("button", { name: "Metronome", exact: true })
+    await expect(metronomeToggle).toHaveAttribute("aria-pressed", "false")
+    await metronomeToggle.click()
+    await expect(metronomeToggle).toHaveAttribute("aria-pressed", "true")
+    await page.getByRole("button", { name: "Play" }).click()
+    await expect
+      .poll(async () => {
+        const snapshot = await page.evaluate(() => window.yadaw.mixerSnapshot())
+        const meter = snapshot.meters.find((candidate) => candidate.channelId === "metronome")
+        return Math.max(...(meter?.heldPeak ?? [0, 0]))
+      })
+      .toBeGreaterThan(0)
+    await page.getByRole("button", { name: "Pause" }).click()
+    await page.getByRole("button", { name: "Go to beginning" }).click()
+
     await page.getByRole("button", { name: "Add audio track" }).click()
     await page.getByRole("button", { name: "Add bus" }).click()
     await expect(
@@ -209,10 +236,14 @@ test("records into a Large Object and reopens the PGlite project archive", async
     expect(mixerBeforeSave.channels.map((channel) => channel.kind)).toEqual([
       "audio",
       "audio",
+      "instrument",
       "bus",
       "master",
       "output"
     ])
+    expect(
+      mixerBeforeSave.channels.find((channel) => channel.systemRole === "metronome")
+    ).toMatchObject({ id: "metronome", muted: false })
     expect(mixerBeforeSave.sends).toHaveLength(1)
     await expect(page.getByRole("region", { name: "Arrangement timeline" })).toBeVisible()
 

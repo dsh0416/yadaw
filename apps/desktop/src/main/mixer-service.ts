@@ -119,6 +119,7 @@ function inverseFor(graph: MixerGraphSnapshot, command: ProjectCommand): Project
     case "delete-channel": {
       const channel = channelById(graph, command.channelId)
       if (channel.kind === "master") throw new Error("Master cannot be deleted")
+      if (channel.systemRole !== null) throw new Error("System channels cannot be deleted")
       if (
         channel.kind === "output" &&
         graph.channels.some((candidate) => candidate.outputChannelId === channel.id)
@@ -256,6 +257,7 @@ function applyToGraph(graph: MixerGraphSnapshot, command: ProjectCommand): Mixer
       const master = next.channels.find((channel) => channel.kind === "master")
       if (!master || command.channelId === master.id) throw new Error("Master cannot be deleted")
       const removed = channelById(next, command.channelId)
+      if (removed.systemRole !== null) throw new Error("System channels cannot be deleted")
       const fallbackOutput = next.channels.find(
         (channel) => channel.kind === "output" && channel.id !== removed.id
       )
@@ -376,6 +378,9 @@ function validateGraph(graph: MixerGraphSnapshot): void {
     if (channel.kind === "master" && channel.soloed) {
       throw new Error("Master cannot be soloed")
     }
+    if (channel.systemRole !== null && channel.kind !== "instrument") {
+      throw new Error("System channels must be Instrument channels")
+    }
     if (channel.kind === "audio" && channel.inputFormat === null) {
       throw new Error("Audio tracks require an input format")
     }
@@ -398,6 +403,12 @@ function validateGraph(graph: MixerGraphSnapshot): void {
   }
   const masters = graph.channels.filter((channel) => channel.kind === "master")
   if (masters.length !== 1) throw new Error("Mixer graph requires exactly one Master")
+  const systemRoles = graph.channels
+    .map((channel) => channel.systemRole)
+    .filter((role): role is NonNullable<typeof role> => role !== null)
+  if (new Set(systemRoles).size !== systemRoles.length) {
+    throw new Error("Mixer system channel roles must be unique")
+  }
   const outputs = graph.channels.filter((channel) => channel.kind === "output")
   if (outputs.length === 0) throw new Error("Mixer graph requires at least one hardware Output")
   const outputMappings = new Set(outputs.map((channel) => channel.hardwareOutputChannels.join(",")))
@@ -453,7 +464,8 @@ function validateGraph(graph: MixerGraphSnapshot): void {
     ) {
       throw new Error("Clip source offset and length must use valid sample frames")
     }
-    if (channelById(graph, clip.trackId).kind !== "audio") {
+    const channel = channelById(graph, clip.trackId)
+    if (channel.kind !== "audio" || channel.systemRole !== null) {
       throw new Error("Timeline clips must belong to audio tracks")
     }
   }
@@ -524,7 +536,8 @@ function validateGraph(graph: MixerGraphSnapshot): void {
   for (const clip of graph.midiClips) {
     if (!clip.id || midiClipIds.has(clip.id)) throw new Error("MIDI clip IDs must be unique")
     midiClipIds.add(clip.id)
-    if (channelById(graph, clip.trackId).kind !== "instrument") {
+    const channel = channelById(graph, clip.trackId)
+    if (channel.kind !== "instrument" || channel.systemRole !== null) {
       throw new Error("MIDI clips must belong to Instrument tracks")
     }
     if (
@@ -672,6 +685,7 @@ export class MixerService {
       channels: graph.channels.map((channel) => ({
         id: channel.id,
         kind: channel.kind,
+        system_role: channel.systemRole ?? undefined,
         gain_db: channel.gainDb,
         pan: channel.pan,
         muted: channel.muted,

@@ -26,6 +26,7 @@ function channel(id: string, kind: MixerChannelState["kind"]): MixerChannelState
   return {
     id,
     kind,
+    systemRole: null,
     name: id,
     color: "#4F8CFF",
     sortOrder: 0,

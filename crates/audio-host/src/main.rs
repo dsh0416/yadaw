@@ -96,6 +96,7 @@ fn live_graph(
             Ok(engine::NativeMixerChannel {
                 id: channel.id.clone(),
                 kind: channel.kind.clone(),
+                system_role: channel.system_role,
                 gain_db: channel.gain_db,
                 pan: channel.pan,
                 muted: channel.muted,
@@ -2111,14 +2112,6 @@ fn parse_editor_owner_window(value: &str) -> Result<usize, &'static str> {
 
 fn run_ipc() -> Result<(), Box<dyn std::error::Error>> {
     const UI_MAILBOX_CAPACITY: usize = 64;
-    editor_platform::configure_process_application_identity()
-        .map_err(|error| format!("could not configure application identity: {error}"))?;
-    // VSTGUI performs process-thread platform initialization from InitDll. On
-    // Windows that includes COM-backed WIC creation, so OLE must already be
-    // initialized before any plug-in module is loaded. Keep this guard alive
-    // until after every editor, controller, and module owned below is dropped.
-    let _native_ui_context = NativeUiContext::initialize()
-        .map_err(|error| format!("could not initialize native UI context: {error}"))?;
     let mut arguments = env::args_os().skip(1);
     let mut ipc_token = None;
     let mut crash_marker_path = None;
@@ -2157,14 +2150,27 @@ fn run_ipc() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     let runtime_config = runtime_config.validate()?;
-    if let Some(path) = crash_marker_path.as_deref() {
-        crash_marker::initialize(path)
-            .map_err(|error| format!("could not initialize crash marker: {error}"))?;
-    }
+    // Complete the rendezvous before any platform or crash-marker setup that
+    // can fail. AudioHostIpcClient constructs synchronously on Electron's main
+    // thread; connecting first guarantees an early helper failure is observed
+    // by its IPC routers instead of leaving the parent blocked in accept().
     let token = ipc_token.ok_or("missing --ipc-token")?;
     let rendezvous = IpcSender::<IpcSender<HostBootstrap>>::connect(token)?;
     let (bootstrap_sender, bootstrap_receiver) = ipc::channel::<HostBootstrap>()?;
     rendezvous.send(bootstrap_sender)?;
+
+    editor_platform::configure_process_application_identity()
+        .map_err(|error| format!("could not configure application identity: {error}"))?;
+    // VSTGUI performs process-thread platform initialization from InitDll. On
+    // Windows that includes COM-backed WIC creation, so OLE must already be
+    // initialized before any plug-in module is loaded. Keep this guard alive
+    // until after every editor, controller, and module owned below is dropped.
+    let _native_ui_context = NativeUiContext::initialize()
+        .map_err(|error| format!("could not initialize native UI context: {error}"))?;
+    if let Some(path) = crash_marker_path.as_deref() {
+        crash_marker::initialize(path)
+            .map_err(|error| format!("could not initialize crash marker: {error}"))?;
+    }
     let bootstrap = bootstrap_receiver.recv()?;
 
     let mut event_loop_builder = EventLoop::<UiEvent>::with_user_event();
