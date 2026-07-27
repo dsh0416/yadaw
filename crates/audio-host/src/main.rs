@@ -106,7 +106,9 @@ fn live_graph(
                     .as_deref()
                     .map(channel_index)
                     .transpose()?,
+                output_bus: channel.output_bus,
                 record_armed: channel.record_armed,
+                input_source: channel.input_source.clone(),
                 input_channels: channel.input_channels.clone(),
                 hardware_output_channels: channel.hardware_output_channels.clone(),
             })
@@ -119,7 +121,12 @@ fn live_graph(
             Ok(engine::NativeMixerSend {
                 id: send.id.clone(),
                 source_index: channel_index(&send.source_channel_id)?,
-                target_index: channel_index(&send.target_channel_id)?,
+                target_output_index: send
+                    .target_channel_id
+                    .as_deref()
+                    .map(channel_index)
+                    .transpose()?,
+                target_bus: send.target_bus,
                 enabled: send.enabled,
                 tap: send.tap,
                 level_db: send.level_db,

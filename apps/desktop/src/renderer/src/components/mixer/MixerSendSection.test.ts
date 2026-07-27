@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest"
 import { DOMWrapper, flushPromises, mount } from "@vue/test-utils"
-import type { MixerChannelState, MixerSendState } from "@yadaw/contracts"
+import type { MixerBusState, MixerChannelState, MixerSendState } from "@yadaw/contracts"
 import MixerSendSection from "./MixerSendSection.vue"
 
 const channel: MixerChannelState = {
@@ -10,6 +10,7 @@ const channel: MixerChannelState = {
   name: "Vocal",
   color: "#4F8CFF",
   sortOrder: 0,
+  inputSource: "hardware",
   inputFormat: "mono",
   gainDb: 0,
   pan: 0,
@@ -21,19 +22,27 @@ const channel: MixerChannelState = {
   hardwareOutputChannels: []
 }
 
-const bus: MixerChannelState = {
+const bus: MixerBusState = {
+  channel: 7,
+  name: "BUS 7"
+}
+
+const output: MixerChannelState = {
   ...channel,
-  id: "reverb",
-  kind: "bus",
-  name: "Reverb",
+  id: "output",
+  kind: "output",
+  name: "Output 1–2",
+  inputSource: null,
   inputFormat: null,
-  inputChannels: []
+  outputChannelId: null,
+  inputChannels: [],
+  hardwareOutputChannels: [1, 2]
 }
 
 const send: MixerSendState = {
   id: "send",
   sourceChannelId: "audio",
-  targetChannelId: "reverb",
+  targetBus: 7,
   sortOrder: 0,
   enabled: true,
   tap: "post",
@@ -52,16 +61,17 @@ describe("MixerSendSection", () => {
         channel,
         sends: [send],
         buses: [bus],
+        outputs: [output],
         sendTargets: [],
         slotRows: 2
       }
     })
 
-    expect(wrapper.get('button[aria-label="Edit send to Reverb"]').text()).toContain("POST")
+    expect(wrapper.get('button[aria-label="Edit send to BUS 7"]').text()).toContain("POST")
     expect(wrapper.text()).not.toContain("EMPTY SEND")
     expect(wrapper.find('button[aria-label="Add send in empty slot"]').exists()).toBe(false)
     expect(wrapper.findAll(".send-row.alignment-spacer")).toHaveLength(1)
-    await wrapper.get('button[aria-label="Edit send to Reverb"]').trigger("click")
+    await wrapper.get('button[aria-label="Edit send to BUS 7"]').trigger("click")
     await flushPromises()
 
     const tapButtons = Array.from(
@@ -87,16 +97,29 @@ describe("MixerSendSection", () => {
       value: -6
     })
     expect(wrapper.emitted("updateSend")?.at(-1)).toEqual(["send", { levelDb: -6 }])
+
+    const target = new DOMWrapper(
+      document.body.querySelector<HTMLSelectElement>('select[aria-label="Send target"]')
+    )
+    await target.setValue("output:output")
+    expect(wrapper.emitted("updateSend")?.at(-1)).toEqual([
+      "send",
+      { targetChannelId: "output", targetBus: null }
+    ])
   })
 
-  it("adds a send from available bus targets", async () => {
+  it("adds a send from available BUS and Output targets", async () => {
     const wrapper = mount(MixerSendSection, {
       attachTo: document.body,
       props: {
         channel,
         sends: [],
         buses: [bus],
-        sendTargets: [bus],
+        outputs: [output],
+        sendTargets: [
+          { kind: "bus", bus: 7 },
+          { kind: "output", channelId: "output" }
+        ],
         slotRows: 1
       }
     })
@@ -110,6 +133,6 @@ describe("MixerSendSection", () => {
       (button) => button.textContent?.trim() === "Add"
     )
     await new DOMWrapper(addButton).trigger("click")
-    expect(wrapper.emitted("addSend")?.at(-1)).toEqual(["reverb"])
+    expect(wrapper.emitted("addSend")?.at(-1)).toEqual([{ kind: "bus", bus: 7 }])
   })
 })

@@ -678,8 +678,11 @@ export type DesktopLifecycleEvent =
 export const MUSICAL_TICKS_PER_QUARTER = 960
 export const DEFAULT_INSTRUMENT_COLOR = "#73D6A2"
 
-export type MixerChannelKind = "audio" | "instrument" | "bus" | "master" | "output"
+export const MIXER_BUS_COUNT = 256
+
+export type MixerChannelKind = "audio" | "instrument" | "aux" | "master" | "output"
 export type MixerSystemRole = "metronome"
+export type MixerInputSource = "hardware" | "bus"
 export type MixerInputFormat = "mono" | "stereo"
 export type MixerSendTap = "pre" | "post" | "post-pan"
 export type PluginKind = "effect" | "instrument"
@@ -894,16 +897,25 @@ export interface MixerChannelState {
   name: string
   color: string
   sortOrder: number
+  inputSource: MixerInputSource | null
   inputFormat: MixerInputFormat | null
   gainDb: number
   pan: number
   muted: boolean
   soloed: boolean
   outputChannelId: string | null
+  outputBus?: number | null
   recordArmed: boolean
   inputChannels: number[]
   hardwareOutputChannels: number[]
 }
+
+export interface MixerBusState {
+  channel: number
+  name: string
+}
+
+export type MixerRouteTarget = { kind: "bus"; bus: number } | { kind: "output"; channelId: string }
 
 export interface TimelineClipState {
   id: string
@@ -920,7 +932,8 @@ export interface TimelineClipState {
 export interface MixerSendState {
   id: string
   sourceChannelId: string
-  targetChannelId: string
+  targetChannelId?: string | null
+  targetBus: number | null
   sortOrder: number
   enabled: boolean
   tap: MixerSendTap
@@ -944,12 +957,14 @@ export type MixerChannelPatch = Partial<
     | "name"
     | "color"
     | "sortOrder"
+    | "inputSource"
     | "inputFormat"
     | "gainDb"
     | "pan"
     | "muted"
     | "soloed"
     | "outputChannelId"
+    | "outputBus"
     | "recordArmed"
     | "inputChannels"
     | "hardwareOutputChannels"
@@ -957,7 +972,10 @@ export type MixerChannelPatch = Partial<
 >
 
 export type MixerSendPatch = Partial<
-  Pick<MixerSendState, "targetChannelId" | "sortOrder" | "enabled" | "tap" | "levelDb">
+  Pick<
+    MixerSendState,
+    "targetChannelId" | "targetBus" | "sortOrder" | "enabled" | "tap" | "levelDb"
+  >
 >
 
 export type PluginInstancePatch = Partial<

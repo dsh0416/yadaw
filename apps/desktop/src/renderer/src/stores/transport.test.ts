@@ -99,6 +99,7 @@ describe("transport store", () => {
           name: "Metronome",
           color: "#AD8CFF",
           sortOrder: 0,
+          inputSource: null,
           inputFormat: null,
           gainDb: 0,
           pan: 0,

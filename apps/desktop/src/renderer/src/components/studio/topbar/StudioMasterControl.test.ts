@@ -9,6 +9,7 @@ const channel = {
   name: "Master",
   color: "#67D9E7",
   sortOrder: 0,
+  inputSource: null,
   inputFormat: null,
   gainDb: 0,
   pan: 0,

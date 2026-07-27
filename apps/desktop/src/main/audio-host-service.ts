@@ -338,14 +338,17 @@ export interface AudioHostGraph {
     muted: boolean
     soloed: boolean
     output_channel_id?: string
+    output_bus?: number
     record_armed: boolean
+    input_source?: "hardware" | "bus"
     input_channels: number[]
     hardware_output_channels: number[]
   }>
   sends: Array<{
     id: string
     source_channel_id: string
-    target_channel_id: string
+    target_channel_id?: string
+    target_bus?: number
     enabled: boolean
     tap: string
     level_db: number

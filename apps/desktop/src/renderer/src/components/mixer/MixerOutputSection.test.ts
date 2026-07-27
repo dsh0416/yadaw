@@ -11,6 +11,7 @@ const channel: MixerChannelState = {
   name: "Vocal",
   color: "#4F8CFF",
   sortOrder: 0,
+  inputSource: "hardware",
   inputFormat: "mono",
   gainDb: 0,
   pan: 0,
@@ -27,45 +28,41 @@ const output: MixerChannelState = {
   id: "output",
   kind: "output",
   name: "Output 1–2",
+  inputSource: null,
   inputFormat: null,
   outputChannelId: null,
   inputChannels: [],
   hardwareOutputChannels: [1, 2]
 }
 
-const bus: MixerChannelState = {
-  ...channel,
-  id: "reverb",
-  kind: "bus",
-  name: "Reverb",
-  inputFormat: null,
-  outputChannelId: "output",
-  inputChannels: []
-}
-
 describe("MixerOutputSection", () => {
-  it("groups route candidates into output and bus submenus", async () => {
+  it("routes processing channels to either a BUS or hardware Output", async () => {
     const wrapper = mount(MixerOutputSection, {
       props: {
         channel,
-        outputs: [output, bus]
+        buses: [{ channel: 7, name: "BUS 7" }],
+        outputs: [output],
+        targets: [
+          { kind: "bus", bus: 7 },
+          { kind: "output", channelId: "output" }
+        ]
       }
     })
 
     const routeMenu = wrapper.getComponent(UiCascadingSelect)
     expect(routeMenu.props("groups")).toEqual([
       {
-        label: "Outputs",
-        options: [{ value: "output", label: "Output 1–2" }]
+        label: "Buses",
+        options: [{ value: "bus:7", label: "BUS 7" }]
       },
       {
-        label: "Buses",
-        options: [{ value: "reverb", label: "Reverb" }]
+        label: "Outputs",
+        options: [{ value: "output:output", label: "Output 1–2" }]
       }
     ])
 
-    routeMenu.vm.$emit("update:modelValue", "reverb")
+    routeMenu.vm.$emit("update:modelValue", "bus:7")
     await wrapper.vm.$nextTick()
-    expect(wrapper.emitted("updateChannel")).toEqual([[{ outputChannelId: "reverb" }]])
+    expect(wrapper.emitted("updateChannel")).toEqual([[{ outputChannelId: null, outputBus: 7 }]])
   })
 })

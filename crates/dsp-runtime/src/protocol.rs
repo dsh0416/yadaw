@@ -313,7 +313,9 @@ pub struct LiveMixerChannel {
     pub muted: bool,
     pub soloed: bool,
     pub output_channel_id: Option<String>,
+    pub output_bus: Option<u32>,
     pub record_armed: bool,
+    pub input_source: Option<String>,
     pub input_channels: Vec<u32>,
     pub hardware_output_channels: Vec<u32>,
 }
@@ -330,7 +332,8 @@ pub enum LiveMixerSendTap {
 pub struct LiveMixerSend {
     pub id: String,
     pub source_channel_id: String,
-    pub target_channel_id: String,
+    pub target_channel_id: Option<String>,
+    pub target_bus: Option<u32>,
     pub enabled: bool,
     pub tap: LiveMixerSendTap,
     pub level_db: f64,
@@ -864,7 +867,9 @@ mod tests {
             muted: false,
             soloed: false,
             output_channel_id: None,
+            output_bus: None,
             record_armed: false,
+            input_source: None,
             input_channels: vec![],
             hardware_output_channels: vec![0, 1],
         };
@@ -894,7 +899,9 @@ mod tests {
             muted: false,
             soloed: false,
             output_channel_id: Some("output".into()),
+            output_bus: None,
             record_armed: false,
+            input_source: Some("hardware".into()),
             input_channels: vec![],
             hardware_output_channels: vec![],
         };

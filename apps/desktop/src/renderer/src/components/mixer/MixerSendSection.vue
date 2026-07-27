@@ -3,8 +3,10 @@ import { computed, shallowRef, watch } from "vue"
 import { Trash2 } from "@lucide/vue"
 import { UiPopover, UiSelect } from "@yadaw/ui"
 import type {
+  MixerBusState,
   MixerChannelState,
   MixerParameterPreview,
+  MixerRouteTarget,
   MixerSendPatch,
   MixerSendState,
   MixerSendTap
@@ -14,37 +16,86 @@ import { useParameterGesture } from "../../composables/useParameterGesture"
 const props = defineProps<{
   channel: MixerChannelState
   sends: MixerSendState[]
-  buses: MixerChannelState[]
-  sendTargets: MixerChannelState[]
+  buses: readonly MixerBusState[]
+  outputs: MixerChannelState[]
+  sendTargets: MixerRouteTarget[]
   slotRows: number
 }>()
 
 const emit = defineEmits<{
   preview: [preview: MixerParameterPreview]
   updateSend: [sendId: string, patch: MixerSendPatch]
-  addSend: [targetChannelId: string]
+  addSend: [target: MixerRouteTarget]
   deleteSend: [sendId: string]
 }>()
 
 const newSendTarget = shallowRef("")
 const sendGestures = new Map<string, ReturnType<typeof useParameterGesture>>()
-const supportsSends = computed(() => ["audio", "instrument", "bus"].includes(props.channel.kind))
+const supportsSends = computed(() => ["audio", "instrument", "aux"].includes(props.channel.kind))
 const emptyRows = computed(() => Math.max(0, props.slotRows - props.sends.length))
 const canAddSend = computed(() => props.sendTargets.length > 0)
 const alignmentRows = computed(() => Math.max(0, emptyRows.value - (canAddSend.value ? 1 : 0)))
+const sendBusTargets = computed(() =>
+  props.sendTargets.filter(
+    (target): target is Extract<MixerRouteTarget, { kind: "bus" }> => target.kind === "bus"
+  )
+)
+const sendOutputTargets = computed(() =>
+  props.sendTargets.filter(
+    (target): target is Extract<MixerRouteTarget, { kind: "output" }> => target.kind === "output"
+  )
+)
 
 watch(
-  () => [props.channel.id, props.sendTargets.map((target) => target.id).join("|")],
+  () => [props.channel.id, props.sendTargets.map(targetValue).join("|")],
   () => {
-    if (!props.sendTargets.some((target) => target.id === newSendTarget.value)) {
-      newSendTarget.value = props.sendTargets[0]?.id ?? ""
+    if (!props.sendTargets.some((target) => targetValue(target) === newSendTarget.value)) {
+      newSendTarget.value = props.sendTargets[0] ? targetValue(props.sendTargets[0]) : ""
     }
   },
   { immediate: true }
 )
 
 function targetName(send: MixerSendState): string {
-  return props.buses.find((bus) => bus.id === send.targetChannelId)?.name ?? "Missing bus"
+  if (send.targetChannelId) {
+    return (
+      props.outputs.find((output) => output.id === send.targetChannelId)?.name ?? "Missing output"
+    )
+  }
+  return props.buses.find((bus) => bus.channel === send.targetBus)?.name ?? "Missing bus"
+}
+
+function targetValue(target: MixerRouteTarget): string {
+  return target.kind === "output" ? `output:${target.channelId}` : `bus:${target.bus}`
+}
+
+function sendTargetValue(send: MixerSendState): string {
+  return send.targetChannelId ? `output:${send.targetChannelId}` : `bus:${send.targetBus}`
+}
+
+function parseTarget(value: string): MixerRouteTarget {
+  const separator = value.indexOf(":")
+  const kind = value.slice(0, separator)
+  const target = value.slice(separator + 1)
+  return kind === "output"
+    ? { kind: "output", channelId: target }
+    : { kind: "bus", bus: Number(target) }
+}
+
+function targetPatch(value: string): MixerSendPatch {
+  const target = parseTarget(value)
+  return {
+    targetChannelId: target.kind === "output" ? target.channelId : null,
+    targetBus: target.kind === "bus" ? target.bus : null
+  }
+}
+
+function isTargetAvailable(send: MixerSendState, target: MixerRouteTarget): boolean {
+  const value = targetValue(target)
+  return (
+    value === sendTargetValue(send) ||
+    props.sendTargets.some((candidate) => targetValue(candidate) === value)
+  )
 }
 
 function tapLabel(tap: MixerSendTap): string {
@@ -89,7 +140,7 @@ function numberValue(event: Event): number {
 
 function createSend(): void {
   if (!newSendTarget.value) return
-  emit("addSend", newSendTarget.value)
+  emit("addSend", parseTarget(newSendTarget.value))
 }
 </script>
 
@@ -135,22 +186,31 @@ function createSend(): void {
           <label>
             <span>Destination</span>
             <UiSelect
-              :model-value="send.targetChannelId"
+              :model-value="sendTargetValue(send)"
               size="compact"
               aria-label="Send target"
-              @update:model-value="updateSend(send, { targetChannelId: $event })"
+              @update:model-value="updateSend(send, targetPatch($event))"
             >
-              <option
-                v-for="bus in buses"
-                :key="bus.id"
-                :value="bus.id"
-                :disabled="
-                  bus.id !== send.targetChannelId &&
-                  !sendTargets.some((target) => target.id === bus.id)
-                "
-              >
-                {{ bus.name }}
-              </option>
+              <optgroup label="Buses">
+                <option
+                  v-for="bus in buses"
+                  :key="bus.channel"
+                  :value="`bus:${bus.channel}`"
+                  :disabled="!isTargetAvailable(send, { kind: 'bus', bus: bus.channel })"
+                >
+                  {{ bus.name }}
+                </option>
+              </optgroup>
+              <optgroup label="Outputs">
+                <option
+                  v-for="output in outputs"
+                  :key="output.id"
+                  :value="`output:${output.id}`"
+                  :disabled="!isTargetAvailable(send, { kind: 'output', channelId: output.id })"
+                >
+                  {{ output.name }}
+                </option>
+              </optgroup>
             </UiSelect>
           </label>
           <div class="tap-options" aria-label="Send position">
@@ -203,9 +263,26 @@ function createSend(): void {
         <div class="add-send-popover">
           <strong>Add send</strong>
           <UiSelect v-model="newSendTarget" size="compact" aria-label="New send target">
-            <option v-for="target in sendTargets" :key="target.id" :value="target.id">
-              {{ target.name }}
-            </option>
+            <optgroup label="Buses">
+              <option
+                v-for="target in sendBusTargets"
+                :key="targetValue(target)"
+                :value="targetValue(target)"
+              >
+                {{ buses.find((bus) => bus.channel === target.bus)?.name ?? `BUS ${target.bus}` }}
+              </option>
+            </optgroup>
+            <optgroup label="Outputs">
+              <option
+                v-for="target in sendOutputTargets"
+                :key="targetValue(target)"
+                :value="targetValue(target)"
+              >
+                {{
+                  outputs.find((output) => output.id === target.channelId)?.name ?? "Missing output"
+                }}
+              </option>
+            </optgroup>
           </UiSelect>
           <button :disabled="!newSendTarget" @click="createSend">Add</button>
         </div>

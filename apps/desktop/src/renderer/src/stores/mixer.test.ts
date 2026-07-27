@@ -15,31 +15,33 @@ function graph(): MixerGraphSnapshot {
         name: "Audio",
         color: "#8C83FF",
         sortOrder: 0,
+        inputSource: "hardware",
         inputFormat: "stereo",
         gainDb: 0,
         pan: 0,
         muted: false,
         soloed: false,
-        outputChannelId: "bus-a",
+        outputChannelId: "output",
         recordArmed: false,
         inputChannels: [1, 2],
         hardwareOutputChannels: []
       },
       {
-        id: "bus-a",
-        kind: "bus",
+        id: "aux-a",
+        kind: "aux",
         systemRole: null,
-        name: "Bus A",
+        name: "Aux A",
         color: "#E8B85F",
         sortOrder: 0,
-        inputFormat: null,
+        inputSource: "bus",
+        inputFormat: "mono",
         gainDb: 0,
         pan: 0,
         muted: false,
         soloed: false,
-        outputChannelId: "bus-b",
+        outputChannelId: "output",
         recordArmed: false,
-        inputChannels: [],
+        inputChannels: [1],
         hardwareOutputChannels: []
       },
       {
@@ -49,6 +51,7 @@ function graph(): MixerGraphSnapshot {
         name: "Metronome",
         color: "#AD8CFF",
         sortOrder: 0,
+        inputSource: null,
         inputFormat: null,
         gainDb: 0,
         pan: 0,
@@ -60,20 +63,21 @@ function graph(): MixerGraphSnapshot {
         hardwareOutputChannels: []
       },
       {
-        id: "bus-b",
-        kind: "bus",
+        id: "aux-b",
+        kind: "aux",
         systemRole: null,
-        name: "Bus B",
+        name: "Aux B",
         color: "#E8B85F",
         sortOrder: 1,
-        inputFormat: null,
+        inputSource: "bus",
+        inputFormat: "mono",
         gainDb: 0,
         pan: 0,
         muted: false,
         soloed: false,
         outputChannelId: "output",
         recordArmed: false,
-        inputChannels: [],
+        inputChannels: [2],
         hardwareOutputChannels: []
       },
       {
@@ -83,6 +87,7 @@ function graph(): MixerGraphSnapshot {
         name: "Master",
         color: "#67D9E7",
         sortOrder: 0,
+        inputSource: null,
         inputFormat: null,
         gainDb: 0,
         pan: 0,
@@ -100,6 +105,7 @@ function graph(): MixerGraphSnapshot {
         name: "Output 1–2",
         color: "#73D6A2",
         sortOrder: 0,
+        inputSource: null,
         inputFormat: null,
         gainDb: 0,
         pan: 0,
@@ -112,7 +118,17 @@ function graph(): MixerGraphSnapshot {
       }
     ],
     clips: [],
-    sends: [],
+    sends: [
+      {
+        id: "aux-a-to-bus-2",
+        sourceChannelId: "aux-a",
+        targetBus: 2,
+        sortOrder: 0,
+        enabled: true,
+        tap: "post-pan",
+        levelDb: -12
+      }
+    ],
     plugins: [],
     midiClips: [],
     keySignatureEvents: [{ tick: 0, fifths: 0, mode: "major" }],
@@ -197,9 +213,17 @@ describe("mixer store", () => {
     const mixer = useMixerStore()
     mixer.graph = graph()
 
-    expect(mixer.availableOutputs("bus-b").map((channel) => channel.id)).toEqual(["output"])
-    expect(mixer.availableSendTargets("bus-b").map((channel) => channel.id)).toEqual([])
-    expect(mixer.availableOutputs("master")).toEqual([])
+    expect(mixer.availableOutputTargets("aux-b")).toContainEqual({
+      kind: "output",
+      channelId: "output"
+    })
+    expect(mixer.availableOutputTargets("aux-b")).not.toContainEqual({ kind: "bus", bus: 1 })
+    expect(mixer.availableSendTargets("aux-b")).toContainEqual({
+      kind: "output",
+      channelId: "output"
+    })
+    expect(mixer.availableSendTargets("aux-b")).not.toContainEqual({ kind: "bus", bus: 1 })
+    expect(mixer.availableOutputTargets("master")).toEqual([])
     expect(mixer.availableSendTargets("master")).toEqual([])
   })
 
@@ -211,13 +235,14 @@ describe("mixer store", () => {
     const mixer = useMixerStore()
     mixer.graph = initial
 
-    await mixer.addSend("audio", "bus-b")
+    await mixer.addSend("audio", { kind: "output", channelId: "output" })
 
     expect(window.yadaw.executeProjectCommand).toHaveBeenCalledWith({
       type: "create-send",
       send: expect.objectContaining({
         sourceChannelId: "audio",
-        targetChannelId: "bus-b",
+        targetChannelId: "output",
+        targetBus: null,
         enabled: false,
         tap: "post-pan",
         levelDb: -90
@@ -234,7 +259,7 @@ describe("mixer store", () => {
     mixer.graph = initial
 
     await mixer.createAudioTrack()
-    await mixer.createBus()
+    await mixer.createAux()
     await mixer.createOutput()
     await mixer.updateChannel("audio", { color: "#123456" })
 
@@ -247,7 +272,13 @@ describe("mixer store", () => {
     })
     expect(commands[1]).toMatchObject({
       type: "create-channel",
-      channel: { kind: "bus", color: "#E8B85F" }
+      channel: {
+        kind: "aux",
+        color: "#E8B85F",
+        inputSource: "bus",
+        inputFormat: "stereo",
+        inputChannels: [1, 2]
+      }
     })
     expect(commands[2]).toMatchObject({
       type: "create-channel",
@@ -276,6 +307,7 @@ describe("mixer store", () => {
         kind: "instrument",
         name: "Instrument 1",
         color: "#73D6A2",
+        inputSource: null,
         inputFormat: null,
         inputChannels: [],
         recordArmed: false,

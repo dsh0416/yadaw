@@ -2,8 +2,8 @@ use std::{hint::black_box, time::Duration};
 
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use yadaw_dsp_core::mixer::{
-    ChannelKind, ChannelPeak, ChannelSpec, GraphError, HardwareOutputFrame, MixerGraph, SendSpec,
-    SendTap, StereoFrame,
+    ChannelKind, ChannelPeak, ChannelSpec, GraphError, HardwareOutputFrame, MixerGraph,
+    RouteTarget, SendSpec, SendTap, StereoFrame,
 };
 
 #[derive(Clone, Copy)]
@@ -27,18 +27,13 @@ fn scenario(
     tracks: usize,
     buses: usize,
     sends_per_track: usize,
-    topology: Topology,
+    _topology: Topology,
     soloed: bool,
 ) -> (Vec<ChannelSpec>, Vec<SendSpec>) {
     let master = tracks + buses;
     let output = master + 1;
     let mut channels = Vec::with_capacity(master + 2);
     for index in 0..tracks {
-        let output = match topology {
-            Topology::Direct => output,
-            Topology::Cascaded | Topology::SendHeavy if buses > 0 => tracks + index % buses,
-            Topology::Cascaded | Topology::SendHeavy => output,
-        };
         channels.push(ChannelSpec {
             id: format!("audio-{index}"),
             kind: ChannelKind::Audio,
@@ -46,23 +41,21 @@ fn scenario(
             pan: (index % 5) as f32 * 0.2 - 0.4,
             muted: index % 17 == 16,
             soloed: soloed && index == 0,
-            output: Some(output),
+            output: Some(RouteTarget::Output(output)),
+            input_bus: None,
             hardware_output: None,
         });
     }
     for index in 0..buses {
-        let output = match topology {
-            Topology::Cascaded if index + 1 < buses => tracks + index + 1,
-            _ => output,
-        };
         channels.push(ChannelSpec {
-            id: format!("bus-{index}"),
-            kind: ChannelKind::Bus,
+            id: format!("aux-{index}"),
+            kind: ChannelKind::Aux,
             gain_db: -1.0,
             pan: 0.0,
             muted: false,
             soloed: false,
-            output: Some(output),
+            output: Some(RouteTarget::Output(output)),
+            input_bus: Some([index, index]),
             hardware_output: None,
         });
     }
@@ -74,6 +67,7 @@ fn scenario(
         muted: false,
         soloed: false,
         output: None,
+        input_bus: None,
         hardware_output: None,
     });
     channels.push(ChannelSpec {
@@ -84,6 +78,7 @@ fn scenario(
         muted: false,
         soloed: false,
         output: None,
+        input_bus: None,
         hardware_output: Some([0, 1]),
     });
 
@@ -91,11 +86,10 @@ fn scenario(
     if buses > 0 {
         for source in 0..tracks {
             for send_index in 0..sends_per_track {
-                let target = tracks + (source + send_index) % buses;
                 sends.push(SendSpec {
                     id: format!("send-{source}-{send_index}"),
                     source,
-                    target,
+                    target: RouteTarget::Bus((source + send_index) % buses),
                     enabled: true,
                     tap: if send_index % 2 == 0 {
                         SendTap::Pre
@@ -153,7 +147,25 @@ fn bench_graph_build(c: &mut Criterion) {
     }
 
     let (mut channels, sends) = scenario(32, 4, 0, Topology::Cascaded, false);
-    channels[32 + 3].output = Some(32);
+    channels[32].input_bus = Some([0, 0]);
+    channels[32 + 3].input_bus = Some([3, 3]);
+    let mut sends = sends;
+    sends.push(SendSpec {
+        id: "cycle-a".to_owned(),
+        source: 32,
+        target: RouteTarget::Bus(3),
+        enabled: true,
+        tap: SendTap::Post,
+        level_db: 0.0,
+    });
+    sends.push(SendSpec {
+        id: "cycle-b".to_owned(),
+        source: 35,
+        target: RouteTarget::Bus(0),
+        enabled: true,
+        tap: SendTap::Post,
+        level_db: 0.0,
+    });
     group.bench_function("reject-routing-cycle/channels=37", |bencher| {
         bencher.iter(|| {
             let result = MixerGraph::new(48_000, channels.clone(), sends.clone());

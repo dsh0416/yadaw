@@ -25,7 +25,6 @@ const emit = defineEmits<{
 }>()
 
 const inputSummary = computed(() => {
-  if (props.channel.kind === "bus") return "BUS RETURN"
   if (props.channel.kind === "master") return "GLOBAL"
   return "MIX BUS"
 })
@@ -43,8 +42,9 @@ const inputSummary = computed(() => {
       @assign="emit('assignInstrument', $event)"
     />
     <MixerInputCapsule
-      v-else-if="channel.kind === 'audio'"
+      v-else-if="channel.kind === 'audio' || channel.kind === 'aux'"
       :channel-name="channel.name"
+      :input-source="channel.inputSource ?? 'hardware'"
       :input-format="channel.inputFormat ?? 'stereo'"
       :input-channels="channel.inputChannels"
       @update="emit('updateChannel', $event)"

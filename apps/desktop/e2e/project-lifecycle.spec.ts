@@ -188,10 +188,8 @@ test("records into a Large Object and reopens the PGlite project archive", async
     await page.getByRole("button", { name: "Go to beginning" }).click()
 
     await page.getByRole("button", { name: "Add audio track" }).click()
-    await page.getByRole("button", { name: "Add bus" }).click()
-    await expect(
-      visibleMixer.getByText("2 audio · 0 instrument · 1 buses · 1 outputs")
-    ).toBeVisible()
+    await page.getByRole("button", { name: "Add aux channel" }).click()
+    await expect(visibleMixer.getByText("2 audio · 0 instrument · 1 aux · 1 outputs")).toBeVisible()
     const audioOneVolume = visibleMixer.getByRole("slider", { name: "Audio 1 volume", exact: true })
     const volumeBounds = await audioOneVolume.boundingBox()
     expect(volumeBounds).not.toBeNull()
@@ -204,14 +202,12 @@ test("records into a Large Object and reopens the PGlite project archive", async
       "none"
     )
     await page.getByRole("button", { name: "Undo mixer change" }).click()
-    await expect(
-      visibleMixer.getByText("2 audio · 0 instrument · 0 buses · 1 outputs")
-    ).toBeVisible()
+    await expect(visibleMixer.getByText("2 audio · 0 instrument · 0 aux · 1 outputs")).toBeVisible()
     await page.getByRole("button", { name: "Redo mixer change" }).click()
-    await expect(
-      visibleMixer.getByText("2 audio · 0 instrument · 1 buses · 1 outputs")
-    ).toBeVisible()
-    await visibleMixer.getByLabel("Audio 1 output").selectOption({ label: "Bus 1" })
+    await expect(visibleMixer.getByText("2 audio · 0 instrument · 1 aux · 1 outputs")).toBeVisible()
+    await visibleMixer.getByRole("button", { name: "Audio 2 input channel" }).click()
+    await page.getByRole("menuitem", { name: "Buses" }).hover()
+    await page.getByRole("menuitemradio", { name: "BUS 1–2" }).click()
     await visibleMixer.getByRole("button", { name: "Use mono input for Audio 2" }).click()
     await expect
       .poll(async () => {
@@ -219,15 +215,14 @@ test("records into a Large Object and reopens the PGlite project archive", async
         return graph.channels.find((channel) => channel.name === "Audio 2")?.inputFormat
       })
       .toBe("mono")
-    await visibleMixer
-      .getByRole("article", { name: "Audio 1 audio channel" })
-      .getByRole("button", { name: "Add send in empty slot" })
-      .click()
+    const audioOneStrip = visibleMixer.getByRole("article", { name: "Audio 1 audio channel" })
+    await audioOneStrip.getByRole("button", { name: "Audio 1 output" }).click()
+    await page.getByRole("menuitem", { name: "Buses" }).hover()
+    await page.getByRole("menuitemradio", { name: "BUS 3", exact: true }).click()
+    await audioOneStrip.getByRole("button", { name: "Add send in empty slot" }).click()
     await page.getByRole("button", { name: "Add", exact: true }).click()
-    await visibleMixer
-      .getByRole("article", { name: "Audio 1 audio channel" })
-      .getByRole("button", { name: "Edit send to Bus 1" })
-      .click()
+    await audioOneStrip.getByRole("button", { name: "Edit send to BUS 1" }).click()
+    await page.getByLabel("Send target").selectOption("output:output-1-2")
     await page.getByRole("button", { name: "Enable send" }).click()
     await visibleMixer.getByRole("button", { name: "Arm Audio 1" }).click()
     await visibleMixer.getByRole("button", { name: "Arm Audio 2" }).click()
@@ -236,14 +231,25 @@ test("records into a Large Object and reopens the PGlite project archive", async
       "audio",
       "audio",
       "instrument",
-      "bus",
+      "aux",
       "master",
       "output"
     ])
     expect(
       mixerBeforeSave.channels.find((channel) => channel.systemRole === "metronome")
     ).toMatchObject({ id: "metronome", muted: false })
-    expect(mixerBeforeSave.sends).toHaveLength(1)
+    expect(mixerBeforeSave.channels.find((channel) => channel.name === "Audio 1")).toMatchObject({
+      outputChannelId: null,
+      outputBus: 3
+    })
+    expect(mixerBeforeSave.sends).toEqual([
+      expect.objectContaining({
+        sourceChannelId: mixerBeforeSave.channels.find((channel) => channel.name === "Audio 1")?.id,
+        targetChannelId: "output-1-2",
+        targetBus: null,
+        enabled: true
+      })
+    ])
     await expect(page.getByRole("region", { name: "Arrangement timeline" })).toBeVisible()
 
     const timeZoom = page.getByRole("slider", { name: "Time zoom" })
@@ -374,13 +380,9 @@ test("records into a Large Object and reopens the PGlite project archive", async
     await expect(openingDialog).toBeHidden({ timeout: 10_000 })
     await expect(page.locator(".studio-shell")).toBeVisible()
     await page.getByRole("button", { name: "Add instrument track" }).click()
-    await expect(
-      visibleMixer.getByText("2 audio · 1 instrument · 1 buses · 1 outputs")
-    ).toBeVisible()
+    await expect(visibleMixer.getByText("2 audio · 1 instrument · 1 aux · 1 outputs")).toBeVisible()
     await page.getByRole("button", { name: "Undo mixer change" }).click()
-    await expect(
-      visibleMixer.getByText("2 audio · 0 instrument · 1 buses · 1 outputs")
-    ).toBeVisible()
+    await expect(visibleMixer.getByText("2 audio · 0 instrument · 1 aux · 1 outputs")).toBeVisible()
     await navigateTo("/settings/project")
     await expect(page.getByLabel("Sample rate")).toHaveValue("44100")
     await expect(page.getByLabel("Waveform channels")).toHaveValue("aggregate")

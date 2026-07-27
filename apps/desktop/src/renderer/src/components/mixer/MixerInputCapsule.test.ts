@@ -1,5 +1,6 @@
-import { DOMWrapper, mount } from "@vue/test-utils"
+import { mount } from "@vue/test-utils"
 import { afterEach, describe, expect, it } from "vitest"
+import { UiCascadingSelect } from "@yadaw/ui"
 import MixerInputCapsule from "./MixerInputCapsule.vue"
 
 afterEach(() => {
@@ -12,6 +13,7 @@ describe("MixerInputCapsule", () => {
       attachTo: document.body,
       props: {
         channelName: "Audio 1",
+        inputSource: "hardware",
         inputFormat: "mono",
         inputChannels: [2]
       }
@@ -19,8 +21,8 @@ describe("MixerInputCapsule", () => {
 
     const select = wrapper.get('button[aria-label="Audio 1 input channel"]')
     expect(select.text()).toBe("IN 2")
-    await select.trigger("click")
-    expect(document.body.querySelectorAll(".ui-cascading-select__item")).toHaveLength(32)
+    const routeMenu = wrapper.getComponent(UiCascadingSelect)
+    expect(routeMenu.props("groups")?.map((group) => group.options.length)).toEqual([32, 256])
 
     const stereoButton = wrapper.get(
       'button[aria-label="Link adjacent input as stereo for Audio 1"]'
@@ -30,7 +32,9 @@ describe("MixerInputCapsule", () => {
     expect(stereoButton.findAll("path")).toHaveLength(1)
     await stereoButton.trigger("click")
 
-    expect(wrapper.emitted("update")).toEqual([[{ inputFormat: "stereo", inputChannels: [1, 2] }]])
+    expect(wrapper.emitted("update")).toEqual([
+      [{ inputSource: "hardware", inputFormat: "stereo", inputChannels: [1, 2] }]
+    ])
   })
 
   it("offers canonical stereo pairs and emits both routed channels", async () => {
@@ -38,6 +42,7 @@ describe("MixerInputCapsule", () => {
       attachTo: document.body,
       props: {
         channelName: "Audio 2",
+        inputSource: "hardware",
         inputFormat: "stereo",
         inputChannels: [3, 4]
       }
@@ -48,12 +53,31 @@ describe("MixerInputCapsule", () => {
     const formatButton = wrapper.get('button[aria-label="Use mono input for Audio 2"]')
     expect(formatButton.get('[role="img"]').attributes("aria-label")).toBe("2 channels audio")
     expect(formatButton.findAll("path")).toHaveLength(2)
-    await select.trigger("click")
+    const routeMenu = wrapper.getComponent(UiCascadingSelect)
+    expect(routeMenu.props("groups")?.map((group) => group.options.length)).toEqual([16, 128])
+    routeMenu.vm.$emit("update:modelValue", "hardware:5")
+    await wrapper.vm.$nextTick()
 
-    const options = document.body.querySelectorAll<HTMLElement>(".ui-cascading-select__item")
-    expect(options).toHaveLength(16)
-    await new DOMWrapper(options[2]).trigger("click")
+    expect(wrapper.emitted("update")).toEqual([
+      [{ inputSource: "hardware", inputFormat: "stereo", inputChannels: [5, 6] }]
+    ])
+  })
 
-    expect(wrapper.emitted("update")).toEqual([[{ inputFormat: "stereo", inputChannels: [5, 6] }]])
+  it("switches an audio channel from hardware input to a fixed BUS slot", async () => {
+    const wrapper = mount(MixerInputCapsule, {
+      props: {
+        channelName: "Audio 3",
+        inputSource: "hardware",
+        inputFormat: "mono",
+        inputChannels: [1]
+      }
+    })
+
+    wrapper.getComponent(UiCascadingSelect).vm.$emit("update:modelValue", "bus:256")
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.emitted("update")).toEqual([
+      [{ inputSource: "bus", inputFormat: "mono", inputChannels: [256] }]
+    ])
   })
 })

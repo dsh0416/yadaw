@@ -5,7 +5,9 @@ use std::{
 
 use napi::{Result, Task, bindgen_prelude::AsyncTask};
 use napi_derive::napi;
-use yadaw_dsp_core::mixer::{ChannelKind, ChannelSpec, MixerGraph, SendSpec, SendTap, StereoFrame};
+use yadaw_dsp_core::mixer::{
+    ChannelKind, ChannelSpec, MixerGraph, RouteTarget, SendSpec, SendTap, StereoFrame,
+};
 
 const SAMPLE_RATE: u32 = 48_000;
 const TARGET_MEASUREMENT_TIME: Duration = Duration::from_millis(200);
@@ -104,20 +106,22 @@ fn build_graph(scenario: Scenario) -> MixerGraph {
             pan: (index % 5) as f32 * 0.2 - 0.4,
             muted: false,
             soloed: false,
-            output: Some(scenario.tracks + index % scenario.buses),
+            output: Some(RouteTarget::Output(output)),
+            input_bus: None,
             hardware_output: None,
         });
     }
 
     for index in 0..scenario.buses {
         channels.push(ChannelSpec {
-            id: format!("bus-{index}"),
-            kind: ChannelKind::Bus,
+            id: format!("aux-{index}"),
+            kind: ChannelKind::Aux,
             gain_db: -1.5,
             pan: 0.0,
             muted: false,
             soloed: false,
-            output: Some(output),
+            output: Some(RouteTarget::Output(output)),
+            input_bus: Some([index, index]),
             hardware_output: None,
         });
     }
@@ -130,6 +134,7 @@ fn build_graph(scenario: Scenario) -> MixerGraph {
         muted: false,
         soloed: false,
         output: None,
+        input_bus: None,
         hardware_output: None,
     });
     channels.push(ChannelSpec {
@@ -140,6 +145,7 @@ fn build_graph(scenario: Scenario) -> MixerGraph {
         muted: false,
         soloed: false,
         output: None,
+        input_bus: None,
         hardware_output: Some([0, 1]),
     });
 
@@ -147,7 +153,7 @@ fn build_graph(scenario: Scenario) -> MixerGraph {
         .map(|index| SendSpec {
             id: format!("send-{index}"),
             source: index % scenario.tracks,
-            target: scenario.tracks + (index + 1) % scenario.buses,
+            target: RouteTarget::Bus((index + 1) % scenario.buses),
             enabled: true,
             tap: if index % 4 == 0 {
                 SendTap::Pre

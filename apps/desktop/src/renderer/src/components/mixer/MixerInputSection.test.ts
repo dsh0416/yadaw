@@ -10,6 +10,7 @@ const channel: MixerChannelState = {
   name: "Audio 1",
   color: "#4F8CFF",
   sortOrder: 0,
+  inputSource: "hardware",
   inputFormat: "stereo",
   gainDb: 0,
   pan: 0,
@@ -40,7 +41,7 @@ describe("MixerInputSection", () => {
     await stereoButton.trigger("click")
 
     expect(wrapper.emitted("updateChannel")).toEqual([
-      [{ inputFormat: "mono", inputChannels: [1] }]
+      [{ inputSource: "hardware", inputFormat: "mono", inputChannels: [1] }]
     ])
   })
 })

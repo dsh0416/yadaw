@@ -122,7 +122,8 @@ function inverseFor(graph: MixerGraphSnapshot, command: ProjectCommand): Project
       if (channel.systemRole !== null) throw new Error("System channels cannot be deleted")
       if (
         channel.kind === "output" &&
-        graph.channels.some((candidate) => candidate.outputChannelId === channel.id)
+        (graph.channels.some((candidate) => candidate.outputChannelId === channel.id) ||
+          graph.sends.some((send) => send.targetChannelId === channel.id))
       ) {
         throw new Error("An Output must be unused before it can be deleted")
       }
@@ -131,12 +132,10 @@ function inverseFor(graph: MixerGraphSnapshot, command: ProjectCommand): Project
         .map<ProjectCommand>((candidate) => ({
           type: "update-channel",
           channelId: candidate.id,
-          patch: { outputChannelId: channel.id }
+          patch: { outputChannelId: channel.id, outputBus: null }
         }))
       const sends = graph.sends
-        .filter(
-          (send) => send.sourceChannelId === channel.id || send.targetChannelId === channel.id
-        )
+        .filter((send) => send.sourceChannelId === channel.id)
         .map<ProjectCommand>((send) => ({ type: "create-send", send }))
       const clips = graph.clips
         .filter((clip) => clip.trackId === channel.id)
@@ -268,7 +267,8 @@ function applyToGraph(graph: MixerGraphSnapshot, command: ProjectCommand): Mixer
       )
       if (
         removed.kind === "output" &&
-        next.channels.some((channel) => channel.outputChannelId === removed.id)
+        (next.channels.some((channel) => channel.outputChannelId === removed.id) ||
+          next.sends.some((send) => send.targetChannelId === removed.id))
       ) {
         throw new Error("An Output must be unused before it can be deleted")
       }
@@ -279,10 +279,7 @@ function applyToGraph(graph: MixerGraphSnapshot, command: ProjectCommand): Mixer
           channel.outputChannelId = fallbackOutput.id
         }
       }
-      next.sends = next.sends.filter(
-        (send) =>
-          send.sourceChannelId !== command.channelId && send.targetChannelId !== command.channelId
-      )
+      next.sends = next.sends.filter((send) => send.sourceChannelId !== command.channelId)
       next.clips = next.clips.filter((clip) => clip.trackId !== command.channelId)
       next.plugins = next.plugins.filter((plugin) => plugin.channelId !== command.channelId)
       next.midiClips = next.midiClips.filter((clip) => clip.trackId !== command.channelId)
@@ -365,32 +362,40 @@ function validateGraph(graph: MixerGraphSnapshot): void {
     ids.add(channel.id)
     finiteRange(channel.gainDb, -90, 12, "Channel gain")
     finiteRange(channel.pan, -1, 1, "Channel pan")
+    const supportsAudioInput = channel.kind === "audio" || channel.kind === "aux"
     if (
-      channel.kind === "audio" &&
+      supportsAudioInput &&
       channel.inputChannels.length !== (channel.inputFormat === "mono" ? 1 : 2)
     ) {
-      throw new Error("Audio track input mapping does not match its input format")
+      throw new Error("Audio and Aux input mappings must match their input format")
     }
-    if (
-      channel.kind === "audio" &&
-      channel.inputChannels.some((input) => !Number.isInteger(input) || input < 1 || input > 32)
+    if (supportsAudioInput) {
+      const maximumInput = channel.inputSource === "bus" ? 256 : 32
+      if (
+        channel.inputSource === null ||
+        channel.inputFormat === null ||
+        channel.inputChannels.some(
+          (input) => !Number.isInteger(input) || input < 1 || input > maximumInput
+        ) ||
+        new Set(channel.inputChannels).size !== channel.inputChannels.length
+      ) {
+        throw new Error("Audio and Aux channels require a valid hardware or BUS input")
+      }
+    } else if (
+      channel.inputSource !== null ||
+      channel.inputFormat !== null ||
+      channel.inputChannels.length > 0
     ) {
-      throw new Error("Audio track inputs must be hardware channels 1 through 32")
+      throw new Error("Only Audio and Aux channels can map audio inputs")
     }
-    if (
-      channel.kind !== "audio" &&
-      (channel.inputFormat !== null || channel.inputChannels.length > 0 || channel.recordArmed)
-    ) {
-      throw new Error("Only audio tracks can map or arm hardware inputs")
+    if (channel.kind !== "audio" && channel.recordArmed) {
+      throw new Error("Only Audio tracks can arm recording")
     }
     if (channel.kind === "master" && channel.soloed) {
       throw new Error("Master cannot be soloed")
     }
     if (channel.systemRole !== null && channel.kind !== "instrument") {
       throw new Error("System channels must be Instrument channels")
-    }
-    if (channel.kind === "audio" && channel.inputFormat === null) {
-      throw new Error("Audio tracks require an input format")
     }
     if (channel.kind === "output") {
       if (
@@ -426,18 +431,41 @@ function validateGraph(graph: MixerGraphSnapshot): void {
   const edges = new Map(graph.channels.map((channel) => [channel.id, [] as string[]]))
   for (const channel of graph.channels) {
     if (channel.kind === "master" || channel.kind === "output") {
-      if (channel.outputChannelId !== null) {
+      if (channel.outputChannelId !== null || channel.outputBus != null) {
         throw new Error("Master and hardware Outputs cannot route onward")
       }
     } else {
-      const output = channel.outputChannelId && channelById(graph, channel.outputChannelId)
-      if (!output || (output.kind !== "bus" && output.kind !== "output")) {
-        throw new Error("Audio, Instrument, and Bus channels must target a Bus or hardware Output")
+      const targetCount =
+        Number(channel.outputChannelId !== null) + Number(channel.outputBus != null)
+      if (targetCount !== 1) {
+        throw new Error("Audio, Instrument, and Aux channels must target one BUS or Output")
       }
-      edges.get(channel.id)!.push(output.id)
+      if (channel.outputChannelId !== null) {
+        const output = channelById(graph, channel.outputChannelId)
+        if (output.kind !== "output") {
+          throw new Error("Mixer output channel targets must reference a hardware Output")
+        }
+        edges.get(channel.id)!.push(output.id)
+      } else if (
+        !Number.isSafeInteger(channel.outputBus) ||
+        channel.outputBus! < 1 ||
+        channel.outputBus! > 256
+      ) {
+        throw new Error("Mixer BUS output targets must be between 1 and 256")
+      } else {
+        for (const consumer of graph.channels) {
+          if (
+            consumer.inputSource === "bus" &&
+            consumer.inputChannels.includes(channel.outputBus!)
+          ) {
+            edges.get(channel.id)!.push(consumer.id)
+          }
+        }
+      }
     }
   }
   const sendIds = new Set<string>()
+  const sendRoutes = new Set<string>()
   for (const send of graph.sends) {
     if (!send.id || sendIds.has(send.id)) throw new Error("Mixer send IDs must be unique")
     if (new TextEncoder().encode(send.id).length > 64) {
@@ -445,20 +473,41 @@ function validateGraph(graph: MixerGraphSnapshot): void {
     }
     sendIds.add(send.id)
     const source = channelById(graph, send.sourceChannelId)
-    const target = channelById(graph, send.targetChannelId)
-    if (
-      source.kind === "master" ||
-      source.kind === "output" ||
-      target.kind !== "bus" ||
-      source.id === target.id
-    ) {
-      throw new Error("Sends must route an Audio, Instrument, or Bus channel to a Bus")
+    if (source.kind === "master" || source.kind === "output") {
+      throw new Error("Only Audio, Instrument, and Aux channels can source sends")
     }
+    const targetCount = Number(send.targetChannelId != null) + Number(send.targetBus !== null)
+    if (targetCount !== 1) {
+      throw new Error("A send must target exactly one BUS or Output")
+    }
+    let route: string
+    if (send.targetChannelId != null) {
+      const output = channelById(graph, send.targetChannelId)
+      if (output.kind !== "output") {
+        throw new Error("Send Output targets must reference a hardware Output")
+      }
+      route = `${source.id}:output:${output.id}`
+      edges.get(source.id)!.push(output.id)
+    } else if (
+      !Number.isSafeInteger(send.targetBus) ||
+      send.targetBus! < 1 ||
+      send.targetBus! > 256
+    ) {
+      throw new Error("Send BUS targets must be between 1 and 256")
+    } else {
+      route = `${source.id}:bus:${send.targetBus}`
+      for (const consumer of graph.channels) {
+        if (consumer.inputSource === "bus" && consumer.inputChannels.includes(send.targetBus!)) {
+          edges.get(source.id)!.push(consumer.id)
+        }
+      }
+    }
+    if (sendRoutes.has(route)) throw new Error("A channel can only send to each destination once")
+    sendRoutes.add(route)
     finiteRange(send.levelDb, -90, 12, "Send level")
     if (!Number.isSafeInteger(send.sortOrder) || send.sortOrder < 0) {
       throw new Error("Mixer send order must be a non-negative safe integer")
     }
-    edges.get(source.id)!.push(target.id)
   }
   for (const clip of graph.clips) {
     if (!Number.isSafeInteger(clip.startFrame) || clip.startFrame < 0) {
@@ -717,14 +766,17 @@ export class MixerService {
         muted: channel.muted,
         soloed: channel.soloed,
         record_armed: channel.recordArmed,
+        input_source: channel.inputSource ?? undefined,
         input_channels: channel.inputChannels,
         hardware_output_channels: channel.hardwareOutputChannels,
-        output_channel_id: channel.outputChannelId ?? undefined
+        output_channel_id: channel.outputChannelId ?? undefined,
+        output_bus: channel.outputBus ?? undefined
       })),
       sends: graph.sends.map((send) => ({
         id: send.id,
         source_channel_id: send.sourceChannelId,
-        target_channel_id: send.targetChannelId,
+        target_channel_id: send.targetChannelId ?? undefined,
+        target_bus: send.targetBus ?? undefined,
         enabled: send.enabled,
         tap: send.tap,
         level_db: send.levelDb

@@ -11,6 +11,7 @@ const channel: MixerChannelState = {
   name: "Vocal",
   color: "#4F8CFF",
   sortOrder: 0,
+  inputSource: "hardware",
   inputFormat: "mono",
   gainDb: 0,
   pan: 0,

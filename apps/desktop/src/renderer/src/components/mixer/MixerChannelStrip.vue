@@ -3,10 +3,12 @@ import { computed, nextTick, shallowRef, useTemplateRef, watch } from "vue"
 import { storeToRefs } from "pinia"
 import type { MeterPeakHold, MeterReturnRate } from "@yadaw/contracts"
 import type {
+  MixerBusState,
   MixerChannelMeter,
   MixerChannelPatch,
   MixerChannelState,
   MixerParameterPreview,
+  MixerRouteTarget,
   MixerSendPatch,
   MixerSendState
 } from "@yadaw/contracts"
@@ -35,8 +37,9 @@ const props = defineProps<{
   sends: MixerSendState[]
   meter: MixerChannelMeter
   outputs: MixerChannelState[]
-  buses: MixerChannelState[]
-  sendTargets: MixerChannelState[]
+  buses: readonly MixerBusState[]
+  outputTargets: MixerRouteTarget[]
+  sendTargets: MixerRouteTarget[]
   plugins: PluginInstanceState[]
   pluginRuntime: Record<string, PluginRuntimeStatus>
   effectPlugins: PluginDescriptor[]
@@ -51,7 +54,7 @@ const emit = defineEmits<{
   preview: [preview: MixerParameterPreview]
   updateChannel: [channelId: string, patch: MixerChannelPatch]
   updateSend: [sendId: string, patch: MixerSendPatch]
-  addSend: [sourceChannelId: string, targetChannelId: string]
+  addSend: [sourceChannelId: string, target: MixerRouteTarget]
   deleteSend: [sendId: string]
   openPlugin: [instanceId: string]
   togglePlugin: [instanceId: string, enabled: boolean]
@@ -262,6 +265,7 @@ function handleFaderKeydown(event: KeyboardEvent): void {
       :channel="channel"
       :sends="sends"
       :buses="buses"
+      :outputs="outputs"
       :send-targets="sendTargets"
       :slot-rows="sendSlotRows"
       @preview="emit('preview', $event)"
@@ -272,7 +276,9 @@ function handleFaderKeydown(event: KeyboardEvent): void {
 
     <MixerOutputSection
       :channel="channel"
+      :buses="buses"
       :outputs="outputs"
+      :targets="outputTargets"
       @update-channel="emit('updateChannel', channel.id, $event)"
     />
 
@@ -463,7 +469,7 @@ function handleFaderKeydown(event: KeyboardEvent): void {
   opacity: 0.75;
 }
 
-.channel-strip.bus {
+.channel-strip.aux {
   background: var(--ui-domain-color-53575a);
 }
 

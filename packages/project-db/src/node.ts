@@ -74,12 +74,14 @@ function channelPatch(patch: MixerChannelPatch): Partial<typeof mixerChannels.$i
   if (patch.name !== undefined) result.name = patch.name
   if (patch.color !== undefined) result.color = patch.color
   if (patch.sortOrder !== undefined) result.sortOrder = patch.sortOrder
+  if (patch.inputSource !== undefined) result.inputSource = patch.inputSource
   if (patch.inputFormat !== undefined) result.inputFormat = patch.inputFormat
   if (patch.gainDb !== undefined) result.gainDb = patch.gainDb
   if (patch.pan !== undefined) result.pan = patch.pan
   if (patch.muted !== undefined) result.muted = patch.muted
   if (patch.soloed !== undefined) result.soloed = patch.soloed
   if (patch.outputChannelId !== undefined) result.outputChannelId = patch.outputChannelId
+  if (patch.outputBus !== undefined) result.outputBus = patch.outputBus
   if (patch.recordArmed !== undefined) result.recordArmed = patch.recordArmed
   if (patch.inputChannels !== undefined) result.inputChannels = patch.inputChannels
   if (patch.hardwareOutputChannels !== undefined) {
@@ -91,6 +93,7 @@ function channelPatch(patch: MixerChannelPatch): Partial<typeof mixerChannels.$i
 function sendPatch(patch: MixerSendPatch): Partial<typeof mixerSends.$inferInsert> {
   const result: Partial<typeof mixerSends.$inferInsert> = {}
   if (patch.targetChannelId !== undefined) result.targetChannelId = patch.targetChannelId
+  if (patch.targetBus !== undefined) result.targetBus = patch.targetBus
   if (patch.sortOrder !== undefined) result.sortOrder = patch.sortOrder
   if (patch.enabled !== undefined) result.enabled = patch.enabled
   if (patch.tap !== undefined) result.tap = patch.tap
@@ -117,12 +120,14 @@ function channelValue(
     name: channel.name,
     color: channel.color,
     sortOrder: channel.sortOrder,
+    inputSource: channel.inputSource,
     inputFormat: channel.inputFormat,
     gainDb: channel.gainDb,
     pan: channel.pan,
     muted: channel.muted,
     soloed: channel.soloed,
     outputChannelId: channel.outputChannelId,
+    outputBus: channel.outputBus ?? null,
     recordArmed: channel.recordArmed,
     inputChannels: channel.inputChannels,
     hardwareOutputChannels: channel.hardwareOutputChannels
@@ -135,7 +140,8 @@ function sendValue(
   return {
     id: send.id,
     sourceChannelId: send.sourceChannelId,
-    targetChannelId: send.targetChannelId,
+    targetChannelId: send.targetChannelId ?? null,
+    targetBus: send.targetBus,
     sortOrder: send.sortOrder,
     enabled: send.enabled,
     tap: send.tap,
@@ -226,9 +232,8 @@ async function applyProjectCommand(
     case "delete-channel":
       await tx
         .update(mixerChannels)
-        .set({ outputChannelId: fallbackOutputId })
+        .set({ outputChannelId: fallbackOutputId, outputBus: null })
         .where(eq(mixerChannels.outputChannelId, command.channelId))
-      await tx.delete(mixerSends).where(eq(mixerSends.targetChannelId, command.channelId))
       await tx.delete(mixerChannels).where(eq(mixerChannels.id, command.channelId))
       return
     case "update-channel": {
@@ -540,12 +545,14 @@ export class ProjectDatabase {
             name: "Master",
             color: "#8C83FF",
             sortOrder: 0,
+            inputSource: null,
             inputFormat: null,
             gainDb: 0,
             pan: 0,
             muted: false,
             soloed: false,
             outputChannelId: null,
+            outputBus: null,
             recordArmed: false,
             inputChannels: [],
             hardwareOutputChannels: []
@@ -557,12 +564,14 @@ export class ProjectDatabase {
             name: "Output 1–2",
             color: "#EF7C95",
             sortOrder: 0,
+            inputSource: null,
             inputFormat: null,
             gainDb: 0,
             pan: 0,
             muted: false,
             soloed: false,
             outputChannelId: null,
+            outputBus: null,
             recordArmed: false,
             inputChannels: [],
             hardwareOutputChannels: [1, 2]
@@ -574,12 +583,14 @@ export class ProjectDatabase {
             name: "Audio 1",
             color: "#4F8CFF",
             sortOrder: 0,
+            inputSource: "hardware",
             inputFormat: "stereo",
             gainDb: 0,
             pan: 0,
             muted: false,
             soloed: false,
             outputChannelId: "output-1-2",
+            outputBus: null,
             recordArmed: false,
             inputChannels: [1, 2],
             hardwareOutputChannels: []
@@ -591,12 +602,14 @@ export class ProjectDatabase {
             name: "Metronome",
             color: "#AD8CFF",
             sortOrder: 0,
+            inputSource: null,
             inputFormat: null,
             gainDb: 0,
             pan: 0,
             muted: true,
             soloed: false,
             outputChannelId: "output-1-2",
+            outputBus: null,
             recordArmed: false,
             inputChannels: [],
             hardwareOutputChannels: []
@@ -794,7 +807,7 @@ export class ProjectDatabase {
     const kindOrder = new Map([
       ["audio", 0],
       ["instrument", 1],
-      ["bus", 2],
+      ["aux", 2],
       ["master", 3],
       ["output", 4]
     ])
@@ -841,12 +854,14 @@ export class ProjectDatabase {
         name: channel.name,
         color: channel.color,
         sortOrder: channel.sortOrder,
+        inputSource: channel.inputSource,
         inputFormat: channel.inputFormat,
         gainDb: channel.gainDb,
         pan: channel.pan,
         muted: channel.muted,
         soloed: channel.soloed,
         outputChannelId: channel.outputChannelId,
+        outputBus: channel.outputBus,
         recordArmed: channel.recordArmed,
         inputChannels: channel.inputChannels,
         hardwareOutputChannels: channel.hardwareOutputChannels

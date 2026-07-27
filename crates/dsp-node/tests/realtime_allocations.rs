@@ -9,7 +9,7 @@ use std::{
 use yadaw_audio_host::engine::bench_support::{
     ParameterQueueHarness, RenderHarness, RenderScenario,
 };
-use yadaw_dsp_core::mixer::{ChannelKind, ChannelSpec, MixerGraph};
+use yadaw_dsp_core::mixer::{ChannelKind, ChannelSpec, MixerGraph, RouteTarget};
 use yadaw_dsp_node::bench_support::TapHarness;
 
 thread_local! {
@@ -88,7 +88,8 @@ fn realtime_mixer_render_preview_and_capture_do_not_allocate() {
             pan: 0.0,
             muted: false,
             soloed: false,
-            output: Some(2),
+            output: Some(RouteTarget::Output(2)),
+            input_bus: None,
             hardware_output: None,
         },
         ChannelSpec {
@@ -99,6 +100,7 @@ fn realtime_mixer_render_preview_and_capture_do_not_allocate() {
             muted: false,
             soloed: false,
             output: None,
+            input_bus: None,
             hardware_output: None,
         },
         ChannelSpec {
@@ -109,6 +111,7 @@ fn realtime_mixer_render_preview_and_capture_do_not_allocate() {
             muted: false,
             soloed: false,
             output: None,
+            input_bus: None,
             hardware_output: Some([0, 1]),
         },
     ];

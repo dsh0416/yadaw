@@ -34,6 +34,59 @@ async function createDatabase(name = "Test project"): Promise<TestDatabase> {
   return result
 }
 
+async function revertAuxBusMigration(database: PGlite): Promise<void> {
+  await database.exec(`
+    drop index "mixer_sends_source_bus_unique";
+    drop index "mixer_sends_source_output_unique";
+    alter table "mixer_sends" drop constraint "mixer_sends_target_check";
+    alter table "mixer_sends" alter column "target_channel_id" set not null;
+    alter table "mixer_sends"
+      add constraint "mixer_sends_distinct_channels_check"
+      check ("source_channel_id" <> "target_channel_id");
+    create unique index "mixer_sends_source_target_unique"
+      on "mixer_sends" ("source_channel_id", "target_channel_id");
+    alter table "mixer_sends" drop column "target_bus";
+
+    alter table "mixer_channels" drop constraint "mixer_channels_kind_check";
+    alter table "mixer_channels" drop constraint "mixer_channels_output_route_check";
+    alter table "mixer_channels" drop constraint "mixer_channels_output_bus_check";
+    alter table "mixer_channels" drop constraint "mixer_channels_input_check";
+    alter table "mixer_channels" drop constraint "mixer_channels_input_channels_check";
+    update "mixer_channels"
+      set "kind" = 'bus',
+          "input_format" = null,
+          "input_channels" = array[]::smallint[],
+          "record_armed" = false
+      where "kind" = 'aux';
+    alter table "mixer_channels" drop column "input_source";
+    alter table "mixer_channels" drop column "output_bus";
+    alter table "mixer_channels"
+      add constraint "mixer_channels_kind_check"
+      check ("kind" in ('audio', 'instrument', 'bus', 'master', 'output'));
+    alter table "mixer_channels"
+      add constraint "mixer_channels_output_route_check"
+      check (("kind" in ('master', 'output')) = ("output_channel_id" is null));
+    alter table "mixer_channels"
+      add constraint "mixer_channels_input_check"
+      check ((
+        "kind" = 'audio'
+        and "input_format" is not null
+        and (
+          ("input_format" = 'mono' and cardinality("input_channels") = 1)
+          or ("input_format" = 'stereo' and cardinality("input_channels") = 2)
+        )
+      ) or (
+        "kind" <> 'audio'
+        and "input_format" is null
+        and cardinality("input_channels") = 0
+        and not "record_armed"
+      ));
+    alter table "mixer_channels"
+      add constraint "mixer_channels_input_channels_check"
+      check (0 < all("input_channels"));
+  `)
+}
+
 afterEach(async () => {
   for (const resource of databases.splice(0)) {
     await resource.database.close()
@@ -131,34 +184,117 @@ describe("ProjectDatabase", () => {
     ])
   })
 
+  it("migrates legacy bus channels while preserving main and send BUS targets", async () => {
+    const resource = await createDatabase()
+    await resource.database.applyCommand(
+      {
+        type: "create-channel",
+        channel: {
+          id: "legacy-bus",
+          kind: "aux",
+          systemRole: null,
+          name: "Legacy Bus",
+          color: "#112233",
+          sortOrder: 6,
+          inputSource: "bus",
+          inputFormat: "mono",
+          gainDb: 0,
+          pan: 0,
+          muted: false,
+          soloed: false,
+          outputChannelId: "output-1-2",
+          recordArmed: false,
+          inputChannels: [7],
+          hardwareOutputChannels: []
+        }
+      },
+      "output-1-2"
+    )
+    await resource.database.close()
+    databases.splice(databases.indexOf(resource), 1)
+
+    const raw = new PGlite(join(resource.directory, "pgdata"))
+    try {
+      await revertAuxBusMigration(raw)
+      await raw.exec(`
+        update "mixer_channels"
+          set "output_channel_id" = 'legacy-bus'
+          where "id" = 'audio-1';
+        insert into "mixer_sends" (
+          "id", "source_channel_id", "target_channel_id",
+          "sort_order", "enabled", "tap", "level_db"
+        ) values (
+          'legacy-send', 'metronome', 'legacy-bus',
+          0, true, 'post-pan', -6
+        );
+        delete from drizzle.__drizzle_migrations
+        where created_at = (
+          select created_at
+          from drizzle.__drizzle_migrations
+          order by created_at desc
+          limit 1
+        );
+      `)
+    } finally {
+      await raw.close()
+    }
+
+    const migrated = await ProjectDatabase.open(join(resource.directory, "pgdata"))
+    databases.push({ database: migrated, directory: resource.directory })
+    const snapshot = await migrated.mixerSnapshot()
+    expect(snapshot.channels.find(({ id }) => id === "legacy-bus")).toMatchObject({
+      kind: "aux",
+      inputSource: "bus",
+      inputFormat: "mono",
+      inputChannels: [7],
+      outputChannelId: "output-1-2"
+    })
+    expect(snapshot.channels.find(({ id }) => id === "audio-1")).toMatchObject({
+      outputChannelId: null,
+      outputBus: 7
+    })
+    expect(snapshot.sends).toContainEqual(
+      expect.objectContaining({
+        id: "legacy-send",
+        sourceChannelId: "metronome",
+        targetChannelId: null,
+        targetBus: 7,
+        enabled: true,
+        tap: "post-pan",
+        levelDb: -6
+      })
+    )
+  })
+
   it("enforces relations and rolls back failed command batches", async () => {
     const { database } = await createDatabase()
-    const bus: MixerChannelState = {
-      id: "bus-1",
-      kind: "bus",
+    const aux: MixerChannelState = {
+      id: "aux-1",
+      kind: "aux",
       systemRole: null,
-      name: "Bus 1",
+      name: "Aux 1",
       color: "#112233",
       sortOrder: 0,
-      inputFormat: null,
+      inputSource: "bus",
+      inputFormat: "mono",
       gainDb: 0,
       pan: 0,
       muted: false,
       soloed: false,
       outputChannelId: "output-1-2",
       recordArmed: false,
-      inputChannels: [],
+      inputChannels: [7],
       hardwareOutputChannels: []
     }
 
-    await database.applyCommand({ type: "create-channel", channel: bus }, "output-1-2")
+    await database.applyCommand({ type: "create-channel", channel: aux }, "output-1-2")
     await database.applyCommand(
       {
         type: "create-send",
         send: {
           id: "post-pan-send",
           sourceChannelId: "audio-1",
-          targetChannelId: bus.id,
+          targetBus: 7,
           sortOrder: 0,
           enabled: true,
           tap: "post-pan",
@@ -172,15 +308,7 @@ describe("ProjectDatabase", () => {
     )
     expect(persistedSend).toMatchObject({ id: "post-pan-send", tap: "post-pan" })
     expect(persistedSend).not.toHaveProperty("pan")
-    await database.applyCommand(
-      {
-        type: "update-channel",
-        channelId: "audio-1",
-        patch: { outputChannelId: bus.id }
-      },
-      "output-1-2"
-    )
-    await database.applyCommand({ type: "delete-channel", channelId: bus.id }, "output-1-2")
+    await database.applyCommand({ type: "delete-channel", channelId: aux.id }, "output-1-2")
     expect(
       (await database.mixerSnapshot()).channels.find(({ id }) => id === "audio-1")
     ).toMatchObject({ outputChannelId: "output-1-2" })
@@ -188,13 +316,13 @@ describe("ProjectDatabase", () => {
     const invalidBatch: ProjectCommand = {
       type: "batch",
       commands: [
-        { type: "create-channel", channel: { ...bus, id: "rolled-back-bus" } },
+        { type: "create-channel", channel: { ...aux, id: "rolled-back-aux" } },
         {
           type: "create-send",
           send: {
             id: "invalid-send",
             sourceChannelId: "missing-channel",
-            targetChannelId: "output-1-2",
+            targetBus: 8,
             sortOrder: 0,
             enabled: true,
             tap: "post",
@@ -205,7 +333,7 @@ describe("ProjectDatabase", () => {
     }
     await expect(database.applyCommand(invalidBatch, "output-1-2")).rejects.toThrow()
     expect((await database.mixerSnapshot()).channels).not.toContainEqual(
-      expect.objectContaining({ id: "rolled-back-bus" })
+      expect.objectContaining({ id: "rolled-back-aux" })
     )
 
     await expect(
@@ -296,6 +424,7 @@ describe("ProjectDatabase", () => {
 
     const raw = new PGlite(join(resource.directory, "pgdata"))
     try {
+      await revertAuxBusMigration(raw)
       await raw.exec(`
         delete from "mixer_channels" where "id" = 'metronome';
         drop index "mixer_system_role_singleton";
@@ -310,7 +439,7 @@ describe("ProjectDatabase", () => {
           select created_at
           from drizzle.__drizzle_migrations
           order by created_at desc
-          limit 4
+          limit 5
         );
       `)
     } finally {
@@ -343,6 +472,7 @@ describe("ProjectDatabase", () => {
 
     const raw = new PGlite(join(resource.directory, "pgdata"))
     try {
+      await revertAuxBusMigration(raw)
       await raw.exec(`
         alter table "key_signature_events"
           add column "pitch_class" smallint not null default 0;
@@ -362,7 +492,7 @@ describe("ProjectDatabase", () => {
           select created_at
           from drizzle.__drizzle_migrations
           order by created_at desc
-          limit 2
+          limit 3
         );
       `)
     } finally {

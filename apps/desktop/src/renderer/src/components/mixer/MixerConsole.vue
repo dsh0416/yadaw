@@ -29,7 +29,7 @@ const sendSlotRows = computed(() =>
   Math.max(
     1,
     ...mixerStore.orderedChannels.map((channel) =>
-      ["audio", "instrument", "bus"].includes(channel.kind)
+      ["audio", "instrument", "aux"].includes(channel.kind)
         ? mixerStore.sendsFor(channel.id).length +
           (mixerStore.availableSendTargets(channel.id).length > 0 ? 1 : 0)
         : 0
@@ -108,8 +108,8 @@ async function deleteChannel(channelId: string): Promise<void> {
         <span>MIXER</span>
         <strong
           >{{ mixerStore.audioTracks.length }} audio ·
-          {{ mixerStore.instrumentTracks.length }} instrument · {{ mixerStore.buses.length }} buses
-          · {{ mixerStore.outputs.length }} outputs</strong
+          {{ mixerStore.instrumentTracks.length }} instrument ·
+          {{ mixerStore.auxChannels.length }} aux · {{ mixerStore.outputs.length }} outputs</strong
         >
       </div>
       <nav aria-label="Mixer actions">
@@ -119,7 +119,9 @@ async function deleteChannel(channelId: string): Promise<void> {
         <button aria-label="Add instrument track" @click="mixerStore.createInstrumentTrack">
           <Plus :size="12" />Instrument
         </button>
-        <button aria-label="Add bus" @click="mixerStore.createBus"><Plus :size="12" />Bus</button>
+        <button aria-label="Add aux channel" @click="mixerStore.createAux()">
+          <Plus :size="12" />Aux
+        </button>
         <button aria-label="Add hardware output" @click="mixerStore.createOutput">
           <Plus :size="12" />Output
         </button>
@@ -147,8 +149,9 @@ async function deleteChannel(channelId: string): Promise<void> {
         :channel="channel"
         :sends="mixerStore.sendsFor(channel.id)"
         :meter="mixerStore.meterFor(channel.id)"
-        :outputs="mixerStore.availableOutputs(channel.id)"
+        :outputs="mixerStore.outputs"
         :buses="mixerStore.buses"
+        :output-targets="mixerStore.availableOutputTargets(channel.id)"
         :send-targets="mixerStore.availableSendTargets(channel.id)"
         :plugins="pluginsFor(channel.id)"
         :plugin-runtime="pluginStore.runtime"

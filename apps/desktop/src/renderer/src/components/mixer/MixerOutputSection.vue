@@ -2,11 +2,18 @@
 import { computed } from "vue"
 import { UiCascadingSelect, UiPopover, UiSelect } from "@yadaw/ui"
 import type { UiCascadingSelectGroup } from "@yadaw/ui"
-import type { MixerChannelPatch, MixerChannelState } from "@yadaw/contracts"
+import type {
+  MixerBusState,
+  MixerChannelPatch,
+  MixerChannelState,
+  MixerRouteTarget
+} from "@yadaw/contracts"
 
 const props = defineProps<{
   channel: MixerChannelState
+  buses: readonly MixerBusState[]
   outputs: MixerChannelState[]
+  targets: MixerRouteTarget[]
 }>()
 
 const emit = defineEmits<{
@@ -19,18 +26,47 @@ const hardwareSummary = computed(
 )
 const routeGroups = computed<readonly UiCascadingSelectGroup[]>(() => [
   {
-    label: "Outputs",
-    options: props.outputs
-      .filter((output) => output.kind === "output")
-      .map((output) => ({ value: output.id, label: output.name }))
+    label: "Buses",
+    options: props.targets
+      .filter(
+        (target): target is Extract<MixerRouteTarget, { kind: "bus" }> => target.kind === "bus"
+      )
+      .map((target) => ({
+        value: `bus:${target.bus}`,
+        label: props.buses.find((bus) => bus.channel === target.bus)?.name ?? `BUS ${target.bus}`
+      }))
   },
   {
-    label: "Buses",
-    options: props.outputs
-      .filter((output) => output.kind === "bus")
-      .map((output) => ({ value: output.id, label: output.name }))
+    label: "Outputs",
+    options: props.targets
+      .filter(
+        (target): target is Extract<MixerRouteTarget, { kind: "output" }> =>
+          target.kind === "output"
+      )
+      .map((target) => ({
+        value: `output:${target.channelId}`,
+        label:
+          props.outputs.find((output) => output.id === target.channelId)?.name ?? "Missing output"
+      }))
   }
 ])
+const routeValue = computed(() =>
+  props.channel.outputChannelId
+    ? `output:${props.channel.outputChannelId}`
+    : props.channel.outputBus
+      ? `bus:${props.channel.outputBus}`
+      : ""
+)
+
+function updateRoute(value: string): void {
+  const separator = value.indexOf(":")
+  const kind = value.slice(0, separator)
+  const target = value.slice(separator + 1)
+  emit("updateChannel", {
+    outputChannelId: kind === "output" ? target : null,
+    outputBus: kind === "bus" ? Number(target) : null
+  })
+}
 
 function updateHardwareOutput(index: number, value: string): void {
   const hardwareOutputChannels = [...props.channel.hardwareOutputChannels]
@@ -42,13 +78,13 @@ function updateHardwareOutput(index: number, value: string): void {
 <template>
   <section class="output-section" data-section="output">
     <UiCascadingSelect
-      v-if="channel.kind === 'audio' || channel.kind === 'instrument' || channel.kind === 'bus'"
-      :model-value="channel.outputChannelId ?? ''"
+      v-if="channel.kind === 'audio' || channel.kind === 'instrument' || channel.kind === 'aux'"
+      :model-value="routeValue"
       :groups="routeGroups"
       placeholder="No route"
       size="compact"
       :aria-label="`${channel.name} output`"
-      @update:model-value="emit('updateChannel', { outputChannelId: $event })"
+      @update:model-value="updateRoute"
     />
     <UiPopover v-else-if="channel.kind === 'output'" side="top" :side-offset="7">
       <template #trigger>

@@ -21,7 +21,7 @@ use ringbuf::{
 };
 use yadaw_dsp_core::mixer::{
     ChannelKind, ChannelPeak, ChannelSpec, HardwareOutputFrame, MAX_OUTPUT_CHANNELS, MixerGraph,
-    SendSpec, SendTap,
+    RouteTarget, SendSpec, SendTap,
 };
 use yadaw_dsp_runtime::{
     MUSICAL_TICKS_PER_QUARTER,
@@ -105,7 +105,9 @@ pub struct NativeMixerChannel {
     pub muted: bool,
     pub soloed: bool,
     pub output_index: Option<u32>,
+    pub output_bus: Option<u32>,
     pub record_armed: bool,
+    pub input_source: Option<String>,
     pub input_channels: Vec<u32>,
     pub hardware_output_channels: Vec<u32>,
 }
@@ -114,7 +116,8 @@ pub struct NativeMixerChannel {
 pub struct NativeMixerSend {
     pub id: String,
     pub source_index: u32,
-    pub target_index: u32,
+    pub target_output_index: Option<u32>,
+    pub target_bus: Option<u32>,
     pub enabled: bool,
     pub tap: LiveMixerSendTap,
     pub level_db: f64,
@@ -1156,7 +1159,7 @@ fn parse_channel_kind(value: &str) -> Result<ChannelKind> {
     match value {
         "audio" => Ok(ChannelKind::Audio),
         "instrument" => Ok(ChannelKind::Instrument),
-        "bus" => Ok(ChannelKind::Bus),
+        "aux" => Ok(ChannelKind::Aux),
         "master" => Ok(ChannelKind::Master),
         "output" => Ok(ChannelKind::Output),
         _ => Err(invalid_config("unknown mixer channel kind")),
@@ -1178,7 +1181,10 @@ fn build_mixer_runtime(
         .channels
         .iter()
         .map(|channel| {
-            if channel.kind != "audio" || !channel.record_armed {
+            if channel.kind != "audio"
+                || channel.input_source.as_deref() != Some("hardware")
+                || !channel.record_armed
+            {
                 return Ok(None);
             }
             let routed = channel
@@ -1206,7 +1212,31 @@ fn build_mixer_runtime(
                 pan: channel.pan as f32,
                 muted: channel.muted,
                 soloed: channel.soloed,
-                output: channel.output_index.map(|index| index as usize),
+                output: match (channel.output_index, channel.output_bus) {
+                    (Some(index), None) => Some(RouteTarget::Output(index as usize)),
+                    (None, Some(bus)) => Some(RouteTarget::Bus(
+                        bus.checked_sub(1)
+                            .ok_or_else(|| invalid_config("BUS channels are one-based"))?
+                            as usize,
+                    )),
+                    (None, None) => None,
+                    (Some(_), Some(_)) => {
+                        return Err(invalid_config(
+                            "channel output must target either a BUS or an Output",
+                        ));
+                    }
+                },
+                input_bus: if channel.input_source.as_deref() == Some("bus") {
+                    match channel.input_channels.as_slice() {
+                        [mono] if *mono > 0 => Some([(*mono - 1) as usize; 2]),
+                        [left, right] if *left > 0 && *right > 0 => {
+                            Some([(*left - 1) as usize, (*right - 1) as usize])
+                        }
+                        _ => return Err(invalid_config("invalid BUS input mapping")),
+                    }
+                } else {
+                    None
+                },
                 hardware_output: match channel.hardware_output_channels.as_slice() {
                     [] => None,
                     [left, right] if *left > 0 && *right > 0 => {
@@ -1224,7 +1254,17 @@ fn build_mixer_runtime(
             Ok(SendSpec {
                 id: send.id.clone(),
                 source: send.source_index as usize,
-                target: send.target_index as usize,
+                target: match (send.target_output_index, send.target_bus) {
+                    (Some(index), None) => RouteTarget::Output(index as usize),
+                    (None, Some(bus)) => RouteTarget::Bus(
+                        bus.checked_sub(1)
+                            .ok_or_else(|| invalid_config("BUS channels are one-based"))?
+                            as usize,
+                    ),
+                    _ => {
+                        return Err(invalid_config("send must target either a BUS or an Output"));
+                    }
+                },
                 enabled: send.enabled,
                 tap: match send.tap {
                     LiveMixerSendTap::Pre => SendTap::Pre,
@@ -1343,13 +1383,42 @@ fn build_mixer_runtime(
         .map(|_| Vec::new())
         .collect::<Vec<Vec<InputEdge>>>();
     for (source, channel) in channels.iter().enumerate() {
-        if let Some(target) = channel.output {
-            input_edges[target].push(InputEdge::Main(source));
+        match channel.output {
+            Some(RouteTarget::Output(target)) => {
+                input_edges[target].push(InputEdge::Main(source));
+            }
+            Some(RouteTarget::Bus(bus)) => {
+                for (target, consumer) in channels.iter().enumerate() {
+                    if consumer
+                        .input_bus
+                        .is_some_and(|inputs| inputs.contains(&bus))
+                    {
+                        input_edges[target].push(InputEdge::Main(source));
+                    }
+                }
+            }
+            None => {}
         }
     }
     for (send_index, send) in native.sends.iter().enumerate() {
         if send.enabled {
-            input_edges[send.target_index as usize].push(InputEdge::Send(send_index));
+            match (send.target_output_index, send.target_bus) {
+                (Some(target), None) => {
+                    input_edges[target as usize].push(InputEdge::Send(send_index));
+                }
+                (None, Some(bus)) => {
+                    let bus = bus.saturating_sub(1) as usize;
+                    for (target, channel) in channels.iter().enumerate() {
+                        if channel
+                            .input_bus
+                            .is_some_and(|inputs| inputs.contains(&bus))
+                        {
+                            input_edges[target].push(InputEdge::Send(send_index));
+                        }
+                    }
+                }
+                _ => unreachable!("validated send target must be exclusive"),
+            }
         }
     }
     let latency_nodes = input_edges
@@ -1369,18 +1438,28 @@ fn build_mixer_runtime(
         .collect::<Vec<_>>();
     let latency_plan = plan_latency_compensation(&latency_nodes)
         .map_err(|error| invalid_config(error.to_string()))?;
+    let mut channel_output_delays = vec![0_usize; channels.len()];
+    let mut send_delays = vec![0_usize; native.sends.len()];
     for (target, edges) in input_edges.iter().enumerate() {
         for (input, edge) in edges.iter().enumerate() {
             let delay = latency_plan[target].input_delays[input] as usize;
             match edge {
-                InputEdge::Main(source) => graph
-                    .set_channel_output_delay(*source, delay)
-                    .map_err(|error| invalid_config(error.to_string()))?,
-                InputEdge::Send(send) => graph
-                    .set_send_delay(*send, delay)
-                    .map_err(|error| invalid_config(error.to_string()))?,
+                InputEdge::Main(source) => {
+                    channel_output_delays[*source] = channel_output_delays[*source].max(delay);
+                }
+                InputEdge::Send(send) => send_delays[*send] = send_delays[*send].max(delay),
             }
         }
+    }
+    for (channel, delay) in channel_output_delays.into_iter().enumerate() {
+        graph
+            .set_channel_output_delay(channel, delay)
+            .map_err(|error| invalid_config(error.to_string()))?;
+    }
+    for (send, delay) in send_delays.into_iter().enumerate() {
+        graph
+            .set_send_delay(send, delay)
+            .map_err(|error| invalid_config(error.to_string()))?;
     }
 
     let mut midi_events = Vec::new();
@@ -2720,7 +2799,9 @@ pub mod bench_support {
         HeapCons, HeapProd, HeapRb,
         traits::{Consumer, Producer, Split},
     };
-    use yadaw_dsp_core::mixer::{ChannelKind, ChannelPeak, ChannelSpec, MixerGraph, StereoFrame};
+    use yadaw_dsp_core::mixer::{
+        ChannelKind, ChannelPeak, ChannelSpec, MixerGraph, RouteTarget, StereoFrame,
+    };
     use yadaw_dsp_runtime::tempo::TempoMap;
 
     use super::{
@@ -2754,7 +2835,8 @@ pub mod bench_support {
                 pan: 0.0,
                 muted: false,
                 soloed: false,
-                output: Some(output),
+                output: Some(RouteTarget::Output(output)),
+                input_bus: None,
                 hardware_output: None,
             });
         }
@@ -2766,6 +2848,7 @@ pub mod bench_support {
             muted: false,
             soloed: false,
             output: None,
+            input_bus: None,
             hardware_output: None,
         });
         channels.push(ChannelSpec {
@@ -2776,6 +2859,7 @@ pub mod bench_support {
             muted: false,
             soloed: false,
             output: None,
+            input_bus: None,
             hardware_output: Some([0, 1]),
         });
         let graph = MixerGraph::new(scenario.sample_rate, channels, Vec::new())

@@ -30,14 +30,15 @@ function channel(id: string, kind: MixerChannelState["kind"]): MixerChannelState
     name: id,
     color: "#4F8CFF",
     sortOrder: 0,
-    inputFormat: kind === "audio" ? "stereo" : null,
+    inputSource: kind === "audio" ? "hardware" : kind === "aux" ? "bus" : null,
+    inputFormat: kind === "audio" || kind === "aux" ? "stereo" : null,
     gainDb: 0,
     pan: 0,
     muted: false,
     soloed: false,
-    outputChannelId: ["audio", "bus"].includes(kind) ? "output" : null,
+    outputChannelId: ["audio", "instrument", "aux"].includes(kind) ? "output" : null,
     recordArmed: false,
-    inputChannels: kind === "audio" ? [1, 2] : [],
+    inputChannels: kind === "audio" || kind === "aux" ? [1, 2] : [],
     hardwareOutputChannels: kind === "output" ? [1, 2] : []
   }
 }
@@ -51,17 +52,17 @@ describe("MixerConsole", () => {
       sampleRate: 48_000,
       channels: [
         channel("audio", "audio"),
-        channel("bus-a", "bus"),
-        channel("bus-b", "bus"),
-        channel("bus-c", "bus"),
+        channel("aux-a", "aux"),
+        channel("aux-b", "aux"),
+        channel("aux-c", "aux"),
         channel("master", "master"),
         channel("output", "output")
       ],
       clips: [],
-      sends: ["bus-a", "bus-b", "bus-c"].map((targetChannelId, index) => ({
+      sends: [1, 2, 3].map((targetBus, index) => ({
         id: `send-${index}`,
         sourceChannelId: "audio",
-        targetChannelId,
+        targetBus,
         sortOrder: index,
         enabled: true,
         tap: "post-pan" as const,
@@ -90,7 +91,7 @@ describe("MixerConsole", () => {
     const wrapper = mount(MixerConsole, { global: { plugins: [pinia] } })
     const scroller = wrapper.get(".channel-scroll")
     expect(scroller.attributes("style")).toContain("--plugin-section-height: 156px")
-    expect(scroller.attributes("style")).toContain("--send-section-height: 90px")
+    expect(scroller.attributes("style")).toContain("--send-section-height: 116px")
     expect(wrapper.find(".mixer-section-labels").exists()).toBe(true)
     expect(wrapper.findAll(".channel-strip")).toHaveLength(6)
     expect(wrapper.find(".channel-strip.master").classes()).toContain("master")
@@ -116,7 +117,7 @@ describe("MixerConsole", () => {
         {
           id: "send-3",
           sourceChannelId: "audio",
-          targetChannelId: "bus-a",
+          targetBus: 4,
           sortOrder: 3,
           enabled: true,
           tap: "post-pan",
@@ -127,6 +128,6 @@ describe("MixerConsole", () => {
     await nextTick()
 
     expect(scroller.attributes("style")).toContain("--plugin-section-height: 180px")
-    expect(scroller.attributes("style")).toContain("--send-section-height: 116px")
+    expect(scroller.attributes("style")).toContain("--send-section-height: 142px")
   })
 })

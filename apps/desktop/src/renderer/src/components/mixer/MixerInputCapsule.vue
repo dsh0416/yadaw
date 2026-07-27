@@ -1,18 +1,22 @@
 <script setup lang="ts">
 import { computed } from "vue"
-import { UiCascadingSelect, type UiSelectOption } from "@yadaw/ui"
-import type { MixerChannelPatch } from "@yadaw/contracts"
+import { UiCascadingSelect, type UiCascadingSelectGroup } from "@yadaw/ui"
+import type { MixerChannelPatch, MixerInputSource } from "@yadaw/contracts"
+import { MIXER_BUS_COUNT } from "@yadaw/contracts"
 import ChannelFormatIcon from "../studio/ChannelFormatIcon.vue"
 
 const props = withDefaults(
   defineProps<{
     channelName: string
+    inputSource: MixerInputSource
     inputFormat: "mono" | "stereo"
     inputChannels: number[]
-    inputCount?: number
+    hardwareInputCount?: number
+    busCount?: number
   }>(),
   {
-    inputCount: 32
+    hardwareInputCount: 32,
+    busCount: MIXER_BUS_COUNT
   }
 )
 
@@ -22,47 +26,67 @@ const emit = defineEmits<{
 
 const isStereo = computed(() => props.inputFormat === "stereo")
 
-function clampInput(channel: number): number {
-  return Math.min(Math.max(channel, 1), props.inputCount)
+function inputCount(source: MixerInputSource): number {
+  return source === "hardware" ? props.hardwareInputCount : props.busCount
 }
 
-function adjacentPair(channel: number): [number, number] {
-  const clampedChannel = clampInput(channel)
+function clampInput(source: MixerInputSource, channel: number): number {
+  return Math.min(Math.max(channel, 1), inputCount(source))
+}
+
+function adjacentPair(source: MixerInputSource, channel: number): [number, number] {
+  const count = inputCount(source)
+  const clampedChannel = clampInput(source, channel)
   const pairStart = clampedChannel % 2 === 0 ? clampedChannel - 1 : clampedChannel
-  const boundedPairStart = Math.min(pairStart, Math.max(props.inputCount - 1, 1))
-  return [boundedPairStart, Math.min(boundedPairStart + 1, props.inputCount)]
+  const boundedPairStart = Math.min(pairStart, Math.max(count - 1, 1))
+  return [boundedPairStart, Math.min(boundedPairStart + 1, count)]
 }
 
 const selectedInput = computed(() => {
   const channel = props.inputChannels[0] ?? 1
-  return String(isStereo.value ? adjacentPair(channel)[0] : clampInput(channel))
+  const selected = isStereo.value
+    ? adjacentPair(props.inputSource, channel)[0]
+    : clampInput(props.inputSource, channel)
+  return `${props.inputSource}:${selected}`
 })
 
-const channelOptions = computed<readonly UiSelectOption[]>(() => {
+function sourceOptions(source: MixerInputSource) {
+  const count = inputCount(source)
+  const prefix = source === "hardware" ? "IN" : "BUS"
   if (isStereo.value) {
-    return Array.from({ length: Math.floor(props.inputCount / 2) }, (_, index) => {
+    return Array.from({ length: Math.floor(count / 2) }, (_, index) => {
       const first = index * 2 + 1
       return {
-        value: String(first),
-        label: `IN ${first}–${first + 1}`
+        value: `${source}:${first}`,
+        label: `${prefix} ${first}–${first + 1}`
       }
     })
   }
 
-  return Array.from({ length: props.inputCount }, (_, index) => {
+  return Array.from({ length: count }, (_, index) => {
     const channel = index + 1
     return {
-      value: String(channel),
-      label: `IN ${channel}`
+      value: `${source}:${channel}`,
+      label: `${prefix} ${channel}`
     }
   })
+}
+
+const inputGroups = computed<readonly UiCascadingSelectGroup[]>(() => {
+  return [
+    { label: "Hardware inputs", options: sourceOptions("hardware") },
+    { label: "Buses", options: sourceOptions("bus") }
+  ]
 })
 
 function selectInput(value: string): void {
-  const channel = clampInput(Number(value))
+  const [sourceValue, channelValue] = value.split(":")
+  const inputSource: MixerInputSource = sourceValue === "bus" ? "bus" : "hardware"
+  const channel = clampInput(inputSource, Number(channelValue))
   emit("update", {
+    inputSource,
     inputFormat: props.inputFormat,
-    inputChannels: isStereo.value ? adjacentPair(channel) : [channel]
+    inputChannels: isStereo.value ? adjacentPair(inputSource, channel) : [channel]
   })
 }
 
@@ -70,8 +94,11 @@ function toggleStereo(): void {
   const channel = props.inputChannels[0] ?? 1
   const nextIsStereo = !isStereo.value
   emit("update", {
+    inputSource: props.inputSource,
     inputFormat: nextIsStereo ? "stereo" : "mono",
-    inputChannels: nextIsStereo ? adjacentPair(channel) : [clampInput(channel)]
+    inputChannels: nextIsStereo
+      ? adjacentPair(props.inputSource, channel)
+      : [clampInput(props.inputSource, channel)]
   })
 }
 </script>
@@ -81,7 +108,7 @@ function toggleStereo(): void {
     <div class="input-capsule__channel">
       <UiCascadingSelect
         :model-value="selectedInput"
-        :options="channelOptions"
+        :groups="inputGroups"
         size="compact"
         appearance="embedded"
         :aria-label="`${channelName} input channel`"

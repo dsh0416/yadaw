@@ -131,17 +131,19 @@ export const mixerChannels = pgTable(
   "mixer_channels",
   {
     id: text("id").primaryKey(),
-    kind: text("kind").$type<"audio" | "instrument" | "bus" | "master" | "output">().notNull(),
+    kind: text("kind").$type<"audio" | "instrument" | "aux" | "master" | "output">().notNull(),
     systemRole: text("system_role").$type<"metronome">(),
     name: text("name").notNull(),
     color: text("color").notNull(),
     sortOrder: integer("sort_order").notNull(),
+    inputSource: text("input_source").$type<"hardware" | "bus">(),
     inputFormat: text("input_format").$type<"mono" | "stereo">(),
     gainDb: doublePrecision("gain_db").notNull().default(0),
     pan: doublePrecision("pan").notNull().default(0),
     muted: boolean("muted").notNull().default(false),
     soloed: boolean("soloed").notNull().default(false),
     outputChannelId: text("output_channel_id"),
+    outputBus: smallint("output_bus"),
     recordArmed: boolean("record_armed").notNull().default(false),
     inputChannels: smallint("input_channels")
       .array()
@@ -172,7 +174,7 @@ export const mixerChannels = pgTable(
     index("mixer_channel_sort_order").on(table.kind, table.sortOrder),
     check(
       "mixer_channels_kind_check",
-      sql`${table.kind} in ('audio', 'instrument', 'bus', 'master', 'output')`
+      sql`${table.kind} in ('audio', 'instrument', 'aux', 'master', 'output')`
     ),
     check(
       "mixer_channels_system_role_check",
@@ -193,25 +195,55 @@ export const mixerChannels = pgTable(
     ),
     check(
       "mixer_channels_output_route_check",
-      sql`(${table.kind} in ('master', 'output')) = (${table.outputChannelId} is null)`
+      sql`(
+        ${table.kind} in ('master', 'output')
+        and ${table.outputChannelId} is null
+        and ${table.outputBus} is null
+      ) or (
+        ${table.kind} not in ('master', 'output')
+        and num_nonnulls(${table.outputChannelId}, ${table.outputBus}) = 1
+      )`
+    ),
+    check(
+      "mixer_channels_output_bus_check",
+      sql`${table.outputBus} is null or ${table.outputBus} between 1 and 256`
     ),
     check(
       "mixer_channels_input_check",
       sql`(
-      ${table.kind} = 'audio'
+      ${table.kind} in ('audio', 'aux')
+      and ${table.inputSource} is not null
       and ${table.inputFormat} is not null
       and (
         (${table.inputFormat} = 'mono' and cardinality(${table.inputChannels}) = 1)
-        or (${table.inputFormat} = 'stereo' and cardinality(${table.inputChannels}) = 2)
+        or (
+          ${table.inputFormat} = 'stereo'
+          and cardinality(${table.inputChannels}) = 2
+          and ${table.inputChannels}[1] <> ${table.inputChannels}[2]
+        )
       )
+      and (${table.kind} = 'audio' or not ${table.recordArmed})
     ) or (
-      ${table.kind} <> 'audio'
+      ${table.kind} not in ('audio', 'aux')
+      and ${table.inputSource} is null
       and ${table.inputFormat} is null
       and cardinality(${table.inputChannels}) = 0
       and not ${table.recordArmed}
     )`
     ),
-    check("mixer_channels_input_channels_check", sql`0 < all(${table.inputChannels})`),
+    check(
+      "mixer_channels_input_channels_check",
+      sql`(
+        ${table.inputSource} is null
+        or (
+          0 < all(${table.inputChannels})
+          and (
+            (${table.inputSource} = 'hardware' and 32 >= all(${table.inputChannels}))
+            or (${table.inputSource} = 'bus' and 256 >= all(${table.inputChannels}))
+          )
+        )
+      )`
+    ),
     check(
       "mixer_channels_hardware_output_check",
       sql`(
@@ -260,26 +292,30 @@ export const mixerSends = pgTable(
     sourceChannelId: text("source_channel_id")
       .notNull()
       .references(() => mixerChannels.id, { onDelete: "cascade" }),
-    targetChannelId: text("target_channel_id")
-      .notNull()
-      .references(() => mixerChannels.id, { onDelete: "cascade" }),
+    targetChannelId: text("target_channel_id").references(() => mixerChannels.id, {
+      onDelete: "cascade"
+    }),
+    targetBus: smallint("target_bus"),
     sortOrder: integer("sort_order").notNull(),
     enabled: boolean("enabled").notNull().default(false),
     tap: text("tap").$type<"pre" | "post" | "post-pan">().notNull().default("post-pan"),
     levelDb: doublePrecision("level_db").notNull().default(-90)
   },
   (table) => [
-    uniqueIndex("mixer_sends_source_target_unique").on(
-      table.sourceChannelId,
-      table.targetChannelId
-    ),
+    uniqueIndex("mixer_sends_source_bus_unique")
+      .on(table.sourceChannelId, table.targetBus)
+      .where(sql`${table.targetBus} is not null`),
+    uniqueIndex("mixer_sends_source_output_unique")
+      .on(table.sourceChannelId, table.targetChannelId)
+      .where(sql`${table.targetChannelId} is not null`),
     index("mixer_sends_source_order").on(table.sourceChannelId, table.sortOrder),
     check("mixer_sends_sort_order_check", sql`${table.sortOrder} >= 0`),
     check("mixer_sends_tap_check", sql`${table.tap} in ('pre', 'post', 'post-pan')`),
     check("mixer_sends_level_db_check", sql`${table.levelDb} between -90 and 12`),
     check(
-      "mixer_sends_distinct_channels_check",
-      sql`${table.sourceChannelId} <> ${table.targetChannelId}`
+      "mixer_sends_target_check",
+      sql`num_nonnulls(${table.targetChannelId}, ${table.targetBus}) = 1
+        and (${table.targetBus} is null or ${table.targetBus} between 1 and 256)`
     )
   ]
 )

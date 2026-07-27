@@ -1,6 +1,7 @@
 use std::{collections::VecDeque, error::Error, fmt};
 
 pub type StereoFrame = [f32; 2];
+pub const MAX_BUS_CHANNELS: usize = 256;
 pub const MAX_OUTPUT_CHANNELS: usize = 32;
 pub type HardwareOutputFrame = [f32; MAX_OUTPUT_CHANNELS];
 
@@ -8,7 +9,7 @@ pub type HardwareOutputFrame = [f32; MAX_OUTPUT_CHANNELS];
 pub enum ChannelKind {
     Audio,
     Instrument,
-    Bus,
+    Aux,
     Master,
     Output,
 }
@@ -20,6 +21,12 @@ pub enum SendTap {
     PostPan,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RouteTarget {
+    Bus(usize),
+    Output(usize),
+}
+
 #[derive(Debug, Clone)]
 pub struct ChannelSpec {
     pub id: String,
@@ -28,7 +35,8 @@ pub struct ChannelSpec {
     pub pan: f32,
     pub muted: bool,
     pub soloed: bool,
-    pub output: Option<usize>,
+    pub output: Option<RouteTarget>,
+    pub input_bus: Option<[usize; 2]>,
     pub hardware_output: Option<[usize; 2]>,
 }
 
@@ -36,7 +44,7 @@ pub struct ChannelSpec {
 pub struct SendSpec {
     pub id: String,
     pub source: usize,
-    pub target: usize,
+    pub target: RouteTarget,
     pub enabled: bool,
     pub tap: SendTap,
     pub level_db: f32,
@@ -159,6 +167,7 @@ pub struct MixerGraph {
     channel_runtime: Vec<ChannelRuntime>,
     send_runtime: Vec<SendRuntime>,
     accumulation: Vec<StereoFrame>,
+    bus_accumulation: [f32; MAX_BUS_CHANNELS],
     peaks: Vec<ChannelPeak>,
     sends_by_source: Vec<Vec<usize>>,
     master: usize,
@@ -213,29 +222,59 @@ fn graph_edges(
             (ChannelKind::Master | ChannelKind::Output, Some(_)) | (_, None) => {
                 return Err(GraphError::InvalidOutput);
             }
-            (_, Some(output)) if output >= channels.len() || output == index => {
-                return Err(GraphError::InvalidOutput);
-            }
-            (_, Some(output))
-                if channels[output].kind != ChannelKind::Bus
-                    && channels[output].kind != ChannelKind::Output =>
+            (_, Some(RouteTarget::Output(output)))
+                if output >= channels.len()
+                    || output == index
+                    || channels[output].kind != ChannelKind::Output =>
             {
                 return Err(GraphError::InvalidOutput);
             }
-            (_, Some(output)) => edges[index].push(output),
+            (_, Some(RouteTarget::Output(output))) => edges[index].push(output),
+            (_, Some(RouteTarget::Bus(bus))) if bus >= MAX_BUS_CHANNELS => {
+                return Err(GraphError::InvalidOutput);
+            }
+            (_, Some(RouteTarget::Bus(bus))) => {
+                for (target, candidate) in channels.iter().enumerate() {
+                    if candidate
+                        .input_bus
+                        .is_some_and(|inputs| inputs.contains(&bus))
+                    {
+                        edges[index].push(target);
+                    }
+                }
+            }
         }
     }
     for send in sends {
         if send.source >= channels.len()
-            || send.target >= channels.len()
-            || send.source == send.target
             || channels[send.source].kind == ChannelKind::Master
             || channels[send.source].kind == ChannelKind::Output
-            || channels[send.target].kind != ChannelKind::Bus
         {
             return Err(GraphError::InvalidSend);
         }
-        edges[send.source].push(send.target);
+        match send.target {
+            RouteTarget::Bus(bus) if bus >= MAX_BUS_CHANNELS => {
+                return Err(GraphError::InvalidSend);
+            }
+            RouteTarget::Bus(bus) => {
+                for (target, channel) in channels.iter().enumerate() {
+                    if channel
+                        .input_bus
+                        .is_some_and(|inputs| inputs.contains(&bus))
+                    {
+                        edges[send.source].push(target);
+                    }
+                }
+            }
+            RouteTarget::Output(output)
+                if output >= channels.len()
+                    || output == send.source
+                    || channels[output].kind != ChannelKind::Output =>
+            {
+                return Err(GraphError::InvalidSend);
+            }
+            RouteTarget::Output(output) => edges[send.source].push(output),
+        }
     }
     Ok(edges)
 }
@@ -323,18 +362,27 @@ fn solo_audibility(
         .zip(&downstream)
         .map(|(upstream, downstream)| *upstream || *downstream)
         .collect();
+    let route_is_audible = |source: usize, route: RouteTarget| match route {
+        RouteTarget::Output(target) => edge_is_audible(source, target),
+        RouteTarget::Bus(bus) => channels.iter().enumerate().any(|(target, channel)| {
+            channel
+                .input_bus
+                .is_some_and(|inputs| inputs.contains(&bus))
+                && edge_is_audible(source, target)
+        }),
+    };
     let output_audible = channels
         .iter()
         .enumerate()
         .map(|(source, channel)| {
             channel
                 .output
-                .is_none_or(|target| edge_is_audible(source, target))
+                .is_none_or(|target| route_is_audible(source, target))
         })
         .collect();
     let send_audible = sends
         .iter()
-        .map(|send| edge_is_audible(send.source, send.target))
+        .map(|send| route_is_audible(send.source, send.target))
         .collect();
     (audible, output_audible, send_audible)
 }
@@ -377,6 +425,16 @@ impl MixerGraph {
         }) {
             return Err(GraphError::InvalidOutput);
         }
+        if channels.iter().any(|channel| match channel.input_bus {
+            Some([left, right]) => {
+                (channel.kind != ChannelKind::Audio && channel.kind != ChannelKind::Aux)
+                    || left >= MAX_BUS_CHANNELS
+                    || right >= MAX_BUS_CHANNELS
+            }
+            None => false,
+        }) {
+            return Err(GraphError::InvalidOutput);
+        }
         let edges = graph_edges(&channels, &sends)?;
         let order = topological_order(&edges)?;
         let (audible, output_audible, send_audible) = solo_audibility(&channels, &edges, &sends);
@@ -401,6 +459,7 @@ impl MixerGraph {
         }
         Ok(Self {
             accumulation: vec![[0.0, 0.0]; channels.len()],
+            bus_accumulation: [0.0; MAX_BUS_CHANNELS],
             peaks: vec![ChannelPeak::default(); channels.len()],
             channels,
             sends,
@@ -489,6 +548,7 @@ impl MixerGraph {
 
     pub fn process_frame(&mut self, audio_inputs: &[StereoFrame]) -> HardwareOutputFrame {
         self.accumulation.fill([0.0, 0.0]);
+        self.bus_accumulation.fill(0.0);
         for (input_index, channel_index) in self
             .channels
             .iter()
@@ -509,6 +569,7 @@ impl MixerGraph {
         processor: &mut impl FnMut(usize, StereoFrame) -> StereoFrame,
     ) -> HardwareOutputFrame {
         self.accumulation.fill([0.0, 0.0]);
+        self.bus_accumulation.fill(0.0);
         for (target, source) in self.accumulation.iter_mut().zip(channel_sources) {
             *target = *source;
         }
@@ -532,6 +593,10 @@ impl MixerGraph {
                 continue;
             }
             let channel = &self.channels[index];
+            if let Some([left, right]) = channel.input_bus {
+                self.accumulation[index][0] += self.bus_accumulation[left];
+                self.accumulation[index][1] += self.bus_accumulation[right];
+            }
             let pre = processor(index, self.accumulation[index]);
             self.peaks[index].pre = [
                 self.peaks[index].pre[0].max(pre[0].abs()),
@@ -557,7 +622,12 @@ impl MixerGraph {
                 };
                 let sent = scale(tap, self.send_runtime[send_index].gain.next());
                 let sent = self.send_runtime[send_index].delay.process(sent);
-                add(&mut self.accumulation[send.target], sent);
+                match send.target {
+                    RouteTarget::Bus(bus) => {
+                        self.bus_accumulation[bus] += (sent[0] + sent[1]) * 0.5;
+                    }
+                    RouteTarget::Output(output) => add(&mut self.accumulation[output], sent),
+                }
             }
 
             self.peaks[index].post = [
@@ -566,7 +636,12 @@ impl MixerGraph {
             ];
             if let Some(output) = channel.output.filter(|_| self.output_audible[index]) {
                 let routed = self.channel_runtime[index].output_delay.process(post);
-                add(&mut self.accumulation[output], routed);
+                match output {
+                    RouteTarget::Bus(bus) => {
+                        self.bus_accumulation[bus] += (routed[0] + routed[1]) * 0.5;
+                    }
+                    RouteTarget::Output(output) => add(&mut self.accumulation[output], routed),
+                }
             }
             if let Some([left, right]) = channel.hardware_output {
                 master_pre[0] = master_pre[0].max(post[0].abs());
@@ -600,8 +675,8 @@ impl MixerGraph {
 #[cfg(test)]
 mod tests {
     use super::{
-        ChannelKind, ChannelSpec, GraphError, MixerGraph, SendSpec, SendTap, balance_stereo,
-        pan_mono,
+        ChannelKind, ChannelSpec, GraphError, MixerGraph, RouteTarget, SendSpec, SendTap,
+        balance_stereo, pan_mono,
     };
 
     fn channel(id: &str, kind: ChannelKind, output: Option<usize>) -> ChannelSpec {
@@ -612,7 +687,8 @@ mod tests {
             pan: 0.0,
             muted: false,
             soloed: false,
-            output,
+            output: output.map(RouteTarget::Output),
+            input_bus: (kind == ChannelKind::Aux).then_some([0, 0]),
             hardware_output: (kind == ChannelKind::Output).then_some([0, 1]),
         }
     }
@@ -681,13 +757,34 @@ mod tests {
     #[test]
     fn rejects_output_and_send_cycles() {
         let channels = vec![
-            channel("bus-a", ChannelKind::Bus, Some(1)),
-            channel("bus-b", ChannelKind::Bus, Some(0)),
+            channel("aux-a", ChannelKind::Aux, Some(3)),
+            channel("aux-b", ChannelKind::Aux, Some(3)),
             channel("master", ChannelKind::Master, None),
             channel("output", ChannelKind::Output, None),
         ];
+        let sends = vec![
+            SendSpec {
+                id: "a-to-b".to_owned(),
+                source: 0,
+                target: RouteTarget::Bus(1),
+                enabled: true,
+                tap: SendTap::Post,
+                level_db: 0.0,
+            },
+            SendSpec {
+                id: "b-to-a".to_owned(),
+                source: 1,
+                target: RouteTarget::Bus(0),
+                enabled: true,
+                tap: SendTap::Post,
+                level_db: 0.0,
+            },
+        ];
+        let mut channels = channels;
+        channels[0].input_bus = Some([0, 0]);
+        channels[1].input_bus = Some([1, 1]);
         assert!(matches!(
-            MixerGraph::new(48_000, channels, vec![]),
+            MixerGraph::new(48_000, channels, sends),
             Err(GraphError::RoutingCycle)
         ));
     }
@@ -699,14 +796,14 @@ mod tests {
         source.muted = true;
         let channels = vec![
             source,
-            channel("bus", ChannelKind::Bus, Some(3)),
+            channel("aux", ChannelKind::Aux, Some(3)),
             channel("master", ChannelKind::Master, None),
             channel("output", ChannelKind::Output, None),
         ];
         let sends = vec![SendSpec {
             id: "send".to_owned(),
             source: 0,
-            target: 1,
+            target: RouteTarget::Bus(0),
             enabled: true,
             tap: SendTap::Pre,
             level_db: 0.0,
@@ -722,14 +819,14 @@ mod tests {
         source.muted = true;
         let channels = vec![
             source,
-            channel("bus", ChannelKind::Bus, Some(3)),
+            channel("aux", ChannelKind::Aux, Some(3)),
             channel("master", ChannelKind::Master, None),
             channel("output", ChannelKind::Output, None),
         ];
         let sends = vec![SendSpec {
             id: "send".to_owned(),
             source: 0,
-            target: 1,
+            target: RouteTarget::Bus(0),
             enabled: true,
             tap: SendTap::Post,
             level_db: 0.0,
@@ -739,25 +836,89 @@ mod tests {
     }
 
     #[test]
+    fn stereo_aux_reads_two_adjacent_mono_bus_slots() {
+        let mut left_source = channel("left", ChannelKind::Audio, Some(4));
+        left_source.muted = true;
+        let mut right_source = channel("right", ChannelKind::Audio, Some(4));
+        right_source.muted = true;
+        let mut aux = channel("aux", ChannelKind::Aux, Some(4));
+        aux.input_bus = Some([0, 1]);
+        let channels = vec![
+            left_source,
+            right_source,
+            aux,
+            channel("master", ChannelKind::Master, None),
+            channel("output", ChannelKind::Output, None),
+        ];
+        let sends = vec![
+            SendSpec {
+                id: "left-send".to_owned(),
+                source: 0,
+                target: RouteTarget::Bus(0),
+                enabled: true,
+                tap: SendTap::Pre,
+                level_db: 0.0,
+            },
+            SendSpec {
+                id: "right-send".to_owned(),
+                source: 1,
+                target: RouteTarget::Bus(1),
+                enabled: true,
+                tap: SendTap::Pre,
+                level_db: 0.0,
+            },
+        ];
+        let mut graph = MixerGraph::new(48_000, channels, sends).unwrap();
+
+        assert_eq!(rendered(&mut graph, &[[1.0, 0.0], [0.0, 2.0]]), [0.5, 1.0]);
+    }
+
+    #[test]
+    fn main_outputs_can_target_buses_and_sends_can_target_outputs() {
+        let mut bus_source = channel("bus-source", ChannelKind::Audio, None);
+        bus_source.output = Some(RouteTarget::Bus(0));
+        let mut output_send_source = channel("output-send-source", ChannelKind::Audio, None);
+        output_send_source.output = Some(RouteTarget::Bus(2));
+        let channels = vec![
+            bus_source,
+            output_send_source,
+            channel("aux", ChannelKind::Aux, Some(4)),
+            channel("master", ChannelKind::Master, None),
+            channel("output", ChannelKind::Output, None),
+        ];
+        let sends = vec![SendSpec {
+            id: "output-send".to_owned(),
+            source: 1,
+            target: RouteTarget::Output(4),
+            enabled: true,
+            tap: SendTap::PostPan,
+            level_db: 0.0,
+        }];
+        let mut graph = MixerGraph::new(48_000, channels, sends).unwrap();
+
+        assert_eq!(rendered(&mut graph, &[[1.0, 1.0], [0.5, 1.0]]), [1.5, 2.0]);
+    }
+
+    #[test]
     fn post_pan_send_follows_source_pan_after_the_fader() {
         let mut source = channel("audio", ChannelKind::Audio, Some(3));
         source.pan = 1.0;
         let channels = vec![
             source,
-            channel("bus", ChannelKind::Bus, Some(3)),
+            channel("aux", ChannelKind::Aux, Some(3)),
             channel("master", ChannelKind::Master, None),
             channel("output", ChannelKind::Output, None),
         ];
         let sends = vec![SendSpec {
             id: "send".to_owned(),
             source: 0,
-            target: 1,
+            target: RouteTarget::Bus(0),
             enabled: true,
             tap: SendTap::PostPan,
             level_db: 0.0,
         }];
         let mut graph = MixerGraph::new(48_000, channels, sends).unwrap();
-        assert_eq!(rendered(&mut graph, &[[1.0, 1.0]]), [0.0, 2.0]);
+        assert_eq!(rendered(&mut graph, &[[1.0, 1.0]]), [0.5, 1.5]);
     }
 
     #[test]
@@ -767,7 +928,7 @@ mod tests {
         let channels = vec![
             soloed,
             channel("other", ChannelKind::Audio, Some(4)),
-            channel("bus", ChannelKind::Bus, Some(4)),
+            channel("aux", ChannelKind::Aux, Some(4)),
             channel("master", ChannelKind::Master, None),
             channel("output", ChannelKind::Output, None),
         ];
@@ -791,20 +952,20 @@ mod tests {
     }
 
     #[test]
-    fn soloed_bus_receives_inputs_without_leaking_their_direct_outputs() {
+    fn soloed_aux_receives_bus_inputs_without_leaking_direct_outputs() {
         let source = channel("source", ChannelKind::Audio, Some(3));
-        let mut bus = channel("bus", ChannelKind::Bus, Some(3));
-        bus.soloed = true;
+        let mut aux = channel("aux", ChannelKind::Aux, Some(3));
+        aux.soloed = true;
         let channels = vec![
             source,
-            bus,
+            aux,
             channel("master", ChannelKind::Master, None),
             channel("output", ChannelKind::Output, None),
         ];
         let sends = vec![SendSpec {
             id: "send".to_owned(),
             source: 0,
-            target: 1,
+            target: RouteTarget::Bus(0),
             enabled: true,
             tap: SendTap::Post,
             level_db: 0.0,

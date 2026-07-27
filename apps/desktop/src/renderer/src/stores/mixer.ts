@@ -2,17 +2,23 @@ import { useIntervalFn } from "@vueuse/core"
 import { acceptHMRUpdate, defineStore } from "pinia"
 import { computed, shallowRef } from "vue"
 import type {
+  MixerBusState,
   MixerChannelKind,
   MixerChannelPatch,
   MixerChannelState,
   MixerGraphSnapshot,
   MixerParameterPreview,
+  MixerRouteTarget,
   MixerRuntimeSnapshot,
   MixerSendPatch,
   MixerSendState,
   ProjectCommand
 } from "@yadaw/contracts"
-import { DEFAULT_INSTRUMENT_COLOR, MUSICAL_TICKS_PER_QUARTER } from "@yadaw/contracts"
+import {
+  DEFAULT_INSTRUMENT_COLOR,
+  MIXER_BUS_COUNT,
+  MUSICAL_TICKS_PER_QUARTER
+} from "@yadaw/contracts"
 import { UI_DOMAIN_COLORS } from "@yadaw/ui"
 import { useProjectStore } from "./project"
 
@@ -39,10 +45,18 @@ const EMPTY_GRAPH: MixerGraphSnapshot = {
 const DEFAULT_CHANNEL_COLORS: Record<MixerChannelKind, string> = {
   audio: UI_DOMAIN_COLORS.audioChannel,
   instrument: DEFAULT_INSTRUMENT_COLOR,
-  bus: UI_DOMAIN_COLORS.busChannel,
+  aux: UI_DOMAIN_COLORS.busChannel,
   master: UI_DOMAIN_COLORS.masterChannel,
   output: UI_DOMAIN_COLORS.outputChannel
 }
+
+const MIXER_BUSES: readonly MixerBusState[] = Array.from(
+  { length: MIXER_BUS_COUNT },
+  (_, index) => ({
+    channel: index + 1,
+    name: `BUS ${index + 1}`
+  })
+)
 
 function patchGraph(
   graph: MixerGraphSnapshot,
@@ -61,9 +75,22 @@ function isAcyclic(graph: MixerGraphSnapshot): boolean {
   const edges = new Map(graph.channels.map((channel) => [channel.id, [] as string[]]))
   for (const channel of graph.channels) {
     if (channel.outputChannelId) edges.get(channel.id)?.push(channel.outputChannelId)
+    if (channel.outputBus != null) {
+      for (const consumer of graph.channels) {
+        if (consumer.inputSource === "bus" && consumer.inputChannels.includes(channel.outputBus)) {
+          edges.get(channel.id)?.push(consumer.id)
+        }
+      }
+    }
   }
   for (const send of graph.sends) {
-    edges.get(send.sourceChannelId)?.push(send.targetChannelId)
+    if (send.targetChannelId) edges.get(send.sourceChannelId)?.push(send.targetChannelId)
+    if (send.targetBus === null) continue
+    for (const consumer of graph.channels) {
+      if (consumer.inputSource === "bus" && consumer.inputChannels.includes(send.targetBus)) {
+        edges.get(send.sourceChannelId)?.push(consumer.id)
+      }
+    }
   }
   const visiting = new Set<string>()
   const visited = new Set<string>()
@@ -112,14 +139,15 @@ export const useMixerStore = defineStore("mixer", () => {
       (left, right) => left.sortOrder - right.sortOrder
     )
   )
-  const buses = computed(() => channels.value.filter((channel) => channel.kind === "bus"))
+  const auxChannels = computed(() => channels.value.filter((channel) => channel.kind === "aux"))
+  const buses = computed(() => MIXER_BUSES)
   const master = computed(() => channels.value.find((channel) => channel.kind === "master") ?? null)
   const outputs = computed(() => channels.value.filter((channel) => channel.kind === "output"))
   const orderedChannels = computed(() => [
     ...audioTracks.value,
     ...instrumentTracks.value,
     ...systemChannels.value,
-    ...buses.value,
+    ...auxChannels.value,
     ...(master.value ? [master.value] : []),
     ...outputs.value
   ])
@@ -294,12 +322,14 @@ export const useMixerStore = defineStore("mixer", () => {
       name: `Audio ${index + 1}`,
       color: DEFAULT_CHANNEL_COLORS.audio,
       sortOrder: index,
+      inputSource: "hardware",
       inputFormat,
       gainDb: 0,
       pan: 0,
       muted: false,
       soloed: false,
       outputChannelId: defaultOutput?.id ?? null,
+      outputBus: null,
       recordArmed: false,
       inputChannels: inputFormat === "mono" ? [1] : [1, 2],
       hardwareOutputChannels: []
@@ -318,12 +348,14 @@ export const useMixerStore = defineStore("mixer", () => {
       name: `Instrument ${index + 1}`,
       color: DEFAULT_CHANNEL_COLORS.instrument,
       sortOrder: index,
+      inputSource: null,
       inputFormat: null,
       gainDb: 0,
       pan: 0,
       muted: false,
       soloed: false,
       outputChannelId: defaultOutput?.id ?? null,
+      outputBus: null,
       recordArmed: false,
       inputChannels: [],
       hardwareOutputChannels: []
@@ -332,24 +364,26 @@ export const useMixerStore = defineStore("mixer", () => {
     return execute({ type: "create-channel", channel })
   }
 
-  function createBus(): Promise<boolean> {
-    const index = buses.value.length
+  function createAux(inputFormat: "mono" | "stereo" = "stereo"): Promise<boolean> {
+    const index = auxChannels.value.length
     const defaultOutput = outputs.value[0]
     const channel: MixerChannelState = {
       id: crypto.randomUUID(),
-      kind: "bus",
+      kind: "aux",
       systemRole: null,
-      name: `Bus ${index + 1}`,
-      color: DEFAULT_CHANNEL_COLORS.bus,
+      name: `Aux ${index + 1}`,
+      color: DEFAULT_CHANNEL_COLORS.aux,
       sortOrder: index,
-      inputFormat: null,
+      inputSource: "bus",
+      inputFormat,
       gainDb: 0,
       pan: 0,
       muted: false,
       soloed: false,
       outputChannelId: defaultOutput?.id ?? null,
+      outputBus: null,
       recordArmed: false,
-      inputChannels: [],
+      inputChannels: inputFormat === "mono" ? [1] : [1, 2],
       hardwareOutputChannels: []
     }
     selectedChannelId.value = channel.id
@@ -379,12 +413,14 @@ export const useMixerStore = defineStore("mixer", () => {
       name: `Output ${firstHardwareChannel}–${firstHardwareChannel + 1}`,
       color: DEFAULT_CHANNEL_COLORS.output,
       sortOrder: index,
+      inputSource: null,
       inputFormat: null,
       gainDb: 0,
       pan: 0,
       muted: false,
       soloed: false,
       outputChannelId: null,
+      outputBus: null,
       recordArmed: false,
       inputChannels: [],
       hardwareOutputChannels: [firstHardwareChannel, firstHardwareChannel + 1]
@@ -403,11 +439,12 @@ export const useMixerStore = defineStore("mixer", () => {
     return completed
   }
 
-  function addSend(sourceChannelId: string, targetChannelId: string): Promise<boolean> {
+  function addSend(sourceChannelId: string, target: MixerRouteTarget): Promise<boolean> {
     const send: MixerSendState = {
       id: crypto.randomUUID(),
       sourceChannelId,
-      targetChannelId,
+      targetChannelId: target.kind === "output" ? target.channelId : null,
+      targetBus: target.kind === "bus" ? target.bus : null,
       sortOrder: graph.value.sends.filter(
         (candidate) => candidate.sourceChannelId === sourceChannelId
       ).length,
@@ -438,39 +475,52 @@ export const useMixerStore = defineStore("mixer", () => {
     )
   }
 
-  function availableOutputs(channelId: string): MixerChannelState[] {
+  function availableOutputTargets(channelId: string): MixerRouteTarget[] {
     const source = channels.value.find((channel) => channel.id === channelId)
     if (
       !source ||
-      (source.kind !== "audio" && source.kind !== "instrument" && source.kind !== "bus")
+      (source.kind !== "audio" && source.kind !== "instrument" && source.kind !== "aux")
     )
       return []
-    return channels.value.filter((target) => {
-      if (target.id === source.id || (target.kind !== "bus" && target.kind !== "output"))
-        return false
+    const targets: MixerRouteTarget[] = [
+      ...buses.value.map((bus) => ({ kind: "bus" as const, bus: bus.channel })),
+      ...outputs.value.map((output) => ({ kind: "output" as const, channelId: output.id }))
+    ]
+    return targets.filter((target) => {
       const candidate = structuredClone(graph.value)
       const candidateSource = candidate.channels.find((channel) => channel.id === source.id)
       if (!candidateSource) return false
-      candidateSource.outputChannelId = target.id
+      candidateSource.outputChannelId = target.kind === "output" ? target.channelId : null
+      candidateSource.outputBus = target.kind === "bus" ? target.bus : null
       return isAcyclic(candidate)
     })
   }
 
-  function availableSendTargets(channelId: string): MixerChannelState[] {
+  function availableSendTargets(channelId: string): MixerRouteTarget[] {
     const source = channels.value.find((channel) => channel.id === channelId)
     if (
       !source ||
-      (source.kind !== "audio" && source.kind !== "instrument" && source.kind !== "bus")
+      (source.kind !== "audio" && source.kind !== "instrument" && source.kind !== "aux")
     )
       return []
-    const existing = new Set(sendsFor(channelId).map((send) => send.targetChannelId))
-    return buses.value.filter((target) => {
-      if (target.id === channelId || existing.has(target.id)) return false
+    const existing = new Set(
+      sendsFor(channelId).map((send) =>
+        send.targetChannelId ? `output:${send.targetChannelId}` : `bus:${send.targetBus}`
+      )
+    )
+    const targets: MixerRouteTarget[] = [
+      ...buses.value.map((bus) => ({ kind: "bus" as const, bus: bus.channel })),
+      ...outputs.value.map((output) => ({ kind: "output" as const, channelId: output.id }))
+    ]
+    return targets.filter((target) => {
+      const key = target.kind === "output" ? `output:${target.channelId}` : `bus:${target.bus}`
+      if (existing.has(key)) return false
       const candidate = structuredClone(graph.value)
       candidate.sends.push({
         id: "candidate",
         sourceChannelId: channelId,
-        targetChannelId: target.id,
+        targetChannelId: target.kind === "output" ? target.channelId : null,
+        targetBus: target.kind === "bus" ? target.bus : null,
         sortOrder: 0,
         enabled: false,
         tap: "post-pan",
@@ -535,6 +585,7 @@ export const useMixerStore = defineStore("mixer", () => {
     channels,
     audioTracks,
     instrumentTracks,
+    auxChannels,
     systemChannels,
     metronome,
     timelineTracks,
@@ -557,14 +608,14 @@ export const useMixerStore = defineStore("mixer", () => {
     updateSend,
     createAudioTrack,
     createInstrumentTrack,
-    createBus,
+    createAux,
     createOutput,
     deleteChannel,
     addSend,
     deleteSend,
     sendsFor,
     meterFor,
-    availableOutputs,
+    availableOutputTargets,
     availableSendTargets,
     clearMeterClips,
     startMetering,
