@@ -22,7 +22,11 @@ describe("arrangement view store", () => {
       trackScales: {},
       amplitudeScale: 1,
       tempoLaneExpanded: true,
-      tempoLaneHeight: 112
+      tempoLaneHeight: 112,
+      meterLaneExpanded: true,
+      meterLaneHeight: 64,
+      keyLaneExpanded: true,
+      keyLaneHeight: 64
     })
   })
 
@@ -98,5 +102,22 @@ describe("arrangement view store", () => {
     store.setTempoLaneExpanded(true)
     expect(store.tempoLaneExpanded).toBe(true)
     expect(store.tempoLaneHeight).toBe(112)
+  })
+
+  it("keeps the global meter and key lane states independent", () => {
+    const store = useArrangementViewStore()
+
+    store.toggleMeterLane()
+    expect(store.meterLaneExpanded).toBe(false)
+    expect(store.meterLaneHeight).toBe(30)
+    expect(store.keyLaneExpanded).toBe(true)
+
+    store.toggleKeyLane()
+    expect(store.keyLaneExpanded).toBe(false)
+    expect(store.keyLaneHeight).toBe(30)
+
+    store.reset()
+    expect(store.meterLaneHeight).toBe(64)
+    expect(store.keyLaneHeight).toBe(64)
   })
 })

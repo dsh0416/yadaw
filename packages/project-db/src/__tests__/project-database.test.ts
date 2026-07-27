@@ -85,6 +85,7 @@ describe("ProjectDatabase", () => {
       tempoEvents: [{ tick: 0, beatsPerMinute: 120 }],
       timeSignatureEvents: [{ tick: 0, numerator: 4, denominator: 4 }]
     })
+    expect(seeded.keySignatureEvents).toEqual([{ tick: 0, fifths: 0, mode: "major" }])
 
     await database.updateConfiguration({
       name: "Renamed",
@@ -114,6 +115,20 @@ describe("ProjectDatabase", () => {
       numerator: 7,
       denominator: 8
     })
+    await database.applyCommand(
+      {
+        type: "replace-key-signature-map",
+        events: [
+          { tick: 0, fifths: 2, mode: "major" },
+          { tick: 3_840, fifths: -7, mode: "minor" }
+        ]
+      },
+      "output-1-2"
+    )
+    expect((await database.mixerSnapshot()).keySignatureEvents).toEqual([
+      { tick: 0, fifths: 2, mode: "major" },
+      { tick: 3_840, fifths: -7, mode: "minor" }
+    ])
   })
 
   it("enforces relations and rolls back failed command batches", async () => {
@@ -209,6 +224,15 @@ describe("ProjectDatabase", () => {
     expect((await database.mixerSnapshot()).tempoMap.tempoEvents).toEqual([
       { tick: 0, beatsPerMinute: 120 }
     ])
+    await expect(
+      database.applyCommand(
+        {
+          type: "replace-key-signature-map",
+          events: [{ tick: 240, fifths: 0, mode: "major" }]
+        },
+        "output-1-2"
+      )
+    ).rejects.toThrow("tick 0")
   })
 
   it("persists metronome mute while protecting the system channel and clip boundary", async () => {
@@ -280,8 +304,14 @@ describe("ProjectDatabase", () => {
         alter table "mixer_channels"
           drop constraint "mixer_channels_system_role_kind_check";
         alter table "mixer_channels" drop column "system_role";
+        drop table "key_signature_events";
         delete from drizzle.__drizzle_migrations
-        where created_at = (select max(created_at) from drizzle.__drizzle_migrations);
+        where created_at in (
+          select created_at
+          from drizzle.__drizzle_migrations
+          order by created_at desc
+          limit 4
+        );
       `)
     } finally {
       await raw.close()
@@ -302,6 +332,48 @@ describe("ProjectDatabase", () => {
         id: "metronome-instrument",
         classId: "F310A5DEDA34820C9E068A5753F83ADE"
       })
+    ])
+    expect(snapshot.keySignatureEvents).toEqual([{ tick: 0, fifths: 0, mode: "major" }])
+  })
+
+  it("migrates existing pitch-class key events to theory-aware fifths", async () => {
+    const resource = await createDatabase()
+    await resource.database.close()
+    databases.splice(databases.indexOf(resource), 1)
+
+    const raw = new PGlite(join(resource.directory, "pgdata"))
+    try {
+      await raw.exec(`
+        alter table "key_signature_events"
+          add column "pitch_class" smallint not null default 0;
+        update "key_signature_events"
+          set "pitch_class" = 1, "mode" = 'major'
+          where "tick" = 0;
+        insert into "key_signature_events" ("tick", "fifths", "mode", "pitch_class")
+          values (3840, 0, 'minor', 8);
+        alter table "key_signature_events"
+          add constraint "key_signature_events_pitch_class_check"
+          check ("pitch_class" between 0 and 11);
+        alter table "key_signature_events"
+          drop constraint "key_signature_events_fifths_check";
+        alter table "key_signature_events" drop column "fifths";
+        delete from drizzle.__drizzle_migrations
+        where created_at in (
+          select created_at
+          from drizzle.__drizzle_migrations
+          order by created_at desc
+          limit 2
+        );
+      `)
+    } finally {
+      await raw.close()
+    }
+
+    const migrated = await ProjectDatabase.open(join(resource.directory, "pgdata"))
+    databases.push({ database: migrated, directory: resource.directory })
+    expect((await migrated.mixerSnapshot()).keySignatureEvents).toEqual([
+      { tick: 0, fifths: 7, mode: "major" },
+      { tick: 3_840, fifths: -7, mode: "minor" }
     ])
   })
 

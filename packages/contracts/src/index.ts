@@ -798,6 +798,14 @@ export interface TimeSignatureEventState {
   denominator: number
 }
 
+export type KeySignatureMode = "major" | "minor"
+
+export interface KeySignatureEventState {
+  tick: number
+  fifths: number
+  mode: KeySignatureMode
+}
+
 export interface TempoMapSnapshot {
   ticksPerQuarter: typeof MUSICAL_TICKS_PER_QUARTER
   tempoEvents: TempoEventState[]
@@ -927,6 +935,7 @@ export interface MixerGraphSnapshot {
   plugins: PluginInstanceState[]
   midiClips: MidiClipState[]
   tempoMap: TempoMapSnapshot
+  keySignatureEvents: KeySignatureEventState[]
 }
 
 export type MixerChannelPatch = Partial<
@@ -980,6 +989,7 @@ export type ProjectCommand =
   | { type: "delete-midi-clip"; clipId: string }
   | { type: "move-midi-clip"; clipId: string; trackId: string; startTick: number }
   | { type: "replace-tempo-map"; tempoMap: TempoMapSnapshot }
+  | { type: "replace-key-signature-map"; events: KeySignatureEventState[] }
   | { type: "batch"; commands: ProjectCommand[] }
 
 export interface ProjectCommandResult {

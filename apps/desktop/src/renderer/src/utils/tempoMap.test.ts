@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import type { TempoMapSnapshot } from "@yadaw/contracts"
 import {
   barTicksWithinSeconds,
+  beatTicksThroughTick,
   musicalPositionAtTick,
   replaceTempoEventAtTick,
   secondsToTick,
@@ -59,5 +60,20 @@ describe("tempo map", () => {
 
   it("places bar guides using both tempo and time-signature changes", () => {
     expect(barTicksWithinSeconds(map, 5)).toEqual([0, 3_840, 6_720])
+  })
+
+  it("places beat guides between bars and follows the active denominator", () => {
+    expect(
+      beatTicksThroughTick(
+        {
+          ...map,
+          timeSignatureEvents: [
+            { tick: 0, numerator: 4, denominator: 4 },
+            { tick: 3_840, numerator: 6, denominator: 8 }
+          ]
+        },
+        6_720
+      )
+    ).toEqual([960, 1_920, 2_880, 4_320, 4_800, 5_280, 5_760, 6_240])
   })
 })

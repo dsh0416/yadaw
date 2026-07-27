@@ -2,7 +2,7 @@
 import { computed } from "vue"
 import type { TempoMapSnapshot, WaveformDisplayMode } from "@yadaw/contracts"
 import type { TimelineClip } from "../../stores/transport"
-import { barTicksThroughTick } from "../../utils/tempoMap"
+import { barTicksThroughTick, beatTicksThroughTick } from "../../utils/tempoMap"
 import {
   secondsToTimelineX,
   timelineXToSeconds,
@@ -43,6 +43,12 @@ const laneStyle = computed(() => ({
 const barLines = computed(() => {
   const maximumTick = timelineXToTick(props.tempoMap, props.contentWidth, props.pixelsPerQuarter)
   return barTicksThroughTick(props.tempoMap, maximumTick).map(
+    (tick) => (tick / props.tempoMap.ticksPerQuarter) * props.pixelsPerQuarter
+  )
+})
+const beatLines = computed(() => {
+  const maximumTick = timelineXToTick(props.tempoMap, props.contentWidth, props.pixelsPerQuarter)
+  return beatTicksThroughTick(props.tempoMap, maximumTick).map(
     (tick) => (tick / props.tempoMap.ticksPerQuarter) * props.pixelsPerQuarter
   )
 })
@@ -97,8 +103,14 @@ function relayClipDragStart(clipId: string, offsetPixels: number): void {
     @pointerdown="seekFromPointer"
   >
     <i
+      v-for="(left, index) in beatLines"
+      :key="`beat-${index}`"
+      class="beat-line"
+      :style="{ left: `${left}px` }"
+    />
+    <i
       v-for="(left, index) in barLines"
-      :key="index"
+      :key="`bar-${index}`"
       class="bar-line"
       :style="{ left: `${left}px` }"
     />
@@ -158,6 +170,15 @@ function relayClipDragStart(clipId: string, offsetPixels: number): void {
   bottom: 0;
   width: 1px;
   background: var(--daw-grid-line);
+  pointer-events: none;
+}
+.beat-line {
+  position: absolute;
+  z-index: var(--ui-z-local-base);
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: color-mix(in srgb, var(--daw-grid-line) 32%, transparent);
   pointer-events: none;
 }
 .clip-drop-preview {

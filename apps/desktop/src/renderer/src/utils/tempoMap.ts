@@ -124,3 +124,24 @@ export function barTicksThroughTick(
   }
   return ticks
 }
+
+export function beatTicksThroughTick(
+  map: TempoMapSnapshot,
+  maximumTick: number,
+  limit = 8_192
+): number[] {
+  const barTicks = new Set(barTicksThroughTick(map, maximumTick, limit))
+  const ticks: number[] = []
+  let tick = 0
+  for (let index = 0; index < limit; index += 1) {
+    const signature = timeSignatureAtTick(map, tick)
+    const ticksPerBeat = Math.max(1, (map.ticksPerQuarter * 4) / signature.denominator)
+    const nextSignature = map.timeSignatureEvents.find((event) => event.tick > tick)
+    const nextBeat = tick + ticksPerBeat
+    const nextTick = nextSignature && nextSignature.tick < nextBeat ? nextSignature.tick : nextBeat
+    if (nextTick <= tick || nextTick > maximumTick) break
+    tick = nextTick
+    if (!barTicks.has(tick)) ticks.push(tick)
+  }
+  return ticks
+}

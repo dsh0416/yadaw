@@ -22,6 +22,7 @@ function message(error: unknown): string {
 
 function realtimeOnly(command: ProjectCommand): boolean {
   if (command.type === "batch") return command.commands.every(realtimeOnly)
+  if (command.type === "replace-key-signature-map") return true
   if (command.type === "update-channel") {
     return Object.keys(command.patch).every((key) => key === "gainDb" || key === "pan")
   }

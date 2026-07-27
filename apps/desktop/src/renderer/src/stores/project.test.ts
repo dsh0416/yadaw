@@ -27,6 +27,7 @@ const workspace: ProjectWorkspaceSnapshot = {
     sends: [],
     plugins: [],
     midiClips: [],
+    keySignatureEvents: [{ tick: 0, fifths: 0, mode: "major" }],
     tempoMap: {
       ticksPerQuarter: 960,
       tempoEvents: [{ tick: 0, beatsPerMinute: 120 }],

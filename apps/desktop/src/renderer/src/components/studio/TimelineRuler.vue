@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue"
 import type { TempoMapSnapshot } from "@yadaw/contracts"
-import { barTicksThroughTick } from "../../utils/tempoMap"
+import { barTicksThroughTick, beatTicksThroughTick } from "../../utils/tempoMap"
 import { timelineXToSeconds } from "../../utils/timelineCoordinates"
 
 const props = defineProps<{
@@ -17,6 +17,15 @@ const marks = computed(() =>
     (props.contentWidth / props.pixelsPerQuarter) * props.tempoMap.ticksPerQuarter
   ).map((tick, index) => ({
     bar: index + 1,
+    left: (tick / props.tempoMap.ticksPerQuarter) * props.pixelsPerQuarter
+  }))
+)
+const beatMarks = computed(() =>
+  beatTicksThroughTick(
+    props.tempoMap,
+    (props.contentWidth / props.pixelsPerQuarter) * props.tempoMap.ticksPerQuarter
+  ).map((tick) => ({
+    tick,
     left: (tick / props.tempoMap.ticksPerQuarter) * props.pixelsPerQuarter
   }))
 )
@@ -36,6 +45,13 @@ function seekFromPointer(event: PointerEvent): void {
 
 <template>
   <div class="ruler" :style="rulerStyle" aria-label="Timeline ruler" @pointerdown="seekFromPointer">
+    <span
+      v-for="mark in beatMarks"
+      :key="mark.tick"
+      class="beat-mark"
+      :style="{ left: `${mark.left}px` }"
+      aria-hidden="true"
+    />
     <span
       v-for="mark in marks"
       :key="mark.bar"
@@ -77,16 +93,12 @@ function seekFromPointer(event: PointerEvent): void {
   font: var(--ui-type-size-control) var(--ui-type-family-data);
   pointer-events: none;
 }
-.bar-mark::after {
+.beat-mark {
   position: absolute;
-  top: 15px;
-  left: 25%;
+  top: 16px;
+  bottom: 0;
   width: 1px;
-  height: 4px;
-  background: var(--daw-grid-line);
-  box-shadow:
-    7px 0 var(--daw-grid-line),
-    14px 0 var(--daw-grid-line);
-  content: "";
+  background: color-mix(in srgb, var(--daw-grid-line) 32%, transparent);
+  pointer-events: none;
 }
 </style>

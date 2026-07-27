@@ -32,7 +32,8 @@ const EMPTY_GRAPH: MixerGraphSnapshot = {
     ticksPerQuarter: MUSICAL_TICKS_PER_QUARTER,
     tempoEvents: [{ tick: 0, beatsPerMinute: 120 }],
     timeSignatureEvents: [{ tick: 0, numerator: 4, denominator: 4 }]
-  }
+  },
+  keySignatureEvents: [{ tick: 0, fifths: 0, mode: "major" }]
 }
 
 const DEFAULT_CHANNEL_COLORS: Record<MixerChannelKind, string> = {

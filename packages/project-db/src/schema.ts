@@ -351,6 +351,20 @@ export const timeSignatureEvents = pgTable(
   ]
 )
 
+export const keySignatureEvents = pgTable(
+  "key_signature_events",
+  {
+    tick: int8Number("tick").primaryKey(),
+    fifths: smallint("fifths").notNull(),
+    mode: text("mode").notNull()
+  },
+  (table) => [
+    check("key_signature_events_tick_check", sql`${table.tick} >= 0`),
+    check("key_signature_events_fifths_check", sql`${table.fifths} between -7 and 7`),
+    check("key_signature_events_mode_check", sql`${table.mode} in ('major', 'minor')`)
+  ]
+)
+
 export const midiSources = pgTable(
   "midi_sources",
   {
@@ -549,6 +563,7 @@ export type MixerSend = typeof mixerSends.$inferSelect
 export type PluginInstance = typeof pluginInstances.$inferSelect
 export type TempoEvent = typeof tempoEvents.$inferSelect
 export type TimeSignatureEvent = typeof timeSignatureEvents.$inferSelect
+export type KeySignatureEvent = typeof keySignatureEvents.$inferSelect
 export type MidiSource = typeof midiSources.$inferSelect
 export type MidiClip = typeof midiClips.$inferSelect
 export type MidiNote = typeof midiNotes.$inferSelect

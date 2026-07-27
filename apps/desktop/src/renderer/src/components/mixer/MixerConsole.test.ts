@@ -79,6 +79,7 @@ describe("MixerConsole", () => {
         controllerState: new Uint8Array()
       })),
       midiClips: [],
+      keySignatureEvents: [{ tick: 0, fifths: 0, mode: "major" }],
       tempoMap: {
         ticksPerQuarter: 960,
         tempoEvents: [{ tick: 0, beatsPerMinute: 120 }],

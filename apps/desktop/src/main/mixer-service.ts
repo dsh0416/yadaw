@@ -235,6 +235,11 @@ function inverseFor(graph: MixerGraphSnapshot, command: ProjectCommand): Project
     }
     case "replace-tempo-map":
       return { type: "replace-tempo-map", tempoMap: structuredClone(graph.tempoMap) }
+    case "replace-key-signature-map":
+      return {
+        type: "replace-key-signature-map",
+        events: structuredClone(graph.keySignatureEvents)
+      }
     case "batch": {
       let working = cloneGraph(graph)
       const inverses: ProjectCommand[] = []
@@ -340,6 +345,9 @@ function applyToGraph(graph: MixerGraphSnapshot, command: ProjectCommand): Mixer
     }
     case "replace-tempo-map":
       next.tempoMap = structuredClone(command.tempoMap)
+      break
+    case "replace-key-signature-map":
+      next.keySignatureEvents = structuredClone(command.events)
       break
     case "batch":
       return command.commands.reduce(applyToGraph, next)
@@ -532,6 +540,23 @@ function validateGraph(graph: MixerGraphSnapshot): void {
     }
     previousSignatureTick = event.tick
   }
+  if (graph.keySignatureEvents[0]?.tick !== 0) {
+    throw new Error("Key-signature maps require an event at tick 0")
+  }
+  let previousKeyTick = -1
+  for (const event of graph.keySignatureEvents) {
+    if (
+      !Number.isSafeInteger(event.tick) ||
+      event.tick <= previousKeyTick ||
+      !Number.isInteger(event.fifths) ||
+      event.fifths < -7 ||
+      event.fifths > 7 ||
+      (event.mode !== "major" && event.mode !== "minor")
+    ) {
+      throw new Error("Key-signature events contain invalid values")
+    }
+    previousKeyTick = event.tick
+  }
   const midiClipIds = new Set<string>()
   for (const clip of graph.midiClips) {
     if (!clip.id || midiClipIds.has(clip.id)) throw new Error("MIDI clip IDs must be unique")
@@ -589,6 +614,7 @@ function validateGraph(graph: MixerGraphSnapshot): void {
 
 function onlyRealtimeParameters(command: ProjectCommand): boolean {
   if (command.type === "batch") return command.commands.every(onlyRealtimeParameters)
+  if (command.type === "replace-key-signature-map") return true
   if (command.type === "update-channel") {
     return Object.keys(command.patch).every((key) => key === "gainDb" || key === "pan")
   }

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue"
 import type { MidiClipState, TempoMapSnapshot } from "@yadaw/contracts"
+import { barTicksThroughTick, beatTicksThroughTick } from "../../utils/tempoMap"
 import { timelineXToTick } from "../../utils/timelineCoordinates"
 
 const props = defineProps<{
@@ -22,6 +23,19 @@ const style = computed(() => ({
   width: `${props.contentWidth}px`,
   height: `${props.trackHeight}px`
 }))
+const maximumTick = computed(() =>
+  timelineXToTick(props.tempoMap, props.contentWidth, props.pixelsPerQuarter)
+)
+const barLines = computed(() =>
+  barTicksThroughTick(props.tempoMap, maximumTick.value).map(
+    (tick) => (tick / props.tempoMap.ticksPerQuarter) * props.pixelsPerQuarter
+  )
+)
+const beatLines = computed(() =>
+  beatTicksThroughTick(props.tempoMap, maximumTick.value).map(
+    (tick) => (tick / props.tempoMap.ticksPerQuarter) * props.pixelsPerQuarter
+  )
+)
 
 function clipStyle(clip: MidiClipState) {
   const pixelsPerTick = props.pixelsPerQuarter / props.tempoMap.ticksPerQuarter
@@ -78,6 +92,18 @@ function dropClip(event: DragEvent): void {
     @dragover.prevent
     @drop.prevent="dropClip"
   >
+    <i
+      v-for="(left, index) in beatLines"
+      :key="`beat-${index}`"
+      class="beat-line"
+      :style="{ left: `${left}px` }"
+    />
+    <i
+      v-for="(left, index) in barLines"
+      :key="`bar-${index}`"
+      class="bar-line"
+      :style="{ left: `${left}px` }"
+    />
     <button
       v-for="clip in clips"
       :key="clip.id"
@@ -105,12 +131,21 @@ function dropClip(event: DragEvent): void {
   overflow: hidden;
   border-bottom: 1px solid var(--line-strong);
   background: var(--daw-lane);
-  background-image: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--text-primary) 3%, transparent) 1px,
-    transparent 1px
-  );
-  background-size: 48px 100%;
+}
+.bar-line,
+.beat-line {
+  position: absolute;
+  z-index: var(--ui-z-local-base);
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  pointer-events: none;
+}
+.bar-line {
+  background: var(--daw-grid-line);
+}
+.beat-line {
+  background: color-mix(in srgb, var(--daw-grid-line) 32%, transparent);
 }
 .midi-clip {
   position: absolute;

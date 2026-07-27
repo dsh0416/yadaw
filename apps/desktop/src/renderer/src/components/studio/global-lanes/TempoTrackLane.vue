@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue"
 import type { TempoEventState, TempoMapSnapshot } from "@yadaw/contracts"
-import { barTicksThroughTick } from "../../../utils/tempoMap"
+import { barTicksThroughTick, beatTicksThroughTick } from "../../../utils/tempoMap"
 import GlobalValueLane, { type GlobalLanePoint } from "./GlobalValueLane.vue"
 
 const MINIMUM_TEMPO = 20
@@ -52,6 +52,12 @@ const selectedId = computed(() => (props.selectedTick === null ? null : String(p
 const verticalGuides = computed(() => {
   const maximumTick = (props.contentWidth / props.pixelsPerQuarter) * props.tempoMap.ticksPerQuarter
   return barTicksThroughTick(props.tempoMap, maximumTick).map(
+    (tick) => (tick / props.tempoMap.ticksPerQuarter) * props.pixelsPerQuarter
+  )
+})
+const beatGuides = computed(() => {
+  const maximumTick = (props.contentWidth / props.pixelsPerQuarter) * props.tempoMap.ticksPerQuarter
+  return beatTicksThroughTick(props.tempoMap, maximumTick).map(
     (tick) => (tick / props.tempoMap.ticksPerQuarter) * props.pixelsPerQuarter
   )
 })
@@ -113,6 +119,7 @@ function removePoint(id: string): void {
     :minimum="tempoRange.minimum"
     :maximum="tempoRange.maximum"
     :guides="guides"
+    :beat-guides="beatGuides"
     :vertical-guides="verticalGuides"
     color="var(--ui-domain-color-65a8ff)"
     :expanded="expanded"

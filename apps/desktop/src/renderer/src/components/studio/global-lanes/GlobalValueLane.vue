@@ -18,6 +18,7 @@ const props = defineProps<{
   minimum: number
   maximum: number
   guides: number[]
+  beatGuides: number[]
   verticalGuides: number[]
   color: string
   expanded: boolean
@@ -162,6 +163,15 @@ function handleKeydown(event: KeyboardEvent): void {
       aria-hidden="true"
     >
       <line
+        v-for="guide in beatGuides"
+        :key="`beat-${guide}`"
+        class="beat-guide"
+        :x1="guide"
+        :x2="guide"
+        y1="0"
+        :y2="height"
+      />
+      <line
         v-for="guide in verticalGuides"
         :key="`x-${guide}`"
         class="vertical-guide"
@@ -228,6 +238,10 @@ function handleKeydown(event: KeyboardEvent): void {
 }
 .vertical-guide {
   stroke: var(--daw-grid-line);
+  stroke-width: 1;
+}
+.beat-guide {
+  stroke: color-mix(in srgb, var(--daw-grid-line) 32%, transparent);
   stroke-width: 1;
 }
 .value-guide {

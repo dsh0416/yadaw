@@ -2,7 +2,7 @@
 import { computed, nextTick, shallowRef, useTemplateRef, watch } from "vue"
 import { storeToRefs } from "pinia"
 import { useResizeObserver } from "@vueuse/core"
-import type { TempoMapSnapshot } from "@yadaw/contracts"
+import type { KeySignatureEventState, TempoMapSnapshot } from "@yadaw/contracts"
 import { useProjectStore } from "../../stores/project"
 import { useTransportStore } from "../../stores/transport"
 import { useArrangementViewStore } from "../../stores/arrangementView"
@@ -17,7 +17,16 @@ import TrackQuickControls from "./TrackQuickControls.vue"
 import TrackHeightResizeHandle from "./TrackHeightResizeHandle.vue"
 import MidiArrangementTrack from "./MidiArrangementTrack.vue"
 import { tickToSeconds } from "../../utils/tempoMap"
+import {
+  MAJOR_KEY_SIGNATURE_CHOICES,
+  MINOR_KEY_SIGNATURE_CHOICES,
+  keySignatureValue,
+  parseKeySignatureValue
+} from "../../utils/keySignatures"
 import GlobalLaneHeader from "./global-lanes/GlobalLaneHeader.vue"
+import GlobalEventLaneHeader from "./global-lanes/GlobalEventLaneHeader.vue"
+import KeyTrackLane from "./global-lanes/KeyTrackLane.vue"
+import MeterTrackLane from "./global-lanes/MeterTrackLane.vue"
 import TempoTrackLane from "./global-lanes/TempoTrackLane.vue"
 import { secondsToTimelineX, timelineXToSeconds } from "../../utils/timelineCoordinates"
 
@@ -40,8 +49,17 @@ const {
   contentEndSeconds,
   timelineDurationSeconds
 } = storeToRefs(transportStore)
-const { pixelsPerQuarter, trackHeight, amplitudeScale, tempoLaneExpanded, tempoLaneHeight } =
-  storeToRefs(viewStore)
+const {
+  pixelsPerQuarter,
+  trackHeight,
+  amplitudeScale,
+  tempoLaneExpanded,
+  tempoLaneHeight,
+  meterLaneExpanded,
+  meterLaneHeight,
+  keyLaneExpanded,
+  keyLaneHeight
+} = storeToRefs(viewStore)
 const rail = useTemplateRef<HTMLElement>("rail")
 const viewport = useTemplateRef<HTMLElement>("viewport")
 const content = useTemplateRef<HTMLElement>("content")
@@ -49,6 +67,8 @@ const viewportWidth = shallowRef(1)
 const scrollLeft = shallowRef(0)
 const liveDurationSeconds = shallowRef(0)
 const selectedTempoTick = shallowRef<number | null>(0)
+const selectedMeterTick = shallowRef<number | null>(0)
+const selectedKeyTick = shallowRef<number | null>(0)
 const clipDrag = shallowRef<{
   clipId: string
   offsetPixels: number
@@ -62,6 +82,22 @@ const selectedTempo = computed(
     mixerStore.graph.tempoMap.tempoEvents.find((event) => event.tick === selectedTempoTick.value) ??
     mixerStore.graph.tempoMap.tempoEvents[0] ?? { tick: 0, beatsPerMinute: 120 }
 )
+const selectedMeter = computed(
+  () =>
+    mixerStore.graph.tempoMap.timeSignatureEvents.find(
+      (event) => event.tick === selectedMeterTick.value
+    ) ??
+    mixerStore.graph.tempoMap.timeSignatureEvents[0] ?? { tick: 0, numerator: 4, denominator: 4 }
+)
+const selectedKey = computed(
+  () =>
+    mixerStore.graph.keySignatureEvents.find((event) => event.tick === selectedKeyTick.value) ??
+    mixerStore.graph.keySignatureEvents[0] ?? { tick: 0, fifths: 0, mode: "major" as const }
+)
+const selectedKeyValue = computed(() =>
+  keySignatureValue(selectedKey.value.fifths, selectedKey.value.mode)
+)
+const meterDenominators = [1, 2, 4, 8, 16, 32] as const
 const displayMode = computed(() => session.value?.configuration.waveformDisplayMode ?? "separate")
 const recordingDuration = computed(() => {
   if (liveDurationSeconds.value > 0) return liveDurationSeconds.value
@@ -145,7 +181,7 @@ const trackGridRows = computed(() => {
     trackRows.value.length > 0
       ? trackRows.value.map(({ height }) => `${height}px`).join(" ")
       : `${trackHeight.value}px`
-  return `43px ${tempoLaneHeight.value}px ${rows} minmax(64px, 1fr)`
+  return `43px ${tempoLaneHeight.value}px ${meterLaneHeight.value}px ${keyLaneHeight.value}px ${rows} minmax(64px, 1fr)`
 })
 const railStyle = computed(() => ({
   gridTemplateRows: trackGridRows.value
@@ -344,6 +380,31 @@ function updateSelectedTempo(beatsPerMinute: number): void {
     )
   })
 }
+
+function updateSelectedMeter(patch: { numerator?: number; denominator?: number }): void {
+  const tick = selectedMeter.value.tick
+  replaceTempoMap({
+    ...mixerStore.graph.tempoMap,
+    timeSignatureEvents: mixerStore.graph.tempoMap.timeSignatureEvents.map((event) =>
+      event.tick === tick ? { ...event, ...patch } : event
+    )
+  })
+}
+
+function replaceKeySignatureMap(events: KeySignatureEventState[]): void {
+  void mixerStore.execute({ type: "replace-key-signature-map", events })
+}
+
+function updateSelectedKey(event: Event): void {
+  const choice = parseKeySignatureValue((event.target as HTMLSelectElement).value)
+  if (!choice) return
+  const tick = selectedKey.value.tick
+  replaceKeySignatureMap(
+    mixerStore.graph.keySignatureEvents.map((event) =>
+      event.tick === tick ? { ...event, ...choice } : event
+    )
+  )
+}
 </script>
 
 <template>
@@ -384,6 +445,85 @@ function updateSelectedTempo(beatsPerMinute: number): void {
           @toggle="viewStore.toggleTempoLane"
           @update-value="updateSelectedTempo"
         />
+        <GlobalEventLaneHeader
+          label="Meter"
+          eyebrow="GLOBAL TRACK"
+          :expanded="meterLaneExpanded"
+          color="var(--ui-domain-color-f2a65a, #f2a65a)"
+          @toggle="viewStore.toggleMeterLane"
+        >
+          <template #controls>
+            <input
+              :value="selectedMeter.numerator"
+              type="number"
+              min="1"
+              max="32"
+              aria-label="Selected Meter numerator"
+              @change="
+                updateSelectedMeter({
+                  numerator: Math.min(
+                    32,
+                    Math.max(1, Number(($event.target as HTMLInputElement).value))
+                  )
+                })
+              "
+            />
+            <span aria-hidden="true">/</span>
+            <select
+              :value="selectedMeter.denominator"
+              aria-label="Selected Meter denominator"
+              @change="
+                updateSelectedMeter({
+                  denominator: Number(($event.target as HTMLSelectElement).value)
+                })
+              "
+            >
+              <option
+                v-for="denominator in meterDenominators"
+                :key="denominator"
+                :value="denominator"
+              >
+                {{ denominator }}
+              </option>
+            </select>
+          </template>
+        </GlobalEventLaneHeader>
+        <GlobalEventLaneHeader
+          label="Key"
+          eyebrow="GLOBAL TRACK"
+          :expanded="keyLaneExpanded"
+          color="var(--ui-domain-color-b894ff, #b894ff)"
+          @toggle="viewStore.toggleKeyLane"
+        >
+          <template #controls>
+            <select
+              class="key-signature-select"
+              :value="selectedKeyValue"
+              aria-label="Selected Key signature"
+              @change="updateSelectedKey"
+            >
+              <optgroup label="Major keys">
+                <option
+                  v-for="choice in MAJOR_KEY_SIGNATURE_CHOICES"
+                  :key="choice.value"
+                  :value="choice.value"
+                >
+                  {{ choice.label }}
+                </option>
+              </optgroup>
+              <option class="key-signature-divider" disabled>────────────────</option>
+              <optgroup label="Minor keys">
+                <option
+                  v-for="choice in MINOR_KEY_SIGNATURE_CHOICES"
+                  :key="choice.value"
+                  :value="choice.value"
+                >
+                  {{ choice.label }}
+                </option>
+              </optgroup>
+            </select>
+          </template>
+        </GlobalEventLaneHeader>
         <div
           v-for="({ track, scale }, index) in trackRows"
           :key="track.id"
@@ -448,6 +588,27 @@ function updateSelectedTempo(beatsPerMinute: number): void {
             :expanded="tempoLaneExpanded"
             @replace="replaceTempoMap"
             @select="selectedTempoTick = $event"
+          />
+          <MeterTrackLane
+            :tempo-map="mixerStore.graph.tempoMap"
+            :selected-tick="selectedMeterTick"
+            :content-width="contentWidth"
+            :pixels-per-quarter="pixelsPerQuarter"
+            :height="meterLaneHeight"
+            :expanded="meterLaneExpanded"
+            @replace="replaceTempoMap"
+            @select="selectedMeterTick = $event"
+          />
+          <KeyTrackLane
+            :events="mixerStore.graph.keySignatureEvents"
+            :tempo-map="mixerStore.graph.tempoMap"
+            :selected-tick="selectedKeyTick"
+            :content-width="contentWidth"
+            :pixels-per-quarter="pixelsPerQuarter"
+            :height="keyLaneHeight"
+            :expanded="keyLaneExpanded"
+            @replace="replaceKeySignatureMap"
+            @select="selectedKeyTick = $event"
           />
           <template
             v-for="{ track, clips: trackClips, midiClips, height } in trackRows"
@@ -668,5 +829,11 @@ function updateSelectedTempo(beatsPerMinute: number): void {
   display: block;
   font-size: var(--ui-type-size-body-compact);
   font-weight: var(--ui-type-weight-bold);
+}
+.key-signature-select {
+  width: 100%;
+}
+.key-signature-divider {
+  color: var(--line-strong);
 }
 </style>

@@ -16,6 +16,7 @@ function mountLane() {
       minimum: 80,
       maximum: 160,
       guides: [160, 120, 80],
+      beatGuides: [50, 150],
       verticalGuides: [0, 100, 200],
       color: "#65A8FF",
       expanded: true,

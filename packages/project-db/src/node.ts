@@ -40,6 +40,7 @@ import {
   WAVEFORM_CACHE_VERSION,
   assets,
   assetWaveformLevels,
+  keySignatureEvents,
   midiClips,
   midiEvents,
   midiNotes,
@@ -411,6 +412,21 @@ async function applyProjectCommand(
       }
       return
     }
+    case "replace-key-signature-map": {
+      const initialKey = command.events[0]
+      if (!initialKey || initialKey.tick !== 0) {
+        throw new Error("Key-signature map requires a tick 0 event")
+      }
+      await tx
+        .update(keySignatureEvents)
+        .set({ fifths: initialKey.fifths, mode: initialKey.mode })
+        .where(eq(keySignatureEvents.tick, 0))
+      await tx.delete(keySignatureEvents).where(ne(keySignatureEvents.tick, 0))
+      if (command.events.length > 1) {
+        await tx.insert(keySignatureEvents).values(command.events.slice(1))
+      }
+      return
+    }
     case "batch":
       for (const nested of command.commands) {
         await applyProjectCommand(tx, nested, fallbackOutputId)
@@ -510,6 +526,11 @@ export class ProjectDatabase {
           tick: 0,
           numerator: configuration.numerator,
           denominator: configuration.denominator
+        })
+        await tx.insert(keySignatureEvents).values({
+          tick: 0,
+          fifths: 0,
+          mode: "major"
         })
         await tx.insert(mixerChannels).values([
           {
@@ -721,7 +742,8 @@ export class ProjectDatabase {
       midiNoteRows,
       midiEventRows,
       tempoRows,
-      signatureRows
+      signatureRows,
+      keySignatureRows
     ] = await Promise.all([
       this.db
         .select()
@@ -765,7 +787,8 @@ export class ProjectDatabase {
         .from(midiEvents)
         .orderBy(asc(midiEvents.clipId), asc(midiEvents.tick), asc(midiEvents.id)),
       this.db.select().from(tempoEvents).orderBy(asc(tempoEvents.tick)),
-      this.db.select().from(timeSignatureEvents).orderBy(asc(timeSignatureEvents.tick))
+      this.db.select().from(timeSignatureEvents).orderBy(asc(timeSignatureEvents.tick)),
+      this.db.select().from(keySignatureEvents).orderBy(asc(keySignatureEvents.tick))
     ])
 
     const kindOrder = new Map([
@@ -866,7 +889,11 @@ export class ProjectDatabase {
           beatsPerMinute: event.beatsPerMinute
         })),
         timeSignatureEvents: signatureRows
-      }
+      },
+      keySignatureEvents: keySignatureRows.map((event) => ({
+        ...event,
+        mode: event.mode === "minor" ? "minor" : "major"
+      }))
     }
   }
 

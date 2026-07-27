@@ -129,6 +129,7 @@ describe("ArrangementWorkspace", () => {
       sends: [],
       plugins: [],
       midiClips: [],
+      keySignatureEvents: [{ tick: 0, fifths: 0, mode: "major" }],
       tempoMap: {
         ticksPerQuarter: 960,
         tempoEvents: [{ tick: 0, beatsPerMinute: 120 }],
@@ -150,8 +151,58 @@ describe("ArrangementWorkspace", () => {
     expect(wrapper.find(".tempo-readout").exists()).toBe(false)
     expect(wrapper.findAll(".track-lane")).toHaveLength(2)
     expect(wrapper.findAll('[data-testid="timeline-playhead"]')).toHaveLength(1)
+    expect(wrapper.findAll(".beat-mark").length).toBeGreaterThan(0)
+    expect(wrapper.findAll(".beat-line").length).toBeGreaterThan(0)
+    expect(wrapper.findAll(".beat-guide").length).toBeGreaterThan(0)
     expect(wrapper.get('[aria-label="Tempo global track"]').text()).toContain("Tempo")
+    expect(wrapper.get('[aria-label="Meter global track"]').text()).toContain("Meter")
+    expect(wrapper.get('[aria-label="Key global track"]').text()).toContain("Key")
+    const keySelect = wrapper.get<HTMLSelectElement>('[aria-label="Selected Key signature"]')
+    expect(keySelect.findAll("optgroup").map((group) => group.attributes("label"))).toEqual([
+      "Major keys",
+      "Minor keys"
+    ])
+    expect(keySelect.findAll("option").map((option) => option.text())).toEqual([
+      "C♯ Major",
+      "F♯ Major",
+      "B Major",
+      "E Major",
+      "A Major",
+      "D Major",
+      "G Major",
+      "C Major",
+      "F Major",
+      "B♭ Major",
+      "E♭ Major",
+      "A♭ Major",
+      "D♭ Major",
+      "G♭ Major",
+      "C♭ Major",
+      "────────────────",
+      "A♯ minor",
+      "D♯ minor",
+      "G♯ minor",
+      "C♯ minor",
+      "F♯ minor",
+      "B minor",
+      "E minor",
+      "A minor",
+      "D minor",
+      "G minor",
+      "C minor",
+      "F minor",
+      "B♭ minor",
+      "E♭ minor",
+      "A♭ minor"
+    ])
+    const executeKeyChange = vi.spyOn(mixer, "execute").mockResolvedValue(true)
+    await keySelect.setValue("major:-7")
+    expect(executeKeyChange).toHaveBeenCalledWith({
+      type: "replace-key-signature-map",
+      events: [{ tick: 0, fifths: -7, mode: "major" }]
+    })
     expect(wrapper.findAll(".point-handle")).toHaveLength(1)
+    expect(wrapper.findAll(".event-handle")).toHaveLength(2)
     const clip = wrapper.get('button[aria-label="Audio clip First take"]')
     expect(clip.attributes("aria-pressed")).toBe("false")
     expect(clip.attributes("style")).toContain("width: 100px")
@@ -184,6 +235,12 @@ describe("ArrangementWorkspace", () => {
       wrapper.get<HTMLElement>('[data-testid="timeline-rail"]').element.style.gridTemplateRows
     ).toContain("30px")
     await wrapper.get('button[aria-label="Expand Tempo track"]').trigger("click")
+    await wrapper.get('button[aria-label="Collapse Meter track"]').trigger("click")
+    expect(arrangementView.meterLaneExpanded).toBe(false)
+    await wrapper.get('button[aria-label="Expand Meter track"]').trigger("click")
+    await wrapper.get('button[aria-label="Collapse Key track"]').trigger("click")
+    expect(arrangementView.keyLaneExpanded).toBe(false)
+    await wrapper.get('button[aria-label="Expand Key track"]').trigger("click")
     const resizeHandles = wrapper.findAll('[role="separator"]')
     expect(resizeHandles).toHaveLength(2)
     expect(wrapper.findAll<HTMLElement>(".track-lane")[0]?.element.style.height).toBe("104px")
@@ -297,6 +354,7 @@ describe("ArrangementWorkspace", () => {
       sends: [],
       plugins: [],
       midiClips: [],
+      keySignatureEvents: [{ tick: 0, fifths: 0, mode: "major" }],
       tempoMap: {
         ticksPerQuarter: 960,
         tempoEvents: [{ tick: 0, beatsPerMinute: 120 }],
@@ -384,6 +442,7 @@ describe("ArrangementWorkspace", () => {
       sends: [],
       plugins: [],
       midiClips: [],
+      keySignatureEvents: [{ tick: 0, fifths: 0, mode: "major" }],
       tempoMap: {
         ticksPerQuarter: 960,
         tempoEvents: [{ tick: 0, beatsPerMinute: 120 }],
