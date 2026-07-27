@@ -2,7 +2,6 @@
 import { UiProvider } from "@yadaw/ui"
 import { computed, onMounted, onUnmounted, watch } from "vue"
 import { storeToRefs } from "pinia"
-import { RouterView } from "vue-router"
 import { useTheme } from "./composables/useTheme"
 import { useApplicationSettingsStore } from "./stores/applicationSettings"
 import { useAudioPreferencesStore } from "./stores/audioPreferences"
@@ -15,6 +14,7 @@ import GlobalOperationHost from "./components/operations/GlobalOperationHost.vue
 import AudioBenchmarkHost from "./components/benchmark/AudioBenchmarkHost.vue"
 import GlobalDialogHost from "./components/dialog/GlobalDialogHost.vue"
 import AppChrome from "./components/application/AppChrome.vue"
+import AppRouteView from "./components/application/AppRouteView.vue"
 
 const audioPreferencesStore = useAudioPreferencesStore()
 const audioRuntimeStore = useAudioRuntimeStore()
@@ -63,7 +63,7 @@ onUnmounted(() => {
 <template>
   <UiProvider dir="ltr" :tooltip-delay="350" :tooltip-skip-delay="100">
     <AppChrome v-if="lifecycleReady">
-      <RouterView />
+      <AppRouteView />
     </AppChrome>
     <GlobalOperationHost />
     <AudioBenchmarkHost />
