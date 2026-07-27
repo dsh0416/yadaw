@@ -64,6 +64,27 @@ interface StoredCatalog extends PluginCatalogSnapshot {
   fingerprints?: Record<string, PluginFingerprint>
 }
 
+interface CachedBundleReuse {
+  force: boolean
+  retryQuarantined: boolean
+  fingerprintMatches: boolean
+  previousPlugins: PluginDescriptor[]
+}
+
+export function canReuseCachedBundle({
+  force,
+  retryQuarantined,
+  fingerprintMatches,
+  previousPlugins
+}: CachedBundleReuse): boolean {
+  return (
+    !force &&
+    fingerprintMatches &&
+    previousPlugins.length > 0 &&
+    (!retryQuarantined || previousPlugins.every((plugin) => plugin.compatibility !== "quarantined"))
+  )
+}
+
 function defaultPluginPaths(): string[] {
   if (process.platform === "win32") {
     return [
@@ -443,14 +464,24 @@ export class PluginCatalogService {
   }
 
   scan(request: PluginScanRequest = {}): Promise<PluginCatalogSnapshot> {
-    this.scanPromise ??= this.scanNow(request).finally(() => {
-      this.scanPromise = null
-    })
+    this.scanPromise ??= this.scanNow(request)
+      .catch((error: unknown) => {
+        this.catalog = { ...this.catalog, scanning: false }
+        throw error
+      })
+      .finally(() => {
+        this.scanPromise = null
+      })
     return this.scanPromise
   }
 
   private async scanNow(request: PluginScanRequest): Promise<PluginCatalogSnapshot> {
-    const roots = [...new Set([...(request.paths ?? []), ...defaultPluginPaths()])]
+    const knownExternalRoots = this.catalog.plugins
+      .filter((plugin) => plugin.source.kind === "external")
+      .map((plugin) => dirname(plugin.modulePath))
+    const roots = [
+      ...new Set([...(request.paths ?? []), ...knownExternalRoots, ...defaultPluginPaths()])
+    ]
     const bundles = (await Promise.all(roots.map(discoverBundles))).flat()
     this.catalog = { ...this.catalog, scanning: true }
     this.publish({ type: "started", total: bundles.length })
@@ -470,12 +501,14 @@ export class PluginCatalogService {
       const previousPlugins = this.catalog.plugins.filter(
         (plugin) => plugin.modulePath === bundlePath
       )
-      const unchanged =
-        previousFingerprint?.mtimeMs === fingerprint.mtimeMs &&
-        previousFingerprint.size === fingerprint.size &&
-        previousPlugins.length > 0 &&
-        (!request.retryQuarantined ||
-          previousPlugins.every((plugin) => plugin.compatibility !== "quarantined"))
+      const unchanged = canReuseCachedBundle({
+        force: request.force === true,
+        retryQuarantined: request.retryQuarantined === true,
+        fingerprintMatches:
+          previousFingerprint?.mtimeMs === fingerprint.mtimeMs &&
+          previousFingerprint.size === fingerprint.size,
+        previousPlugins
+      })
       if (unchanged) {
         plugins.push(...previousPlugins)
         continue

@@ -15,6 +15,8 @@ export const IPC_CHANNELS = {
   transportSnapshot: "transport:snapshot",
   lifecycleSnapshot: "lifecycle:snapshot",
   lifecycleEvent: "lifecycle:event",
+  startupProgressSnapshot: "startup:progress-snapshot",
+  startupProgressEvent: "startup:progress-event",
   systemPerformanceSnapshot: "system:performance-snapshot",
   audioBenchmarkRun: "audio-benchmark:run",
   audioBenchmarkMenuOpen: "audio-benchmark:menu-open",
@@ -84,6 +86,8 @@ export interface YadawDesktopApi {
   transportSnapshot(): Promise<TransportSnapshot>
   lifecycleSnapshot(): Promise<DesktopLifecycleSnapshot>
   subscribeLifecycle(listener: (event: DesktopLifecycleEvent) => void): () => void
+  startupProgressSnapshot(): Promise<StartupProgressSnapshot>
+  subscribeStartupProgress(listener: (progress: StartupProgressSnapshot) => void): () => void
   systemPerformanceSnapshot(): Promise<SystemPerformanceSnapshot>
   runAudioBenchmark(): Promise<AudioBenchmarkReport>
   subscribeAudioBenchmarkRequests(listener: () => void): () => void
@@ -124,6 +128,25 @@ export const PROJECT_SAMPLE_RATES = [44_100, 48_000, 88_200, 96_000, 176_400, 19
 export type ProjectSampleRate = (typeof PROJECT_SAMPLE_RATES)[number]
 export type RecordingBitDepth = "float32" | "pcm24" | "pcm16"
 export type ThemePreference = "light" | "dark" | "system"
+
+export type StartupPhase =
+  | "starting"
+  | "loading-catalog"
+  | "scanning-plugins"
+  | "starting-audio"
+  | "opening-workspace"
+  | "ready"
+  | "failed"
+
+export interface StartupProgressSnapshot {
+  phase: StartupPhase
+  progress: number
+  label: string
+  detail: string
+  completed: number | null
+  total: number | null
+  warnings: number
+}
 
 export interface ProjectConfiguration {
   name: string
@@ -658,6 +681,7 @@ export interface PluginCatalogSnapshot {
 export interface PluginScanRequest {
   paths?: string[]
   retryQuarantined?: boolean
+  force?: boolean
 }
 
 export type PluginScanEvent =

@@ -40,6 +40,7 @@ import { LifecycleCoordinator } from "./lifecycle-coordinator"
 import { ProjectService } from "./project-service"
 import { PluginCatalogService } from "./plugin-catalog-service"
 import { RecordingService } from "./recording-service"
+import { StartupProgress } from "./startup-progress"
 import { WaveformService } from "./waveform-service"
 
 const rendererDirectory = join(import.meta.dirname, "../renderer")
@@ -960,6 +961,7 @@ function registerIpcHandlers(
 }
 
 let mainWindow: BrowserWindow | null = null
+let splashWindow: BrowserWindow | null = null
 
 function loadMainWindow(window: BrowserWindow): void {
   if (process.env.YADAW_RENDERER_URL) {
@@ -967,6 +969,48 @@ function loadMainWindow(window: BrowserWindow): void {
   } else {
     void window.loadFile(join(rendererDirectory, "index.html"))
   }
+}
+
+function loadSplashWindow(window: BrowserWindow): void {
+  if (process.env.YADAW_RENDERER_URL) {
+    void window.loadURL(new URL("splash.html", process.env.YADAW_RENDERER_URL).toString())
+  } else {
+    void window.loadFile(join(rendererDirectory, "splash.html"))
+  }
+}
+
+function createSplashWindow(): BrowserWindow {
+  const window = new BrowserWindow({
+    show: false,
+    width: 620,
+    height: 360,
+    resizable: false,
+    maximizable: false,
+    minimizable: false,
+    fullscreenable: false,
+    frame: false,
+    transparent: false,
+    backgroundColor: "#0b0e13",
+    webPreferences: {
+      preload: join(import.meta.dirname, "../preload/index.cjs"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true
+    }
+  })
+  splashWindow = window
+  window.once("closed", () => {
+    if (splashWindow === window) splashWindow = null
+  })
+  window.once("ready-to-show", () => {
+    if (!window.isDestroyed()) window.show()
+  })
+  window.webContents.setWindowOpenHandler(() => ({ action: "deny" }))
+  window.webContents.on("will-navigate", (event, url) => {
+    if (url !== window.webContents.getURL()) event.preventDefault()
+  })
+  loadSplashWindow(window)
+  return window
 }
 
 function createMainWindow(loadContent = true): BrowserWindow {
@@ -1036,130 +1080,246 @@ async function shutdownServices(): Promise<void> {
 }
 
 void app.whenReady().then(async () => {
-  const settings = new ApplicationSettingsStore(app.getPath("userData"))
-  const applicationSettings = await settings.get()
-  const executableSuffix = process.platform === "win32" ? ".exe" : ""
-  const probePath = app.isPackaged
-    ? join(process.resourcesPath, `yadaw-vst3-probe${executableSuffix}`)
-    : resolve(
-        app.getAppPath(),
-        "..",
-        "..",
-        "target",
-        "debug",
-        `yadaw-vst3-probe${executableSuffix}`
-      )
-  const builtinPluginDirectory = app.isPackaged
-    ? join(process.resourcesPath, "plugins")
-    : resolve(app.getAppPath(), "..", "..", "target", "bundles")
-  const plugins = new PluginCatalogService(
-    app.getPath("userData"),
-    probePath,
-    builtinPluginDirectory
-  )
-  await plugins.initialize()
-  const audioHostPath = app.isPackaged
-    ? join(process.resourcesPath, `yadaw-audio-host${executableSuffix}`)
-    : resolve(
-        app.getAppPath(),
-        "..",
-        "..",
-        "target",
-        "debug",
-        `yadaw-audio-host${executableSuffix}`
-      )
-  const window = createMainWindow(false)
-  audioHostService = new AudioHostService(
-    audioHostPath,
-    join(app.getPath("userData"), "audio-host-crash-marker.bin"),
-    applicationSettings.audioHostRuntime,
-    process.platform === "win32" ? window.getNativeWindowHandle() : undefined,
-    (message) => {
-      console.error(`YADAW audio helper failure: ${message}`)
-      for (const window of BrowserWindow.getAllWindows().slice(1)) window.close()
-    },
-    async (classId, preference) => {
-      await settings.setPluginEditorPreference(classId, preference)
-    }
-  )
-  audioHostService.start()
-  projectService = new ProjectService(app.getPath("userData"), settings)
-  const operations = new OperationService()
-  const mixer = new MixerService(app.getPath("userData"), projectService, audioHostService, plugins)
-  plugins.attachRuntime({
-    resolveInstance: async (instanceId) => {
-      const graph = await mixer.snapshot()
-      const plugin = graph.plugins.find((candidate) => candidate.id === instanceId)
-      if (!plugin) throw new Error(`Plugin instance '${instanceId}' was not found`)
-      return { plugin, sampleRate: graph.sampleRate }
-    },
-    load: (plugin, sampleRate) => {
-      if (!audioHostService) return Promise.reject(new Error("Audio host is not running"))
-      return audioHostService.loadPlugin(plugin, sampleRate)
-    },
-    parameters: (instanceId) => {
-      if (!audioHostService) return Promise.resolve([])
-      return audioHostService.pluginParameters(instanceId)
-    },
-    setParameter: (change) => {
-      if (!audioHostService) return Promise.reject(new Error("Audio host is not running"))
-      return audioHostService.setPluginParameter(change)
-    },
-    openEditor: async (instanceId) => {
-      if (!audioHostService) {
-        return { editorMode: "parameters" as const, open: false }
-      }
-      const graph = await mixer.snapshot()
-      const plugin = graph.plugins.find((candidate) => candidate.id === instanceId)
-      if (!plugin) throw new Error(`Plugin instance '${instanceId}' was not found`)
-      const preference = await settings.pluginEditorPreference(plugin.classId)
-      return audioHostService.openPluginEditor(instanceId, preference)
-    },
-    closeEditor: (instanceId) => {
-      if (!audioHostService) return Promise.resolve()
-      return audioHostService.closePluginEditor(instanceId)
+  const startup = new StartupProgress()
+  ipcMain.handle(IPC_CHANNELS.startupProgressSnapshot, (event) => {
+    assertTrustedSender(event)
+    return startup.snapshot()
+  })
+  startup.subscribe((progress) => {
+    const window = splashWindow
+    if (window && !window.isDestroyed()) {
+      window.webContents.send(IPC_CHANNELS.startupProgressEvent, progress)
     }
   })
-  const midiImport = new MidiImportService(mixer, plugins)
-  const recordings = new RecordingService(
-    settings,
-    projectService,
-    operations,
-    mixer,
-    audioHostService
-  )
-  const waveforms = new WaveformService(settings, projectService)
-  const initialAudioRuntime = await audioHostService.audioEngineSnapshot()
-  const lifecycle = new LifecycleCoordinator(
-    projectService.current,
-    normalizeAudioRuntime(initialAudioRuntime),
-    { allowRecordingWithoutAudio: process.env.YADAW_TEST_CAPTURE_SOURCE === "1" }
-  )
-  registerIpcHandlers(
-    settings,
-    projectService,
-    recordings,
-    operations,
-    waveforms,
-    mixer,
-    plugins,
-    midiImport,
-    lifecycle
-  )
-  window.once("ready-to-show", () => {
-    if (!window.isDestroyed()) window.show()
-  })
-  loadMainWindow(window)
-  installApplicationMenu()
+  createSplashWindow()
 
-  app.on("activate", () => {
-    if (!mainWindow || mainWindow.isDestroyed()) {
-      createMainWindow()
-    } else {
-      mainWindow.show()
-      mainWindow.focus()
+  try {
+    startup.update({
+      phase: "loading-catalog",
+      progress: 0.05,
+      label: "Loading plug-in catalog",
+      detail: "Reading settings and built-in VST3 modules"
+    })
+    const settings = new ApplicationSettingsStore(app.getPath("userData"))
+    const applicationSettings = await settings.get()
+    const executableSuffix = process.platform === "win32" ? ".exe" : ""
+    const probePath = app.isPackaged
+      ? join(process.resourcesPath, `yadaw-vst3-probe${executableSuffix}`)
+      : resolve(
+          app.getAppPath(),
+          "..",
+          "..",
+          "target",
+          "debug",
+          `yadaw-vst3-probe${executableSuffix}`
+        )
+    const builtinPluginDirectory = app.isPackaged
+      ? join(process.resourcesPath, "plugins")
+      : resolve(app.getAppPath(), "..", "..", "target", "bundles")
+    const plugins = new PluginCatalogService(
+      app.getPath("userData"),
+      probePath,
+      builtinPluginDirectory
+    )
+    await plugins.initialize()
+
+    let scanTotal = 0
+    let scanWarnings = 0
+    const unsubscribeScan = plugins.subscribe((event) => {
+      if (event.type === "started") {
+        scanTotal = event.total
+        startup.update({
+          phase: "scanning-plugins",
+          progress: 0.16,
+          label: "Scanning VST3 plug-ins",
+          detail:
+            event.total === 0
+              ? "No external VST3 bundles found"
+              : `Found ${event.total} VST3 bundles`,
+          completed: 0,
+          total: event.total
+        })
+      } else if (event.type === "progress") {
+        const ratio = event.total > 0 ? event.completed / event.total : 1
+        startup.update({
+          phase: "scanning-plugins",
+          progress: 0.18 + ratio * 0.58,
+          label: "Scanning VST3 plug-ins",
+          detail: basename(event.path),
+          completed: event.completed,
+          total: event.total
+        })
+      } else if (event.type === "quarantined") {
+        scanWarnings += 1
+        startup.update({
+          detail: `${basename(event.path)} could not be loaded`,
+          warnings: scanWarnings
+        })
+      } else {
+        startup.update({
+          progress: 0.78,
+          detail: `${event.catalog.plugins.length} VST3 plug-ins available`,
+          completed: scanTotal,
+          total: scanTotal
+        })
+      }
+    })
+    startup.update({
+      phase: "scanning-plugins",
+      progress: 0.12,
+      label: "Discovering VST3 plug-ins",
+      detail: "Searching system and user plug-in folders"
+    })
+    try {
+      await plugins.scan({ force: true, retryQuarantined: true })
+    } catch (error) {
+      scanWarnings += 1
+      startup.update({
+        progress: 0.78,
+        detail:
+          error instanceof Error
+            ? `VST3 scan finished with an error: ${error.message}`
+            : "VST3 scan finished with an unknown error",
+        warnings: scanWarnings
+      })
+      console.error("Startup VST3 scan failed:", error)
+    } finally {
+      unsubscribeScan()
     }
-  })
+
+    startup.update({
+      phase: "starting-audio",
+      progress: 0.82,
+      label: "Starting audio services",
+      detail: "Connecting the isolated audio engine",
+      completed: null,
+      total: null
+    })
+    const audioHostPath = app.isPackaged
+      ? join(process.resourcesPath, `yadaw-audio-host${executableSuffix}`)
+      : resolve(
+          app.getAppPath(),
+          "..",
+          "..",
+          "target",
+          "debug",
+          `yadaw-audio-host${executableSuffix}`
+        )
+    const window = createMainWindow(false)
+    audioHostService = new AudioHostService(
+      audioHostPath,
+      join(app.getPath("userData"), "audio-host-crash-marker.bin"),
+      applicationSettings.audioHostRuntime,
+      process.platform === "win32" ? window.getNativeWindowHandle() : undefined,
+      (message) => {
+        console.error(`YADAW audio helper failure: ${message}`)
+        for (const candidate of BrowserWindow.getAllWindows()) {
+          if (candidate !== mainWindow && candidate !== splashWindow) candidate.close()
+        }
+      },
+      async (classId, preference) => {
+        await settings.setPluginEditorPreference(classId, preference)
+      }
+    )
+    audioHostService.start()
+    projectService = new ProjectService(app.getPath("userData"), settings)
+    const operations = new OperationService()
+    const mixer = new MixerService(
+      app.getPath("userData"),
+      projectService,
+      audioHostService,
+      plugins
+    )
+    plugins.attachRuntime({
+      resolveInstance: async (instanceId) => {
+        const graph = await mixer.snapshot()
+        const plugin = graph.plugins.find((candidate) => candidate.id === instanceId)
+        if (!plugin) throw new Error(`Plugin instance '${instanceId}' was not found`)
+        return { plugin, sampleRate: graph.sampleRate }
+      },
+      load: (plugin, sampleRate) => {
+        if (!audioHostService) return Promise.reject(new Error("Audio host is not running"))
+        return audioHostService.loadPlugin(plugin, sampleRate)
+      },
+      parameters: (instanceId) => {
+        if (!audioHostService) return Promise.resolve([])
+        return audioHostService.pluginParameters(instanceId)
+      },
+      setParameter: (change) => {
+        if (!audioHostService) return Promise.reject(new Error("Audio host is not running"))
+        return audioHostService.setPluginParameter(change)
+      },
+      openEditor: async (instanceId) => {
+        if (!audioHostService) {
+          return { editorMode: "parameters" as const, open: false }
+        }
+        const graph = await mixer.snapshot()
+        const plugin = graph.plugins.find((candidate) => candidate.id === instanceId)
+        if (!plugin) throw new Error(`Plugin instance '${instanceId}' was not found`)
+        const preference = await settings.pluginEditorPreference(plugin.classId)
+        return audioHostService.openPluginEditor(instanceId, preference)
+      },
+      closeEditor: (instanceId) => {
+        if (!audioHostService) return Promise.resolve()
+        return audioHostService.closePluginEditor(instanceId)
+      }
+    })
+    const midiImport = new MidiImportService(mixer, plugins)
+    const recordings = new RecordingService(
+      settings,
+      projectService,
+      operations,
+      mixer,
+      audioHostService
+    )
+    const waveforms = new WaveformService(settings, projectService)
+    const initialAudioRuntime = await audioHostService.audioEngineSnapshot()
+    const lifecycle = new LifecycleCoordinator(
+      projectService.current,
+      normalizeAudioRuntime(initialAudioRuntime),
+      { allowRecordingWithoutAudio: process.env.YADAW_TEST_CAPTURE_SOURCE === "1" }
+    )
+    registerIpcHandlers(
+      settings,
+      projectService,
+      recordings,
+      operations,
+      waveforms,
+      mixer,
+      plugins,
+      midiImport,
+      lifecycle
+    )
+    startup.update({
+      phase: "opening-workspace",
+      progress: 0.94,
+      label: "Opening workspace",
+      detail: "Building the mixer and project interface"
+    })
+    window.once("ready-to-show", () => {
+      startup.complete(`${plugins.list().plugins.length} VST3 plug-ins ready`)
+      if (!window.isDestroyed()) window.show()
+      setTimeout(() => {
+        const splash = splashWindow
+        if (splash && !splash.isDestroyed()) splash.close()
+      }, 220)
+    })
+    loadMainWindow(window)
+    installApplicationMenu()
+
+    app.on("activate", () => {
+      if (!mainWindow || mainWindow.isDestroyed()) {
+        createMainWindow()
+      } else {
+        mainWindow.show()
+        mainWindow.focus()
+      }
+    })
+  } catch (error) {
+    console.error("YADAW startup failed:", error)
+    startup.fail(error)
+    setTimeout(() => app.quit(), 4_000).unref()
+  }
 })
 
 app.on("window-all-closed", () => {

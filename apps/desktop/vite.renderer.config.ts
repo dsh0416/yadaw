@@ -8,7 +8,13 @@ export default defineConfig({
   plugins: [vue()],
   build: {
     emptyOutDir: true,
-    outDir: resolve(import.meta.dirname, "out/renderer")
+    outDir: resolve(import.meta.dirname, "out/renderer"),
+    rolldownOptions: {
+      input: {
+        main: resolve(import.meta.dirname, "src/renderer/index.html"),
+        splash: resolve(import.meta.dirname, "src/renderer/splash.html")
+      }
+    }
   },
   server: {
     host: "127.0.0.1",

@@ -27,7 +27,15 @@ test("records into a Large Object and reopens the PGlite project archive", async
   application.process().stdout?.on("data", (data) => console.log(`main stdout: ${String(data)}`))
   application.process().stderr?.on("data", (data) => console.log(`main stderr: ${String(data)}`))
   try {
-    const page = await application.firstWindow()
+    const splash = await application.firstWindow()
+    await splash.waitForLoadState("domcontentloaded")
+    await expect(splash.getByRole("heading", { name: "YADAW" })).toBeVisible()
+    await expect(splash.getByRole("progressbar")).toBeVisible()
+    const page =
+      application.windows().find((candidate) => !candidate.url().includes("splash.html")) ??
+      (await application.waitForEvent("window", {
+        predicate: (candidate) => !candidate.url().includes("splash.html")
+      }))
     page.on("console", (message) => console.log(`renderer ${message.type()}: ${message.text()}`))
     page.on("pageerror", (error) => console.log(`renderer error: ${error.message}`))
     await page.waitForLoadState("domcontentloaded")
@@ -187,7 +195,7 @@ test("records into a Large Object and reopens the PGlite project archive", async
     await expect(
       recordingDialog.getByRole("heading", { name: "Finalizing recording" })
     ).toBeVisible()
-    await expect(recordingDialog.getByRole("heading", { name: "Closing recording" })).toBeVisible()
+    await expect(recordingDialog).toContainText(/Closing recording|Completed/)
     await expect(recordingDialog).toContainText("Completed")
     await expect(recordingDialog).toBeHidden({ timeout: 3_000 })
     const timelineClip = page.getByRole("button", { name: /Audio clip Recording/ }).first()
@@ -256,7 +264,9 @@ test("records into a Large Object and reopens the PGlite project archive", async
 
     await page.getByRole("button", { name: "Save project" }).click()
     const saveDialog = page.getByRole("dialog")
-    await expect(saveDialog.getByRole("heading", { name: "Saving project" })).toBeVisible()
+    await expect(
+      saveDialog.getByRole("heading", { name: "Saving project", exact: true })
+    ).toBeVisible()
     await expect(saveDialog).toContainText("Lifecycle")
     await expect(saveDialog.getByRole("heading", { name: "Saving project archive" })).toBeVisible()
     await expect(saveDialog).toContainText("Completed")

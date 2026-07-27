@@ -40,6 +40,13 @@ const api: YadawDesktopApi = {
     ipcRenderer.on(IPC_CHANNELS.lifecycleEvent, handler)
     return () => ipcRenderer.removeListener(IPC_CHANNELS.lifecycleEvent, handler)
   },
+  startupProgressSnapshot: () => ipcRenderer.invoke(IPC_CHANNELS.startupProgressSnapshot),
+  subscribeStartupProgress: (listener) => {
+    const handler = (_event: Electron.IpcRendererEvent, progress: Parameters<typeof listener>[0]) =>
+      listener(progress)
+    ipcRenderer.on(IPC_CHANNELS.startupProgressEvent, handler)
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.startupProgressEvent, handler)
+  },
   systemPerformanceSnapshot: () => ipcRenderer.invoke(IPC_CHANNELS.systemPerformanceSnapshot),
   runAudioBenchmark: () => ipcRenderer.invoke(IPC_CHANNELS.audioBenchmarkRun),
   subscribeAudioBenchmarkRequests: (listener) => {
