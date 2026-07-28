@@ -1,0 +1,109 @@
+name: Setup YADAW build
+description: Install the locked toolchain, native dependencies, caches, and workspace packages.
+
+inputs:
+  github-token:
+    description: Token used by mise when downloading tools from GitHub.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Install Linux system dependencies
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install --yes --no-install-recommends \
+          libasound2-dev \
+          libxcursor-dev \
+          libxi-dev \
+          libxinerama-dev \
+          libxkbcommon-dev \
+          libxkbcommon-x11-dev \
+          libopenjp2-tools \
+          libxrandr-dev \
+          libwayland-dev \
+          libx11-xcb-dev
+
+    - name: Install locked toolchain
+      uses: jdx/mise-action@v4
+      with:
+        version: 2026.7.13
+        cache: true
+        github_token: ${{ inputs.github-token }}
+
+    - name: Expose libclang on Windows
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        $llvmRoot = mise where 'github:llvm/llvm-project'
+        "LIBCLANG_PATH=$llvmRoot\bin" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+    - name: Install and start sccache
+      uses: mozilla-actions/sccache-action@v0.0.10
+
+    - name: Locate Cargo and pnpm caches
+      id: cache-paths
+      shell: bash
+      run: |
+        echo "cargo-home=${CARGO_HOME:-$HOME/.cargo}" >> "$GITHUB_OUTPUT"
+        echo "pnpm-store=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+    - name: Restore Cargo downloads
+      uses: actions/cache@v5
+      with:
+        path: |
+          ${{ steps.cache-paths.outputs.cargo-home }}/registry/index
+          ${{ steps.cache-paths.outputs.cargo-home }}/registry/cache
+          ${{ steps.cache-paths.outputs.cargo-home }}/git/db
+        key: cargo-downloads-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock') }}
+        restore-keys: |
+          cargo-downloads-${{ runner.os }}-${{ runner.arch }}-
+
+    - name: Restore pnpm store
+      uses: actions/cache@v5
+      with:
+        path: ${{ steps.cache-paths.outputs.pnpm-store }}
+        key: pnpm-store-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml') }}
+        restore-keys: |
+          pnpm-store-${{ runner.os }}-${{ runner.arch }}-
+
+    - name: Restore Electron downloads
+      uses: actions/cache@v5
+      with:
+        path: |
+          ~/.cache/electron
+          ~/.cache/electron-builder
+          ~/Library/Caches/electron
+          ~/Library/Caches/electron-builder
+          ~/AppData/Local/electron/Cache
+          ~/AppData/Local/electron-builder/Cache
+        key: electron-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml') }}
+        restore-keys: |
+          electron-${{ runner.os }}-${{ runner.arch }}-
+
+    - name: Fetch pinned VST3 SDK
+      shell: bash
+      env:
+        VST3_SDK_COMMIT: 9fad9770f2ae8542ab1a548a68c1ad1ac690abe0
+      run: |
+        if [[ ! -d third_party/vst3sdk/.git ]]; then
+          git init third_party/vst3sdk
+          git -C third_party/vst3sdk remote add \
+            origin https://github.com/steinbergmedia/vst3sdk.git
+          git -C third_party/vst3sdk fetch --depth 1 origin "$VST3_SDK_COMMIT"
+          git -C third_party/vst3sdk checkout --detach FETCH_HEAD
+          git -C third_party/vst3sdk submodule update --init --recursive --depth 1
+        fi
+
+        actual_commit="$(git -C third_party/vst3sdk rev-parse HEAD)"
+        if [[ "$actual_commit" != "$VST3_SDK_COMMIT" ]]; then
+          echo "::error::Expected VST3 SDK commit $VST3_SDK_COMMIT, got $actual_commit"
+          exit 1
+        fi
+
+    - name: Install workspace dependencies
+      shell: bash
+      run: pnpm install --frozen-lockfile --prefer-offline

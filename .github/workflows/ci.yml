@@ -1,0 +1,240 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: "1"
+  RUSTC_WRAPPER: sccache
+  SCCACHE_GHA_ENABLED: "true"
+
+jobs:
+  metadata:
+    name: Validate version metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Validate tag and VERSION
+        id: version
+        shell: bash
+        run: |
+          version="$(tr -d '\r\n' < VERSION)"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::VERSION is not a valid release version: $version"
+            exit 1
+          fi
+
+          if [[ "$GITHUB_REF" == refs/tags/* && "$GITHUB_REF_NAME" != "v$version" ]]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match VERSION ($version)"
+            exit 1
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  quality:
+    name: Formatting, lint, types, and full checks
+    needs: metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up build environment
+        uses: ./.github/actions/setup-build
+        with:
+          github-token: >-
+            ${{ github.event_name == 'pull_request' && '' || github.token }}
+
+      - name: Run repository checks
+        run: pnpm check
+
+  platform-tests:
+    name: Tests (${{ matrix.name }})
+    needs: metadata
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows x64
+            os: windows-latest
+          - name: macOS arm64
+            os: macos-15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up build environment
+        uses: ./.github/actions/setup-build
+        with:
+          github-token: >-
+            ${{ github.event_name == 'pull_request' && '' || github.token }}
+
+      - name: Run Rust tests and allocation invariants
+        run: pnpm test:rust
+
+      - name: Run desktop unit tests
+        run: pnpm --filter @yadaw/desktop test:unit
+
+      - name: Run project database integration tests
+        run: pnpm --filter @yadaw/project-db test:integration
+
+  package:
+    name: Package (${{ matrix.name }})
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.ref == 'refs/heads/main' ||
+      startsWith(github.ref, 'refs/tags/')
+    needs:
+      - metadata
+      - quality
+      - platform-tests
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows x64
+            os: windows-latest
+            builder-arch: x64
+            artifact: windows-x64
+            package-glob: release/*.exe
+          - name: Linux x64
+            os: ubuntu-24.04
+            builder-arch: x64
+            artifact: linux-x64
+            package-glob: release/*.AppImage
+          - name: Linux arm64
+            os: ubuntu-24.04-arm
+            builder-arch: arm64
+            artifact: linux-arm64
+            package-glob: release/*.AppImage
+          - name: macOS x64
+            os: macos-15-intel
+            builder-arch: x64
+            artifact: macos-x64
+            package-glob: release/*.dmg
+          - name: macOS arm64
+            os: macos-15
+            builder-arch: arm64
+            artifact: macos-arm64
+            package-glob: release/*.dmg
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up build environment
+        uses: ./.github/actions/setup-build
+        with:
+          github-token: ${{ github.token }}
+
+      - name: Build native binaries and bundled plug-ins
+        run: pnpm build:native
+
+      - name: Build Electron bundles
+        run: pnpm --filter @yadaw/desktop build
+
+      - name: Create installer
+        run: >-
+          pnpm --filter @yadaw/desktop exec electron-builder
+          --publish never
+          --${{ matrix.builder-arch }}
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: yadaw-${{ needs.metadata.outputs.version }}-${{ matrix.artifact }}
+          path: ${{ matrix.package-glob }}
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs:
+      - metadata
+      - quality
+      - platform-tests
+      - package
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Download installers
+        uses: actions/download-artifact@v8
+        with:
+          pattern: yadaw-${{ needs.metadata.outputs.version }}-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Generate SHA-256 checksums
+        shell: bash
+        working-directory: release-assets
+        run: sha256sum * > SHA256SUMS
+
+      - name: Attest release artifacts
+        if: github.event.repository.visibility == 'public'
+        uses: actions/attest@v4
+        with:
+          subject-path: release-assets/*
+
+      - name: Create or update GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          release_args=(
+            --verify-tag
+            --generate-notes
+            --title "YADAW $GITHUB_REF_NAME"
+          )
+
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
+            release_args+=(--prerelease)
+          else
+            release_args+=(--latest)
+          fi
+
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" release-assets/* --clobber
+          else
+            gh release create \
+              "$GITHUB_REF_NAME" \
+              release-assets/* \
+              "${release_args[@]}"
+          fi

@@ -1,69 +1,80 @@
 # YADAW
 
-YADAW is an experimental desktop digital audio workstation built with Vue,
-Reka UI primitives, and a Rust DSP core.
+**Yet Another Digital Audio Workstation**
 
-## Architecture
+YADAW is a free and open-source digital audio workstation for creating,
+recording, and performing music. It aims to provide a fast, dependable creative
+environment across Windows, macOS, and Linux—one that can follow an idea from
+its first sketch to a finished production or a live stage.
 
-- `apps/desktop`: Electron host, secure preload bridge, and Vue renderer.
-- `packages/contracts`: shared, serializable IPC contracts.
-- `packages/audio-engine`: renderer-side state model for the native audio engine.
-- `crates/dsp-core`: runtime-agnostic Rust DSP code.
-- `crates/dsp-node`: napi-rs adapter loaded only by Electron's main process.
+YADAW is currently experimental and under active development. It is not yet
+recommended for production sessions or live performances.
 
-The renderer never imports the native addon. Non-real-time commands cross the
-preload bridge. Audio backends and devices come exclusively from cpal through
-the napi-rs addon; Chromium `MediaDevices` is not part of the device model.
+## Vision
 
-Audio preferences are modeled in `@yadaw/contracts` and persisted by the Vue
-renderer. Device IDs and buffer capabilities come from cpal. Applying the
-preferences opens native input/output streams and a preallocated SPSC bridge in
-Rust; the UI only polls an atomic runtime and latency snapshot.
+Music-making should not require choosing between creative freedom, technical
+control, and reliable performance. YADAW's long-term vision is a single,
+coherent workspace that serves:
 
-Windows builds always include cpal's ASIO backend. ASIO is part of the standard
-Windows product rather than an optional build variant; WASAPI remains available
-alongside it. Building on Windows therefore requires LLVM/Clang for bindgen.
-`asio-sys` downloads the Steinberg ASIO SDK automatically unless
-`CPAL_ASIO_DIR` points to a local SDK. Running the ASIO backend additionally
-requires a 64-bit ASIO driver supplied by the audio-interface vendor or a
-development fallback such as ASIO4ALL.
+- **Composition and production** — arranging audio and MIDI, shaping sounds,
+  automating ideas, and moving quickly from sketch to full arrangement.
+- **Recording and mixing** — capturing performances with low latency, editing
+  non-destructively, routing signals flexibly, and delivering a finished mix.
+- **Live performance** — preparing material in the studio and bringing the same
+  instruments, effects, routing, and musical ideas to the stage.
 
-The desktop build uses three repository-owned Vite configurations (main,
-preload, and renderer). `electron-builder` only packages their outputs and the
-native addon; no Electron-specific Vite framework owns the build pipeline.
+These workflows should reinforce one another instead of living as separate
+products or incompatible project formats.
 
-## Prerequisites
+## Project goals
 
-```powershell
-mise install
-```
+- **High and predictable performance.** Keep the audio path low-latency,
+  real-time safe, and stable as sessions grow.
+- **A genuinely cross-platform experience.** Make the same core workflow and
+  project available on Windows, macOS, and Linux while integrating well with
+  each platform's audio system.
+- **Freedom and user ownership.** Keep YADAW free software, keep creative work
+  under the user's control, and avoid making a service account or subscription
+  a prerequisite for making music.
+- **Interoperability.** Work with established plug-in ecosystems, audio and MIDI
+  hardware, and common media formats rather than creating a closed island.
+- **An approachable workflow with room to grow.** Support direct,
+  discoverable creation without hiding the routing, timing, and processing
+  control needed for demanding work.
+- **Reliability from studio to stage.** Treat project integrity, recovery,
+  diagnostics, and graceful handling of device or plug-in failures as product
+  features.
+- **A community-shaped tool.** Develop in the open so musicians, engineers,
+  performers, and developers can inspect it, adapt it, and influence its
+  direction.
 
-On Windows, install Visual Studio's **Desktop development with C++** workload
-and LLVM/Clang, then expose libclang to the build:
+## Current direction
 
-```powershell
-$env:LIBCLANG_PATH = "C:\Program Files\LLVM\bin"
-```
+The project is building its foundation around a native real-time audio engine,
+project persistence, an arrangement and mixer workflow, audio recording, MIDI,
+and plug-in hosting. The immediate focus is making these fundamentals reliable
+before expanding the composition and live-performance workflows.
 
-To use an already-downloaded ASIO SDK instead of the automatic download, also
-set `CPAL_ASIO_DIR` to its extracted root.
+Features, project formats, and compatibility may change while the project is in
+this early stage. Releases will document their supported platforms and
+capabilities as the application matures.
 
 ## Development
 
-```powershell
+The repository uses a locked, project-managed toolchain. To start a development
+build:
+
+```sh
+mise install
 mise run dev
 ```
 
-The development task installs locked pnpm dependencies when needed, builds the
-native addon in debug mode, and then starts Electron with the repository-owned
-Vite watchers. Use `mise run format` to apply Prettier and rustfmt,
-`mise run lint` for ESLint and Clippy, and `mise run check` for the complete
-formatting, lint, Rust test, napi-rs, and TypeScript validation path. Use
-`mise run build` for a production build. The underlying pnpm scripts remain
-available for package-level development.
+Contributor-facing details live outside this README:
 
-See [docs/architecture.md](docs/architecture.md) for the process boundaries and
-the next implementation milestones.
+- [Development environment](agents/docs/environment.md)
+- [Architecture and real-time constraints](docs/architecture.md)
+- [Performance benchmarks](docs/benchmarks.md)
+- [Continuous integration and releases](docs/ci.md)
 
 ## License
 

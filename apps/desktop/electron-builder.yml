@@ -10,6 +10,8 @@ npmRebuild: false
 directories:
   output: ../../release
 
+artifactName: "${productName}-${version}-${os}-${arch}.${ext}"
+
 files:
   - out/**/*
   - package.json
@@ -31,8 +33,7 @@ win:
         - YADAW Metronome.vst3/**/*
         - YADAW Sine.vst3/**/*
   target:
-    - target: nsis
-      arch: [x64]
+    - nsis
 
 mac:
   hardenedRuntime: true
@@ -50,8 +51,7 @@ mac:
         - YADAW Metronome.vst3/**/*
         - YADAW Sine.vst3/**/*
   target:
-    - target: dmg
-      arch: [x64, arm64]
+    - dmg
 
 linux:
   extraResources:
@@ -66,5 +66,4 @@ linux:
         - YADAW Metronome.vst3/**/*
         - YADAW Sine.vst3/**/*
   target:
-    - target: AppImage
-      arch: [x64, arm64]
+    - AppImage
