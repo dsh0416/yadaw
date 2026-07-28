@@ -1,19 +1,20 @@
 name: Build
 
 on:
-  workflow_run:
-    workflows: ["Test"]
-    types: [completed]
+  pull_request:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: >-
-    ${{ github.workflow }}-${{ github.event.workflow_run.head_branch ||
-    github.event.workflow_run.head_sha }}
-  cancel-in-progress: >-
-    ${{ !startsWith(github.event.workflow_run.head_branch, 'v') }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 env:
   CARGO_TERM_COLOR: always
@@ -22,32 +23,19 @@ env:
 jobs:
   metadata:
     name: Validate version metadata
-    if: >-
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event != 'pull_request' &&
-      (
-        github.event.workflow_run.event == 'workflow_dispatch' ||
-        github.event.workflow_run.head_branch == 'main' ||
-        startsWith(github.event.workflow_run.head_branch, 'v')
-      )
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
       version: ${{ steps.version.outputs.version }}
-      tag: ${{ steps.version.outputs.tag }}
     steps:
       - name: Check out source
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
           persist-credentials: false
 
       - name: Validate tag and VERSION
         id: version
         shell: bash
-        env:
-          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
-          TRIGGER_EVENT: ${{ github.event.workflow_run.event }}
         run: |
           version="$(tr -d '\r\n' < VERSION)"
           if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
@@ -55,17 +43,12 @@ jobs:
             exit 1
           fi
 
-          tag=""
-          if [[ "$TRIGGER_EVENT" == "push" && "$HEAD_BRANCH" == v* ]]; then
-            tag="$HEAD_BRANCH"
-            if [[ "$tag" != "v$version" ]]; then
-              echo "::error::Tag $tag does not match VERSION ($version)"
-              exit 1
-            fi
+          if [[ "$GITHUB_REF" == refs/tags/* && "$GITHUB_REF_NAME" != "v$version" ]]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match VERSION ($version)"
+            exit 1
           fi
 
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
   package:
     name: Package (${{ matrix.name }})
@@ -107,13 +90,13 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
           persist-credentials: false
 
       - name: Set up build environment
         uses: ./.github/actions/setup-build
         with:
-          github-token: ${{ github.token }}
+          github-token: >-
+            ${{ github.event_name == 'pull_request' && '' || github.token }}
 
       - name: Build native binaries and bundled plug-ins
         run: pnpm build:native
@@ -134,61 +117,3 @@ jobs:
           path: ${{ matrix.package-glob }}
           if-no-files-found: error
           retention-days: 14
-
-  release:
-    name: Publish GitHub Release
-    if: needs.metadata.outputs.tag != ''
-    needs:
-      - metadata
-      - package
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      contents: write
-      id-token: write
-      attestations: write
-    steps:
-      - name: Download installers
-        uses: actions/download-artifact@v8
-        with:
-          pattern: yadaw-${{ needs.metadata.outputs.version }}-*
-          path: release-assets
-          merge-multiple: true
-
-      - name: Generate SHA-256 checksums
-        shell: bash
-        working-directory: release-assets
-        run: sha256sum * > SHA256SUMS
-
-      - name: Attest release artifacts
-        if: github.event.repository.visibility == 'public'
-        uses: actions/attest@v4
-        with:
-          subject-path: release-assets/*
-
-      - name: Create or update GitHub Release
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG_NAME: ${{ needs.metadata.outputs.tag }}
-        run: |
-          release_args=(
-            --verify-tag
-            --generate-notes
-            --title "YADAW $TAG_NAME"
-          )
-
-          if [[ "$TAG_NAME" == *-* ]]; then
-            release_args+=(--prerelease)
-          else
-            release_args+=(--latest)
-          fi
-
-          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
-            gh release upload "$TAG_NAME" release-assets/* --clobber
-          else
-            gh release create \
-              "$TAG_NAME" \
-              release-assets/* \
-              "${release_args[@]}"
-          fi
