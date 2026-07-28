@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, shallowRef, watch } from "vue"
+import { computed } from "vue"
 import { Trash2 } from "@lucide/vue"
-import { UiPopover, UiSelect } from "@yadaw/ui"
+import { UiCascadingSelect, UiPopover, UiSelect } from "@yadaw/ui"
 import type {
   MixerBusState,
   MixerChannelState,
@@ -12,6 +12,7 @@ import type {
   MixerSendTap
 } from "@yadaw/contracts"
 import { useParameterGesture } from "../../composables/useParameterGesture"
+import { mixerRouteGroups } from "./mixer-route-groups"
 
 const props = defineProps<{
   channel: MixerChannelState
@@ -29,31 +30,13 @@ const emit = defineEmits<{
   deleteSend: [sendId: string]
 }>()
 
-const newSendTarget = shallowRef("")
 const sendGestures = new Map<string, ReturnType<typeof useParameterGesture>>()
 const supportsSends = computed(() => ["audio", "instrument", "aux"].includes(props.channel.kind))
 const emptyRows = computed(() => Math.max(0, props.slotRows - props.sends.length))
 const canAddSend = computed(() => props.sendTargets.length > 0)
 const alignmentRows = computed(() => Math.max(0, emptyRows.value - (canAddSend.value ? 1 : 0)))
-const sendBusTargets = computed(() =>
-  props.sendTargets.filter(
-    (target): target is Extract<MixerRouteTarget, { kind: "bus" }> => target.kind === "bus"
-  )
-)
-const sendOutputTargets = computed(() =>
-  props.sendTargets.filter(
-    (target): target is Extract<MixerRouteTarget, { kind: "output" }> => target.kind === "output"
-  )
-)
-
-watch(
-  () => [props.channel.id, props.sendTargets.map(targetValue).join("|")],
-  () => {
-    if (!props.sendTargets.some((target) => targetValue(target) === newSendTarget.value)) {
-      newSendTarget.value = props.sendTargets[0] ? targetValue(props.sendTargets[0]) : ""
-    }
-  },
-  { immediate: true }
+const sendTargetGroups = computed(() =>
+  mixerRouteGroups(props.sendTargets, props.buses, props.outputs)
 )
 
 function targetName(send: MixerSendState): string {
@@ -138,9 +121,8 @@ function numberValue(event: Event): number {
   return Number((event.currentTarget as HTMLInputElement).value)
 }
 
-function createSend(): void {
-  if (!newSendTarget.value) return
-  emit("addSend", parseTarget(newSendTarget.value))
+function createSend(value: string): void {
+  emit("addSend", parseTarget(value))
 }
 </script>
 
@@ -254,37 +236,18 @@ function createSend(): void {
         </div>
       </UiPopover>
 
-      <UiPopover v-if="emptyRows > 0 && canAddSend" side="top" :side-offset="7">
-        <template #trigger>
-          <button class="send-row empty empty-slot" aria-label="Add send in empty slot" />
-        </template>
-        <div class="add-send-popover">
-          <strong>Add send</strong>
-          <UiSelect v-model="newSendTarget" size="compact" aria-label="New send target">
-            <optgroup label="Buses">
-              <option
-                v-for="target in sendBusTargets"
-                :key="targetValue(target)"
-                :value="targetValue(target)"
-              >
-                {{ buses.find((bus) => bus.channel === target.bus)?.name ?? `BUS ${target.bus}` }}
-              </option>
-            </optgroup>
-            <optgroup label="Outputs">
-              <option
-                v-for="target in sendOutputTargets"
-                :key="targetValue(target)"
-                :value="targetValue(target)"
-              >
-                {{
-                  outputs.find((output) => output.id === target.channelId)?.name ?? "Missing output"
-                }}
-              </option>
-            </optgroup>
-          </UiSelect>
-          <button :disabled="!newSendTarget" @click="createSend">Add</button>
-        </div>
-      </UiPopover>
+      <div v-if="emptyRows > 0 && canAddSend" class="send-row empty empty-slot">
+        <UiCascadingSelect
+          model-value=""
+          :groups="sendTargetGroups"
+          placeholder=""
+          size="compact"
+          appearance="embedded"
+          class="send-target-picker"
+          aria-label="Add send in empty slot"
+          @update:model-value="createSend"
+        />
+      </div>
       <span
         v-for="index in alignmentRows"
         :key="`alignment-${index}`"
@@ -367,7 +330,13 @@ function createSend(): void {
   cursor: default;
 }
 .send-row.empty-slot {
+  padding: 0;
   cursor: pointer;
+}
+.send-target-picker {
+  width: 100%;
+  height: 23px;
+  min-height: 23px;
 }
 .send-row.empty-slot:hover {
   border-color: var(--ui-domain-color-4e8dbf);
@@ -383,8 +352,7 @@ function createSend(): void {
   outline: 2px solid var(--focus);
   outline-offset: 1px;
 }
-.send-popover,
-.add-send-popover {
+.send-popover {
   display: grid;
   width: 250px;
   gap: 10px;
@@ -489,21 +457,5 @@ function createSend(): void {
   width: 54px;
   min-width: 0;
   padding: 0 4px;
-}
-.add-send-popover {
-  grid-template-columns: minmax(0, 1fr) 52px;
-  width: 220px;
-}
-.add-send-popover strong {
-  grid-column: 1 / -1;
-  font-size: var(--ui-type-size-label);
-}
-.add-send-popover button {
-  border: 1px solid var(--ui-domain-color-4d8fc0);
-  border-radius: 3px;
-  color: var(--ui-domain-color-fff);
-  background: var(--ui-domain-color-377aa8);
-  font-size: var(--ui-type-size-control);
-  cursor: pointer;
 }
 </style>

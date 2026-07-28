@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { computed } from "vue"
 import { UiCascadingSelect, UiPopover, UiSelect } from "@yadaw/ui"
-import type { UiCascadingSelectGroup } from "@yadaw/ui"
 import type {
   MixerBusState,
   MixerChannelPatch,
   MixerChannelState,
   MixerRouteTarget
 } from "@yadaw/contracts"
+import { mixerRouteGroups } from "./mixer-route-groups"
 
 const props = defineProps<{
   channel: MixerChannelState
@@ -24,32 +24,7 @@ const hardwareOptions = Array.from({ length: 32 }, (_, index) => index + 1)
 const hardwareSummary = computed(
   () => `HW ${props.channel.hardwareOutputChannels.join("–") || "—"}`
 )
-const routeGroups = computed<readonly UiCascadingSelectGroup[]>(() => [
-  {
-    label: "Buses",
-    options: props.targets
-      .filter(
-        (target): target is Extract<MixerRouteTarget, { kind: "bus" }> => target.kind === "bus"
-      )
-      .map((target) => ({
-        value: `bus:${target.bus}`,
-        label: props.buses.find((bus) => bus.channel === target.bus)?.name ?? `BUS ${target.bus}`
-      }))
-  },
-  {
-    label: "Outputs",
-    options: props.targets
-      .filter(
-        (target): target is Extract<MixerRouteTarget, { kind: "output" }> =>
-          target.kind === "output"
-      )
-      .map((target) => ({
-        value: `output:${target.channelId}`,
-        label:
-          props.outputs.find((output) => output.id === target.channelId)?.name ?? "Missing output"
-      }))
-  }
-])
+const routeGroups = computed(() => mixerRouteGroups(props.targets, props.buses, props.outputs))
 const routeValue = computed(() =>
   props.channel.outputChannelId
     ? `output:${props.channel.outputChannelId}`

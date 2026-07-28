@@ -130,10 +130,30 @@ describe("MixerSendSection", () => {
     expect(wrapper.get('button[aria-label="Add send in empty slot"]').text()).toBe("")
     await wrapper.get('button[aria-label="Add send in empty slot"]').trigger("click")
     await flushPromises()
-    const addButton = Array.from(document.body.querySelectorAll<HTMLButtonElement>("button")).find(
-      (button) => button.textContent?.trim() === "Add"
+    const routeGroups = Array.from(
+      document.body.querySelectorAll<HTMLButtonElement>(".ui-cascading-select__sub-trigger")
     )
-    await new DOMWrapper(addButton).trigger("click")
+    expect(routeGroups.map((button) => button.textContent?.trim())).toEqual(["Buses", "Outputs"])
+
+    await new DOMWrapper(routeGroups[0]).trigger("keydown", { key: "ArrowRight" })
+    await flushPromises()
+    const busOption = Array.from(
+      document.body.querySelectorAll<HTMLButtonElement>(".ui-cascading-select__item")
+    ).find((button) => button.textContent?.trim() === "BUS 7")
+    await new DOMWrapper(busOption).trigger("click")
     expect(wrapper.emitted("addSend")?.at(-1)).toEqual([{ kind: "bus", bus: 7 }])
+
+    await wrapper.get('button[aria-label="Add send in empty slot"]').trigger("click")
+    await flushPromises()
+    const outputGroup = Array.from(
+      document.body.querySelectorAll<HTMLButtonElement>(".ui-cascading-select__sub-trigger")
+    ).find((button) => button.textContent?.trim() === "Outputs")
+    await new DOMWrapper(outputGroup).trigger("keydown", { key: "ArrowRight" })
+    await flushPromises()
+    const outputOption = Array.from(
+      document.body.querySelectorAll<HTMLButtonElement>(".ui-cascading-select__item")
+    ).find((button) => button.textContent?.trim() === "Output 1–2")
+    await new DOMWrapper(outputOption).trigger("click")
+    expect(wrapper.emitted("addSend")?.at(-1)).toEqual([{ kind: "output", channelId: "output" }])
   })
 })
