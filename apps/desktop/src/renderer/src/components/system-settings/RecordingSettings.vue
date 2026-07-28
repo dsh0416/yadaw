@@ -10,7 +10,7 @@ import { useRecordingStore } from "../../stores/recording"
 
 const settingsStore = useApplicationSettingsStore()
 const recordingStore = useRecordingStore()
-const { settings, loading, error } = storeToRefs(settingsStore)
+const { settings, loading, error, applyingSoftwareMonitoring } = storeToRefs(settingsStore)
 const { pending } = storeToRefs(recordingStore)
 const pendingCount = computed(
   () => pending.value.filter((recording) => !recording.assetExists).length
@@ -23,6 +23,11 @@ onMounted(async () => {
 
 function setBitDepth(value: string): void {
   void settingsStore.update({ recordingBitDepth: value as RecordingBitDepth })
+}
+
+function setSoftwareMonitoring(event: Event): void {
+  const enabled = (event.currentTarget as HTMLInputElement).checked
+  void settingsStore.setSoftwareMonitoringEnabled(enabled).catch(() => undefined)
 }
 </script>
 
@@ -65,6 +70,36 @@ function setBitDepth(value: string): void {
           <option value="pcm16">16-bit PCM</option>
         </UiSelect>
       </label>
+    </SettingsSection>
+
+    <SettingsSection
+      title="Software monitoring"
+      description="Hear hardware inputs through the track's effects, fader, pan, sends, delay compensation, and output routing."
+    >
+      <label class="monitoring-control">
+        <input
+          type="checkbox"
+          :checked="settings?.softwareMonitoringEnabled ?? false"
+          :disabled="loading || applyingSoftwareMonitoring"
+          @change="setSoftwareMonitoring"
+        />
+        <span>
+          <b>Enable software monitoring</b>
+          <small>
+            Use headphones or mute direct monitoring on the audio interface. Open speakers can
+            create loud feedback.
+          </small>
+        </span>
+      </label>
+      <p class="monitoring-state" aria-live="polite">
+        {{
+          applyingSoftwareMonitoring
+            ? "Publishing the updated audio graph…"
+            : settings?.softwareMonitoringEnabled
+              ? "Available on Audio tracks with hardware inputs."
+              : "Off. Existing per-track monitoring choices are preserved."
+        }}
+      </p>
     </SettingsSection>
 
     <SettingsSection
@@ -136,6 +171,40 @@ function setBitDepth(value: string): void {
   display: flex;
   align-items: baseline;
   gap: 10px;
+}
+
+.monitoring-control {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: 620px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.monitoring-control input {
+  margin-top: 3px;
+  accent-color: var(--mixer-input);
+}
+
+.monitoring-control span {
+  display: grid;
+  gap: 5px;
+}
+
+.monitoring-control b {
+  font-size: var(--ui-type-size-body-compact);
+}
+
+.monitoring-control small,
+.monitoring-state {
+  color: var(--text-muted);
+  font-size: var(--ui-type-size-caption);
+  line-height: var(--ui-type-leading-normal);
+}
+
+.monitoring-state {
+  margin: 10px 0 0 26px;
 }
 
 .recovery-count b {

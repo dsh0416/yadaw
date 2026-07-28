@@ -4,6 +4,7 @@ import { useRouter } from "vue-router"
 import type { ApplicationCommandId, CreateProjectRequest } from "@yadaw/contracts"
 import type { UiMenubarMenu } from "@yadaw/ui"
 import { useAudioBenchmarkStore } from "../stores/audioBenchmark"
+import { useCompiledEffectGraphStore } from "../stores/compiledEffectGraph"
 import { useApplicationWindowStore } from "../stores/applicationWindow"
 import { useMixerStore } from "../stores/mixer"
 import { useProjectStore } from "../stores/project"
@@ -30,6 +31,7 @@ export function useApplicationCommands() {
   const mixerStore = useMixerStore()
   const studioWorkflowStore = useStudioWorkflowStore()
   const benchmarkStore = useAudioBenchmarkStore()
+  const compiledEffectGraphStore = useCompiledEffectGraphStore()
   const applicationWindowStore = useApplicationWindowStore()
   const { lifecycle, session, busy: projectBusy } = storeToRefs(projectStore)
   const { canUndo, canRedo } = storeToRefs(mixerStore)
@@ -116,6 +118,10 @@ export function useApplicationCommands() {
         {
           value: "help.audio-benchmark",
           label: "Audio Performance Benchmark…"
+        },
+        {
+          value: "help.effect-chain-graph",
+          label: "Effect Chain Graph…"
         },
         {
           value: "application.about",
@@ -210,6 +216,9 @@ export function useApplicationCommands() {
         break
       case "help.audio-benchmark":
         benchmarkStore.open()
+        break
+      case "help.effect-chain-graph":
+        compiledEffectGraphStore.open()
         break
     }
   }

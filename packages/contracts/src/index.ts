@@ -20,6 +20,7 @@ export const IPC_CHANNELS = {
   startupProgressEvent: "startup:progress-event",
   systemPerformanceSnapshot: "system:performance-snapshot",
   audioBenchmarkRun: "audio-benchmark:run",
+  compiledAudioGraphSnapshot: "compiled-audio-graph:snapshot",
   applicationCommandRequested: "application-command:requested",
   applicationWindowCommand: "application-window:command",
   applicationWindowTheme: "application-window:theme",
@@ -32,6 +33,7 @@ export const IPC_CHANNELS = {
   projectConfigurationUpdate: "project:configuration-update",
   settingsGet: "settings:get",
   settingsUpdate: "settings:update",
+  settingsSetSoftwareMonitoring: "settings:set-software-monitoring",
   settingsConfigureAudioHostRuntime: "settings:configure-audio-host-runtime",
   settingsChooseSwap: "settings:choose-swap",
   settingsOpenSwap: "settings:open-swap",
@@ -73,6 +75,7 @@ export const APPLICATION_COMMAND_IDS = [
   "window.close",
   "view.toggle-full-screen",
   "help.audio-benchmark",
+  "help.effect-chain-graph",
   "application.about"
 ] as const
 
@@ -135,6 +138,7 @@ export interface YadawDesktopApi {
   subscribeStartupProgress(listener: (progress: StartupProgressSnapshot) => void): () => void
   systemPerformanceSnapshot(): Promise<SystemPerformanceSnapshot>
   runAudioBenchmark(): Promise<AudioBenchmarkReport>
+  compiledAudioGraphSnapshot(): Promise<CompiledAudioGraphSnapshot | null>
   subscribeApplicationCommands(listener: (command: ApplicationCommandId) => void): () => void
   executeApplicationWindowCommand(command: ApplicationWindowCommandId): Promise<void>
   setApplicationWindowTheme(theme: "light" | "dark"): Promise<void>
@@ -147,6 +151,7 @@ export interface YadawDesktopApi {
   updateProjectConfiguration(configuration: ProjectConfiguration): Promise<ProjectSession>
   getApplicationSettings(): Promise<ApplicationSettings>
   updateApplicationSettings(patch: ApplicationSettingsPatch): Promise<ApplicationSettings>
+  setSoftwareMonitoringEnabled(enabled: boolean): Promise<ApplicationSettings>
   configureAudioHostRuntime(preferences: AudioHostRuntimePreferences): Promise<ApplicationSettings>
   chooseSwapDirectory(): Promise<ApplicationSettings>
   openSwapDirectory(): Promise<void>
@@ -300,6 +305,7 @@ export interface ApplicationSettings {
   theme: ThemePreference
   meterPeakHold: MeterPeakHold
   meterReturnRate: MeterReturnRate
+  softwareMonitoringEnabled: boolean
   audioHostRuntime: AudioHostRuntimePreferences
   pluginEditors: Record<string, PluginEditorPreference>
   recentProjects: RecentProject[]
@@ -912,6 +918,7 @@ export interface MixerChannelState {
   outputChannelId: string | null
   outputBus?: number | null
   recordArmed: boolean
+  inputMonitoring: boolean
   inputChannels: number[]
   hardwareOutputChannels: number[]
 }
@@ -972,10 +979,55 @@ export type MixerChannelPatch = Partial<
     | "outputChannelId"
     | "outputBus"
     | "recordArmed"
+    | "inputMonitoring"
     | "inputChannels"
     | "hardwareOutputChannels"
   >
 >
+
+export type CompiledAudioGraphSignalWidth = "mono" | "stereo"
+export type CompiledAudioGraphPluginState = "active" | "bypassed" | "unavailable"
+export type CompiledAudioGraphNodeKind =
+  | "hardware-input"
+  | "bus-input"
+  | "timeline-input"
+  | "instrument-input"
+  | "channel"
+  | "effect"
+  | "send"
+  | "master"
+  | "hardware-output"
+  | "width-adapter"
+  | "pdc-delay"
+
+export type CompiledAudioGraphEdgeKind = "signal" | "main-route" | "send-route" | "hardware-route"
+
+export interface CompiledAudioGraphNode {
+  id: string
+  kind: CompiledAudioGraphNodeKind
+  label: string
+  channelId: string | null
+  pluginInstanceId: string | null
+  signalWidth: CompiledAudioGraphSignalWidth
+  latencySamples: number
+  pluginState: CompiledAudioGraphPluginState | null
+}
+
+export interface CompiledAudioGraphEdge {
+  id: string
+  source: string
+  target: string
+  kind: CompiledAudioGraphEdgeKind
+  signalWidth: CompiledAudioGraphSignalWidth
+}
+
+export interface CompiledAudioGraphSnapshot {
+  graphRevision: number
+  buildGeneration: number
+  sampleRate: number
+  nodes: CompiledAudioGraphNode[]
+  edges: CompiledAudioGraphEdge[]
+}
 
 export type MixerSendPatch = Partial<
   Pick<

@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest"
 import { mount } from "@vue/test-utils"
-import { createPinia } from "pinia"
+import { createPinia, setActivePinia } from "pinia"
 import type { MixerChannelState, PluginDescriptor, PluginInstanceState } from "@yadaw/contracts"
 import MixerChannelStrip from "./MixerChannelStrip.vue"
+import { useApplicationSettingsStore } from "../../stores/applicationSettings"
 
 const channel: MixerChannelState = {
   id: "audio",
@@ -19,6 +20,7 @@ const channel: MixerChannelState = {
   soloed: false,
   outputChannelId: "output",
   recordArmed: false,
+  inputMonitoring: false,
   inputChannels: [1],
   hardwareOutputChannels: []
 }
@@ -169,9 +171,7 @@ describe("MixerChannelStrip", () => {
     await wrapper.get('button[aria-label="Mute Vocal"]').trigger("click")
     expect(wrapper.emitted("updateChannel")?.at(-1)).toEqual(["audio", { muted: true }])
     expect(wrapper.get('button[aria-label="Arm Vocal"]').attributes("aria-pressed")).toBe("false")
-    expect(
-      wrapper.get('button[aria-label="Input monitoring unavailable"]').attributes("disabled")
-    ).toBeDefined()
+    expect(wrapper.get('button[aria-label="Monitor Vocal"]').attributes("disabled")).toBeDefined()
     expect(wrapper.find(".pan-heading").exists()).toBe(false)
     expect(
       wrapper.findAll("[data-section]").map((section) => section.attributes("data-section"))
@@ -213,14 +213,32 @@ describe("MixerChannelStrip", () => {
     expect(wrapper.emitted("updateChannel")?.at(-1)).toEqual(["audio", { name: "Lead Vocal" }])
   })
 
-  it("uses the conventional M/S/R/I action roles", () => {
+  it("uses the conventional M/S/R/I action roles", async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    useApplicationSettingsStore().settings = {
+      swapDirectory: "C:/swap",
+      recordingBitDepth: "float32",
+      theme: "system",
+      meterPeakHold: "800ms",
+      meterReturnRate: "iec-type-i",
+      softwareMonitoringEnabled: true,
+      audioHostRuntime: {
+        workerThreads: "auto",
+        maxBlockingThreads: "auto",
+        egressConcurrency: "auto"
+      },
+      pluginEditors: {},
+      recentProjects: []
+    }
     const wrapper = mount(MixerChannelStrip, {
       props: {
         channel: {
           ...channel,
           muted: true,
           soloed: true,
-          recordArmed: true
+          recordArmed: true,
+          inputMonitoring: true
         },
         sends: [],
         meter: {
@@ -242,7 +260,7 @@ describe("MixerChannelStrip", () => {
         sendSlotRows: 2,
         selected: true
       },
-      global: { plugins: [createPinia()] }
+      global: { plugins: [pinia] }
     })
 
     expect(wrapper.get('button[aria-label="Mute Vocal"]').classes()).toContain("mute")
@@ -251,9 +269,12 @@ describe("MixerChannelStrip", () => {
     expect(wrapper.get('button[aria-label="Solo Vocal"]').classes()).toContain("active")
     expect(wrapper.get('button[aria-label="Arm Vocal"]').classes()).toContain("record")
     expect(wrapper.get('button[aria-label="Arm Vocal"]').classes()).toContain("active")
-    expect(wrapper.get('button[aria-label="Input monitoring unavailable"]').classes()).toContain(
-      "monitor"
-    )
+    const monitor = wrapper.get('button[aria-label="Monitor Vocal"]')
+    expect(monitor.classes()).toContain("monitor")
+    expect(monitor.classes()).toContain("active")
+    expect(monitor.attributes("disabled")).toBeUndefined()
+    await monitor.trigger("click")
+    expect(wrapper.emitted("updateChannel")?.at(-1)).toEqual(["audio", { inputMonitoring: false }])
     expect(wrapper.get(".input-actions").findAll("button")).toHaveLength(2)
   })
 

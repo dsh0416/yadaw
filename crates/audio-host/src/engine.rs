@@ -1,4 +1,5 @@
 use std::{
+    collections::BTreeMap,
     fs,
     sync::{
         Arc, Mutex, OnceLock,
@@ -19,6 +20,10 @@ use ringbuf::{
     HeapCons, HeapProd, HeapRb,
     traits::{Consumer, Observer, Producer, Split},
 };
+use rubato::{
+    Adjustable, Async, FixedAsync, Resampler, SincInterpolationParameters,
+    audioadapter_buffers::direct::InterleavedSlice,
+};
 use yadaw_dsp_core::mixer::{
     ChannelKind, ChannelPeak, ChannelSpec, HardwareOutputFrame, MAX_OUTPUT_CHANNELS, MixerGraph,
     RouteTarget, SendSpec, SendTap,
@@ -26,7 +31,11 @@ use yadaw_dsp_core::mixer::{
 use yadaw_dsp_runtime::{
     MUSICAL_TICKS_PER_QUARTER,
     block::{LatencyNode, StereoDelayLine, plan_latency_compensation},
-    protocol::{LiveMixerSendTap, LiveMixerSystemRole, PluginAudioMode},
+    protocol::{
+        CompiledAudioGraphSnapshot, CompiledGraphEdge, CompiledGraphEdgeKind, CompiledGraphNode,
+        CompiledGraphNodeKind, CompiledGraphPluginState, CompiledGraphSignalWidth,
+        LiveMixerSendTap, LiveMixerSystemRole, PluginAudioMode,
+    },
     tempo::{TempoEvent, TempoMap, TimeSignatureEvent},
 };
 
@@ -42,6 +51,9 @@ const RING_BUFFER_BLOCKS: usize = 8;
 static AUDIO_ENGINE: OnceLock<Mutex<Option<AudioEngine>>> = OnceLock::new();
 static PENDING_MIXER: OnceLock<Mutex<Option<Box<NativeMixerRuntime>>>> = OnceLock::new();
 static LAST_NATIVE_GRAPH: OnceLock<Mutex<Option<NativeMixerGraph>>> = OnceLock::new();
+static COMPILED_GRAPH_SNAPSHOTS: OnceLock<Mutex<BTreeMap<u64, CompiledAudioGraphSnapshot>>> =
+    OnceLock::new();
+static NEXT_BUILD_GENERATION: AtomicU64 = AtomicU64::new(1);
 static STREAM_WORKERS: OnceLock<StreamWorkerPool> = OnceLock::new();
 
 const ENGINE_COMMAND_CAPACITY: usize = 256;
@@ -54,6 +66,8 @@ const METRONOME_ACCENT_NOTE: u8 = 84;
 const METRONOME_BEAT_NOTE: u8 = 72;
 const METRONOME_NOTE_ID: i32 = -1;
 const METRONOME_NOTE_LENGTH_MS: u64 = 20;
+const INPUT_RESAMPLER_OUTPUT_FRAMES: usize = 256;
+type InputFrame = [f32; MAX_INPUT_CHANNELS];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ClipStoragePolicy {
@@ -107,6 +121,7 @@ pub struct NativeMixerChannel {
     pub output_index: Option<u32>,
     pub output_bus: Option<u32>,
     pub record_armed: bool,
+    pub input_monitoring: bool,
     pub input_source: Option<String>,
     pub input_channels: Vec<u32>,
     pub hardware_output_channels: Vec<u32>,
@@ -758,6 +773,7 @@ impl MetronomeScheduler {
 
 struct NativeMixerRuntime {
     generation: u64,
+    build_generation: u64,
     graph: MixerGraph,
     clips: Vec<LoadedClip>,
     channel_sources: Vec<StereoFrame>,
@@ -779,6 +795,7 @@ struct NativeMixerRuntime {
     has_infinite_tail: bool,
     input_peaks: Arc<InputPeakBank>,
     input_meter_routes: Vec<Option<[usize; 2]>>,
+    monitor_input_routes: Vec<Option<[usize; 2]>>,
     input_peak_scratch: [f32; MAX_INPUT_CHANNELS],
     meter_frame_clock: u64,
 }
@@ -854,6 +871,7 @@ struct RuntimeMetrics {
     xruns: AtomicU32,
     callback_generation: AtomicU64,
     published_graph_generation: AtomicU64,
+    published_graph_build_generation: AtomicU64,
     faulted: AtomicBool,
     buffer_fallback: AtomicBool,
     clock_sync: &'static str,
@@ -1223,8 +1241,462 @@ fn parse_channel_kind(value: &str) -> Result<ChannelKind> {
     }
 }
 
+fn compiled_graph_snapshot(
+    native: &NativeMixerGraph,
+    build_generation: u64,
+) -> CompiledAudioGraphSnapshot {
+    fn edge(
+        edges: &mut Vec<CompiledGraphEdge>,
+        source: &str,
+        target: &str,
+        kind: CompiledGraphEdgeKind,
+        width: CompiledGraphSignalWidth,
+    ) {
+        edges.push(CompiledGraphEdge {
+            id: format!("{source}->{target}:{}", edges.len()),
+            source: source.to_owned(),
+            target: target.to_owned(),
+            kind,
+            signal_width: width,
+        });
+    }
+
+    fn plugin_input_width(mode: PluginAudioMode) -> CompiledGraphSignalWidth {
+        match mode {
+            PluginAudioMode::Mono | PluginAudioMode::MonoToStereo => CompiledGraphSignalWidth::Mono,
+            PluginAudioMode::Stereo | PluginAudioMode::DualMono => CompiledGraphSignalWidth::Stereo,
+        }
+    }
+
+    fn plugin_output_width(mode: PluginAudioMode) -> CompiledGraphSignalWidth {
+        match mode {
+            PluginAudioMode::Mono => CompiledGraphSignalWidth::Mono,
+            PluginAudioMode::MonoToStereo | PluginAudioMode::Stereo | PluginAudioMode::DualMono => {
+                CompiledGraphSignalWidth::Stereo
+            }
+        }
+    }
+
+    #[derive(Clone, Copy)]
+    enum DiagnosticInputEdge {
+        Main(usize),
+        Send(usize),
+    }
+
+    let intrinsic_latencies = native
+        .channels
+        .iter()
+        .enumerate()
+        .map(|(channel_index, _)| {
+            native
+                .plugins
+                .iter()
+                .filter(|plugin| plugin.channel_index as usize == channel_index)
+                .fold(0_u32, |latency, plugin| {
+                    latency.saturating_add(plugin.latency_samples)
+                })
+        })
+        .collect::<Vec<_>>();
+    let mut input_edges = (0..native.channels.len())
+        .map(|_| Vec::new())
+        .collect::<Vec<Vec<DiagnosticInputEdge>>>();
+    for (source, channel) in native.channels.iter().enumerate() {
+        if let Some(target) = channel.output_index {
+            if let Some(edges) = input_edges.get_mut(target as usize) {
+                edges.push(DiagnosticInputEdge::Main(source));
+            }
+        } else if let Some(bus) = channel.output_bus {
+            for (target, consumer) in native.channels.iter().enumerate() {
+                if consumer.input_source.as_deref() == Some("bus")
+                    && consumer.input_channels.contains(&bus)
+                {
+                    input_edges[target].push(DiagnosticInputEdge::Main(source));
+                }
+            }
+        }
+    }
+    for (send_index, send) in native.sends.iter().enumerate() {
+        if !send.enabled {
+            continue;
+        }
+        if let Some(target) = send.target_output_index {
+            if let Some(edges) = input_edges.get_mut(target as usize) {
+                edges.push(DiagnosticInputEdge::Send(send_index));
+            }
+        } else if let Some(bus) = send.target_bus {
+            for (target, consumer) in native.channels.iter().enumerate() {
+                if consumer.input_source.as_deref() == Some("bus")
+                    && consumer.input_channels.contains(&bus)
+                {
+                    input_edges[target].push(DiagnosticInputEdge::Send(send_index));
+                }
+            }
+        }
+    }
+    let latency_nodes = input_edges
+        .iter()
+        .enumerate()
+        .map(|(index, edges)| LatencyNode {
+            id: native.channels[index].id.clone(),
+            intrinsic_latency: intrinsic_latencies[index],
+            inputs: edges
+                .iter()
+                .filter_map(|edge| match edge {
+                    DiagnosticInputEdge::Main(source) => Some(*source),
+                    DiagnosticInputEdge::Send(send) => native
+                        .sends
+                        .get(*send)
+                        .map(|send| send.source_index as usize),
+                })
+                .collect(),
+        })
+        .collect::<Vec<_>>();
+    let latency_plan = plan_latency_compensation(&latency_nodes).ok();
+    let mut channel_output_delays = vec![0_u32; native.channels.len()];
+    let mut send_delays = vec![0_u32; native.sends.len()];
+    if let Some(latency_plan) = latency_plan {
+        for (target, edges) in input_edges.iter().enumerate() {
+            for (input, edge) in edges.iter().enumerate() {
+                let delay = latency_plan[target].input_delays[input];
+                match edge {
+                    DiagnosticInputEdge::Main(source) => {
+                        channel_output_delays[*source] = channel_output_delays[*source].max(delay);
+                    }
+                    DiagnosticInputEdge::Send(send) => {
+                        send_delays[*send] = send_delays[*send].max(delay);
+                    }
+                }
+            }
+        }
+    }
+
+    let mut nodes = Vec::new();
+    let mut edges = Vec::new();
+    for (channel_index, channel) in native.channels.iter().enumerate() {
+        let channel_id = channel.id.clone();
+        let source_id = format!("source:{channel_id}");
+        let mut width = if channel.input_channels.len() == 1 {
+            CompiledGraphSignalWidth::Mono
+        } else {
+            CompiledGraphSignalWidth::Stereo
+        };
+        let source_kind = if channel.kind == "instrument" {
+            CompiledGraphNodeKind::InstrumentInput
+        } else if channel.input_source.as_deref() == Some("hardware") {
+            CompiledGraphNodeKind::HardwareInput
+        } else if channel.input_source.as_deref() == Some("bus") {
+            CompiledGraphNodeKind::BusInput
+        } else {
+            CompiledGraphNodeKind::TimelineInput
+        };
+        nodes.push(CompiledGraphNode {
+            id: source_id.clone(),
+            kind: source_kind,
+            label: match source_kind {
+                CompiledGraphNodeKind::HardwareInput => "Hardware input",
+                CompiledGraphNodeKind::BusInput => "BUS input",
+                CompiledGraphNodeKind::InstrumentInput => "Instrument input",
+                _ => "Timeline input",
+            }
+            .to_owned(),
+            channel_id: Some(channel_id.clone()),
+            plugin_instance_id: None,
+            signal_width: width,
+            latency_samples: 0,
+            plugin_state: None,
+        });
+
+        let mut previous = source_id;
+        let mut plugins = native
+            .plugins
+            .iter()
+            .filter(|plugin| plugin.channel_index as usize == channel_index)
+            .collect::<Vec<_>>();
+        plugins.sort_by_key(|plugin| (plugin.role.as_str(), plugin.slot_order));
+        for plugin in plugins {
+            let required = plugin_input_width(plugin.audio_mode);
+            if required != width {
+                let adapter_id = format!("adapter:{}:{}", plugin.instance_id, nodes.len());
+                nodes.push(CompiledGraphNode {
+                    id: adapter_id.clone(),
+                    kind: CompiledGraphNodeKind::WidthAdapter,
+                    label: if required == CompiledGraphSignalWidth::Mono {
+                        "Stereo → Mono"
+                    } else {
+                        "Mono → Stereo"
+                    }
+                    .to_owned(),
+                    channel_id: Some(channel_id.clone()),
+                    plugin_instance_id: None,
+                    signal_width: required,
+                    latency_samples: 0,
+                    plugin_state: None,
+                });
+                edge(
+                    &mut edges,
+                    &previous,
+                    &adapter_id,
+                    CompiledGraphEdgeKind::Signal,
+                    width,
+                );
+                previous = adapter_id;
+                width = required;
+            }
+
+            let plugin_id = format!("effect:{}", plugin.instance_id);
+            let plugin_state = if !plugin.enabled {
+                CompiledGraphPluginState::Bypassed
+            } else if plugin.processor.is_none() {
+                CompiledGraphPluginState::Unavailable
+            } else {
+                CompiledGraphPluginState::Active
+            };
+            nodes.push(CompiledGraphNode {
+                id: plugin_id.clone(),
+                kind: CompiledGraphNodeKind::Effect,
+                label: if plugin.role == "instrument" {
+                    "Instrument"
+                } else {
+                    "Insert effect"
+                }
+                .to_owned(),
+                channel_id: Some(channel_id.clone()),
+                plugin_instance_id: Some(plugin.instance_id.clone()),
+                signal_width: plugin_output_width(plugin.audio_mode),
+                latency_samples: plugin.latency_samples,
+                plugin_state: Some(plugin_state),
+            });
+            edge(
+                &mut edges,
+                &previous,
+                &plugin_id,
+                CompiledGraphEdgeKind::Signal,
+                width,
+            );
+            previous = plugin_id;
+            width = plugin_output_width(plugin.audio_mode);
+
+            if plugin.latency_samples > 0 {
+                let delay_id = format!("delay:{}", plugin.instance_id);
+                nodes.push(CompiledGraphNode {
+                    id: delay_id.clone(),
+                    kind: CompiledGraphNodeKind::PdcDelay,
+                    label: if plugin_state == CompiledGraphPluginState::Bypassed {
+                        "Bypass compensation"
+                    } else {
+                        "Plug-in latency"
+                    }
+                    .to_owned(),
+                    channel_id: Some(channel_id.clone()),
+                    plugin_instance_id: Some(plugin.instance_id.clone()),
+                    signal_width: width,
+                    latency_samples: plugin.latency_samples,
+                    plugin_state: None,
+                });
+                edge(
+                    &mut edges,
+                    &previous,
+                    &delay_id,
+                    CompiledGraphEdgeKind::Signal,
+                    width,
+                );
+                previous = delay_id;
+            }
+        }
+
+        if width == CompiledGraphSignalWidth::Mono {
+            let adapter_id = format!("adapter:{channel_id}:stereo-output");
+            nodes.push(CompiledGraphNode {
+                id: adapter_id.clone(),
+                kind: CompiledGraphNodeKind::WidthAdapter,
+                label: "Mono → Stereo".to_owned(),
+                channel_id: Some(channel_id.clone()),
+                plugin_instance_id: None,
+                signal_width: CompiledGraphSignalWidth::Stereo,
+                latency_samples: 0,
+                plugin_state: None,
+            });
+            edge(
+                &mut edges,
+                &previous,
+                &adapter_id,
+                CompiledGraphEdgeKind::Signal,
+                width,
+            );
+            previous = adapter_id;
+            width = CompiledGraphSignalWidth::Stereo;
+        }
+
+        let output_id = format!("channel:{channel_id}");
+        let kind = match channel.kind.as_str() {
+            "master" => CompiledGraphNodeKind::Master,
+            "output" => CompiledGraphNodeKind::HardwareOutput,
+            _ => CompiledGraphNodeKind::Channel,
+        };
+        nodes.push(CompiledGraphNode {
+            id: output_id.clone(),
+            kind,
+            label: channel_id.clone(),
+            channel_id: Some(channel_id),
+            plugin_instance_id: None,
+            signal_width: width,
+            latency_samples: 0,
+            plugin_state: None,
+        });
+        edge(
+            &mut edges,
+            &previous,
+            &output_id,
+            CompiledGraphEdgeKind::Signal,
+            width,
+        );
+    }
+
+    for (channel_index, channel) in native.channels.iter().enumerate() {
+        let channel_id = format!("channel:{}", channel.id);
+        let route_source = if channel_output_delays[channel_index] > 0 {
+            let delay_id = format!("pdc:channel:{}", channel.id);
+            nodes.push(CompiledGraphNode {
+                id: delay_id.clone(),
+                kind: CompiledGraphNodeKind::PdcDelay,
+                label: "Channel PDC".to_owned(),
+                channel_id: Some(channel.id.clone()),
+                plugin_instance_id: None,
+                signal_width: CompiledGraphSignalWidth::Stereo,
+                latency_samples: channel_output_delays[channel_index],
+                plugin_state: None,
+            });
+            edge(
+                &mut edges,
+                &channel_id,
+                &delay_id,
+                CompiledGraphEdgeKind::Signal,
+                CompiledGraphSignalWidth::Stereo,
+            );
+            delay_id
+        } else {
+            channel_id
+        };
+
+        if let Some(target) = channel
+            .output_index
+            .and_then(|index| native.channels.get(index as usize))
+        {
+            edge(
+                &mut edges,
+                &route_source,
+                &format!("channel:{}", target.id),
+                if target.kind == "output" {
+                    CompiledGraphEdgeKind::HardwareRoute
+                } else {
+                    CompiledGraphEdgeKind::MainRoute
+                },
+                CompiledGraphSignalWidth::Stereo,
+            );
+        } else if let Some(bus) = channel.output_bus {
+            for target in native.channels.iter().filter(|target| {
+                target.input_source.as_deref() == Some("bus")
+                    && target.input_channels.contains(&bus)
+            }) {
+                edge(
+                    &mut edges,
+                    &route_source,
+                    &format!("source:{}", target.id),
+                    CompiledGraphEdgeKind::MainRoute,
+                    CompiledGraphSignalWidth::Stereo,
+                );
+            }
+        }
+    }
+    for (send_index, send) in native.sends.iter().enumerate() {
+        let send_id = format!("send:{}", send.id);
+        nodes.push(CompiledGraphNode {
+            id: send_id.clone(),
+            kind: CompiledGraphNodeKind::Send,
+            label: format!("Send ({:?})", send.tap),
+            channel_id: native
+                .channels
+                .get(send.source_index as usize)
+                .map(|channel| channel.id.clone()),
+            plugin_instance_id: None,
+            signal_width: CompiledGraphSignalWidth::Stereo,
+            latency_samples: 0,
+            plugin_state: None,
+        });
+        if let Some(source) = native.channels.get(send.source_index as usize) {
+            edge(
+                &mut edges,
+                &format!("channel:{}", source.id),
+                &send_id,
+                CompiledGraphEdgeKind::SendRoute,
+                CompiledGraphSignalWidth::Stereo,
+            );
+        }
+        let route_source = if send_delays[send_index] > 0 {
+            let delay_id = format!("pdc:send:{}", send.id);
+            nodes.push(CompiledGraphNode {
+                id: delay_id.clone(),
+                kind: CompiledGraphNodeKind::PdcDelay,
+                label: "Send PDC".to_owned(),
+                channel_id: native
+                    .channels
+                    .get(send.source_index as usize)
+                    .map(|channel| channel.id.clone()),
+                plugin_instance_id: None,
+                signal_width: CompiledGraphSignalWidth::Stereo,
+                latency_samples: send_delays[send_index],
+                plugin_state: None,
+            });
+            edge(
+                &mut edges,
+                &send_id,
+                &delay_id,
+                CompiledGraphEdgeKind::Signal,
+                CompiledGraphSignalWidth::Stereo,
+            );
+            delay_id
+        } else {
+            send_id
+        };
+        if let Some(target) = send
+            .target_output_index
+            .and_then(|index| native.channels.get(index as usize))
+        {
+            edge(
+                &mut edges,
+                &route_source,
+                &format!("channel:{}", target.id),
+                CompiledGraphEdgeKind::SendRoute,
+                CompiledGraphSignalWidth::Stereo,
+            );
+        } else if let Some(bus) = send.target_bus {
+            for target in native.channels.iter().filter(|target| {
+                target.input_source.as_deref() == Some("bus")
+                    && target.input_channels.contains(&bus)
+            }) {
+                edge(
+                    &mut edges,
+                    &route_source,
+                    &format!("source:{}", target.id),
+                    CompiledGraphEdgeKind::SendRoute,
+                    CompiledGraphSignalWidth::Stereo,
+                );
+            }
+        }
+    }
+
+    CompiledAudioGraphSnapshot {
+        graph_revision: native.generation,
+        build_generation,
+        sample_rate: native.sample_rate,
+        nodes,
+        edges,
+    }
+}
+
 fn build_mixer_runtime(
     native: NativeMixerGraph,
+    build_generation: u64,
     transport: Arc<TransportShared>,
     input_peaks: Arc<InputPeakBank>,
 ) -> Result<NativeMixerRuntime> {
@@ -1241,6 +1713,7 @@ fn build_mixer_runtime(
             if channel.kind != "audio"
                 || channel.input_source.as_deref() != Some("hardware")
                 || !channel.record_armed
+                || channel.input_monitoring
             {
                 return Ok(None);
             }
@@ -1254,6 +1727,32 @@ fn build_mixer_runtime(
                 || routed.iter().any(|&channel| channel >= MAX_INPUT_CHANNELS)
             {
                 return Err(invalid_config("armed track has an invalid input mapping"));
+            }
+            Ok(Some([routed[0], *routed.get(1).unwrap_or(&routed[0])]))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let monitor_input_routes = native
+        .channels
+        .iter()
+        .map(|channel| {
+            if channel.kind != "audio"
+                || channel.input_source.as_deref() != Some("hardware")
+                || !channel.input_monitoring
+            {
+                return Ok(None);
+            }
+            let routed = channel
+                .input_channels
+                .iter()
+                .map(|channel| channel.saturating_sub(1) as usize)
+                .collect::<Vec<_>>();
+            if routed.is_empty()
+                || routed.len() > 2
+                || routed.iter().any(|&channel| channel >= MAX_INPUT_CHANNELS)
+            {
+                return Err(invalid_config(
+                    "monitored track has an invalid input mapping",
+                ));
             }
             Ok(Some([routed[0], *routed.get(1).unwrap_or(&routed[0])]))
         })
@@ -1597,6 +2096,7 @@ fn build_mixer_runtime(
     );
     Ok(NativeMixerRuntime {
         generation: native.generation,
+        build_generation,
         peak_scratch: vec![ChannelPeak::default(); graph.channel_count()],
         held_peaks: vec![[0.0, 0.0]; graph.channel_count()],
         held_until: vec![[0, 0]; graph.channel_count()],
@@ -1618,6 +2118,7 @@ fn build_mixer_runtime(
         has_infinite_tail,
         input_peaks,
         input_meter_routes,
+        monitor_input_routes,
         input_peak_scratch: [0.0; MAX_INPUT_CHANNELS],
         meter_frame_clock: 0,
     })
@@ -1706,47 +2207,56 @@ impl NativeMixerRuntime {
         None
     }
 
-    fn render_frame(&mut self) -> (HardwareOutputFrame, bool) {
+    fn render_frame(&mut self, input: InputFrame) -> (HardwareOutputFrame, bool) {
         let state = self.transport.state.load(Ordering::Relaxed);
-        if state == TRANSPORT_STOPPED {
-            return ([0.0; MAX_OUTPUT_CHANNELS], false);
-        }
         let position = self.transport.position_frames.load(Ordering::Relaxed);
         self.channel_sources.fill([0.0, 0.0]);
-        let mut stream_underrun = false;
-        for clip in &mut self.clips {
-            let Some(relative) = position.checked_sub(clip.start_frame) else {
-                continue;
-            };
-            let relative = relative as usize;
-            if relative >= clip.length_frames {
-                continue;
-            }
-            let is_streaming = matches!(&clip.samples, ClipSamples::Streaming(_));
-            if let Some(sample) = clip.sample_at(relative) {
-                let target = &mut self.channel_sources[clip.channel_index];
-                target[0] += sample[0];
-                target[1] += sample[1];
-            } else if is_streaming {
-                stream_underrun = true;
+        let mut has_monitor = false;
+        for (channel_index, route) in self.monitor_input_routes.iter().enumerate() {
+            if let Some([left, right]) = route {
+                has_monitor = true;
+                self.channel_sources[channel_index] = [input[*left], input[*right]];
             }
         }
-        while self
-            .midi_events
-            .get(self.midi_cursor)
-            .is_some_and(|event| event.frame <= position)
-        {
-            let event = self.midi_events[self.midi_cursor];
-            if event.frame == position {
+        if state == TRANSPORT_STOPPED && !has_monitor {
+            return ([0.0; MAX_OUTPUT_CHANNELS], false);
+        }
+        let mut stream_underrun = false;
+        if state != TRANSPORT_STOPPED {
+            for clip in &mut self.clips {
+                let Some(relative) = position.checked_sub(clip.start_frame) else {
+                    continue;
+                };
+                let relative = relative as usize;
+                if relative >= clip.length_frames {
+                    continue;
+                }
+                let is_streaming = matches!(&clip.samples, ClipSamples::Streaming(_));
+                if let Some(sample) = clip.sample_at(relative) {
+                    let target = &mut self.channel_sources[clip.channel_index];
+                    target[0] += sample[0];
+                    target[1] += sample[1];
+                } else if is_streaming {
+                    stream_underrun = true;
+                }
+            }
+            while self
+                .midi_events
+                .get(self.midi_cursor)
+                .is_some_and(|event| event.frame <= position)
+            {
+                let event = self.midi_events[self.midi_cursor];
+                if event.frame == position {
+                    self.dispatch_midi_event(event);
+                }
+                self.midi_cursor += 1;
+            }
+            let metronome_events =
+                self.metronome
+                    .events_at(&self.tempo_map, self.sample_rate, position);
+            for event in metronome_events.into_iter().flatten() {
                 self.dispatch_midi_event(event);
             }
-            self.midi_cursor += 1;
-        }
-        let metronome_events =
-            self.metronome
-                .events_at(&self.tempo_map, self.sample_rate, position);
-        for event in metronome_events.into_iter().flatten() {
-            self.dispatch_midi_event(event);
         }
         let context = self.process_context(position, state);
         let sources = &self.channel_sources;
@@ -1772,10 +2282,15 @@ impl NativeMixerRuntime {
         let result = self
             .graph
             .process_frame_with_sources(sources, &mut process_plugins);
-        let next = position.saturating_add(1);
-        self.transport
-            .position_frames
-            .store(next, Ordering::Relaxed);
+        let next = if state == TRANSPORT_STOPPED {
+            position
+        } else {
+            let next = position.saturating_add(1);
+            self.transport
+                .position_frames
+                .store(next, Ordering::Relaxed);
+            next
+        };
         if state == TRANSPORT_PLAYING
             && self.content_end_frame > 0
             && !self.has_infinite_tail
@@ -2050,80 +2565,146 @@ fn mark_stream_error(metrics: &RuntimeMetrics) {
 }
 
 struct AdaptiveResampler {
-    consumer: HeapCons<StereoFrame>,
-    current: StereoFrame,
-    next: StereoFrame,
-    phase: f64,
-    nominal_ratio: f64,
+    consumer: HeapCons<InputFrame>,
+    resampler: Async<f32>,
+    input_channels: usize,
+    input_buffer: Vec<f32>,
+    output_buffer: Vec<f32>,
+    output_cursor: usize,
+    output_frames: usize,
     target_fill: usize,
     capacity: usize,
-    primed: bool,
 }
 
 impl AdaptiveResampler {
     fn new(
-        consumer: HeapCons<StereoFrame>,
+        consumer: HeapCons<InputFrame>,
         input_sample_rate: u32,
         output_sample_rate: u32,
+        input_channels: usize,
         target_fill: usize,
         capacity: usize,
-    ) -> Self {
-        Self {
+    ) -> Result<Self> {
+        let input_channels = input_channels.clamp(1, MAX_INPUT_CHANNELS);
+        let nominal_ratio = f64::from(output_sample_rate) / f64::from(input_sample_rate);
+        let resampler = Async::<f32>::new_sinc(
+            nominal_ratio,
+            1.002,
+            &SincInterpolationParameters::default(),
+            INPUT_RESAMPLER_OUTPUT_FRAMES,
+            input_channels,
+            FixedAsync::Output,
+        )
+        .map_err(|error| invalid_config(error.to_string()))?;
+        let input_buffer = vec![0.0; resampler.input_frames_max() * input_channels];
+        let output_buffer = vec![0.0; resampler.output_frames_max() * input_channels];
+        Ok(Self {
             consumer,
-            current: [0.0, 0.0],
-            next: [0.0, 0.0],
-            phase: 0.0,
-            nominal_ratio: f64::from(input_sample_rate) / f64::from(output_sample_rate),
+            resampler,
+            input_channels,
+            input_buffer,
+            output_buffer,
+            output_cursor: 0,
+            output_frames: 0,
             target_fill,
             capacity,
-            primed: false,
-        }
+        })
     }
 
     fn occupied_len(&self) -> usize {
         self.consumer.occupied_len()
     }
 
-    fn adaptive_ratio(&self) -> f64 {
+    fn adaptive_relative_ratio(&self) -> f64 {
         let fill_error = self.occupied_len() as f64 - self.target_fill as f64;
         let normalized_error = fill_error / self.capacity.max(1) as f64;
         let drift_correction = (normalized_error * 0.002).clamp(-0.001, 0.001);
-        self.nominal_ratio * (1.0 + drift_correction)
+        1.0 / (1.0 + drift_correction)
     }
 
-    fn next_frame(&mut self, ratio: f64) -> Option<StereoFrame> {
-        if !self.primed {
-            self.current = self.consumer.try_pop()?;
-            self.next = self.consumer.try_pop()?;
-            self.phase = 0.0;
-            self.primed = true;
+    fn refill(&mut self) -> bool {
+        let relative_ratio = self.adaptive_relative_ratio();
+        if self
+            .resampler
+            .set_resample_ratio_relative(relative_ratio, true)
+            .is_err()
+        {
+            self.output_buffer.fill(0.0);
+            self.output_frames = INPUT_RESAMPLER_OUTPUT_FRAMES;
+            self.output_cursor = 0;
+            self.resampler.reset();
+            return true;
         }
 
-        let output = [
-            self.current[0] + (self.next[0] - self.current[0]) * self.phase as f32,
-            self.current[1] + (self.next[1] - self.current[1]) * self.phase as f32,
-        ];
-        self.phase += ratio;
-
-        while self.phase >= 1.0 {
-            let Some(next) = self.consumer.try_pop() else {
-                self.primed = false;
-                self.phase = 0.0;
+        let required = self.resampler.input_frames_next();
+        let output_frames = self.resampler.output_frames_next();
+        self.input_buffer[..required * self.input_channels].fill(0.0);
+        let mut available = 0;
+        while available < required {
+            let Some(frame) = self.consumer.try_pop() else {
                 break;
             };
-            self.current = self.next;
-            self.next = next;
-            self.phase -= 1.0;
+            let offset = available * self.input_channels;
+            self.input_buffer[offset..offset + self.input_channels]
+                .copy_from_slice(&frame[..self.input_channels]);
+            available += 1;
         }
+        self.output_buffer[..output_frames * self.input_channels].fill(0.0);
+        let processed = {
+            let Ok(input) = InterleavedSlice::new(
+                &self.input_buffer[..required * self.input_channels],
+                self.input_channels,
+                required,
+            ) else {
+                return true;
+            };
+            let Ok(mut output) = InterleavedSlice::new_mut(
+                &mut self.output_buffer[..output_frames * self.input_channels],
+                self.input_channels,
+                output_frames,
+            ) else {
+                return true;
+            };
+            self.resampler
+                .process_into_buffer(&input, &mut output, None)
+        };
+        match processed {
+            Ok((_consumed, produced)) => {
+                self.output_cursor = 0;
+                self.output_frames = produced;
+            }
+            Err(_) => {
+                self.output_buffer.fill(0.0);
+                self.output_cursor = 0;
+                self.output_frames = output_frames;
+                self.resampler.reset();
+                return true;
+            }
+        }
+        available < required
+    }
 
-        Some(output)
+    fn next_frame(&mut self) -> (InputFrame, bool) {
+        let mut underrun = false;
+        if self.output_cursor >= self.output_frames {
+            underrun = self.refill();
+        }
+        if self.output_cursor >= self.output_frames {
+            return ([0.0; MAX_INPUT_CHANNELS], true);
+        }
+        let mut frame = [0.0; MAX_INPUT_CHANNELS];
+        let offset = self.output_cursor * self.input_channels;
+        frame[..self.input_channels]
+            .copy_from_slice(&self.output_buffer[offset..offset + self.input_channels]);
+        self.output_cursor += 1;
+        (frame, underrun)
     }
 }
 
 fn build_input_stream<T>(
     device: &Device,
     config: &StreamConfig,
-    mut producer: HeapProd<StereoFrame>,
+    mut producer: HeapProd<InputFrame>,
     metrics: Arc<RuntimeMetrics>,
     mut recording_tap: RecordingTap,
     input_peaks: Arc<InputPeakBank>,
@@ -2148,19 +2729,13 @@ where
 
                 let mut overrun = false;
                 for frame in data.chunks_exact(channels) {
-                    let left = f32::from_sample(frame[0]);
-                    let right = if channels > 1 {
-                        f32::from_sample(frame[1])
-                    } else {
-                        left
-                    };
-                    if producer.try_push([left, right]).is_err() {
-                        overrun = true;
-                    }
                     let mut capture = [0.0_f32; MAX_INPUT_CHANNELS];
                     let capture_channels = channels.min(MAX_INPUT_CHANNELS);
                     for (target, source) in capture[..capture_channels].iter_mut().zip(frame) {
                         *target = f32::from_sample(*source);
+                    }
+                    if producer.try_push(capture).is_err() {
+                        overrun = true;
                     }
                     input_peaks.observe(&capture[..capture_channels]);
                     recording_tap.push(&capture[..capture_channels]);
@@ -2182,7 +2757,8 @@ where
 fn build_output_stream<T>(
     device: &Device,
     config: &StreamConfig,
-    consumer: HeapCons<StereoFrame>,
+    consumer: HeapCons<InputFrame>,
+    input_channels: usize,
     target_fill: usize,
     metrics: Arc<RuntimeMetrics>,
     mixer_control: OutputMixerControl,
@@ -2200,9 +2776,10 @@ where
         consumer,
         metrics.input_sample_rate,
         metrics.sample_rate,
+        input_channels,
         target_fill,
         metrics.ring_buffer_capacity_frames as usize,
-    );
+    )?;
     let callback_metrics = Arc::clone(&metrics);
     let error_metrics = Arc::clone(&metrics);
 
@@ -2222,6 +2799,9 @@ where
                             callback_metrics
                                 .published_graph_generation
                                 .store(replacement.generation, Ordering::Release);
+                            callback_metrics
+                                .published_graph_build_generation
+                                .store(replacement.build_generation, Ordering::Release);
                             if let Some(retired) = mixer.replace(replacement)
                                 && let Err(retired) = retired_mixers.try_push(retired)
                             {
@@ -2235,31 +2815,24 @@ where
                         callback_metrics
                             .published_graph_generation
                             .store(runtime.generation, Ordering::Release);
+                        callback_metrics
+                            .published_graph_build_generation
+                            .store(runtime.build_generation, Ordering::Release);
                         mixer = Some(runtime);
                     }
                 }
 
                 let mut underrun = false;
-                let ratio = resampler.adaptive_ratio();
                 for frame in data.chunks_exact_mut(channels) {
-                    let input = resampler.next_frame(ratio).unwrap_or_else(|| {
-                        underrun = true;
-                        [0.0, 0.0]
-                    });
+                    let (input, input_underrun) = resampler.next_frame();
+                    underrun |= input_underrun;
                     let (rendered, stream_underrun) = mixer
                         .as_mut()
                         .map_or(([0.0; MAX_OUTPUT_CHANNELS], false), |runtime| {
-                            runtime.render_frame()
+                            runtime.render_frame(input)
                         });
                     underrun |= stream_underrun;
                     for (channel, sample) in frame.iter_mut().enumerate() {
-                        // Input monitoring remains intentionally muted. The bridge is consumed
-                        // to keep capture clocks synchronized while the mixer renders project audio.
-                        let _input_sample = match channel {
-                            0 => input[0],
-                            1 => input[1],
-                            _ => 0.0,
-                        };
                         let value = rendered
                             .get(channel)
                             .copied()
@@ -2387,11 +2960,11 @@ pub fn start_audio_engine(config: NativeAudioEngineConfig) -> Result<NativeAudio
         .expected_frames
         .max(output_buffer.expected_frames);
     let ring_capacity = (bridge_block_size as usize * RING_BUFFER_BLOCKS).max(256);
-    let ring = HeapRb::<StereoFrame>::new(ring_capacity);
+    let ring = HeapRb::<InputFrame>::new(ring_capacity);
     let (mut producer, consumer) = ring.split();
     for _ in 0..bridge_block_size {
         producer
-            .try_push([0.0, 0.0])
+            .try_push([0.0; MAX_INPUT_CHANNELS])
             .map_err(|_| audio_error("failed to prime ring buffer", "buffer is full"))?;
     }
     let metrics = Arc::new(RuntimeMetrics {
@@ -2407,6 +2980,7 @@ pub fn start_audio_engine(config: NativeAudioEngineConfig) -> Result<NativeAudio
         xruns: AtomicU32::new(0),
         callback_generation: AtomicU64::new(0),
         published_graph_generation: AtomicU64::new(0),
+        published_graph_build_generation: AtomicU64::new(0),
         faulted: AtomicBool::new(false),
         buffer_fallback: AtomicBool::new(input_buffer.fell_back || output_buffer.fell_back),
         clock_sync: if config.input_device_id == config.output_device_id
@@ -2427,6 +3001,9 @@ pub fn start_audio_engine(config: NativeAudioEngineConfig) -> Result<NativeAudio
         metrics
             .published_graph_generation
             .store(runtime.generation, Ordering::Release);
+        metrics
+            .published_graph_build_generation
+            .store(runtime.build_generation, Ordering::Release);
     }
     let transport = initial_mixer.as_ref().map_or_else(
         || {
@@ -2467,6 +3044,7 @@ pub fn start_audio_engine(config: NativeAudioEngineConfig) -> Result<NativeAudio
         &output_device,
         &output_config,
         consumer,
+        usize::from(input_config.channels),
         bridge_block_size as usize,
         Arc::clone(&metrics),
         OutputMixerControl {
@@ -2536,6 +3114,7 @@ fn start_virtual_audio_engine(key: AudioEngineKey) -> Result<NativeAudioRuntimeS
         xruns: AtomicU32::new(0),
         callback_generation: AtomicU64::new(0),
         published_graph_generation: AtomicU64::new(0),
+        published_graph_build_generation: AtomicU64::new(0),
         faulted: AtomicBool::new(false),
         buffer_fallback: AtomicBool::new(false),
         clock_sync: "shared-device",
@@ -2549,6 +3128,9 @@ fn start_virtual_audio_engine(key: AudioEngineKey) -> Result<NativeAudioRuntimeS
         metrics
             .published_graph_generation
             .store(runtime.generation, Ordering::Release);
+        metrics
+            .published_graph_build_generation
+            .store(runtime.build_generation, Ordering::Release);
     }
     let transport = initial_mixer.as_ref().map_or_else(
         || {
@@ -2587,6 +3169,9 @@ fn start_virtual_audio_engine(key: AudioEngineKey) -> Result<NativeAudioRuntimeS
                             worker_metrics
                                 .published_graph_generation
                                 .store(replacement.generation, Ordering::Release);
+                            worker_metrics
+                                .published_graph_build_generation
+                                .store(replacement.build_generation, Ordering::Release);
                             if let Some(retired) = mixer.replace(replacement)
                                 && let Err(retired) = retirement_producer.try_push(retired)
                             {
@@ -2597,12 +3182,15 @@ fn start_virtual_audio_engine(key: AudioEngineKey) -> Result<NativeAudioRuntimeS
                         worker_metrics
                             .published_graph_generation
                             .store(runtime.generation, Ordering::Release);
+                        worker_metrics
+                            .published_graph_build_generation
+                            .store(runtime.build_generation, Ordering::Release);
                         mixer = Some(runtime);
                     }
                 }
                 if let Some(runtime) = mixer.as_mut() {
                     for _ in 0..block_frames {
-                        let _ = runtime.render_frame();
+                        let _ = runtime.render_frame([0.0; MAX_INPUT_CHANNELS]);
                     }
                     runtime.publish_peaks(block_frames as usize);
                 }
@@ -2680,7 +3268,26 @@ pub fn load_mixer_graph(graph: NativeMixerGraph) -> Result<()> {
             },
         )
     };
-    let runtime = Box::new(build_mixer_runtime(graph, transport, input_peaks)?);
+    let build_generation = NEXT_BUILD_GENERATION.fetch_add(1, Ordering::Relaxed);
+    let snapshot = compiled_graph_snapshot(&graph, build_generation);
+    let runtime = Box::new(build_mixer_runtime(
+        graph,
+        build_generation,
+        transport,
+        input_peaks,
+    )?);
+    if let Ok(mut snapshots) = COMPILED_GRAPH_SNAPSHOTS
+        .get_or_init(|| Mutex::new(BTreeMap::new()))
+        .lock()
+    {
+        snapshots.insert(build_generation, snapshot);
+        while snapshots.len() > 16 {
+            let Some(oldest) = snapshots.keys().next().copied() else {
+                break;
+            };
+            snapshots.remove(&oldest);
+        }
+    }
     let mut guard = engine_slot()
         .lock()
         .map_err(|_| audio_error("audio engine lock", "poisoned"))?;
@@ -2829,6 +3436,29 @@ pub fn published_graph_generation() -> u64 {
         .unwrap_or(0)
 }
 
+pub fn compiled_audio_graph_snapshot() -> Option<CompiledAudioGraphSnapshot> {
+    let build_generation = engine_slot()
+        .lock()
+        .ok()
+        .and_then(|engine| {
+            engine.as_ref().map(|engine| {
+                engine
+                    .metrics
+                    .published_graph_build_generation
+                    .load(Ordering::Acquire)
+            })
+        })
+        .unwrap_or(0);
+    if build_generation == 0 {
+        return None;
+    }
+    COMPILED_GRAPH_SNAPSHOTS
+        .get_or_init(|| Mutex::new(BTreeMap::new()))
+        .lock()
+        .ok()
+        .and_then(|snapshots| snapshots.get(&build_generation).cloned())
+}
+
 pub fn start_recording(config: NativeRecordingStartConfig) -> Result<()> {
     let guard = engine_slot()
         .lock()
@@ -2973,6 +3603,7 @@ pub mod bench_support {
             .collect();
         Box::new(NativeMixerRuntime {
             generation: 1,
+            build_generation: 1,
             peak_scratch: vec![ChannelPeak::default(); graph.channel_count()],
             held_peaks: vec![[0.0, 0.0]; graph.channel_count()],
             held_until: vec![[0, 0]; graph.channel_count()],
@@ -2999,6 +3630,7 @@ pub mod bench_support {
             has_infinite_tail: false,
             input_peaks,
             input_meter_routes: vec![None; scenario.tracks + 2],
+            monitor_input_routes: vec![None; scenario.tracks + 2],
             input_peak_scratch: [0.0; super::MAX_INPUT_CHANNELS],
             meter_frame_clock: 0,
         })
@@ -3022,7 +3654,31 @@ pub mod bench_support {
                 .store(0, super::Ordering::Relaxed);
             let mut output = [0.0, 0.0];
             for _ in 0..frames {
-                let (frame, underrun) = self.runtime.render_frame();
+                let (frame, underrun) = self.runtime.render_frame([0.0; super::MAX_INPUT_CHANNELS]);
+                debug_assert!(!underrun);
+                output = [frame[0], frame[1]];
+            }
+            output
+        }
+
+        pub fn enable_stopped_monitoring(&mut self) {
+            self.runtime.monitor_input_routes[0] = Some([0, 1]);
+            self.runtime
+                .transport
+                .state
+                .store(super::TRANSPORT_STOPPED, super::Ordering::Relaxed);
+        }
+
+        pub fn render_monitoring_block(
+            &mut self,
+            frames: usize,
+            input: StereoFrame,
+        ) -> StereoFrame {
+            let mut input_frame = [0.0; super::MAX_INPUT_CHANNELS];
+            input_frame[..2].copy_from_slice(&input);
+            let mut output = [0.0, 0.0];
+            for _ in 0..frames {
+                let (frame, underrun) = self.runtime.render_frame(input_frame);
                 debug_assert!(!underrun);
                 output = [frame[0], frame[1]];
             }
@@ -3178,16 +3834,16 @@ pub mod bench_support {
         pub fn new(input_rate: u32, output_rate: u32, output_frames: usize) -> Self {
             let source_frames = (output_frames as u128 * u128::from(input_rate))
                 .div_ceil(u128::from(output_rate)) as usize
-                + 4;
+                + 1_024;
             let capacity = source_frames.next_power_of_two().max(8);
-            let ring = HeapRb::<StereoFrame>::new(capacity);
+            let ring = HeapRb::<super::InputFrame>::new(capacity);
             let (mut producer, consumer) = ring.split();
             for index in 0..source_frames {
+                let mut frame = [0.0; super::MAX_INPUT_CHANNELS];
+                frame[0] = index as f32 / source_frames as f32;
+                frame[1] = -frame[0];
                 producer
-                    .try_push([
-                        index as f32 / source_frames as f32,
-                        -(index as f32 / source_frames as f32),
-                    ])
+                    .try_push(frame)
                     .expect("resampler fixture ring has capacity");
             }
             Self {
@@ -3195,9 +3851,11 @@ pub mod bench_support {
                     consumer,
                     input_rate,
                     output_rate,
+                    2,
                     source_frames / 2,
                     capacity,
-                ),
+                )
+                .expect("benchmark resampler must be valid"),
                 output_frames,
             }
         }
@@ -3205,8 +3863,8 @@ pub mod bench_support {
         pub fn render(&mut self) -> StereoFrame {
             let mut output = [0.0, 0.0];
             for _ in 0..self.output_frames {
-                let ratio = self.resampler.adaptive_ratio();
-                output = self.resampler.next_frame(ratio).unwrap_or_default();
+                let (frame, _underrun) = self.resampler.next_frame();
+                output = [frame[0], frame[1]];
             }
             output
         }
@@ -3265,8 +3923,10 @@ mod tests {
     use super::{
         AdaptiveResampler, BufferSelection, BufferSize, ClipStoragePolicy, InputPeakBank,
         LivePlugin, MAX_INPUT_CHANNELS, MEMORY_DECODE_LIMIT_BYTES, METRONOME_ACCENT_NOTE,
-        METRONOME_BEAT_NOTE, MetronomeScheduler, SignalWidth, StereoDelayLine, SupportedBufferSize,
-        clip_storage_policy, resolve_stream_devices, select_buffer_size, spawn_streaming_clip,
+        METRONOME_BEAT_NOTE, MetronomeScheduler, NativeMixerChannel, NativeMixerGraph,
+        NativeMixerSend, NativePluginInstance, SignalWidth, StereoDelayLine, SupportedBufferSize,
+        clip_storage_policy, compiled_graph_snapshot, resolve_stream_devices, select_buffer_size,
+        spawn_streaming_clip,
     };
     use crate::recording::{NativeRecordingStartConfig, write_deterministic_test_recording};
     use crate::vst3::ProcessContext;
@@ -3274,7 +3934,9 @@ mod tests {
         HeapRb,
         traits::{Producer, Split},
     };
-    use yadaw_dsp_runtime::protocol::PluginAudioMode;
+    use yadaw_dsp_runtime::protocol::{
+        CompiledGraphNodeKind, CompiledGraphPluginState, LiveMixerSendTap, PluginAudioMode,
+    };
     use yadaw_dsp_runtime::tempo::{TempoEvent, TempoMap, TimeSignatureEvent};
 
     fn assert_fixed(selection: BufferSelection, expected: u32, fell_back: bool) {
@@ -3321,17 +3983,25 @@ mod tests {
     }
 
     #[test]
-    fn interpolates_between_input_frames_without_callback_allocations() {
-        let ring = HeapRb::new(8);
+    fn sinc_resampler_preserves_all_hardware_input_channels() {
+        let ring = HeapRb::new(4_096);
         let (mut producer, consumer) = ring.split();
-        producer.try_push([0.0, 0.0]).unwrap();
-        producer.try_push([1.0, 1.0]).unwrap();
-        producer.try_push([2.0, 2.0]).unwrap();
-        let mut resampler = AdaptiveResampler::new(consumer, 48_000, 44_100, 1, 8);
+        for _ in 0..2_048 {
+            let mut input = [0.0; MAX_INPUT_CHANNELS];
+            input[0] = 0.25;
+            input[MAX_INPUT_CHANNELS - 1] = -0.5;
+            producer.try_push(input).expect("fixture ring has capacity");
+        }
+        let mut resampler =
+            AdaptiveResampler::new(consumer, 48_000, 48_000, MAX_INPUT_CHANNELS, 1_024, 4_096)
+                .expect("resampler configuration is valid");
+        let mut output = [0.0; MAX_INPUT_CHANNELS];
+        for _ in 0..512 {
+            (output, _) = resampler.next_frame();
+        }
 
-        assert_eq!(resampler.next_frame(0.5), Some([0.0, 0.0]));
-        assert_eq!(resampler.next_frame(0.5), Some([0.5, 0.5]));
-        assert_eq!(resampler.next_frame(0.5), Some([1.0, 1.0]));
+        assert!((output[0] - 0.25).abs() < 0.01);
+        assert!((output[MAX_INPUT_CHANNELS - 1] + 0.5).abs() < 0.01);
     }
 
     #[test]
@@ -3617,5 +4287,116 @@ mod tests {
                 "{first_mode:?} followed by {second_mode:?}"
             );
         }
+    }
+
+    #[test]
+    fn compiled_snapshot_exposes_adapters_plugin_states_and_route_pdc() {
+        fn channel(
+            id: &str,
+            output_index: Option<u32>,
+            input_channels: Vec<u32>,
+        ) -> NativeMixerChannel {
+            NativeMixerChannel {
+                id: id.to_owned(),
+                kind: if id == "output" { "output" } else { "audio" }.to_owned(),
+                system_role: None,
+                gain_db: 0.0,
+                pan: 0.0,
+                muted: false,
+                soloed: false,
+                output_index,
+                output_bus: None,
+                record_armed: false,
+                input_monitoring: false,
+                input_source: (id != "output").then(|| "hardware".to_owned()),
+                input_channels,
+                hardware_output_channels: (id == "output")
+                    .then_some(vec![1, 2])
+                    .unwrap_or_default(),
+            }
+        }
+        let graph = NativeMixerGraph {
+            generation: 17,
+            sample_rate: 48_000,
+            channels: vec![
+                channel("wet", Some(3), vec![1]),
+                channel("send-source", None, vec![2, 3]),
+                channel("dry", Some(3), vec![4, 5]),
+                channel("output", None, Vec::new()),
+            ],
+            sends: vec![NativeMixerSend {
+                id: "parallel".to_owned(),
+                source_index: 1,
+                target_output_index: Some(3),
+                target_bus: None,
+                enabled: true,
+                tap: LiveMixerSendTap::PostPan,
+                level_db: 0.0,
+            }],
+            clips: Vec::new(),
+            plugins: vec![
+                NativePluginInstance {
+                    instance_id: "missing".to_owned(),
+                    channel_index: 0,
+                    role: "insert".to_owned(),
+                    slot_order: 0,
+                    audio_mode: PluginAudioMode::Stereo,
+                    enabled: true,
+                    latency_samples: 64,
+                    tail_samples: Some(0),
+                    processor: None,
+                },
+                NativePluginInstance {
+                    instance_id: "bypassed".to_owned(),
+                    channel_index: 1,
+                    role: "insert".to_owned(),
+                    slot_order: 0,
+                    audio_mode: PluginAudioMode::Stereo,
+                    enabled: false,
+                    latency_samples: 32,
+                    tail_samples: Some(0),
+                    processor: None,
+                },
+            ],
+            midi_clips: Vec::new(),
+            tempo_events: Vec::new(),
+            time_signature_events: Vec::new(),
+        };
+
+        let snapshot = compiled_graph_snapshot(&graph, 23);
+
+        assert_eq!(snapshot.graph_revision, 17);
+        assert_eq!(snapshot.build_generation, 23);
+        assert!(snapshot.nodes.iter().any(|node| {
+            node.kind == CompiledGraphNodeKind::WidthAdapter
+                && node.channel_id.as_deref() == Some("wet")
+        }));
+        assert!(
+            snapshot
+                .nodes
+                .iter()
+                .any(|node| { node.plugin_state == Some(CompiledGraphPluginState::Unavailable) })
+        );
+        assert!(
+            snapshot
+                .nodes
+                .iter()
+                .any(|node| { node.plugin_state == Some(CompiledGraphPluginState::Bypassed) })
+        );
+        assert!(snapshot.nodes.iter().any(|node| {
+            node.kind == CompiledGraphNodeKind::PdcDelay
+                && node.label == "Channel PDC"
+                && node.latency_samples == 64
+        }));
+        assert!(snapshot.nodes.iter().any(|node| {
+            node.kind == CompiledGraphNodeKind::PdcDelay
+                && node.label == "Send PDC"
+                && node.latency_samples == 32
+        }));
+        assert!(snapshot.nodes.iter().any(|node| {
+            node.kind == CompiledGraphNodeKind::PdcDelay
+                && node.label == "Bypass compensation"
+                && node.latency_samples == 32
+        }));
     }
 }

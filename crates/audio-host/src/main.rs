@@ -108,6 +108,7 @@ fn live_graph(
                     .transpose()?,
                 output_bus: channel.output_bus,
                 record_armed: channel.record_armed,
+                input_monitoring: channel.input_monitoring,
                 input_source: channel.input_source.clone(),
                 input_channels: channel.input_channels.clone(),
                 hardware_output_channels: channel.hardware_output_channels.clone(),
@@ -376,6 +377,9 @@ fn engine_command(
             Err(error) => ControlResult::Error {
                 message: error.to_string(),
             },
+        },
+        ControlCommand::CompiledGraphSnapshot => ControlResult::CompiledGraphSnapshot {
+            snapshot: engine::compiled_audio_graph_snapshot(),
         },
         ControlCommand::ClearMeterClips => {
             match engine::transport_command("clear-meter-clips".to_owned(), None) {

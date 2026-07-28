@@ -331,6 +331,7 @@ export const useMixerStore = defineStore("mixer", () => {
       outputChannelId: defaultOutput?.id ?? null,
       outputBus: null,
       recordArmed: false,
+      inputMonitoring: false,
       inputChannels: inputFormat === "mono" ? [1] : [1, 2],
       hardwareOutputChannels: []
     }
@@ -357,6 +358,7 @@ export const useMixerStore = defineStore("mixer", () => {
       outputChannelId: defaultOutput?.id ?? null,
       outputBus: null,
       recordArmed: false,
+      inputMonitoring: false,
       inputChannels: [],
       hardwareOutputChannels: []
     }
@@ -383,6 +385,7 @@ export const useMixerStore = defineStore("mixer", () => {
       outputChannelId: defaultOutput?.id ?? null,
       outputBus: null,
       recordArmed: false,
+      inputMonitoring: false,
       inputChannels: inputFormat === "mono" ? [1] : [1, 2],
       hardwareOutputChannels: []
     }
@@ -422,6 +425,7 @@ export const useMixerStore = defineStore("mixer", () => {
       outputChannelId: null,
       outputBus: null,
       recordArmed: false,
+      inputMonitoring: false,
       inputChannels: [],
       hardwareOutputChannels: [firstHardwareChannel, firstHardwareChannel + 1]
     }

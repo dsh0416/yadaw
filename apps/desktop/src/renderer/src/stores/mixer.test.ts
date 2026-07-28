@@ -23,6 +23,7 @@ function graph(): MixerGraphSnapshot {
         soloed: false,
         outputChannelId: "output",
         recordArmed: false,
+        inputMonitoring: false,
         inputChannels: [1, 2],
         hardwareOutputChannels: []
       },
@@ -41,6 +42,7 @@ function graph(): MixerGraphSnapshot {
         soloed: false,
         outputChannelId: "output",
         recordArmed: false,
+        inputMonitoring: false,
         inputChannels: [1],
         hardwareOutputChannels: []
       },
@@ -59,6 +61,7 @@ function graph(): MixerGraphSnapshot {
         soloed: false,
         outputChannelId: "output",
         recordArmed: false,
+        inputMonitoring: false,
         inputChannels: [],
         hardwareOutputChannels: []
       },
@@ -77,6 +80,7 @@ function graph(): MixerGraphSnapshot {
         soloed: false,
         outputChannelId: "output",
         recordArmed: false,
+        inputMonitoring: false,
         inputChannels: [2],
         hardwareOutputChannels: []
       },
@@ -95,6 +99,7 @@ function graph(): MixerGraphSnapshot {
         soloed: false,
         outputChannelId: null,
         recordArmed: false,
+        inputMonitoring: false,
         inputChannels: [],
         hardwareOutputChannels: []
       },
@@ -113,6 +118,7 @@ function graph(): MixerGraphSnapshot {
         soloed: false,
         outputChannelId: null,
         recordArmed: false,
+        inputMonitoring: false,
         inputChannels: [],
         hardwareOutputChannels: [1, 2]
       }
@@ -194,6 +200,55 @@ describe("mixer store", () => {
       patch: { gainDb: 0 }
     })
     expect(mixer.canRedo).toBe(true)
+  })
+
+  it("keeps input monitoring in project history through undo and redo", async () => {
+    const initial = graph()
+    const monitored = structuredClone(initial)
+    monitored.channels[0]!.inputMonitoring = true
+    window.yadaw.loadMixerGraph = vi.fn().mockResolvedValue(initial)
+    window.yadaw.executeProjectCommand = vi
+      .fn()
+      .mockResolvedValueOnce({
+        graph: monitored,
+        inverse: {
+          type: "update-channel",
+          channelId: "audio",
+          patch: { inputMonitoring: false }
+        }
+      })
+      .mockResolvedValueOnce({
+        graph: initial,
+        inverse: {
+          type: "update-channel",
+          channelId: "audio",
+          patch: { inputMonitoring: true }
+        }
+      })
+      .mockResolvedValueOnce({
+        graph: monitored,
+        inverse: {
+          type: "update-channel",
+          channelId: "audio",
+          patch: { inputMonitoring: false }
+        }
+      })
+
+    const mixer = useMixerStore()
+    await mixer.load()
+    await mixer.updateChannel("audio", { inputMonitoring: true })
+    expect(mixer.graph.channels[0]?.inputMonitoring).toBe(true)
+
+    await mixer.undo()
+    expect(mixer.graph.channels[0]?.inputMonitoring).toBe(false)
+
+    await mixer.redo()
+    expect(mixer.graph.channels[0]?.inputMonitoring).toBe(true)
+    expect(window.yadaw.executeProjectCommand).toHaveBeenLastCalledWith({
+      type: "update-channel",
+      channelId: "audio",
+      patch: { inputMonitoring: true }
+    })
   })
 
   it("hydrates the ready workspace graph synchronously without reloading the audio host", () => {
@@ -311,6 +366,7 @@ describe("mixer store", () => {
         inputFormat: null,
         inputChannels: [],
         recordArmed: false,
+        inputMonitoring: false,
         outputChannelId: "output"
       })
     })

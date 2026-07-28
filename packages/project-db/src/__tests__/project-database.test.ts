@@ -95,6 +95,21 @@ async function revertPluginAudioModeMigration(database: PGlite): Promise<void> {
   `)
 }
 
+async function revertInputMonitoringMigration(database: PGlite): Promise<void> {
+  await database.exec(`
+    alter table "mixer_channels"
+      drop constraint "mixer_channels_input_monitoring_check";
+    alter table "mixer_channels" drop column "input_monitoring";
+    delete from drizzle.__drizzle_migrations
+    where created_at = (
+      select created_at
+      from drizzle.__drizzle_migrations
+      order by created_at desc
+      limit 1
+    );
+  `)
+}
+
 afterEach(async () => {
   for (const resource of databases.splice(0)) {
     await resource.database.close()
@@ -147,6 +162,7 @@ describe("ProjectDatabase", () => {
       timeSignatureEvents: [{ tick: 0, numerator: 4, denominator: 4 }]
     })
     expect(seeded.keySignatureEvents).toEqual([{ tick: 0, fifths: 0, mode: "major" }])
+    expect(seeded.channels.find(({ id }) => id === "audio-1")?.inputMonitoring).toBe(false)
 
     await database.updateConfiguration({
       name: "Renamed",
@@ -190,6 +206,52 @@ describe("ProjectDatabase", () => {
       { tick: 0, fifths: 2, mode: "major" },
       { tick: 3_840, fifths: -7, mode: "minor" }
     ])
+  })
+
+  it("persists input monitoring only for Audio channels", async () => {
+    const { database } = await createDatabase()
+    await database.applyCommand(
+      {
+        type: "update-channel",
+        channelId: "audio-1",
+        patch: { inputMonitoring: true }
+      },
+      "output-1-2"
+    )
+    expect(
+      (await database.mixerSnapshot()).channels.find(({ id }) => id === "audio-1")
+    ).toMatchObject({ inputMonitoring: true })
+
+    await expect(
+      database.applyCommand(
+        {
+          type: "update-channel",
+          channelId: "metronome",
+          patch: { inputMonitoring: true }
+        },
+        "output-1-2"
+      )
+    ).rejects.toThrow()
+  })
+
+  it("migrates existing tracks with software monitoring disabled", async () => {
+    const resource = await createDatabase()
+    await resource.database.close()
+    databases.splice(databases.indexOf(resource), 1)
+
+    const raw = new PGlite(join(resource.directory, "pgdata"))
+    try {
+      await revertInputMonitoringMigration(raw)
+    } finally {
+      await raw.close()
+    }
+
+    const migrated = await ProjectDatabase.open(join(resource.directory, "pgdata"))
+    databases.push({ database: migrated, directory: resource.directory })
+    await migrated.migrate()
+    expect(
+      (await migrated.mixerSnapshot()).channels.find(({ id }) => id === "audio-1")
+    ).toMatchObject({ inputMonitoring: false })
   })
 
   it("round-trips every plugin audio mode", async () => {
@@ -259,6 +321,7 @@ describe("ProjectDatabase", () => {
           soloed: false,
           outputChannelId: "output-1-2",
           recordArmed: false,
+          inputMonitoring: false,
           inputChannels: [7],
           hardwareOutputChannels: []
         }
@@ -270,6 +333,7 @@ describe("ProjectDatabase", () => {
 
     const raw = new PGlite(join(resource.directory, "pgdata"))
     try {
+      await revertInputMonitoringMigration(raw)
       await revertPluginAudioModeMigration(raw)
       await revertAuxBusMigration(raw)
       await raw.exec(`
@@ -339,6 +403,7 @@ describe("ProjectDatabase", () => {
       soloed: false,
       outputChannelId: "output-1-2",
       recordArmed: false,
+      inputMonitoring: false,
       inputChannels: [7],
       hardwareOutputChannels: []
     }
@@ -480,6 +545,7 @@ describe("ProjectDatabase", () => {
 
     const raw = new PGlite(join(resource.directory, "pgdata"))
     try {
+      await revertInputMonitoringMigration(raw)
       await revertPluginAudioModeMigration(raw)
       await revertAuxBusMigration(raw)
       await raw.exec(`
@@ -530,6 +596,7 @@ describe("ProjectDatabase", () => {
 
     const raw = new PGlite(join(resource.directory, "pgdata"))
     try {
+      await revertInputMonitoringMigration(raw)
       await revertPluginAudioModeMigration(raw)
       await revertAuxBusMigration(raw)
       await raw.exec(`

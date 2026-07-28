@@ -139,6 +139,7 @@ export class ApplicationSettingsStore {
       theme: "system",
       meterPeakHold: "800ms",
       meterReturnRate: "iec-type-i",
+      softwareMonitoringEnabled: false,
       audioHostRuntime: {
         workerThreads: "auto",
         maxBlockingThreads: "auto",
@@ -167,6 +168,10 @@ export class ApplicationSettingsStore {
         meterReturnRate: isMeterReturnRate(raw.meterReturnRate)
           ? raw.meterReturnRate
           : value.meterReturnRate,
+        softwareMonitoringEnabled:
+          typeof raw.softwareMonitoringEnabled === "boolean"
+            ? raw.softwareMonitoringEnabled
+            : value.softwareMonitoringEnabled,
         audioHostRuntime: (() => {
           try {
             return validateAudioHostRuntimePreferences(raw.audioHostRuntime)
@@ -236,6 +241,12 @@ export class ApplicationSettingsStore {
   ): Promise<ApplicationSettings> {
     const current = await this.get()
     current.audioHostRuntime = validateAudioHostRuntimePreferences(preferences)
+    return this.write(current)
+  }
+
+  async setSoftwareMonitoringEnabled(enabled: boolean): Promise<ApplicationSettings> {
+    const current = await this.get()
+    current.softwareMonitoringEnabled = enabled
     return this.write(current)
   }
 

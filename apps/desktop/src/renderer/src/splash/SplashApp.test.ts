@@ -5,7 +5,7 @@ import type { StartupProgressSnapshot } from "@yadaw/contracts"
 import SplashApp from "./SplashApp.vue"
 
 describe("SplashApp", () => {
-  it("renders the startup snapshot and live VST3 scan progress", async () => {
+  it("renders the minimal brand and live startup progress", async () => {
     const listeners: Array<(progress: StartupProgressSnapshot) => void> = []
     const startupProgressSnapshot = vi.fn(async (): Promise<StartupProgressSnapshot> => ({
       phase: "loading-catalog",
@@ -31,7 +31,11 @@ describe("SplashApp", () => {
 
     const wrapper = mount(SplashApp)
     await flushPromises()
+    expect(wrapper.text()).toContain("https://github.com/dsh0416/yadaw")
+    expect(wrapper.text()).toContain("v0.0.0")
     expect(wrapper.text()).toContain("Loading plug-in catalog")
+    expect(wrapper.text()).not.toContain("Reading the previous VST3 index")
+    expect(wrapper.findAll(".progress-track > i")).toHaveLength(0)
     expect(wrapper.get('[role="progressbar"]').attributes("aria-valuenow")).toBe("10")
 
     listeners[0]?.({
@@ -46,9 +50,9 @@ describe("SplashApp", () => {
     await wrapper.vm.$nextTick()
 
     expect(wrapper.text()).toContain("Scanning VST3 plug-ins")
-    expect(wrapper.text()).toContain("Super Synth.vst3")
-    expect(wrapper.text()).toContain("4 / 10")
-    expect(wrapper.text()).toContain("1 plug-ins quarantined")
+    expect(wrapper.text()).not.toContain("Super Synth.vst3")
+    expect(wrapper.text()).not.toContain("4 / 10")
+    expect(wrapper.text()).not.toContain("plug-ins quarantined")
     expect(wrapper.get('[role="progressbar"]').attributes("aria-valuenow")).toBe("50")
   })
 })

@@ -30,7 +30,8 @@
     "@yadaw/audio-host-client": "workspace:*",
     "@yadaw/dsp-node": "workspace:*",
     "@yadaw/project-db": "workspace:*",
-    "@yadaw/ui": "workspace:*"
+    "@yadaw/ui": "workspace:*",
+    "echarts": "^6.1.0"
   },
   "devDependencies": {
     "@pinia/testing": "2.0.1",

@@ -4,39 +4,25 @@ import { computed, onMounted } from "vue"
 import { useStartupStore } from "../stores/startup"
 
 const startup = useStartupStore()
+const projectUrl = "https://github.com/dsh0416/yadaw"
+const appVersion = typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "0.0.0"
 const percentage = computed(() => Math.round(startup.progress.progress * 100))
-const scanCount = computed(() => {
-  if (startup.progress.completed === null || startup.progress.total === null) return null
-  return `${startup.progress.completed} / ${startup.progress.total}`
-})
 
 onMounted(() => void startup.load())
 </script>
 
 <template>
   <main class="splash-shell" :data-phase="startup.progress.phase">
-    <div class="signal-field" aria-hidden="true">
-      <i v-for="index in 24" :key="index" :style="{ '--index': index }" />
-    </div>
-
     <header class="brand">
-      <div class="brand-mark" aria-hidden="true">
-        <YadawLogo class="brand-mark-logo" variant="mark" decorative />
-      </div>
-      <div>
-        <p>DIGITAL AUDIO WORKSTATION</p>
-        <h1><YadawLogo variant="wordmark" /></h1>
-      </div>
-      <b>STARTUP / VST3 INDEX</b>
+      <h1 class="brand-heading"><YadawLogo class="brand-logo" /></h1>
+      <p class="project-url">{{ projectUrl }}</p>
+      <p class="version">v{{ appVersion }}</p>
     </header>
 
     <section class="startup-status" aria-live="polite">
       <div class="status-heading">
-        <div>
-          <p>{{ startup.progress.phase === "failed" ? "STARTUP INTERRUPTED" : "NOW LOADING" }}</p>
-          <h2>{{ startup.progress.label }}</h2>
-        </div>
-        <strong>{{ percentage }}<small>%</small></strong>
+        <p>{{ startup.progress.label }}</p>
+        <strong>{{ percentage }}%</strong>
       </div>
 
       <div
@@ -48,24 +34,8 @@ onMounted(() => void startup.load())
         :aria-valuenow="percentage"
       >
         <span class="progress-fill" :style="{ width: `${percentage}%` }" />
-        <i v-for="tick in 16" :key="tick" aria-hidden="true" />
-      </div>
-
-      <div class="progress-detail">
-        <span class="activity-dot" aria-hidden="true" />
-        <p :title="startup.progress.detail">{{ startup.progress.detail }}</p>
-        <b v-if="scanCount">{{ scanCount }}</b>
       </div>
     </section>
-
-    <footer>
-      <span>{{
-        startup.progress.warnings > 0
-          ? `${startup.progress.warnings} plug-ins quarantined`
-          : "SAFE SCAN"
-      }}</span>
-      <span>64-BIT AUDIO ENGINE</span>
-    </footer>
   </main>
 </template>
 
@@ -93,184 +63,100 @@ onMounted(() => void startup.load())
 .splash-shell {
   position: relative;
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: 1fr auto;
   width: 100%;
   height: 100%;
-  padding: 30px 34px 24px;
+  padding: 44px 48px 40px;
   overflow: hidden;
   border: 1px solid var(--ui-color-border);
   background:
-    linear-gradient(
-      115deg,
-      color-mix(in srgb, var(--ui-signal-audio) 7%, transparent),
-      transparent 38%
-    ),
     radial-gradient(
-      circle at 86% 13%,
-      color-mix(in srgb, var(--ui-signal-midi) 12%, transparent),
-      transparent 32%
+      circle at 50% 34%,
+      color-mix(in srgb, var(--ui-signal-audio) 8%, transparent),
+      transparent 42%
     ),
     var(--ui-color-canvas-subtle);
   box-shadow: var(--ui-shadow-highlight-inset);
   -webkit-app-region: drag;
 }
 
-.splash-shell::before {
-  position: absolute;
-  inset: 0;
-  opacity: 0.12;
-  background-image: linear-gradient(
-    color-mix(in srgb, var(--ui-color-text) 8%, transparent) 1px,
-    transparent 1px
-  );
-  background-size: 100% 4px;
-  content: "";
-  pointer-events: none;
-}
-
-.signal-field {
-  position: absolute;
-  top: 108px;
-  right: 22px;
-  left: 22px;
-  display: flex;
-  align-items: center;
-  height: 82px;
-  gap: 5px;
-  opacity: 0.13;
-  pointer-events: none;
-}
-
-.signal-field i {
-  flex: 1;
-  height: calc(12px + (var(--index) % 7) * 8px);
-  border-radius: 1px;
-  background: linear-gradient(var(--ui-signal-midi), var(--ui-signal-audio));
-  transform: scaleY(0.75);
-  transform-origin: center;
-  animation: meter 1.6s ease-in-out infinite alternate;
-  animation-delay: calc(var(--index) * -55ms);
-}
-
 .brand {
-  position: relative;
-  display: grid;
-  grid-template-columns: 42px 1fr auto;
-  align-items: center;
-  gap: 13px;
-  z-index: var(--ui-z-local-content);
-}
-
-.brand-mark {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 42px;
-  gap: 3px;
-  border: 1px solid var(--ui-color-border-strong);
-  background: var(--ui-color-surface);
-  box-shadow: var(--ui-shadow-selected-outline);
+  align-self: stretch;
+  text-align: center;
 }
 
-.brand-mark-logo {
-  --yadaw-logo-highlight: var(--ui-signal-midi);
-
-  color: var(--ui-signal-audio);
-  font-size: var(--ui-font-size-2xl);
-}
-
-.brand p,
-.startup-status p,
-footer {
-  font-family: var(--ui-type-family-data);
-  letter-spacing: var(--ui-type-tracking-wider);
-}
-
-.brand p {
-  margin: 0 0 2px;
-  color: var(--ui-color-text-subtle);
-  font-size: var(--ui-type-size-caption);
-  font-weight: var(--ui-type-weight-bold);
-}
-
-.brand h1 {
+.brand-heading {
   margin: 0;
-  color: var(--ui-color-text);
-  font-size: var(--ui-type-size-page-title);
-  line-height: var(--ui-type-leading-none);
 }
 
-.brand > b {
-  align-self: start;
-  padding: 5px 7px;
-  border: 1px solid var(--ui-color-border);
+.brand-logo {
+  --yadaw-logo-highlight: var(--ui-signal-midi);
+  --yadaw-logo-lockup-wordmark-size: 0.62em;
+
+  color: var(--ui-color-text);
+  font-size: 72px;
+}
+
+.project-url,
+.version,
+.status-heading {
+  font-family: var(--ui-type-family-data);
+}
+
+.project-url {
+  margin: 22px 0 0;
   color: var(--ui-color-text-subtle);
-  background: color-mix(in srgb, var(--ui-color-canvas) 52%, transparent);
-  font: var(--ui-type-weight-semibold) var(--ui-type-size-caption) var(--ui-type-family-data);
+  font-size: var(--ui-type-size-control);
+  letter-spacing: var(--ui-type-tracking-normal);
+}
+
+.version {
+  margin: 8px 0 0;
+  color: var(--ui-color-text-muted);
+  font-size: var(--ui-type-size-caption);
   letter-spacing: var(--ui-type-tracking-wide);
+  font-variant-numeric: tabular-nums;
 }
 
 .startup-status {
-  position: relative;
-  align-self: end;
-  z-index: var(--ui-z-local-content);
+  width: 100%;
 }
 
 .status-heading {
   display: flex;
-  align-items: end;
+  align-items: center;
   justify-content: space-between;
-  min-height: 94px;
-  margin-bottom: 14px;
+  margin-bottom: 10px;
+  color: var(--ui-color-text-subtle);
+  font-size: var(--ui-type-size-control);
 }
 
 .status-heading p {
-  margin: 0 0 7px;
-  color: var(--ui-signal-audio);
-  font-size: var(--ui-type-size-caption);
-  font-weight: var(--ui-type-weight-bold);
-}
-
-.status-heading h2 {
-  max-width: 430px;
   margin: 0;
   overflow: hidden;
-  font-size: var(--ui-type-size-feature-title);
-  font-weight: var(--ui-type-weight-medium);
-  letter-spacing: var(--ui-type-tracking-tight);
+  letter-spacing: var(--ui-type-tracking-normal);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .status-heading > strong {
   color: var(--ui-color-text);
-  font: var(--ui-type-weight-regular) var(--ui-type-size-display) / var(--ui-type-leading-none)
-    var(--ui-type-family-interface);
+  font-weight: var(--ui-type-weight-semibold);
   font-variant-numeric: tabular-nums;
-  letter-spacing: var(--ui-type-tracking-tighter);
-}
-
-.status-heading > strong small {
-  margin-left: 3px;
-  color: var(--ui-color-text-subtle);
-  font-size: var(--ui-font-size-xs);
-  letter-spacing: var(--ui-type-tracking-normal);
 }
 
 .progress-track {
   position: relative;
-  display: grid;
-  grid-template-columns: repeat(16, 1fr);
-  height: 14px;
+  height: 8px;
   overflow: hidden;
   border: 1px solid var(--ui-color-border);
+  border-radius: 999px;
   background: var(--ui-color-canvas);
-  box-shadow: var(--ui-shadow-sm);
-}
-
-.progress-track > i {
-  border-right: 1px solid color-mix(in srgb, var(--ui-color-text) 8%, transparent);
-  z-index: var(--ui-z-local-raised);
+  box-shadow: var(--ui-shadow-highlight-inset);
 }
 
 .progress-fill {
@@ -289,97 +175,16 @@ footer {
   transition: width 180ms ease-out;
 }
 
-.progress-fill::after {
-  position: absolute;
-  inset: 0 0 0 auto;
-  width: 18px;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    color-mix(in srgb, var(--ui-color-text) 72%, transparent)
-  );
-  content: "";
-  animation: head-pulse 700ms ease-in-out infinite alternate;
-}
-
-.progress-detail {
-  display: grid;
-  grid-template-columns: 7px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-  min-height: 30px;
-  color: var(--ui-color-text-subtle);
-  font: var(--ui-type-size-control) var(--ui-type-family-data);
-}
-
-.progress-detail p {
-  margin: 0;
-  overflow: hidden;
-  letter-spacing: var(--ui-type-tracking-normal);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.progress-detail b {
-  color: var(--ui-color-text-muted);
-  font-variant-numeric: tabular-nums;
-}
-
-.activity-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--ui-signal-audio);
-  box-shadow: var(--ui-shadow-selected-outline);
-  animation: head-pulse 650ms ease-in-out infinite alternate;
-}
-
-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-top: 12px;
-  border-top: 1px solid var(--ui-color-border);
-  color: var(--ui-color-text-subtle);
-  font-size: var(--ui-type-size-micro);
-  font-weight: var(--ui-type-weight-bold);
-  z-index: var(--ui-z-local-content);
-}
-
-.splash-shell[data-phase="failed"] .status-heading p,
-.splash-shell[data-phase="failed"] .progress-detail,
-.splash-shell[data-phase="failed"] .activity-dot {
+.splash-shell[data-phase="failed"] .status-heading {
   color: var(--ui-color-danger);
 }
 
-.splash-shell[data-phase="failed"] .activity-dot,
 .splash-shell[data-phase="failed"] .progress-fill {
   background: var(--ui-color-danger);
   box-shadow: var(--ui-focus-ring);
 }
 
-@keyframes meter {
-  to {
-    transform: scaleY(1);
-  }
-}
-
-@keyframes head-pulse {
-  from {
-    opacity: 0.38;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .signal-field i,
-  .progress-fill::after,
-  .activity-dot {
-    animation: none;
-  }
-
   .progress-fill {
     transition: none;
   }

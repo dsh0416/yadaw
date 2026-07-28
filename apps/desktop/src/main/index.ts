@@ -682,6 +682,13 @@ function registerIpcHandlers(
     return createAudioBenchmarkReport(audioHostService)
   })
 
+  ipcMain.handle(IPC_CHANNELS.compiledAudioGraphSnapshot, (event) => {
+    assertTrustedSender(event)
+    if (!projects.current) return null
+    if (!audioHostService) throw new Error("Audio host is not running")
+    return audioHostService.compiledAudioGraphSnapshot()
+  })
+
   ipcMain.handle(IPC_CHANNELS.settingsGet, (event) => {
     assertTrustedSender(event)
     return settings.get()
@@ -690,6 +697,31 @@ function registerIpcHandlers(
   ipcMain.handle(IPC_CHANNELS.settingsUpdate, (event, value: unknown) => {
     assertTrustedSender(event)
     return settings.update(validateSettingsPatch(value))
+  })
+
+  ipcMain.handle(IPC_CHANNELS.settingsSetSoftwareMonitoring, async (event, value: unknown) => {
+    assertTrustedSender(event)
+    if (typeof value !== "boolean") {
+      throw new TypeError("Software monitoring value must be a boolean")
+    }
+    if (
+      recordings.current ||
+      operations.activeCount > 0 ||
+      audioHostService?.configurationRestarting
+    ) {
+      throw new Error("Software monitoring cannot change while audio configuration is busy")
+    }
+    const current = await settings.get()
+    if (current.softwareMonitoringEnabled === value) return current
+    if (!projects.current) return settings.setSoftwareMonitoringEnabled(value)
+
+    await mixer.setSoftwareMonitoringEnabled(value)
+    try {
+      return await settings.setSoftwareMonitoringEnabled(value)
+    } catch (error) {
+      await mixer.setSoftwareMonitoringEnabled(current.softwareMonitoringEnabled)
+      throw error
+    }
   })
 
   ipcMain.handle(IPC_CHANNELS.settingsConfigureAudioHostRuntime, async (event, value: unknown) => {
@@ -1337,7 +1369,8 @@ void app.whenReady().then(async () => {
       app.getPath("userData"),
       projectService,
       audioHostService,
-      plugins
+      plugins,
+      settings
     )
     plugins.attachRuntime({
       resolveInstance: async (instanceId) => {

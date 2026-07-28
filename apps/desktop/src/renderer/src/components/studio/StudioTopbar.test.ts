@@ -27,6 +27,7 @@ const masterChannel = {
   soloed: false,
   outputChannelId: null,
   recordArmed: false,
+  inputMonitoring: false,
   inputChannels: [],
   hardwareOutputChannels: []
 }
@@ -45,6 +46,7 @@ const metronomeChannel = {
   soloed: false,
   outputChannelId: "output",
   recordArmed: false,
+  inputMonitoring: false,
   inputChannels: [],
   hardwareOutputChannels: []
 }

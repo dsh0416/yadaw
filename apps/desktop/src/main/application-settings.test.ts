@@ -13,6 +13,7 @@ describe("ApplicationSettingsStore", () => {
       theme: "system",
       meterPeakHold: "800ms",
       meterReturnRate: "iec-type-i",
+      softwareMonitoringEnabled: false,
       audioHostRuntime: {
         workerThreads: "auto",
         maxBlockingThreads: "auto",
@@ -95,5 +96,22 @@ describe("ApplicationSettingsStore", () => {
         egressConcurrency: "auto"
       })
     ).rejects.toThrow("Worker threads")
+  })
+
+  it("defaults legacy files to disabled and persists software monitoring through its named path", async () => {
+    const userData = await mkdtemp(join(tmpdir(), "yadaw-monitoring-settings-"))
+    await writeFile(
+      join(userData, "settings.json"),
+      JSON.stringify({ recordingBitDepth: "pcm24" }),
+      "utf8"
+    )
+    const store = new ApplicationSettingsStore(userData)
+
+    expect((await store.get()).softwareMonitoringEnabled).toBe(false)
+    await store.setSoftwareMonitoringEnabled(true)
+
+    expect((await new ApplicationSettingsStore(userData).get()).softwareMonitoringEnabled).toBe(
+      true
+    )
   })
 })

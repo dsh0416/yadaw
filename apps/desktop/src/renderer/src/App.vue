@@ -12,6 +12,7 @@ import { useOperationStore } from "./stores/operations"
 import { useApplicationWindowStore } from "./stores/applicationWindow"
 import GlobalOperationHost from "./components/operations/GlobalOperationHost.vue"
 import AudioBenchmarkHost from "./components/benchmark/AudioBenchmarkHost.vue"
+import CompiledEffectGraphHost from "./components/effect-graph/CompiledEffectGraphHost.vue"
 import GlobalDialogHost from "./components/dialog/GlobalDialogHost.vue"
 import AppChrome from "./components/application/AppChrome.vue"
 import AppRouteView from "./components/application/AppRouteView.vue"
@@ -67,6 +68,7 @@ onUnmounted(() => {
     </AppChrome>
     <GlobalOperationHost />
     <AudioBenchmarkHost />
+    <CompiledEffectGraphHost />
     <GlobalDialogHost />
   </UiProvider>
 </template>

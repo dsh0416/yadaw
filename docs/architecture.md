@@ -59,8 +59,11 @@ as atomic snapshots rather than callback events.
 The stream bridge is primed with one requested block. Input and output callback
 timestamps estimate ADC-to-callback and callback-to-DAC latency, while current
 ring occupancy supplies the internal bridge contribution. Physical loopback
-measurement is still required for authoritative round-trip latency. Input
-monitoring remains muted until the audio graph owns that routing decision.
+measurement is still required for authoritative round-trip latency. Software
+monitoring is an explicit graph route: the application setting gates persisted
+per-Audio-track choices, and only hardware input mappings enter the monitored
+track source. The route remains live while transport is stopped without
+advancing clips, MIDI, the metronome, or the transport clock.
 
 Requested buffer sizes are advisory. Rust keeps a fixed request only when it is
 inside the device's reported range; otherwise, or when the backend cannot report
@@ -74,12 +77,12 @@ live engine; they do not tear down and immediately reopen WASAPI endpoints.
 
 Preferences do not own the sample rate. Until Project Settings provides the
 session rate, the output device's native default is the engine clock. The input
-stream keeps its own native rate and an allocation-free adaptive linear
-resampler converts it at the ring consumer; ring-fill error supplies a bounded
-drift correction for independent clocks. This removes device-switch sample-rate
-mismatch failures without introducing a hidden Preferences setting. The linear
-stage must be replaced by a band-limited production SRC before input monitoring
-or recording is armed.
+stream keeps its own native rate and a fixed-output asynchronous sinc SRC
+converts all 1–32 hardware channels at the ring consumer. Its rubato/Blackman-
+Harris buffers and active-channel mask are allocated at stream startup;
+ring-fill error supplies the existing bounded ±0.1% drift correction for
+independent clocks. The input and output callbacks do not allocate, lock, or
+format diagnostics.
 
 There is one audio-device namespace. cpal supplies the available hosts, device
 names, stable IDs, and defaults. Chromium `MediaDevices` and Web Audio devices
@@ -133,6 +136,16 @@ and output routing. It preallocates VST processors, adapters, dual-mono alignmen
 delays, and plug-in bypass delay lines before publishing a graph generation;
 the audio callback performs no allocation, locking, IPC, or filesystem work.
 
+Each successful native build also creates an immutable diagnostic snapshot.
+`buildGeneration` identifies the concrete compiled build independently from the
+project's `graphRevision`. The callback atomically publishes only the build
+number at a block boundary, so control-side queries cannot observe a compiled
+graph before it is audible. The snapshot preserves hidden width adapters,
+plug-in active/bypassed/unavailable state, plug-in and bypass latency, channel
+and Send PDC, signal widths, and main/Send/hardware routing. Help → Effect Chain
+Graph reads this snapshot at one hertz while open; it never inspects or
+serializes graph state from the audio callback.
+
 ## Dependency direction
 
 ```text
@@ -146,6 +159,6 @@ dsp-core -> no JS or Electron dependencies
 
 1. Project/session model and undoable command bus.
 2. Rust transport clock, audio graph, plugin-delay reporting, and offline rendering.
-3. Project sample-rate ownership and a band-limited production asynchronous SRC.
+3. Project sample-rate ownership across device reconfiguration.
 4. Lock-free control commands and richer metering snapshots.
 5. Waveform peak cache, file decoding, plugin hosting, and persistence.

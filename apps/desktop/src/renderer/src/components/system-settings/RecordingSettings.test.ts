@@ -1,4 +1,4 @@
-import { mount } from "@vue/test-utils"
+import { flushPromises, mount } from "@vue/test-utils"
 import { createPinia } from "pinia"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import RecordingSettings from "./RecordingSettings.vue"
@@ -11,6 +11,7 @@ describe("RecordingSettings", () => {
       theme: "system",
       meterPeakHold: "800ms",
       meterReturnRate: "iec-type-i",
+      softwareMonitoringEnabled: false,
       recentProjects: []
     })
     window.yadaw.listPendingRecordings = vi.fn().mockResolvedValue([])
@@ -20,6 +21,7 @@ describe("RecordingSettings", () => {
       theme: "system",
       meterPeakHold: "800ms",
       meterReturnRate: "iec-type-i",
+      softwareMonitoringEnabled: false,
       recentProjects: []
     })
     window.yadaw.chooseSwapDirectory = vi.fn().mockResolvedValue({
@@ -28,6 +30,16 @@ describe("RecordingSettings", () => {
       theme: "system",
       meterPeakHold: "800ms",
       meterReturnRate: "iec-type-i",
+      softwareMonitoringEnabled: false,
+      recentProjects: []
+    })
+    window.yadaw.setSoftwareMonitoringEnabled = vi.fn().mockResolvedValue({
+      swapDirectory: "C:/swap",
+      recordingBitDepth: "float32",
+      theme: "system",
+      meterPeakHold: "800ms",
+      meterReturnRate: "iec-type-i",
+      softwareMonitoringEnabled: true,
       recentProjects: []
     })
   })
@@ -43,5 +55,28 @@ describe("RecordingSettings", () => {
 
     await wrapper.get('button[type="button"]').trigger("click")
     expect(window.yadaw.chooseSwapDirectory).toHaveBeenCalledOnce()
+  })
+
+  it("uses the dedicated software-monitoring transaction and restores the checkbox on failure", async () => {
+    const wrapper = mount(RecordingSettings, { global: { plugins: [createPinia()] } })
+    const checkbox = wrapper.get<HTMLInputElement>('input[type="checkbox"]')
+    await vi.waitFor(() => expect(wrapper.text()).toContain("C:/swap"))
+    expect(checkbox.element.disabled).toBe(false)
+    expect(wrapper.text()).toContain("Off. Existing")
+
+    await checkbox.setValue(true)
+    await flushPromises()
+    expect(window.yadaw.setSoftwareMonitoringEnabled).toHaveBeenCalledWith(true)
+    expect(checkbox.element.checked).toBe(true)
+    expect(wrapper.text()).toContain("Available on Audio tracks")
+
+    window.yadaw.setSoftwareMonitoringEnabled = vi
+      .fn()
+      .mockRejectedValue(new Error("Recording is active"))
+    await checkbox.setValue(false)
+    await flushPromises()
+
+    expect(checkbox.element.checked).toBe(true)
+    expect(wrapper.get('[role="alert"]').text()).toContain("Recording is active")
   })
 })

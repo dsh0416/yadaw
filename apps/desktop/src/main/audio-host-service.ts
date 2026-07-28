@@ -10,6 +10,7 @@ import type {
   AudioHostRuntimePreferences,
   AudioPreferences,
   AudioRuntimeSnapshot,
+  CompiledAudioGraphSnapshot,
   MixerGraphSnapshot,
   MixerParameterPreview,
   MixerRuntimeSnapshot,
@@ -40,6 +41,7 @@ interface ControlResponse {
       | "audio-devices"
       | "audio-runtime"
       | "mixer-snapshot"
+      | "compiled-graph-snapshot"
       | "transport-snapshot"
       | "recording-stopped"
       | "recording-waveform"
@@ -83,6 +85,28 @@ interface ControlResponse {
     }
     runtime?: AudioHostRuntime
     meters?: AudioHostMeter[]
+    snapshot?: {
+      graph_revision: number
+      build_generation: number
+      sample_rate: number
+      nodes: Array<{
+        id: string
+        kind: CompiledAudioGraphSnapshot["nodes"][number]["kind"]
+        label: string
+        channel_id: string | null
+        plugin_instance_id: string | null
+        signal_width: CompiledAudioGraphSnapshot["nodes"][number]["signalWidth"]
+        latency_samples: number
+        plugin_state: CompiledAudioGraphSnapshot["nodes"][number]["pluginState"]
+      }>
+      edges: Array<{
+        id: string
+        source: string
+        target: string
+        kind: CompiledAudioGraphSnapshot["edges"][number]["kind"]
+        signal_width: CompiledAudioGraphSnapshot["edges"][number]["signalWidth"]
+      }>
+    } | null
     transport?: AudioHostTransport
     recording?: AudioHostRecordingResultWire
     waveform?: AudioHostWaveformWire
@@ -341,6 +365,7 @@ export interface AudioHostGraph {
     output_channel_id?: string
     output_bus?: number
     record_armed: boolean
+    input_monitoring: boolean
     input_source?: "hardware" | "bus"
     input_channels: number[]
     hardware_output_channels: number[]
@@ -716,7 +741,8 @@ export class AudioHostService {
   async loadGraph(
     revision: number,
     project: MixerGraphSnapshot,
-    runtime: AudioHostGraph
+    runtime: AudioHostGraph,
+    awaitPublication = false
   ): Promise<void> {
     this.lastGraph = {
       revision,
@@ -724,6 +750,10 @@ export class AudioHostService {
       runtime: structuredClone(runtime)
     }
     await this.restoreGraph()
+    if (awaitPublication) {
+      const audio = await this.audioEngineSnapshot()
+      if (audio.state === "running") await this.waitForGraphPublication(revision)
+    }
   }
 
   private async restoreGraph(immediate = false): Promise<void> {
@@ -975,6 +1005,37 @@ export class AudioHostService {
           : []
       }),
       capturedAt: Date.now()
+    }
+  }
+
+  async compiledAudioGraphSnapshot(): Promise<CompiledAudioGraphSnapshot | null> {
+    const response = await this.request({ type: "compiled-graph-snapshot" })
+    if (response.result.type !== "compiled-graph-snapshot") {
+      throw new Error("audio host returned an invalid compiled graph snapshot")
+    }
+    const value = response.result.snapshot
+    if (!value) return null
+    return {
+      graphRevision: value.graph_revision,
+      buildGeneration: value.build_generation,
+      sampleRate: value.sample_rate,
+      nodes: value.nodes.map((node) => ({
+        id: node.id,
+        kind: node.kind,
+        label: node.label,
+        channelId: node.channel_id,
+        pluginInstanceId: node.plugin_instance_id,
+        signalWidth: node.signal_width,
+        latencySamples: node.latency_samples,
+        pluginState: node.plugin_state
+      })),
+      edges: value.edges.map((edge) => ({
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        kind: edge.kind,
+        signalWidth: edge.signal_width
+      }))
     }
   }
 

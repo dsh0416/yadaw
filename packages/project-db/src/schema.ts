@@ -146,6 +146,7 @@ export const mixerChannels = pgTable(
     outputChannelId: text("output_channel_id"),
     outputBus: smallint("output_bus"),
     recordArmed: boolean("record_armed").notNull().default(false),
+    inputMonitoring: boolean("input_monitoring").notNull().default(false),
     inputChannels: smallint("input_channels")
       .array()
       .$type<number[]>()
@@ -193,6 +194,10 @@ export const mixerChannels = pgTable(
     check(
       "mixer_channels_master_solo_check",
       sql`${table.kind} <> 'master' or not ${table.soloed}`
+    ),
+    check(
+      "mixer_channels_input_monitoring_check",
+      sql`${table.kind} = 'audio' or not ${table.inputMonitoring}`
     ),
     check(
       "mixer_channels_output_route_check",

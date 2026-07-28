@@ -91,6 +91,7 @@ function channelPatch(patch: MixerChannelPatch): Partial<typeof mixerChannels.$i
   if (patch.outputChannelId !== undefined) result.outputChannelId = patch.outputChannelId
   if (patch.outputBus !== undefined) result.outputBus = patch.outputBus
   if (patch.recordArmed !== undefined) result.recordArmed = patch.recordArmed
+  if (patch.inputMonitoring !== undefined) result.inputMonitoring = patch.inputMonitoring
   if (patch.inputChannels !== undefined) result.inputChannels = patch.inputChannels
   if (patch.hardwareOutputChannels !== undefined) {
     result.hardwareOutputChannels = patch.hardwareOutputChannels
@@ -137,6 +138,7 @@ function channelValue(
     outputChannelId: channel.outputChannelId,
     outputBus: channel.outputBus ?? null,
     recordArmed: channel.recordArmed,
+    inputMonitoring: channel.inputMonitoring,
     inputChannels: channel.inputChannels,
     hardwareOutputChannels: channel.hardwareOutputChannels
   }
@@ -563,6 +565,7 @@ export class ProjectDatabase {
             outputChannelId: null,
             outputBus: null,
             recordArmed: false,
+            inputMonitoring: false,
             inputChannels: [],
             hardwareOutputChannels: []
           },
@@ -582,6 +585,7 @@ export class ProjectDatabase {
             outputChannelId: null,
             outputBus: null,
             recordArmed: false,
+            inputMonitoring: false,
             inputChannels: [],
             hardwareOutputChannels: [1, 2]
           },
@@ -601,6 +605,7 @@ export class ProjectDatabase {
             outputChannelId: "output-1-2",
             outputBus: null,
             recordArmed: false,
+            inputMonitoring: false,
             inputChannels: [1, 2],
             hardwareOutputChannels: []
           },
@@ -620,6 +625,7 @@ export class ProjectDatabase {
             outputChannelId: "output-1-2",
             outputBus: null,
             recordArmed: false,
+            inputMonitoring: false,
             inputChannels: [],
             hardwareOutputChannels: []
           }
@@ -874,6 +880,7 @@ export class ProjectDatabase {
         outputChannelId: channel.outputChannelId,
         outputBus: channel.outputBus,
         recordArmed: channel.recordArmed,
+        inputMonitoring: channel.inputMonitoring,
         inputChannels: channel.inputChannels,
         hardwareOutputChannels: channel.hardwareOutputChannels
       })),

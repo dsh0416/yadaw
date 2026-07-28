@@ -15,6 +15,7 @@ import type {
   TransportSnapshot
 } from "@yadaw/contracts"
 import { type AudioHostGraph, AudioHostService } from "./audio-host-service"
+import { ApplicationSettingsStore } from "./application-settings"
 import type { PluginCatalogService } from "./plugin-catalog-service"
 import type { ProjectService } from "./project-service"
 
@@ -391,6 +392,9 @@ function validateGraph(graph: MixerGraphSnapshot): void {
     if (channel.kind !== "audio" && channel.recordArmed) {
       throw new Error("Only Audio tracks can arm recording")
     }
+    if (channel.kind !== "audio" && channel.inputMonitoring) {
+      throw new Error("Only Audio tracks can enable input monitoring")
+    }
     if (channel.kind === "master" && channel.soloed) {
       throw new Error("Master cannot be soloed")
     }
@@ -700,7 +704,8 @@ export class MixerService {
     userData: string,
     private readonly projects: ProjectService,
     private readonly audioHost: AudioHostService | null = null,
-    private readonly plugins: PluginCatalogService | null = null
+    private readonly plugins: PluginCatalogService | null = null,
+    private readonly settings: ApplicationSettingsStore | null = null
   ) {
     this.cacheDirectory = join(userData, "mixer-cache")
   }
@@ -755,8 +760,13 @@ export class MixerService {
     return this.enqueueMutation(() => this.loadNow())
   }
 
-  private async loadNow(): Promise<MixerGraphSnapshot> {
+  private async loadNow(
+    softwareMonitoringOverride?: boolean,
+    awaitPublication = false
+  ): Promise<MixerGraphSnapshot> {
     const graph = await this.snapshot()
+    const softwareMonitoringEnabled =
+      softwareMonitoringOverride ?? (await this.settings?.get())?.softwareMonitoringEnabled ?? false
     if (process.env.YADAW_TEST_CAPTURE_SOURCE === "1") {
       this.testTransport.sampleRate = graph.sampleRate
     }
@@ -773,6 +783,11 @@ export class MixerService {
         muted: channel.muted,
         soloed: channel.soloed,
         record_armed: channel.recordArmed,
+        input_monitoring:
+          softwareMonitoringEnabled &&
+          channel.kind === "audio" &&
+          channel.inputMonitoring &&
+          channel.inputSource === "hardware",
         input_source: channel.inputSource ?? undefined,
         input_channels: channel.inputChannels,
         hardware_output_channels: channel.hardwareOutputChannels,
@@ -847,8 +862,14 @@ export class MixerService {
       }))
     }
     this.graphRevision += 1
-    await this.audioHost?.loadGraph(this.graphRevision, graph, runtimeGraph)
+    await this.audioHost?.loadGraph(this.graphRevision, graph, runtimeGraph, awaitPublication)
     return graph
+  }
+
+  setSoftwareMonitoringEnabled(enabled: boolean): Promise<void> {
+    return this.enqueueMutation(async () => {
+      await this.loadNow(enabled, true)
+    })
   }
 
   execute(command: ProjectCommand): Promise<ProjectCommandResult> {

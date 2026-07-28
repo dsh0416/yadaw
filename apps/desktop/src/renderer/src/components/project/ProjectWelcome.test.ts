@@ -25,6 +25,7 @@ describe("ProjectWelcome", () => {
           theme: "system",
           meterPeakHold: "800ms",
           meterReturnRate: "iec-type-i",
+          softwareMonitoringEnabled: false,
           audioHostRuntime: {
             workerThreads: "auto",
             maxBlockingThreads: "auto",

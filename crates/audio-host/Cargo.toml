@@ -16,6 +16,7 @@ iced_winit.workspace = true
 ipc-channel.workspace = true
 raw-window-handle.workspace = true
 ringbuf.workspace = true
+rubato.workspace = true
 rmp-serde.workspace = true
 tokio.workspace = true
 winit.workspace = true

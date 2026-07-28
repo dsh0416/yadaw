@@ -39,6 +39,7 @@ function channel(id: string, kind: MixerChannelState["kind"]): MixerChannelState
     soloed: false,
     outputChannelId: ["audio", "instrument", "aux"].includes(kind) ? "output" : null,
     recordArmed: false,
+    inputMonitoring: false,
     inputChannels: kind === "audio" || kind === "aux" ? [1, 2] : [],
     hardwareOutputChannels: kind === "output" ? [1, 2] : []
   }

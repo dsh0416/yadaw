@@ -135,6 +135,12 @@ fn realtime_mixer_render_preview_and_capture_do_not_allocate() {
     assert_no_thread_allocations("NativeMixerRuntime::render_frame", || {
         black_box(render.render_block(256));
     });
+    render.enable_stopped_monitoring();
+    let monitored = render.render_monitoring_block(1, [0.25, -0.125]);
+    assert!(monitored[0] > 0.1 && monitored[1] < -0.05);
+    assert_no_thread_allocations("stopped software monitoring render", || {
+        black_box(render.render_monitoring_block(256, black_box([0.25, -0.125])));
+    });
 
     let mut adapters = PluginAdapterHarness::new();
     let _ = adapters.render_frame([0.25, -0.125]);

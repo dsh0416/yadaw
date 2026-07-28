@@ -71,7 +71,10 @@ function macApplicationMenu(): MenuItemConstructorOptions[] {
     { role: "windowMenu" },
     {
       role: "help",
-      submenu: [commandItem("Audio Performance Benchmark…", "help.audio-benchmark")]
+      submenu: [
+        commandItem("Audio Performance Benchmark…", "help.audio-benchmark"),
+        commandItem("Effect Chain Graph…", "help.effect-chain-graph")
+      ]
     }
   ]
 }

@@ -64,6 +64,13 @@
       "when": 1785162651055,
       "tag": "0008_outgoing_tarantula",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1785206707397,
+      "tag": "0009_outstanding_killmonger",
+      "breakpoints": true
     }
   ]
 }

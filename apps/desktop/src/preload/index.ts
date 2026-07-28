@@ -52,6 +52,7 @@ const api: YadawDesktopApi = {
   },
   systemPerformanceSnapshot: () => ipcRenderer.invoke(IPC_CHANNELS.systemPerformanceSnapshot),
   runAudioBenchmark: () => ipcRenderer.invoke(IPC_CHANNELS.audioBenchmarkRun),
+  compiledAudioGraphSnapshot: () => ipcRenderer.invoke(IPC_CHANNELS.compiledAudioGraphSnapshot),
   subscribeApplicationCommands: (listener) => {
     const handler = (_event: Electron.IpcRendererEvent, command: Parameters<typeof listener>[0]) =>
       listener(command)
@@ -76,6 +77,8 @@ const api: YadawDesktopApi = {
   getApplicationSettings: () => ipcRenderer.invoke(IPC_CHANNELS.settingsGet),
   updateApplicationSettings: (patch: ApplicationSettingsPatch) =>
     ipcRenderer.invoke(IPC_CHANNELS.settingsUpdate, patch),
+  setSoftwareMonitoringEnabled: (enabled: boolean) =>
+    ipcRenderer.invoke(IPC_CHANNELS.settingsSetSoftwareMonitoring, enabled),
   configureAudioHostRuntime: (preferences: AudioHostRuntimePreferences) =>
     ipcRenderer.invoke(IPC_CHANNELS.settingsConfigureAudioHostRuntime, preferences),
   chooseSwapDirectory: () => ipcRenderer.invoke(IPC_CHANNELS.settingsChooseSwap),

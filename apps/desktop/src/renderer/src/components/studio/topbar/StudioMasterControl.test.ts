@@ -17,6 +17,7 @@ const channel = {
   soloed: false,
   outputChannelId: null,
   recordArmed: false,
+  inputMonitoring: false,
   inputChannels: [],
   hardwareOutputChannels: []
 }

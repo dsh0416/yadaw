@@ -108,6 +108,13 @@ const maximumPeakState = computed(() => ({
   hot: meterDisplay.latchedPeakDb.value >= -6,
   clipped: meterDisplay.clipped.value
 }))
+const monitoringAvailable = computed(
+  () =>
+    settings.value?.softwareMonitoringEnabled === true &&
+    props.channel.kind === "audio" &&
+    props.channel.inputSource === "hardware"
+)
+const monitoringActive = computed(() => monitoringAvailable.value && props.channel.inputMonitoring)
 const meterStyle = computed(() => ({
   "--meter-level": `${meterDisplay.meterLevelPercent.value}%`,
   "--held-meter-level": `${meterDisplay.heldMeterLevelPercent.value}%`
@@ -401,11 +408,20 @@ function handleFaderKeydown(event: KeyboardEvent): void {
               R
             </button>
             <button
-              class="monitor"
-              aria-label="Input monitoring unavailable"
-              aria-disabled="true"
-              title="Input monitoring is not available yet"
-              disabled
+              :class="['monitor', { active: monitoringActive }]"
+              :aria-label="`Monitor ${channel.name}`"
+              :aria-pressed="channel.inputMonitoring"
+              :title="
+                monitoringAvailable
+                  ? 'Input monitoring'
+                  : 'Enable software monitoring and select a hardware input first'
+              "
+              :disabled="!monitoringAvailable"
+              @click.stop="
+                emit('updateChannel', channel.id, {
+                  inputMonitoring: !channel.inputMonitoring
+                })
+              "
             >
               I
             </button>
@@ -923,6 +939,15 @@ function handleFaderKeydown(event: KeyboardEvent): void {
   box-shadow:
     0 0 8px color-mix(in srgb, var(--mixer-record) 46%, transparent),
     0 1px 0 var(--ui-domain-color-ffffff40) inset;
+}
+
+.channel-actions .monitor.active {
+  border-color: color-mix(in srgb, var(--mixer-input) 72%, white);
+  color: var(--ui-domain-color-221c08);
+  background: var(--mixer-input);
+  box-shadow:
+    0 0 8px color-mix(in srgb, var(--mixer-input) 44%, transparent),
+    0 1px 0 var(--ui-domain-color-ffffff5c) inset;
 }
 
 .channel-actions .monitor:disabled {

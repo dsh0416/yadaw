@@ -208,6 +208,7 @@ pub enum ControlCommand {
         preview: MixerParameterPreview,
     },
     MixerSnapshot,
+    CompiledGraphSnapshot,
     ClearMeterClips,
     Transport {
         command: TransportControl,
@@ -326,6 +327,8 @@ pub struct LiveMixerChannel {
     pub output_channel_id: Option<String>,
     pub output_bus: Option<u32>,
     pub record_armed: bool,
+    #[serde(default)]
+    pub input_monitoring: bool,
     pub input_source: Option<String>,
     pub input_channels: Vec<u32>,
     pub hardware_output_channels: Vec<u32>,
@@ -583,6 +586,76 @@ pub struct MixerChannelMeter {
     pub clipped: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum CompiledGraphSignalWidth {
+    Mono,
+    Stereo,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum CompiledGraphPluginState {
+    Active,
+    Bypassed,
+    Unavailable,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum CompiledGraphNodeKind {
+    HardwareInput,
+    BusInput,
+    TimelineInput,
+    InstrumentInput,
+    Channel,
+    Effect,
+    Send,
+    Master,
+    HardwareOutput,
+    WidthAdapter,
+    PdcDelay,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum CompiledGraphEdgeKind {
+    Signal,
+    MainRoute,
+    SendRoute,
+    HardwareRoute,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CompiledGraphNode {
+    pub id: String,
+    pub kind: CompiledGraphNodeKind,
+    pub label: String,
+    pub channel_id: Option<String>,
+    pub plugin_instance_id: Option<String>,
+    pub signal_width: CompiledGraphSignalWidth,
+    pub latency_samples: u32,
+    pub plugin_state: Option<CompiledGraphPluginState>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CompiledGraphEdge {
+    pub id: String,
+    pub source: String,
+    pub target: String,
+    pub kind: CompiledGraphEdgeKind,
+    pub signal_width: CompiledGraphSignalWidth,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CompiledAudioGraphSnapshot {
+    pub graph_revision: u64,
+    pub build_generation: u64,
+    pub sample_rate: u32,
+    pub nodes: Vec<CompiledGraphNode>,
+    pub edges: Vec<CompiledGraphEdge>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TransportControl {
     pub kind: String,
@@ -698,6 +771,9 @@ pub enum ControlResult {
     },
     MixerSnapshot {
         meters: Vec<MixerChannelMeter>,
+    },
+    CompiledGraphSnapshot {
+        snapshot: Option<CompiledAudioGraphSnapshot>,
     },
     TransportSnapshot {
         transport: TransportState,
@@ -882,6 +958,7 @@ mod tests {
             output_channel_id: None,
             output_bus: None,
             record_armed: false,
+            input_monitoring: false,
             input_source: None,
             input_channels: vec![],
             hardware_output_channels: vec![0, 1],
@@ -914,6 +991,7 @@ mod tests {
             output_channel_id: Some("output".into()),
             output_bus: None,
             record_armed: false,
+            input_monitoring: false,
             input_source: Some("hardware".into()),
             input_channels: vec![],
             hardware_output_channels: vec![],

@@ -52,6 +52,7 @@ but product behavior should normally be exercised through the UI.
 | Mixer graph and history                            | `mixer`               | FIFO committed mutations; coalesced previews        | rollback/reload before next mutation        |
 | Transport                                          | `transport`           | FIFO state commands; coalesced seek; latest polling | ignore stale snapshots                      |
 | Recording and recovery                             | `recording`           | exclusive lifecycle                                 | return to idle and retain recoverable media |
+| Compiled effect-graph diagnostics                  | `compiledEffectGraph` | latest-wins one-hertz polling while dialog is open  | explicit empty/error state; manual retry    |
 | Cross-domain studio operations                     | `studioWorkflow`      | explicit awaited sequence                           | stop at the first failed guard/action       |
 | Waveforms                                          | `waveform`            | cached/latest request generation                    | stale results are discarded                 |
 | Settings                                           | `applicationSettings` | ordinary patches; exclusive helper restart          | persist only after restart; rollback config |
@@ -116,6 +117,22 @@ settings patch API. The `applicationSettings` store owns its loading/error
 state; main owns the recording/recovery guard and the complete helper
 restart/restore/rollback transaction. The new settings file is written only
 after the replacement helper has published the restored graph.
+
+`setSoftwareMonitoringEnabled` is also a named transaction rather than a
+generic settings patch. Main rejects it during recording, helper
+reconfiguration, or another exclusive operation. With an open project it
+serially recompiles and waits for block-boundary publication before persisting
+the setting; a persistence failure republishes the prior graph. Without an open
+project it only persists the setting. The project-owned `inputMonitoring`
+selection is not cleared when the global setting is disabled.
+
+`compiledAudioGraphSnapshot` is read-only and low frequency. The helper assigns
+an independent build generation to each successful compilation and stores an
+immutable typed snapshot off the real-time path. The callback publishes the
+build generation atomically with the graph swap; a query resolves that
+published generation and therefore never returns a queued graph. The renderer
+store polls only while its Help dialog is open, suppresses stale results, and
+distinguishes no project/no published graph from helper failure.
 
 Plug-in editor preferences follow a similarly narrow path. Renderer code only
 calls `openPluginEditor(instanceId)` through the plug-in Pinia store. Electron

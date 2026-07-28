@@ -15,6 +15,7 @@ export const useApplicationSettingsStore = defineStore("application-settings", (
   const loading = shallowRef(false)
   const error = shallowRef("")
   const applyingAudioRuntime = shallowRef(false)
+  const applyingSoftwareMonitoring = shallowRef(false)
   const resolvedAudioHostRuntime = shallowRef<ResolvedAudioHostRuntimePreferences | null>(null)
   let loadPromise: Promise<void> | null = null
 
@@ -106,6 +107,27 @@ export const useApplicationSettingsStore = defineStore("application-settings", (
     }
   }
 
+  async function setSoftwareMonitoringEnabled(enabled: boolean): Promise<void> {
+    if (applyingSoftwareMonitoring.value) return
+    if (!settings.value) await load()
+    if (!settings.value || settings.value.softwareMonitoringEnabled === enabled) return
+
+    const previous = settings.value
+    settings.value = { ...previous, softwareMonitoringEnabled: enabled }
+    applyingSoftwareMonitoring.value = true
+    error.value = ""
+    try {
+      settings.value = await window.yadaw.setSoftwareMonitoringEnabled(enabled)
+    } catch (reason) {
+      settings.value = previous
+      error.value =
+        reason instanceof Error ? reason.message : "Unable to change software monitoring."
+      throw reason
+    } finally {
+      applyingSoftwareMonitoring.value = false
+    }
+  }
+
   async function refreshAudioHostRuntimeDiagnostics(): Promise<void> {
     const snapshot = await window.yadaw.systemPerformanceSnapshot()
     resolvedAudioHostRuntime.value = snapshot.audioIpc?.runtime.resolved ?? null
@@ -116,6 +138,7 @@ export const useApplicationSettingsStore = defineStore("application-settings", (
     loading,
     error,
     applyingAudioRuntime,
+    applyingSoftwareMonitoring,
     resolvedAudioHostRuntime,
     load,
     update,
@@ -125,6 +148,7 @@ export const useApplicationSettingsStore = defineStore("application-settings", (
     chooseSwapDirectory,
     openSwapDirectory,
     configureAudioHostRuntime,
+    setSoftwareMonitoringEnabled,
     refreshAudioHostRuntimeDiagnostics
   }
 })

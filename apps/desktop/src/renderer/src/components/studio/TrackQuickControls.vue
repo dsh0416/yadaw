@@ -7,6 +7,9 @@ import type {
 } from "@yadaw/contracts"
 import TrackGainControl from "./TrackGainControl.vue"
 import TrackPanControl from "./TrackPanControl.vue"
+import { computed } from "vue"
+import { storeToRefs } from "pinia"
+import { useApplicationSettingsStore } from "../../stores/applicationSettings"
 
 const props = defineProps<{
   channel: MixerChannelState
@@ -17,6 +20,16 @@ const emit = defineEmits<{
   preview: [preview: MixerParameterPreview]
   updateChannel: [channelId: string, patch: MixerChannelPatch]
 }>()
+
+const settingsStore = useApplicationSettingsStore()
+const { settings } = storeToRefs(settingsStore)
+const monitoringAvailable = computed(
+  () =>
+    settings.value?.softwareMonitoringEnabled === true &&
+    props.channel.kind === "audio" &&
+    props.channel.inputSource === "hardware"
+)
+const monitoringActive = computed(() => monitoringAvailable.value && props.channel.inputMonitoring)
 
 function preview(parameter: "gainDb" | "pan", value: number): void {
   emit("preview", {
@@ -58,12 +71,16 @@ function preview(parameter: "gainDb" | "pan", value: number): void {
       R
     </button>
     <button
-      class="monitor"
-      aria-label="Input monitoring unavailable"
-      aria-disabled="true"
-      title="Input monitoring is not available yet"
-      disabled
-      @click.stop
+      :class="['monitor', { active: monitoringActive }]"
+      :aria-label="`Monitor ${channel.name}`"
+      :aria-pressed="channel.inputMonitoring"
+      :title="
+        monitoringAvailable
+          ? 'Input monitoring'
+          : 'Enable software monitoring and select a hardware input first'
+      "
+      :disabled="!monitoringAvailable"
+      @click.stop="emit('updateChannel', channel.id, { inputMonitoring: !channel.inputMonitoring })"
     >
       I
     </button>
@@ -141,6 +158,12 @@ function preview(parameter: "gainDb" | "pan", value: number): void {
   border-color: color-mix(in srgb, var(--mixer-record) 72%, white);
   color: var(--ui-domain-color-fff);
   background: var(--mixer-record);
+}
+
+.track-quick-controls .monitor.active {
+  border-color: color-mix(in srgb, var(--mixer-input) 72%, white);
+  color: var(--ui-domain-color-221c08);
+  background: var(--mixer-input);
 }
 
 .track-quick-controls .monitor:disabled {

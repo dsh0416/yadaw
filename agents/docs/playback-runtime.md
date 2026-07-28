@@ -323,6 +323,16 @@ being published. Plugin instance IDs are stable across generations, so graph
 changes do not unnecessarily destroy processors, controller state, or editor
 windows.
 
+The user-facing compiled-graph diagnostic uses a separate monotonic
+`buildGeneration`, because one project `graphRevision` can be rebuilt after a
+dynamic plug-in latency change or a software-monitoring setting change. The
+worker creates an immutable typed snapshot with sources, channel/effect/Send
+processing, width adapters, PDC and bypass compensation, Master/output sinks,
+signal widths, and routing edges. The callback publishes that build number
+beside the graph revision at the swap boundary. Control-side lookup keys the
+snapshot by the published build number and never returns the newer queued
+candidate.
+
 The graph worker receives immutable build data and must not call a VST3
 controller, access winit, start a device, or mutate the active graph. It
 preallocates all callback data, including:

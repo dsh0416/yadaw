@@ -59,6 +59,7 @@ describe("ArrangementWorkspace", () => {
           soloed: false,
           outputChannelId: "output",
           recordArmed: false,
+          inputMonitoring: false,
           inputChannels: [1, 2],
           hardwareOutputChannels: []
         },
@@ -77,6 +78,7 @@ describe("ArrangementWorkspace", () => {
           soloed: false,
           outputChannelId: "output",
           recordArmed: false,
+          inputMonitoring: false,
           inputChannels: [1],
           hardwareOutputChannels: []
         },
@@ -95,6 +97,7 @@ describe("ArrangementWorkspace", () => {
           soloed: false,
           outputChannelId: null,
           recordArmed: false,
+          inputMonitoring: false,
           inputChannels: [],
           hardwareOutputChannels: []
         },
@@ -113,6 +116,7 @@ describe("ArrangementWorkspace", () => {
           soloed: false,
           outputChannelId: null,
           recordArmed: false,
+          inputMonitoring: false,
           inputChannels: [],
           hardwareOutputChannels: [1, 2]
         }
@@ -317,6 +321,7 @@ describe("ArrangementWorkspace", () => {
           soloed: false,
           outputChannelId: "output",
           recordArmed: true,
+          inputMonitoring: false,
           inputChannels: [1, 2],
           hardwareOutputChannels: []
         },
@@ -335,6 +340,7 @@ describe("ArrangementWorkspace", () => {
           soloed: false,
           outputChannelId: null,
           recordArmed: false,
+          inputMonitoring: false,
           inputChannels: [],
           hardwareOutputChannels: []
         },
@@ -353,6 +359,7 @@ describe("ArrangementWorkspace", () => {
           soloed: false,
           outputChannelId: null,
           recordArmed: false,
+          inputMonitoring: false,
           inputChannels: [],
           hardwareOutputChannels: [1, 2]
         }
@@ -405,6 +412,7 @@ describe("ArrangementWorkspace", () => {
         soloed: false,
         outputChannelId: "output",
         recordArmed: false,
+        inputMonitoring: false,
         inputChannels: [1, 2],
         hardwareOutputChannels: []
       })),
@@ -423,6 +431,7 @@ describe("ArrangementWorkspace", () => {
         soloed: false,
         outputChannelId: null,
         recordArmed: false,
+        inputMonitoring: false,
         inputChannels: [],
         hardwareOutputChannels: []
       },
@@ -441,6 +450,7 @@ describe("ArrangementWorkspace", () => {
         soloed: false,
         outputChannelId: null,
         recordArmed: false,
+        inputMonitoring: false,
         inputChannels: [],
         hardwareOutputChannels: [1, 2]
       }

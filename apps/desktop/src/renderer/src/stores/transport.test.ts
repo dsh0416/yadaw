@@ -107,6 +107,7 @@ describe("transport store", () => {
           soloed: false,
           outputChannelId: "output",
           recordArmed: false,
+          inputMonitoring: false,
           inputChannels: [],
           hardwareOutputChannels: []
         }

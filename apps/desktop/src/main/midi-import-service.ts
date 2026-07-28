@@ -158,6 +158,7 @@ export class MidiImportService {
           outputChannelId: defaultOutput.id,
           outputBus: null,
           recordArmed: false,
+          inputMonitoring: false,
           inputChannels: [],
           hardwareOutputChannels: []
         }

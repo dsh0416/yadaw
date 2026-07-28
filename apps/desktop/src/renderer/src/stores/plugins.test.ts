@@ -50,6 +50,7 @@ function graph(): MixerGraphSnapshot {
         soloed: false,
         outputChannelId: "output",
         recordArmed: false,
+        inputMonitoring: false,
         inputChannels: [1, 2],
         hardwareOutputChannels: []
       },
@@ -68,6 +69,7 @@ function graph(): MixerGraphSnapshot {
         soloed: false,
         outputChannelId: "output",
         recordArmed: false,
+        inputMonitoring: false,
         inputChannels: [],
         hardwareOutputChannels: []
       },
@@ -86,6 +88,7 @@ function graph(): MixerGraphSnapshot {
         soloed: false,
         outputChannelId: null,
         recordArmed: false,
+        inputMonitoring: false,
         inputChannels: [],
         hardwareOutputChannels: [1, 2]
       }

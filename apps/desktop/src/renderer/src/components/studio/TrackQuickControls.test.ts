@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { mount } from "@vue/test-utils"
+import { createPinia } from "pinia"
 import type { MixerChannelState } from "@yadaw/contracts"
 import TrackQuickControls from "./TrackQuickControls.vue"
 
@@ -18,6 +19,7 @@ const channel: MixerChannelState = {
   soloed: false,
   outputChannelId: "output",
   recordArmed: false,
+  inputMonitoring: false,
   inputChannels: [1],
   hardwareOutputChannels: []
 }
@@ -34,7 +36,8 @@ describe("TrackQuickControls", () => {
           heldPeak: [0.5, 0.5],
           clipped: false
         }
-      }
+      },
+      global: { plugins: [createPinia()] }
     })
 
     await wrapper.get('button[aria-label="Mute Vocal"]').trigger("click")
@@ -43,9 +46,7 @@ describe("TrackQuickControls", () => {
     expect(wrapper.emitted("updateChannel")?.at(-1)).toEqual(["audio", { soloed: true }])
     await wrapper.get('button[aria-label="Arm Vocal"]').trigger("click")
     expect(wrapper.emitted("updateChannel")?.at(-1)).toEqual(["audio", { recordArmed: true }])
-    expect(
-      wrapper.get('button[aria-label="Input monitoring unavailable"]').attributes("disabled")
-    ).toBeDefined()
+    expect(wrapper.get('button[aria-label="Monitor Vocal"]').attributes("disabled")).toBeDefined()
 
     const gain = wrapper.get('input[aria-label="Vocal quick volume"]')
     await gain.trigger("pointerdown")

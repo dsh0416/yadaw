@@ -18,6 +18,7 @@ const channel: MixerChannelState = {
   soloed: false,
   outputChannelId: "output",
   recordArmed: false,
+  inputMonitoring: false,
   inputChannels: [1, 2],
   hardwareOutputChannels: []
 }

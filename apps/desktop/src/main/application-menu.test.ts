@@ -29,7 +29,7 @@ import { installApplicationMenu } from "./application-menu"
 describe("installApplicationMenu", () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it("installs the macOS menu with preferences, project settings, and benchmark commands", () => {
+  it("installs the macOS menu with preferences, project settings, and Help diagnostics", () => {
     installApplicationMenu("darwin")
 
     const template = electron.buildFromTemplate.mock.calls[0]?.[0]
@@ -45,10 +45,14 @@ describe("installApplicationMenu", () => {
     const benchmark = help?.submenu?.find(
       (item: { label?: string }) => item.label === "Audio Performance Benchmark…"
     )
+    const effectGraph = help?.submenu?.find(
+      (item: { label?: string }) => item.label === "Effect Chain Graph…"
+    )
 
     preferences?.click()
     projectSettings?.click()
     benchmark?.click()
+    effectGraph?.click()
 
     expect(electron.send).toHaveBeenNthCalledWith(
       1,
@@ -65,7 +69,13 @@ describe("installApplicationMenu", () => {
       IPC_CHANNELS.applicationCommandRequested,
       "help.audio-benchmark"
     )
+    expect(electron.send).toHaveBeenNthCalledWith(
+      4,
+      IPC_CHANNELS.applicationCommandRequested,
+      "help.effect-chain-graph"
+    )
     expect(benchmark).toBeDefined()
+    expect(effectGraph).toBeDefined()
     expect(electron.setApplicationMenu).toHaveBeenCalledOnce()
   })
 
