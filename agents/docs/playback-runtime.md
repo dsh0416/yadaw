@@ -314,6 +314,15 @@ advance only by session frames rendered, not by native output frame count.
 separate diagnostic reports session/output conversion. Both converter delays
 are included in engine and estimated round-trip latency.
 
+Physical loopback measurement is a separate, user-triggered callback state
+machine. It runs only while transport is stopped, validates 50 ms of quiet input,
+silences the selected output to break any monitoring feedback route, emits a
+fixed 13-sample matched probe, and correlates the selected input for up to three
+seconds. Configuration and results cross the actor boundary; the callbacks only
+read/write atomics and fixed arrays. The virtual backend feeds the selected
+output into the selected input one block later for deterministic integration and
+desktop e2e coverage.
+
 Normal shutdown stops new ingress, signals the async outbound actor, drains
 queued responses and ordered events, waits for blocking sends, releases arena
 mappings, then closes VST3/UI and joins the runtime. The addon waits up to two

@@ -6,8 +6,7 @@ const versionFilePath = join(workspaceRoot, "VERSION")
 const cargoTomlPath = join(workspaceRoot, "Cargo.toml")
 const packageGlobs = ["apps", "packages", "crates"] as const
 const semverPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/
-const workspacePackageSection =
-  /\[workspace\.package\][^\n]*\n([\s\S]*?)(?=\n\[|\s*$)/
+const workspacePackageSection = /\[workspace\.package\][^\n]*\n([\s\S]*?)(?=\n\[|\s*$)/
 const workspacePackageVersion = /^\s*version\s*=\s*"([^"]+)"/m
 const packageJsonVersion = /^(\s*"version"\s*:\s*")([^"]+)(")/m
 
@@ -89,9 +88,8 @@ function writeCargoWorkspaceVersion(version: string): void {
     fail(`Missing [workspace.package].version in Cargo.toml`)
   }
 
-  const updatedSection = sectionMatch[0].replace(
-    workspacePackageVersion,
-    (line, current: string) => line.replace(`"${current}"`, `"${version}"`)
+  const updatedSection = sectionMatch[0].replace(workspacePackageVersion, (line, current: string) =>
+    line.replace(`"${current}"`, `"${version}"`)
   )
   const updated =
     source.slice(0, sectionMatch.index) +
@@ -104,9 +102,7 @@ function writeCargoWorkspaceVersion(version: string): void {
 function collectTargets(): Target[] {
   const packagePaths = [
     join(workspaceRoot, "package.json"),
-    ...packageGlobs.flatMap((directory) =>
-      collectPackageManifests(join(workspaceRoot, directory))
-    ),
+    ...packageGlobs.flatMap((directory) => collectPackageManifests(join(workspaceRoot, directory)))
   ]
 
   return [
@@ -114,14 +110,14 @@ function collectTargets(): Target[] {
       label: "Cargo.toml [workspace.package].version",
       path: cargoTomlPath,
       read: readCargoWorkspaceVersion,
-      write: writeCargoWorkspaceVersion,
+      write: writeCargoWorkspaceVersion
     },
     ...packagePaths.map((path) => ({
       label: relative(workspaceRoot, path).replaceAll("\\", "/"),
       path,
       read: () => readPackageJsonVersion(path),
-      write: (version: string) => writePackageJsonVersion(path, version),
-    })),
+      write: (version: string) => writePackageJsonVersion(path, version)
+    }))
   ]
 }
 
@@ -141,7 +137,7 @@ function checkVersions(expected: string): void {
         `Version mismatch against VERSION (${expected}):`,
         ...mismatches,
         "",
-        "Run `pnpm sync:version` to update all package manifests.",
+        "Run `pnpm sync:version` to update all package manifests."
       ].join("\n")
     )
   }
@@ -176,5 +172,5 @@ if (command === "check") {
 } else if (command === "sync") {
   syncVersions(expected)
 } else {
-  fail('Usage: node scripts/version.ts <check|sync>')
+  fail("Usage: node scripts/version.ts <check|sync>")
 }

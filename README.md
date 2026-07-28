@@ -72,6 +72,7 @@ mise run dev
 
 Contributor-facing details live outside this README:
 
+- [Contributing guide](CONTRIBUTING.md)
 - [Development environment](agents/docs/environment.md)
 - [Architecture and real-time constraints](docs/architecture.md)
 - [Product roadmap](docs/roadmap.md)

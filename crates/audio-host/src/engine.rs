@@ -7,7 +7,7 @@ use std::{
         mpsc,
     },
     thread::{self, JoinHandle},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use bwavfile::WaveReader;
@@ -68,6 +68,22 @@ const METRONOME_NOTE_ID: i32 = -1;
 const METRONOME_NOTE_LENGTH_MS: u64 = 20;
 const INPUT_RESAMPLER_OUTPUT_FRAMES: usize = 256;
 const OUTPUT_RESAMPLER_FRAMES: usize = 256;
+const LOOPBACK_MEASUREMENT_IDLE: u32 = 0;
+const LOOPBACK_MEASUREMENT_PREPARING: u32 = 1;
+const LOOPBACK_MEASUREMENT_READY: u32 = 2;
+const LOOPBACK_MEASUREMENT_RUNNING: u32 = 3;
+const LOOPBACK_MEASUREMENT_COMPLETE: u32 = 4;
+const LOOPBACK_MEASUREMENT_INPUT_TOO_LOUD: u32 = 5;
+const LOOPBACK_MEASUREMENT_SIGNAL_NOT_DETECTED: u32 = 6;
+const LOOPBACK_MEASUREMENT_TIMEOUT_NS: u64 = 3_000_000_000;
+const LOOPBACK_QUIET_DURATION_MS: u64 = 50;
+const LOOPBACK_QUIET_THRESHOLD: f32 = 0.03;
+const LOOPBACK_PROBE_AMPLITUDE: f32 = 0.25;
+const LOOPBACK_CORRELATION_THRESHOLD: f32 = 0.82;
+const LOOPBACK_MINIMUM_SIGNAL_ENERGY: f32 = 0.02;
+const LOOPBACK_PROBE: [f32; 13] = [
+    1.0, 1.0, 1.0, 1.0, 1.0, -1.0, -1.0, 1.0, 1.0, -1.0, 1.0, -1.0, 1.0,
+];
 type InputFrame = [f32; MAX_INPUT_CHANNELS];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -110,6 +126,19 @@ pub struct NativeAudioRuntimeSnapshot {
     pub xruns: u32,
     pub clock_sync: String,
     pub buffer_fallback: bool,
+}
+
+pub struct NativeRoundTripLatencyMeasurementRequest {
+    pub input_channel: u32,
+    pub output_channel: u32,
+}
+
+pub struct NativeRoundTripLatencyMeasurementSnapshot {
+    pub status: String,
+    pub input_channel: Option<u32>,
+    pub output_channel: Option<u32>,
+    pub measured_round_trip_latency_ms: Option<f64>,
+    pub failure: Option<String>,
 }
 
 #[derive(Clone)]
@@ -861,6 +890,303 @@ enum EngineCommand {
     ClearMeterClips,
 }
 
+struct RoundTripLatencyMeasurement {
+    clock_origin: Instant,
+    state: AtomicU32,
+    generation: AtomicU64,
+    input_channel: AtomicU32,
+    output_channel: AtomicU32,
+    started_at_ns: AtomicU64,
+    emitted_at_ns: AtomicU64,
+    latency_ns: AtomicU64,
+    input_channels: u32,
+    output_channels: u32,
+    input_sample_rate: u32,
+}
+
+impl RoundTripLatencyMeasurement {
+    fn new(input_channels: u32, output_channels: u32, input_sample_rate: u32) -> Self {
+        Self {
+            clock_origin: Instant::now(),
+            state: AtomicU32::new(LOOPBACK_MEASUREMENT_IDLE),
+            generation: AtomicU64::new(0),
+            input_channel: AtomicU32::new(0),
+            output_channel: AtomicU32::new(0),
+            started_at_ns: AtomicU64::new(0),
+            emitted_at_ns: AtomicU64::new(0),
+            latency_ns: AtomicU64::new(0),
+            input_channels,
+            output_channels,
+            input_sample_rate,
+        }
+    }
+
+    fn now_ns(&self) -> u64 {
+        self.clock_origin
+            .elapsed()
+            .as_nanos()
+            .min(u128::from(u64::MAX)) as u64
+    }
+
+    fn start(&self, request: NativeRoundTripLatencyMeasurementRequest) -> Result<()> {
+        if request.input_channel == 0 || request.input_channel > self.input_channels {
+            return Err(invalid_config(format!(
+                "loopback input channel must be between 1 and {}",
+                self.input_channels
+            )));
+        }
+        if request.output_channel == 0 || request.output_channel > self.output_channels {
+            return Err(invalid_config(format!(
+                "loopback output channel must be between 1 and {}",
+                self.output_channels
+            )));
+        }
+        if matches!(
+            self.state.load(Ordering::Acquire),
+            LOOPBACK_MEASUREMENT_PREPARING
+                | LOOPBACK_MEASUREMENT_READY
+                | LOOPBACK_MEASUREMENT_RUNNING
+        ) {
+            return Err(invalid_config(
+                "a round-trip latency measurement is already running",
+            ));
+        }
+
+        self.input_channel
+            .store(request.input_channel - 1, Ordering::Relaxed);
+        self.output_channel
+            .store(request.output_channel - 1, Ordering::Relaxed);
+        self.started_at_ns.store(self.now_ns(), Ordering::Relaxed);
+        self.emitted_at_ns.store(0, Ordering::Relaxed);
+        self.latency_ns.store(0, Ordering::Relaxed);
+        self.generation.fetch_add(1, Ordering::AcqRel);
+        self.state
+            .store(LOOPBACK_MEASUREMENT_PREPARING, Ordering::Release);
+        Ok(())
+    }
+
+    fn expire_if_needed(&self, now_ns: u64) {
+        let state = self.state.load(Ordering::Acquire);
+        if !matches!(
+            state,
+            LOOPBACK_MEASUREMENT_PREPARING
+                | LOOPBACK_MEASUREMENT_READY
+                | LOOPBACK_MEASUREMENT_RUNNING
+        ) {
+            return;
+        }
+        let started_at = self.started_at_ns.load(Ordering::Relaxed);
+        if now_ns.saturating_sub(started_at) >= LOOPBACK_MEASUREMENT_TIMEOUT_NS {
+            let _ = self.state.compare_exchange(
+                state,
+                LOOPBACK_MEASUREMENT_SIGNAL_NOT_DETECTED,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            );
+        }
+    }
+
+    fn snapshot(&self) -> NativeRoundTripLatencyMeasurementSnapshot {
+        self.expire_if_needed(self.now_ns());
+        let state = self.state.load(Ordering::Acquire);
+        let has_selection = state != LOOPBACK_MEASUREMENT_IDLE;
+        let latency_ns = self.latency_ns.load(Ordering::Acquire);
+        NativeRoundTripLatencyMeasurementSnapshot {
+            status: match state {
+                LOOPBACK_MEASUREMENT_PREPARING | LOOPBACK_MEASUREMENT_READY => "preparing",
+                LOOPBACK_MEASUREMENT_RUNNING => "measuring",
+                LOOPBACK_MEASUREMENT_COMPLETE => "complete",
+                LOOPBACK_MEASUREMENT_INPUT_TOO_LOUD | LOOPBACK_MEASUREMENT_SIGNAL_NOT_DETECTED => {
+                    "failed"
+                }
+                _ => "idle",
+            }
+            .to_owned(),
+            input_channel: has_selection.then(|| self.input_channel.load(Ordering::Relaxed) + 1),
+            output_channel: has_selection.then(|| self.output_channel.load(Ordering::Relaxed) + 1),
+            measured_round_trip_latency_ms: (state == LOOPBACK_MEASUREMENT_COMPLETE)
+                .then_some(latency_ns as f64 / 1_000_000.0),
+            failure: match state {
+                LOOPBACK_MEASUREMENT_INPUT_TOO_LOUD => Some("input-too-loud".to_owned()),
+                LOOPBACK_MEASUREMENT_SIGNAL_NOT_DETECTED => Some("signal-not-detected".to_owned()),
+                _ => None,
+            },
+        }
+    }
+}
+
+struct RoundTripInputDetector {
+    shared: Arc<RoundTripLatencyMeasurement>,
+    generation: u64,
+    quiet_frames: u32,
+    quiet_peak: f32,
+    history: [f32; LOOPBACK_PROBE.len()],
+    history_length: usize,
+}
+
+impl RoundTripInputDetector {
+    fn new(shared: Arc<RoundTripLatencyMeasurement>) -> Self {
+        Self {
+            shared,
+            generation: 0,
+            quiet_frames: 0,
+            quiet_peak: 0.0,
+            history: [0.0; LOOPBACK_PROBE.len()],
+            history_length: 0,
+        }
+    }
+
+    fn reset_for_generation(&mut self, generation: u64) {
+        self.generation = generation;
+        self.quiet_frames = 0;
+        self.quiet_peak = 0.0;
+        self.history.fill(0.0);
+        self.history_length = 0;
+    }
+
+    fn observe(&mut self, frame: &[f32], frame_time_ns: u64) {
+        let generation = self.shared.generation.load(Ordering::Acquire);
+        if generation != self.generation {
+            self.reset_for_generation(generation);
+        }
+        self.shared.expire_if_needed(frame_time_ns);
+        let state = self.shared.state.load(Ordering::Acquire);
+        let input_channel = self.shared.input_channel.load(Ordering::Relaxed) as usize;
+        let sample = frame.get(input_channel).copied().unwrap_or(0.0);
+
+        if state == LOOPBACK_MEASUREMENT_PREPARING {
+            self.quiet_frames = self.quiet_frames.saturating_add(1);
+            self.quiet_peak = self.quiet_peak.max(sample.abs());
+            let required_frames = u64::from(self.shared.input_sample_rate)
+                .saturating_mul(LOOPBACK_QUIET_DURATION_MS)
+                / 1_000;
+            if u64::from(self.quiet_frames) >= required_frames {
+                let next_state = if self.quiet_peak <= LOOPBACK_QUIET_THRESHOLD {
+                    LOOPBACK_MEASUREMENT_READY
+                } else {
+                    LOOPBACK_MEASUREMENT_INPUT_TOO_LOUD
+                };
+                let _ = self.shared.state.compare_exchange(
+                    LOOPBACK_MEASUREMENT_PREPARING,
+                    next_state,
+                    Ordering::AcqRel,
+                    Ordering::Acquire,
+                );
+            }
+            return;
+        }
+        if state != LOOPBACK_MEASUREMENT_RUNNING {
+            return;
+        }
+
+        self.history.copy_within(1.., 0);
+        self.history[LOOPBACK_PROBE.len() - 1] = sample;
+        self.history_length = (self.history_length + 1).min(LOOPBACK_PROBE.len());
+        if self.history_length < LOOPBACK_PROBE.len() {
+            return;
+        }
+
+        let mut dot = 0.0_f32;
+        let mut energy = 0.0_f32;
+        for (captured, expected) in self.history.iter().zip(LOOPBACK_PROBE) {
+            dot += captured * expected;
+            energy += captured * captured;
+        }
+        if energy < LOOPBACK_MINIMUM_SIGNAL_ENERGY {
+            return;
+        }
+        let probe_energy = LOOPBACK_PROBE.len() as f32;
+        let correlation = dot.abs() / (energy * probe_energy).sqrt();
+        if correlation < LOOPBACK_CORRELATION_THRESHOLD {
+            return;
+        }
+
+        let probe_duration_ns = frames_to_nanos(
+            LOOPBACK_PROBE.len().saturating_sub(1),
+            self.shared.input_sample_rate,
+        );
+        let detected_at_ns = frame_time_ns.saturating_sub(probe_duration_ns);
+        let emitted_at_ns = self.shared.emitted_at_ns.load(Ordering::Acquire);
+        if detected_at_ns <= emitted_at_ns {
+            return;
+        }
+        self.shared
+            .latency_ns
+            .store(detected_at_ns - emitted_at_ns, Ordering::Release);
+        let _ = self.shared.state.compare_exchange(
+            LOOPBACK_MEASUREMENT_RUNNING,
+            LOOPBACK_MEASUREMENT_COMPLETE,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        );
+    }
+}
+
+struct RoundTripOutputProbe {
+    shared: Arc<RoundTripLatencyMeasurement>,
+    generation: u64,
+    cursor: usize,
+}
+
+impl RoundTripOutputProbe {
+    fn new(shared: Arc<RoundTripLatencyMeasurement>) -> Self {
+        Self {
+            shared,
+            generation: 0,
+            cursor: LOOPBACK_PROBE.len(),
+        }
+    }
+
+    fn apply(&mut self, frame: &mut [f32], frame_time_ns: u64) {
+        let generation = self.shared.generation.load(Ordering::Acquire);
+        if generation != self.generation {
+            self.generation = generation;
+            self.cursor = LOOPBACK_PROBE.len();
+        }
+        self.shared.expire_if_needed(frame_time_ns);
+        let mut state = self.shared.state.load(Ordering::Acquire);
+        let output_channel = self.shared.output_channel.load(Ordering::Relaxed) as usize;
+        if matches!(
+            state,
+            LOOPBACK_MEASUREMENT_PREPARING
+                | LOOPBACK_MEASUREMENT_READY
+                | LOOPBACK_MEASUREMENT_RUNNING
+        ) && let Some(sample) = frame.get_mut(output_channel)
+        {
+            // Silence the selected graph output for the short measurement window.
+            // This prevents existing monitoring routes from forming a feedback loop
+            // through the physical cable.
+            *sample = 0.0;
+        }
+        if state == LOOPBACK_MEASUREMENT_READY {
+            self.shared
+                .emitted_at_ns
+                .store(frame_time_ns, Ordering::Release);
+            self.cursor = 0;
+            if self
+                .shared
+                .state
+                .compare_exchange(
+                    LOOPBACK_MEASUREMENT_READY,
+                    LOOPBACK_MEASUREMENT_RUNNING,
+                    Ordering::AcqRel,
+                    Ordering::Acquire,
+                )
+                .is_ok()
+            {
+                state = LOOPBACK_MEASUREMENT_RUNNING;
+            }
+        }
+        if state != LOOPBACK_MEASUREMENT_RUNNING || self.cursor >= LOOPBACK_PROBE.len() {
+            return;
+        }
+        if let Some(sample) = frame.get_mut(output_channel) {
+            *sample = LOOPBACK_PROBE[self.cursor] * LOOPBACK_PROBE_AMPLITUDE;
+        }
+        self.cursor += 1;
+    }
+}
+
 struct RuntimeMetrics {
     requested_buffer_size: u32,
     sample_rate: u32,
@@ -937,6 +1263,7 @@ struct AudioEngine {
     meter_bank: Arc<MeterBank>,
     transport: Arc<TransportShared>,
     input_peaks: Arc<InputPeakBank>,
+    round_trip_latency: Arc<RoundTripLatencyMeasurement>,
 }
 
 struct VirtualAudioThread {
@@ -957,6 +1284,12 @@ struct OutputMixerControl {
     commands: HeapCons<EngineCommand>,
     mixer: Option<Box<NativeMixerRuntime>>,
     retired_mixers: HeapProd<Box<NativeMixerRuntime>>,
+}
+
+struct OutputStreamContext {
+    metrics: Arc<RuntimeMetrics>,
+    mixer_control: OutputMixerControl,
+    round_trip_latency: Arc<RoundTripLatencyMeasurement>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -2578,6 +2911,11 @@ fn frames_to_micros(frames: usize, sample_rate: u32) -> u64 {
         as u64
 }
 
+fn frames_to_nanos(frames: usize, sample_rate: u32) -> u64 {
+    ((frames as u128).saturating_mul(1_000_000_000) / u128::from(sample_rate))
+        .min(u128::from(u64::MAX)) as u64
+}
+
 fn mark_stream_error(metrics: &RuntimeMetrics) {
     metrics.xruns.fetch_add(1, Ordering::Relaxed);
     metrics.faulted.store(true, Ordering::Relaxed);
@@ -2733,6 +3071,9 @@ struct SessionOutputResampler {
     output_frames: usize,
 }
 
+// Keeping the resampler inline avoids an extra indirection on every output
+// frame; the converter is allocated once during engine startup.
+#[allow(clippy::large_enum_variant)]
 enum SessionOutputConverter {
     Bypass,
     Resampled(SessionOutputResampler),
@@ -2862,6 +3203,7 @@ fn build_input_stream<T>(
     metrics: Arc<RuntimeMetrics>,
     mut recording_tap: RecordingTap,
     input_peaks: Arc<InputPeakBank>,
+    round_trip_latency: Arc<RoundTripLatencyMeasurement>,
 ) -> Result<Stream>
 where
     T: SizedSample + Send + 'static,
@@ -2870,11 +3212,13 @@ where
     let channels = usize::from(config.channels);
     let callback_metrics = Arc::clone(&metrics);
     let error_metrics = Arc::clone(&metrics);
+    let mut round_trip_detector = RoundTripInputDetector::new(round_trip_latency);
 
     device
         .build_input_stream(
             *config,
             move |data: &[T], info| {
+                let callback_started_ns = round_trip_detector.shared.now_ns();
                 let timestamp = info.timestamp();
                 callback_metrics.input_latency_us.store(
                     duration_to_micros(timestamp.callback.duration_since(timestamp.capture)),
@@ -2882,7 +3226,7 @@ where
                 );
 
                 let mut overrun = false;
-                for frame in data.chunks_exact(channels) {
+                for (frame_index, frame) in data.chunks_exact(channels).enumerate() {
                     let mut capture = [0.0_f32; MAX_INPUT_CHANNELS];
                     let capture_channels = channels.min(MAX_INPUT_CHANNELS);
                     for (target, source) in capture[..capture_channels].iter_mut().zip(frame) {
@@ -2893,6 +3237,13 @@ where
                     }
                     input_peaks.observe(&capture[..capture_channels]);
                     recording_tap.push(&capture[..capture_channels]);
+                    round_trip_detector.observe(
+                        &capture[..capture_channels],
+                        callback_started_ns.saturating_add(frames_to_nanos(
+                            frame_index,
+                            callback_metrics.input_sample_rate,
+                        )),
+                    );
                 }
 
                 callback_metrics
@@ -2914,12 +3265,16 @@ fn build_output_stream<T>(
     consumer: HeapCons<InputFrame>,
     input_channels: usize,
     target_fill: usize,
-    metrics: Arc<RuntimeMetrics>,
-    mixer_control: OutputMixerControl,
+    context: OutputStreamContext,
 ) -> Result<Stream>
 where
     T: SizedSample + FromSample<f32> + Send + 'static,
 {
+    let OutputStreamContext {
+        metrics,
+        mixer_control,
+        round_trip_latency,
+    } = context;
     let OutputMixerControl {
         mut commands,
         mut mixer,
@@ -2944,11 +3299,13 @@ where
     );
     let callback_metrics = Arc::clone(&metrics);
     let error_metrics = Arc::clone(&metrics);
+    let mut round_trip_probe = RoundTripOutputProbe::new(round_trip_latency);
 
     device
         .build_output_stream(
             *config,
             move |data: &mut [T], info| {
+                let callback_started_ns = round_trip_probe.shared.now_ns();
                 let timestamp = info.timestamp();
                 callback_metrics.output_latency_us.store(
                     duration_to_micros(timestamp.playback.duration_since(timestamp.callback)),
@@ -2986,9 +3343,9 @@ where
 
                 let mut underrun = false;
                 let mut rendered_session_frames = 0;
-                for frame in data.chunks_exact_mut(channels) {
-                    let (rendered, frame_underrun, rendered_frames) =
-                        output_converter.next_frame(|| {
+                for (frame_index, frame) in data.chunks_exact_mut(channels).enumerate() {
+                    let (mut rendered, frame_underrun, rendered_frames) = output_converter
+                        .next_frame(|| {
                             let (input, input_underrun) = resampler.next_frame();
                             let (rendered, stream_underrun) = mixer
                                 .as_mut()
@@ -2997,6 +3354,13 @@ where
                                 });
                             (rendered, input_underrun || stream_underrun)
                         });
+                    round_trip_probe.apply(
+                        &mut rendered[..channels.min(MAX_OUTPUT_CHANNELS)],
+                        callback_started_ns.saturating_add(frames_to_nanos(
+                            frame_index,
+                            callback_metrics.output_sample_rate,
+                        )),
+                    );
                     underrun |= frame_underrun;
                     rendered_session_frames += rendered_frames;
                     for (channel, sample) in frame.iter_mut().enumerate() {
@@ -3170,6 +3534,11 @@ pub fn start_audio_engine(config: NativeAudioEngineConfig) -> Result<NativeAudio
             "adaptive-resampled"
         },
     });
+    let round_trip_latency = Arc::new(RoundTripLatencyMeasurement::new(
+        u32::from(input_config.channels).min(MAX_INPUT_CHANNELS as u32),
+        u32::from(output_config.channels).min(MAX_OUTPUT_CHANNELS as u32),
+        input_config.sample_rate,
+    ));
     let (recorder, recording_tap) =
         RecorderController::new(input_config.sample_rate, usize::from(input_config.channels));
     let initial_mixer = take_pending_mixer(session_sample_rate)?;
@@ -3213,6 +3582,7 @@ pub fn start_audio_engine(config: NativeAudioEngineConfig) -> Result<NativeAudio
         Arc::clone(&metrics),
         recording_tap,
         Arc::clone(&input_peaks),
+        Arc::clone(&round_trip_latency),
     )?;
     let output_stream = build_stream_for_format!(
         build_output_stream,
@@ -3222,11 +3592,14 @@ pub fn start_audio_engine(config: NativeAudioEngineConfig) -> Result<NativeAudio
         consumer,
         usize::from(input_config.channels),
         bridge_block_size as usize,
-        Arc::clone(&metrics),
-        OutputMixerControl {
-            commands: command_consumer,
-            mixer: initial_mixer,
-            retired_mixers: retirement_producer,
+        OutputStreamContext {
+            metrics: Arc::clone(&metrics),
+            mixer_control: OutputMixerControl {
+                commands: command_consumer,
+                mixer: initial_mixer,
+                retired_mixers: retirement_producer,
+            },
+            round_trip_latency: Arc::clone(&round_trip_latency),
         },
     )?;
 
@@ -3265,6 +3638,7 @@ pub fn start_audio_engine(config: NativeAudioEngineConfig) -> Result<NativeAudio
         meter_bank,
         transport,
         input_peaks,
+        round_trip_latency,
     };
     let snapshot = engine.metrics.snapshot();
     *engine_slot()
@@ -3301,6 +3675,7 @@ fn start_virtual_audio_engine(key: AudioEngineKey) -> Result<NativeAudioRuntimeS
         buffer_fallback: AtomicBool::new(false),
         clock_sync: "shared-device",
     });
+    let round_trip_latency = Arc::new(RoundTripLatencyMeasurement::new(2, 2, input_sample_rate));
     let (recorder, _recording_tap) = RecorderController::new(sample_rate, 2);
     let initial_mixer = take_pending_mixer(sample_rate)?;
     if let Some(runtime) = initial_mixer.as_ref() {
@@ -3336,6 +3711,7 @@ fn start_virtual_audio_engine(key: AudioEngineKey) -> Result<NativeAudioRuntimeS
     let shutdown = Arc::new(AtomicBool::new(false));
     let worker_shutdown = Arc::clone(&shutdown);
     let worker_metrics = Arc::clone(&metrics);
+    let worker_round_trip_latency = Arc::clone(&round_trip_latency);
     let input_ring = HeapRb::<InputFrame>::new(worker_metrics.ring_buffer_capacity_frames as usize);
     let (mut input_producer, input_consumer) = input_ring.split();
     for _ in 0..block_frames {
@@ -3362,15 +3738,27 @@ fn start_virtual_audio_engine(key: AudioEngineKey) -> Result<NativeAudioRuntimeS
         .name("yadaw-virtual-audio".to_owned())
         .spawn(move || {
             let mut mixer = initial_mixer;
+            let mut round_trip_detector =
+                RoundTripInputDetector::new(Arc::clone(&worker_round_trip_latency));
+            let mut round_trip_probe =
+                RoundTripOutputProbe::new(Arc::clone(&worker_round_trip_latency));
+            let mut loopback_block = vec![[0.0_f32; MAX_INPUT_CHANNELS]; block_frames as usize];
             let block_duration =
                 Duration::from_secs_f64(block_frames as f64 / output_sample_rate as f64);
             while !worker_shutdown.load(Ordering::Acquire) {
+                let input_callback_started_ns = worker_round_trip_latency.now_ns();
                 let mut overrun = false;
-                for _ in 0..block_frames {
-                    if input_producer.try_push([0.0; MAX_INPUT_CHANNELS]).is_err() {
+                for (frame_index, capture) in loopback_block.iter().enumerate() {
+                    round_trip_detector.observe(
+                        &capture[..2],
+                        input_callback_started_ns
+                            .saturating_add(frames_to_nanos(frame_index, input_sample_rate)),
+                    );
+                    if input_producer.try_push(*capture).is_err() {
                         overrun = true;
                     }
                 }
+                loopback_block.fill([0.0; MAX_INPUT_CHANNELS]);
                 while let Some(command) = command_consumer.try_pop() {
                     if let Some(runtime) = mixer.as_mut() {
                         if let Some(replacement) = runtime.handle_command(command) {
@@ -3398,16 +3786,34 @@ fn start_virtual_audio_engine(key: AudioEngineKey) -> Result<NativeAudioRuntimeS
                 }
                 let mut rendered_session_frames = 0;
                 let mut underrun = false;
-                for _ in 0..block_frames {
-                    let (_, frame_underrun, rendered_frames) = output_converter.next_frame(|| {
-                        let (input, input_underrun) = input_resampler.next_frame();
-                        let (output, render_underrun) = mixer
-                            .as_mut()
-                            .map_or(([0.0; MAX_OUTPUT_CHANNELS], false), |runtime| {
-                                runtime.render_frame(input)
-                            });
-                        (output, input_underrun || render_underrun)
-                    });
+                let output_callback_started_ns = worker_round_trip_latency.now_ns();
+                for (frame_index, loopback) in loopback_block.iter_mut().enumerate() {
+                    let (mut output, frame_underrun, rendered_frames) = output_converter
+                        .next_frame(|| {
+                            let (input, input_underrun) = input_resampler.next_frame();
+                            let (output, render_underrun) = mixer
+                                .as_mut()
+                                .map_or(([0.0; MAX_OUTPUT_CHANNELS], false), |runtime| {
+                                    runtime.render_frame(input)
+                                });
+                            (output, input_underrun || render_underrun)
+                        });
+                    round_trip_probe.apply(
+                        &mut output[..2],
+                        output_callback_started_ns
+                            .saturating_add(frames_to_nanos(frame_index, output_sample_rate)),
+                    );
+                    let input_channel = worker_round_trip_latency
+                        .input_channel
+                        .load(Ordering::Relaxed) as usize;
+                    let output_channel = worker_round_trip_latency
+                        .output_channel
+                        .load(Ordering::Relaxed) as usize;
+                    if let (Some(capture), Some(sample)) =
+                        (loopback.get_mut(input_channel), output.get(output_channel))
+                    {
+                        *capture = *sample;
+                    }
                     underrun |= frame_underrun;
                     rendered_session_frames += rendered_frames;
                 }
@@ -3442,6 +3848,7 @@ fn start_virtual_audio_engine(key: AudioEngineKey) -> Result<NativeAudioRuntimeS
         meter_bank,
         transport,
         input_peaks,
+        round_trip_latency,
     };
     let snapshot = engine.metrics.snapshot();
     *engine_slot()
@@ -3464,6 +3871,35 @@ pub fn audio_engine_snapshot() -> Result<NativeAudioRuntimeSnapshot> {
     Ok(guard
         .as_ref()
         .map_or_else(stopped_snapshot, |engine| engine.metrics.snapshot()))
+}
+
+pub fn start_round_trip_latency_measurement(
+    request: NativeRoundTripLatencyMeasurementRequest,
+) -> Result<NativeRoundTripLatencyMeasurementSnapshot> {
+    let guard = engine_slot()
+        .lock()
+        .map_err(|_| audio_error("audio engine lock", "poisoned"))?;
+    let engine = guard
+        .as_ref()
+        .ok_or_else(|| invalid_config("the audio engine must be running"))?;
+    if engine.transport.state.load(Ordering::Acquire) != TRANSPORT_STOPPED {
+        return Err(invalid_config(
+            "stop transport before measuring round-trip latency",
+        ));
+    }
+    engine.round_trip_latency.start(request)?;
+    Ok(engine.round_trip_latency.snapshot())
+}
+
+pub fn round_trip_latency_measurement_snapshot() -> Result<NativeRoundTripLatencyMeasurementSnapshot>
+{
+    let guard = engine_slot()
+        .lock()
+        .map_err(|_| audio_error("audio engine lock", "poisoned"))?;
+    let engine = guard
+        .as_ref()
+        .ok_or_else(|| invalid_config("the audio engine must be running"))?;
+    Ok(engine.round_trip_latency.snapshot())
 }
 
 /// Immutable input for a supervised graph-worker compile.
@@ -4305,7 +4741,9 @@ pub mod bench_support {
 #[cfg(test)]
 mod tests {
     use std::{
-        fs, thread,
+        fs,
+        sync::Arc,
+        thread,
         time::{Duration, SystemTime, UNIX_EPOCH},
     };
 
@@ -4314,9 +4752,11 @@ mod tests {
         InputPeakBank, LivePlugin, MAX_INPUT_CHANNELS, MAX_OUTPUT_CHANNELS,
         MEMORY_DECODE_LIMIT_BYTES, METRONOME_ACCENT_NOTE, METRONOME_BEAT_NOTE, MetronomeScheduler,
         NativeMixerChannel, NativeMixerGraph, NativeMixerSend, NativePluginInstance,
-        OUTPUT_RESAMPLER_FRAMES, SessionOutputConverter, SignalWidth, StereoDelayLine,
-        SupportedBufferSize, clip_storage_policy, compiled_graph_snapshot, resolve_stream_devices,
-        select_buffer_size, spawn_streaming_clip, validate_session_sample_rate,
+        NativeRoundTripLatencyMeasurementRequest, OUTPUT_RESAMPLER_FRAMES, RoundTripInputDetector,
+        RoundTripLatencyMeasurement, RoundTripOutputProbe, SessionOutputConverter, SignalWidth,
+        StereoDelayLine, SupportedBufferSize, clip_storage_policy, compiled_graph_snapshot,
+        frames_to_nanos, resolve_stream_devices, select_buffer_size, spawn_streaming_clip,
+        validate_session_sample_rate,
     };
     use crate::recording::{NativeRecordingStartConfig, write_deterministic_test_recording};
     use crate::vst3::ProcessContext;
@@ -4370,6 +4810,54 @@ mod tests {
         assert!(matches!(selection.buffer_size, BufferSize::Default));
         assert_eq!(selection.expected_frames, 64);
         assert!(selection.fell_back);
+    }
+
+    #[test]
+    fn matched_loopback_probe_reports_the_synthetic_physical_delay() {
+        let measurement = Arc::new(RoundTripLatencyMeasurement::new(2, 2, 48_000));
+        measurement
+            .start(NativeRoundTripLatencyMeasurementRequest {
+                input_channel: 2,
+                output_channel: 2,
+            })
+            .unwrap();
+        let mut detector = RoundTripInputDetector::new(Arc::clone(&measurement));
+        let mut probe = RoundTripOutputProbe::new(Arc::clone(&measurement));
+
+        for frame in 0..2_400 {
+            detector.observe(&[0.0, 0.0], frames_to_nanos(frame, 48_000));
+        }
+        let emitted_at_ns = 1_000_000_000_u64;
+        let mut captured_probe = Vec::new();
+        for frame in 0..super::LOOPBACK_PROBE.len() {
+            let mut output = [0.0, 0.0];
+            probe.apply(
+                &mut output,
+                emitted_at_ns.saturating_add(frames_to_nanos(frame, 48_000)),
+            );
+            captured_probe.push(output[1]);
+        }
+
+        let delayed_frames = 480_usize;
+        for frame in 0..delayed_frames {
+            detector.observe(
+                &[0.0, 0.0],
+                emitted_at_ns.saturating_add(frames_to_nanos(frame, 48_000)),
+            );
+        }
+        for (offset, sample) in captured_probe.into_iter().enumerate() {
+            detector.observe(
+                &[0.0, sample],
+                emitted_at_ns.saturating_add(frames_to_nanos(delayed_frames + offset, 48_000)),
+            );
+        }
+
+        let snapshot = measurement.snapshot();
+        assert_eq!(snapshot.status, "complete");
+        let latency = snapshot
+            .measured_round_trip_latency_ms
+            .expect("matched probe should produce latency");
+        assert!((latency - 10.0).abs() < 0.02, "{latency}");
     }
 
     #[test]

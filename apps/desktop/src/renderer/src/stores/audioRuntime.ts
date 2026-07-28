@@ -2,7 +2,13 @@ import { useIntervalFn } from "@vueuse/core"
 import { acceptHMRUpdate, defineStore } from "pinia"
 import { computed, ref, shallowRef } from "vue"
 import { INITIAL_AUDIO_RUNTIME_SNAPSHOT } from "@yadaw/contracts"
-import type { AudioLifecycleState, AudioPreferences, AudioRuntimeSnapshot } from "@yadaw/contracts"
+import type {
+  AudioLifecycleState,
+  AudioPreferences,
+  AudioRuntimeSnapshot,
+  RoundTripLatencyMeasurement,
+  RoundTripLatencyMeasurementRequest
+} from "@yadaw/contracts"
 
 const POLLING_INTERVAL_MS = 500
 const TELEMETRY_HISTORY_LIMIT = 240
@@ -66,6 +72,13 @@ export const useAudioRuntimeStore = defineStore("audio-runtime", () => {
   })
   const runtime = computed(() => lifecycle.value.runtime)
   const latencyHistory = shallowRef<AudioTelemetrySample[]>([])
+  const roundTripLatencyMeasurement = shallowRef<RoundTripLatencyMeasurement>({
+    status: "idle",
+    inputChannel: null,
+    outputChannel: null,
+    measuredRoundTripLatencyMs: null,
+    failure: null
+  })
   const lastError = computed(() => lifecycle.value.error ?? "")
   const lastUpdatedAt = ref<number | null>(null)
   const xrunBaseline = ref(0)
@@ -172,6 +185,20 @@ export const useAudioRuntimeStore = defineStore("audio-runtime", () => {
       }
       throw error
     }
+  }
+
+  async function startRoundTripLatencyMeasurement(
+    request: RoundTripLatencyMeasurementRequest
+  ): Promise<RoundTripLatencyMeasurement> {
+    const measurement = await window.yadaw.startRoundTripLatencyMeasurement(request)
+    roundTripLatencyMeasurement.value = measurement
+    return measurement
+  }
+
+  async function refreshRoundTripLatencyMeasurement(): Promise<RoundTripLatencyMeasurement> {
+    const measurement = await window.yadaw.roundTripLatencyMeasurementSnapshot()
+    roundTripLatencyMeasurement.value = measurement
+    return measurement
   }
 
   function applyLifecycleState(state: AudioLifecycleState): void {
@@ -331,6 +358,7 @@ export const useAudioRuntimeStore = defineStore("audio-runtime", () => {
     runtime,
     lifecycle,
     latencyHistory,
+    roundTripLatencyMeasurement,
     statistics,
     warnings,
     lastError,
@@ -339,6 +367,8 @@ export const useAudioRuntimeStore = defineStore("audio-runtime", () => {
     refresh,
     startEngine,
     stopEngine,
+    startRoundTripLatencyMeasurement,
+    refreshRoundTripLatencyMeasurement,
     startPolling,
     stopPolling
   }

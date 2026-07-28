@@ -14,6 +14,7 @@ import type {
 import SettingsPage from "../settings/SettingsPage.vue"
 import SettingsSection from "../settings/SettingsSection.vue"
 import { useAudioPreferencesStore } from "../../stores/audioPreferences"
+import RoundTripLatencyMeasurement from "./RoundTripLatencyMeasurement.vue"
 
 const props = defineProps<{
   runtime: AudioRuntimeSnapshot
@@ -364,6 +365,18 @@ watch(canApply, (valid) => emit("validityChange", valid), { immediate: true })
           </small>
         </div>
       </div>
+    </SettingsSection>
+
+    <SettingsSection
+      title="Physical loopback"
+      description="Measure actual hardware round-trip latency with a direct output-to-input cable."
+    >
+      <RoundTripLatencyMeasurement
+        :runtime-state="runtime.state"
+        :input-channel-count="selectedInputDevice?.channelCount ?? 0"
+        :output-channel-count="selectedOutputDevice?.channelCount ?? 0"
+        :estimated-latency-ms="runtime.estimatedRoundTripLatencyMs"
+      />
     </SettingsSection>
 
     <p v-if="applyError" class="apply-error" role="alert">{{ applyError }}</p>

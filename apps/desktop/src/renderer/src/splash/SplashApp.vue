@@ -98,7 +98,7 @@ onMounted(() => void startup.load())
   --yadaw-logo-lockup-wordmark-size: 0.62em;
 
   color: var(--ui-color-text);
-  font-size: 72px;
+  font-size: var(--ui-font-size-5xl);
 }
 
 .project-url,

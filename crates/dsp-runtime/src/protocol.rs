@@ -201,6 +201,10 @@ pub enum ControlCommand {
     },
     StopAudioEngine,
     AudioEngineSnapshot,
+    StartRoundTripLatencyMeasurement {
+        request: RoundTripLatencyMeasurementRequest,
+    },
+    RoundTripLatencyMeasurementSnapshot,
     UpdateGraph {
         update: GraphUpdate,
     },
@@ -309,6 +313,21 @@ pub struct AudioRuntime {
     pub xruns: u32,
     pub clock_sync: String,
     pub buffer_fallback: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RoundTripLatencyMeasurementRequest {
+    pub input_channel: u32,
+    pub output_channel: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RoundTripLatencyMeasurement {
+    pub status: String,
+    pub input_channel: Option<u32>,
+    pub output_channel: Option<u32>,
+    pub measured_round_trip_latency_ms: Option<f64>,
+    pub failure: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -770,6 +789,9 @@ pub enum ControlResult {
     },
     AudioRuntime {
         runtime: AudioRuntime,
+    },
+    RoundTripLatencyMeasurement {
+        measurement: RoundTripLatencyMeasurement,
     },
     MixerSnapshot {
         meters: Vec<MixerChannelMeter>,

@@ -6,6 +6,7 @@ import type {
   AudioHostRuntimePreferences,
   AudioBackend,
   AudioPreferences,
+  RoundTripLatencyMeasurementRequest,
   CreateProjectRequest,
   ProcessGainRequest,
   ProjectCloseDisposition,
@@ -26,6 +27,10 @@ const api: YadawDesktopApi = {
     ipcRenderer.invoke(IPC_CHANNELS.audioStart, preferences),
   stopAudioEngine: () => ipcRenderer.invoke(IPC_CHANNELS.audioStop),
   audioEngineSnapshot: () => ipcRenderer.invoke(IPC_CHANNELS.audioSnapshot),
+  startRoundTripLatencyMeasurement: (request: RoundTripLatencyMeasurementRequest) =>
+    ipcRenderer.invoke(IPC_CHANNELS.audioRoundTripLatencyStart, request),
+  roundTripLatencyMeasurementSnapshot: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.audioRoundTripLatencySnapshot),
   loadMixerGraph: () => ipcRenderer.invoke(IPC_CHANNELS.mixerLoad),
   reloadMixerGraph: () => ipcRenderer.invoke(IPC_CHANNELS.mixerReload),
   executeProjectCommand: (command) => ipcRenderer.invoke(IPC_CHANNELS.mixerExecute, command),

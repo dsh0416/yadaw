@@ -21,6 +21,7 @@ import type {
   MixerParameterPreview,
   MidiImportPlan,
   PluginParameterChange,
+  RoundTripLatencyMeasurementRequest,
   TransportCommand,
   StorageSpaceSnapshot,
   SystemPerformanceSnapshot,
@@ -342,6 +343,25 @@ function validateAudioPreferences(value: unknown): AudioPreferences {
   }
 }
 
+function validateRoundTripLatencyMeasurementRequest(
+  value: unknown
+): RoundTripLatencyMeasurementRequest {
+  if (typeof value !== "object" || value === null) {
+    throw new TypeError("Round-trip latency measurement request must be an object")
+  }
+  const request = value as Partial<RoundTripLatencyMeasurementRequest>
+  const validateChannel = (label: string, channel: unknown): number => {
+    if (typeof channel !== "number" || !Number.isInteger(channel) || channel < 1 || channel > 256) {
+      throw new TypeError(`Round-trip latency ${label} channel must be between 1 and 256`)
+    }
+    return channel
+  }
+  return {
+    inputChannel: validateChannel("input", request.inputChannel),
+    outputChannel: validateChannel("output", request.outputChannel)
+  }
+}
+
 function normalizeAudioDeviceList(devices: AudioDeviceList): AudioDeviceList {
   return devices
 }
@@ -519,6 +539,20 @@ function registerIpcHandlers(
     const snapshot = normalizeAudioRuntime(await audioHostService.audioEngineSnapshot())
     lifecycle.refreshAudio(snapshot)
     return snapshot
+  })
+
+  ipcMain.handle(IPC_CHANNELS.audioRoundTripLatencyStart, async (event, value: unknown) => {
+    assertTrustedSender(event)
+    if (!audioHostService) throw new Error("Audio host is not running")
+    return audioHostService.startRoundTripLatencyMeasurement(
+      validateRoundTripLatencyMeasurementRequest(value)
+    )
+  })
+
+  ipcMain.handle(IPC_CHANNELS.audioRoundTripLatencySnapshot, async (event) => {
+    assertTrustedSender(event)
+    if (!audioHostService) throw new Error("Audio host is not running")
+    return audioHostService.roundTripLatencyMeasurementSnapshot()
   })
 
   ipcMain.handle(IPC_CHANNELS.mixerLoad, (event) => {

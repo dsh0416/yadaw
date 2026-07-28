@@ -20,6 +20,8 @@ import type {
   PluginInstanceState,
   PluginParameterChange,
   PluginParameterInfo,
+  RoundTripLatencyMeasurement,
+  RoundTripLatencyMeasurementRequest,
   TransportCommand,
   TransportSnapshot
 } from "@yadaw/contracts"
@@ -40,6 +42,7 @@ interface ControlResponse {
       | "audio-backends"
       | "audio-devices"
       | "audio-runtime"
+      | "round-trip-latency-measurement"
       | "mixer-snapshot"
       | "compiled-graph-snapshot"
       | "transport-snapshot"
@@ -84,6 +87,7 @@ interface ControlResponse {
       outputs: AudioHostDevice[]
     }
     runtime?: AudioHostRuntime
+    measurement?: AudioHostRoundTripLatencyMeasurement
     meters?: AudioHostMeter[]
     snapshot?: {
       graph_revision: number
@@ -141,6 +145,14 @@ interface AudioHostRuntime {
   xruns: number
   clock_sync: string
   buffer_fallback: boolean
+}
+
+interface AudioHostRoundTripLatencyMeasurement {
+  status: string
+  input_channel: number | null
+  output_channel: number | null
+  measured_round_trip_latency_ms: number | null
+  failure: string | null
 }
 
 interface AudioHostMeter {
@@ -986,6 +998,53 @@ export class AudioHostService {
 
   async audioEngineSnapshot(): Promise<AudioRuntimeSnapshot> {
     return this.runtimeResult(await this.request({ type: "audio-engine-snapshot" }))
+  }
+
+  async startRoundTripLatencyMeasurement(
+    request: RoundTripLatencyMeasurementRequest
+  ): Promise<RoundTripLatencyMeasurement> {
+    return this.roundTripLatencyMeasurementResult(
+      await this.request({
+        type: "start-round-trip-latency-measurement",
+        request: {
+          input_channel: request.inputChannel,
+          output_channel: request.outputChannel
+        }
+      })
+    )
+  }
+
+  async roundTripLatencyMeasurementSnapshot(): Promise<RoundTripLatencyMeasurement> {
+    return this.roundTripLatencyMeasurementResult(
+      await this.request({ type: "round-trip-latency-measurement-snapshot" })
+    )
+  }
+
+  private roundTripLatencyMeasurementResult(
+    response: ControlResponse
+  ): RoundTripLatencyMeasurement {
+    const value = response.result.measurement
+    if (response.result.type !== "round-trip-latency-measurement" || !value) {
+      throw new Error("audio host returned an invalid round-trip latency response")
+    }
+    const status =
+      value.status === "preparing" ||
+      value.status === "measuring" ||
+      value.status === "complete" ||
+      value.status === "failed"
+        ? value.status
+        : "idle"
+    const failure =
+      value.failure === "input-too-loud" || value.failure === "signal-not-detected"
+        ? value.failure
+        : null
+    return {
+      status,
+      inputChannel: value.input_channel,
+      outputChannel: value.output_channel,
+      measuredRoundTripLatencyMs: value.measured_round_trip_latency_ms,
+      failure
+    }
   }
 
   private runtimeResult(response: ControlResponse): AudioRuntimeSnapshot {

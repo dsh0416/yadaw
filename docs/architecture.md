@@ -58,12 +58,17 @@ as atomic snapshots rather than callback events.
 
 The stream bridge is primed with one requested block. Input and output callback
 timestamps estimate ADC-to-callback and callback-to-DAC latency, while current
-ring occupancy supplies the internal bridge contribution. Physical loopback
-measurement is still required for authoritative round-trip latency. Software
-monitoring is an explicit graph route: the application setting gates persisted
-per-Audio-track choices, and only hardware input mappings enter the monitored
-track source. The route remains live while transport is stopped without
-advancing clips, MIDI, the metronome, or the transport clock.
+ring occupancy supplies the internal bridge contribution. Audio Settings also
+offers an authoritative physical-loopback measurement: with transport stopped,
+the user connects a selected output directly to a selected input. The callbacks
+first verify a quiet input, silence that graph output to prevent a monitoring
+feedback loop, emit a fixed matched probe, and publish the detected elapsed time
+through atomics. The callback-side detector uses fixed arrays and performs no
+allocation, locking, IPC, or formatting. Software monitoring is an explicit
+graph route: the application setting gates persisted per-Audio-track choices,
+and only hardware input mappings enter the monitored track source. The route
+remains live while transport is stopped without advancing clips, MIDI, the
+metronome, or the transport clock.
 
 Requested buffer sizes are advisory. Rust keeps a fixed request only when it is
 inside the device's reported range; otherwise, or when the backend cannot report

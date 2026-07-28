@@ -52,8 +52,9 @@ Make the existing vertical slice reliable for daily experimentation.
       resamples to that rate
 - [x] Audio engine session clock follows the project sample rate across device
       open / reconfiguration (streams still open at the device native default)
-- [ ] Authoritative round-trip latency measurement (physical loopback; estimates
-      from callback timestamps + ring occupancy exist today)
+- [x] Authoritative round-trip latency measurement (guided physical loopback
+      with quiet-input validation and matched-probe detection; callback/ring
+      estimate remains visible for comparison)
 
 ## M1 — Composition MVP
 

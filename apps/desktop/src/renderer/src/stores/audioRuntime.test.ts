@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { createPinia, setActivePinia } from "pinia"
 import { INITIAL_AUDIO_RUNTIME_SNAPSHOT } from "@yadaw/contracts"
 import { useAudioRuntimeStore } from "./audioRuntime"
@@ -41,5 +41,28 @@ describe("audio runtime sample-rate diagnostics", () => {
     })
 
     expect(store.warnings.map((warning) => warning.id)).toEqual(["session-sample-rate-conversion"])
+  })
+
+  it("publishes physical loopback measurement state through the store", async () => {
+    window.yadaw.startRoundTripLatencyMeasurement = vi.fn().mockResolvedValue({
+      status: "preparing",
+      inputChannel: 1,
+      outputChannel: 2,
+      measuredRoundTripLatencyMs: null,
+      failure: null
+    })
+    window.yadaw.roundTripLatencyMeasurementSnapshot = vi.fn().mockResolvedValue({
+      status: "complete",
+      inputChannel: 1,
+      outputChannel: 2,
+      measuredRoundTripLatencyMs: 9.5,
+      failure: null
+    })
+    const store = useAudioRuntimeStore()
+
+    await store.startRoundTripLatencyMeasurement({ inputChannel: 1, outputChannel: 2 })
+    expect(store.roundTripLatencyMeasurement.status).toBe("preparing")
+    await store.refreshRoundTripLatencyMeasurement()
+    expect(store.roundTripLatencyMeasurement.measuredRoundTripLatencyMs).toBe(9.5)
   })
 })

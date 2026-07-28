@@ -6,6 +6,8 @@ export const IPC_CHANNELS = {
   audioStart: "audio:start",
   audioStop: "audio:stop",
   audioSnapshot: "audio:snapshot",
+  audioRoundTripLatencyStart: "audio:round-trip-latency-start",
+  audioRoundTripLatencySnapshot: "audio:round-trip-latency-snapshot",
   mixerLoad: "mixer:load",
   mixerReload: "mixer:reload",
   mixerExecute: "mixer:execute",
@@ -124,6 +126,10 @@ export interface YadawDesktopApi {
   startAudioEngine(preferences: AudioPreferences): Promise<AudioRuntimeSnapshot>
   stopAudioEngine(): Promise<AudioRuntimeSnapshot>
   audioEngineSnapshot(): Promise<AudioRuntimeSnapshot>
+  startRoundTripLatencyMeasurement(
+    request: RoundTripLatencyMeasurementRequest
+  ): Promise<RoundTripLatencyMeasurement>
+  roundTripLatencyMeasurementSnapshot(): Promise<RoundTripLatencyMeasurement>
   loadMixerGraph(): Promise<MixerGraphSnapshot>
   reloadMixerGraph(): Promise<MixerGraphSnapshot>
   executeProjectCommand(command: ProjectCommand): Promise<ProjectCommandResult>
@@ -632,6 +638,24 @@ export interface AudioRuntimeSnapshot {
   xruns: number
   clockSync: AudioClockSync
   bufferFallback: boolean
+}
+
+export interface RoundTripLatencyMeasurementRequest {
+  inputChannel: number
+  outputChannel: number
+}
+
+export type RoundTripLatencyMeasurementStatus =
+  "idle" | "preparing" | "measuring" | "complete" | "failed"
+
+export type RoundTripLatencyMeasurementFailure = "input-too-loud" | "signal-not-detected"
+
+export interface RoundTripLatencyMeasurement {
+  status: RoundTripLatencyMeasurementStatus
+  inputChannel: number | null
+  outputChannel: number | null
+  measuredRoundTripLatencyMs: number | null
+  failure: RoundTripLatencyMeasurementFailure | null
 }
 
 export const INITIAL_AUDIO_RUNTIME_SNAPSHOT: Readonly<AudioRuntimeSnapshot> = {

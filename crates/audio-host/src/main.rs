@@ -41,7 +41,7 @@ use yadaw_dsp_runtime::protocol::{
     ControlRequest, ControlResponse, ControlResult, GraphUpdate, HostEvent, LiveMixerGraph,
     MixerChannelMeter, NATIVE_BUILD_FINGERPRINT, PluginEditorPreference, PriorityCommand,
     PriorityRequest, PriorityResponse, PriorityResult, RecordingResult, RecordingWaveform,
-    TransportState, read_message, write_message,
+    RoundTripLatencyMeasurement, TransportState, read_message, write_message,
 };
 use yadaw_dsp_runtime::tempo::{TempoEvent, TimeSignatureEvent};
 use yadaw_ipc_transport::{
@@ -70,6 +70,18 @@ fn audio_runtime(value: engine::NativeAudioRuntimeSnapshot) -> AudioRuntime {
         xruns: value.xruns,
         clock_sync: value.clock_sync,
         buffer_fallback: value.buffer_fallback,
+    }
+}
+
+fn round_trip_latency_measurement(
+    value: engine::NativeRoundTripLatencyMeasurementSnapshot,
+) -> RoundTripLatencyMeasurement {
+    RoundTripLatencyMeasurement {
+        status: value.status,
+        input_channel: value.input_channel,
+        output_channel: value.output_channel,
+        measured_round_trip_latency_ms: value.measured_round_trip_latency_ms,
+        failure: value.failure,
     }
 }
 
@@ -331,6 +343,31 @@ fn engine_command(
                 message: error.to_string(),
             },
         },
+        ControlCommand::StartRoundTripLatencyMeasurement { request } => {
+            match engine::start_round_trip_latency_measurement(
+                engine::NativeRoundTripLatencyMeasurementRequest {
+                    input_channel: request.input_channel,
+                    output_channel: request.output_channel,
+                },
+            ) {
+                Ok(measurement) => ControlResult::RoundTripLatencyMeasurement {
+                    measurement: round_trip_latency_measurement(measurement),
+                },
+                Err(error) => ControlResult::Error {
+                    message: error.to_string(),
+                },
+            }
+        }
+        ControlCommand::RoundTripLatencyMeasurementSnapshot => {
+            match engine::round_trip_latency_measurement_snapshot() {
+                Ok(measurement) => ControlResult::RoundTripLatencyMeasurement {
+                    measurement: round_trip_latency_measurement(measurement),
+                },
+                Err(error) => ControlResult::Error {
+                    message: error.to_string(),
+                },
+            }
+        }
         ControlCommand::UpdateGraph {
             update: GraphUpdate::Replace { revision, graph },
         } => {

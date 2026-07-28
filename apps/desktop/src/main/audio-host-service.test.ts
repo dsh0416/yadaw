@@ -32,6 +32,13 @@ const fakeHost = vi.hoisted(() => {
     graphRevision = 0
     transportState = 0
     positionFrames = 0
+    latencyMeasurement = {
+      status: "idle",
+      input_channel: null as number | null,
+      output_channel: null as number | null,
+      measured_round_trip_latency_ms: null as number | null,
+      failure: null as string | null
+    }
 
     constructor(..._arguments: unknown[]) {
       Client.instances.push(this)
@@ -68,6 +75,29 @@ const fakeHost = vi.hoisted(() => {
         return response({
           type: "audio-runtime",
           runtime: runtime("running", this.sessionSampleRate, this.outputSampleRate)
+        })
+      }
+      if (request.command.type === "start-round-trip-latency-measurement") {
+        const value = request.command.request as {
+          input_channel: number
+          output_channel: number
+        }
+        this.latencyMeasurement = {
+          status: "preparing",
+          input_channel: value.input_channel,
+          output_channel: value.output_channel,
+          measured_round_trip_latency_ms: null,
+          failure: null
+        }
+        return response({
+          type: "round-trip-latency-measurement",
+          measurement: this.latencyMeasurement
+        })
+      }
+      if (request.command.type === "round-trip-latency-measurement-snapshot") {
+        return response({
+          type: "round-trip-latency-measurement",
+          measurement: this.latencyMeasurement
         })
       }
       if (request.command.type === "update-graph") {
@@ -370,6 +400,54 @@ describe("AudioHostService recovery", () => {
     expect(config.session_sample_rate).toBeNull()
     expect(runtime.sampleRate).toBe(48_000)
     expect(runtime.outputSampleRate).toBe(48_000)
+
+    await service.stop()
+  })
+
+  it("round-trips physical latency channel selections and measurement results", async () => {
+    const service = new AudioHostService(
+      "audio-host",
+      "crash-marker",
+      {
+        workerThreads: "auto",
+        maxBlockingThreads: "auto",
+        egressConcurrency: "auto"
+      },
+      undefined,
+      () => {},
+      async () => {}
+    )
+    service.start()
+    const client = fakeHost.Client.instances[0]!
+
+    const started = await service.startRoundTripLatencyMeasurement({
+      inputChannel: 2,
+      outputChannel: 4
+    })
+    expect(started).toMatchObject({
+      status: "preparing",
+      inputChannel: 2,
+      outputChannel: 4
+    })
+    expect(client.commands.at(-1)).toEqual({
+      type: "start-round-trip-latency-measurement",
+      request: { input_channel: 2, output_channel: 4 }
+    })
+
+    client.latencyMeasurement = {
+      status: "complete",
+      input_channel: 2,
+      output_channel: 4,
+      measured_round_trip_latency_ms: 8.75,
+      failure: null
+    }
+    await expect(service.roundTripLatencyMeasurementSnapshot()).resolves.toEqual({
+      status: "complete",
+      inputChannel: 2,
+      outputChannel: 4,
+      measuredRoundTripLatencyMs: 8.75,
+      failure: null
+    })
 
     await service.stop()
   })

@@ -9,8 +9,8 @@ use yadaw_dsp_runtime::tempo::{TempoEvent, TimeSignatureEvent};
 
 #[test]
 fn virtual_backend_uses_the_project_clock_over_native_48_khz_io() {
-    // This integration test is its own process and sets the opt-in before the
-    // virtual audio worker is spawned.
+    // SAFETY: This integration test is its own process and sets the opt-in
+    // before the virtual audio worker or any other thread is spawned.
     unsafe {
         std::env::set_var("YADAW_TEST_VIRTUAL_AUDIO", "1");
     }
