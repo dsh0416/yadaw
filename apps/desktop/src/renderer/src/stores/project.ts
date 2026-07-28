@@ -18,6 +18,7 @@ export const useProjectStore = defineStore("project", () => {
   const { showDialog } = useGlobalDialog()
   const lifecycle = shallowRef<ProjectLifecycleState>({ status: "closed", error: null })
   const projectAssets = ref<ProjectAssetSummary[]>([])
+  let pendingClose: Promise<boolean> | null = null
 
   const session = computed(() => ("session" in lifecycle.value ? lifecycle.value.session : null))
   const busy = computed(
@@ -114,7 +115,7 @@ export const useProjectStore = defineStore("project", () => {
     }
   }
 
-  async function close(disposition?: "save" | "discard" | "cancel"): Promise<boolean> {
+  async function closeOnce(disposition?: "save" | "discard" | "cancel"): Promise<boolean> {
     if (lifecycle.value.status === "closed") return true
     if (lifecycle.value.status !== "open") return false
     const previous = lifecycle.value.session
@@ -151,6 +152,17 @@ export const useProjectStore = defineStore("project", () => {
         reason instanceof Error ? reason.message : "Unable to close project."
       )
       return false
+    }
+  }
+
+  async function close(disposition?: "save" | "discard" | "cancel"): Promise<boolean> {
+    if (pendingClose) return pendingClose
+    const operation = closeOnce(disposition)
+    pendingClose = operation
+    try {
+      return await operation
+    } finally {
+      if (pendingClose === operation) pendingClose = null
     }
   }
 

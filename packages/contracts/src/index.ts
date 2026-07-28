@@ -69,6 +69,8 @@ export const APPLICATION_COMMAND_IDS = [
   "edit.paste",
   "edit.select-all",
   "application.preferences",
+  "application.quit",
+  "window.close",
   "view.toggle-full-screen",
   "help.audio-benchmark",
   "application.about"
@@ -87,6 +89,7 @@ export const APPLICATION_WINDOW_COMMAND_IDS = [
   "window.minimize",
   "window.toggle-maximize",
   "window.close",
+  "application.quit",
   "view.toggle-full-screen",
   "application.about"
 ] as const

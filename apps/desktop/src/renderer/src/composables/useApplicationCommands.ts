@@ -154,6 +154,12 @@ export function useApplicationCommands() {
     await router.push({ name: "welcome" })
   }
 
+  async function closeApplication(command: "application.quit" | "window.close"): Promise<void> {
+    if (projectBusy.value) return
+    if (session.value && !(await studioWorkflowStore.closeProject())) return
+    await applicationWindowStore.execute(command)
+  }
+
   async function execute(command: ApplicationCommandId): Promise<void> {
     switch (command) {
       case "project.new":
@@ -193,6 +199,10 @@ export function useApplicationCommands() {
         break
       case "application.preferences":
         await router.push({ name: "system-settings" })
+        break
+      case "application.quit":
+      case "window.close":
+        await closeApplication(command)
         break
       case "view.toggle-full-screen":
       case "application.about":

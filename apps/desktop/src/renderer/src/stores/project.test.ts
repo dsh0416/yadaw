@@ -114,4 +114,19 @@ describe("project store dialogs", () => {
     expect(window.yadaw.closeProject).not.toHaveBeenCalled()
     expect(store.lifecycle.status).toBe("open")
   })
+
+  it("coalesces repeated close requests into one dirty-project decision", async () => {
+    window.yadaw.closeProject = vi.fn().mockResolvedValue(true)
+    const store = useProjectStore()
+    store.applyLifecycleState({ status: "open", session, error: null })
+    const { activeDialog, selectDialogAction } = useGlobalDialog()
+
+    const firstClosing = store.close()
+    const secondClosing = store.close()
+    await vi.waitFor(() => expect(activeDialog.value?.title).toBe("Save project before closing?"))
+    selectDialogAction("discard")
+
+    await expect(Promise.all([firstClosing, secondClosing])).resolves.toEqual([true, true])
+    expect(window.yadaw.closeProject).toHaveBeenCalledOnce()
+  })
 })

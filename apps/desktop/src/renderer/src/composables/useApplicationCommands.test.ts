@@ -5,6 +5,7 @@ import { defineComponent, h } from "vue"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { ApplicationCommandId, ProjectSession } from "@yadaw/contracts"
 import { useApplicationCommands } from "./useApplicationCommands"
+import { useGlobalDialog } from "./useGlobalDialog"
 import { useProjectStore } from "../stores/project"
 
 const session: ProjectSession = {
@@ -62,6 +63,7 @@ describe("useApplicationCommands", () => {
   let nativeCommandListener: ((command: ApplicationCommandId) => void) | null
 
   beforeEach(() => {
+    vi.clearAllMocks()
     nativeCommandListener = null
     Object.defineProperty(window.yadaw, "platform", {
       configurable: true,
@@ -70,6 +72,11 @@ describe("useApplicationCommands", () => {
     window.yadaw.subscribeApplicationCommands = vi.fn((listener) => {
       nativeCommandListener = listener
       return () => undefined
+    })
+    window.yadaw.transportCommand = vi.fn().mockResolvedValue({
+      state: "stopped",
+      positionFrames: 0,
+      sampleRate: 48_000
     })
   })
 
@@ -107,5 +114,49 @@ describe("useApplicationCommands", () => {
     await flushPromises()
 
     expect(router.currentRoute.value.name).toBe("system-settings")
+  })
+
+  it.each(["window.close", "application.quit"] as const)(
+    "prompts before %s and continues only after the dirty project is closed",
+    async (command) => {
+      window.yadaw.closeProject = vi.fn().mockResolvedValue(true)
+      const { pinia } = createHarness()
+      useProjectStore(pinia).applyLifecycleState({
+        status: "open",
+        session: { ...session, dirty: true },
+        error: null
+      })
+      const { activeDialog, selectDialogAction } = useGlobalDialog()
+
+      nativeCommandListener?.(command)
+      await vi.waitFor(() => expect(activeDialog.value?.title).toBe("Save project before closing?"))
+      expect(window.yadaw.executeApplicationWindowCommand).not.toHaveBeenCalledWith(command)
+      selectDialogAction("discard")
+      await flushPromises()
+
+      expect(window.yadaw.closeProject).toHaveBeenCalledWith("discard")
+      expect(window.yadaw.executeApplicationWindowCommand).toHaveBeenCalledWith(command)
+    }
+  )
+
+  it("keeps the current dirty project when switching projects is cancelled", async () => {
+    window.yadaw.prepareOpenProject = vi.fn()
+    const { pinia } = createHarness()
+    const projectStore = useProjectStore(pinia)
+    projectStore.applyLifecycleState({
+      status: "open",
+      session: { ...session, dirty: true },
+      error: null
+    })
+    const { activeDialog, dismissDialog } = useGlobalDialog()
+
+    nativeCommandListener?.("project.open")
+    await vi.waitFor(() => expect(activeDialog.value?.title).toBe("Save project before closing?"))
+    dismissDialog()
+    await flushPromises()
+
+    expect(window.yadaw.closeProject).not.toHaveBeenCalled()
+    expect(window.yadaw.prepareOpenProject).not.toHaveBeenCalled()
+    expect(projectStore.session?.path).toBe(session.path)
   })
 })

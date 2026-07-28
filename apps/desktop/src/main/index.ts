@@ -34,6 +34,7 @@ import {
 import { AudioHostService } from "./audio-host-service"
 import { createAudioBenchmarkReport } from "./audio-benchmark-service"
 import { installApplicationMenu } from "./application-menu"
+import { deferDirtyProjectClose } from "./dirty-project-close"
 import { OperationService } from "./operation-service"
 import { MixerService } from "./mixer-service"
 import { MidiImportService } from "./midi-import-service"
@@ -421,6 +422,9 @@ function registerIpcHandlers(
         break
       case "window.close":
         window?.close()
+        break
+      case "application.quit":
+        app.quit()
         break
       case "view.toggle-full-screen":
         if (window) window.setFullScreen(!window.isFullScreen())
@@ -1133,6 +1137,14 @@ function createMainWindow(loadContent = true): BrowserWindow {
     }
   })
   mainWindow = window
+  window.on("close", (event) => {
+    deferDirtyProjectClose({
+      command: "window.close",
+      event,
+      project: projectService?.current ?? null,
+      window
+    })
+  })
   window.once("closed", () => {
     if (mainWindow === window) mainWindow = null
   })
@@ -1427,6 +1439,16 @@ app.on("window-all-closed", () => {
 
 app.on("before-quit", (event) => {
   if (shutdownComplete) return
+  if (
+    deferDirtyProjectClose({
+      command: "application.quit",
+      event,
+      project: projectService?.current ?? null,
+      window: mainWindow
+    })
+  ) {
+    return
+  }
   event.preventDefault()
   if (shutdownPromise) return
   shutdownPromise = shutdownServices().finally(() => {
