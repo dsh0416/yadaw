@@ -26,6 +26,7 @@ import {
   writeLargeObject
 } from "./large-object"
 import { listLargeObjectOids, vacuumAndAnalyze } from "./maintenance"
+import { readWaveformWindow } from "./waveform"
 import type {
   AssetContentHash,
   DefaultRecordingTrack,
@@ -1141,47 +1142,14 @@ export class ProjectDatabase {
     endFrame: number,
     maxBuckets: number
   ): Promise<StoredWaveformWindow | null> {
-    const rows = await this.db
-      .select({
-        framesPerBucket: assetWaveformLevels.framesPerBucket,
-        bucketCount: assetWaveformLevels.bucketCount,
-        channels: assetWaveformLevels.channels,
-        sampleRate: assetWaveformLevels.sampleRate,
-        frameCount: assetWaveformLevels.frameCount,
-        peaks: assetWaveformLevels.peaks
-      })
-      .from(assetWaveformLevels)
-      .where(
-        and(
-          eq(assetWaveformLevels.assetId, assetId),
-          eq(assetWaveformLevels.cacheVersion, WAVEFORM_CACHE_VERSION)
-        )
-      )
-      .orderBy(asc(assetWaveformLevels.framesPerBucket))
-    if (rows.length === 0) return null
-    const target = Math.max(1, Math.ceil((endFrame - startFrame) / Math.max(1, maxBuckets)))
-    const selected =
-      [...rows].reverse().find((level) => level.framesPerBucket <= target) ?? rows[0]!
-    const frameCount = Number(selected.frameCount)
-    const start = Math.max(0, Math.min(frameCount, startFrame))
-    const end = Math.max(start, Math.min(frameCount, endFrame))
-    const firstBucket = Math.floor(start / selected.framesPerBucket)
-    const lastBucket = Math.min(selected.bucketCount, Math.ceil(end / selected.framesPerBucket))
-    const bytesPerBucket = selected.channels * 8
-    const peaks = bytes(selected.peaks).slice(
-      firstBucket * bytesPerBucket,
-      lastBucket * bytesPerBucket
+    return readWaveformWindow(
+      this.db,
+      assetId,
+      WAVEFORM_CACHE_VERSION,
+      startFrame,
+      endFrame,
+      maxBuckets
     )
-    return {
-      sampleRate: selected.sampleRate,
-      channels: selected.channels,
-      frameCount,
-      startFrame: firstBucket * selected.framesPerBucket,
-      endFrame: Math.min(frameCount, lastBucket * selected.framesPerBucket),
-      framesPerBucket: selected.framesPerBucket,
-      bucketCount: lastBucket - firstBucket,
-      peaks
-    }
   }
 
   private async maintainForSave(): Promise<{ orphanedLargeObjectsRemoved: number }> {

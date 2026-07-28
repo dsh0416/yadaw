@@ -686,6 +686,13 @@ describe("ProjectDatabase", () => {
     databases.push({ database: restored, directory: restoredDirectory })
 
     expect(await restored.readLargeObject("asset-1")).toEqual(audio)
+    expect(await restored.readWaveform("asset-1", 0, 2, 100)).toMatchObject({
+      startFrame: 0,
+      endFrame: 2,
+      framesPerBucket: 2,
+      bucketCount: 1,
+      peaks: encodePeaks([-1, 1, -0.5, 0.5])
+    })
     await restored.storeWaveform("asset-1", {
       sampleRate: 48_000,
       channels: 2,
@@ -697,6 +704,75 @@ describe("ProjectDatabase", () => {
     expect(await restored.listAssets()).toEqual([])
     await expect(restored.readLargeObject("asset-1")).rejects.toThrow("was not found")
   }, 15_000)
+
+  it("selects and slices one waveform level inside PGlite", async () => {
+    const { database, directory } = await createDatabase()
+    const audioPath = join(directory, "waveform-window.bwf")
+    await writeFile(audioPath, new Uint8Array())
+    const detailedValues = Array.from({ length: 24 }, (_, index) => index + 1)
+    const overviewValues = Array.from({ length: 12 }, (_, index) => 101 + index)
+    await database.importLargeObject(audioPath, {
+      id: "waveform-window",
+      name: "Waveform window",
+      mimeType: "audio/x-bwf",
+      contentHash: "waveform-window-hash",
+      sampleRate: 48_000,
+      channels: 2,
+      bitDepth: "float32",
+      frameCount: 12n,
+      bwfTimeReference: 0n,
+      waveformLevels: [
+        {
+          framesPerBucket: 2,
+          bucketCount: 6,
+          peaks: encodePeaks(detailedValues)
+        },
+        {
+          framesPerBucket: 4,
+          bucketCount: 3,
+          peaks: encodePeaks(overviewValues)
+        }
+      ]
+    })
+
+    expect(await database.readWaveform("waveform-window", 3, 9, 100)).toEqual({
+      sampleRate: 48_000,
+      channels: 2,
+      frameCount: 12,
+      startFrame: 2,
+      endFrame: 10,
+      framesPerBucket: 2,
+      bucketCount: 4,
+      peaks: encodePeaks(detailedValues.slice(4, 20))
+    })
+    expect(await database.readWaveform("waveform-window", 0, 12, 3)).toEqual({
+      sampleRate: 48_000,
+      channels: 2,
+      frameCount: 12,
+      startFrame: 0,
+      endFrame: 12,
+      framesPerBucket: 4,
+      bucketCount: 3,
+      peaks: encodePeaks(overviewValues)
+    })
+    expect(await database.readWaveform("waveform-window", -10, 30, 100)).toEqual({
+      sampleRate: 48_000,
+      channels: 2,
+      frameCount: 12,
+      startFrame: 0,
+      endFrame: 12,
+      framesPerBucket: 2,
+      bucketCount: 6,
+      peaks: encodePeaks(detailedValues)
+    })
+    expect(await database.readWaveform("waveform-window", 10, 2, 100)).toMatchObject({
+      startFrame: 10,
+      endFrame: 10,
+      bucketCount: 0,
+      peaks: new Uint8Array()
+    })
+    expect(await database.readWaveform("missing", 0, 10, 100)).toBeNull()
+  })
 
   it("reclaims orphaned large objects before writing the archive", async () => {
     const resource = await createDatabase()

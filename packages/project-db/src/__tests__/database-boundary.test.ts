@@ -14,7 +14,8 @@ const roots = [
 const allowedSqlFiles = new Set([
   resolve(workspace, "packages/project-db/src/schema.ts"),
   resolve(workspace, "packages/project-db/src/large-object.ts"),
-  resolve(workspace, "packages/project-db/src/maintenance.ts")
+  resolve(workspace, "packages/project-db/src/maintenance.ts"),
+  resolve(workspace, "packages/project-db/src/waveform.ts")
 ])
 const forbiddenApi = [
   "ProjectQueryRequest",

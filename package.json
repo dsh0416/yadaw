@@ -26,6 +26,7 @@
     "bench:rust:quick": "cargo bench --workspace --bench mixer_graph --bench native_render --bench media_streaming --bench recording --features yadaw-dsp-node/bench-internals -- --quick",
     "bench:rust:save": "cargo bench --workspace --bench mixer_graph --bench native_render --bench media_streaming --bench recording --features yadaw-dsp-node/bench-internals -- --save-baseline main",
     "bench:rust:compare": "cargo bench --workspace --bench mixer_graph --bench native_render --bench media_streaming --bench recording --features yadaw-dsp-node/bench-internals -- --baseline main",
+    "bench:project-db": "pnpm --filter @yadaw/project-db bench",
     "test:unit": "cargo test --workspace && pnpm --filter @yadaw/desktop test:unit",
     "test:integration": "pnpm --filter @yadaw/project-db test:integration",
     "test:vst3-fixtures": "cmake -S . -B target/vst3-fixtures -DYADAW_BUILD_VST3_FIXTURES=ON && cmake --build target/vst3-fixtures/third_party/vst3sdk/public.sdk/samples/vst/again --config Debug --target again && cmake --build target/vst3-fixtures/third_party/vst3sdk/public.sdk/samples/vst/note_expression_synth --config Debug --target note-expression-synth && cargo build -p yadaw-audio-host && pnpm --filter @yadaw/desktop test:vst3-helper && pnpm --filter @yadaw/desktop test:vst3-editor",

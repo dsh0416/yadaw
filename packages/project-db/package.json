@@ -13,6 +13,7 @@
     "check": "tsc --noEmit -p tsconfig.json && pnpm db:check",
     "db:generate": "drizzle-kit generate --config drizzle.config.ts",
     "db:check": "drizzle-kit check --config drizzle.config.ts",
+    "bench": "vitest bench --run",
     "test": "vitest run",
     "test:integration": "vitest run src/__tests__"
   },
