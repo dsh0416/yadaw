@@ -9,11 +9,13 @@ a configurable Tokio multi-thread runtime, bounded actor mailboxes, persistent
 bulk arenas, and a winit process main thread.
 Streaming clips are cooperatively serviced by a fixed pool of two to four
 background lanes; there is no production prefetch thread per clip. Graph
-construction is still synchronous inside the VST3 actor and must move to the
-supervised graph worker described below. The old length-prefixed MessagePack
-transport remains only as a compatibility entry point for standalone tools.
-Update this document in the same change whenever an ownership boundary or
-concurrency rule changes.
+construction and PDC calculation run on the supervised graph worker owned by
+`BackgroundIoActor` (general `yadaw-background-io-*` lanes with generation
+cancellation). Clip prefetch and the recording writer still use their dedicated
+pools until a later migration folds them into the same supervisor priorities.
+The old length-prefixed MessagePack transport remains only as a compatibility
+entry point for standalone tools. Update this document in the same change
+whenever an ownership boundary or concurrency rule changes.
 
 ## System shape
 

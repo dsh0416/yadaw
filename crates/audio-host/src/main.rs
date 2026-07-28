@@ -34,6 +34,7 @@ use yadaw_audio_host::{
     engine,
     recording::{NativeRecordingResult, NativeRecordingStartConfig, NativeWaveformSnapshot},
     vst3,
+    workers::WorkerSupervisor,
 };
 use yadaw_dsp_runtime::protocol::{
     AudioBackend, AudioDevice, AudioDeviceList, AudioRuntime, BinaryPayload, ControlCommand,
@@ -571,6 +572,14 @@ async fn forward_to_ui(
 enum ActorCommand {
     Control(ControlCommand),
     Parameter(yadaw_dsp_runtime::protocol::ParameterCommand),
+    /// Immutable mixer graph compile+publish owned by `BackgroundIoActor`.
+    BuildGraph {
+        graph: engine::NativeMixerGraph,
+    },
+    /// Generation-checked SPSC publication owned by `EngineActor`.
+    PublishBuiltGraph {
+        built: engine::CompiledGraphBuild,
+    },
 }
 
 #[derive(Default)]
@@ -682,14 +691,80 @@ async fn engine_actor(
                 })
             }
             ActorCommand::Parameter(command) => mixer_parameter_command(&handles, command),
+            ActorCommand::PublishBuiltGraph { built } => match engine::publish_mixer_runtime(built)
+            {
+                Ok(engine::PublishOutcome::Published) => ControlResult::Accepted,
+                Ok(engine::PublishOutcome::Superseded) => ControlResult::Error {
+                    message: "graph build superseded".into(),
+                },
+                Err(error) => ControlResult::Error {
+                    message: error.to_string(),
+                },
+            },
+            ActorCommand::BuildGraph { .. } => ControlResult::Error {
+                message: "engine actor does not own graph construction".into(),
+            },
         };
         let _ = message.reply.send(result);
     }
 }
 
-async fn background_io_actor(mut inbox: mpsc::Receiver<ActorRequest>) {
+async fn publish_built_graph(
+    engine_sender: &mpsc::Sender<ActorRequest>,
+    built: engine::CompiledGraphBuild,
+) -> ControlResult {
+    dispatch_actor_command(engine_sender, ActorCommand::PublishBuiltGraph { built }).await
+}
+
+async fn build_graph_on_worker(
+    supervisor: &WorkerSupervisor,
+    engine_sender: &mpsc::Sender<ActorRequest>,
+    graph: engine::NativeMixerGraph,
+) -> ControlResult {
+    let revision = graph.generation;
+    let input = match engine::begin_graph_build(graph) {
+        Ok(input) => input,
+        Err(error) => {
+            return ControlResult::Error {
+                message: error.to_string(),
+            };
+        }
+    };
+    let complete = match supervisor.submit_graph_build(input) {
+        Ok(complete) => complete,
+        Err(message) => return ControlResult::Error { message },
+    };
+    let built = match complete.await {
+        Ok(Ok(built)) => built,
+        Ok(Err(message)) => return ControlResult::Error { message },
+        Err(_) => {
+            return ControlResult::Error {
+                message: "graph worker dropped the build result".into(),
+            };
+        }
+    };
+    match publish_built_graph(engine_sender, built).await {
+        ControlResult::Accepted => ControlResult::GraphAccepted { revision },
+        ControlResult::Error { message }
+            if message == "graph build superseded"
+                && engine::published_graph_generation() >= revision =>
+        {
+            ControlResult::GraphAccepted { revision }
+        }
+        other => other,
+    }
+}
+
+async fn background_io_actor(
+    mut inbox: mpsc::Receiver<ActorRequest>,
+    engine_sender: mpsc::Sender<ActorRequest>,
+    supervisor: Arc<WorkerSupervisor>,
+) {
     while let Some(message) = inbox.recv().await {
         let result = match message.command {
+            ActorCommand::BuildGraph { graph } => {
+                build_graph_on_worker(&supervisor, &engine_sender, graph).await
+            }
             ActorCommand::Control(command) => {
                 engine_command(command, None).unwrap_or(ControlResult::Error {
                     message: "unsupported background I/O command".into(),
@@ -698,9 +773,50 @@ async fn background_io_actor(mut inbox: mpsc::Receiver<ActorRequest>) {
             ActorCommand::Parameter(_) => ControlResult::Error {
                 message: "background I/O actor does not own parameters".into(),
             },
+            ActorCommand::PublishBuiltGraph { .. } => ControlResult::Error {
+                message: "background I/O actor does not publish graphs".into(),
+            },
         };
         let _ = message.reply.send(result);
     }
+    supervisor.shutdown();
+}
+
+async fn dispatch_actor_command(
+    sender: &mpsc::Sender<ActorRequest>,
+    command: ActorCommand,
+) -> ControlResult {
+    let (reply, response) = oneshot::channel();
+    if sender
+        .send(ActorRequest { command, reply })
+        .await
+        .is_err()
+    {
+        return ControlResult::Error {
+            message: "audio-host actor stopped".into(),
+        };
+    }
+    response.await.unwrap_or(ControlResult::Error {
+        message: "audio-host actor dropped its response".into(),
+    })
+}
+
+async fn dispatch_build_graph(
+    background_sender: &mpsc::Sender<ActorRequest>,
+    graph: engine::NativeMixerGraph,
+) -> ControlResult {
+    dispatch_actor_command(background_sender, ActorCommand::BuildGraph { graph }).await
+}
+
+fn queue_background_graph_build(
+    background_sender: &mpsc::Sender<ActorRequest>,
+    graph: engine::NativeMixerGraph,
+) {
+    let (reply, _response) = oneshot::channel();
+    let _ = background_sender.try_send(ActorRequest {
+        command: ActorCommand::BuildGraph { graph },
+        reply,
+    });
 }
 
 enum DeferredBinary {
@@ -742,11 +858,17 @@ async fn vst3_actor(
     processors: Arc<Mutex<HashMap<String, vst3::Vst3ProcessorHandle>>>,
     handles: Arc<Mutex<GraphParameterHandles>>,
     request_arena: Arc<Mutex<ArenaReceiver>>,
+    background_sender: mpsc::Sender<ActorRequest>,
 ) {
     let mut graph_revision = 0_u64;
     let mut graph_snapshot: Option<LiveMixerGraph> = None;
     while let Some(message) = inbox.recv().await {
         let result = match message.command {
+            ActorCommand::BuildGraph { .. } | ActorCommand::PublishBuiltGraph { .. } => {
+                ControlResult::Error {
+                    message: "VST3 actor does not own graph worker jobs".into(),
+                }
+            }
             ActorCommand::Parameter(command) => {
                 forward_to_ui(
                     &ui_sender,
@@ -855,11 +977,11 @@ async fn vst3_actor(
                             (revision, graph)
                         }
                     };
-                    let arena = request_arena
-                        .lock()
-                        .map_err(|_| "request arena is poisoned".to_owned())
-                        .map(|arena| arena.clone());
-                    let compiled = arena.and_then(|arena| {
+                    let prepared = (|| {
+                        let arena = request_arena
+                            .lock()
+                            .map_err(|_| "request arena is poisoned".to_owned())?
+                            .clone();
                         let processors = processors
                             .lock()
                             .map_err(|_| "VST3 processor registry is poisoned".to_owned())?
@@ -867,16 +989,25 @@ async fn vst3_actor(
                         let graph = live_graph(revision, &candidate, Some(&processors), &arena)?;
                         materialize_mixer_graph(&mut candidate, &arena)
                             .map_err(|error| error.to_string())?;
-                        engine::load_mixer_graph(graph).map_err(|error| error.to_string())
-                    });
-                    match compiled {
-                        Ok(()) => {
-                            refresh_graph_handles(&handles, &candidate);
-                            graph_revision = revision;
-                            graph_snapshot = Some(candidate);
-                            ControlResult::GraphAccepted { revision }
-                        }
+                        Ok::<_, String>((graph, candidate))
+                    })();
+                    match prepared {
                         Err(message) => ControlResult::Error { message },
+                        Ok((graph, candidate)) => {
+                            match dispatch_build_graph(&background_sender, graph).await {
+                                ControlResult::GraphAccepted {
+                                    revision: accepted_revision,
+                                } => {
+                                    refresh_graph_handles(&handles, &candidate);
+                                    graph_revision = accepted_revision;
+                                    graph_snapshot = Some(candidate);
+                                    ControlResult::GraphAccepted {
+                                        revision: accepted_revision,
+                                    }
+                                }
+                                other => other,
+                            }
+                        }
                     }
                 }
                 _ => ControlResult::Error {
@@ -1520,17 +1651,33 @@ fn validate_native_build_fingerprint(value: &str) -> Result<(), String> {
     }
 }
 
-async fn run_protocol_actor(
-    bootstrap: HostBootstrap,
+struct ProtocolActorDeps {
     ui_proxy: EventLoopProxy<UiEvent>,
     ui_sender: std_mpsc::SyncSender<ActorRequest>,
     host_event_inbox: std_mpsc::Receiver<HostEvent>,
     processors: Arc<Mutex<HashMap<String, vst3::Vst3ProcessorHandle>>>,
     winit_generation: Arc<AtomicU64>,
     runtime_config: RuntimeConfig,
+    background_sender: mpsc::Sender<ActorRequest>,
+    background_inbox: mpsc::Receiver<ActorRequest>,
+}
+
+async fn run_protocol_actor(
+    bootstrap: HostBootstrap,
+    deps: ProtocolActorDeps,
 ) -> Result<(), String> {
     const ACTOR_CAPACITY: usize = 64;
     const PROTOCOL_CAPACITY: usize = 256;
+    let ProtocolActorDeps {
+        ui_proxy,
+        ui_sender,
+        host_event_inbox,
+        processors,
+        winit_generation,
+        runtime_config,
+        background_sender,
+        background_inbox,
+    } = deps;
     let HostBootstrap {
         native_build_fingerprint,
         requests,
@@ -1597,7 +1744,7 @@ async fn run_protocol_actor(
     let handles = Arc::new(Mutex::new(GraphParameterHandles::default()));
     let (engine_sender, engine_inbox) = mpsc::channel(ACTOR_CAPACITY);
     let (vst3_sender, vst3_inbox) = mpsc::channel(ACTOR_CAPACITY);
-    let (background_sender, background_inbox) = mpsc::channel(ACTOR_CAPACITY);
+    let worker_supervisor = WorkerSupervisor::new();
     tokio::spawn(engine_actor(engine_inbox, handles.clone()));
     tokio::task::spawn_local(vst3_actor(
         vst3_inbox,
@@ -1606,8 +1753,13 @@ async fn run_protocol_actor(
         processors,
         handles,
         request_arena.clone(),
+        background_sender.clone(),
     ));
-    tokio::spawn(background_io_actor(background_inbox));
+    tokio::spawn(background_io_actor(
+        background_inbox,
+        engine_sender.clone(),
+        worker_supervisor,
+    ));
 
     outbound
         .send(OutboundMessage::Event(
@@ -1833,6 +1985,7 @@ struct WinitHost {
     proxy: EventLoopProxy<UiEvent>,
     inbox: std_mpsc::Receiver<ActorRequest>,
     processors: Arc<Mutex<HashMap<String, vst3::Vst3ProcessorHandle>>>,
+    background_sender: mpsc::Sender<ActorRequest>,
     host_events: std_mpsc::SyncSender<HostEvent>,
     vst3: Option<vst3::Vst3Runtime>,
     compositor: TinySkiaCompositor,
@@ -1953,8 +2106,16 @@ impl WinitHost {
             ActorCommand::Parameter(command) => runtime.apply_parameter_command(command),
             ActorCommand::Control(ControlCommand::Ping) => {
                 for (instance_id, latency, tail) in runtime.take_timing_changes() {
-                    if let Err(error) = engine::update_plugin_timing(&instance_id, latency, tail) {
-                        eprintln!("audio-host: could not rebuild dynamic plugin latency: {error}");
+                    match engine::apply_plugin_timing(&instance_id, latency, tail) {
+                        Ok(Some(graph)) => {
+                            queue_background_graph_build(&self.background_sender, graph);
+                        }
+                        Ok(None) => {}
+                        Err(error) => {
+                            eprintln!(
+                                "audio-host: could not apply dynamic plugin latency: {error}"
+                            );
+                        }
                     }
                 }
                 let (callback_generation, transport_state) = engine::heartbeat_snapshot();
@@ -1980,6 +2141,11 @@ impl WinitHost {
                     processors.insert(instance_id, processor);
                 }
                 result
+            }
+            ActorCommand::BuildGraph { .. } | ActorCommand::PublishBuiltGraph { .. } => {
+                ControlResult::Error {
+                    message: "winit UI thread does not own graph worker jobs".into(),
+                }
             }
         };
         let _ = reply.send(result);
@@ -2199,6 +2365,8 @@ fn run_ipc() -> Result<(), Box<dyn std::error::Error>> {
     let application_proxy = proxy.clone();
     let (ui_sender, ui_inbox) = std_mpsc::sync_channel(UI_MAILBOX_CAPACITY);
     let (host_event_sender, host_event_inbox) = std_mpsc::sync_channel(UI_MAILBOX_CAPACITY);
+    let (background_sender, background_inbox) = mpsc::channel(UI_MAILBOX_CAPACITY);
+    let winit_background_sender = background_sender.clone();
     let processors = Arc::new(Mutex::new(HashMap::new()));
     let protocol_processors = processors.clone();
     let winit_generation = Arc::new(AtomicU64::new(0));
@@ -2217,12 +2385,16 @@ fn run_ipc() -> Result<(), Box<dyn std::error::Error>> {
             local.block_on(&runtime, async move {
                 if let Err(error) = run_protocol_actor(
                     bootstrap,
-                    proxy.clone(),
-                    ui_sender,
-                    host_event_inbox,
-                    protocol_processors,
-                    protocol_winit_generation,
-                    runtime_config,
+                    ProtocolActorDeps {
+                        ui_proxy: proxy.clone(),
+                        ui_sender,
+                        host_event_inbox,
+                        processors: protocol_processors,
+                        winit_generation: protocol_winit_generation,
+                        runtime_config,
+                        background_sender,
+                        background_inbox,
+                    },
                 )
                 .await
                 {
@@ -2236,6 +2408,7 @@ fn run_ipc() -> Result<(), Box<dyn std::error::Error>> {
         proxy: application_proxy,
         inbox: ui_inbox,
         processors,
+        background_sender: winit_background_sender,
         host_events: host_event_sender,
         vst3: Some(vst3::Vst3Runtime::new()),
         compositor,

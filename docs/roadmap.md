@@ -46,8 +46,8 @@ Make the existing vertical slice reliable for daily experimentation.
       keeps legal topology for missing slots)
 - [x] Contributor-facing CI and multi-platform packaging (signed/notarized
       installers stay in M3)
-- [ ] Graph construction moves to the supervised graph worker (still synchronous
-      inside the VST3 actor; see `agents/docs/playback-runtime.md`)
+- [x] Graph construction moves to the supervised graph worker (see
+      `agents/docs/playback-runtime.md`)
 - [x] Project Settings exposes session sample rate; recording finalization
       resamples to that rate
 - [ ] Audio engine session clock follows the project sample rate across device

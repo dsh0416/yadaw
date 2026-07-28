@@ -7,6 +7,7 @@ pub mod editor_window;
 pub mod engine;
 pub mod recording;
 pub mod vst3;
+pub mod workers;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Status {
