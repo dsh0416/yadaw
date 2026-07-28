@@ -1,48 +1,48 @@
 //! Target-specific VST3 interface identifiers.
 
-use crate::Steinberg::TUID;
+use crate::{Steinberg::TUID, compat::tuid_byte};
 
 #[cfg(windows)]
 const fn tuid(a: u32, b: u32, c: u32, d: u32) -> TUID {
     [
-        (a & 0xff) as i8,
-        ((a >> 8) & 0xff) as i8,
-        ((a >> 16) & 0xff) as i8,
-        ((a >> 24) & 0xff) as i8,
-        ((b >> 16) & 0xff) as i8,
-        ((b >> 24) & 0xff) as i8,
-        (b & 0xff) as i8,
-        ((b >> 8) & 0xff) as i8,
-        ((c >> 24) & 0xff) as i8,
-        ((c >> 16) & 0xff) as i8,
-        ((c >> 8) & 0xff) as i8,
-        (c & 0xff) as i8,
-        ((d >> 24) & 0xff) as i8,
-        ((d >> 16) & 0xff) as i8,
-        ((d >> 8) & 0xff) as i8,
-        (d & 0xff) as i8,
+        tuid_byte((a & 0xff) as u8),
+        tuid_byte(((a >> 8) & 0xff) as u8),
+        tuid_byte(((a >> 16) & 0xff) as u8),
+        tuid_byte(((a >> 24) & 0xff) as u8),
+        tuid_byte(((b >> 16) & 0xff) as u8),
+        tuid_byte(((b >> 24) & 0xff) as u8),
+        tuid_byte((b & 0xff) as u8),
+        tuid_byte(((b >> 8) & 0xff) as u8),
+        tuid_byte(((c >> 24) & 0xff) as u8),
+        tuid_byte(((c >> 16) & 0xff) as u8),
+        tuid_byte(((c >> 8) & 0xff) as u8),
+        tuid_byte((c & 0xff) as u8),
+        tuid_byte(((d >> 24) & 0xff) as u8),
+        tuid_byte(((d >> 16) & 0xff) as u8),
+        tuid_byte(((d >> 8) & 0xff) as u8),
+        tuid_byte((d & 0xff) as u8),
     ]
 }
 
 #[cfg(not(windows))]
 const fn tuid(a: u32, b: u32, c: u32, d: u32) -> TUID {
     [
-        ((a >> 24) & 0xff) as i8,
-        ((a >> 16) & 0xff) as i8,
-        ((a >> 8) & 0xff) as i8,
-        (a & 0xff) as i8,
-        ((b >> 24) & 0xff) as i8,
-        ((b >> 16) & 0xff) as i8,
-        ((b >> 8) & 0xff) as i8,
-        (b & 0xff) as i8,
-        ((c >> 24) & 0xff) as i8,
-        ((c >> 16) & 0xff) as i8,
-        ((c >> 8) & 0xff) as i8,
-        (c & 0xff) as i8,
-        ((d >> 24) & 0xff) as i8,
-        ((d >> 16) & 0xff) as i8,
-        ((d >> 8) & 0xff) as i8,
-        (d & 0xff) as i8,
+        tuid_byte(((a >> 24) & 0xff) as u8),
+        tuid_byte(((a >> 16) & 0xff) as u8),
+        tuid_byte(((a >> 8) & 0xff) as u8),
+        tuid_byte((a & 0xff) as u8),
+        tuid_byte(((b >> 24) & 0xff) as u8),
+        tuid_byte(((b >> 16) & 0xff) as u8),
+        tuid_byte(((b >> 8) & 0xff) as u8),
+        tuid_byte((b & 0xff) as u8),
+        tuid_byte(((c >> 24) & 0xff) as u8),
+        tuid_byte(((c >> 16) & 0xff) as u8),
+        tuid_byte(((c >> 8) & 0xff) as u8),
+        tuid_byte((c & 0xff) as u8),
+        tuid_byte(((d >> 24) & 0xff) as u8),
+        tuid_byte(((d >> 16) & 0xff) as u8),
+        tuid_byte(((d >> 8) & 0xff) as u8),
+        tuid_byte((d & 0xff) as u8),
     ]
 }
 

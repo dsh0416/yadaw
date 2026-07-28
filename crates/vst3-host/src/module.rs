@@ -9,7 +9,7 @@ use yadaw_vst3_host_sys::{
     abi::{GetPluginFactory, PluginFactoryVTable},
 };
 
-use crate::{ClassId, ComInterface, ComPtr, HostError, HostResult};
+use crate::{ClassId, ComInterface, ComPtr, HostError, HostResult, id::fixed_c_string};
 
 /// Stable metadata exposed by the base VST3 factory interface.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -179,17 +179,6 @@ impl Drop for Module {
         }
         let _keep_loaded = &self.library;
     }
-}
-
-fn fixed_c_string<const N: usize>(bytes: &[i8; N]) -> String {
-    let length = bytes.iter().position(|value| *value == 0).unwrap_or(N);
-    String::from_utf8_lossy(
-        &bytes[..length]
-            .iter()
-            .map(|value| *value as u8)
-            .collect::<Vec<_>>(),
-    )
-    .into_owned()
 }
 
 fn resolve_module_binary(path: &Path) -> Option<PathBuf> {

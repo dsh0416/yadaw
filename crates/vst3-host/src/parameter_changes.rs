@@ -1,8 +1,8 @@
-use std::{ffi::c_void, mem::MaybeUninit};
+use std::{ffi::c_void, mem::MaybeUninit, os::raw::c_char};
 
 use yadaw_vst3_host_sys::{
     Steinberg::{
-        FUnknown,
+        FUnknown, TUID,
         Vst::{IParamValueQueue, IParameterChanges, ParamID, ParamValue},
         int32, tresult, uint32,
     },
@@ -102,7 +102,7 @@ impl ParameterChanges {
 
 unsafe extern "system" fn changes_query_interface(
     this: *mut FUnknown,
-    requested: *const i8,
+    requested: *const c_char,
     output: *mut *mut c_void,
 ) -> tresult {
     unsafe {
@@ -113,7 +113,7 @@ unsafe extern "system" fn changes_query_interface(
 
 unsafe extern "system" fn queue_query_interface(
     this: *mut FUnknown,
-    requested: *const i8,
+    requested: *const c_char,
     output: *mut *mut c_void,
 ) -> tresult {
     unsafe {
@@ -124,9 +124,9 @@ unsafe extern "system" fn queue_query_interface(
 
 unsafe fn query_fixed_interface(
     this: *mut FUnknown,
-    requested: *const i8,
+    requested: *const c_char,
     output: *mut *mut c_void,
-    interface_id: [i8; 16],
+    interface_id: TUID,
 ) -> tresult {
     if requested.is_null() || output.is_null() {
         return -2147024809;

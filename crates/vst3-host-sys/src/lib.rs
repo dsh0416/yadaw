@@ -19,4 +19,5 @@ include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 pub use root::Steinberg;
 
 pub mod abi;
+pub mod compat;
 pub mod iid;

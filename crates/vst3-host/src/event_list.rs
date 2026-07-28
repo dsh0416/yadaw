@@ -1,4 +1,4 @@
-use std::{ffi::c_void, mem::MaybeUninit};
+use std::{ffi::c_void, mem::MaybeUninit, os::raw::c_char};
 
 use yadaw_vst3_host_sys::{
     Steinberg::{
@@ -52,7 +52,7 @@ impl EventList {
 
 unsafe extern "system" fn query_interface(
     this: *mut FUnknown,
-    requested: *const i8,
+    requested: *const c_char,
     output: *mut *mut c_void,
 ) -> tresult {
     if requested.is_null() || output.is_null() {
