@@ -1,11 +1,19 @@
-use std::{thread, time::Duration};
+use std::{
+    thread,
+    time::{Duration, Instant},
+};
 
 use yadaw_audio_host::engine::{
     NativeAudioEngineConfig, NativeMixerChannel, NativeMixerGraph, begin_graph_build,
-    compile_graph_build, publish_mixer_runtime, start_audio_engine, stop_audio_engine,
-    transport_command, transport_snapshot,
+    compile_graph_build, heartbeat_snapshot, publish_mixer_runtime, start_audio_engine,
+    stop_audio_engine, transport_command, transport_snapshot,
 };
 use yadaw_dsp_runtime::tempo::{TempoEvent, TimeSignatureEvent};
+
+const VIRTUAL_BLOCK_FRAMES: u64 = 128;
+const NATIVE_SAMPLE_RATE: u64 = 48_000;
+const PROJECT_SAMPLE_RATE: u64 = 44_100;
+const CALLBACKS_TO_OBSERVE: u64 = 64;
 
 #[test]
 fn virtual_backend_uses_the_project_clock_over_native_48_khz_io() {
@@ -80,15 +88,49 @@ fn virtual_backend_uses_the_project_clock_over_native_48_khz_io() {
     let built = compile_graph_build(begin_graph_build(graph).unwrap()).unwrap();
     publish_mixer_runtime(built).unwrap();
     transport_command("play".to_owned(), None).unwrap();
-    thread::sleep(Duration::from_millis(120));
 
-    let transport = transport_snapshot().unwrap();
-    assert_eq!(transport.sample_rate, 44_100);
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let (start_generation, start_position) = loop {
+        let (generation, state) = heartbeat_snapshot();
+        let transport = transport_snapshot().unwrap();
+        if state == "playing" && transport.position_frames > 0 {
+            break (generation, transport.position_frames);
+        }
+        assert!(
+            Instant::now() < deadline,
+            "virtual transport did not start before the timeout"
+        );
+        thread::sleep(Duration::from_millis(1));
+    };
+    let target_generation = start_generation.saturating_add(CALLBACKS_TO_OBSERVE);
+
+    let (end_generation, transport) = loop {
+        let (generation, _) = heartbeat_snapshot();
+        let transport = transport_snapshot().unwrap();
+        if generation >= target_generation {
+            break (generation, transport);
+        }
+        assert!(
+            Instant::now() < deadline,
+            "virtual audio callbacks did not advance before the timeout"
+        );
+        thread::sleep(Duration::from_millis(1));
+    };
+
+    let callback_count = end_generation.saturating_sub(start_generation);
+    let expected_project_frames = callback_count
+        .saturating_mul(VIRTUAL_BLOCK_FRAMES)
+        .saturating_mul(PROJECT_SAMPLE_RATE)
+        / NATIVE_SAMPLE_RATE;
+    let advanced_project_frames =
+        u64::try_from(transport.position_frames.saturating_sub(start_position)).unwrap();
+
+    assert_eq!(transport.sample_rate, PROJECT_SAMPLE_RATE as u32);
     assert_eq!(transport.state, "playing");
     assert!(
-        (500..=8_000).contains(&transport.position_frames),
-        "virtual transport advanced {} project frames",
-        transport.position_frames
+        advanced_project_frames.abs_diff(expected_project_frames) <= VIRTUAL_BLOCK_FRAMES,
+        "virtual transport advanced {advanced_project_frames} project frames over \
+         {callback_count} native callbacks; expected about {expected_project_frames}"
     );
     stop_audio_engine().unwrap();
 }
