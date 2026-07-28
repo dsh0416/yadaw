@@ -94,10 +94,10 @@ jobs:
             crates/audio-host-client/*.darwin-arm64.node \
             crates/audio-host-client/*.darwin-x64.node
 
-          lipo -verify_arch arm64 x86_64 \
-            crates/dsp-node/yadaw-dsp-node.darwin-universal.node
-          lipo -verify_arch arm64 x86_64 \
-            crates/audio-host-client/yadaw-audio-host-client.darwin-universal.node
+          lipo crates/dsp-node/yadaw-dsp-node.darwin-universal.node \
+            -verify_arch arm64 x86_64
+          lipo crates/audio-host-client/yadaw-audio-host-client.darwin-universal.node \
+            -verify_arch arm64 x86_64
 
           for target in "$ARM_TARGET" "$X64_TARGET"; do
             cargo build \
@@ -118,7 +118,7 @@ jobs:
               "target/$ARM_TARGET/release/$binary" \
               "target/$X64_TARGET/release/$binary" \
               -output "target/release/$binary"
-            lipo -verify_arch arm64 x86_64 "target/release/$binary"
+            lipo "target/release/$binary" -verify_arch arm64 x86_64
           done
 
           for arm_bundle in "target/bundles/$ARM_TARGET"/*.vst3; do
@@ -133,8 +133,8 @@ jobs:
                 "$arm_binary" \
                 "$x64_bundle/$relative_path" \
                 -output "$universal_bundle/$relative_path"
-              lipo -verify_arch arm64 x86_64 \
-                "$universal_bundle/$relative_path"
+              lipo "$universal_bundle/$relative_path" \
+                -verify_arch arm64 x86_64
             done < <(find "$arm_bundle/Contents/MacOS" -type f -print0)
           done
 
@@ -150,7 +150,7 @@ jobs:
       - name: Upload installer
         uses: actions/upload-artifact@v7
         with:
-          name: yadaw-${{ needs.metadata.outputs.version }}-${{ matrix.artifact }}
+          name: yadaw-${{ matrix.artifact }}
           path: ${{ matrix.package-glob }}
           if-no-files-found: error
           retention-days: 14

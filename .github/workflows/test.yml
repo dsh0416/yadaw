@@ -21,38 +21,8 @@ env:
   RUST_BACKTRACE: "1"
 
 jobs:
-  metadata:
-    name: Validate version metadata
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      version: ${{ steps.version.outputs.version }}
-    steps:
-      - name: Check out source
-        uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-
-      - name: Validate tag and VERSION
-        id: version
-        shell: bash
-        run: |
-          version="$(tr -d '\r\n' < VERSION)"
-          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
-            echo "::error::VERSION is not a valid release version: $version"
-            exit 1
-          fi
-
-          if [[ "$GITHUB_REF" == refs/tags/* && "$GITHUB_REF_NAME" != "v$version" ]]; then
-            echo "::error::Tag $GITHUB_REF_NAME does not match VERSION ($version)"
-            exit 1
-          fi
-
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-
   checks:
     name: Checks (${{ matrix.name }})
-    needs: metadata
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     strategy:

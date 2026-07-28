@@ -94,7 +94,7 @@ jobs:
       - name: Download installers from Build
         uses: actions/download-artifact@v8
         with:
-          pattern: yadaw-${{ needs.gate.outputs.version }}-*
+          pattern: yadaw-*
           path: release-assets
           merge-multiple: true
           github-token: ${{ github.token }}
