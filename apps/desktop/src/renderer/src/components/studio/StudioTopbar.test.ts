@@ -79,7 +79,12 @@ function mountTopbar() {
       plugins: [createPinia()],
       stubs: {
         TooltipRoot: { template: "<div><slot /></div>" },
-        TooltipTrigger: { template: "<slot />" },
+        TooltipTrigger: {
+          props: {
+            asChild: Boolean
+          },
+          template: "<slot />"
+        },
         TooltipPortal: true,
         TooltipContent: true,
         TooltipArrow: true

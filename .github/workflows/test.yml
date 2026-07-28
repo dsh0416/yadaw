@@ -47,5 +47,16 @@ jobs:
           github-token: >-
             ${{ github.event_name == 'pull_request' && '' || github.token }}
 
+      - name: Install Playwright Chromium and Linux dependencies
+        if: runner.os == 'Linux'
+        run: >-
+          pnpm --filter @yadaw/design-system exec playwright install
+          --with-deps chromium
+
+      - name: Install Playwright Chromium
+        if: runner.os != 'Linux'
+        run: >-
+          pnpm --filter @yadaw/design-system exec playwright install chromium
+
       - name: Run repository checks
         run: pnpm check
