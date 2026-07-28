@@ -13,7 +13,8 @@ use yadaw_dsp_runtime::tempo::{TempoEvent, TimeSignatureEvent};
 const VIRTUAL_BLOCK_FRAMES: u64 = 128;
 const NATIVE_SAMPLE_RATE: u64 = 48_000;
 const PROJECT_SAMPLE_RATE: u64 = 44_100;
-const CALLBACKS_TO_OBSERVE: u64 = 64;
+const CALLBACKS_TO_OBSERVE: u64 = 128;
+const MAX_CLOCK_RATE_ERROR_PERCENT: u64 = 2;
 
 fn stable_transport_snapshot() -> (u64, NativeTransportSnapshot) {
     loop {
@@ -134,15 +135,22 @@ fn virtual_backend_uses_the_project_clock_over_native_48_khz_io() {
         .saturating_mul(VIRTUAL_BLOCK_FRAMES)
         .saturating_mul(PROJECT_SAMPLE_RATE)
         / NATIVE_SAMPLE_RATE;
+    // Project frames are rendered in resampler refill batches rather than one
+    // at a time. A transport snapshot can therefore be ahead of or behind the
+    // callback count by one batch. Over this observation window a batch is
+    // less than 2%, while a native 48 kHz clock would be about 8.8% too fast.
+    let max_project_frame_error =
+        expected_project_frames.saturating_mul(MAX_CLOCK_RATE_ERROR_PERCENT) / 100;
     let advanced_project_frames =
         u64::try_from(transport.position_frames.saturating_sub(start_position)).unwrap();
 
     assert_eq!(transport.sample_rate, PROJECT_SAMPLE_RATE as u32);
     assert_eq!(transport.state, "playing");
     assert!(
-        advanced_project_frames.abs_diff(expected_project_frames) <= VIRTUAL_BLOCK_FRAMES,
+        advanced_project_frames.abs_diff(expected_project_frames) <= max_project_frame_error,
         "virtual transport advanced {advanced_project_frames} project frames over \
-         {callback_count} native callbacks; expected about {expected_project_frames}"
+         {callback_count} native callbacks; expected {expected_project_frames} within \
+         {MAX_CLOCK_RATE_ERROR_PERCENT}% ({max_project_frame_error} frames)"
     );
     stop_audio_engine().unwrap();
 }
