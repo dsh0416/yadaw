@@ -21,6 +21,8 @@ defineSlots<{
   default(): unknown
 }>()
 
+const appVersion = __APP_VERSION__
+
 function firstEnabledPage(category: SettingsCategory): SettingsPageDefinition | undefined {
   return category.pages.find((page) => !page.disabled)
 }
@@ -116,7 +118,7 @@ watch(
           <small v-if="category.badge">{{ category.badge }}</small>
         </button>
       </nav>
-      <div class="settings-build-label">Yadaw / build 0.0.0</div>
+      <div class="settings-build-label">Yadaw / build {{ appVersion }}</div>
     </aside>
 
     <aside class="settings-secondary-sidebar">

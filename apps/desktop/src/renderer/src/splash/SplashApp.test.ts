@@ -32,7 +32,7 @@ describe("SplashApp", () => {
     const wrapper = mount(SplashApp)
     await flushPromises()
     expect(wrapper.text()).toContain("https://github.com/dsh0416/yadaw")
-    expect(wrapper.text()).toContain("v0.0.0")
+    expect(wrapper.text()).toContain(`v${__APP_VERSION__}`)
     expect(wrapper.text()).toContain("Loading plug-in catalog")
     expect(wrapper.text()).not.toContain("Reading the previous VST3 index")
     expect(wrapper.findAll(".progress-track > i")).toHaveLength(0)

@@ -1,18 +1,14 @@
-import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import vue from "@vitejs/plugin-vue"
 import { defineConfig } from "vite"
-
-const { version } = JSON.parse(
-  readFileSync(new URL("./package.json", import.meta.url), "utf8")
-) as { version: string }
+import { appVersionDefine } from "./build/app-version"
 
 export default defineConfig({
   base: "./",
   root: resolve(import.meta.dirname, "src/renderer"),
   plugins: [vue()],
   define: {
-    __APP_VERSION__: JSON.stringify(version)
+    __APP_VERSION__: appVersionDefine
   },
   build: {
     emptyOutDir: true,

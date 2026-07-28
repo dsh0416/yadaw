@@ -5,7 +5,7 @@ import { useStartupStore } from "../stores/startup"
 
 const startup = useStartupStore()
 const projectUrl = "https://github.com/dsh0416/yadaw"
-const appVersion = typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "0.0.0"
+const appVersion = __APP_VERSION__
 const percentage = computed(() => Math.round(startup.progress.progress * 100))
 
 onMounted(() => void startup.load())
