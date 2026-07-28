@@ -605,10 +605,17 @@ mod platform {
     }
 
     unsafe fn set_xembed_info(display: *mut Display, window: XWindow) {
-        let property = unsafe { XInternAtom(display, c"_XEMBED_INFO".as_ptr(), 0) };
-        let cardinal = unsafe { XInternAtom(display, c"CARDINAL".as_ptr(), 0) };
+        let property = unsafe {
+            // SAFETY: display is a live X11 connection and the atom name is a static C string.
+            XInternAtom(display, c"_XEMBED_INFO".as_ptr(), 0)
+        };
+        let cardinal = unsafe {
+            // SAFETY: display is a live X11 connection and the atom name is a static C string.
+            XInternAtom(display, c"CARDINAL".as_ptr(), 0)
+        };
         let values = [0_u32, 1_u32];
         unsafe {
+            // SAFETY: display/window are live, atoms were interned above, and values outlives the call.
             XChangeProperty(
                 display,
                 window,
