@@ -23,7 +23,6 @@ env:
 jobs:
   package:
     name: Package (${{ matrix.name }})
-    needs: metadata
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     strategy:
