@@ -1,0 +1,648 @@
+#[cfg(test)]
+mod tests {
+    use std::{
+        fs,
+        sync::Arc,
+        thread,
+        time::{Duration, SystemTime, UNIX_EPOCH},
+    };
+
+    use super::{
+        AdaptiveResampler, AudioEngineKey, BufferSelection, BufferSize, ClipStoragePolicy,
+        InputPeakBank, LivePlugin, MAX_INPUT_CHANNELS, MAX_OUTPUT_CHANNELS,
+        MEMORY_DECODE_LIMIT_BYTES, METRONOME_ACCENT_NOTE, METRONOME_BEAT_NOTE, MetronomeScheduler,
+        NativeMixerChannel, NativeMixerGraph, NativeMixerSend, NativePluginInstance,
+        NativeRoundTripLatencyMeasurementRequest, OUTPUT_RESAMPLER_FRAMES, RoundTripInputDetector,
+        RoundTripLatencyMeasurement, RoundTripOutputProbe, SessionOutputConverter, SignalWidth,
+        StereoDelayLine, SupportedBufferSize, clip_storage_policy, compiled_graph_snapshot,
+        frames_to_nanos, resolve_stream_devices, select_buffer_size, spawn_streaming_clip,
+        validate_session_sample_rate,
+    };
+    use crate::recording::{NativeRecordingStartConfig, write_deterministic_test_recording};
+    use crate::vst3::ProcessContext;
+    use ringbuf::{
+        HeapRb,
+        traits::{Producer, Split},
+    };
+    use yadaw_dsp_runtime::protocol::{
+        CompiledGraphNodeKind, CompiledGraphPluginState, LiveMixerSendTap, PluginAudioMode,
+    };
+    use yadaw_dsp_runtime::tempo::{TempoEvent, TempoMap, TimeSignatureEvent};
+
+    fn assert_fixed(selection: BufferSelection, expected: u32, fell_back: bool) {
+        assert!(matches!(selection.buffer_size, BufferSize::Fixed(value) if value == expected));
+        assert_eq!(selection.expected_frames, expected);
+        assert_eq!(selection.fell_back, fell_back);
+    }
+
+    #[test]
+    fn keeps_a_supported_requested_buffer_size() {
+        assert_fixed(
+            select_buffer_size(&SupportedBufferSize::Range { min: 32, max: 512 }, 64),
+            64,
+            false,
+        );
+    }
+
+    #[test]
+    fn streams_only_assets_above_the_memory_decode_limit() {
+        assert_eq!(
+            clip_storage_policy(MEMORY_DECODE_LIMIT_BYTES),
+            ClipStoragePolicy::Memory
+        );
+        assert_eq!(
+            clip_storage_policy(MEMORY_DECODE_LIMIT_BYTES + 1),
+            ClipStoragePolicy::Streaming
+        );
+    }
+
+    #[test]
+    fn falls_back_to_the_driver_default_outside_the_device_range() {
+        let selection = select_buffer_size(&SupportedBufferSize::Range { min: 480, max: 480 }, 64);
+        assert!(matches!(selection.buffer_size, BufferSize::Default));
+        assert_eq!(selection.expected_frames, 480);
+        assert!(selection.fell_back);
+    }
+
+    #[test]
+    fn uses_the_driver_default_when_the_range_is_unknown() {
+        let selection = select_buffer_size(&SupportedBufferSize::Unknown, 64);
+        assert!(matches!(selection.buffer_size, BufferSize::Default));
+        assert_eq!(selection.expected_frames, 64);
+        assert!(selection.fell_back);
+    }
+
+    #[test]
+    fn matched_loopback_probe_reports_the_synthetic_physical_delay() {
+        let measurement = Arc::new(RoundTripLatencyMeasurement::new(2, 2, 48_000));
+        measurement
+            .start(NativeRoundTripLatencyMeasurementRequest {
+                input_channel: 2,
+                output_channel: 2,
+            })
+            .unwrap();
+        let mut detector = RoundTripInputDetector::new(Arc::clone(&measurement));
+        let mut probe = RoundTripOutputProbe::new(Arc::clone(&measurement));
+
+        for frame in 0..2_400 {
+            detector.observe(&[0.0, 0.0], frames_to_nanos(frame, 48_000));
+        }
+        let emitted_at_ns = 1_000_000_000_u64;
+        let mut captured_probe = Vec::new();
+        for frame in 0..super::LOOPBACK_PROBE.len() {
+            let mut output = [0.0, 0.0];
+            probe.apply(
+                &mut output,
+                emitted_at_ns.saturating_add(frames_to_nanos(frame, 48_000)),
+            );
+            captured_probe.push(output[1]);
+        }
+
+        let delayed_frames = 480_usize;
+        for frame in 0..delayed_frames {
+            detector.observe(
+                &[0.0, 0.0],
+                emitted_at_ns.saturating_add(frames_to_nanos(frame, 48_000)),
+            );
+        }
+        for (offset, sample) in captured_probe.into_iter().enumerate() {
+            detector.observe(
+                &[0.0, sample],
+                emitted_at_ns.saturating_add(frames_to_nanos(delayed_frames + offset, 48_000)),
+            );
+        }
+
+        let snapshot = measurement.snapshot();
+        assert_eq!(snapshot.status, "complete");
+        let latency = snapshot
+            .measured_round_trip_latency_ms
+            .expect("matched probe should produce latency");
+        assert!((latency - 10.0).abs() < 0.02, "{latency}");
+    }
+
+    #[test]
+    fn sinc_resampler_preserves_all_hardware_input_channels() {
+        let ring = HeapRb::new(4_096);
+        let (mut producer, consumer) = ring.split();
+        for _ in 0..2_048 {
+            let mut input = [0.0; MAX_INPUT_CHANNELS];
+            input[0] = 0.25;
+            input[MAX_INPUT_CHANNELS - 1] = -0.5;
+            producer.try_push(input).expect("fixture ring has capacity");
+        }
+        let mut resampler =
+            AdaptiveResampler::new(consumer, 48_000, 48_000, MAX_INPUT_CHANNELS, 1_024, 4_096)
+                .expect("resampler configuration is valid");
+        let mut output = [0.0; MAX_INPUT_CHANNELS];
+        for _ in 0..512 {
+            (output, _) = resampler.next_frame();
+        }
+
+        assert!((output[0] - 0.25).abs() < 0.01);
+        assert!((output[MAX_INPUT_CHANNELS - 1] + 0.5).abs() < 0.01);
+    }
+
+    #[test]
+    fn native_input_is_converted_to_the_session_rate_without_losing_channels() {
+        let ring = HeapRb::new(8_192);
+        let (mut producer, consumer) = ring.split();
+        for _ in 0..4_096 {
+            let mut input = [0.0; MAX_INPUT_CHANNELS];
+            for (channel, sample) in input.iter_mut().enumerate() {
+                *sample = (channel + 1) as f32 / MAX_INPUT_CHANNELS as f32;
+            }
+            producer.try_push(input).expect("fixture ring has capacity");
+        }
+        let mut resampler =
+            AdaptiveResampler::new(consumer, 48_000, 44_100, MAX_INPUT_CHANNELS, 2_048, 8_192)
+                .expect("resampler configuration is valid");
+        let mut output = [0.0; MAX_INPUT_CHANNELS];
+        for _ in 0..2_048 {
+            (output, _) = resampler.next_frame();
+        }
+
+        for (channel, sample) in output.iter().enumerate() {
+            let expected = (channel + 1) as f32 / MAX_INPUT_CHANNELS as f32;
+            assert!((sample - expected).abs() < 0.01, "channel {channel}");
+        }
+    }
+
+    fn rendered_session_frames(
+        session_sample_rate: u32,
+        output_sample_rate: u32,
+        output_frames: usize,
+    ) -> usize {
+        let mut converter =
+            SessionOutputConverter::new(session_sample_rate, output_sample_rate, 2).unwrap();
+        let mut rendered = 0;
+        for _ in 0..output_frames {
+            let (_, _, frames) = converter.next_frame(|| ([0.0; MAX_OUTPUT_CHANNELS], false));
+            rendered += frames;
+        }
+        rendered
+    }
+
+    #[test]
+    fn session_output_converter_bypasses_equal_rates_exactly() {
+        let converter = SessionOutputConverter::new(48_000, 48_000, 2).unwrap();
+        assert!(matches!(converter, SessionOutputConverter::Bypass));
+        assert_eq!(rendered_session_frames(48_000, 48_000, 48_000), 48_000);
+    }
+
+    #[test]
+    fn session_output_converter_consumes_project_frames_at_44_1_and_96_khz() {
+        for session_sample_rate in [44_100_u32, 96_000] {
+            let rendered = rendered_session_frames(session_sample_rate, 48_000, 48_000);
+            let expected = session_sample_rate as usize;
+            assert!(
+                rendered.abs_diff(expected) <= OUTPUT_RESAMPLER_FRAMES * 2,
+                "{session_sample_rate} Hz rendered {rendered} frames, expected about {expected}"
+            );
+        }
+    }
+
+    #[test]
+    fn session_output_converter_preserves_every_active_hardware_channel() {
+        let mut converter =
+            SessionOutputConverter::new(44_100, 48_000, MAX_OUTPUT_CHANNELS).unwrap();
+        let mut output = [0.0; MAX_OUTPUT_CHANNELS];
+        for _ in 0..4_096 {
+            (output, _, _) = converter.next_frame(|| {
+                let mut frame = [0.0; MAX_OUTPUT_CHANNELS];
+                for (channel, sample) in frame.iter_mut().enumerate() {
+                    *sample = (channel + 1) as f32 / MAX_OUTPUT_CHANNELS as f32;
+                }
+                (frame, false)
+            });
+        }
+        for (channel, sample) in output.iter().enumerate() {
+            let expected = (channel + 1) as f32 / MAX_OUTPUT_CHANNELS as f32;
+            assert!((sample - expected).abs() < 0.01, "channel {channel}");
+        }
+    }
+
+    #[test]
+    fn audio_engine_identity_includes_the_requested_session_rate() {
+        let base = AudioEngineKey {
+            backend: "virtual".to_owned(),
+            input_device_id: "input".to_owned(),
+            output_device_id: "output".to_owned(),
+            requested_buffer_size: 128,
+            requested_session_sample_rate: Some(44_100),
+        };
+        let same = base.clone();
+        let changed = AudioEngineKey {
+            requested_session_sample_rate: Some(96_000),
+            ..base.clone()
+        };
+        assert_eq!(base, same);
+        assert_ne!(base, changed);
+    }
+
+    #[test]
+    fn graph_publication_rejects_a_different_session_rate() {
+        assert!(validate_session_sample_rate(44_100, 44_100).is_ok());
+        let error = validate_session_sample_rate(44_100, 48_000).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("mixer sample rate does not match")
+        );
+    }
+
+    #[test]
+    fn captures_multichannel_input_peaks_and_resets_the_snapshot() {
+        let peaks = InputPeakBank::new();
+        peaks.observe(&[0.25, -0.75, 1.25]);
+        peaks.observe(&[-0.5, 0.5, 0.25]);
+        let mut snapshot = [0.0; MAX_INPUT_CHANNELS];
+        peaks.take_all(&mut snapshot);
+        assert_eq!(&snapshot[..3], &[0.5, 0.75, 1.25]);
+        peaks.take_all(&mut snapshot);
+        assert_eq!(&snapshot[..3], &[0.0, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn asio_resolves_one_shared_device_for_duplex_streams() {
+        let mut calls = Vec::new();
+        let (input, output) =
+            resolve_stream_devices("asio", "us-1x2hr", "us-1x2hr", |id, input| {
+                calls.push((id.to_owned(), input));
+                Ok(id.to_owned())
+            })
+            .unwrap();
+
+        assert_eq!(input, "us-1x2hr");
+        assert_eq!(output, "us-1x2hr");
+        assert_eq!(calls, [("us-1x2hr".to_owned(), true)]);
+    }
+
+    #[test]
+    fn non_asio_backends_resolve_independent_input_and_output_devices() {
+        let mut calls = Vec::new();
+        resolve_stream_devices("wasapi", "microphone", "speakers", |id, input| {
+            calls.push((id.to_owned(), input));
+            Ok(id.to_owned())
+        })
+        .unwrap();
+
+        assert_eq!(
+            calls,
+            [
+                ("microphone".to_owned(), true),
+                ("speakers".to_owned(), false)
+            ]
+        );
+    }
+
+    #[test]
+    fn asio_rejects_different_input_and_output_drivers() {
+        let result = resolve_stream_devices("asio", "input-driver", "output-driver", |_, _| {
+            Ok(String::new())
+        });
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn metronome_starts_on_an_exact_beat_and_releases_after_twenty_ms() {
+        let map = TempoMap::default_120_bpm();
+        let mut scheduler = MetronomeScheduler::new(Some(2), &map, 48_000, 0);
+
+        let at_origin = scheduler.events_at(&map, 48_000, 0);
+        let note_on = at_origin.into_iter().flatten().find(|event| event.note_on);
+        assert!(note_on.is_some_and(|event| {
+            event.channel_index == 2 && event.key == METRONOME_ACCENT_NOTE
+        }));
+        assert!(scheduler.events_at(&map, 48_000, 959)[0].is_none());
+        let release = scheduler.events_at(&map, 48_000, 960);
+        assert!(
+            release
+                .into_iter()
+                .flatten()
+                .any(|event| !event.note_on && event.key == METRONOME_ACCENT_NOTE)
+        );
+        assert_eq!(scheduler.next.map(|boundary| boundary.frame), Some(24_000));
+    }
+
+    #[test]
+    fn metronome_seek_waits_for_the_next_beat_unless_seek_is_exact() {
+        let map = TempoMap::default_120_bpm();
+        let mut scheduler = MetronomeScheduler::new(Some(0), &map, 48_000, 12_000);
+        assert_eq!(scheduler.next.map(|boundary| boundary.frame), Some(24_000));
+        assert!(scheduler.events_at(&map, 48_000, 12_000)[0].is_none());
+
+        scheduler.reposition(&map, 48_000, 24_000, true);
+        let exact = scheduler.events_at(&map, 48_000, 24_000);
+        assert!(
+            exact
+                .into_iter()
+                .flatten()
+                .any(|event| event.note_on && event.key == METRONOME_BEAT_NOTE)
+        );
+    }
+
+    #[test]
+    fn metronome_uses_the_signature_denominator_and_restarts_at_markers() {
+        let map = TempoMap::new(
+            vec![TempoEvent {
+                tick: 0,
+                beats_per_minute: 120.0,
+            }],
+            vec![
+                TimeSignatureEvent {
+                    tick: 0,
+                    numerator: 6,
+                    denominator: 8,
+                },
+                TimeSignatureEvent {
+                    tick: 3_000,
+                    numerator: 3,
+                    denominator: 4,
+                },
+            ],
+        )
+        .unwrap();
+        let mut scheduler = MetronomeScheduler::new(Some(0), &map, 48_000, 1);
+        assert_eq!(scheduler.next.map(|boundary| boundary.tick), Some(480));
+        assert!(!scheduler.next.is_some_and(|boundary| boundary.accent));
+
+        scheduler.reposition(&map, 48_000, 73_000, true);
+        assert_eq!(scheduler.next.map(|boundary| boundary.tick), Some(3_000));
+        assert!(scheduler.next.is_some_and(|boundary| boundary.accent));
+    }
+
+    #[test]
+    fn metronome_frames_follow_step_tempo_changes() {
+        let map = TempoMap::new(
+            vec![
+                TempoEvent {
+                    tick: 0,
+                    beats_per_minute: 120.0,
+                },
+                TempoEvent {
+                    tick: 1_920,
+                    beats_per_minute: 60.0,
+                },
+            ],
+            vec![TimeSignatureEvent {
+                tick: 0,
+                numerator: 4,
+                denominator: 4,
+            }],
+        )
+        .unwrap();
+        let scheduler = MetronomeScheduler::new(Some(0), &map, 48_000, 48_001);
+        assert_eq!(scheduler.next.map(|boundary| boundary.tick), Some(2_880));
+        assert_eq!(scheduler.next.map(|boundary| boundary.frame), Some(96_000));
+    }
+
+    #[test]
+    fn streaming_clip_prefetches_and_restarts_after_a_seek_generation() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "yadaw-streaming-{}-{nonce}.bwf",
+            std::process::id()
+        ));
+        write_deterministic_test_recording(
+            NativeRecordingStartConfig {
+                path: path.to_string_lossy().into_owned(),
+                asset_id: "streaming-test".to_owned(),
+                originator: "YADAW test".to_owned(),
+                origination_date: "2026-07-24".to_owned(),
+                origination_time: "12:00:00".to_owned(),
+                time_reference: 0,
+            },
+            48_000,
+            4_800,
+        )
+        .unwrap();
+        let (mut stream, frames) =
+            spawn_streaming_clip(path.to_string_lossy().into_owned(), 48_000, 0).unwrap();
+        assert_eq!(frames, 4_800);
+        assert!(stream.sample_at(0).is_some());
+
+        let mut refilled = false;
+        for frame in 1_234..1_334 {
+            if stream.sample_at(frame).is_some() {
+                refilled = true;
+                break;
+            }
+            thread::sleep(Duration::from_millis(2));
+        }
+        assert!(refilled);
+        drop(stream);
+        fs::remove_file(path).unwrap();
+    }
+
+    fn test_process_context() -> ProcessContext {
+        ProcessContext {
+            project_time_samples: 0,
+            continuous_time_samples: 0,
+            project_time_quarters: 0.0,
+            bar_position_quarters: 0.0,
+            tempo: 120.0,
+            time_signature_numerator: 4,
+            time_signature_denominator: 4,
+            playing: false,
+            recording: false,
+        }
+    }
+
+    fn missing_effect(mode: PluginAudioMode, enabled: bool) -> LivePlugin {
+        LivePlugin {
+            processor: None,
+            audio_mode: mode,
+            enabled,
+            is_instrument: false,
+            bypass_delay: StereoDelayLine::new(0),
+            marker_index: 0,
+        }
+    }
+
+    #[test]
+    fn hidden_channel_adapters_downmix_and_upmix_at_chain_boundaries() {
+        let context = test_process_context();
+        let mut width = SignalWidth::Stereo;
+        let mut mono = missing_effect(PluginAudioMode::Mono, true);
+        let frame = mono.process([1.0, 3.0], &mut width, &context);
+        assert_eq!(frame, [2.0, 0.0]);
+        assert!(matches!(width, SignalWidth::Mono));
+
+        let mut stereo = missing_effect(PluginAudioMode::Stereo, true);
+        let frame = stereo.process(frame, &mut width, &context);
+        assert_eq!(frame, [2.0, 2.0]);
+        assert!(matches!(width, SignalWidth::Stereo));
+    }
+
+    #[test]
+    fn bypassed_modes_keep_their_selected_topology() {
+        let context = test_process_context();
+        let mut width = SignalWidth::Stereo;
+        let mut mono_to_stereo = missing_effect(PluginAudioMode::MonoToStereo, false);
+        let frame = mono_to_stereo.process([1.0, 3.0], &mut width, &context);
+        assert_eq!(frame, [2.0, 2.0]);
+        assert!(matches!(width, SignalWidth::Stereo));
+
+        let mut mono = missing_effect(PluginAudioMode::Mono, false);
+        let frame = mono.process(frame, &mut width, &context);
+        assert_eq!(frame, [2.0, 0.0]);
+        assert!(matches!(width, SignalWidth::Mono));
+    }
+
+    #[test]
+    fn every_adjacent_effect_mode_pair_has_a_legal_hidden_adapter_path() {
+        use PluginAudioMode::{DualMono, Mono, MonoToStereo, Stereo};
+
+        let cases = [
+            (Mono, Mono, [2.0, 0.0], true),
+            (Mono, MonoToStereo, [2.0, 2.0], false),
+            (Mono, Stereo, [2.0, 2.0], false),
+            (Mono, DualMono, [2.0, 2.0], false),
+            (MonoToStereo, Mono, [2.0, 0.0], true),
+            (MonoToStereo, MonoToStereo, [2.0, 2.0], false),
+            (MonoToStereo, Stereo, [2.0, 2.0], false),
+            (MonoToStereo, DualMono, [2.0, 2.0], false),
+            (Stereo, Mono, [2.0, 0.0], true),
+            (Stereo, MonoToStereo, [2.0, 2.0], false),
+            (Stereo, Stereo, [1.0, 3.0], false),
+            (Stereo, DualMono, [1.0, 3.0], false),
+            (DualMono, Mono, [2.0, 0.0], true),
+            (DualMono, MonoToStereo, [2.0, 2.0], false),
+            (DualMono, Stereo, [1.0, 3.0], false),
+            (DualMono, DualMono, [1.0, 3.0], false),
+        ];
+        let context = test_process_context();
+
+        for (first_mode, second_mode, expected, expected_mono) in cases {
+            let mut width = SignalWidth::Stereo;
+            let mut first = missing_effect(first_mode, false);
+            let mut second = missing_effect(second_mode, false);
+            let frame = first.process([1.0, 3.0], &mut width, &context);
+            let frame = second.process(frame, &mut width, &context);
+            assert_eq!(
+                frame, expected,
+                "{first_mode:?} followed by {second_mode:?}"
+            );
+            assert_eq!(
+                matches!(width, SignalWidth::Mono),
+                expected_mono,
+                "{first_mode:?} followed by {second_mode:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn compiled_snapshot_exposes_adapters_plugin_states_and_route_pdc() {
+        fn channel(
+            id: &str,
+            output_index: Option<u32>,
+            input_channels: Vec<u32>,
+        ) -> NativeMixerChannel {
+            NativeMixerChannel {
+                id: id.to_owned(),
+                kind: if id == "output" { "output" } else { "audio" }.to_owned(),
+                system_role: None,
+                gain_db: 0.0,
+                pan: 0.0,
+                muted: false,
+                soloed: false,
+                output_index,
+                output_bus: None,
+                record_armed: false,
+                input_monitoring: false,
+                input_source: (id != "output").then(|| "hardware".to_owned()),
+                input_channels,
+                hardware_output_channels: (id == "output")
+                    .then_some(vec![1, 2])
+                    .unwrap_or_default(),
+            }
+        }
+        let graph = NativeMixerGraph {
+            generation: 17,
+            sample_rate: 48_000,
+            channels: vec![
+                channel("wet", Some(3), vec![1]),
+                channel("send-source", None, vec![2, 3]),
+                channel("dry", Some(3), vec![4, 5]),
+                channel("output", None, Vec::new()),
+            ],
+            sends: vec![NativeMixerSend {
+                id: "parallel".to_owned(),
+                source_index: 1,
+                target_output_index: Some(3),
+                target_bus: None,
+                enabled: true,
+                tap: LiveMixerSendTap::PostPan,
+                level_db: 0.0,
+            }],
+            clips: Vec::new(),
+            plugins: vec![
+                NativePluginInstance {
+                    instance_id: "missing".to_owned(),
+                    channel_index: 0,
+                    role: "insert".to_owned(),
+                    slot_order: 0,
+                    audio_mode: PluginAudioMode::Stereo,
+                    enabled: true,
+                    latency_samples: 64,
+                    tail_samples: Some(0),
+                    processor: None,
+                },
+                NativePluginInstance {
+                    instance_id: "bypassed".to_owned(),
+                    channel_index: 1,
+                    role: "insert".to_owned(),
+                    slot_order: 0,
+                    audio_mode: PluginAudioMode::Stereo,
+                    enabled: false,
+                    latency_samples: 32,
+                    tail_samples: Some(0),
+                    processor: None,
+                },
+            ],
+            midi_clips: Vec::new(),
+            tempo_events: Vec::new(),
+            time_signature_events: Vec::new(),
+        };
+
+        let snapshot = compiled_graph_snapshot(&graph, 23);
+
+        assert_eq!(snapshot.graph_revision, 17);
+        assert_eq!(snapshot.build_generation, 23);
+        assert!(snapshot.nodes.iter().any(|node| {
+            node.kind == CompiledGraphNodeKind::WidthAdapter
+                && node.channel_id.as_deref() == Some("wet")
+        }));
+        assert!(
+            snapshot
+                .nodes
+                .iter()
+                .any(|node| { node.plugin_state == Some(CompiledGraphPluginState::Unavailable) })
+        );
+        assert!(
+            snapshot
+                .nodes
+                .iter()
+                .any(|node| { node.plugin_state == Some(CompiledGraphPluginState::Bypassed) })
+        );
+        assert!(snapshot.nodes.iter().any(|node| {
+            node.kind == CompiledGraphNodeKind::PdcDelay
+                && node.label == "Channel PDC"
+                && node.latency_samples == 64
+        }));
+        assert!(snapshot.nodes.iter().any(|node| {
+            node.kind == CompiledGraphNodeKind::PdcDelay
+                && node.label == "Send PDC"
+                && node.latency_samples == 32
+        }));
+        assert!(snapshot.nodes.iter().any(|node| {
+            node.kind == CompiledGraphNodeKind::PdcDelay
+                && node.label == "Bypass compensation"
+                && node.latency_samples == 32
+        }));
+    }
+}

@@ -1,0 +1,296 @@
+fn validate_native_build_fingerprint(value: &str) -> Result<(), String> {
+    if value == NATIVE_BUILD_FINGERPRINT {
+        Ok(())
+    } else {
+        Err(format!(
+            "audio-host native build mismatch: addon={value}, helper={NATIVE_BUILD_FINGERPRINT}"
+        ))
+    }
+}
+
+struct ProtocolActorDeps {
+    ui_proxy: EventLoopProxy<UiEvent>,
+    ui_sender: std_mpsc::SyncSender<ActorRequest>,
+    host_event_inbox: std_mpsc::Receiver<HostEvent>,
+    processors: Arc<Mutex<HashMap<String, vst3::Vst3ProcessorHandle>>>,
+    winit_generation: Arc<AtomicU64>,
+    runtime_config: RuntimeConfig,
+    background_sender: mpsc::Sender<ActorRequest>,
+    background_inbox: mpsc::Receiver<ActorRequest>,
+}
+
+async fn run_protocol_actor(
+    bootstrap: HostBootstrap,
+    deps: ProtocolActorDeps,
+) -> Result<(), String> {
+    const ACTOR_CAPACITY: usize = 64;
+    const PROTOCOL_CAPACITY: usize = 256;
+    let ProtocolActorDeps {
+        ui_proxy,
+        ui_sender,
+        host_event_inbox,
+        processors,
+        winit_generation,
+        runtime_config,
+        background_sender,
+        background_inbox,
+    } = deps;
+    let HostBootstrap {
+        native_build_fingerprint,
+        requests,
+        responses,
+        priority_requests,
+        priority_responses,
+        events,
+        telemetry_page,
+        parameter_ring,
+        session_epoch,
+    } = bootstrap;
+    validate_native_build_fingerprint(&native_build_fingerprint)?;
+    let telemetry = Arc::new(Mutex::new(
+        TelemetryWriter::map(telemetry_page).map_err(|error| error.to_string())?,
+    ));
+    let parameter_consumer =
+        ParameterConsumer::map(parameter_ring).map_err(|error| error.to_string())?;
+    let response_leases = Arc::new(Mutex::new(LeaseRegistry::with_session_epoch(session_epoch)));
+    let request_arena = Arc::new(Mutex::new(ArenaReceiver::new(session_epoch)));
+    let ipc_generation = Arc::new(AtomicU64::new(0));
+    let tokio_generation = Arc::new(AtomicU64::new(0));
+    let published_event_revision = Arc::new(AtomicU64::new(0));
+    let page_epoch = Arc::new(AtomicU64::new(0));
+    let egress_metrics = Arc::new(EgressMetrics::default());
+    let host_event_inbox = Arc::new(Mutex::new(host_event_inbox));
+
+    let (outbound, outbound_inbox) = mpsc::channel(PROTOCOL_CAPACITY);
+    let (egress_shutdown, egress_shutdown_rx) = watch::channel(false);
+    let egress_task = tokio::spawn(run_egress(
+        outbound_inbox,
+        responses,
+        events,
+        EgressArenas {
+            responses: response_leases.clone(),
+            requests: request_arena.clone(),
+        },
+        runtime_config.egress_concurrency,
+        egress_shutdown_rx,
+        egress_metrics.clone(),
+    ));
+    let (inbound, mut inbound_inbox) = mpsc::channel(PROTOCOL_CAPACITY);
+    let (priority, mut priority_inbox) = mpsc::channel(64);
+    let ingress_thread = spawn_ingress(
+        IngressChannels {
+            requests,
+            priority_requests,
+            priority_responses,
+        },
+        IngressMailboxes {
+            inbound,
+            priority,
+            outbound: outbound.clone(),
+        },
+        response_leases,
+        request_arena.clone(),
+        Liveness {
+            ipc: ipc_generation.clone(),
+            tokio: tokio_generation.clone(),
+            winit: winit_generation,
+            egress: egress_metrics,
+        },
+    );
+
+    let handles = Arc::new(Mutex::new(GraphParameterHandles::default()));
+    let (engine_sender, engine_inbox) = mpsc::channel(ACTOR_CAPACITY);
+    let (vst3_sender, vst3_inbox) = mpsc::channel(ACTOR_CAPACITY);
+    let worker_supervisor = WorkerSupervisor::new();
+    tokio::spawn(engine_actor(engine_inbox, handles.clone()));
+    tokio::task::spawn_local(vst3_actor(
+        vst3_inbox,
+        ui_proxy.clone(),
+        ui_sender,
+        processors,
+        handles,
+        request_arena.clone(),
+        background_sender.clone(),
+    ));
+    tokio::spawn(background_io_actor(
+        background_inbox,
+        engine_sender.clone(),
+        worker_supervisor,
+    ));
+
+    outbound
+        .send(OutboundMessage::Event(
+            encode_event(&HostEvent::Ready, Vec::new()).map_err(|error| error.to_string())?,
+        ))
+        .await
+        .map_err(|_| "audio-host egress stopped before Ready".to_owned())?;
+
+    let telemetry_writer = telemetry.clone();
+    let telemetry_outbound = outbound.clone();
+    let telemetry_host_events = host_event_inbox.clone();
+    let telemetry_event_revision = published_event_revision.clone();
+    let telemetry_page_epoch = page_epoch.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_millis(33));
+        loop {
+            interval.tick().await;
+            let editor_events = telemetry_host_events
+                .lock()
+                .map(|inbox| inbox.try_iter().collect::<Vec<_>>())
+                .unwrap_or_default();
+            for event in editor_events {
+                if let Ok(packet) = encode_event(&event, Vec::new()) {
+                    let _ = telemetry_outbound
+                        .send(OutboundMessage::Event(packet))
+                        .await;
+                }
+            }
+            let published_revision = engine::published_graph_generation();
+            publish_telemetry(
+                &telemetry_writer,
+                &telemetry_outbound,
+                published_revision,
+                session_epoch,
+                &telemetry_page_epoch,
+            )
+            .await;
+            if published_revision != 0
+                && telemetry_event_revision.swap(published_revision, Ordering::AcqRel)
+                    != published_revision
+                && let Ok(packet) = encode_event(
+                    &HostEvent::GraphPublished {
+                        revision: published_revision,
+                    },
+                    Vec::new(),
+                )
+            {
+                let _ = telemetry_outbound
+                    .send(OutboundMessage::Event(packet))
+                    .await;
+            }
+        }
+    });
+
+    let shutting_down = Arc::new(AtomicBool::new(false));
+    let inflight = Arc::new(Semaphore::new(PROTOCOL_CAPACITY));
+    while !shutting_down.load(Ordering::Acquire) {
+        tokio::select! {
+            inbound = inbound_inbox.recv() => {
+                let Some(inbound) = inbound else { break };
+                tokio_generation.fetch_add(1, Ordering::Release);
+                let permit = match inflight.clone().try_acquire_owned() {
+                    Ok(permit) => permit,
+                    Err(_) => {
+                        let _ = outbound
+                            .send(OutboundMessage::Response {
+                                value: response(
+                                    inbound.request.request_id,
+                                    ControlResult::Busy,
+                                ),
+                                request_leases: inbound.received_leases,
+                            })
+                            .await;
+                        continue;
+                    }
+                };
+                let engine_sender = engine_sender.clone();
+                let vst3_sender = vst3_sender.clone();
+                let background_sender = background_sender.clone();
+                let outbound = outbound.clone();
+                let ui_proxy = ui_proxy.clone();
+                let shutting_down = shutting_down.clone();
+                tokio::spawn(async move {
+                    let _permit = permit;
+                    let ControlRequest {
+                        request_id,
+                        command,
+                    } = inbound.request;
+                    let received_leases = inbound.received_leases;
+                    let shutdown = matches!(command, ControlCommand::Shutdown);
+                    let deadline = protocol_deadline(&command);
+                    let work = async move {
+                        if shutdown {
+                            let _ = engine::stop_audio_engine();
+                            ControlResult::Accepted
+                        } else {
+                            match command {
+                                ControlCommand::BenchmarkEcho { payload } => {
+                                    ControlResult::BenchmarkEcho { payload }
+                                }
+                                command if is_vst3_command(&command) => {
+                                    dispatch_actor(&vst3_sender, command).await
+                                }
+                                command if is_background_io_command(&command) => {
+                                    dispatch_actor(&background_sender, command).await
+                                }
+                                command => dispatch_actor(&engine_sender, command).await,
+                            }
+                        }
+                    };
+                    let result = match tokio::time::timeout(deadline, work).await {
+                        Ok(result) => result,
+                        Err(_) => ControlResult::Error {
+                            message: "audio-host request deadline exceeded".into(),
+                        },
+                    };
+                    let _ = outbound
+                        .send(OutboundMessage::Response {
+                            value: response(request_id, result),
+                            request_leases: received_leases,
+                        })
+                        .await;
+                    if shutdown {
+                        shutting_down.store(true, Ordering::Release);
+                        let _ = ui_proxy.send_event(UiEvent::Exit);
+                    }
+                });
+            }
+            priority = priority_inbox.recv() => {
+                let Some(priority) = priority else { break };
+                tokio_generation.fetch_add(1, Ordering::Release);
+                match priority {
+                    PriorityIngress::ParameterWake => {
+                        let mut commands = Vec::new();
+                        parameter_consumer.drain(4096, &mut commands);
+                        for command in commands {
+                            let sender = match command.target_kind {
+                                yadaw_dsp_runtime::protocol::ParameterTargetKind::Plugin => &vst3_sender,
+                                _ => &engine_sender,
+                            };
+                            let _ = dispatch_parameter(sender, command).await;
+                        }
+                    }
+                    PriorityIngress::ParameterBoundary(command) => {
+                        let sender = match command.target_kind {
+                            yadaw_dsp_runtime::protocol::ParameterTargetKind::Plugin => &vst3_sender,
+                            _ => &engine_sender,
+                        };
+                        let _ = dispatch_parameter(sender, command).await;
+                    }
+                    PriorityIngress::Shutdown => {
+                        let _ = engine::stop_audio_engine();
+                        shutting_down.store(true, Ordering::Release);
+                        let _ = ui_proxy.send_event(UiEvent::Exit);
+                    }
+                    PriorityIngress::TelemetryPageReady => {}
+                }
+            }
+        }
+    }
+    // The blocking IPC receivers are deliberately detached. Joining them here would
+    // deadlock a clean shutdown while the parent still owns channel handles. Process
+    // teardown closes those handles after the Tokio actor and winit loop have exited.
+    let final_editor_events = host_event_inbox
+        .lock()
+        .map(|inbox| inbox.try_iter().collect::<Vec<_>>())
+        .unwrap_or_default();
+    for event in final_editor_events {
+        if let Ok(packet) = encode_event(&event, Vec::new()) {
+            let _ = outbound.send(OutboundMessage::Event(packet)).await;
+        }
+    }
+    let _ = egress_shutdown.send(true);
+    let _ = egress_task.await;
+    drop((outbound, ingress_thread));
+    Ok(())
+}
