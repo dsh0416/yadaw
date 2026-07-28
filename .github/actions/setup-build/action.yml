@@ -44,6 +44,12 @@ runs:
     - name: Install and start sccache
       uses: mozilla-actions/sccache-action@v0.0.10
 
+    - name: Enable sccache for subsequent build steps
+      shell: bash
+      run: |
+        echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
+        echo "SCCACHE_GHA_ENABLED=true" >> "$GITHUB_ENV"
+
     - name: Locate Cargo and pnpm caches
       id: cache-paths
       shell: bash
