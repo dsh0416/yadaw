@@ -29,8 +29,7 @@ const applicationWindowStore = useApplicationWindowStore()
 const { settings } = storeToRefs(applicationSettingsStore)
 const { ready: lifecycleReady } = storeToRefs(lifecycleStore)
 const themePreference = computed(() => settings.value?.theme ?? "system")
-const appLocale = computed(() => settings.value?.locale ?? DEFAULT_LOCALE)
-const uiLocale = computed(() => rekaLocale(appLocale.value))
+const uiLocale = computed(() => rekaLocale(settings.value?.locale ?? DEFAULT_LOCALE))
 
 const { resolvedTheme } = useTheme(themePreference)
 
@@ -43,11 +42,10 @@ watch(
 )
 
 watch(
-  appLocale,
+  () => settings.value?.locale,
   (locale) => {
-    setAppLocale(locale)
-  },
-  { immediate: true }
+    if (locale) setAppLocale(locale)
+  }
 )
 
 function stopRuntimePolling(): void {

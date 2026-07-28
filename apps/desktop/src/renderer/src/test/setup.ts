@@ -13,7 +13,9 @@ const api = {
 
 Object.defineProperty(window, "yadaw", { configurable: true, value: api })
 
-config.global.plugins.push(i18n)
+if (!config.global.plugins.includes(i18n)) {
+  config.global.plugins.push(i18n)
+}
 
 afterEach(() => {
   document.body.innerHTML = ""
