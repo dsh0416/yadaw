@@ -50,24 +50,21 @@ jobs:
 
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-  quality:
-    name: Quality (${{ matrix.name }})
+  checks:
+    name: Checks (${{ matrix.name }})
     needs: metadata
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
         include:
           - name: Linux x64
             os: ubuntu-latest
-            full: true
           - name: Windows x64
             os: windows-latest
-            full: false
-          - name: macOS arm64
-            os: macos-15
-            full: false
+          - name: macOS
+            os: macos-latest
     steps:
       - name: Check out source
         uses: actions/checkout@v6
@@ -81,50 +78,4 @@ jobs:
             ${{ github.event_name == 'pull_request' && '' || github.token }}
 
       - name: Run repository checks
-        if: matrix.full
         run: pnpm check
-
-      - name: Check Rust formatting
-        if: ${{ !matrix.full }}
-        run: pnpm format:rust:check
-
-      - name: Run Clippy
-        if: ${{ !matrix.full }}
-        run: pnpm lint:rust
-
-  platform-tests:
-    name: Tests (${{ matrix.name }})
-    needs: metadata
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: Windows x64
-            os: windows-latest
-          - name: macOS arm64
-            os: macos-15
-    steps:
-      - name: Check out source
-        uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-
-      - name: Set up build environment
-        uses: ./.github/actions/setup-build
-        with:
-          github-token: >-
-            ${{ github.event_name == 'pull_request' && '' || github.token }}
-
-      - name: Run Rust tests and allocation invariants
-        run: pnpm test:rust
-
-      - name: Build native bindings for unit tests
-        run: pnpm --filter @yadaw/dsp-node build:debug
-
-      - name: Run desktop unit tests
-        run: pnpm --filter @yadaw/desktop test:unit
-
-      - name: Run project database integration tests
-        run: pnpm --filter @yadaw/project-db test:integration
