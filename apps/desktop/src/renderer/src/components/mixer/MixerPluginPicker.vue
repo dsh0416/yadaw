@@ -3,6 +3,8 @@ import { computed, shallowRef, watch } from "vue"
 import { Search } from "@lucide/vue"
 import { UiPopover } from "@yadaw/ui"
 import { pluginDescriptorKey, type PluginDescriptor } from "@yadaw/contracts"
+import PluginAudioModeMenu from "../plugins/PluginAudioModeMenu.vue"
+import type { PluginSelection } from "../plugins/plugin-audio-mode"
 
 const props = defineProps<{
   plugins: PluginDescriptor[]
@@ -12,11 +14,12 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  select: [descriptor: PluginDescriptor]
+  select: [selection: PluginSelection]
 }>()
 
 const open = shallowRef(false)
 const query = shallowRef("")
+const selectedPlugin = shallowRef<PluginDescriptor | null>(null)
 const filteredPlugins = computed(() => {
   const normalizedQuery = query.value.trim().toLocaleLowerCase()
   return [...props.plugins]
@@ -32,11 +35,19 @@ const filteredPlugins = computed(() => {
 })
 
 watch(open, (isOpen) => {
-  if (!isOpen) query.value = ""
+  if (!isOpen) {
+    query.value = ""
+    selectedPlugin.value = null
+  }
 })
 
 function selectPlugin(descriptor: PluginDescriptor): void {
-  emit("select", descriptor)
+  selectedPlugin.value = descriptor
+}
+
+function selectMode(audioMode: PluginSelection["audioMode"]): void {
+  if (!selectedPlugin.value) return
+  emit("select", { descriptor: selectedPlugin.value, audioMode })
   open.value = false
 }
 </script>
@@ -47,31 +58,39 @@ function selectPlugin(descriptor: PluginDescriptor): void {
       <slot />
     </template>
     <div class="plugin-picker">
-      <header>
-        <span>VST3</span><strong>{{ title }}</strong>
-      </header>
-      <label>
-        <Search :size="12" aria-hidden="true" />
-        <input v-model="query" :aria-label="searchLabel" placeholder="Search plug-ins" />
-      </label>
-      <div class="plugin-list">
-        <button
-          v-for="plugin in filteredPlugins"
-          :key="pluginDescriptorKey(plugin)"
-          type="button"
-          :aria-label="`Add ${plugin.name}`"
-          @click="selectPlugin(plugin)"
-        >
-          <b>{{ plugin.name }}</b>
-          <small
-            >{{ plugin.source.kind === "builtin" ? "Built-in · " : "" }}{{ plugin.vendor }} ·
-            {{ plugin.category }}</small
+      <PluginAudioModeMenu
+        v-if="selectedPlugin"
+        :descriptor="selectedPlugin"
+        @select="selectMode"
+        @cancel="selectedPlugin = null"
+      />
+      <template v-else>
+        <header>
+          <span>VST3</span><strong>{{ title }}</strong>
+        </header>
+        <label>
+          <Search :size="12" aria-hidden="true" />
+          <input v-model="query" :aria-label="searchLabel" placeholder="Search plug-ins" />
+        </label>
+        <div class="plugin-list">
+          <button
+            v-for="plugin in filteredPlugins"
+            :key="pluginDescriptorKey(plugin)"
+            type="button"
+            :aria-label="`Add ${plugin.name}`"
+            @click="selectPlugin(plugin)"
           >
-        </button>
-        <p v-if="filteredPlugins.length === 0">
-          {{ plugins.length === 0 ? emptyMessage : "No plug-ins match this search." }}
-        </p>
-      </div>
+            <b>{{ plugin.name }}</b>
+            <small
+              >{{ plugin.source.kind === "builtin" ? "Built-in · " : "" }}{{ plugin.vendor }} ·
+              {{ plugin.category }}</small
+            >
+          </button>
+          <p v-if="filteredPlugins.length === 0">
+            {{ plugins.length === 0 ? emptyMessage : "No plug-ins match this search." }}
+          </p>
+        </div>
+      </template>
     </div>
   </UiPopover>
 </template>

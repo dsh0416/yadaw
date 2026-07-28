@@ -5,6 +5,7 @@ import { homedir } from "node:os"
 import { basename, dirname, join } from "node:path"
 import type {
   PluginCatalogSnapshot,
+  PluginAudioMode,
   PluginDescriptor,
   PluginEditorMode,
   PluginParameterChange,
@@ -33,8 +34,36 @@ interface PluginRuntime {
   closeEditor(instanceId: string): Promise<void>
 }
 
-const SCANNER_VERSION = 2
+const SCANNER_VERSION = 3
 const execFileAsync = promisify(execFile)
+const AUDIO_MODES = ["mono", "mono-to-stereo", "stereo", "dual-mono"] as const
+
+function isPluginAudioMode(value: unknown): value is PluginAudioMode {
+  return AUDIO_MODES.some((mode) => mode === value)
+}
+
+function busesForMode(kind: PluginDescriptor["kind"], mode: PluginAudioMode) {
+  const inputChannels = mode === "stereo" || mode === "dual-mono" ? 2 : 1
+  const outputChannels = mode === "mono" ? 1 : 2
+  const buses: PluginDescriptor["buses"] = []
+  if (kind === "effect") {
+    buses.push({
+      direction: "input",
+      kind: "main",
+      name: inputChannels === 1 ? "Mono In" : "Stereo In",
+      channels: inputChannels,
+      defaultActive: true
+    })
+  }
+  buses.push({
+    direction: "output",
+    kind: "main",
+    name: outputChannels === 1 ? "Mono Out" : "Stereo Out",
+    channels: outputChannels,
+    defaultActive: true
+  })
+  return buses
+}
 
 const BUILTIN_PLUGINS = [
   {
@@ -183,6 +212,7 @@ function descriptorsFromModuleInfo(
         kind: "effect",
         architecture: process.arch,
         buses: [],
+        supportedAudioModes: [],
         hasEditor: false,
         compatibility: "load-error",
         compatibilityReason: "Native VST3 probing is required for this module"
@@ -210,6 +240,7 @@ function descriptorsFromModuleInfo(
         category: subCategories.join("|") || (kind === "instrument" ? "Instrument" : "Fx"),
         kind,
         architecture: process.arch,
+        supportedAudioModes: ["stereo"],
         buses:
           kind === "instrument"
             ? [
@@ -261,13 +292,12 @@ interface ProbeOutput {
       audioInputs?: number
       audioOutputs?: number
       eventInputs?: number
-      stereoMainInput?: boolean
-      stereoMainOutput?: boolean
+      supportedAudioModes?: unknown[]
     }>
   }
 }
 
-function descriptorFromProbe(
+export function descriptorFromProbe(
   bundlePath: string,
   factoryVendor: string,
   value: NonNullable<NonNullable<ProbeOutput["module"]>["classes"]>[number]
@@ -276,6 +306,12 @@ function descriptorFromProbe(
   if (!classId) return null
   const category = textValue(value.category)
   const kind = /instrument|synth/i.test(category) ? "instrument" : "effect"
+  const probedModes = (value.supportedAudioModes ?? []).filter(isPluginAudioMode)
+  const nativeModes = probedModes.filter((mode) =>
+    kind === "instrument" ? mode === "mono" || mode === "stereo" : mode !== "dual-mono"
+  )
+  const supportedAudioModes: PluginAudioMode[] =
+    kind === "effect" && nativeModes.includes("mono") ? [...nativeModes, "dual-mono"] : nativeModes
   let compatibility: PluginDescriptor["compatibility"] = "compatible"
   let compatibilityReason: string | null = null
   if (!value.initialized) {
@@ -289,21 +325,24 @@ function descriptorFromProbe(
     ((value.audioInputs ?? 0) !== 0 ||
       (value.eventInputs ?? 0) < 1 ||
       (value.audioOutputs ?? 0) !== 1 ||
-      !value.stereoMainOutput)
+      supportedAudioModes.length === 0)
   ) {
     compatibility = "unsupported-buses"
     compatibilityReason =
-      "Instrument requires event input, no audio input, and one stereo main output"
+      "Instrument requires event input, no audio input, and a mono or stereo main output"
   } else if (
     kind === "effect" &&
     ((value.audioInputs ?? 0) !== 1 ||
       (value.audioOutputs ?? 0) !== 1 ||
-      !value.stereoMainInput ||
-      !value.stereoMainOutput)
+      supportedAudioModes.length === 0)
   ) {
     compatibility = "unsupported-buses"
-    compatibilityReason = "Effect requires one stereo main input and output"
+    compatibilityReason = "Effect requires one supported mono/stereo main input and output layout"
   }
+  const preferredMode =
+    supportedAudioModes.find((mode) => mode === "stereo") ??
+    supportedAudioModes.find((mode) => mode !== "dual-mono") ??
+    "stereo"
   return {
     source: { kind: "external" },
     classId,
@@ -314,33 +353,8 @@ function descriptorFromProbe(
     category: category || (kind === "instrument" ? "Instrument" : "Fx"),
     kind,
     architecture: process.arch,
-    buses:
-      kind === "instrument"
-        ? [
-            {
-              direction: "output",
-              kind: "main",
-              name: "Stereo Out",
-              channels: 2,
-              defaultActive: true
-            }
-          ]
-        : [
-            {
-              direction: "input",
-              kind: "main",
-              name: "Stereo In",
-              channels: 2,
-              defaultActive: true
-            },
-            {
-              direction: "output",
-              kind: "main",
-              name: "Stereo Out",
-              channels: 2,
-              defaultActive: true
-            }
-          ],
+    buses: busesForMode(kind, preferredMode),
+    supportedAudioModes,
     hasEditor: value.hasEditor === true,
     compatibility,
     compatibilityReason
@@ -426,6 +440,7 @@ export class PluginCatalogService {
           kind: spec.kind,
           architecture: process.arch,
           buses: spec.kind === "instrument" ? [outputBus] : [inputBus, outputBus],
+          supportedAudioModes: [],
           hasEditor: true,
           compatibility: "load-error",
           compatibilityReason: reason

@@ -29,6 +29,31 @@ pub enum PluginKind {
     Instrument,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AudioLayout {
+    Mono,
+    MonoToStereo,
+    Stereo,
+}
+
+impl AudioLayout {
+    #[must_use]
+    pub const fn input_channels(self) -> i32 {
+        match self {
+            Self::Mono | Self::MonoToStereo => 1,
+            Self::Stereo => 2,
+        }
+    }
+
+    #[must_use]
+    pub const fn output_channels(self) -> i32 {
+        match self {
+            Self::Mono => 1,
+            Self::MonoToStereo | Self::Stereo => 2,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HostProcessContext {
     pub project_time_samples: i64,
@@ -49,7 +74,7 @@ pub(crate) struct QueuedParameter {
     pub(crate) sample_offset: i32,
 }
 
-/// A stereo sample32 VST3 component with explicit lifecycle ownership.
+/// A mono/stereo sample32 VST3 component with explicit lifecycle ownership.
 pub struct StereoProcessor {
     processor: ComPtr<IAudioProcessor>,
     component: ComPtr<IComponent>,
@@ -61,6 +86,7 @@ pub struct StereoProcessor {
     parameter_consumer: HeapCons<QueuedParameter>,
     module: Rc<Module>,
     kind: PluginKind,
+    layout: AudioLayout,
     active: bool,
 }
 
@@ -71,7 +97,17 @@ impl StereoProcessor {
         sample_rate: f64,
         kind: PluginKind,
     ) -> HostResult<Self> {
-        Self::create_with_parameter_queue(module, class_id, sample_rate, kind)
+        Self::create_with_layout(module, class_id, sample_rate, kind, AudioLayout::Stereo)
+    }
+
+    pub fn create_with_layout(
+        module: Rc<Module>,
+        class_id: ClassId,
+        sample_rate: f64,
+        kind: PluginKind,
+        layout: AudioLayout,
+    ) -> HostResult<Self> {
+        Self::create_with_parameter_queue(module, class_id, sample_rate, kind, layout)
             .map(|(processor, _producer)| processor)
     }
 
@@ -80,7 +116,14 @@ impl StereoProcessor {
         class_id: ClassId,
         sample_rate: f64,
         kind: PluginKind,
+        layout: AudioLayout,
     ) -> HostResult<(Self, HeapProd<QueuedParameter>)> {
+        if kind == PluginKind::Instrument && layout == AudioLayout::MonoToStereo {
+            return Err(HostError::Operation {
+                operation: "instrument audio layout",
+                result: -2147024809,
+            });
+        }
         let component = module.create::<IComponent>(class_id)?;
         let host = HostContext::new();
         let input_events = EventList::new();
@@ -112,8 +155,16 @@ impl StereoProcessor {
             )
         })?;
 
-        let mut input_arrangement = Vst::SpeakerArr::kStereo;
-        let mut output_arrangement = Vst::SpeakerArr::kStereo;
+        let mut input_arrangement = if layout.input_channels() == 1 {
+            Vst::SpeakerArr::kMono
+        } else {
+            Vst::SpeakerArr::kStereo
+        };
+        let mut output_arrangement = if layout.output_channels() == 1 {
+            Vst::SpeakerArr::kMono
+        } else {
+            Vst::SpeakerArr::kStereo
+        };
         let input_count = i32::from(kind == PluginKind::Effect);
         check("setBusArrangements", unsafe {
             // SAFETY: arrangement pointers remain valid for the call.
@@ -180,6 +231,7 @@ impl StereoProcessor {
                 parameter_consumer,
                 module,
                 kind,
+                layout,
                 active: true,
             },
             parameter_producer,
@@ -189,6 +241,11 @@ impl StereoProcessor {
     #[must_use]
     pub fn kind(&self) -> PluginKind {
         self.kind
+    }
+
+    #[must_use]
+    pub fn layout(&self) -> AudioLayout {
+        self.layout
     }
 
     #[must_use]
@@ -242,14 +299,14 @@ impl StereoProcessor {
         let mut input_channels = [input_left.as_mut_ptr(), input_right.as_mut_ptr()];
         let mut output_channels = [output_left.as_mut_ptr(), output_right.as_mut_ptr()];
         let mut input_bus = AudioBusBuffers {
-            numChannels: 2,
+            numChannels: self.layout.input_channels(),
             silenceFlags: 0,
             __bindgen_anon_1: AudioBusBuffers__bindgen_ty_1 {
                 channelBuffers32: input_channels.as_mut_ptr(),
             },
         };
         let mut output_bus = AudioBusBuffers {
-            numChannels: 2,
+            numChannels: self.layout.output_channels(),
             silenceFlags: 0,
             __bindgen_anon_1: AudioBusBuffers__bindgen_ty_1 {
                 channelBuffers32: output_channels.as_mut_ptr(),

@@ -256,9 +256,7 @@ function createSend(): void {
 
       <UiPopover v-if="emptyRows > 0 && canAddSend" side="top" :side-offset="7">
         <template #trigger>
-          <button class="send-row empty empty-slot" aria-label="Add send in empty slot">
-            EMPTY SEND
-          </button>
+          <button class="send-row empty empty-slot" aria-label="Add send in empty slot" />
         </template>
         <div class="add-send-popover">
           <strong>Add send</strong>

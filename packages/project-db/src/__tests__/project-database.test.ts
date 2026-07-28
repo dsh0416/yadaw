@@ -87,6 +87,14 @@ async function revertAuxBusMigration(database: PGlite): Promise<void> {
   `)
 }
 
+async function revertPluginAudioModeMigration(database: PGlite): Promise<void> {
+  await database.exec(`
+    alter table "plugin_instances"
+      drop constraint "plugin_instances_audio_mode_check";
+    alter table "plugin_instances" drop column "audio_mode";
+  `)
+}
+
 afterEach(async () => {
   for (const resource of databases.splice(0)) {
     await resource.database.close()
@@ -184,6 +192,53 @@ describe("ProjectDatabase", () => {
     ])
   })
 
+  it("round-trips every plugin audio mode", async () => {
+    const { database } = await createDatabase()
+    const modes = ["mono", "mono-to-stereo", "stereo", "dual-mono"] as const
+    await database.applyCommand(
+      {
+        type: "batch",
+        commands: modes.map((audioMode, slotOrder) => ({
+          type: "create-plugin" as const,
+          plugin: {
+            id: `effect-${audioMode}`,
+            channelId: "audio-1",
+            role: "insert" as const,
+            slotOrder,
+            classId: "0123456789ABCDEFFEDCBA9876543210",
+            descriptor: {
+              source: { kind: "external" as const },
+              classId: "0123456789ABCDEFFEDCBA9876543210",
+              modulePath: "effect.vst3",
+              name: "Effect",
+              vendor: "YADAW",
+              version: "1.0",
+              category: "Fx",
+              kind: "effect" as const,
+              architecture: "x86_64",
+              buses: [],
+              supportedAudioModes: [...modes],
+              hasEditor: true,
+              compatibility: "compatible" as const,
+              compatibilityReason: null
+            },
+            audioMode,
+            enabled: true,
+            componentState: new Uint8Array(),
+            controllerState: new Uint8Array()
+          }
+        }))
+      },
+      "audio-1"
+    )
+
+    expect(
+      (await database.mixerSnapshot()).plugins
+        .filter((plugin) => plugin.channelId === "audio-1")
+        .map((plugin) => plugin.audioMode)
+    ).toEqual(modes)
+  })
+
   it("migrates legacy bus channels while preserving main and send BUS targets", async () => {
     const resource = await createDatabase()
     await resource.database.applyCommand(
@@ -215,6 +270,7 @@ describe("ProjectDatabase", () => {
 
     const raw = new PGlite(join(resource.directory, "pgdata"))
     try {
+      await revertPluginAudioModeMigration(raw)
       await revertAuxBusMigration(raw)
       await raw.exec(`
         update "mixer_channels"
@@ -228,11 +284,11 @@ describe("ProjectDatabase", () => {
           0, true, 'post-pan', -6
         );
         delete from drizzle.__drizzle_migrations
-        where created_at = (
+        where created_at in (
           select created_at
           from drizzle.__drizzle_migrations
           order by created_at desc
-          limit 1
+          limit 2
         );
       `)
     } finally {
@@ -424,6 +480,7 @@ describe("ProjectDatabase", () => {
 
     const raw = new PGlite(join(resource.directory, "pgdata"))
     try {
+      await revertPluginAudioModeMigration(raw)
       await revertAuxBusMigration(raw)
       await raw.exec(`
         delete from "mixer_channels" where "id" = 'metronome';
@@ -439,7 +496,7 @@ describe("ProjectDatabase", () => {
           select created_at
           from drizzle.__drizzle_migrations
           order by created_at desc
-          limit 5
+          limit 6
         );
       `)
     } finally {
@@ -459,7 +516,8 @@ describe("ProjectDatabase", () => {
     expect(snapshot.plugins.filter((plugin) => plugin.channelId === "metronome")).toEqual([
       expect.objectContaining({
         id: "metronome-instrument",
-        classId: "F310A5DEDA34820C9E068A5753F83ADE"
+        classId: "F310A5DEDA34820C9E068A5753F83ADE",
+        audioMode: "stereo"
       })
     ])
     expect(snapshot.keySignatureEvents).toEqual([{ tick: 0, fifths: 0, mode: "major" }])
@@ -472,6 +530,7 @@ describe("ProjectDatabase", () => {
 
     const raw = new PGlite(join(resource.directory, "pgdata"))
     try {
+      await revertPluginAudioModeMigration(raw)
       await revertAuxBusMigration(raw)
       await raw.exec(`
         alter table "key_signature_events"
@@ -492,7 +551,7 @@ describe("ProjectDatabase", () => {
           select created_at
           from drizzle.__drizzle_migrations
           order by created_at desc
-          limit 3
+          limit 4
         );
       `)
     } finally {

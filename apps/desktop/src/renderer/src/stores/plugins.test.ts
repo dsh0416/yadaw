@@ -15,6 +15,7 @@ const effectDescriptor: PluginDescriptor = {
   kind: "effect",
   architecture: "x86_64",
   buses: [],
+  supportedAudioModes: ["mono", "mono-to-stereo", "stereo", "dual-mono"],
   hasEditor: true,
   compatibility: "compatible",
   compatibilityReason: null
@@ -26,7 +27,8 @@ const instrumentDescriptor: PluginDescriptor = {
   modulePath: "instrument.vst3",
   name: "Instrument",
   category: "Instrument",
-  kind: "instrument"
+  kind: "instrument",
+  supportedAudioModes: ["mono", "stereo"]
 }
 
 function graph(): MixerGraphSnapshot {
@@ -176,8 +178,19 @@ describe("plugin store", () => {
     })
     const pluginStore = usePluginStore()
 
-    expect(await pluginStore.addEffectAt(effectDescriptor, "audio", 0)).toBe(true)
-    expect(await pluginStore.assignInstrument(instrumentDescriptor, "instrument")).toBe(true)
+    expect(
+      await pluginStore.addEffectAt(
+        { descriptor: effectDescriptor, audioMode: "dual-mono" },
+        "audio",
+        0
+      )
+    ).toBe(true)
+    expect(
+      await pluginStore.assignInstrument(
+        { descriptor: instrumentDescriptor, audioMode: "mono" },
+        "instrument"
+      )
+    ).toBe(true)
 
     const commands = vi
       .mocked(window.yadaw.executeProjectCommand)
@@ -188,7 +201,8 @@ describe("plugin store", () => {
         channelId: "audio",
         role: "insert",
         slotOrder: 0,
-        descriptor: effectDescriptor
+        descriptor: effectDescriptor,
+        audioMode: "dual-mono"
       }
     })
     expect(commands[1]).toMatchObject({
@@ -197,9 +211,47 @@ describe("plugin store", () => {
         channelId: "instrument",
         role: "instrument",
         slotOrder: 0,
-        descriptor: instrumentDescriptor
+        descriptor: instrumentDescriptor,
+        audioMode: "mono"
       }
     })
     expect(mixerStore.graph.plugins).toHaveLength(2)
+  })
+
+  it("rejects effect modes whose native input width does not match the insert point", async () => {
+    const mixerStore = useMixerStore()
+    mixerStore.graph = graph()
+    mixerStore.graph.channels[0] = {
+      ...mixerStore.graph.channels[0]!,
+      inputFormat: "mono",
+      inputChannels: [1]
+    }
+    window.yadaw.executeProjectCommand = vi.fn()
+    const pluginStore = usePluginStore()
+
+    expect(pluginStore.effectInputWidth("audio", 0)).toBe("mono")
+    expect(
+      await pluginStore.addEffectAt(
+        { descriptor: effectDescriptor, audioMode: "stereo" },
+        "audio",
+        0
+      )
+    ).toBe(false)
+    expect(window.yadaw.executeProjectCommand).not.toHaveBeenCalled()
+    expect(pluginStore.error).toContain("mono-input")
+
+    mixerStore.graph.plugins.push({
+      id: "widener",
+      channelId: "audio",
+      role: "insert",
+      slotOrder: 0,
+      classId: effectDescriptor.classId,
+      descriptor: effectDescriptor,
+      audioMode: "mono-to-stereo",
+      enabled: true,
+      componentState: new Uint8Array(),
+      controllerState: new Uint8Array()
+    })
+    expect(pluginStore.effectInputWidth("audio", 1)).toBe("stereo")
   })
 })

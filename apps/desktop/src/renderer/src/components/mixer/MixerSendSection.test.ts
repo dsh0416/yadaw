@@ -127,6 +127,7 @@ describe("MixerSendSection", () => {
     expect(wrapper.findAll(".send-row.empty")).toHaveLength(1)
     expect(wrapper.find(".send-row.alignment-spacer").exists()).toBe(false)
     expect(wrapper.find('button[aria-label="Add send"]').exists()).toBe(false)
+    expect(wrapper.get('button[aria-label="Add send in empty slot"]').text()).toBe("")
     await wrapper.get('button[aria-label="Add send in empty slot"]').trigger("click")
     await flushPromises()
     const addButton = Array.from(document.body.querySelectorAll<HTMLButtonElement>("button")).find(

@@ -1,7 +1,7 @@
 use std::{env, path::Path, process::ExitCode, rc::Rc};
 
 use serde::Serialize;
-use yadaw_vst3_host::{ClassInfo, Module, PluginKind, StereoProcessor};
+use yadaw_vst3_host::{AudioLayout, ClassInfo, Module, PluginKind, StereoProcessor};
 
 #[derive(Serialize)]
 struct Output<'a> {
@@ -29,30 +29,32 @@ struct ClassOutput {
     audio_inputs: u32,
     audio_outputs: u32,
     event_inputs: u32,
-    stereo_main_input: bool,
-    stereo_main_output: bool,
+    supported_audio_modes: Vec<&'static str>,
 }
 
 fn inspect(module: &Rc<Module>, class: ClassInfo) -> ClassOutput {
-    let effect = StereoProcessor::create(Rc::clone(module), class.id, 48_000.0, PluginKind::Effect);
-    let (initialized, kind) = match effect {
-        Ok(processor) => {
-            drop(processor);
-            (true, PluginKind::Effect)
-        }
-        Err(_) => match StereoProcessor::create(
-            Rc::clone(module),
-            class.id,
-            48_000.0,
-            PluginKind::Instrument,
-        ) {
-            Ok(processor) => {
-                drop(processor);
-                (true, PluginKind::Instrument)
-            }
-            Err(_) => (false, PluginKind::Effect),
-        },
+    let supports = |kind, layout| {
+        StereoProcessor::create_with_layout(Rc::clone(module), class.id, 48_000.0, kind, layout)
+            .is_ok()
     };
+    let effect_modes = [
+        (AudioLayout::Mono, "mono"),
+        (AudioLayout::MonoToStereo, "mono-to-stereo"),
+        (AudioLayout::Stereo, "stereo"),
+    ]
+    .into_iter()
+    .filter_map(|(layout, name)| supports(PluginKind::Effect, layout).then_some(name))
+    .collect::<Vec<_>>();
+    let instrument_modes = [(AudioLayout::Mono, "mono"), (AudioLayout::Stereo, "stereo")]
+        .into_iter()
+        .filter_map(|(layout, name)| supports(PluginKind::Instrument, layout).then_some(name))
+        .collect::<Vec<_>>();
+    let (kind, supported_audio_modes) = if effect_modes.is_empty() && !instrument_modes.is_empty() {
+        (PluginKind::Instrument, instrument_modes)
+    } else {
+        (PluginKind::Effect, effect_modes)
+    };
+    let initialized = !supported_audio_modes.is_empty();
     let instrument = kind == PluginKind::Instrument;
     ClassOutput {
         class_id: class.id.to_string(),
@@ -73,8 +75,7 @@ fn inspect(module: &Rc<Module>, class: ClassInfo) -> ClassOutput {
         audio_inputs: u32::from(!instrument),
         audio_outputs: u32::from(initialized),
         event_inputs: u32::from(instrument),
-        stereo_main_input: initialized && !instrument,
-        stereo_main_output: initialized,
+        supported_audio_modes,
     }
 }
 

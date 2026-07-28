@@ -21,5 +21,5 @@ pub use frame::PlugFrame;
 pub use hosted::{HostedParameter, HostedPlugin, PlugView, ProcessorLease};
 pub use id::ClassId;
 pub use module::{ClassInfo, Module};
-pub use processor::{HostProcessContext, PluginKind, StereoProcessor};
+pub use processor::{AudioLayout, HostProcessContext, PluginKind, StereoProcessor};
 pub use yadaw_vst3_host_sys::Steinberg::ViewRect;

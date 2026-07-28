@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { computed } from "vue"
+import { computed, shallowRef } from "vue"
 import { Trash2 } from "@lucide/vue"
 import type { PluginDescriptor, PluginInstanceState, PluginRuntimeStatus } from "@yadaw/contracts"
 import { PLUGIN_DRAG_TYPE, readPluginDrag } from "../plugins/plugin-drag"
+import PluginAudioModeMenu from "../plugins/PluginAudioModeMenu.vue"
+import { pluginAudioModeBadge, type PluginSelection } from "../plugins/plugin-audio-mode"
 import MixerPluginPicker from "./MixerPluginPicker.vue"
 
 const props = defineProps<{
@@ -14,8 +16,9 @@ const props = defineProps<{
 const emit = defineEmits<{
   open: [instanceId: string]
   remove: [instanceId: string]
-  assign: [descriptor: PluginDescriptor]
+  assign: [selection: PluginSelection]
 }>()
+const pendingDrop = shallowRef<PluginDescriptor | null>(null)
 
 const instrumentState = computed<PluginRuntimeStatus["state"]>(() => {
   if (!props.instrument) return "unloaded"
@@ -34,61 +37,79 @@ function dropInstrument(event: DragEvent): void {
   event.preventDefault()
   const payload = readPluginDrag(event)
   if (payload?.source === "catalog" && payload.descriptor.kind === "instrument") {
-    emit("assign", payload.descriptor)
+    pendingDrop.value = payload.descriptor
   }
+}
+
+function confirmDrop(selection: PluginSelection): void {
+  emit("assign", selection)
+  pendingDrop.value = null
 }
 </script>
 
 <template>
-  <article
-    v-if="instrument"
-    :class="['instrument-input', instrumentState]"
-    :aria-label="`${instrument.descriptor.name} instrument input ${instrumentState}`"
-    @dragenter="allowDrop"
-    @dragover="allowDrop"
-    @drop="dropInstrument"
-  >
-    <button
-      class="instrument-name"
-      :title="instrument.descriptor.name"
-      :aria-label="`Open ${instrument.descriptor.name} instrument editor`"
-      @click="emit('open', instrument.id)"
-    >
-      {{ instrument.descriptor.name }}
-    </button>
-    <button
-      :aria-label="`Remove ${instrument.descriptor.name}`"
-      @click="emit('remove', instrument.id)"
-    >
-      <Trash2 :size="10" />
-    </button>
-  </article>
-
-  <MixerPluginPicker
-    v-else
-    :plugins="plugins"
-    title="Choose instrument"
-    search-label="Search VST3 instruments"
-    empty-message="No compatible VST3 instruments found. Rescan from the Sound Browser."
-    @select="emit('assign', $event)"
-  >
-    <button
-      type="button"
-      class="instrument-input empty"
-      aria-label="Assign VST3 instrument input"
+  <div class="instrument-input-wrapper">
+    <article
+      v-if="instrument"
+      :class="['instrument-input', instrumentState]"
+      :aria-label="`${instrument.descriptor.name} instrument input ${instrumentState}`"
       @dragenter="allowDrop"
       @dragover="allowDrop"
       @drop="dropInstrument"
     >
-      <span>EMPTY INSTRUMENT</span>
-    </button>
-  </MixerPluginPicker>
+      <button
+        class="instrument-name"
+        :title="instrument.descriptor.name"
+        :aria-label="`Open ${instrument.descriptor.name} instrument editor`"
+        @click="emit('open', instrument.id)"
+      >
+        {{ instrument.descriptor.name }}
+      </button>
+      <span class="mode-badge" :title="`Audio mode: ${instrument.audioMode}`">{{
+        pluginAudioModeBadge(instrument.audioMode)
+      }}</span>
+      <button
+        :aria-label="`Remove ${instrument.descriptor.name}`"
+        @click="emit('remove', instrument.id)"
+      >
+        <Trash2 :size="10" />
+      </button>
+    </article>
+
+    <MixerPluginPicker
+      v-else
+      :plugins="plugins"
+      title="Choose instrument"
+      search-label="Search VST3 instruments"
+      empty-message="No compatible VST3 instruments found. Rescan from the Sound Browser."
+      @select="emit('assign', $event)"
+    >
+      <button
+        type="button"
+        class="instrument-input empty"
+        aria-label="Assign VST3 instrument input"
+        @dragenter="allowDrop"
+        @dragover="allowDrop"
+        @drop="dropInstrument"
+      />
+    </MixerPluginPicker>
+    <div v-if="pendingDrop" class="drop-mode-menu">
+      <PluginAudioModeMenu
+        :descriptor="pendingDrop"
+        @select="confirmDrop({ descriptor: pendingDrop, audioMode: $event })"
+        @cancel="pendingDrop = null"
+      />
+    </div>
+  </div>
 </template>
 
 <style scoped>
+.instrument-input-wrapper {
+  position: relative;
+}
 .instrument-input {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 22px;
+  grid-template-columns: minmax(0, 1fr) auto 22px;
   align-items: center;
   width: 100%;
   height: 28px;
@@ -99,6 +120,25 @@ function dropInstrument(event: DragEvent): void {
   color: var(--ui-domain-color-fff);
   background: linear-gradient(var(--ui-domain-color-7e9362), var(--ui-domain-color-63764d));
   box-shadow: 0 1px 0 var(--ui-domain-color-ffffff28) inset;
+}
+.mode-badge {
+  padding: 1px 4px;
+  border: 1px solid var(--ui-domain-color-ffffff28);
+  border-radius: 3px;
+  font: var(--ui-type-size-micro) var(--ui-type-family-data);
+}
+.drop-mode-menu {
+  position: absolute;
+  z-index: var(--ui-z-popover);
+  top: 32px;
+  left: 0;
+  width: 232px;
+  padding: 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  color: var(--text-primary);
+  background: var(--surface-1);
+  box-shadow: 0 14px 36px var(--ui-domain-color-00000075);
 }
 .instrument-input.bypassed {
   border-color: var(--ui-domain-color-505050);
@@ -160,10 +200,6 @@ function dropInstrument(event: DragEvent): void {
   box-shadow: 0 1px 2px var(--ui-domain-color-00000038) inset;
   font: inherit;
   cursor: pointer;
-}
-.instrument-input.empty span {
-  font: var(--ui-type-size-micro) var(--ui-type-family-data);
-  letter-spacing: var(--ui-type-tracking-wide);
 }
 .instrument-input.empty:hover {
   border-color: var(--ui-domain-color-768a61);

@@ -686,6 +686,7 @@ export type MixerInputSource = "hardware" | "bus"
 export type MixerInputFormat = "mono" | "stereo"
 export type MixerSendTap = "pre" | "post" | "post-pan"
 export type PluginKind = "effect" | "instrument"
+export type PluginAudioMode = "mono" | "mono-to-stereo" | "stereo" | "dual-mono"
 export type PluginInstanceRole = "instrument" | "insert"
 export type PluginSource = { kind: "builtin"; id: string } | { kind: "external" }
 export type PluginCompatibility =
@@ -713,6 +714,7 @@ export interface PluginDescriptor {
   version: string
   category: string
   kind: PluginKind
+  supportedAudioModes: PluginAudioMode[]
   architecture: string
   buses: PluginAudioBusInfo[]
   hasEditor: boolean
@@ -752,6 +754,7 @@ export interface PluginInstanceState {
   slotOrder: number
   classId: string
   descriptor: PluginDescriptor
+  audioMode: PluginAudioMode
   enabled: boolean
   componentState: Uint8Array
   controllerState: Uint8Array

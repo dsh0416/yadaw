@@ -4,6 +4,8 @@ import { AudioWaveform, Piano, Plug, Search, SlidersHorizontal } from "@lucide/v
 import type { ProjectAssetSummary as Asset } from "@yadaw/contracts"
 import { pluginDescriptorKey, type PluginDescriptor } from "@yadaw/contracts"
 import { usePluginStore } from "../../stores/plugins"
+import PluginAudioModeMenu from "../plugins/PluginAudioModeMenu.vue"
+import type { PluginSelection, PluginSignalWidth } from "../plugins/plugin-audio-mode"
 import { writePluginDrag } from "../plugins/plugin-drag"
 
 const props = defineProps<{ assets: Asset[] }>()
@@ -11,6 +13,8 @@ const pluginStore = usePluginStore()
 const query = shallowRef("")
 type BrowserSection = "instruments" | "effects" | "samples" | "plugins"
 const activeSection = shallowRef<BrowserSection>("instruments")
+const pendingPlugin = shallowRef<PluginDescriptor | null>(null)
+const pendingInputWidth = shallowRef<PluginSignalWidth | undefined>(undefined)
 
 function matches(value: string): boolean {
   return value.toLocaleLowerCase().includes(query.value.trim().toLocaleLowerCase())
@@ -47,7 +51,25 @@ const browserSections = computed<
 ])
 
 function activate(plugin: PluginDescriptor): void {
-  void pluginStore.activate(plugin)
+  if (plugin.kind === "effect") {
+    const inputWidth = pluginStore.requireSelectedEffectInputWidth()
+    if (!inputWidth) return
+    pendingInputWidth.value = inputWidth
+  } else {
+    pendingInputWidth.value = undefined
+  }
+  pendingPlugin.value = plugin
+}
+
+function confirmActivation(selection: PluginSelection): void {
+  pendingPlugin.value = null
+  pendingInputWidth.value = undefined
+  void pluginStore.activate(selection)
+}
+
+function cancelActivation(): void {
+  pendingPlugin.value = null
+  pendingInputWidth.value = undefined
 }
 
 onMounted(() => void pluginStore.load())
@@ -55,6 +77,14 @@ onMounted(() => void pluginStore.load())
 
 <template>
   <aside class="browser-panel">
+    <div v-if="pendingPlugin" class="browser-mode-menu">
+      <PluginAudioModeMenu
+        :descriptor="pendingPlugin"
+        :input-width="pendingInputWidth"
+        @select="confirmActivation({ descriptor: pendingPlugin, audioMode: $event })"
+        @cancel="cancelActivation"
+      />
+    </div>
     <div class="panel-heading">
       <div><span>LIBRARY</span><strong>Sound browser</strong></div>
       <b>{{ assets.length }}</b>
@@ -186,12 +216,26 @@ onMounted(() => void pluginStore.load())
 
 <style scoped>
 .browser-panel {
+  position: relative;
   display: flex;
   min-height: 0;
   flex-direction: column;
   padding: 17px 12px 12px;
   border-right: 1px solid var(--line-soft);
   background: var(--surface-panel);
+}
+.browser-mode-menu {
+  position: absolute;
+  z-index: var(--ui-z-popover);
+  top: 74px;
+  right: 12px;
+  left: 12px;
+  padding: 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  color: var(--text-primary);
+  background: var(--surface-1);
+  box-shadow: 0 14px 36px var(--ui-domain-color-00000075);
 }
 .panel-heading {
   display: flex;

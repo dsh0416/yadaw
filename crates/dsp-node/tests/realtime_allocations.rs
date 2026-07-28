@@ -7,7 +7,7 @@ use std::{
 };
 
 use yadaw_audio_host::engine::bench_support::{
-    ParameterQueueHarness, RenderHarness, RenderScenario,
+    ParameterQueueHarness, PluginAdapterHarness, RenderHarness, RenderScenario,
 };
 use yadaw_dsp_core::mixer::{ChannelKind, ChannelSpec, MixerGraph, RouteTarget};
 use yadaw_dsp_node::bench_support::TapHarness;
@@ -134,6 +134,14 @@ fn realtime_mixer_render_preview_and_capture_do_not_allocate() {
     let _ = render.render_block(256);
     assert_no_thread_allocations("NativeMixerRuntime::render_frame", || {
         black_box(render.render_block(256));
+    });
+
+    let mut adapters = PluginAdapterHarness::new();
+    let _ = adapters.render_frame([0.25, -0.125]);
+    assert_no_thread_allocations("all plugin channel adapter modes", || {
+        for _ in 0..256 {
+            black_box(adapters.render_frame(black_box([0.25, -0.125])));
+        }
     });
 
     let mut preview = ParameterQueueHarness::new();

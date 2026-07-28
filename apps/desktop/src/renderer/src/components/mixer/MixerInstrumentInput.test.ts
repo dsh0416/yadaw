@@ -15,6 +15,7 @@ const descriptor: PluginDescriptor = {
   kind: "instrument",
   architecture: "x86_64",
   buses: [],
+  supportedAudioModes: ["mono", "stereo"],
   hasEditor: true,
   compatibility: "compatible",
   compatibilityReason: null
@@ -27,6 +28,7 @@ const instrument: PluginInstanceState = {
   slotOrder: 0,
   classId: descriptor.classId,
   descriptor,
+  audioMode: "stereo",
   enabled: true,
   componentState: new Uint8Array(),
   controllerState: new Uint8Array()
@@ -65,6 +67,7 @@ describe("MixerInstrumentInput", () => {
       }
     })
 
+    expect(wrapper.get('button[aria-label="Assign VST3 instrument input"]').text()).toBe("")
     await wrapper.get('button[aria-label="Assign VST3 instrument input"]').trigger("click")
     await flushPromises()
     const synthButton = document.body.querySelector<HTMLButtonElement>(
@@ -72,7 +75,13 @@ describe("MixerInstrumentInput", () => {
     )
     expect(synthButton).not.toBeNull()
     await new DOMWrapper(synthButton).trigger("click")
-    expect(wrapper.emitted("assign")?.at(-1)).toEqual([descriptor])
+    expect(wrapper.emitted("assign")).toBeUndefined()
+    const stereoButton = document.body.querySelector<HTMLButtonElement>(
+      'button[title="Stereo: 2 channel output"]'
+    )
+    expect(stereoButton).not.toBeNull()
+    await new DOMWrapper(stereoButton).trigger("click")
+    expect(wrapper.emitted("assign")?.at(-1)).toEqual([{ descriptor, audioMode: "stereo" }])
 
     await wrapper.get('button[aria-label="Assign VST3 instrument input"]').trigger("drop", {
       dataTransfer: {
@@ -84,6 +93,8 @@ describe("MixerInstrumentInput", () => {
           })
       }
     })
-    expect(wrapper.emitted("assign")?.at(-1)).toEqual([descriptor])
+    expect(wrapper.emitted("assign")).toHaveLength(1)
+    await wrapper.get('button[title="Mono: 1 channel output"]').trigger("click")
+    expect(wrapper.emitted("assign")?.at(-1)).toEqual([{ descriptor, audioMode: "mono" }])
   })
 })

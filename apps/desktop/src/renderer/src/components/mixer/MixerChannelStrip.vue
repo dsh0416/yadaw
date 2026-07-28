@@ -13,6 +13,11 @@ import type {
   MixerSendState
 } from "@yadaw/contracts"
 import type { PluginDescriptor, PluginInstanceState, PluginRuntimeStatus } from "@yadaw/contracts"
+import {
+  pluginAudioModeOutputWidth,
+  type PluginSelection,
+  type PluginSignalWidth
+} from "../plugins/plugin-audio-mode"
 import { usePeakMeterDisplay } from "../../composables/usePeakMeterDisplay"
 import { useParameterGesture } from "../../composables/useParameterGesture"
 import { useApplicationSettingsStore } from "../../stores/applicationSettings"
@@ -59,9 +64,9 @@ const emit = defineEmits<{
   openPlugin: [instanceId: string]
   togglePlugin: [instanceId: string, enabled: boolean]
   removePlugin: [instanceId: string]
-  insertPlugin: [channelId: string, descriptor: PluginDescriptor, slotOrder: number]
+  insertPlugin: [channelId: string, selection: PluginSelection, slotOrder: number]
   movePlugin: [instanceId: string, channelId: string, slotOrder: number]
-  assignInstrument: [channelId: string, descriptor: PluginDescriptor]
+  assignInstrument: [channelId: string, selection: PluginSelection]
   deleteChannel: [channelId: string]
   resetMeterClips: []
 }>()
@@ -80,6 +85,12 @@ const instrument = computed(
   () => props.plugins.find((plugin) => plugin.role === "instrument") ?? null
 )
 const inserts = computed(() => props.plugins.filter((plugin) => plugin.role === "insert"))
+const insertInitialInputWidth = computed<PluginSignalWidth>(() => {
+  if (instrument.value) return pluginAudioModeOutputWidth(instrument.value.audioMode)
+  return props.channel.kind !== "instrument" && props.channel.inputChannels.length === 1
+    ? "mono"
+    : "stereo"
+})
 
 const gainLabel = computed(() =>
   props.channel.gainDb <= -90 ? "−∞" : `${props.channel.gainDb.toFixed(1)} dB`
@@ -254,10 +265,11 @@ function handleFaderKeydown(event: KeyboardEvent): void {
       :runtime="pluginRuntime"
       :effect-plugins="effectPlugins"
       :slot-rows="pluginSlotRows"
+      :initial-input-width="insertInitialInputWidth"
       @open="emit('openPlugin', $event)"
       @toggle="(id, enabled) => emit('togglePlugin', id, enabled)"
       @remove="emit('removePlugin', $event)"
-      @insert="(descriptor, slotOrder) => emit('insertPlugin', channel.id, descriptor, slotOrder)"
+      @insert="(selection, slotOrder) => emit('insertPlugin', channel.id, selection, slotOrder)"
       @move="(instanceId, slotOrder) => emit('movePlugin', instanceId, channel.id, slotOrder)"
     />
 

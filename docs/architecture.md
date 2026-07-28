@@ -110,10 +110,28 @@ Mixer channels and physical device channels are separate concepts:
 
 `input_source` distinguishes hardware and BUS inputs. `input_format` selects one
 input for mono or an adjacent left/right pair for stereo. Mono recordings remain
-mono assets on disk, then expand to a stereo frame when they enter the track
-processing graph. Everything downstream stays stereo, so a plug-in can produce
-different left and right signals without the channel collapsing them back to
-mono.
+mono assets on disk. A channel's plug-in chain may remain mono internally:
+instruments select `0→1` or `0→2`, while effects select `1→1`, `1→2`, `2→2`, or
+dual mono `2×(1→1)`. The graph compiler tracks the width between adjacent
+plug-ins, averages stereo to mono as `(L + R) × 0.5`, and duplicates mono when a
+stereo input is required. Dual mono uses two linked `1→1` processor instances
+and preserves the left and right lanes independently.
+
+For a new effect insertion, the renderer derives the signal width immediately
+before that slot and only offers modes with a matching native input: a mono
+position offers `1→1` and `1→2`, while a stereo position offers `2→2` and dual
+mono. The command path validates the same condition before creating the
+instance. Hidden adapters are therefore not used to broaden a new selection;
+they keep persisted chains legal after moves, restores, bypasses, or missing
+plug-ins change the surrounding topology.
+
+These width adapters are compiled runtime details. They are not project
+entities, do not appear in `MixerGraphSnapshot.plugins`, and are rebuilt after
+insert, remove, move, or bypass changes. The compiler restores stereo at the end
+of every plug-in chain before the existing channel fader, pan, sends, meters,
+and output routing. It preallocates VST processors, adapters, dual-mono alignment
+delays, and plug-in bypass delay lines before publishing a graph generation;
+the audio callback performs no allocation, locking, IPC, or filesystem work.
 
 ## Dependency direction
 

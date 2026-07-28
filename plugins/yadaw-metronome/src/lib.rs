@@ -214,7 +214,7 @@ impl PluginLogic for YadawMetronome {
     type DspState = MetronomeDspState;
 
     fn bus_layouts() -> Vec<BusLayout> {
-        vec![BusLayout::new().with_output("Main", ChannelConfig::Stereo)]
+        BusLayout::stereo_and_mono_output()
     }
 
     fn reset(state: &mut MetronomeDspState, _params: &MetronomeParams, config: &AudioConfig) {

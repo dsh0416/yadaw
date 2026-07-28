@@ -264,7 +264,7 @@ impl PluginLogic for YadawSine {
     type DspState = SineDspState;
 
     fn bus_layouts() -> Vec<BusLayout> {
-        vec![BusLayout::new().with_output("Main", ChannelConfig::Stereo)]
+        BusLayout::stereo_and_mono_output()
     }
 
     fn reset(state: &mut SineDspState, _params: &SineParams, config: &AudioConfig) {
@@ -378,6 +378,15 @@ mod tests {
         truce_test::assert_valid_info::<Plugin>();
         truce_test::assert_has_editor::<Plugin>();
         truce_test::assert_state_round_trip::<Plugin>();
+    }
+
+    #[test]
+    fn exposes_mono_and_stereo_instrument_outputs() {
+        let channels = YadawSine::bus_layouts()
+            .into_iter()
+            .map(|layout| layout.total_output_channels())
+            .collect::<Vec<_>>();
+        assert_eq!(channels, vec![2, 1]);
     }
 
     #[test]

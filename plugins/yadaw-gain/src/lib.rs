@@ -91,6 +91,16 @@ pub struct YadawGain;
 impl PurePluginLogic for YadawGain {
     type Params = GainParams;
 
+    fn bus_layouts() -> Vec<BusLayout> {
+        vec![
+            BusLayout::stereo(),
+            BusLayout::mono(),
+            BusLayout::new()
+                .with_input("Main", ChannelConfig::Mono)
+                .with_output("Main", ChannelConfig::Stereo),
+        ]
+    }
+
     fn process(
         params: &Self::Params,
         buffer: &mut AudioBuffer,
@@ -106,9 +116,10 @@ impl PurePluginLogic for YadawGain {
             } else {
                 db_to_linear(gain_db)
             };
-            for channel_index in 0..buffer.channels() {
-                let (input, output) = buffer.io(channel_index);
-                output[sample_index] = input[sample_index] * gain;
+            for output_channel in 0..buffer.num_output_channels() {
+                let input_channel = output_channel.min(buffer.num_input_channels() - 1);
+                let input = buffer.input(input_channel)[sample_index];
+                buffer.output(output_channel)[sample_index] = input * gain;
             }
         }
         if buffer.num_output_channels() > 0 {
@@ -145,6 +156,20 @@ mod tests {
         truce_test::assert_valid_info::<Plugin>();
         truce_test::assert_has_editor::<Plugin>();
         truce_test::assert_state_round_trip::<Plugin>();
+    }
+
+    #[test]
+    fn exposes_mono_mono_to_stereo_and_stereo_layouts() {
+        let layouts = <YadawGain as PurePluginLogic>::bus_layouts()
+            .into_iter()
+            .map(|layout| {
+                (
+                    layout.total_input_channels(),
+                    layout.total_output_channels(),
+                )
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(layouts, vec![(2, 2), (1, 1), (1, 2)]);
     }
 
     #[test]

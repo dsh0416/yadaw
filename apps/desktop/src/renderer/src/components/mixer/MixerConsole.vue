@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed } from "vue"
 import { Plus, RotateCcw, RotateCw } from "@lucide/vue"
-import type { PluginDescriptor } from "@yadaw/contracts"
 import { useGlobalDialog } from "../../composables/useGlobalDialog"
 import { useMixerStore } from "../../stores/mixer"
 import { usePluginStore } from "../../stores/plugins"
+import type { PluginSelection } from "../plugins/plugin-audio-mode"
 import MixerChannelStrip from "./MixerChannelStrip.vue"
 import MixerSectionLabels from "./MixerSectionLabels.vue"
 
@@ -58,15 +58,15 @@ function removePlugin(instanceId: string): void {
   void mixerStore.execute({ type: "delete-plugin", pluginId: instanceId })
 }
 
-function insertPlugin(channelId: string, descriptor: PluginDescriptor, slotOrder: number): void {
-  void pluginStore.addEffectAt(descriptor, channelId, slotOrder)
+function insertPlugin(channelId: string, selection: PluginSelection, slotOrder: number): void {
+  void pluginStore.addEffectAt(selection, channelId, slotOrder)
 }
 
 function movePlugin(instanceId: string, channelId: string, slotOrder: number): void {
   void pluginStore.moveInsert(instanceId, channelId, slotOrder)
 }
 
-async function assignInstrument(channelId: string, descriptor: PluginDescriptor): Promise<void> {
+async function assignInstrument(channelId: string, selection: PluginSelection): Promise<void> {
   const current = mixerStore.graph.plugins.find(
     (plugin) => plugin.channelId === channelId && plugin.role === "instrument"
   )
@@ -75,14 +75,14 @@ async function assignInstrument(channelId: string, descriptor: PluginDescriptor)
       eyebrow: "Instrument slot",
       tone: "warning",
       title: "Replace instrument?",
-      description: `${current.descriptor.name} will be replaced with ${descriptor.name}.`,
+      description: `${current.descriptor.name} will be replaced with ${selection.descriptor.name}.`,
       detail: "The previous component and controller state remain available through undo.",
       confirmLabel: "Replace instrument",
       destructive: false
     })
     if (!confirmed) return
   }
-  await pluginStore.assignInstrument(descriptor, channelId)
+  await pluginStore.assignInstrument(selection, channelId)
 }
 
 async function deleteChannel(channelId: string): Promise<void> {

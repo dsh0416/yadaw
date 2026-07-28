@@ -174,6 +174,16 @@ pub enum PriorityResult {
     },
 }
 
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PluginAudioMode {
+    Mono,
+    MonoToStereo,
+    #[default]
+    Stereo,
+    DualMono,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum ControlCommand {
@@ -217,6 +227,7 @@ pub enum ControlCommand {
         module_path: String,
         class_id: String,
         plugin_kind: String,
+        audio_mode: PluginAudioMode,
         sample_rate: f64,
         component_state: BinaryPayload,
         controller_state: BinaryPayload,
@@ -355,6 +366,8 @@ pub struct LivePluginInstance {
     pub channel_id: String,
     pub role: String,
     pub slot_order: u32,
+    #[serde(default)]
+    pub audio_mode: PluginAudioMode,
     pub enabled: bool,
     pub latency_samples: u32,
     pub tail_samples: Option<u32>,

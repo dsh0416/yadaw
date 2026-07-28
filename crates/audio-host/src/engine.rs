@@ -26,7 +26,7 @@ use yadaw_dsp_core::mixer::{
 use yadaw_dsp_runtime::{
     MUSICAL_TICKS_PER_QUARTER,
     block::{LatencyNode, StereoDelayLine, plan_latency_compensation},
-    protocol::{LiveMixerSendTap, LiveMixerSystemRole},
+    protocol::{LiveMixerSendTap, LiveMixerSystemRole, PluginAudioMode},
     tempo::{TempoEvent, TempoMap, TimeSignatureEvent},
 };
 
@@ -139,6 +139,7 @@ pub struct NativePluginInstance {
     pub channel_index: u32,
     pub role: String,
     pub slot_order: u32,
+    pub audio_mode: PluginAudioMode,
     pub enabled: bool,
     pub latency_samples: u32,
     pub tail_samples: Option<u32>,
@@ -503,6 +504,7 @@ impl LoadedClip {
 
 struct LivePlugin {
     processor: Option<Vst3ProcessorHandle>,
+    audio_mode: PluginAudioMode,
     enabled: bool,
     is_instrument: bool,
     bypass_delay: StereoDelayLine,
@@ -510,17 +512,71 @@ struct LivePlugin {
 }
 
 impl LivePlugin {
-    fn process(&mut self, input: StereoFrame, context: &ProcessContext) -> StereoFrame {
+    fn process(
+        &mut self,
+        input: StereoFrame,
+        width: &mut SignalWidth,
+        context: &ProcessContext,
+    ) -> StereoFrame {
+        let prepared = self.prepare_input(input, *width);
+        let output_width = self.output_width();
         if !self.enabled {
-            return self.bypass_delay.process(input);
+            *width = output_width;
+            return self.bypass_delay.process(self.passthrough(prepared));
         }
-        let Some(processor) = self.processor.as_mut() else {
-            return if self.is_instrument { [0.0; 2] } else { input };
+        let failure_output = if self.is_instrument {
+            [0.0; 2]
+        } else {
+            self.passthrough(prepared)
         };
+        let Some(processor) = self.processor.as_mut() else {
+            *width = output_width;
+            return failure_output;
+        };
+        *width = output_width;
         processor
-            .process_frame(input, context)
-            .unwrap_or(if self.is_instrument { [0.0; 2] } else { input })
+            .process_frame(prepared, context)
+            .unwrap_or(failure_output)
     }
+
+    fn prepare_input(&self, input: StereoFrame, width: SignalWidth) -> StereoFrame {
+        if self.is_instrument {
+            return [0.0; 2];
+        }
+        match self.audio_mode {
+            PluginAudioMode::Mono | PluginAudioMode::MonoToStereo => match width {
+                SignalWidth::Mono => [input[0], 0.0],
+                SignalWidth::Stereo => [(input[0] + input[1]) * 0.5, 0.0],
+            },
+            PluginAudioMode::Stereo | PluginAudioMode::DualMono => match width {
+                SignalWidth::Mono => [input[0], input[0]],
+                SignalWidth::Stereo => input,
+            },
+        }
+    }
+
+    fn passthrough(&self, input: StereoFrame) -> StereoFrame {
+        match self.audio_mode {
+            PluginAudioMode::Mono => [input[0], 0.0],
+            PluginAudioMode::MonoToStereo => [input[0], input[0]],
+            PluginAudioMode::Stereo | PluginAudioMode::DualMono => input,
+        }
+    }
+
+    fn output_width(&self) -> SignalWidth {
+        match self.audio_mode {
+            PluginAudioMode::Mono => SignalWidth::Mono,
+            PluginAudioMode::MonoToStereo | PluginAudioMode::Stereo | PluginAudioMode::DualMono => {
+                SignalWidth::Stereo
+            }
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum SignalWidth {
+    Mono,
+    Stereo,
 }
 
 #[derive(Clone, Copy)]
@@ -705,6 +761,7 @@ struct NativeMixerRuntime {
     graph: MixerGraph,
     clips: Vec<LoadedClip>,
     channel_sources: Vec<StereoFrame>,
+    channel_input_widths: Vec<SignalWidth>,
     plugins_by_channel: Vec<Vec<LivePlugin>>,
     midi_events: Vec<ScheduledMidiEvent>,
     midi_cursor: usize,
@@ -1201,6 +1258,17 @@ fn build_mixer_runtime(
             Ok(Some([routed[0], *routed.get(1).unwrap_or(&routed[0])]))
         })
         .collect::<Result<Vec<_>>>()?;
+    let channel_input_widths = native
+        .channels
+        .iter()
+        .map(|channel| {
+            if channel.kind != "instrument" && channel.input_channels.len() == 1 {
+                SignalWidth::Mono
+            } else {
+                SignalWidth::Stereo
+            }
+        })
+        .collect::<Vec<_>>();
     let channels = native
         .channels
         .iter()
@@ -1368,6 +1436,7 @@ fn build_mixer_runtime(
         }
         plugins_by_channel[channel_index].push(LivePlugin {
             processor: plugin.processor,
+            audio_mode: plugin.audio_mode,
             enabled: plugin.enabled,
             is_instrument,
             bypass_delay: StereoDelayLine::new(plugin.latency_samples as usize),
@@ -1532,6 +1601,7 @@ fn build_mixer_runtime(
         held_peaks: vec![[0.0, 0.0]; graph.channel_count()],
         held_until: vec![[0, 0]; graph.channel_count()],
         channel_sources: vec![[0.0, 0.0]; channels.len()],
+        channel_input_widths,
         plugins_by_channel,
         midi_events,
         midi_cursor: 0,
@@ -1680,19 +1750,24 @@ impl NativeMixerRuntime {
         }
         let context = self.process_context(position, state);
         let sources = &self.channel_sources;
+        let input_widths = &self.channel_input_widths;
         let plugins = &mut self.plugins_by_channel;
         let generation = self.generation;
         let mut process_plugins = |channel_index: usize, mut frame: StereoFrame| {
+            let mut width = input_widths[channel_index];
             for plugin in &mut plugins[channel_index] {
                 crate::crash_marker::mark(
                     generation,
                     plugin.marker_index,
                     crate::crash_marker::STAGE_PROCESS,
                 );
-                frame = plugin.process(frame, &context);
+                frame = plugin.process(frame, &mut width, &context);
                 crate::crash_marker::clean(generation);
             }
-            frame
+            match width {
+                SignalWidth::Mono => [frame[0], frame[0]],
+                SignalWidth::Stereo => frame,
+            }
         };
         let result = self
             .graph
@@ -2802,13 +2877,13 @@ pub mod bench_support {
     use yadaw_dsp_core::mixer::{
         ChannelKind, ChannelPeak, ChannelSpec, MixerGraph, RouteTarget, StereoFrame,
     };
-    use yadaw_dsp_runtime::tempo::TempoMap;
+    use yadaw_dsp_runtime::{protocol::PluginAudioMode, tempo::TempoMap};
 
     use super::{
-        AdaptiveResampler, ClipSamples, EngineCommand, InputPeakBank, LoadedClip, MeterAtomics,
-        MeterBank, MetronomeScheduler, NativeMixerRuntime, RealtimeParameter,
-        RealtimeParameterCommand, StreamingClip, TRANSPORT_PLAYING, TransportShared,
-        decode_clip_audio, spawn_streaming_clip,
+        AdaptiveResampler, ClipSamples, EngineCommand, InputPeakBank, LivePlugin, LoadedClip,
+        MeterAtomics, MeterBank, MetronomeScheduler, NativeMixerRuntime, ProcessContext,
+        RealtimeParameter, RealtimeParameterCommand, SignalWidth, StereoDelayLine, StreamingClip,
+        TRANSPORT_PLAYING, TransportShared, decode_clip_audio, spawn_streaming_clip,
     };
 
     #[derive(Clone, Copy, Debug)]
@@ -2902,6 +2977,7 @@ pub mod bench_support {
             held_peaks: vec![[0.0, 0.0]; graph.channel_count()],
             held_until: vec![[0, 0]; graph.channel_count()],
             channel_sources: vec![[0.0, 0.0]; scenario.tracks + 2],
+            channel_input_widths: vec![SignalWidth::Stereo; scenario.tracks + 2],
             plugins_by_channel: (0..scenario.tracks + 2).map(|_| Vec::new()).collect(),
             midi_events: Vec::new(),
             midi_cursor: 0,
@@ -2955,6 +3031,63 @@ pub mod bench_support {
 
         pub fn publish_meters(&mut self, elapsed_frames: usize) {
             self.runtime.publish_peaks(elapsed_frames);
+        }
+    }
+
+    pub struct PluginAdapterHarness {
+        plugins: [LivePlugin; 4],
+        context: ProcessContext,
+    }
+
+    impl PluginAdapterHarness {
+        pub fn new() -> Self {
+            Self {
+                plugins: [
+                    missing_effect(PluginAudioMode::Mono),
+                    missing_effect(PluginAudioMode::DualMono),
+                    missing_effect(PluginAudioMode::MonoToStereo),
+                    missing_effect(PluginAudioMode::Stereo),
+                ],
+                context: ProcessContext {
+                    project_time_samples: 0,
+                    continuous_time_samples: 0,
+                    project_time_quarters: 0.0,
+                    bar_position_quarters: 0.0,
+                    tempo: 120.0,
+                    time_signature_numerator: 4,
+                    time_signature_denominator: 4,
+                    playing: false,
+                    recording: false,
+                },
+            }
+        }
+
+        pub fn render_frame(&mut self, mut frame: StereoFrame) -> StereoFrame {
+            let mut width = SignalWidth::Stereo;
+            for plugin in &mut self.plugins {
+                frame = plugin.process(frame, &mut width, &self.context);
+            }
+            match width {
+                SignalWidth::Mono => [frame[0], frame[0]],
+                SignalWidth::Stereo => frame,
+            }
+        }
+    }
+
+    impl Default for PluginAdapterHarness {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
+    fn missing_effect(audio_mode: PluginAudioMode) -> LivePlugin {
+        LivePlugin {
+            processor: None,
+            audio_mode,
+            enabled: false,
+            is_instrument: false,
+            bypass_delay: StereoDelayLine::new(0),
+            marker_index: 0,
         }
     }
 
@@ -3131,15 +3264,17 @@ mod tests {
 
     use super::{
         AdaptiveResampler, BufferSelection, BufferSize, ClipStoragePolicy, InputPeakBank,
-        MAX_INPUT_CHANNELS, MEMORY_DECODE_LIMIT_BYTES, METRONOME_ACCENT_NOTE, METRONOME_BEAT_NOTE,
-        MetronomeScheduler, SupportedBufferSize, clip_storage_policy, resolve_stream_devices,
-        select_buffer_size, spawn_streaming_clip,
+        LivePlugin, MAX_INPUT_CHANNELS, MEMORY_DECODE_LIMIT_BYTES, METRONOME_ACCENT_NOTE,
+        METRONOME_BEAT_NOTE, MetronomeScheduler, SignalWidth, StereoDelayLine, SupportedBufferSize,
+        clip_storage_policy, resolve_stream_devices, select_buffer_size, spawn_streaming_clip,
     };
     use crate::recording::{NativeRecordingStartConfig, write_deterministic_test_recording};
+    use crate::vst3::ProcessContext;
     use ringbuf::{
         HeapRb,
         traits::{Producer, Split},
     };
+    use yadaw_dsp_runtime::protocol::PluginAudioMode;
     use yadaw_dsp_runtime::tempo::{TempoEvent, TempoMap, TimeSignatureEvent};
 
     fn assert_fixed(selection: BufferSelection, expected: u32, fell_back: bool) {
@@ -3385,5 +3520,102 @@ mod tests {
         assert!(refilled);
         drop(stream);
         fs::remove_file(path).unwrap();
+    }
+
+    fn test_process_context() -> ProcessContext {
+        ProcessContext {
+            project_time_samples: 0,
+            continuous_time_samples: 0,
+            project_time_quarters: 0.0,
+            bar_position_quarters: 0.0,
+            tempo: 120.0,
+            time_signature_numerator: 4,
+            time_signature_denominator: 4,
+            playing: false,
+            recording: false,
+        }
+    }
+
+    fn missing_effect(mode: PluginAudioMode, enabled: bool) -> LivePlugin {
+        LivePlugin {
+            processor: None,
+            audio_mode: mode,
+            enabled,
+            is_instrument: false,
+            bypass_delay: StereoDelayLine::new(0),
+            marker_index: 0,
+        }
+    }
+
+    #[test]
+    fn hidden_channel_adapters_downmix_and_upmix_at_chain_boundaries() {
+        let context = test_process_context();
+        let mut width = SignalWidth::Stereo;
+        let mut mono = missing_effect(PluginAudioMode::Mono, true);
+        let frame = mono.process([1.0, 3.0], &mut width, &context);
+        assert_eq!(frame, [2.0, 0.0]);
+        assert!(matches!(width, SignalWidth::Mono));
+
+        let mut stereo = missing_effect(PluginAudioMode::Stereo, true);
+        let frame = stereo.process(frame, &mut width, &context);
+        assert_eq!(frame, [2.0, 2.0]);
+        assert!(matches!(width, SignalWidth::Stereo));
+    }
+
+    #[test]
+    fn bypassed_modes_keep_their_selected_topology() {
+        let context = test_process_context();
+        let mut width = SignalWidth::Stereo;
+        let mut mono_to_stereo = missing_effect(PluginAudioMode::MonoToStereo, false);
+        let frame = mono_to_stereo.process([1.0, 3.0], &mut width, &context);
+        assert_eq!(frame, [2.0, 2.0]);
+        assert!(matches!(width, SignalWidth::Stereo));
+
+        let mut mono = missing_effect(PluginAudioMode::Mono, false);
+        let frame = mono.process(frame, &mut width, &context);
+        assert_eq!(frame, [2.0, 0.0]);
+        assert!(matches!(width, SignalWidth::Mono));
+    }
+
+    #[test]
+    fn every_adjacent_effect_mode_pair_has_a_legal_hidden_adapter_path() {
+        use PluginAudioMode::{DualMono, Mono, MonoToStereo, Stereo};
+
+        let cases = [
+            (Mono, Mono, [2.0, 0.0], true),
+            (Mono, MonoToStereo, [2.0, 2.0], false),
+            (Mono, Stereo, [2.0, 2.0], false),
+            (Mono, DualMono, [2.0, 2.0], false),
+            (MonoToStereo, Mono, [2.0, 0.0], true),
+            (MonoToStereo, MonoToStereo, [2.0, 2.0], false),
+            (MonoToStereo, Stereo, [2.0, 2.0], false),
+            (MonoToStereo, DualMono, [2.0, 2.0], false),
+            (Stereo, Mono, [2.0, 0.0], true),
+            (Stereo, MonoToStereo, [2.0, 2.0], false),
+            (Stereo, Stereo, [1.0, 3.0], false),
+            (Stereo, DualMono, [1.0, 3.0], false),
+            (DualMono, Mono, [2.0, 0.0], true),
+            (DualMono, MonoToStereo, [2.0, 2.0], false),
+            (DualMono, Stereo, [1.0, 3.0], false),
+            (DualMono, DualMono, [1.0, 3.0], false),
+        ];
+        let context = test_process_context();
+
+        for (first_mode, second_mode, expected, expected_mono) in cases {
+            let mut width = SignalWidth::Stereo;
+            let mut first = missing_effect(first_mode, false);
+            let mut second = missing_effect(second_mode, false);
+            let frame = first.process([1.0, 3.0], &mut width, &context);
+            let frame = second.process(frame, &mut width, &context);
+            assert_eq!(
+                frame, expected,
+                "{first_mode:?} followed by {second_mode:?}"
+            );
+            assert_eq!(
+                matches!(width, SignalWidth::Mono),
+                expected_mono,
+                "{first_mode:?} followed by {second_mode:?}"
+            );
+        }
     }
 }

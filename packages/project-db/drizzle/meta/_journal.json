@@ -57,6 +57,13 @@
       "when": 1785157783782,
       "tag": "0007_shiny_scarlet_spider",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1785162651055,
+      "tag": "0008_outgoing_tarantula",
+      "breakpoints": true
     }
   ]
 }

@@ -15,6 +15,7 @@ import type {
   MixerRuntimeSnapshot,
   PluginEditorMode,
   PluginEditorPreference,
+  PluginAudioMode,
   PluginInstanceState,
   PluginParameterChange,
   PluginParameterInfo,
@@ -366,6 +367,7 @@ export interface AudioHostGraph {
     channel_id: string
     role: string
     slot_order: number
+    audio_mode: PluginAudioMode
     enabled: boolean
     latency_samples: number
     tail_samples: number | null
@@ -1441,6 +1443,7 @@ export class AudioHostService {
       module_path: plugin.descriptor.modulePath,
       class_id: plugin.classId,
       plugin_kind: plugin.descriptor.kind,
+      audio_mode: plugin.audioMode,
       sample_rate: sampleRate,
       component_state: inlineBinary(plugin.componentState),
       controller_state: inlineBinary(plugin.controllerState)

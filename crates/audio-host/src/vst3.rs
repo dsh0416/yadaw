@@ -2,14 +2,71 @@ use std::{collections::HashMap, path::Path};
 
 use yadaw_dsp_runtime::protocol::{
     BinaryPayload, ControlCommand, ControlResult, ParameterCommand, ParameterGesture,
-    PluginEditorPreference, PluginParameter,
+    PluginAudioMode, PluginEditorPreference, PluginParameter,
 };
 use yadaw_vst3_host::{
-    ClassId, HostProcessContext, HostedPlugin, PlugView, PluginKind, ProcessorLease,
+    AudioLayout, ClassId, HostProcessContext, HostedPlugin, PlugView, PluginKind, ProcessorLease,
 };
 
 pub type ProcessContext = HostProcessContext;
-pub type Vst3ProcessorHandle = ProcessorLease;
+
+#[derive(Clone)]
+pub struct Vst3ProcessorHandle {
+    primary: ProcessorLease,
+    secondary: Option<ProcessorLease>,
+    left_delay: SampleDelay,
+    right_delay: SampleDelay,
+}
+
+#[derive(Clone)]
+struct SampleDelay {
+    samples: Vec<f32>,
+    cursor: usize,
+}
+
+impl SampleDelay {
+    fn new(delay_samples: u32) -> Self {
+        Self {
+            samples: vec![0.0; delay_samples as usize],
+            cursor: 0,
+        }
+    }
+
+    fn process(&mut self, sample: f32) -> f32 {
+        if self.samples.is_empty() {
+            return sample;
+        }
+        let delayed = self.samples[self.cursor];
+        self.samples[self.cursor] = sample;
+        self.cursor = (self.cursor + 1) % self.samples.len();
+        delayed
+    }
+}
+
+impl Vst3ProcessorHandle {
+    pub fn process_frame(&mut self, input: [f32; 2], context: &ProcessContext) -> Option<[f32; 2]> {
+        match &mut self.secondary {
+            Some(secondary) => {
+                let left = self
+                    .left_delay
+                    .process(self.primary.process_frame([input[0], 0.0], context)?[0]);
+                let right = self
+                    .right_delay
+                    .process(secondary.process_frame([input[1], 0.0], context)?[0]);
+                Some([left, right])
+            }
+            None => self.primary.process_frame(input, context),
+        }
+    }
+
+    pub fn note_on(&mut self, channel: u8, key: u8, velocity: u8, note_id: i32) -> bool {
+        self.primary.note_on(channel, key, velocity, note_id)
+    }
+
+    pub fn note_off(&mut self, channel: u8, key: u8, velocity: u8, note_id: i32) -> bool {
+        self.primary.note_off(channel, key, velocity, note_id)
+    }
+}
 
 pub struct Vst3Runtime {
     instances: HashMap<String, Instance>,
@@ -19,8 +76,43 @@ pub struct Vst3Runtime {
 
 struct Instance {
     plugin: HostedPlugin,
+    secondary: Option<HostedPlugin>,
     runtime_handle: u32,
     display_name: String,
+}
+
+impl Instance {
+    fn processor_handle(&self) -> Vst3ProcessorHandle {
+        let primary_latency = self.plugin.latency_samples();
+        let secondary_latency = self
+            .secondary
+            .as_ref()
+            .map_or(primary_latency, HostedPlugin::latency_samples);
+        let maximum_latency = primary_latency.max(secondary_latency);
+        Vst3ProcessorHandle {
+            primary: self.plugin.processor_lease(),
+            secondary: self.secondary.as_ref().map(HostedPlugin::processor_lease),
+            left_delay: SampleDelay::new(maximum_latency - primary_latency),
+            right_delay: SampleDelay::new(maximum_latency - secondary_latency),
+        }
+    }
+
+    fn latency_samples(&self) -> u32 {
+        self.secondary
+            .as_ref()
+            .map_or(self.plugin.latency_samples(), |secondary| {
+                self.plugin
+                    .latency_samples()
+                    .max(secondary.latency_samples())
+            })
+    }
+
+    fn tail_samples(&self) -> Option<u32> {
+        self.secondary.as_ref().map_or_else(
+            || self.plugin.tail_samples(),
+            |secondary| max_tail(self.plugin.tail_samples(), secondary.tail_samples()),
+        )
+    }
 }
 
 struct LoadPluginRequest {
@@ -28,6 +120,7 @@ struct LoadPluginRequest {
     module_path: String,
     class_id: String,
     plugin_kind: String,
+    audio_mode: PluginAudioMode,
     sample_rate: f64,
     component_state: Vec<u8>,
     controller_state: Vec<u8>,
@@ -56,6 +149,7 @@ impl Vst3Runtime {
                 module_path,
                 class_id,
                 plugin_kind,
+                audio_mode,
                 sample_rate,
                 component_state,
                 controller_state,
@@ -73,6 +167,7 @@ impl Vst3Runtime {
                     module_path,
                     class_id,
                     plugin_kind,
+                    audio_mode,
                     sample_rate,
                     component_state,
                     controller_state,
@@ -109,13 +204,13 @@ impl Vst3Runtime {
     pub fn processor_handle(&self, instance_id: &str) -> Option<Vst3ProcessorHandle> {
         self.instances
             .get(instance_id)
-            .map(|instance| instance.plugin.processor_lease())
+            .map(Instance::processor_handle)
     }
 
     pub fn processor_handles(&self) -> HashMap<String, Vst3ProcessorHandle> {
         self.instances
             .iter()
-            .map(|(id, instance)| (id.clone(), instance.plugin.processor_lease()))
+            .map(|(id, instance)| (id.clone(), instance.processor_handle()))
             .collect()
     }
 
@@ -197,12 +292,18 @@ impl Vst3Runtime {
     pub fn take_timing_changes(&self) -> Vec<(String, u32, Option<u32>)> {
         self.instances
             .iter()
-            .filter(|(_, instance)| instance.plugin.take_latency_changed())
+            .filter(|(_, instance)| {
+                instance.plugin.take_latency_changed()
+                    || instance
+                        .secondary
+                        .as_ref()
+                        .is_some_and(HostedPlugin::take_latency_changed)
+            })
             .map(|(id, instance)| {
                 (
                     id.clone(),
-                    instance.plugin.latency_samples(),
-                    instance.plugin.tail_samples(),
+                    instance.latency_samples(),
+                    instance.tail_samples(),
                 )
             })
             .collect()
@@ -214,6 +315,7 @@ impl Vst3Runtime {
             module_path,
             class_id,
             plugin_kind,
+            audio_mode,
             sample_rate,
             component_state,
             controller_state,
@@ -221,8 +323,8 @@ impl Vst3Runtime {
         if let Some(instance) = self.instances.get(&instance_id) {
             return ControlResult::PluginLoaded {
                 runtime_handle: instance.runtime_handle,
-                latency_samples: instance.plugin.latency_samples(),
-                tail_samples: instance.plugin.tail_samples(),
+                latency_samples: instance.latency_samples(),
+                tail_samples: instance.tail_samples(),
             };
         }
         let class_id = match class_id.parse::<ClassId>() {
@@ -234,17 +336,66 @@ impl Vst3Runtime {
             "instrument" => PluginKind::Instrument,
             _ => return control_error("unsupported VST3 plugin kind"),
         };
-        let plugin = match HostedPlugin::create(&module_path, class_id, sample_rate, kind) {
+        let layout = match audio_mode {
+            PluginAudioMode::Mono | PluginAudioMode::DualMono => AudioLayout::Mono,
+            PluginAudioMode::MonoToStereo => AudioLayout::MonoToStereo,
+            PluginAudioMode::Stereo => AudioLayout::Stereo,
+        };
+        if kind == PluginKind::Instrument
+            && matches!(
+                audio_mode,
+                PluginAudioMode::MonoToStereo | PluginAudioMode::DualMono
+            )
+        {
+            return control_error("unsupported instrument audio mode");
+        }
+        let plugin = match HostedPlugin::create_with_layout(
+            &module_path,
+            class_id,
+            sample_rate,
+            kind,
+            layout,
+        ) {
             Ok(plugin) => plugin,
             Err(error) => return control_error(&error.to_string()),
+        };
+        let secondary = if audio_mode == PluginAudioMode::DualMono {
+            match HostedPlugin::create_with_layout(
+                &module_path,
+                class_id,
+                sample_rate,
+                kind,
+                AudioLayout::Mono,
+            ) {
+                Ok(plugin) => Some(plugin),
+                Err(error) => return control_error(&error.to_string()),
+            }
+        } else {
+            None
         };
         if (!component_state.is_empty() || !controller_state.is_empty())
             && let Err(error) = plugin.restore_state(&component_state, &controller_state)
         {
             return control_error(&error.to_string());
         }
-        let latency_samples = plugin.latency_samples();
-        let tail_samples = plugin.tail_samples();
+        if let Some(secondary) = &secondary
+            && (!component_state.is_empty() || !controller_state.is_empty())
+            && let Err(error) = secondary.restore_state(&component_state, &controller_state)
+        {
+            return control_error(&error.to_string());
+        }
+        if let Some(secondary) = &secondary {
+            plugin.mirror_parameters_to(secondary);
+        }
+        let latency_samples = secondary
+            .as_ref()
+            .map_or(plugin.latency_samples(), |secondary| {
+                plugin.latency_samples().max(secondary.latency_samples())
+            });
+        let tail_samples = secondary.as_ref().map_or_else(
+            || plugin.tail_samples(),
+            |secondary| max_tail(plugin.tail_samples(), secondary.tail_samples()),
+        );
         let runtime_handle = self.next_runtime_handle;
         self.next_runtime_handle = self.next_runtime_handle.wrapping_add(1).max(1);
         let display_name = Path::new(&module_path)
@@ -256,6 +407,7 @@ impl Vst3Runtime {
             instance_id,
             Instance {
                 plugin,
+                secondary,
                 runtime_handle,
                 display_name,
             },
@@ -287,14 +439,15 @@ impl Vst3Runtime {
         if gesture == ParameterGesture::Begin {
             return ControlResult::Accepted;
         }
-        match instance.plugin.set_parameter(
+        let primary_result = instance.plugin.set_parameter(
             parameter_id,
             normalized,
             gesture == ParameterGesture::End,
-        ) {
-            Ok(()) => ControlResult::Accepted,
-            Err(error) => control_error(&error.to_string()),
+        );
+        if let Err(error) = primary_result {
+            return control_error(&error.to_string());
         }
+        ControlResult::Accepted
     }
 
     fn save_state(&self, instance_id: &str) -> ControlResult {
@@ -337,6 +490,13 @@ fn inline_bytes(payload: BinaryPayload) -> Result<Vec<u8>, &'static str> {
     }
 }
 
+fn max_tail(left: Option<u32>, right: Option<u32>) -> Option<u32> {
+    match (left, right) {
+        (Some(left), Some(right)) => Some(left.max(right)),
+        (Some(_), None) | (None, Some(_)) | (None, None) => None,
+    }
+}
+
 fn control_error(message: &str) -> ControlResult {
     ControlResult::Error {
         message: message.to_owned(),
@@ -358,5 +518,19 @@ mod tests {
             },
         );
         assert!(matches!(result, ControlResult::Error { .. }));
+    }
+
+    #[test]
+    fn dual_mono_lane_delay_aligns_the_shorter_processor() {
+        let mut delay = SampleDelay::new(2);
+        assert_eq!(delay.process(1.0), 0.0);
+        assert_eq!(delay.process(2.0), 0.0);
+        assert_eq!(delay.process(3.0), 1.0);
+    }
+
+    #[test]
+    fn an_infinite_dual_mono_tail_dominates_a_finite_tail() {
+        assert_eq!(max_tail(Some(128), None), None);
+        assert_eq!(max_tail(Some(128), Some(256)), Some(256));
     }
 }

@@ -21,6 +21,17 @@ export interface UiCascadingSelectGroup {
   disabled?: boolean
 }
 
+export interface UiCascadingMenuItem {
+  label: string
+  value?: string
+  ariaLabel?: string
+  title?: string
+  leading?: string
+  trailing?: string
+  disabled?: boolean
+  children?: readonly UiCascadingMenuItem[]
+}
+
 export interface UiRadioOption extends UiSelectOption {
   description?: string
 }

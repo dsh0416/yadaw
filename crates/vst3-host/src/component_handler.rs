@@ -22,6 +22,7 @@ use crate::processor::QueuedParameter;
 
 pub(crate) struct HandlerShared {
     parameter_producer: UnsafeCell<HeapProd<QueuedParameter>>,
+    parameter_mirror: UnsafeCell<Option<Arc<HandlerShared>>>,
     latency_changed: AtomicBool,
 }
 
@@ -29,6 +30,7 @@ impl HandlerShared {
     pub(crate) fn new(parameter_producer: HeapProd<QueuedParameter>) -> Arc<Self> {
         Arc::new(Self {
             parameter_producer: UnsafeCell::new(parameter_producer),
+            parameter_mirror: UnsafeCell::new(None),
             latency_changed: AtomicBool::new(false),
         })
     }
@@ -39,13 +41,31 @@ impl HandlerShared {
             // thread. The matching consumer is exclusively owned by the audio processor.
             &mut *self.parameter_producer.get()
         };
-        producer
+        let queued = producer
             .try_push(QueuedParameter {
                 id,
                 value,
                 sample_offset: 0,
             })
-            .is_ok()
+            .is_ok();
+        if !queued {
+            return false;
+        }
+        unsafe {
+            // SAFETY: the mirror is installed once on the serialized host UI thread before the
+            // instance is exposed to editor or automation callbacks, then remains immutable.
+            (&*self.parameter_mirror.get())
+                .as_ref()
+                .is_none_or(|mirror| mirror.enqueue_parameter(id, value))
+        }
+    }
+
+    pub(crate) fn set_parameter_mirror(&self, mirror: Arc<HandlerShared>) {
+        unsafe {
+            // SAFETY: dual-mono construction calls this once on the host UI thread before any
+            // editor or audio processing can observe the instance.
+            *self.parameter_mirror.get() = Some(mirror);
+        }
     }
 
     pub(crate) fn take_latency_changed(&self) -> bool {
@@ -176,3 +196,30 @@ static COMPONENT_HANDLER_VTABLE: ComponentHandlerVTable = ComponentHandlerVTable
     end_edit,
     restart_component,
 };
+
+#[cfg(test)]
+mod tests {
+    use ringbuf::{
+        HeapRb,
+        traits::{Consumer, Split},
+    };
+
+    use super::HandlerShared;
+
+    #[test]
+    fn parameter_mirror_queues_the_same_change_for_both_mono_processors() {
+        let primary_ring = HeapRb::new(8);
+        let (primary_producer, mut primary_consumer) = primary_ring.split();
+        let secondary_ring = HeapRb::new(8);
+        let (secondary_producer, mut secondary_consumer) = secondary_ring.split();
+        let primary = HandlerShared::new(primary_producer);
+        let secondary = HandlerShared::new(secondary_producer);
+        primary.set_parameter_mirror(secondary);
+
+        assert!(primary.enqueue_parameter(42, 0.75));
+        let primary_change = primary_consumer.try_pop().unwrap();
+        let secondary_change = secondary_consumer.try_pop().unwrap();
+        assert_eq!(primary_change.id, secondary_change.id);
+        assert_eq!(primary_change.value, secondary_change.value);
+    }
+}

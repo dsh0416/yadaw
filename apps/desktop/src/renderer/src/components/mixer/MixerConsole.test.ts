@@ -17,6 +17,7 @@ const descriptor: PluginDescriptor = {
   kind: "effect",
   architecture: "x86_64",
   buses: [],
+  supportedAudioModes: ["mono", "mono-to-stereo", "stereo", "dual-mono"],
   hasEditor: true,
   compatibility: "compatible",
   compatibilityReason: null
@@ -75,6 +76,7 @@ describe("MixerConsole", () => {
         slotOrder: index,
         classId: descriptor.classId,
         descriptor,
+        audioMode: "stereo",
         enabled: true,
         componentState: new Uint8Array(),
         controllerState: new Uint8Array()
@@ -107,6 +109,7 @@ describe("MixerConsole", () => {
           slotOrder: 5,
           classId: descriptor.classId,
           descriptor,
+          audioMode: "stereo",
           enabled: true,
           componentState: new Uint8Array(),
           controllerState: new Uint8Array()

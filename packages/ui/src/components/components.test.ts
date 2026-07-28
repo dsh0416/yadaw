@@ -1,7 +1,8 @@
-import { DOMWrapper, mount } from "@vue/test-utils"
+import { DOMWrapper, flushPromises, mount } from "@vue/test-utils"
 import { afterEach, describe, expect, it } from "vitest"
 
 import UiButton from "./UiButton.vue"
+import UiCascadingMenu from "./UiCascadingMenu.vue"
 import UiCascadingSelect from "./UiCascadingSelect.vue"
 import UiCheckbox from "./UiCheckbox.vue"
 import UiField from "./UiField.vue"
@@ -127,6 +128,70 @@ describe("UI controls", () => {
     expect(busOption.text()).toBe("Reverb")
     await busOption.trigger("click")
     expect(wrapper.emitted("update:modelValue")).toEqual([["reverb"]])
+  })
+
+  it("searches and chooses from a multi-level cascading menu", async () => {
+    const wrapper = mount(UiCascadingMenu, {
+      attachTo: document.body,
+      props: {
+        search: "",
+        searchLabel: "Search audio effects",
+        emptyMessage: "No effects found.",
+        items: [
+          {
+            label: "YADAW",
+            ariaLabel: "Browse YADAW plug-ins",
+            children: [
+              {
+                label: "Delay",
+                ariaLabel: "Choose Delay",
+                children: [
+                  {
+                    label: "Stereo",
+                    value: "delay:stereo",
+                    leading: "S",
+                    trailing: "2 → 2"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "onUpdate:search": (value: string) => wrapper.setProps({ search: value })
+      },
+      slots: {
+        default: '<button type="button">Add effect</button>'
+      }
+    })
+
+    await wrapper.get("button").trigger("click")
+    const search = document.body.querySelector<HTMLInputElement>(
+      'input[aria-label="Search audio effects"]'
+    )
+    expect(search).not.toBeNull()
+    await new DOMWrapper(search).setValue("delay")
+    expect(wrapper.props("search")).toBe("delay")
+
+    const vendor = new DOMWrapper(
+      document.body.querySelector<HTMLElement>('[aria-label="Browse YADAW plug-ins"]')
+    )
+    await vendor.trigger("focus")
+    await vendor.trigger("keydown", { key: "ArrowRight" })
+    await flushPromises()
+    const plugin = new DOMWrapper(
+      document.body.querySelector<HTMLElement>('[aria-label="Choose Delay"]')
+    )
+    await plugin.trigger("focus")
+    await plugin.trigger("keydown", { key: "ArrowRight" })
+    await flushPromises()
+    expect(document.body.querySelector(".ui-cascading-menu__sub-content--detailed")).not.toBeNull()
+    const modeElement = document.body.querySelector<HTMLElement>(".ui-cascading-menu__item")
+    expect(modeElement).not.toBeNull()
+    expect(modeElement?.classList.contains("ui-cascading-menu__item--detailed")).toBe(true)
+    const mode = new DOMWrapper(modeElement)
+    await mode.trigger("click")
+
+    expect(wrapper.emitted("select")).toEqual([["delay:stereo"]])
   })
 
   it("chooses a direct menu option from the embedded select appearance", async () => {

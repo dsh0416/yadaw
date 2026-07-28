@@ -11,6 +11,7 @@ import type {
   MixerChannelPatch,
   MixerGraphSnapshot,
   MixerSendPatch,
+  PluginDescriptor,
   PluginInstancePatch,
   ProjectAssetSummary,
   ProjectCommand,
@@ -67,6 +68,13 @@ function bytes(value: unknown): Uint8Array {
     return new Uint8Array(value.buffer, value.byteOffset, value.byteLength)
   }
   return new Uint8Array()
+}
+
+function pluginDescriptor(snapshot: string): PluginDescriptor {
+  const descriptor = JSON.parse(snapshot) as PluginDescriptor
+  return Array.isArray(descriptor.supportedAudioModes)
+    ? descriptor
+    : { ...descriptor, supportedAudioModes: ["stereo"] }
 }
 
 function channelPatch(patch: MixerChannelPatch): Partial<typeof mixerChannels.$inferInsert> {
@@ -173,6 +181,7 @@ function pluginValue(
     slotOrder: plugin.slotOrder,
     classId: plugin.classId,
     descriptorSnapshot: JSON.stringify(plugin.descriptor),
+    audioMode: plugin.audioMode,
     enabled: plugin.enabled,
     componentState: plugin.componentState,
     controllerState: plugin.controllerState
@@ -640,10 +649,12 @@ export class ProjectDatabase {
                 defaultActive: true
               }
             ],
+            supportedAudioModes: ["mono", "stereo"],
             hasEditor: true,
             compatibility: "compatible",
             compatibilityReason: null
           }),
+          audioMode: "stereo",
           enabled: true,
           componentState: new Uint8Array(),
           controllerState: new Uint8Array()
@@ -879,9 +890,8 @@ export class ProjectDatabase {
         role: plugin.role,
         slotOrder: plugin.slotOrder,
         classId: plugin.classId,
-        descriptor: JSON.parse(
-          plugin.descriptorSnapshot
-        ) as MixerGraphSnapshot["plugins"][number]["descriptor"],
+        descriptor: pluginDescriptor(plugin.descriptorSnapshot),
+        audioMode: plugin.audioMode,
         enabled: plugin.enabled,
         componentState: bytes(plugin.componentState),
         controllerState: bytes(plugin.controllerState)

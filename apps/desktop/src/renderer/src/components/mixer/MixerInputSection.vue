@@ -7,6 +7,7 @@ import type {
   PluginInstanceState,
   PluginRuntimeStatus
 } from "@yadaw/contracts"
+import type { PluginSelection } from "../plugins/plugin-audio-mode"
 import MixerInputCapsule from "./MixerInputCapsule.vue"
 import MixerInstrumentInput from "./MixerInstrumentInput.vue"
 
@@ -21,7 +22,7 @@ const emit = defineEmits<{
   updateChannel: [patch: MixerChannelPatch]
   openPlugin: [instanceId: string]
   removePlugin: [instanceId: string]
-  assignInstrument: [descriptor: PluginDescriptor]
+  assignInstrument: [selection: PluginSelection]
 }>()
 
 const inputSummary = computed(() => {

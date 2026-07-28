@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { GripVertical, Power, SquareArrowOutUpRight, Trash2 } from "@lucide/vue"
 import type { PluginInstanceState, PluginRuntimeStatus } from "@yadaw/contracts"
+import { pluginAudioModeBadge } from "./plugin-audio-mode"
 import { writePluginDrag } from "./plugin-drag"
 
 defineProps<{
@@ -29,6 +30,9 @@ defineEmits<{
       <strong>{{ plugin.descriptor.name }}</strong
       ><small>{{ plugin.descriptor.vendor }}</small>
     </div>
+    <span class="mode-badge" :title="`Audio mode: ${plugin.audioMode}`">{{
+      pluginAudioModeBadge(plugin.audioMode)
+    }}</span>
     <button
       :aria-label="`${plugin.enabled ? 'Bypass' : 'Enable'} ${plugin.descriptor.name}`"
       @click="$emit('toggle', plugin.id, !plugin.enabled)"
@@ -47,7 +51,7 @@ defineEmits<{
 <style scoped>
 .plugin-slot {
   display: grid;
-  grid-template-columns: 12px 5px minmax(0, 1fr) repeat(3, 22px);
+  grid-template-columns: 12px 5px minmax(0, 1fr) auto repeat(3, 22px);
   align-items: center;
   gap: 5px;
   min-height: 31px;
@@ -55,6 +59,13 @@ defineEmits<{
   border: 1px solid var(--line-strong);
   border-radius: 3px;
   background: var(--surface-sunken);
+}
+.mode-badge {
+  padding: 2px 4px;
+  border: 1px solid var(--line-soft);
+  border-radius: 3px;
+  color: var(--text-muted);
+  font: var(--ui-type-size-micro) var(--ui-type-family-data);
 }
 .grip {
   display: grid;

@@ -2,17 +2,22 @@ import { acceptHMRUpdate, defineStore } from "pinia"
 import { computed, onScopeDispose, shallowRef, watch } from "vue"
 import type {
   PluginCatalogSnapshot,
-  PluginDescriptor,
   PluginParameterChange,
   PluginParameterInfo,
   PluginRuntimeStatus,
   PluginScanEvent
 } from "@yadaw/contracts"
 import { pluginDescriptorKey } from "@yadaw/contracts"
+import {
+  pluginAudioModeInputWidth,
+  pluginAudioModeOutputWidth,
+  type PluginSelection,
+  type PluginSignalWidth
+} from "../components/plugins/plugin-audio-mode"
 import { useMixerStore } from "./mixer"
 
 const EMPTY_CATALOG: PluginCatalogSnapshot = {
-  scannerVersion: 2,
+  scannerVersion: 3,
   scanning: false,
   scannedAt: null,
   plugins: []
@@ -66,6 +71,15 @@ export const usePluginStore = defineStore("plugins", () => {
           tailSamples: 0,
           error: descriptor.compatibilityReason
         }
+      } else if (!descriptor.supportedAudioModes.includes(instance.audioMode)) {
+        next[instance.id] = {
+          instanceId: instance.id,
+          state: "failed",
+          editorOpen: false,
+          latencySamples: 0,
+          tailSamples: 0,
+          error: `The saved ${instance.audioMode} layout is no longer supported by this VST3.`
+        }
       }
     }
     runtime.value = next
@@ -111,7 +125,8 @@ export const usePluginStore = defineStore("plugins", () => {
     }
   }
 
-  async function addInstrument(descriptor: PluginDescriptor): Promise<boolean> {
+  async function addInstrument(selection: PluginSelection): Promise<boolean> {
+    const { descriptor, audioMode } = selection
     let channel = mixerStore.selectedChannel
     const hasInstrument = channel
       ? mixerStore.graph.plugins.some(
@@ -132,6 +147,7 @@ export const usePluginStore = defineStore("plugins", () => {
         slotOrder: 0,
         classId: descriptor.classId,
         descriptor: structuredClone(descriptor),
+        audioMode,
         enabled: true,
         componentState: new Uint8Array(),
         controllerState: new Uint8Array()
@@ -139,11 +155,42 @@ export const usePluginStore = defineStore("plugins", () => {
     })
   }
 
+  function effectInputWidth(channelId?: string, slotOrder?: number): PluginSignalWidth | null {
+    const channel = channelId
+      ? (mixerStore.graph.channels.find((candidate) => candidate.id === channelId) ?? null)
+      : mixerStore.selectedChannel
+    if (!channel || channel.kind === "master") return null
+
+    const instrument = mixerStore.graph.plugins.find(
+      (plugin) => plugin.channelId === channel.id && plugin.role === "instrument"
+    )
+    let width: PluginSignalWidth = instrument
+      ? pluginAudioModeOutputWidth(instrument.audioMode)
+      : channel.kind !== "instrument" && channel.inputChannels.length === 1
+        ? "mono"
+        : "stereo"
+    const inserts = mixerStore.graph.plugins
+      .filter((plugin) => plugin.channelId === channel.id && plugin.role === "insert")
+      .sort((left, right) => left.slotOrder - right.slotOrder)
+    const insertionIndex = Math.max(0, Math.min(slotOrder ?? inserts.length, inserts.length))
+    for (const plugin of inserts.slice(0, insertionIndex)) {
+      width = pluginAudioModeOutputWidth(plugin.audioMode)
+    }
+    return width
+  }
+
+  function requireSelectedEffectInputWidth(): PluginSignalWidth | null {
+    const width = effectInputWidth()
+    if (!width) error.value = "Select an Audio, Instrument, Bus, or Output channel first."
+    return width
+  }
+
   function addEffectAt(
-    descriptor: PluginDescriptor,
+    selection: PluginSelection,
     channelId?: string,
     slotOrder?: number
   ): Promise<boolean> {
+    const { descriptor, audioMode } = selection
     const channel = channelId
       ? (mixerStore.graph.channels.find((candidate) => candidate.id === channelId) ?? null)
       : mixerStore.selectedChannel
@@ -155,6 +202,15 @@ export const usePluginStore = defineStore("plugins", () => {
       (plugin) => plugin.channelId === channel.id && plugin.role === "insert"
     )
     const insertionIndex = Math.max(0, Math.min(slotOrder ?? inserts.length, inserts.length))
+    const inputWidth = effectInputWidth(channel.id, insertionIndex)
+    if (
+      descriptor.kind !== "effect" ||
+      !inputWidth ||
+      pluginAudioModeInputWidth(audioMode) !== inputWidth
+    ) {
+      error.value = `Choose a ${inputWidth ?? "valid"}-input effect mode for this insert position.`
+      return Promise.resolve(false)
+    }
     const plugin = {
       id: crypto.randomUUID(),
       channelId: channel.id,
@@ -162,6 +218,7 @@ export const usePluginStore = defineStore("plugins", () => {
       slotOrder: inserts.length,
       classId: descriptor.classId,
       descriptor: structuredClone(descriptor),
+      audioMode,
       enabled: true,
       componentState: new Uint8Array(),
       controllerState: new Uint8Array()
@@ -188,8 +245,8 @@ export const usePluginStore = defineStore("plugins", () => {
     )
   }
 
-  function addEffect(descriptor: PluginDescriptor): Promise<boolean> {
-    return addEffectAt(descriptor)
+  function addEffect(selection: PluginSelection): Promise<boolean> {
+    return addEffectAt(selection)
   }
 
   function moveInsert(instanceId: string, channelId: string, slotOrder: number): Promise<boolean> {
@@ -207,7 +264,8 @@ export const usePluginStore = defineStore("plugins", () => {
     })
   }
 
-  function assignInstrument(descriptor: PluginDescriptor, channelId: string): Promise<boolean> {
+  function assignInstrument(selection: PluginSelection, channelId: string): Promise<boolean> {
+    const { descriptor, audioMode } = selection
     const channel = mixerStore.graph.channels.find((candidate) => candidate.id === channelId)
     if (!channel || channel.kind !== "instrument" || descriptor.kind !== "instrument") {
       error.value = "Instruments can only be assigned to Instrument tracks."
@@ -223,6 +281,7 @@ export const usePluginStore = defineStore("plugins", () => {
       slotOrder: 0,
       classId: descriptor.classId,
       descriptor: structuredClone(descriptor),
+      audioMode,
       enabled: true,
       componentState: new Uint8Array(),
       controllerState: new Uint8Array()
@@ -234,8 +293,10 @@ export const usePluginStore = defineStore("plugins", () => {
     )
   }
 
-  function activate(descriptor: PluginDescriptor): Promise<boolean> {
-    return descriptor.kind === "instrument" ? addInstrument(descriptor) : addEffect(descriptor)
+  function activate(selection: PluginSelection): Promise<boolean> {
+    return selection.descriptor.kind === "instrument"
+      ? addInstrument(selection)
+      : addEffect(selection)
   }
 
   async function openEditor(instanceId: string): Promise<void> {
@@ -300,6 +361,8 @@ export const usePluginStore = defineStore("plugins", () => {
     addInstrument,
     addEffect,
     addEffectAt,
+    effectInputWidth,
+    requireSelectedEffectInputWidth,
     moveInsert,
     assignInstrument,
     openEditor,

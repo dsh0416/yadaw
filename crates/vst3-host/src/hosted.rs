@@ -22,7 +22,7 @@ use yadaw_vst3_host_sys::{
 };
 
 use crate::{
-    ClassId, ComPtr, HostError, HostResult, Module, PluginKind, StereoProcessor,
+    AudioLayout, ClassId, ComPtr, HostError, HostResult, Module, PluginKind, StereoProcessor,
     component_handler::{ComponentHandler, HandlerShared},
     processor::HostProcessContext,
     stream::MemoryStream,
@@ -109,11 +109,11 @@ impl ProcessorLease {
             self.cell.as_ref()
         };
         if cell.paused.load(Ordering::Acquire) || cell.processing.swap(true, Ordering::AcqRel) {
-            return Some(input);
+            return None;
         }
         if cell.paused.load(Ordering::Acquire) {
             cell.processing.store(false, Ordering::Release);
-            return Some(input);
+            return None;
         }
         let mut input_left = [input[0]];
         let mut input_right = [input[1]];
@@ -199,12 +199,29 @@ impl HostedPlugin {
         sample_rate: f64,
         kind: PluginKind,
     ) -> HostResult<Self> {
+        Self::create_with_layout(
+            module_path,
+            class_id,
+            sample_rate,
+            kind,
+            AudioLayout::Stereo,
+        )
+    }
+
+    pub fn create_with_layout(
+        module_path: impl AsRef<std::path::Path>,
+        class_id: ClassId,
+        sample_rate: f64,
+        kind: PluginKind,
+        layout: AudioLayout,
+    ) -> HostResult<Self> {
         let module = Rc::new(Module::open(module_path)?);
         let (processor, parameter_producer) = StereoProcessor::create_with_parameter_queue(
             module.clone(),
             class_id,
             sample_rate,
             kind,
+            layout,
         )?;
         let shared = HandlerShared::new(parameter_producer);
         let controller = create_controller(&module, &processor)?;
@@ -246,6 +263,10 @@ impl HostedPlugin {
             controller_initialized: true,
             class_id,
         })
+    }
+
+    pub fn mirror_parameters_to(&self, target: &Self) {
+        self.shared.set_parameter_mirror(target.shared.clone());
     }
 
     #[must_use]

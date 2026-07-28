@@ -159,6 +159,7 @@ fn live_graph(
                 channel_index: channel_index(&plugin.channel_id)?,
                 role: plugin.role.clone(),
                 slot_order: plugin.slot_order,
+                audio_mode: plugin.audio_mode,
                 enabled: plugin.enabled,
                 latency_samples: plugin.latency_samples,
                 tail_samples: plugin.tail_samples,
@@ -772,6 +773,7 @@ async fn vst3_actor(
                     module_path,
                     class_id,
                     plugin_kind,
+                    audio_mode,
                     sample_rate,
                     component_state,
                     controller_state,
@@ -790,6 +792,7 @@ async fn vst3_actor(
                                         module_path,
                                         class_id,
                                         plugin_kind,
+                                        audio_mode,
                                         sample_rate,
                                         component_state: BinaryPayload::inline(
                                             component_state.as_slice().to_vec(),

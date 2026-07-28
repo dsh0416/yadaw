@@ -543,15 +543,22 @@ function validateGraph(graph: MixerGraphSnapshot): void {
       if (
         channel.kind !== "instrument" ||
         plugin.slotOrder !== 0 ||
-        plugin.descriptor.kind !== "instrument"
+        plugin.descriptor.kind !== "instrument" ||
+        !["mono", "stereo"].includes(plugin.audioMode)
       ) {
         throw new Error("An instrument slot requires an instrument plugin on an Instrument track")
       }
-    } else if (plugin.descriptor.kind !== "effect") {
-      throw new Error("Insert slots only accept effect plugins")
+    } else if (
+      plugin.descriptor.kind !== "effect" ||
+      !["mono", "mono-to-stereo", "stereo", "dual-mono"].includes(plugin.audioMode)
+    ) {
+      throw new Error("Insert slots only accept effect plug-ins with a valid audio mode")
     }
     if (plugin.classId !== plugin.descriptor.classId) {
       throw new Error("Plugin class ID must match its descriptor snapshot")
+    }
+    if (!plugin.descriptor.supportedAudioModes.includes(plugin.audioMode)) {
+      throw new Error("Plugin audio mode must be supported by its descriptor snapshot")
     }
   }
   if (graph.tempoMap.ticksPerQuarter !== 960) {
@@ -794,6 +801,7 @@ export class MixerService {
         channel_id: plugin.channelId,
         role: plugin.role,
         slot_order: plugin.slotOrder,
+        audio_mode: plugin.audioMode,
         enabled: plugin.enabled,
         latency_samples: 0,
         tail_samples: 0

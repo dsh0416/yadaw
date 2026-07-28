@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { PluginDescriptor } from "@yadaw/contracts"
-import { canReuseCachedBundle } from "./plugin-catalog-service"
+import { canReuseCachedBundle, descriptorFromProbe } from "./plugin-catalog-service"
 
 const plugin = {
   compatibility: "compatible"
@@ -35,5 +35,39 @@ describe("canReuseCachedBundle", () => {
         previousPlugins: [{ ...plugin, compatibility: "quarantined" }]
       })
     ).toBe(false)
+  })
+})
+
+describe("descriptorFromProbe", () => {
+  it("derives dual mono only from native mono effect support", () => {
+    const descriptor = descriptorFromProbe("effect.vst3", "Vendor", {
+      classId: "effect",
+      category: "Fx",
+      initialized: true,
+      sample32: true,
+      audioInputs: 1,
+      audioOutputs: 1,
+      supportedAudioModes: ["mono", "mono-to-stereo"]
+    })
+
+    expect(descriptor?.supportedAudioModes).toEqual(["mono", "mono-to-stereo", "dual-mono"])
+  })
+
+  it("rejects probes that cannot negotiate an applicable main-bus mode", () => {
+    const descriptor = descriptorFromProbe("instrument.vst3", "Vendor", {
+      classId: "instrument",
+      category: "Instrument|Synth",
+      initialized: true,
+      sample32: true,
+      audioInputs: 0,
+      audioOutputs: 1,
+      eventInputs: 1,
+      supportedAudioModes: ["mono-to-stereo"]
+    })
+
+    expect(descriptor).toMatchObject({
+      compatibility: "unsupported-buses",
+      supportedAudioModes: []
+    })
   })
 })

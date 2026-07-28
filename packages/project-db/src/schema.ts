@@ -1,4 +1,5 @@
 import { relations, sql } from "drizzle-orm"
+import type { PluginAudioMode } from "@yadaw/contracts"
 import {
   boolean,
   check,
@@ -331,6 +332,7 @@ export const pluginInstances = pgTable(
     slotOrder: integer("slot_order").notNull(),
     classId: text("class_id").notNull(),
     descriptorSnapshot: text("descriptor_snapshot").notNull(),
+    audioMode: text("audio_mode").$type<PluginAudioMode>().notNull().default("stereo"),
     enabled: boolean("enabled").notNull().default(true),
     componentState: bytea("component_state")
       .notNull()
@@ -350,6 +352,10 @@ export const pluginInstances = pgTable(
       .where(sql`${table.role} = 'instrument'`),
     index("plugin_instances_channel_order").on(table.channelId, table.role, table.slotOrder),
     check("plugin_instances_role_check", sql`${table.role} in ('instrument', 'insert')`),
+    check(
+      "plugin_instances_audio_mode_check",
+      sql`${table.audioMode} in ('mono', 'mono-to-stereo', 'stereo', 'dual-mono')`
+    ),
     check("plugin_instances_slot_order_check", sql`${table.slotOrder} >= 0`),
     check(
       "plugin_instances_instrument_slot_check",

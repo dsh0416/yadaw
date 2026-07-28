@@ -310,6 +310,7 @@ describe("MixerChannelStrip", () => {
       kind: "instrument",
       architecture: "x86_64",
       buses: [],
+      supportedAudioModes: ["mono", "stereo"],
       hasEditor: true,
       compatibility: "compatible",
       compatibilityReason: null
@@ -321,6 +322,7 @@ describe("MixerChannelStrip", () => {
       slotOrder: 0,
       classId: instrumentDescriptor.classId,
       descriptor: instrumentDescriptor,
+      audioMode: "stereo",
       enabled: true,
       componentState: new Uint8Array(),
       controllerState: new Uint8Array()

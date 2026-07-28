@@ -1,5 +1,6 @@
 export { default as UiAlertDialog } from "./components/UiAlertDialog.vue"
 export { default as UiButton } from "./components/UiButton.vue"
+export { default as UiCascadingMenu } from "./components/UiCascadingMenu.vue"
 export { default as UiCascadingSelect } from "./components/UiCascadingSelect.vue"
 export { default as UiCheckbox } from "./components/UiCheckbox.vue"
 export { default as UiDialog } from "./components/UiDialog.vue"
@@ -26,6 +27,7 @@ export { UI_DOMAIN_COLORS } from "./domainColors"
 export type {
   UiActionVariant,
   UiAlertAction,
+  UiCascadingMenuItem,
   UiCascadingSelectGroup,
   UiControlSize,
   UiMenubarItem,
