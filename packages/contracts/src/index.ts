@@ -322,12 +322,7 @@ export interface ApplicationSettings {
 export type ApplicationSettingsPatch = Partial<
   Pick<
     ApplicationSettings,
-    | "swapDirectory"
-    | "recordingBitDepth"
-    | "theme"
-    | "locale"
-    | "meterPeakHold"
-    | "meterReturnRate"
+    "swapDirectory" | "recordingBitDepth" | "theme" | "locale" | "meterPeakHold" | "meterReturnRate"
   >
 >
 

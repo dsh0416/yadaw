@@ -23,11 +23,7 @@ export default defineConfig({
   test: {
     environment: "happy-dom",
     setupFiles: [resolve(import.meta.dirname, "src/renderer/src/test/setup.ts")],
-    include: [
-      "src/renderer/src/**/*.test.ts",
-      "src/main/**/*.test.ts",
-      "src/shared/**/*.test.ts"
-    ],
+    include: ["src/renderer/src/**/*.test.ts", "src/main/**/*.test.ts", "src/shared/**/*.test.ts"],
     restoreMocks: true
   }
 })

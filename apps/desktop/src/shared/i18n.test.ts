@@ -15,9 +15,7 @@ describe("shared i18n", () => {
         foundBundles: "Found {count} VST3 bundles"
       }
     }
-    expect(translate(messages, "startup.foundBundles", { count: 3 })).toBe(
-      "Found 3 VST3 bundles"
-    )
+    expect(translate(messages, "startup.foundBundles", { count: 3 })).toBe("Found 3 VST3 bundles")
     expect(translate(messages, "missing.key")).toBe("missing.key")
   })
 
