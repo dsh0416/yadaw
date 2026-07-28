@@ -8,8 +8,9 @@ pub mod bench_support {
         traits::{Consumer, Producer, Split},
     };
     use yadaw_dsp_core::mixer::{
-        ChannelKind, ChannelPeak, ChannelSpec, MixerGraph, RouteTarget, StereoFrame,
+        ChannelKind, ChannelSpec, MixerGraph, RouteTarget, StereoFrame,
     };
+    use yadaw_dsp_render::{RenderMeter, RenderRuntime};
     use yadaw_dsp_runtime::{protocol::PluginAudioMode, tempo::TempoMap};
 
     use super::{
@@ -73,6 +74,11 @@ pub mod bench_support {
         });
         let graph = MixerGraph::new(scenario.sample_rate, channels, Vec::new())
             .expect("benchmark graph must be valid");
+        let graph = RenderRuntime::from_mixer_graph(
+            scenario.sample_rate,
+            graph,
+            TempoMap::default_120_bpm(),
+        );
         let meter_bank = Arc::new(MeterBank {
             channels: (0..scenario.tracks + 2)
                 .map(|index| MeterAtomics::new(format!("channel-{index}")))
@@ -108,7 +114,13 @@ pub mod bench_support {
         Box::new(NativeMixerRuntime {
             generation: 1,
             build_generation: 1,
-            peak_scratch: vec![ChannelPeak::default(); graph.channel_count()],
+            peak_scratch: vec![
+                RenderMeter {
+                    pre: [0.0; 2],
+                    post: [0.0; 2],
+                };
+                graph.channel_count()
+            ],
             held_peaks: vec![[0.0, 0.0]; graph.channel_count()],
             held_until: vec![[0, 0]; graph.channel_count()],
             channel_sources: vec![[0.0, 0.0]; scenario.tracks + 2],

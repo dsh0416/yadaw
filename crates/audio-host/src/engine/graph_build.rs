@@ -333,6 +333,12 @@ fn build_mixer_runtime(
             .set_send_delay(send, delay)
             .map_err(|error| invalid_config(error.to_string()))?;
     }
+    let render_tempo_map = TempoMap::new(
+        tempo_map.tempo_events().to_vec(),
+        tempo_map.time_signature_events().to_vec(),
+    )
+    .map_err(|error| invalid_config(error.to_string()))?;
+    let graph = RenderRuntime::from_mixer_graph(native.sample_rate, graph, render_tempo_map);
 
     let mut midi_events = Vec::new();
     let mut next_note_id = 1_i32;
@@ -401,7 +407,13 @@ fn build_mixer_runtime(
     Ok(NativeMixerRuntime {
         generation: native.generation,
         build_generation,
-        peak_scratch: vec![ChannelPeak::default(); graph.channel_count()],
+        peak_scratch: vec![
+            RenderMeter {
+                pre: [0.0; 2],
+                post: [0.0; 2],
+            };
+            graph.channel_count()
+        ],
         held_peaks: vec![[0.0, 0.0]; graph.channel_count()],
         held_until: vec![[0, 0]; graph.channel_count()],
         channel_sources: vec![[0.0, 0.0]; channels.len()],

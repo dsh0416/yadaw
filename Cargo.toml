@@ -3,6 +3,7 @@ members = [
     "crates/dsp-core",
     "crates/dsp-node",
     "crates/dsp-runtime",
+    "crates/dsp-render",
     "crates/ipc-transport",
     "crates/audio-host",
     "crates/audio-host-client",
@@ -59,6 +60,7 @@ winit = { version = "0.30.13", default-features = false, features = ["rwh_06", "
 zerocopy = { version = "0.8.55", features = ["derive"] }
 yadaw-dsp-core = { path = "crates/dsp-core" }
 yadaw-dsp-runtime = { path = "crates/dsp-runtime" }
+yadaw-dsp-render = { path = "crates/dsp-render" }
 yadaw-ipc-transport = { path = "crates/ipc-transport" }
 yadaw-audio-host-client = { path = "crates/audio-host-client" }
 yadaw-vst3-host = { path = "crates/vst3-host" }

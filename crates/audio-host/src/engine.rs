@@ -28,6 +28,7 @@ use yadaw_dsp_core::mixer::{
     ChannelKind, ChannelPeak, ChannelSpec, HardwareOutputFrame, MAX_OUTPUT_CHANNELS, MixerGraph,
     RouteTarget, SendSpec, SendTap,
 };
+use yadaw_dsp_render::{RenderMeter, RenderRuntime};
 use yadaw_dsp_runtime::{
     MUSICAL_TICKS_PER_QUARTER,
     block::{LatencyNode, StereoDelayLine, plan_latency_compensation},

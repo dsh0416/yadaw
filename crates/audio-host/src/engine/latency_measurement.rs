@@ -1,7 +1,7 @@
 struct NativeMixerRuntime {
     generation: u64,
     build_generation: u64,
-    graph: MixerGraph,
+    graph: RenderRuntime,
     clips: Vec<LoadedClip>,
     channel_sources: Vec<StereoFrame>,
     channel_input_widths: Vec<SignalWidth>,
@@ -11,7 +11,7 @@ struct NativeMixerRuntime {
     active_notes: Vec<bool>,
     metronome: MetronomeScheduler,
     tempo_map: TempoMap,
-    peak_scratch: Vec<ChannelPeak>,
+    peak_scratch: Vec<RenderMeter>,
     held_peaks: Vec<StereoFrame>,
     held_until: Vec<[u64; 2]>,
     meter_bank: Arc<MeterBank>,

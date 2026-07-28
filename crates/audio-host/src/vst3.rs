@@ -1,5 +1,6 @@
 use std::{collections::HashMap, path::Path};
 
+use yadaw_dsp_render::{PluginProcessContext, PluginProcessor};
 use yadaw_dsp_runtime::protocol::{
     BinaryPayload, ControlCommand, ControlResult, ParameterCommand, ParameterGesture,
     PluginAudioMode, PluginEditorPreference, PluginParameter,
@@ -65,6 +66,35 @@ impl Vst3ProcessorHandle {
 
     pub fn note_off(&mut self, channel: u8, key: u8, velocity: u8, note_id: i32) -> bool {
         self.primary.note_off(channel, key, velocity, note_id)
+    }
+}
+
+impl PluginProcessor for Vst3ProcessorHandle {
+    fn clone_box(&self) -> Box<dyn PluginProcessor> {
+        Box::new(self.clone())
+    }
+
+    fn process_frame(&mut self, input: [f32; 2], context: PluginProcessContext) -> [f32; 2] {
+        let context = ProcessContext {
+            project_time_samples: context.sample_position.min(i64::MAX as u64) as i64,
+            continuous_time_samples: context.sample_position.min(i64::MAX as u64) as i64,
+            project_time_quarters: context.quarter_position,
+            bar_position_quarters: context.bar_position,
+            tempo: context.tempo,
+            time_signature_numerator: i32::from(context.time_signature_numerator),
+            time_signature_denominator: i32::from(context.time_signature_denominator),
+            playing: context.playing,
+            recording: context.recording,
+        };
+        Vst3ProcessorHandle::process_frame(self, input, &context).unwrap_or(input)
+    }
+
+    fn note_on(&mut self, channel: u8, key: u8, velocity: u8) {
+        let _ = Vst3ProcessorHandle::note_on(self, channel, key, velocity, -1);
+    }
+
+    fn note_off(&mut self, channel: u8, key: u8, velocity: u8) {
+        let _ = Vst3ProcessorHandle::note_off(self, channel, key, velocity, -1);
     }
 }
 

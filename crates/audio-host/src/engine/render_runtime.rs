@@ -16,15 +16,21 @@ impl NativeMixerRuntime {
                     RealtimeParameter::ChannelGain => self
                         .graph
                         .channel_index(preview.id())
-                        .and_then(|index| self.graph.set_channel_gain(index, preview.value).ok()),
+                        .and_then(|index| {
+                            self.graph.preview_channel_gain(index, preview.value).ok()
+                        }),
                     RealtimeParameter::ChannelPan => self
                         .graph
                         .channel_index(preview.id())
-                        .and_then(|index| self.graph.set_channel_pan(index, preview.value).ok()),
+                        .and_then(|index| {
+                            self.graph.preview_channel_pan(index, preview.value).ok()
+                        }),
                     RealtimeParameter::SendLevel => self
                         .graph
                         .send_index(preview.id())
-                        .and_then(|index| self.graph.set_send_level(index, preview.value).ok()),
+                        .and_then(|index| {
+                            self.graph.preview_send_level(index, preview.value).ok()
+                        }),
                 };
                 let _ = result;
             }
@@ -155,7 +161,7 @@ impl NativeMixerRuntime {
         };
         let result = self
             .graph
-            .process_frame_with_sources(sources, &mut process_plugins);
+            .process_channel_sources(sources, &mut process_plugins);
         let next = if state == TRANSPORT_STOPPED {
             position
         } else {
@@ -295,7 +301,7 @@ impl NativeMixerRuntime {
     }
 
     fn publish_peaks(&mut self, elapsed_frames: usize) {
-        self.graph.write_peaks(&mut self.peak_scratch);
+        self.graph.write_meters(&mut self.peak_scratch);
         self.input_peaks.take_all(&mut self.input_peak_scratch);
         for (index, route) in self.input_meter_routes.iter().enumerate() {
             if let Some([left, right]) = route {
@@ -320,7 +326,13 @@ impl NativeMixerRuntime {
                 }
             }
             if let Some(meter) = self.meter_bank.channels.get(index) {
-                meter.store(peak, self.held_peaks[index]);
+                meter.store(
+                    ChannelPeak {
+                        pre: peak.pre,
+                        post: peak.post,
+                    },
+                    self.held_peaks[index],
+                );
             }
         }
     }

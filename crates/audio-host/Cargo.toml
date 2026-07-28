@@ -21,6 +21,7 @@ rmp-serde.workspace = true
 tokio.workspace = true
 winit.workspace = true
 yadaw-dsp-core.workspace = true
+yadaw-dsp-render.workspace = true
 yadaw-dsp-runtime.workspace = true
 yadaw-ipc-transport.workspace = true
 yadaw-vst3-host.workspace = true
