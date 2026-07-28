@@ -50,14 +50,15 @@ products or incompatible project formats.
 
 ## Current direction
 
-The project is building its foundation around a native real-time audio engine,
-project persistence, an arrangement and mixer workflow, audio recording, MIDI,
-and plug-in hosting. The immediate focus is making these fundamentals reliable
-before expanding the composition and live-performance workflows.
+The foundation is in place: a native real-time audio engine, project
+persistence, arrangement and mixer workflows, audio recording, MIDI clips, and
+VST3 hosting. The next primary focus is composition depth—especially MIDI
+editing and the piano roll—then mixing/export, live performance, and finally a
+broader built-in plug-in rack for out-of-the-box use. After VST3, hosted formats
+are planned as ARA, then CLAP, then AU.
 
-Features, project formats, and compatibility may change while the project is in
-this early stage. Releases will document their supported platforms and
-capabilities as the application matures.
+Until 1.0, project formats and compatibility may change without a migration
+guarantee. See the [roadmap](docs/roadmap.md) for milestones and priorities.
 
 ## Development
 
@@ -73,6 +74,7 @@ Contributor-facing details live outside this README:
 
 - [Development environment](agents/docs/environment.md)
 - [Architecture and real-time constraints](docs/architecture.md)
+- [Product roadmap](docs/roadmap.md)
 - [Performance benchmarks](docs/benchmarks.md)
 - [Continuous integration and releases](docs/ci.md)
 

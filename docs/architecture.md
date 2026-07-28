@@ -75,14 +75,16 @@ Applying an unchanged configuration is idempotent. Requests matching either the
 original buffer request or the currently negotiated input/output size reuse the
 live engine; they do not tear down and immediately reopen WASAPI endpoints.
 
-Preferences do not own the sample rate. Until Project Settings provides the
-session rate, the output device's native default is the engine clock. The input
-stream keeps its own native rate and a fixed-output asynchronous sinc SRC
-converts all 1–32 hardware channels at the ring consumer. Its rubato/Blackman-
-Harris buffers and active-channel mask are allocated at stream startup;
-ring-fill error supplies the existing bounded ±0.1% drift correction for
-independent clocks. The input and output callbacks do not allocate, lock, or
-format diagnostics.
+Preferences do not own the sample rate. Project Settings stores the session
+rate (used for recording finalization and mixer/project metadata), but the
+audio engine still opens streams at the output device's native default; making
+that project rate the engine clock across device reconfiguration remains open
+work (see [roadmap.md](roadmap.md) M0). The input stream keeps its own native
+rate and a fixed-output asynchronous sinc SRC converts all 1–32 hardware
+channels at the ring consumer. Its rubato/Blackman-Harris buffers and
+active-channel mask are allocated at stream startup; ring-fill error supplies
+the existing bounded ±0.1% drift correction for independent clocks. The input
+and output callbacks do not allocate, lock, or format diagnostics.
 
 There is one audio-device namespace. cpal supplies the available hosts, device
 names, stable IDs, and defaults. Chromium `MediaDevices` and Web Audio devices
@@ -155,10 +157,8 @@ desktop main -> dsp-node -> dsp-core
 dsp-core -> no JS or Electron dependencies
 ```
 
-## Near-term milestones
+## Product roadmap
 
-1. Project/session model and undoable command bus.
-2. Rust transport clock, audio graph, plugin-delay reporting, and offline rendering.
-3. Project sample-rate ownership across device reconfiguration.
-4. Lock-free control commands and richer metering snapshots.
-5. Waveform peak cache, file decoding, plugin hosting, and persistence.
+Product milestones, format compatibility policy, and sequencing live in
+[roadmap.md](roadmap.md). Keep this document focused on process boundaries and
+real-time constraints.

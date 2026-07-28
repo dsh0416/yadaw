@@ -76,6 +76,7 @@ mise exec -- pnpm lint
 
 - [Repository overview](README.md)
 - [Architecture and real-time constraints](docs/architecture.md)
+- [Product roadmap](docs/roadmap.md)
 - [Rust performance benchmarks](docs/benchmarks.md)
 - [Development environment](agents/docs/environment.md)
 - [Renderer/native-call boundary](agents/docs/native-call-boundary.md)
