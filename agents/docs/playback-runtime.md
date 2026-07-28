@@ -510,11 +510,13 @@ hardcoded Rust primitives at call sites:
 
 - `TUID` / `int8` / `char8` are `c_char` (signedness varies by target). Use
   `TUID` and `compat::tuid_byte` instead of `[i8; 16]` or `*const i8`.
-- C++ unscoped enums bind as `c_int`. Steinberg fields and parameters use
-  typedefs such as `int32`, `uint32`, `MediaType`, and `BusDirection`. Cast
+- C++ unscoped enum constants may bind as signed (`c_int` / `i32`) or unsigned
+  (`u32`) depending on the target toolchain. Steinberg fields and parameters
+  use typedefs such as `int32`, `uint32`, `MediaType`, and `BusDirection`. Cast
   enum constants to the **destination** typedef through `compat::as_int32`,
   `compat::as_uint32`, `compat::as_media_type`, `compat::as_bus_direction`, or
-  `compat::process_context_state` — never flip platform-specific bare casts.
+  `compat::process_context_state` (via `compat::BindgenEnum`) — never assume
+  the enum constant type or flip platform-specific bare casts.
 - Windows `COM_COMPATIBLE` TUID byte order and hand-written
   `extern "system"` vtables remain intentional ABI differences; keep them in
   `iid` / `abi`, separate from the typedef facade.

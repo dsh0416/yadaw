@@ -5,13 +5,43 @@
 //! to those aliases. Prefer Steinberg typedefs (`TUID`, `MediaType`, `uint32`)
 //! and cast C++ enum constants to the **destination** typedef via the helpers
 //! below.
+//!
+//! Bindgen may type C++ unscoped enum constants as signed (`c_int` / `i32`) or
+//! unsigned (`u32`) depending on the target toolchain. [`BindgenEnum`] accepts
+//! both so call sites stay identical across Windows, Linux, and macOS.
 
-use std::os::raw::{c_char, c_int};
+use std::os::raw::c_char;
 
 use crate::Steinberg::{
     Vst::{BusDirection, MediaType},
     int32, uint32,
 };
+
+/// Integer shapes bindgen may use for C++ unscoped enum constants.
+pub trait BindgenEnum: Copy {
+    fn to_i32(self) -> i32;
+    fn to_u32(self) -> u32;
+}
+
+macro_rules! impl_bindgen_enum {
+    ($($ty:ty),+ $(,)?) => {
+        $(
+            impl BindgenEnum for $ty {
+                #[inline]
+                fn to_i32(self) -> i32 {
+                    self as i32
+                }
+
+                #[inline]
+                fn to_u32(self) -> u32 {
+                    self as u32
+                }
+            }
+        )+
+    };
+}
+
+impl_bindgen_enum!(i8, u8, i16, u16, i32, u32, i64, u64, isize, usize);
 
 /// Converts a byte into a `TUID` / `char8` element for the current target.
 #[inline]
@@ -20,41 +50,41 @@ pub const fn tuid_byte(byte: u8) -> c_char {
     byte as c_char
 }
 
-/// Casts a bindgen C++ enum constant (`c_int`) to a Steinberg `int32` field or parameter.
+/// Casts a bindgen C++ enum constant to a Steinberg `int32` field or parameter.
 #[inline]
 #[must_use]
-pub const fn as_int32(value: c_int) -> int32 {
-    value as int32
+pub fn as_int32(value: impl BindgenEnum) -> int32 {
+    value.to_i32()
 }
 
-/// Casts a bindgen C++ enum constant (`c_int`) to a Steinberg `uint32` field or parameter.
+/// Casts a bindgen C++ enum constant to a Steinberg `uint32` field or parameter.
 #[inline]
 #[must_use]
-pub const fn as_uint32(value: c_int) -> uint32 {
-    value as uint32
+pub fn as_uint32(value: impl BindgenEnum) -> uint32 {
+    value.to_u32()
 }
 
 /// Casts a media-type enum constant to the `MediaType` parameter typedef.
 #[inline]
 #[must_use]
-pub const fn as_media_type(value: c_int) -> MediaType {
+pub fn as_media_type(value: impl BindgenEnum) -> MediaType {
     as_int32(value)
 }
 
 /// Casts a bus-direction enum constant to the `BusDirection` parameter typedef.
 #[inline]
 #[must_use]
-pub const fn as_bus_direction(value: c_int) -> BusDirection {
+pub fn as_bus_direction(value: impl BindgenEnum) -> BusDirection {
     as_int32(value)
 }
 
 /// Combines `ProcessContext_StatesAndFlags` enum constants into the `uint32` state field.
 #[inline]
 #[must_use]
-pub fn process_context_state(flags: &[c_int]) -> uint32 {
+pub fn process_context_state<E: BindgenEnum>(flags: &[E]) -> uint32 {
     let mut state = 0_u32;
     for flag in flags {
-        state |= as_uint32(*flag);
+        state |= flag.to_u32();
     }
     state
 }
@@ -93,5 +123,15 @@ mod tests {
         assert_eq!(as_int32(Vst::ProcessModes_kRealtime), 0);
         assert_eq!(as_media_type(Vst::MediaTypes_kAudio), 0);
         assert_eq!(as_bus_direction(Vst::BusDirections_kInput), 0);
+    }
+
+    #[test]
+    fn bindgen_enum_accepts_signed_and_unsigned() {
+        assert_eq!(as_int32(0_i32), 0);
+        assert_eq!(as_int32(0_u32), 0);
+        assert_eq!(as_uint32(2_i32), 2);
+        assert_eq!(as_uint32(2_u32), 2);
+        assert_eq!(process_context_state(&[1_i32, 2_i32]), 3);
+        assert_eq!(process_context_state(&[1_u32, 2_u32]), 3);
     }
 }
