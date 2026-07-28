@@ -1,6 +1,7 @@
 import { acceptHMRUpdate, defineStore } from "pinia"
 import { shallowRef } from "vue"
 import type {
+  AppLocale,
   ApplicationSettings,
   ApplicationSettingsPatch,
   AudioHostRuntimePreferences,
@@ -50,6 +51,21 @@ export const useApplicationSettingsStore = defineStore("application-settings", (
     error.value = ""
     try {
       settings.value = await window.yadaw.updateApplicationSettings({ theme })
+    } catch (reason) {
+      settings.value = previous
+      error.value = reason instanceof Error ? reason.message : "Unable to save display settings."
+    }
+  }
+
+  async function setLocale(locale: AppLocale): Promise<void> {
+    if (!settings.value) await load()
+    if (!settings.value || settings.value.locale === locale) return
+
+    const previous = settings.value
+    settings.value = { ...previous, locale }
+    error.value = ""
+    try {
+      settings.value = await window.yadaw.updateApplicationSettings({ locale })
     } catch (reason) {
       settings.value = previous
       error.value = reason instanceof Error ? reason.message : "Unable to save display settings."
@@ -143,6 +159,7 @@ export const useApplicationSettingsStore = defineStore("application-settings", (
     load,
     update,
     setTheme,
+    setLocale,
     setMeterPeakHold,
     setMeterReturnRate,
     chooseSwapDirectory,

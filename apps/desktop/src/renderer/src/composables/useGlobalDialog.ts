@@ -1,4 +1,9 @@
 import { readonly, shallowRef } from "vue"
+import { i18n } from "../i18n"
+
+function t(key: string): string {
+  return i18n.global.t(key)
+}
 
 export type GlobalDialogTone = "default" | "warning" | "danger"
 export type GlobalDialogActionKind = "primary" | "secondary" | "danger" | "cancel"
@@ -85,7 +90,7 @@ function showDialog<Value extends string>(
         title: options.title,
         description: options.description,
         detail: options.detail,
-        eyebrow: options.eyebrow ?? "YADAW",
+        eyebrow: options.eyebrow ?? t("app.name"),
         tone: options.tone ?? "default",
         actions: options.actions,
         cancelValue: options.cancelValue ?? null
@@ -102,7 +107,7 @@ async function alert(options: GlobalAlertOptions): Promise<void> {
     actions: [
       {
         value: "dismiss",
-        label: options.actionLabel ?? "OK",
+        label: options.actionLabel ?? t("dialog.actions.ok"),
         kind: "cancel"
       }
     ],
@@ -116,12 +121,12 @@ async function confirm(options: GlobalConfirmOptions): Promise<boolean> {
     actions: [
       {
         value: "confirm",
-        label: options.confirmLabel ?? "Confirm",
+        label: options.confirmLabel ?? t("dialog.actions.confirm"),
         kind: options.destructive ? "danger" : "primary"
       },
       {
         value: "cancel",
-        label: options.cancelLabel ?? "Cancel",
+        label: options.cancelLabel ?? t("dialog.actions.cancel"),
         kind: "cancel"
       }
     ],

@@ -2,6 +2,7 @@ import { BrowserWindow, Menu } from "electron"
 import type { MenuItemConstructorOptions } from "electron"
 import { IPC_CHANNELS } from "@yadaw/contracts"
 import type { ApplicationCommandId } from "@yadaw/contracts"
+import { t } from "./i18n"
 
 function requestApplicationCommand(command: ApplicationCommandId): void {
   const window = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
@@ -25,11 +26,11 @@ function commandItem(
 function macApplicationMenu(): MenuItemConstructorOptions[] {
   return [
     {
-      label: "YADAW",
+      label: t("app.name"),
       submenu: [
-        { role: "about", label: "About YADAW" },
+        { role: "about", label: t("app.about") },
         { type: "separator" },
-        commandItem("Preferences…", "application.preferences", "Command+,"),
+        commandItem(t("menu.preferences"), "application.preferences", "Command+,"),
         { type: "separator" },
         { role: "services" },
         { type: "separator" },
@@ -41,22 +42,22 @@ function macApplicationMenu(): MenuItemConstructorOptions[] {
       ]
     },
     {
-      label: "File",
+      label: t("menu.file"),
       submenu: [
-        commandItem("New Project", "project.new", "Command+N"),
-        commandItem("Open Project…", "project.open", "Command+O"),
+        commandItem(t("menu.newProject"), "project.new", "Command+N"),
+        commandItem(t("menu.openProject"), "project.open", "Command+O"),
         { type: "separator" },
-        commandItem("Save Project", "project.save", "Command+S"),
-        commandItem("Close Project", "project.close", "Command+W"),
+        commandItem(t("menu.saveProject"), "project.save", "Command+S"),
+        commandItem(t("menu.closeProject"), "project.close", "Command+W"),
         { type: "separator" },
-        commandItem("Project Settings…", "project.settings", "Command+Shift+,")
+        commandItem(t("menu.projectSettings"), "project.settings", "Command+Shift+,")
       ]
     },
     {
-      label: "Edit",
+      label: t("menu.edit"),
       submenu: [
-        commandItem("Undo", "edit.undo", "Command+Z"),
-        commandItem("Redo", "edit.redo", "Command+Shift+Z"),
+        commandItem(t("menu.undo"), "edit.undo", "Command+Z"),
+        commandItem(t("menu.redo"), "edit.redo", "Command+Shift+Z"),
         { type: "separator" },
         { role: "cut" },
         { role: "copy" },
@@ -65,15 +66,17 @@ function macApplicationMenu(): MenuItemConstructorOptions[] {
       ]
     },
     {
-      label: "View",
-      submenu: [commandItem("Toggle Full Screen", "view.toggle-full-screen", "Control+Command+F")]
+      label: t("menu.view"),
+      submenu: [
+        commandItem(t("menu.toggleFullScreen"), "view.toggle-full-screen", "Control+Command+F")
+      ]
     },
     { role: "windowMenu" },
     {
       role: "help",
       submenu: [
-        commandItem("Audio Performance Benchmark…", "help.audio-benchmark"),
-        commandItem("Effect Chain Graph…", "help.effect-chain-graph")
+        commandItem(t("menu.audioBenchmark"), "help.audio-benchmark"),
+        commandItem(t("menu.effectChainGraph"), "help.effect-chain-graph")
       ]
     }
   ]

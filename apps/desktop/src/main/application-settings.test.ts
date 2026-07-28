@@ -11,6 +11,7 @@ describe("ApplicationSettingsStore", () => {
     expect(await first.get()).toMatchObject({
       recordingBitDepth: "float32",
       theme: "system",
+      locale: "en-US",
       meterPeakHold: "800ms",
       meterReturnRate: "iec-type-i",
       softwareMonitoringEnabled: false,
@@ -25,6 +26,7 @@ describe("ApplicationSettingsStore", () => {
       swapDirectory: join(userData, "custom-swap"),
       recordingBitDepth: "pcm24",
       theme: "light",
+      locale: "zh-cmn-Hans-CN",
       meterPeakHold: "4s"
     })
     const reloaded = await new ApplicationSettingsStore(userData).get()
@@ -32,6 +34,7 @@ describe("ApplicationSettingsStore", () => {
       swapDirectory: join(userData, "custom-swap"),
       recordingBitDepth: "pcm24",
       theme: "light",
+      locale: "zh-cmn-Hans-CN",
       meterPeakHold: "4s",
       meterReturnRate: "iec-type-i"
     })

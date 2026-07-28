@@ -7,6 +7,7 @@ const settings = {
   swapDirectory: "C:/swap",
   recordingBitDepth: "float32" as const,
   theme: "dark" as const,
+  locale: "en-US" as const,
   meterPeakHold: "800ms" as const,
   meterReturnRate: "iec-type-i" as const,
   recentProjects: []

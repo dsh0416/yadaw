@@ -31,9 +31,11 @@
     "@yadaw/dsp-node": "workspace:*",
     "@yadaw/project-db": "workspace:*",
     "@yadaw/ui": "workspace:*",
-    "echarts": "^6.1.0"
+    "echarts": "^6.1.0",
+    "vue-i18n": "^11.4.8"
   },
   "devDependencies": {
+    "@intlify/unplugin-vue-i18n": "^11.2.4",
     "@pinia/testing": "2.0.1",
     "@playwright/test": "1.61.1",
     "@types/node": "^26.0.0",

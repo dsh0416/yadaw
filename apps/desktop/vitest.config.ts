@@ -1,10 +1,17 @@
 import { resolve } from "node:path"
+import VueI18nPlugin from "@intlify/unplugin-vue-i18n/vite"
 import vue from "@vitejs/plugin-vue"
 import { defineConfig } from "vitest/config"
 import { appVersionDefine } from "./build/app-version"
 
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [
+    vue(),
+    VueI18nPlugin({
+      strictMessage: false,
+      runtimeOnly: true
+    })
+  ],
   define: {
     __APP_VERSION__: appVersionDefine
   },
@@ -16,7 +23,11 @@ export default defineConfig({
   test: {
     environment: "happy-dom",
     setupFiles: [resolve(import.meta.dirname, "src/renderer/src/test/setup.ts")],
-    include: ["src/renderer/src/**/*.test.ts", "src/main/**/*.test.ts"],
+    include: [
+      "src/renderer/src/**/*.test.ts",
+      "src/main/**/*.test.ts",
+      "src/shared/**/*.test.ts"
+    ],
     restoreMocks: true
   }
 })

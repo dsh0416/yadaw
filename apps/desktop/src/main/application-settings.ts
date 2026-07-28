@@ -10,6 +10,7 @@ import type {
   RecordingBitDepth,
   ThemePreference
 } from "@yadaw/contracts"
+import { DEFAULT_LOCALE, isAppLocale } from "../shared/i18n"
 
 export const DEFAULT_PLUGIN_EDITOR_PREFERENCE: Readonly<PluginEditorPreference> = {
   mode: "native",
@@ -137,6 +138,7 @@ export class ApplicationSettingsStore {
       swapDirectory: join(this.userData, "swap"),
       recordingBitDepth: "float32",
       theme: "system",
+      locale: DEFAULT_LOCALE,
       meterPeakHold: "800ms",
       meterReturnRate: "iec-type-i",
       softwareMonitoringEnabled: false,
@@ -164,6 +166,7 @@ export class ApplicationSettingsStore {
           ? raw.recordingBitDepth
           : value.recordingBitDepth,
         theme: isThemePreference(raw.theme) ? raw.theme : value.theme,
+        locale: isAppLocale(raw.locale) ? raw.locale : value.locale,
         meterPeakHold: isMeterPeakHold(raw.meterPeakHold) ? raw.meterPeakHold : value.meterPeakHold,
         meterReturnRate: isMeterReturnRate(raw.meterReturnRate)
           ? raw.meterReturnRate
@@ -214,6 +217,10 @@ export class ApplicationSettingsStore {
     if (patch.theme !== undefined) {
       if (!isThemePreference(patch.theme)) throw new TypeError("Unsupported theme preference")
       current.theme = patch.theme
+    }
+    if (patch.locale !== undefined) {
+      if (!isAppLocale(patch.locale)) throw new TypeError("Unsupported locale preference")
+      current.locale = patch.locale
     }
     if (patch.meterPeakHold !== undefined) {
       if (!isMeterPeakHold(patch.meterPeakHold)) throw new TypeError("Unsupported meter peak hold")

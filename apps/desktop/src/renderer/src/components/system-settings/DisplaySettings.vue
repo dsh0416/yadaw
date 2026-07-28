@@ -1,41 +1,60 @@
 <script setup lang="ts">
-import { onMounted } from "vue"
+import { computed, onMounted } from "vue"
 import { storeToRefs } from "pinia"
-import { Monitor, Moon, Sun } from "@lucide/vue"
+import { useI18n } from "vue-i18n"
+import { Languages, Monitor, Moon, Sun } from "@lucide/vue"
 import type { Component } from "vue"
-import type { ThemePreference } from "@yadaw/contracts"
+import type { AppLocale, ThemePreference } from "@yadaw/contracts"
 import SettingsPage from "../settings/SettingsPage.vue"
 import SettingsSection from "../settings/SettingsSection.vue"
 import { useApplicationSettingsStore } from "../../stores/applicationSettings"
+import { APP_LOCALES } from "../../../../shared/i18n"
 
+const { t } = useI18n()
 const settingsStore = useApplicationSettingsStore()
 const { settings, loading, error } = storeToRefs(settingsStore)
 
-const themeOptions: ReadonlyArray<{
-  value: ThemePreference
-  label: string
-  description: string
-  icon: Component
-}> = [
+const themeOptions = computed<
+  ReadonlyArray<{
+    value: ThemePreference
+    label: string
+    description: string
+    icon: Component
+  }>
+>(() => [
   {
     value: "light",
-    label: "Light",
-    description: "A soft neutral-gray workspace for bright rooms.",
+    label: t("settings.display.theme.light.label"),
+    description: t("settings.display.theme.light.description"),
     icon: Sun
   },
   {
     value: "dark",
-    label: "Dark",
-    description: "Low-glare graphite surfaces for long sessions.",
+    label: t("settings.display.theme.dark.label"),
+    description: t("settings.display.theme.dark.description"),
     icon: Moon
   },
   {
     value: "system",
-    label: "Follow system",
-    description: "Switch automatically with your operating system.",
+    label: t("settings.display.theme.system.label"),
+    description: t("settings.display.theme.system.description"),
     icon: Monitor
   }
-]
+])
+
+const localeOptions = computed<
+  ReadonlyArray<{
+    value: AppLocale
+    label: string
+    description: string
+  }>
+>(() =>
+  APP_LOCALES.map((locale) => ({
+    value: locale,
+    label: t(`settings.display.locales.${locale}.label`),
+    description: t(`settings.display.locales.${locale}.description`)
+  }))
+)
 
 onMounted(() => {
   if (!settings.value) void settingsStore.load()
@@ -44,16 +63,16 @@ onMounted(() => {
 
 <template>
   <SettingsPage
-    category="Display"
-    page="General"
-    title="General"
-    description="Choose a comfortable workspace for long editing and mixing sessions."
+    :category="t('settings.display.category')"
+    :page="t('settings.display.page')"
+    :title="t('settings.display.title')"
+    :description="t('settings.display.description')"
   >
     <SettingsSection
-      title="Color theme"
-      description="Changes apply immediately across every project and are remembered on this device."
+      :title="t('settings.display.themeTitle')"
+      :description="t('settings.display.themeDescription')"
     >
-      <div class="theme-options" role="radiogroup" aria-label="Color theme">
+      <div class="theme-options" role="radiogroup" :aria-label="t('settings.display.themeAria')">
         <button
           v-for="option in themeOptions"
           :key="option.value"
@@ -81,18 +100,56 @@ onMounted(() => {
       </div>
     </SettingsSection>
 
+    <SettingsSection
+      :title="t('settings.display.languageTitle')"
+      :description="t('settings.display.languageDescription')"
+    >
+      <div
+        class="locale-options"
+        role="radiogroup"
+        :aria-label="t('settings.display.languageAria')"
+      >
+        <button
+          v-for="option in localeOptions"
+          :key="option.value"
+          class="locale-option"
+          :class="{ selected: settings?.locale === option.value }"
+          type="button"
+          role="radio"
+          :aria-checked="settings?.locale === option.value"
+          :disabled="loading"
+          @click="settingsStore.setLocale(option.value)"
+        >
+          <span class="locale-option-copy">
+            <Languages :size="14" aria-hidden="true" />
+            <span>
+              <b>{{ option.label }}</b>
+              <small>{{ option.description }}</small>
+            </span>
+          </span>
+          <span class="selection-dot" aria-hidden="true" />
+        </button>
+      </div>
+    </SettingsSection>
+
     <p v-if="error" class="display-error" role="alert">{{ error }}</p>
   </SettingsPage>
 </template>
 
 <style scoped>
-.theme-options {
+.theme-options,
+.locale-options {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 9px;
 }
 
-.theme-option {
+.locale-options {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.theme-option,
+.locale-option {
   position: relative;
   display: grid;
   gap: 11px;
@@ -105,22 +162,26 @@ onMounted(() => {
   cursor: pointer;
 }
 
-.theme-option:hover {
+.theme-option:hover,
+.locale-option:hover {
   border-color: var(--line-strong);
   background: var(--surface-2);
 }
 
-.theme-option.selected {
+.theme-option.selected,
+.locale-option.selected {
   border-color: var(--accent);
   box-shadow: var(--ui-shadow-selected-outline);
 }
 
-.theme-option:focus-visible {
+.theme-option:focus-visible,
+.locale-option:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 
-.theme-option:disabled {
+.theme-option:disabled,
+.locale-option:disabled {
   cursor: wait;
   opacity: 0.6;
 }
@@ -208,27 +269,33 @@ onMounted(() => {
   );
 }
 
-.theme-option-copy {
+.theme-option-copy,
+.locale-option-copy {
   display: grid;
   grid-template-columns: 16px minmax(0, 1fr);
   gap: 7px;
 }
 
-.theme-option-copy > svg {
+.theme-option-copy > svg,
+.locale-option-copy > svg {
   margin-top: 1px;
   color: var(--accent);
 }
 
 .theme-option-copy b,
-.theme-option-copy small {
+.theme-option-copy small,
+.locale-option-copy b,
+.locale-option-copy small {
   display: block;
 }
 
-.theme-option-copy b {
+.theme-option-copy b,
+.locale-option-copy b {
   font-size: var(--ui-type-size-body-compact);
 }
 
-.theme-option-copy small {
+.theme-option-copy small,
+.locale-option-copy small {
   min-height: 29px;
   margin-top: 4px;
   color: var(--text-faint);
@@ -261,6 +328,10 @@ onMounted(() => {
 @media (max-width: 1120px) {
   .theme-options {
     grid-template-columns: repeat(3, minmax(120px, 1fr));
+  }
+
+  .locale-options {
+    grid-template-columns: 1fr;
   }
 }
 </style>

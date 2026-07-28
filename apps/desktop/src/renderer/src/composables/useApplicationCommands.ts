@@ -1,5 +1,6 @@
 import { computed, onMounted, onUnmounted } from "vue"
 import { storeToRefs } from "pinia"
+import { useI18n } from "vue-i18n"
 import { useRouter } from "vue-router"
 import type { ApplicationCommandId, CreateProjectRequest } from "@yadaw/contracts"
 import type { UiMenubarMenu } from "@yadaw/ui"
@@ -10,12 +11,14 @@ import { useMixerStore } from "../stores/mixer"
 import { useProjectStore } from "../stores/project"
 import { useStudioWorkflowStore } from "../stores/studioWorkflow"
 
-const DEFAULT_PROJECT: CreateProjectRequest = {
-  name: "Untitled project",
-  sampleRate: 48_000,
-  timeSignatureNumerator: 4,
-  timeSignatureDenominator: 4,
-  waveformDisplayMode: "separate"
+function defaultProject(name: string): CreateProjectRequest {
+  return {
+    name,
+    sampleRate: 48_000,
+    timeSignatureNumerator: 4,
+    timeSignatureDenominator: 4,
+    waveformDisplayMode: "separate"
+  }
 }
 
 function isEditableTarget(target: EventTarget | null): boolean {
@@ -26,6 +29,7 @@ function isEditableTarget(target: EventTarget | null): boolean {
 }
 
 export function useApplicationCommands() {
+  const { t } = useI18n()
   const router = useRouter()
   const projectStore = useProjectStore()
   const mixerStore = useMixerStore()
@@ -41,26 +45,26 @@ export function useApplicationCommands() {
   const menus = computed<UiMenubarMenu[]>(() => [
     {
       value: "file",
-      label: "File",
+      label: t("menu.file"),
       items: [
-        { value: "project.new", label: "New Project", shortcut: "Ctrl+N" },
-        { value: "project.open", label: "Open Project…", shortcut: "Ctrl+O" },
+        { value: "project.new", label: t("menu.newProject"), shortcut: "Ctrl+N" },
+        { value: "project.open", label: t("menu.openProject"), shortcut: "Ctrl+O" },
         {
           value: "project.save",
-          label: "Save Project",
+          label: t("menu.saveProject"),
           shortcut: "Ctrl+S",
           separatorBefore: true,
           disabled: !projectReady.value
         },
         {
           value: "project.close",
-          label: "Close Project",
+          label: t("menu.closeProject"),
           shortcut: "Ctrl+W",
           disabled: !projectReady.value
         },
         {
           value: "project.settings",
-          label: "Project Settings…",
+          label: t("menu.projectSettings"),
           shortcut: "Ctrl+Shift+,",
           separatorBefore: true,
           disabled: !projectReady.value
@@ -69,32 +73,32 @@ export function useApplicationCommands() {
     },
     {
       value: "edit",
-      label: "Edit",
+      label: t("menu.edit"),
       items: [
         {
           value: "edit.undo",
-          label: "Undo",
+          label: t("menu.undo"),
           shortcut: "Ctrl+Z",
           disabled: !projectReady.value || !canUndo.value
         },
         {
           value: "edit.redo",
-          label: "Redo",
+          label: t("menu.redo"),
           shortcut: "Ctrl+Shift+Z",
           disabled: !projectReady.value || !canRedo.value
         },
         {
           value: "edit.cut",
-          label: "Cut",
+          label: t("menu.cut"),
           shortcut: "Ctrl+X",
           separatorBefore: true
         },
-        { value: "edit.copy", label: "Copy", shortcut: "Ctrl+C" },
-        { value: "edit.paste", label: "Paste", shortcut: "Ctrl+V" },
-        { value: "edit.select-all", label: "Select All", shortcut: "Ctrl+A" },
+        { value: "edit.copy", label: t("menu.copy"), shortcut: "Ctrl+C" },
+        { value: "edit.paste", label: t("menu.paste"), shortcut: "Ctrl+V" },
+        { value: "edit.select-all", label: t("menu.selectAll"), shortcut: "Ctrl+A" },
         {
           value: "application.preferences",
-          label: "Preferences…",
+          label: t("menu.preferences"),
           shortcut: "Ctrl+,",
           separatorBefore: true
         }
@@ -102,30 +106,30 @@ export function useApplicationCommands() {
     },
     {
       value: "view",
-      label: "View",
+      label: t("menu.view"),
       items: [
         {
           value: "view.toggle-full-screen",
-          label: "Toggle Full Screen",
+          label: t("menu.toggleFullScreen"),
           shortcut: "F11"
         }
       ]
     },
     {
       value: "help",
-      label: "Help",
+      label: t("menu.help"),
       items: [
         {
           value: "help.audio-benchmark",
-          label: "Audio Performance Benchmark…"
+          label: t("menu.audioBenchmark")
         },
         {
           value: "help.effect-chain-graph",
-          label: "Effect Chain Graph…"
+          label: t("menu.effectChainGraph")
         },
         {
           value: "application.about",
-          label: "About YADAW",
+          label: t("app.about"),
           separatorBefore: true
         }
       ]
@@ -141,7 +145,9 @@ export function useApplicationCommands() {
 
   async function createProject(): Promise<void> {
     if (projectBusy.value || !(await leaveCurrentProject())) return
-    const workspace = await projectStore.create(structuredClone(DEFAULT_PROJECT))
+    const workspace = await projectStore.create(
+      structuredClone(defaultProject(t("welcome.untitledProject")))
+    )
     if (!workspace) return
     mixerStore.hydrate(workspace.graph)
     await router.push({ name: "studio" })
