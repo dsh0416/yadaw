@@ -1,20 +1,19 @@
-name: CI
+name: Build
 
 on:
-  pull_request:
-  push:
-    branches:
-      - main
-    tags:
-      - "v*"
-  workflow_dispatch:
+  workflow_run:
+    workflows: ["Test"]
+    types: [completed]
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+  group: >-
+    ${{ github.workflow }}-${{ github.event.workflow_run.head_branch ||
+    github.event.workflow_run.head_sha }}
+  cancel-in-progress: >-
+    ${{ !startsWith(github.event.workflow_run.head_branch, 'v') }}
 
 env:
   CARGO_TERM_COLOR: always
@@ -23,19 +22,32 @@ env:
 jobs:
   metadata:
     name: Validate version metadata
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event != 'pull_request' &&
+      (
+        github.event.workflow_run.event == 'workflow_dispatch' ||
+        github.event.workflow_run.head_branch == 'main' ||
+        startsWith(github.event.workflow_run.head_branch, 'v')
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
       version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
     steps:
       - name: Check out source
         uses: actions/checkout@v6
         with:
+          ref: ${{ github.event.workflow_run.head_sha }}
           persist-credentials: false
 
       - name: Validate tag and VERSION
         id: version
         shell: bash
+        env:
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          TRIGGER_EVENT: ${{ github.event.workflow_run.event }}
         run: |
           version="$(tr -d '\r\n' < VERSION)"
           if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
@@ -43,80 +55,21 @@ jobs:
             exit 1
           fi
 
-          if [[ "$GITHUB_REF" == refs/tags/* && "$GITHUB_REF_NAME" != "v$version" ]]; then
-            echo "::error::Tag $GITHUB_REF_NAME does not match VERSION ($version)"
-            exit 1
+          tag=""
+          if [[ "$TRIGGER_EVENT" == "push" && "$HEAD_BRANCH" == v* ]]; then
+            tag="$HEAD_BRANCH"
+            if [[ "$tag" != "v$version" ]]; then
+              echo "::error::Tag $tag does not match VERSION ($version)"
+              exit 1
+            fi
           fi
 
           echo "version=$version" >> "$GITHUB_OUTPUT"
-
-  quality:
-    name: Formatting, lint, types, and full checks
-    needs: metadata
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    steps:
-      - name: Check out source
-        uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-
-      - name: Set up build environment
-        uses: ./.github/actions/setup-build
-        with:
-          github-token: >-
-            ${{ github.event_name == 'pull_request' && '' || github.token }}
-
-      - name: Run repository checks
-        run: pnpm check
-
-  platform-tests:
-    name: Tests (${{ matrix.name }})
-    needs: metadata
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: Windows x64
-            os: windows-latest
-          - name: macOS arm64
-            os: macos-15
-    steps:
-      - name: Check out source
-        uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-
-      - name: Set up build environment
-        uses: ./.github/actions/setup-build
-        with:
-          github-token: >-
-            ${{ github.event_name == 'pull_request' && '' || github.token }}
-
-      - name: Run Rust tests and allocation invariants
-        run: pnpm test:rust
-
-      - name: Build native bindings for unit tests
-        run: pnpm --filter @yadaw/dsp-node build:debug
-
-      - name: Run desktop unit tests
-        run: pnpm --filter @yadaw/desktop test:unit
-
-      - name: Run project database integration tests
-        run: pnpm --filter @yadaw/project-db test:integration
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
   package:
     name: Package (${{ matrix.name }})
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      github.ref == 'refs/heads/main' ||
-      startsWith(github.ref, 'refs/tags/')
-    needs:
-      - metadata
-      - quality
-      - platform-tests
+    needs: metadata
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     strategy:
@@ -154,6 +107,7 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v6
         with:
+          ref: ${{ github.event.workflow_run.head_sha }}
           persist-credentials: false
 
       - name: Set up build environment
@@ -183,11 +137,9 @@ jobs:
 
   release:
     name: Publish GitHub Release
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: needs.metadata.outputs.tag != ''
     needs:
       - metadata
-      - quality
-      - platform-tests
       - package
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -218,24 +170,25 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ needs.metadata.outputs.tag }}
         run: |
           release_args=(
             --verify-tag
             --generate-notes
-            --title "YADAW $GITHUB_REF_NAME"
+            --title "YADAW $TAG_NAME"
           )
 
-          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
+          if [[ "$TAG_NAME" == *-* ]]; then
             release_args+=(--prerelease)
           else
             release_args+=(--latest)
           fi
 
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" release-assets/* --clobber
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            gh release upload "$TAG_NAME" release-assets/* --clobber
           else
             gh release create \
-              "$GITHUB_REF_NAME" \
+              "$TAG_NAME" \
               release-assets/* \
               "${release_args[@]}"
           fi
