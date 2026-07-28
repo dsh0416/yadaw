@@ -1,7 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, shallowRef, useTemplateRef, watch } from "vue"
-import { storeToRefs } from "pinia"
-import type { MeterPeakHold, MeterReturnRate } from "@yadaw/contracts"
+import { computed } from "vue"
 import type {
   MixerBusState,
   MixerChannelMeter,
@@ -18,19 +16,9 @@ import {
   type PluginSelection,
   type PluginSignalWidth
 } from "../plugins/plugin-audio-mode"
-import { usePeakMeterDisplay } from "../../composables/usePeakMeterDisplay"
-import { useParameterGesture } from "../../composables/useParameterGesture"
-import { useApplicationSettingsStore } from "../../stores/applicationSettings"
-import {
-  dbToLevelPercent,
-  FADER_MAX_DB,
-  FADER_MIN_DB,
-  FADER_SCALE_MARKS,
-  METER_SCALE_MARKS
-} from "../../utils/mixerDbScale"
 import InlineTrackNameEditor from "../InlineTrackNameEditor.vue"
-import MixerDbScale from "./MixerDbScale.vue"
 import MixerChannelMenu from "./MixerChannelMenu.vue"
+import MixerFaderSection from "./MixerFaderSection.vue"
 import MixerInputSection from "./MixerInputSection.vue"
 import MixerOutputSection from "./MixerOutputSection.vue"
 import MixerPanKnob from "./MixerPanKnob.vue"
@@ -71,16 +59,6 @@ const emit = defineEmits<{
   resetMeterClips: []
 }>()
 
-const settingsStore = useApplicationSettingsStore()
-const { settings } = storeToRefs(settingsStore)
-const meter = computed(() => props.meter)
-const peakHold = computed<MeterPeakHold>(() => settings.value?.meterPeakHold ?? "800ms")
-const returnRate = computed<MeterReturnRate>(() => settings.value?.meterReturnRate ?? "iec-type-i")
-const meterDisplay = usePeakMeterDisplay({
-  meter,
-  peakHold,
-  returnRate
-})
 const instrument = computed(
   () => props.plugins.find((plugin) => plugin.role === "instrument") ?? null
 )
@@ -92,48 +70,6 @@ const insertInitialInputWidth = computed<PluginSignalWidth>(() => {
     : "stereo"
 })
 
-const gainLabel = computed(() =>
-  props.channel.gainDb <= -90 ? "−∞" : `${props.channel.gainDb.toFixed(1)} dB`
-)
-const gainReadoutLabel = computed(() =>
-  props.channel.gainDb <= -90 ? "−∞" : props.channel.gainDb.toFixed(1)
-)
-const maximumPeakLabel = computed(() =>
-  Number.isFinite(meterDisplay.latchedPeakDb.value)
-    ? meterDisplay.latchedPeakDb.value.toFixed(1)
-    : "−∞"
-)
-const maximumPeakState = computed(() => ({
-  active: Number.isFinite(meterDisplay.latchedPeakDb.value),
-  hot: meterDisplay.latchedPeakDb.value >= -6,
-  clipped: meterDisplay.clipped.value
-}))
-const monitoringAvailable = computed(
-  () =>
-    settings.value?.softwareMonitoringEnabled === true &&
-    props.channel.kind === "audio" &&
-    props.channel.inputSource === "hardware"
-)
-const monitoringActive = computed(() => monitoringAvailable.value && props.channel.inputMonitoring)
-const meterStyle = computed(() => ({
-  "--meter-level": `${meterDisplay.meterLevelPercent.value}%`,
-  "--held-meter-level": `${meterDisplay.heldMeterLevelPercent.value}%`
-}))
-const faderStyle = computed(() => ({
-  "--fader-level": `${dbToLevelPercent(props.channel.gainDb, FADER_MIN_DB, FADER_MAX_DB)}%`
-}))
-const gainInputValue = shallowRef(String(props.channel.gainDb))
-const gainInputEditing = shallowRef(false)
-const faderTooltipVisible = shallowRef(false)
-const gainInput = useTemplateRef<HTMLInputElement>("gainInput")
-
-watch(
-  () => props.channel.gainDb,
-  (value) => {
-    if (!gainInputEditing.value) gainInputValue.value = String(value)
-  }
-)
-
 function preview(parameter: "gainDb" | "pan", value: number): void {
   emit("preview", {
     target: "channel",
@@ -141,110 +77,6 @@ function preview(parameter: "gainDb" | "pan", value: number): void {
     parameter,
     value
   })
-}
-
-function resetMaximumPeak(): void {
-  meterDisplay.resetPeakAndClip()
-  emit("resetMeterClips")
-}
-
-async function beginGainInputEdit(): Promise<void> {
-  gainInputEditing.value = true
-  gainInputValue.value = String(props.channel.gainDb)
-  await nextTick()
-  gainInput.value?.focus()
-  gainInput.value?.select()
-}
-
-function updateGainInputValue(event: Event): void {
-  gainInputEditing.value = true
-  gainInputValue.value = (event.currentTarget as HTMLInputElement).value
-}
-
-function finishGainInputEdit(): void {
-  if (!gainInputEditing.value) return
-  gainInputEditing.value = false
-  gainInputValue.value = String(props.channel.gainDb)
-}
-
-function commitGainInputValue(event: Event): void {
-  const input = event.currentTarget as HTMLInputElement
-  const value = Number(input.value)
-
-  if (input.value.trim() === "" || !Number.isFinite(value)) {
-    finishGainInputEdit()
-    input.value = gainInputValue.value
-    return
-  }
-
-  const clampedValue = Math.max(FADER_MIN_DB, Math.min(FADER_MAX_DB, value))
-  gainInputValue.value = String(clampedValue)
-  preview("gainDb", clampedValue)
-  gainInputEditing.value = false
-  gainGesture.reset(clampedValue)
-}
-
-function cancelGainInputEdit(event: KeyboardEvent): void {
-  if (event.key !== "Escape") return
-  event.preventDefault()
-  event.stopPropagation()
-  const input = event.currentTarget as HTMLInputElement
-  gainInputValue.value = String(props.channel.gainDb)
-  gainInputEditing.value = false
-  input.value = gainInputValue.value
-  input.blur()
-}
-
-function submitGainInput(event: KeyboardEvent): void {
-  if (event.key !== "Enter") return
-  event.preventDefault()
-  ;(event.currentTarget as HTMLInputElement).blur()
-}
-
-const gainGesture = useParameterGesture({
-  currentValue: () => props.channel.gainDb,
-  preview: (value) => preview("gainDb", value),
-  commit: (value) => emit("updateChannel", props.channel.id, { gainDb: value })
-})
-
-function beginFaderGesture(event: PointerEvent): void {
-  if (event.button !== 0) {
-    event.preventDefault()
-    return
-  }
-
-  const input = event.currentTarget as HTMLInputElement
-  const bounds = input.getBoundingClientRect()
-  const min = Number(input.min)
-  const max = Number(input.max)
-  const value = Math.max(min, Math.min(max, props.channel.gainDb))
-  const ratio = (value - min) / (max - min)
-  const thumbInset = Math.min(8, bounds.height / 2)
-  const thumbTravel = Math.max(0, bounds.height - thumbInset * 2)
-  const thumbCenterY = bounds.top + thumbInset + (1 - ratio) * thumbTravel
-
-  if (Math.abs(event.clientY - thumbCenterY) > 13) {
-    event.preventDefault()
-    return
-  }
-
-  gainGesture.begin()
-  faderTooltipVisible.value = true
-}
-
-function previewFaderGesture(event: Event): void {
-  faderTooltipVisible.value = true
-  gainGesture.preview(event)
-}
-
-function commitFaderGesture(event: Event): void {
-  gainGesture.commit(event)
-  faderTooltipVisible.value = false
-}
-
-function handleFaderKeydown(event: KeyboardEvent): void {
-  gainGesture.keydown(event)
-  if (event.key === "Escape") faderTooltipVisible.value = false
 }
 </script>
 
@@ -318,136 +150,13 @@ function handleFaderKeydown(event: KeyboardEvent): void {
       @commit="emit('updateChannel', channel.id, { pan: $event })"
     />
 
-    <section class="volume-section" data-section="volume">
-      <div class="strip-core">
-        <button
-          v-if="!gainInputEditing"
-          type="button"
-          class="parameter-value parameter-value-button"
-          :aria-label="`${channel.name} volume value in decibels`"
-          :title="`Fader: ${gainLabel} · Double-click to edit`"
-          @pointerdown.stop
-          @dblclick.stop.prevent="beginGainInputEdit"
-        >
-          {{ gainReadoutLabel }}
-        </button>
-        <input
-          v-else
-          ref="gainInput"
-          class="parameter-value"
-          type="number"
-          :min="FADER_MIN_DB"
-          :max="FADER_MAX_DB"
-          step="0.1"
-          :value="gainInputValue"
-          :aria-label="`${channel.name} volume value in decibels`"
-          :title="`Fader: ${gainLabel}`"
-          @input="updateGainInputValue"
-          @change="commitGainInputValue"
-          @blur="finishGainInputEdit"
-          @keydown="cancelGainInputEdit"
-          @keydown.enter="submitGainInput"
-        />
-        <button
-          type="button"
-          :class="['maximum-peak-value', maximumPeakState]"
-          :aria-label="`${channel.name} latched maximum post-fader level in decibels`"
-          :title="`Maximum post-fader peak: ${maximumPeakLabel} dB · Click to reset peak and clipping`"
-          @pointerdown.stop
-          @click.stop="resetMaximumPeak"
-        >
-          {{ maximumPeakLabel }}
-        </button>
-        <label class="fader" :style="faderStyle">
-          <MixerDbScale class="fader-scale" :marks="FADER_SCALE_MARKS" side="left" />
-          <input
-            class="fader-control"
-            type="range"
-            :min="FADER_MIN_DB"
-            :max="FADER_MAX_DB"
-            step="0.1"
-            :value="channel.gainDb"
-            :aria-label="`${channel.name} volume`"
-            @pointerdown="beginFaderGesture"
-            @input="previewFaderGesture"
-            @change="commitFaderGesture"
-            @blur="faderTooltipVisible = false"
-            @keydown="handleFaderKeydown"
-            @dblclick.prevent="gainGesture.reset(0)"
-          />
-          <output v-if="faderTooltipVisible" class="fader-tooltip" aria-hidden="true">
-            {{ gainLabel }}
-          </output>
-        </label>
-        <div class="meter-rack">
-          <MixerDbScale class="meter-scale" :marks="METER_SCALE_MARKS" side="left" />
-          <div
-            class="meter"
-            :class="{
-              clipped: meterDisplay.clipped.value,
-              'has-held-peak': Number.isFinite(meterDisplay.heldPeakDb.value)
-            }"
-            :style="meterStyle"
-            aria-hidden="true"
-          >
-            <span /><span />
-          </div>
-        </div>
-      </div>
-
-      <div :class="['channel-actions', { 'has-input': channel.kind === 'audio' }]">
-        <div class="input-actions">
-          <template v-if="channel.kind === 'audio'">
-            <button
-              :class="['record', { active: channel.recordArmed }]"
-              :aria-pressed="channel.recordArmed"
-              :aria-label="`Arm ${channel.name}`"
-              title="Record enable"
-              @click.stop="emit('updateChannel', channel.id, { recordArmed: !channel.recordArmed })"
-            >
-              R
-            </button>
-            <button
-              :class="['monitor', { active: monitoringActive }]"
-              :aria-label="`Monitor ${channel.name}`"
-              :aria-pressed="channel.inputMonitoring"
-              :title="
-                monitoringAvailable
-                  ? 'Input monitoring'
-                  : 'Enable software monitoring and select a hardware input first'
-              "
-              :disabled="!monitoringAvailable"
-              @click.stop="
-                emit('updateChannel', channel.id, {
-                  inputMonitoring: !channel.inputMonitoring
-                })
-              "
-            >
-              I
-            </button>
-          </template>
-        </div>
-        <div class="mix-actions">
-          <button
-            :class="['mute', { active: channel.muted }]"
-            :aria-pressed="channel.muted"
-            :aria-label="`Mute ${channel.name}`"
-            @click.stop="emit('updateChannel', channel.id, { muted: !channel.muted })"
-          >
-            M
-          </button>
-          <button
-            v-if="channel.kind !== 'master'"
-            :class="['solo', { active: channel.soloed }]"
-            :aria-pressed="channel.soloed"
-            :aria-label="`Solo ${channel.name}`"
-            @click.stop="emit('updateChannel', channel.id, { soloed: !channel.soloed })"
-          >
-            S
-          </button>
-        </div>
-      </div>
-    </section>
+    <MixerFaderSection
+      :channel="channel"
+      :meter="meter"
+      @preview="emit('preview', $event)"
+      @update-channel="emit('updateChannel', channel.id, $event)"
+      @reset-meter-clips="emit('resetMeterClips')"
+    />
 
     <div class="channel-name" data-section="name" @click="emit('select', channel.id)">
       <i :style="{ backgroundColor: channel.color }" />

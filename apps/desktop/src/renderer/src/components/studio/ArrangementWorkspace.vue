@@ -1,15 +1,12 @@
 <script setup lang="ts">
-import { computed, nextTick, shallowRef, useTemplateRef, watch } from "vue"
+import { computed, shallowRef, watch } from "vue"
 import { storeToRefs } from "pinia"
-import { useResizeObserver } from "@vueuse/core"
 import { UiSelect } from "@yadaw/ui"
-import type { KeySignatureEventState, TempoMapSnapshot } from "@yadaw/contracts"
 import { useProjectStore } from "../../stores/project"
 import { useTransportStore } from "../../stores/transport"
 import { useArrangementViewStore } from "../../stores/arrangementView"
 import { useMixerStore } from "../../stores/mixer"
 import type { TimelineClip } from "../../stores/transport"
-import { clipStartSecondsFromPointer, findNearestTrackId } from "../../utils/clipDrag"
 import ArrangementTrack from "./ArrangementTrack.vue"
 import ArrangementZoomControls from "./ArrangementZoomControls.vue"
 import InlineTrackNameEditor from "../InlineTrackNameEditor.vue"
@@ -18,18 +15,16 @@ import TrackQuickControls from "./TrackQuickControls.vue"
 import TrackHeightResizeHandle from "./TrackHeightResizeHandle.vue"
 import MidiArrangementTrack from "./MidiArrangementTrack.vue"
 import { tickToSeconds } from "../../utils/tempoMap"
-import {
-  MAJOR_KEY_SIGNATURE_CHOICES,
-  MINOR_KEY_SIGNATURE_CHOICES,
-  keySignatureValue,
-  parseKeySignatureValue
-} from "../../utils/keySignatures"
+import { MAJOR_KEY_SIGNATURE_CHOICES, MINOR_KEY_SIGNATURE_CHOICES } from "../../utils/keySignatures"
 import GlobalLaneHeader from "./global-lanes/GlobalLaneHeader.vue"
 import GlobalEventLaneHeader from "./global-lanes/GlobalEventLaneHeader.vue"
 import KeyTrackLane from "./global-lanes/KeyTrackLane.vue"
 import MeterTrackLane from "./global-lanes/MeterTrackLane.vue"
 import TempoTrackLane from "./global-lanes/TempoTrackLane.vue"
-import { secondsToTimelineX, timelineXToSeconds } from "../../utils/timelineCoordinates"
+import { secondsToTimelineX } from "../../utils/timelineCoordinates"
+import { useArrangementViewport } from "./useArrangementViewport"
+import { useArrangementClipDrag } from "./useArrangementClipDrag"
+import { useGlobalLaneSelection } from "./useGlobalLaneSelection"
 
 const props = defineProps<{
   recordingId: string | null
@@ -61,43 +56,23 @@ const {
   keyLaneExpanded,
   keyLaneHeight
 } = storeToRefs(viewStore)
-const rail = useTemplateRef<HTMLElement>("rail")
-const viewport = useTemplateRef<HTMLElement>("viewport")
-const content = useTemplateRef<HTMLElement>("content")
-const viewportWidth = shallowRef(1)
-const scrollLeft = shallowRef(0)
 const liveDurationSeconds = shallowRef(0)
-const selectedTempoTick = shallowRef<number | null>(0)
-const selectedMeterTick = shallowRef<number | null>(0)
-const selectedKeyTick = shallowRef<number | null>(0)
-const clipDrag = shallowRef<{
-  clipId: string
-  offsetPixels: number
-  trackId: string
-  startSeconds: number
-} | null>(null)
-let timeZoomAnchor: { seconds: number; viewportX: number } | null = null
-
-const selectedTempo = computed(
-  () =>
-    mixerStore.graph.tempoMap.tempoEvents.find((event) => event.tick === selectedTempoTick.value) ??
-    mixerStore.graph.tempoMap.tempoEvents[0] ?? { tick: 0, beatsPerMinute: 120 }
-)
-const selectedMeter = computed(
-  () =>
-    mixerStore.graph.tempoMap.timeSignatureEvents.find(
-      (event) => event.tick === selectedMeterTick.value
-    ) ??
-    mixerStore.graph.tempoMap.timeSignatureEvents[0] ?? { tick: 0, numerator: 4, denominator: 4 }
-)
-const selectedKey = computed(
-  () =>
-    mixerStore.graph.keySignatureEvents.find((event) => event.tick === selectedKeyTick.value) ??
-    mixerStore.graph.keySignatureEvents[0] ?? { tick: 0, fifths: 0, mode: "major" as const }
-)
-const selectedKeyValue = computed(() =>
-  keySignatureValue(selectedKey.value.fifths, selectedKey.value.mode)
-)
+const {
+  selectedTempoTick,
+  selectedMeterTick,
+  selectedKeyTick,
+  selectedTempo,
+  selectedMeter,
+  selectedKeyValue,
+  replaceTempoMap,
+  updateSelectedTempo,
+  updateSelectedMeter,
+  replaceKeySignatureMap,
+  updateSelectedKey
+} = useGlobalLaneSelection({
+  graph: () => mixerStore.graph,
+  execute: (command) => mixerStore.execute(command)
+})
 const meterDenominators = [1, 2, 4, 8, 16, 32] as const
 const keySignatureGroups = [
   {
@@ -151,33 +126,33 @@ const visibleDuration = computed(() =>
     (liveClips.value[0]?.endSeconds ?? contentEndSeconds.value) + 2
   )
 )
-const contentWidth = computed(() =>
-  Math.max(
-    viewportWidth.value,
-    secondsToTimelineX(mixerStore.graph.tempoMap, visibleDuration.value, pixelsPerQuarter.value)
-  )
-)
-const viewportStartSeconds = computed(() =>
-  timelineXToSeconds(mixerStore.graph.tempoMap, scrollLeft.value, pixelsPerQuarter.value)
-)
-const viewportEndSeconds = computed(() =>
-  timelineXToSeconds(
-    mixerStore.graph.tempoMap,
-    scrollLeft.value + viewportWidth.value,
-    pixelsPerQuarter.value
-  )
-)
-const dragPreview = computed<TimelineClip | null>(() => {
-  const drag = clipDrag.value
-  if (!drag) return null
-  const clip = clips.value.find((candidate) => candidate.id === drag.clipId)
-  if (!clip) return null
-  return {
-    ...clip,
-    trackId: drag.trackId,
-    startSeconds: drag.startSeconds,
-    endSeconds: drag.startSeconds + clip.durationSeconds
-  }
+const {
+  contentWidth,
+  viewportStartSeconds,
+  viewportEndSeconds,
+  handleScroll,
+  handleWheel,
+  handleRailWheel
+} = useArrangementViewport({
+  tempoMap: () => mixerStore.graph.tempoMap,
+  pixelsPerQuarter,
+  visibleDuration,
+  zoomTime: viewStore.zoomTime,
+  zoomTrack: viewStore.zoomTrack,
+  zoomAmplitude: viewStore.zoomAmplitude
+})
+const {
+  clipDrag,
+  dragPreview,
+  handleClipDragStart,
+  updateClipDrag,
+  handleClipDrop,
+  handleClipDragEnd
+} = useArrangementClipDrag({
+  clips,
+  tempoMap: () => mixerStore.graph.tempoMap,
+  pixelsPerQuarter,
+  moveClip: handleMoveClip
 })
 const trackRows = computed(() =>
   mixerStore.timelineTracks.map((track) => ({
@@ -210,60 +185,12 @@ const playheadStyle = computed(() => ({
   )}px`
 }))
 
-useResizeObserver(viewport, (entries) => {
-  viewportWidth.value = Math.max(1, entries[0]?.contentRect.width ?? 1)
-  if (viewport.value) syncRailScroll(viewport.value)
-})
 watch(
   () => props.recordingStartedAt,
   () => {
     liveDurationSeconds.value = 0
   }
 )
-watch(pixelsPerQuarter, (value, previous) => {
-  const element = viewport.value
-  if (!element || !previous) return
-  const anchor = timeZoomAnchor ?? {
-    seconds: timelineXToSeconds(
-      mixerStore.graph.tempoMap,
-      element.scrollLeft + element.clientWidth / 2,
-      previous
-    ),
-    viewportX: element.clientWidth / 2
-  }
-  timeZoomAnchor = null
-  void nextTick(() => {
-    element.scrollLeft = Math.max(
-      0,
-      secondsToTimelineX(mixerStore.graph.tempoMap, anchor.seconds, value) - anchor.viewportX
-    )
-    scrollLeft.value = element.scrollLeft
-  })
-})
-
-function handleScroll(): void {
-  const element = viewport.value
-  scrollLeft.value = element?.scrollLeft ?? 0
-  if (element) syncRailScroll(element)
-}
-function syncRailScroll(element: HTMLElement): void {
-  const railElement = rail.value
-  if (!railElement) return
-  railElement.style.paddingBottom = `${Math.max(0, element.offsetHeight - element.clientHeight)}px`
-  railElement.scrollTop = element.scrollTop
-}
-function handleRailWheel(event: WheelEvent): void {
-  const element = viewport.value
-  if (!element) return
-  if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) {
-    handleWheel(event)
-    return
-  }
-  element.scrollTop += event.deltaY
-  element.scrollLeft += event.deltaX
-  syncRailScroll(element)
-  event.preventDefault()
-}
 function handleSeek(seconds: number): void {
   transportStore.clearSelection()
   transportStore.seek(seconds)
@@ -278,56 +205,6 @@ function handleMoveClip(clipId: string, trackId: string, startSeconds: number): 
     trackId,
     startFrame: Math.round(startSeconds * mixerStore.graph.sampleRate)
   })
-}
-function handleClipDragStart(clipId: string, offsetPixels: number): void {
-  const clip = clips.value.find((candidate) => candidate.id === clipId)
-  if (!clip) return
-  clipDrag.value = {
-    clipId,
-    offsetPixels,
-    trackId: clip.trackId,
-    startSeconds: clip.startSeconds
-  }
-}
-function updateClipDrag(event: DragEvent): void {
-  const drag = clipDrag.value
-  const contentElement = content.value
-  if (!drag || !contentElement) return
-
-  const lanes = Array.from(
-    contentElement.querySelectorAll<HTMLElement>("[data-track-id][data-track-kind='audio']")
-  ).map((lane) => {
-    const bounds = lane.getBoundingClientRect()
-    return {
-      trackId: lane.dataset.trackId!,
-      top: bounds.top,
-      bottom: bounds.bottom
-    }
-  })
-  const trackId = findNearestTrackId(lanes, event.clientY)
-  if (!trackId) return
-
-  event.preventDefault()
-  if (event.dataTransfer) event.dataTransfer.dropEffect = "move"
-  const startSeconds = clipStartSecondsFromPointer(
-    event.clientX,
-    contentElement.getBoundingClientRect().left,
-    mixerStore.graph.tempoMap,
-    pixelsPerQuarter.value,
-    drag.offsetPixels
-  )
-  clipDrag.value = { ...drag, trackId, startSeconds }
-}
-function handleClipDrop(event: DragEvent): void {
-  if (!clipDrag.value) return
-  updateClipDrag(event)
-  const drag = clipDrag.value
-  if (!drag) return
-  handleMoveClip(drag.clipId, drag.trackId, drag.startSeconds)
-  clipDrag.value = null
-}
-function handleClipDragEnd(): void {
-  clipDrag.value = null
 }
 function reorderTrack(index: number, direction: -1 | 1): void {
   const targetIndex = index + direction
@@ -347,29 +224,6 @@ function handleTrackKeydown(event: KeyboardEvent, index: number): void {
   event.preventDefault()
   reorderTrack(index, event.key === "ArrowUp" ? -1 : 1)
 }
-function handleWheel(event: WheelEvent): void {
-  if ((event.ctrlKey || event.metaKey) && event.altKey) {
-    viewStore.zoomAmplitude(event.deltaY < 0 ? 1 : -1)
-  } else if (event.ctrlKey || event.metaKey) {
-    const element = viewport.value
-    if (element) {
-      const bounds = element.getBoundingClientRect()
-      const viewportX = Math.max(0, Math.min(element.clientWidth, event.clientX - bounds.left))
-      timeZoomAnchor = {
-        seconds: timelineXToSeconds(
-          mixerStore.graph.tempoMap,
-          element.scrollLeft + viewportX,
-          pixelsPerQuarter.value
-        ),
-        viewportX
-      }
-    }
-    viewStore.zoomTime(event.deltaY < 0 ? 1 : -1)
-  } else if (event.altKey) viewStore.zoomTrack(event.deltaY < 0 ? 1 : -1)
-  else if (event.shiftKey && viewport.value) viewport.value.scrollLeft += event.deltaY
-  else return
-  event.preventDefault()
-}
 
 function removeMidiClip(clipId: string): void {
   void mixerStore.execute({ type: "delete-midi-clip", clipId })
@@ -377,45 +231,6 @@ function removeMidiClip(clipId: string): void {
 
 function moveMidiClip(clipId: string, trackId: string, startTick: number): void {
   void mixerStore.execute({ type: "move-midi-clip", clipId, trackId, startTick })
-}
-
-function replaceTempoMap(tempoMap: TempoMapSnapshot): void {
-  void mixerStore.execute({ type: "replace-tempo-map", tempoMap })
-}
-
-function updateSelectedTempo(beatsPerMinute: number): void {
-  const tick = selectedTempo.value.tick
-  replaceTempoMap({
-    ...mixerStore.graph.tempoMap,
-    tempoEvents: mixerStore.graph.tempoMap.tempoEvents.map((event) =>
-      event.tick === tick ? { ...event, beatsPerMinute } : event
-    )
-  })
-}
-
-function updateSelectedMeter(patch: { numerator?: number; denominator?: number }): void {
-  const tick = selectedMeter.value.tick
-  replaceTempoMap({
-    ...mixerStore.graph.tempoMap,
-    timeSignatureEvents: mixerStore.graph.tempoMap.timeSignatureEvents.map((event) =>
-      event.tick === tick ? { ...event, ...patch } : event
-    )
-  })
-}
-
-function replaceKeySignatureMap(events: KeySignatureEventState[]): void {
-  void mixerStore.execute({ type: "replace-key-signature-map", events })
-}
-
-function updateSelectedKey(value: string): void {
-  const choice = parseKeySignatureValue(value)
-  if (!choice) return
-  const tick = selectedKey.value.tick
-  replaceKeySignatureMap(
-    mixerStore.graph.keySignatureEvents.map((event) =>
-      event.tick === tick ? { ...event, ...choice } : event
-    )
-  )
 }
 </script>
 

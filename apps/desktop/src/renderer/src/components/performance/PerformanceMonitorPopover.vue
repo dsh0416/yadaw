@@ -1,27 +1,20 @@
 <script setup lang="ts">
 import { storeToRefs } from "pinia"
 import { computed } from "vue"
-import {
-  Activity,
-  CircleAlert,
-  Cpu,
-  HardDrive,
-  MemoryStick,
-  Radio,
-  RefreshCw,
-  TriangleAlert
-} from "@lucide/vue"
-import type { AudioRuntimeSnapshot, StorageSpaceSnapshot } from "@yadaw/contracts"
+import { CircleAlert, RefreshCw, TriangleAlert } from "@lucide/vue"
+import type { AudioRuntimeSnapshot } from "@yadaw/contracts"
 import { UiPopover } from "@yadaw/ui"
 import type { AudioTelemetryStatistics, AudioWarning } from "../../stores/audioRuntime"
 import {
   classifyUpperBound,
   highestSeverity,
   PERFORMANCE_THRESHOLDS,
-  storageSeverity,
   useSystemPerformanceStore
 } from "../../stores/systemPerformance"
 import type { HealthSeverity, PerformanceWarning } from "../../stores/systemPerformance"
+import PerformanceAudioSection from "./PerformanceAudioSection.vue"
+import PerformanceIpcSection from "./PerformanceIpcSection.vue"
+import PerformanceResourceSections from "./PerformanceResourceSections.vue"
 
 const props = defineProps<{
   runtime: AudioRuntimeSnapshot
@@ -88,17 +81,7 @@ const activeWarnings = computed<PerformanceWarning[]>(() => [
 
 const cpuUsage = computed(() => snapshot.value?.cpu.overallUsagePercent ?? null)
 const memoryUsage = computed(() => snapshot.value?.memory.usagePercent ?? null)
-const workspaceSpace = computed(() => findStorage("workspace"))
-const swapSpace = computed(() => findStorage("swap"))
 const audioIpc = computed(() => snapshot.value?.audioIpc ?? null)
-const audioIpcBuildLabel = computed(() => {
-  const fingerprint = audioIpc.value?.nativeBuildFingerprint
-  return fingerprint ? `Build ${fingerprint.slice(0, 8)}` : "Unavailable"
-})
-
-function findStorage(id: StorageSpaceSnapshot["id"]): StorageSpaceSnapshot | null {
-  return snapshot.value?.storage.find((space) => space.id === id) ?? null
-}
 
 function formatPercent(value: number | null): string {
   return value === null ? "—" : `${Math.round(value)}%`
@@ -106,56 +89,6 @@ function formatPercent(value: number | null): string {
 
 function formatLatency(value: number | null): string {
   return value === null ? "—" : `${value.toFixed(1)} ms`
-}
-
-function formatHeartbeatAge(value: number | null): string {
-  return value === null ? "Waiting" : `${Math.round(value)} ms`
-}
-
-function formatOccupancy(used: number, capacity: number): string {
-  return `${used.toLocaleString()} / ${capacity.toLocaleString()}`
-}
-
-function formatBytes(value: number | null): string {
-  if (value === null) return "—"
-  const units = ["B", "KiB", "MiB", "GiB", "TiB"]
-  let scaled = value
-  let unitIndex = 0
-  while (scaled >= 1024 && unitIndex < units.length - 1) {
-    scaled /= 1024
-    unitIndex += 1
-  }
-  return `${scaled.toLocaleString(undefined, { maximumFractionDigits: scaled >= 100 ? 0 : 1 })} ${units[unitIndex]}`
-}
-
-function spaceFreePercent(space: StorageSpaceSnapshot | null): number | null {
-  if (!space || space.totalBytes === null || space.freeBytes === null || space.totalBytes <= 0)
-    return null
-  return (space.freeBytes / space.totalBytes) * 100
-}
-
-function spaceValue(space: StorageSpaceSnapshot | null): string {
-  if (!space || space.state === "unconfigured") return "Not configured"
-  if (space.state === "unavailable") return "Unavailable"
-  return `${formatBytes(space.freeBytes)} free`
-}
-
-function spaceDetail(space: StorageSpaceSnapshot | null): string {
-  if (!space || space.state === "unconfigured") return "Path will be supplied by project settings"
-  if (space.state === "unavailable") return space.path ?? "Configured path cannot be read"
-  return `${formatPercent(spaceFreePercent(space))} of ${formatBytes(space.totalBytes)}`
-}
-
-function coreStyle(usagePercent: number | null): Record<string, string> {
-  return { "--core-load": `${usagePercent ?? 0}%` }
-}
-
-function coreSeverity(usagePercent: number | null): HealthSeverity {
-  return classifyUpperBound(
-    usagePercent,
-    PERFORMANCE_THRESHOLDS.cpu.warningPercent,
-    PERFORMANCE_THRESHOLDS.cpu.criticalPercent
-  )
 }
 </script>
 
@@ -207,234 +140,11 @@ function coreSeverity(usagePercent: number | null): HealthSeverity {
         </article>
       </div>
 
-      <section class="performance-section cpu-section">
-        <div class="section-heading">
-          <div><Cpu :size="13" /><strong>CPU channels</strong></div>
-          <span>{{ formatPercent(cpuUsage) }} total</span>
-        </div>
-        <div v-if="snapshot?.cpu.cores.length" class="core-bank">
-          <div
-            v-for="core in snapshot.cpu.cores"
-            :key="core.index"
-            :class="['core-channel', coreSeverity(core.usagePercent)]"
-          >
-            <span class="core-value">{{ formatPercent(core.usagePercent) }}</span>
-            <span class="core-meter" :style="coreStyle(core.usagePercent)"><i /></span>
-            <span class="core-label">C{{ String(core.index + 1).padStart(2, "0") }}</span>
-          </div>
-        </div>
-        <div v-else class="monitor-placeholder">Sampling individual CPU cores…</div>
-      </section>
+      <PerformanceResourceSections :snapshot="snapshot" />
 
-      <section class="performance-section memory-section">
-        <div class="section-heading">
-          <div><MemoryStick :size="13" /><strong>Physical memory</strong></div>
-          <span>{{ formatPercent(memoryUsage) }}</span>
-        </div>
-        <div class="memory-readout">
-          <div class="linear-meter"><i :style="{ width: `${memoryUsage ?? 0}%` }" /></div>
-          <span>{{ formatBytes(snapshot?.memory.usedBytes ?? null) }} used</span>
-          <span>{{ formatBytes(snapshot?.memory.freeBytes ?? null) }} free</span>
-          <span>{{ formatBytes(snapshot?.memory.totalBytes ?? null) }} total</span>
-        </div>
-      </section>
+      <PerformanceAudioSection :runtime="runtime" :statistics="statistics" />
 
-      <section class="performance-section storage-section">
-        <div class="section-heading">
-          <div><HardDrive :size="13" /><strong>Project storage</strong></div>
-          <span>Free space</span>
-        </div>
-        <div class="storage-grid">
-          <article
-            :class="[
-              'storage-space',
-              storageSeverity(
-                workspaceSpace ?? {
-                  id: 'workspace',
-                  path: null,
-                  state: 'unconfigured',
-                  totalBytes: null,
-                  freeBytes: null
-                }
-              )
-            ]"
-          >
-            <span>Workspace</span><strong>{{ spaceValue(workspaceSpace) }}</strong
-            ><small>{{ spaceDetail(workspaceSpace) }}</small>
-          </article>
-          <article
-            :class="[
-              'storage-space',
-              storageSeverity(
-                swapSpace ?? {
-                  id: 'swap',
-                  path: null,
-                  state: 'unconfigured',
-                  totalBytes: null,
-                  freeBytes: null
-                }
-              )
-            ]"
-          >
-            <span>Swap</span><strong>{{ spaceValue(swapSpace) }}</strong
-            ><small>{{ spaceDetail(swapSpace) }}</small>
-          </article>
-        </div>
-      </section>
-
-      <section class="performance-section audio-section">
-        <div class="section-heading">
-          <div><Radio :size="13" /><strong>Audio timing</strong></div>
-          <span>{{ runtime.state }}</span>
-        </div>
-        <dl class="audio-timing-grid">
-          <div>
-            <dt>Round trip</dt>
-            <dd>{{ formatLatency(runtime.estimatedRoundTripLatencyMs) }}</dd>
-          </div>
-          <div>
-            <dt>Rolling avg</dt>
-            <dd>{{ formatLatency(statistics.averageRoundTripLatencyMs) }}</dd>
-          </div>
-          <div>
-            <dt>Rolling max</dt>
-            <dd>{{ formatLatency(statistics.maximumRoundTripLatencyMs) }}</dd>
-          </div>
-          <div>
-            <dt>Output</dt>
-            <dd>{{ formatLatency(runtime.outputLatencyMs) }}</dd>
-          </div>
-          <div>
-            <dt>Buffer</dt>
-            <dd>{{ runtime.outputBufferSize ?? "—" }} frames</dd>
-          </div>
-          <div :class="{ warning: statistics.sessionXruns > 0 }">
-            <dt>XRUN</dt>
-            <dd>{{ statistics.sessionXruns }}</dd>
-          </div>
-        </dl>
-      </section>
-
-      <section class="performance-section ipc-section">
-        <div class="section-heading">
-          <div><Activity :size="13" /><strong>Audio IPC transport</strong></div>
-          <span>{{ audioIpcBuildLabel }}</span>
-        </div>
-        <dl v-if="audioIpc" class="ipc-diagnostics-grid">
-          <div>
-            <dt>Request router</dt>
-            <dd>
-              {{ audioIpc.requests.normalPending }} normal ·
-              {{ audioIpc.requests.priorityPending }} priority
-            </dd>
-            <small>{{ audioIpc.requests.capacity }} slots per channel</small>
-          </div>
-          <div>
-            <dt>Arena leases</dt>
-            <dd>
-              {{
-                formatOccupancy(
-                  audioIpc.sharedMemory.outstandingLeases,
-                  audioIpc.sharedMemory.maxLeases
-                )
-              }}
-              leases
-            </dd>
-            <small
-              >{{ formatBytes(audioIpc.sharedMemory.outstandingBytes) }} /
-              {{ formatBytes(audioIpc.sharedMemory.maxBytes) }} live ·
-              {{ audioIpc.sharedMemory.sharedPackets }} packets /
-              {{ formatBytes(audioIpc.sharedMemory.sharedBytes) }} total</small
-            >
-          </div>
-          <div>
-            <dt>Bulk arena</dt>
-            <dd>
-              {{ formatBytes(audioIpc.sharedMemory.arenaUsedBytes) }} /
-              {{ formatBytes(audioIpc.sharedMemory.arenaCapacityBytes) }}
-            </dd>
-            <small
-              >{{ audioIpc.sharedMemory.arenaRegions }} regions ·
-              {{ audioIpc.sharedMemory.arenaOffers }} offers ·
-              {{ audioIpc.sharedMemory.arenaBusy }} busy ·
-              {{ audioIpc.sharedMemory.arenaQuarantinedRegions }} quarantine</small
-            >
-          </div>
-          <div>
-            <dt>Runtime workers</dt>
-            <dd>
-              {{ audioIpc.runtime.resolved.workerThreads }} async ·
-              {{ audioIpc.runtime.resolved.maxBlockingThreads }} blocking
-            </dd>
-            <small
-              >{{ audioIpc.runtime.resolved.egressConcurrency }} egress concurrency ·
-              {{ audioIpc.runtime.blockingJobs }} blocking active</small
-            >
-          </div>
-          <div>
-            <dt>Async egress</dt>
-            <dd>
-              {{ audioIpc.runtime.egressActive }} active ·
-              {{ audioIpc.runtime.egressQueueDepth }} queued
-            </dd>
-            <small
-              >{{ audioIpc.runtime.egressQueueHighWater }} high-water ·
-              {{ audioIpc.runtime.egressBatches }} batches ·
-              {{ formatBytes(audioIpc.sharedMemory.copiedBytes) }} copied</small
-            >
-          </div>
-          <div>
-            <dt>Inline payload</dt>
-            <dd>{{ audioIpc.sharedMemory.inlinePackets.toLocaleString() }} packets</dd>
-            <small
-              >{{ formatBytes(audioIpc.sharedMemory.inlineBytes) }} serialized ·
-              {{ audioIpc.sharedMemory.sharedRegions }} shared regions</small
-            >
-          </div>
-          <div>
-            <dt>Telemetry page</dt>
-            <dd>
-              {{ formatOccupancy(audioIpc.telemetry.meterSlots, audioIpc.telemetry.capacity) }}
-              meters
-            </dd>
-            <small
-              >rev {{ audioIpc.telemetry.graphRevision }} ·
-              {{ audioIpc.telemetry.fallbackReads }} fallback reads</small
-            >
-          </div>
-          <div>
-            <dt>Parameter SPSC</dt>
-            <dd>
-              {{ formatOccupancy(audioIpc.parameterRing.used, audioIpc.parameterRing.capacity) }}
-            </dd>
-            <small
-              >{{ audioIpc.parameterRing.softFull }} soft ·
-              {{ audioIpc.parameterRing.hardFull }} full ·
-              {{ audioIpc.parameterRing.boundaryFallbacks }} boundary</small
-            >
-          </div>
-          <div>
-            <dt>Priority heartbeat</dt>
-            <dd>{{ formatHeartbeatAge(audioIpc.heartbeat.ageMs) }}</dd>
-            <small
-              >IPC {{ audioIpc.heartbeat.ipcGeneration }} · Tokio
-              {{ audioIpc.heartbeat.tokioGeneration }} · UI
-              {{ audioIpc.heartbeat.winitGeneration }}</small
-            >
-          </div>
-          <div>
-            <dt>Router health</dt>
-            <dd>
-              {{ audioIpc.eventQueueDepth }} events · {{ audioIpc.requests.timeouts }} timeouts
-            </dd>
-            <small
-              >callback {{ audioIpc.telemetry.callbackGeneration }} · stale
-              {{ audioIpc.parameterRing.staleEpoch }}</small
-            >
-          </div>
-        </dl>
-        <div v-else class="monitor-placeholder">Audio helper diagnostics are unavailable.</div>
-      </section>
+      <PerformanceIpcSection :audio-ipc="audioIpc" />
 
       <footer class="threshold-note">
         Warning / critical · CPU {{ PERFORMANCE_THRESHOLDS.cpu.warningPercent }}/{{

@@ -1,8 +1,6 @@
-import { useIntervalFn } from "@vueuse/core"
 import { acceptHMRUpdate, defineStore } from "pinia"
 import { computed, shallowRef } from "vue"
 import type {
-  MixerBusState,
   MixerChannelKind,
   MixerChannelPatch,
   MixerChannelState,
@@ -14,18 +12,22 @@ import type {
   MixerSendState,
   ProjectCommand
 } from "@yadaw/contracts"
-import {
-  DEFAULT_INSTRUMENT_COLOR,
-  MIXER_BUS_COUNT,
-  MUSICAL_TICKS_PER_QUARTER
-} from "@yadaw/contracts"
+import { DEFAULT_INSTRUMENT_COLOR, MUSICAL_TICKS_PER_QUARTER } from "@yadaw/contracts"
 import { UI_DOMAIN_COLORS } from "@yadaw/ui"
 import { useProjectStore } from "./project"
-
-interface HistoryEntry {
-  forward: ProjectCommand
-  inverse: ProjectCommand
-}
+import { useMixerHistory } from "./mixer-history"
+import { useMixerMeterPolling } from "./mixer-meter-polling"
+import {
+  MIXER_BUSES,
+  audioTracks as selectAudioTracks,
+  availableOutputTargets as selectAvailableOutputTargets,
+  availableSendTargets as selectAvailableSendTargets,
+  instrumentTracks as selectInstrumentTracks,
+  meterFor as selectMeterFor,
+  patchMixerGraph,
+  sendsFor as selectSendsFor,
+  systemChannels as selectSystemChannels
+} from "./mixer-selectors"
 
 const EMPTY_GRAPH: MixerGraphSnapshot = {
   sampleRate: 48_000,
@@ -50,64 +52,6 @@ const DEFAULT_CHANNEL_COLORS: Record<MixerChannelKind, string> = {
   output: UI_DOMAIN_COLORS.outputChannel
 }
 
-const MIXER_BUSES: readonly MixerBusState[] = Array.from(
-  { length: MIXER_BUS_COUNT },
-  (_, index) => ({
-    channel: index + 1,
-    name: `BUS ${index + 1}`
-  })
-)
-
-function patchGraph(
-  graph: MixerGraphSnapshot,
-  target: "channel" | "send",
-  id: string,
-  patch: Record<string, unknown>
-): MixerGraphSnapshot {
-  const next = structuredClone(graph)
-  const values = target === "channel" ? next.channels : next.sends
-  const value = values.find((candidate) => candidate.id === id)
-  if (value) Object.assign(value, patch)
-  return next
-}
-
-function isAcyclic(graph: MixerGraphSnapshot): boolean {
-  const edges = new Map(graph.channels.map((channel) => [channel.id, [] as string[]]))
-  for (const channel of graph.channels) {
-    if (channel.outputChannelId) edges.get(channel.id)?.push(channel.outputChannelId)
-    if (channel.outputBus != null) {
-      for (const consumer of graph.channels) {
-        if (consumer.inputSource === "bus" && consumer.inputChannels.includes(channel.outputBus)) {
-          edges.get(channel.id)?.push(consumer.id)
-        }
-      }
-    }
-  }
-  for (const send of graph.sends) {
-    if (send.targetChannelId) edges.get(send.sourceChannelId)?.push(send.targetChannelId)
-    if (send.targetBus === null) continue
-    for (const consumer of graph.channels) {
-      if (consumer.inputSource === "bus" && consumer.inputChannels.includes(send.targetBus)) {
-        edges.get(send.sourceChannelId)?.push(consumer.id)
-      }
-    }
-  }
-  const visiting = new Set<string>()
-  const visited = new Set<string>()
-  const visit = (id: string): boolean => {
-    if (visiting.has(id)) return false
-    if (visited.has(id)) return true
-    visiting.add(id)
-    for (const next of edges.get(id) ?? []) {
-      if (!visit(next)) return false
-    }
-    visiting.delete(id)
-    visited.add(id)
-    return true
-  }
-  return graph.channels.every((channel) => visit(channel.id))
-}
-
 export const useMixerStore = defineStore("mixer", () => {
   const projectStore = useProjectStore()
   const graph = shallowRef<MixerGraphSnapshot>(structuredClone(EMPTY_GRAPH))
@@ -115,22 +59,16 @@ export const useMixerStore = defineStore("mixer", () => {
   const selectedChannelId = shallowRef<string | null>(null)
   const loading = shallowRef(false)
   const error = shallowRef("")
-  const undoHistory = shallowRef<HistoryEntry[]>([])
-  const redoHistory = shallowRef<HistoryEntry[]>([])
+  const history = useMixerHistory()
+  const { undoHistory, redoHistory, canUndo, canRedo } = history
   let mutationTail: Promise<void> = Promise.resolve()
   const pendingPreviews = new Map<string, MixerParameterPreview>()
   let previewFlush: Promise<void> | null = null
 
   const channels = computed(() => graph.value.channels)
-  const audioTracks = computed(() =>
-    channels.value.filter((channel) => channel.kind === "audio" && channel.systemRole === null)
-  )
-  const instrumentTracks = computed(() =>
-    channels.value.filter((channel) => channel.kind === "instrument" && channel.systemRole === null)
-  )
-  const systemChannels = computed(() =>
-    channels.value.filter((channel) => channel.systemRole !== null)
-  )
+  const audioTracks = computed(() => selectAudioTracks(channels.value))
+  const instrumentTracks = computed(() => selectInstrumentTracks(channels.value))
+  const systemChannels = computed(() => selectSystemChannels(channels.value))
   const metronome = computed(
     () => channels.value.find((channel) => channel.systemRole === "metronome") ?? null
   )
@@ -154,8 +92,6 @@ export const useMixerStore = defineStore("mixer", () => {
   const selectedChannel = computed(
     () => channels.value.find((channel) => channel.id === selectedChannelId.value) ?? null
   )
-  const canUndo = computed(() => undoHistory.value.length > 0)
-  const canRedo = computed(() => redoHistory.value.length > 0)
 
   function enqueueMutation<T>(task: () => Promise<T>): Promise<T> {
     const result = mutationTail.then(task, task)
@@ -185,8 +121,7 @@ export const useMixerStore = defineStore("mixer", () => {
 
   function hydrate(snapshot: MixerGraphSnapshot): void {
     applyGraph(snapshot)
-    undoHistory.value = []
-    redoHistory.value = []
+    history.clear()
     error.value = ""
   }
 
@@ -232,8 +167,7 @@ export const useMixerStore = defineStore("mixer", () => {
       graph.value = result.graph
       projectStore.markDirty()
       if (recordHistory) {
-        undoHistory.value = [...undoHistory.value, { forward: command, inverse: result.inverse }]
-        redoHistory.value = []
+        history.record({ forward: command, inverse: result.inverse })
       }
       return true
     } catch (reason) {
@@ -251,8 +185,7 @@ export const useMixerStore = defineStore("mixer", () => {
     const entry = undoHistory.value.at(-1)
     if (!entry) return
     if (await executeNow(entry.inverse, false)) {
-      undoHistory.value = undoHistory.value.slice(0, -1)
-      redoHistory.value = [...redoHistory.value, entry]
+      history.completeUndo(entry)
     }
   }
 
@@ -264,13 +197,12 @@ export const useMixerStore = defineStore("mixer", () => {
     const entry = redoHistory.value.at(-1)
     if (!entry) return
     if (await executeNow(entry.forward, false)) {
-      redoHistory.value = redoHistory.value.slice(0, -1)
-      undoHistory.value = [...undoHistory.value, entry]
+      history.completeRedo(entry)
     }
   }
 
   function preview(previewValue: MixerParameterPreview): void {
-    graph.value = patchGraph(graph.value, previewValue.target, previewValue.id, {
+    graph.value = patchMixerGraph(graph.value, previewValue.target, previewValue.id, {
       [previewValue.parameter]: previewValue.value
     })
     const key = `${previewValue.target}:${previewValue.id}:${previewValue.parameter}`
@@ -464,74 +396,19 @@ export const useMixerStore = defineStore("mixer", () => {
   }
 
   function sendsFor(channelId: string): MixerSendState[] {
-    return graph.value.sends.filter((send) => send.sourceChannelId === channelId)
+    return selectSendsFor(graph.value, channelId)
   }
 
   function meterFor(channelId: string) {
-    return (
-      runtime.value.meters.find((meter) => meter.channelId === channelId) ?? {
-        channelId,
-        preFaderPeak: [0, 0] as [number, number],
-        postFaderPeak: [0, 0] as [number, number],
-        heldPeak: [0, 0] as [number, number],
-        clipped: false
-      }
-    )
+    return selectMeterFor(runtime.value, channelId)
   }
 
   function availableOutputTargets(channelId: string): MixerRouteTarget[] {
-    const source = channels.value.find((channel) => channel.id === channelId)
-    if (
-      !source ||
-      (source.kind !== "audio" && source.kind !== "instrument" && source.kind !== "aux")
-    )
-      return []
-    const targets: MixerRouteTarget[] = [
-      ...buses.value.map((bus) => ({ kind: "bus" as const, bus: bus.channel })),
-      ...outputs.value.map((output) => ({ kind: "output" as const, channelId: output.id }))
-    ]
-    return targets.filter((target) => {
-      const candidate = structuredClone(graph.value)
-      const candidateSource = candidate.channels.find((channel) => channel.id === source.id)
-      if (!candidateSource) return false
-      candidateSource.outputChannelId = target.kind === "output" ? target.channelId : null
-      candidateSource.outputBus = target.kind === "bus" ? target.bus : null
-      return isAcyclic(candidate)
-    })
+    return selectAvailableOutputTargets(graph.value, channelId)
   }
 
   function availableSendTargets(channelId: string): MixerRouteTarget[] {
-    const source = channels.value.find((channel) => channel.id === channelId)
-    if (
-      !source ||
-      (source.kind !== "audio" && source.kind !== "instrument" && source.kind !== "aux")
-    )
-      return []
-    const existing = new Set(
-      sendsFor(channelId).map((send) =>
-        send.targetChannelId ? `output:${send.targetChannelId}` : `bus:${send.targetBus}`
-      )
-    )
-    const targets: MixerRouteTarget[] = [
-      ...buses.value.map((bus) => ({ kind: "bus" as const, bus: bus.channel })),
-      ...outputs.value.map((output) => ({ kind: "output" as const, channelId: output.id }))
-    ]
-    return targets.filter((target) => {
-      const key = target.kind === "output" ? `output:${target.channelId}` : `bus:${target.bus}`
-      if (existing.has(key)) return false
-      const candidate = structuredClone(graph.value)
-      candidate.sends.push({
-        id: "candidate",
-        sourceChannelId: channelId,
-        targetChannelId: target.kind === "output" ? target.channelId : null,
-        targetBus: target.kind === "bus" ? target.bus : null,
-        sortOrder: 0,
-        enabled: false,
-        tap: "post-pan",
-        levelDb: -90
-      })
-      return isAcyclic(candidate)
-    })
+    return selectAvailableSendTargets(graph.value, channelId)
   }
 
   async function refreshMeters(): Promise<void> {
@@ -559,15 +436,14 @@ export const useMixerStore = defineStore("mixer", () => {
     }
   }
 
-  const meterPolling = useIntervalFn(() => void refreshMeters(), 33, { immediate: false })
+  const meterPolling = useMixerMeterPolling(refreshMeters)
 
   function startMetering(): void {
-    void refreshMeters()
-    meterPolling.resume()
+    meterPolling.start()
   }
 
   function stopMetering(): void {
-    meterPolling.pause()
+    meterPolling.stop()
   }
 
   function reset(): void {
@@ -575,8 +451,7 @@ export const useMixerStore = defineStore("mixer", () => {
     graph.value = structuredClone(EMPTY_GRAPH)
     runtime.value = { meters: [], capturedAt: 0 }
     selectedChannelId.value = null
-    undoHistory.value = []
-    redoHistory.value = []
+    history.clear()
     error.value = ""
   }
 
