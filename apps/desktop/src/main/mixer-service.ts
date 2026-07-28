@@ -944,7 +944,12 @@ export class MixerService {
   deleteUnusedAssets(ids: string[]): Promise<void> {
     if (ids.length === 0) return Promise.resolve()
     return this.enqueueMutation(async () => {
-      const referenced = new Set(this.snapshotNow().clips.map((clip) => clip.assetId))
+      const projectId = this.currentProjectId()
+      if (!this.cachedProject || this.cachedProject.projectId !== projectId) {
+        this.cachedProject = null
+        throw new Error("Mixer graph is not loaded")
+      }
+      const referenced = new Set(this.cachedProject.graph.clips.map((clip) => clip.assetId))
       const used = ids.find((id) => referenced.has(id))
       if (used) throw new Error(`Audio asset '${used}' is still used by a timeline clip`)
       await this.projects.deleteAssets(ids)

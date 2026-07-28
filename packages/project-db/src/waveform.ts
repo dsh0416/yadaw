@@ -32,6 +32,12 @@ export async function readWaveformWindow(
   endFrame: number,
   maxBuckets: number
 ): Promise<StoredWaveformWindow | null> {
+  if (!Number.isSafeInteger(startFrame) || !Number.isSafeInteger(endFrame)) {
+    throw new TypeError("Waveform window frames must be safe integers")
+  }
+  if (!Number.isSafeInteger(maxBuckets)) {
+    throw new TypeError("Waveform maxBuckets must be a safe integer")
+  }
   const targetFramesPerBucket = Math.max(
     1,
     Math.ceil((endFrame - startFrame) / Math.max(1, maxBuckets))
