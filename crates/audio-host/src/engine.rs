@@ -3384,7 +3384,7 @@ where
                 }
                 callback_metrics
                     .callback_generation
-                    .fetch_add(1, Ordering::Relaxed);
+                    .fetch_add(1, Ordering::Release);
             },
             move |_error| mark_stream_error(&error_metrics),
             None,
@@ -3828,7 +3828,7 @@ fn start_virtual_audio_engine(key: AudioEngineKey) -> Result<NativeAudioRuntimeS
                 }
                 worker_metrics
                     .callback_generation
-                    .fetch_add(1, Ordering::Relaxed);
+                    .fetch_add(1, Ordering::Release);
                 thread::sleep(block_duration);
             }
         })
@@ -4185,7 +4185,7 @@ pub fn heartbeat_snapshot() -> (u64, String) {
     };
     guard.as_ref().map_or((0, "stopped".to_owned()), |engine| {
         (
-            engine.metrics.callback_generation.load(Ordering::Relaxed),
+            engine.metrics.callback_generation.load(Ordering::Acquire),
             engine.transport.snapshot().state,
         )
     })
