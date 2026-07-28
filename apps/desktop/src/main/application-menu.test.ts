@@ -25,9 +25,13 @@ vi.mock("electron", () => ({
 
 import { IPC_CHANNELS } from "@yadaw/contracts"
 import { installApplicationMenu } from "./application-menu"
+import { setMainLocale } from "./i18n"
 
 describe("installApplicationMenu", () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    setMainLocale("en-US")
+  })
 
   it("installs the macOS menu with preferences, project settings, and Help diagnostics", () => {
     installApplicationMenu("darwin")
@@ -77,6 +81,20 @@ describe("installApplicationMenu", () => {
     expect(benchmark).toBeDefined()
     expect(effectGraph).toBeDefined()
     expect(electron.setApplicationMenu).toHaveBeenCalledOnce()
+  })
+
+  it("rebuilds the macOS menu with Chinese labels after locale change", () => {
+    setMainLocale("zh-cmn-Hans-CN")
+    installApplicationMenu("darwin")
+
+    const template = electron.buildFromTemplate.mock.calls[0]?.[0]
+    const file = template?.find((item: { label?: string }) => item.label === "文件")
+    const preferences = template
+      ?.find((item: { label?: string }) => item.label === "YADAW")
+      ?.submenu?.find((item: { label?: string }) => item.label === "偏好设置…")
+
+    expect(file).toBeDefined()
+    expect(preferences).toBeDefined()
   })
 
   it("removes the Electron application menu on Windows and Linux", () => {

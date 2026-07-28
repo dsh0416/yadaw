@@ -23,6 +23,7 @@ describe("ProjectWelcome", () => {
           swapDirectory: "swap",
           recordingBitDepth: "float32",
           theme: "system",
+          locale: "en-US",
           meterPeakHold: "800ms",
           meterReturnRate: "iec-type-i",
           softwareMonitoringEnabled: false,

@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import type { ApplicationSettings, CreateProjectRequest } from "@yadaw/contracts"
 import { YadawLogo } from "@yadaw/ui"
+import { useI18n } from "vue-i18n"
 
 defineProps<{ settings: ApplicationSettings | null; busy: boolean; error: string }>()
 const emit = defineEmits<{ create: [request: CreateProjectRequest]; open: [path?: string] }>()
+const { t } = useI18n()
 
 function createProject(): void {
   emit("create", {
-    name: "Untitled project",
+    name: t("welcome.untitledProject"),
     sampleRate: 48_000,
     timeSignatureNumerator: 4,
     timeSignatureDenominator: 4,
@@ -21,27 +23,21 @@ function createProject(): void {
     <section class="welcome-card">
       <div class="welcome-brand">
         <YadawLogo class="welcome-logo" />
-        <h1>Build a session that survives the unexpected.</h1>
-        <p>
-          Projects are self-contained PGlite archives. Recordings remain recoverable in swap until
-          the archive is saved.
-        </p>
+        <h1>{{ t("welcome.headline") }}</h1>
+        <p>{{ t("welcome.body") }}</p>
       </div>
       <section class="new-project">
-        <span>NEW PROJECT</span>
-        <h2>Start with a clean session.</h2>
-        <p>
-          48 kHz · 4/4 · Tempo Track starts at 120 BPM. Name and format can be changed later in
-          Project settings.
-        </p>
+        <span>{{ t("welcome.newProjectLabel") }}</span>
+        <h2>{{ t("welcome.newProjectTitle") }}</h2>
+        <p>{{ t("welcome.newProjectBody") }}</p>
         <button :disabled="busy" type="button" @click="createProject">
-          {{ busy ? "Creating…" : "Create project" }}
+          {{ busy ? t("welcome.creating") : t("welcome.createProject") }}
         </button>
       </section>
       <section class="recent-projects">
         <div class="recent-heading">
-          <span>RECENT PROJECTS</span>
-          <button :disabled="busy" @click="emit('open')">Open another…</button>
+          <span>{{ t("welcome.recentProjects") }}</span>
+          <button :disabled="busy" @click="emit('open')">{{ t("welcome.openAnother") }}</button>
         </div>
         <button
           v-for="recent in settings?.recentProjects"
@@ -53,7 +49,7 @@ function createProject(): void {
           <b>{{ recent.name }}</b>
           <small>{{ recent.path }}</small>
         </button>
-        <p v-if="!settings?.recentProjects.length">No recent projects yet.</p>
+        <p v-if="!settings?.recentProjects.length">{{ t("welcome.noRecent") }}</p>
       </section>
       <p v-if="error" role="alert" class="welcome-error">{{ error }}</p>
     </section>

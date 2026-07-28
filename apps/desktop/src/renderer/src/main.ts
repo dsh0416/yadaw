@@ -1,12 +1,26 @@
 import { createApp } from "vue"
 import { createPinia } from "pinia"
 import App from "./App.vue"
+import { i18n, setAppLocale } from "./i18n"
 import { router } from "./router"
+import { useApplicationSettingsStore } from "./stores/applicationSettings"
 import "@yadaw/ui/styles.css"
 import "./styles.css"
 
-const app = createApp(App)
+async function bootstrap(): Promise<void> {
+  const app = createApp(App)
+  const pinia = createPinia()
 
-app.use(createPinia())
-app.use(router)
-app.mount("#root")
+  app.use(pinia)
+  app.use(router)
+  app.use(i18n)
+
+  const settingsStore = useApplicationSettingsStore(pinia)
+  await settingsStore.load()
+  const locale = settingsStore.settings?.locale
+  if (locale) setAppLocale(locale)
+
+  app.mount("#root")
+}
+
+void bootstrap()

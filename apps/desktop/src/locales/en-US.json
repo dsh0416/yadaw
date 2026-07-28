@@ -1,0 +1,129 @@
+{
+  "app": {
+    "name": "YADAW",
+    "about": "About YADAW"
+  },
+  "menu": {
+    "file": "File",
+    "edit": "Edit",
+    "view": "View",
+    "help": "Help",
+    "preferences": "Preferences…",
+    "newProject": "New Project",
+    "openProject": "Open Project…",
+    "saveProject": "Save Project",
+    "closeProject": "Close Project",
+    "projectSettings": "Project Settings…",
+    "undo": "Undo",
+    "redo": "Redo",
+    "cut": "Cut",
+    "copy": "Copy",
+    "paste": "Paste",
+    "selectAll": "Select All",
+    "toggleFullScreen": "Toggle Full Screen",
+    "audioBenchmark": "Audio Performance Benchmark…",
+    "effectChainGraph": "Effect Chain Graph…"
+  },
+  "dialog": {
+    "actions": {
+      "ok": "OK",
+      "cancel": "Cancel",
+      "confirm": "Confirm"
+    },
+    "importMidi": {
+      "title": "Import Standard MIDI File",
+      "filter": "Standard MIDI File"
+    },
+    "chooseSwap": {
+      "title": "Choose recording swap directory"
+    },
+    "createProject": {
+      "title": "Create YADAW project",
+      "filter": "YADAW project"
+    },
+    "openProject": {
+      "title": "Open YADAW project",
+      "filter": "YADAW project"
+    }
+  },
+  "operation": {
+    "openingProject": "Opening project",
+    "savingProject": "Saving project",
+    "finalizingRecording": "Finalizing recording",
+    "recoveringRecording": "Recovering recording"
+  },
+  "startup": {
+    "starting": "Starting YADAW",
+    "preparing": "Preparing the audio workspace",
+    "ready": "Ready",
+    "failed": "Startup failed",
+    "failedDetail": "YADAW could not finish starting",
+    "loadingCatalog": "Loading plug-in catalog",
+    "loadingCatalogDetail": "Reading settings and built-in VST3 modules",
+    "scanningPlugins": "Scanning VST3 plug-ins",
+    "noBundles": "No external VST3 bundles found",
+    "foundBundles": "Found {count} VST3 bundles",
+    "quarantined": "{name} could not be loaded",
+    "pluginsAvailable": "{count} VST3 plug-ins available",
+    "scanError": "VST3 scan finished with an error: {message}",
+    "scanUnknownError": "VST3 scan finished with an unknown error",
+    "discoveringPlugins": "Discovering VST3 plug-ins",
+    "discoveringPluginsDetail": "Searching system and user plug-in folders",
+    "startingAudio": "Starting audio services",
+    "startingAudioDetail": "Connecting the isolated audio engine",
+    "openingWorkspace": "Opening workspace",
+    "openingWorkspaceDetail": "Building the mixer and project interface",
+    "pluginsReady": "{count} VST3 plug-ins ready"
+  },
+  "welcome": {
+    "headline": "Build a session that survives the unexpected.",
+    "body": "Projects are self-contained PGlite archives. Recordings remain recoverable in swap until the archive is saved.",
+    "newProjectLabel": "NEW PROJECT",
+    "newProjectTitle": "Start with a clean session.",
+    "newProjectBody": "48 kHz · 4/4 · Tempo Track starts at 120 BPM. Name and format can be changed later in Project settings.",
+    "createProject": "Create project",
+    "creating": "Creating…",
+    "recentProjects": "RECENT PROJECTS",
+    "openAnother": "Open another…",
+    "noRecent": "No recent projects yet.",
+    "untitledProject": "Untitled project"
+  },
+  "settings": {
+    "display": {
+      "category": "Display",
+      "page": "General",
+      "title": "General",
+      "description": "Choose a comfortable workspace for long editing and mixing sessions.",
+      "themeTitle": "Color theme",
+      "themeDescription": "Changes apply immediately across every project and are remembered on this device.",
+      "themeAria": "Color theme",
+      "theme": {
+        "light": {
+          "label": "Light",
+          "description": "A soft neutral-gray workspace for bright rooms."
+        },
+        "dark": {
+          "label": "Dark",
+          "description": "Low-glare graphite surfaces for long sessions."
+        },
+        "system": {
+          "label": "Follow system",
+          "description": "Switch automatically with your operating system."
+        }
+      },
+      "languageTitle": "Language",
+      "languageDescription": "Menus, dialogs, and workspace chrome update immediately. Mixer and studio copy will follow in later releases.",
+      "languageAria": "Language",
+      "locales": {
+        "en-US": {
+          "label": "English",
+          "description": "English (United States)"
+        },
+        "zh-cmn-Hans-CN": {
+          "label": "简体中文",
+          "description": "Chinese, Mandarin (Simplified, China)"
+        }
+      }
+    }
+  }
+}

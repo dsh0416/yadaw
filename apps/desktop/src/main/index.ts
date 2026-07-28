@@ -34,7 +34,9 @@ import {
 } from "./application-settings"
 import { AudioHostService } from "./audio-host-service"
 import { createAudioBenchmarkReport } from "./audio-benchmark-service"
+import { isAppLocale } from "../shared/i18n"
 import { installApplicationMenu } from "./application-menu"
+import { setMainLocale, t } from "./i18n"
 import { deferDirtyProjectClose } from "./dirty-project-close"
 import { OperationService } from "./operation-service"
 import { MixerService } from "./mixer-service"
@@ -234,6 +236,9 @@ function validateSettingsPatch(value: unknown): ApplicationSettingsPatch {
     patch.theme !== "system"
   ) {
     throw new TypeError("Unsupported theme preference")
+  }
+  if (patch.locale !== undefined && !isAppLocale(patch.locale)) {
+    throw new TypeError("Unsupported locale preference")
   }
   if (
     patch.meterPeakHold !== undefined &&
@@ -646,9 +651,9 @@ function registerIpcHandlers(
     let path = typeof value === "string" && value.trim() ? value : undefined
     if (!path) {
       const result = await dialog.showOpenDialog({
-        title: "Import Standard MIDI File",
+        title: t("dialog.importMidi.title"),
         properties: ["openFile"],
-        filters: [{ name: "Standard MIDI File", extensions: ["mid", "midi"] }]
+        filters: [{ name: t("dialog.importMidi.filter"), extensions: ["mid", "midi"] }]
       })
       path = result.filePaths[0]
       if (result.canceled || !path) return null
@@ -728,9 +733,15 @@ function registerIpcHandlers(
     return settings.get()
   })
 
-  ipcMain.handle(IPC_CHANNELS.settingsUpdate, (event, value: unknown) => {
+  ipcMain.handle(IPC_CHANNELS.settingsUpdate, async (event, value: unknown) => {
     assertTrustedSender(event)
-    return settings.update(validateSettingsPatch(value))
+    const patch = validateSettingsPatch(value)
+    const updated = await settings.update(patch)
+    if (patch.locale !== undefined) {
+      setMainLocale(updated.locale)
+      installApplicationMenu()
+    }
+    return updated
   })
 
   ipcMain.handle(IPC_CHANNELS.settingsSetSoftwareMonitoring, async (event, value: unknown) => {
@@ -780,7 +791,7 @@ function registerIpcHandlers(
     assertTrustedSender(event)
     const current = await settings.get()
     const result = await dialog.showOpenDialog({
-      title: "Choose recording swap directory",
+      title: t("dialog.chooseSwap.title"),
       defaultPath: current.swapDirectory,
       properties: ["openDirectory", "createDirectory"]
     })
@@ -805,9 +816,9 @@ function registerIpcHandlers(
       path ??= process.env.YADAW_TEST_PROJECT_PATH
       if (!path) {
         const result = await dialog.showSaveDialog({
-          title: "Create YADAW project",
+          title: t("dialog.createProject.title"),
           defaultPath: `${request.name}.yadaw`,
-          filters: [{ name: "YADAW project", extensions: ["yadaw"] }]
+          filters: [{ name: t("dialog.createProject.filter"), extensions: ["yadaw"] }]
         })
         if (result.canceled || !result.filePath) {
           lifecycle.cancelProject()
@@ -837,9 +848,9 @@ function registerIpcHandlers(
     let path = typeof value === "string" && value.trim() ? value : undefined
     if (!path) {
       const result = await dialog.showOpenDialog({
-        title: "Open YADAW project",
+        title: t("dialog.openProject.title"),
         properties: ["openFile"],
-        filters: [{ name: "YADAW project", extensions: ["yadaw"] }]
+        filters: [{ name: t("dialog.openProject.filter"), extensions: ["yadaw"] }]
       })
       path = result.filePaths[0]
       if (result.canceled || !path) return null
@@ -867,7 +878,7 @@ function registerIpcHandlers(
       operations.upsert(
         {
           id: operationId,
-          title: "Opening project",
+          title: t("operation.openingProject"),
           description: projectName,
           phase: recover ? "loading-project-database" : "loading-project-archive",
           state: "running",
@@ -956,7 +967,7 @@ function registerIpcHandlers(
     operations.upsert(
       {
         id: operationId,
-        title: "Saving project",
+        title: t("operation.savingProject"),
         description: current.configuration.name,
         phase: "saving-archive",
         state: "running",
@@ -1307,6 +1318,10 @@ async function shutdownServices(): Promise<void> {
 }
 
 void app.whenReady().then(async () => {
+  const settings = new ApplicationSettingsStore(app.getPath("userData"))
+  const applicationSettings = await settings.get()
+  setMainLocale(applicationSettings.locale)
+
   const startup = new StartupProgress()
   ipcMain.handle(IPC_CHANNELS.startupProgressSnapshot, (event) => {
     assertTrustedSender(event)
@@ -1324,11 +1339,9 @@ void app.whenReady().then(async () => {
     startup.update({
       phase: "loading-catalog",
       progress: 0.05,
-      label: "Loading plug-in catalog",
-      detail: "Reading settings and built-in VST3 modules"
+      label: t("startup.loadingCatalog"),
+      detail: t("startup.loadingCatalogDetail")
     })
-    const settings = new ApplicationSettingsStore(app.getPath("userData"))
-    const applicationSettings = await settings.get()
     const executableSuffix = process.platform === "win32" ? ".exe" : ""
     const probePath = app.isPackaged
       ? join(process.resourcesPath, `yadaw-vst3-probe${executableSuffix}`)
@@ -1358,11 +1371,11 @@ void app.whenReady().then(async () => {
         startup.update({
           phase: "scanning-plugins",
           progress: 0.16,
-          label: "Scanning VST3 plug-ins",
+          label: t("startup.scanningPlugins"),
           detail:
             event.total === 0
-              ? "No external VST3 bundles found"
-              : `Found ${event.total} VST3 bundles`,
+              ? t("startup.noBundles")
+              : t("startup.foundBundles", { count: event.total }),
           completed: 0,
           total: event.total
         })
@@ -1371,7 +1384,7 @@ void app.whenReady().then(async () => {
         startup.update({
           phase: "scanning-plugins",
           progress: 0.18 + ratio * 0.58,
-          label: "Scanning VST3 plug-ins",
+          label: t("startup.scanningPlugins"),
           detail: basename(event.path),
           completed: event.completed,
           total: event.total
@@ -1379,13 +1392,13 @@ void app.whenReady().then(async () => {
       } else if (event.type === "quarantined") {
         scanWarnings += 1
         startup.update({
-          detail: `${basename(event.path)} could not be loaded`,
+          detail: t("startup.quarantined", { name: basename(event.path) }),
           warnings: scanWarnings
         })
       } else {
         startup.update({
           progress: 0.78,
-          detail: `${event.catalog.plugins.length} VST3 plug-ins available`,
+          detail: t("startup.pluginsAvailable", { count: event.catalog.plugins.length }),
           completed: scanTotal,
           total: scanTotal
         })
@@ -1394,8 +1407,8 @@ void app.whenReady().then(async () => {
     startup.update({
       phase: "scanning-plugins",
       progress: 0.12,
-      label: "Discovering VST3 plug-ins",
-      detail: "Searching system and user plug-in folders"
+      label: t("startup.discoveringPlugins"),
+      detail: t("startup.discoveringPluginsDetail")
     })
     try {
       await plugins.scan({ force: true, retryQuarantined: true })
@@ -1405,8 +1418,8 @@ void app.whenReady().then(async () => {
         progress: 0.78,
         detail:
           error instanceof Error
-            ? `VST3 scan finished with an error: ${error.message}`
-            : "VST3 scan finished with an unknown error",
+            ? t("startup.scanError", { message: error.message })
+            : t("startup.scanUnknownError"),
         warnings: scanWarnings
       })
       console.error("Startup VST3 scan failed:", error)
@@ -1417,8 +1430,8 @@ void app.whenReady().then(async () => {
     startup.update({
       phase: "starting-audio",
       progress: 0.82,
-      label: "Starting audio services",
-      detail: "Connecting the isolated audio engine",
+      label: t("startup.startingAudio"),
+      detail: t("startup.startingAudioDetail"),
       completed: null,
       total: null
     })
@@ -1521,11 +1534,11 @@ void app.whenReady().then(async () => {
     startup.update({
       phase: "opening-workspace",
       progress: 0.94,
-      label: "Opening workspace",
-      detail: "Building the mixer and project interface"
+      label: t("startup.openingWorkspace"),
+      detail: t("startup.openingWorkspaceDetail")
     })
     window.once("ready-to-show", () => {
-      startup.complete(`${plugins.list().plugins.length} VST3 plug-ins ready`)
+      startup.complete(t("startup.pluginsReady", { count: plugins.list().plugins.length }))
       if (!window.isDestroyed()) window.show()
       setTimeout(() => {
         const splash = splashWindow

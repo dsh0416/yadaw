@@ -186,6 +186,7 @@ export const PROJECT_SAMPLE_RATES = [44_100, 48_000, 88_200, 96_000, 176_400, 19
 export type ProjectSampleRate = (typeof PROJECT_SAMPLE_RATES)[number]
 export type RecordingBitDepth = "float32" | "pcm24" | "pcm16"
 export type ThemePreference = "light" | "dark" | "system"
+export type AppLocale = "en-US" | "zh-cmn-Hans-CN"
 
 export type StartupPhase =
   | "starting"
@@ -309,6 +310,7 @@ export interface ApplicationSettings {
   swapDirectory: string
   recordingBitDepth: RecordingBitDepth
   theme: ThemePreference
+  locale: AppLocale
   meterPeakHold: MeterPeakHold
   meterReturnRate: MeterReturnRate
   softwareMonitoringEnabled: boolean
@@ -320,7 +322,7 @@ export interface ApplicationSettings {
 export type ApplicationSettingsPatch = Partial<
   Pick<
     ApplicationSettings,
-    "swapDirectory" | "recordingBitDepth" | "theme" | "meterPeakHold" | "meterReturnRate"
+    "swapDirectory" | "recordingBitDepth" | "theme" | "locale" | "meterPeakHold" | "meterReturnRate"
   >
 >
 

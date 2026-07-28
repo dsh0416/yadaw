@@ -220,6 +220,7 @@ describe("MixerChannelStrip", () => {
       swapDirectory: "C:/swap",
       recordingBitDepth: "float32",
       theme: "system",
+      locale: "en-US",
       meterPeakHold: "800ms",
       meterReturnRate: "iec-type-i",
       softwareMonitoringEnabled: true,

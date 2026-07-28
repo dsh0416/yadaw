@@ -3,6 +3,7 @@ import { UiProvider } from "@yadaw/ui"
 import { computed, onMounted, onUnmounted, watch } from "vue"
 import { storeToRefs } from "pinia"
 import { useTheme } from "./composables/useTheme"
+import { setAppLocale } from "./i18n"
 import { useApplicationSettingsStore } from "./stores/applicationSettings"
 import { useAudioPreferencesStore } from "./stores/audioPreferences"
 import { useAudioRuntimeStore } from "./stores/audioRuntime"
@@ -16,6 +17,7 @@ import CompiledEffectGraphHost from "./components/effect-graph/CompiledEffectGra
 import GlobalDialogHost from "./components/dialog/GlobalDialogHost.vue"
 import AppChrome from "./components/application/AppChrome.vue"
 import AppRouteView from "./components/application/AppRouteView.vue"
+import { DEFAULT_LOCALE, rekaLocale } from "../../shared/i18n"
 
 const audioPreferencesStore = useAudioPreferencesStore()
 const audioRuntimeStore = useAudioRuntimeStore()
@@ -27,6 +29,7 @@ const applicationWindowStore = useApplicationWindowStore()
 const { settings } = storeToRefs(applicationSettingsStore)
 const { ready: lifecycleReady } = storeToRefs(lifecycleStore)
 const themePreference = computed(() => settings.value?.theme ?? "system")
+const uiLocale = computed(() => rekaLocale(settings.value?.locale ?? DEFAULT_LOCALE))
 
 const { resolvedTheme } = useTheme(themePreference)
 
@@ -36,6 +39,13 @@ watch(
     void applicationWindowStore.setTheme(theme)
   },
   { immediate: true }
+)
+
+watch(
+  () => settings.value?.locale,
+  (locale) => {
+    if (locale) setAppLocale(locale)
+  }
 )
 
 function stopRuntimePolling(): void {
@@ -62,7 +72,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <UiProvider dir="ltr" :tooltip-delay="350" :tooltip-skip-delay="100">
+  <UiProvider dir="ltr" :locale="uiLocale" :tooltip-delay="350" :tooltip-skip-delay="100">
     <AppChrome v-if="lifecycleReady">
       <AppRouteView />
     </AppChrome>

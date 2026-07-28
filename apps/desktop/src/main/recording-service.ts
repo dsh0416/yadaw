@@ -16,6 +16,7 @@ import {
 } from "@yadaw/dsp-node"
 import type { AudioHostService } from "./audio-host-service"
 import type { ApplicationSettingsStore } from "./application-settings"
+import { t } from "./i18n"
 import type { OperationService } from "./operation-service"
 import type { ProjectService } from "./project-service"
 import type { MixerService } from "./mixer-service"
@@ -176,7 +177,7 @@ export class RecordingService {
     const operationId = `recording:${recording.id}`
     const operation: OperationSnapshot = {
       id: operationId,
-      title: "Finalizing recording",
+      title: t("operation.finalizingRecording"),
       description: basename(recording.audioPath),
       phase: "closing-recording",
       state: "running",
@@ -566,7 +567,7 @@ export class RecordingService {
       this.operations.upsert(
         {
           id: `recording:${id}`,
-          title: "Recovering recording",
+          title: t("operation.recoveringRecording"),
           description: basename(recording.audioPath),
           phase: "repairing-header",
           state: "running",
@@ -588,7 +589,7 @@ export class RecordingService {
       this.operations.upsert(
         {
           id: `recording:${id}`,
-          title: "Recovering recording",
+          title: t("operation.recoveringRecording"),
           description: basename(recording.audioPath),
           phase: "hashing",
           state: "running",

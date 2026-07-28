@@ -1,4 +1,5 @@
 import { resolve } from "node:path"
+import VueI18nPlugin from "@intlify/unplugin-vue-i18n/vite"
 import vue from "@vitejs/plugin-vue"
 import { defineConfig } from "vite"
 import { appVersionDefine } from "./build/app-version"
@@ -6,7 +7,15 @@ import { appVersionDefine } from "./build/app-version"
 export default defineConfig({
   base: "./",
   root: resolve(import.meta.dirname, "src/renderer"),
-  plugins: [vue()],
+  plugins: [
+    vue(),
+    VueI18nPlugin({
+      // Locale JSON is imported explicitly so the main process can share the same
+      // catalogs as plain JSON without unplugin rewriting those modules.
+      strictMessage: false,
+      runtimeOnly: true
+    })
+  ],
   define: {
     __APP_VERSION__: appVersionDefine
   },

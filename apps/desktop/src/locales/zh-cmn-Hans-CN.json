@@ -1,0 +1,129 @@
+{
+  "app": {
+    "name": "YADAW",
+    "about": "关于 YADAW"
+  },
+  "menu": {
+    "file": "文件",
+    "edit": "编辑",
+    "view": "视图",
+    "help": "帮助",
+    "preferences": "偏好设置…",
+    "newProject": "新建工程",
+    "openProject": "打开工程…",
+    "saveProject": "保存工程",
+    "closeProject": "关闭工程",
+    "projectSettings": "工程设置…",
+    "undo": "撤销",
+    "redo": "重做",
+    "cut": "剪切",
+    "copy": "复制",
+    "paste": "粘贴",
+    "selectAll": "全选",
+    "toggleFullScreen": "切换全屏",
+    "audioBenchmark": "音频性能基准测试…",
+    "effectChainGraph": "效果链图…"
+  },
+  "dialog": {
+    "actions": {
+      "ok": "确定",
+      "cancel": "取消",
+      "confirm": "确认"
+    },
+    "importMidi": {
+      "title": "导入标准 MIDI 文件",
+      "filter": "标准 MIDI 文件"
+    },
+    "chooseSwap": {
+      "title": "选择录音交换目录"
+    },
+    "createProject": {
+      "title": "创建 YADAW 工程",
+      "filter": "YADAW 工程"
+    },
+    "openProject": {
+      "title": "打开 YADAW 工程",
+      "filter": "YADAW 工程"
+    }
+  },
+  "operation": {
+    "openingProject": "正在打开工程",
+    "savingProject": "正在保存工程",
+    "finalizingRecording": "正在完成录音",
+    "recoveringRecording": "正在恢复录音"
+  },
+  "startup": {
+    "starting": "正在启动 YADAW",
+    "preparing": "正在准备音频工作区",
+    "ready": "就绪",
+    "failed": "启动失败",
+    "failedDetail": "YADAW 未能完成启动",
+    "loadingCatalog": "正在加载插件目录",
+    "loadingCatalogDetail": "正在读取设置与内置 VST3 模块",
+    "scanningPlugins": "正在扫描 VST3 插件",
+    "noBundles": "未找到外部 VST3 插件包",
+    "foundBundles": "找到 {count} 个 VST3 插件包",
+    "quarantined": "无法加载 {name}",
+    "pluginsAvailable": "可用 VST3 插件：{count}",
+    "scanError": "VST3 扫描完成但出现错误：{message}",
+    "scanUnknownError": "VST3 扫描完成但出现未知错误",
+    "discoveringPlugins": "正在发现 VST3 插件",
+    "discoveringPluginsDetail": "正在搜索系统与用户插件文件夹",
+    "startingAudio": "正在启动音频服务",
+    "startingAudioDetail": "正在连接隔离的音频引擎",
+    "openingWorkspace": "正在打开工作区",
+    "openingWorkspaceDetail": "正在构建混音台与工程界面",
+    "pluginsReady": "{count} 个 VST3 插件已就绪"
+  },
+  "welcome": {
+    "headline": "构建经得起意外的会话。",
+    "body": "工程是独立的 PGlite 归档。录音在归档保存前都会保留在交换目录中，以便恢复。",
+    "newProjectLabel": "新建工程",
+    "newProjectTitle": "从干净的会话开始。",
+    "newProjectBody": "48 kHz · 4/4 · 速度轨起始为 120 BPM。名称与格式可稍后在工程设置中更改。",
+    "createProject": "创建工程",
+    "creating": "正在创建…",
+    "recentProjects": "最近工程",
+    "openAnother": "打开其他…",
+    "noRecent": "暂无最近工程。",
+    "untitledProject": "未命名工程"
+  },
+  "settings": {
+    "display": {
+      "category": "显示",
+      "page": "常规",
+      "title": "常规",
+      "description": "为长时间编辑与混音选择舒适的工作区。",
+      "themeTitle": "颜色主题",
+      "themeDescription": "更改会立即应用到所有工程，并保存在本机。",
+      "themeAria": "颜色主题",
+      "theme": {
+        "light": {
+          "label": "浅色",
+          "description": "适合明亮环境的柔和中性灰工作区。"
+        },
+        "dark": {
+          "label": "深色",
+          "description": "适合长时间会话的低眩光石墨表面。"
+        },
+        "system": {
+          "label": "跟随系统",
+          "description": "随操作系统自动切换。"
+        }
+      },
+      "languageTitle": "语言",
+      "languageDescription": "菜单、对话框与工作区外壳会立即更新。混音台与编排界面文案将在后续版本跟进。",
+      "languageAria": "语言",
+      "locales": {
+        "en-US": {
+          "label": "English",
+          "description": "英语（美国）"
+        },
+        "zh-cmn-Hans-CN": {
+          "label": "简体中文",
+          "description": "中文，普通话（中国大陆简体）"
+        }
+      }
+    }
+  }
+}

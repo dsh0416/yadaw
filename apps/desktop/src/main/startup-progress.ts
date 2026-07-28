@@ -1,15 +1,18 @@
 import type { StartupProgressSnapshot } from "@yadaw/contracts"
+import { t } from "./i18n"
 
 type StartupProgressListener = (snapshot: StartupProgressSnapshot) => void
 
-const INITIAL_PROGRESS: StartupProgressSnapshot = {
-  phase: "starting",
-  progress: 0.02,
-  label: "Starting YADAW",
-  detail: "Preparing the audio workspace",
-  completed: null,
-  total: null,
-  warnings: 0
+function initialProgress(): StartupProgressSnapshot {
+  return {
+    phase: "starting",
+    progress: 0.02,
+    label: t("startup.starting"),
+    detail: t("startup.preparing"),
+    completed: null,
+    total: null,
+    warnings: 0
+  }
 }
 
 function normalizeProgress(value: number): number {
@@ -18,7 +21,7 @@ function normalizeProgress(value: number): number {
 }
 
 export class StartupProgress {
-  private current = structuredClone(INITIAL_PROGRESS)
+  private current = initialProgress()
   private readonly listeners = new Set<StartupProgressListener>()
 
   snapshot(): StartupProgressSnapshot {
@@ -48,7 +51,7 @@ export class StartupProgress {
     return this.update({
       phase: "ready",
       progress: 1,
-      label: "Ready",
+      label: t("startup.ready"),
       detail,
       completed: this.current.total,
       total: this.current.total
@@ -56,10 +59,10 @@ export class StartupProgress {
   }
 
   fail(error: unknown): StartupProgressSnapshot {
-    const detail = error instanceof Error ? error.message : "YADAW could not finish starting"
+    const detail = error instanceof Error ? error.message : t("startup.failedDetail")
     return this.update({
       phase: "failed",
-      label: "Startup failed",
+      label: t("startup.failed"),
       detail
     })
   }
