@@ -45,7 +45,6 @@ export default tseslint.config(
           "./apps/desktop/tsconfig.eslint.json",
           "./apps/desktop/tsconfig.scripts.json",
           "./apps/design-system/tsconfig.json",
-          "./packages/audio-engine/tsconfig.json",
           "./packages/contracts/tsconfig.json",
           "./packages/project-db/tsconfig.eslint.json",
           "./packages/ui/tsconfig.json"

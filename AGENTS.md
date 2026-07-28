@@ -18,8 +18,8 @@ skills under `.agents/skills/`.
 - Windows native builds must always include cpal's ASIO backend. Do not
   introduce an ASIO-free Windows build variant; Windows build hosts must provide
   LLVM/Clang, and runtime validation requires a 64-bit ASIO driver.
-- Shared packages: serializable IPC contracts, renderer-side audio-engine
-  state, and a PGlite/Drizzle project database.
+- Shared packages: serializable IPC contracts, reusable Vue UI primitives, and
+  a PGlite/Drizzle project database.
 - Process boundary: the renderer uses the narrow typed preload API exposed as
   `window.yadaw`; it must never import the native `.node` addon directly.
 - Real-time boundary: keep Electron IPC, UI work, filesystem access, allocation,
@@ -31,6 +31,10 @@ skills under `.agents/skills/`.
   it with a dedicated `tsconfig` using `erasableSyntaxOnly`. Reserve `.mjs` and
   `.cjs` for generated files or bundle outputs whose consumers require those
   extensions.
+- Treat 800 lines in a hand-authored production source file as a review trigger,
+  not a hard limit. Keep binary entry points, package barrels, route views, and
+  application composition roots thin; split growing modules by feature and
+  ownership boundary rather than by arbitrary type categories.
 
 ## Common Commands
 
