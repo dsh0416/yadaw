@@ -98,6 +98,9 @@ jobs:
       - name: Run Rust tests and allocation invariants
         run: pnpm test:rust
 
+      - name: Build native bindings for unit tests
+        run: pnpm --filter @yadaw/dsp-node build:debug
+
       - name: Run desktop unit tests
         run: pnpm --filter @yadaw/desktop test:unit
 
