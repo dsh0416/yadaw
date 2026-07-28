@@ -403,7 +403,7 @@ function registerIpcHandlers(
         console.error(`Could not synchronize VST3 state for ${plugin.id}:`, error)
       }
     }
-    if (states.length > 0) await projects.savePluginStates(states)
+    if (states.length > 0) await mixer.savePluginStates(states)
   }
   ipcMain.handle(IPC_CHANNELS.engineInfo, (event) => {
     assertTrustedSender(event)
@@ -826,6 +826,7 @@ function registerIpcHandlers(
       } catch {
         // Preserve the original create failure; shutdown will terminate a stuck worker.
       }
+      await mixer.clearProject()
       if (lifecycle.snapshot().project.status === "creating") lifecycle.failProject(error)
       throw error
     }
@@ -925,6 +926,7 @@ function registerIpcHandlers(
       } catch {
         // Preserve the original open failure; shutdown will terminate a stuck worker.
       }
+      await mixer.clearProject()
       lifecycle.failProject(error)
       const activeOperation = lifecycle.snapshot().project.status === "closed"
       if (activeOperation) {
@@ -1009,6 +1011,7 @@ function registerIpcHandlers(
         lifecycle.cancelProject()
         return false
       }
+      await mixer.clearProject()
       try {
         await mixer.transport({ type: "stop" })
       } catch {
@@ -1035,13 +1038,17 @@ function registerIpcHandlers(
     if (!previous) throw new Error("No project is open")
     const configuration = validateProjectConfiguration(value)
     const sampleRateChanged = configuration.sampleRate !== previous.configuration.sampleRate
+    const graphConfigurationChanged =
+      sampleRateChanged ||
+      configuration.timeSignatureNumerator !== previous.configuration.timeSignatureNumerator ||
+      configuration.timeSignatureDenominator !== previous.configuration.timeSignatureDenominator
     const audioWasRunning = lifecycle.snapshot().audio.status === "running"
     if (sampleRateChanged && audioWasRunning) lifecycle.beginAudio("reconfiguring")
     let configurationUpdated = false
     try {
       const session = await projects.updateConfiguration(configuration)
       configurationUpdated = true
-      if (sampleRateChanged) await mixer.load()
+      await mixer.refreshFromDatabase(graphConfigurationChanged)
       lifecycle.syncProject(session)
       if (sampleRateChanged && audioWasRunning && audioHostService) {
         lifecycle.completeAudio(normalizeAudioRuntime(await audioHostService.audioEngineSnapshot()))
@@ -1059,7 +1066,7 @@ function registerIpcHandlers(
       }
       try {
         const restored = await projects.updateConfiguration(previous.configuration)
-        if (sampleRateChanged) await mixer.load()
+        await mixer.refreshFromDatabase(graphConfigurationChanged)
         lifecycle.syncProject(restored)
         if (sampleRateChanged && audioWasRunning && audioHostService) {
           let runtime = await audioHostService.audioEngineSnapshot()

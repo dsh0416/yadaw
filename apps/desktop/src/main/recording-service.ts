@@ -431,7 +431,7 @@ export class RecordingService {
       }
     } catch (error) {
       if (imported.length > 0) {
-        await this.projects.deleteAssets(imported)
+        await this.mixer.deleteUnusedAssets(imported)
       }
       throw error
     }
@@ -561,7 +561,7 @@ export class RecordingService {
     )
       return
     const recoverableIds = recording.tracks?.map((track) => track.assetId) ?? [recording.id]
-    await this.projects.deleteAssets(recoverableIds)
+    await this.mixer.deleteUnusedAssets(recoverableIds)
     if (recording.state === "partial") {
       this.operations.upsert(
         {

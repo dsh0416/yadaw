@@ -130,7 +130,7 @@ database work:
 Raw SQL is forbidden for normal CRUD, joins, ordering, filtering, migrations,
 or transaction orchestration.
 
-There are only three allowed production exceptions:
+There are only four allowed production exceptions:
 
 1. Drizzle `sql` expressions inside schema declarations for constraints,
    partial indexes, and typed defaults that cannot be expressed by the column
@@ -141,11 +141,18 @@ There are only three allowed production exceptions:
 3. A single save-time maintenance module for reading PostgreSQL's large-object
    catalog and executing `VACUUM (ANALYZE)`, which Drizzle cannot express as an
    ORM operation.
+4. A single waveform infrastructure module for selecting one cached waveform
+   level and returning a parameterized `substring(bytea)` window without
+   materializing every complete level in JavaScript.
 
 Large-object calls must be parameterized and run inside the same Drizzle
 transaction as their asset-row changes. Asset deletion selects the stored OID,
 deletes the asset, and unlinks the large object transactionally. Do not restore
 the handwritten unlink trigger or spread large-object SQL into services.
+
+Waveform slicing SQL must be parameterized, isolated to the documented module,
+and preserve the typed `StoredWaveformWindow` interface. Ordinary waveform
+metadata writes and cache replacement remain Drizzle operations.
 
 Before creating a project archive, the worker compares
 `pg_largeobject_metadata` with the asset table's OID references, unlinks
