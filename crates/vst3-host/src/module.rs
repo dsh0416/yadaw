@@ -45,11 +45,11 @@ impl Module {
             path: binary_path.clone(),
             source,
         })?;
-        let exit = unsafe {
+        let exit = {
             // SAFETY: the optional module lifecycle functions have the SDK
             // signatures and remain valid while Library is owned below.
             #[cfg(target_os = "windows")]
-            {
+            unsafe {
                 if let Ok(init) = library.get::<unsafe extern "system" fn() -> bool>(b"InitDll\0")
                     && !init()
                 {

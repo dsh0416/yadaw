@@ -8,9 +8,9 @@ use yadaw_vst3_host_sys::{
     Steinberg::{
         IPluginBase,
         Vst::{
-            self, AudioBusBuffers, AudioBusBuffers__bindgen_ty_1, Event, Event__bindgen_ty_1,
-            IAudioProcessor, IComponent, NoteOffEvent, NoteOnEvent, ProcessContext, ProcessData,
-            ProcessSetup,
+            self, AudioBusBuffers, AudioBusBuffers__bindgen_ty_1, BusDirection, Event,
+            Event__bindgen_ty_1, IAudioProcessor, IComponent, MediaType, NoteOffEvent, NoteOnEvent,
+            ProcessContext, ProcessData, ProcessSetup,
         },
     },
     abi::{AudioProcessorVTable, ComponentVTable},
@@ -151,7 +151,7 @@ impl StereoProcessor {
             // SAFETY: processor is initialized and live.
             ((*processor_table).can_process_sample_size)(
                 processor.as_ptr(),
-                Vst::SymbolicSampleSizes_kSample32,
+                Vst::SymbolicSampleSizes_kSample32 as i32,
             )
         })?;
 
@@ -183,8 +183,8 @@ impl StereoProcessor {
                 // negotiated stereo main input.
                 ((*component_table).activate_bus)(
                     component.as_ptr(),
-                    Vst::MediaTypes_kAudio,
-                    Vst::BusDirections_kInput,
+                    Vst::MediaTypes_kAudio as MediaType,
+                    Vst::BusDirections_kInput as BusDirection,
                     0,
                     1,
                 )
@@ -195,15 +195,15 @@ impl StereoProcessor {
             // negotiated stereo main output.
             ((*component_table).activate_bus)(
                 component.as_ptr(),
-                Vst::MediaTypes_kAudio,
-                Vst::BusDirections_kOutput,
+                Vst::MediaTypes_kAudio as MediaType,
+                Vst::BusDirections_kOutput as BusDirection,
                 0,
                 1,
             )
         })?;
         let mut setup = ProcessSetup {
-            processMode: Vst::ProcessModes_kRealtime,
-            symbolicSampleSize: Vst::SymbolicSampleSizes_kSample32,
+            processMode: Vst::ProcessModes_kRealtime as i32,
+            symbolicSampleSize: Vst::SymbolicSampleSizes_kSample32 as i32,
             maxSamplesPerBlock: MAX_BLOCK_FRAMES,
             sampleRate: sample_rate,
         };
@@ -326,16 +326,16 @@ impl StereoProcessor {
         let output_parameter_changes = self.output_parameters.as_interface();
         let process_context = context.map(|context| {
             let value = &mut self.process_context;
-            value.state = Vst::ProcessContext_StatesAndFlags_kContTimeValid as u32
-                | Vst::ProcessContext_StatesAndFlags_kProjectTimeMusicValid as u32
-                | Vst::ProcessContext_StatesAndFlags_kBarPositionValid as u32
-                | Vst::ProcessContext_StatesAndFlags_kTempoValid as u32
-                | Vst::ProcessContext_StatesAndFlags_kTimeSigValid as u32;
+            value.state = Vst::ProcessContext_StatesAndFlags_kContTimeValid
+                | Vst::ProcessContext_StatesAndFlags_kProjectTimeMusicValid
+                | Vst::ProcessContext_StatesAndFlags_kBarPositionValid
+                | Vst::ProcessContext_StatesAndFlags_kTempoValid
+                | Vst::ProcessContext_StatesAndFlags_kTimeSigValid;
             if context.playing {
-                value.state |= Vst::ProcessContext_StatesAndFlags_kPlaying as u32;
+                value.state |= Vst::ProcessContext_StatesAndFlags_kPlaying;
             }
             if context.recording {
-                value.state |= Vst::ProcessContext_StatesAndFlags_kRecording as u32;
+                value.state |= Vst::ProcessContext_StatesAndFlags_kRecording;
             }
             value.projectTimeSamples = context.project_time_samples;
             value.continousTimeSamples = context.continuous_time_samples;
@@ -347,8 +347,8 @@ impl StereoProcessor {
             std::ptr::from_mut(value.as_mut())
         });
         let mut data = ProcessData {
-            processMode: Vst::ProcessModes_kRealtime,
-            symbolicSampleSize: Vst::SymbolicSampleSizes_kSample32,
+            processMode: Vst::ProcessModes_kRealtime as i32,
+            symbolicSampleSize: Vst::SymbolicSampleSizes_kSample32 as i32,
             numSamples: frames as i32,
             numInputs: i32::from(self.kind == PluginKind::Effect),
             numOutputs: 1,
@@ -397,8 +397,8 @@ impl StereoProcessor {
         }
         self.output_parameters.clear();
         let mut data = ProcessData {
-            processMode: Vst::ProcessModes_kRealtime,
-            symbolicSampleSize: Vst::SymbolicSampleSizes_kSample32,
+            processMode: Vst::ProcessModes_kRealtime as i32,
+            symbolicSampleSize: Vst::SymbolicSampleSizes_kSample32 as i32,
             numSamples: 0,
             numInputs: 0,
             numOutputs: 0,
