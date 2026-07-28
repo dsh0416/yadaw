@@ -263,6 +263,7 @@ pub struct AudioEngineConfig {
     pub input_device_id: String,
     pub output_device_id: String,
     pub buffer_size: u32,
+    pub session_sample_rate: Option<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -295,6 +296,7 @@ pub struct AudioRuntime {
     pub requested_buffer_size: Option<u32>,
     pub sample_rate: Option<u32>,
     pub input_sample_rate: Option<u32>,
+    pub output_sample_rate: Option<u32>,
     pub input_buffer_size: Option<u32>,
     pub output_buffer_size: Option<u32>,
     pub ring_buffer_capacity_frames: Option<u32>,
@@ -903,6 +905,49 @@ mod tests {
         assert_eq!(
             read_message::<ControlRequest>(&mut bytes.as_slice()).unwrap(),
             request
+        );
+    }
+
+    #[test]
+    fn session_and_native_output_sample_rates_round_trip() {
+        let command = ControlCommand::StartAudioEngine {
+            config: AudioEngineConfig {
+                backend: "virtual".to_owned(),
+                input_device_id: "input".to_owned(),
+                output_device_id: "output".to_owned(),
+                buffer_size: 128,
+                session_sample_rate: Some(44_100),
+            },
+        };
+        let command_bytes = rmp_serde::to_vec_named(&command).unwrap();
+        assert_eq!(
+            rmp_serde::from_slice::<ControlCommand>(&command_bytes).unwrap(),
+            command
+        );
+
+        let runtime = AudioRuntime {
+            state: "running".to_owned(),
+            requested_buffer_size: Some(128),
+            sample_rate: Some(44_100),
+            input_sample_rate: Some(48_000),
+            output_sample_rate: Some(48_000),
+            input_buffer_size: Some(128),
+            output_buffer_size: Some(128),
+            ring_buffer_capacity_frames: Some(512),
+            ring_buffer_fill_frames: Some(256),
+            input_latency_ms: Some(1.0),
+            output_latency_ms: Some(1.0),
+            ring_buffer_latency_ms: Some(1.0),
+            engine_latency_ms: Some(2.0),
+            estimated_round_trip_latency_ms: Some(5.0),
+            xruns: 0,
+            clock_sync: "shared".to_owned(),
+            buffer_fallback: false,
+        };
+        let runtime_bytes = rmp_serde::to_vec_named(&runtime).unwrap();
+        assert_eq!(
+            rmp_serde::from_slice::<AudioRuntime>(&runtime_bytes).unwrap(),
+            runtime
         );
     }
 

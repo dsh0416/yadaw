@@ -1,4 +1,5 @@
 import { decode, encode } from "@msgpack/msgpack"
+import type { MixerGraphSnapshot } from "@yadaw/contracts"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const fakeHost = vi.hoisted(() => {
@@ -22,8 +23,13 @@ const fakeHost = vi.hoisted(() => {
     readonly heartbeatDeferred = new Deferred<{ body: Buffer; attachments: Buffer[] }>()
     readonly delayedEngineStart =
       Client.instances.length === 1 ? new Deferred<{ body: Buffer; attachments: Buffer[] }>() : null
+    delayedEngineRequestId = 0
     heartbeatCalls = 0
     closed = false
+    engineState: "running" | "stopped" = "stopped"
+    sessionSampleRate = 48_000
+    outputSampleRate = 48_000
+    graphRevision = 0
     transportState = 0
     positionFrames = 0
 
@@ -46,11 +52,28 @@ const fakeHost = vi.hoisted(() => {
         })
 
       if (request.command.type === "audio-engine-snapshot") {
-        return response({ type: "audio-runtime", runtime: runtime("stopped") })
+        return response({
+          type: "audio-runtime",
+          runtime: runtime(this.engineState, this.sessionSampleRate, this.outputSampleRate)
+        })
       }
       if (request.command.type === "start-audio-engine") {
-        if (this.delayedEngineStart) return this.delayedEngineStart.promise
-        return response({ type: "audio-runtime", runtime: runtime("running") })
+        const config = request.command.config as { session_sample_rate?: number | null }
+        this.engineState = "running"
+        this.sessionSampleRate = config.session_sample_rate ?? this.outputSampleRate
+        if (this.delayedEngineStart) {
+          this.delayedEngineRequestId = request.request_id
+          return this.delayedEngineStart.promise
+        }
+        return response({
+          type: "audio-runtime",
+          runtime: runtime("running", this.sessionSampleRate, this.outputSampleRate)
+        })
+      }
+      if (request.command.type === "update-graph") {
+        const update = request.command.update as { revision?: number }
+        this.graphRevision = update.revision ?? 0
+        return response({ type: "graph-accepted", revision: this.graphRevision })
       }
       if (request.command.type === "transport") {
         const kind = request.command.command?.kind
@@ -67,7 +90,7 @@ const fakeHost = vi.hoisted(() => {
           transport: {
             state: this.transportState === 1 ? "playing" : "stopped",
             position_frames: this.positionFrames,
-            sample_rate: 48_000
+            sample_rate: this.sessionSampleRate
           }
         })
       }
@@ -92,7 +115,17 @@ const fakeHost = vi.hoisted(() => {
     }
 
     readTelemetry(): Buffer {
-      return Buffer.from(encode([1, 0, 0, this.transportState, this.positionFrames, 48_000, []]))
+      return Buffer.from(
+        encode([
+          1,
+          this.graphRevision,
+          0,
+          this.transportState,
+          this.positionFrames,
+          this.sessionSampleRate,
+          []
+        ])
+      )
     }
 
     enqueueParameter(): string {
@@ -112,11 +145,16 @@ const fakeHost = vi.hoisted(() => {
     }
   }
 
-  const runtime = (state: "running" | "stopped") => ({
+  const runtime = (
+    state: "running" | "stopped",
+    sampleRate = 48_000,
+    outputSampleRate = 48_000
+  ) => ({
     state,
     requested_buffer_size: 128,
-    sample_rate: 48_000,
+    sample_rate: sampleRate,
     input_sample_rate: 48_000,
+    output_sample_rate: outputSampleRate,
     input_buffer_size: 128,
     output_buffer_size: 128,
     ring_buffer_capacity_frames: 512,
@@ -143,6 +181,29 @@ vi.mock("@yadaw/audio-host-client", () => ({
 }))
 
 import { AudioHostService } from "./audio-host-service"
+import type { AudioHostGraph } from "./audio-host-service"
+
+function graph(sampleRate: number): {
+  project: MixerGraphSnapshot
+  runtime: AudioHostGraph
+} {
+  return {
+    project: {
+      sampleRate,
+      plugins: []
+    } as unknown as MixerGraphSnapshot,
+    runtime: {
+      sample_rate: sampleRate,
+      channels: [],
+      sends: [],
+      clips: [],
+      plugins: [],
+      midi_clips: [],
+      tempo_events: [],
+      time_signature_events: []
+    }
+  }
+}
 
 describe("AudioHostService recovery", () => {
   beforeEach(() => {
@@ -170,6 +231,8 @@ describe("AudioHostService recovery", () => {
     )
     service.start()
     const original = fakeHost.Client.instances[0]!
+    const projectGraph = graph(44_100)
+    await service.loadGraph(1, projectGraph.project, projectGraph.runtime)
 
     await service.startAudioEngine({
       backend: "asio",
@@ -207,8 +270,11 @@ describe("AudioHostService recovery", () => {
     replacement.delayedEngineStart!.resolve({
       body: Buffer.from(
         encode({
-          request_id: 5,
-          result: { type: "audio-runtime", runtime: fakeHost.runtime("running") }
+          request_id: replacement.delayedEngineRequestId,
+          result: {
+            type: "audio-runtime",
+            runtime: fakeHost.runtime("running", 44_100, 48_000)
+          }
         })
       ),
       attachments: []
@@ -219,7 +285,91 @@ describe("AudioHostService recovery", () => {
       .filter((command) => command.type === "transport")
       .map((command) => (command.command as { kind: string }).kind)
     expect(transportKinds).toEqual(["seek", "play", "pause"])
+    const restoredConfig = replacement.commands.find(
+      (command) => command.type === "start-audio-engine"
+    )?.config as { session_sample_rate?: number | null }
+    expect(restoredConfig.session_sample_rate).toBe(44_100)
     expect(failures).toEqual(["heartbeat failed: audio-host request: deadline exceeded"])
+
+    await service.stop()
+  })
+
+  it("rebuilds native-default streams at a new session rate and preserves playhead time", async () => {
+    const service = new AudioHostService(
+      "audio-host",
+      "crash-marker",
+      {
+        workerThreads: "auto",
+        maxBlockingThreads: "auto",
+        egressConcurrency: "auto"
+      },
+      undefined,
+      () => {},
+      async () => {}
+    )
+    service.start()
+    const client = fakeHost.Client.instances[0]!
+    const initialGraph = graph(48_000)
+    await service.loadGraph(1, initialGraph.project, initialGraph.runtime)
+    await service.startAudioEngine({
+      backend: "asio",
+      inputDeviceId: "input",
+      outputDeviceId: "output",
+      bufferSize: 128
+    })
+    await service.transport({ type: "play" })
+    client.positionFrames = 48_000
+
+    const nextGraph = graph(44_100)
+    await service.loadGraph(2, nextGraph.project, nextGraph.runtime)
+
+    const starts = client.commands.filter((command) => command.type === "start-audio-engine")
+    expect(
+      starts.map(
+        (command) => (command.config as { session_sample_rate?: number | null }).session_sample_rate
+      )
+    ).toEqual([48_000, 44_100])
+    const transportCommands = client.commands
+      .filter((command) => command.type === "transport")
+      .map((command) => command.command as { kind: string; position_frames?: number })
+    expect(transportCommands.slice(-3)).toEqual([
+      { kind: "pause", position_frames: null },
+      { kind: "seek", position_frames: 44_100 },
+      { kind: "play", position_frames: null }
+    ])
+    expect(client.outputSampleRate).toBe(48_000)
+    expect(client.sessionSampleRate).toBe(44_100)
+
+    await service.stop()
+  })
+
+  it("uses the native output rate when no project graph is open", async () => {
+    const service = new AudioHostService(
+      "audio-host",
+      "crash-marker",
+      {
+        workerThreads: "auto",
+        maxBlockingThreads: "auto",
+        egressConcurrency: "auto"
+      },
+      undefined,
+      () => {},
+      async () => {}
+    )
+    service.start()
+    const runtime = await service.startAudioEngine({
+      backend: "asio",
+      inputDeviceId: "input",
+      outputDeviceId: "output",
+      bufferSize: 128
+    })
+    const client = fakeHost.Client.instances[0]!
+    const config = client.commands.find((command) => command.type === "start-audio-engine")
+      ?.config as { session_sample_rate?: number | null }
+
+    expect(config.session_sample_rate).toBeNull()
+    expect(runtime.sampleRate).toBe(48_000)
+    expect(runtime.outputSampleRate).toBe(48_000)
 
     await service.stop()
   })

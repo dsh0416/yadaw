@@ -244,14 +244,14 @@ export const useAudioRuntimeStore = defineStore("audio-runtime", () => {
 
     if (
       snapshot.inputSampleRate !== null &&
-      snapshot.sampleRate !== null &&
-      snapshot.inputSampleRate !== snapshot.sampleRate
+      snapshot.outputSampleRate !== null &&
+      snapshot.inputSampleRate !== snapshot.outputSampleRate
     ) {
       result.push({
-        id: "sample-rate-mismatch",
+        id: "device-sample-rate-mismatch",
         severity: "warning",
-        title: "Sample-rate conversion active",
-        message: `Input is ${formatRate(snapshot.inputSampleRate)} while the engine is ${formatRate(snapshot.sampleRate)}. Adaptive resampling is keeping the devices synchronized.`
+        title: "Device sample-rate conversion active",
+        message: `Input is ${formatRate(snapshot.inputSampleRate)} while output is ${formatRate(snapshot.outputSampleRate)}. Adaptive resampling is keeping the devices synchronized.`
       })
     } else if (snapshot.clockSync === "adaptive-resampled") {
       result.push({
@@ -260,6 +260,19 @@ export const useAudioRuntimeStore = defineStore("audio-runtime", () => {
         title: "Independent device clocks",
         message:
           "Input and output use separate hardware clocks, so adaptive drift correction is active."
+      })
+    }
+
+    if (
+      snapshot.sampleRate !== null &&
+      snapshot.outputSampleRate !== null &&
+      snapshot.sampleRate !== snapshot.outputSampleRate
+    ) {
+      result.push({
+        id: "session-sample-rate-conversion",
+        severity: "warning",
+        title: "Session sample-rate conversion active",
+        message: `The project clock is ${formatRate(snapshot.sampleRate)} while the output device is ${formatRate(snapshot.outputSampleRate)}. Output is converted at the device boundary.`
       })
     }
 

@@ -76,15 +76,28 @@ original buffer request or the currently negotiated input/output size reuse the
 live engine; they do not tear down and immediately reopen WASAPI endpoints.
 
 Preferences do not own the sample rate. Project Settings stores the session
-rate (used for recording finalization and mixer/project metadata), but the
-audio engine still opens streams at the output device's native default; making
-that project rate the engine clock across device reconfiguration remains open
-work (see [roadmap.md](roadmap.md) M0). The input stream keeps its own native
-rate and a fixed-output asynchronous sinc SRC converts all 1–32 hardware
-channels at the ring consumer. Its rubato/Blackman-Harris buffers and
-active-channel mask are allocated at stream startup; ring-fill error supplies
-the existing bounded ±0.1% drift correction for independent clocks. The input
-and output callbacks do not allocate, lock, or format diagnostics.
+rate, and that rate is the authoritative DSP, transport, plug-in, metering, and
+recording-finalization clock. cpal still opens both streams from
+`default_input_config()` and `default_output_config()` at their native rates;
+the engine never requests the project rate from a device. With no open project,
+the native output rate becomes the session rate.
+
+Two asynchronous sinc converters form the device boundary. The input converter
+maps every active native input channel directly into session frames and retains
+bounded ±0.1% ring-fill drift correction for independent device clocks. The
+output converter renders the required number of session frames, then maps all
+active output channels to native output frames; it is exactly bypassed when the
+session and output rates match. Both converters and all rubato buffers are
+allocated during engine startup. Their algorithmic delay contributes to engine
+and estimated round-trip latency, and the callbacks do not allocate, lock, or
+format diagnostics.
+
+A project-rate change is a controlled stream rebuild using the same native
+default configurations. Electron pauses transport, scales its frame position
+by `newRate / oldRate`, rebuilds the engine, publishes a graph compiled for the
+new session rate, and resumes only if transport had been playing. Recording
+blocks the transition. Graph publication is rejected whenever its rate differs
+from the active session rate.
 
 There is one audio-device namespace. cpal supplies the available hosts, device
 names, stable IDs, and defaults. Chromium `MediaDevices` and Web Audio devices

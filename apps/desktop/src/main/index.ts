@@ -997,9 +997,54 @@ function registerIpcHandlers(
   ipcMain.handle(IPC_CHANNELS.projectConfigurationUpdate, async (event, value: unknown) => {
     assertTrustedSender(event)
     lifecycle.assertProjectWriteAllowed()
-    const session = await projects.updateConfiguration(validateProjectConfiguration(value))
-    lifecycle.syncProject(session)
-    return session
+    const previous = projects.current
+    if (!previous) throw new Error("No project is open")
+    const configuration = validateProjectConfiguration(value)
+    const sampleRateChanged = configuration.sampleRate !== previous.configuration.sampleRate
+    const audioWasRunning = lifecycle.snapshot().audio.status === "running"
+    if (sampleRateChanged && audioWasRunning) lifecycle.beginAudio("reconfiguring")
+    let configurationUpdated = false
+    try {
+      const session = await projects.updateConfiguration(configuration)
+      configurationUpdated = true
+      if (sampleRateChanged) await mixer.load()
+      lifecycle.syncProject(session)
+      if (sampleRateChanged && audioWasRunning && audioHostService) {
+        lifecycle.completeAudio(normalizeAudioRuntime(await audioHostService.audioEngineSnapshot()))
+      }
+      return session
+    } catch (error) {
+      if (!configurationUpdated) {
+        if (sampleRateChanged && audioWasRunning && audioHostService) {
+          const runtime = await audioHostService
+            .audioEngineSnapshot()
+            .catch(() => lifecycle.snapshot().audio.runtime)
+          lifecycle.completeAudio(normalizeAudioRuntime(runtime))
+        }
+        throw error
+      }
+      try {
+        const restored = await projects.updateConfiguration(previous.configuration)
+        if (sampleRateChanged) await mixer.load()
+        lifecycle.syncProject(restored)
+        if (sampleRateChanged && audioWasRunning && audioHostService) {
+          let runtime = await audioHostService.audioEngineSnapshot()
+          if (runtime.state !== "running") {
+            runtime = await audioHostService.restoreAudioEngine()
+          }
+          lifecycle.completeAudio(normalizeAudioRuntime(runtime))
+        }
+      } catch (rollbackError) {
+        console.error("Could not roll back the project sample-rate change", rollbackError)
+        if (sampleRateChanged && audioWasRunning && audioHostService) {
+          const runtime = await audioHostService
+            .audioEngineSnapshot()
+            .catch(() => lifecycle.snapshot().audio.runtime)
+          lifecycle.failAudio(rollbackError, normalizeAudioRuntime(runtime))
+        }
+      }
+      throw error
+    }
   })
 
   ipcMain.handle(IPC_CHANNELS.recordingStart, async (event) => {

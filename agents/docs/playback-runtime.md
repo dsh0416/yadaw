@@ -53,6 +53,7 @@ device, transport, recording session, playback graph, or plugin instance.
 | -------------------------------------- | --------------------------------- | ---------------------------------- |
 | Helper request lifecycle               | `ProtocolActor`                   | typed handles and one-shot replies |
 | Audio devices and cpal streams         | `EngineActor`                     | atomic runtime snapshots           |
+| Device-boundary SRC state and buffers  | cpal callbacks                    | startup-allocated, callback-local  |
 | Active playback graph                  | cpal output callback              | SPSC graph commands                |
 | Graph construction and PDC calculation | supervised graph worker           | immutable build input              |
 | Retired graphs                         | control side of `EngineActor`     | callback pushes to retirement SPSC |
@@ -285,6 +286,34 @@ are restored. Settings are persisted only after success. Failure restarts with
 the previous settings; only a failed rollback enters audio error. This planned
 restart does not consume crash-recovery quota or mark a plugin suspicious.
 
+Changing the project sample rate is a narrower engine transaction. The project
+rate is the session clock used by DSP, transport, VST3 process context, MIDI,
+metronome, and meters. cpal input and output streams remain at their respective
+native default rates. Before publishing a differently rated graph, Electron
+main rejects recording, snapshots and pauses transport, and rebuilds the same
+device configuration with the new session rate. It scales the saved transport
+position by `newRate / oldRate`, waits for the matching graph revision to
+publish, seeks, and resumes only a previously playing transport. A failed
+transition remains stopped and attempts to restore the previous project
+configuration, session rate, and graph.
+
+The input callback produces native frames into the bounded ring. The output
+callback owns both preallocated rate boundaries:
+
+```text
+native input ring
+  -> adaptive sinc SRC (native input rate -> session rate)
+  -> playback graph / transport / VST3 / meters
+  -> fixed-ratio sinc SRC (session rate -> native output rate)
+  -> native output stream
+```
+
+The output converter is an exact bypass at equal rates. Meter time and transport
+advance only by session frames rendered, not by native output frame count.
+`clockSync` describes native input/output device-clock synchronization; a
+separate diagnostic reports session/output conversion. Both converter delays
+are included in engine and estimated round-trip latency.
+
 Normal shutdown stops new ingress, signals the async outbound actor, drains
 queued responses and ordered events, waits for blocking sends, releases arena
 mappings, then closes VST3/UI and joins the runtime. The addon waits up to two
@@ -402,6 +431,7 @@ events before clearing delayed and tail state.
 The cpal callback may:
 
 - read and write preallocated slices and fixed-capacity collections;
+- run the startup-allocated input/session/output sinc converters;
 - perform DSP and VST3 processor calls;
 - use atomics with documented orderings;
 - consume or produce bounded SPSC rings;

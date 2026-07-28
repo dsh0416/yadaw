@@ -128,6 +128,7 @@ interface AudioHostRuntime {
   requested_buffer_size: number | null
   sample_rate: number | null
   input_sample_rate: number | null
+  output_sample_rate: number | null
   input_buffer_size: number | null
   output_buffer_size: number | null
   ring_buffer_capacity_frames: number | null
@@ -749,11 +750,48 @@ export class AudioHostService {
       project: structuredClone(project),
       runtime: structuredClone(runtime)
     }
+    const transport = await this.prepareSessionRateTransition(project.sampleRate)
     await this.restoreGraph()
-    if (awaitPublication) {
+    if (awaitPublication || transport) {
       const audio = await this.audioEngineSnapshot()
       if (audio.state === "running") await this.waitForGraphPublication(revision)
     }
+    if (transport) await this.restoreSessionRateTransition(transport)
+  }
+
+  private async prepareSessionRateTransition(
+    sessionSampleRate: number
+  ): Promise<TransportSnapshot | null> {
+    const audio = await this.audioEngineSnapshot()
+    if (audio.state !== "running" || audio.sampleRate === sessionSampleRate) return null
+    if (!this.lastAudioPreferences) {
+      throw new Error("Audio preferences are unavailable for a session-rate change")
+    }
+    const transport = await this.transportSnapshot()
+    if (transport.state === "recording") {
+      throw new Error("Stop recording before changing the project sample rate")
+    }
+    if (transport.state === "playing") await this.transport({ type: "pause" })
+    const previousSampleRate = transport.sampleRate || audio.sampleRate || sessionSampleRate
+    const positionFrames = Math.max(
+      0,
+      Math.round((transport.positionFrames * sessionSampleRate) / previousSampleRate)
+    )
+    const runtime = await this.startAudioEngine(this.lastAudioPreferences)
+    if (runtime.state !== "running" || runtime.sampleRate !== sessionSampleRate) {
+      throw new Error("Audio engine did not adopt the project sample rate")
+    }
+    this.publishedGraph = null
+    return {
+      state: transport.state,
+      positionFrames,
+      sampleRate: sessionSampleRate
+    }
+  }
+
+  private async restoreSessionRateTransition(transport: TransportSnapshot): Promise<void> {
+    await this.transport({ type: "seek", positionFrames: transport.positionFrames })
+    if (transport.state === "playing") await this.transport({ type: "play" })
   }
 
   private async restoreGraph(immediate = false): Promise<void> {
@@ -908,12 +946,7 @@ export class AudioHostService {
   async startAudioEngine(preferences: AudioPreferences): Promise<AudioRuntimeSnapshot> {
     const response = await this.request({
       type: "start-audio-engine",
-      config: {
-        backend: preferences.backend,
-        input_device_id: preferences.inputDeviceId,
-        output_device_id: preferences.outputDeviceId,
-        buffer_size: preferences.bufferSize
-      }
+      config: this.audioEngineConfig(preferences)
     })
     const runtime = this.runtimeResult(response)
     if (runtime.state === "running") {
@@ -921,6 +954,26 @@ export class AudioHostService {
       this.audioEngineExpectedRunning = true
     }
     return runtime
+  }
+
+  async restoreAudioEngine(): Promise<AudioRuntimeSnapshot> {
+    if (!this.lastAudioPreferences) {
+      throw new Error("Audio preferences are unavailable for engine restoration")
+    }
+    return this.startAudioEngine(this.lastAudioPreferences)
+  }
+
+  private audioEngineConfig(
+    preferences: AudioPreferences,
+    sessionSampleRate = this.lastGraph?.project.sampleRate ?? null
+  ): Record<string, unknown> {
+    return {
+      backend: preferences.backend,
+      input_device_id: preferences.inputDeviceId,
+      output_device_id: preferences.outputDeviceId,
+      buffer_size: preferences.bufferSize,
+      session_sample_rate: sessionSampleRate
+    }
   }
 
   async stopAudioEngine(): Promise<AudioRuntimeSnapshot> {
@@ -945,6 +998,7 @@ export class AudioHostService {
       requestedBufferSize: value.requested_buffer_size,
       sampleRate: value.sample_rate,
       inputSampleRate: value.input_sample_rate,
+      outputSampleRate: value.output_sample_rate,
       inputBufferSize: value.input_buffer_size,
       outputBufferSize: value.output_buffer_size,
       ringBufferCapacityFrames: value.ring_buffer_capacity_frames,
@@ -1776,12 +1830,7 @@ export class AudioHostService {
         await this.requestImmediately(
           {
             type: "start-audio-engine",
-            config: {
-              backend: audioPreferences.backend,
-              input_device_id: audioPreferences.inputDeviceId,
-              output_device_id: audioPreferences.outputDeviceId,
-              buffer_size: audioPreferences.bufferSize
-            }
+            config: this.audioEngineConfig(audioPreferences)
           },
           client
         )

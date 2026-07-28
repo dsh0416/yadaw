@@ -50,7 +50,7 @@ Make the existing vertical slice reliable for daily experimentation.
       `agents/docs/playback-runtime.md`)
 - [x] Project Settings exposes session sample rate; recording finalization
       resamples to that rate
-- [ ] Audio engine session clock follows the project sample rate across device
+- [x] Audio engine session clock follows the project sample rate across device
       open / reconfiguration (streams still open at the device native default)
 - [ ] Authoritative round-trip latency measurement (physical loopback; estimates
       from callback timestamps + ring occupancy exist today)

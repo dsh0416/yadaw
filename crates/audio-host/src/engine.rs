@@ -67,6 +67,7 @@ const METRONOME_BEAT_NOTE: u8 = 72;
 const METRONOME_NOTE_ID: i32 = -1;
 const METRONOME_NOTE_LENGTH_MS: u64 = 20;
 const INPUT_RESAMPLER_OUTPUT_FRAMES: usize = 256;
+const OUTPUT_RESAMPLER_FRAMES: usize = 256;
 type InputFrame = [f32; MAX_INPUT_CHANNELS];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -88,6 +89,7 @@ pub struct NativeAudioEngineConfig {
     pub input_device_id: String,
     pub output_device_id: String,
     pub buffer_size: u32,
+    pub session_sample_rate: Option<u32>,
 }
 
 pub struct NativeAudioRuntimeSnapshot {
@@ -95,6 +97,7 @@ pub struct NativeAudioRuntimeSnapshot {
     pub requested_buffer_size: Option<u32>,
     pub sample_rate: Option<u32>,
     pub input_sample_rate: Option<u32>,
+    pub output_sample_rate: Option<u32>,
     pub input_buffer_size: Option<u32>,
     pub output_buffer_size: Option<u32>,
     pub ring_buffer_capacity_frames: Option<u32>,
@@ -862,12 +865,14 @@ struct RuntimeMetrics {
     requested_buffer_size: u32,
     sample_rate: u32,
     input_sample_rate: u32,
+    output_sample_rate: u32,
     input_buffer_size: AtomicU32,
     output_buffer_size: AtomicU32,
     ring_buffer_capacity_frames: u32,
     ring_buffer_fill_frames: AtomicU32,
     input_latency_us: AtomicU64,
     output_latency_us: AtomicU64,
+    engine_latency_us: AtomicU64,
     xruns: AtomicU32,
     callback_generation: AtomicU64,
     published_graph_generation: AtomicU64,
@@ -883,11 +888,7 @@ impl RuntimeMetrics {
         let output_latency_us = optional_latency(self.output_latency_us.load(Ordering::Relaxed));
         let ring_fill = self.ring_buffer_fill_frames.load(Ordering::Relaxed);
         let ring_latency_ms = frames_to_ms(ring_fill, self.input_sample_rate);
-        let engine_latency_ms = if self.clock_sync == "adaptive-resampled" {
-            frames_to_ms(1, self.input_sample_rate)
-        } else {
-            0.0
-        };
+        let engine_latency_ms = self.engine_latency_us.load(Ordering::Relaxed) as f64 / 1_000.0;
         let estimated_round_trip_latency_ms =
             input_latency_us
                 .zip(output_latency_us)
@@ -907,6 +908,7 @@ impl RuntimeMetrics {
             requested_buffer_size: Some(self.requested_buffer_size),
             sample_rate: Some(self.sample_rate),
             input_sample_rate: Some(self.input_sample_rate),
+            output_sample_rate: Some(self.output_sample_rate),
             input_buffer_size: Some(self.input_buffer_size.load(Ordering::Relaxed)),
             output_buffer_size: Some(self.output_buffer_size.load(Ordering::Relaxed)),
             ring_buffer_capacity_frames: Some(self.ring_buffer_capacity_frames),
@@ -963,6 +965,7 @@ struct AudioEngineKey {
     input_device_id: String,
     output_device_id: String,
     requested_buffer_size: u32,
+    requested_session_sample_rate: Option<u32>,
 }
 
 impl AudioEngine {
@@ -970,6 +973,7 @@ impl AudioEngine {
         self.key.backend == key.backend
             && self.key.input_device_id == key.input_device_id
             && self.key.output_device_id == key.output_device_id
+            && self.key.requested_session_sample_rate == key.requested_session_sample_rate
             && (self.key.requested_buffer_size == key.requested_buffer_size
                 || self.metrics.input_buffer_size.load(Ordering::Relaxed)
                     == key.requested_buffer_size
@@ -989,6 +993,16 @@ fn engine_slot() -> &'static Mutex<Option<AudioEngine>> {
 
 fn pending_mixer_slot() -> &'static Mutex<Option<Box<NativeMixerRuntime>>> {
     PENDING_MIXER.get_or_init(|| Mutex::new(None))
+}
+
+fn take_pending_mixer(sample_rate: u32) -> Result<Option<Box<NativeMixerRuntime>>> {
+    let mut pending = pending_mixer_slot()
+        .lock()
+        .map_err(|_| audio_error("pending mixer lock", "poisoned"))?;
+    if let Some(runtime) = pending.as_ref() {
+        validate_session_sample_rate(sample_rate, runtime.sample_rate)?;
+    }
+    Ok(pending.take())
 }
 
 fn audio_error(context: &str, error: impl std::fmt::Display) -> Error {
@@ -2559,6 +2573,11 @@ fn frames_to_ms(frames: u32, sample_rate: u32) -> f64 {
     f64::from(frames) / f64::from(sample_rate) * 1_000.0
 }
 
+fn frames_to_micros(frames: usize, sample_rate: u32) -> u64 {
+    ((frames as u128).saturating_mul(1_000_000) / u128::from(sample_rate)).min(u128::from(u64::MAX))
+        as u64
+}
+
 fn mark_stream_error(metrics: &RuntimeMetrics) {
     metrics.xruns.fetch_add(1, Ordering::Relaxed);
     metrics.faulted.store(true, Ordering::Relaxed);
@@ -2613,6 +2632,10 @@ impl AdaptiveResampler {
 
     fn occupied_len(&self) -> usize {
         self.consumer.occupied_len()
+    }
+
+    fn output_delay(&self) -> usize {
+        self.resampler.output_delay()
     }
 
     fn adaptive_relative_ratio(&self) -> f64 {
@@ -2701,6 +2724,137 @@ impl AdaptiveResampler {
     }
 }
 
+struct SessionOutputResampler {
+    resampler: Async<f32>,
+    channels: usize,
+    input_buffer: Vec<f32>,
+    output_buffer: Vec<f32>,
+    output_cursor: usize,
+    output_frames: usize,
+}
+
+enum SessionOutputConverter {
+    Bypass,
+    Resampled(SessionOutputResampler),
+}
+
+impl SessionOutputConverter {
+    fn new(session_sample_rate: u32, output_sample_rate: u32, channels: usize) -> Result<Self> {
+        if session_sample_rate == output_sample_rate {
+            return Ok(Self::Bypass);
+        }
+        let channels = channels.clamp(1, MAX_OUTPUT_CHANNELS);
+        let ratio = f64::from(output_sample_rate) / f64::from(session_sample_rate);
+        let resampler = Async::<f32>::new_sinc(
+            ratio,
+            1.0,
+            &SincInterpolationParameters::default(),
+            OUTPUT_RESAMPLER_FRAMES,
+            channels,
+            FixedAsync::Output,
+        )
+        .map_err(|error| invalid_config(error.to_string()))?;
+        let input_buffer = vec![0.0; resampler.input_frames_max() * channels];
+        let output_buffer = vec![0.0; resampler.output_frames_max() * channels];
+        Ok(Self::Resampled(SessionOutputResampler {
+            resampler,
+            channels,
+            input_buffer,
+            output_buffer,
+            output_cursor: 0,
+            output_frames: 0,
+        }))
+    }
+
+    fn output_delay(&self) -> usize {
+        match self {
+            Self::Bypass => 0,
+            Self::Resampled(resampler) => resampler.resampler.output_delay(),
+        }
+    }
+
+    fn next_frame(
+        &mut self,
+        mut render: impl FnMut() -> (HardwareOutputFrame, bool),
+    ) -> (HardwareOutputFrame, bool, usize) {
+        match self {
+            Self::Bypass => {
+                let (frame, underrun) = render();
+                (frame, underrun, 1)
+            }
+            Self::Resampled(resampler) => resampler.next_frame(render),
+        }
+    }
+}
+
+impl SessionOutputResampler {
+    fn refill(&mut self, mut render: impl FnMut() -> (HardwareOutputFrame, bool)) -> (bool, usize) {
+        let required = self.resampler.input_frames_next();
+        let output_frames = self.resampler.output_frames_next();
+        self.input_buffer[..required * self.channels].fill(0.0);
+        let mut underrun = false;
+        for frame_index in 0..required {
+            let (frame, frame_underrun) = render();
+            underrun |= frame_underrun;
+            let offset = frame_index * self.channels;
+            self.input_buffer[offset..offset + self.channels]
+                .copy_from_slice(&frame[..self.channels]);
+        }
+        self.output_buffer[..output_frames * self.channels].fill(0.0);
+        let processed = {
+            let Ok(input) = InterleavedSlice::new(
+                &self.input_buffer[..required * self.channels],
+                self.channels,
+                required,
+            ) else {
+                return (true, required);
+            };
+            let Ok(mut output) = InterleavedSlice::new_mut(
+                &mut self.output_buffer[..output_frames * self.channels],
+                self.channels,
+                output_frames,
+            ) else {
+                return (true, required);
+            };
+            self.resampler
+                .process_into_buffer(&input, &mut output, None)
+        };
+        match processed {
+            Ok((_consumed, produced)) => {
+                self.output_cursor = 0;
+                self.output_frames = produced;
+            }
+            Err(_) => {
+                self.output_buffer.fill(0.0);
+                self.output_cursor = 0;
+                self.output_frames = output_frames;
+                self.resampler.reset();
+                underrun = true;
+            }
+        }
+        (underrun, required)
+    }
+
+    fn next_frame(
+        &mut self,
+        render: impl FnMut() -> (HardwareOutputFrame, bool),
+    ) -> (HardwareOutputFrame, bool, usize) {
+        let (underrun, rendered_frames) = if self.output_cursor >= self.output_frames {
+            self.refill(render)
+        } else {
+            (false, 0)
+        };
+        if self.output_cursor >= self.output_frames {
+            return ([0.0; MAX_OUTPUT_CHANNELS], true, rendered_frames);
+        }
+        let mut frame = [0.0; MAX_OUTPUT_CHANNELS];
+        let offset = self.output_cursor * self.channels;
+        frame[..self.channels].copy_from_slice(&self.output_buffer[offset..offset + self.channels]);
+        self.output_cursor += 1;
+        (frame, underrun, rendered_frames)
+    }
+}
+
 fn build_input_stream<T>(
     device: &Device,
     config: &StreamConfig,
@@ -2780,6 +2934,14 @@ where
         target_fill,
         metrics.ring_buffer_capacity_frames as usize,
     )?;
+    let mut output_converter =
+        SessionOutputConverter::new(metrics.sample_rate, metrics.output_sample_rate, channels)?;
+    metrics.engine_latency_us.store(
+        frames_to_micros(resampler.output_delay(), metrics.sample_rate).saturating_add(
+            frames_to_micros(output_converter.output_delay(), metrics.output_sample_rate),
+        ),
+        Ordering::Relaxed,
+    );
     let callback_metrics = Arc::clone(&metrics);
     let error_metrics = Arc::clone(&metrics);
 
@@ -2823,15 +2985,20 @@ where
                 }
 
                 let mut underrun = false;
+                let mut rendered_session_frames = 0;
                 for frame in data.chunks_exact_mut(channels) {
-                    let (input, input_underrun) = resampler.next_frame();
-                    underrun |= input_underrun;
-                    let (rendered, stream_underrun) = mixer
-                        .as_mut()
-                        .map_or(([0.0; MAX_OUTPUT_CHANNELS], false), |runtime| {
-                            runtime.render_frame(input)
+                    let (rendered, frame_underrun, rendered_frames) =
+                        output_converter.next_frame(|| {
+                            let (input, input_underrun) = resampler.next_frame();
+                            let (rendered, stream_underrun) = mixer
+                                .as_mut()
+                                .map_or(([0.0; MAX_OUTPUT_CHANNELS], false), |runtime| {
+                                    runtime.render_frame(input)
+                                });
+                            (rendered, input_underrun || stream_underrun)
                         });
-                    underrun |= stream_underrun;
+                    underrun |= frame_underrun;
+                    rendered_session_frames += rendered_frames;
                     for (channel, sample) in frame.iter_mut().enumerate() {
                         let value = rendered
                             .get(channel)
@@ -2842,7 +3009,7 @@ where
                     }
                 }
                 if let Some(runtime) = mixer.as_mut() {
-                    runtime.publish_peaks(data.len() / channels);
+                    runtime.publish_peaks(rendered_session_frames);
                 }
 
                 callback_metrics
@@ -2890,6 +3057,7 @@ fn stopped_snapshot() -> NativeAudioRuntimeSnapshot {
         requested_buffer_size: None,
         sample_rate: None,
         input_sample_rate: None,
+        output_sample_rate: None,
         input_buffer_size: None,
         output_buffer_size: None,
         ring_buffer_capacity_frames: None,
@@ -2909,12 +3077,18 @@ pub fn start_audio_engine(config: NativeAudioEngineConfig) -> Result<NativeAudio
     if config.buffer_size == 0 {
         return Err(invalid_config("buffer size must be greater than zero"));
     }
+    if config.session_sample_rate == Some(0) {
+        return Err(invalid_config(
+            "session sample rate must be greater than zero",
+        ));
+    }
 
     let engine_key = AudioEngineKey {
         backend: config.backend.clone(),
         input_device_id: config.input_device_id.clone(),
         output_device_id: config.output_device_id.clone(),
         requested_buffer_size: config.buffer_size,
+        requested_session_sample_rate: config.session_sample_rate,
     };
 
     {
@@ -2956,6 +3130,9 @@ pub fn start_audio_engine(config: NativeAudioEngineConfig) -> Result<NativeAudio
 
     let (input_config, input_buffer) = stream_config(&input_supported, config.buffer_size);
     let (output_config, output_buffer) = stream_config(&output_supported, config.buffer_size);
+    let session_sample_rate = config
+        .session_sample_rate
+        .unwrap_or(output_config.sample_rate);
     let bridge_block_size = input_buffer
         .expected_frames
         .max(output_buffer.expected_frames);
@@ -2969,14 +3146,16 @@ pub fn start_audio_engine(config: NativeAudioEngineConfig) -> Result<NativeAudio
     }
     let metrics = Arc::new(RuntimeMetrics {
         requested_buffer_size: config.buffer_size,
-        sample_rate: output_config.sample_rate,
+        sample_rate: session_sample_rate,
         input_sample_rate: input_config.sample_rate,
+        output_sample_rate: output_config.sample_rate,
         input_buffer_size: AtomicU32::new(input_buffer.expected_frames),
         output_buffer_size: AtomicU32::new(output_buffer.expected_frames),
         ring_buffer_capacity_frames: ring_capacity as u32,
         ring_buffer_fill_frames: AtomicU32::new(bridge_block_size),
         input_latency_us: AtomicU64::new(UNKNOWN_LATENCY_US),
         output_latency_us: AtomicU64::new(UNKNOWN_LATENCY_US),
+        engine_latency_us: AtomicU64::new(0),
         xruns: AtomicU32::new(0),
         callback_generation: AtomicU64::new(0),
         published_graph_generation: AtomicU64::new(0),
@@ -2993,10 +3172,7 @@ pub fn start_audio_engine(config: NativeAudioEngineConfig) -> Result<NativeAudio
     });
     let (recorder, recording_tap) =
         RecorderController::new(input_config.sample_rate, usize::from(input_config.channels));
-    let initial_mixer = pending_mixer_slot()
-        .lock()
-        .map_err(|_| audio_error("pending mixer lock", "poisoned"))?
-        .take();
+    let initial_mixer = take_pending_mixer(session_sample_rate)?;
     if let Some(runtime) = initial_mixer.as_ref() {
         metrics
             .published_graph_generation
@@ -3010,7 +3186,7 @@ pub fn start_audio_engine(config: NativeAudioEngineConfig) -> Result<NativeAudio
             Arc::new(TransportShared {
                 state: AtomicU32::new(TRANSPORT_STOPPED),
                 position_frames: AtomicU64::new(0),
-                sample_rate: AtomicU32::new(output_config.sample_rate),
+                sample_rate: AtomicU32::new(session_sample_rate),
             })
         },
         |runtime| Arc::clone(&runtime.transport),
@@ -3099,18 +3275,24 @@ pub fn start_audio_engine(config: NativeAudioEngineConfig) -> Result<NativeAudio
 }
 
 fn start_virtual_audio_engine(key: AudioEngineKey) -> Result<NativeAudioRuntimeSnapshot> {
-    let sample_rate = 48_000;
+    let input_sample_rate = 48_000;
+    let output_sample_rate = 48_000;
+    let sample_rate = key
+        .requested_session_sample_rate
+        .unwrap_or(output_sample_rate);
     let block_frames = key.requested_buffer_size.clamp(32, 2_048);
     let metrics = Arc::new(RuntimeMetrics {
         requested_buffer_size: key.requested_buffer_size,
         sample_rate,
-        input_sample_rate: sample_rate,
+        input_sample_rate,
+        output_sample_rate,
         input_buffer_size: AtomicU32::new(block_frames),
         output_buffer_size: AtomicU32::new(block_frames),
-        ring_buffer_capacity_frames: block_frames,
-        ring_buffer_fill_frames: AtomicU32::new(0),
+        ring_buffer_capacity_frames: (block_frames * RING_BUFFER_BLOCKS as u32).max(256),
+        ring_buffer_fill_frames: AtomicU32::new(block_frames),
         input_latency_us: AtomicU64::new(0),
         output_latency_us: AtomicU64::new(0),
+        engine_latency_us: AtomicU64::new(0),
         xruns: AtomicU32::new(0),
         callback_generation: AtomicU64::new(0),
         published_graph_generation: AtomicU64::new(0),
@@ -3120,10 +3302,7 @@ fn start_virtual_audio_engine(key: AudioEngineKey) -> Result<NativeAudioRuntimeS
         clock_sync: "shared-device",
     });
     let (recorder, _recording_tap) = RecorderController::new(sample_rate, 2);
-    let initial_mixer = pending_mixer_slot()
-        .lock()
-        .map_err(|_| audio_error("pending mixer lock", "poisoned"))?
-        .take();
+    let initial_mixer = take_pending_mixer(sample_rate)?;
     if let Some(runtime) = initial_mixer.as_ref() {
         metrics
             .published_graph_generation
@@ -3157,12 +3336,41 @@ fn start_virtual_audio_engine(key: AudioEngineKey) -> Result<NativeAudioRuntimeS
     let shutdown = Arc::new(AtomicBool::new(false));
     let worker_shutdown = Arc::clone(&shutdown);
     let worker_metrics = Arc::clone(&metrics);
+    let input_ring = HeapRb::<InputFrame>::new(worker_metrics.ring_buffer_capacity_frames as usize);
+    let (mut input_producer, input_consumer) = input_ring.split();
+    for _ in 0..block_frames {
+        input_producer
+            .try_push([0.0; MAX_INPUT_CHANNELS])
+            .map_err(|_| audio_error("failed to prime virtual input ring", "buffer is full"))?;
+    }
+    let mut input_resampler = AdaptiveResampler::new(
+        input_consumer,
+        input_sample_rate,
+        sample_rate,
+        2,
+        block_frames as usize,
+        worker_metrics.ring_buffer_capacity_frames as usize,
+    )?;
+    let mut output_converter = SessionOutputConverter::new(sample_rate, output_sample_rate, 2)?;
+    worker_metrics.engine_latency_us.store(
+        frames_to_micros(input_resampler.output_delay(), sample_rate).saturating_add(
+            frames_to_micros(output_converter.output_delay(), output_sample_rate),
+        ),
+        Ordering::Relaxed,
+    );
     let thread = thread::Builder::new()
         .name("yadaw-virtual-audio".to_owned())
         .spawn(move || {
             let mut mixer = initial_mixer;
-            let block_duration = Duration::from_secs_f64(block_frames as f64 / sample_rate as f64);
+            let block_duration =
+                Duration::from_secs_f64(block_frames as f64 / output_sample_rate as f64);
             while !worker_shutdown.load(Ordering::Acquire) {
+                let mut overrun = false;
+                for _ in 0..block_frames {
+                    if input_producer.try_push([0.0; MAX_INPUT_CHANNELS]).is_err() {
+                        overrun = true;
+                    }
+                }
                 while let Some(command) = command_consumer.try_pop() {
                     if let Some(runtime) = mixer.as_mut() {
                         if let Some(replacement) = runtime.handle_command(command) {
@@ -3188,11 +3396,29 @@ fn start_virtual_audio_engine(key: AudioEngineKey) -> Result<NativeAudioRuntimeS
                         mixer = Some(runtime);
                     }
                 }
+                let mut rendered_session_frames = 0;
+                let mut underrun = false;
+                for _ in 0..block_frames {
+                    let (_, frame_underrun, rendered_frames) = output_converter.next_frame(|| {
+                        let (input, input_underrun) = input_resampler.next_frame();
+                        let (output, render_underrun) = mixer
+                            .as_mut()
+                            .map_or(([0.0; MAX_OUTPUT_CHANNELS], false), |runtime| {
+                                runtime.render_frame(input)
+                            });
+                        (output, input_underrun || render_underrun)
+                    });
+                    underrun |= frame_underrun;
+                    rendered_session_frames += rendered_frames;
+                }
                 if let Some(runtime) = mixer.as_mut() {
-                    for _ in 0..block_frames {
-                        let _ = runtime.render_frame([0.0; MAX_INPUT_CHANNELS]);
-                    }
-                    runtime.publish_peaks(block_frames as usize);
+                    runtime.publish_peaks(rendered_session_frames);
+                }
+                worker_metrics
+                    .ring_buffer_fill_frames
+                    .store(input_resampler.occupied_len() as u32, Ordering::Relaxed);
+                if overrun || underrun {
+                    worker_metrics.xruns.fetch_add(1, Ordering::Relaxed);
                 }
                 worker_metrics
                     .callback_generation
@@ -3272,10 +3498,15 @@ pub enum PublishOutcome {
     Superseded,
 }
 
-fn engine_transport_handles(sample_rate: u32) -> Result<(Arc<TransportShared>, Arc<InputPeakBank>)> {
+fn engine_transport_handles(
+    sample_rate: u32,
+) -> Result<(Arc<TransportShared>, Arc<InputPeakBank>)> {
     let guard = engine_slot()
         .lock()
         .map_err(|_| audio_error("audio engine lock", "poisoned"))?;
+    if let Some(engine) = guard.as_ref() {
+        validate_session_sample_rate(engine.metrics.sample_rate, sample_rate)?;
+    }
     Ok(guard.as_ref().map_or_else(
         || {
             (
@@ -3294,6 +3525,15 @@ fn engine_transport_handles(sample_rate: u32) -> Result<(Arc<TransportShared>, A
             )
         },
     ))
+}
+
+fn validate_session_sample_rate(engine_sample_rate: u32, graph_sample_rate: u32) -> Result<()> {
+    if engine_sample_rate != graph_sample_rate {
+        return Err(invalid_config(
+            "mixer sample rate does not match the audio engine session rate",
+        ));
+    }
+    Ok(())
 }
 
 /// Store the candidate graph, allocate a build generation, and capture transport
@@ -3365,6 +3605,7 @@ pub fn publish_mixer_runtime(built: CompiledGraphBuild) -> Result<PublishOutcome
         return Ok(PublishOutcome::Superseded);
     }
     if let Some(engine) = guard.as_mut() {
+        validate_session_sample_rate(engine.metrics.sample_rate, built.runtime.sample_rate)?;
         engine.reclaim_retired_mixers();
         engine.meter_bank = Arc::clone(&built.runtime.meter_bank);
         engine
@@ -3605,8 +3846,9 @@ pub mod bench_support {
     use super::{
         AdaptiveResampler, ClipSamples, EngineCommand, InputPeakBank, LivePlugin, LoadedClip,
         MeterAtomics, MeterBank, MetronomeScheduler, NativeMixerRuntime, ProcessContext,
-        RealtimeParameter, RealtimeParameterCommand, SignalWidth, StereoDelayLine, StreamingClip,
-        TRANSPORT_PLAYING, TransportShared, decode_clip_audio, spawn_streaming_clip,
+        RealtimeParameter, RealtimeParameterCommand, SessionOutputConverter, SignalWidth,
+        StereoDelayLine, StreamingClip, TRANSPORT_PLAYING, TransportShared, decode_clip_audio,
+        spawn_streaming_clip,
     };
 
     #[derive(Clone, Copy, Debug)]
@@ -3963,6 +4205,60 @@ pub mod bench_support {
         }
     }
 
+    pub struct SessionRateBridgeHarness {
+        input_resampler: AdaptiveResampler,
+        output_converter: SessionOutputConverter,
+    }
+
+    impl SessionRateBridgeHarness {
+        pub fn new(input_rate: u32, session_rate: u32, output_rate: u32) -> Self {
+            let source_frames = 16_384;
+            let ring = HeapRb::<super::InputFrame>::new(source_frames);
+            let (mut producer, consumer) = ring.split();
+            for index in 0..source_frames {
+                let mut frame = [0.0; super::MAX_INPUT_CHANNELS];
+                frame[0] = index as f32 / source_frames as f32;
+                frame[1] = -frame[0];
+                producer
+                    .try_push(frame)
+                    .expect("rate bridge fixture ring has capacity");
+            }
+            Self {
+                input_resampler: AdaptiveResampler::new(
+                    consumer,
+                    input_rate,
+                    session_rate,
+                    2,
+                    source_frames / 2,
+                    source_frames,
+                )
+                .expect("input/session resampler must be valid"),
+                output_converter: SessionOutputConverter::new(session_rate, output_rate, 2)
+                    .expect("session/output resampler must be valid"),
+            }
+        }
+
+        pub fn render_device_block(&mut self, output_frames: usize) -> StereoFrame {
+            let Self {
+                input_resampler,
+                output_converter,
+            } = self;
+            let mut output = [0.0, 0.0];
+            for _ in 0..output_frames {
+                let (frame, _underrun, _rendered_session_frames) =
+                    output_converter.next_frame(|| {
+                        let (input, underrun) = input_resampler.next_frame();
+                        let mut session_output = [0.0; super::MAX_OUTPUT_CHANNELS];
+                        session_output[0] = input[0];
+                        session_output[1] = input[1];
+                        (session_output, underrun)
+                    });
+                output = [frame[0], frame[1]];
+            }
+            output
+        }
+    }
+
     pub fn decode_clip(path: &str, target_sample_rate: u32) -> usize {
         decode_clip_audio(path, target_sample_rate)
             .expect("benchmark fixture must decode")
@@ -4014,12 +4310,13 @@ mod tests {
     };
 
     use super::{
-        AdaptiveResampler, BufferSelection, BufferSize, ClipStoragePolicy, InputPeakBank,
-        LivePlugin, MAX_INPUT_CHANNELS, MEMORY_DECODE_LIMIT_BYTES, METRONOME_ACCENT_NOTE,
-        METRONOME_BEAT_NOTE, MetronomeScheduler, NativeMixerChannel, NativeMixerGraph,
-        NativeMixerSend, NativePluginInstance, SignalWidth, StereoDelayLine, SupportedBufferSize,
-        clip_storage_policy, compiled_graph_snapshot, resolve_stream_devices, select_buffer_size,
-        spawn_streaming_clip,
+        AdaptiveResampler, AudioEngineKey, BufferSelection, BufferSize, ClipStoragePolicy,
+        InputPeakBank, LivePlugin, MAX_INPUT_CHANNELS, MAX_OUTPUT_CHANNELS,
+        MEMORY_DECODE_LIMIT_BYTES, METRONOME_ACCENT_NOTE, METRONOME_BEAT_NOTE, MetronomeScheduler,
+        NativeMixerChannel, NativeMixerGraph, NativeMixerSend, NativePluginInstance,
+        OUTPUT_RESAMPLER_FRAMES, SessionOutputConverter, SignalWidth, StereoDelayLine,
+        SupportedBufferSize, clip_storage_policy, compiled_graph_snapshot, resolve_stream_devices,
+        select_buffer_size, spawn_streaming_clip, validate_session_sample_rate,
     };
     use crate::recording::{NativeRecordingStartConfig, write_deterministic_test_recording};
     use crate::vst3::ProcessContext;
@@ -4095,6 +4392,114 @@ mod tests {
 
         assert!((output[0] - 0.25).abs() < 0.01);
         assert!((output[MAX_INPUT_CHANNELS - 1] + 0.5).abs() < 0.01);
+    }
+
+    #[test]
+    fn native_input_is_converted_to_the_session_rate_without_losing_channels() {
+        let ring = HeapRb::new(8_192);
+        let (mut producer, consumer) = ring.split();
+        for _ in 0..4_096 {
+            let mut input = [0.0; MAX_INPUT_CHANNELS];
+            for (channel, sample) in input.iter_mut().enumerate() {
+                *sample = (channel + 1) as f32 / MAX_INPUT_CHANNELS as f32;
+            }
+            producer.try_push(input).expect("fixture ring has capacity");
+        }
+        let mut resampler =
+            AdaptiveResampler::new(consumer, 48_000, 44_100, MAX_INPUT_CHANNELS, 2_048, 8_192)
+                .expect("resampler configuration is valid");
+        let mut output = [0.0; MAX_INPUT_CHANNELS];
+        for _ in 0..2_048 {
+            (output, _) = resampler.next_frame();
+        }
+
+        for (channel, sample) in output.iter().enumerate() {
+            let expected = (channel + 1) as f32 / MAX_INPUT_CHANNELS as f32;
+            assert!((sample - expected).abs() < 0.01, "channel {channel}");
+        }
+    }
+
+    fn rendered_session_frames(
+        session_sample_rate: u32,
+        output_sample_rate: u32,
+        output_frames: usize,
+    ) -> usize {
+        let mut converter =
+            SessionOutputConverter::new(session_sample_rate, output_sample_rate, 2).unwrap();
+        let mut rendered = 0;
+        for _ in 0..output_frames {
+            let (_, _, frames) = converter.next_frame(|| ([0.0; MAX_OUTPUT_CHANNELS], false));
+            rendered += frames;
+        }
+        rendered
+    }
+
+    #[test]
+    fn session_output_converter_bypasses_equal_rates_exactly() {
+        let converter = SessionOutputConverter::new(48_000, 48_000, 2).unwrap();
+        assert!(matches!(converter, SessionOutputConverter::Bypass));
+        assert_eq!(rendered_session_frames(48_000, 48_000, 48_000), 48_000);
+    }
+
+    #[test]
+    fn session_output_converter_consumes_project_frames_at_44_1_and_96_khz() {
+        for session_sample_rate in [44_100_u32, 96_000] {
+            let rendered = rendered_session_frames(session_sample_rate, 48_000, 48_000);
+            let expected = session_sample_rate as usize;
+            assert!(
+                rendered.abs_diff(expected) <= OUTPUT_RESAMPLER_FRAMES * 2,
+                "{session_sample_rate} Hz rendered {rendered} frames, expected about {expected}"
+            );
+        }
+    }
+
+    #[test]
+    fn session_output_converter_preserves_every_active_hardware_channel() {
+        let mut converter =
+            SessionOutputConverter::new(44_100, 48_000, MAX_OUTPUT_CHANNELS).unwrap();
+        let mut output = [0.0; MAX_OUTPUT_CHANNELS];
+        for _ in 0..4_096 {
+            (output, _, _) = converter.next_frame(|| {
+                let mut frame = [0.0; MAX_OUTPUT_CHANNELS];
+                for (channel, sample) in frame.iter_mut().enumerate() {
+                    *sample = (channel + 1) as f32 / MAX_OUTPUT_CHANNELS as f32;
+                }
+                (frame, false)
+            });
+        }
+        for (channel, sample) in output.iter().enumerate() {
+            let expected = (channel + 1) as f32 / MAX_OUTPUT_CHANNELS as f32;
+            assert!((sample - expected).abs() < 0.01, "channel {channel}");
+        }
+    }
+
+    #[test]
+    fn audio_engine_identity_includes_the_requested_session_rate() {
+        let base = AudioEngineKey {
+            backend: "virtual".to_owned(),
+            input_device_id: "input".to_owned(),
+            output_device_id: "output".to_owned(),
+            requested_buffer_size: 128,
+            requested_session_sample_rate: Some(44_100),
+        };
+        let same = base.clone();
+        let changed = AudioEngineKey {
+            requested_session_sample_rate: Some(96_000),
+            ..base.clone()
+        };
+        assert_eq!(base, same);
+        assert_ne!(base, changed);
+    }
+
+    #[test]
+    fn graph_publication_rejects_a_different_session_rate() {
+        assert!(validate_session_sample_rate(44_100, 44_100).is_ok());
+        let error = validate_session_sample_rate(44_100, 48_000).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("mixer sample rate does not match")
+        );
     }
 
     #[test]

@@ -57,6 +57,7 @@ fn audio_runtime(value: engine::NativeAudioRuntimeSnapshot) -> AudioRuntime {
         requested_buffer_size: value.requested_buffer_size,
         sample_rate: value.sample_rate,
         input_sample_rate: value.input_sample_rate,
+        output_sample_rate: value.output_sample_rate,
         input_buffer_size: value.input_buffer_size,
         output_buffer_size: value.output_buffer_size,
         ring_buffer_capacity_frames: value.ring_buffer_capacity_frames,
@@ -304,6 +305,7 @@ fn engine_command(
                 input_device_id: config.input_device_id,
                 output_device_id: config.output_device_id,
                 buffer_size: config.buffer_size,
+                session_sample_rate: config.session_sample_rate,
             }) {
                 Ok(runtime) => ControlResult::AudioRuntime {
                     runtime: audio_runtime(runtime),
@@ -787,11 +789,7 @@ async fn dispatch_actor_command(
     command: ActorCommand,
 ) -> ControlResult {
     let (reply, response) = oneshot::channel();
-    if sender
-        .send(ActorRequest { command, reply })
-        .await
-        .is_err()
-    {
+    if sender.send(ActorRequest { command, reply }).await.is_err() {
         return ControlResult::Error {
             message: "audio-host actor stopped".into(),
         };

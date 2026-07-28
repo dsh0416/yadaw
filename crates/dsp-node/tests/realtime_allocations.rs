@@ -8,6 +8,7 @@ use std::{
 
 use yadaw_audio_host::engine::bench_support::{
     ParameterQueueHarness, PluginAdapterHarness, RenderHarness, RenderScenario,
+    SessionRateBridgeHarness,
 };
 use yadaw_dsp_core::mixer::{ChannelKind, ChannelSpec, MixerGraph, RouteTarget};
 use yadaw_dsp_node::bench_support::TapHarness;
@@ -161,5 +162,11 @@ fn realtime_mixer_render_preview_and_capture_do_not_allocate() {
     assert_eq!(tap.drain(), 256);
     assert_no_thread_allocations("RecordingTap::push", || {
         tap.push_block();
+    });
+
+    let mut rate_bridge = SessionRateBridgeHarness::new(48_000, 44_100, 48_000);
+    let _ = rate_bridge.render_device_block(1_024);
+    assert_no_thread_allocations("input/session/output rate bridge", || {
+        black_box(rate_bridge.render_device_block(256));
     });
 }

@@ -619,6 +619,7 @@ export interface AudioRuntimeSnapshot {
   requestedBufferSize: number | null
   sampleRate: number | null
   inputSampleRate: number | null
+  outputSampleRate: number | null
   inputBufferSize: number | null
   outputBufferSize: number | null
   ringBufferCapacityFrames: number | null
@@ -638,6 +639,7 @@ export const INITIAL_AUDIO_RUNTIME_SNAPSHOT: Readonly<AudioRuntimeSnapshot> = {
   requestedBufferSize: null,
   sampleRate: null,
   inputSampleRate: null,
+  outputSampleRate: null,
   inputBufferSize: null,
   outputBufferSize: null,
   ringBufferCapacityFrames: null,
