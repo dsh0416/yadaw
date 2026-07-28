@@ -14,7 +14,7 @@ export function getMainLocale(): AppLocale {
   return currentLocale
 }
 
-export function setMainLocale(locale: AppLocale | unknown): AppLocale {
+export function setMainLocale(locale: unknown): AppLocale {
   currentLocale = isAppLocale(locale) ? locale : DEFAULT_LOCALE
   return currentLocale
 }
