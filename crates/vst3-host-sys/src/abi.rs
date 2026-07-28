@@ -4,7 +4,7 @@
 //! emit complete inherited virtual tables for these abstract interfaces, so
 //! the method tables below mirror the declaration order in VST3 SDK 3.8.0.
 
-use std::ffi::c_void;
+use std::{ffi::c_void, os::raw::c_char};
 
 use crate::Steinberg::{
     self, FIDString, FUnknown, IBStream, IPlugFrame, IPlugView, IPlugViewContentScaleSupport,
@@ -21,7 +21,7 @@ use crate::Steinberg::{
 
 pub type QueryInterface = unsafe extern "system" fn(
     this: *mut FUnknown,
-    iid: *const i8,
+    iid: *const c_char,
     object: *mut *mut c_void,
 ) -> tresult;
 pub type AddRef = unsafe extern "system" fn(this: *mut FUnknown) -> uint32;
@@ -111,7 +111,7 @@ pub struct StreamVTable {
 pub struct ComponentVTable {
     pub base: PluginBaseVTable,
     pub get_controller_class_id:
-        unsafe extern "system" fn(this: *mut IComponent, class_id: *mut i8) -> tresult,
+        unsafe extern "system" fn(this: *mut IComponent, class_id: *mut c_char) -> tresult,
     pub set_io_mode: unsafe extern "system" fn(this: *mut IComponent, mode: IoMode) -> tresult,
     pub get_bus_count: unsafe extern "system" fn(
         this: *mut IComponent,
@@ -244,8 +244,8 @@ pub struct HostApplicationVTable {
     pub get_name: unsafe extern "system" fn(this: *mut IHostApplication, name: *mut u16) -> tresult,
     pub create_instance: unsafe extern "system" fn(
         this: *mut IHostApplication,
-        class_id: *mut i8,
-        interface_id: *mut i8,
+        class_id: *mut c_char,
+        interface_id: *mut c_char,
         object: *mut *mut c_void,
     ) -> tresult,
 }

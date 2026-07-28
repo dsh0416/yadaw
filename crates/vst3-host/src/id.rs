@@ -1,4 +1,6 @@
-use std::{fmt, str::FromStr};
+use std::{fmt, os::raw::c_char, str::FromStr};
+
+use yadaw_vst3_host_sys::{Steinberg::TUID, compat::tuid_byte};
 
 use crate::HostError;
 
@@ -22,7 +24,7 @@ impl ClassId {
 
     /// Returns the target ABI byte order expected by VST3 interface calls.
     #[must_use]
-    pub const fn to_tuid(self) -> [i8; 16] {
+    pub const fn to_tuid(self) -> TUID {
         #[cfg(windows)]
         let bytes = [
             self.0[3], self.0[2], self.0[1], self.0[0], self.0[5], self.0[4], self.0[7], self.0[6],
@@ -31,10 +33,10 @@ impl ClassId {
         ];
         #[cfg(not(windows))]
         let bytes = self.0;
-        let mut result = [0_i8; 16];
+        let mut result = [tuid_byte(0); 16];
         let mut index = 0;
         while index < 16 {
-            result[index] = bytes[index] as i8;
+            result[index] = tuid_byte(bytes[index]);
             index += 1;
         }
         result
@@ -42,7 +44,7 @@ impl ClassId {
 
     /// Creates the canonical, platform-independent ID from a VST3 ABI TUID.
     #[must_use]
-    pub const fn from_tuid(value: [i8; 16]) -> Self {
+    pub const fn from_tuid(value: TUID) -> Self {
         let mut bytes = [0_u8; 16];
         let mut index = 0;
         while index < 16 {
@@ -61,7 +63,7 @@ impl ClassId {
 impl FromStr for ClassId {
     type Err = HostError;
 
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
+    fn from_str(value: &str) -> Result<Self, HostError> {
         let compact = value
             .bytes()
             .filter(|byte| !matches!(byte, b'{' | b'}' | b'-'))
@@ -93,6 +95,18 @@ impl fmt::Display for ClassId {
         }
         Ok(())
     }
+}
+
+/// Reads a NUL-terminated Steinberg `char8` buffer as lossy UTF-8.
+pub(crate) fn fixed_c_string<const N: usize>(bytes: &[c_char; N]) -> String {
+    let length = bytes.iter().position(|value| *value == 0).unwrap_or(N);
+    String::from_utf8_lossy(
+        &bytes[..length]
+            .iter()
+            .map(|value| *value as u8)
+            .collect::<Vec<_>>(),
+    )
+    .into_owned()
 }
 
 #[cfg(test)]

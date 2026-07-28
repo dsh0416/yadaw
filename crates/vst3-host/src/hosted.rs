@@ -12,13 +12,14 @@ use std::{
 
 use yadaw_vst3_host_sys::{
     Steinberg::{
-        IPlugFrame, IPlugView, IPlugViewContentScaleSupport, IPluginBase, ViewRect,
+        IPlugFrame, IPlugView, IPlugViewContentScaleSupport, IPluginBase, TUID, ViewRect,
         Vst::{IComponent, IConnectionPoint, IEditController, ParameterInfo},
     },
     abi::{
         ComponentVTable, ConnectionPointVTable, EditControllerVTable,
         PlugViewContentScaleSupportVTable, PlugViewVTable,
     },
+    compat::tuid_byte,
 };
 
 use crate::{
@@ -629,7 +630,7 @@ fn create_controller(
     module: &Rc<Module>,
     processor: &StereoProcessor,
 ) -> HostResult<Option<ComPtr<IEditController>>> {
-    let mut controller_id = [0_i8; 16];
+    let mut controller_id: TUID = [tuid_byte(0); 16];
     let result = unsafe {
         // SAFETY: component is initialized and controller_id is writable TUID storage.
         ((*component_table(processor.component())).get_controller_class_id)(

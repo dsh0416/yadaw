@@ -177,6 +177,11 @@ interaction, and dark/light themes.
 The toolbar disables motion by default for deterministic screenshots. Choose **Motion enabled**
 only for a motion-specific review.
 
+Pixel-based visual snapshots are temporarily skipped in CI while the design system uses
+platform-dependent system fonts. Run them locally with `mise exec -- pnpm design:test`. Re-enable
+the CI snapshot comparisons after the interface fonts are bundled for deterministic rendering.
+Storybook browser tests plus the controls and reflow Playwright tests remain enabled in CI.
+
 ## Contribution checklist
 
 - Choose an existing primitive before creating a new generic component.

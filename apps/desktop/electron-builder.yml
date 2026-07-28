@@ -1,5 +1,7 @@
 appId: dev.yadaw.studio
 productName: YADAW
+# AppImage rejects `@` from the scoped package name `@yadaw/desktop`.
+executableName: yadaw
 asar: true
 asarUnpack:
   - "**/*.node"

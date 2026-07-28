@@ -505,6 +505,22 @@ tail queries, parameter/state exchange, controller connections, and editor
 interfaces. The production scanner uses the Rust `yadaw-vst3-probe` binary.
 There is no production C++ bridge or bridge path argument.
 
+Bindgen types follow the target C ABI and must not be papered over with
+hardcoded Rust primitives at call sites:
+
+- `TUID` / `int8` / `char8` are `c_char` (signedness varies by target). Use
+  `TUID` and `compat::tuid_byte` instead of `[i8; 16]` or `*const i8`.
+- C++ unscoped enum constants may bind as signed (`c_int` / `i32`) or unsigned
+  (`u32`) depending on the target toolchain. Steinberg fields and parameters
+  use typedefs such as `int32`, `uint32`, `MediaType`, and `BusDirection`. Cast
+  enum constants to the **destination** typedef through `compat::as_int32`,
+  `compat::as_uint32`, `compat::as_media_type`, `compat::as_bus_direction`, or
+  `compat::process_context_state` (via `compat::BindgenEnum`) — never assume
+  the enum constant type or flip platform-specific bare casts.
+- Windows `COM_COMPATIBLE` TUID byte order and hand-written
+  `extern "system"` vtables remain intentional ABI differences; keep them in
+  `iid` / `abi`, separate from the typedef facade.
+
 VST3 component/controller and processor ownership is split deliberately:
 
 - controller, state/UI coordination, `IComponentHandler`, `IPlugView`, and

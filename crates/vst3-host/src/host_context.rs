@@ -1,5 +1,6 @@
 use std::{
     ffi::c_void,
+    os::raw::c_char,
     sync::atomic::{AtomicU32, Ordering},
 };
 
@@ -30,7 +31,7 @@ impl HostContext {
 
 unsafe extern "system" fn query_interface(
     this: *mut FUnknown,
-    requested: *const i8,
+    requested: *const c_char,
     output: *mut *mut c_void,
 ) -> tresult {
     if requested.is_null() || output.is_null() {
@@ -93,8 +94,8 @@ unsafe extern "system" fn get_name(_this: *mut IHostApplication, name: *mut u16)
 
 unsafe extern "system" fn create_instance(
     _this: *mut IHostApplication,
-    _class_id: *mut i8,
-    _interface_id: *mut i8,
+    _class_id: *mut c_char,
+    _interface_id: *mut c_char,
     output: *mut *mut c_void,
 ) -> tresult {
     if !output.is_null() {

@@ -414,39 +414,69 @@ mod platform {
     type Class = *mut c_void;
 
     unsafe fn send_id(receiver: *mut c_void, selector: Sel) -> *mut c_void {
-        let function: unsafe extern "C" fn(*mut c_void, Sel) -> *mut c_void =
-            unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-        unsafe { function(receiver, selector) }
+        let function: unsafe extern "C" fn(*mut c_void, Sel) -> *mut c_void = unsafe {
+            // SAFETY: casts objc_msgSend to the id-returning selector signature used below.
+            std::mem::transmute(objc_msgSend as *const ())
+        };
+        unsafe {
+            // SAFETY: receiver and selector form a valid Objective-C message for this signature.
+            function(receiver, selector)
+        }
     }
 
     unsafe fn send_id_rect(receiver: *mut c_void, selector: Sel, value: Rect) -> *mut c_void {
-        let function: unsafe extern "C" fn(*mut c_void, Sel, Rect) -> *mut c_void =
-            unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-        unsafe { function(receiver, selector, value) }
+        let function: unsafe extern "C" fn(*mut c_void, Sel, Rect) -> *mut c_void = unsafe {
+            // SAFETY: casts objc_msgSend to the id/Rect selector signature used below.
+            std::mem::transmute(objc_msgSend as *const ())
+        };
+        unsafe {
+            // SAFETY: receiver, selector, and Rect argument match this Objective-C message.
+            function(receiver, selector, value)
+        }
     }
 
     unsafe fn send_void(receiver: *mut c_void, selector: Sel) {
-        let function: unsafe extern "C" fn(*mut c_void, Sel) =
-            unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-        unsafe { function(receiver, selector) }
+        let function: unsafe extern "C" fn(*mut c_void, Sel) = unsafe {
+            // SAFETY: casts objc_msgSend to the void selector signature used below.
+            std::mem::transmute(objc_msgSend as *const ())
+        };
+        unsafe {
+            // SAFETY: receiver and selector form a valid Objective-C message for this signature.
+            function(receiver, selector)
+        }
     }
 
     unsafe fn send_void_id(receiver: *mut c_void, selector: Sel, value: *mut c_void) {
-        let function: unsafe extern "C" fn(*mut c_void, Sel, *mut c_void) =
-            unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-        unsafe { function(receiver, selector, value) }
+        let function: unsafe extern "C" fn(*mut c_void, Sel, *mut c_void) = unsafe {
+            // SAFETY: casts objc_msgSend to the void/id selector signature used below.
+            std::mem::transmute(objc_msgSend as *const ())
+        };
+        unsafe {
+            // SAFETY: receiver, selector, and object argument match this Objective-C message.
+            function(receiver, selector, value)
+        }
     }
 
     unsafe fn send_void_rect(receiver: *mut c_void, selector: Sel, value: Rect) {
-        let function: unsafe extern "C" fn(*mut c_void, Sel, Rect) =
-            unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-        unsafe { function(receiver, selector, value) }
+        let function: unsafe extern "C" fn(*mut c_void, Sel, Rect) = unsafe {
+            // SAFETY: casts objc_msgSend to the void/Rect selector signature used below.
+            std::mem::transmute(objc_msgSend as *const ())
+        };
+        unsafe {
+            // SAFETY: receiver, selector, and Rect argument match this Objective-C message.
+            function(receiver, selector, value)
+        }
     }
 
     unsafe fn send_void_bool(receiver: *mut c_void, selector: Sel, value: i8) {
-        let function: unsafe extern "C" fn(*mut c_void, Sel, i8) =
-            unsafe { std::mem::transmute(objc_msgSend as *const ()) };
-        unsafe { function(receiver, selector, value) }
+        let function: unsafe extern "C" fn(*mut c_void, Sel, i8) = unsafe {
+            // SAFETY: casts objc_msgSend to the void/BOOL selector signature used below.
+            std::mem::transmute(objc_msgSend as *const ())
+        };
+        unsafe {
+            // SAFETY: receiver, selector, and BOOL argument match this Objective-C message.
+            function(receiver, selector, value)
+        }
     }
 
     #[link(name = "objc")]
@@ -605,10 +635,17 @@ mod platform {
     }
 
     unsafe fn set_xembed_info(display: *mut Display, window: XWindow) {
-        let property = unsafe { XInternAtom(display, c"_XEMBED_INFO".as_ptr(), 0) };
-        let cardinal = unsafe { XInternAtom(display, c"CARDINAL".as_ptr(), 0) };
+        let property = unsafe {
+            // SAFETY: display is a live X11 connection and the atom name is a static C string.
+            XInternAtom(display, c"_XEMBED_INFO".as_ptr(), 0)
+        };
+        let cardinal = unsafe {
+            // SAFETY: display is a live X11 connection and the atom name is a static C string.
+            XInternAtom(display, c"CARDINAL".as_ptr(), 0)
+        };
         let values = [0_u32, 1_u32];
         unsafe {
+            // SAFETY: display/window are live, atoms were interned above, and values outlives the call.
             XChangeProperty(
                 display,
                 window,

@@ -3,7 +3,7 @@ use std::{ffi::c_void, marker::PhantomData, ptr::NonNull};
 use yadaw_vst3_host_sys::{
     Steinberg::{
         FUnknown, IBStream, IPlugFrame, IPlugView, IPlugViewContentScaleSupport, IPluginBase,
-        IPluginFactory, IPluginFactory2, IPluginFactory3,
+        IPluginFactory, IPluginFactory2, IPluginFactory3, TUID,
         Vst::{
             IAudioProcessor, IComponent, IComponentHandler, IConnectionPoint, IEditController,
             IEventList, IHostApplication, IParamValueQueue, IParameterChanges,
@@ -25,14 +25,14 @@ mod private {
 /// vtable layout declared by the selected VST3 SDK version.
 pub trait ComInterface: private::Sealed {
     /// The target-specific interface identifier.
-    const IID: [i8; 16];
+    const IID: TUID;
 }
 
 macro_rules! interface {
     ($type:ty, $iid:expr) => {
         impl private::Sealed for $type {}
         impl ComInterface for $type {
-            const IID: [i8; 16] = $iid;
+            const IID: TUID = $iid;
         }
     };
 }

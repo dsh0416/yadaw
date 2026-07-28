@@ -1,0 +1,139 @@
+name: Publish
+
+on:
+  workflow_run:
+    workflows: ["Test", "Build"]
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    name: Wait for Test and Build
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      startsWith(github.event.workflow_run.head_branch, 'v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      ready: ${{ steps.peer.outputs.ready }}
+      version: ${{ steps.peer.outputs.version }}
+      tag: ${{ steps.peer.outputs.tag }}
+      build_run_id: ${{ steps.peer.outputs.build_run_id }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+
+      - name: Confirm Test and Build succeeded
+        id: peer
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          TAG_NAME: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          version="$(tr -d '\r\n' < VERSION)"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::VERSION is not a valid release version: $version"
+            exit 1
+          fi
+
+          if [[ "$TAG_NAME" != "v$version" ]]; then
+            echo "::error::Tag $TAG_NAME does not match VERSION ($version)"
+            exit 1
+          fi
+
+          test_run="$(
+            gh run list \
+              --workflow test.yml \
+              --commit "$HEAD_SHA" \
+              --json databaseId,conclusion \
+              --jq '[.[] | select(.conclusion == "success")][0].databaseId // empty'
+          )"
+          build_run="$(
+            gh run list \
+              --workflow build.yml \
+              --commit "$HEAD_SHA" \
+              --json databaseId,conclusion \
+              --jq '[.[] | select(.conclusion == "success")][0].databaseId // empty'
+          )"
+
+          if [[ -z "$test_run" || -z "$build_run" ]]; then
+            echo "Test and Build have not both succeeded for $HEAD_SHA yet; skipping."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG_NAME" >> "$GITHUB_OUTPUT"
+          echo "build_run_id=$build_run" >> "$GITHUB_OUTPUT"
+
+  release:
+    name: Publish GitHub Release
+    if: needs.gate.outputs.ready == 'true'
+    needs: gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Download installers from Build
+        uses: actions/download-artifact@v8
+        with:
+          pattern: yadaw-*
+          path: release-assets
+          merge-multiple: true
+          github-token: ${{ github.token }}
+          run-id: ${{ needs.gate.outputs.build_run_id }}
+
+      - name: Generate SHA-256 checksums
+        shell: bash
+        working-directory: release-assets
+        run: sha256sum * > SHA256SUMS
+
+      - name: Attest release artifacts
+        if: github.event.repository.visibility == 'public'
+        uses: actions/attest@v4
+        with:
+          subject-path: release-assets/*
+
+      - name: Create or update GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ needs.gate.outputs.tag }}
+        run: |
+          release_args=(
+            --verify-tag
+            --generate-notes
+            --title "YADAW $TAG_NAME"
+          )
+
+          if [[ "$TAG_NAME" == *-* ]]; then
+            release_args+=(--prerelease)
+          else
+            release_args+=(--latest)
+          fi
+
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            gh release upload "$TAG_NAME" release-assets/* --clobber
+          else
+            gh release create \
+              "$TAG_NAME" \
+              release-assets/* \
+              "${release_args[@]}"
+          fi
