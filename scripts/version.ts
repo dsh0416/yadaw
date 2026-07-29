@@ -5,10 +5,15 @@ const workspaceRoot = process.cwd()
 const versionFilePath = join(workspaceRoot, "VERSION")
 const cargoTomlPath = join(workspaceRoot, "Cargo.toml")
 const packageGlobs = ["apps", "packages", "crates"] as const
+const napiLoaderPaths = [
+  join(workspaceRoot, "crates", "audio-host-client", "index.js"),
+  join(workspaceRoot, "crates", "dsp-node", "index.js")
+] as const
 const semverPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/
 const workspacePackageSection = /\[workspace\.package\][^\n]*\n([\s\S]*?)(?=\n\[|\s*$)/
 const workspacePackageVersion = /^\s*version\s*=\s*"([^"]+)"/m
 const packageJsonVersion = /^(\s*"version"\s*:\s*")([^"]+)(")/m
+const napiLoaderVersion = /bindingPackageVersion !== '([^']+)'/g
 
 type Target = {
   label: string
@@ -65,6 +70,22 @@ function writePackageJsonVersion(path: string, version: string): void {
     fail(`Missing top-level "version" in ${relative(workspaceRoot, path)}`)
   }
   writeFileSync(path, source.replace(packageJsonVersion, `$1${version}$3`))
+}
+
+function readNapiLoaderVersion(path: string): string {
+  const source = readFileSync(path, "utf8")
+  const versions = new Set([...source.matchAll(napiLoaderVersion)].map((match) => match[1]))
+
+  if (versions.size === 0) {
+    fail(`Missing binding package version checks in ${relative(workspaceRoot, path)}`)
+  }
+  if (versions.size > 1) {
+    fail(
+      `Inconsistent binding package versions in ${relative(workspaceRoot, path)}: ${[...versions].join(", ")}`
+    )
+  }
+
+  return [...versions][0]!
 }
 
 function readCargoWorkspaceVersion(): string {
@@ -131,18 +152,27 @@ function checkVersions(expected: string): void {
     }
   }
 
+  for (const path of napiLoaderPaths) {
+    const actual = readNapiLoaderVersion(path)
+    if (actual !== expected) {
+      mismatches.push(
+        `  ${relative(workspaceRoot, path).replaceAll("\\", "/")}: ${actual} (expected ${expected})`
+      )
+    }
+  }
+
   if (mismatches.length > 0) {
     fail(
       [
         `Version mismatch against VERSION (${expected}):`,
         ...mismatches,
         "",
-        "Run `pnpm sync:version` to update all package manifests."
+        "Run `pnpm sync:version` to synchronize manifests and generated loaders."
       ].join("\n")
     )
   }
 
-  console.log(`All package versions match VERSION (${expected}).`)
+  console.log(`All package and generated loader versions match VERSION (${expected}).`)
 }
 
 function syncVersions(expected: string): void {

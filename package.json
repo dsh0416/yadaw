@@ -1,6 +1,6 @@
 {
   "name": "yadaw",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "license": "GPL-3.0-only",
   "private": true,
   "type": "module",
@@ -18,7 +18,8 @@
     "check": "pnpm check:version && pnpm format:prettier:check && pnpm lint:eslint && pnpm lint:design && pnpm check:configs && pnpm check:rust && pnpm -r --if-present check && pnpm --filter @yadaw/desktop test:unit && pnpm --filter @yadaw/project-db test:integration && pnpm design:test && pnpm design:build",
     "check:configs": "tsc --noEmit -p tsconfig.config.json",
     "check:version": "node scripts/version.ts check",
-    "sync:version": "node scripts/version.ts sync",
+    "sync:version": "node scripts/version.ts sync && pnpm sync:napi-bindings",
+    "sync:napi-bindings": "pnpm --filter @yadaw/dsp-node build:debug && pnpm --filter @yadaw/audio-host-client build:debug",
     "check:rust": "pnpm format:rust:check && pnpm lint:rust && pnpm test:rust && pnpm bench:rust:check",
     "test:rust": "cargo test --workspace && cargo test -p yadaw-dsp-node --features bench-internals --test realtime_allocations",
     "bench:rust:check": "cargo bench --workspace --bench mixer_graph --bench render_runtime --bench media_streaming --bench recording --features yadaw-dsp-node/bench-internals --no-run",
