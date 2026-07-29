@@ -11,6 +11,7 @@ export interface ControlResponse {
     type:
       | "pong"
       | "benchmark-echo"
+      | "audio-benchmark"
       | "heartbeat"
       | "accepted"
       | "audio-backends"
@@ -53,6 +54,7 @@ export interface ControlResponse {
     component_state?: BinaryPayloadWire
     controller_state?: BinaryPayloadWire
     payload?: BinaryPayloadWire
+    report?: AudioHostBenchmarkReport
     active_mode?: PluginEditorMode
     open?: boolean
     backends?: AudioBackendDescriptor[]
@@ -138,6 +140,34 @@ export interface AudioHostMeter {
   held_left: number
   held_right: number
   clipped: boolean
+}
+
+export interface AudioHostBenchmarkReport {
+  duration_ms: number
+  overall_realtime_factor: number
+  worst_p99_deadline_utilization_percent: number
+  scenarios: Array<{
+    id: string
+    label: string
+    description: string
+    sample_rate: number
+    block_size: number
+    tracks: number
+    buses: number
+    sends: number
+    plugins: number
+    elapsed_ms: number
+    audio_duration_ms: number
+    average_block_ms: number
+    p95_block_ms: number
+    p99_block_ms: number
+    max_block_ms: number
+    buffer_budget_ms: number
+    p99_deadline_utilization_percent: number
+    deadline_misses: number
+    measured_blocks: number
+    realtime_factor: number
+  }>
 }
 
 export type BinaryPayloadWire =

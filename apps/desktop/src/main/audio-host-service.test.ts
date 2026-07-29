@@ -26,6 +26,7 @@ const fakeHost = vi.hoisted(() => {
     delayedEngineRequestId = 0
     heartbeatCalls = 0
     closed = false
+    failAudioBenchmark = false
     engineState: "running" | "stopped" = "stopped"
     sessionSampleRate = 48_000
     outputSampleRate = 48_000
@@ -124,6 +125,28 @@ const fakeHost = vi.hoisted(() => {
           }
         })
       }
+      if (request.command.type === "load-plugin") {
+        return response({
+          type: "plugin-loaded",
+          runtime_handle: 1,
+          latency_samples: 0,
+          tail_samples: 0
+        })
+      }
+      if (request.command.type === "run-audio-benchmark") {
+        if (this.failAudioBenchmark) {
+          return response({ type: "error", message: "benchmark failed" })
+        }
+        return response({
+          type: "audio-benchmark",
+          report: {
+            duration_ms: 1,
+            overall_realtime_factor: 2,
+            worst_p99_deadline_utilization_percent: 10,
+            scenarios: []
+          }
+        })
+      }
       return response({ type: "accepted" })
     }
 
@@ -212,6 +235,7 @@ vi.mock("@yadaw/audio-host-client", () => ({
 
 import { AudioHostService } from "./audio-host-service"
 import type { AudioHostGraph } from "./audio-host-service"
+import type { PluginDescriptor } from "@yadaw/contracts"
 
 function graph(sampleRate: number): {
   project: MixerGraphSnapshot
@@ -400,6 +424,60 @@ describe("AudioHostService recovery", () => {
     expect(config.session_sample_rate).toBeNull()
     expect(runtime.sampleRate).toBe(48_000)
     expect(runtime.outputSampleRate).toBe(48_000)
+
+    await service.stop()
+  })
+
+  it("unloads audio benchmark VST3 instances after success and failure", async () => {
+    const effect = {
+      kind: "effect",
+      compatibility: "compatible",
+      supportedAudioModes: ["stereo"],
+      classId: "test-gain",
+      modulePath: "/tmp/gain.vst3"
+    } as PluginDescriptor
+
+    const service = new AudioHostService(
+      "audio-host",
+      "crash-marker",
+      {
+        workerThreads: "auto",
+        maxBlockingThreads: "auto",
+        egressConcurrency: "auto"
+      },
+      undefined,
+      () => {},
+      async () => {}
+    )
+    service.start()
+    const client = fakeHost.Client.instances[0]!
+
+    await service.runAudioBenchmark(effect)
+    const commandTypes = client.commands.map((command) => command.type)
+    const firstBenchmark = commandTypes.indexOf("run-audio-benchmark")
+    expect(commandTypes.slice(0, firstBenchmark)).toEqual(Array(64).fill("load-plugin"))
+    expect(commandTypes.slice(firstBenchmark, firstBenchmark + 1)).toEqual(["run-audio-benchmark"])
+    expect(commandTypes.slice(firstBenchmark + 1)).toEqual(Array(64).fill("unload-plugin"))
+    const unloadIds = client.commands
+      .filter((command) => command.type === "unload-plugin")
+      .map((command) => command.instance_id)
+    expect(unloadIds[0]).toBe("__yadaw-audio-benchmark-gain-0")
+    expect(unloadIds[63]).toBe("__yadaw-audio-benchmark-gain-63")
+    expect(
+      (
+        service as unknown as { plugins: { loadedInstanceIds(): string[] } }
+      ).plugins.loadedInstanceIds()
+    ).toEqual([])
+
+    client.commands.length = 0
+    client.failAudioBenchmark = true
+    await expect(service.runAudioBenchmark(effect)).rejects.toThrow("benchmark failed")
+    expect(client.commands.filter((command) => command.type === "unload-plugin")).toHaveLength(64)
+    expect(
+      (
+        service as unknown as { plugins: { loadedInstanceIds(): string[] } }
+      ).plugins.loadedInstanceIds()
+    ).toEqual([])
 
     await service.stop()
   })

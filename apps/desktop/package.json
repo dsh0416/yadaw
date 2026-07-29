@@ -17,7 +17,7 @@
     "test:unit": "vitest run",
     "test:vst3-helper": "node scripts/vst3-helper-smoke.ts",
     "test:vst3-editor": "node scripts/vst3-editor-smoke.ts",
-    "test:builtin-vst3": "node scripts/builtin-vst3-smoke.ts",
+    "test:builtin-vst3": "node scripts/builtin-vst3-smoke.ts && node scripts/audio-benchmark-smoke.ts",
     "test:ipc": "node scripts/ipc-smoke.ts",
     "test:e2e": "pnpm predev && pnpm build && playwright test",
     "pack": "pnpm --workspace-root build:native && pnpm build && electron-builder --dir --publish never",

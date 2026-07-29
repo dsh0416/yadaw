@@ -111,6 +111,19 @@ export class AudioHostPluginClient {
     return status
   }
 
+  async unloadPlugin(instanceId: string): Promise<void> {
+    if (!this.loadedPlugins.has(instanceId)) return
+    try {
+      await this.request({
+        type: "unload-plugin",
+        instance_id: instanceId
+      })
+    } finally {
+      this.loadedPlugins.delete(instanceId)
+      this.recoveryBypassed.delete(instanceId)
+    }
+  }
+
   async pluginParameters(instanceId: string): Promise<PluginParameterInfo[]> {
     const response = await this.request({
       type: "plugin-parameters",

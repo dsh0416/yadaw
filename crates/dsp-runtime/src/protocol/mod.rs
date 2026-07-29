@@ -112,6 +112,9 @@ pub enum ControlCommand {
     BenchmarkEcho {
         payload: BinaryPayload,
     },
+    RunAudioBenchmark {
+        plugin_instance_ids: Vec<String>,
+    },
     Shutdown,
     ListAudioBackends,
     ListAudioDevices {
@@ -194,6 +197,9 @@ pub enum ControlResult {
     Pong,
     BenchmarkEcho {
         payload: BinaryPayload,
+    },
+    AudioBenchmark {
+        report: AudioBenchmarkReport,
     },
     Heartbeat {
         ipc_generation: u64,

@@ -116,5 +116,6 @@ include!("engine/resampling.rs");
 include!("engine/lifecycle.rs");
 include!("engine/publication.rs");
 include!("engine/recording.rs");
+include!("engine/benchmark.rs");
 include!("engine/bench_support.rs");
 include!("engine/tests.rs");

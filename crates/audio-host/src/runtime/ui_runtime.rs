@@ -115,7 +115,21 @@ impl WinitHost {
             }
             ActorCommand::Control(ControlCommand::UnloadPlugin { instance_id }) => {
                 self.close_editor(&instance_id);
-                ActorCommand::Control(ControlCommand::UnloadPlugin { instance_id })
+                if let Ok(mut processors) = self.processors.lock() {
+                    processors.remove(&instance_id);
+                }
+                let Some(runtime) = self.vst3.as_mut() else {
+                    let _ = reply.send(ControlResult::Error {
+                        message: "VST3 UI runtime is shutting down".into(),
+                    });
+                    return;
+                };
+                // Benchmark (and other non-graph) instances are dropped immediately. Instances that
+                // still appear in the last native mixer graph are retained until helper shutdown so
+                // retiring mixer generations cannot use a freed ProcessorLease.
+                let retain_for_graph = engine::native_graph_references_plugin(&instance_id);
+                let _ = reply.send(runtime.unload_plugin(&instance_id, retain_for_graph));
+                return;
             }
             command => command,
         };

@@ -287,6 +287,34 @@ pub fn heartbeat_snapshot() -> (u64, String) {
     })
 }
 
+/// Returns true when the last candidate/native mixer graph still lists `instance_id`.
+///
+/// Unload callers use this to decide whether the VST3 allocation must be retained for a mixer
+/// generation that may still hold a processor lease.
+pub fn native_graph_references_plugin(instance_id: &str) -> bool {
+    LAST_NATIVE_GRAPH
+        .get_or_init(|| Mutex::new(None))
+        .lock()
+        .ok()
+        .and_then(|graph| {
+            graph.as_ref().map(|graph| {
+                graph
+                    .plugins
+                    .iter()
+                    .any(|plugin| plugin.instance_id == instance_id)
+            })
+        })
+        .unwrap_or(false)
+}
+
+#[cfg(test)]
+pub(crate) fn set_last_native_graph_for_test(graph: Option<NativeMixerGraph>) {
+    *LAST_NATIVE_GRAPH
+        .get_or_init(|| Mutex::new(None))
+        .lock()
+        .expect("last mixer graph lock") = graph;
+}
+
 pub fn published_graph_generation() -> u64 {
     engine_slot()
         .lock()

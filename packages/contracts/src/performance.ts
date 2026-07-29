@@ -110,6 +110,7 @@ export interface AudioBenchmarkScenario {
   tracks: number
   buses: number
   sends: number
+  plugins: number
   elapsedMs: number
   audioDurationMs: number
   averageBlockMs: number

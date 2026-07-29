@@ -189,6 +189,47 @@ async fn vst3_actor(
                         }
                     }
                 }
+                ControlCommand::RunAudioBenchmark {
+                    plugin_instance_ids,
+                } => {
+                    let processors = processors
+                        .lock()
+                        .map_err(|_| "VST3 processor registry is poisoned".to_owned())
+                        .and_then(|processors| {
+                            plugin_instance_ids
+                                .iter()
+                                .map(|instance_id| {
+                                    processors
+                                        .get(instance_id)
+                                        .cloned()
+                                        .map(|processor| (instance_id.clone(), processor))
+                                        .ok_or_else(|| {
+                                            format!(
+                                                "audio benchmark VST3 instance `{instance_id}` is not loaded"
+                                            )
+                                        })
+                                })
+                                .collect::<Result<Vec<_>, _>>()
+                        });
+                    match processors {
+                        Err(message) => ControlResult::Error { message },
+                        Ok(processors) => {
+                            match tokio::task::spawn_blocking(move || {
+                                engine::run_audio_benchmark(processors)
+                            })
+                            .await
+                            {
+                                Ok(Ok(report)) => ControlResult::AudioBenchmark { report },
+                                Ok(Err(message)) => ControlResult::Error { message },
+                                Err(error) => ControlResult::Error {
+                                    message: format!(
+                                        "audio benchmark worker did not complete: {error}"
+                                    ),
+                                },
+                            }
+                        }
+                    }
+                }
                 _ => ControlResult::Error {
                     message: "unsupported VST3 actor command".into(),
                 },
@@ -254,6 +295,7 @@ fn is_vst3_command(command: &ControlCommand) -> bool {
             | ControlCommand::SavePluginState { .. }
             | ControlCommand::OpenPluginEditor { .. }
             | ControlCommand::ClosePluginEditor { .. }
+            | ControlCommand::RunAudioBenchmark { .. }
     )
 }
 
@@ -273,6 +315,7 @@ fn protocol_deadline(command: &ControlCommand) -> std::time::Duration {
             | ControlCommand::SavePluginState { .. }
             | ControlCommand::OpenPluginEditor { .. }
             | ControlCommand::ClosePluginEditor { .. }
+            | ControlCommand::RunAudioBenchmark { .. }
     ) {
         std::time::Duration::from_secs(15)
     } else {

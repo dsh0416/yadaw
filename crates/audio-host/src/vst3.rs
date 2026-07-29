@@ -256,13 +256,9 @@ impl Vst3Runtime {
                 })
             }
             ControlCommand::UnloadPlugin { instance_id } => {
-                // Retired audio graphs may still hold a processor lease. Remove the instance from
-                // the live UI registry immediately, but retain its allocation until helper
-                // shutdown, after the audio engine and every graph generation have stopped.
-                if let Some(instance) = self.instances.remove(&instance_id) {
-                    self.retired_instances.push(instance);
-                }
-                ControlResult::Accepted
+                // Compatibility/wire callers do not know whether a mixer generation still holds a
+                // lease, so retain the allocation until helper shutdown.
+                self.unload_plugin(&instance_id, true)
             }
             ControlCommand::PluginParameters { instance_id } => {
                 self.plugin_parameters(&instance_id)
@@ -281,6 +277,26 @@ impl Vst3Runtime {
             ControlCommand::ClosePluginEditor { .. } => ControlResult::Accepted,
             _ => control_error("command is not a VST3 runtime command"),
         }
+    }
+
+    /// Remove a live instance from the UI registry.
+    ///
+    /// When `retain_for_graph` is true, keep the allocation in `retired_instances` because a live
+    /// or retiring mixer generation may still hold a `ProcessorLease` into it. Temporary owners
+    /// such as the audio benchmark must pass false so repeated runs do not accumulate plug-ins
+    /// until helper exit.
+    pub fn unload_plugin(&mut self, instance_id: &str, retain_for_graph: bool) -> ControlResult {
+        if let Some(instance) = self.instances.remove(instance_id)
+            && retain_for_graph
+        {
+            self.retired_instances.push(instance);
+        }
+        ControlResult::Accepted
+    }
+
+    #[cfg(test)]
+    pub(crate) fn retired_instance_count(&self) -> usize {
+        self.retired_instances.len()
     }
 
     pub fn processor_handle(&self, instance_id: &str) -> Option<Vst3ProcessorHandle> {
@@ -600,6 +616,20 @@ mod tests {
             },
         );
         assert!(matches!(result, ControlResult::Error { .. }));
+    }
+
+    #[test]
+    fn unload_of_a_missing_instance_is_accepted_without_retirement() {
+        let mut runtime = Vst3Runtime::new();
+        assert!(matches!(
+            runtime.unload_plugin("missing", false),
+            ControlResult::Accepted
+        ));
+        assert!(matches!(
+            runtime.unload_plugin("missing", true),
+            ControlResult::Accepted
+        ));
+        assert_eq!(runtime.retired_instance_count(), 0);
     }
 
     #[test]

@@ -31,7 +31,7 @@
     "test:unit": "cargo test --workspace && pnpm --filter @yadaw/desktop test:unit",
     "test:integration": "pnpm --filter @yadaw/project-db test:integration",
     "test:vst3-fixtures": "cmake -S . -B target/vst3-fixtures -DYADAW_BUILD_VST3_FIXTURES=ON && cmake --build target/vst3-fixtures/third_party/vst3sdk/public.sdk/samples/vst/again --config Debug --target again && cmake --build target/vst3-fixtures/third_party/vst3sdk/public.sdk/samples/vst/note_expression_synth --config Debug --target note-expression-synth && cargo build -p yadaw-audio-host && pnpm --filter @yadaw/desktop test:vst3-helper && pnpm --filter @yadaw/desktop test:vst3-editor",
-    "test:builtin-vst3": "cargo truce build --vst3 --debug && cargo build -p yadaw-audio-host -p yadaw-vst3-host --bin yadaw-vst3-probe && pnpm --filter @yadaw/desktop test:builtin-vst3",
+    "test:builtin-vst3": "cargo truce build --vst3 --debug && cargo build -p yadaw-audio-host -p yadaw-vst3-host --bin yadaw-vst3-probe && pnpm --filter @yadaw/audio-host-client build:debug && pnpm --filter @yadaw/desktop test:builtin-vst3",
     "test:e2e": "pnpm --filter @yadaw/desktop test:e2e",
     "design:dev": "pnpm --filter @yadaw/design-system dev",
     "design:build": "pnpm --filter @yadaw/design-system build",

@@ -68,3 +68,35 @@ pub struct RoundTripLatencyMeasurement {
     pub measured_round_trip_latency_ms: Option<f64>,
     pub failure: Option<String>,
 }
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AudioBenchmarkScenario {
+    pub id: String,
+    pub label: String,
+    pub description: String,
+    pub sample_rate: u32,
+    pub block_size: u32,
+    pub tracks: u32,
+    pub buses: u32,
+    pub sends: u32,
+    pub plugins: u32,
+    pub elapsed_ms: f64,
+    pub audio_duration_ms: f64,
+    pub average_block_ms: f64,
+    pub p95_block_ms: f64,
+    pub p99_block_ms: f64,
+    pub max_block_ms: f64,
+    pub buffer_budget_ms: f64,
+    pub p99_deadline_utilization_percent: f64,
+    pub deadline_misses: u32,
+    pub measured_blocks: u32,
+    pub realtime_factor: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AudioBenchmarkReport {
+    pub duration_ms: f64,
+    pub overall_realtime_factor: f64,
+    pub worst_p99_deadline_utilization_percent: f64,
+    pub scenarios: Vec<AudioBenchmarkScenario>,
+}
