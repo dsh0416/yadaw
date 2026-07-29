@@ -1,7 +1,6 @@
 # YADAW
 
-[![Test](https://github.com/dsh0416/yadaw/actions/workflows/test.yml/badge.svg)](https://github.com/dsh0416/yadaw/actions/workflows/test.yml)
-[![Build](https://github.com/dsh0416/yadaw/actions/workflows/build.yml/badge.svg)](https://github.com/dsh0416/yadaw/actions/workflows/build.yml)
+[![CI](https://github.com/dsh0416/yadaw/actions/workflows/ci.yml/badge.svg)](https://github.com/dsh0416/yadaw/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/tag/dsh0416/yadaw?label=version)](https://github.com/dsh0416/yadaw/releases/latest)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
