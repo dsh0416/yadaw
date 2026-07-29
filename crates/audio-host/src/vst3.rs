@@ -286,10 +286,10 @@ impl Vst3Runtime {
     /// such as the audio benchmark must pass false so repeated runs do not accumulate plug-ins
     /// until helper exit.
     pub fn unload_plugin(&mut self, instance_id: &str, retain_for_graph: bool) -> ControlResult {
-        if let Some(instance) = self.instances.remove(instance_id) {
-            if retain_for_graph {
-                self.retired_instances.push(instance);
-            }
+        if let Some(instance) = self.instances.remove(instance_id)
+            && retain_for_graph
+        {
+            self.retired_instances.push(instance);
         }
         ControlResult::Accepted
     }
