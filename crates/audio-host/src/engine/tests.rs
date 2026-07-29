@@ -10,6 +10,7 @@ mod tests {
     use super::{
         AdaptiveResampler, AudioEngineKey, BufferSelection, BufferSize, ClipStoragePolicy,
         InputPeakBank, LivePlugin, MAX_INPUT_CHANNELS, MAX_OUTPUT_CHANNELS,
+        MAX_PLUGIN_BLOCK_FRAMES,
         MEMORY_DECODE_LIMIT_BYTES, METRONOME_ACCENT_NOTE, METRONOME_BEAT_NOTE, MetronomeScheduler,
         NativeMixerChannel, NativeMixerGraph, NativeMixerSend, NativePluginInstance,
         NativeRoundTripLatencyMeasurementRequest, OUTPUT_RESAMPLER_FRAMES, RoundTripInputDetector,
@@ -18,7 +19,9 @@ mod tests {
         clip_storage_policy, compiled_graph_snapshot, frames_to_nanos, resolve_stream_devices,
         select_buffer_size, spawn_streaming_clip, stream_error_impact, validate_session_sample_rate,
     };
-    use crate::recording::{NativeRecordingStartConfig, write_deterministic_test_recording};
+    use crate::recording::{
+        NativeRecordingStartConfig, StereoFrame, write_deterministic_test_recording,
+    };
     use crate::vst3::ProcessContext;
     use ringbuf::{
         HeapRb,
@@ -195,9 +198,17 @@ mod tests {
         let mut converter =
             SessionOutputConverter::new(session_sample_rate, output_sample_rate, 2).unwrap();
         let mut rendered = 0;
-        for _ in 0..output_frames {
-            let (_, _, frames) = converter.next_frame(|| ([0.0; MAX_OUTPUT_CHANNELS], false));
+        let mut output = vec![[0.0; MAX_OUTPUT_CHANNELS]; MAX_PLUGIN_BLOCK_FRAMES];
+        let mut offset = 0;
+        while offset < output_frames {
+            let block_frames = (output_frames - offset).min(MAX_PLUGIN_BLOCK_FRAMES);
+            let (_, frames) =
+                converter.render_block(&mut output[..block_frames], |session_output| {
+                    session_output.fill([0.0; MAX_OUTPUT_CHANNELS]);
+                    false
+                });
             rendered += frames;
+            offset += block_frames;
         }
         rendered
     }
@@ -222,19 +233,43 @@ mod tests {
     }
 
     #[test]
+    fn session_output_converter_requests_session_audio_in_blocks() {
+        let mut bypass = SessionOutputConverter::new(48_000, 48_000, 2).unwrap();
+        let mut bypass_output = [[0.0; MAX_OUTPUT_CHANNELS]; 128];
+        let mut bypass_calls = 0;
+        let _ = bypass.render_block(&mut bypass_output, |block| {
+            bypass_calls += 1;
+            assert_eq!(block.len(), 128);
+            false
+        });
+        assert_eq!(bypass_calls, 1);
+
+        let mut resampled = SessionOutputConverter::new(44_100, 48_000, 2).unwrap();
+        let mut resampled_output = [[0.0; MAX_OUTPUT_CHANNELS]; 1_024];
+        let mut render_calls = 0;
+        let _ = resampled.render_block(&mut resampled_output, |block| {
+            render_calls += 1;
+            assert!(block.len() > 1);
+            block.fill([0.0; MAX_OUTPUT_CHANNELS]);
+            false
+        });
+        assert!(render_calls < resampled_output.len());
+    }
+
+    #[test]
     fn session_output_converter_preserves_every_active_hardware_channel() {
         let mut converter =
             SessionOutputConverter::new(44_100, 48_000, MAX_OUTPUT_CHANNELS).unwrap();
-        let mut output = [0.0; MAX_OUTPUT_CHANNELS];
-        for _ in 0..4_096 {
-            (output, _, _) = converter.next_frame(|| {
-                let mut frame = [0.0; MAX_OUTPUT_CHANNELS];
+        let mut outputs = [[0.0; MAX_OUTPUT_CHANNELS]; 4_096];
+        let _ = converter.render_block(&mut outputs, |block| {
+            for frame in block {
                 for (channel, sample) in frame.iter_mut().enumerate() {
                     *sample = (channel + 1) as f32 / MAX_OUTPUT_CHANNELS as f32;
                 }
-                (frame, false)
-            });
-        }
+            }
+            false
+        });
+        let output = outputs[outputs.len() - 1];
         for (channel, sample) in output.iter().enumerate() {
             let expected = (channel + 1) as f32 / MAX_OUTPUT_CHANNELS as f32;
             assert!((sample - expected).abs() < 0.01, "channel {channel}");
@@ -483,17 +518,28 @@ mod tests {
         }
     }
 
+    fn process_test_plugin(
+        plugin: &mut LivePlugin,
+        input: StereoFrame,
+        width: &mut SignalWidth,
+        context: &ProcessContext,
+    ) -> StereoFrame {
+        let mut frames = [input];
+        plugin.process_block(&mut frames, width, context);
+        frames[0]
+    }
+
     #[test]
     fn hidden_channel_adapters_downmix_and_upmix_at_chain_boundaries() {
         let context = test_process_context();
         let mut width = SignalWidth::Stereo;
         let mut mono = missing_effect(PluginAudioMode::Mono, true);
-        let frame = mono.process([1.0, 3.0], &mut width, &context);
+        let frame = process_test_plugin(&mut mono, [1.0, 3.0], &mut width, &context);
         assert_eq!(frame, [2.0, 0.0]);
         assert!(matches!(width, SignalWidth::Mono));
 
         let mut stereo = missing_effect(PluginAudioMode::Stereo, true);
-        let frame = stereo.process(frame, &mut width, &context);
+        let frame = process_test_plugin(&mut stereo, frame, &mut width, &context);
         assert_eq!(frame, [2.0, 2.0]);
         assert!(matches!(width, SignalWidth::Stereo));
     }
@@ -503,12 +549,13 @@ mod tests {
         let context = test_process_context();
         let mut width = SignalWidth::Stereo;
         let mut mono_to_stereo = missing_effect(PluginAudioMode::MonoToStereo, false);
-        let frame = mono_to_stereo.process([1.0, 3.0], &mut width, &context);
+        let frame =
+            process_test_plugin(&mut mono_to_stereo, [1.0, 3.0], &mut width, &context);
         assert_eq!(frame, [2.0, 2.0]);
         assert!(matches!(width, SignalWidth::Stereo));
 
         let mut mono = missing_effect(PluginAudioMode::Mono, false);
-        let frame = mono.process(frame, &mut width, &context);
+        let frame = process_test_plugin(&mut mono, frame, &mut width, &context);
         assert_eq!(frame, [2.0, 0.0]);
         assert!(matches!(width, SignalWidth::Mono));
     }
@@ -541,8 +588,8 @@ mod tests {
             let mut width = SignalWidth::Stereo;
             let mut first = missing_effect(first_mode, false);
             let mut second = missing_effect(second_mode, false);
-            let frame = first.process([1.0, 3.0], &mut width, &context);
-            let frame = second.process(frame, &mut width, &context);
+            let frame = process_test_plugin(&mut first, [1.0, 3.0], &mut width, &context);
+            let frame = process_test_plugin(&mut second, frame, &mut width, &context);
             assert_eq!(
                 frame, expected,
                 "{first_mode:?} followed by {second_mode:?}"

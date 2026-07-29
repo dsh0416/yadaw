@@ -338,7 +338,8 @@ fn build_mixer_runtime(
         tempo_map.time_signature_events().to_vec(),
     )
     .map_err(|error| invalid_config(error.to_string()))?;
-    let graph = RenderRuntime::from_mixer_graph(native.sample_rate, graph, render_tempo_map);
+    let mut graph = RenderRuntime::from_mixer_graph(native.sample_rate, graph, render_tempo_map);
+    graph.prepare_block_processing(MAX_PLUGIN_BLOCK_FRAMES);
 
     let mut midi_events = Vec::new();
     let mut next_note_id = 1_i32;
@@ -416,7 +417,10 @@ fn build_mixer_runtime(
         ],
         held_peaks: vec![[0.0, 0.0]; graph.channel_count()],
         held_until: vec![[0, 0]; graph.channel_count()],
-        channel_sources: vec![[0.0, 0.0]; channels.len()],
+        channel_source_block: vec![
+            [0.0, 0.0];
+            channels.len().saturating_mul(MAX_PLUGIN_BLOCK_FRAMES)
+        ],
         channel_input_widths,
         plugins_by_channel,
         midi_events,

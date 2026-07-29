@@ -326,6 +326,10 @@ fn start_virtual_audio_engine(key: AudioEngineKey) -> Result<NativeAudioRuntimeS
             let mut round_trip_probe =
                 RoundTripOutputProbe::new(Arc::clone(&worker_round_trip_latency));
             let mut loopback_block = vec![[0.0_f32; MAX_INPUT_CHANNELS]; block_frames as usize];
+            let mut render_inputs =
+                vec![[0.0_f32; MAX_INPUT_CHANNELS]; MAX_PLUGIN_BLOCK_FRAMES];
+            let mut device_outputs =
+                vec![[0.0_f32; MAX_OUTPUT_CHANNELS]; MAX_PLUGIN_BLOCK_FRAMES];
             let block_duration =
                 Duration::from_secs_f64(block_frames as f64 / output_sample_rate as f64);
             while !worker_shutdown.load(Ordering::Acquire) {
@@ -365,19 +369,31 @@ fn start_virtual_audio_engine(key: AudioEngineKey) -> Result<NativeAudioRuntimeS
                     }
                 }
                 let mut rendered_session_frames = 0;
-                let mut underrun = false;
                 let output_callback_started_ns = worker_round_trip_latency.now_ns();
-                for (frame_index, loopback) in loopback_block.iter_mut().enumerate() {
-                    let (mut output, frame_underrun, rendered_frames) = output_converter
-                        .next_frame(|| {
+                let (underrun, rendered_frames) = output_converter.render_block(
+                    &mut device_outputs[..block_frames as usize],
+                    |session_outputs| {
+                        for target in &mut render_inputs[..session_outputs.len()] {
                             let (input, _input_underrun) = input_resampler.next_frame();
-                            let (output, render_underrun) = mixer
-                                .as_mut()
-                                .map_or(([0.0; MAX_OUTPUT_CHANNELS], false), |runtime| {
-                                    runtime.render_frame(input)
-                                });
-                            (output, render_underrun)
-                        });
+                            *target = input;
+                        }
+                        if let Some(runtime) = mixer.as_mut() {
+                            runtime.render_block(
+                                &render_inputs[..session_outputs.len()],
+                                session_outputs,
+                            )
+                        } else {
+                            session_outputs.fill([0.0; MAX_OUTPUT_CHANNELS]);
+                            false
+                        }
+                    },
+                );
+                rendered_session_frames += rendered_frames;
+                for (frame_index, (loopback, output)) in loopback_block
+                    .iter_mut()
+                    .zip(&mut device_outputs[..block_frames as usize])
+                    .enumerate()
+                {
                     round_trip_probe.apply(
                         &mut output[..2],
                         output_callback_started_ns
@@ -394,8 +410,6 @@ fn start_virtual_audio_engine(key: AudioEngineKey) -> Result<NativeAudioRuntimeS
                     {
                         *capture = *sample;
                     }
-                    underrun |= frame_underrun;
-                    rendered_session_frames += rendered_frames;
                 }
                 if let Some(runtime) = mixer.as_mut() {
                     runtime.publish_peaks(rendered_session_frames);

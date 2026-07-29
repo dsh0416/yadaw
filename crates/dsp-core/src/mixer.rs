@@ -65,6 +65,7 @@ pub enum GraphError {
     InvalidSend,
     RoutingCycle,
     InvalidParameter,
+    InvalidBlock,
 }
 
 impl fmt::Display for GraphError {
@@ -77,6 +78,7 @@ impl fmt::Display for GraphError {
             Self::InvalidSend => "mixer send has an invalid source or target",
             Self::RoutingCycle => "mixer routing must not contain a cycle",
             Self::InvalidParameter => "mixer parameter is outside its supported range",
+            Self::InvalidBlock => "mixer block shape exceeds the prepared capacity",
         })
     }
 }
@@ -171,6 +173,11 @@ pub struct MixerGraph {
     peaks: Vec<ChannelPeak>,
     sends_by_source: Vec<Vec<usize>>,
     master: usize,
+    block_capacity: usize,
+    block_bus_count: usize,
+    block_bus_accumulation: Vec<f32>,
+    block_master_gains: Vec<f32>,
+    block_master_pans: Vec<f32>,
 }
 
 include!("mixer/graph.rs");
