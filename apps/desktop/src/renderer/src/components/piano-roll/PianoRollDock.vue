@@ -38,14 +38,122 @@ const openClips = computed(() =>
 const activeClip = computed(
   () => openClips.value.find((clip) => clip.id === pianoRollStore.activeClipId) ?? null
 )
+
+interface NoteGestureItem {
+  clip: MidiClipState
+  note: MidiNoteState
+  globalStartTick: number
+}
+
+interface Gesture {
+  startX: number
+  startY: number
+  currentX: number
+  currentY: number
+  mode: "move" | "resize-left" | "resize-right"
+  items: NoteGestureItem[]
+}
+
+const gesture = shallowRef<Gesture | null>(null)
+const viewport = shallowRef<HTMLElement | null>(null)
+const pixelsPerTick = computed(
+  () => pianoRollStore.pixelsPerQuarter / graph.value.tempoMap.ticksPerQuarter
+)
+
+function editsForGesture(
+  current: Gesture,
+  clientX: number,
+  clientY: number
+): Array<
+  NoteGestureItem & {
+    durationTicks: number
+    patch?: Omit<MidiNotePatch, "startTick" | "durationTicks">
+  }
+> {
+  const rawTickDelta = (clientX - current.startX) / pixelsPerTick.value
+  const step = snapStep(pianoRollStore.snap)
+  const tickDelta = Math.round(rawTickDelta / step) * step
+  const rawKeyDelta = -Math.round((clientY - current.startY) / pianoRollStore.rowHeight)
+  const minimumStart = Math.min(...current.items.map((item) => item.globalStartTick))
+  const minimumKey = Math.min(...current.items.map((item) => item.note.key))
+  const maximumKey = Math.max(...current.items.map((item) => item.note.key))
+  const moveTickDelta = Math.max(-minimumStart, tickDelta)
+  const keyDelta = Math.max(-minimumKey, Math.min(127 - maximumKey, rawKeyDelta))
+
+  return current.items.map((item) => {
+    if (current.mode === "resize-right") {
+      return {
+        ...item,
+        durationTicks: Math.max(MIN_NOTE_TICKS, item.note.durationTicks + tickDelta)
+      }
+    }
+    if (current.mode === "resize-left") {
+      const requested = Math.min(item.note.durationTicks - MIN_NOTE_TICKS, tickDelta)
+      const globalStartTick = Math.max(0, item.globalStartTick + requested)
+      const applied = globalStartTick - item.globalStartTick
+      return {
+        ...item,
+        globalStartTick,
+        durationTicks: item.note.durationTicks - applied
+      }
+    }
+    return {
+      ...item,
+      globalStartTick: item.globalStartTick + moveTickDelta,
+      durationTicks: item.note.durationTicks,
+      patch: { key: item.note.key + keyDelta }
+    }
+  })
+}
+
+const gestureEdits = computed(() => {
+  const current = gesture.value
+  return current ? editsForGesture(current, current.currentX, current.currentY) : []
+})
+const gestureNotePreviews = computed(
+  () =>
+    new Map(
+      gestureEdits.value.map((edit) => [
+        `${edit.clip.id}:${edit.note.id}`,
+        {
+          globalStartTick: edit.globalStartTick,
+          durationTicks: edit.durationTicks,
+          key: edit.patch?.key ?? edit.note.key
+        }
+      ])
+    )
+)
+const gestureClipRanges = computed(() => {
+  const byClip = new Map<string, typeof gestureEdits.value>()
+  for (const edit of gestureEdits.value) {
+    const values = byClip.get(edit.clip.id) ?? []
+    values.push(edit)
+    byClip.set(edit.clip.id, values)
+  }
+  return new Map(
+    [...byClip].map(([clipId, edits]) => {
+      const clip = edits[0]!.clip
+      const plan = planExistingNoteEdits(
+        clip,
+        edits.map((edit) => ({
+          noteId: edit.note.id,
+          globalStartTick: edit.globalStartTick,
+          durationTicks: edit.durationTicks,
+          patch: edit.patch
+        }))
+      )
+      return [clipId, plan]
+    })
+  )
+})
 const maximumTick = computed(() =>
   Math.max(
     graph.value.tempoMap.ticksPerQuarter * 4,
-    ...openClips.value.map((clip) => clip.startTick + clip.lengthTicks)
+    ...openClips.value.map((clip) => {
+      const preview = gestureClipRanges.value.get(clip.id)
+      return preview ? preview.startTick + preview.lengthTicks : clip.startTick + clip.lengthTicks
+    })
   )
-)
-const pixelsPerTick = computed(
-  () => pianoRollStore.pixelsPerQuarter / graph.value.tempoMap.ticksPerQuarter
 )
 const gridWidth = computed(() => Math.max(640, maximumTick.value * pixelsPerTick.value + 240))
 const canvasHeight = computed(() => 28 + pianoRollStore.rowHeight * 128)
@@ -90,21 +198,46 @@ function trackColor(clip: MidiClipState): string {
 }
 
 function clipStyle(clip: MidiClipState): CSSProperties {
+  const preview = gestureClipRanges.value.get(clip.id)
+  const startTick = preview?.startTick ?? clip.startTick
+  const lengthTicks = preview?.lengthTicks ?? clip.lengthTicks
   return {
-    left: `${clip.startTick * pixelsPerTick.value}px`,
-    width: `${Math.max(1, clip.lengthTicks * pixelsPerTick.value)}px`,
+    left: `${startTick * pixelsPerTick.value}px`,
+    width: `${Math.max(1, lengthTicks * pixelsPerTick.value)}px`,
     "--clip-color": trackColor(clip)
   }
 }
 
 function noteStyle(clip: MidiClipState, note: MidiNoteState): CSSProperties {
+  const preview = gestureNotePreviews.value.get(`${clip.id}:${note.id}`)
+  const globalStartTick = preview?.globalStartTick ?? noteGlobalStart(clip, note)
+  const durationTicks = preview?.durationTicks ?? note.durationTicks
+  const key = preview?.key ?? note.key
   return {
-    left: `${noteGlobalStart(clip, note) * pixelsPerTick.value}px`,
-    top: `${(127 - note.key) * pianoRollStore.rowHeight + 1}px`,
-    width: `${Math.max(2, note.durationTicks * pixelsPerTick.value)}px`,
+    left: `${globalStartTick * pixelsPerTick.value}px`,
+    top: `${(127 - key) * pianoRollStore.rowHeight + 1}px`,
+    width: `${Math.max(2, durationTicks * pixelsPerTick.value)}px`,
     height: `${Math.max(4, pianoRollStore.rowHeight - 2)}px`,
     "--note-color": trackColor(clip)
   }
+}
+
+function displayedNoteValues(
+  clip: MidiClipState,
+  note: MidiNoteState
+): { globalStartTick: number; durationTicks: number; key: number } {
+  return (
+    gestureNotePreviews.value.get(`${clip.id}:${note.id}`) ?? {
+      globalStartTick: noteGlobalStart(clip, note),
+      durationTicks: note.durationTicks,
+      key: note.key
+    }
+  )
+}
+
+function noteAriaLabel(clip: MidiClipState, note: MidiNoteState): string {
+  const value = displayedNoteValues(clip, note)
+  return `${midiNoteName(value.key)}, start ${value.globalStartTick}, duration ${value.durationTicks}, velocity ${note.velocity}, ${clip.name}`
 }
 
 function keyStyle(key: number): CSSProperties {
@@ -155,15 +288,6 @@ function commandsForEdits(
   )
 }
 
-interface Gesture {
-  startX: number
-  startY: number
-  mode: "move" | "resize-left" | "resize-right"
-  items: typeof selectedItems.value
-}
-const gesture = shallowRef<Gesture | null>(null)
-const viewport = shallowRef<HTMLElement | null>(null)
-
 function changeTimeZoom(factor: number): void {
   pianoRollStore.pixelsPerQuarter = Math.max(
     40,
@@ -179,49 +303,62 @@ function beginNoteGesture(
 ): void {
   event.stopPropagation()
   const reference = { clipId: clip.id, noteId: note.id }
-  if (!pianoRollStore.selectedNoteKeys.has(`${clip.id}:${note.id}`)) {
+  const key = `${clip.id}:${note.id}`
+  suppressedNoteClickKey = key
+  if (!pianoRollStore.selectedNoteKeys.has(key)) {
     pianoRollStore.selectNote(reference, event.ctrlKey || event.metaKey)
   }
-  ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
+  ;(event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId)
   gesture.value = {
     startX: event.clientX,
     startY: event.clientY,
+    currentX: event.clientX,
+    currentY: event.clientY,
     mode,
     items: selectedItems.value.map((item) => ({ ...item }))
   }
+}
+
+function updateNoteGesture(event: PointerEvent): void {
+  const current = gesture.value
+  if (!current) return
+  event.preventDefault()
+  gesture.value = { ...current, currentX: event.clientX, currentY: event.clientY }
 }
 
 function finishNoteGesture(event: PointerEvent): void {
   const current = gesture.value
   gesture.value = null
   if (!current) return
-  const rawTickDelta = (event.clientX - current.startX) / pixelsPerTick.value
-  const step = snapStep(pianoRollStore.snap)
-  const tickDelta = Math.round(rawTickDelta / step) * step
-  const keyDelta = -Math.round((event.clientY - current.startY) / pianoRollStore.rowHeight)
-  const edits = current.items.map((item) => {
-    if (current.mode === "resize-right") {
-      return {
-        ...item,
-        durationTicks: Math.max(MIN_NOTE_TICKS, item.note.durationTicks + tickDelta)
-      }
-    }
-    if (current.mode === "resize-left") {
-      const applied = Math.min(item.note.durationTicks - MIN_NOTE_TICKS, tickDelta)
-      return {
-        ...item,
-        globalStartTick: Math.max(0, item.globalStartTick + applied),
-        durationTicks: Math.max(MIN_NOTE_TICKS, item.note.durationTicks - applied)
-      }
-    }
-    return {
-      ...item,
-      globalStartTick: Math.max(0, item.globalStartTick + tickDelta),
-      durationTicks: item.note.durationTicks,
-      patch: { key: Math.max(0, Math.min(127, item.note.key + keyDelta)) }
-    }
-  })
-  void batch(commandsForEdits(edits))
+  const edits = editsForGesture(current, event.clientX, event.clientY).filter(
+    (item) =>
+      item.globalStartTick !== noteGlobalStart(item.clip, item.note) ||
+      item.durationTicks !== item.note.durationTicks ||
+      (item.patch?.key ?? item.note.key) !== item.note.key
+  )
+  if (edits.length > 0) void batch(commandsForEdits(edits))
+  const key = suppressedNoteClickKey
+  window.setTimeout(() => {
+    if (suppressedNoteClickKey === key) suppressedNoteClickKey = null
+  }, 0)
+}
+
+function cancelNoteGesture(): void {
+  gesture.value = null
+  suppressedNoteClickKey = null
+}
+
+let suppressedNoteClickKey: string | null = null
+function handleNoteClick(event: MouseEvent, clip: MidiClipState, note: MidiNoteState): void {
+  const key = `${clip.id}:${note.id}`
+  if (suppressedNoteClickKey === key) {
+    suppressedNoteClickKey = null
+    return
+  }
+  const additive = event.ctrlKey || event.metaKey
+  if (!pianoRollStore.selectedNoteKeys.has(key) || additive) {
+    pianoRollStore.selectNote({ clipId: clip.id, noteId: note.id }, additive)
+  }
 }
 
 function gridPoint(event: PointerEvent): { tick: number; key: number } {
@@ -351,9 +488,11 @@ function applyInspector(field: string, raw: string): void {
 function commonValue(field: string): string {
   if (selectedItems.value.length === 0) return ""
   const values = selectedItems.value.map((item) => {
-    if (field === "start") return item.globalStartTick
-    if (field === "duration") return item.note.durationTicks
+    const preview = gestureNotePreviews.value.get(`${item.clip.id}:${item.note.id}`)
+    if (field === "start") return preview?.globalStartTick ?? item.globalStartTick
+    if (field === "duration") return preview?.durationTicks ?? item.note.durationTicks
     if (field === "channel") return item.note.channel + 1
+    if (field === "key") return preview?.key ?? item.note.key
     return item.note[field as "key" | "velocity" | "releaseVelocity"]
   })
   return values.every((value) => value === values[0]) ? String(values[0]) : ""
@@ -577,6 +716,14 @@ function close(): void {
           @pointerdown.self="handleGridPointerDown"
         >
           <i
+            v-for="key in 128"
+            :key="`pitch-row-${key - 1}`"
+            :class="['pitch-row', { black: isBlackKey(key - 1) }]"
+            :style="keyStyle(key - 1)"
+            :data-key="key - 1"
+            aria-hidden="true"
+          />
+          <i
             v-for="tick in beatTicks"
             :key="`beat-${tick}`"
             class="beat-line"
@@ -601,32 +748,36 @@ function close(): void {
             class="note"
             :class="{
               selected: pianoRollStore.selectedNoteKeys.has(`${clip.id}:${note.id}`),
-              inactive: clip.id !== pianoRollStore.activeClipId
+              inactive: clip.id !== pianoRollStore.activeClipId,
+              previewing: gestureNotePreviews.has(`${clip.id}:${note.id}`)
             }"
             :style="noteStyle(clip, note)"
-            :aria-label="`${midiNoteName(note.key)}, start ${noteGlobalStart(clip, note)}, duration ${note.durationTicks}, velocity ${note.velocity}, ${clip.name}`"
+            :aria-label="noteAriaLabel(clip, note)"
             :aria-pressed="pianoRollStore.selectedNoteKeys.has(`${clip.id}:${note.id}`)"
-            @click.stop="
-              pianoRollStore.selectNote(
-                { clipId: clip.id, noteId: note.id },
-                $event.ctrlKey || $event.metaKey
-              )
-            "
+            @click.stop="handleNoteClick($event, clip, note)"
             @pointerdown="beginNoteGesture($event, clip, note, 'move')"
+            @pointermove="updateNoteGesture"
             @pointerup="finishNoteGesture"
+            @pointercancel="cancelNoteGesture"
           >
             <span
               class="resize-handle left"
               data-edge="left"
               @pointerdown.stop="beginNoteGesture($event, clip, note, 'resize-left')"
+              @pointermove.stop="updateNoteGesture"
               @pointerup.stop="finishNoteGesture"
+              @pointercancel.stop="cancelNoteGesture"
             />
-            <span class="note-label">{{ midiNoteName(note.key) }}</span>
+            <span class="note-label">
+              {{ midiNoteName(displayedNoteValues(clip, note).key) }}
+            </span>
             <span
               class="resize-handle right"
               data-edge="right"
               @pointerdown.stop="beginNoteGesture($event, clip, note, 'resize-right')"
+              @pointermove.stop="updateNoteGesture"
               @pointerup.stop="finishNoteGesture"
+              @pointercancel.stop="cancelNoteGesture"
             />
           </button>
           <div
