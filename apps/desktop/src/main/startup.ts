@@ -128,7 +128,9 @@ export function startApplication(
         detail: t("startup.discoveringPluginsDetail")
       })
       try {
-        await plugins.scan({ force: true, retryQuarantined: true })
+        // Reuse fingerprint-cached descriptors unless bundles changed; still
+        // retry quarantined modules in case a prior probe was a transient failure.
+        await plugins.scan({ retryQuarantined: true })
       } catch (error) {
         scanWarnings += 1
         startup.update({

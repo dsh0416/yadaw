@@ -52,7 +52,13 @@ export interface PluginCatalogSnapshot {
 
 export interface PluginScanRequest {
   paths?: string[]
+  /** Re-probe quarantined bundles even when their fingerprint is unchanged. */
   retryQuarantined?: boolean
+  /**
+   * Bypass the on-disk fingerprint cache and re-probe every discovered bundle.
+   * Manual "Rescan VST3" sets this; startup scans leave it unset so unchanged
+   * plugins are reused from `plugin-catalog.json`.
+   */
   force?: boolean
 }
 

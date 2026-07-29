@@ -498,6 +498,9 @@ export class PluginCatalogService {
   }
 
   private async scanNow(request: PluginScanRequest): Promise<PluginCatalogSnapshot> {
+    // Incremental scans reuse descriptors when mtime/size fingerprints match.
+    // Forced scans (manual Rescan) and changed/new/quarantined-retry bundles
+    // re-run the isolated yadaw-vst3-probe.
     const knownExternalRoots = this.catalog.plugins
       .filter((plugin) => plugin.source.kind === "external")
       .map((plugin) => dirname(plugin.modulePath))

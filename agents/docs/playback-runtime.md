@@ -503,7 +503,10 @@ SDK 3.8.0 headers. `vst3-host` owns COM references, module lifetime, class
 enumeration, component activation, stereo sample32 block processing, latency,
 tail queries, parameter/state exchange, controller connections, and editor
 interfaces. The production scanner uses the Rust `yadaw-vst3-probe` binary.
-There is no production C++ bridge or bridge path argument.
+Descriptors are cached in `userData/plugin-catalog.json` with per-bundle
+mtime/size fingerprints: startup reuses unchanged results (and retries
+quarantined modules), while a manual Rescan forces a full re-probe. There is
+no production C++ bridge or bridge path argument.
 
 Bindgen types follow the target C ABI and must not be papered over with
 hardcoded Rust primitives at call sites:
