@@ -460,7 +460,9 @@ describe("AudioHostService recovery", () => {
     expect(unloadIds[0]).toBe("__yadaw-audio-benchmark-gain-0")
     expect(unloadIds[63]).toBe("__yadaw-audio-benchmark-gain-63")
     expect(
-      (service as unknown as { plugins: { loadedInstanceIds(): string[] } }).plugins.loadedInstanceIds()
+      (
+        service as unknown as { plugins: { loadedInstanceIds(): string[] } }
+      ).plugins.loadedInstanceIds()
     ).toEqual([])
 
     client.commands.length = 0
@@ -468,7 +470,9 @@ describe("AudioHostService recovery", () => {
     await expect(service.runAudioBenchmark(effect)).rejects.toThrow("benchmark failed")
     expect(client.commands.filter((command) => command.type === "unload-plugin")).toHaveLength(64)
     expect(
-      (service as unknown as { plugins: { loadedInstanceIds(): string[] } }).plugins.loadedInstanceIds()
+      (
+        service as unknown as { plugins: { loadedInstanceIds(): string[] } }
+      ).plugins.loadedInstanceIds()
     ).toEqual([])
 
     await service.stop()
