@@ -81,7 +81,10 @@ export function createPianoRollEditor(): PianoRollEditor {
     () => pianoRollStore.pixelsPerQuarter / graph.value.tempoMap.ticksPerQuarter
   )
   const channelsById = computed(
-    () => new Map<string, MixerChannelState>(graph.value.channels.map((channel) => [channel.id, channel]))
+    () =>
+      new Map<string, MixerChannelState>(
+        graph.value.channels.map((channel) => [channel.id, channel])
+      )
   )
   const visibleNotes = computed(() =>
     openClips.value.flatMap((clip) =>

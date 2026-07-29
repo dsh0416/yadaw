@@ -29,9 +29,7 @@ onMounted(() => {
       if (clip) {
         element.scrollLeft = Math.max(
           0,
-          clip.startTick * editor.pixelsPerTick.value +
-            KEYBOARD_WIDTH_PX -
-            element.clientWidth / 2
+          clip.startTick * editor.pixelsPerTick.value + KEYBOARD_WIDTH_PX - element.clientWidth / 2
         )
       }
     }
@@ -45,8 +43,7 @@ function handleWheel(event: WheelEvent): void {
   event.preventDefault()
   const bounds = element.getBoundingClientRect()
   if (event.altKey) {
-    const contentY =
-      event.clientY - bounds.top + element.scrollTop - RULER_HEIGHT_PX
+    const contentY = event.clientY - bounds.top + element.scrollTop - RULER_HEIGHT_PX
     const row = contentY / pianoRollStore.rowHeight
     const previous = pianoRollStore.rowHeight
     pianoRollStore.setRowHeight(previous + (event.deltaY < 0 ? 2 : -2))

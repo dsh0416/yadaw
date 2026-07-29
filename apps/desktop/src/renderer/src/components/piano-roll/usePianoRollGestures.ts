@@ -1,11 +1,6 @@
 import { computed, shallowRef, type ComputedRef, type CSSProperties } from "vue"
 import { useEventListener } from "@vueuse/core"
-import type {
-  MidiClipState,
-  MidiNotePatch,
-  MidiNoteState,
-  ProjectCommand
-} from "@yadaw/contracts"
+import type { MidiClipState, MidiNotePatch, MidiNoteState, ProjectCommand } from "@yadaw/contracts"
 import type { PianoRollNoteRef, usePianoRollStore } from "../../stores/pianoRoll"
 import {
   MIN_NOTE_TICKS,
@@ -286,7 +281,10 @@ export function createPianoRollGestures(
     if (pianoRollStore.tool === "erase" || event.altKey) {
       suppressNextNoteClick(key)
       if (pianoRollStore.tool === "erase") {
-        gesture.value = { kind: "erase", targets: new Map([[key, { clipId: clip.id, noteId: note.id }]]) }
+        gesture.value = {
+          kind: "erase",
+          targets: new Map([[key, { clipId: clip.id, noteId: note.id }]])
+        }
       } else {
         void batch([{ type: "delete-midi-notes", clipId: clip.id, noteIds: [note.id] }])
       }
@@ -431,10 +429,8 @@ export function createPianoRollGestures(
       const position = gridPosition(event)
       const moved =
         current.moved ||
-        Math.max(
-          Math.abs(position.x - current.anchorX),
-          Math.abs(position.y - current.anchorY)
-        ) >= DRAG_THRESHOLD_PX
+        Math.max(Math.abs(position.x - current.anchorX), Math.abs(position.y - current.anchorY)) >=
+          DRAG_THRESHOLD_PX
       const next: MarqueeGesture = { ...current, currentX: position.x, currentY: position.y, moved }
       gesture.value = next
       if (moved) pianoRollStore.setSelectedNotes(marqueeSelection(next))
@@ -444,9 +440,7 @@ export function createPianoRollGestures(
       event.preventDefault()
       const point = gridPoint(event)
       const moved =
-        current.moved ||
-        point.tick !== current.anchorTick ||
-        point.key !== current.currentKey
+        current.moved || point.tick !== current.anchorTick || point.key !== current.currentKey
       gesture.value = { ...current, currentTick: point.tick, currentKey: point.key, moved }
     }
   }
@@ -462,10 +456,8 @@ export function createPianoRollGestures(
       const position = gridPosition(event)
       const moved =
         current.moved ||
-        Math.max(
-          Math.abs(position.x - current.anchorX),
-          Math.abs(position.y - current.anchorY)
-        ) >= DRAG_THRESHOLD_PX
+        Math.max(Math.abs(position.x - current.anchorX), Math.abs(position.y - current.anchorY)) >=
+          DRAG_THRESHOLD_PX
       if (!moved) pianoRollStore.clearNoteSelection()
       return
     }
