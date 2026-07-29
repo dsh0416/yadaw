@@ -24,12 +24,17 @@ runs the real-time allocation invariants.
 The packaged desktop application also exposes a short native DSP test from
 **Help → Audio Performance Benchmark…**. Unlike the Criterion suite, this test
 does not require a Rust toolchain or repository checkout. It renders three
-reference mixer graphs on a worker thread, then runs an IPC suite against the
-live audio helper. The two suites run sequentially so they do not distort each
-other. The report includes:
+reference mixer graphs on a worker thread inside the audio helper, then runs an
+IPC suite against that helper. Each graph processes a deterministic stereo
+signal through independent instances of the bundled YADAW Gain VST3: 8 instances
+for low-latency tracking, 32 for a production mix, and 64 for a dense session.
+Using a bundled effect keeps results reproducible while including the real VST3
+ABI, buffer adaptation, and plug-in scheduling path. The two suites run
+sequentially so they do not distort each other. The report includes:
 
 - p95, p99, maximum block processing time, deadline utilization, and deadline
-  misses for low-latency tracking, production mix, and dense-session scenarios;
+  misses for low-latency tracking, production mix, and dense-session scenarios,
+  including the VST3 instance count for each;
 - real-time factor as a secondary diagnostic rather than the score;
 - inline sequential RTT;
 - cold 4 MiB shared-arena first-use latency, including mapping the first offer;
@@ -47,7 +52,9 @@ Real-time factor alone can make a deliberately heavy graph look informative
 while hiding jitter that actually causes dropouts. This report helps users
 evaluate both practical buffer stability and process-boundary overhead. It does
 not open an audio device and is not a substitute for the repeatable Criterion
-regression suite.
+regression suite. The bundled gain workload measures realistic hosting overhead,
+not the algorithmic cost of arbitrary third-party synthesis, convolution, or
+oversampling plug-ins.
 
 Criterion writes HTML indexes to
 `crates/dsp-core/target/criterion/report/index.html` and

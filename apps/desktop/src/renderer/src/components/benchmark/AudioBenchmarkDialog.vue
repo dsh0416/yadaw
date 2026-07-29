@@ -50,8 +50,8 @@ function format(value: number, digits = 1): string {
   <section class="benchmark-dialog">
     <div v-if="status === 'idle'" class="intro-state">
       <p class="intro-summary">
-        Runs a short local test of DSP deadlines and process-boundary transfers. It does not use
-        your audio devices or change the project.
+        Runs a short local test of DSP deadlines with bundled VST3 effects and process-boundary
+        transfers. It does not use your audio devices or change the project.
       </p>
       <p class="intro-guidance">
         <strong>Before you start</strong>
@@ -68,7 +68,7 @@ function format(value: number, digits = 1): string {
       </div>
       <span class="kicker">MEASURING</span>
       <h3>Measuring engine paths…</h3>
-      <p>Block deadlines · IPC round trips · Shared pages</p>
+      <p>VST3 processing · Block deadlines · IPC round trips · Shared pages</p>
       <div class="progress-track"><span /></div>
     </div>
 

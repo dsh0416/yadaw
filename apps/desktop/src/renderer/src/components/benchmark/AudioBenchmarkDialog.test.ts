@@ -25,6 +25,7 @@ const report: AudioBenchmarkReport = {
       tracks: 48,
       buses: 4,
       sends: 24,
+      plugins: 32,
       elapsedMs: 200,
       audioDurationMs: 1_280,
       averageBlockMs: 0.2,
@@ -76,6 +77,7 @@ describe("AudioBenchmarkDialog", () => {
 
     expect(wrapper.text()).not.toContain("Audio performance benchmark")
     expect(wrapper.text()).toContain("Runs a short local test")
+    expect(wrapper.text()).toContain("bundled VST3 effects")
     expect(wrapper.text()).toContain("Pause playback and close CPU-heavy apps")
     expect(wrapper.find(".signal-map").exists()).toBe(false)
     await wrapper.get(".primary-button").trigger("click")
@@ -98,6 +100,7 @@ describe("AudioBenchmarkDialog", () => {
 
     expect(wrapper.text()).toContain("82% headroom")
     expect(wrapper.text()).toContain("Production mix")
+    expect(wrapper.text()).toContain("32 VST3 effects")
     expect(wrapper.text()).toContain("Large shared state")
     expect(wrapper.text()).toContain("2400.0 MiB/s")
     expect(wrapper.text()).toContain("Reference CPU")

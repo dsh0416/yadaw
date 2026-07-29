@@ -33,7 +33,8 @@ function format(value: number, digits = 1): string {
       </div>
       <div class="scenario-meta">
         <span>{{ scenario.tracks }} tracks</span><span>{{ scenario.buses }} buses</span>
-        <span>{{ scenario.sends }} sends</span><span>{{ scenario.blockSize }} samples</span>
+        <span>{{ scenario.sends }} sends</span><span>{{ scenario.plugins }} VST3 effects</span>
+        <span>{{ scenario.blockSize }} samples</span>
         <span>{{ format(scenario.bufferBudgetMs, 3) }} ms budget</span>
         <span>{{ scenario.deadlineMisses }} / {{ scenario.measuredBlocks }} late</span>
         <span>{{ format(scenario.realtimeFactor) }}× real time</span>
