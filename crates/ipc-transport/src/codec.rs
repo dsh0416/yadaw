@@ -55,7 +55,17 @@ impl<'a> AttachmentBuilder<'a> {
         let (reference, offer) = self.arena.allocate(bytes)?;
         self.lease_ids.push(reference.lease_id);
         if let Some(offer) = offer {
-            self.offers.push(offer);
+            // One offer per region per packet; later allocations in the same
+            // region replace the earlier handle so the snapshot includes them.
+            if let Some(existing) = self
+                .offers
+                .iter_mut()
+                .find(|value| value.region_id == offer.region_id)
+            {
+                *existing = offer;
+            } else {
+                self.offers.push(offer);
+            }
         }
         Ok(reference)
     }

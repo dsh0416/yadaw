@@ -2,6 +2,7 @@
 mod tests {
     use super::*;
     use ipc_channel::ipc::IpcSharedMemory;
+    use yadaw_dsp_runtime::protocol::BinaryPayload;
     use yadaw_ipc_transport::RegionOffer;
 
     #[test]
@@ -21,6 +22,12 @@ mod tests {
         assert_eq!(
             request_deadline(&ControlCommand::RunAudioBenchmark {
                 plugin_instance_ids: Vec::new(),
+            }),
+            Duration::from_secs(15)
+        );
+        assert_eq!(
+            request_deadline(&ControlCommand::BenchmarkEcho {
+                payload: BinaryPayload::inline(Vec::new()),
             }),
             Duration::from_secs(15)
         );

@@ -355,7 +355,7 @@ fn invalid_shared_range_and_stale_allocation_are_rejected() {
 }
 
 #[test]
-fn warm_allocations_reuse_a_registered_region_without_another_offer() {
+fn warm_allocations_reuse_a_region_and_refresh_the_consumer_mapping() {
     let mut sender = LeaseRegistry::with_session_epoch(17);
     let mut receiver = ArenaReceiver::new(17);
     let (first, offer) = sender.allocate(&vec![1; 128 * 1024]).unwrap();
@@ -364,9 +364,12 @@ fn warm_allocations_reuse_a_registered_region_without_another_offer() {
     sender.release(&[first.lease_id]);
 
     let (second, offer) = sender.allocate(&vec![2; 128 * 1024]).unwrap();
-    assert!(offer.is_none());
+    // Producers re-offer on every allocation so macOS VIRTUAL_COPY consumers
+    // observe the latest publication instead of a stale COW snapshot.
+    assert!(offer.is_some());
     assert_eq!(first.region_id, second.region_id);
     assert_ne!(first.allocation_generation, second.allocation_generation);
+    receiver.register_offers(vec![offer.unwrap()]).unwrap();
     assert_eq!(receiver.resolve(second).unwrap()[0], 2);
 }
 
@@ -472,7 +475,7 @@ fn out_of_order_release_coalesces_extents_for_a_larger_allocation() {
 
     let before = sender.diagnostics().region_count;
     let (_, offer) = sender.allocate(&vec![4; 768 * 1024]).unwrap();
-    assert!(offer.is_none());
+    assert!(offer.is_some());
     assert_eq!(sender.diagnostics().region_count, before);
 }
 
@@ -686,4 +689,72 @@ fn loom_models_telemetry_seqlock_publication() {
         writer.join().unwrap();
         reader.join().unwrap();
     });
+}
+
+#[test]
+fn two_sequential_shared_benchmark_echoes_with_lease_release() {
+    let mut request_leases = LeaseRegistry::with_session_epoch(1);
+    let mut request_receiver = ArenaReceiver::new(1);
+    let mut response_leases = LeaseRegistry::with_session_epoch(1);
+    let mut response_receiver = ArenaReceiver::new(1);
+
+    for request_id in [1_u64, 2] {
+        let payload = vec![request_id as u8; INLINE_BLOB_LIMIT + 1];
+        let attachments = [payload.as_slice()];
+        let request = ControlRequest {
+            request_id,
+            command: ControlCommand::BenchmarkEcho {
+                payload: BinaryPayload::Attachment {
+                    index: 0,
+                    offset: 0,
+                    length: payload.len() as u64,
+                },
+            },
+        };
+        let request_packet =
+            encode_request_with_attachments(request, &attachments, &mut request_leases).unwrap();
+        assert_eq!(
+            request_packet.region_offers.len(),
+            1,
+            "each shared request must re-offer its region"
+        );
+        let (decoded, request_release) =
+            decode_request_deferred(request_packet, &mut request_receiver).unwrap();
+        let ControlCommand::BenchmarkEcho {
+            payload: BinaryPayload::Shared { reference },
+        } = decoded.command
+        else {
+            panic!("expected shared deferred payload");
+        };
+        let response = ControlResponse {
+            request_id,
+            result: ControlResult::BenchmarkEcho {
+                payload: BinaryPayload::Shared { reference },
+            },
+        };
+        let response_packet =
+            encode_response_from_arena(response, &mut response_leases, &request_receiver).unwrap();
+        assert_eq!(
+            response_packet.region_offers.len(),
+            1,
+            "each shared response must re-offer its region"
+        );
+        // Client frees the request lease after the host has copied it into the response.
+        request_leases.release(&request_release);
+        let (decoded, _attachments, response_release) =
+            decode_response_to_attachments(response_packet, &mut response_receiver).unwrap();
+        assert_eq!(decoded.request_id, request_id);
+        assert_eq!(response_release.len(), 1);
+        response_leases.release(&response_release);
+        assert_eq!(
+            request_leases.len(),
+            0,
+            "request leases should be free after echo {request_id}"
+        );
+        assert_eq!(
+            response_leases.len(),
+            0,
+            "response leases should be free after echo {request_id}"
+        );
+    }
 }

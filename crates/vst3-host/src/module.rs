@@ -1,39 +1,37 @@
 use std::{
-    ffi::{OsStr, c_void},
+    ffi::c_void,
     path::{Path, PathBuf},
 };
 
-use libloading::{Library, Symbol};
 use yadaw_vst3_host_sys::{
-    Steinberg::{IPluginFactory, PClassInfo},
-    abi::{GetPluginFactory, PluginFactoryVTable},
+    Steinberg::{IPluginFactory, IPluginFactory2, PClassInfo, PClassInfo2},
+    abi::{PluginFactory2VTable, PluginFactoryVTable},
 };
 
 use crate::{ClassId, ComInterface, ComPtr, HostError, HostResult, id::fixed_c_string};
 
-/// Stable metadata exposed by the base VST3 factory interface.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ClassInfo {
-    pub id: ClassId,
-    pub category: String,
-    pub name: String,
-}
+#[cfg(target_os = "macos")]
+#[path = "module_macos.rs"]
+mod module_macos;
+#[cfg(target_os = "macos")]
+use module_macos::MacBundle;
 
-/// A loaded VST3 module and its root factory.
-///
-/// Field order is intentional: the factory is released before the dynamic
-/// library is unloaded.
-pub struct Module {
-    factory: Option<ComPtr<IPluginFactory>>,
-    library: Library,
-    binary_path: PathBuf,
-    exit: Option<unsafe extern "system" fn() -> bool>,
-}
+#[cfg(not(target_os = "macos"))]
+mod dynamic {
+    use std::{
+        ffi::OsStr,
+        path::{Path, PathBuf},
+    };
 
-impl Module {
-    /// Loads a VST3 bundle or direct module binary.
-    pub fn open(path: impl AsRef<Path>) -> HostResult<Self> {
-        let path = path.as_ref();
+    use libloading::Library;
+    #[cfg(target_os = "linux")]
+    use yadaw_vst3_host_sys::abi::ModuleEntry;
+    use yadaw_vst3_host_sys::abi::{GetPluginFactory, ModuleExit};
+
+    use super::Module;
+    use crate::{ComPtr, HostError, HostResult};
+
+    pub(super) fn open(path: &Path) -> HostResult<Module> {
         let binary_path = resolve_module_binary(path)
             .ok_or_else(|| HostError::ModuleBinary(path.to_path_buf()))?;
         let library = unsafe {
@@ -45,10 +43,11 @@ impl Module {
             path: binary_path.clone(),
             source,
         })?;
-        let exit = {
-            // SAFETY: the optional module lifecycle functions have the SDK
-            // signatures and remain valid while Library is owned below.
-            #[cfg(target_os = "windows")]
+
+        #[cfg(target_os = "windows")]
+        let (library, exit, factory_fn) = {
+            // SAFETY: InitDll/ExitDll/GetPluginFactory have the VST3 ABI
+            // signatures and remain valid while Library is owned.
             unsafe {
                 if let Ok(init) = library.get::<unsafe extern "system" fn() -> bool>(b"InitDll\0")
                     && !init()
@@ -58,29 +57,135 @@ impl Module {
                         result: 1,
                     });
                 }
-                library
-                    .get::<unsafe extern "system" fn() -> bool>(b"ExitDll\0")
+                let exit = library
+                    .get::<ModuleExit>(b"ExitDll\0")
                     .ok()
-                    .map(|symbol| *symbol)
-            }
-            #[cfg(not(target_os = "windows"))]
-            {
-                None
+                    .map(|symbol| *symbol);
+                let factory_fn: GetPluginFactory = *library
+                    .get(b"GetPluginFactory\0")
+                    .map_err(|_| HostError::MissingEntryPoint("GetPluginFactory"))?;
+                (library, exit, factory_fn)
             }
         };
+
+        #[cfg(target_os = "linux")]
+        let (library, exit, factory_fn) = {
+            // SAFETY: ModuleEntry/ModuleExit/GetPluginFactory have the VST3 ABI
+            // signatures; ModuleEntry receives the live dlopen handle.
+            unsafe {
+                let entry: ModuleEntry = *library
+                    .get(b"ModuleEntry\0")
+                    .map_err(|_| HostError::MissingEntryPoint("ModuleEntry"))?;
+                let exit: ModuleExit = *library
+                    .get(b"ModuleExit\0")
+                    .map_err(|_| HostError::MissingEntryPoint("ModuleExit"))?;
+                let factory_fn: GetPluginFactory = *library
+                    .get(b"GetPluginFactory\0")
+                    .map_err(|_| HostError::MissingEntryPoint("GetPluginFactory"))?;
+                let unix = libloading::os::unix::Library::from(library);
+                let handle = unix.into_raw();
+                let library = Library::from(libloading::os::unix::Library::from_raw(handle));
+                if !entry(handle) {
+                    return Err(HostError::Operation {
+                        operation: "ModuleEntry",
+                        result: 1,
+                    });
+                }
+                (library, Some(exit), factory_fn)
+            }
+        };
+
+        #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+        compile_error!("VST3 dynamic module loading requires Windows or Linux");
+
         let factory = unsafe {
-            // SAFETY: the VST3 ABI defines this exact entry point signature.
-            let entry: Symbol<'_, GetPluginFactory> = library
-                .get(b"GetPluginFactory\0")
-                .map_err(|_| HostError::MissingEntryPoint("GetPluginFactory"))?;
-            ComPtr::from_raw(entry(), "GetPluginFactory")?
+            // SAFETY: GetPluginFactory returns an owned factory on success.
+            ComPtr::from_raw(factory_fn(), "GetPluginFactory")?
         };
-        Ok(Self {
+        Ok(Module {
             factory: Some(factory),
             library,
             binary_path,
             exit,
         })
+    }
+
+    fn resolve_module_binary(path: &Path) -> Option<PathBuf> {
+        if path.is_file() {
+            return Some(path.to_path_buf());
+        }
+        let stem = path.file_stem().and_then(OsStr::to_str)?;
+        #[cfg(target_os = "windows")]
+        let candidates = [
+            path.join("Contents")
+                .join("x86_64-win")
+                .join(format!("{stem}.vst3")),
+            path.join("Contents")
+                .join("x86_64-win")
+                .join(format!("{stem}.dll")),
+        ];
+        #[cfg(target_os = "linux")]
+        let candidates = [
+            path.join("Contents")
+                .join("x86_64-linux")
+                .join(format!("{stem}.so")),
+            path.join("Contents")
+                .join("aarch64-linux")
+                .join(format!("{stem}.so")),
+        ];
+        #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+        let candidates: [PathBuf; 0] = [];
+        candidates.into_iter().find(|candidate| candidate.is_file())
+    }
+}
+
+/// Stable metadata exposed by the base VST3 factory interface.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ClassInfo {
+    pub id: ClassId,
+    pub category: String,
+    pub name: String,
+    /// Pipe-separated VST3 subcategories from `IPluginFactory2`, when available.
+    pub subcategories: String,
+}
+
+/// A loaded VST3 module and its root factory.
+///
+/// Field order is intentional: the factory is released before the dynamic
+/// library / bundle is unloaded.
+pub struct Module {
+    factory: Option<ComPtr<IPluginFactory>>,
+    #[cfg(target_os = "macos")]
+    mac_bundle: Option<MacBundle>,
+    #[cfg(not(target_os = "macos"))]
+    library: libloading::Library,
+    binary_path: PathBuf,
+    #[cfg(not(target_os = "macos"))]
+    exit: Option<yadaw_vst3_host_sys::abi::ModuleExit>,
+}
+
+impl Module {
+    /// Loads a VST3 bundle or direct module binary.
+    pub fn open(path: impl AsRef<Path>) -> HostResult<Self> {
+        let path = path.as_ref();
+        #[cfg(target_os = "macos")]
+        {
+            let (mac_bundle, factory_fn, binary_path) = MacBundle::load(path)?;
+            let factory = unsafe {
+                // SAFETY: GetPluginFactory is the VST3 ABI entry point and returns
+                // an owned factory reference on success.
+                ComPtr::from_raw(factory_fn(), "GetPluginFactory")?
+            };
+            Ok(Self {
+                factory: Some(factory),
+                mac_bundle: Some(mac_bundle),
+                binary_path,
+            })
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            dynamic::open(path)
+        }
     }
 
     #[must_use]
@@ -134,6 +239,7 @@ impl Module {
             // IPluginFactory vtable pointer.
             *factory.cast::<*const PluginFactoryVTable>()
         };
+        let factory2 = self.factory().query::<IPluginFactory2>().ok();
         let count = unsafe {
             // SAFETY: table belongs to factory.
             ((*table).count_classes)(factory)
@@ -157,56 +263,58 @@ impl Module {
                 // SAFETY: successful getClassInfo initialized the structure.
                 raw.assume_init()
             };
+            let subcategories = factory2
+                .as_ref()
+                .and_then(|factory2| class_subcategories(factory2, index))
+                .unwrap_or_default();
             classes.push(ClassInfo {
                 id: ClassId::from_tuid(raw.cid),
                 category: fixed_c_string(&raw.category),
                 name: fixed_c_string(&raw.name),
+                subcategories,
             });
         }
         Ok(classes)
     }
 }
 
+fn class_subcategories(factory2: &ComPtr<IPluginFactory2>, index: i32) -> Option<String> {
+    let table = unsafe {
+        // SAFETY: factory2 is a live IPluginFactory2 and begins with its vtable.
+        *factory2.as_ptr().cast::<*const PluginFactory2VTable>()
+    };
+    let mut raw = std::mem::MaybeUninit::<PClassInfo2>::zeroed();
+    let result = unsafe {
+        // SAFETY: raw is writable SDK storage and index is within countClasses().
+        ((*table).get_class_info2)(factory2.as_ptr(), index, raw.as_mut_ptr())
+    };
+    if result != 0 {
+        return None;
+    }
+    let raw = unsafe {
+        // SAFETY: successful getClassInfo2 initialized the structure.
+        raw.assume_init()
+    };
+    Some(fixed_c_string(&raw.subCategories))
+}
+
 impl Drop for Module {
     fn drop(&mut self) {
         self.factory.take();
-        if let Some(exit) = self.exit {
-            unsafe {
-                // SAFETY: all module interfaces were released above and the
-                // library remains loaded until this Drop returns.
-                exit();
-            }
+        #[cfg(target_os = "macos")]
+        {
+            self.mac_bundle.take();
         }
-        let _keep_loaded = &self.library;
+        #[cfg(not(target_os = "macos"))]
+        {
+            if let Some(exit) = self.exit {
+                unsafe {
+                    // SAFETY: all module interfaces were released above and the
+                    // library remains loaded until this Drop returns.
+                    exit();
+                }
+            }
+            let _keep_loaded = &self.library;
+        }
     }
-}
-
-fn resolve_module_binary(path: &Path) -> Option<PathBuf> {
-    if path.is_file() {
-        return Some(path.to_path_buf());
-    }
-    let stem = path.file_stem().and_then(OsStr::to_str)?;
-    #[cfg(target_os = "windows")]
-    let candidates = [
-        path.join("Contents")
-            .join("x86_64-win")
-            .join(format!("{stem}.vst3")),
-        path.join("Contents")
-            .join("x86_64-win")
-            .join(format!("{stem}.dll")),
-    ];
-    #[cfg(target_os = "macos")]
-    let candidates = [path.join("Contents").join("MacOS").join(stem)];
-    #[cfg(target_os = "linux")]
-    let candidates = [
-        path.join("Contents")
-            .join("x86_64-linux")
-            .join(format!("{stem}.so")),
-        path.join("Contents")
-            .join("aarch64-linux")
-            .join(format!("{stem}.so")),
-    ];
-    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
-    let candidates: [PathBuf; 0] = [];
-    candidates.into_iter().find(|candidate| candidate.is_file())
 }
