@@ -41,6 +41,9 @@ pub enum HostError {
         /// The raw VST3 result code.
         result: i32,
     },
+    /// The ARA companion lifecycle failed before the VST3 component could be activated.
+    #[error("ARA host operation failed: {0}")]
+    Ara(String),
 }
 
 /// Result type used by the safe VST3 host layer.

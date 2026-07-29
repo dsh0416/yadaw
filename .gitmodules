@@ -2,3 +2,6 @@
 	path = third_party/vst3sdk
 	url = https://github.com/steinbergmedia/vst3sdk.git
 	branch = v3.8.0_build_66
+[submodule "third_party/ARA_SDK"]
+	path = third_party/ARA_SDK
+	url = https://github.com/Celemony/ARA_SDK.git

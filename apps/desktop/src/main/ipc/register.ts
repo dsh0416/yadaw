@@ -51,7 +51,8 @@ export function registerIpcHandlers(
         states.push({
           id: plugin.id,
           componentState: state.componentState,
-          controllerState: state.controllerState
+          controllerState: state.controllerState,
+          araDocumentState: state.araDocumentState
         })
       } catch (error) {
         console.error(`Could not synchronize VST3 state for ${plugin.id}:`, error)

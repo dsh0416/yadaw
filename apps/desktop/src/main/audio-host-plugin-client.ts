@@ -96,7 +96,9 @@ export class AudioHostPluginClient {
       audio_mode: plugin.audioMode,
       sample_rate: sampleRate,
       component_state: inlineBinary(plugin.componentState),
-      controller_state: inlineBinary(plugin.controllerState)
+      controller_state: inlineBinary(plugin.controllerState),
+      ara_factory_class_id: plugin.descriptor.ara?.factoryClassId ?? null,
+      ara_document_state: inlineBinary(plugin.araDocumentState ?? new Uint8Array())
     })
     if (response.result.type !== "plugin-loaded") {
       throw new Error("audio host returned an invalid plugin load response")
@@ -208,6 +210,7 @@ export class AudioHostPluginClient {
   async savePluginState(instanceId: string): Promise<{
     componentState: Uint8Array
     controllerState: Uint8Array
+    araDocumentState: Uint8Array
   }> {
     const response = await this.request({
       type: "save-plugin-state",
@@ -218,7 +221,8 @@ export class AudioHostPluginClient {
     }
     return {
       componentState: binaryBytes(response.result.component_state),
-      controllerState: binaryBytes(response.result.controller_state)
+      controllerState: binaryBytes(response.result.controller_state),
+      araDocumentState: binaryBytes(response.result.ara_document_state)
     }
   }
 

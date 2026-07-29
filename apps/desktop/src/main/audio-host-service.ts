@@ -590,9 +590,11 @@ export class AudioHostService {
     return this.plugins.setPluginParameter(change)
   }
 
-  savePluginState(
-    instanceId: string
-  ): Promise<{ componentState: Uint8Array; controllerState: Uint8Array }> {
+  savePluginState(instanceId: string): Promise<{
+    componentState: Uint8Array
+    controllerState: Uint8Array
+    araDocumentState: Uint8Array
+  }> {
     return this.plugins.savePluginState(instanceId)
   }
 
@@ -810,6 +812,7 @@ export class AudioHostService {
         const state = await this.savePluginState(plugin.id)
         plugin.componentState = state.componentState
         plugin.controllerState = state.controllerState
+        plugin.araDocumentState = state.araDocumentState
       } catch (error) {
         console.warn(`Could not capture VST3 state for runtime restart (${plugin.id})`, error)
       }

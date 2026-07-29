@@ -94,4 +94,40 @@ describe("descriptorFromProbe", () => {
       supportedAudioModes: []
     })
   })
+
+  it("retains verified ARA factory metadata without changing insertion compatibility", () => {
+    const descriptor = descriptorFromProbe("melody.vst3", "Vendor", {
+      classId: "audio-module-class",
+      category: "Fx",
+      initialized: true,
+      sample32: true,
+      audioInputs: 1,
+      audioOutputs: 1,
+      supportedAudioModes: ["stereo"],
+      ara: {
+        factoryClassId: "ara-main-factory-class",
+        factoryId: "com.vendor.melody",
+        documentArchiveId: "com.vendor.melody.archive",
+        lowestApiGeneration: 4,
+        highestApiGeneration: 6,
+        playbackTransformationFlags: 7,
+        supportsStoringAudioFileChunks: true
+      }
+    })
+
+    expect(descriptor).toMatchObject({
+      compatibility: "compatible",
+      supportedAudioModes: ["stereo"],
+      ara: {
+        apiGeneration: 2,
+        factoryClassId: "ara-main-factory-class",
+        factoryId: "com.vendor.melody",
+        documentArchiveId: "com.vendor.melody.archive",
+        lowestApiGeneration: 4,
+        highestApiGeneration: 6,
+        playbackTransformationFlags: 7,
+        supportsStoringAudioFileChunks: true
+      }
+    })
+  })
 })

@@ -1,15 +1,17 @@
-use std::{collections::HashMap, path::Path};
+use std::{collections::HashMap, path::Path, rc::Rc};
 
 use yadaw_dsp_runtime::{
     block::MAX_PLUGIN_BLOCK_FRAMES,
     protocol::{
-        BinaryPayload, ControlCommand, ControlResult, ParameterCommand, ParameterGesture,
-        PluginAudioMode, PluginEditorPreference, PluginParameter,
+        BinaryPayload, ControlCommand, ControlResult, LiveMixerGraph, ParameterCommand,
+        ParameterGesture, PluginAudioMode, PluginEditorPreference, PluginParameter,
     },
 };
 use yadaw_vst3_host::{
     AudioLayout, ClassId, HostProcessContext, HostedPlugin, PlugView, PluginKind, ProcessorLease,
 };
+
+use crate::ara::{AraDocument, AraFactoryHost};
 
 pub type ProcessContext = HostProcessContext;
 
@@ -154,14 +156,17 @@ impl Vst3ProcessorHandle {
 pub struct Vst3Runtime {
     instances: HashMap<String, Instance>,
     retired_instances: Vec<Instance>,
+    ara_factories: HashMap<(String, String), Rc<AraFactoryHost>>,
     next_runtime_handle: u32,
 }
 
 struct Instance {
+    ara: Option<AraDocument>,
     plugin: HostedPlugin,
     secondary: Option<HostedPlugin>,
     runtime_handle: u32,
     display_name: String,
+    ara_document_state: Vec<u8>,
 }
 
 impl Instance {
@@ -213,6 +218,8 @@ struct LoadPluginRequest {
     sample_rate: f64,
     component_state: Vec<u8>,
     controller_state: Vec<u8>,
+    ara_factory_class_id: Option<String>,
+    ara_document_state: Vec<u8>,
 }
 
 impl Default for Vst3Runtime {
@@ -227,6 +234,7 @@ impl Vst3Runtime {
         Self {
             instances: HashMap::new(),
             retired_instances: Vec::new(),
+            ara_factories: HashMap::new(),
             next_runtime_handle: 1,
         }
     }
@@ -242,12 +250,18 @@ impl Vst3Runtime {
                 sample_rate,
                 component_state,
                 controller_state,
+                ara_factory_class_id,
+                ara_document_state,
             } => {
                 let component_state = match inline_bytes(component_state) {
                     Ok(bytes) => bytes,
                     Err(message) => return control_error(message),
                 };
                 let controller_state = match inline_bytes(controller_state) {
+                    Ok(bytes) => bytes,
+                    Err(message) => return control_error(message),
+                };
+                let ara_document_state = match inline_bytes(ara_document_state) {
                     Ok(bytes) => bytes,
                     Err(message) => return control_error(message),
                 };
@@ -260,6 +274,8 @@ impl Vst3Runtime {
                     sample_rate,
                     component_state,
                     controller_state,
+                    ara_factory_class_id,
+                    ara_document_state,
                 })
             }
             ControlCommand::UnloadPlugin { instance_id } => {
@@ -414,6 +430,16 @@ impl Vst3Runtime {
             .collect()
     }
 
+    pub fn sync_ara_graph(&mut self, graph: Option<&LiveMixerGraph>) -> Result<(), String> {
+        for instance in self.instances.values_mut() {
+            let Instance { ara, plugin, .. } = instance;
+            if let Some(ara) = ara {
+                plugin.with_processing_paused(|| ara.sync_live_graph(graph))?;
+            }
+        }
+        Ok(())
+    }
+
     fn load_plugin(&mut self, request: LoadPluginRequest) -> ControlResult {
         let LoadPluginRequest {
             instance_id,
@@ -424,6 +450,8 @@ impl Vst3Runtime {
             sample_rate,
             component_state,
             controller_state,
+            ara_factory_class_id,
+            ara_document_state,
         } = request;
         if let Some(instance) = self.instances.get(&instance_id) {
             return ControlResult::PluginLoaded {
@@ -454,15 +482,56 @@ impl Vst3Runtime {
         {
             return control_error("unsupported instrument audio mode");
         }
-        let plugin = match HostedPlugin::create_with_layout(
-            &module_path,
-            class_id,
-            sample_rate,
-            kind,
-            layout,
-        ) {
-            Ok(plugin) => plugin,
-            Err(error) => return control_error(&error.to_string()),
+        if ara_factory_class_id.is_some() && audio_mode == PluginAudioMode::DualMono {
+            return control_error("ARA plug-ins do not support the dual-mono hosting mode");
+        }
+        let (plugin, ara) = match ara_factory_class_id {
+            Some(factory_class_id) => {
+                let factory_key = (module_path.clone(), factory_class_id.clone());
+                let parsed_factory_class_id = match factory_class_id.parse::<ClassId>() {
+                    Ok(class_id) => class_id,
+                    Err(error) => return control_error(&error.to_string()),
+                };
+                let shared_factory = self.ara_factories.get(&factory_key).cloned();
+                let ara_instance_id = instance_id.clone();
+                let initial_archive = ara_document_state.clone();
+                match HostedPlugin::create_with_layout_and_hook(
+                    &module_path,
+                    class_id,
+                    sample_rate,
+                    kind,
+                    layout,
+                    move |module, component| {
+                        let factory = match shared_factory {
+                            Some(factory) => factory,
+                            None => AraFactoryHost::create(module, parsed_factory_class_id)?,
+                        };
+                        let document = AraDocument::create(
+                            ara_instance_id,
+                            component,
+                            Rc::clone(&factory),
+                            initial_archive,
+                        )?;
+                        Ok((document, factory))
+                    },
+                ) {
+                    Ok((plugin, (ara, factory))) => {
+                        self.ara_factories.entry(factory_key).or_insert(factory);
+                        (plugin, Some(ara))
+                    }
+                    Err(error) => return control_error(&error.to_string()),
+                }
+            }
+            None => match HostedPlugin::create_with_layout(
+                &module_path,
+                class_id,
+                sample_rate,
+                kind,
+                layout,
+            ) {
+                Ok(plugin) => (plugin, None),
+                Err(error) => return control_error(&error.to_string()),
+            },
         };
         let secondary = if audio_mode == PluginAudioMode::DualMono {
             match HostedPlugin::create_with_layout(
@@ -511,10 +580,12 @@ impl Vst3Runtime {
         self.instances.insert(
             instance_id,
             Instance {
+                ara,
                 plugin,
                 secondary,
                 runtime_handle,
                 display_name,
+                ara_document_state,
             },
         );
         ControlResult::PluginLoaded {
@@ -555,14 +626,25 @@ impl Vst3Runtime {
         ControlResult::Accepted
     }
 
-    fn save_state(&self, instance_id: &str) -> ControlResult {
-        let Some(instance) = self.instances.get(instance_id) else {
+    fn save_state(&mut self, instance_id: &str) -> ControlResult {
+        let Some(instance) = self.instances.get_mut(instance_id) else {
             return control_error("VST3 instance is not loaded");
+        };
+        let ara_document_state = match &mut instance.ara {
+            Some(ara) => match instance
+                .plugin
+                .with_processing_paused(|| ara.save_archive())
+            {
+                Ok(archive) => archive,
+                Err(error) => return control_error(&error),
+            },
+            None => instance.ara_document_state.clone(),
         };
         match instance.plugin.save_state() {
             Ok((component_state, controller_state)) => ControlResult::PluginState {
                 component_state: BinaryPayload::inline(component_state),
                 controller_state: BinaryPayload::inline(controller_state),
+                ara_document_state: BinaryPayload::inline(ara_document_state),
             },
             Err(error) => control_error(&error.to_string()),
         }

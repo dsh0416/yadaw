@@ -359,10 +359,12 @@ pub fn encode_request(
         ControlCommand::LoadPlugin {
             component_state,
             controller_state,
+            ara_document_state,
             ..
         } => {
             externalize_binary(component_state, &mut builder, &[])?;
             externalize_binary(controller_state, &mut builder, &[])?;
+            externalize_binary(ara_document_state, &mut builder, &[])?;
         }
         ControlCommand::UpdateGraph { update } => visit_graph_update(update, &mut builder, &[])?,
         _ => {}
@@ -388,10 +390,12 @@ pub fn encode_request_with_attachments(
         ControlCommand::LoadPlugin {
             component_state,
             controller_state,
+            ara_document_state,
             ..
         } => {
             externalize_binary(component_state, &mut builder, attachments)?;
             externalize_binary(controller_state, &mut builder, attachments)?;
+            externalize_binary(ara_document_state, &mut builder, attachments)?;
         }
         ControlCommand::UpdateGraph { update } => {
             visit_graph_update(update, &mut builder, attachments)?;
@@ -420,9 +424,11 @@ pub fn encode_response(
         ControlResult::PluginState {
             component_state,
             controller_state,
+            ara_document_state,
         } => {
             externalize_binary(component_state, &mut builder, &[])?;
             externalize_binary(controller_state, &mut builder, &[])?;
+            externalize_binary(ara_document_state, &mut builder, &[])?;
         }
         _ => {}
     }
@@ -450,9 +456,11 @@ pub fn encode_response_from_arena(
         ControlResult::PluginState {
             component_state,
             controller_state,
+            ara_document_state,
         } => {
             externalize_binary_from_arena(component_state, &mut builder, source)?;
             externalize_binary_from_arena(controller_state, &mut builder, source)?;
+            externalize_binary_from_arena(ara_document_state, &mut builder, source)?;
         }
         _ => {}
     }
@@ -512,10 +520,12 @@ pub fn materialize_request_payloads(
         ControlCommand::LoadPlugin {
             component_state,
             controller_state,
+            ara_document_state,
             ..
         } => {
             materialize_binary(component_state, arena, &mut leases)?;
             materialize_binary(controller_state, arena, &mut leases)?;
+            materialize_binary(ara_document_state, arena, &mut leases)?;
         }
         ControlCommand::UpdateGraph { update } => {
             materialize_graph_update(update, arena)?;
@@ -542,9 +552,11 @@ pub fn decode_response(
         ControlResult::PluginState {
             component_state,
             controller_state,
+            ara_document_state,
         } => {
             materialize_binary(component_state, arena, &mut leases)?;
             materialize_binary(controller_state, arena, &mut leases)?;
+            materialize_binary(ara_document_state, arena, &mut leases)?;
         }
         _ => {}
     }
@@ -571,9 +583,11 @@ pub fn decode_response_to_attachments(
         ControlResult::PluginState {
             component_state,
             controller_state,
+            ara_document_state,
         } => {
             extract_binary_attachment(component_state, arena, &mut attachments, &mut leases)?;
             extract_binary_attachment(controller_state, arena, &mut attachments, &mut leases)?;
+            extract_binary_attachment(ara_document_state, arena, &mut attachments, &mut leases)?;
         }
         _ => {}
     }

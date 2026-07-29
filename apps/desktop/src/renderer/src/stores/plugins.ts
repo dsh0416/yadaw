@@ -17,7 +17,7 @@ import {
 import { useMixerStore } from "./mixer"
 
 const EMPTY_CATALOG: PluginCatalogSnapshot = {
-  scannerVersion: 3,
+  scannerVersion: 4,
   scanning: false,
   scannedAt: null,
   plugins: []

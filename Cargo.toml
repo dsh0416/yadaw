@@ -23,6 +23,9 @@ rust-version = "1.97"
 license = "GPL-3.0-only"
 
 [workspace.dependencies]
+ara2-bridge-core = "=0.3.0"
+ara2-bridge-host = { path = "third_party/ara2-bridge-host" }
+ara2-bridge-sys = "=0.3.0"
 bwavfile = "2.0.1"
 bindgen = "0.72.1"
 cc = "1"

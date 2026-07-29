@@ -11,6 +11,7 @@ struct WinitHost {
     background_sender: mpsc::Sender<ActorRequest>,
     host_events: std_mpsc::SyncSender<HostEvent>,
     vst3: Option<vst3::Vst3Runtime>,
+    ara_graph: Option<LiveMixerGraph>,
     compositor: TinySkiaCompositor,
     editor_owner_window: Option<usize>,
     editors: HashMap<WindowId, EditorWindow>,
@@ -131,6 +132,23 @@ impl WinitHost {
                 let _ = reply.send(runtime.unload_plugin(&instance_id, retain_for_graph));
                 return;
             }
+            ActorCommand::SyncAraGraph { graph } => {
+                let Some(runtime) = self.vst3.as_mut() else {
+                    let _ = reply.send(ControlResult::Error {
+                        message: "VST3 UI runtime is shutting down".into(),
+                    });
+                    return;
+                };
+                let result = match runtime.sync_ara_graph(graph.as_ref()) {
+                    Ok(()) => {
+                        self.ara_graph = graph;
+                        ControlResult::Accepted
+                    }
+                    Err(message) => ControlResult::Error { message },
+                };
+                let _ = reply.send(result);
+                return;
+            }
             command => command,
         };
         let Some(runtime) = self.vst3.as_mut() else {
@@ -169,7 +187,14 @@ impl WinitHost {
                     ControlCommand::LoadPlugin { instance_id, .. } => Some(instance_id.clone()),
                     _ => None,
                 };
-                let result = runtime.execute(command);
+                let mut result = runtime.execute(command);
+                if matches!(result, ControlResult::PluginLoaded { .. })
+                    && let Some(instance_id) = loaded_id.as_ref()
+                    && let Err(message) = runtime.sync_ara_graph(self.ara_graph.as_ref())
+                {
+                    let _ = runtime.unload_plugin(instance_id, false);
+                    result = ControlResult::Error { message };
+                }
                 if matches!(result, ControlResult::PluginLoaded { .. })
                     && let Some(instance_id) = loaded_id
                     && let Some(processor) = runtime.processor_handle(&instance_id)
@@ -184,6 +209,9 @@ impl WinitHost {
                     message: "winit UI thread does not own graph worker jobs".into(),
                 }
             }
+            ActorCommand::SyncAraGraph { .. } => ControlResult::Error {
+                message: "ARA graph synchronization was not handled".into(),
+            },
         };
         let _ = reply.send(result);
     }
@@ -213,6 +241,7 @@ impl WinitHost {
             processors.clear();
         }
         self.vst3.take();
+        self.ara_graph = None;
         while let Ok(request) = self.inbox.try_recv() {
             let _ = request.reply.send(ControlResult::Error {
                 message: "VST3 UI runtime shut down".into(),

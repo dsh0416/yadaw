@@ -152,7 +152,10 @@ export type MixerSendPatch = Partial<
 >
 
 export type PluginInstancePatch = Partial<
-  Pick<PluginInstanceState, "slotOrder" | "enabled" | "componentState" | "controllerState">
+  Pick<
+    PluginInstanceState,
+    "slotOrder" | "enabled" | "componentState" | "controllerState" | "araDocumentState"
+  >
 >
 
 export type ProjectCommand =

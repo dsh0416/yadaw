@@ -1,4 +1,7 @@
-fn decode_clip_audio(path: &str, target_sample_rate: u32) -> Result<Vec<StereoFrame>> {
+pub(crate) fn decode_clip_audio(
+    path: &str,
+    target_sample_rate: u32,
+) -> Result<Vec<StereoFrame>> {
     let mut reader =
         WaveReader::open(path).map_err(|error| audio_error("failed to open mixer clip", error))?;
     let format = reader

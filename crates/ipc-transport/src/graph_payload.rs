@@ -12,10 +12,12 @@ pub(crate) fn validate_request_payloads(
         ControlCommand::LoadPlugin {
             component_state,
             controller_state,
+            ara_document_state,
             ..
         } => {
             validate_binary(component_state, arena, leases)?;
             validate_binary(controller_state, arena, leases)?;
+            validate_binary(ara_document_state, arena, leases)?;
         }
         ControlCommand::UpdateGraph { update } => {
             validate_graph_update(update, arena, leases)?;

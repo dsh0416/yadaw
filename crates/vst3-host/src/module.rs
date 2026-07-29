@@ -5,7 +5,9 @@ use std::{
 
 use yadaw_vst3_host_sys::{
     Steinberg::{IPluginFactory, IPluginFactory2, PClassInfo, PClassInfo2},
+    YadawAraFactoryInfo,
     abi::{PluginFactory2VTable, PluginFactoryVTable},
+    yadaw_ara_query_factory,
 };
 
 use crate::{ClassId, ComInterface, ComPtr, HostError, HostResult, id::fixed_c_string};
@@ -15,6 +17,19 @@ use crate::{ClassId, ComInterface, ComPtr, HostError, HostResult, id::fixed_c_st
 mod module_macos;
 #[cfg(target_os = "macos")]
 use module_macos::MacBundle;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AraFactoryInfo {
+    pub factory_id: String,
+    pub document_archive_id: String,
+    pub plugin_name: String,
+    pub manufacturer_name: String,
+    pub version: String,
+    pub lowest_api_generation: i32,
+    pub highest_api_generation: i32,
+    pub playback_transformation_flags: u32,
+    pub supports_storing_audio_file_chunks: bool,
+}
 
 #[cfg(not(target_os = "macos"))]
 mod dynamic {
@@ -200,6 +215,10 @@ impl Module {
             .expect("factory is present until module drop")
     }
 
+    pub fn create_ara_main_factory(&self, class_id: ClassId) -> HostResult<crate::AraMainFactory> {
+        crate::AraMainFactory::create(self.factory().as_ptr(), class_id)
+    }
+
     /// Creates one SDK interface for a class exposed by this module.
     pub fn create<I: ComInterface>(&self, class_id: ClassId) -> HostResult<ComPtr<I>> {
         let factory = self.factory().as_ptr();
@@ -275,6 +294,38 @@ impl Module {
             });
         }
         Ok(classes)
+    }
+
+    /// Reads the ARA factory exposed by an `ARA Main Factory Class`.
+    pub fn ara_factory_info(&self, class_id: ClassId) -> HostResult<AraFactoryInfo> {
+        let class_id = class_id.to_tuid();
+        let mut raw = std::mem::MaybeUninit::<YadawAraFactoryInfo>::zeroed();
+        let result = unsafe {
+            // SAFETY: the module factory is live, class_id is a VST3 ABI TUID, and raw is writable
+            // storage. The bridge copies all plug-in-owned strings before releasing IMainFactory.
+            yadaw_ara_query_factory(self.factory().as_ptr(), class_id.as_ptr(), raw.as_mut_ptr())
+        };
+        if result != 0 {
+            return Err(HostError::Operation {
+                operation: "ARA::IMainFactory::getFactory",
+                result,
+            });
+        }
+        let raw = unsafe {
+            // SAFETY: a successful bridge call initialized the complete POD output structure.
+            raw.assume_init()
+        };
+        Ok(AraFactoryInfo {
+            factory_id: fixed_c_string(&raw.factory_id),
+            document_archive_id: fixed_c_string(&raw.document_archive_id),
+            plugin_name: fixed_c_string(&raw.plugin_name),
+            manufacturer_name: fixed_c_string(&raw.manufacturer_name),
+            version: fixed_c_string(&raw.version),
+            lowest_api_generation: raw.lowest_api_generation,
+            highest_api_generation: raw.highest_api_generation,
+            playback_transformation_flags: raw.playback_transformation_flags,
+            supports_storing_audio_file_chunks: raw.supports_storing_audio_file_chunks != 0,
+        })
     }
 }
 

@@ -17,6 +17,12 @@
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 pub use root::Steinberg;
+pub use root::{
+    YadawAraFactoryInfo, YadawAraMainFactory, YadawAraPluginEntry, yadaw_ara_main_factory_create,
+    yadaw_ara_main_factory_destroy, yadaw_ara_main_factory_get, yadaw_ara_plugin_entry_bind,
+    yadaw_ara_plugin_entry_create, yadaw_ara_plugin_entry_destroy,
+    yadaw_ara_plugin_entry_get_factory, yadaw_ara_query_factory,
+};
 
 pub mod abi;
 pub mod compat;

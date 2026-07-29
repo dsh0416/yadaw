@@ -53,6 +53,7 @@ export interface ControlResponse {
     }>
     component_state?: BinaryPayloadWire
     controller_state?: BinaryPayloadWire
+    ara_document_state?: BinaryPayloadWire
     payload?: BinaryPayloadWire
     report?: AudioHostBenchmarkReport
     active_mode?: PluginEditorMode

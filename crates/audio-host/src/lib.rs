@@ -1,5 +1,6 @@
 use std::{error::Error, fmt};
 
+mod ara;
 pub mod crash_marker;
 pub mod device;
 pub mod editor_platform;

@@ -7,7 +7,9 @@ fn main() {
     let manifest_dir =
         PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").expect("manifest directory is set"));
     let sdk_dir = manifest_dir.join("../../third_party/vst3sdk");
+    let ara_api_dir = manifest_dir.join("../../third_party/ARA_SDK/ARA_API");
     let wrapper = manifest_dir.join("wrapper.hpp");
+    let ara_bridge = manifest_dir.join("ara_bridge.cpp");
     let output =
         PathBuf::from(env::var_os("OUT_DIR").expect("output directory is set")).join("bindings.rs");
 
@@ -17,9 +19,26 @@ fn main() {
             sdk_dir.display()
         );
     }
+    if !ara_api_dir.join("ARAInterface.h").is_file() {
+        panic!(
+            "ARA SDK is missing at {}; initialize the recursive third_party/ARA_SDK submodule",
+            ara_api_dir.display()
+        );
+    }
 
     println!("cargo:rerun-if-changed={}", wrapper.display());
+    println!("cargo:rerun-if-changed={}", ara_bridge.display());
+    println!(
+        "cargo:rerun-if-changed={}",
+        manifest_dir.join("ara_bridge.hpp").display()
+    );
     emit_sdk_reruns(&sdk_dir);
+    for path in ["ARAInterface.h", "ARAVST3.h"] {
+        println!(
+            "cargo:rerun-if-changed={}",
+            ara_api_dir.join(path).display()
+        );
+    }
 
     let target = env::var("TARGET").expect("Cargo target is set");
     let mut builder = bindgen::Builder::default()
@@ -28,6 +47,7 @@ fn main() {
         .clang_arg("c++")
         .clang_arg("-std=c++17")
         .clang_arg(format!("-I{}", sdk_dir.display()))
+        .clang_arg(format!("-I{}", ara_api_dir.display()))
         .clang_arg(format!("--target={target}"))
         .enable_cxx_namespaces()
         .vtable_generation(true)
@@ -45,7 +65,11 @@ fn main() {
         .allowlist_type("Steinberg::IPlugView.*")
         .allowlist_type("Steinberg::IPlugFrame")
         .allowlist_type("Steinberg::Vst::.*")
+        .allowlist_type("ARA::.*")
         .allowlist_var("Steinberg::.*")
+        .allowlist_var("ARA::.*")
+        .allowlist_type("YadawAraFactoryInfo")
+        .allowlist_function("yadaw_ara_.*")
         .opaque_type("std::.*")
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()));
 
@@ -59,6 +83,17 @@ fn main() {
     bindings
         .write_to_file(output)
         .expect("VST3 SDK bindings should be written");
+
+    let mut bridge = cc::Build::new();
+    bridge
+        .cpp(true)
+        .std("c++17")
+        .file(&ara_bridge)
+        .include(&manifest_dir)
+        .include(&sdk_dir)
+        .include(&ara_api_dir)
+        .warnings(false);
+    bridge.compile("yadaw_ara_bridge");
 }
 
 fn emit_sdk_reruns(sdk_dir: &Path) {

@@ -31,6 +31,10 @@ async fn forward_to_ui(
 enum ActorCommand {
     Control(ControlCommand),
     Parameter(yadaw_dsp_runtime::protocol::ParameterCommand),
+    /// ARA document model mutation owned by the winit/VST3 controller thread.
+    SyncAraGraph {
+        graph: Option<LiveMixerGraph>,
+    },
     /// Immutable mixer graph compile+publish owned by `BackgroundIoActor`.
     BuildGraph {
         graph: engine::NativeMixerGraph,
@@ -150,6 +154,9 @@ async fn engine_actor(
                 })
             }
             ActorCommand::Parameter(command) => mixer_parameter_command(&handles, command),
+            ActorCommand::SyncAraGraph { .. } => ControlResult::Error {
+                message: "engine actor does not own ARA documents".into(),
+            },
             ActorCommand::PublishBuiltGraph { built } => match engine::publish_mixer_runtime(built)
             {
                 Ok(engine::PublishOutcome::Published) => ControlResult::Accepted,
@@ -231,6 +238,9 @@ async fn background_io_actor(
             }
             ActorCommand::Parameter(_) => ControlResult::Error {
                 message: "background I/O actor does not own parameters".into(),
+            },
+            ActorCommand::SyncAraGraph { .. } => ControlResult::Error {
+                message: "background I/O actor does not own ARA documents".into(),
             },
             ActorCommand::PublishBuiltGraph { .. } => ControlResult::Error {
                 message: "background I/O actor does not publish graphs".into(),

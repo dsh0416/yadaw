@@ -34,7 +34,7 @@ interface PluginRuntime {
   closeEditor(instanceId: string): Promise<void>
 }
 
-const SCANNER_VERSION = 3
+const SCANNER_VERSION = 4
 const execFileAsync = promisify(execFile)
 const AUDIO_MODES = ["mono", "mono-to-stereo", "stereo", "dual-mono"] as const
 
@@ -293,6 +293,15 @@ interface ProbeOutput {
       audioOutputs?: number
       eventInputs?: number
       supportedAudioModes?: unknown[]
+      ara?: {
+        factoryClassId?: string
+        factoryId?: string
+        documentArchiveId?: string
+        lowestApiGeneration?: number
+        highestApiGeneration?: number
+        playbackTransformationFlags?: number
+        supportsStoringAudioFileChunks?: boolean
+      } | null
     }>
   }
 }
@@ -376,6 +385,20 @@ export function descriptorFromProbe(
     buses: busesForMode(kind, preferredMode),
     supportedAudioModes,
     hasEditor: value.hasEditor === true,
+    ...(textValue(value.ara?.factoryClassId)
+      ? {
+          ara: {
+            apiGeneration: 2 as const,
+            factoryClassId: textValue(value.ara?.factoryClassId),
+            factoryId: textValue(value.ara?.factoryId),
+            documentArchiveId: textValue(value.ara?.documentArchiveId),
+            lowestApiGeneration: value.ara?.lowestApiGeneration ?? 4,
+            highestApiGeneration: value.ara?.highestApiGeneration ?? 4,
+            playbackTransformationFlags: value.ara?.playbackTransformationFlags ?? 0,
+            supportsStoringAudioFileChunks: value.ara?.supportsStoringAudioFileChunks === true
+          }
+        }
+      : {}),
     compatibility,
     compatibilityReason
   }
