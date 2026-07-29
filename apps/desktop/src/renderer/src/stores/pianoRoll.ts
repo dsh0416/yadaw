@@ -14,6 +14,11 @@ export interface PianoRollClipboardNote extends Omit<MidiNoteState, "id" | "star
 
 export type PianoRollEditCommand = "cut" | "copy" | "paste" | "select-all"
 
+export const PIANO_ROLL_MIN_PIXELS_PER_QUARTER = 40
+export const PIANO_ROLL_MAX_PIXELS_PER_QUARTER = 960
+export const PIANO_ROLL_MIN_ROW_HEIGHT = 10
+export const PIANO_ROLL_MAX_ROW_HEIGHT = 32
+
 const noteRefKey = (value: PianoRollNoteRef): string => `${value.clipId}:${value.noteId}`
 
 export const usePianoRollStore = defineStore("piano-roll", () => {
@@ -34,6 +39,20 @@ export const usePianoRollStore = defineStore("piano-roll", () => {
   const selectedNoteKeys = computed(
     () => new Set(selectedNotes.value.map((value) => noteRefKey(value)))
   )
+
+  function setPixelsPerQuarter(value: number): void {
+    pixelsPerQuarter.value = Math.max(
+      PIANO_ROLL_MIN_PIXELS_PER_QUARTER,
+      Math.min(PIANO_ROLL_MAX_PIXELS_PER_QUARTER, Math.round(value))
+    )
+  }
+
+  function setRowHeight(value: number): void {
+    rowHeight.value = Math.max(
+      PIANO_ROLL_MIN_ROW_HEIGHT,
+      Math.min(PIANO_ROLL_MAX_ROW_HEIGHT, Math.round(value))
+    )
+  }
 
   function selectArrangementClip(clipId: string, additive = false): void {
     if (!additive) arrangementClipIds.value = [clipId]
@@ -141,6 +160,8 @@ export const usePianoRollStore = defineStore("piano-roll", () => {
     editCursorKey,
     clipboard,
     editorFocused,
+    setPixelsPerQuarter,
+    setRowHeight,
     selectArrangementClip,
     clearArrangementSelection,
     openSelection,
