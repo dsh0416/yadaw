@@ -34,11 +34,6 @@ criterion.workspace = true
 yadaw-audio-host = { path = "../audio-host", features = ["bench-internals"] }
 
 [[bench]]
-name = "native_render"
-harness = false
-required-features = ["bench-internals"]
-
-[[bench]]
 name = "media_streaming"
 harness = false
 required-features = ["bench-internals"]

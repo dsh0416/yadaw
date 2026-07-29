@@ -200,16 +200,6 @@ importers:
         specifier: ^3.0.0
         version: 3.7.4(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2)(@types/node@26.1.1)
 
-  packages/audio-engine:
-    dependencies:
-      '@yadaw/contracts':
-        specifier: workspace:*
-        version: link:../contracts
-    devDependencies:
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-
   packages/contracts:
     devDependencies:
       typescript:

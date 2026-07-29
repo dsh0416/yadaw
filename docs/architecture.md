@@ -169,9 +169,10 @@ serializes graph state from the audio callback.
 ## Dependency direction
 
 ```text
-desktop -> contracts
-desktop renderer -> audio-engine + contracts
-desktop main -> dsp-node -> dsp-core
+desktop renderer -> contracts + ui
+desktop main -> contracts + project-db + audio-host-client + dsp-node
+audio-host -> dsp-runtime + dsp-core + vst3-host
+dsp-node -> dsp-runtime + dsp-core
 dsp-core -> no JS or Electron dependencies
 ```
 

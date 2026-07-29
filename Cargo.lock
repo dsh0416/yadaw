@@ -5770,6 +5770,7 @@ dependencies = [
  "tokio",
  "winit",
  "yadaw-dsp-core",
+ "yadaw-dsp-render",
  "yadaw-dsp-runtime",
  "yadaw-ipc-transport",
  "yadaw-vst3-host",
@@ -5808,6 +5809,15 @@ dependencies = [
  "rubato",
  "sha2",
  "yadaw-audio-host",
+ "yadaw-dsp-core",
+ "yadaw-dsp-runtime",
+]
+
+[[package]]
+name = "yadaw-dsp-render"
+version = "0.1.1"
+dependencies = [
+ "criterion",
  "yadaw-dsp-core",
  "yadaw-dsp-runtime",
 ]

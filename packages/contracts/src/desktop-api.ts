@@ -1,0 +1,185 @@
+import type {
+  ApplicationCommandId,
+  ApplicationWindowCommandId,
+  DesktopPlatform,
+  NativeEngineInfo,
+  ProcessGainRequest,
+  ProcessGainResult
+} from "./application"
+import type {
+  AudioBackend,
+  AudioBackendDescriptor,
+  AudioDeviceList,
+  AudioPreferences,
+  AudioRuntimeSnapshot,
+  DesktopLifecycleEvent,
+  DesktopLifecycleSnapshot,
+  RoundTripLatencyMeasurement,
+  RoundTripLatencyMeasurementRequest
+} from "./audio"
+import type { AudioBenchmarkReport, SystemPerformanceSnapshot } from "./performance"
+import type {
+  CompiledAudioGraphSnapshot,
+  MixerGraphSnapshot,
+  MixerParameterPreview,
+  MixerRuntimeSnapshot,
+  ProjectCommand,
+  ProjectCommandResult,
+  TransportCommand,
+  TransportSnapshot
+} from "./mixer"
+import type { MidiImportPlan, MidiImportPreview } from "./midi"
+import type { OperationEvent } from "./operations"
+import type {
+  PluginCatalogSnapshot,
+  PluginParameterChange,
+  PluginParameterInfo,
+  PluginRuntimeStatus,
+  PluginScanEvent,
+  PluginScanRequest
+} from "./plugins"
+import type {
+  CreateProjectRequest,
+  ProjectAssetSummary,
+  ProjectCloseDisposition,
+  ProjectConfiguration,
+  ProjectOpenPreparation,
+  ProjectSession,
+  ProjectWorkspaceSnapshot,
+  StartupProgressSnapshot,
+  WaveformPeakWindow,
+  WaveformWindowRequest
+} from "./project"
+import type { PendingRecording, RecordingSession } from "./recording"
+import type {
+  ApplicationSettings,
+  ApplicationSettingsPatch,
+  AudioHostRuntimePreferences
+} from "./settings"
+
+export const IPC_CHANNELS = {
+  engineInfo: "engine:info",
+  processGain: "engine:process-gain",
+  audioBackends: "audio:list-backends",
+  audioDevices: "audio:list-devices",
+  audioStart: "audio:start",
+  audioStop: "audio:stop",
+  audioSnapshot: "audio:snapshot",
+  audioRoundTripLatencyStart: "audio:round-trip-latency-start",
+  audioRoundTripLatencySnapshot: "audio:round-trip-latency-snapshot",
+  mixerLoad: "mixer:load",
+  mixerReload: "mixer:reload",
+  mixerExecute: "mixer:execute",
+  mixerPreview: "mixer:preview",
+  mixerSnapshot: "mixer:snapshot",
+  mixerClearMeterClips: "mixer:clear-meter-clips",
+  transportCommand: "transport:command",
+  transportSnapshot: "transport:snapshot",
+  lifecycleSnapshot: "lifecycle:snapshot",
+  lifecycleEvent: "lifecycle:event",
+  startupProgressSnapshot: "startup:progress-snapshot",
+  startupProgressEvent: "startup:progress-event",
+  systemPerformanceSnapshot: "system:performance-snapshot",
+  audioBenchmarkRun: "audio-benchmark:run",
+  compiledAudioGraphSnapshot: "compiled-audio-graph:snapshot",
+  applicationCommandRequested: "application-command:requested",
+  applicationWindowCommand: "application-window:command",
+  applicationWindowTheme: "application-window:theme",
+  projectCreate: "project:create",
+  projectPrepareOpen: "project:prepare-open",
+  projectOpen: "project:open",
+  projectSave: "project:save",
+  projectClose: "project:close",
+  projectAssetsList: "project:assets-list",
+  projectConfigurationUpdate: "project:configuration-update",
+  settingsGet: "settings:get",
+  settingsUpdate: "settings:update",
+  settingsSetSoftwareMonitoring: "settings:set-software-monitoring",
+  settingsConfigureAudioHostRuntime: "settings:configure-audio-host-runtime",
+  settingsChooseSwap: "settings:choose-swap",
+  settingsOpenSwap: "settings:open-swap",
+  recordingStart: "recording:start",
+  recordingStop: "recording:stop",
+  recordingPendingList: "recording:pending-list",
+  recordingRecover: "recording:recover",
+  recordingDeletePending: "recording:delete-pending",
+  assetAudioRead: "asset:audio-read",
+  assetWaveformRead: "asset:waveform-read",
+  recordingWaveformSnapshot: "recording:waveform-snapshot",
+  pluginsList: "plugins:list",
+  pluginsScan: "plugins:scan",
+  pluginsScanEvent: "plugins:scan-event",
+  pluginEditorOpen: "plugin-editor:open",
+  pluginEditorClose: "plugin-editor:close",
+  pluginParametersGet: "plugin-parameters:get",
+  pluginParameterSet: "plugin-parameter:set",
+  midiImportPrepare: "midi-import:prepare",
+  midiImportCommit: "midi-import:commit",
+  operationCancel: "operation:cancel",
+  operationEvent: "operation:event"
+} as const
+
+export interface YadawDesktopApi {
+  readonly platform: DesktopPlatform
+  engineInfo(): Promise<NativeEngineInfo>
+  processGain(request: ProcessGainRequest): Promise<ProcessGainResult>
+  listAudioBackends(): Promise<AudioBackendDescriptor[]>
+  listAudioDevices(backend: AudioBackend): Promise<AudioDeviceList>
+  startAudioEngine(preferences: AudioPreferences): Promise<AudioRuntimeSnapshot>
+  stopAudioEngine(): Promise<AudioRuntimeSnapshot>
+  audioEngineSnapshot(): Promise<AudioRuntimeSnapshot>
+  startRoundTripLatencyMeasurement(
+    request: RoundTripLatencyMeasurementRequest
+  ): Promise<RoundTripLatencyMeasurement>
+  roundTripLatencyMeasurementSnapshot(): Promise<RoundTripLatencyMeasurement>
+  loadMixerGraph(): Promise<MixerGraphSnapshot>
+  reloadMixerGraph(): Promise<MixerGraphSnapshot>
+  executeProjectCommand(command: ProjectCommand): Promise<ProjectCommandResult>
+  previewMixerParameter(preview: MixerParameterPreview): Promise<void>
+  mixerSnapshot(): Promise<MixerRuntimeSnapshot>
+  clearMixerMeterClips(): Promise<MixerRuntimeSnapshot>
+  transportCommand(command: TransportCommand): Promise<TransportSnapshot>
+  transportSnapshot(): Promise<TransportSnapshot>
+  lifecycleSnapshot(): Promise<DesktopLifecycleSnapshot>
+  subscribeLifecycle(listener: (event: DesktopLifecycleEvent) => void): () => void
+  startupProgressSnapshot(): Promise<StartupProgressSnapshot>
+  subscribeStartupProgress(listener: (progress: StartupProgressSnapshot) => void): () => void
+  systemPerformanceSnapshot(): Promise<SystemPerformanceSnapshot>
+  runAudioBenchmark(): Promise<AudioBenchmarkReport>
+  compiledAudioGraphSnapshot(): Promise<CompiledAudioGraphSnapshot | null>
+  subscribeApplicationCommands(listener: (command: ApplicationCommandId) => void): () => void
+  executeApplicationWindowCommand(command: ApplicationWindowCommandId): Promise<void>
+  setApplicationWindowTheme(theme: "light" | "dark"): Promise<void>
+  createProject(request: CreateProjectRequest): Promise<ProjectWorkspaceSnapshot>
+  prepareOpenProject(path?: string): Promise<ProjectOpenPreparation | null>
+  openProject(path: string, recover?: boolean): Promise<ProjectWorkspaceSnapshot>
+  saveProject(path?: string): Promise<ProjectSession | null>
+  closeProject(disposition?: ProjectCloseDisposition): Promise<boolean>
+  listProjectAssets(): Promise<ProjectAssetSummary[]>
+  updateProjectConfiguration(configuration: ProjectConfiguration): Promise<ProjectSession>
+  getApplicationSettings(): Promise<ApplicationSettings>
+  updateApplicationSettings(patch: ApplicationSettingsPatch): Promise<ApplicationSettings>
+  setSoftwareMonitoringEnabled(enabled: boolean): Promise<ApplicationSettings>
+  configureAudioHostRuntime(preferences: AudioHostRuntimePreferences): Promise<ApplicationSettings>
+  chooseSwapDirectory(): Promise<ApplicationSettings>
+  openSwapDirectory(): Promise<void>
+  startRecording(): Promise<RecordingSession>
+  stopRecording(): Promise<PendingRecording>
+  listPendingRecordings(): Promise<PendingRecording[]>
+  recoverRecording(id: string): Promise<void>
+  deletePendingRecording(id: string): Promise<void>
+  readAssetAudio(id: string): Promise<Uint8Array>
+  readAssetWaveform(request: WaveformWindowRequest): Promise<WaveformPeakWindow>
+  recordingWaveformSnapshot(request: WaveformWindowRequest): Promise<WaveformPeakWindow>
+  listPlugins(): Promise<PluginCatalogSnapshot>
+  scanPlugins(request?: PluginScanRequest): Promise<PluginCatalogSnapshot>
+  subscribePluginScan(listener: (event: PluginScanEvent) => void): () => void
+  openPluginEditor(instanceId: string): Promise<PluginRuntimeStatus>
+  closePluginEditor(instanceId: string): Promise<void>
+  getPluginParameters(instanceId: string): Promise<PluginParameterInfo[]>
+  setPluginParameter(request: PluginParameterChange): Promise<void>
+  prepareMidiImport(path?: string): Promise<MidiImportPreview | null>
+  commitMidiImport(plan: MidiImportPlan): Promise<ProjectCommandResult>
+  subscribeOperations(listener: (event: OperationEvent) => void): () => void
+  cancelOperation(id: string): Promise<void>
+}

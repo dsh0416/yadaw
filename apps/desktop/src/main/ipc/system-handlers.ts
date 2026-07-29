@@ -1,0 +1,79 @@
+import { app, BrowserWindow, ipcMain } from "electron"
+import { IPC_CHANNELS } from "@yadaw/contracts"
+import { engineInfo, processGain } from "@yadaw/dsp-node"
+import {
+  assertTrustedSender,
+  validateApplicationWindowCommand,
+  validateGainRequest
+} from "./support"
+export function registerSystemHandlers(): void {
+  ipcMain.handle(IPC_CHANNELS.engineInfo, (event) => {
+    assertTrustedSender(event)
+    return engineInfo()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.applicationWindowCommand, (event, value: unknown) => {
+    assertTrustedSender(event)
+    const command = validateApplicationWindowCommand(value)
+    const window = BrowserWindow.fromWebContents(event.sender)
+    switch (command) {
+      case "edit.undo":
+        event.sender.undo()
+        break
+      case "edit.redo":
+        event.sender.redo()
+        break
+      case "edit.cut":
+        event.sender.cut()
+        break
+      case "edit.copy":
+        event.sender.copy()
+        break
+      case "edit.paste":
+        event.sender.paste()
+        break
+      case "edit.select-all":
+        event.sender.selectAll()
+        break
+      case "window.minimize":
+        window?.minimize()
+        break
+      case "window.toggle-maximize":
+        if (window?.isMaximized()) window.unmaximize()
+        else window?.maximize()
+        break
+      case "window.close":
+        window?.close()
+        break
+      case "application.quit":
+        app.quit()
+        break
+      case "view.toggle-full-screen":
+        if (window) window.setFullScreen(!window.isFullScreen())
+        break
+      case "application.about":
+        app.showAboutPanel()
+        break
+    }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.applicationWindowTheme, (event, value: unknown) => {
+    assertTrustedSender(event)
+    if (value !== "light" && value !== "dark") {
+      throw new TypeError("Unknown application window theme")
+    }
+    const window = BrowserWindow.fromWebContents(event.sender)
+    if (!window || process.platform !== "linux") return
+    window.setTitleBarOverlay({
+      color: value === "dark" ? "#151515" : "#d8d9db",
+      symbolColor: value === "dark" ? "#e8e8e8" : "#202224",
+      height: 38
+    })
+  })
+
+  ipcMain.handle(IPC_CHANNELS.processGain, (event, value: unknown) => {
+    assertTrustedSender(event)
+    const request = validateGainRequest(value)
+    return processGain(request.samples, request.gain)
+  })
+}
