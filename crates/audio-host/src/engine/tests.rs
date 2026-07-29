@@ -16,8 +16,10 @@ mod tests {
         NativeRoundTripLatencyMeasurementRequest, OUTPUT_RESAMPLER_FRAMES, RoundTripInputDetector,
         RoundTripLatencyMeasurement, RoundTripOutputProbe, SessionOutputConverter, SignalWidth,
         StereoDelayLine, StreamDirection, StreamErrorImpact, SupportedBufferSize,
-        clip_storage_policy, compiled_graph_snapshot, frames_to_nanos, resolve_stream_devices,
-        select_buffer_size, spawn_streaming_clip, stream_error_impact, validate_session_sample_rate,
+        clip_storage_policy, compiled_graph_snapshot, frames_to_nanos,
+        native_graph_references_plugin, resolve_stream_devices, select_buffer_size,
+        set_last_native_graph_for_test, spawn_streaming_clip, stream_error_impact,
+        validate_session_sample_rate,
     };
     use crate::recording::{
         NativeRecordingStartConfig, StereoFrame, write_deterministic_test_recording,
@@ -711,5 +713,36 @@ mod tests {
                 && node.label == "Bypass compensation"
                 && node.latency_samples == 32
         }));
+    }
+
+    #[test]
+    fn native_graph_plugin_references_follow_the_last_candidate_graph() {
+        set_last_native_graph_for_test(None);
+        assert!(!native_graph_references_plugin("bench-0"));
+
+        set_last_native_graph_for_test(Some(NativeMixerGraph {
+            generation: 1,
+            sample_rate: 48_000,
+            channels: Vec::new(),
+            sends: Vec::new(),
+            clips: Vec::new(),
+            plugins: vec![NativePluginInstance {
+                instance_id: "session-fx".to_owned(),
+                channel_index: 0,
+                role: "insert".to_owned(),
+                slot_order: 0,
+                audio_mode: PluginAudioMode::Stereo,
+                enabled: true,
+                latency_samples: 0,
+                tail_samples: Some(0),
+                processor: None,
+            }],
+            midi_clips: Vec::new(),
+            tempo_events: Vec::new(),
+            time_signature_events: Vec::new(),
+        }));
+        assert!(native_graph_references_plugin("session-fx"));
+        assert!(!native_graph_references_plugin("bench-0"));
+        set_last_native_graph_for_test(None);
     }
 }

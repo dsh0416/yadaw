@@ -453,10 +453,14 @@ describe("AudioHostService recovery", () => {
     const client = fakeHost.Client.instances[0]!
 
     await service.runAudioBenchmark(effect)
+    const commandTypes = client.commands.map((command) => command.type)
+    const firstBenchmark = commandTypes.indexOf("run-audio-benchmark")
+    expect(commandTypes.slice(0, firstBenchmark)).toEqual(Array(64).fill("load-plugin"))
+    expect(commandTypes.slice(firstBenchmark, firstBenchmark + 1)).toEqual(["run-audio-benchmark"])
+    expect(commandTypes.slice(firstBenchmark + 1)).toEqual(Array(64).fill("unload-plugin"))
     const unloadIds = client.commands
       .filter((command) => command.type === "unload-plugin")
       .map((command) => command.instance_id)
-    expect(unloadIds).toHaveLength(64)
     expect(unloadIds[0]).toBe("__yadaw-audio-benchmark-gain-0")
     expect(unloadIds[63]).toBe("__yadaw-audio-benchmark-gain-63")
     expect(

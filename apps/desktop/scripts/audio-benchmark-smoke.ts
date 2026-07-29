@@ -52,22 +52,20 @@ const pluginInstanceIds = Array.from(
 )
 
 try {
-  await Promise.all(
-    pluginInstanceIds.map(async (instanceId) => {
-      const loaded = await request({
-        type: "load-plugin",
-        instance_id: instanceId,
-        module_path: pluginPath,
-        class_id: "59CABE21E605B9C9EE928D6C3B236BBF",
-        plugin_kind: "effect",
-        audio_mode: "stereo",
-        sample_rate: 48_000,
-        component_state: { storage: "inline", bytes: new Uint8Array() },
-        controller_state: { storage: "inline", bytes: new Uint8Array() }
-      })
-      if (loaded.type !== "plugin-loaded") throw new Error("VST3 load response mismatch")
+  for (const instanceId of pluginInstanceIds) {
+    const loaded = await request({
+      type: "load-plugin",
+      instance_id: instanceId,
+      module_path: pluginPath,
+      class_id: "59CABE21E605B9C9EE928D6C3B236BBF",
+      plugin_kind: "effect",
+      audio_mode: "stereo",
+      sample_rate: 48_000,
+      component_state: { storage: "inline", bytes: new Uint8Array() },
+      controller_state: { storage: "inline", bytes: new Uint8Array() }
     })
-  )
+    if (loaded.type !== "plugin-loaded") throw new Error("VST3 load response mismatch")
+  }
 
   const result = await request({
     type: "run-audio-benchmark",
@@ -84,6 +82,14 @@ try {
     !Number.isFinite(report.worst_p99_deadline_utilization_percent)
   ) {
     throw new Error("audio benchmark report mismatch")
+  }
+
+  for (const instanceId of pluginInstanceIds) {
+    const unloaded = await request({
+      type: "unload-plugin",
+      instance_id: instanceId
+    })
+    if (unloaded.type !== "accepted") throw new Error("VST3 unload response mismatch")
   }
 
   console.log(

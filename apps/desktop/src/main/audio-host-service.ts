@@ -471,32 +471,25 @@ export class AudioHostService {
       (_, index) => `__yadaw-audio-benchmark-gain-${index}`
     )
     try {
-      // Wait for every load attempt to settle before continuing or cleaning up so a
-      // single failure cannot race with in-flight loads during unload.
-      const loaded = await Promise.allSettled(
-        pluginInstanceIds.map((id, slotOrder) =>
-          this.plugins.loadPlugin(
-            {
-              id,
-              channelId: "__yadaw-audio-benchmark",
-              role: "insert",
-              slotOrder,
-              classId: effect.classId,
-              descriptor: effect,
-              audioMode: "stereo",
-              enabled: true,
-              componentState: new Uint8Array(),
-              controllerState: new Uint8Array()
-            },
-            48_000
-          )
+      // Load one at a time. The VST3 actor largely serializes loads, and each IPC request's
+      // deadline starts when the client sends it — firing all 64 at once lets later requests
+      // time out while still queued behind earlier successful loads.
+      for (const [slotOrder, id] of pluginInstanceIds.entries()) {
+        await this.plugins.loadPlugin(
+          {
+            id,
+            channelId: "__yadaw-audio-benchmark",
+            role: "insert",
+            slotOrder,
+            classId: effect.classId,
+            descriptor: effect,
+            audioMode: "stereo",
+            enabled: true,
+            componentState: new Uint8Array(),
+            controllerState: new Uint8Array()
+          },
+          48_000
         )
-      )
-      const loadFailure = loaded.find((result) => result.status === "rejected")
-      if (loadFailure?.status === "rejected") {
-        throw loadFailure.reason instanceof Error
-          ? loadFailure.reason
-          : new Error(String(loadFailure.reason))
       }
 
       const response = await this.request({
@@ -535,15 +528,13 @@ export class AudioHostService {
         }))
       }
     } finally {
-      const unloaded = await Promise.allSettled(
-        pluginInstanceIds.map((id) => this.plugins.unloadPlugin(id))
-      )
-      for (const [index, result] of unloaded.entries()) {
-        if (result.status === "rejected") {
-          console.error(
-            `Could not unload audio benchmark VST3 instance ${pluginInstanceIds[index]}:`,
-            result.reason
-          )
+      // Unload sequentially for the same deadline reason as loads. Host unload drops these
+      // non-graph instances instead of retaining them in retired_instances.
+      for (const id of pluginInstanceIds) {
+        try {
+          await this.plugins.unloadPlugin(id)
+        } catch (error) {
+          console.error(`Could not unload audio benchmark VST3 instance ${id}:`, error)
         }
       }
     }
