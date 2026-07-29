@@ -301,6 +301,11 @@ impl RenderRuntime {
         self.mixer.clear_delays();
     }
 
+    /// Preallocates graph scratch for block processing before real-time publication.
+    pub fn prepare_block_processing(&mut self, maximum_frames: usize) {
+        self.mixer.prepare_block_processing(maximum_frames);
+    }
+
     /// Routes host-prepared channel sources through the shared graph kernel.
     ///
     /// The callback runs inline on the caller's render thread and must obey the
@@ -311,6 +316,21 @@ impl RenderRuntime {
         process: &mut impl FnMut(usize, StereoFrame) -> StereoFrame,
     ) -> HardwareOutputFrame {
         self.mixer.process_frame_with_sources(sources, process)
+    }
+
+    /// Routes host-prepared, channel-major source blocks through the graph.
+    ///
+    /// The processor callback is invoked once per channel with the entire
+    /// contiguous block. Scratch must have been prepared with
+    /// [`Self::prepare_block_processing`] before entering the real-time thread.
+    pub fn process_channel_source_block(
+        &mut self,
+        sources: &mut [StereoFrame],
+        output: &mut [HardwareOutputFrame],
+        process: &mut impl FnMut(usize, &mut [StereoFrame]),
+    ) -> Result<(), GraphError> {
+        self.mixer
+            .process_block_with_sources(sources, output, process)
     }
 
     pub fn render_frame(&mut self, hardware_input: &[f32]) -> HardwareOutputFrame {

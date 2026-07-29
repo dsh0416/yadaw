@@ -87,63 +87,147 @@ impl NativeMixerRuntime {
         None
     }
 
-    fn render_frame(&mut self, input: InputFrame) -> (HardwareOutputFrame, bool) {
-        let state = self.transport.state.load(Ordering::Relaxed);
-        let position = self.transport.position_frames.load(Ordering::Relaxed);
-        self.channel_sources.fill([0.0, 0.0]);
-        let mut has_monitor = false;
-        for (channel_index, route) in self.monitor_input_routes.iter().enumerate() {
-            if let Some([left, right]) = route {
-                has_monitor = true;
-                self.channel_sources[channel_index] = [input[*left], input[*right]];
+    fn render_block(&mut self, inputs: &[InputFrame], outputs: &mut [HardwareOutputFrame]) -> bool {
+        if inputs.len() != outputs.len() || outputs.len() > MAX_PLUGIN_BLOCK_FRAMES {
+            outputs.fill([0.0; MAX_OUTPUT_CHANNELS]);
+            return true;
+        }
+
+        let has_monitor = self.monitor_input_routes.iter().any(Option::is_some);
+        let mut offset = 0;
+        let mut stream_underrun = false;
+        while offset < outputs.len() {
+            let state = self.transport.state.load(Ordering::Relaxed);
+            let position = self.transport.position_frames.load(Ordering::Relaxed);
+            if state == TRANSPORT_STOPPED && !has_monitor {
+                outputs[offset..].fill([0.0; MAX_OUTPUT_CHANNELS]);
+                break;
+            }
+
+            let mut frame_count = outputs.len() - offset;
+            if state != TRANSPORT_STOPPED {
+                frame_count = frame_count.min(self.frames_until_timing_boundary(
+                    position,
+                    frame_count,
+                ));
+            }
+            if state == TRANSPORT_PLAYING
+                && self.content_end_frame > 0
+                && !self.has_infinite_tail
+                && let Some(end) = self.tail_end_frame
+            {
+                if position >= end {
+                    self.all_notes_off();
+                    self.transport
+                        .state
+                        .store(TRANSPORT_STOPPED, Ordering::Relaxed);
+                    continue;
+                }
+                frame_count = frame_count.min((end - position) as usize);
+            }
+
+            let end = offset + frame_count;
+            stream_underrun |= self.render_segment(
+                &inputs[offset..end],
+                &mut outputs[offset..end],
+                position,
+                state,
+            );
+            offset = end;
+            if state != TRANSPORT_STOPPED {
+                let next = position.saturating_add(frame_count as u64);
+                self.transport
+                    .position_frames
+                    .store(next, Ordering::Relaxed);
+                if state == TRANSPORT_PLAYING
+                    && self.content_end_frame > 0
+                    && !self.has_infinite_tail
+                    && self.tail_end_frame.is_some_and(|end| next >= end)
+                {
+                    self.all_notes_off();
+                    self.transport
+                        .state
+                        .store(TRANSPORT_STOPPED, Ordering::Relaxed);
+                }
             }
         }
-        if state == TRANSPORT_STOPPED && !has_monitor {
-            return ([0.0; MAX_OUTPUT_CHANNELS], false);
+        stream_underrun
+    }
+
+    fn render_segment(
+        &mut self,
+        inputs: &[InputFrame],
+        outputs: &mut [HardwareOutputFrame],
+        position: u64,
+        state: u32,
+    ) -> bool {
+        let frame_count = outputs.len();
+        let used_sources = self
+            .channel_input_widths
+            .len()
+            .saturating_mul(frame_count);
+        self.channel_source_block[..used_sources].fill([0.0, 0.0]);
+        for (channel_index, route) in self.monitor_input_routes.iter().enumerate() {
+            if let Some([left, right]) = route {
+                let start = channel_index * frame_count;
+                for (frame, input) in inputs.iter().enumerate() {
+                    self.channel_source_block[start + frame] = [input[*left], input[*right]];
+                }
+            }
         }
+
         let mut stream_underrun = false;
         if state != TRANSPORT_STOPPED {
             for clip in &mut self.clips {
-                let Some(relative) = position.checked_sub(clip.start_frame) else {
-                    continue;
-                };
-                let relative = relative as usize;
-                if relative >= clip.length_frames {
-                    continue;
-                }
-                let is_streaming = matches!(&clip.samples, ClipSamples::Streaming(_));
-                if let Some(sample) = clip.sample_at(relative) {
-                    let target = &mut self.channel_sources[clip.channel_index];
-                    target[0] += sample[0];
-                    target[1] += sample[1];
-                } else if is_streaming {
-                    stream_underrun = true;
+                for frame in 0..frame_count {
+                    let project_frame = position.saturating_add(frame as u64);
+                    let Some(relative) = project_frame.checked_sub(clip.start_frame) else {
+                        continue;
+                    };
+                    let relative = relative as usize;
+                    if relative >= clip.length_frames {
+                        continue;
+                    }
+                    let is_streaming = matches!(&clip.samples, ClipSamples::Streaming(_));
+                    if let Some(sample) = clip.sample_at(relative) {
+                        let target =
+                            &mut self.channel_source_block[clip.channel_index * frame_count + frame];
+                        target[0] += sample[0];
+                        target[1] += sample[1];
+                    } else if is_streaming {
+                        stream_underrun = true;
+                    }
                 }
             }
+
+            let end = position.saturating_add(frame_count as u64);
             while self
                 .midi_events
                 .get(self.midi_cursor)
-                .is_some_and(|event| event.frame <= position)
+                .is_some_and(|event| event.frame < end)
             {
                 let event = self.midi_events[self.midi_cursor];
-                if event.frame == position {
-                    self.dispatch_midi_event(event);
+                if event.frame >= position {
+                    self.dispatch_midi_event(event, (event.frame - position) as usize);
                 }
                 self.midi_cursor += 1;
             }
-            let metronome_events =
-                self.metronome
-                    .events_at(&self.tempo_map, self.sample_rate, position);
-            for event in metronome_events.into_iter().flatten() {
-                self.dispatch_midi_event(event);
+            for frame in 0..frame_count {
+                let project_frame = position.saturating_add(frame as u64);
+                let metronome_events =
+                    self.metronome
+                        .events_at(&self.tempo_map, self.sample_rate, project_frame);
+                for event in metronome_events.into_iter().flatten() {
+                    self.dispatch_midi_event(event, frame);
+                }
             }
         }
+
         let context = self.process_context(position, state);
-        let sources = &self.channel_sources;
         let input_widths = &self.channel_input_widths;
         let plugins = &mut self.plugins_by_channel;
         let generation = self.generation;
-        let mut process_plugins = |channel_index: usize, mut frame: StereoFrame| {
+        let mut process_plugins = |channel_index: usize, frames: &mut [StereoFrame]| {
             let mut width = input_widths[channel_index];
             for plugin in &mut plugins[channel_index] {
                 crate::crash_marker::mark(
@@ -151,37 +235,48 @@ impl NativeMixerRuntime {
                     plugin.marker_index,
                     crate::crash_marker::STAGE_PROCESS,
                 );
-                frame = plugin.process(frame, &mut width, &context);
+                plugin.process_block(frames, &mut width, &context);
                 crate::crash_marker::clean(generation);
             }
-            match width {
-                SignalWidth::Mono => [frame[0], frame[0]],
-                SignalWidth::Stereo => frame,
+            if matches!(width, SignalWidth::Mono) {
+                for frame in frames {
+                    frame[1] = frame[0];
+                }
             }
         };
-        let result = self
+        if self
             .graph
-            .process_channel_sources(sources, &mut process_plugins);
-        let next = if state == TRANSPORT_STOPPED {
-            position
-        } else {
-            let next = position.saturating_add(1);
-            self.transport
-                .position_frames
-                .store(next, Ordering::Relaxed);
-            next
-        };
-        if state == TRANSPORT_PLAYING
-            && self.content_end_frame > 0
-            && !self.has_infinite_tail
-            && self.tail_end_frame.is_some_and(|end| next >= end)
+            .process_channel_source_block(
+                &mut self.channel_source_block[..used_sources],
+                outputs,
+                &mut process_plugins,
+            )
+            .is_err()
         {
-            self.all_notes_off();
-            self.transport
-                .state
-                .store(TRANSPORT_STOPPED, Ordering::Relaxed);
+            outputs.fill([0.0; MAX_OUTPUT_CHANNELS]);
+            stream_underrun = true;
         }
-        (result, stream_underrun)
+        stream_underrun
+    }
+
+    fn frames_until_timing_boundary(&self, position: u64, maximum: usize) -> usize {
+        let end = position.saturating_add(maximum as u64);
+        self.tempo_map
+            .tempo_events()
+            .iter()
+            .skip(1)
+            .map(|event| event.tick)
+            .chain(
+                self.tempo_map
+                    .time_signature_events()
+                    .iter()
+                    .skip(1)
+                    .map(|event| event.tick),
+            )
+            .filter_map(|tick| self.tempo_map.tick_to_frame(tick, self.sample_rate).ok())
+            .filter(|frame| *frame > position && *frame < end)
+            .min()
+            .map_or(maximum, |boundary| (boundary - position) as usize)
     }
 
     fn process_context(&self, frame: u64, state: u32) -> ProcessContext {
@@ -230,7 +325,7 @@ impl NativeMixerRuntime {
         }
     }
 
-    fn dispatch_midi_event(&mut self, event: ScheduledMidiEvent) {
+    fn dispatch_midi_event(&mut self, event: ScheduledMidiEvent, sample_offset: usize) {
         let Some(plugin) = self.plugins_by_channel[event.channel_index]
             .iter_mut()
             .find(|plugin| plugin.is_instrument)
@@ -241,9 +336,21 @@ impl NativeMixerRuntime {
             return;
         };
         if event.note_on {
-            processor.note_on(event.channel, event.key, event.velocity, event.note_id);
+            processor.note_on(
+                sample_offset,
+                event.channel,
+                event.key,
+                event.velocity,
+                event.note_id,
+            );
         } else {
-            processor.note_off(event.channel, event.key, event.velocity, event.note_id);
+            processor.note_off(
+                sample_offset,
+                event.channel,
+                event.key,
+                event.velocity,
+                event.note_id,
+            );
         }
         if let Some(active) = self.active_notes.get_mut(event.note_id as usize) {
             *active = event.note_on;
@@ -252,7 +359,7 @@ impl NativeMixerRuntime {
 
     fn all_notes_off(&mut self) {
         if let Some(event) = self.metronome.release() {
-            self.dispatch_midi_event(event);
+            self.dispatch_midi_event(event, 0);
         }
         for index in 0..self.midi_events.len() {
             let event = self.midi_events[index];
@@ -267,7 +374,7 @@ impl NativeMixerRuntime {
                     note_on: false,
                     velocity: 0,
                     ..event
-                });
+                }, 0);
             }
         }
         self.active_notes.fill(false);
@@ -293,7 +400,7 @@ impl NativeMixerRuntime {
                     .copied()
                     .unwrap_or(false)
             {
-                self.dispatch_midi_event(event);
+                self.dispatch_midi_event(event, 0);
             }
         }
         self.metronome

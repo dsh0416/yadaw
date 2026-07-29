@@ -31,7 +31,7 @@ use yadaw_dsp_core::mixer::{
 use yadaw_dsp_render::{RenderMeter, RenderRuntime};
 use yadaw_dsp_runtime::{
     MUSICAL_TICKS_PER_QUARTER,
-    block::{LatencyNode, StereoDelayLine, plan_latency_compensation},
+    block::{LatencyNode, MAX_PLUGIN_BLOCK_FRAMES, StereoDelayLine, plan_latency_compensation},
     protocol::{
         CompiledAudioGraphSnapshot, CompiledGraphEdge, CompiledGraphEdgeKind, CompiledGraphNode,
         CompiledGraphNodeKind, CompiledGraphPluginState, CompiledGraphSignalWidth,

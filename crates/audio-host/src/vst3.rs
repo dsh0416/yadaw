@@ -1,9 +1,11 @@
 use std::{collections::HashMap, path::Path};
 
-use yadaw_dsp_render::{PluginProcessContext, PluginProcessor};
-use yadaw_dsp_runtime::protocol::{
-    BinaryPayload, ControlCommand, ControlResult, ParameterCommand, ParameterGesture,
-    PluginAudioMode, PluginEditorPreference, PluginParameter,
+use yadaw_dsp_runtime::{
+    block::MAX_PLUGIN_BLOCK_FRAMES,
+    protocol::{
+        BinaryPayload, ControlCommand, ControlResult, ParameterCommand, ParameterGesture,
+        PluginAudioMode, PluginEditorPreference, PluginParameter,
+    },
 };
 use yadaw_vst3_host::{
     AudioLayout, ClassId, HostProcessContext, HostedPlugin, PlugView, PluginKind, ProcessorLease,
@@ -17,6 +19,12 @@ pub struct Vst3ProcessorHandle {
     secondary: Option<ProcessorLease>,
     left_delay: SampleDelay,
     right_delay: SampleDelay,
+    input_left: Vec<f32>,
+    input_right: Vec<f32>,
+    output_left: Vec<f32>,
+    output_right: Vec<f32>,
+    auxiliary_input: Vec<f32>,
+    auxiliary_output: Vec<f32>,
 }
 
 #[derive(Clone)]
@@ -45,56 +53,94 @@ impl SampleDelay {
 }
 
 impl Vst3ProcessorHandle {
-    pub fn process_frame(&mut self, input: [f32; 2], context: &ProcessContext) -> Option<[f32; 2]> {
+    pub fn process_block(&mut self, frames: &mut [[f32; 2]], context: &ProcessContext) -> bool {
+        if frames.len() > MAX_PLUGIN_BLOCK_FRAMES {
+            return false;
+        }
+        let frame_count = frames.len();
+        for (index, frame) in frames.iter().enumerate() {
+            self.input_left[index] = frame[0];
+            self.input_right[index] = frame[1];
+        }
+        self.output_left[..frame_count].fill(0.0);
+        self.output_right[..frame_count].fill(0.0);
+
         match &mut self.secondary {
             Some(secondary) => {
-                let left = self
-                    .left_delay
-                    .process(self.primary.process_frame([input[0], 0.0], context)?[0]);
-                let right = self
-                    .right_delay
-                    .process(secondary.process_frame([input[1], 0.0], context)?[0]);
-                Some([left, right])
+                self.auxiliary_input[..frame_count].fill(0.0);
+                self.auxiliary_output[..frame_count].fill(0.0);
+                if !self.primary.process_block(
+                    &mut self.input_left[..frame_count],
+                    &mut self.auxiliary_input[..frame_count],
+                    &mut self.output_left[..frame_count],
+                    &mut self.auxiliary_output[..frame_count],
+                    context,
+                ) {
+                    return false;
+                }
+                self.auxiliary_input[..frame_count].fill(0.0);
+                self.auxiliary_output[..frame_count].fill(0.0);
+                if !secondary.process_block(
+                    &mut self.input_right[..frame_count],
+                    &mut self.auxiliary_input[..frame_count],
+                    &mut self.output_right[..frame_count],
+                    &mut self.auxiliary_output[..frame_count],
+                    context,
+                ) {
+                    return false;
+                }
             }
-            None => self.primary.process_frame(input, context),
+            None => {
+                if !self.primary.process_block(
+                    &mut self.input_left[..frame_count],
+                    &mut self.input_right[..frame_count],
+                    &mut self.output_left[..frame_count],
+                    &mut self.output_right[..frame_count],
+                    context,
+                ) {
+                    return false;
+                }
+            }
         }
+        for (index, frame) in frames.iter_mut().enumerate() {
+            frame[0] = self.left_delay.process(self.output_left[index]);
+            frame[1] = self.right_delay.process(self.output_right[index]);
+        }
+        true
     }
 
-    pub fn note_on(&mut self, channel: u8, key: u8, velocity: u8, note_id: i32) -> bool {
-        self.primary.note_on(channel, key, velocity, note_id)
+    pub fn note_on(
+        &mut self,
+        sample_offset: usize,
+        channel: u8,
+        key: u8,
+        velocity: u8,
+        note_id: i32,
+    ) -> bool {
+        self.primary.note_on(
+            sample_offset.min(i32::MAX as usize) as i32,
+            channel,
+            key,
+            velocity,
+            note_id,
+        )
     }
 
-    pub fn note_off(&mut self, channel: u8, key: u8, velocity: u8, note_id: i32) -> bool {
-        self.primary.note_off(channel, key, velocity, note_id)
-    }
-}
-
-impl PluginProcessor for Vst3ProcessorHandle {
-    fn clone_box(&self) -> Box<dyn PluginProcessor> {
-        Box::new(self.clone())
-    }
-
-    fn process_frame(&mut self, input: [f32; 2], context: PluginProcessContext) -> [f32; 2] {
-        let context = ProcessContext {
-            project_time_samples: context.sample_position.min(i64::MAX as u64) as i64,
-            continuous_time_samples: context.sample_position.min(i64::MAX as u64) as i64,
-            project_time_quarters: context.quarter_position,
-            bar_position_quarters: context.bar_position,
-            tempo: context.tempo,
-            time_signature_numerator: i32::from(context.time_signature_numerator),
-            time_signature_denominator: i32::from(context.time_signature_denominator),
-            playing: context.playing,
-            recording: context.recording,
-        };
-        Vst3ProcessorHandle::process_frame(self, input, &context).unwrap_or(input)
-    }
-
-    fn note_on(&mut self, channel: u8, key: u8, velocity: u8) {
-        let _ = Vst3ProcessorHandle::note_on(self, channel, key, velocity, -1);
-    }
-
-    fn note_off(&mut self, channel: u8, key: u8, velocity: u8) {
-        let _ = Vst3ProcessorHandle::note_off(self, channel, key, velocity, -1);
+    pub fn note_off(
+        &mut self,
+        sample_offset: usize,
+        channel: u8,
+        key: u8,
+        velocity: u8,
+        note_id: i32,
+    ) -> bool {
+        self.primary.note_off(
+            sample_offset.min(i32::MAX as usize) as i32,
+            channel,
+            key,
+            velocity,
+            note_id,
+        )
     }
 }
 
@@ -124,6 +170,12 @@ impl Instance {
             secondary: self.secondary.as_ref().map(HostedPlugin::processor_lease),
             left_delay: SampleDelay::new(maximum_latency - primary_latency),
             right_delay: SampleDelay::new(maximum_latency - secondary_latency),
+            input_left: vec![0.0; MAX_PLUGIN_BLOCK_FRAMES],
+            input_right: vec![0.0; MAX_PLUGIN_BLOCK_FRAMES],
+            output_left: vec![0.0; MAX_PLUGIN_BLOCK_FRAMES],
+            output_right: vec![0.0; MAX_PLUGIN_BLOCK_FRAMES],
+            auxiliary_input: vec![0.0; MAX_PLUGIN_BLOCK_FRAMES],
+            auxiliary_output: vec![0.0; MAX_PLUGIN_BLOCK_FRAMES],
         }
     }
 

@@ -68,6 +68,23 @@ impl MixerGraph {
         for (index, send) in sends.iter().enumerate() {
             sends_by_source[send.source].push(index);
         }
+        let block_bus_count = channels
+            .iter()
+            .filter_map(|channel| {
+                channel
+                    .input_bus
+                    .map(|[left, right]| left.max(right))
+            })
+            .chain(channels.iter().filter_map(|channel| match channel.output {
+                Some(RouteTarget::Bus(bus)) => Some(bus),
+                Some(RouteTarget::Output(_)) | None => None,
+            }))
+            .chain(sends.iter().filter_map(|send| match send.target {
+                RouteTarget::Bus(bus) => Some(bus),
+                RouteTarget::Output(_) => None,
+            }))
+            .max()
+            .map_or(0, |maximum| maximum + 1);
         Ok(Self {
             accumulation: vec![[0.0, 0.0]; channels.len()],
             bus_accumulation: [0.0; MAX_BUS_CHANNELS],
@@ -82,6 +99,11 @@ impl MixerGraph {
             send_runtime,
             sends_by_source,
             master,
+            block_capacity: 0,
+            block_bus_count,
+            block_bus_accumulation: Vec::new(),
+            block_master_gains: Vec::new(),
+            block_master_pans: Vec::new(),
         })
     }
 
@@ -157,6 +179,18 @@ impl MixerGraph {
         }
     }
 
+    /// Allocates the scratch storage used by [`Self::process_block_with_sources`].
+    ///
+    /// Call this while building the graph, before publishing it to a real-time
+    /// thread. Processing a block never grows these buffers.
+    pub fn prepare_block_processing(&mut self, maximum_frames: usize) {
+        self.block_capacity = maximum_frames;
+        self.block_bus_accumulation =
+            vec![0.0; self.block_bus_count.saturating_mul(maximum_frames)];
+        self.block_master_gains = vec![0.0; maximum_frames];
+        self.block_master_pans = vec![0.0; maximum_frames];
+    }
+
     pub fn process_frame(&mut self, audio_inputs: &[StereoFrame]) -> HardwareOutputFrame {
         self.accumulation.fill([0.0, 0.0]);
         self.bus_accumulation.fill(0.0);
@@ -185,6 +219,146 @@ impl MixerGraph {
             *target = *source;
         }
         self.process_accumulated(processor)
+    }
+
+    /// Processes channel-major source buffers as one graph block.
+    ///
+    /// `channel_sources` contains `channel_count * frame_count` frames, with
+    /// each channel occupying one contiguous `frame_count` slice. The processor
+    /// callback is invoked once per graph channel, so format adapters can call
+    /// block-oriented plug-in APIs without per-sample ABI crossings.
+    pub fn process_block_with_sources(
+        &mut self,
+        channel_sources: &mut [StereoFrame],
+        output: &mut [HardwareOutputFrame],
+        processor: &mut impl FnMut(usize, &mut [StereoFrame]),
+    ) -> Result<(), GraphError> {
+        let frame_count = output.len();
+        let required_sources = self.channels.len().saturating_mul(frame_count);
+        if frame_count > self.block_capacity || channel_sources.len() < required_sources {
+            output.fill([0.0; MAX_OUTPUT_CHANNELS]);
+            return Err(GraphError::InvalidBlock);
+        }
+        if frame_count == 0 {
+            return Ok(());
+        }
+
+        output.fill([0.0; MAX_OUTPUT_CHANNELS]);
+        let used_bus_samples = self.block_bus_count.saturating_mul(frame_count);
+        self.block_bus_accumulation[..used_bus_samples].fill(0.0);
+
+        let master = &self.channels[self.master];
+        let master_gate = if master.muted { 0.0 } else { 1.0 };
+        for frame in 0..frame_count {
+            self.block_master_gains[frame] =
+                self.channel_runtime[self.master].gain.next() * master_gate;
+            self.block_master_pans[frame] = self.channel_runtime[self.master].pan.next();
+        }
+        let mut master_pre = [0.0_f32; 2];
+        let mut master_post = [0.0_f32; 2];
+
+        for &index in &self.order {
+            if index == self.master {
+                continue;
+            }
+            let start = index * frame_count;
+            let end = start + frame_count;
+            if let Some([left, right]) = self.channels[index].input_bus {
+                let left_start = left * frame_count;
+                let right_start = right * frame_count;
+                for frame in 0..frame_count {
+                    channel_sources[start + frame][0] +=
+                        self.block_bus_accumulation[left_start + frame];
+                    channel_sources[start + frame][1] +=
+                        self.block_bus_accumulation[right_start + frame];
+                }
+            }
+            processor(index, &mut channel_sources[start..end]);
+
+            let muted = self.channels[index].muted;
+            let output_route = self.channels[index].output;
+            let hardware_output = self.channels[index].hardware_output;
+            for (frame, hardware_frame) in output.iter_mut().enumerate() {
+                let source_index = start + frame;
+                let pre = channel_sources[source_index];
+                self.peaks[index].pre = [
+                    self.peaks[index].pre[0].max(pre[0].abs()),
+                    self.peaks[index].pre[1].max(pre[1].abs()),
+                ];
+                let gate = if muted || !self.audible[index] {
+                    0.0
+                } else {
+                    1.0
+                };
+                let post_fader =
+                    scale(pre, self.channel_runtime[index].gain.next() * gate);
+                let post =
+                    balance_stereo(post_fader, self.channel_runtime[index].pan.next());
+
+                for &send_index in &self.sends_by_source[index] {
+                    let send = &self.sends[send_index];
+                    if !send.enabled || !self.send_audible[send_index] {
+                        continue;
+                    }
+                    let tap = match send.tap {
+                        SendTap::Pre => pre,
+                        SendTap::Post => post_fader,
+                        SendTap::PostPan => post,
+                    };
+                    let sent = scale(tap, self.send_runtime[send_index].gain.next());
+                    let sent = self.send_runtime[send_index].delay.process(sent);
+                    match send.target {
+                        RouteTarget::Bus(bus) => {
+                            self.block_bus_accumulation[bus * frame_count + frame] +=
+                                (sent[0] + sent[1]) * 0.5;
+                        }
+                        RouteTarget::Output(target) => {
+                            let target_index = target * frame_count + frame;
+                            add(&mut channel_sources[target_index], sent);
+                        }
+                    }
+                }
+
+                self.peaks[index].post = [
+                    self.peaks[index].post[0].max(post[0].abs()),
+                    self.peaks[index].post[1].max(post[1].abs()),
+                ];
+                if let Some(route) = output_route.filter(|_| self.output_audible[index]) {
+                    let routed = self.channel_runtime[index].output_delay.process(post);
+                    match route {
+                        RouteTarget::Bus(bus) => {
+                            self.block_bus_accumulation[bus * frame_count + frame] +=
+                                (routed[0] + routed[1]) * 0.5;
+                        }
+                        RouteTarget::Output(target) => {
+                            let target_index = target * frame_count + frame;
+                            add(&mut channel_sources[target_index], routed);
+                        }
+                    }
+                }
+                if let Some([left, right]) = hardware_output {
+                    master_pre[0] = master_pre[0].max(post[0].abs());
+                    master_pre[1] = master_pre[1].max(post[1].abs());
+                    let mastered = balance_stereo(
+                        scale(post, self.block_master_gains[frame]),
+                        self.block_master_pans[frame],
+                    );
+                    master_post[0] = master_post[0].max(mastered[0].abs());
+                    master_post[1] = master_post[1].max(mastered[1].abs());
+                    hardware_frame[left] += mastered[0];
+                    hardware_frame[right] += mastered[1];
+                }
+            }
+        }
+        self.peaks[self.master].pre = [
+            self.peaks[self.master].pre[0].max(master_pre[0]),
+            self.peaks[self.master].pre[1].max(master_pre[1]),
+        ];
+        self.peaks[self.master].post = [
+            self.peaks[self.master].post[0].max(master_post[0]),
+            self.peaks[self.master].post[1].max(master_post[1]),
+        ];
+        Ok(())
     }
 
     fn process_accumulated(

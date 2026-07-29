@@ -322,4 +322,50 @@ mod tests {
         graph.write_peaks(&mut peaks);
         assert_eq!(peaks[0].pre, [0.0, 0.0]);
     }
+
+    #[test]
+    fn block_processing_matches_frame_processing_and_visits_each_channel_once() {
+        let channels = vec![
+            channel("audio", ChannelKind::Audio, Some(2)),
+            channel("master", ChannelKind::Master, None),
+            channel("output", ChannelKind::Output, None),
+        ];
+        let mut frame_graph = MixerGraph::new(48_000, channels.clone(), vec![]).unwrap();
+        let mut block_graph = MixerGraph::new(48_000, channels, vec![]).unwrap();
+        block_graph.prepare_block_processing(4);
+        let inputs = [
+            [0.25, -0.5],
+            [0.5, -0.25],
+            [0.75, 0.0],
+            [1.0, 0.25],
+        ];
+        let mut expected = [[0.0; super::MAX_OUTPUT_CHANNELS]; 4];
+        for (target, input) in expected.iter_mut().zip(inputs) {
+            *target = frame_graph.process_frame_with_sources(
+                &[input, [0.0; 2], [0.0; 2]],
+                &mut |_, mut frame| {
+                    frame[0] *= 0.5;
+                    frame[1] *= 0.5;
+                    frame
+                },
+            );
+        }
+
+        let mut sources = vec![[0.0; 2]; block_graph.channel_count() * inputs.len()];
+        sources[..inputs.len()].copy_from_slice(&inputs);
+        let mut actual = [[0.0; super::MAX_OUTPUT_CHANNELS]; 4];
+        let mut channel_visits = 0;
+        block_graph
+            .process_block_with_sources(&mut sources, &mut actual, &mut |_, frames| {
+                channel_visits += 1;
+                for frame in frames {
+                    frame[0] *= 0.5;
+                    frame[1] *= 0.5;
+                }
+            })
+            .unwrap();
+
+        assert_eq!(actual, expected);
+        assert_eq!(channel_visits, block_graph.channel_count() - 1);
+    }
 }

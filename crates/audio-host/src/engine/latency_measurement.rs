@@ -3,7 +3,7 @@ struct NativeMixerRuntime {
     build_generation: u64,
     graph: RenderRuntime,
     clips: Vec<LoadedClip>,
-    channel_sources: Vec<StereoFrame>,
+    channel_source_block: Vec<StereoFrame>,
     channel_input_widths: Vec<SignalWidth>,
     plugins_by_channel: Vec<Vec<LivePlugin>>,
     midi_events: Vec<ScheduledMidiEvent>,

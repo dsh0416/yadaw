@@ -81,6 +81,11 @@ dbg_macro = "warn"
 todo = "warn"
 undocumented_unsafe_blocks = "warn"
 
+[profile.dev]
+opt-level = 3
+debug = 2
+lto = false
+
 [profile.release]
 codegen-units = 1
 lto = "thin"

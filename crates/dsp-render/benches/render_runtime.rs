@@ -27,7 +27,7 @@ impl AudioClipSource for ConstantClip {
 
 fn runtime(sample_rate: u32, tracks: usize, clips: usize, clip_frames: u64) -> RenderRuntime {
     let mut resources = RenderResources::new();
-    let mut channels = Vec::with_capacity(tracks + 1);
+    let mut channels = Vec::with_capacity(tracks + 2);
     let mut clip_specs = Vec::with_capacity(clips);
     for track in 0..tracks {
         channels.push(RenderChannelSpec {
@@ -43,6 +43,18 @@ fn runtime(sample_rate: u32, tracks: usize, clips: usize, clip_frames: u64) -> R
             hardware_output: None,
         });
     }
+    channels.push(RenderChannelSpec {
+        id: "master".into(),
+        kind: RenderChannelKind::Master,
+        gain_db: 0.0,
+        pan: 0.0,
+        muted: false,
+        soloed: false,
+        output: None,
+        input_bus: None,
+        hardware_input: None,
+        hardware_output: None,
+    });
     channels.push(RenderChannelSpec {
         id: "output".into(),
         kind: RenderChannelKind::Output,

@@ -333,15 +333,7 @@ export const useAudioRuntimeStore = defineStore("audio-runtime", () => {
       Date.now() - sessionStartedAt >= STARTUP_XRUN_GRACE_MS
     ) {
       const fillRatio = snapshot.ringBufferFillFrames / snapshot.ringBufferCapacityFrames
-      if (fillRatio <= 0.05) {
-        result.push({
-          id: "ring-underrun-risk",
-          severity: "warning",
-          title: "Ring buffer is nearly empty",
-          message:
-            "The output callback is close to starving. This may become an audible dropout under additional load."
-        })
-      } else if (fillRatio >= 0.95) {
+      if (fillRatio >= 0.95) {
         result.push({
           id: "ring-overrun-risk",
           severity: "warning",

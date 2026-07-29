@@ -142,14 +142,15 @@ impl AdaptiveResampler {
 struct SessionOutputResampler {
     resampler: Async<f32>,
     channels: usize,
+    session_buffer: Vec<HardwareOutputFrame>,
     input_buffer: Vec<f32>,
     output_buffer: Vec<f32>,
     output_cursor: usize,
     output_frames: usize,
 }
 
-// Keeping the resampler inline avoids an extra indirection on every output
-// frame; the converter is allocated once during engine startup.
+// Keeping the resampler inline avoids an extra indirection while filling each
+// output block; the converter and all scratch are allocated during startup.
 #[allow(clippy::large_enum_variant)]
 enum SessionOutputConverter {
     Bypass,
@@ -172,11 +173,14 @@ impl SessionOutputConverter {
             FixedAsync::Output,
         )
         .map_err(|error| invalid_config(error.to_string()))?;
+        let session_buffer =
+            vec![[0.0; MAX_OUTPUT_CHANNELS]; resampler.input_frames_max()];
         let input_buffer = vec![0.0; resampler.input_frames_max() * channels];
         let output_buffer = vec![0.0; resampler.output_frames_max() * channels];
         Ok(Self::Resampled(SessionOutputResampler {
             resampler,
             channels,
+            session_buffer,
             input_buffer,
             output_buffer,
             output_cursor: 0,
@@ -191,29 +195,34 @@ impl SessionOutputConverter {
         }
     }
 
-    fn next_frame(
+    fn render_block(
         &mut self,
-        mut render: impl FnMut() -> (HardwareOutputFrame, bool),
-    ) -> (HardwareOutputFrame, bool, usize) {
+        output: &mut [HardwareOutputFrame],
+        mut render: impl FnMut(&mut [HardwareOutputFrame]) -> bool,
+    ) -> (bool, usize) {
         match self {
             Self::Bypass => {
-                let (frame, underrun) = render();
-                (frame, underrun, 1)
+                let rendered_frames = output.len();
+                (render(output), rendered_frames)
             }
-            Self::Resampled(resampler) => resampler.next_frame(render),
+            Self::Resampled(resampler) => resampler.render_block(output, render),
         }
     }
 }
 
 impl SessionOutputResampler {
-    fn refill(&mut self, mut render: impl FnMut() -> (HardwareOutputFrame, bool)) -> (bool, usize) {
+    fn refill(
+        &mut self,
+        mut render: impl FnMut(&mut [HardwareOutputFrame]) -> bool,
+    ) -> (bool, usize) {
         let required = self.resampler.input_frames_next();
         let output_frames = self.resampler.output_frames_next();
         self.input_buffer[..required * self.channels].fill(0.0);
         let mut underrun = false;
-        for frame_index in 0..required {
-            let (frame, frame_underrun) = render();
-            underrun |= frame_underrun;
+        for block in self.session_buffer[..required].chunks_mut(MAX_PLUGIN_BLOCK_FRAMES) {
+            underrun |= render(block);
+        }
+        for (frame_index, frame) in self.session_buffer[..required].iter().enumerate() {
             let offset = frame_index * self.channels;
             self.input_buffer[offset..offset + self.channels]
                 .copy_from_slice(&frame[..self.channels]);
@@ -253,23 +262,31 @@ impl SessionOutputResampler {
         (underrun, required)
     }
 
-    fn next_frame(
+    fn render_block(
         &mut self,
-        render: impl FnMut() -> (HardwareOutputFrame, bool),
-    ) -> (HardwareOutputFrame, bool, usize) {
-        let (underrun, rendered_frames) = if self.output_cursor >= self.output_frames {
-            self.refill(render)
-        } else {
-            (false, 0)
-        };
-        if self.output_cursor >= self.output_frames {
-            return ([0.0; MAX_OUTPUT_CHANNELS], true, rendered_frames);
+        output: &mut [HardwareOutputFrame],
+        mut render: impl FnMut(&mut [HardwareOutputFrame]) -> bool,
+    ) -> (bool, usize) {
+        let mut underrun = false;
+        let mut rendered_frames = 0;
+        for frame in output {
+            if self.output_cursor >= self.output_frames {
+                let (refill_underrun, refill_frames) = self.refill(&mut render);
+                underrun |= refill_underrun;
+                rendered_frames += refill_frames;
+            }
+            if self.output_cursor >= self.output_frames {
+                *frame = [0.0; MAX_OUTPUT_CHANNELS];
+                underrun = true;
+                continue;
+            }
+            let offset = self.output_cursor * self.channels;
+            frame[..self.channels]
+                .copy_from_slice(&self.output_buffer[offset..offset + self.channels]);
+            frame[self.channels..].fill(0.0);
+            self.output_cursor += 1;
         }
-        let mut frame = [0.0; MAX_OUTPUT_CHANNELS];
-        let offset = self.output_cursor * self.channels;
-        frame[..self.channels].copy_from_slice(&self.output_buffer[offset..offset + self.channels]);
-        self.output_cursor += 1;
-        (frame, underrun, rendered_frames)
+        (underrun, rendered_frames)
     }
 }
 
@@ -302,16 +319,15 @@ where
                     Ordering::Relaxed,
                 );
 
-                let mut overrun = false;
                 for (frame_index, frame) in data.chunks_exact(channels).enumerate() {
                     let mut capture = [0.0_f32; MAX_INPUT_CHANNELS];
                     let capture_channels = channels.min(MAX_INPUT_CHANNELS);
                     for (target, source) in capture[..capture_channels].iter_mut().zip(frame) {
                         *target = f32::from_sample(*source);
                     }
-                    if producer.try_push(capture).is_err() {
-                        overrun = true;
-                    }
+                    // The recording tap receives the capture independently. Saturating this
+                    // monitor bridge is not evidence of an output dropout.
+                    let _ = producer.try_push(capture);
                     input_peaks.observe(&capture[..capture_channels]);
                     recording_tap.push(&capture[..capture_channels]);
                     round_trip_detector.observe(
@@ -326,11 +342,8 @@ where
                 callback_metrics
                     .ring_buffer_fill_frames
                     .store(producer.occupied_len() as u32, Ordering::Relaxed);
-                if overrun {
-                    callback_metrics.xruns.fetch_add(1, Ordering::Relaxed);
-                }
             },
-            move |_error| mark_stream_error(&error_metrics),
+            move |error| mark_stream_error(&error_metrics, StreamDirection::Input, &error),
             None,
         )
         .map_err(|error| audio_error("failed to build cpal input stream", error))
@@ -377,6 +390,9 @@ where
     let callback_metrics = Arc::clone(&metrics);
     let error_metrics = Arc::clone(&metrics);
     let mut round_trip_probe = RoundTripOutputProbe::new(round_trip_latency);
+    let mut render_inputs = vec![[0.0; MAX_INPUT_CHANNELS]; MAX_PLUGIN_BLOCK_FRAMES];
+    let mut device_outputs =
+        vec![[0.0; MAX_OUTPUT_CHANNELS]; MAX_PLUGIN_BLOCK_FRAMES];
 
     device
         .build_output_stream(
@@ -420,34 +436,58 @@ where
 
                 let mut underrun = false;
                 let mut rendered_session_frames = 0;
-                for (frame_index, frame) in data.chunks_exact_mut(channels).enumerate() {
-                    let (mut rendered, frame_underrun, rendered_frames) = output_converter
-                        .next_frame(|| {
-                            let (input, input_underrun) = resampler.next_frame();
-                            let (rendered, stream_underrun) = mixer
-                                .as_mut()
-                                .map_or(([0.0; MAX_OUTPUT_CHANNELS], false), |runtime| {
-                                    runtime.render_frame(input)
-                                });
-                            (rendered, input_underrun || stream_underrun)
-                        });
-                    round_trip_probe.apply(
-                        &mut rendered[..channels.min(MAX_OUTPUT_CHANNELS)],
-                        callback_started_ns.saturating_add(frames_to_nanos(
-                            frame_index,
-                            callback_metrics.output_sample_rate,
-                        )),
+                let total_frames = data.len() / channels;
+                let mut device_frame_offset = 0;
+                while device_frame_offset < total_frames {
+                    let block_frames =
+                        (total_frames - device_frame_offset).min(MAX_PLUGIN_BLOCK_FRAMES);
+                    let (block_underrun, rendered_frames) = output_converter.render_block(
+                        &mut device_outputs[..block_frames],
+                        |session_outputs| {
+                            for target in &mut render_inputs[..session_outputs.len()] {
+                                // A dry input bridge is zero-filled. When the graph does not
+                                // monitor that input it cannot affect the rendered output.
+                                let (input, _input_underrun) = resampler.next_frame();
+                                *target = input;
+                            }
+                            if let Some(runtime) = mixer.as_mut() {
+                                runtime.render_block(
+                                    &render_inputs[..session_outputs.len()],
+                                    session_outputs,
+                                )
+                            } else {
+                                session_outputs.fill([0.0; MAX_OUTPUT_CHANNELS]);
+                                false
+                            }
+                        },
                     );
-                    underrun |= frame_underrun;
+                    underrun |= block_underrun;
                     rendered_session_frames += rendered_frames;
-                    for (channel, sample) in frame.iter_mut().enumerate() {
-                        let value = rendered
-                            .get(channel)
-                            .copied()
-                            .unwrap_or(0.0)
-                            .clamp(-1.0, 1.0);
-                        *sample = T::from_sample(value);
+
+                    let sample_start = device_frame_offset * channels;
+                    let sample_end = sample_start + block_frames * channels;
+                    for (local_frame, (frame, rendered)) in data[sample_start..sample_end]
+                        .chunks_exact_mut(channels)
+                        .zip(&mut device_outputs[..block_frames])
+                        .enumerate()
+                    {
+                        round_trip_probe.apply(
+                            &mut rendered[..channels.min(MAX_OUTPUT_CHANNELS)],
+                            callback_started_ns.saturating_add(frames_to_nanos(
+                                device_frame_offset + local_frame,
+                                callback_metrics.output_sample_rate,
+                            )),
+                        );
+                        for (channel, sample) in frame.iter_mut().enumerate() {
+                            let value = rendered
+                                .get(channel)
+                                .copied()
+                                .unwrap_or(0.0)
+                                .clamp(-1.0, 1.0);
+                            *sample = T::from_sample(value);
+                        }
                     }
+                    device_frame_offset += block_frames;
                 }
                 if let Some(runtime) = mixer.as_mut() {
                     runtime.publish_peaks(rendered_session_frames);
@@ -463,7 +503,7 @@ where
                     .callback_generation
                     .fetch_add(1, Ordering::Release);
             },
-            move |_error| mark_stream_error(&error_metrics),
+            move |error| mark_stream_error(&error_metrics, StreamDirection::Output, &error),
             None,
         )
         .map_err(|error| audio_error("failed to build cpal output stream", error))

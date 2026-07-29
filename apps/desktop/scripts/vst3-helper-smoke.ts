@@ -109,6 +109,7 @@ try {
     module_path: resolvedPlugin,
     class_id: "84E8DE5F92554F5396FAE4133C935A18",
     plugin_kind: "effect",
+    audio_mode: "stereo",
     sample_rate: 48_000,
     component_state: { storage: "inline", bytes: new Uint8Array() },
     controller_state: { storage: "inline", bytes: new Uint8Array() }
@@ -120,6 +121,7 @@ try {
     module_path: resolvedSynth,
     class_id: "41466D9BB0654576B641098F686371B3",
     plugin_kind: "instrument",
+    audio_mode: "stereo",
     sample_rate: 48_000,
     component_state: { storage: "inline", bytes: new Uint8Array() },
     controller_state: { storage: "inline", bytes: new Uint8Array() }
@@ -218,6 +220,7 @@ try {
             channel_id: "instrument-1",
             role: "instrument",
             slot_order: 0,
+            audio_mode: "stereo",
             enabled: true,
             latency_samples: synthLoaded.latency_samples ?? 0,
             tail_samples: synthLoaded.tail_samples ?? 0
@@ -227,6 +230,7 @@ try {
             channel_id: "instrument-1",
             role: "insert",
             slot_order: 0,
+            audio_mode: "stereo",
             enabled: true,
             latency_samples: loaded.latency_samples ?? 0,
             tail_samples: loaded.tail_samples ?? 0

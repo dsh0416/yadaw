@@ -99,53 +99,67 @@ impl Clone for ProcessorLease {
 unsafe impl Send for ProcessorLease {}
 
 impl ProcessorLease {
-    pub fn process_frame(
+    pub fn process_block(
         &mut self,
-        input: [f32; 2],
+        input_left: &mut [f32],
+        input_right: &mut [f32],
+        output_left: &mut [f32],
+        output_right: &mut [f32],
         context: &HostProcessContext,
-    ) -> Option<[f32; 2]> {
+    ) -> bool {
         let cell = unsafe {
             // SAFETY: HostedPlugin keeps the stable ProcessorCell allocation alive for the helper
             // lifetime and graph retirement prevents use after owner drop.
             self.cell.as_ref()
         };
         if cell.paused.load(Ordering::Acquire) || cell.processing.swap(true, Ordering::AcqRel) {
-            return None;
+            return false;
         }
         if cell.paused.load(Ordering::Acquire) {
             cell.processing.store(false, Ordering::Release);
-            return None;
+            return false;
         }
-        let mut input_left = [input[0]];
-        let mut input_right = [input[1]];
-        let mut output_left = [0.0];
-        let mut output_right = [0.0];
         let result = unsafe {
             // SAFETY: processing is an exclusive single-audio-thread guard and the UI pause path
             // waits for it to clear before accessing the processor.
             (&mut *cell.processor.get()).process_stereo_with_context(
-                &mut input_left,
-                &mut input_right,
-                &mut output_left,
-                &mut output_right,
+                input_left,
+                input_right,
+                output_left,
+                output_right,
                 Some(context),
             )
         };
         cell.processing.store(false, Ordering::Release);
-        result.ok().map(|()| [output_left[0], output_right[0]])
+        result.is_ok()
     }
 
-    pub fn note_on(&mut self, channel: u8, key: u8, velocity: u8, note_id: i32) -> bool {
-        self.queue_note(true, channel, key, velocity, note_id)
+    pub fn note_on(
+        &mut self,
+        sample_offset: i32,
+        channel: u8,
+        key: u8,
+        velocity: u8,
+        note_id: i32,
+    ) -> bool {
+        self.queue_note(true, sample_offset, channel, key, velocity, note_id)
     }
 
-    pub fn note_off(&mut self, channel: u8, key: u8, velocity: u8, note_id: i32) -> bool {
-        self.queue_note(false, channel, key, velocity, note_id)
+    pub fn note_off(
+        &mut self,
+        sample_offset: i32,
+        channel: u8,
+        key: u8,
+        velocity: u8,
+        note_id: i32,
+    ) -> bool {
+        self.queue_note(false, sample_offset, channel, key, velocity, note_id)
     }
 
     fn queue_note(
         &mut self,
         note_on: bool,
+        sample_offset: i32,
         channel: u8,
         key: u8,
         velocity: u8,
@@ -159,11 +173,11 @@ impl ProcessorLease {
             return false;
         }
         unsafe {
-            // SAFETY: note scheduling is called by the same single audio thread as process_frame.
+            // SAFETY: note scheduling is called by the same single audio thread as process_block.
             let processor = &mut *cell.processor.get();
             if note_on {
                 processor.queue_note_on(
-                    0,
+                    sample_offset,
                     i16::from(channel),
                     i16::from(key),
                     f32::from(velocity) / 127.0,
@@ -171,7 +185,7 @@ impl ProcessorLease {
                 )
             } else {
                 processor.queue_note_off(
-                    0,
+                    sample_offset,
                     i16::from(channel),
                     i16::from(key),
                     f32::from(velocity) / 127.0,

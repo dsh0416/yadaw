@@ -17,8 +17,8 @@ pub mod bench_support {
         AdaptiveResampler, ClipSamples, EngineCommand, InputPeakBank, LivePlugin, LoadedClip,
         MeterAtomics, MeterBank, MetronomeScheduler, NativeMixerRuntime, ProcessContext,
         RealtimeParameter, RealtimeParameterCommand, SessionOutputConverter, SignalWidth,
-        StereoDelayLine, StreamingClip, TRANSPORT_PLAYING, TransportShared, decode_clip_audio,
-        spawn_streaming_clip,
+        StereoDelayLine, StreamingClip, MAX_PLUGIN_BLOCK_FRAMES, TRANSPORT_PLAYING,
+        TransportShared, decode_clip_audio, spawn_streaming_clip,
     };
 
     #[derive(Clone, Copy, Debug)]
@@ -74,11 +74,12 @@ pub mod bench_support {
         });
         let graph = MixerGraph::new(scenario.sample_rate, channels, Vec::new())
             .expect("benchmark graph must be valid");
-        let graph = RenderRuntime::from_mixer_graph(
+        let mut graph = RenderRuntime::from_mixer_graph(
             scenario.sample_rate,
             graph,
             TempoMap::default_120_bpm(),
         );
+        graph.prepare_block_processing(MAX_PLUGIN_BLOCK_FRAMES);
         let meter_bank = Arc::new(MeterBank {
             channels: (0..scenario.tracks + 2)
                 .map(|index| MeterAtomics::new(format!("channel-{index}")))
@@ -123,7 +124,10 @@ pub mod bench_support {
             ],
             held_peaks: vec![[0.0, 0.0]; graph.channel_count()],
             held_until: vec![[0, 0]; graph.channel_count()],
-            channel_sources: vec![[0.0, 0.0]; scenario.tracks + 2],
+            channel_source_block: vec![
+                [0.0, 0.0];
+                (scenario.tracks + 2).saturating_mul(MAX_PLUGIN_BLOCK_FRAMES)
+            ],
             channel_input_widths: vec![SignalWidth::Stereo; scenario.tracks + 2],
             plugins_by_channel: (0..scenario.tracks + 2).map(|_| Vec::new()).collect(),
             midi_events: Vec::new(),
@@ -154,12 +158,16 @@ pub mod bench_support {
 
     pub struct RenderHarness {
         runtime: Box<NativeMixerRuntime>,
+        inputs: Vec<super::InputFrame>,
+        outputs: Vec<super::HardwareOutputFrame>,
     }
 
     impl RenderHarness {
         pub fn new(scenario: RenderScenario) -> Self {
             Self {
                 runtime: runtime_for(scenario),
+                inputs: vec![[0.0; super::MAX_INPUT_CHANNELS]; MAX_PLUGIN_BLOCK_FRAMES],
+                outputs: vec![[0.0; super::MAX_OUTPUT_CHANNELS]; MAX_PLUGIN_BLOCK_FRAMES],
             }
         }
 
@@ -169,10 +177,17 @@ pub mod bench_support {
                 .position_frames
                 .store(0, super::Ordering::Relaxed);
             let mut output = [0.0, 0.0];
-            for _ in 0..frames {
-                let (frame, underrun) = self.runtime.render_frame([0.0; super::MAX_INPUT_CHANNELS]);
+            let mut rendered = 0;
+            while rendered < frames {
+                let block_frames = (frames - rendered).min(MAX_PLUGIN_BLOCK_FRAMES);
+                let underrun = self.runtime.render_block(
+                    &self.inputs[..block_frames],
+                    &mut self.outputs[..block_frames],
+                );
                 debug_assert!(!underrun);
+                let frame = self.outputs[block_frames - 1];
                 output = [frame[0], frame[1]];
+                rendered += block_frames;
             }
             output
         }
@@ -190,13 +205,21 @@ pub mod bench_support {
             frames: usize,
             input: StereoFrame,
         ) -> StereoFrame {
-            let mut input_frame = [0.0; super::MAX_INPUT_CHANNELS];
-            input_frame[..2].copy_from_slice(&input);
             let mut output = [0.0, 0.0];
-            for _ in 0..frames {
-                let (frame, underrun) = self.runtime.render_frame(input_frame);
+            let mut rendered = 0;
+            while rendered < frames {
+                let block_frames = (frames - rendered).min(MAX_PLUGIN_BLOCK_FRAMES);
+                for input_frame in &mut self.inputs[..block_frames] {
+                    input_frame[..2].copy_from_slice(&input);
+                }
+                let underrun = self.runtime.render_block(
+                    &self.inputs[..block_frames],
+                    &mut self.outputs[..block_frames],
+                );
                 debug_assert!(!underrun);
+                let frame = self.outputs[block_frames - 1];
                 output = [frame[0], frame[1]];
+                rendered += block_frames;
             }
             output
         }
@@ -236,9 +259,11 @@ pub mod bench_support {
 
         pub fn render_frame(&mut self, mut frame: StereoFrame) -> StereoFrame {
             let mut width = SignalWidth::Stereo;
+            let mut frames = [frame];
             for plugin in &mut self.plugins {
-                frame = plugin.process(frame, &mut width, &self.context);
+                plugin.process_block(&mut frames, &mut width, &self.context);
             }
+            frame = frames[0];
             match width {
                 SignalWidth::Mono => [frame[0], frame[0]],
                 SignalWidth::Stereo => frame,
@@ -389,6 +414,7 @@ pub mod bench_support {
     pub struct SessionRateBridgeHarness {
         input_resampler: AdaptiveResampler,
         output_converter: SessionOutputConverter,
+        device_outputs: Vec<super::HardwareOutputFrame>,
     }
 
     impl SessionRateBridgeHarness {
@@ -416,6 +442,10 @@ pub mod bench_support {
                 .expect("input/session resampler must be valid"),
                 output_converter: SessionOutputConverter::new(session_rate, output_rate, 2)
                     .expect("session/output resampler must be valid"),
+                device_outputs: vec![
+                    [0.0; super::MAX_OUTPUT_CHANNELS];
+                    MAX_PLUGIN_BLOCK_FRAMES
+                ],
             }
         }
 
@@ -423,18 +453,28 @@ pub mod bench_support {
             let Self {
                 input_resampler,
                 output_converter,
+                device_outputs,
             } = self;
             let mut output = [0.0, 0.0];
-            for _ in 0..output_frames {
-                let (frame, _underrun, _rendered_session_frames) =
-                    output_converter.next_frame(|| {
-                        let (input, underrun) = input_resampler.next_frame();
-                        let mut session_output = [0.0; super::MAX_OUTPUT_CHANNELS];
-                        session_output[0] = input[0];
-                        session_output[1] = input[1];
-                        (session_output, underrun)
-                    });
+            let mut rendered = 0;
+            while rendered < output_frames {
+                let block_frames = (output_frames - rendered).min(MAX_PLUGIN_BLOCK_FRAMES);
+                let _ = output_converter.render_block(
+                    &mut device_outputs[..block_frames],
+                    |session_outputs| {
+                        let mut underrun = false;
+                        for session_output in session_outputs {
+                            let (input, frame_underrun) = input_resampler.next_frame();
+                            session_output[0] = input[0];
+                            session_output[1] = input[1];
+                            underrun |= frame_underrun;
+                        }
+                        underrun
+                    },
+                );
+                let frame = device_outputs[block_frames - 1];
                 output = [frame[0], frame[1]];
+                rendered += block_frames;
             }
             output
         }

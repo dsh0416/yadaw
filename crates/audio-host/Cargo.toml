@@ -27,7 +27,7 @@ yadaw-ipc-transport.workspace = true
 yadaw-vst3-host.workspace = true
 
 [target.'cfg(target_os = "windows")'.dependencies]
-cpal = { workspace = true, features = ["asio"] }
+cpal = { workspace = true, features = ["asio", "realtime"] }
 
 [target.'cfg(not(target_os = "windows"))'.dependencies]
 cpal.workspace = true

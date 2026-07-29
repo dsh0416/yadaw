@@ -8,31 +8,38 @@ struct LivePlugin {
 }
 
 impl LivePlugin {
-    fn process(
+    fn process_block(
         &mut self,
-        input: StereoFrame,
+        frames: &mut [StereoFrame],
         width: &mut SignalWidth,
         context: &ProcessContext,
-    ) -> StereoFrame {
-        let prepared = self.prepare_input(input, *width);
+    ) {
+        for frame in frames.iter_mut() {
+            *frame = self.prepare_input(*frame, *width);
+        }
         let output_width = self.output_width();
         if !self.enabled {
             *width = output_width;
-            return self.bypass_delay.process(self.passthrough(prepared));
+            for frame in frames {
+                *frame = self.bypass_delay.process(self.passthrough(*frame));
+            }
+            return;
         }
-        let failure_output = if self.is_instrument {
-            [0.0; 2]
-        } else {
-            self.passthrough(prepared)
-        };
         let Some(processor) = self.processor.as_mut() else {
             *width = output_width;
-            return failure_output;
+            if !self.is_instrument {
+                for frame in frames {
+                    *frame = self.passthrough(*frame);
+                }
+            }
+            return;
         };
         *width = output_width;
-        processor
-            .process_frame(prepared, context)
-            .unwrap_or(failure_output)
+        if !processor.process_block(frames, context) && !self.is_instrument {
+            for frame in frames {
+                *frame = self.passthrough(*frame);
+            }
+        }
     }
 
     fn prepare_input(&self, input: StereoFrame, width: SignalWidth) -> StereoFrame {
