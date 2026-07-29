@@ -330,16 +330,13 @@ fn start_virtual_audio_engine(key: AudioEngineKey) -> Result<NativeAudioRuntimeS
                 Duration::from_secs_f64(block_frames as f64 / output_sample_rate as f64);
             while !worker_shutdown.load(Ordering::Acquire) {
                 let input_callback_started_ns = worker_round_trip_latency.now_ns();
-                let mut overrun = false;
                 for (frame_index, capture) in loopback_block.iter().enumerate() {
                     round_trip_detector.observe(
                         &capture[..2],
                         input_callback_started_ns
                             .saturating_add(frames_to_nanos(frame_index, input_sample_rate)),
                     );
-                    if input_producer.try_push(*capture).is_err() {
-                        overrun = true;
-                    }
+                    let _ = input_producer.try_push(*capture);
                 }
                 loopback_block.fill([0.0; MAX_INPUT_CHANNELS]);
                 while let Some(command) = command_consumer.try_pop() {
@@ -373,13 +370,13 @@ fn start_virtual_audio_engine(key: AudioEngineKey) -> Result<NativeAudioRuntimeS
                 for (frame_index, loopback) in loopback_block.iter_mut().enumerate() {
                     let (mut output, frame_underrun, rendered_frames) = output_converter
                         .next_frame(|| {
-                            let (input, input_underrun) = input_resampler.next_frame();
+                            let (input, _input_underrun) = input_resampler.next_frame();
                             let (output, render_underrun) = mixer
                                 .as_mut()
                                 .map_or(([0.0; MAX_OUTPUT_CHANNELS], false), |runtime| {
                                     runtime.render_frame(input)
                                 });
-                            (output, input_underrun || render_underrun)
+                            (output, render_underrun)
                         });
                     round_trip_probe.apply(
                         &mut output[..2],
@@ -406,7 +403,7 @@ fn start_virtual_audio_engine(key: AudioEngineKey) -> Result<NativeAudioRuntimeS
                 worker_metrics
                     .ring_buffer_fill_frames
                     .store(input_resampler.occupied_len() as u32, Ordering::Relaxed);
-                if overrun || underrun {
+                if underrun {
                     worker_metrics.xruns.fetch_add(1, Ordering::Relaxed);
                 }
                 worker_metrics

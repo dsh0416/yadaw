@@ -14,9 +14,9 @@ mod tests {
         NativeMixerChannel, NativeMixerGraph, NativeMixerSend, NativePluginInstance,
         NativeRoundTripLatencyMeasurementRequest, OUTPUT_RESAMPLER_FRAMES, RoundTripInputDetector,
         RoundTripLatencyMeasurement, RoundTripOutputProbe, SessionOutputConverter, SignalWidth,
-        StereoDelayLine, SupportedBufferSize, clip_storage_policy, compiled_graph_snapshot,
-        frames_to_nanos, resolve_stream_devices, select_buffer_size, spawn_streaming_clip,
-        validate_session_sample_rate,
+        StereoDelayLine, StreamDirection, StreamErrorImpact, SupportedBufferSize,
+        clip_storage_policy, compiled_graph_snapshot, frames_to_nanos, resolve_stream_devices,
+        select_buffer_size, spawn_streaming_clip, stream_error_impact, validate_session_sample_rate,
     };
     use crate::recording::{NativeRecordingStartConfig, write_deterministic_test_recording};
     use crate::vst3::ProcessContext;
@@ -70,6 +70,26 @@ mod tests {
         assert!(matches!(selection.buffer_size, BufferSize::Default));
         assert_eq!(selection.expected_frames, 64);
         assert!(selection.fell_back);
+    }
+
+    #[test]
+    fn only_output_stream_xruns_are_user_visible() {
+        assert_eq!(
+            stream_error_impact(StreamDirection::Input, cpal::ErrorKind::Xrun),
+            StreamErrorImpact::Ignore
+        );
+        assert_eq!(
+            stream_error_impact(StreamDirection::Output, cpal::ErrorKind::Xrun),
+            StreamErrorImpact::CountXrun
+        );
+        assert_eq!(
+            stream_error_impact(StreamDirection::Output, cpal::ErrorKind::DeviceChanged),
+            StreamErrorImpact::Ignore
+        );
+        assert_eq!(
+            stream_error_impact(StreamDirection::Output, cpal::ErrorKind::BackendError),
+            StreamErrorImpact::Fault
+        );
     }
 
     #[test]

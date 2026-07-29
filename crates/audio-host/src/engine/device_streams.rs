@@ -115,7 +115,42 @@ fn frames_to_nanos(frames: usize, sample_rate: u32) -> u64 {
         .min(u128::from(u64::MAX)) as u64
 }
 
-fn mark_stream_error(metrics: &RuntimeMetrics) {
-    metrics.xruns.fetch_add(1, Ordering::Relaxed);
-    metrics.faulted.store(true, Ordering::Relaxed);
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum StreamDirection {
+    Input,
+    Output,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum StreamErrorImpact {
+    Ignore,
+    CountXrun,
+    Fault,
+}
+
+fn stream_error_impact(
+    direction: StreamDirection,
+    error_kind: cpal::ErrorKind,
+) -> StreamErrorImpact {
+    match error_kind {
+        cpal::ErrorKind::Xrun if direction == StreamDirection::Output => {
+            StreamErrorImpact::CountXrun
+        }
+        cpal::ErrorKind::Xrun | cpal::ErrorKind::DeviceChanged => StreamErrorImpact::Ignore,
+        _ => StreamErrorImpact::Fault,
+    }
+}
+
+fn mark_stream_error(
+    metrics: &RuntimeMetrics,
+    direction: StreamDirection,
+    error: &cpal::Error,
+) {
+    match stream_error_impact(direction, error.kind()) {
+        StreamErrorImpact::Ignore => {}
+        StreamErrorImpact::CountXrun => {
+            metrics.xruns.fetch_add(1, Ordering::Relaxed);
+        }
+        StreamErrorImpact::Fault => metrics.faulted.store(true, Ordering::Relaxed),
+    }
 }

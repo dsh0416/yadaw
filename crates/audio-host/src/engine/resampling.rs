@@ -302,16 +302,15 @@ where
                     Ordering::Relaxed,
                 );
 
-                let mut overrun = false;
                 for (frame_index, frame) in data.chunks_exact(channels).enumerate() {
                     let mut capture = [0.0_f32; MAX_INPUT_CHANNELS];
                     let capture_channels = channels.min(MAX_INPUT_CHANNELS);
                     for (target, source) in capture[..capture_channels].iter_mut().zip(frame) {
                         *target = f32::from_sample(*source);
                     }
-                    if producer.try_push(capture).is_err() {
-                        overrun = true;
-                    }
+                    // The recording tap receives the capture independently. Saturating this
+                    // monitor bridge is not evidence of an output dropout.
+                    let _ = producer.try_push(capture);
                     input_peaks.observe(&capture[..capture_channels]);
                     recording_tap.push(&capture[..capture_channels]);
                     round_trip_detector.observe(
@@ -326,11 +325,8 @@ where
                 callback_metrics
                     .ring_buffer_fill_frames
                     .store(producer.occupied_len() as u32, Ordering::Relaxed);
-                if overrun {
-                    callback_metrics.xruns.fetch_add(1, Ordering::Relaxed);
-                }
             },
-            move |_error| mark_stream_error(&error_metrics),
+            move |error| mark_stream_error(&error_metrics, StreamDirection::Input, &error),
             None,
         )
         .map_err(|error| audio_error("failed to build cpal input stream", error))
@@ -423,13 +419,16 @@ where
                 for (frame_index, frame) in data.chunks_exact_mut(channels).enumerate() {
                     let (mut rendered, frame_underrun, rendered_frames) = output_converter
                         .next_frame(|| {
-                            let (input, input_underrun) = resampler.next_frame();
+                            // A dry input bridge is zero-filled. When the graph does not monitor
+                            // that input it cannot affect the rendered output, so it is not an
+                            // output xrun.
+                            let (input, _input_underrun) = resampler.next_frame();
                             let (rendered, stream_underrun) = mixer
                                 .as_mut()
                                 .map_or(([0.0; MAX_OUTPUT_CHANNELS], false), |runtime| {
                                     runtime.render_frame(input)
                                 });
-                            (rendered, input_underrun || stream_underrun)
+                            (rendered, stream_underrun)
                         });
                     round_trip_probe.apply(
                         &mut rendered[..channels.min(MAX_OUTPUT_CHANNELS)],
@@ -463,7 +462,7 @@ where
                     .callback_generation
                     .fetch_add(1, Ordering::Release);
             },
-            move |_error| mark_stream_error(&error_metrics),
+            move |error| mark_stream_error(&error_metrics, StreamDirection::Output, &error),
             None,
         )
         .map_err(|error| audio_error("failed to build cpal output stream", error))

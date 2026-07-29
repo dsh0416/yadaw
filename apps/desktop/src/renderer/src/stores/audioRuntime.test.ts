@@ -1,10 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { createPinia, setActivePinia } from "pinia"
 import { INITIAL_AUDIO_RUNTIME_SNAPSHOT } from "@yadaw/contracts"
 import { useAudioRuntimeStore } from "./audioRuntime"
 
 describe("audio runtime sample-rate diagnostics", () => {
   beforeEach(() => setActivePinia(createPinia()))
+  afterEach(() => vi.useRealTimers())
 
   it("reports native clock mismatch separately from session conversion", () => {
     const store = useAudioRuntimeStore()
@@ -41,6 +42,24 @@ describe("audio runtime sample-rate diagnostics", () => {
     })
 
     expect(store.warnings.map((warning) => warning.id)).toEqual(["session-sample-rate-conversion"])
+  })
+
+  it("does not treat an empty monitoring ring as an audio warning", () => {
+    vi.useFakeTimers()
+    const store = useAudioRuntimeStore()
+    store.applyLifecycleState({
+      status: "running",
+      runtime: {
+        ...INITIAL_AUDIO_RUNTIME_SNAPSHOT,
+        state: "running",
+        ringBufferCapacityFrames: 1_024,
+        ringBufferFillFrames: 0
+      },
+      error: null
+    })
+    vi.advanceTimersByTime(2_000)
+
+    expect(store.warnings).toEqual([])
   })
 
   it("publishes physical loopback measurement state through the store", async () => {
