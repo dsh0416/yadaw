@@ -75,7 +75,11 @@ const {
   border: 1px solid color-mix(in srgb, var(--note-color) 65%, var(--line-strong));
   border-radius: 2px;
   color: var(--canvas);
-  background: var(--note-color);
+  background: color-mix(
+    in srgb,
+    var(--note-color) calc(38% + 62% * var(--note-velocity, 1)),
+    var(--surface-sunken)
+  );
   cursor: grab;
 }
 

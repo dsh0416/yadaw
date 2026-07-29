@@ -34,6 +34,7 @@ export const usePianoRollStore = defineStore("piano-roll", () => {
   const editCursorKey = shallowRef(60)
   const clipboard = shallowRef<PianoRollClipboardNote[]>([])
   const editorFocused = shallowRef(false)
+  const showVelocityLane = shallowRef(true)
   let editCommandHandler: ((command: PianoRollEditCommand) => void) | null = null
 
   const selectedNoteKeys = computed(
@@ -144,6 +145,7 @@ export const usePianoRollStore = defineStore("piano-roll", () => {
     editCursorKey.value = 60
     clipboard.value = []
     editorFocused.value = false
+    showVelocityLane.value = true
   }
 
   return {
@@ -160,6 +162,7 @@ export const usePianoRollStore = defineStore("piano-roll", () => {
     editCursorKey,
     clipboard,
     editorFocused,
+    showVelocityLane,
     setPixelsPerQuarter,
     setRowHeight,
     selectArrangementClip,

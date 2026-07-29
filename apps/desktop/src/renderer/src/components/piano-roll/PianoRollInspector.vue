@@ -51,6 +51,16 @@ const FIELD_LABELS: Record<string, string> = {
     >
       Quantize
     </UiButton>
+    <UiButton
+      size="sm"
+      :variant="pianoRollStore.showVelocityLane ? 'primary' : 'ghost'"
+      class="velocity-toggle"
+      aria-label="Toggle velocity lane"
+      :aria-pressed="pianoRollStore.showVelocityLane"
+      @click="pianoRollStore.showVelocityLane = !pianoRollStore.showVelocityLane"
+    >
+      Velocity lane
+    </UiButton>
     <span class="resolution">Resolution 1/3840 note · integer ticks</span>
   </aside>
 </template>
@@ -103,7 +113,8 @@ const FIELD_LABELS: Record<string, string> = {
   white-space: nowrap;
 }
 
-.quantize {
+.quantize,
+.velocity-toggle {
   flex: none;
 }
 

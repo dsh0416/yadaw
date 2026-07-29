@@ -185,7 +185,8 @@ export function createPianoRollEditor(): PianoRollEditor {
       top: `${(127 - key) * pianoRollStore.rowHeight + 1}px`,
       width: `${Math.max(2, durationTicks * pixelsPerTick.value)}px`,
       height: `${Math.max(4, pianoRollStore.rowHeight - 2)}px`,
-      "--note-color": trackColor(clip)
+      "--note-color": trackColor(clip),
+      "--note-velocity": `${note.velocity / 127}`
     }
   }
 

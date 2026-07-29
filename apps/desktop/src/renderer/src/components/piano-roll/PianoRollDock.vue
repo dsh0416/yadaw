@@ -4,6 +4,7 @@ import { createPianoRollEditor, pianoRollEditorKey } from "./usePianoRollEditor"
 import PianoRollToolbar from "./PianoRollToolbar.vue"
 import PianoRollInspector from "./PianoRollInspector.vue"
 import PianoRollGrid from "./PianoRollGrid.vue"
+import PianoRollVelocityLane from "./PianoRollVelocityLane.vue"
 
 const emit = defineEmits<{ close: [] }>()
 const editor = createPianoRollEditor()
@@ -41,13 +42,16 @@ function close(): void {
   >
     <PianoRollToolbar class="toolbar-area" @close="close" />
     <PianoRollInspector class="inspector-area" />
-    <div
-      ref="viewport"
-      class="viewport"
-      tabindex="0"
-      aria-label="Piano roll note grid"
-    >
-      <PianoRollGrid />
+    <div class="editor-main">
+      <div
+        ref="viewport"
+        class="viewport"
+        tabindex="0"
+        aria-label="Piano roll note grid"
+      >
+        <PianoRollGrid />
+      </div>
+      <PianoRollVelocityLane v-if="pianoRollStore.showVelocityLane" :viewport="viewport" />
     </div>
     <p v-if="editor.mixerError.value" class="error" role="alert">{{ editor.mixerError.value }}</p>
   </section>
@@ -79,13 +83,21 @@ function close(): void {
   grid-area: inspector;
 }
 
+.editor-main {
+  display: flex;
+  grid-area: viewport;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+}
+
 .viewport {
   position: relative;
   z-index: var(--ui-z-local-base);
   isolation: isolate;
-  grid-area: viewport;
   min-width: 0;
   min-height: 0;
+  flex: 1;
   overflow: auto;
   outline: none;
 }
