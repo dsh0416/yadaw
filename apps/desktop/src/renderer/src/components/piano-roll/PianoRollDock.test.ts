@@ -77,6 +77,7 @@ describe("PianoRollDock", () => {
     const wrapper = mount(PianoRollDock, { global: { plugins: [pinia] } })
 
     expect(wrapper.text()).toContain("Resolution 1/3840 note")
+    expect(wrapper.find('[aria-label="Lower dock"]').exists()).toBe(false)
     expect(wrapper.findAll(".pitch-row")).toHaveLength(128)
     expect(wrapper.get('.pitch-row[data-key="61"]').classes()).toContain("black")
     expect(wrapper.get('.pitch-row[data-key="60"]').classes()).not.toContain("black")

@@ -37,13 +37,16 @@ export const useStudioWorkspaceStore = defineStore("studio-workspace", () => {
     }
   }
 
-  function openPianoRollDock(): void {
-    activeLowerDock.value = "piano-roll"
-    lowerDockOpen.value = true
+  function togglePianoRollDock(): void {
+    if (pianoRollDockOpen.value) lowerDockOpen.value = false
+    else {
+      activeLowerDock.value = "piano-roll"
+      lowerDockOpen.value = true
+    }
   }
 
-  function activateLowerDock(value: "mixer" | "piano-roll"): void {
-    activeLowerDock.value = value
+  function openPianoRollDock(): void {
+    activeLowerDock.value = "piano-roll"
     lowerDockOpen.value = true
   }
 
@@ -72,8 +75,8 @@ export const useStudioWorkspaceStore = defineStore("studio-workspace", () => {
     dockStyle,
     toggleSoundBrowser,
     toggleMixerDock,
+    togglePianoRollDock,
     openPianoRollDock,
-    activateLowerDock,
     closeLowerDock,
     setDockHeight,
     reset

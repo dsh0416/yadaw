@@ -62,4 +62,22 @@ describe("studio workspace store", () => {
     expect(workspace.mixerDockHeight).toBe(284)
     expect(workspace.dockStyle).toEqual({ height: "284px" })
   })
+
+  it("switches and closes lower-dock editors from the shared workspace state", () => {
+    const workspace = useStudioWorkspaceStore()
+
+    workspace.togglePianoRollDock()
+    expect(workspace.lowerDockOpen).toBe(true)
+    expect(workspace.activeLowerDock).toBe("piano-roll")
+    expect(workspace.pianoRollDockOpen).toBe(true)
+    expect(workspace.mixerDockOpen).toBe(false)
+
+    workspace.togglePianoRollDock()
+    expect(workspace.lowerDockOpen).toBe(false)
+
+    workspace.toggleMixerDock()
+    expect(workspace.lowerDockOpen).toBe(true)
+    expect(workspace.activeLowerDock).toBe("mixer")
+    expect(workspace.mixerDockOpen).toBe(true)
+  })
 })

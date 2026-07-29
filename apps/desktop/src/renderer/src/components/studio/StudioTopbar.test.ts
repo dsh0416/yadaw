@@ -71,6 +71,8 @@ function mountTopbar() {
       tempoMap,
       soundBrowserOpen: true,
       mixerDockOpen: true,
+      pianoRollDockOpen: false,
+      pianoRollAvailable: true,
       metronomeChannel,
       masterChannel,
       masterMeter
@@ -112,14 +114,17 @@ describe("StudioTopbar", () => {
 
     expect(wrapper.get('button[aria-label="Library"]').attributes("aria-pressed")).toBe("true")
     expect(wrapper.get('button[aria-label="Mixer"]').attributes("aria-pressed")).toBe("true")
+    expect(wrapper.get('button[aria-label="Piano Roll"]').attributes("aria-pressed")).toBe("false")
     await wrapper.get('button[aria-label="Library"]').trigger("click")
     await wrapper.get('button[aria-label="Mixer"]').trigger("click")
+    await wrapper.get('button[aria-label="Piano Roll"]').trigger("click")
     await wrapper.get('button[aria-label="Go to beginning"]').trigger("click")
     await wrapper.get('button[aria-label="Play"]').trigger("click")
     await wrapper.get('button[aria-label="Metronome"]').trigger("click")
 
     expect(wrapper.emitted("toggleSoundBrowser")).toHaveLength(1)
     expect(wrapper.emitted("toggleMixerDock")).toHaveLength(1)
+    expect(wrapper.emitted("togglePianoRollDock")).toHaveLength(1)
     expect(wrapper.emitted("goToStart")).toHaveLength(1)
     expect(wrapper.emitted("togglePlayback")).toHaveLength(1)
     expect(wrapper.emitted("toggleMetronome")).toHaveLength(1)
@@ -127,6 +132,18 @@ describe("StudioTopbar", () => {
     const placeholders = wrapper.findAll('button[aria-disabled="true"][data-placeholder]')
     expect(placeholders.length).toBeGreaterThan(10)
     expect(wrapper.get('button[aria-label="Metronome"]').attributes("aria-pressed")).toBe("false")
+  })
+
+  it("uses the existing topbar control state for the Piano Roll editor", async () => {
+    const wrapper = mountTopbar()
+    await wrapper.setProps({ pianoRollDockOpen: true })
+    expect(wrapper.get('button[aria-label="Piano Roll"]').attributes("aria-pressed")).toBe("true")
+
+    await wrapper.setProps({ pianoRollDockOpen: false, pianoRollAvailable: false })
+    const button = wrapper.get('button[aria-label="Piano Roll"]')
+    expect(button.attributes("aria-disabled")).toBe("true")
+    await button.trigger("click")
+    expect(wrapper.emitted("togglePianoRollDock")).toBeUndefined()
   })
 
   it("reflects Mixer mute state and disables the control if the system channel is missing", async () => {

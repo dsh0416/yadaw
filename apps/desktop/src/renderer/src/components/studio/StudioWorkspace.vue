@@ -5,7 +5,6 @@ import { useStudioWorkspaceStore } from "../../stores/studioWorkspace"
 import ArrangementWorkspace from "./ArrangementWorkspace.vue"
 import MixerConsole from "../mixer/MixerConsole.vue"
 import PianoRollDock from "../piano-roll/PianoRollDock.vue"
-import { usePianoRollStore } from "../../stores/pianoRoll"
 
 defineProps<{
   recordingId: string | null
@@ -15,7 +14,6 @@ defineProps<{
 }>()
 
 const workspaceStore = useStudioWorkspaceStore()
-const pianoRollStore = usePianoRollStore()
 const resizing = shallowRef(false)
 
 function startResize(event: PointerEvent): void {
@@ -55,34 +53,8 @@ useEventListener(window, "pointerup", stopResize)
         @pointerdown="startResize"
       />
       <div v-if="workspaceStore.lowerDockOpen" class="lower-dock" :style="workspaceStore.dockStyle">
-        <template v-if="workspaceStore.activeLowerDock === 'mixer'">
-          <div class="dock-tabbar" role="tablist" aria-label="Lower dock">
-            <button type="button" role="tab" aria-selected="true">Mixer</button>
-            <button
-              v-if="pianoRollStore.openClipIds.length > 0"
-              type="button"
-              role="tab"
-              aria-selected="false"
-              @click="workspaceStore.activateLowerDock('piano-roll')"
-            >
-              Piano roll
-            </button>
-          </div>
-          <MixerConsole class="mixer-dock" />
-        </template>
-        <PianoRollDock v-else @close="workspaceStore.activateLowerDock('mixer')">
-          <template #tabs>
-            <button
-              type="button"
-              role="tab"
-              aria-selected="false"
-              @click="workspaceStore.activateLowerDock('mixer')"
-            >
-              Mixer
-            </button>
-            <button type="button" role="tab" aria-selected="true">Piano roll</button>
-          </template>
-        </PianoRollDock>
+        <MixerConsole v-if="workspaceStore.activeLowerDock === 'mixer'" class="mixer-dock" />
+        <PianoRollDock v-else @close="workspaceStore.closeLowerDock" />
       </div>
     </div>
   </section>
@@ -119,32 +91,6 @@ useEventListener(window, "pointerup", stopResize)
   min-height: 0;
   flex: none;
   flex: 1;
-}
-.dock-tabbar {
-  display: flex;
-  flex: none;
-  height: 31px;
-  align-items: center;
-  gap: 3px;
-  padding: 3px var(--ui-space-3);
-  border-top: 1px solid var(--line-strong);
-  border-bottom: 1px solid var(--line-soft);
-  background: var(--surface-1);
-}
-.dock-tabbar button,
-:deep(.dock-tabs button) {
-  min-height: var(--ui-target-min);
-  padding: 0 var(--ui-space-2);
-  border: 1px solid transparent;
-  border-radius: var(--ui-radius-sm);
-  color: var(--text-muted);
-  background: transparent;
-}
-.dock-tabbar button[aria-selected="true"],
-:deep(.dock-tabs button[aria-selected="true"]) {
-  color: var(--text-primary);
-  border-color: var(--line-soft);
-  background: var(--surface-active);
 }
 .dock-resizer {
   position: relative;

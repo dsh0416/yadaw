@@ -574,9 +574,6 @@ function close(): void {
     @keydown="handleKeydown"
   >
     <header class="toolbar">
-      <div class="dock-tabs" role="tablist" aria-label="Lower dock">
-        <slot name="tabs" />
-      </div>
       <div class="tools" role="group" aria-label="Piano roll tools">
         <UiButton
           size="sm"

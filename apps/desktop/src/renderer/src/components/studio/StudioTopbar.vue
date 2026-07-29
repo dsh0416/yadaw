@@ -37,6 +37,8 @@ defineProps<{
   tempoMap: TempoMapSnapshot
   soundBrowserOpen: boolean
   mixerDockOpen: boolean
+  pianoRollDockOpen: boolean
+  pianoRollAvailable: boolean
   metronomeChannel: MixerChannelState | null
   masterChannel: MixerChannelState | null
   masterMeter: MixerChannelMeter
@@ -44,6 +46,7 @@ defineProps<{
 const emit = defineEmits<{
   toggleSoundBrowser: []
   toggleMixerDock: []
+  togglePianoRollDock: []
   toggleRecording: []
   togglePlayback: []
   goToStart: []
@@ -88,7 +91,13 @@ const emit = defineEmits<{
       >
         <PanelBottom :size="15" />
       </StudioControlButton>
-      <StudioControlButton label="Editors" unavailable compact-hidden>
+      <StudioControlButton
+        label="Piano Roll"
+        :pressed="pianoRollDockOpen"
+        :disabled="!pianoRollAvailable"
+        tone="accent"
+        @activate="emit('togglePianoRollDock')"
+      >
         <Pencil :size="15" />
       </StudioControlButton>
     </div>
