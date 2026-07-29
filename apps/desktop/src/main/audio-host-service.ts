@@ -470,60 +470,82 @@ export class AudioHostService {
       { length: pluginCount },
       (_, index) => `__yadaw-audio-benchmark-gain-${index}`
     )
-    await Promise.all(
-      pluginInstanceIds.map((id, slotOrder) =>
-        this.plugins.loadPlugin(
-          {
-            id,
-            channelId: "__yadaw-audio-benchmark",
-            role: "insert",
-            slotOrder,
-            classId: effect.classId,
-            descriptor: effect,
-            audioMode: "stereo",
-            enabled: true,
-            componentState: new Uint8Array(),
-            controllerState: new Uint8Array()
-          },
-          48_000
+    try {
+      // Wait for every load attempt to settle before continuing or cleaning up so a
+      // single failure cannot race with in-flight loads during unload.
+      const loaded = await Promise.allSettled(
+        pluginInstanceIds.map((id, slotOrder) =>
+          this.plugins.loadPlugin(
+            {
+              id,
+              channelId: "__yadaw-audio-benchmark",
+              role: "insert",
+              slotOrder,
+              classId: effect.classId,
+              descriptor: effect,
+              audioMode: "stereo",
+              enabled: true,
+              componentState: new Uint8Array(),
+              controllerState: new Uint8Array()
+            },
+            48_000
+          )
         )
       )
-    )
+      const loadFailure = loaded.find((result) => result.status === "rejected")
+      if (loadFailure?.status === "rejected") {
+        throw loadFailure.reason instanceof Error
+          ? loadFailure.reason
+          : new Error(String(loadFailure.reason))
+      }
 
-    const response = await this.request({
-      type: "run-audio-benchmark",
-      plugin_instance_ids: pluginInstanceIds
-    })
-    if (response.result.type !== "audio-benchmark" || !response.result.report) {
-      throw new Error("audio host returned an invalid audio benchmark response")
-    }
-    const report = response.result.report
-    return {
-      durationMs: report.duration_ms,
-      overallRealtimeFactor: report.overall_realtime_factor,
-      worstP99DeadlineUtilizationPercent: report.worst_p99_deadline_utilization_percent,
-      scenarios: report.scenarios.map((scenario) => ({
-        id: scenario.id,
-        label: scenario.label,
-        description: scenario.description,
-        sampleRate: scenario.sample_rate,
-        blockSize: scenario.block_size,
-        tracks: scenario.tracks,
-        buses: scenario.buses,
-        sends: scenario.sends,
-        plugins: scenario.plugins,
-        elapsedMs: scenario.elapsed_ms,
-        audioDurationMs: scenario.audio_duration_ms,
-        averageBlockMs: scenario.average_block_ms,
-        p95BlockMs: scenario.p95_block_ms,
-        p99BlockMs: scenario.p99_block_ms,
-        maxBlockMs: scenario.max_block_ms,
-        bufferBudgetMs: scenario.buffer_budget_ms,
-        p99DeadlineUtilizationPercent: scenario.p99_deadline_utilization_percent,
-        deadlineMisses: scenario.deadline_misses,
-        measuredBlocks: scenario.measured_blocks,
-        realtimeFactor: scenario.realtime_factor
-      }))
+      const response = await this.request({
+        type: "run-audio-benchmark",
+        plugin_instance_ids: pluginInstanceIds
+      })
+      if (response.result.type !== "audio-benchmark" || !response.result.report) {
+        throw new Error("audio host returned an invalid audio benchmark response")
+      }
+      const report = response.result.report
+      return {
+        durationMs: report.duration_ms,
+        overallRealtimeFactor: report.overall_realtime_factor,
+        worstP99DeadlineUtilizationPercent: report.worst_p99_deadline_utilization_percent,
+        scenarios: report.scenarios.map((scenario) => ({
+          id: scenario.id,
+          label: scenario.label,
+          description: scenario.description,
+          sampleRate: scenario.sample_rate,
+          blockSize: scenario.block_size,
+          tracks: scenario.tracks,
+          buses: scenario.buses,
+          sends: scenario.sends,
+          plugins: scenario.plugins,
+          elapsedMs: scenario.elapsed_ms,
+          audioDurationMs: scenario.audio_duration_ms,
+          averageBlockMs: scenario.average_block_ms,
+          p95BlockMs: scenario.p95_block_ms,
+          p99BlockMs: scenario.p99_block_ms,
+          maxBlockMs: scenario.max_block_ms,
+          bufferBudgetMs: scenario.buffer_budget_ms,
+          p99DeadlineUtilizationPercent: scenario.p99_deadline_utilization_percent,
+          deadlineMisses: scenario.deadline_misses,
+          measuredBlocks: scenario.measured_blocks,
+          realtimeFactor: scenario.realtime_factor
+        }))
+      }
+    } finally {
+      const unloaded = await Promise.allSettled(
+        pluginInstanceIds.map((id) => this.plugins.unloadPlugin(id))
+      )
+      for (const [index, result] of unloaded.entries()) {
+        if (result.status === "rejected") {
+          console.error(
+            `Could not unload audio benchmark VST3 instance ${pluginInstanceIds[index]}:`,
+            result.reason
+          )
+        }
+      }
     }
   }
 

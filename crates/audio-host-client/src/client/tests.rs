@@ -17,6 +17,20 @@ mod tests {
     }
 
     #[test]
+    fn run_audio_benchmark_uses_the_extended_request_deadline() {
+        assert_eq!(
+            request_deadline(&ControlCommand::RunAudioBenchmark {
+                plugin_instance_ids: Vec::new(),
+            }),
+            Duration::from_secs(15)
+        );
+        assert_eq!(
+            request_deadline(&ControlCommand::Ping),
+            Duration::from_secs(2)
+        );
+    }
+
+    #[test]
     fn transport_traffic_separates_inline_and_shared_packets() {
         let traffic = TransportTraffic::default();
         record_packet(
