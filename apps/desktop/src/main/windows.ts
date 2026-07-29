@@ -2,8 +2,8 @@ import { BrowserWindow } from "electron"
 import { join } from "node:path"
 import { deferDirtyProjectClose } from "./dirty-project-close"
 import type { ProjectService } from "./project-service"
+import { rendererDirectory } from "./runtime-paths"
 
-const rendererDirectory = join(import.meta.dirname, "../renderer")
 let projectService: ProjectService | null = null
 
 export function setWindowProjectService(service: ProjectService): void {
