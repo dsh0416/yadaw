@@ -112,7 +112,7 @@ runs:
       env:
         VST3_SDK_COMMIT: 9fad9770f2ae8542ab1a548a68c1ad1ac690abe0
       run: |
-        if [[ ! -d third_party/vst3sdk/.git ]]; then
+        if [[ ! -e third_party/vst3sdk/.git ]]; then
           git init third_party/vst3sdk
           git -C third_party/vst3sdk remote add \
             origin https://github.com/steinbergmedia/vst3sdk.git
@@ -132,7 +132,7 @@ runs:
       env:
         ARA_SDK_COMMIT: 0005c532bb03eb210e7bb490329fc6d7ba1792c7
       run: |
-        if ! git -C third_party/ARA_SDK rev-parse --git-dir >/dev/null 2>&1; then
+        if [[ ! -e third_party/ARA_SDK/.git ]]; then
           git init third_party/ARA_SDK
           git -C third_party/ARA_SDK remote add \
             origin https://github.com/Celemony/ARA_SDK.git
