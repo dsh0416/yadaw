@@ -48,6 +48,12 @@ function midiClipById(graph: MixerGraphSnapshot, id: string): MidiClipState {
   return clip
 }
 
+function midiNoteById(clip: MidiClipState, id: string): MidiClipState["notes"][number] {
+  const note = clip.notes.find((candidate) => candidate.id === id)
+  if (!note) throw new Error(`MIDI note '${id}' was not found in clip '${clip.id}'`)
+  return note
+}
+
 function movePluginInGraph(
   graph: MixerGraphSnapshot,
   pluginId: string,
@@ -202,6 +208,10 @@ export function inverseFor(graph: MixerGraphSnapshot, command: ProjectCommand): 
         pluginId: command.pluginId,
         plugin: pluginById(graph, command.pluginId)
       }
+    case "create-midi-source":
+      return { type: "delete-midi-source", source: structuredClone(command.source) }
+    case "delete-midi-source":
+      return { type: "create-midi-source", source: structuredClone(command.source) }
     case "create-midi-clip":
       return { type: "delete-midi-clip", clipId: command.clip.id }
     case "delete-midi-clip":
@@ -215,6 +225,46 @@ export function inverseFor(graph: MixerGraphSnapshot, command: ProjectCommand): 
         startTick: clip.startTick
       }
     }
+    case "update-midi-clip-range": {
+      const clip = midiClipById(graph, command.clipId)
+      return {
+        type: "update-midi-clip-range",
+        clipId: clip.id,
+        patch: patchFromKeys(clip, command.patch)
+      }
+    }
+    case "create-midi-notes":
+      return {
+        type: "delete-midi-notes",
+        clipId: command.clipId,
+        noteIds: command.notes.map((note) => note.id)
+      }
+    case "delete-midi-notes": {
+      const clip = midiClipById(graph, command.clipId)
+      return {
+        type: "create-midi-notes",
+        clipId: clip.id,
+        notes: command.noteIds.map((noteId) => structuredClone(midiNoteById(clip, noteId)))
+      }
+    }
+    case "update-midi-notes": {
+      const clip = midiClipById(graph, command.clipId)
+      return {
+        type: "update-midi-notes",
+        clipId: clip.id,
+        updates: command.updates.map(({ noteId, patch }) => ({
+          noteId,
+          patch: patchFromKeys(midiNoteById(clip, noteId), patch)
+        }))
+      }
+    }
+    case "rebase-midi-clip-content":
+      midiClipById(graph, command.clipId)
+      return {
+        type: "rebase-midi-clip-content",
+        clipId: command.clipId,
+        deltaTicks: -command.deltaTicks
+      }
     case "replace-tempo-map":
       return { type: "replace-tempo-map", tempoMap: structuredClone(graph.tempoMap) }
     case "replace-key-signature-map":
@@ -314,6 +364,9 @@ export function applyToGraph(
       next.plugins[index] = structuredClone(command.plugin)
       break
     }
+    case "create-midi-source":
+    case "delete-midi-source":
+      break
     case "create-midi-clip":
       next.midiClips.push(structuredClone(command.clip))
       break
@@ -324,6 +377,32 @@ export function applyToGraph(
       const clip = midiClipById(next, command.clipId)
       clip.trackId = command.trackId
       clip.startTick = command.startTick
+      break
+    }
+    case "update-midi-clip-range":
+      Object.assign(midiClipById(next, command.clipId), command.patch)
+      break
+    case "create-midi-notes":
+      midiClipById(next, command.clipId).notes.push(...structuredClone(command.notes))
+      break
+    case "delete-midi-notes": {
+      const clip = midiClipById(next, command.clipId)
+      const ids = new Set(command.noteIds)
+      for (const id of ids) midiNoteById(clip, id)
+      clip.notes = clip.notes.filter((note) => !ids.has(note.id))
+      break
+    }
+    case "update-midi-notes": {
+      const clip = midiClipById(next, command.clipId)
+      for (const update of command.updates) {
+        Object.assign(midiNoteById(clip, update.noteId), update.patch)
+      }
+      break
+    }
+    case "rebase-midi-clip-content": {
+      const clip = midiClipById(next, command.clipId)
+      for (const note of clip.notes) note.startTick += command.deltaTicks
+      for (const event of clip.events) event.tick += command.deltaTicks
       break
     }
     case "replace-tempo-map":
@@ -603,6 +682,8 @@ export function validateGraph(graph: MixerGraphSnapshot): void {
     previousKeyTick = event.tick
   }
   const midiClipIds = new Set<string>()
+  const midiNoteIds = new Set<string>()
+  const midiEventIds = new Set<string>()
   for (const clip of graph.midiClips) {
     if (!clip.id || midiClipIds.has(clip.id)) throw new Error("MIDI clip IDs must be unique")
     midiClipIds.add(clip.id)
@@ -621,6 +702,8 @@ export function validateGraph(graph: MixerGraphSnapshot): void {
       throw new Error("MIDI clip positions must use valid musical ticks")
     }
     for (const note of clip.notes) {
+      if (!note.id || midiNoteIds.has(note.id)) throw new Error("MIDI note IDs must be unique")
+      midiNoteIds.add(note.id)
       if (
         !Number.isSafeInteger(note.startTick) ||
         note.startTick < 0 ||
@@ -640,6 +723,13 @@ export function validateGraph(graph: MixerGraphSnapshot): void {
         note.releaseVelocity > 127
       ) {
         throw new Error("MIDI note contains invalid tick, channel, key, or velocity data")
+      }
+    }
+    for (const event of clip.events) {
+      if (!event.id || midiEventIds.has(event.id)) throw new Error("MIDI event IDs must be unique")
+      midiEventIds.add(event.id)
+      if (!Number.isSafeInteger(event.tick) || event.tick < 0) {
+        throw new Error("MIDI event ticks must use 1/3840-note integer resolution")
       }
     }
   }

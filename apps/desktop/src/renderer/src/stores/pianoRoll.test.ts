@@ -1,0 +1,53 @@
+import { createPinia, setActivePinia } from "pinia"
+import { beforeEach, describe, expect, it, vi } from "vitest"
+import { usePianoRollStore } from "./pianoRoll"
+
+describe("piano roll store", () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  it("opens the explicit arrangement selection and tracks an active clip", () => {
+    const store = usePianoRollStore()
+    store.selectArrangementClip("clip-1")
+    store.selectArrangementClip("clip-2", true)
+    store.openSelection("clip-2")
+
+    expect(store.openClipIds).toEqual(["clip-1", "clip-2"])
+    expect(store.activeClipId).toBe("clip-2")
+  })
+
+  it("maintains clip-qualified multi-note selection", () => {
+    const store = usePianoRollStore()
+    store.selectNote({ clipId: "clip-1", noteId: "note-1" })
+    store.selectNote({ clipId: "clip-2", noteId: "note-1" }, true)
+
+    expect(store.selectedNotes).toHaveLength(2)
+    expect(store.selectedNoteKeys).toEqual(new Set(["clip-1:note-1", "clip-2:note-1"]))
+  })
+
+  it("prunes deleted graph entities and falls back to the remaining active clip", () => {
+    const store = usePianoRollStore()
+    store.openClipIds = ["clip-1", "clip-2"]
+    store.activeClipId = "clip-1"
+    store.selectedNotes = [
+      { clipId: "clip-1", noteId: "gone" },
+      { clipId: "clip-2", noteId: "kept" }
+    ]
+
+    store.reconcile(new Set(["clip-2"]), new Set(["clip-2:kept"]))
+
+    expect(store.openClipIds).toEqual(["clip-2"])
+    expect(store.activeClipId).toBe("clip-2")
+    expect(store.selectedNotes).toEqual([{ clipId: "clip-2", noteId: "kept" }])
+  })
+
+  it("routes contextual Edit commands only while the editor owns focus", () => {
+    const store = usePianoRollStore()
+    const handler = vi.fn()
+    store.registerEditCommandHandler(handler)
+
+    expect(store.executeEditCommand("copy")).toBe(false)
+    store.editorFocused = true
+    expect(store.executeEditCommand("copy")).toBe(true)
+    expect(handler).toHaveBeenCalledWith("copy")
+  })
+})

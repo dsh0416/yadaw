@@ -69,6 +69,14 @@ export function timeSignatureAtTick(map: TempoMapSnapshot, tick: number): TimeSi
   return current
 }
 
+export function barLengthTicksAtTick(map: TempoMapSnapshot, tick: number): number {
+  const signature = timeSignatureAtTick(map, tick)
+  return Math.max(
+    1,
+    Math.round((signature.numerator * map.ticksPerQuarter * 4) / signature.denominator)
+  )
+}
+
 export function musicalPositionAtTick(
   map: TempoMapSnapshot,
   tick: number

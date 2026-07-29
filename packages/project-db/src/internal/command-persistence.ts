@@ -1,6 +1,8 @@
-import { eq, ne } from "drizzle-orm"
+import { and, eq, inArray, ne } from "drizzle-orm"
 import type { PgliteDatabase } from "drizzle-orm/pglite"
 import type {
+  MidiClipRangePatch,
+  MidiNotePatch,
   MixerChannelPatch,
   MixerSendPatch,
   PluginDescriptor,
@@ -12,6 +14,7 @@ import {
   midiClips,
   midiEvents,
   midiNotes,
+  midiSources,
   mixerChannels,
   mixerSends,
   pluginInstances,
@@ -78,6 +81,25 @@ function pluginPatch(patch: PluginInstancePatch): Partial<typeof pluginInstances
   if (patch.enabled !== undefined) result.enabled = patch.enabled
   if (patch.componentState !== undefined) result.componentState = patch.componentState
   if (patch.controllerState !== undefined) result.controllerState = patch.controllerState
+  return result
+}
+
+function midiClipRangePatch(patch: MidiClipRangePatch): Partial<typeof midiClips.$inferInsert> {
+  const result: Partial<typeof midiClips.$inferInsert> = {}
+  if (patch.startTick !== undefined) result.startTick = patch.startTick
+  if (patch.lengthTicks !== undefined) result.lengthTicks = patch.lengthTicks
+  if (patch.sourceOffsetTicks !== undefined) result.sourceOffsetTicks = patch.sourceOffsetTicks
+  return result
+}
+
+function midiNotePatch(patch: MidiNotePatch): Partial<typeof midiNotes.$inferInsert> {
+  const result: Partial<typeof midiNotes.$inferInsert> = {}
+  if (patch.startTick !== undefined) result.startTick = patch.startTick
+  if (patch.durationTicks !== undefined) result.durationTicks = patch.durationTicks
+  if (patch.channel !== undefined) result.channel = patch.channel
+  if (patch.key !== undefined) result.key = patch.key
+  if (patch.velocity !== undefined) result.velocity = patch.velocity
+  if (patch.releaseVelocity !== undefined) result.releaseVelocity = patch.releaseVelocity
   return result
 }
 
@@ -335,6 +357,12 @@ export async function applyProjectCommand(
       await tx.delete(pluginInstances).where(eq(pluginInstances.id, command.pluginId))
       await tx.insert(pluginInstances).values(pluginValue(command.plugin))
       return
+    case "create-midi-source":
+      await tx.insert(midiSources).values(command.source)
+      return
+    case "delete-midi-source":
+      await tx.delete(midiSources).where(eq(midiSources.id, command.source.id))
+      return
     case "create-midi-clip":
       await insertMidiClip(tx, command.clip)
       return
@@ -347,6 +375,71 @@ export async function applyProjectCommand(
         .set({ trackId: command.trackId, startTick: command.startTick })
         .where(eq(midiClips.id, command.clipId))
       return
+    case "update-midi-clip-range": {
+      const patch = midiClipRangePatch(command.patch)
+      if (Object.keys(patch).length > 0) {
+        await tx.update(midiClips).set(patch).where(eq(midiClips.id, command.clipId))
+      }
+      return
+    }
+    case "create-midi-notes":
+      if (command.notes.length > 0) {
+        await tx.insert(midiNotes).values(
+          command.notes.map((note) => ({
+            id: note.id,
+            clipId: command.clipId,
+            startTick: note.startTick,
+            durationTicks: note.durationTicks,
+            channel: note.channel,
+            key: note.key,
+            velocity: note.velocity,
+            releaseVelocity: note.releaseVelocity
+          }))
+        )
+      }
+      return
+    case "delete-midi-notes":
+      if (command.noteIds.length > 0) {
+        await tx
+          .delete(midiNotes)
+          .where(and(eq(midiNotes.clipId, command.clipId), inArray(midiNotes.id, command.noteIds)))
+      }
+      return
+    case "update-midi-notes":
+      for (const update of command.updates) {
+        const patch = midiNotePatch(update.patch)
+        if (Object.keys(patch).length === 0) continue
+        await tx
+          .update(midiNotes)
+          .set(patch)
+          .where(and(eq(midiNotes.clipId, command.clipId), eq(midiNotes.id, update.noteId)))
+      }
+      return
+    case "rebase-midi-clip-content": {
+      const [notes, events] = await Promise.all([
+        tx
+          .select({ id: midiNotes.id, startTick: midiNotes.startTick })
+          .from(midiNotes)
+          .where(eq(midiNotes.clipId, command.clipId)),
+        tx
+          .select({ id: midiEvents.id, tick: midiEvents.tick })
+          .from(midiEvents)
+          .where(eq(midiEvents.clipId, command.clipId))
+      ])
+      for (const note of notes) {
+        await tx
+          .update(midiNotes)
+          .set({ startTick: note.startTick + command.deltaTicks })
+          .where(eq(midiNotes.id, note.id))
+      }
+      for (const event of events) {
+        await tx
+          .update(midiEvents)
+          .set({ tick: event.tick + command.deltaTicks })
+          .where(eq(midiEvents.id, event.id))
+      }
+      return
+    }
     case "replace-tempo-map": {
       const initialTempo = command.tempoMap.tempoEvents[0]
       const initialSignature = command.tempoMap.timeSignatureEvents[0]
@@ -449,6 +542,40 @@ export async function assertProjectCommandAllowed(
         .limit(1)
       if (rows[0]?.systemRole !== null && rows[0]?.systemRole !== undefined) {
         throw new Error("System channels cannot contain clips")
+      }
+      return
+    }
+    case "create-midi-source":
+    case "delete-midi-source":
+      if (
+        !command.source.id ||
+        command.source.name.trim().length === 0 ||
+        !command.source.contentHash ||
+        !(command.source.rawBytes instanceof Uint8Array)
+      ) {
+        throw new Error("MIDI source metadata is invalid")
+      }
+      return
+    case "update-midi-clip-range":
+    case "create-midi-notes":
+    case "delete-midi-notes":
+    case "update-midi-notes":
+    case "rebase-midi-clip-content": {
+      const rows = await tx
+        .select({ clipId: midiClips.id, systemRole: mixerChannels.systemRole })
+        .from(midiClips)
+        .innerJoin(mixerChannels, eq(mixerChannels.id, midiClips.trackId))
+        .where(eq(midiClips.id, command.clipId))
+        .limit(1)
+      if (!rows[0]) throw new Error(`MIDI clip '${command.clipId}' was not found`)
+      if (rows[0].systemRole !== null) {
+        throw new Error("System channels cannot contain editable MIDI clips")
+      }
+      if (
+        command.type === "rebase-midi-clip-content" &&
+        !Number.isSafeInteger(command.deltaTicks)
+      ) {
+        throw new Error("MIDI content offsets require 1/3840-note integer resolution")
       }
       return
     }

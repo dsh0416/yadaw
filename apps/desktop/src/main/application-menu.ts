@@ -59,10 +59,10 @@ function macApplicationMenu(): MenuItemConstructorOptions[] {
         commandItem(t("menu.undo"), "edit.undo", "Command+Z"),
         commandItem(t("menu.redo"), "edit.redo", "Command+Shift+Z"),
         { type: "separator" },
-        { role: "cut" },
-        { role: "copy" },
-        { role: "paste" },
-        { role: "selectAll" }
+        commandItem(t("menu.cut"), "edit.cut", "Command+X"),
+        commandItem(t("menu.copy"), "edit.copy", "Command+C"),
+        commandItem(t("menu.paste"), "edit.paste", "Command+V"),
+        commandItem(t("menu.selectAll"), "edit.select-all", "Command+A")
       ]
     },
     {

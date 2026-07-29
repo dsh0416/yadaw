@@ -6,6 +6,9 @@ import { useProjectStore } from "../../stores/project"
 import { useTransportStore } from "../../stores/transport"
 import { useArrangementViewStore } from "../../stores/arrangementView"
 import { useMixerStore } from "../../stores/mixer"
+import { usePianoRollStore } from "../../stores/pianoRoll"
+import { useStudioWorkspaceStore } from "../../stores/studioWorkspace"
+import type { MidiClipState, MidiSourceState, ProjectCommand } from "@yadaw/contracts"
 import type { TimelineClip } from "../../stores/transport"
 import ArrangementTrack from "./ArrangementTrack.vue"
 import ArrangementZoomControls from "./ArrangementZoomControls.vue"
@@ -14,7 +17,7 @@ import TimelineRuler from "./TimelineRuler.vue"
 import TrackQuickControls from "./TrackQuickControls.vue"
 import TrackHeightResizeHandle from "./TrackHeightResizeHandle.vue"
 import MidiArrangementTrack from "./MidiArrangementTrack.vue"
-import { tickToSeconds } from "../../utils/tempoMap"
+import { barLengthTicksAtTick, secondsToTick, tickToSeconds } from "../../utils/tempoMap"
 import { MAJOR_KEY_SIGNATURE_CHOICES, MINOR_KEY_SIGNATURE_CHOICES } from "../../utils/keySignatures"
 import GlobalLaneHeader from "./global-lanes/GlobalLaneHeader.vue"
 import GlobalEventLaneHeader from "./global-lanes/GlobalEventLaneHeader.vue"
@@ -25,6 +28,7 @@ import { secondsToTimelineX } from "../../utils/timelineCoordinates"
 import { useArrangementViewport } from "./useArrangementViewport"
 import { useArrangementClipDrag } from "./useArrangementClipDrag"
 import { useGlobalLaneSelection } from "./useGlobalLaneSelection"
+import { snapTicks } from "../../utils/pianoRoll"
 
 const props = defineProps<{
   recordingId: string | null
@@ -36,6 +40,8 @@ const projectStore = useProjectStore()
 const transportStore = useTransportStore()
 const viewStore = useArrangementViewStore()
 const mixerStore = useMixerStore()
+const pianoRollStore = usePianoRollStore()
+const workspaceStore = useStudioWorkspaceStore()
 const { session } = storeToRefs(projectStore)
 const {
   clips,
@@ -193,7 +199,12 @@ watch(
 )
 function handleSeek(seconds: number): void {
   transportStore.clearSelection()
+  pianoRollStore.clearArrangementSelection()
   transportStore.seek(seconds)
+}
+function selectAudioClip(clipId: string): void {
+  pianoRollStore.clearArrangementSelection()
+  transportStore.selectClip(clipId)
 }
 function handleWaveformFrameCount(frameCount: number, sampleRate: number): void {
   if (sampleRate > 0) liveDurationSeconds.value = frameCount / sampleRate
@@ -226,11 +237,61 @@ function handleTrackKeydown(event: KeyboardEvent, index: number): void {
 }
 
 function removeMidiClip(clipId: string): void {
-  void mixerStore.execute({ type: "delete-midi-clip", clipId })
+  void mixerStore.execute({ type: "delete-midi-clip", clipId }).then(() => {
+    pianoRollStore.clearArrangementSelection()
+  })
 }
 
 function moveMidiClip(clipId: string, trackId: string, startTick: number): void {
   void mixerStore.execute({ type: "move-midi-clip", clipId, trackId, startTick })
+}
+
+function selectMidiClip(clipId: string, additive: boolean): void {
+  transportStore.clearSelection()
+  pianoRollStore.selectArrangementClip(clipId, additive)
+}
+
+function openMidiClip(clipId: string, selectedClipIds: string[]): void {
+  pianoRollStore.openClipSet(selectedClipIds, clipId)
+  workspaceStore.openPianoRollDock()
+}
+
+function createMidiClip(trackId: string, requestedStartTick: number): void {
+  const sourceId = crypto.randomUUID()
+  const clipId = crypto.randomUUID()
+  const startTick = snapTicks(requestedStartTick, pianoRollStore.snap)
+  const name = `MIDI Clip ${mixerStore.graph.midiClips.length + 1}`
+  const source: MidiSourceState = {
+    id: sourceId,
+    name,
+    contentHash: `blank:${sourceId}`,
+    rawBytes: new Uint8Array()
+  }
+  const clip: MidiClipState = {
+    id: clipId,
+    sourceId,
+    trackId,
+    name,
+    startTick,
+    lengthTicks: barLengthTicksAtTick(mixerStore.graph.tempoMap, startTick),
+    sourceOffsetTicks: 0,
+    notes: [],
+    events: []
+  }
+  const command: ProjectCommand = {
+    type: "batch",
+    commands: [
+      { type: "create-midi-source", source },
+      { type: "create-midi-clip", clip }
+    ]
+  }
+  void mixerStore.execute(command).then((created) => {
+    if (!created) return
+    transportStore.clearSelection()
+    pianoRollStore.selectArrangementClip(clipId)
+    pianoRollStore.openClipSet([clipId], clipId)
+    workspaceStore.openPianoRollDock()
+  })
 }
 </script>
 
@@ -441,7 +502,7 @@ function moveMidiClip(clipId: string, trackId: string, startTick: number): void 
               :selected-clip-id="selectedClipId"
               :live-clip="liveClips.find((clip) => clip.trackId === track.id) ?? null"
               @seek="handleSeek"
-              @select-clip="transportStore.selectClip"
+              @select-clip="selectAudioClip"
               @waveform-frame-count="handleWaveformFrameCount"
               @clip-drag-start="handleClipDragStart"
               @clip-drag-end="handleClipDragEnd"
@@ -455,8 +516,13 @@ function moveMidiClip(clipId: string, trackId: string, startTick: number): void 
               :content-width="contentWidth"
               :pixels-per-quarter="pixelsPerQuarter"
               :track-height="height"
+              :selected-clip-ids="pianoRollStore.arrangementClipIds"
+              :keyboard-insertion-tick="secondsToTick(mixerStore.graph.tempoMap, playheadSeconds)"
               @move="moveMidiClip"
               @remove="removeMidiClip"
+              @select="selectMidiClip"
+              @open="openMidiClip"
+              @create="createMidiClip"
             />
           </template>
           <div

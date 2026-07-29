@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import type { TempoMapSnapshot } from "@yadaw/contracts"
 import {
+  barLengthTicksAtTick,
   barTicksWithinSeconds,
   beatTicksThroughTick,
   musicalPositionAtTick,
@@ -46,6 +47,8 @@ describe("tempo map", () => {
       beat: 2,
       tick: 0
     })
+    expect(barLengthTicksAtTick(map, 0)).toBe(3_840)
+    expect(barLengthTicksAtTick(map, 4_800)).toBe(2_880)
   })
 
   it("replaces the active event without inserting a marker at the playhead", () => {

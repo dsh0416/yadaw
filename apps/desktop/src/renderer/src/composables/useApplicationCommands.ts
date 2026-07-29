@@ -10,6 +10,7 @@ import { useApplicationWindowStore } from "../stores/applicationWindow"
 import { useMixerStore } from "../stores/mixer"
 import { useProjectStore } from "../stores/project"
 import { useStudioWorkflowStore } from "../stores/studioWorkflow"
+import { usePianoRollStore } from "../stores/pianoRoll"
 
 function defaultProject(name: string): CreateProjectRequest {
   return {
@@ -34,6 +35,7 @@ export function useApplicationCommands() {
   const projectStore = useProjectStore()
   const mixerStore = useMixerStore()
   const studioWorkflowStore = useStudioWorkflowStore()
+  const pianoRollStore = usePianoRollStore()
   const benchmarkStore = useAudioBenchmarkStore()
   const compiledEffectGraphStore = useCompiledEffectGraphStore()
   const applicationWindowStore = useApplicationWindowStore()
@@ -206,9 +208,13 @@ export function useApplicationCommands() {
       case "edit.cut":
       case "edit.copy":
       case "edit.paste":
-      case "edit.select-all":
-        await applicationWindowStore.execute(command)
+      case "edit.select-all": {
+        const handled = pianoRollStore.executeEditCommand(
+          command.slice("edit.".length) as "cut" | "copy" | "paste" | "select-all"
+        )
+        if (!handled) await applicationWindowStore.execute(command)
         break
+      }
       case "application.preferences":
         await router.push({ name: "system-settings" })
         break

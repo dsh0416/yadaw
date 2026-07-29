@@ -6,6 +6,7 @@ import { useProjectStore } from "./project"
 import { useRecordingStore } from "./recording"
 import { useTransportStore } from "./transport"
 import { useWaveformStore } from "./waveform"
+import { usePianoRollStore } from "./pianoRoll"
 
 export const useStudioWorkflowStore = defineStore("studio-workflow", () => {
   const projectStore = useProjectStore()
@@ -14,6 +15,7 @@ export const useStudioWorkflowStore = defineStore("studio-workflow", () => {
   const transportStore = useTransportStore()
   const arrangementViewStore = useArrangementViewStore()
   const waveformStore = useWaveformStore()
+  const pianoRollStore = usePianoRollStore()
 
   async function startRecording(): Promise<boolean> {
     if (recordingStore.lifecycle.status !== "idle") return false
@@ -89,6 +91,7 @@ export const useStudioWorkflowStore = defineStore("studio-workflow", () => {
     mixerStore.reset()
     arrangementViewStore.reset()
     waveformStore.clear()
+    pianoRollStore.reset()
     return true
   }
 
