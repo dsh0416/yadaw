@@ -36,7 +36,16 @@ impl NativeMixerRuntime {
             }
             EngineCommand::Transport(action, position) => match action {
                 TransportAction::Play => {
-                    let position = self.transport.position_frames.load(Ordering::Relaxed);
+                    let mut position = self.transport.position_frames.load(Ordering::Relaxed);
+                    // Auto-stop leaves the playhead at/past the finite content tail.
+                    // Restart from the beginning so Play after song-end is not a no-op.
+                    if self.content_end_frame > 0
+                        && !self.has_infinite_tail
+                        && self.tail_end_frame.is_some_and(|end| position >= end)
+                    {
+                        position = 0;
+                        self.transport.position_frames.store(0, Ordering::Relaxed);
+                    }
                     self.chase_notes(position);
                     self.transport
                         .state
