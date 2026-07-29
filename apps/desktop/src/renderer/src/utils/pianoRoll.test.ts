@@ -5,6 +5,7 @@ import {
   noteGlobalStart,
   planCreatedNotes,
   planExistingNoteEdits,
+  quantizeNoteStarts,
   snapTicks
 } from "./pianoRoll"
 
@@ -94,5 +95,24 @@ describe("piano roll timing", () => {
         })
       ]
     })
+  })
+
+  it("quantizes note starts to the snap grid and drops already-aligned notes", () => {
+    const quantized = quantizeNoteStarts(
+      [
+        { noteId: "note-1", globalStartTick: 1_060 },
+        { noteId: "note-2", globalStartTick: 960 },
+        { noteId: "note-3", globalStartTick: 1_339 }
+      ],
+      "1/16"
+    )
+    expect(quantized).toEqual([
+      { noteId: "note-1", globalStartTick: 960 },
+      { noteId: "note-3", globalStartTick: 1_440 }
+    ])
+  })
+
+  it("does not quantize when snapping is off", () => {
+    expect(quantizeNoteStarts([{ globalStartTick: 1_060.4 }], "off")).toEqual([])
   })
 })

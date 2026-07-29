@@ -38,6 +38,16 @@ export function snapStep(snap: PianoRollSnap): number {
   return PIANO_ROLL_SNAP_OPTIONS.find((option) => option.value === snap)?.ticks ?? 1
 }
 
+export function quantizeNoteStarts<T extends { globalStartTick: number }>(
+  items: readonly T[],
+  snap: PianoRollSnap
+): T[] {
+  if (snap === "off") return []
+  return items
+    .map((item) => ({ ...item, globalStartTick: snapTicks(item.globalStartTick, snap) }))
+    .filter((item, index) => item.globalStartTick !== items[index]!.globalStartTick)
+}
+
 export function midiNoteName(key: number): string {
   const names = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"]
   return `${names[((key % 12) + 12) % 12]}${Math.floor(key / 12) - 1}`
