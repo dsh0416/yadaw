@@ -7,7 +7,7 @@ const plugin = {
 } as PluginDescriptor
 
 describe("canReuseCachedBundle", () => {
-  it("bypasses the fingerprint cache for a forced startup scan", () => {
+  it("reuses unchanged bundles unless a forced rescan is requested", () => {
     expect(
       canReuseCachedBundle({
         force: false,
@@ -16,6 +16,14 @@ describe("canReuseCachedBundle", () => {
         previousPlugins: [plugin]
       })
     ).toBe(true)
+    expect(
+      canReuseCachedBundle({
+        force: false,
+        retryQuarantined: false,
+        fingerprintMatches: false,
+        previousPlugins: [plugin]
+      })
+    ).toBe(false)
     expect(
       canReuseCachedBundle({
         force: true,

@@ -119,7 +119,8 @@ export const usePluginStore = defineStore("plugins", () => {
   async function scan(retryQuarantined = false): Promise<void> {
     error.value = ""
     try {
-      catalog.value = await window.yadaw.scanPlugins({ retryQuarantined })
+      // Manual rescans always re-probe; launch-time scanning reuses fingerprints.
+      catalog.value = await window.yadaw.scanPlugins({ force: true, retryQuarantined })
     } catch (reason) {
       error.value = reason instanceof Error ? reason.message : "Plugin scan failed."
     }

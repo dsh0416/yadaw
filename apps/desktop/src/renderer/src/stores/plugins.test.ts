@@ -111,6 +111,25 @@ describe("plugin store", () => {
     setActivePinia(createPinia())
   })
 
+  it("forces a full re-probe when the user requests a manual rescan", async () => {
+    const catalog = {
+      scannerVersion: 3,
+      scanning: false,
+      scannedAt: 1,
+      plugins: [effectDescriptor]
+    }
+    window.yadaw.scanPlugins = vi.fn().mockResolvedValue(catalog)
+    const store = usePluginStore()
+
+    await store.scan(true)
+
+    expect(window.yadaw.scanPlugins).toHaveBeenCalledWith({
+      force: true,
+      retryQuarantined: true
+    })
+    expect(store.catalog.plugins).toEqual([effectDescriptor])
+  })
+
   it("reports the helper editor state without creating an Electron parameter panel", async () => {
     window.yadaw.getPluginParameters = vi.fn()
     window.yadaw.openPluginEditor = vi.fn().mockResolvedValue({
