@@ -2,7 +2,7 @@ import { app } from "electron"
 import type { IpcMainInvokeEvent } from "electron"
 import { statfs } from "node:fs/promises"
 import { cpus, freemem, totalmem } from "node:os"
-import { join } from "node:path"
+import { isAbsolute, join, relative } from "node:path"
 import { fileURLToPath } from "node:url"
 import { APPLICATION_WINDOW_COMMAND_IDS, AUDIO_BACKENDS } from "@yadaw/contracts"
 import type {
@@ -23,8 +23,7 @@ import type {
 import { isAppLocale } from "../../shared/i18n"
 import type { ApplicationSettingsStore } from "../application-settings"
 import type { AudioHostService } from "../audio-host-service"
-
-const rendererDirectory = join(import.meta.dirname, "../../renderer")
+import { rendererDirectory } from "../runtime-paths"
 
 interface CpuTicks {
   idle: number
@@ -233,7 +232,13 @@ export function assertTrustedSender(event: IpcMainInvokeEvent): void {
 
   if (senderUrl.protocol === "file:") {
     const senderPath = fileURLToPath(senderUrl)
-    if (senderPath.startsWith(rendererDirectory)) {
+    const relativeSenderPath = relative(rendererDirectory, senderPath)
+    if (
+      relativeSenderPath &&
+      relativeSenderPath !== ".." &&
+      !relativeSenderPath.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`) &&
+      !isAbsolute(relativeSenderPath)
+    ) {
       return
     }
   }
