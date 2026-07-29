@@ -33,7 +33,9 @@ describe("MidiArrangementTrack", () => {
         pixelsPerQuarter: 120,
         trackHeight: 80,
         selectedClipIds: ["clip-1", "clip-2"],
-        keyboardInsertionTick: 1_920
+        keyboardInsertionTick: 1_920,
+        dragPreview: null,
+        draggingClipId: null
       }
     })
     const renderedClip = wrapper.get('button[aria-label="Verse, MIDI clip"]')
@@ -58,7 +60,9 @@ describe("MidiArrangementTrack", () => {
         pixelsPerQuarter: 120,
         trackHeight: 80,
         selectedClipIds: [],
-        keyboardInsertionTick: 1_920
+        keyboardInsertionTick: 1_920,
+        dragPreview: null,
+        draggingClipId: null
       }
     })
     const lane = wrapper.get<HTMLElement>(".midi-track")
@@ -74,5 +78,32 @@ describe("MidiArrangementTrack", () => {
       ["instrument-1", 960],
       ["instrument-1", 1_920]
     ])
+  })
+
+  it("renders a live snapped drag preview and fades the source clip", async () => {
+    const preview = { ...clip, trackId: "instrument-2", startTick: 1_920 }
+    const wrapper = mount(MidiArrangementTrack, {
+      props: {
+        trackId: "instrument-2",
+        trackColor: "#67D9E7",
+        clips: [clip],
+        tempoMap,
+        contentWidth: 1_200,
+        pixelsPerQuarter: 120,
+        trackHeight: 80,
+        selectedClipIds: [],
+        keyboardInsertionTick: 0,
+        dragPreview: preview,
+        draggingClipId: "clip-1"
+      }
+    })
+
+    expect(wrapper.get(".midi-clip").classes()).toContain("dragging")
+    expect(
+      wrapper.get<HTMLElement>('[data-testid="midi-clip-drop-preview"]').element.style.left
+    ).toBe("240px")
+    expect(
+      wrapper.get<HTMLElement>('[data-testid="midi-clip-drop-preview"]').element.style.width
+    ).toBe("120px")
   })
 })

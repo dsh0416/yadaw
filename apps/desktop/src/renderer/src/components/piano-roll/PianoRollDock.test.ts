@@ -77,6 +77,9 @@ describe("PianoRollDock", () => {
     const wrapper = mount(PianoRollDock, { global: { plugins: [pinia] } })
 
     expect(wrapper.text()).toContain("Resolution 1/3840 note")
+    expect(wrapper.findAll(".pitch-row")).toHaveLength(128)
+    expect(wrapper.get('.pitch-row[data-key="61"]').classes()).toContain("black")
+    expect(wrapper.get('.pitch-row[data-key="60"]').classes()).not.toContain("black")
     expect(wrapper.get('button[aria-label^="C4, start 960"]').attributes("aria-pressed")).toBe(
       "false"
     )
@@ -136,6 +139,89 @@ describe("PianoRollDock", () => {
         key: 60
       })
     }
+
+    wrapper.unmount()
+  })
+
+  it("previews note movement and resizing before committing on pointer release", async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const mixer = useMixerStore()
+    mixer.hydrate(graph)
+    const pianoRoll = usePianoRollStore()
+    pianoRoll.selectArrangementClip("clip-1")
+    pianoRoll.openSelection("clip-1")
+    const execute = vi.spyOn(mixer, "execute").mockResolvedValue(true)
+    const wrapper = mount(PianoRollDock, { global: { plugins: [pinia] } })
+    const note = wrapper.get<HTMLElement>("button.note")
+
+    await note.trigger("pointerdown", { pointerId: 1, clientX: 100, clientY: 100 })
+    await note.trigger("pointermove", { pointerId: 1, clientX: 130, clientY: 82 })
+
+    expect(note.element.style.left).toBe("150px")
+    expect(note.element.style.top).toBe("1189px")
+    expect(note.classes()).toContain("previewing")
+    expect(execute).not.toHaveBeenCalled()
+
+    await note.trigger("pointerup", { pointerId: 1, clientX: 130, clientY: 82 })
+    await flushPromises()
+    expect(execute).toHaveBeenCalledWith({
+      type: "update-midi-notes",
+      clipId: "clip-1",
+      updates: [
+        {
+          noteId: "note-1",
+          patch: { key: 61, startTick: 240, durationTicks: 240 }
+        }
+      ]
+    } satisfies ProjectCommand)
+
+    execute.mockClear()
+    const rightHandle = wrapper.get<HTMLElement>(".resize-handle.right")
+    await rightHandle.trigger("pointerdown", { pointerId: 2, clientX: 100, clientY: 100 })
+    await rightHandle.trigger("pointermove", { pointerId: 2, clientX: 130, clientY: 100 })
+
+    expect(note.element.style.width).toBe("60px")
+    expect(execute).not.toHaveBeenCalled()
+
+    await rightHandle.trigger("pointerup", { pointerId: 2, clientX: 130, clientY: 100 })
+    await flushPromises()
+    expect(execute).toHaveBeenCalledWith({
+      type: "update-midi-notes",
+      clipId: "clip-1",
+      updates: [{ noteId: "note-1", patch: { startTick: 0, durationTicks: 480 } }]
+    } satisfies ProjectCommand)
+
+    execute.mockClear()
+    const leftHandle = wrapper.get<HTMLElement>(".resize-handle.left")
+    const clipRange = wrapper.get<HTMLElement>(".clip-range")
+    await leftHandle.trigger("pointerdown", { pointerId: 3, clientX: 100, clientY: 100 })
+    await leftHandle.trigger("pointermove", { pointerId: 3, clientX: 70, clientY: 100 })
+
+    expect(note.element.style.left).toBe("90px")
+    expect(note.element.style.width).toBe("60px")
+    expect(clipRange.element.style.left).toBe("90px")
+    expect(clipRange.element.style.width).toBe("150px")
+    expect(execute).not.toHaveBeenCalled()
+
+    await leftHandle.trigger("pointerup", { pointerId: 3, clientX: 70, clientY: 100 })
+    await flushPromises()
+    expect(execute).toHaveBeenCalledWith({
+      type: "batch",
+      commands: [
+        { type: "rebase-midi-clip-content", clipId: "clip-1", deltaTicks: 240 },
+        {
+          type: "update-midi-clip-range",
+          clipId: "clip-1",
+          patch: { startTick: 720, lengthTicks: 1_200, sourceOffsetTicks: 0 }
+        },
+        {
+          type: "update-midi-notes",
+          clipId: "clip-1",
+          updates: [{ noteId: "note-1", patch: { startTick: 0, durationTicks: 480 } }]
+        }
+      ]
+    } satisfies ProjectCommand)
 
     wrapper.unmount()
   })

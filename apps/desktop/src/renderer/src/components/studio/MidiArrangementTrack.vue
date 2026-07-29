@@ -14,19 +14,23 @@ const props = defineProps<{
   trackHeight: number
   selectedClipIds: string[]
   keyboardInsertionTick: number
+  dragPreview: MidiClipState | null
+  draggingClipId: string | null
 }>()
 
 const emit = defineEmits<{
-  move: [clipId: string, trackId: string, startTick: number]
   remove: [clipId: string]
   select: [clipId: string, additive: boolean]
   open: [clipId: string, selectedClipIds: string[]]
   create: [trackId: string, startTick: number]
+  clipDragStart: [clipId: string, offsetPixels: number]
+  clipDragEnd: []
 }>()
 
 const style = computed(() => ({
   width: `${props.contentWidth}px`,
-  height: `${props.trackHeight}px`
+  height: `${props.trackHeight}px`,
+  "--clip-color": props.trackColor
 }))
 const maximumTick = computed(() =>
   timelineXToTick(props.tempoMap, props.contentWidth, props.pixelsPerQuarter)
@@ -41,6 +45,16 @@ const beatLines = computed(() =>
     (tick) => (tick / props.tempoMap.ticksPerQuarter) * props.pixelsPerQuarter
   )
 )
+const dragPreviewStyle = computed(() => {
+  if (!props.dragPreview) return {}
+  const pixelsPerTick = props.pixelsPerQuarter / props.tempoMap.ticksPerQuarter
+  return {
+    left: `${props.dragPreview.startTick * pixelsPerTick}px`,
+    width: `${Math.max(9, props.dragPreview.lengthTicks * pixelsPerTick)}px`,
+    borderColor: props.trackColor,
+    "--clip-color": props.trackColor
+  }
+})
 
 function clipStyle(clip: MidiClipState) {
   const pixelsPerTick = props.pixelsPerQuarter / props.tempoMap.ticksPerQuarter
@@ -87,18 +101,8 @@ function openClip(clipId: string): void {
 function startDrag(event: DragEvent, clip: MidiClipState): void {
   event.dataTransfer?.setData("application/x-yadaw-midi-clip", clip.id)
   if (event.dataTransfer) event.dataTransfer.effectAllowed = "move"
-}
-
-function dropClip(event: DragEvent): void {
-  const clipId = event.dataTransfer?.getData("application/x-yadaw-midi-clip")
-  if (!clipId) return
   const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect()
-  const tick = timelineXToTick(
-    props.tempoMap,
-    Math.max(0, event.clientX - bounds.left),
-    props.pixelsPerQuarter
-  )
-  emit("move", clipId, props.trackId, tick)
+  emit("clipDragStart", clip.id, Math.max(0, Math.min(bounds.width, event.clientX - bounds.left)))
 }
 
 function createClipAtPointer(event: MouseEvent): void {
@@ -114,18 +118,18 @@ function createClipAtPointer(event: MouseEvent): void {
 
 <template>
   <div
-    class="midi-track"
+    :class="['midi-track', { 'drag-target': dragPreview }]"
     :style="style"
     :data-track-id="trackId"
     data-track-kind="instrument"
     tabindex="0"
     aria-label="Instrument lane; double-click empty space or press Enter to create a MIDI clip"
-    @dragover.prevent
-    @drop.prevent="dropClip"
     @dblclick.self="createClipAtPointer"
     @keydown.enter.self="emit('create', trackId, keyboardInsertionTick)"
   >
-    <span v-if="clips.length === 0" class="empty-hint">Double-click to create MIDI clip</span>
+    <span v-if="clips.length === 0 && !dragPreview" class="empty-hint">
+      Double-click to create MIDI clip
+    </span>
     <i
       v-for="(left, index) in beatLines"
       :key="`beat-${index}`"
@@ -141,7 +145,7 @@ function createClipAtPointer(event: MouseEvent): void {
     <button
       v-for="clip in clips"
       :key="clip.id"
-      class="midi-clip"
+      :class="['midi-clip', { dragging: clip.id === draggingClipId }]"
       draggable="true"
       :style="clipStyle(clip)"
       :aria-label="`${clip.name}, MIDI clip`"
@@ -150,6 +154,7 @@ function createClipAtPointer(event: MouseEvent): void {
       @click.stop="emit('select', clip.id, $event.ctrlKey || $event.metaKey)"
       @dblclick.stop="openClip(clip.id)"
       @dragstart="startDrag($event, clip)"
+      @dragend="emit('clipDragEnd')"
       @keydown="handleKeydown($event, clip)"
     >
       <strong>{{ clip.name }}</strong>
@@ -160,6 +165,21 @@ function createClipAtPointer(event: MouseEvent): void {
         :style="noteStyle(clip, note)"
       />
     </button>
+    <div
+      v-if="dragPreview"
+      class="midi-clip-drop-preview"
+      data-testid="midi-clip-drop-preview"
+      :style="dragPreviewStyle"
+      aria-hidden="true"
+    >
+      <strong>{{ dragPreview.name }}</strong>
+      <span
+        v-for="note in dragPreview.notes"
+        :key="note.id"
+        class="midi-note"
+        :style="noteStyle(dragPreview, note)"
+      />
+    </div>
   </div>
 </template>
 
@@ -173,6 +193,9 @@ function createClipAtPointer(event: MouseEvent): void {
 .midi-track:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: -2px;
+}
+.midi-track.drag-target {
+  background: color-mix(in srgb, var(--clip-color, var(--accent)) 8%, var(--daw-lane));
 }
 .empty-hint {
   position: absolute;
@@ -214,6 +237,9 @@ function createClipAtPointer(event: MouseEvent): void {
 .midi-clip:active {
   cursor: grabbing;
 }
+.midi-clip.dragging {
+  opacity: 0.28;
+}
 .midi-clip:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 1px;
@@ -223,6 +249,31 @@ function createClipAtPointer(event: MouseEvent): void {
   outline-offset: -2px;
 }
 .midi-clip strong {
+  position: relative;
+  z-index: var(--ui-z-local-raised);
+  display: block;
+  overflow: hidden;
+  font: var(--ui-type-weight-bold) var(--ui-type-size-caption) var(--ui-type-family-data);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.midi-clip-drop-preview {
+  position: absolute;
+  z-index: var(--ui-z-local-sticky);
+  top: 5px;
+  bottom: 5px;
+  overflow: hidden;
+  min-width: 9px;
+  padding: 4px 5px;
+  border: 1px solid;
+  border-radius: 3px;
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--clip-color) 32%, var(--surface-sunken));
+  box-shadow: var(--ui-focus-ring);
+  opacity: 0.92;
+  pointer-events: none;
+}
+.midi-clip-drop-preview strong {
   position: relative;
   z-index: var(--ui-z-local-raised);
   display: block;

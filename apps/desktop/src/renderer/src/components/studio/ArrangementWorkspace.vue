@@ -29,6 +29,7 @@ import { useArrangementViewport } from "./useArrangementViewport"
 import { useArrangementClipDrag } from "./useArrangementClipDrag"
 import { useGlobalLaneSelection } from "./useGlobalLaneSelection"
 import { snapTicks } from "../../utils/pianoRoll"
+import { useMidiClipDrag } from "./useMidiClipDrag"
 
 const props = defineProps<{
   recordingId: string | null
@@ -42,6 +43,7 @@ const viewStore = useArrangementViewStore()
 const mixerStore = useMixerStore()
 const pianoRollStore = usePianoRollStore()
 const workspaceStore = useStudioWorkspaceStore()
+const { snap: pianoRollSnap } = storeToRefs(pianoRollStore)
 const { session } = storeToRefs(projectStore)
 const {
   clips,
@@ -148,6 +150,7 @@ const {
   zoomAmplitude: viewStore.zoomAmplitude
 })
 const {
+  content,
   clipDrag,
   dragPreview,
   handleClipDragStart,
@@ -159,6 +162,22 @@ const {
   tempoMap: () => mixerStore.graph.tempoMap,
   pixelsPerQuarter,
   moveClip: handleMoveClip
+})
+const midiClipList = computed(() => mixerStore.graph.midiClips)
+const {
+  midiClipDrag,
+  midiDragPreview,
+  handleMidiClipDragStart,
+  updateMidiClipDrag,
+  handleMidiClipDrop,
+  handleMidiClipDragEnd
+} = useMidiClipDrag({
+  clips: midiClipList,
+  content,
+  tempoMap: () => mixerStore.graph.tempoMap,
+  pixelsPerQuarter,
+  snap: pianoRollSnap,
+  moveClip: moveMidiClip
 })
 const trackRows = computed(() =>
   mixerStore.timelineTracks.map((track) => ({
@@ -244,6 +263,16 @@ function removeMidiClip(clipId: string): void {
 
 function moveMidiClip(clipId: string, trackId: string, startTick: number): void {
   void mixerStore.execute({ type: "move-midi-clip", clipId, trackId, startTick })
+}
+
+function updateArrangementDrag(event: DragEvent): void {
+  updateClipDrag(event)
+  updateMidiClipDrag(event)
+}
+
+function handleArrangementDrop(event: DragEvent): void {
+  handleClipDrop(event)
+  handleMidiClipDrop(event)
 }
 
 function selectMidiClip(clipId: string, additive: boolean): void {
@@ -440,8 +469,8 @@ function createMidiClip(trackId: string, requestedStartTick: number): void {
           ref="content"
           class="timeline-content"
           :style="contentStyle"
-          @dragover="updateClipDrag"
-          @drop="handleClipDrop"
+          @dragover="updateArrangementDrag"
+          @drop="handleArrangementDrop"
         >
           <TimelineRuler
             :content-width="contentWidth"
@@ -518,11 +547,14 @@ function createMidiClip(trackId: string, requestedStartTick: number): void {
               :track-height="height"
               :selected-clip-ids="pianoRollStore.arrangementClipIds"
               :keyboard-insertion-tick="secondsToTick(mixerStore.graph.tempoMap, playheadSeconds)"
-              @move="moveMidiClip"
+              :drag-preview="midiDragPreview?.trackId === track.id ? midiDragPreview : null"
+              :dragging-clip-id="midiClipDrag?.clipId ?? null"
               @remove="removeMidiClip"
               @select="selectMidiClip"
               @open="openMidiClip"
               @create="createMidiClip"
+              @clip-drag-start="handleMidiClipDragStart"
+              @clip-drag-end="handleMidiClipDragEnd"
             />
           </template>
           <div
