@@ -19,4 +19,5 @@ if (!config.global.plugins.includes(i18n)) {
 
 afterEach(() => {
   document.body.innerHTML = ""
+  window.localStorage?.clear()
 })

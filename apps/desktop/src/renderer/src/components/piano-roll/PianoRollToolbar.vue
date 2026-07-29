@@ -9,6 +9,10 @@ const { pianoRollStore, openClips, trackColor } = usePianoRollEditor()
 function changeTimeZoom(factor: number): void {
   pianoRollStore.setPixelsPerQuarter(pianoRollStore.pixelsPerQuarter * factor)
 }
+
+function changeKeyZoom(delta: number): void {
+  pianoRollStore.setRowHeight(pianoRollStore.rowHeight + delta)
+}
 </script>
 
 <template>
@@ -66,6 +70,24 @@ function changeTimeZoom(factor: number): void {
         +
       </UiButton>
     </div>
+    <div class="key-zoom" role="group" aria-label="Piano roll key zoom">
+      <UiButton
+        size="sm"
+        variant="ghost"
+        aria-label="Zoom piano roll keys out"
+        @click="changeKeyZoom(-2)"
+      >
+        −
+      </UiButton>
+      <UiButton
+        size="sm"
+        variant="ghost"
+        aria-label="Zoom piano roll keys in"
+        @click="changeKeyZoom(2)"
+      >
+        +
+      </UiButton>
+    </div>
     <div class="clip-chips" aria-label="Editable MIDI clips">
       <button
         v-for="clip in openClips"
@@ -100,6 +122,7 @@ function changeTimeZoom(factor: number): void {
 
 .tools,
 .time-zoom,
+.key-zoom,
 .clip-chips {
   display: flex;
   align-items: center;

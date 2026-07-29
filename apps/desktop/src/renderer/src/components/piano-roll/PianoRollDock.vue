@@ -13,6 +13,9 @@ const { pianoRollStore } = editor
 
 const viewport = shallowRef<HTMLElement | null>(null)
 
+const RULER_HEIGHT_PX = 28
+const KEYBOARD_WIDTH_PX = 72
+
 onMounted(() => {
   void nextTick(() => {
     const focusKey = editor.activeClip.value?.notes[0]?.key ?? 60
@@ -22,9 +25,46 @@ onMounted(() => {
         0,
         (127 - focusKey) * pianoRollStore.rowHeight - element.clientHeight / 2
       )
+      const clip = editor.activeClip.value
+      if (clip) {
+        element.scrollLeft = Math.max(
+          0,
+          clip.startTick * editor.pixelsPerTick.value +
+            KEYBOARD_WIDTH_PX -
+            element.clientWidth / 2
+        )
+      }
     }
   })
 })
+
+function handleWheel(event: WheelEvent): void {
+  if (!(event.ctrlKey || event.metaKey)) return
+  const element = viewport.value
+  if (!element) return
+  event.preventDefault()
+  const bounds = element.getBoundingClientRect()
+  if (event.altKey) {
+    const contentY =
+      event.clientY - bounds.top + element.scrollTop - RULER_HEIGHT_PX
+    const row = contentY / pianoRollStore.rowHeight
+    const previous = pianoRollStore.rowHeight
+    pianoRollStore.setRowHeight(previous + (event.deltaY < 0 ? 2 : -2))
+    const next = pianoRollStore.rowHeight
+    if (next !== previous) element.scrollTop += row * (next - previous)
+    return
+  }
+  const contentX = event.clientX - bounds.left + element.scrollLeft - KEYBOARD_WIDTH_PX
+  const previousPixelsPerTick = editor.pixelsPerTick.value
+  const tick = contentX / previousPixelsPerTick
+  pianoRollStore.setPixelsPerQuarter(
+    pianoRollStore.pixelsPerQuarter * (event.deltaY < 0 ? 1.25 : 0.8)
+  )
+  const nextPixelsPerTick = editor.pixelsPerTick.value
+  if (nextPixelsPerTick !== previousPixelsPerTick) {
+    element.scrollLeft += tick * (nextPixelsPerTick - previousPixelsPerTick)
+  }
+}
 
 function close(): void {
   pianoRollStore.closeEditor()
@@ -48,6 +88,7 @@ function close(): void {
         class="viewport"
         tabindex="0"
         aria-label="Piano roll note grid"
+        @wheel="handleWheel"
       >
         <PianoRollGrid />
       </div>

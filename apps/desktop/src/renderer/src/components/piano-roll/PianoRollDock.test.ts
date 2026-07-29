@@ -306,6 +306,69 @@ describe("PianoRollDock", () => {
     wrapper.unmount()
   })
 
+  it("zooms keys from the toolbar and zooms at the pointer with ctrl+wheel", async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const mixer = useMixerStore()
+    mixer.hydrate(graph)
+    const pianoRoll = usePianoRollStore()
+    pianoRoll.selectArrangementClip("clip-1")
+    pianoRoll.openSelection("clip-1")
+    vi.spyOn(mixer, "execute").mockResolvedValue(true)
+
+    const wrapper = mount(PianoRollDock, { global: { plugins: [pinia] } })
+
+    await wrapper.get('button[aria-label="Zoom piano roll keys in"]').trigger("click")
+    expect(pianoRoll.rowHeight).toBe(20)
+    await wrapper.get('button[aria-label="Zoom piano roll keys out"]').trigger("click")
+    expect(pianoRoll.rowHeight).toBe(18)
+
+    const viewport = wrapper.get<HTMLElement>('[aria-label="Piano roll note grid"]')
+    vi.spyOn(viewport.element, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 0,
+      top: 0,
+      right: 800,
+      bottom: 400,
+      left: 0,
+      width: 800,
+      height: 400,
+      toJSON: () => ({})
+    })
+    let scrollLeft = 0
+    let scrollTop = 0
+    Object.defineProperty(viewport.element, "scrollLeft", {
+      get: () => scrollLeft,
+      set: (value: number) => {
+        scrollLeft = value
+      }
+    })
+    Object.defineProperty(viewport.element, "scrollTop", {
+      get: () => scrollTop,
+      set: (value: number) => {
+        scrollTop = value
+      }
+    })
+
+    await viewport.trigger("wheel", { ctrlKey: true, deltaY: -1, clientX: 272, clientY: 100 })
+    expect(pianoRoll.pixelsPerQuarter).toBe(150)
+    // The tick under the pointer (1600) stays put: 1600 * (0.15625 - 0.125) = 50.
+    expect(scrollLeft).toBe(50)
+
+    await viewport.trigger("wheel", {
+      ctrlKey: true,
+      altKey: true,
+      deltaY: -1,
+      clientX: 272,
+      clientY: 100
+    })
+    expect(pianoRoll.rowHeight).toBe(20)
+    // The row under the pointer ((100 - 28) / 18 = 4) stays put: 4 * 2 = 8.
+    expect(scrollTop).toBe(8)
+
+    wrapper.unmount()
+  })
+
   it("quantizes from the inspector panel button", async () => {
     const pinia = createPinia()
     setActivePinia(pinia)

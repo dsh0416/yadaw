@@ -1,3 +1,4 @@
+import { useStorage } from "@vueuse/core"
 import { acceptHMRUpdate, defineStore } from "pinia"
 import { computed, shallowRef } from "vue"
 import type { MidiNoteState } from "@yadaw/contracts"
@@ -27,14 +28,14 @@ export const usePianoRollStore = defineStore("piano-roll", () => {
   const activeClipId = shallowRef<string | null>(null)
   const selectedNotes = shallowRef<PianoRollNoteRef[]>([])
   const tool = shallowRef<"select" | "draw" | "erase">("select")
-  const snap = shallowRef<PianoRollSnap>("1/16")
-  const pixelsPerQuarter = shallowRef(120)
-  const rowHeight = shallowRef(18)
+  const snap = useStorage<PianoRollSnap>("yadaw.piano-roll.snap.v1", "1/16")
+  const pixelsPerQuarter = useStorage("yadaw.piano-roll.time-zoom.v1", 120)
+  const rowHeight = useStorage("yadaw.piano-roll.row-height.v1", 18)
   const editCursorTick = shallowRef(0)
   const editCursorKey = shallowRef(60)
   const clipboard = shallowRef<PianoRollClipboardNote[]>([])
   const editorFocused = shallowRef(false)
-  const showVelocityLane = shallowRef(true)
+  const showVelocityLane = useStorage("yadaw.piano-roll.velocity-lane.v1", true)
   let editCommandHandler: ((command: PianoRollEditCommand) => void) | null = null
 
   const selectedNoteKeys = computed(
@@ -54,6 +55,10 @@ export const usePianoRollStore = defineStore("piano-roll", () => {
       Math.min(PIANO_ROLL_MAX_ROW_HEIGHT, Math.round(value))
     )
   }
+
+  // Re-clamp persisted values in case stored preferences predate the limits.
+  setPixelsPerQuarter(pixelsPerQuarter.value)
+  setRowHeight(rowHeight.value)
 
   function selectArrangementClip(clipId: string, additive = false): void {
     if (!additive) arrangementClipIds.value = [clipId]
@@ -141,6 +146,8 @@ export const usePianoRollStore = defineStore("piano-roll", () => {
     selectedNotes.value = []
     tool.value = "select"
     snap.value = "1/16"
+    pixelsPerQuarter.value = 120
+    rowHeight.value = 18
     editCursorTick.value = 0
     editCursorKey.value = 60
     clipboard.value = []
