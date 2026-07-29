@@ -30,6 +30,14 @@ function changeTimeZoom(factor: number): void {
       >
         Draw
       </UiButton>
+      <UiButton
+        size="sm"
+        :variant="pianoRollStore.tool === 'erase' ? 'primary' : 'ghost'"
+        :aria-pressed="pianoRollStore.tool === 'erase'"
+        @click="pianoRollStore.tool = 'erase'"
+      >
+        Erase
+      </UiButton>
     </div>
     <label class="snap-control">
       <span>Snap</span>

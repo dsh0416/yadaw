@@ -137,8 +137,10 @@ export function createPianoRollEditor(): PianoRollEditor {
   const gestures = createPianoRollGestures({
     pianoRollStore,
     pixelsPerTick,
+    visibleNotes,
     selectedItems,
     activeClip,
+    trackColor,
     batch,
     commandsForEdits
   })
@@ -222,6 +224,7 @@ export function createPianoRollEditor(): PianoRollEditor {
 
   const editing = createPianoRollEditing({
     pianoRollStore,
+    graph,
     activeClip,
     visibleNotes,
     selectedItems,

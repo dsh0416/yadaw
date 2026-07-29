@@ -14,11 +14,16 @@ const {
   barTicks,
   beatTicks,
   playheadTick,
+  marqueeStyle,
+  createPreviewStyle,
   clipStyle,
   keyStyle,
   isBlackKey,
   seekToTick,
-  handleGridPointerDown
+  handleGridPointerDown,
+  handleGridPointerMove,
+  handleGridPointerUp,
+  cancelGridGesture
 } = usePianoRollEditor()
 </script>
 
@@ -54,6 +59,9 @@ const {
         '--beat-width': `${graph.tempoMap.ticksPerQuarter * pixelsPerTick}px`
       }"
       @pointerdown.self="handleGridPointerDown"
+      @pointermove="handleGridPointerMove"
+      @pointerup="handleGridPointerUp"
+      @pointercancel="cancelGridGesture"
     >
       <i
         v-for="key in 128"
@@ -87,6 +95,13 @@ const {
         :clip="clip"
         :note="note"
       />
+      <div
+        v-if="createPreviewStyle"
+        class="create-preview"
+        :style="createPreviewStyle"
+        aria-hidden="true"
+      />
+      <div v-if="marqueeStyle" class="marquee" :style="marqueeStyle" aria-hidden="true" />
       <div
         class="playhead"
         :style="{ left: `${playheadTick * pixelsPerTick}px` }"
@@ -199,6 +214,23 @@ const {
 
 .clip-range.active {
   background: color-mix(in srgb, var(--clip-color) 8%, transparent);
+}
+
+.create-preview {
+  position: absolute;
+  z-index: var(--ui-z-local-selection);
+  border: 1px solid color-mix(in srgb, var(--note-color) 65%, var(--line-strong));
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--note-color) 75%, transparent);
+  pointer-events: none;
+}
+
+.marquee {
+  position: absolute;
+  z-index: var(--ui-z-local-selection);
+  border: 1px dashed var(--focus);
+  background: color-mix(in srgb, var(--focus) 12%, transparent);
+  pointer-events: none;
 }
 
 .playhead {

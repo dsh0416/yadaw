@@ -8,6 +8,7 @@ const props = defineProps<{ clip: MidiClipState; note: MidiNoteState }>()
 const {
   pianoRollStore,
   gestureNotePreviews,
+  eraseTargetKeys,
   noteStyle,
   noteAriaLabel,
   displayedNoteValues,
@@ -15,7 +16,8 @@ const {
   updateNoteGesture,
   finishNoteGesture,
   cancelNoteGesture,
-  handleNoteClick
+  handleNoteClick,
+  handleNotePointerOver
 } = usePianoRollEditor()
 </script>
 
@@ -26,7 +28,8 @@ const {
     :class="{
       selected: pianoRollStore.selectedNoteKeys.has(`${props.clip.id}:${props.note.id}`),
       inactive: props.clip.id !== pianoRollStore.activeClipId,
-      previewing: gestureNotePreviews.has(`${props.clip.id}:${props.note.id}`)
+      previewing: gestureNotePreviews.has(`${props.clip.id}:${props.note.id}`),
+      erasing: eraseTargetKeys.has(`${props.clip.id}:${props.note.id}`)
     }"
     :style="noteStyle(props.clip, props.note)"
     :aria-label="noteAriaLabel(props.clip, props.note)"
@@ -36,6 +39,7 @@ const {
     @pointermove="updateNoteGesture"
     @pointerup="finishNoteGesture"
     @pointercancel="cancelNoteGesture"
+    @pointerover="handleNotePointerOver(props.clip, props.note)"
   >
     <span
       class="resize-handle left"
@@ -88,6 +92,11 @@ const {
 
 .note.previewing {
   cursor: grabbing;
+}
+
+.note.erasing {
+  opacity: 0.25;
+  pointer-events: none;
 }
 
 .note:focus-visible {

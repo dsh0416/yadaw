@@ -1,11 +1,22 @@
-import { onMounted, onUnmounted, type ComputedRef } from "vue"
-import type { MidiClipState, MidiNotePatch, ProjectCommand } from "@yadaw/contracts"
+import { onMounted, onUnmounted, type ComputedRef, type Ref } from "vue"
+import type {
+  MidiClipState,
+  MidiNotePatch,
+  MixerGraphSnapshot,
+  ProjectCommand
+} from "@yadaw/contracts"
 import type { PianoRollNoteRef, usePianoRollStore } from "../../stores/pianoRoll"
-import { MIN_NOTE_TICKS, planCreatedNotes, snapStep } from "../../utils/pianoRoll"
+import {
+  MIN_NOTE_TICKS,
+  planCreatedNotes,
+  quantizeNoteStarts,
+  snapStep
+} from "../../utils/pianoRoll"
 import type { NoteGestureItem, PianoRollNoteEdit } from "./usePianoRollGestures"
 
 export interface PianoRollEditingDependencies {
   pianoRollStore: ReturnType<typeof usePianoRollStore>
+  graph: Ref<MixerGraphSnapshot>
   activeClip: ComputedRef<MidiClipState | null>
   visibleNotes: ComputedRef<NoteGestureItem[]>
   selectedItems: ComputedRef<NoteGestureItem[]>
@@ -22,6 +33,8 @@ export interface PianoRollEditing {
   cutSelected: () => void
   paste: () => void
   selectAll: () => void
+  duplicateSelected: () => void
+  quantizeSelected: () => void
   applyInspector: (field: string, raw: string) => void
   commonValue: (field: string) => string
   moveSelection: (deltaTick: number, deltaKey: number, resize?: boolean) => void
@@ -33,6 +46,7 @@ export function createPianoRollEditing(
 ): PianoRollEditing {
   const {
     pianoRollStore,
+    graph,
     activeClip,
     visibleNotes,
     selectedItems,
@@ -107,6 +121,57 @@ export function createPianoRollEditing(
     )
   }
 
+  function duplicateSelected(): void {
+    const items = selectedItems.value
+    if (items.length === 0) return
+    const step =
+      pianoRollStore.snap === "off"
+        ? graph.value.tempoMap.ticksPerQuarter * 4
+        : snapStep(pianoRollStore.snap)
+    const first = Math.min(...items.map((item) => item.globalStartTick))
+    const last = Math.max(...items.map((item) => item.globalStartTick + item.note.durationTicks))
+    const offset = Math.max(step, Math.ceil((last - first) / step) * step)
+    const byClip = new Map<string, NoteGestureItem[]>()
+    for (const item of items) {
+      const group = byClip.get(item.clip.id) ?? []
+      group.push(item)
+      byClip.set(item.clip.id, group)
+    }
+    const ids: PianoRollNoteRef[] = []
+    const commands = [...byClip.values()].flatMap(
+      (group) =>
+        planCreatedNotes(
+          group[0]!.clip,
+          group.map((item) => {
+            const id = crypto.randomUUID()
+            ids.push({ clipId: item.clip.id, noteId: id })
+            return {
+              id,
+              globalStartTick: item.globalStartTick + offset,
+              durationTicks: item.note.durationTicks,
+              channel: item.note.channel,
+              key: item.note.key,
+              velocity: item.note.velocity,
+              releaseVelocity: item.note.releaseVelocity
+            }
+          })
+        ).commands
+    )
+    void batch(commands).then((created) => {
+      if (created) pianoRollStore.setSelectedNotes(ids)
+    })
+  }
+
+  function quantizeSelected(): void {
+    if (pianoRollStore.snap === "off") return
+    const edits = quantizeNoteStarts(
+      selectedItems.value.map((item) => ({ ...item, durationTicks: item.note.durationTicks })),
+      pianoRollStore.snap
+    )
+    if (edits.length === 0) return
+    void batch(commandsForEdits(edits))
+  }
+
   function applyInspector(field: string, raw: string): void {
     if (selectedItems.value.length === 0 || raw.trim() === "") return
     const value = Math.round(Number(raw))
@@ -169,9 +234,11 @@ export function createPianoRollEditing(
     else if (modifier && event.code === "KeyX") cutSelected()
     else if (modifier && event.code === "KeyV") paste()
     else if (modifier && event.code === "KeyA") selectAll()
+    else if (modifier && event.code === "KeyD") duplicateSelected()
+    else if (!modifier && event.code === "KeyQ") quantizeSelected()
     else if (event.code === "Delete" || event.code === "Backspace") deleteSelected()
-    else if (event.code === "ArrowUp") moveSelection(0, 1)
-    else if (event.code === "ArrowDown") moveSelection(0, -1)
+    else if (event.code === "ArrowUp") moveSelection(0, event.shiftKey ? 12 : 1)
+    else if (event.code === "ArrowDown") moveSelection(0, event.shiftKey ? -12 : -1)
     else if (event.code === "ArrowLeft") {
       moveSelection(-snapStep(pianoRollStore.snap), 0, event.altKey)
     } else if (event.code === "ArrowRight") {
@@ -198,6 +265,8 @@ export function createPianoRollEditing(
     cutSelected,
     paste,
     selectAll,
+    duplicateSelected,
+    quantizeSelected,
     applyInspector,
     commonValue,
     moveSelection,

@@ -26,7 +26,7 @@ export const usePianoRollStore = defineStore("piano-roll", () => {
   const openClipIds = shallowRef<string[]>([])
   const activeClipId = shallowRef<string | null>(null)
   const selectedNotes = shallowRef<PianoRollNoteRef[]>([])
-  const tool = shallowRef<"select" | "draw">("select")
+  const tool = shallowRef<"select" | "draw" | "erase">("select")
   const snap = shallowRef<PianoRollSnap>("1/16")
   const pixelsPerQuarter = shallowRef(120)
   const rowHeight = shallowRef(18)

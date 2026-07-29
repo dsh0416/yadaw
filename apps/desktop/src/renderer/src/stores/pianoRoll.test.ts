@@ -40,6 +40,20 @@ describe("piano roll store", () => {
     expect(store.selectedNotes).toEqual([{ clipId: "clip-2", noteId: "kept" }])
   })
 
+  it("clamps zoom setters to the supported ranges", () => {
+    const store = usePianoRollStore()
+    store.setPixelsPerQuarter(12)
+    expect(store.pixelsPerQuarter).toBe(40)
+    store.setPixelsPerQuarter(4_000)
+    expect(store.pixelsPerQuarter).toBe(960)
+    store.setPixelsPerQuarter(149.6)
+    expect(store.pixelsPerQuarter).toBe(150)
+    store.setRowHeight(2)
+    expect(store.rowHeight).toBe(10)
+    store.setRowHeight(200)
+    expect(store.rowHeight).toBe(32)
+  })
+
   it("routes contextual Edit commands only while the editor owns focus", () => {
     const store = usePianoRollStore()
     const handler = vi.fn()

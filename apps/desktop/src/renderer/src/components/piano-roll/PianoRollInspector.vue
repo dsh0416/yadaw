@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { UiButton } from "@yadaw/ui"
 import { usePianoRollEditor } from "./usePianoRollEditor"
 
-const { selectedItems, applyInspector, commonValue } = usePianoRollEditor()
+const { pianoRollStore, selectedItems, applyInspector, commonValue, quantizeSelected } =
+  usePianoRollEditor()
 
 const FIELD_LABELS: Record<string, string> = {
   key: "Pitch",
@@ -39,6 +41,16 @@ const FIELD_LABELS: Record<string, string> = {
         @change="applyInspector(field, ($event.target as HTMLInputElement).value)"
       />
     </label>
+    <UiButton
+      size="sm"
+      variant="ghost"
+      class="quantize"
+      aria-label="Quantize selected note starts to the snap grid"
+      :disabled="selectedItems.length === 0 || pianoRollStore.snap === 'off'"
+      @click="quantizeSelected"
+    >
+      Quantize
+    </UiButton>
     <span class="resolution">Resolution 1/3840 note · integer ticks</span>
   </aside>
 </template>
@@ -89,6 +101,10 @@ const FIELD_LABELS: Record<string, string> = {
 .selection-summary {
   flex: none;
   white-space: nowrap;
+}
+
+.quantize {
+  flex: none;
 }
 
 .resolution {
