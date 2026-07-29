@@ -440,7 +440,9 @@ export class PluginCatalogService {
           kind: spec.kind,
           architecture: process.arch,
           buses: spec.kind === "instrument" ? [outputBus] : [inputBus, outputBus],
-          supportedAudioModes: [],
+          // Keep project graph validation working when a built-in probe fails:
+          // default projects still seed stereo metronome/instrument instances.
+          supportedAudioModes: spec.kind === "instrument" ? ["mono", "stereo"] : ["stereo"],
           hasEditor: true,
           compatibility: "load-error",
           compatibilityReason: reason

@@ -1,5 +1,5 @@
 lockfile_version: '1'
-generated_at: '2026-07-25T17:14:21.071792+00:00'
+generated_at: '2026-07-29T16:38:50.465851+00:00'
 apm_version: 0.26.0
 dependencies:
 - repo_url: antfu/skills
@@ -239,7 +239,7 @@ dependencies:
 - repo_url: anthropics/skills
   name: frontend-design
   host: github.com
-  resolved_commit: fa0fa64bdc967915dc8399e803be67759e1e62b8
+  resolved_commit: b29e7cf65e5cb78a5ac33d582270551bc74a14eb
   version: unknown
   virtual_path: skills/frontend-design
   is_virtual: true
@@ -255,7 +255,7 @@ dependencies:
 - repo_url: anthropics/skills
   name: skill-creator
   host: github.com
-  resolved_commit: fa0fa64bdc967915dc8399e803be67759e1e62b8
+  resolved_commit: b29e7cf65e5cb78a5ac33d582270551bc74a14eb
   version: unknown
   virtual_path: skills/skill-creator
   is_virtual: true
@@ -595,9 +595,9 @@ dependencies:
   - .agents/skills/rust-skills/rules/unsafe-send-sync-manual.md
   deployed_file_hashes:
     .agents/skills/rust-skills/.github/workflows/ci.yml: sha256:968afee6f0146675bb296dd06515677a0b1fdc0916a37ba73196038593d2ae8c
-    .agents/skills/rust-skills/AGENTS.md: sha256:0e95f5a3666031d6fac42bc6ca698b40b61648f4974c8ec355181ed4888c5c26
+    .agents/skills/rust-skills/AGENTS.md: sha256:5a74070e740c8aacec1264adfc537daeab14c0f629bb604943295c08fd9252e6
     .agents/skills/rust-skills/CHANGELOG.md: sha256:a54170f74bb352598518df6fc6bcca15f260b485e147ff607ad959f454e8590c
-    .agents/skills/rust-skills/CLAUDE.md: sha256:0e95f5a3666031d6fac42bc6ca698b40b61648f4974c8ec355181ed4888c5c26
+    .agents/skills/rust-skills/CLAUDE.md: sha256:5a74070e740c8aacec1264adfc537daeab14c0f629bb604943295c08fd9252e6
     .agents/skills/rust-skills/CONTRIBUTING.md: sha256:37f9fc8ed5f9f01cbfd5f53a5dec75b925233c21e28b07ac17c59dcebfd7b8c4
     .agents/skills/rust-skills/LICENSE: sha256:663ce6f8f087dc366602ac34eefd4cf71a5d8db411359422298a1399a014a9d5
     .agents/skills/rust-skills/README.md: sha256:d4b4aa637b20b3d1c7a1a7f71919de1ca293a588d5346ba29a60eec1ba0085ca
@@ -879,7 +879,7 @@ dependencies:
     .agents/skills/rust-skills/rules/unsafe-no-mangle-unsafe.md: sha256:429ffbd81bcf9f749614472a06c9ea2c14f3d242294318797ba5e30d7d559cd7
     .agents/skills/rust-skills/rules/unsafe-safety-comment.md: sha256:4892500c59f446eb8031fcf2cc98bf64f3323276abee0355409f4af53cbdcaab
     .agents/skills/rust-skills/rules/unsafe-send-sync-manual.md: sha256:106ca8ba1843ec8dfe9658c5db41fd99d106bcf2b8b4ece41e8db1dd347372f2
-  content_hash: sha256:3dd93033dd9a6b3f5c2631ef7b5a0ea50c57a4e1a63fb92d2a43797814a0ab3f
+  content_hash: sha256:b0a055da7be8a53d7e9a15fa84ea7371d8564a7498f0a531aecf16b75213ee72
 deployments:
 - kind: project-relative
   target: agent-skills
@@ -1213,7 +1213,7 @@ deployments:
   owners:
   - leonardomso/rust-skills
   active_owner: leonardomso/rust-skills
-  content_hash: sha256:0e95f5a3666031d6fac42bc6ca698b40b61648f4974c8ec355181ed4888c5c26
+  content_hash: sha256:5a74070e740c8aacec1264adfc537daeab14c0f629bb604943295c08fd9252e6
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/rust-skills/CHANGELOG.md
@@ -1231,7 +1231,7 @@ deployments:
   owners:
   - leonardomso/rust-skills
   active_owner: leonardomso/rust-skills
-  content_hash: sha256:0e95f5a3666031d6fac42bc6ca698b40b61648f4974c8ec355181ed4888c5c26
+  content_hash: sha256:5a74070e740c8aacec1264adfc537daeab14c0f629bb604943295c08fd9252e6
 - kind: project-relative
   target: agent-skills
   value: .agents/skills/rust-skills/CONTRIBUTING.md
