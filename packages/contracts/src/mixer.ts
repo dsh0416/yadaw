@@ -1,4 +1,12 @@
-import type { KeySignatureEventState, MidiClipState, TempoMapSnapshot } from "./midi"
+import type {
+  KeySignatureEventState,
+  MidiClipRangePatch,
+  MidiClipState,
+  MidiNotePatch,
+  MidiNoteState,
+  MidiSourceState,
+  TempoMapSnapshot
+} from "./midi"
 import type { PluginInstanceRole, PluginInstanceState } from "./plugins"
 
 export const MIXER_BUS_COUNT = 256
@@ -168,9 +176,20 @@ export type ProjectCommand =
       slotOrder: number
     }
   | { type: "replace-plugin"; pluginId: string; plugin: PluginInstanceState }
+  | { type: "create-midi-source"; source: MidiSourceState }
+  | { type: "delete-midi-source"; source: MidiSourceState }
   | { type: "create-midi-clip"; clip: MidiClipState }
   | { type: "delete-midi-clip"; clipId: string }
   | { type: "move-midi-clip"; clipId: string; trackId: string; startTick: number }
+  | { type: "update-midi-clip-range"; clipId: string; patch: MidiClipRangePatch }
+  | { type: "create-midi-notes"; clipId: string; notes: MidiNoteState[] }
+  | { type: "delete-midi-notes"; clipId: string; noteIds: string[] }
+  | {
+      type: "update-midi-notes"
+      clipId: string
+      updates: Array<{ noteId: string; patch: MidiNotePatch }>
+    }
+  | { type: "rebase-midi-clip-content"; clipId: string; deltaTicks: number }
   | { type: "replace-tempo-map"; tempoMap: TempoMapSnapshot }
   | { type: "replace-key-signature-map"; events: KeySignatureEventState[] }
   | { type: "batch"; commands: ProjectCommand[] }

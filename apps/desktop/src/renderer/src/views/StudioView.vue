@@ -16,6 +16,7 @@ import { useTransportStore } from "../stores/transport"
 import { useMixerStore } from "../stores/mixer"
 import { useStudioWorkspaceStore } from "../stores/studioWorkspace"
 import { useStudioWorkflowStore } from "../stores/studioWorkflow"
+import { usePianoRollStore } from "../stores/pianoRoll"
 import MidiImportDialog from "../components/midi/MidiImportDialog.vue"
 import { replaceTempoEventAtTick, secondsToTick } from "../utils/tempoMap"
 
@@ -33,6 +34,7 @@ const transportStore = useTransportStore()
 const mixerStore = useMixerStore()
 const workspaceStore = useStudioWorkspaceStore()
 const studioWorkflowStore = useStudioWorkflowStore()
+const pianoRollStore = usePianoRollStore()
 const { session, projectAssets } = storeToRefs(projectStore)
 const {
   active: activeRecording,
@@ -93,6 +95,23 @@ function isEditableTarget(target: EventTarget | null): boolean {
 
 function handleShortcut(event: KeyboardEvent): void {
   if (isEditableTarget(event.target) || event.repeat) return
+  if (
+    (event.code === "Delete" || event.code === "Backspace") &&
+    pianoRollStore.arrangementClipIds.length > 0 &&
+    !pianoRollStore.editorFocused
+  ) {
+    event.preventDefault()
+    const commands = pianoRollStore.arrangementClipIds.map((clipId) => ({
+      type: "delete-midi-clip" as const,
+      clipId
+    }))
+    void mixerStore
+      .execute(commands.length === 1 ? commands[0]! : { type: "batch", commands })
+      .then((deleted) => {
+        if (deleted) pianoRollStore.clearArrangementSelection()
+      })
+    return
+  }
   if ((event.code === "Delete" || event.code === "Backspace") && transportStore.selectedClipId) {
     event.preventDefault()
     const clipId = transportStore.selectedClipId

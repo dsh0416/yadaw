@@ -12,11 +12,16 @@ const props = defineProps<{
   contentWidth: number
   pixelsPerQuarter: number
   trackHeight: number
+  selectedClipIds: string[]
+  keyboardInsertionTick: number
 }>()
 
 const emit = defineEmits<{
   move: [clipId: string, trackId: string, startTick: number]
   remove: [clipId: string]
+  select: [clipId: string, additive: boolean]
+  open: [clipId: string, selectedClipIds: string[]]
+  create: [trackId: string, startTick: number]
 }>()
 
 const style = computed(() => ({
@@ -65,6 +70,20 @@ function handleKeydown(event: KeyboardEvent, clip: MidiClipState): void {
   }
 }
 
+let openSelectionSnapshot: string[] = []
+
+function captureOpenSelection(event: MouseEvent, clipId: string): void {
+  if (event.detail > 1 && openSelectionSnapshot.length > 0) return
+  openSelectionSnapshot = props.selectedClipIds.includes(clipId)
+    ? [...props.selectedClipIds]
+    : [clipId]
+}
+
+function openClip(clipId: string): void {
+  emit("open", clipId, openSelectionSnapshot.length > 0 ? openSelectionSnapshot : [clipId])
+  openSelectionSnapshot = []
+}
+
 function startDrag(event: DragEvent, clip: MidiClipState): void {
   event.dataTransfer?.setData("application/x-yadaw-midi-clip", clip.id)
   if (event.dataTransfer) event.dataTransfer.effectAllowed = "move"
@@ -81,6 +100,16 @@ function dropClip(event: DragEvent): void {
   )
   emit("move", clipId, props.trackId, tick)
 }
+
+function createClipAtPointer(event: MouseEvent): void {
+  const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  const tick = timelineXToTick(
+    props.tempoMap,
+    Math.max(0, event.clientX - bounds.left),
+    props.pixelsPerQuarter
+  )
+  emit("create", props.trackId, tick)
+}
 </script>
 
 <template>
@@ -89,9 +118,14 @@ function dropClip(event: DragEvent): void {
     :style="style"
     :data-track-id="trackId"
     data-track-kind="instrument"
+    tabindex="0"
+    aria-label="Instrument lane; double-click empty space or press Enter to create a MIDI clip"
     @dragover.prevent
     @drop.prevent="dropClip"
+    @dblclick.self="createClipAtPointer"
+    @keydown.enter.self="emit('create', trackId, keyboardInsertionTick)"
   >
+    <span v-if="clips.length === 0" class="empty-hint">Double-click to create MIDI clip</span>
     <i
       v-for="(left, index) in beatLines"
       :key="`beat-${index}`"
@@ -111,6 +145,10 @@ function dropClip(event: DragEvent): void {
       draggable="true"
       :style="clipStyle(clip)"
       :aria-label="`${clip.name}, MIDI clip`"
+      :aria-pressed="selectedClipIds.includes(clip.id)"
+      @mousedown="captureOpenSelection($event, clip.id)"
+      @click.stop="emit('select', clip.id, $event.ctrlKey || $event.metaKey)"
+      @dblclick.stop="openClip(clip.id)"
       @dragstart="startDrag($event, clip)"
       @keydown="handleKeydown($event, clip)"
     >
@@ -131,6 +169,19 @@ function dropClip(event: DragEvent): void {
   overflow: hidden;
   border-bottom: 1px solid var(--line-strong);
   background: var(--daw-lane);
+}
+.midi-track:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+.empty-hint {
+  position: absolute;
+  top: 50%;
+  left: var(--ui-space-3);
+  color: var(--text-muted);
+  font: var(--ui-type-size-caption) var(--ui-type-family-data);
+  pointer-events: none;
+  transform: translateY(-50%);
 }
 .bar-line,
 .beat-line {
@@ -166,6 +217,10 @@ function dropClip(event: DragEvent): void {
 .midi-clip:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 1px;
+}
+.midi-clip[aria-pressed="true"] {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
 }
 .midi-clip strong {
   position: relative;
