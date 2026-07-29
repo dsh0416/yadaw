@@ -5,3 +5,4 @@
 [submodule "third_party/ARA_SDK"]
 	path = third_party/ARA_SDK
 	url = https://github.com/Celemony/ARA_SDK.git
+	branch = releases/2.3.0
