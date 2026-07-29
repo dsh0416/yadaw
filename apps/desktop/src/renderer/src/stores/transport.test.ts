@@ -125,4 +125,81 @@ describe("transport store", () => {
 
     expect(window.yadaw.transportCommand).toHaveBeenCalledWith({ type: "play" })
   })
+
+  it("rewinds to the start before playing when the playhead is at the content end", async () => {
+    const mixer = useMixerStore()
+    mixer.graph = {
+      ...structuredClone(emptyGraph),
+      clips: [
+        {
+          id: "clip-1",
+          name: "Clip",
+          trackId: "audio-1",
+          assetId: "asset-1",
+          assetChannels: 2,
+          assetSampleRate: 48_000,
+          startFrame: 0,
+          sourceOffsetFrames: 0,
+          lengthFrames: 48_000
+        }
+      ]
+    }
+    window.yadaw.transportCommand = vi
+      .fn()
+      .mockResolvedValueOnce({
+        state: "stopped",
+        positionFrames: 0,
+        sampleRate: 48_000
+      })
+      .mockResolvedValueOnce({
+        state: "playing",
+        positionFrames: 0,
+        sampleRate: 48_000
+      })
+    const transport = useTransportStore()
+    transport.snapshot = {
+      state: "stopped",
+      positionFrames: 48_000,
+      sampleRate: 48_000
+    }
+
+    await transport.play()
+
+    expect(window.yadaw.transportCommand).toHaveBeenNthCalledWith(1, {
+      type: "seek",
+      positionFrames: 0
+    })
+    expect(window.yadaw.transportCommand).toHaveBeenNthCalledWith(2, { type: "play" })
+  })
+
+  it("can play a MIDI-only project and treats MIDI length as content end", async () => {
+    const mixer = useMixerStore()
+    mixer.graph = {
+      ...structuredClone(emptyGraph),
+      midiClips: [
+        {
+          id: "midi-1",
+          sourceId: "source-1",
+          name: "Midi",
+          trackId: "instrument-1",
+          startTick: 0,
+          lengthTicks: 3_840,
+          sourceOffsetTicks: 0,
+          notes: [],
+          events: []
+        }
+      ]
+    }
+    window.yadaw.transportCommand = vi.fn().mockResolvedValue({
+      state: "playing",
+      positionFrames: 0,
+      sampleRate: 48_000
+    })
+    const transport = useTransportStore()
+
+    expect(transport.canPlay).toBe(true)
+    expect(transport.contentEndSeconds).toBe(2)
+    await transport.play()
+    expect(window.yadaw.transportCommand).toHaveBeenCalledWith({ type: "play" })
+  })
 })

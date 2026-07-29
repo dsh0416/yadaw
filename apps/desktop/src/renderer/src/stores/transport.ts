@@ -3,6 +3,7 @@ import { acceptHMRUpdate, defineStore } from "pinia"
 import { computed, shallowRef } from "vue"
 import type { TransportSnapshot } from "@yadaw/contracts"
 import type { ProjectAssetSummary as Asset } from "@yadaw/contracts"
+import { tickToSeconds } from "../utils/tempoMap"
 import { useMixerStore } from "./mixer"
 
 const MINIMUM_TIMELINE_SECONDS = 8
@@ -80,16 +81,22 @@ export const useTransportStore = defineStore("transport", () => {
   )
   const playing = computed(() => snapshot.value.state === "playing")
   const recording = computed(() => snapshot.value.state === "recording")
-  const contentEndSeconds = computed(() =>
-    clips.value.reduce((latest, clip) => Math.max(latest, clip.endSeconds), 0)
-  )
+  const contentEndSeconds = computed(() => {
+    const audioEnd = clips.value.reduce((latest, clip) => Math.max(latest, clip.endSeconds), 0)
+    const midiEnd = mixerStore.graph.midiClips.reduce((latest, clip) => {
+      const endTick = clip.startTick + clip.lengthTicks
+      return Math.max(latest, tickToSeconds(mixerStore.graph.tempoMap, endTick))
+    }, 0)
+    return Math.max(audioEnd, midiEnd)
+  })
   const timelineDurationSeconds = computed(() =>
     Math.max(MINIMUM_TIMELINE_SECONDS, contentEndSeconds.value + TIMELINE_TAIL_SECONDS)
   )
   const canPlay = computed(
     () =>
-      (clips.value.length > 0 || (mixerStore.metronome !== null && !mixerStore.metronome.muted)) &&
-      !loading.value
+      clips.value.length > 0 ||
+      mixerStore.graph.midiClips.length > 0 ||
+      (mixerStore.metronome !== null && !mixerStore.metronome.muted)
   )
 
   function command(value: Parameters<typeof window.yadaw.transportCommand>[0]): Promise<void> {
@@ -132,9 +139,14 @@ export const useTransportStore = defineStore("transport", () => {
   }
 
   async function play(): Promise<void> {
-    if (!canPlay.value || playing.value) return
+    if (!canPlay.value || playing.value || loading.value) return
     loading.value = true
     try {
+      // Engine auto-stop leaves the playhead at the content tail; restart from zero
+      // so Play after song-end is not a no-op even before the host applies Play.
+      if (contentEndSeconds.value > 0 && playheadSeconds.value >= contentEndSeconds.value) {
+        await command({ type: "seek", positionFrames: 0 })
+      }
       await command({ type: "play" })
     } finally {
       loading.value = false

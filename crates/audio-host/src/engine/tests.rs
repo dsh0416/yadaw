@@ -8,18 +8,19 @@ mod tests {
     };
 
     use super::{
-        AdaptiveResampler, AudioEngineKey, BufferSelection, BufferSize, ClipStoragePolicy,
-        InputPeakBank, LivePlugin, MAX_INPUT_CHANNELS, MAX_OUTPUT_CHANNELS,
-        MAX_PLUGIN_BLOCK_FRAMES,
-        MEMORY_DECODE_LIMIT_BYTES, METRONOME_ACCENT_NOTE, METRONOME_BEAT_NOTE, MetronomeScheduler,
-        NativeMixerChannel, NativeMixerGraph, NativeMixerSend, NativePluginInstance,
-        NativeRoundTripLatencyMeasurementRequest, OUTPUT_RESAMPLER_FRAMES, RoundTripInputDetector,
-        RoundTripLatencyMeasurement, RoundTripOutputProbe, SessionOutputConverter, SignalWidth,
-        StereoDelayLine, StreamDirection, StreamErrorImpact, SupportedBufferSize,
-        clip_storage_policy, compiled_graph_snapshot, frames_to_nanos,
-        native_graph_references_plugin, resolve_stream_devices, select_buffer_size,
-        set_last_native_graph_for_test, spawn_streaming_clip, stream_error_impact,
-        validate_session_sample_rate,
+        AdaptiveResampler, AtomicU32, AtomicU64, AudioEngineKey, BufferSelection, BufferSize,
+        ClipSamples, ClipStoragePolicy, EngineCommand, InputPeakBank, LivePlugin, LoadedClip,
+        MAX_INPUT_CHANNELS, MAX_OUTPUT_CHANNELS, MAX_PLUGIN_BLOCK_FRAMES, MEMORY_DECODE_LIMIT_BYTES,
+        METRONOME_ACCENT_NOTE, METRONOME_BEAT_NOTE, MeterAtomics, MeterBank, MetronomeScheduler,
+        NativeMixerChannel, NativeMixerGraph, NativeMixerRuntime, NativeMixerSend,
+        NativePluginInstance, NativeRoundTripLatencyMeasurementRequest, Ordering,
+        OUTPUT_RESAMPLER_FRAMES, RoundTripInputDetector, RoundTripLatencyMeasurement,
+        RoundTripOutputProbe, SessionOutputConverter, SignalWidth, StereoDelayLine,
+        StreamDirection, StreamErrorImpact, SupportedBufferSize, TRANSPORT_PLAYING,
+        TRANSPORT_STOPPED, TransportAction, TransportShared, clip_storage_policy,
+        compiled_graph_snapshot, frames_to_nanos, native_graph_references_plugin,
+        resolve_stream_devices, select_buffer_size, set_last_native_graph_for_test,
+        spawn_streaming_clip, stream_error_impact, validate_session_sample_rate,
     };
     use crate::recording::{
         NativeRecordingStartConfig, StereoFrame, write_deterministic_test_recording,
@@ -29,6 +30,8 @@ mod tests {
         HeapRb,
         traits::{Producer, Split},
     };
+    use yadaw_dsp_core::mixer::{ChannelKind, ChannelSpec, MixerGraph, RouteTarget};
+    use yadaw_dsp_render::{RenderMeter, RenderRuntime};
     use yadaw_dsp_runtime::protocol::{
         CompiledGraphNodeKind, CompiledGraphPluginState, LiveMixerSendTap, PluginAudioMode,
     };
@@ -744,5 +747,164 @@ mod tests {
         assert!(native_graph_references_plugin("session-fx"));
         assert!(!native_graph_references_plugin("bench-0"));
         set_last_native_graph_for_test(None);
+    }
+
+    fn transport_test_runtime(
+        sample_rate: u32,
+        content_end_frame: u64,
+        position_frames: u64,
+        state: u32,
+    ) -> Box<NativeMixerRuntime> {
+        let channels = vec![
+            ChannelSpec {
+                id: "audio-0".to_owned(),
+                kind: ChannelKind::Audio,
+                gain_db: 0.0,
+                pan: 0.0,
+                muted: false,
+                soloed: false,
+                output: Some(RouteTarget::Output(2)),
+                input_bus: None,
+                hardware_output: None,
+            },
+            ChannelSpec {
+                id: "master".to_owned(),
+                kind: ChannelKind::Master,
+                gain_db: 0.0,
+                pan: 0.0,
+                muted: false,
+                soloed: false,
+                output: None,
+                input_bus: None,
+                hardware_output: None,
+            },
+            ChannelSpec {
+                id: "output".to_owned(),
+                kind: ChannelKind::Output,
+                gain_db: 0.0,
+                pan: 0.0,
+                muted: false,
+                soloed: false,
+                output: None,
+                input_bus: None,
+                hardware_output: Some([0, 1]),
+            },
+        ];
+        let graph = MixerGraph::new(sample_rate, channels, Vec::new())
+            .expect("transport test graph must be valid");
+        let mut graph =
+            RenderRuntime::from_mixer_graph(sample_rate, graph, TempoMap::default_120_bpm());
+        graph.prepare_block_processing(MAX_PLUGIN_BLOCK_FRAMES);
+        let length_frames = content_end_frame.max(1) as usize;
+        Box::new(NativeMixerRuntime {
+            generation: 1,
+            build_generation: 1,
+            peak_scratch: vec![
+                RenderMeter {
+                    pre: [0.0; 2],
+                    post: [0.0; 2],
+                };
+                3
+            ],
+            held_peaks: vec![[0.0, 0.0]; 3],
+            held_until: vec![[0, 0]; 3],
+            channel_source_block: vec![[0.0, 0.0]; 3usize.saturating_mul(MAX_PLUGIN_BLOCK_FRAMES)],
+            channel_input_widths: vec![SignalWidth::Stereo; 3],
+            plugins_by_channel: vec![Vec::new(), Vec::new(), Vec::new()],
+            midi_events: Vec::new(),
+            midi_cursor: 0,
+            active_notes: Vec::new(),
+            metronome: MetronomeScheduler::new(None, &TempoMap::default_120_bpm(), sample_rate, 0),
+            tempo_map: TempoMap::default_120_bpm(),
+            graph,
+            clips: vec![LoadedClip {
+                channel_index: 0,
+                start_frame: 0,
+                source_offset_frames: 0,
+                length_frames,
+                samples: ClipSamples::Memory(vec![[0.25, -0.25]; length_frames]),
+            }],
+            meter_bank: Arc::new(MeterBank {
+                channels: (0..3)
+                    .map(|index| MeterAtomics::new(format!("channel-{index}")))
+                    .collect(),
+            }),
+            transport: Arc::new(TransportShared {
+                state: AtomicU32::new(state),
+                position_frames: AtomicU64::new(position_frames),
+                sample_rate: AtomicU32::new(sample_rate),
+            }),
+            sample_rate,
+            content_end_frame,
+            tail_end_frame: Some(content_end_frame),
+            has_infinite_tail: false,
+            input_peaks: Arc::new(InputPeakBank::new()),
+            input_meter_routes: vec![None; 3],
+            monitor_input_routes: vec![None; 3],
+            input_peak_scratch: [0.0; MAX_INPUT_CHANNELS],
+            meter_frame_clock: 0,
+        })
+    }
+
+    #[test]
+    fn play_at_content_end_rewinds_before_starting() {
+        let mut runtime = transport_test_runtime(48_000, 1_000, 1_000, TRANSPORT_STOPPED);
+
+        let _ = runtime.handle_command(EngineCommand::Transport(TransportAction::Play, 0));
+
+        assert_eq!(
+            runtime.transport.state.load(Ordering::Relaxed),
+            TRANSPORT_PLAYING
+        );
+        assert_eq!(runtime.transport.position_frames.load(Ordering::Relaxed), 0);
+    }
+
+    #[test]
+    fn play_before_content_end_keeps_current_position() {
+        let mut runtime = transport_test_runtime(48_000, 1_000, 250, TRANSPORT_STOPPED);
+
+        let _ = runtime.handle_command(EngineCommand::Transport(TransportAction::Play, 0));
+
+        assert_eq!(
+            runtime.transport.state.load(Ordering::Relaxed),
+            TRANSPORT_PLAYING
+        );
+        assert_eq!(
+            runtime.transport.position_frames.load(Ordering::Relaxed),
+            250
+        );
+    }
+
+    #[test]
+    fn auto_stop_at_content_end_then_play_restarts_from_beginning() {
+        let mut runtime = transport_test_runtime(48_000, 1_000, 980, TRANSPORT_PLAYING);
+        let inputs = vec![[0.0; MAX_INPUT_CHANNELS]; 64];
+        let mut outputs = vec![[0.0; MAX_OUTPUT_CHANNELS]; 64];
+
+        let underrun = runtime.render_block(&inputs, &mut outputs);
+        assert!(!underrun);
+        assert_eq!(
+            runtime.transport.state.load(Ordering::Relaxed),
+            TRANSPORT_STOPPED
+        );
+        assert!(runtime.transport.position_frames.load(Ordering::Relaxed) >= 1_000);
+
+        let _ = runtime.handle_command(EngineCommand::Transport(TransportAction::Play, 0));
+        assert_eq!(
+            runtime.transport.state.load(Ordering::Relaxed),
+            TRANSPORT_PLAYING
+        );
+        assert_eq!(runtime.transport.position_frames.load(Ordering::Relaxed), 0);
+
+        let underrun = runtime.render_block(&inputs[..32], &mut outputs[..32]);
+        assert!(!underrun);
+        assert_eq!(
+            runtime.transport.state.load(Ordering::Relaxed),
+            TRANSPORT_PLAYING
+        );
+        assert_eq!(
+            runtime.transport.position_frames.load(Ordering::Relaxed),
+            32
+        );
     }
 }
