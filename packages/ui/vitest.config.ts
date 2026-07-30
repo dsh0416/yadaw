@@ -5,6 +5,13 @@ export default defineConfig({
   plugins: [vue()],
   test: {
     environment: "happy-dom",
-    include: ["src/**/*.test.ts"]
+    include: ["src/**/*.test.ts"],
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "lcov"],
+      reportsDirectory: "./coverage",
+      include: ["src/**/*.{ts,vue}"],
+      exclude: ["src/**/*.test.ts", "src/**/*.stories.ts"]
+    }
   }
 })

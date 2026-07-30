@@ -7,6 +7,8 @@ dist/
 release/
 test-results/
 playwright-report/
+coverage/
+**/coverage/
 *.node
 *.log
 .DS_Store

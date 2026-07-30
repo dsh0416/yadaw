@@ -13,6 +13,7 @@
   "scripts": {
     "check": "vue-tsc --noEmit",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:watch": "vitest"
   },
   "peerDependencies": {
@@ -24,6 +25,7 @@
   "devDependencies": {
     "@storybook/vue3-vite": "10.5.4",
     "@vitejs/plugin-vue": "6.0.8",
+    "@vitest/coverage-v8": "4.1.10",
     "@vue/test-utils": "2.4.6",
     "happy-dom": "20.11.1",
     "storybook": "10.5.4",

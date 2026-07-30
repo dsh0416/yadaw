@@ -24,6 +24,18 @@ export default defineConfig({
     environment: "happy-dom",
     setupFiles: [resolve(import.meta.dirname, "src/renderer/src/test/setup.ts")],
     include: ["src/renderer/src/**/*.test.ts", "src/main/**/*.test.ts", "src/shared/**/*.test.ts"],
-    restoreMocks: true
+    restoreMocks: true,
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "lcov"],
+      reportsDirectory: "./coverage",
+      include: ["src/renderer/src/**/*.{ts,vue}", "src/main/**/*.ts", "src/shared/**/*.ts"],
+      exclude: [
+        "src/**/*.test.ts",
+        "src/renderer/src/test/**",
+        "src/main/**/*.d.ts",
+        "src/renderer/src/**/*.d.ts"
+      ]
+    }
   }
 })
