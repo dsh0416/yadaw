@@ -3,8 +3,8 @@ monorepo_root = true
 [tools]
 "github:microsoft/apm" = "latest"
 node = "26"
-pnpm = "11.9.0"
-rust = { version = "1.97", components = "rustfmt,clippy,llvm-tools-preview" }
+pnpm = "latest"
+rust = { version = "latest", components = "rustfmt,clippy,llvm-tools" }
 "cargo:cargo-llvm-cov" = "0.8.7"
 cmake = "3.31.12"
 "cargo:cargo-truce" = "6.1.3"

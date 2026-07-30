@@ -6,7 +6,7 @@ use std::{
     process::ExitCode,
     sync::{
         Arc, Mutex, OnceLock,
-        atomic::{AtomicBool, AtomicU64, Ordering},
+        atomic::{AtomicU64, Ordering},
         mpsc as std_mpsc,
     },
     thread,
