@@ -55,8 +55,6 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build documentation
-        env:
-          YADAW_DOCS_BASE: /${{ github.event.repository.name }}/
         run: pnpm docs:build
 
       - name: Upload GitHub Pages artifact

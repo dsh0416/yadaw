@@ -68,7 +68,7 @@ guarantee. See the [roadmap](agents/docs/roadmap.md) for milestones and prioriti
 
 ## User manual
 
-The [YADAW user manual](docs/content/manual/index.md) covers installation,
+The [YADAW user manual](https://yadaw.midori.live/manual/) covers installation,
 projects, recording, MIDI editing, mixing, plug-ins, audio-device setup, and
 troubleshooting.
 

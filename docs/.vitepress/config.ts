@@ -1,19 +1,22 @@
 import { defineConfig } from "vitepress"
 
-const base = process.env.YADAW_DOCS_BASE ?? "/"
+const docsRoot = "https://yadaw.midori.live"
 
 export default defineConfig({
   title: "YADAW",
   titleTemplate: ":title · YADAW",
   description: "A free and open-source digital audio workstation.",
   lang: "en-US",
-  base,
+  base: "/",
   srcDir: "content",
   cleanUrls: true,
   lastUpdated: true,
   appearance: "dark",
+  sitemap: {
+    hostname: docsRoot
+  },
   head: [
-    ["link", { rel: "icon", href: `${base}logo.svg`, type: "image/svg+xml" }],
+    ["link", { rel: "icon", href: "/logo.svg", type: "image/svg+xml" }],
     ["meta", { name: "theme-color", content: "#101010" }],
     ["meta", { property: "og:type", content: "website" }],
     ["meta", { property: "og:title", content: "YADAW" }],
