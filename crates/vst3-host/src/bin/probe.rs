@@ -163,9 +163,9 @@ fn deep_inspect_in_child(module_path: &Path, class: &ClassInfo) -> Option<ClassO
         .ok()?;
     let mut stdout = child.stdout.take()?;
     let started = Instant::now();
-    let status = loop {
+    loop {
         match child.try_wait() {
-            Ok(Some(status)) => break status,
+            Ok(Some(_)) => break,
             Ok(None) if started.elapsed() >= CHILD_TIMEOUT => {
                 let _ = child.kill();
                 let _ = child.wait();
@@ -174,12 +174,13 @@ fn deep_inspect_in_child(module_path: &Path, class: &ClassInfo) -> Option<ClassO
             Ok(None) => thread::sleep(Duration::from_millis(40)),
             Err(_) => return None,
         }
-    };
-    if !status.success() {
-        return None;
     }
     let mut bytes = Vec::new();
     stdout.read_to_end(&mut bytes).ok()?;
+    // The child flushes its JSON payload before tearing the module down, so a
+    // crash during teardown can still leave a completed probe result on stdout.
+    // Prefer that result over the exit status; a child that failed before
+    // probing produces no JSON and falls back to `soft_inspect` regardless.
     json_from_stdout(&bytes)
 }
 
