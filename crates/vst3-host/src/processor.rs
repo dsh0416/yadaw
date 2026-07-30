@@ -24,6 +24,11 @@ use crate::{
 
 const MAX_BLOCK_FRAMES: i32 = 4096;
 
+#[cfg(windows)]
+const MIDI_SYSEX_DATA_TYPE: u32 = Vst::DataEvent_DataTypes_kMidiSysEx as u32;
+#[cfg(not(windows))]
+const MIDI_SYSEX_DATA_TYPE: u32 = Vst::DataEvent_DataTypes_kMidiSysEx;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PluginKind {
     Effect,
@@ -535,7 +540,7 @@ impl StereoProcessor {
             __bindgen_anon_1: Event__bindgen_ty_1 {
                 data: DataEvent {
                     size,
-                    type_: Vst::DataEvent_DataTypes_kMidiSysEx as u32,
+                    type_: MIDI_SYSEX_DATA_TYPE,
                     bytes: bytes.as_ptr(),
                 },
             },
