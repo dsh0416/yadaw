@@ -143,8 +143,9 @@ export class ProjectService {
       recoveredWorkingCopy: false
     }
     await this.persistCurrentState()
-    await this.settings.addRecent(projectPath, configuration.name)
-    return structuredClone(this.session)
+    // Initialize the .yadaw archive immediately so closing or discarding the
+    // session still leaves a loadable project file on disk.
+    return this.save()
   }
 
   async hasRecoverableWorkingCopy(projectPathValue: string): Promise<boolean> {
