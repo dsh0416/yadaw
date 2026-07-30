@@ -1,16 +1,12 @@
 import type {
   MixerGraphSnapshot,
+  MidiSourceState,
   ProjectAssetSummary,
   ProjectCommand,
   ProjectConfiguration
 } from "@yadaw/contracts"
 
-export interface MidiSourceInput {
-  id: string
-  name: string
-  contentHash: string
-  rawBytes: Uint8Array
-}
+export type MidiSourceInput = MidiSourceState
 
 export interface PluginStateInput {
   id: string

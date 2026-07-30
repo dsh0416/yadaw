@@ -1,4 +1,6 @@
 export const MUSICAL_TICKS_PER_QUARTER = 960
+export const MUSICAL_TICKS_PER_WHOLE_NOTE = MUSICAL_TICKS_PER_QUARTER * 4
+export const MIN_MIDI_NOTE_DURATION_TICKS = 1
 export const DEFAULT_INSTRUMENT_COLOR = "#73D6A2"
 
 export interface TempoEventState {
@@ -36,6 +38,13 @@ export interface MidiNoteState {
   releaseVelocity: number
 }
 
+export type MidiNotePatch = Partial<
+  Pick<
+    MidiNoteState,
+    "startTick" | "durationTicks" | "channel" | "key" | "velocity" | "releaseVelocity"
+  >
+>
+
 export type MidiEventKind =
   | "control-change"
   | "pitch-bend"
@@ -52,6 +61,13 @@ export interface MidiEventState {
   data: Uint8Array
 }
 
+export interface MidiSourceState {
+  id: string
+  name: string
+  contentHash: string
+  rawBytes: Uint8Array
+}
+
 export interface MidiClipState {
   id: string
   sourceId: string
@@ -63,6 +79,10 @@ export interface MidiClipState {
   notes: MidiNoteState[]
   events: MidiEventState[]
 }
+
+export type MidiClipRangePatch = Partial<
+  Pick<MidiClipState, "startTick" | "lengthTicks" | "sourceOffsetTicks">
+>
 
 export interface MidiImportTrackPreview {
   sourceTrack: number

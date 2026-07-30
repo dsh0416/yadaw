@@ -61,9 +61,9 @@ Make the existing vertical slice reliable for daily experimentation.
 **Next primary focus.** Write and edit music inside YADAW without an external
 DAW for MIDI work.
 
-- [ ] Piano roll UI
-- [ ] Note-level MIDI create / edit / delete
-- [ ] Velocity and basic note properties editing
+- [x] Piano roll UI
+- [x] Note-level MIDI create / edit / delete
+- [x] Velocity and basic note properties editing
 - [ ] MIDI clip trim / split (minimum useful set)
 - [ ] Audio clip trim / split / fade basics (minimum useful set)
 - [ ] Transport loop

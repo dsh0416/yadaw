@@ -538,6 +538,237 @@ describe("ProjectDatabase", () => {
     )
   })
 
+  it("creates and removes a blank MIDI source and clip atomically", async () => {
+    const { database } = await createDatabase()
+    const instrument: MixerChannelState = {
+      id: "instrument-blank",
+      kind: "instrument",
+      systemRole: null,
+      name: "Instrument",
+      color: "#73D6A2",
+      sortOrder: 0,
+      inputSource: null,
+      inputFormat: null,
+      gainDb: 0,
+      pan: 0,
+      muted: false,
+      soloed: false,
+      outputChannelId: "output-1-2",
+      outputBus: null,
+      recordArmed: false,
+      inputMonitoring: false,
+      inputChannels: [],
+      hardwareOutputChannels: []
+    }
+    const source = {
+      id: "blank-source",
+      name: "MIDI Clip 1",
+      contentHash: "blank:blank-source",
+      rawBytes: new Uint8Array()
+    }
+    const clip = {
+      id: "blank-clip",
+      sourceId: source.id,
+      trackId: instrument.id,
+      name: source.name,
+      startTick: 960,
+      lengthTicks: 3_840,
+      sourceOffsetTicks: 0,
+      notes: [],
+      events: []
+    }
+    const create: ProjectCommand = {
+      type: "batch",
+      commands: [
+        { type: "create-channel", channel: instrument },
+        { type: "create-midi-source", source },
+        { type: "create-midi-clip", clip }
+      ]
+    }
+
+    await database.applyCommand(create, "output-1-2")
+    expect((await database.mixerSnapshot()).midiClips).toContainEqual(clip)
+
+    await database.applyCommand(
+      {
+        type: "batch",
+        commands: [
+          { type: "delete-midi-clip", clipId: clip.id },
+          { type: "delete-midi-source", source }
+        ]
+      },
+      "output-1-2"
+    )
+    expect((await database.mixerSnapshot()).midiClips).toEqual([])
+
+    await database.applyCommand(
+      {
+        type: "batch",
+        commands: [
+          { type: "create-midi-source", source },
+          { type: "create-midi-clip", clip }
+        ]
+      },
+      "output-1-2"
+    )
+    expect((await database.mixerSnapshot()).midiClips).toContainEqual(clip)
+  })
+
+  it("round-trips atomic piano-roll note edits at 1/3840-note resolution", async () => {
+    const { database } = await createDatabase()
+    const instrument = {
+      id: "instrument-1",
+      kind: "instrument" as const,
+      systemRole: null,
+      name: "Instrument 1",
+      color: "#73D6A2",
+      sortOrder: 0,
+      inputSource: null,
+      inputFormat: null,
+      gainDb: 0,
+      pan: 0,
+      muted: false,
+      soloed: false,
+      outputChannelId: "output-1-2",
+      outputBus: null,
+      recordArmed: false,
+      inputMonitoring: false,
+      inputChannels: [],
+      hardwareOutputChannels: []
+    }
+    const clip = {
+      id: "midi-clip-1",
+      sourceId: "midi-source-1",
+      trackId: instrument.id,
+      name: "Editable",
+      startTick: 960,
+      sourceOffsetTicks: 0,
+      lengthTicks: 960,
+      notes: [
+        {
+          id: "note-1",
+          startTick: 120,
+          durationTicks: 240,
+          channel: 0,
+          key: 60,
+          velocity: 100,
+          releaseVelocity: 0
+        }
+      ],
+      events: [
+        {
+          id: "event-1",
+          tick: 240,
+          channel: 0,
+          kind: "control-change" as const,
+          data: new Uint8Array([1, 2])
+        }
+      ]
+    }
+    await database.importMidi(
+      {
+        id: clip.sourceId,
+        name: "editable.mid",
+        contentHash: "editable-midi-source",
+        rawBytes: new Uint8Array([0x4d, 0x54, 0x68, 0x64])
+      },
+      {
+        type: "batch",
+        commands: [
+          { type: "create-channel", channel: instrument },
+          { type: "create-midi-clip", clip }
+        ]
+      },
+      "output-1-2"
+    )
+
+    await database.applyCommand(
+      {
+        type: "batch",
+        commands: [
+          {
+            type: "rebase-midi-clip-content",
+            clipId: clip.id,
+            deltaTicks: 240
+          },
+          {
+            type: "update-midi-clip-range",
+            clipId: clip.id,
+            patch: { startTick: 720, lengthTicks: 1_200 }
+          },
+          {
+            type: "update-midi-notes",
+            clipId: clip.id,
+            updates: [
+              {
+                noteId: "note-1",
+                patch: { startTick: 1, durationTicks: 1, velocity: 127 }
+              }
+            ]
+          },
+          {
+            type: "create-midi-notes",
+            clipId: clip.id,
+            notes: [
+              {
+                id: "note-2",
+                startTick: 480,
+                durationTicks: 1,
+                channel: 15,
+                key: 127,
+                velocity: 1,
+                releaseVelocity: 127
+              }
+            ]
+          }
+        ]
+      },
+      "output-1-2"
+    )
+
+    const edited = (await database.mixerSnapshot()).midiClips[0]!
+    expect(edited).toMatchObject({ startTick: 720, lengthTicks: 1_200 })
+    expect(edited.notes).toEqual([
+      expect.objectContaining({ id: "note-1", startTick: 1, durationTicks: 1, velocity: 127 }),
+      expect.objectContaining({ id: "note-2", durationTicks: 1, channel: 15, key: 127 })
+    ])
+    expect(edited.events[0]?.tick).toBe(480)
+
+    await expect(
+      database.applyCommand(
+        {
+          type: "batch",
+          commands: [
+            {
+              type: "create-midi-notes",
+              clipId: clip.id,
+              notes: [
+                {
+                  id: "rolled-back-note",
+                  startTick: 0,
+                  durationTicks: 1,
+                  channel: 0,
+                  key: 60,
+                  velocity: 100,
+                  releaseVelocity: 0
+                }
+              ]
+            },
+            {
+              type: "update-midi-notes",
+              clipId: clip.id,
+              updates: [{ noteId: "note-2", patch: { durationTicks: 0 } }]
+            }
+          ]
+        },
+        "output-1-2"
+      )
+    ).rejects.toThrow()
+    expect((await database.mixerSnapshot()).midiClips[0]?.notes).not.toContainEqual(
+      expect.objectContaining({ id: "rolled-back-note" })
+    )
+  })
+
   it("adds the default muted metronome exactly once when an older project is migrated", async () => {
     const resource = await createDatabase()
     await resource.database.close()

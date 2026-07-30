@@ -1,11 +1,13 @@
 import { createPinia, setActivePinia } from "pinia"
-import { mount } from "@vue/test-utils"
+import { flushPromises, mount } from "@vue/test-utils"
 import { describe, expect, it, vi } from "vitest"
 import type { MixerChannelState } from "@yadaw/contracts"
 import type { ProjectAssetSummary as Asset } from "@yadaw/contracts"
 import { useProjectStore } from "../../stores/project"
 import { useMixerStore } from "../../stores/mixer"
 import { useArrangementViewStore } from "../../stores/arrangementView"
+import { usePianoRollStore } from "../../stores/pianoRoll"
+import { useStudioWorkspaceStore } from "../../stores/studioWorkspace"
 import ArrangementWorkspace from "./ArrangementWorkspace.vue"
 
 const recordingAsset: Asset = {
@@ -494,5 +496,139 @@ describe("ArrangementWorkspace", () => {
     await rail.trigger("wheel", { deltaY: 80 })
     expect(viewport.element.scrollTop).toBe(320)
     expect(rail.element.scrollTop).toBe(320)
+  })
+
+  it("creates a snapped one-bar MIDI clip and opens it from an empty Instrument lane", async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const mixer = useMixerStore()
+    mixer.graph = {
+      sampleRate: 48_000,
+      channels: [
+        {
+          id: "instrument-1",
+          kind: "instrument",
+          systemRole: null,
+          name: "Instrument 1",
+          color: "#73D6A2",
+          sortOrder: 0,
+          inputSource: null,
+          inputFormat: null,
+          gainDb: 0,
+          pan: 0,
+          muted: false,
+          soloed: false,
+          outputChannelId: "output",
+          recordArmed: false,
+          inputMonitoring: false,
+          inputChannels: [],
+          hardwareOutputChannels: []
+        },
+        {
+          id: "master",
+          kind: "master",
+          systemRole: null,
+          name: "Master",
+          color: "#8C83FF",
+          sortOrder: 0,
+          inputSource: null,
+          inputFormat: null,
+          gainDb: 0,
+          pan: 0,
+          muted: false,
+          soloed: false,
+          outputChannelId: null,
+          recordArmed: false,
+          inputMonitoring: false,
+          inputChannels: [],
+          hardwareOutputChannels: []
+        },
+        {
+          id: "output",
+          kind: "output",
+          systemRole: null,
+          name: "Output",
+          color: "#EF7C95",
+          sortOrder: 0,
+          inputSource: null,
+          inputFormat: null,
+          gainDb: 0,
+          pan: 0,
+          muted: false,
+          soloed: false,
+          outputChannelId: null,
+          recordArmed: false,
+          inputMonitoring: false,
+          inputChannels: [],
+          hardwareOutputChannels: [1, 2]
+        }
+      ],
+      clips: [],
+      sends: [],
+      plugins: [],
+      midiClips: [],
+      keySignatureEvents: [{ tick: 0, fifths: 0, mode: "major" }],
+      tempoMap: {
+        ticksPerQuarter: 960,
+        tempoEvents: [{ tick: 0, beatsPerMinute: 120 }],
+        timeSignatureEvents: [{ tick: 0, numerator: 4, denominator: 4 }]
+      }
+    }
+    const execute = vi.spyOn(mixer, "execute").mockResolvedValue(true)
+    useArrangementViewStore().setTimeZoom(120)
+    const randomUuid = vi
+      .spyOn(crypto, "randomUUID")
+      .mockReturnValueOnce("00000000-0000-4000-8000-000000000001")
+      .mockReturnValueOnce("00000000-0000-4000-8000-000000000002")
+    const wrapper = mount(ArrangementWorkspace, {
+      props: {
+        recordingId: null,
+        recordingStartedAt: null,
+        recordingStartFrame: null,
+        recordingError: ""
+      },
+      global: { plugins: [pinia] }
+    })
+    const lane = wrapper.get<HTMLElement>(".midi-track")
+    Object.defineProperty(lane.element, "getBoundingClientRect", {
+      value: () => ({ left: 20 })
+    })
+
+    await lane.trigger("dblclick", { clientX: 145 })
+    await flushPromises()
+
+    expect(execute).toHaveBeenCalledWith({
+      type: "batch",
+      commands: [
+        {
+          type: "create-midi-source",
+          source: {
+            id: "00000000-0000-4000-8000-000000000001",
+            name: "MIDI Clip 1",
+            contentHash: "blank:00000000-0000-4000-8000-000000000001",
+            rawBytes: new Uint8Array()
+          }
+        },
+        {
+          type: "create-midi-clip",
+          clip: {
+            id: "00000000-0000-4000-8000-000000000002",
+            sourceId: "00000000-0000-4000-8000-000000000001",
+            trackId: "instrument-1",
+            name: "MIDI Clip 1",
+            startTick: 960,
+            lengthTicks: 3_840,
+            sourceOffsetTicks: 0,
+            notes: [],
+            events: []
+          }
+        }
+      ]
+    })
+    expect(usePianoRollStore().openClipIds).toEqual(["00000000-0000-4000-8000-000000000002"])
+    expect(useStudioWorkspaceStore().activeLowerDock).toBe("piano-roll")
+
+    randomUuid.mockRestore()
+    wrapper.unmount()
   })
 })

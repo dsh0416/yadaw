@@ -4,6 +4,7 @@ import { useEventListener } from "@vueuse/core"
 import { useStudioWorkspaceStore } from "../../stores/studioWorkspace"
 import ArrangementWorkspace from "./ArrangementWorkspace.vue"
 import MixerConsole from "../mixer/MixerConsole.vue"
+import PianoRollDock from "../piano-roll/PianoRollDock.vue"
 
 defineProps<{
   recordingId: string | null
@@ -44,18 +45,17 @@ useEventListener(window, "pointerup", stopResize)
         :recording-error="recordingError"
       />
       <div
-        v-if="workspaceStore.mixerDockOpen"
+        v-if="workspaceStore.lowerDockOpen"
         class="dock-resizer"
         :class="{ active: resizing }"
         role="separator"
         aria-label="Resize mixer dock"
         @pointerdown="startResize"
       />
-      <MixerConsole
-        v-if="workspaceStore.mixerDockOpen"
-        class="mixer-dock"
-        :style="workspaceStore.dockStyle"
-      />
+      <div v-if="workspaceStore.lowerDockOpen" class="lower-dock" :style="workspaceStore.dockStyle">
+        <MixerConsole v-if="workspaceStore.activeLowerDock === 'mixer'" class="mixer-dock" />
+        <PianoRollDock v-else @close="workspaceStore.closeLowerDock" />
+      </div>
     </div>
   </section>
 </template>
@@ -80,8 +80,17 @@ useEventListener(window, "pointerup", stopResize)
   min-height: 120px;
   flex: 1;
 }
-.mixer-dock {
+.lower-dock {
+  display: flex;
+  min-height: 0;
   flex: none;
+  flex-direction: column;
+  overflow: hidden;
+}
+.mixer-dock {
+  min-height: 0;
+  flex: none;
+  flex: 1;
 }
 .dock-resizer {
   position: relative;
