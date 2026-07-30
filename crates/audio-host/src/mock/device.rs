@@ -305,7 +305,10 @@ impl DeviceTrait for MockDevice {
 ///
 /// The mock devices advertise a single configuration, so anything the engine
 /// could not have taken from [`default_config`] is rejected the same way a real
-/// backend would reject an unsupported format.
+/// backend would reject an unsupported format. Because the devices report a
+/// buffer range, the engine always asks for a fixed size inside it;
+/// [`BufferSize::Default`] resolves to the devices' own default block size for
+/// any other cpal caller.
 fn negotiate_frames(config: &StreamConfig, sample_format: SampleFormat) -> Result<FrameCount, Error> {
     if sample_format != SAMPLE_FORMAT {
         return Err(Error::with_message(

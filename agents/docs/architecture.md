@@ -70,9 +70,12 @@ and only hardware input mappings enter the monitored track source. The route
 remains live while transport is stopped without advancing clips, MIDI, the
 metronome, or the transport clock.
 
-Requested buffer sizes are advisory. Rust keeps a fixed request only when it is
-inside the device's reported range; otherwise, or when the backend cannot report
-a range, it opens the stream with `BufferSize::Default`. The negotiated
+Requested buffer sizes are advisory. When the device reports a range, Rust
+clamps the request into it and opens the stream at that fixed size, so the input
+ring buffer and both resamplers are sized for the block size the callbacks
+actually receive. Only a backend that cannot report a range falls back to
+`BufferSize::Default`, where the negotiated size stays unknown until the stream
+exists and `Stream::buffer_size` corrects the reported figures. The negotiated
 input/output sizes and a fallback flag are returned to the renderer, and the
 working output size replaces the stale persisted request.
 

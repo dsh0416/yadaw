@@ -50,21 +50,22 @@ struct BufferSelection {
 fn select_buffer_size(supported: &SupportedBufferSize, requested: u32) -> BufferSelection {
     match supported {
         SupportedBufferSize::Range { min, max } => {
+            // A clamped request is still opened as a fixed size. The device
+            // advertised that size, so `expected_frames` is a value it has
+            // committed to rather than a guess. Asking for `BufferSize::Default`
+            // here would leave the negotiated block size unknown until after
+            // the ring buffer and resamplers had already been sized for the
+            // clamped value.
             let selected = requested.clamp(*min, *max);
-            if selected == requested {
-                BufferSelection {
-                    buffer_size: BufferSize::Fixed(selected),
-                    expected_frames: selected,
-                    fell_back: false,
-                }
-            } else {
-                BufferSelection {
-                    buffer_size: BufferSize::Default,
-                    expected_frames: selected,
-                    fell_back: true,
-                }
+            BufferSelection {
+                buffer_size: BufferSize::Fixed(selected),
+                expected_frames: selected,
+                fell_back: selected != requested,
             }
         }
+        // With no reported range there is nothing to clamp into, so the driver
+        // default is the only option and `expected_frames` stays a prediction
+        // that `Stream::buffer_size` corrects once the stream exists.
         SupportedBufferSize::Unknown => BufferSelection {
             buffer_size: BufferSize::Default,
             expected_frames: requested,
