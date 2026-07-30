@@ -8,6 +8,7 @@ pub mod editor_window;
 pub mod engine;
 pub mod midi_input;
 pub mod midi_journal;
+pub mod mock;
 pub mod recording;
 pub mod vst3;
 pub mod workers;

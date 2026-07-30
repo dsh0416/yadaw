@@ -1,7 +1,6 @@
 struct AudioEngine {
-    _input_stream: Option<Stream>,
-    _output_stream: Option<Stream>,
-    _virtual_thread: Option<VirtualAudioThread>,
+    _input_stream: Stream,
+    _output_stream: Stream,
     metrics: Arc<RuntimeMetrics>,
     key: AudioEngineKey,
     recorder: RecorderController,
@@ -11,20 +10,6 @@ struct AudioEngine {
     transport: Arc<TransportShared>,
     input_peaks: Arc<InputPeakBank>,
     round_trip_latency: Arc<RoundTripLatencyMeasurement>,
-}
-
-struct VirtualAudioThread {
-    shutdown: Arc<AtomicBool>,
-    thread: Option<JoinHandle<()>>,
-}
-
-impl Drop for VirtualAudioThread {
-    fn drop(&mut self) {
-        self.shutdown.store(true, Ordering::Release);
-        if let Some(thread) = self.thread.take() {
-            let _ = thread.join();
-        }
-    }
 }
 
 struct OutputMixerControl {

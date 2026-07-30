@@ -409,7 +409,7 @@ export class MixerService {
   async transport(command: TransportCommand): Promise<TransportSnapshot> {
     if (
       process.env.YADAW_TEST_CAPTURE_SOURCE === "1" &&
-      process.env.YADAW_TEST_VIRTUAL_AUDIO !== "1"
+      process.env.YADAW_TEST_MOCK_AUDIO !== "1"
     ) {
       if (command.type === "seek") {
         this.testTransport.positionFrames = command.positionFrames
@@ -448,7 +448,7 @@ export class MixerService {
   async transportSnapshot(): Promise<TransportSnapshot> {
     if (
       process.env.YADAW_TEST_CAPTURE_SOURCE === "1" &&
-      process.env.YADAW_TEST_VIRTUAL_AUDIO !== "1"
+      process.env.YADAW_TEST_MOCK_AUDIO !== "1"
     ) {
       return { ...this.testTransport }
     }

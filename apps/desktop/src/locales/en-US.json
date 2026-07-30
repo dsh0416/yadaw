@@ -363,6 +363,11 @@
         "label": "ALSA",
         "platform": "Linux",
         "description": "Native Linux audio device layer"
+      },
+      "mock": {
+        "label": "Mock",
+        "platform": "No hardware",
+        "description": "Runs the engine without real audio devices"
       }
     },
     "audio": {

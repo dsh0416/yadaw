@@ -31,6 +31,15 @@ or cabling.
 5. On Windows, install and select the manufacturer's 64-bit ASIO driver when
    appropriate.
 
+## No audio device can be opened at all
+
+When no backend reports a usable device, or another application is holding the
+interface, select the **Mock** backend under **Settings → Audio → Devices**. It
+starts the engine without touching hardware, so you can keep editing, arranging,
+and configuring the project, and it lets YADAW report the rest of its state
+normally. Playback is discarded while it is selected, so switch back to a
+hardware backend to hear the session.
+
 ## Input monitoring is unavailable
 
 Enable software monitoring under recording settings, select a hardware input
