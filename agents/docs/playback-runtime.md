@@ -546,7 +546,11 @@ The native UI context outlives the complete winit-owned VST3 runtime. On
 Windows it calls `OleInitialize` before the first module load, because
 `InitDll` can synchronously initialize VSTGUI and create its WIC factory.
 Initializing OLE only when the first view is attached is too late: the module
-would retain a null graphics factory for its lifetime.
+would retain a null graphics factory for its lifetime. On macOS, module load
+uses `CFBundle` + mandatory `bundleEntry`/`bundleExit` (see Steinberg
+`module_mac.mm`); raw `dlopen` of `Contents/MacOS/<stem>` is insufficient
+because many bundles use a different executable name and require the bundle
+ref for resource lookup.
 
 There is one winit top-level editor per plug-in instance. Reopening focuses it.
 iced 0.14 and `iced_tiny_skia` draw the toolbar and parameter list without

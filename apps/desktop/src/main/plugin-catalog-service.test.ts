@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest"
 import type { PluginDescriptor } from "@yadaw/contracts"
-import { canReuseCachedBundle, descriptorFromProbe } from "./plugin-catalog-service"
+import {
+  canReuseCachedBundle,
+  descriptorFromProbe,
+  parseProbeStdout
+} from "./plugin-catalog-service"
 
 const plugin = {
   compatibility: "compatible"
@@ -43,6 +47,18 @@ describe("canReuseCachedBundle", () => {
         previousPlugins: [{ ...plugin, compatibility: "quarantined" }]
       })
     ).toBe(false)
+  })
+})
+
+describe("parseProbeStdout", () => {
+  it("accepts pure JSON and recovers JSON after plug-in stdout noise", () => {
+    const payload = JSON.stringify({
+      module: { path: "demo.vst3", vendor: "", classes: [{ classId: "1", category: "Fx" }] }
+    })
+    expect(parseProbeStdout(payload).module?.classes?.[0]?.classId).toBe("1")
+    expect(
+      parseProbeStdout(`[info] initializing...\n${payload}\n`).module?.classes?.[0]?.classId
+    ).toBe("1")
   })
 })
 
