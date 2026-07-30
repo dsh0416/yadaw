@@ -1,9 +1,11 @@
 use std::{
     env,
-    io::{Write, stdout},
+    io::{Read, Write, stdout},
     path::{Path, PathBuf},
     process::{Command, ExitCode, Stdio},
     rc::Rc,
+    thread,
+    time::{Duration, Instant},
 };
 
 use serde::{Deserialize, Serialize};
@@ -149,19 +151,36 @@ fn json_from_stdout(stdout: &[u8]) -> Option<ClassOutput> {
 }
 
 fn deep_inspect_in_child(module_path: &Path, class: &ClassInfo) -> Option<ClassOutput> {
+    const CHILD_TIMEOUT: Duration = Duration::from_secs(8);
     let executable = env::current_exe().ok()?;
-    let output = Command::new(executable)
+    let mut child = Command::new(executable)
         .arg(module_path)
         .env(CLASS_PROBE_ENV, class.id.to_string())
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
-        .output()
+        .spawn()
         .ok()?;
-    if !output.status.success() {
+    let mut stdout = child.stdout.take()?;
+    let started = Instant::now();
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if started.elapsed() >= CHILD_TIMEOUT => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+            Ok(None) => thread::sleep(Duration::from_millis(40)),
+            Err(_) => return None,
+        }
+    };
+    if !status.success() {
         return None;
     }
-    json_from_stdout(&output.stdout)
+    let mut bytes = Vec::new();
+    stdout.read_to_end(&mut bytes).ok()?;
+    json_from_stdout(&bytes)
 }
 
 fn inspect(module_path: &Path, class: ClassInfo) -> ClassOutput {
