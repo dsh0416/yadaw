@@ -33,7 +33,9 @@ function formatBytes(value: number): string {
 <template>
   <section class="performance-section ipc-section">
     <div class="section-heading">
-      <div><Activity :size="13" /><strong>{{ t("performance.ipcSection.title") }}</strong></div>
+      <div>
+        <Activity :size="13" /><strong>{{ t("performance.ipcSection.title") }}</strong>
+      </div>
       <span>{{ buildLabel }}</span>
     </div>
     <dl v-if="audioIpc" class="ipc-diagnostics-grid">

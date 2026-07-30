@@ -441,9 +441,7 @@ function createMidiClip(trackId: string, requestedStartTick: number): void {
             <InlineTrackNameEditor
               class="track-name-editor"
               :name="track.name"
-              :label="
-                t('studio.arrangement.trackRenameLabel', { name: track.name })
-              "
+              :label="t('studio.arrangement.trackRenameLabel', { name: track.name })"
               @rename="mixerStore.updateChannel(track.id, { name: $event })"
             />
           </div>

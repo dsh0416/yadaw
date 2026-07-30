@@ -65,7 +65,9 @@ function setNumber(
     <div class="runtime-strip" :aria-label="t('settings.audio.engine.resolvedAria')">
       <span>{{ t("common.resolved") }}</span>
       <b>{{
-        t("settings.audio.engine.resolvedWorkers", { count: resolvedCount(resolved?.workerThreads) })
+        t("settings.audio.engine.resolvedWorkers", {
+          count: resolvedCount(resolved?.workerThreads)
+        })
       }}</b>
       <i />
       <b>{{
@@ -75,7 +77,9 @@ function setNumber(
       }}</b>
       <i />
       <b>{{
-        t("settings.audio.engine.resolvedEgress", { count: resolvedCount(resolved?.egressConcurrency) })
+        t("settings.audio.engine.resolvedEgress", {
+          count: resolvedCount(resolved?.egressConcurrency)
+        })
       }}</b>
     </div>
 

@@ -31,14 +31,11 @@ function commitInspectorValue(field: string, value: number | null | undefined): 
 <template>
   <aside class="inspector" :aria-label="t('pianoRoll.inspector.ariaLabel')">
     <span class="selection-summary">
-      {{ t("pianoRoll.inspector.noteCount", selectedItems.length, { count: selectedItems.length }) }}
+      {{
+        t("pianoRoll.inspector.noteCount", selectedItems.length, { count: selectedItems.length })
+      }}
     </span>
-    <UiField
-      v-for="field in inspectorFields"
-      :key="field.key"
-      :label="field.label"
-      layout="inline"
-    >
+    <UiField v-for="field in inspectorFields" :key="field.key" :label="field.label" layout="inline">
       <template #default="{ controlId }">
         <UiNumberInput
           :id="controlId"

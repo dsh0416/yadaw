@@ -18,7 +18,10 @@ function deadlineHeadroom(report: AudioBenchmarkReport): number {
   <section class="score-panel" :class="`rating-${report.rating}`">
     <div class="score-copy">
       <span class="kicker">{{ t("benchmark.summary.kicker") }}</span>
-      <strong>{{ deadlineHeadroom(report).toFixed(0) }}<small>{{ t("benchmark.summary.headroom") }}</small></strong>
+      <strong
+        >{{ deadlineHeadroom(report).toFixed(0)
+        }}<small>{{ t("benchmark.summary.headroom") }}</small></strong
+      >
     </div>
     <div class="rating-copy">
       <span>{{ rating.label }}</span>

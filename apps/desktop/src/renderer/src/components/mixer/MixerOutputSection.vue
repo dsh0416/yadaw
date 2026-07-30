@@ -79,7 +79,9 @@ function updateHardwareOutput(index: number, value: string): void {
           <strong>{{ channel.name }}</strong>
         </header>
         <label v-for="(_, index) in channel.hardwareOutputChannels" :key="index">
-          <span>{{ index === 0 ? t("mixer.outputSection.left") : t("mixer.outputSection.right") }}</span>
+          <span>{{
+            index === 0 ? t("mixer.outputSection.left") : t("mixer.outputSection.right")
+          }}</span>
           <UiSelect
             :model-value="String(channel.hardwareOutputChannels[index])"
             size="compact"

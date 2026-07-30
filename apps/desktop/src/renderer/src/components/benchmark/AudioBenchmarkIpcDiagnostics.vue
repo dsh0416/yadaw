@@ -64,7 +64,9 @@ function ipcRate(scenario: AudioIpcBenchmarkScenario): string {
       })
     }}
     · {{ t("benchmark.ipc.note.arenaOffers", { count: report.arenaOffers }) }} ·
-    {{ t("benchmark.ipc.note.messagePackBody", { size: formatPayload(report.messagePackBodyBytes) }) }}
+    {{
+      t("benchmark.ipc.note.messagePackBody", { size: formatPayload(report.messagePackBodyBytes) })
+    }}
     <template v-if="report.buildProfile === 'debug'">
       · {{ t("benchmark.ipc.note.debugOnly") }}
     </template>

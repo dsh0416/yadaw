@@ -149,8 +149,7 @@ onMounted(() => void pluginStore.load())
                 ><b>{{ plugin.name }}</b
                 ><small
                   >{{ plugin.source.kind === "builtin" ? t("studio.soundBrowser.builtIn") : ""
-                  }}{{ plugin.vendor }} ·
-                  {{ pluginCategoriesLabel(plugin.categories) }}</small
+                  }}{{ plugin.vendor }} · {{ pluginCategoriesLabel(plugin.categories) }}</small
                 ></span
               ><span class="item-dot compatible" />
             </button>
@@ -177,8 +176,7 @@ onMounted(() => void pluginStore.load())
                 ><b>{{ plugin.name }}</b
                 ><small
                   >{{ plugin.source.kind === "builtin" ? t("studio.soundBrowser.builtIn") : ""
-                  }}{{ plugin.vendor }} ·
-                  {{ pluginCategoriesLabel(plugin.categories) }}</small
+                  }}{{ plugin.vendor }} · {{ pluginCategoriesLabel(plugin.categories) }}</small
                 ></span
               ><span class="item-dot compatible" />
             </button>
@@ -230,8 +228,7 @@ onMounted(() => void pluginStore.load())
                 ><b>{{ plugin.name }}</b
                 ><small
                   >{{ plugin.source.kind === "builtin" ? t("studio.soundBrowser.builtIn") : ""
-                  }}{{ plugin.vendor }} ·
-                  {{ plugin.compatibility }}</small
+                  }}{{ plugin.vendor }} · {{ plugin.compatibility }}</small
                 ></span
               ><span :class="['item-dot', plugin.compatibility]" />
             </article>

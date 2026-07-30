@@ -274,8 +274,7 @@ export const useAudioRuntimeStore = defineStore("audio-runtime", () => {
           requested:
             snapshot.requestedBufferSize?.toString() ??
             t("warnings.audio.bufferFallback.requestedUnknown"),
-          actual:
-            actual?.toString() ?? t("warnings.audio.bufferFallback.actualDeviceSelected")
+          actual: actual?.toString() ?? t("warnings.audio.bufferFallback.actualDeviceSelected")
         })
       })
     }

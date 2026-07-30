@@ -26,11 +26,7 @@ const { t } = useI18n()
     <div class="placeholder-card">
       <component :is="side === 'left' ? Boxes : SlidersHorizontal" :size="17" />
       <p>
-        {{
-          side === "left"
-            ? t("studio.placeholder.leftBody")
-            : t("studio.placeholder.rightBody")
-        }}
+        {{ side === "left" ? t("studio.placeholder.leftBody") : t("studio.placeholder.rightBody") }}
       </p>
       <small>{{ t("studio.placeholder.badge") }}</small>
     </div>

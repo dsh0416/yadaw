@@ -54,7 +54,9 @@ const resetToken = shallowRef(0)
       <template v-else-if="status === 'error'">
         <b>{{ t("effectGraph.state.error.title") }}</b>
         <span>{{ errorMessage }}</span>
-        <button type="button" @click="emit('retry')">{{ t("effectGraph.state.error.retry") }}</button>
+        <button type="button" @click="emit('retry')">
+          {{ t("effectGraph.state.error.retry") }}
+        </button>
       </template>
     </div>
   </section>

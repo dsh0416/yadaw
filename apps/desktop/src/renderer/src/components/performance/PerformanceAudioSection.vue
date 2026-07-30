@@ -17,7 +17,9 @@ function formatLatency(value: number | null): string {
 <template>
   <section class="performance-section audio-section">
     <div class="section-heading">
-      <div><Radio :size="13" /><strong>{{ t("performance.audioSection.title") }}</strong></div>
+      <div>
+        <Radio :size="13" /><strong>{{ t("performance.audioSection.title") }}</strong>
+      </div>
       <span>{{ runtime.state }}</span>
     </div>
     <dl class="audio-timing-grid">

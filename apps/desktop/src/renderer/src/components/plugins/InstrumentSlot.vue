@@ -56,7 +56,10 @@ function drop(event: DragEvent): void {
         <strong>{{ plugin.descriptor.name }}</strong
         ><small>{{ plugin.descriptor.vendor }}</small>
       </div>
-      <button :aria-label="t('plugins.instrumentSlot.openEditor')" @click="$emit('open', plugin.id)">
+      <button
+        :aria-label="t('plugins.instrumentSlot.openEditor')"
+        @click="$emit('open', plugin.id)"
+      >
         <SquareArrowOutUpRight :size="11" />
       </button>
       <button :aria-label="t('plugins.instrumentSlot.remove')" @click="$emit('remove', plugin.id)">

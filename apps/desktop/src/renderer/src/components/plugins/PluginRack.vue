@@ -52,7 +52,8 @@ function drop(event: DragEvent, index: number): void {
 <template>
   <section class="plugin-rack" :aria-label="t('plugins.rack.ariaLabel')">
     <div class="rack-heading">
-      <span>{{ t("plugins.rack.inserts") }}</span><b>{{ plugins.length }}</b>
+      <span>{{ t("plugins.rack.inserts") }}</span
+      ><b>{{ plugins.length }}</b>
     </div>
     <template v-for="(plugin, index) in plugins" :key="plugin.id">
       <div

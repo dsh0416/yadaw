@@ -58,7 +58,8 @@ export const useApplicationSettingsStore = defineStore("application-settings", (
       settings.value = await window.yadaw.updateApplicationSettings({ theme })
     } catch (reason) {
       settings.value = previous
-      error.value = reason instanceof Error ? reason.message : t("errors.unableToSaveDisplaySettings")
+      error.value =
+        reason instanceof Error ? reason.message : t("errors.unableToSaveDisplaySettings")
     }
   }
 
@@ -73,7 +74,8 @@ export const useApplicationSettingsStore = defineStore("application-settings", (
       settings.value = await window.yadaw.updateApplicationSettings({ locale })
     } catch (reason) {
       settings.value = previous
-      error.value = reason instanceof Error ? reason.message : t("errors.unableToSaveDisplaySettings")
+      error.value =
+        reason instanceof Error ? reason.message : t("errors.unableToSaveDisplaySettings")
     }
   }
 
@@ -121,7 +123,8 @@ export const useApplicationSettingsStore = defineStore("application-settings", (
       settings.value = await window.yadaw.configureAudioHostRuntime(preferences)
       await refreshAudioHostRuntimeDiagnostics()
     } catch (reason) {
-      error.value = reason instanceof Error ? reason.message : t("errors.unableToRestartAudioHelper")
+      error.value =
+        reason instanceof Error ? reason.message : t("errors.unableToRestartAudioHelper")
       throw reason
     } finally {
       applyingAudioRuntime.value = false

@@ -17,7 +17,9 @@ const emit = defineEmits<{ "update:bufferSize": [value: string] }>()
 const { t } = useI18n()
 
 function formatLatency(value: number | null): string {
-  return value === null ? t("common.notAvailable") : t("common.milliseconds", { value: value.toFixed(2) })
+  return value === null
+    ? t("common.notAvailable")
+    : t("common.milliseconds", { value: value.toFixed(2) })
 }
 function formatFrames(value: number | null): string {
   return value === null ? t("common.notAvailable") : t("common.frames", { count: value })
@@ -49,7 +51,9 @@ function formatFrames(value: number | null): string {
         <span>{{ t("settings.audio.latency.output.label") }}</span>
         <strong>{{ formatLatency(runtime.outputLatencyMs) }}</strong>
         <small>{{
-          t("settings.audio.latency.output.detail", { frames: formatFrames(runtime.outputBufferSize) })
+          t("settings.audio.latency.output.detail", {
+            frames: formatFrames(runtime.outputBufferSize)
+          })
         }}</small>
       </div>
       <div class="latency-card">
@@ -61,7 +65,9 @@ function formatFrames(value: number | null): string {
         <span>{{ t("settings.audio.latency.input.label") }}</span>
         <strong>{{ formatLatency(runtime.inputLatencyMs) }}</strong>
         <small>{{
-          t("settings.audio.latency.input.detail", { frames: formatFrames(runtime.inputBufferSize) })
+          t("settings.audio.latency.input.detail", {
+            frames: formatFrames(runtime.inputBufferSize)
+          })
         }}</small>
       </div>
       <div class="latency-card">

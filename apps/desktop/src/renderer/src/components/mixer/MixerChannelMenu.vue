@@ -20,7 +20,10 @@ const { t } = useI18n()
 <template>
   <UiPopover side="top" align="end" :side-offset="6">
     <template #trigger>
-      <button class="menu-trigger" :aria-label="t('mixer.channelMenu.ariaLabel', { name: channelName })">
+      <button
+        class="menu-trigger"
+        :aria-label="t('mixer.channelMenu.ariaLabel', { name: channelName })"
+      >
         <MoreHorizontal :size="13" />
       </button>
     </template>

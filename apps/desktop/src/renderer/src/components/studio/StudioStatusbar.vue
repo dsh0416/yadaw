@@ -42,8 +42,12 @@ function formatLatency(value: number | null): string {
           : t("studio.statusbar.buffer", { size: runtime.outputBufferSize })
       }}</span
     >
-    <span>{{ t("studio.statusbar.rtl", { latency: formatLatency(runtime.estimatedRoundTripLatencyMs) }) }}</span>
-    <span>{{ t("studio.statusbar.avg", { latency: formatLatency(statistics.averageRoundTripLatencyMs) }) }}</span>
+    <span>{{
+      t("studio.statusbar.rtl", { latency: formatLatency(runtime.estimatedRoundTripLatencyMs) })
+    }}</span>
+    <span>{{
+      t("studio.statusbar.avg", { latency: formatLatency(statistics.averageRoundTripLatencyMs) })
+    }}</span>
     <span class="status-spacer" />
     <span :class="{ alert: statistics.sessionXruns > 0 }">{{
       t("studio.statusbar.xrun", { count: statistics.sessionXruns })

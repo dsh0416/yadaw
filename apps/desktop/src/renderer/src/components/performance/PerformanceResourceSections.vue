@@ -18,7 +18,11 @@ const workspaceSpace = computed(() => findStorage("workspace"))
 const swapSpace = computed(() => findStorage("swap"))
 
 const storageLabels = computed(() => [
-  { key: "workspace" as const, label: t("performance.resourceSections.workspace"), space: workspaceSpace.value },
+  {
+    key: "workspace" as const,
+    label: t("performance.resourceSections.workspace"),
+    space: workspaceSpace.value
+  },
   { key: "swap" as const, label: t("performance.resourceSections.swap"), space: swapSpace.value }
 ])
 
@@ -46,7 +50,9 @@ function spaceFreePercent(space: StorageSpaceSnapshot | null): number | null {
 }
 function spaceValue(space: StorageSpaceSnapshot | null): string {
   const percent = spaceFreePercent(space)
-  return percent === null ? "—" : t("performance.resourceSections.percentFree", { percent: Math.round(percent) })
+  return percent === null
+    ? "—"
+    : t("performance.resourceSections.percentFree", { percent: Math.round(percent) })
 }
 function spaceDetail(space: StorageSpaceSnapshot | null): string {
   if (!space || space.freeBytes === null) {
@@ -71,8 +77,12 @@ function coreSeverity(usagePercent: number | null): HealthSeverity {
 <template>
   <section class="performance-section cpu-section">
     <div class="section-heading">
-      <div><Cpu :size="13" /><strong>{{ t("performance.resourceSections.cpuChannels") }}</strong></div>
-      <span>{{ t("performance.resourceSections.total", { percent: formatPercent(cpuUsage) }) }}</span>
+      <div>
+        <Cpu :size="13" /><strong>{{ t("performance.resourceSections.cpuChannels") }}</strong>
+      </div>
+      <span>{{
+        t("performance.resourceSections.total", { percent: formatPercent(cpuUsage) })
+      }}</span>
     </div>
     <div v-if="snapshot?.cpu.cores.length" class="core-bank">
       <div
@@ -85,23 +95,45 @@ function coreSeverity(usagePercent: number | null): HealthSeverity {
         <span class="core-label">C{{ String(core.index + 1).padStart(2, "0") }}</span>
       </div>
     </div>
-    <div v-else class="monitor-placeholder">{{ t("performance.resourceSections.samplingCores") }}</div>
+    <div v-else class="monitor-placeholder">
+      {{ t("performance.resourceSections.samplingCores") }}
+    </div>
   </section>
   <section class="performance-section memory-section">
     <div class="section-heading">
-      <div><MemoryStick :size="13" /><strong>{{ t("performance.resourceSections.physicalMemory") }}</strong></div>
+      <div>
+        <MemoryStick :size="13" /><strong>{{
+          t("performance.resourceSections.physicalMemory")
+        }}</strong>
+      </div>
       <span>{{ formatPercent(memoryUsage) }}</span>
     </div>
     <div class="memory-readout">
       <div class="linear-meter"><i :style="{ width: `${memoryUsage ?? 0}%` }" /></div>
-      <span>{{ t("performance.resourceSections.used", { size: formatBytes(snapshot?.memory.usedBytes ?? null) }) }}</span>
-      <span>{{ t("performance.resourceSections.free", { size: formatBytes(snapshot?.memory.freeBytes ?? null) }) }}</span>
-      <span>{{ t("performance.resourceSections.totalMemory", { size: formatBytes(snapshot?.memory.totalBytes ?? null) }) }}</span>
+      <span>{{
+        t("performance.resourceSections.used", {
+          size: formatBytes(snapshot?.memory.usedBytes ?? null)
+        })
+      }}</span>
+      <span>{{
+        t("performance.resourceSections.free", {
+          size: formatBytes(snapshot?.memory.freeBytes ?? null)
+        })
+      }}</span>
+      <span>{{
+        t("performance.resourceSections.totalMemory", {
+          size: formatBytes(snapshot?.memory.totalBytes ?? null)
+        })
+      }}</span>
     </div>
   </section>
   <section class="performance-section storage-section">
     <div class="section-heading">
-      <div><HardDrive :size="13" /><strong>{{ t("performance.resourceSections.projectStorage") }}</strong></div>
+      <div>
+        <HardDrive :size="13" /><strong>{{
+          t("performance.resourceSections.projectStorage")
+        }}</strong>
+      </div>
       <span>{{ t("performance.resourceSections.freeSpace") }}</span>
     </div>
     <div class="storage-grid">

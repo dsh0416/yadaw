@@ -25,7 +25,11 @@ const { t } = useI18n()
     :data-plugin-id="plugin.id"
     @dragstart="writePluginDrag($event, { source: 'rack', instanceId: plugin.id })"
   >
-    <span class="grip" draggable="true" :aria-label="t('plugins.pluginSlot.move', { name: plugin.descriptor.name })">
+    <span
+      class="grip"
+      draggable="true"
+      :aria-label="t('plugins.pluginSlot.move', { name: plugin.descriptor.name })"
+    >
       <GripVertical :size="11" aria-hidden="true" />
     </span>
     <i :class="runtime?.state ?? (plugin.enabled ? 'active' : 'bypassed')" />
@@ -39,19 +43,14 @@ const { t } = useI18n()
         :title="t('plugins.pluginSlot.audioMode', { mode: plugin.audioMode })"
         >{{ pluginAudioModeBadge(plugin.audioMode) }}</span
       >
-      <span
-        v-if="plugin.descriptor.ara"
-        class="ara-badge"
-        :title="t('plugins.pluginSlot.araTitle')"
+      <span v-if="plugin.descriptor.ara" class="ara-badge" :title="t('plugins.pluginSlot.araTitle')"
         >ARA</span
       >
     </span>
     <button
       :aria-label="
         t('plugins.pluginSlot.toggle', {
-          action: plugin.enabled
-            ? t('plugins.pluginSlot.bypass')
-            : t('plugins.pluginSlot.enable'),
+          action: plugin.enabled ? t('plugins.pluginSlot.bypass') : t('plugins.pluginSlot.enable'),
           name: plugin.descriptor.name
         })
       "

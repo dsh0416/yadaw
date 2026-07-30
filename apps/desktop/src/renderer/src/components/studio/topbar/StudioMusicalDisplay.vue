@@ -80,9 +80,7 @@ function commitTempoEdit(): void {
         v-else
         type="button"
         class="tempo-value"
-        :aria-label="
-          t('studio.musical.tempoButtonAria', { value: currentTempo.toFixed(2) })
-        "
+        :aria-label="t('studio.musical.tempoButtonAria', { value: currentTempo.toFixed(2) })"
         :title="t('studio.musical.tempoEditTitle')"
         @dblclick="beginTempoEdit"
         @keydown.enter.prevent="beginTempoEdit"

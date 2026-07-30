@@ -119,7 +119,9 @@ function formatLatency(value: number | null): string {
           <strong>{{ t("performance.header.title") }}</strong>
         </div>
         <div class="performance-header-actions">
-          <span :class="['health-badge', severity]">{{ t(`performance.severity.${severity}`) }}</span>
+          <span :class="['health-badge', severity]">{{
+            t(`performance.severity.${severity}`)
+          }}</span>
           <button
             class="refresh-performance"
             :aria-label="t('performance.header.refreshAria')"

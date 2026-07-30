@@ -27,7 +27,10 @@ function format(value: number, digits = 1): string {
           <h3>{{ scenario.label }}</h3>
           <p>{{ scenario.description }}</p>
         </div>
-        <strong>{{ format(scenario.p99BlockMs, 3) }}<small> {{ t("benchmark.scenarios.p99Unit") }}</small></strong>
+        <strong
+          >{{ format(scenario.p99BlockMs, 3)
+          }}<small> {{ t("benchmark.scenarios.p99Unit") }}</small></strong
+        >
       </header>
       <div class="timing-lane">
         <span class="timing-fill" :style="{ width: `${budgetUsePercent(scenario)}%` }" />
@@ -39,7 +42,9 @@ function format(value: number, digits = 1): string {
         <span>{{ t("benchmark.scenarios.sends", { count: scenario.sends }) }}</span
         ><span>{{ t("benchmark.scenarios.plugins", { count: scenario.plugins }) }}</span>
         <span>{{ t("benchmark.scenarios.samples", { count: scenario.blockSize }) }}</span>
-        <span>{{ t("benchmark.scenarios.budget", { ms: format(scenario.bufferBudgetMs, 3) }) }}</span>
+        <span>{{
+          t("benchmark.scenarios.budget", { ms: format(scenario.bufferBudgetMs, 3) })
+        }}</span>
         <span>{{
           t("benchmark.scenarios.late", {
             misses: scenario.deadlineMisses,

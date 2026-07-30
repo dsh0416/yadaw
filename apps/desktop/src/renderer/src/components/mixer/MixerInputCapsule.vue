@@ -55,7 +55,8 @@ const selectedInput = computed(() => {
 
 function sourceOptions(source: MixerInputSource) {
   const count = inputCount(source)
-  const prefix = source === "hardware" ? t("mixer.inputCapsule.inPrefix") : t("mixer.inputCapsule.busPrefix")
+  const prefix =
+    source === "hardware" ? t("mixer.inputCapsule.inPrefix") : t("mixer.inputCapsule.busPrefix")
   if (isStereo.value) {
     return Array.from({ length: Math.floor(count / 2) }, (_, index) => {
       const first = index * 2 + 1

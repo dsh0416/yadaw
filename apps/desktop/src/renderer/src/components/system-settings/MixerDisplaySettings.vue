@@ -12,18 +12,16 @@ const { t } = useI18n()
 const settingsStore = useApplicationSettingsStore()
 const { settings, loading, error } = storeToRefs(settingsStore)
 
-const peakHoldOptions = computed<
-  ReadonlyArray<{ value: MeterPeakHold; label: string }>
->(() => [
+const peakHoldOptions = computed<ReadonlyArray<{ value: MeterPeakHold; label: string }>>(() => [
   { value: "800ms", label: t("settings.audio.mixerDisplay.peakHold.800ms") },
   { value: "2s", label: t("settings.audio.mixerDisplay.peakHold.2s") },
   { value: "4s", label: t("settings.audio.mixerDisplay.peakHold.4s") },
   { value: "infinite", label: t("settings.audio.mixerDisplay.peakHold.infinite") }
 ])
 
-const returnRateOptions = computed<
-  ReadonlyArray<{ value: MeterReturnRate; label: string }>
->(() => [{ value: "iec-type-i", label: t("settings.audio.mixerDisplay.returnRate.iecTypeI") }])
+const returnRateOptions = computed<ReadonlyArray<{ value: MeterReturnRate; label: string }>>(() => [
+  { value: "iec-type-i", label: t("settings.audio.mixerDisplay.returnRate.iecTypeI") }
+])
 
 function selectPeakHold(value: string): void {
   void settingsStore.setMeterPeakHold(value as MeterPeakHold)

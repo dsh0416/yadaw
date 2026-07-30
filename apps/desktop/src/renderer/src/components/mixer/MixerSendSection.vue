@@ -49,7 +49,10 @@ function targetName(send: MixerSendState): string {
       t("mixer.sendSection.missingOutput")
     )
   }
-  return props.buses.find((bus) => bus.channel === send.targetBus)?.name ?? t("mixer.sendSection.missingBus")
+  return (
+    props.buses.find((bus) => bus.channel === send.targetBus)?.name ??
+    t("mixer.sendSection.missingBus")
+  )
 }
 
 function targetValue(target: MixerRouteTarget): string {
@@ -164,7 +167,9 @@ function createSend(value: string): void {
             <button
               :class="{ active: send.enabled }"
               :aria-label="
-                send.enabled ? t('mixer.sendSection.disableSend') : t('mixer.sendSection.enableSend')
+                send.enabled
+                  ? t('mixer.sendSection.disableSend')
+                  : t('mixer.sendSection.enableSend')
               "
               :aria-pressed="send.enabled"
               @click="updateSend(send, { enabled: !send.enabled })"

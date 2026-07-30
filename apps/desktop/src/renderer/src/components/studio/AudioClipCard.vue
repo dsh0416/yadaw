@@ -150,7 +150,11 @@ function startDrag(event: DragEvent): void {
     <span class="transparent-drag-image" aria-hidden="true" />
     <span class="clip-heading" :title="clip.name">
       <b class="clip-name">{{ clip.name }}</b>
-      <span v-if="recording" class="capture-dot" :aria-label="t('studio.arrangement.recordingAria')" />
+      <span
+        v-if="recording"
+        class="capture-dot"
+        :aria-label="t('studio.arrangement.recordingAria')"
+      />
       <ChannelFormatIcon :channels="clip.channels" />
     </span>
     <span v-if="visibleEndSeconds > visibleStartSeconds" class="waveform" :style="waveformStyle">

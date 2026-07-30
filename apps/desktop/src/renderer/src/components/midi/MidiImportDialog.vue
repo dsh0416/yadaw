@@ -73,12 +73,11 @@ function updateInstrument(sourceTrack: number, sequence: number, value: string):
           :key="`${track.sequence}:${track.sourceTrack}`"
         >
           <div>
-            <strong>{{ track.name }}</strong
-            >            <small
+            <strong>{{ track.name }}</strong>
+            <small
               >{{ t("midiImport.notes", { count: track.noteCount }) }} ·
-              {{ t("midiImport.events", { count: track.eventCount }) }}<span
-                v-if="midiImportStore.preview?.format === 2"
-              >
+              {{ t("midiImport.events", { count: track.eventCount })
+              }}<span v-if="midiImportStore.preview?.format === 2">
                 · {{ t("midiImport.sequence", { n: track.sequence + 1 }) }}</span
               ></small
             >

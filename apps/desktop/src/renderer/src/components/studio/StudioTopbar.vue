@@ -142,7 +142,12 @@ const { t } = useI18n()
     </div>
 
     <div class="control-group metronome-group" data-topbar-group="metronome">
-      <StudioControlButton :label="t('studio.topbar.countIn')" unavailable compact-hidden tone="accent">
+      <StudioControlButton
+        :label="t('studio.topbar.countIn')"
+        unavailable
+        compact-hidden
+        tone="accent"
+      >
         <span class="count-in-control">1234</span>
       </StudioControlButton>
       <StudioControlButton
