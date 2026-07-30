@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue"
+import { useI18n } from "vue-i18n"
 import { UiCascadingSelect, type UiCascadingSelectGroup } from "@yadaw/ui"
 import type { MixerChannelPatch, MixerInputSource } from "@yadaw/contracts"
 import { MIXER_BUS_COUNT } from "@yadaw/contracts"
@@ -23,6 +24,8 @@ const props = withDefaults(
 const emit = defineEmits<{
   update: [patch: MixerChannelPatch]
 }>()
+
+const { t } = useI18n()
 
 const isStereo = computed(() => props.inputFormat === "stereo")
 
@@ -52,7 +55,7 @@ const selectedInput = computed(() => {
 
 function sourceOptions(source: MixerInputSource) {
   const count = inputCount(source)
-  const prefix = source === "hardware" ? "IN" : "BUS"
+  const prefix = source === "hardware" ? t("mixer.inputCapsule.inPrefix") : t("mixer.inputCapsule.busPrefix")
   if (isStereo.value) {
     return Array.from({ length: Math.floor(count / 2) }, (_, index) => {
       const first = index * 2 + 1
@@ -74,8 +77,8 @@ function sourceOptions(source: MixerInputSource) {
 
 const inputGroups = computed<readonly UiCascadingSelectGroup[]>(() => {
   return [
-    { label: "Hardware inputs", options: sourceOptions("hardware") },
-    { label: "Buses", options: sourceOptions("bus") }
+    { label: t("mixer.inputCapsule.hardwareInputs"), options: sourceOptions("hardware") },
+    { label: t("mixer.inputCapsule.buses"), options: sourceOptions("bus") }
   ]
 })
 
@@ -111,7 +114,7 @@ function toggleStereo(): void {
         :groups="inputGroups"
         size="compact"
         appearance="embedded"
-        :aria-label="`${channelName} input channel`"
+        :aria-label="t('mixer.inputCapsule.inputChannel', { name: channelName })"
         @update:model-value="selectInput"
       />
     </div>
@@ -121,11 +124,13 @@ function toggleStereo(): void {
       type="button"
       :aria-label="
         isStereo
-          ? `Use mono input for ${channelName}`
-          : `Link adjacent input as stereo for ${channelName}`
+          ? t('mixer.inputCapsule.useMono', { name: channelName })
+          : t('mixer.inputCapsule.linkStereo', { name: channelName })
       "
       :aria-pressed="isStereo"
-      :title="isStereo ? 'Stereo linked' : 'Link adjacent input as stereo'"
+      :title="
+        isStereo ? t('mixer.inputCapsule.stereoLinked') : t('mixer.inputCapsule.linkStereoTitle')
+      "
       @click="toggleStereo"
     >
       <ChannelFormatIcon :channels="isStereo ? 2 : 1" />

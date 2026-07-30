@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n"
 import { MoreHorizontal, Trash2 } from "@lucide/vue"
 import { UiPopover } from "@yadaw/ui"
 
@@ -12,22 +13,24 @@ const emit = defineEmits<{
   updateColor: [color: string]
   delete: []
 }>()
+
+const { t } = useI18n()
 </script>
 
 <template>
   <UiPopover side="top" align="end" :side-offset="6">
     <template #trigger>
-      <button class="menu-trigger" :aria-label="`${channelName} channel menu`">
+      <button class="menu-trigger" :aria-label="t('mixer.channelMenu.ariaLabel', { name: channelName })">
         <MoreHorizontal :size="13" />
       </button>
     </template>
     <div class="channel-menu">
       <label>
-        <span>Channel color</span>
+        <span>{{ t("mixer.channelMenu.channelColor") }}</span>
         <input
           type="color"
           :value="color"
-          :aria-label="`${channelName} channel color`"
+          :aria-label="t('mixer.channelMenu.colorAria', { name: channelName })"
           @change="
             emit('updateColor', ($event.currentTarget as HTMLInputElement).value.toUpperCase())
           "
@@ -36,10 +39,10 @@ const emit = defineEmits<{
       <button
         v-if="deletable"
         class="delete-action"
-        :aria-label="`Delete ${channelName}`"
+        :aria-label="t('mixer.channelMenu.deleteAria', { name: channelName })"
         @click="emit('delete')"
       >
-        <Trash2 :size="12" />Delete channel
+        <Trash2 :size="12" />{{ t("mixer.channelMenu.delete") }}
       </button>
     </div>
   </UiPopover>

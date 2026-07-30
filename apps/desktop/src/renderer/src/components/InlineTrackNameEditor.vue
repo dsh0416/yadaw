@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { nextTick, shallowRef, useTemplateRef } from "vue"
+import { useI18n } from "vue-i18n"
 
 const props = defineProps<{
   name: string
@@ -10,6 +11,7 @@ const emit = defineEmits<{
   rename: [name: string]
 }>()
 
+const { t } = useI18n()
 const editing = shallowRef(false)
 const draft = shallowRef("")
 const input = useTemplateRef<HTMLInputElement>("input")
@@ -42,7 +44,7 @@ function cancel(): void {
       ref="input"
       v-model="draft"
       class="inline-track-name-input"
-      :aria-label="`Rename ${name}`"
+      :aria-label="t('studio.rename.renameAria', { name })"
       @blur="commit"
       @click.stop
       @dblclick.stop
@@ -55,7 +57,7 @@ function cancel(): void {
       class="inline-track-name-value"
       type="button"
       :aria-label="label"
-      :title="`${name} — Double-click to rename`"
+      :title="t('studio.rename.doubleClickTitle', { name })"
       @dblclick.stop.prevent="beginEditing"
       @keydown.f2.stop.prevent="beginEditing"
     >

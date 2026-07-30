@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, useTemplateRef, watch } from "vue"
+import { useI18n } from "vue-i18n"
 import type { PluginAudioMode, PluginDescriptor } from "@yadaw/contracts"
 import { pluginAudioModeOptions, type PluginSignalWidth } from "./plugin-audio-mode"
 
@@ -13,8 +14,9 @@ const emit = defineEmits<{
   cancel: []
 }>()
 const modeList = useTemplateRef<HTMLDivElement>("modeList")
+const { t } = useI18n()
 const visibleOptions = computed(() =>
-  pluginAudioModeOptions(props.descriptor.kind, props.inputWidth)
+  pluginAudioModeOptions(props.descriptor.kind, props.inputWidth, t)
 )
 
 function isSupported(mode: PluginAudioMode): boolean {
@@ -49,12 +51,14 @@ watch(() => [props.descriptor, props.inputWidth], focusFirstMode, { flush: "post
 </script>
 
 <template>
-  <section class="mode-menu" aria-label="Choose plugin audio mode">
+  <section class="mode-menu" :aria-label="t('plugins.audioModeMenu.ariaLabel')">
     <header>
-      <button type="button" aria-label="Back to plugin list" @click="emit('cancel')">‹</button>
+      <button type="button" :aria-label="t('plugins.audioModeMenu.back')" @click="emit('cancel')">
+        ‹
+      </button>
       <span
         ><b>{{ descriptor.name }}</b
-        ><small>Choose audio mode</small></span
+        ><small>{{ t("plugins.audioModeMenu.chooseMode") }}</small></span
       >
     </header>
     <div ref="modeList" class="mode-list" @keydown="navigateModes">
@@ -65,8 +69,11 @@ watch(() => [props.descriptor, props.inputWidth], focusFirstMode, { flush: "post
         :disabled="!isSupported(option.value)"
         :title="
           isSupported(option.value)
-            ? `${option.label}: ${option.detail}`
-            : `${option.label} is not supported by this plug-in`
+            ? t('plugins.audioModeMenu.supported', {
+                label: option.label,
+                detail: option.detail
+              })
+            : t('plugins.audioModeMenu.notSupported', { label: option.label })
         "
         @click="emit('select', option.value)"
       >
@@ -75,7 +82,7 @@ watch(() => [props.descriptor, props.inputWidth], focusFirstMode, { flush: "post
           ><b>{{ option.label }}</b
           ><small>{{ option.detail }}</small></span
         >
-        <em v-if="!isSupported(option.value)">Unavailable</em>
+        <em v-if="!isSupported(option.value)">{{ t("plugins.audioModeMenu.unavailable") }}</em>
       </button>
     </div>
   </section>

@@ -1,19 +1,22 @@
 <script setup lang="ts">
 import { Minus, Square, X } from "@lucide/vue"
 import type { ApplicationWindowCommandId } from "@yadaw/contracts"
+import { useI18n } from "vue-i18n"
 
 const emit = defineEmits<{
   command: [command: ApplicationWindowCommandId]
 }>()
+
+const { t } = useI18n()
 </script>
 
 <template>
-  <div class="window-controls" role="group" aria-label="Window controls">
+  <div class="window-controls" role="group" :aria-label="t('chrome.windowControls')">
     <button
       class="window-control"
       type="button"
-      title="Minimize"
-      aria-label="Minimize"
+      :title="t('chrome.minimize')"
+      :aria-label="t('chrome.minimize')"
       @click="emit('command', 'window.minimize')"
     >
       <Minus :size="13" :stroke-width="1.6" />
@@ -21,8 +24,8 @@ const emit = defineEmits<{
     <button
       class="window-control"
       type="button"
-      title="Maximize or restore"
-      aria-label="Maximize or restore"
+      :title="t('chrome.maximizeOrRestore')"
+      :aria-label="t('chrome.maximizeOrRestore')"
       @click="emit('command', 'window.toggle-maximize')"
     >
       <Square :size="10" :stroke-width="1.6" />
@@ -30,8 +33,8 @@ const emit = defineEmits<{
     <button
       class="window-control window-control--close"
       type="button"
-      title="Close"
-      aria-label="Close"
+      :title="t('chrome.close')"
+      :aria-label="t('chrome.close')"
       @click="emit('command', 'window.close')"
     >
       <X :size="13" :stroke-width="1.6" />

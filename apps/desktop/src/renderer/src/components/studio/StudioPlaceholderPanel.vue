@@ -1,27 +1,38 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n"
 import { Boxes, SlidersHorizontal } from "@lucide/vue"
 
 defineProps<{
   side: "left" | "right"
 }>()
+
+const { t } = useI18n()
 </script>
 
 <template>
   <aside :class="['placeholder-panel', side]">
     <div class="panel-heading">
-      <span>{{ side === "left" ? "LIBRARY" : "INSPECTOR" }}</span>
-      <strong>{{ side === "left" ? "Browser" : "Properties" }}</strong>
+      <span>{{
+        side === "left"
+          ? t("studio.placeholder.libraryEyebrow")
+          : t("studio.placeholder.inspectorEyebrow")
+      }}</span>
+      <strong>{{
+        side === "left"
+          ? t("studio.placeholder.browserTitle")
+          : t("studio.placeholder.propertiesTitle")
+      }}</strong>
     </div>
     <div class="placeholder-card">
       <component :is="side === 'left' ? Boxes : SlidersHorizontal" :size="17" />
       <p>
         {{
           side === "left"
-            ? "Sounds and devices will live here."
-            : "Clip and track controls will live here."
+            ? t("studio.placeholder.leftBody")
+            : t("studio.placeholder.rightBody")
         }}
       </p>
-      <small>PLACEHOLDER</small>
+      <small>{{ t("studio.placeholder.badge") }}</small>
     </div>
   </aside>
 </template>

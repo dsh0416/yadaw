@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n"
 import {
   AudioLines,
   BellRing,
@@ -55,36 +56,38 @@ const emit = defineEmits<{
   previewMaster: [preview: MixerParameterPreview]
   updateMaster: [channelId: string, patch: MixerChannelPatch]
 }>()
+
+const { t } = useI18n()
 </script>
 
 <template>
   <header class="topbar">
     <div class="control-group left-panel-group" data-topbar-group="left-panel">
       <StudioControlButton
-        label="Library"
+        :label="t('studio.topbar.library')"
         :pressed="soundBrowserOpen"
         tone="accent"
         @activate="emit('toggleSoundBrowser')"
       >
         <Library :size="15" />
       </StudioControlButton>
-      <StudioControlButton label="Inspector" unavailable compact-hidden>
+      <StudioControlButton :label="t('studio.topbar.inspector')" unavailable compact-hidden>
         <SlidersHorizontal :size="15" />
       </StudioControlButton>
-      <StudioControlButton label="Quick Help" unavailable compact-hidden>
+      <StudioControlButton :label="t('studio.topbar.quickHelp')" unavailable compact-hidden>
         <CircleHelp :size="15" />
       </StudioControlButton>
-      <StudioControlButton label="Download Manager" unavailable compact-hidden>
+      <StudioControlButton :label="t('studio.topbar.downloadManager')" unavailable compact-hidden>
         <Download :size="15" />
       </StudioControlButton>
     </div>
 
     <div class="control-group bottom-panel-group" data-topbar-group="bottom-panel">
-      <StudioControlButton label="Smart Controls" unavailable compact-hidden>
+      <StudioControlButton :label="t('studio.topbar.smartControls')" unavailable compact-hidden>
         <Gauge :size="15" />
       </StudioControlButton>
       <StudioControlButton
-        label="Mixer"
+        :label="t('studio.topbar.mixer')"
         :pressed="mixerDockOpen"
         tone="accent"
         @activate="emit('toggleMixerDock')"
@@ -92,7 +95,7 @@ const emit = defineEmits<{
         <PanelBottom :size="15" />
       </StudioControlButton>
       <StudioControlButton
-        label="Piano Roll"
+        :label="t('studio.topbar.pianoRoll')"
         :pressed="pianoRollDockOpen"
         :disabled="!pianoRollAvailable"
         tone="accent"
@@ -124,26 +127,26 @@ const emit = defineEmits<{
     />
 
     <div class="control-group placeholder-only tools-group" data-topbar-group="tools">
-      <StudioControlButton label="Low Latency Mode" unavailable>
+      <StudioControlButton :label="t('studio.topbar.lowLatencyMode')" unavailable>
         <ShieldX :size="15" />
       </StudioControlButton>
-      <StudioControlButton label="Varispeed" unavailable>
+      <StudioControlButton :label="t('studio.topbar.varispeed')" unavailable>
         <Gauge :size="15" />
       </StudioControlButton>
-      <StudioControlButton label="Tuner" unavailable>
+      <StudioControlButton :label="t('studio.topbar.tuner')" unavailable>
         <AudioLines :size="15" />
       </StudioControlButton>
-      <StudioControlButton label="Solo" unavailable>
+      <StudioControlButton :label="t('studio.topbar.solo')" unavailable>
         <span class="letter-control">S</span>
       </StudioControlButton>
     </div>
 
     <div class="control-group metronome-group" data-topbar-group="metronome">
-      <StudioControlButton label="Count-in" unavailable compact-hidden tone="accent">
+      <StudioControlButton :label="t('studio.topbar.countIn')" unavailable compact-hidden tone="accent">
         <span class="count-in-control">1234</span>
       </StudioControlButton>
       <StudioControlButton
-        label="Metronome"
+        :label="t('studio.topbar.metronome')"
         :pressed="metronomeChannel ? !metronomeChannel.muted : false"
         :disabled="metronomeChannel === null"
         tone="accent"
@@ -162,16 +165,16 @@ const emit = defineEmits<{
     />
 
     <div class="control-group placeholder-only right-panel-group" data-topbar-group="right-panel">
-      <StudioControlButton label="List Editors" unavailable>
+      <StudioControlButton :label="t('studio.topbar.listEditors')" unavailable>
         <List :size="15" />
       </StudioControlButton>
-      <StudioControlButton label="Notes" unavailable>
+      <StudioControlButton :label="t('studio.topbar.notes')" unavailable>
         <NotebookTabs :size="15" />
       </StudioControlButton>
-      <StudioControlButton label="Loop Browser" unavailable>
+      <StudioControlButton :label="t('studio.topbar.loopBrowser')" unavailable>
         <ListMusic :size="15" />
       </StudioControlButton>
-      <StudioControlButton label="Media Browser" unavailable>
+      <StudioControlButton :label="t('studio.topbar.mediaBrowser')" unavailable>
         <Library :size="15" />
       </StudioControlButton>
     </div>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { shallowRef } from "vue"
+import { useI18n } from "vue-i18n"
 import type { CompiledAudioGraphSnapshot } from "@yadaw/contracts"
 import type { CompiledEffectGraphStatus } from "../../stores/compiledEffectGraph"
 import CompiledEffectGraphChart from "./CompiledEffectGraphChart.vue"
@@ -11,6 +12,7 @@ defineProps<{
 }>()
 
 const emit = defineEmits<{ retry: [] }>()
+const { t } = useI18n()
 const resetToken = shallowRef(0)
 </script>
 
@@ -18,14 +20,21 @@ const resetToken = shallowRef(0)
   <section class="compiled-effect-graph-panel">
     <header class="graph-toolbar">
       <div>
-        <span>NATIVE COMPILE</span>
+        <span>{{ t("effectGraph.toolbar.nativeCompile") }}</span>
         <strong v-if="snapshot">
-          revision {{ snapshot.graphRevision }} · build {{ snapshot.buildGeneration }} ·
-          {{ snapshot.sampleRate.toLocaleString() }} Hz
+          {{
+            t("effectGraph.toolbar.revision", {
+              revision: snapshot.graphRevision,
+              build: snapshot.buildGeneration,
+              sampleRate: snapshot.sampleRate.toLocaleString()
+            })
+          }}
         </strong>
-        <strong v-else>Waiting for a published graph</strong>
+        <strong v-else>{{ t("effectGraph.toolbar.waiting") }}</strong>
       </div>
-      <button type="button" :disabled="!snapshot" @click="resetToken += 1">Reset view</button>
+      <button type="button" :disabled="!snapshot" @click="resetToken += 1">
+        {{ t("effectGraph.toolbar.resetView") }}
+      </button>
     </header>
 
     <CompiledEffectGraphChart
@@ -35,17 +44,17 @@ const resetToken = shallowRef(0)
     />
     <div v-else class="graph-state" role="status">
       <template v-if="status === 'loading'">
-        <b>Reading the published audio graph…</b>
-        <span>The graph appears after the helper swaps it at an audio block boundary.</span>
+        <b>{{ t("effectGraph.state.loading.title") }}</b>
+        <span>{{ t("effectGraph.state.loading.description") }}</span>
       </template>
       <template v-else-if="status === 'empty'">
-        <b>No published graph</b>
-        <span>Open a project and start the audio engine to publish its compiled effect chain.</span>
+        <b>{{ t("effectGraph.state.empty.title") }}</b>
+        <span>{{ t("effectGraph.state.empty.description") }}</span>
       </template>
       <template v-else-if="status === 'error'">
-        <b>Audio helper unavailable</b>
+        <b>{{ t("effectGraph.state.error.title") }}</b>
         <span>{{ errorMessage }}</span>
-        <button type="button" @click="emit('retry')">Retry</button>
+        <button type="button" @click="emit('retry')">{{ t("effectGraph.state.error.retry") }}</button>
       </template>
     </div>
   </section>

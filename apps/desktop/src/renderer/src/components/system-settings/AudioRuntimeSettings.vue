@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, watch } from "vue"
+import { useI18n } from "vue-i18n"
 import { UiSelect } from "@yadaw/ui"
 import type {
   AudioHostRuntimePreferences,
@@ -19,6 +20,7 @@ const emit = defineEmits<{
   apply: [preferences: AudioHostRuntimePreferences]
 }>()
 
+const { t } = useI18n()
 const draft = reactive<AudioHostRuntimePreferences>({ ...props.modelValue })
 
 watch(
@@ -33,6 +35,10 @@ const dirty = computed(
     draft.maxBlockingThreads !== props.modelValue.maxBlockingThreads ||
     draft.egressConcurrency !== props.modelValue.egressConcurrency
 )
+
+function resolvedCount(value: number | undefined): string {
+  return value === undefined ? t("common.notAvailable") : String(value)
+}
 
 function setMode(key: keyof AudioHostRuntimePreferences, mode: string, fallback: number): void {
   draft[key] = mode === "auto" ? "auto" : fallback
@@ -51,33 +57,41 @@ function setNumber(
 
 <template>
   <SettingsPage
-    category="System"
-    page="Engine"
-    title="Runtime scheduling"
-    description="Bound helper concurrency without changing the real-time callback. Changes restart only the audio helper, then restore devices, plug-ins, graph and transport."
+    :category="t('settings.audio.engine.category')"
+    :page="t('settings.audio.engine.page')"
+    :title="t('settings.audio.engine.title')"
+    :description="t('settings.audio.engine.description')"
   >
-    <div class="runtime-strip" aria-label="Resolved audio helper threads">
-      <span>Resolved</span>
-      <b>{{ resolved?.workerThreads ?? "—" }} workers</b>
+    <div class="runtime-strip" :aria-label="t('settings.audio.engine.resolvedAria')">
+      <span>{{ t("common.resolved") }}</span>
+      <b>{{
+        t("settings.audio.engine.resolvedWorkers", { count: resolvedCount(resolved?.workerThreads) })
+      }}</b>
       <i />
-      <b>{{ resolved?.maxBlockingThreads ?? "—" }} blocking</b>
+      <b>{{
+        t("settings.audio.engine.resolvedBlocking", {
+          count: resolvedCount(resolved?.maxBlockingThreads)
+        })
+      }}</b>
       <i />
-      <b>{{ resolved?.egressConcurrency ?? "—" }} egress</b>
+      <b>{{
+        t("settings.audio.engine.resolvedEgress", { count: resolvedCount(resolved?.egressConcurrency) })
+      }}</b>
     </div>
 
     <SettingsSection
-      title="Async worker threads"
-      description="Runs protocol, engine, background I/O and telemetry tasks. VST3 stays thread-affine."
+      :title="t('settings.audio.engine.workerThreads.title')"
+      :description="t('settings.audio.engine.workerThreads.description')"
     >
       <div class="thread-control">
         <UiSelect
-          aria-label="Worker thread mode"
+          :aria-label="t('settings.audio.engine.workerThreads.modeAria')"
           :model-value="draft.workerThreads === 'auto' ? 'auto' : 'manual'"
           size="sm"
           @update:model-value="setMode('workerThreads', $event, resolved?.workerThreads ?? 2)"
         >
-          <option value="auto">Auto</option>
-          <option value="manual">Manual</option>
+          <option value="auto">{{ t("common.auto") }}</option>
+          <option value="manual">{{ t("common.manual") }}</option>
         </UiSelect>
         <input
           v-if="draft.workerThreads !== 'auto'"
@@ -85,28 +99,28 @@ function setNumber(
           min="1"
           max="8"
           :value="draft.workerThreads"
-          aria-label="Worker threads"
+          :aria-label="t('settings.audio.engine.workerThreads.countAria')"
           @input="setNumber('workerThreads', $event, 1, 8)"
         />
-        <small>1–8</small>
+        <small>{{ t("settings.audio.engine.workerThreads.range") }}</small>
       </div>
     </SettingsSection>
 
     <SettingsSection
-      title="Blocking thread ceiling"
-      description="Caps synchronous IPC sends, arena copies and other controlled blocking jobs."
+      :title="t('settings.audio.engine.blockingThreads.title')"
+      :description="t('settings.audio.engine.blockingThreads.description')"
     >
       <div class="thread-control">
         <UiSelect
-          aria-label="Blocking thread mode"
+          :aria-label="t('settings.audio.engine.blockingThreads.modeAria')"
           :model-value="draft.maxBlockingThreads === 'auto' ? 'auto' : 'manual'"
           size="sm"
           @update:model-value="
             setMode('maxBlockingThreads', $event, resolved?.maxBlockingThreads ?? 4)
           "
         >
-          <option value="auto">Auto</option>
-          <option value="manual">Manual</option>
+          <option value="auto">{{ t("common.auto") }}</option>
+          <option value="manual">{{ t("common.manual") }}</option>
         </UiSelect>
         <input
           v-if="draft.maxBlockingThreads !== 'auto'"
@@ -114,28 +128,28 @@ function setNumber(
           min="2"
           max="16"
           :value="draft.maxBlockingThreads"
-          aria-label="Blocking threads"
+          :aria-label="t('settings.audio.engine.blockingThreads.countAria')"
           @input="setNumber('maxBlockingThreads', $event, 2, 16)"
         />
-        <small>2–16</small>
+        <small>{{ t("settings.audio.engine.blockingThreads.range") }}</small>
       </div>
     </SettingsSection>
 
     <SettingsSection
-      title="IPC egress concurrency"
-      description="Allows independent responses to encode and send concurrently; runtime events stay ordered."
+      :title="t('settings.audio.engine.egressConcurrency.title')"
+      :description="t('settings.audio.engine.egressConcurrency.description')"
     >
       <div class="thread-control">
         <UiSelect
-          aria-label="Egress concurrency mode"
+          :aria-label="t('settings.audio.engine.egressConcurrency.modeAria')"
           :model-value="draft.egressConcurrency === 'auto' ? 'auto' : 'manual'"
           size="sm"
           @update:model-value="
             setMode('egressConcurrency', $event, resolved?.egressConcurrency ?? 2)
           "
         >
-          <option value="auto">Auto</option>
-          <option value="manual">Manual</option>
+          <option value="auto">{{ t("common.auto") }}</option>
+          <option value="manual">{{ t("common.manual") }}</option>
         </UiSelect>
         <input
           v-if="draft.egressConcurrency !== 'auto'"
@@ -143,16 +157,20 @@ function setNumber(
           min="1"
           max="4"
           :value="draft.egressConcurrency"
-          aria-label="Egress concurrency"
+          :aria-label="t('settings.audio.engine.egressConcurrency.countAria')"
           @input="setNumber('egressConcurrency', $event, 1, 4)"
         />
-        <small>1–4</small>
+        <small>{{ t("settings.audio.engine.egressConcurrency.range") }}</small>
       </div>
     </SettingsSection>
 
     <div class="runtime-actions">
       <button type="button" :disabled="applying || !dirty" @click="emit('apply', { ...draft })">
-        {{ applying ? "Restarting helper…" : "Apply runtime settings" }}
+        {{
+          applying
+            ? t("settings.audio.engine.apply.restarting")
+            : t("settings.audio.engine.apply.label")
+        }}
       </button>
     </div>
     <p v-if="error" class="runtime-error" role="alert">{{ error }}</p>

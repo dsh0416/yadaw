@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n"
 import { RefreshCw } from "@lucide/vue"
 import { UiSelect, type UiSelectOption } from "@yadaw/ui"
 import SettingsSection from "../settings/SettingsSection.vue"
@@ -16,12 +17,14 @@ const emit = defineEmits<{
   "update:inputDeviceId": [value: string]
   refresh: []
 }>()
+
+const { t } = useI18n()
 </script>
 
 <template>
   <SettingsSection
-    title="Output device"
-    description="Select the CPAL device used for monitoring and playback."
+    :title="t('settings.audio.deviceSections.output.title')"
+    :description="t('settings.audio.deviceSections.output.description')"
   >
     <button
       class="refresh-button"
@@ -30,31 +33,46 @@ const emit = defineEmits<{
       @click="emit('refresh')"
     >
       <RefreshCw :size="12" :class="{ spinning: discoveryState === 'loading' }" />
-      {{ discoveryState === "loading" ? "Scanning…" : "Refresh devices" }}
+      {{
+        discoveryState === "loading"
+          ? t("settings.audio.deviceSections.refresh.scanning")
+          : t("settings.audio.deviceSections.refresh.refresh")
+      }}
     </button>
     <p v-if="discoveryError" class="discovery-error">{{ discoveryError }}</p>
     <label class="device-field">
-      <span>Device</span>
+      <span>{{ t("common.device") }}</span>
       <UiSelect
         :model-value="outputDeviceId"
         :options="outputOptions"
-        :placeholder="outputOptions.length ? 'Choose an output' : 'No CPAL output devices'"
+        :placeholder="
+          outputOptions.length
+            ? t('settings.audio.deviceSections.output.placeholder')
+            : t('settings.audio.deviceSections.output.emptyPlaceholder')
+        "
         size="sm"
-        aria-label="Output device"
+        :aria-label="t('settings.audio.deviceSections.output.ariaLabel')"
         :disabled="discoveryState !== 'ready' || outputOptions.length === 0"
         @update:model-value="emit('update:outputDeviceId', $event)"
       />
     </label>
   </SettingsSection>
-  <SettingsSection title="Input device" description="Select the CPAL device used for recording.">
+  <SettingsSection
+    :title="t('settings.audio.deviceSections.input.title')"
+    :description="t('settings.audio.deviceSections.input.description')"
+  >
     <label class="device-field">
-      <span>Device</span>
+      <span>{{ t("common.device") }}</span>
       <UiSelect
         :model-value="inputDeviceId"
         :options="inputOptions"
-        :placeholder="inputOptions.length ? 'Choose an input' : 'No CPAL input devices'"
+        :placeholder="
+          inputOptions.length
+            ? t('settings.audio.deviceSections.input.placeholder')
+            : t('settings.audio.deviceSections.input.emptyPlaceholder')
+        "
         size="sm"
-        aria-label="Input device"
+        :aria-label="t('settings.audio.deviceSections.input.ariaLabel')"
         :disabled="discoveryState !== 'ready' || inputOptions.length === 0"
         @update:model-value="emit('update:inputDeviceId', $event)"
       />

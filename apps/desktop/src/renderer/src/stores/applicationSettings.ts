@@ -10,6 +10,11 @@ import type {
   MeterReturnRate,
   ThemePreference
 } from "@yadaw/contracts"
+import { i18n } from "../i18n"
+
+function t(key: string): string {
+  return i18n.global.t(key)
+}
 
 export const useApplicationSettingsStore = defineStore("application-settings", () => {
   const settings = shallowRef<ApplicationSettings | null>(null)
@@ -29,7 +34,7 @@ export const useApplicationSettingsStore = defineStore("application-settings", (
         settings.value = await window.yadaw.getApplicationSettings()
       } catch (reason) {
         error.value =
-          reason instanceof Error ? reason.message : "Unable to load application settings."
+          reason instanceof Error ? reason.message : t("errors.unableToLoadApplicationSettings")
       } finally {
         loading.value = false
         loadPromise = null
@@ -53,7 +58,7 @@ export const useApplicationSettingsStore = defineStore("application-settings", (
       settings.value = await window.yadaw.updateApplicationSettings({ theme })
     } catch (reason) {
       settings.value = previous
-      error.value = reason instanceof Error ? reason.message : "Unable to save display settings."
+      error.value = reason instanceof Error ? reason.message : t("errors.unableToSaveDisplaySettings")
     }
   }
 
@@ -68,7 +73,7 @@ export const useApplicationSettingsStore = defineStore("application-settings", (
       settings.value = await window.yadaw.updateApplicationSettings({ locale })
     } catch (reason) {
       settings.value = previous
-      error.value = reason instanceof Error ? reason.message : "Unable to save display settings."
+      error.value = reason instanceof Error ? reason.message : t("errors.unableToSaveDisplaySettings")
     }
   }
 
@@ -86,7 +91,7 @@ export const useApplicationSettingsStore = defineStore("application-settings", (
     } catch (reason) {
       settings.value = previous
       error.value =
-        reason instanceof Error ? reason.message : "Unable to save mixer display settings."
+        reason instanceof Error ? reason.message : t("errors.unableToSaveMixerDisplaySettings")
     }
   }
 
@@ -116,7 +121,7 @@ export const useApplicationSettingsStore = defineStore("application-settings", (
       settings.value = await window.yadaw.configureAudioHostRuntime(preferences)
       await refreshAudioHostRuntimeDiagnostics()
     } catch (reason) {
-      error.value = reason instanceof Error ? reason.message : "Unable to restart the audio helper."
+      error.value = reason instanceof Error ? reason.message : t("errors.unableToRestartAudioHelper")
       throw reason
     } finally {
       applyingAudioRuntime.value = false
@@ -137,7 +142,7 @@ export const useApplicationSettingsStore = defineStore("application-settings", (
     } catch (reason) {
       settings.value = previous
       error.value =
-        reason instanceof Error ? reason.message : "Unable to change software monitoring."
+        reason instanceof Error ? reason.message : t("errors.unableToChangeSoftwareMonitoring")
       throw reason
     } finally {
       applyingSoftwareMonitoring.value = false

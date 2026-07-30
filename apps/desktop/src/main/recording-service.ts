@@ -450,7 +450,7 @@ export class RecordingService {
         state: "completed",
         message:
           recording.dropoutFrames > 0
-            ? `${recording.dropoutFrames} input frames were dropped during capture.`
+            ? t("operation.recordingDropoutsInput", { count: recording.dropoutFrames })
             : null,
         dropoutFrames: recording.dropoutFrames
       },

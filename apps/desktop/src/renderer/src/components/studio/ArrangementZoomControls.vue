@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue"
+import { useI18n } from "vue-i18n"
 
 const props = defineProps<{
   pixelsPerQuarter: number
@@ -15,6 +16,7 @@ const emit = defineEmits<{
   resetAmplitude: []
 }>()
 
+const { t } = useI18n()
 const SLIDER_MAX = 100
 const TIME_MIN = 12.5
 const TIME_MAX = 800
@@ -59,9 +61,9 @@ function setAmplitude(event: Event): void {
 </script>
 
 <template>
-  <div class="zoom-controls" aria-label="Arrangement zoom controls">
+  <div class="zoom-controls" :aria-label="t('studio.zoom.ariaLabel')">
     <label class="zoom-control">
-      <span>TIME</span>
+      <span>{{ t("studio.zoom.time") }}</span>
       <input
         type="range"
         min="0"
@@ -69,15 +71,15 @@ function setAmplitude(event: Event): void {
         step="1"
         :value="timePosition"
         :style="{ '--zoom-fill': `${timePosition}%` }"
-        aria-label="Time zoom"
-        :aria-valuetext="`${Math.round(pixelsPerQuarter)} pixels per quarter note`"
-        title="Double-click to reset time zoom"
+        :aria-label="t('studio.zoom.timeZoom')"
+        :aria-valuetext="t('studio.zoom.timeZoomValue', { pixels: Math.round(pixelsPerQuarter) })"
+        :title="t('studio.zoom.timeZoomReset')"
         @input="setTime"
         @dblclick="emit('resetTime')"
       />
     </label>
     <label class="zoom-control">
-      <span>TRACK</span>
+      <span>{{ t("studio.zoom.track") }}</span>
       <input
         type="range"
         min="0"
@@ -85,15 +87,15 @@ function setAmplitude(event: Event): void {
         step="1"
         :value="trackPosition"
         :style="{ '--zoom-fill': `${trackPosition}%` }"
-        aria-label="Track height"
-        :aria-valuetext="`${trackHeight} pixels`"
-        title="Double-click to reset track height"
+        :aria-label="t('studio.zoom.trackHeight')"
+        :aria-valuetext="t('studio.zoom.trackHeightValue', { height: trackHeight })"
+        :title="t('studio.zoom.trackHeightReset')"
         @input="setTrack"
         @dblclick="emit('resetTrack')"
       />
     </label>
     <label class="zoom-control">
-      <span>GAIN</span>
+      <span>{{ t("studio.zoom.gain") }}</span>
       <input
         type="range"
         min="0"
@@ -101,9 +103,9 @@ function setAmplitude(event: Event): void {
         step="1"
         :value="amplitudePosition"
         :style="{ '--zoom-fill': `${amplitudePosition}%` }"
-        aria-label="Waveform gain"
-        :aria-valuetext="`${amplitudeScale.toFixed(1)} times`"
-        title="Double-click to reset waveform gain"
+        :aria-label="t('studio.zoom.waveformGain')"
+        :aria-valuetext="t('studio.zoom.waveformGainValue', { scale: amplitudeScale.toFixed(1) })"
+        :title="t('studio.zoom.waveformGainReset')"
         @input="setAmplitude"
         @dblclick="emit('resetAmplitude')"
       />

@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed } from "vue"
+import { useI18n } from "vue-i18n"
 import { UiTooltip } from "@yadaw/ui"
+
+const { t } = useI18n()
 
 const props = withDefaults(
   defineProps<{
@@ -26,7 +29,9 @@ const emit = defineEmits<{
 }>()
 
 const tooltipText = computed(() =>
-  props.unavailable ? `${props.label} · Coming soon` : (props.tooltip ?? props.label)
+  props.unavailable
+    ? `${props.label} · ${t("studio.common.comingSoon")}`
+    : (props.tooltip ?? props.label)
 )
 
 function activate(event: MouseEvent): void {

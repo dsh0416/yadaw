@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, shallowRef, watch } from "vue"
+import { useI18n } from "vue-i18n"
 import { useIntervalFn } from "@vueuse/core"
 import { storeToRefs } from "pinia"
 import { Cable } from "@lucide/vue"
@@ -15,6 +16,7 @@ const props = defineProps<{
   estimatedLatencyMs: number | null
 }>()
 
+const { t } = useI18n()
 const audioRuntimeStore = useAudioRuntimeStore()
 const { roundTripLatencyMeasurement: measurement } = storeToRefs(audioRuntimeStore)
 const inputChannel = shallowRef("1")
@@ -24,13 +26,13 @@ const requestError = shallowRef("")
 const inputChannelOptions = computed<readonly UiSelectOption[]>(() =>
   Array.from({ length: props.inputChannelCount }, (_, index) => ({
     value: String(index + 1),
-    label: `Input ${index + 1}`
+    label: t("settings.audio.loopback.inputChannelOption", { number: index + 1 })
   }))
 )
 const outputChannelOptions = computed<readonly UiSelectOption[]>(() =>
   Array.from({ length: props.outputChannelCount }, (_, index) => ({
     value: String(index + 1),
-    label: `Output ${index + 1}`
+    label: t("settings.audio.loopback.outputChannelOption", { number: index + 1 })
   }))
 )
 const isActive = computed(
@@ -50,27 +52,27 @@ const resultTone = computed<UiNoticeTone>(() => {
   return "neutral"
 })
 const resultTitle = computed(() => {
-  if (requestError.value) return "Measurement could not start"
+  if (requestError.value) return t("settings.audio.loopback.status.startFailed")
   switch (measurement.value.status) {
     case "preparing":
-      return "Checking the input"
+      return t("settings.audio.loopback.status.preparing")
     case "measuring":
-      return "Listening for the probe"
+      return t("settings.audio.loopback.status.measuring")
     case "complete":
-      return "Physical loopback measured"
+      return t("settings.audio.loopback.status.complete")
     case "failed":
-      return "Measurement failed"
+      return t("settings.audio.loopback.status.failed")
     default:
-      return "Ready to measure"
+      return t("settings.audio.loopback.status.ready")
   }
 })
 const resultMessage = computed(() => {
   if (requestError.value) return requestError.value
   if (measurement.value.failure === "input-too-loud") {
-    return "The selected input was not quiet. Disconnect other sources, lower their gain, and try again."
+    return t("settings.audio.loopback.messages.inputTooLoud")
   }
   if (measurement.value.failure === "signal-not-detected") {
-    return "No matching probe returned within three seconds. Check the cable and selected channels."
+    return t("settings.audio.loopback.messages.signalNotDetected")
   }
   if (
     measurement.value.status === "complete" &&
@@ -80,19 +82,26 @@ const resultMessage = computed(() => {
     const comparison =
       props.estimatedLatencyMs === null
         ? ""
-        : ` The callback estimate is ${props.estimatedLatencyMs.toFixed(2)} ms.`
-    return `Measured ${measured} ms through output ${measurement.value.outputChannel} and input ${measurement.value.inputChannel}.${comparison}`
+        : t("settings.audio.loopback.messages.comparison", {
+            estimate: props.estimatedLatencyMs.toFixed(2)
+          })
+    return t("settings.audio.loopback.messages.complete", {
+      measured,
+      outputChannel: measurement.value.outputChannel,
+      inputChannel: measurement.value.inputChannel,
+      comparison
+    })
   }
   if (measurement.value.status === "preparing") {
-    return "Keep the selected input quiet while YADAW checks its noise floor."
+    return t("settings.audio.loopback.messages.preparing")
   }
   if (measurement.value.status === "measuring") {
-    return "A short probe has been sent. Keep the loopback cable connected."
+    return t("settings.audio.loopback.messages.measuring")
   }
   if (props.runtimeState !== "running") {
-    return "Start the audio engine before running a physical loopback measurement."
+    return t("settings.audio.loopback.messages.engineNotRunning")
   }
-  return "Connect the selected hardware output directly to the selected hardware input. Lower monitor volume first—the test emits a short probe."
+  return t("settings.audio.loopback.messages.ready")
 })
 
 async function refreshMeasurement(): Promise<void> {
@@ -103,7 +112,7 @@ async function refreshMeasurement(): Promise<void> {
     }
   } catch (error) {
     requestError.value =
-      error instanceof Error ? error.message : "Unable to read the measurement result."
+      error instanceof Error ? error.message : t("settings.audio.loopback.messages.readFailed")
     polling.pause()
   }
 }
@@ -126,7 +135,7 @@ async function startMeasurement(): Promise<void> {
     polling.resume()
   } catch (error) {
     requestError.value =
-      error instanceof Error ? error.message : "Unable to start the loopback measurement."
+      error instanceof Error ? error.message : t("settings.audio.loopback.messages.startFailed")
   }
 }
 
@@ -150,29 +159,26 @@ onBeforeUnmount(() => polling.pause())
   <div class="loopback-measurement">
     <div class="loopback-copy">
       <Cable :size="18" aria-hidden="true" />
-      <p>
-        This measures the real converter, driver, and cable path. Stop transport and connect one
-        output directly to one input.
-      </p>
+      <p>{{ t("settings.audio.loopback.intro") }}</p>
     </div>
     <div class="loopback-controls">
       <label class="loopback-field">
-        <span>Output channel</span>
+        <span>{{ t("settings.audio.loopback.outputChannel") }}</span>
         <UiSelect
           v-model="outputChannel"
           :options="outputChannelOptions"
           size="sm"
-          aria-label="Loopback output channel"
+          :aria-label="t('settings.audio.loopback.outputChannelAria')"
           :disabled="isActive || outputChannelCount === 0"
         />
       </label>
       <label class="loopback-field">
-        <span>Input channel</span>
+        <span>{{ t("settings.audio.loopback.inputChannel") }}</span>
         <UiSelect
           v-model="inputChannel"
           :options="inputChannelOptions"
           size="sm"
-          aria-label="Loopback input channel"
+          :aria-label="t('settings.audio.loopback.inputChannelAria')"
           :disabled="isActive || inputChannelCount === 0"
         />
       </label>
@@ -180,11 +186,15 @@ onBeforeUnmount(() => polling.pause())
         class="measure-button"
         size="sm"
         :loading="isActive"
-        loading-label="Measuring"
+        :loading-label="t('settings.audio.loopback.measuring')"
         :disabled="!canMeasure"
         @click="startMeasurement"
       >
-        {{ isActive ? "Measuring…" : "Measure round trip" }}
+        {{
+          isActive
+            ? t("settings.audio.loopback.measuringAction")
+            : t("settings.audio.loopback.measure")
+        }}
       </UiButton>
     </div>
     <UiStatusNotice :title="resultTitle" :tone="resultTone" live="polite">

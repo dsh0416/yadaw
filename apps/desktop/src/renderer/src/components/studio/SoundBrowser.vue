@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, shallowRef } from "vue"
+import { useI18n } from "vue-i18n"
 import { AudioWaveform, Piano, Plug, Search, SlidersHorizontal } from "@lucide/vue"
 import type { ProjectAssetSummary as Asset } from "@yadaw/contracts"
 import { pluginCategoriesLabel, pluginDescriptorKey, type PluginDescriptor } from "@yadaw/contracts"
@@ -9,6 +10,7 @@ import type { PluginSelection, PluginSignalWidth } from "../plugins/plugin-audio
 import { writePluginDrag } from "../plugins/plugin-drag"
 
 const props = defineProps<{ assets: Asset[] }>()
+const { t } = useI18n()
 const pluginStore = usePluginStore()
 const query = shallowRef("")
 type BrowserSection = "instruments" | "effects" | "samples" | "plugins"
@@ -39,15 +41,30 @@ const allPlugins = computed(() =>
 const browserSections = computed<
   ReadonlyArray<{ value: BrowserSection; icon: typeof Piano; label: string; count: number }>
 >(() => [
-  { value: "instruments", icon: Piano, label: "Instruments", count: instruments.value.length },
+  {
+    value: "instruments",
+    icon: Piano,
+    label: t("studio.soundBrowser.tabs.instruments"),
+    count: instruments.value.length
+  },
   {
     value: "effects",
     icon: SlidersHorizontal,
-    label: "Audio effects",
+    label: t("studio.soundBrowser.tabs.effects"),
     count: effects.value.length
   },
-  { value: "samples", icon: AudioWaveform, label: "Samples", count: samples.value.length },
-  { value: "plugins", icon: Plug, label: "Plugins", count: allPlugins.value.length }
+  {
+    value: "samples",
+    icon: AudioWaveform,
+    label: t("studio.soundBrowser.tabs.samples"),
+    count: samples.value.length
+  },
+  {
+    value: "plugins",
+    icon: Plug,
+    label: t("studio.soundBrowser.tabs.plugins"),
+    count: allPlugins.value.length
+  }
 ])
 
 function activate(plugin: PluginDescriptor): void {
@@ -86,18 +103,21 @@ onMounted(() => void pluginStore.load())
       />
     </div>
     <div class="panel-heading">
-      <div><span>LIBRARY</span><strong>Sound browser</strong></div>
+      <div>
+        <span>{{ t("studio.soundBrowser.eyebrow") }}</span
+        ><strong>{{ t("studio.soundBrowser.title") }}</strong>
+      </div>
       <b>{{ assets.length }}</b>
     </div>
     <label class="search-field"
       ><Search :size="13" aria-hidden="true" /><input
         v-model="query"
-        aria-label="Search sounds"
-        placeholder="Search sounds & devices"
+        :aria-label="t('studio.soundBrowser.searchAria')"
+        :placeholder="t('studio.soundBrowser.searchPlaceholder')"
       /><kbd>/</kbd></label
     >
     <div class="browser-tabs">
-      <div class="browser-nav" role="tablist" aria-label="Sound browser">
+      <div class="browser-nav" role="tablist" :aria-label="t('studio.soundBrowser.tabsAria')">
         <button
           v-for="section in browserSections"
           :key="section.value"
@@ -115,7 +135,7 @@ onMounted(() => void pluginStore.load())
       <section v-show="activeSection === 'instruments'" class="browser-content" role="tabpanel">
         <div class="library-scroll">
           <div class="library-viewport">
-            <div class="library-heading">VST3 instruments</div>
+            <div class="library-heading">{{ t("studio.soundBrowser.headings.instruments") }}</div>
             <button
               v-for="plugin in instruments"
               :key="pluginDescriptorKey(plugin)"
@@ -128,13 +148,14 @@ onMounted(() => void pluginStore.load())
               ><span class="library-item-copy"
                 ><b>{{ plugin.name }}</b
                 ><small
-                  >{{ plugin.source.kind === "builtin" ? "Built-in · " : "" }}{{ plugin.vendor }} ·
+                  >{{ plugin.source.kind === "builtin" ? t("studio.soundBrowser.builtIn") : ""
+                  }}{{ plugin.vendor }} ·
                   {{ pluginCategoriesLabel(plugin.categories) }}</small
                 ></span
               ><span class="item-dot compatible" />
             </button>
             <p v-if="!instruments.length" class="library-empty">
-              No compatible VST3 instruments found.
+              {{ t("studio.soundBrowser.empty.instruments") }}
             </p>
           </div>
         </div>
@@ -142,7 +163,7 @@ onMounted(() => void pluginStore.load())
       <section v-show="activeSection === 'effects'" class="browser-content" role="tabpanel">
         <div class="library-scroll">
           <div class="library-viewport">
-            <div class="library-heading">VST3 audio effects</div>
+            <div class="library-heading">{{ t("studio.soundBrowser.headings.effects") }}</div>
             <button
               v-for="plugin in effects"
               :key="pluginDescriptorKey(plugin)"
@@ -155,19 +176,22 @@ onMounted(() => void pluginStore.load())
               ><span class="library-item-copy"
                 ><b>{{ plugin.name }}</b
                 ><small
-                  >{{ plugin.source.kind === "builtin" ? "Built-in · " : "" }}{{ plugin.vendor }} ·
+                  >{{ plugin.source.kind === "builtin" ? t("studio.soundBrowser.builtIn") : ""
+                  }}{{ plugin.vendor }} ·
                   {{ pluginCategoriesLabel(plugin.categories) }}</small
                 ></span
               ><span class="item-dot compatible" />
             </button>
-            <p v-if="!effects.length" class="library-empty">No compatible VST3 effects found.</p>
+            <p v-if="!effects.length" class="library-empty">
+              {{ t("studio.soundBrowser.empty.effects") }}
+            </p>
           </div>
         </div>
       </section>
       <section v-show="activeSection === 'samples'" class="browser-content" role="tabpanel">
         <div class="library-scroll">
           <div class="library-viewport">
-            <div class="library-heading">Project audio</div>
+            <div class="library-heading">{{ t("studio.soundBrowser.headings.samples") }}</div>
             <button v-for="asset in samples" :key="asset.id" class="library-item">
               <span class="library-item-icon"><AudioWaveform :size="13" /></span
               ><span class="library-item-copy"
@@ -183,7 +207,11 @@ onMounted(() => void pluginStore.load())
       <section v-show="activeSection === 'plugins'" class="browser-content" role="tabpanel">
         <div class="plugin-scan">
           <button :disabled="pluginStore.catalog.scanning" @click="pluginStore.scan(false)">
-            {{ pluginStore.catalog.scanning ? "Scanning…" : "Rescan VST3" }}
+            {{
+              pluginStore.catalog.scanning
+                ? t("studio.soundBrowser.scanning")
+                : t("studio.soundBrowser.rescan")
+            }}
           </button>
           <small v-if="pluginStore.scanProgress"
             >{{ pluginStore.scanProgress.completed }}/{{ pluginStore.scanProgress.total }}</small
@@ -191,7 +219,7 @@ onMounted(() => void pluginStore.load())
         </div>
         <div class="library-scroll">
           <div class="library-viewport">
-            <div class="library-heading">Plugin catalog</div>
+            <div class="library-heading">{{ t("studio.soundBrowser.headings.catalog") }}</div>
             <article
               v-for="plugin in allPlugins"
               :key="pluginDescriptorKey(plugin)"
@@ -201,7 +229,8 @@ onMounted(() => void pluginStore.load())
               ><span class="library-item-copy"
                 ><b>{{ plugin.name }}</b
                 ><small
-                  >{{ plugin.source.kind === "builtin" ? "Built-in · " : "" }}{{ plugin.vendor }} ·
+                  >{{ plugin.source.kind === "builtin" ? t("studio.soundBrowser.builtIn") : ""
+                  }}{{ plugin.vendor }} ·
                   {{ plugin.compatibility }}</small
                 ></span
               ><span :class="['item-dot', plugin.compatibility]" />

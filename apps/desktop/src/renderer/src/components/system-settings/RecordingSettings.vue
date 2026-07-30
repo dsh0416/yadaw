@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted } from "vue"
+import { useI18n } from "vue-i18n"
 import { storeToRefs } from "pinia"
 import { UiSelect } from "@yadaw/ui"
 import type { RecordingBitDepth } from "@yadaw/contracts"
@@ -8,6 +9,7 @@ import SettingsSection from "../settings/SettingsSection.vue"
 import { useApplicationSettingsStore } from "../../stores/applicationSettings"
 import { useRecordingStore } from "../../stores/recording"
 
+const { t } = useI18n()
 const settingsStore = useApplicationSettingsStore()
 const recordingStore = useRecordingStore()
 const { settings, loading, error, applyingSoftwareMonitoring } = storeToRefs(settingsStore)
@@ -33,48 +35,48 @@ function setSoftwareMonitoring(event: Event): void {
 
 <template>
   <SettingsPage
-    category="Audio"
-    page="Recording"
-    title="Recording"
-    description="Capture stays in machine-local swap until a successful project archive save."
+    :category="t('settings.audio.recording.category')"
+    :page="t('settings.audio.recording.page')"
+    :title="t('settings.audio.recording.title')"
+    :description="t('settings.audio.recording.description')"
   >
     <SettingsSection
-      title="Swap directory"
-      description="Half-finished recordings and recoverable source BWF files live here."
+      :title="t('settings.audio.recording.swapDirectory.title')"
+      :description="t('settings.audio.recording.swapDirectory.description')"
     >
       <div class="path-control">
-        <code>{{ settings?.swapDirectory ?? "Loading…" }}</code>
+        <code>{{ settings?.swapDirectory ?? t("common.loading") }}</code>
         <button type="button" :disabled="loading" @click="settingsStore.chooseSwapDirectory">
-          Browse…
+          {{ t("common.browse") }}
         </button>
         <button type="button" :disabled="loading" @click="settingsStore.openSwapDirectory">
-          Open
+          {{ t("common.open") }}
         </button>
       </div>
     </SettingsSection>
 
     <SettingsSection
-      title="Final bit depth"
-      description="Swap is always float32. Integer output is dithered once after resampling."
+      :title="t('settings.audio.recording.bitDepth.title')"
+      :description="t('settings.audio.recording.bitDepth.description')"
     >
       <label class="recording-field">
-        <span>Format</span>
+        <span>{{ t("common.format") }}</span>
         <UiSelect
           :model-value="settings?.recordingBitDepth ?? 'float32'"
           size="sm"
-          aria-label="Final recording bit depth"
+          :aria-label="t('settings.audio.recording.bitDepth.ariaLabel')"
           @update:model-value="setBitDepth"
         >
-          <option value="float32">32-bit float</option>
-          <option value="pcm24">24-bit PCM</option>
-          <option value="pcm16">16-bit PCM</option>
+          <option value="float32">{{ t("settings.audio.recording.bitDepth.float32") }}</option>
+          <option value="pcm24">{{ t("settings.audio.recording.bitDepth.pcm24") }}</option>
+          <option value="pcm16">{{ t("settings.audio.recording.bitDepth.pcm16") }}</option>
         </UiSelect>
       </label>
     </SettingsSection>
 
     <SettingsSection
-      title="Software monitoring"
-      description="Hear hardware inputs through the track's effects, fader, pan, sends, delay compensation, and output routing."
+      :title="t('settings.audio.recording.softwareMonitoring.title')"
+      :description="t('settings.audio.recording.softwareMonitoring.description')"
     >
       <label class="monitoring-control">
         <input
@@ -84,31 +86,28 @@ function setSoftwareMonitoring(event: Event): void {
           @change="setSoftwareMonitoring"
         />
         <span>
-          <b>Enable software monitoring</b>
-          <small>
-            Use headphones or mute direct monitoring on the audio interface. Open speakers can
-            create loud feedback.
-          </small>
+          <b>{{ t("settings.audio.recording.softwareMonitoring.enable") }}</b>
+          <small>{{ t("settings.audio.recording.softwareMonitoring.warning") }}</small>
         </span>
       </label>
       <p class="monitoring-state" aria-live="polite">
         {{
           applyingSoftwareMonitoring
-            ? "Publishing the updated audio graph…"
+            ? t("settings.audio.recording.softwareMonitoring.publishing")
             : settings?.softwareMonitoringEnabled
-              ? "Available on Audio tracks with hardware inputs."
-              : "Off. Existing per-track monitoring choices are preserved."
+              ? t("settings.audio.recording.softwareMonitoring.enabled")
+              : t("settings.audio.recording.softwareMonitoring.disabled")
         }}
       </p>
     </SettingsSection>
 
     <SettingsSection
-      title="Recovery"
-      description="Files are never removed merely because the project was closed without saving."
+      :title="t('settings.audio.recording.recovery.title')"
+      :description="t('settings.audio.recording.recovery.description')"
     >
       <div class="recovery-count">
         <b>{{ pendingCount }}</b>
-        <span>recordings waiting in swap</span>
+        <span>{{ t("settings.audio.recording.recovery.pending") }}</span>
       </div>
     </SettingsSection>
 

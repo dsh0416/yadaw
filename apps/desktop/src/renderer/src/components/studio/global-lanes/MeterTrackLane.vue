@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue"
+import { useI18n } from "vue-i18n"
 import type { TempoMapSnapshot, TimeSignatureEventState } from "@yadaw/contracts"
 import {
   barTicksThroughTick,
@@ -21,6 +22,8 @@ const emit = defineEmits<{
   replace: [tempoMap: TempoMapSnapshot]
   select: [tick: number | null]
 }>()
+
+const { t } = useI18n()
 
 const points = computed<GlobalMarkerLanePoint[]>(() =>
   props.tempoMap.timeSignatureEvents.map((event) => ({
@@ -133,8 +136,8 @@ function removePoint(id: string): void {
     :vertical-guides="verticalGuides"
     color="var(--ui-domain-color-f2a65a)"
     :expanded="expanded"
-    value-label="Meter"
-    position-label="beats"
+    :value-label="t('studio.lanes.meter')"
+    :position-label="t('studio.lanes.positionLabel')"
     @create="createPoint"
     @update="updatePoint"
     @remove="removePoint"

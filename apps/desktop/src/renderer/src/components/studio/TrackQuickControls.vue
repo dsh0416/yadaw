@@ -8,8 +8,11 @@ import type {
 import TrackGainControl from "./TrackGainControl.vue"
 import TrackPanControl from "./TrackPanControl.vue"
 import { computed } from "vue"
+import { useI18n } from "vue-i18n"
 import { storeToRefs } from "pinia"
 import { useApplicationSettingsStore } from "../../stores/applicationSettings"
+
+const { t } = useI18n()
 
 const props = defineProps<{
   channel: MixerChannelState
@@ -42,12 +45,15 @@ function preview(parameter: "gainDb" | "pan", value: number): void {
 </script>
 
 <template>
-  <div class="track-quick-controls" :aria-label="`${channel.name} mixer quick controls`">
+  <div
+    class="track-quick-controls"
+    :aria-label="t('studio.trackControls.ariaLabel', { name: channel.name })"
+  >
     <button
       :class="['mute', { active: channel.muted }]"
       :aria-pressed="channel.muted"
-      :aria-label="`Mute ${channel.name}`"
-      title="Mute"
+      :aria-label="t('studio.trackControls.muteAria', { name: channel.name })"
+      :title="t('studio.trackControls.mute')"
       @click.stop="emit('updateChannel', channel.id, { muted: !channel.muted })"
     >
       M
@@ -55,8 +61,8 @@ function preview(parameter: "gainDb" | "pan", value: number): void {
     <button
       :class="['solo', { active: channel.soloed }]"
       :aria-pressed="channel.soloed"
-      :aria-label="`Solo ${channel.name}`"
-      title="Solo"
+      :aria-label="t('studio.trackControls.soloAria', { name: channel.name })"
+      :title="t('studio.trackControls.solo')"
       @click.stop="emit('updateChannel', channel.id, { soloed: !channel.soloed })"
     >
       S
@@ -64,20 +70,20 @@ function preview(parameter: "gainDb" | "pan", value: number): void {
     <button
       :class="['record', { active: channel.recordArmed }]"
       :aria-pressed="channel.recordArmed"
-      :aria-label="`Arm ${channel.name}`"
-      title="Record enable"
+      :aria-label="t('studio.trackControls.armAria', { name: channel.name })"
+      :title="t('studio.trackControls.recordEnable')"
       @click.stop="emit('updateChannel', channel.id, { recordArmed: !channel.recordArmed })"
     >
       R
     </button>
     <button
       :class="['monitor', { active: monitoringActive }]"
-      :aria-label="`Monitor ${channel.name}`"
+      :aria-label="t('studio.trackControls.monitorAria', { name: channel.name })"
       :aria-pressed="channel.inputMonitoring"
       :title="
         monitoringAvailable
-          ? 'Input monitoring'
-          : 'Enable software monitoring and select a hardware input first'
+          ? t('studio.trackControls.inputMonitoring')
+          : t('studio.trackControls.inputMonitoringDisabled')
       "
       :disabled="!monitoringAvailable"
       @click.stop="emit('updateChannel', channel.id, { inputMonitoring: !channel.inputMonitoring })"

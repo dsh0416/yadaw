@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n"
+
 const props = defineProps<{
   label: string
   eyebrow: string
@@ -15,6 +17,8 @@ const emit = defineEmits<{
   updateValue: [value: number]
 }>()
 
+const { t } = useI18n()
+
 function updateValue(event: Event): void {
   const value = Number((event.target as HTMLInputElement).value)
   if (!Number.isFinite(value)) return
@@ -27,13 +31,17 @@ function updateValue(event: Event): void {
     class="global-lane-header"
     :class="{ collapsed: !expanded }"
     :style="{ '--lane-color': color }"
-    :aria-label="`${label} global track`"
+    :aria-label="t('studio.lanes.globalTrackAria', { label })"
   >
     <button
       class="lane-toggle"
       type="button"
       :aria-expanded="expanded"
-      :aria-label="`${expanded ? 'Collapse' : 'Expand'} ${label} track`"
+      :aria-label="
+        expanded
+          ? t('studio.lanes.collapseTrackAria', { label })
+          : t('studio.lanes.expandTrackAria', { label })
+      "
       @click="emit('toggle')"
     >
       <span aria-hidden="true">{{ expanded ? "▾" : "▸" }}</span>
@@ -43,7 +51,7 @@ function updateValue(event: Event): void {
       <strong>{{ label }}</strong>
     </div>
     <label v-if="expanded" class="lane-value">
-      <span>Selected</span>
+      <span>{{ t("studio.lanes.selected") }}</span>
       <span class="value-control">
         <input
           :value="value.toFixed(2)"
@@ -51,7 +59,7 @@ function updateValue(event: Event): void {
           :min="minimum"
           :max="maximum"
           step="0.01"
-          :aria-label="`Selected ${label} value`"
+          :aria-label="t('studio.lanes.selectedValueAria', { label })"
           @change="updateValue"
         />
         <b>{{ unit }}</b>

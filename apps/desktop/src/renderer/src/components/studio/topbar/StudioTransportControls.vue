@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { computed } from "vue"
+import { useI18n } from "vue-i18n"
 import {
   Circle,
   CircleDashed,
@@ -12,7 +14,7 @@ import {
 } from "@lucide/vue"
 import StudioControlButton from "./StudioControlButton.vue"
 
-defineProps<{
+const props = defineProps<{
   engineRunning: boolean
   recording: boolean
   recordingBusy: boolean
@@ -25,26 +27,34 @@ const emit = defineEmits<{
   togglePlayback: []
   toggleRecording: []
 }>()
+
+const { t } = useI18n()
+const playLabel = computed(() =>
+  props.playing ? t("studio.transport.pause") : t("studio.transport.play")
+)
+const playTooltip = computed(() =>
+  props.playing ? t("studio.transport.pauseTooltip") : t("studio.transport.playTooltip")
+)
 </script>
 
 <template>
-  <div class="transport-controls" aria-label="Transport controls">
-    <StudioControlButton label="Rewind" unavailable compact-hidden>
+  <div class="transport-controls" :aria-label="t('studio.transport.ariaLabel')">
+    <StudioControlButton :label="t('studio.transport.rewind')" unavailable compact-hidden>
       <Rewind :size="15" fill="currentColor" />
     </StudioControlButton>
-    <StudioControlButton label="Fast-forward" unavailable compact-hidden>
+    <StudioControlButton :label="t('studio.transport.fastForward')" unavailable compact-hidden>
       <FastForward :size="15" fill="currentColor" />
     </StudioControlButton>
     <StudioControlButton
-      label="Go to beginning"
-      tooltip="Go to beginning · Home"
+      :label="t('studio.transport.goToBeginning')"
+      :tooltip="t('studio.transport.goToBeginningTooltip')"
       @activate="emit('goToStart')"
     >
       <SkipBack :size="15" fill="currentColor" />
     </StudioControlButton>
     <StudioControlButton
-      :label="playing ? 'Pause' : 'Play'"
-      :tooltip="`${playing ? 'Pause' : 'Play'} · Space`"
+      :label="playLabel"
+      :tooltip="playTooltip"
       :pressed="playing"
       :disabled="!canPlay && !playing && !playLoading"
       tone="play"
@@ -55,8 +65,8 @@ const emit = defineEmits<{
       <Play v-else :size="15" fill="currentColor" />
     </StudioControlButton>
     <StudioControlButton
-      label="Record"
-      tooltip="Record · R"
+      :label="t('studio.transport.record')"
+      :tooltip="t('studio.transport.recordTooltip')"
       :pressed="recording"
       :disabled="(!engineRunning && !recording) || recordingBusy"
       tone="record"
@@ -64,10 +74,15 @@ const emit = defineEmits<{
     >
       <Circle :size="13" fill="currentColor" />
     </StudioControlButton>
-    <StudioControlButton label="Capture Recording" unavailable compact-hidden tone="record">
+    <StudioControlButton
+      :label="t('studio.transport.captureRecording')"
+      unavailable
+      compact-hidden
+      tone="record"
+    >
       <CircleDashed :size="16" />
     </StudioControlButton>
-    <StudioControlButton label="Cycle" unavailable compact-hidden>
+    <StudioControlButton :label="t('studio.transport.cycle')" unavailable compact-hidden>
       <Repeat2 :size="15" />
     </StudioControlButton>
   </div>

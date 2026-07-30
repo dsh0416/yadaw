@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, shallowRef, useTemplateRef } from "vue"
+import { useI18n } from "vue-i18n"
 import { UiTooltip } from "@yadaw/ui"
 import type { TempoMapSnapshot } from "@yadaw/contracts"
 import {
@@ -17,6 +18,7 @@ const emit = defineEmits<{
   updateTempo: [beatsPerMinute: number]
 }>()
 
+const { t } = useI18n()
 const MINIMUM_TEMPO = 20
 const MAXIMUM_TEMPO = 300
 const editingTempo = shallowRef(false)
@@ -50,14 +52,14 @@ function commitTempoEdit(): void {
 </script>
 
 <template>
-  <section class="musical-display" aria-label="Project musical display">
+  <section class="musical-display" :aria-label="t('studio.musical.ariaLabel')">
     <div class="position-cell bar-cell">
       <strong>{{ String(musicalPosition.bar).padStart(3, "0") }}</strong>
-      <span>BAR</span>
+      <span>{{ t("studio.musical.bar") }}</span>
     </div>
     <div class="position-cell beat-cell">
       <strong>{{ musicalPosition.beat }}</strong>
-      <span>BEAT</span>
+      <span>{{ t("studio.musical.beat") }}</span>
     </div>
     <div class="lcd-cell tempo-cell">
       <input
@@ -65,7 +67,7 @@ function commitTempoEdit(): void {
         ref="tempoInput"
         v-model="tempoDraft"
         class="tempo-input"
-        aria-label="Edit current tempo"
+        :aria-label="t('studio.musical.editTempoAria')"
         type="number"
         :min="MINIMUM_TEMPO"
         :max="MAXIMUM_TEMPO"
@@ -78,30 +80,32 @@ function commitTempoEdit(): void {
         v-else
         type="button"
         class="tempo-value"
-        :aria-label="`Tempo ${currentTempo.toFixed(2)} BPM; double-click to edit`"
-        title="Double-click to edit the current Tempo Track event"
+        :aria-label="
+          t('studio.musical.tempoButtonAria', { value: currentTempo.toFixed(2) })
+        "
+        :title="t('studio.musical.tempoEditTitle')"
         @dblclick="beginTempoEdit"
         @keydown.enter.prevent="beginTempoEdit"
       >
         {{ currentTempo.toFixed(2) }}
       </button>
-      <span>TEMPO</span>
+      <span>{{ t("studio.musical.tempo") }}</span>
     </div>
     <div class="lcd-cell signature-cell">
       <strong>{{ currentSignature.numerator }}/{{ currentSignature.denominator }}</strong>
-      <span>METER</span>
+      <span>{{ t("studio.musical.meter") }}</span>
     </div>
-    <UiTooltip text="Project key · Coming soon" side="bottom">
+    <UiTooltip :text="t('studio.musical.projectKeyTooltip')" side="bottom">
       <button
         type="button"
         class="lcd-cell key-cell"
-        aria-label="Project key"
+        :aria-label="t('studio.musical.projectKeyAria')"
         aria-disabled="true"
         data-placeholder
         @click.prevent
       >
         <strong>—</strong>
-        <span>KEY</span>
+        <span>{{ t("studio.musical.key") }}</span>
       </button>
     </UiTooltip>
   </section>

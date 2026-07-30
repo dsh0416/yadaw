@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n"
 import type { MixerChannelPatch, MixerChannelState } from "@yadaw/contracts"
 
 defineProps<{
@@ -10,6 +11,8 @@ defineProps<{
 const emit = defineEmits<{
   updateChannel: [patch: MixerChannelPatch]
 }>()
+
+const { t } = useI18n()
 </script>
 
 <template>
@@ -19,20 +22,20 @@ const emit = defineEmits<{
         <button
           :class="['record', { active: channel.recordArmed }]"
           :aria-pressed="channel.recordArmed"
-          :aria-label="`Arm ${channel.name}`"
-          title="Record enable"
+          :aria-label="t('mixer.channelControls.arm', { name: channel.name })"
+          :title="t('mixer.channelControls.recordEnable')"
           @click.stop="emit('updateChannel', { recordArmed: !channel.recordArmed })"
         >
           R
         </button>
         <button
           :class="['monitor', { active: monitoringActive }]"
-          :aria-label="`Monitor ${channel.name}`"
+          :aria-label="t('mixer.channelControls.monitor', { name: channel.name })"
           :aria-pressed="channel.inputMonitoring"
           :title="
             monitoringAvailable
-              ? 'Input monitoring'
-              : 'Enable software monitoring and select a hardware input first'
+              ? t('mixer.channelControls.inputMonitoring')
+              : t('mixer.channelControls.inputMonitoringDisabled')
           "
           :disabled="!monitoringAvailable"
           @click.stop="emit('updateChannel', { inputMonitoring: !channel.inputMonitoring })"
@@ -45,7 +48,7 @@ const emit = defineEmits<{
       <button
         :class="['mute', { active: channel.muted }]"
         :aria-pressed="channel.muted"
-        :aria-label="`Mute ${channel.name}`"
+        :aria-label="t('mixer.channelControls.mute', { name: channel.name })"
         @click.stop="emit('updateChannel', { muted: !channel.muted })"
       >
         M
@@ -54,7 +57,7 @@ const emit = defineEmits<{
         v-if="channel.kind !== 'master'"
         :class="['solo', { active: channel.soloed }]"
         :aria-pressed="channel.soloed"
-        :aria-label="`Solo ${channel.name}`"
+        :aria-label="t('mixer.channelControls.solo', { name: channel.name })"
         @click.stop="emit('updateChannel', { soloed: !channel.soloed })"
       >
         S

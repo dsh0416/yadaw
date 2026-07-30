@@ -1,14 +1,17 @@
 import type { UiCascadingSelectGroup } from "@yadaw/ui"
 import type { MixerBusState, MixerChannelState, MixerRouteTarget } from "@yadaw/contracts"
 
+export type MixerRouteGroupsTranslator = (key: string, params?: Record<string, unknown>) => string
+
 export function mixerRouteGroups(
   targets: readonly MixerRouteTarget[],
   buses: readonly MixerBusState[],
-  outputs: readonly MixerChannelState[]
+  outputs: readonly MixerChannelState[],
+  t: MixerRouteGroupsTranslator
 ): readonly UiCascadingSelectGroup[] {
   return [
     {
-      label: "Buses",
+      label: t("mixer.routeGroups.buses"),
       options: targets
         .filter(
           (target): target is Extract<MixerRouteTarget, { kind: "bus" }> => target.kind === "bus"
@@ -19,7 +22,7 @@ export function mixerRouteGroups(
         }))
     },
     {
-      label: "Outputs",
+      label: t("mixer.routeGroups.outputs"),
       options: targets
         .filter(
           (target): target is Extract<MixerRouteTarget, { kind: "output" }> =>
@@ -27,7 +30,9 @@ export function mixerRouteGroups(
         )
         .map((target) => ({
           value: `output:${target.channelId}`,
-          label: outputs.find((output) => output.id === target.channelId)?.name ?? "Missing output"
+          label:
+            outputs.find((output) => output.id === target.channelId)?.name ??
+            t("mixer.routeGroups.missingOutput")
         }))
     }
   ]

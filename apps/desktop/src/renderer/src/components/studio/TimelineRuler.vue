@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { computed } from "vue"
+import { useI18n } from "vue-i18n"
 import type { TempoMapSnapshot } from "@yadaw/contracts"
 import { barTicksThroughTick, beatTicksThroughTick } from "../../utils/tempoMap"
 import { timelineXToSeconds } from "../../utils/timelineCoordinates"
+
+const { t } = useI18n()
 
 const props = defineProps<{
   contentWidth: number
@@ -44,7 +47,12 @@ function seekFromPointer(event: PointerEvent): void {
 </script>
 
 <template>
-  <div class="ruler" :style="rulerStyle" aria-label="Timeline ruler" @pointerdown="seekFromPointer">
+  <div
+    class="ruler"
+    :style="rulerStyle"
+    :aria-label="t('studio.arrangement.timelineRulerAria')"
+    @pointerdown="seekFromPointer"
+  >
     <span
       v-for="mark in beatMarks"
       :key="mark.tick"

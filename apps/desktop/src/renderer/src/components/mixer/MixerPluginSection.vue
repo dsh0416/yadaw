@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onUnmounted, shallowRef } from "vue"
+import { useI18n } from "vue-i18n"
 import { Power, Trash2 } from "@lucide/vue"
 import type {
   MixerChannelState,
@@ -40,6 +41,8 @@ const emit = defineEmits<{
   insert: [selection: PluginSelection, slotOrder: number]
   move: [instanceId: string, slotOrder: number]
 }>()
+
+const { t } = useI18n()
 
 const orderedInserts = computed(() =>
   [...props.inserts].sort((left, right) => left.slotOrder - right.slotOrder)
@@ -160,7 +163,7 @@ function confirmDrop(selection: PluginSelection): void {
   <section
     class="plugin-section"
     data-section="plugins"
-    aria-label="Audio effects"
+    :aria-label="t('mixer.pluginSection.ariaLabel')"
     @dragleave="leavePluginSection"
   >
     <template v-if="acceptsPlugins">
@@ -170,7 +173,7 @@ function confirmDrop(selection: PluginSelection): void {
           class="plugin-drop-preview"
           role="status"
           aria-live="polite"
-          :aria-label="`Drop at effect slot ${previewSlotNumber}`"
+          :aria-label="t('mixer.pluginSection.dropAtSlot', { slot: previewSlotNumber })"
           data-testid="plugin-drop-preview"
           @dragenter="allowDrop"
           @dragover="allowDrop"
@@ -182,7 +185,12 @@ function confirmDrop(selection: PluginSelection): void {
             pluginState(plugin),
             { 'drag-source': draggedInstanceId === plugin.id }
           ]"
-          :aria-label="`${plugin.descriptor.name} plugin ${pluginState(plugin)}`"
+          :aria-label="
+            t('mixer.pluginSection.pluginState', {
+              name: plugin.descriptor.name,
+              state: pluginState(plugin)
+            })
+          "
           draggable="true"
           @dragstart="startRackDrag($event, plugin.id)"
           @dragend="finishRackDrag"
@@ -193,22 +201,31 @@ function confirmDrop(selection: PluginSelection): void {
           <button
             class="plugin-name"
             :title="`${plugin.descriptor.name} · ${plugin.descriptor.vendor}`"
-            :aria-label="`Open ${plugin.descriptor.name} editor`"
+            :aria-label="t('mixer.pluginSection.openEditor', { name: plugin.descriptor.name })"
             @click="emit('open', plugin.id)"
           >
             {{ plugin.descriptor.name }}
           </button>
-          <span class="mode-badge" :title="`Audio mode: ${plugin.audioMode}`">{{
-            pluginAudioModeBadge(plugin.audioMode)
-          }}</span>
+          <span
+            class="mode-badge"
+            :title="t('mixer.pluginSection.audioMode', { mode: plugin.audioMode })"
+            >{{ pluginAudioModeBadge(plugin.audioMode) }}</span
+          >
           <button
-            :aria-label="`${plugin.enabled ? 'Bypass' : 'Enable'} ${plugin.descriptor.name}`"
+            :aria-label="
+              t('mixer.pluginSection.bypassPlugin', {
+                action: plugin.enabled
+                  ? t('mixer.pluginSection.bypass')
+                  : t('mixer.pluginSection.enable'),
+                name: plugin.descriptor.name
+              })
+            "
             @click="emit('toggle', plugin.id, !plugin.enabled)"
           >
             <Power :size="9" />
           </button>
           <button
-            :aria-label="`Remove ${plugin.descriptor.name}`"
+            :aria-label="t('mixer.pluginSection.remove', { name: plugin.descriptor.name })"
             @click="emit('remove', plugin.id)"
           >
             <Trash2 :size="9" />
@@ -221,7 +238,7 @@ function confirmDrop(selection: PluginSelection): void {
         class="plugin-drop-preview"
         role="status"
         aria-live="polite"
-        :aria-label="`Drop at effect slot ${previewSlotNumber}`"
+        :aria-label="t('mixer.pluginSection.dropAtSlot', { slot: previewSlotNumber })"
         data-testid="plugin-drop-preview"
         @dragenter="allowDrop"
         @dragover="allowDrop"
@@ -232,15 +249,15 @@ function confirmDrop(selection: PluginSelection): void {
         v-if="emptyRows > 0 && dropPreviewSlot === null"
         :plugins="effectPlugins"
         :input-width="inputWidthAt(orderedInserts.length)"
-        title="Add audio effect"
-        search-label="Search VST3 audio effects"
-        empty-message="No compatible VST3 effects found. Rescan from the Sound Browser."
+        :title="t('mixer.pluginSection.addEffectTitle')"
+        :search-label="t('mixer.pluginSection.searchEffects')"
+        :empty-message="t('mixer.pluginSection.noEffects')"
         @select="emit('insert', $event, orderedInserts.length)"
       >
         <button
           type="button"
           class="plugin-row empty picker-trigger"
-          aria-label="Add VST3 audio effect"
+          :aria-label="t('mixer.pluginSection.addEffect')"
           @dragenter="previewDropAtEnd"
           @dragover="previewDropAtEnd"
           @drop="dropInsert($event, orderedInserts.length)"
@@ -255,7 +272,7 @@ function confirmDrop(selection: PluginSelection): void {
     </template>
     <template v-else>
       <article class="plugin-row empty disabled">
-        <span>NO INSERT</span>
+        <span>{{ t("mixer.pluginSection.noInsert") }}</span>
       </article>
       <span
         v-for="index in Math.max(0, slotRows - 1)"

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue"
+import { useI18n } from "vue-i18n"
 import type { KeySignatureEventState, TempoMapSnapshot } from "@yadaw/contracts"
 import { keySignatureLabel } from "../../../utils/keySignatures"
 import { barTicksThroughTick, beatTicksThroughTick } from "../../../utils/tempoMap"
@@ -19,6 +20,8 @@ const emit = defineEmits<{
   replace: [events: KeySignatureEventState[]]
   select: [tick: number | null]
 }>()
+
+const { t } = useI18n()
 
 const points = computed<GlobalMarkerLanePoint[]>(() =>
   props.events.map((event) => ({
@@ -110,8 +113,8 @@ function removePoint(id: string): void {
     :vertical-guides="verticalGuides"
     color="var(--ui-domain-color-b894ff)"
     :expanded="expanded"
-    value-label="Key"
-    position-label="beats"
+    :value-label="t('studio.lanes.key')"
+    :position-label="t('studio.lanes.positionLabel')"
     @create="createPoint"
     @update="updatePoint"
     @remove="removePoint"

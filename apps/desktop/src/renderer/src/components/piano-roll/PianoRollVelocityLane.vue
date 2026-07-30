@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { shallowRef, type CSSProperties } from "vue"
+import { useI18n } from "vue-i18n"
 import { useEventListener } from "@vueuse/core"
 import type { ProjectCommand } from "@yadaw/contracts"
 import { midiNoteName } from "../../utils/pianoRoll"
@@ -17,6 +18,7 @@ const {
   trackColor,
   batch
 } = usePianoRollEditor()
+const { t } = useI18n()
 
 const BAR_WIDTH_PX = 5
 const BAR_HIT_TOLERANCE_PX = 3
@@ -152,19 +154,23 @@ function cancelDrag(): void {
 }
 
 function barAriaLabel(item: NoteGestureItem): string {
-  return `Velocity ${displayedVelocity(item)} for ${midiNoteName(item.note.key)}, ${item.clip.name}`
+  return t("pianoRoll.velocityLane.barLabel", {
+    velocity: displayedVelocity(item),
+    note: midiNoteName(item.note.key),
+    clip: item.clip.name
+  })
 }
 </script>
 
 <template>
   <div class="velocity-lane">
-    <div class="lane-header">Velocity</div>
+    <div class="lane-header">{{ t("pianoRoll.velocityLane.header") }}</div>
     <div ref="laneScroll" class="lane-scroll">
       <div
         class="lane-canvas"
         :style="{ width: `${gridWidth}px` }"
         role="application"
-        aria-label="Velocity lane. Drag bars to change note velocities."
+        :aria-label="t('pianoRoll.velocityLane.ariaLabel')"
         @pointerdown="handlePointerDown"
         @pointermove="handlePointerMove"
         @pointerup="handlePointerUp"

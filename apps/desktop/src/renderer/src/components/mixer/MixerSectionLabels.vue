@@ -1,14 +1,20 @@
+<script setup lang="ts">
+import { useI18n } from "vue-i18n"
+
+const { t } = useI18n()
+</script>
+
 <template>
   <aside class="mixer-section-labels" aria-hidden="true">
-    <span>INPUT</span>
-    <span>AUDIO FX</span>
-    <span>SENDS</span>
-    <span>OUTPUT</span>
-    <span>GROUP</span>
-    <span>AUTOMATION</span>
-    <span>PAN</span>
-    <span>VOLUME</span>
-    <span>CHANNEL</span>
+    <span>{{ t("mixer.sections.input") }}</span>
+    <span>{{ t("mixer.sections.audioFx") }}</span>
+    <span>{{ t("mixer.sections.sends") }}</span>
+    <span>{{ t("mixer.sections.output") }}</span>
+    <span>{{ t("mixer.sections.group") }}</span>
+    <span>{{ t("mixer.sections.automation") }}</span>
+    <span>{{ t("mixer.sections.pan") }}</span>
+    <span>{{ t("mixer.sections.volume") }}</span>
+    <span>{{ t("mixer.sections.channel") }}</span>
   </aside>
 </template>
 

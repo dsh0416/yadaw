@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, shallowRef } from "vue"
+import { useI18n } from "vue-i18n"
 import { Trash2 } from "@lucide/vue"
 import type { PluginDescriptor, PluginInstanceState, PluginRuntimeStatus } from "@yadaw/contracts"
 import { PLUGIN_DRAG_TYPE, readPluginDrag } from "../plugins/plugin-drag"
@@ -19,6 +20,7 @@ const emit = defineEmits<{
   assign: [selection: PluginSelection]
 }>()
 const pendingDrop = shallowRef<PluginDescriptor | null>(null)
+const { t } = useI18n()
 
 const instrumentState = computed<PluginRuntimeStatus["state"]>(() => {
   if (!props.instrument) return "unloaded"
@@ -52,7 +54,12 @@ function confirmDrop(selection: PluginSelection): void {
     <article
       v-if="instrument"
       :class="['instrument-input', instrumentState]"
-      :aria-label="`${instrument.descriptor.name} instrument input ${instrumentState}`"
+      :aria-label="
+        t('mixer.instrumentInput.ariaLabel', {
+          name: instrument.descriptor.name,
+          state: instrumentState
+        })
+      "
       @dragenter="allowDrop"
       @dragover="allowDrop"
       @drop="dropInstrument"
@@ -60,16 +67,18 @@ function confirmDrop(selection: PluginSelection): void {
       <button
         class="instrument-name"
         :title="instrument.descriptor.name"
-        :aria-label="`Open ${instrument.descriptor.name} instrument editor`"
+        :aria-label="t('mixer.instrumentInput.openEditor', { name: instrument.descriptor.name })"
         @click="emit('open', instrument.id)"
       >
         {{ instrument.descriptor.name }}
       </button>
-      <span class="mode-badge" :title="`Audio mode: ${instrument.audioMode}`">{{
-        pluginAudioModeBadge(instrument.audioMode)
-      }}</span>
+      <span
+        class="mode-badge"
+        :title="t('mixer.instrumentInput.audioMode', { mode: instrument.audioMode })"
+        >{{ pluginAudioModeBadge(instrument.audioMode) }}</span
+      >
       <button
-        :aria-label="`Remove ${instrument.descriptor.name}`"
+        :aria-label="t('mixer.instrumentInput.remove', { name: instrument.descriptor.name })"
         @click="emit('remove', instrument.id)"
       >
         <Trash2 :size="10" />
@@ -79,15 +88,15 @@ function confirmDrop(selection: PluginSelection): void {
     <MixerPluginPicker
       v-else
       :plugins="plugins"
-      title="Choose instrument"
-      search-label="Search VST3 instruments"
-      empty-message="No compatible VST3 instruments found. Rescan from the Sound Browser."
+      :title="t('mixer.instrumentInput.chooseTitle')"
+      :search-label="t('mixer.instrumentInput.searchInstruments')"
+      :empty-message="t('mixer.instrumentInput.noInstruments')"
       @select="emit('assign', $event)"
     >
       <button
         type="button"
         class="instrument-input empty"
-        aria-label="Assign VST3 instrument input"
+        :aria-label="t('mixer.instrumentInput.assign')"
         @dragenter="allowDrop"
         @dragover="allowDrop"
         @drop="dropInstrument"

@@ -1,4 +1,5 @@
 import { computed, onMounted, reactive, watch, type Ref } from "vue"
+import { useI18n } from "vue-i18n"
 import { storeToRefs } from "pinia"
 import { AUDIO_BUFFER_SIZES } from "@yadaw/contracts"
 import type {
@@ -10,43 +11,14 @@ import type {
 import type { UiRadioOption, UiSelectOption } from "@yadaw/ui"
 import { useAudioPreferencesStore } from "../../stores/audioPreferences"
 
-const BACKEND_OPTIONS: ReadonlyArray<{
-  value: AudioBackend
-  label: string
-  platform: string
-  description: string
-}> = [
-  {
-    value: "wasapi",
-    label: "WASAPI",
-    platform: "Windows",
-    description: "Windows shared and exclusive audio"
-  },
-  {
-    value: "asio",
-    label: "ASIO",
-    platform: "Windows",
-    description: "Low-latency professional audio drivers"
-  },
-  {
-    value: "coreaudio",
-    label: "CoreAudio",
-    platform: "macOS",
-    description: "Native macOS audio device layer"
-  },
-  {
-    value: "alsa",
-    label: "ALSA",
-    platform: "Linux",
-    description: "Native Linux audio device layer"
-  }
-]
+const BACKEND_IDS: readonly AudioBackend[] = ["wasapi", "asio", "coreaudio", "alsa"]
 
 export function useAudioDeviceOptions(
   preferences: Ref<AudioPreferences>,
   runtime: () => AudioRuntimeSnapshot,
   validityChange: (valid: boolean) => void
 ) {
+  const { t } = useI18n()
   const store = useAudioPreferencesStore()
   const { inputDevices, outputDevices, discoveryState, discoveryError } = storeToRefs(store)
   const backendAvailability = reactive<Record<AudioBackend, boolean>>({
@@ -71,7 +43,7 @@ export function useAudioDeviceOptions(
     set: (inputDeviceId: string) => updatePreferences({ inputDeviceId })
   })
   const availableBackendOptions = computed(() =>
-    BACKEND_OPTIONS.filter((backend) => backendAvailability[backend.value])
+    BACKEND_IDS.filter((backend) => backendAvailability[backend])
   )
   const backendSelection = computed({
     get: () => backendModel.value,
@@ -81,21 +53,21 @@ export function useAudioDeviceOptions(
   })
   const backendUiOptions = computed<readonly UiRadioOption[]>(() =>
     availableBackendOptions.value.map((backend) => ({
-      value: backend.value,
-      label: `${backend.label} · ${backend.platform}`,
-      description: backend.description
+      value: backend,
+      label: `${t(`settings.backends.${backend}.label`)} · ${t(`settings.backends.${backend}.platform`)}`,
+      description: t(`settings.backends.${backend}.description`)
     }))
   )
   const outputDeviceOptions = computed<readonly UiSelectOption[]>(() =>
     outputDevices.value.map((device) => ({
       value: device.id,
-      label: `${device.name}${device.isDefault ? " · Default" : ""}`
+      label: `${device.name}${device.isDefault ? ` · ${t("common.default")}` : ""}`
     }))
   )
   const inputDeviceOptions = computed<readonly UiSelectOption[]>(() =>
     inputDevices.value.map((device) => ({
       value: device.id,
-      label: `${device.name}${device.isDefault ? " · Default" : ""}`
+      label: `${device.name}${device.isDefault ? ` · ${t("common.default")}` : ""}`
     }))
   )
   const selectedInputDevice = computed(() =>
@@ -142,7 +114,7 @@ export function useAudioDeviceOptions(
   const bufferSizeOptions = computed<readonly UiSelectOption[]>(() =>
     supportedBufferSizes.value.map((size) => ({
       value: String(size),
-      label: `${size} samples`
+      label: t("settings.audio.buffer.optionLabel", { size })
     }))
   )
   const canApply = computed(
@@ -159,7 +131,7 @@ export function useAudioDeviceOptions(
     const backend = preferences.value.backend
     if (!backendAvailability[backend]) {
       updatePreferences({ inputDeviceId: "", outputDeviceId: "" })
-      store.markBackendUnavailable("This CPAL host is not available in the current native build.")
+      store.markBackendUnavailable(t("settings.audio.backend.hostUnavailable"))
       return
     }
     await store.discoverDevices(backend)
@@ -178,7 +150,7 @@ export function useAudioDeviceOptions(
     if (!backendAvailability[preferences.value.backend]) {
       const firstAvailable = backends.find((backend) => backend.available)
       if (!firstAvailable) {
-        store.markBackendUnavailable("CPAL did not report an available audio host.")
+        store.markBackendUnavailable(t("settings.audio.backend.noHostReported"))
         return
       }
       backendModel.value = firstAvailable.id

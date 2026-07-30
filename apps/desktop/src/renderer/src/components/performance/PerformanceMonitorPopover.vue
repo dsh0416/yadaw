@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { storeToRefs } from "pinia"
 import { computed } from "vue"
+import { useI18n } from "vue-i18n"
 import { CircleAlert, RefreshCw, TriangleAlert } from "@lucide/vue"
 import type { AudioRuntimeSnapshot } from "@yadaw/contracts"
 import { UiPopover } from "@yadaw/ui"
@@ -23,6 +24,7 @@ const props = defineProps<{
 }>()
 
 const systemPerformanceStore = useSystemPerformanceStore()
+const { t } = useI18n()
 const {
   snapshot,
   warnings: systemWarnings,
@@ -67,9 +69,11 @@ const latencyWarning = computed<PerformanceWarning | null>(() => {
     severity: latencySeverity.value,
     title:
       latencySeverity.value === "critical"
-        ? "Audio latency is critical"
-        : "Audio latency is elevated",
-    message: `Current or rolling round-trip latency is ${formatLatency(monitoredRoundTripLatency.value ?? value)}.`
+        ? t("performance.latency.criticalTitle")
+        : t("performance.latency.warningTitle"),
+    message: t("performance.latency.message", {
+      latency: formatLatency(monitoredRoundTripLatency.value ?? value)
+    })
   }
 })
 
@@ -97,24 +101,28 @@ function formatLatency(value: number | null): string {
     <template #trigger>
       <button
         :class="['performance-trigger', severity]"
-        :aria-label="`Open performance monitor. Status: ${severity}`"
+        :aria-label="
+          t('performance.trigger.ariaLabel', {
+            severity: t(`performance.severity.${severity}`)
+          })
+        "
       >
         <span class="health-light" aria-hidden="true" />
-        <span>CPU {{ formatPercent(cpuUsage) }}</span>
-        <span>MEM {{ formatPercent(memoryUsage) }}</span>
+        <span>{{ t("performance.trigger.cpu") }} {{ formatPercent(cpuUsage) }}</span>
+        <span>{{ t("performance.trigger.mem") }} {{ formatPercent(memoryUsage) }}</span>
       </button>
     </template>
     <div class="performance-popover">
       <header class="performance-header">
         <div>
-          <span>Realtime headroom</span>
-          <strong>Performance monitor</strong>
+          <span>{{ t("performance.header.kicker") }}</span>
+          <strong>{{ t("performance.header.title") }}</strong>
         </div>
         <div class="performance-header-actions">
-          <span :class="['health-badge', severity]">{{ severity }}</span>
+          <span :class="['health-badge', severity]">{{ t(`performance.severity.${severity}`) }}</span>
           <button
             class="refresh-performance"
-            aria-label="Refresh performance data"
+            :aria-label="t('performance.header.refreshAria')"
             :disabled="isRefreshing"
             @click="systemPerformanceStore.refresh"
           >
@@ -147,14 +155,16 @@ function formatLatency(value: number | null): string {
       <PerformanceIpcSection :audio-ipc="audioIpc" />
 
       <footer class="threshold-note">
-        Warning / critical · CPU {{ PERFORMANCE_THRESHOLDS.cpu.warningPercent }}/{{
-          PERFORMANCE_THRESHOLDS.cpu.criticalPercent
-        }}% · MEM {{ PERFORMANCE_THRESHOLDS.memory.warningPercent }}/{{
-          PERFORMANCE_THRESHOLDS.memory.criticalPercent
-        }}% · RTL {{ PERFORMANCE_THRESHOLDS.audioRoundTrip.warningMs }}/{{
-          PERFORMANCE_THRESHOLDS.audioRoundTrip.criticalMs
+        {{
+          t("performance.thresholdNote", {
+            cpuWarning: PERFORMANCE_THRESHOLDS.cpu.warningPercent,
+            cpuCritical: PERFORMANCE_THRESHOLDS.cpu.criticalPercent,
+            memWarning: PERFORMANCE_THRESHOLDS.memory.warningPercent,
+            memCritical: PERFORMANCE_THRESHOLDS.memory.criticalPercent,
+            rtlWarning: PERFORMANCE_THRESHOLDS.audioRoundTrip.warningMs,
+            rtlCritical: PERFORMANCE_THRESHOLDS.audioRoundTrip.criticalMs
+          })
         }}
-        ms
       </footer>
     </div>
   </UiPopover>

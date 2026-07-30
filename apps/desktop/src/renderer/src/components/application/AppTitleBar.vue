@@ -5,6 +5,7 @@ import type {
   DesktopPlatform
 } from "@yadaw/contracts"
 import { YadawLogo, type UiMenubarMenu } from "@yadaw/ui"
+import { useI18n } from "vue-i18n"
 import ApplicationMenuBar from "./ApplicationMenuBar.vue"
 import AppWindowControls from "./AppWindowControls.vue"
 
@@ -19,6 +20,8 @@ const emit = defineEmits<{
   command: [command: ApplicationCommandId]
   windowCommand: [command: ApplicationWindowCommandId]
 }>()
+
+const { t } = useI18n()
 </script>
 
 <template>
@@ -36,11 +39,15 @@ const emit = defineEmits<{
 
       <div class="app-titlebar__drag">
         <span v-if="projectName" class="app-titlebar__project">
-          <i v-if="dirty" title="Unsaved changes" aria-label="Unsaved changes" />
+          <i
+            v-if="dirty"
+            :title="t('chrome.unsavedChanges')"
+            :aria-label="t('chrome.unsavedChanges')"
+          />
           {{ projectName }}
         </span>
         <span v-else class="app-titlebar__project app-titlebar__project--empty">
-          No project open
+          {{ t("chrome.noProjectOpen") }}
         </span>
       </div>
 

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, shallowRef, watch } from "vue"
+import { useI18n } from "vue-i18n"
 import { storeToRefs } from "pinia"
 import { UiSelect } from "@yadaw/ui"
 import { useProjectStore } from "../../stores/project"
@@ -37,6 +38,7 @@ const props = defineProps<{
   recordingStartFrame: number | null
   recordingError: string
 }>()
+const { t } = useI18n()
 const projectStore = useProjectStore()
 const transportStore = useTransportStore()
 const viewStore = useArrangementViewStore()
@@ -82,17 +84,17 @@ const {
   execute: (command) => mixerStore.execute(command)
 })
 const meterDenominators = [1, 2, 4, 8, 16, 32] as const
-const keySignatureGroups = [
+const keySignatureGroups = computed(() => [
   {
-    label: "Major keys",
+    label: t("studio.arrangement.majorKeys"),
     options: MAJOR_KEY_SIGNATURE_CHOICES
   },
   {
-    label: "Minor keys",
+    label: t("studio.arrangement.minorKeys"),
     options: MINOR_KEY_SIGNATURE_CHOICES,
     separatorBefore: true
   }
-] as const
+])
 const displayMode = computed(() => session.value?.configuration.waveformDisplayMode ?? "separate")
 const recordingDuration = computed(() => {
   if (liveDurationSeconds.value > 0) return liveDurationSeconds.value
@@ -117,7 +119,7 @@ const liveClips = computed<TimelineClip[]>(() =>
         id: `${props.recordingId}-${track.id}`,
         assetId: props.recordingId!,
         trackId: track.id,
-        name: "New recording",
+        name: t("studio.arrangement.newRecording"),
         startSeconds: recordingStartSeconds.value,
         durationSeconds: recordingDuration.value,
         endSeconds: recordingStartSeconds.value + recordingDuration.value,
@@ -289,7 +291,9 @@ function createMidiClip(trackId: string, requestedStartTick: number): void {
   const sourceId = crypto.randomUUID()
   const clipId = crypto.randomUUID()
   const startTick = snapTicks(requestedStartTick, pianoRollStore.snap)
-  const name = `MIDI Clip ${mixerStore.graph.midiClips.length + 1}`
+  const name = t("studio.arrangement.midiClipName", {
+    index: mixerStore.graph.midiClips.length + 1
+  })
   const source: MidiSourceState = {
     id: sourceId,
     name,
@@ -325,7 +329,7 @@ function createMidiClip(trackId: string, requestedStartTick: number): void {
 </script>
 
 <template>
-  <section class="arrangement" aria-label="Arrangement timeline">
+  <section class="arrangement" :aria-label="t('studio.arrangement.ariaLabel')">
     <div class="arrangement-toolbar">
       <ArrangementZoomControls
         class="arrangement-zoom-controls"
@@ -349,10 +353,10 @@ function createMidiClip(trackId: string, requestedStartTick: number): void {
         :style="railStyle"
         @wheel="handleRailWheel"
       >
-        <div class="ruler-corner">TRACKS</div>
+        <div class="ruler-corner">{{ t("studio.arrangement.tracks") }}</div>
         <GlobalLaneHeader
-          label="Tempo"
-          eyebrow="GLOBAL TRACK"
+          :label="t('studio.arrangement.tempo')"
+          :eyebrow="t('studio.arrangement.globalTrack')"
           :value="selectedTempo.beatsPerMinute"
           unit="BPM"
           :minimum="20"
@@ -363,8 +367,8 @@ function createMidiClip(trackId: string, requestedStartTick: number): void {
           @update-value="updateSelectedTempo"
         />
         <GlobalEventLaneHeader
-          label="Meter"
-          eyebrow="GLOBAL TRACK"
+          :label="t('studio.arrangement.meter')"
+          :eyebrow="t('studio.arrangement.globalTrack')"
           :expanded="meterLaneExpanded"
           color="var(--ui-domain-color-f2a65a)"
           @toggle="viewStore.toggleMeterLane"
@@ -375,7 +379,7 @@ function createMidiClip(trackId: string, requestedStartTick: number): void {
               type="number"
               min="1"
               max="32"
-              aria-label="Selected Meter numerator"
+              :aria-label="t('studio.arrangement.meterNumeratorAria')"
               @change="
                 updateSelectedMeter({
                   numerator: Math.min(
@@ -389,7 +393,7 @@ function createMidiClip(trackId: string, requestedStartTick: number): void {
             <UiSelect
               :model-value="String(selectedMeter.denominator)"
               size="compact"
-              aria-label="Selected Meter denominator"
+              :aria-label="t('studio.arrangement.meterDenominatorAria')"
               @update:model-value="
                 updateSelectedMeter({
                   denominator: Number($event)
@@ -407,8 +411,8 @@ function createMidiClip(trackId: string, requestedStartTick: number): void {
           </template>
         </GlobalEventLaneHeader>
         <GlobalEventLaneHeader
-          label="Key"
-          eyebrow="GLOBAL TRACK"
+          :label="t('studio.arrangement.key')"
+          :eyebrow="t('studio.arrangement.globalTrack')"
           :expanded="keyLaneExpanded"
           color="var(--ui-domain-color-b894ff)"
           @toggle="viewStore.toggleKeyLane"
@@ -418,7 +422,7 @@ function createMidiClip(trackId: string, requestedStartTick: number): void {
               :model-value="selectedKeyValue"
               :groups="keySignatureGroups"
               size="compact"
-              aria-label="Selected Key signature"
+              :aria-label="t('studio.arrangement.keySignatureAria')"
               @update:model-value="updateSelectedKey"
             />
           </template>
@@ -437,7 +441,9 @@ function createMidiClip(trackId: string, requestedStartTick: number): void {
             <InlineTrackNameEditor
               class="track-name-editor"
               :name="track.name"
-              :label="`${track.name}; double-click to rename; Alt+Arrow Up or Down to reorder`"
+              :label="
+                t('studio.arrangement.trackRenameLabel', { name: track.name })
+              "
               @rename="mixerStore.updateChannel(track.id, { name: $event })"
             />
           </div>

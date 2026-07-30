@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue"
+import { useI18n } from "vue-i18n"
 import type {
   MixerChannelPatch,
   MixerChannelState,
@@ -25,9 +26,11 @@ const emit = defineEmits<{
   assignInstrument: [selection: PluginSelection]
 }>()
 
+const { t } = useI18n()
+
 const inputSummary = computed(() => {
-  if (props.channel.kind === "master") return "GLOBAL"
-  return "MIX BUS"
+  if (props.channel.kind === "master") return t("mixer.inputSection.global")
+  return t("mixer.inputSection.mixBus")
 })
 </script>
 

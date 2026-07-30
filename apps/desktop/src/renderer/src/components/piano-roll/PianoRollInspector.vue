@@ -1,18 +1,21 @@
 <script setup lang="ts">
+import { computed } from "vue"
+import { useI18n } from "vue-i18n"
 import { UiButton, UiField, UiNumberInput } from "@yadaw/ui"
 import { usePianoRollEditor } from "./usePianoRollEditor"
 
 const { pianoRollStore, selectedItems, applyInspector, commonValue, quantizeSelected } =
   usePianoRollEditor()
+const { t } = useI18n()
 
-const INSPECTOR_FIELDS = [
-  { key: "key", label: "Pitch", min: 0, max: 127 },
-  { key: "start", label: "Start tick", min: 0, max: undefined },
-  { key: "duration", label: "Duration", min: 1, max: undefined },
-  { key: "channel", label: "Channel", min: 1, max: 16 },
-  { key: "velocity", label: "Velocity", min: 1, max: 127 },
-  { key: "releaseVelocity", label: "Release", min: 0, max: 127 }
-] as const
+const inspectorFields = computed(() => [
+  { key: "key", label: t("pianoRoll.inspector.pitch"), min: 0, max: 127 },
+  { key: "start", label: t("pianoRoll.inspector.startTick"), min: 0, max: undefined },
+  { key: "duration", label: t("pianoRoll.inspector.duration"), min: 1, max: undefined },
+  { key: "channel", label: t("pianoRoll.inspector.channel"), min: 1, max: 16 },
+  { key: "velocity", label: t("pianoRoll.inspector.velocity"), min: 1, max: 127 },
+  { key: "releaseVelocity", label: t("pianoRoll.inspector.release"), min: 0, max: 127 }
+])
 
 function numericValue(field: string): number | null {
   const value = commonValue(field)
@@ -26,12 +29,12 @@ function commitInspectorValue(field: string, value: number | null | undefined): 
 </script>
 
 <template>
-  <aside class="inspector" aria-label="Selected note properties">
+  <aside class="inspector" :aria-label="t('pianoRoll.inspector.ariaLabel')">
     <span class="selection-summary">
-      {{ selectedItems.length }} note{{ selectedItems.length === 1 ? "" : "s" }}
+      {{ t("pianoRoll.inspector.noteCount", selectedItems.length, { count: selectedItems.length }) }}
     </span>
     <UiField
-      v-for="field in INSPECTOR_FIELDS"
+      v-for="field in inspectorFields"
       :key="field.key"
       :label="field.label"
       layout="inline"
@@ -54,23 +57,23 @@ function commitInspectorValue(field: string, value: number | null | undefined): 
       size="sm"
       variant="ghost"
       class="quantize"
-      aria-label="Quantize selected note starts to the snap grid"
+      :aria-label="t('pianoRoll.inspector.quantizeAria')"
       :disabled="selectedItems.length === 0 || pianoRollStore.snap === 'off'"
       @click="quantizeSelected"
     >
-      Quantize
+      {{ t("pianoRoll.inspector.quantize") }}
     </UiButton>
     <UiButton
       size="sm"
       :variant="pianoRollStore.showVelocityLane ? 'primary' : 'ghost'"
       class="velocity-toggle"
-      aria-label="Toggle velocity lane"
+      :aria-label="t('pianoRoll.inspector.velocityLaneAria')"
       :aria-pressed="pianoRollStore.showVelocityLane"
       @click="pianoRollStore.showVelocityLane = !pianoRollStore.showVelocityLane"
     >
-      Velocity lane
+      {{ t("pianoRoll.inspector.velocityLane") }}
     </UiButton>
-    <span class="resolution">Resolution 1/3840 note · integer ticks</span>
+    <span class="resolution">{{ t("pianoRoll.inspector.resolution") }}</span>
   </aside>
 </template>
 

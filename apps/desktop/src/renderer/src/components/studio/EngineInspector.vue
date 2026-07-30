@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue"
+import { useI18n } from "vue-i18n"
 import { Activity, Cpu, Zap } from "@lucide/vue"
 import { UiButton, UiSlider } from "@yadaw/ui"
 import type { AudioRuntimeSnapshot } from "@yadaw/contracts"
@@ -7,6 +8,7 @@ import type { AudioRuntimeSnapshot } from "@yadaw/contracts"
 const props = defineProps<{ runtime: AudioRuntimeSnapshot; peak?: number; error?: string }>()
 const emit = defineEmits<{ runPreview: [] }>()
 const gainValues = defineModel<number[]>({ required: true })
+const { t } = useI18n()
 const gain = computed(() => gainValues.value[0] ?? 0.5)
 const gainValue = computed({
   get: () => gain.value,
@@ -23,17 +25,21 @@ const meterSegments = Array.from({ length: 12 }, (_, index) => index)
 <template>
   <aside class="inspector-panel">
     <div class="panel-heading">
-      <div><span>SIGNAL LAB</span><strong>Engine probe</strong></div>
+      <div>
+        <span>{{ t("studio.inspector.eyebrow") }}</span
+        ><strong>{{ t("studio.inspector.title") }}</strong>
+      </div>
       <Activity :size="15" aria-hidden="true" />
     </div>
     <p class="panel-description">
-      Trace a test signal through Vue, Electron, N-API, and the Rust DSP core.
+      {{ t("studio.inspector.description") }}
     </p>
     <div class="signal-card">
       <div class="signal-card-header">
-        <span>Output peak</span><output>{{ peak === undefined ? "—" : peak.toFixed(3) }}</output>
+        <span>{{ t("studio.inspector.outputPeak") }}</span
+        ><output>{{ peak === undefined ? "—" : peak.toFixed(3) }}</output>
       </div>
-      <div class="meter" aria-label="Output peak meter">
+      <div class="meter" :aria-label="t('studio.inspector.outputPeakMeter')">
         <span
           v-for="segment in meterSegments"
           :key="segment"
@@ -43,38 +49,40 @@ const meterSegments = Array.from({ length: 12 }, (_, index) => index)
       <div class="meter-scale"><span>−∞</span><span>−12</span><span>−6</span><span>0 dB</span></div>
     </div>
     <label class="gain-label" for="gain"
-      >Offline gain <output>{{ gain.toFixed(2) }}</output></label
+      >{{ t("studio.inspector.offlineGain") }} <output>{{ gain.toFixed(2) }}</output></label
     >
     <UiSlider
       id="gain"
       v-model="gainValue"
       class="gain-slider"
-      label="Offline gain"
+      :label="t('studio.inspector.offlineGain')"
       :value-text="gain.toFixed(2)"
       :min="0"
       :max="2"
       :step="0.01"
     />
     <UiButton class="primary-action" variant="primary" @click="emit('runPreview')">
-      <Zap :size="13" />Run signal check
+      <Zap :size="13" />{{ t("studio.inspector.runSignalCheck") }}
     </UiButton>
     <hr class="panel-separator" />
-    <div class="telemetry-heading"><Cpu :size="12" /><span>Native telemetry</span></div>
+    <div class="telemetry-heading">
+      <Cpu :size="12" /><span>{{ t("studio.inspector.nativeTelemetry") }}</span>
+    </div>
     <dl>
       <div>
-        <dt>Input</dt>
+        <dt>{{ t("studio.inspector.input") }}</dt>
         <dd>−0.50 · 0.25 · 1.00</dd>
       </div>
       <div>
-        <dt>Audio I/O</dt>
+        <dt>{{ t("studio.inspector.audioIo") }}</dt>
         <dd>Rust · CPAL</dd>
       </div>
       <div>
-        <dt>Sample rate</dt>
+        <dt>{{ t("studio.inspector.sampleRate") }}</dt>
         <dd>{{ runtime.sampleRate ? `${runtime.sampleRate.toLocaleString()} Hz` : "—" }}</dd>
       </div>
       <div>
-        <dt>Clock sync</dt>
+        <dt>{{ t("studio.inspector.clockSync") }}</dt>
         <dd>{{ runtime.clockSync.replace("-", " ") }}</dd>
       </div>
     </dl>

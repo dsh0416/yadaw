@@ -1,15 +1,19 @@
 <script setup lang="ts">
 import { computed } from "vue"
 import { Activity } from "@lucide/vue"
+import { useI18n } from "vue-i18n"
 import type { AudioIpcPerformanceSnapshot } from "@yadaw/contracts"
 
 const props = defineProps<{ audioIpc: AudioIpcPerformanceSnapshot | null }>()
+const { t } = useI18n()
 const buildLabel = computed(() => {
   const fingerprint = props.audioIpc?.nativeBuildFingerprint
-  return fingerprint ? `Build ${fingerprint.slice(0, 8)}` : "Unavailable"
+  return fingerprint
+    ? t("performance.ipcSection.build", { fingerprint: fingerprint.slice(0, 8) })
+    : t("performance.ipcSection.unavailable")
 })
 function formatHeartbeatAge(value: number | null): string {
-  return value === null ? "Waiting" : `${Math.round(value)} ms`
+  return value === null ? t("performance.ipcSection.waiting") : `${Math.round(value)} ms`
 }
 function formatOccupancy(used: number, capacity: number): string {
   return `${used.toLocaleString()} / ${capacity.toLocaleString()}`
@@ -29,20 +33,26 @@ function formatBytes(value: number): string {
 <template>
   <section class="performance-section ipc-section">
     <div class="section-heading">
-      <div><Activity :size="13" /><strong>Audio IPC transport</strong></div>
+      <div><Activity :size="13" /><strong>{{ t("performance.ipcSection.title") }}</strong></div>
       <span>{{ buildLabel }}</span>
     </div>
     <dl v-if="audioIpc" class="ipc-diagnostics-grid">
       <div>
-        <dt>Request router</dt>
+        <dt>{{ t("performance.ipcSection.requestRouter") }}</dt>
         <dd>
-          {{ audioIpc.requests.normalPending }} normal ·
-          {{ audioIpc.requests.priorityPending }} priority
+          {{
+            t("performance.ipcSection.normalPriority", {
+              normal: audioIpc.requests.normalPending,
+              priority: audioIpc.requests.priorityPending
+            })
+          }}
         </dd>
-        <small>{{ audioIpc.requests.capacity }} slots per channel</small>
+        <small>{{
+          t("performance.ipcSection.slotsPerChannel", { count: audioIpc.requests.capacity })
+        }}</small>
       </div>
       <div>
-        <dt>Arena leases</dt>
+        <dt>{{ t("performance.ipcSection.arenaLeases") }}</dt>
         <dd>
           {{
             formatOccupancy(
@@ -50,95 +60,132 @@ function formatBytes(value: number): string {
               audioIpc.sharedMemory.maxLeases
             )
           }}
-          leases
+          {{ t("performance.ipcSection.leases") }}
         </dd>
-        <small
-          >{{ formatBytes(audioIpc.sharedMemory.outstandingBytes) }} /
-          {{ formatBytes(audioIpc.sharedMemory.maxBytes) }} live ·
-          {{ audioIpc.sharedMemory.sharedPackets }} packets /
-          {{ formatBytes(audioIpc.sharedMemory.sharedBytes) }} total</small
-        >
+        <small>{{
+          t("performance.ipcSection.liveTotal", {
+            live: `${formatBytes(audioIpc.sharedMemory.outstandingBytes)} / ${formatBytes(audioIpc.sharedMemory.maxBytes)}`,
+            packets: audioIpc.sharedMemory.sharedPackets,
+            total: formatBytes(audioIpc.sharedMemory.sharedBytes)
+          })
+        }}</small>
       </div>
       <div>
-        <dt>Bulk arena</dt>
+        <dt>{{ t("performance.ipcSection.bulkArena") }}</dt>
         <dd>
           {{ formatBytes(audioIpc.sharedMemory.arenaUsedBytes) }} /
           {{ formatBytes(audioIpc.sharedMemory.arenaCapacityBytes) }}
         </dd>
-        <small
-          >{{ audioIpc.sharedMemory.arenaRegions }} regions ·
-          {{ audioIpc.sharedMemory.arenaOffers }} offers ·
-          {{ audioIpc.sharedMemory.arenaBusy }} busy ·
-          {{ audioIpc.sharedMemory.arenaQuarantinedRegions }} quarantine</small
-        >
+        <small>{{
+          t("performance.ipcSection.regionsDetail", {
+            regions: audioIpc.sharedMemory.arenaRegions,
+            offers: audioIpc.sharedMemory.arenaOffers,
+            busy: audioIpc.sharedMemory.arenaBusy,
+            quarantine: audioIpc.sharedMemory.arenaQuarantinedRegions
+          })
+        }}</small>
       </div>
       <div>
-        <dt>Runtime workers</dt>
+        <dt>{{ t("performance.ipcSection.runtimeWorkers") }}</dt>
         <dd>
-          {{ audioIpc.runtime.resolved.workerThreads }} async ·
-          {{ audioIpc.runtime.resolved.maxBlockingThreads }} blocking
+          {{
+            t("performance.ipcSection.asyncBlocking", {
+              async: audioIpc.runtime.resolved.workerThreads,
+              blocking: audioIpc.runtime.resolved.maxBlockingThreads
+            })
+          }}
         </dd>
-        <small
-          >{{ audioIpc.runtime.resolved.egressConcurrency }} egress concurrency ·
-          {{ audioIpc.runtime.blockingJobs }} blocking active</small
-        >
+        <small>{{
+          t("performance.ipcSection.egressDetail", {
+            egress: audioIpc.runtime.resolved.egressConcurrency,
+            active: audioIpc.runtime.blockingJobs
+          })
+        }}</small>
       </div>
       <div>
-        <dt>Async egress</dt>
+        <dt>{{ t("performance.ipcSection.asyncEgress") }}</dt>
         <dd>
-          {{ audioIpc.runtime.egressActive }} active ·
-          {{ audioIpc.runtime.egressQueueDepth }} queued
+          {{
+            t("performance.ipcSection.activeQueued", {
+              active: audioIpc.runtime.egressActive,
+              queued: audioIpc.runtime.egressQueueDepth
+            })
+          }}
         </dd>
-        <small
-          >{{ audioIpc.runtime.egressQueueHighWater }} high-water ·
-          {{ audioIpc.runtime.egressBatches }} batches ·
-          {{ formatBytes(audioIpc.sharedMemory.copiedBytes) }} copied</small
-        >
+        <small>{{
+          t("performance.ipcSection.egressStats", {
+            highWater: audioIpc.runtime.egressQueueHighWater,
+            batches: audioIpc.runtime.egressBatches,
+            copied: formatBytes(audioIpc.sharedMemory.copiedBytes)
+          })
+        }}</small>
       </div>
       <div>
-        <dt>Inline payload</dt>
-        <dd>{{ audioIpc.sharedMemory.inlinePackets.toLocaleString() }} packets</dd>
-        <small
-          >{{ formatBytes(audioIpc.sharedMemory.inlineBytes) }} serialized ·
-          {{ audioIpc.sharedMemory.sharedRegions }} shared regions</small
-        >
-      </div>
-      <div>
-        <dt>Telemetry page</dt>
+        <dt>{{ t("performance.ipcSection.inlinePayload") }}</dt>
         <dd>
-          {{ formatOccupancy(audioIpc.telemetry.meterSlots, audioIpc.telemetry.capacity) }} meters
+          {{ audioIpc.sharedMemory.inlinePackets.toLocaleString() }}
+          {{ t("performance.ipcSection.packets") }}
         </dd>
-        <small
-          >rev {{ audioIpc.telemetry.graphRevision }} ·
-          {{ audioIpc.telemetry.fallbackReads }} fallback reads</small
-        >
+        <small>{{
+          t("performance.ipcSection.serializedRegions", {
+            serialized: formatBytes(audioIpc.sharedMemory.inlineBytes),
+            regions: audioIpc.sharedMemory.sharedRegions
+          })
+        }}</small>
       </div>
       <div>
-        <dt>Parameter SPSC</dt>
+        <dt>{{ t("performance.ipcSection.telemetryPage") }}</dt>
+        <dd>
+          {{ formatOccupancy(audioIpc.telemetry.meterSlots, audioIpc.telemetry.capacity) }}
+          {{ t("performance.ipcSection.meters") }}
+        </dd>
+        <small>{{
+          t("performance.ipcSection.telemetryDetail", {
+            revision: audioIpc.telemetry.graphRevision,
+            fallbackReads: audioIpc.telemetry.fallbackReads
+          })
+        }}</small>
+      </div>
+      <div>
+        <dt>{{ t("performance.ipcSection.parameterSpsc") }}</dt>
         <dd>{{ formatOccupancy(audioIpc.parameterRing.used, audioIpc.parameterRing.capacity) }}</dd>
-        <small
-          >{{ audioIpc.parameterRing.softFull }} soft · {{ audioIpc.parameterRing.hardFull }} full ·
-          {{ audioIpc.parameterRing.boundaryFallbacks }} boundary</small
-        >
+        <small>{{
+          t("performance.ipcSection.ringDetail", {
+            softFull: audioIpc.parameterRing.softFull,
+            hardFull: audioIpc.parameterRing.hardFull,
+            boundary: audioIpc.parameterRing.boundaryFallbacks
+          })
+        }}</small>
       </div>
       <div>
-        <dt>Priority heartbeat</dt>
+        <dt>{{ t("performance.ipcSection.priorityHeartbeat") }}</dt>
         <dd>{{ formatHeartbeatAge(audioIpc.heartbeat.ageMs) }}</dd>
-        <small
-          >IPC {{ audioIpc.heartbeat.ipcGeneration }} · Tokio
-          {{ audioIpc.heartbeat.tokioGeneration }} · UI
-          {{ audioIpc.heartbeat.winitGeneration }}</small
-        >
+        <small>{{
+          t("performance.ipcSection.heartbeatDetail", {
+            ipcGeneration: audioIpc.heartbeat.ipcGeneration,
+            tokioGeneration: audioIpc.heartbeat.tokioGeneration,
+            winitGeneration: audioIpc.heartbeat.winitGeneration
+          })
+        }}</small>
       </div>
       <div>
-        <dt>Router health</dt>
-        <dd>{{ audioIpc.eventQueueDepth }} events · {{ audioIpc.requests.timeouts }} timeouts</dd>
-        <small
-          >callback {{ audioIpc.telemetry.callbackGeneration }} · stale
-          {{ audioIpc.parameterRing.staleEpoch }}</small
-        >
+        <dt>{{ t("performance.ipcSection.routerHealth") }}</dt>
+        <dd>
+          {{
+            t("performance.ipcSection.eventsTimeouts", {
+              events: audioIpc.eventQueueDepth,
+              timeouts: audioIpc.requests.timeouts
+            })
+          }}
+        </dd>
+        <small>{{
+          t("performance.ipcSection.callbackStale", {
+            callbackGeneration: audioIpc.telemetry.callbackGeneration,
+            staleEpoch: audioIpc.parameterRing.staleEpoch
+          })
+        }}</small>
       </div>
     </dl>
-    <div v-else class="monitor-placeholder">Audio helper diagnostics are unavailable.</div>
+    <div v-else class="monitor-placeholder">{{ t("performance.ipcSection.placeholder") }}</div>
   </section>
 </template>

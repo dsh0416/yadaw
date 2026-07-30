@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, watch } from "vue"
+import { useI18n } from "vue-i18n"
 import type { TempoMapSnapshot, WaveformDisplayMode } from "@yadaw/contracts"
 import type { TimelineClip } from "../../stores/transport"
 import { useClipWaveform } from "../../composables/useClipWaveform"
@@ -7,6 +8,8 @@ import { secondsToTimelineX } from "../../utils/timelineCoordinates"
 import { secondsToTick, tempoAtTick } from "../../utils/tempoMap"
 import ChannelFormatIcon from "./ChannelFormatIcon.vue"
 import WaveformCanvas from "./WaveformCanvas.vue"
+
+const { t } = useI18n()
 
 const props = defineProps<{
   clip: TimelineClip
@@ -147,7 +150,7 @@ function startDrag(event: DragEvent): void {
     <span class="transparent-drag-image" aria-hidden="true" />
     <span class="clip-heading" :title="clip.name">
       <b class="clip-name">{{ clip.name }}</b>
-      <span v-if="recording" class="capture-dot" aria-label="Recording" />
+      <span v-if="recording" class="capture-dot" :aria-label="t('studio.arrangement.recordingAria')" />
       <ChannelFormatIcon :channels="clip.channels" />
     </span>
     <span v-if="visibleEndSeconds > visibleStartSeconds" class="waveform" :style="waveformStyle">
