@@ -1,5 +1,10 @@
 fn request_deadline(command: &ControlCommand) -> Duration {
-    if matches!(
+    // Keep in sync with the helper-side `protocol_deadline`: the audio
+    // benchmark drives up to 64 live VST3 instances through three dense mixer
+    // scenarios and can legitimately run past the 15 s extended deadline.
+    if matches!(command, ControlCommand::RunAudioBenchmark { .. }) {
+        Duration::from_secs(60)
+    } else if matches!(
         command,
         ControlCommand::UpdateGraph { .. }
             | ControlCommand::LoadPlugin { .. }
@@ -7,7 +12,6 @@ fn request_deadline(command: &ControlCommand) -> Duration {
             | ControlCommand::SavePluginState { .. }
             | ControlCommand::OpenPluginEditor { .. }
             | ControlCommand::ClosePluginEditor { .. }
-            | ControlCommand::RunAudioBenchmark { .. }
             | ControlCommand::BenchmarkEcho { .. }
     ) {
         Duration::from_secs(15)

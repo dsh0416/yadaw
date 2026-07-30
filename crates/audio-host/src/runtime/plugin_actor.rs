@@ -307,7 +307,12 @@ fn is_background_io_command(command: &ControlCommand) -> bool {
 }
 
 fn protocol_deadline(command: &ControlCommand) -> std::time::Duration {
-    if matches!(
+    // The audio benchmark builds three dense mixer graphs around up to 64 live
+    // VST3 instances; on slow machines that legitimately exceeds the extended
+    // 15 s command deadline, so give it its own generous budget.
+    if matches!(command, ControlCommand::RunAudioBenchmark { .. }) {
+        std::time::Duration::from_secs(60)
+    } else if matches!(
         command,
         ControlCommand::UpdateGraph { .. }
             | ControlCommand::LoadPlugin { .. }
@@ -315,7 +320,6 @@ fn protocol_deadline(command: &ControlCommand) -> std::time::Duration {
             | ControlCommand::SavePluginState { .. }
             | ControlCommand::OpenPluginEditor { .. }
             | ControlCommand::ClosePluginEditor { .. }
-            | ControlCommand::RunAudioBenchmark { .. }
             | ControlCommand::BenchmarkEcho { .. }
     ) {
         std::time::Duration::from_secs(15)
