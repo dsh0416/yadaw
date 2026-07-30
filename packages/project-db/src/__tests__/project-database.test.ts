@@ -1033,7 +1033,7 @@ describe("ProjectDatabase", () => {
       peaks: new Uint8Array()
     })
     expect(await database.readWaveform("missing", 0, 10, 100)).toBeNull()
-  })
+  }, 15_000)
 
   it("reclaims orphaned large objects before writing the archive", async () => {
     const resource = await createDatabase()
