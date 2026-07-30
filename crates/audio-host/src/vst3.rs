@@ -87,7 +87,14 @@ impl Vst3ProcessorHandle {
                     &mut self.auxiliary_output[..frame_count],
                     context,
                 ) {
-                    return false;
+                    // The primary lane already rendered valid left-channel audio.
+                    // Keep it and fall back to the dry right input (still delayed
+                    // below for latency alignment) instead of failing the block,
+                    // which would discard the primary output and pass the whole
+                    // unprocessed input through.
+                    for (index, frame) in frames.iter().enumerate() {
+                        self.output_right[index] = frame[1];
+                    }
                 }
             }
             None => {
