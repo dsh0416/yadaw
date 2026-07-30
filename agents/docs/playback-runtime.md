@@ -512,10 +512,10 @@ that is absent, or when the moduleinfo lists an ARA Main Factory Class, a soft
 instantiating processors. Deep processor probing remains available for built-in
 validation and insert-time activation. Descriptors are cached in
 `userData/plugin-catalog.json` with per-bundle mtime/size fingerprints: startup
-reuses unchanged results and continues discovery in the background after the
-workspace is shown (retrying quarantined modules), while a manual Rescan forces
-lightweight rediscovery of every bundle. There is no production C++ bridge or
-bridge path argument.
+awaits soft rediscovery before the workspace opens (reusing unchanged results
+and retrying quarantined modules), while a manual Rescan forces lightweight
+rediscovery of every bundle. There is no production C++ bridge or bridge path
+argument.
 
 Bindgen types follow the target C ABI and must not be papered over with
 hardcoded Rust primitives at call sites:
