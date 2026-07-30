@@ -60,16 +60,17 @@ export function pluginDescriptorKey(descriptor: PluginDescriptor): string {
 export function parsePluginCategories(
   value: string | readonly string[] | null | undefined
 ): string[] {
-  if (Array.isArray(value)) {
-    return value.map((item) => item.trim()).filter((item) => item.length > 0)
-  }
   if (typeof value === "string") {
     return value
       .split("|")
       .map((item) => item.trim())
       .filter((item) => item.length > 0)
   }
-  return []
+  if (value == null) {
+    return []
+  }
+  // Array.isArray narrows to any[]; keep the readonly string[] branch explicit.
+  return value.map((item) => item.trim()).filter((item) => item.length > 0)
 }
 
 export function defaultPluginCategories(kind: PluginKind): string[] {
