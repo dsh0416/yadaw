@@ -39,7 +39,7 @@ test("measures mock round-trip latency through the desktop boundary", async () =
         inputDeviceId: "custom:mock-duplex",
         outputDeviceId: "custom:mock-duplex",
         bufferSize: 128
-      } as Parameters<typeof window.yadaw.startAudioEngine>[0])
+      })
     )
     expect(runtime.state).toBe("running")
 

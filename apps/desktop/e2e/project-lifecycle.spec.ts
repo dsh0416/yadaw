@@ -151,7 +151,7 @@ test("records into a Large Object and reopens the PGlite project archive", async
         inputDeviceId: "custom:mock-duplex",
         outputDeviceId: "custom:mock-duplex",
         bufferSize: 256
-      } as Parameters<typeof window.yadaw.startAudioEngine>[0])
+      })
     )
     expect(mockRuntime.state).toBe("running")
 
