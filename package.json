@@ -4,7 +4,7 @@
   "license": "GPL-3.0-only",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@11.9.0",
+  "packageManager": "pnpm@11.18.0",
   "engines": {
     "node": "26.x",
     "pnpm": ">=11"
