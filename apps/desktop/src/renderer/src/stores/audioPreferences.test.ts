@@ -152,11 +152,7 @@ describe("apply", () => {
   })
 
   it("describes non-Error rejections without leaking the raw value", async () => {
-    stubApi({
-      startAudioEngine: vi.fn(async () => {
-        throw "alsa exploded"
-      })
-    })
+    stubApi({ startAudioEngine: vi.fn().mockRejectedValue("alsa exploded") })
     const store = useAudioPreferencesStore()
 
     await store.apply(preferences())
@@ -276,9 +272,7 @@ describe("backend discovery", () => {
 
   it("uses a generic message when the host query rejects without an Error", async () => {
     stubApi({
-      listAudioBackends: vi.fn(async () => {
-        throw "boom"
-      })
+      listAudioBackends: vi.fn().mockRejectedValue("boom")
     })
     const store = useAudioPreferencesStore()
 
@@ -345,9 +339,7 @@ describe("device discovery", () => {
 
   it("uses a generic message when enumeration rejects without an Error", async () => {
     stubApi({
-      listAudioDevices: vi.fn(async () => {
-        throw "boom"
-      })
+      listAudioDevices: vi.fn().mockRejectedValue("boom")
     })
     const store = useAudioPreferencesStore()
 

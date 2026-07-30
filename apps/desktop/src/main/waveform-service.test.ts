@@ -1,7 +1,7 @@
 import { mkdtemp, readdir, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest"
 import type { ApplicationSettingsStore } from "./application-settings"
 import type { ProjectService } from "./project-service"
 import { WaveformService } from "./waveform-service"
@@ -28,24 +28,26 @@ function window(overrides: Record<string, unknown> = {}) {
 
 const request = { id: "asset-1", startFrame: 0, endFrame: 4_800, maxBuckets: 512 }
 
+type Window = ReturnType<typeof window>
+
 interface Stubs {
   service: WaveformService
   projects: {
     current: { id: string } | null
-    readAssetWaveform: ReturnType<typeof vi.fn>
-    readAssetAudio: ReturnType<typeof vi.fn>
-    storeAssetWaveform: ReturnType<typeof vi.fn>
-    assetsMissingWaveform: ReturnType<typeof vi.fn>
+    readAssetWaveform: Mock<() => Promise<Window | null>>
+    readAssetAudio: Mock<() => Promise<Uint8Array>>
+    storeAssetWaveform: Mock<() => Promise<void>>
+    assetsMissingWaveform: Mock<() => Promise<string[]>>
   }
 }
 
 function createService(): Stubs {
-  const projects = {
-    current: { id: "project-1" } as { id: string } | null,
+  const projects: Stubs["projects"] = {
+    current: { id: "project-1" },
     readAssetWaveform: vi.fn(async () => window()),
     readAssetAudio: vi.fn(async () => new Uint8Array([1, 2, 3])),
     storeAssetWaveform: vi.fn(async () => undefined),
-    assetsMissingWaveform: vi.fn(async () => [] as string[])
+    assetsMissingWaveform: vi.fn(async () => [])
   }
   const settings = {
     get: async () => ({ swapDirectory })

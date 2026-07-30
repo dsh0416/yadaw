@@ -85,9 +85,7 @@ describe("load", () => {
 
   it("uses a translated fallback for non-Error rejections", async () => {
     stubApi({
-      getApplicationSettings: vi.fn(async () => {
-        throw "boom"
-      })
+      getApplicationSettings: vi.fn().mockRejectedValue("boom")
     })
     const store = useApplicationSettingsStore()
 

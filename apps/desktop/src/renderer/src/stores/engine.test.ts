@@ -41,9 +41,7 @@ describe("initialize", () => {
 
   it("uses a generic message for non-Error rejections", async () => {
     stubApi({
-      engineInfo: vi.fn(async () => {
-        throw "boom"
-      })
+      engineInfo: vi.fn().mockRejectedValue("boom")
     })
     const store = useEngineStore()
 
@@ -113,9 +111,7 @@ describe("runPreview", () => {
 
   it("uses a generic message for non-Error rejections", async () => {
     stubApi({
-      processGain: vi.fn(async () => {
-        throw "boom"
-      })
+      processGain: vi.fn().mockRejectedValue("boom")
     })
     const store = useEngineStore()
 

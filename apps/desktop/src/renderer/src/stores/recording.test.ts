@@ -131,9 +131,7 @@ describe("start", () => {
 
   it("uses a generic message for non-Error rejections", async () => {
     stubApi({
-      startRecording: vi.fn(async () => {
-        throw "boom"
-      })
+      startRecording: vi.fn().mockRejectedValue("boom")
     })
     const store = useRecordingStore()
 
@@ -226,9 +224,7 @@ describe("pending recordings", () => {
 
   it("uses a generic message when recovery rejects without an Error", async () => {
     stubApi({
-      recoverRecording: vi.fn(async () => {
-        throw "boom"
-      })
+      recoverRecording: vi.fn().mockRejectedValue("boom")
     })
     const store = useRecordingStore()
 

@@ -125,9 +125,7 @@ describe("load", () => {
 
   it("uses a generic message for non-Error rejections", async () => {
     stubApi({
-      midiInputSnapshot: vi.fn(async () => {
-        throw "boom"
-      })
+      midiInputSnapshot: vi.fn().mockRejectedValue("boom")
     })
     const store = useMidiInputStore()
 
@@ -245,9 +243,7 @@ describe("configure", () => {
 
   it("uses a generic message for non-Error rejections", async () => {
     stubApi({
-      configureMidiInput: vi.fn(async () => {
-        throw "boom"
-      })
+      configureMidiInput: vi.fn().mockRejectedValue("boom")
     })
     const store = useMidiInputStore()
 
