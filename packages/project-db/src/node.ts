@@ -338,7 +338,8 @@ export class ProjectDatabase {
           .update(pluginInstances)
           .set({
             componentState: state.componentState,
-            controllerState: state.controllerState
+            controllerState: state.controllerState,
+            araDocumentState: state.araDocumentState ?? new Uint8Array()
           })
           .where(eq(pluginInstances.id, state.id))
       }

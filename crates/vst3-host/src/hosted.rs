@@ -230,14 +230,36 @@ impl HostedPlugin {
         kind: PluginKind,
         layout: AudioLayout,
     ) -> HostResult<Self> {
-        let module = Rc::new(Module::open(module_path)?);
-        let (processor, parameter_producer) = StereoProcessor::create_with_parameter_queue(
-            module.clone(),
+        Self::create_with_layout_and_hook(
+            module_path,
             class_id,
             sample_rate,
             kind,
             layout,
-        )?;
+            |_, _| Ok(()),
+        )
+        .map(|(plugin, ())| plugin)
+    }
+
+    pub fn create_with_layout_and_hook<T>(
+        module_path: impl AsRef<std::path::Path>,
+        class_id: ClassId,
+        sample_rate: f64,
+        kind: PluginKind,
+        layout: AudioLayout,
+        hook: impl FnOnce(&Module, *mut c_void) -> HostResult<T>,
+    ) -> HostResult<(Self, T)> {
+        let module = Rc::new(Module::open(module_path)?);
+        let hook_module = Rc::clone(&module);
+        let (processor, parameter_producer, hook_result) =
+            StereoProcessor::create_with_parameter_queue_and_hook(
+                module.clone(),
+                class_id,
+                sample_rate,
+                kind,
+                layout,
+                move |component| hook(&hook_module, component),
+            )?;
         let shared = HandlerShared::new(parameter_producer);
         let controller = create_controller(&module, &processor)?;
         let mut handler = controller
@@ -268,20 +290,28 @@ impl HostedPlugin {
                 ((*connection_table(controller)).connect)(controller.as_ptr(), component.as_ptr())
             };
         }
-        Ok(Self {
-            processor: ProcessorCell::new(processor),
-            controller,
-            controller_connection,
-            component_connection,
-            handler,
-            shared,
-            controller_initialized: true,
-            class_id,
-        })
+        Ok((
+            Self {
+                processor: ProcessorCell::new(processor),
+                controller,
+                controller_connection,
+                component_connection,
+                handler,
+                shared,
+                controller_initialized: true,
+                class_id,
+            },
+            hook_result,
+        ))
     }
 
     pub fn mirror_parameters_to(&self, target: &Self) {
         self.shared.set_parameter_mirror(target.shared.clone());
+    }
+
+    /// Runs one controller-thread operation while no audio lease can enter `process`.
+    pub fn with_processing_paused<T>(&self, action: impl FnOnce() -> T) -> T {
+        self.processor.with_paused(|_| action())
     }
 
     #[must_use]

@@ -20,6 +20,17 @@ export interface PluginAudioBusInfo {
   defaultActive: boolean
 }
 
+export interface PluginAraCapability {
+  apiGeneration: 2
+  factoryClassId: string
+  factoryId: string
+  documentArchiveId: string
+  lowestApiGeneration: number
+  highestApiGeneration: number
+  playbackTransformationFlags: number
+  supportsStoringAudioFileChunks: boolean
+}
+
 export interface PluginDescriptor {
   source: PluginSource
   classId: string
@@ -33,6 +44,7 @@ export interface PluginDescriptor {
   architecture: string
   buses: PluginAudioBusInfo[]
   hasEditor: boolean
+  ara?: PluginAraCapability
   compatibility: PluginCompatibility
   compatibilityReason: string | null
 }
@@ -79,6 +91,8 @@ export interface PluginInstanceState {
   enabled: boolean
   componentState: Uint8Array
   controllerState: Uint8Array
+  /** Opaque ARA document archive. The plug-in owns its contents. */
+  araDocumentState?: Uint8Array
 }
 
 export type PluginRuntimeState =

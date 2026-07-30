@@ -81,6 +81,7 @@ function pluginPatch(patch: PluginInstancePatch): Partial<typeof pluginInstances
   if (patch.enabled !== undefined) result.enabled = patch.enabled
   if (patch.componentState !== undefined) result.componentState = patch.componentState
   if (patch.controllerState !== undefined) result.controllerState = patch.controllerState
+  if (patch.araDocumentState !== undefined) result.araDocumentState = patch.araDocumentState
   return result
 }
 
@@ -170,7 +171,8 @@ function pluginValue(
     audioMode: plugin.audioMode,
     enabled: plugin.enabled,
     componentState: plugin.componentState,
-    controllerState: plugin.controllerState
+    controllerState: plugin.controllerState,
+    araDocumentState: plugin.araDocumentState ?? new Uint8Array()
   }
 }
 

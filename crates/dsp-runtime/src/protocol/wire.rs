@@ -39,6 +39,12 @@ pub enum BinaryPayload {
     },
 }
 
+impl Default for BinaryPayload {
+    fn default() -> Self {
+        Self::inline(Vec::new())
+    }
+}
+
 impl BinaryPayload {
     #[must_use]
     pub fn inline(bytes: Vec<u8>) -> Self {

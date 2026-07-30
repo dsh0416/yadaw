@@ -30,9 +30,17 @@ defineEmits<{
       <strong>{{ plugin.descriptor.name }}</strong
       ><small>{{ plugin.descriptor.vendor }}</small>
     </div>
-    <span class="mode-badge" :title="`Audio mode: ${plugin.audioMode}`">{{
-      pluginAudioModeBadge(plugin.audioMode)
-    }}</span>
+    <span class="badges">
+      <span class="mode-badge" :title="`Audio mode: ${plugin.audioMode}`">{{
+        pluginAudioModeBadge(plugin.audioMode)
+      }}</span>
+      <span
+        v-if="plugin.descriptor.ara"
+        class="ara-badge"
+        title="ARA 2 document processing is active for this insert"
+        >ARA</span
+      >
+    </span>
     <button
       :aria-label="`${plugin.enabled ? 'Bypass' : 'Enable'} ${plugin.descriptor.name}`"
       @click="$emit('toggle', plugin.id, !plugin.enabled)"
@@ -60,12 +68,24 @@ defineEmits<{
   border-radius: 3px;
   background: var(--surface-sunken);
 }
+.badges {
+  display: flex;
+  gap: 3px;
+}
 .mode-badge {
   padding: 2px 4px;
   border: 1px solid var(--line-soft);
   border-radius: 3px;
   color: var(--text-muted);
   font: var(--ui-type-size-micro) var(--ui-type-family-data);
+}
+.ara-badge {
+  padding: 2px 4px;
+  border: 1px solid color-mix(in srgb, var(--signal-cyan) 52%, var(--line-soft));
+  border-radius: 3px;
+  color: var(--signal-cyan);
+  font: var(--ui-type-weight-bold) var(--ui-type-size-micro) var(--ui-type-family-data);
+  letter-spacing: var(--ui-type-tracking-wide);
 }
 .grip {
   display: grid;

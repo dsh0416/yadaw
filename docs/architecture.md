@@ -156,6 +156,27 @@ and output routing. It preallocates VST processors, adapters, dual-mono alignmen
 delays, and plug-in bypass delay lines before publishing a graph generation;
 the audio callback performs no allocation, locking, IPC, or filesystem work.
 
+VST3 classes that expose an ARA 2 main factory use the same insert entities,
+slot ordering, move/bypass commands, and editor entry point as ordinary VST3
+effects. `audio-host` binds the VST3 component to one ARA document controller
+before component activation. On the winit/VST3 controller thread, that document
+mirrors the owning channel as a musical context and region sequence, with one
+audio source per materialized asset, one audio modification per source and
+plug-in instance, and one playback region per arrangement clip. The audio
+access provider reads the materialized source non-destructively; it never
+rewrites the project asset. The ARA playback renderer's output remains the
+ordinary output of its insert slot, so later inserts, the channel fader, sends,
+and routing consume it unchanged.
+
+ARA archive bytes are persisted separately from VST3 component and controller
+state. Tempo and time-signature content flows from the project into the ARA
+musical context, while plug-in model-change callbacks only mark the ARA
+document state dirty; they do not directly create, edit, or replace project
+clips. Document edits, random file reads, restoration, and archive storage stay
+off the audio callback. This initial companion implementation is VST3+ARA 2;
+CLAP/AU companion bindings and a Wayland-specific native editor path are
+outside its scope.
+
 Each successful native build also creates an immutable diagnostic snapshot.
 `buildGeneration` identifies the concrete compiled build independently from the
 project's `graphRevision`. The callback atomically publishes only the build

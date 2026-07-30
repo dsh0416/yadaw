@@ -158,7 +158,8 @@ export async function readMixerSnapshot(
       audioMode: plugin.audioMode,
       enabled: plugin.enabled,
       componentState: bytes(plugin.componentState),
-      controllerState: bytes(plugin.controllerState)
+      controllerState: bytes(plugin.controllerState),
+      araDocumentState: bytes(plugin.araDocumentState)
     })),
     midiClips: midiClipRows.map((clip) => ({
       id: clip.id,

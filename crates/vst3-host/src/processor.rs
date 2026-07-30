@@ -119,6 +119,25 @@ impl StereoProcessor {
         kind: PluginKind,
         layout: AudioLayout,
     ) -> HostResult<(Self, HeapProd<QueuedParameter>)> {
+        Self::create_with_parameter_queue_and_hook(
+            module,
+            class_id,
+            sample_rate,
+            kind,
+            layout,
+            |_| Ok(()),
+        )
+        .map(|(processor, producer, ())| (processor, producer))
+    }
+
+    pub(crate) fn create_with_parameter_queue_and_hook<T>(
+        module: Rc<Module>,
+        class_id: ClassId,
+        sample_rate: f64,
+        kind: PluginKind,
+        layout: AudioLayout,
+        hook: impl FnOnce(*mut std::ffi::c_void) -> HostResult<T>,
+    ) -> HostResult<(Self, HeapProd<QueuedParameter>, T)> {
         if kind == PluginKind::Instrument && layout == AudioLayout::MonoToStereo {
             return Err(HostError::Operation {
                 operation: "instrument audio layout",
@@ -146,6 +165,7 @@ impl StereoProcessor {
                 host.as_unknown(),
             )
         })?;
+        let hook_result = hook(component.as_ptr().cast())?;
         let processor = component.query::<IAudioProcessor>()?;
         let processor_table = processor_table(&processor);
         check("canProcessSampleSize(sample32)", unsafe {
@@ -236,6 +256,7 @@ impl StereoProcessor {
                 active: true,
             },
             parameter_producer,
+            hook_result,
         ))
     }
 

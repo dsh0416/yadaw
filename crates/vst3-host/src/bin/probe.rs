@@ -9,7 +9,9 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
-use yadaw_vst3_host::{AudioLayout, ClassId, ClassInfo, Module, PluginKind, StereoProcessor};
+use yadaw_vst3_host::{
+    AraFactoryInfo, AudioLayout, ClassId, ClassInfo, Module, PluginKind, StereoProcessor,
+};
 
 const CLASS_PROBE_ENV: &str = "YADAW_VST3_PROBE_CLASS";
 
@@ -40,6 +42,19 @@ struct ClassOutput {
     audio_outputs: u32,
     event_inputs: u32,
     supported_audio_modes: Vec<String>,
+    ara: Option<AraOutput>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AraOutput {
+    factory_class_id: String,
+    factory_id: String,
+    document_archive_id: String,
+    lowest_api_generation: i32,
+    highest_api_generation: i32,
+    playback_transformation_flags: u32,
+    supports_storing_audio_file_chunks: bool,
 }
 
 fn looks_like_instrument(class: &ClassInfo) -> bool {
@@ -84,6 +99,7 @@ fn soft_inspect(class: &ClassInfo) -> ClassOutput {
                 .map(str::to_owned)
                 .collect()
         },
+        ara: None,
     }
 }
 
@@ -130,6 +146,7 @@ fn deep_inspect(module: &Rc<Module>, class: ClassInfo) -> ClassOutput {
         audio_outputs: u32::from(initialized),
         event_inputs: u32::from(instrument),
         supported_audio_modes,
+        ara: None,
     }
 }
 
@@ -184,13 +201,14 @@ fn deep_inspect_in_child(module_path: &Path, class: &ClassInfo) -> Option<ClassO
     json_from_stdout(&bytes)
 }
 
-fn inspect(module_path: &Path, class: ClassInfo) -> ClassOutput {
-    if let Some(deep) = deep_inspect_in_child(module_path, &class) {
-        return deep;
-    }
-    // Child crashed or rejected the processor setup. Keep the class visible
-    // from the already-successful module load instead of quarantining the bundle.
-    soft_inspect(&class)
+fn inspect(module_path: &Path, class: ClassInfo, ara: Option<AraOutput>) -> ClassOutput {
+    let mut output = deep_inspect_in_child(module_path, &class).unwrap_or_else(|| {
+        // Child crashed or rejected the processor setup. Keep the class visible
+        // from the already-successful module load instead of quarantining the bundle.
+        soft_inspect(&class)
+    });
+    output.ara = ara;
+    output
 }
 
 fn run_class_probe(module_path: &Path, class_id: &str) -> Result<(), Box<dyn std::error::Error>> {
@@ -220,11 +238,27 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let module = Rc::new(Module::open(&path)?);
-    let classes = module
-        .classes()?
+    let discovered = module.classes()?;
+    let ara_factories = discovered
+        .iter()
+        .filter(|class| class.category == "ARA Main Factory Class")
+        .filter_map(|class| match module.ara_factory_info(class.id) {
+            Ok(info) => Some((class.name.clone(), (class.id, info))),
+            Err(error) => {
+                eprintln!("could not inspect ARA factory class {}: {error}", class.id);
+                None
+            }
+        })
+        .collect::<std::collections::HashMap<_, _>>();
+    let classes = discovered
         .into_iter()
         .filter(|class| class.category == "Audio Module Class")
-        .map(|class| inspect(&path, class))
+        .map(|class| {
+            let ara = ara_factories
+                .get(class.name.as_str())
+                .map(|(class_id, info)| ara_output(*class_id, info));
+            inspect(&path, class, ara)
+        })
         .collect();
     // Emit JSON on its own line so hosts can recover it when plug-ins log to stdout.
     println!(
@@ -240,6 +274,18 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     stdout().flush()?;
     drop(module);
     Ok(())
+}
+
+fn ara_output(class_id: ClassId, info: &AraFactoryInfo) -> AraOutput {
+    AraOutput {
+        factory_class_id: class_id.to_string(),
+        factory_id: info.factory_id.clone(),
+        document_archive_id: info.document_archive_id.clone(),
+        lowest_api_generation: info.lowest_api_generation,
+        highest_api_generation: info.highest_api_generation,
+        playback_transformation_flags: info.playback_transformation_flags,
+        supports_storing_audio_file_chunks: info.supports_storing_audio_file_chunks,
+    }
 }
 
 fn main() -> ExitCode {

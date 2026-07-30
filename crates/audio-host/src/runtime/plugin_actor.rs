@@ -48,6 +48,18 @@ async fn vst3_actor(
                     message: "VST3 actor does not own graph worker jobs".into(),
                 }
             }
+            ActorCommand::SyncAraGraph { graph } => {
+                forward_to_ui(
+                    &ui_sender,
+                    &ui_proxy,
+                    ActorRequest {
+                        command: ActorCommand::SyncAraGraph { graph },
+                        reply: message.reply,
+                    },
+                )
+                .await;
+                continue;
+            }
             ActorCommand::Parameter(command) => {
                 forward_to_ui(
                     &ui_sender,
@@ -82,12 +94,16 @@ async fn vst3_actor(
                     sample_rate,
                     component_state,
                     controller_state,
+                    ara_factory_class_id,
+                    ara_document_state,
                 } => {
                     let component_state = resolve_deferred_binary(component_state, &request_arena);
                     let controller_state =
                         resolve_deferred_binary(controller_state, &request_arena);
-                    match (component_state, controller_state) {
-                        (Ok(component_state), Ok(controller_state)) => {
+                    let ara_document_state =
+                        resolve_deferred_binary(ara_document_state, &request_arena);
+                    match (component_state, controller_state, ara_document_state) {
+                        (Ok(component_state), Ok(controller_state), Ok(ara_document_state)) => {
                             forward_to_ui(
                                 &ui_sender,
                                 &ui_proxy,
@@ -105,6 +121,10 @@ async fn vst3_actor(
                                         controller_state: BinaryPayload::inline(
                                             controller_state.as_slice().to_vec(),
                                         ),
+                                        ara_factory_class_id,
+                                        ara_document_state: BinaryPayload::inline(
+                                            ara_document_state.as_slice().to_vec(),
+                                        ),
                                     }),
                                     reply: message.reply,
                                 },
@@ -112,7 +132,9 @@ async fn vst3_actor(
                             .await;
                             continue;
                         }
-                        (Err(message), _) | (_, Err(message)) => ControlResult::Error { message },
+                        (Err(message), _, _)
+                        | (_, Err(message), _)
+                        | (_, _, Err(message)) => ControlResult::Error { message },
                     }
                 }
                 command @ (ControlCommand::UnloadPlugin { .. }
@@ -173,7 +195,19 @@ async fn vst3_actor(
                     match prepared {
                         Err(message) => ControlResult::Error { message },
                         Ok((graph, candidate)) => {
-                            match dispatch_build_graph(&background_sender, graph).await {
+                            let previous_graph = graph_snapshot.clone();
+                            let ara_result = dispatch_ui_actor_command(
+                                &ui_sender,
+                                &ui_proxy,
+                                ActorCommand::SyncAraGraph {
+                                    graph: Some(candidate.clone()),
+                                },
+                            )
+                            .await;
+                            if let ControlResult::Error { .. } = ara_result {
+                                ara_result
+                            } else {
+                                match dispatch_build_graph(&background_sender, graph).await {
                                 ControlResult::GraphAccepted {
                                     revision: accepted_revision,
                                 } => {
@@ -184,7 +218,18 @@ async fn vst3_actor(
                                         revision: accepted_revision,
                                     }
                                 }
-                                other => other,
+                                other => {
+                                    let _ = dispatch_ui_actor_command(
+                                        &ui_sender,
+                                        &ui_proxy,
+                                        ActorCommand::SyncAraGraph {
+                                            graph: previous_graph,
+                                        },
+                                    )
+                                    .await;
+                                    other
+                                }
+                            }
                             }
                         }
                     }
@@ -237,6 +282,26 @@ async fn vst3_actor(
         };
         let _ = message.reply.send(result);
     }
+}
+
+async fn dispatch_ui_actor_command(
+    sender: &std_mpsc::SyncSender<ActorRequest>,
+    proxy: &EventLoopProxy<UiEvent>,
+    command: ActorCommand,
+) -> ControlResult {
+    let (reply, response) = oneshot::channel();
+    forward_to_ui(
+        sender,
+        proxy,
+        ActorRequest {
+            command,
+            reply,
+        },
+    )
+    .await;
+    response.await.unwrap_or(ControlResult::Error {
+        message: "winit VST3 UI actor dropped its response".into(),
+    })
 }
 
 async fn dispatch_actor(

@@ -80,7 +80,8 @@ Finish and hand off a mix.
 - [ ] Offline bounce / export of the full mix
 - [ ] Stem export
 - [ ] Mixer groups (or equivalent grouping workflow)
-- [ ] ARA hosting
+- [x] VST3+ARA 2 hosting (ordinary insert workflow, non-destructive playback,
+      independent archive state; Wayland-specific editor work remains in M3)
 - [ ] CLAP hosting
 - [ ] AU hosting
 

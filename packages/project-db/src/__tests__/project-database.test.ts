@@ -110,6 +110,19 @@ async function revertInputMonitoringMigration(database: PGlite): Promise<void> {
   `)
 }
 
+async function revertAraDocumentStateMigration(database: PGlite): Promise<void> {
+  await database.exec(`
+    alter table "plugin_instances" drop column "ara_document_state";
+    delete from drizzle.__drizzle_migrations
+    where created_at = (
+      select created_at
+      from drizzle.__drizzle_migrations
+      order by created_at desc
+      limit 1
+    );
+  `)
+}
+
 afterEach(async () => {
   for (const resource of databases.splice(0)) {
     await resource.database.close()
@@ -241,6 +254,7 @@ describe("ProjectDatabase", () => {
 
     const raw = new PGlite(join(resource.directory, "pgdata"))
     try {
+      await revertAraDocumentStateMigration(raw)
       await revertInputMonitoringMigration(raw)
     } finally {
       await raw.close()
@@ -299,6 +313,19 @@ describe("ProjectDatabase", () => {
         .filter((plugin) => plugin.channelId === "audio-1")
         .map((plugin) => plugin.audioMode)
     ).toEqual(modes)
+
+    await database.savePluginStates([
+      {
+        id: "effect-stereo",
+        componentState: new Uint8Array([1, 2]),
+        controllerState: new Uint8Array([3]),
+        araDocumentState: new Uint8Array([4, 5, 6])
+      }
+    ])
+    const stored = (await database.mixerSnapshot()).plugins.find(
+      (plugin) => plugin.id === "effect-stereo"
+    )
+    expect(Array.from(stored?.araDocumentState ?? [])).toEqual([4, 5, 6])
   })
 
   it("migrates legacy bus channels while preserving main and send BUS targets", async () => {
@@ -333,6 +360,7 @@ describe("ProjectDatabase", () => {
 
     const raw = new PGlite(join(resource.directory, "pgdata"))
     try {
+      await revertAraDocumentStateMigration(raw)
       await revertInputMonitoringMigration(raw)
       await revertPluginAudioModeMigration(raw)
       await revertAuxBusMigration(raw)
@@ -776,6 +804,7 @@ describe("ProjectDatabase", () => {
 
     const raw = new PGlite(join(resource.directory, "pgdata"))
     try {
+      await revertAraDocumentStateMigration(raw)
       await revertInputMonitoringMigration(raw)
       await revertPluginAudioModeMigration(raw)
       await revertAuxBusMigration(raw)
@@ -827,6 +856,7 @@ describe("ProjectDatabase", () => {
 
     const raw = new PGlite(join(resource.directory, "pgdata"))
     try {
+      await revertAraDocumentStateMigration(raw)
       await revertInputMonitoringMigration(raw)
       await revertPluginAudioModeMigration(raw)
       await revertAuxBusMigration(raw)

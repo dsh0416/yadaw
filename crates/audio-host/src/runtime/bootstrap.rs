@@ -119,6 +119,7 @@ fn run_ipc() -> Result<(), Box<dyn std::error::Error>> {
         background_sender: winit_background_sender,
         host_events: host_event_sender,
         vst3: Some(vst3::Vst3Runtime::new()),
+        ara_graph: None,
         compositor,
         editor_owner_window,
         editors: HashMap::new(),

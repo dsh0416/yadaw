@@ -112,7 +112,7 @@ runs:
       env:
         VST3_SDK_COMMIT: 9fad9770f2ae8542ab1a548a68c1ad1ac690abe0
       run: |
-        if [[ ! -d third_party/vst3sdk/.git ]]; then
+        if [[ ! -e third_party/vst3sdk/.git ]]; then
           git init third_party/vst3sdk
           git -C third_party/vst3sdk remote add \
             origin https://github.com/steinbergmedia/vst3sdk.git
@@ -124,6 +124,35 @@ runs:
         actual_commit="$(git -C third_party/vst3sdk rev-parse HEAD)"
         if [[ "$actual_commit" != "$VST3_SDK_COMMIT" ]]; then
           echo "::error::Expected VST3 SDK commit $VST3_SDK_COMMIT, got $actual_commit"
+          exit 1
+        fi
+
+    - name: Fetch pinned ARA SDK
+      shell: bash
+      env:
+        ARA_SDK_COMMIT: 0005c532bb03eb210e7bb490329fc6d7ba1792c7
+      run: |
+        if [[ ! -e third_party/ARA_SDK/.git ]]; then
+          git init third_party/ARA_SDK
+          git -C third_party/ARA_SDK remote add \
+            origin https://github.com/Celemony/ARA_SDK.git
+          git -C third_party/ARA_SDK fetch --depth 1 origin "$ARA_SDK_COMMIT"
+          git -C third_party/ARA_SDK checkout --detach FETCH_HEAD
+        fi
+
+        actual_commit="$(git -C third_party/ARA_SDK rev-parse HEAD)"
+        if [[ "$actual_commit" != "$ARA_SDK_COMMIT" ]]; then
+          echo "::error::Expected ARA SDK commit $ARA_SDK_COMMIT, got $actual_commit"
+          exit 1
+        fi
+
+        git -C third_party/ARA_SDK submodule update \
+          --init \
+          --depth 1 \
+          ARA_API
+
+        if [[ ! -f third_party/ARA_SDK/ARA_API/ARAInterface.h ]]; then
+          echo "::error::ARA API submodule is missing ARAInterface.h"
           exit 1
         fi
 

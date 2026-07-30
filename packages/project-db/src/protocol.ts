@@ -12,6 +12,7 @@ export interface PluginStateInput {
   id: string
   componentState: Uint8Array
   controllerState: Uint8Array
+  araDocumentState?: Uint8Array
 }
 
 export interface AssetContentHash {

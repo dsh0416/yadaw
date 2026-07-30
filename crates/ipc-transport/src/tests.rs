@@ -18,6 +18,8 @@ fn payload_at_threshold_stays_inline_and_larger_payload_uses_shared_memory() {
             sample_rate: 48_000.0,
             component_state: BinaryPayload::inline(vec![7; size]),
             controller_state: BinaryPayload::inline(Vec::new()),
+            ara_factory_class_id: None,
+            ara_document_state: BinaryPayload::inline(Vec::new()),
         },
     };
     let mut leases = LeaseRegistry::new();
@@ -102,6 +104,8 @@ fn multiple_large_fields_share_one_aligned_persistent_region() {
             sample_rate: 48_000.0,
             component_state: BinaryPayload::inline(vec![1; INLINE_BLOB_LIMIT + 3]),
             controller_state: BinaryPayload::inline(vec![2; INLINE_BLOB_LIMIT + 5]),
+            ara_factory_class_id: Some("ARA factory".into()),
+            ara_document_state: BinaryPayload::inline(vec![3; INLINE_BLOB_LIMIT + 7]),
         },
     };
     let mut leases = LeaseRegistry::new();
@@ -115,21 +119,28 @@ fn multiple_large_fields_share_one_aligned_persistent_region() {
         controller_state: BinaryPayload::Shared {
             reference: controller,
         },
+        ara_document_state: BinaryPayload::Shared {
+            reference: ara_document,
+        },
         ..
     } = wire.command
     else {
         panic!("large plugin states were not externalized");
     };
     assert_eq!(component.region_id, controller.region_id);
+    assert_eq!(component.region_id, ara_document.region_id);
     assert_eq!(component.offset % 8, 0);
     assert_eq!(controller.offset % 8, 0);
+    assert_eq!(ara_document.offset % 8, 0);
     assert_ne!(component.lease_id, controller.lease_id);
+    assert_ne!(controller.lease_id, ara_document.lease_id);
     let mut receiver = ArenaReceiver::new(1);
     let (decoded, release) = decode_request(packet, &mut receiver).unwrap();
-    assert_eq!(release.len(), 2);
+    assert_eq!(release.len(), 3);
     let ControlCommand::LoadPlugin {
         component_state,
         controller_state,
+        ara_document_state,
         ..
     } = decoded.command
     else {
@@ -137,6 +148,7 @@ fn multiple_large_fields_share_one_aligned_persistent_region() {
     };
     assert_eq!(component_state.as_inline().unwrap()[0], 1);
     assert_eq!(controller_state.as_inline().unwrap()[0], 2);
+    assert_eq!(ara_document_state.as_inline().unwrap()[0], 3);
 }
 
 #[test]

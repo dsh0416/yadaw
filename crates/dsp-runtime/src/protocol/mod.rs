@@ -160,6 +160,10 @@ pub enum ControlCommand {
         sample_rate: f64,
         component_state: BinaryPayload,
         controller_state: BinaryPayload,
+        #[serde(default)]
+        ara_factory_class_id: Option<String>,
+        #[serde(default)]
+        ara_document_state: BinaryPayload,
     },
     UnloadPlugin {
         instance_id: String,
@@ -247,6 +251,7 @@ pub enum ControlResult {
     PluginState {
         component_state: BinaryPayload,
         controller_state: BinaryPayload,
+        ara_document_state: BinaryPayload,
     },
     GraphAccepted {
         revision: u64,

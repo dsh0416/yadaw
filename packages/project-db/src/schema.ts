@@ -344,6 +344,9 @@ export const pluginInstances = pgTable(
       .default(sql`''::bytea`),
     controllerState: bytea("controller_state")
       .notNull()
+      .default(sql`''::bytea`),
+    araDocumentState: bytea("ara_document_state")
+      .notNull()
       .default(sql`''::bytea`)
   },
   (table) => [
