@@ -38,6 +38,11 @@ use crate::{
 const TOOLBAR_HEIGHT: f64 = 72.0;
 const DEFAULT_PARAMETER_WIDTH: f64 = 720.0;
 const DEFAULT_PARAMETER_HEIGHT: f64 = 640.0;
+/// Fallback content size when `IPlugView::getSize` fails or returns an empty
+/// rect. Adaptive / HiDPI editors often defer a real size until `attached` or
+/// `IPlugFrame::resizeView`.
+const DEFAULT_NATIVE_EDITOR_WIDTH: i32 = 800;
+const DEFAULT_NATIVE_EDITOR_HEIGHT: i32 = 600;
 const MIN_PARAMETER_WIDTH: f64 = 480.0;
 const MIN_PARAMETER_HEIGHT: f64 = 240.0;
 const ZOOM_PRESETS: [u16; 6] = [75, 100, 125, 150, 175, 200];
