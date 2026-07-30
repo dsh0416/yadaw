@@ -9,6 +9,11 @@ struct StreamControls {
 /// The worker never reports stream errors: a mock device cannot be unplugged,
 /// cannot be claimed by another process, and absorbs its own scheduling jitter,
 /// so the error callback supplied by the engine is intentionally unused.
+///
+/// [`StreamTrait::play`] and [`StreamTrait::pause`] signal the worker rather
+/// than synchronising with it, so a block already in flight when `pause` is
+/// called still reaches the data callback. Only dropping the stream waits for
+/// the worker to finish.
 struct MockStream {
     controls: Arc<StreamControls>,
     origin: Instant,

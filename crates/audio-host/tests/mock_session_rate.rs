@@ -116,7 +116,12 @@ fn mock_backend_uses_the_project_clock_over_native_48_khz_io() {
     };
     let target_generation = start_generation.saturating_add(CALLBACKS_TO_OBSERVE);
 
-    let callback_deadline = Instant::now() + Duration::from_secs(5);
+    // The mock streams are paced with `thread::sleep`, so on platforms whose
+    // sleep granularity is coarser than a 128-frame block the observation
+    // window takes far longer than the 2.7 ms per block it nominally needs.
+    // This is a clock-ratio assertion, not a throughput one, so the deadline
+    // only has to be generous enough to catch callbacks that never advance.
+    let callback_deadline = Instant::now() + Duration::from_secs(30);
     loop {
         let (generation, _) = heartbeat_snapshot();
         if generation >= target_generation {

@@ -198,8 +198,12 @@ mod tests {
             .unwrap();
 
         assert_eq!(stream.buffer_size().unwrap(), 64);
-        thread::sleep(Duration::from_millis(20));
-        assert_eq!(callbacks.get(), 0, "a paused stream must stay silent");
+        thread::sleep(SETTLE);
+        assert_eq!(
+            callbacks.get(),
+            0,
+            "a stream must stay silent until it is played"
+        );
 
         stream.play().unwrap();
         assert!(
@@ -208,9 +212,14 @@ mod tests {
         );
 
         stream.pause().unwrap();
-        let paused_at = callbacks.get();
-        thread::sleep(Duration::from_millis(20));
-        assert_eq!(callbacks.get(), paused_at, "a paused stream must stop");
+        // Pausing stops the worker promptly but not instantly: a block already
+        // in flight still reaches the callback, exactly as a real backend may
+        // deliver one more buffer after `pause` returns. What must hold is that
+        // the callback count settles instead of continuing to climb.
+        assert!(
+            callbacks_settle(&callbacks),
+            "a paused stream must stop calling back"
+        );
     }
 
     #[test]
@@ -328,6 +337,26 @@ mod tests {
                 return true;
             }
             thread::sleep(Duration::from_millis(1));
+        }
+        false
+    }
+
+    /// Long enough to observe several blocks of the buffer sizes used here, even
+    /// where the platform sleep granularity is tens of milliseconds.
+    const SETTLE: Duration = Duration::from_millis(50);
+
+    /// Whether the callback count stops changing across a [`SETTLE`] window.
+    ///
+    /// A running stream keeps incrementing the counter, so the window never
+    /// stabilises and this returns `false` once the deadline passes.
+    fn callbacks_settle(callbacks: &AtomicU32Counter) -> bool {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while Instant::now() < deadline {
+            let before = callbacks.get();
+            thread::sleep(SETTLE);
+            if callbacks.get() == before {
+                return true;
+            }
         }
         false
     }
