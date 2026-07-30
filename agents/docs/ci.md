@@ -13,10 +13,11 @@ builds, and tagged releases.
   the documentation artifact to GitHub Pages. Configure the `Gate` check (shown
   under the `CI` workflow) as the only required status check for pull requests.
 - **Test** (`.github/workflows/test.yml`) runs repository checks on Linux x64,
-  Windows x64, and macOS, plus a Linux Coverage job that uploads JavaScript
-  (Vitest) and Rust (`cargo-llvm-cov`) reports to Codecov. It is reusable
-  through `workflow_call` and can also be started manually. Callers must pass
-  `CODECOV_TOKEN` when available (see `CI` and `Publish`).
+  Windows x64, and macOS. After the Linux Checks job finishes, it collects
+  JavaScript (Vitest) and Rust (`cargo-llvm-cov`) coverage and uploads the
+  reports to Codecov. It is reusable through `workflow_call` and can also be
+  started manually. Callers must pass `CODECOV_TOKEN` when available (see `CI`
+  and `Publish`).
 - **Build** (`.github/workflows/build.yml`) packages installers for Windows
   x64, Linux x64 and arm64, and universal macOS as a packaging smoke test. It
   is reusable through `workflow_call` and can also be started manually.
@@ -42,9 +43,10 @@ required. The mise installation, pnpm store, Cargo downloads, and Electron
 downloads have separate platform-and-architecture cache keys. Rust compilation
 uses sccache's GitHub Actions backend. Check jobs may restore a Cargo `target`
 cache; packaging jobs leave it disabled because the directory is large and can
-retain stale platform-specific build state. The Coverage job disables the
-shared Cargo target cache and clears `RUSTC_WRAPPER` so instrumented builds do
-not pollute or conflict with Checks caches.
+retain stale platform-specific build state. Linux coverage reuses the Checks
+toolchain and native modules, writes instrumented Rust artifacts to
+`target-coverage/`, and clears `RUSTC_WRAPPER` so those builds do not pollute
+or conflict with the shared Checks cache.
 
 ## Coverage
 
@@ -61,7 +63,9 @@ JavaScript coverage requires `@vitest/coverage-v8` (installed with the
 workspace). Rust coverage requires the locked `cargo-llvm-cov` tool and the
 `llvm-tools-preview` Rust component from `mise.toml`. Reports land under
 `coverage/` (gitignored) and are uploaded to Codecov with the repository
-`CODECOV_TOKEN` secret.
+`CODECOV_TOKEN` secret. CI sets `CARGO_TARGET_DIR=target-coverage` for the
+Rust coverage step so instrumented objects stay out of the shared `target/`
+cache.
 
 ## Creating a release
 
