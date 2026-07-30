@@ -15,8 +15,8 @@ mod tests {
         NativeMixerChannel, NativeMixerGraph, NativeMixerRuntime, NativeMixerSend,
         NativePluginInstance, NativeRoundTripLatencyMeasurementRequest, Ordering,
         OUTPUT_RESAMPLER_FRAMES, RoundTripInputDetector, RoundTripLatencyMeasurement,
-        RoundTripOutputProbe, SessionOutputConverter, SignalWidth, StereoDelayLine,
-        StreamDirection, StreamErrorImpact, SupportedBufferSize, TRANSPORT_PLAYING,
+        RoundTripOutputProbe, ScheduledMidiEvent, SessionOutputConverter, SignalWidth,
+        StereoDelayLine, StreamDirection, StreamErrorImpact, SupportedBufferSize, TRANSPORT_PLAYING,
         TRANSPORT_STOPPED, TransportAction, TransportShared, clip_storage_policy,
         compiled_graph_snapshot, frames_to_nanos, native_graph_references_plugin,
         resolve_stream_devices, select_buffer_size, set_last_native_graph_for_test,
@@ -906,5 +906,37 @@ mod tests {
             runtime.transport.position_frames.load(Ordering::Relaxed),
             32
         );
+    }
+
+    #[test]
+    fn render_block_consumes_scheduled_midi_exactly_up_to_the_block_end() {
+        let mut runtime = transport_test_runtime(48_000, 1_000, 5, TRANSPORT_PLAYING);
+        let event = |frame: u64, note_id: i32| ScheduledMidiEvent {
+            frame,
+            channel_index: 0,
+            note_id,
+            channel: 0,
+            key: 60,
+            velocity: 100,
+            note_on: true,
+        };
+        runtime.midi_events = vec![
+            event(2, 0),
+            event(10, 1),
+            event(63, 2),
+            event(68, 3),
+            event(69, 4),
+        ];
+        runtime.active_notes = vec![false; 5];
+        let inputs = vec![[0.0; MAX_INPUT_CHANNELS]; 64];
+        let mut outputs = vec![[0.0; MAX_OUTPUT_CHANNELS]; 64];
+
+        let underrun = runtime.render_block(&inputs, &mut outputs);
+
+        assert!(!underrun);
+        // Rendering frames 5..69 consumes every event before the block end —
+        // including the stale frame-2 event behind the playhead — exactly once,
+        // while the frame-69 event stays queued for the next block.
+        assert_eq!(runtime.midi_cursor, 4);
     }
 }

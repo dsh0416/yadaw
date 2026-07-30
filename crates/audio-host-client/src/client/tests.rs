@@ -23,7 +23,7 @@ mod tests {
             request_deadline(&ControlCommand::RunAudioBenchmark {
                 plugin_instance_ids: Vec::new(),
             }),
-            Duration::from_secs(15)
+            Duration::from_secs(60)
         );
         assert_eq!(
             request_deadline(&ControlCommand::BenchmarkEcho {

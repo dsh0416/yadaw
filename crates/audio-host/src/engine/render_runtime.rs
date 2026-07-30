@@ -209,20 +209,22 @@ impl NativeMixerRuntime {
                 }
             }
 
-            let end = position.saturating_add(frame_count as u64);
-            while self
-                .midi_events
-                .get(self.midi_cursor)
-                .is_some_and(|event| event.frame < end)
-            {
-                let event = self.midi_events[self.midi_cursor];
-                if event.frame >= position {
-                    self.dispatch_midi_event(event, (event.frame - position) as usize);
-                }
-                self.midi_cursor += 1;
-            }
+            // Dispatch clip MIDI and metronome clicks in per-frame order so a
+            // later-frame clip event cannot reach instruments before an
+            // earlier-frame metronome click within the same block.
             for frame in 0..frame_count {
                 let project_frame = position.saturating_add(frame as u64);
+                while self
+                    .midi_events
+                    .get(self.midi_cursor)
+                    .is_some_and(|event| event.frame <= project_frame)
+                {
+                    let event = self.midi_events[self.midi_cursor];
+                    if event.frame == project_frame {
+                        self.dispatch_midi_event(event, frame);
+                    }
+                    self.midi_cursor += 1;
+                }
                 let metronome_events =
                     self.metronome
                         .events_at(&self.tempo_map, self.sample_rate, project_frame);

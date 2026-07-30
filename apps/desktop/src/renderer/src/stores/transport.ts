@@ -5,6 +5,7 @@ import type { TransportSnapshot } from "@yadaw/contracts"
 import type { ProjectAssetSummary as Asset } from "@yadaw/contracts"
 import { tickToSeconds } from "../utils/tempoMap"
 import { useMixerStore } from "./mixer"
+import { usePluginStore } from "./plugins"
 
 const MINIMUM_TIMELINE_SECONDS = 8
 const TIMELINE_TAIL_SECONDS = 2
@@ -49,6 +50,7 @@ const EMPTY_TRANSPORT: TransportSnapshot = {
 
 export const useTransportStore = defineStore("transport", () => {
   const mixerStore = useMixerStore()
+  const pluginStore = usePluginStore()
   const snapshot = shallowRef<TransportSnapshot>({ ...EMPTY_TRANSPORT })
   const selectedClipId = shallowRef<string | null>(null)
   const loading = shallowRef(false)
@@ -92,6 +94,19 @@ export const useTransportStore = defineStore("transport", () => {
   const timelineDurationSeconds = computed(() =>
     Math.max(MINIMUM_TIMELINE_SECONDS, contentEndSeconds.value + TIMELINE_TAIL_SECONDS)
   )
+  // Mirror the engine's auto-stop window: finite plugin tails extend playback
+  // past the content end, and any plugin with an unbounded tail (`null`)
+  // disables auto-stop entirely, so the playhead never parks at the end.
+  const autoStopEndSeconds = computed<number | null>(() => {
+    let tailSamples = 0
+    for (const instance of mixerStore.graph.plugins) {
+      const tail = pluginStore.runtime[instance.id]?.tailSamples
+      if (tail === null) return null
+      tailSamples += tail ?? 0
+    }
+    const sampleRate = mixerStore.graph.sampleRate
+    return contentEndSeconds.value + (sampleRate > 0 ? tailSamples / sampleRate : 0)
+  })
   const canPlay = computed(
     () =>
       clips.value.length > 0 ||
@@ -142,9 +157,16 @@ export const useTransportStore = defineStore("transport", () => {
     if (!canPlay.value || playing.value || loading.value) return
     loading.value = true
     try {
-      // Engine auto-stop leaves the playhead at the content tail; restart from zero
-      // so Play after song-end is not a no-op even before the host applies Play.
-      if (contentEndSeconds.value > 0 && playheadSeconds.value >= contentEndSeconds.value) {
+      // Engine auto-stop leaves the playhead at the end of the content plus any
+      // finite plugin tail; restart from zero so Play after song-end is not a
+      // no-op even before the host applies Play. A playhead paused inside the
+      // tail window keeps its position so the decaying tail can play out.
+      const autoStopEnd = autoStopEndSeconds.value
+      if (
+        contentEndSeconds.value > 0 &&
+        autoStopEnd !== null &&
+        playheadSeconds.value >= autoStopEnd
+      ) {
         await command({ type: "seek", positionFrames: 0 })
       }
       await command({ type: "play" })
