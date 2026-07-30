@@ -29,7 +29,7 @@ function changeKeyZoom(delta: number): void {
 </script>
 
 <template>
-  <UiToolbar as="header" class="toolbar" density="compact" label="Piano roll commands">
+  <UiToolbar class="toolbar" density="compact" label="Piano roll commands">
     <template #start>
       <UiSegmentedControl
         v-model="pianoRollStore.tool"

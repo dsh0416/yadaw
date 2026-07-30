@@ -52,7 +52,7 @@ export const EditorToolbar: Story = {
       activeClip: "Verse"
     }),
     template: `
-      <UiToolbar as="header" density="compact" label="Piano roll commands">
+      <UiToolbar density="compact" label="Piano roll commands">
         <template #start>
           <UiSegmentedControl v-model="tool" size="compact" label="Editing tool" :options="tools" />
           <label class="workspace-story-field">

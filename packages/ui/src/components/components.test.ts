@@ -13,6 +13,7 @@ import UiSegmentedControl from "./UiSegmentedControl.vue"
 import UiSelect from "./UiSelect.vue"
 import UiStatusNotice from "./UiStatusNotice.vue"
 import UiTextInput from "./UiTextInput.vue"
+import UiToolbar from "./UiToolbar.vue"
 
 afterEach(() => {
   document.body.innerHTML = ""
@@ -110,6 +111,22 @@ describe("UI controls", () => {
     expect(button.text()).toBe("Verse")
     await button.trigger("click")
     expect(wrapper.emitted("select")).toHaveLength(1)
+  })
+
+  it("renders toolbar semantics on an allowed generic element", () => {
+    const wrapper = mount(UiToolbar, {
+      props: {
+        label: "Piano roll commands",
+        density: "compact"
+      },
+      slots: {
+        default: '<button type="button">Select</button>'
+      }
+    })
+
+    expect(wrapper.element.tagName).toBe("DIV")
+    expect(wrapper.attributes("role")).toBe("toolbar")
+    expect(wrapper.attributes("aria-label")).toBe("Piano roll commands")
   })
 
   it("renders grouped select options with a separator and updates v-model", async () => {

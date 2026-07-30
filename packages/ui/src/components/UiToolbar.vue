@@ -2,19 +2,16 @@
 const props = withDefaults(
   defineProps<{
     label: string
-    as?: "div" | "header"
     density?: "compact" | "standard"
   }>(),
   {
-    as: "div",
     density: "standard"
   }
 )
 </script>
 
 <template>
-  <component
-    :is="props.as"
+  <div
     class="ui-toolbar"
     :class="`ui-toolbar--${props.density}`"
     role="toolbar"
@@ -29,7 +26,7 @@ const props = withDefaults(
     <div v-if="$slots.end" class="ui-toolbar__section ui-toolbar__section--end">
       <slot name="end" />
     </div>
-  </component>
+  </div>
 </template>
 
 <style scoped>
