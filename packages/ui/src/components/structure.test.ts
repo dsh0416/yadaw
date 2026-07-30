@@ -79,7 +79,7 @@ describe("UiEmptyState", () => {
 
     expect(wrapper.get("p").text()).toBe("Create one to get started.")
     expect(wrapper.get(".ui-empty-state__icon").attributes("aria-hidden")).toBe("true")
-    expect(wrapper.get(".ui-empty-state__icon .glyph").exists()).toBe(true)
+    expect(wrapper.find(".ui-empty-state__icon .glyph").exists()).toBe(true)
     expect(wrapper.get(".ui-empty-state__actions").text()).toBe("New project")
   })
 })
