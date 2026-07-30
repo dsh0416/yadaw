@@ -6,6 +6,13 @@ inputs:
     description: Token used by mise when downloading tools from GitHub.
     required: false
     default: ""
+  cache-rust-build:
+    description: >-
+      Cache the Cargo target directory (and registry) between runs. Enable for
+      check/test jobs that rebuild the same profiles every run; leave disabled
+      for release packaging jobs to conserve the repository cache quota.
+    required: false
+    default: "false"
 
 runs:
   using: composite
@@ -41,6 +48,14 @@ runs:
         $llvmRoot = mise where 'github:llvm/llvm-project'
         "LIBCLANG_PATH=$llvmRoot\bin" | Out-File -FilePath $env:GITHUB_ENV -Append
 
+    - name: Restore Cargo target directory
+      if: inputs.cache-rust-build == 'true'
+      uses: Swatinem/rust-cache@v2
+      with:
+        # Warm caches come from main so pull requests restore a consistent
+        # baseline without competing for the repository cache quota.
+        save-if: ${{ github.ref == 'refs/heads/main' }}
+
     - name: Install and start sccache
       uses: mozilla-actions/sccache-action@v0.0.10
 
@@ -58,6 +73,8 @@ runs:
         echo "pnpm-store=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
 
     - name: Restore Cargo downloads
+      # rust-cache already caches the registry and git databases.
+      if: inputs.cache-rust-build != 'true'
       uses: actions/cache@v5
       with:
         path: |
