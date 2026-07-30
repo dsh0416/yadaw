@@ -1,9 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { createPinia, setActivePinia } from "pinia"
-import type { MixerGraphSnapshot, TransportSnapshot } from "@yadaw/contracts"
+import type {
+  MixerGraphSnapshot,
+  PluginInstanceState,
+  PluginRuntimeStatus,
+  TransportSnapshot
+} from "@yadaw/contracts"
 import type { ProjectAssetSummary as Asset } from "@yadaw/contracts"
 import { assetsToTimelineClips, useTransportStore } from "./transport"
 import { useMixerStore } from "./mixer"
+import { usePluginStore } from "./plugins"
 
 function asset(id: string, frameCount: bigint, sampleRate = 48_000): Asset {
   return {
@@ -13,6 +19,47 @@ function asset(id: string, frameCount: bigint, sampleRate = 48_000): Asset {
     channels: 2,
     bitDepth: "float32",
     frameCount
+  }
+}
+
+function effectInstance(id: string): PluginInstanceState {
+  return {
+    id,
+    channelId: "audio-1",
+    role: "insert",
+    slotOrder: 0,
+    classId: "class-1",
+    descriptor: {
+      source: { kind: "external" },
+      classId: "class-1",
+      modulePath: "/plugins/reverb.vst3",
+      name: "Reverb",
+      vendor: "Vendor",
+      version: "1.0",
+      category: "Fx",
+      kind: "effect",
+      supportedAudioModes: ["stereo"],
+      architecture: "x86_64",
+      buses: [],
+      hasEditor: false,
+      compatibility: "compatible",
+      compatibilityReason: null
+    },
+    audioMode: "stereo",
+    enabled: true,
+    componentState: new Uint8Array(),
+    controllerState: new Uint8Array()
+  }
+}
+
+function activeRuntime(instanceId: string, tailSamples: number | null): PluginRuntimeStatus {
+  return {
+    instanceId,
+    state: "active",
+    editorOpen: false,
+    latencySamples: 0,
+    tailSamples,
+    error: null
   }
 }
 
@@ -170,6 +217,124 @@ describe("transport store", () => {
       positionFrames: 0
     })
     expect(window.yadaw.transportCommand).toHaveBeenNthCalledWith(2, { type: "play" })
+  })
+
+  it("keeps the playhead when paused inside a finite plugin tail window", async () => {
+    const mixer = useMixerStore()
+    mixer.graph = {
+      ...structuredClone(emptyGraph),
+      clips: [
+        {
+          id: "clip-1",
+          name: "Clip",
+          trackId: "audio-1",
+          assetId: "asset-1",
+          assetChannels: 2,
+          assetSampleRate: 48_000,
+          startFrame: 0,
+          sourceOffsetFrames: 0,
+          lengthFrames: 48_000
+        }
+      ],
+      plugins: [effectInstance("reverb-1")]
+    }
+    usePluginStore().runtime = { "reverb-1": activeRuntime("reverb-1", 48_000) }
+    window.yadaw.transportCommand = vi.fn().mockResolvedValue({
+      state: "playing",
+      positionFrames: 60_000,
+      sampleRate: 48_000
+    })
+    const transport = useTransportStore()
+    // Paused past the content end but before the tail finishes decaying.
+    transport.snapshot = {
+      state: "stopped",
+      positionFrames: 60_000,
+      sampleRate: 48_000
+    }
+
+    await transport.play()
+
+    expect(window.yadaw.transportCommand).toHaveBeenCalledOnce()
+    expect(window.yadaw.transportCommand).toHaveBeenCalledWith({ type: "play" })
+  })
+
+  it("rewinds before playing once the playhead reaches the end of the plugin tail", async () => {
+    const mixer = useMixerStore()
+    mixer.graph = {
+      ...structuredClone(emptyGraph),
+      clips: [
+        {
+          id: "clip-1",
+          name: "Clip",
+          trackId: "audio-1",
+          assetId: "asset-1",
+          assetChannels: 2,
+          assetSampleRate: 48_000,
+          startFrame: 0,
+          sourceOffsetFrames: 0,
+          lengthFrames: 48_000
+        }
+      ],
+      plugins: [effectInstance("reverb-1")]
+    }
+    usePluginStore().runtime = { "reverb-1": activeRuntime("reverb-1", 48_000) }
+    window.yadaw.transportCommand = vi.fn().mockResolvedValue({
+      state: "stopped",
+      positionFrames: 0,
+      sampleRate: 48_000
+    })
+    const transport = useTransportStore()
+    transport.snapshot = {
+      state: "stopped",
+      positionFrames: 96_000,
+      sampleRate: 48_000
+    }
+
+    await transport.play()
+
+    expect(window.yadaw.transportCommand).toHaveBeenNthCalledWith(1, {
+      type: "seek",
+      positionFrames: 0
+    })
+    expect(window.yadaw.transportCommand).toHaveBeenNthCalledWith(2, { type: "play" })
+  })
+
+  it("never auto-rewinds while a plugin reports an unbounded tail", async () => {
+    const mixer = useMixerStore()
+    mixer.graph = {
+      ...structuredClone(emptyGraph),
+      clips: [
+        {
+          id: "clip-1",
+          name: "Clip",
+          trackId: "audio-1",
+          assetId: "asset-1",
+          assetChannels: 2,
+          assetSampleRate: 48_000,
+          startFrame: 0,
+          sourceOffsetFrames: 0,
+          lengthFrames: 48_000
+        }
+      ],
+      plugins: [effectInstance("freeze-1")]
+    }
+    usePluginStore().runtime = { "freeze-1": activeRuntime("freeze-1", null) }
+    window.yadaw.transportCommand = vi.fn().mockResolvedValue({
+      state: "playing",
+      positionFrames: 240_000,
+      sampleRate: 48_000
+    })
+    const transport = useTransportStore()
+    transport.snapshot = {
+      state: "stopped",
+      positionFrames: 240_000,
+      sampleRate: 48_000
+    }
+
+    await transport.play()
+
+    expect(window.yadaw.transportCommand).toHaveBeenCalledOnce()
+    expect(window.yadaw.transportCommand).toHaveBeenCalledWith({ type: "play" })
   })
 
   it("can play a MIDI-only project and treats MIDI length as content end", async () => {
