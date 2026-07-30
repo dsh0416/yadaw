@@ -22,6 +22,10 @@ Before changing behavior near process or audio boundaries, read:
 
 ## Pull requests
 
+Fill in the repository pull request template, and:
+
+- Use a [Conventional Commits](https://www.conventionalcommits.org/) title
+  (for example `feat(desktop): …`, `fix(audio-host): …`, `chore: …`).
 - Prefer small, reviewable changes with a clear purpose.
 - Match existing style and architecture; do not drive-by reformat unrelated code.
 - Keep Electron IPC, UI work, filesystem access, allocation, and blocking
@@ -103,10 +107,11 @@ whether a change “counts” as AI-authored.
 
 ## Issues
 
-Bug reports and design issues are welcome. Prefer a clear reproduction,
-expected versus actual behavior, and platform details when relevant. AI may
-help draft issues; the report itself should still be accurate and actionable.
-Do not open floods of speculative or duplicate tickets.
+Use the GitHub issue templates for bug reports and design / feature discussion.
+Prefer a clear reproduction, expected versus actual behavior, and platform
+details when relevant. AI may help draft issues; the report itself should still
+be accurate and actionable. Do not open floods of speculative or duplicate
+tickets.
 
 ## License
 

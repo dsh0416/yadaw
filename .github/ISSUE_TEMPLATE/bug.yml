@@ -1,0 +1,89 @@
+name: Bug report
+description: Something does not work as expected.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Prefer a clear reproduction, expected versus actual
+        behavior, and platform details. Search existing issues first to avoid duplicates.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: One or two sentences describing the problem.
+      placeholder: Audio drops when inserting a VST3 on a record-armed track.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps someone else can follow.
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include error text, crash symptoms, or incorrect UI/audio results.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Multiple / cross-platform
+        - Not sure / N/A
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: YADAW version
+      description: Release tag, commit SHA, or `dev` build details.
+      placeholder: v0.x.y or commit abc1234
+    validations:
+      required: false
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment details
+      description: OS version, audio backend/driver (e.g. ASIO), sample rate/buffer size, relevant plug-ins.
+      placeholder: |
+        OS:
+        Audio device / driver:
+        Sample rate / buffer:
+        Plug-ins involved:
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Logs, screenshots, project notes, or links. Avoid pasting secrets.
+    validations:
+      required: false

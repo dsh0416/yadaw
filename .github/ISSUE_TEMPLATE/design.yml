@@ -1,0 +1,60 @@
+name: Design / feature discussion
+description: Propose a design change, feature, or product direction discussion.
+title: "[Design]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for design discussion or feature proposals. Check the
+        [roadmap](https://github.com/dsh0416/yadaw/blob/main/docs/roadmap.md) first.
+        Prefer actionable scope over speculative wish lists.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or motivation
+      description: What user or contributor need does this address?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What should change, and roughly where in the product or architecture?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other approaches, workarounds, or reasons not to do this now.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Primary area
+      options:
+        - Desktop UI / renderer
+        - Audio engine / real-time path
+        - Project persistence / database
+        - Plug-in hosting
+        - Packaging / CI / tooling
+        - Docs / contributor experience
+        - Other / cross-cutting
+    validations:
+      required: true
+
+  - type: textarea
+    id: risks
+    attributes:
+      label: Constraints and risks
+      description: |
+        Note real-time safety, process boundaries (`window.yadaw` / native addon),
+        compatibility before 1.0, or review cost if relevant.
+    validations:
+      required: false
