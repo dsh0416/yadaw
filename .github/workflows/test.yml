@@ -115,6 +115,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: >-
             apps/desktop/coverage/lcov.info,
+            packages/contracts/coverage/lcov.info,
             packages/project-db/coverage/lcov.info,
             packages/ui/coverage/lcov.info
           flags: javascript
