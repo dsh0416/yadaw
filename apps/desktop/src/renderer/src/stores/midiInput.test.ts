@@ -21,6 +21,7 @@ function snapshot(overrides: Partial<MidiInputSnapshot> = {}): MidiInputSnapshot
       ignoredSystemMessages: 0,
       error: null
     },
+    controlEvents: [],
     capturedAt: 1_000,
     ...overrides
   }
@@ -206,6 +207,7 @@ describe("configure", () => {
         egressConcurrency: "auto"
       },
       pluginEditors: {},
+      shortcuts: { keyboard: {}, midi: {} },
       recentProjects: []
     }
     const store = useMidiInputStore()
@@ -306,5 +308,50 @@ describe("dispose", () => {
     const store = useMidiInputStore()
 
     expect(() => store.dispose()).not.toThrow()
+  })
+})
+
+function controlSnapshot(generations: number[]): MidiInputSnapshot {
+  return snapshot({
+    ports: [{ id: "controller", name: "Controller", connected: true }],
+    controlEvents: generations.map((generation) => ({
+      generation,
+      timestampMicroseconds: generation * 100,
+      portId: "controller",
+      portName: "Controller",
+      channel: 0,
+      type: "note",
+      number: 36,
+      value: 100
+    })),
+    capturedAt: Date.now()
+  })
+}
+
+describe("midi input control events", () => {
+  let publish: ((value: MidiInputSnapshot) => void) | null
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    publish = null
+    window.yadaw.midiInputSnapshot = vi.fn().mockResolvedValue(controlSnapshot([1, 2]))
+    window.yadaw.subscribeMidiInput = vi.fn((listener) => {
+      publish = listener
+      return () => undefined
+    })
+  })
+
+  it("publishes each new generation once and ignores snapshot history", async () => {
+    const store = useMidiInputStore()
+    const controls = vi.fn()
+    store.subscribeControls(controls)
+    await store.load()
+
+    expect(controls).not.toHaveBeenCalled()
+    publish?.(controlSnapshot([2, 3]))
+    publish?.(controlSnapshot([2, 3]))
+
+    expect(controls).toHaveBeenCalledOnce()
+    expect(controls).toHaveBeenCalledWith(expect.objectContaining({ generation: 3, number: 36 }))
   })
 })

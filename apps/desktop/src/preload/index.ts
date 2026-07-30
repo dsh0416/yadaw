@@ -12,6 +12,7 @@ import type {
   ProcessGainRequest,
   ProjectCloseDisposition,
   ProjectConfiguration,
+  ShortcutPreferences,
   WaveformWindowRequest,
   YadawDesktopApi
 } from "@yadaw/contracts"
@@ -87,6 +88,8 @@ const api: YadawDesktopApi = {
     ipcRenderer.invoke(IPC_CHANNELS.settingsSetSoftwareMonitoring, enabled),
   configureAudioHostRuntime: (preferences: AudioHostRuntimePreferences) =>
     ipcRenderer.invoke(IPC_CHANNELS.settingsConfigureAudioHostRuntime, preferences),
+  configureShortcuts: (preferences: ShortcutPreferences) =>
+    ipcRenderer.invoke(IPC_CHANNELS.settingsConfigureShortcuts, preferences),
   midiInputSnapshot: () => ipcRenderer.invoke(IPC_CHANNELS.midiInputSnapshot),
   subscribeMidiInput: (listener) => {
     const handler = (_event: Electron.IpcRendererEvent, snapshot: Parameters<typeof listener>[0]) =>
@@ -96,6 +99,8 @@ const api: YadawDesktopApi = {
   },
   configureMidiInput: (preferences: MidiSyncPreferences) =>
     ipcRenderer.invoke(IPC_CHANNELS.midiInputConfigure, preferences),
+  setMidiControlLearning: (enabled: boolean) =>
+    ipcRenderer.invoke(IPC_CHANNELS.midiControlLearning, enabled),
   chooseSwapDirectory: () => ipcRenderer.invoke(IPC_CHANNELS.settingsChooseSwap),
   openSwapDirectory: () => ipcRenderer.invoke(IPC_CHANNELS.settingsOpenSwap),
   startRecording: () => ipcRenderer.invoke(IPC_CHANNELS.recordingStart),

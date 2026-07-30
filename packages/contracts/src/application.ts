@@ -14,6 +14,10 @@ export const APPLICATION_COMMAND_IDS = [
   "application.quit",
   "window.close",
   "view.toggle-full-screen",
+  "view.toggle-mixer-dock",
+  "transport.toggle-playback",
+  "transport.go-to-start",
+  "recording.toggle",
   "help.audio-benchmark",
   "help.effect-chain-graph",
   "application.about"

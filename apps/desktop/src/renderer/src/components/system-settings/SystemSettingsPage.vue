@@ -19,6 +19,7 @@ import MidiSettings from "./MidiSettings.vue"
 import MixerDisplaySettings from "./MixerDisplaySettings.vue"
 import MidiInputSettings from "./MidiInputSettings.vue"
 import RecordingSettings from "./RecordingSettings.vue"
+import ShortcutSettings from "./ShortcutSettings.vue"
 
 type SystemSettingsPageId =
   | "engine"
@@ -28,6 +29,7 @@ type SystemSettingsPageId =
   | "midi-input"
   | "display-general"
   | "display-mixer"
+  | "shortcuts"
 
 const { t } = useI18n()
 
@@ -142,8 +144,14 @@ const categories = computed<readonly SettingsCategory[]>(() => [
     label: t("settings.system.categories.keyboard.label"),
     description: t("settings.system.categories.keyboard.description"),
     icon: Keyboard,
-    badge: t("common.soon"),
-    pages: []
+    pages: [
+      {
+        id: "shortcuts",
+        label: t("settings.system.pages.shortcuts.label"),
+        description: t("settings.system.pages.shortcuts.description"),
+        icon: Keyboard
+      }
+    ]
   }
 ])
 
@@ -232,5 +240,6 @@ function applyAudio(): void {
     />
     <DisplaySettings v-else-if="activePage === 'display-general'" />
     <MixerDisplaySettings v-else-if="activePage === 'display-mixer'" />
+    <ShortcutSettings v-else-if="activePage === 'shortcuts'" />
   </SettingsContainer>
 </template>

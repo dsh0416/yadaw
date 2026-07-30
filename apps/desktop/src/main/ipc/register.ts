@@ -56,7 +56,7 @@ export function registerIpcHandlers(
       midiSnapshotPending = false
     }
   }
-  const midiSnapshotTimer = setInterval(() => void publishMidiSnapshot(), 250)
+  const midiSnapshotTimer = setInterval(() => void publishMidiSnapshot(), 100)
   midiSnapshotTimer.unref()
   const synchronizePluginStates = async (): Promise<void> => {
     const graph = await mixer.snapshot()

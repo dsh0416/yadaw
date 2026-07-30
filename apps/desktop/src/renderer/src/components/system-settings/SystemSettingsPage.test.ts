@@ -66,6 +66,7 @@ function mountPage() {
           ignoredSystemMessages: 0,
           error: null
         },
+        controlEvents: [],
         capturedAt: 0
       },
       midiApplying: false,
@@ -86,7 +87,8 @@ function mountPage() {
         RecordingSettings: true,
         MidiInputSettings: true,
         DisplaySettings: true,
-        MixerDisplaySettings: true
+        MixerDisplaySettings: true,
+        ShortcutSettings: true
       }
     }
   })

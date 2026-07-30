@@ -108,6 +108,7 @@
     "unableToSaveDisplaySettings": "Unable to save display settings.",
     "unableToSaveMixerDisplaySettings": "Unable to save mixer display settings.",
     "unableToSaveMidiSettings": "Unable to save MIDI settings.",
+    "unableToSaveShortcutSettings": "Unable to save shortcut settings.",
     "unableToRestartAudioHelper": "Unable to restart the audio helper.",
     "unableToChangeSoftwareMonitoring": "Unable to change software monitoring.",
     "nativeAudioEngineStopped": "The native audio engine stopped unexpectedly.",
@@ -336,11 +337,78 @@
         "displayMixer": {
           "label": "Mixer",
           "description": "Meter hold and return"
+        },
+        "shortcuts": {
+          "label": "Shortcuts",
+          "description": "Keyboard and MIDI control"
         }
       },
       "actions": {
         "startingEngine": "Starting engine…",
         "applyAudio": "Apply audio"
+      }
+    },
+    "shortcuts": {
+      "category": "Keyboard",
+      "page": "Shortcuts",
+      "title": "Keyboard & MIDI shortcuts",
+      "description": "Assign keyboard combinations, MIDI notes, and MIDI control-change messages to application commands.",
+      "instructions": "Select a keyboard binding and press the new combination, or use MIDI Learn and move a hardware control.",
+      "groupDescription": "Keyboard and MIDI bindings are stored for this device.",
+      "resetAll": "Reset all",
+      "pressKeys": "Press keys…",
+      "midiLearn": "MIDI Learn",
+      "moveMidiControl": "Waiting for MIDI…",
+      "unassigned": "Unassigned",
+      "clearMidi": "Clear MIDI binding",
+      "channel": "Channel {channel}",
+      "note": "Note {number}",
+      "controlChange": "CC {number}",
+      "groups": {
+        "project": "Project",
+        "edit": "Edit",
+        "transport": "Transport",
+        "application": "Application"
+      },
+      "commands": {
+        "project": {
+          "new": "New project",
+          "open": "Open project",
+          "save": "Save project",
+          "close": "Close project",
+          "settings": "Project settings"
+        },
+        "edit": {
+          "undo": "Undo",
+          "redo": "Redo",
+          "cut": "Cut",
+          "copy": "Copy",
+          "paste": "Paste",
+          "select-all": "Select all"
+        },
+        "application": {
+          "preferences": "System settings",
+          "quit": "Quit",
+          "about": "About"
+        },
+        "window": {
+          "close": "Close window"
+        },
+        "view": {
+          "toggle-full-screen": "Toggle full screen",
+          "toggle-mixer-dock": "Toggle mixer"
+        },
+        "transport": {
+          "toggle-playback": "Play / pause",
+          "go-to-start": "Return to start"
+        },
+        "recording": {
+          "toggle": "Start / stop recording"
+        },
+        "help": {
+          "audio-benchmark": "Audio performance benchmark",
+          "effect-chain-graph": "Effect chain graph"
+        }
       }
     },
     "backends": {

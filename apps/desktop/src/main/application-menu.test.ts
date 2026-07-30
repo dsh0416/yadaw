@@ -97,6 +97,21 @@ describe("installApplicationMenu", () => {
     expect(preferences).toBeDefined()
   })
 
+  it("uses configured keyboard bindings for native menu accelerators", () => {
+    installApplicationMenu("darwin", {
+      keyboard: {
+        "project.save": { code: "KeyK", modifiers: ["primary", "shift"] }
+      },
+      midi: {}
+    })
+
+    const template = electron.buildFromTemplate.mock.calls[0]?.[0]
+    const save = template
+      ?.find((item: { label?: string }) => item.label === "File")
+      ?.submenu?.find((item: { label?: string }) => item.label === "Save Project")
+    expect(save?.accelerator).toBe("Command+Shift+K")
+  })
+
   it("removes the Electron application menu on Windows and Linux", () => {
     installApplicationMenu("win32")
 

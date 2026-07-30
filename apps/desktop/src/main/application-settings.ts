@@ -1,7 +1,12 @@
 import { mkdir, open, readFile, rename } from "node:fs/promises"
 import { dirname, join } from "node:path"
-import { MAX_MIDI_INPUT_OFFSET_MS } from "@yadaw/contracts"
+import {
+  APPLICATION_COMMAND_IDS,
+  MAX_MIDI_INPUT_OFFSET_MS,
+  SHORTCUT_MODIFIERS
+} from "@yadaw/contracts"
 import type {
+  ApplicationCommandId,
   ApplicationSettings,
   ApplicationSettingsPatch,
   AudioHostRuntimePreferences,
@@ -11,6 +16,7 @@ import type {
   MidiSyncPreferences,
   PluginEditorPreference,
   RecordingBitDepth,
+  ShortcutPreferences,
   ThemePreference
 } from "@yadaw/contracts"
 import { DEFAULT_LOCALE, isAppLocale } from "../shared/i18n"
@@ -169,6 +175,66 @@ function pluginEditorPreferences(value: unknown): Record<string, PluginEditorPre
   return preferences
 }
 
+export function validateShortcutPreferences(value: unknown): ShortcutPreferences {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new TypeError("Shortcut preferences must be an object")
+  }
+  const input = value as Partial<ShortcutPreferences>
+  if (!input.keyboard || typeof input.keyboard !== "object" || Array.isArray(input.keyboard)) {
+    throw new TypeError("Keyboard shortcuts must be an object")
+  }
+  if (!input.midi || typeof input.midi !== "object" || Array.isArray(input.midi)) {
+    throw new TypeError("MIDI shortcuts must be an object")
+  }
+  const commandIds = new Set<string>(APPLICATION_COMMAND_IDS)
+  const keyboard: ShortcutPreferences["keyboard"] = {}
+  for (const [command, binding] of Object.entries(input.keyboard)) {
+    if (!commandIds.has(command)) throw new TypeError(`Unsupported shortcut command '${command}'`)
+    if (binding === null) {
+      keyboard[command as ApplicationCommandId] = null
+      continue
+    }
+    if (
+      !binding ||
+      typeof binding !== "object" ||
+      typeof binding.code !== "string" ||
+      !binding.code.trim() ||
+      !Array.isArray(binding.modifiers) ||
+      binding.modifiers.some((modifier) => !SHORTCUT_MODIFIERS.includes(modifier)) ||
+      new Set(binding.modifiers).size !== binding.modifiers.length
+    ) {
+      throw new TypeError(`Invalid keyboard shortcut for '${command}'`)
+    }
+    keyboard[command as ApplicationCommandId] = {
+      code: binding.code,
+      modifiers: [...binding.modifiers]
+    }
+  }
+  const midi: ShortcutPreferences["midi"] = {}
+  for (const [command, binding] of Object.entries(input.midi)) {
+    if (!commandIds.has(command)) throw new TypeError(`Unsupported shortcut command '${command}'`)
+    if (
+      !binding ||
+      typeof binding !== "object" ||
+      typeof binding.portId !== "string" ||
+      !binding.portId.trim() ||
+      typeof binding.portName !== "string" ||
+      !binding.portName.trim() ||
+      !Number.isInteger(binding.channel) ||
+      binding.channel < 0 ||
+      binding.channel > 15 ||
+      (binding.type !== "note" && binding.type !== "control-change") ||
+      !Number.isInteger(binding.number) ||
+      binding.number < 0 ||
+      binding.number > 127
+    ) {
+      throw new TypeError(`Invalid MIDI shortcut for '${command}'`)
+    }
+    midi[command as ApplicationCommandId] = { ...binding }
+  }
+  return { keyboard, midi }
+}
+
 async function syncDirectory(path: string): Promise<void> {
   try {
     const handle = await open(path, "r")
@@ -213,6 +279,7 @@ export class ApplicationSettingsStore {
         egressConcurrency: "auto"
       },
       pluginEditors: {},
+      shortcuts: { keyboard: {}, midi: {} },
       recentProjects: []
     }
   }
@@ -258,6 +325,13 @@ export class ApplicationSettingsStore {
           }
         })(),
         pluginEditors: pluginEditorPreferences(raw.pluginEditors),
+        shortcuts: (() => {
+          try {
+            return validateShortcutPreferences(raw.shortcuts)
+          } catch {
+            return value.shortcuts
+          }
+        })(),
         recentProjects: Array.isArray(raw.recentProjects)
           ? raw.recentProjects
               .filter(
@@ -334,6 +408,12 @@ export class ApplicationSettingsStore {
   async configureMidiInput(preferences: MidiSyncPreferences): Promise<ApplicationSettings> {
     const current = await this.get()
     current.midiSync = validateMidiSyncPreferences(preferences)
+    return this.write(current)
+  }
+
+  async configureShortcuts(preferences: ShortcutPreferences): Promise<ApplicationSettings> {
+    const current = await this.get()
+    current.shortcuts = validateShortcutPreferences(preferences)
     return this.write(current)
   }
 

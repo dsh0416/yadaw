@@ -176,4 +176,54 @@ describe("ApplicationSettingsStore", () => {
       })
     ).rejects.toThrow("-500 to 500")
   })
+
+  it("persists validated keyboard and MIDI shortcut overrides", async () => {
+    const userData = await mkdtemp(join(tmpdir(), "yadaw-shortcut-settings-"))
+    const store = new ApplicationSettingsStore(userData)
+    await store.configureShortcuts({
+      keyboard: {
+        "project.save": { code: "KeyK", modifiers: ["primary", "shift"] },
+        "recording.toggle": null
+      },
+      midi: {
+        "transport.toggle-playback": {
+          portId: "controller-1",
+          portName: "Studio Controller",
+          channel: 0,
+          type: "note",
+          number: 36
+        }
+      }
+    })
+
+    expect((await new ApplicationSettingsStore(userData).get()).shortcuts).toEqual({
+      keyboard: {
+        "project.save": { code: "KeyK", modifiers: ["primary", "shift"] },
+        "recording.toggle": null
+      },
+      midi: {
+        "transport.toggle-playback": {
+          portId: "controller-1",
+          portName: "Studio Controller",
+          channel: 0,
+          type: "note",
+          number: 36
+        }
+      }
+    })
+    await expect(
+      store.configureShortcuts({
+        keyboard: {},
+        midi: {
+          "transport.toggle-playback": {
+            portId: "controller-1",
+            portName: "Studio Controller",
+            channel: 16,
+            type: "note",
+            number: 36
+          }
+        }
+      })
+    ).rejects.toThrow("Invalid MIDI shortcut")
+  })
 })

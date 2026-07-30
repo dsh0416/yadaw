@@ -206,6 +206,16 @@ export interface AudioHostMidiInputSnapshot {
     ignored_system_messages: number
     error: string | null
   }
+  control_events: Array<{
+    generation: number
+    timestamp_microseconds: number
+    port_id: string
+    port_name: string
+    channel: number
+    type: "note" | "control-change"
+    number: number
+    value: number
+  }>
   captured_at: number
 }
 

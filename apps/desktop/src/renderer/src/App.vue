@@ -11,6 +11,7 @@ import { useSystemPerformanceStore } from "./stores/systemPerformance"
 import { useLifecycleStore } from "./stores/lifecycle"
 import { useOperationStore } from "./stores/operations"
 import { useApplicationWindowStore } from "./stores/applicationWindow"
+import { useMidiInputStore } from "./stores/midiInput"
 import GlobalOperationHost from "./components/operations/GlobalOperationHost.vue"
 import AudioBenchmarkHost from "./components/benchmark/AudioBenchmarkHost.vue"
 import CompiledEffectGraphHost from "./components/effect-graph/CompiledEffectGraphHost.vue"
@@ -26,6 +27,7 @@ const applicationSettingsStore = useApplicationSettingsStore()
 const lifecycleStore = useLifecycleStore()
 const operationStore = useOperationStore()
 const applicationWindowStore = useApplicationWindowStore()
+const midiInputStore = useMidiInputStore()
 const { settings } = storeToRefs(applicationSettingsStore)
 const { ready: lifecycleReady } = storeToRefs(lifecycleStore)
 const themePreference = computed(() => settings.value?.theme ?? "system")
@@ -60,6 +62,7 @@ onMounted(() => {
   systemPerformanceStore.startPolling()
   void audioPreferencesStore.restore()
   void applicationSettingsStore.load()
+  void midiInputStore.load()
   window.addEventListener("beforeunload", stopRuntimePolling)
 })
 
@@ -67,6 +70,7 @@ onUnmounted(() => {
   window.removeEventListener("beforeunload", stopRuntimePolling)
   lifecycleStore.dispose()
   operationStore.stopSubscription()
+  midiInputStore.dispose()
   stopRuntimePolling()
 })
 </script>

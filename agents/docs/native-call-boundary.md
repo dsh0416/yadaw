@@ -121,6 +121,14 @@ then restores the same preferences after a helper restart. Per-track route
 identity remains project data and is compiled into numeric keys before the
 graph reaches the callback.
 
+Configurable MIDI shortcuts use the same sampled snapshot boundary. The MIDI
+actor records a bounded, generation-ordered window of Note On and Control
+Change events for configured controller ports; Electron polls that window and
+the renderer ignores generations it has already handled. MIDI Learn
+temporarily opens all enumerated inputs through a named preload method, then
+returns to only the persisted controller ports. Capture and queue cloning stay
+on the MIDI actor and IPC threads, never the `midir` or audio callback.
+
 The `midir` callback may only copy a timestamp and bytes into the fixed
 16,384-message/4 MiB SysEx ingress. Parsing, device names, hot-plug polling,
 diagnostics, and journal I/O stay on non-real-time actors. The audio callback

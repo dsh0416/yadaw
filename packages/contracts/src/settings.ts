@@ -1,5 +1,6 @@
 import type { AppLocale, RecentProject, RecordingBitDepth, ThemePreference } from "./project"
 import type { MidiSyncPreferences } from "./midi"
+import type { ShortcutPreferences } from "./shortcuts"
 
 export type MeterPeakHold = "800ms" | "2s" | "4s" | "infinite"
 export type MeterReturnRate = "iec-type-i"
@@ -36,6 +37,7 @@ export interface ApplicationSettings {
   midiSync: MidiSyncPreferences
   audioHostRuntime: AudioHostRuntimePreferences
   pluginEditors: Record<string, PluginEditorPreference>
+  shortcuts: ShortcutPreferences
   recentProjects: RecentProject[]
 }
 

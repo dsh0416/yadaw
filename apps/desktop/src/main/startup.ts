@@ -182,7 +182,10 @@ export function startApplication(
         }
       )
       audioHostService.start()
-      await audioHostService.configureMidiInput(applicationSettings.midiSync)
+      await audioHostService.configureMidiInput(
+        applicationSettings.midiSync,
+        applicationSettings.shortcuts
+      )
       const projectService = new ProjectService(app.getPath("userData"), settings)
       setWindowProjectService(projectService)
       onServices({ audioHostService, projectService })
@@ -271,7 +274,7 @@ export function startApplication(
         }, 220)
       })
       loadMainWindow(window)
-      installApplicationMenu()
+      installApplicationMenu(process.platform, applicationSettings.shortcuts)
 
       app.on("activate", () => {
         if (!mainWindow || mainWindow.isDestroyed()) {

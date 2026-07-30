@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, VecDeque},
     sync::{
         Arc, OnceLock,
         atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering},
@@ -20,7 +20,8 @@ use yadaw_dsp_runtime::{
         MidiInputMessage, MidiInputParser, MidiSyncState,
     },
     protocol::{
-        MidiInputPort as WireMidiInputPort, MidiInputSnapshot, MidiSyncPreferences, MidiSyncRuntime,
+        MidiControlEvent, MidiControlEventKind, MidiInputPort as WireMidiInputPort,
+        MidiInputSnapshot, MidiSyncPreferences, MidiSyncRuntime,
     },
 };
 
@@ -28,6 +29,7 @@ const PORT_POLL_INTERVAL: Duration = Duration::from_secs(1);
 const ACTOR_POLL_INTERVAL: Duration = Duration::from_millis(20);
 const SYSEX_DESCRIPTOR_CAPACITY: usize = 64;
 const REALTIME_LOOKAHEAD: Duration = Duration::from_millis(50);
+const CONTROL_EVENT_CAPACITY: usize = 64;
 
 static PROCESS_EPOCH: OnceLock<Instant> = OnceLock::new();
 static REALTIME_INPUT: OnceLock<Arc<RealtimeInputShared>> = OnceLock::new();
@@ -380,6 +382,8 @@ struct ActorState {
     realtime_sysex: Prod<Arc<HeapRb<u8>>>,
     realtime_shared: Arc<RealtimeInputShared>,
     pending_events: Vec<PendingMidiEvent>,
+    control_generation: u64,
+    control_events: VecDeque<MidiControlEvent>,
 }
 
 struct PendingMidiEvent {
@@ -403,6 +407,8 @@ fn run_actor(receiver: mpsc::Receiver<Command>, preferences: MidiSyncPreferences
         realtime_sysex: Prod::new(Arc::clone(&realtime_shared.sysex)),
         realtime_shared,
         pending_events: Vec::with_capacity(MIDI_SHORT_QUEUE_CAPACITY),
+        control_generation: 0,
+        control_events: VecDeque::with_capacity(CONTROL_EVENT_CAPACITY),
     };
     state
         .realtime_shared
@@ -515,6 +521,10 @@ fn enumerate_and_reconcile(state: &mut ActorState) {
     if let Some(source) = &state.preferences.source_port_id {
         wanted.insert(source.clone());
     }
+    wanted.extend(state.preferences.control_port_ids.iter().cloned());
+    if state.preferences.capture_all_controls {
+        wanted.extend(available.iter().cloned());
+    }
     let disconnected = state
         .connections
         .keys()
@@ -555,7 +565,15 @@ fn enumerate_and_reconcile(state: &mut ActorState) {
 }
 
 fn drain_connections(state: &mut ActorState) {
+    let port_names: BTreeMap<_, _> = state
+        .ports
+        .iter()
+        .map(|port| (port.id.clone(), port.name.clone()))
+        .collect();
     for (port_id, connection) in &mut state.connections {
+        let port_name = port_names
+            .get(port_id)
+            .map_or_else(|| port_id.as_str(), String::as_str);
         let offset_micros = state
             .preferences
             .input_offsets_ms
@@ -575,8 +593,11 @@ fn drain_connections(state: &mut ActorState) {
                         ignored_system_messages: &mut state.ignored_system_messages,
                         panic_requested: &state.realtime_shared.panic_requested,
                         pending_events: &mut state.pending_events,
+                        control_generation: &mut state.control_generation,
+                        control_events: &mut state.control_events,
                     },
                     port_id,
+                    port_name,
                     port_key,
                     packet.timestamp_micros.saturating_add_signed(offset_micros),
                     messages,
@@ -601,8 +622,11 @@ fn drain_connections(state: &mut ActorState) {
                         ignored_system_messages: &mut state.ignored_system_messages,
                         panic_requested: &state.realtime_shared.panic_requested,
                         pending_events: &mut state.pending_events,
+                        control_generation: &mut state.control_generation,
+                        control_events: &mut state.control_events,
                     },
                     port_id,
+                    port_name,
                     port_key,
                     descriptor
                         .timestamp_micros
@@ -620,16 +644,52 @@ struct MessageSink<'a> {
     ignored_system_messages: &'a mut u64,
     panic_requested: &'a AtomicBool,
     pending_events: &'a mut Vec<PendingMidiEvent>,
+    control_generation: &'a mut u64,
+    control_events: &'a mut VecDeque<MidiControlEvent>,
 }
 
 fn process_messages(
     sink: &mut MessageSink<'_>,
     port_id: &str,
+    port_name: &str,
     port_key: u64,
     timestamp_micros: u64,
     messages: Vec<MidiInputMessage>,
 ) {
     for message in messages {
+        if sink.preferences.capture_all_controls
+            || sink.preferences.control_port_ids.contains(port_id)
+        {
+            let kind = match &message {
+                MidiInputMessage::NoteOn(_, number, value) if *value > 0 => {
+                    Some(MidiControlEventKind::Note {
+                        number: *number,
+                        value: *value,
+                    })
+                }
+                MidiInputMessage::ControlChange(_, number, value) => {
+                    Some(MidiControlEventKind::ControlChange {
+                        number: *number,
+                        value: *value,
+                    })
+                }
+                _ => None,
+            };
+            if let Some(kind) = kind {
+                *sink.control_generation = (*sink.control_generation).saturating_add(1);
+                if sink.control_events.len() == CONTROL_EVENT_CAPACITY {
+                    sink.control_events.pop_front();
+                }
+                sink.control_events.push_back(MidiControlEvent {
+                    generation: *sink.control_generation,
+                    timestamp_microseconds: timestamp_micros,
+                    port_id: port_id.to_owned(),
+                    port_name: port_name.to_owned(),
+                    channel: message.channel().unwrap_or(0),
+                    kind,
+                });
+            }
+        }
         let is_clock_source =
             sink.preferences.enabled && sink.preferences.source_port_id.as_deref() == Some(port_id);
         if is_clock_source {
@@ -797,6 +857,7 @@ fn snapshot(state: &ActorState) -> MidiInputSnapshot {
             ignored_system_messages: state.ignored_system_messages,
             error: state.error.clone(),
         },
+        control_events: state.control_events.iter().cloned().collect(),
         captured_at: SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
@@ -820,6 +881,7 @@ fn unavailable_snapshot(message: &str) -> MidiInputSnapshot {
             ignored_system_messages: 0,
             error: Some(message.to_owned()),
         },
+        control_events: Vec::new(),
         captured_at: 0,
     }
 }
@@ -836,8 +898,58 @@ mod tests {
                 source_port_id: None,
                 source_port_name: None,
                 input_offsets_ms: BTreeMap::from([("port".to_owned(), 500.1)]),
+                control_port_ids: BTreeSet::new(),
+                capture_all_controls: false,
             })
             .is_err()
         );
+    }
+
+    #[test]
+    fn captures_note_and_control_change_events_for_shortcut_ports() {
+        let preferences = MidiSyncPreferences {
+            enabled: false,
+            source_port_id: None,
+            source_port_name: None,
+            input_offsets_ms: BTreeMap::new(),
+            control_port_ids: BTreeSet::from(["controller".to_owned()]),
+            capture_all_controls: false,
+        };
+        let mut clock = MidiClockSlave::default();
+        let mut ignored = 0;
+        let panic = AtomicBool::new(false);
+        let mut pending = Vec::new();
+        let mut generation = 0;
+        let mut controls = VecDeque::new();
+        process_messages(
+            &mut MessageSink {
+                preferences: &preferences,
+                clock: &mut clock,
+                ignored_system_messages: &mut ignored,
+                panic_requested: &panic,
+                pending_events: &mut pending,
+                control_generation: &mut generation,
+                control_events: &mut controls,
+            },
+            "controller",
+            "Studio Controller",
+            stable_port_key("controller"),
+            123,
+            vec![
+                MidiInputMessage::NoteOn(2, 36, 100),
+                MidiInputMessage::ControlChange(2, 64, 127),
+            ],
+        );
+
+        assert_eq!(generation, 2);
+        assert_eq!(controls.len(), 2);
+        assert!(matches!(
+            controls.front().map(|event| &event.kind),
+            Some(MidiControlEventKind::Note {
+                number: 36,
+                value: 100
+            })
+        ));
+        assert_eq!(controls.back().map(|event| event.channel), Some(2));
     }
 }

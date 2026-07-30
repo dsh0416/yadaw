@@ -61,6 +61,7 @@ import type {
   ApplicationSettingsPatch,
   AudioHostRuntimePreferences
 } from "./settings"
+import type { ShortcutPreferences } from "./shortcuts"
 
 export const IPC_CHANNELS = {
   engineInfo: "engine:info",
@@ -101,6 +102,7 @@ export const IPC_CHANNELS = {
   settingsUpdate: "settings:update",
   settingsSetSoftwareMonitoring: "settings:set-software-monitoring",
   settingsConfigureAudioHostRuntime: "settings:configure-audio-host-runtime",
+  settingsConfigureShortcuts: "settings:configure-shortcuts",
   settingsChooseSwap: "settings:choose-swap",
   settingsOpenSwap: "settings:open-swap",
   recordingStart: "recording:start",
@@ -123,6 +125,7 @@ export const IPC_CHANNELS = {
   midiInputSnapshot: "midi-input:snapshot",
   midiInputEvent: "midi-input:event",
   midiInputConfigure: "midi-input:configure",
+  midiControlLearning: "midi-control:learning",
   operationCancel: "operation:cancel",
   operationEvent: "operation:event"
 } as const
@@ -169,6 +172,7 @@ export interface YadawDesktopApi {
   updateApplicationSettings(patch: ApplicationSettingsPatch): Promise<ApplicationSettings>
   setSoftwareMonitoringEnabled(enabled: boolean): Promise<ApplicationSettings>
   configureAudioHostRuntime(preferences: AudioHostRuntimePreferences): Promise<ApplicationSettings>
+  configureShortcuts(preferences: ShortcutPreferences): Promise<ApplicationSettings>
   chooseSwapDirectory(): Promise<ApplicationSettings>
   openSwapDirectory(): Promise<void>
   startRecording(): Promise<RecordingSession>
@@ -191,6 +195,7 @@ export interface YadawDesktopApi {
   midiInputSnapshot(): Promise<MidiInputSnapshot>
   subscribeMidiInput(listener: (snapshot: MidiInputSnapshot) => void): () => void
   configureMidiInput(preferences: MidiSyncPreferences): Promise<MidiInputSnapshot>
+  setMidiControlLearning(enabled: boolean): Promise<void>
   subscribeOperations(listener: (event: OperationEvent) => void): () => void
   cancelOperation(id: string): Promise<void>
 }

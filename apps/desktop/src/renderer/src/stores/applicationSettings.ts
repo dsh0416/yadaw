@@ -9,6 +9,7 @@ import type {
   MeterPeakHold,
   MeterReturnRate,
   MidiCenterCStandard,
+  ShortcutPreferences,
   ThemePreference
 } from "@yadaw/contracts"
 import { i18n } from "../i18n"
@@ -168,6 +169,22 @@ export const useApplicationSettingsStore = defineStore("application-settings", (
     }
   }
 
+  async function configureShortcuts(shortcuts: ShortcutPreferences): Promise<void> {
+    if (!settings.value) await load()
+    if (!settings.value) return
+    const previous = settings.value
+    settings.value = { ...previous, shortcuts: structuredClone(shortcuts) }
+    error.value = ""
+    try {
+      settings.value = await window.yadaw.configureShortcuts(shortcuts)
+    } catch (reason) {
+      settings.value = previous
+      error.value =
+        reason instanceof Error ? reason.message : t("errors.unableToSaveShortcutSettings")
+      throw reason
+    }
+  }
+
   async function refreshAudioHostRuntimeDiagnostics(): Promise<void> {
     const snapshot = await window.yadaw.systemPerformanceSnapshot()
     resolvedAudioHostRuntime.value = snapshot.audioIpc?.runtime.resolved ?? null
@@ -190,6 +207,7 @@ export const useApplicationSettingsStore = defineStore("application-settings", (
     chooseSwapDirectory,
     openSwapDirectory,
     configureAudioHostRuntime,
+    configureShortcuts,
     setSoftwareMonitoringEnabled,
     refreshAudioHostRuntimeDiagnostics
   }
