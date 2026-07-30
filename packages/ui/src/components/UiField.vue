@@ -8,12 +8,14 @@ const props = withDefaults(
     description?: string
     error?: string
     required?: boolean
+    layout?: "stacked" | "inline"
   }>(),
   {
     id: undefined,
     description: undefined,
     error: undefined,
-    required: false
+    required: false,
+    layout: "stacked"
   }
 )
 
@@ -32,7 +34,11 @@ const errorId = props.error ? `${controlId}-error` : undefined
 </script>
 
 <template>
-  <div class="ui-field" :data-invalid="Boolean(props.error) || undefined">
+  <div
+    class="ui-field"
+    :class="`ui-field--${props.layout}`"
+    :data-invalid="Boolean(props.error) || undefined"
+  >
     <label class="ui-field__label" :for="controlId">
       {{ props.label }}
       <span v-if="props.required" class="ui-field__required" aria-hidden="true">*</span>
@@ -41,7 +47,9 @@ const errorId = props.error ? `${controlId}-error` : undefined
     <p v-if="props.description" :id="descriptionId" class="ui-field__description">
       {{ props.description }}
     </p>
-    <slot :control-id="controlId" :description-id="descriptionId" :error-id="errorId" />
+    <div class="ui-field__control">
+      <slot :control-id="controlId" :description-id="descriptionId" :error-id="errorId" />
+    </div>
     <p v-if="props.error" :id="errorId" class="ui-field__error" role="alert">
       {{ props.error }}
     </p>
@@ -61,6 +69,36 @@ const errorId = props.error ? `${controlId}-error` : undefined
   font-weight: var(--ui-type-weight-semibold);
 }
 
+.ui-field__control {
+  min-width: 0;
+}
+
+.ui-field--inline {
+  grid-template-areas:
+    "label control"
+    "description description"
+    "error error";
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--ui-space-3);
+}
+
+.ui-field--inline .ui-field__label {
+  grid-area: label;
+  color: var(--ui-color-text-muted);
+  font: var(--ui-type-size-control) var(--ui-type-family-data);
+  white-space: nowrap;
+}
+
+.ui-field--inline .ui-field__description,
+.ui-field--inline .ui-field__error {
+  grid-column: 1 / -1;
+}
+
+.ui-field--inline .ui-field__control {
+  grid-area: control;
+}
+
 .ui-field__required,
 .ui-field__error {
   color: var(--ui-color-danger);
@@ -75,5 +113,13 @@ const errorId = props.error ? `${controlId}-error` : undefined
 
 .ui-field__description {
   color: var(--ui-color-text-muted);
+}
+
+.ui-field--inline .ui-field__description {
+  grid-area: description;
+}
+
+.ui-field--inline .ui-field__error {
+  grid-area: error;
 }
 </style>

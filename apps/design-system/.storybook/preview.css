@@ -38,3 +38,29 @@ body {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+
+.workspace-story-field {
+  display: grid;
+  grid-template-columns: auto 7rem;
+  align-items: center;
+  gap: var(--ui-space-2);
+  color: var(--ui-color-text-muted);
+  font: var(--ui-type-size-control) var(--ui-type-family-data);
+}
+
+.workspace-story-clips {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--ui-space-1);
+}
+
+.workspace-story-inspector {
+  display: grid;
+  width: 12rem;
+  gap: var(--ui-space-2);
+  padding: var(--ui-space-3);
+  border: 1px solid var(--ui-color-border);
+  color: var(--ui-color-text);
+  background: var(--ui-color-surface);
+}

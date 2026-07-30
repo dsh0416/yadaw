@@ -32,3 +32,19 @@ test("mixer keeps two-dimensional overflow inside its workspace", async ({ page 
     .poll(() => localScroller.evaluate((element) => element.scrollWidth > element.clientWidth))
     .toBe(true)
 })
+
+test("workspace toolbar keeps overflow local at 320 CSS px and 200% text", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 800 })
+  await page.goto(
+    "/iframe.html?id=components-workspace-command-surfaces--editor-toolbar&viewMode=story&globals=theme:dark;motion:disabled"
+  )
+
+  await page.addStyleTag({ content: "html { font-size: 200% !important; }" })
+  const toolbar = page.getByRole("toolbar", { name: "Piano roll commands" })
+  await expect(toolbar).toBeVisible()
+  await expect(page.getByRole("button", { name: "Close editor" })).toBeVisible()
+  const viewportOverflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+  )
+  expect(viewportOverflow).toBeLessThanOrEqual(1)
+})

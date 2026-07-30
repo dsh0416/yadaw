@@ -239,7 +239,7 @@ const {
   top: 0;
   bottom: 0;
   width: 1px;
-  background: var(--ui-signal-recording);
+  background: var(--ui-signal-record);
   pointer-events: none;
 }
 </style>

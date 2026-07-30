@@ -78,7 +78,7 @@ function mockGridBounds(element: HTMLElement): void {
 }
 
 describe("PianoRollDock", () => {
-  it("renders editable notes and accepts the one-tick minimum duration", async () => {
+  it("commits inspector stepping, blur, and Enter updates to the selected note", async () => {
     const pinia = createPinia()
     setActivePinia(pinia)
     const mixer = useMixerStore()
@@ -103,14 +103,49 @@ describe("PianoRollDock", () => {
     await wrapper.get("button.note").trigger("click")
     expect(pianoRoll.selectedNoteKeys.has("clip-1:note-1")).toBe(true)
 
-    const durationInput = wrapper.findAll<HTMLInputElement>(".inspector input")[2]!
+    const inspectorInputs = wrapper.findAll<HTMLInputElement>(".inspector input")
+    const pitchInput = inspectorInputs[0]!
+    await pitchInput.trigger("keydown", { key: "ArrowUp" })
+    await flushPromises()
+
+    expect(execute).toHaveBeenCalledWith({
+      type: "update-midi-notes",
+      clipId: "clip-1",
+      updates: [
+        {
+          noteId: "note-1",
+          patch: { key: 61, startTick: 0, durationTicks: 240 }
+        }
+      ]
+    } satisfies ProjectCommand)
+
+    execute.mockClear()
+    const durationInput = inspectorInputs[2]!
     await durationInput.setValue("1")
+    await durationInput.trigger("blur")
     await flushPromises()
 
     expect(execute).toHaveBeenCalledWith({
       type: "update-midi-notes",
       clipId: "clip-1",
       updates: [{ noteId: "note-1", patch: { startTick: 0, durationTicks: 1 } }]
+    } satisfies ProjectCommand)
+
+    execute.mockClear()
+    const velocityInput = inspectorInputs[4]!
+    await velocityInput.setValue("96")
+    await velocityInput.trigger("keydown", { key: "Enter" })
+    await flushPromises()
+
+    expect(execute).toHaveBeenCalledWith({
+      type: "update-midi-notes",
+      clipId: "clip-1",
+      updates: [
+        {
+          noteId: "note-1",
+          patch: { velocity: 96, startTick: 0, durationTicks: 240 }
+        }
+      ]
     } satisfies ProjectCommand)
 
     wrapper.unmount()

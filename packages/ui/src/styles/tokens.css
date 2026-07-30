@@ -42,6 +42,20 @@
   --ui-color-action-pressed: var(--ui-palette-blue-500);
   --ui-color-action-text: var(--ui-palette-neutral-950);
   --ui-color-focus: var(--ui-palette-blue-300);
+  --ui-color-control: var(--ui-palette-neutral-800);
+  --ui-color-control-hover: var(--ui-palette-neutral-700);
+  --ui-color-control-pressed: var(--ui-palette-neutral-900);
+  --ui-color-selection: color-mix(in srgb, var(--ui-color-action) 14%, var(--ui-color-surface));
+  --ui-color-selection-hover: color-mix(
+    in srgb,
+    var(--ui-color-action) 20%,
+    var(--ui-color-surface)
+  );
+  --ui-color-selection-border: color-mix(
+    in srgb,
+    var(--ui-color-action) 72%,
+    var(--ui-color-border)
+  );
   --ui-color-info: var(--ui-palette-blue-400);
   --ui-color-success: var(--ui-palette-green-400);
   --ui-color-warning: var(--ui-palette-amber-400);
@@ -73,10 +87,13 @@
   --ui-radius-lg: 0.75rem;
   --ui-radius-pill: 999px;
 
+  --ui-control-compact: 1.5rem;
   --ui-control-sm: 2rem;
   --ui-control-md: 2.5rem;
   --ui-control-lg: 3rem;
   --ui-target-min: 1.5rem;
+  --ui-signal-rail-width: 0.1875rem;
+  --ui-opacity-disabled: 0.55;
 
   /* Typography foundations */
   --ui-type-family-interface:
@@ -254,6 +271,20 @@
   --ui-color-action-pressed: #0b4c86;
   --ui-color-action-text: var(--ui-palette-neutral-0);
   --ui-color-focus: var(--ui-palette-blue-600);
+  --ui-color-control: var(--ui-palette-neutral-0);
+  --ui-color-control-hover: var(--ui-palette-neutral-100);
+  --ui-color-control-pressed: var(--ui-palette-neutral-200);
+  --ui-color-selection: color-mix(in srgb, var(--ui-color-action) 12%, var(--ui-color-surface));
+  --ui-color-selection-hover: color-mix(
+    in srgb,
+    var(--ui-color-action) 18%,
+    var(--ui-color-surface)
+  );
+  --ui-color-selection-border: color-mix(
+    in srgb,
+    var(--ui-color-action) 72%,
+    var(--ui-color-border)
+  );
   --ui-color-info: var(--ui-palette-blue-600);
   --ui-color-success: #16764c;
   --ui-color-warning: #8a5700;
