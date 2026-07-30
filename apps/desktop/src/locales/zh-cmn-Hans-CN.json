@@ -107,6 +107,7 @@
     "unableToLoadApplicationSettings": "无法加载应用程序设置。",
     "unableToSaveDisplaySettings": "无法保存显示设置。",
     "unableToSaveMixerDisplaySettings": "无法保存混音台显示设置。",
+    "unableToSaveMidiSettings": "无法保存 MIDI 设置。",
     "unableToRestartAudioHelper": "无法重启音频助手。",
     "unableToChangeSoftwareMonitoring": "无法更改软件监听。",
     "nativeAudioEngineStopped": "原生音频引擎意外停止。",
@@ -227,6 +228,25 @@
     "untitledProject": "未命名工程"
   },
   "settings": {
+    "midi": {
+      "category": "MIDI",
+      "page": "常规",
+      "title": "常规",
+      "description": "选择钢琴卷帘与编辑器中 MIDI 音高的标注方式。",
+      "centerC": {
+        "title": "中央 C",
+        "description": "选择中间 C（MIDI 音符 60）使用的厂商八度标准。",
+        "ariaLabel": "中央 C 标准",
+        "yamaha": {
+          "label": "Yamaha（C3）",
+          "description": "中间 C 标注为 C3，与 Yamaha 键盘及许多日系产品一致。"
+        },
+        "roland": {
+          "label": "Roland（C4）",
+          "description": "中间 C 标注为 C4，与 Roland 设备及科学音高记法一致。"
+        }
+      }
+    },
     "display": {
       "category": "显示",
       "page": "常规",
@@ -277,7 +297,7 @@
         },
         "midi": {
           "label": "MIDI",
-          "description": "控制器"
+          "description": "记谱与控制器"
         },
         "plugins": {
           "label": "插件",
@@ -304,6 +324,10 @@
         "recording": {
           "label": "录音",
           "description": "交换目录、格式与恢复"
+        },
+        "midiGeneral": {
+          "label": "常规",
+          "description": "中央 C 与音名标注"
         },
         "displayGeneral": {
           "label": "常规",

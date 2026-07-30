@@ -13,10 +13,12 @@ import type { SettingsCategory } from "../settings/settings"
 import AudioDeviceSettings from "./AudioDeviceSettings.vue"
 import AudioRuntimeSettings from "./AudioRuntimeSettings.vue"
 import DisplaySettings from "./DisplaySettings.vue"
+import MidiSettings from "./MidiSettings.vue"
 import MixerDisplaySettings from "./MixerDisplaySettings.vue"
 import RecordingSettings from "./RecordingSettings.vue"
 
-type SystemSettingsPageId = "engine" | "devices" | "recording" | "display-general" | "display-mixer"
+type SystemSettingsPageId =
+  "engine" | "devices" | "recording" | "midi-general" | "display-general" | "display-mixer"
 
 const { t } = useI18n()
 
@@ -78,8 +80,14 @@ const categories = computed<readonly SettingsCategory[]>(() => [
     label: t("settings.system.categories.midi.label"),
     description: t("settings.system.categories.midi.description"),
     icon: Music2,
-    badge: t("common.soon"),
-    pages: []
+    pages: [
+      {
+        id: "midi-general",
+        label: t("settings.system.pages.midiGeneral.label"),
+        description: t("settings.system.pages.midiGeneral.description"),
+        icon: Music2
+      }
+    ]
   },
   {
     id: "plugins",
@@ -193,7 +201,8 @@ function applyAudio(): void {
       @apply="emit('configureRuntime', $event)"
     />
     <RecordingSettings v-else-if="activePage === 'recording'" />
+    <MidiSettings v-else-if="activePage === 'midi-general'" />
     <DisplaySettings v-else-if="activePage === 'display-general'" />
-    <MixerDisplaySettings v-else />
+    <MixerDisplaySettings v-else-if="activePage === 'display-mixer'" />
   </SettingsContainer>
 </template>

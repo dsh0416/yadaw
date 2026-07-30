@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import type { MidiClipState } from "@yadaw/contracts"
 import {
   MIN_NOTE_TICKS,
+  midiNoteName,
   noteGlobalStart,
   planCreatedNotes,
   planExistingNoteEdits,
@@ -114,5 +115,19 @@ describe("piano roll timing", () => {
 
   it("does not quantize when snapping is off", () => {
     expect(quantizeNoteStarts([{ globalStartTick: 1_060.4 }], "off")).toEqual([])
+  })
+})
+
+describe("midi note naming", () => {
+  it("labels middle C as C4 under the Roland standard by default", () => {
+    expect(midiNoteName(60)).toBe("C4")
+    expect(midiNoteName(60, "roland-c4")).toBe("C4")
+    expect(midiNoteName(72, "roland-c4")).toBe("C5")
+  })
+
+  it("labels middle C as C3 under the Yamaha standard", () => {
+    expect(midiNoteName(60, "yamaha-c3")).toBe("C3")
+    expect(midiNoteName(72, "yamaha-c3")).toBe("C4")
+    expect(midiNoteName(61, "yamaha-c3")).toBe("C♯3")
   })
 })

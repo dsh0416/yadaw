@@ -3,7 +3,6 @@ import { shallowRef, type CSSProperties } from "vue"
 import { useI18n } from "vue-i18n"
 import { useEventListener } from "@vueuse/core"
 import type { ProjectCommand } from "@yadaw/contracts"
-import { midiNoteName } from "../../utils/pianoRoll"
 import { usePianoRollEditor } from "./usePianoRollEditor"
 import type { NoteGestureItem } from "./usePianoRollGestures"
 
@@ -15,6 +14,7 @@ const {
   pixelsPerTick,
   gridWidth,
   displayedNoteValues,
+  formatMidiNoteName,
   trackColor,
   batch
 } = usePianoRollEditor()
@@ -156,7 +156,7 @@ function cancelDrag(): void {
 function barAriaLabel(item: NoteGestureItem): string {
   return t("pianoRoll.velocityLane.barLabel", {
     velocity: displayedVelocity(item),
-    note: midiNoteName(item.note.key),
+    note: formatMidiNoteName(item.note.key),
     clip: item.clip.name
   })
 }

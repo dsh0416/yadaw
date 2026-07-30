@@ -1,9 +1,9 @@
 import { flushPromises, mount } from "@vue/test-utils"
 import { createPinia } from "pinia"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import DisplaySettings from "./DisplaySettings.vue"
+import MidiSettings from "./MidiSettings.vue"
 
-describe("DisplaySettings", () => {
+describe("MidiSettings", () => {
   beforeEach(() => {
     window.yadaw.getApplicationSettings = vi.fn().mockResolvedValue({
       swapDirectory: "C:/swap",
@@ -28,39 +28,29 @@ describe("DisplaySettings", () => {
     }))
   })
 
-  it("persists a theme selected by the user", async () => {
-    const wrapper = mount(DisplaySettings, {
+  it("persists the Yamaha center C standard selected by the user", async () => {
+    const wrapper = mount(MidiSettings, {
       global: { plugins: [createPinia()] }
     })
     await flushPromises()
 
-    const lightOption = wrapper
+    const yamahaOption = wrapper
       .findAll('[role="radio"]')
-      .find((option) => option.text().includes("Light"))
-    expect(lightOption).toBeDefined()
-    await lightOption!.trigger("click")
-    await flushPromises()
+      .find((option) => option.text().includes("Yamaha (C3)"))
+    expect(yamahaOption).toBeDefined()
+    expect(
+      wrapper
+        .findAll('[role="radio"]')
+        .find((option) => option.text().includes("Roland (C4)"))
+        ?.attributes("aria-checked")
+    ).toBe("true")
 
-    expect(window.yadaw.updateApplicationSettings).toHaveBeenCalledWith({ theme: "light" })
-    expect(lightOption!.attributes("aria-checked")).toBe("true")
-  })
-
-  it("persists a locale selected by the user", async () => {
-    const wrapper = mount(DisplaySettings, {
-      global: { plugins: [createPinia()] }
-    })
-    await flushPromises()
-
-    const chineseOption = wrapper
-      .findAll('[role="radio"]')
-      .find((option) => option.text().includes("简体中文"))
-    expect(chineseOption).toBeDefined()
-    await chineseOption!.trigger("click")
+    await yamahaOption!.trigger("click")
     await flushPromises()
 
     expect(window.yadaw.updateApplicationSettings).toHaveBeenCalledWith({
-      locale: "zh-cmn-Hans-CN"
+      midiCenterCStandard: "yamaha-c3"
     })
-    expect(chineseOption!.attributes("aria-checked")).toBe("true")
+    expect(yamahaOption!.attributes("aria-checked")).toBe("true")
   })
 })

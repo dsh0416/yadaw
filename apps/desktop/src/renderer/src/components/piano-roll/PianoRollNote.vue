@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { MidiClipState, MidiNoteState } from "@yadaw/contracts"
-import { midiNoteName } from "../../utils/pianoRoll"
 import { usePianoRollEditor } from "./usePianoRollEditor"
 
 const props = defineProps<{ clip: MidiClipState; note: MidiNoteState }>()
@@ -12,6 +11,7 @@ const {
   noteStyle,
   noteAriaLabel,
   displayedNoteValues,
+  formatMidiNoteName,
   beginNoteGesture,
   updateNoteGesture,
   finishNoteGesture,
@@ -50,7 +50,7 @@ const {
       @pointercancel.stop="cancelNoteGesture"
     />
     <span class="note-label">
-      {{ midiNoteName(displayedNoteValues(props.clip, props.note).key) }}
+      {{ formatMidiNoteName(displayedNoteValues(props.clip, props.note).key) }}
     </span>
     <span
       class="resize-handle right"

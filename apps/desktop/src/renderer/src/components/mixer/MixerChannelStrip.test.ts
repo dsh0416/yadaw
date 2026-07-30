@@ -223,6 +223,7 @@ describe("MixerChannelStrip", () => {
       locale: "en-US",
       meterPeakHold: "800ms",
       meterReturnRate: "iec-type-i",
+      midiCenterCStandard: "roland-c4",
       softwareMonitoringEnabled: true,
       audioHostRuntime: {
         workerThreads: "auto",

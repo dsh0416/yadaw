@@ -2,6 +2,7 @@ import type { AppLocale, RecentProject, RecordingBitDepth, ThemePreference } fro
 
 export type MeterPeakHold = "800ms" | "2s" | "4s" | "infinite"
 export type MeterReturnRate = "iec-type-i"
+export type MidiCenterCStandard = "yamaha-c3" | "roland-c4"
 export type AudioHostThreadSetting = "auto" | number
 export type PluginEditorMode = "native" | "parameters"
 
@@ -29,6 +30,7 @@ export interface ApplicationSettings {
   locale: AppLocale
   meterPeakHold: MeterPeakHold
   meterReturnRate: MeterReturnRate
+  midiCenterCStandard: MidiCenterCStandard
   softwareMonitoringEnabled: boolean
   audioHostRuntime: AudioHostRuntimePreferences
   pluginEditors: Record<string, PluginEditorPreference>
@@ -38,6 +40,12 @@ export interface ApplicationSettings {
 export type ApplicationSettingsPatch = Partial<
   Pick<
     ApplicationSettings,
-    "swapDirectory" | "recordingBitDepth" | "theme" | "locale" | "meterPeakHold" | "meterReturnRate"
+    | "swapDirectory"
+    | "recordingBitDepth"
+    | "theme"
+    | "locale"
+    | "meterPeakHold"
+    | "meterReturnRate"
+    | "midiCenterCStandard"
   >
 >

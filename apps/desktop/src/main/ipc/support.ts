@@ -215,6 +215,13 @@ export function validateSettingsPatch(value: unknown): ApplicationSettingsPatch 
   if (patch.meterReturnRate !== undefined && patch.meterReturnRate !== "iec-type-i") {
     throw new TypeError("Unsupported meter return rate")
   }
+  if (
+    patch.midiCenterCStandard !== undefined &&
+    patch.midiCenterCStandard !== "yamaha-c3" &&
+    patch.midiCenterCStandard !== "roland-c4"
+  ) {
+    throw new TypeError("Unsupported MIDI center C standard")
+  }
   return patch
 }
 
