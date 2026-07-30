@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { nextTick, onMounted, provide, shallowRef } from "vue"
+import { useI18n } from "vue-i18n"
 import { createPianoRollEditor, pianoRollEditorKey } from "./usePianoRollEditor"
 import PianoRollToolbar from "./PianoRollToolbar.vue"
 import PianoRollInspector from "./PianoRollInspector.vue"
@@ -10,6 +11,7 @@ const emit = defineEmits<{ close: [] }>()
 const editor = createPianoRollEditor()
 provide(pianoRollEditorKey, editor)
 const { pianoRollStore } = editor
+const { t } = useI18n()
 
 const viewport = shallowRef<HTMLElement | null>(null)
 
@@ -72,7 +74,7 @@ function close(): void {
 <template>
   <section
     class="piano-roll"
-    aria-label="Piano roll editor"
+    :aria-label="t('pianoRoll.dock.ariaLabel')"
     @focusin="pianoRollStore.editorFocused = true"
     @focusout="pianoRollStore.editorFocused = false"
     @keydown="editor.handleKeydown"
@@ -84,7 +86,7 @@ function close(): void {
         ref="viewport"
         class="viewport"
         tabindex="0"
-        aria-label="Piano roll note grid"
+        :aria-label="t('pianoRoll.dock.noteGrid')"
         @wheel="handleWheel"
       >
         <PianoRollGrid />

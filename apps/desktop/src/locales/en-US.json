@@ -1,4 +1,41 @@
 {
+  "common": {
+    "soon": "Soon",
+    "done": "Done",
+    "unknown": "unknown",
+    "loading": "Loading…",
+    "default": "Default",
+    "auto": "Auto",
+    "manual": "Manual",
+    "browse": "Browse…",
+    "open": "Open",
+    "format": "Format",
+    "device": "Device",
+    "samples": "Samples",
+    "duration": "Duration",
+    "response": "Response",
+    "notAvailable": "—",
+    "frames": "{count} frames",
+    "milliseconds": "{value} ms",
+    "resolved": "Resolved",
+    "saving": "Saving…",
+    "saveChanges": "Save changes",
+    "changesSaved": "Changes saved",
+    "backToStudio": "Back to studio"
+  },
+  "chrome": {
+    "unsavedChanges": "Unsaved changes",
+    "noProjectOpen": "No project open",
+    "windowControls": "Window controls",
+    "minimize": "Minimize",
+    "maximizeOrRestore": "Maximize or restore",
+    "close": "Close",
+    "applicationMenu": "Application menu",
+    "settings": "Settings",
+    "buildLabel": "Yadaw / build {version}",
+    "categoriesAria": "{title} categories",
+    "pagesAria": "{category} settings pages"
+  },
   "app": {
     "name": "YADAW",
     "about": "About YADAW"
@@ -44,13 +81,114 @@
     "openProject": {
       "title": "Open YADAW project",
       "filter": "YADAW project"
+    },
+    "projectRecovery": {
+      "eyebrow": "Project recovery",
+      "title": "Recover unsaved project?",
+      "description": "A newer working copy contains changes that were not saved to the .yadaw archive.",
+      "detail": "Recover it, open the last saved archive, or cancel without changing either copy.",
+      "recover": "Recover working copy",
+      "openSaved": "Open last saved"
+    },
+    "saveBeforeClose": {
+      "eyebrow": "Unsaved project",
+      "title": "Save project before closing?",
+      "description": "Save changes to {name}?",
+      "detail": "Closing without saving keeps the last saved archive unchanged.",
+      "save": "Save",
+      "discard": "Don't save"
+    }
+  },
+  "errors": {
+    "unableToCreateProject": "Unable to create project.",
+    "unableToOpenProject": "Unable to open project.",
+    "unableToSaveProject": "Unable to save project.",
+    "unableToCloseProject": "Unable to close project.",
+    "unableToLoadApplicationSettings": "Unable to load application settings.",
+    "unableToSaveDisplaySettings": "Unable to save display settings.",
+    "unableToSaveMixerDisplaySettings": "Unable to save mixer display settings.",
+    "unableToRestartAudioHelper": "Unable to restart the audio helper.",
+    "unableToChangeSoftwareMonitoring": "Unable to change software monitoring.",
+    "nativeAudioEngineStopped": "The native audio engine stopped unexpectedly.",
+    "unableToReadAudioEngineState": "Unable to read audio engine state.",
+    "unableToStartAudioEngine": "Unable to start the native audio engine.",
+    "unableToStopAudioEngine": "Unable to stop the native audio engine."
+  },
+  "warnings": {
+    "audio": {
+      "nativeError": {
+        "title": "Native audio error"
+      },
+      "engineStopped": {
+        "title": "Audio engine stopped unexpectedly",
+        "message": "Open system settings to select a working device configuration."
+      },
+      "bufferFallback": {
+        "title": "I/O buffer fallback active",
+        "message": "The requested {requested}-frame buffer was unavailable; the engine is using {actual} frames.",
+        "requestedUnknown": "unknown",
+        "actualDeviceSelected": "a device-selected size"
+      },
+      "deviceSampleRateMismatch": {
+        "title": "Device sample-rate conversion active",
+        "message": "Input is {inputRate} while output is {outputRate}. Adaptive resampling is keeping the devices synchronized."
+      },
+      "independentDeviceClocks": {
+        "title": "Independent device clocks",
+        "message": "Input and output use separate hardware clocks, so adaptive drift correction is active."
+      },
+      "sessionSampleRateConversion": {
+        "title": "Session sample-rate conversion active",
+        "message": "The project clock is {sessionRate} while the output device is {outputRate}. Output is converted at the device boundary."
+      },
+      "asymmetricBuffers": {
+        "title": "Asymmetric I/O buffers",
+        "message": "Input uses {inputBuffer} frames and output uses {outputBuffer} frames, so their hardware latency differs."
+      },
+      "dropout": {
+        "title": "{count} real-time dropout",
+        "message": "The audio callback could not consume or produce data on time. Try a larger buffer or close CPU-heavy work."
+      },
+      "dropouts": {
+        "title": "{count} real-time dropouts",
+        "message": "The audio callback could not consume or produce data on time. Try a larger buffer or close CPU-heavy work."
+      },
+      "ringOverrunRisk": {
+        "title": "Ring buffer is nearly full",
+        "message": "Input is outrunning output and may begin dropping captured samples."
+      }
     }
   },
   "operation": {
     "openingProject": "Opening project",
     "savingProject": "Saving project",
     "finalizingRecording": "Finalizing recording",
-    "recoveringRecording": "Recovering recording"
+    "recoveringRecording": "Recovering recording",
+    "recordingDropoutsInput": "{count} input frames were dropped during capture.",
+    "recordingDropoutsCaptured": "{count} captured frames were dropped.",
+    "state": {
+      "completed": "Completed",
+      "failed": "Failed",
+      "cancelled": "Cancelled",
+      "inProgress": "In progress"
+    },
+    "phase": {
+      "closingRecording": "Closing recording",
+      "repairingHeader": "Repairing BWF header",
+      "hashing": "Hashing audio",
+      "resampling": "Resampling audio",
+      "quantizing": "Quantizing audio",
+      "writingLargeObject": "Writing project asset",
+      "committingDatabase": "Committing database",
+      "savingArchive": "Saving project archive",
+      "loadingProjectArchive": "Reading project archive",
+      "loadingProjectDatabase": "Loading project database",
+      "restoringProjectState": "Restoring project state",
+      "loadingMixer": "Loading mixer",
+      "loadingProjectAssets": "Loading project assets",
+      "preparingWaveforms": "Preparing waveforms",
+      "cleaningUp": "Cleaning swap files"
+    }
   },
   "startup": {
     "starting": "Starting YADAW",
@@ -112,7 +250,7 @@
         }
       },
       "languageTitle": "Language",
-      "languageDescription": "Menus, dialogs, and workspace chrome update immediately. Mixer and studio copy will follow in later releases.",
+      "languageDescription": "Menus, dialogs, mixer, studio, and settings copy update immediately across the app.",
       "languageAria": "Language",
       "locales": {
         "en-US": {
@@ -124,6 +262,1052 @@
           "description": "Chinese, Mandarin (Simplified, China)"
         }
       }
+    },
+    "system": {
+      "title": "System settings",
+      "scopeLabel": "Yadaw / System",
+      "categories": {
+        "system": {
+          "label": "System",
+          "description": "Runtime"
+        },
+        "audio": {
+          "label": "Audio",
+          "description": "Signal path"
+        },
+        "midi": {
+          "label": "MIDI",
+          "description": "Controllers"
+        },
+        "plugins": {
+          "label": "Plugins",
+          "description": "Discovery"
+        },
+        "display": {
+          "label": "Display",
+          "description": "Workspace"
+        },
+        "keyboard": {
+          "label": "Keyboard",
+          "description": "Shortcuts"
+        }
+      },
+      "pages": {
+        "engine": {
+          "label": "Engine",
+          "description": "Async workers and IPC egress"
+        },
+        "devices": {
+          "label": "Devices",
+          "description": "Host, hardware I/O and latency"
+        },
+        "recording": {
+          "label": "Recording",
+          "description": "Swap, format and recovery"
+        },
+        "displayGeneral": {
+          "label": "General",
+          "description": "Light, dark and system"
+        },
+        "displayMixer": {
+          "label": "Mixer",
+          "description": "Meter hold and return"
+        }
+      },
+      "actions": {
+        "startingEngine": "Starting engine…",
+        "applyAudio": "Apply audio"
+      }
+    },
+    "backends": {
+      "wasapi": {
+        "label": "WASAPI",
+        "platform": "Windows",
+        "description": "Windows shared and exclusive audio"
+      },
+      "asio": {
+        "label": "ASIO",
+        "platform": "Windows",
+        "description": "Low-latency professional audio drivers"
+      },
+      "coreaudio": {
+        "label": "CoreAudio",
+        "platform": "macOS",
+        "description": "Native macOS audio device layer"
+      },
+      "alsa": {
+        "label": "ALSA",
+        "platform": "Linux",
+        "description": "Native Linux audio device layer"
+      }
+    },
+    "audio": {
+      "devices": {
+        "category": "Audio",
+        "page": "Devices",
+        "title": "Devices",
+        "description": "Choose the host API, audio devices, and real-time I/O buffer."
+      },
+      "backend": {
+        "title": "Backend",
+        "description": "Select the host API used by the native audio engine.",
+        "ariaLabel": "Audio backend",
+        "scanning": "Scanning cpal hosts…",
+        "unavailable": "No CPAL audio backend is available.",
+        "hostUnavailable": "This CPAL host is not available in the current native build.",
+        "noHostReported": "CPAL did not report an available audio host."
+      },
+      "deviceSections": {
+        "output": {
+          "title": "Output device",
+          "description": "Select the CPAL device used for monitoring and playback.",
+          "placeholder": "Choose an output",
+          "emptyPlaceholder": "No CPAL output devices",
+          "ariaLabel": "Output device"
+        },
+        "input": {
+          "title": "Input device",
+          "description": "Select the CPAL device used for recording.",
+          "placeholder": "Choose an input",
+          "emptyPlaceholder": "No CPAL input devices",
+          "ariaLabel": "Input device"
+        },
+        "refresh": {
+          "scanning": "Scanning…",
+          "refresh": "Refresh devices"
+        }
+      },
+      "buffer": {
+        "title": "I/O buffer size",
+        "description": "Smaller buffers reduce latency but require more CPU headroom.",
+        "samplesLabel": "Samples",
+        "ariaLabel": "I/O buffer size",
+        "optionLabel": "{size} samples"
+      },
+      "latency": {
+        "title": "Latency",
+        "description": "Reported by the running Rust engine from CPAL timestamps and the live ring-buffer fill.",
+        "ariaLabel": "Runtime latency",
+        "output": {
+          "label": "Output latency",
+          "detail": "Output callback → DAC · {frames}"
+        },
+        "roundTrip": {
+          "label": "Round-trip latency",
+          "detail": "ADC → input → ring → graph → output → DAC"
+        },
+        "input": {
+          "label": "Input latency",
+          "detail": "ADC → input callback · {frames}"
+        },
+        "ringBuffer": {
+          "label": "Ring-buffer latency"
+        },
+        "loopbackSection": {
+          "title": "Physical loopback",
+          "description": "Measure actual hardware round-trip latency with a direct output-to-input cable."
+        }
+      },
+      "engine": {
+        "category": "System",
+        "page": "Engine",
+        "title": "Runtime scheduling",
+        "description": "Bound helper concurrency without changing the real-time callback. Changes restart only the audio helper, then restore devices, plug-ins, graph and transport.",
+        "resolvedAria": "Resolved audio helper threads",
+        "resolvedWorkers": "{count} workers",
+        "resolvedBlocking": "{count} blocking",
+        "resolvedEgress": "{count} egress",
+        "workerThreads": {
+          "title": "Async worker threads",
+          "description": "Runs protocol, engine, background I/O and telemetry tasks. VST3 stays thread-affine.",
+          "modeAria": "Worker thread mode",
+          "countAria": "Worker threads",
+          "range": "1–8"
+        },
+        "blockingThreads": {
+          "title": "Blocking thread ceiling",
+          "description": "Caps synchronous IPC sends, arena copies and other controlled blocking jobs.",
+          "modeAria": "Blocking thread mode",
+          "countAria": "Blocking threads",
+          "range": "2–16"
+        },
+        "egressConcurrency": {
+          "title": "IPC egress concurrency",
+          "description": "Allows independent responses to encode and send concurrently; runtime events stay ordered.",
+          "modeAria": "Egress concurrency mode",
+          "countAria": "Egress concurrency",
+          "range": "1–4"
+        },
+        "apply": {
+          "restarting": "Restarting helper…",
+          "label": "Apply runtime settings"
+        }
+      },
+      "recording": {
+        "category": "Audio",
+        "page": "Recording",
+        "title": "Recording",
+        "description": "Capture stays in machine-local swap until a successful project archive save.",
+        "swapDirectory": {
+          "title": "Swap directory",
+          "description": "Half-finished recordings and recoverable source BWF files live here."
+        },
+        "bitDepth": {
+          "title": "Final bit depth",
+          "description": "Swap is always float32. Integer output is dithered once after resampling.",
+          "ariaLabel": "Final recording bit depth",
+          "float32": "32-bit float",
+          "pcm24": "24-bit PCM",
+          "pcm16": "16-bit PCM"
+        },
+        "softwareMonitoring": {
+          "title": "Software monitoring",
+          "description": "Hear hardware inputs through the track's effects, fader, pan, sends, delay compensation, and output routing.",
+          "enable": "Enable software monitoring",
+          "warning": "Use headphones or mute direct monitoring on the audio interface. Open speakers can create loud feedback.",
+          "publishing": "Publishing the updated audio graph…",
+          "enabled": "Available on Audio tracks with hardware inputs.",
+          "disabled": "Off. Existing per-track monitoring choices are preserved."
+        },
+        "recovery": {
+          "title": "Recovery",
+          "description": "Files are never removed merely because the project was closed without saving.",
+          "pending": "recordings waiting in swap"
+        }
+      },
+      "mixerDisplay": {
+        "category": "Display",
+        "page": "Mixer",
+        "title": "Mixer meters",
+        "description": "Control how channel peaks remain visible and return after transients.",
+        "peakHold": {
+          "title": "Peak hold time",
+          "description": "Keeps the highest level visible long enough to identify short transients.",
+          "ariaLabel": "Mixer meter peak hold time",
+          "800ms": "800 ms",
+          "2s": "2 seconds",
+          "4s": "4 seconds",
+          "infinite": "Infinite"
+        },
+        "returnRate": {
+          "title": "Return time",
+          "description": "Sets how quickly the displayed level falls after the signal peak.",
+          "ariaLabel": "Mixer meter return time",
+          "iecTypeI": "IEC Type I (11.8 dB/s)"
+        }
+      },
+      "loopback": {
+        "intro": "This measures the real converter, driver, and cable path. Stop transport and connect one output directly to one input.",
+        "outputChannel": "Output channel",
+        "inputChannel": "Input channel",
+        "outputChannelAria": "Loopback output channel",
+        "inputChannelAria": "Loopback input channel",
+        "measuring": "Measuring",
+        "measuringAction": "Measuring…",
+        "measure": "Measure round trip",
+        "inputChannelOption": "Input {number}",
+        "outputChannelOption": "Output {number}",
+        "status": {
+          "startFailed": "Measurement could not start",
+          "preparing": "Checking the input",
+          "measuring": "Listening for the probe",
+          "complete": "Physical loopback measured",
+          "failed": "Measurement failed",
+          "ready": "Ready to measure"
+        },
+        "messages": {
+          "inputTooLoud": "The selected input was not quiet. Disconnect other sources, lower their gain, and try again.",
+          "signalNotDetected": "No matching probe returned within three seconds. Check the cable and selected channels.",
+          "complete": "Measured {measured} ms through output {outputChannel} and input {inputChannel}.{comparison}",
+          "comparison": " The callback estimate is {estimate} ms.",
+          "preparing": "Keep the selected input quiet while YADAW checks its noise floor.",
+          "measuring": "A short probe has been sent. Keep the loopback cable connected.",
+          "engineNotRunning": "Start the audio engine before running a physical loopback measurement.",
+          "ready": "Connect the selected hardware output directly to the selected hardware input. Lower monitor volume first—the test emits a short probe.",
+          "readFailed": "Unable to read the measurement result.",
+          "startFailed": "Unable to start the loopback measurement."
+        }
+      }
+    },
+    "project": {
+      "title": "Project settings",
+      "scopeLabel": "Yadaw / Project",
+      "categories": {
+        "project": {
+          "label": "Project",
+          "description": "Session definition"
+        },
+        "timing": {
+          "label": "Timing",
+          "description": "Tempo and clock"
+        },
+        "media": {
+          "label": "Media",
+          "description": "Import and render"
+        },
+        "musical": {
+          "label": "Musical",
+          "description": "Tuning and notation"
+        }
+      },
+      "pages": {
+        "general": {
+          "label": "General",
+          "description": "Identity and session format"
+        },
+        "tempoMap": {
+          "label": "Tempo map",
+          "description": "Tempo events and transitions"
+        },
+        "clock": {
+          "label": "Clock",
+          "description": "Synchronization and timecode"
+        },
+        "importDefaults": {
+          "label": "Import defaults",
+          "description": "New asset handling"
+        },
+        "renderDefaults": {
+          "label": "Render defaults",
+          "description": "Export format and destination"
+        },
+        "tuning": {
+          "label": "Tuning",
+          "description": "Pitch reference and temperament"
+        },
+        "notation": {
+          "label": "Notation",
+          "description": "Spelling and display defaults"
+        }
+      },
+      "general": {
+        "category": "Project",
+        "page": "General",
+        "title": "General",
+        "description": "Parameters stored inside this project and shared wherever it is opened.",
+        "identity": {
+          "eyebrow": "Identity",
+          "title": "Project identity",
+          "description": "The name shown throughout the workspace and recent project list.",
+          "nameLabel": "Project name"
+        },
+        "sessionFormat": {
+          "eyebrow": "Session format",
+          "title": "Meter and audio basis",
+          "description": "Tempo is edited on the tempo track; these values define new media and the initial musical meter.",
+          "sampleRate": "Sample rate",
+          "sampleRateHint": "Existing assets remain unchanged.",
+          "meterNumerator": "Meter numerator",
+          "meterDenominator": "Meter denominator"
+        },
+        "waveforms": {
+          "eyebrow": "Waveforms",
+          "title": "Channel display",
+          "description": "Choose how multichannel audio is represented inside timeline clips.",
+          "channelsLabel": "Waveform channels",
+          "separate": "Separate channels",
+          "aggregate": "Combined peak envelope",
+          "separateHint": "Separate mode creates one lane per channel and remains compatible with future surround formats."
+        }
+      }
+    }
+  },
+  "effectGraph": {
+    "title": "Effect chain graph",
+    "description": "The currently published native audio topology, including adapters and latency compensation.",
+    "toolbar": {
+      "nativeCompile": "NATIVE COMPILE",
+      "revision": "revision {revision} · build {build} · {sampleRate} Hz",
+      "waiting": "Waiting for a published graph",
+      "resetView": "Reset view"
+    },
+    "state": {
+      "loading": {
+        "title": "Reading the published audio graph…",
+        "description": "The graph appears after the helper swaps it at an audio block boundary."
+      },
+      "empty": {
+        "title": "No published graph",
+        "description": "Open a project and start the audio engine to publish its compiled effect chain."
+      },
+      "error": {
+        "title": "Audio helper unavailable",
+        "retry": "Retry"
+      }
+    },
+    "chart": {
+      "ariaLabel": "Compiled audio effect graph",
+      "legend": {
+        "activeEffect": "Active effect",
+        "audioRoute": "Audio route",
+        "pdcLatency": "PDC / latency",
+        "bypassedUnavailable": "Bypassed / unavailable"
+      },
+      "tooltip": {
+        "state": "State: {state}",
+        "latency": "Latency: {samples} samples",
+        "signal": "Signal: {width}"
+      }
+    }
+  },
+  "benchmark": {
+    "title": "Audio performance benchmark",
+    "description": "Measure DSP deadline stability and process-boundary transport.",
+    "intro": {
+      "summary": "Runs a short local test of DSP deadlines with bundled VST3 effects and process-boundary transfers. It does not use your audio devices or change the project.",
+      "beforeStart": "Before you start",
+      "guidance": "Pause playback and close CPU-heavy apps for a representative result.",
+      "runBenchmark": "Run benchmark"
+    },
+    "running": {
+      "kicker": "MEASURING",
+      "title": "Measuring engine paths…",
+      "description": "VST3 processing · Block deadlines · IPC round trips · Shared pages"
+    },
+    "error": {
+      "kicker": "BENCHMARK INTERRUPTED",
+      "title": "Performance test did not finish"
+    },
+    "actions": {
+      "close": "Close",
+      "runAgain": "Run again",
+      "tryAgain": "Try again"
+    },
+    "rating": {
+      "limited": {
+        "label": "Limited headroom",
+        "summary": "Use larger buffers and keep sessions compact for reliable playback."
+      },
+      "basic": {
+        "label": "Basic",
+        "summary": "Suitable for focused projects with moderate track and routing counts."
+      },
+      "good": {
+        "label": "Good",
+        "summary": "Comfortable real-time capacity for most production sessions."
+      },
+      "excellent": {
+        "label": "Excellent",
+        "summary": "Strong real-time headroom for dense sessions and low-latency work."
+      }
+    },
+    "summary": {
+      "kicker": "WORST P99 DEADLINE",
+      "headroom": "% headroom"
+    },
+    "scenarios": {
+      "kicker": "REAL-TIME DSP",
+      "title": "Block deadline stability",
+      "subtitle": "p99 timing is primary · real-time factor is diagnostic",
+      "p99Unit": "ms p99",
+      "tracks": "{count} tracks",
+      "buses": "{count} buses",
+      "sends": "{count} sends",
+      "plugins": "{count} VST3 effects",
+      "samples": "{count} samples",
+      "budget": "{ms} ms budget",
+      "late": "{misses} / {blocks} late",
+      "realtimeFactor": "{factor}× real time"
+    },
+    "ipc": {
+      "kicker": "PROCESS BOUNDARY",
+      "title": "IPC transport",
+      "suiteDuration": "{ms} ms suite",
+      "table": {
+        "path": "Path",
+        "payload": "Payload",
+        "p50": "P50",
+        "p99": "P99",
+        "rate": "Rate"
+      },
+      "payload": {
+        "sharedPage": "shared page"
+      },
+      "rate": {
+        "readsPerSecond": "{rate}k reads/s",
+        "throughput": "{rate} MiB/s"
+      },
+      "note": {
+        "workers": "{workers} workers / {blocking} blocking / {egress} egress",
+        "arenaOffers": "{count} arena offers",
+        "messagePackBody": "{size} MessagePack body",
+        "debugOnly": "Diagnostic only; formal bandwidth grading uses a release build."
+      }
+    },
+    "footer": {
+      "logicalCores": "{count} logical cores · {platform} · {architecture}",
+      "measured": "Measured {measuredAt} in {duration} s"
+    }
+  },
+  "performance": {
+    "trigger": {
+      "ariaLabel": "Open performance monitor. Status: {severity}",
+      "cpu": "CPU",
+      "mem": "MEM"
+    },
+    "header": {
+      "kicker": "Realtime headroom",
+      "title": "Performance monitor",
+      "refreshAria": "Refresh performance data"
+    },
+    "severity": {
+      "normal": "normal",
+      "warning": "warning",
+      "critical": "critical"
+    },
+    "latency": {
+      "criticalTitle": "Audio latency is critical",
+      "warningTitle": "Audio latency is elevated",
+      "message": "Current or rolling round-trip latency is {latency}."
+    },
+    "thresholdNote": "Warning / critical · CPU {cpuWarning}/{cpuCritical}% · MEM {memWarning}/{memCritical}% · RTL {rtlWarning}/{rtlCritical} ms",
+    "audioSection": {
+      "title": "Audio timing",
+      "roundTrip": "Round trip",
+      "rollingAvg": "Rolling avg",
+      "rollingMax": "Rolling max",
+      "output": "Output",
+      "buffer": "Buffer",
+      "frames": "frames",
+      "xrun": "XRUN"
+    },
+    "ipcSection": {
+      "title": "Audio IPC transport",
+      "unavailable": "Unavailable",
+      "build": "Build {fingerprint}",
+      "placeholder": "Audio helper diagnostics are unavailable.",
+      "requestRouter": "Request router",
+      "normalPriority": "{normal} normal · {priority} priority",
+      "slotsPerChannel": "{count} slots per channel",
+      "arenaLeases": "Arena leases",
+      "leases": "leases",
+      "liveTotal": "{live} live · {packets} packets / {total} total",
+      "bulkArena": "Bulk arena",
+      "regionsDetail": "{regions} regions · {offers} offers · {busy} busy · {quarantine} quarantine",
+      "runtimeWorkers": "Runtime workers",
+      "asyncBlocking": "{async} async · {blocking} blocking",
+      "egressDetail": "{egress} egress concurrency · {active} blocking active",
+      "asyncEgress": "Async egress",
+      "activeQueued": "{active} active · {queued} queued",
+      "egressStats": "{highWater} high-water · {batches} batches · {copied} copied",
+      "inlinePayload": "Inline payload",
+      "packets": "packets",
+      "serializedRegions": "{serialized} serialized · {regions} shared regions",
+      "telemetryPage": "Telemetry page",
+      "meters": "meters",
+      "telemetryDetail": "rev {revision} · {fallbackReads} fallback reads",
+      "parameterSpsc": "Parameter SPSC",
+      "ringDetail": "{softFull} soft · {hardFull} full · {boundary} boundary",
+      "priorityHeartbeat": "Priority heartbeat",
+      "waiting": "Waiting",
+      "heartbeatDetail": "IPC {ipcGeneration} · Tokio {tokioGeneration} · UI {winitGeneration}",
+      "routerHealth": "Router health",
+      "eventsTimeouts": "{events} events · {timeouts} timeouts",
+      "callbackStale": "callback {callbackGeneration} · stale {staleEpoch}"
+    },
+    "resourceSections": {
+      "cpuChannels": "CPU channels",
+      "total": "{percent} total",
+      "samplingCores": "Sampling individual CPU cores…",
+      "physicalMemory": "Physical memory",
+      "used": "{size} used",
+      "free": "{size} free",
+      "totalMemory": "{size} total",
+      "projectStorage": "Project storage",
+      "freeSpace": "Free space",
+      "workspace": "Workspace",
+      "swap": "Swap",
+      "percentFree": "{percent}% free",
+      "available": "{size} available",
+      "unconfigured": "unconfigured"
+    }
+  },
+  "mixer": {
+    "console": {
+      "ariaLabel": "Mixer console",
+      "title": "MIXER",
+      "summary": "{audio} audio · {instrument} instrument · {aux} aux · {outputs} outputs",
+      "actions": {
+        "ariaLabel": "Mixer actions",
+        "addAudio": "Add audio track",
+        "addAudioLabel": "Audio",
+        "addInstrument": "Add instrument track",
+        "addInstrumentLabel": "Instrument",
+        "addAux": "Add aux channel",
+        "addAuxLabel": "Aux",
+        "addOutput": "Add hardware output",
+        "addOutputLabel": "Output",
+        "undo": "Undo mixer change",
+        "redo": "Redo mixer change"
+      },
+      "replaceInstrument": {
+        "eyebrow": "Instrument slot",
+        "title": "Replace instrument?",
+        "description": "{current} will be replaced with {next}.",
+        "detail": "The previous component and controller state remain available through undo.",
+        "confirm": "Replace instrument"
+      },
+      "deleteChannel": {
+        "eyebrow": "Mixer routing",
+        "title": "Delete channel?",
+        "description": "The {name} channel and its clips will be removed from the timeline. Media assets will be kept.",
+        "detail": "This change is added to the project history and can be undone.",
+        "confirm": "Delete channel"
+      }
+    },
+    "sections": {
+      "input": "INPUT",
+      "audioFx": "AUDIO FX",
+      "sends": "SENDS",
+      "output": "OUTPUT",
+      "group": "GROUP",
+      "automation": "AUTOMATION",
+      "pan": "PAN",
+      "volume": "VOLUME",
+      "channel": "CHANNEL"
+    },
+    "channelKind": {
+      "audio": "audio",
+      "instrument": "instrument",
+      "aux": "aux",
+      "master": "master",
+      "output": "output"
+    },
+    "channelControls": {
+      "arm": "Arm {name}",
+      "recordEnable": "Record enable",
+      "monitor": "Monitor {name}",
+      "inputMonitoring": "Input monitoring",
+      "inputMonitoringDisabled": "Enable software monitoring and select a hardware input first",
+      "mute": "Mute {name}",
+      "solo": "Solo {name}"
+    },
+    "channelStrip": {
+      "ariaLabel": "{name} {kind} channel",
+      "noGroup": "No Group",
+      "read": "Read",
+      "channelNameLabel": "{name} channel name; double-click to rename"
+    },
+    "channelMenu": {
+      "ariaLabel": "{name} channel menu",
+      "channelColor": "Channel color",
+      "colorAria": "{name} channel color",
+      "delete": "Delete channel",
+      "deleteAria": "Delete {name}"
+    },
+    "sendSection": {
+      "ariaLabel": "Channel sends",
+      "missingOutput": "Missing output",
+      "missingBus": "Missing bus",
+      "tapPre": "PRE",
+      "tapPost": "POST",
+      "tapPan": "PAN",
+      "editSend": "Edit send to {target}",
+      "header": "SEND",
+      "deleteSend": "Delete send to {target}",
+      "enabled": "Enabled",
+      "disableSend": "Disable send",
+      "enableSend": "Enable send",
+      "on": "ON",
+      "off": "OFF",
+      "destination": "Destination",
+      "sendTarget": "Send target",
+      "buses": "Buses",
+      "outputs": "Outputs",
+      "sendPosition": "Send position",
+      "level": "Level",
+      "levelDb": "{level} dB",
+      "sendLevel": "Send level",
+      "sendLevelValue": "Send level value in decibels",
+      "addSend": "Add send in empty slot",
+      "noSend": "NO SEND"
+    },
+    "outputSection": {
+      "hardwareSummary": "HW {channels}",
+      "noRoute": "No route",
+      "outputAria": "{name} output",
+      "hardwareRouting": "{name} hardware output routing",
+      "hardwareOutput": "HARDWARE OUTPUT",
+      "left": "Left",
+      "right": "Right",
+      "hardwareOutputN": "{name} hardware output {n}",
+      "outputN": "Output {n}",
+      "global": "GLOBAL"
+    },
+    "pluginSection": {
+      "ariaLabel": "Audio effects",
+      "dropAtSlot": "Drop at effect slot {slot}",
+      "pluginState": "{name} plugin {state}",
+      "openEditor": "Open {name} editor",
+      "audioMode": "Audio mode: {mode}",
+      "bypass": "Bypass",
+      "enable": "Enable",
+      "bypassPlugin": "{action} {name}",
+      "remove": "Remove {name}",
+      "addEffectTitle": "Add audio effect",
+      "searchEffects": "Search VST3 audio effects",
+      "noEffects": "No compatible VST3 effects found. Rescan from the Sound Browser.",
+      "addEffect": "Add VST3 audio effect",
+      "noInsert": "NO INSERT"
+    },
+    "instrumentInput": {
+      "ariaLabel": "{name} instrument input {state}",
+      "openEditor": "Open {name} instrument editor",
+      "audioMode": "Audio mode: {mode}",
+      "remove": "Remove {name}",
+      "chooseTitle": "Choose instrument",
+      "searchInstruments": "Search VST3 instruments",
+      "noInstruments": "No compatible VST3 instruments found. Rescan from the Sound Browser.",
+      "assign": "Assign VST3 instrument input"
+    },
+    "inputCapsule": {
+      "inputChannel": "{name} input channel",
+      "useMono": "Use mono input for {name}",
+      "linkStereo": "Link adjacent input as stereo for {name}",
+      "stereoLinked": "Stereo linked",
+      "linkStereoTitle": "Link adjacent input as stereo",
+      "hardwareInputs": "Hardware inputs",
+      "buses": "Buses",
+      "inPrefix": "IN",
+      "busPrefix": "BUS"
+    },
+    "inputSection": {
+      "global": "GLOBAL",
+      "mixBus": "MIX BUS"
+    },
+    "pluginPicker": {
+      "vst3": "VST3",
+      "searchPlaceholder": "Search plug-ins",
+      "addPlugin": "Add {name}",
+      "builtin": "Built-in",
+      "noSearchResults": "No plug-ins match this search.",
+      "browseVendor": "Browse {vendor} plug-ins",
+      "choosePlugin": "Choose {name}",
+      "modeNotSupported": "{mode} is not supported by this plug-in",
+      "modeSupported": "{label}: {detail}",
+      "unknownVendor": "Unknown vendor"
+    },
+    "routeGroups": {
+      "buses": "Buses",
+      "outputs": "Outputs",
+      "missingOutput": "Missing output"
+    }
+  },
+  "plugins": {
+    "rack": {
+      "ariaLabel": "Plugin insert rack",
+      "inserts": "INSERTS",
+      "emptyHint": "Double-click an effect in the Sound Browser to add it here."
+    },
+    "instrumentSlot": {
+      "ariaLabel": "Instrument slot",
+      "heading": "INSTRUMENT",
+      "vst3": "VST3",
+      "empty": "EMPTY",
+      "openEditor": "Open instrument editor",
+      "remove": "Remove instrument",
+      "chooseHint": "Choose an instrument from the Sound Browser."
+    },
+    "pluginSlot": {
+      "move": "Move {name}",
+      "audioMode": "Audio mode: {mode}",
+      "araTitle": "ARA 2 document processing is active for this insert",
+      "bypass": "Bypass",
+      "enable": "Enable",
+      "toggle": "{action} {name}",
+      "openEditor": "Open {name} editor",
+      "remove": "Remove {name}"
+    },
+    "audioModeMenu": {
+      "ariaLabel": "Choose plugin audio mode",
+      "back": "Back to plugin list",
+      "chooseMode": "Choose audio mode",
+      "notSupported": "{label} is not supported by this plug-in",
+      "supported": "{label}: {detail}",
+      "unavailable": "Unavailable"
+    },
+    "audioMode": {
+      "mono": {
+        "label": "Mono",
+        "detailInstrument": "1 channel output",
+        "detailEffect": "1 → 1"
+      },
+      "stereo": {
+        "label": "Stereo",
+        "detailInstrument": "2 channel output",
+        "detailEffect": "2 → 2"
+      },
+      "monoToStereo": {
+        "label": "Mono to stereo",
+        "detail": "1 → 2"
+      },
+      "dualMono": {
+        "label": "Dual mono",
+        "detail": "2 × (1 → 1)"
+      }
+    }
+  },
+  "pianoRoll": {
+    "dock": {
+      "ariaLabel": "Piano roll editor",
+      "noteGrid": "Piano roll note grid"
+    },
+    "toolbar": {
+      "commands": "Piano roll commands",
+      "tools": "Piano roll tools",
+      "toolSelect": "Select",
+      "toolDraw": "Draw",
+      "toolErase": "Erase",
+      "snap": "Snap",
+      "snapResolution": "Note snap resolution",
+      "timeZoom": "Piano roll time zoom",
+      "zoomTimeOut": "Zoom piano roll time out",
+      "zoomTimeIn": "Zoom piano roll time in",
+      "keyZoom": "Piano roll key zoom",
+      "zoomKeysOut": "Zoom piano roll keys out",
+      "zoomKeysIn": "Zoom piano roll keys in",
+      "editableClips": "Editable MIDI clips",
+      "close": "Close piano roll",
+      "closeLabel": "Close"
+    },
+    "velocityLane": {
+      "header": "Velocity",
+      "ariaLabel": "Velocity lane. Drag bars to change note velocities.",
+      "barLabel": "Velocity {velocity} for {note}, {clip}"
+    },
+    "inspector": {
+      "ariaLabel": "Selected note properties",
+      "noteCount": "{count} note | {count} notes",
+      "pitch": "Pitch",
+      "startTick": "Start tick",
+      "duration": "Duration",
+      "channel": "Channel",
+      "velocity": "Velocity",
+      "release": "Release",
+      "quantize": "Quantize",
+      "quantizeAria": "Quantize selected note starts to the snap grid",
+      "velocityLane": "Velocity lane",
+      "velocityLaneAria": "Toggle velocity lane",
+      "resolution": "Resolution 1/3840 note · integer ticks"
+    },
+    "snap": {
+      "off": "Off · 1/3840",
+      "1/1": "1/1",
+      "1/2": "1/2",
+      "1/4": "1/4",
+      "1/8": "1/8",
+      "1/16": "1/16",
+      "1/32": "1/32",
+      "1/64": "1/64",
+      "1/2T": "1/2 triplet",
+      "1/4T": "1/4 triplet",
+      "1/8T": "1/8 triplet",
+      "1/16T": "1/16 triplet",
+      "1/32T": "1/32 triplet",
+      "1/64T": "1/64 triplet"
+    }
+  },
+  "midiImport": {
+    "eyebrow": "MIDI import",
+    "title": "Import MIDI",
+    "defaultFileName": "Import MIDI file",
+    "unknownTiming": "Unknown timing",
+    "description": "{fileName} · {timing} · Format {format}",
+    "notes": "{count} notes",
+    "events": "{count} events",
+    "sequence": "sequence {n}",
+    "targetAria": "{name} target",
+    "ignore": "Ignore",
+    "newTrack": "New Instrument track",
+    "instrumentAria": "{name} VST3 instrument",
+    "noInstrument": "No instrument assigned",
+    "tempoLegend": "Tempo for imported MIDI",
+    "keepProjectTempo": "Keep the project Tempo Track",
+    "keepProjectTempoDetail": "Place the MIDI at the playhead and follow the current project Tempo Track.",
+    "importMidiTempo": "Import MIDI tempo into project",
+    "importMidiTempoDetail": "Start at tick 0 and replace the project Tempo Track with the MIDI tempo map.",
+    "import": "Import MIDI",
+    "importing": "Importing MIDI"
+  },
+  "studio": {
+    "common": {
+      "comingSoon": "Coming soon"
+    },
+    "topbar": {
+      "library": "Library",
+      "inspector": "Inspector",
+      "quickHelp": "Quick Help",
+      "downloadManager": "Download Manager",
+      "smartControls": "Smart Controls",
+      "mixer": "Mixer",
+      "pianoRoll": "Piano Roll",
+      "lowLatencyMode": "Low Latency Mode",
+      "varispeed": "Varispeed",
+      "tuner": "Tuner",
+      "solo": "Solo",
+      "countIn": "Count-in",
+      "metronome": "Metronome",
+      "listEditors": "List Editors",
+      "notes": "Notes",
+      "loopBrowser": "Loop Browser",
+      "mediaBrowser": "Media Browser"
+    },
+    "transport": {
+      "ariaLabel": "Transport controls",
+      "rewind": "Rewind",
+      "fastForward": "Fast-forward",
+      "goToBeginning": "Go to beginning",
+      "goToBeginningTooltip": "Go to beginning · Home",
+      "play": "Play",
+      "pause": "Pause",
+      "playTooltip": "Play · Space",
+      "pauseTooltip": "Pause · Space",
+      "record": "Record",
+      "recordTooltip": "Record · R",
+      "captureRecording": "Capture Recording",
+      "cycle": "Cycle"
+    },
+    "musical": {
+      "ariaLabel": "Project musical display",
+      "bar": "BAR",
+      "beat": "BEAT",
+      "tempo": "TEMPO",
+      "meter": "METER",
+      "key": "KEY",
+      "editTempoAria": "Edit current tempo",
+      "tempoButtonAria": "Tempo {value} BPM; double-click to edit",
+      "tempoEditTitle": "Double-click to edit the current Tempo Track event",
+      "projectKeyTooltip": "Project key · Coming soon",
+      "projectKeyAria": "Project key"
+    },
+    "master": {
+      "ariaLabel": "Master output",
+      "channelName": "Master"
+    },
+    "statusbar": {
+      "audioActive": "Audio active",
+      "audioStopped": "Audio stopped",
+      "sampleRate": "{rate} kHz",
+      "sampleRateUnknown": "— kHz",
+      "bitDepth": "24 bit",
+      "buffer": "Buffer {size}",
+      "bufferUnknown": "Buffer —",
+      "rtl": "RTL {latency}",
+      "avg": "AVG {latency}",
+      "xrun": "XRUN {count}"
+    },
+    "zoom": {
+      "ariaLabel": "Arrangement zoom controls",
+      "time": "TIME",
+      "track": "TRACK",
+      "gain": "GAIN",
+      "timeZoom": "Time zoom",
+      "timeZoomValue": "{pixels} pixels per quarter note",
+      "timeZoomReset": "Double-click to reset time zoom",
+      "trackHeight": "Track height",
+      "trackHeightValue": "{height} pixels",
+      "trackHeightReset": "Double-click to reset track height",
+      "waveformGain": "Waveform gain",
+      "waveformGainValue": "{scale} times",
+      "waveformGainReset": "Double-click to reset waveform gain"
+    },
+    "arrangement": {
+      "ariaLabel": "Arrangement timeline",
+      "tracks": "TRACKS",
+      "tempo": "Tempo",
+      "meter": "Meter",
+      "key": "Key",
+      "globalTrack": "GLOBAL TRACK",
+      "bpm": "BPM",
+      "meterNumeratorAria": "Selected Meter numerator",
+      "meterDenominatorAria": "Selected Meter denominator",
+      "keySignatureAria": "Selected Key signature",
+      "majorKeys": "Major keys",
+      "minorKeys": "Minor keys",
+      "newRecording": "New recording",
+      "midiClipName": "MIDI Clip {index}",
+      "trackRenameLabel": "{name}; double-click to rename; Alt+Arrow Up or Down to reorder",
+      "timelineRulerAria": "Timeline ruler",
+      "instrumentLaneAria": "Instrument lane; double-click empty space or press Enter to create a MIDI clip",
+      "createMidiClipHint": "Double-click to create MIDI clip",
+      "recordingAria": "Recording",
+      "resizeMixerDockAria": "Resize mixer dock"
+    },
+    "trackControls": {
+      "ariaLabel": "{name} mixer quick controls",
+      "mute": "Mute",
+      "muteAria": "Mute {name}",
+      "solo": "Solo",
+      "soloAria": "Solo {name}",
+      "recordEnable": "Record enable",
+      "armAria": "Arm {name}",
+      "monitorAria": "Monitor {name}",
+      "inputMonitoring": "Input monitoring",
+      "inputMonitoringDisabled": "Enable software monitoring and select a hardware input first"
+    },
+    "soundBrowser": {
+      "eyebrow": "LIBRARY",
+      "title": "Sound browser",
+      "searchAria": "Search sounds",
+      "searchPlaceholder": "Search sounds & devices",
+      "tabsAria": "Sound browser",
+      "tabs": {
+        "instruments": "Instruments",
+        "effects": "Audio effects",
+        "samples": "Samples",
+        "plugins": "Plugins"
+      },
+      "headings": {
+        "instruments": "VST3 instruments",
+        "effects": "VST3 audio effects",
+        "samples": "Project audio",
+        "catalog": "Plugin catalog"
+      },
+      "empty": {
+        "instruments": "No compatible VST3 instruments found.",
+        "effects": "No compatible VST3 effects found."
+      },
+      "builtIn": "Built-in · ",
+      "rescan": "Rescan VST3",
+      "scanning": "Scanning…"
+    },
+    "inspector": {
+      "eyebrow": "SIGNAL LAB",
+      "title": "Engine probe",
+      "description": "Trace a test signal through Vue, Electron, N-API, and the Rust DSP core.",
+      "outputPeak": "Output peak",
+      "outputPeakMeter": "Output peak meter",
+      "offlineGain": "Offline gain",
+      "runSignalCheck": "Run signal check",
+      "nativeTelemetry": "Native telemetry",
+      "input": "Input",
+      "audioIo": "Audio I/O",
+      "sampleRate": "Sample rate",
+      "clockSync": "Clock sync"
+    },
+    "lanes": {
+      "tempo": "Tempo",
+      "meter": "Meter",
+      "key": "Key",
+      "positionLabel": "beats",
+      "selected": "Selected",
+      "selectedValueAria": "Selected {label} value",
+      "globalTrackAria": "{label} global track",
+      "expandTrackAria": "Expand {label} track",
+      "collapseTrackAria": "Collapse {label} track"
+    },
+    "rename": {
+      "renameAria": "Rename {name}",
+      "doubleClickTitle": "{name} — Double-click to rename"
+    },
+    "placeholder": {
+      "libraryEyebrow": "LIBRARY",
+      "inspectorEyebrow": "INSPECTOR",
+      "browserTitle": "Browser",
+      "propertiesTitle": "Properties",
+      "leftBody": "Sounds and devices will live here.",
+      "rightBody": "Clip and track controls will live here.",
+      "badge": "PLACEHOLDER"
     }
   }
 }

@@ -1,10 +1,13 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n"
 import type { AudioPreferences, AudioRuntimeSnapshot } from "@yadaw/contracts"
 import SettingsPage from "../settings/SettingsPage.vue"
 import AudioBackendSection from "./AudioBackendSection.vue"
 import AudioBufferLatencySections from "./AudioBufferLatencySections.vue"
 import AudioDeviceSections from "./AudioDeviceSections.vue"
 import { useAudioDeviceOptions } from "./useAudioDeviceOptions"
+
+const { t } = useI18n()
 
 const props = defineProps<{
   runtime: AudioRuntimeSnapshot
@@ -37,10 +40,10 @@ const {
 
 <template>
   <SettingsPage
-    category="Audio"
-    page="Devices"
-    title="Devices"
-    description="Choose the host API, audio devices, and real-time I/O buffer."
+    :category="t('settings.audio.devices.category')"
+    :page="t('settings.audio.devices.page')"
+    :title="t('settings.audio.devices.title')"
+    :description="t('settings.audio.devices.description')"
   >
     <AudioBackendSection
       v-model="backendSelection"

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue"
+import { useI18n } from "vue-i18n"
 import { UiCascadingSelect, UiPopover, UiSelect } from "@yadaw/ui"
 import type {
   MixerBusState,
@@ -20,11 +21,13 @@ const emit = defineEmits<{
   updateChannel: [patch: MixerChannelPatch]
 }>()
 
+const { t } = useI18n()
+
 const hardwareOptions = Array.from({ length: 32 }, (_, index) => index + 1)
 const hardwareSummary = computed(
   () => `HW ${props.channel.hardwareOutputChannels.join("–") || "—"}`
 )
-const routeGroups = computed(() => mixerRouteGroups(props.targets, props.buses, props.outputs))
+const routeGroups = computed(() => mixerRouteGroups(props.targets, props.buses, props.outputs, t))
 const routeValue = computed(() =>
   props.channel.outputChannelId
     ? `output:${props.channel.outputChannelId}`
@@ -56,38 +59,47 @@ function updateHardwareOutput(index: number, value: string): void {
       v-if="channel.kind === 'audio' || channel.kind === 'instrument' || channel.kind === 'aux'"
       :model-value="routeValue"
       :groups="routeGroups"
-      placeholder="No route"
+      :placeholder="t('mixer.outputSection.noRoute')"
       size="compact"
-      :aria-label="`${channel.name} output`"
+      :aria-label="t('mixer.outputSection.outputAria', { name: channel.name })"
       @update:model-value="updateRoute"
     />
     <UiPopover v-else-if="channel.kind === 'output'" side="top" :side-offset="7">
       <template #trigger>
-        <button class="output-control" :aria-label="`${channel.name} hardware output routing`">
+        <button
+          class="output-control"
+          :aria-label="t('mixer.outputSection.hardwareRouting', { name: channel.name })"
+        >
           {{ hardwareSummary }}
         </button>
       </template>
       <div class="mixer-popover output-popover">
         <header>
-          <span>HARDWARE OUTPUT</span>
+          <span>{{ t("mixer.outputSection.hardwareOutput") }}</span>
           <strong>{{ channel.name }}</strong>
         </header>
         <label v-for="(_, index) in channel.hardwareOutputChannels" :key="index">
-          <span>{{ index === 0 ? "Left" : "Right" }}</span>
+          <span>{{
+            index === 0 ? t("mixer.outputSection.left") : t("mixer.outputSection.right")
+          }}</span>
           <UiSelect
             :model-value="String(channel.hardwareOutputChannels[index])"
             size="compact"
-            :aria-label="`${channel.name} hardware output ${index + 1}`"
+            :aria-label="
+              t('mixer.outputSection.hardwareOutputN', { name: channel.name, n: index + 1 })
+            "
             @update:model-value="updateHardwareOutput(index, $event)"
           >
             <option v-for="output in hardwareOptions" :key="output" :value="String(output)">
-              Output {{ output }}
+              {{ t("mixer.outputSection.outputN", { n: output }) }}
             </option>
           </UiSelect>
         </label>
       </div>
     </UiPopover>
-    <button v-else class="output-control" disabled aria-disabled="true">GLOBAL</button>
+    <button v-else class="output-control" disabled aria-disabled="true">
+      {{ t("mixer.outputSection.global") }}
+    </button>
   </section>
 </template>
 

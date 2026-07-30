@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n"
 import { CircleGauge, Radio } from "@lucide/vue"
 import type { AudioRuntimeSnapshot } from "@yadaw/contracts"
 import PerformanceMonitorPopover from "../performance/PerformanceMonitorPopover.vue"
@@ -10,6 +11,8 @@ defineProps<{
   audioWarnings: AudioWarning[]
 }>()
 
+const { t } = useI18n()
+
 function formatLatency(value: number | null): string {
   return value === null ? "—" : `${value.toFixed(1)} ms`
 }
@@ -19,18 +22,36 @@ function formatLatency(value: number | null): string {
   <footer class="statusbar">
     <span class="engine-state"
       ><i :class="{ active: runtime.state === 'running' }" />{{
-        runtime.state === "running" ? "Audio active" : "Audio stopped"
+        runtime.state === "running"
+          ? t("studio.statusbar.audioActive")
+          : t("studio.statusbar.audioStopped")
       }}</span
     >
     <span
-      ><Radio :size="10" />{{ runtime.sampleRate ? `${runtime.sampleRate / 1000} kHz` : "— kHz" }} ·
-      24 bit</span
+      ><Radio :size="10" />{{
+        runtime.sampleRate
+          ? t("studio.statusbar.sampleRate", { rate: runtime.sampleRate / 1000 })
+          : t("studio.statusbar.sampleRateUnknown")
+      }}
+      · {{ t("studio.statusbar.bitDepth") }}</span
     >
-    <span><CircleGauge :size="10" />Buffer {{ runtime.outputBufferSize ?? "—" }}</span>
-    <span>RTL {{ formatLatency(runtime.estimatedRoundTripLatencyMs) }}</span>
-    <span>AVG {{ formatLatency(statistics.averageRoundTripLatencyMs) }}</span>
+    <span
+      ><CircleGauge :size="10" />{{
+        runtime.outputBufferSize === null || runtime.outputBufferSize === undefined
+          ? t("studio.statusbar.bufferUnknown")
+          : t("studio.statusbar.buffer", { size: runtime.outputBufferSize })
+      }}</span
+    >
+    <span>{{
+      t("studio.statusbar.rtl", { latency: formatLatency(runtime.estimatedRoundTripLatencyMs) })
+    }}</span>
+    <span>{{
+      t("studio.statusbar.avg", { latency: formatLatency(statistics.averageRoundTripLatencyMs) })
+    }}</span>
     <span class="status-spacer" />
-    <span :class="{ alert: statistics.sessionXruns > 0 }">XRUN {{ statistics.sessionXruns }}</span>
+    <span :class="{ alert: statistics.sessionXruns > 0 }">{{
+      t("studio.statusbar.xrun", { count: statistics.sessionXruns })
+    }}</span>
     <PerformanceMonitorPopover
       :runtime="runtime"
       :statistics="statistics"

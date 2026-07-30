@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue"
+import { useI18n } from "vue-i18n"
 import type {
   MixerBusState,
   MixerChannelMeter,
@@ -59,6 +60,8 @@ const emit = defineEmits<{
   resetMeterClips: []
 }>()
 
+const { t } = useI18n()
+
 const instrument = computed(
   () => props.plugins.find((plugin) => plugin.role === "instrument") ?? null
 )
@@ -84,7 +87,12 @@ function preview(parameter: "gainDb" | "pan", value: number): void {
   <article
     :class="['channel-strip', channel.kind, { selected }]"
     :style="{ '--strip-color': channel.color }"
-    :aria-label="`${channel.name} ${channel.kind} channel`"
+    :aria-label="
+      t('mixer.channelStrip.ariaLabel', {
+        name: channel.name,
+        kind: t(`mixer.channelKind.${channel.kind}`)
+      })
+    "
     @pointerdown="emit('select', channel.id)"
   >
     <MixerInputSection
@@ -134,11 +142,11 @@ function preview(parameter: "gainDb" | "pan", value: number): void {
     />
 
     <section class="placeholder-section" data-section="group">
-      <button disabled aria-disabled="true">No Group</button>
+      <button disabled aria-disabled="true">{{ t("mixer.channelStrip.noGroup") }}</button>
     </section>
 
     <section class="placeholder-section automation-section" data-section="automation">
-      <button disabled aria-disabled="true">Read</button>
+      <button disabled aria-disabled="true">{{ t("mixer.channelStrip.read") }}</button>
     </section>
 
     <MixerPanKnob
@@ -163,7 +171,7 @@ function preview(parameter: "gainDb" | "pan", value: number): void {
       <InlineTrackNameEditor
         class="channel-name-editor"
         :name="channel.name"
-        :label="`${channel.name} channel name; double-click to rename`"
+        :label="t('mixer.channelStrip.channelNameLabel', { name: channel.name })"
         @rename="emit('updateChannel', channel.id, { name: $event })"
       />
       <MixerChannelMenu

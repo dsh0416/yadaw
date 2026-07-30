@@ -9,6 +9,11 @@ import type {
   ProjectWorkspaceSnapshot
 } from "@yadaw/contracts"
 import { useGlobalDialog } from "../composables/useGlobalDialog"
+import { i18n } from "../i18n"
+
+function t(key: string, params?: Record<string, string | number>): string {
+  return i18n.global.t(key, params ?? {})
+}
 
 function openState(session: ProjectSession, error: string | null = null): ProjectLifecycleState {
   return { status: "open", session: structuredClone(session), error }
@@ -45,7 +50,7 @@ export const useProjectStore = defineStore("project", () => {
       projectAssets.value = structuredClone(workspace.assets)
       return workspace
     } catch (reason) {
-      const message = reason instanceof Error ? reason.message : "Unable to create project."
+      const message = reason instanceof Error ? reason.message : t("errors.unableToCreateProject")
       lifecycle.value = {
         status: "closed",
         error: /cancelled/i.test(message) ? null : message
@@ -66,17 +71,15 @@ export const useProjectStore = defineStore("project", () => {
       let recover = false
       if (preparation.recoverableWorkingCopy) {
         const choice = await showDialog({
-          eyebrow: "Project recovery",
+          eyebrow: t("dialog.projectRecovery.eyebrow"),
           tone: "warning",
-          title: "Recover unsaved project?",
-          description:
-            "A newer working copy contains changes that were not saved to the .yadaw archive.",
-          detail:
-            "Recover it, open the last saved archive, or cancel without changing either copy.",
+          title: t("dialog.projectRecovery.title"),
+          description: t("dialog.projectRecovery.description"),
+          detail: t("dialog.projectRecovery.detail"),
           actions: [
-            { value: "recover", label: "Recover working copy", kind: "primary" },
-            { value: "saved", label: "Open last saved", kind: "secondary" },
-            { value: "cancel", label: "Cancel", kind: "cancel" }
+            { value: "recover", label: t("dialog.projectRecovery.recover"), kind: "primary" },
+            { value: "saved", label: t("dialog.projectRecovery.openSaved"), kind: "secondary" },
+            { value: "cancel", label: t("dialog.actions.cancel"), kind: "cancel" }
           ],
           cancelValue: "cancel"
         })
@@ -91,7 +94,7 @@ export const useProjectStore = defineStore("project", () => {
       projectAssets.value = structuredClone(workspace.assets)
       return workspace
     } catch (reason) {
-      const message = reason instanceof Error ? reason.message : "Unable to open project."
+      const message = reason instanceof Error ? reason.message : t("errors.unableToOpenProject")
       lifecycle.value = {
         status: "closed",
         error: message
@@ -110,7 +113,7 @@ export const useProjectStore = defineStore("project", () => {
     } catch (reason) {
       lifecycle.value = openState(
         previous,
-        reason instanceof Error ? reason.message : "Unable to save project."
+        reason instanceof Error ? reason.message : t("errors.unableToSaveProject")
       )
     }
   }
@@ -122,15 +125,17 @@ export const useProjectStore = defineStore("project", () => {
     if (previous.dirty && !disposition) {
       disposition =
         (await showDialog<"save" | "discard" | "cancel">({
-          eyebrow: "Unsaved project",
+          eyebrow: t("dialog.saveBeforeClose.eyebrow"),
           tone: "warning",
-          title: "Save project before closing?",
-          description: `Save changes to ${previous.configuration.name}?`,
-          detail: "Closing without saving keeps the last saved archive unchanged.",
+          title: t("dialog.saveBeforeClose.title"),
+          description: t("dialog.saveBeforeClose.description", {
+            name: previous.configuration.name
+          }),
+          detail: t("dialog.saveBeforeClose.detail"),
           actions: [
-            { value: "save", label: "Save", kind: "primary" },
-            { value: "discard", label: "Don't save", kind: "secondary" },
-            { value: "cancel", label: "Cancel", kind: "cancel" }
+            { value: "save", label: t("dialog.saveBeforeClose.save"), kind: "primary" },
+            { value: "discard", label: t("dialog.saveBeforeClose.discard"), kind: "secondary" },
+            { value: "cancel", label: t("dialog.actions.cancel"), kind: "cancel" }
           ],
           cancelValue: "cancel"
         })) ?? "cancel"
@@ -149,7 +154,7 @@ export const useProjectStore = defineStore("project", () => {
     } catch (reason) {
       lifecycle.value = openState(
         previous,
-        reason instanceof Error ? reason.message : "Unable to close project."
+        reason instanceof Error ? reason.message : t("errors.unableToCloseProject")
       )
       return false
     }

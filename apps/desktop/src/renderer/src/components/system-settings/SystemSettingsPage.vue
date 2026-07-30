@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { shallowRef, watch } from "vue"
+import { computed, shallowRef, watch } from "vue"
+import { useI18n } from "vue-i18n"
 import { AudioLines, Cable, CircleDot, Gauge, Keyboard, Music2, Palette, Plug } from "@lucide/vue"
 import type {
   AudioHostRuntimePreferences,
@@ -16,6 +17,8 @@ import MixerDisplaySettings from "./MixerDisplaySettings.vue"
 import RecordingSettings from "./RecordingSettings.vue"
 
 type SystemSettingsPageId = "engine" | "devices" | "recording" | "display-general" | "display-mixer"
+
+const { t } = useI18n()
 
 const props = defineProps<{
   modelValue: AudioPreferences
@@ -35,86 +38,86 @@ const emit = defineEmits<{
   configureRuntime: [preferences: AudioHostRuntimePreferences]
 }>()
 
-const categories: readonly SettingsCategory[] = [
+const categories = computed<readonly SettingsCategory[]>(() => [
   {
     id: "system",
-    label: "System",
-    description: "Runtime",
+    label: t("settings.system.categories.system.label"),
+    description: t("settings.system.categories.system.description"),
     icon: Gauge,
     pages: [
       {
         id: "engine",
-        label: "Engine",
-        description: "Async workers and IPC egress",
+        label: t("settings.system.pages.engine.label"),
+        description: t("settings.system.pages.engine.description"),
         icon: Gauge
       }
     ]
   },
   {
     id: "audio",
-    label: "Audio",
-    description: "Signal path",
+    label: t("settings.system.categories.audio.label"),
+    description: t("settings.system.categories.audio.description"),
     icon: AudioLines,
     pages: [
       {
         id: "devices",
-        label: "Devices",
-        description: "Host, hardware I/O and latency",
+        label: t("settings.system.pages.devices.label"),
+        description: t("settings.system.pages.devices.description"),
         icon: Cable
       },
       {
         id: "recording",
-        label: "Recording",
-        description: "Swap, format and recovery",
+        label: t("settings.system.pages.recording.label"),
+        description: t("settings.system.pages.recording.description"),
         icon: CircleDot
       }
     ]
   },
   {
     id: "midi",
-    label: "MIDI",
-    description: "Controllers",
+    label: t("settings.system.categories.midi.label"),
+    description: t("settings.system.categories.midi.description"),
     icon: Music2,
-    badge: "Soon",
+    badge: t("common.soon"),
     pages: []
   },
   {
     id: "plugins",
-    label: "Plugins",
-    description: "Discovery",
+    label: t("settings.system.categories.plugins.label"),
+    description: t("settings.system.categories.plugins.description"),
     icon: Plug,
-    badge: "Soon",
+    badge: t("common.soon"),
     pages: []
   },
   {
     id: "display",
-    label: "Display",
-    description: "Workspace",
+    label: t("settings.display.category"),
+    description: t("settings.system.categories.display.description"),
     icon: Palette,
     pages: [
       {
         id: "display-general",
-        label: "General",
-        description: "Light, dark and system",
+        label: t("settings.system.pages.displayGeneral.label"),
+        description: t("settings.system.pages.displayGeneral.description"),
         icon: Palette
       },
       {
         id: "display-mixer",
-        label: "Mixer",
-        description: "Meter hold and return",
+        label: t("settings.system.pages.displayMixer.label"),
+        description: t("settings.system.pages.displayMixer.description"),
         icon: Gauge
       }
     ]
   },
   {
     id: "keyboard",
-    label: "Keyboard",
-    description: "Shortcuts",
+    label: t("settings.system.categories.keyboard.label"),
+    description: t("settings.system.categories.keyboard.description"),
     icon: Keyboard,
-    badge: "Soon",
+    badge: t("common.soon"),
     pages: []
   }
-]
+])
 
 const activePage = shallowRef<SystemSettingsPageId>("devices")
 const audioDraft = shallowRef<AudioPreferences>({ ...props.modelValue })
@@ -138,8 +141,8 @@ function applyAudio(): void {
 
 <template>
   <SettingsContainer
-    title="System settings"
-    scope-label="Yadaw / System"
+    :title="t('settings.system.title')"
+    :scope-label="t('settings.system.scopeLabel')"
     :back-label="backLabel"
     :categories="categories"
     :active-page="activePage"
@@ -148,14 +151,20 @@ function applyAudio(): void {
   >
     <template #actions>
       <template v-if="activePage === 'devices'">
-        <button class="settings-action" type="button" @click="emit('close')">Cancel</button>
+        <button class="settings-action" type="button" @click="emit('close')">
+          {{ t("dialog.actions.cancel") }}
+        </button>
         <button
           class="settings-action settings-action-primary"
           type="button"
           :disabled="applying || !audioCanApply"
           @click="applyAudio"
         >
-          {{ applying ? "Starting engine…" : "Apply audio" }}
+          {{
+            applying
+              ? t("settings.system.actions.startingEngine")
+              : t("settings.system.actions.applyAudio")
+          }}
         </button>
       </template>
       <button
@@ -164,7 +173,7 @@ function applyAudio(): void {
         type="button"
         @click="emit('close')"
       >
-        Done
+        {{ t("common.done") }}
       </button>
     </template>
 

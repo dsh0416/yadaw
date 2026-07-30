@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n"
 import { shallowRef } from "vue"
 import { SquareArrowOutUpRight, Trash2 } from "@lucide/vue"
 import type { PluginDescriptor } from "@yadaw/contracts"
@@ -17,6 +18,7 @@ const emit = defineEmits<{
 }>()
 
 const dragging = shallowRef(false)
+const { t } = useI18n()
 
 function dragOver(event: DragEvent): void {
   if (![...(event.dataTransfer?.types ?? [])].includes(PLUGIN_DRAG_TYPE)) return
@@ -38,14 +40,15 @@ function drop(event: DragEvent): void {
 <template>
   <section
     :class="['instrument-slot', { dragging }]"
-    aria-label="Instrument slot"
+    :aria-label="t('plugins.instrumentSlot.ariaLabel')"
     @dragenter="dragOver"
     @dragover="dragOver"
     @dragleave="dragging = false"
     @drop="drop"
   >
     <div class="slot-heading">
-      <span>INSTRUMENT</span><b>{{ plugin ? "VST3" : "EMPTY" }}</b>
+      <span>{{ t("plugins.instrumentSlot.heading") }}</span
+      ><b>{{ plugin ? t("plugins.instrumentSlot.vst3") : t("plugins.instrumentSlot.empty") }}</b>
     </div>
     <div v-if="plugin" class="slot-body">
       <i :class="runtime?.state ?? (plugin.enabled ? 'active' : 'bypassed')" />
@@ -53,14 +56,17 @@ function drop(event: DragEvent): void {
         <strong>{{ plugin.descriptor.name }}</strong
         ><small>{{ plugin.descriptor.vendor }}</small>
       </div>
-      <button aria-label="Open instrument editor" @click="$emit('open', plugin.id)">
+      <button
+        :aria-label="t('plugins.instrumentSlot.openEditor')"
+        @click="$emit('open', plugin.id)"
+      >
         <SquareArrowOutUpRight :size="11" />
       </button>
-      <button aria-label="Remove instrument" @click="$emit('remove', plugin.id)">
+      <button :aria-label="t('plugins.instrumentSlot.remove')" @click="$emit('remove', plugin.id)">
         <Trash2 :size="11" />
       </button>
     </div>
-    <p v-else>Choose an instrument from the Sound Browser.</p>
+    <p v-else>{{ t("plugins.instrumentSlot.chooseHint") }}</p>
     <small v-if="runtime?.error" class="slot-error">{{ runtime.error }}</small>
   </section>
 </template>

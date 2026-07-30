@@ -1,4 +1,41 @@
 {
+  "common": {
+    "soon": "即将推出",
+    "done": "完成",
+    "unknown": "未知",
+    "loading": "正在加载…",
+    "default": "默认",
+    "auto": "自动",
+    "manual": "手动",
+    "browse": "浏览…",
+    "open": "打开",
+    "format": "格式",
+    "device": "设备",
+    "samples": "采样",
+    "duration": "时长",
+    "response": "响应",
+    "notAvailable": "—",
+    "frames": "{count} 帧",
+    "milliseconds": "{value} ms",
+    "resolved": "已解析",
+    "saving": "正在保存…",
+    "saveChanges": "保存更改",
+    "changesSaved": "更改已保存",
+    "backToStudio": "返回编排界面"
+  },
+  "chrome": {
+    "unsavedChanges": "未保存的更改",
+    "noProjectOpen": "未打开工程",
+    "windowControls": "窗口控制",
+    "minimize": "最小化",
+    "maximizeOrRestore": "最大化或还原",
+    "close": "关闭",
+    "applicationMenu": "应用程序菜单",
+    "settings": "设置",
+    "buildLabel": "Yadaw / 构建 {version}",
+    "categoriesAria": "{title} 分类",
+    "pagesAria": "{category} 设置页面"
+  },
   "app": {
     "name": "YADAW",
     "about": "关于 YADAW"
@@ -44,13 +81,114 @@
     "openProject": {
       "title": "打开 YADAW 工程",
       "filter": "YADAW 工程"
+    },
+    "projectRecovery": {
+      "eyebrow": "工程恢复",
+      "title": "恢复未保存的工程？",
+      "description": "较新的工作副本包含尚未保存到 .yadaw 归档的更改。",
+      "detail": "可恢复工作副本、打开上次保存的归档，或取消且不改动任一份副本。",
+      "recover": "恢复工作副本",
+      "openSaved": "打开上次保存"
+    },
+    "saveBeforeClose": {
+      "eyebrow": "未保存的工程",
+      "title": "关闭前保存工程？",
+      "description": "是否将更改保存到 {name}？",
+      "detail": "不保存直接关闭将保留上次保存的归档不变。",
+      "save": "保存",
+      "discard": "不保存"
+    }
+  },
+  "errors": {
+    "unableToCreateProject": "无法创建工程。",
+    "unableToOpenProject": "无法打开工程。",
+    "unableToSaveProject": "无法保存工程。",
+    "unableToCloseProject": "无法关闭工程。",
+    "unableToLoadApplicationSettings": "无法加载应用程序设置。",
+    "unableToSaveDisplaySettings": "无法保存显示设置。",
+    "unableToSaveMixerDisplaySettings": "无法保存混音台显示设置。",
+    "unableToRestartAudioHelper": "无法重启音频助手。",
+    "unableToChangeSoftwareMonitoring": "无法更改软件监听。",
+    "nativeAudioEngineStopped": "原生音频引擎意外停止。",
+    "unableToReadAudioEngineState": "无法读取音频引擎状态。",
+    "unableToStartAudioEngine": "无法启动原生音频引擎。",
+    "unableToStopAudioEngine": "无法停止原生音频引擎。"
+  },
+  "warnings": {
+    "audio": {
+      "nativeError": {
+        "title": "原生音频错误"
+      },
+      "engineStopped": {
+        "title": "音频引擎意外停止",
+        "message": "请打开系统设置，选择可用的设备配置。"
+      },
+      "bufferFallback": {
+        "title": "正在使用 I/O 缓冲区回退",
+        "message": "请求的 {requested} 帧缓冲区不可用；引擎正在使用 {actual} 帧。",
+        "requestedUnknown": "未知",
+        "actualDeviceSelected": "设备选择的大小"
+      },
+      "deviceSampleRateMismatch": {
+        "title": "设备采样率转换已启用",
+        "message": "输入为 {inputRate}，输出为 {outputRate}。自适应重采样正在保持设备同步。"
+      },
+      "independentDeviceClocks": {
+        "title": "独立设备时钟",
+        "message": "输入与输出使用独立的硬件时钟，因此自适应漂移校正已启用。"
+      },
+      "sessionSampleRateConversion": {
+        "title": "会话采样率转换已启用",
+        "message": "工程时钟为 {sessionRate}，而输出设备为 {outputRate}。输出将在设备边界进行转换。"
+      },
+      "asymmetricBuffers": {
+        "title": "非对称 I/O 缓冲区",
+        "message": "输入使用 {inputBuffer} 帧，输出使用 {outputBuffer} 帧，因此硬件延迟不同。"
+      },
+      "dropout": {
+        "title": "{count} 次实时丢失",
+        "message": "音频回调未能按时消耗或产生数据。请尝试增大缓冲区，或关闭占用 CPU 较高的工作。"
+      },
+      "dropouts": {
+        "title": "{count} 次实时丢失",
+        "message": "音频回调未能按时消耗或产生数据。请尝试增大缓冲区，或关闭占用 CPU 较高的工作。"
+      },
+      "ringOverrunRisk": {
+        "title": "环形缓冲区即将写满",
+        "message": "输入速度快于输出，可能开始丢弃已捕获的采样。"
+      }
     }
   },
   "operation": {
     "openingProject": "正在打开工程",
     "savingProject": "正在保存工程",
     "finalizingRecording": "正在完成录音",
-    "recoveringRecording": "正在恢复录音"
+    "recoveringRecording": "正在恢复录音",
+    "recordingDropoutsInput": "捕获期间丢弃了 {count} 个输入帧。",
+    "recordingDropoutsCaptured": "丢弃了 {count} 个已捕获帧。",
+    "state": {
+      "completed": "已完成",
+      "failed": "失败",
+      "cancelled": "已取消",
+      "inProgress": "进行中"
+    },
+    "phase": {
+      "closingRecording": "正在关闭录音",
+      "repairingHeader": "正在修复 BWF 头",
+      "hashing": "正在哈希音频",
+      "resampling": "正在重采样音频",
+      "quantizing": "正在量化音频",
+      "writingLargeObject": "正在写入工程资源",
+      "committingDatabase": "正在提交数据库",
+      "savingArchive": "正在保存工程归档",
+      "loadingProjectArchive": "正在读取工程归档",
+      "loadingProjectDatabase": "正在加载工程数据库",
+      "restoringProjectState": "正在恢复工程状态",
+      "loadingMixer": "正在加载混音台",
+      "loadingProjectAssets": "正在加载工程资源",
+      "preparingWaveforms": "正在准备波形",
+      "cleaningUp": "正在清理交换文件"
+    }
   },
   "startup": {
     "starting": "正在启动 YADAW",
@@ -112,7 +250,7 @@
         }
       },
       "languageTitle": "语言",
-      "languageDescription": "菜单、对话框与工作区外壳会立即更新。混音台与编排界面文案将在后续版本跟进。",
+      "languageDescription": "菜单、对话框、混音台、编排界面与设置文案会立即在整个应用中更新。",
       "languageAria": "语言",
       "locales": {
         "en-US": {
@@ -124,6 +262,1052 @@
           "description": "中文，普通话（中国大陆简体）"
         }
       }
+    },
+    "system": {
+      "title": "系统设置",
+      "scopeLabel": "Yadaw / 系统",
+      "categories": {
+        "system": {
+          "label": "系统",
+          "description": "运行时"
+        },
+        "audio": {
+          "label": "音频",
+          "description": "信号路径"
+        },
+        "midi": {
+          "label": "MIDI",
+          "description": "控制器"
+        },
+        "plugins": {
+          "label": "插件",
+          "description": "发现"
+        },
+        "display": {
+          "label": "显示",
+          "description": "工作区"
+        },
+        "keyboard": {
+          "label": "键盘",
+          "description": "快捷键"
+        }
+      },
+      "pages": {
+        "engine": {
+          "label": "引擎",
+          "description": "异步工作线程与 IPC 出站"
+        },
+        "devices": {
+          "label": "设备",
+          "description": "宿主、硬件 I/O 与延迟"
+        },
+        "recording": {
+          "label": "录音",
+          "description": "交换目录、格式与恢复"
+        },
+        "displayGeneral": {
+          "label": "常规",
+          "description": "浅色、深色与跟随系统"
+        },
+        "displayMixer": {
+          "label": "混音台",
+          "description": "峰值保持与回落"
+        }
+      },
+      "actions": {
+        "startingEngine": "正在启动引擎…",
+        "applyAudio": "应用音频"
+      }
+    },
+    "backends": {
+      "wasapi": {
+        "label": "WASAPI",
+        "platform": "Windows",
+        "description": "Windows 共享与独占音频"
+      },
+      "asio": {
+        "label": "ASIO",
+        "platform": "Windows",
+        "description": "低延迟专业音频驱动"
+      },
+      "coreaudio": {
+        "label": "CoreAudio",
+        "platform": "macOS",
+        "description": "macOS 原生音频设备层"
+      },
+      "alsa": {
+        "label": "ALSA",
+        "platform": "Linux",
+        "description": "Linux 原生音频设备层"
+      }
+    },
+    "audio": {
+      "devices": {
+        "category": "音频",
+        "page": "设备",
+        "title": "设备",
+        "description": "选择宿主 API、音频设备与实时 I/O 缓冲区。"
+      },
+      "backend": {
+        "title": "后端",
+        "description": "选择原生音频引擎使用的宿主 API。",
+        "ariaLabel": "音频后端",
+        "scanning": "正在扫描 cpal 宿主…",
+        "unavailable": "没有可用的 CPAL 音频后端。",
+        "hostUnavailable": "当前原生构建中不可用此 CPAL 宿主。",
+        "noHostReported": "CPAL 未报告可用的音频宿主。"
+      },
+      "deviceSections": {
+        "output": {
+          "title": "输出设备",
+          "description": "选择用于监听与回放的 CPAL 设备。",
+          "placeholder": "选择输出",
+          "emptyPlaceholder": "无 CPAL 输出设备",
+          "ariaLabel": "输出设备"
+        },
+        "input": {
+          "title": "输入设备",
+          "description": "选择用于录音的 CPAL 设备。",
+          "placeholder": "选择输入",
+          "emptyPlaceholder": "无 CPAL 输入设备",
+          "ariaLabel": "输入设备"
+        },
+        "refresh": {
+          "scanning": "正在扫描…",
+          "refresh": "刷新设备"
+        }
+      },
+      "buffer": {
+        "title": "I/O 缓冲区大小",
+        "description": "较小的缓冲区可降低延迟，但需要更多 CPU 余量。",
+        "samplesLabel": "采样",
+        "ariaLabel": "I/O 缓冲区大小",
+        "optionLabel": "{size} 采样"
+      },
+      "latency": {
+        "title": "延迟",
+        "description": "由运行中的 Rust 引擎根据 CPAL 时间戳与实时环形缓冲区填充量报告。",
+        "ariaLabel": "运行时延迟",
+        "output": {
+          "label": "输出延迟",
+          "detail": "输出回调 → DAC · {frames}"
+        },
+        "roundTrip": {
+          "label": "往返延迟",
+          "detail": "ADC → 输入 → 环形缓冲 → 图 → 输出 → DAC"
+        },
+        "input": {
+          "label": "输入延迟",
+          "detail": "ADC → 输入回调 · {frames}"
+        },
+        "ringBuffer": {
+          "label": "环形缓冲区延迟"
+        },
+        "loopbackSection": {
+          "title": "物理环回",
+          "description": "通过输出到输入的直接线缆测量实际硬件往返延迟。"
+        }
+      },
+      "engine": {
+        "category": "系统",
+        "page": "引擎",
+        "title": "运行时调度",
+        "description": "限制辅助并发而不改变实时回调。更改仅重启音频辅助进程，然后恢复设备、插件、图与走带。",
+        "resolvedAria": "已解析的音频辅助线程",
+        "resolvedWorkers": "{count} 个工作线程",
+        "resolvedBlocking": "{count} 阻塞",
+        "resolvedEgress": "{count} 出站",
+        "workerThreads": {
+          "title": "异步工作线程",
+          "description": "运行协议、引擎、后台 I/O 与遥测任务。VST3 保持线程亲和。",
+          "modeAria": "工作线程模式",
+          "countAria": "工作线程数",
+          "range": "1–8"
+        },
+        "blockingThreads": {
+          "title": "阻塞线程上限",
+          "description": "限制同步 IPC 发送、arena 复制与其他受控阻塞任务。",
+          "modeAria": "阻塞线程模式",
+          "countAria": "阻塞线程数",
+          "range": "2–16"
+        },
+        "egressConcurrency": {
+          "title": "IPC 出站并发",
+          "description": "允许独立响应并发编码与发送；运行时事件保持有序。",
+          "modeAria": "出站并发模式",
+          "countAria": "出站并发数",
+          "range": "1–4"
+        },
+        "apply": {
+          "restarting": "正在重启辅助进程…",
+          "label": "应用运行时设置"
+        }
+      },
+      "recording": {
+        "category": "音频",
+        "page": "录音",
+        "title": "录音",
+        "description": "捕获内容保存在本机交换目录中，直到工程归档成功保存。",
+        "swapDirectory": {
+          "title": "交换目录",
+          "description": "未完成录音与可恢复的源 BWF 文件存放在此处。"
+        },
+        "bitDepth": {
+          "title": "最终位深",
+          "description": "交换目录始终为 float32。整数输出在重采样后一次性抖动。",
+          "ariaLabel": "最终录音位深",
+          "float32": "32 位浮点",
+          "pcm24": "24 位 PCM",
+          "pcm16": "16 位 PCM"
+        },
+        "softwareMonitoring": {
+          "title": "软件监听",
+          "description": "通过轨道的特效、推子、声像、发送、延迟补偿与输出路由监听硬件输入。",
+          "enable": "启用软件监听",
+          "warning": "请使用耳机或在音频接口上静音直接监听。开放扬声器可能产生大声反馈。",
+          "publishing": "正在发布更新的音频图…",
+          "enabled": "可用于带硬件输入的音频轨道。",
+          "disabled": "已关闭。现有各轨道监听选择会保留。"
+        },
+        "recovery": {
+          "title": "恢复",
+          "description": "文件不会因工程未保存就关闭而被删除。",
+          "pending": "条录音等待于交换目录"
+        }
+      },
+      "mixerDisplay": {
+        "category": "显示",
+        "page": "混音台",
+        "title": "混音台表",
+        "description": "控制通道峰值保持可见及瞬态后的回落方式。",
+        "peakHold": {
+          "title": "峰值保持时间",
+          "description": "让最高电平保持可见足够长，以便识别短瞬态。",
+          "ariaLabel": "混音台表峰值保持时间",
+          "800ms": "800 ms",
+          "2s": "2 秒",
+          "4s": "4 秒",
+          "infinite": "无限"
+        },
+        "returnRate": {
+          "title": "回落时间",
+          "description": "设置信号峰值后显示电平下降的速度。",
+          "ariaLabel": "混音台表回落时间",
+          "iecTypeI": "IEC Type I (11.8 dB/s)"
+        }
+      },
+      "loopback": {
+        "intro": "此测量涵盖真实转换器、驱动与线缆路径。停止走带并将一个输出直接连接到一个输入。",
+        "outputChannel": "输出通道",
+        "inputChannel": "输入通道",
+        "outputChannelAria": "环回输出通道",
+        "inputChannelAria": "环回输入通道",
+        "measuring": "测量中",
+        "measuringAction": "正在测量…",
+        "measure": "测量往返",
+        "inputChannelOption": "输入 {number}",
+        "outputChannelOption": "输出 {number}",
+        "status": {
+          "startFailed": "无法开始测量",
+          "preparing": "正在检查输入",
+          "measuring": "正在监听探测信号",
+          "complete": "物理环回已测量",
+          "failed": "测量失败",
+          "ready": "准备测量"
+        },
+        "messages": {
+          "inputTooLoud": "所选输入不够安静。请断开其他源、降低增益后重试。",
+          "signalNotDetected": "三秒内未检测到匹配的探测信号。请检查线缆与所选通道。",
+          "complete": "通过输出 {outputChannel} 与输入 {inputChannel} 测得 {measured} ms。{comparison}",
+          "comparison": " 回调估计值为 {estimate} ms。",
+          "preparing": "YADAW 检查噪声底时，请保持所选输入安静。",
+          "measuring": "已发送短探测信号。请保持环回线缆连接。",
+          "engineNotRunning": "运行物理环回测量前请先启动音频引擎。",
+          "ready": "将所选硬件输出直接连接到所选硬件输入。请先降低监听音量——测试会发出短探测信号。",
+          "readFailed": "无法读取测量结果。",
+          "startFailed": "无法开始环回测量。"
+        }
+      }
+    },
+    "project": {
+      "title": "工程设置",
+      "scopeLabel": "Yadaw / 工程",
+      "categories": {
+        "project": {
+          "label": "工程",
+          "description": "会话定义"
+        },
+        "timing": {
+          "label": "时序",
+          "description": "速度与时钟"
+        },
+        "media": {
+          "label": "媒体",
+          "description": "导入与渲染"
+        },
+        "musical": {
+          "label": "音乐",
+          "description": "调律与记谱"
+        }
+      },
+      "pages": {
+        "general": {
+          "label": "常规",
+          "description": "标识与会话格式"
+        },
+        "tempoMap": {
+          "label": "速度图",
+          "description": "速度事件与过渡"
+        },
+        "clock": {
+          "label": "时钟",
+          "description": "同步与时间码"
+        },
+        "importDefaults": {
+          "label": "导入默认值",
+          "description": "新资源处理"
+        },
+        "renderDefaults": {
+          "label": "渲染默认值",
+          "description": "导出格式与目标"
+        },
+        "tuning": {
+          "label": "调律",
+          "description": "音高参考与音律"
+        },
+        "notation": {
+          "label": "记谱",
+          "description": "拼写与显示默认值"
+        }
+      },
+      "general": {
+        "category": "工程",
+        "page": "常规",
+        "title": "常规",
+        "description": "存储在此工程内、并在任何打开位置共享的参数。",
+        "identity": {
+          "eyebrow": "标识",
+          "title": "工程标识",
+          "description": "在工作区与最近工程列表中显示的名称。",
+          "nameLabel": "工程名称"
+        },
+        "sessionFormat": {
+          "eyebrow": "会话格式",
+          "title": "拍号与音频基准",
+          "description": "速度在速度轨上编辑；这些值定义新媒体与初始音乐拍号。",
+          "sampleRate": "采样率",
+          "sampleRateHint": "现有资源保持不变。",
+          "meterNumerator": "拍号分子",
+          "meterDenominator": "拍号分母"
+        },
+        "waveforms": {
+          "eyebrow": "波形",
+          "title": "通道显示",
+          "description": "选择时间线片段中如何表示多通道音频。",
+          "channelsLabel": "波形通道",
+          "separate": "分离通道",
+          "aggregate": "合并峰值包络",
+          "separateHint": "分离模式为每个通道创建一条轨道，并兼容未来的环绕声格式。"
+        }
+      }
     }
+  },
+  "effectGraph": {
+    "title": "效果链图",
+    "description": "当前已发布的原生音频拓扑，包括适配器与延迟补偿。",
+    "toolbar": {
+      "nativeCompile": "原生编译",
+      "revision": "修订 {revision} · 构建 {build} · {sampleRate} Hz",
+      "waiting": "等待已发布的图",
+      "resetView": "重置视图"
+    },
+    "state": {
+      "loading": {
+        "title": "正在读取已发布的音频图…",
+        "description": "辅助进程在音频块边界交换图后，此处会显示该图。"
+      },
+      "empty": {
+        "title": "尚无已发布的图",
+        "description": "打开工程并启动音频引擎，以发布其编译后的效果链。"
+      },
+      "error": {
+        "title": "音频辅助进程不可用",
+        "retry": "重试"
+      }
+    },
+    "chart": {
+      "ariaLabel": "已编译音频效果图",
+      "legend": {
+        "activeEffect": "活动效果",
+        "audioRoute": "音频路由",
+        "pdcLatency": "PDC / 延迟",
+        "bypassedUnavailable": "旁路 / 不可用"
+      },
+      "tooltip": {
+        "state": "状态：{state}",
+        "latency": "延迟：{samples} 采样",
+        "signal": "信号：{width}"
+      }
+    }
+  },
+  "benchmark": {
+    "title": "音频性能基准测试",
+    "description": "测量 DSP 截止时间稳定性与进程边界传输。",
+    "intro": {
+      "summary": "在本地对捆绑 VST3 效果与进程边界传输进行简短的 DSP 截止时间测试。不会使用您的音频设备，也不会更改工程。",
+      "beforeStart": "开始之前",
+      "guidance": "暂停播放并关闭占用 CPU 的应用，以获得有代表性的结果。",
+      "runBenchmark": "运行基准测试"
+    },
+    "running": {
+      "kicker": "测量中",
+      "title": "正在测量引擎路径…",
+      "description": "VST3 处理 · 块截止时间 · IPC 往返 · 共享页"
+    },
+    "error": {
+      "kicker": "基准测试中断",
+      "title": "性能测试未能完成"
+    },
+    "actions": {
+      "close": "关闭",
+      "runAgain": "再次运行",
+      "tryAgain": "重试"
+    },
+    "rating": {
+      "limited": {
+        "label": "余量有限",
+        "summary": "请使用更大的缓冲区并保持会话精简，以确保稳定播放。"
+      },
+      "basic": {
+        "label": "基础",
+        "summary": "适合轨道与路由数量适中的专注型工程。"
+      },
+      "good": {
+        "label": "良好",
+        "summary": "对大多数制作会话具有舒适的实时处理能力。"
+      },
+      "excellent": {
+        "label": "优秀",
+        "summary": "对密集会话与低延迟工作具有充足的实时余量。"
+      }
+    },
+    "summary": {
+      "kicker": "最差 P99 截止时间",
+      "headroom": "% 余量"
+    },
+    "scenarios": {
+      "kicker": "实时 DSP",
+      "title": "块截止时间稳定性",
+      "subtitle": "以 p99 时序为主 · 实时系数为诊断参考",
+      "p99Unit": "ms p99",
+      "tracks": "{count} 条轨道",
+      "buses": "{count} 条总线",
+      "sends": "{count} 条发送",
+      "plugins": "{count} 个 VST3 效果",
+      "samples": "{count} 采样",
+      "budget": "{ms} ms 预算",
+      "late": "{misses} / {blocks} 超时",
+      "realtimeFactor": "{factor}× 实时"
+    },
+    "ipc": {
+      "kicker": "进程边界",
+      "title": "IPC 传输",
+      "suiteDuration": "{ms} ms 套件",
+      "table": {
+        "path": "路径",
+        "payload": "负载",
+        "p50": "P50",
+        "p99": "P99",
+        "rate": "速率"
+      },
+      "payload": {
+        "sharedPage": "共享页"
+      },
+      "rate": {
+        "readsPerSecond": "{rate}k 读/秒",
+        "throughput": "{rate} MiB/秒"
+      },
+      "note": {
+        "workers": "{workers} 工作线程 / {blocking} 阻塞线程 / {egress} 出站",
+        "arenaOffers": "{count} 次 arena 提供",
+        "messagePackBody": "{size} MessagePack 正文",
+        "debugOnly": "仅供诊断；正式带宽评级需使用 release 构建。"
+      }
+    },
+    "footer": {
+      "logicalCores": "{count} 逻辑核心 · {platform} · {architecture}",
+      "measured": "于 {measuredAt} 测量，耗时 {duration} 秒"
+    }
+  },
+  "performance": {
+    "trigger": {
+      "ariaLabel": "打开性能监视器。状态：{severity}",
+      "cpu": "CPU",
+      "mem": "内存"
+    },
+    "header": {
+      "kicker": "实时余量",
+      "title": "性能监视器",
+      "refreshAria": "刷新性能数据"
+    },
+    "severity": {
+      "normal": "正常",
+      "warning": "警告",
+      "critical": "严重"
+    },
+    "latency": {
+      "criticalTitle": "音频延迟严重",
+      "warningTitle": "音频延迟偏高",
+      "message": "当前或滚动往返延迟为 {latency}。"
+    },
+    "thresholdNote": "警告 / 严重 · CPU {cpuWarning}/{cpuCritical}% · 内存 {memWarning}/{memCritical}% · 往返 {rtlWarning}/{rtlCritical} ms",
+    "audioSection": {
+      "title": "音频时序",
+      "roundTrip": "往返",
+      "rollingAvg": "滚动平均",
+      "rollingMax": "滚动最大",
+      "output": "输出",
+      "buffer": "缓冲",
+      "frames": "帧",
+      "xrun": "XRUN"
+    },
+    "ipcSection": {
+      "title": "音频 IPC 传输",
+      "unavailable": "不可用",
+      "build": "构建 {fingerprint}",
+      "placeholder": "音频辅助进程诊断不可用。",
+      "requestRouter": "请求路由",
+      "normalPriority": "{normal} 普通 · {priority} 优先",
+      "slotsPerChannel": "每通道 {count} 个槽位",
+      "arenaLeases": "Arena 租约",
+      "leases": "租约",
+      "liveTotal": "{live} 活跃 · {packets} 包 / {total} 总计",
+      "bulkArena": "Bulk arena",
+      "regionsDetail": "{regions} 区域 · {offers} 提供 · {busy} 忙碌 · {quarantine} 隔离",
+      "runtimeWorkers": "运行时工作线程",
+      "asyncBlocking": "{async} 异步 · {blocking} 阻塞",
+      "egressDetail": "{egress} 出站并发 · {active} 阻塞活跃",
+      "asyncEgress": "异步出站",
+      "activeQueued": "{active} 活跃 · {queued} 排队",
+      "egressStats": "{highWater} 高水位 · {batches} 批次 · {copied} 已复制",
+      "inlinePayload": "内联负载",
+      "packets": "包",
+      "serializedRegions": "{serialized} 已序列化 · {regions} 共享区域",
+      "telemetryPage": "遥测页",
+      "meters": "表",
+      "telemetryDetail": "修订 {revision} · {fallbackReads} 次回退读取",
+      "parameterSpsc": "参数 SPSC",
+      "ringDetail": "{softFull} 软满 · {hardFull} 满 · {boundary} 边界",
+      "priorityHeartbeat": "优先心跳",
+      "waiting": "等待中",
+      "heartbeatDetail": "IPC {ipcGeneration} · Tokio {tokioGeneration} · UI {winitGeneration}",
+      "routerHealth": "路由健康",
+      "eventsTimeouts": "{events} 事件 · {timeouts} 超时",
+      "callbackStale": "回调 {callbackGeneration} · 过期 {staleEpoch}"
+    },
+    "resourceSections": {
+      "cpuChannels": "CPU 通道",
+      "total": "总计 {percent}",
+      "samplingCores": "正在采样各 CPU 核心…",
+      "physicalMemory": "物理内存",
+      "used": "已用 {size}",
+      "free": "可用 {size}",
+      "totalMemory": "总计 {size}",
+      "projectStorage": "工程存储",
+      "freeSpace": "可用空间",
+      "workspace": "工作区",
+      "swap": "交换",
+      "percentFree": "可用 {percent}%",
+      "available": "可用 {size}",
+      "unconfigured": "未配置"
+    }
+  },
+  "studio": {
+    "common": {
+      "comingSoon": "即将推出"
+    },
+    "topbar": {
+      "library": "资料库",
+      "inspector": "检查器",
+      "quickHelp": "快速帮助",
+      "downloadManager": "下载管理器",
+      "smartControls": "智能控制",
+      "mixer": "混音台",
+      "pianoRoll": "钢琴卷帘",
+      "lowLatencyMode": "低延迟模式",
+      "varispeed": "变速",
+      "tuner": "校音器",
+      "solo": "独奏",
+      "countIn": "预备拍",
+      "metronome": "节拍器",
+      "listEditors": "列表编辑器",
+      "notes": "备注",
+      "loopBrowser": "循环浏览器",
+      "mediaBrowser": "媒体浏览器"
+    },
+    "transport": {
+      "ariaLabel": "走带控制",
+      "rewind": "倒退",
+      "fastForward": "快进",
+      "goToBeginning": "回到开头",
+      "goToBeginningTooltip": "回到开头 · Home",
+      "play": "播放",
+      "pause": "暂停",
+      "playTooltip": "播放 · 空格",
+      "pauseTooltip": "暂停 · 空格",
+      "record": "录音",
+      "recordTooltip": "录音 · R",
+      "captureRecording": "捕获录音",
+      "cycle": "循环"
+    },
+    "musical": {
+      "ariaLabel": "工程音乐显示",
+      "bar": "小节",
+      "beat": "拍",
+      "tempo": "速度",
+      "meter": "拍号",
+      "key": "调号",
+      "editTempoAria": "编辑当前速度",
+      "tempoButtonAria": "速度 {value} BPM；双击编辑",
+      "tempoEditTitle": "双击编辑当前速度轨事件",
+      "projectKeyTooltip": "工程调号 · 即将推出",
+      "projectKeyAria": "工程调号"
+    },
+    "master": {
+      "ariaLabel": "主输出",
+      "channelName": "主输出"
+    },
+    "statusbar": {
+      "audioActive": "音频运行中",
+      "audioStopped": "音频已停止",
+      "sampleRate": "{rate} kHz",
+      "sampleRateUnknown": "— kHz",
+      "bitDepth": "24 位",
+      "buffer": "缓冲 {size}",
+      "bufferUnknown": "缓冲 —",
+      "rtl": "RTL {latency}",
+      "avg": "AVG {latency}",
+      "xrun": "XRUN {count}"
+    },
+    "zoom": {
+      "ariaLabel": "编排缩放控制",
+      "time": "时间",
+      "track": "轨道",
+      "gain": "增益",
+      "timeZoom": "时间缩放",
+      "timeZoomValue": "每四分音符 {pixels} 像素",
+      "timeZoomReset": "双击重置时间缩放",
+      "trackHeight": "轨道高度",
+      "trackHeightValue": "{height} 像素",
+      "trackHeightReset": "双击重置轨道高度",
+      "waveformGain": "波形增益",
+      "waveformGainValue": "{scale} 倍",
+      "waveformGainReset": "双击重置波形增益"
+    },
+    "arrangement": {
+      "ariaLabel": "编排时间线",
+      "tracks": "轨道",
+      "tempo": "速度",
+      "meter": "拍号",
+      "key": "调号",
+      "globalTrack": "全局轨道",
+      "bpm": "BPM",
+      "meterNumeratorAria": "所选拍号分子",
+      "meterDenominatorAria": "所选拍号分母",
+      "keySignatureAria": "所选调号",
+      "majorKeys": "大调",
+      "minorKeys": "小调",
+      "newRecording": "新录音",
+      "midiClipName": "MIDI 片段 {index}",
+      "trackRenameLabel": "{name}；双击重命名；Alt+上/下箭头重新排序",
+      "timelineRulerAria": "时间线标尺",
+      "instrumentLaneAria": "乐器轨；双击空白处或按 Enter 创建 MIDI 片段",
+      "createMidiClipHint": "双击以创建 MIDI 片段",
+      "recordingAria": "正在录音",
+      "resizeMixerDockAria": "调整混音台停靠区大小"
+    },
+    "trackControls": {
+      "ariaLabel": "{name} 混音台快捷控制",
+      "mute": "静音",
+      "muteAria": "静音 {name}",
+      "solo": "独奏",
+      "soloAria": "独奏 {name}",
+      "recordEnable": "启用录音",
+      "armAria": "预备录音 {name}",
+      "monitorAria": "监听 {name}",
+      "inputMonitoring": "输入监听",
+      "inputMonitoringDisabled": "请先启用软件监听并选择硬件输入"
+    },
+    "soundBrowser": {
+      "eyebrow": "资料库",
+      "title": "声音浏览器",
+      "searchAria": "搜索声音",
+      "searchPlaceholder": "搜索声音与设备",
+      "tabsAria": "声音浏览器",
+      "tabs": {
+        "instruments": "乐器",
+        "effects": "音频效果",
+        "samples": "采样",
+        "plugins": "插件"
+      },
+      "headings": {
+        "instruments": "VST3 乐器",
+        "effects": "VST3 音频效果",
+        "samples": "工程音频",
+        "catalog": "插件目录"
+      },
+      "empty": {
+        "instruments": "未找到兼容的 VST3 乐器。",
+        "effects": "未找到兼容的 VST3 效果。"
+      },
+      "builtIn": "内置 · ",
+      "rescan": "重新扫描 VST3",
+      "scanning": "正在扫描…"
+    },
+    "inspector": {
+      "eyebrow": "信号实验室",
+      "title": "引擎探测",
+      "description": "追踪测试信号在 Vue、Electron、N-API 与 Rust DSP 核心中的路径。",
+      "outputPeak": "输出峰值",
+      "outputPeakMeter": "输出峰值表",
+      "offlineGain": "离线增益",
+      "runSignalCheck": "运行信号检测",
+      "nativeTelemetry": "原生遥测",
+      "input": "输入",
+      "audioIo": "音频 I/O",
+      "sampleRate": "采样率",
+      "clockSync": "时钟同步"
+    },
+    "lanes": {
+      "tempo": "速度",
+      "meter": "拍号",
+      "key": "调号",
+      "positionLabel": "拍",
+      "selected": "已选",
+      "selectedValueAria": "已选 {label} 值",
+      "globalTrackAria": "{label} 全局轨道",
+      "expandTrackAria": "展开 {label} 轨道",
+      "collapseTrackAria": "折叠 {label} 轨道"
+    },
+    "rename": {
+      "renameAria": "重命名 {name}",
+      "doubleClickTitle": "{name} — 双击重命名"
+    },
+    "placeholder": {
+      "libraryEyebrow": "资料库",
+      "inspectorEyebrow": "检查器",
+      "browserTitle": "浏览器",
+      "propertiesTitle": "属性",
+      "leftBody": "声音与设备将显示在此处。",
+      "rightBody": "片段与轨道控制将显示在此处。",
+      "badge": "占位"
+    }
+  },
+  "mixer": {
+    "console": {
+      "ariaLabel": "混音台",
+      "title": "混音台",
+      "summary": "{audio} 条音频 · {instrument} 条乐器 · {aux} 条辅助 · {outputs} 个输出",
+      "actions": {
+        "ariaLabel": "混音台操作",
+        "addAudio": "添加音频轨",
+        "addAudioLabel": "音频",
+        "addInstrument": "添加乐器轨",
+        "addInstrumentLabel": "乐器",
+        "addAux": "添加辅助通道",
+        "addAuxLabel": "辅助",
+        "addOutput": "添加硬件输出",
+        "addOutputLabel": "输出",
+        "undo": "撤销混音台更改",
+        "redo": "重做混音台更改"
+      },
+      "replaceInstrument": {
+        "eyebrow": "乐器插槽",
+        "title": "替换乐器？",
+        "description": "{current} 将被替换为 {next}。",
+        "detail": "先前的组件与控制器状态仍可通过撤销恢复。",
+        "confirm": "替换乐器"
+      },
+      "deleteChannel": {
+        "eyebrow": "混音台路由",
+        "title": "删除通道？",
+        "description": "{name} 通道及其片段将从时间线中移除。媒体资源将保留。",
+        "detail": "此更改会加入工程历史，可以撤销。",
+        "confirm": "删除通道"
+      }
+    },
+    "sections": {
+      "input": "输入",
+      "audioFx": "音频效果",
+      "sends": "发送",
+      "output": "输出",
+      "group": "编组",
+      "automation": "自动化",
+      "pan": "声像",
+      "volume": "音量",
+      "channel": "通道"
+    },
+    "channelKind": {
+      "audio": "音频",
+      "instrument": "乐器",
+      "aux": "辅助",
+      "master": "主输出",
+      "output": "输出"
+    },
+    "channelControls": {
+      "arm": "启用录音 {name}",
+      "recordEnable": "录音启用",
+      "monitor": "监听 {name}",
+      "inputMonitoring": "输入监听",
+      "inputMonitoringDisabled": "请先启用软件监听并选择硬件输入",
+      "mute": "静音 {name}",
+      "solo": "独奏 {name}"
+    },
+    "channelStrip": {
+      "ariaLabel": "{name} {kind} 通道",
+      "noGroup": "无编组",
+      "read": "读取",
+      "channelNameLabel": "{name} 通道名称；双击重命名"
+    },
+    "channelMenu": {
+      "ariaLabel": "{name} 通道菜单",
+      "channelColor": "通道颜色",
+      "colorAria": "{name} 通道颜色",
+      "delete": "删除通道",
+      "deleteAria": "删除 {name}"
+    },
+    "sendSection": {
+      "ariaLabel": "通道发送",
+      "missingOutput": "缺少输出",
+      "missingBus": "缺少总线",
+      "tapPre": "前置",
+      "tapPost": "后置",
+      "tapPan": "声像后",
+      "editSend": "编辑发送至 {target}",
+      "header": "发送",
+      "deleteSend": "删除发送至 {target}",
+      "enabled": "启用",
+      "disableSend": "禁用发送",
+      "enableSend": "启用发送",
+      "on": "开",
+      "off": "关",
+      "destination": "目标",
+      "sendTarget": "发送目标",
+      "buses": "总线",
+      "outputs": "输出",
+      "sendPosition": "发送位置",
+      "level": "电平",
+      "levelDb": "{level} dB",
+      "sendLevel": "发送电平",
+      "sendLevelValue": "发送电平（分贝）",
+      "addSend": "在空槽位添加发送",
+      "noSend": "无发送"
+    },
+    "outputSection": {
+      "hardwareSummary": "硬件 {channels}",
+      "noRoute": "无路由",
+      "outputAria": "{name} 输出",
+      "hardwareRouting": "{name} 硬件输出路由",
+      "hardwareOutput": "硬件输出",
+      "left": "左",
+      "right": "右",
+      "hardwareOutputN": "{name} 硬件输出 {n}",
+      "outputN": "输出 {n}",
+      "global": "全局"
+    },
+    "pluginSection": {
+      "ariaLabel": "音频效果",
+      "dropAtSlot": "拖放到效果插槽 {slot}",
+      "pluginState": "{name} 插件 {state}",
+      "openEditor": "打开 {name} 编辑器",
+      "audioMode": "音频模式：{mode}",
+      "bypass": "旁路",
+      "enable": "启用",
+      "bypassPlugin": "{action} {name}",
+      "remove": "移除 {name}",
+      "addEffectTitle": "添加音频效果",
+      "searchEffects": "搜索 VST3 音频效果",
+      "noEffects": "未找到兼容的 VST3 效果。请从声音浏览器重新扫描。",
+      "addEffect": "添加 VST3 音频效果",
+      "noInsert": "无插入"
+    },
+    "instrumentInput": {
+      "ariaLabel": "{name} 乐器输入 {state}",
+      "openEditor": "打开 {name} 乐器编辑器",
+      "audioMode": "音频模式：{mode}",
+      "remove": "移除 {name}",
+      "chooseTitle": "选择乐器",
+      "searchInstruments": "搜索 VST3 乐器",
+      "noInstruments": "未找到兼容的 VST3 乐器。请从声音浏览器重新扫描。",
+      "assign": "分配 VST3 乐器输入"
+    },
+    "inputCapsule": {
+      "inputChannel": "{name} 输入通道",
+      "useMono": "为 {name} 使用单声道输入",
+      "linkStereo": "为 {name} 链接相邻输入为立体声",
+      "stereoLinked": "立体声已链接",
+      "linkStereoTitle": "链接相邻输入为立体声",
+      "hardwareInputs": "硬件输入",
+      "buses": "总线",
+      "inPrefix": "输入",
+      "busPrefix": "总线"
+    },
+    "inputSection": {
+      "global": "全局",
+      "mixBus": "混音总线"
+    },
+    "pluginPicker": {
+      "vst3": "VST3",
+      "searchPlaceholder": "搜索插件",
+      "addPlugin": "添加 {name}",
+      "builtin": "内置",
+      "noSearchResults": "没有匹配此搜索的插件。",
+      "browseVendor": "浏览 {vendor} 插件",
+      "choosePlugin": "选择 {name}",
+      "modeNotSupported": "此插件不支持 {mode}",
+      "modeSupported": "{label}：{detail}",
+      "unknownVendor": "未知厂商"
+    },
+    "routeGroups": {
+      "buses": "总线",
+      "outputs": "输出",
+      "missingOutput": "缺少输出"
+    }
+  },
+  "plugins": {
+    "rack": {
+      "ariaLabel": "插件插入架",
+      "inserts": "插入",
+      "emptyHint": "在声音浏览器中双击效果以添加到此处。"
+    },
+    "instrumentSlot": {
+      "ariaLabel": "乐器插槽",
+      "heading": "乐器",
+      "vst3": "VST3",
+      "empty": "空",
+      "openEditor": "打开乐器编辑器",
+      "remove": "移除乐器",
+      "chooseHint": "从声音浏览器中选择乐器。"
+    },
+    "pluginSlot": {
+      "move": "移动 {name}",
+      "audioMode": "音频模式：{mode}",
+      "araTitle": "此插入已启用 ARA 2 文档处理",
+      "bypass": "旁路",
+      "enable": "启用",
+      "toggle": "{action} {name}",
+      "openEditor": "打开 {name} 编辑器",
+      "remove": "移除 {name}"
+    },
+    "audioModeMenu": {
+      "ariaLabel": "选择插件音频模式",
+      "back": "返回插件列表",
+      "chooseMode": "选择音频模式",
+      "notSupported": "此插件不支持 {label}",
+      "supported": "{label}：{detail}",
+      "unavailable": "不可用"
+    },
+    "audioMode": {
+      "mono": {
+        "label": "单声道",
+        "detailInstrument": "1 通道输出",
+        "detailEffect": "1 → 1"
+      },
+      "stereo": {
+        "label": "立体声",
+        "detailInstrument": "2 通道输出",
+        "detailEffect": "2 → 2"
+      },
+      "monoToStereo": {
+        "label": "单声道转立体声",
+        "detail": "1 → 2"
+      },
+      "dualMono": {
+        "label": "双单声道",
+        "detail": "2 × (1 → 1)"
+      }
+    }
+  },
+  "pianoRoll": {
+    "dock": {
+      "ariaLabel": "钢琴卷帘编辑器",
+      "noteGrid": "钢琴卷帘音符网格"
+    },
+    "toolbar": {
+      "commands": "钢琴卷帘命令",
+      "tools": "钢琴卷帘工具",
+      "toolSelect": "选择",
+      "toolDraw": "绘制",
+      "toolErase": "擦除",
+      "snap": "吸附",
+      "snapResolution": "音符吸附分辨率",
+      "timeZoom": "钢琴卷帘时间缩放",
+      "zoomTimeOut": "缩小钢琴卷帘时间",
+      "zoomTimeIn": "放大钢琴卷帘时间",
+      "keyZoom": "钢琴卷帘音高缩放",
+      "zoomKeysOut": "缩小钢琴卷帘音高",
+      "zoomKeysIn": "放大钢琴卷帘音高",
+      "editableClips": "可编辑 MIDI 片段",
+      "close": "关闭钢琴卷帘",
+      "closeLabel": "关闭"
+    },
+    "velocityLane": {
+      "header": "力度",
+      "ariaLabel": "力度轨。拖动条块以更改音符力度。",
+      "barLabel": "{clip} 中 {note} 的力度 {velocity}"
+    },
+    "inspector": {
+      "ariaLabel": "所选音符属性",
+      "noteCount": "{count} 个音符",
+      "pitch": "音高",
+      "startTick": "起始 tick",
+      "duration": "时长",
+      "channel": "通道",
+      "velocity": "力度",
+      "release": "释音力度",
+      "quantize": "量化",
+      "quantizeAria": "将所选音符起始量化到吸附网格",
+      "velocityLane": "力度轨",
+      "velocityLaneAria": "切换力度轨",
+      "resolution": "分辨率 1/3840 音符 · 整数 tick"
+    },
+    "snap": {
+      "off": "关 · 1/3840",
+      "1/1": "1/1",
+      "1/2": "1/2",
+      "1/4": "1/4",
+      "1/8": "1/8",
+      "1/16": "1/16",
+      "1/32": "1/32",
+      "1/64": "1/64",
+      "1/2T": "1/2 三连音",
+      "1/4T": "1/4 三连音",
+      "1/8T": "1/8 三连音",
+      "1/16T": "1/16 三连音",
+      "1/32T": "1/32 三连音",
+      "1/64T": "1/64 三连音"
+    }
+  },
+  "midiImport": {
+    "eyebrow": "MIDI 导入",
+    "title": "导入 MIDI",
+    "defaultFileName": "导入 MIDI 文件",
+    "unknownTiming": "未知时序",
+    "description": "{fileName} · {timing} · 格式 {format}",
+    "notes": "{count} 个音符",
+    "events": "{count} 个事件",
+    "sequence": "序列 {n}",
+    "targetAria": "{name} 目标",
+    "ignore": "忽略",
+    "newTrack": "新建乐器轨",
+    "instrumentAria": "{name} VST3 乐器",
+    "noInstrument": "未分配乐器",
+    "tempoLegend": "导入 MIDI 的速度",
+    "keepProjectTempo": "保留工程速度轨",
+    "keepProjectTempoDetail": "将 MIDI 放置在播放头处，并跟随当前工程速度轨。",
+    "importMidiTempo": "将 MIDI 速度导入工程",
+    "importMidiTempoDetail": "从 tick 0 开始，并用 MIDI 速度映射替换工程速度轨。",
+    "import": "导入 MIDI",
+    "importing": "正在导入 MIDI"
   }
 }

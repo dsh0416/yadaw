@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue"
+import { useI18n } from "vue-i18n"
 import { Trash2 } from "@lucide/vue"
 import { UiCascadingSelect, UiPopover, UiSelect } from "@yadaw/ui"
 import type {
@@ -30,22 +31,28 @@ const emit = defineEmits<{
   deleteSend: [sendId: string]
 }>()
 
+const { t } = useI18n()
+
 const sendGestures = new Map<string, ReturnType<typeof useParameterGesture>>()
 const supportsSends = computed(() => ["audio", "instrument", "aux"].includes(props.channel.kind))
 const emptyRows = computed(() => Math.max(0, props.slotRows - props.sends.length))
 const canAddSend = computed(() => props.sendTargets.length > 0)
 const alignmentRows = computed(() => Math.max(0, emptyRows.value - (canAddSend.value ? 1 : 0)))
 const sendTargetGroups = computed(() =>
-  mixerRouteGroups(props.sendTargets, props.buses, props.outputs)
+  mixerRouteGroups(props.sendTargets, props.buses, props.outputs, t)
 )
 
 function targetName(send: MixerSendState): string {
   if (send.targetChannelId) {
     return (
-      props.outputs.find((output) => output.id === send.targetChannelId)?.name ?? "Missing output"
+      props.outputs.find((output) => output.id === send.targetChannelId)?.name ??
+      t("mixer.sendSection.missingOutput")
     )
   }
-  return props.buses.find((bus) => bus.channel === send.targetBus)?.name ?? "Missing bus"
+  return (
+    props.buses.find((bus) => bus.channel === send.targetBus)?.name ??
+    t("mixer.sendSection.missingBus")
+  )
 }
 
 function targetValue(target: MixerRouteTarget): string {
@@ -82,9 +89,9 @@ function isTargetAvailable(send: MixerSendState, target: MixerRouteTarget): bool
 }
 
 function tapLabel(tap: MixerSendTap): string {
-  if (tap === "pre") return "PRE"
-  if (tap === "post") return "POST"
-  return "PAN"
+  if (tap === "pre") return t("mixer.sendSection.tapPre")
+  if (tap === "post") return t("mixer.sendSection.tapPost")
+  return t("mixer.sendSection.tapPan")
 }
 
 function sendLevel(send: MixerSendState): string {
@@ -127,13 +134,13 @@ function createSend(value: string): void {
 </script>
 
 <template>
-  <section class="send-section" data-section="sends" aria-label="Channel sends">
+  <section class="send-section" data-section="sends" :aria-label="t('mixer.sendSection.ariaLabel')">
     <template v-if="supportsSends">
       <UiPopover v-for="send in sends" :key="send.id" side="top" :side-offset="7">
         <template #trigger>
           <button
             :class="['send-row', { disabled: !send.enabled }]"
-            :aria-label="`Edit send to ${targetName(send)}`"
+            :aria-label="t('mixer.sendSection.editSend', { target: targetName(send) })"
           >
             <i aria-hidden="true" />
             <span>{{ targetName(send) }}</span>
@@ -144,36 +151,41 @@ function createSend(value: string): void {
         <div class="send-popover">
           <header>
             <div>
-              <span>SEND</span><strong>{{ targetName(send) }}</strong>
+              <span>{{ t("mixer.sendSection.header") }}</span
+              ><strong>{{ targetName(send) }}</strong>
             </div>
             <button
               class="delete-send"
-              :aria-label="`Delete send to ${targetName(send)}`"
+              :aria-label="t('mixer.sendSection.deleteSend', { target: targetName(send) })"
               @click="emit('deleteSend', send.id)"
             >
               <Trash2 :size="12" />
             </button>
           </header>
           <label class="toggle-row">
-            <span>Enabled</span>
+            <span>{{ t("mixer.sendSection.enabled") }}</span>
             <button
               :class="{ active: send.enabled }"
-              :aria-label="send.enabled ? 'Disable send' : 'Enable send'"
+              :aria-label="
+                send.enabled
+                  ? t('mixer.sendSection.disableSend')
+                  : t('mixer.sendSection.enableSend')
+              "
               :aria-pressed="send.enabled"
               @click="updateSend(send, { enabled: !send.enabled })"
             >
-              {{ send.enabled ? "ON" : "OFF" }}
+              {{ send.enabled ? t("mixer.sendSection.on") : t("mixer.sendSection.off") }}
             </button>
           </label>
           <label>
-            <span>Destination</span>
+            <span>{{ t("mixer.sendSection.destination") }}</span>
             <UiSelect
               :model-value="sendTargetValue(send)"
               size="compact"
-              aria-label="Send target"
+              :aria-label="t('mixer.sendSection.sendTarget')"
               @update:model-value="updateSend(send, targetPatch($event))"
             >
-              <optgroup label="Buses">
+              <optgroup :label="t('mixer.sendSection.buses')">
                 <option
                   v-for="bus in buses"
                   :key="bus.channel"
@@ -183,7 +195,7 @@ function createSend(value: string): void {
                   {{ bus.name }}
                 </option>
               </optgroup>
-              <optgroup label="Outputs">
+              <optgroup :label="t('mixer.sendSection.outputs')">
                 <option
                   v-for="output in outputs"
                   :key="output.id"
@@ -195,7 +207,7 @@ function createSend(value: string): void {
               </optgroup>
             </UiSelect>
           </label>
-          <div class="tap-options" aria-label="Send position">
+          <div class="tap-options" :aria-label="t('mixer.sendSection.sendPosition')">
             <button
               v-for="option in ['pre', 'post', 'post-pan'] as MixerSendTap[]"
               :key="option"
@@ -208,7 +220,8 @@ function createSend(value: string): void {
           </div>
           <label class="parameter-row">
             <span
-              >Level <b>{{ sendLevel(send) }} dB</b></span
+              >{{ t("mixer.sendSection.level") }}
+              <b>{{ t("mixer.sendSection.levelDb", { level: sendLevel(send) }) }}</b></span
             >
             <input
               type="range"
@@ -216,7 +229,7 @@ function createSend(value: string): void {
               max="12"
               step="0.1"
               :value="send.levelDb"
-              aria-label="Send level"
+              :aria-label="t('mixer.sendSection.sendLevel')"
               @pointerdown="sendLevelGesture(send).begin"
               @input="sendLevelGesture(send).preview"
               @change="sendLevelGesture(send).commit"
@@ -229,7 +242,7 @@ function createSend(value: string): void {
               max="12"
               step="0.1"
               :value="send.levelDb"
-              aria-label="Send level value in decibels"
+              :aria-label="t('mixer.sendSection.sendLevelValue')"
               @change="sendLevelGesture(send).reset(numberValue($event))"
             />
           </label>
@@ -244,7 +257,7 @@ function createSend(value: string): void {
           size="compact"
           appearance="embedded"
           class="send-target-picker"
-          aria-label="Add send in empty slot"
+          :aria-label="t('mixer.sendSection.addSend')"
           @update:model-value="createSend"
         />
       </div>
@@ -256,7 +269,7 @@ function createSend(value: string): void {
       />
     </template>
     <template v-else>
-      <span class="send-row empty disabled">NO SEND</span>
+      <span class="send-row empty disabled">{{ t("mixer.sendSection.noSend") }}</span>
       <span
         v-for="index in Math.max(0, slotRows - 1)"
         :key="index"

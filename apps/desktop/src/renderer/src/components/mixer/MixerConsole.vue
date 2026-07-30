@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue"
+import { useI18n } from "vue-i18n"
 import { Plus, RotateCcw, RotateCw } from "@lucide/vue"
 import { useGlobalDialog } from "../../composables/useGlobalDialog"
 import { useMixerStore } from "../../stores/mixer"
@@ -11,6 +12,7 @@ import MixerSectionLabels from "./MixerSectionLabels.vue"
 const mixerStore = useMixerStore()
 const pluginStore = usePluginStore()
 const { confirm } = useGlobalDialog()
+const { t } = useI18n()
 
 const pluginSlotRows = computed(
   () =>
@@ -72,12 +74,15 @@ async function assignInstrument(channelId: string, selection: PluginSelection): 
   )
   if (current) {
     const confirmed = await confirm({
-      eyebrow: "Instrument slot",
+      eyebrow: t("mixer.console.replaceInstrument.eyebrow"),
       tone: "warning",
-      title: "Replace instrument?",
-      description: `${current.descriptor.name} will be replaced with ${selection.descriptor.name}.`,
-      detail: "The previous component and controller state remain available through undo.",
-      confirmLabel: "Replace instrument",
+      title: t("mixer.console.replaceInstrument.title"),
+      description: t("mixer.console.replaceInstrument.description", {
+        current: current.descriptor.name,
+        next: selection.descriptor.name
+      }),
+      detail: t("mixer.console.replaceInstrument.detail"),
+      confirmLabel: t("mixer.console.replaceInstrument.confirm"),
       destructive: false
     })
     if (!confirmed) return
@@ -89,12 +94,12 @@ async function deleteChannel(channelId: string): Promise<void> {
   const channel = mixerStore.channels.find((candidate) => candidate.id === channelId)
   if (!channel || channel.kind === "master" || channel.systemRole !== null) return
   const confirmed = await confirm({
-    eyebrow: "Mixer routing",
+    eyebrow: t("mixer.console.deleteChannel.eyebrow"),
     tone: "danger",
-    title: "Delete channel?",
-    description: `The ${channel.name} channel and its clips will be removed from the timeline. Media assets will be kept.`,
-    detail: "This change is added to the project history and can be undone.",
-    confirmLabel: "Delete channel",
+    title: t("mixer.console.deleteChannel.title"),
+    description: t("mixer.console.deleteChannel.description", { name: channel.name }),
+    detail: t("mixer.console.deleteChannel.detail"),
+    confirmLabel: t("mixer.console.deleteChannel.confirm"),
     destructive: true
   })
   if (confirmed) void mixerStore.deleteChannel(channel.id)
@@ -102,38 +107,47 @@ async function deleteChannel(channelId: string): Promise<void> {
 </script>
 
 <template>
-  <section class="mixer-console" aria-label="Mixer console">
+  <section class="mixer-console" :aria-label="t('mixer.console.ariaLabel')">
     <header class="mixer-toolbar">
       <div>
-        <span>MIXER</span>
-        <strong
-          >{{ mixerStore.audioTracks.length }} audio ·
-          {{ mixerStore.instrumentTracks.length }} instrument ·
-          {{ mixerStore.auxChannels.length }} aux · {{ mixerStore.outputs.length }} outputs</strong
-        >
+        <span>{{ t("mixer.console.title") }}</span>
+        <strong>{{
+          t("mixer.console.summary", {
+            audio: mixerStore.audioTracks.length,
+            instrument: mixerStore.instrumentTracks.length,
+            aux: mixerStore.auxChannels.length,
+            outputs: mixerStore.outputs.length
+          })
+        }}</strong>
       </div>
-      <nav aria-label="Mixer actions">
-        <button aria-label="Add audio track" @click="mixerStore.createAudioTrack()">
-          <Plus :size="12" />Audio
-        </button>
-        <button aria-label="Add instrument track" @click="mixerStore.createInstrumentTrack">
-          <Plus :size="12" />Instrument
-        </button>
-        <button aria-label="Add aux channel" @click="mixerStore.createAux()">
-          <Plus :size="12" />Aux
-        </button>
-        <button aria-label="Add hardware output" @click="mixerStore.createOutput">
-          <Plus :size="12" />Output
+      <nav :aria-label="t('mixer.console.actions.ariaLabel')">
+        <button
+          :aria-label="t('mixer.console.actions.addAudio')"
+          @click="mixerStore.createAudioTrack()"
+        >
+          <Plus :size="12" />{{ t("mixer.console.actions.addAudioLabel") }}
         </button>
         <button
-          aria-label="Undo mixer change"
+          :aria-label="t('mixer.console.actions.addInstrument')"
+          @click="mixerStore.createInstrumentTrack"
+        >
+          <Plus :size="12" />{{ t("mixer.console.actions.addInstrumentLabel") }}
+        </button>
+        <button :aria-label="t('mixer.console.actions.addAux')" @click="mixerStore.createAux()">
+          <Plus :size="12" />{{ t("mixer.console.actions.addAuxLabel") }}
+        </button>
+        <button :aria-label="t('mixer.console.actions.addOutput')" @click="mixerStore.createOutput">
+          <Plus :size="12" />{{ t("mixer.console.actions.addOutputLabel") }}
+        </button>
+        <button
+          :aria-label="t('mixer.console.actions.undo')"
           :disabled="!mixerStore.canUndo"
           @click="mixerStore.undo"
         >
           <RotateCcw :size="13" />
         </button>
         <button
-          aria-label="Redo mixer change"
+          :aria-label="t('mixer.console.actions.redo')"
           :disabled="!mixerStore.canRedo"
           @click="mixerStore.redo"
         >

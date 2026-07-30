@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue"
+import { useI18n } from "vue-i18n"
 import { UiButton, UiDialog, UiSelect, UiStatusNotice } from "@yadaw/ui"
 import type { MidiImportTrackTarget } from "@yadaw/contracts"
 import { useMidiImportStore } from "../../stores/midiImport"
@@ -9,6 +10,7 @@ import { usePluginStore } from "../../stores/plugins"
 const midiImportStore = useMidiImportStore()
 const mixerStore = useMixerStore()
 const pluginStore = usePluginStore()
+const { t } = useI18n()
 const instrumentTracks = computed(() => mixerStore.instrumentTracks)
 const open = computed({
   get: () => midiImportStore.open,
@@ -17,13 +19,14 @@ const open = computed({
   }
 })
 const sourceFileName = computed(
-  () => midiImportStore.preview?.path.split(/[\\/]/).at(-1) ?? "Import MIDI file"
+  () => midiImportStore.preview?.path.split(/[\\/]/).at(-1) ?? t("midiImport.defaultFileName")
 )
-const description = computed(
-  () =>
-    `${sourceFileName.value} · ${
-      midiImportStore.preview?.sourceTiming ?? "Unknown timing"
-    } · Format ${midiImportStore.preview?.format ?? "—"}`
+const description = computed(() =>
+  t("midiImport.description", {
+    fileName: sourceFileName.value,
+    timing: midiImportStore.preview?.sourceTiming ?? t("midiImport.unknownTiming"),
+    format: midiImportStore.preview?.format ?? "—"
+  })
 )
 
 function targetValue(sourceTrack: number, sequence: number): string {
@@ -57,8 +60,8 @@ function updateInstrument(sourceTrack: number, sequence: number, value: string):
 <template>
   <UiDialog
     v-model="open"
-    eyebrow="MIDI import"
-    title="Import MIDI"
+    :eyebrow="t('midiImport.eyebrow')"
+    :title="t('midiImport.title')"
     :description="description"
     size="lg"
     :dismissible="!midiImportStore.busy"
@@ -70,23 +73,23 @@ function updateInstrument(sourceTrack: number, sequence: number, value: string):
           :key="`${track.sequence}:${track.sourceTrack}`"
         >
           <div>
-            <strong>{{ track.name }}</strong
-            ><small
-              >{{ track.noteCount }} notes · {{ track.eventCount }} events<span
-                v-if="midiImportStore.preview?.format === 2"
-              >
-                · sequence {{ track.sequence + 1 }}</span
+            <strong>{{ track.name }}</strong>
+            <small
+              >{{ t("midiImport.notes", { count: track.noteCount }) }} ·
+              {{ t("midiImport.events", { count: track.eventCount })
+              }}<span v-if="midiImportStore.preview?.format === 2">
+                · {{ t("midiImport.sequence", { n: track.sequence + 1 }) }}</span
               ></small
             >
           </div>
           <UiSelect
             :model-value="targetValue(track.sourceTrack, track.sequence)"
             size="compact"
-            :aria-label="`${track.name} target`"
+            :aria-label="t('midiImport.targetAria', { name: track.name })"
             @update:model-value="updateTarget(track.sourceTrack, track.sequence, $event)"
           >
-            <option value="ignore">Ignore</option>
-            <option value="new">New Instrument track</option>
+            <option value="ignore">{{ t("midiImport.ignore") }}</option>
+            <option value="new">{{ t("midiImport.newTrack") }}</option>
             <option
               v-for="target in instrumentTracks"
               :key="target.id"
@@ -99,10 +102,10 @@ function updateInstrument(sourceTrack: number, sequence: number, value: string):
             :model-value="instrumentValue(track.sourceTrack, track.sequence)"
             size="compact"
             :disabled="targetValue(track.sourceTrack, track.sequence) === 'ignore'"
-            :aria-label="`${track.name} VST3 instrument`"
+            :aria-label="t('midiImport.instrumentAria', { name: track.name })"
             @update:model-value="updateInstrument(track.sourceTrack, track.sequence, $event)"
           >
-            <option value="">No instrument assigned</option>
+            <option value="">{{ t("midiImport.noInstrument") }}</option>
             <option
               v-for="plugin in pluginStore.compatibleInstruments"
               :key="plugin.classId"
@@ -117,23 +120,19 @@ function updateInstrument(sourceTrack: number, sequence: number, value: string):
         </article>
       </div>
       <fieldset class="tempo-choice">
-        <legend>Tempo for imported MIDI</legend>
+        <legend>{{ t("midiImport.tempoLegend") }}</legend>
         <label :class="{ selected: midiImportStore.tempoMode === 'project' }">
           <input v-model="midiImportStore.tempoMode" type="radio" value="project" />
           <span>
-            <strong>Keep the project Tempo Track</strong>
-            <small
-              >Place the MIDI at the playhead and follow the current project Tempo Track.</small
-            >
+            <strong>{{ t("midiImport.keepProjectTempo") }}</strong>
+            <small>{{ t("midiImport.keepProjectTempoDetail") }}</small>
           </span>
         </label>
         <label :class="{ selected: midiImportStore.tempoMode === 'midi' }">
           <input v-model="midiImportStore.tempoMode" type="radio" value="midi" />
           <span>
-            <strong>Import MIDI tempo into project</strong>
-            <small
-              >Start at tick 0 and replace the project Tempo Track with the MIDI tempo map.</small
-            >
+            <strong>{{ t("midiImport.importMidiTempo") }}</strong>
+            <small>{{ t("midiImport.importMidiTempoDetail") }}</small>
           </span>
         </label>
       </fieldset>
@@ -149,14 +148,16 @@ function updateInstrument(sourceTrack: number, sequence: number, value: string):
       </UiStatusNotice>
     </div>
     <template #actions>
-      <UiButton :disabled="midiImportStore.busy" @click="midiImportStore.close">Cancel</UiButton>
+      <UiButton :disabled="midiImportStore.busy" @click="midiImportStore.close">{{
+        t("dialog.actions.cancel")
+      }}</UiButton>
       <UiButton
         variant="primary"
         :loading="midiImportStore.busy"
-        loading-label="Importing MIDI"
+        :loading-label="t('midiImport.importing')"
         @click="midiImportStore.commit"
       >
-        Import MIDI
+        {{ t("midiImport.import") }}
       </UiButton>
     </template>
   </UiDialog>

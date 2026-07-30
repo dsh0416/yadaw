@@ -9,6 +9,11 @@ import type {
   RoundTripLatencyMeasurement,
   RoundTripLatencyMeasurementRequest
 } from "@yadaw/contracts"
+import { i18n } from "../i18n"
+
+function t(key: string, params?: Record<string, string | number>): string {
+  return i18n.global.t(key, params ?? {})
+}
 
 const POLLING_INTERVAL_MS = 500
 const TELEMETRY_HISTORY_LIMIT = 240
@@ -125,7 +130,7 @@ export const useAudioRuntimeStore = defineStore("audio-runtime", () => {
           ? {
               status: "error",
               runtime: snapshot,
-              error: lifecycle.value.error ?? "The native audio engine stopped unexpectedly."
+              error: lifecycle.value.error ?? t("errors.nativeAudioEngineStopped")
             }
           : { status: "stopped", runtime: snapshot, error: null }
     lastUpdatedAt.value = capturedAt
@@ -142,7 +147,7 @@ export const useAudioRuntimeStore = defineStore("audio-runtime", () => {
       lifecycle.value = {
         status: "error",
         runtime: runtime.value,
-        error: error instanceof Error ? error.message : "Unable to read audio engine state."
+        error: error instanceof Error ? error.message : t("errors.unableToReadAudioEngineState")
       }
     }
   }
@@ -163,7 +168,7 @@ export const useAudioRuntimeStore = defineStore("audio-runtime", () => {
       lifecycle.value = {
         status: "error",
         runtime: runtime.value,
-        error: error instanceof Error ? error.message : "Unable to start the native audio engine."
+        error: error instanceof Error ? error.message : t("errors.unableToStartAudioEngine")
       }
       throw error
     }
@@ -181,7 +186,7 @@ export const useAudioRuntimeStore = defineStore("audio-runtime", () => {
       lifecycle.value = {
         status: "error",
         runtime: runtime.value,
-        error: error instanceof Error ? error.message : "Unable to stop the native audio engine."
+        error: error instanceof Error ? error.message : t("errors.unableToStopAudioEngine")
       }
       throw error
     }
@@ -245,15 +250,15 @@ export const useAudioRuntimeStore = defineStore("audio-runtime", () => {
       result.push({
         id: "native-error",
         severity: "critical",
-        title: "Native audio error",
+        title: t("warnings.audio.nativeError.title"),
         message: lastError.value
       })
     } else if (snapshot.state === "error") {
       result.push({
         id: "engine-error",
         severity: "critical",
-        title: "Audio engine stopped unexpectedly",
-        message: "Open system settings to select a working device configuration."
+        title: t("warnings.audio.engineStopped.title"),
+        message: t("warnings.audio.engineStopped.message")
       })
     }
 
@@ -264,8 +269,13 @@ export const useAudioRuntimeStore = defineStore("audio-runtime", () => {
       result.push({
         id: "buffer-fallback",
         severity: "warning",
-        title: "I/O buffer fallback active",
-        message: `The requested ${snapshot.requestedBufferSize ?? "unknown"}-frame buffer was unavailable; the engine is using ${actual ?? "a device-selected size"} frames.`
+        title: t("warnings.audio.bufferFallback.title"),
+        message: t("warnings.audio.bufferFallback.message", {
+          requested:
+            snapshot.requestedBufferSize?.toString() ??
+            t("warnings.audio.bufferFallback.requestedUnknown"),
+          actual: actual?.toString() ?? t("warnings.audio.bufferFallback.actualDeviceSelected")
+        })
       })
     }
 
@@ -277,16 +287,18 @@ export const useAudioRuntimeStore = defineStore("audio-runtime", () => {
       result.push({
         id: "device-sample-rate-mismatch",
         severity: "warning",
-        title: "Device sample-rate conversion active",
-        message: `Input is ${formatRate(snapshot.inputSampleRate)} while output is ${formatRate(snapshot.outputSampleRate)}. Adaptive resampling is keeping the devices synchronized.`
+        title: t("warnings.audio.deviceSampleRateMismatch.title"),
+        message: t("warnings.audio.deviceSampleRateMismatch.message", {
+          inputRate: formatRate(snapshot.inputSampleRate),
+          outputRate: formatRate(snapshot.outputSampleRate)
+        })
       })
     } else if (snapshot.clockSync === "adaptive-resampled") {
       result.push({
         id: "independent-device-clocks",
         severity: "warning",
-        title: "Independent device clocks",
-        message:
-          "Input and output use separate hardware clocks, so adaptive drift correction is active."
+        title: t("warnings.audio.independentDeviceClocks.title"),
+        message: t("warnings.audio.independentDeviceClocks.message")
       })
     }
 
@@ -298,8 +310,11 @@ export const useAudioRuntimeStore = defineStore("audio-runtime", () => {
       result.push({
         id: "session-sample-rate-conversion",
         severity: "warning",
-        title: "Session sample-rate conversion active",
-        message: `The project clock is ${formatRate(snapshot.sampleRate)} while the output device is ${formatRate(snapshot.outputSampleRate)}. Output is converted at the device boundary.`
+        title: t("warnings.audio.sessionSampleRateConversion.title"),
+        message: t("warnings.audio.sessionSampleRateConversion.message", {
+          sessionRate: formatRate(snapshot.sampleRate),
+          outputRate: formatRate(snapshot.outputSampleRate)
+        })
       })
     }
 
@@ -311,18 +326,22 @@ export const useAudioRuntimeStore = defineStore("audio-runtime", () => {
       result.push({
         id: "asymmetric-buffers",
         severity: "warning",
-        title: "Asymmetric I/O buffers",
-        message: `Input uses ${snapshot.inputBufferSize} frames and output uses ${snapshot.outputBufferSize} frames, so their hardware latency differs.`
+        title: t("warnings.audio.asymmetricBuffers.title"),
+        message: t("warnings.audio.asymmetricBuffers.message", {
+          inputBuffer: snapshot.inputBufferSize,
+          outputBuffer: snapshot.outputBufferSize
+        })
       })
     }
 
     if (sessionXruns.value > 0) {
+      const xrunKey =
+        sessionXruns.value === 1 ? "warnings.audio.dropout" : "warnings.audio.dropouts"
       result.push({
         id: "xruns",
         severity: sessionXruns.value >= 5 ? "critical" : "warning",
-        title: `${sessionXruns.value} real-time ${sessionXruns.value === 1 ? "dropout" : "dropouts"}`,
-        message:
-          "The audio callback could not consume or produce data on time. Try a larger buffer or close CPU-heavy work."
+        title: t(`${xrunKey}.title`, { count: sessionXruns.value }),
+        message: t(`${xrunKey}.message`)
       })
     }
 
@@ -337,8 +356,8 @@ export const useAudioRuntimeStore = defineStore("audio-runtime", () => {
         result.push({
           id: "ring-overrun-risk",
           severity: "warning",
-          title: "Ring buffer is nearly full",
-          message: "Input is outrunning output and may begin dropping captured samples."
+          title: t("warnings.audio.ringOverrunRisk.title"),
+          message: t("warnings.audio.ringOverrunRisk.message")
         })
       }
     }

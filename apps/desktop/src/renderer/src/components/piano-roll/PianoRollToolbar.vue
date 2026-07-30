@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { computed } from "vue"
+import { useI18n } from "vue-i18n"
 import {
   UiButton,
   UiChoiceChip,
@@ -12,12 +14,23 @@ import { usePianoRollEditor } from "./usePianoRollEditor"
 
 const emit = defineEmits<{ close: [] }>()
 const { pianoRollStore, openClips, trackColor } = usePianoRollEditor()
+const { t } = useI18n()
 
-const TOOL_OPTIONS = [
-  { label: "Select", value: "select" },
-  { label: "Draw", value: "draw" },
-  { label: "Erase", value: "erase" }
-] satisfies readonly UiSegmentedOption[]
+const toolOptions = computed(
+  () =>
+    [
+      { label: t("pianoRoll.toolbar.toolSelect"), value: "select" },
+      { label: t("pianoRoll.toolbar.toolDraw"), value: "draw" },
+      { label: t("pianoRoll.toolbar.toolErase"), value: "erase" }
+    ] satisfies readonly UiSegmentedOption[]
+)
+
+const snapOptions = computed(() =>
+  PIANO_ROLL_SNAP_OPTIONS.map((option) => ({
+    value: option.value,
+    label: t(`pianoRoll.snap.${option.value}`)
+  }))
+)
 
 function changeTimeZoom(factor: number): void {
   pianoRollStore.setPixelsPerQuarter(pianoRollStore.pixelsPerQuarter * factor)
@@ -29,29 +42,29 @@ function changeKeyZoom(delta: number): void {
 </script>
 
 <template>
-  <UiToolbar class="toolbar" density="compact" label="Piano roll commands">
+  <UiToolbar class="toolbar" density="compact" :label="t('pianoRoll.toolbar.commands')">
     <template #start>
       <UiSegmentedControl
         v-model="pianoRollStore.tool"
         size="compact"
-        label="Piano roll tools"
-        :options="TOOL_OPTIONS"
+        :label="t('pianoRoll.toolbar.tools')"
+        :options="toolOptions"
       />
       <label class="snap-control">
-        <span>Snap</span>
+        <span>{{ t("pianoRoll.toolbar.snap") }}</span>
         <UiSelect
           v-model="pianoRollStore.snap"
           size="compact"
-          :options="PIANO_ROLL_SNAP_OPTIONS"
-          aria-label="Note snap resolution"
+          :options="snapOptions"
+          :aria-label="t('pianoRoll.toolbar.snapResolution')"
         />
       </label>
     </template>
-    <div class="time-zoom" role="group" aria-label="Piano roll time zoom">
+    <div class="time-zoom" role="group" :aria-label="t('pianoRoll.toolbar.timeZoom')">
       <UiButton
         size="sm"
         variant="ghost"
-        aria-label="Zoom piano roll time out"
+        :aria-label="t('pianoRoll.toolbar.zoomTimeOut')"
         @click="changeTimeZoom(0.8)"
       >
         −
@@ -59,17 +72,17 @@ function changeKeyZoom(delta: number): void {
       <UiButton
         size="sm"
         variant="ghost"
-        aria-label="Zoom piano roll time in"
+        :aria-label="t('pianoRoll.toolbar.zoomTimeIn')"
         @click="changeTimeZoom(1.25)"
       >
         +
       </UiButton>
     </div>
-    <div class="key-zoom" role="group" aria-label="Piano roll key zoom">
+    <div class="key-zoom" role="group" :aria-label="t('pianoRoll.toolbar.keyZoom')">
       <UiButton
         size="sm"
         variant="ghost"
-        aria-label="Zoom piano roll keys out"
+        :aria-label="t('pianoRoll.toolbar.zoomKeysOut')"
         @click="changeKeyZoom(-2)"
       >
         −
@@ -77,13 +90,13 @@ function changeKeyZoom(delta: number): void {
       <UiButton
         size="sm"
         variant="ghost"
-        aria-label="Zoom piano roll keys in"
+        :aria-label="t('pianoRoll.toolbar.zoomKeysIn')"
         @click="changeKeyZoom(2)"
       >
         +
       </UiButton>
     </div>
-    <div class="clip-chips" aria-label="Editable MIDI clips">
+    <div class="clip-chips" :aria-label="t('pianoRoll.toolbar.editableClips')">
       <UiChoiceChip
         v-for="clip in openClips"
         :key="clip.id"
@@ -94,8 +107,13 @@ function changeKeyZoom(delta: number): void {
       />
     </div>
     <template #end>
-      <UiButton size="sm" variant="ghost" aria-label="Close piano roll" @click="emit('close')">
-        Close
+      <UiButton
+        size="sm"
+        variant="ghost"
+        :aria-label="t('pianoRoll.toolbar.close')"
+        @click="emit('close')"
+      >
+        {{ t("pianoRoll.toolbar.closeLabel") }}
       </UiButton>
     </template>
   </UiToolbar>

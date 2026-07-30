@@ -1,10 +1,12 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n"
 import { UiSelect } from "@yadaw/ui"
 import { PROJECT_SAMPLE_RATES } from "@yadaw/contracts"
 import type { ProjectConfiguration } from "@yadaw/contracts"
 import SettingsPage from "../settings/SettingsPage.vue"
 import SettingsSection from "../settings/SettingsSection.vue"
 
+const { t } = useI18n()
 const configuration = defineModel<ProjectConfiguration>({ required: true })
 
 function update(patch: Partial<ProjectConfiguration>): void {
@@ -22,30 +24,30 @@ function numberValue(event: Event): number {
 
 <template>
   <SettingsPage
-    category="Project"
-    page="General"
-    title="General"
-    description="Parameters stored inside this project and shared wherever it is opened."
+    :category="t('settings.project.general.category')"
+    :page="t('settings.project.general.page')"
+    :title="t('settings.project.general.title')"
+    :description="t('settings.project.general.description')"
   >
     <SettingsSection
-      eyebrow="Identity"
-      title="Project identity"
-      description="The name shown throughout the workspace and recent project list."
+      :eyebrow="t('settings.project.general.identity.eyebrow')"
+      :title="t('settings.project.general.identity.title')"
+      :description="t('settings.project.general.identity.description')"
     >
       <label class="field">
-        <span>Project name</span>
+        <span>{{ t("settings.project.general.identity.nameLabel") }}</span>
         <input :value="configuration.name" required @input="update({ name: textValue($event) })" />
       </label>
     </SettingsSection>
 
     <SettingsSection
-      eyebrow="Session format"
-      title="Meter and audio basis"
-      description="Tempo is edited on the tempo track; these values define new media and the initial musical meter."
+      :eyebrow="t('settings.project.general.sessionFormat.eyebrow')"
+      :title="t('settings.project.general.sessionFormat.title')"
+      :description="t('settings.project.general.sessionFormat.description')"
     >
       <div class="field-grid">
         <label class="field wide">
-          <span>Sample rate</span>
+          <span>{{ t("settings.project.general.sessionFormat.sampleRate") }}</span>
           <UiSelect
             :model-value="String(configuration.sampleRate)"
             size="md"
@@ -57,10 +59,10 @@ function numberValue(event: Event): number {
               {{ rate.toLocaleString() }} Hz
             </option>
           </UiSelect>
-          <small>Existing assets remain unchanged.</small>
+          <small>{{ t("settings.project.general.sessionFormat.sampleRateHint") }}</small>
         </label>
         <label class="field">
-          <span>Meter numerator</span>
+          <span>{{ t("settings.project.general.sessionFormat.meterNumerator") }}</span>
           <input
             :value="configuration.timeSignatureNumerator"
             type="number"
@@ -70,7 +72,7 @@ function numberValue(event: Event): number {
           />
         </label>
         <label class="field">
-          <span>Meter denominator</span>
+          <span>{{ t("settings.project.general.sessionFormat.meterDenominator") }}</span>
           <UiSelect
             :model-value="String(configuration.timeSignatureDenominator)"
             size="md"
@@ -85,12 +87,12 @@ function numberValue(event: Event): number {
     </SettingsSection>
 
     <SettingsSection
-      eyebrow="Waveforms"
-      title="Channel display"
-      description="Choose how multichannel audio is represented inside timeline clips."
+      :eyebrow="t('settings.project.general.waveforms.eyebrow')"
+      :title="t('settings.project.general.waveforms.title')"
+      :description="t('settings.project.general.waveforms.description')"
     >
       <label class="field">
-        <span>Waveform channels</span>
+        <span>{{ t("settings.project.general.waveforms.channelsLabel") }}</span>
         <UiSelect
           :model-value="configuration.waveformDisplayMode"
           size="md"
@@ -100,13 +102,10 @@ function numberValue(event: Event): number {
             })
           "
         >
-          <option value="separate">Separate channels</option>
-          <option value="aggregate">Combined peak envelope</option>
+          <option value="separate">{{ t("settings.project.general.waveforms.separate") }}</option>
+          <option value="aggregate">{{ t("settings.project.general.waveforms.aggregate") }}</option>
         </UiSelect>
-        <small>
-          Separate mode creates one lane per channel and remains compatible with future surround
-          formats.
-        </small>
+        <small>{{ t("settings.project.general.waveforms.separateHint") }}</small>
       </label>
     </SettingsSection>
   </SettingsPage>

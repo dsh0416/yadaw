@@ -14,29 +14,72 @@ export interface PluginAudioModeOption {
   detail: string
 }
 
-const INSTRUMENT_MODES: readonly PluginAudioModeOption[] = [
-  { value: "mono", badge: "M", label: "Mono", detail: "1 channel output" },
-  { value: "stereo", badge: "S", label: "Stereo", detail: "2 channel output" }
-]
+export type PluginAudioModeTranslator = (key: string) => string
 
-const EFFECT_MODES: readonly PluginAudioModeOption[] = [
-  { value: "mono", badge: "M", label: "Mono", detail: "1 → 1" },
-  { value: "mono-to-stereo", badge: "M→S", label: "Mono to stereo", detail: "1 → 2" },
-  { value: "stereo", badge: "S", label: "Stereo", detail: "2 → 2" },
-  { value: "dual-mono", badge: "2×M", label: "Dual mono", detail: "2 × (1 → 1)" }
-]
+function instrumentModes(t: PluginAudioModeTranslator): readonly PluginAudioModeOption[] {
+  return [
+    {
+      value: "mono",
+      badge: "M",
+      label: t("plugins.audioMode.mono.label"),
+      detail: t("plugins.audioMode.mono.detailInstrument")
+    },
+    {
+      value: "stereo",
+      badge: "S",
+      label: t("plugins.audioMode.stereo.label"),
+      detail: t("plugins.audioMode.stereo.detailInstrument")
+    }
+  ]
+}
+
+function effectModes(t: PluginAudioModeTranslator): readonly PluginAudioModeOption[] {
+  return [
+    {
+      value: "mono",
+      badge: "M",
+      label: t("plugins.audioMode.mono.label"),
+      detail: t("plugins.audioMode.mono.detailEffect")
+    },
+    {
+      value: "mono-to-stereo",
+      badge: "M→S",
+      label: t("plugins.audioMode.monoToStereo.label"),
+      detail: t("plugins.audioMode.monoToStereo.detail")
+    },
+    {
+      value: "stereo",
+      badge: "S",
+      label: t("plugins.audioMode.stereo.label"),
+      detail: t("plugins.audioMode.stereo.detailEffect")
+    },
+    {
+      value: "dual-mono",
+      badge: "2×M",
+      label: t("plugins.audioMode.dualMono.label"),
+      detail: t("plugins.audioMode.dualMono.detail")
+    }
+  ]
+}
 
 export function pluginAudioModeOptions(
   kind: PluginDescriptor["kind"],
-  inputWidth?: PluginSignalWidth
+  inputWidth: PluginSignalWidth | undefined,
+  t: PluginAudioModeTranslator
 ): readonly PluginAudioModeOption[] {
-  if (kind === "instrument") return INSTRUMENT_MODES
+  if (kind === "instrument") return instrumentModes(t)
   if (!inputWidth) return []
-  return EFFECT_MODES.filter((option) => pluginAudioModeInputWidth(option.value) === inputWidth)
+  return effectModes(t).filter((option) => pluginAudioModeInputWidth(option.value) === inputWidth)
 }
 
 export function pluginAudioModeBadge(mode: PluginAudioMode): string {
-  return EFFECT_MODES.find((option) => option.value === mode)?.badge ?? mode
+  const badges: Partial<Record<PluginAudioMode, string>> = {
+    mono: "M",
+    "mono-to-stereo": "M→S",
+    stereo: "S",
+    "dual-mono": "2×M"
+  }
+  return badges[mode] ?? mode
 }
 
 export function pluginAudioModeInputWidth(mode: PluginAudioMode): PluginSignalWidth {

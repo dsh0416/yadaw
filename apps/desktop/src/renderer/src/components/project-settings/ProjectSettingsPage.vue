@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { computed, shallowRef, watch } from "vue"
+import { useI18n } from "vue-i18n"
 import { Clock3, FileAudio, FolderCog, Music2, Save, SlidersHorizontal } from "@lucide/vue"
 import type { ProjectConfiguration } from "@yadaw/contracts"
 import SettingsContainer from "../settings/SettingsContainer.vue"
 import type { SettingsCategory } from "../settings/settings"
 import ProjectGeneralSettings from "./ProjectGeneralSettings.vue"
+
+const { t } = useI18n()
 
 const props = defineProps<{
   configuration: ProjectConfiguration
@@ -18,97 +21,97 @@ const emit = defineEmits<{
   close: []
 }>()
 
-const categories: readonly SettingsCategory[] = [
+const categories = computed<readonly SettingsCategory[]>(() => [
   {
     id: "project",
-    label: "Project",
-    description: "Session definition",
+    label: t("settings.project.categories.project.label"),
+    description: t("settings.project.categories.project.description"),
     icon: FolderCog,
     pages: [
       {
         id: "general",
-        label: "General",
-        description: "Identity and session format",
+        label: t("settings.project.pages.general.label"),
+        description: t("settings.project.pages.general.description"),
         icon: SlidersHorizontal
       }
     ]
   },
   {
     id: "timing",
-    label: "Timing",
-    description: "Tempo and clock",
+    label: t("settings.project.categories.timing.label"),
+    description: t("settings.project.categories.timing.description"),
     icon: Clock3,
-    badge: "Soon",
+    badge: t("common.soon"),
     pages: [
       {
         id: "tempo-map",
-        label: "Tempo map",
-        description: "Tempo events and transitions",
+        label: t("settings.project.pages.tempoMap.label"),
+        description: t("settings.project.pages.tempoMap.description"),
         icon: Clock3,
         disabled: true,
-        badge: "Soon"
+        badge: t("common.soon")
       },
       {
         id: "clock",
-        label: "Clock",
-        description: "Synchronization and timecode",
+        label: t("settings.project.pages.clock.label"),
+        description: t("settings.project.pages.clock.description"),
         icon: Clock3,
         disabled: true,
-        badge: "Soon"
+        badge: t("common.soon")
       }
     ]
   },
   {
     id: "media",
-    label: "Media",
-    description: "Import and render",
+    label: t("settings.project.categories.media.label"),
+    description: t("settings.project.categories.media.description"),
     icon: FileAudio,
-    badge: "Soon",
+    badge: t("common.soon"),
     pages: [
       {
         id: "import-defaults",
-        label: "Import defaults",
-        description: "New asset handling",
+        label: t("settings.project.pages.importDefaults.label"),
+        description: t("settings.project.pages.importDefaults.description"),
         icon: FileAudio,
         disabled: true,
-        badge: "Soon"
+        badge: t("common.soon")
       },
       {
         id: "render-defaults",
-        label: "Render defaults",
-        description: "Export format and destination",
+        label: t("settings.project.pages.renderDefaults.label"),
+        description: t("settings.project.pages.renderDefaults.description"),
         icon: FileAudio,
         disabled: true,
-        badge: "Soon"
+        badge: t("common.soon")
       }
     ]
   },
   {
     id: "musical",
-    label: "Musical",
-    description: "Tuning and notation",
+    label: t("settings.project.categories.musical.label"),
+    description: t("settings.project.categories.musical.description"),
     icon: Music2,
-    badge: "Soon",
+    badge: t("common.soon"),
     pages: [
       {
         id: "tuning",
-        label: "Tuning",
-        description: "Pitch reference and temperament",
+        label: t("settings.project.pages.tuning.label"),
+        description: t("settings.project.pages.tuning.description"),
         icon: Music2,
         disabled: true,
-        badge: "Soon"
+        badge: t("common.soon")
       },
       {
         id: "notation",
-        label: "Notation",
-        description: "Spelling and display defaults",
+        label: t("settings.project.pages.notation.label"),
+        description: t("settings.project.pages.notation.description"),
         icon: Music2,
         disabled: true,
-        badge: "Soon"
+        badge: t("common.soon")
       }
     ]
   }
-]
+])
 
 const activePage = shallowRef("general")
 const draft = shallowRef<ProjectConfiguration>({ ...props.configuration })
@@ -136,9 +139,9 @@ function save(): void {
 
 <template>
   <SettingsContainer
-    title="Project settings"
-    scope-label="Yadaw / Project"
-    back-label="Back to studio"
+    :title="t('settings.project.title')"
+    :scope-label="t('settings.project.scopeLabel')"
+    :back-label="t('common.backToStudio')"
     :categories="categories"
     :active-page="activePage"
     @back="emit('close')"
@@ -146,7 +149,9 @@ function save(): void {
   >
     <template #actions>
       <span v-if="error" role="alert" class="save-error">{{ error }}</span>
-      <span v-else-if="saved && !dirty" role="status" class="save-status">Changes saved</span>
+      <span v-else-if="saved && !dirty" role="status" class="save-status">{{
+        t("common.changesSaved")
+      }}</span>
       <button
         class="settings-action settings-action-primary"
         type="submit"
@@ -154,7 +159,7 @@ function save(): void {
         :disabled="saving || !dirty"
       >
         <Save :size="14" />
-        {{ saving ? "Saving…" : "Save changes" }}
+        {{ saving ? t("common.saving") : t("common.saveChanges") }}
       </button>
     </template>
 

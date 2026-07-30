@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue"
+import { useI18n } from "vue-i18n"
 import type { AudioBenchmarkRating, AudioBenchmarkReport } from "@yadaw/contracts"
 import type { AudioBenchmarkStatus } from "../../stores/audioBenchmark"
 import AudioBenchmarkIpcDiagnostics from "./AudioBenchmarkIpcDiagnostics.vue"
@@ -17,26 +18,30 @@ const emit = defineEmits<{
   run: []
 }>()
 
-const ratingCopy: Record<AudioBenchmarkRating, { label: string; summary: string }> = {
-  limited: {
-    label: "Limited headroom",
-    summary: "Use larger buffers and keep sessions compact for reliable playback."
-  },
-  basic: {
-    label: "Basic",
-    summary: "Suitable for focused projects with moderate track and routing counts."
-  },
-  good: {
-    label: "Good",
-    summary: "Comfortable real-time capacity for most production sessions."
-  },
-  excellent: {
-    label: "Excellent",
-    summary: "Strong real-time headroom for dense sessions and low-latency work."
-  }
-}
+const { t } = useI18n()
 
-const rating = computed(() => (props.report ? ratingCopy[props.report.rating] : null))
+const ratingCopy = computed<Record<AudioBenchmarkRating, { label: string; summary: string }>>(
+  () => ({
+    limited: {
+      label: t("benchmark.rating.limited.label"),
+      summary: t("benchmark.rating.limited.summary")
+    },
+    basic: {
+      label: t("benchmark.rating.basic.label"),
+      summary: t("benchmark.rating.basic.summary")
+    },
+    good: {
+      label: t("benchmark.rating.good.label"),
+      summary: t("benchmark.rating.good.summary")
+    },
+    excellent: {
+      label: t("benchmark.rating.excellent.label"),
+      summary: t("benchmark.rating.excellent.summary")
+    }
+  })
+)
+
+const rating = computed(() => (props.report ? ratingCopy.value[props.report.rating] : null))
 const measuredAt = computed(() =>
   props.report ? new Date(props.report.measuredAt).toLocaleString() : ""
 )
@@ -50,15 +55,16 @@ function format(value: number, digits = 1): string {
   <section class="benchmark-dialog">
     <div v-if="status === 'idle'" class="intro-state">
       <p class="intro-summary">
-        Runs a short local test of DSP deadlines with bundled VST3 effects and process-boundary
-        transfers. It does not use your audio devices or change the project.
+        {{ t("benchmark.intro.summary") }}
       </p>
       <p class="intro-guidance">
-        <strong>Before you start</strong>
-        <span>Pause playback and close CPU-heavy apps for a representative result.</span>
+        <strong>{{ t("benchmark.intro.beforeStart") }}</strong>
+        <span>{{ t("benchmark.intro.guidance") }}</span>
       </p>
       <div class="intro-actions">
-        <button class="primary-button" type="button" @click="emit('run')">Run benchmark</button>
+        <button class="primary-button" type="button" @click="emit('run')">
+          {{ t("benchmark.intro.runBenchmark") }}
+        </button>
       </div>
     </div>
 
@@ -66,9 +72,9 @@ function format(value: number, digits = 1): string {
       <div class="scope" aria-hidden="true">
         <span v-for="lane in 3" :key="lane" :style="{ '--lane': lane }" />
       </div>
-      <span class="kicker">MEASURING</span>
-      <h3>Measuring engine paths…</h3>
-      <p>VST3 processing · Block deadlines · IPC round trips · Shared pages</p>
+      <span class="kicker">{{ t("benchmark.running.kicker") }}</span>
+      <h3>{{ t("benchmark.running.title") }}</h3>
+      <p>{{ t("benchmark.running.description") }}</p>
       <div class="progress-track"><span /></div>
     </div>
 
@@ -80,28 +86,42 @@ function format(value: number, digits = 1): string {
       <footer class="report-footer">
         <div>
           <span>{{ report.system.cpuModel }}</span>
-          <small
-            >{{ report.system.logicalCores }} logical cores · {{ report.system.platform }} ·
-            {{ report.system.architecture }}</small
-          >
-          <small>Measured {{ measuredAt }} in {{ format(report.durationMs / 1_000, 2) }} s</small>
+          <small>{{
+            t("benchmark.footer.logicalCores", {
+              count: report.system.logicalCores,
+              platform: report.system.platform,
+              architecture: report.system.architecture
+            })
+          }}</small>
+          <small>{{
+            t("benchmark.footer.measured", {
+              measuredAt,
+              duration: format(report.durationMs / 1_000, 2)
+            })
+          }}</small>
         </div>
         <div class="report-actions">
-          <button class="secondary-button" type="button" @click="emit('close')">Close</button>
+          <button class="secondary-button" type="button" @click="emit('close')">
+            {{ t("benchmark.actions.close") }}
+          </button>
           <button class="primary-button compact" type="button" @click="emit('run')">
-            Run again
+            {{ t("benchmark.actions.runAgain") }}
           </button>
         </div>
       </footer>
     </div>
 
     <div v-else class="error-state" role="alert">
-      <span class="kicker">BENCHMARK INTERRUPTED</span>
-      <h3>Performance test did not finish</h3>
+      <span class="kicker">{{ t("benchmark.error.kicker") }}</span>
+      <h3>{{ t("benchmark.error.title") }}</h3>
       <p>{{ errorMessage }}</p>
       <div class="error-actions">
-        <button class="secondary-button" type="button" @click="emit('close')">Close</button>
-        <button class="primary-button compact" type="button" @click="emit('run')">Try again</button>
+        <button class="secondary-button" type="button" @click="emit('close')">
+          {{ t("benchmark.actions.close") }}
+        </button>
+        <button class="primary-button compact" type="button" @click="emit('run')">
+          {{ t("benchmark.actions.tryAgain") }}
+        </button>
       </div>
     </div>
   </section>

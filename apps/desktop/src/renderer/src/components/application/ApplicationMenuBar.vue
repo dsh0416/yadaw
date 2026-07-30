@@ -3,6 +3,7 @@ import { APPLICATION_COMMAND_IDS } from "@yadaw/contracts"
 import type { ApplicationCommandId } from "@yadaw/contracts"
 import { UiMenubar } from "@yadaw/ui"
 import type { UiMenubarMenu } from "@yadaw/ui"
+import { useI18n } from "vue-i18n"
 
 defineProps<{
   menus: UiMenubarMenu[]
@@ -11,6 +12,8 @@ defineProps<{
 const emit = defineEmits<{
   command: [command: ApplicationCommandId]
 }>()
+
+const { t } = useI18n()
 
 function select(value: string): void {
   if (!APPLICATION_COMMAND_IDS.includes(value as ApplicationCommandId)) return
@@ -22,7 +25,7 @@ function select(value: string): void {
   <UiMenubar
     class="application-menu-bar"
     :menus="menus"
-    aria-label="Application menu"
+    :aria-label="t('chrome.applicationMenu')"
     @select="select"
   />
 </template>

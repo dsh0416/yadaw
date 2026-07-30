@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { onMounted } from "vue"
+import { computed, onMounted } from "vue"
+import { useI18n } from "vue-i18n"
 import { storeToRefs } from "pinia"
 import { UiSelect } from "@yadaw/ui"
 import type { MeterPeakHold, MeterReturnRate } from "@yadaw/contracts"
@@ -7,19 +8,20 @@ import SettingsPage from "../settings/SettingsPage.vue"
 import SettingsSection from "../settings/SettingsSection.vue"
 import { useApplicationSettingsStore } from "../../stores/applicationSettings"
 
+const { t } = useI18n()
 const settingsStore = useApplicationSettingsStore()
 const { settings, loading, error } = storeToRefs(settingsStore)
 
-const peakHoldOptions: ReadonlyArray<{ value: MeterPeakHold; label: string }> = [
-  { value: "800ms", label: "800 ms" },
-  { value: "2s", label: "2 seconds" },
-  { value: "4s", label: "4 seconds" },
-  { value: "infinite", label: "Infinite" }
-]
+const peakHoldOptions = computed<ReadonlyArray<{ value: MeterPeakHold; label: string }>>(() => [
+  { value: "800ms", label: t("settings.audio.mixerDisplay.peakHold.800ms") },
+  { value: "2s", label: t("settings.audio.mixerDisplay.peakHold.2s") },
+  { value: "4s", label: t("settings.audio.mixerDisplay.peakHold.4s") },
+  { value: "infinite", label: t("settings.audio.mixerDisplay.peakHold.infinite") }
+])
 
-const returnRateOptions: ReadonlyArray<{ value: MeterReturnRate; label: string }> = [
-  { value: "iec-type-i", label: "IEC Type I (11.8 dB/s)" }
-]
+const returnRateOptions = computed<ReadonlyArray<{ value: MeterReturnRate; label: string }>>(() => [
+  { value: "iec-type-i", label: t("settings.audio.mixerDisplay.returnRate.iecTypeI") }
+])
 
 function selectPeakHold(value: string): void {
   void settingsStore.setMeterPeakHold(value as MeterPeakHold)
@@ -36,40 +38,40 @@ onMounted(() => {
 
 <template>
   <SettingsPage
-    category="Display"
-    page="Mixer"
-    title="Mixer meters"
-    description="Control how channel peaks remain visible and return after transients."
+    :category="t('settings.audio.mixerDisplay.category')"
+    :page="t('settings.audio.mixerDisplay.page')"
+    :title="t('settings.audio.mixerDisplay.title')"
+    :description="t('settings.audio.mixerDisplay.description')"
   >
     <SettingsSection
-      title="Peak hold time"
-      description="Keeps the highest level visible long enough to identify short transients."
+      :title="t('settings.audio.mixerDisplay.peakHold.title')"
+      :description="t('settings.audio.mixerDisplay.peakHold.description')"
     >
       <label class="setting-field">
-        <span>Duration</span>
+        <span>{{ t("common.duration") }}</span>
         <UiSelect
           :model-value="settings?.meterPeakHold ?? '800ms'"
           :options="peakHoldOptions"
           size="sm"
           :disabled="loading"
-          aria-label="Mixer meter peak hold time"
+          :aria-label="t('settings.audio.mixerDisplay.peakHold.ariaLabel')"
           @update:model-value="selectPeakHold"
         />
       </label>
     </SettingsSection>
 
     <SettingsSection
-      title="Return time"
-      description="Sets how quickly the displayed level falls after the signal peak."
+      :title="t('settings.audio.mixerDisplay.returnRate.title')"
+      :description="t('settings.audio.mixerDisplay.returnRate.description')"
     >
       <label class="setting-field">
-        <span>Response</span>
+        <span>{{ t("common.response") }}</span>
         <UiSelect
           :model-value="settings?.meterReturnRate ?? 'iec-type-i'"
           :options="returnRateOptions"
           size="sm"
           :disabled="loading"
-          aria-label="Mixer meter return time"
+          :aria-label="t('settings.audio.mixerDisplay.returnRate.ariaLabel')"
           @update:model-value="selectReturnRate"
         />
       </label>

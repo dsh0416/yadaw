@@ -2,26 +2,29 @@
 import { computed } from "vue"
 import type { OperationSnapshot } from "@yadaw/contracts"
 import { UiButton, UiProgress, UiStatusNotice } from "@yadaw/ui"
+import { useI18n } from "vue-i18n"
 
 const props = defineProps<{ operation: OperationSnapshot }>()
 const emit = defineEmits<{ cancel: [] }>()
 
-const phaseLabels: Record<OperationSnapshot["phase"], string> = {
-  "closing-recording": "Closing recording",
-  "repairing-header": "Repairing BWF header",
-  hashing: "Hashing audio",
-  resampling: "Resampling audio",
-  quantizing: "Quantizing audio",
-  "writing-large-object": "Writing project asset",
-  "committing-database": "Committing database",
-  "saving-archive": "Saving project archive",
-  "loading-project-archive": "Reading project archive",
-  "loading-project-database": "Loading project database",
-  "restoring-project-state": "Restoring project state",
-  "loading-mixer": "Loading mixer",
-  "loading-project-assets": "Loading project assets",
-  "preparing-waveforms": "Preparing waveforms",
-  "cleaning-up": "Cleaning swap files"
+const { t } = useI18n()
+
+const phaseKeys: Record<OperationSnapshot["phase"], string> = {
+  "closing-recording": "operation.phase.closingRecording",
+  "repairing-header": "operation.phase.repairingHeader",
+  hashing: "operation.phase.hashing",
+  resampling: "operation.phase.resampling",
+  quantizing: "operation.phase.quantizing",
+  "writing-large-object": "operation.phase.writingLargeObject",
+  "committing-database": "operation.phase.committingDatabase",
+  "saving-archive": "operation.phase.savingArchive",
+  "loading-project-archive": "operation.phase.loadingProjectArchive",
+  "loading-project-database": "operation.phase.loadingProjectDatabase",
+  "restoring-project-state": "operation.phase.restoringProjectState",
+  "loading-mixer": "operation.phase.loadingMixer",
+  "loading-project-assets": "operation.phase.loadingProjectAssets",
+  "preparing-waveforms": "operation.phase.preparingWaveforms",
+  "cleaning-up": "operation.phase.cleaningUp"
 }
 
 const progress = computed(() => {
@@ -35,13 +38,13 @@ const progressLabel = computed(() =>
 )
 
 const stateLabel = computed(() => {
-  if (props.operation.state === "completed") return "Completed"
-  if (props.operation.state === "failed") return "Failed"
-  if (props.operation.state === "cancelled") return "Cancelled"
-  return "In progress"
+  if (props.operation.state === "completed") return t("operation.state.completed")
+  if (props.operation.state === "failed") return t("operation.state.failed")
+  if (props.operation.state === "cancelled") return t("operation.state.cancelled")
+  return t("operation.state.inProgress")
 })
 
-const phaseLabel = computed(() => phaseLabels[props.operation.phase])
+const phaseLabel = computed(() => t(phaseKeys[props.operation.phase]))
 </script>
 
 <template>
@@ -60,10 +63,10 @@ const phaseLabel = computed(() => phaseLabels[props.operation.phase])
       {{ operation.message }}
     </UiStatusNotice>
     <UiStatusNotice v-if="operation.dropoutFrames > 0" tone="warning" live="polite">
-      {{ operation.dropoutFrames }} captured frames were dropped.
+      {{ t("operation.recordingDropoutsCaptured", { count: operation.dropoutFrames }) }}
     </UiStatusNotice>
     <div v-if="operation.state === 'running' && operation.cancellable" class="operation-actions">
-      <UiButton @click="emit('cancel')">Cancel</UiButton>
+      <UiButton @click="emit('cancel')">{{ t("dialog.actions.cancel") }}</UiButton>
     </div>
   </section>
 </template>

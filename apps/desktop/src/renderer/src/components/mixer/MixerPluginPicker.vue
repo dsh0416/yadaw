@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, shallowRef, watch } from "vue"
+import { useI18n } from "vue-i18n"
 import { Search } from "@lucide/vue"
 import { UiPopover } from "@yadaw/ui"
 import { pluginCategoriesLabel, pluginDescriptorKey, type PluginDescriptor } from "@yadaw/contracts"
@@ -16,6 +17,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   select: [selection: PluginSelection]
 }>()
+
+const { t } = useI18n()
 
 const open = shallowRef(false)
 const query = shallowRef("")
@@ -66,28 +69,33 @@ function selectMode(audioMode: PluginSelection["audioMode"]): void {
       />
       <template v-else>
         <header>
-          <span>VST3</span><strong>{{ title }}</strong>
+          <span>{{ t("mixer.pluginPicker.vst3") }}</span
+          ><strong>{{ title }}</strong>
         </header>
         <label>
           <Search :size="12" aria-hidden="true" />
-          <input v-model="query" :aria-label="searchLabel" placeholder="Search plug-ins" />
+          <input
+            v-model="query"
+            :aria-label="searchLabel"
+            :placeholder="t('mixer.pluginPicker.searchPlaceholder')"
+          />
         </label>
         <div class="plugin-list">
           <button
             v-for="plugin in filteredPlugins"
             :key="pluginDescriptorKey(plugin)"
             type="button"
-            :aria-label="`Add ${plugin.name}`"
+            :aria-label="t('mixer.pluginPicker.addPlugin', { name: plugin.name })"
             @click="selectPlugin(plugin)"
           >
             <b>{{ plugin.name }}</b>
             <small
-              >{{ plugin.source.kind === "builtin" ? "Built-in · " : "" }}{{ plugin.vendor }} ·
-              {{ pluginCategoriesLabel(plugin.categories) }}</small
+              >{{ plugin.source.kind === "builtin" ? `${t("mixer.pluginPicker.builtin")} · ` : ""
+              }}{{ plugin.vendor }} · {{ pluginCategoriesLabel(plugin.categories) }}</small
             >
           </button>
           <p v-if="filteredPlugins.length === 0">
-            {{ plugins.length === 0 ? emptyMessage : "No plug-ins match this search." }}
+            {{ plugins.length === 0 ? emptyMessage : t("mixer.pluginPicker.noSearchResults") }}
           </p>
         </div>
       </template>

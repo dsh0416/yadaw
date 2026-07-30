@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, shallowRef } from "vue"
+import { useI18n } from "vue-i18n"
 import { UiCascadingMenu } from "@yadaw/ui"
 import type { UiCascadingMenuItem } from "@yadaw/ui"
 import { pluginCategoriesLabel, pluginDescriptorKey, type PluginDescriptor } from "@yadaw/contracts"
@@ -21,6 +22,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   select: [selection: PluginSelection]
 }>()
+
+const { t } = useI18n()
 
 const query = shallowRef("")
 const filteredPlugins = computed(() => {
@@ -53,12 +56,12 @@ const pickerMenu = computed(() => {
 
   const items: UiCascadingMenuItem[] = [...vendors].map(([vendor, plugins]) => ({
     label: vendor,
-    ariaLabel: `Browse ${vendor} plug-ins`,
+    ariaLabel: t("mixer.pluginPicker.browseVendor", { vendor }),
     children: plugins.map((plugin) => ({
       label: plugin.name,
-      ariaLabel: `Choose ${plugin.name}`,
+      ariaLabel: t("mixer.pluginPicker.choosePlugin", { name: plugin.name }),
       title: `${plugin.name} · ${plugin.vendor} · ${pluginCategoriesLabel(plugin.categories)}`,
-      children: pluginAudioModeOptions(plugin.kind, props.inputWidth).map((option) => {
+      children: pluginAudioModeOptions(plugin.kind, props.inputWidth, t).map((option) => {
         const value = JSON.stringify([pluginDescriptorKey(plugin), option.value])
         selections.set(value, { descriptor: plugin, audioMode: option.value })
         const supported = plugin.supportedAudioModes.includes(option.value)
@@ -70,8 +73,11 @@ const pickerMenu = computed(() => {
           trailing: option.detail,
           disabled: !supported,
           title: supported
-            ? `${option.label}: ${option.detail}`
-            : `${option.label} is not supported by this plug-in`
+            ? t("mixer.pluginPicker.modeSupported", {
+                label: option.label,
+                detail: option.detail
+              })
+            : t("mixer.pluginPicker.modeNotSupported", { mode: option.label })
         }
       })
     }))
@@ -80,12 +86,12 @@ const pickerMenu = computed(() => {
   return { items, selections }
 })
 const noResultsMessage = computed(() =>
-  props.plugins.length === 0 ? props.emptyMessage : "No plug-ins match this search."
+  props.plugins.length === 0 ? props.emptyMessage : t("mixer.pluginPicker.noSearchResults")
 )
 
 function vendorLabel(plugin: PluginDescriptor): string {
-  if (plugin.source.kind === "builtin") return "Built-in"
-  return plugin.vendor.trim() || "Unknown vendor"
+  if (plugin.source.kind === "builtin") return t("mixer.pluginPicker.builtin")
+  return plugin.vendor.trim() || t("mixer.pluginPicker.unknownVendor")
 }
 
 function select(value: string): void {
@@ -100,7 +106,7 @@ function select(value: string): void {
     :items="pickerMenu.items"
     :aria-label="title"
     :search-label="searchLabel"
-    search-placeholder="Search plug-ins"
+    :search-placeholder="t('mixer.pluginPicker.searchPlaceholder')"
     :empty-message="noResultsMessage"
     @select="select"
   >

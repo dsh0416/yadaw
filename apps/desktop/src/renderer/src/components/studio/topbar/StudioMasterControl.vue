@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n"
 import type {
   MixerChannelMeter,
   MixerChannelPatch,
@@ -17,6 +18,8 @@ const emit = defineEmits<{
   updateChannel: [channelId: string, patch: MixerChannelPatch]
 }>()
 
+const { t } = useI18n()
+
 function previewGain(value: number): void {
   if (!props.channel) return
   emit("preview", {
@@ -34,9 +37,9 @@ function commitGain(value: number): void {
 </script>
 
 <template>
-  <section class="master-control" aria-label="Master output">
+  <section class="master-control" :aria-label="t('studio.master.ariaLabel')">
     <TrackGainControl
-      channel-name="Master"
+      :channel-name="t('studio.master.channelName')"
       :value="channel?.gainDb ?? FADER_MIN_DB"
       :meter="meter"
       :disabled="!channel"

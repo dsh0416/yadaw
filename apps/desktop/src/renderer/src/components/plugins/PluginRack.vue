@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n"
 import { shallowRef } from "vue"
 import type { PluginDescriptor } from "@yadaw/contracts"
 import type { PluginInstanceState, PluginRuntimeStatus } from "@yadaw/contracts"
@@ -20,6 +21,7 @@ const emit = defineEmits<{
 }>()
 
 const dropIndex = shallowRef<number | null>(null)
+const { t } = useI18n()
 
 function accepts(event: DragEvent): boolean {
   return [...(event.dataTransfer?.types ?? [])].includes(PLUGIN_DRAG_TYPE)
@@ -48,9 +50,10 @@ function drop(event: DragEvent, index: number): void {
 </script>
 
 <template>
-  <section class="plugin-rack" aria-label="Plugin insert rack">
+  <section class="plugin-rack" :aria-label="t('plugins.rack.ariaLabel')">
     <div class="rack-heading">
-      <span>INSERTS</span><b>{{ plugins.length }}</b>
+      <span>{{ t("plugins.rack.inserts") }}</span
+      ><b>{{ plugins.length }}</b>
     </div>
     <template v-for="(plugin, index) in plugins" :key="plugin.id">
       <div
@@ -77,7 +80,7 @@ function drop(event: DragEvent, index: number): void {
       @dragleave="dropIndex === plugins.length && (dropIndex = null)"
       @drop="drop($event, plugins.length)"
     />
-    <p v-if="plugins.length === 0">Double-click an effect in the Sound Browser to add it here.</p>
+    <p v-if="plugins.length === 0">{{ t("plugins.rack.emptyHint") }}</p>
   </section>
 </template>
 

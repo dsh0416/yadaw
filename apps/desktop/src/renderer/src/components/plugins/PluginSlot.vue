@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n"
 import { GripVertical, Power, SquareArrowOutUpRight, Trash2 } from "@lucide/vue"
 import type { PluginInstanceState, PluginRuntimeStatus } from "@yadaw/contracts"
 import { pluginAudioModeBadge } from "./plugin-audio-mode"
@@ -14,6 +15,8 @@ defineEmits<{
   toggle: [instanceId: string, enabled: boolean]
   remove: [instanceId: string]
 }>()
+
+const { t } = useI18n()
 </script>
 
 <template>
@@ -22,7 +25,11 @@ defineEmits<{
     :data-plugin-id="plugin.id"
     @dragstart="writePluginDrag($event, { source: 'rack', instanceId: plugin.id })"
   >
-    <span class="grip" draggable="true" :aria-label="`Move ${plugin.descriptor.name}`">
+    <span
+      class="grip"
+      draggable="true"
+      :aria-label="t('plugins.pluginSlot.move', { name: plugin.descriptor.name })"
+    >
       <GripVertical :size="11" aria-hidden="true" />
     </span>
     <i :class="runtime?.state ?? (plugin.enabled ? 'active' : 'bypassed')" />
@@ -31,26 +38,36 @@ defineEmits<{
       ><small>{{ plugin.descriptor.vendor }}</small>
     </div>
     <span class="badges">
-      <span class="mode-badge" :title="`Audio mode: ${plugin.audioMode}`">{{
-        pluginAudioModeBadge(plugin.audioMode)
-      }}</span>
       <span
-        v-if="plugin.descriptor.ara"
-        class="ara-badge"
-        title="ARA 2 document processing is active for this insert"
+        class="mode-badge"
+        :title="t('plugins.pluginSlot.audioMode', { mode: plugin.audioMode })"
+        >{{ pluginAudioModeBadge(plugin.audioMode) }}</span
+      >
+      <span v-if="plugin.descriptor.ara" class="ara-badge" :title="t('plugins.pluginSlot.araTitle')"
         >ARA</span
       >
     </span>
     <button
-      :aria-label="`${plugin.enabled ? 'Bypass' : 'Enable'} ${plugin.descriptor.name}`"
+      :aria-label="
+        t('plugins.pluginSlot.toggle', {
+          action: plugin.enabled ? t('plugins.pluginSlot.bypass') : t('plugins.pluginSlot.enable'),
+          name: plugin.descriptor.name
+        })
+      "
       @click="$emit('toggle', plugin.id, !plugin.enabled)"
     >
       <Power :size="10" />
     </button>
-    <button :aria-label="`Open ${plugin.descriptor.name} editor`" @click="$emit('open', plugin.id)">
+    <button
+      :aria-label="t('plugins.pluginSlot.openEditor', { name: plugin.descriptor.name })"
+      @click="$emit('open', plugin.id)"
+    >
       <SquareArrowOutUpRight :size="10" />
     </button>
-    <button :aria-label="`Remove ${plugin.descriptor.name}`" @click="$emit('remove', plugin.id)">
+    <button
+      :aria-label="t('plugins.pluginSlot.remove', { name: plugin.descriptor.name })"
+      @click="$emit('remove', plugin.id)"
+    >
       <Trash2 :size="10" />
     </button>
   </article>

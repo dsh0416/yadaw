@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n"
 import type { AudioRuntimeSnapshot } from "@yadaw/contracts"
 import { UiSelect, type UiSelectOption } from "@yadaw/ui"
 import SettingsSection from "../settings/SettingsSection.vue"
@@ -13,52 +14,64 @@ defineProps<{
 }>()
 const emit = defineEmits<{ "update:bufferSize": [value: string] }>()
 
+const { t } = useI18n()
+
 function formatLatency(value: number | null): string {
-  return value === null ? "—" : `${value.toFixed(2)} ms`
+  return value === null
+    ? t("common.notAvailable")
+    : t("common.milliseconds", { value: value.toFixed(2) })
 }
 function formatFrames(value: number | null): string {
-  return value === null ? "—" : `${value} frames`
+  return value === null ? t("common.notAvailable") : t("common.frames", { count: value })
 }
 </script>
 
 <template>
   <SettingsSection
-    title="I/O buffer size"
-    description="Smaller buffers reduce latency but require more CPU headroom."
+    :title="t('settings.audio.buffer.title')"
+    :description="t('settings.audio.buffer.description')"
   >
     <label class="buffer-field">
-      <span>Samples</span>
+      <span>{{ t("settings.audio.buffer.samplesLabel") }}</span>
       <UiSelect
         :model-value="bufferSize"
         :options="bufferOptions"
         size="sm"
-        aria-label="I/O buffer size"
+        :aria-label="t('settings.audio.buffer.ariaLabel')"
         @update:model-value="emit('update:bufferSize', $event)"
       />
     </label>
   </SettingsSection>
   <SettingsSection
-    title="Latency"
-    description="Reported by the running Rust engine from CPAL timestamps and the live ring-buffer fill."
+    :title="t('settings.audio.latency.title')"
+    :description="t('settings.audio.latency.description')"
   >
-    <div class="latency-grid" aria-label="Runtime latency">
+    <div class="latency-grid" :aria-label="t('settings.audio.latency.ariaLabel')">
       <div class="latency-card">
-        <span>Output latency</span>
+        <span>{{ t("settings.audio.latency.output.label") }}</span>
         <strong>{{ formatLatency(runtime.outputLatencyMs) }}</strong>
-        <small>Output callback → DAC · {{ formatFrames(runtime.outputBufferSize) }}</small>
+        <small>{{
+          t("settings.audio.latency.output.detail", {
+            frames: formatFrames(runtime.outputBufferSize)
+          })
+        }}</small>
       </div>
       <div class="latency-card">
-        <span>Round-trip latency</span>
+        <span>{{ t("settings.audio.latency.roundTrip.label") }}</span>
         <strong>{{ formatLatency(runtime.estimatedRoundTripLatencyMs) }}</strong>
-        <small>ADC → input → ring → graph → output → DAC</small>
+        <small>{{ t("settings.audio.latency.roundTrip.detail") }}</small>
       </div>
       <div class="latency-card">
-        <span>Input latency</span>
+        <span>{{ t("settings.audio.latency.input.label") }}</span>
         <strong>{{ formatLatency(runtime.inputLatencyMs) }}</strong>
-        <small>ADC → input callback · {{ formatFrames(runtime.inputBufferSize) }}</small>
+        <small>{{
+          t("settings.audio.latency.input.detail", {
+            frames: formatFrames(runtime.inputBufferSize)
+          })
+        }}</small>
       </div>
       <div class="latency-card">
-        <span>Ring-buffer latency</span>
+        <span>{{ t("settings.audio.latency.ringBuffer.label") }}</span>
         <strong>{{ formatLatency(runtime.ringBufferLatencyMs) }}</strong>
         <small>
           {{ formatFrames(runtime.ringBufferFillFrames) }} /
@@ -68,8 +81,8 @@ function formatFrames(value: number | null): string {
     </div>
   </SettingsSection>
   <SettingsSection
-    title="Physical loopback"
-    description="Measure actual hardware round-trip latency with a direct output-to-input cable."
+    :title="t('settings.audio.latency.loopbackSection.title')"
+    :description="t('settings.audio.latency.loopbackSection.description')"
   >
     <RoundTripLatencyMeasurement
       :runtime-state="runtime.state"

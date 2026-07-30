@@ -1,12 +1,13 @@
 import { defineStore } from "pinia"
 import { onScopeDispose, shallowRef } from "vue"
 import type { StartupProgressSnapshot } from "@yadaw/contracts"
+import { i18n } from "../i18n"
 
 const INITIAL_PROGRESS: StartupProgressSnapshot = {
   phase: "starting",
   progress: 0,
-  label: "Starting YADAW",
-  detail: "Preparing the audio workspace",
+  label: i18n.global.t("startup.starting"),
+  detail: i18n.global.t("startup.preparing"),
   completed: null,
   total: null,
   warnings: 0

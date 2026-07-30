@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { shallowRef } from "vue"
+import { useI18n } from "vue-i18n"
 import { useEventListener } from "@vueuse/core"
 import { useStudioWorkspaceStore } from "../../stores/studioWorkspace"
 import ArrangementWorkspace from "./ArrangementWorkspace.vue"
 import MixerConsole from "../mixer/MixerConsole.vue"
 import PianoRollDock from "../piano-roll/PianoRollDock.vue"
+
+const { t } = useI18n()
 
 defineProps<{
   recordingId: string | null
@@ -49,7 +52,7 @@ useEventListener(window, "pointerup", stopResize)
         class="dock-resizer"
         :class="{ active: resizing }"
         role="separator"
-        aria-label="Resize mixer dock"
+        :aria-label="t('studio.arrangement.resizeMixerDockAria')"
         @pointerdown="startResize"
       />
       <div v-if="workspaceStore.lowerDockOpen" class="lower-dock" :style="workspaceStore.dockStyle">

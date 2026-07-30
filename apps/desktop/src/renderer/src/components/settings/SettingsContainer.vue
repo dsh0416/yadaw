@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, watch } from "vue"
 import { ArrowLeft } from "@lucide/vue"
+import { useI18n } from "vue-i18n"
 import type { SettingsCategory, SettingsPageDefinition } from "./settings"
 
 const props = defineProps<{
@@ -21,6 +22,7 @@ defineSlots<{
   default(): unknown
 }>()
 
+const { t } = useI18n()
 const appVersion = __APP_VERSION__
 
 function firstEnabledPage(category: SettingsCategory): SettingsPageDefinition | undefined {
@@ -101,8 +103,8 @@ watch(
     </header>
 
     <aside class="settings-primary-sidebar">
-      <div class="settings-sidebar-label">Settings</div>
-      <nav class="settings-primary-navigation" :aria-label="`${title} categories`">
+      <div class="settings-sidebar-label">{{ t("chrome.settings") }}</div>
+      <nav class="settings-primary-navigation" :aria-label="t('chrome.categoriesAria', { title })">
         <button
           v-for="category in categories"
           :key="category.id"
@@ -118,7 +120,7 @@ watch(
           <small v-if="category.badge">{{ category.badge }}</small>
         </button>
       </nav>
-      <div class="settings-build-label">Yadaw / build {{ appVersion }}</div>
+      <div class="settings-build-label">{{ t("chrome.buildLabel", { version: appVersion }) }}</div>
     </aside>
 
     <aside class="settings-secondary-sidebar">
@@ -127,7 +129,7 @@ watch(
           <span>{{ activeCategory.label }}</span>
           <strong>{{ activeCategory.description }}</strong>
         </div>
-        <nav :aria-label="`${activeCategory.label} settings pages`">
+        <nav :aria-label="t('chrome.pagesAria', { category: activeCategory.label })">
           <button
             v-for="page in activeCategory.pages"
             :key="page.id"

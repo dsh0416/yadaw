@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue"
+import { useI18n } from "vue-i18n"
 import type { TempoEventState, TempoMapSnapshot } from "@yadaw/contracts"
 import { barTicksThroughTick, beatTicksThroughTick } from "../../../utils/tempoMap"
 import GlobalValueLane, { type GlobalLanePoint } from "./GlobalValueLane.vue"
@@ -20,6 +21,8 @@ const emit = defineEmits<{
   replace: [tempoMap: TempoMapSnapshot]
   select: [tick: number | null]
 }>()
+
+const { t } = useI18n()
 
 const tempoRange = computed(() => {
   const values = props.tempoMap.tempoEvents.map((event) => event.beatsPerMinute)
@@ -123,8 +126,8 @@ function removePoint(id: string): void {
     :vertical-guides="verticalGuides"
     color="var(--ui-domain-color-65a8ff)"
     :expanded="expanded"
-    value-label="Tempo"
-    position-label="beats"
+    :value-label="t('studio.lanes.tempo')"
+    :position-label="t('studio.lanes.positionLabel')"
     @create="createPoint"
     @update="updatePoint"
     @remove="removePoint"

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, shallowRef, useTemplateRef, watch } from "vue"
+import { useI18n } from "vue-i18n"
 import type { CompiledAudioGraphSnapshot } from "@yadaw/contracts"
 import { layoutCompiledEffectGraph } from "./compiledEffectGraphLayout"
 
@@ -7,6 +8,8 @@ const props = defineProps<{
   snapshot: CompiledAudioGraphSnapshot
   resetToken: number
 }>()
+
+const { t } = useI18n()
 
 const chartElement = useTemplateRef<HTMLDivElement>("chart")
 const chart = shallowRef<import("echarts/core").ECharts | null>(null)
@@ -51,6 +54,11 @@ async function render(): Promise<void> {
     return surface
   }
 
+  const legendActiveEffect = t("effectGraph.chart.legend.activeEffect")
+  const legendAudioRoute = t("effectGraph.chart.legend.audioRoute")
+  const legendPdcLatency = t("effectGraph.chart.legend.pdcLatency")
+  const legendBypassedUnavailable = t("effectGraph.chart.legend.bypassedUnavailable")
+
   chart.value.setOption({
     animation: !reducedMotion,
     backgroundColor: "transparent",
@@ -60,7 +68,7 @@ async function render(): Promise<void> {
     },
     legend: [
       {
-        data: ["Active effect", "Audio route", "PDC / latency", "Bypassed / unavailable"],
+        data: [legendActiveEffect, legendAudioRoute, legendPdcLatency, legendBypassedUnavailable],
         textStyle: { color: cssColor("--text-secondary") }
       }
     ],
@@ -82,10 +90,10 @@ async function render(): Promise<void> {
         },
         emphasis: { focus: "adjacency" },
         categories: [
-          { name: "Active effect", itemStyle: { color: orange } },
-          { name: "Audio route", itemStyle: { color: cyan } },
-          { name: "PDC / latency", itemStyle: { color: purple } },
-          { name: "Bypassed / unavailable", itemStyle: { color: muted } }
+          { name: legendActiveEffect, itemStyle: { color: orange } },
+          { name: legendAudioRoute, itemStyle: { color: cyan } },
+          { name: legendPdcLatency, itemStyle: { color: purple } },
+          { name: legendBypassedUnavailable, itemStyle: { color: muted } }
         ],
         data: layout.nodes.map((node) => ({
           id: node.id,
@@ -120,9 +128,13 @@ async function render(): Promise<void> {
           detail: [
             node.label,
             node.kind.replaceAll("-", " "),
-            node.pluginState ? `State: ${node.pluginState}` : "",
-            node.latencySamples > 0 ? `Latency: ${node.latencySamples} samples` : "",
-            `Signal: ${node.signalWidth}`
+            node.pluginState
+              ? t("effectGraph.chart.tooltip.state", { state: node.pluginState })
+              : "",
+            node.latencySamples > 0
+              ? t("effectGraph.chart.tooltip.latency", { samples: node.latencySamples })
+              : "",
+            t("effectGraph.chart.tooltip.signal", { width: node.signalWidth })
           ]
             .filter(Boolean)
             .join("<br>")
@@ -171,7 +183,11 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="chart" class="compiled-effect-graph-chart" aria-label="Compiled audio effect graph" />
+  <div
+    ref="chart"
+    class="compiled-effect-graph-chart"
+    :aria-label="t('effectGraph.chart.ariaLabel')"
+  />
 </template>
 
 <style scoped>

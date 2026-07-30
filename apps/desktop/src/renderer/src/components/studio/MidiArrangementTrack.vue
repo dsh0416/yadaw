@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { computed } from "vue"
+import { useI18n } from "vue-i18n"
 import type { MidiClipState, TempoMapSnapshot } from "@yadaw/contracts"
 import { barTicksThroughTick, beatTicksThroughTick } from "../../utils/tempoMap"
 import { timelineXToTick } from "../../utils/timelineCoordinates"
+
+const { t } = useI18n()
 
 const props = defineProps<{
   trackId: string
@@ -123,12 +126,12 @@ function createClipAtPointer(event: MouseEvent): void {
     :data-track-id="trackId"
     data-track-kind="instrument"
     tabindex="0"
-    aria-label="Instrument lane; double-click empty space or press Enter to create a MIDI clip"
+    :aria-label="t('studio.arrangement.instrumentLaneAria')"
     @dblclick.self="createClipAtPointer"
     @keydown.enter.self="emit('create', trackId, keyboardInsertionTick)"
   >
     <span v-if="clips.length === 0 && !dragPreview" class="empty-hint">
-      Double-click to create MIDI clip
+      {{ t("studio.arrangement.createMidiClipHint") }}
     </span>
     <i
       v-for="(left, index) in beatLines"
