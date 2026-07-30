@@ -3,6 +3,7 @@
 apm_modules/
 node_modules/
 **/node_modules/
+**/.vitepress/cache/
 
 dist/
 out/

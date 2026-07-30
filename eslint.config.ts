@@ -8,6 +8,7 @@ const generatedAndBuildPaths = [
   ".agents/skills/",
   ".pnpm-store/",
   "apm_modules/",
+  "**/.vitepress/cache/",
   "**/node_modules/",
   "**/dist/",
   "**/out/",
@@ -45,6 +46,7 @@ export default tseslint.config(
           "./apps/desktop/tsconfig.eslint.json",
           "./apps/desktop/tsconfig.scripts.json",
           "./apps/design-system/tsconfig.json",
+          "./docs/tsconfig.json",
           "./packages/contracts/tsconfig.json",
           "./packages/project-db/tsconfig.eslint.json",
           "./packages/ui/tsconfig.json"
@@ -111,6 +113,7 @@ export default tseslint.config(
       "apps/desktop/scripts/**/*.{cjs,js,mjs,ts}",
       "apps/desktop/src/main/**/*.ts",
       "apps/desktop/src/preload/**/*.ts",
+      "docs/.vitepress/**/*.ts",
       "scripts/**/*.ts",
       "packages/project-db/**/*.ts"
     ],

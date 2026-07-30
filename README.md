@@ -66,6 +66,12 @@ are planned as ARA, then CLAP, then AU.
 Until 1.0, project formats and compatibility may change without a migration
 guarantee. See the [roadmap](agents/docs/roadmap.md) for milestones and priorities.
 
+## User manual
+
+The [YADAW user manual](docs/content/manual/index.md) covers installation,
+projects, recording, MIDI editing, mixing, plug-ins, audio-device setup, and
+troubleshooting.
+
 ## Development
 
 The repository uses a locked, project-managed toolchain. To start a development
@@ -75,6 +81,8 @@ build:
 mise install
 mise run dev
 ```
+
+Run `mise run docs` to develop the VitePress website locally.
 
 Contributor-facing details live outside this README:
 

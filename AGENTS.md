@@ -2,7 +2,8 @@
 
 This file is the entry point for AI agents and automation working in this
 repository. Keep project and agent-facing documentation under `agents/docs/`,
-and reusable agent skills under `.agents/skills/`.
+the VitePress website and user manual under `docs/`, and reusable agent skills
+under `.agents/skills/`.
 
 ## Project Shape
 
@@ -42,8 +43,10 @@ Use the project-managed toolchain:
 ```sh
 mise install
 mise run dev
+mise run docs
 mise run check
 mise run build
+mise run docs-build
 mise run format
 mise run format-check
 mise run lint
@@ -78,6 +81,7 @@ mise exec -- pnpm lint
 ## Supporting Notes
 
 - [Repository overview](README.md)
+- [User manual](docs/content/manual/index.md)
 - [Architecture and real-time constraints](agents/docs/architecture.md)
 - [Product roadmap](agents/docs/roadmap.md)
 - [Rust performance benchmarks](agents/docs/benchmarks.md)
@@ -89,10 +93,12 @@ mise exec -- pnpm lint
 
 ## Documentation Boundary
 
-Keep repository-wide agent instructions in `AGENTS.md`. Place architecture,
-roadmap, performance, CI, design-system, development-environment notes, agent
-workflows, permission guidance, and implementation checklists under
-`agents/docs/`. Treat `.agents/skills/` as APM-managed content derived from
-`apm.yml` and `apm.lock.yaml`; update the dependency declarations instead of
-hand-editing installed skill copies. Do not place temporary agent notes,
-generated output, or benchmark artifacts in `agents/docs/`.
+Keep repository-wide agent instructions in `AGENTS.md`. The `docs/` workspace
+is the public VitePress website: keep its content focused on the product landing
+page and end-user manual. Place architecture, roadmap, performance, CI,
+design-system, development-environment notes, agent workflows, permission
+guidance, and implementation checklists under `agents/docs/`. Treat
+`.agents/skills/` as APM-managed content derived from `apm.yml` and
+`apm.lock.yaml`; update the dependency declarations instead of hand-editing
+installed skill copies. Do not place temporary agent notes, generated output,
+or benchmark artifacts in either documentation directory.

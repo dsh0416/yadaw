@@ -1,15 +1,17 @@
 # Continuous integration and releases
 
 The `CI`, `Test`, `Build`, and `Publish` GitHub Actions workflows are the
-source of truth for validation, packaging smoke builds, and tagged releases.
+source of truth for validation, documentation deployment, packaging smoke
+builds, and tagged releases.
 
 ## Workflows
 
 - **CI** (`.github/workflows/ci.yml`) runs on pull requests and pushes to
-  `main`. It calls the reusable Test and Build workflows in parallel, then
-  reports their combined result through the stable `Gate` job. Configure
-  the `Gate` check (shown under the `CI` workflow) as the only required status
-  check for pull requests.
+  `main`. It calls the reusable Test and Build workflows and builds the
+  VitePress user documentation in parallel, then reports their combined result
+  through the stable `Gate` job. After the gate succeeds on `main`, it deploys
+  the documentation artifact to GitHub Pages. Configure the `Gate` check (shown
+  under the `CI` workflow) as the only required status check for pull requests.
 - **Test** (`.github/workflows/test.yml`) runs repository checks on Linux x64,
   Windows x64, and macOS. It is reusable through `workflow_call` and can also
   be started manually.
@@ -22,9 +24,10 @@ source of truth for validation, packaging smoke builds, and tagged releases.
 
 ## Workflow tiers
 
-- Pull requests and pushes to `main` run `CI`, which calls `Test` and `Build`.
-  The `Gate` job succeeds only when both reusable workflows succeed.
-  Installers remain available as workflow artifacts for 14 days.
+- Pull requests and pushes to `main` run `CI`, which calls `Test` and `Build`
+  and builds the user documentation. The `Gate` job succeeds only when all
+  three jobs succeed. Main-branch runs then deploy the documentation to GitHub
+  Pages. Installers remain available as workflow artifacts for 14 days.
 - Manual `workflow_dispatch` runs are available on `CI`, `Test`, and `Build`.
 - Tags beginning with `v` run `Publish`, which calls `Test` and `Build`. After
   both succeed, `Publish` downloads the Build artifacts and adds the

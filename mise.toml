@@ -24,6 +24,7 @@ sources = [
   "pnpm-lock.yaml",
   "pnpm-workspace.yaml",
   "apps/*/package.json",
+  "docs/package.json",
   "packages/*/package.json",
   "crates/*/package.json",
 ]
@@ -33,6 +34,16 @@ outputs = ["node_modules/.pnpm/lock.yaml"]
 description = "Build the native addon and start Electron with Vite watchers"
 depends = ["install"]
 run = "pnpm dev"
+
+[tasks.docs]
+description = "Start the user documentation site"
+depends = ["install"]
+run = "pnpm docs:dev"
+
+[tasks.docs-build]
+description = "Build the user documentation site"
+depends = ["install"]
+run = "pnpm docs:build"
 
 [tasks.check]
 description = "Run formatting, lint, Rust, napi-rs, TypeScript, and Vue checks"

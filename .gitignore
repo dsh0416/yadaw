@@ -3,6 +3,7 @@ node_modules/
 target/
 out/
 dist/
+**/.vitepress/cache/
 release/
 test-results/
 playwright-report/
