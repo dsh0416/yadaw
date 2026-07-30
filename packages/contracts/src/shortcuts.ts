@@ -73,8 +73,8 @@ export function resolveKeyboardShortcuts(
   const resolved: Partial<Record<ApplicationCommandId, KeyboardShortcutBinding>> = {}
   for (const [command, binding] of Object.entries(defaultKeyboardShortcuts(platform))) {
     resolved[command as ApplicationCommandId] = {
-      code: binding!.code,
-      modifiers: [...binding!.modifiers]
+      code: binding.code,
+      modifiers: [...binding.modifiers]
     }
   }
   for (const [command, binding] of Object.entries(preferences.keyboard)) {
@@ -91,7 +91,13 @@ export function resolveKeyboardShortcuts(
 
 export function keyboardBindingMatches(
   binding: KeyboardShortcutBinding,
-  event: Pick<KeyboardEvent, "code" | "ctrlKey" | "altKey" | "shiftKey" | "metaKey">,
+  event: {
+    code: string
+    ctrlKey: boolean
+    altKey: boolean
+    shiftKey: boolean
+    metaKey: boolean
+  },
   platform: DesktopPlatform
 ): boolean {
   const modifiers = new Set(binding.modifiers)

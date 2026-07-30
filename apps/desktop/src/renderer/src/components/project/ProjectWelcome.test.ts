@@ -40,6 +40,7 @@ describe("ProjectWelcome", () => {
             egressConcurrency: "auto"
           },
           pluginEditors: {},
+          shortcuts: { keyboard: {}, midi: {} },
           recentProjects: [{ path: "C:/song.yadaw", name: "Song", openedAt: 1 }]
         },
         busy: false,

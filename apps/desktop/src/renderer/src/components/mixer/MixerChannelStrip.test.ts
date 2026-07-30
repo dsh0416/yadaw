@@ -237,6 +237,7 @@ describe("MixerChannelStrip", () => {
         egressConcurrency: "auto"
       },
       pluginEditors: {},
+      shortcuts: { keyboard: {}, midi: {} },
       recentProjects: []
     }
     const wrapper = mount(MixerChannelStrip, {

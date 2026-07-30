@@ -28,24 +28,6 @@ import { useRecordingStore } from "../stores/recording"
 import { useStudioWorkspaceStore } from "../stores/studioWorkspace"
 import { useTransportStore } from "../stores/transport"
 
-const NATIVE_MAC_MENU_COMMANDS = new Set<ApplicationCommandId>([
-  "project.new",
-  "project.open",
-  "project.save",
-  "project.close",
-  "project.settings",
-  "edit.undo",
-  "edit.redo",
-  "edit.cut",
-  "edit.copy",
-  "edit.paste",
-  "edit.select-all",
-  "application.preferences",
-  "view.toggle-full-screen",
-  "help.audio-benchmark",
-  "help.effect-chain-graph"
-])
-
 function defaultProject(name: string): CreateProjectRequest {
   return {
     name,
@@ -340,12 +322,6 @@ export function useApplicationCommands() {
     if (
       isEditableTarget(event.target) &&
       !match.binding.modifiers.some((modifier) => ["primary", "control", "alt"].includes(modifier))
-    ) {
-      return
-    }
-    if (
-      applicationWindowStore.platform === "darwin" &&
-      NATIVE_MAC_MENU_COMMANDS.has(match.command)
     ) {
       return
     }

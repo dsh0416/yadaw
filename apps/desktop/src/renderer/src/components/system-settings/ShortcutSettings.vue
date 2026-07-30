@@ -85,10 +85,11 @@ async function assignKeyboard(
   const next = currentPreferences()
   if (binding) {
     for (const candidate of APPLICATION_COMMAND_IDS) {
+      const candidateBinding = resolvedKeyboard.value[candidate]
       if (
         candidate !== command &&
-        resolvedKeyboard.value[candidate] &&
-        sameKeyboardBinding(resolvedKeyboard.value[candidate]!, binding)
+        candidateBinding &&
+        sameKeyboardBinding(candidateBinding, binding)
       ) {
         next.keyboard[candidate] = null
       }
@@ -212,7 +213,9 @@ function midiLabel(command: ApplicationCommandId): string {
 
 onMounted(() => {
   window.addEventListener("keydown", captureKeyboard, true)
-  unsubscribeControls = midiInputStore.subscribeControls(handleMidiControl)
+  unsubscribeControls = midiInputStore.subscribeControls((event) => {
+    void handleMidiControl(event)
+  })
   if (!settings.value) void settingsStore.load()
   void midiInputStore.load()
 })

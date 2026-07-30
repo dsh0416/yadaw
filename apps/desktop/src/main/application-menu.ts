@@ -33,8 +33,30 @@ function electronAccelerator(binding: KeyboardShortcutBinding | undefined): stri
     ? binding.code.slice(3)
     : /^Digit[0-9]$/u.test(binding.code)
       ? binding.code.slice(5)
-      : (({ Comma: ",", Period: ".", Space: "Space" } as Record<string, string>)[binding.code] ??
-        binding.code)
+      : /^F(?:[1-9]|1[0-9]|2[0-4])$/u.test(binding.code)
+        ? binding.code
+        : (
+            {
+              ArrowDown: "Down",
+              ArrowLeft: "Left",
+              ArrowRight: "Right",
+              ArrowUp: "Up",
+              Backspace: "Backspace",
+              Comma: ",",
+              Delete: "Delete",
+              End: "End",
+              Enter: "Enter",
+              Escape: "Escape",
+              Home: "Home",
+              Insert: "Insert",
+              PageDown: "PageDown",
+              PageUp: "PageUp",
+              Period: ".",
+              Space: "Space",
+              Tab: "Tab"
+            } as Record<string, string | undefined>
+          )[binding.code]
+  if (!key) return undefined
   const modifiers = binding.modifiers.map((modifier) => {
     if (modifier === "primary") return "Command"
     if (modifier === "control") return "Control"

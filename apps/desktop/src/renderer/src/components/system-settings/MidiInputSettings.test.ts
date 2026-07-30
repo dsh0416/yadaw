@@ -44,6 +44,7 @@ describe("MidiInputSettings", () => {
             ignoredSystemMessages: 0,
             error: null
           },
+          controlEvents: [],
           capturedAt: 1
         },
         applying: false,
@@ -89,6 +90,7 @@ describe("MidiInputSettings", () => {
             ignoredSystemMessages: 1,
             error: null
           },
+          controlEvents: [],
           capturedAt: 1
         },
         applying: false,
