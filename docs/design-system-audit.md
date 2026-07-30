@@ -1,9 +1,11 @@
 # Renderer UI audit
 
-This checklist records the source-wide audit performed while introducing `@yadaw/ui`. All 61 Vue
-files were included. “Reviewed” means the file is covered by the automated raw-color, z-index,
-overlay, dependency-boundary, and Histoire checks; it does not mean every product-specific DAW
-control was replaced with a generic primitive.
+This checklist records the source-wide audit introduced with `@yadaw/ui` and extended as the
+renderer grew. The inventory is now collected dynamically rather than frozen at the original 61
+Vue files. On the 2026-07-30 expansion pass, `lint:design` covered 234 renderer sources, 45 UI
+sources, and 8 design-system sources. “Reviewed” means the file is covered by the automated
+raw-color, typography, token-reference, z-index, overlay, dependency-boundary, and Storybook-only
+checks; it does not mean every product-specific DAW control was replaced with a generic primitive.
 
 Product-specific controls were retained where their interaction is intrinsically musical or
 two-dimensional. Their colors now come from the domain palette or runtime CSS variables, and
@@ -84,6 +86,21 @@ their focus/keyboard semantics remain part of desktop tests.
 - [x] `components/studio/global-lanes/GlobalValueLane.vue`.
 - [x] `components/studio/global-lanes/TempoTrackLane.vue`.
 
+## Editors and expanded workflows
+
+- [x] `components/piano-roll/PianoRollDock.vue` — editor composition and focus boundary.
+- [x] `components/piano-roll/PianoRollToolbar.vue` — shared toolbar, exclusive tool group, and
+      signal-rail clip choices.
+- [x] `components/piano-roll/PianoRollInspector.vue` — shared inline fields and bounded numeric
+      inputs.
+- [x] `components/piano-roll/PianoRollGrid.vue` — domain grid retained; shared recording signal
+      token.
+- [x] `components/piano-roll/PianoRollKeyboard.vue`.
+- [x] `components/piano-roll/PianoRollNote.vue`.
+- [x] `components/piano-roll/PianoRollVelocityLane.vue`.
+- [x] `components/effect-graph/CompiledEffectGraphHost.vue` — product controller.
+- [x] `components/effect-graph/CompiledEffectGraphPanel.vue` — domain graph surface retained.
+
 ## Shared editing
 
 - [x] `components/InlineTrackNameEditor.vue`.
@@ -95,6 +112,8 @@ their focus/keyboard semantics remain part of desktop tests.
 - No Histoire dependency or script.
 - No raw renderer color.
 - No numeric renderer z-index.
+- No undefined shared token reference; the `--ui-` namespace resolves only through shared token
+  sources.
 - UI package cannot import product state, routing, contracts, Electron, or preload APIs.
 - Ordinary UI elevation uses shared tokens; dynamic signal glows are restricted to documented DAW
   domain directories.

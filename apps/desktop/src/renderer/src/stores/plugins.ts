@@ -31,6 +31,7 @@ export const usePluginStore = defineStore("plugins", () => {
   const scanProgress = shallowRef<{ completed: number; total: number; path: string } | null>(null)
   const loading = shallowRef(false)
   const error = shallowRef("")
+  let catalogFailureIds = new Set<string>()
   let unsubscribe: (() => void) | null = null
 
   const compatibleInstruments = computed(() =>
@@ -48,7 +49,11 @@ export const usePluginStore = defineStore("plugins", () => {
   )
 
   function reconcileRuntime(): void {
-    const next = { ...runtime.value }
+    const instanceIds = new Set(mixerStore.graph.plugins.map((instance) => instance.id))
+    const next = Object.fromEntries(
+      Object.entries(runtime.value).filter(([instanceId]) => instanceIds.has(instanceId))
+    )
+    const nextCatalogFailureIds = new Set<string>()
     for (const instance of mixerStore.graph.plugins) {
       const descriptor = catalog.value.plugins.find(
         (plugin) => pluginDescriptorKey(plugin) === pluginDescriptorKey(instance.descriptor)
@@ -62,6 +67,7 @@ export const usePluginStore = defineStore("plugins", () => {
           tailSamples: 0,
           error: "The saved VST3 module is missing."
         }
+        nextCatalogFailureIds.add(instance.id)
       } else if (descriptor.compatibility === "quarantined") {
         next[instance.id] = {
           instanceId: instance.id,
@@ -71,6 +77,7 @@ export const usePluginStore = defineStore("plugins", () => {
           tailSamples: 0,
           error: descriptor.compatibilityReason
         }
+        nextCatalogFailureIds.add(instance.id)
       } else if (!descriptor.supportedAudioModes.includes(instance.audioMode)) {
         next[instance.id] = {
           instanceId: instance.id,
@@ -80,8 +87,15 @@ export const usePluginStore = defineStore("plugins", () => {
           tailSamples: 0,
           error: `The saved ${instance.audioMode} layout is no longer supported by this VST3.`
         }
+        nextCatalogFailureIds.add(instance.id)
+      } else if (
+        catalogFailureIds.has(instance.id) &&
+        ["missing", "quarantined", "failed"].includes(next[instance.id]?.state ?? "")
+      ) {
+        delete next[instance.id]
       }
     }
+    catalogFailureIds = nextCatalogFailureIds
     runtime.value = next
   }
 
@@ -336,6 +350,7 @@ export const usePluginStore = defineStore("plugins", () => {
   function reset(): void {
     catalog.value = structuredClone(EMPTY_CATALOG)
     runtime.value = {}
+    catalogFailureIds = new Set()
     parameters.value = {}
     scanProgress.value = null
     error.value = ""

@@ -1,10 +1,23 @@
 <script setup lang="ts">
-import { UiButton, UiSelect } from "@yadaw/ui"
+import {
+  UiButton,
+  UiChoiceChip,
+  UiSegmentedControl,
+  UiSelect,
+  UiToolbar,
+  type UiSegmentedOption
+} from "@yadaw/ui"
 import { PIANO_ROLL_SNAP_OPTIONS } from "../../utils/pianoRoll"
 import { usePianoRollEditor } from "./usePianoRollEditor"
 
 const emit = defineEmits<{ close: [] }>()
 const { pianoRollStore, openClips, trackColor } = usePianoRollEditor()
+
+const TOOL_OPTIONS = [
+  { label: "Select", value: "select" },
+  { label: "Draw", value: "draw" },
+  { label: "Erase", value: "erase" }
+] satisfies readonly UiSegmentedOption[]
 
 function changeTimeZoom(factor: number): void {
   pianoRollStore.setPixelsPerQuarter(pianoRollStore.pixelsPerQuarter * factor)
@@ -16,42 +29,24 @@ function changeKeyZoom(delta: number): void {
 </script>
 
 <template>
-  <header class="toolbar">
-    <div class="tools" role="group" aria-label="Piano roll tools">
-      <UiButton
-        size="sm"
-        :variant="pianoRollStore.tool === 'select' ? 'primary' : 'ghost'"
-        :aria-pressed="pianoRollStore.tool === 'select'"
-        @click="pianoRollStore.tool = 'select'"
-      >
-        Select
-      </UiButton>
-      <UiButton
-        size="sm"
-        :variant="pianoRollStore.tool === 'draw' ? 'primary' : 'ghost'"
-        :aria-pressed="pianoRollStore.tool === 'draw'"
-        @click="pianoRollStore.tool = 'draw'"
-      >
-        Draw
-      </UiButton>
-      <UiButton
-        size="sm"
-        :variant="pianoRollStore.tool === 'erase' ? 'primary' : 'ghost'"
-        :aria-pressed="pianoRollStore.tool === 'erase'"
-        @click="pianoRollStore.tool = 'erase'"
-      >
-        Erase
-      </UiButton>
-    </div>
-    <label class="snap-control">
-      <span>Snap</span>
-      <UiSelect
-        v-model="pianoRollStore.snap"
-        size="sm"
-        :options="PIANO_ROLL_SNAP_OPTIONS"
-        aria-label="Note snap resolution"
+  <UiToolbar as="header" class="toolbar" density="compact" label="Piano roll commands">
+    <template #start>
+      <UiSegmentedControl
+        v-model="pianoRollStore.tool"
+        size="compact"
+        label="Piano roll tools"
+        :options="TOOL_OPTIONS"
       />
-    </label>
+      <label class="snap-control">
+        <span>Snap</span>
+        <UiSelect
+          v-model="pianoRollStore.snap"
+          size="compact"
+          :options="PIANO_ROLL_SNAP_OPTIONS"
+          aria-label="Note snap resolution"
+        />
+      </label>
+    </template>
     <div class="time-zoom" role="group" aria-label="Piano roll time zoom">
       <UiButton
         size="sm"
@@ -89,38 +84,29 @@ function changeKeyZoom(delta: number): void {
       </UiButton>
     </div>
     <div class="clip-chips" aria-label="Editable MIDI clips">
-      <button
+      <UiChoiceChip
         v-for="clip in openClips"
         :key="clip.id"
-        type="button"
-        :class="['clip-chip', { active: clip.id === pianoRollStore.activeClipId }]"
-        :style="{ '--clip-color': trackColor(clip) }"
-        :aria-pressed="clip.id === pianoRollStore.activeClipId"
-        @click="pianoRollStore.activateClip(clip.id)"
-      >
-        {{ clip.name }}
-      </button>
+        :label="clip.name"
+        :selected="clip.id === pianoRollStore.activeClipId"
+        :signal-color="trackColor(clip)"
+        @select="pianoRollStore.activateClip(clip.id)"
+      />
     </div>
-    <UiButton size="sm" variant="ghost" aria-label="Close piano roll" @click="emit('close')">
-      Close
-    </UiButton>
-  </header>
+    <template #end>
+      <UiButton size="sm" variant="ghost" aria-label="Close piano roll" @click="emit('close')">
+        Close
+      </UiButton>
+    </template>
+  </UiToolbar>
 </template>
 
 <style scoped>
 .toolbar {
   position: relative;
   z-index: var(--ui-z-local-header);
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: var(--ui-space-2);
-  padding: 4px var(--ui-space-3);
-  border-bottom: 1px solid var(--line-soft);
-  background: var(--surface-1);
 }
 
-.tools,
 .time-zoom,
 .key-zoom,
 .clip-chips {
@@ -131,7 +117,7 @@ function changeKeyZoom(delta: number): void {
 
 .snap-control {
   display: grid;
-  grid-template-columns: auto 112px;
+  grid-template-columns: auto 7rem;
   align-items: center;
   gap: 5px;
   color: var(--text-muted);
@@ -142,22 +128,5 @@ function changeKeyZoom(delta: number): void {
   min-width: 0;
   flex: 1;
   overflow-x: auto;
-}
-
-.clip-chip {
-  min-height: var(--ui-target-min);
-  padding: 0 var(--ui-space-2);
-  border: 1px solid var(--line-soft);
-  border-left: 3px solid var(--clip-color);
-  border-radius: var(--ui-radius-sm);
-  color: var(--text-muted);
-  background: var(--surface-sunken);
-  white-space: nowrap;
-}
-
-.clip-chip.active {
-  color: var(--text-primary);
-  border-color: var(--clip-color);
-  background: var(--surface-active);
 }
 </style>

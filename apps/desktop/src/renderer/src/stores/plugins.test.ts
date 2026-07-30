@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { createPinia, setActivePinia } from "pinia"
+import { nextTick } from "vue"
 import type { MixerGraphSnapshot, PluginDescriptor } from "@yadaw/contracts"
 import { useMixerStore } from "./mixer"
 import { usePluginStore } from "./plugins"
@@ -29,6 +30,13 @@ const instrumentDescriptor: PluginDescriptor = {
   category: "Instrument",
   kind: "instrument",
   supportedAudioModes: ["mono", "stereo"]
+}
+
+const replacementInstrumentDescriptor: PluginDescriptor = {
+  ...instrumentDescriptor,
+  classId: "replacement-instrument",
+  modulePath: "replacement-instrument.vst3",
+  name: "Replacement Instrument"
 }
 
 function graph(): MixerGraphSnapshot {
@@ -238,6 +246,58 @@ describe("plugin store", () => {
       }
     })
     expect(mixerStore.graph.plugins).toHaveLength(2)
+  })
+
+  it("clears a stale catalog failure when an instrument instance is replaced", async () => {
+    const mixerStore = useMixerStore()
+    const initialGraph = graph()
+    initialGraph.plugins.push({
+      id: "instrument-instance",
+      channelId: "instrument",
+      role: "instrument",
+      slotOrder: 0,
+      classId: instrumentDescriptor.classId,
+      descriptor: instrumentDescriptor,
+      audioMode: "stereo",
+      enabled: true,
+      componentState: new Uint8Array(),
+      controllerState: new Uint8Array()
+    })
+    mixerStore.graph = initialGraph
+    window.yadaw.listPlugins = vi.fn().mockResolvedValue({
+      scannerVersion: 4,
+      scanning: false,
+      scannedAt: 1,
+      plugins: [replacementInstrumentDescriptor]
+    })
+    window.yadaw.subscribePluginScan = vi.fn().mockReturnValue(vi.fn())
+    window.yadaw.executeProjectCommand = vi.fn().mockImplementation(async (command) => {
+      if (command.type !== "replace-plugin") throw new Error("Unexpected project command")
+      const next = structuredClone(mixerStore.graph)
+      const index = next.plugins.findIndex((plugin) => plugin.id === command.pluginId)
+      next.plugins[index] = structuredClone(command.plugin)
+      return {
+        graph: next,
+        inverse: {
+          type: "replace-plugin" as const,
+          pluginId: command.plugin.id,
+          plugin: initialGraph.plugins[0]!
+        }
+      }
+    })
+    const pluginStore = usePluginStore()
+    await pluginStore.load()
+    expect(pluginStore.runtime["instrument-instance"]?.state).toBe("missing")
+
+    expect(
+      await pluginStore.assignInstrument(
+        { descriptor: replacementInstrumentDescriptor, audioMode: "stereo" },
+        "instrument"
+      )
+    ).toBe(true)
+    await nextTick()
+
+    expect(pluginStore.runtime["instrument-instance"]).toBeUndefined()
   })
 
   it("rejects effect modes whose native input width does not match the insert point", async () => {

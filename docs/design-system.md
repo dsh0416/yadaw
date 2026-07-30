@@ -8,6 +8,30 @@ The source of truth is `packages/ui`. Storybook in `apps/design-system` is the i
 reference. Product screens may compose these primitives, but they must not create a second
 generic component system.
 
+## Visual thesis
+
+YADAW is built for musicians, editors, and audio engineers who may keep the same workspace open
+for hours. The interface's single job is to keep musical position, editable scope, and audio state
+legible without competing with the material being edited.
+
+The core palette is intentionally small:
+
+- **Carbon** `#101010` — the two-dimensional musical workspace;
+- **Graphite** `#202020` — controls, strips, and local structure;
+- **Steel** `#8da8b5` — focus, primary action, and neutral selection;
+- **Wave cyan** `#72c3c7` — audio-domain signal;
+- **Take red** `#ff6577` — recording and destructive live state;
+- **Meter amber** `#e8b75f` — thresholds that need attention.
+
+Interface type uses Segoe UI Variable or the platform UI stack, restrained headings use
+Bahnschrift Condensed or the condensed fallback stack, and musical measurements use Cascadia
+Mono or the platform monospace stack. A family is a role, not decoration: time, dB, BPM, ticks,
+channels, and aligned tables use data type; sentences and controls use interface type.
+
+The signature element is the **signal rail**: a narrow channel-derived edge marks the active clip,
+track, route, or editable scope while the surrounding surface remains neutral. It always appears
+with a text, shape, or programmatic state, so color is never the only carrier.
+
 ## Principles
 
 1. **Signal over decoration.** Color, motion, and elevation explain state or hierarchy.
@@ -20,6 +44,11 @@ generic component system.
    `@yadaw/ui` owns visual behavior and accessibility.
 5. **Accessibility is behavior.** Keyboard operation, focus restoration, live regions, reflow,
    contrast, and reduced motion are tested rather than inferred from appearance.
+6. **One interaction, one primitive.** Actions, modes, navigation, selection, and numeric values
+   are different behaviors and must not share an improvised button style.
+7. **The canvas is exceptional, its chrome is not.** Notes, clips, waveforms, faders, rulers, and
+   meters may use domain geometry. Their toolbars, fields, menus, status, and selection controls
+   still use `@yadaw/ui`.
 
 ## Package boundary
 
@@ -39,6 +68,11 @@ API. Storybook product examples render from plain fixtures.
 - canvas, surface, text, border, action, feedback, and signal semantics;
 - spacing, radius, control size, typography, elevation, focus, motion, and z-index;
 - compatibility aliases used by existing DAW styles during source-level migration.
+
+Every `var(--ui-...)` reference must resolve to a declaration in `tokens.css` or
+`domain-palette.css`. `lint:design` rejects misspelled and removed tokens. Local runtime variables
+use a feature name without the `--ui-` prefix (for example `--clip-color`); the `--ui-` namespace
+is reserved for the shared system.
 
 `domain-palette.css` contains fixed product-rendering colors moved out of component styles during
 the 61-file audit. These values are allowed only where a DAW visualization needs a stable
@@ -79,6 +113,11 @@ Validation errors are specific, placed beside the field, and connected with
 `aria-describedby`. Do not validate on every keystroke when the user cannot yet provide a
 complete value. Disabled controls remain named.
 
+Use `UiNumberInput` for bounded musical and technical values. It exposes spinbutton semantics,
+Arrow/Page/Home/End keyboard behavior, and prevents accidental value changes while the containing
+workspace scrolls. Use `UiField layout="inline"` only in narrow inspectors; normal settings and
+dialogs keep stacked fields.
+
 ### Overlays
 
 - `UiDialog` owns portal placement, overlay, focus trapping and restoration, Escape, outside
@@ -110,6 +149,52 @@ Product hosts may own queues or stores, but must render these overlay components
 `UiSurface` and `UiSectionHeading` create stable visual hierarchy without business behavior.
 They should remain inexpensive to nest and must not read application state.
 
+### Workspace commands and selection
+
+- `UiToolbar` is the semantic command surface for an editor or dock. It has a required accessible
+  label, fixed start/end areas, and a locally scrollable command area.
+- `UiSegmentedControl` is for one exclusive mode in a stable set, such as Select, Draw, or Erase.
+  It is not navigation and does not switch documents or panels.
+- `UiChoiceChip` selects one peer object such as an editable clip. Its signal rail may accept a
+  documented runtime color, but text and `aria-pressed` carry the same state.
+- A zoom pair is an action group, not a segmented control. A panel switch is navigation, not a
+  pressed action, unless the same control directly opens and closes that panel.
+
+## Density and spatial composition
+
+There are two density contexts:
+
+- **Standard** is the default for welcome, settings, dialogs, onboarding, and long-running
+  workflows. Controls are 32–48 CSS px high and use the rem-based type scale.
+- **Compact** is reserved for persistent DAW chrome inside a musical workspace. Controls remain at
+  least 24×24 CSS px, use dense role typography, and must expose their full accessible name.
+
+Do not make a standard workflow compact merely to fit more content. Do not make clips, mixer
+strips, or rulers standard-density when that would reduce visible musical context.
+
+The application shell follows one spatial grammar:
+
+```text
+┌ application menu / project identity ─────────────────────────┐
+├ global transport and monitoring commands ────────────────────┤
+├ browser ┆ primary musical canvas ┆ contextual inspector ─────┤
+├─────────┴ optional editor or mixer dock ┴─────────────────────┤
+└ engine, device, position, and operation status ───────────────┘
+```
+
+Only the musical canvas and dock may scroll in two dimensions. Toolbars, inspectors, modal
+content, and global status never rely on horizontal page scrolling. Resizers are separators with
+an accessible name and keyboard equivalent; a pointer gesture cannot be the only way to restore
+or close a region.
+
+## Interaction states
+
+Every interactive component defines the applicable states in this order: default, hover, focus,
+pressed, selected, disabled, busy, invalid. Focus is never replaced by selected styling. Selected
+means the object or mode remains current after activation; pressed means the pointer or key is
+currently actuating the control. Busy disables duplicate commitment but preserves the action
+label. Invalid names the recovery beside the field.
+
 ## Product patterns
 
 ### Loading and long-running operations
@@ -135,6 +220,10 @@ Arrangement and mixer canvases may scroll locally in two dimensions. Their headi
 toolbars, context controls, and overlays still reflow at 320 CSS px and remain operable at 200%
 text zoom. Scrolling the canvas must not hide the only way to leave or configure it.
 
+An editor toolbar uses `UiToolbar`; exclusive tools use `UiSegmentedControl`; open editable
+objects use `UiChoiceChip`; bounded inspector values use `UiNumberInput`. This is the required
+baseline for arrangement, piano-roll, automation, sampler, and future score editors.
+
 ## Content
 
 Use sentence case. Prefer a concrete verb (“Import four tracks”) to a generic label (“OK”).
@@ -154,6 +243,8 @@ WCAG 2.2 AA is the release floor:
 - 320 CSS px reflow for non-canvas content and 200% text zoom;
 - reduced-motion support;
 - no information conveyed by color alone.
+- exclusive mode groups support arrow-key roving focus;
+- numeric fields expose min, max, current value, and keyboard stepping.
 
 Every Storybook story runs Axe with `parameters.a11y.test = "error"`. Complex behavior also has a
 `play` test. Critical dark/light product examples are the review surfaces for visual snapshots.
@@ -187,6 +278,7 @@ Storybook browser tests plus the controls and reflow Playwright tests remain ena
 - Choose an existing primitive before creating a new generic component.
 - Keep stores, routing, contracts, and preload calls outside `@yadaw/ui`.
 - Use semantic tokens; justify any domain palette or runtime signal color.
+- Keep every `--ui-` reference resolvable from the shared token sources.
 - Cover default, disabled/loading/error as applicable, long text, both themes, and keyboard state.
 - Add a `play` test for multi-step behavior.
 - Confirm focus, Escape, dismissal, and restoration for overlays.

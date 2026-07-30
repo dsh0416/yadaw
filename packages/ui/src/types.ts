@@ -9,6 +9,10 @@ export interface UiSelectOption {
   disabled?: boolean
 }
 
+export interface UiSegmentedOption extends UiSelectOption {
+  ariaLabel?: string
+}
+
 export interface UiSelectGroup {
   label: string
   options: readonly UiSelectOption[]

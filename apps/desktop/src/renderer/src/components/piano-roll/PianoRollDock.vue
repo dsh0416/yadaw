@@ -100,7 +100,7 @@ function close(): void {
   position: relative;
   isolation: isolate;
   display: grid;
-  grid-template-rows: 39px minmax(0, 1fr);
+  grid-template-rows: var(--ui-control-md) minmax(0, 1fr);
   grid-template-columns: 168px minmax(0, 1fr);
   grid-template-areas:
     "toolbar toolbar"

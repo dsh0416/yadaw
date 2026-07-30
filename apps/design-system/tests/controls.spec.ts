@@ -63,3 +63,36 @@ test("global key and meter track accent colors are defined", async ({ page }) =>
 
   expect(colors).toEqual({ key: "#b894ff", meter: "#f2a65a" })
 })
+
+test("workspace tool modes use roving focus and persistent pressed state", async ({ page }) => {
+  await page.goto(
+    "/iframe.html?id=components-workspace-command-surfaces--editor-toolbar&viewMode=story&globals=theme:dark;motion:disabled"
+  )
+
+  const select = page.getByRole("button", { name: "Select" })
+  const draw = page.getByRole("button", { name: "Draw" })
+  await expect(select).toHaveAttribute("aria-pressed", "true")
+
+  await select.focus()
+  await select.press("ArrowRight")
+
+  await expect(draw).toBeFocused()
+  await draw.press("Enter")
+  await expect(draw).toHaveAttribute("aria-pressed", "true")
+  await expect(select).toHaveAttribute("aria-pressed", "false")
+})
+
+test("workspace clip choices pair the signal rail with text state", async ({ page }) => {
+  await page.goto(
+    "/iframe.html?id=components-workspace-command-surfaces--editor-toolbar&viewMode=story&globals=theme:light;motion:disabled"
+  )
+
+  const verse = page.getByRole("button", { name: "Verse" })
+  const counterMelody = page.getByRole("button", { name: "Counter melody" })
+  await expect(verse).toHaveAttribute("aria-pressed", "true")
+  await expect(verse).toHaveCSS("border-left-width", "3px")
+
+  await counterMelody.click()
+  await expect(counterMelody).toHaveAttribute("aria-pressed", "true")
+  await expect(verse).toHaveAttribute("aria-pressed", "false")
+})

@@ -1,0 +1,31 @@
+import { Meta } from "@storybook/addon-docs/blocks"
+
+<Meta title="Foundations/Interaction" />
+
+# Interaction
+
+Controls are classified by behavior before they are styled.
+
+| Intent                         | Primitive                   | Persistent state |
+| ------------------------------ | --------------------------- | ---------------- |
+| Run a command                  | `UiButton` / `UiIconButton` | No               |
+| Choose one editor mode         | `UiSegmentedControl`        | Yes              |
+| Select an editable peer object | `UiChoiceChip`              | Yes              |
+| Navigate to a view or panel    | Router or tab pattern       | Yes              |
+| Edit a bounded number          | `UiNumberInput`             | Value            |
+
+A mode is not navigation. A zoom pair is not a mode. A clip choice is not a primary action. Keeping
+these contracts separate gives keyboard users the right operation and keeps visual state
+consistent as the product grows.
+
+## State order
+
+Implement the states that apply in this order: default, hover, focus, pressed, selected, disabled,
+busy, invalid. Focus remains visible on a selected control. Busy controls preserve their label.
+Invalid controls identify the recovery beside the field.
+
+## Signal rail
+
+Track, clip, route, and lane colors may enter `UiChoiceChip` through its documented signal color.
+The rail identifies musical ownership; text and `aria-pressed` communicate the same selection.
+Ordinary application choices use the neutral action color instead.

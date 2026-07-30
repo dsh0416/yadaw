@@ -1,17 +1,22 @@
 <script setup lang="ts">
-import { UiButton } from "@yadaw/ui"
+import { UiButton, UiField, UiNumberInput } from "@yadaw/ui"
 import { usePianoRollEditor } from "./usePianoRollEditor"
 
 const { pianoRollStore, selectedItems, applyInspector, commonValue, quantizeSelected } =
   usePianoRollEditor()
 
-const FIELD_LABELS: Record<string, string> = {
-  key: "Pitch",
-  start: "Start tick",
-  duration: "Duration",
-  channel: "Channel",
-  velocity: "Velocity",
-  releaseVelocity: "Release"
+const INSPECTOR_FIELDS = [
+  { key: "key", label: "Pitch", min: 0, max: 127 },
+  { key: "start", label: "Start tick", min: 0, max: undefined },
+  { key: "duration", label: "Duration", min: 1, max: undefined },
+  { key: "channel", label: "Channel", min: 1, max: 16 },
+  { key: "velocity", label: "Velocity", min: 1, max: 127 },
+  { key: "releaseVelocity", label: "Release", min: 0, max: 127 }
+] as const
+
+function numericValue(field: string): number | null {
+  const value = commonValue(field)
+  return value === "" ? null : Number(value)
 }
 </script>
 
@@ -20,27 +25,26 @@ const FIELD_LABELS: Record<string, string> = {
     <span class="selection-summary">
       {{ selectedItems.length }} note{{ selectedItems.length === 1 ? "" : "s" }}
     </span>
-    <label
-      v-for="field in ['key', 'start', 'duration', 'channel', 'velocity', 'releaseVelocity']"
-      :key="field"
+    <UiField
+      v-for="field in INSPECTOR_FIELDS"
+      :key="field.key"
+      :label="field.label"
+      layout="inline"
     >
-      <span>{{ FIELD_LABELS[field] }}</span>
-      <input
-        type="number"
-        :min="field === 'duration' || field === 'velocity' || field === 'channel' ? 1 : 0"
-        :max="
-          field === 'key' || field === 'velocity' || field === 'releaseVelocity'
-            ? 127
-            : field === 'channel'
-              ? 16
-              : undefined
-        "
-        :value="commonValue(field)"
-        placeholder="—"
-        :disabled="selectedItems.length === 0"
-        @change="applyInspector(field, ($event.target as HTMLInputElement).value)"
-      />
-    </label>
+      <template #default="{ controlId }">
+        <UiNumberInput
+          :id="controlId"
+          class="inspector-input"
+          size="compact"
+          :min="field.min"
+          :max="field.max"
+          :model-value="numericValue(field.key)"
+          placeholder="—"
+          :disabled="selectedItems.length === 0"
+          @change="applyInspector(field.key, ($event.target as HTMLInputElement).value)"
+        />
+      </template>
+    </UiField>
     <UiButton
       size="sm"
       variant="ghost"
@@ -80,26 +84,8 @@ const FIELD_LABELS: Record<string, string> = {
   overflow-y: auto;
 }
 
-.inspector label {
-  display: grid;
-  flex: none;
-  grid-template-columns: minmax(0, 1fr) 64px;
-  align-items: center;
-  gap: 4px;
-  color: var(--text-muted);
-  font: var(--ui-type-size-caption) var(--ui-type-family-data);
-  white-space: nowrap;
-}
-
-.inspector input {
-  width: 64px;
-  min-height: var(--ui-target-min);
-  padding: 0 5px;
-  border: 1px solid var(--line-soft);
-  border-radius: var(--ui-radius-sm);
-  color: var(--text-primary);
-  background: var(--surface-sunken);
-  font: inherit;
+.inspector-input {
+  width: 4rem;
 }
 
 .selection-summary,

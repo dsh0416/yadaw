@@ -23,6 +23,15 @@ function report(file: string, rule: string, detail: string): void {
 const rendererFiles = collectFiles(rendererRoot)
 const designSystemFiles = collectFiles(designSystemRoot)
 const uiFiles = collectFiles(uiRoot)
+const tokenSourceFiles = [
+  join(uiRoot, "styles/tokens.css"),
+  join(uiRoot, "styles/domain-palette.css")
+]
+const definedUiTokens = new Set(
+  tokenSourceFiles.flatMap((file) =>
+    [...readFileSync(file, "utf8").matchAll(/(--ui-[\w-]+)\s*:/g)].map((match) => match[1]!)
+  )
+)
 const rawColor = /#[0-9a-f]{3,8}\b|(?:rgb|hsl)a?\([^)]*\)/gi
 const numericZIndex = /z-index\s*:\s*-?\d+/gi
 const typographyProperty =
@@ -63,6 +72,15 @@ function auditTypography(file: string, source: string, isTokenSource = false): v
   }
 }
 
+function auditTokenReferences(file: string, source: string): void {
+  for (const match of source.matchAll(/var\((--ui-[\w-]+)/g)) {
+    const token = match[1]!
+    if (!token.endsWith("-") && !definedUiTokens.has(token)) {
+      report(file, "undefined-ui-token", token)
+    }
+  }
+}
+
 for (const file of rendererFiles) {
   const source = readFileSync(file, "utf8")
   const isTest = /\.test\.ts$/.test(file)
@@ -82,6 +100,7 @@ for (const file of rendererFiles) {
     report(file, "numeric-z-index", match[0])
   }
   auditTypography(file, source)
+  auditTokenReferences(file, source)
 
   const normalized = file.split(sep).join("/")
   const domainShadow =
@@ -118,6 +137,7 @@ for (const file of uiFiles) {
     }
   }
   auditTypography(file, source, isTokenSource)
+  auditTokenReferences(file, source)
 
   if (/from\s+["'](?:pinia|vue-router|@yadaw\/contracts|electron)["']|window\.yadaw/.test(source)) {
     report(file, "ui-package-boundary", "UI primitives cannot depend on product state or runtime")
@@ -125,7 +145,9 @@ for (const file of uiFiles) {
 }
 
 for (const file of designSystemFiles) {
-  auditTypography(file, readFileSync(file, "utf8"))
+  const source = readFileSync(file, "utf8")
+  auditTypography(file, source)
+  auditTokenReferences(file, source)
 }
 
 const manifests = [

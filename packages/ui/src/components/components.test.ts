@@ -5,8 +5,11 @@ import UiButton from "./UiButton.vue"
 import UiCascadingMenu from "./UiCascadingMenu.vue"
 import UiCascadingSelect from "./UiCascadingSelect.vue"
 import UiCheckbox from "./UiCheckbox.vue"
+import UiChoiceChip from "./UiChoiceChip.vue"
 import UiField from "./UiField.vue"
+import UiNumberInput from "./UiNumberInput.vue"
 import UiProgress from "./UiProgress.vue"
+import UiSegmentedControl from "./UiSegmentedControl.vue"
 import UiSelect from "./UiSelect.vue"
 import UiStatusNotice from "./UiStatusNotice.vue"
 import UiTextInput from "./UiTextInput.vue"
@@ -52,6 +55,61 @@ describe("UI controls", () => {
 
     await wrapper.get("input").setValue(true)
     expect(wrapper.emitted("update:modelValue")).toEqual([[true]])
+  })
+
+  it("selects one segmented option and exposes the pressed state", async () => {
+    const wrapper = mount(UiSegmentedControl, {
+      props: {
+        label: "Editing tool",
+        modelValue: "select",
+        options: [
+          { label: "Select", value: "select" },
+          { label: "Draw", value: "draw" }
+        ]
+      }
+    })
+
+    const buttons = wrapper.findAll("button")
+    expect(buttons[0]?.attributes("data-state")).toBe("on")
+    await buttons[1]?.trigger("click")
+    expect(wrapper.emitted("update:modelValue")).toEqual([["draw"]])
+  })
+
+  it("commits bounded numeric values with spinbutton semantics", async () => {
+    const wrapper = mount(UiNumberInput, {
+      props: {
+        modelValue: 64,
+        min: 1,
+        max: 127,
+        size: "compact"
+      },
+      attrs: {
+        "aria-label": "Velocity"
+      }
+    })
+
+    const input = wrapper.get("input")
+    expect(input.attributes("role")).toBe("spinbutton")
+    expect(input.attributes("aria-valuemin")).toBe("1")
+    await input.setValue("96")
+    await input.trigger("blur")
+    expect(wrapper.emitted("update:modelValue")).toEqual([[96]])
+  })
+
+  it("uses text and a signal rail for selected choices", async () => {
+    const wrapper = mount(UiChoiceChip, {
+      props: {
+        label: "Verse",
+        selected: true,
+        signalColor: "var(--ui-signal-midi)"
+      }
+    })
+
+    const button = wrapper.get("button")
+    expect(button.attributes("aria-pressed")).toBe("true")
+    expect(button.text()).toBe("Verse")
+    await button.trigger("click")
+    expect(wrapper.emitted("select")).toHaveLength(1)
   })
 
   it("renders grouped select options with a separator and updates v-model", async () => {
@@ -247,6 +305,25 @@ describe("UI feedback semantics", () => {
     expect(input.attributes("aria-describedby")).toContain("-description")
     expect(input.attributes("aria-describedby")).toContain("-error")
     expect(wrapper.get('[role="alert"]').text()).toContain("required")
+  })
+
+  it("supports compact inline inspector fields without changing associations", () => {
+    const wrapper = mount(UiField, {
+      props: {
+        label: "Velocity",
+        layout: "inline"
+      },
+      slots: {
+        default: `
+          <template #default="{ controlId }">
+            <input :id="controlId" />
+          </template>
+        `
+      }
+    })
+
+    expect(wrapper.classes()).toContain("ui-field--inline")
+    expect(wrapper.get("label").attributes("for")).toBe(wrapper.get("input").attributes("id"))
   })
 
   it("distinguishes determinate from indeterminate progress", async () => {
