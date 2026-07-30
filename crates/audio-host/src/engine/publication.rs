@@ -45,7 +45,11 @@ fn engine_transport_handles(
                 Arc::new(TransportShared {
                     state: AtomicU32::new(TRANSPORT_STOPPED),
                     position_frames: AtomicU64::new(0),
+                    position_ticks: AtomicU64::new(0),
                     sample_rate: AtomicU32::new(sample_rate),
+                    effective_bpm_bits: AtomicU64::new(f64::NAN.to_bits()),
+                    clock_source: AtomicU32::new(0),
+                    waiting_for: AtomicU32::new(0),
                 }),
                 Arc::new(InputPeakBank::new()),
             )
@@ -269,7 +273,11 @@ pub fn transport_snapshot() -> Result<NativeTransportSnapshot> {
         NativeTransportSnapshot {
             state: "stopped".to_owned(),
             position_frames: 0,
+            position_ticks: 0,
             sample_rate: 0,
+            effective_bpm: None,
+            clock_source: "internal".to_owned(),
+            waiting_for: None,
         },
         |engine| engine.transport.snapshot(),
     ))

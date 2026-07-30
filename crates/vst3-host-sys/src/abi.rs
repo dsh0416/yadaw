@@ -11,10 +11,10 @@ use crate::Steinberg::{
     IPluginBase, IPluginFactory, IPluginFactory2, IPluginFactory3, PClassInfo, PClassInfo2,
     PClassInfoW, PFactoryInfo, TBool, TUID, ViewRect,
     Vst::{
-        AudioBusBuffers, BusDirection, BusInfo, Event, IAudioProcessor, IComponent,
+        AudioBusBuffers, BusDirection, BusInfo, CtrlNumber, Event, IAudioProcessor, IComponent,
         IComponentHandler, IConnectionPoint, IEditController, IEventList, IHostApplication,
-        IMessage, IParamValueQueue, IParameterChanges, IoMode, MediaType, ParamID, ParamValue,
-        ParameterInfo, ProcessData, ProcessSetup, RoutingInfo, SpeakerArrangement,
+        IMessage, IMidiMapping, IParamValueQueue, IParameterChanges, IoMode, MediaType, ParamID,
+        ParamValue, ParameterInfo, ProcessData, ProcessSetup, RoutingInfo, SpeakerArrangement,
     },
     int16, int32, int64, tresult, uint32,
 };
@@ -222,6 +222,18 @@ pub struct EditControllerVTable {
     ) -> tresult,
     pub create_view:
         unsafe extern "system" fn(this: *mut IEditController, name: FIDString) -> *mut IPlugView,
+}
+
+#[repr(C)]
+pub struct MidiMappingVTable {
+    pub base: FUnknownVTable,
+    pub get_midi_controller_assignment: unsafe extern "system" fn(
+        this: *mut IMidiMapping,
+        bus_index: int32,
+        channel: int16,
+        midi_controller_number: CtrlNumber,
+        id: *mut ParamID,
+    ) -> tresult,
 }
 
 #[repr(C)]

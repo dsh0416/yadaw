@@ -15,10 +15,11 @@ mod tests {
         NativeMixerChannel, NativeMixerGraph, NativeMixerRuntime, NativeMixerSend,
         NativePluginInstance, NativeRoundTripLatencyMeasurementRequest, Ordering,
         OUTPUT_RESAMPLER_FRAMES, RoundTripInputDetector, RoundTripLatencyMeasurement,
-        RoundTripOutputProbe, ScheduledMidiEvent, SessionOutputConverter, SignalWidth,
-        StereoDelayLine, StreamDirection, StreamErrorImpact, SupportedBufferSize, TRANSPORT_PLAYING,
-        TRANSPORT_STOPPED, TransportAction, TransportShared, clip_storage_policy,
-        compiled_graph_snapshot, frames_to_nanos, native_graph_references_plugin,
+        RoundTripOutputProbe, ScheduledMidiEvent, ScheduledMidiEventKind, SessionOutputConverter,
+        SignalWidth, StereoDelayLine, StreamDirection, StreamErrorImpact, SupportedBufferSize,
+        TRANSPORT_PLAYING, TRANSPORT_RECORDING, TRANSPORT_STOPPED, TRANSPORT_WAITING,
+        TransportAction, TransportShared, clip_storage_policy, compiled_graph_snapshot,
+        frames_to_nanos, native_graph_references_plugin,
         resolve_stream_devices, select_buffer_size, set_last_native_graph_for_test,
         spawn_streaming_clip, stream_error_impact, validate_session_sample_rate,
     };
@@ -370,9 +371,19 @@ mod tests {
         let mut scheduler = MetronomeScheduler::new(Some(2), &map, 48_000, 0);
 
         let at_origin = scheduler.events_at(&map, 48_000, 0);
-        let note_on = at_origin.into_iter().flatten().find(|event| event.note_on);
+        let note_on = at_origin
+            .into_iter()
+            .flatten()
+            .find(|event| matches!(event.kind, ScheduledMidiEventKind::NoteOn { .. }));
         assert!(note_on.is_some_and(|event| {
-            event.channel_index == 2 && event.key == METRONOME_ACCENT_NOTE
+            event.channel_index == 2
+                && matches!(
+                    event.kind,
+                    ScheduledMidiEventKind::NoteOn {
+                        key: METRONOME_ACCENT_NOTE,
+                        ..
+                    }
+                )
         }));
         assert!(scheduler.events_at(&map, 48_000, 959)[0].is_none());
         let release = scheduler.events_at(&map, 48_000, 960);
@@ -380,7 +391,13 @@ mod tests {
             release
                 .into_iter()
                 .flatten()
-                .any(|event| !event.note_on && event.key == METRONOME_ACCENT_NOTE)
+                .any(|event| matches!(
+                    event.kind,
+                    ScheduledMidiEventKind::NoteOff {
+                        key: METRONOME_ACCENT_NOTE,
+                        ..
+                    }
+                ))
         );
         assert_eq!(scheduler.next.map(|boundary| boundary.frame), Some(24_000));
     }
@@ -398,7 +415,13 @@ mod tests {
             exact
                 .into_iter()
                 .flatten()
-                .any(|event| event.note_on && event.key == METRONOME_BEAT_NOTE)
+                .any(|event| matches!(
+                    event.kind,
+                    ScheduledMidiEventKind::NoteOn {
+                        key: METRONOME_BEAT_NOTE,
+                        ..
+                    }
+                ))
         );
     }
 
@@ -631,6 +654,8 @@ mod tests {
                 hardware_output_channels: (id == "output")
                     .then_some(vec![1, 2])
                     .unwrap_or_default(),
+                midi_input_port_id: None,
+                midi_input_channel: None,
             }
         }
         let graph = NativeMixerGraph {
@@ -812,8 +837,16 @@ mod tests {
             channel_input_widths: vec![SignalWidth::Stereo; 3],
             plugins_by_channel: vec![Vec::new(), Vec::new(), Vec::new()],
             midi_events: Vec::new(),
+            midi_event_data: Vec::new(),
             midi_cursor: 0,
             active_notes: Vec::new(),
+            live_midi_routes: vec![None; 3],
+            live_midi_events: Vec::new(),
+            live_notes: vec![false; 3 * 16 * 128],
+            live_sysex_scratch: vec![
+                0;
+                yadaw_dsp_runtime::midi_input::MIDI_MAX_SYSEX_BYTES
+            ],
             metronome: MetronomeScheduler::new(None, &TempoMap::default_120_bpm(), sample_rate, 0),
             tempo_map: TempoMap::default_120_bpm(),
             graph,
@@ -832,7 +865,11 @@ mod tests {
             transport: Arc::new(TransportShared {
                 state: AtomicU32::new(state),
                 position_frames: AtomicU64::new(position_frames),
+                position_ticks: AtomicU64::new(0),
                 sample_rate: AtomicU32::new(sample_rate),
+                effective_bpm_bits: AtomicU64::new(f64::NAN.to_bits()),
+                clock_source: AtomicU32::new(0),
+                waiting_for: AtomicU32::new(0),
             }),
             sample_rate,
             content_end_frame,
@@ -881,7 +918,7 @@ mod tests {
         let inputs = vec![[0.0; MAX_INPUT_CHANNELS]; 64];
         let mut outputs = vec![[0.0; MAX_OUTPUT_CHANNELS]; 64];
 
-        let underrun = runtime.render_block(&inputs, &mut outputs);
+        let underrun = runtime.render_block(&inputs, &mut outputs, None);
         assert!(!underrun);
         assert_eq!(
             runtime.transport.state.load(Ordering::Relaxed),
@@ -896,7 +933,7 @@ mod tests {
         );
         assert_eq!(runtime.transport.position_frames.load(Ordering::Relaxed), 0);
 
-        let underrun = runtime.render_block(&inputs[..32], &mut outputs[..32]);
+        let underrun = runtime.render_block(&inputs[..32], &mut outputs[..32], None);
         assert!(!underrun);
         assert_eq!(
             runtime.transport.state.load(Ordering::Relaxed),
@@ -914,11 +951,12 @@ mod tests {
         let event = |frame: u64, note_id: i32| ScheduledMidiEvent {
             frame,
             channel_index: 0,
-            note_id,
             channel: 0,
-            key: 60,
-            velocity: 100,
-            note_on: true,
+            kind: ScheduledMidiEventKind::NoteOn {
+                note_id,
+                key: 60,
+                velocity: 100,
+            },
         };
         runtime.midi_events = vec![
             event(2, 0),
@@ -931,12 +969,61 @@ mod tests {
         let inputs = vec![[0.0; MAX_INPUT_CHANNELS]; 64];
         let mut outputs = vec![[0.0; MAX_OUTPUT_CHANNELS]; 64];
 
-        let underrun = runtime.render_block(&inputs, &mut outputs);
+        let underrun = runtime.render_block(&inputs, &mut outputs, None);
 
         assert!(!underrun);
         // Rendering frames 5..69 consumes every event before the block end —
         // including the stale frame-2 event behind the playhead — exactly once,
         // while the frame-69 event stays queued for the next block.
         assert_eq!(runtime.midi_cursor, 4);
+    }
+
+    #[test]
+    fn external_start_spp_clock_and_stop_drive_the_strict_slave_transport() {
+        let mut runtime = transport_test_runtime(48_000, 10_000, 0, TRANSPORT_WAITING);
+        runtime.transport.clock_source.store(1, Ordering::Relaxed);
+        runtime.transport.waiting_for.store(2, Ordering::Relaxed);
+
+        runtime.handle_external_sync(crate::midi_input::RealtimeMidiMessage::SongPosition {
+            position: 8,
+        });
+        assert_eq!(
+            runtime.transport.position_ticks.load(Ordering::Relaxed),
+            8 * yadaw_dsp_runtime::midi_input::MUSICAL_TICKS_PER_SONG_POSITION
+        );
+
+        runtime.handle_external_sync(crate::midi_input::RealtimeMidiMessage::Start);
+        assert_eq!(
+            runtime.transport.state.load(Ordering::Relaxed),
+            TRANSPORT_RECORDING
+        );
+        assert_eq!(runtime.transport.position_ticks.load(Ordering::Relaxed), 0);
+
+        runtime.handle_external_sync(crate::midi_input::RealtimeMidiMessage::Clock {
+            effective_bpm_bits: 127.5_f64.to_bits(),
+        });
+        assert_eq!(
+            runtime.transport.position_ticks.load(Ordering::Relaxed),
+            yadaw_dsp_runtime::midi_input::MUSICAL_TICKS_PER_MIDI_CLOCK
+        );
+        assert_eq!(
+            f64::from_bits(
+                runtime
+                    .transport
+                    .effective_bpm_bits
+                    .load(Ordering::Relaxed)
+            ),
+            127.5
+        );
+
+        runtime.handle_external_sync(crate::midi_input::RealtimeMidiMessage::Stop);
+        assert_eq!(
+            runtime.transport.state.load(Ordering::Relaxed),
+            TRANSPORT_STOPPED
+        );
+        assert_eq!(
+            runtime.transport.position_ticks.load(Ordering::Relaxed),
+            yadaw_dsp_runtime::midi_input::MUSICAL_TICKS_PER_MIDI_CLOCK
+        );
     }
 }

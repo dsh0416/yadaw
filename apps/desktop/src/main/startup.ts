@@ -182,6 +182,7 @@ export function startApplication(
         }
       )
       audioHostService.start()
+      await audioHostService.configureMidiInput(applicationSettings.midiSync)
       const projectService = new ProjectService(app.getPath("userData"), settings)
       setWindowProjectService(projectService)
       onServices({ audioHostService, projectService })

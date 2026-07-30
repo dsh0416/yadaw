@@ -46,6 +46,7 @@ ringbuf = "0.5"
 rubato = "4.0.0"
 sha2 = "0.10.9"
 midly = "=0.5.3"
+midir = "0.11"
 libloading = "0.8.9"
 rmp-serde = "1.3"
 serde = { version = "1", features = ["derive"] }

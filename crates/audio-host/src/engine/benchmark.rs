@@ -83,6 +83,8 @@ fn benchmark_graph(
             input_source: Some("hardware".into()),
             input_channels: vec![1, 2],
             hardware_output_channels: Vec::new(),
+            midi_input_port_id: None,
+            midi_input_channel: None,
         });
     }
 
@@ -102,6 +104,8 @@ fn benchmark_graph(
             input_source: Some("bus".into()),
             input_channels: vec![(index + 1) as u32, (index + 1) as u32],
             hardware_output_channels: Vec::new(),
+            midi_input_port_id: None,
+            midi_input_channel: None,
         });
     }
 
@@ -120,6 +124,8 @@ fn benchmark_graph(
         input_source: None,
         input_channels: Vec::new(),
         hardware_output_channels: Vec::new(),
+        midi_input_port_id: None,
+        midi_input_channel: None,
     });
     channels.push(NativeMixerChannel {
         id: "benchmark-output".into(),
@@ -136,6 +142,8 @@ fn benchmark_graph(
         input_source: None,
         input_channels: Vec::new(),
         hardware_output_channels: vec![1, 2],
+        midi_input_port_id: None,
+        midi_input_channel: None,
     });
 
     let sends = (0..spec.sends)
@@ -198,7 +206,11 @@ fn benchmark_runtime(
     let transport = Arc::new(TransportShared {
         state: AtomicU32::new(TRANSPORT_STOPPED),
         position_frames: AtomicU64::new(0),
+        position_ticks: AtomicU64::new(0),
         sample_rate: AtomicU32::new(BENCHMARK_SAMPLE_RATE),
+        effective_bpm_bits: AtomicU64::new(f64::NAN.to_bits()),
+        clock_source: AtomicU32::new(0),
+        waiting_for: AtomicU32::new(0),
     });
     build_mixer_runtime(
         benchmark_graph(spec, processors),
@@ -225,7 +237,7 @@ fn measure_audio_benchmark_spec(
     }
 
     for _ in 0..8 {
-        black_box(runtime.render_block(black_box(&inputs), black_box(&mut outputs)));
+        black_box(runtime.render_block(black_box(&inputs), black_box(&mut outputs), None));
     }
 
     let started = Instant::now();
@@ -235,7 +247,7 @@ fn measure_audio_benchmark_spec(
         Vec::with_capacity(max_virtual_frames.div_ceil(spec.block_frames).min(16_384));
     while rendered_frames < max_virtual_frames {
         let block_started = Instant::now();
-        black_box(runtime.render_block(black_box(&inputs), black_box(&mut outputs)));
+        black_box(runtime.render_block(black_box(&inputs), black_box(&mut outputs), None));
         block_times_ms.push(block_started.elapsed().as_secs_f64() * 1_000.0);
         rendered_frames += spec.block_frames;
         rendered_blocks += 1;

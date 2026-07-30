@@ -187,14 +187,35 @@ async fn vst3_actor(
                             .lock()
                             .map_err(|_| "VST3 processor registry is poisoned".to_owned())?
                             .clone();
-                        let graph = live_graph(revision, &candidate, Some(&processors), &arena)?;
                         materialize_mixer_graph(&mut candidate, &arena)
                             .map_err(|error| error.to_string())?;
+                        let graph = live_graph(revision, &candidate, Some(&processors), &arena)?;
                         Ok::<_, String>((graph, candidate))
                     })();
                     match prepared {
                         Err(message) => ControlResult::Error { message },
                         Ok((graph, candidate)) => {
+                            if let Some(midi_input) = MIDI_INPUT.get() {
+                                let mut all_inputs = false;
+                                let port_ids = candidate
+                                    .channels
+                                    .iter()
+                                    .filter(|channel| {
+                                        channel.kind == "instrument"
+                                            && channel.system_role.is_none()
+                                            && (channel.input_monitoring || channel.record_armed)
+                                    })
+                                    .filter_map(|channel| {
+                                        if let Some(port_id) = &channel.midi_input_port_id {
+                                            Some(port_id.clone())
+                                        } else {
+                                            all_inputs = true;
+                                            None
+                                        }
+                                    })
+                                    .collect();
+                                midi_input.update_routes(all_inputs, port_ids);
+                            }
                             let previous_graph = graph_snapshot.clone();
                             let ara_result = dispatch_ui_actor_command(
                                 &ui_sender,

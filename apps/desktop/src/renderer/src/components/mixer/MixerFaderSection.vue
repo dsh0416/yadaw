@@ -56,9 +56,10 @@ const maximumPeakState = computed(() => ({
 }))
 const monitoringAvailable = computed(
   () =>
-    settings.value?.softwareMonitoringEnabled === true &&
-    props.channel.kind === "audio" &&
-    props.channel.inputSource === "hardware"
+    (props.channel.kind === "instrument" && props.channel.systemRole === null) ||
+    (settings.value?.softwareMonitoringEnabled === true &&
+      props.channel.kind === "audio" &&
+      props.channel.inputSource === "hardware")
 )
 const monitoringActive = computed(() => monitoringAvailable.value && props.channel.inputMonitoring)
 const faderStyle = computed(() => ({

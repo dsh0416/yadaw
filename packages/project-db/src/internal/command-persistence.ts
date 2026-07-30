@@ -47,6 +47,11 @@ function channelPatch(patch: MixerChannelPatch): Partial<typeof mixerChannels.$i
   if (patch.sortOrder !== undefined) result.sortOrder = patch.sortOrder
   if (patch.inputSource !== undefined) result.inputSource = patch.inputSource
   if (patch.inputFormat !== undefined) result.inputFormat = patch.inputFormat
+  if (patch.midiInput !== undefined) {
+    result.midiInputPortId = patch.midiInput?.portId ?? null
+    result.midiInputPortName = patch.midiInput?.portName ?? null
+    result.midiInputChannel = patch.midiInput?.channel ?? null
+  }
   if (patch.gainDb !== undefined) result.gainDb = patch.gainDb
   if (patch.pan !== undefined) result.pan = patch.pan
   if (patch.muted !== undefined) result.muted = patch.muted
@@ -114,6 +119,9 @@ function channelValue(
     sortOrder: channel.sortOrder,
     inputSource: channel.inputSource,
     inputFormat: channel.inputFormat,
+    midiInputPortId: channel.midiInput?.portId ?? null,
+    midiInputPortName: channel.midiInput?.portName ?? null,
+    midiInputChannel: channel.midiInput?.channel ?? null,
     gainDb: channel.gainDb,
     pan: channel.pan,
     muted: channel.muted,

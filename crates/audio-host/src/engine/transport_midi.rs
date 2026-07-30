@@ -83,14 +83,74 @@ enum SignalWidth {
 }
 
 #[derive(Clone, Copy)]
+enum ScheduledMidiEventKind {
+    NoteOn {
+        note_id: i32,
+        key: u8,
+        velocity: u8,
+    },
+    NoteOff {
+        note_id: i32,
+        key: u8,
+        velocity: u8,
+    },
+    ControlChange {
+        controller: u8,
+        value: u8,
+    },
+    PitchBend {
+        value: u16,
+    },
+    ProgramChange {
+        program: u8,
+    },
+    ChannelPressure {
+        pressure: u8,
+    },
+    PolyPressure {
+        key: u8,
+        pressure: u8,
+    },
+    SysEx {
+        offset: u32,
+        length: u32,
+    },
+}
+
+impl ScheduledMidiEventKind {
+    const fn sort_rank(self) -> u8 {
+        match self {
+            Self::NoteOff { .. } => 0,
+            Self::ControlChange { .. }
+            | Self::PitchBend { .. }
+            | Self::ProgramChange { .. }
+            | Self::ChannelPressure { .. }
+            | Self::PolyPressure { .. }
+            | Self::SysEx { .. } => 1,
+            Self::NoteOn { .. } => 2,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
 struct ScheduledMidiEvent {
     frame: u64,
     channel_index: usize,
-    note_id: i32,
     channel: u8,
-    key: u8,
-    velocity: u8,
-    note_on: bool,
+    kind: ScheduledMidiEventKind,
+}
+
+#[derive(Clone, Copy)]
+struct LiveMidiRoute {
+    port_key: Option<u64>,
+    channel: Option<u8>,
+    monitoring: bool,
+}
+
+#[derive(Clone, Copy)]
+struct BlockMidiEvent {
+    sample_offset: usize,
+    event: crate::midi_input::RealtimeMidiEvent,
 }
 
 #[derive(Clone, Copy)]
@@ -223,11 +283,12 @@ impl MetronomeScheduler {
             Some(ScheduledMidiEvent {
                 frame: position,
                 channel_index,
-                note_id: METRONOME_NOTE_ID,
                 channel: 0,
-                key,
-                velocity: if boundary.accent { 127 } else { 100 },
-                note_on: true,
+                kind: ScheduledMidiEventKind::NoteOn {
+                    note_id: METRONOME_NOTE_ID,
+                    key,
+                    velocity: if boundary.accent { 127 } else { 100 },
+                },
             })
         } else {
             None
@@ -245,11 +306,12 @@ impl MetronomeScheduler {
         Some(ScheduledMidiEvent {
             frame: 0,
             channel_index,
-            note_id: METRONOME_NOTE_ID,
             channel: 0,
-            key,
-            velocity: 0,
-            note_on: false,
+            kind: ScheduledMidiEventKind::NoteOff {
+                note_id: METRONOME_NOTE_ID,
+                key,
+                velocity: 0,
+            },
         })
     }
 

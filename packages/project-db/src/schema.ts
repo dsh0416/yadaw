@@ -139,6 +139,9 @@ export const mixerChannels = pgTable(
     sortOrder: integer("sort_order").notNull(),
     inputSource: text("input_source").$type<"hardware" | "bus">(),
     inputFormat: text("input_format").$type<"mono" | "stereo">(),
+    midiInputPortId: text("midi_input_port_id"),
+    midiInputPortName: text("midi_input_port_name"),
+    midiInputChannel: smallint("midi_input_channel"),
     gainDb: doublePrecision("gain_db").notNull().default(0),
     pan: doublePrecision("pan").notNull().default(0),
     muted: boolean("muted").notNull().default(false),
@@ -197,7 +200,30 @@ export const mixerChannels = pgTable(
     ),
     check(
       "mixer_channels_input_monitoring_check",
-      sql`${table.kind} = 'audio' or not ${table.inputMonitoring}`
+      sql`(${table.kind} = 'audio' or (${table.kind} = 'instrument' and ${table.systemRole} is null))
+        or not ${table.inputMonitoring}`
+    ),
+    check(
+      "mixer_channels_record_armed_check",
+      sql`(${table.kind} = 'audio' or (${table.kind} = 'instrument' and ${table.systemRole} is null))
+        or not ${table.recordArmed}`
+    ),
+    check(
+      "mixer_channels_midi_input_check",
+      sql`(
+        ${table.kind} = 'instrument'
+        and ${table.systemRole} is null
+        and (
+          (${table.midiInputPortId} is null and ${table.midiInputPortName} is null)
+          or (${table.midiInputPortId} is not null and ${table.midiInputPortName} is not null)
+        )
+        and (${table.midiInputChannel} is null or ${table.midiInputChannel} between 0 and 15)
+      ) or (
+        not (${table.kind} = 'instrument' and ${table.systemRole} is null)
+        and ${table.midiInputPortId} is null
+        and ${table.midiInputPortName} is null
+        and ${table.midiInputChannel} is null
+      )`
     ),
     check(
       "mixer_channels_output_route_check",
@@ -228,13 +254,11 @@ export const mixerChannels = pgTable(
           and ${table.inputChannels}[1] <> ${table.inputChannels}[2]
         )
       )
-      and (${table.kind} = 'audio' or not ${table.recordArmed})
     ) or (
       ${table.kind} not in ('audio', 'aux')
       and ${table.inputSource} is null
       and ${table.inputFormat} is null
       and cardinality(${table.inputChannels}) = 0
-      and not ${table.recordArmed}
     )`
     ),
     check(

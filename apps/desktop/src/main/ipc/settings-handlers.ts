@@ -1,8 +1,11 @@
-import { dialog, ipcMain, shell } from "electron"
+import { BrowserWindow, dialog, ipcMain, shell } from "electron"
 import { IPC_CHANNELS } from "@yadaw/contracts"
-import type { AudioHostRuntimePreferences } from "@yadaw/contracts"
+import type { AudioHostRuntimePreferences, MidiSyncPreferences } from "@yadaw/contracts"
 import type { IpcHandlerContext } from "./context"
-import { validateAudioHostRuntimePreferences } from "../application-settings"
+import {
+  validateAudioHostRuntimePreferences,
+  validateMidiSyncPreferences
+} from "../application-settings"
 import { installApplicationMenu } from "../application-menu"
 import { setMainLocale, t } from "../i18n"
 import { assertTrustedSender, validateSettingsPatch } from "./support"
@@ -73,6 +76,33 @@ export function registerSettingsHandlers(context: IpcHandlerContext): void {
     await synchronizePluginStates()
     await audioHostService.configureRuntime(preferences)
     return settings.configureAudioHostRuntime(preferences)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.midiInputSnapshot, (event) => {
+    assertTrustedSender(event)
+    if (!audioHostService) throw new Error("Audio host is not running")
+    return audioHostService.midiInputSnapshot()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.midiInputConfigure, async (event, value: unknown) => {
+    assertTrustedSender(event)
+    if (recordings.current || audioHostService?.configurationRestarting) {
+      throw new Error("MIDI sync configuration cannot change while recording is busy")
+    }
+    if (!audioHostService) throw new Error("Audio host is not running")
+    const preferences = validateMidiSyncPreferences(value) satisfies MidiSyncPreferences
+    const current = await settings.get()
+    const snapshot = await audioHostService.configureMidiInput(preferences)
+    try {
+      await settings.configureMidiInput(preferences)
+    } catch (error) {
+      await audioHostService.configureMidiInput(current.midiSync)
+      throw error
+    }
+    for (const window of BrowserWindow.getAllWindows()) {
+      window.webContents.send(IPC_CHANNELS.midiInputEvent, snapshot)
+    }
+    return snapshot
   })
 
   ipcMain.handle(IPC_CHANNELS.settingsChooseSwap, async (event) => {

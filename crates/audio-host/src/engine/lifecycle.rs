@@ -138,7 +138,11 @@ pub fn start_audio_engine(config: NativeAudioEngineConfig) -> Result<NativeAudio
             Arc::new(TransportShared {
                 state: AtomicU32::new(TRANSPORT_STOPPED),
                 position_frames: AtomicU64::new(0),
+                position_ticks: AtomicU64::new(0),
                 sample_rate: AtomicU32::new(session_sample_rate),
+                effective_bpm_bits: AtomicU64::new(f64::NAN.to_bits()),
+                clock_source: AtomicU32::new(0),
+                waiting_for: AtomicU32::new(0),
             })
         },
         |runtime| Arc::clone(&runtime.transport),
@@ -274,7 +278,11 @@ fn start_virtual_audio_engine(key: AudioEngineKey) -> Result<NativeAudioRuntimeS
             Arc::new(TransportShared {
                 state: AtomicU32::new(TRANSPORT_STOPPED),
                 position_frames: AtomicU64::new(0),
+                position_ticks: AtomicU64::new(0),
                 sample_rate: AtomicU32::new(sample_rate),
+                effective_bpm_bits: AtomicU64::new(f64::NAN.to_bits()),
+                clock_source: AtomicU32::new(0),
+                waiting_for: AtomicU32::new(0),
             })
         },
         |runtime| Arc::clone(&runtime.transport),
@@ -317,6 +325,7 @@ fn start_virtual_audio_engine(key: AudioEngineKey) -> Result<NativeAudioRuntimeS
         ),
         Ordering::Relaxed,
     );
+    let mut realtime_midi = crate::midi_input::realtime_consumer();
     let thread = thread::Builder::new()
         .name("yadaw-virtual-audio".to_owned())
         .spawn(move || {
@@ -333,6 +342,9 @@ fn start_virtual_audio_engine(key: AudioEngineKey) -> Result<NativeAudioRuntimeS
             let block_duration =
                 Duration::from_secs_f64(block_frames as f64 / output_sample_rate as f64);
             while !worker_shutdown.load(Ordering::Acquire) {
+                realtime_midi.set_presentation_latency_micros(
+                    worker_metrics.engine_latency_us.load(Ordering::Relaxed),
+                );
                 let input_callback_started_ns = worker_round_trip_latency.now_ns();
                 for (frame_index, capture) in loopback_block.iter().enumerate() {
                     round_trip_detector.observe(
@@ -381,6 +393,7 @@ fn start_virtual_audio_engine(key: AudioEngineKey) -> Result<NativeAudioRuntimeS
                             runtime.render_block(
                                 &render_inputs[..session_outputs.len()],
                                 session_outputs,
+                                Some(&mut realtime_midi),
                             )
                         } else {
                             session_outputs.fill([0.0; MAX_OUTPUT_CHANNELS]);

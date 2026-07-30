@@ -19,6 +19,8 @@ import type {
   MixerGraphSnapshot,
   MixerParameterPreview,
   MixerRuntimeSnapshot,
+  MidiInputSnapshot,
+  MidiSyncPreferences,
   PluginEditorMode,
   PluginEditorPreference,
   PluginDescriptor,
@@ -98,6 +100,13 @@ export class AudioHostService {
   private readonly pendingPreferenceWrites = new Set<Promise<void>>()
   private recovery: Promise<void> | null = null
   private reconfiguring = false
+  private midiPreferences: MidiSyncPreferences = {
+    enabled: false,
+    sourcePortId: null,
+    sourcePortName: null,
+    inputOffsetsMs: {}
+  }
+  private midiPreferencesConfigured = false
 
   private readonly diagnostics = new AudioHostDiagnostics(
     () => this.client,
@@ -448,6 +457,67 @@ export class AudioHostService {
     return this.audioTransport.transportSnapshot()
   }
 
+  async midiInputSnapshot(): Promise<MidiInputSnapshot> {
+    return this.midiInputResult(await this.request({ type: "midi-input-snapshot" }))
+  }
+
+  async configureMidiInput(preferences: MidiSyncPreferences): Promise<MidiInputSnapshot> {
+    const snapshot = this.midiInputResult(
+      await this.request({
+        type: "configure-midi-input",
+        preferences: {
+          enabled: preferences.enabled,
+          source_port_id: preferences.sourcePortId,
+          source_port_name: preferences.sourcePortName,
+          input_offsets_ms: preferences.inputOffsetsMs
+        }
+      })
+    )
+    this.midiPreferences = structuredClone(preferences)
+    this.midiPreferencesConfigured = true
+    return snapshot
+  }
+
+  private async restoreMidiInput(client: AudioHostIpcClient): Promise<void> {
+    if (!this.midiPreferencesConfigured) return
+    this.midiInputResult(
+      await this.requestImmediately(
+        {
+          type: "configure-midi-input",
+          preferences: {
+            enabled: this.midiPreferences.enabled,
+            source_port_id: this.midiPreferences.sourcePortId,
+            source_port_name: this.midiPreferences.sourcePortName,
+            input_offsets_ms: this.midiPreferences.inputOffsetsMs
+          }
+        },
+        client
+      )
+    )
+  }
+
+  private midiInputResult(response: ControlResponse): MidiInputSnapshot {
+    const value = response.result.midi_input
+    if (response.result.type !== "midi-input-snapshot" || !value) {
+      throw new Error(response.result.message ?? "audio host returned an invalid MIDI snapshot")
+    }
+    return {
+      ports: value.ports,
+      sync: {
+        state: value.sync.state as MidiInputSnapshot["sync"]["state"],
+        sourcePortId: value.sync.source_port_id,
+        sourcePortName: value.sync.source_port_name,
+        effectiveBpm: value.sync.effective_bpm,
+        jitterMicroseconds: value.sync.jitter_microseconds,
+        lastClockAgeMs: value.sync.last_clock_age_ms,
+        droppedEvents: value.sync.dropped_events,
+        ignoredSystemMessages: value.sync.ignored_system_messages,
+        error: value.sync.error
+      },
+      capturedAt: value.captured_at
+    }
+  }
+
   runIpcBenchmark(): Promise<AudioIpcBenchmarkReport> {
     return this.diagnostics.runIpcBenchmark()
   }
@@ -717,6 +787,7 @@ export class AudioHostService {
     this.audioTransport.runtimeResult(
       await this.requestImmediately({ type: "audio-engine-snapshot" }, client)
     )
+    await this.restoreMidiInput(client)
     const audioEngineRestored = audioEngineWasRunning && audioPreferences !== null
     if (audioEngineRestored) {
       const runtime = this.audioTransport.runtimeResult(
@@ -827,6 +898,7 @@ export class AudioHostService {
     this.start(false)
     if (!this.client) throw new Error("Audio helper did not restart")
     await this.audioEngineSnapshot()
+    await this.restoreMidiInput(this.client)
     const audioEngineRestored = audioEngineWasRunning && audioPreferences !== null
     if (audioEngineRestored) await this.startAudioEngine(audioPreferences)
     await this.restoreGraph()

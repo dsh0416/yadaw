@@ -88,7 +88,11 @@ pub mod bench_support {
         let transport = Arc::new(TransportShared {
             state: super::AtomicU32::new(TRANSPORT_PLAYING),
             position_frames: super::AtomicU64::new(0),
+            position_ticks: super::AtomicU64::new(0),
             sample_rate: super::AtomicU32::new(scenario.sample_rate),
+            effective_bpm_bits: super::AtomicU64::new(f64::NAN.to_bits()),
+            clock_source: super::AtomicU32::new(0),
+            waiting_for: super::AtomicU32::new(0),
         });
         let input_peaks = Arc::new(InputPeakBank::new());
         let clip_frames = scenario.clip_frames.max(1);
@@ -131,8 +135,16 @@ pub mod bench_support {
             channel_input_widths: vec![SignalWidth::Stereo; scenario.tracks + 2],
             plugins_by_channel: (0..scenario.tracks + 2).map(|_| Vec::new()).collect(),
             midi_events: Vec::new(),
+            midi_event_data: Vec::new(),
             midi_cursor: 0,
             active_notes: Vec::new(),
+            live_midi_routes: vec![None; scenario.tracks + 2],
+            live_midi_events: Vec::new(),
+            live_notes: vec![false; (scenario.tracks + 2) * 16 * 128],
+            live_sysex_scratch: vec![
+                0;
+                yadaw_dsp_runtime::midi_input::MIDI_MAX_SYSEX_BYTES
+            ],
             metronome: MetronomeScheduler::new(
                 None,
                 &TempoMap::default_120_bpm(),
@@ -183,6 +195,7 @@ pub mod bench_support {
                 let underrun = self.runtime.render_block(
                     &self.inputs[..block_frames],
                     &mut self.outputs[..block_frames],
+                    None,
                 );
                 debug_assert!(!underrun);
                 let frame = self.outputs[block_frames - 1];
@@ -215,6 +228,7 @@ pub mod bench_support {
                 let underrun = self.runtime.render_block(
                     &self.inputs[..block_frames],
                     &mut self.outputs[..block_frames],
+                    None,
                 );
                 debug_assert!(!underrun);
                 let frame = self.outputs[block_frames - 1];

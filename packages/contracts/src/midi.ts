@@ -2,6 +2,53 @@ export const MUSICAL_TICKS_PER_QUARTER = 960
 export const MUSICAL_TICKS_PER_WHOLE_NOTE = MUSICAL_TICKS_PER_QUARTER * 4
 export const MIN_MIDI_NOTE_DURATION_TICKS = 1
 export const DEFAULT_INSTRUMENT_COLOR = "#73D6A2"
+export const MIDI_CLOCKS_PER_QUARTER = 24
+export const MUSICAL_TICKS_PER_MIDI_CLOCK = MUSICAL_TICKS_PER_QUARTER / MIDI_CLOCKS_PER_QUARTER
+export const MUSICAL_TICKS_PER_SONG_POSITION = MUSICAL_TICKS_PER_MIDI_CLOCK * 6
+export const MAX_MIDI_INPUT_OFFSET_MS = 500
+
+export interface MidiInputRoute {
+  /** `null` receives every connected MIDI input. */
+  portId: string | null
+  /** Retained so a disconnected route can still be identified in the UI. */
+  portName: string | null
+  /** Zero-based MIDI channel; `null` receives all channels. */
+  channel: number | null
+}
+
+export interface MidiInputPort {
+  id: string
+  name: string
+  connected: boolean
+}
+
+export type MidiSyncState = "internal" | "waiting" | "locking" | "locked" | "freewheel" | "lost"
+
+export interface MidiSyncPreferences {
+  enabled: boolean
+  sourcePortId: string | null
+  sourcePortName: string | null
+  /** Per-port signed timing correction, in milliseconds. */
+  inputOffsetsMs: Record<string, number>
+}
+
+export interface MidiSyncRuntimeSnapshot {
+  state: MidiSyncState
+  sourcePortId: string | null
+  sourcePortName: string | null
+  effectiveBpm: number | null
+  jitterMicroseconds: number | null
+  lastClockAgeMs: number | null
+  droppedEvents: number
+  ignoredSystemMessages: number
+  error: string | null
+}
+
+export interface MidiInputSnapshot {
+  ports: MidiInputPort[]
+  sync: MidiSyncRuntimeSnapshot
+  capturedAt: number
+}
 
 export interface TempoEventState {
   tick: number

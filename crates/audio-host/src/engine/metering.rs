@@ -1,7 +1,11 @@
 struct TransportShared {
     state: AtomicU32,
     position_frames: AtomicU64,
+    position_ticks: AtomicU64,
     sample_rate: AtomicU32,
+    effective_bpm_bits: AtomicU64,
+    clock_source: AtomicU32,
+    waiting_for: AtomicU32,
 }
 
 impl TransportShared {
@@ -10,6 +14,7 @@ impl TransportShared {
             state: match self.state.load(Ordering::Relaxed) {
                 TRANSPORT_PLAYING => "playing",
                 TRANSPORT_RECORDING => "recording",
+                TRANSPORT_WAITING => "waiting",
                 _ => "stopped",
             }
             .to_owned(),
@@ -17,7 +22,23 @@ impl TransportShared {
                 .position_frames
                 .load(Ordering::Relaxed)
                 .min(i64::MAX as u64) as i64,
+            position_ticks: self.position_ticks.load(Ordering::Relaxed).min(i64::MAX as u64) as i64,
             sample_rate: self.sample_rate.load(Ordering::Relaxed),
+            effective_bpm: {
+                let value = f64::from_bits(self.effective_bpm_bits.load(Ordering::Relaxed));
+                value.is_finite().then_some(value)
+            },
+            clock_source: if self.clock_source.load(Ordering::Relaxed) == 1 {
+                "external"
+            } else {
+                "internal"
+            }
+            .to_owned(),
+            waiting_for: match self.waiting_for.load(Ordering::Relaxed) {
+                1 => Some("play".to_owned()),
+                2 => Some("record".to_owned()),
+                _ => None,
+            },
         }
     }
 }

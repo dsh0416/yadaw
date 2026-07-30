@@ -130,6 +130,14 @@ export async function readMixerSnapshot(
       sortOrder: channel.sortOrder,
       inputSource: channel.inputSource,
       inputFormat: channel.inputFormat,
+      midiInput:
+        channel.kind === "instrument" && channel.systemRole === null
+          ? {
+              portId: channel.midiInputPortId,
+              portName: channel.midiInputPortName,
+              channel: channel.midiInputChannel
+            }
+          : null,
       gainDb: channel.gainDb,
       pan: channel.pan,
       muted: channel.muted,

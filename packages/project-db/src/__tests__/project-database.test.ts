@@ -95,6 +95,50 @@ async function revertPluginAudioModeMigration(database: PGlite): Promise<void> {
   `)
 }
 
+async function revertMidiInputMigration(database: PGlite): Promise<void> {
+  await database.exec(`
+    alter table "mixer_channels" drop constraint "mixer_channels_record_armed_check";
+    alter table "mixer_channels" drop constraint "mixer_channels_midi_input_check";
+    alter table "mixer_channels" drop constraint "mixer_channels_input_monitoring_check";
+    alter table "mixer_channels" drop constraint "mixer_channels_input_check";
+    alter table "mixer_channels" drop column "midi_input_port_id";
+    alter table "mixer_channels" drop column "midi_input_port_name";
+    alter table "mixer_channels" drop column "midi_input_channel";
+    alter table "mixer_channels"
+      add constraint "mixer_channels_input_monitoring_check"
+      check ("kind" = 'audio' or not "input_monitoring");
+    alter table "mixer_channels"
+      add constraint "mixer_channels_input_check"
+      check ((
+        "kind" in ('audio', 'aux')
+        and "input_source" is not null
+        and "input_format" is not null
+        and (
+          ("input_format" = 'mono' and cardinality("input_channels") = 1)
+          or (
+            "input_format" = 'stereo'
+            and cardinality("input_channels") = 2
+            and "input_channels"[1] <> "input_channels"[2]
+          )
+        )
+        and ("kind" = 'audio' or not "record_armed")
+      ) or (
+        "kind" not in ('audio', 'aux')
+        and "input_source" is null
+        and "input_format" is null
+        and cardinality("input_channels") = 0
+        and not "record_armed"
+      ));
+    delete from drizzle.__drizzle_migrations
+    where created_at = (
+      select created_at
+      from drizzle.__drizzle_migrations
+      order by created_at desc
+      limit 1
+    );
+  `)
+}
+
 async function revertInputMonitoringMigration(database: PGlite): Promise<void> {
   await database.exec(`
     alter table "mixer_channels"
@@ -254,6 +298,7 @@ describe("ProjectDatabase", () => {
 
     const raw = new PGlite(join(resource.directory, "pgdata"))
     try {
+      await revertMidiInputMigration(raw)
       await revertAraDocumentStateMigration(raw)
       await revertInputMonitoringMigration(raw)
     } finally {
@@ -360,6 +405,7 @@ describe("ProjectDatabase", () => {
 
     const raw = new PGlite(join(resource.directory, "pgdata"))
     try {
+      await revertMidiInputMigration(raw)
       await revertAraDocumentStateMigration(raw)
       await revertInputMonitoringMigration(raw)
       await revertPluginAudioModeMigration(raw)
@@ -804,6 +850,7 @@ describe("ProjectDatabase", () => {
 
     const raw = new PGlite(join(resource.directory, "pgdata"))
     try {
+      await revertMidiInputMigration(raw)
       await revertAraDocumentStateMigration(raw)
       await revertInputMonitoringMigration(raw)
       await revertPluginAudioModeMigration(raw)
@@ -856,6 +903,7 @@ describe("ProjectDatabase", () => {
 
     const raw = new PGlite(join(resource.directory, "pgdata"))
     try {
+      await revertMidiInputMigration(raw)
       await revertAraDocumentStateMigration(raw)
       await revertInputMonitoringMigration(raw)
       await revertPluginAudioModeMigration(raw)

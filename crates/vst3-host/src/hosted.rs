@@ -13,10 +13,10 @@ use std::{
 use yadaw_vst3_host_sys::{
     Steinberg::{
         IPlugFrame, IPlugView, IPlugViewContentScaleSupport, IPluginBase, TUID, ViewRect,
-        Vst::{IComponent, IConnectionPoint, IEditController, ParameterInfo},
+        Vst::{IComponent, IConnectionPoint, IEditController, IMidiMapping, ParameterInfo},
     },
     abi::{
-        ComponentVTable, ConnectionPointVTable, EditControllerVTable,
+        ComponentVTable, ConnectionPointVTable, EditControllerVTable, MidiMappingVTable,
         PlugViewContentScaleSupportVTable, PlugViewVTable,
     },
     compat::tuid_byte,
@@ -48,6 +48,60 @@ pub struct HostedParameter {
     pub default_normalized: f64,
     pub normalized: f64,
     pub flags: u32,
+}
+
+const MIDI_MAPPING_CHANNELS: usize = 16;
+const MIDI_MAPPING_CONTROLLERS: usize = 131;
+const MIDI_AFTERTOUCH: usize = 128;
+const MIDI_PITCH_BEND: usize = 129;
+const MIDI_PROGRAM_CHANGE: usize = 130;
+const UNMAPPED_PARAMETER: u32 = u32::MAX;
+
+#[derive(Clone)]
+struct MidiMappingTable {
+    parameters: Box<[u32]>,
+}
+
+impl MidiMappingTable {
+    fn query(controller: Option<&ComPtr<IEditController>>) -> Self {
+        let mut parameters =
+            vec![UNMAPPED_PARAMETER; MIDI_MAPPING_CHANNELS * MIDI_MAPPING_CONTROLLERS]
+                .into_boxed_slice();
+        let Some(mapping) = controller.and_then(|value| value.query::<IMidiMapping>().ok()) else {
+            return Self { parameters };
+        };
+        let table = midi_mapping_table(&mapping);
+        for channel in 0..MIDI_MAPPING_CHANNELS {
+            for controller in 0..MIDI_MAPPING_CONTROLLERS {
+                let mut parameter = UNMAPPED_PARAMETER;
+                let result = unsafe {
+                    // SAFETY: the controller is live, the bus/channel/controller values are in
+                    // the VST3 MIDI mapping range, and parameter is writable.
+                    ((*table).get_midi_controller_assignment)(
+                        mapping.as_ptr(),
+                        0,
+                        channel as i16,
+                        controller as i16,
+                        std::ptr::addr_of_mut!(parameter),
+                    )
+                };
+                if result == 0 {
+                    parameters[channel * MIDI_MAPPING_CONTROLLERS + controller] = parameter;
+                }
+            }
+        }
+        Self { parameters }
+    }
+
+    fn parameter(&self, channel: u8, controller: usize) -> Option<u32> {
+        let index = usize::from(channel)
+            .checked_mul(MIDI_MAPPING_CONTROLLERS)?
+            .checked_add(controller)?;
+        self.parameters
+            .get(index)
+            .copied()
+            .filter(|value| *value != UNMAPPED_PARAMETER)
+    }
 }
 
 struct ProcessorCell {
@@ -82,6 +136,7 @@ impl ProcessorCell {
 
 pub struct ProcessorLease {
     cell: NonNull<ProcessorCell>,
+    midi_mapping: Arc<MidiMappingTable>,
     _not_sync: PhantomData<Cell<()>>,
 }
 
@@ -89,6 +144,7 @@ impl Clone for ProcessorLease {
     fn clone(&self) -> Self {
         Self {
             cell: self.cell,
+            midi_mapping: Arc::clone(&self.midi_mapping),
             _not_sync: PhantomData,
         }
     }
@@ -194,10 +250,115 @@ impl ProcessorLease {
             }
         }
     }
+
+    pub fn poly_pressure(
+        &mut self,
+        sample_offset: i32,
+        channel: u8,
+        key: u8,
+        pressure: u8,
+    ) -> bool {
+        let cell = unsafe {
+            // SAFETY: the owner keeps this stable cell alive for the lease lifetime.
+            self.cell.as_ref()
+        };
+        if cell.paused.load(Ordering::Acquire) {
+            return false;
+        }
+        unsafe {
+            // SAFETY: MIDI scheduling is called by the same single audio thread as process_block.
+            (&mut *cell.processor.get()).queue_poly_pressure(
+                sample_offset,
+                i16::from(channel),
+                i16::from(key),
+                f32::from(pressure) / 127.0,
+            )
+        }
+    }
+
+    pub fn sysex(&mut self, sample_offset: i32, bytes: &[u8]) -> bool {
+        let cell = unsafe {
+            // SAFETY: the owner keeps this stable cell alive for the lease lifetime.
+            self.cell.as_ref()
+        };
+        if cell.paused.load(Ordering::Acquire) {
+            return false;
+        }
+        unsafe {
+            // SAFETY: MIDI scheduling is called by the same single audio thread as process_block.
+            (&mut *cell.processor.get()).queue_sysex(sample_offset, bytes)
+        }
+    }
+
+    pub fn control_change(
+        &mut self,
+        sample_offset: i32,
+        channel: u8,
+        controller: u8,
+        value: u8,
+    ) -> bool {
+        self.mapped_parameter(
+            sample_offset,
+            channel,
+            usize::from(controller),
+            f64::from(value) / 127.0,
+        )
+    }
+
+    pub fn channel_pressure(&mut self, sample_offset: i32, channel: u8, pressure: u8) -> bool {
+        self.mapped_parameter(
+            sample_offset,
+            channel,
+            MIDI_AFTERTOUCH,
+            f64::from(pressure) / 127.0,
+        )
+    }
+
+    pub fn pitch_bend(&mut self, sample_offset: i32, channel: u8, bend: u16) -> bool {
+        self.mapped_parameter(
+            sample_offset,
+            channel,
+            MIDI_PITCH_BEND,
+            f64::from(bend.min(16_383)) / 16_383.0,
+        )
+    }
+
+    pub fn program_change(&mut self, sample_offset: i32, channel: u8, program: u8) -> bool {
+        self.mapped_parameter(
+            sample_offset,
+            channel,
+            MIDI_PROGRAM_CHANGE,
+            f64::from(program) / 127.0,
+        )
+    }
+
+    fn mapped_parameter(
+        &mut self,
+        sample_offset: i32,
+        channel: u8,
+        controller: usize,
+        value: f64,
+    ) -> bool {
+        let Some(parameter_id) = self.midi_mapping.parameter(channel, controller) else {
+            return false;
+        };
+        let cell = unsafe {
+            // SAFETY: the owner keeps this stable cell alive for the lease lifetime.
+            self.cell.as_ref()
+        };
+        if cell.paused.load(Ordering::Acquire) {
+            return false;
+        }
+        unsafe {
+            // SAFETY: MIDI scheduling is called by the same single audio thread as process_block.
+            (&mut *cell.processor.get()).queue_parameter_change(sample_offset, parameter_id, value)
+        }
+    }
 }
 
 pub struct HostedPlugin {
     processor: Box<ProcessorCell>,
+    midi_mapping: Arc<MidiMappingTable>,
     controller: Option<ComPtr<IEditController>>,
     controller_connection: Option<ComPtr<IConnectionPoint>>,
     component_connection: Option<ComPtr<IConnectionPoint>>,
@@ -262,6 +423,7 @@ impl HostedPlugin {
             )?;
         let shared = HandlerShared::new(parameter_producer);
         let controller = create_controller(&module, &processor)?;
+        let midi_mapping = Arc::new(MidiMappingTable::query(controller.as_ref()));
         let mut handler = controller
             .as_ref()
             .map(|_| ComponentHandler::new(shared.clone()));
@@ -293,6 +455,7 @@ impl HostedPlugin {
         Ok((
             Self {
                 processor: ProcessorCell::new(processor),
+                midi_mapping,
                 controller,
                 controller_connection,
                 component_connection,
@@ -323,6 +486,7 @@ impl HostedPlugin {
     pub fn processor_lease(&self) -> ProcessorLease {
         ProcessorLease {
             cell: NonNull::from(self.processor.as_ref()),
+            midi_mapping: Arc::clone(&self.midi_mapping),
             _not_sync: PhantomData,
         }
     }
@@ -700,6 +864,13 @@ fn component_table(component: &ComPtr<IComponent>) -> *const ComponentVTable {
     unsafe {
         // SAFETY: ComPtr guarantees the object's leading vtable pointer.
         *component.as_ptr().cast::<*const ComponentVTable>()
+    }
+}
+
+fn midi_mapping_table(mapping: &ComPtr<IMidiMapping>) -> *const MidiMappingVTable {
+    unsafe {
+        // SAFETY: ComPtr guarantees the object's leading vtable pointer.
+        *mapping.as_ptr().cast::<*const MidiMappingVTable>()
     }
 }
 

@@ -8,9 +8,9 @@ use yadaw_vst3_host_sys::{
     Steinberg::{
         IPluginBase,
         Vst::{
-            self, AudioBusBuffers, AudioBusBuffers__bindgen_ty_1, BusDirections, Event,
+            self, AudioBusBuffers, AudioBusBuffers__bindgen_ty_1, BusDirections, DataEvent, Event,
             Event__bindgen_ty_1, IAudioProcessor, IComponent, NoteOffEvent, NoteOnEvent,
-            ProcessContext, ProcessData, ProcessSetup, SpeakerArrangement,
+            PolyPressureEvent, ProcessContext, ProcessData, ProcessSetup, SpeakerArrangement,
         },
     },
     abi::{AudioProcessorVTable, ComponentVTable},
@@ -335,7 +335,6 @@ impl StereoProcessor {
             },
         };
         let event_list = (!self.input_events.is_empty()).then(|| self.input_events.as_interface());
-        self.input_parameters.clear();
         while let Some(parameter) = self.parameter_consumer.try_pop() {
             let _ = self.input_parameters.add_value(
                 parameter.id,
@@ -497,6 +496,60 @@ impl StereoProcessor {
                 },
             },
         })
+    }
+
+    pub fn queue_poly_pressure(
+        &mut self,
+        sample_offset: i32,
+        channel: i16,
+        pitch: i16,
+        pressure: f32,
+    ) -> bool {
+        self.input_events.push(Event {
+            busIndex: 0,
+            sampleOffset: sample_offset,
+            ppqPosition: 0.0,
+            flags: 0,
+            type_: Vst::Event_EventTypes_kPolyPressureEvent as u16,
+            __bindgen_anon_1: Event__bindgen_ty_1 {
+                polyPressure: PolyPressureEvent {
+                    channel,
+                    pitch,
+                    pressure: pressure.clamp(0.0, 1.0),
+                    noteId: -1,
+                },
+            },
+        })
+    }
+
+    pub fn queue_sysex(&mut self, sample_offset: i32, bytes: &[u8]) -> bool {
+        let Ok(size) = u32::try_from(bytes.len()) else {
+            return false;
+        };
+        self.input_events.push(Event {
+            busIndex: 0,
+            sampleOffset: sample_offset,
+            ppqPosition: 0.0,
+            flags: 0,
+            type_: Vst::Event_EventTypes_kDataEvent as u16,
+            __bindgen_anon_1: Event__bindgen_ty_1 {
+                data: DataEvent {
+                    size,
+                    type_: Vst::DataEvent_DataTypes_kMidiSysEx as u32,
+                    bytes: bytes.as_ptr(),
+                },
+            },
+        })
+    }
+
+    pub fn queue_parameter_change(
+        &mut self,
+        sample_offset: i32,
+        parameter_id: u32,
+        value: f64,
+    ) -> bool {
+        self.input_parameters
+            .add_value(parameter_id, sample_offset, value.clamp(0.0, 1.0))
     }
 }
 

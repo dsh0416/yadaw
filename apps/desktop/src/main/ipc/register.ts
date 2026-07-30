@@ -41,6 +41,23 @@ export function registerIpcHandlers(
       window.webContents.send(IPC_CHANNELS.pluginsScanEvent, scanEvent)
     }
   })
+  let midiSnapshotPending = false
+  const publishMidiSnapshot = async (): Promise<void> => {
+    if (midiSnapshotPending) return
+    midiSnapshotPending = true
+    try {
+      const snapshot = await audioHost.midiInputSnapshot()
+      for (const window of BrowserWindow.getAllWindows()) {
+        window.webContents.send(IPC_CHANNELS.midiInputEvent, snapshot)
+      }
+    } catch {
+      // Helper recovery owns error reporting; the next interval retries.
+    } finally {
+      midiSnapshotPending = false
+    }
+  }
+  const midiSnapshotTimer = setInterval(() => void publishMidiSnapshot(), 250)
+  midiSnapshotTimer.unref()
   const synchronizePluginStates = async (): Promise<void> => {
     const graph = await mixer.snapshot()
     const states = []

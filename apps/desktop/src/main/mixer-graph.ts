@@ -453,11 +453,36 @@ export function validateGraph(graph: MixerGraphSnapshot): void {
     ) {
       throw new Error("Only Audio and Aux channels can map audio inputs")
     }
-    if (channel.kind !== "audio" && channel.recordArmed) {
-      throw new Error("Only Audio tracks can arm recording")
+    const supportsMidiInput = channel.kind === "instrument" && channel.systemRole === null
+    const midiInput =
+      channel.midiInput === undefined
+        ? supportsMidiInput
+          ? { portId: null, portName: null, channel: null }
+          : null
+        : channel.midiInput
+    if (supportsMidiInput) {
+      if (midiInput === null) {
+        throw new Error("Instrument tracks require a MIDI input route")
+      }
+      const hasPortId = midiInput.portId !== null
+      const hasPortName = midiInput.portName !== null
+      if (
+        hasPortId !== hasPortName ||
+        (hasPortId && !midiInput.portId?.trim()) ||
+        (hasPortName && !midiInput.portName?.trim()) ||
+        (midiInput.channel !== null &&
+          (!Number.isInteger(midiInput.channel) || midiInput.channel < 0 || midiInput.channel > 15))
+      ) {
+        throw new Error("Instrument MIDI routes require a valid port and channel")
+      }
+    } else if (midiInput !== null) {
+      throw new Error("Only ordinary Instrument tracks can map MIDI inputs")
     }
-    if (channel.kind !== "audio" && channel.inputMonitoring) {
-      throw new Error("Only Audio tracks can enable input monitoring")
+    if (channel.kind !== "audio" && !supportsMidiInput && channel.recordArmed) {
+      throw new Error("Only Audio and ordinary Instrument tracks can arm recording")
+    }
+    if (channel.kind !== "audio" && !supportsMidiInput && channel.inputMonitoring) {
+      throw new Error("Only Audio and ordinary Instrument tracks can enable input monitoring")
     }
     if (channel.kind === "master" && channel.soloed) {
       throw new Error("Master cannot be soloed")

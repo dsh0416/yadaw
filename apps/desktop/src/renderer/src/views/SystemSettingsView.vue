@@ -2,11 +2,16 @@
 import { computed, onMounted } from "vue"
 import { storeToRefs } from "pinia"
 import { useRouter } from "vue-router"
-import type { AudioHostRuntimePreferences, AudioPreferences } from "@yadaw/contracts"
+import type {
+  AudioHostRuntimePreferences,
+  AudioPreferences,
+  MidiSyncPreferences
+} from "@yadaw/contracts"
 import SystemSettingsPage from "../components/system-settings/SystemSettingsPage.vue"
 import { useApplicationSettingsStore } from "../stores/applicationSettings"
 import { useAudioPreferencesStore } from "../stores/audioPreferences"
 import { useAudioRuntimeStore } from "../stores/audioRuntime"
+import { useMidiInputStore } from "../stores/midiInput"
 import { useProjectStore } from "../stores/project"
 
 const router = useRouter()
@@ -14,6 +19,7 @@ const audioPreferencesStore = useAudioPreferencesStore()
 const audioRuntimeStore = useAudioRuntimeStore()
 const projectStore = useProjectStore()
 const applicationSettingsStore = useApplicationSettingsStore()
+const midiInputStore = useMidiInputStore()
 const { preferences, applyError, applying } = storeToRefs(audioPreferencesStore)
 const { runtime } = storeToRefs(audioRuntimeStore)
 const {
@@ -22,6 +28,11 @@ const {
   error: applicationSettingsError,
   resolvedAudioHostRuntime
 } = storeToRefs(applicationSettingsStore)
+const {
+  snapshot: midiSnapshot,
+  applying: midiApplying,
+  error: midiError
+} = storeToRefs(midiInputStore)
 
 const backLabel = computed(() => (projectStore.session ? "Back to studio" : "Back to welcome"))
 
@@ -41,8 +52,13 @@ async function configureRuntime(preferences: AudioHostRuntimePreferences): Promi
   await applicationSettingsStore.configureAudioHostRuntime(preferences)
 }
 
+async function configureMidi(preferences: MidiSyncPreferences): Promise<void> {
+  await midiInputStore.configure(preferences)
+}
+
 onMounted(async () => {
   if (!applicationSettings.value) await applicationSettingsStore.load()
+  await midiInputStore.load()
   await refreshRuntimeDiagnostics()
 })
 </script>
@@ -63,9 +79,21 @@ onMounted(async () => {
     :resolved-audio-host-runtime="resolvedAudioHostRuntime"
     :audio-host-runtime-applying="applyingAudioRuntime"
     :audio-host-runtime-error="applicationSettingsError"
+    :midi-preferences="
+      applicationSettings?.midiSync ?? {
+        enabled: false,
+        sourcePortId: null,
+        sourcePortName: null,
+        inputOffsetsMs: {}
+      }
+    "
+    :midi-snapshot="midiSnapshot"
+    :midi-applying="midiApplying"
+    :midi-error="midiError"
     :back-label="backLabel"
     @close="close"
     @apply-audio="applyAudio"
     @configure-runtime="configureRuntime"
+    @configure-midi="configureMidi"
   />
 </template>

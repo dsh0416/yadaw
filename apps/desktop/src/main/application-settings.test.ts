@@ -135,4 +135,45 @@ describe("ApplicationSettingsStore", () => {
       true
     )
   })
+
+  it("persists one validated MIDI clock source and bounded per-port offsets", async () => {
+    const userData = await mkdtemp(join(tmpdir(), "yadaw-midi-settings-"))
+    const store = new ApplicationSettingsStore(userData)
+
+    await store.configureMidiInput({
+      enabled: true,
+      sourcePortId: "winmm:keyboard",
+      sourcePortName: "Keyboard",
+      inputOffsetsMs: {
+        "winmm:keyboard": -12.5,
+        "winmm:pads": 500
+      }
+    })
+
+    expect((await new ApplicationSettingsStore(userData).get()).midiSync).toEqual({
+      enabled: true,
+      sourcePortId: "winmm:keyboard",
+      sourcePortName: "Keyboard",
+      inputOffsetsMs: {
+        "winmm:keyboard": -12.5,
+        "winmm:pads": 500
+      }
+    })
+    await expect(
+      store.configureMidiInput({
+        enabled: true,
+        sourcePortId: "winmm:keyboard",
+        sourcePortName: null,
+        inputOffsetsMs: {}
+      })
+    ).rejects.toThrow("ID and name")
+    await expect(
+      store.configureMidiInput({
+        enabled: true,
+        sourcePortId: null,
+        sourcePortName: null,
+        inputOffsetsMs: { port: 500.1 }
+      })
+    ).rejects.toThrow("-500 to 500")
+  })
 })

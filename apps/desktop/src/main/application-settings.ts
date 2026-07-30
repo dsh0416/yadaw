@@ -1,5 +1,6 @@
 import { mkdir, open, readFile, rename } from "node:fs/promises"
 import { dirname, join } from "node:path"
+import { MAX_MIDI_INPUT_OFFSET_MS } from "@yadaw/contracts"
 import type {
   ApplicationSettings,
   ApplicationSettingsPatch,
@@ -7,6 +8,7 @@ import type {
   MeterPeakHold,
   MeterReturnRate,
   MidiCenterCStandard,
+  MidiSyncPreferences,
   PluginEditorPreference,
   RecordingBitDepth,
   ThemePreference
@@ -38,6 +40,57 @@ function isMeterReturnRate(value: unknown): value is MeterReturnRate {
 
 function isMidiCenterCStandard(value: unknown): value is MidiCenterCStandard {
   return value === "yamaha-c3" || value === "roland-c4"
+}
+
+export function validateMidiSyncPreferences(value: unknown): MidiSyncPreferences {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new TypeError("MIDI sync preferences must be an object")
+  }
+  const input = value as Partial<MidiSyncPreferences>
+  if (typeof input.enabled !== "boolean") {
+    throw new TypeError("External MIDI sync enabled must be a boolean")
+  }
+  if (input.sourcePortId !== null && typeof input.sourcePortId !== "string") {
+    throw new TypeError("MIDI clock source port ID must be a string or null")
+  }
+  if (input.sourcePortName !== null && typeof input.sourcePortName !== "string") {
+    throw new TypeError("MIDI clock source port name must be a string or null")
+  }
+  if (
+    (input.sourcePortId === null) !== (input.sourcePortName === null) ||
+    (typeof input.sourcePortId === "string" && !input.sourcePortId.trim()) ||
+    (typeof input.sourcePortName === "string" && !input.sourcePortName.trim())
+  ) {
+    throw new TypeError("MIDI clock source ID and name must be set together")
+  }
+  if (
+    !input.inputOffsetsMs ||
+    typeof input.inputOffsetsMs !== "object" ||
+    Array.isArray(input.inputOffsetsMs)
+  ) {
+    throw new TypeError("MIDI input offsets must be an object")
+  }
+  const inputOffsetsMs: Record<string, number> = {}
+  for (const [portId, offset] of Object.entries(input.inputOffsetsMs)) {
+    if (
+      !portId.trim() ||
+      typeof offset !== "number" ||
+      !Number.isFinite(offset) ||
+      offset < -MAX_MIDI_INPUT_OFFSET_MS ||
+      offset > MAX_MIDI_INPUT_OFFSET_MS
+    ) {
+      throw new TypeError(
+        `MIDI input offsets must be finite values from -${MAX_MIDI_INPUT_OFFSET_MS} to ${MAX_MIDI_INPUT_OFFSET_MS} ms`
+      )
+    }
+    inputOffsetsMs[portId] = offset
+  }
+  return {
+    enabled: input.enabled,
+    sourcePortId: input.sourcePortId ?? null,
+    sourcePortName: input.sourcePortName ?? null,
+    inputOffsetsMs
+  }
 }
 
 function runtimeThreadSetting(
@@ -148,6 +201,12 @@ export class ApplicationSettingsStore {
       meterReturnRate: "iec-type-i",
       midiCenterCStandard: "roland-c4",
       softwareMonitoringEnabled: false,
+      midiSync: {
+        enabled: false,
+        sourcePortId: null,
+        sourcePortName: null,
+        inputOffsetsMs: {}
+      },
       audioHostRuntime: {
         workerThreads: "auto",
         maxBlockingThreads: "auto",
@@ -184,6 +243,13 @@ export class ApplicationSettingsStore {
           typeof raw.softwareMonitoringEnabled === "boolean"
             ? raw.softwareMonitoringEnabled
             : value.softwareMonitoringEnabled,
+        midiSync: (() => {
+          try {
+            return validateMidiSyncPreferences(raw.midiSync)
+          } catch {
+            return value.midiSync
+          }
+        })(),
         audioHostRuntime: (() => {
           try {
             return validateAudioHostRuntimePreferences(raw.audioHostRuntime)
@@ -262,6 +328,12 @@ export class ApplicationSettingsStore {
   ): Promise<ApplicationSettings> {
     const current = await this.get()
     current.audioHostRuntime = validateAudioHostRuntimePreferences(preferences)
+    return this.write(current)
+  }
+
+  async configureMidiInput(preferences: MidiSyncPreferences): Promise<ApplicationSettings> {
+    const current = await this.get()
+    current.midiSync = validateMidiSyncPreferences(preferences)
     return this.write(current)
   }
 

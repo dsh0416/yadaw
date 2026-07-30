@@ -364,9 +364,10 @@ describe("mixer store", () => {
         color: "#73D6A2",
         inputSource: null,
         inputFormat: null,
+        midiInput: { portId: null, portName: null, channel: null },
         inputChannels: [],
         recordArmed: false,
-        inputMonitoring: false,
+        inputMonitoring: true,
         outputChannelId: "output"
       })
     })

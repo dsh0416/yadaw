@@ -73,6 +73,8 @@ fn live_graph(
                 input_source: channel.input_source.clone(),
                 input_channels: channel.input_channels.clone(),
                 hardware_output_channels: channel.hardware_output_channels.clone(),
+                midi_input_port_id: channel.midi_input_port_id.clone(),
+                midi_input_channel: channel.midi_input_channel,
             })
         })
         .collect::<Result<Vec<_>, String>>()?;
@@ -157,6 +159,63 @@ fn live_graph(
                     }));
                 }
             }
+            let yadaw_dsp_runtime::protocol::MidiEventBatch::Inline { events } = &clip.events else {
+                return Err("MIDI event batch must be materialized before graph build".to_owned());
+            };
+            let mut native_events = Vec::with_capacity(events.len());
+            for event in events {
+                let channel = event.channel.unwrap_or(0);
+                if channel > 15 {
+                    return Err("MIDI event channel must be in 0..15".to_owned());
+                }
+                let data = event
+                    .data
+                    .as_inline()
+                    .ok_or_else(|| "MIDI event payload must be materialized".to_owned())?;
+                let kind = match event.kind.as_str() {
+                    "control-change" if data.len() == 2 && data[0] <= 127 && data[1] <= 127 => {
+                        engine::NativeMidiEventKind::ControlChange {
+                            controller: data[0],
+                            value: data[1],
+                        }
+                    }
+                    "pitch-bend" if data.len() == 2 => {
+                        let value = u16::from_le_bytes([data[0], data[1]]);
+                        if value > 16_383 {
+                            return Err("MIDI pitch bend must be in 0..16383".to_owned());
+                        }
+                        engine::NativeMidiEventKind::PitchBend { value }
+                    }
+                    "program-change" if data.len() == 1 && data[0] <= 127 => {
+                        engine::NativeMidiEventKind::ProgramChange { program: data[0] }
+                    }
+                    "channel-pressure" if data.len() == 1 && data[0] <= 127 => {
+                        engine::NativeMidiEventKind::ChannelPressure { pressure: data[0] }
+                    }
+                    "poly-pressure" if data.len() == 2 && data[0] <= 127 && data[1] <= 127 => {
+                        engine::NativeMidiEventKind::PolyPressure {
+                            key: data[0],
+                            pressure: data[1],
+                        }
+                    }
+                    "sysex" if event.channel.is_none() && data.len() <= 1024 * 1024 => {
+                        engine::NativeMidiEventKind::SysEx {
+                            data: data.to_vec(),
+                        }
+                    }
+                    _ => return Err(format!("invalid MIDI event {}", event.kind)),
+                };
+                if !matches!(kind, engine::NativeMidiEventKind::SysEx { .. })
+                    && event.channel.is_none()
+                {
+                    return Err(format!("MIDI event {} requires a channel", event.kind));
+                }
+                native_events.push(engine::NativeMidiEvent {
+                    tick: event.tick,
+                    channel,
+                    kind,
+                });
+            }
             Ok(engine::NativeMidiClip {
                 id: clip.id.clone(),
                 channel_index: channel_index(&clip.channel_id)?,
@@ -164,6 +223,7 @@ fn live_graph(
                 source_offset_ticks: clip.source_offset_ticks,
                 length_ticks: clip.length_ticks,
                 notes: native_notes,
+                events: native_events,
             })
         })
         .collect::<Result<Vec<_>, String>>()?;
@@ -382,7 +442,11 @@ fn engine_command(
                     transport: TransportState {
                         state: value.state,
                         position_frames: value.position_frames,
+                        position_ticks: value.position_ticks,
                         sample_rate: value.sample_rate,
+                        effective_bpm: value.effective_bpm,
+                        clock_source: value.clock_source,
+                        waiting_for: value.waiting_for,
                     },
                 },
                 Err(error) => ControlResult::Error {
@@ -395,13 +459,37 @@ fn engine_command(
                 transport: TransportState {
                     state: value.state,
                     position_frames: value.position_frames,
+                    position_ticks: value.position_ticks,
                     sample_rate: value.sample_rate,
+                    effective_bpm: value.effective_bpm,
+                    clock_source: value.clock_source,
+                    waiting_for: value.waiting_for,
                 },
             },
             Err(error) => ControlResult::Error {
                 message: error.to_string(),
             },
         },
+        ControlCommand::MidiInputSnapshot => {
+            match MIDI_INPUT.get() {
+                Some(actor) => ControlResult::MidiInputSnapshot {
+                    midi_input: actor.snapshot(),
+                },
+                None => ControlResult::Error {
+                    message: "MIDI input actor is unavailable".to_owned(),
+                },
+            }
+        }
+        ControlCommand::ConfigureMidiInput { preferences } => {
+            match MIDI_INPUT
+                .get()
+                .ok_or_else(|| "MIDI input actor is unavailable".to_owned())
+                .and_then(|actor| actor.configure(preferences))
+            {
+                Ok(midi_input) => ControlResult::MidiInputSnapshot { midi_input },
+                Err(message) => ControlResult::Error { message },
+            }
+        }
         ControlCommand::StartRecording { config } => {
             match engine::start_recording(NativeRecordingStartConfig {
                 path: config.path,

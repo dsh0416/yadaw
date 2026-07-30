@@ -112,6 +112,24 @@ the mapping while compiling the native graph and only creates an owned copy for
 the retained graph-patch snapshot. This optimization is contained below the
 preload API and does not expose shared-memory lifetimes to JavaScript.
 
+Live MIDI devices are another native-only boundary. Renderer code consumes
+`midiInputSnapshot`, subscribes to the named MIDI runtime event, and submits
+validated `configureMidiInput` preferences; it never imports `midir`, the
+native addon, port handles, or queue storage. Electron main persists the unique
+clock-source identity and timing offsets only after the helper accepts them,
+then restores the same preferences after a helper restart. Per-track route
+identity remains project data and is compiled into numeric keys before the
+graph reaches the callback.
+
+The `midir` callback may only copy a timestamp and bytes into the fixed
+16,384-message/4 MiB SysEx ingress. Parsing, device names, hot-plug polling,
+diagnostics, and journal I/O stay on non-real-time actors. The audio callback
+may drain the preallocated queue, scan preallocated scratch, calculate sample
+offsets, update atomics, and enqueue fixed-capacity VST3 events or parameter
+points. It must not allocate, deallocate, lock, format, touch the filesystem,
+or emit IPC. A dropped event that could strand a note sets an atomic panic
+consumed at the next block.
+
 `configureAudioHostRuntime` is intentionally separate from the ordinary
 settings patch API. The `applicationSettings` store owns its loading/error
 state; main owns the recording/recovery guard and the complete helper

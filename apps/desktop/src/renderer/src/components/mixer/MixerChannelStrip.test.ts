@@ -225,6 +225,12 @@ describe("MixerChannelStrip", () => {
       meterReturnRate: "iec-type-i",
       midiCenterCStandard: "roland-c4",
       softwareMonitoringEnabled: true,
+      midiSync: {
+        enabled: false,
+        sourcePortId: null,
+        sourcePortName: null,
+        inputOffsetsMs: {}
+      },
       audioHostRuntime: {
         workerThreads: "auto",
         maxBlockingThreads: "auto",

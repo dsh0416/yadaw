@@ -66,6 +66,8 @@ fn virtual_backend_uses_the_project_clock_over_native_48_khz_io() {
                 input_source: None,
                 input_channels: vec![],
                 hardware_output_channels: vec![],
+                midi_input_port_id: None,
+                midi_input_channel: None,
             },
             NativeMixerChannel {
                 id: "output".to_owned(),
@@ -82,6 +84,8 @@ fn virtual_backend_uses_the_project_clock_over_native_48_khz_io() {
                 input_source: None,
                 input_channels: vec![],
                 hardware_output_channels: vec![1, 2],
+                midi_input_port_id: None,
+                midi_input_channel: None,
             },
         ],
         sends: vec![],

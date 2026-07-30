@@ -151,6 +151,7 @@ export class MidiImportService {
           sortOrder: nextInstrumentOrder++,
           inputSource: null,
           inputFormat: null,
+          midiInput: { portId: null, portName: null, channel: null },
           gainDb: 0,
           pan: 0,
           muted: false,
@@ -158,7 +159,7 @@ export class MidiImportService {
           outputChannelId: defaultOutput.id,
           outputBus: null,
           recordArmed: false,
-          inputMonitoring: false,
+          inputMonitoring: true,
           inputChannels: [],
           hardwareOutputChannels: []
         }

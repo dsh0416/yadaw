@@ -2,6 +2,7 @@ import type {
   KeySignatureEventState,
   MidiClipRangePatch,
   MidiClipState,
+  MidiInputRoute,
   MidiNotePatch,
   MidiNoteState,
   MidiSourceState,
@@ -26,6 +27,8 @@ export interface MixerChannelState {
   sortOrder: number
   inputSource: MixerInputSource | null
   inputFormat: MixerInputFormat | null
+  /** Present only for ordinary Instrument tracks. */
+  midiInput?: MidiInputRoute | null
   gainDb: number
   pan: number
   muted: boolean
@@ -87,6 +90,7 @@ export type MixerChannelPatch = Partial<
     | "sortOrder"
     | "inputSource"
     | "inputFormat"
+    | "midiInput"
     | "gainDb"
     | "pan"
     | "muted"
@@ -229,11 +233,17 @@ export interface MixerRuntimeSnapshot {
   capturedAt: number
 }
 
-export type TransportState = "stopped" | "playing" | "recording"
+export type TransportState = "stopped" | "waiting" | "playing" | "recording"
+export type TransportWaitingAction = "play" | "record"
+export type TransportClockSource = "internal" | "external"
 export interface TransportSnapshot {
   state: TransportState
   positionFrames: number
+  positionTicks?: number
   sampleRate: number
+  effectiveBpm?: number
+  clockSource?: TransportClockSource
+  waitingFor?: TransportWaitingAction | null
 }
 
 export type TransportCommand =

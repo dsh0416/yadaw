@@ -22,6 +22,12 @@ pub struct LiveMixerChannel {
     pub record_armed: bool,
     #[serde(default)]
     pub input_monitoring: bool,
+    #[serde(default)]
+    pub midi_input_port_id: Option<String>,
+    #[serde(default)]
+    pub midi_input_port_name: Option<String>,
+    #[serde(default)]
+    pub midi_input_channel: Option<u8>,
     pub input_source: Option<String>,
     pub input_channels: Vec<u32>,
     pub hardware_output_channels: Vec<u32>,
