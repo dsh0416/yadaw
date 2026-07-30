@@ -378,8 +378,7 @@ mod tests {
     #[test]
     fn subcategory_instrument_survives_failed_instrument_activation() {
         let effect = modes(&["stereo"]);
-        let (kind, supported) =
-            classify_plugin_kind(&modes(&["Instrument", "Drum"]), &effect, &[]);
+        let (kind, supported) = classify_plugin_kind(&modes(&["Instrument", "Drum"]), &effect, &[]);
         assert_eq!(kind, PluginKind::Instrument);
         assert_eq!(supported, modes(&["mono", "stereo"]));
     }
@@ -419,9 +418,6 @@ mod tests {
             modes(&["Instrument", "Synth"])
         );
         assert_eq!(categories_for_output("", false), modes(&["Fx"]));
-        assert_eq!(
-            parse_subcategories(" Fx | EQ | "),
-            modes(&["Fx", "EQ"])
-        );
+        assert_eq!(parse_subcategories(" Fx | EQ | "), modes(&["Fx", "EQ"]));
     }
 }
