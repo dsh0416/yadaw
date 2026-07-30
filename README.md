@@ -64,7 +64,7 @@ broader built-in plug-in rack for out-of-the-box use. After VST3, hosted formats
 are planned as ARA, then CLAP, then AU.
 
 Until 1.0, project formats and compatibility may change without a migration
-guarantee. See the [roadmap](docs/roadmap.md) for milestones and priorities.
+guarantee. See the [roadmap](agents/docs/roadmap.md) for milestones and priorities.
 
 ## Development
 
@@ -80,10 +80,10 @@ Contributor-facing details live outside this README:
 
 - [Contributing guide](CONTRIBUTING.md)
 - [Development environment](agents/docs/environment.md)
-- [Architecture and real-time constraints](docs/architecture.md)
-- [Product roadmap](docs/roadmap.md)
-- [Performance benchmarks](docs/benchmarks.md)
-- [Continuous integration and releases](docs/ci.md)
+- [Architecture and real-time constraints](agents/docs/architecture.md)
+- [Product roadmap](agents/docs/roadmap.md)
+- [Performance benchmarks](agents/docs/benchmarks.md)
+- [Continuous integration and releases](agents/docs/ci.md)
 
 ## License
 

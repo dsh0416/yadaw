@@ -35,7 +35,7 @@ Vue component or composable
 - IPC, filesystem work, Vue reactivity, allocation, and blocking synchronization
   remain outside real-time audio callbacks. The normative graph, actor, worker,
   and thread rules are in [Playback runtime architecture](playback-runtime.md).
-  See also `docs/architecture.md`.
+  See also [Architecture and real-time constraints](architecture.md).
 
 Tests may mock `window.yadaw`. E2E tests may call it to inspect native state,
 but product behavior should normally be exercised through the UI.

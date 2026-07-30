@@ -47,7 +47,7 @@ Make the existing vertical slice reliable for daily experimentation.
 - [x] Contributor-facing CI and multi-platform packaging (signed/notarized
       installers stay in M3)
 - [x] Graph construction moves to the supervised graph worker (see
-      `agents/docs/playback-runtime.md`)
+      `playback-runtime.md`)
 - [x] Project Settings exposes session sample rate; recording finalization
       resamples to that rate
 - [x] Audio engine session clock follows the project sample rate across device

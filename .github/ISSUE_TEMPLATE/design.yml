@@ -7,7 +7,7 @@ body:
     attributes:
       value: |
         Use this for design discussion or feature proposals. Check the
-        [roadmap](https://github.com/dsh0416/yadaw/blob/main/docs/roadmap.md) first.
+        [roadmap](https://github.com/dsh0416/yadaw/blob/main/agents/docs/roadmap.md) first.
         Prefer actionable scope over speculative wish lists.
 
   - type: textarea

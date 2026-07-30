@@ -1,9 +1,8 @@
 # Agent Guide
 
 This file is the entry point for AI agents and automation working in this
-repository. Keep durable project documentation in `docs/`; keep agent-facing
-development conventions here and under `agents/docs/`, and reusable agent
-skills under `.agents/skills/`.
+repository. Keep project and agent-facing documentation under `agents/docs/`,
+and reusable agent skills under `.agents/skills/`.
 
 ## Project Shape
 
@@ -79,9 +78,9 @@ mise exec -- pnpm lint
 ## Supporting Notes
 
 - [Repository overview](README.md)
-- [Architecture and real-time constraints](docs/architecture.md)
-- [Product roadmap](docs/roadmap.md)
-- [Rust performance benchmarks](docs/benchmarks.md)
+- [Architecture and real-time constraints](agents/docs/architecture.md)
+- [Product roadmap](agents/docs/roadmap.md)
+- [Rust performance benchmarks](agents/docs/benchmarks.md)
 - [Development environment](agents/docs/environment.md)
 - [Renderer/native-call boundary](agents/docs/native-call-boundary.md)
 - [Project database development rules](agents/docs/project-database.md)
@@ -90,11 +89,10 @@ mise exec -- pnpm lint
 
 ## Documentation Boundary
 
-The `docs/` directory contains durable architecture, performance, deployment,
-and usage documentation for contributors and users. Keep repository-wide agent
-instructions in `AGENTS.md`, and place internal development-environment notes,
-agent workflows, permission guidance, and implementation checklists under
+Keep repository-wide agent instructions in `AGENTS.md`. Place architecture,
+roadmap, performance, CI, design-system, development-environment notes, agent
+workflows, permission guidance, and implementation checklists under
 `agents/docs/`. Treat `.agents/skills/` as APM-managed content derived from
 `apm.yml` and `apm.lock.yaml`; update the dependency declarations instead of
 hand-editing installed skill copies. Do not place temporary agent notes,
-generated output, or benchmark artifacts in `docs/`.
+generated output, or benchmark artifacts in `agents/docs/`.

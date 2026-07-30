@@ -16,8 +16,8 @@ mise run dev
 Before changing behavior near process or audio boundaries, read:
 
 - [Development environment](agents/docs/environment.md)
-- [Architecture and real-time constraints](docs/architecture.md)
-- [Product roadmap](docs/roadmap.md)
+- [Architecture and real-time constraints](agents/docs/architecture.md)
+- [Product roadmap](agents/docs/roadmap.md)
 - [Agent guide](AGENTS.md) (conventions used by automation and humans alike)
 
 ## Pull requests

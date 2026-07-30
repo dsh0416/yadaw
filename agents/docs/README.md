@@ -1,16 +1,22 @@
 # Agent Development Notes
 
-This directory is reserved for internal, agent-facing development
-documentation that is too detailed for the repository-level `AGENTS.md`.
+This directory holds project and agent-facing documentation that is too detailed
+for the repository-level `AGENTS.md`.
 
-Use it for development-environment notes, agent workflows, permission guidance,
-implementation checklists, and other automation-specific conventions. Keep
-durable contributor and user documentation in `docs/`, and manage reusable
-agent skills through `apm.yml` rather than documenting or editing installed
-copies under `.agents/skills/`.
+Use it for architecture, roadmap, performance, CI, design-system notes,
+development-environment guidance, agent workflows, permission guidance,
+implementation checklists, and other automation-specific conventions. Manage
+reusable agent skills through `apm.yml` rather than documenting or editing
+installed copies under `.agents/skills/`.
 
 ## Notes
 
+- [Architecture and real-time constraints](architecture.md)
+- [Product roadmap](roadmap.md)
+- [Rust performance benchmarks](benchmarks.md)
+- [Continuous integration and releases](ci.md)
+- [Design system](design-system.md)
+- [Design system audit](design-system-audit.md)
 - [Development environment](environment.md)
 - [Native call boundary](native-call-boundary.md)
 - [Playback runtime architecture](playback-runtime.md)

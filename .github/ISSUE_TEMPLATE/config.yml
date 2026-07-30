@@ -4,8 +4,8 @@ contact_links:
     url: https://github.com/dsh0416/yadaw/blob/main/CONTRIBUTING.md
     about: Toolchain, pull request expectations, and AI-assisted contribution policy.
   - name: Product roadmap
-    url: https://github.com/dsh0416/yadaw/blob/main/docs/roadmap.md
+    url: https://github.com/dsh0416/yadaw/blob/main/agents/docs/roadmap.md
     about: Check milestones and priorities before proposing large new scope.
   - name: Architecture notes
-    url: https://github.com/dsh0416/yadaw/blob/main/docs/architecture.md
+    url: https://github.com/dsh0416/yadaw/blob/main/agents/docs/architecture.md
     about: Process boundaries and real-time audio constraints.
