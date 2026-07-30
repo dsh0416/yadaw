@@ -18,6 +18,7 @@ import type { AudioHostDevice, ControlResponse, TelemetryWire } from "./audio-ho
 
 export class AudioHostTransportClient {
   private lastAudioPreferences: AudioPreferences | null = null
+  private lastAudioRuntime: AudioRuntimeSnapshot | null = null
   private audioEngineExpectedRunning = false
   private lastTransport: TransportSnapshot = {
     state: "stopped",
@@ -135,6 +136,10 @@ export class AudioHostTransportClient {
     return this.runtimeResult(await this.request({ type: "audio-engine-snapshot" }))
   }
 
+  cachedAudioEngineSnapshot(): AudioRuntimeSnapshot | null {
+    return this.lastAudioRuntime ? structuredClone(this.lastAudioRuntime) : null
+  }
+
   async startRoundTripLatencyMeasurement(
     request: RoundTripLatencyMeasurementRequest
   ): Promise<RoundTripLatencyMeasurement> {
@@ -187,7 +192,7 @@ export class AudioHostTransportClient {
     if (response.result.type !== "audio-runtime" || !value) {
       throw new Error("audio host returned an invalid runtime response")
     }
-    return {
+    const runtime: AudioRuntimeSnapshot = {
       state: value.state === "running" || value.state === "error" ? value.state : "stopped",
       requestedBufferSize: value.requested_buffer_size,
       sampleRate: value.sample_rate,
@@ -209,6 +214,8 @@ export class AudioHostTransportClient {
           : "inactive",
       bufferFallback: value.buffer_fallback
     }
+    this.lastAudioRuntime = structuredClone(runtime)
+    return runtime
   }
 
   async previewMixerParameter(preview: MixerParameterPreview): Promise<void> {

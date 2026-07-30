@@ -61,6 +61,8 @@ export class AudioHostService {
   private nextRequestId = 1
   private heartbeat: NodeJS.Timeout | null = null
   private heartbeatInFlight = false
+  private audioBenchmarkInFlight = false
+  private audioBenchmarkGeneration = 0
   private stableTimer: NodeJS.Timeout | null = null
   private lastCallbackGeneration: number | null = null
   private callbackStagnantSince = 0
@@ -192,7 +194,8 @@ export class AudioHostService {
       arenaCopiedBytes: 0
     }
     this.heartbeat = setInterval(() => {
-      if (this.client !== client || this.heartbeatInFlight) return
+      if (this.client !== client || this.heartbeatInFlight || this.audioBenchmarkInFlight) return
+      const benchmarkGeneration = this.audioBenchmarkGeneration
       this.heartbeatInFlight = true
       void this.performHeartbeat(client)
         .then((response) => {
@@ -236,6 +239,16 @@ export class AudioHostService {
           }
         })
         .catch((error: unknown) => {
+          // A benchmark can begin after this heartbeat was sent. Its deliberately
+          // saturating VST3 workload has a 60-second request deadline, so a
+          // two-second health-check timeout during that interval is not evidence
+          // that the helper has failed.
+          if (
+            this.audioBenchmarkInFlight ||
+            this.audioBenchmarkGeneration !== benchmarkGeneration
+          ) {
+            return
+          }
           const message = error instanceof Error ? error.message : String(error)
           this.handleExit(client, `heartbeat failed: ${message}`)
         })
@@ -420,6 +433,10 @@ export class AudioHostService {
   }
 
   audioEngineSnapshot(): Promise<AudioRuntimeSnapshot> {
+    if (this.audioBenchmarkInFlight) {
+      const cached = this.audioTransport.cachedAudioEngineSnapshot()
+      if (cached) return Promise.resolve(cached)
+    }
     return this.audioTransport.audioEngineSnapshot()
   }
 
@@ -536,6 +553,11 @@ export class AudioHostService {
     ) {
       throw new Error("audio benchmark requires a compatible stereo VST3 effect")
     }
+    if (this.audioBenchmarkInFlight) {
+      throw new Error("audio benchmark is already running")
+    }
+    this.audioBenchmarkInFlight = true
+    this.audioBenchmarkGeneration += 1
     const pluginInstanceIds = Array.from(
       { length: pluginCount },
       (_, index) => `__yadaw-audio-benchmark-gain-${index}`
@@ -607,6 +629,7 @@ export class AudioHostService {
           console.error(`Could not unload audio benchmark VST3 instance ${id}:`, error)
         }
       }
+      this.audioBenchmarkInFlight = false
     }
   }
 

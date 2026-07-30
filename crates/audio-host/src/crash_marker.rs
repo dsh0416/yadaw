@@ -1,5 +1,5 @@
 use std::{
-    fs::OpenOptions,
+    fs::{File, OpenOptions},
     io,
     path::Path,
     ptr,
@@ -75,13 +75,7 @@ impl Drop for CrashMarker {
 static MARKER: OnceLock<CrashMarker> = OnceLock::new();
 
 pub fn initialize(path: &Path) -> io::Result<()> {
-    let file = OpenOptions::new()
-        .create(true)
-        .truncate(true)
-        .read(true)
-        .write(true)
-        .open(path)?;
-    file.set_len(MARKER_BYTES)?;
+    let file = open_marker_file(path)?;
     let marker = map_file(&file)?;
     marker.write(0, u64::MAX, STAGE_CLEAN);
     MARKER.set(marker).map_err(|_| {
@@ -90,6 +84,23 @@ pub fn initialize(path: &Path) -> io::Result<()> {
             "crash marker already initialized",
         )
     })
+}
+
+fn open_marker_file(path: &Path) -> io::Result<File> {
+    let file = OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(path)?;
+    // Never truncate an existing marker. On Windows, recovery can begin while
+    // the kernel is still releasing the previous helper's mapped section, and
+    // truncation then fails with ERROR_USER_MAPPED_FILE. Only grow a new or
+    // incomplete file; the mapping below intentionally uses the first 40 bytes.
+    if file.metadata()?.len() < MARKER_BYTES {
+        file.set_len(MARKER_BYTES)?;
+    }
+    Ok(file)
 }
 
 pub fn mark(generation: u64, plugin_index: usize, stage: u64) {
@@ -210,4 +221,32 @@ unsafe extern "C" {
         offset: isize,
     ) -> *mut std::ffi::c_void;
     fn munmap(address: *mut std::ffi::c_void, length: usize) -> i32;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn opens_a_marker_while_an_existing_view_is_mapped() {
+        let path = std::env::temp_dir().join(format!(
+            "yadaw-crash-marker-mapped-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock must follow the Unix epoch")
+                .as_nanos()
+        ));
+        let original = open_marker_file(&path).expect("test marker must open");
+        let mapping = map_file(&original).expect("test marker must map");
+
+        let reopened =
+            open_marker_file(&path).expect("mapped marker must reopen without truncation");
+        assert!(reopened.metadata().unwrap().len() >= MARKER_BYTES);
+
+        drop(reopened);
+        drop(mapping);
+        drop(original);
+        std::fs::remove_file(path).expect("test marker must be removable after unmapping");
+    }
 }
