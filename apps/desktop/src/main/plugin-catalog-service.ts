@@ -252,8 +252,7 @@ export function descriptorsFromModuleInfo(
       : "effect"
     // Soft catalog metadata: advertise host-supported layouts. Insert-time
     // activation still validates the real processor setup.
-    const supportedAudioModes =
-      kind === "instrument" ? INSTRUMENT_SOFT_MODES : EFFECT_SOFT_MODES
+    const supportedAudioModes = kind === "instrument" ? INSTRUMENT_SOFT_MODES : EFFECT_SOFT_MODES
     const preferredMode =
       supportedAudioModes.find((mode) => mode === "stereo") ??
       supportedAudioModes.find((mode) => mode !== "dual-mono") ??
