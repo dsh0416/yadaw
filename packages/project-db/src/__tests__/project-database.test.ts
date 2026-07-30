@@ -289,7 +289,7 @@ describe("ProjectDatabase", () => {
               name: "Effect",
               vendor: "YADAW",
               version: "1.0",
-              category: "Fx",
+              categories: ["Fx"],
               kind: "effect" as const,
               architecture: "x86_64",
               buses: [],

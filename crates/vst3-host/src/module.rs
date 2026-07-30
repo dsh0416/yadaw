@@ -4,7 +4,7 @@ use std::{
 };
 
 use yadaw_vst3_host_sys::{
-    Steinberg::{IPluginFactory, IPluginFactory2, PClassInfo, PClassInfo2},
+    Steinberg::{IPluginFactory, IPluginFactory2, PClassInfo, PClassInfo2, PFactoryInfo},
     YadawAraFactoryInfo,
     abi::{PluginFactory2VTable, PluginFactoryVTable},
     yadaw_ara_query_factory,
@@ -154,6 +154,12 @@ mod dynamic {
     }
 }
 
+/// Stable metadata from `IPluginFactory::getFactoryInfo`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FactoryInfo {
+    pub vendor: String,
+}
+
 /// Stable metadata exposed by the base VST3 factory interface.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ClassInfo {
@@ -162,6 +168,10 @@ pub struct ClassInfo {
     pub name: String,
     /// Pipe-separated VST3 subcategories from `IPluginFactory2`, when available.
     pub subcategories: String,
+    /// Per-class vendor from `IPluginFactory2::getClassInfo2`, when available.
+    pub vendor: String,
+    /// Per-class version from `IPluginFactory2::getClassInfo2`, when available.
+    pub version: String,
 }
 
 /// A loaded VST3 module and its root factory.
@@ -250,6 +260,34 @@ impl Module {
         }
     }
 
+    /// Reads the module-level vendor string from `IPluginFactory`.
+    pub fn factory_info(&self) -> HostResult<FactoryInfo> {
+        let factory = self.factory().as_ptr();
+        let table = unsafe {
+            // SAFETY: factory is live for this Module and begins with the
+            // IPluginFactory vtable pointer.
+            *factory.cast::<*const PluginFactoryVTable>()
+        };
+        let mut raw = std::mem::MaybeUninit::<PFactoryInfo>::zeroed();
+        let result = unsafe {
+            // SAFETY: raw points to writable SDK storage for PFactoryInfo.
+            ((*table).get_factory_info)(factory, raw.as_mut_ptr())
+        };
+        if result != 0 {
+            return Err(HostError::Operation {
+                operation: "getFactoryInfo",
+                result,
+            });
+        }
+        let raw = unsafe {
+            // SAFETY: successful getFactoryInfo initialized the structure.
+            raw.assume_init()
+        };
+        Ok(FactoryInfo {
+            vendor: fixed_c_string(&raw.vendor),
+        })
+    }
+
     /// Enumerates classes without constructing plug-in instances.
     pub fn classes(&self) -> HostResult<Vec<ClassInfo>> {
         let factory = self.factory().as_ptr();
@@ -282,15 +320,20 @@ impl Module {
                 // SAFETY: successful getClassInfo initialized the structure.
                 raw.assume_init()
             };
-            let subcategories = factory2
+            let class2 = factory2
                 .as_ref()
-                .and_then(|factory2| class_subcategories(factory2, index))
-                .unwrap_or_default();
+                .and_then(|factory2| class_info2_fields(factory2, index));
+            let (subcategories, vendor, version) = match class2 {
+                Some(fields) => (fields.subcategories, fields.vendor, fields.version),
+                None => (String::new(), String::new(), String::new()),
+            };
             classes.push(ClassInfo {
                 id: ClassId::from_tuid(raw.cid),
                 category: fixed_c_string(&raw.category),
                 name: fixed_c_string(&raw.name),
                 subcategories,
+                vendor,
+                version,
             });
         }
         Ok(classes)
@@ -329,7 +372,13 @@ impl Module {
     }
 }
 
-fn class_subcategories(factory2: &ComPtr<IPluginFactory2>, index: i32) -> Option<String> {
+struct ClassInfo2Fields {
+    subcategories: String,
+    vendor: String,
+    version: String,
+}
+
+fn class_info2_fields(factory2: &ComPtr<IPluginFactory2>, index: i32) -> Option<ClassInfo2Fields> {
     let table = unsafe {
         // SAFETY: factory2 is a live IPluginFactory2 and begins with its vtable.
         *factory2.as_ptr().cast::<*const PluginFactory2VTable>()
@@ -346,7 +395,11 @@ fn class_subcategories(factory2: &ComPtr<IPluginFactory2>, index: i32) -> Option
         // SAFETY: successful getClassInfo2 initialized the structure.
         raw.assume_init()
     };
-    Some(fixed_c_string(&raw.subCategories))
+    Some(ClassInfo2Fields {
+        subcategories: fixed_c_string(&raw.subCategories),
+        vendor: fixed_c_string(&raw.vendor),
+        version: fixed_c_string(&raw.version),
+    })
 }
 
 impl Drop for Module {

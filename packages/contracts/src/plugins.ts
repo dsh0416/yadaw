@@ -38,7 +38,8 @@ export interface PluginDescriptor {
   name: string
   vendor: string
   version: string
-  category: string
+  /** VST3 `subCategories` (and host fallbacks), split into individual tags. */
+  categories: string[]
   kind: PluginKind
   supportedAudioModes: PluginAudioMode[]
   architecture: string
@@ -53,6 +54,56 @@ export function pluginDescriptorKey(descriptor: PluginDescriptor): string {
   return descriptor.source.kind === "builtin"
     ? `${descriptor.source.id}:${descriptor.classId}`
     : `${descriptor.modulePath}:${descriptor.classId}`
+}
+
+/** Split a VST3 pipe-separated subcategory string, or normalize an array. */
+export function parsePluginCategories(
+  value: string | readonly string[] | null | undefined
+): string[] {
+  if (Array.isArray(value)) {
+    return value.map((item) => item.trim()).filter((item) => item.length > 0)
+  }
+  if (typeof value === "string") {
+    return value
+      .split("|")
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0)
+  }
+  return []
+}
+
+export function defaultPluginCategories(kind: PluginKind): string[] {
+  return kind === "instrument" ? ["Instrument", "Synth"] : ["Fx"]
+}
+
+export function pluginCategoriesLabel(categories: readonly string[], separator = " · "): string {
+  return categories.join(separator)
+}
+
+export function pluginLooksLikeInstrument(categories: readonly string[]): boolean {
+  return categories.some((category) => {
+    const normalized = category.toLocaleLowerCase()
+    return normalized.includes("instrument") || normalized.includes("synth")
+  })
+}
+
+/**
+ * Normalize a descriptor loaded from older project/catalog snapshots that used
+ * a single pipe-separated `category` string.
+ */
+export function normalizePluginDescriptor(
+  value: PluginDescriptor & { category?: string }
+): PluginDescriptor {
+  const supportedAudioModes = Array.isArray(value.supportedAudioModes)
+    ? value.supportedAudioModes
+    : (["stereo"] as PluginAudioMode[])
+  const categories = parsePluginCategories(value.categories ?? value.category)
+  const { category: _legacyCategory, ...rest } = value
+  return {
+    ...rest,
+    supportedAudioModes,
+    categories: categories.length > 0 ? categories : defaultPluginCategories(value.kind ?? "effect")
+  }
 }
 
 export interface PluginCatalogSnapshot {

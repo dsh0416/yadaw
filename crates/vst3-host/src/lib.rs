@@ -22,6 +22,6 @@ pub use error::{HostError, HostResult};
 pub use frame::PlugFrame;
 pub use hosted::{HostedParameter, HostedPlugin, PlugView, ProcessorLease};
 pub use id::ClassId;
-pub use module::{AraFactoryInfo, ClassInfo, Module};
+pub use module::{AraFactoryInfo, ClassInfo, FactoryInfo, Module};
 pub use processor::{AudioLayout, HostProcessContext, PluginKind, StereoProcessor};
 pub use yadaw_vst3_host_sys::Steinberg::ViewRect;

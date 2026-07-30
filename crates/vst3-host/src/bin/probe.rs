@@ -23,7 +23,7 @@ struct Output<'a> {
 #[derive(Serialize)]
 struct ModuleOutput<'a> {
     path: &'a Path,
-    vendor: &'static str,
+    vendor: String,
     classes: Vec<ClassOutput>,
 }
 
@@ -34,7 +34,7 @@ struct ClassOutput {
     name: String,
     vendor: String,
     version: String,
-    category: String,
+    categories: Vec<String>,
     initialized: bool,
     sample32: bool,
     has_editor: bool,
@@ -57,34 +57,75 @@ struct AraOutput {
     supports_storing_audio_file_chunks: bool,
 }
 
-fn looks_like_instrument(class: &ClassInfo) -> bool {
-    class.subcategories.split('|').any(|category| {
-        let category = category.trim().to_ascii_lowercase();
+fn parse_subcategories(subcategories: &str) -> Vec<String> {
+    subcategories
+        .split('|')
+        .map(str::trim)
+        .filter(|category| !category.is_empty())
+        .map(str::to_owned)
+        .collect()
+}
+
+fn looks_like_instrument(categories: &[String]) -> bool {
+    categories.iter().any(|category| {
+        let category = category.to_ascii_lowercase();
         category.contains("instrument") || category.contains("synth")
     })
+}
+
+fn categories_for_output(subcategories: &str, instrument: bool) -> Vec<String> {
+    let parsed = parse_subcategories(subcategories);
+    if !parsed.is_empty() {
+        parsed
+    } else if instrument {
+        vec!["Instrument".into(), "Synth".into()]
+    } else {
+        vec!["Fx".into()]
+    }
+}
+
+/// Choose instrument vs effect from factory subcategories and negotiated layouts.
+///
+/// Many instruments still accept an audio-input bus arrangement (sidechain,
+/// FX-on-input, permissive SDK stubs). Prefer the factory `subCategories` hint
+/// whenever it identifies an instrument; only fall back to "effect layout wins"
+/// when subcategories are silent.
+fn classify_plugin_kind(
+    categories: &[String],
+    effect_modes: &[String],
+    instrument_modes: &[String],
+) -> (PluginKind, Vec<String>) {
+    if looks_like_instrument(categories) {
+        if !instrument_modes.is_empty() {
+            return (PluginKind::Instrument, instrument_modes.to_vec());
+        }
+        // Subcategories identify an instrument even when the zero-input layout
+        // failed to activate. Keep the class usable with the host's default
+        // instrument paths; insert-time activation still validates the setup.
+        return (
+            PluginKind::Instrument,
+            ["mono", "stereo"].into_iter().map(str::to_owned).collect(),
+        );
+    }
+    if effect_modes.is_empty() && !instrument_modes.is_empty() {
+        (PluginKind::Instrument, instrument_modes.to_vec())
+    } else {
+        (PluginKind::Effect, effect_modes.to_vec())
+    }
 }
 
 fn soft_inspect(class: &ClassInfo) -> ClassOutput {
     // Factory enumeration alone cannot prove bus layouts. Advertise the host's
     // supported paths so a module that loads is discoverable; insert-time
     // activation still validates the processor setup.
-    let instrument = looks_like_instrument(class);
+    let factory_categories = parse_subcategories(&class.subcategories);
+    let instrument = looks_like_instrument(&factory_categories);
     ClassOutput {
         class_id: class.id.to_string(),
         name: class.name.clone(),
-        vendor: String::new(),
-        version: String::new(),
-        category: if instrument {
-            if class.subcategories.is_empty() {
-                "Instrument|Synth".into()
-            } else {
-                class.subcategories.clone()
-            }
-        } else if class.subcategories.is_empty() {
-            "Fx".into()
-        } else {
-            class.subcategories.clone()
-        },
+        vendor: class.vendor.clone(),
+        version: class.version.clone(),
+        categories: categories_for_output(&class.subcategories, instrument),
         initialized: true,
         sample32: true,
         has_editor: true,
@@ -122,23 +163,17 @@ fn deep_inspect(module: &Rc<Module>, class: ClassInfo) -> ClassOutput {
             supports(PluginKind::Instrument, layout).then_some(name.to_owned())
         })
         .collect::<Vec<_>>();
-    let (kind, supported_audio_modes) = if effect_modes.is_empty() && !instrument_modes.is_empty() {
-        (PluginKind::Instrument, instrument_modes)
-    } else {
-        (PluginKind::Effect, effect_modes)
-    };
+    let factory_categories = parse_subcategories(&class.subcategories);
+    let (kind, supported_audio_modes) =
+        classify_plugin_kind(&factory_categories, &effect_modes, &instrument_modes);
     let initialized = !supported_audio_modes.is_empty();
     let instrument = kind == PluginKind::Instrument;
     ClassOutput {
         class_id: class.id.to_string(),
         name: class.name,
-        vendor: String::new(),
-        version: String::new(),
-        category: if instrument {
-            "Instrument|Synth".into()
-        } else {
-            "Fx".into()
-        },
+        vendor: class.vendor,
+        version: class.version,
+        categories: categories_for_output(&class.subcategories, instrument),
         initialized,
         sample32: initialized,
         has_editor: initialized,
@@ -238,6 +273,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let module = Rc::new(Module::open(&path)?);
+    let factory_vendor = module
+        .factory_info()
+        .map(|info| info.vendor)
+        .unwrap_or_default();
     let discovered = module.classes()?;
     let ara_factories = discovered
         .iter()
@@ -266,7 +305,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         serde_json::to_string(&Output {
             module: ModuleOutput {
                 path: &path,
-                vendor: "",
+                vendor: factory_vendor,
                 classes,
             },
         })?
@@ -295,5 +334,77 @@ fn main() -> ExitCode {
             eprintln!("{error}");
             ExitCode::FAILURE
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        PluginKind, categories_for_output, classify_plugin_kind, looks_like_instrument,
+        parse_subcategories,
+    };
+
+    fn modes(names: &[&str]) -> Vec<String> {
+        names.iter().map(|name| (*name).to_owned()).collect()
+    }
+
+    #[test]
+    fn subcategory_instrument_beats_permissive_effect_layout() {
+        let effect = modes(&["mono", "stereo"]);
+        let instrument = modes(&["stereo"]);
+        let (kind, supported) =
+            classify_plugin_kind(&modes(&["Instrument", "Synth"]), &effect, &instrument);
+        assert_eq!(kind, PluginKind::Instrument);
+        assert_eq!(supported, instrument);
+    }
+
+    #[test]
+    fn subcategory_instrument_survives_failed_instrument_activation() {
+        let effect = modes(&["stereo"]);
+        let (kind, supported) =
+            classify_plugin_kind(&modes(&["Instrument", "Drum"]), &effect, &[]);
+        assert_eq!(kind, PluginKind::Instrument);
+        assert_eq!(supported, modes(&["mono", "stereo"]));
+    }
+
+    #[test]
+    fn bus_heuristic_still_classifies_instrument_without_subcategories() {
+        let (kind, supported) = classify_plugin_kind(&[], &[], &modes(&["mono"]));
+        assert_eq!(kind, PluginKind::Instrument);
+        assert_eq!(supported, modes(&["mono"]));
+    }
+
+    #[test]
+    fn silent_subcategories_prefer_effect_when_both_layouts_work() {
+        let effect = modes(&["stereo"]);
+        let instrument = modes(&["stereo"]);
+        let (kind, supported) = classify_plugin_kind(&[], &effect, &instrument);
+        assert_eq!(kind, PluginKind::Effect);
+        assert_eq!(supported, effect);
+    }
+
+    #[test]
+    fn looks_like_instrument_matches_common_vst3_tokens() {
+        assert!(looks_like_instrument(&modes(&["Instrument", "Synth"])));
+        assert!(looks_like_instrument(&modes(&["Fx", "Synth"])));
+        assert!(!looks_like_instrument(&modes(&["Fx", "EQ"])));
+        assert!(!looks_like_instrument(&[]));
+    }
+
+    #[test]
+    fn categories_for_output_preserves_factory_tags() {
+        assert_eq!(
+            categories_for_output("Instrument|Sampler", true),
+            modes(&["Instrument", "Sampler"])
+        );
+        assert_eq!(
+            categories_for_output("", true),
+            modes(&["Instrument", "Synth"])
+        );
+        assert_eq!(categories_for_output("", false), modes(&["Fx"]));
+        assert_eq!(
+            parse_subcategories(" Fx | EQ | "),
+            modes(&["Fx", "EQ"])
+        );
     }
 }

@@ -3,17 +3,21 @@ import { execFile } from "node:child_process"
 import { promisify } from "node:util"
 import { homedir } from "node:os"
 import { basename, dirname, join } from "node:path"
-import type {
-  PluginCatalogSnapshot,
-  PluginAudioMode,
-  PluginDescriptor,
-  PluginEditorMode,
-  PluginParameterChange,
-  PluginParameterInfo,
-  PluginRuntimeStatus,
-  PluginInstanceState,
-  PluginScanEvent,
-  PluginScanRequest
+import {
+  defaultPluginCategories,
+  normalizePluginDescriptor,
+  parsePluginCategories,
+  pluginLooksLikeInstrument,
+  type PluginCatalogSnapshot,
+  type PluginAudioMode,
+  type PluginDescriptor,
+  type PluginEditorMode,
+  type PluginParameterChange,
+  type PluginParameterInfo,
+  type PluginRuntimeStatus,
+  type PluginInstanceState,
+  type PluginScanEvent,
+  type PluginScanRequest
 } from "@yadaw/contracts"
 
 interface PluginRuntime {
@@ -34,7 +38,7 @@ interface PluginRuntime {
   closeEditor(instanceId: string): Promise<void>
 }
 
-const SCANNER_VERSION = 4
+const SCANNER_VERSION = 7
 const execFileAsync = promisify(execFile)
 const AUDIO_MODES = ["mono", "mono-to-stereo", "stereo", "dual-mono"] as const
 
@@ -208,7 +212,7 @@ function descriptorsFromModuleInfo(
         name: fallbackName,
         vendor,
         version: textValue(moduleInfo?.["Version"], ""),
-        category: "Audio Module Class",
+        categories: defaultPluginCategories("effect"),
         kind: "effect",
         architecture: process.arch,
         buses: [],
@@ -222,13 +226,8 @@ function descriptorsFromModuleInfo(
   return classes.flatMap((value) => {
     const classInfo = record(value)
     if (!classInfo || textValue(classInfo["Category"]) !== "Audio Module Class") return []
-    const subCategories = stringList(classInfo["Sub Categories"])
-    const kind = subCategories.some(
-      (category) =>
-        category.toLowerCase().includes("instrument") || category.toLowerCase().includes("synth")
-    )
-      ? "instrument"
-      : "effect"
+    const categories = parsePluginCategories(stringList(classInfo["Sub Categories"]))
+    const kind = pluginLooksLikeInstrument(categories) ? "instrument" : "effect"
     return [
       {
         source: { kind: "external" },
@@ -237,7 +236,7 @@ function descriptorsFromModuleInfo(
         name: textValue(classInfo["Name"], fallbackName),
         vendor: textValue(classInfo["Vendor"], vendor),
         version: textValue(classInfo["Version"], textValue(moduleInfo?.["Version"])),
-        category: subCategories.join("|") || (kind === "instrument" ? "Instrument" : "Fx"),
+        categories: categories.length > 0 ? categories : defaultPluginCategories(kind),
         kind,
         architecture: process.arch,
         supportedAudioModes: ["stereo"],
@@ -285,6 +284,8 @@ interface ProbeOutput {
       name?: string
       vendor?: string
       version?: string
+      categories?: string[]
+      /** @deprecated Probe payloads before categories[]; accepted for transition. */
       category?: string
       initialized?: boolean
       sample32?: boolean
@@ -333,8 +334,9 @@ export function descriptorFromProbe(
 ): PluginDescriptor | null {
   const classId = textValue(value.classId)
   if (!classId) return null
-  const category = textValue(value.category)
-  const kind = /instrument|synth/i.test(category) ? "instrument" : "effect"
+  const categories = parsePluginCategories(value.categories ?? value.category)
+  const kind = pluginLooksLikeInstrument(categories) ? "instrument" : "effect"
+  const resolvedCategories = categories.length > 0 ? categories : defaultPluginCategories(kind)
   const probedModes = (value.supportedAudioModes ?? []).filter(isPluginAudioMode)
   const nativeModes = probedModes.filter((mode) =>
     kind === "instrument" ? mode === "mono" || mode === "stereo" : mode !== "dual-mono"
@@ -379,7 +381,7 @@ export function descriptorFromProbe(
     name: textValue(value.name, basename(bundlePath).replace(/\.vst3$/i, "")),
     vendor: textValue(value.vendor, factoryVendor || "Unknown vendor"),
     version: textValue(value.version),
-    category: category || (kind === "instrument" ? "Instrument" : "Fx"),
+    categories: resolvedCategories,
     kind,
     architecture: process.arch,
     buses: busesForMode(kind, preferredMode),
@@ -479,7 +481,7 @@ export class PluginCatalogService {
           name: spec.name,
           vendor: "YADAW",
           version: "",
-          category: spec.kind === "instrument" ? "Instrument|Synth" : "Fx",
+          categories: defaultPluginCategories(spec.kind),
           kind: spec.kind,
           architecture: process.arch,
           buses: spec.kind === "instrument" ? [outputBus] : [inputBus, outputBus],
@@ -514,7 +516,7 @@ export class PluginCatalogService {
         candidate.modulePath === snapshot.modulePath
       )
     })
-    return descriptor ? structuredClone(descriptor) : snapshot
+    return normalizePluginDescriptor(descriptor ? structuredClone(descriptor) : snapshot)
   }
 
   subscribe(listener: ScanListener): () => void {

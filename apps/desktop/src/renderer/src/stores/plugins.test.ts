@@ -11,7 +11,7 @@ const effectDescriptor: PluginDescriptor = {
   name: "Effect",
   vendor: "YADAW",
   version: "1.0",
-  category: "Fx",
+  categories: ["Fx"],
   kind: "effect",
   architecture: "x86_64",
   buses: [],
@@ -26,7 +26,7 @@ const instrumentDescriptor: PluginDescriptor = {
   classId: "instrument",
   modulePath: "instrument.vst3",
   name: "Instrument",
-  category: "Instrument",
+  categories: ["Instrument"],
   kind: "instrument",
   supportedAudioModes: ["mono", "stereo"]
 }
