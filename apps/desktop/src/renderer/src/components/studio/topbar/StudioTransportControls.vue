@@ -13,6 +13,7 @@ import {
   SkipBack
 } from "@lucide/vue"
 import StudioControlButton from "./StudioControlButton.vue"
+import StudioMidiSyncStatus from "./StudioMidiSyncStatus.vue"
 
 const props = defineProps<{
   engineRunning: boolean
@@ -85,6 +86,7 @@ const playTooltip = computed(() =>
     <StudioControlButton :label="t('studio.transport.cycle')" unavailable compact-hidden>
       <Repeat2 :size="15" />
     </StudioControlButton>
+    <StudioMidiSyncStatus />
   </div>
 </template>
 

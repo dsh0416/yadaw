@@ -28,7 +28,12 @@ import type {
   TransportCommand,
   TransportSnapshot
 } from "./mixer"
-import type { MidiImportPlan, MidiImportPreview } from "./midi"
+import type {
+  MidiImportPlan,
+  MidiImportPreview,
+  MidiInputSnapshot,
+  MidiSyncPreferences
+} from "./midi"
 import type { OperationEvent } from "./operations"
 import type {
   PluginCatalogSnapshot,
@@ -115,6 +120,9 @@ export const IPC_CHANNELS = {
   pluginParameterSet: "plugin-parameter:set",
   midiImportPrepare: "midi-import:prepare",
   midiImportCommit: "midi-import:commit",
+  midiInputSnapshot: "midi-input:snapshot",
+  midiInputEvent: "midi-input:event",
+  midiInputConfigure: "midi-input:configure",
   operationCancel: "operation:cancel",
   operationEvent: "operation:event"
 } as const
@@ -180,6 +188,9 @@ export interface YadawDesktopApi {
   setPluginParameter(request: PluginParameterChange): Promise<void>
   prepareMidiImport(path?: string): Promise<MidiImportPreview | null>
   commitMidiImport(plan: MidiImportPlan): Promise<ProjectCommandResult>
+  midiInputSnapshot(): Promise<MidiInputSnapshot>
+  subscribeMidiInput(listener: (snapshot: MidiInputSnapshot) => void): () => void
+  configureMidiInput(preferences: MidiSyncPreferences): Promise<MidiInputSnapshot>
   subscribeOperations(listener: (event: OperationEvent) => void): () => void
   cancelOperation(id: string): Promise<void>
 }

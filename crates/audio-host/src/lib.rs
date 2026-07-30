@@ -6,6 +6,8 @@ pub mod device;
 pub mod editor_platform;
 pub mod editor_window;
 pub mod engine;
+pub mod midi_input;
+pub mod midi_journal;
 pub mod recording;
 pub mod vst3;
 pub mod workers;

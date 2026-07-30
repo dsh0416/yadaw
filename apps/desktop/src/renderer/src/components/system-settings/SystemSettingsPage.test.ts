@@ -47,6 +47,29 @@ function mountPage() {
       resolvedAudioHostRuntime: null,
       audioHostRuntimeApplying: false,
       audioHostRuntimeError: "",
+      midiPreferences: {
+        enabled: false,
+        sourcePortId: null,
+        sourcePortName: null,
+        inputOffsetsMs: {}
+      },
+      midiSnapshot: {
+        ports: [],
+        sync: {
+          state: "internal",
+          sourcePortId: null,
+          sourcePortName: null,
+          effectiveBpm: null,
+          jitterMicroseconds: null,
+          lastClockAgeMs: null,
+          droppedEvents: 0,
+          ignoredSystemMessages: 0,
+          error: null
+        },
+        capturedAt: 0
+      },
+      midiApplying: false,
+      midiError: "",
       backLabel: "Back to studio"
     },
     global: {
@@ -61,6 +84,7 @@ function mountPage() {
           template: "<section><h2>Runtime scheduling</h2></section>"
         },
         RecordingSettings: true,
+        MidiInputSettings: true,
         DisplaySettings: true,
         MixerDisplaySettings: true
       }

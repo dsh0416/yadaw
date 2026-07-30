@@ -6,6 +6,7 @@ import type {
   AudioHostRuntimePreferences,
   AudioBackend,
   AudioPreferences,
+  MidiSyncPreferences,
   RoundTripLatencyMeasurementRequest,
   CreateProjectRequest,
   ProcessGainRequest,
@@ -86,6 +87,15 @@ const api: YadawDesktopApi = {
     ipcRenderer.invoke(IPC_CHANNELS.settingsSetSoftwareMonitoring, enabled),
   configureAudioHostRuntime: (preferences: AudioHostRuntimePreferences) =>
     ipcRenderer.invoke(IPC_CHANNELS.settingsConfigureAudioHostRuntime, preferences),
+  midiInputSnapshot: () => ipcRenderer.invoke(IPC_CHANNELS.midiInputSnapshot),
+  subscribeMidiInput: (listener) => {
+    const handler = (_event: Electron.IpcRendererEvent, snapshot: Parameters<typeof listener>[0]) =>
+      listener(snapshot)
+    ipcRenderer.on(IPC_CHANNELS.midiInputEvent, handler)
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.midiInputEvent, handler)
+  },
+  configureMidiInput: (preferences: MidiSyncPreferences) =>
+    ipcRenderer.invoke(IPC_CHANNELS.midiInputConfigure, preferences),
   chooseSwapDirectory: () => ipcRenderer.invoke(IPC_CHANNELS.settingsChooseSwap),
   openSwapDirectory: () => ipcRenderer.invoke(IPC_CHANNELS.settingsOpenSwap),
   startRecording: () => ipcRenderer.invoke(IPC_CHANNELS.recordingStart),

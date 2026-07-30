@@ -102,13 +102,9 @@ export class RecordingService {
     }
     const applicationSettings = await this.settings.get()
     const graph = await this.mixer.snapshot()
-    const armed = graph.channels.filter(
+    const targets = graph.channels.filter(
       (channel) => channel.kind === "audio" && channel.recordArmed
     )
-    const targets =
-      armed.length > 0
-        ? armed
-        : graph.channels.filter((channel) => channel.kind === "audio").slice(0, 1)
     if (targets.length === 0) throw new Error("Arm an audio track before recording")
     await mkdir(applicationSettings.swapDirectory, { recursive: true })
     const id = randomUUID()

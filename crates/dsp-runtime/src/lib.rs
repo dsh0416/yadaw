@@ -2,6 +2,7 @@
 
 pub mod block;
 pub mod midi;
+pub mod midi_input;
 pub mod protocol;
 pub mod tempo;
 

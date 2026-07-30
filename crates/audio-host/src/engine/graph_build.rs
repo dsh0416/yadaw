@@ -72,6 +72,23 @@ fn build_mixer_runtime(
             }
         })
         .collect::<Vec<_>>();
+    let live_midi_routes = native
+        .channels
+        .iter()
+        .map(|channel| {
+            if channel.kind != "instrument" || channel.system_role.is_some() {
+                return None;
+            }
+            Some(LiveMidiRoute {
+                port_key: channel
+                    .midi_input_port_id
+                    .as_deref()
+                    .map(crate::midi_input::stable_port_key),
+                channel: channel.midi_input_channel,
+                monitoring: channel.input_monitoring,
+            })
+        })
+        .collect::<Vec<_>>();
     let channels = native
         .channels
         .iter()
@@ -343,6 +360,7 @@ fn build_mixer_runtime(
 
     let mut midi_events = Vec::new();
     let mut next_note_id = 1_i32;
+    let mut midi_event_data = Vec::new();
     for clip in native.midi_clips {
         let channel_index = clip.channel_index as usize;
         if channels
@@ -377,25 +395,70 @@ fn build_mixer_runtime(
             midi_events.push(ScheduledMidiEvent {
                 frame: start_frame,
                 channel_index,
-                note_id: next_note_id,
                 channel: note.channel,
-                key: note.key,
-                velocity: note.velocity,
-                note_on: true,
+                kind: ScheduledMidiEventKind::NoteOn {
+                    note_id: next_note_id,
+                    key: note.key,
+                    velocity: note.velocity,
+                },
             });
             midi_events.push(ScheduledMidiEvent {
                 frame: end_frame,
                 channel_index,
-                note_id: next_note_id,
                 channel: note.channel,
-                key: note.key,
-                velocity: note.release_velocity,
-                note_on: false,
+                kind: ScheduledMidiEventKind::NoteOff {
+                    note_id: next_note_id,
+                    key: note.key,
+                    velocity: note.release_velocity,
+                },
             });
             next_note_id = next_note_id.saturating_add(1);
         }
+        for event in clip.events {
+            if event.tick < clip.source_offset_ticks || event.tick >= clip_source_end {
+                continue;
+            }
+            let project_tick = clip
+                .start_tick
+                .saturating_add(event.tick - clip.source_offset_ticks);
+            let frame = tempo_map
+                .tick_to_frame(project_tick, native.sample_rate)
+                .map_err(|error| invalid_config(error.to_string()))?;
+            content_end_frame = content_end_frame.max(frame);
+            let kind = match event.kind {
+                NativeMidiEventKind::ControlChange { controller, value } => {
+                    ScheduledMidiEventKind::ControlChange { controller, value }
+                }
+                NativeMidiEventKind::PitchBend { value } => {
+                    ScheduledMidiEventKind::PitchBend { value }
+                }
+                NativeMidiEventKind::ProgramChange { program } => {
+                    ScheduledMidiEventKind::ProgramChange { program }
+                }
+                NativeMidiEventKind::ChannelPressure { pressure } => {
+                    ScheduledMidiEventKind::ChannelPressure { pressure }
+                }
+                NativeMidiEventKind::PolyPressure { key, pressure } => {
+                    ScheduledMidiEventKind::PolyPressure { key, pressure }
+                }
+                NativeMidiEventKind::SysEx { data } => {
+                    let offset = u32::try_from(midi_event_data.len())
+                        .map_err(|_| invalid_config("MIDI event data exceeds 4 GiB"))?;
+                    let length = u32::try_from(data.len())
+                        .map_err(|_| invalid_config("SysEx event exceeds 4 GiB"))?;
+                    midi_event_data.extend_from_slice(&data);
+                    ScheduledMidiEventKind::SysEx { offset, length }
+                }
+            };
+            midi_events.push(ScheduledMidiEvent {
+                frame,
+                channel_index,
+                channel: event.channel,
+                kind,
+            });
+        }
     }
-    midi_events.sort_by_key(|event| (event.frame, event.note_on, event.note_id));
+    midi_events.sort_by_key(|event| (event.frame, event.kind.sort_rank()));
     let tail_end_frame =
         (!has_infinite_tail).then_some(content_end_frame.saturating_add(maximum_tail));
     let active_notes = vec![false; next_note_id as usize];
@@ -424,8 +487,15 @@ fn build_mixer_runtime(
         channel_input_widths,
         plugins_by_channel,
         midi_events,
+        midi_event_data,
         midi_cursor: 0,
         active_notes,
+        live_midi_routes,
+        live_midi_events: Vec::with_capacity(
+            yadaw_dsp_runtime::midi_input::MIDI_SHORT_QUEUE_CAPACITY,
+        ),
+        live_notes: vec![false; channels.len().saturating_mul(16 * 128)],
+        live_sysex_scratch: vec![0; yadaw_dsp_runtime::midi_input::MIDI_MAX_SYSEX_BYTES],
         metronome,
         tempo_map,
         graph,

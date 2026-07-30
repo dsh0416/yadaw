@@ -1,5 +1,6 @@
 mod audio;
 mod graph;
+mod midi_input;
 mod plugin;
 mod recording;
 mod transport;
@@ -7,6 +8,7 @@ mod wire;
 
 pub use audio::*;
 pub use graph::*;
+pub use midi_input::*;
 pub use plugin::*;
 pub use recording::*;
 pub use transport::*;
@@ -43,6 +45,9 @@ pub enum HostEvent {
     PluginEditorPreferenceChanged {
         class_id: String,
         preference: PluginEditorPreference,
+    },
+    MidiInputSnapshot {
+        snapshot: MidiInputSnapshot,
     },
 }
 
@@ -142,6 +147,10 @@ pub enum ControlCommand {
         command: TransportControl,
     },
     TransportSnapshot,
+    MidiInputSnapshot,
+    ConfigureMidiInput {
+        preferences: MidiSyncPreferences,
+    },
     StartRecording {
         config: RecordingStartConfig,
     },
@@ -233,6 +242,9 @@ pub enum ControlResult {
     },
     TransportSnapshot {
         transport: TransportState,
+    },
+    MidiInputSnapshot {
+        midi_input: MidiInputSnapshot,
     },
     RecordingStopped {
         recording: RecordingResult,
@@ -465,6 +477,9 @@ mod tests {
             output_bus: None,
             record_armed: false,
             input_monitoring: false,
+            midi_input_port_id: None,
+            midi_input_port_name: None,
+            midi_input_channel: None,
             input_source: None,
             input_channels: vec![],
             hardware_output_channels: vec![0, 1],
@@ -498,6 +513,9 @@ mod tests {
             output_bus: None,
             record_armed: false,
             input_monitoring: false,
+            midi_input_port_id: None,
+            midi_input_port_name: None,
+            midi_input_channel: None,
             input_source: Some("hardware".into()),
             input_channels: vec![],
             hardware_output_channels: vec![],

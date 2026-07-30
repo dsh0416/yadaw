@@ -17,6 +17,7 @@ iced_tiny_skia.workspace = true
 iced_widget.workspace = true
 iced_winit.workspace = true
 ipc-channel.workspace = true
+midir.workspace = true
 raw-window-handle.workspace = true
 ringbuf.workspace = true
 rubato.workspace = true

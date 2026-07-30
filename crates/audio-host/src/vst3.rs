@@ -151,6 +151,62 @@ impl Vst3ProcessorHandle {
             note_id,
         )
     }
+
+    pub fn poly_pressure(
+        &mut self,
+        sample_offset: usize,
+        channel: u8,
+        key: u8,
+        pressure: u8,
+    ) -> bool {
+        self.primary.poly_pressure(
+            sample_offset.min(i32::MAX as usize) as i32,
+            channel,
+            key,
+            pressure,
+        )
+    }
+
+    pub fn control_change(
+        &mut self,
+        sample_offset: usize,
+        channel: u8,
+        controller: u8,
+        value: u8,
+    ) -> bool {
+        self.primary.control_change(
+            sample_offset.min(i32::MAX as usize) as i32,
+            channel,
+            controller,
+            value,
+        )
+    }
+
+    pub fn pitch_bend(&mut self, sample_offset: usize, channel: u8, value: u16) -> bool {
+        self.primary
+            .pitch_bend(sample_offset.min(i32::MAX as usize) as i32, channel, value)
+    }
+
+    pub fn channel_pressure(&mut self, sample_offset: usize, channel: u8, pressure: u8) -> bool {
+        self.primary.channel_pressure(
+            sample_offset.min(i32::MAX as usize) as i32,
+            channel,
+            pressure,
+        )
+    }
+
+    pub fn program_change(&mut self, sample_offset: usize, channel: u8, program: u8) -> bool {
+        self.primary.program_change(
+            sample_offset.min(i32::MAX as usize) as i32,
+            channel,
+            program,
+        )
+    }
+
+    pub fn sysex(&mut self, sample_offset: usize, bytes: &[u8]) -> bool {
+        self.primary
+            .sysex(sample_offset.min(i32::MAX as usize) as i32, bytes)
+    }
 }
 
 pub struct Vst3Runtime {

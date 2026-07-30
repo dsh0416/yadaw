@@ -21,6 +21,7 @@ export interface ControlResponse {
       | "mixer-snapshot"
       | "compiled-graph-snapshot"
       | "transport-snapshot"
+      | "midi-input-snapshot"
       | "recording-stopped"
       | "recording-waveform"
       | "plugin-loaded"
@@ -89,6 +90,7 @@ export interface ControlResponse {
       }>
     } | null
     transport?: AudioHostTransport
+    midi_input?: AudioHostMidiInputSnapshot
     recording?: AudioHostRecordingResultWire
     waveform?: AudioHostWaveformWire
   }
@@ -178,7 +180,33 @@ export type BinaryPayloadWire =
 export interface AudioHostTransport {
   state: string
   position_frames: number
+  position_ticks: number
   sample_rate: number
+  effective_bpm: number | null
+  clock_source: string
+  waiting_for: string | null
+}
+
+export interface AudioHostMidiInputRoute {
+  port_id: string | null
+  port_name: string | null
+  channel: number | null
+}
+
+export interface AudioHostMidiInputSnapshot {
+  ports: Array<{ id: string; name: string; connected: boolean }>
+  sync: {
+    state: string
+    source_port_id: string | null
+    source_port_name: string | null
+    effective_bpm: number | null
+    jitter_microseconds: number
+    last_clock_age_ms: number | null
+    dropped_events: number
+    ignored_system_messages: number
+    error: string | null
+  }
+  captured_at: number
 }
 
 export interface PriorityResponse {
@@ -384,6 +412,9 @@ export interface AudioHostGraph {
     output_bus?: number
     record_armed: boolean
     input_monitoring: boolean
+    midi_input_port_id?: string
+    midi_input_port_name?: string
+    midi_input_channel?: number
     input_source?: "hardware" | "bus"
     input_channels: number[]
     hardware_output_channels: number[]

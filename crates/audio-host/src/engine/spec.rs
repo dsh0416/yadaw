@@ -55,6 +55,8 @@ pub struct NativeMixerChannel {
     pub input_source: Option<String>,
     pub input_channels: Vec<u32>,
     pub hardware_output_channels: Vec<u32>,
+    pub midi_input_port_id: Option<String>,
+    pub midi_input_channel: Option<u8>,
 }
 
 #[derive(Clone)]
@@ -102,6 +104,23 @@ pub struct NativeMidiNote {
 }
 
 #[derive(Clone)]
+pub enum NativeMidiEventKind {
+    ControlChange { controller: u8, value: u8 },
+    PitchBend { value: u16 },
+    ProgramChange { program: u8 },
+    ChannelPressure { pressure: u8 },
+    PolyPressure { key: u8, pressure: u8 },
+    SysEx { data: Vec<u8> },
+}
+
+#[derive(Clone)]
+pub struct NativeMidiEvent {
+    pub tick: u64,
+    pub channel: u8,
+    pub kind: NativeMidiEventKind,
+}
+
+#[derive(Clone)]
 pub struct NativeMidiClip {
     pub id: String,
     pub channel_index: u32,
@@ -109,6 +128,7 @@ pub struct NativeMidiClip {
     pub source_offset_ticks: u64,
     pub length_ticks: u64,
     pub notes: Vec<NativeMidiNote>,
+    pub events: Vec<NativeMidiEvent>,
 }
 
 #[derive(Clone)]
@@ -149,5 +169,9 @@ pub struct NativeMixerSnapshot {
 pub struct NativeTransportSnapshot {
     pub state: String,
     pub position_frames: i64,
+    pub position_ticks: i64,
     pub sample_rate: u32,
+    pub effective_bpm: Option<f64>,
+    pub clock_source: String,
+    pub waiting_for: Option<String>,
 }

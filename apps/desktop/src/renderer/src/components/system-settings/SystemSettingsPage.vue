@@ -6,6 +6,8 @@ import type {
   AudioHostRuntimePreferences,
   AudioPreferences,
   AudioRuntimeSnapshot,
+  MidiInputSnapshot,
+  MidiSyncPreferences,
   ResolvedAudioHostRuntimePreferences
 } from "@yadaw/contracts"
 import SettingsContainer from "../settings/SettingsContainer.vue"
@@ -15,10 +17,17 @@ import AudioRuntimeSettings from "./AudioRuntimeSettings.vue"
 import DisplaySettings from "./DisplaySettings.vue"
 import MidiSettings from "./MidiSettings.vue"
 import MixerDisplaySettings from "./MixerDisplaySettings.vue"
+import MidiInputSettings from "./MidiInputSettings.vue"
 import RecordingSettings from "./RecordingSettings.vue"
 
 type SystemSettingsPageId =
-  "engine" | "devices" | "recording" | "midi-general" | "display-general" | "display-mixer"
+  | "engine"
+  | "devices"
+  | "recording"
+  | "midi-general"
+  | "midi-input"
+  | "display-general"
+  | "display-mixer"
 
 const { t } = useI18n()
 
@@ -31,6 +40,10 @@ const props = defineProps<{
   resolvedAudioHostRuntime: ResolvedAudioHostRuntimePreferences | null
   audioHostRuntimeApplying: boolean
   audioHostRuntimeError: string
+  midiPreferences: MidiSyncPreferences
+  midiSnapshot: MidiInputSnapshot
+  midiApplying: boolean
+  midiError: string
   backLabel: string
 }>()
 
@@ -38,6 +51,7 @@ const emit = defineEmits<{
   close: []
   applyAudio: [preferences: AudioPreferences]
   configureRuntime: [preferences: AudioHostRuntimePreferences]
+  configureMidi: [preferences: MidiSyncPreferences]
 }>()
 
 const categories = computed<readonly SettingsCategory[]>(() => [
@@ -85,6 +99,12 @@ const categories = computed<readonly SettingsCategory[]>(() => [
         id: "midi-general",
         label: t("settings.system.pages.midiGeneral.label"),
         description: t("settings.system.pages.midiGeneral.description"),
+        icon: Music2
+      },
+      {
+        id: "midi-input",
+        label: "Input & sync",
+        description: "Ports, timing and MIDI Clock",
         icon: Music2
       }
     ]
@@ -202,6 +222,14 @@ function applyAudio(): void {
     />
     <RecordingSettings v-else-if="activePage === 'recording'" />
     <MidiSettings v-else-if="activePage === 'midi-general'" />
+    <MidiInputSettings
+      v-else-if="activePage === 'midi-input'"
+      :preferences="midiPreferences"
+      :snapshot="midiSnapshot"
+      :applying="midiApplying"
+      :error="midiError"
+      @apply="emit('configureMidi', $event)"
+    />
     <DisplaySettings v-else-if="activePage === 'display-general'" />
     <MixerDisplaySettings v-else-if="activePage === 'display-mixer'" />
   </SettingsContainer>

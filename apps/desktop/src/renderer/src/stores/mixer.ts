@@ -283,6 +283,7 @@ export const useMixerStore = defineStore("mixer", () => {
       sortOrder: index,
       inputSource: null,
       inputFormat: null,
+      midiInput: { portId: null, portName: null, channel: null },
       gainDb: 0,
       pan: 0,
       muted: false,
@@ -290,7 +291,7 @@ export const useMixerStore = defineStore("mixer", () => {
       outputChannelId: defaultOutput?.id ?? null,
       outputBus: null,
       recordArmed: false,
-      inputMonitoring: false,
+      inputMonitoring: true,
       inputChannels: [],
       hardwareOutputChannels: []
     }

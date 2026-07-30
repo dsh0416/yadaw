@@ -1,12 +1,18 @@
 <script setup lang="ts">
+import { computed } from "vue"
 import { useI18n } from "vue-i18n"
 import type { MixerChannelPatch, MixerChannelState } from "@yadaw/contracts"
 
-defineProps<{
+const props = defineProps<{
   channel: MixerChannelState
   monitoringAvailable: boolean
   monitoringActive: boolean
 }>()
+const supportsRecording = computed(
+  () =>
+    props.channel.kind === "audio" ||
+    (props.channel.kind === "instrument" && props.channel.systemRole === null)
+)
 
 const emit = defineEmits<{
   updateChannel: [patch: MixerChannelPatch]
@@ -16,9 +22,9 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <div :class="['channel-actions', { 'has-input': channel.kind === 'audio' }]">
+  <div :class="['channel-actions', { 'has-input': supportsRecording }]">
     <div class="input-actions">
-      <template v-if="channel.kind === 'audio'">
+      <template v-if="supportsRecording">
         <button
           :class="['record', { active: channel.recordArmed }]"
           :aria-pressed="channel.recordArmed"

@@ -19,16 +19,12 @@ export const useStudioWorkflowStore = defineStore("studio-workflow", () => {
 
   async function startRecording(): Promise<boolean> {
     if (recordingStore.lifecycle.status !== "idle") return false
-    if (mixerStore.audioTracks.length === 0) {
-      if (!(await mixerStore.createAudioTrack("stereo"))) return false
-    }
-    if (!mixerStore.audioTracks.some((track) => track.recordArmed)) {
-      const target =
-        mixerStore.audioTracks.find((track) => track.id === mixerStore.selectedChannelId) ??
-        mixerStore.audioTracks[0]
-      if (target && !(await mixerStore.updateChannel(target.id, { recordArmed: true })))
-        return false
-    }
+    const hasArmedRecordTarget = mixerStore.channels.some(
+      (track) =>
+        track.recordArmed &&
+        (track.kind === "audio" || (track.kind === "instrument" && track.systemRole === null))
+    )
+    if (!hasArmedRecordTarget) return false
     return Boolean(await recordingStore.start())
   }
 
@@ -40,6 +36,10 @@ export const useStudioWorkflowStore = defineStore("studio-workflow", () => {
 
     await projectStore.refreshAssets()
     if (completed.recordedTracks.length > 0) {
+      const startFrame = completed.startFrame ?? session.startFrame
+      if (startFrame === null || startFrame === undefined) {
+        throw new Error("Completed audio recording is missing its transport start frame")
+      }
       await mixerStore.execute({
         type: "batch",
         commands: completed.recordedTracks.map((asset) => ({
@@ -49,7 +49,7 @@ export const useStudioWorkflowStore = defineStore("studio-workflow", () => {
             assetId: asset.assetId,
             trackId: asset.trackId,
             name: asset.name,
-            startFrame: session.startFrame,
+            startFrame,
             sourceOffsetFrames: 0,
             lengthFrames: Math.max(
               1,

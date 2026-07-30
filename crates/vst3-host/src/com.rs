@@ -6,7 +6,7 @@ use yadaw_vst3_host_sys::{
         IPluginFactory, IPluginFactory2, IPluginFactory3, TUID,
         Vst::{
             IAudioProcessor, IComponent, IComponentHandler, IConnectionPoint, IEditController,
-            IEventList, IHostApplication, IParamValueQueue, IParameterChanges,
+            IEventList, IHostApplication, IMidiMapping, IParamValueQueue, IParameterChanges,
         },
     },
     abi::FUnknownVTable,
@@ -47,6 +47,7 @@ interface!(IHostApplication, iid::IHOST_APPLICATION);
 interface!(IComponent, iid::ICOMPONENT);
 interface!(IAudioProcessor, iid::IAUDIO_PROCESSOR);
 interface!(IEditController, iid::IEDIT_CONTROLLER);
+interface!(IMidiMapping, iid::IMIDI_MAPPING);
 interface!(IComponentHandler, iid::ICOMPONENT_HANDLER);
 interface!(IEventList, iid::IEVENT_LIST);
 interface!(IParameterChanges, iid::IPARAMETER_CHANGES);

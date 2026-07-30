@@ -306,7 +306,15 @@ export class AudioHostTransportClient {
   async transportSnapshot(): Promise<TransportSnapshot> {
     const telemetry = this.readTelemetry()
     return this.rememberTransport({
-      state: telemetry[3] === 1 ? "playing" : telemetry[3] === 2 ? "recording" : "stopped",
+      ...this.lastTransport,
+      state:
+        telemetry[3] === 1
+          ? "playing"
+          : telemetry[3] === 2
+            ? "recording"
+            : telemetry[3] === 3
+              ? "waiting"
+              : "stopped",
       positionFrames: telemetry[4],
       sampleRate: telemetry[5]
     })
@@ -318,9 +326,17 @@ export class AudioHostTransportClient {
       throw new Error("audio host returned an invalid transport snapshot")
     }
     return {
-      state: value.state === "playing" || value.state === "recording" ? value.state : "stopped",
+      state:
+        value.state === "waiting" || value.state === "playing" || value.state === "recording"
+          ? value.state
+          : "stopped",
       positionFrames: value.position_frames,
-      sampleRate: value.sample_rate
+      positionTicks: value.position_ticks,
+      sampleRate: value.sample_rate,
+      effectiveBpm: value.effective_bpm ?? undefined,
+      clockSource: value.clock_source === "external" ? "external" : "internal",
+      waitingFor:
+        value.waiting_for === "play" || value.waiting_for === "record" ? value.waiting_for : null
     }
   }
 

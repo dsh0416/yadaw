@@ -26,11 +26,17 @@ const emit = defineEmits<{
 
 const settingsStore = useApplicationSettingsStore()
 const { settings } = storeToRefs(settingsStore)
+const supportsRecording = computed(
+  () =>
+    props.channel.kind === "audio" ||
+    (props.channel.kind === "instrument" && props.channel.systemRole === null)
+)
 const monitoringAvailable = computed(
   () =>
-    settings.value?.softwareMonitoringEnabled === true &&
-    props.channel.kind === "audio" &&
-    props.channel.inputSource === "hardware"
+    (props.channel.kind === "instrument" && props.channel.systemRole === null) ||
+    (settings.value?.softwareMonitoringEnabled === true &&
+      props.channel.kind === "audio" &&
+      props.channel.inputSource === "hardware")
 )
 const monitoringActive = computed(() => monitoringAvailable.value && props.channel.inputMonitoring)
 
@@ -68,6 +74,7 @@ function preview(parameter: "gainDb" | "pan", value: number): void {
       S
     </button>
     <button
+      v-if="supportsRecording"
       :class="['record', { active: channel.recordArmed }]"
       :aria-pressed="channel.recordArmed"
       :aria-label="t('studio.trackControls.armAria', { name: channel.name })"
@@ -77,6 +84,7 @@ function preview(parameter: "gainDb" | "pan", value: number): void {
       R
     </button>
     <button
+      v-if="supportsRecording"
       :class="['monitor', { active: monitoringActive }]"
       :aria-label="t('studio.trackControls.monitorAria', { name: channel.name })"
       :aria-pressed="channel.inputMonitoring"

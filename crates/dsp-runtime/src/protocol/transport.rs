@@ -64,9 +64,21 @@ pub struct TransportControl {
     pub position_frames: Option<i64>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TransportState {
     pub state: String,
     pub position_frames: i64,
+    #[serde(default)]
+    pub position_ticks: i64,
     pub sample_rate: u32,
+    #[serde(default)]
+    pub effective_bpm: Option<f64>,
+    #[serde(default = "internal_clock_source")]
+    pub clock_source: String,
+    #[serde(default)]
+    pub waiting_for: Option<String>,
+}
+
+fn internal_clock_source() -> String {
+    "internal".to_owned()
 }

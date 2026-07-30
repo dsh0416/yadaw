@@ -2,8 +2,12 @@ export interface RecordingSession {
   id: string
   startedAt: number
   swapPath: string
-  startFrame: number
+  startFrame: number | null
+  startTick?: number | null
   trackIds: string[]
+  audioTrackIds?: string[]
+  midiTrackIds?: string[]
+  waitingForSync?: boolean
 }
 
 export type RecordingLifecycleState =
@@ -25,6 +29,15 @@ export interface RecordedTrackAsset {
   frameCount: number
 }
 
+export interface PendingMidiTake {
+  trackId: string
+  sourceId: string
+  clipId: string
+  journalPath: string
+  eventCount: number
+  droppedEvents: number
+}
+
 export interface PendingRecording {
   id: string
   state: PendingRecordingState
@@ -34,7 +47,10 @@ export interface PendingRecording {
   sampleRate: number
   channels: number
   startedAt: number
+  startFrame?: number | null
+  startTick?: number | null
   dropoutFrames: number
   assetExists: boolean
   recordedTracks: RecordedTrackAsset[]
+  midiTakes?: PendingMidiTake[]
 }

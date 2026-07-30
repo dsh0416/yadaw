@@ -176,10 +176,15 @@ export class MixerService {
         soloed: channel.soloed,
         record_armed: channel.recordArmed,
         input_monitoring:
-          softwareMonitoringEnabled &&
-          channel.kind === "audio" &&
-          channel.inputMonitoring &&
-          channel.inputSource === "hardware",
+          channel.kind === "instrument" && channel.systemRole === null
+            ? channel.inputMonitoring
+            : softwareMonitoringEnabled &&
+              channel.kind === "audio" &&
+              channel.inputMonitoring &&
+              channel.inputSource === "hardware",
+        midi_input_port_id: channel.midiInput?.portId ?? undefined,
+        midi_input_port_name: channel.midiInput?.portName ?? undefined,
+        midi_input_channel: channel.midiInput?.channel ?? undefined,
         input_source: channel.inputSource ?? undefined,
         input_channels: channel.inputChannels,
         hardware_output_channels: channel.hardwareOutputChannels,

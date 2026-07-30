@@ -390,6 +390,7 @@ where
     let callback_metrics = Arc::clone(&metrics);
     let error_metrics = Arc::clone(&metrics);
     let mut round_trip_probe = RoundTripOutputProbe::new(round_trip_latency);
+    let mut realtime_midi = crate::midi_input::realtime_consumer();
     let mut render_inputs = vec![[0.0; MAX_INPUT_CHANNELS]; MAX_PLUGIN_BLOCK_FRAMES];
     let mut device_outputs =
         vec![[0.0; MAX_OUTPUT_CHANNELS]; MAX_PLUGIN_BLOCK_FRAMES];
@@ -403,6 +404,17 @@ where
                 callback_metrics.output_latency_us.store(
                     duration_to_micros(timestamp.playback.duration_since(timestamp.callback)),
                     Ordering::Relaxed,
+                );
+                let output_latency = callback_metrics.output_latency_us.load(Ordering::Relaxed);
+                realtime_midi.set_presentation_latency_micros(
+                    callback_metrics
+                        .engine_latency_us
+                        .load(Ordering::Relaxed)
+                        .saturating_add(if output_latency != UNKNOWN_LATENCY_US {
+                            output_latency
+                        } else {
+                            0
+                        }),
                 );
 
                 while let Some(command) = commands.try_pop() {
@@ -454,6 +466,7 @@ where
                                 runtime.render_block(
                                     &render_inputs[..session_outputs.len()],
                                     session_outputs,
+                                    Some(&mut realtime_midi),
                                 )
                             } else {
                                 session_outputs.fill([0.0; MAX_OUTPUT_CHANNELS]);

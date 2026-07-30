@@ -1,11 +1,11 @@
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     env,
     io::{self, BufReader, BufWriter},
     path::PathBuf,
     process::ExitCode,
     sync::{
-        Arc, Mutex,
+        Arc, Mutex, OnceLock,
         atomic::{AtomicBool, AtomicU64, Ordering},
         mpsc as std_mpsc,
     },
@@ -32,6 +32,7 @@ use yadaw_audio_host::{
     editor_platform::{self, NativeUiContext},
     editor_window::{EditorAction, EditorWindow},
     engine,
+    midi_input::MidiInputActor,
     recording::{NativeRecordingResult, NativeRecordingStartConfig, NativeWaveformSnapshot},
     vst3,
     workers::WorkerSupervisor,
@@ -62,7 +63,17 @@ include!("runtime/runtime_config.rs");
 include!("runtime/ui_runtime.rs");
 include!("runtime/bootstrap.rs");
 
+static MIDI_INPUT: OnceLock<MidiInputActor> = OnceLock::new();
+
 fn main() -> ExitCode {
+    let _ = MIDI_INPUT.set(MidiInputActor::start(
+        yadaw_dsp_runtime::protocol::MidiSyncPreferences {
+            enabled: false,
+            source_port_id: None,
+            source_port_name: None,
+            input_offsets_ms: BTreeMap::new(),
+        },
+    ));
     let uses_ipc = env::args_os().any(|argument| argument == "--ipc-token");
     let result = if uses_ipc { run_ipc() } else { run_legacy() };
     match result {

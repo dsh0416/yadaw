@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { computed } from "vue"
+import { computed, onMounted, shallowRef, watchEffect } from "vue"
+import { storeToRefs } from "pinia"
 import { useI18n } from "vue-i18n"
 import type {
   MixerChannelPatch,
   MixerChannelState,
+  MidiInputPort,
   PluginDescriptor,
   PluginInstanceState,
   PluginRuntimeStatus
@@ -11,6 +13,8 @@ import type {
 import type { PluginSelection } from "../plugins/plugin-audio-mode"
 import MixerInputCapsule from "./MixerInputCapsule.vue"
 import MixerInstrumentInput from "./MixerInstrumentInput.vue"
+import MixerMidiInputCapsule from "./MixerMidiInputCapsule.vue"
+import { useMidiInputStore } from "../../stores/midiInput"
 
 const props = defineProps<{
   channel: MixerChannelState
@@ -27,6 +31,15 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const midiPorts = shallowRef<MidiInputPort[]>([])
+if (props.channel.kind === "instrument" && props.channel.systemRole === null) {
+  const midiInputStore = useMidiInputStore()
+  const { snapshot } = storeToRefs(midiInputStore)
+  watchEffect(() => {
+    midiPorts.value = snapshot.value.ports
+  })
+  onMounted(() => void midiInputStore.load())
+}
 
 const inputSummary = computed(() => {
   if (props.channel.kind === "master") return t("mixer.inputSection.global")
@@ -36,8 +49,26 @@ const inputSummary = computed(() => {
 
 <template>
   <section class="strip-section input-section" data-section="input">
+    <div
+      v-if="channel.kind === 'instrument' && channel.systemRole === null"
+      class="instrument-stack"
+    >
+      <MixerMidiInputCapsule
+        :route="channel.midiInput ?? { portId: null, portName: null, channel: null }"
+        :ports="midiPorts"
+        @update="emit('updateChannel', { midiInput: $event })"
+      />
+      <MixerInstrumentInput
+        :instrument="instrument"
+        :runtime="pluginRuntime"
+        :plugins="instrumentPlugins"
+        @open="emit('openPlugin', $event)"
+        @remove="emit('removePlugin', $event)"
+        @assign="emit('assignInstrument', $event)"
+      />
+    </div>
     <MixerInstrumentInput
-      v-if="channel.kind === 'instrument'"
+      v-else-if="channel.kind === 'instrument'"
       :instrument="instrument"
       :runtime="pluginRuntime"
       :plugins="instrumentPlugins"
@@ -67,6 +98,10 @@ const inputSummary = computed(() => {
   padding: 7px;
   border-bottom: 1px solid var(--ui-domain-color-444);
   background: var(--ui-domain-color-595959);
+}
+.instrument-stack {
+  display: grid;
+  gap: 4px;
 }
 .section-control {
   display: flex;
