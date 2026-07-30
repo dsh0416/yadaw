@@ -108,6 +108,26 @@ There is one audio-device namespace. cpal supplies the available hosts, device
 names, stable IDs, and defaults. Chromium `MediaDevices` and Web Audio devices
 must not be mixed into project settings.
 
+## Mock audio backend
+
+Alongside WASAPI, ASIO, CoreAudio, and ALSA, the audio host ships a `mock`
+backend implemented with cpal's custom-host API. Choosing it is the equivalent
+of disabling CoreAudio in Logic Pro: the engine, transport, mixer graph, and
+plug-ins all run, but capture is synthesised and playback is discarded. It
+covers debugging without a driver holding a device open, deterministic
+automated tests, and machines with no usable audio hardware.
+
+Because it is a real cpal host rather than a parallel engine implementation, it
+reaches the engine through the same enumeration, stream building, resampling,
+metering, and recording code paths as the hardware backends. It enumerates a
+duplex device plus dedicated capture and playback devices, all stereo `f32` at
+48 kHz with a 32-to-2048-frame buffer range, and it loops playback back into
+capture so physical-loopback latency measurement behaves as it would with a real
+cable. cpal deliberately hides custom hosts from `available_hosts`, so the
+backend is resolved by name and reported as always available; it is listed last
+so it is only auto-selected when no hardware backend can be reached. Its device
+IDs carry cpal's custom-host prefix, for example `custom:mock-duplex`.
+
 ## Mixer channel and hardware routing
 
 Mixer channels and physical device channels are separate concepts:

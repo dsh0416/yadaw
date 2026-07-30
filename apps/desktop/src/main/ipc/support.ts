@@ -274,9 +274,6 @@ export function validateGainRequest(value: unknown): ProcessGainRequest {
 }
 
 export function validateAudioBackend(value: unknown): AudioBackend {
-  if (process.env.YADAW_TEST_VIRTUAL_AUDIO === "1" && value === "virtual") {
-    return value as AudioBackend
-  }
   if (typeof value !== "string" || !AUDIO_BACKENDS.includes(value as AudioBackend)) {
     throw new TypeError("Unknown audio backend")
   }

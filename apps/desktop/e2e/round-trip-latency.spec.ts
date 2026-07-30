@@ -3,7 +3,7 @@ import { mkdtemp } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 
-test("measures virtual round-trip latency through the desktop boundary", async () => {
+test("measures mock round-trip latency through the desktop boundary", async () => {
   const testRoot = await mkdtemp(join(tmpdir(), "yadaw-loopback-e2e-"))
   const executablePath = process.env.YADAW_E2E_EXECUTABLE
   const application = await electron.launch({
@@ -19,7 +19,7 @@ test("measures virtual round-trip latency through the desktop boundary", async (
       ...process.env,
       YADAW_TEST_USER_DATA: join(testRoot, "user-data"),
       YADAW_TEST_PROJECT_PATH: join(testRoot, "loopback.yadaw"),
-      YADAW_TEST_VIRTUAL_AUDIO: "1"
+      YADAW_TEST_MOCK_AUDIO: "1"
     }
   })
 
@@ -35,9 +35,9 @@ test("measures virtual round-trip latency through the desktop boundary", async (
 
     const runtime = await page.evaluate(() =>
       window.yadaw.startAudioEngine({
-        backend: "virtual",
-        inputDeviceId: "virtual-input",
-        outputDeviceId: "virtual-output",
+        backend: "mock",
+        inputDeviceId: "custom:mock-duplex",
+        outputDeviceId: "custom:mock-duplex",
         bufferSize: 128
       } as Parameters<typeof window.yadaw.startAudioEngine>[0])
     )

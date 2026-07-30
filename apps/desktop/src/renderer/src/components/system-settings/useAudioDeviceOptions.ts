@@ -11,7 +11,7 @@ import type {
 import type { UiRadioOption, UiSelectOption } from "@yadaw/ui"
 import { useAudioPreferencesStore } from "../../stores/audioPreferences"
 
-const BACKEND_IDS: readonly AudioBackend[] = ["wasapi", "asio", "coreaudio", "alsa"]
+const BACKEND_IDS: readonly AudioBackend[] = ["wasapi", "asio", "coreaudio", "alsa", "mock"]
 
 export function useAudioDeviceOptions(
   preferences: Ref<AudioPreferences>,
@@ -25,7 +25,8 @@ export function useAudioDeviceOptions(
     wasapi: false,
     asio: false,
     coreaudio: false,
-    alsa: false
+    alsa: false,
+    mock: false
   })
   function updatePreferences(patch: Partial<AudioPreferences>): void {
     preferences.value = { ...preferences.value, ...patch }

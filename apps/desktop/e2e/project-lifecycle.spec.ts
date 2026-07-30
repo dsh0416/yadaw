@@ -21,7 +21,7 @@ test("records into a Large Object and reopens the PGlite project archive", async
       YADAW_TEST_USER_DATA: join(testRoot, "user-data"),
       YADAW_TEST_PROJECT_PATH: projectPath,
       YADAW_TEST_CAPTURE_SOURCE: "1",
-      YADAW_TEST_VIRTUAL_AUDIO: "1"
+      YADAW_TEST_MOCK_AUDIO: "1"
     }
   })
   application.process().stdout?.on("data", (data) => console.log(`main stdout: ${String(data)}`))
@@ -145,15 +145,15 @@ test("records into a Large Object and reopens the PGlite project archive", async
     await expect(page.getByRole("status")).toContainText("Changes saved")
     await page.getByRole("button", { name: "Back to studio" }).click()
     await expect(page.locator(".studio-shell")).toBeVisible()
-    const virtualRuntime = await page.evaluate(() =>
+    const mockRuntime = await page.evaluate(() =>
       window.yadaw.startAudioEngine({
-        backend: "virtual",
-        inputDeviceId: "virtual-input",
-        outputDeviceId: "virtual-output",
+        backend: "mock",
+        inputDeviceId: "custom:mock-duplex",
+        outputDeviceId: "custom:mock-duplex",
         bufferSize: 256
       } as Parameters<typeof window.yadaw.startAudioEngine>[0])
     )
-    expect(virtualRuntime.state).toBe("running")
+    expect(mockRuntime.state).toBe("running")
 
     const mixerDockToggle = page.getByRole("button", { name: "Mixer", exact: true })
     await expect(mixerDockToggle).toBeVisible()

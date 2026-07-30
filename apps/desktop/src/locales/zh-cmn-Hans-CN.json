@@ -363,6 +363,11 @@
         "label": "ALSA",
         "platform": "Linux",
         "description": "Linux 原生音频设备层"
+      },
+      "mock": {
+        "label": "模拟",
+        "platform": "无硬件",
+        "description": "在没有真实音频设备的情况下运行引擎"
       }
     },
     "audio": {

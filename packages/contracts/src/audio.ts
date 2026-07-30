@@ -1,7 +1,10 @@
 import type { ProjectLifecycleState } from "./project"
 import type { RecordingLifecycleState } from "./recording"
 
-export const AUDIO_BACKENDS = ["wasapi", "asio", "coreaudio", "alsa"] as const
+// "mock" is a cpal custom host that synthesises capture and discards playback.
+// It is always available and is listed last so it is only auto-selected when no
+// hardware backend can be reached.
+export const AUDIO_BACKENDS = ["wasapi", "asio", "coreaudio", "alsa", "mock"] as const
 export type AudioBackend = (typeof AUDIO_BACKENDS)[number]
 
 export interface AudioBackendDescriptor {
