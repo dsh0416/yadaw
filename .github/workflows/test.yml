@@ -71,45 +71,24 @@ jobs:
       - name: Run repository checks
         run: pnpm ${{ matrix.check-script }}
 
-  coverage:
-    name: Coverage
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
-    steps:
-      - name: Check out source
-        uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-
-      - name: Set up build environment
-        uses: ./.github/actions/setup-build
-        with:
-          github-token: >-
-            ${{ github.event_name == 'pull_request' && '' || github.token }}
-          # Instrumented coverage builds must not overwrite the shared
-          # non-coverage Cargo target cache used by Checks.
-          cache-rust-build: "false"
-
-      - name: Build native modules required by unit tests
-        env:
-          # Keep this job's Cargo target separate from instrumented coverage
-          # builds below; sccache is fine for ordinary debug napi builds.
-          CARGO_INCREMENTAL: "0"
-        run: >-
-          pnpm --filter @yadaw/dsp-node build:debug
-          && pnpm --filter @yadaw/audio-host-client build:debug
-
+      # Coverage runs only on Linux after Checks so we reuse the already-built
+      # native modules and toolchain setup instead of a second job. Keep
+      # instrumented Rust output out of the shared Cargo target cache.
       - name: Collect JavaScript coverage
+        if: runner.os == 'Linux'
         run: pnpm test:coverage:js
 
       - name: Collect Rust coverage
+        if: runner.os == 'Linux'
         env:
           # sccache skips or interferes with instrumented coverage builds.
           RUSTC_WRAPPER: ""
           CARGO_INCREMENTAL: "0"
+          CARGO_TARGET_DIR: target-coverage
         run: pnpm test:coverage:rust
 
       - name: Upload JavaScript coverage to Codecov
+        if: runner.os == 'Linux'
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -123,6 +102,7 @@ jobs:
           disable_search: true
 
       - name: Upload Rust coverage to Codecov
+        if: runner.os == 'Linux'
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
