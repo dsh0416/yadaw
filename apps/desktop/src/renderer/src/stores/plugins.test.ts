@@ -111,9 +111,9 @@ describe("plugin store", () => {
     setActivePinia(createPinia())
   })
 
-  it("forces a full re-probe when the user requests a manual rescan", async () => {
+  it("forces lightweight rediscovery when the user requests a manual rescan", async () => {
     const catalog = {
-      scannerVersion: 3,
+      scannerVersion: 5,
       scanning: false,
       scannedAt: 1,
       plugins: [effectDescriptor]

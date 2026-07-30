@@ -1,5 +1,5 @@
 import { app, BrowserWindow, ipcMain } from "electron"
-import { basename, join, resolve } from "node:path"
+import { join, resolve } from "node:path"
 import { IPC_CHANNELS } from "@yadaw/contracts"
 import { ApplicationSettingsStore } from "./application-settings"
 import { AudioHostService } from "./audio-host-service"
@@ -79,72 +79,18 @@ export function startApplication(
         builtinPluginDirectory
       )
       await plugins.initialize()
-
-      let scanTotal = 0
-      let scanWarnings = 0
-      const unsubscribeScan = plugins.subscribe((event) => {
-        if (event.type === "started") {
-          scanTotal = event.total
-          startup.update({
-            phase: "scanning-plugins",
-            progress: 0.16,
-            label: t("startup.scanningPlugins"),
-            detail:
-              event.total === 0
-                ? t("startup.noBundles")
-                : t("startup.foundBundles", { count: event.total }),
-            completed: 0,
-            total: event.total
-          })
-        } else if (event.type === "progress") {
-          const ratio = event.total > 0 ? event.completed / event.total : 1
-          startup.update({
-            phase: "scanning-plugins",
-            progress: 0.18 + ratio * 0.58,
-            label: t("startup.scanningPlugins"),
-            detail: basename(event.path),
-            completed: event.completed,
-            total: event.total
-          })
-        } else if (event.type === "quarantined") {
-          scanWarnings += 1
-          startup.update({
-            detail: t("startup.quarantined", { name: basename(event.path) }),
-            warnings: scanWarnings
-          })
-        } else {
-          startup.update({
-            progress: 0.78,
-            detail: t("startup.pluginsAvailable", { count: event.catalog.plugins.length }),
-            completed: scanTotal,
-            total: scanTotal
-          })
-        }
-      })
+      const cachedPluginCount = plugins.list().plugins.length
       startup.update({
         phase: "scanning-plugins",
-        progress: 0.12,
+        progress: 0.18,
         label: t("startup.discoveringPlugins"),
-        detail: t("startup.discoveringPluginsDetail")
+        detail:
+          cachedPluginCount > 0
+            ? t("startup.pluginsAvailable", { count: cachedPluginCount })
+            : t("startup.discoveringPluginsDetail"),
+        completed: null,
+        total: null
       })
-      try {
-        // Reuse fingerprint-cached descriptors unless bundles changed; still
-        // retry quarantined modules in case a prior probe was a transient failure.
-        await plugins.scan({ retryQuarantined: true })
-      } catch (error) {
-        scanWarnings += 1
-        startup.update({
-          progress: 0.78,
-          detail:
-            error instanceof Error
-              ? t("startup.scanError", { message: error.message })
-              : t("startup.scanUnknownError"),
-          warnings: scanWarnings
-        })
-        console.error("Startup VST3 scan failed:", error)
-      } finally {
-        unsubscribeScan()
-      }
 
       startup.update({
         phase: "starting-audio",
@@ -267,6 +213,12 @@ export function startApplication(
           const splash = splashWindow
           if (splash && !splash.isDestroyed()) splash.close()
         }, 220)
+        // Catalog discovery runs after the workspace is shown. It prefers
+        // moduleinfo.json / soft factory enumeration and never deep-loads
+        // processors, so large plugin libraries do not block startup.
+        void plugins.scan({ retryQuarantined: true }).catch((error: unknown) => {
+          console.error("Background VST3 scan failed:", error)
+        })
       })
       loadMainWindow(window)
       installApplicationMenu()

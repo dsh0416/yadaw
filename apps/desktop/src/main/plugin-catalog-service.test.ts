@@ -3,6 +3,7 @@ import type { PluginDescriptor } from "@yadaw/contracts"
 import {
   canReuseCachedBundle,
   descriptorFromProbe,
+  descriptorsFromModuleInfo,
   parseProbeStdout
 } from "./plugin-catalog-service"
 
@@ -59,6 +60,87 @@ describe("parseProbeStdout", () => {
     expect(
       parseProbeStdout(`[info] initializing...\n${payload}\n`).module?.classes?.[0]?.classId
     ).toBe("1")
+  })
+})
+
+describe("descriptorsFromModuleInfo", () => {
+  it("builds soft catalog entries from moduleinfo without requiring a probe", () => {
+    const descriptors = descriptorsFromModuleInfo("/Library/Audio/Plug-Ins/VST3/Demo.vst3", {
+      Version: "1.2.3",
+      "Factory Info": { Vendor: "Acme" },
+      Classes: [
+        {
+          CID: "ABCDEF0123456789ABCDEF0123456789",
+          Category: "Audio Module Class",
+          Name: "Demo Delay",
+          Vendor: "Acme Audio",
+          Version: "1.2.3",
+          "Sub Categories": ["Fx", "Delay"]
+        },
+        {
+          CID: "FEDCBA9876543210FEDCBA9876543210",
+          Category: "Audio Module Class",
+          Name: "Demo Synth",
+          "Sub Categories": ["Instrument", "Synth"]
+        },
+        {
+          CID: "ignored",
+          Category: "Service Class",
+          Name: "Helper"
+        }
+      ]
+    })
+
+    expect(descriptors).toHaveLength(2)
+    expect(descriptors[0]).toMatchObject({
+      classId: "ABCDEF0123456789ABCDEF0123456789",
+      name: "Demo Delay",
+      vendor: "Acme Audio",
+      kind: "effect",
+      compatibility: "compatible",
+      supportedAudioModes: ["mono", "mono-to-stereo", "stereo", "dual-mono"]
+    })
+    expect(descriptors[1]).toMatchObject({
+      classId: "FEDCBA9876543210FEDCBA9876543210",
+      name: "Demo Synth",
+      kind: "instrument",
+      compatibility: "compatible",
+      supportedAudioModes: ["mono", "stereo"]
+    })
+  })
+
+  it("marks modules without Audio Module classes as needing factory enumeration", () => {
+    const [descriptor] = descriptorsFromModuleInfo("legacy.vst3", {
+      "Factory Info": { Vendor: "Legacy" },
+      Classes: []
+    })
+    expect(descriptor).toMatchObject({
+      classId: "unprobed:legacy.vst3",
+      compatibility: "load-error",
+      supportedAudioModes: []
+    })
+  })
+
+  it("still exposes Audio Module classes when an ARA factory is also listed", () => {
+    const descriptors = descriptorsFromModuleInfo("melody.vst3", {
+      "Factory Info": { Vendor: "Acme" },
+      Classes: [
+        {
+          CID: "ABCDEF0123456789ABCDEF0123456789",
+          Category: "Audio Module Class",
+          Name: "Melody",
+          "Sub Categories": ["Fx"]
+        },
+        {
+          CID: "ARAFACTORY0123456789ABCDEF012345",
+          Category: "ARA Main Factory Class",
+          Name: "Melody"
+        }
+      ]
+    })
+    expect(descriptors).toHaveLength(1)
+    expect(descriptors[0]?.name).toBe("Melody")
+    expect(descriptors[0]?.ara).toBeUndefined()
   })
 })
 
