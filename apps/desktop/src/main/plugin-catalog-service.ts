@@ -297,6 +297,26 @@ interface ProbeOutput {
   }
 }
 
+/** Recover the probe JSON payload when plug-ins also write diagnostics to stdout. */
+export function parseProbeStdout(stdout: string): ProbeOutput {
+  const trimmed = stdout.trim()
+  try {
+    return JSON.parse(trimmed) as ProbeOutput
+  } catch {
+    // Keep scanning reverse lines for the final JSON object emitted by the probe.
+  }
+  for (const line of trimmed.split(/\r?\n/).reverse()) {
+    const candidate = line.trim()
+    if (!candidate.startsWith("{")) continue
+    try {
+      return JSON.parse(candidate) as ProbeOutput
+    } catch {
+      // Try earlier lines.
+    }
+  }
+  throw new Error("VST3 probe returned an invalid descriptor")
+}
+
 export function descriptorFromProbe(
   bundlePath: string,
   factoryVendor: string,
@@ -440,7 +460,9 @@ export class PluginCatalogService {
           kind: spec.kind,
           architecture: process.arch,
           buses: spec.kind === "instrument" ? [outputBus] : [inputBus, outputBus],
-          supportedAudioModes: [],
+          // Keep project graph validation working when a built-in probe fails:
+          // default projects still seed stereo metronome/instrument instances.
+          supportedAudioModes: spec.kind === "instrument" ? ["mono", "stereo"] : ["stereo"],
           hasEditor: true,
           compatibility: "load-error",
           compatibilityReason: reason
@@ -596,12 +618,13 @@ export class PluginCatalogService {
 
   private async probe(bundlePath: string): Promise<PluginDescriptor[]> {
     const { stdout } = await execFileAsync(this.probePath, [bundlePath], {
-      timeout: 15_000,
+      // Child-process deep probes reopen slow commercial modules; keep headroom.
+      timeout: 60_000,
       windowsHide: true,
       maxBuffer: 4 * 1024 * 1024,
       encoding: "utf8"
     })
-    const parsed = JSON.parse(stdout) as ProbeOutput
+    const parsed = parseProbeStdout(stdout)
     const module = parsed.module
     if (!module || !Array.isArray(module.classes)) {
       throw new Error("VST3 probe returned an invalid descriptor")

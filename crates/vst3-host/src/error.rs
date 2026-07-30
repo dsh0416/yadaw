@@ -19,6 +19,14 @@ pub enum HostError {
     /// A VST3 bundle does not contain the platform module binary.
     #[error("could not locate a VST3 module binary in '{0}'")]
     ModuleBinary(PathBuf),
+    /// A VST3 bundle could not be loaded through the platform module loader.
+    #[error("could not load VST3 bundle at {path}: {message}")]
+    BundleLoad {
+        /// The bundle path passed to the loader.
+        path: PathBuf,
+        /// Platform-specific failure detail.
+        message: String,
+    },
     /// A required module entry point was not exported.
     #[error("VST3 module does not export '{0}'")]
     MissingEntryPoint(&'static str),

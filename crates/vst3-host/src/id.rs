@@ -22,17 +22,16 @@ impl ClassId {
         &self.0
     }
 
-    /// Returns the target ABI byte order expected by VST3 interface calls.
+    /// Returns the ABI byte order expected by VST3 `createInstance` / factory CIDs.
+    ///
+    /// Component class IDs use COM GUID memory layout on every platform we host
+    /// (Windows Steinberg, and cross-platform wrappers such as truce that store
+    /// the same little-endian CID bytes in the factory on macOS/Linux). The
+    /// canonical string form stays platform-independent by always converting
+    /// through this layout.
     #[must_use]
     pub const fn to_tuid(self) -> TUID {
-        #[cfg(windows)]
-        let bytes = [
-            self.0[3], self.0[2], self.0[1], self.0[0], self.0[5], self.0[4], self.0[7], self.0[6],
-            self.0[8], self.0[9], self.0[10], self.0[11], self.0[12], self.0[13], self.0[14],
-            self.0[15],
-        ];
-        #[cfg(not(windows))]
-        let bytes = self.0;
+        let bytes = com_guid_bytes(self.0);
         let mut result = [tuid_byte(0); 16];
         let mut index = 0;
         while index < 16 {
@@ -51,13 +50,16 @@ impl ClassId {
             bytes[index] = value[index] as u8;
             index += 1;
         }
-        #[cfg(windows)]
-        let bytes = [
-            bytes[3], bytes[2], bytes[1], bytes[0], bytes[5], bytes[4], bytes[7], bytes[6],
-            bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15],
-        ];
-        Self(bytes)
+        Self(com_guid_bytes(bytes))
     }
+}
+
+/// Swaps the first three GUID fields between registry order and COM memory order.
+const fn com_guid_bytes(bytes: [u8; 16]) -> [u8; 16] {
+    [
+        bytes[3], bytes[2], bytes[1], bytes[0], bytes[5], bytes[4], bytes[7], bytes[6], bytes[8],
+        bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15],
+    ]
 }
 
 impl FromStr for ClassId {
@@ -140,5 +142,30 @@ mod tests {
             .parse()
             .expect("valid ID");
         assert_eq!(ClassId::from_tuid(id.to_tuid()), id);
+    }
+
+    #[test]
+    fn com_factory_bytes_map_to_registry_class_ids() {
+        // truce's vst3_cid() stores FNV-1a as little-endian factory bytes. Those
+        // match COM GUID memory order for the registry IDs committed in desktop.
+        let factory = [
+            0xDE, 0xA5, 0x10, 0xF3, 0x34, 0xDA, 0x0C, 0x82, 0x9E, 0x06, 0x8A, 0x57, 0x53, 0xF8,
+            0x3A, 0xDE,
+        ];
+        let mut tuid = [tuid_byte(0); 16];
+        let mut index = 0;
+        while index < 16 {
+            tuid[index] = tuid_byte(factory[index]);
+            index += 1;
+        }
+        let id = ClassId::from_tuid(tuid);
+        assert_eq!(id.to_string(), "F310A5DEDA34820C9E068A5753F83ADE");
+        assert_eq!(
+            id.to_tuid()
+                .into_iter()
+                .map(|byte| byte as u8)
+                .collect::<Vec<_>>(),
+            factory
+        );
     }
 }

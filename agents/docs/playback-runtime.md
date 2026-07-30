@@ -177,7 +177,11 @@ extent allocator that supports out-of-order release and adjacent-extent
 coalescing. Each direction is limited to 32 regions, 256 MiB mapped capacity,
 256 in-flight leases, and a 64 MiB blob/packet. The producer writes an
 unpublished extent, then publishes slot metadata with Release; the consumer
-validates it with Acquire before reading.
+validates it with Acquire before reading. Every packet that references a
+region re-offers that region's `IpcSharedMemory` handle, and receivers replace
+their mapping for the region id. macOS `ipc-channel` delivers those handles
+with `MACH_MSG_VIRTUAL_COPY`, so a one-time offer would leave the consumer on
+a COW snapshot that goes stale after the producer writes again.
 
 The sender retains an allocation until `ReleaseLeases`. Release happens after
 the final command consumer completes, or after the addon copies a response

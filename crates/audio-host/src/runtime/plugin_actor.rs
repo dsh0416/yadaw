@@ -316,6 +316,7 @@ fn protocol_deadline(command: &ControlCommand) -> std::time::Duration {
             | ControlCommand::OpenPluginEditor { .. }
             | ControlCommand::ClosePluginEditor { .. }
             | ControlCommand::RunAudioBenchmark { .. }
+            | ControlCommand::BenchmarkEcho { .. }
     ) {
         std::time::Duration::from_secs(15)
     } else {

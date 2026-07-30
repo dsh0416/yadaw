@@ -131,13 +131,15 @@ impl LeaseRegistry {
             allocation.offset,
             bytes.len(),
         );
-        let offer = if region.offered {
-            None
-        } else {
+        // Always attach a region offer. On macOS, ipc-channel delivers shared
+        // memory with MACH_MSG_VIRTUAL_COPY, so a one-time offer leaves the
+        // consumer on a COW snapshot that diverges after the producer writes
+        // again. Re-offering refreshes the consumer mapping for this packet.
+        if !region.offered {
             region.offered = true;
             self.offers = self.offers.saturating_add(1);
-            Some(region.offer(self.session_epoch))
-        };
+        }
+        let offer = Some(region.offer(self.session_epoch));
         self.bytes += bytes.len();
         self.entries.insert(
             lease_id,
@@ -475,13 +477,17 @@ impl ArenaReceiver {
             {
                 return Err(TransportError::StaleRegion);
             }
-            self.regions
-                .entry(offer.region_id)
-                .or_insert(ReceivedRegion {
+            // Replace the mapping even when region_id is unchanged. macOS
+            // VIRTUAL_COPY offers are snapshots; keeping the first mapping
+            // makes later warm allocations appear stale.
+            self.regions.insert(
+                offer.region_id,
+                ReceivedRegion {
                     generation: offer.region_generation,
                     capacity,
                     memory: Arc::new(offer.memory),
-                });
+                },
+            );
         }
         Ok(())
     }

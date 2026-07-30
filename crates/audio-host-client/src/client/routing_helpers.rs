@@ -8,6 +8,7 @@ fn request_deadline(command: &ControlCommand) -> Duration {
             | ControlCommand::OpenPluginEditor { .. }
             | ControlCommand::ClosePluginEditor { .. }
             | ControlCommand::RunAudioBenchmark { .. }
+            | ControlCommand::BenchmarkEcho { .. }
     ) {
         Duration::from_secs(15)
     } else {
