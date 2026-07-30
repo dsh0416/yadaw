@@ -128,8 +128,9 @@ export function startApplication(
         detail: t("startup.discoveringPluginsDetail")
       })
       try {
-        // Reuse fingerprint-cached descriptors unless bundles changed; still
-        // retry quarantined modules in case a prior probe was a transient failure.
+        // Soft discovery (moduleinfo / factory enum) must finish before the
+        // workspace opens so project restore can resolve plug-in descriptors.
+        // Fingerprint-cached descriptors are reused; quarantined modules retry.
         await plugins.scan({ retryQuarantined: true })
       } catch (error) {
         scanWarnings += 1

@@ -14,6 +14,8 @@ use yadaw_vst3_host::{
 };
 
 const CLASS_PROBE_ENV: &str = "YADAW_VST3_PROBE_CLASS";
+/// When set to `soft`, enumerate factory classes without instantiating processors.
+const PROBE_MODE_ENV: &str = "YADAW_VST3_PROBE_MODE";
 
 #[derive(Serialize)]
 struct Output<'a> {
@@ -263,15 +265,24 @@ fn run_class_probe(module_path: &Path, class_id: &str) -> Result<(), Box<dyn std
     Ok(())
 }
 
+fn soft_probe_requested() -> bool {
+    env::var(PROBE_MODE_ENV)
+        .map(|value| value.eq_ignore_ascii_case("soft"))
+        .unwrap_or(false)
+        || env::args_os().any(|arg| arg == "--soft")
+}
+
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     let path = env::args_os()
-        .nth(1)
-        .ok_or("usage: yadaw-vst3-probe <module.vst3>")?;
+        .skip(1)
+        .find(|arg| arg != "--soft")
+        .ok_or("usage: yadaw-vst3-probe [--soft] <module.vst3>")?;
     let path = PathBuf::from(path);
     if let Ok(class_id) = env::var(CLASS_PROBE_ENV) {
         return run_class_probe(&path, &class_id);
     }
 
+    let soft = soft_probe_requested();
     let module = Rc::new(Module::open(&path)?);
     let factory_vendor = module
         .factory_info()
@@ -296,7 +307,13 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             let ara = ara_factories
                 .get(class.name.as_str())
                 .map(|(class_id, info)| ara_output(*class_id, info));
-            inspect(&path, class, ara)
+            if soft {
+                let mut output = soft_inspect(&class);
+                output.ara = ara;
+                output
+            } else {
+                inspect(&path, class, ara)
+            }
         })
         .collect();
     // Emit JSON on its own line so hosts can recover it when plug-ins log to stdout.

@@ -506,11 +506,16 @@ threads.
 SDK 3.8.0 headers. `vst3-host` owns COM references, module lifetime, class
 enumeration, component activation, stereo sample32 block processing, latency,
 tail queries, parameter/state exchange, controller connections, and editor
-interfaces. The production scanner uses the Rust `yadaw-vst3-probe` binary.
-Descriptors are cached in `userData/plugin-catalog.json` with per-bundle
-mtime/size fingerprints: startup reuses unchanged results (and retries
-quarantined modules), while a manual Rescan forces a full re-probe. There is
-no production C++ bridge or bridge path argument.
+interfaces. Catalog discovery prefers `moduleinfo.json` (no binary load). When
+that is absent, or when the moduleinfo lists an ARA Main Factory Class, a soft
+`yadaw-vst3-probe --soft` factory enumeration opens the module without
+instantiating processors. Deep processor probing remains available for built-in
+validation and insert-time activation. Descriptors are cached in
+`userData/plugin-catalog.json` with per-bundle mtime/size fingerprints: startup
+awaits soft rediscovery before the workspace opens (reusing unchanged results
+and retrying quarantined modules), while a manual Rescan forces lightweight
+rediscovery of every bundle. There is no production C++ bridge or bridge path
+argument.
 
 Bindgen types follow the target C ABI and must not be papered over with
 hardcoded Rust primitives at call sites:
