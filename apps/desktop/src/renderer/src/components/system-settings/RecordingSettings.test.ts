@@ -12,6 +12,7 @@ describe("RecordingSettings", () => {
       locale: "en-US",
       meterPeakHold: "800ms",
       meterReturnRate: "iec-type-i",
+      midiCenterCStandard: "roland-c4",
       softwareMonitoringEnabled: false,
       recentProjects: []
     })
@@ -23,6 +24,7 @@ describe("RecordingSettings", () => {
       locale: "en-US",
       meterPeakHold: "800ms",
       meterReturnRate: "iec-type-i",
+      midiCenterCStandard: "roland-c4",
       softwareMonitoringEnabled: false,
       recentProjects: []
     })
@@ -33,6 +35,7 @@ describe("RecordingSettings", () => {
       locale: "en-US",
       meterPeakHold: "800ms",
       meterReturnRate: "iec-type-i",
+      midiCenterCStandard: "roland-c4",
       softwareMonitoringEnabled: false,
       recentProjects: []
     })
@@ -43,6 +46,7 @@ describe("RecordingSettings", () => {
       locale: "en-US",
       meterPeakHold: "800ms",
       meterReturnRate: "iec-type-i",
+      midiCenterCStandard: "roland-c4",
       softwareMonitoringEnabled: true,
       recentProjects: []
     })

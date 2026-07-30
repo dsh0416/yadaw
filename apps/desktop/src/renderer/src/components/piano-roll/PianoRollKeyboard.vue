@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { midiNoteName } from "../../utils/pianoRoll"
 import { usePianoRollEditor } from "./usePianoRollEditor"
 
-const { pianoRollStore, keyStyle, isBlackKey } = usePianoRollEditor()
+const { pianoRollStore, keyStyle, isBlackKey, formatMidiNoteName } = usePianoRollEditor()
 </script>
 
 <template>
@@ -13,10 +12,10 @@ const { pianoRollStore, keyStyle, isBlackKey } = usePianoRollEditor()
       type="button"
       :class="['piano-key', { black: isBlackKey(key - 1) }]"
       :style="keyStyle(key - 1)"
-      :aria-label="midiNoteName(key - 1)"
+      :aria-label="formatMidiNoteName(key - 1)"
       @click="pianoRollStore.editCursorKey = key - 1"
     >
-      {{ (key - 1) % 12 === 0 ? midiNoteName(key - 1) : "" }}
+      {{ (key - 1) % 12 === 0 ? formatMidiNoteName(key - 1) : "" }}
     </button>
   </div>
 </template>

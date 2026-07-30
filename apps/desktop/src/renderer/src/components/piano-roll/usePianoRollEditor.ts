@@ -8,6 +8,7 @@ import type {
   MixerGraphSnapshot,
   ProjectCommand
 } from "@yadaw/contracts"
+import { useApplicationSettingsStore } from "../../stores/applicationSettings"
 import { useMixerStore } from "../../stores/mixer"
 import { usePianoRollStore } from "../../stores/pianoRoll"
 import { useTransportStore } from "../../stores/transport"
@@ -50,6 +51,7 @@ export interface PianoRollEditor extends PianoRollGestures, PianoRollEditing {
     note: MidiNoteState
   ) => { globalStartTick: number; durationTicks: number; key: number }
   noteAriaLabel: (clip: MidiClipState, note: MidiNoteState) => string
+  formatMidiNoteName: (key: number) => string
   seekToTick: (tick: number) => void
   batch: (commands: ProjectCommand[]) => Promise<boolean>
   commandsForEdits: (values: PianoRollNoteEdit[]) => ProjectCommand[]
@@ -67,7 +69,9 @@ export function createPianoRollEditor(): PianoRollEditor {
   const mixerStore = useMixerStore()
   const pianoRollStore = usePianoRollStore()
   const transportStore = useTransportStore()
+  const applicationSettingsStore = useApplicationSettingsStore()
   const { graph } = storeToRefs(mixerStore)
+  const { settings } = storeToRefs(applicationSettingsStore)
 
   const openClips = computed(() =>
     pianoRollStore.openClipIds
@@ -206,9 +210,13 @@ export function createPianoRollEditor(): PianoRollEditor {
     )
   }
 
+  function formatMidiNoteName(key: number): string {
+    return midiNoteName(key, settings.value?.midiCenterCStandard ?? "roland-c4")
+  }
+
   function noteAriaLabel(clip: MidiClipState, note: MidiNoteState): string {
     const value = displayedNoteValues(clip, note)
-    return `${midiNoteName(value.key)}, start ${value.globalStartTick}, duration ${value.durationTicks}, velocity ${note.velocity}, ${clip.name}`
+    return `${formatMidiNoteName(value.key)}, start ${value.globalStartTick}, duration ${value.durationTicks}, velocity ${note.velocity}, ${clip.name}`
   }
 
   function keyStyle(key: number): CSSProperties {
@@ -272,6 +280,7 @@ export function createPianoRollEditor(): PianoRollEditor {
     isBlackKey,
     displayedNoteValues,
     noteAriaLabel,
+    formatMidiNoteName,
     seekToTick,
     batch,
     commandsForEdits

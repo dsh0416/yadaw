@@ -14,6 +14,7 @@ describe("ApplicationSettingsStore", () => {
       locale: "en-US",
       meterPeakHold: "800ms",
       meterReturnRate: "iec-type-i",
+      midiCenterCStandard: "roland-c4",
       softwareMonitoringEnabled: false,
       audioHostRuntime: {
         workerThreads: "auto",
@@ -27,7 +28,8 @@ describe("ApplicationSettingsStore", () => {
       recordingBitDepth: "pcm24",
       theme: "light",
       locale: "zh-cmn-Hans-CN",
-      meterPeakHold: "4s"
+      meterPeakHold: "4s",
+      midiCenterCStandard: "yamaha-c3"
     })
     const reloaded = await new ApplicationSettingsStore(userData).get()
     expect(reloaded).toMatchObject({
@@ -36,8 +38,24 @@ describe("ApplicationSettingsStore", () => {
       theme: "light",
       locale: "zh-cmn-Hans-CN",
       meterPeakHold: "4s",
-      meterReturnRate: "iec-type-i"
+      meterReturnRate: "iec-type-i",
+      midiCenterCStandard: "yamaha-c3"
     })
+  })
+
+  it("defaults legacy files to Roland C4 and rejects unsupported center C standards", async () => {
+    const userData = await mkdtemp(join(tmpdir(), "yadaw-midi-center-c-"))
+    await writeFile(
+      join(userData, "settings.json"),
+      JSON.stringify({ recordingBitDepth: "pcm24" }),
+      "utf8"
+    )
+    const store = new ApplicationSettingsStore(userData)
+
+    expect((await store.get()).midiCenterCStandard).toBe("roland-c4")
+    await expect(
+      store.update({ midiCenterCStandard: "scientific" as "roland-c4" })
+    ).rejects.toThrow("Unsupported MIDI center C standard")
   })
 
   it("migrates editor preferences and persists validated values by normalized class ID", async () => {

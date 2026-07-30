@@ -1,6 +1,7 @@
 import {
   MIN_MIDI_NOTE_DURATION_TICKS,
   MUSICAL_TICKS_PER_WHOLE_NOTE,
+  type MidiCenterCStandard,
   type MidiClipState,
   type MidiNotePatch,
   type MidiNoteState,
@@ -48,9 +49,10 @@ export function quantizeNoteStarts<T extends { globalStartTick: number }>(
     .filter((item, index) => item.globalStartTick !== items[index]!.globalStartTick)
 }
 
-export function midiNoteName(key: number): string {
+export function midiNoteName(key: number, centerC: MidiCenterCStandard = "roland-c4"): string {
   const names = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"]
-  return `${names[((key % 12) + 12) % 12]}${Math.floor(key / 12) - 1}`
+  const octaveOffset = centerC === "yamaha-c3" ? 2 : 1
+  return `${names[((key % 12) + 12) % 12]}${Math.floor(key / 12) - octaveOffset}`
 }
 
 export function noteGlobalStart(clip: MidiClipState, note: MidiNoteState): number {

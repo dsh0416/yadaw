@@ -10,6 +10,7 @@ const settings = {
   locale: "en-US" as const,
   meterPeakHold: "800ms" as const,
   meterReturnRate: "iec-type-i" as const,
+  midiCenterCStandard: "roland-c4" as const,
   recentProjects: []
 }
 

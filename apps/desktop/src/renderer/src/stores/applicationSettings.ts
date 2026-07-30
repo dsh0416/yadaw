@@ -8,6 +8,7 @@ import type {
   ResolvedAudioHostRuntimePreferences,
   MeterPeakHold,
   MeterReturnRate,
+  MidiCenterCStandard,
   ThemePreference
 } from "@yadaw/contracts"
 import { i18n } from "../i18n"
@@ -105,6 +106,21 @@ export const useApplicationSettingsStore = defineStore("application-settings", (
     return updateDisplaySetting({ meterReturnRate })
   }
 
+  async function setMidiCenterCStandard(midiCenterCStandard: MidiCenterCStandard): Promise<void> {
+    if (!settings.value) await load()
+    if (!settings.value || settings.value.midiCenterCStandard === midiCenterCStandard) return
+
+    const previous = settings.value
+    settings.value = { ...previous, midiCenterCStandard }
+    error.value = ""
+    try {
+      settings.value = await window.yadaw.updateApplicationSettings({ midiCenterCStandard })
+    } catch (reason) {
+      settings.value = previous
+      error.value = reason instanceof Error ? reason.message : t("errors.unableToSaveMidiSettings")
+    }
+  }
+
   async function chooseSwapDirectory(): Promise<void> {
     settings.value = await window.yadaw.chooseSwapDirectory()
   }
@@ -170,6 +186,7 @@ export const useApplicationSettingsStore = defineStore("application-settings", (
     setLocale,
     setMeterPeakHold,
     setMeterReturnRate,
+    setMidiCenterCStandard,
     chooseSwapDirectory,
     openSwapDirectory,
     configureAudioHostRuntime,

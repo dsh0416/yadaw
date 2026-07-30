@@ -6,6 +6,7 @@ import type {
   AudioHostRuntimePreferences,
   MeterPeakHold,
   MeterReturnRate,
+  MidiCenterCStandard,
   PluginEditorPreference,
   RecordingBitDepth,
   ThemePreference
@@ -33,6 +34,10 @@ function isMeterPeakHold(value: unknown): value is MeterPeakHold {
 
 function isMeterReturnRate(value: unknown): value is MeterReturnRate {
   return value === "iec-type-i"
+}
+
+function isMidiCenterCStandard(value: unknown): value is MidiCenterCStandard {
+  return value === "yamaha-c3" || value === "roland-c4"
 }
 
 function runtimeThreadSetting(
@@ -141,6 +146,7 @@ export class ApplicationSettingsStore {
       locale: DEFAULT_LOCALE,
       meterPeakHold: "800ms",
       meterReturnRate: "iec-type-i",
+      midiCenterCStandard: "roland-c4",
       softwareMonitoringEnabled: false,
       audioHostRuntime: {
         workerThreads: "auto",
@@ -171,6 +177,9 @@ export class ApplicationSettingsStore {
         meterReturnRate: isMeterReturnRate(raw.meterReturnRate)
           ? raw.meterReturnRate
           : value.meterReturnRate,
+        midiCenterCStandard: isMidiCenterCStandard(raw.midiCenterCStandard)
+          ? raw.midiCenterCStandard
+          : value.midiCenterCStandard,
         softwareMonitoringEnabled:
           typeof raw.softwareMonitoringEnabled === "boolean"
             ? raw.softwareMonitoringEnabled
@@ -230,6 +239,11 @@ export class ApplicationSettingsStore {
       if (!isMeterReturnRate(patch.meterReturnRate))
         throw new TypeError("Unsupported meter return rate")
       current.meterReturnRate = patch.meterReturnRate
+    }
+    if (patch.midiCenterCStandard !== undefined) {
+      if (!isMidiCenterCStandard(patch.midiCenterCStandard))
+        throw new TypeError("Unsupported MIDI center C standard")
+      current.midiCenterCStandard = patch.midiCenterCStandard
     }
     return this.write(current)
   }
