@@ -12,7 +12,7 @@ const effectDescriptor: PluginDescriptor = {
   name: "Effect",
   vendor: "YADAW",
   version: "1.0",
-  category: "Fx",
+  categories: ["Fx"],
   kind: "effect",
   architecture: "x86_64",
   buses: [],
@@ -27,7 +27,7 @@ const instrumentDescriptor: PluginDescriptor = {
   classId: "instrument",
   modulePath: "instrument.vst3",
   name: "Instrument",
-  category: "Instrument",
+  categories: ["Instrument"],
   kind: "instrument",
   supportedAudioModes: ["mono", "stereo"]
 }
@@ -119,9 +119,9 @@ describe("plugin store", () => {
     setActivePinia(createPinia())
   })
 
-  it("forces a full re-probe when the user requests a manual rescan", async () => {
+  it("forces lightweight rediscovery when the user requests a manual rescan", async () => {
     const catalog = {
-      scannerVersion: 3,
+      scannerVersion: 7,
       scanning: false,
       scannedAt: 1,
       plugins: [effectDescriptor]

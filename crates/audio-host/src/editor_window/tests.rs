@@ -47,4 +47,44 @@ mod tests {
         assert_eq!(EditorModeOption::Parameters.to_string(), "Parameters");
         assert_eq!(ZoomOption(125).to_string(), "125%");
     }
+
+    #[test]
+    fn initial_native_view_rect_keeps_reported_sizes() {
+        let reported: Result<ViewRect, &str> = Ok(ViewRect {
+            left: 0,
+            top: 0,
+            right: 640,
+            bottom: 480,
+        });
+        let size = initial_native_view_rect(reported, |_| true);
+        assert_eq!((rect_width(size), rect_height(size)), (640, 480));
+    }
+
+    #[test]
+    fn initial_native_view_rect_falls_back_when_get_size_fails() {
+        let size = initial_native_view_rect(Err("not ready"), |_| true);
+        assert_eq!(
+            (rect_width(size), rect_height(size)),
+            (
+                DEFAULT_NATIVE_EDITOR_WIDTH as u32,
+                DEFAULT_NATIVE_EDITOR_HEIGHT as u32
+            )
+        );
+    }
+
+    #[test]
+    fn initial_native_view_rect_falls_back_when_size_is_empty() {
+        let reported: Result<ViewRect, &str> = Ok(ViewRect {
+            left: 0,
+            top: 0,
+            right: 0,
+            bottom: 0,
+        });
+        let size = initial_native_view_rect(reported, |rect| {
+            rect.right = 1024;
+            rect.bottom = 768;
+            true
+        });
+        assert_eq!((rect_width(size), rect_height(size)), (1024, 768));
+    }
 }

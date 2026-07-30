@@ -35,6 +35,37 @@ fn rect_height(rect: ViewRect) -> u32 {
     rect.bottom.saturating_sub(rect.top).max(0) as u32
 }
 
+fn default_native_view_rect() -> ViewRect {
+    ViewRect {
+        left: 0,
+        top: 0,
+        right: DEFAULT_NATIVE_EDITOR_WIDTH,
+        bottom: DEFAULT_NATIVE_EDITOR_HEIGHT,
+    }
+}
+
+/// Resolve the initial plug-in content rect for window creation.
+///
+/// Adaptive UIs often return an error or empty rect from `getSize` until they
+/// are attached and call `IPlugFrame::resizeView`. In that case use a default
+/// size (optionally constrained) so attach can proceed.
+fn initial_native_view_rect(
+    reported: Result<ViewRect, impl std::fmt::Display>,
+    mut constrain: impl FnMut(&mut ViewRect) -> bool,
+) -> ViewRect {
+    if let Ok(size) = reported
+        && rect_width(size) > 0
+        && rect_height(size) > 0
+    {
+        return size;
+    }
+    let mut fallback = default_native_view_rect();
+    if constrain(&mut fallback) && rect_width(fallback) > 0 && rect_height(fallback) > 0 {
+        return fallback;
+    }
+    default_native_view_rect()
+}
+
 #[cfg(target_os = "macos")]
 fn container_extent(rect: ViewRect, _monitor_scale: f64) -> (u32, u32) {
     (rect_width(rect), rect_height(rect))

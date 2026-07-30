@@ -17,7 +17,7 @@ import {
 import { useMixerStore } from "./mixer"
 
 const EMPTY_CATALOG: PluginCatalogSnapshot = {
-  scannerVersion: 4,
+  scannerVersion: 7,
   scanning: false,
   scannedAt: null,
   plugins: []
@@ -133,7 +133,8 @@ export const usePluginStore = defineStore("plugins", () => {
   async function scan(retryQuarantined = false): Promise<void> {
     error.value = ""
     try {
-      // Manual rescans always re-probe; launch-time scanning reuses fingerprints.
+      // Manual rescans always rediscover; launch-time scanning reuses fingerprints.
+      // Discovery stays soft (moduleinfo / factory enum) and does not deep-load.
       catalog.value = await window.yadaw.scanPlugins({ force: true, retryQuarantined })
     } catch (reason) {
       error.value = reason instanceof Error ? reason.message : "Plugin scan failed."

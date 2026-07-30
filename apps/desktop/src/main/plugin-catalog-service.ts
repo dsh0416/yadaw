@@ -3,17 +3,21 @@ import { execFile } from "node:child_process"
 import { promisify } from "node:util"
 import { homedir } from "node:os"
 import { basename, dirname, join } from "node:path"
-import type {
-  PluginCatalogSnapshot,
-  PluginAudioMode,
-  PluginDescriptor,
-  PluginEditorMode,
-  PluginParameterChange,
-  PluginParameterInfo,
-  PluginRuntimeStatus,
-  PluginInstanceState,
-  PluginScanEvent,
-  PluginScanRequest
+import {
+  defaultPluginCategories,
+  normalizePluginDescriptor,
+  parsePluginCategories,
+  pluginLooksLikeInstrument,
+  type PluginCatalogSnapshot,
+  type PluginAudioMode,
+  type PluginDescriptor,
+  type PluginEditorMode,
+  type PluginParameterChange,
+  type PluginParameterInfo,
+  type PluginRuntimeStatus,
+  type PluginInstanceState,
+  type PluginScanEvent,
+  type PluginScanRequest
 } from "@yadaw/contracts"
 
 interface PluginRuntime {
@@ -34,9 +38,11 @@ interface PluginRuntime {
   closeEditor(instanceId: string): Promise<void>
 }
 
-const SCANNER_VERSION = 4
+const SCANNER_VERSION = 7
 const execFileAsync = promisify(execFile)
 const AUDIO_MODES = ["mono", "mono-to-stereo", "stereo", "dual-mono"] as const
+const INSTRUMENT_SOFT_MODES: PluginAudioMode[] = ["mono", "stereo"]
+const EFFECT_SOFT_MODES: PluginAudioMode[] = ["mono", "mono-to-stereo", "stereo", "dual-mono"]
 
 function isPluginAudioMode(value: unknown): value is PluginAudioMode {
   return AUDIO_MODES.some((mode) => mode === value)
@@ -191,15 +197,34 @@ async function readModuleInfo(bundlePath: string): Promise<Record<string, unknow
   return null
 }
 
-function descriptorsFromModuleInfo(
+function moduleInfoClasses(moduleInfo: Record<string, unknown> | null): unknown[] {
+  return Array.isArray(moduleInfo?.["Classes"]) ? moduleInfo["Classes"] : []
+}
+
+function hasAudioModuleClasses(moduleInfo: Record<string, unknown> | null): boolean {
+  return moduleInfoClasses(moduleInfo).some((value) => {
+    const classInfo = record(value)
+    return textValue(classInfo?.["Category"]) === "Audio Module Class"
+  })
+}
+
+function hasAraMainFactoryClass(moduleInfo: Record<string, unknown> | null): boolean {
+  return moduleInfoClasses(moduleInfo).some((value) => {
+    const classInfo = record(value)
+    return textValue(classInfo?.["Category"]) === "ARA Main Factory Class"
+  })
+}
+
+/** Build catalog entries from moduleinfo.json without loading the VST3 binary. */
+export function descriptorsFromModuleInfo(
   bundlePath: string,
   moduleInfo: Record<string, unknown> | null
 ): PluginDescriptor[] {
   const factory = record(moduleInfo?.["Factory Info"])
-  const classes = Array.isArray(moduleInfo?.["Classes"]) ? moduleInfo["Classes"] : []
+  const classes = moduleInfoClasses(moduleInfo)
   const vendor = textValue(factory?.["Vendor"], "Unknown vendor")
   const fallbackName = basename(bundlePath).replace(/\.vst3$/i, "")
-  if (classes.length === 0) {
+  if (!hasAudioModuleClasses(moduleInfo)) {
     return [
       {
         source: { kind: "external" },
@@ -208,27 +233,29 @@ function descriptorsFromModuleInfo(
         name: fallbackName,
         vendor,
         version: textValue(moduleInfo?.["Version"], ""),
-        category: "Audio Module Class",
+        categories: defaultPluginCategories("effect"),
         kind: "effect",
         architecture: process.arch,
         buses: [],
         supportedAudioModes: [],
         hasEditor: false,
         compatibility: "load-error",
-        compatibilityReason: "Native VST3 probing is required for this module"
+        compatibilityReason: "Native VST3 factory enumeration is required for this module"
       }
     ]
   }
   return classes.flatMap((value) => {
     const classInfo = record(value)
     if (!classInfo || textValue(classInfo["Category"]) !== "Audio Module Class") return []
-    const subCategories = stringList(classInfo["Sub Categories"])
-    const kind = subCategories.some(
-      (category) =>
-        category.toLowerCase().includes("instrument") || category.toLowerCase().includes("synth")
-    )
-      ? "instrument"
-      : "effect"
+    const categories = parsePluginCategories(stringList(classInfo["Sub Categories"]))
+    const kind = pluginLooksLikeInstrument(categories) ? "instrument" : "effect"
+    // Soft catalog metadata: advertise host-supported layouts. Insert-time
+    // activation still validates the real processor setup.
+    const supportedAudioModes = kind === "instrument" ? INSTRUMENT_SOFT_MODES : EFFECT_SOFT_MODES
+    const preferredMode =
+      supportedAudioModes.find((mode) => mode === "stereo") ??
+      supportedAudioModes.find((mode) => mode !== "dual-mono") ??
+      "stereo"
     return [
       {
         source: { kind: "external" },
@@ -237,37 +264,11 @@ function descriptorsFromModuleInfo(
         name: textValue(classInfo["Name"], fallbackName),
         vendor: textValue(classInfo["Vendor"], vendor),
         version: textValue(classInfo["Version"], textValue(moduleInfo?.["Version"])),
-        category: subCategories.join("|") || (kind === "instrument" ? "Instrument" : "Fx"),
+        categories: categories.length > 0 ? categories : defaultPluginCategories(kind),
         kind,
         architecture: process.arch,
-        supportedAudioModes: ["stereo"],
-        buses:
-          kind === "instrument"
-            ? [
-                {
-                  direction: "output" as const,
-                  kind: "main" as const,
-                  name: "Stereo Out",
-                  channels: 2,
-                  defaultActive: true
-                }
-              ]
-            : [
-                {
-                  direction: "input" as const,
-                  kind: "main" as const,
-                  name: "Stereo In",
-                  channels: 2,
-                  defaultActive: true
-                },
-                {
-                  direction: "output" as const,
-                  kind: "main" as const,
-                  name: "Stereo Out",
-                  channels: 2,
-                  defaultActive: true
-                }
-              ],
+        supportedAudioModes,
+        buses: busesForMode(kind, preferredMode),
         hasEditor: true,
         compatibility: "compatible" as const,
         compatibilityReason: null
@@ -285,6 +286,8 @@ interface ProbeOutput {
       name?: string
       vendor?: string
       version?: string
+      categories?: string[]
+      /** @deprecated Probe payloads before categories[]; accepted for transition. */
       category?: string
       initialized?: boolean
       sample32?: boolean
@@ -333,8 +336,9 @@ export function descriptorFromProbe(
 ): PluginDescriptor | null {
   const classId = textValue(value.classId)
   if (!classId) return null
-  const category = textValue(value.category)
-  const kind = /instrument|synth/i.test(category) ? "instrument" : "effect"
+  const categories = parsePluginCategories(value.categories ?? value.category)
+  const kind = pluginLooksLikeInstrument(categories) ? "instrument" : "effect"
+  const resolvedCategories = categories.length > 0 ? categories : defaultPluginCategories(kind)
   const probedModes = (value.supportedAudioModes ?? []).filter(isPluginAudioMode)
   const nativeModes = probedModes.filter((mode) =>
     kind === "instrument" ? mode === "mono" || mode === "stereo" : mode !== "dual-mono"
@@ -379,7 +383,7 @@ export function descriptorFromProbe(
     name: textValue(value.name, basename(bundlePath).replace(/\.vst3$/i, "")),
     vendor: textValue(value.vendor, factoryVendor || "Unknown vendor"),
     version: textValue(value.version),
-    category: category || (kind === "instrument" ? "Instrument" : "Fx"),
+    categories: resolvedCategories,
     kind,
     architecture: process.arch,
     buses: busesForMode(kind, preferredMode),
@@ -479,7 +483,7 @@ export class PluginCatalogService {
           name: spec.name,
           vendor: "YADAW",
           version: "",
-          category: spec.kind === "instrument" ? "Instrument|Synth" : "Fx",
+          categories: defaultPluginCategories(spec.kind),
           kind: spec.kind,
           architecture: process.arch,
           buses: spec.kind === "instrument" ? [outputBus] : [inputBus, outputBus],
@@ -514,7 +518,7 @@ export class PluginCatalogService {
         candidate.modulePath === snapshot.modulePath
       )
     })
-    return descriptor ? structuredClone(descriptor) : snapshot
+    return normalizePluginDescriptor(descriptor ? structuredClone(descriptor) : snapshot)
   }
 
   subscribe(listener: ScanListener): () => void {
@@ -545,7 +549,8 @@ export class PluginCatalogService {
   private async scanNow(request: PluginScanRequest): Promise<PluginCatalogSnapshot> {
     // Incremental scans reuse descriptors when mtime/size fingerprints match.
     // Forced scans (manual Rescan) and changed/new/quarantined-retry bundles
-    // re-run the isolated yadaw-vst3-probe.
+    // use lightweight discovery only: moduleinfo.json when present, otherwise
+    // an isolated soft factory probe. Processors are never instantiated here.
     const knownExternalRoots = this.catalog.plugins
       .filter((plugin) => plugin.source.kind === "external")
       .map((plugin) => dirname(plugin.modulePath))
@@ -584,9 +589,9 @@ export class PluginCatalogService {
         continue
       }
       try {
-        plugins.push(...(await this.probe(bundlePath)))
+        plugins.push(...(await this.discoverBundle(bundlePath)))
       } catch (error) {
-        const reason = error instanceof Error ? error.message : "VST3 probe failed"
+        const reason = error instanceof Error ? error.message : "VST3 discovery failed"
         this.publish({ type: "quarantined", path: bundlePath, reason })
         const fallback = descriptorsFromModuleInfo(bundlePath, await readModuleInfo(bundlePath))
         plugins.push(
@@ -639,14 +644,38 @@ export class PluginCatalogService {
     return this.list()
   }
 
-  private async probe(bundlePath: string): Promise<PluginDescriptor[]> {
-    const { stdout } = await execFileAsync(this.probePath, [bundlePath], {
-      // Child-process deep probes reopen slow commercial modules; keep headroom.
-      timeout: 60_000,
-      windowsHide: true,
-      maxBuffer: 4 * 1024 * 1024,
-      encoding: "utf8"
-    })
+  /**
+   * Lightweight catalog discovery: prefer moduleinfo.json (no binary load).
+   * Bundles that advertise an ARA Main Factory Class still need a soft factory
+   * probe for factory IDs. Other missing-moduleinfo bundles use the same soft
+   * probe. Processors are never instantiated here.
+   */
+  private async discoverBundle(bundlePath: string): Promise<PluginDescriptor[]> {
+    const moduleInfo = await readModuleInfo(bundlePath)
+    if (hasAudioModuleClasses(moduleInfo) && !hasAraMainFactoryClass(moduleInfo)) {
+      return descriptorsFromModuleInfo(bundlePath, moduleInfo)
+    }
+    return this.probe(bundlePath, "soft")
+  }
+
+  private async probe(
+    bundlePath: string,
+    mode: "soft" | "deep" = "deep"
+  ): Promise<PluginDescriptor[]> {
+    const { stdout } = await execFileAsync(
+      this.probePath,
+      mode === "soft" ? ["--soft", bundlePath] : [bundlePath],
+      {
+        timeout: 600_000,
+        windowsHide: true,
+        maxBuffer: 4 * 1024 * 1024,
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          ...(mode === "soft" ? { YADAW_VST3_PROBE_MODE: "soft" } : {})
+        }
+      }
+    )
     const parsed = parseProbeStdout(stdout)
     const module = parsed.module
     if (!module || !Array.isArray(module.classes)) {

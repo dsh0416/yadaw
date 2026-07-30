@@ -189,7 +189,7 @@ export class ProjectDatabase {
             name: "YADAW Metronome",
             vendor: "YADAW",
             version: "",
-            category: "Instrument|Synth",
+            categories: ["Instrument", "Synth"],
             kind: "instrument",
             architecture: process.arch,
             buses: [

@@ -11,7 +11,7 @@ const descriptor: PluginDescriptor = {
   name: "Synth",
   vendor: "YADAW",
   version: "1.0",
-  category: "Instrument",
+  categories: ["Instrument"],
   kind: "instrument",
   architecture: "x86_64",
   buses: [],

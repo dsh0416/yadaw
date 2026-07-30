@@ -8,9 +8,9 @@ use yadaw_vst3_host_sys::{
     Steinberg::{
         IPluginBase,
         Vst::{
-            self, AudioBusBuffers, AudioBusBuffers__bindgen_ty_1, Event, Event__bindgen_ty_1,
-            IAudioProcessor, IComponent, NoteOffEvent, NoteOnEvent, ProcessContext, ProcessData,
-            ProcessSetup,
+            self, AudioBusBuffers, AudioBusBuffers__bindgen_ty_1, BusDirections, Event,
+            Event__bindgen_ty_1, IAudioProcessor, IComponent, NoteOffEvent, NoteOnEvent,
+            ProcessContext, ProcessData, ProcessSetup, SpeakerArrangement,
         },
     },
     abi::{AudioProcessorVTable, ComponentVTable},
@@ -156,90 +156,90 @@ impl StereoProcessor {
             // value represents no active flags and neutral optional fields.
             std::mem::MaybeUninit::<ProcessContext>::zeroed().assume_init()
         });
-        let component_table = component_table(&component);
         check("IComponent::initialize", unsafe {
             // SAFETY: component and host are live and owned by this
             // construction path.
-            ((*component_table).base.initialize)(
+            ((*component_table(&component)).base.initialize)(
                 component.as_ptr().cast::<IPluginBase>(),
                 host.as_unknown(),
             )
         })?;
-        let hook_result = hook(component.as_ptr().cast())?;
-        let processor = component.query::<IAudioProcessor>()?;
-        let processor_table = processor_table(&processor);
-        check("canProcessSampleSize(sample32)", unsafe {
-            // SAFETY: processor is initialized and live.
-            ((*processor_table).can_process_sample_size)(
-                processor.as_ptr(),
-                as_int32(Vst::SymbolicSampleSizes_kSample32),
-            )
-        })?;
+        // After initialize(), any failure must terminate before release.
+        // Commercial instruments (e.g. Kontakt) crash in their destructors when
+        // the host skips terminate on the error path.
+        let mut lifecycle = InitializedComponent::new(component);
+        let hook_result = hook(lifecycle.component().as_ptr().cast())?;
+        let processor = lifecycle.component().query::<IAudioProcessor>()?;
+        lifecycle.set_processor(processor);
+        {
+            let processor = lifecycle.processor();
+            let component = lifecycle.component();
+            let processor_table = processor_table(processor);
+            let component_table = component_table(component);
+            check("canProcessSampleSize(sample32)", unsafe {
+                // SAFETY: processor is initialized and live.
+                ((*processor_table).can_process_sample_size)(
+                    processor.as_ptr(),
+                    as_int32(Vst::SymbolicSampleSizes_kSample32),
+                )
+            })?;
 
-        let mut input_arrangement = if layout.input_channels() == 1 {
-            Vst::SpeakerArr::kMono
-        } else {
-            Vst::SpeakerArr::kStereo
-        };
-        let mut output_arrangement = if layout.output_channels() == 1 {
-            Vst::SpeakerArr::kMono
-        } else {
-            Vst::SpeakerArr::kStereo
-        };
-        let input_count = i32::from(kind == PluginKind::Effect);
-        check("setBusArrangements", unsafe {
-            // SAFETY: arrangement pointers remain valid for the call.
-            ((*processor_table).set_bus_arrangements)(
-                processor.as_ptr(),
-                std::ptr::addr_of_mut!(input_arrangement),
-                input_count,
-                std::ptr::addr_of_mut!(output_arrangement),
-                1,
-            )
-        })?;
+            negotiate_bus_arrangements(component, processor, layout)?;
 
-        if kind == PluginKind::Effect {
-            check("activate audio input", unsafe {
+            if kind == PluginKind::Effect {
+                check("activate audio input", unsafe {
+                    // SAFETY: component is initialized; bus zero is the
+                    // negotiated stereo main input.
+                    ((*component_table).activate_bus)(
+                        component.as_ptr(),
+                        as_media_type(Vst::MediaTypes_kAudio),
+                        as_bus_direction(Vst::BusDirections_kInput),
+                        0,
+                        1,
+                    )
+                })?;
+            }
+            check("activate audio output", unsafe {
                 // SAFETY: component is initialized; bus zero is the
-                // negotiated stereo main input.
+                // negotiated stereo main output.
                 ((*component_table).activate_bus)(
                     component.as_ptr(),
                     as_media_type(Vst::MediaTypes_kAudio),
-                    as_bus_direction(Vst::BusDirections_kInput),
+                    as_bus_direction(Vst::BusDirections_kOutput),
                     0,
                     1,
                 )
             })?;
+            activate_event_input_buses(component)?;
+            let mut setup = ProcessSetup {
+                processMode: as_int32(Vst::ProcessModes_kRealtime),
+                symbolicSampleSize: as_int32(Vst::SymbolicSampleSizes_kSample32),
+                maxSamplesPerBlock: MAX_BLOCK_FRAMES,
+                sampleRate: sample_rate,
+            };
+            check("setupProcessing", unsafe {
+                // SAFETY: setup is initialized and valid for this call.
+                ((*processor_table).setup_processing)(
+                    processor.as_ptr(),
+                    std::ptr::addr_of_mut!(setup),
+                )
+            })?;
+            check("setActive(true)", unsafe {
+                // SAFETY: all buses and processing configuration are set.
+                ((*component_table).set_active)(component.as_ptr(), 1)
+            })?;
         }
-        check("activate audio output", unsafe {
-            // SAFETY: component is initialized; bus zero is the
-            // negotiated stereo main output.
-            ((*component_table).activate_bus)(
-                component.as_ptr(),
-                as_media_type(Vst::MediaTypes_kAudio),
-                as_bus_direction(Vst::BusDirections_kOutput),
-                0,
-                1,
-            )
-        })?;
-        let mut setup = ProcessSetup {
-            processMode: as_int32(Vst::ProcessModes_kRealtime),
-            symbolicSampleSize: as_int32(Vst::SymbolicSampleSizes_kSample32),
-            maxSamplesPerBlock: MAX_BLOCK_FRAMES,
-            sampleRate: sample_rate,
-        };
-        check("setupProcessing", unsafe {
-            // SAFETY: setup is initialized and valid for this call.
-            ((*processor_table).setup_processing)(processor.as_ptr(), std::ptr::addr_of_mut!(setup))
-        })?;
-        check("setActive(true)", unsafe {
-            // SAFETY: all buses and processing configuration are set.
-            ((*component_table).set_active)(component.as_ptr(), 1)
-        })?;
-        check_optional("setProcessing(true)", unsafe {
-            // SAFETY: component is active.
-            ((*processor_table).set_processing)(processor.as_ptr(), 1)
-        })?;
+        lifecycle.active = true;
+        {
+            let processor = lifecycle.processor();
+            let processor_table = processor_table(processor);
+            check_optional("setProcessing(true)", unsafe {
+                // SAFETY: component is active.
+                ((*processor_table).set_processing)(processor.as_ptr(), 1)
+            })?;
+        }
+        lifecycle.processing = true;
+        let (component, processor) = lifecycle.take();
         Ok((
             Self {
                 processor,
@@ -516,6 +516,270 @@ impl Drop for StereoProcessor {
         }
         let _keep_alive = (&self.module, &self.host);
     }
+}
+
+/// Owns an initialized VST3 component until construction succeeds or fails.
+///
+/// On failure, tears down with `setProcessing(false)` / `setActive(false)` /
+/// `terminate()` before `ComPtr` release. Skipping `terminate()` after a
+/// successful `initialize()` crashes some commercial instruments (Kontakt).
+struct InitializedComponent {
+    component: Option<ComPtr<IComponent>>,
+    processor: Option<ComPtr<IAudioProcessor>>,
+    active: bool,
+    processing: bool,
+}
+
+impl InitializedComponent {
+    fn new(component: ComPtr<IComponent>) -> Self {
+        Self {
+            component: Some(component),
+            processor: None,
+            active: false,
+            processing: false,
+        }
+    }
+
+    fn component(&self) -> &ComPtr<IComponent> {
+        self.component
+            .as_ref()
+            .expect("initialized component is present until take()")
+    }
+
+    fn processor(&self) -> &ComPtr<IAudioProcessor> {
+        self.processor
+            .as_ref()
+            .expect("audio processor is present after set_processor()")
+    }
+
+    fn set_processor(&mut self, processor: ComPtr<IAudioProcessor>) {
+        self.processor = Some(processor);
+    }
+
+    fn take(mut self) -> (ComPtr<IComponent>, ComPtr<IAudioProcessor>) {
+        let component = self
+            .component
+            .take()
+            .expect("initialized component is present until take()");
+        let processor = self
+            .processor
+            .take()
+            .expect("audio processor is present until take()");
+        // Disarm Drop so StereoProcessor owns the remaining lifecycle.
+        self.active = false;
+        self.processing = false;
+        (component, processor)
+    }
+}
+
+impl Drop for InitializedComponent {
+    fn drop(&mut self) {
+        let Some(component) = self.component.as_ref() else {
+            return;
+        };
+        let component_table = component_table(component);
+        unsafe {
+            // SAFETY: component was successfully initialized; tear down in reverse
+            // activation order while the module and interfaces remain live.
+            if self.processing
+                && let Some(processor) = self.processor.as_ref()
+            {
+                ((*processor_table(processor)).set_processing)(processor.as_ptr(), 0);
+            }
+            if self.active {
+                ((*component_table).set_active)(component.as_ptr(), 0);
+            }
+            ((*component_table).base.terminate)(component.as_ptr().cast::<IPluginBase>());
+        }
+    }
+}
+
+fn audio_bus_count(component: &ComPtr<IComponent>, direction: BusDirections) -> i32 {
+    let component_table = component_table(component);
+    unsafe {
+        // SAFETY: component is initialized and the media/direction enums are SDK values.
+        ((*component_table).get_bus_count)(
+            component.as_ptr(),
+            as_media_type(Vst::MediaTypes_kAudio),
+            as_bus_direction(direction),
+        )
+    }
+    .max(0)
+}
+
+fn bus_arrangement(
+    processor: &ComPtr<IAudioProcessor>,
+    direction: BusDirections,
+    index: i32,
+) -> HostResult<SpeakerArrangement> {
+    let mut arrangement = 0;
+    check("getBusArrangement", unsafe {
+        // SAFETY: arrangement points to writable SDK storage for this call.
+        ((*processor_table(processor)).get_bus_arrangement)(
+            processor.as_ptr(),
+            as_bus_direction(direction),
+            index,
+            std::ptr::addr_of_mut!(arrangement),
+        )
+    })?;
+    Ok(arrangement)
+}
+
+fn bus_arrangement_or(
+    processor: &ComPtr<IAudioProcessor>,
+    direction: BusDirections,
+    index: i32,
+    fallback: SpeakerArrangement,
+) -> SpeakerArrangement {
+    bus_arrangement(processor, direction, index).unwrap_or(fallback)
+}
+
+/// Negotiate speaker arrangements the way Steinberg hosts do:
+/// propose layouts for every audio bus (`getBusCount`), treat `kResultFalse`
+/// as a counter-offer, then adopt the plug-in's `getBusArrangement` values.
+///
+/// Multi-out instruments (Kontakt) reject a single-bus proposal; passing the
+/// full bus count lets them adapt while we still only activate the main out.
+fn negotiate_bus_arrangements(
+    component: &ComPtr<IComponent>,
+    processor: &ComPtr<IAudioProcessor>,
+    layout: AudioLayout,
+) -> HostResult<()> {
+    let input_count = audio_bus_count(component, Vst::BusDirections_kInput) as usize;
+    let output_count = audio_bus_count(component, Vst::BusDirections_kOutput) as usize;
+    if output_count == 0 {
+        return Err(HostError::Operation {
+            operation: "audio output bus count",
+            result: -2147024809,
+        });
+    }
+
+    let desired_main = if layout.output_channels() == 1 {
+        Vst::SpeakerArr::kMono
+    } else {
+        Vst::SpeakerArr::kStereo
+    };
+    let desired_input = if layout.input_channels() == 1 {
+        Vst::SpeakerArr::kMono
+    } else {
+        Vst::SpeakerArr::kStereo
+    };
+
+    let mut inputs = (0..input_count)
+        .map(|index| {
+            if index == 0 {
+                desired_input
+            } else {
+                bus_arrangement_or(
+                    processor,
+                    Vst::BusDirections_kInput,
+                    index as i32,
+                    Vst::SpeakerArr::kStereo,
+                )
+            }
+        })
+        .collect::<Vec<_>>();
+    let mut outputs = (0..output_count)
+        .map(|index| {
+            if index == 0 {
+                desired_main
+            } else {
+                bus_arrangement_or(
+                    processor,
+                    Vst::BusDirections_kOutput,
+                    index as i32,
+                    Vst::SpeakerArr::kStereo,
+                )
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let processor_table = processor_table(processor);
+    let result = unsafe {
+        // SAFETY: input/output arrangement arrays stay live for the call and
+        // lengths match IComponent::getBusCount for each direction.
+        ((*processor_table).set_bus_arrangements)(
+            processor.as_ptr(),
+            if inputs.is_empty() {
+                std::ptr::null_mut()
+            } else {
+                inputs.as_mut_ptr()
+            },
+            inputs.len() as i32,
+            outputs.as_mut_ptr(),
+            outputs.len() as i32,
+        )
+    };
+    // kResultOk / kResultTrue == 0: accepted as proposed.
+    if result == 0 {
+        return Ok(());
+    }
+    // kResultFalse == 1: plug-in rejected the proposal but may have adapted.
+    // Read back every bus and continue — matching Cubase/Logic negotiation.
+    if result != 1 {
+        return Err(HostError::Operation {
+            operation: "setBusArrangements",
+            result,
+        });
+    }
+
+    for (index, arrangement) in inputs.iter_mut().enumerate() {
+        *arrangement = bus_arrangement(processor, Vst::BusDirections_kInput, index as i32)?;
+    }
+    for (index, arrangement) in outputs.iter_mut().enumerate() {
+        *arrangement = bus_arrangement(processor, Vst::BusDirections_kOutput, index as i32)?;
+    }
+
+    let confirm = unsafe {
+        // SAFETY: same as the proposal call; arrays still match getBusCount.
+        ((*processor_table).set_bus_arrangements)(
+            processor.as_ptr(),
+            if inputs.is_empty() {
+                std::ptr::null_mut()
+            } else {
+                inputs.as_mut_ptr()
+            },
+            inputs.len() as i32,
+            outputs.as_mut_ptr(),
+            outputs.len() as i32,
+        )
+    };
+    // After adopting the plug-in's arrangements, either Ok or False is fine —
+    // Steinberg's reject workflow proceeds to setActive after getBusArrangement.
+    if confirm == 0 || confirm == 1 {
+        Ok(())
+    } else {
+        Err(HostError::Operation {
+            operation: "setBusArrangements",
+            result: confirm,
+        })
+    }
+}
+
+fn activate_event_input_buses(component: &ComPtr<IComponent>) -> HostResult<()> {
+    let component_table = component_table(component);
+    let count = unsafe {
+        // SAFETY: component is initialized and the media/direction enums are SDK values.
+        ((*component_table).get_bus_count)(
+            component.as_ptr(),
+            as_media_type(Vst::MediaTypes_kEvent),
+            as_bus_direction(Vst::BusDirections_kInput),
+        )
+    }
+    .max(0);
+    for index in 0..count {
+        check("activate event input", unsafe {
+            // SAFETY: index is within getBusCount(kEvent, kInput).
+            ((*component_table).activate_bus)(
+                component.as_ptr(),
+                as_media_type(Vst::MediaTypes_kEvent),
+                as_bus_direction(Vst::BusDirections_kInput),
+                index,
+                1,
+            )
+        })?;
+    }
+    Ok(())
 }
 
 fn component_table(component: &ComPtr<IComponent>) -> *const ComponentVTable {

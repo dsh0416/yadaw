@@ -2,7 +2,7 @@
 import { computed, onMounted, shallowRef } from "vue"
 import { AudioWaveform, Piano, Plug, Search, SlidersHorizontal } from "@lucide/vue"
 import type { ProjectAssetSummary as Asset } from "@yadaw/contracts"
-import { pluginDescriptorKey, type PluginDescriptor } from "@yadaw/contracts"
+import { pluginCategoriesLabel, pluginDescriptorKey, type PluginDescriptor } from "@yadaw/contracts"
 import { usePluginStore } from "../../stores/plugins"
 import PluginAudioModeMenu from "../plugins/PluginAudioModeMenu.vue"
 import type { PluginSelection, PluginSignalWidth } from "../plugins/plugin-audio-mode"
@@ -22,18 +22,18 @@ function matches(value: string): boolean {
 
 const instruments = computed(() =>
   pluginStore.compatibleInstruments.filter((plugin) =>
-    matches(`${plugin.name} ${plugin.vendor} ${plugin.category}`)
+    matches(`${plugin.name} ${plugin.vendor} ${pluginCategoriesLabel(plugin.categories)}`)
   )
 )
 const effects = computed(() =>
   pluginStore.compatibleEffects.filter((plugin) =>
-    matches(`${plugin.name} ${plugin.vendor} ${plugin.category}`)
+    matches(`${plugin.name} ${plugin.vendor} ${pluginCategoriesLabel(plugin.categories)}`)
   )
 )
 const samples = computed(() => props.assets.filter((asset) => matches(asset.name)))
 const allPlugins = computed(() =>
   pluginStore.catalog.plugins.filter((plugin) =>
-    matches(`${plugin.name} ${plugin.vendor} ${plugin.category}`)
+    matches(`${plugin.name} ${plugin.vendor} ${pluginCategoriesLabel(plugin.categories)}`)
   )
 )
 const browserSections = computed<
@@ -129,7 +129,7 @@ onMounted(() => void pluginStore.load())
                 ><b>{{ plugin.name }}</b
                 ><small
                   >{{ plugin.source.kind === "builtin" ? "Built-in · " : "" }}{{ plugin.vendor }} ·
-                  {{ plugin.category }}</small
+                  {{ pluginCategoriesLabel(plugin.categories) }}</small
                 ></span
               ><span class="item-dot compatible" />
             </button>
@@ -156,7 +156,7 @@ onMounted(() => void pluginStore.load())
                 ><b>{{ plugin.name }}</b
                 ><small
                   >{{ plugin.source.kind === "builtin" ? "Built-in · " : "" }}{{ plugin.vendor }} ·
-                  {{ plugin.category }}</small
+                  {{ pluginCategoriesLabel(plugin.categories) }}</small
                 ></span
               ><span class="item-dot compatible" />
             </button>

@@ -10,7 +10,7 @@ const descriptor: PluginDescriptor = {
   name: "Mono Effect",
   vendor: "YADAW",
   version: "1.0",
-  category: "Fx",
+  categories: ["Fx"],
   kind: "effect",
   architecture: "x86_64",
   buses: [],

@@ -2,7 +2,7 @@
 import { computed, shallowRef } from "vue"
 import { UiCascadingMenu } from "@yadaw/ui"
 import type { UiCascadingMenuItem } from "@yadaw/ui"
-import { pluginDescriptorKey, type PluginDescriptor } from "@yadaw/contracts"
+import { pluginCategoriesLabel, pluginDescriptorKey, type PluginDescriptor } from "@yadaw/contracts"
 import {
   pluginAudioModeInputWidth,
   pluginAudioModeOptions,
@@ -32,7 +32,7 @@ const filteredPlugins = computed(() => {
       )
     )
     .filter((plugin) =>
-      `${plugin.name} ${plugin.vendor} ${plugin.category}`
+      `${plugin.name} ${plugin.vendor} ${pluginCategoriesLabel(plugin.categories)}`
         .toLocaleLowerCase()
         .includes(normalizedQuery)
     )
@@ -57,7 +57,7 @@ const pickerMenu = computed(() => {
     children: plugins.map((plugin) => ({
       label: plugin.name,
       ariaLabel: `Choose ${plugin.name}`,
-      title: `${plugin.name} · ${plugin.vendor} · ${plugin.category}`,
+      title: `${plugin.name} · ${plugin.vendor} · ${pluginCategoriesLabel(plugin.categories)}`,
       children: pluginAudioModeOptions(plugin.kind, props.inputWidth).map((option) => {
         const value = JSON.stringify([pluginDescriptorKey(plugin), option.value])
         selections.set(value, { descriptor: plugin, audioMode: option.value })

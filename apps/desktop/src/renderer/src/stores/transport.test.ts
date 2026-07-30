@@ -36,7 +36,7 @@ function effectInstance(id: string): PluginInstanceState {
       name: "Reverb",
       vendor: "Vendor",
       version: "1.0",
-      category: "Fx",
+      categories: ["Fx"],
       kind: "effect",
       supportedAudioModes: ["stereo"],
       architecture: "x86_64",

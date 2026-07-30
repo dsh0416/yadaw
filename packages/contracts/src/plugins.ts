@@ -38,7 +38,8 @@ export interface PluginDescriptor {
   name: string
   vendor: string
   version: string
-  category: string
+  /** VST3 `subCategories` (and host fallbacks), split into individual tags. */
+  categories: string[]
   kind: PluginKind
   supportedAudioModes: PluginAudioMode[]
   architecture: string
@@ -55,6 +56,57 @@ export function pluginDescriptorKey(descriptor: PluginDescriptor): string {
     : `${descriptor.modulePath}:${descriptor.classId}`
 }
 
+/** Split a VST3 pipe-separated subcategory string, or normalize an array. */
+export function parsePluginCategories(
+  value: string | readonly string[] | null | undefined
+): string[] {
+  if (typeof value === "string") {
+    return value
+      .split("|")
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0)
+  }
+  if (value == null) {
+    return []
+  }
+  // Array.isArray narrows to any[]; keep the readonly string[] branch explicit.
+  return value.map((item) => item.trim()).filter((item) => item.length > 0)
+}
+
+export function defaultPluginCategories(kind: PluginKind): string[] {
+  return kind === "instrument" ? ["Instrument", "Synth"] : ["Fx"]
+}
+
+export function pluginCategoriesLabel(categories: readonly string[], separator = " · "): string {
+  return categories.join(separator)
+}
+
+export function pluginLooksLikeInstrument(categories: readonly string[]): boolean {
+  return categories.some((category) => {
+    const normalized = category.toLocaleLowerCase()
+    return normalized.includes("instrument") || normalized.includes("synth")
+  })
+}
+
+/**
+ * Normalize a descriptor loaded from older project/catalog snapshots that used
+ * a single pipe-separated `category` string.
+ */
+export function normalizePluginDescriptor(
+  value: PluginDescriptor & { category?: string }
+): PluginDescriptor {
+  const supportedAudioModes = Array.isArray(value.supportedAudioModes)
+    ? value.supportedAudioModes
+    : (["stereo"] as PluginAudioMode[])
+  const categories = parsePluginCategories(value.categories ?? value.category)
+  const { category: _legacyCategory, ...rest } = value
+  return {
+    ...rest,
+    supportedAudioModes,
+    categories: categories.length > 0 ? categories : defaultPluginCategories(value.kind ?? "effect")
+  }
+}
+
 export interface PluginCatalogSnapshot {
   scannerVersion: number
   scanning: boolean
@@ -64,12 +116,13 @@ export interface PluginCatalogSnapshot {
 
 export interface PluginScanRequest {
   paths?: string[]
-  /** Re-probe quarantined bundles even when their fingerprint is unchanged. */
+  /** Re-discover quarantined bundles even when their fingerprint is unchanged. */
   retryQuarantined?: boolean
   /**
-   * Bypass the on-disk fingerprint cache and re-probe every discovered bundle.
+   * Bypass the on-disk fingerprint cache and rediscover every found bundle.
    * Manual "Rescan VST3" sets this; startup scans leave it unset so unchanged
-   * plugins are reused from `plugin-catalog.json`.
+   * plugins are reused from `plugin-catalog.json`. Discovery stays lightweight
+   * (moduleinfo.json / soft factory enum) and does not instantiate processors.
    */
   force?: boolean
 }

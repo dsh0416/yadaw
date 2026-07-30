@@ -51,18 +51,10 @@ impl EditorWindow {
             self.platform_context = Some(NativeUiContext::initialize()?);
         }
         let view = runtime.create_view(&self.instance_id)?;
-        let size = view
-            .size()
-            .map_err(|error| format!("Could not read the plug-in UI size: {error}"))?;
-        let width = rect_width(size);
-        let height = rect_height(size);
-        if width == 0 || height == 0 {
-            return Err("The plug-in did not provide a usable native editor size; \
-                 switched to Parameters."
-                .into());
-        }
         self.window.set_resizable(view.can_resize());
 
+        // Apply content scale before reading size: some adaptive editors only
+        // report a usable getSize after IPlugViewContentScaleSupport.
         let scale = plugin_content_scale(self.monitor_scale.get(), self.user_zoom.get());
         let scale_supported = view
             .set_content_scale_factor(scale)
@@ -74,6 +66,7 @@ impl EditorWindow {
             );
         }
 
+        let size = initial_native_view_rect(view.size(), |rect| view.constrain_size(rect).is_ok());
         let (container_width, container_height) = container_extent(size, self.monitor_scale.get());
         let toolbar = toolbar_platform_extent(self.monitor_scale.get(), self.user_zoom.get());
         let Some(container) = NativeContainer::create(

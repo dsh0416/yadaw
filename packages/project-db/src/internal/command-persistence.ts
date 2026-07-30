@@ -1,13 +1,14 @@
 import { and, eq, inArray, ne } from "drizzle-orm"
 import type { PgliteDatabase } from "drizzle-orm/pglite"
-import type {
-  MidiClipRangePatch,
-  MidiNotePatch,
-  MixerChannelPatch,
-  MixerSendPatch,
-  PluginDescriptor,
-  PluginInstancePatch,
-  ProjectCommand
+import {
+  normalizePluginDescriptor,
+  type MidiClipRangePatch,
+  type MidiNotePatch,
+  type MixerChannelPatch,
+  type MixerSendPatch,
+  type PluginDescriptor,
+  type PluginInstancePatch,
+  type ProjectCommand
 } from "@yadaw/contracts"
 import {
   keySignatureEvents,
@@ -36,10 +37,7 @@ export function bytes(value: unknown): Uint8Array {
 }
 
 export function pluginDescriptor(snapshot: string): PluginDescriptor {
-  const descriptor = JSON.parse(snapshot) as PluginDescriptor
-  return Array.isArray(descriptor.supportedAudioModes)
-    ? descriptor
-    : { ...descriptor, supportedAudioModes: ["stereo"] }
+  return normalizePluginDescriptor(JSON.parse(snapshot) as PluginDescriptor & { category?: string })
 }
 
 function channelPatch(patch: MixerChannelPatch): Partial<typeof mixerChannels.$inferInsert> {

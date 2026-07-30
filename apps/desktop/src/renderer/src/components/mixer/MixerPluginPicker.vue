@@ -2,7 +2,7 @@
 import { computed, shallowRef, watch } from "vue"
 import { Search } from "@lucide/vue"
 import { UiPopover } from "@yadaw/ui"
-import { pluginDescriptorKey, type PluginDescriptor } from "@yadaw/contracts"
+import { pluginCategoriesLabel, pluginDescriptorKey, type PluginDescriptor } from "@yadaw/contracts"
 import PluginAudioModeMenu from "../plugins/PluginAudioModeMenu.vue"
 import type { PluginSelection } from "../plugins/plugin-audio-mode"
 
@@ -24,7 +24,7 @@ const filteredPlugins = computed(() => {
   const normalizedQuery = query.value.trim().toLocaleLowerCase()
   return [...props.plugins]
     .filter((plugin) =>
-      `${plugin.name} ${plugin.vendor} ${plugin.category}`
+      `${plugin.name} ${plugin.vendor} ${pluginCategoriesLabel(plugin.categories)}`
         .toLocaleLowerCase()
         .includes(normalizedQuery)
     )
@@ -83,7 +83,7 @@ function selectMode(audioMode: PluginSelection["audioMode"]): void {
             <b>{{ plugin.name }}</b>
             <small
               >{{ plugin.source.kind === "builtin" ? "Built-in · " : "" }}{{ plugin.vendor }} ·
-              {{ plugin.category }}</small
+              {{ pluginCategoriesLabel(plugin.categories) }}</small
             >
           </button>
           <p v-if="filteredPlugins.length === 0">
