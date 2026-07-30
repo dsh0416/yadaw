@@ -1,0 +1,15 @@
+{
+  "name": "@yadaw/docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vitepress dev",
+    "build": "vitepress build",
+    "preview": "vitepress preview",
+    "check": "vitepress build"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "vitepress": "^1.6.4"
+  }
+}

@@ -11,6 +11,9 @@
   },
   "scripts": {
     "dev": "pnpm --filter @yadaw/desktop dev",
+    "docs:dev": "pnpm --filter @yadaw/docs dev",
+    "docs:build": "pnpm --filter @yadaw/docs build",
+    "docs:preview": "pnpm --filter @yadaw/docs preview",
     "build": "pnpm build:native && pnpm --filter @yadaw/desktop build",
     "build:native": "pnpm --filter @yadaw/dsp-node build && pnpm --filter @yadaw/audio-host-client build && cargo build -p yadaw-audio-host --release && cargo build -p yadaw-vst3-host --bin yadaw-vst3-probe --release && cargo truce build --vst3",
     "db:generate": "pnpm --filter @yadaw/project-db db:generate",
@@ -44,8 +47,8 @@
     "format:rust": "cargo fmt --all",
     "format:rust:check": "cargo fmt --all --check",
     "lint": "pnpm lint:eslint && pnpm lint:rust",
-    "lint:eslint": "eslint \"*.{js,mjs,ts}\" \"apps/**/*.{cjs,js,mjs,ts,vue}\" \"packages/**/*.{cjs,js,mjs,ts,vue}\" --max-warnings 0",
-    "lint:eslint:fix": "eslint \"*.{js,mjs,ts}\" \"apps/**/*.{cjs,js,mjs,ts,vue}\" \"packages/**/*.{cjs,js,mjs,ts,vue}\" --fix --max-warnings 0",
+    "lint:eslint": "eslint \"*.{js,mjs,ts}\" \"apps/**/*.{cjs,js,mjs,ts,vue}\" \"docs/**/*.{cjs,js,mjs,ts,vue}\" \"packages/**/*.{cjs,js,mjs,ts,vue}\" --max-warnings 0",
+    "lint:eslint:fix": "eslint \"*.{js,mjs,ts}\" \"apps/**/*.{cjs,js,mjs,ts,vue}\" \"docs/**/*.{cjs,js,mjs,ts,vue}\" \"packages/**/*.{cjs,js,mjs,ts,vue}\" --fix --max-warnings 0",
     "lint:design": "node scripts/design-audit.ts",
     "lint:rust": "cargo clippy --workspace --all-targets --features yadaw-dsp-node/bench-internals -- -D warnings"
   },

@@ -1,0 +1,147 @@
+:root {
+  --yadaw-display: "Avenir Next Condensed", "Arial Narrow", "Helvetica Neue", sans-serif;
+  --yadaw-cyan: #72c3c7;
+  --yadaw-cyan-light: #9bdadd;
+  --yadaw-cyan-dark: #397a7d;
+  --yadaw-record: #ff6577;
+  --yadaw-midi: #a98ade;
+  --yadaw-meter: #50b86d;
+  --yadaw-warning: #e8b75f;
+  --vp-font-family-base: "Avenir Next", Avenir, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --vp-font-family-mono: "SFMono-Regular", "Cascadia Code", "Roboto Mono", Consolas, monospace;
+  --vp-c-brand-1: #72c3c7;
+  --vp-c-brand-2: #8dd0d3;
+  --vp-c-brand-3: #397a7d;
+  --vp-c-brand-soft: rgb(114 195 199 / 12%);
+  --vp-c-bg: #101010;
+  --vp-c-bg-alt: #151515;
+  --vp-c-bg-elv: #202020;
+  --vp-c-bg-soft: #1b1b1b;
+  --vp-c-divider: #2b2b2b;
+  --vp-c-border: #3a3a3a;
+  --vp-c-gutter: #181818;
+  --vp-c-text-1: #e8e8e8;
+  --vp-c-text-2: #b8b8b8;
+  --vp-c-text-3: #797979;
+  --vp-code-block-bg: #151515;
+  --vp-home-hero-name-color: var(--yadaw-cyan);
+  --vp-nav-bg-color: rgb(16 16 16 / 86%);
+  --vp-sidebar-bg-color: #151515;
+}
+
+:root:not(.dark) {
+  --yadaw-cyan: #287982;
+  --yadaw-cyan-light: #3b8d95;
+  --yadaw-cyan-dark: #1f6269;
+  --yadaw-record: #c13e50;
+  --yadaw-midi: #704fc0;
+  --yadaw-meter: #33804b;
+  --yadaw-warning: #9a681d;
+  --vp-c-brand-1: #287982;
+  --vp-c-brand-2: #1f6269;
+  --vp-c-brand-3: #3b8d95;
+  --vp-c-brand-soft: rgb(40 121 130 / 12%);
+  --vp-c-bg: #f3f3f4;
+  --vp-c-bg-alt: #e4e5e7;
+  --vp-c-bg-elv: #ffffff;
+  --vp-c-bg-soft: #ececee;
+  --vp-c-divider: #c4c5c7;
+  --vp-c-border: #aaadb0;
+  --vp-c-gutter: #d8d9db;
+  --vp-c-text-1: #202224;
+  --vp-c-text-2: #45494c;
+  --vp-c-text-3: #676c70;
+  --vp-code-block-bg: #e4e5e7;
+  --vp-nav-bg-color: rgb(243 243 244 / 88%);
+  --vp-sidebar-bg-color: #ececee;
+}
+
+html {
+  background: var(--vp-c-bg);
+  transition: background-color 180ms ease;
+}
+
+body {
+  letter-spacing: -0.005em;
+}
+
+.VPNavBar {
+  border-bottom-color: var(--vp-c-divider) !important;
+}
+
+.VPNavBarTitle .logo {
+  width: 25px;
+  height: 25px;
+}
+
+.VPNavBarTitle .title {
+  font-family: var(--vp-font-family-mono);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+}
+
+.VPNavBarMenuLink,
+.VPNavBarMenuGroup .text {
+  font-family: var(--vp-font-family-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.VPDoc h1,
+.VPDoc h2,
+.VPDoc h3 {
+  font-family: var(--yadaw-display);
+  letter-spacing: -0.025em;
+}
+
+.VPDoc h1 {
+  font-size: clamp(38px, 5vw, 52px);
+  line-height: 1;
+}
+
+.VPDoc h2 {
+  border-top-color: var(--vp-c-divider);
+}
+
+.VPDoc a {
+  text-underline-offset: 3px;
+}
+
+.VPDoc img {
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 8px;
+}
+
+.VPDoc .custom-block {
+  border-radius: 6px;
+}
+
+.VPSidebarItem .text {
+  font-size: 13px;
+}
+
+.VPSidebarItem.level-0 > .item > .text {
+  font-family: var(--vp-font-family-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.VPFooter {
+  border-top-color: var(--vp-c-divider) !important;
+  background: var(--vp-c-bg) !important;
+}
+
+@media (min-width: 960px) {
+  .VPNavBar.has-sidebar .title {
+    border-bottom-color: transparent !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    transition: none;
+  }
+}
