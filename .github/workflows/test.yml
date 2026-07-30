@@ -14,6 +14,14 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: "1"
+  # CI-only compilation tuning. Local dev builds keep full debug info and the
+  # optimized dev profile from Cargo.toml; CI only needs line tables for
+  # useful backtraces, and MSVC PDB generation is a large part of Windows
+  # build time. Incremental compilation is disabled so sccache can cache
+  # every rustc invocation (sccache skips incremental compiles).
+  CARGO_INCREMENTAL: "0"
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
+  CARGO_PROFILE_TEST_DEBUG: line-tables-only
 
 jobs:
   checks:
@@ -23,13 +31,21 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Linux runs the full repository checks. Windows and macOS only run
+        # the platform-dependent subset (Rust checks, napi-rs builds, unit
+        # and project-database tests); Prettier, ESLint, design audits,
+        # TypeScript-only checks, and Storybook produce identical results on
+        # every platform and would otherwise dominate the slower runners.
         include:
           - name: Linux x64
             os: ubuntu-latest
+            check-script: check
           - name: Windows x64
             os: windows-latest
+            check-script: check:native
           - name: macOS
             os: macos-latest
+            check-script: check:native
     steps:
       - name: Check out source
         uses: actions/checkout@v7
@@ -41,6 +57,7 @@ jobs:
         with:
           github-token: >-
             ${{ github.event_name == 'pull_request' && '' || github.token }}
+          cache-rust-build: "true"
 
       - name: Install Playwright Chromium and Linux dependencies
         if: runner.os == 'Linux'
@@ -48,10 +65,5 @@ jobs:
           pnpm --filter @yadaw/design-system exec playwright install
           --with-deps chromium
 
-      - name: Install Playwright Chromium
-        if: runner.os != 'Linux'
-        run: >-
-          pnpm --filter @yadaw/design-system exec playwright install chromium
-
       - name: Run repository checks
-        run: pnpm check
+        run: pnpm ${{ matrix.check-script }}

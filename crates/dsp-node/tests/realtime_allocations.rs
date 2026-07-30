@@ -24,6 +24,9 @@ struct ThreadCountingAllocator;
 #[global_allocator]
 static ALLOCATOR: ThreadCountingAllocator = ThreadCountingAllocator;
 
+// SAFETY: every method delegates to the `System` allocator and only adds
+// side-effect-free thread-local counting, so the `GlobalAlloc` contract is
+// upheld by `System`.
 unsafe impl GlobalAlloc for ThreadCountingAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         TRACKING.with(|tracking| {
@@ -31,6 +34,7 @@ unsafe impl GlobalAlloc for ThreadCountingAllocator {
                 ALLOCATIONS.with(|count| count.set(count.get() + 1));
             }
         });
+        // SAFETY: the caller upholds the `GlobalAlloc::alloc` contract.
         unsafe { System.alloc(layout) }
     }
 
@@ -40,6 +44,7 @@ unsafe impl GlobalAlloc for ThreadCountingAllocator {
                 DEALLOCATIONS.with(|count| count.set(count.get() + 1));
             }
         });
+        // SAFETY: the caller upholds the `GlobalAlloc::dealloc` contract.
         unsafe { System.dealloc(pointer, layout) }
     }
 
@@ -49,6 +54,7 @@ unsafe impl GlobalAlloc for ThreadCountingAllocator {
                 ALLOCATIONS.with(|count| count.set(count.get() + 1));
             }
         });
+        // SAFETY: the caller upholds the `GlobalAlloc::alloc_zeroed` contract.
         unsafe { System.alloc_zeroed(layout) }
     }
 
@@ -59,6 +65,7 @@ unsafe impl GlobalAlloc for ThreadCountingAllocator {
                 DEALLOCATIONS.with(|count| count.set(count.get() + 1));
             }
         });
+        // SAFETY: the caller upholds the `GlobalAlloc::realloc` contract.
         unsafe { System.realloc(pointer, layout, new_size) }
     }
 }
