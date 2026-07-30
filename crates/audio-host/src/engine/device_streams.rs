@@ -1,13 +1,3 @@
-fn host_for_backend(backend: &str) -> Result<Host> {
-    let host_id = cpal::available_hosts()
-        .into_iter()
-        .find(|host_id| host_id.to_string().eq_ignore_ascii_case(backend))
-        .ok_or_else(|| invalid_config(format!("cpal backend '{backend}' is not available")))?;
-
-    cpal::host_from_id(host_id)
-        .map_err(|error| audio_error("failed to initialize cpal host", error))
-}
-
 fn find_device(host: &Host, id: &str, input: bool) -> Result<Device> {
     let devices = if input {
         host.input_devices()

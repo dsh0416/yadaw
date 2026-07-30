@@ -285,7 +285,7 @@ mod tests {
     #[test]
     fn audio_engine_identity_includes_the_requested_session_rate() {
         let base = AudioEngineKey {
-            backend: "virtual".to_owned(),
+            backend: "mock".to_owned(),
             input_device_id: "input".to_owned(),
             output_device_id: "output".to_owned(),
             requested_buffer_size: 128,

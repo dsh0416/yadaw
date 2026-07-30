@@ -8,9 +8,10 @@ use yadaw_audio_host::engine::{
     begin_graph_build, compile_graph_build, heartbeat_snapshot, publish_mixer_runtime,
     start_audio_engine, stop_audio_engine, transport_command, transport_snapshot,
 };
+use yadaw_audio_host::mock;
 use yadaw_dsp_runtime::tempo::{TempoEvent, TimeSignatureEvent};
 
-const VIRTUAL_BLOCK_FRAMES: u64 = 128;
+const MOCK_BLOCK_FRAMES: u64 = 128;
 const NATIVE_SAMPLE_RATE: u64 = 48_000;
 const PROJECT_SAMPLE_RATE: u64 = 44_100;
 const CALLBACKS_TO_OBSERVE: u64 = 128;
@@ -29,16 +30,11 @@ fn stable_transport_snapshot() -> (u64, NativeTransportSnapshot) {
 }
 
 #[test]
-fn virtual_backend_uses_the_project_clock_over_native_48_khz_io() {
-    // SAFETY: This integration test is its own process and sets the opt-in
-    // before the virtual audio worker or any other thread is spawned.
-    unsafe {
-        std::env::set_var("YADAW_TEST_VIRTUAL_AUDIO", "1");
-    }
+fn mock_backend_uses_the_project_clock_over_native_48_khz_io() {
     let runtime = start_audio_engine(NativeAudioEngineConfig {
-        backend: "virtual".to_owned(),
-        input_device_id: "virtual-input".to_owned(),
-        output_device_id: "virtual-output".to_owned(),
+        backend: mock::BACKEND_ID.to_owned(),
+        input_device_id: "custom:mock-input".to_owned(),
+        output_device_id: "custom:mock-output".to_owned(),
         buffer_size: 128,
         session_sample_rate: Some(44_100),
     })
@@ -114,7 +110,7 @@ fn virtual_backend_uses_the_project_clock_over_native_48_khz_io() {
         }
         assert!(
             Instant::now() < start_deadline,
-            "virtual transport did not start before the timeout"
+            "mock transport did not start before the timeout"
         );
         thread::sleep(Duration::from_millis(1));
     };
@@ -128,7 +124,7 @@ fn virtual_backend_uses_the_project_clock_over_native_48_khz_io() {
         }
         assert!(
             Instant::now() < callback_deadline,
-            "virtual audio callbacks did not advance before the timeout"
+            "mock audio callbacks did not advance before the timeout"
         );
         thread::sleep(Duration::from_millis(1));
     }
@@ -136,7 +132,7 @@ fn virtual_backend_uses_the_project_clock_over_native_48_khz_io() {
 
     let callback_count = end_generation.saturating_sub(start_generation);
     let expected_project_frames = callback_count
-        .saturating_mul(VIRTUAL_BLOCK_FRAMES)
+        .saturating_mul(MOCK_BLOCK_FRAMES)
         .saturating_mul(PROJECT_SAMPLE_RATE)
         / NATIVE_SAMPLE_RATE;
     // Project frames are rendered in resampler refill batches rather than one
@@ -152,7 +148,7 @@ fn virtual_backend_uses_the_project_clock_over_native_48_khz_io() {
     assert_eq!(transport.state, "playing");
     assert!(
         advanced_project_frames.abs_diff(expected_project_frames) <= max_project_frame_error,
-        "virtual transport advanced {advanced_project_frames} project frames over \
+        "mock transport advanced {advanced_project_frames} project frames over \
          {callback_count} native callbacks; expected {expected_project_frames} within \
          {MAX_CLOCK_RATE_ERROR_PERCENT}% ({max_project_frame_error} frames)"
     );

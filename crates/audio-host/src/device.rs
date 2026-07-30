@@ -1,6 +1,7 @@
+use crate::mock;
 use crate::{HostError as Error, HostResult as Result, Status};
 use cpal::{
-    SupportedBufferSize, SupportedStreamConfig,
+    Host, SupportedBufferSize, SupportedStreamConfig,
     traits::{DeviceTrait, HostTrait},
 };
 
@@ -65,35 +66,27 @@ pub fn list_audio_backends() -> Vec<NativeAudioBackend> {
                 .any(|host_id| host_id.to_string().eq_ignore_ascii_case(id)),
         })
         .collect::<Vec<_>>();
-    if std::env::var_os("YADAW_TEST_VIRTUAL_AUDIO").is_some() {
-        backends.push(NativeAudioBackend {
-            id: "virtual".to_owned(),
-            label: "Virtual (test)".to_owned(),
-            available: true,
-        });
-    }
+    // The mock backend is a cpal custom host, which cpal deliberately keeps out
+    // of `available_hosts`. It ships in every build and needs no driver, so it
+    // is always selectable and is listed last as the fallback for machines with
+    // no usable audio hardware.
+    backends.push(NativeAudioBackend {
+        id: mock::BACKEND_ID.to_owned(),
+        label: mock::BACKEND_LABEL.to_owned(),
+        available: true,
+    });
     backends
 }
 
-pub fn list_audio_devices(backend: String) -> Result<NativeAudioDeviceList> {
-    if backend == "virtual" && std::env::var_os("YADAW_TEST_VIRTUAL_AUDIO").is_some() {
-        let device = || NativeAudioDevice {
-            id: "virtual-stereo".to_owned(),
-            name: "Virtual Stereo".to_owned(),
-            is_default: true,
-            default_sample_rate: Some(48_000),
-            min_buffer_size: Some(32),
-            max_buffer_size: Some(2_048),
-            channel_count: Some(2),
-        };
-        return Ok(NativeAudioDeviceList {
-            inputs: vec![device()],
-            outputs: vec![device()],
-        });
+/// Resolves a backend identifier to the cpal host that serves it.
+pub fn host_for_backend(backend: &str) -> Result<Host> {
+    if mock::is_mock_backend(backend) {
+        return Ok(mock::host());
     }
+
     let host_id = cpal::available_hosts()
         .into_iter()
-        .find(|host_id| host_id.to_string().eq_ignore_ascii_case(&backend))
+        .find(|host_id| host_id.to_string().eq_ignore_ascii_case(backend))
         .ok_or_else(|| {
             Error::new(
                 Status::InvalidArg,
@@ -101,8 +94,11 @@ pub fn list_audio_devices(backend: String) -> Result<NativeAudioDeviceList> {
             )
         })?;
 
-    let host = cpal::host_from_id(host_id)
-        .map_err(|error| cpal_error("failed to initialize cpal host", error))?;
+    cpal::host_from_id(host_id).map_err(|error| cpal_error("failed to initialize cpal host", error))
+}
+
+pub fn list_audio_devices(backend: String) -> Result<NativeAudioDeviceList> {
+    let host = host_for_backend(&backend)?;
     let default_input_id = host
         .default_input_device()
         .and_then(|device| device.id().ok());
