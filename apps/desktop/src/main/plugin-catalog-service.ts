@@ -666,9 +666,7 @@ export class PluginCatalogService {
       this.probePath,
       mode === "soft" ? ["--soft", bundlePath] : [bundlePath],
       {
-        // Soft probes only open the module factory; deep probes instantiate
-        // processors and need more headroom for slow commercial modules.
-        timeout: mode === "soft" ? 15_000 : 60_000,
+        timeout: 600_000,
         windowsHide: true,
         maxBuffer: 4 * 1024 * 1024,
         encoding: "utf8",
