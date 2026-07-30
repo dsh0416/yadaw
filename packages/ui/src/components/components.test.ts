@@ -76,7 +76,7 @@ describe("UI controls", () => {
     expect(wrapper.emitted("update:modelValue")).toEqual([["draw"]])
   })
 
-  it("commits bounded numeric values with spinbutton semantics", async () => {
+  it("commits bounded numeric values from stepping, blur, and Enter", async () => {
     const wrapper = mount(UiNumberInput, {
       props: {
         modelValue: 64,
@@ -92,9 +92,19 @@ describe("UI controls", () => {
     const input = wrapper.get("input")
     expect(input.attributes("role")).toBe("spinbutton")
     expect(input.attributes("aria-valuemin")).toBe("1")
+
+    await input.trigger("keydown", { key: "ArrowUp" })
+    expect(wrapper.emitted("update:modelValue")?.at(-1)).toEqual([65])
+    await wrapper.setProps({ modelValue: 65 })
+
     await input.setValue("96")
     await input.trigger("blur")
-    expect(wrapper.emitted("update:modelValue")).toEqual([[96]])
+    expect(wrapper.emitted("update:modelValue")?.at(-1)).toEqual([96])
+    await wrapper.setProps({ modelValue: 96 })
+
+    await input.setValue("97")
+    await input.trigger("keydown", { key: "Enter" })
+    expect(wrapper.emitted("update:modelValue")?.at(-1)).toEqual([97])
   })
 
   it("uses text and a signal rail for selected choices", async () => {

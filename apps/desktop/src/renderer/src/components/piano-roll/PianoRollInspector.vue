@@ -18,6 +18,11 @@ function numericValue(field: string): number | null {
   const value = commonValue(field)
   return value === "" ? null : Number(value)
 }
+
+function commitInspectorValue(field: string, value: number | null | undefined): void {
+  if (value === null || value === undefined) return
+  applyInspector(field, String(value))
+}
 </script>
 
 <template>
@@ -41,7 +46,7 @@ function numericValue(field: string): number | null {
           :model-value="numericValue(field.key)"
           placeholder="—"
           :disabled="selectedItems.length === 0"
-          @change="applyInspector(field.key, ($event.target as HTMLInputElement).value)"
+          @update:model-value="commitInspectorValue(field.key, $event)"
         />
       </template>
     </UiField>
