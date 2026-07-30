@@ -1,0 +1,29 @@
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 1%
+    patch:
+      default:
+        target: auto
+        threshold: 1%
+
+comment:
+  layout: "header, diff, flags, files"
+  behavior: default
+  require_changes: false
+
+flag_management:
+  default_rules:
+    carryforward: true
+  individual_flags:
+    - name: javascript
+      paths:
+        - apps/desktop/
+        - packages/project-db/
+        - packages/ui/
+    - name: rust
+      paths:
+        - crates/
+        - plugins/
