@@ -2,7 +2,8 @@ fn transport_state_code(state: &str) -> u32 {
     match state {
         "playing" => 1,
         "recording" => 2,
-        "paused" => 3,
+        "waiting" => 3,
+        "counting-in" => 4,
         _ => 0,
     }
 }

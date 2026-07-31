@@ -3,7 +3,7 @@ use std::{
     io::BufWriter,
     sync::{
         Arc, Mutex,
-        atomic::{AtomicBool, AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering},
         mpsc::{self, Receiver, Sender, SyncSender},
     },
     thread::{self, JoinHandle},
@@ -215,11 +215,15 @@ pub struct RecordingTap {
     active: Arc<AtomicBool>,
     dropout_frames: Arc<AtomicU64>,
     channel_count: usize,
+    transport_state: Arc<AtomicU32>,
+    recording_state: u32,
 }
 
 impl RecordingTap {
     pub fn push(&mut self, channels: &[f32]) {
-        if !self.active.load(Ordering::Relaxed) {
+        if !self.active.load(Ordering::Relaxed)
+            || self.transport_state.load(Ordering::Relaxed) != self.recording_state
+        {
             return;
         }
         let mut frame = [0.0_f32; MAX_INPUT_CHANNELS];
@@ -396,7 +400,12 @@ pub struct RecorderController {
 }
 
 impl RecorderController {
-    pub fn new(sample_rate: u32, channel_count: usize) -> (Self, RecordingTap) {
+    pub fn new(
+        sample_rate: u32,
+        channel_count: usize,
+        transport_state: Arc<AtomicU32>,
+        recording_state: u32,
+    ) -> (Self, RecordingTap) {
         let channel_count = channel_count.clamp(1, MAX_INPUT_CHANNELS);
         let ring =
             HeapRb::<InputFrame>::new((sample_rate as usize * RECORDING_RING_SECONDS).max(8_192));
@@ -436,6 +445,8 @@ impl RecorderController {
                 active,
                 dropout_frames,
                 channel_count,
+                transport_state,
+                recording_state,
             },
         )
     }
@@ -542,4 +553,37 @@ pub fn write_deterministic_test_recording(
         frame_count: i64::from(frame_count),
         dropout_frames: 0,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn recording_tap_ignores_input_until_transport_is_recording() {
+        const RECORDING: u32 = 2;
+        const COUNTING_IN: u32 = 4;
+        let ring = HeapRb::<InputFrame>::new(4);
+        let (producer, mut consumer) = ring.split();
+        let active = Arc::new(AtomicBool::new(true));
+        let transport_state = Arc::new(AtomicU32::new(COUNTING_IN));
+        let mut tap = RecordingTap {
+            producer,
+            active,
+            dropout_frames: Arc::new(AtomicU64::new(0)),
+            channel_count: 2,
+            transport_state: Arc::clone(&transport_state),
+            recording_state: RECORDING,
+        };
+
+        tap.push(&[0.25, -0.25]);
+        assert!(consumer.try_pop().is_none());
+
+        transport_state.store(RECORDING, Ordering::Relaxed);
+        tap.push(&[0.25, -0.25]);
+        assert_eq!(
+            consumer.try_pop().map(|frame| [frame[0], frame[1]]),
+            Some([0.25, -0.25])
+        );
+    }
 }

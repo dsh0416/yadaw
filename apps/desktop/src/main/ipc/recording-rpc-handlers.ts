@@ -146,7 +146,8 @@ function recordingStartRequest(value: unknown): RecordingStartRequest | null {
     isResourceRef(request.projectGraph) &&
     request.projectGraph.kind === "project-graph" &&
     isResourceRef(request.audioEngine) &&
-    request.audioEngine.kind === "audio-engine"
+    request.audioEngine.kind === "audio-engine" &&
+    typeof request.countIn === "boolean"
     ? (request as RecordingStartRequest)
     : null
 }
@@ -195,7 +196,7 @@ export function registerRecordingRpcHandlers(context: IpcHandlerContext): void {
     let committedResource: RecordingResourceSnapshot | null = null
     try {
       lifecycle.beginRecordingStart()
-      const session = await recordings.start()
+      const session = await recordings.start(request.countIn)
       const resource = state.commitRecording(session, request)
       committedResource = resource
       lifecycle.completeRecordingStart(session)

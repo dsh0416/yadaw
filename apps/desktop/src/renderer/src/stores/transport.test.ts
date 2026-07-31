@@ -421,4 +421,22 @@ describe("transport store", () => {
       { type: "play" }
     )
   })
+
+  it("toggles and resets the one-bar count-in preference", () => {
+    const transport = useTransportStore()
+
+    expect(transport.countInEnabled).toBe(false)
+    transport.toggleCountIn()
+    expect(transport.countInEnabled).toBe(true)
+
+    transport.snapshot = {
+      state: "counting-in",
+      positionFrames: 0,
+      sampleRate: 48_000
+    }
+    expect(transport.playing).toBe(true)
+
+    transport.reset()
+    expect(transport.countInEnabled).toBe(false)
+  })
 })

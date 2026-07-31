@@ -204,7 +204,7 @@ fn benchmark_runtime(
     processors: &[(String, Vst3ProcessorHandle)],
 ) -> std::result::Result<NativeMixerRuntime, String> {
     let transport = Arc::new(TransportShared {
-        state: AtomicU32::new(TRANSPORT_STOPPED),
+        state: Arc::new(AtomicU32::new(TRANSPORT_STOPPED)),
         position_frames: AtomicU64::new(0),
         position_ticks: AtomicU64::new(0),
         sample_rate: AtomicU32::new(BENCHMARK_SAMPLE_RATE),
@@ -257,11 +257,9 @@ fn measure_audio_benchmark_spec(
     }
 
     let elapsed_ms = started.elapsed().as_secs_f64() * 1_000.0;
-    let audio_duration_ms =
-        rendered_frames as f64 / f64::from(BENCHMARK_SAMPLE_RATE) * 1_000.0;
+    let audio_duration_ms = rendered_frames as f64 / f64::from(BENCHMARK_SAMPLE_RATE) * 1_000.0;
     let average_block_ms = elapsed_ms / rendered_blocks.max(1) as f64;
-    let buffer_budget_ms =
-        spec.block_frames as f64 / f64::from(BENCHMARK_SAMPLE_RATE) * 1_000.0;
+    let buffer_budget_ms = spec.block_frames as f64 / f64::from(BENCHMARK_SAMPLE_RATE) * 1_000.0;
     block_times_ms.sort_by(f64::total_cmp);
     let p95_block_ms = percentile(&block_times_ms, 0.95);
     let p99_block_ms = percentile(&block_times_ms, 0.99);
@@ -345,15 +343,11 @@ mod benchmark_tests {
 
     #[test]
     fn audio_benchmark_specs_scale_vst3_load_with_session_size() {
-        assert_eq!(
-            AUDIO_BENCHMARK_SPECS.map(|spec| spec.plugins),
-            [8, 32, 64]
-        );
+        assert_eq!(AUDIO_BENCHMARK_SPECS.map(|spec| spec.plugins), [8, 32, 64]);
         assert!(
             AUDIO_BENCHMARK_SPECS
                 .windows(2)
-                .all(|pair| pair[0].tracks < pair[1].tracks
-                    && pair[0].plugins < pair[1].plugins)
+                .all(|pair| pair[0].tracks < pair[1].tracks && pair[0].plugins < pair[1].plugins)
         );
     }
 

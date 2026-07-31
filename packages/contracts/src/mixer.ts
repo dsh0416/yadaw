@@ -245,7 +245,7 @@ export interface MixerRuntimeSnapshot {
   capturedAt: number
 }
 
-export type TransportState = "stopped" | "waiting" | "playing" | "recording"
+export type TransportState = "stopped" | "waiting" | "counting-in" | "playing" | "recording"
 export type TransportWaitingAction = "play" | "record"
 export type TransportClockSource = "internal" | "external"
 export interface TransportSnapshot {
@@ -262,5 +262,6 @@ export type TransportCommand =
   | { type: "play" }
   | { type: "record" }
   | { type: "pause" }
+  | { type: "record-count-in" }
   | { type: "stop" }
   | { type: "seek"; positionFrames: number }

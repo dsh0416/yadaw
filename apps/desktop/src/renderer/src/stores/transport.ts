@@ -56,6 +56,7 @@ export const useTransportStore = defineStore("transport", () => {
   const audioRuntimeStore = useAudioRuntimeStore()
   const snapshot = shallowRef<TransportSnapshot>({ ...EMPTY_TRANSPORT })
   const selectedClipId = shallowRef<string | null>(null)
+  const countInEnabled = shallowRef(false)
   const loading = shallowRef(false)
   const error = shallowRef("")
   let commandTail: Promise<void> = Promise.resolve()
@@ -84,7 +85,10 @@ export const useTransportStore = defineStore("transport", () => {
   const playheadSeconds = computed(() =>
     snapshot.value.sampleRate > 0 ? snapshot.value.positionFrames / snapshot.value.sampleRate : 0
   )
-  const playing = computed(() => snapshot.value.state === "playing")
+  const countingIn = computed(() => snapshot.value.state === "counting-in")
+  const playing = computed(
+    () => snapshot.value.state === "playing" || snapshot.value.state === "counting-in"
+  )
   const recording = computed(() => snapshot.value.state === "recording")
   const contentEndSeconds = computed(() => projectContentEndSeconds(mixerStore.graph))
   const timelineDurationSeconds = computed(() =>
@@ -210,6 +214,10 @@ export const useTransportStore = defineStore("transport", () => {
     return command({ type: "seek", positionFrames: 0 })
   }
 
+  function toggleCountIn(): void {
+    countInEnabled.value = !countInEnabled.value
+  }
+
   function selectClip(id: string): void {
     selectedClipId.value = id
   }
@@ -228,6 +236,7 @@ export const useTransportStore = defineStore("transport", () => {
     stopPolling()
     snapshot.value = { ...EMPTY_TRANSPORT }
     selectedClipId.value = null
+    countInEnabled.value = false
     error.value = ""
   }
 
@@ -236,6 +245,8 @@ export const useTransportStore = defineStore("transport", () => {
     clips,
     playheadSeconds,
     selectedClipId,
+    countInEnabled,
+    countingIn,
     playing,
     recording,
     loading,
@@ -251,6 +262,7 @@ export const useTransportStore = defineStore("transport", () => {
     toggle,
     seek,
     goToStart,
+    toggleCountIn,
     selectClip,
     selectAndRevealClip,
     clearSelection,
