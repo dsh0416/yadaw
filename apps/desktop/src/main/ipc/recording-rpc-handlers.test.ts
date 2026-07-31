@@ -123,7 +123,8 @@ describe("registerRecordingRpcHandlers", () => {
       {
         project: workspace.project,
         projectGraph: workspace.projectGraph,
-        audioEngine: audio.engine
+        audioEngine: audio.engine,
+        countIn: false
       }
     )
 
@@ -195,7 +196,8 @@ describe("registerRecordingRpcHandlers", () => {
       {
         project: workspace.project,
         projectGraph: workspace.projectGraph,
-        audioEngine: audio.engine
+        audioEngine: audio.engine,
+        countIn: false
       }
     )
 
@@ -208,6 +210,7 @@ describe("registerRecordingRpcHandlers", () => {
       }
     })
     expect(context.recordings.start).toHaveBeenCalledOnce()
+    expect(context.recordings.start).toHaveBeenCalledWith(false)
   })
 
   it("returns unavailable when recordingStart throws before commit", async () => {
@@ -265,7 +268,8 @@ describe("registerRecordingRpcHandlers", () => {
       {
         project: workspace.project,
         projectGraph: workspace.projectGraph,
-        audioEngine: audio.engine
+        audioEngine: audio.engine,
+        countIn: true
       }
     )
 
@@ -273,6 +277,7 @@ describe("registerRecordingRpcHandlers", () => {
       ok: false,
       error: { code: "resource-unavailable" }
     })
+    expect(context.recordings.start).toHaveBeenCalledWith(true)
     expect(context.recordings.abortStart).toHaveBeenCalled()
   })
 
@@ -536,7 +541,8 @@ describe("registerRecordingRpcHandlers", () => {
     const request = {
       project: workspace.project,
       projectGraph: workspace.projectGraph,
-      audioEngine: audio.engine
+      audioEngine: audio.engine,
+      countIn: false
     }
     const first = await invoke(electronMocks, IPC_CHANNELS.recordingStart, requestMeta, request)
     expect(first).toMatchObject({ ok: true })
