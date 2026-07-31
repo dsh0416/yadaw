@@ -1,9 +1,15 @@
-struct TpdfDither {
+use super::*;
+use super::{
+    waveform_analysis::analyze_waveform_path,
+    writer_format::{broadcast_metadata, pcm_stereo_format, recording_error},
+};
+
+pub(super) struct TpdfDither {
     state: u64,
 }
 
 impl TpdfDither {
-    fn new(seed: &[u8]) -> Self {
+    pub(super) fn new(seed: &[u8]) -> Self {
         let digest = Sha256::digest(seed);
         let mut value = [0_u8; 8];
         value.copy_from_slice(&digest[..8]);
@@ -19,13 +25,13 @@ impl TpdfDither {
         (self.state >> 40) as f32 / (1_u32 << 24) as f32
     }
 
-    fn apply(&mut self, sample: f32, bits: u32) -> f32 {
+    pub(super) fn apply(&mut self, sample: f32, bits: u32) -> f32 {
         let lsb = 1.0 / (1_u32 << (bits - 1)) as f32;
         (sample + (self.uniform() - self.uniform()) * lsb).clamp(-1.0, 1.0 - lsb)
     }
 }
 
-fn finalize(config: &NativeFinalizeRecordingConfig) -> Result<NativeFinalizedRecording> {
+pub(super) fn finalize(config: &NativeFinalizeRecordingConfig) -> Result<NativeFinalizedRecording> {
     if config.target_sample_rate == 0 {
         return Err(Error::new(
             Status::InvalidArg,

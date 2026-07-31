@@ -1,4 +1,7 @@
-fn analyze_waveform_path(path: &str) -> Result<NativeAnalyzedWaveform> {
+use super::*;
+use super::{finalize::finalize, waveform::build_waveform_levels, writer_format::recording_error};
+
+pub(super) fn analyze_waveform_path(path: &str) -> Result<NativeAnalyzedWaveform> {
     let mut reader = WaveReader::open(path)
         .map_err(|error| recording_error("failed to open waveform source", error))?;
     let format = reader

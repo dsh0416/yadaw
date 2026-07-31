@@ -42,11 +42,27 @@ const WRITER_BLOCK_FRAMES: usize = 2_048;
 const WAVEFORM_BASE_FRAMES: usize = 64;
 const WAVEFORM_LEVEL_FACTOR: usize = 4;
 
-include!("recording/waveform.rs");
-include!("recording/writer_format.rs");
-include!("recording/realtime_tap.rs");
-include!("recording/writer.rs");
-include!("recording/finalize.rs");
-include!("recording/waveform_analysis.rs");
-include!("recording/repair.rs");
-include!("recording/tests.rs");
+mod finalize;
+mod realtime_tap;
+mod repair;
+#[cfg(test)]
+mod tests;
+mod waveform;
+mod waveform_analysis;
+mod writer;
+mod writer_format;
+
+#[cfg(any(test, feature = "bench-internals"))]
+pub use realtime_tap::RecordingTap;
+#[cfg(feature = "bench-internals")]
+pub use repair::bench_support;
+pub use repair::{repair_recording_header, write_deterministic_test_recording};
+#[cfg(any(test, feature = "bench-internals"))]
+pub use waveform::NativeWaveformSnapshot;
+pub use waveform::{
+    NativeAnalyzedWaveform, NativeFinalizeRecordingConfig, NativeFinalizedRecording,
+    NativeRecordingResult, NativeRecordingStartConfig,
+};
+pub use waveform_analysis::{analyze_waveform, finalize_recording};
+#[cfg(any(test, feature = "bench-internals"))]
+pub use writer::RecorderController;

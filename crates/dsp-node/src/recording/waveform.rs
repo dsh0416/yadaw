@@ -1,3 +1,5 @@
+use super::*;
+
 #[napi(object)]
 pub struct NativeWaveformLevel {
     pub frames_per_bucket: u32,
@@ -107,7 +109,7 @@ fn aggregate_peak_level(source: &[f32], channels: usize) -> Vec<f32> {
     result
 }
 
-fn base_peak_level(samples: &[f32], channels: usize) -> Vec<f32> {
+pub(super) fn base_peak_level(samples: &[f32], channels: usize) -> Vec<f32> {
     let frames = samples.len() / channels;
     let mut peaks = Vec::with_capacity(frames.div_ceil(WAVEFORM_BASE_FRAMES) * channels * 2);
     for start in (0..frames).step_by(WAVEFORM_BASE_FRAMES) {
@@ -126,7 +128,7 @@ fn base_peak_level(samples: &[f32], channels: usize) -> Vec<f32> {
     peaks
 }
 
-fn build_waveform_levels(samples: &[f32], channels: usize) -> Vec<NativeWaveformLevel> {
+pub(super) fn build_waveform_levels(samples: &[f32], channels: usize) -> Vec<NativeWaveformLevel> {
     if channels == 0 || samples.is_empty() {
         return Vec::new();
     }
@@ -151,7 +153,7 @@ fn build_waveform_levels(samples: &[f32], channels: usize) -> Vec<NativeWaveform
 
 #[derive(Default)]
 #[cfg(any(test, feature = "bench-internals"))]
-struct LiveWaveform {
+pub(super) struct LiveWaveform {
     sample_rate: u32,
     channels: usize,
     frame_count: usize,
@@ -170,7 +172,7 @@ impl LiveWaveform {
         self.pending_frames = 0;
     }
 
-    fn reset(&mut self, sample_rate: u32, channels: usize) {
+    pub(super) fn reset(&mut self, sample_rate: u32, channels: usize) {
         self.sample_rate = sample_rate;
         self.channels = channels;
         self.frame_count = 0;
@@ -178,7 +180,7 @@ impl LiveWaveform {
         self.reset_pending();
     }
 
-    fn push(&mut self, samples: &[f32]) {
+    pub(super) fn push(&mut self, samples: &[f32]) {
         if self.channels == 0 {
             return;
         }
@@ -198,7 +200,7 @@ impl LiveWaveform {
         }
     }
 
-    fn snapshot(
+    pub(super) fn snapshot(
         &self,
         start_frame: usize,
         end_frame: usize,

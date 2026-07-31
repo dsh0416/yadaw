@@ -180,6 +180,9 @@ pub struct MixerGraph {
     block_master_pans: Vec<f32>,
 }
 
-include!("mixer/graph.rs");
-include!("mixer/runtime.rs");
-include!("mixer/tests.rs");
+mod graph;
+mod runtime;
+#[cfg(test)]
+mod tests;
+
+pub use graph::{balance_stereo, pan_mono};

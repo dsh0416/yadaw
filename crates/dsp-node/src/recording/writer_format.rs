@@ -1,8 +1,10 @@
-fn recording_error(context: &str, error: impl std::fmt::Display) -> Error {
+use super::*;
+
+pub(super) fn recording_error(context: &str, error: impl std::fmt::Display) -> Error {
     Error::new(Status::GenericFailure, format!("{context}: {error}"))
 }
 
-fn float_format(sample_rate: u32, channels: usize) -> WaveFmt {
+pub(super) fn float_format(sample_rate: u32, channels: usize) -> WaveFmt {
     let channels = channels.clamp(1, u16::MAX as usize) as u16;
     let block_alignment = channels.saturating_mul(4);
     WaveFmt {
@@ -16,15 +18,15 @@ fn float_format(sample_rate: u32, channels: usize) -> WaveFmt {
     }
 }
 
-fn float_stereo_format(sample_rate: u32) -> WaveFmt {
+pub(super) fn float_stereo_format(sample_rate: u32) -> WaveFmt {
     float_format(sample_rate, 2)
 }
 
-fn pcm_stereo_format(sample_rate: u32, bits_per_sample: u16) -> WaveFmt {
+pub(super) fn pcm_stereo_format(sample_rate: u32, bits_per_sample: u16) -> WaveFmt {
     WaveFmt::new_pcm_stereo(sample_rate, bits_per_sample)
 }
 
-fn broadcast_metadata(
+pub(super) fn broadcast_metadata(
     asset_id: &str,
     originator: &str,
     origination_date: &str,
