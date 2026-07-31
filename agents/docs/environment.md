@@ -102,6 +102,11 @@ mise exec -- pnpm lint
 Prefer the root `mise run check` task before handing off a completed change
 because it is the repository's full validation path.
 
+`pnpm check` and `pnpm check:native` run `pnpm sync:napi-bindings` before
+type-aware ESLint, package TypeScript checks, and tests that resolve
+`@yadaw/dsp-node` / `@yadaw/audio-host-client`, so the gitignored loaders and
+typings exist in CI and clean checkouts.
+
 Prettier formats the tracked TypeScript, JavaScript, Vue, JSON, YAML, Markdown,
 and CSS sources. ESLint performs type-aware TypeScript and Vue checks, while
 rustfmt and Clippy cover every Rust workspace crate. Generated napi-rs loaders
