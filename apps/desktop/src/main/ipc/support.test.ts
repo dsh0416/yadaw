@@ -2,6 +2,7 @@ import type { IpcMainInvokeEvent } from "electron"
 import { basename, dirname, join } from "node:path"
 import { pathToFileURL } from "node:url"
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import { AUDIO_BACKENDS } from "@yadaw/contracts"
 import type { CreateProjectRequest } from "@yadaw/contracts"
 import type { ApplicationSettingsStore } from "../application-settings"
 import type { AudioHostService } from "../audio-host-service"
@@ -251,12 +252,8 @@ describe("validateGainRequest", () => {
 })
 
 describe("validateAudioBackend", () => {
-  beforeEach(() => {
-    vi.stubEnv("YADAW_TEST_VIRTUAL_AUDIO", "")
-  })
-
-  it("accepts every shipped cpal backend", () => {
-    for (const backend of ["wasapi", "asio", "coreaudio", "alsa"]) {
+  it("accepts every shipped cpal host, including the mock backend", () => {
+    for (const backend of AUDIO_BACKENDS) {
       expect(validateAudioBackend(backend)).toBe(backend)
     }
   })
@@ -264,13 +261,7 @@ describe("validateAudioBackend", () => {
   it("rejects unknown backends", () => {
     expect(() => validateAudioBackend("jack")).toThrow("Unknown audio backend")
     expect(() => validateAudioBackend(1)).toThrow("Unknown audio backend")
-  })
-
-  it("accepts the virtual backend only when the test harness enables it", () => {
-    expect(() => validateAudioBackend("virtual")).toThrow("Unknown audio backend")
-
-    vi.stubEnv("YADAW_TEST_VIRTUAL_AUDIO", "1")
-    expect(validateAudioBackend("virtual")).toBe("virtual")
+    expect(() => validateAudioBackend(null)).toThrow("Unknown audio backend")
   })
 })
 
