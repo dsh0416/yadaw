@@ -12,9 +12,14 @@ import type {
   RecordingSession,
   TransportCommand
 } from "@yadaw/contracts"
+import { ApplicationStateStore } from "./kernel/application-state-store"
 
 type ProjectTransition = "creating" | "opening" | "saving" | "closing"
 type AudioTransition = "starting" | "reconfiguring" | "stopping"
+interface LifecycleCoordinatorOptions {
+  allowRecordingWithoutAudio?: boolean
+  stateStore?: ApplicationStateStore
+}
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
@@ -33,66 +38,63 @@ function realtimeOnly(command: ProjectCommand): boolean {
 }
 
 export class LifecycleCoordinator {
-  private revision = 0
-  private projectState: ProjectLifecycleState
-  private audioState: AudioLifecycleState
-  private recordingState: RecordingLifecycleState = { status: "idle", error: null }
   private projectRollback: ProjectLifecycleState | null = null
+  private readonly state: ApplicationStateStore
 
   constructor(
     project: ProjectSession | null,
     runtime?: AudioRuntimeSnapshot,
-    private readonly options: { allowRecordingWithoutAudio?: boolean } = {}
+    private readonly options: LifecycleCoordinatorOptions = {}
   ) {
-    this.projectState = project
-      ? { status: "open", session: structuredClone(project), error: null }
-      : { status: "closed", error: null }
-    const initial = structuredClone(runtime ?? INITIAL_AUDIO_RUNTIME_SNAPSHOT)
-    this.audioState =
-      initial.state === "running"
-        ? { status: "running", runtime: initial, error: null }
-        : initial.state === "error"
-          ? {
-              status: "error",
-              runtime: initial,
-              error: "The native audio engine is in an error state."
-            }
-          : { status: "stopped", runtime: initial, error: null }
+    const created = options.stateStore
+      ? { ok: true as const, value: options.stateStore }
+      : ApplicationStateStore.create({
+          project,
+          runtime: structuredClone(runtime ?? INITIAL_AUDIO_RUNTIME_SNAPSHOT)
+        })
+    if (!created.ok) {
+      throw new Error(`Could not initialize application state: ${created.error.code}`)
+    }
+    this.state = created.value
+    this.state.subscribe((event) => this.publish(event))
   }
 
   snapshot(): DesktopLifecycleSnapshot {
-    return structuredClone({
-      revision: this.revision,
-      project: this.projectState,
-      audio: this.audioState,
-      recording: this.recordingState
-    })
+    return this.state.lifecycleSnapshot()
   }
 
-  private publish(
-    type: DesktopLifecycleEvent["type"],
-    state: ProjectLifecycleState | AudioLifecycleState | RecordingLifecycleState
-  ): void {
-    this.revision += 1
-    const event = { type, revision: this.revision, state } as DesktopLifecycleEvent
+  get applicationState(): ApplicationStateStore {
+    return this.state
+  }
+
+  private publish(event: DesktopLifecycleEvent): void {
     for (const window of BrowserWindow.getAllWindows()) {
       window.webContents.send(IPC_CHANNELS.lifecycleEvent, structuredClone(event))
     }
   }
 
   private setProject(state: ProjectLifecycleState): void {
-    this.projectState = structuredClone(state)
-    this.publish("project", this.projectState)
+    this.state.setProject(state)
   }
 
   private setAudio(state: AudioLifecycleState): void {
-    this.audioState = structuredClone(state)
-    this.publish("audio", this.audioState)
+    this.state.setAudio(state)
   }
 
   private setRecording(state: RecordingLifecycleState): void {
-    this.recordingState = structuredClone(state)
-    this.publish("recording", this.recordingState)
+    this.state.setRecording(state)
+  }
+
+  private get projectState(): ProjectLifecycleState {
+    return this.state.lifecycleSnapshot().project
+  }
+
+  private get audioState(): AudioLifecycleState {
+    return this.state.lifecycleSnapshot().audio
+  }
+
+  private get recordingState(): RecordingLifecycleState {
+    return this.state.lifecycleSnapshot().recording
   }
 
   get recordingBusy(): boolean {
@@ -211,7 +213,7 @@ export class LifecycleCoordinator {
     const nextStatus =
       runtime.state === "running" ? "running" : runtime.state === "error" ? "error" : "stopped"
     if (nextStatus === this.audioState.status && runtime.state === this.audioState.runtime.state) {
-      this.audioState = { ...this.audioState, runtime }
+      this.state.replaceAudioProjection({ ...this.audioState, runtime })
       return
     }
     this.completeAudio(runtime)

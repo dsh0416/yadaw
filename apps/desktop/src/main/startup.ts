@@ -12,6 +12,7 @@ import { LifecycleCoordinator } from "./lifecycle-coordinator"
 import { MidiImportService } from "./midi-import-service"
 import { MixerRuntimeService } from "./mixer-runtime-service"
 import { OperationService } from "./operation-service"
+import { OperationRegistry } from "./kernel/operation-registry"
 import { PluginCatalogService } from "./plugin-catalog-service"
 import { ProjectCommandService } from "./project-command-service"
 import { ProjectGraphService } from "./project-graph-service"
@@ -195,7 +196,6 @@ export function startApplication(
       const projectService = new ProjectService(app.getPath("userData"), settings)
       setWindowProjectService(projectService)
       onServices({ audioHostService, projectService })
-      const operations = new OperationService()
       const graphPublisher = new AudioGraphPublisher(
         new AudioGraphCompiler(),
         new AssetMaterializer(app.getPath("userData"), projectService),
@@ -247,6 +247,16 @@ export function startApplication(
         }
       })
       const midiImport = new MidiImportService(projectGraph, projectCommands, plugins)
+      const initialAudioRuntime = await audioHostService.audioEngineSnapshot()
+      const lifecycle = new LifecycleCoordinator(
+        projectService.current,
+        normalizeAudioRuntime(initialAudioRuntime),
+        { allowRecordingWithoutAudio: process.env.YADAW_TEST_CAPTURE_SOURCE === "1" }
+      )
+      const operations = new OperationService(
+        new OperationRegistry(),
+        lifecycle.applicationState.desktopSession
+      )
       const recordings = new RecordingService(
         settings,
         projectService,
@@ -256,12 +266,6 @@ export function startApplication(
         audioHostService
       )
       const waveforms = new WaveformService(settings, projectService)
-      const initialAudioRuntime = await audioHostService.audioEngineSnapshot()
-      const lifecycle = new LifecycleCoordinator(
-        projectService.current,
-        normalizeAudioRuntime(initialAudioRuntime),
-        { allowRecordingWithoutAudio: process.env.YADAW_TEST_CAPTURE_SOURCE === "1" }
-      )
       registerIpcHandlers({
         settings,
         projects: projectService,
