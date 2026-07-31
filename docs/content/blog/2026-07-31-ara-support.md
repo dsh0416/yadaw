@@ -13,7 +13,7 @@ Ever since I moved to Apple Silicon, I have barely used ARA plug-ins in Logic Pr
 
 The usual advice is familiar: freeze the track, bounce in place, or otherwise hand a static audio file to a regular VST/AU plug-in that can do something similar. Those workflows work until they do not.
 
-Once the audio is frozen or rendered, you lose the interactive loop that made ARA useful in the first place. You cannot freely move the clip, tweak timing, or keep editing against a live analysis model without bouncing again. For tools that are supposed to sit *inside* the arrangement — Melodyne-style editing, tempo-aware processing, region-level analysis — that is a severe downgrade, not a substitute.
+Once the audio is frozen or rendered, you lose the interactive loop that made ARA useful in the first place. You cannot freely move the clip, tweak timing, or keep editing against a live analysis model without bouncing again. For tools that are supposed to sit _inside_ the arrangement — Melodyne-style editing, tempo-aware processing, region-level analysis — that is a severe downgrade, not a substitute.
 
 So the question lingered: is ARA somehow intrinsically hard, or is this just a host-specific dead end?
 
@@ -21,7 +21,7 @@ So the question lingered: is ARA somehow intrinsically hard, or is this just a h
 
 Melodyne is the example everyone reaches for, but it is not the worst case. Melodyne still starts from audio that already exists. Without ARA you pay in friction — bounce, re-analyze, bounce again — yet the material itself is still there.
 
-Synthesizer V is different. The voice *is* the instrument. Pitch, timing, lyrics, and especially timbre are not a corrective pass over a finished recording; they are the generative controls that define the performance. Retaking pitch versus timbre, swapping voicebanks, shaping tone against the rest of the mix — all of that only works when the synthesizer stays live and linked to the arrangement.
+Synthesizer V is different. The voice _is_ the instrument. Pitch, timing, lyrics, and especially timbre are not a corrective pass over a finished recording; they are the generative controls that define the performance. Retaking pitch versus timbre, swapping voicebanks, shaping tone against the rest of the mix — all of that only works when the synthesizer stays live and linked to the arrangement.
 
 Lose ARA on native Logic, and the freeze-style escape hatch almost disappears. You are not “re-processing a clip”; you are re-rendering a singer every time the arrangement or the voice moves. Import MIDI into a disconnected instrument plug-in, export audio, drop it back on the timeline, discover the harmony shifted or the timbre no longer fits, and start over. Timbre work becomes the most expensive part of the loop, because it is exactly the part that needs to stay interactive.
 
@@ -62,7 +62,7 @@ So the failure mode is not “Apple Silicon cannot run Melodyne.” It is more s
 
 Until one of the following changes, this looks unsolvable in the current Logic + Apple Silicon arrangement:
 
-1. macOS fully retires Rosetta and drops the need to keep x86_64 plug-ins coexisting with arm64 ones in the same session, *and* hosts are willing to load ARA plug-ins in-process again; or
+1. macOS fully retires Rosetta and drops the need to keep x86_64 plug-ins coexisting with arm64 ones in the same session, _and_ hosts are willing to load ARA plug-ins in-process again; or
 2. Logic (and the system hosting stack) give up simultaneous cross-architecture plug-in loading in favor of an in-process path that ARA can use; or
 3. the ARA / Audio Unit stack grows a true out-of-process replacement for pointer-based random access — something that does not exist as a drop-in today.
 
