@@ -23,6 +23,7 @@ flag_management:
         - apps/desktop/
         - packages/contracts/
         - packages/project-db/
+        - packages/project-model/
         - packages/ui/
     - name: rust
       paths:
@@ -51,6 +52,10 @@ component_management:
       name: project-db
       paths:
         - packages/project-db/**
+    - component_id: project-model
+      name: project-model
+      paths:
+        - packages/project-model/**
     - component_id: ui
       name: ui
       paths:
