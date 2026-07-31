@@ -10,7 +10,7 @@ coverage:
         threshold: 1%
 
 comment:
-  layout: "header, diff, flags, files"
+  layout: "header, diff, flags, components, files"
   behavior: default
   require_changes: false
 
@@ -28,3 +28,70 @@ flag_management:
       paths:
         - crates/
         - plugins/
+
+component_management:
+  default_rules:
+    statuses:
+      - type: project
+        target: auto
+        threshold: 1%
+      - type: patch
+        target: auto
+        threshold: 1%
+  individual_components:
+    - component_id: desktop
+      name: desktop
+      paths:
+        - apps/desktop/**
+    - component_id: contracts
+      name: contracts
+      paths:
+        - packages/contracts/**
+    - component_id: project-db
+      name: project-db
+      paths:
+        - packages/project-db/**
+    - component_id: ui
+      name: ui
+      paths:
+        - packages/ui/**
+    - component_id: dsp-core
+      name: dsp-core
+      paths:
+        - crates/dsp-core/**
+    - component_id: dsp-node
+      name: dsp-node
+      paths:
+        - crates/dsp-node/**
+    - component_id: dsp-runtime
+      name: dsp-runtime
+      paths:
+        - crates/dsp-runtime/**
+    - component_id: dsp-render
+      name: dsp-render
+      paths:
+        - crates/dsp-render/**
+    - component_id: ipc-transport
+      name: ipc-transport
+      paths:
+        - crates/ipc-transport/**
+    - component_id: audio-host
+      name: audio-host
+      paths:
+        - crates/audio-host/**
+    - component_id: audio-host-client
+      name: audio-host-client
+      paths:
+        - crates/audio-host-client/**
+    - component_id: vst3-host
+      name: vst3-host
+      paths:
+        - crates/vst3-host/**
+    - component_id: vst3-host-sys
+      name: vst3-host-sys
+      paths:
+        - crates/vst3-host-sys/**
+    - component_id: plugins
+      name: plugins
+      paths:
+        - plugins/**
