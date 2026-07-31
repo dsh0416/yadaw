@@ -34,8 +34,8 @@ export interface HomeCopy {
 
 const en: HomeCopy = {
   heroEyebrow: "Yet Another Digital Audio Workstation",
-  heroTitleTop: "Make sound.",
-  heroTitleAccent: "Keep the session.",
+  heroTitleTop: "Make sound,",
+  heroTitleAccent: "of your own.",
   heroLead:
     "A free, open-source workspace for recording, arranging, and mixing music on Windows, macOS, and Linux.",
   openManual: "Open the manual",
@@ -82,8 +82,8 @@ const en: HomeCopy = {
 
 const zh: HomeCopy = {
   heroEyebrow: "Yet Another Digital Audio Workstation",
-  heroTitleTop: "创造声音。",
-  heroTitleAccent: "留住会话。",
+  heroTitleTop: "创造声音，",
+  heroTitleAccent: "由你做主。",
   heroLead: "一个自由、开源的工作区，在 Windows、macOS 与 Linux 上录音、编排与混音。",
   openManual: "打开手册",
   getRelease: "获取发布版本",
