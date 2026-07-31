@@ -1,5 +1,5 @@
 import type {
-  MixerGraphSnapshot,
+  ProjectGraphSnapshot,
   MidiSourceState,
   ProjectAssetSummary,
   ProjectCommand,
@@ -143,4 +143,4 @@ export interface WorkerProgress {
 
 export type ProjectWorkerConfiguration = ProjectConfiguration
 export type ProjectWorkerAssetSummary = ProjectAssetSummary
-export type ProjectWorkerMixerSnapshot = MixerGraphSnapshot
+export type ProjectWorkerMixerSnapshot = ProjectGraphSnapshot

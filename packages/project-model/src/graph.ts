@@ -1,11 +1,12 @@
 import type {
+  AudioClipState,
   MidiClipState,
   MixerChannelState,
-  MixerGraphSnapshot,
   MixerSendState,
   PluginInstanceState,
   ProjectCommand,
-  TimelineClipState
+  ProjectGraphSnapshot,
+  TrackState
 } from "@yadaw/contracts"
 
 export function finiteRange(value: number, minimum: number, maximum: number, label: string): void {
@@ -14,35 +15,45 @@ export function finiteRange(value: number, minimum: number, maximum: number, lab
   }
 }
 
-export function cloneGraph(graph: MixerGraphSnapshot): MixerGraphSnapshot {
+export function cloneGraph(graph: ProjectGraphSnapshot): ProjectGraphSnapshot {
   return structuredClone(graph)
 }
 
-function channelById(graph: MixerGraphSnapshot, id: string): MixerChannelState {
+function channelById(graph: ProjectGraphSnapshot, id: string): MixerChannelState {
   const channel = graph.channels.find((candidate) => candidate.id === id)
   if (!channel) throw new Error(`Mixer channel '${id}' was not found`)
   return channel
 }
 
-function sendById(graph: MixerGraphSnapshot, id: string): MixerSendState {
+function trackById(graph: ProjectGraphSnapshot, id: string): TrackState {
+  const track = graph.tracks.find((candidate) => candidate.id === id)
+  if (!track) throw new Error(`Project track '${id}' was not found`)
+  return track
+}
+
+function channelForTrack(graph: ProjectGraphSnapshot, trackId: string): MixerChannelState {
+  return channelById(graph, trackById(graph, trackId).channelId)
+}
+
+function sendById(graph: ProjectGraphSnapshot, id: string): MixerSendState {
   const send = graph.sends.find((candidate) => candidate.id === id)
   if (!send) throw new Error(`Mixer send '${id}' was not found`)
   return send
 }
 
-function clipById(graph: MixerGraphSnapshot, id: string): TimelineClipState {
-  const clip = graph.clips.find((candidate) => candidate.id === id)
+function clipById(graph: ProjectGraphSnapshot, id: string): AudioClipState {
+  const clip = graph.audioClips.find((candidate) => candidate.id === id)
   if (!clip) throw new Error(`Timeline clip '${id}' was not found`)
   return clip
 }
 
-function pluginById(graph: MixerGraphSnapshot, id: string): PluginInstanceState {
+function pluginById(graph: ProjectGraphSnapshot, id: string): PluginInstanceState {
   const plugin = graph.plugins.find((candidate) => candidate.id === id)
   if (!plugin) throw new Error(`Plugin instance '${id}' was not found`)
   return plugin
 }
 
-function midiClipById(graph: MixerGraphSnapshot, id: string): MidiClipState {
+function midiClipById(graph: ProjectGraphSnapshot, id: string): MidiClipState {
   const clip = graph.midiClips.find((candidate) => candidate.id === id)
   if (!clip) throw new Error(`MIDI clip '${id}' was not found`)
   return clip
@@ -55,7 +66,7 @@ function midiNoteById(clip: MidiClipState, id: string): MidiClipState["notes"][n
 }
 
 function movePluginInGraph(
-  graph: MixerGraphSnapshot,
+  graph: ProjectGraphSnapshot,
   pluginId: string,
   channelId: string,
   role: PluginInstanceState["role"],
@@ -101,12 +112,59 @@ function patchFromKeys<T extends object>(source: T, patch: Partial<T>): Partial<
   ) as Partial<T>
 }
 
-export function inverseFor(graph: MixerGraphSnapshot, command: ProjectCommand): ProjectCommand {
+export function inverseFor(graph: ProjectGraphSnapshot, command: ProjectCommand): ProjectCommand {
   switch (command.type) {
+    case "create-track":
+      return { type: "delete-track", trackId: command.track.id }
+    case "delete-track": {
+      const track = trackById(graph, command.trackId)
+      const channel = channelById(graph, track.channelId)
+      const affectedOutputs = graph.channels
+        .filter((candidate) => candidate.outputChannelId === channel.id)
+        .map<ProjectCommand>((candidate) => ({
+          type: "update-channel",
+          channelId: candidate.id,
+          patch: { outputChannelId: channel.id, outputBus: null }
+        }))
+      const sends = graph.sends
+        .filter((send) => send.sourceChannelId === channel.id)
+        .map<ProjectCommand>((send) => ({ type: "create-send", send }))
+      const audioClips = graph.audioClips
+        .filter((clip) => clip.trackId === track.id)
+        .map<ProjectCommand>((clip) => ({ type: "create-audio-clip", clip }))
+      const plugins = graph.plugins
+        .filter((plugin) => plugin.channelId === channel.id)
+        .map<ProjectCommand>((plugin) => ({ type: "create-plugin", plugin }))
+      const midiClips = graph.midiClips
+        .filter((clip) => clip.trackId === track.id)
+        .map<ProjectCommand>((clip) => ({ type: "create-midi-clip", clip }))
+      return {
+        type: "batch",
+        commands: [
+          { type: "create-track", track, channel },
+          ...affectedOutputs,
+          ...sends,
+          ...audioClips,
+          ...plugins,
+          ...midiClips
+        ]
+      }
+    }
+    case "update-track": {
+      const track = trackById(graph, command.trackId)
+      return {
+        type: "update-track",
+        trackId: command.trackId,
+        patch: patchFromKeys(track, command.patch)
+      }
+    }
     case "create-channel":
       return { type: "delete-channel", channelId: command.channel.id }
     case "delete-channel": {
       const channel = channelById(graph, command.channelId)
+      if (graph.tracks.some((track) => track.channelId === channel.id)) {
+        throw new Error("Track-owned channels must be deleted through delete-track")
+      }
       if (channel.kind === "master") throw new Error("Master cannot be deleted")
       if (channel.systemRole !== null) throw new Error("System channels cannot be deleted")
       if (
@@ -126,25 +184,12 @@ export function inverseFor(graph: MixerGraphSnapshot, command: ProjectCommand): 
       const sends = graph.sends
         .filter((send) => send.sourceChannelId === channel.id)
         .map<ProjectCommand>((send) => ({ type: "create-send", send }))
-      const clips = graph.clips
-        .filter((clip) => clip.trackId === channel.id)
-        .map<ProjectCommand>((clip) => ({ type: "create-clip", clip }))
       const plugins = graph.plugins
         .filter((plugin) => plugin.channelId === channel.id)
         .map<ProjectCommand>((plugin) => ({ type: "create-plugin", plugin }))
-      const midiClips = graph.midiClips
-        .filter((clip) => clip.trackId === channel.id)
-        .map<ProjectCommand>((clip) => ({ type: "create-midi-clip", clip }))
       return {
         type: "batch",
-        commands: [
-          { type: "create-channel", channel },
-          ...affectedOutputs,
-          ...sends,
-          ...clips,
-          ...plugins,
-          ...midiClips
-        ]
+        commands: [{ type: "create-channel", channel }, ...affectedOutputs, ...sends, ...plugins]
       }
     }
     case "update-channel": {
@@ -167,14 +212,14 @@ export function inverseFor(graph: MixerGraphSnapshot, command: ProjectCommand): 
         patch: patchFromKeys(send, command.patch)
       }
     }
-    case "create-clip":
-      return { type: "delete-clip", clipId: command.clip.id }
-    case "delete-clip":
-      return { type: "create-clip", clip: clipById(graph, command.clipId) }
-    case "move-clip": {
+    case "create-audio-clip":
+      return { type: "delete-audio-clip", clipId: command.clip.id }
+    case "delete-audio-clip":
+      return { type: "create-audio-clip", clip: clipById(graph, command.clipId) }
+    case "move-audio-clip": {
       const clip = clipById(graph, command.clipId)
       return {
-        type: "move-clip",
+        type: "move-audio-clip",
         clipId: command.clipId,
         trackId: clip.trackId,
         startFrame: clip.startFrame
@@ -285,11 +330,25 @@ export function inverseFor(graph: MixerGraphSnapshot, command: ProjectCommand): 
 }
 
 export function applyToGraph(
-  graph: MixerGraphSnapshot,
+  graph: ProjectGraphSnapshot,
   command: ProjectCommand
-): MixerGraphSnapshot {
+): ProjectGraphSnapshot {
   const next = cloneGraph(graph)
   switch (command.type) {
+    case "create-track":
+      next.channels.push(structuredClone(command.channel))
+      next.tracks.push(structuredClone(command.track))
+      break
+    case "delete-track": {
+      const track = trackById(next, command.trackId)
+      next.tracks = next.tracks.filter((candidate) => candidate.id !== track.id)
+      next.audioClips = next.audioClips.filter((clip) => clip.trackId !== track.id)
+      next.midiClips = next.midiClips.filter((clip) => clip.trackId !== track.id)
+      return applyToGraph(next, { type: "delete-channel", channelId: track.channelId })
+    }
+    case "update-track":
+      Object.assign(trackById(next, command.trackId), command.patch)
+      break
     case "create-channel":
       next.channels.push(structuredClone(command.channel))
       break
@@ -297,6 +356,9 @@ export function applyToGraph(
       const master = next.channels.find((channel) => channel.kind === "master")
       if (!master || command.channelId === master.id) throw new Error("Master cannot be deleted")
       const removed = channelById(next, command.channelId)
+      if (next.tracks.some((track) => track.channelId === removed.id)) {
+        throw new Error("Track-owned channels must be deleted through delete-track")
+      }
       if (removed.systemRole !== null) throw new Error("System channels cannot be deleted")
       const fallbackOutput = next.channels.find(
         (channel) => channel.kind === "output" && channel.id !== removed.id
@@ -316,9 +378,7 @@ export function applyToGraph(
         }
       }
       next.sends = next.sends.filter((send) => send.sourceChannelId !== command.channelId)
-      next.clips = next.clips.filter((clip) => clip.trackId !== command.channelId)
       next.plugins = next.plugins.filter((plugin) => plugin.channelId !== command.channelId)
-      next.midiClips = next.midiClips.filter((clip) => clip.trackId !== command.channelId)
       break
     }
     case "update-channel":
@@ -333,13 +393,13 @@ export function applyToGraph(
     case "update-send":
       Object.assign(sendById(next, command.sendId), command.patch)
       break
-    case "create-clip":
-      next.clips.push(structuredClone(command.clip))
+    case "create-audio-clip":
+      next.audioClips.push(structuredClone(command.clip))
       break
-    case "delete-clip":
-      next.clips = next.clips.filter((clip) => clip.id !== command.clipId)
+    case "delete-audio-clip":
+      next.audioClips = next.audioClips.filter((clip) => clip.id !== command.clipId)
       break
-    case "move-clip": {
+    case "move-audio-clip": {
       const clip = clipById(next, command.clipId)
       clip.trackId = command.trackId
       clip.startFrame = command.startFrame
@@ -417,7 +477,31 @@ export function applyToGraph(
   return next
 }
 
-export function validateGraph(graph: MixerGraphSnapshot): void {
+export function validateGraph(graph: ProjectGraphSnapshot): void {
+  const trackIds = new Set<string>()
+  const tracksByChannel = new Map<string, TrackState>()
+  for (const track of graph.tracks) {
+    if (!track.id || trackIds.has(track.id)) throw new Error("Project track IDs must be unique")
+    if (new TextEncoder().encode(track.id).length > 64) {
+      throw new Error("Project track IDs must be at most 64 UTF-8 bytes")
+    }
+    if (!Number.isSafeInteger(track.sortOrder) || track.sortOrder < 0) {
+      throw new Error("Project track order must be a non-negative safe integer")
+    }
+    if (tracksByChannel.has(track.channelId)) {
+      throw new Error("A mixer channel can belong to at most one project track")
+    }
+    const channel = channelById(graph, track.channelId)
+    if (
+      channel.systemRole !== null ||
+      (channel.kind !== "audio" && channel.kind !== "instrument")
+    ) {
+      throw new Error("Project tracks must reference ordinary Audio or Instrument channels")
+    }
+    trackIds.add(track.id)
+    tracksByChannel.set(track.channelId, track)
+  }
+
   const ids = new Set<string>()
   for (const channel of graph.channels) {
     if (!channel.id || ids.has(channel.id)) throw new Error("Mixer channel IDs must be unique")
@@ -489,6 +573,15 @@ export function validateGraph(graph: MixerGraphSnapshot): void {
     }
     if (channel.systemRole !== null && channel.kind !== "instrument") {
       throw new Error("System channels must be Instrument channels")
+    }
+    const shouldOwnTrack =
+      channel.systemRole === null && (channel.kind === "audio" || channel.kind === "instrument")
+    if (tracksByChannel.has(channel.id) !== shouldOwnTrack) {
+      throw new Error(
+        shouldOwnTrack
+          ? "Ordinary Audio and Instrument channels require exactly one project track"
+          : "Aux, Master, Output, and system channels cannot own project tracks"
+      )
     }
     if (channel.kind === "output") {
       if (
@@ -602,7 +695,7 @@ export function validateGraph(graph: MixerGraphSnapshot): void {
       throw new Error("Mixer send order must be a non-negative safe integer")
     }
   }
-  for (const clip of graph.clips) {
+  for (const clip of graph.audioClips) {
     if (!Number.isSafeInteger(clip.startFrame) || clip.startFrame < 0) {
       throw new Error("Clip start frame must be a non-negative safe integer")
     }
@@ -614,7 +707,7 @@ export function validateGraph(graph: MixerGraphSnapshot): void {
     ) {
       throw new Error("Clip source offset and length must use valid sample frames")
     }
-    const channel = channelById(graph, clip.trackId)
+    const channel = channelForTrack(graph, clip.trackId)
     if (channel.kind !== "audio" || channel.systemRole !== null) {
       throw new Error("Timeline clips must belong to audio tracks")
     }
@@ -712,7 +805,7 @@ export function validateGraph(graph: MixerGraphSnapshot): void {
   for (const clip of graph.midiClips) {
     if (!clip.id || midiClipIds.has(clip.id)) throw new Error("MIDI clip IDs must be unique")
     midiClipIds.add(clip.id)
-    const channel = channelById(graph, clip.trackId)
+    const channel = channelForTrack(graph, clip.trackId)
     if (channel.kind !== "instrument" || channel.systemRole !== null) {
       throw new Error("MIDI clips must belong to Instrument tracks")
     }
@@ -784,8 +877,14 @@ export function onlyRealtimeParameters(command: ProjectCommand): boolean {
   return false
 }
 
-export function deletedChannelIds(command: ProjectCommand): Set<string> {
+export function deletedChannelIds(
+  graph: ProjectGraphSnapshot,
+  command: ProjectCommand
+): Set<string> {
+  if (command.type === "delete-track") {
+    return new Set([trackById(graph, command.trackId).channelId])
+  }
   if (command.type === "delete-channel") return new Set([command.channelId])
   if (command.type !== "batch") return new Set()
-  return new Set(command.commands.flatMap((nested) => [...deletedChannelIds(nested)]))
+  return new Set(command.commands.flatMap((nested) => [...deletedChannelIds(graph, nested)]))
 }

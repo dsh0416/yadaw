@@ -48,7 +48,15 @@ export interface MixerBusState {
 
 export type MixerRouteTarget = { kind: "bus"; bus: number } | { kind: "output"; channelId: string }
 
-export interface TimelineClipState {
+export interface TrackState {
+  id: string
+  channelId: string
+  sortOrder: number
+}
+
+export type TrackPatch = Partial<Pick<TrackState, "sortOrder">>
+
+export interface AudioClipState {
   id: string
   assetId: string
   trackId: string
@@ -71,10 +79,11 @@ export interface MixerSendState {
   levelDb: number
 }
 
-export interface MixerGraphSnapshot {
+export interface ProjectGraphSnapshot {
   sampleRate: number
+  tracks: TrackState[]
   channels: MixerChannelState[]
-  clips: TimelineClipState[]
+  audioClips: AudioClipState[]
   sends: MixerSendState[]
   plugins: PluginInstanceState[]
   midiClips: MidiClipState[]
@@ -163,15 +172,18 @@ export type PluginInstancePatch = Partial<
 >
 
 export type ProjectCommand =
+  | { type: "create-track"; track: TrackState; channel: MixerChannelState }
+  | { type: "delete-track"; trackId: string }
+  | { type: "update-track"; trackId: string; patch: TrackPatch }
   | { type: "create-channel"; channel: MixerChannelState }
   | { type: "delete-channel"; channelId: string }
   | { type: "update-channel"; channelId: string; patch: MixerChannelPatch }
   | { type: "create-send"; send: MixerSendState }
   | { type: "delete-send"; sendId: string }
   | { type: "update-send"; sendId: string; patch: MixerSendPatch }
-  | { type: "create-clip"; clip: TimelineClipState }
-  | { type: "delete-clip"; clipId: string }
-  | { type: "move-clip"; clipId: string; trackId: string; startFrame: number }
+  | { type: "create-audio-clip"; clip: AudioClipState }
+  | { type: "delete-audio-clip"; clipId: string }
+  | { type: "move-audio-clip"; clipId: string; trackId: string; startFrame: number }
   | { type: "create-plugin"; plugin: PluginInstanceState }
   | { type: "delete-plugin"; pluginId: string }
   | { type: "update-plugin"; pluginId: string; patch: PluginInstancePatch }
@@ -202,7 +214,7 @@ export type ProjectCommand =
   | { type: "batch"; commands: ProjectCommand[] }
 
 export interface ProjectCommandResult {
-  graph: MixerGraphSnapshot
+  graph: ProjectGraphSnapshot
   inverse: ProjectCommand
 }
 

@@ -22,8 +22,9 @@ const workspace: ProjectWorkspaceSnapshot = {
   session,
   graph: {
     sampleRate: 48_000,
+    tracks: [],
     channels: [],
-    clips: [],
+    audioClips: [],
     sends: [],
     plugins: [],
     midiClips: [],

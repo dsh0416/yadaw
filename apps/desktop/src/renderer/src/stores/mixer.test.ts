@@ -1,12 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { createPinia, setActivePinia } from "pinia"
-import type { MixerGraphSnapshot, ProjectSession } from "@yadaw/contracts"
+import type { ProjectGraphSnapshot, ProjectSession } from "@yadaw/contracts"
 import { useProjectStore } from "./project"
 import { useMixerStore } from "./mixer"
 
-function graph(): MixerGraphSnapshot {
+function graph(): ProjectGraphSnapshot {
   return {
     sampleRate: 48_000,
+    tracks: [{ id: "track:audio", channelId: "audio", sortOrder: 0 }],
     channels: [
       {
         id: "audio",
@@ -123,7 +124,7 @@ function graph(): MixerGraphSnapshot {
         hardwareOutputChannels: [1, 2]
       }
     ],
-    clips: [],
+    audioClips: [],
     sends: [
       {
         id: "aux-a-to-bus-2",
@@ -174,7 +175,7 @@ describe("mixer store", () => {
     const initial = graph()
     const changed = structuredClone(initial)
     changed.channels[0]!.gainDb = -6
-    window.yadaw.loadMixerGraph = vi.fn().mockResolvedValue(initial)
+    window.yadaw.loadProjectGraph = vi.fn().mockResolvedValue(initial)
     window.yadaw.executeProjectCommand = vi
       .fn()
       .mockResolvedValueOnce({
@@ -206,7 +207,7 @@ describe("mixer store", () => {
     const initial = graph()
     const monitored = structuredClone(initial)
     monitored.channels[0]!.inputMonitoring = true
-    window.yadaw.loadMixerGraph = vi.fn().mockResolvedValue(initial)
+    window.yadaw.loadProjectGraph = vi.fn().mockResolvedValue(initial)
     window.yadaw.executeProjectCommand = vi
       .fn()
       .mockResolvedValueOnce({
@@ -253,7 +254,7 @@ describe("mixer store", () => {
 
   it("hydrates the ready workspace graph synchronously without reloading the audio host", () => {
     const initial = graph()
-    window.yadaw.loadMixerGraph = vi.fn()
+    window.yadaw.loadProjectGraph = vi.fn()
     const mixer = useMixerStore()
 
     mixer.hydrate(initial)
@@ -261,7 +262,7 @@ describe("mixer store", () => {
     expect(mixer.graph).toEqual(initial)
     expect(mixer.selectedChannelId).toBe("audio")
     expect(mixer.loading).toBe(false)
-    expect(window.yadaw.loadMixerGraph).not.toHaveBeenCalled()
+    expect(window.yadaw.loadProjectGraph).not.toHaveBeenCalled()
   })
 
   it("hides output and send targets that would create a routing cycle", () => {
@@ -322,7 +323,7 @@ describe("mixer store", () => {
       .mocked(window.yadaw.executeProjectCommand)
       .mock.calls.map(([command]) => command)
     expect(commands[0]).toMatchObject({
-      type: "create-channel",
+      type: "create-track",
       channel: { kind: "audio", color: "#4F8CFF" }
     })
     expect(commands[1]).toMatchObject({
@@ -357,7 +358,8 @@ describe("mixer store", () => {
     await mixer.createInstrumentTrack()
 
     expect(window.yadaw.executeProjectCommand).toHaveBeenCalledWith({
-      type: "create-channel",
+      type: "create-track",
+      track: expect.objectContaining({ channelId: expect.any(String), sortOrder: 0 }),
       channel: expect.objectContaining({
         kind: "instrument",
         name: "Instrument 1",

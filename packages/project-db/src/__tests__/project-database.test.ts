@@ -595,7 +595,7 @@ describe("ProjectDatabase", () => {
           clip: {
             id: "invalid-metronome-clip",
             sourceId: "missing-source",
-            trackId: "metronome",
+            trackId: "track:metronome",
             name: "Invalid",
             startTick: 0,
             sourceOffsetTicks: 0,
@@ -640,10 +640,15 @@ describe("ProjectDatabase", () => {
       contentHash: "blank:blank-source",
       rawBytes: new Uint8Array()
     }
+    const track = {
+      id: `track:${instrument.id}`,
+      channelId: instrument.id,
+      sortOrder: instrument.sortOrder
+    }
     const clip = {
       id: "blank-clip",
       sourceId: source.id,
-      trackId: instrument.id,
+      trackId: track.id,
       name: source.name,
       startTick: 960,
       lengthTicks: 3_840,
@@ -654,7 +659,7 @@ describe("ProjectDatabase", () => {
     const create: ProjectCommand = {
       type: "batch",
       commands: [
-        { type: "create-channel", channel: instrument },
+        { type: "create-track", track, channel: instrument },
         { type: "create-midi-source", source },
         { type: "create-midi-clip", clip }
       ]
@@ -713,7 +718,7 @@ describe("ProjectDatabase", () => {
     const clip = {
       id: "midi-clip-1",
       sourceId: "midi-source-1",
-      trackId: instrument.id,
+      trackId: `track:${instrument.id}`,
       name: "Editable",
       startTick: 960,
       sourceOffsetTicks: 0,
@@ -749,7 +754,15 @@ describe("ProjectDatabase", () => {
       {
         type: "batch",
         commands: [
-          { type: "create-channel", channel: instrument },
+          {
+            type: "create-track",
+            track: {
+              id: `track:${instrument.id}`,
+              channelId: instrument.id,
+              sortOrder: instrument.sortOrder
+            },
+            channel: instrument
+          },
           { type: "create-midi-clip", clip }
         ]
       },

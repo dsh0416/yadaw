@@ -115,17 +115,26 @@ const recordingTracks = computed(() => {
 const liveClips = computed<TimelineClip[]>(() =>
   props.recordingStartedAt === null || props.recordingId === null
     ? []
-    : recordingTracks.value.map((track) => ({
-        id: `${props.recordingId}-${track.id}`,
-        assetId: props.recordingId!,
-        trackId: track.id,
-        name: t("studio.arrangement.newRecording"),
-        startSeconds: recordingStartSeconds.value,
-        durationSeconds: recordingDuration.value,
-        endSeconds: recordingStartSeconds.value + recordingDuration.value,
-        channels: track.inputFormat === "mono" ? 1 : 2,
-        sampleRate: session.value?.configuration.sampleRate ?? 48_000
-      }))
+    : recordingTracks.value.flatMap((channel) => {
+        const track = mixerStore.graph.tracks.find(
+          (candidate) => candidate.channelId === channel.id
+        )
+        return track
+          ? [
+              {
+                id: `${props.recordingId}-${track.id}`,
+                assetId: props.recordingId!,
+                trackId: track.id,
+                name: t("studio.arrangement.newRecording"),
+                startSeconds: recordingStartSeconds.value,
+                durationSeconds: recordingDuration.value,
+                endSeconds: recordingStartSeconds.value + recordingDuration.value,
+                channels: channel.inputFormat === "mono" ? 1 : 2,
+                sampleRate: session.value?.configuration.sampleRate ?? 48_000
+              }
+            ]
+          : []
+      })
 )
 const visibleDuration = computed(() =>
   Math.max(
@@ -184,10 +193,10 @@ const {
 const trackRows = computed(() =>
   mixerStore.timelineTracks.map((track) => ({
     track,
-    clips: clips.value.filter((clip) => clip.trackId === track.id),
-    midiClips: mixerStore.graph.midiClips.filter((clip) => clip.trackId === track.id),
-    scale: viewStore.trackScale(track.id),
-    height: viewStore.effectiveTrackHeight(track.id)
+    audioClips: clips.value.filter((clip) => clip.trackId === track.trackId),
+    midiClips: mixerStore.graph.midiClips.filter((clip) => clip.trackId === track.trackId),
+    scale: viewStore.trackScale(track.trackId),
+    height: viewStore.effectiveTrackHeight(track.trackId)
   }))
 )
 const trackGridRows = computed(() => {
@@ -232,7 +241,7 @@ function handleWaveformFrameCount(frameCount: number, sampleRate: number): void 
 }
 function handleMoveClip(clipId: string, trackId: string, startSeconds: number): void {
   void mixerStore.execute({
-    type: "move-clip",
+    type: "move-audio-clip",
     clipId,
     trackId,
     startFrame: Math.round(startSeconds * mixerStore.graph.sampleRate)
@@ -246,8 +255,8 @@ function reorderTrack(index: number, direction: -1 | 1): void {
   void mixerStore.execute({
     type: "batch",
     commands: [
-      { type: "update-channel", channelId: source.id, patch: { sortOrder: target.sortOrder } },
-      { type: "update-channel", channelId: target.id, patch: { sortOrder: source.sortOrder } }
+      { type: "update-track", trackId: source.trackId, patch: { sortOrder: target.sortOrder } },
+      { type: "update-track", trackId: target.trackId, patch: { sortOrder: source.sortOrder } }
     ]
   })
 }
@@ -456,8 +465,8 @@ function createMidiClip(trackId: string, requestedStartTick: number): void {
             :base-height="trackHeight"
             :scale="scale"
             :track-name="track.name"
-            @set-scale="viewStore.setTrackScale(track.id, $event)"
-            @reset="viewStore.resetTrackScale(track.id)"
+            @set-scale="viewStore.setTrackScale(track.trackId, $event)"
+            @reset="viewStore.resetTrackScale(track.trackId)"
           />
         </div>
         <div class="track-spacer" aria-hidden="true" />
@@ -514,14 +523,14 @@ function createMidiClip(trackId: string, requestedStartTick: number): void {
             @select="selectedKeyTick = $event"
           />
           <template
-            v-for="{ track, clips: trackClips, midiClips, height } in trackRows"
+            v-for="{ track, audioClips: trackClips, midiClips, height } in trackRows"
             :key="track.id"
           >
             <ArrangementTrack
               v-if="track.kind === 'audio'"
-              :track-id="track.id"
+              :track-id="track.trackId"
               :track-color="track.color"
-              :drag-preview="dragPreview?.trackId === track.id ? dragPreview : null"
+              :drag-preview="dragPreview?.trackId === track.trackId ? dragPreview : null"
               :dragging-clip-id="clipDrag?.clipId ?? null"
               :clips="trackClips"
               :tempo-map="mixerStore.graph.tempoMap"
@@ -533,7 +542,7 @@ function createMidiClip(trackId: string, requestedStartTick: number): void {
               :viewport-start-seconds="viewportStartSeconds"
               :viewport-end-seconds="viewportEndSeconds"
               :selected-clip-id="selectedClipId"
-              :live-clip="liveClips.find((clip) => clip.trackId === track.id) ?? null"
+              :live-clip="liveClips.find((clip) => clip.trackId === track.trackId) ?? null"
               @seek="handleSeek"
               @select-clip="selectAudioClip"
               @waveform-frame-count="handleWaveformFrameCount"
@@ -542,7 +551,7 @@ function createMidiClip(trackId: string, requestedStartTick: number): void {
             />
             <MidiArrangementTrack
               v-else
-              :track-id="track.id"
+              :track-id="track.trackId"
               :track-color="track.color"
               :clips="midiClips"
               :tempo-map="mixerStore.graph.tempoMap"
@@ -551,7 +560,7 @@ function createMidiClip(trackId: string, requestedStartTick: number): void {
               :track-height="height"
               :selected-clip-ids="pianoRollStore.arrangementClipIds"
               :keyboard-insertion-tick="secondsToTick(mixerStore.graph.tempoMap, playheadSeconds)"
-              :drag-preview="midiDragPreview?.trackId === track.id ? midiDragPreview : null"
+              :drag-preview="midiDragPreview?.trackId === track.trackId ? midiDragPreview : null"
               :dragging-clip-id="midiClipDrag?.clipId ?? null"
               @remove="removeMidiClip"
               @select="selectMidiClip"

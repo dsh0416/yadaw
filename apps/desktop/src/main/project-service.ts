@@ -3,7 +3,7 @@ import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises"
 import { basename, dirname, join, resolve } from "node:path"
 import type {
   CreateProjectRequest,
-  MixerGraphSnapshot,
+  ProjectGraphSnapshot,
   ProjectAssetSummary,
   ProjectCloseDisposition,
   ProjectCommand,
@@ -222,7 +222,7 @@ export class ProjectService {
     return structuredClone(this.session)
   }
 
-  mixerSnapshot(): Promise<MixerGraphSnapshot> {
+  mixerSnapshot(): Promise<ProjectGraphSnapshot> {
     if (!this.session) throw new Error("No project is open")
     return this.worker.mixerSnapshot()
   }

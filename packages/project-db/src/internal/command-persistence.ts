@@ -24,6 +24,7 @@ import {
   timelineClips
 } from "../schema"
 import * as schema from "../schema"
+import { legacyChannelId } from "./track-compat"
 
 type ProjectDb = PgliteDatabase<typeof schema>
 type ProjectTransaction = Parameters<Parameters<ProjectDb["transaction"]>[0]>[0]
@@ -151,12 +152,12 @@ function sendValue(
 }
 
 function clipValue(
-  clip: Extract<ProjectCommand, { type: "create-clip" }>["clip"]
+  clip: Extract<ProjectCommand, { type: "create-audio-clip" }>["clip"]
 ): typeof timelineClips.$inferInsert {
   return {
     id: clip.id,
     assetId: clip.assetId,
-    trackId: clip.trackId,
+    trackId: legacyChannelId(clip.trackId),
     name: clip.name,
     startFrame: BigInt(clip.startFrame),
     sourceOffsetFrames: BigInt(clip.sourceOffsetFrames),
@@ -189,7 +190,7 @@ async function insertMidiClip(
   await tx.insert(midiClips).values({
     id: clip.id,
     sourceId: clip.sourceId,
-    trackId: clip.trackId,
+    trackId: legacyChannelId(clip.trackId),
     name: clip.name,
     startTick: clip.startTick,
     lengthTicks: clip.lengthTicks,
@@ -229,6 +230,26 @@ export async function applyProjectCommand(
   fallbackOutputId: string
 ): Promise<void> {
   switch (command.type) {
+    case "create-track":
+      await tx.insert(mixerChannels).values(channelValue(command.channel))
+      return
+    case "delete-track": {
+      const channelId = legacyChannelId(command.trackId)
+      await tx
+        .update(mixerChannels)
+        .set({ outputChannelId: fallbackOutputId, outputBus: null })
+        .where(eq(mixerChannels.outputChannelId, channelId))
+      await tx.delete(mixerChannels).where(eq(mixerChannels.id, channelId))
+      return
+    }
+    case "update-track":
+      if (command.patch.sortOrder !== undefined) {
+        await tx
+          .update(mixerChannels)
+          .set({ sortOrder: command.patch.sortOrder })
+          .where(eq(mixerChannels.id, legacyChannelId(command.trackId)))
+      }
+      return
     case "create-channel":
       await tx.insert(mixerChannels).values(channelValue(command.channel))
       return
@@ -259,16 +280,19 @@ export async function applyProjectCommand(
       }
       return
     }
-    case "create-clip":
+    case "create-audio-clip":
       await tx.insert(timelineClips).values(clipValue(command.clip))
       return
-    case "delete-clip":
+    case "delete-audio-clip":
       await tx.delete(timelineClips).where(eq(timelineClips.id, command.clipId))
       return
-    case "move-clip":
+    case "move-audio-clip":
       await tx
         .update(timelineClips)
-        .set({ trackId: command.trackId, startFrame: BigInt(command.startFrame) })
+        .set({
+          trackId: legacyChannelId(command.trackId),
+          startFrame: BigInt(command.startFrame)
+        })
         .where(eq(timelineClips.id, command.clipId))
       return
     case "create-plugin":
@@ -380,7 +404,7 @@ export async function applyProjectCommand(
     case "move-midi-clip":
       await tx
         .update(midiClips)
-        .set({ trackId: command.trackId, startTick: command.startTick })
+        .set({ trackId: legacyChannelId(command.trackId), startTick: command.startTick })
         .where(eq(midiClips.id, command.clipId))
       return
     case "update-midi-clip-range": {
@@ -518,6 +542,17 @@ export async function assertProjectCommandAllowed(
   command: ProjectCommand
 ): Promise<void> {
   switch (command.type) {
+    case "delete-track": {
+      const rows = await tx
+        .select({ systemRole: mixerChannels.systemRole })
+        .from(mixerChannels)
+        .where(eq(mixerChannels.id, legacyChannelId(command.trackId)))
+        .limit(1)
+      if (rows[0]?.systemRole !== null && rows[0]?.systemRole !== undefined) {
+        throw new Error("System channels cannot be deleted")
+      }
+      return
+    }
     case "delete-channel": {
       const rows = await tx
         .select({ systemRole: mixerChannels.systemRole })
@@ -529,24 +564,24 @@ export async function assertProjectCommandAllowed(
       }
       return
     }
-    case "create-clip":
+    case "create-audio-clip":
     case "create-midi-clip": {
       const rows = await tx
         .select({ systemRole: mixerChannels.systemRole })
         .from(mixerChannels)
-        .where(eq(mixerChannels.id, command.clip.trackId))
+        .where(eq(mixerChannels.id, legacyChannelId(command.clip.trackId)))
         .limit(1)
       if (rows[0]?.systemRole !== null && rows[0]?.systemRole !== undefined) {
         throw new Error("System channels cannot contain clips")
       }
       return
     }
-    case "move-clip":
+    case "move-audio-clip":
     case "move-midi-clip": {
       const rows = await tx
         .select({ systemRole: mixerChannels.systemRole })
         .from(mixerChannels)
-        .where(eq(mixerChannels.id, command.trackId))
+        .where(eq(mixerChannels.id, legacyChannelId(command.trackId)))
         .limit(1)
       if (rows[0]?.systemRole !== null && rows[0]?.systemRole !== undefined) {
         throw new Error("System channels cannot contain clips")

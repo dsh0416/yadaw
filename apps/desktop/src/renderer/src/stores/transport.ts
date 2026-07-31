@@ -61,7 +61,7 @@ export const useTransportStore = defineStore("transport", () => {
   let seekFlush: Promise<void> | null = null
 
   const clips = computed<TimelineClip[]>(() =>
-    mixerStore.graph.clips.map((clip) => {
+    mixerStore.graph.audioClips.map((clip) => {
       const sampleRate = mixerStore.graph.sampleRate
       const startSeconds = clip.startFrame / sampleRate
       const durationSeconds = clip.lengthFrames / sampleRate

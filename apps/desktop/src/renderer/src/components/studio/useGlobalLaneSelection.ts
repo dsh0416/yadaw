@@ -1,14 +1,14 @@
 import { computed, shallowRef } from "vue"
 import type {
   KeySignatureEventState,
-  MixerGraphSnapshot,
+  ProjectGraphSnapshot,
   ProjectCommand,
   TempoMapSnapshot
 } from "@yadaw/contracts"
 import { keySignatureValue, parseKeySignatureValue } from "../../utils/keySignatures"
 
 interface GlobalLaneSelectionOptions {
-  graph: () => MixerGraphSnapshot
+  graph: () => ProjectGraphSnapshot
   execute: (command: ProjectCommand) => Promise<boolean>
 }
 

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { createPinia, setActivePinia } from "pinia"
 import type {
-  MixerGraphSnapshot,
+  ProjectGraphSnapshot,
   PluginInstanceState,
   PluginRuntimeStatus,
   TransportSnapshot
@@ -63,10 +63,11 @@ function activeRuntime(instanceId: string, tailSamples: number | null): PluginRu
   }
 }
 
-const emptyGraph: MixerGraphSnapshot = {
+const emptyGraph: ProjectGraphSnapshot = {
   sampleRate: 48_000,
+  tracks: [],
   channels: [],
-  clips: [],
+  audioClips: [],
   sends: [],
   plugins: [],
   midiClips: [],
@@ -177,11 +178,11 @@ describe("transport store", () => {
     const mixer = useMixerStore()
     mixer.graph = {
       ...structuredClone(emptyGraph),
-      clips: [
+      audioClips: [
         {
           id: "clip-1",
           name: "Clip",
-          trackId: "audio-1",
+          trackId: "track:audio-1",
           assetId: "asset-1",
           assetChannels: 2,
           assetSampleRate: 48_000,
@@ -223,11 +224,11 @@ describe("transport store", () => {
     const mixer = useMixerStore()
     mixer.graph = {
       ...structuredClone(emptyGraph),
-      clips: [
+      audioClips: [
         {
           id: "clip-1",
           name: "Clip",
-          trackId: "audio-1",
+          trackId: "track:audio-1",
           assetId: "asset-1",
           assetChannels: 2,
           assetSampleRate: 48_000,
@@ -262,11 +263,11 @@ describe("transport store", () => {
     const mixer = useMixerStore()
     mixer.graph = {
       ...structuredClone(emptyGraph),
-      clips: [
+      audioClips: [
         {
           id: "clip-1",
           name: "Clip",
-          trackId: "audio-1",
+          trackId: "track:audio-1",
           assetId: "asset-1",
           assetChannels: 2,
           assetSampleRate: 48_000,
@@ -303,11 +304,11 @@ describe("transport store", () => {
     const mixer = useMixerStore()
     mixer.graph = {
       ...structuredClone(emptyGraph),
-      clips: [
+      audioClips: [
         {
           id: "clip-1",
           name: "Clip",
-          trackId: "audio-1",
+          trackId: "track:audio-1",
           assetId: "asset-1",
           assetChannels: 2,
           assetSampleRate: 48_000,
@@ -346,7 +347,7 @@ describe("transport store", () => {
           id: "midi-1",
           sourceId: "source-1",
           name: "Midi",
-          trackId: "instrument-1",
+          trackId: "track:instrument-1",
           startTick: 0,
           lengthTicks: 3_840,
           sourceOffsetTicks: 0,

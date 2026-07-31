@@ -52,6 +52,7 @@ describe("MixerConsole", () => {
     const mixerStore = useMixerStore()
     mixerStore.graph = {
       sampleRate: 48_000,
+      tracks: [{ id: "track:audio", channelId: "audio", sortOrder: 0 }],
       channels: [
         channel("audio", "audio"),
         channel("aux-a", "aux"),
@@ -60,7 +61,7 @@ describe("MixerConsole", () => {
         channel("master", "master"),
         channel("output", "output")
       ],
-      clips: [],
+      audioClips: [],
       sends: [1, 2, 3].map((targetBus, index) => ({
         id: `send-${index}`,
         sourceChannelId: "audio",

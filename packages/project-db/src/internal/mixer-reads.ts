@@ -1,6 +1,6 @@
 import { asc, eq } from "drizzle-orm"
 import type { PgliteDatabase } from "drizzle-orm/pglite"
-import type { MixerGraphSnapshot, ProjectConfiguration } from "@yadaw/contracts"
+import type { ProjectGraphSnapshot, ProjectConfiguration } from "@yadaw/contracts"
 import {
   assets,
   keySignatureEvents,
@@ -16,13 +16,14 @@ import {
 } from "../schema"
 import * as schema from "../schema"
 import { bytes, pluginDescriptor } from "./command-persistence"
+import { legacyTrackId } from "./track-compat"
 
 type ProjectDb = PgliteDatabase<typeof schema>
 
 export async function readMixerSnapshot(
   db: ProjectDb,
   configuration: ProjectConfiguration
-): Promise<MixerGraphSnapshot> {
+): Promise<ProjectGraphSnapshot> {
   const [
     channelRows,
     clipRows,
@@ -92,7 +93,7 @@ export async function readMixerSnapshot(
       left.id.localeCompare(right.id)
   )
 
-  const notesByClip = new Map<string, MixerGraphSnapshot["midiClips"][number]["notes"]>()
+  const notesByClip = new Map<string, ProjectGraphSnapshot["midiClips"][number]["notes"]>()
   for (const note of midiNoteRows) {
     const notes = notesByClip.get(note.clipId) ?? []
     notes.push({
@@ -106,7 +107,7 @@ export async function readMixerSnapshot(
     })
     notesByClip.set(note.clipId, notes)
   }
-  const eventsByClip = new Map<string, MixerGraphSnapshot["midiClips"][number]["events"]>()
+  const eventsByClip = new Map<string, ProjectGraphSnapshot["midiClips"][number]["events"]>()
   for (const event of midiEventRows) {
     const events = eventsByClip.get(event.clipId) ?? []
     events.push({
@@ -121,6 +122,16 @@ export async function readMixerSnapshot(
 
   return {
     sampleRate: configuration.sampleRate,
+    tracks: channelRows
+      .filter(
+        (channel) =>
+          channel.systemRole === null && (channel.kind === "audio" || channel.kind === "instrument")
+      )
+      .map((channel) => ({
+        id: legacyTrackId(channel.id),
+        channelId: channel.id,
+        sortOrder: channel.sortOrder
+      })),
     channels: channelRows.map((channel) => ({
       id: channel.id,
       kind: channel.kind,
@@ -149,8 +160,9 @@ export async function readMixerSnapshot(
       inputChannels: channel.inputChannels,
       hardwareOutputChannels: channel.hardwareOutputChannels
     })),
-    clips: clipRows.map((clip) => ({
+    audioClips: clipRows.map((clip) => ({
       ...clip,
+      trackId: legacyTrackId(clip.trackId),
       startFrame: Number(clip.startFrame),
       sourceOffsetFrames: Number(clip.sourceOffsetFrames),
       lengthFrames: Number(clip.lengthFrames)
@@ -172,7 +184,7 @@ export async function readMixerSnapshot(
     midiClips: midiClipRows.map((clip) => ({
       id: clip.id,
       sourceId: clip.sourceId,
-      trackId: clip.trackId,
+      trackId: legacyTrackId(clip.trackId),
       name: clip.name,
       startTick: clip.startTick,
       lengthTicks: clip.lengthTicks,

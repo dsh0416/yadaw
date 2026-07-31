@@ -1,7 +1,7 @@
 import { access, mkdir, rename, rm, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import type {
-  MixerGraphSnapshot,
+  ProjectGraphSnapshot,
   MixerParameterPreview,
   MixerRuntimeSnapshot,
   ProjectCommand,
@@ -34,7 +34,7 @@ export interface MidiSourceImport {
 export class MixerService {
   private readonly cacheDirectory: string
   private mutationTail: Promise<void> = Promise.resolve()
-  private cachedProject: { projectId: string; graph: MixerGraphSnapshot } | null = null
+  private cachedProject: { projectId: string; graph: ProjectGraphSnapshot } | null = null
   private graphRevision = 0
   private testTransport: TransportSnapshot = {
     state: "stopped",
@@ -67,7 +67,7 @@ export class MixerService {
     return current.id
   }
 
-  private resolveGraph(graph: MixerGraphSnapshot): MixerGraphSnapshot {
+  private resolveGraph(graph: ProjectGraphSnapshot): ProjectGraphSnapshot {
     const resolved = cloneGraph(graph)
     resolved.plugins = resolved.plugins.map((plugin) => ({
       ...plugin,
@@ -76,7 +76,7 @@ export class MixerService {
     return resolved
   }
 
-  private snapshotNow(): MixerGraphSnapshot {
+  private snapshotNow(): ProjectGraphSnapshot {
     const projectId = this.currentProjectId()
     if (!this.cachedProject || this.cachedProject.projectId !== projectId) {
       this.cachedProject = null
@@ -85,21 +85,21 @@ export class MixerService {
     return this.resolveGraph(this.cachedProject.graph)
   }
 
-  private commitGraph(projectId: string, graph: MixerGraphSnapshot): void {
+  private commitGraph(projectId: string, graph: ProjectGraphSnapshot): void {
     if (this.currentProjectId() !== projectId) {
       throw new Error("Project changed while updating the mixer graph")
     }
     this.cachedProject = { projectId, graph }
   }
 
-  async snapshot(): Promise<MixerGraphSnapshot> {
+  async snapshot(): Promise<ProjectGraphSnapshot> {
     await this.mutationTail
     return this.snapshotNow()
   }
 
-  private async cacheAssets(graph: MixerGraphSnapshot): Promise<Map<string, string>> {
+  private async cacheAssets(graph: ProjectGraphSnapshot): Promise<Map<string, string>> {
     await mkdir(this.cacheDirectory, { recursive: true })
-    const ids = [...new Set(graph.clips.map((clip) => clip.assetId))]
+    const ids = [...new Set(graph.audioClips.map((clip) => clip.assetId))]
     const contentHashes = new Map(
       (await this.projects.assetContentHashes(ids)).map((asset) => [asset.id, asset.contentHash])
     )
@@ -124,11 +124,11 @@ export class MixerService {
     return result
   }
 
-  load(): Promise<MixerGraphSnapshot> {
+  load(): Promise<ProjectGraphSnapshot> {
     return this.refreshFromDatabase(true)
   }
 
-  refreshFromDatabase(publish: boolean): Promise<MixerGraphSnapshot> {
+  refreshFromDatabase(publish: boolean): Promise<ProjectGraphSnapshot> {
     return this.enqueueMutation(async () => {
       const projectId = this.currentProjectId()
       const graph = await this.projects.mixerSnapshot()
@@ -152,10 +152,10 @@ export class MixerService {
   }
 
   private async publishGraph(
-    source: MixerGraphSnapshot,
+    source: ProjectGraphSnapshot,
     softwareMonitoringOverride?: boolean,
     awaitPublication = false
-  ): Promise<MixerGraphSnapshot> {
+  ): Promise<ProjectGraphSnapshot> {
     const graph = this.resolveGraph(source)
     const softwareMonitoringEnabled =
       softwareMonitoringOverride ?? (await this.settings?.get())?.softwareMonitoringEnabled ?? false
@@ -164,6 +164,11 @@ export class MixerService {
     }
     validateGraph(graph)
     const paths = await this.cacheAssets(graph)
+    const channelIdForTrack = (trackId: string): string => {
+      const track = graph.tracks.find((candidate) => candidate.id === trackId)
+      if (!track) throw new Error(`Project track '${trackId}' was not found`)
+      return track.channelId
+    }
     const runtimeGraph: AudioHostGraph = {
       sample_rate: graph.sampleRate,
       channels: graph.channels.map((channel) => ({
@@ -200,9 +205,9 @@ export class MixerService {
         tap: send.tap,
         level_db: send.levelDb
       })),
-      clips: graph.clips.map((clip) => ({
+      clips: graph.audioClips.map((clip) => ({
         id: clip.id,
-        channel_id: clip.trackId,
+        channel_id: channelIdForTrack(clip.trackId),
         start_frame: clip.startFrame,
         source_offset_frames: clip.sourceOffsetFrames,
         length_frames: clip.lengthFrames,
@@ -220,7 +225,7 @@ export class MixerService {
       })),
       midi_clips: graph.midiClips.map((clip) => ({
         id: clip.id,
-        channel_id: clip.trackId,
+        channel_id: channelIdForTrack(clip.trackId),
         start_tick: clip.startTick,
         source_offset_ticks: clip.sourceOffsetTicks,
         length_ticks: clip.lengthTicks,
@@ -294,7 +299,7 @@ export class MixerService {
         this.cachedProject = null
         throw new Error("Mixer graph is not loaded")
       }
-      const referenced = new Set(this.cachedProject.graph.clips.map((clip) => clip.assetId))
+      const referenced = new Set(this.cachedProject.graph.audioClips.map((clip) => clip.assetId))
       const used = ids.find((id) => referenced.has(id))
       if (used) throw new Error(`Audio asset '${used}' is still used by a timeline clip`)
       await this.projects.deleteAssets(ids)
@@ -335,7 +340,7 @@ export class MixerService {
     const inverse = inverseFor(before, command)
     const candidate = applyToGraph(before, command)
     validateGraph(candidate)
-    const deletedIds = deletedChannelIds(command)
+    const deletedIds = deletedChannelIds(before, command)
     const fallbackOutput = before.channels.find(
       (channel) => channel.kind === "output" && !deletedIds.has(channel.id)
     )

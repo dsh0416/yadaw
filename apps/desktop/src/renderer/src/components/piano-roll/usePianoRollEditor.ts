@@ -5,7 +5,7 @@ import type {
   MidiClipState,
   MidiNoteState,
   MixerChannelState,
-  MixerGraphSnapshot,
+  ProjectGraphSnapshot,
   ProjectCommand
 } from "@yadaw/contracts"
 import { useApplicationSettingsStore } from "../../stores/applicationSettings"
@@ -29,7 +29,7 @@ import { createPianoRollEditing, type PianoRollEditing } from "./usePianoRollEdi
 
 export interface PianoRollEditor extends PianoRollGestures, PianoRollEditing {
   pianoRollStore: ReturnType<typeof usePianoRollStore>
-  graph: Ref<MixerGraphSnapshot>
+  graph: Ref<ProjectGraphSnapshot>
   openClips: ComputedRef<MidiClipState[]>
   activeClip: ComputedRef<MidiClipState | null>
   visibleNotes: ComputedRef<NoteGestureItem[]>

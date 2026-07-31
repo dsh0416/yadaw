@@ -1,7 +1,7 @@
 import type {
   MixerBusState,
   MixerChannelState,
-  MixerGraphSnapshot,
+  ProjectGraphSnapshot,
   MixerRouteTarget,
   MixerRuntimeSnapshot,
   MixerSendState
@@ -17,11 +17,11 @@ export const MIXER_BUSES: readonly MixerBusState[] = Array.from(
 )
 
 export function patchMixerGraph(
-  graph: MixerGraphSnapshot,
+  graph: ProjectGraphSnapshot,
   target: "channel" | "send",
   id: string,
   patch: Record<string, unknown>
-): MixerGraphSnapshot {
+): ProjectGraphSnapshot {
   const next = structuredClone(graph)
   const values = target === "channel" ? next.channels : next.sends
   const value = values.find((candidate) => candidate.id === id)
@@ -41,7 +41,7 @@ export function systemChannels(channels: readonly MixerChannelState[]): MixerCha
   return channels.filter((channel) => channel.systemRole !== null)
 }
 
-export function sendsFor(graph: MixerGraphSnapshot, channelId: string): MixerSendState[] {
+export function sendsFor(graph: ProjectGraphSnapshot, channelId: string): MixerSendState[] {
   return graph.sends.filter((send) => send.sourceChannelId === channelId)
 }
 
@@ -58,7 +58,7 @@ export function meterFor(runtime: MixerRuntimeSnapshot, channelId: string) {
 }
 
 export function availableOutputTargets(
-  graph: MixerGraphSnapshot,
+  graph: ProjectGraphSnapshot,
   channelId: string
 ): MixerRouteTarget[] {
   const source = graph.channels.find((channel) => channel.id === channelId)
@@ -79,7 +79,7 @@ export function availableOutputTargets(
 }
 
 export function availableSendTargets(
-  graph: MixerGraphSnapshot,
+  graph: ProjectGraphSnapshot,
   channelId: string
 ): MixerRouteTarget[] {
   const source = graph.channels.find((channel) => channel.id === channelId)
@@ -112,7 +112,7 @@ export function availableSendTargets(
   })
 }
 
-function routeTargets(graph: MixerGraphSnapshot): MixerRouteTarget[] {
+function routeTargets(graph: ProjectGraphSnapshot): MixerRouteTarget[] {
   return [
     ...MIXER_BUSES.map((bus) => ({ kind: "bus" as const, bus: bus.channel })),
     ...graph.channels
@@ -121,7 +121,7 @@ function routeTargets(graph: MixerGraphSnapshot): MixerRouteTarget[] {
   ]
 }
 
-function isAcyclic(graph: MixerGraphSnapshot): boolean {
+function isAcyclic(graph: ProjectGraphSnapshot): boolean {
   const edges = new Map(graph.channels.map((channel) => [channel.id, [] as string[]]))
   for (const channel of graph.channels) {
     if (channel.outputChannelId) edges.get(channel.id)?.push(channel.outputChannelId)

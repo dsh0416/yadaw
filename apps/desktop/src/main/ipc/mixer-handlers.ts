@@ -5,19 +5,19 @@ import type { IpcHandlerContext } from "./context"
 import { assertTrustedSender } from "./support"
 export function registerMixerHandlers(context: IpcHandlerContext): void {
   const { mixer, lifecycle, projects, isShuttingDown } = context
-  ipcMain.handle(IPC_CHANNELS.mixerLoad, (event) => {
+  ipcMain.handle(IPC_CHANNELS.projectGraphLoad, (event) => {
     assertTrustedSender(event)
     lifecycle.assertMixerLoadAllowed()
     return mixer.snapshot()
   })
 
-  ipcMain.handle(IPC_CHANNELS.mixerReload, (event) => {
+  ipcMain.handle(IPC_CHANNELS.projectGraphReload, (event) => {
     assertTrustedSender(event)
     lifecycle.assertMixerLoadAllowed()
     return mixer.load()
   })
 
-  ipcMain.handle(IPC_CHANNELS.mixerExecute, async (event, value: unknown) => {
+  ipcMain.handle(IPC_CHANNELS.projectCommandExecute, async (event, value: unknown) => {
     assertTrustedSender(event)
     if (
       !value ||

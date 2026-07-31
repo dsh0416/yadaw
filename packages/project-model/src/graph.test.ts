@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest"
-import type { MixerGraphSnapshot, ProjectCommand } from "@yadaw/contracts"
+import type { ProjectGraphSnapshot, ProjectCommand } from "@yadaw/contracts"
 import { applyToGraph, inverseFor, validateGraph } from "./graph"
 
-function graph(): MixerGraphSnapshot {
+function graph(): ProjectGraphSnapshot {
   return {
     sampleRate: 48_000,
+    tracks: [{ id: "track:instrument-1", channelId: "instrument-1", sortOrder: 0 }],
     channels: [
       {
         id: "instrument-1",
@@ -67,14 +68,14 @@ function graph(): MixerGraphSnapshot {
         hardwareOutputChannels: [1, 2]
       }
     ],
-    clips: [],
+    audioClips: [],
     sends: [],
     plugins: [],
     midiClips: [
       {
         id: "clip-1",
         sourceId: "source-1",
-        trackId: "instrument-1",
+        trackId: "track:instrument-1",
         name: "Clip",
         startTick: 0,
         lengthTicks: 960,
@@ -120,7 +121,7 @@ describe("MIDI note project commands", () => {
           clip: {
             id: "clip-2",
             sourceId: source.id,
-            trackId: "instrument-1",
+            trackId: "track:instrument-1",
             name: source.name,
             startTick: 960,
             lengthTicks: 3_840,
@@ -196,6 +197,51 @@ describe("MIDI note project commands", () => {
 })
 
 describe("project graph command characterization", () => {
+  it("creates and deletes a track with its channel as one invertible aggregate", () => {
+    const before = graph()
+    const channel = {
+      ...structuredClone(before.channels[0]!),
+      id: "instrument-2",
+      name: "Instrument 2",
+      sortOrder: 1
+    }
+    const command: ProjectCommand = {
+      type: "create-track",
+      track: { id: "track:instrument-2", channelId: channel.id, sortOrder: 1 },
+      channel
+    }
+
+    const after = applyToGraph(before, command)
+
+    validateGraph(after)
+    expect(after.tracks).toContainEqual({
+      id: "track:instrument-2",
+      channelId: "instrument-2",
+      sortOrder: 1
+    })
+    expect(after.channels).toContainEqual(channel)
+    expect(applyToGraph(after, inverseFor(before, command))).toEqual(before)
+  })
+
+  it("enforces track ownership independently from mixer channel order", () => {
+    const missingTrack = graph()
+    missingTrack.tracks = []
+    expect(() => validateGraph(missingTrack)).toThrow(
+      "Ordinary Audio and Instrument channels require exactly one project track"
+    )
+
+    const systemTrack = graph()
+    systemTrack.tracks.push({ id: "track:master", channelId: "master", sortOrder: 99 })
+    expect(() => validateGraph(systemTrack)).toThrow(
+      "Project tracks must reference ordinary Audio or Instrument channels"
+    )
+
+    const value = graph()
+    value.tracks[0]!.sortOrder = 12
+    value.channels[0]!.sortOrder = 3
+    expect(() => validateGraph(value)).not.toThrow()
+  })
+
   it("round-trips non-MIDI edits through one inverse batch", () => {
     const before = graph()
     const command: ProjectCommand = {

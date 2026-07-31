@@ -3,7 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import type {
   MixerChannelState,
-  MixerGraphSnapshot,
+  ProjectGraphSnapshot,
   PluginDescriptor,
   ProjectCommand,
   ProjectSession
@@ -53,16 +53,20 @@ function channel(id: string, kind: MixerChannelState["kind"], sortOrder = 0): Mi
   }
 }
 
-function graph(): MixerGraphSnapshot {
+function graph(): ProjectGraphSnapshot {
   return {
     sampleRate: 48_000,
+    tracks: [
+      { id: "track:audio", channelId: "audio", sortOrder: 0 },
+      { id: "track:instrument", channelId: "instrument", sortOrder: 0 }
+    ],
     channels: [
       channel("audio", "audio"),
       channel("instrument", "instrument"),
       channel("master", "master"),
       channel("output", "output")
     ],
-    clips: [],
+    audioClips: [],
     sends: [],
     plugins: [
       {
@@ -190,7 +194,11 @@ describe("MixerService project graph cache", () => {
       patch: { gainDb: -6 }
     })
     const created = channel("instrument-2", "instrument", 1)
-    const structural = await service.execute({ type: "create-channel", channel: created })
+    const structural = await service.execute({
+      type: "create-track",
+      track: { id: "track:instrument-2", channelId: created.id, sortOrder: 1 },
+      channel: created
+    })
 
     expect(realtime.graph.channels.find(({ id }) => id === "audio")?.gainDb).toBe(-6)
     expect(structural.graph.channels).toContainEqual(created)
@@ -209,7 +217,8 @@ describe("MixerService project graph cache", () => {
     const service = await mixer(projects, { loadGraph })
     await service.load()
     const command: ProjectCommand = {
-      type: "create-channel",
+      type: "create-track",
+      track: { id: "track:instrument-2", channelId: "instrument-2", sortOrder: 1 },
       channel: channel("instrument-2", "instrument", 1)
     }
 
@@ -218,7 +227,7 @@ describe("MixerService project graph cache", () => {
     expect(projects.applyProjectCommand).toHaveBeenNthCalledWith(1, command, "output")
     expect(projects.applyProjectCommand).toHaveBeenNthCalledWith(
       2,
-      { type: "delete-channel", channelId: "instrument-2" },
+      { type: "delete-track", trackId: "track:instrument-2" },
       "output"
     )
     expect((await service.snapshot()).channels.some(({ id }) => id === "instrument-2")).toBe(false)
@@ -261,7 +270,7 @@ describe("MixerService project graph cache", () => {
       clip: {
         id: "midi-1",
         sourceId: "source-1",
-        trackId: "instrument",
+        trackId: "track:instrument",
         name: "MIDI",
         startTick: 0,
         lengthTicks: 960,
@@ -335,10 +344,10 @@ describe("MixerService project graph cache", () => {
 
   it("deletes only assets that are not referenced by the cached graph", async () => {
     const initial = graph()
-    initial.clips.push({
+    initial.audioClips.push({
       id: "clip-1",
       assetId: "used-asset",
-      trackId: "audio",
+      trackId: "track:audio",
       name: "Clip",
       startFrame: 0,
       sourceOffsetFrames: 0,

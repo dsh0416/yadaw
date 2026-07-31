@@ -115,7 +115,7 @@ function handleShortcut(event: KeyboardEvent): void {
   if ((event.code === "Delete" || event.code === "Backspace") && transportStore.selectedClipId) {
     event.preventDefault()
     const clipId = transportStore.selectedClipId
-    void mixerStore.execute({ type: "delete-clip", clipId }).then((deleted) => {
+    void mixerStore.execute({ type: "delete-audio-clip", clipId }).then((deleted) => {
       if (deleted) transportStore.clearSelection()
     })
     return

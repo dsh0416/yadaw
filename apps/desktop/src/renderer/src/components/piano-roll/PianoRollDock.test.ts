@@ -1,13 +1,14 @@
 import { createPinia, setActivePinia } from "pinia"
 import { flushPromises, mount } from "@vue/test-utils"
 import { describe, expect, it, vi } from "vitest"
-import type { MixerGraphSnapshot, ProjectCommand } from "@yadaw/contracts"
+import type { ProjectGraphSnapshot, ProjectCommand } from "@yadaw/contracts"
 import { useMixerStore } from "../../stores/mixer"
 import { usePianoRollStore } from "../../stores/pianoRoll"
 import PianoRollDock from "./PianoRollDock.vue"
 
-const graph: MixerGraphSnapshot = {
+const graph: ProjectGraphSnapshot = {
   sampleRate: 48_000,
+  tracks: [{ id: "track:instrument-1", channelId: "instrument-1", sortOrder: 0 }],
   channels: [
     {
       id: "instrument-1",
@@ -29,14 +30,14 @@ const graph: MixerGraphSnapshot = {
       hardwareOutputChannels: []
     }
   ],
-  clips: [],
+  audioClips: [],
   sends: [],
   plugins: [],
   midiClips: [
     {
       id: "clip-1",
       sourceId: "source-1",
-      trackId: "instrument-1",
+      trackId: "track:instrument-1",
       name: "Verse",
       startTick: 960,
       lengthTicks: 960,
@@ -286,7 +287,7 @@ describe("PianoRollDock", () => {
     const pinia = createPinia()
     setActivePinia(pinia)
     const mixer = useMixerStore()
-    const offGridGraph: MixerGraphSnapshot = {
+    const offGridGraph: ProjectGraphSnapshot = {
       ...graph,
       midiClips: [
         {
@@ -408,7 +409,7 @@ describe("PianoRollDock", () => {
     const pinia = createPinia()
     setActivePinia(pinia)
     const mixer = useMixerStore()
-    const offGridGraph: MixerGraphSnapshot = {
+    const offGridGraph: ProjectGraphSnapshot = {
       ...graph,
       midiClips: [
         {

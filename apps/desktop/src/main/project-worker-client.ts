@@ -1,6 +1,6 @@
 import { Worker } from "node:worker_threads"
 import type {
-  MixerGraphSnapshot,
+  ProjectGraphSnapshot,
   ProjectAssetSummary,
   ProjectCommand,
   ProjectConfiguration
@@ -105,7 +105,7 @@ export class ProjectWorkerClient {
     return this.call({ type: "list-assets" })
   }
 
-  mixerSnapshot(): Promise<MixerGraphSnapshot> {
+  mixerSnapshot(): Promise<ProjectGraphSnapshot> {
     return this.call({ type: "mixer-snapshot" })
   }
 

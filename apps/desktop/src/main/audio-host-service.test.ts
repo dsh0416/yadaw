@@ -1,5 +1,5 @@
 import { decode, encode } from "@msgpack/msgpack"
-import type { MixerGraphSnapshot } from "@yadaw/contracts"
+import type { ProjectGraphSnapshot } from "@yadaw/contracts"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const fakeHost = vi.hoisted(() => {
@@ -242,14 +242,14 @@ import type { AudioHostGraph } from "./audio-host-service"
 import type { PluginDescriptor } from "@yadaw/contracts"
 
 function graph(sampleRate: number): {
-  project: MixerGraphSnapshot
+  project: ProjectGraphSnapshot
   runtime: AudioHostGraph
 } {
   return {
     project: {
       sampleRate,
       plugins: []
-    } as unknown as MixerGraphSnapshot,
+    } as unknown as ProjectGraphSnapshot,
     runtime: {
       sample_rate: sampleRate,
       channels: [],

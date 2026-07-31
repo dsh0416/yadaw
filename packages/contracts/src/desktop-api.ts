@@ -20,7 +20,7 @@ import type {
 import type { AudioBenchmarkReport, SystemPerformanceSnapshot } from "./performance"
 import type {
   CompiledAudioGraphSnapshot,
-  MixerGraphSnapshot,
+  ProjectGraphSnapshot,
   MixerParameterPreview,
   MixerRuntimeSnapshot,
   ProjectCommand,
@@ -73,9 +73,9 @@ export const IPC_CHANNELS = {
   audioSnapshot: "audio:snapshot",
   audioRoundTripLatencyStart: "audio:round-trip-latency-start",
   audioRoundTripLatencySnapshot: "audio:round-trip-latency-snapshot",
-  mixerLoad: "mixer:load",
-  mixerReload: "mixer:reload",
-  mixerExecute: "mixer:execute",
+  projectGraphLoad: "project:graph-load",
+  projectGraphReload: "project:graph-reload",
+  projectCommandExecute: "project:command-execute",
   mixerPreview: "mixer:preview",
   mixerSnapshot: "mixer:snapshot",
   mixerClearMeterClips: "mixer:clear-meter-clips",
@@ -143,8 +143,8 @@ export interface YadawDesktopApi {
     request: RoundTripLatencyMeasurementRequest
   ): Promise<RoundTripLatencyMeasurement>
   roundTripLatencyMeasurementSnapshot(): Promise<RoundTripLatencyMeasurement>
-  loadMixerGraph(): Promise<MixerGraphSnapshot>
-  reloadMixerGraph(): Promise<MixerGraphSnapshot>
+  loadProjectGraph(): Promise<ProjectGraphSnapshot>
+  reloadProjectGraph(): Promise<ProjectGraphSnapshot>
   executeProjectCommand(command: ProjectCommand): Promise<ProjectCommandResult>
   previewMixerParameter(preview: MixerParameterPreview): Promise<void>
   mixerSnapshot(): Promise<MixerRuntimeSnapshot>

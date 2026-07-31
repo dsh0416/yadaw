@@ -4,7 +4,7 @@ import type {
   MixerChannelKind,
   MixerChannelPatch,
   MixerChannelState,
-  MixerGraphSnapshot,
+  ProjectGraphSnapshot,
   MixerParameterPreview,
   MixerRouteTarget,
   MixerRuntimeSnapshot,
@@ -29,10 +29,11 @@ import { useProjectStore } from "./project"
 import { useMixerHistory } from "./mixer-history"
 import { useMixerMeterPolling } from "./mixer-meter-polling"
 
-const EMPTY_GRAPH: MixerGraphSnapshot = {
+const EMPTY_GRAPH: ProjectGraphSnapshot = {
   sampleRate: 48_000,
+  tracks: [],
   channels: [],
-  clips: [],
+  audioClips: [],
   sends: [],
   plugins: [],
   midiClips: [],
@@ -54,7 +55,7 @@ const DEFAULT_CHANNEL_COLORS: Record<MixerChannelKind, string> = {
 
 export const useMixerStore = defineStore("mixer", () => {
   const projectStore = useProjectStore()
-  const graph = shallowRef<MixerGraphSnapshot>(structuredClone(EMPTY_GRAPH))
+  const graph = shallowRef<ProjectGraphSnapshot>(structuredClone(EMPTY_GRAPH))
   const runtime = shallowRef<MixerRuntimeSnapshot>({ meters: [], capturedAt: 0 })
   const selectedChannelId = shallowRef<string | null>(null)
   const loading = shallowRef(false)
@@ -73,9 +74,12 @@ export const useMixerStore = defineStore("mixer", () => {
     () => channels.value.find((channel) => channel.systemRole === "metronome") ?? null
   )
   const timelineTracks = computed(() =>
-    [...audioTracks.value, ...instrumentTracks.value].sort(
-      (left, right) => left.sortOrder - right.sortOrder
-    )
+    graph.value.tracks
+      .flatMap((track) => {
+        const channel = graph.value.channels.find((candidate) => candidate.id === track.channelId)
+        return channel ? [{ ...channel, trackId: track.id, sortOrder: track.sortOrder }] : []
+      })
+      .sort((left, right) => left.sortOrder - right.sortOrder)
   )
   const auxChannels = computed(() => channels.value.filter((channel) => channel.kind === "aux"))
   const buses = computed(() => MIXER_BUSES)
@@ -106,7 +110,7 @@ export const useMixerStore = defineStore("mixer", () => {
     return enqueueMutation(loadNow)
   }
 
-  function applyGraph(snapshot: MixerGraphSnapshot): void {
+  function applyGraph(snapshot: ProjectGraphSnapshot): void {
     graph.value = structuredClone(snapshot)
     const selectedStillExists = graph.value.channels.some(
       (channel) => channel.id === selectedChannelId.value
@@ -119,7 +123,7 @@ export const useMixerStore = defineStore("mixer", () => {
     }
   }
 
-  function hydrate(snapshot: MixerGraphSnapshot): void {
+  function hydrate(snapshot: ProjectGraphSnapshot): void {
     applyGraph(snapshot)
     history.clear()
     error.value = ""
@@ -130,7 +134,7 @@ export const useMixerStore = defineStore("mixer", () => {
     loading.value = true
     error.value = ""
     try {
-      applyGraph(await window.yadaw.loadMixerGraph())
+      applyGraph(await window.yadaw.loadProjectGraph())
     } catch (reason) {
       error.value = reason instanceof Error ? reason.message : "Unable to load the mixer."
     } finally {
@@ -147,7 +151,7 @@ export const useMixerStore = defineStore("mixer", () => {
     loading.value = true
     error.value = ""
     try {
-      applyGraph(await window.yadaw.reloadMixerGraph())
+      applyGraph(await window.yadaw.reloadProjectGraph())
     } catch (reason) {
       error.value = reason instanceof Error ? reason.message : "Unable to reload the mixer."
     } finally {
@@ -268,7 +272,11 @@ export const useMixerStore = defineStore("mixer", () => {
       hardwareOutputChannels: []
     }
     selectedChannelId.value = channel.id
-    return execute({ type: "create-channel", channel })
+    return execute({
+      type: "create-track",
+      track: { id: crypto.randomUUID(), channelId: channel.id, sortOrder: index },
+      channel
+    })
   }
 
   function createInstrumentTrack(): Promise<boolean> {
@@ -296,7 +304,11 @@ export const useMixerStore = defineStore("mixer", () => {
       hardwareOutputChannels: []
     }
     selectedChannelId.value = channel.id
-    return execute({ type: "create-channel", channel })
+    return execute({
+      type: "create-track",
+      track: { id: crypto.randomUUID(), channelId: channel.id, sortOrder: index },
+      channel
+    })
   }
 
   function createAux(inputFormat: "mono" | "stereo" = "stereo"): Promise<boolean> {
@@ -369,7 +381,10 @@ export const useMixerStore = defineStore("mixer", () => {
   async function deleteChannel(channelId: string): Promise<boolean> {
     const channel = channels.value.find((candidate) => candidate.id === channelId)
     if (!channel || channel.kind === "master" || channel.systemRole !== null) return false
-    const completed = await execute({ type: "delete-channel", channelId })
+    const track = graph.value.tracks.find((candidate) => candidate.channelId === channelId)
+    const completed = await execute(
+      track ? { type: "delete-track", trackId: track.id } : { type: "delete-channel", channelId }
+    )
     if (completed && selectedChannelId.value === channelId) {
       selectedChannelId.value = graph.value.channels[0]?.id ?? null
     }

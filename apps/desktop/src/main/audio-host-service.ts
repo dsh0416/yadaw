@@ -16,7 +16,7 @@ import type {
   AudioPreferences,
   AudioRuntimeSnapshot,
   CompiledAudioGraphSnapshot,
-  MixerGraphSnapshot,
+  ProjectGraphSnapshot,
   MixerParameterPreview,
   MixerRuntimeSnapshot,
   MidiInputSnapshot,
@@ -93,7 +93,7 @@ export class AudioHostService {
   private stopping = false
   private lastGraph: {
     revision: number
-    project: MixerGraphSnapshot
+    project: ProjectGraphSnapshot
     runtime: AudioHostGraph
   } | null = null
   private publishedGraph: {
@@ -302,7 +302,7 @@ export class AudioHostService {
 
   async loadGraph(
     revision: number,
-    project: MixerGraphSnapshot,
+    project: ProjectGraphSnapshot,
     runtime: AudioHostGraph,
     awaitPublication = false
   ): Promise<void> {
