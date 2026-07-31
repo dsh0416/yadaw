@@ -13,6 +13,7 @@ mod graph;
 mod midi_input;
 mod plugin;
 mod recording;
+mod rpc;
 mod transport;
 mod wire;
 
@@ -21,6 +22,7 @@ pub use graph::*;
 pub use midi_input::*;
 pub use plugin::*;
 pub use recording::*;
+pub use rpc::*;
 pub use transport::*;
 pub use wire::*;
 

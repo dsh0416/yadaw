@@ -75,7 +75,7 @@ type RpcResult<T> =
     }
 
 interface RpcError {
-  code: string
+  code: RpcErrorCode
   category:
     | "validation"
     | "conflict"
@@ -86,10 +86,12 @@ interface RpcError {
     | "timeout-unknown"
     | "dependency-failed"
     | "invariant-violation"
-  message: string
+  outcome: "not-committed" | "unknown" | "quarantined"
   retry: "never" | "safe" | "after-reconcile"
   correlationId: string
+  userMessageKey: string
   resource?: ResourceRef
+  details?: RpcErrorDetails
 }
 ```
 
@@ -115,13 +117,14 @@ Every stateful operation names its target with an opaque resource reference:
 interface ResourceRef {
   kind: string
   id: string
-  epoch: number
+  epoch: string
   generation: number
 }
 ```
 
 - `id` identifies the logical resource.
-- `epoch` identifies the owning process or worker incarnation.
+- `epoch` identifies the owning process or worker incarnation. It is encoded as
+  a decimal string so a Rust `u64` never loses precision in JavaScript.
 - `generation` identifies the resource incarnation within that process.
 - Mutations also carry `expectedRevision` when concurrent updates are possible.
 
