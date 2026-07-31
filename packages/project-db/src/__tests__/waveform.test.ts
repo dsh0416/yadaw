@@ -3,7 +3,7 @@ import { readWaveformWindow, type WaveformExecutor } from "../waveform"
 
 function executorWithRows(rows: unknown[]): WaveformExecutor {
   return {
-    execute: vi.fn(async () => ({ rows })) as WaveformExecutor["execute"]
+    execute: vi.fn(async () => ({ rows })) as unknown as WaveformExecutor["execute"]
   }
 }
 
