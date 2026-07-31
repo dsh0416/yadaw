@@ -15,15 +15,16 @@ mod tests {
         MeterBank, MetronomeScheduler, NativeMidiClip, NativeMidiEvent, NativeMidiEventKind,
         NativeMidiNote, NativeMixerChannel, NativeMixerGraph, NativeMixerRuntime, NativeMixerSend,
         NativePluginInstance, NativeRoundTripLatencyMeasurementRequest, OUTPUT_RESAMPLER_FRAMES,
-        Ordering, RoundTripInputDetector, RoundTripLatencyMeasurement, RoundTripOutputProbe,
-        ScheduledMidiEvent, ScheduledMidiEventKind, SessionOutputConverter, SignalWidth,
-        StereoDelayLine, StreamDirection, StreamErrorImpact, SupportedBufferSize,
-        TRANSPORT_COUNTING_IN, TRANSPORT_PLAYING, TRANSPORT_RECORDING, TRANSPORT_STOPPED,
-        TRANSPORT_WAITING, TransportAction, TransportShared, build_mixer_runtime,
-        clip_storage_policy, compiled_graph_snapshot, frames_to_nanos,
-        native_graph_references_plugin, parse_channel_kind, resolve_stream_devices,
-        select_buffer_size, set_last_native_graph_for_test, spawn_streaming_clip,
-        stream_error_impact, validate_session_sample_rate,
+        Ordering, RealtimeParameter, RealtimeParameterCommand, RoundTripInputDetector,
+        RoundTripLatencyMeasurement, RoundTripOutputProbe, ScheduledMidiEvent,
+        ScheduledMidiEventKind, SessionOutputConverter, SignalWidth, StereoDelayLine,
+        StreamDirection, StreamErrorImpact, SupportedBufferSize, TRANSPORT_COUNTING_IN,
+        TRANSPORT_PLAYING, TRANSPORT_RECORDING, TRANSPORT_STOPPED, TRANSPORT_WAITING,
+        TransportAction, TransportShared, build_mixer_runtime, clip_storage_policy,
+        compiled_graph_snapshot, frames_to_nanos, native_graph_references_plugin,
+        parse_channel_kind, resolve_stream_devices, select_buffer_size,
+        set_last_native_graph_for_test, spawn_streaming_clip, stream_error_impact,
+        validate_session_sample_rate,
     };
     use crate::recording::{
         NativeRecordingStartConfig, StereoFrame, write_deterministic_test_recording,
@@ -1156,7 +1157,7 @@ mod tests {
 
     fn test_transport(sample_rate: u32) -> Arc<TransportShared> {
         Arc::new(TransportShared {
-            state: AtomicU32::new(TRANSPORT_STOPPED),
+            state: Arc::new(AtomicU32::new(TRANSPORT_STOPPED)),
             position_frames: AtomicU64::new(0),
             position_ticks: AtomicU64::new(0),
             sample_rate: AtomicU32::new(sample_rate),
@@ -1736,6 +1737,242 @@ mod tests {
                 .nodes
                 .iter()
                 .any(|node| node.kind == CompiledGraphNodeKind::Send && node.label.contains("Post"))
+        );
+    }
+
+    #[test]
+    fn frames_until_timing_boundary_stops_at_tempo_and_signature_changes() {
+        let mut runtime = transport_test_runtime(48_000, 100_000, 0, TRANSPORT_STOPPED);
+        runtime.tempo_map = TempoMap::new(
+            vec![
+                TempoEvent {
+                    tick: 0,
+                    beats_per_minute: 120.0,
+                },
+                TempoEvent {
+                    tick: 1_920,
+                    beats_per_minute: 140.0,
+                },
+            ],
+            vec![
+                TimeSignatureEvent {
+                    tick: 0,
+                    numerator: 4,
+                    denominator: 4,
+                },
+                TimeSignatureEvent {
+                    tick: 3_840,
+                    numerator: 3,
+                    denominator: 4,
+                },
+            ],
+        )
+        .expect("tempo map");
+
+        let tempo_frame = runtime
+            .tempo_map
+            .tick_to_frame(1_920, 48_000)
+            .expect("tempo frame");
+        let signature_frame = runtime
+            .tempo_map
+            .tick_to_frame(3_840, 48_000)
+            .expect("signature frame");
+
+        assert_eq!(
+            runtime.frames_until_timing_boundary(0, 200_000),
+            tempo_frame as usize
+        );
+        assert_eq!(
+            runtime.frames_until_timing_boundary(tempo_frame, 200_000),
+            (signature_frame - tempo_frame) as usize
+        );
+        assert_eq!(
+            runtime.frames_until_timing_boundary(0, 512),
+            512,
+            "boundaries outside the requested window leave the full maximum"
+        );
+        assert_eq!(
+            runtime.frames_until_timing_boundary(signature_frame, 512),
+            512
+        );
+    }
+
+    #[test]
+    fn process_context_uses_internal_tempo_or_external_bpm() {
+        let runtime = transport_test_runtime(48_000, 10_000, 0, TRANSPORT_PLAYING);
+        let internal = runtime.process_context(0, TRANSPORT_PLAYING);
+        assert!(internal.playing);
+        assert!(!internal.recording);
+        assert_eq!(internal.tempo, 120.0);
+        assert_eq!(internal.time_signature_numerator, 4);
+        assert_eq!(internal.time_signature_denominator, 4);
+
+        runtime.transport.clock_source.store(1, Ordering::Relaxed);
+        runtime
+            .transport
+            .effective_bpm_bits
+            .store(99.0_f64.to_bits(), Ordering::Relaxed);
+        runtime.transport.position_ticks.store(0, Ordering::Relaxed);
+        let external = runtime.process_context(480, TRANSPORT_RECORDING);
+        assert!(!external.playing);
+        assert!(external.recording);
+        assert_eq!(external.tempo, 99.0);
+        assert_eq!(external.project_time_samples, 480);
+    }
+
+    #[test]
+    fn transport_commands_pause_stop_seek_record_and_clear_clips() {
+        let mut runtime = transport_test_runtime(48_000, 5_000, 1_200, TRANSPORT_PLAYING);
+        runtime.held_peaks[0] = [0.8, 0.7];
+        runtime.held_until[0] = [9, 9];
+
+        assert!(
+            runtime
+                .handle_command(EngineCommand::ClearMeterClips)
+                .is_none()
+        );
+        assert_eq!(runtime.held_peaks[0], [0.0, 0.0]);
+        assert_eq!(runtime.held_until[0], [0, 0]);
+
+        assert!(
+            runtime
+                .handle_command(EngineCommand::Transport(TransportAction::Pause, 0))
+                .is_none()
+        );
+        assert_eq!(
+            runtime.transport.state.load(Ordering::Relaxed),
+            TRANSPORT_STOPPED
+        );
+
+        runtime
+            .transport
+            .state
+            .store(TRANSPORT_PLAYING, Ordering::Relaxed);
+        runtime
+            .transport
+            .position_frames
+            .store(900, Ordering::Relaxed);
+        assert!(
+            runtime
+                .handle_command(EngineCommand::Transport(TransportAction::Stop, 0))
+                .is_none()
+        );
+        assert_eq!(
+            runtime.transport.state.load(Ordering::Relaxed),
+            TRANSPORT_STOPPED
+        );
+        assert_eq!(runtime.transport.position_frames.load(Ordering::Relaxed), 0);
+        assert_eq!(runtime.midi_cursor, 0);
+
+        assert!(
+            runtime
+                .handle_command(EngineCommand::Transport(TransportAction::Seek, 2_400))
+                .is_none()
+        );
+        assert_eq!(
+            runtime.transport.position_frames.load(Ordering::Relaxed),
+            2_400
+        );
+
+        assert!(
+            runtime
+                .handle_command(EngineCommand::Transport(
+                    TransportAction::Record { count_in: false },
+                    0,
+                ))
+                .is_none()
+        );
+        assert_eq!(
+            runtime.transport.state.load(Ordering::Relaxed),
+            TRANSPORT_RECORDING
+        );
+    }
+
+    #[test]
+    fn external_continue_resumes_waiting_record_or_play() {
+        let mut runtime = transport_test_runtime(48_000, 10_000, 100, TRANSPORT_WAITING);
+        runtime.transport.waiting_for.store(2, Ordering::Relaxed);
+        runtime.handle_external_sync(crate::midi_input::RealtimeMidiMessage::Continue);
+        assert_eq!(
+            runtime.transport.state.load(Ordering::Relaxed),
+            TRANSPORT_RECORDING
+        );
+        assert_eq!(runtime.transport.waiting_for.load(Ordering::Relaxed), 0);
+
+        runtime
+            .transport
+            .state
+            .store(TRANSPORT_WAITING, Ordering::Relaxed);
+        runtime.transport.waiting_for.store(1, Ordering::Relaxed);
+        runtime.handle_external_sync(crate::midi_input::RealtimeMidiMessage::Continue);
+        assert_eq!(
+            runtime.transport.state.load(Ordering::Relaxed),
+            TRANSPORT_PLAYING
+        );
+    }
+
+    #[test]
+    fn render_block_rejects_mismatched_buffers_and_silence_when_stopped() {
+        let mut runtime = transport_test_runtime(48_000, 1_000, 0, TRANSPORT_STOPPED);
+        let inputs = vec![[0.5; MAX_INPUT_CHANNELS]; 8];
+        let mut outputs = vec![[0.25; MAX_OUTPUT_CHANNELS]; 4];
+        assert!(runtime.render_block(&inputs, &mut outputs, None));
+        assert!(outputs.iter().all(|frame| frame.iter().all(|sample| *sample == 0.0)));
+
+        let inputs = vec![[0.5; MAX_INPUT_CHANNELS]; 16];
+        let mut outputs = vec![[0.25; MAX_OUTPUT_CHANNELS]; 16];
+        assert!(!runtime.render_block(&inputs, &mut outputs, None));
+        assert!(outputs.iter().all(|frame| frame.iter().all(|sample| *sample == 0.0)));
+    }
+
+    #[test]
+    fn render_block_auto_stops_when_playhead_reaches_content_end() {
+        let mut runtime = transport_test_runtime(48_000, 32, 0, TRANSPORT_PLAYING);
+        let inputs = vec![[0.0; MAX_INPUT_CHANNELS]; 64];
+        let mut outputs = vec![[0.0; MAX_OUTPUT_CHANNELS]; 64];
+        let underrun = runtime.render_block(&inputs, &mut outputs, None);
+        assert!(!underrun);
+        assert_eq!(
+            runtime.transport.state.load(Ordering::Relaxed),
+            TRANSPORT_STOPPED
+        );
+        assert!(runtime.transport.position_frames.load(Ordering::Relaxed) >= 32);
+    }
+
+    #[test]
+    fn preview_commands_tolerate_unknown_targets() {
+        let mut runtime = transport_test_runtime(48_000, 1_000, 0, TRANSPORT_STOPPED);
+        let mut id = [0_u8; 64];
+        id[..7].copy_from_slice(b"missing");
+        assert!(
+            runtime
+                .handle_command(EngineCommand::Preview(RealtimeParameterCommand {
+                    id,
+                    id_len: 7,
+                    parameter: RealtimeParameter::ChannelGain,
+                    value: -6.0,
+                }))
+                .is_none()
+        );
+        assert!(
+            runtime
+                .handle_command(EngineCommand::Preview(RealtimeParameterCommand {
+                    id,
+                    id_len: 7,
+                    parameter: RealtimeParameter::ChannelPan,
+                    value: 0.25,
+                }))
+                .is_none()
+        );
+        assert!(
+            runtime
+                .handle_command(EngineCommand::Preview(RealtimeParameterCommand {
+                    id,
+                    id_len: 7,
+                    parameter: RealtimeParameter::SendLevel,
+                    value: -3.0,
+                }))
+                .is_none()
         );
     }
 }
