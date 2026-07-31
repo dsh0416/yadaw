@@ -112,7 +112,7 @@ describe("registerRecordingRpcHandlers", () => {
       engineLatencyMs: 1,
       estimatedRoundTripLatencyMs: 3,
       xruns: 0,
-      clockSync: "locked",
+      clockSync: "shared-device",
       bufferFallback: false
     })
 
@@ -157,7 +157,7 @@ describe("registerRecordingRpcHandlers", () => {
       engineLatencyMs: 1,
       estimatedRoundTripLatencyMs: 3,
       xruns: 0,
-      clockSync: "locked",
+      clockSync: "shared-device",
       bufferFallback: false
     })
     context.lifecycle.beginAudio("starting")
@@ -182,7 +182,7 @@ describe("registerRecordingRpcHandlers", () => {
         engineLatencyMs: 1,
         estimatedRoundTripLatencyMs: 3,
         xruns: 0,
-        clockSync: "locked",
+        clockSync: "shared-device",
         bufferFallback: false
       },
       error: null
@@ -231,7 +231,7 @@ describe("registerRecordingRpcHandlers", () => {
       engineLatencyMs: 1,
       estimatedRoundTripLatencyMs: 3,
       xruns: 0,
-      clockSync: "locked",
+      clockSync: "shared-device",
       bufferFallback: false
     })
     context.lifecycle.applicationState.setAudio({
@@ -252,7 +252,7 @@ describe("registerRecordingRpcHandlers", () => {
         engineLatencyMs: 1,
         estimatedRoundTripLatencyMs: 3,
         xruns: 0,
-        clockSync: "locked",
+        clockSync: "shared-device",
         bufferFallback: false
       },
       error: null
@@ -448,7 +448,7 @@ describe("registerRecordingRpcHandlers", () => {
       engineLatencyMs: 1,
       estimatedRoundTripLatencyMs: 3,
       xruns: 0,
-      clockSync: "locked",
+      clockSync: "shared-device",
       bufferFallback: false
     })
     const resource = context.lifecycle.applicationState.commitRecording(recordingSession, {
@@ -502,7 +502,7 @@ describe("registerRecordingRpcHandlers", () => {
       engineLatencyMs: 1,
       estimatedRoundTripLatencyMs: 3,
       xruns: 0,
-      clockSync: "locked",
+      clockSync: "shared-device",
       bufferFallback: false
     })
     context.lifecycle.applicationState.setAudio({
@@ -523,7 +523,7 @@ describe("registerRecordingRpcHandlers", () => {
         engineLatencyMs: 1,
         estimatedRoundTripLatencyMs: 3,
         xruns: 0,
-        clockSync: "locked",
+        clockSync: "shared-device",
         bufferFallback: false
       },
       error: null

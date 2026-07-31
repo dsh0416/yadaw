@@ -5,6 +5,9 @@ import type {
   PluginParameterCommand
 } from "@yadaw/contracts"
 import { AudioHostPluginClient } from "./audio-host-plugin-client"
+import type { ControlResponse } from "./audio-host-wire"
+
+type HostRequest = (command: Record<string, unknown>) => Promise<ControlResponse>
 
 const descriptor: PluginDescriptor = {
   source: { kind: "external" },
@@ -49,7 +52,11 @@ describe("AudioHostPluginClient", () => {
     const request = options?.request ?? vi.fn()
     const requestImmediately = options?.requestImmediately ?? vi.fn()
     const ipcClient = options?.client === undefined ? { enqueueParameter: vi.fn() } : options.client
-    const client = new AudioHostPluginClient(() => ipcClient as never, request, requestImmediately)
+    const client = new AudioHostPluginClient(
+      () => ipcClient as never,
+      request as unknown as HostRequest,
+      requestImmediately as unknown as HostRequest
+    )
     return { client, request, requestImmediately, ipcClient }
   }
 

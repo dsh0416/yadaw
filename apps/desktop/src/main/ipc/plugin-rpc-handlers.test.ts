@@ -31,7 +31,12 @@ vi.mock("electron", () => ({
 }))
 
 import { IPC_CHANNELS } from "@yadaw/contracts"
-import type { PluginDescriptor, PluginInstanceState } from "@yadaw/contracts"
+import type {
+  PluginDescriptor,
+  PluginInstanceState,
+  PluginRuntimeStatus,
+  ProjectWorkspaceSnapshot
+} from "@yadaw/contracts"
 import {
   createContext,
   emptyGraph,
@@ -157,7 +162,15 @@ describe("registerPluginRpcHandlers", () => {
 
   it("opens a plugin editor for a graph-resident instance", async () => {
     const context = createContext()
-    const status = { editorMode: "native" as const, open: true }
+    const status: PluginRuntimeStatus = {
+      instanceId: "plugin-1",
+      state: "active",
+      editorOpen: true,
+      editorMode: "native",
+      latencySamples: 0,
+      tailSamples: null,
+      error: null
+    }
     vi.mocked(context.plugins.openEditor).mockResolvedValue(status)
     registerPluginRpcHandlers(context)
     const workspace = installWorkspace(context.lifecycle, {
@@ -331,17 +344,17 @@ describe("registerPluginRpcHandlers", () => {
   })
 })
 
-function createWorkspaceFrom(context: ReturnType<typeof createContext>) {
+function createWorkspaceFrom(context: ReturnType<typeof createContext>): ProjectWorkspaceSnapshot {
   const desktop = context.lifecycle.applicationState.desktopSession
   return {
     project: {
-      kind: "project-session" as const,
+      kind: "project-session",
       id: "project",
       epoch: desktop.epoch,
       generation: 1
     },
     projectGraph: {
-      kind: "project-graph" as const,
+      kind: "project-graph",
       id: "project:graph",
       epoch: desktop.epoch,
       generation: 1
@@ -355,7 +368,7 @@ function createWorkspaceFrom(context: ReturnType<typeof createContext>) {
         sampleRate: 48_000,
         timeSignatureNumerator: 4,
         timeSignatureDenominator: 4,
-        waveformDisplayMode: "separate" as const
+        waveformDisplayMode: "separate"
       },
       dirty: false,
       recoveredWorkingCopy: false

@@ -51,7 +51,7 @@ async function runningAudio(context: ReturnType<typeof createContext>) {
     engineLatencyMs: 1,
     estimatedRoundTripLatencyMs: 3,
     xruns: 0,
-    clockSync: "locked",
+    clockSync: "shared-device",
     bufferFallback: false
   })
 }
@@ -68,7 +68,7 @@ describe("registerTransportHandlers", () => {
     const audio = await runningAudio(context)
 
     await expect(
-      invoke(electronMocks, IPC_CHANNELS.transportCommand, meta({ target: audio.transport }), {
+      invoke(electronMocks, IPC_CHANNELS.transportCommand, meta({ target: audio.transport! }), {
         type: "stop"
       })
     ).resolves.toMatchObject({ ok: false, error: { code: "validation-failed" } })

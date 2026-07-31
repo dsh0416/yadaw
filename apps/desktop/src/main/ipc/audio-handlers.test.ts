@@ -43,7 +43,7 @@ const runningRuntime = {
   requestedBufferSize: 256,
   inputBufferSize: 256,
   outputBufferSize: 256,
-  clockSync: "locked" as const
+  clockSync: "shared-device" as const
 }
 
 const preferences = {

@@ -58,7 +58,7 @@ async function runningAudio(context: ReturnType<typeof createContext>) {
     engineLatencyMs: 1,
     estimatedRoundTripLatencyMs: 3,
     xruns: 0,
-    clockSync: "locked",
+    clockSync: "shared-device",
     bufferFallback: false
   })
 }

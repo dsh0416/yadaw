@@ -266,7 +266,7 @@ describe("registerMidiRpcHandlers", () => {
     expect(result).toMatchObject({ ok: false, error: { code: "validation-failed" } })
   })
 
-  it("maps commit failures to unknown outcome", async () => {
+  it("maps pre-commit failures to unavailable", async () => {
     const context = createContext()
     vi.mocked(context.midiImport.commit).mockRejectedValue(new Error("import failed"))
     registerMidiRpcHandlers(context)
@@ -284,6 +284,36 @@ describe("registerMidiRpcHandlers", () => {
       mutationMeta(workspace.projectGraph, {
         expectedRevision: workspace.revision,
         mutation: { operationId: "op-commit-fail", idempotencyKey: "idem-commit-fail" }
+      }),
+      plan
+    )
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: "resource-unavailable", outcome: "not-committed" }
+    })
+  })
+
+  it("maps post-commit resource advance failures to unknown outcome", async () => {
+    const context = createContext()
+    vi.mocked(context.midiImport.commit).mockRejectedValue(
+      new Error("Committed MIDI import resource could not advance")
+    )
+    registerMidiRpcHandlers(context)
+    const workspace = installWorkspace(context.lifecycle)
+    const plan = {
+      token: "token-1",
+      insertionTick: 0,
+      importTempoMap: false,
+      tracks: []
+    }
+
+    const result = await invoke(
+      electronMocks,
+      IPC_CHANNELS.midiImportCommit,
+      mutationMeta(workspace.projectGraph, {
+        expectedRevision: workspace.revision,
+        mutation: { operationId: "op-commit-unknown", idempotencyKey: "idem-commit-unknown" }
       }),
       plan
     )

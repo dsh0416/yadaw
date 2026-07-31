@@ -34,6 +34,7 @@ import { IPC_CHANNELS } from "@yadaw/contracts"
 import {
   createContext,
   createWorkspace,
+  emptyGraph,
   installWorkspace,
   invoke,
   meta,
@@ -243,7 +244,7 @@ describe("registerProjectHandlers", () => {
     expect(context.recordings.cleanupCommittedForProject).toHaveBeenCalledWith(saved.path)
   })
 
-  it("maps save failures to timeout-unknown", async () => {
+  it("maps pre-commit save failures to unavailable", async () => {
     const context = createContext()
     vi.mocked(context.projects.save).mockRejectedValue(new Error("disk full"))
     registerProjectHandlers(context)
@@ -255,6 +256,31 @@ describe("registerProjectHandlers", () => {
       mutationMeta(workspace.project, {
         expectedRevision: workspace.revision,
         mutation: { operationId: "op-save-fail", idempotencyKey: "idem-save-fail" }
+      })
+    )
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: "resource-unavailable", outcome: "not-committed" }
+    })
+  })
+
+  it("maps post-archive save cleanup failures to timeout-unknown", async () => {
+    const context = createContext()
+    const saved = { ...projectSession, dirty: false }
+    vi.mocked(context.projects.save).mockResolvedValue(saved)
+    vi.mocked(context.recordings.cleanupCommittedForProject).mockRejectedValue(
+      new Error("cleanup failed")
+    )
+    registerProjectHandlers(context)
+    const workspace = installWorkspace(context.lifecycle)
+
+    const result = await invoke(
+      electronMocks,
+      IPC_CHANNELS.projectSave,
+      mutationMeta(workspace.project, {
+        expectedRevision: workspace.revision,
+        mutation: { operationId: "op-save-unknown", idempotencyKey: "idem-save-unknown" }
       })
     )
 
@@ -337,14 +363,16 @@ describe("registerProjectHandlers", () => {
     })
   })
 
-  it("maps configuration update failures after commit to unavailable", async () => {
+  it("maps configuration update failures after commit to unavailable when rollback succeeds", async () => {
     const context = createContext()
     vi.mocked(context.projects.updateConfiguration).mockResolvedValueOnce({
       ...projectSession,
       configuration: { ...projectSession.configuration, name: "Renamed" },
       dirty: true
     })
-    vi.mocked(context.projectGraph.refreshFromDatabase).mockRejectedValue(new Error("graph failed"))
+    vi.mocked(context.projectGraph.refreshFromDatabase)
+      .mockRejectedValueOnce(new Error("graph failed"))
+      .mockResolvedValueOnce(emptyGraph)
     vi.mocked(context.projects.updateConfiguration).mockResolvedValueOnce(projectSession)
     registerProjectHandlers(context)
     const workspace = installWorkspace(context.lifecycle)
@@ -361,7 +389,35 @@ describe("registerProjectHandlers", () => {
 
     expect(result).toMatchObject({
       ok: false,
-      error: { code: "resource-unavailable" }
+      error: { code: "resource-unavailable", outcome: "not-committed" }
+    })
+  })
+
+  it("maps configuration update failures to invariant-violation when rollback fails", async () => {
+    const context = createContext()
+    vi.mocked(context.projects.updateConfiguration).mockResolvedValueOnce({
+      ...projectSession,
+      configuration: { ...projectSession.configuration, name: "Renamed" },
+      dirty: true
+    })
+    vi.mocked(context.projectGraph.refreshFromDatabase).mockRejectedValue(new Error("graph failed"))
+    vi.mocked(context.projects.updateConfiguration).mockResolvedValueOnce(projectSession)
+    registerProjectHandlers(context)
+    const workspace = installWorkspace(context.lifecycle)
+
+    const result = await invoke(
+      electronMocks,
+      IPC_CHANNELS.projectConfigurationUpdate,
+      mutationMeta(workspace.projectGraph, {
+        expectedRevision: workspace.revision,
+        mutation: { operationId: "op-config-quarantine", idempotencyKey: "idem-config-quarantine" }
+      }),
+      { ...projectSession.configuration, name: "Renamed" }
+    )
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: "invariant-violation", outcome: "quarantined" }
     })
   })
 })

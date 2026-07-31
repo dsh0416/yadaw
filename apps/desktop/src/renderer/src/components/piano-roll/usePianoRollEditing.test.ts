@@ -168,15 +168,17 @@ describe("createPianoRollEditing", () => {
     ])
 
     pianoRollStore.editCursorTick = 2_000
-    vi.spyOn(crypto, "randomUUID").mockReturnValueOnce("paste-1").mockReturnValueOnce("paste-2")
+    vi.spyOn(crypto, "randomUUID")
+      .mockReturnValueOnce("11111111-1111-4111-8111-111111111111")
+      .mockReturnValueOnce("22222222-2222-4222-8222-222222222222")
     editing.paste()
     await nextTick()
     expect(batch).toHaveBeenCalled()
     const commands = batch.mock.calls[0]![0] as ProjectCommand[]
     expect(commands.some((command) => command.type === "create-midi-notes")).toBe(true)
     expect(pianoRollStore.selectedNotes).toEqual([
-      { clipId: "clip-1", noteId: "paste-1" },
-      { clipId: "clip-1", noteId: "paste-2" }
+      { clipId: "clip-1", noteId: "11111111-1111-4111-8111-111111111111" },
+      { clipId: "clip-1", noteId: "22222222-2222-4222-8222-222222222222" }
     ])
 
     batch.mockClear()
@@ -201,14 +203,14 @@ describe("createPianoRollEditing", () => {
     expect(pianoRollStore.selectedNotes).toHaveLength(2)
 
     pianoRollStore.setSelectedNotes([{ clipId: "clip-1", noteId: "note-1" }])
-    vi.spyOn(crypto, "randomUUID").mockReturnValue("dup-1")
+    vi.spyOn(crypto, "randomUUID").mockReturnValue("33333333-3333-4333-8333-333333333333")
     editing.duplicateSelected()
     await nextTick()
     const commands = batch.mock.calls[0]![0] as ProjectCommand[]
     const create = commands.find((command) => command.type === "create-midi-notes")
     expect(create).toMatchObject({
       type: "create-midi-notes",
-      notes: [expect.objectContaining({ id: "dup-1", key: 60 })]
+      notes: [expect.objectContaining({ id: "33333333-3333-4333-8333-333333333333", key: 60 })]
     })
     unmount()
   })

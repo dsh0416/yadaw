@@ -133,6 +133,25 @@ function success<T>(value: T, resourceRevision = 2): RpcResult<T> {
 }
 
 function failure(retry: "safe" | "after-reconcile" = "safe"): RpcResult<never> {
+  if (retry === "after-reconcile") {
+    return {
+      ok: false,
+      requestId: "test-request",
+      error: {
+        code: "revision-conflict",
+        category: "conflict",
+        outcome: "not-committed",
+        retry: "after-reconcile",
+        correlationId: "test-correlation",
+        userMessageKey: "errors.conflict",
+        details: {
+          type: "revision-conflict",
+          expectedRevision: 1,
+          actualRevision: 2
+        }
+      }
+    }
+  }
   return {
     ok: false,
     requestId: "test-request",
@@ -140,7 +159,7 @@ function failure(retry: "safe" | "after-reconcile" = "safe"): RpcResult<never> {
       code: "resource-unavailable",
       category: "unavailable",
       outcome: "not-committed",
-      retry,
+      retry: "safe",
       correlationId: "test-correlation",
       userMessageKey: "errors.unavailable",
       details: {
