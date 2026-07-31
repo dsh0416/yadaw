@@ -102,11 +102,17 @@ mise exec -- pnpm lint
 Prefer the root `mise run check` task before handing off a completed change
 because it is the repository's full validation path.
 
+`pnpm check` and `pnpm check:native` run `pnpm sync:napi-bindings` before
+type-aware ESLint, package TypeScript checks, and tests that resolve
+`@yadaw/dsp-node` / `@yadaw/audio-host-client`, so the gitignored loaders and
+typings exist in CI and clean checkouts.
+
 Prettier formats the tracked TypeScript, JavaScript, Vue, JSON, YAML, Markdown,
 and CSS sources. ESLint performs type-aware TypeScript and Vue checks, while
-rustfmt and Clippy cover every Rust workspace crate. Generated napi-rs bindings,
-Drizzle migration metadata, lockfiles, build output, and third-party sources are
-excluded from the JavaScript formatting and linting paths.
+rustfmt and Clippy cover every Rust workspace crate. Generated napi-rs loaders
+and typings (gitignored under the native addon crates), Drizzle migration
+metadata, lockfiles, build output, and third-party sources are excluded from
+the JavaScript formatting and linting paths.
 
 ## Dependency Versions
 
@@ -131,10 +137,11 @@ Product version is lockstep across the monorepo. The repository-root `VERSION`
 file is the single source of truth; `pnpm sync:version` copies it into root
 `Cargo.toml` (`[workspace.package].version`) and every workspace
 `package.json`, then runs `pnpm sync:napi-bindings` to rebuild the napi-rs
-bindings and regenerate their JavaScript loaders with the same version.
-`pnpm check:version` (part of `pnpm check`) fails if any manifest or generated
-loader drifts. Do not edit those mirrored version fields or generated loaders
-by hand.
+addons. That rebuild regenerates the gitignored JavaScript loaders and typings
+(`crates/*/index.js`, `crates/*/index.d.ts`) from each package manifest, so
+those files are never committed. `pnpm check:version` (part of `pnpm check`)
+fails if any mirrored manifest version drifts. Do not edit those mirrored
+version fields by hand.
 
 JavaScript dependency versions belong in the applicable `package.json`, with
 resolved dependency changes committed in `pnpm-lock.yaml`. Use the
