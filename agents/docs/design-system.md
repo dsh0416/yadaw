@@ -26,8 +26,10 @@ The core palette is intentionally small:
 Interface type uses bundled Inter Variable, restrained headings use Barlow Condensed, and
 musical measurements use Cascadia Mono Variable. Families are loaded through `unplugin-fonts`
 and Fontsource (`packages/ui/fonts.ts`) so desktop, Storybook, and docs share the same faces.
-A family is a role, not decoration: time, dB, BPM, ticks, channels, and aligned tables use data
-type; sentences and controls use interface type.
+Desktop and Storybook use Unhead (`useLocaleFonts`) to keep `html lang` aligned with the active
+locale and to load Noto Sans SC Variable for Chinese UI; docs rely on VitePress locale `lang`
+plus the same `:lang(zh*)` token overrides. A family is a role, not decoration: time, dB, BPM,
+ticks, channels, and aligned tables use data type; sentences and controls use interface type.
 
 The signature element is the **signal rail**: a narrow channel-derived edge marks the active clip,
 track, route, or editable scope while the surrounding surface remains neutral. It always appears

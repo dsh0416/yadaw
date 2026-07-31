@@ -1,16 +1,23 @@
 import type { Decorator, Preview } from "@storybook/vue3-vite"
+import { setup } from "@storybook/vue3"
+import { createHead } from "@unhead/vue/client"
 import { createPinia, setActivePinia } from "pinia"
 import { withThemeByDataAttribute } from "@storybook/addon-themes"
 
-import { UiProvider } from "@yadaw/ui"
+import { UiProvider, useLocaleFonts } from "@yadaw/ui"
 import "unfonts.css"
 import "@yadaw/ui/styles.css"
 import "./preview.css"
+
+setup((app) => {
+  app.use(createHead())
+})
 
 const withIsolatedUiContext: Decorator = (story, context) => ({
   components: { story, UiProvider },
   setup() {
     setActivePinia(createPinia())
+    useLocaleFonts("en-US")
     return {
       motion: context.globals.motion as string
     }

@@ -29,6 +29,15 @@
   --vp-sidebar-bg-color: #151515;
 }
 
+:root:lang(zh),
+:root:lang(zh-CN),
+:root:lang(zh-Hans) {
+  --yadaw-display:
+    "Noto Sans SC Variable", "Barlow Condensed", ui-sans-serif, system-ui, sans-serif;
+  --vp-font-family-base:
+    "Noto Sans SC Variable", "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+}
+
 :root:not(.dark) {
   --yadaw-cyan: #287982;
   --yadaw-cyan-light: #3b8d95;

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { UiProvider } from "@yadaw/ui"
+import { UiProvider, useLocaleFonts } from "@yadaw/ui"
 import { computed, onMounted, onUnmounted, watch } from "vue"
 import { storeToRefs } from "pinia"
 import { useTheme } from "./composables/useTheme"
@@ -31,7 +31,10 @@ const midiInputStore = useMidiInputStore()
 const { settings } = storeToRefs(applicationSettingsStore)
 const { ready: lifecycleReady } = storeToRefs(lifecycleStore)
 const themePreference = computed(() => settings.value?.theme ?? "system")
-const uiLocale = computed(() => rekaLocale(settings.value?.locale ?? DEFAULT_LOCALE))
+const documentLocale = computed(() => settings.value?.locale ?? DEFAULT_LOCALE)
+const uiLocale = computed(() => rekaLocale(documentLocale.value))
+
+useLocaleFonts(documentLocale)
 
 const { resolvedTheme } = useTheme(themePreference)
 
