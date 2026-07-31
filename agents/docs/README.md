@@ -19,5 +19,6 @@ installed copies under `.agents/skills/`.
 - [Design system audit](design-system-audit.md)
 - [Development environment](environment.md)
 - [Native call boundary](native-call-boundary.md)
+- [Cross-process resource and error contract](cross-process-error-contract.md)
 - [Playback runtime architecture](playback-runtime.md)
 - [Project database development rules](project-database.md)

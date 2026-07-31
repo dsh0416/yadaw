@@ -3,6 +3,9 @@
 This document defines the ownership and ordering rules for calls that cross
 from the Vue renderer into Electron main or the native audio addon. These are
 correctness and architecture rules, not merely code-organization preferences.
+The normative result algebra, resource-handle, transaction, idempotency, and
+recovery rules are in
+[Cross-process resource and error contract](cross-process-error-contract.md).
 
 ## Boundary
 
@@ -22,6 +25,9 @@ Vue component or composable
   actions and consume reactive store state. They never call the preload API.
 - Preload only maps named, typed methods and subscriptions to IPC. It owns no
   business state and performs no workflow orchestration.
+- Every cross-process method returns a serializable success/error union.
+  Exceptions, rejected Promises, Rust panics, and free-form error strings are
+  not application protocol outcomes.
 - Pinia is the renderer projection, not a security boundary. Main validates the
   sender, payload, lifecycle transition, and cross-domain preconditions for
   every request.
@@ -68,8 +74,20 @@ capability boundaries.
 
 Project, audio, and recording use discriminated-union states shared through
 `@yadaw/contracts`. Main transitions first and publishes revisioned lifecycle
-events. Pinia may transition immediately for UI feedback, then reconciles with
-main and ignores any event older than the last accepted revision.
+events. Pinia may expose a pending intent immediately for UI feedback, but it
+must not mutate authoritative lifecycle state. It reconciles with main and
+ignores any event older than the last accepted revision.
+
+Every stateful request carries an explicit resource reference with owner epoch
+and resource generation. Mutations carry an operation ID and expected revision
+where applicable. An owner must reject a stale reference before mutation; it
+must never infer the target from an ambient "current" resource.
+
+Every mutation has one documented commit point. Work before that point is
+staged and invisible. Failure leaves the previous committed state unchanged or
+invalidates the smallest affected resource epoch into a documented safe state.
+If a response is lost after dispatch, callers reconcile by operation ID; they
+do not blindly repeat a non-idempotent request.
 
 Main also owns cross-domain guards. In particular, an active recording blocks
 project save/close, audio stop/reconfiguration, renderer transport commands,
@@ -183,23 +201,29 @@ Before adding or changing a native call:
    method. Do not add a stringly typed generic command.
 2. Assign exactly one owner Pinia store and update the table above.
 3. Validate the sender and all untrusted payload fields in Electron main.
-4. Route live playback through `audio-host-client`; route only offline work
+4. Define a serializable `RpcResult` and typed error variants. Do not rely on a
+   thrown `Error`, rejected Promise, panic, or error string across a boundary.
+5. Assign an explicit resource reference, owner epoch, generation, operation ID,
+   expected revision, idempotency rule, and stale-handle behavior as applicable.
+6. Route live playback through `audio-host-client`; route only offline work
    through `dsp-node`. Do not add a temporary direct helper or plugin call.
-5. Choose and document one concurrency rule: exclusive state transition, FIFO,
+7. Choose and document one concurrency rule: exclusive state transition, FIFO,
    latest-wins, coalesced, or sampled telemetry.
-6. Define the stable state after success, cancellation, and failure. Main must
-   reject illegal transitions even if the renderer bypasses its store guard.
-7. If the operation reaches the playback helper, assign an actor owner,
+8. Define the prepare, single commit point, abort cleanup, timeout-unknown
+   reconciliation, and quarantine behavior. Main must reject illegal
+   transitions even if the renderer bypasses its store guard.
+9. If the operation reaches the playback helper, assign an actor owner,
    bounded-mailbox behavior, deadline, cancellation behavior, and confirm that
    no part executes in the real-time callback.
-8. Classify its transport: small control MessagePack, persistent-arena
-   attachment,
-   sampled telemetry, SPSC parameter command, or stable-ID graph patch. Do not
-   place a large byte vector or high-frequency observation on normal request
-   IPC.
-9. Add store tests, main guard/transition tests, and a reversed-completion race
-   test when the operation is asynchronous.
-10. Run the renderer boundary test and the repository validation path.
+10. Classify its transport: small control MessagePack, persistent-arena
+    attachment,
+    sampled telemetry, SPSC parameter command, or stable-ID graph patch. Do not
+    place a large byte vector or high-frequency observation on normal request
+    IPC.
+11. Add store tests, main guard/transition tests, failure injection before and
+    after the commit point, timeout-after-commit reconciliation, and a
+    subsequent healthy-operation test.
+12. Run the renderer boundary test and the repository validation path.
 
 Any production exception to this boundary requires an explicit update to this
 document and `AGENTS.md`; a local bypass is not acceptable.

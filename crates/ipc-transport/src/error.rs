@@ -24,4 +24,6 @@ pub enum TransportError {
     InvalidSharedLayout,
     #[error("shared page capacity is invalid")]
     InvalidCapacity,
+    #[error("transport invariant violated: {0}")]
+    Invariant(&'static str),
 }

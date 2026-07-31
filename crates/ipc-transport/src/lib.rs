@@ -3,6 +3,15 @@
 //! MessagePack remains the logical protocol. Large immutable payloads travel as
 //! `IpcSharedMemory` attachments, while fixed shared pages carry telemetry and
 //! parameter commands.
+#![cfg_attr(
+    not(test),
+    deny(
+        clippy::expect_used,
+        clippy::panic,
+        clippy::panic_in_result_fn,
+        clippy::unwrap_used
+    )
+)]
 
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
