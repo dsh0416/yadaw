@@ -175,13 +175,7 @@ describe("AudioHostGraphTransactions", () => {
         })
       )
 
-    const result = await transactions.prepare(
-      meta(),
-      projectGraph,
-      4,
-      project(),
-      runtimeGraph()
-    )
+    const result = await transactions.prepare(meta(), projectGraph, 4, project(), runtimeGraph())
 
     expect(result.ok).toBe(true)
     if (!result.ok) return
@@ -207,13 +201,7 @@ describe("AudioHostGraphTransactions", () => {
       transactionResponse("request-1", { type: "snapshot", snapshot: snapshot() })
     )
 
-    const result = await transactions.prepare(
-      meta(),
-      projectGraph,
-      5,
-      project(),
-      runtimeGraph()
-    )
+    const result = await transactions.prepare(meta(), projectGraph, 5, project(), runtimeGraph())
 
     expect(result).toMatchObject({
       ok: false,
@@ -292,9 +280,7 @@ describe("AudioHostGraphTransactions", () => {
 
     const result = await transactions.activate(deployment)
 
-    expect(result).toEqual(
-      rpcSuccess(deployment.meta, { type: "activated", snapshot: committed })
-    )
+    expect(result).toEqual(rpcSuccess(deployment.meta, { type: "activated", snapshot: committed }))
     expect(dependencies.commit).toHaveBeenCalledWith(deployment)
     expect(dependencies.request).toHaveBeenNthCalledWith(
       2,
@@ -331,3 +317,5 @@ describe("AudioHostGraphTransactions", () => {
       expect.objectContaining({ type: "abort-graph" })
     )
     expect(dependencies.commit).not.toHaveBeenCalled()
+  })
+})
