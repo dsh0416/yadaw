@@ -596,7 +596,10 @@ mod tests {
             .collect()
     }
 
-    fn recording_controller(sample_rate: u32, channel_count: usize) -> (RecorderController, RecordingTap) {
+    fn recording_controller(
+        sample_rate: u32,
+        channel_count: usize,
+    ) -> (RecorderController, RecordingTap) {
         RecorderController::new(
             sample_rate,
             channel_count,
