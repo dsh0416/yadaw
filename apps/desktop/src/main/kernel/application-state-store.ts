@@ -2,7 +2,10 @@ import { randomBytes } from "node:crypto"
 import { INITIAL_AUDIO_RUNTIME_SNAPSHOT, IPC_PROTOCOL_VERSION } from "@yadaw/contracts"
 import type {
   ApplicationSettingsRef,
+  AudioEngineRef,
+  AudioHostRef,
   AudioLifecycleState,
+  AudioResourceSnapshot,
   AudioRuntimeSnapshot,
   DesktopLifecycleEvent,
   DesktopLifecycleSnapshot,
@@ -10,7 +13,8 @@ import type {
   ProjectLifecycleState,
   ProjectSession,
   ProjectWorkspaceSnapshot,
-  RecordingLifecycleState
+  RecordingLifecycleState,
+  TransportRef
 } from "@yadaw/contracts"
 import type { OperationRegistry } from "./operation-registry"
 import { ResourceRegistry } from "./resource-registry"
@@ -34,6 +38,7 @@ export interface ApplicationStateSnapshot {
 
 export interface CreateApplicationStateOptions {
   epoch?: string
+  audioHostEpoch?: string
   project: ProjectSession | null
   runtime?: AudioRuntimeSnapshot
 }
@@ -65,12 +70,16 @@ export class ApplicationStateStore {
   private audio: AudioLifecycleState
   private recording: RecordingLifecycleState = { status: "idle", error: null }
   private workspace: ProjectWorkspaceSnapshot | null = null
+  private audioEngine: AudioEngineRef | null = null
+  private transport: TransportRef | null = null
+  private currentAudioHost: AudioHostRef
   private readonly listeners = new Set<ApplicationStateListener>()
 
   private constructor(
     readonly resources: ResourceRegistry,
     readonly desktopSession: DesktopSessionRef,
     readonly applicationSettings: ApplicationSettingsRef,
+    audioHost: AudioHostRef,
     project: ProjectSession | null,
     runtime?: AudioRuntimeSnapshot
   ) {
@@ -78,6 +87,7 @@ export class ApplicationStateStore {
       ? { status: "open", session: structuredClone(project), error: null }
       : { status: "closed", error: null }
     this.audio = initialAudioState(runtime)
+    this.currentAudioHost = audioHost
   }
 
   static create(
@@ -99,12 +109,22 @@ export class ApplicationStateStore {
     if (!settingsCandidate.ok) return settingsCandidate
     const settings = resources.commit(settingsCandidate.value.ref, { loaded: true })
     if (!settings.ok) return settings
+    const audioHostCandidate = resources.create({
+      kind: "audio-host",
+      id: "audio-host",
+      epoch: options.audioHostEpoch,
+      parent: desktop.value.ref
+    })
+    if (!audioHostCandidate.ok) return audioHostCandidate
+    const audioHost = resources.commit(audioHostCandidate.value.ref, { status: "ready" })
+    if (!audioHost.ok) return audioHost
 
     return kernelSuccess(
       new ApplicationStateStore(
         resources,
         desktop.value.ref as DesktopSessionRef,
         settings.value.ref as ApplicationSettingsRef,
+        audioHost.value.ref as AudioHostRef,
         options.project,
         options.runtime
       )
@@ -122,6 +142,80 @@ export class ApplicationStateStore {
 
   workspaceSnapshot(): ProjectWorkspaceSnapshot | null {
     return this.workspace ? structuredClone(this.workspace) : null
+  }
+
+  audioResourceSnapshot(): AudioResourceSnapshot {
+    const resolved = this.transport ? this.resources.resolve(this.transport) : null
+    const revision = resolved?.ok ? resolved.value.revision : 0
+    return {
+      host: structuredClone(this.currentAudioHost),
+      engine: this.audioEngine ? structuredClone(this.audioEngine) : null,
+      transport: this.transport ? structuredClone(this.transport) : null,
+      revision
+    }
+  }
+
+  async commitAudioEngine(runtime: AudioRuntimeSnapshot): Promise<AudioResourceSnapshot> {
+    if (this.audioEngine) await this.resources.drop(this.audioEngine)
+    const engineCandidate = this.resources.create({
+      kind: "audio-engine",
+      id: "audio-engine",
+      epoch: this.currentAudioHost.epoch,
+      parent: this.currentAudioHost
+    })
+    if (!engineCandidate.ok) throw new Error(engineCandidate.error.code)
+    const engine = this.resources.commit(engineCandidate.value.ref, { runtime })
+    if (!engine.ok) throw new Error(engine.error.code)
+    const transportCandidate = this.resources.create({
+      kind: "transport",
+      id: "transport",
+      parent: engine.value.ref
+    })
+    if (!transportCandidate.ok) throw new Error(transportCandidate.error.code)
+    const transport = this.resources.commit(transportCandidate.value.ref, {
+      state: "stopped",
+      positionFrames: 0
+    })
+    if (!transport.ok) throw new Error(transport.error.code)
+    this.audioEngine = engine.value.ref as AudioEngineRef
+    this.transport = transport.value.ref as TransportRef
+    return this.audioResourceSnapshot()
+  }
+
+  async dropAudioEngine(): Promise<AudioResourceSnapshot> {
+    if (this.audioEngine) await this.resources.drop(this.audioEngine)
+    this.audioEngine = null
+    this.transport = null
+    return this.audioResourceSnapshot()
+  }
+
+  get audioHost(): AudioHostRef {
+    return structuredClone(this.currentAudioHost)
+  }
+
+  async reconcileAudioHost(helperEpoch: string): Promise<AudioResourceSnapshot> {
+    if (this.currentAudioHost.epoch === helperEpoch) return this.audioResourceSnapshot()
+    await this.resources.drop(this.currentAudioHost)
+    const candidate = this.resources.create({
+      kind: "audio-host",
+      id: "audio-host",
+      epoch: helperEpoch,
+      parent: this.desktopSession
+    })
+    if (!candidate.ok) throw new Error(candidate.error.code)
+    const committed = this.resources.commit(candidate.value.ref, { status: "ready" })
+    if (!committed.ok) throw new Error(committed.error.code)
+    this.currentAudioHost = committed.value.ref as AudioHostRef
+    this.audioEngine = null
+    this.transport = null
+    return this.audioResourceSnapshot()
+  }
+
+  advanceTransport(expectedRevision: number, snapshot: unknown): number {
+    if (!this.transport) throw new Error("transport-unavailable")
+    const updated = this.resources.update(this.transport, expectedRevision, snapshot)
+    if (!updated.ok) throw new Error(updated.error.code)
+    return updated.value.revision
   }
 
   setWorkspace(workspace: ProjectWorkspaceSnapshot | null): void {
@@ -156,7 +250,12 @@ export class ApplicationStateStore {
 
   setAudio(state: AudioLifecycleState): void {
     this.audio = structuredClone(state)
-    this.publish({ type: "audio", revision: 0, state: this.audio })
+    this.publish({
+      type: "audio",
+      revision: 0,
+      state: this.audio,
+      resources: this.audioResourceSnapshot()
+    })
   }
 
   replaceAudioProjection(state: AudioLifecycleState): void {

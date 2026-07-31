@@ -33,14 +33,32 @@ test("measures mock round-trip latency through the desktop boundary", async () =
     await page.waitForLoadState("domcontentloaded")
     await expect(page.getByRole("heading", { name: /Build a session/ })).toBeVisible()
 
-    const runtime = await page.evaluate(() =>
-      window.yadaw.startAudioEngine({
-        backend: "mock",
-        inputDeviceId: "custom:mock-duplex",
-        outputDeviceId: "custom:mock-duplex",
-        bufferSize: 128
+    const runtime = await page.evaluate(async () => {
+      const bootstrap = await window.yadaw.bootstrap({
+        protocolVersion: 2,
+        requestId: crypto.randomUUID()
       })
-    )
+      if (!bootstrap.ok) throw new Error(bootstrap.error.code)
+      const result = await window.yadaw.startAudioEngine(
+        {
+          protocolVersion: 2,
+          requestId: crypto.randomUUID(),
+          target: bootstrap.value.audioResources.host,
+          mutation: {
+            operationId: crypto.randomUUID(),
+            idempotencyKey: crypto.randomUUID()
+          }
+        },
+        {
+          backend: "mock",
+          inputDeviceId: "custom:mock-duplex",
+          outputDeviceId: "custom:mock-duplex",
+          bufferSize: 128
+        }
+      )
+      if (!result.ok) throw new Error(result.error.code)
+      return result.value.runtime
+    })
     expect(runtime.state).toBe("running")
 
     const started = await page.evaluate(() =>
@@ -66,7 +84,23 @@ test("measures mock round-trip latency through the desktop boundary", async () =
       })
       .toMatchObject({ status: "complete", measured: expect.any(Number) })
 
-    await page.evaluate(() => window.yadaw.stopAudioEngine())
+    await page.evaluate(async () => {
+      const bootstrap = await window.yadaw.bootstrap({
+        protocolVersion: 2,
+        requestId: crypto.randomUUID()
+      })
+      if (!bootstrap.ok || !bootstrap.value.audioResources.engine) return
+      const result = await window.yadaw.stopAudioEngine({
+        protocolVersion: 2,
+        requestId: crypto.randomUUID(),
+        target: bootstrap.value.audioResources.engine,
+        mutation: {
+          operationId: crypto.randomUUID(),
+          idempotencyKey: crypto.randomUUID()
+        }
+      })
+      if (!result.ok) throw new Error(result.error.code)
+    })
   } finally {
     await application.close()
   }

@@ -11,6 +11,8 @@ import type {
   AudioBackend,
   AudioBackendDescriptor,
   AudioDeviceList,
+  AudioEngineSessionSnapshot,
+  AudioEngineStopSnapshot,
   AudioPreferences,
   AudioRuntimeSnapshot,
   DesktopLifecycleEvent,
@@ -140,9 +142,12 @@ export interface YadawDesktopApi {
   processGain(request: ProcessGainRequest): Promise<ProcessGainResult>
   listAudioBackends(): Promise<AudioBackendDescriptor[]>
   listAudioDevices(backend: AudioBackend): Promise<AudioDeviceList>
-  startAudioEngine(preferences: AudioPreferences): Promise<AudioRuntimeSnapshot>
-  stopAudioEngine(): Promise<AudioRuntimeSnapshot>
-  audioEngineSnapshot(): Promise<AudioRuntimeSnapshot>
+  startAudioEngine(
+    meta: RpcRequestMeta,
+    preferences: AudioPreferences
+  ): Promise<RpcResult<AudioEngineSessionSnapshot>>
+  stopAudioEngine(meta: RpcRequestMeta): Promise<RpcResult<AudioEngineStopSnapshot>>
+  audioEngineSnapshot(meta: RpcRequestMeta): Promise<RpcResult<AudioRuntimeSnapshot>>
   startRoundTripLatencyMeasurement(
     request: RoundTripLatencyMeasurementRequest
   ): Promise<RoundTripLatencyMeasurement>
@@ -156,8 +161,11 @@ export interface YadawDesktopApi {
   previewMixerParameter(preview: MixerParameterPreview): Promise<void>
   mixerSnapshot(): Promise<MixerRuntimeSnapshot>
   clearMixerMeterClips(): Promise<MixerRuntimeSnapshot>
-  transportCommand(command: TransportCommand): Promise<TransportSnapshot>
-  transportSnapshot(): Promise<TransportSnapshot>
+  transportCommand(
+    meta: RpcRequestMeta,
+    command: TransportCommand
+  ): Promise<RpcResult<TransportSnapshot>>
+  transportSnapshot(meta: RpcRequestMeta): Promise<RpcResult<TransportSnapshot>>
   lifecycleSnapshot(): Promise<DesktopLifecycleSnapshot>
   subscribeLifecycle(listener: (event: DesktopLifecycleEvent) => void): () => void
   startupProgressSnapshot(): Promise<StartupProgressSnapshot>

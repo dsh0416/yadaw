@@ -250,8 +250,16 @@ export function startApplication(
       const lifecycle = new LifecycleCoordinator(
         projectService.current,
         normalizeAudioRuntime(initialAudioRuntime),
-        { allowRecordingWithoutAudio: process.env.YADAW_TEST_CAPTURE_SOURCE === "1" }
+        {
+          allowRecordingWithoutAudio: process.env.YADAW_TEST_CAPTURE_SOURCE === "1",
+          audioHostEpoch: audioHostService.helperEpoch() ?? undefined
+        }
       )
+      if (initialAudioRuntime.state === "running") {
+        await lifecycle.applicationState.commitAudioEngine(
+          normalizeAudioRuntime(initialAudioRuntime)
+        )
+      }
       const operations = new OperationService(
         new OperationRegistry(),
         lifecycle.applicationState.desktopSession

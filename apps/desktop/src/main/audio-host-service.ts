@@ -176,6 +176,9 @@ export class AudioHostService {
   private set client(value: AudioHostIpcClient | null) {
     this.supervisor.client = value
   }
+  helperEpoch(): string | null {
+    return this.client?.helperEpoch ?? null
+  }
   private get heartbeat(): NodeJS.Timeout | null {
     return this.supervisor.heartbeat
   }

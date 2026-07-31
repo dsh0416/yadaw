@@ -4,6 +4,8 @@ import { computed, shallowRef } from "vue"
 import type { TransportSnapshot } from "@yadaw/contracts"
 import type { ProjectAssetSummary as Asset } from "@yadaw/contracts"
 import { projectContentEndSeconds } from "@yadaw/project-model"
+import { mutationMeta, readMeta, rpcErrorMessage } from "../rpc"
+import { useAudioRuntimeStore } from "./audioRuntime"
 import { useMixerStore } from "./mixer"
 import { usePluginStore } from "./plugins"
 
@@ -51,6 +53,7 @@ const EMPTY_TRANSPORT: TransportSnapshot = {
 export const useTransportStore = defineStore("transport", () => {
   const mixerStore = useMixerStore()
   const pluginStore = usePluginStore()
+  const audioRuntimeStore = useAudioRuntimeStore()
   const snapshot = shallowRef<TransportSnapshot>({ ...EMPTY_TRANSPORT })
   const selectedClipId = shallowRef<string | null>(null)
   const loading = shallowRef(false)
@@ -107,16 +110,24 @@ export const useTransportStore = defineStore("transport", () => {
       (mixerStore.metronome !== null && !mixerStore.metronome.muted)
   )
 
-  function command(value: Parameters<typeof window.yadaw.transportCommand>[0]): Promise<void> {
+  function command(value: Parameters<typeof window.yadaw.transportCommand>[1]): Promise<void> {
     const generation = ++requestGeneration
     const result = commandTail.then(async () => {
-      try {
-        const next = await window.yadaw.transportCommand(value)
-        if (generation >= requestGeneration) snapshot.value = next
-        error.value = ""
-      } catch (reason) {
-        error.value = reason instanceof Error ? reason.message : "Transport command failed."
+      const target = audioRuntimeStore.transportRef
+      if (!target) return
+      const next = await window.yadaw.transportCommand(
+        mutationMeta(target, `transport-${value.type}`, audioRuntimeStore.transportRevision),
+        value
+      )
+      if (!next.ok) {
+        error.value = rpcErrorMessage(next.error)
+        return
       }
+      if (generation >= requestGeneration) snapshot.value = next.value
+      if (next.resourceRevision !== undefined) {
+        audioRuntimeStore.advanceTransportRevision(next.resourceRevision)
+      }
+      error.value = ""
     })
     commandTail = result.then(
       () => undefined,
@@ -127,12 +138,14 @@ export const useTransportStore = defineStore("transport", () => {
 
   async function refresh(): Promise<void> {
     const generation = ++requestGeneration
-    try {
-      const next = await window.yadaw.transportSnapshot()
-      if (generation === requestGeneration) snapshot.value = next
-    } catch {
-      // Existing audio runtime state owns device-level errors.
+    const target = audioRuntimeStore.transportRef
+    if (!target) {
+      if (generation === requestGeneration) snapshot.value = { ...EMPTY_TRANSPORT }
+      return
     }
+    const next = await window.yadaw.transportSnapshot(readMeta(target))
+    if (!next.ok) return
+    if (generation === requestGeneration) snapshot.value = next.value
   }
 
   const polling = useIntervalFn(() => void refresh(), 33, { immediate: false })

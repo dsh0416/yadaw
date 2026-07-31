@@ -27,10 +27,10 @@ const api: YadawDesktopApi = {
   listAudioBackends: () => ipcRenderer.invoke(IPC_CHANNELS.audioBackends),
   listAudioDevices: (backend: AudioBackend) =>
     ipcRenderer.invoke(IPC_CHANNELS.audioDevices, backend),
-  startAudioEngine: (preferences: AudioPreferences) =>
-    ipcRenderer.invoke(IPC_CHANNELS.audioStart, preferences),
-  stopAudioEngine: () => ipcRenderer.invoke(IPC_CHANNELS.audioStop),
-  audioEngineSnapshot: () => ipcRenderer.invoke(IPC_CHANNELS.audioSnapshot),
+  startAudioEngine: (meta, preferences: AudioPreferences) =>
+    invokeRpc(IPC_CHANNELS.audioStart, meta, preferences),
+  stopAudioEngine: (meta) => invokeRpc(IPC_CHANNELS.audioStop, meta),
+  audioEngineSnapshot: (meta) => invokeRpc(IPC_CHANNELS.audioSnapshot, meta),
   startRoundTripLatencyMeasurement: (request: RoundTripLatencyMeasurementRequest) =>
     ipcRenderer.invoke(IPC_CHANNELS.audioRoundTripLatencyStart, request),
   roundTripLatencyMeasurementSnapshot: () =>
@@ -42,8 +42,8 @@ const api: YadawDesktopApi = {
   previewMixerParameter: (preview) => ipcRenderer.invoke(IPC_CHANNELS.mixerPreview, preview),
   mixerSnapshot: () => ipcRenderer.invoke(IPC_CHANNELS.mixerSnapshot),
   clearMixerMeterClips: () => ipcRenderer.invoke(IPC_CHANNELS.mixerClearMeterClips),
-  transportCommand: (command) => ipcRenderer.invoke(IPC_CHANNELS.transportCommand, command),
-  transportSnapshot: () => ipcRenderer.invoke(IPC_CHANNELS.transportSnapshot),
+  transportCommand: (meta, command) => invokeRpc(IPC_CHANNELS.transportCommand, meta, command),
+  transportSnapshot: (meta) => invokeRpc(IPC_CHANNELS.transportSnapshot, meta),
   lifecycleSnapshot: () => ipcRenderer.invoke(IPC_CHANNELS.lifecycleSnapshot),
   subscribeLifecycle: (listener) => {
     const handler = (

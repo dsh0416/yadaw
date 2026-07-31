@@ -47,6 +47,26 @@ describe("ResourceRegistry", () => {
     })
   })
 
+  it("allows a helper-owned child epoch while preserving the main parent dependency", () => {
+    const registry = new ResourceRegistry("main-epoch")
+    const root = committedRoot(registry)
+    const host = registry.create({
+      kind: "audio-host",
+      id: "audio-host",
+      epoch: "helper-epoch",
+      parent: root.ref
+    })
+    expect(host.ok).toBe(true)
+    if (!host.ok) throw new Error("test setup failed")
+    expect(registry.commit(host.value.ref, { ready: true })).toMatchObject({
+      ok: true,
+      value: {
+        ref: { epoch: "helper-epoch" },
+        parent: { epoch: "main-epoch" }
+      }
+    })
+  })
+
   it("builds an isolated candidate subtree before committing its parent", () => {
     const registry = new ResourceRegistry("epoch")
     const root = committedRoot(registry)

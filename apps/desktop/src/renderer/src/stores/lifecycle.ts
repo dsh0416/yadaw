@@ -22,8 +22,10 @@ export const useLifecycleStore = defineStore("lifecycle", () => {
     if (event.revision <= revisions[event.type]) return
     revisions[event.type] = event.revision
     if (event.type === "project") projectStore.applyLifecycleState(event.state)
-    else if (event.type === "audio") audioRuntimeStore.applyLifecycleState(event.state)
-    else recordingStore.applyLifecycleState(event.state)
+    else if (event.type === "audio") {
+      audioRuntimeStore.applyResources(event.resources)
+      audioRuntimeStore.applyLifecycleState(event.state)
+    } else recordingStore.applyLifecycleState(event.state)
   }
 
   function applySnapshot(snapshot: DesktopLifecycleSnapshot): void {
@@ -60,6 +62,7 @@ export const useLifecycleStore = defineStore("lifecycle", () => {
           projectStore.applyDesktopSession(result.value.desktopSession)
         }
         settingsStore.applySnapshot(result.value.settings)
+        audioRuntimeStore.applyResources(result.value.audioResources)
         applySnapshot(result.value.lifecycle)
         ready.value = true
       } catch (reason) {

@@ -79,6 +79,17 @@ function bootstrap(active: ProjectWorkspaceSnapshot | null): ApplicationBootstra
       epoch: "main-epoch",
       generation: 1
     },
+    audioResources: {
+      host: {
+        kind: "audio-host",
+        id: "audio-host",
+        epoch: "main-epoch",
+        generation: 1
+      },
+      engine: null,
+      transport: null,
+      revision: 0
+    },
     revision: 1,
     lifecycle: {
       revision: 1,

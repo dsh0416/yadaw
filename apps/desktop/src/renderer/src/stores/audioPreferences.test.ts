@@ -4,8 +4,10 @@ import { DEFAULT_AUDIO_PREFERENCES, INITIAL_AUDIO_RUNTIME_SNAPSHOT } from "@yada
 import type {
   AudioBackendDescriptor,
   AudioDeviceList,
+  AudioEngineSessionSnapshot,
   AudioPreferences,
-  AudioRuntimeSnapshot
+  AudioRuntimeSnapshot,
+  RpcResult
 } from "@yadaw/contracts"
 import { useAudioPreferencesStore } from "./audioPreferences"
 import { useAudioRuntimeStore } from "./audioRuntime"
@@ -24,6 +26,51 @@ function preferences(overrides: Partial<AudioPreferences> = {}): AudioPreference
 
 function runtimeSnapshot(overrides: Partial<AudioRuntimeSnapshot> = {}): AudioRuntimeSnapshot {
   return { ...INITIAL_AUDIO_RUNTIME_SNAPSHOT, state: "running", ...overrides }
+}
+
+function engineSuccess(runtime: AudioRuntimeSnapshot): RpcResult<AudioEngineSessionSnapshot> {
+  return {
+    ok: true,
+    requestId: "request",
+    operationId: "operation",
+    value: {
+      host: {
+        kind: "audio-host",
+        id: "audio-host",
+        epoch: "main-epoch",
+        generation: 1
+      },
+      engine: {
+        kind: "audio-engine",
+        id: "audio-engine",
+        epoch: "main-epoch",
+        generation: 1
+      },
+      transport: {
+        kind: "transport",
+        id: "transport",
+        epoch: "main-epoch",
+        generation: 1
+      },
+      revision: 0,
+      runtime
+    },
+    warnings: []
+  }
+}
+
+function applyAudioHost(): void {
+  useAudioRuntimeStore().applyResources({
+    host: {
+      kind: "audio-host",
+      id: "audio-host",
+      epoch: "main-epoch",
+      generation: 1
+    },
+    engine: null,
+    transport: null,
+    revision: 0
+  })
 }
 
 function device(id: string, isDefault = false) {
@@ -67,6 +114,7 @@ let storage: Storage
 beforeEach(() => {
   setActivePinia(createPinia())
   storage = installMemoryStorage()
+  applyAudioHost()
 })
 
 describe("persisted preferences", () => {
@@ -110,13 +158,21 @@ describe("persisted preferences", () => {
 
 describe("apply", () => {
   it("starts the engine and stores the accepted preferences", async () => {
-    const startAudioEngine = vi.fn(async () => runtimeSnapshot({ outputBufferSize: 256 }))
+    const startAudioEngine = vi.fn(async () =>
+      engineSuccess(runtimeSnapshot({ outputBufferSize: 256 }))
+    )
     stubApi({ startAudioEngine })
     const store = useAudioPreferencesStore()
 
     await expect(store.apply(preferences())).resolves.toBe(true)
 
-    expect(startAudioEngine).toHaveBeenCalledWith(preferences())
+    expect(startAudioEngine).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target: expect.objectContaining({ kind: "audio-host" }),
+        mutation: expect.any(Object)
+      }),
+      preferences()
+    )
     expect(store.preferences).toEqual(preferences())
     expect(store.applying).toBe(false)
     expect(store.applyError).toBe("")
@@ -125,7 +181,7 @@ describe("apply", () => {
   it("adopts the buffer size the engine actually negotiated and explains the fallback", async () => {
     stubApi({
       startAudioEngine: vi.fn(async () =>
-        runtimeSnapshot({ outputBufferSize: 512, bufferFallback: true })
+        engineSuccess(runtimeSnapshot({ outputBufferSize: 512, bufferFallback: true }))
       )
     })
     const store = useAudioPreferencesStore()
@@ -137,17 +193,32 @@ describe("apply", () => {
     expect(store.applyNotice).toContain("64")
   })
 
-  it("reports the engine failure and leaves applying settled", async () => {
+  it("reports the typed engine failure and leaves applying settled", async () => {
     stubApi({
-      startAudioEngine: vi.fn(async () => {
-        throw new Error("Device is in use")
-      })
+      startAudioEngine: vi.fn(async () => ({
+        ok: false,
+        requestId: "request",
+        operationId: "operation",
+        error: {
+          code: "resource-unavailable",
+          category: "unavailable",
+          outcome: "not-committed",
+          retry: "safe",
+          correlationId: "correlation",
+          userMessageKey: "errors.audioEngineUnavailable",
+          details: {
+            type: "resource-unavailable",
+            component: "audio-host",
+            dispatched: true
+          }
+        }
+      }))
     })
     const store = useAudioPreferencesStore()
 
     await expect(store.apply(preferences())).resolves.toBe(false)
 
-    expect(store.applyError).toBe("Device is in use")
+    expect(store.applyError).toBe("The audio engine is unavailable.")
     expect(store.applying).toBe(false)
   })
 
@@ -161,7 +232,7 @@ describe("apply", () => {
   })
 
   it("skips a restart when the running engine already uses those preferences", async () => {
-    const startAudioEngine = vi.fn(async () => runtimeSnapshot())
+    const startAudioEngine = vi.fn(async () => engineSuccess(runtimeSnapshot()))
     stubApi({ startAudioEngine })
     const store = useAudioPreferencesStore()
     useAudioRuntimeStore().applyLifecycleState({
@@ -178,7 +249,7 @@ describe("apply", () => {
   })
 
   it("restarts the engine when any single preference differs", async () => {
-    const startAudioEngine = vi.fn(async () => runtimeSnapshot())
+    const startAudioEngine = vi.fn(async () => engineSuccess(runtimeSnapshot()))
     stubApi({ startAudioEngine })
     const store = useAudioPreferencesStore()
     useAudioRuntimeStore().applyLifecycleState({
@@ -198,12 +269,9 @@ describe("apply", () => {
 describe("restore", () => {
   it("starts the engine once when a stopped session has a saved device pair", async () => {
     storage.setItem(STORAGE_KEY, JSON.stringify(preferences()))
-    const startAudioEngine = vi.fn(async () => runtimeSnapshot())
+    const startAudioEngine = vi.fn(async () => engineSuccess(runtimeSnapshot()))
     stubApi({
-      audioEngineSnapshot: vi.fn(async () => ({
-        ...INITIAL_AUDIO_RUNTIME_SNAPSHOT,
-        state: "stopped" as const
-      })),
+      audioEngineSnapshot: vi.fn(),
       startAudioEngine
     })
     const store = useAudioPreferencesStore()
@@ -226,12 +294,17 @@ describe("restore", () => {
 
   it("leaves an already running engine alone", async () => {
     storage.setItem(STORAGE_KEY, JSON.stringify(preferences()))
-    const startAudioEngine = vi.fn(async () => runtimeSnapshot())
+    const startAudioEngine = vi.fn(async () => engineSuccess(runtimeSnapshot()))
     stubApi({
-      audioEngineSnapshot: vi.fn(async () => runtimeSnapshot()),
+      audioEngineSnapshot: vi.fn(),
       startAudioEngine
     })
     const store = useAudioPreferencesStore()
+    useAudioRuntimeStore().applyLifecycleState({
+      status: "running",
+      runtime: runtimeSnapshot(),
+      error: null
+    })
 
     await store.restore()
 

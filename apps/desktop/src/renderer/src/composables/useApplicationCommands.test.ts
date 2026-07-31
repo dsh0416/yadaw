@@ -11,6 +11,7 @@ import type {
 } from "@yadaw/contracts"
 import { useApplicationCommands } from "./useApplicationCommands"
 import { useGlobalDialog } from "./useGlobalDialog"
+import { useAudioRuntimeStore } from "../stores/audioRuntime"
 import { useProjectStore } from "../stores/project"
 
 const session: ProjectSession = {
@@ -78,6 +79,17 @@ function closedBootstrap(): ApplicationBootstrapSnapshot {
       epoch: "main-epoch",
       generation: 1
     },
+    audioResources: {
+      host: {
+        kind: "audio-host",
+        id: "audio-host",
+        epoch: "main-epoch",
+        generation: 1
+      },
+      engine: null,
+      transport: null,
+      revision: 0
+    },
     revision: 2,
     lifecycle: {
       revision: 2,
@@ -124,6 +136,27 @@ function createHarness() {
   const wrapper = mount(Harness, {
     global: { plugins: [pinia, router] }
   })
+  useAudioRuntimeStore(pinia).applyResources({
+    host: {
+      kind: "audio-host",
+      id: "audio-host",
+      epoch: "main-epoch",
+      generation: 1
+    },
+    engine: {
+      kind: "audio-engine",
+      id: "audio-engine",
+      epoch: "main-epoch",
+      generation: 1
+    },
+    transport: {
+      kind: "transport",
+      id: "transport",
+      epoch: "main-epoch",
+      generation: 1
+    },
+    revision: 0
+  })
   return { pinia, router, wrapper }
 }
 
@@ -142,9 +175,16 @@ describe("useApplicationCommands", () => {
       return () => undefined
     })
     window.yadaw.transportCommand = vi.fn().mockResolvedValue({
-      state: "stopped",
-      positionFrames: 0,
-      sampleRate: 48_000
+      ok: true,
+      requestId: "transport",
+      operationId: "transport-operation",
+      resourceRevision: 1,
+      value: {
+        state: "stopped",
+        positionFrames: 0,
+        sampleRate: 48_000
+      },
+      warnings: []
     })
   })
 
@@ -204,7 +244,14 @@ describe("useApplicationCommands", () => {
       selectDialogAction("discard")
       await flushPromises()
 
-      expect(window.yadaw.transportCommand).toHaveBeenCalledWith({ type: "pause" })
+      expect(window.yadaw.transportCommand).toHaveBeenCalledWith(
+        expect.objectContaining({
+          target: expect.objectContaining({ kind: "transport" }),
+          expectedRevision: 0,
+          mutation: expect.any(Object)
+        }),
+        { type: "pause" }
+      )
       expect(window.yadaw.closeProject).toHaveBeenCalledWith(
         expect.objectContaining({
           target: expect.objectContaining({ kind: "project-session" }),

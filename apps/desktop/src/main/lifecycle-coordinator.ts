@@ -18,6 +18,7 @@ type ProjectTransition = "creating" | "opening" | "saving" | "closing"
 type AudioTransition = "starting" | "reconfiguring" | "stopping"
 interface LifecycleCoordinatorOptions {
   allowRecordingWithoutAudio?: boolean
+  audioHostEpoch?: string
   stateStore?: ApplicationStateStore
 }
 
@@ -50,6 +51,7 @@ export class LifecycleCoordinator {
       ? { ok: true as const, value: options.stateStore }
       : ApplicationStateStore.create({
           project,
+          audioHostEpoch: options.audioHostEpoch,
           runtime: structuredClone(runtime ?? INITIAL_AUDIO_RUNTIME_SNAPSHOT)
         })
     if (!created.ok) {

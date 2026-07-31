@@ -165,14 +165,32 @@ test("records into a Large Object and reopens the PGlite project archive", async
     await expect(page.getByRole("status")).toContainText("Changes saved")
     await page.getByRole("button", { name: "Back to studio" }).click()
     await expect(page.locator(".studio-shell")).toBeVisible()
-    const mockRuntime = await page.evaluate(() =>
-      window.yadaw.startAudioEngine({
-        backend: "mock",
-        inputDeviceId: "custom:mock-duplex",
-        outputDeviceId: "custom:mock-duplex",
-        bufferSize: 256
+    const mockRuntime = await page.evaluate(async () => {
+      const bootstrap = await window.yadaw.bootstrap({
+        protocolVersion: 2,
+        requestId: crypto.randomUUID()
       })
-    )
+      if (!bootstrap.ok) throw new Error(bootstrap.error.code)
+      const result = await window.yadaw.startAudioEngine(
+        {
+          protocolVersion: 2,
+          requestId: crypto.randomUUID(),
+          target: bootstrap.value.audioResources.host,
+          mutation: {
+            operationId: crypto.randomUUID(),
+            idempotencyKey: crypto.randomUUID()
+          }
+        },
+        {
+          backend: "mock",
+          inputDeviceId: "custom:mock-duplex",
+          outputDeviceId: "custom:mock-duplex",
+          bufferSize: 256
+        }
+      )
+      if (!result.ok) throw new Error(result.error.code)
+      return result.value.runtime
+    })
     expect(mockRuntime.state).toBe("running")
 
     const mixerDockToggle = page.getByRole("button", { name: "Mixer", exact: true })
@@ -495,7 +513,23 @@ test("records into a Large Object and reopens the PGlite project archive", async
         return result.ok && result.value.closed
       })
     ).toBe(true)
-    await page.evaluate(() => window.yadaw.stopAudioEngine())
+    await page.evaluate(async () => {
+      const bootstrap = await window.yadaw.bootstrap({
+        protocolVersion: 2,
+        requestId: crypto.randomUUID()
+      })
+      if (!bootstrap.ok || !bootstrap.value.audioResources.engine) return
+      const result = await window.yadaw.stopAudioEngine({
+        protocolVersion: 2,
+        requestId: crypto.randomUUID(),
+        target: bootstrap.value.audioResources.engine,
+        mutation: {
+          operationId: crypto.randomUUID(),
+          idempotencyKey: crypto.randomUUID()
+        }
+      })
+      if (!result.ok) throw new Error(result.error.code)
+    })
   } finally {
     await application.close()
   }

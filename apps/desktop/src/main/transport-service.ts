@@ -8,13 +8,26 @@ export class TransportService {
     positionFrames: 0,
     sampleRate: 48_000
   }
+  private commandTail: Promise<void> = Promise.resolve()
 
   constructor(
     private readonly projects: ProjectService,
     private readonly audioHost: AudioHostService | null
   ) {}
 
-  async command(command: TransportCommand): Promise<TransportSnapshot> {
+  command(command: TransportCommand): Promise<TransportSnapshot> {
+    const result = this.commandTail.then(
+      () => this.commandNow(command),
+      () => this.commandNow(command)
+    )
+    this.commandTail = result.then(
+      () => undefined,
+      () => undefined
+    )
+    return result
+  }
+
+  private async commandNow(command: TransportCommand): Promise<TransportSnapshot> {
     if (
       process.env.YADAW_TEST_CAPTURE_SOURCE === "1" &&
       process.env.YADAW_TEST_MOCK_AUDIO !== "1"

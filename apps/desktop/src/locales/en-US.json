@@ -114,10 +114,28 @@
     "nativeAudioEngineStopped": "The native audio engine stopped unexpectedly.",
     "unableToReadAudioEngineState": "Unable to read audio engine state.",
     "unableToStartAudioEngine": "Unable to start the native audio engine.",
-    "unableToStopAudioEngine": "Unable to stop the native audio engine."
+    "unableToStopAudioEngine": "Unable to stop the native audio engine.",
+    "invalidRpcRequest": "The request was invalid.",
+    "protocolMismatch": "This application component uses an incompatible protocol version.",
+    "untrustedSender": "The request came from an untrusted application context.",
+    "internalInvariant": "An internal invariant failed. The affected resource was isolated.",
+    "revisionConflict": "The resource changed before this operation could be applied.",
+    "staleResource": "This resource handle is no longer current.",
+    "resourceBusy": "The resource is busy with another operation.",
+    "operationCancelled": "The operation was cancelled.",
+    "operationOutcomeUnknown": "The operation outcome is unknown. Reconciliation is required.",
+    "operationFailed": "The operation could not be completed.",
+    "transportUnavailable": "The IPC transport is unavailable.",
+    "audioEngineUnavailable": "The audio engine is unavailable.",
+    "projectUnavailable": "The project is unavailable.",
+    "projectQuarantined": "The failed project candidate was isolated."
   },
   "warnings": {
+    "audioDeploymentDegraded": "Project data was saved, but audio deployment must be rebuilt.",
+    "audioParameterDegraded": "The parameter was saved, but its live audio update must be reconciled.",
+    "projectCleanupQuarantined": "Project cleanup was isolated and will be retried.",
     "audio": {
+      "projectGraphDeploymentFailed": "The audio engine started, but the project graph could not be deployed.",
       "nativeError": {
         "title": "Native audio error"
       },

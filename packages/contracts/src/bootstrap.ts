@@ -1,4 +1,4 @@
-import type { DesktopLifecycleSnapshot } from "./audio"
+import type { AudioResourceSnapshot, DesktopLifecycleSnapshot } from "./audio"
 import type { ProjectWorkspaceSnapshot } from "./project"
 import type { ApplicationSettingsRef, DesktopSessionRef } from "./rpc"
 import type { ApplicationSettings } from "./settings"
@@ -11,6 +11,7 @@ export interface ApplicationBootstrapSnapshot {
   applicationSettings: ApplicationSettingsRef
   revision: number
   lifecycle: DesktopLifecycleSnapshot
+  audioResources: AudioResourceSnapshot
   settings: ApplicationSettings
   workspace: ProjectWorkspaceSnapshot | null
 }

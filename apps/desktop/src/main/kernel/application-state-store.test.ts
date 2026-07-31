@@ -93,4 +93,87 @@ describe("ApplicationStateStore", () => {
       }
     })
   })
+
+  it("invalidates the previous engine generation and revisions transport atomically", async () => {
+    const created = ApplicationStateStore.create({
+      epoch: "epoch-1",
+      project: null
+    })
+    if (!created.ok) throw new Error("test setup failed")
+    const store = created.value
+    const runtime = { ...INITIAL_AUDIO_RUNTIME_SNAPSHOT, state: "running" as const }
+
+    const first = await store.commitAudioEngine(runtime)
+    expect(first).toMatchObject({
+      engine: { kind: "audio-engine", generation: 1 },
+      transport: { kind: "transport", generation: 1 },
+      revision: 1
+    })
+    const firstEngine = first.engine
+    const firstTransport = first.transport
+    if (!firstEngine || !firstTransport) throw new Error("test setup failed")
+
+    expect(
+      store.advanceTransport(1, {
+        state: "playing",
+        positionFrames: 0,
+        sampleRate: 48_000
+      })
+    ).toBe(2)
+    expect(() =>
+      store.advanceTransport(1, {
+        state: "stopped",
+        positionFrames: 0,
+        sampleRate: 48_000
+      })
+    ).toThrow("revision-conflict")
+
+    const second = await store.commitAudioEngine(runtime)
+    expect(second).toMatchObject({
+      engine: { generation: 2 },
+      transport: { generation: 2 },
+      revision: 1
+    })
+    expect(store.resources.resolve(firstEngine)).toMatchObject({
+      ok: false,
+      error: { reason: "parent-invalid" }
+    })
+    expect(store.resources.resolve(firstTransport)).toMatchObject({
+      ok: false,
+      error: { reason: "parent-invalid" }
+    })
+  })
+
+  it("rotates the entire audio subtree when the helper epoch changes", async () => {
+    const created = ApplicationStateStore.create({
+      epoch: "main-epoch",
+      audioHostEpoch: "helper-1",
+      project: null
+    })
+    if (!created.ok) throw new Error("test setup failed")
+    const store = created.value
+    const runtime = { ...INITIAL_AUDIO_RUNTIME_SNAPSHOT, state: "running" as const }
+    const previous = await store.commitAudioEngine(runtime)
+
+    const next = await store.reconcileAudioHost("helper-2")
+
+    expect(next).toMatchObject({
+      host: { epoch: "helper-2", generation: 2 },
+      engine: null,
+      transport: null,
+      revision: 0
+    })
+    expect(store.resources.resolve(previous.host)).toMatchObject({
+      ok: false,
+      error: { reason: "parent-invalid" }
+    })
+    expect(store.resources.resolve(previous.engine!)).toMatchObject({
+      ok: false,
+      error: { reason: "parent-invalid" }
+    })
+    expect(store.resources.resolve(previous.transport!)).toMatchObject({
+      ok: false,
+      error: { reason: "parent-invalid" }
+    })
+  })
 })

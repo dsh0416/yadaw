@@ -53,6 +53,17 @@ function bootstrap(lifecycle: DesktopLifecycleSnapshot): ApplicationBootstrapSna
       epoch: "main-epoch",
       generation: 1
     },
+    audioResources: {
+      host: {
+        kind: "audio-host",
+        id: "audio-host",
+        epoch: "main-epoch",
+        generation: 1
+      },
+      engine: null,
+      transport: null,
+      revision: 0
+    },
     revision: lifecycle.revision,
     lifecycle,
     settings: {} as ApplicationBootstrapSnapshot["settings"],

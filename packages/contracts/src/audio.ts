@@ -1,5 +1,6 @@
 import type { ProjectLifecycleState } from "./project"
 import type { RecordingLifecycleState } from "./recording"
+import type { AudioEngineRef, AudioHostRef, TransportRef } from "./rpc"
 
 // "mock" is a cpal custom host that synthesises capture and discards playback.
 // It is always available and is listed last so it is only auto-selected when no
@@ -68,6 +69,25 @@ export interface AudioRuntimeSnapshot {
   bufferFallback: boolean
 }
 
+export interface AudioResourceSnapshot {
+  host: AudioHostRef
+  engine: AudioEngineRef | null
+  transport: TransportRef | null
+  revision: number
+}
+
+export interface AudioEngineSessionSnapshot extends AudioResourceSnapshot {
+  engine: AudioEngineRef
+  transport: TransportRef
+  runtime: AudioRuntimeSnapshot
+}
+
+export interface AudioEngineStopSnapshot extends AudioResourceSnapshot {
+  engine: null
+  transport: null
+  runtime: AudioRuntimeSnapshot
+}
+
 export interface RoundTripLatencyMeasurementRequest {
   inputChannel: number
   outputChannel: number
@@ -131,6 +151,7 @@ export type DesktopLifecycleEvent =
       type: "audio"
       revision: number
       state: AudioLifecycleState
+      resources: AudioResourceSnapshot
     }
   | {
       type: "recording"

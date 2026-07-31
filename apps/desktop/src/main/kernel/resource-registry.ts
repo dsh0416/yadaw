@@ -41,6 +41,7 @@ export type ResourceRegistryError =
 export interface CreateResourceOptions {
   kind: ResourceKind
   id: string
+  epoch?: string
   parent?: ResourceRef
   disposer?: ResourceDisposer
   quarantinePolicy?: QuarantinePolicy
@@ -99,7 +100,7 @@ export class ResourceRegistry {
     const ref: ResourceRef = {
       kind: options.kind,
       id: options.id,
-      epoch: this.epoch,
+      epoch: options.epoch ?? this.epoch,
       generation
     }
     const record: StoredResourceRecord = {
@@ -258,20 +259,22 @@ export class ResourceRegistry {
   private resolveStored(
     ref: ResourceRef
   ): KernelResult<StoredResourceRecord, ResourceRegistryError> {
-    if (ref.epoch !== this.epoch) {
-      return kernelFailure({
-        code: "stale-resource",
-        reason: "epoch-mismatch",
-        resource: structuredClone(ref)
-      })
-    }
     const exact = this.records.get(refKey(ref))
     if (exact) return kernelSuccess(exact)
     const logical = logicalKey(ref.kind, ref.id)
     const knownGeneration = this.generations.get(logical)
+    const hasOtherEpoch = [...this.records.values()].some(
+      (record) =>
+        record.ref.kind === ref.kind && record.ref.id === ref.id && record.ref.epoch !== ref.epoch
+    )
     return kernelFailure({
       code: "stale-resource",
-      reason: knownGeneration === undefined ? "missing" : "generation-mismatch",
+      reason:
+        knownGeneration === undefined
+          ? "missing"
+          : hasOtherEpoch
+            ? "epoch-mismatch"
+            : "generation-mismatch",
       resource: structuredClone(ref)
     })
   }

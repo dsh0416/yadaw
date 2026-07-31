@@ -40,7 +40,6 @@ describe("IPC v2 architecture gate", () => {
       "main/ipc/rpc.ts",
       "main/ipc/settings-handlers.ts",
       "main/ipc/system-handlers.ts",
-      "main/ipc/transport-handlers.ts",
       "main/startup.ts"
     ])
   })
