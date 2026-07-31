@@ -59,6 +59,9 @@ jobs:
     name: Build
     needs: validate
     uses: ./.github/workflows/build.yml
+    with:
+      # Ship installers with Cargo.toml thin-LTO release settings.
+      full_release_profile: true
     permissions:
       contents: read
 

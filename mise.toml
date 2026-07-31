@@ -82,7 +82,6 @@ depends = ["install"]
 run = [
   "pnpm --filter @yadaw/dsp-node build",
   "pnpm --filter @yadaw/audio-host-client build",
-  "cargo build -p yadaw-audio-host --release",
-  "cargo build -p yadaw-vst3-host --bin yadaw-vst3-probe --release",
+  "cargo build --release -p yadaw-audio-host -p yadaw-vst3-host",
   "cargo truce build --vst3",
 ]
