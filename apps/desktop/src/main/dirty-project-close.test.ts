@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { IPC_CHANNELS } from "@yadaw/contracts"
+import { IPC_CHANNELS, IPC_PROTOCOL_VERSION } from "@yadaw/contracts"
 import { deferDirtyProjectClose } from "./dirty-project-close"
 
 describe("deferDirtyProjectClose", () => {
@@ -21,7 +21,16 @@ describe("deferDirtyProjectClose", () => {
         })
       ).toBe(true)
       expect(event.preventDefault).toHaveBeenCalledOnce()
-      expect(send).toHaveBeenCalledWith(IPC_CHANNELS.applicationCommandRequested, command)
+      expect(send).toHaveBeenCalledWith(
+        IPC_CHANNELS.applicationCommandRequested,
+        expect.objectContaining({
+          protocolVersion: IPC_PROTOCOL_VERSION,
+          payload: command,
+          sequence: expect.any(Number),
+          resourceRevision: expect.any(Number),
+          sourceEpoch: expect.any(String)
+        })
+      )
     }
   )
 

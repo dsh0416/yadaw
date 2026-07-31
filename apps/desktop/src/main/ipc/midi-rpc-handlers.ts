@@ -13,6 +13,7 @@ import type {
 import { validateMidiSyncPreferences } from "../application-settings"
 import { t } from "../i18n"
 import type { IpcHandlerContext } from "./context"
+import { reconcileAudioHostEpoch } from "./audio-host-reconcile"
 import { registerRpcHandler } from "./rpc"
 
 function sameRef(left: ResourceRef | undefined | null, right: ResourceRef | undefined | null) {
@@ -170,13 +171,17 @@ function importPlan(value: unknown): MidiImportPlan | null {
 export function registerMidiRpcHandlers(context: IpcHandlerContext): void {
   const { lifecycle, midiImport, audioHost, settings, recordings } = context
   const state = lifecycle.applicationState
+  const reconcileAudioHost = () =>
+    reconcileAudioHostEpoch({
+      audioHost,
+      lifecycle,
+      recordings
+    })
 
   registerRpcHandler(IPC_CHANNELS.midiInputSnapshot, async ({ meta }) => {
+    await reconcileAudioHost()
     const resources = state.audioResourceSnapshot()
-    if (
-      !sameRef(meta.target, resources.midiRuntime) ||
-      audioHost.helperEpoch() !== resources.host.epoch
-    ) {
+    if (!sameRef(meta.target, resources.midiRuntime)) {
       return rpcFailure(meta, error(meta, "stale"))
     }
     try {
@@ -187,6 +192,7 @@ export function registerMidiRpcHandlers(context: IpcHandlerContext): void {
   })
 
   registerRpcHandler(IPC_CHANNELS.midiInputConfigure, async ({ meta }, value: unknown) => {
+    await reconcileAudioHost()
     const resources = state.audioResourceSnapshot()
     if (!sameRef(meta.target, resources.midiRuntime)) {
       return rpcFailure(meta, error(meta, "stale"))
@@ -239,6 +245,7 @@ export function registerMidiRpcHandlers(context: IpcHandlerContext): void {
   })
 
   registerRpcHandler(IPC_CHANNELS.midiControlLearning, async ({ meta }, value: unknown) => {
+    await reconcileAudioHost()
     const resources = state.audioResourceSnapshot()
     if (typeof value !== "boolean") return rpcFailure(meta, error(meta, "validation"))
     if (!sameRef(meta.target, resources.midiRuntime)) {
@@ -316,9 +323,11 @@ export function registerMidiRpcHandlers(context: IpcHandlerContext): void {
       const result = rpcSuccess(meta, value, { resourceRevision: value.workspace.revision })
       finish(context, meta, "committed", result)
       return result
-    } catch {
-      const result = rpcFailure(meta, error(meta, "unknown"))
-      finish(context, meta, "quarantined", result)
+    } catch (reason) {
+      const message = reason instanceof Error ? reason.message : String(reason)
+      const committed = message.includes("Committed MIDI import resource could not advance")
+      const result = rpcFailure(meta, error(meta, committed ? "unknown" : "unavailable"))
+      finish(context, meta, committed ? "quarantined" : "not-committed", result)
       return result
     }
   })

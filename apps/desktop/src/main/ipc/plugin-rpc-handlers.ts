@@ -8,6 +8,7 @@ import type {
   RpcResult
 } from "@yadaw/contracts"
 import type { IpcHandlerContext } from "./context"
+import { reconcileAudioHostEpoch } from "./audio-host-reconcile"
 import { registerRpcHandler } from "./rpc"
 
 function sameRef(left: ResourceRef | undefined | null, right: ResourceRef | undefined | null) {
@@ -152,8 +153,14 @@ function parameterCommand(value: unknown): PluginParameterCommand | null {
 }
 
 export function registerPluginRpcHandlers(context: IpcHandlerContext): void {
-  const { plugins, lifecycle, audioHost } = context
+  const { plugins, lifecycle, audioHost, recordings } = context
   const state = lifecycle.applicationState
+  const reconcileAudioHost = () =>
+    reconcileAudioHostEpoch({
+      audioHost,
+      lifecycle,
+      recordings
+    })
 
   registerRpcHandler(IPC_CHANNELS.pluginsList, ({ meta }) => {
     if (!sameRef(meta.target, state.desktopSession)) {
@@ -266,6 +273,7 @@ export function registerPluginRpcHandlers(context: IpcHandlerContext): void {
     if (!meta.mutation || !command || !target || target.kind !== "plugin-instance") {
       return rpcFailure(meta, error(meta, "validation"))
     }
+    await reconcileAudioHost()
     const resource = await state.pluginInstanceSnapshot(target.id, () =>
       plugins.closeEditor(target.id)
     )

@@ -1,5 +1,5 @@
-import { IPC_CHANNELS } from "@yadaw/contracts"
-import type { ApplicationCommandId, ProjectSession } from "@yadaw/contracts"
+import type { ApplicationCommandId, ProjectSession, RpcEvent } from "@yadaw/contracts"
+import { sendApplicationCommand } from "./application-command-events"
 
 export type DirtyProjectCloseCommand = Extract<
   ApplicationCommandId,
@@ -13,7 +13,7 @@ interface PreventableCloseEvent {
 interface CloseRequestWindow {
   isDestroyed(): boolean
   webContents: {
-    send(channel: string, command: DirtyProjectCloseCommand): void
+    send(channel: string, event: RpcEvent<ApplicationCommandId>): void
   }
 }
 
@@ -32,6 +32,6 @@ export function deferDirtyProjectClose({
 }: DeferDirtyProjectCloseOptions): boolean {
   if (!project?.dirty || !window || window.isDestroyed()) return false
   event.preventDefault()
-  window.webContents.send(IPC_CHANNELS.applicationCommandRequested, command)
+  sendApplicationCommand(window, command)
   return true
 }

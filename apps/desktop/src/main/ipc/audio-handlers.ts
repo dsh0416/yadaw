@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto"
 import { IPC_CHANNELS, rpcFailure, rpcSuccess } from "@yadaw/contracts"
-import type { ResourceRef, RpcError, RpcRequestMeta, RpcResult } from "@yadaw/contracts"
+import type { ResourceRef, RpcError, RpcRequestMeta } from "@yadaw/contracts"
 import type { IpcHandlerContext } from "./context"
+import { reconcileAudioHostEpoch } from "./audio-host-reconcile"
+import { beginGuardedMutation, finishGuardedMutation } from "./operation-guard"
 import { registerRpcHandler } from "./rpc"
 import { validateMutationTarget, validateReadTarget } from "./resource-validation"
 import {
@@ -63,59 +65,21 @@ function failure(
   }
 }
 
-function operationBusy(meta: RpcRequestMeta, activeOperationId: string): RpcError {
-  return {
-    code: "resource-busy",
-    category: "busy",
-    outcome: "not-committed",
-    retry: "safe",
-    correlationId: randomUUID(),
-    userMessageKey: "errors.resourceBusy",
-    ...(meta.target ? { resource: meta.target } : {}),
-    details: { type: "resource-busy", activeOperationId }
-  }
-}
-
-function rebindResult(meta: RpcRequestMeta, result: RpcResult<unknown>): RpcResult<unknown> {
-  return {
-    ...structuredClone(result),
-    requestId: meta.requestId
-  }
-}
-
-function replayOperation(
-  context: IpcHandlerContext,
-  meta: RpcRequestMeta
-): RpcResult<unknown> | null {
-  const operationId = meta.mutation?.operationId
-  if (!operationId) return null
-  const existing = context.operations.registry.status(operationId)
-  if (!existing.ok) return null
-  return existing.value.result
-    ? rebindResult(meta, existing.value.result)
-    : rpcFailure(meta, operationBusy(meta, existing.value.operationId))
-}
-
 export function registerAudioHandlers(context: IpcHandlerContext): void {
   const {
     audioHost: audioHostService,
     projects,
     projectGraph,
     lifecycle,
-    operations,
     recordings,
     isShuttingDown
   } = context
-  const reconcileAudioHost = async (): Promise<void> => {
-    const state = lifecycle.applicationState
-    const previousRecording = state.recordingResourceSnapshot()
-    const helperEpoch = audioHostService.helperEpoch()
-    if (!helperEpoch) return
-    await state.reconcileAudioHost(helperEpoch)
-    if (previousRecording && !state.recordingResourceSnapshot()) {
-      await recordings.abortStart()
-    }
-  }
+  const reconcileAudioHost = () =>
+    reconcileAudioHostEpoch({
+      audioHost: audioHostService,
+      lifecycle,
+      recordings
+    })
   registerRpcHandler(IPC_CHANNELS.audioBackends, async ({ meta }) => {
     await reconcileAudioHost()
     const invalid = validateReadTarget(meta, lifecycle.applicationState.audioHost)
@@ -135,23 +99,12 @@ export function registerAudioHandlers(context: IpcHandlerContext): void {
   registerRpcHandler(IPC_CHANNELS.audioStart, async ({ meta }, value: unknown) => {
     const state = lifecycle.applicationState
     if (!meta.mutation) return rpcFailure(meta, failure(meta, "validation-failed"))
-    const replay = replayOperation(context, meta)
-    if (replay) return replay
     await reconcileAudioHost()
     if (!sameRef(meta.target, state.audioHost)) {
       return rpcFailure(meta, failure(meta, "stale-resource"))
     }
-    const begun = operations.registry.begin({
-      operationId: meta.mutation.operationId,
-      idempotencyKey: meta.mutation.idempotencyKey,
-      target: state.audioHost
-    })
-    if (!begun.ok) return rpcFailure(meta, failure(meta, "validation-failed"))
-    if (begun.value.disposition !== "started") {
-      return begun.value.operation.result
-        ? rebindResult(meta, begun.value.operation.result)
-        : rpcFailure(meta, operationBusy(meta, begun.value.operation.operationId))
-    }
+    const guarded = beginGuardedMutation(context, meta, state.audioHost)
+    if (guarded) return guarded
     try {
       const transition =
         lifecycle.snapshot().audio.status === "running" ? "reconfiguring" : "starting"
@@ -183,7 +136,7 @@ export function registerAudioHandlers(context: IpcHandlerContext): void {
         },
         { warnings }
       )
-      operations.registry.finish(meta.mutation.operationId, "committed", result)
+      finishGuardedMutation(context, meta, "committed", result)
       return result
     } catch (error) {
       const runtime = await audioHostService
@@ -191,7 +144,7 @@ export function registerAudioHandlers(context: IpcHandlerContext): void {
         .catch(() => lifecycle.snapshot().audio.runtime)
       lifecycle.failAudio(error, normalizeAudioRuntime(runtime))
       const result = rpcFailure(meta, failure(meta, "resource-unavailable", "audio-host"))
-      operations.registry.finish(meta.mutation.operationId, "not-committed", result)
+      finishGuardedMutation(context, meta, "not-committed", result)
       return result
     }
   })
@@ -199,31 +152,20 @@ export function registerAudioHandlers(context: IpcHandlerContext): void {
   registerRpcHandler(IPC_CHANNELS.audioStop, async ({ meta }) => {
     const state = lifecycle.applicationState
     if (!meta.mutation) return rpcFailure(meta, failure(meta, "validation-failed"))
-    const replay = replayOperation(context, meta)
-    if (replay) return replay
     await reconcileAudioHost()
     const current = state.audioResourceSnapshot()
     if (!sameRef(meta.target, current.engine)) {
       return rpcFailure(meta, failure(meta, "stale-resource"))
     }
-    const begun = operations.registry.begin({
-      operationId: meta.mutation.operationId,
-      idempotencyKey: meta.mutation.idempotencyKey,
-      target: current.engine!
-    })
-    if (!begun.ok) return rpcFailure(meta, failure(meta, "validation-failed"))
-    if (begun.value.disposition !== "started") {
-      return begun.value.operation.result
-        ? rebindResult(meta, begun.value.operation.result)
-        : rpcFailure(meta, operationBusy(meta, begun.value.operation.operationId))
-    }
+    const guarded = beginGuardedMutation(context, meta, current.engine!)
+    if (guarded) return guarded
     try {
       lifecycle.beginAudio("stopping")
       const runtime = normalizeAudioRuntime(await audioHostService.stopAudioEngine())
       const resources = await state.dropAudioEngine()
       lifecycle.completeAudio(runtime)
       const result = rpcSuccess(meta, { ...resources, engine: null, transport: null, runtime })
-      operations.registry.finish(meta.mutation.operationId, "committed", result)
+      finishGuardedMutation(context, meta, "committed", result)
       return result
     } catch (error) {
       const runtime = await audioHostService
@@ -239,12 +181,12 @@ export function registerAudioHandlers(context: IpcHandlerContext): void {
           transport: null,
           runtime: normalized
         })
-        operations.registry.finish(meta.mutation.operationId, "committed", result)
+        finishGuardedMutation(context, meta, "committed", result)
         return result
       }
       lifecycle.failAudio(error, normalizeAudioRuntime(runtime))
       const result = rpcFailure(meta, failure(meta, "resource-unavailable", "audio-host"))
-      operations.registry.finish(meta.mutation.operationId, "not-committed", result)
+      finishGuardedMutation(context, meta, "not-committed", result)
       return result
     }
   })
@@ -267,21 +209,20 @@ export function registerAudioHandlers(context: IpcHandlerContext): void {
     const target = lifecycle.applicationState.audioHost
     const invalid = validateMutationTarget(meta, target)
     if (invalid) return invalid
-    const begun = operations.registry.begin({
-      operationId: meta.mutation!.operationId,
-      idempotencyKey: meta.mutation!.idempotencyKey,
-      target
-    })
-    if (!begun.ok) throw new Error(begun.error.code)
-    if (begun.value.disposition !== "started" && begun.value.operation.result) {
-      return begun.value.operation.result
+    const guarded = beginGuardedMutation(context, meta, target)
+    if (guarded) return guarded
+    try {
+      const valueResult = await audioHostService.startRoundTripLatencyMeasurement(
+        validateRoundTripLatencyMeasurementRequest(value)
+      )
+      const result = rpcSuccess(meta, valueResult)
+      finishGuardedMutation(context, meta, "committed", result)
+      return result
+    } catch {
+      const result = rpcFailure(meta, failure(meta, "resource-unavailable", "audio-host"))
+      finishGuardedMutation(context, meta, "not-committed", result)
+      return result
     }
-    const valueResult = await audioHostService.startRoundTripLatencyMeasurement(
-      validateRoundTripLatencyMeasurementRequest(value)
-    )
-    const result = rpcSuccess(meta, valueResult)
-    operations.registry.finish(meta.mutation!.operationId, "committed", result)
-    return result
   })
 
   registerRpcHandler(IPC_CHANNELS.audioRoundTripLatencySnapshot, async ({ meta }) => {

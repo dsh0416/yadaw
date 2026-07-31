@@ -132,7 +132,8 @@
     "projectUnavailable": "The project is unavailable.",
     "pluginUnavailable": "The plug-in runtime is unavailable. Reopen the editor or reconcile the project.",
     "midiUnavailable": "The MIDI runtime is unavailable. Reconcile the audio helper and try again.",
-    "projectQuarantined": "The failed project candidate was isolated."
+    "projectQuarantined": "The failed project candidate was isolated.",
+    "graphDependencyFailed": "A graph dependency failed to prepare. Reconcile the project and try again."
   },
   "warnings": {
     "audioDeploymentDegraded": "Project data was saved, but audio deployment must be rebuilt.",

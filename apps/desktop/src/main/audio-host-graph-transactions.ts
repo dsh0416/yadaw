@@ -1,5 +1,6 @@
+import { randomUUID } from "node:crypto"
 import type { AudioHostIpcClient } from "@yadaw/audio-host-client"
-import { IPC_PROTOCOL_VERSION, rpcSuccess } from "@yadaw/contracts"
+import { IPC_PROTOCOL_VERSION, rpcFailure, rpcSuccess } from "@yadaw/contracts"
 import type {
   AudioEngineRef,
   PluginInstanceState,
@@ -52,10 +53,26 @@ export class AudioHostGraphTransactions {
     )
     for (const [index, result] of loaded.entries()) {
       if (result.status === "rejected") {
-        console.error(
-          `Could not prepare VST3 instance ${project.plugins[index]?.id}:`,
-          result.reason
-        )
+        const plugin = project.plugins[index]
+        console.error(`Could not prepare VST3 instance ${plugin?.id}:`, result.reason)
+        return rpcFailure(meta, {
+          code: "dependency-failed",
+          category: "dependency-failed",
+          outcome: "not-committed",
+          retry: "after-reconcile",
+          correlationId: randomUUID(),
+          userMessageKey: "errors.graphDependencyFailed",
+          resource: projectGraph,
+          details: {
+            type: "dependency-failed",
+            dependency: {
+              kind: "plugin-instance",
+              id: plugin?.id ?? `plugin:${index}`,
+              epoch: projectGraph.epoch,
+              generation: projectGraph.generation
+            }
+          }
+        })
       }
     }
     const runtime = structuredClone(runtimeInput)

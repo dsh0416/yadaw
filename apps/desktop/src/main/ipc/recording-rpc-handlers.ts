@@ -11,6 +11,7 @@ import type {
 } from "@yadaw/contracts"
 import type { BeginOperationResult } from "../kernel/operation-registry"
 import type { IpcHandlerContext } from "./context"
+import { reconcileAudioHostEpoch } from "./audio-host-reconcile"
 import { registerRpcHandler } from "./rpc"
 import { validateWaveformRequest } from "./support"
 
@@ -152,7 +153,13 @@ function recordingStartRequest(value: unknown): RecordingStartRequest | null {
 }
 
 export function registerRecordingRpcHandlers(context: IpcHandlerContext): void {
-  const { recordings, projects, projectGraph, lifecycle, operations } = context
+  const { recordings, projects, projectGraph, lifecycle, operations, audioHost } = context
+  const reconcileAudioHost = () =>
+    reconcileAudioHostEpoch({
+      audioHost,
+      lifecycle,
+      recordings
+    })
   const commitProjectProjection = async () => {
     const session = projects.current
     if (!session) throw new Error("project-workspace-unavailable")
@@ -167,6 +174,7 @@ export function registerRecordingRpcHandlers(context: IpcHandlerContext): void {
     if (!meta.mutation) return rpcFailure(meta, error(meta, "validation"))
     const previous = replay(meta, context)
     if (previous) return previous
+    await reconcileAudioHost()
     const request = recordingStartRequest(value)
     const state = lifecycle.applicationState
     const workspace = state.workspaceSnapshot()
@@ -225,6 +233,7 @@ export function registerRecordingRpcHandlers(context: IpcHandlerContext): void {
     if (!meta.mutation) return rpcFailure(meta, error(meta, "validation"))
     const replayed = replay(meta, context)
     if (replayed) return replayed
+    await reconcileAudioHost()
     const state = lifecycle.applicationState
     const current = state.recordingResourceSnapshot()
     if (!current || !sameRef(meta.target, current.recording)) {
