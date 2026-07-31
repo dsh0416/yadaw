@@ -36,6 +36,12 @@ import type {
 const HEARTBEAT_INTERVAL_MS = 250
 const HEARTBEAT_TIMEOUT_MS = 2_000
 
+function benchmarkStageError(stage: string, error: unknown, helperFailure: string | null): Error {
+  const message = error instanceof Error ? error.message : String(error)
+  const failure = helperFailure && !message.includes(helperFailure) ? ` (${helperFailure})` : ""
+  return new Error(`${stage} failed: ${message}${failure}`, { cause: error })
+}
+
 import { AudioHostGateway } from "./audio-host-gateway"
 import { AudioHostProcessSupervisor } from "./audio-host-process-supervisor"
 import { AudioHostSessionCoordinator } from "./audio-host-session-coordinator"
@@ -58,6 +64,7 @@ export type {
 export class AudioHostService {
   private heartbeatInFlight = false
   private audioBenchmarkInFlight = false
+  private benchmarkRunnerInFlight = false
   private audioBenchmarkGeneration = 0
   private lastCallbackGeneration: number | null = null
   private callbackStagnantSince = 0
@@ -614,11 +621,59 @@ export class AudioHostService {
     }
   }
 
-  runIpcBenchmark(): Promise<AudioIpcBenchmarkReport> {
+  private runIpcBenchmarkInCurrentHost(): Promise<AudioIpcBenchmarkReport> {
     return this.diagnostics.runIpcBenchmark()
   }
 
   async runAudioBenchmark(effect: PluginDescriptor): Promise<{
+    durationMs: number
+    overallRealtimeFactor: number
+    worstP99DeadlineUtilizationPercent: number
+    scenarios: AudioBenchmarkScenario[]
+    ipc: AudioIpcBenchmarkReport
+  }> {
+    if (this.benchmarkRunnerInFlight) {
+      throw new Error("audio benchmark is already running")
+    }
+    this.benchmarkRunnerInFlight = true
+    let helperFailure: string | null = null
+    const benchmarkHost = new AudioHostService(
+      this.executablePath,
+      `${this.crashMarkerPath}.benchmark`,
+      structuredClone(this.runtimePreferences),
+      undefined,
+      (message) => {
+        helperFailure = message
+      },
+      async () => {}
+    )
+    benchmarkHost.start(false)
+    try {
+      let dsp
+      try {
+        dsp = await benchmarkHost.runAudioBenchmarkInCurrentHost(effect)
+      } catch (error) {
+        throw benchmarkStageError("audio DSP benchmark", error, helperFailure)
+      }
+      let ipc: AudioIpcBenchmarkReport
+      try {
+        // Keep the CPU-bound DSP suite and IPC suite separate so neither distorts the other's
+        // latency distribution, while still using the same isolated one-shot helper.
+        ipc = await benchmarkHost.runIpcBenchmarkInCurrentHost()
+      } catch (error) {
+        throw benchmarkStageError("audio IPC benchmark", error, helperFailure)
+      }
+      return { ...dsp, ipc }
+    } finally {
+      try {
+        await benchmarkHost.stop()
+      } finally {
+        this.benchmarkRunnerInFlight = false
+      }
+    }
+  }
+
+  private async runAudioBenchmarkInCurrentHost(effect: PluginDescriptor): Promise<{
     durationMs: number
     overallRealtimeFactor: number
     worstP99DeadlineUtilizationPercent: number
@@ -699,15 +754,8 @@ export class AudioHostService {
         }))
       }
     } finally {
-      // Unload sequentially for the same deadline reason as loads. Host unload drops these
-      // non-graph instances instead of retaining them in retired_instances.
-      for (const id of pluginInstanceIds) {
-        try {
-          await this.plugins.unloadPlugin(id)
-        } catch (error) {
-          console.error(`Could not unload audio benchmark VST3 instance ${id}:`, error)
-        }
-      }
+      // This helper exists only for one benchmark suite. Its process shutdown owns VST3 teardown,
+      // so no per-instance unload can block the project helper or leave an uncancellable worker.
       this.audioBenchmarkInFlight = false
     }
   }
