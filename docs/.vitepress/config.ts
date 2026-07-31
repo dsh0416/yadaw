@@ -1,6 +1,43 @@
-import { defineConfig } from "vitepress"
+import { defineConfig, type PageData } from "vitepress"
 
 const docsRoot = "https://yadaw.midori.live"
+const ogImage = `${docsRoot}/og.png`
+const defaultDescriptionEn = "A free and open-source digital audio workstation."
+const defaultDescriptionZh = "一款自由开源的数字音频工作站。"
+
+function pageUrl(relativePath: string): string {
+  const path = relativePath.replace(/(^|\/)index\.md$/, "$1").replace(/\.md$/, "")
+  return `${docsRoot}/${path}`.replace(/\/$/, "") || docsRoot
+}
+
+function pageTitle(pageData: PageData): string {
+  const title = pageData.title || "YADAW"
+  if (pageData.frontmatter.titleTemplate === false) {
+    return title
+  }
+
+  const template = pageData.frontmatter.titleTemplate ?? ":title · YADAW"
+  if (typeof template === "string" && template.includes(":title")) {
+    return template.replace(/:title/g, title)
+  }
+
+  return `${title} · YADAW`
+}
+
+function pageDescription(pageData: PageData): string {
+  const fromPage = pageData.description || pageData.frontmatter.description
+  if (typeof fromPage === "string" && fromPage.length > 0) {
+    return fromPage
+  }
+
+  return pageData.relativePath === "zh" || pageData.relativePath.startsWith("zh/")
+    ? defaultDescriptionZh
+    : defaultDescriptionEn
+}
+
+function isBlogArticle(relativePath: string): boolean {
+  return /^blog\/(?!index\.md$).+\.md$/.test(relativePath)
+}
 
 export default defineConfig({
   title: "YADAW",
@@ -17,22 +54,37 @@ export default defineConfig({
     ["link", { rel: "icon", href: "/logo.svg", type: "image/svg+xml" }],
     ["meta", { name: "theme-color", content: "#101010" }],
     ["meta", { property: "og:type", content: "website" }],
-    ["meta", { property: "og:title", content: "YADAW" }]
+    ["meta", { property: "og:site_name", content: "YADAW" }],
+    ["meta", { property: "og:image", content: ogImage }],
+    ["meta", { property: "og:image:width", content: "1200" }],
+    ["meta", { property: "og:image:height", content: "630" }],
+    ["meta", { name: "twitter:card", content: "summary_large_image" }],
+    ["meta", { name: "twitter:image", content: ogImage }]
   ],
+  transformPageData(pageData) {
+    const title = pageTitle(pageData)
+    const description = pageDescription(pageData)
+    const url = pageUrl(pageData.relativePath)
+
+    pageData.frontmatter.head ??= []
+    pageData.frontmatter.head.push(
+      ["link", { rel: "canonical", href: url }],
+      ["meta", { property: "og:title", content: title }],
+      ["meta", { property: "og:description", content: description }],
+      ["meta", { property: "og:url", content: url }],
+      ["meta", { name: "twitter:title", content: title }],
+      ["meta", { name: "twitter:description", content: description }]
+    )
+
+    if (isBlogArticle(pageData.relativePath)) {
+      pageData.frontmatter.head.push(["meta", { property: "og:type", content: "article" }])
+    }
+  },
   locales: {
     root: {
       label: "English",
       lang: "en-US",
-      description: "A free and open-source digital audio workstation.",
-      head: [
-        [
-          "meta",
-          {
-            property: "og:description",
-            content: "A free and open-source digital audio workstation."
-          }
-        ]
-      ],
+      description: defaultDescriptionEn,
       themeConfig: {
         nav: [
           { text: "Manual", link: "/manual/" },
@@ -106,16 +158,7 @@ export default defineConfig({
       label: "简体中文",
       lang: "zh-CN",
       link: "/zh/",
-      description: "一款自由开源的数字音频工作站。",
-      head: [
-        [
-          "meta",
-          {
-            property: "og:description",
-            content: "一款自由开源的数字音频工作站。"
-          }
-        ]
-      ],
+      description: defaultDescriptionZh,
       themeConfig: {
         nav: [
           { text: "手册", link: "/zh/manual/" },
