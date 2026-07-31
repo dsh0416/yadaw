@@ -2,7 +2,7 @@ import { yadawFontsOptions } from "@yadaw/ui/fonts"
 import Unfonts from "unplugin-fonts/vite"
 import { defineConfig, type HeadConfig, type PageData } from "vitepress"
 
-const docsRoot = "https://yadaw.midori.live"
+const docsRoot = "https://yadaw.minori.live"
 const ogImage = `${docsRoot}/og.png`
 const defaultDescriptionEn = "A free and open-source digital audio workstation."
 const defaultDescriptionZh = "一款自由开源的数字音频工作站。"
