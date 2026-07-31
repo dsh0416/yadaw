@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 import { INITIAL_AUDIO_RUNTIME_SNAPSHOT } from "@yadaw/contracts"
-import type { ProjectSession } from "@yadaw/contracts"
+import type { ProjectGraphRef, ProjectSession, ProjectSessionRef } from "@yadaw/contracts"
 import { ApplicationStateStore } from "./application-state-store"
 import { OperationRegistry } from "./operation-registry"
 
@@ -175,5 +175,60 @@ describe("ApplicationStateStore", () => {
       ok: false,
       error: { reason: "parent-invalid" }
     })
+  })
+
+  it("binds a recording ref to project, graph, and engine generations", async () => {
+    const created = ApplicationStateStore.create({
+      epoch: "main-epoch",
+      audioHostEpoch: "helper-epoch",
+      project
+    })
+    if (!created.ok) throw new Error("test setup failed")
+    const store = created.value
+    const projectCandidate = store.resources.create({
+      kind: "project-session",
+      id: project.id,
+      parent: store.desktopSession
+    })
+    if (!projectCandidate.ok) throw new Error("test setup failed")
+    const committedProject = store.resources.commit(projectCandidate.value.ref, project)
+    if (!committedProject.ok) throw new Error("test setup failed")
+    const graphCandidate = store.resources.create({
+      kind: "project-graph",
+      id: "graph",
+      parent: committedProject.value.ref
+    })
+    if (!graphCandidate.ok) throw new Error("test setup failed")
+    const committedGraph = store.resources.commit(graphCandidate.value.ref, { revision: 1 })
+    if (!committedGraph.ok) throw new Error("test setup failed")
+    const audio = await store.commitAudioEngine({
+      ...INITIAL_AUDIO_RUNTIME_SNAPSHOT,
+      state: "running"
+    })
+    if (!audio.engine) throw new Error("test setup failed")
+
+    const recording = store.commitRecording(
+      {
+        id: "recording",
+        startedAt: 1,
+        swapPath: "recording.partial.bwf",
+        startFrame: 0,
+        trackIds: ["audio-1"]
+      },
+      {
+        project: committedProject.value.ref as ProjectSessionRef,
+        projectGraph: committedGraph.value.ref as ProjectGraphRef,
+        audioEngine: audio.engine
+      }
+    )
+
+    expect(recording).toMatchObject({
+      recording: { kind: "recording-session", generation: 1 },
+      project: { id: project.id },
+      projectGraph: { id: "graph" },
+      audioEngine: { epoch: "helper-epoch" }
+    })
+    await store.resources.drop(committedGraph.value.ref)
+    expect(store.recordingResourceSnapshot()).toBeNull()
   })
 })

@@ -58,7 +58,13 @@ import type {
   WaveformPeakWindow,
   WaveformWindowRequest
 } from "./project"
-import type { PendingRecording, RecordingSession } from "./recording"
+import type {
+  PendingRecording,
+  RecordingResourceSnapshot,
+  RecordingRecoveryResult,
+  RecordingStartRequest,
+  RecordingStopResult
+} from "./recording"
 import type {
   ApplicationSettings,
   ApplicationSettingsPatch,
@@ -203,14 +209,20 @@ export interface YadawDesktopApi {
   configureShortcuts(preferences: ShortcutPreferences): Promise<ApplicationSettings>
   chooseSwapDirectory(): Promise<ApplicationSettings>
   openSwapDirectory(): Promise<void>
-  startRecording(): Promise<RecordingSession>
-  stopRecording(): Promise<PendingRecording>
-  listPendingRecordings(): Promise<PendingRecording[]>
-  recoverRecording(id: string): Promise<void>
-  deletePendingRecording(id: string): Promise<void>
+  startRecording(
+    meta: RpcRequestMeta,
+    request: RecordingStartRequest
+  ): Promise<RpcResult<RecordingResourceSnapshot>>
+  stopRecording(meta: RpcRequestMeta): Promise<RpcResult<RecordingStopResult>>
+  listPendingRecordings(meta: RpcRequestMeta): Promise<RpcResult<PendingRecording[]>>
+  recoverRecording(meta: RpcRequestMeta, id: string): Promise<RpcResult<RecordingRecoveryResult>>
+  deletePendingRecording(meta: RpcRequestMeta, id: string): Promise<RpcResult<void>>
   readAssetAudio(id: string): Promise<Uint8Array>
   readAssetWaveform(request: WaveformWindowRequest): Promise<WaveformPeakWindow>
-  recordingWaveformSnapshot(request: WaveformWindowRequest): Promise<WaveformPeakWindow>
+  recordingWaveformSnapshot(
+    meta: RpcRequestMeta,
+    request: WaveformWindowRequest
+  ): Promise<RpcResult<WaveformPeakWindow>>
   listPlugins(): Promise<PluginCatalogSnapshot>
   scanPlugins(request?: PluginScanRequest): Promise<PluginCatalogSnapshot>
   subscribePluginScan(listener: (event: PluginScanEvent) => void): () => void

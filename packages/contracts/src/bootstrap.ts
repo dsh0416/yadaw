@@ -1,5 +1,6 @@
 import type { AudioResourceSnapshot, DesktopLifecycleSnapshot } from "./audio"
 import type { ProjectWorkspaceSnapshot } from "./project"
+import type { RecordingResourceSnapshot } from "./recording"
 import type { ApplicationSettingsRef, DesktopSessionRef } from "./rpc"
 import type { ApplicationSettings } from "./settings"
 import { IPC_PROTOCOL_VERSION } from "./rpc"
@@ -12,6 +13,7 @@ export interface ApplicationBootstrapSnapshot {
   revision: number
   lifecycle: DesktopLifecycleSnapshot
   audioResources: AudioResourceSnapshot
+  recordingResource: RecordingResourceSnapshot | null
   settings: ApplicationSettings
   workspace: ProjectWorkspaceSnapshot | null
 }

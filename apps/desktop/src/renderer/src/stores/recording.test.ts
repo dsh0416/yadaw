@@ -1,6 +1,17 @@
 import { createPinia, setActivePinia } from "pinia"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import type { PendingRecording, RecordingSession } from "@yadaw/contracts"
+import type {
+  AudioEngineRef,
+  PendingRecording,
+  ProjectGraphRef,
+  ProjectSessionRef,
+  ProjectWorkspaceSnapshot,
+  RecordingResourceSnapshot,
+  RecordingSession,
+  RpcResult
+} from "@yadaw/contracts"
+import { useAudioRuntimeStore } from "./audioRuntime"
+import { useProjectStore } from "./project"
 import { useRecordingStore } from "./recording"
 
 function session(overrides: Partial<RecordingSession> = {}): RecordingSession {
@@ -30,11 +41,110 @@ function pendingRecording(id: string): PendingRecording {
   }
 }
 
+const project: ProjectSessionRef = {
+  kind: "project-session",
+  id: "project",
+  epoch: "main",
+  generation: 1
+}
+const projectGraph: ProjectGraphRef = {
+  kind: "project-graph",
+  id: "graph",
+  epoch: "main",
+  generation: 1
+}
+const audioEngine: AudioEngineRef = {
+  kind: "audio-engine",
+  id: "engine",
+  epoch: "helper",
+  generation: 1
+}
+
+function recordingResource(overrides: Partial<RecordingResourceSnapshot> = {}) {
+  return {
+    recording: {
+      kind: "recording-session",
+      id: "take-1",
+      epoch: "main",
+      generation: 1
+    },
+    project,
+    projectGraph,
+    audioEngine,
+    revision: 1,
+    session: session(),
+    ...overrides
+  } satisfies RecordingResourceSnapshot
+}
+
+function workspace(): ProjectWorkspaceSnapshot {
+  return {
+    project,
+    projectGraph,
+    revision: 2,
+    session: {
+      id: project.id,
+      path: "/projects/demo.yadaw",
+      configuration: {
+        name: "Demo",
+        sampleRate: 48_000,
+        timeSignatureNumerator: 4,
+        timeSignatureDenominator: 4,
+        waveformDisplayMode: "separate"
+      },
+      dirty: true,
+      recoveredWorkingCopy: false
+    },
+    graph: {} as ProjectWorkspaceSnapshot["graph"],
+    assets: []
+  }
+}
+
+function success<T>(value: T): RpcResult<T> {
+  return {
+    ok: true,
+    requestId: "request",
+    value,
+    warnings: []
+  }
+}
+
+function failure(userMessageKey = "errors.recordingUnavailable"): RpcResult<never> {
+  return {
+    ok: false,
+    requestId: "request",
+    error: {
+      code: "resource-unavailable",
+      category: "unavailable",
+      outcome: "not-committed",
+      retry: "safe",
+      correlationId: "correlation",
+      userMessageKey,
+      details: {
+        type: "resource-unavailable",
+        component: "main",
+        dispatched: true
+      }
+    }
+  }
+}
+
+function configureDependencies(): void {
+  const projectStore = useProjectStore()
+  projectStore.projectRef = structuredClone(project)
+  projectStore.projectGraphRef = structuredClone(projectGraph)
+  projectStore.projectRevision = 1
+  useAudioRuntimeStore().audioEngineRef = structuredClone(audioEngine)
+}
+
 function stubApi(overrides: Record<string, unknown>): void {
   Object.assign(window.yadaw as unknown as Record<string, unknown>, overrides)
 }
 
-beforeEach(() => setActivePinia(createPinia()))
+beforeEach(() => {
+  setActivePinia(createPinia())
+  configureDependencies()
+})
 
 describe("derived state", () => {
   it("starts idle with no active session", () => {
@@ -46,13 +156,13 @@ describe("derived state", () => {
     expect(store.error).toBe("")
   })
 
-  it("exposes the session only while one is attached to the lifecycle", () => {
+  it("exposes the session only while a resource projection is attached", () => {
     const store = useRecordingStore()
 
-    store.applyLifecycleState({ status: "recording", session: session(), error: null })
+    store.applyResource(recordingResource())
     expect(store.active?.id).toBe("take-1")
 
-    store.applyLifecycleState({ status: "idle", error: null })
+    store.applyResource(null)
     expect(store.active).toBeNull()
   })
 
@@ -82,11 +192,11 @@ describe("derived state", () => {
     expect(store.error).toBe("Disk full")
   })
 
-  it("copies applied lifecycle state so later mutations cannot leak in", () => {
+  it("copies applied resource state so later mutations cannot leak in", () => {
     const store = useRecordingStore()
-    const state = { status: "recording", session: session(), error: null } as const
+    const state = recordingResource()
 
-    store.applyLifecycleState(state)
+    store.applyResource(state)
     state.session.trackIds.push("audio-2")
 
     expect(store.active?.trackIds).toEqual(["audio-1"])
@@ -95,7 +205,7 @@ describe("derived state", () => {
 
 describe("start", () => {
   it("moves to recording and returns the session", async () => {
-    stubApi({ startRecording: vi.fn(async () => session()) })
+    stubApi({ startRecording: vi.fn(async () => success(recordingResource())) })
     const store = useRecordingStore()
 
     await expect(store.start()).resolves.toMatchObject({ id: "take-1" })
@@ -105,7 +215,7 @@ describe("start", () => {
   })
 
   it("refuses to start a second take while one is already running", async () => {
-    const startRecording = vi.fn(async () => session())
+    const startRecording = vi.fn(async () => success(recordingResource()))
     stubApi({ startRecording })
     const store = useRecordingStore()
     await store.start()
@@ -117,27 +227,27 @@ describe("start", () => {
 
   it("returns to idle and reports why the take could not start", async () => {
     stubApi({
-      startRecording: vi.fn(async () => {
-        throw new Error("No armed track")
-      })
+      startRecording: vi.fn(async () => failure())
     })
     const store = useRecordingStore()
 
     await expect(store.start()).resolves.toBeNull()
 
     expect(store.lifecycle.status).toBe("idle")
-    expect(store.error).toBe("No armed track")
+    expect(store.error).toBe(
+      "Recording is unavailable. Check the project and audio engine, then try again."
+    )
   })
 
-  it("uses a generic message for non-Error rejections", async () => {
+  it("uses the typed transport-safe error projection", async () => {
     stubApi({
-      startRecording: vi.fn().mockRejectedValue("boom")
+      startRecording: vi.fn(async () => failure("errors.transportUnavailable"))
     })
     const store = useRecordingStore()
 
     await store.start()
 
-    expect(store.error).toBe("Recording failed.")
+    expect(store.error).toBe("The IPC transport is unavailable.")
   })
 })
 
@@ -145,14 +255,21 @@ describe("stop", () => {
   it("finishes the take and refreshes the pending list", async () => {
     const completed = pendingRecording("take-1")
     stubApi({
-      startRecording: vi.fn(async () => session()),
-      stopRecording: vi.fn(async () => completed),
-      listPendingRecordings: vi.fn(async () => [completed])
+      startRecording: vi.fn(async () => success(recordingResource())),
+      stopRecording: vi.fn(async () =>
+        success({
+          recording: recordingResource().recording,
+          pending: completed,
+          recoverableMedia: true,
+          workspace: workspace()
+        })
+      ),
+      listPendingRecordings: vi.fn(async () => success([completed]))
     })
     const store = useRecordingStore()
     await store.start()
 
-    await expect(store.stop()).resolves.toBe(completed)
+    await expect(store.stop()).resolves.toEqual(completed)
 
     expect(store.lifecycle.status).toBe("idle")
     expect(store.pending).toEqual([completed])
@@ -170,10 +287,8 @@ describe("stop", () => {
 
   it("returns to idle and reports a failed stop", async () => {
     stubApi({
-      startRecording: vi.fn(async () => session()),
-      stopRecording: vi.fn(async () => {
-        throw new Error("Swap file is locked")
-      })
+      startRecording: vi.fn(async () => success(recordingResource())),
+      stopRecording: vi.fn(async () => failure("errors.recordingMediaRecoverable"))
     })
     const store = useRecordingStore()
     await store.start()
@@ -181,14 +296,16 @@ describe("stop", () => {
     await expect(store.stop()).resolves.toBeNull()
 
     expect(store.lifecycle.status).toBe("idle")
-    expect(store.error).toBe("Swap file is locked")
+    expect(store.error).toBe(
+      "Recording finalization did not complete. The captured media was kept for recovery."
+    )
   })
 })
 
 describe("pending recordings", () => {
   it("loads the pending list from the main process", async () => {
     const recordings = [pendingRecording("take-1"), pendingRecording("take-2")]
-    stubApi({ listPendingRecordings: vi.fn(async () => recordings) })
+    stubApi({ listPendingRecordings: vi.fn(async () => success(recordings)) })
     const store = useRecordingStore()
 
     await store.refreshPending()
@@ -197,45 +314,51 @@ describe("pending recordings", () => {
   })
 
   it("recovers a take and refreshes the list", async () => {
-    const recoverRecording = vi.fn(async () => undefined)
-    stubApi({ recoverRecording, listPendingRecordings: vi.fn(async () => []) })
+    const recovered = pendingRecording("take-1")
+    const recoverRecording = vi.fn(async () =>
+      success({ pending: recovered, workspace: workspace() })
+    )
+    stubApi({
+      recoverRecording,
+      listPendingRecordings: vi.fn(async () => success([]))
+    })
     const store = useRecordingStore()
 
     await expect(store.recover(pendingRecording("take-1"))).resolves.toBe(true)
 
-    expect(recoverRecording).toHaveBeenCalledWith("take-1")
+    expect(recoverRecording).toHaveBeenCalledWith(expect.any(Object), "take-1")
     expect(store.lifecycle.status).toBe("idle")
     expect(store.pending).toEqual([])
   })
 
   it("reports a failed recovery and returns to idle", async () => {
     stubApi({
-      recoverRecording: vi.fn(async () => {
-        throw new Error("Sidecar is corrupt")
-      })
+      recoverRecording: vi.fn(async () => failure())
     })
     const store = useRecordingStore()
 
     await expect(store.recover(pendingRecording("take-1"))).resolves.toBe(false)
 
     expect(store.lifecycle.status).toBe("idle")
-    expect(store.error).toBe("Sidecar is corrupt")
+    expect(store.error).toBe(
+      "Recording is unavailable. Check the project and audio engine, then try again."
+    )
   })
 
-  it("uses a generic message when recovery rejects without an Error", async () => {
+  it("uses typed transport errors during recovery", async () => {
     stubApi({
-      recoverRecording: vi.fn().mockRejectedValue("boom")
+      recoverRecording: vi.fn(async () => failure("errors.transportUnavailable"))
     })
     const store = useRecordingStore()
 
     await store.recover(pendingRecording("take-1"))
 
-    expect(store.error).toBe("Recording recovery failed.")
+    expect(store.error).toBe("The IPC transport is unavailable.")
   })
 
   it("refuses to recover while another operation is in flight", async () => {
     const recoverRecording = vi.fn()
-    stubApi({ startRecording: vi.fn(async () => session()), recoverRecording })
+    stubApi({ startRecording: vi.fn(async () => success(recordingResource())), recoverRecording })
     const store = useRecordingStore()
     await store.start()
 
@@ -245,20 +368,26 @@ describe("pending recordings", () => {
   })
 
   it("deletes a take and refreshes the list", async () => {
-    const deletePendingRecording = vi.fn(async () => undefined)
-    stubApi({ deletePendingRecording, listPendingRecordings: vi.fn(async () => []) })
+    const deletePendingRecording = vi.fn(async () => success(undefined))
+    stubApi({
+      deletePendingRecording,
+      listPendingRecordings: vi.fn(async () => success([]))
+    })
     const store = useRecordingStore()
     store.pending = [pendingRecording("take-1")]
 
     await store.remove(pendingRecording("take-1"))
 
-    expect(deletePendingRecording).toHaveBeenCalledWith("take-1")
+    expect(deletePendingRecording).toHaveBeenCalledWith(expect.any(Object), "take-1")
     expect(store.pending).toEqual([])
   })
 
   it("refuses to delete while another operation is in flight", async () => {
     const deletePendingRecording = vi.fn()
-    stubApi({ startRecording: vi.fn(async () => session()), deletePendingRecording })
+    stubApi({
+      startRecording: vi.fn(async () => success(recordingResource())),
+      deletePendingRecording
+    })
     const store = useRecordingStore()
     await store.start()
 

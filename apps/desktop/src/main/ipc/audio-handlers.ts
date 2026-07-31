@@ -104,8 +104,19 @@ export function registerAudioHandlers(context: IpcHandlerContext): void {
     projectGraph,
     lifecycle,
     operations,
+    recordings,
     isShuttingDown
   } = context
+  const reconcileAudioHost = async (): Promise<void> => {
+    const state = lifecycle.applicationState
+    const previousRecording = state.recordingResourceSnapshot()
+    const helperEpoch = audioHostService.helperEpoch()
+    if (!helperEpoch) return
+    await state.reconcileAudioHost(helperEpoch)
+    if (previousRecording && !state.recordingResourceSnapshot()) {
+      await recordings.abortStart()
+    }
+  }
   ipcMain.handle(IPC_CHANNELS.audioBackends, async (event) => {
     assertTrustedSender(event)
     return audioHostService.listAudioBackends()
@@ -123,8 +134,7 @@ export function registerAudioHandlers(context: IpcHandlerContext): void {
     if (!meta.mutation) return rpcFailure(meta, failure(meta, "validation-failed"))
     const replay = replayOperation(context, meta)
     if (replay) return replay
-    const helperEpoch = audioHostService.helperEpoch()
-    if (helperEpoch) await state.reconcileAudioHost(helperEpoch)
+    await reconcileAudioHost()
     if (!sameRef(meta.target, state.audioHost)) {
       return rpcFailure(meta, failure(meta, "stale-resource"))
     }
@@ -188,8 +198,7 @@ export function registerAudioHandlers(context: IpcHandlerContext): void {
     if (!meta.mutation) return rpcFailure(meta, failure(meta, "validation-failed"))
     const replay = replayOperation(context, meta)
     if (replay) return replay
-    const helperEpoch = audioHostService.helperEpoch()
-    if (helperEpoch) await state.reconcileAudioHost(helperEpoch)
+    await reconcileAudioHost()
     const current = state.audioResourceSnapshot()
     if (!sameRef(meta.target, current.engine)) {
       return rpcFailure(meta, failure(meta, "stale-resource"))
@@ -239,8 +248,7 @@ export function registerAudioHandlers(context: IpcHandlerContext): void {
 
   registerRpcHandler(IPC_CHANNELS.audioSnapshot, async ({ meta }) => {
     const state = lifecycle.applicationState
-    const helperEpoch = audioHostService.helperEpoch()
-    if (helperEpoch) await state.reconcileAudioHost(helperEpoch)
+    await reconcileAudioHost()
     const current = state.audioResourceSnapshot()
     if (!sameRef(meta.target, current.engine)) {
       return rpcFailure(meta, failure(meta, "stale-resource"))

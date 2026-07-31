@@ -90,6 +90,7 @@ function bootstrap(active: ProjectWorkspaceSnapshot | null): ApplicationBootstra
       transport: null,
       revision: 0
     },
+    recordingResource: null,
     revision: 1,
     lifecycle: {
       revision: 1,

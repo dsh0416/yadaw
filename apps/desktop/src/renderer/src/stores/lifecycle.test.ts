@@ -64,6 +64,7 @@ function bootstrap(lifecycle: DesktopLifecycleSnapshot): ApplicationBootstrapSna
       transport: null,
       revision: 0
     },
+    recordingResource: null,
     revision: lifecycle.revision,
     lifecycle,
     settings: {} as ApplicationBootstrapSnapshot["settings"],

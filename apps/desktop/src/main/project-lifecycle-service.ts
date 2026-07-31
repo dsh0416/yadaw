@@ -137,6 +137,7 @@ export class ProjectLifecycleService {
       revision: snapshot.revision,
       lifecycle: snapshot.lifecycle,
       audioResources: state.audioResourceSnapshot(),
+      recordingResource: state.recordingResourceSnapshot(),
       settings: await this.settings.get(),
       workspace: state.workspaceSnapshot()
     }

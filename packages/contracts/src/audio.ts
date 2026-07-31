@@ -1,5 +1,5 @@
 import type { ProjectLifecycleState } from "./project"
-import type { RecordingLifecycleState } from "./recording"
+import type { RecordingLifecycleState, RecordingResourceSnapshot } from "./recording"
 import type { AudioEngineRef, AudioHostRef, TransportRef } from "./rpc"
 
 // "mock" is a cpal custom host that synthesises capture and discards playback.
@@ -157,4 +157,5 @@ export type DesktopLifecycleEvent =
       type: "recording"
       revision: number
       state: RecordingLifecycleState
+      resource: RecordingResourceSnapshot | null
     }

@@ -159,11 +159,28 @@ export class RecordingService {
         })
       await this.transport.command({ type: "record" })
     } catch (error) {
+      await Promise.allSettled([
+        deterministicTestCapture
+          ? Promise.resolve()
+          : (this.audioHost?.stopRecording() ?? Promise.resolve()),
+        this.transport.command({ type: "pause" })
+      ])
       await rm(sidecarPath, { force: true })
       throw error
     }
     this.sessions.begin(sidecar)
     return this.toSession(sidecar)
+  }
+
+  async abortStart(): Promise<void> {
+    if (!this.sessions.active) return
+    this.sessions.take()
+    await Promise.allSettled([
+      process.env.YADAW_TEST_CAPTURE_SOURCE === "1"
+        ? Promise.resolve()
+        : (this.audioHost?.stopRecording() ?? Promise.resolve()),
+      this.transport.command({ type: "pause" })
+    ])
   }
 
   async stop(onFinalizing?: () => void): Promise<PendingRecording> {
@@ -538,14 +555,14 @@ export class RecordingService {
     return true
   }
 
-  async recover(id: string): Promise<void> {
+  async recover(id: string): Promise<PendingRecording> {
     const recording = await this.readSidecar(id)
     if (
       recording.assetExists ||
       recording.state === "committed" ||
       (await this.assetAlreadyCommitted(recording))
     )
-      return
+      return this.toPending(recording)
     const recoverableIds = recording.tracks?.map((track) => track.assetId) ?? [recording.id]
     await this.graphs.deleteUnusedAssets(recoverableIds)
     if (recording.state === "partial") {
@@ -588,6 +605,7 @@ export class RecordingService {
       )
     }
     await this.finalizeAndCommit(recording, `recording:${id}`)
+    return this.toPending(recording)
   }
 
   async deletePending(id: string): Promise<void> {

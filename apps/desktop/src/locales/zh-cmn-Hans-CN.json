@@ -122,6 +122,8 @@
     "revisionConflict": "资源已在操作应用前发生变化。",
     "staleResource": "此资源句柄已失效。",
     "resourceBusy": "资源正被另一项操作占用。",
+    "recordingUnavailable": "录音当前不可用，请检查工程和音频引擎后重试。",
+    "recordingMediaRecoverable": "录音收尾未完成，已保留捕获媒体以便恢复。",
     "operationCancelled": "操作已取消。",
     "operationOutcomeUnknown": "操作结果未知，需要重新协调状态。",
     "operationFailed": "操作无法完成。",

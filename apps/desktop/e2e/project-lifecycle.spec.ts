@@ -374,10 +374,47 @@ test("records into a Large Object and reopens the PGlite project archive", async
     await page.getByRole("button", { name: "Pause" }).click()
     await page.getByRole("button", { name: "Go to beginning" }).click()
     await expect(page.getByRole("region", { name: "Project musical display" })).toContainText("001")
-    const pendingAfterCommit = await page.evaluate(() => window.yadaw.listPendingRecordings())
+    const pendingAfterCommit = await page.evaluate(async () => {
+      const bootstrap = await window.yadaw.bootstrap({
+        protocolVersion: 2,
+        requestId: crypto.randomUUID()
+      })
+      if (!bootstrap.ok || !bootstrap.value.workspace) {
+        throw new Error("Project workspace is unavailable")
+      }
+      const result = await window.yadaw.listPendingRecordings({
+        protocolVersion: 2,
+        requestId: crypto.randomUUID(),
+        target: bootstrap.value.workspace.project
+      })
+      if (!result.ok) throw new Error(result.error.code)
+      return result.value
+    })
     expect(pendingAfterCommit).toHaveLength(1)
     expect(pendingAfterCommit[0]?.assetExists).toBe(true)
-    await page.evaluate((id) => window.yadaw.recoverRecording(id), pendingAfterCommit[0]!.id)
+    await page.evaluate(async (id) => {
+      const bootstrap = await window.yadaw.bootstrap({
+        protocolVersion: 2,
+        requestId: crypto.randomUUID()
+      })
+      if (!bootstrap.ok || !bootstrap.value.workspace) {
+        throw new Error("Project workspace is unavailable")
+      }
+      const result = await window.yadaw.recoverRecording(
+        {
+          protocolVersion: 2,
+          requestId: crypto.randomUUID(),
+          target: bootstrap.value.workspace.project,
+          expectedRevision: bootstrap.value.workspace.revision,
+          mutation: {
+            operationId: crypto.randomUUID(),
+            idempotencyKey: crypto.randomUUID()
+          }
+        },
+        id
+      )
+      if (!result.ok) throw new Error(result.error.code)
+    }, pendingAfterCommit[0]!.id)
     await expect(page.getByRole("dialog")).toBeHidden()
     const importedAssets = await page.evaluate(async () => {
       const assets = await window.yadaw.listProjectAssets()

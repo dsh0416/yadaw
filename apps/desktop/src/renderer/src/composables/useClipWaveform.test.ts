@@ -3,6 +3,7 @@ import { flushPromises, mount } from "@vue/test-utils"
 import { defineComponent, h, nextTick, ref } from "vue"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { WaveformPeakWindow } from "@yadaw/contracts"
+import { useRecordingStore } from "../stores/recording"
 import { useClipWaveform } from "./useClipWaveform"
 
 function response(id: string, frameCount: number): WaveformPeakWindow {
@@ -19,6 +20,47 @@ function response(id: string, frameCount: number): WaveformPeakWindow {
   }
 }
 
+function success(value: WaveformPeakWindow) {
+  return { ok: true, requestId: "request", value, warnings: [] } as const
+}
+
+function attachRecording(id: string): void {
+  useRecordingStore().applyResource({
+    recording: {
+      kind: "recording-session",
+      id,
+      epoch: "main",
+      generation: 1
+    },
+    project: {
+      kind: "project-session",
+      id: "project",
+      epoch: "main",
+      generation: 1
+    },
+    projectGraph: {
+      kind: "project-graph",
+      id: "graph",
+      epoch: "main",
+      generation: 1
+    },
+    audioEngine: {
+      kind: "audio-engine",
+      id: "engine",
+      epoch: "helper",
+      generation: 1
+    },
+    revision: 1,
+    session: {
+      id,
+      startedAt: 1_000,
+      swapPath: `/swap/${id}.bwf`,
+      startFrame: 0,
+      trackIds: ["audio-1"]
+    }
+  })
+}
+
 describe("useClipWaveform", () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -31,10 +73,11 @@ describe("useClipWaveform", () => {
   })
 
   it("polls staging every 50 ms and stops after unmount", async () => {
+    attachRecording("recording")
     const read = vi
       .fn()
-      .mockResolvedValueOnce(response("recording", 2_400))
-      .mockResolvedValue(response("recording", 4_800))
+      .mockResolvedValueOnce(success(response("recording", 2_400)))
+      .mockResolvedValue(success(response("recording", 4_800)))
     window.yadaw.recordingWaveformSnapshot = read
     const component = defineComponent({
       setup() {
@@ -114,7 +157,10 @@ describe("useClipWaveform", () => {
   it("keeps the last live frame until the finalized asset response takes over", async () => {
     const recording = ref(true)
     let resolveAsset!: (value: WaveformPeakWindow) => void
-    window.yadaw.recordingWaveformSnapshot = vi.fn().mockResolvedValue(response("take", 4_800))
+    attachRecording("take")
+    window.yadaw.recordingWaveformSnapshot = vi
+      .fn()
+      .mockResolvedValue(success(response("take", 4_800)))
     window.yadaw.readAssetWaveform = vi.fn().mockImplementation(
       () =>
         new Promise((resolve) => {

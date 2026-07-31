@@ -99,10 +99,11 @@ describe("RecordingService archive cleanup", () => {
       {} as never
     )
 
-    await service.recover(id)
+    const recovered = await service.recover(id)
 
     expect(projects.assetContentHashes).toHaveBeenCalledOnce()
     expect(projects.importLargeObject).not.toHaveBeenCalled()
     expect(operations.upsert).not.toHaveBeenCalled()
+    expect(recovered).toMatchObject({ id, state: "committed", assetExists: true })
   })
 })

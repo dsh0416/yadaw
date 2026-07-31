@@ -1,3 +1,6 @@
+import type { AudioEngineRef, ProjectGraphRef, ProjectSessionRef, RecordingSessionRef } from "./rpc"
+import type { ProjectWorkspaceSnapshot } from "./project"
+
 export interface RecordingSession {
   id: string
   startedAt: number
@@ -8,6 +11,20 @@ export interface RecordingSession {
   audioTrackIds?: string[]
   midiTrackIds?: string[]
   waitingForSync?: boolean
+}
+
+export interface RecordingDependencies {
+  project: ProjectSessionRef
+  projectGraph: ProjectGraphRef
+  audioEngine: AudioEngineRef
+}
+
+export type RecordingStartRequest = RecordingDependencies
+
+export interface RecordingResourceSnapshot extends RecordingDependencies {
+  recording: RecordingSessionRef
+  revision: number
+  session: RecordingSession
 }
 
 export type RecordingLifecycleState =
@@ -53,4 +70,16 @@ export interface PendingRecording {
   assetExists: boolean
   recordedTracks: RecordedTrackAsset[]
   midiTakes?: PendingMidiTake[]
+}
+
+export interface RecordingStopResult {
+  recording: RecordingSessionRef
+  pending: PendingRecording
+  recoverableMedia: boolean
+  workspace: ProjectWorkspaceSnapshot
+}
+
+export interface RecordingRecoveryResult {
+  pending: PendingRecording
+  workspace: ProjectWorkspaceSnapshot
 }

@@ -25,7 +25,10 @@ export const useLifecycleStore = defineStore("lifecycle", () => {
     else if (event.type === "audio") {
       audioRuntimeStore.applyResources(event.resources)
       audioRuntimeStore.applyLifecycleState(event.state)
-    } else recordingStore.applyLifecycleState(event.state)
+    } else {
+      recordingStore.applyResource(event.resource)
+      recordingStore.applyLifecycleState(event.state)
+    }
   }
 
   function applySnapshot(snapshot: DesktopLifecycleSnapshot): void {
@@ -63,6 +66,7 @@ export const useLifecycleStore = defineStore("lifecycle", () => {
         }
         settingsStore.applySnapshot(result.value.settings)
         audioRuntimeStore.applyResources(result.value.audioResources)
+        recordingStore.applyResource(result.value.recordingResource)
         applySnapshot(result.value.lifecycle)
         ready.value = true
       } catch (reason) {

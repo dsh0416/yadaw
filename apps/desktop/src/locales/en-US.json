@@ -122,6 +122,8 @@
     "revisionConflict": "The resource changed before this operation could be applied.",
     "staleResource": "This resource handle is no longer current.",
     "resourceBusy": "The resource is busy with another operation.",
+    "recordingUnavailable": "Recording is unavailable. Check the project and audio engine, then try again.",
+    "recordingMediaRecoverable": "Recording finalization did not complete. The captured media was kept for recovery.",
     "operationCancelled": "The operation was cancelled.",
     "operationOutcomeUnknown": "The operation outcome is unknown. Reconciliation is required.",
     "operationFailed": "The operation could not be completed.",

@@ -107,17 +107,17 @@ const api: YadawDesktopApi = {
     ipcRenderer.invoke(IPC_CHANNELS.midiControlLearning, enabled),
   chooseSwapDirectory: () => ipcRenderer.invoke(IPC_CHANNELS.settingsChooseSwap),
   openSwapDirectory: () => ipcRenderer.invoke(IPC_CHANNELS.settingsOpenSwap),
-  startRecording: () => ipcRenderer.invoke(IPC_CHANNELS.recordingStart),
-  stopRecording: () => ipcRenderer.invoke(IPC_CHANNELS.recordingStop),
-  listPendingRecordings: () => ipcRenderer.invoke(IPC_CHANNELS.recordingPendingList),
-  recoverRecording: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.recordingRecover, id),
-  deletePendingRecording: (id: string) =>
-    ipcRenderer.invoke(IPC_CHANNELS.recordingDeletePending, id),
+  startRecording: (meta, request) => invokeRpc(IPC_CHANNELS.recordingStart, meta, request),
+  stopRecording: (meta) => invokeRpc(IPC_CHANNELS.recordingStop, meta),
+  listPendingRecordings: (meta) => invokeRpc(IPC_CHANNELS.recordingPendingList, meta),
+  recoverRecording: (meta, id: string) => invokeRpc(IPC_CHANNELS.recordingRecover, meta, id),
+  deletePendingRecording: (meta, id: string) =>
+    invokeRpc(IPC_CHANNELS.recordingDeletePending, meta, id),
   readAssetAudio: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.assetAudioRead, id),
   readAssetWaveform: (request: WaveformWindowRequest) =>
     ipcRenderer.invoke(IPC_CHANNELS.assetWaveformRead, request),
-  recordingWaveformSnapshot: (request: WaveformWindowRequest) =>
-    ipcRenderer.invoke(IPC_CHANNELS.recordingWaveformSnapshot, request),
+  recordingWaveformSnapshot: (meta, request: WaveformWindowRequest) =>
+    invokeRpc(IPC_CHANNELS.recordingWaveformSnapshot, meta, request),
   listPlugins: () => ipcRenderer.invoke(IPC_CHANNELS.pluginsList),
   scanPlugins: (request) => ipcRenderer.invoke(IPC_CHANNELS.pluginsScan, request),
   subscribePluginScan: (listener) => {

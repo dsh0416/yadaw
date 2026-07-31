@@ -90,6 +90,7 @@ function closedBootstrap(): ApplicationBootstrapSnapshot {
       transport: null,
       revision: 0
     },
+    recordingResource: null,
     revision: 2,
     lifecycle: {
       revision: 2,

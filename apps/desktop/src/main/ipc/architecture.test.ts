@@ -74,4 +74,25 @@ describe("IPC v2 architecture gate", () => {
     expect(project).not.toContain("ipcMain.handle(IPC_CHANNELS.projectSave")
     expect(preload).toMatch(/invokeRpc\(\s*IPC_CHANNELS\.projectSave/)
   })
+
+  it("keeps recording lifecycle and recovery routes on typed resource RPC", async () => {
+    const main = await readFile(
+      join(sourceRoot, "main", "ipc", "recording-rpc-handlers.ts"),
+      "utf8"
+    )
+    const legacy = await readFile(join(sourceRoot, "main", "ipc", "recording-handlers.ts"), "utf8")
+    const preload = await readFile(join(sourceRoot, "preload", "index.ts"), "utf8")
+    for (const channel of [
+      "recordingStart",
+      "recordingStop",
+      "recordingPendingList",
+      "recordingRecover",
+      "recordingDeletePending",
+      "recordingWaveformSnapshot"
+    ]) {
+      expect(main).toMatch(new RegExp(`registerRpcHandler\\(\\s*IPC_CHANNELS\\.${channel}`))
+      expect(legacy).not.toContain(`ipcMain.handle(IPC_CHANNELS.${channel}`)
+      expect(preload).toMatch(new RegExp(`invokeRpc\\(\\s*IPC_CHANNELS\\.${channel}`))
+    }
+  })
 })

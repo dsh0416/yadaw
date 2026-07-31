@@ -10,10 +10,16 @@ import type {
   DesktopLifecycleEvent,
   DesktopLifecycleSnapshot,
   DesktopSessionRef,
+  ProjectAssetSummary,
+  ProjectGraphSnapshot,
   ProjectLifecycleState,
   ProjectSession,
   ProjectWorkspaceSnapshot,
+  RecordingDependencies,
   RecordingLifecycleState,
+  RecordingResourceSnapshot,
+  RecordingSession,
+  RecordingSessionRef,
   TransportRef
 } from "@yadaw/contracts"
 import type { OperationRegistry } from "./operation-registry"
@@ -69,6 +75,7 @@ export class ApplicationStateStore {
   private project: ProjectLifecycleState
   private audio: AudioLifecycleState
   private recording: RecordingLifecycleState = { status: "idle", error: null }
+  private recordingResource: RecordingResourceSnapshot | null = null
   private workspace: ProjectWorkspaceSnapshot | null = null
   private audioEngine: AudioEngineRef | null = null
   private transport: TransportRef | null = null
@@ -140,8 +147,75 @@ export class ApplicationStateStore {
     })
   }
 
+  recordingResourceSnapshot(): RecordingResourceSnapshot | null {
+    const current = this.recordingResource
+    if (!current) return null
+    for (const dependency of [
+      current.recording,
+      current.project,
+      current.projectGraph,
+      current.audioEngine
+    ]) {
+      if (!this.resources.resolve(dependency).ok) return null
+    }
+    return structuredClone(current)
+  }
+
+  commitRecording(
+    session: RecordingSession,
+    dependencies: RecordingDependencies
+  ): RecordingResourceSnapshot {
+    const candidate = this.resources.create({
+      kind: "recording-session",
+      id: session.id,
+      epoch: dependencies.project.epoch,
+      parent: dependencies.project
+    })
+    if (!candidate.ok) throw new Error(candidate.error.code)
+    const committed = this.resources.commit(candidate.value.ref, { session, dependencies })
+    if (!committed.ok) throw new Error(committed.error.code)
+    this.recordingResource = {
+      recording: committed.value.ref as RecordingSessionRef,
+      project: structuredClone(dependencies.project),
+      projectGraph: structuredClone(dependencies.projectGraph),
+      audioEngine: structuredClone(dependencies.audioEngine),
+      revision: committed.value.revision,
+      session: structuredClone(session)
+    }
+    return this.recordingResourceSnapshot()!
+  }
+
+  async dropRecording(): Promise<RecordingResourceSnapshot | null> {
+    const previous = this.recordingResourceSnapshot()
+    if (previous) await this.resources.drop(previous.recording)
+    this.recordingResource = null
+    return previous
+  }
+
   workspaceSnapshot(): ProjectWorkspaceSnapshot | null {
     return this.workspace ? structuredClone(this.workspace) : null
+  }
+
+  commitWorkspaceProjection(
+    session: ProjectSession,
+    graph: ProjectGraphSnapshot,
+    assets: ProjectAssetSummary[]
+  ): ProjectWorkspaceSnapshot {
+    const current = this.workspace
+    if (!current) throw new Error("project-workspace-unavailable")
+    const updated = this.resources.update(current.projectGraph, current.revision, {
+      graph,
+      assets
+    })
+    if (!updated.ok) throw new Error(updated.error.code)
+    this.workspace = {
+      ...current,
+      revision: updated.value.revision,
+      session: structuredClone(session),
+      graph: structuredClone(graph),
+      assets: structuredClone(assets)
+    }
+    return this.workspaceSnapshot()!
   }
 
   audioResourceSnapshot(): AudioResourceSnapshot {
@@ -156,6 +230,7 @@ export class ApplicationStateStore {
   }
 
   async commitAudioEngine(runtime: AudioRuntimeSnapshot): Promise<AudioResourceSnapshot> {
+    await this.dropRecording()
     if (this.audioEngine) await this.resources.drop(this.audioEngine)
     const engineCandidate = this.resources.create({
       kind: "audio-engine",
@@ -183,6 +258,7 @@ export class ApplicationStateStore {
   }
 
   async dropAudioEngine(): Promise<AudioResourceSnapshot> {
+    await this.dropRecording()
     if (this.audioEngine) await this.resources.drop(this.audioEngine)
     this.audioEngine = null
     this.transport = null
@@ -195,6 +271,10 @@ export class ApplicationStateStore {
 
   async reconcileAudioHost(helperEpoch: string): Promise<AudioResourceSnapshot> {
     if (this.currentAudioHost.epoch === helperEpoch) return this.audioResourceSnapshot()
+    const invalidatedRecording = await this.dropRecording()
+    if (invalidatedRecording) {
+      this.setRecording({ status: "idle", error: null })
+    }
     await this.resources.drop(this.currentAudioHost)
     const candidate = this.resources.create({
       kind: "audio-host",
@@ -264,7 +344,12 @@ export class ApplicationStateStore {
 
   setRecording(state: RecordingLifecycleState): void {
     this.recording = structuredClone(state)
-    this.publish({ type: "recording", revision: 0, state: this.recording })
+    this.publish({
+      type: "recording",
+      revision: 0,
+      state: this.recording,
+      resource: this.recordingResourceSnapshot()
+    })
   }
 
   private publish(event: DesktopLifecycleEvent): void {
