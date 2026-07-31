@@ -1,6 +1,11 @@
 import { parentPort } from "node:worker_threads"
 import type { ProjectDatabase as ProjectDatabaseInstance } from "@yadaw/project-db/node"
-import type { WorkerProgress, WorkerRequest, WorkerResponse } from "@yadaw/project-db/protocol"
+import type {
+  WorkerProgress,
+  WorkerRequest,
+  WorkerResponse,
+  WorkerResult
+} from "@yadaw/project-db/protocol"
 
 if (!parentPort) throw new Error("Project worker requires a parent port")
 const port = parentPort
@@ -26,7 +31,7 @@ function requireDatabase(): ProjectDatabaseInstance {
   return database
 }
 
-async function handle(request: WorkerRequest): Promise<unknown> {
+async function handle(request: WorkerRequest): Promise<WorkerResult> {
   switch (request.type) {
     case "create": {
       await closeCurrentDatabase()
@@ -38,14 +43,14 @@ async function handle(request: WorkerRequest): Promise<unknown> {
         denominator: request.denominator,
         waveformDisplayMode: request.waveformDisplayMode
       })
-      return null
+      return
     }
     case "open":
       await closeCurrentDatabase()
       database = await (
         await loadProjectDatabase()
       ).ProjectDatabase.open(request.dataDir, request.archivePath)
-      return null
+      return
     case "get-configuration":
       return requireDatabase().getConfiguration()
     case "update-configuration":
@@ -76,7 +81,7 @@ async function handle(request: WorkerRequest): Promise<unknown> {
       return requireDatabase().deleteAssets(request.ids)
     case "dump":
       await requireDatabase().dumpTo(request.outputPath)
-      return null
+      return
     case "import-large-object": {
       cancelledOperations.delete(request.operationId)
       try {
@@ -109,13 +114,13 @@ async function handle(request: WorkerRequest): Promise<unknown> {
       )
     case "store-waveform":
       await requireDatabase().storeWaveform(request.assetId, request.waveform)
-      return null
+      return
     case "cancel":
       cancelledOperations.add(request.operationId)
-      return null
+      return
     case "close":
       await closeCurrentDatabase()
-      return null
+      return
   }
 }
 
@@ -124,13 +129,19 @@ let queue = Promise.resolve()
 function respond(request: WorkerRequest): Promise<void> {
   return handle(request).then(
     (value) => {
-      const response: WorkerResponse = { id: request.id, ok: true, value }
+      const response = {
+        id: request.id,
+        type: request.type,
+        ok: true,
+        value
+      } as WorkerResponse
       port.postMessage(response)
     },
     (error: unknown) => {
       const normalized = error instanceof Error ? error : new Error(String(error))
       const response: WorkerResponse = {
         id: request.id,
+        type: request.type,
         ok: false,
         error: {
           message: normalized.message,
@@ -149,7 +160,12 @@ function respond(request: WorkerRequest): Promise<void> {
 port.on("message", (request: WorkerRequest) => {
   if (request.type === "cancel") {
     cancelledOperations.add(request.operationId)
-    const response: WorkerResponse = { id: request.id, ok: true, value: null }
+    const response: WorkerResponse = {
+      id: request.id,
+      type: request.type,
+      ok: true,
+      value: undefined
+    }
     port.postMessage(response)
     return
   }

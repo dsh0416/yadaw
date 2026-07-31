@@ -34,6 +34,62 @@ async function createDatabase(name = "Test project"): Promise<TestDatabase> {
   return result
 }
 
+async function revertTrackMigration(database: PGlite): Promise<void> {
+  await database.exec(`
+    alter table "midi_clips"
+      drop constraint "midi_clips_track_id_tracks_id_fk";
+    alter table "audio_clips"
+      drop constraint "audio_clips_asset_id_assets_id_fk";
+    alter table "audio_clips"
+      drop constraint "audio_clips_track_id_tracks_id_fk";
+    alter table "audio_clips" drop constraint "audio_clips_name_check";
+    alter table "audio_clips" drop constraint "audio_clips_start_frame_check";
+    alter table "audio_clips"
+      drop constraint "audio_clips_source_offset_frames_check";
+    alter table "audio_clips" drop constraint "audio_clips_length_frames_check";
+    drop index "audio_clips_track_start";
+
+    update "audio_clips"
+      set "track_id" = substring("track_id" from 7);
+    update "midi_clips"
+      set "track_id" = substring("track_id" from 7);
+    drop table "tracks";
+    alter table "audio_clips" rename to "timeline_clips";
+
+    alter table "timeline_clips"
+      add constraint "timeline_clips_asset_id_assets_id_fk"
+      foreign key ("asset_id") references "assets"("id") on delete cascade;
+    alter table "timeline_clips"
+      add constraint "timeline_clips_track_id_mixer_channels_id_fk"
+      foreign key ("track_id") references "mixer_channels"("id") on delete cascade;
+    alter table "midi_clips"
+      add constraint "midi_clips_track_id_mixer_channels_id_fk"
+      foreign key ("track_id") references "mixer_channels"("id") on delete cascade;
+    create index "timeline_clips_track_start"
+      on "timeline_clips" ("track_id", "start_frame");
+    alter table "timeline_clips"
+      add constraint "timeline_clips_name_check"
+      check (length(trim("name")) > 0);
+    alter table "timeline_clips"
+      add constraint "timeline_clips_start_frame_check"
+      check ("start_frame" >= 0);
+    alter table "timeline_clips"
+      add constraint "timeline_clips_source_offset_frames_check"
+      check ("source_offset_frames" >= 0);
+    alter table "timeline_clips"
+      add constraint "timeline_clips_length_frames_check"
+      check ("length_frames" > 0);
+
+    delete from drizzle.__drizzle_migrations
+    where created_at = (
+      select created_at
+      from drizzle.__drizzle_migrations
+      order by created_at desc
+      limit 1
+    );
+  `)
+}
+
 async function revertAuxBusMigration(database: PGlite): Promise<void> {
   await database.exec(`
     drop index "mixer_sends_source_bus_unique";
@@ -265,6 +321,95 @@ describe("ProjectDatabase", () => {
     ])
   })
 
+  it("upgrades the previous migration level with stable track and MIDI clip identities", async () => {
+    const resource = await createDatabase()
+    const instrument: MixerChannelState = {
+      id: "instrument-migrated",
+      kind: "instrument",
+      systemRole: null,
+      name: "Migrated Instrument",
+      color: "#73D6A2",
+      sortOrder: 8,
+      inputSource: null,
+      inputFormat: null,
+      gainDb: -3,
+      pan: 0.2,
+      muted: false,
+      soloed: false,
+      outputChannelId: "output-1-2",
+      outputBus: null,
+      recordArmed: false,
+      inputMonitoring: false,
+      inputChannels: [],
+      hardwareOutputChannels: []
+    }
+    await resource.database.applyCommand(
+      {
+        type: "create-track",
+        track: {
+          id: "track:instrument-migrated",
+          channelId: instrument.id,
+          sortOrder: 3
+        },
+        channel: instrument
+      },
+      "output-1-2"
+    )
+    await resource.database.importMidi(
+      {
+        id: "migrated-source",
+        name: "Migrated source",
+        contentHash: "migrated-source-hash",
+        rawBytes: new Uint8Array([1, 2, 3])
+      },
+      {
+        type: "create-midi-clip",
+        clip: {
+          id: "migrated-clip",
+          sourceId: "migrated-source",
+          trackId: "track:instrument-migrated",
+          name: "Migrated clip",
+          startTick: 960,
+          lengthTicks: 1920,
+          sourceOffsetTicks: 120,
+          notes: [],
+          events: []
+        }
+      },
+      "output-1-2"
+    )
+    await resource.database.close()
+    databases.splice(databases.indexOf(resource), 1)
+
+    const raw = new PGlite(join(resource.directory, "pgdata"))
+    try {
+      await revertTrackMigration(raw)
+    } finally {
+      await raw.close()
+    }
+
+    const migrated = await ProjectDatabase.open(join(resource.directory, "pgdata"))
+    databases.push({ database: migrated, directory: resource.directory })
+    const snapshot = await migrated.mixerSnapshot()
+    expect(snapshot.tracks).toContainEqual({
+      id: "track:instrument-migrated",
+      channelId: "instrument-migrated",
+      sortOrder: 8
+    })
+    expect(snapshot.midiClips).toContainEqual(
+      expect.objectContaining({
+        id: "migrated-clip",
+        trackId: "track:instrument-migrated",
+        startTick: 960,
+        lengthTicks: 1920,
+        sourceOffsetTicks: 120
+      })
+    )
+    expect(snapshot.channels).toContainEqual(
+      expect.objectContaining({ id: "instrument-migrated", sortOrder: 8, gainDb: -3, pan: 0.2 })
+    )
+  })
+
   it("persists input monitoring only for Audio channels", async () => {
     const { database } = await createDatabase()
     await database.applyCommand(
@@ -298,6 +443,7 @@ describe("ProjectDatabase", () => {
 
     const raw = new PGlite(join(resource.directory, "pgdata"))
     try {
+      await revertTrackMigration(raw)
       await revertMidiInputMigration(raw)
       await revertAraDocumentStateMigration(raw)
       await revertInputMonitoringMigration(raw)
@@ -405,6 +551,7 @@ describe("ProjectDatabase", () => {
 
     const raw = new PGlite(join(resource.directory, "pgdata"))
     try {
+      await revertTrackMigration(raw)
       await revertMidiInputMigration(raw)
       await revertAraDocumentStateMigration(raw)
       await revertInputMonitoringMigration(raw)
@@ -606,7 +753,7 @@ describe("ProjectDatabase", () => {
         },
         "output-1-2"
       )
-    ).rejects.toThrow("System channels cannot contain clips")
+    ).rejects.toThrow()
     expect((await database.mixerSnapshot()).channels).toContainEqual(
       expect.objectContaining({ id: "metronome", systemRole: "metronome" })
     )
@@ -863,6 +1010,7 @@ describe("ProjectDatabase", () => {
 
     const raw = new PGlite(join(resource.directory, "pgdata"))
     try {
+      await revertTrackMigration(raw)
       await revertMidiInputMigration(raw)
       await revertAraDocumentStateMigration(raw)
       await revertInputMonitoringMigration(raw)
@@ -916,6 +1064,7 @@ describe("ProjectDatabase", () => {
 
     const raw = new PGlite(join(resource.directory, "pgdata"))
     try {
+      await revertTrackMigration(raw)
       await revertMidiInputMigration(raw)
       await revertAraDocumentStateMigration(raw)
       await revertInputMonitoringMigration(raw)

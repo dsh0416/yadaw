@@ -65,3 +65,13 @@ benchmarks remain the comparison set. Structural changes must keep real-time
 allocation tests at zero allocations. A repeatable median regression above five
 percent is investigated before the responsible commit is accepted; generated
 benchmark artifacts are never committed.
+
+## Migration review notes
+
+Migration `0012_tracks_and_audio_clips` contains a reviewed data backfill in
+addition to the Drizzle-generated structural diff. Drizzle can express the new
+schema and table rename, but it cannot derive the required deterministic
+`track:${channelId}` identities or rewrite existing audio/MIDI clip foreign
+keys. The migration therefore inserts one track for each ordinary audio or
+instrument channel and rewrites both clip tables before installing their new
+track foreign keys.

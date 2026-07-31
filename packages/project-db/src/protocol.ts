@@ -26,77 +26,6 @@ export interface DefaultRecordingTrack {
   inputChannels: number[]
 }
 
-export type WorkerRequest =
-  | {
-      id: number
-      type: "create"
-      dataDir: string
-      name: string
-      sampleRate: number
-      numerator: number
-      denominator: number
-      waveformDisplayMode: "separate" | "aggregate"
-    }
-  | { id: number; type: "open"; dataDir: string; archivePath?: string }
-  | { id: number; type: "get-configuration" }
-  | { id: number; type: "update-configuration"; configuration: ProjectConfiguration }
-  | { id: number; type: "list-assets" }
-  | { id: number; type: "mixer-snapshot" }
-  | {
-      id: number
-      type: "apply-project-command"
-      command: ProjectCommand
-      fallbackOutputId: string
-    }
-  | {
-      id: number
-      type: "import-midi"
-      source: MidiSourceInput
-      command: ProjectCommand
-      fallbackOutputId: string
-    }
-  | {
-      id: number
-      type: "rollback-midi"
-      sourceId: string
-      command: ProjectCommand
-      fallbackOutputId: string
-    }
-  | { id: number; type: "save-plugin-states"; states: PluginStateInput[] }
-  | { id: number; type: "asset-content-hashes"; ids: string[] }
-  | { id: number; type: "default-recording-track" }
-  | { id: number; type: "assets-missing-waveform"; cacheVersion: number }
-  | { id: number; type: "delete-assets"; ids: string[] }
-  | { id: number; type: "dump"; outputPath: string }
-  | {
-      id: number
-      type: "import-large-object"
-      filePath: string
-      operationId: string
-      asset: LargeObjectAssetInput
-    }
-  | { id: number; type: "read-large-object"; assetId: string }
-  | {
-      id: number
-      type: "read-waveform"
-      assetId: string
-      startFrame: number
-      endFrame: number
-      maxBuckets: number
-    }
-  | {
-      id: number
-      type: "store-waveform"
-      assetId: string
-      waveform: WaveformAssetInput
-    }
-  | { id: number; type: "cancel"; operationId: string }
-  | { id: number; type: "close" }
-
-export type WorkerResponse =
-  | { id: number; ok: true; value: unknown }
-  | { id: number; ok: false; error: { message: string; stack?: string; code?: string } }
-
 export interface LargeObjectAssetInput {
   id: string
   name: string
@@ -133,6 +62,103 @@ export interface StoredWaveformWindow {
   bucketCount: number
   peaks: Uint8Array
 }
+
+export interface WorkerRequestMap {
+  create: {
+    dataDir: string
+    name: string
+    sampleRate: number
+    numerator: number
+    denominator: number
+    waveformDisplayMode: "separate" | "aggregate"
+  }
+  open: { dataDir: string; archivePath?: string }
+  "get-configuration": Record<never, never>
+  "update-configuration": { configuration: ProjectConfiguration }
+  "list-assets": Record<never, never>
+  "mixer-snapshot": Record<never, never>
+  "apply-project-command": { command: ProjectCommand; fallbackOutputId: string }
+  "import-midi": {
+    source: MidiSourceInput
+    command: ProjectCommand
+    fallbackOutputId: string
+  }
+  "rollback-midi": {
+    sourceId: string
+    command: ProjectCommand
+    fallbackOutputId: string
+  }
+  "save-plugin-states": { states: PluginStateInput[] }
+  "asset-content-hashes": { ids: string[] }
+  "default-recording-track": Record<never, never>
+  "assets-missing-waveform": { cacheVersion: number }
+  "delete-assets": { ids: string[] }
+  dump: { outputPath: string }
+  "import-large-object": {
+    filePath: string
+    operationId: string
+    asset: LargeObjectAssetInput
+  }
+  "read-large-object": { assetId: string }
+  "read-waveform": {
+    assetId: string
+    startFrame: number
+    endFrame: number
+    maxBuckets: number
+  }
+  "store-waveform": { assetId: string; waveform: WaveformAssetInput }
+  cancel: { operationId: string }
+  close: Record<never, never>
+}
+
+export interface WorkerResultMap {
+  create: void
+  open: void
+  "get-configuration": ProjectConfiguration
+  "update-configuration": ProjectConfiguration
+  "list-assets": ProjectAssetSummary[]
+  "mixer-snapshot": ProjectGraphSnapshot
+  "apply-project-command": void
+  "import-midi": void
+  "rollback-midi": void
+  "save-plugin-states": void
+  "asset-content-hashes": AssetContentHash[]
+  "default-recording-track": DefaultRecordingTrack | null
+  "assets-missing-waveform": string[]
+  "delete-assets": void
+  dump: void
+  "import-large-object": number
+  "read-large-object": Uint8Array
+  "read-waveform": StoredWaveformWindow | null
+  "store-waveform": void
+  cancel: void
+  close: void
+}
+
+export type WorkerOperation = keyof WorkerRequestMap
+
+export type WorkerRequest<K extends WorkerOperation = WorkerOperation> = K extends WorkerOperation
+  ? { id: number; type: K } & WorkerRequestMap[K]
+  : never
+
+export type WorkerRequestInput<K extends WorkerOperation> = K extends WorkerOperation
+  ? { type: K } & WorkerRequestMap[K]
+  : never
+
+export type WorkerResult = WorkerResultMap[WorkerOperation]
+
+export type WorkerResponseFor<K extends WorkerOperation> =
+  | { id: number; type: K; ok: true; value: WorkerResultMap[K] }
+  | {
+      id: number
+      type: K
+      ok: false
+      error: { message: string; stack?: string; code?: string }
+    }
+
+export type WorkerResponse = {
+  [K in WorkerOperation]: WorkerResponseFor<K>
+}[WorkerOperation]
 
 export interface WorkerProgress {
   type: "progress"
