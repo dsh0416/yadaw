@@ -90,7 +90,7 @@ package report, `test:coverage:js` rewrites `SF:` paths to be repository
 relative so Codecov can attribute monorepo package coverage correctly. Rust
 coverage ignores vendored `third_party/` sources (also listed under `ignore`
 in `codecov.yml`) so path dependencies such as `ara2-bridge-host` do not
-dilute first-party totals.
+dilute first-party coverage totals.
 
 ## Creating a release
 
