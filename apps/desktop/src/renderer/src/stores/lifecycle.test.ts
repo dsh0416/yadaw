@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { createPinia, setActivePinia } from "pinia"
 import { INITIAL_AUDIO_RUNTIME_SNAPSHOT } from "@yadaw/contracts"
-import type { DesktopLifecycleSnapshot, ProjectSession } from "@yadaw/contracts"
+import type {
+  ApplicationBootstrapSnapshot,
+  DesktopLifecycleSnapshot,
+  ProjectSession
+} from "@yadaw/contracts"
 import { useLifecycleStore } from "./lifecycle"
 import { useAudioRuntimeStore } from "./audioRuntime"
 import { useProjectStore } from "./project"
@@ -33,6 +37,29 @@ function snapshot(revision: number): DesktopLifecycleSnapshot {
   }
 }
 
+function bootstrap(lifecycle: DesktopLifecycleSnapshot): ApplicationBootstrapSnapshot {
+  return {
+    protocolVersion: 2,
+    mainEpoch: "main-epoch",
+    desktopSession: {
+      kind: "desktop-session",
+      id: "desktop",
+      epoch: "main-epoch",
+      generation: 1
+    },
+    applicationSettings: {
+      kind: "application-settings",
+      id: "settings",
+      epoch: "main-epoch",
+      generation: 1
+    },
+    revision: lifecycle.revision,
+    lifecycle,
+    settings: {} as ApplicationBootstrapSnapshot["settings"],
+    workspace: null
+  }
+}
+
 describe("lifecycle store", () => {
   beforeEach(() => setActivePinia(createPinia()))
 
@@ -42,12 +69,11 @@ describe("lifecycle store", () => {
       listener = next
       return vi.fn()
     })
-    let resolveSnapshot!: (value: DesktopLifecycleSnapshot) => void
-    window.yadaw.lifecycleSnapshot = vi.fn(
-      () =>
-        new Promise<DesktopLifecycleSnapshot>((resolve) => {
-          resolveSnapshot = resolve
-        })
+    let resolveSnapshot!: (value: ApplicationBootstrapSnapshot) => void
+    window.yadaw.bootstrap = vi.fn(() =>
+      new Promise<ApplicationBootstrapSnapshot>((resolve) => {
+        resolveSnapshot = resolve
+      }).then((value) => ({ ok: true as const, requestId: "request", value, warnings: [] }))
     )
     const lifecycle = useLifecycleStore()
     const project = useProjectStore()
@@ -61,7 +87,7 @@ describe("lifecycle store", () => {
       runtime: { ...INITIAL_AUDIO_RUNTIME_SNAPSHOT, state: "running", sampleRate: 48_000 },
       error: null
     }
-    resolveSnapshot(olderSnapshot)
+    resolveSnapshot(bootstrap(olderSnapshot))
     await initializing
 
     expect(project.session?.path).toBe("new.yadaw")
@@ -72,7 +98,12 @@ describe("lifecycle store", () => {
   it("disposes its single native subscription", async () => {
     const unsubscribe = vi.fn()
     window.yadaw.subscribeLifecycle = vi.fn(() => unsubscribe)
-    window.yadaw.lifecycleSnapshot = vi.fn().mockResolvedValue(snapshot(0))
+    window.yadaw.bootstrap = vi.fn().mockResolvedValue({
+      ok: true,
+      requestId: "request",
+      value: bootstrap(snapshot(0)),
+      warnings: []
+    })
     const lifecycle = useLifecycleStore()
 
     await lifecycle.initialize()

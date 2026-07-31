@@ -47,6 +47,32 @@ describe("ResourceRegistry", () => {
     })
   })
 
+  it("builds an isolated candidate subtree before committing its parent", () => {
+    const registry = new ResourceRegistry("epoch")
+    const root = committedRoot(registry)
+    const project = registry.create({
+      kind: "project-session",
+      id: "project",
+      parent: root.ref
+    })
+    expect(project.ok).toBe(true)
+    if (!project.ok) throw new Error("test setup failed")
+    const graph = registry.create({
+      kind: "project-graph",
+      id: "graph",
+      parent: project.value.ref
+    })
+    expect(graph.ok).toBe(true)
+    if (!graph.ok) throw new Error("test setup failed")
+
+    expect(registry.resolve(project.value.ref)).toMatchObject({
+      ok: false,
+      error: { code: "stale-resource" }
+    })
+    expect(registry.commit(project.value.ref, { name: "Project" }).ok).toBe(true)
+    expect(registry.commit(graph.value.ref, { revision: 1 }).ok).toBe(true)
+  })
+
   it("atomically invalidates descendants and quarantines only failed cleanup", async () => {
     const registry = new ResourceRegistry("epoch")
     const root = committedRoot(registry)

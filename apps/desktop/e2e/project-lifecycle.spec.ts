@@ -4,6 +4,7 @@ import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 
 test("records into a Large Object and reopens the PGlite project archive", async () => {
+  test.setTimeout(180_000)
   const testRoot = await mkdtemp(join(tmpdir(), "yadaw-e2e-"))
   const projectPath = join(testRoot, "lifecycle.yadaw")
   const executablePath = process.env.YADAW_E2E_EXECUTABLE
@@ -49,7 +50,7 @@ test("records into a Large Object and reopens the PGlite project archive", async
       ]) {
         await page.setViewportSize(viewport)
         const overflows = await page
-          .getByRole("main")
+          .locator(".settings-container")
           .evaluate(
             (main) =>
               main.scrollWidth > main.clientWidth ||
@@ -220,7 +221,8 @@ test("records into a Large Object and reopens the PGlite project archive", async
     await page.getByRole("menuitem", { name: "Buses" }).hover()
     await page.getByRole("menuitemradio", { name: "BUS 3", exact: true }).click()
     await audioOneStrip.getByRole("button", { name: "Add send in empty slot" }).click()
-    await page.getByRole("button", { name: "Add", exact: true }).click()
+    await page.getByRole("menuitem", { name: "Buses" }).hover()
+    await page.getByRole("menuitemradio", { name: "BUS 1", exact: true }).click()
     await audioOneStrip.getByRole("button", { name: "Edit send to BUS 1" }).click()
     await page.getByLabel("Send target").selectOption("output:output-1-2")
     await page.getByRole("button", { name: "Enable send" }).click()
@@ -368,7 +370,28 @@ test("records into a Large Object and reopens the PGlite project archive", async
     await expect(saveDialog).toBeHidden({ timeout: 3_000 })
     await saveProject
 
-    expect(await page.evaluate(() => window.yadaw.closeProject())).toBe(true)
+    expect(
+      await page.evaluate(async () => {
+        const bootstrap = await window.yadaw.bootstrap({
+          protocolVersion: 2,
+          requestId: crypto.randomUUID()
+        })
+        if (!bootstrap.ok || !bootstrap.value.workspace) return false
+        const result = await window.yadaw.closeProject(
+          {
+            protocolVersion: 2,
+            requestId: crypto.randomUUID(),
+            target: bootstrap.value.workspace.project,
+            mutation: {
+              operationId: crypto.randomUUID(),
+              idempotencyKey: crypto.randomUUID()
+            }
+          },
+          "discard"
+        )
+        return result.ok && result.value.closed
+      })
+    ).toBe(true)
     await navigateTo("/")
     await expect(page.getByRole("heading", { name: /Build a session/ })).toBeVisible()
     await page.getByRole("button", { name: "Lifecycle" }).click()

@@ -1,66 +1,87 @@
 import { dialog, ipcMain } from "electron"
-import { basename } from "node:path"
-import { IPC_CHANNELS } from "@yadaw/contracts"
-import type { ProjectCloseDisposition } from "@yadaw/contracts"
+import { IPC_CHANNELS, rpcFailure } from "@yadaw/contracts"
+import type { ProjectCloseDisposition, RpcRequestMeta } from "@yadaw/contracts"
 import type { IpcHandlerContext } from "./context"
 import { t } from "../i18n"
+import { registerRpcHandler } from "./rpc"
 import {
   assertTrustedSender,
   normalizeAudioRuntime,
   validateCreateProject,
   validateProjectConfiguration
 } from "./support"
+
+function validationFailure(meta: RpcRequestMeta, field: string) {
+  return rpcFailure(meta, {
+    code: "validation-failed",
+    category: "validation",
+    outcome: "not-committed",
+    retry: "never",
+    correlationId: `validation-${meta.requestId}`,
+    userMessageKey: "errors.invalidRpcRequest",
+    ...(meta.target ? { resource: meta.target } : {}),
+    details: { type: "validation-failed", field }
+  })
+}
+
+function cancelledFailure(meta: RpcRequestMeta) {
+  return rpcFailure(meta, {
+    code: "operation-cancelled",
+    category: "cancelled",
+    outcome: "not-committed",
+    retry: "never",
+    correlationId: `cancelled-${meta.requestId}`,
+    userMessageKey: "errors.operationCancelled",
+    ...(meta.target ? { resource: meta.target } : {}),
+    details: { type: "operation-cancelled", committed: false }
+  })
+}
+
 export function registerProjectHandlers(context: IpcHandlerContext): void {
   const {
     projects,
     recordings,
     operations,
-    waveforms,
     projectGraph,
     transport,
     lifecycle,
     audioHost: audioHostService,
-    synchronizePluginStates
+    synchronizePluginStates,
+    projectLifecycle
   } = context
-  ipcMain.handle(IPC_CHANNELS.projectCreate, async (event, value: unknown) => {
-    assertTrustedSender(event)
-    lifecycle.beginProject("creating")
-    try {
-      const request = validateCreateProject(value)
-      let path = request.path
-      path ??= process.env.YADAW_TEST_PROJECT_PATH
-      if (!path) {
-        const result = await dialog.showSaveDialog({
-          title: t("dialog.createProject.title"),
-          defaultPath: `${request.name}.yadaw`,
-          filters: [{ name: t("dialog.createProject.filter"), extensions: ["yadaw"] }]
-        })
-        if (result.canceled || !result.filePath) {
-          lifecycle.cancelProject()
-          throw new Error("Project creation cancelled")
-        }
-        path = result.filePath
-      }
-      const created = await projects.create({ ...request, path })
-      const graph = await projectGraph.load()
-      const assets = await projects.listAssets()
-      lifecycle.completeProject(created)
-      return { session: created, graph, assets }
-    } catch (error) {
-      try {
-        await projects.abortOpen()
-      } catch {
-        // Preserve the original create failure; shutdown will terminate a stuck worker.
-      }
-      await projectGraph.clearProject()
-      if (lifecycle.snapshot().project.status === "creating") lifecycle.failProject(error)
-      throw error
-    }
+
+  registerRpcHandler(IPC_CHANNELS.bootstrap, ({ meta }) => {
+    if (meta.target || meta.mutation) return validationFailure(meta, "target")
+    return projectLifecycle.bootstrap()
   })
 
-  ipcMain.handle(IPC_CHANNELS.projectPrepareOpen, async (event, value: unknown) => {
-    assertTrustedSender(event)
-    let path = typeof value === "string" && value.trim() ? value : undefined
+  registerRpcHandler(IPC_CHANNELS.projectCreate, async ({ meta }, value: unknown) => {
+    let request
+    try {
+      request = validateCreateProject(value)
+    } catch {
+      return validationFailure(meta, "request")
+    }
+    let path = request.path ?? process.env.YADAW_TEST_PROJECT_PATH
+    if (!path) {
+      const result = await dialog.showSaveDialog({
+        title: t("dialog.createProject.title"),
+        defaultPath: `${request.name}.yadaw`,
+        filters: [{ name: t("dialog.createProject.filter"), extensions: ["yadaw"] }]
+      })
+      if (result.canceled || !result.filePath) return cancelledFailure(meta)
+      path = result.filePath
+    }
+    return projectLifecycle.create(meta, { ...request, path }, () => undefined)
+  })
+
+  registerRpcHandler(IPC_CHANNELS.projectPrepareOpen, async ({ meta }, value: unknown) => {
+    const targetFailure = projectLifecycle.validateDesktopRead(meta)
+    if (targetFailure) return targetFailure
+    if (value !== undefined && (typeof value !== "string" || !value.trim())) {
+      return validationFailure(meta, "path")
+    }
+    let path = typeof value === "string" ? value : undefined
     if (!path) {
       const result = await dialog.showOpenDialog({
         title: t("dialog.openProject.title"),
@@ -76,102 +97,18 @@ export function registerProjectHandlers(context: IpcHandlerContext): void {
     }
   })
 
-  ipcMain.handle(IPC_CHANNELS.projectOpen, async (event, value: unknown, recoverValue: unknown) => {
-    assertTrustedSender(event)
-    if (typeof value !== "string" || !value.trim()) {
-      throw new TypeError("Project path must be a non-empty string")
-    }
-    if (recoverValue !== undefined && typeof recoverValue !== "boolean") {
-      throw new TypeError("Project recovery choice must be a boolean")
-    }
-    const path = value
-    const recover = recoverValue === true
-    lifecycle.beginProject("opening")
-    try {
-      const operationId = "open-project"
-      const projectName = basename(path).replace(/\.yadaw$/i, "")
-      operations.upsert(
-        {
-          id: operationId,
-          title: t("operation.openingProject"),
-          description: projectName,
-          phase: recover ? "loading-project-database" : "loading-project-archive",
-          state: "running",
-          completedUnits: 0,
-          totalUnits: 5,
-          cancellable: false,
-          message: null,
-          dropoutFrames: 0
-        },
-        true
-      )
-      const opened = await projects.open(path, recover, ({ phase, completedUnits }) => {
-        operations.patch(operationId, { phase, completedUnits }, true)
-      })
-      operations.patch(
-        operationId,
-        {
-          phase: "loading-mixer",
-          completedUnits: 2
-        },
-        true
-      )
-      const graph = await projectGraph.load()
-      operations.patch(
-        operationId,
-        {
-          phase: "loading-project-assets",
-          completedUnits: 3
-        },
-        true
-      )
-      const assets = await projects.listAssets()
-      operations.patch(
-        operationId,
-        {
-          phase: "preparing-waveforms",
-          completedUnits: 4
-        },
-        true
-      )
-      await waveforms.prepareMissing()
-      operations.patch(
-        operationId,
-        {
-          state: "completed",
-          completedUnits: 5
-        },
-        true
-      )
-      lifecycle.completeProject(opened)
-      operations.remove(operationId)
-      return { session: opened, graph, assets }
-    } catch (error) {
-      try {
-        await projects.abortOpen()
-      } catch {
-        // Preserve the original open failure; shutdown will terminate a stuck worker.
+  registerRpcHandler(
+    IPC_CHANNELS.projectOpen,
+    ({ meta }, value: unknown, recoverValue: unknown) => {
+      if (typeof value !== "string" || !value.trim()) {
+        return validationFailure(meta, "path")
       }
-      await projectGraph.clearProject()
-      lifecycle.failProject(error)
-      const activeOperation = lifecycle.snapshot().project.status === "closed"
-      if (activeOperation) {
-        try {
-          operations.patch(
-            "open-project",
-            {
-              state: "failed",
-              message: error instanceof Error ? error.message : String(error)
-            },
-            true
-          )
-        } catch {
-          // The file chooser or recovery prompt may have failed before the operation existed.
-        }
+      if (recoverValue !== undefined && typeof recoverValue !== "boolean") {
+        return validationFailure(meta, "recover")
       }
-      throw error
+      return projectLifecycle.open(meta, value, recoverValue === true, () => undefined)
     }
-  })
+  )
 
   ipcMain.handle(IPC_CHANNELS.projectSave, async (event, value: unknown) => {
     assertTrustedSender(event)
@@ -216,40 +153,30 @@ export function registerProjectHandlers(context: IpcHandlerContext): void {
     }
   })
 
-  ipcMain.handle(IPC_CHANNELS.projectClose, async (event, value: unknown) => {
-    assertTrustedSender(event)
+  registerRpcHandler(IPC_CHANNELS.projectClose, async ({ meta }, value: unknown) => {
     const current = projects.current
-    if (!current) return true
-    lifecycle.beginProject("closing")
-    try {
-      let disposition = value as ProjectCloseDisposition | undefined
-      if (current.dirty && !disposition) {
-        lifecycle.cancelProject()
-        return false
-      }
-      disposition ??= "discard"
-      if (disposition !== "save" && disposition !== "discard" && disposition !== "cancel") {
-        throw new TypeError("Invalid close disposition")
-      }
-      if (disposition === "save") await synchronizePluginStates()
-      const closed = await projects.close(disposition)
-      if (!closed) {
-        lifecycle.cancelProject()
-        return false
-      }
-      await projectGraph.clearProject()
+    if (!current) {
+      return projectLifecycle.close(meta, "discard")
+    }
+    let disposition = value as ProjectCloseDisposition | undefined
+    if (current.dirty && !disposition) return validationFailure(meta, "disposition")
+    disposition ??= "discard"
+    if (disposition !== "save" && disposition !== "discard" && disposition !== "cancel") {
+      return validationFailure(meta, "disposition")
+    }
+    if (disposition === "save") await synchronizePluginStates()
+    const result = await projectLifecycle.close(meta, disposition)
+    if (result.ok && result.value.closed) {
       try {
         await transport.command({ type: "stop" })
       } catch {
         // The audio engine may already be stopped.
       }
-      if (disposition === "save") await recordings.cleanupCommittedForProject(current.path)
-      lifecycle.completeProject(null)
-      return true
-    } catch (error) {
-      lifecycle.failProject(error)
-      throw error
+      if (disposition === "save") {
+        await recordings.cleanupCommittedForProject(current.path)
+      }
     }
+    return result
   })
 
   ipcMain.handle(IPC_CHANNELS.projectAssetsList, async (event) => {

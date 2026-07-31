@@ -491,6 +491,11 @@ impl AudioHostIpcClient {
         self.state.session_epoch as i64
     }
 
+    #[napi(getter)]
+    pub fn helper_epoch(&self) -> String {
+        self.state.session_epoch.to_string()
+    }
+
     #[napi]
     pub fn drain_events(&self) -> Result<Vec<Buffer>> {
         let mut events = self

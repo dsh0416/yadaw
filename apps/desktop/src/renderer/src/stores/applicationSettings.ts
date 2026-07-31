@@ -27,6 +27,11 @@ export const useApplicationSettingsStore = defineStore("application-settings", (
   const resolvedAudioHostRuntime = shallowRef<ResolvedAudioHostRuntimePreferences | null>(null)
   let loadPromise: Promise<void> | null = null
 
+  function applySnapshot(snapshot: ApplicationSettings): void {
+    settings.value = structuredClone(snapshot)
+    error.value = ""
+  }
+
   function load(): Promise<void> {
     if (loadPromise) return loadPromise
     loadPromise = (async () => {
@@ -197,6 +202,7 @@ export const useApplicationSettingsStore = defineStore("application-settings", (
     applyingAudioRuntime,
     applyingSoftwareMonitoring,
     resolvedAudioHostRuntime,
+    applySnapshot,
     load,
     update,
     setTheme,

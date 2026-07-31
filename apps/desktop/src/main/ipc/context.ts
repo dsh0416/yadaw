@@ -8,6 +8,7 @@ import type { OperationService } from "../operation-service"
 import type { PluginCatalogService } from "../plugin-catalog-service"
 import type { ProjectCommandService } from "../project-command-service"
 import type { ProjectGraphService } from "../project-graph-service"
+import type { ProjectLifecycleService } from "../project-lifecycle-service"
 import type { ProjectService } from "../project-service"
 import type { RecordingService } from "../recording-service"
 import type { TransportService } from "../transport-service"
@@ -31,6 +32,7 @@ export interface ApplicationServices {
 }
 
 export interface IpcHandlerContext extends ApplicationServices {
+  projectLifecycle: ProjectLifecycleService
   synchronizePluginStates: () => Promise<void>
   sampleSystemPerformance: () => Promise<SystemPerformanceSnapshot>
 }

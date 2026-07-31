@@ -1,4 +1,5 @@
 import { decode, encode } from "@msgpack/msgpack"
+import { IPC_PROTOCOL_VERSION } from "@yadaw/contracts"
 import type { ProjectGraphSnapshot } from "@yadaw/contracts"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -36,6 +37,17 @@ const fakeHost = vi.hoisted(() => {
     sessionSampleRate = 48_000
     outputSampleRate = 48_000
     graphRevision = 0
+    graphCandidate: {
+      operationId: string
+      projectGraph: Record<string, unknown>
+      baseRevision: number
+      graphRevision: number
+    } | null = null
+    lastGraphOperation: {
+      operationId: string
+      outcome: "committed" | "not-committed"
+      graphRevision: number
+    } | null = null
     transportState = 0
     positionFrames = 0
     latencyMeasurement = {
@@ -128,6 +140,73 @@ const fakeHost = vi.hoisted(() => {
         const update = request.command.update as { revision?: number }
         this.graphRevision = update.revision ?? 0
         return response({ type: "graph-accepted", revision: this.graphRevision })
+      }
+      if (
+        request.command.type === "graph-deployment-snapshot" ||
+        request.command.type === "prepare-graph" ||
+        request.command.type === "activate-graph" ||
+        request.command.type === "abort-graph"
+      ) {
+        const meta = request.command.meta as {
+          requestId: string
+          mutation?: { operationId: string }
+        }
+        const transaction = request.command.request as
+          | {
+              projectGraph: Record<string, unknown>
+              baseRevision: number
+              graphRevision?: number
+            }
+          | undefined
+        let value: Record<string, unknown>
+        if (request.command.type === "prepare-graph" && transaction) {
+          this.graphCandidate = {
+            operationId: meta.mutation?.operationId ?? "",
+            projectGraph: transaction.projectGraph,
+            baseRevision: transaction.baseRevision,
+            graphRevision: transaction.graphRevision ?? 0
+          }
+          value = { type: "prepared", snapshot: this.graphTransactionSnapshot() }
+        } else if (request.command.type === "activate-graph" && this.graphCandidate) {
+          this.graphRevision = this.graphCandidate.graphRevision
+          this.lastGraphOperation = {
+            operationId: this.graphCandidate.operationId,
+            outcome: "committed",
+            graphRevision: this.graphCandidate.graphRevision
+          }
+          this.graphCandidate = null
+          value = { type: "activated", snapshot: this.graphTransactionSnapshot() }
+        } else if (request.command.type === "abort-graph") {
+          const operationId = meta.mutation?.operationId ?? ""
+          const existed = this.graphCandidate?.operationId === operationId
+          if (existed && this.graphCandidate) {
+            this.lastGraphOperation = {
+              operationId,
+              outcome: "not-committed",
+              graphRevision: this.graphCandidate.graphRevision
+            }
+            this.graphCandidate = null
+          }
+          value = {
+            type: "aborted",
+            operationId,
+            existed,
+            snapshot: this.graphTransactionSnapshot()
+          }
+        } else {
+          value = { type: "snapshot", snapshot: this.graphTransactionSnapshot() }
+        }
+        return response({
+          type: "graph-transaction",
+          result: {
+            ok: true,
+            requestId: meta.requestId,
+            ...(meta.mutation ? { operationId: meta.mutation.operationId } : {}),
+            resourceRevision: this.graphRevision,
+            value,
+            warnings: []
+          }
+        })
       }
       if (request.command.type === "transport") {
         const kind = request.command.command?.kind
@@ -238,6 +317,28 @@ const fakeHost = vi.hoisted(() => {
           [2, 4, 2, 0, 0, 0, 0, 0, 0, 0, 0]
         ])
       )
+    }
+
+    get helperEpoch(): string {
+      return "test-session"
+    }
+
+    private graphTransactionSnapshot(): Record<string, unknown> {
+      return {
+        helperEpoch: this.helperEpoch,
+        engine: {
+          kind: "audio-engine",
+          id: "engine",
+          epoch: this.helperEpoch,
+          generation: 1
+        },
+        status: this.graphCandidate ? "prepared" : this.graphRevision > 0 ? "active" : "empty",
+        committedProjectGraph: null,
+        committedRevision: this.graphRevision,
+        observedRevision: this.graphRevision,
+        candidate: this.graphCandidate,
+        lastOperation: this.lastGraphOperation
+      }
     }
 
     drainEvents(): Buffer[] {
@@ -447,6 +548,66 @@ describe("AudioHostService recovery", () => {
     ])
     expect(client.outputSampleRate).toBe(48_000)
     expect(client.sessionSampleRate).toBe(44_100)
+
+    await service.stop()
+  })
+
+  it("does not update the committed recovery graph until candidate activation", async () => {
+    const service = new AudioHostService(
+      "audio-host",
+      "crash-marker",
+      {
+        workerThreads: "auto",
+        maxBlockingThreads: "auto",
+        egressConcurrency: "auto"
+      },
+      undefined,
+      () => {},
+      async () => {}
+    )
+    service.start()
+    const candidate = graph(48_000)
+    const meta = {
+      protocolVersion: IPC_PROTOCOL_VERSION,
+      requestId: "open-project",
+      mutation: {
+        operationId: "open-project-operation",
+        idempotencyKey: "open-project-idempotency"
+      }
+    }
+    const projectGraph = {
+      kind: "project-graph" as const,
+      id: "project:graph",
+      epoch: "main-epoch",
+      generation: 1
+    }
+
+    const prepared = await service.prepareGraphDeployment(
+      meta,
+      projectGraph,
+      1,
+      candidate.project,
+      candidate.runtime
+    )
+    expect(prepared.ok).toBe(true)
+    expect(
+      (
+        service as unknown as {
+          lastGraph: { revision: number } | null
+        }
+      ).lastGraph
+    ).toBeNull()
+    if (!prepared.ok) throw new Error("test setup failed")
+
+    const activated = await service.activateGraphDeployment(prepared.value)
+    expect(activated).toMatchObject({ ok: true, value: { type: "activated" } })
+    expect(
+      (
+        service as unknown as {
+          lastGraph: { revision: number } | null
+        }
+      ).lastGraph?.revision
+    ).toBe(1)
 
     await service.stop()
   })

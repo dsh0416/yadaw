@@ -21,6 +21,7 @@ import type {
   WaveformAssetInput
 } from "@yadaw/project-db/protocol"
 import type { ApplicationSettingsStore } from "./application-settings"
+import type { ProjectAssetReader } from "./asset-materializer"
 import { ProjectWorkerClient } from "./project-worker-client"
 
 interface WorkingCopyState {
@@ -35,6 +36,12 @@ interface WorkingCopyState {
 interface ProjectOpenProgress {
   phase: "loading-project-archive" | "loading-project-database" | "restoring-project-state"
   completedUnits: number
+}
+
+interface ProjectContext {
+  worker: ProjectWorkerClient
+  session: ProjectSession
+  workingRoot: string
 }
 
 function workspaceId(projectPath: string): string {
@@ -82,11 +89,9 @@ async function fileMtime(path: string): Promise<number | null> {
 }
 
 export class ProjectService {
-  private readonly worker = new ProjectWorkerClient(
-    new URL(/* @vite-ignore */ "./project-worker.mjs", import.meta.url)
-  )
-  private session: ProjectSession | null = null
-  private workingRoot: string | null = null
+  private readonly workerUrl = new URL(/* @vite-ignore */ "./project-worker.mjs", import.meta.url)
+  private active: ProjectContext | null = null
+  private candidate: ProjectContext | null = null
 
   constructor(
     private readonly userData: string,
@@ -94,17 +99,27 @@ export class ProjectService {
   ) {}
 
   get current(): ProjectSession | null {
-    return this.session ? structuredClone(this.session) : null
+    return this.active ? structuredClone(this.active.session) : null
   }
 
-  private async writeState(state: WorkingCopyState): Promise<void> {
-    if (!this.workingRoot) throw new Error("No project is open")
-    const path = join(this.workingRoot, "session.json")
+  private requireActive(): ProjectContext {
+    if (!this.active) throw new Error("No project is open")
+    return this.active
+  }
+
+  private requireCandidate(): ProjectContext {
+    if (!this.candidate) throw new Error("No project candidate is prepared")
+    return this.candidate
+  }
+
+  private async writeState(context: ProjectContext, state: WorkingCopyState): Promise<void> {
+    const path = join(context.workingRoot, "session.json")
     await writeFile(`${path}.tmp`, `${JSON.stringify(state, null, 2)}\n`, "utf8")
     await rename(`${path}.tmp`, path)
   }
 
   private async stateFromDatabase(
+    worker: ProjectWorkerClient,
     id: string,
     projectPath: string,
     recoveredWorkingCopy: boolean
@@ -112,40 +127,60 @@ export class ProjectService {
     return {
       id,
       path: projectPath,
-      configuration: await this.worker.getConfiguration(),
+      configuration: await worker.getConfiguration(),
       dirty: recoveredWorkingCopy,
       recoveredWorkingCopy
     }
   }
 
-  async create(request: CreateProjectRequest & { path: string }): Promise<ProjectSession> {
-    if (this.session) throw new Error("Close the current project before creating another")
+  private assertCanPrepare(): void {
+    if (this.active) throw new Error("Close the current project before opening another")
+    if (this.candidate) throw new Error("A project candidate is already being prepared")
+  }
+
+  async prepareCreate(request: CreateProjectRequest & { path: string }): Promise<ProjectSession> {
+    this.assertCanPrepare()
     const configuration = validateConfiguration(request)
     const projectPath = resolve(
       request.path.endsWith(".yadaw") ? request.path : `${request.path}.yadaw`
     )
     const id = workspaceId(projectPath)
-    this.workingRoot = join(this.userData, "workspaces", id)
-    await rm(this.workingRoot, { recursive: true, force: true })
-    await mkdir(this.workingRoot, { recursive: true })
-    await this.worker.create(join(this.workingRoot, "pgdata"), {
-      name: configuration.name,
-      sampleRate: configuration.sampleRate,
-      numerator: configuration.timeSignatureNumerator,
-      denominator: configuration.timeSignatureDenominator,
-      waveformDisplayMode: configuration.waveformDisplayMode
-    })
-    this.session = {
-      id,
-      path: projectPath,
-      configuration,
-      dirty: true,
-      recoveredWorkingCopy: false
+    const context: ProjectContext = {
+      worker: new ProjectWorkerClient(this.workerUrl),
+      workingRoot: join(this.userData, "workspaces", id),
+      session: {
+        id,
+        path: projectPath,
+        configuration,
+        dirty: true,
+        recoveredWorkingCopy: false
+      }
     }
-    await this.persistCurrentState()
-    // Initialize the .yadaw archive immediately so closing or discarding the
-    // session still leaves a loadable project file on disk.
-    return this.save()
+    this.candidate = context
+    try {
+      await rm(context.workingRoot, { recursive: true, force: true })
+      await mkdir(context.workingRoot, { recursive: true })
+      await context.worker.create(join(context.workingRoot, "pgdata"), {
+        name: configuration.name,
+        sampleRate: configuration.sampleRate,
+        numerator: configuration.timeSignatureNumerator,
+        denominator: configuration.timeSignatureDenominator,
+        waveformDisplayMode: configuration.waveformDisplayMode
+      })
+      await this.persistContextState(context)
+      // Initialize the .yadaw archive before commit so a successful create
+      // always returns a durable, loadable project.
+      await this.saveContext(context)
+      return structuredClone(context.session)
+    } catch (error) {
+      await this.abortCandidate()
+      throw error
+    }
+  }
+
+  async create(request: CreateProjectRequest & { path: string }): Promise<ProjectSession> {
+    await this.prepareCreate(request)
+    return this.commitCandidate()
   }
 
   async hasRecoverableWorkingCopy(projectPathValue: string): Promise<boolean> {
@@ -166,16 +201,16 @@ export class ProjectService {
     }
   }
 
-  async open(
+  async prepareOpen(
     projectPathValue: string,
     recoverWorkingCopy = true,
     onProgress?: (progress: ProjectOpenProgress) => void
   ): Promise<ProjectSession> {
-    if (this.session) throw new Error("Close the current project before opening another")
+    this.assertCanPrepare()
     const projectPath = resolve(projectPathValue)
     const id = workspaceId(projectPath)
-    this.workingRoot = join(this.userData, "workspaces", id)
-    const statePath = join(this.workingRoot, "session.json")
+    const workingRoot = join(this.userData, "workspaces", id)
+    const statePath = join(workingRoot, "session.json")
     let previous: WorkingCopyState | null = null
     try {
       previous = JSON.parse(await readFile(statePath, "utf8")) as WorkingCopyState
@@ -194,42 +229,90 @@ export class ProjectService {
       phase: recover ? "loading-project-database" : "loading-project-archive",
       completedUnits: 0
     })
-    if (recover) {
-      await this.worker.open(join(this.workingRoot, "pgdata"))
-    } else {
-      await rm(this.workingRoot, { recursive: true, force: true })
-      await mkdir(this.workingRoot, { recursive: true })
-      await this.worker.open(join(this.workingRoot, "pgdata"), projectPath)
+    const worker = new ProjectWorkerClient(this.workerUrl)
+    try {
+      if (recover) {
+        await worker.open(join(workingRoot, "pgdata"))
+      } else {
+        await rm(workingRoot, { recursive: true, force: true })
+        await mkdir(workingRoot, { recursive: true })
+        await worker.open(join(workingRoot, "pgdata"), projectPath)
+      }
+      onProgress?.({ phase: "restoring-project-state", completedUnits: 1 })
+      const session = await this.stateFromDatabase(worker, id, projectPath, recover)
+      const context = { worker, session, workingRoot }
+      this.candidate = context
+      await this.persistContextState(context)
+      return structuredClone(session)
+    } catch (error) {
+      await worker.terminate().catch(() => undefined)
+      throw error
     }
-    onProgress?.({ phase: "restoring-project-state", completedUnits: 1 })
-    this.session = await this.stateFromDatabase(id, projectPath, recover)
-    await this.persistCurrentState()
-    await this.settings.addRecent(projectPath, this.session.configuration.name)
-    return structuredClone(this.session)
+  }
+
+  async open(
+    projectPathValue: string,
+    recoverWorkingCopy = true,
+    onProgress?: (progress: ProjectOpenProgress) => void
+  ): Promise<ProjectSession> {
+    await this.prepareOpen(projectPathValue, recoverWorkingCopy, onProgress)
+    return this.commitCandidate()
+  }
+
+  commitCandidate(): ProjectSession {
+    const candidate = this.requireCandidate()
+    this.active = candidate
+    this.candidate = null
+    return structuredClone(candidate.session)
+  }
+
+  async abortCandidate(): Promise<void> {
+    const candidate = this.candidate
+    this.candidate = null
+    if (candidate) await candidate.worker.terminate()
+  }
+
+  async quarantineActiveCandidate(): Promise<void> {
+    const active = this.active
+    this.active = null
+    if (active) await active.worker.terminate()
+  }
+
+  candidateMixerSnapshot(): Promise<ProjectGraphSnapshot> {
+    return this.requireCandidate().worker.mixerSnapshot()
+  }
+
+  candidateAssets(): Promise<ProjectAssetSummary[]> {
+    return this.requireCandidate().worker.listAssets()
+  }
+
+  candidateAssetReader(): ProjectAssetReader {
+    const worker = this.requireCandidate().worker
+    return {
+      assetContentHashes: (ids) => worker.assetContentHashes(ids),
+      readAssetAudio: (assetId) => worker.readLargeObject(assetId)
+    }
   }
 
   listAssets(): Promise<ProjectAssetSummary[]> {
-    if (!this.session) throw new Error("No project is open")
-    return this.worker.listAssets()
+    return this.requireActive().worker.listAssets()
   }
 
   async updateConfiguration(configuration: ProjectConfiguration): Promise<ProjectSession> {
-    if (!this.session) throw new Error("No project is open")
-    this.session.configuration = await this.worker.updateConfiguration(
+    const context = this.requireActive()
+    context.session.configuration = await context.worker.updateConfiguration(
       validateConfiguration(configuration)
     )
     await this.completeMutation(true)
-    return structuredClone(this.session)
+    return structuredClone(context.session)
   }
 
   mixerSnapshot(): Promise<ProjectGraphSnapshot> {
-    if (!this.session) throw new Error("No project is open")
-    return this.worker.mixerSnapshot()
+    return this.requireActive().worker.mixerSnapshot()
   }
 
   async applyProjectCommand(command: ProjectCommand, fallbackOutputId: string): Promise<void> {
-    if (!this.session) throw new Error("No project is open")
-    await this.worker.applyProjectCommand(command, fallbackOutputId)
+    await this.requireActive().worker.applyProjectCommand(command, fallbackOutputId)
     await this.completeMutation(commandChangesConfiguration(command))
   }
 
@@ -238,8 +321,7 @@ export class ProjectService {
     command: ProjectCommand,
     fallbackOutputId: string
   ): Promise<void> {
-    if (!this.session) throw new Error("No project is open")
-    await this.worker.importMidi(source, command, fallbackOutputId)
+    await this.requireActive().worker.importMidi(source, command, fallbackOutputId)
     await this.completeMutation(commandChangesConfiguration(command))
   }
 
@@ -248,56 +330,53 @@ export class ProjectService {
     command: ProjectCommand,
     fallbackOutputId: string
   ): Promise<void> {
-    if (!this.session) throw new Error("No project is open")
-    await this.worker.rollbackMidi(sourceId, command, fallbackOutputId)
+    await this.requireActive().worker.rollbackMidi(sourceId, command, fallbackOutputId)
     await this.completeMutation(commandChangesConfiguration(command))
   }
 
   async savePluginStates(states: PluginStateInput[]): Promise<void> {
-    if (!this.session) throw new Error("No project is open")
     if (states.length === 0) return
-    await this.worker.savePluginStates(states)
+    await this.requireActive().worker.savePluginStates(states)
     await this.completeMutation(false)
   }
 
   assetContentHashes(ids: string[]): Promise<AssetContentHash[]> {
-    if (!this.session) throw new Error("No project is open")
-    return this.worker.assetContentHashes(ids)
+    return this.requireActive().worker.assetContentHashes(ids)
   }
 
   defaultRecordingTrack(): Promise<DefaultRecordingTrack | null> {
-    if (!this.session) throw new Error("No project is open")
-    return this.worker.defaultRecordingTrack()
+    return this.requireActive().worker.defaultRecordingTrack()
   }
 
   assetsMissingWaveform(cacheVersion = 1): Promise<string[]> {
-    if (!this.session) throw new Error("No project is open")
-    return this.worker.assetsMissingWaveform(cacheVersion)
+    return this.requireActive().worker.assetsMissingWaveform(cacheVersion)
   }
 
   async deleteAssets(ids: string[]): Promise<void> {
-    if (!this.session) throw new Error("No project is open")
     if (ids.length === 0) return
-    await this.worker.deleteAssets(ids)
+    await this.requireActive().worker.deleteAssets(ids)
     await this.completeMutation(false)
   }
 
   private async refreshSessionConfiguration(): Promise<void> {
-    if (!this.session) return
+    const context = this.active
+    if (!context) return
     const refreshed = await this.stateFromDatabase(
-      this.session.id,
-      this.session.path,
-      this.session.recoveredWorkingCopy
+      context.worker,
+      context.session.id,
+      context.session.path,
+      context.session.recoveredWorkingCopy
     )
-    this.session.configuration = refreshed.configuration
+    context.session.configuration = refreshed.configuration
   }
 
   private async completeMutation(refreshConfiguration: boolean): Promise<void> {
-    if (!this.session) return
+    const context = this.active
+    if (!context) return
     if (refreshConfiguration) await this.refreshSessionConfiguration()
-    const wasDirty = this.session.dirty
-    this.session.dirty = true
-    if (!wasDirty || refreshConfiguration) await this.persistCurrentState()
+    const wasDirty = context.session.dirty
+    context.session.dirty = true
+    if (!wasDirty || refreshConfiguration) await this.persistContextState(context)
   }
 
   async importLargeObject(
@@ -306,24 +385,23 @@ export class ProjectService {
     asset: LargeObjectAssetInput,
     onProgress: (completed: number, total: number) => void
   ): Promise<number> {
-    if (!this.session) throw new Error("No project is open")
+    const context = this.requireActive()
     // Persist the dirty working-copy marker before starting the LO transaction.
     // This keeps the post-commit path free of filesystem work and guarantees that
     // a process exit immediately after commit will offer working-copy recovery.
     await this.markDirty()
-    this.worker.onProgress = (progress) => {
+    context.worker.onProgress = (progress) => {
       if (progress.operationId === operationId) onProgress(progress.completed, progress.total)
     }
     try {
-      return await this.worker.importLargeObject(filePath, operationId, asset)
+      return await context.worker.importLargeObject(filePath, operationId, asset)
     } finally {
-      this.worker.onProgress = null
+      context.worker.onProgress = null
     }
   }
 
   readAssetAudio(assetId: string): Promise<Uint8Array> {
-    if (!this.session) throw new Error("No project is open")
-    return this.worker.readLargeObject(assetId)
+    return this.requireActive().worker.readLargeObject(assetId)
   }
 
   readAssetWaveform(
@@ -332,46 +410,47 @@ export class ProjectService {
     endFrame: number,
     maxBuckets: number
   ): Promise<StoredWaveformWindow | null> {
-    if (!this.session) throw new Error("No project is open")
-    return this.worker.readWaveform(assetId, startFrame, endFrame, maxBuckets)
+    return this.requireActive().worker.readWaveform(assetId, startFrame, endFrame, maxBuckets)
   }
 
   storeAssetWaveform(assetId: string, waveform: WaveformAssetInput): Promise<void> {
-    if (!this.session) throw new Error("No project is open")
-    return this.worker.storeWaveform(assetId, waveform).then(() => this.markDirty())
+    return this.requireActive()
+      .worker.storeWaveform(assetId, waveform)
+      .then(() => this.markDirty())
   }
 
   cancelOperation(operationId: string): Promise<void> {
-    return this.worker.cancel(operationId)
+    return this.requireActive().worker.cancel(operationId)
   }
 
   private async markDirty(): Promise<void> {
-    if (!this.session || this.session.dirty) return
-    this.session.dirty = true
-    await this.persistCurrentState()
+    const context = this.active
+    if (!context || context.session.dirty) return
+    context.session.dirty = true
+    await this.persistContextState(context)
   }
 
-  private async persistCurrentState(): Promise<void> {
-    if (!this.session) return
-    await this.writeState({
-      id: this.session.id,
-      projectPath: this.session.path,
-      configuration: this.session.configuration,
-      dirty: this.session.dirty,
-      archiveMtimeMs: await fileMtime(this.session.path),
+  private async persistContextState(context: ProjectContext): Promise<void> {
+    await this.writeState(context, {
+      id: context.session.id,
+      projectPath: context.session.path,
+      configuration: context.session.configuration,
+      dirty: context.session.dirty,
+      archiveMtimeMs: await fileMtime(context.session.path),
       updatedAt: Date.now()
     })
   }
 
-  async save(path?: string): Promise<ProjectSession> {
-    if (!this.session) throw new Error("No project is open")
-    const originalPath = this.session.path
-    if (path) this.session.path = resolve(path.endsWith(".yadaw") ? path : `${path}.yadaw`)
-    const target = this.session.path
+  private async saveContext(context: ProjectContext, path?: string): Promise<ProjectSession> {
+    const originalPath = context.session.path
+    if (path) {
+      context.session.path = resolve(path.endsWith(".yadaw") ? path : `${path}.yadaw`)
+    }
+    const target = context.session.path
     await mkdir(dirname(target), { recursive: true })
     const temporary = join(dirname(target), `.${basename(target)}.${randomUUID()}.tmp`)
     const backup = `${target}.bak`
-    await this.worker.dump(temporary)
+    await context.worker.dump(temporary)
     const targetExists = (await fileMtime(target)) !== null
     try {
       if (targetExists) {
@@ -388,39 +467,80 @@ export class ProjectService {
       ) {
         await rename(backup, target)
       }
-      this.session.path = originalPath
+      context.session.path = originalPath
       throw error
     }
-    this.session.dirty = false
-    this.session.recoveredWorkingCopy = false
-    await this.persistCurrentState()
-    await this.settings.addRecent(target, this.session.configuration.name)
-    return structuredClone(this.session)
+    context.session.dirty = false
+    context.session.recoveredWorkingCopy = false
+    await this.persistContextState(context)
+    return structuredClone(context.session)
+  }
+
+  async save(path?: string): Promise<ProjectSession> {
+    const context = this.requireActive()
+    const session = await this.saveContext(context, path)
+    await this.settings.addRecent(session.path, session.configuration.name)
+    return session
+  }
+
+  async recordCurrentAsRecent(): Promise<void> {
+    const session = this.requireActive().session
+    await this.settings.addRecent(session.path, session.configuration.name)
+  }
+
+  async prepareClose(disposition: ProjectCloseDisposition): Promise<boolean> {
+    const context = this.active
+    if (!context) return true
+    if (context.session.dirty && disposition === "cancel") return false
+    if (context.session.dirty && disposition === "save") await this.save()
+    await context.worker.close()
+    return true
+  }
+
+  async abortPreparedClose(): Promise<void> {
+    const context = this.active
+    if (!context) return
+    await context.worker.open(join(context.workingRoot, "pgdata"))
+  }
+
+  async commitClose(disposition: ProjectCloseDisposition): Promise<boolean> {
+    const context = this.requireActive()
+    this.active = null
+    let cleanupSucceeded = true
+    try {
+      await context.worker.terminate()
+    } catch {
+      cleanupSucceeded = false
+    }
+    if (disposition === "discard") {
+      try {
+        await rm(join(context.workingRoot, "pgdata"), { recursive: true, force: true })
+        const statePath = join(context.workingRoot, "session.json")
+        await rm(statePath, { force: true })
+      } catch {
+        cleanupSucceeded = false
+      }
+    }
+    return cleanupSucceeded
   }
 
   async close(disposition: ProjectCloseDisposition): Promise<boolean> {
-    if (!this.session) return true
-    if (this.session.dirty && disposition === "cancel") return false
-    if (this.session.dirty && disposition === "save") await this.save()
-    await this.worker.close()
-    if (disposition === "discard" && this.workingRoot) {
-      await rm(join(this.workingRoot, "pgdata"), { recursive: true, force: true })
-      const statePath = join(this.workingRoot, "session.json")
-      await rm(statePath, { force: true })
-    }
-    this.session = null
-    this.workingRoot = null
+    if (!(await this.prepareClose(disposition))) return false
+    if (!this.active) return true
+    await this.commitClose(disposition)
     return true
   }
 
   async abortOpen(): Promise<void> {
-    if (!this.session) return
-    await this.worker.close()
-    this.session = null
-    this.workingRoot = null
+    await this.abortCandidate()
   }
 
   async shutdown(): Promise<void> {
-    await this.worker.terminate()
+    const contexts = [this.candidate, this.active].filter(
+      (context): context is ProjectContext => context !== null
+    )
+    this.candidate = null
+    this.active = null
+    await Promise.allSettled(contexts.map((context) => context.worker.terminate()))
   }
 }

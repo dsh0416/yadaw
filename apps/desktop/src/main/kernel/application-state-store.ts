@@ -9,6 +9,7 @@ import type {
   DesktopSessionRef,
   ProjectLifecycleState,
   ProjectSession,
+  ProjectWorkspaceSnapshot,
   RecordingLifecycleState
 } from "@yadaw/contracts"
 import type { OperationRegistry } from "./operation-registry"
@@ -63,6 +64,7 @@ export class ApplicationStateStore {
   private project: ProjectLifecycleState
   private audio: AudioLifecycleState
   private recording: RecordingLifecycleState = { status: "idle", error: null }
+  private workspace: ProjectWorkspaceSnapshot | null = null
   private readonly listeners = new Set<ApplicationStateListener>()
 
   private constructor(
@@ -116,6 +118,14 @@ export class ApplicationStateStore {
       audio: this.audio,
       recording: this.recording
     })
+  }
+
+  workspaceSnapshot(): ProjectWorkspaceSnapshot | null {
+    return this.workspace ? structuredClone(this.workspace) : null
+  }
+
+  setWorkspace(workspace: ProjectWorkspaceSnapshot | null): void {
+    this.workspace = workspace ? structuredClone(workspace) : null
   }
 
   snapshot(operations: OperationRegistry): ApplicationStateSnapshot {

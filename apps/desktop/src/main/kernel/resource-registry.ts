@@ -81,7 +81,10 @@ export class ResourceRegistry {
   create(options: CreateResourceOptions): KernelResult<ResourceRecord, ResourceRegistryError> {
     if (options.parent) {
       const parent = this.resolveStored(options.parent)
-      if (!parent.ok || parent.value.status !== "committed") {
+      if (
+        !parent.ok ||
+        (parent.value.status !== "candidate" && parent.value.status !== "committed")
+      ) {
         return kernelFailure({
           code: "stale-resource",
           reason: "parent-invalid",

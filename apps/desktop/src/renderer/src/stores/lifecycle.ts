@@ -2,11 +2,14 @@ import { acceptHMRUpdate, defineStore } from "pinia"
 import { shallowRef } from "vue"
 import type { DesktopLifecycleEvent, DesktopLifecycleSnapshot } from "@yadaw/contracts"
 import { useAudioRuntimeStore } from "./audioRuntime"
+import { useApplicationSettingsStore } from "./applicationSettings"
 import { useProjectStore } from "./project"
 import { useRecordingStore } from "./recording"
+import { readMeta, rpcErrorMessage } from "../rpc"
 
 export const useLifecycleStore = defineStore("lifecycle", () => {
   const projectStore = useProjectStore()
+  const settingsStore = useApplicationSettingsStore()
   const audioRuntimeStore = useAudioRuntimeStore()
   const recordingStore = useRecordingStore()
   const ready = shallowRef(false)
@@ -45,7 +48,19 @@ export const useLifecycleStore = defineStore("lifecycle", () => {
       error.value = ""
       unsubscribe ??= window.yadaw.subscribeLifecycle(applyEvent)
       try {
-        applySnapshot(await window.yadaw.lifecycleSnapshot())
+        const result = await window.yadaw.bootstrap(readMeta())
+        if (!result.ok) {
+          error.value = rpcErrorMessage(result.error)
+          ready.value = true
+          return
+        }
+        if (result.value.lifecycle.revision >= revisions.project) {
+          projectStore.applyBootstrap(result.value)
+        } else {
+          projectStore.applyDesktopSession(result.value.desktopSession)
+        }
+        settingsStore.applySnapshot(result.value.settings)
+        applySnapshot(result.value.lifecycle)
         ready.value = true
       } catch (reason) {
         unsubscribe?.()

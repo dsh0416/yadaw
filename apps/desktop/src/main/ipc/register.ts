@@ -12,6 +12,7 @@ import { registerSettingsHandlers } from "./settings-handlers"
 import { registerSystemHandlers } from "./system-handlers"
 import { registerTransportHandlers } from "./transport-handlers"
 import { sampleSystemPerformance } from "./support"
+import { ProjectLifecycleService } from "../project-lifecycle-service"
 
 export function registerIpcHandlers(services: ApplicationServices): void {
   const { plugins, audioHost, projectGraph, settings } = services
@@ -58,6 +59,14 @@ export function registerIpcHandlers(services: ApplicationServices): void {
   }
   const context: IpcHandlerContext = {
     ...services,
+    projectLifecycle: new ProjectLifecycleService(
+      services.projects,
+      services.projectGraph,
+      services.lifecycle,
+      services.operations,
+      services.settings,
+      services.waveforms
+    ),
     synchronizePluginStates,
     sampleSystemPerformance: () => sampleSystemPerformance(settings, audioHost)
   }

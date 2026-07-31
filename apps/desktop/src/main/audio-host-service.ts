@@ -4,6 +4,8 @@ import { graphDiff, readCrashMarker } from "./audio-host-graph-client"
 import { AudioHostRecordingClient } from "./audio-host-recording-client"
 import { AudioHostPluginClient } from "./audio-host-plugin-client"
 import { AudioHostTransportClient } from "./audio-host-transport-client"
+import { AudioHostGraphTransactions } from "./audio-host-graph-transactions"
+import type { PreparedGraphDeployment } from "./audio-host-graph-transactions"
 import type { AudioHostIpcClient } from "@yadaw/audio-host-client"
 import type {
   AudioBackendDescriptor,
@@ -26,6 +28,9 @@ import type {
   PluginInstanceState,
   PluginParameterChange,
   PluginParameterInfo,
+  ProjectGraphRef,
+  RpcRequestMeta,
+  RpcResult,
   RoundTripLatencyMeasurement,
   RoundTripLatencyMeasurementRequest,
   ShortcutPreferences,
@@ -60,6 +65,7 @@ export type {
   AudioHostRecordingResult,
   AudioHostWaveform
 } from "./audio-host-wire"
+export type { PreparedGraphDeployment } from "./audio-host-graph-transactions"
 
 export class AudioHostService {
   private heartbeatInFlight = false
@@ -122,6 +128,27 @@ export class AudioHostService {
     () => this.lastGraph?.project.sampleRate ?? null,
     (value) => this.plugins.coalesceParameter(value)
   )
+
+  private readonly graphTransactions = new AudioHostGraphTransactions({
+    client: () => this.client,
+    request: (command) => this.request(command),
+    loadPlugin: (plugin, sampleRate) =>
+      this.plugins.loadPluginWithRequest(plugin, sampleRate, false),
+    pluginStatus: (instanceId) => this.plugins.status(instanceId),
+    isPluginBypassed: (instanceId) => this.plugins.isBypassed(instanceId),
+    commit: (deployment) => {
+      this.lastGraph = {
+        revision: deployment.graphRevision,
+        project: structuredClone(deployment.project),
+        runtime: structuredClone(deployment.runtime)
+      }
+      this.publishedGraph = {
+        revision: deployment.graphRevision,
+        runtime: structuredClone(deployment.runtime)
+      }
+      this.audioTransport.setChannelIds(deployment.runtime.channels)
+    }
+  })
 
   constructor(
     private readonly executablePath: string,
@@ -339,6 +366,28 @@ export class AudioHostService {
     expectedClient?: AudioHostIpcClient
   ): Promise<PriorityResponse> {
     return this.gateway.priority(command, expectedClient)
+  }
+
+  async prepareGraphDeployment(
+    meta: RpcRequestMeta,
+    projectGraph: ProjectGraphRef,
+    graphRevision: number,
+    project: ProjectGraphSnapshot,
+    runtimeInput: AudioHostGraph
+  ): Promise<RpcResult<PreparedGraphDeployment>> {
+    return this.graphTransactions.prepare(meta, projectGraph, graphRevision, project, runtimeInput)
+  }
+
+  async activateGraphDeployment(
+    deployment: PreparedGraphDeployment
+  ): ReturnType<AudioHostGraphTransactions["activate"]> {
+    return this.graphTransactions.activate(deployment)
+  }
+
+  async abortGraphDeployment(
+    deployment: PreparedGraphDeployment
+  ): ReturnType<AudioHostGraphTransactions["abort"]> {
+    return this.graphTransactions.abort(deployment)
   }
 
   async loadGraph(

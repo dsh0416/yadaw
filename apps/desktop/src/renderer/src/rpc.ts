@@ -1,0 +1,32 @@
+import { IPC_PROTOCOL_VERSION } from "@yadaw/contracts"
+import type { ResourceRef, RpcError, RpcRequestMeta } from "@yadaw/contracts"
+import { i18n } from "./i18n"
+
+function nextId(prefix: string): string {
+  return `${prefix}:${globalThis.crypto.randomUUID()}`
+}
+
+export function readMeta(target?: ResourceRef): RpcRequestMeta {
+  return {
+    protocolVersion: IPC_PROTOCOL_VERSION,
+    requestId: nextId("request"),
+    ...(target ? { target: structuredClone(target) } : {})
+  }
+}
+
+export function mutationMeta(target: ResourceRef, operation: string): RpcRequestMeta {
+  return {
+    protocolVersion: IPC_PROTOCOL_VERSION,
+    requestId: nextId("request"),
+    target: structuredClone(target),
+    mutation: {
+      operationId: nextId(operation),
+      idempotencyKey: nextId("idempotency")
+    }
+  }
+}
+
+export function rpcErrorMessage(error: RpcError): string {
+  const translated = i18n.global.t(error.userMessageKey)
+  return translated === error.userMessageKey ? error.code : translated
+}

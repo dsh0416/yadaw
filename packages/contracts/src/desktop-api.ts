@@ -1,3 +1,4 @@
+import type { ApplicationBootstrapSnapshot, ProjectCloseResult } from "./bootstrap"
 import type {
   ApplicationCommandId,
   ApplicationWindowCommandId,
@@ -62,8 +63,10 @@ import type {
   AudioHostRuntimePreferences
 } from "./settings"
 import type { ShortcutPreferences } from "./shortcuts"
+import type { RpcRequestMeta, RpcResult } from "./rpc"
 
 export const IPC_CHANNELS = {
+  bootstrap: "application:bootstrap",
   engineInfo: "engine:info",
   processGain: "engine:process-gain",
   audioBackends: "audio:list-backends",
@@ -132,6 +135,7 @@ export const IPC_CHANNELS = {
 
 export interface YadawDesktopApi {
   readonly platform: DesktopPlatform
+  bootstrap(meta: RpcRequestMeta): Promise<RpcResult<ApplicationBootstrapSnapshot>>
   engineInfo(): Promise<NativeEngineInfo>
   processGain(request: ProcessGainRequest): Promise<ProcessGainResult>
   listAudioBackends(): Promise<AudioBackendDescriptor[]>
@@ -161,11 +165,24 @@ export interface YadawDesktopApi {
   subscribeApplicationCommands(listener: (command: ApplicationCommandId) => void): () => void
   executeApplicationWindowCommand(command: ApplicationWindowCommandId): Promise<void>
   setApplicationWindowTheme(theme: "light" | "dark"): Promise<void>
-  createProject(request: CreateProjectRequest): Promise<ProjectWorkspaceSnapshot>
-  prepareOpenProject(path?: string): Promise<ProjectOpenPreparation | null>
-  openProject(path: string, recover?: boolean): Promise<ProjectWorkspaceSnapshot>
+  createProject(
+    meta: RpcRequestMeta,
+    request: CreateProjectRequest
+  ): Promise<RpcResult<ProjectWorkspaceSnapshot>>
+  prepareOpenProject(
+    meta: RpcRequestMeta,
+    path?: string
+  ): Promise<RpcResult<ProjectOpenPreparation | null>>
+  openProject(
+    meta: RpcRequestMeta,
+    path: string,
+    recover?: boolean
+  ): Promise<RpcResult<ProjectWorkspaceSnapshot>>
   saveProject(path?: string): Promise<ProjectSession | null>
-  closeProject(disposition?: ProjectCloseDisposition): Promise<boolean>
+  closeProject(
+    meta: RpcRequestMeta,
+    disposition?: ProjectCloseDisposition
+  ): Promise<RpcResult<ProjectCloseResult>>
   listProjectAssets(): Promise<ProjectAssetSummary[]>
   updateProjectConfiguration(configuration: ProjectConfiguration): Promise<ProjectSession>
   getApplicationSettings(): Promise<ApplicationSettings>

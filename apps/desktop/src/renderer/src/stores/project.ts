@@ -1,15 +1,20 @@
 import { acceptHMRUpdate, defineStore } from "pinia"
 import { computed, ref, shallowRef } from "vue"
 import type {
+  ApplicationBootstrapSnapshot,
   CreateProjectRequest,
+  DesktopSessionRef,
   ProjectAssetSummary,
   ProjectConfiguration,
+  ProjectGraphRef,
   ProjectLifecycleState,
   ProjectSession,
+  ProjectSessionRef,
   ProjectWorkspaceSnapshot
 } from "@yadaw/contracts"
 import { useGlobalDialog } from "../composables/useGlobalDialog"
 import { i18n } from "../i18n"
+import { mutationMeta, readMeta, rpcErrorMessage } from "../rpc"
 
 function t(key: string, params?: Record<string, string | number>): string {
   return i18n.global.t(key, params ?? {})
@@ -23,49 +28,90 @@ export const useProjectStore = defineStore("project", () => {
   const { showDialog } = useGlobalDialog()
   const lifecycle = shallowRef<ProjectLifecycleState>({ status: "closed", error: null })
   const projectAssets = ref<ProjectAssetSummary[]>([])
+  const desktopSession = shallowRef<DesktopSessionRef | null>(null)
+  const projectRef = shallowRef<ProjectSessionRef | null>(null)
+  const projectGraphRef = shallowRef<ProjectGraphRef | null>(null)
+  const pendingIntent = shallowRef<"create" | "open" | "save" | "close" | null>(null)
+  const rpcError = shallowRef("")
   let pendingClose: Promise<boolean> | null = null
 
   const session = computed(() => ("session" in lifecycle.value ? lifecycle.value.session : null))
   const busy = computed(
     () =>
+      pendingIntent.value !== null ||
       lifecycle.value.status === "creating" ||
       lifecycle.value.status === "opening" ||
       lifecycle.value.status === "saving" ||
       lifecycle.value.status === "closing"
   )
-  const error = computed(() => lifecycle.value.error ?? "")
+  const error = computed(() => rpcError.value || lifecycle.value.error || "")
   const isOpen = computed(() => session.value !== null)
 
   function applyLifecycleState(state: ProjectLifecycleState): void {
     lifecycle.value = structuredClone(state)
-    if (state.status === "closed") projectAssets.value = []
+    if (state.status === "closed") {
+      projectAssets.value = []
+      projectRef.value = null
+      projectGraphRef.value = null
+    }
+  }
+
+  function applyWorkspace(workspace: ProjectWorkspaceSnapshot): void {
+    projectRef.value = structuredClone(workspace.project)
+    projectGraphRef.value = structuredClone(workspace.projectGraph)
+    lifecycle.value = openState(workspace.session)
+    projectAssets.value = structuredClone(workspace.assets)
+    rpcError.value = ""
+  }
+
+  function applyDesktopSession(ref: DesktopSessionRef): void {
+    desktopSession.value = structuredClone(ref)
+  }
+
+  function applyBootstrap(snapshot: ApplicationBootstrapSnapshot): void {
+    applyDesktopSession(snapshot.desktopSession)
+    applyLifecycleState(snapshot.lifecycle.project)
+    if (snapshot.workspace) applyWorkspace(snapshot.workspace)
   }
 
   async function create(request: CreateProjectRequest): Promise<ProjectWorkspaceSnapshot | null> {
-    if (lifecycle.value.status !== "closed") return null
-    lifecycle.value = { status: "creating", error: null }
-    try {
-      const workspace = await window.yadaw.createProject(request)
-      lifecycle.value = openState(workspace.session)
-      projectAssets.value = structuredClone(workspace.assets)
-      return workspace
-    } catch (reason) {
-      const message = reason instanceof Error ? reason.message : t("errors.unableToCreateProject")
-      lifecycle.value = {
-        status: "closed",
-        error: /cancelled/i.test(message) ? null : message
-      }
+    if (lifecycle.value.status !== "closed" || !desktopSession.value || pendingIntent.value) {
       return null
+    }
+    pendingIntent.value = "create"
+    rpcError.value = ""
+    try {
+      const result = await window.yadaw.createProject(
+        mutationMeta(desktopSession.value, "project-create"),
+        request
+      )
+      if (!result.ok) {
+        if (result.error.category !== "cancelled") rpcError.value = rpcErrorMessage(result.error)
+        return null
+      }
+      applyWorkspace(result.value)
+      return result.value
+    } finally {
+      pendingIntent.value = null
     }
   }
 
   async function open(path?: string): Promise<ProjectWorkspaceSnapshot | null> {
-    if (lifecycle.value.status !== "closed") return null
-    lifecycle.value = { status: "opening", error: null }
+    if (lifecycle.value.status !== "closed" || !desktopSession.value || pendingIntent.value) {
+      return null
+    }
+    pendingIntent.value = "open"
+    rpcError.value = ""
     try {
-      const preparation = await window.yadaw.prepareOpenProject(path)
+      const prepared = await window.yadaw.prepareOpenProject(readMeta(desktopSession.value), path)
+      if (!prepared.ok) {
+        if (prepared.error.category !== "cancelled") {
+          rpcError.value = rpcErrorMessage(prepared.error)
+        }
+        return null
+      }
+      const preparation = prepared.value
       if (!preparation) {
-        lifecycle.value = { status: "closed", error: null }
         return null
       }
       let recover = false
@@ -84,37 +130,38 @@ export const useProjectStore = defineStore("project", () => {
           cancelValue: "cancel"
         })
         if (!choice || choice === "cancel") {
-          lifecycle.value = { status: "closed", error: null }
           return null
         }
         recover = choice === "recover"
       }
-      const workspace = await window.yadaw.openProject(preparation.path, recover)
-      lifecycle.value = openState(workspace.session)
-      projectAssets.value = structuredClone(workspace.assets)
-      return workspace
-    } catch (reason) {
-      const message = reason instanceof Error ? reason.message : t("errors.unableToOpenProject")
-      lifecycle.value = {
-        status: "closed",
-        error: message
+      const result = await window.yadaw.openProject(
+        mutationMeta(desktopSession.value, "project-open"),
+        preparation.path,
+        recover
+      )
+      if (!result.ok) {
+        rpcError.value = rpcErrorMessage(result.error)
+        return null
       }
-      return null
+      applyWorkspace(result.value)
+      return result.value
+    } finally {
+      pendingIntent.value = null
     }
   }
 
   async function save(): Promise<void> {
-    if (lifecycle.value.status !== "open") return
+    if (lifecycle.value.status !== "open" || pendingIntent.value) return
     const previous = lifecycle.value.session
-    lifecycle.value = { status: "saving", session: structuredClone(previous), error: null }
+    pendingIntent.value = "save"
+    rpcError.value = ""
     try {
       const saved = await window.yadaw.saveProject()
       lifecycle.value = openState(saved ?? previous)
     } catch (reason) {
-      lifecycle.value = openState(
-        previous,
-        reason instanceof Error ? reason.message : t("errors.unableToSaveProject")
-      )
+      rpcError.value = reason instanceof Error ? reason.message : t("errors.unableToSaveProject")
+    } finally {
+      pendingIntent.value = null
     }
   }
 
@@ -141,22 +188,23 @@ export const useProjectStore = defineStore("project", () => {
         })) ?? "cancel"
       if (disposition === "cancel") return false
     }
-    lifecycle.value = { status: "closing", session: structuredClone(previous), error: null }
+    const target = projectRef.value
+    if (!target || pendingIntent.value) return false
+    pendingIntent.value = "close"
+    rpcError.value = ""
     try {
-      const closed = await window.yadaw.closeProject(disposition)
-      if (!closed) {
-        lifecycle.value = openState(previous)
+      const result = await window.yadaw.closeProject(
+        mutationMeta(target, "project-close"),
+        disposition
+      )
+      if (!result.ok) {
+        if (result.error.category !== "cancelled") rpcError.value = rpcErrorMessage(result.error)
         return false
       }
-      lifecycle.value = { status: "closed", error: null }
-      projectAssets.value = []
-      return true
-    } catch (reason) {
-      lifecycle.value = openState(
-        previous,
-        reason instanceof Error ? reason.message : t("errors.unableToCloseProject")
-      )
-      return false
+      applyBootstrap(result.value.snapshot)
+      return result.value.closed
+    } finally {
+      pendingIntent.value = null
     }
   }
 
@@ -190,11 +238,18 @@ export const useProjectStore = defineStore("project", () => {
   return {
     lifecycle,
     session,
+    desktopSession,
+    projectRef,
+    projectGraphRef,
+    pendingIntent,
     projectAssets,
     busy,
     error,
     isOpen,
     applyLifecycleState,
+    applyDesktopSession,
+    applyBootstrap,
+    applyWorkspace,
     create,
     open,
     save,

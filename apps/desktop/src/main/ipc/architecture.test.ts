@@ -51,4 +51,14 @@ describe("IPC v2 architecture gate", () => {
       "preload/rpc.ts"
     ])
   })
+
+  it("keeps project lifecycle routes on the typed RPC wrappers", async () => {
+    const main = await readFile(join(sourceRoot, "main", "ipc", "project-handlers.ts"), "utf8")
+    const preload = await readFile(join(sourceRoot, "preload", "index.ts"), "utf8")
+    for (const channel of ["projectCreate", "projectPrepareOpen", "projectOpen", "projectClose"]) {
+      expect(main).toMatch(new RegExp(`registerRpcHandler\\(\\s*IPC_CHANNELS\\.${channel}`))
+      expect(main).not.toContain(`ipcMain.handle(IPC_CHANNELS.${channel}`)
+      expect(preload).toMatch(new RegExp(`invokeRpc\\(\\s*IPC_CHANNELS\\.${channel}`))
+    }
+  })
 })

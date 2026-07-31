@@ -9,15 +9,27 @@ const dump = vi.fn(async (outputPath: string) => {
   await writeFile(outputPath, "yadaw-archive")
 })
 const openProject = vi.fn().mockResolvedValue(undefined)
+const terminatedWorkers: Array<ReturnType<typeof vi.fn>> = []
 
 vi.mock("./project-worker-client", () => ({
   ProjectWorkerClient: class {
+    terminate = vi.fn().mockResolvedValue(undefined)
     create = vi.fn().mockResolvedValue(undefined)
     open = openProject
+    getConfiguration = vi.fn().mockResolvedValue({
+      name: "Recovered",
+      sampleRate: 48_000,
+      timeSignatureNumerator: 4,
+      timeSignatureDenominator: 4,
+      waveformDisplayMode: "separate"
+    })
     dump = dump
     close = vi.fn().mockResolvedValue(undefined)
-    terminate = vi.fn().mockResolvedValue(undefined)
     onProgress = null
+
+    constructor() {
+      terminatedWorkers.push(this.terminate)
+    }
   }
 }))
 
@@ -29,6 +41,7 @@ describe("ProjectService.create", () => {
     service = null
     dump.mockClear()
     openProject.mockReset().mockResolvedValue(undefined)
+    terminatedWorkers.length = 0
   })
 
   it("writes the initial .yadaw archive and returns a clean session", async () => {
@@ -69,5 +82,27 @@ describe("ProjectService.create", () => {
 
     expect([...(await readFile(projectPath))]).toEqual([...contents])
     expect((await stat(projectPath)).mtimeMs).toBe(before.mtimeMs)
+  })
+
+  it("discards a failed candidate worker before a later healthy open", async () => {
+    const userData = await mkdtemp(join(tmpdir(), "yadaw-project-worker-recovery-"))
+    const brokenPath = join(userData, "Broken.yadaw")
+    const healthyPath = join(userData, "Healthy.yadaw")
+    await writeFile(brokenPath, "broken")
+    await writeFile(healthyPath, "healthy")
+    openProject.mockRejectedValueOnce(new Error("database migration failed"))
+    service = new ProjectService(userData, new ApplicationSettingsStore(userData))
+
+    await expect(service.open(brokenPath, false)).rejects.toThrow("database migration failed")
+    expect(service.current).toBeNull()
+    expect(terminatedWorkers[0]).toHaveBeenCalledOnce()
+
+    await expect(service.open(healthyPath, false)).resolves.toMatchObject({
+      path: healthyPath,
+      configuration: { name: "Recovered" }
+    })
+    expect(service.current?.path).toBe(healthyPath)
+    expect(terminatedWorkers).toHaveLength(2)
+    expect(terminatedWorkers[1]).not.toHaveBeenCalled()
   })
 })

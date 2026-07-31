@@ -4,6 +4,42 @@ import type {
   PluginEditorMode,
   PluginAudioMode
 } from "@yadaw/contracts"
+import type { AudioEngineRef, ProjectGraphRef, RpcResult } from "@yadaw/contracts"
+
+export interface GraphCandidateSnapshot {
+  operationId: string
+  projectGraph: ProjectGraphRef
+  baseRevision: number
+  graphRevision: number
+}
+
+export interface GraphOperationSnapshot {
+  operationId: string
+  outcome: "committed" | "not-committed" | "quarantined"
+  graphRevision: number
+}
+
+export interface GraphDeploymentSnapshot {
+  helperEpoch: string
+  engine: AudioEngineRef
+  status: "empty" | "prepared" | "active" | "degraded"
+  committedProjectGraph: ProjectGraphRef | null
+  committedRevision: number
+  observedRevision: number
+  candidate: GraphCandidateSnapshot | null
+  lastOperation: GraphOperationSnapshot | null
+}
+
+export type GraphTransactionValue =
+  | { type: "prepared"; snapshot: GraphDeploymentSnapshot }
+  | { type: "activated"; snapshot: GraphDeploymentSnapshot }
+  | {
+      type: "aborted"
+      operationId: string
+      existed: boolean
+      snapshot: GraphDeploymentSnapshot
+    }
+  | { type: "snapshot"; snapshot: GraphDeploymentSnapshot }
 
 export interface ControlResponse {
   request_id: number
@@ -28,11 +64,13 @@ export interface ControlResponse {
       | "plugin-parameters"
       | "plugin-state"
       | "graph-accepted"
+      | "graph-transaction"
       | "revision-mismatch"
       | "busy"
       | "plugin-editor"
       | "error"
     message?: string
+    result?: RpcResult<GraphTransactionValue>
     callback_generation?: number
     ipc_generation?: number
     tokio_generation?: number

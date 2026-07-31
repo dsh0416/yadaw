@@ -1,4 +1,5 @@
 import type { ProjectGraphSnapshot } from "./mixer"
+import type { ProjectGraphRef, ProjectSessionRef } from "./rpc"
 
 export const PROJECT_SAMPLE_RATES = [44_100, 48_000, 88_200, 96_000, 176_400, 192_000] as const
 export type ProjectSampleRate = (typeof PROJECT_SAMPLE_RATES)[number]
@@ -91,6 +92,9 @@ export interface ProjectAssetSummary {
 }
 
 export interface ProjectWorkspaceSnapshot {
+  project: ProjectSessionRef
+  projectGraph: ProjectGraphRef
+  revision: number
   session: ProjectSession
   graph: ProjectGraphSnapshot
   assets: ProjectAssetSummary[]

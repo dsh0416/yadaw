@@ -190,6 +190,16 @@ callback's observed revision; a wait timeout returns `timeout-unknown`, and the
 caller reconciles the deployment snapshot by operation ID instead of repeating
 activation. Abort is idempotent and drops only the matching candidate.
 
+Project lifecycle is the first production caller of these primitives. A
+candidate project worker supplies an immutable database graph and asset
+snapshot to main; main creates candidate project/graph resource generations,
+materializes and prepares the native graph, and activates it before committing
+the worker and authoritative workspace projection. The Node service updates
+its committed recovery graph only after activation succeeds (or an
+`operationId` snapshot proves that a timed-out activation committed). No failed
+open can become the helper restart source. Close uses the same path with a
+validated silent graph, then invalidates the project resource subtree.
+
 Plug-in editor preferences follow a similarly narrow path. Renderer code only
 calls `openPluginEditor(instanceId)` through the plug-in Pinia store. Electron
 main resolves the class-ID preference and sends it to `audio-host`; the helper

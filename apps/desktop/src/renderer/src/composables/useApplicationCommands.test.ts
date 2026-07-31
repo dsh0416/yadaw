@@ -3,7 +3,12 @@ import { createPinia } from "pinia"
 import { createMemoryHistory, createRouter } from "vue-router"
 import { defineComponent, h } from "vue"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import type { ApplicationCommandId, ProjectSession } from "@yadaw/contracts"
+import type {
+  ApplicationBootstrapSnapshot,
+  ApplicationCommandId,
+  ProjectSession,
+  ProjectWorkspaceSnapshot
+} from "@yadaw/contracts"
 import { useApplicationCommands } from "./useApplicationCommands"
 import { useGlobalDialog } from "./useGlobalDialog"
 import { useProjectStore } from "../stores/project"
@@ -20,6 +25,69 @@ const session: ProjectSession = {
   },
   dirty: false,
   recoveredWorkingCopy: false
+}
+
+function workspace(value: ProjectSession): ProjectWorkspaceSnapshot {
+  return {
+    project: {
+      kind: "project-session",
+      id: value.id,
+      epoch: "main-epoch",
+      generation: 1
+    },
+    projectGraph: {
+      kind: "project-graph",
+      id: `${value.id}:graph`,
+      epoch: "main-epoch",
+      generation: 1
+    },
+    revision: 1,
+    session: value,
+    graph: {
+      sampleRate: value.configuration.sampleRate,
+      tracks: [],
+      channels: [],
+      audioClips: [],
+      sends: [],
+      plugins: [],
+      midiClips: [],
+      tempoMap: {
+        ticksPerQuarter: 960,
+        tempoEvents: [{ tick: 0, beatsPerMinute: 120 }],
+        timeSignatureEvents: [{ tick: 0, numerator: 4, denominator: 4 }]
+      },
+      keySignatureEvents: [{ tick: 0, fifths: 0, mode: "major" }]
+    },
+    assets: []
+  }
+}
+
+function closedBootstrap(): ApplicationBootstrapSnapshot {
+  return {
+    protocolVersion: 2,
+    mainEpoch: "main-epoch",
+    desktopSession: {
+      kind: "desktop-session",
+      id: "desktop",
+      epoch: "main-epoch",
+      generation: 1
+    },
+    applicationSettings: {
+      kind: "application-settings",
+      id: "settings",
+      epoch: "main-epoch",
+      generation: 1
+    },
+    revision: 2,
+    lifecycle: {
+      revision: 2,
+      project: { status: "closed", error: null },
+      audio: {} as ApplicationBootstrapSnapshot["lifecycle"]["audio"],
+      recording: { status: "idle", error: null }
+    },
+    settings: {} as ApplicationBootstrapSnapshot["settings"],
+    workspace: null
+  }
 }
 
 function createHarness() {
@@ -119,13 +187,14 @@ describe("useApplicationCommands", () => {
   it.each(["window.close", "application.quit"] as const)(
     "prompts before %s and continues only after the dirty project is closed",
     async (command) => {
-      window.yadaw.closeProject = vi.fn().mockResolvedValue(true)
-      const { pinia } = createHarness()
-      useProjectStore(pinia).applyLifecycleState({
-        status: "open",
-        session: { ...session, dirty: true },
-        error: null
+      window.yadaw.closeProject = vi.fn().mockResolvedValue({
+        ok: true,
+        requestId: "close",
+        value: { closed: true, snapshot: closedBootstrap() },
+        warnings: []
       })
+      const { pinia } = createHarness()
+      useProjectStore(pinia).applyWorkspace(workspace({ ...session, dirty: true }))
       const { activeDialog, selectDialogAction } = useGlobalDialog()
 
       nativeCommandListener?.(command)
@@ -134,7 +203,13 @@ describe("useApplicationCommands", () => {
       selectDialogAction("discard")
       await flushPromises()
 
-      expect(window.yadaw.closeProject).toHaveBeenCalledWith("discard")
+      expect(window.yadaw.closeProject).toHaveBeenCalledWith(
+        expect.objectContaining({
+          target: expect.objectContaining({ kind: "project-session" }),
+          mutation: expect.any(Object)
+        }),
+        "discard"
+      )
       expect(window.yadaw.executeApplicationWindowCommand).toHaveBeenCalledWith(command)
     }
   )
@@ -143,11 +218,7 @@ describe("useApplicationCommands", () => {
     window.yadaw.prepareOpenProject = vi.fn()
     const { pinia } = createHarness()
     const projectStore = useProjectStore(pinia)
-    projectStore.applyLifecycleState({
-      status: "open",
-      session: { ...session, dirty: true },
-      error: null
-    })
+    projectStore.applyWorkspace(workspace({ ...session, dirty: true }))
     const { activeDialog, dismissDialog } = useGlobalDialog()
 
     nativeCommandListener?.("project.open")

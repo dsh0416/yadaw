@@ -34,6 +34,25 @@ The initial Clippy-enforced Rust scope is `dsp-runtime::protocol` and
 `audio-host::runtime` as their thread/bootstrap paths are converted from
 `expect` to fallible startup transactions.
 
+The project lifecycle is the first completed vertical IPC v2 slice. Renderer
+bootstrap, project create/open preparation, create/open, and close use named
+`RpcResult` routes with explicit desktop or project targets. Each create/open
+attempt owns a fresh candidate project worker. Main does not expose that worker
+through `current`, the resource registry, lifecycle state, or Pinia until its
+database, graph, assets, native graph candidate, and callback publication have
+all succeeded. A failed candidate is terminated; the next attempt necessarily
+uses a new worker and resource generation.
+
+Project open commits in this order: native graph activation, a synchronous main
+commit of the active worker plus `ProjectSessionRef` and `ProjectGraphRef`, and
+one authoritative workspace projection. Waveform generation and recent-project
+bookkeeping run after that commit. Project close prepares and activates a
+silent graph before dropping the project resource subtree. Cleanup failure
+quarantines the dropped session and returns a warning; it cannot restore a
+half-closed project as active. Pinia records only pending intent and applies
+main snapshots/results—it no longer invents create/open/close lifecycle
+transitions locally.
+
 ## Authoritative state
 
 There is one authoritative owner for each fact, not one process that pretends

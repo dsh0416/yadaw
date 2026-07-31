@@ -16,9 +16,11 @@ import type {
   WaveformWindowRequest,
   YadawDesktopApi
 } from "@yadaw/contracts"
+import { invokeRpc } from "./rpc"
 
 const api: YadawDesktopApi = {
   platform: process.platform as YadawDesktopApi["platform"],
+  bootstrap: (meta) => invokeRpc(IPC_CHANNELS.bootstrap, meta),
   engineInfo: () => ipcRenderer.invoke(IPC_CHANNELS.engineInfo),
   processGain: (request: ProcessGainRequest) =>
     ipcRenderer.invoke(IPC_CHANNELS.processGain, request),
@@ -71,14 +73,15 @@ const api: YadawDesktopApi = {
     ipcRenderer.invoke(IPC_CHANNELS.applicationWindowCommand, command),
   setApplicationWindowTheme: (theme) =>
     ipcRenderer.invoke(IPC_CHANNELS.applicationWindowTheme, theme),
-  createProject: (request: CreateProjectRequest) =>
-    ipcRenderer.invoke(IPC_CHANNELS.projectCreate, request),
-  prepareOpenProject: (path?: string) => ipcRenderer.invoke(IPC_CHANNELS.projectPrepareOpen, path),
-  openProject: (path: string, recover?: boolean) =>
-    ipcRenderer.invoke(IPC_CHANNELS.projectOpen, path, recover),
+  createProject: (meta, request: CreateProjectRequest) =>
+    invokeRpc(IPC_CHANNELS.projectCreate, meta, request),
+  prepareOpenProject: (meta, path?: string) =>
+    invokeRpc(IPC_CHANNELS.projectPrepareOpen, meta, path),
+  openProject: (meta, path: string, recover?: boolean) =>
+    invokeRpc(IPC_CHANNELS.projectOpen, meta, path, recover),
   saveProject: (path?: string) => ipcRenderer.invoke(IPC_CHANNELS.projectSave, path),
-  closeProject: (disposition?: ProjectCloseDisposition) =>
-    ipcRenderer.invoke(IPC_CHANNELS.projectClose, disposition),
+  closeProject: (meta, disposition?: ProjectCloseDisposition) =>
+    invokeRpc(IPC_CHANNELS.projectClose, meta, disposition),
   listProjectAssets: () => ipcRenderer.invoke(IPC_CHANNELS.projectAssetsList),
   updateProjectConfiguration: (configuration: ProjectConfiguration) =>
     ipcRenderer.invoke(IPC_CHANNELS.projectConfigurationUpdate, configuration),
