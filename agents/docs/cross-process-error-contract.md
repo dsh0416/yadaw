@@ -14,44 +14,42 @@ affected resource in a state that the authoritative owner can identify,
 reconcile, and either retry or replace. Cross-process exceptions, panics, and
 partially visible mutations are prohibited protocol semantics.
 
-## Migration status
+## Implementation status
 
-This is the required target contract and applies immediately to every new
-cross-process route. Existing renderer/main and main/helper routes still contain
-legacy thrown errors, free-form native error results, ambient resources, and
-non-transactional workflows; their presence is migration debt, not precedent.
+IPC protocol version 2 is implemented across renderer/preload, Electron main,
+project workers, the native addon, and the audio helper. It is a breaking
+same-build protocol: bootstrap rejects a mismatched version or native build
+fingerprint, and no compatibility adapter for version 1 is retained.
 
-- Do not add a new legacy-shaped route.
-- A changed stateful route must migrate end to end unless its migration is
-  explicitly split into tracked preparatory steps.
-- A boundary is not declared compliant until its contract types, resource
-  validation, commit/abort implementation, and failure-injection tests exist.
-- Temporary adapters must preserve the result union and operation ID. They must
-  not unwrap it into an exception before crossing the next boundary.
+- `bootstrap()` is the only targetless state request.
+- Every `YadawDesktopApi` request resolves to `RpcResult<T>`; Electron
+  transport rejection is converted at preload rather than exposed as application
+  control flow.
+- Stateful routes validate an explicit `ResourceRef`, parent generation, and
+  revision before mutation.
+- Main owns `ResourceRegistry`, `OperationRegistry`, and the desired-state
+  projection. Pinia subscribes before bootstrap and reboots its projection on
+  sequence gaps or epoch changes.
+- Project-worker and native-helper failures cross the wire as typed `RpcError`
+  values. Error messages, stacks, JavaScript exceptions, Rust panics, and
+  `ControlResult::Error { message }` are not protocol variants.
+- Project archives and recording recovery use durable journals. Runtime graph,
+  transport, parameter, and telemetry state remains scoped to the owning epoch.
 
-The initial Clippy-enforced Rust scope is `dsp-runtime::protocol` and
-`ipc-transport`. Extend the same production lint set to `audio-host-client` and
-`audio-host::runtime` as their thread/bootstrap paths are converted from
-`expect` to fallible startup transactions.
+Project create/open uses a fresh candidate worker and graph generation. Main
+does not expose the candidate through the resource registry, lifecycle state,
+or Pinia until database open, graph/materialization, native staging, activation,
+and the main commit have succeeded. Failure terminates or quarantines only the
+candidate, so the next healthy open uses a new generation.
 
-The project lifecycle is the first completed vertical IPC v2 slice. Renderer
-bootstrap, project create/open preparation, create/open, and close use named
-`RpcResult` routes with explicit desktop or project targets. Each create/open
-attempt owns a fresh candidate project worker. Main does not expose that worker
-through `current`, the resource registry, lifecycle state, or Pinia until its
-database, graph, assets, native graph candidate, and callback publication have
-all succeeded. A failed candidate is terminated; the next attempt necessarily
-uses a new worker and resource generation.
+Project close prepares and activates a silent graph before dropping the project
+resource subtree. A dirty project requires an explicit `save`, `discard`, or
+`cancel` disposition; the renderer presents that choice before issuing the
+mutation. Cleanup failure cannot restore a half-closed project as active.
 
-Project open commits in this order: native graph activation, a synchronous main
-commit of the active worker plus `ProjectSessionRef` and `ProjectGraphRef`, and
-one authoritative workspace projection. Waveform generation and recent-project
-bookkeeping run after that commit. Project close prepares and activates a
-silent graph before dropping the project resource subtree. Cleanup failure
-quarantines the dropped session and returns a warning; it cannot restore a
-half-closed project as active. Pinia records only pending intent and applies
-main snapshots/results—it no longer invents create/open/close lifecycle
-transitions locally.
+The implementation and verification record is maintained in
+[IPC v2 delivery verification](ipc-v2-delivery.md). New routes must preserve
+these invariants; there is no accepted legacy route shape.
 
 ## Authoritative state
 
@@ -83,13 +81,16 @@ The shared contract has this conceptual shape:
 type RpcResult<T> =
   | {
       ok: true
-      operationId: string
-      resourceRevision: number
+      requestId: string
+      operationId?: string
+      resourceRevision?: number
       value: T
+      warnings: RpcWarning[]
     }
   | {
       ok: false
-      operationId: string
+      requestId: string
+      operationId?: string
       error: RpcError
     }
 
@@ -269,7 +270,9 @@ protocol must deny:
 )]
 ```
 
-The workspace denies `unused_must_use`. Boundary results therefore cannot be
+The strict lint is enabled in `dsp-runtime::protocol`, `ipc-transport`,
+`audio-host-client`, and `audio-host::runtime`. The workspace denies
+`unused_must_use`. Boundary results therefore cannot be
 dropped accidentally. Tests may use `expect`, `unwrap`, or `panic` to express a
 failed assertion; production exceptions require a narrowly scoped `allow` with
 a reason and an update to this document.
