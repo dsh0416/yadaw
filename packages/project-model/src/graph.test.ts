@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import type { ProjectGraphSnapshot, ProjectCommand } from "@yadaw/contracts"
 import { applyToGraph, inverseFor, validateGraph } from "./graph"
+import { projectContentEndSeconds } from "./selectors"
 
 function graph(): ProjectGraphSnapshot {
   return {
@@ -197,6 +198,23 @@ describe("MIDI note project commands", () => {
 })
 
 describe("project graph command characterization", () => {
+  it("selects the transport content end across audio frames and musical ticks", () => {
+    const value = graph()
+    value.audioClips.push({
+      id: "audio-clip",
+      assetId: "asset",
+      trackId: "track:audio",
+      name: "Audio",
+      startFrame: 48_000,
+      sourceOffsetFrames: 0,
+      lengthFrames: 24_000,
+      assetSampleRate: 48_000,
+      assetChannels: 2
+    })
+
+    expect(projectContentEndSeconds(value)).toBe(1.5)
+  })
+
   it("creates and deletes a track with its channel as one invertible aggregate", () => {
     const before = graph()
     const channel = {

@@ -57,6 +57,37 @@ export function meterFor(runtime: MixerRuntimeSnapshot, channelId: string) {
   )
 }
 
+function tickToSeconds(graph: ProjectGraphSnapshot, tick: number): number {
+  const map = graph.tempoMap
+  let seconds = 0
+  let previousTick = 0
+  let beatsPerMinute = map.tempoEvents[0]?.beatsPerMinute ?? 120
+  for (const event of map.tempoEvents.slice(1)) {
+    if (event.tick >= tick) break
+    seconds += (((event.tick - previousTick) / map.ticksPerQuarter) * 60) / beatsPerMinute
+    previousTick = event.tick
+    beatsPerMinute = event.beatsPerMinute
+  }
+  return (
+    seconds +
+    (((Math.max(previousTick, tick) - previousTick) / map.ticksPerQuarter) * 60) / beatsPerMinute
+  )
+}
+
+export function projectContentEndSeconds(graph: ProjectGraphSnapshot): number {
+  const sampleRate = graph.sampleRate
+  const audioEnd = graph.audioClips.reduce(
+    (latest, clip) =>
+      Math.max(latest, sampleRate > 0 ? (clip.startFrame + clip.lengthFrames) / sampleRate : 0),
+    0
+  )
+  const midiEnd = graph.midiClips.reduce(
+    (latest, clip) => Math.max(latest, tickToSeconds(graph, clip.startTick + clip.lengthTicks)),
+    0
+  )
+  return Math.max(audioEnd, midiEnd)
+}
+
 export function availableOutputTargets(
   graph: ProjectGraphSnapshot,
   channelId: string

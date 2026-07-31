@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { MidiImportPreview, ProjectCommandResult } from "@yadaw/contracts"
 import { useMidiImportStore } from "./midiImport"
 import { useMixerStore } from "./mixer"
+import { useProjectHistoryStore } from "./projectHistory"
 import { useTransportStore } from "./transport"
 
 const preview: MidiImportPreview = {
@@ -58,6 +59,7 @@ describe("MIDI import tempo choice", () => {
 
     await store.commit()
 
+    expect(useProjectHistoryStore().canUndo).toBe(true)
     expect(window.yadaw.commitMidiImport).toHaveBeenCalledWith(
       expect.objectContaining({
         importTempoMap: false,

@@ -3,6 +3,7 @@ import { computed, shallowRef } from "vue"
 import type { MidiImportPlan, MidiImportPreview, MidiImportTrackTarget } from "@yadaw/contracts"
 import { secondsToTick } from "../utils/tempoMap"
 import { useMixerStore } from "./mixer"
+import { useProjectHistoryStore } from "./projectHistory"
 import { useTransportStore } from "./transport"
 
 function key(sourceTrack: number, sequence: number): string {
@@ -13,6 +14,7 @@ export type MidiTempoMode = "project" | "midi"
 
 export const useMidiImportStore = defineStore("midi-import", () => {
   const mixerStore = useMixerStore()
+  const projectHistoryStore = useProjectHistoryStore()
   const transportStore = useTransportStore()
   const preview = shallowRef<MidiImportPreview | null>(null)
   const targets = shallowRef<Record<string, MidiImportTrackTarget>>({})
@@ -70,7 +72,7 @@ export const useMidiImportStore = defineStore("midi-import", () => {
     }
     try {
       const result = await window.yadaw.commitMidiImport(plan)
-      mixerStore.graph = result.graph
+      projectHistoryStore.acceptExternalResult(result)
       preview.value = null
       return true
     } catch (reason) {

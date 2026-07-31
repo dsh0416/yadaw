@@ -3,7 +3,7 @@ import { acceptHMRUpdate, defineStore } from "pinia"
 import { computed, shallowRef } from "vue"
 import type { TransportSnapshot } from "@yadaw/contracts"
 import type { ProjectAssetSummary as Asset } from "@yadaw/contracts"
-import { tickToSeconds } from "../utils/tempoMap"
+import { projectContentEndSeconds } from "@yadaw/project-model"
 import { useMixerStore } from "./mixer"
 import { usePluginStore } from "./plugins"
 
@@ -83,14 +83,7 @@ export const useTransportStore = defineStore("transport", () => {
   )
   const playing = computed(() => snapshot.value.state === "playing")
   const recording = computed(() => snapshot.value.state === "recording")
-  const contentEndSeconds = computed(() => {
-    const audioEnd = clips.value.reduce((latest, clip) => Math.max(latest, clip.endSeconds), 0)
-    const midiEnd = mixerStore.graph.midiClips.reduce((latest, clip) => {
-      const endTick = clip.startTick + clip.lengthTicks
-      return Math.max(latest, tickToSeconds(mixerStore.graph.tempoMap, endTick))
-    }, 0)
-    return Math.max(audioEnd, midiEnd)
-  })
+  const contentEndSeconds = computed(() => projectContentEndSeconds(mixerStore.graph))
   const timelineDurationSeconds = computed(() =>
     Math.max(MINIMUM_TIMELINE_SECONDS, contentEndSeconds.value + TIMELINE_TAIL_SECONDS)
   )

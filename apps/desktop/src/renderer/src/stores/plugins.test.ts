@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import { createPinia, setActivePinia } from "pinia"
 import { nextTick } from "vue"
 import type { ProjectGraphSnapshot, PluginDescriptor } from "@yadaw/contracts"
+import { applyToGraph } from "@yadaw/project-model"
 import { useMixerStore } from "./mixer"
 import { usePluginStore } from "./plugins"
 
@@ -200,13 +201,13 @@ describe("plugin store", () => {
 
   it("adds selected effects and instruments through project commands", async () => {
     const mixerStore = useMixerStore()
-    mixerStore.graph = graph()
+    let canonicalGraph = graph()
+    mixerStore.graph = canonicalGraph
     window.yadaw.executeProjectCommand = vi.fn().mockImplementation(async (command) => {
       if (command.type !== "create-plugin") throw new Error("Unexpected project command")
-      const next = structuredClone(mixerStore.graph)
-      next.plugins.push(structuredClone(command.plugin))
+      canonicalGraph = applyToGraph(canonicalGraph, command)
       return {
-        graph: next,
+        graph: canonicalGraph,
         inverse: { type: "delete-plugin" as const, pluginId: command.plugin.id }
       }
     })

@@ -15,6 +15,7 @@ export {
   instrumentTracks,
   meterFor,
   patchMixerGraph,
+  projectContentEndSeconds,
   sendsFor,
   systemChannels
 } from "./selectors"
