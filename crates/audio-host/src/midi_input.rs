@@ -932,6 +932,7 @@ mod tests {
         }
     }
 
+    #[allow(clippy::type_complexity)]
     fn callback_state(
         short_capacity: usize,
         sysex_capacity: usize,
@@ -1383,6 +1384,7 @@ mod tests {
         );
     }
 
+    #[allow(clippy::type_complexity)]
     fn actor_state_with_local_rings(
         preferences: MidiSyncPreferences,
         pending_events: Vec<PendingMidiEvent>,
