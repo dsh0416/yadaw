@@ -963,7 +963,7 @@ describe("project graph validation and command guards", () => {
     )
 
     const badTempo = graph()
-    badTempo.tempoMap.ticksPerQuarter = 480
+    ;(badTempo.tempoMap as { ticksPerQuarter: number }).ticksPerQuarter = 480
     expect(() => validateGraph(badTempo)).toThrow("960 PPQ")
 
     const badKey = graph()
