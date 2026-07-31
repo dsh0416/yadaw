@@ -1,11 +1,15 @@
-import { dialog, ipcMain } from "electron"
+import { dialog } from "electron"
 import { IPC_CHANNELS, rpcFailure, rpcSuccess } from "@yadaw/contracts"
 import type { ProjectCloseDisposition, RpcRequestMeta } from "@yadaw/contracts"
 import type { IpcHandlerContext } from "./context"
 import { t } from "../i18n"
 import { registerRpcHandler } from "./rpc"
 import {
-  assertTrustedSender,
+  validationFailure as resourceValidationFailure,
+  validateMutationTarget,
+  validateReadTarget
+} from "./resource-validation"
+import {
   normalizeAudioRuntime,
   validateCreateProject,
   validateProjectConfiguration
@@ -226,13 +230,19 @@ export function registerProjectHandlers(context: IpcHandlerContext): void {
     return result
   })
 
-  ipcMain.handle(IPC_CHANNELS.projectAssetsList, async (event) => {
-    assertTrustedSender(event)
+  registerRpcHandler(IPC_CHANNELS.projectAssetsList, async ({ meta }) => {
+    const workspace = lifecycle.applicationState.workspaceSnapshot()
+    if (!workspace) return resourceValidationFailure(meta, "target")
+    const invalid = validateReadTarget(meta, workspace.project)
+    if (invalid) return invalid
     return projects.listAssets()
   })
 
-  ipcMain.handle(IPC_CHANNELS.projectConfigurationUpdate, async (event, value: unknown) => {
-    assertTrustedSender(event)
+  registerRpcHandler(IPC_CHANNELS.projectConfigurationUpdate, async ({ meta }, value: unknown) => {
+    const workspace = lifecycle.applicationState.workspaceSnapshot()
+    if (!workspace) return resourceValidationFailure(meta, "target")
+    const invalid = validateMutationTarget(meta, workspace.projectGraph, workspace.revision)
+    if (invalid) return invalid
     lifecycle.assertProjectWriteAllowed()
     const previous = projects.current
     if (!previous) throw new Error("No project is open")
@@ -242,6 +252,15 @@ export function registerProjectHandlers(context: IpcHandlerContext): void {
       sampleRateChanged ||
       configuration.timeSignatureNumerator !== previous.configuration.timeSignatureNumerator ||
       configuration.timeSignatureDenominator !== previous.configuration.timeSignatureDenominator
+    const begun = operations.registry.begin({
+      operationId: meta.mutation!.operationId,
+      idempotencyKey: meta.mutation!.idempotencyKey,
+      target: workspace.projectGraph
+    })
+    if (!begun.ok) return resourceValidationFailure(meta, "operation")
+    if (begun.value.disposition !== "started") {
+      return begun.value.operation.result ?? resourceValidationFailure(meta, "operation")
+    }
     const audioWasRunning = lifecycle.snapshot().audio.status === "running"
     if (sampleRateChanged && audioWasRunning) lifecycle.beginAudio("reconfiguring")
     let configurationUpdated = false
@@ -253,7 +272,14 @@ export function registerProjectHandlers(context: IpcHandlerContext): void {
       if (sampleRateChanged && audioWasRunning && audioHostService) {
         lifecycle.completeAudio(normalizeAudioRuntime(await audioHostService.audioEngineSnapshot()))
       }
-      return session
+      const next = lifecycle.applicationState.commitWorkspaceProjection(
+        session,
+        await projectGraph.snapshot(),
+        await projects.listAssets()
+      )
+      const result = rpcSuccess(meta, session, { resourceRevision: next.revision })
+      operations.registry.finish(meta.mutation!.operationId, "committed", result)
+      return result
     } catch (error) {
       if (!configurationUpdated) {
         if (sampleRateChanged && audioWasRunning && audioHostService) {
@@ -284,7 +310,18 @@ export function registerProjectHandlers(context: IpcHandlerContext): void {
           lifecycle.failAudio(rollbackError, normalizeAudioRuntime(runtime))
         }
       }
-      throw error
+      const result = rpcFailure(meta, {
+        code: "resource-unavailable",
+        category: "unavailable",
+        outcome: "not-committed",
+        retry: "safe",
+        correlationId: `project-config-${meta.requestId}`,
+        userMessageKey: "errors.operationFailed",
+        resource: workspace.projectGraph,
+        details: { type: "resource-unavailable", component: "project-worker", dispatched: true }
+      })
+      operations.registry.finish(meta.mutation!.operationId, "not-committed", result)
+      return result
     }
   })
 }

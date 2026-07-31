@@ -90,7 +90,8 @@ export const useAudioRuntimeStore = defineStore("audio-runtime", () => {
     measuredRoundTripLatencyMs: null,
     failure: null
   })
-  const lastError = computed(() => lifecycle.value.error ?? "")
+  const rpcError = shallowRef("")
+  const lastError = computed(() => lifecycle.value.error ?? rpcError.value)
   const lastUpdatedAt = ref<number | null>(null)
   const audioHostRef = shallowRef<AudioHostRef | null>(null)
   const audioEngineRef = shallowRef<AudioEngineRef | null>(null)
@@ -220,15 +221,30 @@ export const useAudioRuntimeStore = defineStore("audio-runtime", () => {
   async function startRoundTripLatencyMeasurement(
     request: RoundTripLatencyMeasurementRequest
   ): Promise<RoundTripLatencyMeasurement> {
-    const measurement = await window.yadaw.startRoundTripLatencyMeasurement(request)
-    roundTripLatencyMeasurement.value = measurement
-    return measurement
+    const target = audioHostRef.value
+    if (!target) return roundTripLatencyMeasurement.value
+    const result = await window.yadaw.startRoundTripLatencyMeasurement(
+      mutationMeta(target, "audio-round-trip-latency"),
+      request
+    )
+    if (!result.ok) {
+      rpcError.value = rpcErrorMessage(result.error)
+      return roundTripLatencyMeasurement.value
+    }
+    roundTripLatencyMeasurement.value = result.value
+    return result.value
   }
 
   async function refreshRoundTripLatencyMeasurement(): Promise<RoundTripLatencyMeasurement> {
-    const measurement = await window.yadaw.roundTripLatencyMeasurementSnapshot()
-    roundTripLatencyMeasurement.value = measurement
-    return measurement
+    const target = audioHostRef.value
+    if (!target) return roundTripLatencyMeasurement.value
+    const result = await window.yadaw.roundTripLatencyMeasurementSnapshot(readMeta(target))
+    if (!result.ok) {
+      rpcError.value = rpcErrorMessage(result.error)
+      return roundTripLatencyMeasurement.value
+    }
+    roundTripLatencyMeasurement.value = result.value
+    return result.value
   }
 
   function applyLifecycleState(state: AudioLifecycleState): void {

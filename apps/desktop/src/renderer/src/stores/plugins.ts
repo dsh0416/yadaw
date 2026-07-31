@@ -7,7 +7,8 @@ import type {
   PluginParameterChange,
   PluginParameterInfo,
   PluginRuntimeStatus,
-  PluginScanEvent
+  PluginScanEvent,
+  RpcEvent
 } from "@yadaw/contracts"
 import { pluginDescriptorKey } from "@yadaw/contracts"
 import {
@@ -42,6 +43,8 @@ export const usePluginStore = defineStore("plugins", () => {
   let catalogFailureIds = new Set<string>()
   let unsubscribe: (() => void) | null = null
   let parameterSequence = 0n
+  let scanSourceEpoch: string | null = null
+  let scanSequence = 0
 
   const compatibleInstruments = computed(() =>
     catalog.value.plugins.filter(
@@ -125,10 +128,23 @@ export const usePluginStore = defineStore("plugins", () => {
     }
   }
 
+  function receiveScanEvent(event: RpcEvent<PluginScanEvent>): void {
+    const gap =
+      scanSourceEpoch !== null &&
+      (event.sourceEpoch !== scanSourceEpoch || event.sequence !== scanSequence + 1)
+    scanSourceEpoch = event.sourceEpoch
+    scanSequence = event.sequence
+    if (gap) {
+      void load()
+      return
+    }
+    handleScanEvent(event.payload)
+  }
+
   async function load(): Promise<void> {
     loading.value = true
     error.value = ""
-    unsubscribe ??= window.yadaw.subscribePluginScan(handleScanEvent)
+    unsubscribe ??= window.yadaw.subscribePluginScan(receiveScanEvent)
     const target = projectStore.desktopSession
     if (!target) {
       loading.value = false
@@ -422,6 +438,8 @@ export const usePluginStore = defineStore("plugins", () => {
     error.value = ""
   }
 
+  scanSourceEpoch = null
+  scanSequence = 0
   onScopeDispose(() => {
     unsubscribe?.()
     unsubscribe = null

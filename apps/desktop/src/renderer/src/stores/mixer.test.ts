@@ -7,6 +7,7 @@ import type {
   RpcResult
 } from "@yadaw/contracts"
 import { useProjectStore } from "./project"
+import { useAudioRuntimeStore } from "./audioRuntime"
 import { useMixerStore } from "./mixer"
 
 function graph(): ProjectGraphSnapshot {
@@ -202,6 +203,28 @@ describe("mixer store", () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     useProjectStore().applyWorkspace(workspace(graph()))
+    useAudioRuntimeStore().applyResources({
+      host: {
+        kind: "audio-host",
+        id: "audio-host",
+        epoch: "helper-epoch",
+        generation: 1
+      },
+      engine: {
+        kind: "audio-engine",
+        id: "audio-engine",
+        epoch: "helper-epoch",
+        generation: 1
+      },
+      transport: null,
+      midiRuntime: {
+        kind: "midi-runtime",
+        id: "midi-runtime",
+        epoch: "helper-epoch",
+        generation: 1
+      },
+      revision: 0
+    })
   })
 
   it("records one history entry and applies the inverse on undo", async () => {
@@ -522,18 +545,20 @@ describe("mixer store", () => {
   })
 
   it("clears latched meter clipping in the UI and native engine", async () => {
-    window.yadaw.clearMixerMeterClips = vi.fn().mockResolvedValue({
-      capturedAt: 2,
-      meters: [
-        {
-          channelId: "audio",
-          preFaderPeak: [1, 1],
-          postFaderPeak: [1, 1],
-          heldPeak: [0, 0],
-          clipped: false
-        }
-      ]
-    })
+    window.yadaw.clearMixerMeterClips = vi.fn().mockResolvedValue(
+      success({
+        capturedAt: 2,
+        meters: [
+          {
+            channelId: "audio",
+            preFaderPeak: [1, 1],
+            postFaderPeak: [1, 1],
+            heldPeak: [0, 0],
+            clipped: false
+          }
+        ]
+      })
+    )
     const mixer = useMixerStore()
     mixer.runtime = {
       capturedAt: 1,

@@ -1,5 +1,5 @@
 import { BrowserWindow } from "electron"
-import { IPC_CHANNELS } from "@yadaw/contracts"
+import { IPC_CHANNELS, IPC_PROTOCOL_VERSION } from "@yadaw/contracts"
 import type { OperationEvent, OperationSnapshot, ResourceRef, RpcResult } from "@yadaw/contracts"
 import { OperationRegistry } from "./kernel/operation-registry"
 import type { OperationRecord } from "./kernel/operation-registry"
@@ -76,6 +76,7 @@ export class OperationService {
   private readonly operations = new Map<string, OperationSnapshot>()
   private readonly cancelHandlers = new Map<string, () => Promise<void>>()
   private readonly lastPublished = new Map<string, number>()
+  private eventSequence = 0
 
   constructor(
     readonly registry = new OperationRegistry(),
@@ -92,8 +93,16 @@ export class OperationService {
     if (!force && now - last < 100) return
     this.lastPublished.set(operation.id, now)
     const event: OperationEvent = { type: "upsert", operation: structuredClone(operation) }
+    this.eventSequence += 1
     for (const window of BrowserWindow.getAllWindows()) {
-      window.webContents.send(IPC_CHANNELS.operationEvent, event)
+      window.webContents.send(IPC_CHANNELS.operationEvent, {
+        protocolVersion: IPC_PROTOCOL_VERSION,
+        sourceEpoch: this.defaultTarget.epoch,
+        sequence: this.eventSequence,
+        resourceRevision: this.eventSequence,
+        operationId: operation.id,
+        payload: event
+      })
     }
   }
 
@@ -171,8 +180,16 @@ export class OperationService {
       this.registry.acknowledge(id)
     }
     const event: OperationEvent = { type: "remove", operation }
+    this.eventSequence += 1
     for (const window of BrowserWindow.getAllWindows()) {
-      window.webContents.send(IPC_CHANNELS.operationEvent, event)
+      window.webContents.send(IPC_CHANNELS.operationEvent, {
+        protocolVersion: IPC_PROTOCOL_VERSION,
+        sourceEpoch: this.defaultTarget.epoch,
+        sequence: this.eventSequence,
+        resourceRevision: this.eventSequence,
+        operationId: operation.id,
+        payload: event
+      })
     }
   }
 }

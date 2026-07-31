@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { WaveformWindowRequest } from "@yadaw/contracts"
 import { useWaveformStore } from "./waveform"
 
+import { useProjectStore } from "./project"
 function response(request: WaveformWindowRequest) {
   return {
     ...request,
@@ -18,7 +19,18 @@ function response(request: WaveformWindowRequest) {
 describe("waveform store", () => {
   beforeEach(() => {
     setActivePinia(createPinia())
-    window.yadaw.readAssetWaveform = vi.fn(async (request) => response(request))
+    useProjectStore().projectRef = {
+      kind: "project-session",
+      id: "project",
+      epoch: "project-epoch",
+      generation: 1
+    }
+    window.yadaw.readAssetWaveform = vi.fn(async (_meta, request) => ({
+      ok: true as const,
+      requestId: "waveform",
+      value: response(request),
+      warnings: []
+    }))
   })
 
   it("reuses asset windows and evicts the least-recently-used entry at its bound", async () => {

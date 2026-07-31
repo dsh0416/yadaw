@@ -30,23 +30,13 @@ async function filesContaining(pattern: RegExp): Promise<string[]> {
 describe("IPC v2 architecture gate", () => {
   it("allows direct ipcMain.handle only in frozen legacy handlers and the v2 wrapper", async () => {
     await expect(filesContaining(/\bipcMain\.handle\s*\(/)).resolves.toEqual([
-      "main/ipc/audio-handlers.ts",
-      "main/ipc/diagnostic-handlers.ts",
-      "main/ipc/mixer-handlers.ts",
-      "main/ipc/project-handlers.ts",
-      "main/ipc/recording-handlers.ts",
       "main/ipc/rpc.ts",
-      "main/ipc/settings-handlers.ts",
-      "main/ipc/system-handlers.ts",
-      "main/startup.ts"
+      "main/ipc/settings-handlers.ts"
     ])
   })
 
   it("allows direct ipcRenderer.invoke only in the frozen preload and the v2 wrapper", async () => {
-    await expect(filesContaining(/\bipcRenderer\.invoke\s*\(/)).resolves.toEqual([
-      "preload/index.ts",
-      "preload/rpc.ts"
-    ])
+    await expect(filesContaining(/\bipcRenderer\.invoke\s*\(/)).resolves.toEqual(["preload/rpc.ts"])
   })
 
   it("keeps project lifecycle routes on the typed RPC wrappers", async () => {

@@ -1,4 +1,3 @@
-import { ipcMain } from "electron"
 import { IPC_CHANNELS, rpcFailure, rpcSuccess } from "@yadaw/contracts"
 import type {
   MixerParameterPreview,
@@ -8,7 +7,11 @@ import type {
 } from "@yadaw/contracts"
 import type { IpcHandlerContext } from "./context"
 import { registerRpcHandler } from "./rpc"
-import { assertTrustedSender } from "./support"
+import {
+  validationFailure,
+  validateMutationTarget,
+  validateReadTarget
+} from "./resource-validation"
 
 function sameRef(left: ResourceRef | undefined, right: ResourceRef): boolean {
   return (
@@ -164,21 +167,30 @@ export function registerMixerHandlers(context: IpcHandlerContext): void {
     return projectCommands.execute(meta, command)
   })
 
-  ipcMain.handle(IPC_CHANNELS.mixerPreview, (event, value: unknown) => {
-    assertTrustedSender(event)
+  registerRpcHandler(IPC_CHANNELS.mixerPreview, ({ meta }, value: unknown) => {
+    const workspace = lifecycle.applicationState.workspaceSnapshot()
+    if (!workspace) return validationFailure(meta, "target")
+    const invalid = validateMutationTarget(meta, workspace.projectGraph, workspace.revision)
+    if (invalid) return invalid
     if (!value || typeof value !== "object") throw new TypeError("Mixer preview must be an object")
     lifecycle.assertMixerPreviewAllowed()
-    return mixerRuntime.preview(value as MixerParameterPreview)
+    return mixerRuntime.preview(value as MixerParameterPreview).then(() => undefined)
   })
 
-  ipcMain.handle(IPC_CHANNELS.mixerSnapshot, (event) => {
-    assertTrustedSender(event)
+  registerRpcHandler(IPC_CHANNELS.mixerSnapshot, ({ meta }) => {
+    const resources = lifecycle.applicationState.audioResourceSnapshot()
+    if (!resources.engine) return validationFailure(meta, "target")
+    const invalid = validateReadTarget(meta, resources.engine)
+    if (invalid) return invalid
     if (isShuttingDown()) return { meters: [], capturedAt: Date.now() }
     return mixerRuntime.runtimeSnapshot()
   })
 
-  ipcMain.handle(IPC_CHANNELS.mixerClearMeterClips, (event) => {
-    assertTrustedSender(event)
+  registerRpcHandler(IPC_CHANNELS.mixerClearMeterClips, ({ meta }) => {
+    const resources = lifecycle.applicationState.audioResourceSnapshot()
+    if (!resources.engine) return validationFailure(meta, "target")
+    const invalid = validateMutationTarget(meta, resources.engine, resources.revision)
+    if (invalid) return invalid
     return mixerRuntime.clearMeterClips()
   })
 }

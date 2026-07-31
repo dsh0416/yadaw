@@ -38,7 +38,7 @@ import type {
   MidiRuntimeResourceSnapshot,
   MidiSyncPreferences
 } from "./midi"
-import type { OperationEvent } from "./operations"
+import type { OperationEvent, OperationStatusSnapshot } from "./operations"
 import type {
   PluginCatalogSnapshot,
   PluginEditorOpenResult,
@@ -68,12 +68,12 @@ import type {
   RecordingStopResult
 } from "./recording"
 import type {
-  ApplicationSettings,
+  ApplicationSettingsResourceSnapshot,
   ApplicationSettingsPatch,
   AudioHostRuntimePreferences
 } from "./settings"
 import type { ShortcutPreferences } from "./shortcuts"
-import type { RpcRequestMeta, RpcResult } from "./rpc"
+import type { RpcEvent, RpcRequestMeta, RpcResult } from "./rpc"
 
 export const IPC_CHANNELS = {
   bootstrap: "application:bootstrap",
@@ -140,16 +140,21 @@ export const IPC_CHANNELS = {
   midiInputConfigure: "midi-input:configure",
   midiControlLearning: "midi-control:learning",
   operationCancel: "operation:cancel",
-  operationEvent: "operation:event"
+  operationEvent: "operation:event",
+  operationStatus: "operation:status",
+  operationAcknowledge: "operation:acknowledge"
 } as const
 
 export interface YadawDesktopApi {
   readonly platform: DesktopPlatform
   bootstrap(meta: RpcRequestMeta): Promise<RpcResult<ApplicationBootstrapSnapshot>>
-  engineInfo(): Promise<NativeEngineInfo>
-  processGain(request: ProcessGainRequest): Promise<ProcessGainResult>
-  listAudioBackends(): Promise<AudioBackendDescriptor[]>
-  listAudioDevices(backend: AudioBackend): Promise<AudioDeviceList>
+  engineInfo(meta: RpcRequestMeta): Promise<RpcResult<NativeEngineInfo>>
+  processGain(
+    meta: RpcRequestMeta,
+    request: ProcessGainRequest
+  ): Promise<RpcResult<ProcessGainResult>>
+  listAudioBackends(meta: RpcRequestMeta): Promise<RpcResult<AudioBackendDescriptor[]>>
+  listAudioDevices(meta: RpcRequestMeta, backend: AudioBackend): Promise<RpcResult<AudioDeviceList>>
   startAudioEngine(
     meta: RpcRequestMeta,
     preferences: AudioPreferences
@@ -157,33 +162,46 @@ export interface YadawDesktopApi {
   stopAudioEngine(meta: RpcRequestMeta): Promise<RpcResult<AudioEngineStopSnapshot>>
   audioEngineSnapshot(meta: RpcRequestMeta): Promise<RpcResult<AudioRuntimeSnapshot>>
   startRoundTripLatencyMeasurement(
+    meta: RpcRequestMeta,
     request: RoundTripLatencyMeasurementRequest
-  ): Promise<RoundTripLatencyMeasurement>
-  roundTripLatencyMeasurementSnapshot(): Promise<RoundTripLatencyMeasurement>
+  ): Promise<RpcResult<RoundTripLatencyMeasurement>>
+  roundTripLatencyMeasurementSnapshot(
+    meta: RpcRequestMeta
+  ): Promise<RpcResult<RoundTripLatencyMeasurement>>
   loadProjectGraph(meta: RpcRequestMeta): Promise<RpcResult<ProjectGraphSnapshot>>
   reloadProjectGraph(meta: RpcRequestMeta): Promise<RpcResult<ProjectGraphSnapshot>>
   executeProjectCommand(
     meta: RpcRequestMeta,
     command: ProjectCommand
   ): Promise<RpcResult<ProjectCommandResult>>
-  previewMixerParameter(preview: MixerParameterPreview): Promise<void>
-  mixerSnapshot(): Promise<MixerRuntimeSnapshot>
-  clearMixerMeterClips(): Promise<MixerRuntimeSnapshot>
+  previewMixerParameter(
+    meta: RpcRequestMeta,
+    preview: MixerParameterPreview
+  ): Promise<RpcResult<void>>
+  mixerSnapshot(meta: RpcRequestMeta): Promise<RpcResult<MixerRuntimeSnapshot>>
+  clearMixerMeterClips(meta: RpcRequestMeta): Promise<RpcResult<MixerRuntimeSnapshot>>
   transportCommand(
     meta: RpcRequestMeta,
     command: TransportCommand
   ): Promise<RpcResult<TransportSnapshot>>
   transportSnapshot(meta: RpcRequestMeta): Promise<RpcResult<TransportSnapshot>>
-  lifecycleSnapshot(): Promise<DesktopLifecycleSnapshot>
-  subscribeLifecycle(listener: (event: DesktopLifecycleEvent) => void): () => void
-  startupProgressSnapshot(): Promise<StartupProgressSnapshot>
-  subscribeStartupProgress(listener: (progress: StartupProgressSnapshot) => void): () => void
-  systemPerformanceSnapshot(): Promise<SystemPerformanceSnapshot>
-  runAudioBenchmark(): Promise<AudioBenchmarkReport>
-  compiledAudioGraphSnapshot(): Promise<CompiledAudioGraphSnapshot | null>
-  subscribeApplicationCommands(listener: (command: ApplicationCommandId) => void): () => void
-  executeApplicationWindowCommand(command: ApplicationWindowCommandId): Promise<void>
-  setApplicationWindowTheme(theme: "light" | "dark"): Promise<void>
+  lifecycleSnapshot(meta: RpcRequestMeta): Promise<RpcResult<DesktopLifecycleSnapshot>>
+  subscribeLifecycle(listener: (event: RpcEvent<DesktopLifecycleEvent>) => void): () => void
+  startupProgressSnapshot(meta: RpcRequestMeta): Promise<RpcResult<StartupProgressSnapshot>>
+  subscribeStartupProgress(listener: (event: RpcEvent<StartupProgressSnapshot>) => void): () => void
+  systemPerformanceSnapshot(meta: RpcRequestMeta): Promise<RpcResult<SystemPerformanceSnapshot>>
+  runAudioBenchmark(meta: RpcRequestMeta): Promise<RpcResult<AudioBenchmarkReport>>
+  compiledAudioGraphSnapshot(
+    meta: RpcRequestMeta
+  ): Promise<RpcResult<CompiledAudioGraphSnapshot | null>>
+  subscribeApplicationCommands(
+    listener: (event: RpcEvent<ApplicationCommandId>) => void
+  ): () => void
+  executeApplicationWindowCommand(
+    meta: RpcRequestMeta,
+    command: ApplicationWindowCommandId
+  ): Promise<RpcResult<void>>
+  setApplicationWindowTheme(meta: RpcRequestMeta, theme: "light" | "dark"): Promise<RpcResult<void>>
   createProject(
     meta: RpcRequestMeta,
     request: CreateProjectRequest
@@ -202,15 +220,32 @@ export interface YadawDesktopApi {
     meta: RpcRequestMeta,
     disposition?: ProjectCloseDisposition
   ): Promise<RpcResult<ProjectCloseResult>>
-  listProjectAssets(): Promise<ProjectAssetSummary[]>
-  updateProjectConfiguration(configuration: ProjectConfiguration): Promise<ProjectSession>
-  getApplicationSettings(): Promise<ApplicationSettings>
-  updateApplicationSettings(patch: ApplicationSettingsPatch): Promise<ApplicationSettings>
-  setSoftwareMonitoringEnabled(enabled: boolean): Promise<ApplicationSettings>
-  configureAudioHostRuntime(preferences: AudioHostRuntimePreferences): Promise<ApplicationSettings>
-  configureShortcuts(preferences: ShortcutPreferences): Promise<ApplicationSettings>
-  chooseSwapDirectory(): Promise<ApplicationSettings>
-  openSwapDirectory(): Promise<void>
+  listProjectAssets(meta: RpcRequestMeta): Promise<RpcResult<ProjectAssetSummary[]>>
+  updateProjectConfiguration(
+    meta: RpcRequestMeta,
+    configuration: ProjectConfiguration
+  ): Promise<RpcResult<ProjectSession>>
+  getApplicationSettings(
+    meta: RpcRequestMeta
+  ): Promise<RpcResult<ApplicationSettingsResourceSnapshot>>
+  updateApplicationSettings(
+    meta: RpcRequestMeta,
+    patch: ApplicationSettingsPatch
+  ): Promise<RpcResult<ApplicationSettingsResourceSnapshot>>
+  setSoftwareMonitoringEnabled(
+    meta: RpcRequestMeta,
+    enabled: boolean
+  ): Promise<RpcResult<ApplicationSettingsResourceSnapshot>>
+  configureAudioHostRuntime(
+    meta: RpcRequestMeta,
+    preferences: AudioHostRuntimePreferences
+  ): Promise<RpcResult<ApplicationSettingsResourceSnapshot>>
+  configureShortcuts(
+    meta: RpcRequestMeta,
+    preferences: ShortcutPreferences
+  ): Promise<RpcResult<ApplicationSettingsResourceSnapshot>>
+  chooseSwapDirectory(meta: RpcRequestMeta): Promise<RpcResult<ApplicationSettingsResourceSnapshot>>
+  openSwapDirectory(meta: RpcRequestMeta): Promise<RpcResult<void>>
   startRecording(
     meta: RpcRequestMeta,
     request: RecordingStartRequest
@@ -219,8 +254,11 @@ export interface YadawDesktopApi {
   listPendingRecordings(meta: RpcRequestMeta): Promise<RpcResult<PendingRecording[]>>
   recoverRecording(meta: RpcRequestMeta, id: string): Promise<RpcResult<RecordingRecoveryResult>>
   deletePendingRecording(meta: RpcRequestMeta, id: string): Promise<RpcResult<void>>
-  readAssetAudio(id: string): Promise<Uint8Array>
-  readAssetWaveform(request: WaveformWindowRequest): Promise<WaveformPeakWindow>
+  readAssetAudio(meta: RpcRequestMeta, id: string): Promise<RpcResult<Uint8Array>>
+  readAssetWaveform(
+    meta: RpcRequestMeta,
+    request: WaveformWindowRequest
+  ): Promise<RpcResult<WaveformPeakWindow>>
   recordingWaveformSnapshot(
     meta: RpcRequestMeta,
     request: WaveformWindowRequest
@@ -230,7 +268,7 @@ export interface YadawDesktopApi {
     meta: RpcRequestMeta,
     request?: PluginScanRequest
   ): Promise<RpcResult<PluginCatalogSnapshot>>
-  subscribePluginScan(listener: (event: PluginScanEvent) => void): () => void
+  subscribePluginScan(listener: (event: RpcEvent<PluginScanEvent>) => void): () => void
   openPluginEditor(
     meta: RpcRequestMeta,
     instanceId: string
@@ -250,7 +288,7 @@ export interface YadawDesktopApi {
     plan: MidiImportPlan
   ): Promise<RpcResult<MidiImportCommitResult>>
   midiInputSnapshot(meta: RpcRequestMeta): Promise<RpcResult<MidiRuntimeResourceSnapshot>>
-  subscribeMidiInput(listener: (snapshot: MidiRuntimeResourceSnapshot) => void): () => void
+  subscribeMidiInput(listener: (event: RpcEvent<MidiRuntimeResourceSnapshot>) => void): () => void
   configureMidiInput(
     meta: RpcRequestMeta,
     preferences: MidiSyncPreferences
@@ -259,6 +297,14 @@ export interface YadawDesktopApi {
     meta: RpcRequestMeta,
     enabled: boolean
   ): Promise<RpcResult<MidiRuntimeResourceSnapshot>>
-  subscribeOperations(listener: (event: OperationEvent) => void): () => void
-  cancelOperation(id: string): Promise<void>
+  subscribeOperations(listener: (event: RpcEvent<OperationEvent>) => void): () => void
+  operationStatus(
+    meta: RpcRequestMeta,
+    id: string
+  ): Promise<RpcResult<OperationStatusSnapshot | null>>
+  cancelOperation(
+    meta: RpcRequestMeta,
+    id: string
+  ): Promise<RpcResult<OperationStatusSnapshot | null>>
+  acknowledgeOperation(meta: RpcRequestMeta, id: string): Promise<RpcResult<boolean>>
 }

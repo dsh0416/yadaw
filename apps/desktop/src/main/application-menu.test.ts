@@ -61,22 +61,22 @@ describe("installApplicationMenu", () => {
     expect(electron.send).toHaveBeenNthCalledWith(
       1,
       IPC_CHANNELS.applicationCommandRequested,
-      "application.preferences"
+      expect.objectContaining({ payload: "application.preferences" })
     )
     expect(electron.send).toHaveBeenNthCalledWith(
       2,
       IPC_CHANNELS.applicationCommandRequested,
-      "project.settings"
+      expect.objectContaining({ payload: "project.settings" })
     )
     expect(electron.send).toHaveBeenNthCalledWith(
       3,
       IPC_CHANNELS.applicationCommandRequested,
-      "help.audio-benchmark"
+      expect.objectContaining({ payload: "help.audio-benchmark" })
     )
     expect(electron.send).toHaveBeenNthCalledWith(
       4,
       IPC_CHANNELS.applicationCommandRequested,
-      "help.effect-chain-graph"
+      expect.objectContaining({ payload: "help.effect-chain-graph" })
     )
     expect(benchmark).toBeDefined()
     expect(effectGraph).toBeDefined()

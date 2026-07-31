@@ -1,5 +1,5 @@
 import { BrowserWindow } from "electron"
-import { IPC_CHANNELS } from "@yadaw/contracts"
+import { IPC_CHANNELS, IPC_PROTOCOL_VERSION } from "@yadaw/contracts"
 import type { ApplicationServices, IpcHandlerContext } from "./context"
 import { registerAudioHandlers } from "./audio-handlers"
 import { registerDiagnosticHandlers } from "./diagnostic-handlers"
@@ -8,7 +8,7 @@ import { registerMixerHandlers } from "./mixer-handlers"
 import { registerPluginHandlers } from "./plugin-handlers"
 import { registerProjectHandlers } from "./project-handlers"
 import { registerRecordingHandlers } from "./recording-handlers"
-import { registerSettingsHandlers } from "./settings-handlers"
+import { registerSettingsRpcHandlers } from "./settings-rpc-handlers"
 import { registerSystemHandlers } from "./system-handlers"
 import { registerTransportHandlers } from "./transport-handlers"
 import { sampleSystemPerformance } from "./support"
@@ -16,9 +16,19 @@ import { ProjectLifecycleService } from "../project-lifecycle-service"
 
 export function registerIpcHandlers(services: ApplicationServices): void {
   const { plugins, audioHost, projectGraph, settings } = services
+  let pluginSequence = 0
+  let midiSequence = 0
+
   plugins.subscribe((scanEvent) => {
+    pluginSequence += 1
     for (const window of BrowserWindow.getAllWindows()) {
-      window.webContents.send(IPC_CHANNELS.pluginsScanEvent, scanEvent)
+      window.webContents.send(IPC_CHANNELS.pluginsScanEvent, {
+        protocolVersion: IPC_PROTOCOL_VERSION,
+        sourceEpoch: services.lifecycle.applicationState.resources.epoch,
+        sequence: pluginSequence,
+        resourceRevision: pluginSequence,
+        payload: scanEvent
+      })
     }
   })
   let midiSnapshotPending = false
@@ -29,7 +39,14 @@ export function registerIpcHandlers(services: ApplicationServices): void {
       const nativeSnapshot = await audioHost.midiInputSnapshot()
       const snapshot = services.lifecycle.applicationState.midiRuntimeSnapshot(nativeSnapshot)
       for (const window of BrowserWindow.getAllWindows()) {
-        window.webContents.send(IPC_CHANNELS.midiInputEvent, snapshot)
+        midiSequence += 1
+        window.webContents.send(IPC_CHANNELS.midiInputEvent, {
+          protocolVersion: IPC_PROTOCOL_VERSION,
+          sourceEpoch: services.lifecycle.applicationState.audioHost.epoch,
+          sequence: midiSequence,
+          resourceRevision: snapshot.revision,
+          payload: snapshot
+        })
       }
     } catch {
       // Helper recovery owns error reporting; the next interval retries.
@@ -71,14 +88,14 @@ export function registerIpcHandlers(services: ApplicationServices): void {
     synchronizePluginStates,
     sampleSystemPerformance: () => sampleSystemPerformance(settings, audioHost)
   }
-  registerSystemHandlers()
+  registerSystemHandlers(context)
   registerAudioHandlers(context)
   registerMixerHandlers(context)
   registerPluginHandlers(context)
   registerMidiHandlers(context)
   registerTransportHandlers(context)
   registerDiagnosticHandlers(context)
-  registerSettingsHandlers(context)
+  registerSettingsRpcHandlers(context)
   registerProjectHandlers(context)
   registerRecordingHandlers(context)
 }

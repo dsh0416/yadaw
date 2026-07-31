@@ -1,6 +1,7 @@
 import { BrowserWindow, Menu } from "electron"
+import { randomUUID } from "node:crypto"
 import type { MenuItemConstructorOptions } from "electron"
-import { IPC_CHANNELS, resolveKeyboardShortcuts } from "@yadaw/contracts"
+import { IPC_CHANNELS, IPC_PROTOCOL_VERSION, resolveKeyboardShortcuts } from "@yadaw/contracts"
 import type {
   ApplicationCommandId,
   KeyboardShortcutBinding,
@@ -8,11 +9,21 @@ import type {
 } from "@yadaw/contracts"
 import { t } from "./i18n"
 
+const applicationCommandEpoch = randomUUID()
+let applicationCommandSequence = 0
+
 function requestApplicationCommand(command: ApplicationCommandId): void {
   const window = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
   if (!window) return
   window.show()
-  window.webContents.send(IPC_CHANNELS.applicationCommandRequested, command)
+  applicationCommandSequence += 1
+  window.webContents.send(IPC_CHANNELS.applicationCommandRequested, {
+    protocolVersion: IPC_PROTOCOL_VERSION,
+    sourceEpoch: applicationCommandEpoch,
+    sequence: applicationCommandSequence,
+    resourceRevision: applicationCommandSequence,
+    payload: command
+  })
 }
 
 function commandItem(

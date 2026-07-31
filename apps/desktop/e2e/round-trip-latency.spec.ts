@@ -61,25 +61,55 @@ test("measures mock round-trip latency through the desktop boundary", async () =
     })
     expect(runtime.state).toBe("running")
 
-    const started = await page.evaluate(() =>
-      window.yadaw.startRoundTripLatencyMeasurement({
+    const started = await page.evaluate(async () => {
+      const bootstrap = await window.yadaw.bootstrap({
+        protocolVersion: 2,
+        requestId: crypto.randomUUID()
+      })
+      if (!bootstrap.ok) throw new Error(bootstrap.error.code)
+      return window.yadaw.startRoundTripLatencyMeasurement(
+        {
+          protocolVersion: 2,
+          requestId: crypto.randomUUID(),
+          target: bootstrap.value.audioResources.host,
+          mutation: {
+            operationId: crypto.randomUUID(),
+            idempotencyKey: crypto.randomUUID()
+          }
+        },
+        {
+          inputChannel: 1,
+          outputChannel: 1
+        }
+      )
+    })
+    if (!started.ok) throw new Error(JSON.stringify(started.error))
+    expect(started.ok).toBe(true)
+    expect(started).toMatchObject({
+      value: {
+        status: "preparing",
         inputChannel: 1,
         outputChannel: 1
-      })
-    )
-    expect(started).toMatchObject({
-      status: "preparing",
-      inputChannel: 1,
-      outputChannel: 1
+      }
     })
     await expect
       .poll(async () => {
-        const measurement = await page.evaluate(() =>
-          window.yadaw.roundTripLatencyMeasurementSnapshot()
-        )
+        const measurement = await page.evaluate(async () => {
+          const bootstrap = await window.yadaw.bootstrap({
+            protocolVersion: 2,
+            requestId: crypto.randomUUID()
+          })
+          if (!bootstrap.ok) throw new Error(bootstrap.error.code)
+          return window.yadaw.roundTripLatencyMeasurementSnapshot({
+            protocolVersion: 2,
+            requestId: crypto.randomUUID(),
+            target: bootstrap.value.audioResources.host
+          })
+        })
+        if (!measurement.ok) throw new Error(measurement.error.code)
         return {
-          status: measurement.status,
-          measured: measurement.measuredRoundTripLatencyMs
+          status: measurement.value.status,
+          measured: measurement.value.measuredRoundTripLatencyMs
         }
       })
       .toMatchObject({ status: "complete", measured: expect.any(Number) })

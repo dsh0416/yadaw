@@ -138,7 +138,18 @@ export const useProjectGraphStore = defineStore("project-graph", () => {
       const previews = [...pendingPreviews.values()]
       pendingPreviews.clear()
       try {
-        await Promise.all(previews.map((value) => window.yadaw.previewMixerParameter(value)))
+        const target = projectStore.projectGraphRef
+        if (!target) return
+        const results = await Promise.all(
+          previews.map((value) =>
+            window.yadaw.previewMixerParameter(
+              mutationMeta(target, "mixer-preview", projectStore.projectRevision),
+              value
+            )
+          )
+        )
+        const failure = results.find((result) => !result.ok)
+        if (failure && !failure.ok) error.value = rpcErrorMessage(failure.error)
       } catch (reason) {
         error.value = reason instanceof Error ? reason.message : "Mixer preview failed."
       }

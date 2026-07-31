@@ -1,5 +1,9 @@
 import { BrowserWindow } from "electron"
-import { INITIAL_AUDIO_RUNTIME_SNAPSHOT, IPC_CHANNELS } from "@yadaw/contracts"
+import {
+  INITIAL_AUDIO_RUNTIME_SNAPSHOT,
+  IPC_CHANNELS,
+  IPC_PROTOCOL_VERSION
+} from "@yadaw/contracts"
 import type {
   AudioLifecycleState,
   AudioRuntimeSnapshot,
@@ -71,7 +75,13 @@ export class LifecycleCoordinator {
 
   private publish(event: DesktopLifecycleEvent): void {
     for (const window of BrowserWindow.getAllWindows()) {
-      window.webContents.send(IPC_CHANNELS.lifecycleEvent, structuredClone(event))
+      window.webContents.send(IPC_CHANNELS.lifecycleEvent, {
+        protocolVersion: IPC_PROTOCOL_VERSION,
+        sourceEpoch: this.state.resources.epoch,
+        sequence: event.revision,
+        resourceRevision: event.revision,
+        payload: structuredClone(event)
+      })
     }
   }
 

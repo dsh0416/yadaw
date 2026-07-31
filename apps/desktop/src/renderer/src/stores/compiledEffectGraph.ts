@@ -1,6 +1,8 @@
 import { acceptHMRUpdate, defineStore } from "pinia"
 import { shallowRef } from "vue"
 import type { CompiledAudioGraphSnapshot } from "@yadaw/contracts"
+import { readMeta, rpcErrorMessage } from "../rpc"
+import { useProjectStore } from "./project"
 
 export type CompiledEffectGraphStatus = "idle" | "loading" | "ready" | "empty" | "error"
 
@@ -18,6 +20,7 @@ function isSamePublishedBuild(
 }
 
 export const useCompiledEffectGraphStore = defineStore("compiled-effect-graph", () => {
+  const projectStore = useProjectStore()
   const isOpen = shallowRef(false)
   const status = shallowRef<CompiledEffectGraphStatus>("idle")
   const snapshot = shallowRef<CompiledAudioGraphSnapshot | null>(null)
@@ -39,7 +42,15 @@ export const useCompiledEffectGraphStore = defineStore("compiled-effect-graph", 
     errorMessage.value = ""
     refreshPromise = (async () => {
       try {
-        const next = await window.yadaw.compiledAudioGraphSnapshot()
+        const target = projectStore.projectGraphRef
+        if (!target) return
+        const result = await window.yadaw.compiledAudioGraphSnapshot(readMeta(target))
+        if (!result.ok) {
+          errorMessage.value = rpcErrorMessage(result.error)
+          status.value = "error"
+          return
+        }
+        const next = result.value
         if (!isOpen.value || generation !== requestGeneration) return
         if (!isSamePublishedBuild(snapshot.value, next)) snapshot.value = next
         status.value = next ? "ready" : "empty"

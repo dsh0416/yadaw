@@ -53,6 +53,15 @@ function bootstrap(lifecycle: DesktopLifecycleSnapshot): ApplicationBootstrapSna
       epoch: "main-epoch",
       generation: 1
     },
+    offlineTools: {
+      worker: {
+        kind: "offline-worker",
+        id: "offline-tools",
+        epoch: "offline-epoch",
+        generation: 1
+      },
+      revision: 1
+    },
     audioResources: {
       host: {
         kind: "audio-host",
@@ -98,7 +107,13 @@ describe("lifecycle store", () => {
     const audio = useAudioRuntimeStore()
 
     const initializing = lifecycle.initialize()
-    listener({ type: "project", revision: 2, state: { status: "open", session, error: null } })
+    listener({
+      protocolVersion: 2,
+      sourceEpoch: "main-epoch",
+      sequence: 2,
+      resourceRevision: 2,
+      payload: { type: "project", revision: 2, state: { status: "open", session, error: null } }
+    })
     const olderSnapshot = snapshot(1)
     olderSnapshot.audio = {
       status: "running",

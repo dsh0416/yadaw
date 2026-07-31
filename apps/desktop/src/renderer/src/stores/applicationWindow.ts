@@ -4,20 +4,33 @@ import type {
   ApplicationWindowCommandId,
   DesktopPlatform
 } from "@yadaw/contracts"
+import { mutationMeta } from "../rpc"
+import { useProjectStore } from "./project"
 
 export const useApplicationWindowStore = defineStore("application-window", () => {
+  const projectStore = useProjectStore()
   const platform: DesktopPlatform = window.yadaw.platform
 
   function subscribeCommands(listener: (command: ApplicationCommandId) => void): () => void {
-    return window.yadaw.subscribeApplicationCommands(listener)
+    return window.yadaw.subscribeApplicationCommands((event) => listener(event.payload))
   }
 
-  function execute(command: ApplicationWindowCommandId): Promise<void> {
-    return window.yadaw.executeApplicationWindowCommand(command)
+  async function execute(command: ApplicationWindowCommandId): Promise<void> {
+    const target = projectStore.desktopSession
+    if (!target) return
+    await window.yadaw.executeApplicationWindowCommand(
+      mutationMeta(target, `application-window-${command}`),
+      command
+    )
   }
 
-  function setTheme(theme: "light" | "dark"): Promise<void> {
-    return window.yadaw.setApplicationWindowTheme(theme)
+  async function setTheme(theme: "light" | "dark"): Promise<void> {
+    const target = projectStore.desktopSession
+    if (!target) return
+    await window.yadaw.setApplicationWindowTheme(
+      mutationMeta(target, "application-window-theme"),
+      theme
+    )
   }
 
   return { platform, subscribeCommands, execute, setTheme }

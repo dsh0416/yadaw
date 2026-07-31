@@ -2,30 +2,19 @@ import { flushPromises, mount } from "@vue/test-utils"
 import { createPinia } from "pinia"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import DisplaySettings from "./DisplaySettings.vue"
+import { rpcSuccess, settingsSnapshot, testBootstrap, testSettings } from "../../test/ipc"
 
 describe("DisplaySettings", () => {
   beforeEach(() => {
-    window.yadaw.getApplicationSettings = vi.fn().mockResolvedValue({
-      swapDirectory: "C:/swap",
-      recordingBitDepth: "float32",
-      theme: "dark",
-      locale: "en-US",
-      meterPeakHold: "800ms",
-      meterReturnRate: "iec-type-i",
-      midiCenterCStandard: "roland-c4",
-      recentProjects: []
-    })
-    window.yadaw.updateApplicationSettings = vi.fn().mockImplementation(async (patch) => ({
-      swapDirectory: "C:/swap",
-      recordingBitDepth: "float32",
-      theme: "dark",
-      locale: "en-US",
-      meterPeakHold: "800ms",
-      meterReturnRate: "iec-type-i",
-      midiCenterCStandard: "roland-c4",
-      recentProjects: [],
-      ...patch
-    }))
+    const initial = testSettings({ swapDirectory: "C:/swap", theme: "dark" })
+    window.yadaw.bootstrap = vi
+      .fn()
+      .mockResolvedValue(rpcSuccess(testBootstrap({ settings: settingsSnapshot(initial) })))
+    window.yadaw.updateApplicationSettings = vi
+      .fn()
+      .mockImplementation(async (_meta, patch) =>
+        rpcSuccess(settingsSnapshot(testSettings({ ...initial, ...patch }), 2))
+      )
   })
 
   it("persists a theme selected by the user", async () => {
@@ -41,7 +30,9 @@ describe("DisplaySettings", () => {
     await lightOption!.trigger("click")
     await flushPromises()
 
-    expect(window.yadaw.updateApplicationSettings).toHaveBeenCalledWith({ theme: "light" })
+    expect(window.yadaw.updateApplicationSettings).toHaveBeenCalledWith(expect.any(Object), {
+      theme: "light"
+    })
     expect(lightOption!.attributes("aria-checked")).toBe("true")
   })
 
@@ -58,7 +49,7 @@ describe("DisplaySettings", () => {
     await chineseOption!.trigger("click")
     await flushPromises()
 
-    expect(window.yadaw.updateApplicationSettings).toHaveBeenCalledWith({
+    expect(window.yadaw.updateApplicationSettings).toHaveBeenCalledWith(expect.any(Object), {
       locale: "zh-cmn-Hans-CN"
     })
     expect(chineseOption!.attributes("aria-checked")).toBe("true")

@@ -217,7 +217,21 @@ test("records into a Large Object and reopens the PGlite project archive", async
     await page.getByRole("button", { name: "Play" }).click()
     await expect
       .poll(async () => {
-        const snapshot = await page.evaluate(() => window.yadaw.mixerSnapshot())
+        const snapshot = await page.evaluate(async () => {
+          const bootstrap = await window.yadaw.bootstrap({
+            protocolVersion: 2,
+            requestId: crypto.randomUUID()
+          })
+          const engine = bootstrap.ok ? bootstrap.value.audioResources.engine : null
+          if (!engine) throw new Error("Audio engine resource is unavailable")
+          const result = await window.yadaw.mixerSnapshot({
+            protocolVersion: 2,
+            requestId: crypto.randomUUID(),
+            target: engine
+          })
+          if (!result.ok) throw new Error(result.error.code)
+          return result.value
+        })
         const meter = snapshot.meters.find((candidate) => candidate.channelId === "metronome")
         return Math.max(...(meter?.heldPeak ?? [0, 0]))
       })
@@ -359,7 +373,20 @@ test("records into a Large Object and reopens the PGlite project archive", async
     await page.getByRole("button", { name: "Apply runtime settings" }).click()
     await expect
       .poll(async () => {
-        const snapshot = await page.evaluate(() => window.yadaw.systemPerformanceSnapshot())
+        const snapshot = await page.evaluate(async () => {
+          const bootstrap = await window.yadaw.bootstrap({
+            protocolVersion: 2,
+            requestId: crypto.randomUUID()
+          })
+          if (!bootstrap.ok) throw new Error(bootstrap.error.code)
+          const result = await window.yadaw.systemPerformanceSnapshot({
+            protocolVersion: 2,
+            requestId: crypto.randomUUID(),
+            target: bootstrap.value.desktopSession
+          })
+          if (!result.ok) throw new Error(result.error.code)
+          return result.value
+        })
         return snapshot.audioIpc?.runtime.resolved.workerThreads
       })
       .toBe(1)
@@ -417,13 +444,37 @@ test("records into a Large Object and reopens the PGlite project archive", async
     }, pendingAfterCommit[0]!.id)
     await expect(page.getByRole("dialog")).toBeHidden()
     const importedAssets = await page.evaluate(async () => {
-      const assets = await window.yadaw.listProjectAssets()
+      const bootstrap = await window.yadaw.bootstrap({
+        protocolVersion: 2,
+        requestId: crypto.randomUUID()
+      })
+      if (!bootstrap.ok || !bootstrap.value.workspace) {
+        throw new Error("Project workspace is unavailable")
+      }
+      const project = bootstrap.value.workspace.project
+      const listed = await window.yadaw.listProjectAssets({
+        protocolVersion: 2,
+        requestId: crypto.randomUUID(),
+        target: project
+      })
+      if (!listed.ok) throw new Error(listed.error.code)
       return Promise.all(
-        assets.map(async (asset) => ({
-          ...asset,
-          frameCount: String(asset.frameCount),
-          audioByteLength: (await window.yadaw.readAssetAudio(asset.id)).byteLength
-        }))
+        listed.value.map(async (asset) => {
+          const audio = await window.yadaw.readAssetAudio(
+            {
+              protocolVersion: 2,
+              requestId: crypto.randomUUID(),
+              target: project
+            },
+            asset.id
+          )
+          if (!audio.ok) throw new Error(audio.error.code)
+          return {
+            ...asset,
+            frameCount: String(asset.frameCount),
+            audioByteLength: audio.value.byteLength
+          }
+        })
       )
     })
     expect(importedAssets).toHaveLength(2)
@@ -496,12 +547,25 @@ test("records into a Large Object and reopens the PGlite project archive", async
     await navigateTo("/settings/project")
     await expect(page.getByLabel("Sample rate")).toHaveValue("44100")
     await expect(page.getByLabel("Waveform channels")).toHaveValue("aggregate")
-    const reopenedAssets = await page.evaluate(async () =>
-      (await window.yadaw.listProjectAssets()).map((asset) => ({
+    const reopenedAssets = await page.evaluate(async () => {
+      const bootstrap = await window.yadaw.bootstrap({
+        protocolVersion: 2,
+        requestId: crypto.randomUUID()
+      })
+      if (!bootstrap.ok || !bootstrap.value.workspace) {
+        throw new Error("Project workspace is unavailable")
+      }
+      const result = await window.yadaw.listProjectAssets({
+        protocolVersion: 2,
+        requestId: crypto.randomUUID(),
+        target: bootstrap.value.workspace.project
+      })
+      if (!result.ok) throw new Error(result.error.code)
+      return result.value.map((asset) => ({
         ...asset,
         frameCount: String(asset.frameCount)
       }))
-    )
+    })
     expect(reopenedAssets).toEqual(
       importedAssets.map(({ audioByteLength: _audioByteLength, ...asset }) => asset)
     )
@@ -510,19 +574,40 @@ test("records into a Large Object and reopens the PGlite project archive", async
     expect(reopenedMixer.sends).toEqual(mixerAtSave.sends)
     expect(reopenedMixer.audioClips).toHaveLength(2)
     const reopenedWaveform = await page.evaluate(async () => {
-      const assets = await window.yadaw.listProjectAssets()
-      const asset = assets.find(({ channels }) => channels === 2)
-      if (!asset) throw new Error("Expected a stereo recording asset")
-      const peakWindow = await window.yadaw.readAssetWaveform({
-        id: asset.id,
-        startFrame: 0,
-        endFrame: Number(asset.frameCount),
-        maxBuckets: 100
+      const bootstrap = await window.yadaw.bootstrap({
+        protocolVersion: 2,
+        requestId: crypto.randomUUID()
       })
+      if (!bootstrap.ok || !bootstrap.value.workspace) {
+        throw new Error("Project workspace is unavailable")
+      }
+      const project = bootstrap.value.workspace.project
+      const listed = await window.yadaw.listProjectAssets({
+        protocolVersion: 2,
+        requestId: crypto.randomUUID(),
+        target: project
+      })
+      if (!listed.ok) throw new Error(listed.error.code)
+      const asset = listed.value.find(({ channels }) => channels === 2)
+      if (!asset) throw new Error("Expected a stereo recording asset")
+      const peakWindow = await window.yadaw.readAssetWaveform(
+        {
+          protocolVersion: 2,
+          requestId: crypto.randomUUID(),
+          target: project
+        },
+        {
+          id: asset.id,
+          startFrame: 0,
+          endFrame: Number(asset.frameCount),
+          maxBuckets: 100
+        }
+      )
+      if (!peakWindow.ok) throw new Error(peakWindow.error.code)
       return {
-        channels: peakWindow.channels,
-        bucketCount: peakWindow.bucketCount,
-        byteLength: peakWindow.peaks.byteLength
+        channels: peakWindow.value.channels,
+        bucketCount: peakWindow.value.bucketCount,
+        byteLength: peakWindow.value.peaks.byteLength
       }
     })
     expect(reopenedWaveform.channels).toBe(2)

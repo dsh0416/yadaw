@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import { useOperationStore } from "./operations"
 import type { OperationSnapshot } from "@yadaw/contracts"
 
+import { rpcSuccess, testBootstrap } from "../test/ipc"
+import { useProjectStore } from "./project"
 const running: OperationSnapshot = {
   id: "one",
   title: "Import audio",
@@ -19,6 +21,7 @@ describe("operation store", () => {
   beforeEach(() => {
     vi.useRealTimers()
     setActivePinia(createPinia())
+    useProjectStore().applyBootstrap(testBootstrap())
   })
 
   it("automatically removes successful completed work", () => {
@@ -46,10 +49,10 @@ describe("operation store", () => {
   })
 
   it("delegates cancellation only through the public desktop API", async () => {
-    const cancel = vi.fn().mockResolvedValue(undefined)
+    const cancel = vi.fn().mockResolvedValue(rpcSuccess({ state: "cancelled" }))
     window.yadaw.cancelOperation = cancel
     const store = useOperationStore()
     await store.cancel("one")
-    expect(cancel).toHaveBeenCalledWith("one")
+    expect(cancel).toHaveBeenCalledWith(expect.any(Object), "one")
   })
 })

@@ -1,6 +1,7 @@
-import { app, BrowserWindow, ipcMain } from "electron"
+import { app, BrowserWindow } from "electron"
 import { basename, join, resolve } from "node:path"
-import { IPC_CHANNELS } from "@yadaw/contracts"
+import { randomUUID } from "node:crypto"
+import { IPC_CHANNELS, IPC_PROTOCOL_VERSION } from "@yadaw/contracts"
 import { ApplicationSettingsStore } from "./application-settings"
 import { AssetMaterializer } from "./asset-materializer"
 import { AudioGraphCompiler } from "./audio-graph-compiler"
@@ -17,12 +18,13 @@ import { PluginCatalogService } from "./plugin-catalog-service"
 import { ProjectCommandService } from "./project-command-service"
 import { ProjectGraphService } from "./project-graph-service"
 import { ProjectService } from "./project-service"
+import { registerRpcHandler } from "./ipc/rpc"
 import { RecordingService } from "./recording-service"
 import { StartupProgress } from "./startup-progress"
 import { WaveformService } from "./waveform-service"
 import { TransportService } from "./transport-service"
 import { registerIpcHandlers } from "./ipc/register"
-import { assertTrustedSender, normalizeAudioRuntime } from "./ipc/support"
+import { normalizeAudioRuntime } from "./ipc/support"
 import {
   createMainWindow,
   createSplashWindow,
@@ -47,14 +49,23 @@ export function startApplication(
     setMainLocale(applicationSettings.locale)
 
     const startup = new StartupProgress()
-    ipcMain.handle(IPC_CHANNELS.startupProgressSnapshot, (event) => {
-      assertTrustedSender(event)
+    const startupEpoch = randomUUID()
+    let startupSequence = 0
+    registerRpcHandler(IPC_CHANNELS.startupProgressSnapshot, ({ meta }) => {
+      if (meta.target || meta.mutation) throw new TypeError("startup snapshot has no target")
       return startup.snapshot()
     })
     startup.subscribe((progress) => {
+      startupSequence += 1
       const window = splashWindow
       if (window && !window.isDestroyed()) {
-        window.webContents.send(IPC_CHANNELS.startupProgressEvent, progress)
+        window.webContents.send(IPC_CHANNELS.startupProgressEvent, {
+          protocolVersion: IPC_PROTOCOL_VERSION,
+          sourceEpoch: startupEpoch,
+          sequence: startupSequence,
+          resourceRevision: startupSequence,
+          payload: progress
+        })
       }
     })
     createSplashWindow()

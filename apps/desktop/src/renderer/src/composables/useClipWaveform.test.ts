@@ -6,6 +6,7 @@ import type { WaveformPeakWindow } from "@yadaw/contracts"
 import { useRecordingStore } from "../stores/recording"
 import { useClipWaveform } from "./useClipWaveform"
 
+import { useProjectStore } from "../stores/project"
 function response(id: string, frameCount: number): WaveformPeakWindow {
   return {
     id,
@@ -65,6 +66,12 @@ describe("useClipWaveform", () => {
   beforeEach(() => {
     vi.useFakeTimers()
     setActivePinia(createPinia())
+    useProjectStore().projectRef = {
+      kind: "project-session",
+      id: "project",
+      epoch: "main",
+      generation: 1
+    }
   })
 
   afterEach(() => {
@@ -107,8 +114,8 @@ describe("useClipWaveform", () => {
 
   it("debounces viewport changes and discards stale responses", async () => {
     const startFrame = ref(0)
-    let resolveFirst!: (value: WaveformPeakWindow) => void
-    let resolveSecond!: (value: WaveformPeakWindow) => void
+    let resolveFirst!: (value: ReturnType<typeof success>) => void
+    let resolveSecond!: (value: ReturnType<typeof success>) => void
     window.yadaw.readAssetWaveform = vi
       .fn()
       .mockImplementationOnce(
@@ -145,10 +152,10 @@ describe("useClipWaveform", () => {
     await vi.advanceTimersByTimeAsync(1)
     expect(window.yadaw.readAssetWaveform).toHaveBeenCalledTimes(2)
 
-    resolveSecond(response("asset", 9_600))
+    resolveSecond(success(response("asset", 9_600)))
     await flushPromises()
     expect(wrapper.text()).toBe("9600")
-    resolveFirst(response("asset", 1))
+    resolveFirst(success(response("asset", 1)))
     await flushPromises()
     expect(wrapper.text()).toBe("9600")
     wrapper.unmount()
@@ -156,7 +163,7 @@ describe("useClipWaveform", () => {
 
   it("keeps the last live frame until the finalized asset response takes over", async () => {
     const recording = ref(true)
-    let resolveAsset!: (value: WaveformPeakWindow) => void
+    let resolveAsset!: (value: ReturnType<typeof success>) => void
     attachRecording("take")
     window.yadaw.recordingWaveformSnapshot = vi
       .fn()
@@ -187,7 +194,7 @@ describe("useClipWaveform", () => {
     await nextTick()
     await vi.advanceTimersByTimeAsync(40)
     expect(wrapper.text()).toBe("4800")
-    resolveAsset(response("take", 48_000))
+    resolveAsset(success(response("take", 48_000)))
     await flushPromises()
     expect(wrapper.text()).toBe("48000")
     wrapper.unmount()

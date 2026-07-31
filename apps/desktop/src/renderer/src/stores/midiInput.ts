@@ -5,7 +5,8 @@ import type {
   MidiInputSnapshot,
   MidiRuntimeResourceSnapshot,
   MidiSyncPreferences,
-  ResourceRef
+  ResourceRef,
+  RpcEvent
 } from "@yadaw/contracts"
 import { mutationMeta, readMeta, rpcErrorMessage } from "../rpc"
 import { useApplicationSettingsStore } from "./applicationSettings"
@@ -39,6 +40,8 @@ export const useMidiInputStore = defineStore("midi-input", () => {
   const error = shallowRef("")
   let unsubscribe: (() => void) | null = null
   let lastControlGeneration = 0
+  let sourceEpoch: string | null = null
+  let lastSequence = 0
   const controlListeners = new Set<(event: MidiControlEvent) => void>()
 
   const connectedPorts = computed(() => snapshot.value.ports.filter((port) => port.connected))
@@ -92,10 +95,21 @@ export const useMidiInputStore = defineStore("midi-input", () => {
     if (!target) return
     loading.value = true
     error.value = ""
+    function receiveResource(event: RpcEvent<MidiRuntimeResourceSnapshot>): void {
+      const gap =
+        sourceEpoch !== null &&
+        (event.sourceEpoch !== sourceEpoch || event.sequence !== lastSequence + 1)
+      sourceEpoch = event.sourceEpoch
+      lastSequence = event.sequence
+      if (gap) {
+        void load()
+        return
+      }
+      applyResource(event.payload, true)
+    }
+
     if (!unsubscribe) {
-      unsubscribe = window.yadaw.subscribeMidiInput((next) => {
-        applyResource(next, true)
-      })
+      unsubscribe = window.yadaw.subscribeMidiInput(receiveResource)
     }
     const result = await window.yadaw.midiInputSnapshot(readMeta(target))
     if (!result.ok) {
@@ -180,6 +194,8 @@ export const useMidiInputStore = defineStore("midi-input", () => {
     if (learning.value) void endLearning()
     controlListeners.clear()
     error.value = ""
+    sourceEpoch = null
+    lastSequence = 0
   }
 
   return {

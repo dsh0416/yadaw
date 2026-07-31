@@ -1,9 +1,12 @@
 import { acceptHMRUpdate, defineStore } from "pinia"
 import { computed, ref } from "vue"
-import type { OperationEvent, OperationSnapshot } from "@yadaw/contracts"
+import type { OperationEvent, OperationSnapshot, RpcEvent } from "@yadaw/contracts"
+import { mutationMeta } from "../rpc"
+import { useProjectStore } from "./project"
 
 export const useOperationStore = defineStore("operations", () => {
   const operations = ref<OperationSnapshot[]>([])
+  const projectStore = useProjectStore()
   const completionTimers = new Map<string, ReturnType<typeof setTimeout>>()
   const active = computed(
     () =>
@@ -13,13 +16,17 @@ export const useOperationStore = defineStore("operations", () => {
   )
   let unsubscribe: (() => void) | null = null
 
+  let sourceEpoch: string | null = null
+  let lastSequence = 0
   function startSubscription(): void {
-    unsubscribe ??= window.yadaw.subscribeOperations(apply)
+    unsubscribe ??= window.yadaw.subscribeOperations(receive)
   }
 
   function stopSubscription(): void {
     unsubscribe?.()
     unsubscribe = null
+    sourceEpoch = null
+    lastSequence = 0
   }
 
   function apply(event: OperationEvent): void {
@@ -32,6 +39,19 @@ export const useOperationStore = defineStore("operations", () => {
     if (index >= 0) operations.value[index] = event.operation
     else operations.value.push(event.operation)
     scheduleCompletionCleanup(event.operation)
+  }
+
+  function receive(event: RpcEvent<OperationEvent>): void {
+    if (
+      sourceEpoch !== null &&
+      (event.sourceEpoch !== sourceEpoch || event.sequence !== lastSequence + 1)
+    ) {
+      for (const operation of operations.value) clearCompletionTimer(operation.id)
+      operations.value = []
+    }
+    sourceEpoch = event.sourceEpoch
+    lastSequence = event.sequence
+    apply(event.payload)
   }
 
   function clearCompletionTimer(id: string): void {
@@ -51,12 +71,21 @@ export const useOperationStore = defineStore("operations", () => {
         if (index >= 0 && operations.value[index]?.state === "completed") {
           operations.value.splice(index, 1)
         }
+        void acknowledge(operation.id)
       }, 750)
     )
   }
 
   async function cancel(id: string): Promise<void> {
-    await window.yadaw.cancelOperation(id)
+    const target = projectStore.desktopSession
+    if (!target) return
+    await window.yadaw.cancelOperation(mutationMeta(target, "operation-cancel"), id)
+  }
+
+  async function acknowledge(id: string): Promise<void> {
+    const target = projectStore.desktopSession
+    if (!target) return
+    await window.yadaw.acknowledgeOperation(mutationMeta(target, "operation-acknowledge"), id)
   }
 
   function dismiss(id: string): void {
@@ -64,6 +93,7 @@ export const useOperationStore = defineStore("operations", () => {
     const index = operations.value.findIndex((operation) => operation.id === id)
     if (index >= 0 && operations.value[index]?.state !== "running")
       operations.value.splice(index, 1)
+    void acknowledge(id)
   }
 
   return {

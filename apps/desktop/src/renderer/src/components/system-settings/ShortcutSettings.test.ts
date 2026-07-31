@@ -6,6 +6,7 @@ import ShortcutSettings from "./ShortcutSettings.vue"
 import { useApplicationSettingsStore } from "../../stores/applicationSettings"
 
 import { useAudioRuntimeStore } from "../../stores/audioRuntime"
+import { rpcEvent } from "../../test/ipc"
 const EMPTY_MIDI_SNAPSHOT: MidiInputSnapshot = {
   ports: [{ id: "controller", name: "Studio Controller", connected: true }],
   sync: {
@@ -101,6 +102,13 @@ describe("ShortcutSettings", () => {
     setActivePinia(pinia)
     const settingsStore = useApplicationSettingsStore()
     settingsStore.settings = applicationSettings(shortcuts)
+    settingsStore.resource = {
+      kind: "application-settings",
+      id: "settings",
+      epoch: "main-epoch",
+      generation: 1
+    }
+    settingsStore.revision = 1
     useAudioRuntimeStore().applyResources({
       host,
       engine: null,
@@ -110,7 +118,8 @@ describe("ShortcutSettings", () => {
     })
     window.yadaw.midiInputSnapshot = vi.fn().mockResolvedValue(midiSuccess(EMPTY_MIDI_SNAPSHOT))
     window.yadaw.subscribeMidiInput = vi.fn((listener) => {
-      publishMidi = (snapshot) => listener(midiResource(snapshot))
+      publishMidi = (snapshot) =>
+        listener(rpcEvent(midiResource(snapshot), snapshot.capturedAt, host.epoch))
       return () => undefined
     })
     window.yadaw.setMidiControlLearning = vi.fn(async (_meta, enabled) => {
@@ -119,7 +128,17 @@ describe("ShortcutSettings", () => {
         capturedAt: enabled ? 2 : 3
       })
     })
-    window.yadaw.configureShortcuts = vi.fn(async (next) => applicationSettings(next))
+    window.yadaw.configureShortcuts = vi.fn(async (_meta, next) => ({
+      ok: true as const,
+      requestId: "settings-shortcuts",
+      resourceRevision: 2,
+      value: {
+        settings: settingsStore.resource!,
+        revision: 2,
+        value: applicationSettings(next)
+      },
+      warnings: []
+    }))
     const wrapper = mount(ShortcutSettings, {
       global: {
         plugins: [pinia],

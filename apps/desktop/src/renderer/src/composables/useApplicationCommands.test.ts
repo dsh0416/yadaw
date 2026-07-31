@@ -13,6 +13,7 @@ import { useApplicationCommands } from "./useApplicationCommands"
 import { useGlobalDialog } from "./useGlobalDialog"
 import { useAudioRuntimeStore } from "../stores/audioRuntime"
 import { useProjectStore } from "../stores/project"
+import { rpcEvent } from "../test/ipc"
 
 const session: ProjectSession = {
   id: "project",
@@ -78,6 +79,15 @@ function closedBootstrap(): ApplicationBootstrapSnapshot {
       id: "settings",
       epoch: "main-epoch",
       generation: 1
+    },
+    offlineTools: {
+      worker: {
+        kind: "offline-worker",
+        id: "offline-tools",
+        epoch: "offline-epoch",
+        generation: 1
+      },
+      revision: 1
     },
     audioResources: {
       host: {
@@ -174,7 +184,7 @@ function createHarness() {
 }
 
 describe("useApplicationCommands", () => {
-  let nativeCommandListener: ((command: ApplicationCommandId) => void) | null
+  let nativeCommandListener: Parameters<typeof window.yadaw.subscribeApplicationCommands>[0] | null
 
   beforeEach(() => {
     vi.clearAllMocks()
@@ -231,7 +241,7 @@ describe("useApplicationCommands", () => {
   it("routes macOS system-menu commands through the same command dispatcher", async () => {
     const { router } = createHarness()
 
-    nativeCommandListener?.("application.preferences")
+    nativeCommandListener?.(rpcEvent("application.preferences"))
     await flushPromises()
 
     expect(router.currentRoute.value.name).toBe("system-settings")
@@ -250,7 +260,7 @@ describe("useApplicationCommands", () => {
       useProjectStore(pinia).applyWorkspace(workspace({ ...session, dirty: true }))
       const { activeDialog, selectDialogAction } = useGlobalDialog()
 
-      nativeCommandListener?.(command)
+      nativeCommandListener?.(rpcEvent(command))
       await vi.waitFor(() => expect(activeDialog.value?.title).toBe("Save project before closing?"))
       expect(window.yadaw.executeApplicationWindowCommand).not.toHaveBeenCalledWith(command)
       expect(window.yadaw.transportCommand).not.toHaveBeenCalled()
@@ -272,7 +282,10 @@ describe("useApplicationCommands", () => {
         }),
         "discard"
       )
-      expect(window.yadaw.executeApplicationWindowCommand).toHaveBeenCalledWith(command)
+      expect(window.yadaw.executeApplicationWindowCommand).toHaveBeenCalledWith(
+        expect.any(Object),
+        command
+      )
     }
   )
 
@@ -283,7 +296,7 @@ describe("useApplicationCommands", () => {
     projectStore.applyWorkspace(workspace({ ...session, dirty: true }))
     const { activeDialog, dismissDialog } = useGlobalDialog()
 
-    nativeCommandListener?.("project.open")
+    nativeCommandListener?.(rpcEvent("project.open"))
     await vi.waitFor(() => expect(activeDialog.value?.title).toBe("Save project before closing?"))
     dismissDialog()
     await flushPromises()

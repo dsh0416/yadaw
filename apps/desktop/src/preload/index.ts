@@ -20,30 +20,30 @@ import { invokeRpc } from "./rpc"
 const api: YadawDesktopApi = {
   platform: process.platform as YadawDesktopApi["platform"],
   bootstrap: (meta) => invokeRpc(IPC_CHANNELS.bootstrap, meta),
-  engineInfo: () => ipcRenderer.invoke(IPC_CHANNELS.engineInfo),
-  processGain: (request: ProcessGainRequest) =>
-    ipcRenderer.invoke(IPC_CHANNELS.processGain, request),
-  listAudioBackends: () => ipcRenderer.invoke(IPC_CHANNELS.audioBackends),
-  listAudioDevices: (backend: AudioBackend) =>
-    ipcRenderer.invoke(IPC_CHANNELS.audioDevices, backend),
+  engineInfo: (meta) => invokeRpc(IPC_CHANNELS.engineInfo, meta),
+  processGain: (meta, request: ProcessGainRequest) =>
+    invokeRpc(IPC_CHANNELS.processGain, meta, request),
+  listAudioBackends: (meta) => invokeRpc(IPC_CHANNELS.audioBackends, meta),
+  listAudioDevices: (meta, backend: AudioBackend) =>
+    invokeRpc(IPC_CHANNELS.audioDevices, meta, backend),
   startAudioEngine: (meta, preferences: AudioPreferences) =>
     invokeRpc(IPC_CHANNELS.audioStart, meta, preferences),
   stopAudioEngine: (meta) => invokeRpc(IPC_CHANNELS.audioStop, meta),
   audioEngineSnapshot: (meta) => invokeRpc(IPC_CHANNELS.audioSnapshot, meta),
-  startRoundTripLatencyMeasurement: (request: RoundTripLatencyMeasurementRequest) =>
-    ipcRenderer.invoke(IPC_CHANNELS.audioRoundTripLatencyStart, request),
-  roundTripLatencyMeasurementSnapshot: () =>
-    ipcRenderer.invoke(IPC_CHANNELS.audioRoundTripLatencySnapshot),
+  startRoundTripLatencyMeasurement: (meta, request: RoundTripLatencyMeasurementRequest) =>
+    invokeRpc(IPC_CHANNELS.audioRoundTripLatencyStart, meta, request),
+  roundTripLatencyMeasurementSnapshot: (meta) =>
+    invokeRpc(IPC_CHANNELS.audioRoundTripLatencySnapshot, meta),
   loadProjectGraph: (meta) => invokeRpc(IPC_CHANNELS.projectGraphLoad, meta),
   reloadProjectGraph: (meta) => invokeRpc(IPC_CHANNELS.projectGraphReload, meta),
   executeProjectCommand: (meta, command) =>
     invokeRpc(IPC_CHANNELS.projectCommandExecute, meta, command),
-  previewMixerParameter: (preview) => ipcRenderer.invoke(IPC_CHANNELS.mixerPreview, preview),
-  mixerSnapshot: () => ipcRenderer.invoke(IPC_CHANNELS.mixerSnapshot),
-  clearMixerMeterClips: () => ipcRenderer.invoke(IPC_CHANNELS.mixerClearMeterClips),
+  previewMixerParameter: (meta, preview) => invokeRpc(IPC_CHANNELS.mixerPreview, meta, preview),
+  mixerSnapshot: (meta) => invokeRpc(IPC_CHANNELS.mixerSnapshot, meta),
+  clearMixerMeterClips: (meta) => invokeRpc(IPC_CHANNELS.mixerClearMeterClips, meta),
   transportCommand: (meta, command) => invokeRpc(IPC_CHANNELS.transportCommand, meta, command),
   transportSnapshot: (meta) => invokeRpc(IPC_CHANNELS.transportSnapshot, meta),
-  lifecycleSnapshot: () => ipcRenderer.invoke(IPC_CHANNELS.lifecycleSnapshot),
+  lifecycleSnapshot: (meta) => invokeRpc(IPC_CHANNELS.lifecycleSnapshot, meta),
   subscribeLifecycle: (listener) => {
     const handler = (
       _event: Electron.IpcRendererEvent,
@@ -52,26 +52,26 @@ const api: YadawDesktopApi = {
     ipcRenderer.on(IPC_CHANNELS.lifecycleEvent, handler)
     return () => ipcRenderer.removeListener(IPC_CHANNELS.lifecycleEvent, handler)
   },
-  startupProgressSnapshot: () => ipcRenderer.invoke(IPC_CHANNELS.startupProgressSnapshot),
+  startupProgressSnapshot: (meta) => invokeRpc(IPC_CHANNELS.startupProgressSnapshot, meta),
   subscribeStartupProgress: (listener) => {
     const handler = (_event: Electron.IpcRendererEvent, progress: Parameters<typeof listener>[0]) =>
       listener(progress)
     ipcRenderer.on(IPC_CHANNELS.startupProgressEvent, handler)
     return () => ipcRenderer.removeListener(IPC_CHANNELS.startupProgressEvent, handler)
   },
-  systemPerformanceSnapshot: () => ipcRenderer.invoke(IPC_CHANNELS.systemPerformanceSnapshot),
-  runAudioBenchmark: () => ipcRenderer.invoke(IPC_CHANNELS.audioBenchmarkRun),
-  compiledAudioGraphSnapshot: () => ipcRenderer.invoke(IPC_CHANNELS.compiledAudioGraphSnapshot),
+  systemPerformanceSnapshot: (meta) => invokeRpc(IPC_CHANNELS.systemPerformanceSnapshot, meta),
+  runAudioBenchmark: (meta) => invokeRpc(IPC_CHANNELS.audioBenchmarkRun, meta),
+  compiledAudioGraphSnapshot: (meta) => invokeRpc(IPC_CHANNELS.compiledAudioGraphSnapshot, meta),
   subscribeApplicationCommands: (listener) => {
     const handler = (_event: Electron.IpcRendererEvent, command: Parameters<typeof listener>[0]) =>
       listener(command)
     ipcRenderer.on(IPC_CHANNELS.applicationCommandRequested, handler)
     return () => ipcRenderer.removeListener(IPC_CHANNELS.applicationCommandRequested, handler)
   },
-  executeApplicationWindowCommand: (command: ApplicationWindowCommandId) =>
-    ipcRenderer.invoke(IPC_CHANNELS.applicationWindowCommand, command),
-  setApplicationWindowTheme: (theme) =>
-    ipcRenderer.invoke(IPC_CHANNELS.applicationWindowTheme, theme),
+  executeApplicationWindowCommand: (meta, command: ApplicationWindowCommandId) =>
+    invokeRpc(IPC_CHANNELS.applicationWindowCommand, meta, command),
+  setApplicationWindowTheme: (meta, theme) =>
+    invokeRpc(IPC_CHANNELS.applicationWindowTheme, meta, theme),
   createProject: (meta, request: CreateProjectRequest) =>
     invokeRpc(IPC_CHANNELS.projectCreate, meta, request),
   prepareOpenProject: (meta, path?: string) =>
@@ -81,18 +81,18 @@ const api: YadawDesktopApi = {
   saveProject: (meta, path?: string) => invokeRpc(IPC_CHANNELS.projectSave, meta, path),
   closeProject: (meta, disposition?: ProjectCloseDisposition) =>
     invokeRpc(IPC_CHANNELS.projectClose, meta, disposition),
-  listProjectAssets: () => ipcRenderer.invoke(IPC_CHANNELS.projectAssetsList),
-  updateProjectConfiguration: (configuration: ProjectConfiguration) =>
-    ipcRenderer.invoke(IPC_CHANNELS.projectConfigurationUpdate, configuration),
-  getApplicationSettings: () => ipcRenderer.invoke(IPC_CHANNELS.settingsGet),
-  updateApplicationSettings: (patch: ApplicationSettingsPatch) =>
-    ipcRenderer.invoke(IPC_CHANNELS.settingsUpdate, patch),
-  setSoftwareMonitoringEnabled: (enabled: boolean) =>
-    ipcRenderer.invoke(IPC_CHANNELS.settingsSetSoftwareMonitoring, enabled),
-  configureAudioHostRuntime: (preferences: AudioHostRuntimePreferences) =>
-    ipcRenderer.invoke(IPC_CHANNELS.settingsConfigureAudioHostRuntime, preferences),
-  configureShortcuts: (preferences: ShortcutPreferences) =>
-    ipcRenderer.invoke(IPC_CHANNELS.settingsConfigureShortcuts, preferences),
+  listProjectAssets: (meta) => invokeRpc(IPC_CHANNELS.projectAssetsList, meta),
+  updateProjectConfiguration: (meta, configuration: ProjectConfiguration) =>
+    invokeRpc(IPC_CHANNELS.projectConfigurationUpdate, meta, configuration),
+  getApplicationSettings: (meta) => invokeRpc(IPC_CHANNELS.settingsGet, meta),
+  updateApplicationSettings: (meta, patch: ApplicationSettingsPatch) =>
+    invokeRpc(IPC_CHANNELS.settingsUpdate, meta, patch),
+  setSoftwareMonitoringEnabled: (meta, enabled: boolean) =>
+    invokeRpc(IPC_CHANNELS.settingsSetSoftwareMonitoring, meta, enabled),
+  configureAudioHostRuntime: (meta, preferences: AudioHostRuntimePreferences) =>
+    invokeRpc(IPC_CHANNELS.settingsConfigureAudioHostRuntime, meta, preferences),
+  configureShortcuts: (meta, preferences: ShortcutPreferences) =>
+    invokeRpc(IPC_CHANNELS.settingsConfigureShortcuts, meta, preferences),
   midiInputSnapshot: (meta) => invokeRpc(IPC_CHANNELS.midiInputSnapshot, meta),
   subscribeMidiInput: (listener) => {
     const handler = (_event: Electron.IpcRendererEvent, snapshot: Parameters<typeof listener>[0]) =>
@@ -104,17 +104,17 @@ const api: YadawDesktopApi = {
     invokeRpc(IPC_CHANNELS.midiInputConfigure, meta, preferences),
   setMidiControlLearning: (meta, enabled) =>
     invokeRpc(IPC_CHANNELS.midiControlLearning, meta, enabled),
-  chooseSwapDirectory: () => ipcRenderer.invoke(IPC_CHANNELS.settingsChooseSwap),
-  openSwapDirectory: () => ipcRenderer.invoke(IPC_CHANNELS.settingsOpenSwap),
+  chooseSwapDirectory: (meta) => invokeRpc(IPC_CHANNELS.settingsChooseSwap, meta),
+  openSwapDirectory: (meta) => invokeRpc(IPC_CHANNELS.settingsOpenSwap, meta),
   startRecording: (meta, request) => invokeRpc(IPC_CHANNELS.recordingStart, meta, request),
   stopRecording: (meta) => invokeRpc(IPC_CHANNELS.recordingStop, meta),
   listPendingRecordings: (meta) => invokeRpc(IPC_CHANNELS.recordingPendingList, meta),
   recoverRecording: (meta, id: string) => invokeRpc(IPC_CHANNELS.recordingRecover, meta, id),
   deletePendingRecording: (meta, id: string) =>
     invokeRpc(IPC_CHANNELS.recordingDeletePending, meta, id),
-  readAssetAudio: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.assetAudioRead, id),
-  readAssetWaveform: (request: WaveformWindowRequest) =>
-    ipcRenderer.invoke(IPC_CHANNELS.assetWaveformRead, request),
+  readAssetAudio: (meta, id: string) => invokeRpc(IPC_CHANNELS.assetAudioRead, meta, id),
+  readAssetWaveform: (meta, request: WaveformWindowRequest) =>
+    invokeRpc(IPC_CHANNELS.assetWaveformRead, meta, request),
   recordingWaveformSnapshot: (meta, request: WaveformWindowRequest) =>
     invokeRpc(IPC_CHANNELS.recordingWaveformSnapshot, meta, request),
   listPlugins: (meta) => invokeRpc(IPC_CHANNELS.pluginsList, meta),
@@ -142,7 +142,9 @@ const api: YadawDesktopApi = {
     ipcRenderer.on(IPC_CHANNELS.operationEvent, handler)
     return () => ipcRenderer.removeListener(IPC_CHANNELS.operationEvent, handler)
   },
-  cancelOperation: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.operationCancel, id)
+  operationStatus: (meta, id) => invokeRpc(IPC_CHANNELS.operationStatus, meta, id),
+  cancelOperation: (meta, id) => invokeRpc(IPC_CHANNELS.operationCancel, meta, id),
+  acknowledgeOperation: (meta, id) => invokeRpc(IPC_CHANNELS.operationAcknowledge, meta, id)
 }
 
 contextBridge.exposeInMainWorld("yadaw", api)

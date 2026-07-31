@@ -9,6 +9,7 @@ import type {
 import { useApplicationSettingsStore } from "./applicationSettings"
 import { useAudioRuntimeStore } from "./audioRuntime"
 import { useMidiInputStore } from "./midiInput"
+import { rpcEvent } from "../test/ipc"
 
 function snapshot(overrides: Partial<MidiInputSnapshot> = {}): MidiInputSnapshot {
   return {
@@ -108,8 +109,11 @@ function stubApi(overrides: Record<string, unknown>): void {
   }
   const subscribeCall = overrides.subscribeMidiInput
   if (typeof subscribeCall === "function") {
-    wrapped.subscribeMidiInput = vi.fn((listener: (value: MidiRuntimeResourceSnapshot) => void) =>
-      subscribeCall((value: MidiInputSnapshot) => listener(resource(value)))
+    wrapped.subscribeMidiInput = vi.fn(
+      (listener: Parameters<typeof window.yadaw.subscribeMidiInput>[0]) =>
+        subscribeCall((value: MidiInputSnapshot) =>
+          listener(rpcEvent(resource(value), value.capturedAt, host.epoch))
+        )
     )
   }
   const configureCall = overrides.configureMidiInput

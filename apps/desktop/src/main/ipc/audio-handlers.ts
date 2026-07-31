@@ -1,11 +1,10 @@
 import { randomUUID } from "node:crypto"
-import { ipcMain } from "electron"
 import { IPC_CHANNELS, rpcFailure, rpcSuccess } from "@yadaw/contracts"
 import type { ResourceRef, RpcError, RpcRequestMeta, RpcResult } from "@yadaw/contracts"
 import type { IpcHandlerContext } from "./context"
 import { registerRpcHandler } from "./rpc"
+import { validateMutationTarget, validateReadTarget } from "./resource-validation"
 import {
-  assertTrustedSender,
   normalizeAudioDeviceList,
   normalizeAudioRuntime,
   validateAudioBackend,
@@ -117,13 +116,17 @@ export function registerAudioHandlers(context: IpcHandlerContext): void {
       await recordings.abortStart()
     }
   }
-  ipcMain.handle(IPC_CHANNELS.audioBackends, async (event) => {
-    assertTrustedSender(event)
+  registerRpcHandler(IPC_CHANNELS.audioBackends, async ({ meta }) => {
+    await reconcileAudioHost()
+    const invalid = validateReadTarget(meta, lifecycle.applicationState.audioHost)
+    if (invalid) return invalid
     return audioHostService.listAudioBackends()
   })
 
-  ipcMain.handle(IPC_CHANNELS.audioDevices, async (event, value: unknown) => {
-    assertTrustedSender(event)
+  registerRpcHandler(IPC_CHANNELS.audioDevices, async ({ meta }, value: unknown) => {
+    await reconcileAudioHost()
+    const invalid = validateReadTarget(meta, lifecycle.applicationState.audioHost)
+    if (invalid) return invalid
     return normalizeAudioDeviceList(
       await audioHostService.listAudioDevices(validateAudioBackend(value))
     )
@@ -259,15 +262,32 @@ export function registerAudioHandlers(context: IpcHandlerContext): void {
     return snapshot
   })
 
-  ipcMain.handle(IPC_CHANNELS.audioRoundTripLatencyStart, async (event, value: unknown) => {
-    assertTrustedSender(event)
-    return audioHostService.startRoundTripLatencyMeasurement(
+  registerRpcHandler(IPC_CHANNELS.audioRoundTripLatencyStart, async ({ meta }, value: unknown) => {
+    await reconcileAudioHost()
+    const target = lifecycle.applicationState.audioHost
+    const invalid = validateMutationTarget(meta, target)
+    if (invalid) return invalid
+    const begun = operations.registry.begin({
+      operationId: meta.mutation!.operationId,
+      idempotencyKey: meta.mutation!.idempotencyKey,
+      target
+    })
+    if (!begun.ok) throw new Error(begun.error.code)
+    if (begun.value.disposition !== "started" && begun.value.operation.result) {
+      return begun.value.operation.result
+    }
+    const valueResult = await audioHostService.startRoundTripLatencyMeasurement(
       validateRoundTripLatencyMeasurementRequest(value)
     )
+    const result = rpcSuccess(meta, valueResult)
+    operations.registry.finish(meta.mutation!.operationId, "committed", result)
+    return result
   })
 
-  ipcMain.handle(IPC_CHANNELS.audioRoundTripLatencySnapshot, async (event) => {
-    assertTrustedSender(event)
+  registerRpcHandler(IPC_CHANNELS.audioRoundTripLatencySnapshot, async ({ meta }) => {
+    await reconcileAudioHost()
+    const invalid = validateReadTarget(meta, lifecycle.applicationState.audioHost)
+    if (invalid) return invalid
     return audioHostService.roundTripLatencyMeasurementSnapshot()
   })
 }

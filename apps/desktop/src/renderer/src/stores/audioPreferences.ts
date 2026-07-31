@@ -11,6 +11,7 @@ import type {
 } from "@yadaw/contracts"
 import { useAudioRuntimeStore } from "./audioRuntime"
 
+import { readMeta, rpcErrorMessage } from "../rpc"
 const STORAGE_KEY = "yadaw.audio-preferences.v1"
 
 function isAudioBackend(value: unknown): value is AudioBackend {
@@ -120,7 +121,17 @@ export const useAudioPreferencesStore = defineStore("audio-preferences", () => {
     discoveryState.value = "loading"
     discoveryError.value = ""
     try {
-      const result = await window.yadaw.listAudioBackends()
+      const target = audioRuntimeStore.audioHostRef
+      if (!target) return []
+      const response = await window.yadaw.listAudioBackends(readMeta(target))
+      if (!response.ok) {
+        if (generation !== discoveryGeneration) return backends.value
+        discoveryError.value = rpcErrorMessage(response.error)
+        backends.value = []
+        discoveryState.value = "unavailable"
+        return []
+      }
+      const result = response.value
       if (generation !== discoveryGeneration) return backends.value
       backends.value = result
       discoveryState.value = "ready"
@@ -140,7 +151,18 @@ export const useAudioPreferencesStore = defineStore("audio-preferences", () => {
     discoveryState.value = "loading"
     discoveryError.value = ""
     try {
-      const devices = await window.yadaw.listAudioDevices(backend)
+      const target = audioRuntimeStore.audioHostRef
+      if (!target) return
+      const response = await window.yadaw.listAudioDevices(readMeta(target), backend)
+      if (!response.ok) {
+        if (generation !== discoveryGeneration) return
+        discoveryError.value = rpcErrorMessage(response.error)
+        inputDevices.value = []
+        outputDevices.value = []
+        discoveryState.value = "unavailable"
+        return
+      }
+      const devices = response.value
       if (generation !== discoveryGeneration) return
       inputDevices.value = devices.inputs
       outputDevices.value = devices.outputs

@@ -2,6 +2,7 @@ import { flushPromises, mount } from "@vue/test-utils"
 import { createPinia } from "pinia"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import MixerDisplaySettings from "./MixerDisplaySettings.vue"
+import { rpcSuccess, settingsSnapshot, testBootstrap, testSettings } from "../../test/ipc"
 
 const settings = {
   swapDirectory: "C:/swap",
@@ -16,10 +17,16 @@ const settings = {
 
 describe("MixerDisplaySettings", () => {
   beforeEach(() => {
-    window.yadaw.getApplicationSettings = vi.fn().mockResolvedValue(settings)
+    window.yadaw.bootstrap = vi
+      .fn()
+      .mockResolvedValue(
+        rpcSuccess(testBootstrap({ settings: settingsSnapshot(testSettings(settings)) }))
+      )
     window.yadaw.updateApplicationSettings = vi
       .fn()
-      .mockImplementation(async (patch) => ({ ...settings, ...patch }))
+      .mockImplementation(async (_meta, patch) =>
+        rpcSuccess(settingsSnapshot(testSettings({ ...settings, ...patch }), 2))
+      )
   })
 
   it("persists the selected peak hold time and shows the IEC return default", async () => {
@@ -32,7 +39,7 @@ describe("MixerDisplaySettings", () => {
     await peakHold.setValue("4s")
     await flushPromises()
 
-    expect(window.yadaw.updateApplicationSettings).toHaveBeenCalledWith({
+    expect(window.yadaw.updateApplicationSettings).toHaveBeenCalledWith(expect.any(Object), {
       meterPeakHold: "4s"
     })
     expect(wrapper.get('select[aria-label="Mixer meter return time"]').text()).toContain(
