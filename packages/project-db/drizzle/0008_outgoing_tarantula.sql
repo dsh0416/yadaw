@@ -1,2 +1,0 @@
-ALTER TABLE "plugin_instances" ADD COLUMN "audio_mode" text DEFAULT 'stereo' NOT NULL;--> statement-breakpoint
-ALTER TABLE "plugin_instances" ADD CONSTRAINT "plugin_instances_audio_mode_check" CHECK ("plugin_instances"."audio_mode" in ('mono', 'mono-to-stereo', 'stereo', 'dual-mono'));

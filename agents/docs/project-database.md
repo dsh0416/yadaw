@@ -53,8 +53,9 @@ The following rules are mandatory:
 
 - Never hand-maintain TypeScript arrays of DDL statements or a custom migration
   journal.
-- Never edit an existing generated migration or its metadata after it has been
-  shared. Fix the schema and generate a new migration.
+- Before project-format stability, schema resets replace the complete generated
+  history with one fresh baseline. After stability is declared, migrations
+  become append-only and existing generated artifacts must not be edited.
 - Apply migrations in application code with
   `drizzle-orm/pglite/migrator`; do not loop over SQL strings with PGlite
   `exec`.

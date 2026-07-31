@@ -3,8 +3,8 @@
 This refactor is the architecture gate before new M1 product work. It is
 implemented directly on `dsh0416/refactor-2` as a sequence of independently
 revertible commits. Internal TypeScript, IPC, and native wire APIs may change
-atomically, while existing project archives must migrate through the committed
-Drizzle migrations.
+atomically. The pre-1.0 project format is intentionally reset to the current
+schema; archives created against earlier migration histories are unsupported.
 
 ## Target boundaries
 
@@ -46,8 +46,8 @@ Drizzle migrations.
 
 - Project command semantics have one implementation and apply/inverse
   conformance tests.
-- Existing project archives migrate in a working copy and the source archive is
-  not replaced until a successful save.
+- New-format project archives open and save transactionally. Earlier
+  development archives are rejected rather than upgraded.
 - Ordinary audio and instrument channels have exactly one track; clips address
   tracks and plug-ins/routes address mixer channels.
 - Renderer store dependencies are acyclic and native calls remain behind the
@@ -66,12 +66,9 @@ allocation tests at zero allocations. A repeatable median regression above five
 percent is investigated before the responsible commit is accepted; generated
 benchmark artifacts are never committed.
 
-## Migration review notes
+## Migration baseline
 
-Migration `0012_tracks_and_audio_clips` contains a reviewed data backfill in
-addition to the Drizzle-generated structural diff. Drizzle can express the new
-schema and table rename, but it cannot derive the required deterministic
-`track:${channelId}` identities or rewrite existing audio/MIDI clip foreign
-keys. The migration therefore inserts one track for each ordinary audio or
-instrument channel and rewrites both clip tables before installing their new
-track foreign keys.
+The migration history is intentionally squashed into one generated baseline
+that creates the current schema from an empty database. It contains no legacy
+table renames or data backfills. Rewriting this baseline is permitted until the
+project format receives an explicit stability guarantee.

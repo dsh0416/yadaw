@@ -1,5 +1,5 @@
 {
-  "id": "f1ab96b8-ad02-4ef8-9324-1f02df244796",
+  "id": "dd541683-1fe5-4509-b3fd-86d35a93a9ec",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -298,6 +298,172 @@
       },
       "isRLSEnabled": false
     },
+    "public.audio_clips": {
+      "name": "audio_clips",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "asset_id": {
+          "name": "asset_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "track_id": {
+          "name": "track_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "start_frame": {
+          "name": "start_frame",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_offset_frames": {
+          "name": "source_offset_frames",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        },
+        "length_frames": {
+          "name": "length_frames",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "audio_clips_track_start": {
+          "name": "audio_clips_track_start",
+          "columns": [
+            {
+              "expression": "track_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "start_frame",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "audio_clips_asset_id_assets_id_fk": {
+          "name": "audio_clips_asset_id_assets_id_fk",
+          "tableFrom": "audio_clips",
+          "tableTo": "assets",
+          "columnsFrom": [
+            "asset_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "audio_clips_track_id_tracks_id_fk": {
+          "name": "audio_clips_track_id_tracks_id_fk",
+          "tableFrom": "audio_clips",
+          "tableTo": "tracks",
+          "columnsFrom": [
+            "track_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "audio_clips_name_check": {
+          "name": "audio_clips_name_check",
+          "value": "length(trim(\"audio_clips\".\"name\")) > 0"
+        },
+        "audio_clips_start_frame_check": {
+          "name": "audio_clips_start_frame_check",
+          "value": "\"audio_clips\".\"start_frame\" >= 0"
+        },
+        "audio_clips_source_offset_frames_check": {
+          "name": "audio_clips_source_offset_frames_check",
+          "value": "\"audio_clips\".\"source_offset_frames\" >= 0"
+        },
+        "audio_clips_length_frames_check": {
+          "name": "audio_clips_length_frames_check",
+          "value": "\"audio_clips\".\"length_frames\" > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.key_signature_events": {
+      "name": "key_signature_events",
+      "schema": "",
+      "columns": {
+        "tick": {
+          "name": "tick",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "fifths": {
+          "name": "fifths",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "mode": {
+          "name": "mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "key_signature_events_tick_check": {
+          "name": "key_signature_events_tick_check",
+          "value": "\"key_signature_events\".\"tick\" >= 0"
+        },
+        "key_signature_events_fifths_check": {
+          "name": "key_signature_events_fifths_check",
+          "value": "\"key_signature_events\".\"fifths\" between -7 and 7"
+        },
+        "key_signature_events_mode_check": {
+          "name": "key_signature_events_mode_check",
+          "value": "\"key_signature_events\".\"mode\" in ('major', 'minor')"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.midi_clips": {
       "name": "midi_clips",
       "schema": "",
@@ -383,10 +549,10 @@
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
-        "midi_clips_track_id_mixer_channels_id_fk": {
-          "name": "midi_clips_track_id_mixer_channels_id_fk",
+        "midi_clips_track_id_tracks_id_fk": {
+          "name": "midi_clips_track_id_tracks_id_fk",
           "tableFrom": "midi_clips",
-          "tableTo": "mixer_channels",
+          "tableTo": "tracks",
           "columnsFrom": [
             "track_id"
           ],
@@ -714,6 +880,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "system_role": {
+          "name": "system_role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "name": {
           "name": "name",
           "type": "text",
@@ -732,9 +904,33 @@
           "primaryKey": false,
           "notNull": true
         },
+        "input_source": {
+          "name": "input_source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "input_format": {
           "name": "input_format",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "midi_input_port_id": {
+          "name": "midi_input_port_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "midi_input_port_name": {
+          "name": "midi_input_port_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "midi_input_channel": {
+          "name": "midi_input_channel",
+          "type": "smallint",
           "primaryKey": false,
           "notNull": false
         },
@@ -772,8 +968,21 @@
           "primaryKey": false,
           "notNull": false
         },
+        "output_bus": {
+          "name": "output_bus",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": false
+        },
         "record_armed": {
           "name": "record_armed",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "input_monitoring": {
+          "name": "input_monitoring",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
@@ -827,6 +1036,22 @@
           "method": "btree",
           "with": {}
         },
+        "mixer_system_role_singleton": {
+          "name": "mixer_system_role_singleton",
+          "columns": [
+            {
+              "expression": "system_role",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"mixer_channels\".\"system_role\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "mixer_channel_sort_order": {
           "name": "mixer_channel_sort_order",
           "columns": [
@@ -870,7 +1095,15 @@
       "checkConstraints": {
         "mixer_channels_kind_check": {
           "name": "mixer_channels_kind_check",
-          "value": "\"mixer_channels\".\"kind\" in ('audio', 'instrument', 'bus', 'master', 'output')"
+          "value": "\"mixer_channels\".\"kind\" in ('audio', 'instrument', 'aux', 'master', 'output')"
+        },
+        "mixer_channels_system_role_check": {
+          "name": "mixer_channels_system_role_check",
+          "value": "\"mixer_channels\".\"system_role\" is null or \"mixer_channels\".\"system_role\" = 'metronome'"
+        },
+        "mixer_channels_system_role_kind_check": {
+          "name": "mixer_channels_system_role_kind_check",
+          "value": "\"mixer_channels\".\"system_role\" is null or \"mixer_channels\".\"kind\" = 'instrument'"
         },
         "mixer_channels_name_check": {
           "name": "mixer_channels_name_check",
@@ -896,17 +1129,33 @@
           "name": "mixer_channels_master_solo_check",
           "value": "\"mixer_channels\".\"kind\" <> 'master' or not \"mixer_channels\".\"soloed\""
         },
+        "mixer_channels_input_monitoring_check": {
+          "name": "mixer_channels_input_monitoring_check",
+          "value": "(\"mixer_channels\".\"kind\" = 'audio' or (\"mixer_channels\".\"kind\" = 'instrument' and \"mixer_channels\".\"system_role\" is null))\n        or not \"mixer_channels\".\"input_monitoring\""
+        },
+        "mixer_channels_record_armed_check": {
+          "name": "mixer_channels_record_armed_check",
+          "value": "(\"mixer_channels\".\"kind\" = 'audio' or (\"mixer_channels\".\"kind\" = 'instrument' and \"mixer_channels\".\"system_role\" is null))\n        or not \"mixer_channels\".\"record_armed\""
+        },
+        "mixer_channels_midi_input_check": {
+          "name": "mixer_channels_midi_input_check",
+          "value": "(\n        \"mixer_channels\".\"kind\" = 'instrument'\n        and \"mixer_channels\".\"system_role\" is null\n        and (\n          (\"mixer_channels\".\"midi_input_port_id\" is null and \"mixer_channels\".\"midi_input_port_name\" is null)\n          or (\"mixer_channels\".\"midi_input_port_id\" is not null and \"mixer_channels\".\"midi_input_port_name\" is not null)\n        )\n        and (\"mixer_channels\".\"midi_input_channel\" is null or \"mixer_channels\".\"midi_input_channel\" between 0 and 15)\n      ) or (\n        not (\"mixer_channels\".\"kind\" = 'instrument' and \"mixer_channels\".\"system_role\" is null)\n        and \"mixer_channels\".\"midi_input_port_id\" is null\n        and \"mixer_channels\".\"midi_input_port_name\" is null\n        and \"mixer_channels\".\"midi_input_channel\" is null\n      )"
+        },
         "mixer_channels_output_route_check": {
           "name": "mixer_channels_output_route_check",
-          "value": "(\"mixer_channels\".\"kind\" in ('master', 'output')) = (\"mixer_channels\".\"output_channel_id\" is null)"
+          "value": "(\n        \"mixer_channels\".\"kind\" in ('master', 'output')\n        and \"mixer_channels\".\"output_channel_id\" is null\n        and \"mixer_channels\".\"output_bus\" is null\n      ) or (\n        \"mixer_channels\".\"kind\" not in ('master', 'output')\n        and num_nonnulls(\"mixer_channels\".\"output_channel_id\", \"mixer_channels\".\"output_bus\") = 1\n      )"
+        },
+        "mixer_channels_output_bus_check": {
+          "name": "mixer_channels_output_bus_check",
+          "value": "\"mixer_channels\".\"output_bus\" is null or \"mixer_channels\".\"output_bus\" between 1 and 256"
         },
         "mixer_channels_input_check": {
           "name": "mixer_channels_input_check",
-          "value": "(\n      \"mixer_channels\".\"kind\" = 'audio'\n      and \"mixer_channels\".\"input_format\" is not null\n      and (\n        (\"mixer_channels\".\"input_format\" = 'mono' and cardinality(\"mixer_channels\".\"input_channels\") = 1)\n        or (\"mixer_channels\".\"input_format\" = 'stereo' and cardinality(\"mixer_channels\".\"input_channels\") = 2)\n      )\n    ) or (\n      \"mixer_channels\".\"kind\" <> 'audio'\n      and \"mixer_channels\".\"input_format\" is null\n      and cardinality(\"mixer_channels\".\"input_channels\") = 0\n      and not \"mixer_channels\".\"record_armed\"\n    )"
+          "value": "(\n      \"mixer_channels\".\"kind\" in ('audio', 'aux')\n      and \"mixer_channels\".\"input_source\" is not null\n      and \"mixer_channels\".\"input_format\" is not null\n      and (\n        (\"mixer_channels\".\"input_format\" = 'mono' and cardinality(\"mixer_channels\".\"input_channels\") = 1)\n        or (\n          \"mixer_channels\".\"input_format\" = 'stereo'\n          and cardinality(\"mixer_channels\".\"input_channels\") = 2\n          and \"mixer_channels\".\"input_channels\"[1] <> \"mixer_channels\".\"input_channels\"[2]\n        )\n      )\n    ) or (\n      \"mixer_channels\".\"kind\" not in ('audio', 'aux')\n      and \"mixer_channels\".\"input_source\" is null\n      and \"mixer_channels\".\"input_format\" is null\n      and cardinality(\"mixer_channels\".\"input_channels\") = 0\n    )"
         },
         "mixer_channels_input_channels_check": {
           "name": "mixer_channels_input_channels_check",
-          "value": "0 < all(\"mixer_channels\".\"input_channels\")"
+          "value": "(\n        \"mixer_channels\".\"input_source\" is null\n        or (\n          0 < all(\"mixer_channels\".\"input_channels\")\n          and (\n            (\"mixer_channels\".\"input_source\" = 'hardware' and 32 >= all(\"mixer_channels\".\"input_channels\"))\n            or (\"mixer_channels\".\"input_source\" = 'bus' and 256 >= all(\"mixer_channels\".\"input_channels\"))\n          )\n        )\n      )"
         },
         "mixer_channels_hardware_output_check": {
           "name": "mixer_channels_hardware_output_check",
@@ -935,7 +1184,13 @@
           "name": "target_channel_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
+        },
+        "target_bus": {
+          "name": "target_bus",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": false
         },
         "sort_order": {
           "name": "sort_order",
@@ -955,7 +1210,7 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "default": "'post'"
+          "default": "'post-pan'"
         },
         "level_db": {
           "name": "level_db",
@@ -963,18 +1218,33 @@
           "primaryKey": false,
           "notNull": true,
           "default": -90
-        },
-        "pan": {
-          "name": "pan",
-          "type": "double precision",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
         }
       },
       "indexes": {
-        "mixer_sends_source_target_unique": {
-          "name": "mixer_sends_source_target_unique",
+        "mixer_sends_source_bus_unique": {
+          "name": "mixer_sends_source_bus_unique",
+          "columns": [
+            {
+              "expression": "source_channel_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "target_bus",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"mixer_sends\".\"target_bus\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "mixer_sends_source_output_unique": {
+          "name": "mixer_sends_source_output_unique",
           "columns": [
             {
               "expression": "source_channel_id",
@@ -990,6 +1260,7 @@
             }
           ],
           "isUnique": true,
+          "where": "\"mixer_sends\".\"target_channel_id\" is not null",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -1054,19 +1325,15 @@
         },
         "mixer_sends_tap_check": {
           "name": "mixer_sends_tap_check",
-          "value": "\"mixer_sends\".\"tap\" in ('pre', 'post')"
+          "value": "\"mixer_sends\".\"tap\" in ('pre', 'post', 'post-pan')"
         },
         "mixer_sends_level_db_check": {
           "name": "mixer_sends_level_db_check",
           "value": "\"mixer_sends\".\"level_db\" between -90 and 12"
         },
-        "mixer_sends_pan_check": {
-          "name": "mixer_sends_pan_check",
-          "value": "\"mixer_sends\".\"pan\" between -1 and 1"
-        },
-        "mixer_sends_distinct_channels_check": {
-          "name": "mixer_sends_distinct_channels_check",
-          "value": "\"mixer_sends\".\"source_channel_id\" <> \"mixer_sends\".\"target_channel_id\""
+        "mixer_sends_target_check": {
+          "name": "mixer_sends_target_check",
+          "value": "num_nonnulls(\"mixer_sends\".\"target_channel_id\", \"mixer_sends\".\"target_bus\") = 1\n        and (\"mixer_sends\".\"target_bus\" is null or \"mixer_sends\".\"target_bus\" between 1 and 256)"
         }
       },
       "isRLSEnabled": false
@@ -1111,6 +1378,13 @@
           "primaryKey": false,
           "notNull": true
         },
+        "audio_mode": {
+          "name": "audio_mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'stereo'"
+        },
         "enabled": {
           "name": "enabled",
           "type": "boolean",
@@ -1127,6 +1401,13 @@
         },
         "controller_state": {
           "name": "controller_state",
+          "type": "bytea",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''::bytea"
+        },
+        "ara_document_state": {
+          "name": "ara_document_state",
           "type": "bytea",
           "primaryKey": false,
           "notNull": true,
@@ -1227,6 +1508,10 @@
         "plugin_instances_role_check": {
           "name": "plugin_instances_role_check",
           "value": "\"plugin_instances\".\"role\" in ('instrument', 'insert')"
+        },
+        "plugin_instances_audio_mode_check": {
+          "name": "plugin_instances_audio_mode_check",
+          "value": "\"plugin_instances\".\"audio_mode\" in ('mono', 'mono-to-stereo', 'stereo', 'dual-mono')"
         },
         "plugin_instances_slot_order_check": {
           "name": "plugin_instances_slot_order_check",
@@ -1371,8 +1656,8 @@
       },
       "isRLSEnabled": false
     },
-    "public.timeline_clips": {
-      "name": "timeline_clips",
+    "public.tracks": {
+      "name": "tracks",
       "schema": "",
       "columns": {
         "id": {
@@ -1381,56 +1666,46 @@
           "primaryKey": true,
           "notNull": true
         },
-        "asset_id": {
-          "name": "asset_id",
+        "channel_id": {
+          "name": "channel_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "track_id": {
-          "name": "track_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "start_frame": {
-          "name": "start_frame",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "source_offset_frames": {
-          "name": "source_offset_frames",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "0"
-        },
-        "length_frames": {
-          "name": "length_frames",
-          "type": "bigint",
+        "sort_order": {
+          "name": "sort_order",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true
         }
       },
       "indexes": {
-        "timeline_clips_track_start": {
-          "name": "timeline_clips_track_start",
+        "tracks_channel_id_unique": {
+          "name": "tracks_channel_id_unique",
           "columns": [
             {
-              "expression": "track_id",
+              "expression": "channel_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "tracks_sort_order_index": {
+          "name": "tracks_sort_order_index",
+          "columns": [
+            {
+              "expression": "sort_order",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
             },
             {
-              "expression": "start_frame",
+              "expression": "id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1443,25 +1718,12 @@
         }
       },
       "foreignKeys": {
-        "timeline_clips_asset_id_assets_id_fk": {
-          "name": "timeline_clips_asset_id_assets_id_fk",
-          "tableFrom": "timeline_clips",
-          "tableTo": "assets",
-          "columnsFrom": [
-            "asset_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "timeline_clips_track_id_mixer_channels_id_fk": {
-          "name": "timeline_clips_track_id_mixer_channels_id_fk",
-          "tableFrom": "timeline_clips",
+        "tracks_channel_id_mixer_channels_id_fk": {
+          "name": "tracks_channel_id_mixer_channels_id_fk",
+          "tableFrom": "tracks",
           "tableTo": "mixer_channels",
           "columnsFrom": [
-            "track_id"
+            "channel_id"
           ],
           "columnsTo": [
             "id"
@@ -1474,21 +1736,9 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
-        "timeline_clips_name_check": {
-          "name": "timeline_clips_name_check",
-          "value": "length(trim(\"timeline_clips\".\"name\")) > 0"
-        },
-        "timeline_clips_start_frame_check": {
-          "name": "timeline_clips_start_frame_check",
-          "value": "\"timeline_clips\".\"start_frame\" >= 0"
-        },
-        "timeline_clips_source_offset_frames_check": {
-          "name": "timeline_clips_source_offset_frames_check",
-          "value": "\"timeline_clips\".\"source_offset_frames\" >= 0"
-        },
-        "timeline_clips_length_frames_check": {
-          "name": "timeline_clips_length_frames_check",
-          "value": "\"timeline_clips\".\"length_frames\" > 0"
+        "tracks_sort_order_check": {
+          "name": "tracks_sort_order_check",
+          "value": "\"tracks\".\"sort_order\" >= 0"
         }
       },
       "isRLSEnabled": false
