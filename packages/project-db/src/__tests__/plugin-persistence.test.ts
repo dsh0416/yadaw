@@ -41,9 +41,7 @@ describe("plugin-persistence", () => {
   it("identifies plugin commands", () => {
     expect(isPluginCommand({ type: "create-plugin" } as ProjectCommand)).toBe(true)
     expect(isPluginCommand({ type: "delete-plugin" } as ProjectCommand)).toBe(true)
-    expect(
-      isPluginCommand({ type: "update-channel", channelId: "a", patch: {} } as ProjectCommand)
-    ).toBe(false)
+    expect(isPluginCommand({ type: "update-channel", channelId: "a", patch: {} })).toBe(false)
   })
 
   it("inserts create-plugin rows", async () => {

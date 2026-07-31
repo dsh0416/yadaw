@@ -119,9 +119,7 @@ describe("createPianoRollEditing", () => {
             graph: ref(graphSnapshot),
             activeClip: computed(() => clip),
             visibleNotes: computed(
-              () =>
-                options?.visible ??
-                (clip.notes.map((note) => requireItem(note.id)) as NoteGestureItem[])
+              () => options?.visible ?? clip.notes.map((note) => requireItem(note.id))
             ),
             selectedItems: computed(() =>
               pianoRollStore.selectedNotes.flatMap((reference) => {

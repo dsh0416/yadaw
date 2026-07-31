@@ -1,5 +1,5 @@
 import { createPinia, setActivePinia } from "pinia"
-import { computed, nextTick, ref } from "vue"
+import { computed, nextTick } from "vue"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { MidiClipState, MidiNoteState, ProjectCommand } from "@yadaw/contracts"
 import { usePianoRollStore } from "../../stores/pianoRoll"

@@ -95,7 +95,7 @@ describe("registerSettingsRpcHandlers", () => {
     const context = createContext()
     registerSettingsRpcHandlers(context)
     const before =
-      await context.lifecycle.applicationState.synchronizeApplicationSettings(defaultSettings)
+      context.lifecycle.applicationState.synchronizeApplicationSettings(defaultSettings)
 
     const result = await invoke(
       electronMocks,
@@ -114,7 +114,7 @@ describe("registerSettingsRpcHandlers", () => {
     const context = createContext()
     registerSettingsRpcHandlers(context)
     const before =
-      await context.lifecycle.applicationState.synchronizeApplicationSettings(defaultSettings)
+      context.lifecycle.applicationState.synchronizeApplicationSettings(defaultSettings)
 
     const result = await invoke(
       electronMocks,
@@ -136,7 +136,7 @@ describe("registerSettingsRpcHandlers", () => {
     const context = createContext()
     registerSettingsRpcHandlers(context)
     const before =
-      await context.lifecycle.applicationState.synchronizeApplicationSettings(defaultSettings)
+      context.lifecycle.applicationState.synchronizeApplicationSettings(defaultSettings)
 
     const result = await invoke(
       electronMocks,
@@ -158,7 +158,7 @@ describe("registerSettingsRpcHandlers", () => {
     })
     registerSettingsRpcHandlers(context)
     const before =
-      await context.lifecycle.applicationState.synchronizeApplicationSettings(defaultSettings)
+      context.lifecycle.applicationState.synchronizeApplicationSettings(defaultSettings)
 
     const result = await invoke(
       electronMocks,
@@ -177,7 +177,7 @@ describe("registerSettingsRpcHandlers", () => {
     const context = createContext()
     registerSettingsRpcHandlers(context)
     const before =
-      await context.lifecycle.applicationState.synchronizeApplicationSettings(defaultSettings)
+      context.lifecycle.applicationState.synchronizeApplicationSettings(defaultSettings)
     const preferences = {
       workerThreads: 2,
       maxBlockingThreads: 4,
@@ -203,7 +203,7 @@ describe("registerSettingsRpcHandlers", () => {
     const context = createContext()
     registerSettingsRpcHandlers(context)
     const before =
-      await context.lifecycle.applicationState.synchronizeApplicationSettings(defaultSettings)
+      context.lifecycle.applicationState.synchronizeApplicationSettings(defaultSettings)
 
     const result = await invoke(
       electronMocks,
@@ -225,7 +225,7 @@ describe("registerSettingsRpcHandlers", () => {
     const context = createContext()
     registerSettingsRpcHandlers(context)
     const before =
-      await context.lifecycle.applicationState.synchronizeApplicationSettings(defaultSettings)
+      context.lifecycle.applicationState.synchronizeApplicationSettings(defaultSettings)
 
     const result = await invoke(
       electronMocks,
@@ -246,7 +246,7 @@ describe("registerSettingsRpcHandlers", () => {
     const context = createContext()
     registerSettingsRpcHandlers(context)
     const before =
-      await context.lifecycle.applicationState.synchronizeApplicationSettings(defaultSettings)
+      context.lifecycle.applicationState.synchronizeApplicationSettings(defaultSettings)
 
     const result = await invoke(
       electronMocks,
@@ -266,7 +266,7 @@ describe("registerSettingsRpcHandlers", () => {
     const context = createContext()
     registerSettingsRpcHandlers(context)
     const before =
-      await context.lifecycle.applicationState.synchronizeApplicationSettings(defaultSettings)
+      context.lifecycle.applicationState.synchronizeApplicationSettings(defaultSettings)
 
     const result = await invoke(
       electronMocks,

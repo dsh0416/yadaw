@@ -171,7 +171,7 @@ describe("AudioGraphPublisher", () => {
       activateGraphDeployment: vi.fn(async () => activated)
     }
     const publisher = new AudioGraphPublisher(
-      { compile: vi.fn() } as never,
+      { compile: vi.fn() },
       { materialize: vi.fn() } as never,
       audioHost as never,
       null,
@@ -234,7 +234,7 @@ describe("AudioGraphPublisher", () => {
       abortGraphDeployment: vi.fn(async () => undefined)
     }
     const publisher = new AudioGraphPublisher(
-      { compile: vi.fn() } as never,
+      { compile: vi.fn() },
       { materialize: vi.fn() } as never,
       audioHost as never,
       null,
