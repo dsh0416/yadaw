@@ -383,7 +383,7 @@ onBeforeUnmount(() => {
 
 .clear-button {
   width: 32px;
-  font-size: 18px;
+  font-size: var(--ui-type-size-panel-title);
 }
 
 .shortcut-error {
