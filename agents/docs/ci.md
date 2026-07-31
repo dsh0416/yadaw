@@ -67,6 +67,12 @@ workspace). Rust coverage requires the locked `cargo-llvm-cov` tool and the
 Rust coverage step so instrumented objects stay out of the shared `target/`
 cache.
 
+`codecov.yml` tags uploads with `javascript` and `rust` flags, and defines
+Codecov components for each coverage-producing workspace package or crate
+(`desktop`, `contracts`, `project-db`, `ui`, the `dsp-*` / host crates, and
+`plugins`). Components drive per-area project and patch status checks and
+appear in the Codecov PR comment.
+
 ## Creating a release
 
 `VERSION`, the root package, all workspace packages, and the Cargo workspace
