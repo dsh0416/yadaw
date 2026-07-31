@@ -12,6 +12,7 @@ export {
   audioTracks,
   availableOutputTargets,
   availableSendTargets,
+  channelForTrack,
   instrumentTracks,
   meterFor,
   patchMixerGraph,

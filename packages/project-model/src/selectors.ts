@@ -41,6 +41,14 @@ export function systemChannels(channels: readonly MixerChannelState[]): MixerCha
   return channels.filter((channel) => channel.systemRole !== null)
 }
 
+export function channelForTrack(
+  graph: ProjectGraphSnapshot,
+  trackId: string
+): MixerChannelState | undefined {
+  const channelId = graph.tracks.find((track) => track.id === trackId)?.channelId
+  return graph.channels.find((channel) => channel.id === channelId)
+}
+
 export function sendsFor(graph: ProjectGraphSnapshot, channelId: string): MixerSendState[] {
   return graph.sends.filter((send) => send.sourceChannelId === channelId)
 }

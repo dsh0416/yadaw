@@ -79,6 +79,28 @@ function mockGridBounds(element: HTMLElement): void {
 }
 
 describe("PianoRollDock", () => {
+  it("resolves a MIDI clip track id through its owning channel for styling", () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const mixer = useMixerStore()
+    mixer.hydrate(graph)
+    const pianoRoll = usePianoRollStore()
+    pianoRoll.selectArrangementClip("clip-1")
+    pianoRoll.openSelection("clip-1")
+
+    const wrapper = mount(PianoRollDock, { global: { plugins: [pinia] } })
+
+    expect(graph.midiClips[0]!.trackId).not.toBe(graph.channels[0]!.id)
+    expect(
+      wrapper.get<HTMLElement>(".clip-range").element.style.getPropertyValue("--clip-color")
+    ).toBe("#73D6A2")
+    expect(
+      wrapper.get<HTMLElement>("button.note").element.style.getPropertyValue("--note-color")
+    ).toBe("#73D6A2")
+
+    wrapper.unmount()
+  })
+
   it("commits inspector stepping, blur, and Enter updates to the selected note", async () => {
     const pinia = createPinia()
     setActivePinia(pinia)

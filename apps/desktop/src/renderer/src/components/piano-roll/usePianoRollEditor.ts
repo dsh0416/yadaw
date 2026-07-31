@@ -4,10 +4,10 @@ import { storeToRefs } from "pinia"
 import type {
   MidiClipState,
   MidiNoteState,
-  MixerChannelState,
   ProjectGraphSnapshot,
   ProjectCommand
 } from "@yadaw/contracts"
+import { channelForTrack } from "@yadaw/project-model"
 import { useApplicationSettingsStore } from "../../stores/applicationSettings"
 import { useMixerStore } from "../../stores/mixer"
 import { usePianoRollStore } from "../../stores/pianoRoll"
@@ -83,12 +83,6 @@ export function createPianoRollEditor(): PianoRollEditor {
   )
   const pixelsPerTick = computed(
     () => pianoRollStore.pixelsPerQuarter / graph.value.tempoMap.ticksPerQuarter
-  )
-  const channelsById = computed(
-    () =>
-      new Map<string, MixerChannelState>(
-        graph.value.channels.map((channel) => [channel.id, channel])
-      )
   )
   const visibleNotes = computed(() =>
     openClips.value.flatMap((clip) =>
@@ -168,7 +162,7 @@ export function createPianoRollEditor(): PianoRollEditor {
   const beatTicks = computed(() => beatTicksThroughTick(graph.value.tempoMap, maximumTick.value))
 
   function trackColor(clip: MidiClipState): string {
-    return channelsById.value.get(clip.trackId)?.color ?? "var(--ui-signal-midi)"
+    return channelForTrack(graph.value, clip.trackId)?.color ?? "var(--ui-signal-midi)"
   }
 
   function clipStyle(clip: MidiClipState): CSSProperties {
