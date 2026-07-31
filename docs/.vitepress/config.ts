@@ -1,4 +1,4 @@
-import { defineConfig, type PageData } from "vitepress"
+import { defineConfig, type HeadConfig, type PageData } from "vitepress"
 
 const docsRoot = "https://yadaw.midori.live"
 const ogImage = `${docsRoot}/og.png`
@@ -12,12 +12,13 @@ function pageUrl(relativePath: string): string {
 
 function pageTitle(pageData: PageData): string {
   const title = pageData.title || "YADAW"
-  if (pageData.frontmatter.titleTemplate === false) {
+  const titleTemplate: unknown = pageData.frontmatter.titleTemplate
+  if (titleTemplate === false) {
     return title
   }
 
-  const template = pageData.frontmatter.titleTemplate ?? ":title · YADAW"
-  if (typeof template === "string" && template.includes(":title")) {
+  const template = typeof titleTemplate === "string" ? titleTemplate : ":title · YADAW"
+  if (template.includes(":title")) {
     return template.replace(/:title/g, title)
   }
 
@@ -25,14 +26,24 @@ function pageTitle(pageData: PageData): string {
 }
 
 function pageDescription(pageData: PageData): string {
-  const fromPage = pageData.description || pageData.frontmatter.description
-  if (typeof fromPage === "string" && fromPage.length > 0) {
+  const frontmatterDescription: unknown = pageData.frontmatter.description
+  const fromPage =
+    pageData.description ||
+    (typeof frontmatterDescription === "string" ? frontmatterDescription : "")
+  if (fromPage.length > 0) {
     return fromPage
   }
 
   return pageData.relativePath === "zh" || pageData.relativePath.startsWith("zh/")
     ? defaultDescriptionZh
     : defaultDescriptionEn
+}
+
+function ensurePageHead(pageData: PageData): HeadConfig[] {
+  const existing: unknown = pageData.frontmatter.head
+  const head: HeadConfig[] = Array.isArray(existing) ? (existing as HeadConfig[]) : []
+  pageData.frontmatter.head = head
+  return head
 }
 
 function isBlogArticle(relativePath: string): boolean {
@@ -65,9 +76,9 @@ export default defineConfig({
     const title = pageTitle(pageData)
     const description = pageDescription(pageData)
     const url = pageUrl(pageData.relativePath)
+    const head = ensurePageHead(pageData)
 
-    pageData.frontmatter.head ??= []
-    pageData.frontmatter.head.push(
+    head.push(
       ["link", { rel: "canonical", href: url }],
       ["meta", { property: "og:title", content: title }],
       ["meta", { property: "og:description", content: description }],
@@ -77,7 +88,7 @@ export default defineConfig({
     )
 
     if (isBlogArticle(pageData.relativePath)) {
-      pageData.frontmatter.head.push(["meta", { property: "og:type", content: "article" }])
+      head.push(["meta", { property: "og:type", content: "article" }])
     }
   },
   locales: {
