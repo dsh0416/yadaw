@@ -190,7 +190,7 @@ describe("AudioGraphPublisher", () => {
       }
     }
 
-    const result = await publisher.activate(meta, prepared as never)
+    const result = await publisher.activate(meta, prepared)
     expect(result).toMatchObject({
       ok: true,
       value: expect.objectContaining({ sampleRate: 48_000 })
@@ -200,7 +200,7 @@ describe("AudioGraphPublisher", () => {
 
   it("fails when a native preparation exists without an audio host", async () => {
     const publisher = new AudioGraphPublisher(
-      { compile: vi.fn() } as never,
+      { compile: vi.fn() },
       { materialize: vi.fn() } as never,
       null,
       null,
@@ -219,7 +219,7 @@ describe("AudioGraphPublisher", () => {
       }
     }
 
-    const result = await publisher.activate(meta, prepared as never)
+    const result = await publisher.activate(meta, prepared)
     expect(result).toMatchObject({
       ok: false,
       error: {
@@ -252,7 +252,7 @@ describe("AudioGraphPublisher", () => {
         project: graph,
         runtime: {} as never
       }
-    } as never)
+    })
     expect(audioHost.abortGraphDeployment).toHaveBeenCalled()
   })
 
