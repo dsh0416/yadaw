@@ -26,7 +26,8 @@ export function registerIpcHandlers(services: ApplicationServices): void {
     if (midiSnapshotPending) return
     midiSnapshotPending = true
     try {
-      const snapshot = await audioHost.midiInputSnapshot()
+      const nativeSnapshot = await audioHost.midiInputSnapshot()
+      const snapshot = services.lifecycle.applicationState.midiRuntimeSnapshot(nativeSnapshot)
       for (const window of BrowserWindow.getAllWindows()) {
         window.webContents.send(IPC_CHANNELS.midiInputEvent, snapshot)
       }

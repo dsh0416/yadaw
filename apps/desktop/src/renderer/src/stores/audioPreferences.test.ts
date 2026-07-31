@@ -40,6 +40,12 @@ function engineSuccess(runtime: AudioRuntimeSnapshot): RpcResult<AudioEngineSess
         epoch: "main-epoch",
         generation: 1
       },
+      midiRuntime: {
+        kind: "midi-runtime",
+        id: "midi-runtime",
+        epoch: "main-epoch",
+        generation: 1
+      },
       engine: {
         kind: "audio-engine",
         id: "audio-engine",
@@ -61,6 +67,12 @@ function engineSuccess(runtime: AudioRuntimeSnapshot): RpcResult<AudioEngineSess
 
 function applyAudioHost(): void {
   useAudioRuntimeStore().applyResources({
+    midiRuntime: {
+      kind: "midi-runtime",
+      id: "midi-runtime",
+      epoch: "main-epoch",
+      generation: 1
+    },
     host: {
       kind: "audio-host",
       id: "audio-host",

@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from "vitest"
 import { INITIAL_AUDIO_RUNTIME_SNAPSHOT } from "@yadaw/contracts"
-import type { ProjectGraphRef, ProjectSession, ProjectSessionRef } from "@yadaw/contracts"
+import type {
+  PluginInstanceState,
+  ProjectGraphRef,
+  ProjectGraphSnapshot,
+  ProjectSession,
+  ProjectSessionRef
+} from "@yadaw/contracts"
 import { ApplicationStateStore } from "./application-state-store"
 import { OperationRegistry } from "./operation-registry"
 
@@ -160,6 +166,7 @@ describe("ApplicationStateStore", () => {
     expect(next).toMatchObject({
       host: { epoch: "helper-2", generation: 2 },
       engine: null,
+      midiRuntime: { epoch: "helper-2", generation: 2 },
       transport: null,
       revision: 0
     })
@@ -172,6 +179,10 @@ describe("ApplicationStateStore", () => {
       error: { reason: "parent-invalid" }
     })
     expect(store.resources.resolve(previous.transport!)).toMatchObject({
+      ok: false,
+      error: { reason: "parent-invalid" }
+    })
+    expect(store.resources.resolve(previous.midiRuntime)).toMatchObject({
       ok: false,
       error: { reason: "parent-invalid" }
     })
@@ -230,5 +241,98 @@ describe("ApplicationStateStore", () => {
     })
     await store.resources.drop(committedGraph.value.ref)
     expect(store.recordingResourceSnapshot()).toBeNull()
+  })
+
+  it("binds plugin refs to the project graph generation and disposes stale editors", async () => {
+    const created = ApplicationStateStore.create({
+      epoch: "main-epoch",
+      project
+    })
+    if (!created.ok) throw new Error("test setup failed")
+    const store = created.value
+    const projectCandidate = store.resources.create({
+      kind: "project-session",
+      id: project.id,
+      parent: store.desktopSession
+    })
+    if (!projectCandidate.ok) throw new Error("test setup failed")
+    const committedProject = store.resources.commit(projectCandidate.value.ref, project)
+    if (!committedProject.ok) throw new Error("test setup failed")
+    const graphCandidate = store.resources.create({
+      kind: "project-graph",
+      id: "graph",
+      parent: committedProject.value.ref
+    })
+    if (!graphCandidate.ok) throw new Error("test setup failed")
+    const committedGraph = store.resources.commit(graphCandidate.value.ref, { revision: 1 })
+    if (!committedGraph.ok) throw new Error("test setup failed")
+    const instance: PluginInstanceState = {
+      id: "plugin",
+      channelId: "channel",
+      role: "insert",
+      slotOrder: 0,
+      classId: "plugin-class",
+      descriptor: {
+        source: { kind: "external" },
+        classId: "plugin-class",
+        modulePath: "plugin.vst3",
+        name: "Plugin",
+        vendor: "YADAW",
+        version: "1",
+        categories: ["Fx"],
+        kind: "effect",
+        architecture: "x86_64",
+        buses: [],
+        supportedAudioModes: ["stereo"],
+        hasEditor: true,
+        compatibility: "compatible",
+        compatibilityReason: null
+      },
+      audioMode: "stereo",
+      enabled: true,
+      componentState: new Uint8Array(),
+      controllerState: new Uint8Array()
+    }
+    const graph = { plugins: [instance] } as ProjectGraphSnapshot
+    store.setWorkspace({
+      project: committedProject.value.ref as ProjectSessionRef,
+      projectGraph: committedGraph.value.ref as ProjectGraphRef,
+      revision: committedGraph.value.revision,
+      session: project,
+      graph,
+      assets: []
+    })
+    const dispose = vi.fn(async () => undefined)
+
+    const first = await store.pluginInstanceSnapshot(instance.id, dispose)
+    expect(first?.plugin).toMatchObject({ generation: 1 })
+
+    if (!first) throw new Error("test setup failed")
+    await store.resources.drop(committedGraph.value.ref)
+    const nextCandidate = store.resources.create({
+      kind: "project-graph",
+      id: "graph",
+      parent: committedProject.value.ref
+    })
+    if (!nextCandidate.ok) throw new Error("test setup failed")
+    const nextGraph = store.resources.commit(nextCandidate.value.ref, { revision: 1 })
+    if (!nextGraph.ok) throw new Error("test setup failed")
+    store.setWorkspace({
+      project: committedProject.value.ref as ProjectSessionRef,
+      projectGraph: nextGraph.value.ref as ProjectGraphRef,
+      revision: nextGraph.value.revision,
+      session: project,
+      graph,
+      assets: []
+    })
+
+    const second = await store.pluginInstanceSnapshot(instance.id, dispose)
+
+    expect(second?.plugin).toMatchObject({ generation: 2 })
+    expect(store.resources.resolve(first.plugin)).toMatchObject({
+      ok: false,
+      error: { reason: "parent-invalid" }
+    })
+    expect(dispose).toHaveBeenCalledOnce()
   })
 })

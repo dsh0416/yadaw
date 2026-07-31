@@ -6,7 +6,6 @@ import type {
   AudioHostRuntimePreferences,
   AudioBackend,
   AudioPreferences,
-  MidiSyncPreferences,
   RoundTripLatencyMeasurementRequest,
   CreateProjectRequest,
   ProcessGainRequest,
@@ -94,17 +93,17 @@ const api: YadawDesktopApi = {
     ipcRenderer.invoke(IPC_CHANNELS.settingsConfigureAudioHostRuntime, preferences),
   configureShortcuts: (preferences: ShortcutPreferences) =>
     ipcRenderer.invoke(IPC_CHANNELS.settingsConfigureShortcuts, preferences),
-  midiInputSnapshot: () => ipcRenderer.invoke(IPC_CHANNELS.midiInputSnapshot),
+  midiInputSnapshot: (meta) => invokeRpc(IPC_CHANNELS.midiInputSnapshot, meta),
   subscribeMidiInput: (listener) => {
     const handler = (_event: Electron.IpcRendererEvent, snapshot: Parameters<typeof listener>[0]) =>
       listener(snapshot)
     ipcRenderer.on(IPC_CHANNELS.midiInputEvent, handler)
     return () => ipcRenderer.removeListener(IPC_CHANNELS.midiInputEvent, handler)
   },
-  configureMidiInput: (preferences: MidiSyncPreferences) =>
-    ipcRenderer.invoke(IPC_CHANNELS.midiInputConfigure, preferences),
-  setMidiControlLearning: (enabled: boolean) =>
-    ipcRenderer.invoke(IPC_CHANNELS.midiControlLearning, enabled),
+  configureMidiInput: (meta, preferences) =>
+    invokeRpc(IPC_CHANNELS.midiInputConfigure, meta, preferences),
+  setMidiControlLearning: (meta, enabled) =>
+    invokeRpc(IPC_CHANNELS.midiControlLearning, meta, enabled),
   chooseSwapDirectory: () => ipcRenderer.invoke(IPC_CHANNELS.settingsChooseSwap),
   openSwapDirectory: () => ipcRenderer.invoke(IPC_CHANNELS.settingsOpenSwap),
   startRecording: (meta, request) => invokeRpc(IPC_CHANNELS.recordingStart, meta, request),
@@ -118,8 +117,8 @@ const api: YadawDesktopApi = {
     ipcRenderer.invoke(IPC_CHANNELS.assetWaveformRead, request),
   recordingWaveformSnapshot: (meta, request: WaveformWindowRequest) =>
     invokeRpc(IPC_CHANNELS.recordingWaveformSnapshot, meta, request),
-  listPlugins: () => ipcRenderer.invoke(IPC_CHANNELS.pluginsList),
-  scanPlugins: (request) => ipcRenderer.invoke(IPC_CHANNELS.pluginsScan, request),
+  listPlugins: (meta) => invokeRpc(IPC_CHANNELS.pluginsList, meta),
+  scanPlugins: (meta, request) => invokeRpc(IPC_CHANNELS.pluginsScan, meta, request),
   subscribePluginScan: (listener) => {
     const handler = (
       _event: Electron.IpcRendererEvent,
@@ -128,13 +127,13 @@ const api: YadawDesktopApi = {
     ipcRenderer.on(IPC_CHANNELS.pluginsScanEvent, handler)
     return () => ipcRenderer.removeListener(IPC_CHANNELS.pluginsScanEvent, handler)
   },
-  openPluginEditor: (instanceId) => ipcRenderer.invoke(IPC_CHANNELS.pluginEditorOpen, instanceId),
-  closePluginEditor: (instanceId) => ipcRenderer.invoke(IPC_CHANNELS.pluginEditorClose, instanceId),
-  getPluginParameters: (instanceId) =>
-    ipcRenderer.invoke(IPC_CHANNELS.pluginParametersGet, instanceId),
-  setPluginParameter: (request) => ipcRenderer.invoke(IPC_CHANNELS.pluginParameterSet, request),
-  prepareMidiImport: (path) => ipcRenderer.invoke(IPC_CHANNELS.midiImportPrepare, path),
-  commitMidiImport: (plan) => ipcRenderer.invoke(IPC_CHANNELS.midiImportCommit, plan),
+  openPluginEditor: (meta, instanceId) =>
+    invokeRpc(IPC_CHANNELS.pluginEditorOpen, meta, instanceId),
+  closePluginEditor: (meta) => invokeRpc(IPC_CHANNELS.pluginEditorClose, meta),
+  getPluginParameters: (meta) => invokeRpc(IPC_CHANNELS.pluginParametersGet, meta),
+  setPluginParameter: (meta, request) => invokeRpc(IPC_CHANNELS.pluginParameterSet, meta, request),
+  prepareMidiImport: (meta, path) => invokeRpc(IPC_CHANNELS.midiImportPrepare, meta, path),
+  commitMidiImport: (meta, plan) => invokeRpc(IPC_CHANNELS.midiImportCommit, meta, plan),
   subscribeOperations: (listener) => {
     const handler = (
       _event: Electron.IpcRendererEvent,

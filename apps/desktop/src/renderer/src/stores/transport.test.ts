@@ -103,6 +103,12 @@ describe("transport store", () => {
         epoch: "main-epoch",
         generation: 1
       },
+      midiRuntime: {
+        kind: "midi-runtime",
+        id: "midi-runtime",
+        epoch: "main-epoch",
+        generation: 1
+      },
       engine: {
         kind: "audio-engine",
         id: "audio-engine",

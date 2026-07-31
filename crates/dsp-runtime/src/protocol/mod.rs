@@ -343,6 +343,7 @@ mod tests {
                     target_kind: ParameterTargetKind::Plugin,
                     runtime_handle: 5,
                     parameter_id: 11,
+                    target_generation: 7,
                     normalized: 0.25,
                     gesture: ParameterGesture::Perform,
                 },
@@ -352,9 +353,10 @@ mod tests {
             encoded_hex(&priority),
             concat!(
                 "82aa726571756573745f696409a7636f6d6d616e6482a474797065b2706172616d",
-                "657465722d626f756e64617279a7636f6d6d616e6487ad73657373696f6e5f6570",
+                "657465722d626f756e64617279a7636f6d6d616e6488ad73657373696f6e5f6570",
                 "6f636803a873657175656e636511ab7461726765745f6b696e64a6706c7567696e",
-                "ae72756e74696d655f68616e646c6505ac706172616d657465725f69640baa6e6f",
+                "ae72756e74696d655f68616e646c6505ac706172616d657465725f69640bb17461",
+                "726765745f67656e65726174696f6e07aa6e6f",
                 "726d616c697a6564cb3fd0000000000000a767657374757265a7706572666f726d"
             )
         );

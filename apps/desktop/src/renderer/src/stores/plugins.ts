@@ -2,6 +2,8 @@ import { acceptHMRUpdate, defineStore } from "pinia"
 import { computed, onScopeDispose, shallowRef, watch } from "vue"
 import type {
   PluginCatalogSnapshot,
+  PluginInstanceResourceSnapshot,
+  PluginParameterCommand,
   PluginParameterChange,
   PluginParameterInfo,
   PluginRuntimeStatus,
@@ -14,7 +16,10 @@ import {
   type PluginSelection,
   type PluginSignalWidth
 } from "../components/plugins/plugin-audio-mode"
+import { mutationMeta, readMeta, rpcErrorMessage } from "../rpc"
 import { useMixerStore } from "./mixer"
+import { useAudioRuntimeStore } from "./audioRuntime"
+import { useProjectStore } from "./project"
 
 const EMPTY_CATALOG: PluginCatalogSnapshot = {
   scannerVersion: 7,
@@ -26,13 +31,17 @@ const EMPTY_CATALOG: PluginCatalogSnapshot = {
 export const usePluginStore = defineStore("plugins", () => {
   const mixerStore = useMixerStore()
   const catalog = shallowRef<PluginCatalogSnapshot>(structuredClone(EMPTY_CATALOG))
+  const audioRuntimeStore = useAudioRuntimeStore()
+  const projectStore = useProjectStore()
   const runtime = shallowRef<Record<string, PluginRuntimeStatus>>({})
   const parameters = shallowRef<Record<string, PluginParameterInfo[]>>({})
   const scanProgress = shallowRef<{ completed: number; total: number; path: string } | null>(null)
+  const resources = shallowRef<Record<string, PluginInstanceResourceSnapshot>>({})
   const loading = shallowRef(false)
   const error = shallowRef("")
   let catalogFailureIds = new Set<string>()
   let unsubscribe: (() => void) | null = null
+  let parameterSequence = 0n
 
   const compatibleInstruments = computed(() =>
     catalog.value.plugins.filter(
@@ -120,25 +129,31 @@ export const usePluginStore = defineStore("plugins", () => {
     loading.value = true
     error.value = ""
     unsubscribe ??= window.yadaw.subscribePluginScan(handleScanEvent)
-    try {
-      catalog.value = await window.yadaw.listPlugins()
-      reconcileRuntime()
-    } catch (reason) {
-      error.value = reason instanceof Error ? reason.message : "Unable to load the plugin catalog."
-    } finally {
+    const target = projectStore.desktopSession
+    if (!target) {
       loading.value = false
+      return
     }
+    const result = await window.yadaw.listPlugins(readMeta(target))
+    if (result.ok) {
+      catalog.value = result.value
+      reconcileRuntime()
+    } else error.value = rpcErrorMessage(result.error)
+    loading.value = false
   }
 
   async function scan(retryQuarantined = false): Promise<void> {
     error.value = ""
-    try {
-      // Manual rescans always rediscover; launch-time scanning reuses fingerprints.
-      // Discovery stays soft (moduleinfo / factory enum) and does not deep-load.
-      catalog.value = await window.yadaw.scanPlugins({ force: true, retryQuarantined })
-    } catch (reason) {
-      error.value = reason instanceof Error ? reason.message : "Plugin scan failed."
-    }
+    const target = projectStore.desktopSession
+    if (!target) return
+    // Manual rescans always rediscover; launch-time scanning reuses fingerprints.
+    // Discovery stays soft (moduleinfo / factory enum) and does not deep-load.
+    const result = await window.yadaw.scanPlugins(mutationMeta(target, "plugin-scan"), {
+      force: true,
+      retryQuarantined
+    })
+    if (result.ok) catalog.value = result.value
+    else error.value = rpcErrorMessage(result.error)
   }
 
   async function addInstrument(selection: PluginSelection): Promise<boolean> {
@@ -316,15 +331,39 @@ export const usePluginStore = defineStore("plugins", () => {
   }
 
   async function openEditor(instanceId: string): Promise<void> {
-    try {
-      const status = await window.yadaw.openPluginEditor(instanceId)
-      runtime.value = { ...runtime.value, [instanceId]: status }
-    } catch (reason) {
-      error.value = reason instanceof Error ? reason.message : "Unable to open the plugin editor."
+    const target = projectStore.projectGraphRef
+    if (!target) return
+    const result = await window.yadaw.openPluginEditor(
+      mutationMeta(target, "plugin-editor-open", projectStore.projectRevision),
+      instanceId
+    )
+    if (!result.ok) {
+      error.value = rpcErrorMessage(result.error)
+      return
     }
+    resources.value = { ...resources.value, [instanceId]: result.value.resource }
+    runtime.value = { ...runtime.value, [instanceId]: result.value.status }
+  }
+
+  async function closeEditor(instanceId: string): Promise<void> {
+    const resource = resources.value[instanceId]
+    if (!resource) return
+    const result = await window.yadaw.closePluginEditor(
+      mutationMeta(resource.plugin, "plugin-editor-close", resource.revision)
+    )
+    if (!result.ok) {
+      error.value = rpcErrorMessage(result.error)
+      return
+    }
+    const nextResources = { ...resources.value }
+    delete nextResources[instanceId]
+    resources.value = nextResources
   }
 
   async function setParameter(change: PluginParameterChange): Promise<void> {
+    const resource = resources.value[change.instanceId]
+    const helperEpoch = audioRuntimeStore.audioHostRef?.epoch
+    if (!resource || !helperEpoch) return
     const list = parameters.value[change.instanceId]
     if (list) {
       parameters.value = {
@@ -336,10 +375,34 @@ export const usePluginStore = defineStore("plugins", () => {
         )
       }
     }
-    try {
-      await window.yadaw.setPluginParameter(change)
-    } catch (reason) {
-      error.value = reason instanceof Error ? reason.message : "Unable to change the parameter."
+    parameterSequence += 1n
+    const command: PluginParameterCommand = {
+      plugin: structuredClone(resource.plugin),
+      helperEpoch,
+      pluginGeneration: resource.plugin.generation,
+      sequence: parameterSequence.toString(),
+      parameterId: change.parameterId,
+      normalized: change.normalized,
+      gesture: change.gesture
+    }
+    const result = await window.yadaw.setPluginParameter(
+      mutationMeta(resource.plugin, "plugin-parameter", resource.revision),
+      command
+    )
+    if (!result.ok) {
+      error.value = rpcErrorMessage(result.error)
+      if (result.error.category === "stale-resource") {
+        const nextResources = { ...resources.value }
+        delete nextResources[change.instanceId]
+        resources.value = nextResources
+      }
+      return
+    }
+    if (result.value.outcome === "full" || result.value.outcome === "stale") {
+      error.value =
+        result.value.outcome === "full"
+          ? "Plugin parameter queue is full."
+          : "Plugin handle is stale."
     }
   }
 
@@ -353,6 +416,8 @@ export const usePluginStore = defineStore("plugins", () => {
     runtime.value = {}
     catalogFailureIds = new Set()
     parameters.value = {}
+    resources.value = {}
+    parameterSequence = 0n
     scanProgress.value = null
     error.value = ""
   }
@@ -383,7 +448,9 @@ export const usePluginStore = defineStore("plugins", () => {
     moveInsert,
     assignInstrument,
     openEditor,
+    closeEditor,
     setParameter,
+    resources,
     reset
   }
 })

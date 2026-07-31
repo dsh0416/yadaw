@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto"
 import { rpcFailure, rpcSuccess } from "@yadaw/contracts"
 import type {
   MixerParameterPreview,
+  MidiImportCommitResult,
   ProjectCommand,
   ProjectCommandResult,
   ProjectWorkspaceSnapshot,
@@ -133,10 +134,19 @@ export class ProjectCommandService {
   }
 
   executeMidiImport(
+    meta: RpcRequestMeta,
     source: MidiSourceImport,
     command: ProjectCommand
-  ): Promise<ProjectCommandResult> {
+  ): Promise<MidiImportCommitResult> {
     return this.graphs.enqueue(async () => {
+      const workspace = this.requireWorkspace()
+      if (
+        !meta.mutation ||
+        !sameRef(meta.target, workspace.projectGraph) ||
+        meta.expectedRevision !== workspace.revision
+      ) {
+        throw new Error("stale-midi-import")
+      }
       const projectId = this.graphs.currentProjectId()
       const before = this.graphs.snapshotNow()
       const inverse = inverseFor(before, command)
@@ -144,33 +154,58 @@ export class ProjectCommandService {
       validateGraph(candidate)
       const fallbackOutput = before.channels.find((channel) => channel.kind === "output")
       if (!fallbackOutput) throw new Error("Mixer hardware Output is missing")
-      await this.projects.importMidi(source, command, fallbackOutput.id)
+      const prepared = await this.graphs.prepareMutation(meta, workspace.projectGraph, candidate)
+      if (!prepared.ok) throw new Error(prepared.error.code)
       try {
-        const published = await this.graphs.prepareMutation(
-          {
-            protocolVersion: 2,
-            requestId: `legacy-midi:${randomUUID()}`,
-            target: this.workspace()?.projectGraph
-          },
-          this.requireWorkspace().projectGraph,
-          candidate
-        )
-        if (!published.ok) throw new Error(published.error.code)
-        const activated = await this.graphs.activateMutation(
-          {
-            protocolVersion: 2,
-            requestId: published.requestId,
-            target: this.requireWorkspace().projectGraph
-          },
-          published.value
-        )
-        if (!activated.ok) throw new Error(activated.error.code)
+        await this.projects.importMidi(source, command, fallbackOutput.id)
       } catch (error) {
-        await this.projects.rollbackMidi(source.id, inverse, fallbackOutput.id)
+        await this.graphs.abortMutation(prepared.value).catch(() => undefined)
         throw error
       }
+      if (prepared.value.native) this.audioHost?.commitDesiredGraph(prepared.value.native)
+      const updated = this.lifecycle!.applicationState.resources.update(
+        workspace.projectGraph,
+        workspace.revision,
+        {
+          graph: candidate,
+          nativeRevision: prepared.value.revision,
+          deployment: "pending-midi-import"
+        }
+      )
+      if (!updated.ok) {
+        this.lifecycle!.applicationState.resources.quarantine(workspace.projectGraph)
+        throw new Error("Committed MIDI import resource could not advance")
+      }
       this.graphs.commit(projectId, candidate)
-      return { graph: this.graphs.snapshotNow(), inverse }
+      let nextWorkspace: ProjectWorkspaceSnapshot = {
+        ...workspace,
+        revision: updated.value.revision,
+        session: this.projects.current ?? workspace.session,
+        graph: this.graphs.snapshotNow()
+      }
+      this.lifecycle!.applicationState.setWorkspace(nextWorkspace)
+      this.lifecycle!.syncProject(nextWorkspace.session)
+
+      const activated = await this.graphs.activateMutation(meta, prepared.value).catch(() => null)
+      if (!activated?.ok) {
+        const degraded = this.lifecycle!.applicationState.resources.update(
+          workspace.projectGraph,
+          nextWorkspace.revision,
+          {
+            graph: nextWorkspace.graph,
+            nativeRevision: prepared.value.revision,
+            deployment: "degraded-midi-import"
+          }
+        )
+        if (degraded.ok) {
+          nextWorkspace = { ...nextWorkspace, revision: degraded.value.revision }
+          this.lifecycle!.applicationState.setWorkspace(nextWorkspace)
+        }
+      }
+      return {
+        command: { graph: structuredClone(nextWorkspace.graph), inverse },
+        workspace: structuredClone(nextWorkspace)
+      }
     })
   }
 

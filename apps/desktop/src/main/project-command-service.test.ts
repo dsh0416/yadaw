@@ -206,7 +206,10 @@ interface ProjectHarness {
   clearProject: ProjectGraphService["clearProject"]
   deleteUnusedAssets: ProjectGraphService["deleteUnusedAssets"]
   execute(command: ProjectCommand): Promise<ProjectCommandResult>
-  executeMidiImport: ProjectCommandService["executeMidiImport"]
+  executeMidiImport(
+    source: Parameters<ProjectCommandService["executeMidiImport"]>[1],
+    command: ProjectCommand
+  ): ReturnType<ProjectCommandService["executeMidiImport"]>
 }
 
 async function mixer(
@@ -306,7 +309,27 @@ async function mixer(
     clearProject: graphs.clearProject.bind(graphs),
     deleteUnusedAssets: graphs.deleteUnusedAssets.bind(graphs),
     execute,
-    executeMidiImport: commands.executeMidiImport.bind(commands)
+    executeMidiImport: (
+      source: Parameters<ProjectCommandService["executeMidiImport"]>[1],
+      command: ProjectCommand
+    ) => {
+      const workspace = lifecycle.applicationState.workspaceSnapshot()
+      if (!workspace) throw new Error("missing workspace")
+      return commands.executeMidiImport(
+        {
+          protocolVersion: IPC_PROTOCOL_VERSION,
+          requestId: `midi-import-request:${crypto.randomUUID()}`,
+          target: workspace.projectGraph,
+          expectedRevision: workspace.revision,
+          mutation: {
+            operationId: `midi-import-operation:${crypto.randomUUID()}`,
+            idempotencyKey: `midi-import-idempotency:${crypto.randomUUID()}`
+          }
+        },
+        source,
+        command
+      )
+    }
   }
 }
 
@@ -452,7 +475,7 @@ describe("project graph and command services", () => {
     expect(projects.projectCommandStatus).toHaveBeenCalledOnce()
   })
 
-  it("rolls MIDI imports back without replacing the cached graph", async () => {
+  it("does not commit MIDI data when native staging fails", async () => {
     const projects = projectMock()
     const service = await mixer(projects, {
       loadGraph: vi.fn().mockResolvedValue(undefined),
@@ -486,11 +509,8 @@ describe("project graph and command services", () => {
       )
     ).rejects.toThrow("MIDI publication failed")
 
-    expect(projects.rollbackMidi).toHaveBeenCalledWith(
-      "source-1",
-      { type: "delete-midi-clip", clipId: "midi-1" },
-      "output"
-    )
+    expect(projects.importMidi).not.toHaveBeenCalled()
+    expect(projects.rollbackMidi).not.toHaveBeenCalled()
     expect((await service.snapshot()).midiClips).toEqual([])
   })
 

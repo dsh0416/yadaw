@@ -1,7 +1,15 @@
 import { acceptHMRUpdate, defineStore } from "pinia"
 import { computed, shallowRef } from "vue"
-import type { MidiControlEvent, MidiInputSnapshot, MidiSyncPreferences } from "@yadaw/contracts"
+import type {
+  MidiControlEvent,
+  MidiInputSnapshot,
+  MidiRuntimeResourceSnapshot,
+  MidiSyncPreferences,
+  ResourceRef
+} from "@yadaw/contracts"
+import { mutationMeta, readMeta, rpcErrorMessage } from "../rpc"
 import { useApplicationSettingsStore } from "./applicationSettings"
+import { useAudioRuntimeStore } from "./audioRuntime"
 
 const EMPTY_SNAPSHOT: MidiInputSnapshot = {
   ports: [],
@@ -22,7 +30,9 @@ const EMPTY_SNAPSHOT: MidiInputSnapshot = {
 
 export const useMidiInputStore = defineStore("midi-input", () => {
   const applicationSettings = useApplicationSettingsStore()
+  const audioRuntime = useAudioRuntimeStore()
   const snapshot = shallowRef<MidiInputSnapshot>(structuredClone(EMPTY_SNAPSHOT))
+  const resource = shallowRef<MidiRuntimeResourceSnapshot | null>(null)
   const loading = shallowRef(false)
   const applying = shallowRef(false)
   const learning = shallowRef(false)
@@ -39,6 +49,17 @@ export const useMidiInputStore = defineStore("midi-input", () => {
         (port) => port.id === snapshot.value.sync.sourcePortId && port.connected
       )
   )
+
+  function sameRef(left: ResourceRef | null, right: ResourceRef | null): boolean {
+    return Boolean(
+      left &&
+      right &&
+      left.kind === right.kind &&
+      left.id === right.id &&
+      left.epoch === right.epoch &&
+      left.generation === right.generation
+    )
+  }
 
   function applySnapshot(next: MidiInputSnapshot, publishControls: boolean): void {
     snapshot.value = next
@@ -59,43 +80,56 @@ export const useMidiInputStore = defineStore("midi-input", () => {
     }
   }
 
+  function applyResource(next: MidiRuntimeResourceSnapshot, publishControls: boolean): void {
+    if (!sameRef(next.runtime, audioRuntime.midiRuntimeRef)) return
+    resource.value = structuredClone(next)
+    applySnapshot(structuredClone(next.snapshot), publishControls)
+  }
+
   async function load(): Promise<void> {
-    if (loading.value || unsubscribe) return
+    if (loading.value) return
+    const target = audioRuntime.midiRuntimeRef
+    if (!target) return
     loading.value = true
     error.value = ""
-    try {
-      applySnapshot(await window.yadaw.midiInputSnapshot(), false)
-      if (!unsubscribe) {
-        unsubscribe = window.yadaw.subscribeMidiInput((next) => {
-          applySnapshot(next, true)
-        })
-      }
-    } catch (reason) {
-      error.value = reason instanceof Error ? reason.message : "Unable to read MIDI inputs."
-    } finally {
-      loading.value = false
+    if (!unsubscribe) {
+      unsubscribe = window.yadaw.subscribeMidiInput((next) => {
+        applyResource(next, true)
+      })
     }
+    const result = await window.yadaw.midiInputSnapshot(readMeta(target))
+    if (!result.ok) {
+      error.value = rpcErrorMessage(result.error)
+      loading.value = false
+      return
+    }
+    applyResource(result.value, false)
+    loading.value = false
   }
 
   async function configure(preferences: MidiSyncPreferences): Promise<boolean> {
     if (applying.value) return false
+    const target = audioRuntime.midiRuntimeRef
+    if (!target) return false
     applying.value = true
     error.value = ""
-    try {
-      applySnapshot(await window.yadaw.configureMidiInput(preferences), false)
-      if (applicationSettings.settings) {
-        applicationSettings.settings = {
-          ...applicationSettings.settings,
-          midiSync: structuredClone(preferences)
-        }
-      }
-      return true
-    } catch (reason) {
-      error.value = reason instanceof Error ? reason.message : "Unable to configure MIDI input."
+    const result = await window.yadaw.configureMidiInput(
+      mutationMeta(target, "midi-input-configure", resource.value?.revision ?? 0),
+      preferences
+    )
+    applying.value = false
+    if (!result.ok) {
+      error.value = rpcErrorMessage(result.error)
       return false
-    } finally {
-      applying.value = false
     }
+    applyResource(result.value, false)
+    if (applicationSettings.settings) {
+      applicationSettings.settings = {
+        ...applicationSettings.settings,
+        midiSync: structuredClone(preferences)
+      }
+    }
+    return true
   }
 
   function subscribeControls(listener: (event: MidiControlEvent) => void): () => void {
@@ -105,25 +139,36 @@ export const useMidiInputStore = defineStore("midi-input", () => {
 
   async function beginLearning(): Promise<boolean> {
     if (learning.value) return true
+    const target = audioRuntime.midiRuntimeRef
+    if (!target) return false
     error.value = ""
-    try {
-      await window.yadaw.setMidiControlLearning(true)
-      learning.value = true
-      return true
-    } catch (reason) {
-      error.value = reason instanceof Error ? reason.message : "Unable to start MIDI Learn."
+    const result = await window.yadaw.setMidiControlLearning(
+      mutationMeta(target, "midi-control-learning", resource.value?.revision ?? 0),
+      true
+    )
+    if (!result.ok) {
+      error.value = rpcErrorMessage(result.error)
       return false
     }
+    applyResource(result.value, false)
+    learning.value = true
+    return true
   }
 
   async function endLearning(): Promise<void> {
     if (!learning.value) return
     learning.value = false
-    try {
-      await window.yadaw.setMidiControlLearning(false)
-    } catch (reason) {
-      error.value = reason instanceof Error ? reason.message : "Unable to stop MIDI Learn."
+    const target = audioRuntime.midiRuntimeRef
+    if (!target) return
+    const result = await window.yadaw.setMidiControlLearning(
+      mutationMeta(target, "midi-control-learning", resource.value?.revision ?? 0),
+      false
+    )
+    if (!result.ok) {
+      error.value = rpcErrorMessage(result.error)
+      return
     }
+    applyResource(result.value, false)
   }
 
   function dispose(): void {
@@ -131,6 +176,7 @@ export const useMidiInputStore = defineStore("midi-input", () => {
     unsubscribe = null
     snapshot.value = structuredClone(EMPTY_SNAPSHOT)
     lastControlGeneration = 0
+    resource.value = null
     if (learning.value) void endLearning()
     controlListeners.clear()
     error.value = ""
@@ -139,6 +185,7 @@ export const useMidiInputStore = defineStore("midi-input", () => {
   return {
     snapshot,
     connectedPorts,
+    resource,
     sourceMissing,
     loading,
     applying,

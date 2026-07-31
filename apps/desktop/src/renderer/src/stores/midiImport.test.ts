@@ -1,10 +1,17 @@
 import { createPinia, setActivePinia } from "pinia"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import type { MidiImportPreview, ProjectCommandResult } from "@yadaw/contracts"
+import type {
+  MidiImportCommitResult,
+  MidiImportPreview,
+  ProjectGraphSnapshot,
+  ProjectWorkspaceSnapshot,
+  RpcResult
+} from "@yadaw/contracts"
 import { useMidiImportStore } from "./midiImport"
 import { useMixerStore } from "./mixer"
 import { useProjectHistoryStore } from "./projectHistory"
 import { useTransportStore } from "./transport"
+import { useProjectStore } from "./project"
 
 const preview: MidiImportPreview = {
   token: "midi-token",
@@ -35,9 +42,58 @@ const preview: MidiImportPreview = {
   warnings: []
 }
 
+function workspace(graph: ProjectGraphSnapshot): ProjectWorkspaceSnapshot {
+  return {
+    project: {
+      kind: "project-session",
+      id: "project",
+      epoch: "test-main",
+      generation: 1
+    },
+    projectGraph: {
+      kind: "project-graph",
+      id: "project:graph",
+      epoch: "test-main",
+      generation: 1
+    },
+    revision: 2,
+    session: {
+      id: "project",
+      path: "project.yadaw",
+      configuration: {
+        name: "MIDI import test",
+        sampleRate: 48_000,
+        timeSignatureNumerator: 4,
+        timeSignatureDenominator: 4,
+        waveformDisplayMode: "separate"
+      },
+      dirty: true,
+      recoveredWorkingCopy: false
+    },
+    graph: structuredClone(graph),
+    assets: []
+  }
+}
+
+function success(graph: ProjectGraphSnapshot): RpcResult<MidiImportCommitResult> {
+  return {
+    ok: true,
+    requestId: "midi-import-request",
+    operationId: "midi-import-operation",
+    resourceRevision: 2,
+    warnings: [],
+    value: {
+      command: { graph: structuredClone(graph), inverse: { type: "batch", commands: [] } },
+      workspace: workspace(graph)
+    }
+  }
+}
+
 describe("MIDI import tempo choice", () => {
   beforeEach(() => {
     setActivePinia(createPinia())
+    const mixer = useMixerStore()
+    useProjectStore().applyWorkspace(workspace(mixer.graph))
     Object.assign(window.yadaw, { commitMidiImport: vi.fn() })
   })
 
@@ -52,15 +108,13 @@ describe("MIDI import tempo choice", () => {
     const store = useMidiImportStore()
     store.preview = preview
     store.targets = { "0:0": { type: "new" } }
-    vi.mocked(window.yadaw.commitMidiImport).mockResolvedValue({
-      graph: mixer.graph,
-      inverse: { type: "batch", commands: [] }
-    } satisfies ProjectCommandResult)
+    vi.mocked(window.yadaw.commitMidiImport).mockResolvedValue(success(mixer.graph))
 
     await store.commit()
 
     expect(useProjectHistoryStore().canUndo).toBe(true)
     expect(window.yadaw.commitMidiImport).toHaveBeenCalledWith(
+      expect.any(Object),
       expect.objectContaining({
         importTempoMap: false,
         insertionTick: 7_680
@@ -74,14 +128,12 @@ describe("MIDI import tempo choice", () => {
     store.preview = preview
     store.targets = { "0:0": { type: "new" } }
     store.tempoMode = "midi"
-    vi.mocked(window.yadaw.commitMidiImport).mockResolvedValue({
-      graph: mixer.graph,
-      inverse: { type: "batch", commands: [] }
-    } satisfies ProjectCommandResult)
+    vi.mocked(window.yadaw.commitMidiImport).mockResolvedValue(success(mixer.graph))
 
     await store.commit()
 
     expect(window.yadaw.commitMidiImport).toHaveBeenCalledWith(
+      expect.any(Object),
       expect.objectContaining({
         importTempoMap: true,
         insertionTick: 0

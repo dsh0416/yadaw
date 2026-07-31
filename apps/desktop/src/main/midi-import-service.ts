@@ -4,13 +4,15 @@ import { basename } from "node:path"
 import type {
   MidiClipState,
   MidiEventKind,
+  MidiImportCommitResult,
   MidiImportPlan,
   MidiImportPreview,
   MixerChannelState,
   PluginDescriptor,
   PluginInstanceState,
   ProjectCommand,
-  ProjectCommandResult,
+  ProjectGraphRef,
+  RpcRequestMeta,
   TempoMapSnapshot
 } from "@yadaw/contracts"
 import { DEFAULT_INSTRUMENT_COLOR, MUSICAL_TICKS_PER_QUARTER } from "@yadaw/contracts"
@@ -21,6 +23,7 @@ import type { ProjectCommandService } from "./project-command-service"
 import type { ProjectGraphService } from "./project-graph-service"
 
 interface PreparedImport {
+  projectGraph: ProjectGraphRef
   preview: MidiImportPreview
   parsed: NativeNormalizedSmf
   rawBytes: Uint8Array
@@ -50,7 +53,7 @@ export class MidiImportService {
     private readonly plugins: PluginCatalogService
   ) {}
 
-  async prepare(path: string): Promise<MidiImportPreview> {
+  async prepare(path: string, projectGraph: ProjectGraphRef): Promise<MidiImportPreview> {
     const graph = await this.graphs.snapshot()
     const parsed = await parseMidiFile(path, {
       tempoEvents: graph.tempoMap.tempoEvents,
@@ -91,13 +94,26 @@ export class MidiImportService {
       warnings: parsed.warnings
     }
     this.prepared.clear()
-    this.prepared.set(token, { preview, parsed, rawBytes })
+    this.prepared.set(token, {
+      preview,
+      parsed,
+      rawBytes,
+      projectGraph: structuredClone(projectGraph)
+    })
     return structuredClone(preview)
   }
 
-  async commit(plan: MidiImportPlan): Promise<ProjectCommandResult> {
+  async commit(meta: RpcRequestMeta, plan: MidiImportPlan): Promise<MidiImportCommitResult> {
     const prepared = this.prepared.get(plan.token)
     if (!prepared) throw new Error("MIDI import preview has expired; choose the file again")
+    if (
+      meta.target?.kind !== "project-graph" ||
+      meta.target.id !== prepared.projectGraph.id ||
+      meta.target.epoch !== prepared.projectGraph.epoch ||
+      meta.target.generation !== prepared.projectGraph.generation
+    ) {
+      throw new Error("MIDI import preview belongs to a stale project graph")
+    }
     if (!Number.isSafeInteger(plan.insertionTick) || plan.insertionTick < 0) {
       throw new TypeError("MIDI insertion tick must be a non-negative integer")
     }
@@ -215,6 +231,7 @@ export class MidiImportService {
       commands.push({ type: "create-midi-clip", clip })
     }
     const result = await this.commands.executeMidiImport(
+      meta,
       {
         id: sourceId,
         name: basename(prepared.preview.path),

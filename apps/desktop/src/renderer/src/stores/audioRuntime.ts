@@ -10,6 +10,7 @@ import type {
   AudioResourceSnapshot,
   AudioRuntimeSnapshot,
   RoundTripLatencyMeasurement,
+  MidiRuntimeRef,
   RoundTripLatencyMeasurementRequest,
   TransportRef
 } from "@yadaw/contracts"
@@ -94,6 +95,7 @@ export const useAudioRuntimeStore = defineStore("audio-runtime", () => {
   const audioHostRef = shallowRef<AudioHostRef | null>(null)
   const audioEngineRef = shallowRef<AudioEngineRef | null>(null)
   const transportRef = shallowRef<TransportRef | null>(null)
+  const midiRuntimeRef = shallowRef<MidiRuntimeRef | null>(null)
   const transportRevision = ref(0)
   const xrunBaseline = ref(0)
   let sessionStartedAt = 0
@@ -240,6 +242,7 @@ export const useAudioRuntimeStore = defineStore("audio-runtime", () => {
     audioHostRef.value = structuredClone(resources.host)
     audioEngineRef.value = resources.engine ? structuredClone(resources.engine) : null
     transportRef.value = resources.transport ? structuredClone(resources.transport) : null
+    midiRuntimeRef.value = structuredClone(resources.midiRuntime)
     transportRevision.value = resources.revision
   }
 
@@ -411,6 +414,7 @@ export const useAudioRuntimeStore = defineStore("audio-runtime", () => {
     audioHostRef,
     audioEngineRef,
     transportRef,
+    midiRuntimeRef,
     transportRevision,
     applyLifecycleState,
     applyResources,

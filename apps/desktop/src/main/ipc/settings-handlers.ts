@@ -1,14 +1,9 @@
-import { BrowserWindow, dialog, ipcMain, shell } from "electron"
+import { dialog, ipcMain, shell } from "electron"
 import { IPC_CHANNELS } from "@yadaw/contracts"
-import type {
-  AudioHostRuntimePreferences,
-  MidiSyncPreferences,
-  ShortcutPreferences
-} from "@yadaw/contracts"
+import type { AudioHostRuntimePreferences, ShortcutPreferences } from "@yadaw/contracts"
 import type { IpcHandlerContext } from "./context"
 import {
   validateAudioHostRuntimePreferences,
-  validateMidiSyncPreferences,
   validateShortcutPreferences
 } from "../application-settings"
 import { installApplicationMenu } from "../application-menu"
@@ -97,40 +92,6 @@ export function registerSettingsHandlers(context: IpcHandlerContext): void {
       await audioHostService.configureMidiInput(current.midiSync, current.shortcuts)
       throw error
     }
-  })
-
-  ipcMain.handle(IPC_CHANNELS.midiInputSnapshot, (event) => {
-    assertTrustedSender(event)
-    if (!audioHostService) throw new Error("Audio host is not running")
-    return audioHostService.midiInputSnapshot()
-  })
-
-  ipcMain.handle(IPC_CHANNELS.midiControlLearning, async (event, value: unknown) => {
-    assertTrustedSender(event)
-    if (typeof value !== "boolean") throw new TypeError("MIDI learning state must be a boolean")
-    if (!audioHostService) throw new Error("Audio host is not running")
-    await audioHostService.setMidiControlLearning(value)
-  })
-
-  ipcMain.handle(IPC_CHANNELS.midiInputConfigure, async (event, value: unknown) => {
-    assertTrustedSender(event)
-    if (recordings.current || audioHostService?.configurationRestarting) {
-      throw new Error("MIDI sync configuration cannot change while recording is busy")
-    }
-    if (!audioHostService) throw new Error("Audio host is not running")
-    const preferences = validateMidiSyncPreferences(value) satisfies MidiSyncPreferences
-    const current = await settings.get()
-    const snapshot = await audioHostService.configureMidiInput(preferences, current.shortcuts)
-    try {
-      await settings.configureMidiInput(preferences)
-    } catch (error) {
-      await audioHostService.configureMidiInput(current.midiSync, current.shortcuts)
-      throw error
-    }
-    for (const window of BrowserWindow.getAllWindows()) {
-      window.webContents.send(IPC_CHANNELS.midiInputEvent, snapshot)
-    }
-    return snapshot
   })
 
   ipcMain.handle(IPC_CHANNELS.settingsChooseSwap, async (event) => {

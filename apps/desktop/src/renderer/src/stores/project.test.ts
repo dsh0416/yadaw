@@ -86,6 +86,12 @@ function bootstrap(active: ProjectWorkspaceSnapshot | null): ApplicationBootstra
         epoch: "main-epoch",
         generation: 1
       },
+      midiRuntime: {
+        kind: "midi-runtime",
+        id: "midi-runtime",
+        epoch: "main-epoch",
+        generation: 1
+      },
       engine: null,
       transport: null,
       revision: 0

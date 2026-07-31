@@ -130,6 +130,8 @@
     "transportUnavailable": "The IPC transport is unavailable.",
     "audioEngineUnavailable": "The audio engine is unavailable.",
     "projectUnavailable": "The project is unavailable.",
+    "pluginUnavailable": "The plug-in runtime is unavailable. Reopen the editor or reconcile the project.",
+    "midiUnavailable": "The MIDI runtime is unavailable. Reconcile the audio helper and try again.",
     "projectQuarantined": "The failed project candidate was isolated."
   },
   "warnings": {

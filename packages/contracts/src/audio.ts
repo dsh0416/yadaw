@@ -1,6 +1,6 @@
 import type { ProjectLifecycleState } from "./project"
 import type { RecordingLifecycleState, RecordingResourceSnapshot } from "./recording"
-import type { AudioEngineRef, AudioHostRef, TransportRef } from "./rpc"
+import type { AudioEngineRef, AudioHostRef, MidiRuntimeRef, TransportRef } from "./rpc"
 
 // "mock" is a cpal custom host that synthesises capture and discards playback.
 // It is always available and is listed last so it is only auto-selected when no
@@ -73,6 +73,7 @@ export interface AudioResourceSnapshot {
   host: AudioHostRef
   engine: AudioEngineRef | null
   transport: TransportRef | null
+  midiRuntime: MidiRuntimeRef
   revision: number
 }
 

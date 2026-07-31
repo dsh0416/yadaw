@@ -225,14 +225,14 @@ export class AudioHostTransportClient {
     const parameterId = preview.parameter === "pan" ? 1 : 0
     const normalized =
       preview.parameter === "pan" ? (preview.value + 1) / 2 : (preview.value + 60) / 72
-    const result = client.enqueueParameter(
+    const result = client.enqueueParameter({
       targetKind,
-      stableRuntimeHandle(preview.target === "channel" ? 1 : 2, preview.id),
+      runtimeHandle: stableRuntimeHandle(preview.target === "channel" ? 1 : 2, preview.id),
       parameterId,
-      Math.max(0, Math.min(1, normalized)),
-      "perform"
-    )
-    if (result === "soft-full" || result === "full") {
+      normalized: Math.max(0, Math.min(1, normalized)),
+      gesture: "perform"
+    })
+    if (result.outcome === "soft-full" || result.outcome === "full") {
       this.coalesceParameter({
         targetKind,
         runtimeHandle: stableRuntimeHandle(preview.target === "channel" ? 1 : 2, preview.id),

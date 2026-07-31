@@ -294,29 +294,32 @@ impl AudioHostIpcClient {
     #[napi]
     pub fn enqueue_parameter(
         &self,
-        target_kind: String,
-        runtime_handle: u32,
-        parameter_id: u32,
-        normalized: f64,
-        gesture: String,
-    ) -> Result<String> {
-        let target_kind = match target_kind.as_str() {
+        request: ParameterEnqueueRequest,
+    ) -> Result<ParameterEnqueueResult> {
+        let target_kind = match request.target_kind.as_str() {
             "plugin" => ParameterTargetKind::Plugin,
             "mixer-channel" => ParameterTargetKind::MixerChannel,
             "mixer-send" => ParameterTargetKind::MixerSend,
             _ => return Err(Error::new(Status::InvalidArg, "invalid parameter target")),
         };
-        let gesture = parse_gesture(&gesture)?;
+        let gesture = parse_gesture(&request.gesture)?;
+        let sequence = request.sequence.map_or_else(
+            || {
+                Ok(self
+                    .state
+                    .parameter_sequence
+                    .fetch_add(1, Ordering::Relaxed))
+            },
+            |value| value.parse::<u64>().map_err(|error| failure("invalid parameter sequence", error)),
+        )?;
         let command = ParameterCommand {
             session_epoch: self.state.session_epoch,
-            sequence: self
-                .state
-                .parameter_sequence
-                .fetch_add(1, Ordering::Relaxed),
+            sequence,
             target_kind,
-            runtime_handle,
-            parameter_id,
-            normalized,
+            runtime_handle: request.runtime_handle,
+            parameter_id: request.parameter_id,
+            normalized: request.normalized,
+            target_generation: request.target_generation.unwrap_or(0),
             gesture,
         };
         match self.state.parameters.enqueue(command) {
@@ -324,13 +327,19 @@ impl AudioHostIpcClient {
                 if wake {
                     self.send_internal_priority(PriorityCommand::ParameterWake)?;
                 }
-                Ok("queued".into())
+                Ok(ParameterEnqueueResult {
+                    outcome: "queued".into(),
+                    sequence: sequence.to_string(),
+                })
             }
             ParameterEnqueue::SoftFull => {
                 self.state
                     .parameter_soft_full
                     .fetch_add(1, Ordering::Relaxed);
-                Ok("soft-full".into())
+                Ok(ParameterEnqueueResult {
+                    outcome: "soft-full".into(),
+                    sequence: sequence.to_string(),
+                })
             }
             ParameterEnqueue::Full => {
                 self.state
@@ -341,16 +350,25 @@ impl AudioHostIpcClient {
                     self.state
                         .parameter_boundary_fallbacks
                         .fetch_add(1, Ordering::Relaxed);
-                    Ok("fallback".into())
+                    Ok(ParameterEnqueueResult {
+                        outcome: "fallback".into(),
+                        sequence: sequence.to_string(),
+                    })
                 } else {
-                    Ok("full".into())
+                    Ok(ParameterEnqueueResult {
+                        outcome: "full".into(),
+                        sequence: sequence.to_string(),
+                    })
                 }
             }
             ParameterEnqueue::StaleEpoch => {
                 self.state
                     .parameter_stale_epoch
                     .fetch_add(1, Ordering::Relaxed);
-                Ok("stale".into())
+                Ok(ParameterEnqueueResult {
+                    outcome: "stale".into(),
+                    sequence: sequence.to_string(),
+                })
             }
         }
     }

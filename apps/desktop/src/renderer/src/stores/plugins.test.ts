@@ -9,6 +9,7 @@ import type {
 } from "@yadaw/contracts"
 import { applyToGraph } from "@yadaw/project-model"
 import { useMixerStore } from "./mixer"
+import { useAudioRuntimeStore } from "./audioRuntime"
 import { usePluginStore } from "./plugins"
 import { useProjectStore } from "./project"
 
@@ -173,6 +174,24 @@ describe("plugin store", () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     useProjectStore().applyWorkspace(workspace(graph()))
+    useProjectStore().applyDesktopSession({
+      kind: "desktop-session",
+      id: "desktop",
+      epoch: "test-main",
+      generation: 1
+    })
+    useAudioRuntimeStore().applyResources({
+      host: { kind: "audio-host", id: "audio-host", epoch: "helper-epoch", generation: 1 },
+      engine: null,
+      transport: null,
+      midiRuntime: {
+        kind: "midi-runtime",
+        id: "midi-runtime",
+        epoch: "helper-epoch",
+        generation: 1
+      },
+      revision: 0
+    })
   })
 
   it("forces lightweight rediscovery when the user requests a manual rescan", async () => {
@@ -182,12 +201,12 @@ describe("plugin store", () => {
       scannedAt: 1,
       plugins: [effectDescriptor]
     }
-    window.yadaw.scanPlugins = vi.fn().mockResolvedValue(catalog)
+    window.yadaw.scanPlugins = vi.fn().mockResolvedValue(success(catalog))
     const store = usePluginStore()
 
     await store.scan(true)
 
-    expect(window.yadaw.scanPlugins).toHaveBeenCalledWith({
+    expect(window.yadaw.scanPlugins).toHaveBeenCalledWith(expect.any(Object), {
       force: true,
       retryQuarantined: true
     })
@@ -196,15 +215,41 @@ describe("plugin store", () => {
 
   it("reports the helper editor state without creating an Electron parameter panel", async () => {
     window.yadaw.getPluginParameters = vi.fn()
-    window.yadaw.openPluginEditor = vi.fn().mockResolvedValue({
-      instanceId: "plugin-1",
-      state: "active",
-      editorOpen: true,
-      editorMode: "parameters",
-      latencySamples: 64,
-      tailSamples: 0,
-      error: null
-    })
+    window.yadaw.openPluginEditor = vi.fn().mockResolvedValue(
+      success({
+        resource: {
+          plugin: {
+            kind: "plugin-instance",
+            id: "plugin-1",
+            epoch: "test-main",
+            generation: 1
+          },
+          projectGraph: workspace(graph()).projectGraph,
+          revision: 1,
+          instance: {
+            id: "plugin-1",
+            channelId: "audio",
+            role: "insert",
+            slotOrder: 0,
+            classId: effectDescriptor.classId,
+            descriptor: effectDescriptor,
+            audioMode: "stereo",
+            enabled: true,
+            componentState: new Uint8Array(),
+            controllerState: new Uint8Array()
+          }
+        },
+        status: {
+          instanceId: "plugin-1",
+          state: "active",
+          editorOpen: true,
+          editorMode: "parameters",
+          latencySamples: 64,
+          tailSamples: 0,
+          error: null
+        }
+      })
+    )
     const store = usePluginStore()
 
     await store.openEditor("plugin-1")
@@ -217,7 +262,19 @@ describe("plugin store", () => {
   })
 
   it("updates parameter feedback while preserving gesture boundaries", async () => {
-    window.yadaw.setPluginParameter = vi.fn().mockResolvedValue(undefined)
+    window.yadaw.setPluginParameter = vi.fn().mockResolvedValue(
+      success({
+        plugin: {
+          kind: "plugin-instance",
+          id: "plugin-1",
+          epoch: "test-main",
+          generation: 1
+        },
+        helperEpoch: "helper-epoch",
+        sequence: "1",
+        outcome: "queued" as const
+      })
+    )
     const store = usePluginStore()
     store.parameters = {
       "plugin-1": [
@@ -233,6 +290,30 @@ describe("plugin store", () => {
         }
       ]
     }
+    store.resources = {
+      "plugin-1": {
+        plugin: {
+          kind: "plugin-instance",
+          id: "plugin-1",
+          epoch: "test-main",
+          generation: 1
+        },
+        projectGraph: workspace(graph()).projectGraph,
+        revision: 1,
+        instance: {
+          id: "plugin-1",
+          channelId: "audio",
+          role: "insert",
+          slotOrder: 0,
+          classId: effectDescriptor.classId,
+          descriptor: effectDescriptor,
+          audioMode: "stereo",
+          enabled: true,
+          componentState: new Uint8Array(),
+          controllerState: new Uint8Array()
+        }
+      }
+    }
 
     await store.setParameter({
       instanceId: "plugin-1",
@@ -242,12 +323,18 @@ describe("plugin store", () => {
     })
 
     expect(store.parameters["plugin-1"]?.[0]?.normalized).toBe(0.75)
-    expect(window.yadaw.setPluginParameter).toHaveBeenCalledWith({
-      instanceId: "plugin-1",
-      parameterId: 7,
-      normalized: 0.75,
-      gesture: "perform"
-    })
+    expect(window.yadaw.setPluginParameter).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({
+        plugin: expect.objectContaining({ id: "plugin-1", generation: 1 }),
+        helperEpoch: "helper-epoch",
+        pluginGeneration: 1,
+        sequence: "1",
+        parameterId: 7,
+        normalized: 0.75,
+        gesture: "perform"
+      })
+    )
   })
 
   it("adds selected effects and instruments through project commands", async () => {
@@ -320,12 +407,14 @@ describe("plugin store", () => {
       controllerState: new Uint8Array()
     })
     mixerStore.graph = initialGraph
-    window.yadaw.listPlugins = vi.fn().mockResolvedValue({
-      scannerVersion: 4,
-      scanning: false,
-      scannedAt: 1,
-      plugins: [replacementInstrumentDescriptor]
-    })
+    window.yadaw.listPlugins = vi.fn().mockResolvedValue(
+      success({
+        scannerVersion: 4,
+        scanning: false,
+        scannedAt: 1,
+        plugins: [replacementInstrumentDescriptor]
+      })
+    )
     window.yadaw.subscribePluginScan = vi.fn().mockReturnValue(vi.fn())
     window.yadaw.executeProjectCommand = vi.fn().mockImplementation(async (_meta, command) => {
       if (command.type !== "replace-plugin") throw new Error("Unexpected project command")

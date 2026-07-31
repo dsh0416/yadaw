@@ -1,3 +1,7 @@
+import type { ProjectCommandResult } from "./mixer"
+import type { ProjectWorkspaceSnapshot } from "./project"
+import type { AudioHostRef, MidiRuntimeRef } from "./rpc"
+
 export const MUSICAL_TICKS_PER_QUARTER = 960
 export const MUSICAL_TICKS_PER_WHOLE_NOTE = MUSICAL_TICKS_PER_QUARTER * 4
 export const MIN_MIDI_NOTE_DURATION_TICKS = 1
@@ -62,6 +66,18 @@ export interface MidiInputSnapshot {
   /** A bounded, generation-ordered window of recently received control events. */
   controlEvents: MidiControlEvent[]
   capturedAt: number
+}
+
+export interface MidiRuntimeResourceSnapshot {
+  runtime: MidiRuntimeRef
+  host: AudioHostRef
+  revision: number
+  snapshot: MidiInputSnapshot
+}
+
+export interface MidiImportCommitResult {
+  command: ProjectCommandResult
+  workspace: ProjectWorkspaceSnapshot
 }
 
 export interface TempoEventState {

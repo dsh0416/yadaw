@@ -130,6 +130,8 @@
     "transportUnavailable": "IPC 传输不可用。",
     "audioEngineUnavailable": "音频引擎不可用。",
     "projectUnavailable": "工程不可用。",
+    "pluginUnavailable": "插件运行时不可用，请重新打开编辑器或协调工程状态。",
+    "midiUnavailable": "MIDI 运行时不可用，请协调音频助手状态后重试。",
     "projectQuarantined": "失败的工程候选会话已被隔离。"
   },
   "warnings": {

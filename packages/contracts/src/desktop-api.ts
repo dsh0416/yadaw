@@ -32,17 +32,19 @@ import type {
   TransportSnapshot
 } from "./mixer"
 import type {
+  MidiImportCommitResult,
   MidiImportPlan,
   MidiImportPreview,
-  MidiInputSnapshot,
+  MidiRuntimeResourceSnapshot,
   MidiSyncPreferences
 } from "./midi"
 import type { OperationEvent } from "./operations"
 import type {
   PluginCatalogSnapshot,
-  PluginParameterChange,
+  PluginEditorOpenResult,
+  PluginParameterCommand,
+  PluginParameterEnqueueResult,
   PluginParameterInfo,
-  PluginRuntimeStatus,
   PluginScanEvent,
   PluginScanRequest
 } from "./plugins"
@@ -223,19 +225,40 @@ export interface YadawDesktopApi {
     meta: RpcRequestMeta,
     request: WaveformWindowRequest
   ): Promise<RpcResult<WaveformPeakWindow>>
-  listPlugins(): Promise<PluginCatalogSnapshot>
-  scanPlugins(request?: PluginScanRequest): Promise<PluginCatalogSnapshot>
+  listPlugins(meta: RpcRequestMeta): Promise<RpcResult<PluginCatalogSnapshot>>
+  scanPlugins(
+    meta: RpcRequestMeta,
+    request?: PluginScanRequest
+  ): Promise<RpcResult<PluginCatalogSnapshot>>
   subscribePluginScan(listener: (event: PluginScanEvent) => void): () => void
-  openPluginEditor(instanceId: string): Promise<PluginRuntimeStatus>
-  closePluginEditor(instanceId: string): Promise<void>
-  getPluginParameters(instanceId: string): Promise<PluginParameterInfo[]>
-  setPluginParameter(request: PluginParameterChange): Promise<void>
-  prepareMidiImport(path?: string): Promise<MidiImportPreview | null>
-  commitMidiImport(plan: MidiImportPlan): Promise<ProjectCommandResult>
-  midiInputSnapshot(): Promise<MidiInputSnapshot>
-  subscribeMidiInput(listener: (snapshot: MidiInputSnapshot) => void): () => void
-  configureMidiInput(preferences: MidiSyncPreferences): Promise<MidiInputSnapshot>
-  setMidiControlLearning(enabled: boolean): Promise<void>
+  openPluginEditor(
+    meta: RpcRequestMeta,
+    instanceId: string
+  ): Promise<RpcResult<PluginEditorOpenResult>>
+  closePluginEditor(meta: RpcRequestMeta): Promise<RpcResult<void>>
+  getPluginParameters(meta: RpcRequestMeta): Promise<RpcResult<PluginParameterInfo[]>>
+  setPluginParameter(
+    meta: RpcRequestMeta,
+    request: PluginParameterCommand
+  ): Promise<RpcResult<PluginParameterEnqueueResult>>
+  prepareMidiImport(
+    meta: RpcRequestMeta,
+    path?: string
+  ): Promise<RpcResult<MidiImportPreview | null>>
+  commitMidiImport(
+    meta: RpcRequestMeta,
+    plan: MidiImportPlan
+  ): Promise<RpcResult<MidiImportCommitResult>>
+  midiInputSnapshot(meta: RpcRequestMeta): Promise<RpcResult<MidiRuntimeResourceSnapshot>>
+  subscribeMidiInput(listener: (snapshot: MidiRuntimeResourceSnapshot) => void): () => void
+  configureMidiInput(
+    meta: RpcRequestMeta,
+    preferences: MidiSyncPreferences
+  ): Promise<RpcResult<MidiRuntimeResourceSnapshot>>
+  setMidiControlLearning(
+    meta: RpcRequestMeta,
+    enabled: boolean
+  ): Promise<RpcResult<MidiRuntimeResourceSnapshot>>
   subscribeOperations(listener: (event: OperationEvent) => void): () => void
   cancelOperation(id: string): Promise<void>
 }

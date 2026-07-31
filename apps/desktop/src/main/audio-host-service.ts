@@ -27,6 +27,8 @@ import type {
   PluginDescriptor,
   PluginInstanceState,
   PluginParameterChange,
+  PluginParameterCommand,
+  PluginParameterEnqueueResult,
   PluginParameterInfo,
   ProjectGraphRef,
   RpcRequestMeta,
@@ -864,6 +866,10 @@ export class AudioHostService {
 
   setPluginParameter(change: PluginParameterChange): Promise<void> {
     return this.plugins.setPluginParameter(change)
+  }
+
+  enqueuePluginParameter(command: PluginParameterCommand): Promise<PluginParameterEnqueueResult> {
+    return this.plugins.enqueuePluginParameter(command)
   }
 
   savePluginState(instanceId: string): Promise<{

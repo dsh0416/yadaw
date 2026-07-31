@@ -32,9 +32,7 @@ describe("IPC v2 architecture gate", () => {
     await expect(filesContaining(/\bipcMain\.handle\s*\(/)).resolves.toEqual([
       "main/ipc/audio-handlers.ts",
       "main/ipc/diagnostic-handlers.ts",
-      "main/ipc/midi-handlers.ts",
       "main/ipc/mixer-handlers.ts",
-      "main/ipc/plugin-handlers.ts",
       "main/ipc/project-handlers.ts",
       "main/ipc/recording-handlers.ts",
       "main/ipc/rpc.ts",

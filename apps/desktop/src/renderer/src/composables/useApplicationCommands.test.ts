@@ -86,6 +86,12 @@ function closedBootstrap(): ApplicationBootstrapSnapshot {
         epoch: "main-epoch",
         generation: 1
       },
+      midiRuntime: {
+        kind: "midi-runtime",
+        id: "midi-runtime",
+        epoch: "main-epoch",
+        generation: 1
+      },
       engine: null,
       transport: null,
       revision: 0
@@ -138,6 +144,12 @@ function createHarness() {
     global: { plugins: [pinia, router] }
   })
   useAudioRuntimeStore(pinia).applyResources({
+    midiRuntime: {
+      kind: "midi-runtime",
+      id: "midi-runtime",
+      epoch: "main-epoch",
+      generation: 1
+    },
     host: {
       kind: "audio-host",
       id: "audio-host",

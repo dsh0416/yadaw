@@ -299,8 +299,8 @@ const fakeHost = vi.hoisted(() => {
       )
     }
 
-    enqueueParameter(): string {
-      return "accepted"
+    enqueueParameter(): { outcome: string; sequence: string } {
+      return { outcome: "queued", sequence: "1" }
     }
 
     transportDiagnostics(): Buffer {

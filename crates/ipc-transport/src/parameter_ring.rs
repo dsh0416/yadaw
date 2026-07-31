@@ -131,6 +131,7 @@ fn write_parameter(page: &AtomicPage<'_>, index: usize, command: ParameterComman
         Ordering::Relaxed,
     );
     page.store_u64(offset + 32, command.normalized.to_bits(), Ordering::Relaxed);
+    page.store_u32(offset + 40, command.target_generation, Ordering::Relaxed);
 }
 
 fn read_parameter(page: &AtomicPage<'_>, index: usize) -> ParameterCommand {
@@ -146,6 +147,7 @@ fn read_parameter(page: &AtomicPage<'_>, index: usize) -> ParameterCommand {
         runtime_handle: page.load_u32(offset + 20, Ordering::Relaxed),
         parameter_id: page.load_u32(offset + 24, Ordering::Relaxed),
         normalized: f64::from_bits(page.load_u64(offset + 32, Ordering::Relaxed)),
+        target_generation: page.load_u32(offset + 40, Ordering::Relaxed),
         gesture: match page.load_u32(offset + 28, Ordering::Relaxed) {
             1 => ParameterGesture::Begin,
             3 => ParameterGesture::End,

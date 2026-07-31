@@ -4,6 +4,8 @@ import type {
   PluginEditorPreference,
   PluginInstanceState,
   PluginParameterChange,
+  PluginParameterCommand,
+  PluginParameterEnqueueResult,
   PluginParameterInfo
 } from "@yadaw/contracts"
 import { binaryBytes, inlineBinary } from "./audio-host-wire"
@@ -178,32 +180,66 @@ export class AudioHostPluginClient {
   }
 
   async setPluginParameter(change: PluginParameterChange): Promise<void> {
+    await this.request({
+      type: "set-plugin-parameter",
+      instance_id: change.instanceId,
+      parameter_id: change.parameterId,
+      normalized: change.normalized,
+      gesture: change.gesture
+    })
+  }
+
+  async enqueuePluginParameter(
+    change: PluginParameterCommand
+  ): Promise<PluginParameterEnqueueResult> {
     const client = this.getClient()
-    const plugin = this.loadedPlugins.get(change.instanceId)
+    const plugin = this.loadedPlugins.get(change.plugin.id)
     if (!client || !plugin?.runtimeHandle) {
       await this.request({
         type: "set-plugin-parameter",
-        instance_id: change.instanceId,
+        instance_id: change.plugin.id,
         parameter_id: change.parameterId,
         normalized: change.normalized,
         gesture: change.gesture
       })
-      return
+      return {
+        plugin: change.plugin,
+        helperEpoch: change.helperEpoch,
+        sequence: change.sequence,
+        outcome: "queued"
+      }
     }
-    const result = client.enqueueParameter(
-      "plugin",
-      plugin.runtimeHandle,
-      change.parameterId,
-      change.normalized,
-      change.gesture
-    )
-    if ((result === "soft-full" || result === "full") && change.gesture === "perform") {
+    const result = client.enqueueParameter({
+      targetKind: "plugin",
+      runtimeHandle: plugin.runtimeHandle,
+      parameterId: change.parameterId,
+      normalized: change.normalized,
+      gesture: change.gesture,
+      sequence: change.sequence,
+      targetGeneration: change.pluginGeneration
+    })
+    if (
+      (result.outcome === "soft-full" || result.outcome === "full") &&
+      change.gesture === "perform"
+    ) {
       this.coalesceParameter({
         targetKind: "plugin",
         runtimeHandle: plugin.runtimeHandle,
         parameterId: change.parameterId,
         normalized: change.normalized
       })
+    }
+    return {
+      plugin: change.plugin,
+      helperEpoch: change.helperEpoch,
+      sequence: result.sequence,
+      outcome:
+        result.outcome === "queued" || result.outcome === "fallback" || result.outcome === "stale"
+          ? result.outcome
+          : result.outcome === "soft-full" ||
+              (result.outcome === "full" && change.gesture === "perform")
+            ? "coalesced"
+            : "full"
     }
   }
 
@@ -242,14 +278,14 @@ export class AudioHostPluginClient {
       const pending = [...this.coalescedParameters.entries()]
       this.coalescedParameters.clear()
       for (const [pendingKey, command] of pending) {
-        const result = client.enqueueParameter(
-          command.targetKind,
-          command.runtimeHandle,
-          command.parameterId,
-          Math.max(0, Math.min(1, command.normalized)),
-          "perform"
-        )
-        if (result === "soft-full" || result === "full") {
+        const result = client.enqueueParameter({
+          targetKind: command.targetKind,
+          runtimeHandle: command.runtimeHandle,
+          parameterId: command.parameterId,
+          normalized: Math.max(0, Math.min(1, command.normalized)),
+          gesture: "perform"
+        })
+        if (result.outcome === "soft-full" || result.outcome === "full") {
           this.coalescedParameters.set(pendingKey, command)
         }
       }

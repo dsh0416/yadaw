@@ -4,6 +4,23 @@ pub struct IpcResponse {
     pub attachments: Vec<Buffer>,
 }
 
+#[napi(object)]
+pub struct ParameterEnqueueResult {
+    pub outcome: String,
+    pub sequence: String,
+}
+
+
+#[napi(object)]
+pub struct ParameterEnqueueRequest {
+    pub target_kind: String,
+    pub runtime_handle: u32,
+    pub parameter_id: u32,
+    pub normalized: f64,
+    pub gesture: String,
+    pub sequence: Option<String>,
+    pub target_generation: Option<u32>,
+}
 type ResponseResolver = Box<dyn FnOnce(Env) -> Result<IpcResponse> + Send>;
 type ResponseDeferred = JsDeferred<IpcResponse, ResponseResolver>;
 

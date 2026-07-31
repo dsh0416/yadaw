@@ -10,6 +10,11 @@ import type {
   DesktopLifecycleEvent,
   DesktopLifecycleSnapshot,
   DesktopSessionRef,
+  MidiRuntimeRef,
+  MidiInputSnapshot,
+  MidiRuntimeResourceSnapshot,
+  PluginInstanceRef,
+  PluginInstanceResourceSnapshot,
   ProjectAssetSummary,
   ProjectGraphSnapshot,
   ProjectLifecycleState,
@@ -80,6 +85,8 @@ export class ApplicationStateStore {
   private audioEngine: AudioEngineRef | null = null
   private transport: TransportRef | null = null
   private currentAudioHost: AudioHostRef
+  private currentMidiRuntime: MidiRuntimeRef
+  private readonly pluginInstances = new Map<string, PluginInstanceRef>()
   private readonly listeners = new Set<ApplicationStateListener>()
 
   private constructor(
@@ -87,6 +94,7 @@ export class ApplicationStateStore {
     readonly desktopSession: DesktopSessionRef,
     readonly applicationSettings: ApplicationSettingsRef,
     audioHost: AudioHostRef,
+    midiRuntime: MidiRuntimeRef,
     project: ProjectSession | null,
     runtime?: AudioRuntimeSnapshot
   ) {
@@ -95,6 +103,7 @@ export class ApplicationStateStore {
       : { status: "closed", error: null }
     this.audio = initialAudioState(runtime)
     this.currentAudioHost = audioHost
+    this.currentMidiRuntime = midiRuntime
   }
 
   static create(
@@ -125,6 +134,15 @@ export class ApplicationStateStore {
     if (!audioHostCandidate.ok) return audioHostCandidate
     const audioHost = resources.commit(audioHostCandidate.value.ref, { status: "ready" })
     if (!audioHost.ok) return audioHost
+    const midiRuntimeCandidate = resources.create({
+      kind: "midi-runtime",
+      id: "midi-runtime",
+      epoch: audioHost.value.ref.epoch,
+      parent: audioHost.value.ref
+    })
+    if (!midiRuntimeCandidate.ok) return midiRuntimeCandidate
+    const midiRuntime = resources.commit(midiRuntimeCandidate.value.ref, { status: "ready" })
+    if (!midiRuntime.ok) return midiRuntime
 
     return kernelSuccess(
       new ApplicationStateStore(
@@ -132,6 +150,7 @@ export class ApplicationStateStore {
         desktop.value.ref as DesktopSessionRef,
         settings.value.ref as ApplicationSettingsRef,
         audioHost.value.ref as AudioHostRef,
+        midiRuntime.value.ref as MidiRuntimeRef,
         options.project,
         options.runtime
       )
@@ -196,6 +215,57 @@ export class ApplicationStateStore {
     return this.workspace ? structuredClone(this.workspace) : null
   }
 
+  async pluginInstanceSnapshot(
+    instanceId: string,
+    disposer: () => Promise<void>
+  ): Promise<PluginInstanceResourceSnapshot | null> {
+    const workspace = this.workspaceSnapshot()
+    const instance = workspace?.graph.plugins.find((candidate) => candidate.id === instanceId)
+    if (!workspace || !instance) {
+      const stale = this.pluginInstances.get(instanceId)
+      if (stale && this.resources.resolve(stale).ok) await this.resources.drop(stale)
+      this.pluginInstances.delete(instanceId)
+      return null
+    }
+    const existing = this.pluginInstances.get(instanceId)
+    if (existing) {
+      const resolved = this.resources.resolve<{ classId: string }>(existing)
+      if (
+        resolved.ok &&
+        resolved.value.parent?.generation === workspace.projectGraph.generation &&
+        resolved.value.committedSnapshot?.classId === instance.classId
+      ) {
+        return {
+          plugin: structuredClone(existing),
+          projectGraph: structuredClone(workspace.projectGraph),
+          revision: resolved.value.revision,
+          instance: structuredClone(instance)
+        }
+      }
+      if (resolved.ok) await this.resources.drop(existing)
+    }
+    const candidate = this.resources.create({
+      kind: "plugin-instance",
+      id: instanceId,
+      epoch: workspace.projectGraph.epoch,
+      parent: workspace.projectGraph,
+      disposer
+    })
+    if (!candidate.ok) throw new Error(candidate.error.code)
+    const committed = this.resources.commit(candidate.value.ref, {
+      classId: instance.classId
+    })
+    if (!committed.ok) throw new Error(committed.error.code)
+    const plugin = committed.value.ref as PluginInstanceRef
+    this.pluginInstances.set(instanceId, plugin)
+    return {
+      plugin: structuredClone(plugin),
+      projectGraph: structuredClone(workspace.projectGraph),
+      revision: committed.value.revision,
+      instance: structuredClone(instance)
+    }
+  }
+
   commitWorkspaceProjection(
     session: ProjectSession,
     graph: ProjectGraphSnapshot,
@@ -225,7 +295,34 @@ export class ApplicationStateStore {
       host: structuredClone(this.currentAudioHost),
       engine: this.audioEngine ? structuredClone(this.audioEngine) : null,
       transport: this.transport ? structuredClone(this.transport) : null,
+      midiRuntime: structuredClone(this.currentMidiRuntime),
       revision
+    }
+  }
+  midiRuntimeSnapshot(snapshot: MidiInputSnapshot): MidiRuntimeResourceSnapshot {
+    const resolved = this.resources.resolve(this.currentMidiRuntime)
+    if (!resolved.ok) throw new Error(resolved.error.code)
+    return {
+      runtime: structuredClone(this.currentMidiRuntime),
+      host: structuredClone(this.currentAudioHost),
+      revision: resolved.value.revision,
+      snapshot: structuredClone(snapshot)
+    }
+  }
+
+  advanceMidiRuntime(snapshot: MidiInputSnapshot): MidiRuntimeResourceSnapshot {
+    const resolved = this.resources.resolve(this.currentMidiRuntime)
+    if (!resolved.ok) throw new Error(resolved.error.code)
+    const updated = this.resources.update(this.currentMidiRuntime, resolved.value.revision, {
+      capturedAt: snapshot.capturedAt,
+      sync: snapshot.sync
+    })
+    if (!updated.ok) throw new Error(updated.error.code)
+    return {
+      runtime: structuredClone(this.currentMidiRuntime),
+      host: structuredClone(this.currentAudioHost),
+      revision: updated.value.revision,
+      snapshot: structuredClone(snapshot)
     }
   }
 
@@ -285,7 +382,17 @@ export class ApplicationStateStore {
     if (!candidate.ok) throw new Error(candidate.error.code)
     const committed = this.resources.commit(candidate.value.ref, { status: "ready" })
     if (!committed.ok) throw new Error(committed.error.code)
+    const midiCandidate = this.resources.create({
+      kind: "midi-runtime",
+      id: "midi-runtime",
+      epoch: helperEpoch,
+      parent: committed.value.ref
+    })
+    if (!midiCandidate.ok) throw new Error(midiCandidate.error.code)
+    const midiRuntime = this.resources.commit(midiCandidate.value.ref, { status: "ready" })
+    if (!midiRuntime.ok) throw new Error(midiRuntime.error.code)
     this.currentAudioHost = committed.value.ref as AudioHostRef
+    this.currentMidiRuntime = midiRuntime.value.ref as MidiRuntimeRef
     this.audioEngine = null
     this.transport = null
     return this.audioResourceSnapshot()
