@@ -36,9 +36,16 @@ export default defineConfig({
       themeConfig: {
         nav: [
           { text: "Manual", link: "/manual/" },
+          { text: "Blog", link: "/blog/" },
           { text: "Releases", link: "https://github.com/dsh0416/yadaw/releases" }
         ],
         sidebar: {
+          "/blog/": [
+            {
+              text: "Development log",
+              items: [{ text: "All posts", link: "/blog/" }]
+            }
+          ],
           "/manual/": [
             {
               text: "Start here",
@@ -112,6 +119,7 @@ export default defineConfig({
       themeConfig: {
         nav: [
           { text: "手册", link: "/zh/manual/" },
+          { text: "博客", link: "/blog/" },
           { text: "下载", link: "https://github.com/dsh0416/yadaw/releases" }
         ],
         sidebar: {
