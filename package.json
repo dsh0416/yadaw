@@ -15,7 +15,7 @@
     "docs:build": "pnpm --filter @yadaw/docs build",
     "docs:preview": "pnpm --filter @yadaw/docs preview",
     "build": "pnpm build:native && pnpm --filter @yadaw/desktop build",
-    "build:native": "pnpm --filter @yadaw/dsp-node build && pnpm --filter @yadaw/audio-host-client build && cargo build -p yadaw-audio-host --release && cargo build -p yadaw-vst3-host --bin yadaw-vst3-probe --release && cargo truce build --vst3",
+    "build:native": "pnpm --filter @yadaw/dsp-node build && pnpm --filter @yadaw/audio-host-client build && cargo build --release -p yadaw-audio-host -p yadaw-vst3-host && cargo truce build --vst3",
     "db:generate": "pnpm --filter @yadaw/project-db db:generate",
     "db:check": "pnpm --filter @yadaw/project-db db:check",
     "check": "pnpm check:version && pnpm sync:napi-bindings && pnpm format:prettier:check && pnpm lint:eslint && pnpm lint:design && pnpm check:configs && pnpm check:rust && pnpm -r --if-present check && pnpm --filter @yadaw/contracts test && pnpm --filter @yadaw/ui test && pnpm --filter @yadaw/desktop test:unit && pnpm --filter @yadaw/project-db test:integration && pnpm design:test && pnpm design:build",

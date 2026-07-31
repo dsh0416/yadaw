@@ -20,10 +20,14 @@ builds, and tagged releases.
   and `Publish`).
 - **Build** (`.github/workflows/build.yml`) packages installers for Windows
   x64, Linux x64 and arm64, and universal macOS as a packaging smoke test. It
-  is reusable through `workflow_call` and can also be started manually.
+  is reusable through `workflow_call` and can also be started manually. CI and
+  manual smoke runs disable release LTO (`CARGO_PROFILE_RELEASE_LTO=false`,
+  higher `codegen-units`, stripped symbols) so MSVC packaging stays tolerable;
+  pass `full_release_profile: true` to keep the Cargo.toml thin-LTO settings.
 - **Publish** (`.github/workflows/publish.yml`) runs on a `v*` tag, validates
-  that the tag matches `VERSION`, calls the reusable Test and Build workflows,
-  and creates a draft GitHub Release only after both succeed.
+  that the tag matches `VERSION`, calls the reusable Test and Build workflows
+  (Build with `full_release_profile: true`), and creates a draft GitHub Release
+  only after both succeed.
 
 ## Workflow tiers
 

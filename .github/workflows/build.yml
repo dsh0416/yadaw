@@ -2,7 +2,22 @@ name: Build
 
 on:
   workflow_dispatch:
+    inputs:
+      full_release_profile:
+        description: >-
+          Keep Cargo.toml thin-LTO release settings (real release artifacts).
+          Leave off for faster packaging smoke builds.
+        type: boolean
+        default: false
   workflow_call:
+    inputs:
+      full_release_profile:
+        description: >-
+          Keep Cargo.toml thin-LTO release settings (real release artifacts).
+          Leave off for faster packaging smoke builds.
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -14,6 +29,8 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: "1"
+  # Disable incremental so sccache can cache every rustc invocation.
+  CARGO_INCREMENTAL: "0"
 
 jobs:
   package:
@@ -51,6 +68,17 @@ jobs:
         uses: actions/checkout@v7
         with:
           persist-credentials: false
+
+      - name: Use faster release profile for packaging smoke builds
+        if: ${{ !inputs.full_release_profile }}
+        shell: bash
+        run: |
+          {
+            echo "CARGO_PROFILE_RELEASE_LTO=false"
+            echo "CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16"
+            echo "CARGO_PROFILE_RELEASE_DEBUG=0"
+            echo "CARGO_PROFILE_RELEASE_STRIP=symbols"
+          } >> "$GITHUB_ENV"
 
       - name: Set up build environment
         uses: ./.github/actions/setup-build
@@ -96,14 +124,10 @@ jobs:
 
           for target in "$ARM_TARGET" "$X64_TARGET"; do
             cargo build \
+              --release \
+              --target "$target" \
               -p yadaw-audio-host \
-              --release \
-              --target "$target"
-            cargo build \
-              -p yadaw-vst3-host \
-              --bin yadaw-vst3-probe \
-              --release \
-              --target "$target"
+              -p yadaw-vst3-host
             cargo truce build --vst3 --target "$target"
           done
 
