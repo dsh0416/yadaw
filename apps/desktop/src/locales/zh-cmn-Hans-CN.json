@@ -132,7 +132,8 @@
     "projectUnavailable": "工程不可用。",
     "pluginUnavailable": "插件运行时不可用，请重新打开编辑器或协调工程状态。",
     "midiUnavailable": "MIDI 运行时不可用，请协调音频助手状态后重试。",
-    "projectQuarantined": "失败的工程候选会话已被隔离。"
+    "projectQuarantined": "失败的工程候选会话已被隔离。",
+    "graphDependencyFailed": "图依赖准备失败，请协调工程状态后重试。"
   },
   "warnings": {
     "audioDeploymentDegraded": "工程数据已保存，但需要重新构建音频部署。",

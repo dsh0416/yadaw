@@ -1,12 +1,30 @@
-import { IPC_CHANNELS, rpcSuccess } from "@yadaw/contracts"
+import { randomUUID } from "node:crypto"
+import { IPC_CHANNELS, rpcFailure, rpcSuccess } from "@yadaw/contracts"
+import type { RpcError, RpcRequestMeta } from "@yadaw/contracts"
 import type { IpcHandlerContext } from "./context"
 import { createAudioBenchmarkReport } from "../audio-benchmark-service"
+import { reconcileAudioHostEpoch } from "./audio-host-reconcile"
+import { beginGuardedMutation, finishGuardedMutation } from "./operation-guard"
 import { registerRpcHandler } from "./rpc"
 import {
   staleResourceFailure,
   validateMutationTarget,
   validateReadTarget
 } from "./resource-validation"
+
+function unavailable(meta: RpcRequestMeta, component: "main" | "audio-host"): RpcError {
+  return {
+    code: "resource-unavailable",
+    category: "unavailable",
+    outcome: "not-committed",
+    retry: "safe",
+    correlationId: randomUUID(),
+    userMessageKey:
+      component === "audio-host" ? "errors.audioEngineUnavailable" : "errors.operationFailed",
+    ...(meta.target ? { resource: meta.target } : {}),
+    details: { type: "resource-unavailable", component, dispatched: false }
+  }
+}
 
 export function registerDiagnosticHandlers(context: IpcHandlerContext): void {
   const {
@@ -15,9 +33,15 @@ export function registerDiagnosticHandlers(context: IpcHandlerContext): void {
     plugins,
     audioHost: audioHostService,
     sampleSystemPerformance,
-    operations
+    recordings
   } = context
   const state = lifecycle.applicationState
+  const reconcileAudioHost = () =>
+    reconcileAudioHostEpoch({
+      audioHost: audioHostService,
+      lifecycle,
+      recordings
+    })
   registerRpcHandler(IPC_CHANNELS.lifecycleSnapshot, ({ meta }) => {
     const invalid = validateReadTarget(meta, state.desktopSession)
     if (invalid) return invalid
@@ -31,29 +55,33 @@ export function registerDiagnosticHandlers(context: IpcHandlerContext): void {
   })
 
   registerRpcHandler(IPC_CHANNELS.audioBenchmarkRun, async ({ meta }) => {
+    await reconcileAudioHost()
     const invalid = validateMutationTarget(meta, state.audioHost)
     if (invalid) return invalid
-    const begun = operations.registry.begin({
-      operationId: meta.mutation!.operationId,
-      idempotencyKey: meta.mutation!.idempotencyKey,
-      target: state.audioHost
-    })
-    if (!begun.ok) throw new Error(begun.error.code)
-    if (begun.value.disposition !== "started" && begun.value.operation.result) {
-      return begun.value.operation.result
-    }
-    const benchmarkEffect = plugins
-      .list()
-      .plugins.find(
-        (plugin) => plugin.source.kind === "builtin" && plugin.source.id === "dev.yadaw.gain"
+    const guarded = beginGuardedMutation(context, meta, state.audioHost)
+    if (guarded) return guarded
+    try {
+      const benchmarkEffect = plugins
+        .list()
+        .plugins.find(
+          (plugin) => plugin.source.kind === "builtin" && plugin.source.id === "dev.yadaw.gain"
+        )
+      if (!benchmarkEffect) {
+        const result = rpcFailure(meta, unavailable(meta, "main"))
+        finishGuardedMutation(context, meta, "not-committed", result)
+        return result
+      }
+      const result = rpcSuccess(
+        meta,
+        await createAudioBenchmarkReport(audioHostService, benchmarkEffect)
       )
-    if (!benchmarkEffect) throw new Error("Built-in YADAW Gain VST3 is unavailable")
-    const result = rpcSuccess(
-      meta,
-      await createAudioBenchmarkReport(audioHostService, benchmarkEffect)
-    )
-    operations.registry.finish(meta.mutation!.operationId, "committed", result)
-    return result
+      finishGuardedMutation(context, meta, "committed", result)
+      return result
+    } catch {
+      const result = rpcFailure(meta, unavailable(meta, "audio-host"))
+      finishGuardedMutation(context, meta, "not-committed", result)
+      return result
+    }
   })
 
   registerRpcHandler(IPC_CHANNELS.compiledAudioGraphSnapshot, ({ meta }) => {

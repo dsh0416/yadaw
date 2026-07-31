@@ -8,6 +8,7 @@ import type {
   TransportCommand
 } from "@yadaw/contracts"
 import type { IpcHandlerContext } from "./context"
+import { reconcileAudioHostEpoch } from "./audio-host-reconcile"
 import { registerRpcHandler } from "./rpc"
 
 function sameRef(left: ResourceRef | undefined, right: ResourceRef | null): boolean {
@@ -100,7 +101,13 @@ function rebindResult(meta: RpcRequestMeta, result: RpcResult<unknown>): RpcResu
 }
 
 export function registerTransportHandlers(context: IpcHandlerContext): void {
-  const { lifecycle, transport, operations, audioHost, isShuttingDown } = context
+  const { lifecycle, transport, operations, audioHost, recordings, isShuttingDown } = context
+  const reconcileAudioHost = () =>
+    reconcileAudioHostEpoch({
+      audioHost,
+      lifecycle,
+      recordings
+    })
   registerRpcHandler(IPC_CHANNELS.transportCommand, async ({ meta }, value: unknown) => {
     const state = lifecycle.applicationState
     if (
@@ -118,8 +125,7 @@ export function registerTransportHandlers(context: IpcHandlerContext): void {
         ? rebindResult(meta, existing.value.result)
         : rpcFailure(meta, busy(meta, existing.value.operationId))
     }
-    const helperEpoch = audioHost.helperEpoch()
-    if (helperEpoch) await state.reconcileAudioHost(helperEpoch)
+    await reconcileAudioHost()
     const resources = state.audioResourceSnapshot()
     if (!sameRef(meta.target, resources.transport)) {
       return rpcFailure(meta, error(meta, "stale-resource"))
@@ -169,8 +175,7 @@ export function registerTransportHandlers(context: IpcHandlerContext): void {
 
   registerRpcHandler(IPC_CHANNELS.transportSnapshot, async ({ meta }) => {
     const state = lifecycle.applicationState
-    const helperEpoch = audioHost.helperEpoch()
-    if (helperEpoch) await state.reconcileAudioHost(helperEpoch)
+    await reconcileAudioHost()
     const resources = state.audioResourceSnapshot()
     if (!sameRef(meta.target, resources.transport)) {
       return rpcFailure(meta, error(meta, "stale-resource"))

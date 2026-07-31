@@ -130,19 +130,52 @@ export function registerMixerHandlers(context: IpcHandlerContext): void {
         })
       )
     }
-    lifecycle.assertMixerLoadAllowed()
-    const graph = await projectGraph.load()
-    const updated = lifecycle.applicationState.resources.update(
-      workspace.projectGraph,
-      workspace.revision,
-      { graph, deployment: "observed" }
-    )
-    if (!updated.ok) throw new Error("Reloaded graph resource could not advance")
-    const next = { ...workspace, revision: updated.value.revision, graph }
-    lifecycle.applicationState.setWorkspace(next)
-    const result = rpcSuccess(meta, graph, { resourceRevision: updated.value.revision })
-    context.operations.registry.finish(meta.mutation.operationId, "committed", result)
-    return result
+    try {
+      lifecycle.assertMixerLoadAllowed()
+      const graph = await projectGraph.load()
+      const updated = lifecycle.applicationState.resources.update(
+        workspace.projectGraph,
+        workspace.revision,
+        { graph, deployment: "observed" }
+      )
+      if (!updated.ok) {
+        lifecycle.applicationState.resources.quarantine(workspace.projectGraph)
+        const result = rpcFailure(meta, {
+          code: "invariant-violation",
+          category: "invariant-violation",
+          outcome: "quarantined",
+          retry: "after-reconcile",
+          correlationId: `graph-reload-${meta.requestId}`,
+          userMessageKey: "errors.internalInvariant",
+          resource: workspace.projectGraph,
+          details: { type: "invariant-violation", component: "main" }
+        })
+        context.operations.registry.finish(meta.mutation.operationId, "quarantined", result)
+        return result
+      }
+      const next = { ...workspace, revision: updated.value.revision, graph }
+      lifecycle.applicationState.setWorkspace(next)
+      const result = rpcSuccess(meta, graph, { resourceRevision: updated.value.revision })
+      context.operations.registry.finish(meta.mutation.operationId, "committed", result)
+      return result
+    } catch {
+      const result = rpcFailure(meta, {
+        code: "resource-unavailable",
+        category: "unavailable",
+        outcome: "not-committed",
+        retry: "safe",
+        correlationId: `graph-reload-${meta.requestId}`,
+        userMessageKey: "errors.operationFailed",
+        resource: workspace.projectGraph,
+        details: {
+          type: "resource-unavailable",
+          component: "project-worker",
+          dispatched: false
+        }
+      })
+      context.operations.registry.finish(meta.mutation.operationId, "not-committed", result)
+      return result
+    }
   })
 
   registerRpcHandler(IPC_CHANNELS.projectCommandExecute, ({ meta }, value: unknown) => {

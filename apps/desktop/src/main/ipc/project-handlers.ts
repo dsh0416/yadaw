@@ -156,15 +156,16 @@ export function registerProjectHandlers(context: IpcHandlerContext): void {
       },
       true
     )
+    let archiveCommitted = false
     try {
       await synchronizePluginStates()
       const saved = await projects.save(
         typeof value === "string" ? value : undefined,
         meta.mutation.operationId
       )
+      archiveCommitted = true
       operations.patch(operationId, { phase: "cleaning-up" }, true)
       await recordings.cleanupCommittedForProject(saved.path)
-      lifecycle.completeProject(saved)
       const resolved = lifecycle.applicationState.resources.resolve(workspace.project)
       if (!resolved.ok) throw new Error("Saved project resource became stale")
       const committed = lifecycle.applicationState.resources.update(
@@ -175,23 +176,43 @@ export function registerProjectHandlers(context: IpcHandlerContext): void {
       if (!committed.ok) throw new Error("Saved project resource could not advance")
       const next = { ...workspace, session: saved }
       lifecycle.applicationState.setWorkspace(next)
+      lifecycle.completeProject(saved)
       const result = rpcSuccess(meta, next, { resourceRevision: committed.value.revision })
       operations.registry.finish(operationId, "committed", result)
       operations.patch(operationId, { state: "completed" }, true)
       return result
     } catch (error) {
       lifecycle.failProject(error)
-      const result = rpcFailure(meta, {
-        code: "operation-timeout-unknown",
-        category: "timeout-unknown",
-        outcome: "unknown",
-        retry: "after-reconcile",
-        correlationId: `save-${meta.requestId}`,
-        userMessageKey: "errors.operationOutcomeUnknown",
-        resource: workspace.project,
-        details: { type: "operation-timeout-unknown", dispatched: true }
-      })
-      operations.registry.finish(operationId, "quarantined", result)
+      const result = archiveCommitted
+        ? rpcFailure(meta, {
+            code: "operation-timeout-unknown",
+            category: "timeout-unknown",
+            outcome: "unknown",
+            retry: "after-reconcile",
+            correlationId: `save-${meta.requestId}`,
+            userMessageKey: "errors.operationOutcomeUnknown",
+            resource: workspace.project,
+            details: { type: "operation-timeout-unknown", dispatched: true }
+          })
+        : rpcFailure(meta, {
+            code: "resource-unavailable",
+            category: "unavailable",
+            outcome: "not-committed",
+            retry: "safe",
+            correlationId: `save-${meta.requestId}`,
+            userMessageKey: "errors.operationFailed",
+            resource: workspace.project,
+            details: {
+              type: "resource-unavailable",
+              component: "project-worker",
+              dispatched: false
+            }
+          })
+      operations.registry.finish(
+        operationId,
+        archiveCommitted ? "quarantined" : "not-committed",
+        result
+      )
       operations.patch(
         operationId,
         {
@@ -280,7 +301,7 @@ export function registerProjectHandlers(context: IpcHandlerContext): void {
       const result = rpcSuccess(meta, session, { resourceRevision: next.revision })
       operations.registry.finish(meta.mutation!.operationId, "committed", result)
       return result
-    } catch (error) {
+    } catch (_error) {
       if (!configurationUpdated) {
         if (sampleRateChanged && audioWasRunning && audioHostService) {
           const runtime = await audioHostService
@@ -288,8 +309,24 @@ export function registerProjectHandlers(context: IpcHandlerContext): void {
             .catch(() => lifecycle.snapshot().audio.runtime)
           lifecycle.completeAudio(normalizeAudioRuntime(runtime))
         }
-        throw error
+        const result = rpcFailure(meta, {
+          code: "resource-unavailable",
+          category: "unavailable",
+          outcome: "not-committed",
+          retry: "safe",
+          correlationId: `project-config-${meta.requestId}`,
+          userMessageKey: "errors.operationFailed",
+          resource: workspace.projectGraph,
+          details: {
+            type: "resource-unavailable",
+            component: "project-worker",
+            dispatched: false
+          }
+        })
+        operations.registry.finish(meta.mutation!.operationId, "not-committed", result)
+        return result
       }
+      let rollbackFailed = false
       try {
         const restored = await projects.updateConfiguration(previous.configuration)
         await projectGraph.refreshFromDatabase(graphConfigurationChanged)
@@ -302,6 +339,7 @@ export function registerProjectHandlers(context: IpcHandlerContext): void {
           lifecycle.completeAudio(normalizeAudioRuntime(runtime))
         }
       } catch (rollbackError) {
+        rollbackFailed = true
         console.error("Could not roll back the project sample-rate change", rollbackError)
         if (sampleRateChanged && audioWasRunning && audioHostService) {
           const runtime = await audioHostService
@@ -310,17 +348,36 @@ export function registerProjectHandlers(context: IpcHandlerContext): void {
           lifecycle.failAudio(rollbackError, normalizeAudioRuntime(runtime))
         }
       }
-      const result = rpcFailure(meta, {
-        code: "resource-unavailable",
-        category: "unavailable",
-        outcome: "not-committed",
-        retry: "safe",
-        correlationId: `project-config-${meta.requestId}`,
-        userMessageKey: "errors.operationFailed",
-        resource: workspace.projectGraph,
-        details: { type: "resource-unavailable", component: "project-worker", dispatched: true }
-      })
-      operations.registry.finish(meta.mutation!.operationId, "not-committed", result)
+      const result = rollbackFailed
+        ? rpcFailure(meta, {
+            code: "invariant-violation",
+            category: "invariant-violation",
+            outcome: "quarantined",
+            retry: "after-reconcile",
+            correlationId: `project-config-${meta.requestId}`,
+            userMessageKey: "errors.internalInvariant",
+            resource: workspace.projectGraph,
+            details: { type: "invariant-violation", component: "main" }
+          })
+        : rpcFailure(meta, {
+            code: "resource-unavailable",
+            category: "unavailable",
+            outcome: "not-committed",
+            retry: "safe",
+            correlationId: `project-config-${meta.requestId}`,
+            userMessageKey: "errors.operationFailed",
+            resource: workspace.projectGraph,
+            details: {
+              type: "resource-unavailable",
+              component: "project-worker",
+              dispatched: true
+            }
+          })
+      operations.registry.finish(
+        meta.mutation!.operationId,
+        rollbackFailed ? "quarantined" : "not-committed",
+        result
+      )
       return result
     }
   })

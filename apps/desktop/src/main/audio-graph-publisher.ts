@@ -1,4 +1,5 @@
-import { rpcSuccess } from "@yadaw/contracts"
+import { randomUUID } from "node:crypto"
+import { rpcFailure, rpcSuccess } from "@yadaw/contracts"
 import type {
   ProjectGraphRef,
   ProjectGraphSnapshot,
@@ -80,8 +81,41 @@ export class AudioGraphPublisher {
     prepared: PreparedProjectGraph
   ): Promise<RpcResult<ProjectGraphSnapshot>> {
     if (prepared.native) {
-      const activated = await this.audioHost?.activateGraphDeployment(prepared.native)
-      if (activated && !activated.ok) return activated
+      if (!this.audioHost) {
+        return rpcFailure(meta, {
+          code: "resource-unavailable",
+          category: "unavailable",
+          outcome: "not-committed",
+          retry: "safe",
+          correlationId: randomUUID(),
+          userMessageKey: "errors.audioEngineUnavailable",
+          resource: prepared.native.projectGraph,
+          details: {
+            type: "resource-unavailable",
+            component: "audio-host",
+            dispatched: false
+          }
+        })
+      }
+      try {
+        const activated = await this.audioHost.activateGraphDeployment(prepared.native)
+        if (!activated.ok) return activated
+      } catch {
+        return rpcFailure(meta, {
+          code: "resource-unavailable",
+          category: "unavailable",
+          outcome: "not-committed",
+          retry: "safe",
+          correlationId: randomUUID(),
+          userMessageKey: "errors.audioEngineUnavailable",
+          resource: prepared.native.projectGraph,
+          details: {
+            type: "resource-unavailable",
+            component: "audio-host",
+            dispatched: true
+          }
+        })
+      }
     }
     return rpcSuccess(meta, cloneGraph(prepared.graph), {
       resourceRevision: prepared.revision
