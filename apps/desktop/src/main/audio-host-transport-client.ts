@@ -321,7 +321,9 @@ export class AudioHostTransportClient {
             ? "recording"
             : telemetry[3] === 3
               ? "waiting"
-              : "stopped",
+              : telemetry[3] === 4
+                ? "counting-in"
+                : "stopped",
       positionFrames: telemetry[4],
       sampleRate: telemetry[5]
     })
@@ -334,7 +336,10 @@ export class AudioHostTransportClient {
     }
     return {
       state:
-        value.state === "waiting" || value.state === "playing" || value.state === "recording"
+        value.state === "waiting" ||
+        value.state === "counting-in" ||
+        value.state === "playing" ||
+        value.state === "recording"
           ? value.state
           : "stopped",
       positionFrames: value.position_frames,
@@ -360,7 +365,16 @@ export class AudioHostTransportClient {
     try {
       const telemetry = decode(client.readTelemetry()) as TelemetryWire
       this.rememberTransport({
-        state: telemetry[3] === 1 ? "playing" : telemetry[3] === 2 ? "recording" : "stopped",
+        state:
+          telemetry[3] === 1
+            ? "playing"
+            : telemetry[3] === 2
+              ? "recording"
+              : telemetry[3] === 3
+                ? "waiting"
+                : telemetry[3] === 4
+                  ? "counting-in"
+                  : "stopped",
         positionFrames: telemetry[4],
         sampleRate: telemetry[5]
       })

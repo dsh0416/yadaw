@@ -41,6 +41,7 @@ export class TransportService {
       } else if (command.type === "pause") this.testSnapshot.state = "stopped"
       else if (command.type === "play") this.testSnapshot.state = "playing"
       else if (command.type === "record") this.testSnapshot.state = "recording"
+      else if (command.type === "record-count-in") this.testSnapshot.state = "counting-in"
       return { ...this.testSnapshot }
     }
     if (!this.audioHost) throw new Error("Audio host is not running")

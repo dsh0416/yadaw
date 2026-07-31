@@ -19,7 +19,9 @@ export interface RecordingDependencies {
   audioEngine: AudioEngineRef
 }
 
-export type RecordingStartRequest = RecordingDependencies
+export interface RecordingStartRequest extends RecordingDependencies {
+  countIn: boolean
+}
 
 export interface RecordingResourceSnapshot extends RecordingDependencies {
   recording: RecordingSessionRef

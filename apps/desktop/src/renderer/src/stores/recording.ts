@@ -31,7 +31,7 @@ export const useRecordingStore = defineStore("recording", () => {
     resource.value = value ? structuredClone(value) : null
   }
 
-  async function start(): Promise<RecordingSession | null> {
+  async function start(countIn = false): Promise<RecordingSession | null> {
     if (lifecycle.value.status !== "idle") return null
     const project = projectStore.projectRef
     const projectGraph = projectStore.projectGraphRef
@@ -43,7 +43,7 @@ export const useRecordingStore = defineStore("recording", () => {
     lifecycle.value = { status: "starting", error: null }
     const result = await window.yadaw.startRecording(
       mutationMeta(project, "recording-start", projectStore.projectRevision),
-      { project, projectGraph, audioEngine }
+      { project, projectGraph, audioEngine, countIn }
     )
     if (!result.ok) {
       lifecycle.value = {

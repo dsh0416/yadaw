@@ -25,7 +25,7 @@ export const useStudioWorkflowStore = defineStore("studio-workflow", () => {
         (track.kind === "audio" || (track.kind === "instrument" && track.systemRole === null))
     )
     if (!hasArmedRecordTarget) return false
-    return Boolean(await recordingStore.start())
+    return Boolean(await recordingStore.start(transportStore.countInEnabled))
   }
 
   async function stopRecording(): Promise<PendingRecording | null> {

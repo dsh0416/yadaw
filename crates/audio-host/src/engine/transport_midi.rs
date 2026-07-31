@@ -84,37 +84,14 @@ enum SignalWidth {
 
 #[derive(Clone, Copy)]
 enum ScheduledMidiEventKind {
-    NoteOn {
-        note_id: i32,
-        key: u8,
-        velocity: u8,
-    },
-    NoteOff {
-        note_id: i32,
-        key: u8,
-        velocity: u8,
-    },
-    ControlChange {
-        controller: u8,
-        value: u8,
-    },
-    PitchBend {
-        value: u16,
-    },
-    ProgramChange {
-        program: u8,
-    },
-    ChannelPressure {
-        pressure: u8,
-    },
-    PolyPressure {
-        key: u8,
-        pressure: u8,
-    },
-    SysEx {
-        offset: u32,
-        length: u32,
-    },
+    NoteOn { note_id: i32, key: u8, velocity: u8 },
+    NoteOff { note_id: i32, key: u8, velocity: u8 },
+    ControlChange { controller: u8, value: u8 },
+    PitchBend { value: u16 },
+    ProgramChange { program: u8 },
+    ChannelPressure { pressure: u8 },
+    PolyPressure { key: u8, pressure: u8 },
+    SysEx { offset: u32, length: u32 },
 }
 
 impl ScheduledMidiEventKind {
@@ -158,6 +135,64 @@ struct BeatBoundary {
     tick: u64,
     frame: u64,
     accent: bool,
+}
+
+#[derive(Clone, Copy)]
+struct CountInState {
+    virtual_position: u64,
+    end_frame: u64,
+    record_position: u64,
+}
+
+impl CountInState {
+    fn one_bar(tempo_map: &TempoMap, sample_rate: u32, record_position: u64) -> Option<Self> {
+        let position_tick = tempo_map.frame_to_tick(record_position, sample_rate).ok()?;
+        let signatures = tempo_map.time_signature_events();
+        let signature_index = signatures
+            .partition_point(|event| event.tick <= position_tick)
+            .saturating_sub(1);
+        let signature = *signatures.get(signature_index)?;
+        let beat_ticks =
+            u64::from(MUSICAL_TICKS_PER_QUARTER) * 4 / u64::from(signature.denominator);
+        let bar_ticks = beat_ticks.checked_mul(u64::from(signature.numerator))?;
+        let current_bar_index = position_tick
+            .saturating_sub(signature.tick)
+            .checked_div(bar_ticks)?;
+        let current_bar_start_tick = signature
+            .tick
+            .checked_add(current_bar_index.checked_mul(bar_ticks)?)?;
+        let (start_tick, end_frame) = if let Some(start_tick) = position_tick
+            .checked_sub(bar_ticks)
+            .filter(|start_tick| *start_tick >= signature.tick)
+        {
+            // When timeline material exists before the record cursor, use it as
+            // a real pre-roll so a muted metronome can still count in from the
+            // backing track. The public playhead remains parked at the record
+            // position until this range has finished.
+            (start_tick, record_position)
+        } else {
+            // At the beginning of a project there is no earlier timeline to
+            // render, so retain a full synthetic bar for the click (or silence).
+            let end_tick = current_bar_start_tick.checked_add(bar_ticks)?;
+            (
+                current_bar_start_tick,
+                tempo_map.tick_to_frame(end_tick, sample_rate).ok()?,
+            )
+        };
+        let virtual_position = tempo_map.tick_to_frame(start_tick, sample_rate).ok()?;
+        if end_frame <= virtual_position {
+            return None;
+        }
+        Some(Self {
+            virtual_position,
+            end_frame,
+            record_position,
+        })
+    }
+
+    const fn remaining_frames(self) -> u64 {
+        self.end_frame.saturating_sub(self.virtual_position)
+    }
 }
 
 struct MetronomeScheduler {

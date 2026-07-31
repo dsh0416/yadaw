@@ -9,17 +9,17 @@ mod tests {
 
     use super::{
         AdaptiveResampler, AtomicU32, AtomicU64, AudioEngineKey, BufferSelection, BufferSize,
-        ClipSamples, ClipStoragePolicy, EngineCommand, InputPeakBank, LivePlugin, LoadedClip,
-        MAX_INPUT_CHANNELS, MAX_OUTPUT_CHANNELS, MAX_PLUGIN_BLOCK_FRAMES, MEMORY_DECODE_LIMIT_BYTES,
-        METRONOME_ACCENT_NOTE, METRONOME_BEAT_NOTE, MeterAtomics, MeterBank, MetronomeScheduler,
-        NativeMixerChannel, NativeMixerGraph, NativeMixerRuntime, NativeMixerSend,
-        NativePluginInstance, NativeRoundTripLatencyMeasurementRequest, Ordering,
-        OUTPUT_RESAMPLER_FRAMES, RoundTripInputDetector, RoundTripLatencyMeasurement,
+        ClipSamples, ClipStoragePolicy, EngineCommand, GRAPH_TEST_LOCK, InputPeakBank, LivePlugin,
+        LoadedClip, MAX_INPUT_CHANNELS, MAX_OUTPUT_CHANNELS, MAX_PLUGIN_BLOCK_FRAMES,
+        MEMORY_DECODE_LIMIT_BYTES, METRONOME_ACCENT_NOTE, METRONOME_BEAT_NOTE, MeterAtomics,
+        MeterBank, MetronomeScheduler, NativeMixerChannel, NativeMixerGraph, NativeMixerRuntime,
+        NativeMixerSend, NativePluginInstance, NativeRoundTripLatencyMeasurementRequest,
+        OUTPUT_RESAMPLER_FRAMES, Ordering, RoundTripInputDetector, RoundTripLatencyMeasurement,
         RoundTripOutputProbe, ScheduledMidiEvent, ScheduledMidiEventKind, SessionOutputConverter,
         SignalWidth, StereoDelayLine, StreamDirection, StreamErrorImpact, SupportedBufferSize,
-        TRANSPORT_PLAYING, TRANSPORT_RECORDING, TRANSPORT_STOPPED, TRANSPORT_WAITING,
-        TransportAction, TransportShared, GRAPH_TEST_LOCK, clip_storage_policy, compiled_graph_snapshot,
-        frames_to_nanos, native_graph_references_plugin,
+        TRANSPORT_COUNTING_IN, TRANSPORT_PLAYING, TRANSPORT_RECORDING, TRANSPORT_STOPPED,
+        TRANSPORT_WAITING, TransportAction, TransportShared, clip_storage_policy,
+        compiled_graph_snapshot, frames_to_nanos, native_graph_references_plugin,
         resolve_stream_devices, select_buffer_size, set_last_native_graph_for_test,
         spawn_streaming_clip, stream_error_impact, validate_session_sample_rate,
     };
@@ -396,18 +396,13 @@ mod tests {
         }));
         assert!(scheduler.events_at(&map, 48_000, 959)[0].is_none());
         let release = scheduler.events_at(&map, 48_000, 960);
-        assert!(
-            release
-                .into_iter()
-                .flatten()
-                .any(|event| matches!(
-                    event.kind,
-                    ScheduledMidiEventKind::NoteOff {
-                        key: METRONOME_ACCENT_NOTE,
-                        ..
-                    }
-                ))
-        );
+        assert!(release.into_iter().flatten().any(|event| matches!(
+            event.kind,
+            ScheduledMidiEventKind::NoteOff {
+                key: METRONOME_ACCENT_NOTE,
+                ..
+            }
+        )));
         assert_eq!(scheduler.next.map(|boundary| boundary.frame), Some(24_000));
     }
 
@@ -420,18 +415,13 @@ mod tests {
 
         scheduler.reposition(&map, 48_000, 24_000, true);
         let exact = scheduler.events_at(&map, 48_000, 24_000);
-        assert!(
-            exact
-                .into_iter()
-                .flatten()
-                .any(|event| matches!(
-                    event.kind,
-                    ScheduledMidiEventKind::NoteOn {
-                        key: METRONOME_BEAT_NOTE,
-                        ..
-                    }
-                ))
-        );
+        assert!(exact.into_iter().flatten().any(|event| matches!(
+            event.kind,
+            ScheduledMidiEventKind::NoteOn {
+                key: METRONOME_BEAT_NOTE,
+                ..
+            }
+        )));
     }
 
     #[test]
@@ -586,8 +576,7 @@ mod tests {
         let context = test_process_context();
         let mut width = SignalWidth::Stereo;
         let mut mono_to_stereo = missing_effect(PluginAudioMode::MonoToStereo, false);
-        let frame =
-            process_test_plugin(&mut mono_to_stereo, [1.0, 3.0], &mut width, &context);
+        let frame = process_test_plugin(&mut mono_to_stereo, [1.0, 3.0], &mut width, &context);
         assert_eq!(frame, [2.0, 2.0]);
         assert!(matches!(width, SignalWidth::Stereo));
 
@@ -855,11 +844,9 @@ mod tests {
             live_midi_routes: vec![None; 3],
             live_midi_events: Vec::new(),
             live_notes: vec![false; 3 * 16 * 128],
-            live_sysex_scratch: vec![
-                0;
-                yadaw_dsp_runtime::midi_input::MIDI_MAX_SYSEX_BYTES
-            ],
+            live_sysex_scratch: vec![0; yadaw_dsp_runtime::midi_input::MIDI_MAX_SYSEX_BYTES],
             metronome: MetronomeScheduler::new(None, &TempoMap::default_120_bpm(), sample_rate, 0),
+            count_in: None,
             tempo_map: TempoMap::default_120_bpm(),
             graph,
             clips: vec![LoadedClip {
@@ -875,7 +862,7 @@ mod tests {
                     .collect(),
             }),
             transport: Arc::new(TransportShared {
-                state: AtomicU32::new(state),
+                state: Arc::new(AtomicU32::new(state)),
                 position_frames: AtomicU64::new(position_frames),
                 position_ticks: AtomicU64::new(0),
                 sample_rate: AtomicU32::new(sample_rate),
@@ -925,6 +912,99 @@ mod tests {
     }
 
     #[test]
+    fn record_count_in_holds_the_playhead_for_one_bar_before_recording() {
+        let mut runtime = transport_test_runtime(48_000, 200_000, 250, TRANSPORT_STOPPED);
+        let inputs = vec![[0.0; MAX_INPUT_CHANNELS]; 256];
+        let mut outputs = vec![[0.0; MAX_OUTPUT_CHANNELS]; 256];
+
+        let _ = runtime.handle_command(EngineCommand::Transport(
+            TransportAction::Record { count_in: true },
+            0,
+        ));
+
+        assert_eq!(
+            runtime.transport.state.load(Ordering::Relaxed),
+            TRANSPORT_COUNTING_IN
+        );
+        assert_eq!(
+            runtime.transport.position_frames.load(Ordering::Relaxed),
+            250
+        );
+
+        for _ in 0..375 {
+            assert!(!runtime.render_block(&inputs, &mut outputs, None));
+        }
+
+        assert_eq!(
+            runtime.transport.state.load(Ordering::Relaxed),
+            TRANSPORT_RECORDING
+        );
+        assert_eq!(
+            runtime.transport.position_frames.load(Ordering::Relaxed),
+            250
+        );
+
+        assert!(!runtime.render_block(&inputs[..64], &mut outputs[..64], None));
+        assert_eq!(
+            runtime.transport.position_frames.load(Ordering::Relaxed),
+            314
+        );
+    }
+
+    #[test]
+    fn mixer_reload_preserves_active_record_count_in() {
+        let mut runtime = transport_test_runtime(48_000, 200_000, 250, TRANSPORT_STOPPED);
+        let inputs = vec![[0.0; MAX_INPUT_CHANNELS]; 256];
+        let mut outputs = vec![[0.0; MAX_OUTPUT_CHANNELS]; 256];
+
+        let _ = runtime.handle_command(EngineCommand::Transport(
+            TransportAction::Record { count_in: true },
+            0,
+        ));
+        assert!(!runtime.render_block(&inputs, &mut outputs, None));
+        let count_in_before = runtime
+            .count_in
+            .expect("record count-in should have private scheduler state");
+
+        let mut replacement =
+            transport_test_runtime(48_000, 200_000, 250, TRANSPORT_STOPPED);
+        replacement.transport = Arc::clone(&runtime.transport);
+        runtime = runtime
+            .handle_command(EngineCommand::LoadMixer(replacement))
+            .expect("mixer load should replace the runtime");
+
+        let count_in_after = runtime
+            .count_in
+            .expect("mixer reload should preserve count-in state");
+        assert_eq!(count_in_after.virtual_position, count_in_before.virtual_position);
+        assert_eq!(count_in_after.end_frame, count_in_before.end_frame);
+        assert_eq!(
+            runtime.transport.state.load(Ordering::Relaxed),
+            TRANSPORT_COUNTING_IN
+        );
+        assert_eq!(
+            runtime.transport.position_frames.load(Ordering::Relaxed),
+            250
+        );
+
+        for _ in 0..375 {
+            if runtime.transport.state.load(Ordering::Relaxed) == TRANSPORT_RECORDING {
+                break;
+            }
+            assert!(!runtime.render_block(&inputs, &mut outputs, None));
+        }
+
+        assert_eq!(
+            runtime.transport.state.load(Ordering::Relaxed),
+            TRANSPORT_RECORDING
+        );
+        assert_eq!(
+            runtime.transport.position_frames.load(Ordering::Relaxed),
+            250
+        );
+    }
+
+    #[test]
     fn auto_stop_at_content_end_then_play_restarts_from_beginning() {
         let mut runtime = transport_test_runtime(48_000, 1_000, 980, TRANSPORT_PLAYING);
         let inputs = vec![[0.0; MAX_INPUT_CHANNELS]; 64];
@@ -954,6 +1034,43 @@ mod tests {
         assert_eq!(
             runtime.transport.position_frames.load(Ordering::Relaxed),
             32
+        );
+    }
+
+    #[test]
+    fn record_count_in_plays_the_preceding_timeline_bar_without_advancing_the_playhead() {
+        const BAR_FRAMES: usize = 96_000;
+        let mut runtime = transport_test_runtime(
+            48_000,
+            (BAR_FRAMES * 2) as u64,
+            BAR_FRAMES as u64,
+            TRANSPORT_STOPPED,
+        );
+        let mut samples = vec![[0.0, 0.0]; BAR_FRAMES * 2];
+        samples[..BAR_FRAMES].fill([0.25, -0.25]);
+        runtime.clips[0].samples = ClipSamples::Memory(samples);
+        let inputs = vec![[0.0; MAX_INPUT_CHANNELS]; 256];
+        let mut outputs = vec![[0.0; MAX_OUTPUT_CHANNELS]; 256];
+
+        let _ = runtime.handle_command(EngineCommand::Transport(
+            TransportAction::Record { count_in: true },
+            0,
+        ));
+        assert!(!runtime.render_block(&inputs, &mut outputs, None));
+
+        assert!(
+            outputs
+                .iter()
+                .any(|frame| frame[0].abs() > 0.1 || frame[1].abs() > 0.1),
+            "the preceding backing-track bar should be audible during count-in"
+        );
+        assert_eq!(
+            runtime.transport.state.load(Ordering::Relaxed),
+            TRANSPORT_COUNTING_IN
+        );
+        assert_eq!(
+            runtime.transport.position_frames.load(Ordering::Relaxed),
+            BAR_FRAMES as u64
         );
     }
 
@@ -1019,12 +1136,7 @@ mod tests {
             yadaw_dsp_runtime::midi_input::MUSICAL_TICKS_PER_MIDI_CLOCK
         );
         assert_eq!(
-            f64::from_bits(
-                runtime
-                    .transport
-                    .effective_bpm_bits
-                    .load(Ordering::Relaxed)
-            ),
+            f64::from_bits(runtime.transport.effective_bpm_bits.load(Ordering::Relaxed)),
             127.5
         );
 

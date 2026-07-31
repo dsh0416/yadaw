@@ -3,40 +3,57 @@ impl NativeMixerRuntime {
         match command {
             EngineCommand::LoadMixer(mut runtime) => {
                 self.all_notes_off();
-                let position = runtime.transport.position_frames.load(Ordering::Relaxed);
-                runtime.metronome.reposition(
-                    &runtime.tempo_map,
-                    runtime.sample_rate,
-                    position,
-                    true,
-                );
+                let state = runtime.transport.state.load(Ordering::Relaxed);
+                if state == TRANSPORT_COUNTING_IN {
+                    if let Some(count_in) = self.count_in {
+                        runtime.count_in = Some(count_in);
+                        runtime.chase_notes(count_in.virtual_position);
+                    } else {
+                        runtime.count_in = None;
+                        // The shared transport says count-in is active but the
+                        // private scheduler state was lost. Enter recording so
+                        // the already-committed session cannot remain silent.
+                        runtime
+                            .transport
+                            .state
+                            .store(TRANSPORT_RECORDING, Ordering::Relaxed);
+                        let position = runtime.transport.position_frames.load(Ordering::Relaxed);
+                        runtime.chase_notes(position);
+                    }
+                } else {
+                    runtime.count_in = None;
+                    let position = runtime.transport.position_frames.load(Ordering::Relaxed);
+                    runtime.metronome.reposition(
+                        &runtime.tempo_map,
+                        runtime.sample_rate,
+                        position,
+                        true,
+                    );
+                }
                 return Some(runtime);
             }
             EngineCommand::Preview(preview) => {
                 let result = match preview.parameter {
-                    RealtimeParameter::ChannelGain => self
-                        .graph
-                        .channel_index(preview.id())
-                        .and_then(|index| {
+                    RealtimeParameter::ChannelGain => {
+                        self.graph.channel_index(preview.id()).and_then(|index| {
                             self.graph.preview_channel_gain(index, preview.value).ok()
-                        }),
-                    RealtimeParameter::ChannelPan => self
-                        .graph
-                        .channel_index(preview.id())
-                        .and_then(|index| {
+                        })
+                    }
+                    RealtimeParameter::ChannelPan => {
+                        self.graph.channel_index(preview.id()).and_then(|index| {
                             self.graph.preview_channel_pan(index, preview.value).ok()
-                        }),
+                        })
+                    }
                     RealtimeParameter::SendLevel => self
                         .graph
                         .send_index(preview.id())
-                        .and_then(|index| {
-                            self.graph.preview_send_level(index, preview.value).ok()
-                        }),
+                        .and_then(|index| self.graph.preview_send_level(index, preview.value).ok()),
                 };
                 let _ = result;
             }
             EngineCommand::Transport(action, position) => match action {
                 TransportAction::Play => {
+                    self.count_in = None;
                     let mut position = self.transport.position_frames.load(Ordering::Relaxed);
                     // Auto-stop leaves the playhead at/past the finite content tail.
                     // Restart from the beginning so Play after song-end is not a no-op.
@@ -49,9 +66,7 @@ impl NativeMixerRuntime {
                     }
                     self.chase_notes(position);
                     if crate::midi_input::external_sync_enabled() {
-                        self.transport
-                            .clock_source
-                            .store(1, Ordering::Relaxed);
+                        self.transport.clock_source.store(1, Ordering::Relaxed);
                         self.transport.waiting_for.store(1, Ordering::Relaxed);
                         self.transport
                             .state
@@ -63,6 +78,7 @@ impl NativeMixerRuntime {
                     }
                 }
                 TransportAction::Pause => {
+                    self.count_in = None;
                     self.all_notes_off();
                     self.transport.waiting_for.store(0, Ordering::Relaxed);
                     self.transport
@@ -70,6 +86,7 @@ impl NativeMixerRuntime {
                         .store(TRANSPORT_STOPPED, Ordering::Relaxed);
                 }
                 TransportAction::Stop => {
+                    self.count_in = None;
                     self.all_notes_off();
                     self.transport.waiting_for.store(0, Ordering::Relaxed);
                     self.graph.clear_delays();
@@ -85,6 +102,7 @@ impl NativeMixerRuntime {
                         .reposition(&self.tempo_map, self.sample_rate, 0, true);
                 }
                 TransportAction::Seek => {
+                    self.count_in = None;
                     self.transport
                         .position_frames
                         .store(position, Ordering::Relaxed);
@@ -95,18 +113,27 @@ impl NativeMixerRuntime {
                     self.transport.position_ticks.store(tick, Ordering::Relaxed);
                     self.chase_notes(position);
                 }
-                TransportAction::Record => {
+                TransportAction::Record { count_in } => {
                     let position = self.transport.position_frames.load(Ordering::Relaxed);
-                    self.chase_notes(position);
+                    self.count_in = None;
                     if crate::midi_input::external_sync_enabled() {
-                        self.transport
-                            .clock_source
-                            .store(1, Ordering::Relaxed);
+                        self.chase_notes(position);
+                        self.transport.clock_source.store(1, Ordering::Relaxed);
                         self.transport.waiting_for.store(2, Ordering::Relaxed);
                         self.transport
                             .state
                             .store(TRANSPORT_WAITING, Ordering::Relaxed);
+                    } else if count_in
+                        && let Some(count_in) =
+                            CountInState::one_bar(&self.tempo_map, self.sample_rate, position)
+                    {
+                        self.chase_notes(count_in.virtual_position);
+                        self.count_in = Some(count_in);
+                        self.transport
+                            .state
+                            .store(TRANSPORT_COUNTING_IN, Ordering::Relaxed);
                     } else {
+                        self.chase_notes(position);
                         self.transport
                             .state
                             .store(TRANSPORT_RECORDING, Ordering::Relaxed);
@@ -136,10 +163,9 @@ impl NativeMixerRuntime {
         }
 
         if let Some(input) = midi_input.as_deref_mut() {
-            self.transport.clock_source.store(
-                u32::from(input.external_sync_enabled()),
-                Ordering::Relaxed,
-            );
+            self.transport
+                .clock_source
+                .store(u32::from(input.external_sync_enabled()), Ordering::Relaxed);
             self.prepare_live_midi(outputs.len(), input);
         } else {
             self.live_midi_events.clear();
@@ -154,19 +180,43 @@ impl NativeMixerRuntime {
         let mut stream_underrun = false;
         while offset < outputs.len() {
             let state = self.transport.state.load(Ordering::Relaxed);
-            let position = self.transport.position_frames.load(Ordering::Relaxed);
+            let transport_position = self.transport.position_frames.load(Ordering::Relaxed);
+            let counting_in = state == TRANSPORT_COUNTING_IN;
+            let position = if counting_in {
+                let Some(count_in) = self.count_in else {
+                    self.transport
+                        .state
+                        .store(TRANSPORT_RECORDING, Ordering::Relaxed);
+                    continue;
+                };
+                count_in.virtual_position
+            } else {
+                transport_position
+            };
             let running = matches!(state, TRANSPORT_PLAYING | TRANSPORT_RECORDING);
-            if !running && !has_monitor {
+            let advancing = running || counting_in;
+            if !advancing && !has_monitor {
                 outputs[offset..].fill([0.0; MAX_OUTPUT_CHANNELS]);
                 break;
             }
 
             let mut frame_count = outputs.len() - offset;
-            if running {
-                frame_count = frame_count.min(self.frames_until_timing_boundary(
-                    position,
-                    frame_count,
-                ));
+            if advancing {
+                frame_count =
+                    frame_count.min(self.frames_until_timing_boundary(position, frame_count));
+            }
+            if let Some(count_in) = self.count_in.filter(|_| counting_in) {
+                frame_count = frame_count
+                    .min(usize::try_from(count_in.remaining_frames()).unwrap_or(usize::MAX));
+                if frame_count == 0 {
+                    let record_position = count_in.record_position;
+                    self.count_in = None;
+                    self.chase_notes(record_position);
+                    self.transport
+                        .state
+                        .store(TRANSPORT_RECORDING, Ordering::Relaxed);
+                    continue;
+                }
             }
             if state == TRANSPORT_PLAYING
                 && self.transport.clock_source.load(Ordering::Relaxed) == 0
@@ -194,7 +244,25 @@ impl NativeMixerRuntime {
                 midi_input.as_deref_mut(),
             );
             offset = end;
-            if running {
+            if counting_in {
+                let advanced = u64::try_from(frame_count).unwrap_or(u64::MAX);
+                let complete = if let Some(count_in) = self.count_in.as_mut() {
+                    count_in.virtual_position = count_in.virtual_position.saturating_add(advanced);
+                    count_in.virtual_position >= count_in.end_frame
+                } else {
+                    true
+                };
+                if complete {
+                    let record_position = self
+                        .count_in
+                        .take()
+                        .map_or(transport_position, |value| value.record_position);
+                    self.chase_notes(record_position);
+                    self.transport
+                        .state
+                        .store(TRANSPORT_RECORDING, Ordering::Relaxed);
+                }
+            } else if running {
                 let next = position.saturating_add(frame_count as u64);
                 self.transport
                     .position_frames
@@ -232,10 +300,7 @@ impl NativeMixerRuntime {
         midi_input: Option<&mut crate::midi_input::RealtimeMidiConsumer>,
     ) -> bool {
         let frame_count = outputs.len();
-        let used_sources = self
-            .channel_input_widths
-            .len()
-            .saturating_mul(frame_count);
+        let used_sources = self.channel_input_widths.len().saturating_mul(frame_count);
         self.channel_source_block[..used_sources].fill([0.0, 0.0]);
         for (channel_index, route) in self.monitor_input_routes.iter().enumerate() {
             if let Some([left, right]) = route {
@@ -260,7 +325,10 @@ impl NativeMixerRuntime {
                 }
             }
         }
-        if matches!(state, TRANSPORT_PLAYING | TRANSPORT_RECORDING) {
+        if matches!(
+            state,
+            TRANSPORT_PLAYING | TRANSPORT_RECORDING | TRANSPORT_COUNTING_IN
+        ) {
             for clip in &mut self.clips {
                 for frame in 0..frame_count {
                     let project_frame = position.saturating_add(frame as u64);
@@ -273,8 +341,8 @@ impl NativeMixerRuntime {
                     }
                     let is_streaming = matches!(&clip.samples, ClipSamples::Streaming(_));
                     if let Some(sample) = clip.sample_at(relative) {
-                        let target =
-                            &mut self.channel_source_block[clip.channel_index * frame_count + frame];
+                        let target = &mut self.channel_source_block
+                            [clip.channel_index * frame_count + frame];
                         target[0] += sample[0];
                         target[1] += sample[1];
                     } else if is_streaming {
@@ -282,10 +350,14 @@ impl NativeMixerRuntime {
                     }
                 }
             }
-
-            // Dispatch clip MIDI and metronome clicks in per-frame order so a
-            // later-frame clip event cannot reach instruments before an
-            // earlier-frame metronome click within the same block.
+        }
+        if matches!(
+            state,
+            TRANSPORT_PLAYING | TRANSPORT_RECORDING | TRANSPORT_COUNTING_IN
+        ) {
+            // Timeline MIDI and metronome clicks remain in per-frame order so
+            // accompaniment can provide the count-in without later events
+            // overtaking an earlier click in the same block.
             for frame in 0..frame_count {
                 let project_frame = position.saturating_add(frame as u64);
                 while self
@@ -445,13 +517,7 @@ impl NativeMixerRuntime {
                 key,
                 velocity,
             } => {
-                processor.note_on(
-                    sample_offset,
-                    event.channel,
-                    key,
-                    velocity,
-                    note_id,
-                );
+                processor.note_on(sample_offset, event.channel, key, velocity, note_id);
                 if let Some(active) = self.active_notes.get_mut(note_id as usize) {
                     *active = true;
                 }
@@ -461,13 +527,7 @@ impl NativeMixerRuntime {
                 key,
                 velocity,
             } => {
-                processor.note_off(
-                    sample_offset,
-                    event.channel,
-                    key,
-                    velocity,
-                    note_id,
-                );
+                processor.note_off(sample_offset, event.channel, key, velocity, note_id);
                 if let Some(active) = self.active_notes.get_mut(note_id as usize) {
                     *active = false;
                 }
@@ -539,8 +599,7 @@ impl NativeMixerRuntime {
                 .saturating_mul(u64::from(self.sample_rate))
                 .checked_div(1_000_000)
                 .unwrap_or(0)
-                .min(frame_count.saturating_sub(1) as u64)
-                as usize;
+                .min(frame_count.saturating_sub(1) as u64) as usize;
             self.live_midi_events.push(BlockMidiEvent {
                 sample_offset,
                 event,
@@ -638,7 +697,9 @@ impl NativeMixerRuntime {
             };
             if !route.monitoring
                 || route.port_key.is_some_and(|key| key != event.port_key)
-                || route.channel.is_some_and(|channel| channel != event.channel)
+                || route
+                    .channel
+                    .is_some_and(|channel| channel != event.channel)
             {
                 continue;
             }
@@ -652,13 +713,7 @@ impl NativeMixerRuntime {
             match event.message {
                 RealtimeMidiMessage::NoteOn { key, velocity } => {
                     let note_id = -2 - i32::from(event.channel) * 128 - i32::from(key);
-                    processor.note_on(
-                        sample_offset,
-                        event.channel,
-                        key,
-                        velocity,
-                        note_id,
-                    );
+                    processor.note_on(sample_offset, event.channel, key, velocity, note_id);
                     let active = channel_index * 16 * 128
                         + usize::from(event.channel) * 128
                         + usize::from(key);
@@ -668,13 +723,7 @@ impl NativeMixerRuntime {
                 }
                 RealtimeMidiMessage::NoteOff { key, velocity } => {
                     let note_id = -2 - i32::from(event.channel) * 128 - i32::from(key);
-                    processor.note_off(
-                        sample_offset,
-                        event.channel,
-                        key,
-                        velocity,
-                        note_id,
-                    );
+                    processor.note_off(sample_offset, event.channel, key, velocity, note_id);
                     let active = channel_index * 16 * 128
                         + usize::from(event.channel) * 128
                         + usize::from(key);
@@ -698,10 +747,7 @@ impl NativeMixerRuntime {
                     processor.pitch_bend(sample_offset, event.channel, value);
                 }
                 RealtimeMidiMessage::SysEx { .. } => {
-                    processor.sysex(
-                        sample_offset,
-                        &self.live_sysex_scratch[..sysex_length],
-                    );
+                    processor.sysex(sample_offset, &self.live_sysex_scratch[..sysex_length]);
                 }
                 RealtimeMidiMessage::Clock { .. }
                 | RealtimeMidiMessage::Start
@@ -740,28 +786,26 @@ impl NativeMixerRuntime {
         }
         for index in 0..self.midi_events.len() {
             let event = self.midi_events[index];
-            let ScheduledMidiEventKind::NoteOn {
-                note_id,
-                key,
-                ..
-            } = event.kind
-            else {
+            let ScheduledMidiEventKind::NoteOn { note_id, key, .. } = event.kind else {
                 continue;
             };
             if self
-                    .active_notes
-                    .get(note_id as usize)
-                    .copied()
-                    .unwrap_or(false)
-                {
-                self.dispatch_midi_event(ScheduledMidiEvent {
-                    kind: ScheduledMidiEventKind::NoteOff {
-                        note_id,
-                        key,
-                        velocity: 0,
+                .active_notes
+                .get(note_id as usize)
+                .copied()
+                .unwrap_or(false)
+            {
+                self.dispatch_midi_event(
+                    ScheduledMidiEvent {
+                        kind: ScheduledMidiEventKind::NoteOff {
+                            note_id,
+                            key,
+                            velocity: 0,
+                        },
+                        ..event
                     },
-                    ..event
-                }, 0);
+                    0,
+                );
             }
         }
         self.active_notes.fill(false);
@@ -794,11 +838,11 @@ impl NativeMixerRuntime {
                 continue;
             };
             if self
-                    .active_notes
-                    .get(note_id as usize)
-                    .copied()
-                    .unwrap_or(false)
-                {
+                .active_notes
+                .get(note_id as usize)
+                .copied()
+                .unwrap_or(false)
+            {
                 self.dispatch_midi_event(event, 0);
             }
         }

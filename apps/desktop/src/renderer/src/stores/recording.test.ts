@@ -214,6 +214,21 @@ describe("start", () => {
     expect(store.active?.id).toBe("take-1")
   })
 
+  it("forwards the count-in preference with the recording start request", async () => {
+    const startRecording = vi.fn(async () => success(recordingResource()))
+    stubApi({ startRecording })
+    const store = useRecordingStore()
+
+    await store.start(true)
+
+    expect(startRecording).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({
+        countIn: true
+      })
+    )
+  })
+
   it("refuses to start a second take while one is already running", async () => {
     const startRecording = vi.fn(async () => success(recordingResource()))
     stubApi({ startRecording })

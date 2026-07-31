@@ -113,8 +113,6 @@ pub fn start_audio_engine(config: NativeAudioEngineConfig) -> Result<NativeAudio
         u32::from(output_config.channels).min(MAX_OUTPUT_CHANNELS as u32),
         input_config.sample_rate,
     ));
-    let (recorder, recording_tap) =
-        RecorderController::new(input_config.sample_rate, usize::from(input_config.channels));
     let initial_mixer = take_pending_mixer(session_sample_rate)?;
     if let Some(runtime) = initial_mixer.as_ref() {
         metrics
@@ -127,7 +125,7 @@ pub fn start_audio_engine(config: NativeAudioEngineConfig) -> Result<NativeAudio
     let transport = initial_mixer.as_ref().map_or_else(
         || {
             Arc::new(TransportShared {
-                state: AtomicU32::new(TRANSPORT_STOPPED),
+                state: Arc::new(AtomicU32::new(TRANSPORT_STOPPED)),
                 position_frames: AtomicU64::new(0),
                 position_ticks: AtomicU64::new(0),
                 sample_rate: AtomicU32::new(session_sample_rate),
@@ -137,6 +135,12 @@ pub fn start_audio_engine(config: NativeAudioEngineConfig) -> Result<NativeAudio
             })
         },
         |runtime| Arc::clone(&runtime.transport),
+    );
+    let (recorder, recording_tap) = RecorderController::new(
+        input_config.sample_rate,
+        usize::from(input_config.channels),
+        Arc::clone(&transport.state),
+        TRANSPORT_RECORDING,
     );
     let meter_bank = initial_mixer.as_ref().map_or_else(
         || Arc::new(MeterBank { channels: vec![] }),

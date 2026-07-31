@@ -41,7 +41,13 @@ const {
   busy: recordingBusy,
   error: recordingError
 } = storeToRefs(recordingStore)
-const { playing, loading: playLoading, canPlay, playheadSeconds } = storeToRefs(transportStore)
+const {
+  playing,
+  loading: playLoading,
+  canPlay,
+  countInEnabled,
+  playheadSeconds
+} = storeToRefs(transportStore)
 const EMPTY_MASTER_METER: MixerChannelMeter = {
   channelId: "master",
   preFaderPeak: [0, 0],
@@ -141,6 +147,7 @@ onBeforeUnmount(() => {
       :playing="playing"
       :play-loading="playLoading"
       :can-play="canPlay && !activeRecording"
+      :count-in-enabled="countInEnabled"
       :playhead-seconds="playheadSeconds"
       :tempo-map="mixerStore.graph.tempoMap"
       :sound-browser-open="workspaceStore.soundBrowserOpen"
@@ -156,6 +163,7 @@ onBeforeUnmount(() => {
       @toggle-recording="toggleRecording"
       @toggle-playback="transportStore.toggle"
       @go-to-start="transportStore.goToStart"
+      @toggle-count-in="transportStore.toggleCountIn"
       @update-tempo="updateCurrentTempo"
       @toggle-metronome="toggleMetronome"
       @preview-master="previewMaster"

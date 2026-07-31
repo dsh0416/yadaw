@@ -7,18 +7,16 @@ pub mod bench_support {
         HeapCons, HeapProd, HeapRb,
         traits::{Consumer, Producer, Split},
     };
-    use yadaw_dsp_core::mixer::{
-        ChannelKind, ChannelSpec, MixerGraph, RouteTarget, StereoFrame,
-    };
+    use yadaw_dsp_core::mixer::{ChannelKind, ChannelSpec, MixerGraph, RouteTarget, StereoFrame};
     use yadaw_dsp_render::{RenderMeter, RenderRuntime};
     use yadaw_dsp_runtime::{protocol::PluginAudioMode, tempo::TempoMap};
 
     use super::{
         AdaptiveResampler, ClipSamples, EngineCommand, InputPeakBank, LivePlugin, LoadedClip,
-        MeterAtomics, MeterBank, MetronomeScheduler, NativeMixerRuntime, ProcessContext,
-        RealtimeParameter, RealtimeParameterCommand, SessionOutputConverter, SignalWidth,
-        StereoDelayLine, StreamingClip, MAX_PLUGIN_BLOCK_FRAMES, TRANSPORT_PLAYING,
-        TransportShared, decode_clip_audio, spawn_streaming_clip,
+        MAX_PLUGIN_BLOCK_FRAMES, MeterAtomics, MeterBank, MetronomeScheduler, NativeMixerRuntime,
+        ProcessContext, RealtimeParameter, RealtimeParameterCommand, SessionOutputConverter,
+        SignalWidth, StereoDelayLine, StreamingClip, TRANSPORT_PLAYING, TransportShared,
+        decode_clip_audio, spawn_streaming_clip,
     };
 
     #[derive(Clone, Copy, Debug)]
@@ -86,7 +84,7 @@ pub mod bench_support {
                 .collect(),
         });
         let transport = Arc::new(TransportShared {
-            state: super::AtomicU32::new(TRANSPORT_PLAYING),
+            state: Arc::new(super::AtomicU32::new(TRANSPORT_PLAYING)),
             position_frames: super::AtomicU64::new(0),
             position_ticks: super::AtomicU64::new(0),
             sample_rate: super::AtomicU32::new(scenario.sample_rate),
@@ -141,16 +139,14 @@ pub mod bench_support {
             live_midi_routes: vec![None; scenario.tracks + 2],
             live_midi_events: Vec::new(),
             live_notes: vec![false; (scenario.tracks + 2) * 16 * 128],
-            live_sysex_scratch: vec![
-                0;
-                yadaw_dsp_runtime::midi_input::MIDI_MAX_SYSEX_BYTES
-            ],
+            live_sysex_scratch: vec![0; yadaw_dsp_runtime::midi_input::MIDI_MAX_SYSEX_BYTES],
             metronome: MetronomeScheduler::new(
                 None,
                 &TempoMap::default_120_bpm(),
                 scenario.sample_rate,
                 0,
             ),
+            count_in: None,
             tempo_map: TempoMap::default_120_bpm(),
             graph,
             clips,
@@ -456,10 +452,7 @@ pub mod bench_support {
                 .expect("input/session resampler must be valid"),
                 output_converter: SessionOutputConverter::new(session_rate, output_rate, 2)
                     .expect("session/output resampler must be valid"),
-                device_outputs: vec![
-                    [0.0; super::MAX_OUTPUT_CHANNELS];
-                    MAX_PLUGIN_BLOCK_FRAMES
-                ],
+                device_outputs: vec![[0.0; super::MAX_OUTPUT_CHANNELS]; MAX_PLUGIN_BLOCK_FRAMES],
             }
         }
 

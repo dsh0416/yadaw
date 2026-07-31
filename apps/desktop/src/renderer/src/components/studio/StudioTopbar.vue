@@ -34,6 +34,7 @@ defineProps<{
   playing: boolean
   playLoading: boolean
   canPlay: boolean
+  countInEnabled: boolean
   playheadSeconds: number
   tempoMap: TempoMapSnapshot
   soundBrowserOpen: boolean
@@ -51,6 +52,7 @@ const emit = defineEmits<{
   toggleRecording: []
   togglePlayback: []
   goToStart: []
+  toggleCountIn: []
   updateTempo: [beatsPerMinute: number]
   toggleMetronome: []
   previewMaster: [preview: MixerParameterPreview]
@@ -144,9 +146,10 @@ const { t } = useI18n()
     <div class="control-group metronome-group" data-topbar-group="metronome">
       <StudioControlButton
         :label="t('studio.topbar.countIn')"
-        unavailable
+        :pressed="countInEnabled"
         compact-hidden
         tone="accent"
+        @activate="emit('toggleCountIn')"
       >
         <span class="count-in-control">1234</span>
       </StudioControlButton>

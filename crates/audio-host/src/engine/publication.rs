@@ -44,7 +44,7 @@ fn engine_transport_handles(
         || {
             (
                 Arc::new(TransportShared {
-                    state: AtomicU32::new(TRANSPORT_STOPPED),
+                    state: Arc::new(AtomicU32::new(TRANSPORT_STOPPED)),
                     position_frames: AtomicU64::new(0),
                     position_ticks: AtomicU64::new(0),
                     sample_rate: AtomicU32::new(sample_rate),
@@ -264,7 +264,10 @@ pub fn transport_command(
         "pause" => EngineCommand::Transport(TransportAction::Pause, position),
         "stop" => EngineCommand::Transport(TransportAction::Stop, position),
         "seek" => EngineCommand::Transport(TransportAction::Seek, position),
-        "record" => EngineCommand::Transport(TransportAction::Record, position),
+        "record" => EngineCommand::Transport(TransportAction::Record { count_in: false }, position),
+        "record-count-in" => {
+            EngineCommand::Transport(TransportAction::Record { count_in: true }, position)
+        }
         _ => return Err(invalid_config("unknown transport command")),
     };
     engine

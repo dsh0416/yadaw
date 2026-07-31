@@ -83,7 +83,7 @@ export class RecordingService {
     await this.recovery.write(recording)
   }
 
-  async start(): Promise<RecordingSession> {
+  async start(countIn = false): Promise<RecordingSession> {
     if (this.sessions.active) throw new Error("A recording is already active")
     this.sessions.lastWaveformSnapshot = null
     const project = this.projects.current
@@ -158,7 +158,7 @@ export class RecordingService {
             (startFrame * sidecar.sampleRate) / project.configuration.sampleRate
           )
         })
-      await this.transport.command({ type: "record" })
+      await this.transport.command({ type: countIn ? "record-count-in" : "record" })
     } catch (error) {
       await Promise.allSettled([
         deterministicTestCapture

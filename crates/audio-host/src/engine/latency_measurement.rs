@@ -13,6 +13,7 @@ struct NativeMixerRuntime {
     live_midi_routes: Vec<Option<LiveMidiRoute>>,
     live_midi_events: Vec<BlockMidiEvent>,
     live_notes: Vec<bool>,
+    count_in: Option<CountInState>,
     live_sysex_scratch: Vec<u8>,
     metronome: MetronomeScheduler,
     tempo_map: TempoMap,
@@ -80,7 +81,7 @@ enum TransportAction {
     Pause,
     Stop,
     Seek,
-    Record,
+    Record { count_in: bool },
 }
 
 enum EngineCommand {

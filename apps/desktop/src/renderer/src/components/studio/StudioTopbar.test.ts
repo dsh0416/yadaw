@@ -67,6 +67,7 @@ function mountTopbar() {
       playing: false,
       playLoading: false,
       canPlay: true,
+      countInEnabled: false,
       playheadSeconds: 3,
       tempoMap,
       soundBrowserOpen: true,
@@ -121,6 +122,7 @@ describe("StudioTopbar", () => {
     await wrapper.get('button[aria-label="Go to beginning"]').trigger("click")
     await wrapper.get('button[aria-label="Play"]').trigger("click")
     await wrapper.get('button[aria-label="Metronome"]').trigger("click")
+    await wrapper.get('button[aria-label="Count-in"]').trigger("click")
 
     expect(wrapper.emitted("toggleSoundBrowser")).toHaveLength(1)
     expect(wrapper.emitted("toggleMixerDock")).toHaveLength(1)
@@ -128,10 +130,12 @@ describe("StudioTopbar", () => {
     expect(wrapper.emitted("goToStart")).toHaveLength(1)
     expect(wrapper.emitted("togglePlayback")).toHaveLength(1)
     expect(wrapper.emitted("toggleMetronome")).toHaveLength(1)
+    expect(wrapper.emitted("toggleCountIn")).toHaveLength(1)
 
     const placeholders = wrapper.findAll('button[aria-disabled="true"][data-placeholder]')
     expect(placeholders.length).toBeGreaterThan(10)
     expect(wrapper.get('button[aria-label="Metronome"]').attributes("aria-pressed")).toBe("false")
+    expect(wrapper.get('button[aria-label="Count-in"]').attributes("aria-pressed")).toBe("false")
   })
 
   it("uses the existing topbar control state for the Piano Roll editor", async () => {
@@ -158,6 +162,18 @@ describe("StudioTopbar", () => {
     expect(button.attributes("aria-disabled")).toBe("true")
     await button.trigger("click")
     expect(wrapper.emitted("toggleMetronome")).toBeUndefined()
+  })
+
+  it("reflects and emits the one-bar count-in control", async () => {
+    const wrapper = mountTopbar()
+    await wrapper.setProps({ countInEnabled: true, metronomeChannel: null })
+
+    const button = wrapper.get('button[aria-label="Count-in"]')
+    expect(button.attributes("aria-pressed")).toBe("true")
+    expect(button.attributes("aria-disabled")).toBeUndefined()
+    await button.trigger("click")
+
+    expect(wrapper.emitted("toggleCountIn")).toHaveLength(1)
   })
 
   it("edits the current Tempo Track value on double-click", async () => {
