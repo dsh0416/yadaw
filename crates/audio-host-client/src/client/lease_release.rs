@@ -98,6 +98,22 @@ fn close_state(state: &ClientState) -> Result<()> {
         .lock()
         .map_err(|_| failure("priority outbound queue", "poisoned"))?
         .take();
+    reject_all(
+        &state.pending,
+        failure("audio-host request", "client closed"),
+    );
+    reject_all(
+        &state.priority_pending,
+        failure("audio-host request", "client closed"),
+    );
+    if let Ok(mut threads) = state.threads.lock() {
+        for thread in threads.drain(..) {
+            let _ = thread.join();
+        }
+    }
+    // Closing and joining the transport threads drops the IPC senders. The
+    // helper treats that channel closure as the second phase of graceful
+    // shutdown, after it has acknowledged the caller's shutdown request.
     let mut child = state
         .child
         .lock()
@@ -121,19 +137,6 @@ fn close_state(state: &ClientState) -> Result<()> {
         child
             .wait()
             .map_err(|error| failure("could not reap audio host", error))?;
-    }
-    reject_all(
-        &state.pending,
-        failure("audio-host request", "client closed"),
-    );
-    reject_all(
-        &state.priority_pending,
-        failure("audio-host request", "client closed"),
-    );
-    if let Ok(mut threads) = state.threads.lock() {
-        for thread in threads.drain(..) {
-            let _ = thread.join();
-        }
     }
     Ok(())
 }

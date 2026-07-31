@@ -171,9 +171,8 @@ async fn run_protocol_actor(
         }
     });
 
-    let shutting_down = Arc::new(AtomicBool::new(false));
     let inflight = Arc::new(Semaphore::new(PROTOCOL_CAPACITY));
-    while !shutting_down.load(Ordering::Acquire) {
+    loop {
         tokio::select! {
             inbound = inbound_inbox.recv() => {
                 let Some(inbound) = inbound else { break };
@@ -197,8 +196,6 @@ async fn run_protocol_actor(
                 let vst3_sender = vst3_sender.clone();
                 let background_sender = background_sender.clone();
                 let outbound = outbound.clone();
-                let ui_proxy = ui_proxy.clone();
-                let shutting_down = shutting_down.clone();
                 tokio::spawn(async move {
                     let _permit = permit;
                     let ControlRequest {
@@ -239,10 +236,6 @@ async fn run_protocol_actor(
                             request_leases: received_leases,
                         })
                         .await;
-                    if shutdown {
-                        shutting_down.store(true, Ordering::Release);
-                        let _ = ui_proxy.send_event(UiEvent::Exit);
-                    }
                 });
             }
             priority = priority_inbox.recv() => {
@@ -269,14 +262,17 @@ async fn run_protocol_actor(
                     }
                     PriorityIngress::Shutdown => {
                         let _ = engine::stop_audio_engine();
-                        shutting_down.store(true, Ordering::Release);
-                        let _ = ui_proxy.send_event(UiEvent::Exit);
                     }
                     PriorityIngress::TelemetryPageReady => {}
                 }
             }
         }
     }
+    // Shutdown is a two-phase handshake: acknowledge the request first, then
+    // keep the process alive until the parent closes its IPC senders. The
+    // closed ingress mailboxes break the loop and make it safe to stop the UI
+    // event loop without racing the final response.
+    let _ = ui_proxy.send_event(UiEvent::Exit);
     // The blocking IPC receivers are deliberately detached. Joining them here would
     // deadlock a clean shutdown while the parent still owns channel handles. Process
     // teardown closes those handles after the Tokio actor and winit loop have exited.

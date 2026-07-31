@@ -27,6 +27,7 @@ const fakeHost = vi.hoisted(() => {
     heartbeatCalls = 0
     closed = false
     failAudioBenchmark = false
+    audioBenchmarkDeferred: Deferred<void> | null = null
     engineState: "running" | "stopped" = "stopped"
     sessionSampleRate = 48_000
     outputSampleRate = 48_000
@@ -137,7 +138,7 @@ const fakeHost = vi.hoisted(() => {
         if (this.failAudioBenchmark) {
           return response({ type: "error", message: "benchmark failed" })
         }
-        return response({
+        const report = {
           type: "audio-benchmark",
           report: {
             duration_ms: 1,
@@ -145,7 +146,10 @@ const fakeHost = vi.hoisted(() => {
             worst_p99_deadline_utilization_percent: 10,
             scenarios: []
           }
-        })
+        }
+        return this.audioBenchmarkDeferred
+          ? this.audioBenchmarkDeferred.promise.then(() => response(report))
+          : response(report)
       }
       return response({ type: "accepted" })
     }
@@ -222,7 +226,7 @@ const fakeHost = vi.hoisted(() => {
     buffer_fallback: false
   })
 
-  return { Client, runtime }
+  return { Client, Deferred, runtime }
 })
 
 vi.mock("@yadaw/audio-host-client", () => ({
@@ -479,6 +483,58 @@ describe("AudioHostService recovery", () => {
       ).plugins.loadedInstanceIds()
     ).toEqual([])
 
+    await service.stop()
+  })
+
+  it("does not recover a healthy helper when a heartbeat expires during the audio benchmark", async () => {
+    const failures: string[] = []
+    const effect = {
+      kind: "effect",
+      compatibility: "compatible",
+      supportedAudioModes: ["stereo"],
+      classId: "test-gain",
+      modulePath: "/tmp/gain.vst3"
+    } as PluginDescriptor
+    const service = new AudioHostService(
+      "audio-host",
+      "crash-marker",
+      {
+        workerThreads: "auto",
+        maxBlockingThreads: "auto",
+        egressConcurrency: "auto"
+      },
+      undefined,
+      (message) => failures.push(message),
+      async () => {}
+    )
+    service.start()
+    const client = fakeHost.Client.instances[0]!
+    await service.audioEngineSnapshot()
+
+    await vi.advanceTimersByTimeAsync(250)
+    expect(client.heartbeatCalls).toBe(1)
+
+    client.audioBenchmarkDeferred = new fakeHost.Deferred<void>()
+    const benchmark = service.runAudioBenchmark(effect)
+    await vi.waitFor(() =>
+      expect(client.commands.some((command) => command.type === "run-audio-benchmark")).toBe(true)
+    )
+    const snapshotCommandCount = client.commands.filter(
+      (command) => command.type === "audio-engine-snapshot"
+    ).length
+    await service.audioEngineSnapshot()
+    expect(
+      client.commands.filter((command) => command.type === "audio-engine-snapshot")
+    ).toHaveLength(snapshotCommandCount)
+
+    client.heartbeatDeferred.reject(new Error("audio-host request: deadline exceeded"))
+    await vi.waitFor(() => expect(failures).toEqual([]))
+    expect(client.closed).toBe(false)
+    expect(fakeHost.Client.instances).toHaveLength(1)
+
+    client.audioBenchmarkDeferred.resolve()
+    await benchmark
+    expect(client.commands.filter((command) => command.type === "unload-plugin")).toHaveLength(64)
     await service.stop()
   })
 

@@ -212,6 +212,7 @@ impl Vst3ProcessorHandle {
 pub struct Vst3Runtime {
     instances: HashMap<String, Instance>,
     retired_instances: Vec<Instance>,
+    process_lifetime_guard: Option<Instance>,
     ara_factories: HashMap<(String, String), Rc<AraFactoryHost>>,
     next_runtime_handle: u32,
 }
@@ -290,6 +291,7 @@ impl Vst3Runtime {
         Self {
             instances: HashMap::new(),
             retired_instances: Vec::new(),
+            process_lifetime_guard: None,
             ara_factories: HashMap::new(),
             next_runtime_handle: 1,
         }
@@ -365,10 +367,17 @@ impl Vst3Runtime {
     /// such as the audio benchmark must pass false so repeated runs do not accumulate plug-ins
     /// until helper exit.
     pub fn unload_plugin(&mut self, instance_id: &str, retain_for_graph: bool) -> ControlResult {
-        if let Some(instance) = self.instances.remove(instance_id)
-            && retain_for_graph
-        {
-            self.retired_instances.push(instance);
+        if let Some(instance) = self.instances.remove(instance_id) {
+            if retain_for_graph {
+                self.retired_instances.push(instance);
+            } else if self.instances.is_empty() {
+                // Keep one non-graph instance alive until helper shutdown. Some VST3 modules use
+                // process-global entrypoint state, and tearing down the final module while the
+                // helper continues serving IPC can terminate the process before the unload reply
+                // is delivered. Replacing this guard on a later run keeps the retention bounded.
+                let previous = self.process_lifetime_guard.replace(instance);
+                drop(previous);
+            }
         }
         ControlResult::Accepted
     }

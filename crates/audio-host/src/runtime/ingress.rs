@@ -126,6 +126,7 @@ fn spawn_ingress(
                             continue;
                         }
                     };
+                    let mut shutdown_permit = None;
                     let result = match request.command {
                         PriorityCommand::Heartbeat => {
                             let (callback_generation, transport_state) =
@@ -200,8 +201,11 @@ fn spawn_ingress(
                             }
                         }
                         PriorityCommand::Shutdown => {
-                            match mailboxes.priority.try_send(PriorityIngress::Shutdown) {
-                                Ok(()) => PriorityResult::Accepted,
+                            match mailboxes.priority.try_reserve() {
+                                Ok(permit) => {
+                                    shutdown_permit = Some(permit);
+                                    PriorityResult::Accepted
+                                }
                                 Err(_) => PriorityResult::Busy,
                             }
                         }
@@ -227,8 +231,18 @@ fn spawn_ingress(
                         }
                     };
                     if let Err(error) = channels.priority_responses.send(packet) {
+                        if let Some(permit) = shutdown_permit {
+                            permit.send(PriorityIngress::Shutdown);
+                        }
                         eprintln!("audio-host: priority response failed: {error}");
                         return;
+                    }
+                    // Keep shutdown invisible to the protocol actor until the
+                    // acknowledgement is in the IPC channel. Otherwise the UI
+                    // event loop can terminate the process before the parent
+                    // observes the accepted response.
+                    if let Some(permit) = shutdown_permit {
+                        permit.send(PriorityIngress::Shutdown);
                     }
                 }
             }
