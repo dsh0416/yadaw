@@ -10,6 +10,7 @@ pub mod midi_input;
 pub mod midi_journal;
 pub mod mock;
 pub mod recording;
+pub mod runtime;
 pub mod vst3;
 pub mod workers;
 
