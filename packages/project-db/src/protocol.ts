@@ -3,7 +3,8 @@ import type {
   MidiSourceState,
   ProjectAssetSummary,
   ProjectCommand,
-  ProjectConfiguration
+  ProjectConfiguration,
+  RpcError
 } from "@yadaw/contracts"
 
 export type MidiSourceInput = MidiSourceState
@@ -185,7 +186,7 @@ export type WorkerResponseFor<K extends WorkerOperation> =
       id: number
       type: K
       ok: false
-      error: { message: string; stack?: string; code?: string }
+      error: RpcError
     }
 
 export type WorkerResponse = {

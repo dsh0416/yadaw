@@ -13,7 +13,7 @@ const running: OperationSnapshot = {
   completedUnits: 5,
   totalUnits: 10,
   cancellable: true,
-  message: null,
+  error: null,
   dropoutFrames: 0
 }
 

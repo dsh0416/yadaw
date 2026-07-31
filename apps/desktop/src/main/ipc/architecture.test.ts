@@ -3,6 +3,7 @@ import { join, relative } from "node:path"
 import { describe, expect, it } from "vitest"
 
 const sourceRoot = join(import.meta.dirname, "..", "..")
+const repositoryRoot = join(sourceRoot, "..", "..", "..")
 
 async function sourceFiles(directory: string): Promise<string[]> {
   const entries = await readdir(directory, { withFileTypes: true })
@@ -28,15 +29,37 @@ async function filesContaining(pattern: RegExp): Promise<string[]> {
 }
 
 describe("IPC v2 architecture gate", () => {
-  it("allows direct ipcMain.handle only in frozen legacy handlers and the v2 wrapper", async () => {
-    await expect(filesContaining(/\bipcMain\.handle\s*\(/)).resolves.toEqual([
-      "main/ipc/rpc.ts",
-      "main/ipc/settings-handlers.ts"
-    ])
+  it("allows direct ipcMain.handle only in the v2 wrapper", async () => {
+    await expect(filesContaining(/\bipcMain\.handle\s*\(/)).resolves.toEqual(["main/ipc/rpc.ts"])
   })
 
-  it("allows direct ipcRenderer.invoke only in the frozen preload and the v2 wrapper", async () => {
+  it("allows direct ipcRenderer.invoke only in the v2 wrapper", async () => {
     await expect(filesContaining(/\bipcRenderer\.invoke\s*\(/)).resolves.toEqual(["preload/rpc.ts"])
+  })
+  it("keeps bootstrap as the only targetless state snapshot request", async () => {
+    await expect(filesContaining(/startupProgressSnapshot/)).resolves.toEqual([])
+  })
+
+  it("keeps operation failures typed and resource-scoped", async () => {
+    const contracts = await readFile(
+      join(repositoryRoot, "packages", "contracts", "src", "operations.ts"),
+      "utf8"
+    )
+    const service = await readFile(join(sourceRoot, "main", "operation-service.ts"), "utf8")
+    expect(contracts).toContain("error: RpcError | null")
+    expect(contracts).not.toMatch(/\bmessage:\s*string\s*\|\s*null/)
+    expect(service).not.toContain("legacy-desktop")
+    expect(service).not.toContain("legacy-")
+  })
+
+  it("does not serialize project worker messages or stacks as errors", async () => {
+    const protocol = await readFile(
+      join(repositoryRoot, "packages", "project-db", "src", "protocol.ts"),
+      "utf8"
+    )
+    expect(protocol).toContain("error: RpcError")
+    expect(protocol).not.toMatch(/\bstack\??:\s*string/)
+    expect(protocol).not.toMatch(/error:\s*\{[^}]*\bmessage:/s)
   })
 
   it("keeps project lifecycle routes on the typed RPC wrappers", async () => {

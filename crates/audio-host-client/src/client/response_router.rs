@@ -6,7 +6,7 @@ fn spawn_response_router(
     request_timeouts: Arc<AtomicU64>,
     transport_traffic: Arc<TransportTraffic>,
     response_arena: Arc<Mutex<ArenaReceiver>>,
-) -> JoinHandle<()> {
+) -> Result<JoinHandle<()>> {
     thread::Builder::new()
         .name("yadaw-ipc-response-router".into())
         .spawn(move || {
@@ -52,5 +52,5 @@ fn spawn_response_router(
                 }
             }
         })
-        .expect("response router thread must start")
+        .map_err(|error| failure("could not start response router thread", error))
 }

@@ -18,7 +18,6 @@ import { PluginCatalogService } from "./plugin-catalog-service"
 import { ProjectCommandService } from "./project-command-service"
 import { ProjectGraphService } from "./project-graph-service"
 import { ProjectService } from "./project-service"
-import { registerRpcHandler } from "./ipc/rpc"
 import { RecordingService } from "./recording-service"
 import { StartupProgress } from "./startup-progress"
 import { WaveformService } from "./waveform-service"
@@ -51,11 +50,7 @@ export function startApplication(
     const startup = new StartupProgress()
     const startupEpoch = randomUUID()
     let startupSequence = 0
-    registerRpcHandler(IPC_CHANNELS.startupProgressSnapshot, ({ meta }) => {
-      if (meta.target || meta.mutation) throw new TypeError("startup snapshot has no target")
-      return startup.snapshot()
-    })
-    startup.subscribe((progress) => {
+    const publishStartupProgress = (progress: ReturnType<StartupProgress["snapshot"]>): void => {
       startupSequence += 1
       const window = splashWindow
       if (window && !window.isDestroyed()) {
@@ -67,8 +62,12 @@ export function startApplication(
           payload: progress
         })
       }
+    }
+    startup.subscribe(publishStartupProgress)
+    const splash = createSplashWindow()
+    splash.webContents.once("did-finish-load", () => {
+      publishStartupProgress(startup.snapshot())
     })
-    createSplashWindow()
 
     try {
       startup.update({

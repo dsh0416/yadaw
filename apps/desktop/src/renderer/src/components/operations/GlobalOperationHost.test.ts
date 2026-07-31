@@ -26,7 +26,7 @@ describe("GlobalOperationHost", () => {
         completedUnits: null,
         totalUnits: null,
         cancellable: false,
-        message: null,
+        error: null,
         dropoutFrames: 0
       }
     })
@@ -64,7 +64,7 @@ describe("GlobalOperationHost", () => {
         completedUnits: null,
         totalUnits: null,
         cancellable: false,
-        message: null,
+        error: null,
         dropoutFrames: 4
       }
     })

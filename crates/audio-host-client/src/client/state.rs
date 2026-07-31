@@ -81,8 +81,8 @@ fn resolve_runtime_config(
     egress_concurrency: Option<u32>,
 ) -> Result<ResolvedRuntimeConfig> {
     let logical = thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get);
-    let worker_threads =
-        worker_threads.unwrap_or_else(|| u32::try_from(logical.div_ceil(4).clamp(1, 4)).unwrap());
+    let default_worker_threads = logical.div_ceil(4).clamp(1, 4) as u32;
+    let worker_threads = worker_threads.unwrap_or(default_worker_threads);
     let max_blocking_threads =
         max_blocking_threads.unwrap_or_else(|| (worker_threads.saturating_mul(2)).clamp(2, 8));
     let egress_concurrency = egress_concurrency.unwrap_or_else(|| 2.min(max_blocking_threads));

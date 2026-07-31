@@ -45,7 +45,7 @@ pub enum HostEvent {
         revision: u64,
     },
     RuntimeFailure {
-        message: String,
+        error: RpcError,
         plugin_instance_id: Option<String>,
         phase: Option<String>,
     },
@@ -118,7 +118,7 @@ pub enum PriorityResult {
     Accepted,
     Busy,
     Error {
-        message: String,
+        error: RpcError,
     },
 }
 
@@ -307,7 +307,7 @@ pub enum ControlResult {
         open: bool,
     },
     Error {
-        message: String,
+        error: RpcError,
     },
 }
 

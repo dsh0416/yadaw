@@ -33,9 +33,11 @@ interface PendingCall {
 type WorkerState = "active" | "failed" | "terminating" | "terminated"
 
 function workerError(response: Extract<WorkerResponse, { ok: false }>): Error {
-  const error = new Error(response.error.message)
-  error.stack = response.error.stack
-  if (response.error.code) Object.assign(error, { code: response.error.code })
+  const error = new Error(response.error.userMessageKey)
+  Object.assign(error, {
+    code: response.error.code,
+    correlationId: response.error.correlationId
+  })
   return error
 }
 

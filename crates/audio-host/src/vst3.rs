@@ -509,7 +509,7 @@ impl Vst3Runtime {
     ) -> Result<(), String> {
         match self.set_parameter(instance_id, parameter_id, normalized, gesture) {
             ControlResult::Accepted => Ok(()),
-            ControlResult::Error { message } => Err(message),
+            ControlResult::Error { error } => Err(error.user_message_key),
             _ => Err("unexpected VST3 parameter result".into()),
         }
     }
@@ -826,7 +826,7 @@ fn is_audio_benchmark_instance(instance_id: &str) -> bool {
 }
 
 fn control_error(message: &str) -> ControlResult {
-    ControlResult::Error {
+    control_error! {
         message: message.to_owned(),
     }
 }

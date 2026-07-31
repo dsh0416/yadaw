@@ -75,6 +75,7 @@ impl AudioHostIpcClient {
         })?;
         bootstrap_sender
             .send(HostBootstrap {
+                protocol_version: IPC_PROTOCOL_VERSION,
                 native_build_fingerprint: NATIVE_BUILD_FINGERPRINT.to_owned(),
                 requests: request_receiver,
                 responses: response_sender,
@@ -103,44 +104,54 @@ impl AudioHostIpcClient {
         let request_timeouts = Arc::new(AtomicU64::new(0));
         let transport_traffic = Arc::new(TransportTraffic::default());
 
-        let normal_egress = spawn_egress("yadaw-ipc-request", requests, normal_inbox);
-        let priority_egress = spawn_egress(
-            "yadaw-ipc-priority-request",
-            priority_requests,
-            priority_inbox,
-        );
-        let response_router = spawn_response_router(
-            responses,
-            Arc::clone(&pending),
-            priority_outbound.clone(),
-            Arc::clone(&closing),
-            Arc::clone(&request_timeouts),
-            Arc::clone(&transport_traffic),
-            Arc::clone(&response_arena),
-        );
-        let priority_router = spawn_priority_router(
-            priority_responses,
-            Arc::clone(&priority_pending),
-            Arc::clone(&closing),
-            Arc::clone(&request_timeouts),
-        );
-        let event_router = spawn_event_router(
-            events,
-            Arc::clone(&leases),
-            Arc::clone(&telemetry),
-            Arc::clone(&event_queue),
-            priority_outbound.clone(),
-            Arc::clone(&closing),
-        );
-        // Routers own outbound sender clones, so they must be joined before the
-        // egress threads waiting for every sender to be dropped.
-        let threads = vec![
-            response_router,
-            priority_router,
-            event_router,
-            normal_egress,
-            priority_egress,
-        ];
+        let mut threads = Vec::with_capacity(5);
+        let startup_result = (|| -> Result<()> {
+            threads.push(spawn_response_router(
+                responses,
+                Arc::clone(&pending),
+                priority_outbound.clone(),
+                Arc::clone(&closing),
+                Arc::clone(&request_timeouts),
+                Arc::clone(&transport_traffic),
+                Arc::clone(&response_arena),
+            )?);
+            threads.push(spawn_priority_router(
+                priority_responses,
+                Arc::clone(&priority_pending),
+                Arc::clone(&closing),
+                Arc::clone(&request_timeouts),
+            )?);
+            threads.push(spawn_event_router(
+                events,
+                Arc::clone(&leases),
+                Arc::clone(&telemetry),
+                Arc::clone(&event_queue),
+                priority_outbound.clone(),
+                Arc::clone(&closing),
+            )?);
+            threads.push(spawn_egress(
+                "yadaw-ipc-request",
+                requests,
+                normal_inbox,
+            )?);
+            threads.push(spawn_egress(
+                "yadaw-ipc-priority-request",
+                priority_requests,
+                priority_inbox,
+            )?);
+            Ok(())
+        })();
+        if let Err(error) = startup_result {
+            closing.store(true, Ordering::Release);
+            drop(normal_outbound);
+            drop(priority_outbound);
+            let _ = child.kill();
+            let _ = child.wait();
+            for thread in threads {
+                let _ = thread.join();
+            }
+            return Err(error);
+        }
 
         Ok(Self {
             state: Arc::new(ClientState {

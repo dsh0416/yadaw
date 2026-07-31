@@ -20,6 +20,12 @@ export const useLifecycleStore = defineStore("lifecycle", () => {
   let unsubscribe: (() => void) | null = null
   let initializePromise: Promise<void> | null = null
 
+  function resetRevisions(): void {
+    revisions.project = -1
+    revisions.audio = -1
+    revisions.recording = -1
+  }
+
   function applyEvent(event: DesktopLifecycleEvent): void {
     if (event.revision <= revisions[event.type]) return
     revisions[event.type] = event.revision
@@ -35,10 +41,13 @@ export const useLifecycleStore = defineStore("lifecycle", () => {
   }
 
   function receiveEvent(envelope: RpcEvent<DesktopLifecycleEvent>): void {
-    if (
+    const epochChanged = sourceEpoch !== null && envelope.sourceEpoch !== sourceEpoch
+    const sequenceGap =
       sourceEpoch !== null &&
-      (envelope.sourceEpoch !== sourceEpoch || envelope.sequence !== lastSequence + 1)
-    ) {
+      envelope.sourceEpoch === sourceEpoch &&
+      envelope.sequence !== lastSequence + 1
+    if (epochChanged || sequenceGap) {
+      if (epochChanged) resetRevisions()
       sourceEpoch = envelope.sourceEpoch
       lastSequence = envelope.sequence
       ready.value = false
@@ -78,17 +87,19 @@ export const useLifecycleStore = defineStore("lifecycle", () => {
           ready.value = true
           return
         }
+        const epochChanged = sourceEpoch !== null && sourceEpoch !== result.value.mainEpoch
+        if (epochChanged) resetRevisions()
         if (result.value.lifecycle.revision >= revisions.project) {
           projectStore.applyBootstrap(result.value)
         } else {
           projectStore.applyDesktopSession(result.value.desktopSession)
         }
-        sourceEpoch = result.value.mainEpoch
         lastSequence =
           sourceEpoch === result.value.mainEpoch
             ? Math.max(lastSequence, result.value.revision)
             : result.value.revision
         settingsStore.applySnapshot(result.value.settings, result.value.desktopSession)
+        sourceEpoch = result.value.mainEpoch
         audioRuntimeStore.applyResources(result.value.audioResources)
         recordingStore.applyResource(result.value.recordingResource)
         applySnapshot(result.value.lifecycle)
@@ -110,9 +121,7 @@ export const useLifecycleStore = defineStore("lifecycle", () => {
     unsubscribe?.()
     unsubscribe = null
     ready.value = false
-    revisions.project = -1
-    revisions.audio = -1
-    revisions.recording = -1
+    resetRevisions()
     sourceEpoch = null
     lastSequence = 0
   }

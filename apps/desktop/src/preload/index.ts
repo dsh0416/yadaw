@@ -52,7 +52,6 @@ const api: YadawDesktopApi = {
     ipcRenderer.on(IPC_CHANNELS.lifecycleEvent, handler)
     return () => ipcRenderer.removeListener(IPC_CHANNELS.lifecycleEvent, handler)
   },
-  startupProgressSnapshot: (meta) => invokeRpc(IPC_CHANNELS.startupProgressSnapshot, meta),
   subscribeStartupProgress: (listener) => {
     const handler = (_event: Electron.IpcRendererEvent, progress: Parameters<typeof listener>[0]) =>
       listener(progress)

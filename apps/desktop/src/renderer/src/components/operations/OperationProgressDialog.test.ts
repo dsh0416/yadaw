@@ -14,7 +14,7 @@ describe("OperationProgressDialog", () => {
           completedUnits: 50,
           totalUnits: 100,
           cancellable: true,
-          message: null,
+          error: null,
           dropoutFrames: 0
         }
       }
@@ -39,7 +39,7 @@ describe("OperationProgressDialog", () => {
           completedUnits: null,
           totalUnits: null,
           cancellable: false,
-          message: null,
+          error: null,
           dropoutFrames: 8
         }
       }
@@ -60,7 +60,7 @@ describe("OperationProgressDialog", () => {
           completedUnits: null,
           totalUnits: null,
           cancellable: false,
-          message: null,
+          error: null,
           dropoutFrames: 0
         }
       }
@@ -82,7 +82,7 @@ describe("OperationProgressDialog", () => {
           completedUnits: 2,
           totalUnits: 4,
           cancellable: false,
-          message: null,
+          error: null,
           dropoutFrames: 0
         }
       }

@@ -227,18 +227,23 @@ function respond(request: WorkerRequest): Promise<void> {
       port.postMessage(response)
     },
     (error: unknown) => {
-      const normalized = error instanceof Error ? error : new Error(String(error))
+      const correlationId = randomUUID()
+      console.error(`[project-worker] ${correlationId} request failed`, error)
       const response: WorkerResponse = {
         id: request.id,
         type: request.type,
         ok: false,
         error: {
-          message: normalized.message,
-          stack: normalized.stack,
-          code:
-            typeof (normalized as Error & { code?: unknown }).code === "string"
-              ? (normalized as Error & { code: string }).code
-              : undefined
+          code: "invariant-violation",
+          category: "invariant-violation",
+          outcome: "quarantined",
+          retry: "after-reconcile",
+          correlationId,
+          userMessageKey: "errors.projectWorkerFailed",
+          details: {
+            type: "invariant-violation",
+            component: "project-worker"
+          }
         }
       }
       port.postMessage(response)

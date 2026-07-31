@@ -650,7 +650,7 @@ export class AudioHostService {
   private midiInputResult(response: ControlResponse): MidiInputSnapshot {
     const value = response.result.midi_input
     if (response.result.type !== "midi-input-snapshot" || !value) {
-      throw new Error(response.result.message ?? "audio host returned an invalid MIDI snapshot")
+      throw new Error(response.result.error?.userMessageKey ?? "errors.audioEngineUnavailable")
     }
     return {
       ports: value.ports,

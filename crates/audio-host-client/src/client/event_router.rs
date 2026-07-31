@@ -5,7 +5,7 @@ fn spawn_event_router(
     events: Arc<Mutex<VecDeque<Vec<u8>>>>,
     priority_outbound: SyncSender<WirePacket>,
     closing: Arc<AtomicBool>,
-) -> JoinHandle<()> {
+) -> Result<JoinHandle<()>> {
     thread::Builder::new()
         .name("yadaw-ipc-event-router".into())
         .spawn(move || {
@@ -64,5 +64,5 @@ fn spawn_event_router(
                 }
             }
         })
-        .expect("event router thread must start")
+        .map_err(|error| failure("could not start event router thread", error))
 }

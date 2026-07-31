@@ -4,7 +4,7 @@ import type {
   PluginEditorMode,
   PluginAudioMode
 } from "@yadaw/contracts"
-import type { AudioEngineRef, ProjectGraphRef, RpcResult } from "@yadaw/contracts"
+import type { AudioEngineRef, ProjectGraphRef, RpcError, RpcResult } from "@yadaw/contracts"
 
 export interface GraphCandidateSnapshot {
   operationId: string
@@ -69,7 +69,7 @@ export interface ControlResponse {
       | "busy"
       | "plugin-editor"
       | "error"
-    message?: string
+    error?: RpcError
     result?: RpcResult<GraphTransactionValue>
     callback_generation?: number
     ipc_generation?: number
@@ -261,7 +261,7 @@ export interface PriorityResponse {
   request_id: number
   result: {
     type: "heartbeat" | "accepted" | "busy" | "error"
-    message?: string
+    error?: RpcError
     ipc_generation?: number
     tokio_generation?: number
     winit_generation?: number

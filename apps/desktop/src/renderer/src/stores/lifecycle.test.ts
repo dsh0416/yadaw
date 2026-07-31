@@ -127,6 +127,52 @@ describe("lifecycle store", () => {
     expect(audio.runtime.state).toBe("running")
     expect(lifecycle.ready).toBe(true)
   })
+  it("resets domain revisions when bootstrap replaces a stale event epoch", async () => {
+    let listener: Parameters<typeof window.yadaw.subscribeLifecycle>[0] = () => undefined
+    window.yadaw.subscribeLifecycle = vi.fn((next) => {
+      listener = next
+      return vi.fn()
+    })
+    let resolveSnapshot!: (value: ApplicationBootstrapSnapshot) => void
+    window.yadaw.bootstrap = vi.fn(() =>
+      new Promise<ApplicationBootstrapSnapshot>((resolve) => {
+        resolveSnapshot = resolve
+      }).then((value) => ({ ok: true as const, requestId: "request", value, warnings: [] }))
+    )
+    const lifecycle = useLifecycleStore()
+    const project = useProjectStore()
+
+    const initializing = lifecycle.initialize()
+    listener({
+      protocolVersion: 2,
+      sourceEpoch: "stale-epoch",
+      sequence: 99,
+      resourceRevision: 99,
+      payload: {
+        type: "project",
+        revision: 99,
+        state: { status: "open", session, error: null }
+      }
+    })
+    resolveSnapshot(bootstrap(snapshot(1)))
+    await initializing
+
+    expect(project.session).toBeNull()
+    listener({
+      protocolVersion: 2,
+      sourceEpoch: "main-epoch",
+      sequence: 2,
+      resourceRevision: 2,
+      payload: {
+        type: "project",
+        revision: 2,
+        state: { status: "open", session, error: null }
+      }
+    })
+
+    expect(project.session?.path).toBe("new.yadaw")
+    expect(window.yadaw.bootstrap).toHaveBeenCalledOnce()
+  })
 
   it("disposes its single native subscription", async () => {
     const unsubscribe = vi.fn()

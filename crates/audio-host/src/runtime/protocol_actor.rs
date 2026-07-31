@@ -1,4 +1,9 @@
-fn validate_native_build_fingerprint(value: &str) -> Result<(), String> {
+fn validate_native_bootstrap(protocol_version: u8, value: &str) -> Result<(), String> {
+    if protocol_version != IPC_PROTOCOL_VERSION {
+        return Err(format!(
+            "audio-host protocol mismatch: addon={protocol_version}, helper={IPC_PROTOCOL_VERSION}"
+        ));
+    }
     if value == NATIVE_BUILD_FINGERPRINT {
         Ok(())
     } else {
@@ -36,6 +41,7 @@ async fn run_protocol_actor(
         background_inbox,
     } = deps;
     let HostBootstrap {
+        protocol_version,
         native_build_fingerprint,
         requests,
         responses,
@@ -46,7 +52,7 @@ async fn run_protocol_actor(
         parameter_ring,
         session_epoch,
     } = bootstrap;
-    validate_native_build_fingerprint(&native_build_fingerprint)?;
+    validate_native_bootstrap(protocol_version, &native_build_fingerprint)?;
     let telemetry = Arc::new(Mutex::new(
         TelemetryWriter::map(telemetry_page).map_err(|error| error.to_string())?,
     ));
@@ -96,7 +102,8 @@ async fn run_protocol_actor(
             winit: winit_generation,
             egress: egress_metrics,
         },
-    );
+    )
+    .map_err(|error| format!("could not start IPC ingress thread: {error}"))?;
 
     let handles = Arc::new(Mutex::new(GraphParameterHandles::default()));
     let (engine_sender, engine_inbox) = mpsc::channel(ACTOR_CAPACITY);
@@ -230,7 +237,7 @@ async fn run_protocol_actor(
                     };
                     let result = match tokio::time::timeout(deadline, work).await {
                         Ok(result) => result,
-                        Err(_) => ControlResult::Error {
+                        Err(_) => control_error! {
                             message: "audio-host request deadline exceeded".into(),
                         },
                     };

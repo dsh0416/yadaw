@@ -82,13 +82,20 @@ fn run_ipc() -> Result<(), Box<dyn std::error::Error>> {
     let protocol_thread = thread::Builder::new()
         .name("yadaw-control".into())
         .spawn(move || {
-            let runtime = tokio::runtime::Builder::new_multi_thread()
+            let runtime = match tokio::runtime::Builder::new_multi_thread()
                 .worker_threads(runtime_config.worker_threads)
                 .max_blocking_threads(runtime_config.max_blocking_threads)
                 .thread_name("yadaw-tokio")
                 .enable_all()
                 .build()
-                .expect("multi-thread Tokio runtime must start");
+            {
+                Ok(runtime) => runtime,
+                Err(error) => {
+                    eprintln!("audio-host: could not start Tokio runtime: {error}");
+                    let _ = proxy.send_event(UiEvent::Exit);
+                    return;
+                }
+            };
             let local = tokio::task::LocalSet::new();
             local.block_on(&runtime, async move {
                 if let Err(error) = run_protocol_actor(

@@ -19,7 +19,7 @@ async fn forward_to_ui(
                 tokio::task::yield_now().await;
             }
             Err(std_mpsc::TrySendError::Disconnected(returned)) => {
-                let _ = returned.reply.send(ControlResult::Error {
+                let _ = returned.reply.send(control_error! {
                     message: "winit VST3 UI mailbox stopped".into(),
                 });
                 return;
@@ -87,7 +87,7 @@ fn mixer_parameter_command(
                 .and_then(|values| values.channels.get(&command.runtime_handle))
                 .cloned()
             else {
-                return ControlResult::Error {
+                return control_error! {
                     message: "mixer channel runtime handle is stale".into(),
                 };
             };
@@ -95,7 +95,7 @@ fn mixer_parameter_command(
                 0 => ("gainDb", -60.0 + command.normalized * 72.0),
                 1 => ("pan", command.normalized * 2.0 - 1.0),
                 _ => {
-                    return ControlResult::Error {
+                    return control_error! {
                         message: "unknown mixer channel parameter".into(),
                     };
                 }
@@ -108,7 +108,7 @@ fn mixer_parameter_command(
                 .and_then(|values| values.sends.get(&command.runtime_handle))
                 .cloned()
             else {
-                return ControlResult::Error {
+                return control_error! {
                     message: "mixer send runtime handle is stale".into(),
                 };
             };
@@ -116,7 +116,7 @@ fn mixer_parameter_command(
                 0 => ("levelDb", -60.0 + command.normalized * 72.0),
                 1 => ("pan", command.normalized * 2.0 - 1.0),
                 _ => {
-                    return ControlResult::Error {
+                    return control_error! {
                         message: "unknown mixer send parameter".into(),
                     };
                 }
@@ -124,7 +124,7 @@ fn mixer_parameter_command(
             ("send", id, parameter, value)
         }
         yadaw_dsp_runtime::protocol::ParameterTargetKind::Plugin => {
-            return ControlResult::Error {
+            return control_error! {
                 message: "plugin parameter was routed to the engine actor".into(),
             };
         }
@@ -136,7 +136,7 @@ fn mixer_parameter_command(
         value,
     }) {
         Ok(()) => ControlResult::Accepted,
-        Err(error) => ControlResult::Error {
+        Err(error) => control_error! {
             message: error.to_string(),
         },
     }
@@ -149,25 +149,25 @@ async fn engine_actor(
     while let Some(message) = inbox.recv().await {
         let result = match message.command {
             ActorCommand::Control(command) => {
-                engine_command(command, None).unwrap_or(ControlResult::Error {
+                engine_command(command, None).unwrap_or_else(|| control_error! {
                     message: "unsupported engine command".into(),
                 })
             }
             ActorCommand::Parameter(command) => mixer_parameter_command(&handles, command),
-            ActorCommand::SyncAraGraph { .. } => ControlResult::Error {
+            ActorCommand::SyncAraGraph { .. } => control_error! {
                 message: "engine actor does not own ARA documents".into(),
             },
             ActorCommand::PublishBuiltGraph { built } => match engine::publish_mixer_runtime(built)
             {
                 Ok(engine::PublishOutcome::Published) => ControlResult::Accepted,
-                Ok(engine::PublishOutcome::Superseded) => ControlResult::Error {
+                Ok(engine::PublishOutcome::Superseded) => control_error! {
                     message: "graph build superseded".into(),
                 },
-                Err(error) => ControlResult::Error {
+                Err(error) => control_error! {
                     message: error.to_string(),
                 },
             },
-            ActorCommand::BuildGraph { .. } => ControlResult::Error {
+            ActorCommand::BuildGraph { .. } => control_error! {
                 message: "engine actor does not own graph construction".into(),
             },
         };
@@ -191,29 +191,28 @@ async fn build_graph_on_worker(
     let input = match engine::begin_graph_build(graph) {
         Ok(input) => input,
         Err(error) => {
-            return ControlResult::Error {
+            return control_error! {
                 message: error.to_string(),
             };
         }
     };
     let complete = match supervisor.submit_graph_build(input) {
         Ok(complete) => complete,
-        Err(message) => return ControlResult::Error { message },
+        Err(message) => return control_error! { message },
     };
     let built = match complete.await {
         Ok(Ok(built)) => built,
-        Ok(Err(message)) => return ControlResult::Error { message },
+        Ok(Err(message)) => return control_error! { message },
         Err(_) => {
-            return ControlResult::Error {
+            return control_error! {
                 message: "graph worker dropped the build result".into(),
             };
         }
     };
     match publish_built_graph(engine_sender, built).await {
         ControlResult::Accepted => ControlResult::GraphAccepted { revision },
-        ControlResult::Error { message }
-            if message == "graph build superseded"
-                && engine::published_graph_generation() >= revision =>
+        ControlResult::Error { .. }
+            if engine::published_graph_generation() >= revision =>
         {
             ControlResult::GraphAccepted { revision }
         }
@@ -232,17 +231,17 @@ async fn background_io_actor(
                 build_graph_on_worker(&supervisor, &engine_sender, graph).await
             }
             ActorCommand::Control(command) => {
-                engine_command(command, None).unwrap_or(ControlResult::Error {
+                engine_command(command, None).unwrap_or_else(|| control_error! {
                     message: "unsupported background I/O command".into(),
                 })
             }
-            ActorCommand::Parameter(_) => ControlResult::Error {
+            ActorCommand::Parameter(_) => control_error! {
                 message: "background I/O actor does not own parameters".into(),
             },
-            ActorCommand::SyncAraGraph { .. } => ControlResult::Error {
+            ActorCommand::SyncAraGraph { .. } => control_error! {
                 message: "background I/O actor does not own ARA documents".into(),
             },
-            ActorCommand::PublishBuiltGraph { .. } => ControlResult::Error {
+            ActorCommand::PublishBuiltGraph { .. } => control_error! {
                 message: "background I/O actor does not publish graphs".into(),
             },
         };
@@ -257,11 +256,11 @@ async fn dispatch_actor_command(
 ) -> ControlResult {
     let (reply, response) = oneshot::channel();
     if sender.send(ActorRequest { command, reply }).await.is_err() {
-        return ControlResult::Error {
+        return control_error! {
             message: "audio-host actor stopped".into(),
         };
     }
-    response.await.unwrap_or(ControlResult::Error {
+    response.await.unwrap_or_else(|_| control_error! {
         message: "audio-host actor dropped its response".into(),
     })
 }

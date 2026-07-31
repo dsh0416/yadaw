@@ -32,7 +32,7 @@ impl WinitHost {
         preference: PluginEditorPreference,
     ) -> ControlResult {
         if !preference.is_valid() {
-            return ControlResult::Error {
+            return control_error! {
                 message: "VST3 editor zoom is outside 50...400".into(),
             };
         }
@@ -46,12 +46,12 @@ impl WinitHost {
             };
         }
         let Some(runtime) = self.vst3.as_ref() else {
-            return ControlResult::Error {
+            return control_error! {
                 message: "VST3 UI runtime is shutting down".into(),
             };
         };
         let Some(class_id) = runtime.class_id(&instance_id) else {
-            return ControlResult::Error {
+            return control_error! {
                 message: "VST3 instance is not loaded".into(),
             };
         };
@@ -66,7 +66,7 @@ impl WinitHost {
         let window = match event_loop.create_window(attributes) {
             Ok(window) => Arc::new(window),
             Err(error) => {
-                return ControlResult::Error {
+                return control_error! {
                     message: format!("could not create VST3 editor window: {error}"),
                 };
             }
@@ -120,7 +120,7 @@ impl WinitHost {
                     processors.remove(&instance_id);
                 }
                 let Some(runtime) = self.vst3.as_mut() else {
-                    let _ = reply.send(ControlResult::Error {
+                    let _ = reply.send(control_error! {
                         message: "VST3 UI runtime is shutting down".into(),
                     });
                     return;
@@ -134,7 +134,7 @@ impl WinitHost {
             }
             ActorCommand::SyncAraGraph { graph } => {
                 let Some(runtime) = self.vst3.as_mut() else {
-                    let _ = reply.send(ControlResult::Error {
+                    let _ = reply.send(control_error! {
                         message: "VST3 UI runtime is shutting down".into(),
                     });
                     return;
@@ -144,7 +144,7 @@ impl WinitHost {
                         self.ara_graph = graph;
                         ControlResult::Accepted
                     }
-                    Err(message) => ControlResult::Error { message },
+                    Err(message) => control_error! { message },
                 };
                 let _ = reply.send(result);
                 return;
@@ -152,7 +152,7 @@ impl WinitHost {
             command => command,
         };
         let Some(runtime) = self.vst3.as_mut() else {
-            let _ = reply.send(ControlResult::Error {
+            let _ = reply.send(control_error! {
                 message: "VST3 UI runtime is shutting down".into(),
             });
             return;
@@ -193,7 +193,7 @@ impl WinitHost {
                     && let Err(message) = runtime.sync_ara_graph(self.ara_graph.as_ref())
                 {
                     let _ = runtime.unload_plugin(instance_id, false);
-                    result = ControlResult::Error { message };
+                    result = control_error! { message };
                 }
                 if matches!(result, ControlResult::PluginLoaded { .. })
                     && let Some(instance_id) = loaded_id
@@ -205,11 +205,11 @@ impl WinitHost {
                 result
             }
             ActorCommand::BuildGraph { .. } | ActorCommand::PublishBuiltGraph { .. } => {
-                ControlResult::Error {
+                control_error! {
                     message: "winit UI thread does not own graph worker jobs".into(),
                 }
             }
-            ActorCommand::SyncAraGraph { .. } => ControlResult::Error {
+            ActorCommand::SyncAraGraph { .. } => control_error! {
                 message: "ARA graph synchronization was not handled".into(),
             },
         };
@@ -243,7 +243,7 @@ impl WinitHost {
         self.vst3.take();
         self.ara_graph = None;
         while let Ok(request) = self.inbox.try_recv() {
-            let _ = request.reply.send(ControlResult::Error {
+            let _ = request.reply.send(control_error! {
                 message: "VST3 UI runtime shut down".into(),
             });
         }

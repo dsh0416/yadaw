@@ -6,6 +6,7 @@ import type {
   PendingRecording,
   RecordedTrackAsset,
   RecordingSession,
+  RpcError,
   WaveformPeakWindow,
   WaveformWindowRequest
 } from "@yadaw/contracts"
@@ -195,7 +196,7 @@ export class RecordingService {
       completedUnits: null,
       totalUnits: null,
       cancellable: false,
-      message: null,
+      error: null,
       dropoutFrames: 0
     }
     this.operations.upsert(operation, true)
@@ -242,8 +243,25 @@ export class RecordingService {
       await this.finalizeAndCommit(recording, operationId)
       return this.toPending(recording)
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      this.operations.patch(operationId, { state: "failed", message, cancellable: false }, true)
+      const correlationId = `recording:${operationId}:${randomUUID()}`
+      console.error(`[recording] finalization failed (${correlationId})`, error)
+      const operationError: RpcError = {
+        code: "invariant-violation",
+        category: "invariant-violation",
+        outcome: "quarantined",
+        retry: "after-reconcile",
+        correlationId,
+        userMessageKey: "errors.recordingFinalizationFailed",
+        details: {
+          type: "invariant-violation",
+          component: "main"
+        }
+      }
+      this.operations.patch(
+        operationId,
+        { state: "failed", error: operationError, cancellable: false },
+        true
+      )
       throw error
     }
   }
@@ -459,10 +477,6 @@ export class RecordingService {
       operationId,
       {
         state: "completed",
-        message:
-          recording.dropoutFrames > 0
-            ? t("operation.recordingDropoutsInput", { count: recording.dropoutFrames })
-            : null,
         dropoutFrames: recording.dropoutFrames
       },
       true
@@ -576,7 +590,7 @@ export class RecordingService {
           completedUnits: null,
           totalUnits: null,
           cancellable: false,
-          message: null,
+          error: null,
           dropoutFrames: recording.dropoutFrames
         },
         true
@@ -598,7 +612,7 @@ export class RecordingService {
           completedUnits: null,
           totalUnits: null,
           cancellable: false,
-          message: null,
+          error: null,
           dropoutFrames: recording.dropoutFrames
         },
         true

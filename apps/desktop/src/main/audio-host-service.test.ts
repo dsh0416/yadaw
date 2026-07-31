@@ -237,7 +237,21 @@ const fakeHost = vi.hoisted(() => {
       }
       if (request.command.type === "run-audio-benchmark") {
         if (this.failAudioBenchmark) {
-          return response({ type: "error", message: "benchmark failed" })
+          return response({
+            type: "error",
+            error: {
+              code: "invariant-violation",
+              category: "invariant-violation",
+              outcome: "quarantined",
+              retry: "after-reconcile",
+              correlationId: "test-audio-benchmark",
+              userMessageKey: "errors.audioBenchmarkFailed",
+              details: {
+                type: "invariant-violation",
+                component: "audio-host"
+              }
+            }
+          })
         }
         const report = {
           type: "audio-benchmark",
@@ -255,7 +269,21 @@ const fakeHost = vi.hoisted(() => {
       if (request.command.type === "benchmark-echo") {
         if (this.failIpcBenchmark) {
           this.failIpcBenchmark = false
-          return response({ type: "error", message: "ipc benchmark failed" })
+          return response({
+            type: "error",
+            error: {
+              code: "invariant-violation",
+              category: "invariant-violation",
+              outcome: "quarantined",
+              retry: "after-reconcile",
+              correlationId: "test-ipc-benchmark",
+              userMessageKey: "errors.audioBenchmarkFailed",
+              details: {
+                type: "invariant-violation",
+                component: "audio-host"
+              }
+            }
+          })
         }
         return response(
           {
@@ -682,13 +710,13 @@ describe("AudioHostService recovery", () => {
 
     fakeHost.Client.failNextAudioBenchmark = true
     await expect(service.runAudioBenchmark(effect)).rejects.toThrow(
-      "audio DSP benchmark failed: benchmark failed"
+      "audio DSP benchmark failed: errors.audioBenchmarkFailed"
     )
     expect(fakeHost.Client.instances[2]?.closed).toBe(true)
 
     fakeHost.Client.failNextIpcBenchmark = true
     await expect(service.runAudioBenchmark(effect)).rejects.toThrow(
-      "audio IPC benchmark failed: ipc benchmark failed"
+      "audio IPC benchmark failed: errors.audioBenchmarkFailed"
     )
     expect(fakeHost.Client.instances[3]?.closed).toBe(true)
 

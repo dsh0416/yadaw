@@ -1,15 +1,14 @@
 import { BrowserWindow } from "electron"
 import { IPC_CHANNELS, IPC_PROTOCOL_VERSION } from "@yadaw/contracts"
-import type { OperationEvent, OperationSnapshot, ResourceRef, RpcResult } from "@yadaw/contracts"
+import type {
+  OperationEvent,
+  OperationSnapshot,
+  ResourceRef,
+  RpcError,
+  RpcResult
+} from "@yadaw/contracts"
 import { OperationRegistry } from "./kernel/operation-registry"
 import type { OperationRecord } from "./kernel/operation-registry"
-
-const legacyDesktopTarget: ResourceRef = {
-  kind: "desktop-session",
-  id: "legacy-desktop",
-  epoch: "legacy",
-  generation: 0
-}
 
 function terminalResult(operation: OperationSnapshot): {
   outcome: "committed" | "not-committed" | "quarantined"
@@ -20,7 +19,7 @@ function terminalResult(operation: OperationSnapshot): {
       outcome: "committed",
       result: {
         ok: true,
-        requestId: `legacy-${operation.id}`,
+        requestId: `operation:${operation.id}`,
         operationId: operation.id,
         value: null,
         warnings: []
@@ -32,14 +31,14 @@ function terminalResult(operation: OperationSnapshot): {
       outcome: "not-committed",
       result: {
         ok: false,
-        requestId: `legacy-${operation.id}`,
+        requestId: `operation:${operation.id}`,
         operationId: operation.id,
         error: {
           code: "operation-cancelled",
           category: "cancelled",
           outcome: "not-committed",
           retry: "never",
-          correlationId: `legacy-${operation.id}`,
+          correlationId: `operation:${operation.id}`,
           userMessageKey: "errors.operationCancelled",
           details: {
             type: "operation-cancelled",
@@ -49,25 +48,25 @@ function terminalResult(operation: OperationSnapshot): {
       }
     }
   }
+  const error: RpcError = operation.error ?? {
+    code: "invariant-violation",
+    category: "invariant-violation",
+    outcome: "quarantined",
+    retry: "after-reconcile",
+    correlationId: `operation:${operation.id}`,
+    userMessageKey: "errors.internalInvariant",
+    details: {
+      type: "invariant-violation",
+      component: "main"
+    }
+  }
   return {
-    outcome: "not-committed",
+    outcome: error.outcome === "not-committed" ? "not-committed" : "quarantined",
     result: {
       ok: false,
-      requestId: `legacy-${operation.id}`,
+      requestId: `operation:${operation.id}`,
       operationId: operation.id,
-      error: {
-        code: "resource-unavailable",
-        category: "unavailable",
-        outcome: "not-committed",
-        retry: "safe",
-        correlationId: `legacy-${operation.id}`,
-        userMessageKey: "errors.operationFailed",
-        details: {
-          type: "resource-unavailable",
-          component: "main",
-          dispatched: true
-        }
-      }
+      error
     }
   }
 }
@@ -79,8 +78,8 @@ export class OperationService {
   private eventSequence = 0
 
   constructor(
-    readonly registry = new OperationRegistry(),
-    private readonly defaultTarget: ResourceRef = legacyDesktopTarget
+    readonly registry: OperationRegistry,
+    private readonly defaultTarget: ResourceRef
   ) {}
 
   get activeCount(): number {

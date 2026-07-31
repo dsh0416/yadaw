@@ -96,7 +96,6 @@ export const IPC_CHANNELS = {
   transportSnapshot: "transport:snapshot",
   lifecycleSnapshot: "lifecycle:snapshot",
   lifecycleEvent: "lifecycle:event",
-  startupProgressSnapshot: "startup:progress-snapshot",
   startupProgressEvent: "startup:progress-event",
   systemPerformanceSnapshot: "system:performance-snapshot",
   audioBenchmarkRun: "audio-benchmark:run",
@@ -187,7 +186,6 @@ export interface YadawDesktopApi {
   transportSnapshot(meta: RpcRequestMeta): Promise<RpcResult<TransportSnapshot>>
   lifecycleSnapshot(meta: RpcRequestMeta): Promise<RpcResult<DesktopLifecycleSnapshot>>
   subscribeLifecycle(listener: (event: RpcEvent<DesktopLifecycleEvent>) => void): () => void
-  startupProgressSnapshot(meta: RpcRequestMeta): Promise<RpcResult<StartupProgressSnapshot>>
   subscribeStartupProgress(listener: (event: RpcEvent<StartupProgressSnapshot>) => void): () => void
   systemPerformanceSnapshot(meta: RpcRequestMeta): Promise<RpcResult<SystemPerformanceSnapshot>>
   runAudioBenchmark(meta: RpcRequestMeta): Promise<RpcResult<AudioBenchmarkReport>>

@@ -151,7 +151,7 @@ export function registerProjectHandlers(context: IpcHandlerContext): void {
         completedUnits: null,
         totalUnits: null,
         cancellable: false,
-        message: null,
+        error: null,
         dropoutFrames: 0
       },
       true
@@ -196,7 +196,7 @@ export function registerProjectHandlers(context: IpcHandlerContext): void {
         operationId,
         {
           state: "failed",
-          message: "Project archive commit outcome requires reconciliation."
+          error: result.error
         },
         true
       )

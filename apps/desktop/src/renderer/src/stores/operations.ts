@@ -62,7 +62,7 @@ export const useOperationStore = defineStore("operations", () => {
 
   function scheduleCompletionCleanup(operation: OperationSnapshot): void {
     clearCompletionTimer(operation.id)
-    if (operation.state !== "completed" || operation.message || operation.dropoutFrames > 0) return
+    if (operation.state !== "completed" || operation.error || operation.dropoutFrames > 0) return
     completionTimers.set(
       operation.id,
       setTimeout(() => {

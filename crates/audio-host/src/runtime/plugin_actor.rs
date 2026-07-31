@@ -90,7 +90,7 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
     while let Some(message) = inbox.recv().await {
         let result = match message.command {
             ActorCommand::BuildGraph { .. } | ActorCommand::PublishBuiltGraph { .. } => {
-                ControlResult::Error {
+                control_error! {
                     message: "VST3 actor does not own graph worker jobs".into(),
                 }
             }
@@ -180,7 +180,7 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
                         }
                         (Err(message), _, _)
                         | (_, Err(message), _)
-                        | (_, _, Err(message)) => ControlResult::Error { message },
+                        | (_, _, Err(message)) => control_error! { message },
                     }
                 }
                 command @ (ControlCommand::UnloadPlugin { .. }
@@ -398,8 +398,8 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
                         },
                     )
                     .await;
-                    if let ControlResult::Error { message: error } = ara_result {
-                        log_graph_transaction_failure(&meta, "ara", &error);
+                    if let ControlResult::Error { error } = ara_result {
+                        log_graph_transaction_failure(&meta, "ara", &error.correlation_id);
                         let _ = dispatch_ui_actor_command(
                             &ui_sender,
                             &ui_proxy,
@@ -448,8 +448,8 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
                                 graph_failure(&meta, graph_timeout_error(&meta))
                             }
                         }
-                        ControlResult::Error { message: error } => {
-                            log_graph_transaction_failure(&meta, "publish", &error);
+                        ControlResult::Error { error } => {
+                            log_graph_transaction_failure(&meta, "publish", &error.correlation_id);
                             let _ = dispatch_ui_actor_command(
                                 &ui_sender,
                                 &ui_proxy,
@@ -462,7 +462,7 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
                                 operation_id,
                                 candidate_revision,
                             );
-                            if error == "graph build superseded" {
+                            if engine::published_graph_generation() >= candidate_revision {
                                 graph_failure(
                                     &meta,
                                     graph_conflict_error(
@@ -589,7 +589,7 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
                         Ok::<_, String>((graph, candidate))
                     })();
                     match prepared {
-                        Err(message) => ControlResult::Error { message },
+                        Err(message) => control_error! { message },
                         Ok((graph, candidate)) => {
                             let previous_graph = graph_snapshot.clone();
                             let ara_result = dispatch_ui_actor_command(
@@ -655,7 +655,7 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
                                 .collect::<Result<Vec<_>, _>>()
                         });
                     match processors {
-                        Err(message) => ControlResult::Error { message },
+                        Err(message) => control_error! { message },
                         Ok(processors) => {
                             match tokio::task::spawn_blocking(move || {
                                 engine::run_audio_benchmark(processors)
@@ -663,8 +663,8 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
                             .await
                             {
                                 Ok(Ok(report)) => ControlResult::AudioBenchmark { report },
-                                Ok(Err(message)) => ControlResult::Error { message },
-                                Err(error) => ControlResult::Error {
+                                Ok(Err(message)) => control_error! { message },
+                                Err(error) => control_error! {
                                     message: format!(
                                         "audio benchmark worker did not complete: {error}"
                                     ),
@@ -673,7 +673,7 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
                         }
                     }
                 }
-                _ => ControlResult::Error {
+                _ => control_error! {
                     message: "unsupported VST3 actor command".into(),
                 },
             },
@@ -697,7 +697,7 @@ async fn dispatch_ui_actor_command(
         },
     )
     .await;
-    response.await.unwrap_or(ControlResult::Error {
+    response.await.unwrap_or_else(|_| control_error! {
         message: "winit VST3 UI actor dropped its response".into(),
     })
 }
@@ -715,11 +715,11 @@ async fn dispatch_actor(
         .await
         .is_err()
     {
-        return ControlResult::Error {
+        return control_error! {
             message: "audio-host actor stopped".into(),
         };
     }
-    response.await.unwrap_or(ControlResult::Error {
+    response.await.unwrap_or_else(|_| control_error! {
         message: "audio-host actor dropped its response".into(),
     })
 }
@@ -737,11 +737,11 @@ async fn dispatch_parameter(
         .await
         .is_err()
     {
-        return ControlResult::Error {
+        return control_error! {
             message: "audio-host parameter actor stopped".into(),
         };
     }
-    response.await.unwrap_or(ControlResult::Error {
+    response.await.unwrap_or_else(|_| control_error! {
         message: "audio-host parameter actor dropped its response".into(),
     })
 }

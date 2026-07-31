@@ -56,11 +56,11 @@ const phaseLabel = computed(() => t(phaseKeys[props.operation.phase]))
     </div>
     <UiProgress :value="progress" :label="phaseLabel" :value-text="progressLabel ?? undefined" />
     <UiStatusNotice
-      v-if="operation.message"
+      v-if="operation.error"
       :tone="operation.state === 'failed' ? 'danger' : 'info'"
       :live="operation.state === 'failed' ? 'assertive' : 'polite'"
     >
-      {{ operation.message }}
+      {{ t(operation.error.userMessageKey) }}
     </UiStatusNotice>
     <UiStatusNotice v-if="operation.dropoutFrames > 0" tone="warning" live="polite">
       {{ t("operation.recordingDropoutsCaptured", { count: operation.dropoutFrames }) }}

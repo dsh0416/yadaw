@@ -2,8 +2,6 @@ import { defineStore } from "pinia"
 import { onScopeDispose, shallowRef } from "vue"
 import type { RpcEvent, StartupProgressSnapshot } from "@yadaw/contracts"
 import { i18n } from "../i18n"
-import { readMeta, rpcErrorMessage } from "../rpc"
-
 const INITIAL_PROGRESS: StartupProgressSnapshot = {
   phase: "starting",
   progress: 0,
@@ -31,11 +29,7 @@ export const useStartupStore = defineStore("startup", () => {
     progress.value = next
   }
   function receiveEvent(event: RpcEvent<StartupProgressSnapshot>): void {
-    if (
-      sourceEpoch !== null &&
-      (event.sourceEpoch !== sourceEpoch || event.sequence !== lastSequence + 1)
-    ) {
-      void refreshSnapshot()
+    if (sourceEpoch === event.sourceEpoch && event.sequence <= lastSequence) {
       return
     }
     sourceEpoch = event.sourceEpoch
@@ -43,21 +37,8 @@ export const useStartupStore = defineStore("startup", () => {
     receive(event.payload)
   }
 
-  async function load(): Promise<void> {
+  function load(): void {
     unsubscribe ??= window.yadaw.subscribeStartupProgress(receiveEvent)
-    await refreshSnapshot()
-  }
-
-  async function refreshSnapshot(): Promise<void> {
-    const result = await window.yadaw.startupProgressSnapshot(readMeta())
-    if (result.ok) receive(result.value)
-    else {
-      receive({
-        ...progress.value,
-        phase: "failed",
-        detail: rpcErrorMessage(result.error)
-      })
-    }
   }
 
   function dispose(): void {

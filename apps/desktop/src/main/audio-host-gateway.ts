@@ -56,7 +56,7 @@ export class AudioHostGateway {
       throw new Error("audio host returned an invalid priority response")
     }
     if (response.result.type === "error") {
-      throw new Error(response.result.message ?? "audio host heartbeat failed")
+      throw new Error(response.result.error?.userMessageKey ?? "errors.audioEngineUnavailable")
     }
     drainHostEvents(client, this.onEditorPreferenceChanged, this.pendingPreferenceWrites)
     return response
@@ -87,7 +87,7 @@ export class AudioHostGateway {
       throw new Error("audio host returned an out-of-order response")
     }
     if (response.result.type === "error") {
-      throw new Error(response.result.message ?? "audio host request failed")
+      throw new Error(response.result.error?.userMessageKey ?? "errors.audioEngineUnavailable")
     }
     return response
   }

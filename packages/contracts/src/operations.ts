@@ -1,4 +1,4 @@
-import type { ResourceRef } from "./rpc"
+import type { ResourceRef, RpcError } from "./rpc"
 
 export type OperationPhase =
   | "closing-recording"
@@ -29,7 +29,7 @@ export interface OperationSnapshot {
   completedUnits: number | null
   totalUnits: number | null
   cancellable: boolean
-  message: string | null
+  error: RpcError | null
   dropoutFrames: number
 }
 

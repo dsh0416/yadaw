@@ -3,9 +3,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn bootstrap_rejects_a_stale_native_build() {
-        assert!(validate_native_build_fingerprint(NATIVE_BUILD_FINGERPRINT).is_ok());
-        assert!(validate_native_build_fingerprint("stale-build").is_err());
+    fn bootstrap_rejects_a_stale_protocol_or_native_build() {
+        assert!(
+            validate_native_bootstrap(IPC_PROTOCOL_VERSION, NATIVE_BUILD_FINGERPRINT).is_ok()
+        );
+        assert!(validate_native_bootstrap(IPC_PROTOCOL_VERSION - 1, NATIVE_BUILD_FINGERPRINT).is_err());
+        assert!(validate_native_bootstrap(IPC_PROTOCOL_VERSION, "stale-build").is_err());
     }
 
     #[test]
