@@ -9,9 +9,13 @@
   },
   "types": "./src/index.ts",
   "scripts": {
-    "check": "tsc --noEmit -p tsconfig.json"
+    "check": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
   },
   "devDependencies": {
-    "typescript": "^5.9.3"
+    "@vitest/coverage-v8": "4.1.10",
+    "typescript": "^5.9.3",
+    "vitest": "4.1.10"
   }
 }

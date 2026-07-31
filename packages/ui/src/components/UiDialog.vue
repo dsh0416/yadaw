@@ -32,10 +32,10 @@ const props = withDefaults(
 )
 
 defineSlots<{
-  default(): unknown
-  header(): unknown
-  actions(): unknown
-  trigger(): unknown
+  default?(): unknown
+  header?(): unknown
+  actions?(): unknown
+  trigger?(): unknown
 }>()
 </script>
 

@@ -546,4 +546,398 @@ mod tests {
         full.channels = vec![output, audio];
         assert_eq!(patched, full);
     }
+
+    fn channel(id: &str) -> LiveMixerChannel {
+        LiveMixerChannel {
+            id: id.into(),
+            kind: "audio".into(),
+            system_role: None,
+            gain_db: 0.0,
+            pan: 0.0,
+            muted: false,
+            soloed: false,
+            output_channel_id: None,
+            output_bus: None,
+            record_armed: false,
+            input_monitoring: false,
+            midi_input_port_id: None,
+            midi_input_port_name: None,
+            midi_input_channel: None,
+            input_source: None,
+            input_channels: vec![],
+            hardware_output_channels: vec![],
+        }
+    }
+
+    fn send(id: &str) -> LiveMixerSend {
+        LiveMixerSend {
+            id: id.into(),
+            source_channel_id: "audio-1".into(),
+            target_channel_id: Some("output".into()),
+            target_bus: None,
+            enabled: true,
+            tap: LiveMixerSendTap::Post,
+            level_db: -6.0,
+        }
+    }
+
+    fn clip(id: &str) -> LiveMixerClip {
+        LiveMixerClip {
+            id: id.into(),
+            channel_id: "audio-1".into(),
+            start_frame: 0,
+            source_offset_frames: 0,
+            length_frames: 48_000,
+            path: format!("/assets/{id}.wav"),
+        }
+    }
+
+    fn plugin(instance_id: &str) -> LivePluginInstance {
+        LivePluginInstance {
+            instance_id: instance_id.into(),
+            channel_id: "audio-1".into(),
+            role: "insert".into(),
+            slot_order: 0,
+            audio_mode: PluginAudioMode::Stereo,
+            enabled: true,
+            latency_samples: 0,
+            tail_samples: None,
+        }
+    }
+
+    fn midi_clip(id: &str) -> LiveMidiClip {
+        LiveMidiClip {
+            id: id.into(),
+            channel_id: "instrument-1".into(),
+            start_tick: 0,
+            source_offset_ticks: 0,
+            length_ticks: 1_920,
+            notes: MidiNoteBatch::Inline { notes: vec![] },
+            events: MidiEventBatch::Inline { events: vec![] },
+        }
+    }
+
+    fn empty_graph() -> LiveMixerGraph {
+        LiveMixerGraph {
+            sample_rate: 48_000,
+            channels: vec![],
+            sends: vec![],
+            clips: vec![],
+            plugins: vec![],
+            midi_clips: vec![],
+            tempo_events: vec![LiveTempoEvent {
+                tick: 0,
+                beats_per_minute: 120.0,
+            }],
+            time_signature_events: vec![LiveTimeSignatureEvent {
+                tick: 0,
+                numerator: 4,
+                denominator: 4,
+            }],
+        }
+    }
+
+    #[test]
+    fn upserts_append_new_entries_and_replace_matching_ids_in_place() {
+        let mut graph = empty_graph();
+
+        graph.apply_ops(vec![
+            GraphOp::UpsertChannel {
+                value: channel("audio-1"),
+            },
+            GraphOp::UpsertChannel {
+                value: channel("audio-2"),
+            },
+            GraphOp::UpsertChannel {
+                value: LiveMixerChannel {
+                    muted: true,
+                    ..channel("audio-1")
+                },
+            },
+        ]);
+
+        assert_eq!(
+            graph
+                .channels
+                .iter()
+                .map(|item| item.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["audio-1", "audio-2"]
+        );
+        assert!(graph.channels[0].muted);
+    }
+
+    #[test]
+    fn every_collection_supports_upsert_and_remove() {
+        let mut graph = empty_graph();
+
+        graph.apply_ops(vec![
+            GraphOp::UpsertChannel {
+                value: channel("audio-1"),
+            },
+            GraphOp::UpsertSend { value: send("s-1") },
+            GraphOp::UpsertClip { value: clip("c-1") },
+            GraphOp::UpsertPlugin {
+                value: plugin("p-1"),
+            },
+            GraphOp::UpsertMidiClip {
+                value: midi_clip("m-1"),
+            },
+        ]);
+        assert_eq!(graph.channels.len(), 1);
+        assert_eq!(graph.sends.len(), 1);
+        assert_eq!(graph.clips.len(), 1);
+        assert_eq!(graph.plugins.len(), 1);
+        assert_eq!(graph.midi_clips.len(), 1);
+
+        graph.apply_ops(vec![
+            GraphOp::RemoveChannel {
+                id: "audio-1".into(),
+            },
+            GraphOp::RemoveSend { id: "s-1".into() },
+            GraphOp::RemoveClip { id: "c-1".into() },
+            GraphOp::RemovePlugin { id: "p-1".into() },
+            GraphOp::RemoveMidiClip { id: "m-1".into() },
+        ]);
+        assert_eq!(graph, empty_graph());
+    }
+
+    #[test]
+    fn removing_an_unknown_id_leaves_the_graph_untouched() {
+        let mut graph = empty_graph();
+        graph.apply_ops(vec![GraphOp::UpsertChannel {
+            value: channel("audio-1"),
+        }]);
+        let before = graph.clone();
+
+        graph.apply_ops(vec![
+            GraphOp::RemoveChannel {
+                id: "audio-9".into(),
+            },
+            GraphOp::RemoveSend { id: "s-9".into() },
+            GraphOp::RemoveClip { id: "c-9".into() },
+            GraphOp::RemovePlugin { id: "p-9".into() },
+            GraphOp::RemoveMidiClip { id: "m-9".into() },
+        ]);
+
+        assert_eq!(graph, before);
+    }
+
+    #[test]
+    fn plugins_are_keyed_by_instance_rather_than_channel() {
+        let mut graph = empty_graph();
+
+        graph.apply_ops(vec![
+            GraphOp::UpsertPlugin {
+                value: plugin("p-1"),
+            },
+            GraphOp::UpsertPlugin {
+                value: LivePluginInstance {
+                    slot_order: 1,
+                    ..plugin("p-2")
+                },
+            },
+            GraphOp::UpsertPlugin {
+                value: LivePluginInstance {
+                    enabled: false,
+                    ..plugin("p-1")
+                },
+            },
+        ]);
+
+        assert_eq!(graph.plugins.len(), 2);
+        assert!(!graph.plugins[0].enabled);
+        assert_eq!(graph.plugins[1].slot_order, 1);
+    }
+
+    #[test]
+    fn replacing_the_tempo_map_swaps_both_event_lists() {
+        let mut graph = empty_graph();
+
+        graph.apply_ops(vec![GraphOp::ReplaceTempoMap {
+            tempo_events: vec![LiveTempoEvent {
+                tick: 0,
+                beats_per_minute: 90.0,
+            }],
+            time_signature_events: vec![],
+        }]);
+
+        assert_eq!(graph.tempo_events[0].beats_per_minute, 90.0);
+        assert!(graph.time_signature_events.is_empty());
+    }
+
+    #[test]
+    fn an_empty_op_list_is_a_no_op() {
+        let mut graph = empty_graph();
+
+        graph.apply_ops(vec![]);
+
+        assert_eq!(graph, empty_graph());
+    }
+
+    #[test]
+    fn a_graph_update_reports_the_revision_it_produces() {
+        assert_eq!(
+            GraphUpdate::Replace {
+                revision: 7,
+                graph: empty_graph(),
+            }
+            .revision(),
+            7
+        );
+        assert_eq!(
+            GraphUpdate::Patch {
+                base_revision: 7,
+                revision: 8,
+                ops: vec![],
+            }
+            .revision(),
+            8
+        );
+    }
+
+    #[test]
+    fn binary_payloads_expose_bytes_only_when_they_are_inline() {
+        assert_eq!(BinaryPayload::default(), BinaryPayload::inline(Vec::new()));
+        assert_eq!(
+            BinaryPayload::inline(vec![1, 2, 3]).as_inline(),
+            Some(&[1, 2, 3][..])
+        );
+
+        let reference = SharedBlobRef {
+            session_epoch: 1,
+            region_id: 2,
+            region_generation: 3,
+            slot: 4,
+            allocation_generation: 5,
+            offset: 6,
+            length: 7,
+            lease_id: 8,
+        };
+        assert_eq!(BinaryPayload::Shared { reference }.as_inline(), None);
+        assert_eq!(
+            BinaryPayload::Attachment {
+                index: 0,
+                offset: 0,
+                length: 0,
+            }
+            .as_inline(),
+            None
+        );
+    }
+
+    #[test]
+    fn a_frame_is_length_prefixed_in_big_endian() {
+        let mut bytes = Vec::new();
+        write_message(
+            &mut bytes,
+            &ControlRequest {
+                request_id: 1,
+                command: ControlCommand::Ping,
+            },
+        )
+        .unwrap();
+
+        let length = u32::from_be_bytes(bytes[..4].try_into().unwrap()) as usize;
+        assert_eq!(length, bytes.len() - 4);
+    }
+
+    #[test]
+    fn consecutive_frames_are_read_back_in_order() {
+        let mut bytes = Vec::new();
+        for request_id in 0..3 {
+            write_message(
+                &mut bytes,
+                &ControlRequest {
+                    request_id,
+                    command: ControlCommand::Ping,
+                },
+            )
+            .unwrap();
+        }
+
+        let mut reader = bytes.as_slice();
+        for request_id in 0..3 {
+            assert_eq!(
+                read_message::<ControlRequest>(&mut reader)
+                    .unwrap()
+                    .request_id,
+                request_id
+            );
+        }
+        assert!(reader.is_empty());
+    }
+
+    #[test]
+    fn a_truncated_frame_is_reported_as_an_io_error() {
+        let mut bytes = Vec::new();
+        write_message(
+            &mut bytes,
+            &ControlRequest {
+                request_id: 1,
+                command: ControlCommand::Ping,
+            },
+        )
+        .unwrap();
+        bytes.truncate(bytes.len() - 1);
+
+        assert!(matches!(
+            read_message::<ControlRequest>(&mut bytes.as_slice()),
+            Err(ProtocolError::Io(_))
+        ));
+    }
+
+    #[test]
+    fn a_frame_that_is_not_the_expected_message_is_reported_as_a_decode_error() {
+        let mut bytes = Vec::new();
+        write_message(&mut bytes, &"not a control request".to_owned()).unwrap();
+
+        assert!(matches!(
+            read_message::<ControlRequest>(&mut bytes.as_slice()),
+            Err(ProtocolError::Decode(_))
+        ));
+    }
+
+    #[test]
+    fn a_write_that_fails_midway_surfaces_the_io_error() {
+        struct FullDisk;
+
+        impl std::io::Write for FullDisk {
+            fn write(&mut self, _buffer: &[u8]) -> std::io::Result<usize> {
+                Err(std::io::Error::other("no space left on device"))
+            }
+
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+
+        let error = write_message(
+            &mut FullDisk,
+            &ControlRequest {
+                request_id: 1,
+                command: ControlCommand::Ping,
+            },
+        )
+        .expect_err("a failing writer should surface an error");
+
+        assert!(matches!(error, ProtocolError::Io(_)));
+        assert!(error.to_string().starts_with("helper protocol I/O failed"));
+    }
+
+    #[test]
+    fn protocol_errors_describe_themselves() {
+        assert_eq!(
+            ProtocolError::MessageTooLarge(70_000_000).to_string(),
+            "helper message exceeds 64 MiB: 70000000"
+        );
+
+        let decode = read_message::<ControlRequest>(&mut [0, 0, 0, 1, 0xc1].as_slice())
+            .expect_err("0xc1 is never a valid MessagePack marker");
+        assert!(
+            decode
+                .to_string()
+                .starts_with("helper message decoding failed")
+        );
+    }
 }
