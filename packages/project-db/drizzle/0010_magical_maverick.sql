@@ -1,1 +1,0 @@
-ALTER TABLE "plugin_instances" ADD COLUMN "ara_document_state" "bytea" DEFAULT ''::bytea NOT NULL;

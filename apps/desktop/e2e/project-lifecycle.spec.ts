@@ -211,7 +211,7 @@ test("records into a Large Object and reopens the PGlite project archive", async
     await visibleMixer.getByRole("button", { name: "Use mono input for Audio 2" }).click()
     await expect
       .poll(async () => {
-        const graph = await page.evaluate(() => window.yadaw.loadMixerGraph())
+        const graph = await page.evaluate(() => window.yadaw.loadProjectGraph())
         return graph.channels.find((channel) => channel.name === "Audio 2")?.inputFormat
       })
       .toBe("mono")
@@ -226,7 +226,7 @@ test("records into a Large Object and reopens the PGlite project archive", async
     await page.getByRole("button", { name: "Enable send" }).click()
     await visibleMixer.getByRole("button", { name: "Arm Audio 1" }).click()
     await visibleMixer.getByRole("button", { name: "Arm Audio 2" }).click()
-    const mixerBeforeSave = await page.evaluate(() => window.yadaw.loadMixerGraph())
+    const mixerBeforeSave = await page.evaluate(() => window.yadaw.loadProjectGraph())
     expect(mixerBeforeSave.channels.map((channel) => channel.kind)).toEqual([
       "audio",
       "audio",
@@ -327,7 +327,7 @@ test("records into a Large Object and reopens the PGlite project archive", async
     await page.getByRole("button", { name: "Back to studio" }).click()
     await expect(page.locator(".studio-shell")).toBeVisible()
     await expect(page.getByRole("button", { name: "Pause" })).toBeVisible()
-    const mixerAfterRuntimeRestart = await page.evaluate(() => window.yadaw.loadMixerGraph())
+    const mixerAfterRuntimeRestart = await page.evaluate(() => window.yadaw.loadProjectGraph())
     expect(mixerAfterRuntimeRestart.channels.map((channel) => channel.name)).toEqual(
       mixerBeforeSave.channels.map((channel) => channel.name)
     )
@@ -355,7 +355,7 @@ test("records into a Large Object and reopens the PGlite project archive", async
     expect(importedAssets.map(({ channels }) => channels).sort()).toEqual([1, 2])
     expect(importedAssets.map(({ bitDepth }) => bitDepth)).toEqual(["float32", "float32"])
     expect(importedAssets.every(({ audioByteLength }) => audioByteLength > 0)).toBe(true)
-    const mixerAtSave = await page.evaluate(() => window.yadaw.loadMixerGraph())
+    const mixerAtSave = await page.evaluate(() => window.yadaw.loadProjectGraph())
 
     const saveProject = page.evaluate(() => window.yadaw.saveProject())
     const saveDialog = page.getByRole("dialog")
@@ -395,10 +395,10 @@ test("records into a Large Object and reopens the PGlite project archive", async
     expect(reopenedAssets).toEqual(
       importedAssets.map(({ audioByteLength: _audioByteLength, ...asset }) => asset)
     )
-    const reopenedMixer = await page.evaluate(() => window.yadaw.loadMixerGraph())
+    const reopenedMixer = await page.evaluate(() => window.yadaw.loadProjectGraph())
     expect(reopenedMixer.channels).toEqual(mixerAtSave.channels)
     expect(reopenedMixer.sends).toEqual(mixerAtSave.sends)
-    expect(reopenedMixer.clips).toHaveLength(2)
+    expect(reopenedMixer.audioClips).toHaveLength(2)
     const reopenedWaveform = await page.evaluate(async () => {
       const assets = await window.yadaw.listProjectAssets()
       const asset = assets.find(({ channels }) => channels === 2)

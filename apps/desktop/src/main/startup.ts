@@ -2,18 +2,24 @@ import { app, BrowserWindow, ipcMain } from "electron"
 import { basename, join, resolve } from "node:path"
 import { IPC_CHANNELS } from "@yadaw/contracts"
 import { ApplicationSettingsStore } from "./application-settings"
+import { AssetMaterializer } from "./asset-materializer"
+import { AudioGraphCompiler } from "./audio-graph-compiler"
+import { AudioGraphPublisher } from "./audio-graph-publisher"
 import { AudioHostService } from "./audio-host-service"
 import { installApplicationMenu } from "./application-menu"
 import { setMainLocale, t } from "./i18n"
 import { LifecycleCoordinator } from "./lifecycle-coordinator"
 import { MidiImportService } from "./midi-import-service"
-import { MixerService } from "./mixer-service"
+import { MixerRuntimeService } from "./mixer-runtime-service"
 import { OperationService } from "./operation-service"
 import { PluginCatalogService } from "./plugin-catalog-service"
+import { ProjectCommandService } from "./project-command-service"
+import { ProjectGraphService } from "./project-graph-service"
 import { ProjectService } from "./project-service"
 import { RecordingService } from "./recording-service"
 import { StartupProgress } from "./startup-progress"
 import { WaveformService } from "./waveform-service"
+import { TransportService } from "./transport-service"
 import { registerIpcHandlers } from "./ipc/register"
 import { assertTrustedSender, normalizeAudioRuntime } from "./ipc/support"
 import {
@@ -190,16 +196,25 @@ export function startApplication(
       setWindowProjectService(projectService)
       onServices({ audioHostService, projectService })
       const operations = new OperationService()
-      const mixer = new MixerService(
-        app.getPath("userData"),
-        projectService,
+      const graphPublisher = new AudioGraphPublisher(
+        new AudioGraphCompiler(),
+        new AssetMaterializer(app.getPath("userData"), projectService),
         audioHostService,
         plugins,
         settings
       )
+      const projectGraph = new ProjectGraphService(projectService, graphPublisher)
+      const projectCommands = new ProjectCommandService(
+        projectGraph,
+        projectService,
+        graphPublisher,
+        audioHostService
+      )
+      const mixerRuntime = new MixerRuntimeService(audioHostService)
+      const transport = new TransportService(projectService, audioHostService)
       plugins.attachRuntime({
         resolveInstance: async (instanceId) => {
-          const graph = await mixer.snapshot()
+          const graph = await projectGraph.snapshot()
           const plugin = graph.plugins.find((candidate) => candidate.id === instanceId)
           if (!plugin) throw new Error(`Plugin instance '${instanceId}' was not found`)
           return { plugin, sampleRate: graph.sampleRate }
@@ -220,7 +235,7 @@ export function startApplication(
           if (!audioHostService) {
             return { editorMode: "parameters" as const, open: false }
           }
-          const graph = await mixer.snapshot()
+          const graph = await projectGraph.snapshot()
           const plugin = graph.plugins.find((candidate) => candidate.id === instanceId)
           if (!plugin) throw new Error(`Plugin instance '${instanceId}' was not found`)
           const preference = await settings.pluginEditorPreference(plugin.classId)
@@ -231,12 +246,13 @@ export function startApplication(
           return audioHostService.closePluginEditor(instanceId)
         }
       })
-      const midiImport = new MidiImportService(mixer, plugins)
+      const midiImport = new MidiImportService(projectGraph, projectCommands, plugins)
       const recordings = new RecordingService(
         settings,
         projectService,
         operations,
-        mixer,
+        projectGraph,
+        transport,
         audioHostService
       )
       const waveforms = new WaveformService(settings, projectService)
@@ -246,19 +262,22 @@ export function startApplication(
         normalizeAudioRuntime(initialAudioRuntime),
         { allowRecordingWithoutAudio: process.env.YADAW_TEST_CAPTURE_SOURCE === "1" }
       )
-      registerIpcHandlers(
+      registerIpcHandlers({
         settings,
-        projectService,
+        projects: projectService,
         recordings,
         operations,
         waveforms,
-        mixer,
+        projectGraph,
+        projectCommands,
+        mixerRuntime,
+        transport,
         plugins,
         midiImport,
         lifecycle,
-        audioHostService,
+        audioHost: audioHostService,
         isShuttingDown
-      )
+      })
       startup.update({
         phase: "opening-workspace",
         progress: 0.94,

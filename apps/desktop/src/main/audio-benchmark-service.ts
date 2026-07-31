@@ -41,14 +41,12 @@ export function classifyAudioBenchmark(
 }
 
 export async function createAudioBenchmarkReport(
-  audioHost: Pick<AudioHostService, "runAudioBenchmark" | "runIpcBenchmark">,
+  audioHost: Pick<AudioHostService, "runAudioBenchmark">,
   benchmarkEffect: PluginDescriptor
 ): Promise<AudioBenchmarkReport> {
   const started = performance.now()
   const result = await audioHost.runAudioBenchmark(benchmarkEffect)
-  // Keep the CPU-bound DSP suite and IPC suite separate so neither distorts
-  // the other's latency distribution.
-  const ipc = await audioHost.runIpcBenchmark()
+  const ipc = result.ipc
   const processors = cpus()
 
   return {

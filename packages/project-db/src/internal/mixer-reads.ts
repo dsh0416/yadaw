@@ -1,7 +1,8 @@
 import { asc, eq } from "drizzle-orm"
 import type { PgliteDatabase } from "drizzle-orm/pglite"
-import type { MixerGraphSnapshot, ProjectConfiguration } from "@yadaw/contracts"
+import type { ProjectGraphSnapshot, ProjectConfiguration } from "@yadaw/contracts"
 import {
+  audioClips,
   assets,
   keySignatureEvents,
   midiClips,
@@ -11,19 +12,20 @@ import {
   mixerSends,
   pluginInstances,
   tempoEvents,
-  timelineClips,
+  tracks,
   timeSignatureEvents
 } from "../schema"
 import * as schema from "../schema"
-import { bytes, pluginDescriptor } from "./command-persistence"
+import { bytes, pluginDescriptor } from "./serialization"
 
 type ProjectDb = PgliteDatabase<typeof schema>
 
 export async function readMixerSnapshot(
   db: ProjectDb,
   configuration: ProjectConfiguration
-): Promise<MixerGraphSnapshot> {
+): Promise<ProjectGraphSnapshot> {
   const [
+    trackRows,
     channelRows,
     clipRows,
     sendRows,
@@ -35,22 +37,23 @@ export async function readMixerSnapshot(
     signatureRows,
     keySignatureRows
   ] = await Promise.all([
+    db.select().from(tracks).orderBy(asc(tracks.sortOrder), asc(tracks.id)),
     db.select().from(mixerChannels).orderBy(asc(mixerChannels.sortOrder), asc(mixerChannels.id)),
     db
       .select({
-        id: timelineClips.id,
-        assetId: timelineClips.assetId,
-        trackId: timelineClips.trackId,
-        name: timelineClips.name,
-        startFrame: timelineClips.startFrame,
-        sourceOffsetFrames: timelineClips.sourceOffsetFrames,
-        lengthFrames: timelineClips.lengthFrames,
+        id: audioClips.id,
+        assetId: audioClips.assetId,
+        trackId: audioClips.trackId,
+        name: audioClips.name,
+        startFrame: audioClips.startFrame,
+        sourceOffsetFrames: audioClips.sourceOffsetFrames,
+        lengthFrames: audioClips.lengthFrames,
         assetSampleRate: assets.sampleRate,
         assetChannels: assets.channels
       })
-      .from(timelineClips)
-      .innerJoin(assets, eq(assets.id, timelineClips.assetId))
-      .orderBy(asc(timelineClips.startFrame), asc(timelineClips.id)),
+      .from(audioClips)
+      .innerJoin(assets, eq(assets.id, audioClips.assetId))
+      .orderBy(asc(audioClips.startFrame), asc(audioClips.id)),
     db
       .select()
       .from(mixerSends)
@@ -92,7 +95,7 @@ export async function readMixerSnapshot(
       left.id.localeCompare(right.id)
   )
 
-  const notesByClip = new Map<string, MixerGraphSnapshot["midiClips"][number]["notes"]>()
+  const notesByClip = new Map<string, ProjectGraphSnapshot["midiClips"][number]["notes"]>()
   for (const note of midiNoteRows) {
     const notes = notesByClip.get(note.clipId) ?? []
     notes.push({
@@ -106,7 +109,7 @@ export async function readMixerSnapshot(
     })
     notesByClip.set(note.clipId, notes)
   }
-  const eventsByClip = new Map<string, MixerGraphSnapshot["midiClips"][number]["events"]>()
+  const eventsByClip = new Map<string, ProjectGraphSnapshot["midiClips"][number]["events"]>()
   for (const event of midiEventRows) {
     const events = eventsByClip.get(event.clipId) ?? []
     events.push({
@@ -121,6 +124,7 @@ export async function readMixerSnapshot(
 
   return {
     sampleRate: configuration.sampleRate,
+    tracks: trackRows,
     channels: channelRows.map((channel) => ({
       id: channel.id,
       kind: channel.kind,
@@ -149,7 +153,7 @@ export async function readMixerSnapshot(
       inputChannels: channel.inputChannels,
       hardwareOutputChannels: channel.hardwareOutputChannels
     })),
-    clips: clipRows.map((clip) => ({
+    audioClips: clipRows.map((clip) => ({
       ...clip,
       startFrame: Number(clip.startFrame),
       sourceOffsetFrames: Number(clip.sourceOffsetFrames),

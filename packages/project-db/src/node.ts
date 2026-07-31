@@ -6,7 +6,7 @@ import { drizzle } from "drizzle-orm/pglite"
 import type { PgliteDatabase } from "drizzle-orm/pglite"
 import { migrate as runMigrations } from "drizzle-orm/pglite/migrator"
 import type {
-  MixerGraphSnapshot,
+  ProjectGraphSnapshot,
   ProjectAssetSummary,
   ProjectCommand,
   ProjectConfiguration
@@ -30,6 +30,7 @@ import {
   pluginInstances,
   project,
   tempoEvents,
+  tracks,
   timeSignatureEvents
 } from "./schema"
 import * as schema from "./schema"
@@ -176,6 +177,11 @@ export class ProjectDatabase {
             hardwareOutputChannels: []
           }
         ])
+        await tx.insert(tracks).values({
+          id: "track:audio-1",
+          channelId: "audio-1",
+          sortOrder: 0
+        })
         await tx.insert(pluginInstances).values({
           id: "metronome-instrument",
           channelId: "metronome",
@@ -307,7 +313,7 @@ export class ProjectDatabase {
       .orderBy(asc(assets.createdAt), asc(assets.id))
   }
 
-  async mixerSnapshot(): Promise<MixerGraphSnapshot> {
+  async mixerSnapshot(): Promise<ProjectGraphSnapshot> {
     return readMixerSnapshot(this.db, await this.getConfiguration())
   }
 

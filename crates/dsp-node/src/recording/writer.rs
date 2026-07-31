@@ -1,4 +1,12 @@
 #[cfg(any(test, feature = "bench-internals"))]
+use super::*;
+#[cfg(any(test, feature = "bench-internals"))]
+use super::{
+    waveform::LiveWaveform,
+    writer_format::{broadcast_metadata, float_format, recording_error},
+};
+
+#[cfg(any(test, feature = "bench-internals"))]
 enum WriterCommand {
     Start {
         config: NativeRecordingStartConfig,

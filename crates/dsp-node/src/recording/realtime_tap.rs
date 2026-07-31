@@ -1,9 +1,12 @@
 #[cfg(any(test, feature = "bench-internals"))]
+use super::*;
+
+#[cfg(any(test, feature = "bench-internals"))]
 pub struct RecordingTap {
-    producer: HeapProd<InputFrame>,
-    active: Arc<AtomicBool>,
-    dropout_frames: Arc<AtomicU64>,
-    channel_count: usize,
+    pub(super) producer: HeapProd<InputFrame>,
+    pub(super) active: Arc<AtomicBool>,
+    pub(super) dropout_frames: Arc<AtomicU64>,
+    pub(super) channel_count: usize,
 }
 
 #[cfg(any(test, feature = "bench-internals"))]

@@ -1,3 +1,8 @@
+use super::graph::{
+    add, db_to_gain, graph_edges, scale, solo_audibility, topological_order, valid_db, valid_pan,
+};
+use super::*;
+
 impl MixerGraph {
     pub fn new(
         sample_rate: u32,
@@ -70,11 +75,7 @@ impl MixerGraph {
         }
         let block_bus_count = channels
             .iter()
-            .filter_map(|channel| {
-                channel
-                    .input_bus
-                    .map(|[left, right]| left.max(right))
-            })
+            .filter_map(|channel| channel.input_bus.map(|[left, right]| left.max(right)))
             .chain(channels.iter().filter_map(|channel| match channel.output {
                 Some(RouteTarget::Bus(bus)) => Some(bus),
                 Some(RouteTarget::Output(_)) | None => None,
@@ -290,10 +291,8 @@ impl MixerGraph {
                 } else {
                     1.0
                 };
-                let post_fader =
-                    scale(pre, self.channel_runtime[index].gain.next() * gate);
-                let post =
-                    balance_stereo(post_fader, self.channel_runtime[index].pan.next());
+                let post_fader = scale(pre, self.channel_runtime[index].gain.next() * gate);
+                let post = balance_stereo(post_fader, self.channel_runtime[index].pan.next());
 
                 for &send_index in &self.sends_by_source[index] {
                     let send = &self.sends[send_index];

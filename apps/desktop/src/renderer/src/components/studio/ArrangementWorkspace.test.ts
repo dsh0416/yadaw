@@ -45,6 +45,10 @@ describe("ArrangementWorkspace", () => {
     const mixer = useMixerStore()
     mixer.graph = {
       sampleRate: 48_000,
+      tracks: [
+        { id: "track:audio-1", channelId: "audio-1", sortOrder: 0 },
+        { id: "track:audio-2", channelId: "audio-2", sortOrder: 1 }
+      ],
       channels: [
         {
           id: "audio-1",
@@ -123,11 +127,11 @@ describe("ArrangementWorkspace", () => {
           hardwareOutputChannels: [1, 2]
         }
       ],
-      clips: [
+      audioClips: [
         {
           id: recordingAsset.id,
           assetId: recordingAsset.id,
-          trackId: "audio-1",
+          trackId: "track:audio-1",
           name: "First take",
           startFrame: 0,
           sourceOffsetFrames: 0,
@@ -257,7 +261,7 @@ describe("ArrangementWorkspace", () => {
     expect(wrapper.findAll<HTMLElement>(".track-lane")[1]?.element.style.height).toBe("104px")
 
     await resizeHandles[0]?.trigger("keydown", { key: "ArrowDown" })
-    expect(arrangementView.trackScale("audio-1")).toBe(1.25)
+    expect(arrangementView.trackScale("track:audio-1")).toBe(1.25)
     expect(wrapper.findAll<HTMLElement>(".track-lane")[0]?.element.style.height).toBe("130px")
     expect(wrapper.findAll<HTMLElement>(".track-lane")[1]?.element.style.height).toBe("104px")
 
@@ -270,7 +274,7 @@ describe("ArrangementWorkspace", () => {
     ).toContain("150px 120px")
 
     await resizeHandles[0]?.trigger("dblclick")
-    expect(arrangementView.trackScale("audio-1")).toBe(1)
+    expect(arrangementView.trackScale("track:audio-1")).toBe(1)
     expect(wrapper.findAll<HTMLElement>(".track-lane")[0]?.element.style.height).toBe("120px")
 
     const updateChannel = vi.spyOn(mixer, "updateChannel").mockResolvedValue(true)
@@ -307,6 +311,7 @@ describe("ArrangementWorkspace", () => {
     const mixer = useMixerStore()
     mixer.graph = {
       sampleRate: 48_000,
+      tracks: [{ id: "track:audio-1", channelId: "audio-1", sortOrder: 0 }],
       channels: [
         {
           id: "audio-1",
@@ -366,7 +371,7 @@ describe("ArrangementWorkspace", () => {
           hardwareOutputChannels: [1, 2]
         }
       ],
-      clips: [],
+      audioClips: [],
       sends: [],
       plugins: [],
       midiClips: [],
@@ -459,8 +464,15 @@ describe("ArrangementWorkspace", () => {
     ]
     mixer.graph = {
       sampleRate: 48_000,
+      tracks: channels
+        .filter((channel) => channel.kind === "audio" || channel.kind === "instrument")
+        .map((channel) => ({
+          id: `track:${channel.id}`,
+          channelId: channel.id,
+          sortOrder: channel.sortOrder
+        })),
       channels,
-      clips: [],
+      audioClips: [],
       sends: [],
       plugins: [],
       midiClips: [],
@@ -504,6 +516,7 @@ describe("ArrangementWorkspace", () => {
     const mixer = useMixerStore()
     mixer.graph = {
       sampleRate: 48_000,
+      tracks: [{ id: "track:instrument-1", channelId: "instrument-1", sortOrder: 0 }],
       channels: [
         {
           id: "instrument-1",
@@ -563,7 +576,7 @@ describe("ArrangementWorkspace", () => {
           hardwareOutputChannels: [1, 2]
         }
       ],
-      clips: [],
+      audioClips: [],
       sends: [],
       plugins: [],
       midiClips: [],
@@ -614,7 +627,7 @@ describe("ArrangementWorkspace", () => {
           clip: {
             id: "00000000-0000-4000-8000-000000000002",
             sourceId: "00000000-0000-4000-8000-000000000001",
-            trackId: "instrument-1",
+            trackId: "track:instrument-1",
             name: "MIDI Clip 1",
             startTick: 960,
             lengthTicks: 3_840,

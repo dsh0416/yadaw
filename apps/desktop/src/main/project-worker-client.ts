@@ -1,6 +1,6 @@
 import { Worker } from "node:worker_threads"
 import type {
-  MixerGraphSnapshot,
+  ProjectGraphSnapshot,
   ProjectAssetSummary,
   ProjectCommand,
   ProjectConfiguration
@@ -13,20 +13,24 @@ import type {
   PluginStateInput,
   StoredWaveformWindow,
   WaveformAssetInput,
+  WorkerOperation,
   WorkerProgress,
-  WorkerRequest,
-  WorkerResponse
+  WorkerRequestInput,
+  WorkerResponse,
+  WorkerResult,
+  WorkerResultMap
 } from "@yadaw/project-db/protocol"
 
-type RequestWithoutId = WorkerRequest extends infer Request
-  ? Request extends { id: number }
-    ? Omit<Request, "id">
-    : never
-  : never
-
 interface PendingCall {
-  resolve(value: unknown): void
+  settle(message: WorkerResponse): void
   reject(error: Error): void
+}
+
+function workerError(response: Extract<WorkerResponse, { ok: false }>): Error {
+  const error = new Error(response.error.message)
+  error.stack = response.error.stack
+  if (response.error.code) Object.assign(error, { code: response.error.code })
+  return error
 }
 
 export class ProjectWorkerClient {
@@ -47,13 +51,7 @@ export class ProjectWorkerClient {
       const call = this.pending.get(message.id)
       if (!call) return
       this.pending.delete(message.id)
-      if (message.ok) call.resolve(message.value)
-      else {
-        const error = new Error(message.error.message)
-        error.stack = message.error.stack
-        if (message.error.code) Object.assign(error, { code: message.error.code })
-        call.reject(error)
-      }
+      call.settle(message)
     })
     this.worker.on("error", (error: unknown) => {
       this.rejectAll(error instanceof Error ? error : new Error(String(error)))
@@ -68,11 +66,29 @@ export class ProjectWorkerClient {
     this.pending.clear()
   }
 
-  private call<T>(request: RequestWithoutId): Promise<T> {
+  private call<K extends WorkerOperation>(
+    request: WorkerRequestInput<K>
+  ): Promise<WorkerResultMap[K]>
+  private call(request: WorkerRequestInput<WorkerOperation>): Promise<WorkerResult> {
     const id = this.nextId++
-    return new Promise<T>((resolve, reject) => {
-      this.pending.set(id, { resolve: resolve, reject })
-      this.worker.postMessage({ id, ...request } satisfies WorkerRequest)
+    return new Promise<WorkerResult>((resolve, reject) => {
+      this.pending.set(id, {
+        settle: (message) => {
+          if (message.type !== request.type) {
+            reject(
+              new Error(
+                `Project worker response mismatch: expected '${request.type}', received '${message.type}'`
+              )
+            )
+          } else if (message.ok) {
+            resolve(message.value)
+          } else {
+            reject(workerError(message))
+          }
+        },
+        reject
+      })
+      this.worker.postMessage({ id, ...request })
     })
   }
 
@@ -105,7 +121,7 @@ export class ProjectWorkerClient {
     return this.call({ type: "list-assets" })
   }
 
-  mixerSnapshot(): Promise<MixerGraphSnapshot> {
+  mixerSnapshot(): Promise<ProjectGraphSnapshot> {
     return this.call({ type: "mixer-snapshot" })
   }
 

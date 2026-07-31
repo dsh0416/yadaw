@@ -12,8 +12,9 @@ import type {
 } from "@yadaw/contracts"
 import type { NativeMidiTrack, NativeNormalizedSmf } from "@yadaw/dsp-node"
 import { MidiImportService } from "./midi-import-service"
-import type { MixerService } from "./mixer-service"
 import type { PluginCatalogService } from "./plugin-catalog-service"
+import type { ProjectCommandService } from "./project-command-service"
+import type { ProjectGraphService } from "./project-graph-service"
 
 const parseMidiFile = vi.hoisted(() => vi.fn())
 
@@ -113,18 +114,32 @@ function createService(
   } = {}
 ): Harness {
   const mixer = {
-    snapshot: vi.fn(async () => ({
-      sampleRate: 48_000,
-      channels: options.channels ?? [
+    snapshot: vi.fn(async () => {
+      const channels = options.channels ?? [
         channel({ id: "output-1", kind: "output", name: "Output 1–2" })
-      ],
-      plugins: options.plugins ?? [],
-      tempoMap: {
-        ticksPerQuarter: MUSICAL_TICKS_PER_QUARTER,
-        tempoEvents: [{ tick: 0, beatsPerMinute: 120 }],
-        timeSignatureEvents: [{ tick: 0, numerator: 4, denominator: 4 }]
+      ]
+      return {
+        sampleRate: 48_000,
+        tracks: channels
+          .filter(
+            (candidate) =>
+              candidate.systemRole === null &&
+              (candidate.kind === "audio" || candidate.kind === "instrument")
+          )
+          .map((candidate) => ({
+            id: `track:${candidate.id}`,
+            channelId: candidate.id,
+            sortOrder: candidate.sortOrder
+          })),
+        channels,
+        plugins: options.plugins ?? [],
+        tempoMap: {
+          ticksPerQuarter: MUSICAL_TICKS_PER_QUARTER,
+          tempoEvents: [{ tick: 0, beatsPerMinute: 120 }],
+          timeSignatureEvents: [{ tick: 0, numerator: 4, denominator: 4 }]
+        }
       }
-    })),
+    }),
     executeMidiImport: vi.fn(async () => ({ ok: true }))
   }
   const plugins = { list: vi.fn(() => ({ plugins: options.descriptors ?? [descriptor()] })) }
@@ -133,7 +148,8 @@ function createService(
     mixer,
     plugins,
     service: new MidiImportService(
-      mixer as unknown as MixerService,
+      mixer as unknown as ProjectGraphService,
+      mixer as unknown as ProjectCommandService,
       plugins as unknown as PluginCatalogService
     )
   }
@@ -333,7 +349,7 @@ describe("commit", () => {
 
     await service.commit(plan({ token }))
 
-    const created = commandsFrom(mixer).find((command) => command.type === "create-channel")
+    const created = commandsFrom(mixer).find((command) => command.type === "create-track")
     expect(created).toMatchObject({
       channel: {
         kind: "instrument",
@@ -357,7 +373,7 @@ describe("commit", () => {
       })
     )
 
-    expect(commandsFrom(mixer).find((command) => command.type === "create-channel")).toMatchObject({
+    expect(commandsFrom(mixer).find((command) => command.type === "create-track")).toMatchObject({
       channel: { name: "Lead" }
     })
   })
@@ -375,7 +391,7 @@ describe("commit", () => {
 
     await service.commit(plan({ token }))
 
-    expect(commandsFrom(mixer).find((command) => command.type === "create-channel")).toMatchObject({
+    expect(commandsFrom(mixer).find((command) => command.type === "create-track")).toMatchObject({
       channel: { name: "Instrument 2", sortOrder: 1 }
     })
   })
@@ -387,11 +403,11 @@ describe("commit", () => {
     await service.commit(plan({ token }))
 
     const commands = commandsFrom(mixer)
-    const created = commands.find((command) => command.type === "create-channel")
+    const created = commands.find((command) => command.type === "create-track")
     const clip = commands.find((command) => command.type === "create-midi-clip")
     expect(clip).toMatchObject({
       clip: {
-        trackId: created?.type === "create-channel" ? created.channel.id : undefined,
+        trackId: created?.type === "create-track" ? created.track.id : undefined,
         name: "Piano",
         startTick: 0,
         lengthTicks: 1_920,
@@ -482,15 +498,19 @@ describe("commit", () => {
       plan({
         token,
         tracks: [
-          { sourceTrack: 0, sequence: 0, target: { type: "existing", channelId: "instrument-1" } }
+          {
+            sourceTrack: 0,
+            sequence: 0,
+            target: { type: "existing", trackId: "track:instrument-1" }
+          }
         ]
       })
     )
 
     const commands = commandsFrom(mixer)
-    expect(commands.some((command) => command.type === "create-channel")).toBe(false)
+    expect(commands.some((command) => command.type === "create-track")).toBe(false)
     const clip = commands.find((command) => command.type === "create-midi-clip")
-    expect(clip?.type === "create-midi-clip" && clip.clip.trackId).toBe("instrument-1")
+    expect(clip?.type === "create-midi-clip" && clip.clip.trackId).toBe("track:instrument-1")
   })
 
   it("refuses to target an audio track, a system track, or a missing track", async () => {
@@ -500,7 +520,7 @@ describe("commit", () => {
       channel({ id: "metronome", kind: "instrument", systemRole: "metronome" })
     ]
 
-    for (const channelId of ["audio-1", "metronome", "nope"]) {
+    for (const trackId of ["track:audio-1", "track:metronome", "track:nope"]) {
       const { service } = createService({ channels })
       const { token } = await service.prepare(midiPath)
 
@@ -508,10 +528,10 @@ describe("commit", () => {
         service.commit(
           plan({
             token,
-            tracks: [{ sourceTrack: 0, sequence: 0, target: { type: "existing", channelId } }]
+            tracks: [{ sourceTrack: 0, sequence: 0, target: { type: "existing", trackId } }]
           })
         ),
-        channelId
+        trackId
       ).rejects.toThrow("MIDI clips can only be imported to Instrument tracks")
     }
   })
@@ -583,7 +603,7 @@ describe("commit", () => {
             sequence: 0,
             target: {
               type: "existing",
-              channelId: "instrument-1",
+              trackId: "track:instrument-1",
               instrumentClassId: "sine-class"
             }
           }

@@ -1,3 +1,6 @@
+use super::writer_format::{broadcast_metadata, float_stereo_format, recording_error};
+use super::*;
+
 #[napi]
 pub fn write_deterministic_test_recording(
     config: NativeRecordingStartConfig,
@@ -161,9 +164,10 @@ pub mod bench_support {
         traits::{Consumer, Split},
     };
 
-    use super::{
-        InputFrame, LiveWaveform, MAX_INPUT_CHANNELS, NativeFinalizeRecordingConfig,
-        NativeRecordingStartConfig, RecorderController, RecordingTap, finalize, float_format,
+    use crate::recording::{
+        InputFrame, MAX_INPUT_CHANNELS, NativeFinalizeRecordingConfig, NativeRecordingStartConfig,
+        RecorderController, RecordingTap, finalize::finalize, waveform::LiveWaveform,
+        writer_format::float_format,
     };
 
     pub fn write_float_fixture(

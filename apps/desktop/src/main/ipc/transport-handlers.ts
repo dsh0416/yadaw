@@ -4,7 +4,7 @@ import type { TransportCommand } from "@yadaw/contracts"
 import type { IpcHandlerContext } from "./context"
 import { assertTrustedSender } from "./support"
 export function registerTransportHandlers(context: IpcHandlerContext): void {
-  const { lifecycle, mixer, isShuttingDown } = context
+  const { lifecycle, transport, isShuttingDown } = context
   ipcMain.handle(IPC_CHANNELS.transportCommand, (event, value: unknown) => {
     assertTrustedSender(event)
     if (
@@ -23,7 +23,7 @@ export function registerTransportHandlers(context: IpcHandlerContext): void {
         sampleRate: lifecycle.snapshot().audio.runtime.sampleRate ?? 0
       }
     }
-    return mixer.transport(command)
+    return transport.command(command)
   })
 
   ipcMain.handle(IPC_CHANNELS.transportSnapshot, (event) => {
@@ -35,6 +35,6 @@ export function registerTransportHandlers(context: IpcHandlerContext): void {
         sampleRate: lifecycle.snapshot().audio.runtime.sampleRate ?? 0
       }
     }
-    return mixer.transportSnapshot()
+    return transport.snapshot()
   })
 }

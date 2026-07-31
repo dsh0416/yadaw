@@ -289,8 +289,24 @@ export const mixerChannels = pgTable(
   ]
 )
 
-export const timelineClips = pgTable(
-  "timeline_clips",
+export const tracks = pgTable(
+  "tracks",
+  {
+    id: text("id").primaryKey(),
+    channelId: text("channel_id")
+      .notNull()
+      .references(() => mixerChannels.id, { onDelete: "cascade" }),
+    sortOrder: integer("sort_order").notNull()
+  },
+  (table) => [
+    uniqueIndex("tracks_channel_id_unique").on(table.channelId),
+    index("tracks_sort_order_index").on(table.sortOrder, table.id),
+    check("tracks_sort_order_check", sql`${table.sortOrder} >= 0`)
+  ]
+)
+
+export const audioClips = pgTable(
+  "audio_clips",
   {
     id: text("id").primaryKey(),
     assetId: text("asset_id")
@@ -298,7 +314,7 @@ export const timelineClips = pgTable(
       .references(() => assets.id, { onDelete: "cascade" }),
     trackId: text("track_id")
       .notNull()
-      .references(() => mixerChannels.id, { onDelete: "cascade" }),
+      .references(() => tracks.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     startFrame: int8BigInt("start_frame").notNull(),
     sourceOffsetFrames: int8BigInt("source_offset_frames")
@@ -307,11 +323,11 @@ export const timelineClips = pgTable(
     lengthFrames: int8BigInt("length_frames").notNull()
   },
   (table) => [
-    index("timeline_clips_track_start").on(table.trackId, table.startFrame),
-    check("timeline_clips_name_check", sql`length(trim(${table.name})) > 0`),
-    check("timeline_clips_start_frame_check", sql`${table.startFrame} >= 0`),
-    check("timeline_clips_source_offset_frames_check", sql`${table.sourceOffsetFrames} >= 0`),
-    check("timeline_clips_length_frames_check", sql`${table.lengthFrames} > 0`)
+    index("audio_clips_track_start").on(table.trackId, table.startFrame),
+    check("audio_clips_name_check", sql`length(trim(${table.name})) > 0`),
+    check("audio_clips_start_frame_check", sql`${table.startFrame} >= 0`),
+    check("audio_clips_source_offset_frames_check", sql`${table.sourceOffsetFrames} >= 0`),
+    check("audio_clips_length_frames_check", sql`${table.lengthFrames} > 0`)
   ]
 )
 
@@ -462,7 +478,7 @@ export const midiClips = pgTable(
       .references(() => midiSources.id, { onDelete: "restrict" }),
     trackId: text("track_id")
       .notNull()
-      .references(() => mixerChannels.id, { onDelete: "cascade" }),
+      .references(() => tracks.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     startTick: int8Number("start_tick").notNull(),
     lengthTicks: int8Number("length_ticks").notNull(),
@@ -542,7 +558,7 @@ export const midiEvents = pgTable(
 
 export const assetsRelations = relations(assets, ({ many }) => ({
   waveformLevels: many(assetWaveformLevels),
-  timelineClips: many(timelineClips)
+  audioClips: many(audioClips)
 }))
 
 export const assetWaveformLevelsRelations = relations(assetWaveformLevels, ({ one }) => ({
@@ -559,21 +575,29 @@ export const mixerChannelsRelations = relations(mixerChannels, ({ many, one }) =
     relationName: "channelOutput"
   }),
   routedChannels: many(mixerChannels, { relationName: "channelOutput" }),
-  timelineClips: many(timelineClips),
-  midiClips: many(midiClips),
+  track: one(tracks),
   plugins: many(pluginInstances),
   sourcedSends: many(mixerSends, { relationName: "sendSource" }),
   targetedSends: many(mixerSends, { relationName: "sendTarget" })
 }))
 
-export const timelineClipsRelations = relations(timelineClips, ({ one }) => ({
+export const tracksRelations = relations(tracks, ({ many, one }) => ({
+  channel: one(mixerChannels, {
+    fields: [tracks.channelId],
+    references: [mixerChannels.id]
+  }),
+  audioClips: many(audioClips),
+  midiClips: many(midiClips)
+}))
+
+export const audioClipsRelations = relations(audioClips, ({ one }) => ({
   asset: one(assets, {
-    fields: [timelineClips.assetId],
+    fields: [audioClips.assetId],
     references: [assets.id]
   }),
-  track: one(mixerChannels, {
-    fields: [timelineClips.trackId],
-    references: [mixerChannels.id]
+  track: one(tracks, {
+    fields: [audioClips.trackId],
+    references: [tracks.id]
   })
 }))
 
@@ -606,9 +630,9 @@ export const midiClipsRelations = relations(midiClips, ({ many, one }) => ({
     fields: [midiClips.sourceId],
     references: [midiSources.id]
   }),
-  track: one(mixerChannels, {
+  track: one(tracks, {
     fields: [midiClips.trackId],
-    references: [mixerChannels.id]
+    references: [tracks.id]
   }),
   notes: many(midiNotes),
   events: many(midiEvents)
@@ -632,7 +656,8 @@ export type Project = typeof project.$inferSelect
 export type Asset = typeof assets.$inferSelect
 export type AssetWaveformLevel = typeof assetWaveformLevels.$inferSelect
 export type MixerChannel = typeof mixerChannels.$inferSelect
-export type TimelineClip = typeof timelineClips.$inferSelect
+export type Track = typeof tracks.$inferSelect
+export type AudioClip = typeof audioClips.$inferSelect
 export type MixerSend = typeof mixerSends.$inferSelect
 export type PluginInstance = typeof pluginInstances.$inferSelect
 export type TempoEvent = typeof tempoEvents.$inferSelect

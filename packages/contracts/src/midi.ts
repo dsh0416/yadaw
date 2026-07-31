@@ -168,7 +168,7 @@ export interface MidiImportPreview {
 
 export type MidiImportTrackTarget =
   | { type: "ignore" }
-  | { type: "existing"; channelId: string; instrumentClassId?: string }
+  | { type: "existing"; trackId: string; instrumentClassId?: string }
   | { type: "new"; name?: string; instrumentClassId?: string }
 
 export interface MidiImportPlan {

@@ -1,5 +1,5 @@
 import { decode, encode } from "@msgpack/msgpack"
-import type { MixerGraphSnapshot } from "@yadaw/contracts"
+import type { ProjectGraphSnapshot } from "@yadaw/contracts"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const fakeHost = vi.hoisted(() => {
@@ -18,6 +18,9 @@ const fakeHost = vi.hoisted(() => {
 
   class Client {
     static instances: Client[] = []
+    static failNextAudioBenchmark = false
+    static failNextIpcBenchmark = false
+    static deferNextAudioBenchmark = false
 
     readonly commands: Array<Record<string, unknown>> = []
     readonly heartbeatDeferred = new Deferred<{ body: Buffer; attachments: Buffer[] }>()
@@ -27,6 +30,7 @@ const fakeHost = vi.hoisted(() => {
     heartbeatCalls = 0
     closed = false
     failAudioBenchmark = false
+    failIpcBenchmark = false
     audioBenchmarkDeferred: Deferred<void> | null = null
     engineState: "running" | "stopped" = "stopped"
     sessionSampleRate = 48_000
@@ -43,10 +47,21 @@ const fakeHost = vi.hoisted(() => {
     }
 
     constructor(..._arguments: unknown[]) {
+      this.failAudioBenchmark = Client.failNextAudioBenchmark
+      Client.failNextAudioBenchmark = false
+      this.failIpcBenchmark = Client.failNextIpcBenchmark
+      Client.failNextIpcBenchmark = false
+      if (Client.deferNextAudioBenchmark) {
+        this.audioBenchmarkDeferred = new Deferred<void>()
+        Client.deferNextAudioBenchmark = false
+      }
       Client.instances.push(this)
     }
 
-    request(payload: Buffer): Promise<{ body: Buffer; attachments: Buffer[] }> {
+    request(
+      payload: Buffer,
+      attachments: Buffer[] = []
+    ): Promise<{ body: Buffer; attachments: Buffer[] }> {
       const request = decode(payload) as {
         request_id: number
         command: Record<string, unknown> & {
@@ -54,10 +69,10 @@ const fakeHost = vi.hoisted(() => {
         }
       }
       this.commands.push(request.command)
-      const response = (result: Record<string, unknown>) =>
+      const response = (result: Record<string, unknown>, responseAttachments: Buffer[] = []) =>
         Promise.resolve({
           body: Buffer.from(encode({ request_id: request.request_id, result })),
-          attachments: []
+          attachments: responseAttachments
         })
 
       if (request.command.type === "audio-engine-snapshot") {
@@ -77,6 +92,13 @@ const fakeHost = vi.hoisted(() => {
         return response({
           type: "audio-runtime",
           runtime: runtime("running", this.sessionSampleRate, this.outputSampleRate)
+        })
+      }
+      if (request.command.type === "stop-audio-engine") {
+        this.engineState = "stopped"
+        return response({
+          type: "audio-runtime",
+          runtime: runtime("stopped", this.sessionSampleRate, this.outputSampleRate)
         })
       }
       if (request.command.type === "start-round-trip-latency-measurement") {
@@ -151,6 +173,19 @@ const fakeHost = vi.hoisted(() => {
           ? this.audioBenchmarkDeferred.promise.then(() => response(report))
           : response(report)
       }
+      if (request.command.type === "benchmark-echo") {
+        if (this.failIpcBenchmark) {
+          this.failIpcBenchmark = false
+          return response({ type: "error", message: "ipc benchmark failed" })
+        }
+        return response(
+          {
+            type: "benchmark-echo",
+            payload: request.command.payload
+          },
+          attachments
+        )
+      }
       return response({ type: "accepted" })
     }
 
@@ -190,7 +225,19 @@ const fakeHost = vi.hoisted(() => {
     }
 
     transportDiagnostics(): Buffer {
-      return Buffer.from(encode([]))
+      return Buffer.from(
+        encode([
+          "0123456789abcdef",
+          "test-session",
+          [0, 0, 256, 0],
+          [0, 0, 256, 128 * 1024 * 1024, 0, 0, 0, 0, 0],
+          0,
+          [1, 1, this.graphRevision, 0, 0, 0],
+          [0, 4096, 0, 0, 0, 0],
+          false,
+          [2, 4, 2, 0, 0, 0, 0, 0, 0, 0, 0]
+        ])
+      )
     }
 
     drainEvents(): Buffer[] {
@@ -242,14 +289,14 @@ import type { AudioHostGraph } from "./audio-host-service"
 import type { PluginDescriptor } from "@yadaw/contracts"
 
 function graph(sampleRate: number): {
-  project: MixerGraphSnapshot
+  project: ProjectGraphSnapshot
   runtime: AudioHostGraph
 } {
   return {
     project: {
       sampleRate,
       plugins: []
-    } as unknown as MixerGraphSnapshot,
+    } as unknown as ProjectGraphSnapshot,
     runtime: {
       sample_rate: sampleRate,
       channels: [],
@@ -267,6 +314,9 @@ describe("AudioHostService recovery", () => {
   beforeEach(() => {
     vi.useFakeTimers()
     fakeHost.Client.instances.length = 0
+    fakeHost.Client.failNextAudioBenchmark = false
+    fakeHost.Client.failNextIpcBenchmark = false
+    fakeHost.Client.deferNextAudioBenchmark = false
   })
 
   afterEach(() => {
@@ -432,7 +482,7 @@ describe("AudioHostService recovery", () => {
     await service.stop()
   })
 
-  it("unloads audio benchmark VST3 instances after success and failure", async () => {
+  it("runs the complete benchmark in an isolated one-shot helper", async () => {
     const effect = {
       kind: "effect",
       compatibility: "compatible",
@@ -454,40 +504,37 @@ describe("AudioHostService recovery", () => {
       async () => {}
     )
     service.start()
-    const client = fakeHost.Client.instances[0]!
+    const primary = fakeHost.Client.instances[0]!
 
-    await service.runAudioBenchmark(effect)
-    const commandTypes = client.commands.map((command) => command.type)
+    const result = await service.runAudioBenchmark(effect)
+    const benchmarkClient = fakeHost.Client.instances[1]!
+    const commandTypes = benchmarkClient.commands.map((command) => command.type)
     const firstBenchmark = commandTypes.indexOf("run-audio-benchmark")
     expect(commandTypes.slice(0, firstBenchmark)).toEqual(Array(64).fill("load-plugin"))
     expect(commandTypes.slice(firstBenchmark, firstBenchmark + 1)).toEqual(["run-audio-benchmark"])
-    expect(commandTypes.slice(firstBenchmark + 1)).toEqual(Array(64).fill("unload-plugin"))
-    const unloadIds = client.commands
-      .filter((command) => command.type === "unload-plugin")
-      .map((command) => command.instance_id)
-    expect(unloadIds[0]).toBe("__yadaw-audio-benchmark-gain-0")
-    expect(unloadIds[63]).toBe("__yadaw-audio-benchmark-gain-63")
-    expect(
-      (
-        service as unknown as { plugins: { loadedInstanceIds(): string[] } }
-      ).plugins.loadedInstanceIds()
-    ).toEqual([])
+    expect(commandTypes.filter((type) => type === "unload-plugin")).toHaveLength(0)
+    expect(commandTypes.filter((type) => type === "benchmark-echo").length).toBeGreaterThan(0)
+    expect(result.ipc.scenarios.length).toBeGreaterThan(0)
+    expect(primary.commands.some((command) => command.type === "load-plugin")).toBe(false)
+    expect(primary.closed).toBe(false)
+    expect(benchmarkClient.closed).toBe(true)
 
-    client.commands.length = 0
-    client.failAudioBenchmark = true
-    await expect(service.runAudioBenchmark(effect)).rejects.toThrow("benchmark failed")
-    expect(client.commands.filter((command) => command.type === "unload-plugin")).toHaveLength(64)
-    expect(
-      (
-        service as unknown as { plugins: { loadedInstanceIds(): string[] } }
-      ).plugins.loadedInstanceIds()
-    ).toEqual([])
+    fakeHost.Client.failNextAudioBenchmark = true
+    await expect(service.runAudioBenchmark(effect)).rejects.toThrow(
+      "audio DSP benchmark failed: benchmark failed"
+    )
+    expect(fakeHost.Client.instances[2]?.closed).toBe(true)
+
+    fakeHost.Client.failNextIpcBenchmark = true
+    await expect(service.runAudioBenchmark(effect)).rejects.toThrow(
+      "audio IPC benchmark failed: ipc benchmark failed"
+    )
+    expect(fakeHost.Client.instances[3]?.closed).toBe(true)
 
     await service.stop()
   })
 
-  it("does not recover a healthy helper when a heartbeat expires during the audio benchmark", async () => {
-    const failures: string[] = []
+  it("keeps project requests on the primary helper while the isolated benchmark runs", async () => {
     const effect = {
       kind: "effect",
       compatibility: "compatible",
@@ -504,37 +551,34 @@ describe("AudioHostService recovery", () => {
         egressConcurrency: "auto"
       },
       undefined,
-      (message) => failures.push(message),
+      () => {},
       async () => {}
     )
     service.start()
-    const client = fakeHost.Client.instances[0]!
+    const primary = fakeHost.Client.instances[0]!
     await service.audioEngineSnapshot()
 
-    await vi.advanceTimersByTimeAsync(250)
-    expect(client.heartbeatCalls).toBe(1)
-
-    client.audioBenchmarkDeferred = new fakeHost.Deferred<void>()
+    fakeHost.Client.deferNextAudioBenchmark = true
     const benchmark = service.runAudioBenchmark(effect)
+    await vi.waitFor(() => expect(fakeHost.Client.instances).toHaveLength(2))
+    const benchmarkClient = fakeHost.Client.instances[1]!
     await vi.waitFor(() =>
-      expect(client.commands.some((command) => command.type === "run-audio-benchmark")).toBe(true)
+      expect(
+        benchmarkClient.commands.some((command) => command.type === "run-audio-benchmark")
+      ).toBe(true)
     )
-    const snapshotCommandCount = client.commands.filter(
+    const snapshotCommandCount = primary.commands.filter(
       (command) => command.type === "audio-engine-snapshot"
     ).length
     await service.audioEngineSnapshot()
     expect(
-      client.commands.filter((command) => command.type === "audio-engine-snapshot")
-    ).toHaveLength(snapshotCommandCount)
+      primary.commands.filter((command) => command.type === "audio-engine-snapshot")
+    ).toHaveLength(snapshotCommandCount + 1)
+    expect(primary.closed).toBe(false)
 
-    client.heartbeatDeferred.reject(new Error("audio-host request: deadline exceeded"))
-    await vi.waitFor(() => expect(failures).toEqual([]))
-    expect(client.closed).toBe(false)
-    expect(fakeHost.Client.instances).toHaveLength(1)
-
-    client.audioBenchmarkDeferred.resolve()
+    benchmarkClient.audioBenchmarkDeferred!.resolve()
     await benchmark
-    expect(client.commands.filter((command) => command.type === "unload-plugin")).toHaveLength(64)
+    expect(benchmarkClient.closed).toBe(true)
     await service.stop()
   })
 

@@ -1,0 +1,307 @@
+import { describe, expect, it } from "vitest"
+import type { ProjectGraphSnapshot, ProjectCommand } from "@yadaw/contracts"
+import { applyToGraph, inverseFor, validateGraph } from "./graph"
+import { projectContentEndSeconds } from "./selectors"
+
+function graph(): ProjectGraphSnapshot {
+  return {
+    sampleRate: 48_000,
+    tracks: [{ id: "track:instrument-1", channelId: "instrument-1", sortOrder: 0 }],
+    channels: [
+      {
+        id: "instrument-1",
+        kind: "instrument",
+        systemRole: null,
+        name: "Instrument 1",
+        color: "#73D6A2",
+        sortOrder: 0,
+        inputSource: null,
+        inputFormat: null,
+        gainDb: 0,
+        pan: 0,
+        muted: false,
+        soloed: false,
+        outputChannelId: "output",
+        outputBus: null,
+        recordArmed: false,
+        inputMonitoring: false,
+        inputChannels: [],
+        hardwareOutputChannels: []
+      },
+      {
+        id: "master",
+        kind: "master",
+        systemRole: null,
+        name: "Master",
+        color: "#8C83FF",
+        sortOrder: 0,
+        inputSource: null,
+        inputFormat: null,
+        gainDb: 0,
+        pan: 0,
+        muted: false,
+        soloed: false,
+        outputChannelId: null,
+        outputBus: null,
+        recordArmed: false,
+        inputMonitoring: false,
+        inputChannels: [],
+        hardwareOutputChannels: []
+      },
+      {
+        id: "output",
+        kind: "output",
+        systemRole: null,
+        name: "Output",
+        color: "#EF7C95",
+        sortOrder: 0,
+        inputSource: null,
+        inputFormat: null,
+        gainDb: 0,
+        pan: 0,
+        muted: false,
+        soloed: false,
+        outputChannelId: null,
+        outputBus: null,
+        recordArmed: false,
+        inputMonitoring: false,
+        inputChannels: [],
+        hardwareOutputChannels: [1, 2]
+      }
+    ],
+    audioClips: [],
+    sends: [],
+    plugins: [],
+    midiClips: [
+      {
+        id: "clip-1",
+        sourceId: "source-1",
+        trackId: "track:instrument-1",
+        name: "Clip",
+        startTick: 0,
+        lengthTicks: 960,
+        sourceOffsetTicks: 0,
+        notes: [
+          {
+            id: "note-1",
+            startTick: 120,
+            durationTicks: 240,
+            channel: 0,
+            key: 60,
+            velocity: 100,
+            releaseVelocity: 0
+          }
+        ],
+        events: []
+      }
+    ],
+    tempoMap: {
+      ticksPerQuarter: 960,
+      tempoEvents: [{ tick: 0, beatsPerMinute: 120 }],
+      timeSignatureEvents: [{ tick: 0, numerator: 4, denominator: 4 }]
+    },
+    keySignatureEvents: [{ tick: 0, fifths: 0, mode: "major" }]
+  }
+}
+
+describe("MIDI note project commands", () => {
+  it("creates a blank MIDI source and clip as one invertible batch", () => {
+    const before = graph()
+    const source = {
+      id: "blank-source",
+      name: "MIDI Clip 2",
+      contentHash: "blank:blank-source",
+      rawBytes: new Uint8Array()
+    }
+    const command: ProjectCommand = {
+      type: "batch",
+      commands: [
+        { type: "create-midi-source", source },
+        {
+          type: "create-midi-clip",
+          clip: {
+            id: "clip-2",
+            sourceId: source.id,
+            trackId: "track:instrument-1",
+            name: source.name,
+            startTick: 960,
+            lengthTicks: 3_840,
+            sourceOffsetTicks: 0,
+            notes: [],
+            events: []
+          }
+        }
+      ]
+    }
+    const inverse = inverseFor(before, command)
+    const after = applyToGraph(before, command)
+
+    validateGraph(after)
+    expect(after.midiClips).toContainEqual(expect.objectContaining({ id: "clip-2" }))
+    expect(inverse).toEqual({
+      type: "batch",
+      commands: [
+        { type: "delete-midi-clip", clipId: "clip-2" },
+        { type: "delete-midi-source", source }
+      ]
+    })
+    expect(applyToGraph(after, inverse)).toEqual(before)
+  })
+
+  it("applies and inverts integer-tick note edits", () => {
+    const before = graph()
+    const command: ProjectCommand = {
+      type: "update-midi-notes",
+      clipId: "clip-1",
+      updates: [{ noteId: "note-1", patch: { startTick: 121, durationTicks: 1 } }]
+    }
+    const inverse = inverseFor(before, command)
+    const after = applyToGraph(before, command)
+
+    validateGraph(after)
+    expect(after.midiClips[0]?.notes[0]).toEqual(
+      expect.objectContaining({ startTick: 121, durationTicks: 1 })
+    )
+    expect(applyToGraph(after, inverse)).toEqual(before)
+  })
+
+  it("rebases notes and events with an exactly invertible integer delta", () => {
+    const before = graph()
+    before.midiClips[0]!.events.push({
+      id: "event-1",
+      tick: 80,
+      channel: 0,
+      kind: "control-change",
+      data: new Uint8Array([1, 2])
+    })
+    const command: ProjectCommand = {
+      type: "rebase-midi-clip-content",
+      clipId: "clip-1",
+      deltaTicks: 40
+    }
+    const after = applyToGraph(before, command)
+
+    expect(after.midiClips[0]?.notes[0]?.startTick).toBe(160)
+    expect(after.midiClips[0]?.events[0]?.tick).toBe(120)
+    expect(applyToGraph(after, inverseFor(before, command))).toEqual(before)
+  })
+
+  it("rejects fractional and duplicate note timing identities", () => {
+    const value = graph()
+    value.midiClips[0]!.notes[0]!.startTick = 0.5
+    expect(() => validateGraph(value)).toThrow("MIDI note contains invalid")
+
+    value.midiClips[0]!.notes[0]!.startTick = 0
+    value.midiClips[0]!.notes.push({ ...value.midiClips[0]!.notes[0]! })
+    expect(() => validateGraph(value)).toThrow("MIDI note IDs must be unique")
+  })
+})
+
+describe("project graph command characterization", () => {
+  it("selects the transport content end across audio frames and musical ticks", () => {
+    const value = graph()
+    value.audioClips.push({
+      id: "audio-clip",
+      assetId: "asset",
+      trackId: "track:audio",
+      name: "Audio",
+      startFrame: 48_000,
+      sourceOffsetFrames: 0,
+      lengthFrames: 24_000,
+      assetSampleRate: 48_000,
+      assetChannels: 2
+    })
+
+    expect(projectContentEndSeconds(value)).toBe(1.5)
+  })
+
+  it("creates and deletes a track with its channel as one invertible aggregate", () => {
+    const before = graph()
+    const channel = {
+      ...structuredClone(before.channels[0]!),
+      id: "instrument-2",
+      name: "Instrument 2",
+      sortOrder: 1
+    }
+    const command: ProjectCommand = {
+      type: "create-track",
+      track: { id: "track:instrument-2", channelId: channel.id, sortOrder: 1 },
+      channel
+    }
+
+    const after = applyToGraph(before, command)
+
+    validateGraph(after)
+    expect(after.tracks).toContainEqual({
+      id: "track:instrument-2",
+      channelId: "instrument-2",
+      sortOrder: 1
+    })
+    expect(after.channels).toContainEqual(channel)
+    expect(applyToGraph(after, inverseFor(before, command))).toEqual(before)
+  })
+
+  it("enforces track ownership independently from mixer channel order", () => {
+    const missingTrack = graph()
+    missingTrack.tracks = []
+    expect(() => validateGraph(missingTrack)).toThrow(
+      "Ordinary Audio and Instrument channels require exactly one project track"
+    )
+
+    const systemTrack = graph()
+    systemTrack.tracks.push({ id: "track:master", channelId: "master", sortOrder: 99 })
+    expect(() => validateGraph(systemTrack)).toThrow(
+      "Project tracks must reference ordinary Audio or Instrument channels"
+    )
+
+    const value = graph()
+    value.tracks[0]!.sortOrder = 12
+    value.channels[0]!.sortOrder = 3
+    expect(() => validateGraph(value)).not.toThrow()
+  })
+
+  it("round-trips non-MIDI edits through one inverse batch", () => {
+    const before = graph()
+    const command: ProjectCommand = {
+      type: "batch",
+      commands: [
+        {
+          type: "update-channel",
+          channelId: "instrument-1",
+          patch: { name: "Lead", gainDb: -6, pan: 0.25 }
+        },
+        {
+          type: "replace-tempo-map",
+          tempoMap: {
+            ticksPerQuarter: 960,
+            tempoEvents: [
+              { tick: 0, beatsPerMinute: 100 },
+              { tick: 1_920, beatsPerMinute: 140 }
+            ],
+            timeSignatureEvents: [{ tick: 0, numerator: 3, denominator: 4 }]
+          }
+        },
+        {
+          type: "replace-key-signature-map",
+          events: [
+            { tick: 0, fifths: -3, mode: "minor" },
+            { tick: 3_840, fifths: 2, mode: "major" }
+          ]
+        }
+      ]
+    }
+
+    const inverse = inverseFor(before, command)
+    const after = applyToGraph(before, command)
+
+    validateGraph(after)
+    expect(after.channels.find(({ id }) => id === "instrument-1")).toMatchObject({
+      name: "Lead",
+      gainDb: -6,
+      pan: 0.25
+    })
+    expect(after.tempoMap.tempoEvents).toHaveLength(2)
+    expect(after.keySignatureEvents).toHaveLength(2)
+    expect(applyToGraph(after, inverse)).toEqual(before)
+  })
+})

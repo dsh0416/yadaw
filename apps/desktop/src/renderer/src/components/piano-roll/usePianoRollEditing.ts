@@ -2,7 +2,7 @@ import { onMounted, onUnmounted, type ComputedRef, type Ref } from "vue"
 import type {
   MidiClipState,
   MidiNotePatch,
-  MixerGraphSnapshot,
+  ProjectGraphSnapshot,
   ProjectCommand
 } from "@yadaw/contracts"
 import type { PianoRollNoteRef, usePianoRollStore } from "../../stores/pianoRoll"
@@ -16,7 +16,7 @@ import type { NoteGestureItem, PianoRollNoteEdit } from "./usePianoRollGestures"
 
 export interface PianoRollEditingDependencies {
   pianoRollStore: ReturnType<typeof usePianoRollStore>
-  graph: Ref<MixerGraphSnapshot>
+  graph: Ref<ProjectGraphSnapshot>
   activeClip: ComputedRef<MidiClipState | null>
   visibleNotes: ComputedRef<NoteGestureItem[]>
   selectedItems: ComputedRef<NoteGestureItem[]>

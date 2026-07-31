@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto"
-import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises"
+import { mkdir, readFile, readdir, rename, rm } from "node:fs/promises"
 import { basename, join } from "node:path"
 import type {
   OperationSnapshot,
@@ -9,17 +9,17 @@ import type {
   WaveformPeakWindow,
   WaveformWindowRequest
 } from "@yadaw/contracts"
-import {
-  finalizeRecording,
-  repairRecordingHeader,
-  writeDeterministicTestRecording
-} from "@yadaw/dsp-node"
+import { repairRecordingHeader, writeDeterministicTestRecording } from "@yadaw/dsp-node"
 import type { AudioHostService } from "./audio-host-service"
 import type { ApplicationSettingsStore } from "./application-settings"
 import { t } from "./i18n"
 import type { OperationService } from "./operation-service"
+import type { ProjectGraphService } from "./project-graph-service"
 import type { ProjectService } from "./project-service"
-import type { MixerService } from "./mixer-service"
+import { RecordingFinalizer } from "./recording-finalizer"
+import { RecordingRecoveryRepository } from "./recording-recovery-repository"
+import { RecordingSessionController } from "./recording-session-controller"
+import type { TransportService } from "./transport-service"
 
 interface RecordingTrackSidecar {
   assetId: string
@@ -51,19 +51,21 @@ function utcFields(date: Date): { date: string; time: string } {
 }
 
 export class RecordingService {
-  private active: RecordingSidecar | null = null
-  private lastWaveformSnapshot: WaveformPeakWindow | null = null
+  private readonly sessions = new RecordingSessionController<RecordingSidecar>()
+  private readonly finalizer = new RecordingFinalizer()
+  private readonly recovery = new RecordingRecoveryRepository()
 
   constructor(
     private readonly settings: ApplicationSettingsStore,
     private readonly projects: ProjectService,
     private readonly operations: OperationService,
-    private readonly mixer: MixerService,
+    private readonly graphs: ProjectGraphService,
+    private readonly transport: TransportService,
     private readonly audioHost: AudioHostService | null = null
   ) {}
 
   get current(): RecordingSession | null {
-    return this.active ? this.toSession(this.active) : null
+    return this.sessions.active ? this.toSession(this.sessions.active) : null
   }
 
   private toSession(recording: RecordingSidecar): RecordingSession {
@@ -77,14 +79,12 @@ export class RecordingService {
   }
 
   private async writeSidecar(recording: RecordingSidecar): Promise<void> {
-    const temporary = `${recording.sidecarPath}.tmp`
-    await writeFile(temporary, `${JSON.stringify(recording, null, 2)}\n`, "utf8")
-    await rename(temporary, recording.sidecarPath)
+    await this.recovery.write(recording)
   }
 
   async start(): Promise<RecordingSession> {
-    if (this.active) throw new Error("A recording is already active")
-    this.lastWaveformSnapshot = null
+    if (this.sessions.active) throw new Error("A recording is already active")
+    this.sessions.lastWaveformSnapshot = null
     const project = this.projects.current
     if (!project) throw new Error("Open a project before recording")
     const deterministicTestCapture = process.env.YADAW_TEST_CAPTURE_SOURCE === "1"
@@ -101,7 +101,7 @@ export class RecordingService {
       throw new Error("Start the audio engine before recording")
     }
     const applicationSettings = await this.settings.get()
-    const graph = await this.mixer.snapshot()
+    const graph = await this.graphs.snapshot()
     const targets = graph.channels.filter(
       (channel) => channel.kind === "audio" && channel.recordArmed
     )
@@ -109,7 +109,7 @@ export class RecordingService {
     await mkdir(applicationSettings.swapDirectory, { recursive: true })
     const id = randomUUID()
     const startedAt = Date.now()
-    const transportBeforeRecording = await this.mixer.transportSnapshot()
+    const transportBeforeRecording = await this.transport.snapshot()
     const startFrame = transportBeforeRecording.positionFrames
     const partialPath = join(applicationSettings.swapDirectory, `${id}.partial.bwf`)
     const sidecarPath = join(applicationSettings.swapDirectory, `${id}.recording.json`)
@@ -157,19 +157,17 @@ export class RecordingService {
             (startFrame * sidecar.sampleRate) / project.configuration.sampleRate
           )
         })
-      await this.mixer.transport({ type: "record" })
+      await this.transport.command({ type: "record" })
     } catch (error) {
       await rm(sidecarPath, { force: true })
       throw error
     }
-    this.active = sidecar
+    this.sessions.begin(sidecar)
     return this.toSession(sidecar)
   }
 
   async stop(onFinalizing?: () => void): Promise<PendingRecording> {
-    const recording = this.active
-    if (!recording) throw new Error("No recording is active")
-    this.active = null
+    const recording = this.sessions.take()
     const operationId = `recording:${recording.id}`
     const operation: OperationSnapshot = {
       id: operationId,
@@ -211,7 +209,7 @@ export class RecordingService {
               )
             : await this.audioHost!.stopRecording()
       } finally {
-        await this.mixer.transport({
+        await this.transport.command({
           type: recording.resumePlaybackAfterRecording ? "play" : "pause"
         })
       }
@@ -234,10 +232,10 @@ export class RecordingService {
   }
 
   async waveformSnapshot(request: WaveformWindowRequest): Promise<WaveformPeakWindow> {
-    const recording = this.active
+    const recording = this.sessions.active
     if (!recording || recording.id !== request.id) {
-      if (this.lastWaveformSnapshot?.id === request.id) {
-        return structuredClone(this.lastWaveformSnapshot)
+      if (this.sessions.lastWaveformSnapshot?.id === request.id) {
+        return structuredClone(this.sessions.lastWaveformSnapshot)
       }
       throw new Error("Recording is no longer active")
     }
@@ -283,7 +281,7 @@ export class RecordingService {
         bucketCount,
         peaks: new Uint8Array(values.buffer)
       }
-      this.lastWaveformSnapshot = result
+      this.sessions.lastWaveformSnapshot = result
       return result
     }
     if (!this.audioHost) throw new Error("Audio host is not running")
@@ -303,7 +301,7 @@ export class RecordingService {
       bucketCount: snapshot.bucketCount,
       peaks: new Uint8Array(snapshot.peaks)
     }
-    this.lastWaveformSnapshot = result
+    this.sessions.lastWaveformSnapshot = result
     return result
   }
 
@@ -348,7 +346,7 @@ export class RecordingService {
         ".ready.bwf",
         `.track-${index + 1}.final-${recording.bitDepth}.bwf`
       )
-      const finalized = await finalizeRecording({
+      const finalized = await this.finalizer.finalize({
         inputPath: recording.audioPath,
         outputPath: finalPath,
         targetSampleRate: project.configuration.sampleRate,
@@ -428,7 +426,7 @@ export class RecordingService {
       }
     } catch (error) {
       if (imported.length > 0) {
-        await this.mixer.deleteUnusedAssets(imported)
+        await this.graphs.deleteUnusedAssets(imported)
       }
       throw error
     }
@@ -496,19 +494,11 @@ export class RecordingService {
 
   async listPending(): Promise<PendingRecording[]> {
     const applicationSettings = await this.settings.get()
-    let files: string[]
-    try {
-      files = await readdir(applicationSettings.swapDirectory)
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return []
-      throw error
-    }
     const pending: PendingRecording[] = []
-    for (const file of files.filter((name) => name.endsWith(".recording.json"))) {
+    for (const sidecar of await this.recovery.list<RecordingSidecar>(
+      applicationSettings.swapDirectory
+    )) {
       try {
-        const sidecar = JSON.parse(
-          await readFile(join(applicationSettings.swapDirectory, file), "utf8")
-        ) as RecordingSidecar
         if (this.projects.current?.path === sidecar.projectPath) {
           sidecar.assetExists = await this.assetAlreadyCommitted(sidecar)
         }
@@ -522,8 +512,7 @@ export class RecordingService {
 
   private async readSidecar(id: string): Promise<RecordingSidecar> {
     const settings = await this.settings.get()
-    const path = join(settings.swapDirectory, `${id}.recording.json`)
-    return JSON.parse(await readFile(path, "utf8")) as RecordingSidecar
+    return this.recovery.read<RecordingSidecar>(settings.swapDirectory, id)
   }
 
   private async assetAlreadyCommitted(recording: RecordingSidecar): Promise<boolean> {
@@ -558,7 +547,7 @@ export class RecordingService {
     )
       return
     const recoverableIds = recording.tracks?.map((track) => track.assetId) ?? [recording.id]
-    await this.mixer.deleteUnusedAssets(recoverableIds)
+    await this.graphs.deleteUnusedAssets(recoverableIds)
     if (recording.state === "partial") {
       this.operations.upsert(
         {
@@ -603,14 +592,7 @@ export class RecordingService {
 
   async deletePending(id: string): Promise<void> {
     const recording = await this.readSidecar(id)
-    await Promise.all([
-      rm(recording.audioPath, { force: true }),
-      recording.finalPath ? rm(recording.finalPath, { force: true }) : Promise.resolve(),
-      ...(recording.tracks ?? [])
-        .filter((track) => track.finalPath && track.finalPath !== recording.finalPath)
-        .map((track) => rm(track.finalPath!, { force: true })),
-      rm(recording.sidecarPath, { force: true })
-    ])
+    await this.recovery.remove(recording)
   }
 
   async cleanupCommittedForProject(projectPath: string): Promise<void> {

@@ -1,4 +1,4 @@
-import type { MixerGraphSnapshot } from "./mixer"
+import type { ProjectGraphSnapshot } from "./mixer"
 
 export const PROJECT_SAMPLE_RATES = [44_100, 48_000, 88_200, 96_000, 176_400, 192_000] as const
 export type ProjectSampleRate = (typeof PROJECT_SAMPLE_RATES)[number]
@@ -92,7 +92,7 @@ export interface ProjectAssetSummary {
 
 export interface ProjectWorkspaceSnapshot {
   session: ProjectSession
-  graph: MixerGraphSnapshot
+  graph: ProjectGraphSnapshot
   assets: ProjectAssetSummary[]
 }
 

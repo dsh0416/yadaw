@@ -4,8 +4,7 @@ import { graphDiff, readCrashMarker } from "./audio-host-graph-client"
 import { AudioHostRecordingClient } from "./audio-host-recording-client"
 import { AudioHostPluginClient } from "./audio-host-plugin-client"
 import { AudioHostTransportClient } from "./audio-host-transport-client"
-import { decode, encode } from "@msgpack/msgpack"
-import { AudioHostIpcClient } from "@yadaw/audio-host-client"
+import type { AudioHostIpcClient } from "@yadaw/audio-host-client"
 import type {
   AudioBackendDescriptor,
   AudioBenchmarkScenario,
@@ -16,7 +15,7 @@ import type {
   AudioPreferences,
   AudioRuntimeSnapshot,
   CompiledAudioGraphSnapshot,
-  MixerGraphSnapshot,
+  ProjectGraphSnapshot,
   MixerParameterPreview,
   MixerRuntimeSnapshot,
   MidiInputSnapshot,
@@ -34,12 +33,18 @@ import type {
   TransportSnapshot
 } from "@yadaw/contracts"
 
-const MAX_MESSAGE_BYTES = 64 * 1024 * 1024
-const MAX_LOGICAL_REQUEST_BYTES = MAX_MESSAGE_BYTES * 2
 const HEARTBEAT_INTERVAL_MS = 250
 const HEARTBEAT_TIMEOUT_MS = 2_000
 
-import { extractLargeAttachments, hydrateAttachments } from "./audio-host-wire"
+function benchmarkStageError(stage: string, error: unknown, helperFailure: string | null): Error {
+  const message = error instanceof Error ? error.message : String(error)
+  const failure = helperFailure && !message.includes(helperFailure) ? ` (${helperFailure})` : ""
+  return new Error(`${stage} failed: ${message}${failure}`, { cause: error })
+}
+
+import { AudioHostGateway } from "./audio-host-gateway"
+import { AudioHostProcessSupervisor } from "./audio-host-process-supervisor"
+import { AudioHostSessionCoordinator } from "./audio-host-session-coordinator"
 import type {
   AudioHostGraph,
   AudioHostRecordingConfig,
@@ -57,14 +62,10 @@ export type {
 } from "./audio-host-wire"
 
 export class AudioHostService {
-  private client: AudioHostIpcClient | null = null
-  private readonly pendingRequests = new Set<Promise<ControlResponse>>()
-  private nextRequestId = 1
-  private heartbeat: NodeJS.Timeout | null = null
   private heartbeatInFlight = false
   private audioBenchmarkInFlight = false
+  private benchmarkRunnerInFlight = false
   private audioBenchmarkGeneration = 0
-  private stableTimer: NodeJS.Timeout | null = null
   private lastCallbackGeneration: number | null = null
   private callbackStagnantSince = 0
   private lastHeartbeatAt: number | null = null
@@ -89,29 +90,10 @@ export class AudioHostService {
     arenaQuarantinedRegions: 0,
     arenaCopiedBytes: 0
   }
-  private restartBudget = 1
-  private stopping = false
-  private lastGraph: {
-    revision: number
-    project: MixerGraphSnapshot
-    runtime: AudioHostGraph
-  } | null = null
-  private publishedGraph: {
-    revision: number
-    runtime: AudioHostGraph
-  } | null = null
   private readonly pendingPreferenceWrites = new Set<Promise<void>>()
-  private recovery: Promise<void> | null = null
-  private reconfiguring = false
-  private midiPreferences: MidiSyncPreferences = {
-    enabled: false,
-    sourcePortId: null,
-    sourcePortName: null,
-    inputOffsetsMs: {}
-  }
-  private midiPreferencesConfigured = false
-  private midiControlPortIds: string[] = []
-  private midiControlLearning = false
+  private readonly supervisor: AudioHostProcessSupervisor
+  private readonly session = new AudioHostSessionCoordinator()
+  private readonly gateway: AudioHostGateway
 
   private readonly diagnostics = new AudioHostDiagnostics(
     () => this.client,
@@ -145,37 +127,114 @@ export class AudioHostService {
     private readonly executablePath: string,
     private readonly crashMarkerPath: string,
     private runtimePreferences: AudioHostRuntimePreferences,
-    private readonly editorOwnerWindowHandle: Buffer | undefined,
+    editorOwnerWindowHandle: Buffer | undefined,
     private readonly onFailure: (message: string) => void,
     private readonly onEditorPreferenceChanged: (
       classId: string,
       preference: PluginEditorPreference
     ) => Promise<void>
-  ) {}
+  ) {
+    this.supervisor = new AudioHostProcessSupervisor(
+      executablePath,
+      crashMarkerPath,
+      editorOwnerWindowHandle
+    )
+    this.gateway = new AudioHostGateway(
+      () => this.client,
+      () => (this.stopping ? "stopping" : this.recovery),
+      onEditorPreferenceChanged,
+      this.pendingPreferenceWrites
+    )
+  }
+
+  private get client(): AudioHostIpcClient | null {
+    return this.supervisor.client
+  }
+  private set client(value: AudioHostIpcClient | null) {
+    this.supervisor.client = value
+  }
+  private get heartbeat(): NodeJS.Timeout | null {
+    return this.supervisor.heartbeat
+  }
+  private set heartbeat(value: NodeJS.Timeout | null) {
+    this.supervisor.heartbeat = value
+  }
+  private get stableTimer(): NodeJS.Timeout | null {
+    return this.supervisor.stableTimer
+  }
+  private set stableTimer(value: NodeJS.Timeout | null) {
+    this.supervisor.stableTimer = value
+  }
+  private get restartBudget(): number {
+    return this.supervisor.restartBudget
+  }
+  private set restartBudget(value: number) {
+    this.supervisor.restartBudget = value
+  }
+  private get stopping(): boolean {
+    return this.supervisor.stopping
+  }
+  private set stopping(value: boolean) {
+    this.supervisor.stopping = value
+  }
+  private get lastGraph(): AudioHostSessionCoordinator["graph"] {
+    return this.session.graph
+  }
+  private set lastGraph(value: AudioHostSessionCoordinator["graph"]) {
+    this.session.graph = value
+  }
+  private get publishedGraph(): AudioHostSessionCoordinator["published"] {
+    return this.session.published
+  }
+  private set publishedGraph(value: AudioHostSessionCoordinator["published"]) {
+    this.session.published = value
+  }
+  private get recovery(): Promise<void> | null {
+    return this.session.recovery
+  }
+  private set recovery(value: Promise<void> | null) {
+    this.session.recovery = value
+  }
+  private get reconfiguring(): boolean {
+    return this.session.reconfiguring
+  }
+  private set reconfiguring(value: boolean) {
+    this.session.reconfiguring = value
+  }
+  private get midiPreferences(): MidiSyncPreferences {
+    return this.session.midiPreferences
+  }
+  private set midiPreferences(value: MidiSyncPreferences) {
+    this.session.midiPreferences = value
+  }
+  private get midiPreferencesConfigured(): boolean {
+    return this.session.midiPreferencesConfigured
+  }
+  private set midiPreferencesConfigured(value: boolean) {
+    this.session.midiPreferencesConfigured = value
+  }
+  private get midiControlPortIds(): string[] {
+    return this.session.midiControlPortIds
+  }
+  private set midiControlPortIds(value: string[]) {
+    this.session.midiControlPortIds = value
+  }
+  private get midiControlLearning(): boolean {
+    return this.session.midiControlLearning
+  }
+  private set midiControlLearning(value: boolean) {
+    this.session.midiControlLearning = value
+  }
 
   start(restoreGraph = true): void {
     if (this.client || this.stopping) return
     let client: AudioHostIpcClient
     try {
-      client = new AudioHostIpcClient(
-        this.executablePath,
-        this.crashMarkerPath,
-        this.runtimePreferences.workerThreads === "auto"
-          ? undefined
-          : this.runtimePreferences.workerThreads,
-        this.runtimePreferences.maxBlockingThreads === "auto"
-          ? undefined
-          : this.runtimePreferences.maxBlockingThreads,
-        this.runtimePreferences.egressConcurrency === "auto"
-          ? undefined
-          : this.runtimePreferences.egressConcurrency,
-        this.editorOwnerWindowHandle
-      )
+      client = this.supervisor.launch(this.runtimePreferences)
     } catch (error) {
       this.onFailure(`could not start audio host: ${String(error)}`)
       return
     }
-    this.client = client
     this.heartbeatInFlight = false
     this.lastCallbackGeneration = null
     this.callbackStagnantSince = 0
@@ -279,30 +338,12 @@ export class AudioHostService {
     command: Record<string, unknown>,
     expectedClient?: AudioHostIpcClient
   ): Promise<PriorityResponse> {
-    const client = expectedClient ?? this.client
-    if (!client) throw new Error("audio host is not running")
-    const requestId = this.nextRequestId++
-    const payload = Buffer.from(
-      encode({
-        request_id: requestId,
-        command
-      })
-    )
-    const wireResponse = await client.heartbeat(payload)
-    const response = decode(wireResponse.body) as PriorityResponse
-    if (response.request_id !== requestId) {
-      throw new Error("audio host returned an invalid priority response")
-    }
-    if (response.result.type === "error") {
-      throw new Error(response.result.message ?? "audio host heartbeat failed")
-    }
-    drainHostEvents(client, this.onEditorPreferenceChanged, this.pendingPreferenceWrites)
-    return response
+    return this.gateway.priority(command, expectedClient)
   }
 
   async loadGraph(
     revision: number,
-    project: MixerGraphSnapshot,
+    project: ProjectGraphSnapshot,
     runtime: AudioHostGraph,
     awaitPublication = false
   ): Promise<void> {
@@ -580,11 +621,59 @@ export class AudioHostService {
     }
   }
 
-  runIpcBenchmark(): Promise<AudioIpcBenchmarkReport> {
+  private runIpcBenchmarkInCurrentHost(): Promise<AudioIpcBenchmarkReport> {
     return this.diagnostics.runIpcBenchmark()
   }
 
   async runAudioBenchmark(effect: PluginDescriptor): Promise<{
+    durationMs: number
+    overallRealtimeFactor: number
+    worstP99DeadlineUtilizationPercent: number
+    scenarios: AudioBenchmarkScenario[]
+    ipc: AudioIpcBenchmarkReport
+  }> {
+    if (this.benchmarkRunnerInFlight) {
+      throw new Error("audio benchmark is already running")
+    }
+    this.benchmarkRunnerInFlight = true
+    let helperFailure: string | null = null
+    const benchmarkHost = new AudioHostService(
+      this.executablePath,
+      `${this.crashMarkerPath}.benchmark`,
+      structuredClone(this.runtimePreferences),
+      undefined,
+      (message) => {
+        helperFailure = message
+      },
+      async () => {}
+    )
+    benchmarkHost.start(false)
+    try {
+      let dsp
+      try {
+        dsp = await benchmarkHost.runAudioBenchmarkInCurrentHost(effect)
+      } catch (error) {
+        throw benchmarkStageError("audio DSP benchmark", error, helperFailure)
+      }
+      let ipc: AudioIpcBenchmarkReport
+      try {
+        // Keep the CPU-bound DSP suite and IPC suite separate so neither distorts the other's
+        // latency distribution, while still using the same isolated one-shot helper.
+        ipc = await benchmarkHost.runIpcBenchmarkInCurrentHost()
+      } catch (error) {
+        throw benchmarkStageError("audio IPC benchmark", error, helperFailure)
+      }
+      return { ...dsp, ipc }
+    } finally {
+      try {
+        await benchmarkHost.stop()
+      } finally {
+        this.benchmarkRunnerInFlight = false
+      }
+    }
+  }
+
+  private async runAudioBenchmarkInCurrentHost(effect: PluginDescriptor): Promise<{
     durationMs: number
     overallRealtimeFactor: number
     worstP99DeadlineUtilizationPercent: number
@@ -665,15 +754,8 @@ export class AudioHostService {
         }))
       }
     } finally {
-      // Unload sequentially for the same deadline reason as loads. Host unload drops these
-      // non-graph instances instead of retaining them in retired_instances.
-      for (const id of pluginInstanceIds) {
-        try {
-          await this.plugins.unloadPlugin(id)
-        } catch (error) {
-          console.error(`Could not unload audio benchmark VST3 instance ${id}:`, error)
-        }
-      }
+      // This helper exists only for one benchmark suite. Its process shutdown owns VST3 teardown,
+      // so no per-instance unload can block the project helper or leave an uncancellable worker.
       this.audioBenchmarkInFlight = false
     }
   }
@@ -737,53 +819,14 @@ export class AudioHostService {
   }
 
   private request(command: Record<string, unknown>): Promise<ControlResponse> {
-    if (this.stopping && command.type !== "shutdown") {
-      return Promise.reject(new Error("audio host is stopping"))
-    }
-    const recovery = this.recovery
-    if (recovery && command.type !== "shutdown") {
-      return recovery.then(() => this.requestImmediately(command))
-    }
-    return this.requestImmediately(command)
+    return this.gateway.request(command)
   }
 
   private requestImmediately(
     command: Record<string, unknown>,
     expectedClient?: AudioHostIpcClient
   ): Promise<ControlResponse> {
-    const pending = this.performRequest(command, expectedClient)
-    this.pendingRequests.add(pending)
-    void pending.finally(() => this.pendingRequests.delete(pending)).catch(() => {})
-    return pending
-  }
-
-  private async performRequest(
-    command: Record<string, unknown>,
-    expectedClient?: AudioHostIpcClient
-  ): Promise<ControlResponse> {
-    const client = expectedClient ?? this.client
-    if (!client) throw new Error("audio host is not running")
-    const requestId = this.nextRequestId++
-    const request = {
-      request_id: requestId,
-      command
-    }
-    const attachments: Buffer[] = []
-    extractLargeAttachments(request, attachments)
-    const payload = Buffer.from(encode(request))
-    if (payload.length > MAX_LOGICAL_REQUEST_BYTES) {
-      throw new Error("audio host logical request exceeds 128 MiB")
-    }
-    const wireResponse = await client.request(payload, attachments)
-    const response = decode(wireResponse.body) as ControlResponse
-    hydrateAttachments(response, wireResponse.attachments)
-    if (response.request_id !== requestId) {
-      throw new Error("audio host returned an out-of-order response")
-    }
-    if (response.result.type === "error") {
-      throw new Error(response.result.message ?? "audio host request failed")
-    }
-    return response
+    return this.gateway.requestImmediately(command, expectedClient)
   }
 
   private handleExit(client: AudioHostIpcClient, message: string): void {
@@ -1006,7 +1049,7 @@ export class AudioHostService {
     drainHostEvents(client, this.onEditorPreferenceChanged, this.pendingPreferenceWrites)
     if (this.client === client) this.client = null
     client.close()
-    await Promise.allSettled([...this.pendingRequests])
+    await this.gateway.settle()
     await Promise.allSettled([...this.pendingPreferenceWrites])
     this.publishedGraph = null
     this.audioTransport.resetConnection()

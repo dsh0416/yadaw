@@ -1,16 +1,6 @@
 import { BrowserWindow } from "electron"
 import { IPC_CHANNELS } from "@yadaw/contracts"
-import type { ApplicationSettingsStore } from "../application-settings"
-import type { AudioHostService } from "../audio-host-service"
-import type { LifecycleCoordinator } from "../lifecycle-coordinator"
-import type { MidiImportService } from "../midi-import-service"
-import type { MixerService } from "../mixer-service"
-import type { OperationService } from "../operation-service"
-import type { PluginCatalogService } from "../plugin-catalog-service"
-import type { ProjectService } from "../project-service"
-import type { RecordingService } from "../recording-service"
-import type { WaveformService } from "../waveform-service"
-import type { IpcHandlerContext } from "./context"
+import type { ApplicationServices, IpcHandlerContext } from "./context"
 import { registerAudioHandlers } from "./audio-handlers"
 import { registerDiagnosticHandlers } from "./diagnostic-handlers"
 import { registerMidiHandlers } from "./midi-handlers"
@@ -23,19 +13,8 @@ import { registerSystemHandlers } from "./system-handlers"
 import { registerTransportHandlers } from "./transport-handlers"
 import { sampleSystemPerformance } from "./support"
 
-export function registerIpcHandlers(
-  settings: ApplicationSettingsStore,
-  projects: ProjectService,
-  recordings: RecordingService,
-  operations: OperationService,
-  waveforms: WaveformService,
-  mixer: MixerService,
-  plugins: PluginCatalogService,
-  midiImport: MidiImportService,
-  lifecycle: LifecycleCoordinator,
-  audioHost: AudioHostService,
-  isShuttingDown: () => boolean
-): void {
+export function registerIpcHandlers(services: ApplicationServices): void {
+  const { plugins, audioHost, projectGraph, settings } = services
   plugins.subscribe((scanEvent) => {
     for (const window of BrowserWindow.getAllWindows()) {
       window.webContents.send(IPC_CHANNELS.pluginsScanEvent, scanEvent)
@@ -59,7 +38,7 @@ export function registerIpcHandlers(
   const midiSnapshotTimer = setInterval(() => void publishMidiSnapshot(), 100)
   midiSnapshotTimer.unref()
   const synchronizePluginStates = async (): Promise<void> => {
-    const graph = await mixer.snapshot()
+    const graph = await projectGraph.snapshot()
     const states = []
     for (const plugin of graph.plugins) {
       try {
@@ -75,20 +54,10 @@ export function registerIpcHandlers(
         console.error(`Could not synchronize VST3 state for ${plugin.id}:`, error)
       }
     }
-    if (states.length > 0) await mixer.savePluginStates(states)
+    if (states.length > 0) await projectGraph.savePluginStates(states)
   }
   const context: IpcHandlerContext = {
-    settings,
-    projects,
-    recordings,
-    operations,
-    waveforms,
-    mixer,
-    plugins,
-    midiImport,
-    lifecycle,
-    audioHost,
-    isShuttingDown,
+    ...services,
     synchronizePluginStates,
     sampleSystemPerformance: () => sampleSystemPerformance(settings, audioHost)
   }

@@ -1,4 +1,6 @@
-fn db_to_gain(db: f32) -> f32 {
+use super::*;
+
+pub(super) fn db_to_gain(db: f32) -> f32 {
     if db <= -90.0 {
         0.0
     } else {
@@ -6,11 +8,11 @@ fn db_to_gain(db: f32) -> f32 {
     }
 }
 
-fn valid_db(value: f32) -> bool {
+pub(super) fn valid_db(value: f32) -> bool {
     value.is_finite() && (-90.0..=12.0).contains(&value)
 }
 
-fn valid_pan(value: f32) -> bool {
+pub(super) fn valid_pan(value: f32) -> bool {
     value.is_finite() && (-1.0..=1.0).contains(&value)
 }
 
@@ -27,16 +29,16 @@ pub fn balance_stereo(frame: StereoFrame, pan: f32) -> StereoFrame {
     ]
 }
 
-fn add(target: &mut StereoFrame, source: StereoFrame) {
+pub(super) fn add(target: &mut StereoFrame, source: StereoFrame) {
     target[0] += source[0];
     target[1] += source[1];
 }
 
-fn scale(frame: StereoFrame, gain: f32) -> StereoFrame {
+pub(super) fn scale(frame: StereoFrame, gain: f32) -> StereoFrame {
     [frame[0] * gain, frame[1] * gain]
 }
 
-fn graph_edges(
+pub(super) fn graph_edges(
     channels: &[ChannelSpec],
     sends: &[SendSpec],
 ) -> Result<Vec<Vec<usize>>, GraphError> {
@@ -104,7 +106,7 @@ fn graph_edges(
     Ok(edges)
 }
 
-fn topological_order(edges: &[Vec<usize>]) -> Result<Vec<usize>, GraphError> {
+pub(super) fn topological_order(edges: &[Vec<usize>]) -> Result<Vec<usize>, GraphError> {
     let mut indegree = vec![0_usize; edges.len()];
     for targets in edges {
         for &target in targets {
@@ -133,7 +135,7 @@ fn topological_order(edges: &[Vec<usize>]) -> Result<Vec<usize>, GraphError> {
     }
 }
 
-fn solo_audibility(
+pub(super) fn solo_audibility(
     channels: &[ChannelSpec],
     edges: &[Vec<usize>],
     sends: &[SendSpec],

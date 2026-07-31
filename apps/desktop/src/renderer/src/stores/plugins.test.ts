@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { createPinia, setActivePinia } from "pinia"
 import { nextTick } from "vue"
-import type { MixerGraphSnapshot, PluginDescriptor } from "@yadaw/contracts"
+import type { ProjectGraphSnapshot, PluginDescriptor } from "@yadaw/contracts"
+import { applyToGraph } from "@yadaw/project-model"
 import { useMixerStore } from "./mixer"
 import { usePluginStore } from "./plugins"
 
@@ -39,9 +40,13 @@ const replacementInstrumentDescriptor: PluginDescriptor = {
   name: "Replacement Instrument"
 }
 
-function graph(): MixerGraphSnapshot {
+function graph(): ProjectGraphSnapshot {
   return {
     sampleRate: 48_000,
+    tracks: [
+      { id: "track:audio", channelId: "audio", sortOrder: 0 },
+      { id: "track:instrument", channelId: "instrument", sortOrder: 0 }
+    ],
     channels: [
       {
         id: "audio",
@@ -101,7 +106,7 @@ function graph(): MixerGraphSnapshot {
         hardwareOutputChannels: [1, 2]
       }
     ],
-    clips: [],
+    audioClips: [],
     sends: [],
     plugins: [],
     midiClips: [],
@@ -196,13 +201,13 @@ describe("plugin store", () => {
 
   it("adds selected effects and instruments through project commands", async () => {
     const mixerStore = useMixerStore()
-    mixerStore.graph = graph()
+    let canonicalGraph = graph()
+    mixerStore.graph = canonicalGraph
     window.yadaw.executeProjectCommand = vi.fn().mockImplementation(async (command) => {
       if (command.type !== "create-plugin") throw new Error("Unexpected project command")
-      const next = structuredClone(mixerStore.graph)
-      next.plugins.push(structuredClone(command.plugin))
+      canonicalGraph = applyToGraph(canonicalGraph, command)
       return {
-        graph: next,
+        graph: canonicalGraph,
         inverse: { type: "delete-plugin" as const, pluginId: command.plugin.id }
       }
     })

@@ -213,17 +213,53 @@ pub struct Vst3Runtime {
     instances: HashMap<String, Instance>,
     retired_instances: Vec<Instance>,
     process_lifetime_guard: Option<Instance>,
+    benchmark_lifetime_guards: Vec<GuardedInstance>,
     ara_factories: HashMap<(String, String), Rc<AraFactoryHost>>,
     next_runtime_handle: u32,
 }
 
+struct GuardedInstance {
+    instance_id: String,
+    instance: Instance,
+}
+
 struct Instance {
+    benchmark_configuration: Option<InstanceConfiguration>,
     ara: Option<AraDocument>,
     plugin: HostedPlugin,
     secondary: Option<HostedPlugin>,
     runtime_handle: u32,
     display_name: String,
     ara_document_state: Vec<u8>,
+}
+
+#[derive(PartialEq)]
+struct InstanceConfiguration {
+    module_path: String,
+    class_id: String,
+    plugin_kind: String,
+    audio_mode: PluginAudioMode,
+    sample_rate_bits: u64,
+    component_state: Vec<u8>,
+    controller_state: Vec<u8>,
+    ara_factory_class_id: Option<String>,
+    ara_document_state: Vec<u8>,
+}
+
+impl InstanceConfiguration {
+    fn from_request(request: &LoadPluginRequest) -> Self {
+        Self {
+            module_path: request.module_path.clone(),
+            class_id: request.class_id.clone(),
+            plugin_kind: request.plugin_kind.clone(),
+            audio_mode: request.audio_mode,
+            sample_rate_bits: request.sample_rate.to_bits(),
+            component_state: request.component_state.clone(),
+            controller_state: request.controller_state.clone(),
+            ara_factory_class_id: request.ara_factory_class_id.clone(),
+            ara_document_state: request.ara_document_state.clone(),
+        }
+    }
 }
 
 impl Instance {
@@ -292,6 +328,7 @@ impl Vst3Runtime {
             instances: HashMap::new(),
             retired_instances: Vec::new(),
             process_lifetime_guard: None,
+            benchmark_lifetime_guards: Vec::new(),
             ara_factories: HashMap::new(),
             next_runtime_handle: 1,
         }
@@ -368,13 +405,30 @@ impl Vst3Runtime {
     /// until helper exit.
     pub fn unload_plugin(&mut self, instance_id: &str, retain_for_graph: bool) -> ControlResult {
         if let Some(instance) = self.instances.remove(instance_id) {
+            let last_benchmark_instance = is_audio_benchmark_instance(instance_id)
+                && !self
+                    .instances
+                    .keys()
+                    .any(|loaded_id| is_audio_benchmark_instance(loaded_id));
             if retain_for_graph {
                 self.retired_instances.push(instance);
-            } else if self.instances.is_empty() {
+            } else if last_benchmark_instance {
                 // Keep one non-graph instance alive until helper shutdown. Some VST3 modules use
                 // process-global entrypoint state, and tearing down the final module while the
-                // helper continues serving IPC can terminate the process before the unload reply
-                // is delivered. Replacing this guard on a later run keeps the retention bounded.
+                // helper continues serving IPC can terminate the process before the unload reply is
+                // delivered. Benchmark IDs are stable, so retain one exact configuration and reuse
+                // it on a later run instead of synchronously destroying the previous guard on the
+                // winit thread. Do not reuse general plug-ins: their runtime state may have changed
+                // since load even when their original configuration is identical.
+                if self.benchmark_lifetime_guards.iter().all(|guard| {
+                    guard.instance.benchmark_configuration != instance.benchmark_configuration
+                }) {
+                    self.benchmark_lifetime_guards.push(GuardedInstance {
+                        instance_id: instance_id.to_owned(),
+                        instance,
+                    });
+                }
+            } else if self.instances.is_empty() {
                 let previous = self.process_lifetime_guard.replace(instance);
                 drop(previous);
             }
@@ -506,6 +560,8 @@ impl Vst3Runtime {
     }
 
     fn load_plugin(&mut self, request: LoadPluginRequest) -> ControlResult {
+        let benchmark_configuration = is_audio_benchmark_instance(&request.instance_id)
+            .then(|| InstanceConfiguration::from_request(&request));
         let LoadPluginRequest {
             instance_id,
             module_path,
@@ -523,6 +579,21 @@ impl Vst3Runtime {
                 runtime_handle: instance.runtime_handle,
                 latency_samples: instance.latency_samples(),
                 tail_samples: instance.tail_samples(),
+            };
+        }
+        if let Some(index) = self.benchmark_lifetime_guards.iter().position(|guard| {
+            guard.instance_id == instance_id
+                && guard.instance.benchmark_configuration == benchmark_configuration
+        }) {
+            let guard = self.benchmark_lifetime_guards.swap_remove(index);
+            let runtime_handle = guard.instance.runtime_handle;
+            let latency_samples = guard.instance.latency_samples();
+            let tail_samples = guard.instance.tail_samples();
+            self.instances.insert(instance_id, guard.instance);
+            return ControlResult::PluginLoaded {
+                runtime_handle,
+                latency_samples,
+                tail_samples,
             };
         }
         let class_id = match class_id.parse::<ClassId>() {
@@ -645,6 +716,7 @@ impl Vst3Runtime {
         self.instances.insert(
             instance_id,
             Instance {
+                benchmark_configuration,
                 ara,
                 plugin,
                 secondary,
@@ -749,6 +821,10 @@ fn max_tail(left: Option<u32>, right: Option<u32>) -> Option<u32> {
     }
 }
 
+fn is_audio_benchmark_instance(instance_id: &str) -> bool {
+    instance_id.starts_with("__yadaw-audio-benchmark-")
+}
+
 fn control_error(message: &str) -> ControlResult {
     ControlResult::Error {
         message: message.to_owned(),
@@ -784,6 +860,14 @@ mod tests {
             ControlResult::Accepted
         ));
         assert_eq!(runtime.retired_instance_count(), 0);
+    }
+
+    #[test]
+    fn only_reserved_instance_ids_use_benchmark_lifetime_reuse() {
+        assert!(is_audio_benchmark_instance(
+            "__yadaw-audio-benchmark-gain-63"
+        ));
+        assert!(!is_audio_benchmark_instance("project-plugin"));
     }
 
     #[test]

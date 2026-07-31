@@ -1,2 +1,0 @@
-ALTER TABLE "mixer_channels" ADD COLUMN "input_monitoring" boolean DEFAULT false NOT NULL;--> statement-breakpoint
-ALTER TABLE "mixer_channels" ADD CONSTRAINT "mixer_channels_input_monitoring_check" CHECK ("mixer_channels"."kind" = 'audio' or not "mixer_channels"."input_monitoring");

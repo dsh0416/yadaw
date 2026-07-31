@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, rename, stat, writeFile } from "node:fs/promises"
+import { readFile, readdir, stat } from "node:fs/promises"
 import { execFile } from "node:child_process"
 import { promisify } from "node:util"
 import { homedir } from "node:os"
@@ -11,32 +11,18 @@ import {
   type PluginCatalogSnapshot,
   type PluginAudioMode,
   type PluginDescriptor,
-  type PluginEditorMode,
   type PluginParameterChange,
   type PluginParameterInfo,
   type PluginRuntimeStatus,
-  type PluginInstanceState,
   type PluginScanEvent,
   type PluginScanRequest
 } from "@yadaw/contracts"
+import { PluginCatalogCache } from "./plugin-catalog-cache"
+import { parseProbeStdout } from "./plugin-descriptor-decoder"
+import { PluginScanner } from "./plugin-scanner"
+import { PluginRuntimeService, type PluginRuntime } from "./plugin-runtime-service"
 
-interface PluginRuntime {
-  resolveInstance(instanceId: string): Promise<{
-    plugin: PluginInstanceState
-    sampleRate: number
-  }>
-  load(
-    plugin: PluginInstanceState,
-    sampleRate: number
-  ): Promise<{
-    latencySamples: number
-    tailSamples: number | null
-  }>
-  parameters(instanceId: string): Promise<PluginParameterInfo[]>
-  setParameter(change: PluginParameterChange): Promise<void>
-  openEditor(instanceId: string): Promise<{ editorMode: PluginEditorMode; open: boolean }>
-  closeEditor(instanceId: string): Promise<void>
-}
+export { parseProbeStdout } from "./plugin-descriptor-decoder"
 
 const SCANNER_VERSION = 7
 const execFileAsync = promisify(execFile)
@@ -309,26 +295,6 @@ interface ProbeOutput {
   }
 }
 
-/** Recover the probe JSON payload when plug-ins also write diagnostics to stdout. */
-export function parseProbeStdout(stdout: string): ProbeOutput {
-  const trimmed = stdout.trim()
-  try {
-    return JSON.parse(trimmed) as ProbeOutput
-  } catch {
-    // Keep scanning reverse lines for the final JSON object emitted by the probe.
-  }
-  for (const line of trimmed.split(/\r?\n/).reverse()) {
-    const candidate = line.trim()
-    if (!candidate.startsWith("{")) continue
-    try {
-      return JSON.parse(candidate) as ProbeOutput
-    } catch {
-      // Try earlier lines.
-    }
-  }
-  throw new Error("VST3 probe returned an invalid descriptor")
-}
-
 export function descriptorFromProbe(
   bundlePath: string,
   factoryVendor: string,
@@ -409,7 +375,7 @@ export function descriptorFromProbe(
 }
 
 export class PluginCatalogService {
-  private readonly catalogPath: string
+  private readonly cache: PluginCatalogCache
   private catalog: PluginCatalogSnapshot = {
     scannerVersion: SCANNER_VERSION,
     scanning: false,
@@ -418,30 +384,26 @@ export class PluginCatalogService {
   }
   private readonly listeners = new Set<ScanListener>()
   private fingerprints: Record<string, PluginFingerprint> = {}
-  private scanPromise: Promise<PluginCatalogSnapshot> | null = null
-  private runtime: PluginRuntime | null = null
+  private readonly scanner = new PluginScanner<PluginScanRequest, PluginCatalogSnapshot>()
+  private readonly runtime = new PluginRuntimeService()
 
   constructor(
     userData: string,
     private readonly probePath: string,
     private readonly builtinDirectory: string
   ) {
-    this.catalogPath = join(userData, "plugin-catalog.json")
+    this.cache = new PluginCatalogCache(join(userData, "plugin-catalog.json"))
   }
 
   attachRuntime(runtime: PluginRuntime): void {
-    this.runtime = runtime
+    this.runtime.attach(runtime)
   }
 
   async initialize(): Promise<void> {
-    try {
-      const parsed = JSON.parse(await readFile(this.catalogPath, "utf8")) as StoredCatalog
-      if (parsed.scannerVersion === SCANNER_VERSION && Array.isArray(parsed.plugins)) {
-        this.catalog = { ...parsed, scanning: false }
-        this.fingerprints = parsed.fingerprints ?? {}
-      }
-    } catch {
-      // The catalog is a rebuildable cache.
+    const parsed = await this.cache.load<StoredCatalog>()
+    if (parsed?.scannerVersion === SCANNER_VERSION && Array.isArray(parsed.plugins)) {
+      this.catalog = { ...parsed, scanning: false }
+      this.fingerprints = parsed.fingerprints ?? {}
     }
     await this.refreshBuiltins()
   }
@@ -535,15 +497,12 @@ export class PluginCatalogService {
   }
 
   scan(request: PluginScanRequest = {}): Promise<PluginCatalogSnapshot> {
-    this.scanPromise ??= this.scanNow(request)
-      .catch((error: unknown) => {
+    return this.scanner.run(request, (value) =>
+      this.scanNow(value).catch((error: unknown) => {
         this.catalog = { ...this.catalog, scanning: false }
         throw error
       })
-      .finally(() => {
-        this.scanPromise = null
-      })
-    return this.scanPromise
+    )
   }
 
   private async scanNow(request: PluginScanRequest): Promise<PluginCatalogSnapshot> {
@@ -625,21 +584,7 @@ export class PluginCatalogService {
       )
     }
     this.fingerprints = fingerprints
-    await mkdir(dirname(this.catalogPath), { recursive: true })
-    const temporary = `${this.catalogPath}.${process.pid}.tmp`
-    await writeFile(
-      temporary,
-      `${JSON.stringify(
-        {
-          ...this.catalog,
-          fingerprints: this.fingerprints
-        },
-        null,
-        2
-      )}\n`,
-      "utf8"
-    )
-    await rename(temporary, this.catalogPath)
+    await this.cache.store({ ...this.catalog, fingerprints: this.fingerprints })
     this.publish({ type: "completed", catalog: this.list() })
     return this.list()
   }
@@ -691,40 +636,18 @@ export class PluginCatalogService {
   }
 
   async openEditor(instanceId: string): Promise<PluginRuntimeStatus> {
-    if (!this.runtime) throw new Error("The native VST3 runtime is not running")
-    const { plugin, sampleRate } = await this.runtime.resolveInstance(instanceId)
-    const status = await this.runtime.load(plugin, sampleRate)
-    const editor = await this.runtime.openEditor(instanceId)
-    return {
-      instanceId,
-      state: plugin.enabled ? "active" : "bypassed",
-      editorOpen: editor.open,
-      editorMode: editor.editorMode,
-      latencySamples: status.latencySamples,
-      tailSamples: status.tailSamples,
-      error: null
-    }
+    return this.runtime.openEditor(instanceId)
   }
 
   async closeEditor(instanceId: string): Promise<void> {
-    await this.runtime?.closeEditor(instanceId)
+    await this.runtime.closeEditor(instanceId)
   }
 
   parameters(instanceId: string): Promise<PluginParameterInfo[]> {
-    if (!this.runtime) return Promise.resolve([])
     return this.runtime.parameters(instanceId)
   }
 
   async setParameter(change: PluginParameterChange): Promise<void> {
-    if (
-      !Number.isInteger(change.parameterId) ||
-      !Number.isFinite(change.normalized) ||
-      change.normalized < 0 ||
-      change.normalized > 1
-    ) {
-      throw new TypeError("Invalid VST3 parameter change")
-    }
-    if (!this.runtime) throw new Error("The native VST3 runtime is not running")
     await this.runtime.setParameter(change)
   }
 }

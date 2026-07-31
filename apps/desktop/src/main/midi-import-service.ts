@@ -16,8 +16,9 @@ import type {
 import { DEFAULT_INSTRUMENT_COLOR, MUSICAL_TICKS_PER_QUARTER } from "@yadaw/contracts"
 import { parseMidiFile } from "@yadaw/dsp-node"
 import type { NativeNormalizedSmf } from "@yadaw/dsp-node"
-import type { MixerService } from "./mixer-service"
 import type { PluginCatalogService } from "./plugin-catalog-service"
+import type { ProjectCommandService } from "./project-command-service"
+import type { ProjectGraphService } from "./project-graph-service"
 
 interface PreparedImport {
   preview: MidiImportPreview
@@ -44,12 +45,13 @@ export class MidiImportService {
   private readonly prepared = new Map<string, PreparedImport>()
 
   constructor(
-    private readonly mixer: MixerService,
+    private readonly graphs: ProjectGraphService,
+    private readonly commands: ProjectCommandService,
     private readonly plugins: PluginCatalogService
   ) {}
 
   async prepare(path: string): Promise<MidiImportPreview> {
-    const graph = await this.mixer.snapshot()
+    const graph = await this.graphs.snapshot()
     const parsed = await parseMidiFile(path, {
       tempoEvents: graph.tempoMap.tempoEvents,
       timeSignatureEvents: graph.tempoMap.timeSignatureEvents
@@ -108,7 +110,7 @@ export class MidiImportService {
       throw new Error("Import one Format 2 sequence at a time")
     }
 
-    const graph = await this.mixer.snapshot()
+    const graph = await this.graphs.snapshot()
     const defaultOutput = graph.channels.find((channel) => channel.kind === "output")
     if (!defaultOutput) throw new Error("Project has no hardware Output")
     const sourceId = randomUUID()
@@ -128,9 +130,10 @@ export class MidiImportService {
         tempoMap: structuredClone(selectedSequenceMap ?? prepared.preview.tempoMap)
       })
     }
-    let nextInstrumentOrder = graph.channels.filter(
-      (channel) => channel.kind === "instrument" && channel.systemRole === null
-    ).length
+    let nextInstrumentOrder = graph.tracks.filter((track) => {
+      const channel = graph.channels.find((candidate) => candidate.id === track.channelId)
+      return channel?.kind === "instrument" && channel.systemRole === null
+    }).length
     for (const mapping of selectedPlans) {
       const targetPlan = mapping.target
       if (targetPlan.type === "ignore") continue
@@ -139,8 +142,10 @@ export class MidiImportService {
       )
       if (!parsedTrack) throw new Error(`MIDI source track ${mapping.sourceTrack} was not found`)
       let channelId: string
+      let trackId: string
       if (targetPlan.type === "new") {
         channelId = randomUUID()
+        trackId = randomUUID()
         const channel: MixerChannelState = {
           id: channelId,
           kind: "instrument",
@@ -163,12 +168,18 @@ export class MidiImportService {
           inputChannels: [],
           hardwareOutputChannels: []
         }
-        commands.push({ type: "create-channel", channel })
+        commands.push({
+          type: "create-track",
+          track: { id: trackId, channelId, sortOrder: channel.sortOrder },
+          channel
+        })
       } else {
-        const target = graph.channels.find((channel) => channel.id === targetPlan.channelId)
-        if (!target || target.kind !== "instrument" || target.systemRole !== null) {
+        const track = graph.tracks.find((candidate) => candidate.id === targetPlan.trackId)
+        const target = graph.channels.find((channel) => channel.id === track?.channelId)
+        if (!track || !target || target.kind !== "instrument" || target.systemRole !== null) {
           throw new Error("MIDI clips can only be imported to Instrument tracks")
         }
+        trackId = track.id
         channelId = target.id
       }
 
@@ -179,7 +190,7 @@ export class MidiImportService {
       const clip: MidiClipState = {
         id: randomUUID(),
         sourceId,
-        trackId: channelId,
+        trackId,
         name: parsedTrack.name || `MIDI Track ${parsedTrack.sourceTrack + 1}`,
         startTick: plan.importTempoMap ? 0 : plan.insertionTick,
         lengthTicks: Math.max(1, parsedTrack.lengthTicks),
@@ -203,7 +214,7 @@ export class MidiImportService {
       }
       commands.push({ type: "create-midi-clip", clip })
     }
-    const result = await this.mixer.executeMidiImport(
+    const result = await this.commands.executeMidiImport(
       {
         id: sourceId,
         name: basename(prepared.preview.path),

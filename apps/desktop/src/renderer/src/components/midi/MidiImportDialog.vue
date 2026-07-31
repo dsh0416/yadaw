@@ -11,7 +11,14 @@ const midiImportStore = useMidiImportStore()
 const mixerStore = useMixerStore()
 const pluginStore = usePluginStore()
 const { t } = useI18n()
-const instrumentTracks = computed(() => mixerStore.instrumentTracks)
+const instrumentTracks = computed(() =>
+  mixerStore.graph.tracks.flatMap((track) => {
+    const channel = mixerStore.graph.channels.find((candidate) => candidate.id === track.channelId)
+    return channel?.kind === "instrument" && channel.systemRole === null
+      ? [{ id: track.id, name: channel.name }]
+      : []
+  })
+)
 const open = computed({
   get: () => midiImportStore.open,
   set: (value: boolean) => {
@@ -32,14 +39,14 @@ const description = computed(() =>
 function targetValue(sourceTrack: number, sequence: number): string {
   const target = midiImportStore.targetFor(sourceTrack, sequence)
   if (target.type === "ignore" || target.type === "new") return target.type
-  return `existing:${target.channelId}`
+  return `existing:${target.trackId}`
 }
 
 function updateTarget(sourceTrack: number, sequence: number, value: string): void {
   let target: MidiImportTrackTarget
   if (value === "new") target = { type: "new" }
   else if (value.startsWith("existing:")) {
-    target = { type: "existing", channelId: value.slice("existing:".length) }
+    target = { type: "existing", trackId: value.slice("existing:".length) }
   } else target = { type: "ignore" }
   midiImportStore.setTarget(sourceTrack, sequence, target)
 }

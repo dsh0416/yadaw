@@ -1,48 +1,28 @@
-import { acceptHMRUpdate, defineStore } from "pinia"
+import { acceptHMRUpdate, defineStore, storeToRefs } from "pinia"
 import { computed, shallowRef } from "vue"
 import type {
   MixerChannelKind,
   MixerChannelPatch,
   MixerChannelState,
-  MixerGraphSnapshot,
-  MixerParameterPreview,
   MixerRouteTarget,
-  MixerRuntimeSnapshot,
   MixerSendPatch,
   MixerSendState,
   ProjectCommand
 } from "@yadaw/contracts"
-import { DEFAULT_INSTRUMENT_COLOR, MUSICAL_TICKS_PER_QUARTER } from "@yadaw/contracts"
-import { UI_DOMAIN_COLORS } from "@yadaw/ui"
-import { useProjectStore } from "./project"
-import { useMixerHistory } from "./mixer-history"
-import { useMixerMeterPolling } from "./mixer-meter-polling"
+import { DEFAULT_INSTRUMENT_COLOR } from "@yadaw/contracts"
 import {
   MIXER_BUSES,
   audioTracks as selectAudioTracks,
   availableOutputTargets as selectAvailableOutputTargets,
   availableSendTargets as selectAvailableSendTargets,
   instrumentTracks as selectInstrumentTracks,
-  meterFor as selectMeterFor,
-  patchMixerGraph,
   sendsFor as selectSendsFor,
   systemChannels as selectSystemChannels
-} from "./mixer-selectors"
-
-const EMPTY_GRAPH: MixerGraphSnapshot = {
-  sampleRate: 48_000,
-  channels: [],
-  clips: [],
-  sends: [],
-  plugins: [],
-  midiClips: [],
-  tempoMap: {
-    ticksPerQuarter: MUSICAL_TICKS_PER_QUARTER,
-    tempoEvents: [{ tick: 0, beatsPerMinute: 120 }],
-    timeSignatureEvents: [{ tick: 0, numerator: 4, denominator: 4 }]
-  },
-  keySignatureEvents: [{ tick: 0, fifths: 0, mode: "major" }]
-}
+} from "@yadaw/project-model"
+import { UI_DOMAIN_COLORS } from "@yadaw/ui"
+import { useMixerRuntimeStore } from "./mixerRuntime"
+import { useProjectGraphStore } from "./projectGraph"
+import { useProjectHistoryStore } from "./projectHistory"
 
 const DEFAULT_CHANNEL_COLORS: Record<MixerChannelKind, string> = {
   audio: UI_DOMAIN_COLORS.audioChannel,
@@ -53,17 +33,20 @@ const DEFAULT_CHANNEL_COLORS: Record<MixerChannelKind, string> = {
 }
 
 export const useMixerStore = defineStore("mixer", () => {
-  const projectStore = useProjectStore()
-  const graph = shallowRef<MixerGraphSnapshot>(structuredClone(EMPTY_GRAPH))
-  const runtime = shallowRef<MixerRuntimeSnapshot>({ meters: [], capturedAt: 0 })
+  const graphStore = useProjectGraphStore()
+  const historyStore = useProjectHistoryStore()
+  const runtimeStore = useMixerRuntimeStore()
+  const { graph, loading, error: graphError } = storeToRefs(graphStore)
+  const { canUndo, canRedo } = storeToRefs(historyStore)
+  const { runtime, error: runtimeError } = storeToRefs(runtimeStore)
   const selectedChannelId = shallowRef<string | null>(null)
-  const loading = shallowRef(false)
-  const error = shallowRef("")
-  const history = useMixerHistory()
-  const { undoHistory, redoHistory, canUndo, canRedo } = history
-  let mutationTail: Promise<void> = Promise.resolve()
-  const pendingPreviews = new Map<string, MixerParameterPreview>()
-  let previewFlush: Promise<void> | null = null
+  const error = computed({
+    get: () => graphError.value || runtimeError.value,
+    set: (value: string) => {
+      graphError.value = value
+      if (!value) runtimeError.value = ""
+    }
+  })
 
   const channels = computed(() => graph.value.channels)
   const audioTracks = computed(() => selectAudioTracks(channels.value))
@@ -73,9 +56,12 @@ export const useMixerStore = defineStore("mixer", () => {
     () => channels.value.find((channel) => channel.systemRole === "metronome") ?? null
   )
   const timelineTracks = computed(() =>
-    [...audioTracks.value, ...instrumentTracks.value].sort(
-      (left, right) => left.sortOrder - right.sortOrder
-    )
+    graph.value.tracks
+      .flatMap((track) => {
+        const channel = graph.value.channels.find((candidate) => candidate.id === track.channelId)
+        return channel ? [{ ...channel, trackId: track.id, sortOrder: track.sortOrder }] : []
+      })
+      .sort((left, right) => left.sortOrder - right.sortOrder)
   )
   const auxChannels = computed(() => channels.value.filter((channel) => channel.kind === "aux"))
   const buses = computed(() => MIXER_BUSES)
@@ -93,21 +79,7 @@ export const useMixerStore = defineStore("mixer", () => {
     () => channels.value.find((channel) => channel.id === selectedChannelId.value) ?? null
   )
 
-  function enqueueMutation<T>(task: () => Promise<T>): Promise<T> {
-    const result = mutationTail.then(task, task)
-    mutationTail = result.then(
-      () => undefined,
-      () => undefined
-    )
-    return result
-  }
-
-  function load(): Promise<void> {
-    return enqueueMutation(loadNow)
-  }
-
-  function applyGraph(snapshot: MixerGraphSnapshot): void {
-    graph.value = structuredClone(snapshot)
+  function normalizeSelection(): void {
     const selectedStillExists = graph.value.channels.some(
       (channel) => channel.id === selectedChannelId.value
     )
@@ -119,109 +91,38 @@ export const useMixerStore = defineStore("mixer", () => {
     }
   }
 
-  function hydrate(snapshot: MixerGraphSnapshot): void {
-    applyGraph(snapshot)
-    history.clear()
-    error.value = ""
+  function hydrate(snapshot: Parameters<typeof graphStore.hydrate>[0]): void {
+    graphStore.hydrate(snapshot)
+    historyStore.clear()
+    normalizeSelection()
   }
 
-  async function loadNow(): Promise<void> {
-    if (!projectStore.session) return
-    loading.value = true
-    error.value = ""
-    try {
-      applyGraph(await window.yadaw.loadMixerGraph())
-    } catch (reason) {
-      error.value = reason instanceof Error ? reason.message : "Unable to load the mixer."
-    } finally {
-      loading.value = false
-    }
+  async function load(): Promise<void> {
+    await graphStore.load()
+    normalizeSelection()
   }
 
-  function reload(): Promise<void> {
-    return enqueueMutation(reloadNow)
+  async function reload(): Promise<void> {
+    await graphStore.reload()
+    normalizeSelection()
   }
 
-  async function reloadNow(): Promise<void> {
-    if (!projectStore.session) return
-    loading.value = true
-    error.value = ""
-    try {
-      applyGraph(await window.yadaw.reloadMixerGraph())
-    } catch (reason) {
-      error.value = reason instanceof Error ? reason.message : "Unable to reload the mixer."
-    } finally {
-      loading.value = false
-    }
-  }
-
-  function execute(command: ProjectCommand, recordHistory = true): Promise<boolean> {
-    return enqueueMutation(() => executeNow(command, recordHistory))
-  }
-
-  async function executeNow(command: ProjectCommand, recordHistory = true): Promise<boolean> {
-    error.value = ""
-    try {
-      await flushPreviews()
-      const result = await window.yadaw.executeProjectCommand(command)
-      graph.value = result.graph
-      projectStore.markDirty()
-      if (recordHistory) {
-        history.record({ forward: command, inverse: result.inverse })
-      }
-      return true
-    } catch (reason) {
-      error.value = reason instanceof Error ? reason.message : "Mixer change could not be applied."
-      await loadNow()
-      return false
-    }
+  async function execute(command: ProjectCommand, recordHistory = true): Promise<boolean> {
+    const result = await graphStore.execute(command)
+    if (!result) return false
+    if (recordHistory) historyStore.record({ forward: command, inverse: result.inverse })
+    return true
   }
 
   function undo(): Promise<void> {
-    return enqueueMutation(undoNow)
-  }
-
-  async function undoNow(): Promise<void> {
-    const entry = undoHistory.value.at(-1)
-    if (!entry) return
-    if (await executeNow(entry.inverse, false)) {
-      history.completeUndo(entry)
-    }
+    return historyStore.undo()
   }
 
   function redo(): Promise<void> {
-    return enqueueMutation(redoNow)
+    return historyStore.redo()
   }
 
-  async function redoNow(): Promise<void> {
-    const entry = redoHistory.value.at(-1)
-    if (!entry) return
-    if (await executeNow(entry.forward, false)) {
-      history.completeRedo(entry)
-    }
-  }
-
-  function preview(previewValue: MixerParameterPreview): void {
-    graph.value = patchMixerGraph(graph.value, previewValue.target, previewValue.id, {
-      [previewValue.parameter]: previewValue.value
-    })
-    const key = `${previewValue.target}:${previewValue.id}:${previewValue.parameter}`
-    pendingPreviews.set(key, previewValue)
-    previewFlush ??= Promise.resolve().then(flushPreviews)
-  }
-
-  async function flushPreviews(): Promise<void> {
-    while (pendingPreviews.size > 0) {
-      const previews = [...pendingPreviews.values()]
-      pendingPreviews.clear()
-      try {
-        await Promise.all(previews.map((value) => window.yadaw.previewMixerParameter(value)))
-      } catch (reason) {
-        error.value = reason instanceof Error ? reason.message : "Mixer preview failed."
-      }
-    }
-    previewFlush = null
-  }
+  const preview = graphStore.preview
 
   function updateChannel(channelId: string, patch: MixerChannelPatch): Promise<boolean> {
     return execute({ type: "update-channel", channelId, patch })
@@ -268,7 +169,11 @@ export const useMixerStore = defineStore("mixer", () => {
       hardwareOutputChannels: []
     }
     selectedChannelId.value = channel.id
-    return execute({ type: "create-channel", channel })
+    return execute({
+      type: "create-track",
+      track: { id: crypto.randomUUID(), channelId: channel.id, sortOrder: index },
+      channel
+    })
   }
 
   function createInstrumentTrack(): Promise<boolean> {
@@ -296,7 +201,11 @@ export const useMixerStore = defineStore("mixer", () => {
       hardwareOutputChannels: []
     }
     selectedChannelId.value = channel.id
-    return execute({ type: "create-channel", channel })
+    return execute({
+      type: "create-track",
+      track: { id: crypto.randomUUID(), channelId: channel.id, sortOrder: index },
+      channel
+    })
   }
 
   function createAux(inputFormat: "mono" | "stereo" = "stereo"): Promise<boolean> {
@@ -369,7 +278,10 @@ export const useMixerStore = defineStore("mixer", () => {
   async function deleteChannel(channelId: string): Promise<boolean> {
     const channel = channels.value.find((candidate) => candidate.id === channelId)
     if (!channel || channel.kind === "master" || channel.systemRole !== null) return false
-    const completed = await execute({ type: "delete-channel", channelId })
+    const track = graph.value.tracks.find((candidate) => candidate.channelId === channelId)
+    const completed = await execute(
+      track ? { type: "delete-track", trackId: track.id } : { type: "delete-channel", channelId }
+    )
     if (completed && selectedChannelId.value === channelId) {
       selectedChannelId.value = graph.value.channels[0]?.id ?? null
     }
@@ -401,7 +313,7 @@ export const useMixerStore = defineStore("mixer", () => {
   }
 
   function meterFor(channelId: string) {
-    return selectMeterFor(runtime.value, channelId)
+    return runtimeStore.meterFor(channelId)
   }
 
   function availableOutputTargets(channelId: string): MixerRouteTarget[] {
@@ -412,48 +324,19 @@ export const useMixerStore = defineStore("mixer", () => {
     return selectAvailableSendTargets(graph.value, channelId)
   }
 
-  async function refreshMeters(): Promise<void> {
-    try {
-      runtime.value = await window.yadaw.mixerSnapshot()
-    } catch {
-      // Engine state warnings are surfaced by the existing audio runtime store.
-    }
-  }
-
-  async function clearMeterClips(): Promise<void> {
-    runtime.value = {
-      ...runtime.value,
-      meters: runtime.value.meters.map((meter) => ({
-        ...meter,
-        heldPeak: [0, 0],
-        clipped: false
-      }))
-    }
-    try {
-      runtime.value = await window.yadaw.clearMixerMeterClips()
-    } catch (reason) {
-      error.value =
-        reason instanceof Error ? reason.message : "Unable to reset mixer clipping indicators."
-    }
-  }
-
-  const meterPolling = useMixerMeterPolling(refreshMeters)
-
   function startMetering(): void {
-    meterPolling.start()
+    runtimeStore.startPolling()
   }
 
   function stopMetering(): void {
-    meterPolling.stop()
+    runtimeStore.stopPolling()
   }
 
   function reset(): void {
-    stopMetering()
-    graph.value = structuredClone(EMPTY_GRAPH)
-    runtime.value = { meters: [], capturedAt: 0 }
+    graphStore.reset()
+    runtimeStore.reset()
     selectedChannelId.value = null
-    history.clear()
-    error.value = ""
+    historyStore.clear()
   }
 
   return {
@@ -497,7 +380,7 @@ export const useMixerStore = defineStore("mixer", () => {
     meterFor,
     availableOutputTargets,
     availableSendTargets,
-    clearMeterClips,
+    clearMeterClips: runtimeStore.clearClips,
     startMetering,
     stopMetering,
     reset

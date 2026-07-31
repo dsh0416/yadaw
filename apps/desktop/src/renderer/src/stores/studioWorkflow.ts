@@ -42,23 +42,31 @@ export const useStudioWorkflowStore = defineStore("studio-workflow", () => {
       }
       await mixerStore.execute({
         type: "batch",
-        commands: completed.recordedTracks.map((asset) => ({
-          type: "create-clip" as const,
-          clip: {
-            id: asset.assetId,
-            assetId: asset.assetId,
-            trackId: asset.trackId,
-            name: asset.name,
-            startFrame,
-            sourceOffsetFrames: 0,
-            lengthFrames: Math.max(
-              1,
-              Math.round((asset.frameCount * mixerStore.graph.sampleRate) / asset.sampleRate)
-            ),
-            assetSampleRate: asset.sampleRate,
-            assetChannels: asset.channels
+        commands: completed.recordedTracks.map((asset) => {
+          const track = mixerStore.graph.tracks.find(
+            (candidate) => candidate.channelId === asset.trackId
+          )
+          if (!track) {
+            throw new Error(`Recorded channel '${asset.trackId}' has no project track`)
           }
-        }))
+          return {
+            type: "create-audio-clip" as const,
+            clip: {
+              id: asset.assetId,
+              assetId: asset.assetId,
+              trackId: track.id,
+              name: asset.name,
+              startFrame,
+              sourceOffsetFrames: 0,
+              lengthFrames: Math.max(
+                1,
+                Math.round((asset.frameCount * mixerStore.graph.sampleRate) / asset.sampleRate)
+              ),
+              assetSampleRate: asset.sampleRate,
+              assetChannels: asset.channels
+            }
+          }
+        })
       })
     }
     projectStore.markDirty()
