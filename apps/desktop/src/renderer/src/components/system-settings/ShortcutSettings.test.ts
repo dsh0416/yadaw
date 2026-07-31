@@ -114,6 +114,7 @@ describe("ShortcutSettings", () => {
     window.dispatchEvent(new KeyboardEvent("keydown", { code: "ControlLeft", ctrlKey: true }))
     expect(keyboardButton.text()).toContain("Press keys")
     window.dispatchEvent(new KeyboardEvent("keydown", { code: "Escape" }))
+    await flushPromises()
     expect(keyboardButton.text()).not.toContain("Press keys")
 
     await keyboardButton.trigger("click")
