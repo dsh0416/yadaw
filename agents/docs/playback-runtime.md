@@ -323,8 +323,8 @@ machine. It runs only while transport is stopped, validates 50 ms of quiet input
 silences the selected output to break any monitoring feedback route, emits a
 fixed 13-sample matched probe, and correlates the selected input for up to three
 seconds. Configuration and results cross the actor boundary; the callbacks only
-read/write atomics and fixed arrays. The virtual backend feeds the selected
-output into the selected input one block later for deterministic integration and
+read/write atomics and fixed arrays. The mock backend loops the selected output
+into the selected input roughly one block later for deterministic integration and
 desktop e2e coverage.
 
 Normal shutdown stops new ingress, signals the async outbound actor, drains
@@ -653,7 +653,7 @@ Any playback-runtime change should cover the applicable items:
 - PDC, bypass latency, finite/infinite tail, Tempo boundary, event offset, MIDI
   chase, and VST3 fixture tests;
 - helper crash/hang recovery and graph replay tests;
-- local Playwright coverage through the virtual audio backend.
+- local Playwright coverage through the mock audio backend.
 
 During review, reject changes that:
 

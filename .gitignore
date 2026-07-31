@@ -1,6 +1,7 @@
 node_modules/
 .pnpm-store/
 target/
+target-coverage/
 out/
 dist/
 **/.vitepress/cache/

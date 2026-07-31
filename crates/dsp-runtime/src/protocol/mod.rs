@@ -385,7 +385,7 @@ mod tests {
     fn session_and_native_output_sample_rates_round_trip() {
         let command = ControlCommand::StartAudioEngine {
             config: AudioEngineConfig {
-                backend: "virtual".to_owned(),
+                backend: "mock".to_owned(),
                 input_device_id: "input".to_owned(),
                 output_device_id: "output".to_owned(),
                 buffer_size: 128,

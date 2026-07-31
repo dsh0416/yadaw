@@ -33,6 +33,20 @@ The application reports when adaptive resampling, drift correction, or a buffer
 fallback is active. These are useful compatibility mechanisms, but matching
 device clocks and sample rates usually gives the simplest low-latency setup.
 
+## Working without audio hardware
+
+The backend list ends with **Mock**, which is always available and needs no
+driver. It runs the engine, transport, mixer, and plug-ins normally, but it
+never opens a real device: capture is silent and playback is discarded.
+
+Use it to keep working when no interface is connected, when another application
+is holding the device, or when you want to edit a project without producing
+sound. YADAW selects it automatically only when no other backend can be reached.
+
+Mock devices run at 48 kHz in stereo and route playback back into capture, so
+metering and the round-trip latency measurement still respond. Switch back to a
+hardware backend when you need to hear the session.
+
 ## Buffer size
 
 Smaller buffers reduce monitoring latency and increase deadline pressure.

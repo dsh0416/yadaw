@@ -66,11 +66,20 @@ mod tests {
     }
 
     #[test]
-    fn falls_back_to_the_driver_default_outside_the_device_range() {
-        let selection = select_buffer_size(&SupportedBufferSize::Range { min: 480, max: 480 }, 64);
-        assert!(matches!(selection.buffer_size, BufferSize::Default));
-        assert_eq!(selection.expected_frames, 480);
-        assert!(selection.fell_back);
+    fn clamps_a_request_outside_the_device_range_to_a_fixed_supported_size() {
+        // The clamped size must be requested rather than the driver default, so
+        // that the ring buffer and resamplers are sized for the block size the
+        // callbacks actually receive.
+        assert_fixed(
+            select_buffer_size(&SupportedBufferSize::Range { min: 480, max: 480 }, 64),
+            480,
+            true,
+        );
+        assert_fixed(
+            select_buffer_size(&SupportedBufferSize::Range { min: 32, max: 512 }, 1_024),
+            512,
+            true,
+        );
     }
 
     #[test]
@@ -285,7 +294,7 @@ mod tests {
     #[test]
     fn audio_engine_identity_includes_the_requested_session_rate() {
         let base = AudioEngineKey {
-            backend: "virtual".to_owned(),
+            backend: "mock".to_owned(),
             input_device_id: "input".to_owned(),
             output_device_id: "output".to_owned(),
             requested_buffer_size: 128,

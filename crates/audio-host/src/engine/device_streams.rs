@@ -1,13 +1,3 @@
-fn host_for_backend(backend: &str) -> Result<Host> {
-    let host_id = cpal::available_hosts()
-        .into_iter()
-        .find(|host_id| host_id.to_string().eq_ignore_ascii_case(backend))
-        .ok_or_else(|| invalid_config(format!("cpal backend '{backend}' is not available")))?;
-
-    cpal::host_from_id(host_id)
-        .map_err(|error| audio_error("failed to initialize cpal host", error))
-}
-
 fn find_device(host: &Host, id: &str, input: bool) -> Result<Device> {
     let devices = if input {
         host.input_devices()
@@ -60,21 +50,22 @@ struct BufferSelection {
 fn select_buffer_size(supported: &SupportedBufferSize, requested: u32) -> BufferSelection {
     match supported {
         SupportedBufferSize::Range { min, max } => {
+            // A clamped request is still opened as a fixed size. The device
+            // advertised that size, so `expected_frames` is a value it has
+            // committed to rather than a guess. Asking for `BufferSize::Default`
+            // here would leave the negotiated block size unknown until after
+            // the ring buffer and resamplers had already been sized for the
+            // clamped value.
             let selected = requested.clamp(*min, *max);
-            if selected == requested {
-                BufferSelection {
-                    buffer_size: BufferSize::Fixed(selected),
-                    expected_frames: selected,
-                    fell_back: false,
-                }
-            } else {
-                BufferSelection {
-                    buffer_size: BufferSize::Default,
-                    expected_frames: selected,
-                    fell_back: true,
-                }
+            BufferSelection {
+                buffer_size: BufferSize::Fixed(selected),
+                expected_frames: selected,
+                fell_back: selected != requested,
             }
         }
+        // With no reported range there is nothing to clamp into, so the driver
+        // default is the only option and `expected_frames` stays a prediction
+        // that `Stream::buffer_size` corrects once the stream exists.
         SupportedBufferSize::Unknown => BufferSelection {
             buffer_size: BufferSize::Default,
             expected_frames: requested,

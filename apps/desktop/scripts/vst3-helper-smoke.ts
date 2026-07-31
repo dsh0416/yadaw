@@ -53,8 +53,7 @@ const resolvedSynth = resolve(
 )
 const crashMarker = resolve(tmpdir(), `yadaw-vst3-smoke-${process.pid}.marker`)
 const child = spawn(resolvedHelper, ["--crash-marker", crashMarker], {
-  stdio: ["pipe", "pipe", "inherit"],
-  env: { ...process.env, YADAW_TEST_VIRTUAL_AUDIO: "1" }
+  stdio: ["pipe", "pipe", "inherit"]
 })
 let nextRequestId = 1
 let received = Buffer.alloc(0)
@@ -267,9 +266,9 @@ try {
   await send({
     type: "start-audio-engine",
     config: {
-      backend: "virtual",
-      input_device_id: "virtual-stereo",
-      output_device_id: "virtual-stereo",
+      backend: "mock",
+      input_device_id: "custom:mock-duplex",
+      output_device_id: "custom:mock-duplex",
       buffer_size: 128
     }
   })
@@ -278,7 +277,7 @@ try {
   const meters = await send({ type: "mixer-snapshot" })
   const instrumentMeter = meters.meters?.find((meter) => meter.channel_id === "instrument-1")
   if (!instrumentMeter || Math.max(instrumentMeter.held_left, instrumentMeter.held_right) <= 0) {
-    throw new Error("virtual live graph did not render the VST3 instrument/effect chain")
+    throw new Error("mock live graph did not render the VST3 instrument/effect chain")
   }
   await send({ type: "stop-audio-engine" })
   console.log(
