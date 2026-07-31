@@ -107,8 +107,9 @@ export const useAudioPreferencesStore = defineStore("audio-preferences", () => {
 
   async function restore(): Promise<void> {
     if (restoreAttempted) return
-    restoreAttempted = true
     if (!preferences.value.inputDeviceId || !preferences.value.outputDeviceId) return
+    if (!audioRuntimeStore.audioHostRef) return
+    restoreAttempted = true
 
     await audioRuntimeStore.refresh()
     if (audioRuntimeStore.runtime.state === "stopped") {

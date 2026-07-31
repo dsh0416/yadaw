@@ -280,6 +280,30 @@ describe("apply", () => {
 })
 
 describe("restore", () => {
+  it("waits for the bootstrapped audio host before consuming the restore attempt", async () => {
+    storage.setItem(STORAGE_KEY, JSON.stringify(preferences({ backend: "asio" })))
+    setActivePinia(createPinia())
+    const startAudioEngine = vi.fn(async () => engineSuccess(runtimeSnapshot()))
+    stubApi({
+      audioEngineSnapshot: vi.fn(),
+      startAudioEngine
+    })
+    const store = useAudioPreferencesStore()
+
+    await store.restore()
+    expect(startAudioEngine).not.toHaveBeenCalled()
+
+    applyAudioHost()
+    await store.restore()
+    await store.restore()
+
+    expect(startAudioEngine).toHaveBeenCalledTimes(1)
+    expect(startAudioEngine).toHaveBeenCalledWith(
+      expect.objectContaining({ target: expect.objectContaining({ kind: "audio-host" }) }),
+      preferences({ backend: "asio" })
+    )
+  })
+
   it("starts the engine once when a stopped session has a saved device pair", async () => {
     storage.setItem(STORAGE_KEY, JSON.stringify(preferences()))
     const startAudioEngine = vi.fn(async () => engineSuccess(runtimeSnapshot()))

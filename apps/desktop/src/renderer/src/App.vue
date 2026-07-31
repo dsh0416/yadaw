@@ -30,6 +30,7 @@ const applicationWindowStore = useApplicationWindowStore()
 const midiInputStore = useMidiInputStore()
 const { settings } = storeToRefs(applicationSettingsStore)
 const { ready: lifecycleReady } = storeToRefs(lifecycleStore)
+const { audioHostRef } = storeToRefs(audioRuntimeStore)
 const themePreference = computed(() => settings.value?.theme ?? "system")
 const uiLocale = computed(() => rekaLocale(settings.value?.locale ?? DEFAULT_LOCALE))
 
@@ -50,6 +51,14 @@ watch(
   }
 )
 
+watch(
+  audioHostRef,
+  (host) => {
+    if (host) void audioPreferencesStore.restore()
+  },
+  { immediate: true }
+)
+
 function stopRuntimePolling(): void {
   audioRuntimeStore.stopPolling()
   systemPerformanceStore.stopPolling()
@@ -60,7 +69,6 @@ onMounted(() => {
   void lifecycleStore.initialize()
   audioRuntimeStore.startPolling()
   systemPerformanceStore.startPolling()
-  void audioPreferencesStore.restore()
   void applicationSettingsStore.load()
   void midiInputStore.load()
   window.addEventListener("beforeunload", stopRuntimePolling)
