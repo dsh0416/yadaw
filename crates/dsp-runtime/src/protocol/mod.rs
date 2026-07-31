@@ -149,6 +149,21 @@ pub enum ControlCommand {
     UpdateGraph {
         update: GraphUpdate,
     },
+    PrepareGraph {
+        meta: RpcRequestMeta,
+        request: PrepareGraphRequest,
+    },
+    ActivateGraph {
+        meta: RpcRequestMeta,
+        request: GraphTransactionRequest,
+    },
+    AbortGraph {
+        meta: RpcRequestMeta,
+        request: GraphTransactionRequest,
+    },
+    GraphDeploymentSnapshot {
+        meta: RpcRequestMeta,
+    },
     PreviewMixerParameter {
         preview: MixerParameterPreview,
     },
@@ -280,6 +295,9 @@ pub enum ControlResult {
     GraphAccepted {
         revision: u64,
     },
+    GraphTransaction {
+        result: Box<RpcResult<GraphTransactionValue>>,
+    },
     RevisionMismatch {
         current_revision: u64,
     },
@@ -390,6 +408,47 @@ mod tests {
         assert_eq!(
             read_message::<ControlRequest>(&mut bytes.as_slice()).unwrap(),
             request
+        );
+    }
+
+    #[test]
+    fn graph_transaction_envelopes_round_trip_with_lossless_epochs() {
+        let engine = ResourceRef {
+            kind: ResourceKind::AudioEngine,
+            id: "engine".to_owned(),
+            epoch: u64::MAX.to_string(),
+            generation: 2,
+        };
+        let project_graph = ResourceRef {
+            kind: ResourceKind::ProjectGraph,
+            id: "graph".to_owned(),
+            epoch: "main-epoch".to_owned(),
+            generation: 4,
+        };
+        let command = ControlCommand::PrepareGraph {
+            meta: RpcRequestMeta {
+                protocol_version: IPC_PROTOCOL_VERSION,
+                request_id: "request-1".to_owned(),
+                target: Some(engine),
+                expected_revision: Some(7),
+                mutation: Some(RpcMutationMeta {
+                    operation_id: "operation-1".to_owned(),
+                    idempotency_key: "graph:8".to_owned(),
+                }),
+            },
+            request: PrepareGraphRequest {
+                helper_epoch: u64::MAX.to_string(),
+                project_graph,
+                base_revision: 7,
+                graph_revision: 8,
+                graph: empty_graph(),
+            },
+        };
+
+        let bytes = rmp_serde::to_vec_named(&command).expect("graph transaction must encode");
+        assert_eq!(
+            rmp_serde::from_slice::<ControlCommand>(&bytes).expect("graph transaction must decode"),
+            command
         );
     }
 

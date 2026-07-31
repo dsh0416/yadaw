@@ -16,6 +16,7 @@ impl GraphBuildInput {
 pub struct CompiledGraphBuild {
     runtime: Box<NativeMixerRuntime>,
     snapshot: CompiledAudioGraphSnapshot,
+    source_graph: NativeMixerGraph,
 }
 
 impl CompiledGraphBuild {
@@ -72,14 +73,10 @@ fn validate_session_sample_rate(engine_sample_rate: u32, graph_sample_rate: u32)
     Ok(())
 }
 
-/// Store the candidate graph, allocate a build generation, and capture transport
-/// handles. Heavy compile work must run on a supervised graph worker via
+/// Allocate a build generation and capture transport handles. Heavy compile
+/// work must run on a supervised graph worker via
 /// [`compile_graph_build`].
 pub fn begin_graph_build(graph: NativeMixerGraph) -> Result<GraphBuildInput> {
-    *LAST_NATIVE_GRAPH
-        .get_or_init(|| Mutex::new(None))
-        .lock()
-        .map_err(|_| audio_error("last mixer graph lock", "poisoned"))? = Some(graph.clone());
     let build_generation = NEXT_BUILD_GENERATION.fetch_add(1, Ordering::Relaxed);
     let (transport, input_peaks) = engine_transport_handles(graph.sample_rate)?;
     Ok(GraphBuildInput {
@@ -95,13 +92,18 @@ pub fn begin_graph_build(graph: NativeMixerGraph) -> Result<GraphBuildInput> {
 /// graph.
 pub fn compile_graph_build(input: GraphBuildInput) -> Result<CompiledGraphBuild> {
     let snapshot = compiled_graph_snapshot(&input.graph, input.build_generation);
+    let source_graph = input.graph.clone();
     let runtime = Box::new(build_mixer_runtime(
         input.graph,
         input.build_generation,
         input.transport,
         input.input_peaks,
     )?);
-    Ok(CompiledGraphBuild { runtime, snapshot })
+    Ok(CompiledGraphBuild {
+        runtime,
+        snapshot,
+        source_graph,
+    })
 }
 
 fn latest_build_generation() -> u64 {
@@ -122,18 +124,12 @@ pub fn publish_mixer_runtime(built: CompiledGraphBuild) -> Result<PublishOutcome
     if build_generation != latest_build_generation() {
         return Ok(PublishOutcome::Superseded);
     }
-    if let Ok(mut snapshots) = COMPILED_GRAPH_SNAPSHOTS
-        .get_or_init(|| Mutex::new(BTreeMap::new()))
+    let source_graph = built.source_graph;
+    let snapshot = built.snapshot;
+    let mut last_graph = LAST_NATIVE_GRAPH
+        .get_or_init(|| Mutex::new(None))
         .lock()
-    {
-        snapshots.insert(build_generation, built.snapshot);
-        while snapshots.len() > 16 {
-            let Some(oldest) = snapshots.keys().next().copied() else {
-                break;
-            };
-            snapshots.remove(&oldest);
-        }
-    }
+        .map_err(|_| audio_error("last mixer graph lock", "poisoned"))?;
     let mut guard = engine_slot()
         .lock()
         .map_err(|_| audio_error("audio engine lock", "poisoned"))?;
@@ -152,6 +148,19 @@ pub fn publish_mixer_runtime(built: CompiledGraphBuild) -> Result<PublishOutcome
         *pending_mixer_slot()
             .lock()
             .map_err(|_| audio_error("pending mixer lock", "poisoned"))? = Some(built.runtime);
+    }
+    *last_graph = Some(source_graph);
+    if let Ok(mut snapshots) = COMPILED_GRAPH_SNAPSHOTS
+        .get_or_init(|| Mutex::new(BTreeMap::new()))
+        .lock()
+    {
+        snapshots.insert(build_generation, snapshot);
+        while snapshots.len() > 16 {
+            let Some(oldest) = snapshots.keys().next().copied() else {
+                break;
+            };
+            snapshots.remove(&oldest);
+        }
     }
     Ok(PublishOutcome::Published)
 }
@@ -321,6 +330,15 @@ pub(crate) fn set_last_native_graph_for_test(graph: Option<NativeMixerGraph>) {
         .get_or_init(|| Mutex::new(None))
         .lock()
         .expect("last mixer graph lock") = graph;
+}
+
+#[cfg(test)]
+pub(crate) fn last_native_graph_generation_for_test() -> Option<u64> {
+    LAST_NATIVE_GRAPH
+        .get_or_init(|| Mutex::new(None))
+        .lock()
+        .ok()
+        .and_then(|graph| graph.as_ref().map(|graph| graph.generation))
 }
 
 pub fn published_graph_generation() -> u64 {

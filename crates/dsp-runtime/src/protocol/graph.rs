@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 
-use super::{LiveMidiClip, LivePluginInstance, LiveTempoEvent, LiveTimeSignatureEvent};
+use super::{
+    LiveMidiClip, LivePluginInstance, LiveTempoEvent, LiveTimeSignatureEvent, ResourceRef,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -155,6 +157,94 @@ impl GraphUpdate {
             Self::Replace { revision, .. } | Self::Patch { revision, .. } => *revision,
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrepareGraphRequest {
+    pub helper_epoch: String,
+    pub project_graph: ResourceRef,
+    pub base_revision: u64,
+    pub graph_revision: u64,
+    pub graph: LiveMixerGraph,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GraphTransactionRequest {
+    pub helper_epoch: String,
+    pub project_graph: ResourceRef,
+    pub base_revision: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum GraphDeploymentStatus {
+    Empty,
+    Prepared,
+    Active,
+    Degraded,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GraphCandidateSnapshot {
+    pub operation_id: String,
+    pub project_graph: ResourceRef,
+    pub base_revision: u64,
+    pub graph_revision: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum GraphOperationOutcome {
+    Committed,
+    NotCommitted,
+    Quarantined,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GraphOperationSnapshot {
+    pub operation_id: String,
+    pub outcome: GraphOperationOutcome,
+    pub graph_revision: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GraphDeploymentSnapshot {
+    pub helper_epoch: String,
+    pub engine: ResourceRef,
+    pub status: GraphDeploymentStatus,
+    pub committed_project_graph: Option<ResourceRef>,
+    pub committed_revision: u64,
+    pub observed_revision: u64,
+    pub candidate: Option<GraphCandidateSnapshot>,
+    pub last_operation: Option<GraphOperationSnapshot>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(
+    tag = "type",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
+pub enum GraphTransactionValue {
+    Prepared {
+        snapshot: GraphDeploymentSnapshot,
+    },
+    Activated {
+        snapshot: GraphDeploymentSnapshot,
+    },
+    Aborted {
+        operation_id: String,
+        existed: bool,
+        snapshot: GraphDeploymentSnapshot,
+    },
+    Snapshot {
+        snapshot: GraphDeploymentSnapshot,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

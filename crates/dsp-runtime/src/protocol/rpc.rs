@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 pub const IPC_PROTOCOL_VERSION: u8 = 2;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ResourceKind {
     DesktopSession,

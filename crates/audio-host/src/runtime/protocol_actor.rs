@@ -105,12 +105,16 @@ async fn run_protocol_actor(
     tokio::spawn(engine_actor(engine_inbox, handles.clone()));
     tokio::task::spawn_local(vst3_actor(
         vst3_inbox,
-        ui_proxy.clone(),
-        ui_sender,
-        processors,
-        handles,
-        request_arena.clone(),
-        background_sender.clone(),
+        Vst3ActorDeps {
+            ui_proxy: ui_proxy.clone(),
+            ui_sender,
+            processors,
+            handles,
+            request_arena: request_arena.clone(),
+            background_sender: background_sender.clone(),
+            engine_sender: engine_sender.clone(),
+            session_epoch,
+        },
     ));
     tokio::spawn(background_io_actor(
         background_inbox,

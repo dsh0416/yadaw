@@ -199,13 +199,11 @@ fn worker_lane(queue: Arc<SharedQueue>) {
 mod tests {
     use super::*;
     use crate::engine::{
-        NativeMixerChannel, NativeMixerGraph, PublishOutcome, begin_graph_build,
-        latest_build_generation_for_test, publish_mixer_runtime,
+        GRAPH_TEST_LOCK, NativeMixerChannel, NativeMixerGraph, PublishOutcome, begin_graph_build,
+        last_native_graph_generation_for_test, latest_build_generation_for_test,
+        publish_mixer_runtime, set_last_native_graph_for_test,
     };
-    use std::sync::Mutex;
     use yadaw_dsp_runtime::tempo::{TempoEvent, TimeSignatureEvent};
-
-    static GRAPH_BUILD_TEST_LOCK: Mutex<()> = Mutex::new(());
 
     fn minimal_graph(generation: u64) -> NativeMixerGraph {
         NativeMixerGraph {
@@ -285,7 +283,7 @@ mod tests {
 
     #[test]
     fn newer_build_generation_discards_stale_publish() {
-        let _guard = GRAPH_BUILD_TEST_LOCK
+        let _guard = GRAPH_TEST_LOCK
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let first = begin_graph_build(minimal_graph(1)).expect("first begin");
@@ -313,7 +311,7 @@ mod tests {
 
     #[test]
     fn supervisor_compiles_graph_builds_on_worker_lanes() {
-        let _guard = GRAPH_BUILD_TEST_LOCK
+        let _guard = GRAPH_TEST_LOCK
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let supervisor = WorkerSupervisor::new();
@@ -330,5 +328,25 @@ mod tests {
             PublishOutcome::Published
         );
         supervisor.shutdown();
+    }
+
+    #[test]
+    fn preparing_and_compiling_do_not_replace_the_committed_recovery_graph() {
+        let _guard = GRAPH_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        set_last_native_graph_for_test(None);
+        let input = begin_graph_build(minimal_graph(41)).expect("prepare");
+        assert_eq!(last_native_graph_generation_for_test(), None);
+
+        let built = compile_graph_build(input).expect("compile");
+        assert_eq!(last_native_graph_generation_for_test(), None);
+
+        assert_eq!(
+            publish_mixer_runtime(built).expect("activate"),
+            PublishOutcome::Published
+        );
+        assert_eq!(last_native_graph_generation_for_test(), Some(41));
+        set_last_native_graph_for_test(None);
     }
 }

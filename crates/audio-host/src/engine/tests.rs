@@ -18,7 +18,7 @@ mod tests {
         RoundTripOutputProbe, ScheduledMidiEvent, ScheduledMidiEventKind, SessionOutputConverter,
         SignalWidth, StereoDelayLine, StreamDirection, StreamErrorImpact, SupportedBufferSize,
         TRANSPORT_PLAYING, TRANSPORT_RECORDING, TRANSPORT_STOPPED, TRANSPORT_WAITING,
-        TransportAction, TransportShared, clip_storage_policy, compiled_graph_snapshot,
+        TransportAction, TransportShared, GRAPH_TEST_LOCK, clip_storage_policy, compiled_graph_snapshot,
         frames_to_nanos, native_graph_references_plugin,
         resolve_stream_devices, select_buffer_size, set_last_native_graph_for_test,
         spawn_streaming_clip, stream_error_impact, validate_session_sample_rate,
@@ -753,7 +753,10 @@ mod tests {
     }
 
     #[test]
-    fn native_graph_plugin_references_follow_the_last_candidate_graph() {
+    fn native_graph_plugin_references_follow_the_last_committed_graph() {
+        let _guard = GRAPH_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         set_last_native_graph_for_test(None);
         assert!(!native_graph_references_plugin("bench-0"));
 

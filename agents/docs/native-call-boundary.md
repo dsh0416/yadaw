@@ -178,6 +178,18 @@ published generation and therefore never returns a queued graph. The renderer
 store polls only while its Help dialog is open, suppresses stale results, and
 distinguishes no project/no published graph from helper failure.
 
+IPC v2 graph deployment separates `prepareGraph`, `activateGraph`,
+`abortGraph`, and `graphDeploymentSnapshot`. Prepare validates the complete
+engine/project-graph references and base revision, materializes attachments,
+and compiles one isolated candidate without changing MIDI routes, ARA state,
+parameter handles, the callback graph, or `LAST_NATIVE_GRAPH`. Activate first
+stages the reversible controller state and then uses the existing bounded
+engine command queue as the single native commit point. Only a successful
+publication updates the committed recovery graph. The response waits for the
+callback's observed revision; a wait timeout returns `timeout-unknown`, and the
+caller reconciles the deployment snapshot by operation ID instead of repeating
+activation. Abort is idempotent and drops only the matching candidate.
+
 Plug-in editor preferences follow a similarly narrow path. Renderer code only
 calls `openPluginEditor(instanceId)` through the plug-in Pinia store. Electron
 main resolves the class-ID preference and sends it to `audio-host`; the helper

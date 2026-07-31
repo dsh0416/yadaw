@@ -7,6 +7,9 @@ fn request_deadline(command: &ControlCommand) -> Duration {
     } else if matches!(
         command,
         ControlCommand::UpdateGraph { .. }
+            | ControlCommand::PrepareGraph { .. }
+            | ControlCommand::ActivateGraph { .. }
+            | ControlCommand::AbortGraph { .. }
             | ControlCommand::LoadPlugin { .. }
             | ControlCommand::UnloadPlugin { .. }
             | ControlCommand::SavePluginState { .. }
