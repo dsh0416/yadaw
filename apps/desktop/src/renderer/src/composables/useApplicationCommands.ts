@@ -2,7 +2,18 @@ import { computed, onMounted, onUnmounted } from "vue"
 import { storeToRefs } from "pinia"
 import { useI18n } from "vue-i18n"
 import { useRouter } from "vue-router"
-import type { ApplicationCommandId, CreateProjectRequest } from "@yadaw/contracts"
+import {
+  APPLICATION_COMMAND_IDS,
+  formatKeyboardShortcut,
+  keyboardBindingMatches,
+  resolveKeyboardShortcuts
+} from "@yadaw/contracts"
+import type {
+  ApplicationCommandId,
+  CreateProjectRequest,
+  KeyboardShortcutBinding,
+  MidiControlEvent
+} from "@yadaw/contracts"
 import type { UiMenubarMenu } from "@yadaw/ui"
 import { useAudioBenchmarkStore } from "../stores/audioBenchmark"
 import { useCompiledEffectGraphStore } from "../stores/compiledEffectGraph"
@@ -11,6 +22,11 @@ import { useMixerStore } from "../stores/mixer"
 import { useProjectStore } from "../stores/project"
 import { useStudioWorkflowStore } from "../stores/studioWorkflow"
 import { usePianoRollStore } from "../stores/pianoRoll"
+import { useApplicationSettingsStore } from "../stores/applicationSettings"
+import { useMidiInputStore } from "../stores/midiInput"
+import { useRecordingStore } from "../stores/recording"
+import { useStudioWorkspaceStore } from "../stores/studioWorkspace"
+import { useTransportStore } from "../stores/transport"
 
 function defaultProject(name: string): CreateProjectRequest {
   return {
@@ -39,35 +55,61 @@ export function useApplicationCommands() {
   const benchmarkStore = useAudioBenchmarkStore()
   const compiledEffectGraphStore = useCompiledEffectGraphStore()
   const applicationWindowStore = useApplicationWindowStore()
+  const applicationSettingsStore = useApplicationSettingsStore()
+  const midiInputStore = useMidiInputStore()
+  const recordingStore = useRecordingStore()
+  const workspaceStore = useStudioWorkspaceStore()
+  const transportStore = useTransportStore()
   const { lifecycle, session, busy: projectBusy } = storeToRefs(projectStore)
   const { canUndo, canRedo } = storeToRefs(mixerStore)
+  const { active: activeRecording, busy: recordingBusy } = storeToRefs(recordingStore)
   let unsubscribe: (() => void) | null = null
+  let unsubscribeMidi: (() => void) | null = null
+  const activeMidiControls = new Set<string>()
 
   const projectReady = computed(() => lifecycle.value.status === "open")
+  const keyboardShortcuts = computed(() =>
+    resolveKeyboardShortcuts(
+      applicationWindowStore.platform,
+      applicationSettingsStore.settings?.shortcuts ?? { keyboard: {}, midi: {} }
+    )
+  )
+  const shortcutLabel = (command: ApplicationCommandId): string | undefined => {
+    const binding = keyboardShortcuts.value[command]
+    return binding ? formatKeyboardShortcut(binding, applicationWindowStore.platform) : undefined
+  }
   const menus = computed<UiMenubarMenu[]>(() => [
     {
       value: "file",
       label: t("menu.file"),
       items: [
-        { value: "project.new", label: t("menu.newProject"), shortcut: "Ctrl+N" },
-        { value: "project.open", label: t("menu.openProject"), shortcut: "Ctrl+O" },
+        {
+          value: "project.new",
+          label: t("menu.newProject"),
+          shortcut: shortcutLabel("project.new")
+        },
+        {
+          value: "project.open",
+          label: t("menu.openProject"),
+          shortcut: shortcutLabel("project.open")
+        },
         {
           value: "project.save",
           label: t("menu.saveProject"),
-          shortcut: "Ctrl+S",
+          shortcut: shortcutLabel("project.save"),
           separatorBefore: true,
           disabled: !projectReady.value
         },
         {
           value: "project.close",
           label: t("menu.closeProject"),
-          shortcut: "Ctrl+W",
+          shortcut: shortcutLabel("project.close"),
           disabled: !projectReady.value
         },
         {
           value: "project.settings",
           label: t("menu.projectSettings"),
-          shortcut: "Ctrl+Shift+,",
+          shortcut: shortcutLabel("project.settings"),
           separatorBefore: true,
           disabled: !projectReady.value
         }
@@ -80,28 +122,32 @@ export function useApplicationCommands() {
         {
           value: "edit.undo",
           label: t("menu.undo"),
-          shortcut: "Ctrl+Z",
+          shortcut: shortcutLabel("edit.undo"),
           disabled: !projectReady.value || !canUndo.value
         },
         {
           value: "edit.redo",
           label: t("menu.redo"),
-          shortcut: "Ctrl+Shift+Z",
+          shortcut: shortcutLabel("edit.redo"),
           disabled: !projectReady.value || !canRedo.value
         },
         {
           value: "edit.cut",
           label: t("menu.cut"),
-          shortcut: "Ctrl+X",
+          shortcut: shortcutLabel("edit.cut"),
           separatorBefore: true
         },
-        { value: "edit.copy", label: t("menu.copy"), shortcut: "Ctrl+C" },
-        { value: "edit.paste", label: t("menu.paste"), shortcut: "Ctrl+V" },
-        { value: "edit.select-all", label: t("menu.selectAll"), shortcut: "Ctrl+A" },
+        { value: "edit.copy", label: t("menu.copy"), shortcut: shortcutLabel("edit.copy") },
+        { value: "edit.paste", label: t("menu.paste"), shortcut: shortcutLabel("edit.paste") },
+        {
+          value: "edit.select-all",
+          label: t("menu.selectAll"),
+          shortcut: shortcutLabel("edit.select-all")
+        },
         {
           value: "application.preferences",
           label: t("menu.preferences"),
-          shortcut: "Ctrl+,",
+          shortcut: shortcutLabel("application.preferences"),
           separatorBefore: true
         }
       ]
@@ -113,7 +159,7 @@ export function useApplicationCommands() {
         {
           value: "view.toggle-full-screen",
           label: t("menu.toggleFullScreen"),
-          shortcut: "F11"
+          shortcut: shortcutLabel("view.toggle-full-screen")
         }
       ]
     },
@@ -174,6 +220,12 @@ export function useApplicationCommands() {
     await applicationWindowStore.execute(command)
   }
 
+  async function toggleRecording(): Promise<void> {
+    if (recordingBusy.value || router.currentRoute.value.name !== "studio") return
+    const completed = await studioWorkflowStore.toggleRecording()
+    if (completed) transportStore.selectAndRevealClip(completed.id)
+  }
+
   async function execute(command: ApplicationCommandId): Promise<void> {
     switch (command) {
       case "project.new":
@@ -226,6 +278,20 @@ export function useApplicationCommands() {
       case "application.about":
         await applicationWindowStore.execute(command)
         break
+      case "view.toggle-mixer-dock":
+        if (router.currentRoute.value.name === "studio") workspaceStore.toggleMixerDock()
+        break
+      case "transport.toggle-playback":
+        if (router.currentRoute.value.name === "studio" && !activeRecording.value) {
+          await transportStore.toggle()
+        }
+        break
+      case "transport.go-to-start":
+        if (router.currentRoute.value.name === "studio") await transportStore.goToStart()
+        break
+      case "recording.toggle":
+        await toggleRecording()
+        break
       case "help.audio-benchmark":
         benchmarkStore.open()
         break
@@ -236,30 +302,55 @@ export function useApplicationCommands() {
   }
 
   function handleShortcut(event: KeyboardEvent): void {
-    if (applicationWindowStore.platform === "darwin" || event.repeat) return
-    if (event.code === "F11") {
-      event.preventDefault()
-      void execute("view.toggle-full-screen")
+    if (event.repeat) return
+    const match = APPLICATION_COMMAND_IDS.map((command) => ({
+      command,
+      binding: keyboardShortcuts.value[command]
+    })).find(
+      (
+        entry
+      ): entry is {
+        command: ApplicationCommandId
+        binding: KeyboardShortcutBinding
+      } =>
+        Boolean(
+          entry.binding &&
+          keyboardBindingMatches(entry.binding, event, applicationWindowStore.platform)
+        )
+    )
+    if (!match) return
+    if (
+      isEditableTarget(event.target) &&
+      !match.binding.modifiers.some((modifier) => ["primary", "control", "alt"].includes(modifier))
+    ) {
       return
     }
-    if (!event.ctrlKey || event.altKey || event.metaKey) return
-
-    let command: ApplicationCommandId | null = null
-    if (event.code === "KeyN") command = "project.new"
-    else if (event.code === "KeyO") command = "project.open"
-    else if (event.code === "KeyS") command = "project.save"
-    else if (event.code === "KeyW") command = "project.close"
-    else if (event.code === "Comma")
-      command = event.shiftKey ? "project.settings" : "application.preferences"
-    else if (
-      !isEditableTarget(event.target) &&
-      (event.code === "KeyY" || (event.code === "KeyZ" && event.shiftKey))
-    )
-      command = "edit.redo"
-    else if (!isEditableTarget(event.target) && event.code === "KeyZ") command = "edit.undo"
-
-    if (!command) return
     event.preventDefault()
+    void execute(match.command)
+  }
+
+  function handleMidiControl(event: MidiControlEvent): void {
+    if (midiInputStore.learning) return
+    const midi = applicationSettingsStore.settings?.shortcuts.midi ?? {}
+    const command = APPLICATION_COMMAND_IDS.find((candidate) => {
+      const binding = midi[candidate]
+      return (
+        binding?.portId === event.portId &&
+        binding.channel === event.channel &&
+        binding.type === event.type &&
+        binding.number === event.number
+      )
+    })
+    if (!command) return
+    const key = `${event.portId}:${event.channel}:${event.type}:${event.number}`
+    if (event.type === "control-change") {
+      if (event.value < 64) {
+        activeMidiControls.delete(key)
+        return
+      }
+      if (activeMidiControls.has(key)) return
+      activeMidiControls.add(key)
+    }
     void execute(command)
   }
 
@@ -267,12 +358,15 @@ export function useApplicationCommands() {
     unsubscribe = applicationWindowStore.subscribeCommands((command) => {
       void execute(command)
     })
+    unsubscribeMidi = midiInputStore.subscribeControls(handleMidiControl)
     window.addEventListener("keydown", handleShortcut)
   })
 
   onUnmounted(() => {
     unsubscribe?.()
     unsubscribe = null
+    unsubscribeMidi?.()
+    unsubscribeMidi = null
     window.removeEventListener("keydown", handleShortcut)
   })
 

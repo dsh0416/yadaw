@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     env,
     io::{self, BufReader, BufWriter},
     path::PathBuf,
@@ -72,6 +72,8 @@ fn main() -> ExitCode {
             source_port_id: None,
             source_port_name: None,
             input_offsets_ms: BTreeMap::new(),
+            control_port_ids: BTreeSet::new(),
+            capture_all_controls: false,
         },
     ));
     let uses_ipc = env::args_os().any(|argument| argument == "--ipc-token");

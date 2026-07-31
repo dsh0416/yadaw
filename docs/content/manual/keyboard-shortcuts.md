@@ -8,6 +8,15 @@ description: Reference for project, editing, view, transport, and arrangement sh
 Use <kbd>Cmd</kbd> on macOS and <kbd>Ctrl</kbd> on Windows or Linux unless a
 row says otherwise.
 
+Open **System settings → Keyboard → Shortcuts** to change a keyboard binding or
+assign a MIDI note or control-change message. Select a keyboard binding and
+press the new combination. For MIDI, choose **MIDI Learn** and then press a pad,
+key, or controller button. MIDI control-change bindings trigger when their value
+crosses 64 and reset when it falls below 64.
+
+Reset all restores the defaults listed below. A shortcut can also be left
+unassigned.
+
 ## Projects
 
 | Action               | Shortcut                                              |
@@ -40,6 +49,7 @@ unavailable when the current selection does not support it.
 | Play or pause                                   | <kbd>Space</kbd>                           |
 | Start or stop recording                         | <kbd>R</kbd>                               |
 | Go to beginning                                 | <kbd>Home</kbd>                            |
+| Toggle mixer                                    | <kbd>M</kbd>                               |
 | Create a MIDI clip on a focused instrument lane | <kbd>Enter</kbd>                           |
 | Move a focused track up or down                 | <kbd>Alt</kbd> + <kbd>↑</kbd>/<kbd>↓</kbd> |
 

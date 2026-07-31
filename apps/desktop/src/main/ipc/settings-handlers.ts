@@ -1,10 +1,15 @@
 import { BrowserWindow, dialog, ipcMain, shell } from "electron"
 import { IPC_CHANNELS } from "@yadaw/contracts"
-import type { AudioHostRuntimePreferences, MidiSyncPreferences } from "@yadaw/contracts"
+import type {
+  AudioHostRuntimePreferences,
+  MidiSyncPreferences,
+  ShortcutPreferences
+} from "@yadaw/contracts"
 import type { IpcHandlerContext } from "./context"
 import {
   validateAudioHostRuntimePreferences,
-  validateMidiSyncPreferences
+  validateMidiSyncPreferences,
+  validateShortcutPreferences
 } from "../application-settings"
 import { installApplicationMenu } from "../application-menu"
 import { setMainLocale, t } from "../i18n"
@@ -30,7 +35,7 @@ export function registerSettingsHandlers(context: IpcHandlerContext): void {
     const updated = await settings.update(patch)
     if (patch.locale !== undefined) {
       setMainLocale(updated.locale)
-      installApplicationMenu()
+      installApplicationMenu(process.platform, updated.shortcuts)
     }
     return updated
   })
@@ -78,10 +83,33 @@ export function registerSettingsHandlers(context: IpcHandlerContext): void {
     return settings.configureAudioHostRuntime(preferences)
   })
 
+  ipcMain.handle(IPC_CHANNELS.settingsConfigureShortcuts, async (event, value: unknown) => {
+    assertTrustedSender(event)
+    const shortcuts = validateShortcutPreferences(value) satisfies ShortcutPreferences
+    const current = await settings.get()
+    if (!audioHostService) throw new Error("Audio host is not running")
+    await audioHostService.configureMidiInput(current.midiSync, shortcuts)
+    try {
+      const updated = await settings.configureShortcuts(shortcuts)
+      installApplicationMenu(process.platform, updated.shortcuts)
+      return updated
+    } catch (error) {
+      await audioHostService.configureMidiInput(current.midiSync, current.shortcuts)
+      throw error
+    }
+  })
+
   ipcMain.handle(IPC_CHANNELS.midiInputSnapshot, (event) => {
     assertTrustedSender(event)
     if (!audioHostService) throw new Error("Audio host is not running")
     return audioHostService.midiInputSnapshot()
+  })
+
+  ipcMain.handle(IPC_CHANNELS.midiControlLearning, async (event, value: unknown) => {
+    assertTrustedSender(event)
+    if (typeof value !== "boolean") throw new TypeError("MIDI learning state must be a boolean")
+    if (!audioHostService) throw new Error("Audio host is not running")
+    await audioHostService.setMidiControlLearning(value)
   })
 
   ipcMain.handle(IPC_CHANNELS.midiInputConfigure, async (event, value: unknown) => {
@@ -92,11 +120,11 @@ export function registerSettingsHandlers(context: IpcHandlerContext): void {
     if (!audioHostService) throw new Error("Audio host is not running")
     const preferences = validateMidiSyncPreferences(value) satisfies MidiSyncPreferences
     const current = await settings.get()
-    const snapshot = await audioHostService.configureMidiInput(preferences)
+    const snapshot = await audioHostService.configureMidiInput(preferences, current.shortcuts)
     try {
       await settings.configureMidiInput(preferences)
     } catch (error) {
-      await audioHostService.configureMidiInput(current.midiSync)
+      await audioHostService.configureMidiInput(current.midiSync, current.shortcuts)
       throw error
     }
     for (const window of BrowserWindow.getAllWindows()) {

@@ -29,6 +29,7 @@ import type {
   PluginParameterInfo,
   RoundTripLatencyMeasurement,
   RoundTripLatencyMeasurementRequest,
+  ShortcutPreferences,
   TransportCommand,
   TransportSnapshot
 } from "@yadaw/contracts"
@@ -109,6 +110,8 @@ export class AudioHostService {
     inputOffsetsMs: {}
   }
   private midiPreferencesConfigured = false
+  private midiControlPortIds: string[] = []
+  private midiControlLearning = false
 
   private readonly diagnostics = new AudioHostDiagnostics(
     () => this.client,
@@ -478,7 +481,17 @@ export class AudioHostService {
     return this.midiInputResult(await this.request({ type: "midi-input-snapshot" }))
   }
 
-  async configureMidiInput(preferences: MidiSyncPreferences): Promise<MidiInputSnapshot> {
+  async configureMidiInput(
+    preferences: MidiSyncPreferences,
+    shortcuts: ShortcutPreferences = { keyboard: {}, midi: {} }
+  ): Promise<MidiInputSnapshot> {
+    const controlPortIds = [
+      ...new Set(
+        Object.values(shortcuts.midi)
+          .map((binding) => binding?.portId)
+          .filter((portId): portId is string => Boolean(portId))
+      )
+    ]
     const snapshot = this.midiInputResult(
       await this.request({
         type: "configure-midi-input",
@@ -486,13 +499,33 @@ export class AudioHostService {
           enabled: preferences.enabled,
           source_port_id: preferences.sourcePortId,
           source_port_name: preferences.sourcePortName,
-          input_offsets_ms: preferences.inputOffsetsMs
+          input_offsets_ms: preferences.inputOffsetsMs,
+          control_port_ids: controlPortIds,
+          capture_all_controls: this.midiControlLearning
         }
       })
     )
     this.midiPreferences = structuredClone(preferences)
+    this.midiControlPortIds = controlPortIds
     this.midiPreferencesConfigured = true
     return snapshot
+  }
+
+  async setMidiControlLearning(enabled: boolean): Promise<void> {
+    this.midiInputResult(
+      await this.request({
+        type: "configure-midi-input",
+        preferences: {
+          enabled: this.midiPreferences.enabled,
+          source_port_id: this.midiPreferences.sourcePortId,
+          source_port_name: this.midiPreferences.sourcePortName,
+          input_offsets_ms: this.midiPreferences.inputOffsetsMs,
+          control_port_ids: this.midiControlPortIds,
+          capture_all_controls: enabled
+        }
+      })
+    )
+    this.midiControlLearning = enabled
   }
 
   private async restoreMidiInput(client: AudioHostIpcClient): Promise<void> {
@@ -505,7 +538,9 @@ export class AudioHostService {
             enabled: this.midiPreferences.enabled,
             source_port_id: this.midiPreferences.sourcePortId,
             source_port_name: this.midiPreferences.sourcePortName,
-            input_offsets_ms: this.midiPreferences.inputOffsetsMs
+            input_offsets_ms: this.midiPreferences.inputOffsetsMs,
+            control_port_ids: this.midiControlPortIds,
+            capture_all_controls: this.midiControlLearning
           }
         },
         client
@@ -531,6 +566,16 @@ export class AudioHostService {
         ignoredSystemMessages: value.sync.ignored_system_messages,
         error: value.sync.error
       },
+      controlEvents: value.control_events.map((event) => ({
+        generation: event.generation,
+        timestampMicroseconds: event.timestamp_microseconds,
+        portId: event.port_id,
+        portName: event.port_name,
+        channel: event.channel,
+        type: event.type,
+        number: event.number,
+        value: event.value
+      })),
       capturedAt: value.captured_at
     }
   }

@@ -120,19 +120,6 @@ function handleShortcut(event: KeyboardEvent): void {
     })
     return
   }
-  if (event.code === "Space") {
-    event.preventDefault()
-    if (!activeRecording.value) void transportStore.toggle()
-  } else if (event.code === "Home") {
-    event.preventDefault()
-    void transportStore.goToStart()
-  } else if (event.code === "KeyR") {
-    event.preventDefault()
-    void toggleRecording()
-  } else if (event.code === "KeyM") {
-    event.preventDefault()
-    workspaceStore.toggleMixerDock()
-  }
 }
 
 useEventListener(window, "keydown", handleShortcut)

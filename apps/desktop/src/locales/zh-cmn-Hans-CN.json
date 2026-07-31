@@ -108,6 +108,7 @@
     "unableToSaveDisplaySettings": "无法保存显示设置。",
     "unableToSaveMixerDisplaySettings": "无法保存混音台显示设置。",
     "unableToSaveMidiSettings": "无法保存 MIDI 设置。",
+    "unableToSaveShortcutSettings": "无法保存快捷键设置。",
     "unableToRestartAudioHelper": "无法重启音频助手。",
     "unableToChangeSoftwareMonitoring": "无法更改软件监听。",
     "nativeAudioEngineStopped": "原生音频引擎意外停止。",
@@ -336,11 +337,78 @@
         "displayMixer": {
           "label": "混音台",
           "description": "峰值保持与回落"
+        },
+        "shortcuts": {
+          "label": "快捷键",
+          "description": "键盘与 MIDI 控制"
         }
       },
       "actions": {
         "startingEngine": "正在启动引擎…",
         "applyAudio": "应用音频"
+      }
+    },
+    "shortcuts": {
+      "category": "键盘",
+      "page": "快捷键",
+      "title": "键盘与 MIDI 快捷键",
+      "description": "将键盘组合键、MIDI 音符和控制变更消息分配给应用命令。",
+      "instructions": "选择键盘绑定后按下新组合键，或使用 MIDI 学习并操作硬件控制器。",
+      "groupDescription": "键盘与 MIDI 绑定保存在此设备上。",
+      "resetAll": "全部重置",
+      "pressKeys": "请按键…",
+      "midiLearn": "MIDI 学习",
+      "moveMidiControl": "等待 MIDI…",
+      "unassigned": "未分配",
+      "clearMidi": "清除 MIDI 绑定",
+      "channel": "通道 {channel}",
+      "note": "音符 {number}",
+      "controlChange": "CC {number}",
+      "groups": {
+        "project": "工程",
+        "edit": "编辑",
+        "transport": "走带",
+        "application": "应用"
+      },
+      "commands": {
+        "project": {
+          "new": "新建工程",
+          "open": "打开工程",
+          "save": "保存工程",
+          "close": "关闭工程",
+          "settings": "工程设置"
+        },
+        "edit": {
+          "undo": "撤销",
+          "redo": "重做",
+          "cut": "剪切",
+          "copy": "复制",
+          "paste": "粘贴",
+          "select-all": "全选"
+        },
+        "application": {
+          "preferences": "系统设置",
+          "quit": "退出",
+          "about": "关于"
+        },
+        "window": {
+          "close": "关闭窗口"
+        },
+        "view": {
+          "toggle-full-screen": "切换全屏",
+          "toggle-mixer-dock": "切换混音台"
+        },
+        "transport": {
+          "toggle-playback": "播放 / 暂停",
+          "go-to-start": "返回开头"
+        },
+        "recording": {
+          "toggle": "开始 / 停止录音"
+        },
+        "help": {
+          "audio-benchmark": "音频性能基准测试",
+          "effect-chain-graph": "效果链图"
+        }
       }
     },
     "backends": {

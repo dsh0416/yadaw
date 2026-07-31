@@ -20,6 +20,7 @@ function settings(overrides: Partial<ApplicationSettings> = {}): ApplicationSett
       egressConcurrency: "auto"
     },
     pluginEditors: {},
+    shortcuts: { keyboard: {}, midi: {} },
     recentProjects: [],
     ...overrides
   }

@@ -44,9 +44,23 @@ export interface MidiSyncRuntimeSnapshot {
   error: string | null
 }
 
+export interface MidiControlEvent {
+  generation: number
+  timestampMicroseconds: number
+  portId: string
+  portName: string
+  /** Zero-based MIDI channel. */
+  channel: number
+  type: "note" | "control-change"
+  number: number
+  value: number
+}
+
 export interface MidiInputSnapshot {
   ports: MidiInputPort[]
   sync: MidiSyncRuntimeSnapshot
+  /** A bounded, generation-ordered window of recently received control events. */
+  controlEvents: MidiControlEvent[]
   capturedAt: number
 }
 
