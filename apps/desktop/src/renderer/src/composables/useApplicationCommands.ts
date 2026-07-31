@@ -215,7 +215,6 @@ export function useApplicationCommands() {
   }
 
   async function closeApplication(command: "application.quit" | "window.close"): Promise<void> {
-    if (projectBusy.value) return
     if (session.value && !(await studioWorkflowStore.closeProject())) return
     await applicationWindowStore.execute(command)
   }

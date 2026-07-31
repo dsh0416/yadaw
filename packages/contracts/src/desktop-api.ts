@@ -147,9 +147,12 @@ export interface YadawDesktopApi {
     request: RoundTripLatencyMeasurementRequest
   ): Promise<RoundTripLatencyMeasurement>
   roundTripLatencyMeasurementSnapshot(): Promise<RoundTripLatencyMeasurement>
-  loadProjectGraph(): Promise<ProjectGraphSnapshot>
-  reloadProjectGraph(): Promise<ProjectGraphSnapshot>
-  executeProjectCommand(command: ProjectCommand): Promise<ProjectCommandResult>
+  loadProjectGraph(meta: RpcRequestMeta): Promise<RpcResult<ProjectGraphSnapshot>>
+  reloadProjectGraph(meta: RpcRequestMeta): Promise<RpcResult<ProjectGraphSnapshot>>
+  executeProjectCommand(
+    meta: RpcRequestMeta,
+    command: ProjectCommand
+  ): Promise<RpcResult<ProjectCommandResult>>
   previewMixerParameter(preview: MixerParameterPreview): Promise<void>
   mixerSnapshot(): Promise<MixerRuntimeSnapshot>
   clearMixerMeterClips(): Promise<MixerRuntimeSnapshot>
@@ -178,7 +181,7 @@ export interface YadawDesktopApi {
     path: string,
     recover?: boolean
   ): Promise<RpcResult<ProjectWorkspaceSnapshot>>
-  saveProject(path?: string): Promise<ProjectSession | null>
+  saveProject(meta: RpcRequestMeta, path?: string): Promise<RpcResult<ProjectWorkspaceSnapshot>>
   closeProject(
     meta: RpcRequestMeta,
     disposition?: ProjectCloseDisposition

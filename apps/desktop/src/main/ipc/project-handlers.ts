@@ -1,5 +1,5 @@
 import { dialog, ipcMain } from "electron"
-import { IPC_CHANNELS, rpcFailure } from "@yadaw/contracts"
+import { IPC_CHANNELS, rpcFailure, rpcSuccess } from "@yadaw/contracts"
 import type { ProjectCloseDisposition, RpcRequestMeta } from "@yadaw/contracts"
 import type { IpcHandlerContext } from "./context"
 import { t } from "../i18n"
@@ -110,12 +110,33 @@ export function registerProjectHandlers(context: IpcHandlerContext): void {
     }
   )
 
-  ipcMain.handle(IPC_CHANNELS.projectSave, async (event, value: unknown) => {
-    assertTrustedSender(event)
+  registerRpcHandler(IPC_CHANNELS.projectSave, async ({ meta }, value: unknown) => {
     const current = projects.current
-    if (!current) return null
+    const workspace = lifecycle.applicationState.workspaceSnapshot()
+    if (
+      !current ||
+      !workspace ||
+      !meta.mutation ||
+      !meta.target ||
+      meta.target.kind !== workspace.project.kind ||
+      meta.target.id !== workspace.project.id ||
+      meta.target.epoch !== workspace.project.epoch ||
+      meta.target.generation !== workspace.project.generation
+    ) {
+      return validationFailure(meta, "target")
+    }
+    const begun = operations.registry.begin({
+      operationId: meta.mutation.operationId,
+      idempotencyKey: meta.mutation.idempotencyKey,
+      target: workspace.project
+    })
+    if (!begun.ok) return validationFailure(meta, "operation")
+    if (begun.value.disposition !== "started") {
+      const result = begun.value.operation.result
+      return result ?? validationFailure(meta, "operation")
+    }
     lifecycle.beginProject("saving")
-    const operationId = `save:${current.id}`
+    const operationId = meta.mutation.operationId
     operations.upsert(
       {
         id: operationId,
@@ -133,23 +154,49 @@ export function registerProjectHandlers(context: IpcHandlerContext): void {
     )
     try {
       await synchronizePluginStates()
-      const saved = await projects.save(typeof value === "string" ? value : undefined)
+      const saved = await projects.save(
+        typeof value === "string" ? value : undefined,
+        meta.mutation.operationId
+      )
       operations.patch(operationId, { phase: "cleaning-up" }, true)
       await recordings.cleanupCommittedForProject(saved.path)
-      operations.patch(operationId, { state: "completed" }, true)
       lifecycle.completeProject(saved)
-      return saved
+      const resolved = lifecycle.applicationState.resources.resolve(workspace.project)
+      if (!resolved.ok) throw new Error("Saved project resource became stale")
+      const committed = lifecycle.applicationState.resources.update(
+        workspace.project,
+        resolved.value.revision,
+        saved
+      )
+      if (!committed.ok) throw new Error("Saved project resource could not advance")
+      const next = { ...workspace, session: saved }
+      lifecycle.applicationState.setWorkspace(next)
+      const result = rpcSuccess(meta, next, { resourceRevision: committed.value.revision })
+      operations.registry.finish(operationId, "committed", result)
+      operations.patch(operationId, { state: "completed" }, true)
+      return result
     } catch (error) {
       lifecycle.failProject(error)
+      const result = rpcFailure(meta, {
+        code: "operation-timeout-unknown",
+        category: "timeout-unknown",
+        outcome: "unknown",
+        retry: "after-reconcile",
+        correlationId: `save-${meta.requestId}`,
+        userMessageKey: "errors.operationOutcomeUnknown",
+        resource: workspace.project,
+        details: { type: "operation-timeout-unknown", dispatched: true }
+      })
+      operations.registry.finish(operationId, "quarantined", result)
       operations.patch(
         operationId,
         {
           state: "failed",
-          message: error instanceof Error ? error.message : String(error)
+          message: "Project archive commit outcome requires reconciliation."
         },
         true
       )
-      throw error
+      return result
     }
   })
 

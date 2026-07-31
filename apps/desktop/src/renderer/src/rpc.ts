@@ -14,11 +14,16 @@ export function readMeta(target?: ResourceRef): RpcRequestMeta {
   }
 }
 
-export function mutationMeta(target: ResourceRef, operation: string): RpcRequestMeta {
+export function mutationMeta(
+  target: ResourceRef,
+  operation: string,
+  expectedRevision?: number
+): RpcRequestMeta {
   return {
     protocolVersion: IPC_PROTOCOL_VERSION,
     requestId: nextId("request"),
     target: structuredClone(target),
+    ...(expectedRevision === undefined ? {} : { expectedRevision }),
     mutation: {
       operationId: nextId(operation),
       idempotencyKey: nextId("idempotency")

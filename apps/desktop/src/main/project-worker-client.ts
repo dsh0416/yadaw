@@ -7,10 +7,14 @@ import type {
 } from "@yadaw/contracts"
 import type {
   AssetContentHash,
+  CommittedProjectCommand,
   DefaultRecordingTrack,
   LargeObjectAssetInput,
   MidiSourceInput,
   PluginStateInput,
+  PreparedProjectCommand,
+  ProjectCommandTransactionToken,
+  ProjectCommandTransactionStatus,
   StoredWaveformWindow,
   WaveformAssetInput,
   WorkerOperation,
@@ -149,8 +153,31 @@ export class ProjectWorkerClient {
     return this.call({ type: "mixer-snapshot" })
   }
 
-  applyProjectCommand(command: ProjectCommand, fallbackOutputId: string): Promise<void> {
-    return this.call({ type: "apply-project-command", command, fallbackOutputId })
+  prepareProjectCommand(
+    operationId: string,
+    baseRevision: number,
+    command: ProjectCommand,
+    fallbackOutputId: string
+  ): Promise<PreparedProjectCommand> {
+    return this.call({
+      type: "prepare-project-command",
+      operationId,
+      baseRevision,
+      command,
+      fallbackOutputId
+    })
+  }
+
+  commitProjectCommand(token: ProjectCommandTransactionToken): Promise<CommittedProjectCommand> {
+    return this.call({ type: "commit-project-command", token })
+  }
+
+  abortProjectCommand(token: ProjectCommandTransactionToken): Promise<void> {
+    return this.call({ type: "abort-project-command", token })
+  }
+
+  projectCommandStatus(operationId: string): Promise<ProjectCommandTransactionStatus> {
+    return this.call({ type: "project-command-status", operationId })
   }
 
   importMidi(

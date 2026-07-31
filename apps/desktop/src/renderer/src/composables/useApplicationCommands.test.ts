@@ -200,9 +200,11 @@ describe("useApplicationCommands", () => {
       nativeCommandListener?.(command)
       await vi.waitFor(() => expect(activeDialog.value?.title).toBe("Save project before closing?"))
       expect(window.yadaw.executeApplicationWindowCommand).not.toHaveBeenCalledWith(command)
+      expect(window.yadaw.transportCommand).not.toHaveBeenCalled()
       selectDialogAction("discard")
       await flushPromises()
 
+      expect(window.yadaw.transportCommand).toHaveBeenCalledWith({ type: "pause" })
       expect(window.yadaw.closeProject).toHaveBeenCalledWith(
         expect.objectContaining({
           target: expect.objectContaining({ kind: "project-session" }),

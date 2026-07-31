@@ -93,8 +93,10 @@ export const useStudioWorkflowStore = defineStore("studio-workflow", () => {
 
   async function closeProject(): Promise<boolean> {
     if (!(await prepareToLeaveStudio())) return false
+    const disposition = await projectStore.prepareClose()
+    if (!disposition) return false
     await transportStore.stop()
-    if (!(await projectStore.close())) return false
+    if (!(await projectStore.close(disposition))) return false
     transportStore.reset()
     mixerStore.reset()
     arrangementViewStore.reset()

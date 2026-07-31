@@ -1,10 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { createPinia, setActivePinia } from "pinia"
 import { nextTick } from "vue"
-import type { ProjectGraphSnapshot, PluginDescriptor } from "@yadaw/contracts"
+import type {
+  ProjectGraphSnapshot,
+  PluginDescriptor,
+  ProjectWorkspaceSnapshot,
+  RpcResult
+} from "@yadaw/contracts"
 import { applyToGraph } from "@yadaw/project-model"
 import { useMixerStore } from "./mixer"
 import { usePluginStore } from "./plugins"
+import { useProjectStore } from "./project"
 
 const effectDescriptor: PluginDescriptor = {
   source: { kind: "external" },
@@ -119,9 +125,54 @@ function graph(): ProjectGraphSnapshot {
   }
 }
 
+function workspace(value: ProjectGraphSnapshot): ProjectWorkspaceSnapshot {
+  return {
+    project: {
+      kind: "project-session",
+      id: "project",
+      epoch: "test-main",
+      generation: 1
+    },
+    projectGraph: {
+      kind: "project-graph",
+      id: "project:graph",
+      epoch: "test-main",
+      generation: 1
+    },
+    revision: 1,
+    session: {
+      id: "project",
+      path: "project.yadaw",
+      configuration: {
+        name: "Plugin test",
+        sampleRate: 48_000,
+        timeSignatureNumerator: 4,
+        timeSignatureDenominator: 4,
+        waveformDisplayMode: "separate"
+      },
+      dirty: false,
+      recoveredWorkingCopy: false
+    },
+    graph: structuredClone(value),
+    assets: []
+  }
+}
+
+function success<T>(value: T): RpcResult<T> {
+  return {
+    ok: true,
+    requestId: "test-request",
+    operationId: "test-operation",
+    resourceRevision: 2,
+    value,
+    warnings: []
+  }
+}
+
 describe("plugin store", () => {
   beforeEach(() => {
     setActivePinia(createPinia())
+    useProjectStore().applyWorkspace(workspace(graph()))
   })
 
   it("forces lightweight rediscovery when the user requests a manual rescan", async () => {
@@ -203,13 +254,13 @@ describe("plugin store", () => {
     const mixerStore = useMixerStore()
     let canonicalGraph = graph()
     mixerStore.graph = canonicalGraph
-    window.yadaw.executeProjectCommand = vi.fn().mockImplementation(async (command) => {
+    window.yadaw.executeProjectCommand = vi.fn().mockImplementation(async (_meta, command) => {
       if (command.type !== "create-plugin") throw new Error("Unexpected project command")
       canonicalGraph = applyToGraph(canonicalGraph, command)
-      return {
+      return success({
         graph: canonicalGraph,
         inverse: { type: "delete-plugin" as const, pluginId: command.plugin.id }
-      }
+      })
     })
     const pluginStore = usePluginStore()
 
@@ -229,7 +280,7 @@ describe("plugin store", () => {
 
     const commands = vi
       .mocked(window.yadaw.executeProjectCommand)
-      .mock.calls.map(([command]) => command)
+      .mock.calls.map(([, command]) => command)
     expect(commands[0]).toMatchObject({
       type: "create-plugin",
       plugin: {
@@ -276,19 +327,19 @@ describe("plugin store", () => {
       plugins: [replacementInstrumentDescriptor]
     })
     window.yadaw.subscribePluginScan = vi.fn().mockReturnValue(vi.fn())
-    window.yadaw.executeProjectCommand = vi.fn().mockImplementation(async (command) => {
+    window.yadaw.executeProjectCommand = vi.fn().mockImplementation(async (_meta, command) => {
       if (command.type !== "replace-plugin") throw new Error("Unexpected project command")
       const next = structuredClone(mixerStore.graph)
       const index = next.plugins.findIndex((plugin) => plugin.id === command.pluginId)
       next.plugins[index] = structuredClone(command.plugin)
-      return {
+      return success({
         graph: next,
         inverse: {
           type: "replace-plugin" as const,
           pluginId: command.plugin.id,
           plugin: initialGraph.plugins[0]!
         }
-      }
+      })
     })
     const pluginStore = usePluginStore()
     await pluginStore.load()

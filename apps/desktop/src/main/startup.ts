@@ -207,7 +207,6 @@ export function startApplication(
       const projectCommands = new ProjectCommandService(
         projectGraph,
         projectService,
-        graphPublisher,
         audioHostService
       )
       const mixerRuntime = new MixerRuntimeService(audioHostService)
@@ -257,6 +256,7 @@ export function startApplication(
         new OperationRegistry(),
         lifecycle.applicationState.desktopSession
       )
+      projectCommands.attachKernel(lifecycle, operations)
       const recordings = new RecordingService(
         settings,
         projectService,

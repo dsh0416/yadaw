@@ -35,10 +35,10 @@ const api: YadawDesktopApi = {
     ipcRenderer.invoke(IPC_CHANNELS.audioRoundTripLatencyStart, request),
   roundTripLatencyMeasurementSnapshot: () =>
     ipcRenderer.invoke(IPC_CHANNELS.audioRoundTripLatencySnapshot),
-  loadProjectGraph: () => ipcRenderer.invoke(IPC_CHANNELS.projectGraphLoad),
-  reloadProjectGraph: () => ipcRenderer.invoke(IPC_CHANNELS.projectGraphReload),
-  executeProjectCommand: (command) =>
-    ipcRenderer.invoke(IPC_CHANNELS.projectCommandExecute, command),
+  loadProjectGraph: (meta) => invokeRpc(IPC_CHANNELS.projectGraphLoad, meta),
+  reloadProjectGraph: (meta) => invokeRpc(IPC_CHANNELS.projectGraphReload, meta),
+  executeProjectCommand: (meta, command) =>
+    invokeRpc(IPC_CHANNELS.projectCommandExecute, meta, command),
   previewMixerParameter: (preview) => ipcRenderer.invoke(IPC_CHANNELS.mixerPreview, preview),
   mixerSnapshot: () => ipcRenderer.invoke(IPC_CHANNELS.mixerSnapshot),
   clearMixerMeterClips: () => ipcRenderer.invoke(IPC_CHANNELS.mixerClearMeterClips),
@@ -79,7 +79,7 @@ const api: YadawDesktopApi = {
     invokeRpc(IPC_CHANNELS.projectPrepareOpen, meta, path),
   openProject: (meta, path: string, recover?: boolean) =>
     invokeRpc(IPC_CHANNELS.projectOpen, meta, path, recover),
-  saveProject: (path?: string) => ipcRenderer.invoke(IPC_CHANNELS.projectSave, path),
+  saveProject: (meta, path?: string) => invokeRpc(IPC_CHANNELS.projectSave, meta, path),
   closeProject: (meta, disposition?: ProjectCloseDisposition) =>
     invokeRpc(IPC_CHANNELS.projectClose, meta, disposition),
   listProjectAssets: () => ipcRenderer.invoke(IPC_CHANNELS.projectAssetsList),

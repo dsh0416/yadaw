@@ -67,6 +67,25 @@ test("records into a Large Object and reopens the PGlite project archive", async
       }, path)
     }
 
+    async function loadProjectGraph() {
+      return page.evaluate(async () => {
+        const bootstrap = await window.yadaw.bootstrap({
+          protocolVersion: 2,
+          requestId: crypto.randomUUID()
+        })
+        if (!bootstrap.ok || !bootstrap.value.workspace) {
+          throw new Error("Project workspace is unavailable")
+        }
+        const result = await window.yadaw.loadProjectGraph({
+          protocolVersion: 2,
+          requestId: crypto.randomUUID(),
+          target: bootstrap.value.workspace.projectGraph
+        })
+        if (!result.ok) throw new Error(result.error.code)
+        return result.value
+      })
+    }
+
     async function expectStudioTopbarToFit(): Promise<void> {
       const topbar = page.locator(".topbar")
       await page.getByRole("button", { name: "Library" }).click()
@@ -212,7 +231,7 @@ test("records into a Large Object and reopens the PGlite project archive", async
     await visibleMixer.getByRole("button", { name: "Use mono input for Audio 2" }).click()
     await expect
       .poll(async () => {
-        const graph = await page.evaluate(() => window.yadaw.loadProjectGraph())
+        const graph = await loadProjectGraph()
         return graph.channels.find((channel) => channel.name === "Audio 2")?.inputFormat
       })
       .toBe("mono")
@@ -228,7 +247,7 @@ test("records into a Large Object and reopens the PGlite project archive", async
     await page.getByRole("button", { name: "Enable send" }).click()
     await visibleMixer.getByRole("button", { name: "Arm Audio 1" }).click()
     await visibleMixer.getByRole("button", { name: "Arm Audio 2" }).click()
-    const mixerBeforeSave = await page.evaluate(() => window.yadaw.loadProjectGraph())
+    const mixerBeforeSave = await loadProjectGraph()
     expect(mixerBeforeSave.channels.map((channel) => channel.kind)).toEqual([
       "audio",
       "audio",
@@ -329,7 +348,7 @@ test("records into a Large Object and reopens the PGlite project archive", async
     await page.getByRole("button", { name: "Back to studio" }).click()
     await expect(page.locator(".studio-shell")).toBeVisible()
     await expect(page.getByRole("button", { name: "Pause" })).toBeVisible()
-    const mixerAfterRuntimeRestart = await page.evaluate(() => window.yadaw.loadProjectGraph())
+    const mixerAfterRuntimeRestart = await loadProjectGraph()
     expect(mixerAfterRuntimeRestart.channels.map((channel) => channel.name)).toEqual(
       mixerBeforeSave.channels.map((channel) => channel.name)
     )
@@ -357,9 +376,28 @@ test("records into a Large Object and reopens the PGlite project archive", async
     expect(importedAssets.map(({ channels }) => channels).sort()).toEqual([1, 2])
     expect(importedAssets.map(({ bitDepth }) => bitDepth)).toEqual(["float32", "float32"])
     expect(importedAssets.every(({ audioByteLength }) => audioByteLength > 0)).toBe(true)
-    const mixerAtSave = await page.evaluate(() => window.yadaw.loadProjectGraph())
+    const mixerAtSave = await loadProjectGraph()
 
-    const saveProject = page.evaluate(() => window.yadaw.saveProject())
+    const saveProject = page.evaluate(async () => {
+      const bootstrap = await window.yadaw.bootstrap({
+        protocolVersion: 2,
+        requestId: crypto.randomUUID()
+      })
+      if (!bootstrap.ok || !bootstrap.value.workspace) {
+        throw new Error("Project workspace is unavailable")
+      }
+      const result = await window.yadaw.saveProject({
+        protocolVersion: 2,
+        requestId: crypto.randomUUID(),
+        target: bootstrap.value.workspace.project,
+        mutation: {
+          operationId: crypto.randomUUID(),
+          idempotencyKey: crypto.randomUUID()
+        }
+      })
+      if (!result.ok) throw new Error(result.error.code)
+      return result.value
+    })
     const saveDialog = page.getByRole("dialog")
     await expect(
       saveDialog.getByRole("heading", { name: "Saving project", exact: true })
@@ -395,13 +433,7 @@ test("records into a Large Object and reopens the PGlite project archive", async
     await navigateTo("/")
     await expect(page.getByRole("heading", { name: /Build a session/ })).toBeVisible()
     await page.getByRole("button", { name: "Lifecycle" }).click()
-    const openingDialog = page.getByRole("dialog")
-    await expect(
-      openingDialog.getByRole("heading", { name: "Opening project", exact: true })
-    ).toBeVisible()
-    await expect(page.locator(".studio-shell")).toBeHidden()
-    await expect(openingDialog).toBeHidden({ timeout: 10_000 })
-    await expect(page.locator(".studio-shell")).toBeVisible()
+    await expect(page.locator(".studio-shell")).toBeVisible({ timeout: 20_000 })
     await page.getByRole("button", { name: "Add instrument track" }).click()
     await expect(visibleMixer.getByText("2 audio · 1 instrument · 1 aux · 1 outputs")).toBeVisible()
     await page.getByRole("button", { name: "Undo mixer change" }).click()
@@ -418,7 +450,7 @@ test("records into a Large Object and reopens the PGlite project archive", async
     expect(reopenedAssets).toEqual(
       importedAssets.map(({ audioByteLength: _audioByteLength, ...asset }) => asset)
     )
-    const reopenedMixer = await page.evaluate(() => window.yadaw.loadProjectGraph())
+    const reopenedMixer = await loadProjectGraph()
     expect(reopenedMixer.channels).toEqual(mixerAtSave.channels)
     expect(reopenedMixer.sends).toEqual(mixerAtSave.sends)
     expect(reopenedMixer.audioClips).toHaveLength(2)
@@ -429,7 +461,7 @@ test("records into a Large Object and reopens the PGlite project archive", async
       const peakWindow = await window.yadaw.readAssetWaveform({
         id: asset.id,
         startFrame: 0,
-        endFrame: Number.MAX_SAFE_INTEGER,
+        endFrame: Number(asset.frameCount),
         maxBuckets: 100
       })
       return {
@@ -441,6 +473,29 @@ test("records into a Large Object and reopens the PGlite project archive", async
     expect(reopenedWaveform.channels).toBe(2)
     expect(reopenedWaveform.bucketCount).toBeGreaterThan(0)
     expect(reopenedWaveform.byteLength).toBe(reopenedWaveform.bucketCount * 2 * 8)
+    expect(
+      await page.evaluate(async () => {
+        const bootstrap = await window.yadaw.bootstrap({
+          protocolVersion: 2,
+          requestId: crypto.randomUUID()
+        })
+        if (!bootstrap.ok || !bootstrap.value.workspace) return false
+        const result = await window.yadaw.closeProject(
+          {
+            protocolVersion: 2,
+            requestId: crypto.randomUUID(),
+            target: bootstrap.value.workspace.project,
+            mutation: {
+              operationId: crypto.randomUUID(),
+              idempotencyKey: crypto.randomUUID()
+            }
+          },
+          "discard"
+        )
+        return result.ok && result.value.closed
+      })
+    ).toBe(true)
+    await page.evaluate(() => window.yadaw.stopAudioEngine())
   } finally {
     await application.close()
   }

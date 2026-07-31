@@ -68,6 +68,26 @@ export class ProjectGraphService {
     return this.enqueue(() => this.publisher.prepare(meta, projectGraph, graph, assets))
   }
 
+  prepareMutation(
+    meta: RpcRequestMeta,
+    projectGraph: ProjectGraphRef,
+    graph: ProjectGraphSnapshot
+  ): Promise<RpcResult<PreparedProjectGraph>> {
+    const assets = this.projects.activeAssetReader()
+    return this.publisher.prepare(meta, projectGraph, graph, assets)
+  }
+
+  activateMutation(
+    meta: RpcRequestMeta,
+    prepared: PreparedProjectGraph
+  ): Promise<RpcResult<ProjectGraphSnapshot>> {
+    return this.publisher.activate(meta, prepared)
+  }
+
+  abortMutation(prepared: PreparedProjectGraph): Promise<void> {
+    return this.publisher.abort(prepared)
+  }
+
   prepareSilentCandidate(
     meta: RpcRequestMeta,
     projectGraph: ProjectGraphRef
@@ -84,7 +104,8 @@ export class ProjectGraphService {
       plugins: [],
       midiClips: []
     }
-    return this.prepareCandidate(meta, projectGraph, silent)
+    const assets = this.projects.activeAssetReader()
+    return this.enqueue(() => this.publisher.prepare(meta, projectGraph, silent, assets))
   }
 
   activateCandidate(

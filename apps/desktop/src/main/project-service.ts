@@ -13,15 +13,20 @@ import type {
 import { PROJECT_SAMPLE_RATES } from "@yadaw/contracts"
 import type {
   AssetContentHash,
+  CommittedProjectCommand,
   DefaultRecordingTrack,
   LargeObjectAssetInput,
   MidiSourceInput,
   PluginStateInput,
+  PreparedProjectCommand,
+  ProjectCommandTransactionToken,
+  ProjectCommandTransactionStatus,
   StoredWaveformWindow,
   WaveformAssetInput
 } from "@yadaw/project-db/protocol"
 import type { ApplicationSettingsStore } from "./application-settings"
 import type { ProjectAssetReader } from "./asset-materializer"
+import { ProjectArchiveJournal } from "./project-archive-journal"
 import { ProjectWorkerClient } from "./project-worker-client"
 
 interface WorkingCopyState {
@@ -90,13 +95,16 @@ async function fileMtime(path: string): Promise<number | null> {
 
 export class ProjectService {
   private readonly workerUrl = new URL(/* @vite-ignore */ "./project-worker.mjs", import.meta.url)
+  private readonly archiveJournal: ProjectArchiveJournal
   private active: ProjectContext | null = null
   private candidate: ProjectContext | null = null
 
   constructor(
     private readonly userData: string,
     private readonly settings: ApplicationSettingsStore
-  ) {}
+  ) {
+    this.archiveJournal = new ProjectArchiveJournal(userData)
+  }
 
   get current(): ProjectSession | null {
     return this.active ? structuredClone(this.active.session) : null
@@ -139,6 +147,7 @@ export class ProjectService {
   }
 
   async prepareCreate(request: CreateProjectRequest & { path: string }): Promise<ProjectSession> {
+    await this.archiveJournal.recover()
     this.assertCanPrepare()
     const configuration = validateConfiguration(request)
     const projectPath = resolve(
@@ -206,6 +215,7 @@ export class ProjectService {
     recoverWorkingCopy = true,
     onProgress?: (progress: ProjectOpenProgress) => void
   ): Promise<ProjectSession> {
+    await this.archiveJournal.recover()
     this.assertCanPrepare()
     const projectPath = resolve(projectPathValue)
     const id = workspaceId(projectPath)
@@ -294,6 +304,14 @@ export class ProjectService {
     }
   }
 
+  activeAssetReader(): ProjectAssetReader {
+    const worker = this.requireActive().worker
+    return {
+      assetContentHashes: (ids) => worker.assetContentHashes(ids),
+      readAssetAudio: (assetId) => worker.readLargeObject(assetId)
+    }
+  }
+
   listAssets(): Promise<ProjectAssetSummary[]> {
     return this.requireActive().worker.listAssets()
   }
@@ -311,9 +329,42 @@ export class ProjectService {
     return this.requireActive().worker.mixerSnapshot()
   }
 
-  async applyProjectCommand(command: ProjectCommand, fallbackOutputId: string): Promise<void> {
-    await this.requireActive().worker.applyProjectCommand(command, fallbackOutputId)
-    await this.completeMutation(commandChangesConfiguration(command))
+  prepareProjectCommand(
+    operationId: string,
+    baseRevision: number,
+    command: ProjectCommand,
+    fallbackOutputId: string
+  ): Promise<PreparedProjectCommand> {
+    return this.requireActive().worker.prepareProjectCommand(
+      operationId,
+      baseRevision,
+      command,
+      fallbackOutputId
+    )
+  }
+
+  async commitProjectCommand(
+    token: ProjectCommandTransactionToken,
+    command: ProjectCommand
+  ): Promise<CommittedProjectCommand> {
+    const committed = await this.requireActive().worker.commitProjectCommand(token)
+    try {
+      await this.completeMutation(commandChangesConfiguration(command))
+    } catch (error) {
+      console.error(
+        "Project command committed but working-copy metadata could not be updated",
+        error
+      )
+    }
+    return committed
+  }
+
+  abortProjectCommand(token: ProjectCommandTransactionToken): Promise<void> {
+    return this.requireActive().worker.abortProjectCommand(token)
+  }
+
+  projectCommandStatus(operationId: string): Promise<ProjectCommandTransactionStatus> {
+    return this.requireActive().worker.projectCommandStatus(operationId)
   }
 
   async importMidi(
@@ -441,44 +492,34 @@ export class ProjectService {
     })
   }
 
-  private async saveContext(context: ProjectContext, path?: string): Promise<ProjectSession> {
-    const originalPath = context.session.path
-    if (path) {
-      context.session.path = resolve(path.endsWith(".yadaw") ? path : `${path}.yadaw`)
-    }
-    const target = context.session.path
+  private async saveContext(
+    context: ProjectContext,
+    path?: string,
+    operationId = `project-save:${randomUUID()}`
+  ): Promise<ProjectSession> {
+    const target = path
+      ? resolve(path.endsWith(".yadaw") ? path : `${path}.yadaw`)
+      : context.session.path
     await mkdir(dirname(target), { recursive: true })
     const temporary = join(dirname(target), `.${basename(target)}.${randomUUID()}.tmp`)
     const backup = `${target}.bak`
-    await context.worker.dump(temporary)
-    const targetExists = (await fileMtime(target)) !== null
-    try {
-      if (targetExists) {
-        await rm(backup, { force: true })
-        await rename(target, backup)
-      }
-      await rename(temporary, target)
-    } catch (error) {
-      await rm(temporary, { force: true })
-      if (
-        targetExists &&
-        (await fileMtime(target)) === null &&
-        (await fileMtime(backup)) !== null
-      ) {
-        await rename(backup, target)
-      }
-      context.session.path = originalPath
-      throw error
-    }
+    await this.archiveJournal.commit({
+      operationId,
+      target,
+      temporary,
+      backup,
+      dump: (outputPath) => context.worker.dump(outputPath)
+    })
+    context.session.path = target
     context.session.dirty = false
     context.session.recoveredWorkingCopy = false
     await this.persistContextState(context)
     return structuredClone(context.session)
   }
 
-  async save(path?: string): Promise<ProjectSession> {
+  async save(path?: string, operationId?: string): Promise<ProjectSession> {
     const context = this.requireActive()
-    const session = await this.saveContext(context, path)
+    const session = await this.saveContext(context, path, operationId)
     await this.settings.addRecent(session.path, session.configuration.name)
     return session
   }

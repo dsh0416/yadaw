@@ -200,6 +200,14 @@ its committed recovery graph only after activation succeeds (or an
 open can become the helper restart source. Close uses the same path with a
 validated silent graph, then invalidates the project resource subtree.
 
+Project mutations use the same graph primitives with a different commit order.
+Main prepares the native candidate, commits the Project Worker transaction,
+and immediately records the returned DB snapshot as the committed desired
+graph. Native activation updates only the observed deployment. If activation
+fails, the project graph remains committed and the deployment is degraded;
+helper restart and reconciliation rebuild only from the DB-committed desired
+graph, never from the last attempted graph.
+
 Plug-in editor preferences follow a similarly narrow path. Renderer code only
 calls `openPluginEditor(instanceId)` through the plug-in Pinia store. Electron
 main resolves the class-ID preference and sends it to `audio-host`; the helper

@@ -292,6 +292,31 @@ For every mutating route, the test matrix must assert the committed resource
 snapshot, native observed snapshot, lifecycle projection, and ability to
 perform the next unrelated operation.
 
+## Implemented project mutation and archive slice
+
+Project graph commands now target the committed `ProjectGraphRef` with its
+expected resource revision. The Project Worker validates and retains a
+`prepare-project-command` token without changing PGlite. Main prepares the
+native candidate first, then `commit-project-command` is the single project
+data commit point. The worker returns a fresh DB snapshot after commit; Main
+uses that snapshot, rather than the attempted in-memory graph, to advance the
+resource revision and Pinia projection.
+
+The worker retains committed command results by `operationId`. If the commit
+response is lost, Main queries `project-command-status`; it never replays the
+command blindly. The worker refuses new preparations after 2,048 unacknowledged
+terminal results instead of evicting an outcome silently. A failed native
+activation after DB commit is reported as a degraded warning: the DB mutation
+remains committed, and the committed desired graph becomes the only helper
+restart source.
+
+Project save and save-as use a durable Node-side archive journal. The journal
+records the temp dump, backup rename, and target rename. Recovery restores the
+backup if interruption occurred before the commit rename, and preserves the
+new target if the rename committed but its response or journal update was
+lost. The renderer route returns `RpcResult` and retains its operation outcome
+for status reconciliation.
+
 ## Review checklist
 
 Before adding or changing a cross-process mutation:

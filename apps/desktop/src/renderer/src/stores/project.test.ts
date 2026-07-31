@@ -223,6 +223,77 @@ describe("project store dialogs", () => {
     expect(store.lifecycle.status).toBe("open")
   })
 
+  it("keeps the authoritative project projection when save-before-close fails", async () => {
+    window.yadaw.closeProject = vi.fn().mockResolvedValue({
+      ok: false,
+      requestId: "request",
+      operationId: "project-close",
+      error: {
+        code: "resource-unavailable",
+        category: "unavailable",
+        outcome: "not-committed",
+        retry: "safe",
+        correlationId: "archive-save-failed",
+        userMessageKey: "errors.projectSaveFailed",
+        resource: workspace.project,
+        details: {
+          type: "resource-unavailable",
+          component: "project-worker",
+          dispatched: true
+        }
+      }
+    })
+    const store = useProjectStore()
+    store.applyBootstrap(bootstrap(workspace))
+    const { activeDialog, selectDialogAction } = useGlobalDialog()
+
+    const closing = store.close()
+    await vi.waitFor(() => expect(activeDialog.value?.title).toBe("Save project before closing?"))
+    selectDialogAction("save")
+
+    await expect(closing).resolves.toBe(false)
+    expect(window.yadaw.closeProject).toHaveBeenCalledWith(
+      expect.objectContaining({ target: workspace.project, mutation: expect.any(Object) }),
+      "save"
+    )
+    expect(store.lifecycle).toMatchObject({
+      status: "open",
+      session: { id: session.id, dirty: true }
+    })
+    expect(store.projectRef).toEqual(workspace.project)
+    expect(store.error).toBe("resource-unavailable")
+  })
+
+  it("prompts for a pending mutation and waits for its commit before closing", async () => {
+    window.yadaw.closeProject = vi
+      .fn()
+      .mockResolvedValue(success({ closed: true, snapshot: bootstrap(null) }))
+    const store = useProjectStore()
+    store.applyBootstrap(
+      bootstrap({
+        ...workspace,
+        session: { ...workspace.session, dirty: false }
+      })
+    )
+    const finishMutation = store.beginProjectMutation()
+    const { activeDialog, selectDialogAction } = useGlobalDialog()
+
+    const closing = store.close()
+    await vi.waitFor(() => expect(activeDialog.value?.title).toBe("Save project before closing?"))
+    expect(store.hasUnsavedChanges).toBe(true)
+    selectDialogAction("save")
+    await Promise.resolve()
+    expect(window.yadaw.closeProject).not.toHaveBeenCalled()
+
+    finishMutation()
+
+    await expect(closing).resolves.toBe(true)
+    expect(window.yadaw.closeProject).toHaveBeenCalledWith(
+      expect.objectContaining({ target: workspace.project, mutation: expect.any(Object) }),
+      "save"
+    )
+  })
+
   it("coalesces repeated close requests into one dirty-project decision", async () => {
     window.yadaw.closeProject = vi
       .fn()

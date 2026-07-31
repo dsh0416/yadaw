@@ -238,7 +238,7 @@ export class ProjectLifecycleService {
       const workspace: ProjectWorkspaceSnapshot = {
         project: resources.project,
         projectGraph: resources.graph,
-        revision: preparedGraph.revision,
+        revision: graphCommit.value.revision,
         session: committedSession,
         graph: activated.value,
         assets

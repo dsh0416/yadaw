@@ -137,11 +137,7 @@ export class AudioHostService {
     pluginStatus: (instanceId) => this.plugins.status(instanceId),
     isPluginBypassed: (instanceId) => this.plugins.isBypassed(instanceId),
     commit: (deployment) => {
-      this.lastGraph = {
-        revision: deployment.graphRevision,
-        project: structuredClone(deployment.project),
-        runtime: structuredClone(deployment.runtime)
-      }
+      this.commitDesiredGraph(deployment)
       this.publishedGraph = {
         revision: deployment.graphRevision,
         runtime: structuredClone(deployment.runtime)
@@ -388,6 +384,14 @@ export class AudioHostService {
     deployment: PreparedGraphDeployment
   ): ReturnType<AudioHostGraphTransactions["abort"]> {
     return this.graphTransactions.abort(deployment)
+  }
+
+  commitDesiredGraph(deployment: PreparedGraphDeployment): void {
+    this.lastGraph = {
+      revision: deployment.graphRevision,
+      project: structuredClone(deployment.project),
+      runtime: structuredClone(deployment.runtime)
+    }
   }
 
   async loadGraph(

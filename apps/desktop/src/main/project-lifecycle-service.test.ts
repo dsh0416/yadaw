@@ -88,9 +88,9 @@ function fixture() {
     prepareCandidate: vi.fn<(meta: RpcRequestMeta) => Promise<RpcResult<typeof prepared>>>((meta) =>
       Promise.resolve(rpcSuccess(meta, prepared))
     ),
-    activateCandidate: vi.fn<
-      (meta: RpcRequestMeta) => Promise<RpcResult<ProjectGraphSnapshot>>
-    >((meta) => Promise.resolve(rpcSuccess(meta, structuredClone(graph)))),
+    activateCandidate: vi.fn<(meta: RpcRequestMeta) => Promise<RpcResult<ProjectGraphSnapshot>>>(
+      (meta) => Promise.resolve(rpcSuccess(meta, structuredClone(graph)))
+    ),
     abortCandidate: vi.fn(async () => undefined),
     commitCandidate: vi.fn()
   }

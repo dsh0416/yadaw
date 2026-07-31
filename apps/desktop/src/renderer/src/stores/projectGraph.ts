@@ -8,6 +8,7 @@ import type {
 } from "@yadaw/contracts"
 import { MUSICAL_TICKS_PER_QUARTER } from "@yadaw/contracts"
 import { applyToGraph, patchMixerGraph } from "@yadaw/project-model"
+import { mutationMeta, readMeta, rpcErrorMessage } from "../rpc"
 import { useProjectStore } from "./project"
 
 export const EMPTY_PROJECT_GRAPH: ProjectGraphSnapshot = {
@@ -58,16 +59,21 @@ export const useProjectGraphStore = defineStore("project-graph", () => {
     loading.value = true
     error.value = ""
     try {
-      replace(
-        reload ? await window.yadaw.reloadProjectGraph() : await window.yadaw.loadProjectGraph()
-      )
-    } catch (reason) {
-      error.value =
-        reason instanceof Error
-          ? reason.message
-          : reload
-            ? "Unable to reload the project graph."
-            : "Unable to load the project graph."
+      const target = projectStore.projectGraphRef
+      if (!target) return
+      const result = reload
+        ? await window.yadaw.reloadProjectGraph(
+            mutationMeta(target, "project-graph-reload", projectStore.projectRevision)
+          )
+        : await window.yadaw.loadProjectGraph(readMeta(target))
+      if (!result.ok) {
+        error.value = rpcErrorMessage(result.error)
+        return
+      }
+      replace(result.value)
+      if (result.resourceRevision !== undefined) {
+        projectStore.projectRevision = result.resourceRevision
+      }
     } finally {
       loading.value = false
     }
@@ -86,18 +92,35 @@ export const useProjectGraphStore = defineStore("project-graph", () => {
       error.value = ""
       await flushPreviews()
       const previous = graph.value
+      const finishMutation = projectStore.beginProjectMutation()
       try {
         graph.value = applyToGraph(previous, command)
-        const result = await window.yadaw.executeProjectCommand(command)
-        replace(result.graph)
+        const target = projectStore.projectGraphRef
+        if (!target) return null
+        const result = await window.yadaw.executeProjectCommand(
+          mutationMeta(target, "project-command", projectStore.projectRevision),
+          command
+        )
+        if (!result.ok) {
+          graph.value = previous
+          error.value = rpcErrorMessage(result.error)
+          if (result.error.retry === "after-reconcile") await loadNow(false)
+          return null
+        }
+        replace(result.value.graph)
+        if (result.resourceRevision !== undefined) {
+          projectStore.projectRevision = result.resourceRevision
+        }
         projectStore.markDirty()
-        return result
+        return result.value
       } catch (reason) {
         graph.value = previous
         error.value =
           reason instanceof Error ? reason.message : "Project change could not be applied."
         await loadNow(false)
         return null
+      } finally {
+        finishMutation()
       }
     })
   }

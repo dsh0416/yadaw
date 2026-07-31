@@ -31,11 +31,17 @@ export const useProjectStore = defineStore("project", () => {
   const desktopSession = shallowRef<DesktopSessionRef | null>(null)
   const projectRef = shallowRef<ProjectSessionRef | null>(null)
   const projectGraphRef = shallowRef<ProjectGraphRef | null>(null)
+  const projectRevision = shallowRef(0)
   const pendingIntent = shallowRef<"create" | "open" | "save" | "close" | null>(null)
+  const pendingProjectMutations = shallowRef(0)
   const rpcError = shallowRef("")
   let pendingClose: Promise<boolean> | null = null
+  let projectMutationTail: Promise<void> = Promise.resolve()
 
   const session = computed(() => ("session" in lifecycle.value ? lifecycle.value.session : null))
+  const hasUnsavedChanges = computed(
+    () => session.value?.dirty === true || pendingProjectMutations.value > 0
+  )
   const busy = computed(
     () =>
       pendingIntent.value !== null ||
@@ -53,12 +59,14 @@ export const useProjectStore = defineStore("project", () => {
       projectAssets.value = []
       projectRef.value = null
       projectGraphRef.value = null
+      projectRevision.value = 0
     }
   }
 
   function applyWorkspace(workspace: ProjectWorkspaceSnapshot): void {
     projectRef.value = structuredClone(workspace.project)
     projectGraphRef.value = structuredClone(workspace.projectGraph)
+    projectRevision.value = workspace.revision
     lifecycle.value = openState(workspace.session)
     projectAssets.value = structuredClone(workspace.assets)
     rpcError.value = ""
@@ -156,20 +164,25 @@ export const useProjectStore = defineStore("project", () => {
     pendingIntent.value = "save"
     rpcError.value = ""
     try {
-      const saved = await window.yadaw.saveProject()
-      lifecycle.value = openState(saved ?? previous)
-    } catch (reason) {
-      rpcError.value = reason instanceof Error ? reason.message : t("errors.unableToSaveProject")
+      const target = projectRef.value
+      if (!target) return
+      const saved = await window.yadaw.saveProject(mutationMeta(target, "project-save"))
+      if (!saved.ok) {
+        rpcError.value = rpcErrorMessage(saved.error)
+        lifecycle.value = openState(previous)
+        return
+      }
+      applyWorkspace(saved.value)
     } finally {
       pendingIntent.value = null
     }
   }
 
-  async function closeOnce(disposition?: "save" | "discard" | "cancel"): Promise<boolean> {
-    if (lifecycle.value.status === "closed") return true
-    if (lifecycle.value.status !== "open") return false
-    const previous = lifecycle.value.session
-    if (previous.dirty && !disposition) {
+  async function prepareClose(): Promise<"save" | "discard" | null> {
+    if (lifecycle.value.status !== "open") return null
+    let disposition: "save" | "discard" | "cancel" = "discard"
+    if (hasUnsavedChanges.value) {
+      const previous = lifecycle.value.session
       disposition =
         (await showDialog<"save" | "discard" | "cancel">({
           eyebrow: t("dialog.saveBeforeClose.eyebrow"),
@@ -186,8 +199,20 @@ export const useProjectStore = defineStore("project", () => {
           ],
           cancelValue: "cancel"
         })) ?? "cancel"
-      if (disposition === "cancel") return false
     }
+    if (disposition === "cancel") return null
+    await projectMutationTail
+    const statusAfterMutations = (lifecycle.value as ProjectLifecycleState).status
+    if (statusAfterMutations !== "open") return null
+    return disposition
+  }
+
+  async function closeOnce(disposition?: "save" | "discard" | "cancel"): Promise<boolean> {
+    if (lifecycle.value.status === "closed") return true
+    if (lifecycle.value.status !== "open" || disposition === "cancel") return false
+    const preparedDisposition = disposition ?? (await prepareClose())
+    if (!preparedDisposition) return false
+    if (disposition) await projectMutationTail
     const target = projectRef.value
     if (!target || pendingIntent.value) return false
     pendingIntent.value = "close"
@@ -195,7 +220,7 @@ export const useProjectStore = defineStore("project", () => {
     try {
       const result = await window.yadaw.closeProject(
         mutationMeta(target, "project-close"),
-        disposition
+        preparedDisposition
       )
       if (!result.ok) {
         if (result.error.category !== "cancelled") rpcError.value = rpcErrorMessage(result.error)
@@ -235,17 +260,39 @@ export const useProjectStore = defineStore("project", () => {
     }
   }
 
+  function beginProjectMutation(): () => void {
+    pendingProjectMutations.value += 1
+    let resolveMutation!: () => void
+    const mutation = new Promise<void>((resolve) => {
+      resolveMutation = resolve
+    })
+    projectMutationTail = projectMutationTail.then(
+      () => mutation,
+      () => mutation
+    )
+    let settled = false
+    return () => {
+      if (settled) return
+      settled = true
+      pendingProjectMutations.value = Math.max(0, pendingProjectMutations.value - 1)
+      resolveMutation()
+    }
+  }
+
   return {
     lifecycle,
     session,
     desktopSession,
     projectRef,
     projectGraphRef,
+    projectRevision,
     pendingIntent,
+    pendingProjectMutations,
     projectAssets,
     busy,
     error,
     isOpen,
+    hasUnsavedChanges,
     applyLifecycleState,
     applyDesktopSession,
     applyBootstrap,
@@ -253,10 +300,12 @@ export const useProjectStore = defineStore("project", () => {
     create,
     open,
     save,
+    prepareClose,
     close,
     updateConfiguration,
     refreshAssets,
-    markDirty
+    markDirty,
+    beginProjectMutation
   }
 })
 
