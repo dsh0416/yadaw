@@ -1,6 +1,6 @@
 {
   "name": "@yadaw/desktop",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "A browser-technology digital audio workstation with a Rust DSP core.",
   "license": "GPL-3.0-only",
   "private": true,
