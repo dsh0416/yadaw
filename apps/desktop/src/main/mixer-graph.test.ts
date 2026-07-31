@@ -194,3 +194,50 @@ describe("MIDI note project commands", () => {
     expect(() => validateGraph(value)).toThrow("MIDI note IDs must be unique")
   })
 })
+
+describe("project graph command characterization", () => {
+  it("round-trips non-MIDI edits through one inverse batch", () => {
+    const before = graph()
+    const command: ProjectCommand = {
+      type: "batch",
+      commands: [
+        {
+          type: "update-channel",
+          channelId: "instrument-1",
+          patch: { name: "Lead", gainDb: -6, pan: 0.25 }
+        },
+        {
+          type: "replace-tempo-map",
+          tempoMap: {
+            ticksPerQuarter: 960,
+            tempoEvents: [
+              { tick: 0, beatsPerMinute: 100 },
+              { tick: 1_920, beatsPerMinute: 140 }
+            ],
+            timeSignatureEvents: [{ tick: 0, numerator: 3, denominator: 4 }]
+          }
+        },
+        {
+          type: "replace-key-signature-map",
+          events: [
+            { tick: 0, fifths: -3, mode: "minor" },
+            { tick: 3_840, fifths: 2, mode: "major" }
+          ]
+        }
+      ]
+    }
+
+    const inverse = inverseFor(before, command)
+    const after = applyToGraph(before, command)
+
+    validateGraph(after)
+    expect(after.channels.find(({ id }) => id === "instrument-1")).toMatchObject({
+      name: "Lead",
+      gainDb: -6,
+      pan: 0.25
+    })
+    expect(after.tempoMap.tempoEvents).toHaveLength(2)
+    expect(after.keySignatureEvents).toHaveLength(2)
+    expect(applyToGraph(after, inverse)).toEqual(before)
+  })
+})
