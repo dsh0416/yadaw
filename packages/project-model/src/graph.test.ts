@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { MixerGraphSnapshot, ProjectCommand } from "@yadaw/contracts"
-import { applyToGraph, inverseFor, validateGraph } from "./mixer-graph"
+import { applyToGraph, inverseFor, validateGraph } from "./graph"
 
 function graph(): MixerGraphSnapshot {
   return {

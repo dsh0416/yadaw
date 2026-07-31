@@ -10,10 +10,6 @@ import type {
   TransportSnapshot
 } from "@yadaw/contracts"
 import type { PluginStateInput } from "@yadaw/project-db/protocol"
-import { type AudioHostGraph, AudioHostService } from "./audio-host-service"
-import { ApplicationSettingsStore } from "./application-settings"
-import type { PluginCatalogService } from "./plugin-catalog-service"
-import type { ProjectService } from "./project-service"
 import {
   applyToGraph,
   cloneGraph,
@@ -22,7 +18,11 @@ import {
   inverseFor,
   onlyRealtimeParameters,
   validateGraph
-} from "./mixer-graph"
+} from "@yadaw/project-model"
+import { type AudioHostGraph, AudioHostService } from "./audio-host-service"
+import { ApplicationSettingsStore } from "./application-settings"
+import type { PluginCatalogService } from "./plugin-catalog-service"
+import type { ProjectService } from "./project-service"
 
 export interface MidiSourceImport {
   id: string

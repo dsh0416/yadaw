@@ -13,10 +13,6 @@ import type {
   ProjectCommand
 } from "@yadaw/contracts"
 import { DEFAULT_INSTRUMENT_COLOR, MUSICAL_TICKS_PER_QUARTER } from "@yadaw/contracts"
-import { UI_DOMAIN_COLORS } from "@yadaw/ui"
-import { useProjectStore } from "./project"
-import { useMixerHistory } from "./mixer-history"
-import { useMixerMeterPolling } from "./mixer-meter-polling"
 import {
   MIXER_BUSES,
   audioTracks as selectAudioTracks,
@@ -27,7 +23,11 @@ import {
   patchMixerGraph,
   sendsFor as selectSendsFor,
   systemChannels as selectSystemChannels
-} from "./mixer-selectors"
+} from "@yadaw/project-model"
+import { UI_DOMAIN_COLORS } from "@yadaw/ui"
+import { useProjectStore } from "./project"
+import { useMixerHistory } from "./mixer-history"
+import { useMixerMeterPolling } from "./mixer-meter-polling"
 
 const EMPTY_GRAPH: MixerGraphSnapshot = {
   sampleRate: 48_000,
