@@ -349,4 +349,77 @@ mod tests {
         assert_eq!(last_native_graph_generation_for_test(), Some(41));
         set_last_native_graph_for_test(None);
     }
+
+    #[test]
+    fn job_priority_orders_underrun_ahead_of_graph_build() {
+        assert!(JobPriority::StreamingUnderrun < JobPriority::SeekWindow);
+        assert!(JobPriority::SeekWindow < JobPriority::GraphBuild);
+        assert!(JobPriority::GraphBuild < JobPriority::WaveformCache);
+    }
+
+    #[test]
+    fn prioritized_jobs_pop_lower_priority_discriminants_first() {
+        let _guard = GRAPH_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let queue = SharedQueue::new();
+        let graph_input = begin_graph_build(minimal_graph(50)).expect("graph begin");
+        let seek_input = begin_graph_build(minimal_graph(51)).expect("seek begin");
+        let (graph_tx, _) = oneshot::channel();
+        let (seek_tx, _) = oneshot::channel();
+        queue
+            .push(PrioritizedJob {
+                priority: JobPriority::GraphBuild,
+                sequence: 1,
+                job: WorkerJob::GraphBuild {
+                    input: graph_input,
+                    complete: graph_tx,
+                },
+            })
+            .expect("push graph job");
+        queue
+            .push(PrioritizedJob {
+                priority: JobPriority::SeekWindow,
+                sequence: 2,
+                job: WorkerJob::GraphBuild {
+                    input: seek_input,
+                    complete: seek_tx,
+                },
+            })
+            .expect("push seek job");
+
+        let first = queue.pop().expect("first job");
+        assert_eq!(first.priority, JobPriority::SeekWindow);
+        let second = queue.pop().expect("second job");
+        assert_eq!(second.priority, JobPriority::GraphBuild);
+        queue.close();
+    }
+
+    #[test]
+    fn closed_queue_rejects_new_jobs_and_shutdown_rejects_submits() {
+        let _guard = GRAPH_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let queue = SharedQueue::new();
+        queue.close();
+        let input = begin_graph_build(minimal_graph(52)).expect("begin");
+        let (complete, _) = oneshot::channel();
+        let error = queue
+            .push(PrioritizedJob {
+                priority: JobPriority::GraphBuild,
+                sequence: 0,
+                job: WorkerJob::GraphBuild { input, complete },
+            })
+            .expect_err("closed queue must reject push");
+        assert!(error.contains("closed"));
+
+        let supervisor = WorkerSupervisor::new();
+        supervisor.shutdown();
+        let input = begin_graph_build(minimal_graph(53)).expect("begin");
+        let error = match supervisor.submit_graph_build(input) {
+            Ok(_) => panic!("shutdown supervisor must reject submit"),
+            Err(error) => error,
+        };
+        assert!(error.contains("shut down"));
+    }
 }

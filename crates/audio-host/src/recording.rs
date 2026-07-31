@@ -509,6 +509,53 @@ impl Drop for RecorderController {
 }
 
 #[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn finite_sample_clamps_and_replaces_non_finite_values() {
+        assert_eq!(finite_sample(0.5), 0.5);
+        assert_eq!(finite_sample(2.0), 1.0);
+        assert_eq!(finite_sample(-2.0), -1.0);
+        assert_eq!(finite_sample(f32::NAN), 0.0);
+        assert_eq!(finite_sample(f32::INFINITY), 0.0);
+        assert_eq!(finite_sample(f32::NEG_INFINITY), 0.0);
+    }
+
+    #[test]
+    fn encode_peaks_writes_little_endian_f32_bytes() {
+        let encoded = encode_peaks(&[1.0, -0.5]);
+        assert_eq!(encoded.len(), 8);
+        assert_eq!(&encoded[..4], &1.0_f32.to_le_bytes());
+        assert_eq!(&encoded[4..], &(-0.5_f32).to_le_bytes());
+    }
+
+    #[test]
+    fn aggregate_peak_level_reduces_groups_of_four_buckets() {
+        // 4 buckets × 1 channel × (min, max)
+        let source = [
+            -0.1, 0.2, // bucket 0
+            -0.4, 0.1, // bucket 1
+            -0.2, 0.5, // bucket 2
+            -0.3, 0.3, // bucket 3
+        ];
+        let aggregated = aggregate_peak_level(&source, 1);
+        assert_eq!(aggregated, vec![-0.4, 0.5]);
+    }
+
+    #[test]
+    fn aggregate_peak_level_handles_partial_trailing_group() {
+        // 5 buckets → one full group of 4, then a remainder of 1
+        let source = [
+            -0.1, 0.1, -0.2, 0.2, -0.3, 0.3, -0.4, 0.4, // group 0
+            -0.9, 0.8, // group 1 (partial)
+        ];
+        let aggregated = aggregate_peak_level(&source, 1);
+        assert_eq!(aggregated, vec![-0.4, 0.4, -0.9, 0.8]);
+    }
+}
+
+#[cfg(test)]
 pub fn write_deterministic_test_recording(
     config: NativeRecordingStartConfig,
     sample_rate: u32,
