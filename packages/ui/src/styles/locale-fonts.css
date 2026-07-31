@@ -1,0 +1,12 @@
+/*
+ * Language-specific type stacks. Unhead (desktop) / VitePress (docs) set
+ * `html lang`; these rules pick the matching bundled face for that language.
+ */
+:root:lang(zh),
+:root:lang(zh-CN),
+:root:lang(zh-Hans) {
+  --ui-type-family-interface:
+    "Noto Sans SC Variable", "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --ui-type-family-display:
+    "Noto Sans SC Variable", "Barlow Condensed", ui-sans-serif, system-ui, sans-serif;
+}

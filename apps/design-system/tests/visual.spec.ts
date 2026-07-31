@@ -14,9 +14,6 @@ const stories = [
 ] as const
 
 test.describe("visual baselines", () => {
-  // TODO: Re-enable in CI after the design system uses bundled fonts for deterministic rendering.
-  test.skip(Boolean(process.env.CI), "Visual snapshots are paused in CI until fonts are bundled.")
-
   for (const theme of ["dark", "light"] as const) {
     test(`color · ${theme}`, async ({ page }) => {
       await page.goto(

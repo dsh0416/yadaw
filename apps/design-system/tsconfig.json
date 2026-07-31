@@ -4,7 +4,7 @@
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "types": ["vite/client"]
+    "types": ["vite/client", "unplugin-fonts/client"]
   },
   "include": [
     ".storybook/**/*.ts",
