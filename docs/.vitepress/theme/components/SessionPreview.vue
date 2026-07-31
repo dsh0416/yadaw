@@ -1,9 +1,11 @@
+<script setup lang="ts">
+import { useHomeCopy } from "../i18n"
+
+const t = useHomeCopy()
+</script>
+
 <template>
-  <div
-    class="session"
-    role="img"
-    aria-label="A stylized YADAW arrangement with audio and MIDI tracks"
-  >
+  <div class="session" role="img" :aria-label="t.sessionAriaLabel">
     <div class="session__chrome">
       <span class="session__brand">YADAW</span>
       <span class="session__project">night-drive.yadaw</span>
