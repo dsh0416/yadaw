@@ -73,7 +73,7 @@ const t = useHomeCopy()
   box-shadow:
     0 32px 90px rgb(0 0 0 / 48%),
     0 1px 0 rgb(255 255 255 / 5%) inset;
-  font-family: "SFMono-Regular", "Cascadia Code", Consolas, monospace;
+  font-family: var(--vp-font-family-mono);
   overflow: hidden;
 }
 

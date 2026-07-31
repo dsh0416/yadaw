@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from "pinia"
 import { withThemeByDataAttribute } from "@storybook/addon-themes"
 
 import { UiProvider } from "@yadaw/ui"
+import "unfonts.css"
 import "@yadaw/ui/styles.css"
 import "./preview.css"
 

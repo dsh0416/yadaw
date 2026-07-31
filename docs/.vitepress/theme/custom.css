@@ -1,5 +1,5 @@
 :root {
-  --yadaw-display: "Avenir Next Condensed", "Arial Narrow", "Helvetica Neue", sans-serif;
+  --yadaw-display: "Barlow Condensed", ui-sans-serif, system-ui, sans-serif;
   --yadaw-cyan: #72c3c7;
   --yadaw-cyan-light: #9bdadd;
   --yadaw-cyan-dark: #397a7d;
@@ -7,8 +7,8 @@
   --yadaw-midi: #a98ade;
   --yadaw-meter: #50b86d;
   --yadaw-warning: #e8b75f;
-  --vp-font-family-base: "Avenir Next", Avenir, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-  --vp-font-family-mono: "SFMono-Regular", "Cascadia Code", "Roboto Mono", Consolas, monospace;
+  --vp-font-family-base: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --vp-font-family-mono: "Cascadia Mono Variable", ui-monospace, monospace;
   --vp-c-brand-1: #72c3c7;
   --vp-c-brand-2: #8dd0d3;
   --vp-c-brand-3: #397a7d;

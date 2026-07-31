@@ -1,6 +1,8 @@
 import { resolve } from "node:path"
 import VueI18nPlugin from "@intlify/unplugin-vue-i18n/vite"
 import vue from "@vitejs/plugin-vue"
+import { yadawFontsOptions } from "@yadaw/ui/fonts"
+import Unfonts from "unplugin-fonts/vite"
 import { defineConfig } from "vite"
 import { appVersionDefine } from "./build/app-version"
 
@@ -9,6 +11,7 @@ export default defineConfig({
   root: resolve(import.meta.dirname, "src/renderer"),
   plugins: [
     vue(),
+    Unfonts(yadawFontsOptions),
     VueI18nPlugin({
       // Locale JSON is imported explicitly so the main process can share the same
       // catalogs as plain JSON without unplugin rewriting those modules.

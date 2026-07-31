@@ -4,21 +4,22 @@ import { Meta } from "@storybook/addon-docs/blocks"
 
 # Typography
 
-YADAW uses three deliberate families. Interface copy uses the system UI stack, headings use the
-condensed display stack, and aligned measurements use the data stack. Font family, size, weight,
-line height, and tracking must come from typography tokens rather than local numeric values.
+YADAW uses three deliberate families, bundled through `unplugin-fonts` and Fontsource. Interface
+copy uses Inter Variable, headings use Barlow Condensed, and aligned measurements use Cascadia
+Mono Variable. Font family, size, weight, line height, and tracking must come from typography
+tokens rather than local numeric values.
 
 ## Families
 
 <div style={{ display: "grid", gap: "1rem" }}>
   <div style={{ fontFamily: "var(--ui-type-family-interface)" }}>
-    <strong>Interface</strong> · Navigation, controls, explanations
+    <strong>Interface</strong> · Inter Variable · Navigation, controls, explanations
   </div>
   <div style={{ fontFamily: "var(--ui-type-family-display)" }}>
-    <strong>Display</strong> · Page, panel, and section titles
+    <strong>Display</strong> · Barlow Condensed · Page, panel, and section titles
   </div>
   <div style={{ fontFamily: "var(--ui-type-family-data)" }}>
-    <strong>Data</strong> · 01:42:16.083 · 48,000 Hz · −6.2 dB
+    <strong>Data</strong> · Cascadia Mono Variable · 01:42:16.083 · 48,000 Hz · −6.2 dB
   </div>
 </div>
 

@@ -23,10 +23,11 @@ The core palette is intentionally small:
 - **Take red** `#ff6577` — recording and destructive live state;
 - **Meter amber** `#e8b75f` — thresholds that need attention.
 
-Interface type uses Segoe UI Variable or the platform UI stack, restrained headings use
-Bahnschrift Condensed or the condensed fallback stack, and musical measurements use Cascadia
-Mono or the platform monospace stack. A family is a role, not decoration: time, dB, BPM, ticks,
-channels, and aligned tables use data type; sentences and controls use interface type.
+Interface type uses bundled Inter Variable, restrained headings use Barlow Condensed, and
+musical measurements use Cascadia Mono Variable. Families are loaded through `unplugin-fonts`
+and Fontsource (`packages/ui/fonts.ts`) so desktop, Storybook, and docs share the same faces.
+A family is a role, not decoration: time, dB, BPM, ticks, channels, and aligned tables use data
+type; sentences and controls use interface type.
 
 The signature element is the **signal rail**: a narrow channel-derived edge marks the active clip,
 track, route, or editable scope while the surrounding surface remains neutral. It always appears
@@ -268,10 +269,9 @@ interaction, and dark/light themes.
 The toolbar disables motion by default for deterministic screenshots. Choose **Motion enabled**
 only for a motion-specific review.
 
-Pixel-based visual snapshots are temporarily skipped in CI while the design system uses
-platform-dependent system fonts. Run them locally with `mise exec -- pnpm design:test`. Re-enable
-the CI snapshot comparisons after the interface fonts are bundled for deterministic rendering.
-Storybook browser tests plus the controls and reflow Playwright tests remain enabled in CI.
+Pixel-based visual snapshots run with the bundled Fontsource faces for deterministic rendering.
+Run them with `mise exec -- pnpm design:test`. Storybook browser tests plus the controls and
+reflow Playwright tests also remain enabled in CI.
 
 ## Contribution checklist
 

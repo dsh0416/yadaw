@@ -4,7 +4,7 @@
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "types": ["node", "vitepress/client"]
+    "types": ["node", "vitepress/client", "unplugin-fonts/client"]
   },
   "include": [".vitepress/**/*.ts", ".vitepress/**/*.vue"]
 }

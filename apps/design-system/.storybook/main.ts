@@ -2,7 +2,9 @@ import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
 import type { StorybookConfig } from "@storybook/vue3-vite"
+import { yadawFontsOptions } from "@yadaw/ui/fonts"
 import vue from "@vitejs/plugin-vue"
+import Unfonts from "unplugin-fonts/vite"
 
 const configDirectory = dirname(fileURLToPath(import.meta.url))
 const workspaceRoot = resolve(configDirectory, "../../..")
@@ -42,13 +44,17 @@ const config: StorybookConfig = {
 
     return {
       ...viteConfig,
-      plugins: [vue(), ...plugins],
+      plugins: [vue(), Unfonts(yadawFontsOptions), ...plugins],
       resolve: {
         ...viteConfig.resolve,
         alias: [
           {
             find: /^@yadaw\/ui\/styles\.css$/,
             replacement: resolve(workspaceRoot, "packages/ui/src/styles/index.css")
+          },
+          {
+            find: /^@yadaw\/ui\/fonts$/,
+            replacement: resolve(workspaceRoot, "packages/ui/fonts.ts")
           },
           {
             find: /^@yadaw\/ui$/,

@@ -95,14 +95,10 @@
   --ui-signal-rail-width: 0.1875rem;
   --ui-opacity-disabled: 0.55;
 
-  /* Typography foundations */
-  --ui-type-family-interface:
-    "Segoe UI Variable", Aptos, Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-    sans-serif;
-  --ui-type-family-display:
-    "Bahnschrift Condensed", "Avenir Next Condensed", "Arial Narrow", "Liberation Sans Narrow",
-    sans-serif-condensed, sans-serif;
-  --ui-type-family-data: "Cascadia Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  /* Typography foundations — families are bundled via unplugin-fonts + Fontsource */
+  --ui-type-family-interface: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --ui-type-family-display: "Barlow Condensed", ui-sans-serif, system-ui, sans-serif;
+  --ui-type-family-data: "Cascadia Mono Variable", ui-monospace, monospace;
 
   /* Dense application roles */
   --ui-type-size-micro: 6px;

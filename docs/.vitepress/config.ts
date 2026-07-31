@@ -1,3 +1,5 @@
+import { yadawFontsOptions } from "@yadaw/ui/fonts"
+import Unfonts from "unplugin-fonts/vite"
 import { defineConfig, type HeadConfig, type PageData } from "vitepress"
 
 const docsRoot = "https://yadaw.midori.live"
@@ -60,6 +62,9 @@ export default defineConfig({
   appearance: "dark",
   sitemap: {
     hostname: docsRoot
+  },
+  vite: {
+    plugins: [Unfonts(yadawFontsOptions)]
   },
   head: [
     ["link", { rel: "icon", href: "/logo.svg", type: "image/svg+xml" }],
