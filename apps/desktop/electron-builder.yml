@@ -21,6 +21,10 @@ files:
   - "!node_modules/@yadaw/dsp-node/src/**/*"
   - "!node_modules/@yadaw/dsp-node/Cargo.toml"
   - "!node_modules/@yadaw/dsp-node/build.rs"
+  # Build-only native parsers pulled by Unhead/Unplugin must not enter universal packages.
+  - "!node_modules/@oxc-parser/**/*"
+  - "!node_modules/oxc-parser/**/*"
+  - "!node_modules/@unhead/bundler/**/*"
 
 win:
   extraResources:
