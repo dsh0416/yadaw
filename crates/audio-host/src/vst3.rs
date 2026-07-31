@@ -405,9 +405,14 @@ impl Vst3Runtime {
     /// until helper exit.
     pub fn unload_plugin(&mut self, instance_id: &str, retain_for_graph: bool) -> ControlResult {
         if let Some(instance) = self.instances.remove(instance_id) {
+            let last_benchmark_instance = is_audio_benchmark_instance(instance_id)
+                && !self
+                    .instances
+                    .keys()
+                    .any(|loaded_id| is_audio_benchmark_instance(loaded_id));
             if retain_for_graph {
                 self.retired_instances.push(instance);
-            } else if self.instances.is_empty() {
+            } else if last_benchmark_instance {
                 // Keep one non-graph instance alive until helper shutdown. Some VST3 modules use
                 // process-global entrypoint state, and tearing down the final module while the
                 // helper continues serving IPC can terminate the process before the unload reply is
@@ -415,19 +420,17 @@ impl Vst3Runtime {
                 // it on a later run instead of synchronously destroying the previous guard on the
                 // winit thread. Do not reuse general plug-ins: their runtime state may have changed
                 // since load even when their original configuration is identical.
-                if is_audio_benchmark_instance(instance_id) {
-                    if self.benchmark_lifetime_guards.iter().all(|guard| {
-                        guard.instance.benchmark_configuration != instance.benchmark_configuration
-                    }) {
-                        self.benchmark_lifetime_guards.push(GuardedInstance {
-                            instance_id: instance_id.to_owned(),
-                            instance,
-                        });
-                    }
-                } else {
-                    let previous = self.process_lifetime_guard.replace(instance);
-                    drop(previous);
+                if self.benchmark_lifetime_guards.iter().all(|guard| {
+                    guard.instance.benchmark_configuration != instance.benchmark_configuration
+                }) {
+                    self.benchmark_lifetime_guards.push(GuardedInstance {
+                        instance_id: instance_id.to_owned(),
+                        instance,
+                    });
                 }
+            } else if self.instances.is_empty() {
+                let previous = self.process_lifetime_guard.replace(instance);
+                drop(previous);
             }
         }
         ControlResult::Accepted

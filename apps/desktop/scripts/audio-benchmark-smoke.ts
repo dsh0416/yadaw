@@ -50,22 +50,31 @@ const pluginInstanceIds = Array.from(
   { length: 64 },
   (_, index) => `__yadaw-audio-benchmark-gain-${index}`
 )
+const projectPluginInstanceId = "__yadaw-project-open-gain"
+
+async function loadGain(instanceId: string): Promise<void> {
+  const loaded = await request({
+    type: "load-plugin",
+    instance_id: instanceId,
+    module_path: pluginPath,
+    class_id: "59CABE21E605B9C9EE928D6C3B236BBF",
+    plugin_kind: "effect",
+    audio_mode: "stereo",
+    sample_rate: 48_000,
+    component_state: { storage: "inline", bytes: new Uint8Array() },
+    controller_state: { storage: "inline", bytes: new Uint8Array() }
+  })
+  if (loaded.type !== "plugin-loaded") throw new Error("VST3 load response mismatch")
+}
 
 try {
+  // Keep a normal project-owned instance loaded while both benchmark passes run. This catches the
+  // lifecycle boundary where the benchmark pool becomes empty but the overall VST3 runtime does not.
+  await loadGain(projectPluginInstanceId)
+
   for (let iteration = 0; iteration < 2; iteration += 1) {
     for (const instanceId of pluginInstanceIds) {
-      const loaded = await request({
-        type: "load-plugin",
-        instance_id: instanceId,
-        module_path: pluginPath,
-        class_id: "59CABE21E605B9C9EE928D6C3B236BBF",
-        plugin_kind: "effect",
-        audio_mode: "stereo",
-        sample_rate: 48_000,
-        component_state: { storage: "inline", bytes: new Uint8Array() },
-        controller_state: { storage: "inline", bytes: new Uint8Array() }
-      })
-      if (loaded.type !== "plugin-loaded") throw new Error("VST3 load response mismatch")
+      await loadGain(instanceId)
     }
 
     const result = await request({
@@ -100,6 +109,14 @@ try {
         )
         .join(", ")})`
     )
+  }
+
+  const unloadedProjectPlugin = await request({
+    type: "unload-plugin",
+    instance_id: projectPluginInstanceId
+  })
+  if (unloadedProjectPlugin.type !== "accepted") {
+    throw new Error("project VST3 unload response mismatch")
   }
 } finally {
   try {
