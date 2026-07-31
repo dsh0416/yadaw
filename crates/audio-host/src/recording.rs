@@ -795,9 +795,7 @@ mod tests {
         let path = temporary_path("double-start");
         let (controller, _tap) = recording_controller(8_000, 1);
         assert!(controller.stop().is_err());
-        controller
-            .start(start_config(&path))
-            .expect("first start");
+        controller.start(start_config(&path)).expect("first start");
         assert!(controller.start(start_config(&path)).is_err());
         let _ = controller.stop();
         let _ = std::fs::remove_file(path);

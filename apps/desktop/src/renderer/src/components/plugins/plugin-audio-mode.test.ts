@@ -10,9 +10,9 @@ const t = (key: string): string => key
 
 describe("plugin audio mode helpers", () => {
   it("lists instrument modes and filters effect modes by input width", () => {
-    expect(pluginAudioModeOptions("instrument", undefined, t).map((option) => option.value)).toEqual(
-      ["mono", "stereo"]
-    )
+    expect(
+      pluginAudioModeOptions("instrument", undefined, t).map((option) => option.value)
+    ).toEqual(["mono", "stereo"])
     expect(pluginAudioModeOptions("effect", undefined, t)).toEqual([])
     expect(pluginAudioModeOptions("effect", "mono", t).map((option) => option.value)).toEqual([
       "mono",

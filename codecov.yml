@@ -9,6 +9,9 @@ coverage:
         target: auto
         threshold: 1%
 
+ignore:
+  - "third_party/**"
+
 comment:
   layout: "header, diff, flags, components, files"
   behavior: default

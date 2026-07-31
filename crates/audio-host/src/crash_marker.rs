@@ -344,8 +344,8 @@ mod tests {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let path = marker_path("double");
         ensure_initialized(&path);
-        let error = initialize(&marker_path("double-again"))
-            .expect_err("second initialize must fail");
+        let error =
+            initialize(&marker_path("double-again")).expect_err("second initialize must fail");
         assert_eq!(error.kind(), io::ErrorKind::AlreadyExists);
     }
 }

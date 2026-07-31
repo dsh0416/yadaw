@@ -170,9 +170,7 @@ describe("createPianoRollEditing", () => {
     ])
 
     pianoRollStore.editCursorTick = 2_000
-    vi.spyOn(crypto, "randomUUID")
-      .mockReturnValueOnce("paste-1")
-      .mockReturnValueOnce("paste-2")
+    vi.spyOn(crypto, "randomUUID").mockReturnValueOnce("paste-1").mockReturnValueOnce("paste-2")
     editing.paste()
     await nextTick()
     expect(batch).toHaveBeenCalled()
@@ -224,7 +222,10 @@ describe("createPianoRollEditing", () => {
     editing.quantizeSelected()
     await nextTick()
     expect(commandsForEdits).toHaveBeenCalledWith([
-      expect.objectContaining({ globalStartTick: 960, note: expect.objectContaining({ id: "note-1" }) })
+      expect.objectContaining({
+        globalStartTick: 960,
+        note: expect.objectContaining({ id: "note-1" })
+      })
     ])
     expect(batch).toHaveBeenCalled()
 
@@ -262,9 +263,7 @@ describe("createPianoRollEditing", () => {
 
     batch.mockClear()
     editing.applyInspector("duration", "12")
-    expect(commandsForEdits).toHaveBeenCalledWith([
-      expect.objectContaining({ durationTicks: 12 })
-    ])
+    expect(commandsForEdits).toHaveBeenCalledWith([expect.objectContaining({ durationTicks: 12 })])
 
     batch.mockClear()
     editing.applyInspector("key", "200")
@@ -286,9 +285,7 @@ describe("createPianoRollEditing", () => {
 
     batch.mockClear()
     editing.applyInspector("start", "0")
-    expect(commandsForEdits).toHaveBeenCalledWith([
-      expect.objectContaining({ globalStartTick: 0 })
-    ])
+    expect(commandsForEdits).toHaveBeenCalledWith([expect.objectContaining({ globalStartTick: 0 })])
 
     editing.applyInspector("velocity", "   ")
     editing.applyInspector("velocity", "NaN")
@@ -316,17 +313,13 @@ describe("createPianoRollEditing", () => {
 
     commandsForEdits.mockClear()
     editing.moveSelection(120, 0, true)
-    expect(commandsForEdits).toHaveBeenCalledWith([
-      expect.objectContaining({ durationTicks: 360 })
-    ])
+    expect(commandsForEdits).toHaveBeenCalledWith([expect.objectContaining({ durationTicks: 360 })])
 
     batch.mockClear()
     editing.handleKeydown(
       new KeyboardEvent("keydown", { code: "ArrowUp", shiftKey: true, bubbles: true })
     )
-    expect(commandsForEdits).toHaveBeenCalledWith([
-      expect.objectContaining({ patch: { key: 72 } })
-    ])
+    expect(commandsForEdits).toHaveBeenCalledWith([expect.objectContaining({ patch: { key: 72 } })])
 
     editing.handleKeydown(new KeyboardEvent("keydown", { code: "ArrowDown", bubbles: true }))
     editing.handleKeydown(

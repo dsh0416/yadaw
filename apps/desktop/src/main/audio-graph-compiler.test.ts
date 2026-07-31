@@ -286,9 +286,9 @@ describe("AudioGraphCompiler", () => {
     expect(monitored.channels.find((channel) => channel.id === "audio-1")?.input_monitoring).toBe(
       true
     )
-    expect(
-      unmonitored.channels.find((channel) => channel.id === "audio-1")?.input_monitoring
-    ).toBe(false)
+    expect(unmonitored.channels.find((channel) => channel.id === "audio-1")?.input_monitoring).toBe(
+      false
+    )
     expect(
       unmonitored.channels.find((channel) => channel.id === "instrument-1")?.input_monitoring
     ).toBe(true)

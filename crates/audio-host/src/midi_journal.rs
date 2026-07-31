@@ -399,12 +399,7 @@ mod tests {
         let header = sample_header();
         let mut writer = MidiJournalWriter::create(&path, &header).unwrap();
         let error = writer
-            .append(&sample_record(
-                1,
-                None,
-                None,
-                vec![0; MAX_RECORD_BYTES],
-            ))
+            .append(&sample_record(1, None, None, vec![0; MAX_RECORD_BYTES]))
             .unwrap_err();
         assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
         assert!(error.to_string().contains("exceeds journal limit"));

@@ -106,10 +106,9 @@ describe("hydrateAttachments", () => {
     )
 
     expect(() =>
-      hydrateAttachments(
-        { payload: { storage: "attachment", index: 0, offset: 0, length: 99 } },
-        [Buffer.from([1])]
-      )
+      hydrateAttachments({ payload: { storage: "attachment", index: 0, offset: 0, length: 99 } }, [
+        Buffer.from([1])
+      ])
     ).toThrow("audio host returned an invalid attachment reference")
   })
 })

@@ -974,9 +974,11 @@ mod tests {
         assert_eq!(stable_port_key("port-a"), stable_port_key("port-a"));
         assert_ne!(stable_port_key("port-a"), stable_port_key("port-b"));
         assert_ne!(stable_port_key(""), stable_port_key("x"));
-        let expected = b"midi-clock".iter().fold(0xcbf2_9ce4_8422_2325_u64, |hash, byte| {
-            (hash ^ u64::from(*byte)).wrapping_mul(0x0000_0100_0000_01b3)
-        });
+        let expected = b"midi-clock"
+            .iter()
+            .fold(0xcbf2_9ce4_8422_2325_u64, |hash, byte| {
+                (hash ^ u64::from(*byte)).wrapping_mul(0x0000_0100_0000_01b3)
+            });
         assert_eq!(stable_port_key("midi-clock"), expected);
         assert_eq!(stable_port_key(""), 0xcbf2_9ce4_8422_2325);
     }
@@ -998,14 +1000,8 @@ mod tests {
             .is_ok()
         );
         assert!(
-            validate_preferences(&prefs(
-                false,
-                None,
-                BTreeMap::new(),
-                BTreeSet::new(),
-                true,
-            ))
-            .is_ok()
+            validate_preferences(&prefs(false, None, BTreeMap::new(), BTreeSet::new(), true,))
+                .is_ok()
         );
     }
 
@@ -1227,9 +1223,7 @@ mod tests {
             }
         );
         assert!(consumer.next_before(100).is_none());
-        let deferred = consumer
-            .next_before(20_000)
-            .expect("deferred future event");
+        let deferred = consumer.next_before(20_000).expect("deferred future event");
         assert_eq!(
             deferred.message,
             RealtimeMidiMessage::NoteOff {
@@ -1556,9 +1550,9 @@ mod tests {
         state.clock.advance(20_833 * 12 + 50_000);
         assert_eq!(snapshot(&state).sync.state, "freewheel");
 
-        state.clock.advance(
-            20_833 * 12 + yadaw_dsp_runtime::midi_input::MIDI_CLOCK_FREEWHEEL_MICROS + 1,
-        );
+        state
+            .clock
+            .advance(20_833 * 12 + yadaw_dsp_runtime::midi_input::MIDI_CLOCK_FREEWHEEL_MICROS + 1);
         assert_eq!(snapshot(&state).sync.state, "lost");
     }
 
@@ -1567,13 +1561,8 @@ mod tests {
         let _guard = GLOBAL_MIDI_TEST_LOCK
             .lock()
             .unwrap_or_else(|error| error.into_inner());
-        let actor = MidiInputActor::start(prefs(
-            false,
-            None,
-            BTreeMap::new(),
-            BTreeSet::new(),
-            false,
-        ));
+        let actor =
+            MidiInputActor::start(prefs(false, None, BTreeMap::new(), BTreeSet::new(), false));
         let invalid = actor.configure(MidiSyncPreferences {
             enabled: true,
             source_port_id: Some("id".into()),

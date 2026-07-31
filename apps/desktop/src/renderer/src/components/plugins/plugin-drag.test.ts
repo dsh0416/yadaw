@@ -54,9 +54,10 @@ describe("plugin drag helpers", () => {
     expect(readPluginDrag(dragEvent(JSON.stringify({ source: "rack", instanceId: "p1" })))).toEqual(
       { source: "rack", instanceId: "p1" }
     )
-    expect(
-      readPluginDrag(dragEvent(JSON.stringify({ source: "catalog", descriptor })))
-    ).toEqual({ source: "catalog", descriptor })
+    expect(readPluginDrag(dragEvent(JSON.stringify({ source: "catalog", descriptor })))).toEqual({
+      source: "catalog",
+      descriptor
+    })
     expect(readPluginDrag(dragEvent(""))).toBeNull()
     expect(readPluginDrag(dragEvent("{"))).toBeNull()
     expect(readPluginDrag(dragEvent(JSON.stringify({ source: "rack" })))).toBeNull()

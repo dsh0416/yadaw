@@ -216,15 +216,19 @@ mod header_repair_tests {
         let path = temporary_path("missing");
         let error = repair_recording_header(path.to_string_lossy().into_owned(), 2)
             .expect_err("missing file");
-        assert!(error.to_string().contains("failed to open partial recording"));
+        assert!(
+            error
+                .to_string()
+                .contains("failed to open partial recording")
+        );
     }
 
     #[test]
     fn rejects_non_riff_signature() {
         let path = temporary_path("not-riff");
         std::fs::write(&path, b"XXXX........WAVE....").unwrap();
-        let error = repair_recording_header(path.to_string_lossy().into_owned(), 2)
-            .expect_err("not riff");
+        let error =
+            repair_recording_header(path.to_string_lossy().into_owned(), 2).expect_err("not riff");
         assert!(error.to_string().contains("not RIFF/RF64"));
         let _ = std::fs::remove_file(path);
     }
@@ -233,8 +237,8 @@ mod header_repair_tests {
     fn rejects_non_wave_form_type() {
         let path = temporary_path("not-wave");
         write_partial_wave_fixture(&path, true, false);
-        let error = repair_recording_header(path.to_string_lossy().into_owned(), 2)
-            .expect_err("not wave");
+        let error =
+            repair_recording_header(path.to_string_lossy().into_owned(), 2).expect_err("not wave");
         assert!(error.to_string().contains("not WAVE"));
         let _ = std::fs::remove_file(path);
     }
@@ -243,8 +247,8 @@ mod header_repair_tests {
     fn rejects_wave_without_data_chunk() {
         let path = temporary_path("no-data");
         write_partial_wave_fixture(&path, false, true);
-        let error = repair_recording_header(path.to_string_lossy().into_owned(), 2)
-            .expect_err("no data");
+        let error =
+            repair_recording_header(path.to_string_lossy().into_owned(), 2).expect_err("no data");
         assert!(error.to_string().contains("no data chunk"));
         let _ = std::fs::remove_file(path);
     }

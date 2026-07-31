@@ -375,7 +375,11 @@ describe("createPianoRollGestures", () => {
     const target = gridTarget()
 
     gestures.handleGridPointerDown(
-      pointerEvent("pointerdown", { clientX: 900, clientY: 18 * (127 - 61), shiftKey: true }, target)
+      pointerEvent(
+        "pointerdown",
+        { clientX: 900, clientY: 18 * (127 - 61), shiftKey: true },
+        target
+      )
     )
     gestures.handleGridPointerMove(
       pointerEvent(

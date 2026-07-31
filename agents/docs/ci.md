@@ -87,7 +87,10 @@ Codecov components for each coverage-producing workspace package or crate
 host crates, and `plugins`). Components drive per-area project and patch
 status checks and appear in the Codecov PR comment. After Vitest writes each
 package report, `test:coverage:js` rewrites `SF:` paths to be repository
-relative so Codecov can attribute monorepo package coverage correctly.
+relative so Codecov can attribute monorepo package coverage correctly. Rust
+coverage ignores vendored `third_party/` sources (also listed under `ignore`
+in `codecov.yml`) so path dependencies such as `ara2-bridge-host` do not
+dilute first-party totals.
 
 ## Creating a release
 

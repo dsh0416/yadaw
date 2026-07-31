@@ -11,9 +11,7 @@ import { resolve } from "node:path"
 
 const [, , lcovPathArg, prefixArg] = process.argv
 if (!lcovPathArg || !prefixArg) {
-  console.error(
-    "Usage: node scripts/rewrite-lcov-paths.ts <lcov-path> <repo-relative-prefix>"
-  )
+  console.error("Usage: node scripts/rewrite-lcov-paths.ts <lcov-path> <repo-relative-prefix>")
   process.exit(1)
 }
 

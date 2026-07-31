@@ -185,7 +185,13 @@ describe("project graph store", () => {
     loaded.channels[0]!.name = "Loaded"
     window.yadaw.loadProjectGraph = vi.fn().mockResolvedValue(success(loaded, 3))
     window.yadaw.reloadProjectGraph = vi.fn().mockResolvedValue(
-      success({ ...loaded, channels: loaded.channels.map((channel) => ({ ...channel, name: "Reloaded" })) }, 4)
+      success(
+        {
+          ...loaded,
+          channels: loaded.channels.map((channel) => ({ ...channel, name: "Reloaded" }))
+        },
+        4
+      )
     )
 
     await store.load()

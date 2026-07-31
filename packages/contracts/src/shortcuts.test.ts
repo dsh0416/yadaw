@@ -119,9 +119,9 @@ describe("formatKeyboardShortcut", () => {
     expect(
       formatKeyboardShortcut({ code: "KeyS", modifiers: ["primary", "shift"] }, "darwin")
     ).toBe("⌘⇧S")
-    expect(
-      formatKeyboardShortcut({ code: "KeyS", modifiers: ["primary", "shift"] }, "linux")
-    ).toBe("Ctrl+Shift+S")
+    expect(formatKeyboardShortcut({ code: "KeyS", modifiers: ["primary", "shift"] }, "linux")).toBe(
+      "Ctrl+Shift+S"
+    )
     expect(
       formatKeyboardShortcut({ code: "KeyF", modifiers: ["primary", "control"] }, "darwin")
     ).toBe("⌘CtrlF")

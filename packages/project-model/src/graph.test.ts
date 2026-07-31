@@ -378,7 +378,6 @@ describe("additional project graph commands", () => {
     expect(restored.channels).toEqual(expect.arrayContaining(before.channels))
   })
 
-
   it("creates, updates, and deletes aux channels and sends invertibly", () => {
     const before = graph()
     const aux = {
@@ -691,9 +690,9 @@ describe("project graph validation and command guards", () => {
 
   it("rejects deleting master, system, track-owned, and still-routed output channels", () => {
     const value = graph()
-    expect(() =>
-      applyToGraph(value, { type: "delete-channel", channelId: "master" })
-    ).toThrow("Master cannot be deleted")
+    expect(() => applyToGraph(value, { type: "delete-channel", channelId: "master" })).toThrow(
+      "Master cannot be deleted"
+    )
     expect(() =>
       applyToGraph(value, { type: "delete-channel", channelId: "instrument-1" })
     ).toThrow("Track-owned channels must be deleted through delete-track")
@@ -709,13 +708,13 @@ describe("project graph validation and command guards", () => {
     expect(() =>
       applyToGraph(withSystem, { type: "delete-channel", channelId: "metronome" })
     ).toThrow("System channels cannot be deleted")
-    expect(() => inverseFor(withSystem, { type: "delete-channel", channelId: "metronome" })).toThrow(
-      "System channels cannot be deleted"
-    )
-
     expect(() =>
-      applyToGraph(value, { type: "delete-channel", channelId: "output" })
-    ).toThrow("An Output must be unused before it can be deleted")
+      inverseFor(withSystem, { type: "delete-channel", channelId: "metronome" })
+    ).toThrow("System channels cannot be deleted")
+
+    expect(() => applyToGraph(value, { type: "delete-channel", channelId: "output" })).toThrow(
+      "An Output must be unused before it can be deleted"
+    )
     expect(() => inverseFor(value, { type: "delete-channel", channelId: "instrument-1" })).toThrow(
       "Track-owned channels must be deleted through delete-track"
     )
@@ -806,13 +805,18 @@ describe("project graph validation and command guards", () => {
       slotOrder: 0
     })
     expect(moved.plugins.find((candidate) => candidate.id === "fx-b")?.slotOrder).toBe(0)
-    expect(applyToGraph(moved, inverseFor(withPlugins, {
-      type: "move-plugin",
-      pluginId: "fx-a",
-      channelId: "instrument-2",
-      role: "insert",
-      slotOrder: 0
-    }))).toEqual(withPlugins)
+    expect(
+      applyToGraph(
+        moved,
+        inverseFor(withPlugins, {
+          type: "move-plugin",
+          pluginId: "fx-a",
+          channelId: "instrument-2",
+          role: "insert",
+          slotOrder: 0
+        })
+      )
+    ).toEqual(withPlugins)
   })
 
   it("deletes unused output channels with fallback rewiring and invertible restore", () => {
@@ -827,9 +831,12 @@ describe("project graph validation and command guards", () => {
     const withSpare = applyToGraph(before, { type: "create-channel", channel: spareOutput })
     const deleted = applyToGraph(withSpare, { type: "delete-channel", channelId: "output-2" })
     expect(deleted.channels.some((channel) => channel.id === "output-2")).toBe(false)
-    expect(applyToGraph(deleted, inverseFor(withSpare, { type: "delete-channel", channelId: "output-2" }))).toEqual(
-      withSpare
-    )
+    expect(
+      applyToGraph(
+        deleted,
+        inverseFor(withSpare, { type: "delete-channel", channelId: "output-2" })
+      )
+    ).toEqual(withSpare)
   })
 
   it("covers delete-track inverse restoration of dependent graph entities", () => {
@@ -924,7 +931,9 @@ describe("project graph validation and command guards", () => {
       hardwareOutputChannels: [1, 2],
       sortOrder: 1
     })
-    expect(() => validateGraph(duplicateOutputMap)).toThrow("Hardware Output channel pairs must be unique")
+    expect(() => validateGraph(duplicateOutputMap)).toThrow(
+      "Hardware Output channel pairs must be unique"
+    )
 
     const badSend = graph()
     badSend.sends.push({
@@ -937,7 +946,9 @@ describe("project graph validation and command guards", () => {
       tap: "post",
       levelDb: 0
     })
-    expect(() => validateGraph(badSend)).toThrow("Only Audio, Instrument, and Aux channels can source sends")
+    expect(() => validateGraph(badSend)).toThrow(
+      "Only Audio, Instrument, and Aux channels can source sends"
+    )
 
     const badPlugin = graph()
     badPlugin.plugins.push(
@@ -994,7 +1005,9 @@ describe("project graph validation and command guards", () => {
   it("validates instrument MIDI routes and audio clip ownership", () => {
     const badMidi = graph()
     badMidi.channels[0]!.midiInput = { portId: "port", portName: null, channel: 0 }
-    expect(() => validateGraph(badMidi)).toThrow("Instrument MIDI routes require a valid port and channel")
+    expect(() => validateGraph(badMidi)).toThrow(
+      "Instrument MIDI routes require a valid port and channel"
+    )
 
     const armedMaster = graph()
     armedMaster.channels.find((channel) => channel.kind === "master")!.recordArmed = true
@@ -1050,7 +1063,9 @@ describe("project graph validation and command guards", () => {
       assetSampleRate: 48_000,
       assetChannels: 2
     })
-    expect(() => validateGraph(badClipFrames)).toThrow("Clip start frame must be a non-negative safe integer")
+    expect(() => validateGraph(badClipFrames)).toThrow(
+      "Clip start frame must be a non-negative safe integer"
+    )
   })
 
   it("treats midi source commands as no-ops while preserving invertibility", () => {
@@ -1068,4 +1083,3 @@ describe("project graph validation and command guards", () => {
     })
   })
 })
-
