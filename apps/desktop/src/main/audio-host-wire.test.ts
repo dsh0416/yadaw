@@ -92,9 +92,9 @@ describe("hydrateAttachments", () => {
     hydrateAttachments(value, [bytes])
 
     expect(value.payload.storage).toBe("inline")
-    expect(
-      Uint8Array.from((value.payload as unknown as { bytes: Uint8Array }).bytes)
-    ).toEqual(new Uint8Array([8, 7, 6]))
+    expect(Uint8Array.from((value.payload as unknown as { bytes: Uint8Array }).bytes)).toEqual(
+      new Uint8Array([8, 7, 6])
+    )
   })
 
   it("hydrates nested arrays and rejects invalid references", () => {
@@ -103,9 +103,9 @@ describe("hydrateAttachments", () => {
     }
     hydrateAttachments(value, [Buffer.from([1, 2, 3])])
     expect(value.items[0]?.storage).toBe("inline")
-    expect(
-      Uint8Array.from((value.items[0] as unknown as { bytes: Uint8Array }).bytes)
-    ).toEqual(new Uint8Array([1, 2]))
+    expect(Uint8Array.from((value.items[0] as unknown as { bytes: Uint8Array }).bytes)).toEqual(
+      new Uint8Array([1, 2])
+    )
 
     expect(() =>
       hydrateAttachments({ payload: { storage: "attachment", index: 0, offset: 0, length: 99 } }, [

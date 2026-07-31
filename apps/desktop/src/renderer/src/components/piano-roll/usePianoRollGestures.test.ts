@@ -313,7 +313,7 @@ describe("createPianoRollGestures", () => {
     await nextTick()
 
     expect(batch).toHaveBeenCalled()
-    const commands = batch.mock.calls[0]![0] as unknown as ProjectCommand[]
+    const commands = batch.mock.calls[0]![0]
     expect(commands.some((command) => command.type === "create-midi-notes")).toBe(true)
     expect(pianoRollStore.selectedNoteKeys.has("clip-1:00000000-0000-4000-8000-000000000099")).toBe(
       true
