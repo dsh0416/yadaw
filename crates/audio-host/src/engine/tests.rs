@@ -12,16 +12,18 @@ mod tests {
         ClipSamples, ClipStoragePolicy, EngineCommand, GRAPH_TEST_LOCK, InputPeakBank, LivePlugin,
         LoadedClip, MAX_INPUT_CHANNELS, MAX_OUTPUT_CHANNELS, MAX_PLUGIN_BLOCK_FRAMES,
         MEMORY_DECODE_LIMIT_BYTES, METRONOME_ACCENT_NOTE, METRONOME_BEAT_NOTE, MeterAtomics,
-        MeterBank, MetronomeScheduler, NativeMixerChannel, NativeMixerGraph, NativeMixerRuntime,
-        NativeMixerSend, NativePluginInstance, NativeRoundTripLatencyMeasurementRequest,
-        OUTPUT_RESAMPLER_FRAMES, Ordering, RoundTripInputDetector, RoundTripLatencyMeasurement,
-        RoundTripOutputProbe, ScheduledMidiEvent, ScheduledMidiEventKind, SessionOutputConverter,
-        SignalWidth, StereoDelayLine, StreamDirection, StreamErrorImpact, SupportedBufferSize,
+        MeterBank, MetronomeScheduler, NativeMidiClip, NativeMidiEvent, NativeMidiEventKind,
+        NativeMidiNote, NativeMixerChannel, NativeMixerGraph, NativeMixerRuntime, NativeMixerSend,
+        NativePluginInstance, NativeRoundTripLatencyMeasurementRequest, OUTPUT_RESAMPLER_FRAMES,
+        Ordering, RoundTripInputDetector, RoundTripLatencyMeasurement, RoundTripOutputProbe,
+        ScheduledMidiEvent, ScheduledMidiEventKind, SessionOutputConverter, SignalWidth,
+        StereoDelayLine, StreamDirection, StreamErrorImpact, SupportedBufferSize,
         TRANSPORT_COUNTING_IN, TRANSPORT_PLAYING, TRANSPORT_RECORDING, TRANSPORT_STOPPED,
-        TRANSPORT_WAITING, TransportAction, TransportShared, clip_storage_policy,
-        compiled_graph_snapshot, frames_to_nanos, native_graph_references_plugin,
-        resolve_stream_devices, select_buffer_size, set_last_native_graph_for_test,
-        spawn_streaming_clip, stream_error_impact, validate_session_sample_rate,
+        TRANSPORT_WAITING, TransportAction, TransportShared, build_mixer_runtime,
+        clip_storage_policy, compiled_graph_snapshot, frames_to_nanos,
+        native_graph_references_plugin, parse_channel_kind, resolve_stream_devices,
+        select_buffer_size, set_last_native_graph_for_test, spawn_streaming_clip,
+        stream_error_impact, validate_session_sample_rate,
     };
     use crate::recording::{
         NativeRecordingStartConfig, StereoFrame, write_deterministic_test_recording,
@@ -34,7 +36,8 @@ mod tests {
     use yadaw_dsp_core::mixer::{ChannelKind, ChannelSpec, MixerGraph, RouteTarget};
     use yadaw_dsp_render::{RenderMeter, RenderRuntime};
     use yadaw_dsp_runtime::protocol::{
-        CompiledGraphNodeKind, CompiledGraphPluginState, LiveMixerSendTap, PluginAudioMode,
+        CompiledGraphEdgeKind, CompiledGraphNodeKind, CompiledGraphPluginState,
+        CompiledGraphSignalWidth, LiveMixerSendTap, LiveMixerSystemRole, PluginAudioMode,
     };
     use yadaw_dsp_runtime::tempo::{TempoEvent, TempoMap, TimeSignatureEvent};
 
@@ -1148,6 +1151,591 @@ mod tests {
         assert_eq!(
             runtime.transport.position_ticks.load(Ordering::Relaxed),
             yadaw_dsp_runtime::midi_input::MUSICAL_TICKS_PER_MIDI_CLOCK
+        );
+    }
+
+    fn test_transport(sample_rate: u32) -> Arc<TransportShared> {
+        Arc::new(TransportShared {
+            state: AtomicU32::new(TRANSPORT_STOPPED),
+            position_frames: AtomicU64::new(0),
+            position_ticks: AtomicU64::new(0),
+            sample_rate: AtomicU32::new(sample_rate),
+            effective_bpm_bits: AtomicU64::new(f64::NAN.to_bits()),
+            clock_source: AtomicU32::new(0),
+            waiting_for: AtomicU32::new(0),
+        })
+    }
+
+    fn mixer_channel(
+        id: &str,
+        kind: &str,
+        output_index: Option<u32>,
+        output_bus: Option<u32>,
+        input_source: Option<&str>,
+        input_channels: Vec<u32>,
+        hardware_output_channels: Vec<u32>,
+    ) -> NativeMixerChannel {
+        NativeMixerChannel {
+            id: id.to_owned(),
+            kind: kind.to_owned(),
+            system_role: None,
+            gain_db: 0.0,
+            pan: 0.0,
+            muted: false,
+            soloed: false,
+            output_index,
+            output_bus,
+            record_armed: false,
+            input_monitoring: false,
+            input_source: input_source.map(str::to_owned),
+            input_channels,
+            hardware_output_channels,
+            midi_input_port_id: None,
+            midi_input_channel: None,
+        }
+    }
+
+    fn simple_native_graph() -> NativeMixerGraph {
+        NativeMixerGraph {
+            generation: 3,
+            sample_rate: 48_000,
+            channels: vec![
+                mixer_channel(
+                    "audio-0",
+                    "audio",
+                    Some(2),
+                    None,
+                    Some("hardware"),
+                    vec![1, 2],
+                    Vec::new(),
+                ),
+                mixer_channel(
+                    "master",
+                    "master",
+                    None,
+                    None,
+                    None,
+                    Vec::new(),
+                    Vec::new(),
+                ),
+                mixer_channel(
+                    "output",
+                    "output",
+                    None,
+                    None,
+                    None,
+                    Vec::new(),
+                    vec![1, 2],
+                ),
+            ],
+            sends: Vec::new(),
+            clips: Vec::new(),
+            plugins: Vec::new(),
+            midi_clips: Vec::new(),
+            tempo_events: vec![TempoEvent {
+                tick: 0,
+                beats_per_minute: 120.0,
+            }],
+            time_signature_events: vec![TimeSignatureEvent {
+                tick: 0,
+                numerator: 4,
+                denominator: 4,
+            }],
+        }
+    }
+
+    #[test]
+    fn parse_channel_kind_accepts_known_kinds_and_rejects_unknown() {
+        assert!(matches!(
+            parse_channel_kind("audio").unwrap(),
+            ChannelKind::Audio
+        ));
+        assert!(matches!(
+            parse_channel_kind("instrument").unwrap(),
+            ChannelKind::Instrument
+        ));
+        assert!(matches!(parse_channel_kind("aux").unwrap(), ChannelKind::Aux));
+        assert!(matches!(
+            parse_channel_kind("master").unwrap(),
+            ChannelKind::Master
+        ));
+        assert!(matches!(
+            parse_channel_kind("output").unwrap(),
+            ChannelKind::Output
+        ));
+        assert!(parse_channel_kind("bus").is_err());
+        assert!(parse_channel_kind("").is_err());
+    }
+
+    #[test]
+    fn frames_to_nanos_scales_with_sample_rate() {
+        assert_eq!(frames_to_nanos(48_000, 48_000), 1_000_000_000);
+        assert_eq!(frames_to_nanos(24_000, 48_000), 500_000_000);
+        assert_eq!(frames_to_nanos(0, 48_000), 0);
+    }
+
+    #[test]
+    fn transport_snapshot_maps_state_clock_and_waiting_flags() {
+        let transport = test_transport(44_100);
+        transport.state.store(TRANSPORT_PLAYING, Ordering::Relaxed);
+        transport.position_frames.store(123, Ordering::Relaxed);
+        transport.position_ticks.store(456, Ordering::Relaxed);
+        transport
+            .effective_bpm_bits
+            .store(98.5_f64.to_bits(), Ordering::Relaxed);
+        transport.clock_source.store(1, Ordering::Relaxed);
+        transport.waiting_for.store(1, Ordering::Relaxed);
+
+        let snapshot = transport.snapshot();
+        assert_eq!(snapshot.state, "playing");
+        assert_eq!(snapshot.position_frames, 123);
+        assert_eq!(snapshot.position_ticks, 456);
+        assert_eq!(snapshot.sample_rate, 44_100);
+        assert_eq!(snapshot.effective_bpm, Some(98.5));
+        assert_eq!(snapshot.clock_source, "external");
+        assert_eq!(snapshot.waiting_for.as_deref(), Some("play"));
+
+        transport.state.store(TRANSPORT_RECORDING, Ordering::Relaxed);
+        transport.waiting_for.store(2, Ordering::Relaxed);
+        let recording = transport.snapshot();
+        assert_eq!(recording.state, "recording");
+        assert_eq!(recording.waiting_for.as_deref(), Some("record"));
+
+        transport.state.store(TRANSPORT_WAITING, Ordering::Relaxed);
+        transport.clock_source.store(0, Ordering::Relaxed);
+        transport.waiting_for.store(0, Ordering::Relaxed);
+        transport
+            .effective_bpm_bits
+            .store(f64::NAN.to_bits(), Ordering::Relaxed);
+        let waiting = transport.snapshot();
+        assert_eq!(waiting.state, "waiting");
+        assert_eq!(waiting.clock_source, "internal");
+        assert_eq!(waiting.effective_bpm, None);
+        assert_eq!(waiting.waiting_for, None);
+    }
+
+    fn assert_build_err(
+        result: std::result::Result<NativeMixerRuntime, crate::HostError>,
+        needle: &str,
+    ) {
+        match result {
+            Ok(_) => panic!("expected build_mixer_runtime to fail containing {needle:?}"),
+            Err(error) => assert!(
+                error.to_string().contains(needle),
+                "error {:?} did not contain {needle:?}",
+                error.to_string()
+            ),
+        }
+    }
+
+    #[test]
+    fn build_mixer_runtime_rejects_zero_sample_rate() {
+        let mut graph = simple_native_graph();
+        graph.sample_rate = 0;
+        assert_build_err(
+            build_mixer_runtime(graph, 1, test_transport(48_000), Arc::new(InputPeakBank::new())),
+            "sample rate must be positive",
+        );
+    }
+
+    #[test]
+    fn build_mixer_runtime_rejects_unknown_channel_kinds() {
+        let mut graph = simple_native_graph();
+        graph.channels[0].kind = "group".into();
+        assert_build_err(
+            build_mixer_runtime(graph, 1, test_transport(48_000), Arc::new(InputPeakBank::new())),
+            "unknown mixer channel kind",
+        );
+    }
+
+    #[test]
+    fn build_mixer_runtime_rejects_dual_output_targets() {
+        let mut graph = simple_native_graph();
+        graph.channels[0].output_index = Some(2);
+        graph.channels[0].output_bus = Some(1);
+        assert_build_err(
+            build_mixer_runtime(graph, 1, test_transport(48_000), Arc::new(InputPeakBank::new())),
+            "either a BUS or an Output",
+        );
+    }
+
+    #[test]
+    fn build_mixer_runtime_rejects_invalid_armed_input_mapping() {
+        let mut graph = simple_native_graph();
+        graph.channels[0].record_armed = true;
+        graph.channels[0].input_monitoring = false;
+        graph.channels[0].input_source = Some("hardware".into());
+        graph.channels[0].input_channels = vec![];
+        assert_build_err(
+            build_mixer_runtime(graph, 1, test_transport(48_000), Arc::new(InputPeakBank::new())),
+            "armed track has an invalid input mapping",
+        );
+    }
+
+    #[test]
+    fn build_mixer_runtime_rejects_invalid_monitor_input_mapping() {
+        let mut graph = simple_native_graph();
+        graph.channels[0].input_monitoring = true;
+        graph.channels[0].input_source = Some("hardware".into());
+        graph.channels[0].input_channels = vec![1, 2, 3];
+        assert_build_err(
+            build_mixer_runtime(graph, 1, test_transport(48_000), Arc::new(InputPeakBank::new())),
+            "monitored track has an invalid input mapping",
+        );
+    }
+
+    #[test]
+    fn build_mixer_runtime_rejects_instrument_plugin_on_audio_track() {
+        let mut graph = simple_native_graph();
+        graph.plugins.push(NativePluginInstance {
+            instance_id: "synth".into(),
+            channel_index: 0,
+            role: "instrument".into(),
+            slot_order: 0,
+            audio_mode: PluginAudioMode::Stereo,
+            enabled: true,
+            latency_samples: 0,
+            tail_samples: Some(0),
+            processor: None,
+        });
+        assert_build_err(
+            build_mixer_runtime(graph, 1, test_transport(48_000), Arc::new(InputPeakBank::new())),
+            "instrument plugin is assigned to a non-instrument track",
+        );
+    }
+
+    #[test]
+    fn build_mixer_runtime_compiles_a_simple_graph_with_monitoring_and_pdc() {
+        let mut graph = simple_native_graph();
+        graph.channels[0].input_monitoring = true;
+        graph.plugins.push(NativePluginInstance {
+            instance_id: "fx".into(),
+            channel_index: 0,
+            role: "insert".into(),
+            slot_order: 0,
+            audio_mode: PluginAudioMode::Mono,
+            enabled: true,
+            latency_samples: 32,
+            tail_samples: Some(64),
+            processor: None,
+        });
+        let runtime = build_mixer_runtime(
+            graph,
+            9,
+            test_transport(48_000),
+            Arc::new(InputPeakBank::new()),
+        )
+        .expect("simple graph");
+        assert_eq!(runtime.generation, 3);
+        assert_eq!(runtime.build_generation, 9);
+        assert_eq!(runtime.sample_rate, 48_000);
+        assert_eq!(runtime.plugins_by_channel[0].len(), 1);
+        assert!(matches!(
+            runtime.channel_input_widths[0],
+            SignalWidth::Stereo
+        ));
+        assert!(runtime.monitor_input_routes[0].is_some());
+        assert_eq!(runtime.tail_end_frame, Some(64));
+        assert!(!runtime.has_infinite_tail);
+    }
+
+    #[test]
+    fn build_mixer_runtime_schedules_midi_notes_and_controller_events() {
+        let mut graph = simple_native_graph();
+        graph.channels.insert(
+            0,
+            mixer_channel(
+                "instrument-0",
+                "instrument",
+                Some(3),
+                None,
+                None,
+                Vec::new(),
+                Vec::new(),
+            ),
+        );
+        // Remap audio/master/output after inserting the instrument track.
+        graph.channels[1].output_index = Some(3);
+        graph.midi_clips.push(NativeMidiClip {
+            id: "clip".into(),
+            channel_index: 0,
+            start_tick: 0,
+            source_offset_ticks: 0,
+            length_ticks: 1_920,
+            notes: vec![NativeMidiNote {
+                start_tick: 0,
+                duration_ticks: 480,
+                channel: 0,
+                key: 60,
+                velocity: 100,
+                release_velocity: 0,
+            }],
+            events: vec![
+                NativeMidiEvent {
+                    tick: 240,
+                    channel: 0,
+                    kind: NativeMidiEventKind::ControlChange {
+                        controller: 1,
+                        value: 64,
+                    },
+                },
+                NativeMidiEvent {
+                    tick: 480,
+                    channel: 0,
+                    kind: NativeMidiEventKind::PitchBend { value: 8_192 },
+                },
+                NativeMidiEvent {
+                    tick: 720,
+                    channel: 0,
+                    kind: NativeMidiEventKind::ProgramChange { program: 12 },
+                },
+                NativeMidiEvent {
+                    tick: 960,
+                    channel: 0,
+                    kind: NativeMidiEventKind::ChannelPressure { pressure: 40 },
+                },
+                NativeMidiEvent {
+                    tick: 1_200,
+                    channel: 0,
+                    kind: NativeMidiEventKind::PolyPressure {
+                        key: 61,
+                        pressure: 50,
+                    },
+                },
+                NativeMidiEvent {
+                    tick: 1_440,
+                    channel: 0,
+                    kind: NativeMidiEventKind::SysEx {
+                        data: vec![0xF0, 0x7E, 0xF7],
+                    },
+                },
+            ],
+        });
+        let runtime = build_mixer_runtime(
+            graph,
+            2,
+            test_transport(48_000),
+            Arc::new(InputPeakBank::new()),
+        )
+        .expect("midi graph");
+        assert!(runtime.midi_events.len() >= 8);
+        assert!(
+            runtime
+                .midi_events
+                .iter()
+                .any(|event| matches!(event.kind, ScheduledMidiEventKind::NoteOn { key: 60, .. }))
+        );
+        assert!(
+            runtime
+                .midi_events
+                .iter()
+                .any(|event| matches!(event.kind, ScheduledMidiEventKind::SysEx { .. }))
+        );
+        assert_eq!(&runtime.midi_event_data[..], &[0xF0, 0x7E, 0xF7]);
+        assert!(runtime.content_end_frame > 0);
+    }
+
+    #[test]
+    fn build_mixer_runtime_routes_bus_sends_and_metronome_channels() {
+        let graph = NativeMixerGraph {
+            generation: 5,
+            sample_rate: 48_000,
+            channels: vec![
+                {
+                    let mut channel = mixer_channel(
+                        "audio-0",
+                        "audio",
+                        None,
+                        Some(1),
+                        Some("hardware"),
+                        vec![1],
+                        Vec::new(),
+                    );
+                    channel.record_armed = true;
+                    channel
+                },
+                mixer_channel(
+                    "aux-0",
+                    "aux",
+                    Some(4),
+                    None,
+                    Some("bus"),
+                    vec![1],
+                    Vec::new(),
+                ),
+                {
+                    let mut metronome = mixer_channel(
+                        "metronome",
+                        "instrument",
+                        Some(4),
+                        None,
+                        None,
+                        Vec::new(),
+                        Vec::new(),
+                    );
+                    metronome.system_role = Some(LiveMixerSystemRole::Metronome);
+                    metronome
+                },
+                mixer_channel(
+                    "master",
+                    "master",
+                    None,
+                    None,
+                    None,
+                    Vec::new(),
+                    Vec::new(),
+                ),
+                mixer_channel(
+                    "output",
+                    "output",
+                    None,
+                    None,
+                    None,
+                    Vec::new(),
+                    vec![1, 2],
+                ),
+            ],
+            sends: vec![NativeMixerSend {
+                id: "to-aux".into(),
+                source_index: 0,
+                target_output_index: None,
+                target_bus: Some(1),
+                enabled: true,
+                tap: LiveMixerSendTap::Pre,
+                level_db: -6.0,
+            }],
+            clips: Vec::new(),
+            plugins: Vec::new(),
+            midi_clips: Vec::new(),
+            tempo_events: vec![TempoEvent {
+                tick: 0,
+                beats_per_minute: 120.0,
+            }],
+            time_signature_events: vec![TimeSignatureEvent {
+                tick: 0,
+                numerator: 4,
+                denominator: 4,
+            }],
+        };
+        let runtime = build_mixer_runtime(
+            graph,
+            4,
+            test_transport(48_000),
+            Arc::new(InputPeakBank::new()),
+        )
+        .expect("bus graph");
+        assert!(matches!(
+            runtime.channel_input_widths[0],
+            SignalWidth::Mono
+        ));
+        assert_eq!(runtime.input_meter_routes[0], Some([0, 0]));
+        assert_eq!(runtime.metronome.channel_index, Some(2));
+        assert!(runtime.live_midi_routes[2].is_none());
+    }
+
+    #[test]
+    fn compiled_snapshot_covers_instrument_bus_master_and_active_plugin_paths() {
+        let graph = NativeMixerGraph {
+            generation: 11,
+            sample_rate: 48_000,
+            channels: vec![
+                mixer_channel(
+                    "instrument-0",
+                    "instrument",
+                    None,
+                    Some(1),
+                    None,
+                    Vec::new(),
+                    Vec::new(),
+                ),
+                mixer_channel(
+                    "aux-0",
+                    "aux",
+                    Some(3),
+                    None,
+                    Some("bus"),
+                    vec![1, 2],
+                    Vec::new(),
+                ),
+                mixer_channel(
+                    "master",
+                    "master",
+                    Some(3),
+                    None,
+                    None,
+                    Vec::new(),
+                    Vec::new(),
+                ),
+                mixer_channel(
+                    "output",
+                    "output",
+                    None,
+                    None,
+                    None,
+                    Vec::new(),
+                    vec![1, 2],
+                ),
+            ],
+            sends: vec![NativeMixerSend {
+                id: "bus-send".into(),
+                source_index: 0,
+                target_output_index: None,
+                target_bus: Some(1),
+                enabled: false,
+                tap: LiveMixerSendTap::Post,
+                level_db: -3.0,
+            }],
+            clips: Vec::new(),
+            plugins: vec![NativePluginInstance {
+                instance_id: "active".into(),
+                channel_index: 0,
+                role: "instrument".into(),
+                slot_order: 0,
+                audio_mode: PluginAudioMode::DualMono,
+                enabled: true,
+                latency_samples: 0,
+                tail_samples: None,
+                processor: None,
+            }],
+            midi_clips: Vec::new(),
+            tempo_events: Vec::new(),
+            time_signature_events: Vec::new(),
+        };
+        let snapshot = compiled_graph_snapshot(&graph, 12);
+        assert_eq!(snapshot.graph_revision, 11);
+        assert_eq!(snapshot.build_generation, 12);
+        assert!(snapshot.nodes.iter().any(|node| {
+            node.kind == CompiledGraphNodeKind::InstrumentInput
+                && node.signal_width == CompiledGraphSignalWidth::Stereo
+        }));
+        assert!(
+            snapshot
+                .nodes
+                .iter()
+                .any(|node| node.kind == CompiledGraphNodeKind::BusInput)
+        );
+        assert!(
+            snapshot
+                .nodes
+                .iter()
+                .any(|node| node.kind == CompiledGraphNodeKind::Master)
+        );
+        assert!(snapshot.nodes.iter().any(|node| {
+            node.plugin_instance_id.as_deref() == Some("active")
+                && node.plugin_state == Some(CompiledGraphPluginState::Unavailable)
+                && node.label == "Instrument"
+        }));
+        assert!(
+            snapshot
+                .edges
+                .iter()
+                .any(|edge| edge.kind == CompiledGraphEdgeKind::MainRoute)
+        );
+        assert!(
+            snapshot
+                .nodes
+                .iter()
+                .any(|node| node.kind == CompiledGraphNodeKind::Send && node.label.contains("Post"))
         );
     }
 }
