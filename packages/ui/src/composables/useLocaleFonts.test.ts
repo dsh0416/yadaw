@@ -33,13 +33,13 @@ describe("useLocaleFonts", () => {
     })
 
     await nextTick()
-    await renderDOMHead(head)
+    renderDOMHead(head)
     expect(document.documentElement.lang).toBe("en-US")
     expect(loadHansFonts).not.toHaveBeenCalled()
 
     locale.value = "zh-cmn-Hans-CN"
     await nextTick()
-    await renderDOMHead(head)
+    renderDOMHead(head)
     expect(document.documentElement.lang).toBe("zh-CN")
     await vi.waitFor(() => {
       expect(loadHansFonts).toHaveBeenCalled()
