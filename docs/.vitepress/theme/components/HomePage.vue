@@ -1,78 +1,70 @@
 <script setup lang="ts">
 import { withBase } from "vitepress"
+import { useHomeCopy, useLocalePrefix } from "../i18n"
 import SessionPreview from "./SessionPreview.vue"
+
+const t = useHomeCopy()
+const prefix = useLocalePrefix()
+
+const signalClasses = [
+  "capability__signal--record",
+  "capability__signal--midi",
+  "capability__signal--meter"
+]
 </script>
 
 <template>
   <main class="home">
     <section class="hero">
       <div class="hero__copy">
-        <p class="eyebrow"><span /> Yet Another Digital Audio Workstation</p>
-        <h1 class="hero__title">Make sound.<br /><em>Keep the session.</em></h1>
+        <p class="eyebrow"><span /> {{ t.heroEyebrow }}</p>
+        <h1 class="hero__title">
+          {{ t.heroTitleTop }}<br /><em>{{ t.heroTitleAccent }}</em>
+        </h1>
         <p class="hero__lead">
-          A free, open-source workspace for recording, arranging, and mixing music on Windows,
-          macOS, and Linux.
+          {{ t.heroLead }}
         </p>
         <div class="hero__actions">
-          <a class="button button--primary" :href="withBase('/manual/')">
-            Open the manual <span>→</span>
+          <a class="button button--primary" :href="withBase(`${prefix}/manual/`)">
+            {{ t.openManual }} <span>→</span>
           </a>
-          <a class="button" href="https://github.com/dsh0416/yadaw/releases">Get a release</a>
+          <a class="button" href="https://github.com/dsh0416/yadaw/releases">{{ t.getRelease }}</a>
         </div>
         <p class="hero__notice">
-          <strong>Experimental software.</strong> Explore freely, but keep backups of important
-          work.
+          <strong>{{ t.noticeStrong }}</strong> {{ t.noticeRest }}
         </p>
       </div>
       <div class="hero__stage">
         <SessionPreview />
         <p class="hero__caption">
-          <span>Arrangement</span>
-          <span>Native audio</span>
-          <span>VST3</span>
+          <span v-for="caption in t.captions" :key="caption">{{ caption }}</span>
         </p>
       </div>
     </section>
 
     <section class="manifesto">
-      <p class="section-label">Built for the work between idea and mix</p>
+      <p class="section-label">{{ t.manifestoLabel }}</p>
       <p class="manifesto__statement">
-        YADAW keeps the timeline, mixer, instruments, and project archive in one inspectable
-        workspace—without an account or subscription between you and your music.
+        {{ t.manifestoStatement }}
       </p>
     </section>
 
     <section class="capabilities" aria-labelledby="capabilities-title">
       <div class="capabilities__heading">
-        <p class="section-label">What works today</p>
-        <h2 id="capabilities-title">A practical foundation for real sessions.</h2>
+        <p class="section-label">{{ t.capabilitiesLabel }}</p>
+        <h2 id="capabilities-title">{{ t.capabilitiesTitle }}</h2>
       </div>
       <div class="capability-grid">
-        <article class="capability">
-          <span class="capability__signal capability__signal--record" />
-          <p class="capability__index">REC</p>
-          <h3>Capture without losing the take.</h3>
+        <article
+          v-for="(capability, i) in t.capabilities"
+          :key="capability.index"
+          class="capability"
+        >
+          <span class="capability__signal" :class="signalClasses[i]" />
+          <p class="capability__index">{{ capability.index }}</p>
+          <h3>{{ capability.title }}</h3>
           <p>
-            Record audio through the native engine. In-progress recordings stay recoverable in swap
-            until they are committed to the project archive.
-          </p>
-        </article>
-        <article class="capability">
-          <span class="capability__signal capability__signal--midi" />
-          <p class="capability__index">MIDI</p>
-          <h3>Arrange notes beside audio.</h3>
-          <p>
-            Import MIDI, place clips on the timeline, and shape notes in the docked piano roll
-            without leaving the arrangement.
-          </p>
-        </article>
-        <article class="capability">
-          <span class="capability__signal capability__signal--meter" />
-          <p class="capability__index">MIX</p>
-          <h3>Route, meter, and process.</h3>
-          <p>
-            Balance channels, create sends and buses, and host VST3 effects in a supervised audio
-            process designed to contain plug-in failures.
+            {{ capability.body }}
           </p>
         </article>
       </div>
@@ -80,22 +72,21 @@ import SessionPreview from "./SessionPreview.vue"
 
     <section class="principles">
       <div class="principles__copy">
-        <p class="section-label">The project is yours</p>
-        <h2>No cloud gate.<br />No opaque service.</h2>
+        <p class="section-label">{{ t.principlesLabel }}</p>
+        <h2>{{ t.principlesTitleTop }}<br />{{ t.principlesTitleBottom }}</h2>
       </div>
       <div class="principles__list">
-        <p><span>01</span> Free software under GPL-3.0</p>
-        <p><span>02</span> Self-contained project archives</p>
-        <p><span>03</span> Cross-platform by design</p>
-        <p><span>04</span> Developed in the open</p>
+        <p v-for="(principle, i) in t.principles" :key="principle">
+          <span>0{{ i + 1 }}</span> {{ principle }}
+        </p>
       </div>
     </section>
 
     <section class="final-cta">
-      <p class="section-label">Start with the signal path</p>
-      <h2>Set up your audio device, create a project, and press play.</h2>
-      <a class="button button--primary" :href="withBase('/manual/first-project')">
-        Make your first project →
+      <p class="section-label">{{ t.ctaLabel }}</p>
+      <h2>{{ t.ctaTitle }}</h2>
+      <a class="button button--primary" :href="withBase(`${prefix}/manual/first-project`)">
+        {{ t.ctaButton }}
       </a>
     </section>
   </main>
