@@ -1,54 +1,196 @@
-import { ipcMain } from "electron"
-import { IPC_CHANNELS } from "@yadaw/contracts"
-import type { MixerParameterPreview, ProjectCommand } from "@yadaw/contracts"
+import { IPC_CHANNELS, rpcFailure, rpcSuccess } from "@yadaw/contracts"
+import type {
+  MixerParameterPreview,
+  ProjectCommand,
+  ResourceRef,
+  RpcRequestMeta
+} from "@yadaw/contracts"
 import type { IpcHandlerContext } from "./context"
-import { assertTrustedSender } from "./support"
+import { registerRpcHandler } from "./rpc"
+import {
+  validationFailure,
+  validateMutationTarget,
+  validateReadTarget
+} from "./resource-validation"
+
+function sameRef(left: ResourceRef | undefined, right: ResourceRef): boolean {
+  return (
+    left?.kind === right.kind &&
+    left.id === right.id &&
+    left.epoch === right.epoch &&
+    left.generation === right.generation
+  )
+}
+
+function validateGraphTarget(context: IpcHandlerContext, meta: RpcRequestMeta) {
+  const workspace = context.lifecycle.applicationState.workspaceSnapshot()
+  if (!workspace || !sameRef(meta.target, workspace.projectGraph)) {
+    return rpcFailure(meta, {
+      code: "stale-resource",
+      category: "stale-resource",
+      outcome: "not-committed",
+      retry: "after-reconcile",
+      correlationId: `stale-${meta.requestId}`,
+      userMessageKey: "errors.staleResource",
+      ...(meta.target ? { resource: meta.target } : {}),
+      details: { type: "stale-resource", reason: "generation-mismatch" }
+    })
+  }
+  return null
+}
+
 export function registerMixerHandlers(context: IpcHandlerContext): void {
-  const { projectGraph, projectCommands, mixerRuntime, lifecycle, projects, isShuttingDown } =
-    context
-  ipcMain.handle(IPC_CHANNELS.projectGraphLoad, (event) => {
-    assertTrustedSender(event)
+  const { projectGraph, projectCommands, mixerRuntime, lifecycle, isShuttingDown } = context
+  registerRpcHandler(IPC_CHANNELS.projectGraphLoad, async ({ meta }) => {
+    const invalid = validateGraphTarget(context, meta)
+    if (invalid) return invalid
+    if (meta.mutation) {
+      return rpcFailure(meta, {
+        code: "validation-failed",
+        category: "validation",
+        outcome: "not-committed",
+        retry: "never",
+        correlationId: `validation-${meta.requestId}`,
+        userMessageKey: "errors.invalidRpcRequest",
+        resource: meta.target!,
+        details: { type: "validation-failed", field: "mutation" }
+      })
+    }
     lifecycle.assertMixerLoadAllowed()
-    return projectGraph.snapshot()
+    const workspace = lifecycle.applicationState.workspaceSnapshot()!
+    return rpcSuccess(meta, await projectGraph.snapshot(), {
+      resourceRevision: workspace.revision
+    })
   })
 
-  ipcMain.handle(IPC_CHANNELS.projectGraphReload, (event) => {
-    assertTrustedSender(event)
+  registerRpcHandler(IPC_CHANNELS.projectGraphReload, async ({ meta }) => {
+    const invalid = validateGraphTarget(context, meta)
+    if (invalid) return invalid
+    const workspace = lifecycle.applicationState.workspaceSnapshot()!
+    if (!meta.mutation || meta.expectedRevision === undefined) {
+      return rpcFailure(meta, {
+        code: "validation-failed",
+        category: "validation",
+        outcome: "not-committed",
+        retry: "never",
+        correlationId: `validation-${meta.requestId}`,
+        userMessageKey: "errors.invalidRpcRequest",
+        resource: meta.target!,
+        details: { type: "validation-failed", field: "mutation" }
+      })
+    }
+    if (meta.expectedRevision !== workspace.revision) {
+      return rpcFailure(meta, {
+        code: "revision-conflict",
+        category: "conflict",
+        outcome: "not-committed",
+        retry: "after-reconcile",
+        correlationId: `revision-${meta.requestId}`,
+        userMessageKey: "errors.revisionConflict",
+        resource: workspace.projectGraph,
+        details: {
+          type: "revision-conflict",
+          expectedRevision: meta.expectedRevision,
+          actualRevision: workspace.revision
+        }
+      })
+    }
+    const begun = context.operations.registry.begin({
+      operationId: meta.mutation.operationId,
+      idempotencyKey: meta.mutation.idempotencyKey,
+      target: workspace.projectGraph
+    })
+    if (!begun.ok) {
+      return rpcFailure(meta, {
+        code: "resource-busy",
+        category: "busy",
+        outcome: "not-committed",
+        retry: "safe",
+        correlationId: `busy-${meta.requestId}`,
+        userMessageKey: "errors.resourceBusy",
+        resource: workspace.projectGraph,
+        details: { type: "resource-busy" }
+      })
+    }
+    if (begun.value.disposition !== "started") {
+      return (
+        begun.value.operation.result ??
+        rpcFailure(meta, {
+          code: "resource-busy",
+          category: "busy",
+          outcome: "not-committed",
+          retry: "safe",
+          correlationId: `busy-${meta.requestId}`,
+          userMessageKey: "errors.resourceBusy",
+          resource: workspace.projectGraph,
+          details: {
+            type: "resource-busy",
+            activeOperationId: begun.value.operation.operationId
+          }
+        })
+      )
+    }
     lifecycle.assertMixerLoadAllowed()
-    return projectGraph.load()
+    const graph = await projectGraph.load()
+    const updated = lifecycle.applicationState.resources.update(
+      workspace.projectGraph,
+      workspace.revision,
+      { graph, deployment: "observed" }
+    )
+    if (!updated.ok) throw new Error("Reloaded graph resource could not advance")
+    const next = { ...workspace, revision: updated.value.revision, graph }
+    lifecycle.applicationState.setWorkspace(next)
+    const result = rpcSuccess(meta, graph, { resourceRevision: updated.value.revision })
+    context.operations.registry.finish(meta.mutation.operationId, "committed", result)
+    return result
   })
 
-  ipcMain.handle(IPC_CHANNELS.projectCommandExecute, async (event, value: unknown) => {
-    assertTrustedSender(event)
+  registerRpcHandler(IPC_CHANNELS.projectCommandExecute, ({ meta }, value: unknown) => {
     if (
       !value ||
       typeof value !== "object" ||
       typeof (value as { type?: unknown }).type !== "string"
     ) {
-      throw new TypeError("Project command must be an object with a type")
+      return rpcFailure(meta, {
+        code: "validation-failed",
+        category: "validation",
+        outcome: "not-committed",
+        retry: "never",
+        correlationId: `validation-${meta.requestId}`,
+        userMessageKey: "errors.invalidRpcRequest",
+        ...(meta.target ? { resource: meta.target } : {}),
+        details: { type: "validation-failed", field: "command" }
+      })
     }
     const command = value as ProjectCommand
     lifecycle.assertMixerCommandAllowed(command)
-    const result = await projectCommands.execute(command)
-    lifecycle.syncProject(projects.current)
-    return result
+    return projectCommands.execute(meta, command)
   })
 
-  ipcMain.handle(IPC_CHANNELS.mixerPreview, (event, value: unknown) => {
-    assertTrustedSender(event)
+  registerRpcHandler(IPC_CHANNELS.mixerPreview, ({ meta }, value: unknown) => {
+    const workspace = lifecycle.applicationState.workspaceSnapshot()
+    if (!workspace) return validationFailure(meta, "target")
+    const invalid = validateMutationTarget(meta, workspace.projectGraph, workspace.revision)
+    if (invalid) return invalid
     if (!value || typeof value !== "object") throw new TypeError("Mixer preview must be an object")
     lifecycle.assertMixerPreviewAllowed()
-    return mixerRuntime.preview(value as MixerParameterPreview)
+    return mixerRuntime.preview(value as MixerParameterPreview).then(() => undefined)
   })
 
-  ipcMain.handle(IPC_CHANNELS.mixerSnapshot, (event) => {
-    assertTrustedSender(event)
+  registerRpcHandler(IPC_CHANNELS.mixerSnapshot, ({ meta }) => {
+    const resources = lifecycle.applicationState.audioResourceSnapshot()
+    if (!resources.engine) return validationFailure(meta, "target")
+    const invalid = validateReadTarget(meta, resources.engine)
+    if (invalid) return invalid
     if (isShuttingDown()) return { meters: [], capturedAt: Date.now() }
     return mixerRuntime.runtimeSnapshot()
   })
 
-  ipcMain.handle(IPC_CHANNELS.mixerClearMeterClips, (event) => {
-    assertTrustedSender(event)
+  registerRpcHandler(IPC_CHANNELS.mixerClearMeterClips, ({ meta }) => {
+    const resources = lifecycle.applicationState.audioResourceSnapshot()
+    if (!resources.engine) return validationFailure(meta, "target")
+    const invalid = validateMutationTarget(meta, resources.engine, resources.revision)
+    if (invalid) return invalid
     return mixerRuntime.clearMeterClips()
   })
 }

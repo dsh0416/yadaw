@@ -297,7 +297,7 @@ fn engine_command(
             let value = match device::list_audio_devices(backend) {
                 Ok(value) => value,
                 Err(error) => {
-                    return Some(ControlResult::Error {
+                    return Some(control_error! {
                         message: error.to_string(),
                     });
                 }
@@ -329,7 +329,7 @@ fn engine_command(
                 Ok(runtime) => ControlResult::AudioRuntime {
                     runtime: audio_runtime(runtime),
                 },
-                Err(error) => ControlResult::Error {
+                Err(error) => control_error! {
                     message: error.to_string(),
                 },
             }
@@ -338,7 +338,7 @@ fn engine_command(
             Ok(runtime) => ControlResult::AudioRuntime {
                 runtime: audio_runtime(runtime),
             },
-            Err(error) => ControlResult::Error {
+            Err(error) => control_error! {
                 message: error.to_string(),
             },
         },
@@ -346,7 +346,7 @@ fn engine_command(
             Ok(runtime) => ControlResult::AudioRuntime {
                 runtime: audio_runtime(runtime),
             },
-            Err(error) => ControlResult::Error {
+            Err(error) => control_error! {
                 message: error.to_string(),
             },
         },
@@ -360,7 +360,7 @@ fn engine_command(
                 Ok(measurement) => ControlResult::RoundTripLatencyMeasurement {
                     measurement: round_trip_latency_measurement(measurement),
                 },
-                Err(error) => ControlResult::Error {
+                Err(error) => control_error! {
                     message: error.to_string(),
                 },
             }
@@ -370,7 +370,7 @@ fn engine_command(
                 Ok(measurement) => ControlResult::RoundTripLatencyMeasurement {
                     measurement: round_trip_latency_measurement(measurement),
                 },
-                Err(error) => ControlResult::Error {
+                Err(error) => control_error! {
                     message: error.to_string(),
                 },
             }
@@ -383,12 +383,12 @@ fn engine_command(
                 engine::load_mixer_graph(graph).map_err(|error| error.to_string())
             }) {
                 Ok(()) => ControlResult::GraphAccepted { revision },
-                Err(error) => ControlResult::Error { message: error },
+                Err(error) => control_error! { message: error },
             }
         }
         ControlCommand::UpdateGraph {
             update: GraphUpdate::Patch { .. },
-        } => ControlResult::Error {
+        } => control_error! {
             message: "graph patches require the IPC protocol actor".into(),
         },
         ControlCommand::PreviewMixerParameter { preview } => {
@@ -399,7 +399,7 @@ fn engine_command(
                 value: preview.value,
             }) {
                 Ok(()) => ControlResult::Accepted,
-                Err(error) => ControlResult::Error {
+                Err(error) => control_error! {
                     message: error.to_string(),
                 },
             }
@@ -421,7 +421,7 @@ fn engine_command(
                     })
                     .collect(),
             },
-            Err(error) => ControlResult::Error {
+            Err(error) => control_error! {
                 message: error.to_string(),
             },
         },
@@ -431,7 +431,7 @@ fn engine_command(
         ControlCommand::ClearMeterClips => {
             match engine::transport_command("clear-meter-clips".to_owned(), None) {
                 Ok(_) => ControlResult::Accepted,
-                Err(error) => ControlResult::Error {
+                Err(error) => control_error! {
                     message: error.to_string(),
                 },
             }
@@ -449,7 +449,7 @@ fn engine_command(
                         waiting_for: value.waiting_for,
                     },
                 },
-                Err(error) => ControlResult::Error {
+                Err(error) => control_error! {
                     message: error.to_string(),
                 },
             }
@@ -466,7 +466,7 @@ fn engine_command(
                     waiting_for: value.waiting_for,
                 },
             },
-            Err(error) => ControlResult::Error {
+            Err(error) => control_error! {
                 message: error.to_string(),
             },
         },
@@ -475,7 +475,7 @@ fn engine_command(
                 Some(actor) => ControlResult::MidiInputSnapshot {
                     midi_input: actor.snapshot(),
                 },
-                None => ControlResult::Error {
+                None => control_error! {
                     message: "MIDI input actor is unavailable".to_owned(),
                 },
             }
@@ -487,7 +487,7 @@ fn engine_command(
                 .and_then(|actor| actor.configure(preferences))
             {
                 Ok(midi_input) => ControlResult::MidiInputSnapshot { midi_input },
-                Err(message) => ControlResult::Error { message },
+                Err(message) => control_error! { message },
             }
         }
         ControlCommand::StartRecording { config } => {
@@ -500,7 +500,7 @@ fn engine_command(
                 time_reference: config.time_reference,
             }) {
                 Ok(()) => ControlResult::Accepted,
-                Err(error) => ControlResult::Error {
+                Err(error) => control_error! {
                     message: error.to_string(),
                 },
             }
@@ -509,7 +509,7 @@ fn engine_command(
             Ok(value) => ControlResult::RecordingStopped {
                 recording: recording_result(value),
             },
-            Err(error) => ControlResult::Error {
+            Err(error) => control_error! {
                 message: error.to_string(),
             },
         },
@@ -521,7 +521,7 @@ fn engine_command(
             Ok(value) => ControlResult::RecordingWaveform {
                 waveform: recording_waveform(value),
             },
-            Err(error) => ControlResult::Error {
+            Err(error) => control_error! {
                 message: error.to_string(),
             },
         },
@@ -578,7 +578,7 @@ fn run_legacy() -> Result<(), Box<dyn std::error::Error>> {
             | ControlCommand::OpenPluginEditor { .. }
             | ControlCommand::ClosePluginEditor { .. }) => match vst3.as_mut() {
                 Some(runtime) => runtime.execute(command),
-                None => ControlResult::Error {
+                None => control_error! {
                     message: "VST3 runtime is not configured".into(),
                 },
             },
@@ -597,7 +597,7 @@ fn run_legacy() -> Result<(), Box<dyn std::error::Error>> {
                 let processors = vst3.as_ref().map(vst3::Vst3Runtime::processor_handles);
                 match engine_command(command, processors.as_ref()) {
                     Some(result) => result,
-                    None => ControlResult::Error {
+                    None => control_error! {
                         message: "unsupported audio-host command".into(),
                     },
                 }

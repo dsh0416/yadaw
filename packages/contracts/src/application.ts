@@ -1,3 +1,10 @@
+import type { OfflineWorkerRef } from "./rpc"
+
+export interface OfflineToolsResourceSnapshot {
+  worker: OfflineWorkerRef
+  revision: number
+}
+
 export const APPLICATION_COMMAND_IDS = [
   "project.new",
   "project.open",

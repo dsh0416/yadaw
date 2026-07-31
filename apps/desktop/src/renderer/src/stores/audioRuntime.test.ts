@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { createPinia, setActivePinia } from "pinia"
 import { INITIAL_AUDIO_RUNTIME_SNAPSHOT } from "@yadaw/contracts"
 import { useAudioRuntimeStore } from "./audioRuntime"
+import { rpcSuccess, testBootstrap } from "../test/ipc"
 
 describe("audio runtime sample-rate diagnostics", () => {
   beforeEach(() => setActivePinia(createPinia()))
@@ -63,21 +64,36 @@ describe("audio runtime sample-rate diagnostics", () => {
   })
 
   it("publishes physical loopback measurement state through the store", async () => {
-    window.yadaw.startRoundTripLatencyMeasurement = vi.fn().mockResolvedValue({
-      status: "preparing",
-      inputChannel: 1,
-      outputChannel: 2,
-      measuredRoundTripLatencyMs: null,
-      failure: null
-    })
-    window.yadaw.roundTripLatencyMeasurementSnapshot = vi.fn().mockResolvedValue({
-      status: "complete",
-      inputChannel: 1,
-      outputChannel: 2,
-      measuredRoundTripLatencyMs: 9.5,
-      failure: null
-    })
     const store = useAudioRuntimeStore()
+    const resources = testBootstrap().audioResources
+    store.applyResources({
+      ...resources,
+      engine: {
+        kind: "audio-engine",
+        id: "audio-engine",
+        epoch: resources.host.epoch,
+        generation: 1
+      },
+      transport: null
+    })
+    window.yadaw.startRoundTripLatencyMeasurement = vi.fn().mockResolvedValue(
+      rpcSuccess({
+        status: "preparing",
+        inputChannel: 1,
+        outputChannel: 2,
+        measuredRoundTripLatencyMs: null,
+        failure: null
+      })
+    )
+    window.yadaw.roundTripLatencyMeasurementSnapshot = vi.fn().mockResolvedValue(
+      rpcSuccess({
+        status: "complete",
+        inputChannel: 1,
+        outputChannel: 2,
+        measuredRoundTripLatencyMs: 9.5,
+        failure: null
+      })
+    )
 
     await store.startRoundTripLatencyMeasurement({ inputChannel: 1, outputChannel: 2 })
     expect(store.roundTripLatencyMeasurement.status).toBe("preparing")

@@ -1,4 +1,5 @@
 import type { PluginEditorMode } from "./settings"
+import type { PluginInstanceRef, ProjectGraphRef } from "./rpc"
 
 export type PluginKind = "effect" | "instrument"
 export type PluginAudioMode = "mono" | "mono-to-stereo" | "stereo" | "dual-mono"
@@ -179,4 +180,35 @@ export interface PluginParameterChange {
   parameterId: number
   normalized: number
   gesture: "begin" | "perform" | "end"
+}
+
+export interface PluginInstanceResourceSnapshot {
+  plugin: PluginInstanceRef
+  projectGraph: ProjectGraphRef
+  revision: number
+  instance: PluginInstanceState
+}
+
+export interface PluginEditorOpenResult {
+  resource: PluginInstanceResourceSnapshot
+  status: PluginRuntimeStatus
+}
+
+export interface PluginParameterCommand {
+  plugin: PluginInstanceRef
+  helperEpoch: string
+  pluginGeneration: number
+  sequence: string
+  parameterId: number
+  normalized: number
+  gesture: "begin" | "perform" | "end"
+}
+
+export type PluginParameterEnqueueOutcome = "queued" | "coalesced" | "fallback" | "full" | "stale"
+
+export interface PluginParameterEnqueueResult {
+  plugin: PluginInstanceRef
+  helperEpoch: string
+  sequence: string
+  outcome: PluginParameterEnqueueOutcome
 }

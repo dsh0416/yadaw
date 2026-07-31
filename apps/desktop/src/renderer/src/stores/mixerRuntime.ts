@@ -3,11 +3,14 @@ import { shallowRef } from "vue"
 import type { MixerRuntimeSnapshot } from "@yadaw/contracts"
 import { meterFor as selectMeterFor } from "@yadaw/project-model"
 import { useMixerMeterPolling } from "./mixer-meter-polling"
+import { mutationMeta, readMeta, rpcErrorMessage } from "../rpc"
+import { useAudioRuntimeStore } from "./audioRuntime"
 
 const EMPTY_RUNTIME: MixerRuntimeSnapshot = { meters: [], capturedAt: 0 }
 
 export const useMixerRuntimeStore = defineStore("mixer-runtime", () => {
   const runtime = shallowRef<MixerRuntimeSnapshot>(structuredClone(EMPTY_RUNTIME))
+  const audioRuntime = useAudioRuntimeStore()
   const error = shallowRef("")
 
   function meterFor(channelId: string) {
@@ -16,7 +19,11 @@ export const useMixerRuntimeStore = defineStore("mixer-runtime", () => {
 
   async function refresh(): Promise<void> {
     try {
-      runtime.value = await window.yadaw.mixerSnapshot()
+      const target = audioRuntime.audioEngineRef
+      if (!target) return
+      const result = await window.yadaw.mixerSnapshot(readMeta(target))
+      if (result.ok) runtime.value = result.value
+      else error.value = rpcErrorMessage(result.error)
     } catch {
       // Device-level errors remain owned by the audio runtime store.
     }
@@ -32,7 +39,13 @@ export const useMixerRuntimeStore = defineStore("mixer-runtime", () => {
       }))
     }
     try {
-      runtime.value = await window.yadaw.clearMixerMeterClips()
+      const target = audioRuntime.audioEngineRef
+      if (!target) return
+      const result = await window.yadaw.clearMixerMeterClips(
+        mutationMeta(target, "mixer-clear-clips", audioRuntime.transportRevision)
+      )
+      if (result.ok) runtime.value = result.value
+      else error.value = rpcErrorMessage(result.error)
     } catch (reason) {
       error.value =
         reason instanceof Error ? reason.message : "Unable to reset mixer clipping indicators."

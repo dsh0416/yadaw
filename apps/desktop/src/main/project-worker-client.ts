@@ -7,10 +7,14 @@ import type {
 } from "@yadaw/contracts"
 import type {
   AssetContentHash,
+  CommittedProjectCommand,
   DefaultRecordingTrack,
   LargeObjectAssetInput,
   MidiSourceInput,
   PluginStateInput,
+  PreparedProjectCommand,
+  ProjectCommandTransactionToken,
+  ProjectCommandTransactionStatus,
   StoredWaveformWindow,
   WaveformAssetInput,
   WorkerOperation,
@@ -26,10 +30,14 @@ interface PendingCall {
   reject(error: Error): void
 }
 
+type WorkerState = "active" | "failed" | "terminating" | "terminated"
+
 function workerError(response: Extract<WorkerResponse, { ok: false }>): Error {
-  const error = new Error(response.error.message)
-  error.stack = response.error.stack
-  if (response.error.code) Object.assign(error, { code: response.error.code })
+  const error = new Error(response.error.userMessageKey)
+  Object.assign(error, {
+    code: response.error.code,
+    correlationId: response.error.correlationId
+  })
   return error
 }
 
@@ -37,6 +45,9 @@ export class ProjectWorkerClient {
   private readonly worker: Worker
   private readonly pending = new Map<number, PendingCall>()
   private nextId = 1
+  private state: WorkerState = "active"
+  private termination: Promise<void> | null = null
+  private databaseClosed = true
   onProgress: ((progress: WorkerProgress) => void) | null = null
 
   constructor(workerUrl: URL) {
@@ -54,11 +65,18 @@ export class ProjectWorkerClient {
       call.settle(message)
     })
     this.worker.on("error", (error: unknown) => {
-      this.rejectAll(error instanceof Error ? error : new Error(String(error)))
+      this.fail(error instanceof Error ? error : new Error(String(error)))
     })
     this.worker.on("exit", (code) => {
-      if (code !== 0) this.rejectAll(new Error(`Project worker exited with code ${code}`))
+      if (this.state === "terminating" || this.state === "terminated") return
+      this.fail(new Error(`Project worker exited with code ${code}`))
     })
+  }
+
+  private fail(error: Error): void {
+    if (this.state !== "active") return
+    this.state = "failed"
+    this.rejectAll(error)
   }
 
   private rejectAll(error: Error): void {
@@ -70,6 +88,9 @@ export class ProjectWorkerClient {
     request: WorkerRequestInput<K>
   ): Promise<WorkerResultMap[K]>
   private call(request: WorkerRequestInput<WorkerOperation>): Promise<WorkerResult> {
+    if (this.state !== "active") {
+      return Promise.reject(new Error(`Project worker is ${this.state}`))
+    }
     const id = this.nextId++
     return new Promise<WorkerResult>((resolve, reject) => {
       this.pending.set(id, {
@@ -88,7 +109,12 @@ export class ProjectWorkerClient {
         },
         reject
       })
-      this.worker.postMessage({ id, ...request })
+      try {
+        this.worker.postMessage({ id, ...request })
+      } catch (error) {
+        this.pending.delete(id)
+        reject(error instanceof Error ? error : new Error(String(error)))
+      }
     })
   }
 
@@ -102,11 +128,15 @@ export class ProjectWorkerClient {
       waveformDisplayMode: "separate" | "aggregate"
     }
   ): Promise<void> {
-    return this.call({ type: "create", dataDir, ...configuration })
+    return this.call({ type: "create", dataDir, ...configuration }).then(() => {
+      this.databaseClosed = false
+    })
   }
 
   open(dataDir: string, archivePath?: string): Promise<void> {
-    return this.call({ type: "open", dataDir, archivePath })
+    return this.call({ type: "open", dataDir, archivePath }).then(() => {
+      this.databaseClosed = false
+    })
   }
 
   getConfiguration(): Promise<ProjectConfiguration> {
@@ -125,8 +155,31 @@ export class ProjectWorkerClient {
     return this.call({ type: "mixer-snapshot" })
   }
 
-  applyProjectCommand(command: ProjectCommand, fallbackOutputId: string): Promise<void> {
-    return this.call({ type: "apply-project-command", command, fallbackOutputId })
+  prepareProjectCommand(
+    operationId: string,
+    baseRevision: number,
+    command: ProjectCommand,
+    fallbackOutputId: string
+  ): Promise<PreparedProjectCommand> {
+    return this.call({
+      type: "prepare-project-command",
+      operationId,
+      baseRevision,
+      command,
+      fallbackOutputId
+    })
+  }
+
+  commitProjectCommand(token: ProjectCommandTransactionToken): Promise<CommittedProjectCommand> {
+    return this.call({ type: "commit-project-command", token })
+  }
+
+  abortProjectCommand(token: ProjectCommandTransactionToken): Promise<void> {
+    return this.call({ type: "abort-project-command", token })
+  }
+
+  projectCommandStatus(operationId: string): Promise<ProjectCommandTransactionStatus> {
+    return this.call({ type: "project-command-status", operationId })
   }
 
   importMidi(
@@ -205,15 +258,40 @@ export class ProjectWorkerClient {
     return this.call({ type: "cancel", operationId })
   }
 
-  close(): Promise<void> {
-    return this.call({ type: "close" })
+  async close(): Promise<void> {
+    if (this.databaseClosed) return
+    await this.call({ type: "close" })
+    this.databaseClosed = true
   }
 
   async terminate(): Promise<void> {
-    try {
-      await this.close()
-    } finally {
-      await this.worker.terminate()
-    }
+    if (this.termination) return this.termination
+    this.termination = (async () => {
+      const shouldClose = this.state === "active" && !this.databaseClosed
+      this.state = "terminating"
+      try {
+        if (shouldClose) {
+          await new Promise<void>((resolve) => {
+            const id = this.nextId++
+            this.pending.set(id, {
+              settle: () => resolve(),
+              reject: () => resolve()
+            })
+            try {
+              this.worker.postMessage({ id, type: "close" })
+            } catch {
+              this.pending.delete(id)
+              resolve()
+            }
+          })
+          this.databaseClosed = true
+        }
+      } finally {
+        await this.worker.terminate()
+        this.state = "terminated"
+        this.rejectAll(new Error("Project worker terminated"))
+      }
+    })()
+    return this.termination
   }
 }

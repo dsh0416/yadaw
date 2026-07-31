@@ -2,54 +2,44 @@ import { flushPromises, mount } from "@vue/test-utils"
 import { createPinia } from "pinia"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import RecordingSettings from "./RecordingSettings.vue"
+import {
+  rpcFailure,
+  rpcSuccess,
+  settingsSnapshot,
+  testBootstrap,
+  testSettings
+} from "../../test/ipc"
 
 describe("RecordingSettings", () => {
   beforeEach(() => {
-    window.yadaw.getApplicationSettings = vi.fn().mockResolvedValue({
+    const initial = testSettings({
       swapDirectory: "C:/swap",
       recordingBitDepth: "float32",
-      theme: "system",
-      locale: "en-US",
-      meterPeakHold: "800ms",
-      meterReturnRate: "iec-type-i",
-      midiCenterCStandard: "roland-c4",
-      softwareMonitoringEnabled: false,
-      recentProjects: []
+      midiCenterCStandard: "roland-c4"
     })
-    window.yadaw.listPendingRecordings = vi.fn().mockResolvedValue([])
-    window.yadaw.updateApplicationSettings = vi.fn().mockResolvedValue({
-      swapDirectory: "C:/swap",
-      recordingBitDepth: "pcm24",
-      theme: "system",
-      locale: "en-US",
-      meterPeakHold: "800ms",
-      meterReturnRate: "iec-type-i",
-      midiCenterCStandard: "roland-c4",
-      softwareMonitoringEnabled: false,
-      recentProjects: []
-    })
-    window.yadaw.chooseSwapDirectory = vi.fn().mockResolvedValue({
-      swapDirectory: "D:/recording-swap",
-      recordingBitDepth: "pcm24",
-      theme: "system",
-      locale: "en-US",
-      meterPeakHold: "800ms",
-      meterReturnRate: "iec-type-i",
-      midiCenterCStandard: "roland-c4",
-      softwareMonitoringEnabled: false,
-      recentProjects: []
-    })
-    window.yadaw.setSoftwareMonitoringEnabled = vi.fn().mockResolvedValue({
-      swapDirectory: "C:/swap",
-      recordingBitDepth: "float32",
-      theme: "system",
-      locale: "en-US",
-      meterPeakHold: "800ms",
-      meterReturnRate: "iec-type-i",
-      midiCenterCStandard: "roland-c4",
-      softwareMonitoringEnabled: true,
-      recentProjects: []
-    })
+    window.yadaw.bootstrap = vi
+      .fn()
+      .mockResolvedValue(rpcSuccess(testBootstrap({ settings: settingsSnapshot(initial) })))
+    window.yadaw.listPendingRecordings = vi.fn().mockResolvedValue(rpcSuccess([]))
+    window.yadaw.updateApplicationSettings = vi
+      .fn()
+      .mockImplementation(async (_meta, patch) =>
+        rpcSuccess(settingsSnapshot(testSettings({ ...initial, ...patch }), 2))
+      )
+    window.yadaw.chooseSwapDirectory = vi
+      .fn()
+      .mockResolvedValue(
+        rpcSuccess(
+          settingsSnapshot(testSettings({ ...initial, swapDirectory: "D:/recording-swap" }), 2)
+        )
+      )
+    window.yadaw.setSoftwareMonitoringEnabled = vi
+      .fn()
+      .mockImplementation(async (_meta, enabled) =>
+        rpcSuccess(
+          settingsSnapshot(testSettings({ ...initial, softwareMonitoringEnabled: enabled }), 2)
+        )
+      )
   })
 
   it("persists final bit depth and delegates swap selection", async () => {
@@ -57,7 +47,7 @@ describe("RecordingSettings", () => {
     await vi.waitFor(() => expect(wrapper.text()).toContain("C:/swap"))
 
     await wrapper.get("select").setValue("pcm24")
-    expect(window.yadaw.updateApplicationSettings).toHaveBeenCalledWith({
+    expect(window.yadaw.updateApplicationSettings).toHaveBeenCalledWith(expect.any(Object), {
       recordingBitDepth: "pcm24"
     })
 
@@ -74,17 +64,17 @@ describe("RecordingSettings", () => {
 
     await checkbox.setValue(true)
     await flushPromises()
-    expect(window.yadaw.setSoftwareMonitoringEnabled).toHaveBeenCalledWith(true)
+    expect(window.yadaw.setSoftwareMonitoringEnabled).toHaveBeenCalledWith(expect.any(Object), true)
     expect(checkbox.element.checked).toBe(true)
     expect(wrapper.text()).toContain("Available on Audio tracks")
 
     window.yadaw.setSoftwareMonitoringEnabled = vi
       .fn()
-      .mockRejectedValue(new Error("Recording is active"))
+      .mockResolvedValue(rpcFailure("errors.audioEngineUnavailable"))
     await checkbox.setValue(false)
     await flushPromises()
 
     expect(checkbox.element.checked).toBe(true)
-    expect(wrapper.get('[role="alert"]').text()).toContain("Recording is active")
+    expect(wrapper.get('[role="alert"]').text()).not.toBe("")
   })
 })

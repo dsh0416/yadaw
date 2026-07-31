@@ -6,8 +6,11 @@ import type {
   ProjectGraphSnapshot,
   PluginDescriptor,
   ProjectCommand,
+  ProjectCommandResult,
   ProjectSession
 } from "@yadaw/contracts"
+import { IPC_PROTOCOL_VERSION, rpcSuccess } from "@yadaw/contracts"
+import { applyToGraph } from "@yadaw/project-model"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { AssetMaterializer } from "./asset-materializer"
 import { AudioGraphCompiler } from "./audio-graph-compiler"
@@ -16,6 +19,13 @@ import type { AudioHostService } from "./audio-host-service"
 import { ProjectCommandService } from "./project-command-service"
 import { ProjectGraphService } from "./project-graph-service"
 import type { ProjectService } from "./project-service"
+import { LifecycleCoordinator } from "./lifecycle-coordinator"
+import { OperationRegistry } from "./kernel/operation-registry"
+import { OperationService } from "./operation-service"
+
+vi.mock("electron", () => ({
+  BrowserWindow: { getAllWindows: () => [] }
+}))
 
 const effectDescriptor: PluginDescriptor = {
   source: { kind: "external" },
@@ -99,8 +109,12 @@ function graph(): ProjectGraphSnapshot {
 interface ProjectMock {
   service: ProjectService
   session: ProjectSession | null
+  initialGraph: ProjectGraphSnapshot
   mixerSnapshot: ReturnType<typeof vi.fn>
-  applyProjectCommand: ReturnType<typeof vi.fn>
+  prepareProjectCommand: ReturnType<typeof vi.fn>
+  commitProjectCommand: ReturnType<typeof vi.fn>
+  abortProjectCommand: ReturnType<typeof vi.fn>
+  projectCommandStatus: ReturnType<typeof vi.fn>
   importMidi: ReturnType<typeof vi.fn>
   rollbackMidi: ReturnType<typeof vi.fn>
   savePluginStates: ReturnType<typeof vi.fn>
@@ -108,8 +122,14 @@ interface ProjectMock {
 }
 
 function projectMock(initialGraph = graph()): ProjectMock {
+  let authority = structuredClone(initialGraph)
+  const prepared = new Map<
+    string,
+    { command: ProjectCommand; graph: ProjectGraphSnapshot; baseRevision: number }
+  >()
   const mock: ProjectMock = {
     service: null as unknown as ProjectService,
+    initialGraph: structuredClone(initialGraph),
     session: {
       id: "project-1",
       path: "project-1.yadaw",
@@ -123,8 +143,31 @@ function projectMock(initialGraph = graph()): ProjectMock {
       dirty: false,
       recoveredWorkingCopy: false
     },
-    mixerSnapshot: vi.fn().mockResolvedValue(structuredClone(initialGraph)),
-    applyProjectCommand: vi.fn().mockResolvedValue(undefined),
+    mixerSnapshot: vi.fn(async () => structuredClone(authority)),
+    prepareProjectCommand: vi.fn(
+      async (
+        operationId: string,
+        baseRevision: number,
+        command: ProjectCommand,
+        _fallbackOutputId: string
+      ) => {
+        const candidate = applyToGraph(authority, command)
+        const token = { id: `token:${operationId}`, operationId, baseRevision }
+        prepared.set(token.id, { command, graph: candidate, baseRevision })
+        return { token, graph: structuredClone(candidate) }
+      }
+    ),
+    commitProjectCommand: vi.fn(async (token, _command: ProjectCommand) => {
+      const candidate = prepared.get(token.id)
+      if (!candidate) throw new Error("missing prepared command")
+      authority = structuredClone(candidate.graph)
+      prepared.delete(token.id)
+      return { token, graph: structuredClone(authority) }
+    }),
+    abortProjectCommand: vi.fn(async (token) => {
+      prepared.delete(token.id)
+    }),
+    projectCommandStatus: vi.fn(async () => ({ state: "absent" as const })),
     importMidi: vi.fn().mockResolvedValue(undefined),
     rollbackMidi: vi.fn().mockResolvedValue(undefined),
     savePluginStates: vi.fn().mockResolvedValue(undefined),
@@ -137,7 +180,14 @@ function projectMock(initialGraph = graph()): ProjectMock {
     mixerSnapshot: mock.mixerSnapshot,
     assetContentHashes: vi.fn().mockResolvedValue([]),
     readAssetAudio: vi.fn().mockResolvedValue(new Uint8Array()),
-    applyProjectCommand: mock.applyProjectCommand,
+    activeAssetReader: vi.fn(() => ({
+      assetContentHashes: vi.fn().mockResolvedValue([]),
+      readAssetAudio: vi.fn().mockResolvedValue(new Uint8Array())
+    })),
+    prepareProjectCommand: mock.prepareProjectCommand,
+    commitProjectCommand: mock.commitProjectCommand,
+    abortProjectCommand: mock.abortProjectCommand,
+    projectCommandStatus: mock.projectCommandStatus,
     importMidi: mock.importMidi,
     rollbackMidi: mock.rollbackMidi,
     savePluginStates: mock.savePluginStates,
@@ -155,8 +205,11 @@ interface ProjectHarness {
   refreshFromDatabase: ProjectGraphService["refreshFromDatabase"]
   clearProject: ProjectGraphService["clearProject"]
   deleteUnusedAssets: ProjectGraphService["deleteUnusedAssets"]
-  execute: ProjectCommandService["execute"]
-  executeMidiImport: ProjectCommandService["executeMidiImport"]
+  execute(command: ProjectCommand): Promise<ProjectCommandResult>
+  executeMidiImport(
+    source: Parameters<ProjectCommandService["executeMidiImport"]>[1],
+    command: ProjectCommand
+  ): ReturnType<ProjectCommandService["executeMidiImport"]>
 }
 
 async function mixer(
@@ -165,7 +218,30 @@ async function mixer(
 ): Promise<ProjectHarness> {
   const directory = await mkdtemp(join(tmpdir(), "yadaw-mixer-service-"))
   directories.push(directory)
-  const host = (audioHost ?? null) as AudioHostService | null
+  const initialGraph = structuredClone(projects.initialGraph)
+  const host = audioHost
+    ? ({
+        loadGraph: vi.fn().mockResolvedValue(undefined),
+        prepareGraphDeployment: vi.fn(async (meta, projectGraph, graphRevision, project, runtime) =>
+          rpcSuccess(meta, {
+            meta,
+            projectGraph,
+            baseRevision: Math.max(0, graphRevision - 1),
+            graphRevision,
+            project,
+            runtime
+          })
+        ),
+        activateGraphDeployment: vi.fn(async (deployment) =>
+          rpcSuccess(deployment.meta, { type: "activated", snapshot: {} as never })
+        ),
+        abortGraphDeployment: vi.fn(async (deployment) =>
+          rpcSuccess(deployment.meta, { type: "aborted", snapshot: {} as never })
+        ),
+        commitDesiredGraph: vi.fn(),
+        ...audioHost
+      } as AudioHostService)
+    : null
   const publisher = new AudioGraphPublisher(
     new AudioGraphCompiler(),
     new AssetMaterializer(directory, projects.service),
@@ -174,7 +250,57 @@ async function mixer(
     null
   )
   const graphs = new ProjectGraphService(projects.service, publisher)
-  const commands = new ProjectCommandService(graphs, projects.service, publisher, host)
+  const commands = new ProjectCommandService(graphs, projects.service, host)
+  const lifecycle = new LifecycleCoordinator(projects.session)
+  const resources = lifecycle.applicationState.resources
+  const projectCandidate = resources.create({
+    kind: "project-session",
+    id: projects.session!.id,
+    parent: lifecycle.applicationState.desktopSession
+  })
+  if (!projectCandidate.ok) throw new Error("project test resource failed")
+  const project = resources.commit(projectCandidate.value.ref, projects.session)
+  if (!project.ok) throw new Error("project test commit failed")
+  const graphCandidate = resources.create({
+    kind: "project-graph",
+    id: `${projects.session!.id}:graph`,
+    parent: project.value.ref
+  })
+  if (!graphCandidate.ok) throw new Error("graph test resource failed")
+  const graphResource = resources.commit(graphCandidate.value.ref, initialGraph)
+  if (!graphResource.ok) throw new Error("graph test commit failed")
+  lifecycle.applicationState.setWorkspace({
+    project: project.value.ref as never,
+    projectGraph: graphResource.value.ref as never,
+    revision: graphResource.value.revision,
+    session: projects.session!,
+    graph: initialGraph,
+    assets: []
+  })
+  const operations = new OperationService(
+    new OperationRegistry(),
+    lifecycle.applicationState.desktopSession
+  )
+  commands.attachKernel(lifecycle, operations)
+  const execute = async (command: ProjectCommand): Promise<ProjectCommandResult> => {
+    const workspace = lifecycle.applicationState.workspaceSnapshot()
+    if (!workspace) throw new Error("missing workspace")
+    const result = await commands.execute(
+      {
+        protocolVersion: IPC_PROTOCOL_VERSION,
+        requestId: `request:${crypto.randomUUID()}`,
+        target: workspace.projectGraph,
+        expectedRevision: workspace.revision,
+        mutation: {
+          operationId: `operation:${crypto.randomUUID()}`,
+          idempotencyKey: `idempotency:${crypto.randomUUID()}`
+        }
+      },
+      command
+    )
+    if (!result.ok) throw new Error(result.error.code)
+    return result.value
+  }
   return {
     load: graphs.load.bind(graphs),
     snapshot: graphs.snapshot.bind(graphs),
@@ -182,8 +308,28 @@ async function mixer(
     refreshFromDatabase: graphs.refreshFromDatabase.bind(graphs),
     clearProject: graphs.clearProject.bind(graphs),
     deleteUnusedAssets: graphs.deleteUnusedAssets.bind(graphs),
-    execute: commands.execute.bind(commands),
-    executeMidiImport: commands.executeMidiImport.bind(commands)
+    execute,
+    executeMidiImport: (
+      source: Parameters<ProjectCommandService["executeMidiImport"]>[1],
+      command: ProjectCommand
+    ) => {
+      const workspace = lifecycle.applicationState.workspaceSnapshot()
+      if (!workspace) throw new Error("missing workspace")
+      return commands.executeMidiImport(
+        {
+          protocolVersion: IPC_PROTOCOL_VERSION,
+          requestId: `midi-import-request:${crypto.randomUUID()}`,
+          target: workspace.projectGraph,
+          expectedRevision: workspace.revision,
+          mutation: {
+            operationId: `midi-import-operation:${crypto.randomUUID()}`,
+            idempotencyKey: `midi-import-idempotency:${crypto.randomUUID()}`
+          }
+        },
+        source,
+        command
+      )
+    }
   }
 }
 
@@ -233,18 +379,35 @@ describe("project graph and command services", () => {
     expect(realtime.graph.channels.find(({ id }) => id === "audio")?.gainDb).toBe(-6)
     expect(structural.graph.channels).toContainEqual(created)
     expect(projects.mixerSnapshot).toHaveBeenCalledTimes(1)
-    expect(projects.applyProjectCommand).toHaveBeenCalledTimes(2)
+    expect(projects.prepareProjectCommand).toHaveBeenCalledTimes(2)
+    expect(projects.commitProjectCommand).toHaveBeenCalledTimes(2)
     expect(previewMixerParameter).toHaveBeenCalledTimes(1)
-    expect(loadGraph).toHaveBeenCalledTimes(2)
+    expect(loadGraph).toHaveBeenCalledTimes(1)
   })
 
-  it("rolls persistence back and retains the previous graph when publication fails", async () => {
+  it("keeps the DB commit authoritative when native activation fails", async () => {
     const projects = projectMock()
-    const loadGraph = vi
-      .fn()
-      .mockResolvedValueOnce(undefined)
-      .mockRejectedValueOnce(new Error("publication failed"))
-    const service = await mixer(projects, { loadGraph })
+    const activateGraphDeployment = vi.fn(async (deployment) => ({
+      ok: false as const,
+      requestId: deployment.meta.requestId,
+      operationId: deployment.meta.mutation?.operationId,
+      error: {
+        code: "dependency-failed" as const,
+        category: "dependency-failed" as const,
+        outcome: "not-committed" as const,
+        retry: "after-reconcile" as const,
+        correlationId: "activation-failed",
+        userMessageKey: "errors.graphDependencyFailed",
+        details: {
+          type: "dependency-failed" as const,
+          dependency: deployment.projectGraph
+        }
+      }
+    }))
+    const service = await mixer(projects, {
+      loadGraph: vi.fn().mockResolvedValue(undefined),
+      activateGraphDeployment
+    })
     await service.load()
     const command: ProjectCommand = {
       type: "create-track",
@@ -252,21 +415,18 @@ describe("project graph and command services", () => {
       channel: channel("instrument-2", "instrument", 1)
     }
 
-    await expect(service.execute(command)).rejects.toThrow("publication failed")
+    await expect(service.execute(command)).resolves.toMatchObject({
+      graph: { channels: expect.arrayContaining([expect.objectContaining({ id: "instrument-2" })]) }
+    })
 
-    expect(projects.applyProjectCommand).toHaveBeenNthCalledWith(1, command, "output")
-    expect(projects.applyProjectCommand).toHaveBeenNthCalledWith(
-      2,
-      { type: "delete-track", trackId: "track:instrument-2" },
-      "output"
-    )
-    expect((await service.snapshot()).channels.some(({ id }) => id === "instrument-2")).toBe(false)
+    expect(projects.commitProjectCommand).toHaveBeenCalledOnce()
+    expect((await service.snapshot()).channels.some(({ id }) => id === "instrument-2")).toBe(true)
     expect(projects.mixerSnapshot).toHaveBeenCalledTimes(1)
   })
 
-  it("retains the cached graph when command persistence fails", async () => {
+  it("reports an unknown outcome and retains the cache when the DB commit response fails", async () => {
     const projects = projectMock()
-    projects.applyProjectCommand.mockRejectedValueOnce(new Error("database failed"))
+    projects.commitProjectCommand.mockRejectedValueOnce(new Error("database response lost"))
     const loadGraph = vi.fn().mockResolvedValue(undefined)
     const previewMixerParameter = vi.fn().mockResolvedValue(undefined)
     const service = await mixer(projects, {
@@ -281,19 +441,46 @@ describe("project graph and command services", () => {
         channelId: "audio",
         patch: { gainDb: -12 }
       })
-    ).rejects.toThrow("database failed")
+    ).rejects.toThrow("operation-timeout-unknown")
 
     expect((await service.snapshot()).channels.find(({ id }) => id === "audio")?.gainDb).toBe(0)
     expect(previewMixerParameter).not.toHaveBeenCalled()
   })
 
-  it("rolls MIDI imports back without replacing the cached graph", async () => {
+  it("recovers the committed result by operation ID when the DB response is lost", async () => {
     const projects = projectMock()
-    const loadGraph = vi
-      .fn()
-      .mockResolvedValueOnce(undefined)
-      .mockRejectedValueOnce(new Error("MIDI publication failed"))
-    const service = await mixer(projects, { loadGraph })
+    projects.commitProjectCommand.mockRejectedValueOnce(new Error("database response lost"))
+    const committedGraph = graph()
+    committedGraph.channels[0]!.gainDb = -9
+    projects.projectCommandStatus.mockImplementationOnce((operationId: string) => ({
+      state: "committed" as const,
+      result: {
+        token: { id: "committed-token", operationId, baseRevision: 1 },
+        graph: committedGraph
+      }
+    }))
+    const service = await mixer(projects, {
+      previewMixerParameter: vi.fn().mockResolvedValue(undefined)
+    })
+    await service.load()
+
+    const result = await service.execute({
+      type: "update-channel",
+      channelId: "audio",
+      patch: { gainDb: -9 }
+    })
+
+    expect(result.graph.channels.find(({ id }) => id === "audio")?.gainDb).toBe(-9)
+    expect((await service.snapshot()).channels.find(({ id }) => id === "audio")?.gainDb).toBe(-9)
+    expect(projects.projectCommandStatus).toHaveBeenCalledOnce()
+  })
+
+  it("does not commit MIDI data when native staging fails", async () => {
+    const projects = projectMock()
+    const service = await mixer(projects, {
+      loadGraph: vi.fn().mockResolvedValue(undefined),
+      prepareGraphDeployment: vi.fn().mockRejectedValueOnce(new Error("MIDI publication failed"))
+    })
     await service.load()
     const command: ProjectCommand = {
       type: "create-midi-clip",
@@ -322,11 +509,8 @@ describe("project graph and command services", () => {
       )
     ).rejects.toThrow("MIDI publication failed")
 
-    expect(projects.rollbackMidi).toHaveBeenCalledWith(
-      "source-1",
-      { type: "delete-midi-clip", clipId: "midi-1" },
-      "output"
-    )
+    expect(projects.importMidi).not.toHaveBeenCalled()
+    expect(projects.rollbackMidi).not.toHaveBeenCalled()
     expect((await service.snapshot()).midiClips).toEqual([])
   })
 

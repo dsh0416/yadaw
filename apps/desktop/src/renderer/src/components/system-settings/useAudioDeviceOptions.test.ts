@@ -10,6 +10,8 @@ import type {
   AudioPreferences,
   AudioRuntimeSnapshot
 } from "@yadaw/contracts"
+import { rpcFailure, rpcSuccess, testBootstrap } from "../../test/ipc"
+import { useAudioRuntimeStore } from "../../stores/audioRuntime"
 import { useAudioDeviceOptions } from "./useAudioDeviceOptions"
 
 type DeviceOptions = ReturnType<typeof useAudioDeviceOptions>
@@ -82,9 +84,10 @@ const devices: AudioDeviceList = {
 
 beforeEach(() => {
   setActivePinia(createPinia())
+  useAudioRuntimeStore().applyResources(testBootstrap().audioResources)
   stubApi({
-    listAudioBackends: vi.fn(async () => backends),
-    listAudioDevices: vi.fn(async () => devices)
+    listAudioBackends: vi.fn(async () => rpcSuccess(backends)),
+    listAudioDevices: vi.fn(async () => rpcSuccess(devices))
   })
 })
 
@@ -115,7 +118,7 @@ describe("backend options", () => {
   it("marks discovery unavailable when no host reports itself as usable", async () => {
     stubApi({
       listAudioBackends: vi.fn(async () =>
-        backends.map((entry) => ({ ...entry, available: false }))
+        rpcSuccess(backends.map((entry) => ({ ...entry, available: false })))
       )
     })
 
@@ -194,10 +197,12 @@ describe("device options", () => {
 
   it("falls back to the first device when none is marked default", async () => {
     stubApi({
-      listAudioDevices: vi.fn(async () => ({
-        inputs: [device("in-a"), device("in-b")],
-        outputs: [device("out-a")]
-      }))
+      listAudioDevices: vi.fn(async () =>
+        rpcSuccess({
+          inputs: [device("in-a"), device("in-b")],
+          outputs: [device("out-a")]
+        })
+      )
     })
 
     const { preferences } = await mountOptions()
@@ -207,9 +212,7 @@ describe("device options", () => {
 
   it("clears the selection when enumeration fails", async () => {
     stubApi({
-      listAudioDevices: vi.fn(async () => {
-        throw new Error("device vanished")
-      })
+      listAudioDevices: vi.fn(async () => rpcFailure("errors.audioEngineUnavailable"))
     })
 
     const { preferences, options } = await mountOptions({
@@ -223,10 +226,12 @@ describe("device options", () => {
   })
 
   it("re-enumerates devices when the backend changes", async () => {
-    const listAudioDevices = vi.fn(async () => devices)
+    const listAudioDevices = vi.fn(async () => rpcSuccess(devices))
     stubApi({
       listAudioBackends: vi.fn(async () =>
-        backends.map((entry) => (entry.id === "asio" ? { ...entry, available: true } : entry))
+        rpcSuccess(
+          backends.map((entry) => (entry.id === "asio" ? { ...entry, available: true } : entry))
+        )
       ),
       listAudioDevices
     })
@@ -236,28 +241,30 @@ describe("device options", () => {
     options.backendSelection.value = "asio"
     await flushPromises()
 
-    expect(listAudioDevices).toHaveBeenCalledWith("asio")
+    expect(listAudioDevices).toHaveBeenCalledWith(expect.any(Object), "asio")
   })
 
   it("re-enumerates on demand through refreshDevices", async () => {
-    const listAudioDevices = vi.fn(async () => devices)
+    const listAudioDevices = vi.fn(async () => rpcSuccess(devices))
     stubApi({ listAudioDevices })
     const { options } = await mountOptions()
     listAudioDevices.mockClear()
 
     await options.refreshDevices()
 
-    expect(listAudioDevices).toHaveBeenCalledWith("alsa")
+    expect(listAudioDevices).toHaveBeenCalledWith(expect.any(Object), "alsa")
   })
 })
 
 describe("buffer size options", () => {
   it("restricts the list to the range both devices support", async () => {
     stubApi({
-      listAudioDevices: vi.fn(async () => ({
-        inputs: [device("in-1", { isDefault: true, minBufferSize: 64, maxBufferSize: 512 })],
-        outputs: [device("out-1", { isDefault: true, minBufferSize: 128, maxBufferSize: 1_024 })]
-      }))
+      listAudioDevices: vi.fn(async () =>
+        rpcSuccess({
+          inputs: [device("in-1", { isDefault: true, minBufferSize: 64, maxBufferSize: 512 })],
+          outputs: [device("out-1", { isDefault: true, minBufferSize: 128, maxBufferSize: 1_024 })]
+        })
+      )
     })
 
     const { options } = await mountOptions()
@@ -269,10 +276,12 @@ describe("buffer size options", () => {
 
   it("includes device-reported sizes that are not on the standard list", async () => {
     stubApi({
-      listAudioDevices: vi.fn(async () => ({
-        inputs: [device("in-1", { isDefault: true, minBufferSize: 96, maxBufferSize: 384 })],
-        outputs: [device("out-1", { isDefault: true, minBufferSize: 96, maxBufferSize: 384 })]
-      }))
+      listAudioDevices: vi.fn(async () =>
+        rpcSuccess({
+          inputs: [device("in-1", { isDefault: true, minBufferSize: 96, maxBufferSize: 384 })],
+          outputs: [device("out-1", { isDefault: true, minBufferSize: 96, maxBufferSize: 384 })]
+        })
+      )
     })
 
     const { options } = await mountOptions()
@@ -284,10 +293,12 @@ describe("buffer size options", () => {
 
   it("moves an unsupported saved buffer size to the smallest supported one", async () => {
     stubApi({
-      listAudioDevices: vi.fn(async () => ({
-        inputs: [device("in-1", { isDefault: true, minBufferSize: 512, maxBufferSize: 2_048 })],
-        outputs: [device("out-1", { isDefault: true, minBufferSize: 512, maxBufferSize: 2_048 })]
-      }))
+      listAudioDevices: vi.fn(async () =>
+        rpcSuccess({
+          inputs: [device("in-1", { isDefault: true, minBufferSize: 512, maxBufferSize: 2_048 })],
+          outputs: [device("out-1", { isDefault: true, minBufferSize: 512, maxBufferSize: 2_048 })]
+        })
+      )
     })
 
     const { preferences } = await mountOptions({ bufferSize: 64 })
@@ -314,10 +325,12 @@ describe("buffer size options", () => {
 
   it("falls back to the widest range when devices report no limits", async () => {
     stubApi({
-      listAudioDevices: vi.fn(async () => ({
-        inputs: [device("in-1", { isDefault: true, minBufferSize: null, maxBufferSize: null })],
-        outputs: [device("out-1", { isDefault: true, minBufferSize: null, maxBufferSize: null })]
-      }))
+      listAudioDevices: vi.fn(async () =>
+        rpcSuccess({
+          inputs: [device("in-1", { isDefault: true, minBufferSize: null, maxBufferSize: null })],
+          outputs: [device("out-1", { isDefault: true, minBufferSize: null, maxBufferSize: null })]
+        })
+      )
     })
 
     const { options } = await mountOptions()
@@ -329,10 +342,12 @@ describe("buffer size options", () => {
 
   it("offers the reported, running, and current sizes when device ranges do not overlap", async () => {
     stubApi({
-      listAudioDevices: vi.fn(async () => ({
-        inputs: [device("in-1", { isDefault: true, minBufferSize: 1_024, maxBufferSize: 2_048 })],
-        outputs: [device("out-1", { isDefault: true, minBufferSize: 32, maxBufferSize: 64 })]
-      }))
+      listAudioDevices: vi.fn(async () =>
+        rpcSuccess({
+          inputs: [device("in-1", { isDefault: true, minBufferSize: 1_024, maxBufferSize: 2_048 })],
+          outputs: [device("out-1", { isDefault: true, minBufferSize: 32, maxBufferSize: 64 })]
+        })
+      )
     })
 
     const { options } = await mountOptions(

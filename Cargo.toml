@@ -77,6 +77,7 @@ yadaw-plugin-ui = { path = "plugins/yadaw-plugin-ui" }
 [workspace.lints.rust]
 unexpected_cfgs = "warn"
 unsafe_op_in_unsafe_fn = "deny"
+unused_must_use = "deny"
 
 [workspace.lints.clippy]
 correctness = { level = "deny", priority = -1 }

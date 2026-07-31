@@ -114,10 +114,32 @@
     "nativeAudioEngineStopped": "原生音频引擎意外停止。",
     "unableToReadAudioEngineState": "无法读取音频引擎状态。",
     "unableToStartAudioEngine": "无法启动原生音频引擎。",
-    "unableToStopAudioEngine": "无法停止原生音频引擎。"
+    "unableToStopAudioEngine": "无法停止原生音频引擎。",
+    "invalidRpcRequest": "请求无效。",
+    "protocolMismatch": "此应用组件使用了不兼容的协议版本。",
+    "untrustedSender": "请求来自不受信任的应用上下文。",
+    "internalInvariant": "内部不变量检查失败；受影响的资源已被隔离。",
+    "revisionConflict": "资源已在操作应用前发生变化。",
+    "staleResource": "此资源句柄已失效。",
+    "resourceBusy": "资源正被另一项操作占用。",
+    "recordingUnavailable": "录音当前不可用，请检查工程和音频引擎后重试。",
+    "recordingMediaRecoverable": "录音收尾未完成，已保留捕获媒体以便恢复。",
+    "operationCancelled": "操作已取消。",
+    "operationOutcomeUnknown": "操作结果未知，需要重新协调状态。",
+    "operationFailed": "操作无法完成。",
+    "transportUnavailable": "IPC 传输不可用。",
+    "audioEngineUnavailable": "音频引擎不可用。",
+    "projectUnavailable": "工程不可用。",
+    "pluginUnavailable": "插件运行时不可用，请重新打开编辑器或协调工程状态。",
+    "midiUnavailable": "MIDI 运行时不可用，请协调音频助手状态后重试。",
+    "projectQuarantined": "失败的工程候选会话已被隔离。"
   },
   "warnings": {
+    "audioDeploymentDegraded": "工程数据已保存，但需要重新构建音频部署。",
+    "audioParameterDegraded": "参数已保存，但实时音频更新需要重新协调。",
+    "projectCleanupQuarantined": "工程清理已被隔离，稍后将重试。",
     "audio": {
+      "projectGraphDeploymentFailed": "音频引擎已启动，但无法部署工程图。",
       "nativeError": {
         "title": "原生音频错误"
       },

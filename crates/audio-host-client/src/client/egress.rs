@@ -2,7 +2,7 @@ fn spawn_egress(
     name: &'static str,
     sender: IpcSender<WirePacket>,
     inbox: Receiver<WirePacket>,
-) -> JoinHandle<()> {
+) -> Result<JoinHandle<()>> {
     thread::Builder::new()
         .name(name.into())
         .spawn(move || {
@@ -12,5 +12,5 @@ fn spawn_egress(
                 }
             }
         })
-        .expect("IPC egress thread must start")
+        .map_err(|error| failure("could not start IPC egress thread", error))
 }

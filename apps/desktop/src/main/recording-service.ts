@@ -6,6 +6,7 @@ import type {
   PendingRecording,
   RecordedTrackAsset,
   RecordingSession,
+  RpcError,
   WaveformPeakWindow,
   WaveformWindowRequest
 } from "@yadaw/contracts"
@@ -159,11 +160,28 @@ export class RecordingService {
         })
       await this.transport.command({ type: "record" })
     } catch (error) {
+      await Promise.allSettled([
+        deterministicTestCapture
+          ? Promise.resolve()
+          : (this.audioHost?.stopRecording() ?? Promise.resolve()),
+        this.transport.command({ type: "pause" })
+      ])
       await rm(sidecarPath, { force: true })
       throw error
     }
     this.sessions.begin(sidecar)
     return this.toSession(sidecar)
+  }
+
+  async abortStart(): Promise<void> {
+    if (!this.sessions.active) return
+    this.sessions.take()
+    await Promise.allSettled([
+      process.env.YADAW_TEST_CAPTURE_SOURCE === "1"
+        ? Promise.resolve()
+        : (this.audioHost?.stopRecording() ?? Promise.resolve()),
+      this.transport.command({ type: "pause" })
+    ])
   }
 
   async stop(onFinalizing?: () => void): Promise<PendingRecording> {
@@ -178,7 +196,7 @@ export class RecordingService {
       completedUnits: null,
       totalUnits: null,
       cancellable: false,
-      message: null,
+      error: null,
       dropoutFrames: 0
     }
     this.operations.upsert(operation, true)
@@ -225,8 +243,25 @@ export class RecordingService {
       await this.finalizeAndCommit(recording, operationId)
       return this.toPending(recording)
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      this.operations.patch(operationId, { state: "failed", message, cancellable: false }, true)
+      const correlationId = `recording:${operationId}:${randomUUID()}`
+      console.error(`[recording] finalization failed (${correlationId})`, error)
+      const operationError: RpcError = {
+        code: "invariant-violation",
+        category: "invariant-violation",
+        outcome: "quarantined",
+        retry: "after-reconcile",
+        correlationId,
+        userMessageKey: "errors.recordingFinalizationFailed",
+        details: {
+          type: "invariant-violation",
+          component: "main"
+        }
+      }
+      this.operations.patch(
+        operationId,
+        { state: "failed", error: operationError, cancellable: false },
+        true
+      )
       throw error
     }
   }
@@ -442,10 +477,6 @@ export class RecordingService {
       operationId,
       {
         state: "completed",
-        message:
-          recording.dropoutFrames > 0
-            ? t("operation.recordingDropoutsInput", { count: recording.dropoutFrames })
-            : null,
         dropoutFrames: recording.dropoutFrames
       },
       true
@@ -538,14 +569,14 @@ export class RecordingService {
     return true
   }
 
-  async recover(id: string): Promise<void> {
+  async recover(id: string): Promise<PendingRecording> {
     const recording = await this.readSidecar(id)
     if (
       recording.assetExists ||
       recording.state === "committed" ||
       (await this.assetAlreadyCommitted(recording))
     )
-      return
+      return this.toPending(recording)
     const recoverableIds = recording.tracks?.map((track) => track.assetId) ?? [recording.id]
     await this.graphs.deleteUnusedAssets(recoverableIds)
     if (recording.state === "partial") {
@@ -559,7 +590,7 @@ export class RecordingService {
           completedUnits: null,
           totalUnits: null,
           cancellable: false,
-          message: null,
+          error: null,
           dropoutFrames: recording.dropoutFrames
         },
         true
@@ -581,13 +612,14 @@ export class RecordingService {
           completedUnits: null,
           totalUnits: null,
           cancellable: false,
-          message: null,
+          error: null,
           dropoutFrames: recording.dropoutFrames
         },
         true
       )
     }
     await this.finalizeAndCommit(recording, `recording:${id}`)
+    return this.toPending(recording)
   }
 
   async deletePending(id: string): Promise<void> {

@@ -1,10 +1,15 @@
 import { acceptHMRUpdate, defineStore } from "pinia"
 import type { WaveformPeakWindow, WaveformWindowRequest } from "@yadaw/contracts"
+import { readMeta, rpcErrorMessage } from "../rpc"
+import { useRecordingStore } from "./recording"
+import { useProjectStore } from "./project"
 
 const CACHE_LIMIT = 96
 
 export const useWaveformStore = defineStore("waveform", () => {
   const cache = new Map<string, WaveformPeakWindow>()
+  const recordingStore = useRecordingStore()
+  const projectStore = useProjectStore()
 
   function cacheKey(request: WaveformWindowRequest): string {
     return `${request.id}:${request.startFrame}:${request.endFrame}:${request.maxBuckets}`
@@ -26,13 +31,25 @@ export const useWaveformStore = defineStore("waveform", () => {
       remember(key, cached)
       return cached
     }
-    const value = await window.yadaw.readAssetWaveform(request)
-    remember(key, value)
-    return value
+    const target = projectStore.projectRef
+    if (!target) throw new Error("Project resource is unavailable.")
+    const result = await window.yadaw.readAssetWaveform(readMeta(target), request)
+    if (!result.ok) throw new Error(rpcErrorMessage(result.error))
+    remember(key, result.value)
+    return result.value
   }
 
-  function loadRecording(request: WaveformWindowRequest): Promise<WaveformPeakWindow> {
-    return window.yadaw.recordingWaveformSnapshot(request)
+  async function loadRecording(request: WaveformWindowRequest): Promise<WaveformPeakWindow> {
+    const recording = recordingStore.resource
+    if (!recording || recording.session.id !== request.id) {
+      throw new Error("Recording resource is unavailable.")
+    }
+    const result = await window.yadaw.recordingWaveformSnapshot(
+      readMeta(recording.recording),
+      request
+    )
+    if (!result.ok) throw new Error(rpcErrorMessage(result.error))
+    return result.value
   }
 
   function clear(): void {

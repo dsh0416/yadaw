@@ -2,13 +2,19 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { DEFAULT_INSTRUMENT_COLOR, MUSICAL_TICKS_PER_QUARTER } from "@yadaw/contracts"
+import {
+  DEFAULT_INSTRUMENT_COLOR,
+  IPC_PROTOCOL_VERSION,
+  MUSICAL_TICKS_PER_QUARTER
+} from "@yadaw/contracts"
 import type {
   MidiImportPlan,
   MixerChannelState,
   PluginDescriptor,
   PluginInstanceState,
-  ProjectCommand
+  ProjectCommand,
+  ProjectGraphRef,
+  RpcRequestMeta
 } from "@yadaw/contracts"
 import type { NativeMidiTrack, NativeNormalizedSmf } from "@yadaw/dsp-node"
 import { MidiImportService } from "./midi-import-service"
@@ -164,8 +170,38 @@ function plan(overrides: Partial<MidiImportPlan> & { token: string }): MidiImpor
   }
 }
 
+const projectGraph: ProjectGraphRef = {
+  kind: "project-graph",
+  id: "project:graph",
+  epoch: "test-main",
+  generation: 1
+}
+
+function prepare(service: MidiImportService, path: string) {
+  return service.prepare(path, projectGraph)
+}
+
+function meta(target: ProjectGraphRef = projectGraph): RpcRequestMeta {
+  return {
+    protocolVersion: IPC_PROTOCOL_VERSION,
+    requestId: `midi-import-request:${crypto.randomUUID()}`,
+    target,
+    expectedRevision: 1,
+    mutation: {
+      operationId: `midi-import-operation:${crypto.randomUUID()}`,
+      idempotencyKey: `midi-import-idempotency:${crypto.randomUUID()}`
+    }
+  }
+}
+
+function commit(service: MidiImportService, value: MidiImportPlan) {
+  const request = meta()
+  return service.commit(request, value)
+}
+
 function commandsFrom(mixer: Harness["mixer"]): ProjectCommand[] {
-  const [, batch] = mixer.executeMidiImport.mock.calls[0] as [
+  const [, , batch] = mixer.executeMidiImport.mock.calls[0] as [
+    unknown,
     unknown,
     { commands: ProjectCommand[] }
   ]
@@ -188,7 +224,7 @@ describe("prepare", () => {
   it("summarizes the file against the project tempo map", async () => {
     const { service, mixer } = createService()
 
-    const preview = await service.prepare(midiPath)
+    const preview = await prepare(service, midiPath)
 
     expect(parseMidiFile).toHaveBeenCalledWith(midiPath, {
       tempoEvents: [{ tick: 0, beatsPerMinute: 120 }],
@@ -207,7 +243,7 @@ describe("prepare", () => {
   it("reports per-track note and event counts", async () => {
     const { service } = createService()
 
-    const [preview] = (await service.prepare(midiPath)).tracks
+    const [preview] = (await prepare(service, midiPath)).tracks
 
     expect(preview).toMatchObject({
       sourceTrack: 0,
@@ -223,7 +259,7 @@ describe("prepare", () => {
     parseMidiFile.mockResolvedValue(parsed({ tracks: [track({ name: "", sourceTrack: 2 })] }))
     const { service } = createService()
 
-    const preview = await service.prepare(midiPath)
+    const preview = await prepare(service, midiPath)
 
     expect(preview.tracks[0]?.name).toBe("MIDI Track 3")
   })
@@ -231,7 +267,7 @@ describe("prepare", () => {
   it("normalizes the file and per-track tempo maps to the project resolution", async () => {
     const { service } = createService()
 
-    const preview = await service.prepare(midiPath)
+    const preview = await prepare(service, midiPath)
 
     expect(preview.tempoMap).toEqual({
       ticksPerQuarter: MUSICAL_TICKS_PER_QUARTER,
@@ -249,52 +285,65 @@ describe("prepare", () => {
     parseMidiFile.mockResolvedValue(parsed({ format: 3 }))
     const { service } = createService()
 
-    await expect(service.prepare(midiPath)).rejects.toThrow("Unsupported Standard MIDI File format")
+    await expect(prepare(service, midiPath)).rejects.toThrow(
+      "Unsupported Standard MIDI File format"
+    )
   })
 
   it("keeps only the most recent preview", async () => {
     const { service } = createService()
-    const first = await service.prepare(midiPath)
-    const second = await service.prepare(midiPath)
+    const first = await prepare(service, midiPath)
+    const second = await prepare(service, midiPath)
 
-    await expect(service.commit(plan({ token: first.token }))).rejects.toThrow(
+    await expect(commit(service, plan({ token: first.token }))).rejects.toThrow(
       "MIDI import preview has expired"
     )
-    await expect(service.commit(plan({ token: second.token }))).resolves.toBeTruthy()
+    await expect(commit(service, plan({ token: second.token }))).resolves.toBeTruthy()
   })
 })
 
 describe("commit validation", () => {
   it("rejects an unknown or already-used token", async () => {
     const { service } = createService()
-    const preview = await service.prepare(midiPath)
+    const preview = await prepare(service, midiPath)
 
-    await expect(service.commit(plan({ token: "not-a-token" }))).rejects.toThrow(
+    await expect(commit(service, plan({ token: "not-a-token" }))).rejects.toThrow(
       "MIDI import preview has expired; choose the file again"
     )
 
-    await service.commit(plan({ token: preview.token }))
-    await expect(service.commit(plan({ token: preview.token }))).rejects.toThrow(
+    await commit(service, plan({ token: preview.token }))
+    await expect(commit(service, plan({ token: preview.token }))).rejects.toThrow(
       "MIDI import preview has expired; choose the file again"
+    )
+  })
+
+  it("rejects a preview prepared for an older project graph generation", async () => {
+    const { service } = createService()
+    const preview = await prepare(service, midiPath)
+    const nextGraph: ProjectGraphRef = { ...projectGraph, generation: 2 }
+
+    await expect(service.commit(meta(nextGraph), plan({ token: preview.token }))).rejects.toThrow(
+      "MIDI import preview belongs to a stale project graph"
     )
   })
 
   it("rejects a negative or non-integer insertion tick", async () => {
     const { service } = createService()
-    const { token } = await service.prepare(midiPath)
+    const { token } = await prepare(service, midiPath)
 
-    await expect(service.commit(plan({ token, insertionTick: -1 }))).rejects.toThrow(TypeError)
-    await expect(service.commit(plan({ token, insertionTick: 1.5 }))).rejects.toThrow(
+    await expect(commit(service, plan({ token, insertionTick: -1 }))).rejects.toThrow(TypeError)
+    await expect(commit(service, plan({ token, insertionTick: 1.5 }))).rejects.toThrow(
       "MIDI insertion tick must be a non-negative integer"
     )
   })
 
   it("requires at least one track that is not ignored", async () => {
     const { service } = createService()
-    const { token } = await service.prepare(midiPath)
+    const { token } = await prepare(service, midiPath)
 
     await expect(
-      service.commit(
+      commit(
+        service,
         plan({ token, tracks: [{ sourceTrack: 0, sequence: 0, target: { type: "ignore" } }] })
       )
     ).rejects.toThrow("Select at least one MIDI track to import")
@@ -308,10 +357,11 @@ describe("commit validation", () => {
       })
     )
     const { service } = createService()
-    const { token } = await service.prepare(midiPath)
+    const { token } = await prepare(service, midiPath)
 
     await expect(
-      service.commit(
+      commit(
+        service,
         plan({
           token,
           tracks: [
@@ -325,17 +375,18 @@ describe("commit validation", () => {
 
   it("requires the project to have a hardware output", async () => {
     const { service } = createService({ channels: [] })
-    const { token } = await service.prepare(midiPath)
+    const { token } = await prepare(service, midiPath)
 
-    await expect(service.commit(plan({ token }))).rejects.toThrow("Project has no hardware Output")
+    await expect(commit(service, plan({ token }))).rejects.toThrow("Project has no hardware Output")
   })
 
   it("rejects a plan that references a track the file does not contain", async () => {
     const { service } = createService()
-    const { token } = await service.prepare(midiPath)
+    const { token } = await prepare(service, midiPath)
 
     await expect(
-      service.commit(
+      commit(
+        service,
         plan({ token, tracks: [{ sourceTrack: 9, sequence: 0, target: { type: "new" } }] })
       )
     ).rejects.toThrow("MIDI source track 9 was not found")
@@ -345,9 +396,9 @@ describe("commit validation", () => {
 describe("commit", () => {
   it("creates an instrument track routed to the hardware output", async () => {
     const { service, mixer } = createService()
-    const { token } = await service.prepare(midiPath)
+    const { token } = await prepare(service, midiPath)
 
-    await service.commit(plan({ token }))
+    await commit(service, plan({ token }))
 
     const created = commandsFrom(mixer).find((command) => command.type === "create-track")
     expect(created).toMatchObject({
@@ -364,9 +415,10 @@ describe("commit", () => {
 
   it("prefers an explicit track name over the one in the file", async () => {
     const { service, mixer } = createService()
-    const { token } = await service.prepare(midiPath)
+    const { token } = await prepare(service, midiPath)
 
-    await service.commit(
+    await commit(
+      service,
       plan({
         token,
         tracks: [{ sourceTrack: 0, sequence: 0, target: { type: "new", name: "  Lead  " } }]
@@ -387,9 +439,9 @@ describe("commit", () => {
       ]
     })
     parseMidiFile.mockResolvedValue(parsed({ tracks: [track({ name: "" })] }))
-    const { token } = await service.prepare(midiPath)
+    const { token } = await prepare(service, midiPath)
 
-    await service.commit(plan({ token }))
+    await commit(service, plan({ token }))
 
     expect(commandsFrom(mixer).find((command) => command.type === "create-track")).toMatchObject({
       channel: { name: "Instrument 2", sortOrder: 1 }
@@ -398,9 +450,9 @@ describe("commit", () => {
 
   it("converts notes and events into a clip on the new track", async () => {
     const { service, mixer } = createService()
-    const { token } = await service.prepare(midiPath)
+    const { token } = await prepare(service, midiPath)
 
-    await service.commit(plan({ token }))
+    await commit(service, plan({ token }))
 
     const commands = commandsFrom(mixer)
     const created = commands.find((command) => command.type === "create-track")
@@ -424,9 +476,9 @@ describe("commit", () => {
   it("gives every clip a length of at least one tick", async () => {
     parseMidiFile.mockResolvedValue(parsed({ tracks: [track({ lengthTicks: 0 })] }))
     const { service, mixer } = createService()
-    const { token } = await service.prepare(midiPath)
+    const { token } = await prepare(service, midiPath)
 
-    await service.commit(plan({ token }))
+    await commit(service, plan({ token }))
 
     const clip = commandsFrom(mixer).find((command) => command.type === "create-midi-clip")
     expect(clip?.type === "create-midi-clip" && clip.clip.lengthTicks).toBe(1)
@@ -434,9 +486,9 @@ describe("commit", () => {
 
   it("places the clip at the insertion tick when the tempo map is not imported", async () => {
     const { service, mixer } = createService()
-    const { token } = await service.prepare(midiPath)
+    const { token } = await prepare(service, midiPath)
 
-    await service.commit(plan({ token, insertionTick: 3_840 }))
+    await commit(service, plan({ token, insertionTick: 3_840 }))
 
     const clip = commandsFrom(mixer).find((command) => command.type === "create-midi-clip")
     expect(clip?.type === "create-midi-clip" && clip.clip.startTick).toBe(3_840)
@@ -444,9 +496,9 @@ describe("commit", () => {
 
   it("anchors the clip at zero and replaces the tempo map when asked", async () => {
     const { service, mixer } = createService()
-    const { token } = await service.prepare(midiPath)
+    const { token } = await prepare(service, midiPath)
 
-    await service.commit(plan({ token, importTempoMap: true, insertionTick: 3_840 }))
+    await commit(service, plan({ token, importTempoMap: true, insertionTick: 3_840 }))
 
     const commands = commandsFrom(mixer)
     expect(commands[0]).toMatchObject({
@@ -472,9 +524,10 @@ describe("commit", () => {
       })
     )
     const { service, mixer } = createService()
-    const { token } = await service.prepare(midiPath)
+    const { token } = await prepare(service, midiPath)
 
-    await service.commit(
+    await commit(
+      service,
       plan({
         token,
         importTempoMap: true,
@@ -492,9 +545,10 @@ describe("commit", () => {
     const { service, mixer } = createService({
       channels: [channel({ id: "output-1", kind: "output" }), channel({ id: "instrument-1" })]
     })
-    const { token } = await service.prepare(midiPath)
+    const { token } = await prepare(service, midiPath)
 
-    await service.commit(
+    await commit(
+      service,
       plan({
         token,
         tracks: [
@@ -522,10 +576,11 @@ describe("commit", () => {
 
     for (const trackId of ["track:audio-1", "track:metronome", "track:nope"]) {
       const { service } = createService({ channels })
-      const { token } = await service.prepare(midiPath)
+      const { token } = await prepare(service, midiPath)
 
       await expect(
-        service.commit(
+        commit(
+          service,
           plan({
             token,
             tracks: [{ sourceTrack: 0, sequence: 0, target: { type: "existing", trackId } }]
@@ -538,9 +593,10 @@ describe("commit", () => {
 
   it("adds the requested instrument plug-in to a new track", async () => {
     const { service, mixer } = createService()
-    const { token } = await service.prepare(midiPath)
+    const { token } = await prepare(service, midiPath)
 
-    await service.commit(
+    await commit(
+      service,
       plan({
         token,
         tracks: [
@@ -559,9 +615,10 @@ describe("commit", () => {
     const { service, mixer } = createService({
       descriptors: [descriptor({ supportedAudioModes: ["mono"] })]
     })
-    const { token } = await service.prepare(midiPath)
+    const { token } = await prepare(service, midiPath)
 
-    await service.commit(
+    await commit(
+      service,
       plan({
         token,
         tracks: [
@@ -592,9 +649,10 @@ describe("commit", () => {
         }
       ]
     })
-    const { token } = await service.prepare(midiPath)
+    const { token } = await prepare(service, midiPath)
 
-    await service.commit(
+    await commit(
+      service,
       plan({
         token,
         tracks: [
@@ -626,10 +684,11 @@ describe("commit", () => {
 
     for (const descriptors of cases) {
       const { service } = createService({ descriptors })
-      const { token } = await service.prepare(midiPath)
+      const { token } = await prepare(service, midiPath)
 
       await expect(
-        service.commit(
+        commit(
+          service,
           plan({
             token,
             tracks: [
@@ -647,11 +706,12 @@ describe("commit", () => {
 
   it("records the source file with a content hash so the project can re-export it", async () => {
     const { service, mixer } = createService()
-    const { token } = await service.prepare(midiPath)
+    const { token } = await prepare(service, midiPath)
 
-    await service.commit(plan({ token }))
+    await commit(service, plan({ token }))
 
-    const [source] = mixer.executeMidiImport.mock.calls[0] as [
+    const [, source] = mixer.executeMidiImport.mock.calls[0] as [
+      unknown,
       { id: string; name: string; contentHash: string; rawBytes: Uint8Array }
     ]
     expect(source.name).toBe("song.mid")
@@ -664,9 +724,10 @@ describe("commit", () => {
       parsed({ tracks: [track(), track({ sourceTrack: 1, name: "Bass" })] })
     )
     const { service, mixer } = createService()
-    const { token } = await service.prepare(midiPath)
+    const { token } = await prepare(service, midiPath)
 
-    await service.commit(
+    await commit(
+      service,
       plan({
         token,
         tracks: [
@@ -677,7 +738,7 @@ describe("commit", () => {
     )
 
     const clips = commandsFrom(mixer).filter((command) => command.type === "create-midi-clip")
-    const [source] = mixer.executeMidiImport.mock.calls[0] as [{ id: string }]
+    const [, source] = mixer.executeMidiImport.mock.calls[0] as [unknown, { id: string }]
     expect(clips).toHaveLength(2)
     expect(new Set(clips.map((clip) => clip.clip.sourceId))).toEqual(new Set([source.id]))
     expect(new Set(clips.map((clip) => clip.clip.id)).size).toBe(2)
@@ -688,9 +749,10 @@ describe("commit", () => {
       parsed({ tracks: [track(), track({ sourceTrack: 1, name: "Bass" })] })
     )
     const { service, mixer } = createService()
-    const { token } = await service.prepare(midiPath)
+    const { token } = await prepare(service, midiPath)
 
-    await service.commit(
+    await commit(
+      service,
       plan({
         token,
         tracks: [

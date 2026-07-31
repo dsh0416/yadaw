@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import type { OperationSnapshot } from "@yadaw/contracts"
+import type { DesktopSessionRef, OperationSnapshot } from "@yadaw/contracts"
 
 vi.mock("electron", () => ({
   BrowserWindow: {
@@ -8,6 +8,7 @@ vi.mock("electron", () => ({
 }))
 
 import { OperationService } from "./operation-service"
+import { OperationRegistry } from "./kernel/operation-registry"
 
 const runningOperation: OperationSnapshot = {
   id: "recording:1",
@@ -17,15 +18,21 @@ const runningOperation: OperationSnapshot = {
   completedUnits: null,
   totalUnits: null,
   cancellable: false,
-  message: null,
+  error: null,
   dropoutFrames: 0
+}
+const desktopSession: DesktopSessionRef = {
+  kind: "desktop-session",
+  id: "desktop",
+  epoch: "main-epoch",
+  generation: 1
 }
 
 describe("OperationService", () => {
   let service: OperationService
 
   beforeEach(() => {
-    service = new OperationService()
+    service = new OperationService(new OperationRegistry(), desktopSession)
   })
 
   it("counts only operations that are still running", () => {

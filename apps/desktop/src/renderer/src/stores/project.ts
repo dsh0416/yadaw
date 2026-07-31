@@ -1,15 +1,21 @@
 import { acceptHMRUpdate, defineStore } from "pinia"
 import { computed, ref, shallowRef } from "vue"
 import type {
+  ApplicationBootstrapSnapshot,
   CreateProjectRequest,
+  DesktopSessionRef,
+  OfflineWorkerRef,
   ProjectAssetSummary,
   ProjectConfiguration,
+  ProjectGraphRef,
   ProjectLifecycleState,
   ProjectSession,
+  ProjectSessionRef,
   ProjectWorkspaceSnapshot
 } from "@yadaw/contracts"
 import { useGlobalDialog } from "../composables/useGlobalDialog"
 import { i18n } from "../i18n"
+import { mutationMeta, readMeta, rpcErrorMessage } from "../rpc"
 
 function t(key: string, params?: Record<string, string | number>): string {
   return i18n.global.t(key, params ?? {})
@@ -23,49 +29,100 @@ export const useProjectStore = defineStore("project", () => {
   const { showDialog } = useGlobalDialog()
   const lifecycle = shallowRef<ProjectLifecycleState>({ status: "closed", error: null })
   const projectAssets = ref<ProjectAssetSummary[]>([])
+  const desktopSession = shallowRef<DesktopSessionRef | null>(null)
+  const offlineWorkerRef = shallowRef<OfflineWorkerRef | null>(null)
+  const projectRef = shallowRef<ProjectSessionRef | null>(null)
+  const projectGraphRef = shallowRef<ProjectGraphRef | null>(null)
+  const projectRevision = shallowRef(0)
+  const pendingIntent = shallowRef<"create" | "open" | "save" | "close" | null>(null)
+  const pendingProjectMutations = shallowRef(0)
+  const rpcError = shallowRef("")
   let pendingClose: Promise<boolean> | null = null
+  let projectMutationTail: Promise<void> = Promise.resolve()
 
   const session = computed(() => ("session" in lifecycle.value ? lifecycle.value.session : null))
+  const hasUnsavedChanges = computed(
+    () => session.value?.dirty === true || pendingProjectMutations.value > 0
+  )
   const busy = computed(
     () =>
+      pendingIntent.value !== null ||
       lifecycle.value.status === "creating" ||
       lifecycle.value.status === "opening" ||
       lifecycle.value.status === "saving" ||
       lifecycle.value.status === "closing"
   )
-  const error = computed(() => lifecycle.value.error ?? "")
+  const error = computed(() => rpcError.value || lifecycle.value.error || "")
   const isOpen = computed(() => session.value !== null)
 
   function applyLifecycleState(state: ProjectLifecycleState): void {
     lifecycle.value = structuredClone(state)
-    if (state.status === "closed") projectAssets.value = []
+    if (state.status === "closed") {
+      projectAssets.value = []
+      projectRef.value = null
+      projectGraphRef.value = null
+      projectRevision.value = 0
+    }
+  }
+
+  function applyWorkspace(workspace: ProjectWorkspaceSnapshot): void {
+    projectRef.value = structuredClone(workspace.project)
+    projectGraphRef.value = structuredClone(workspace.projectGraph)
+    projectRevision.value = workspace.revision
+    lifecycle.value = openState(workspace.session)
+    projectAssets.value = structuredClone(workspace.assets)
+    rpcError.value = ""
+  }
+
+  function applyDesktopSession(ref: DesktopSessionRef): void {
+    desktopSession.value = structuredClone(ref)
+  }
+
+  function applyBootstrap(snapshot: ApplicationBootstrapSnapshot): void {
+    offlineWorkerRef.value = structuredClone(snapshot.offlineTools.worker)
+    applyDesktopSession(snapshot.desktopSession)
+    applyLifecycleState(snapshot.lifecycle.project)
+    if (snapshot.workspace) applyWorkspace(snapshot.workspace)
   }
 
   async function create(request: CreateProjectRequest): Promise<ProjectWorkspaceSnapshot | null> {
-    if (lifecycle.value.status !== "closed") return null
-    lifecycle.value = { status: "creating", error: null }
-    try {
-      const workspace = await window.yadaw.createProject(request)
-      lifecycle.value = openState(workspace.session)
-      projectAssets.value = structuredClone(workspace.assets)
-      return workspace
-    } catch (reason) {
-      const message = reason instanceof Error ? reason.message : t("errors.unableToCreateProject")
-      lifecycle.value = {
-        status: "closed",
-        error: /cancelled/i.test(message) ? null : message
-      }
+    if (lifecycle.value.status !== "closed" || !desktopSession.value || pendingIntent.value) {
       return null
+    }
+    pendingIntent.value = "create"
+    rpcError.value = ""
+    try {
+      const result = await window.yadaw.createProject(
+        mutationMeta(desktopSession.value, "project-create"),
+        request
+      )
+      if (!result.ok) {
+        if (result.error.category !== "cancelled") rpcError.value = rpcErrorMessage(result.error)
+        return null
+      }
+      applyWorkspace(result.value)
+      return result.value
+    } finally {
+      pendingIntent.value = null
     }
   }
 
   async function open(path?: string): Promise<ProjectWorkspaceSnapshot | null> {
-    if (lifecycle.value.status !== "closed") return null
-    lifecycle.value = { status: "opening", error: null }
+    if (lifecycle.value.status !== "closed" || !desktopSession.value || pendingIntent.value) {
+      return null
+    }
+    pendingIntent.value = "open"
+    rpcError.value = ""
     try {
-      const preparation = await window.yadaw.prepareOpenProject(path)
+      const prepared = await window.yadaw.prepareOpenProject(readMeta(desktopSession.value), path)
+      if (!prepared.ok) {
+        if (prepared.error.category !== "cancelled") {
+          rpcError.value = rpcErrorMessage(prepared.error)
+        }
+        return null
+      }
+      const preparation = prepared.value
       if (!preparation) {
-        lifecycle.value = { status: "closed", error: null }
         return null
       }
       let recover = false
@@ -84,45 +141,51 @@ export const useProjectStore = defineStore("project", () => {
           cancelValue: "cancel"
         })
         if (!choice || choice === "cancel") {
-          lifecycle.value = { status: "closed", error: null }
           return null
         }
         recover = choice === "recover"
       }
-      const workspace = await window.yadaw.openProject(preparation.path, recover)
-      lifecycle.value = openState(workspace.session)
-      projectAssets.value = structuredClone(workspace.assets)
-      return workspace
-    } catch (reason) {
-      const message = reason instanceof Error ? reason.message : t("errors.unableToOpenProject")
-      lifecycle.value = {
-        status: "closed",
-        error: message
+      const result = await window.yadaw.openProject(
+        mutationMeta(desktopSession.value, "project-open"),
+        preparation.path,
+        recover
+      )
+      if (!result.ok) {
+        rpcError.value = rpcErrorMessage(result.error)
+        return null
       }
-      return null
+      applyWorkspace(result.value)
+      return result.value
+    } finally {
+      pendingIntent.value = null
     }
   }
 
   async function save(): Promise<void> {
-    if (lifecycle.value.status !== "open") return
+    if (lifecycle.value.status !== "open" || pendingIntent.value) return
     const previous = lifecycle.value.session
-    lifecycle.value = { status: "saving", session: structuredClone(previous), error: null }
+    pendingIntent.value = "save"
+    rpcError.value = ""
     try {
-      const saved = await window.yadaw.saveProject()
-      lifecycle.value = openState(saved ?? previous)
-    } catch (reason) {
-      lifecycle.value = openState(
-        previous,
-        reason instanceof Error ? reason.message : t("errors.unableToSaveProject")
-      )
+      const target = projectRef.value
+      if (!target) return
+      const saved = await window.yadaw.saveProject(mutationMeta(target, "project-save"))
+      if (!saved.ok) {
+        rpcError.value = rpcErrorMessage(saved.error)
+        lifecycle.value = openState(previous)
+        return
+      }
+      applyWorkspace(saved.value)
+    } finally {
+      pendingIntent.value = null
     }
   }
 
-  async function closeOnce(disposition?: "save" | "discard" | "cancel"): Promise<boolean> {
-    if (lifecycle.value.status === "closed") return true
-    if (lifecycle.value.status !== "open") return false
-    const previous = lifecycle.value.session
-    if (previous.dirty && !disposition) {
+  async function prepareClose(): Promise<"save" | "discard" | null> {
+    if (lifecycle.value.status !== "open") return null
+    let disposition: "save" | "discard" | "cancel" = "discard"
+    if (hasUnsavedChanges.value) {
+      const previous = lifecycle.value.session
       disposition =
         (await showDialog<"save" | "discard" | "cancel">({
           eyebrow: t("dialog.saveBeforeClose.eyebrow"),
@@ -139,24 +202,37 @@ export const useProjectStore = defineStore("project", () => {
           ],
           cancelValue: "cancel"
         })) ?? "cancel"
-      if (disposition === "cancel") return false
     }
-    lifecycle.value = { status: "closing", session: structuredClone(previous), error: null }
+    if (disposition === "cancel") return null
+    await projectMutationTail
+    const statusAfterMutations = (lifecycle.value as ProjectLifecycleState).status
+    if (statusAfterMutations !== "open") return null
+    return disposition
+  }
+
+  async function closeOnce(disposition?: "save" | "discard" | "cancel"): Promise<boolean> {
+    if (lifecycle.value.status === "closed") return true
+    if (lifecycle.value.status !== "open" || disposition === "cancel") return false
+    const preparedDisposition = disposition ?? (await prepareClose())
+    if (!preparedDisposition) return false
+    if (disposition) await projectMutationTail
+    const target = projectRef.value
+    if (!target || pendingIntent.value) return false
+    pendingIntent.value = "close"
+    rpcError.value = ""
     try {
-      const closed = await window.yadaw.closeProject(disposition)
-      if (!closed) {
-        lifecycle.value = openState(previous)
+      const result = await window.yadaw.closeProject(
+        mutationMeta(target, "project-close"),
+        preparedDisposition
+      )
+      if (!result.ok) {
+        if (result.error.category !== "cancelled") rpcError.value = rpcErrorMessage(result.error)
         return false
       }
-      lifecycle.value = { status: "closed", error: null }
-      projectAssets.value = []
-      return true
-    } catch (reason) {
-      lifecycle.value = openState(
-        previous,
-        reason instanceof Error ? reason.message : t("errors.unableToCloseProject")
-      )
-      return false
+      applyBootstrap(result.value.snapshot)
+      return result.value.closed
+    } finally {
+      pendingIntent.value = null
     }
   }
 
@@ -172,13 +248,27 @@ export const useProjectStore = defineStore("project", () => {
   }
 
   async function updateConfiguration(configuration: ProjectConfiguration): Promise<void> {
-    const updated = await window.yadaw.updateProjectConfiguration(configuration)
-    lifecycle.value = openState(updated)
+    if (!projectGraphRef.value) return
+    const result = await window.yadaw.updateProjectConfiguration(
+      mutationMeta(projectGraphRef.value, "project-configuration", projectRevision.value),
+      configuration
+    )
+    if (!result.ok) {
+      rpcError.value = rpcErrorMessage(result.error)
+      return
+    }
+    lifecycle.value = openState(result.value)
+    projectRevision.value = result.resourceRevision ?? projectRevision.value
   }
 
   async function refreshAssets(): Promise<void> {
-    if (!session.value) return
-    projectAssets.value = await window.yadaw.listProjectAssets()
+    if (!session.value || !projectRef.value) return
+    const result = await window.yadaw.listProjectAssets(readMeta(projectRef.value))
+    if (!result.ok) {
+      rpcError.value = rpcErrorMessage(result.error)
+      return
+    }
+    projectAssets.value = result.value
   }
 
   function markDirty(): void {
@@ -187,21 +277,53 @@ export const useProjectStore = defineStore("project", () => {
     }
   }
 
+  function beginProjectMutation(): () => void {
+    pendingProjectMutations.value += 1
+    let resolveMutation!: () => void
+    const mutation = new Promise<void>((resolve) => {
+      resolveMutation = resolve
+    })
+    projectMutationTail = projectMutationTail.then(
+      () => mutation,
+      () => mutation
+    )
+    let settled = false
+    return () => {
+      if (settled) return
+      settled = true
+      pendingProjectMutations.value = Math.max(0, pendingProjectMutations.value - 1)
+      resolveMutation()
+    }
+  }
+
   return {
     lifecycle,
     session,
+    desktopSession,
+    offlineWorkerRef,
+    projectRef,
+    projectGraphRef,
+    projectRevision,
+    pendingIntent,
+    pendingProjectMutations,
     projectAssets,
     busy,
     error,
     isOpen,
+    hasUnsavedChanges,
     applyLifecycleState,
+    applyDesktopSession,
+    applyBootstrap,
+    applyWorkspace,
     create,
     open,
     save,
+    prepareClose,
     close,
     updateConfiguration,
     refreshAssets,
-    markDirty
+    markDirty,
+    beginProjectMutation
   }
 })
 

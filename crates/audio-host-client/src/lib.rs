@@ -1,4 +1,13 @@
 #![deny(unsafe_code)]
+#![cfg_attr(
+    not(test),
+    deny(
+        clippy::expect_used,
+        clippy::panic,
+        clippy::panic_in_result_fn,
+        clippy::unwrap_used
+    )
+)]
 
 use std::{
     collections::{HashMap, VecDeque},
@@ -22,9 +31,9 @@ use napi::{
 };
 use napi_derive::napi;
 use yadaw_dsp_runtime::protocol::{
-    ControlCommand, ControlRequest, HostEvent, MAX_MESSAGE_BYTES, NATIVE_BUILD_FINGERPRINT,
-    ParameterCommand, ParameterGesture, ParameterTargetKind, PriorityCommand, PriorityRequest,
-    PriorityResponse,
+    ControlCommand, ControlRequest, HostEvent, IPC_PROTOCOL_VERSION, MAX_MESSAGE_BYTES,
+    NATIVE_BUILD_FINGERPRINT, ParameterCommand, ParameterGesture, ParameterTargetKind,
+    PriorityCommand, PriorityRequest, PriorityResponse,
 };
 use yadaw_ipc_transport::{
     ArenaReceiver, HostBootstrap, LeaseRegistry, MAX_OUTSTANDING_LEASE_BYTES,

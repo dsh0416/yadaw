@@ -56,6 +56,8 @@ static COMPILED_GRAPH_SNAPSHOTS: OnceLock<Mutex<BTreeMap<u64, CompiledAudioGraph
     OnceLock::new();
 static NEXT_BUILD_GENERATION: AtomicU64 = AtomicU64::new(1);
 static STREAM_WORKERS: OnceLock<StreamWorkerPool> = OnceLock::new();
+#[cfg(test)]
+pub(crate) static GRAPH_TEST_LOCK: Mutex<()> = Mutex::new(());
 
 const ENGINE_COMMAND_CAPACITY: usize = 256;
 const MEMORY_DECODE_LIMIT_BYTES: u64 = 32 * 1024 * 1024;

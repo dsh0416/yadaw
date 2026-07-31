@@ -75,6 +75,7 @@ impl AudioHostIpcClient {
         })?;
         bootstrap_sender
             .send(HostBootstrap {
+                protocol_version: IPC_PROTOCOL_VERSION,
                 native_build_fingerprint: NATIVE_BUILD_FINGERPRINT.to_owned(),
                 requests: request_receiver,
                 responses: response_sender,
@@ -103,44 +104,54 @@ impl AudioHostIpcClient {
         let request_timeouts = Arc::new(AtomicU64::new(0));
         let transport_traffic = Arc::new(TransportTraffic::default());
 
-        let normal_egress = spawn_egress("yadaw-ipc-request", requests, normal_inbox);
-        let priority_egress = spawn_egress(
-            "yadaw-ipc-priority-request",
-            priority_requests,
-            priority_inbox,
-        );
-        let response_router = spawn_response_router(
-            responses,
-            Arc::clone(&pending),
-            priority_outbound.clone(),
-            Arc::clone(&closing),
-            Arc::clone(&request_timeouts),
-            Arc::clone(&transport_traffic),
-            Arc::clone(&response_arena),
-        );
-        let priority_router = spawn_priority_router(
-            priority_responses,
-            Arc::clone(&priority_pending),
-            Arc::clone(&closing),
-            Arc::clone(&request_timeouts),
-        );
-        let event_router = spawn_event_router(
-            events,
-            Arc::clone(&leases),
-            Arc::clone(&telemetry),
-            Arc::clone(&event_queue),
-            priority_outbound.clone(),
-            Arc::clone(&closing),
-        );
-        // Routers own outbound sender clones, so they must be joined before the
-        // egress threads waiting for every sender to be dropped.
-        let threads = vec![
-            response_router,
-            priority_router,
-            event_router,
-            normal_egress,
-            priority_egress,
-        ];
+        let mut threads = Vec::with_capacity(5);
+        let startup_result = (|| -> Result<()> {
+            threads.push(spawn_response_router(
+                responses,
+                Arc::clone(&pending),
+                priority_outbound.clone(),
+                Arc::clone(&closing),
+                Arc::clone(&request_timeouts),
+                Arc::clone(&transport_traffic),
+                Arc::clone(&response_arena),
+            )?);
+            threads.push(spawn_priority_router(
+                priority_responses,
+                Arc::clone(&priority_pending),
+                Arc::clone(&closing),
+                Arc::clone(&request_timeouts),
+            )?);
+            threads.push(spawn_event_router(
+                events,
+                Arc::clone(&leases),
+                Arc::clone(&telemetry),
+                Arc::clone(&event_queue),
+                priority_outbound.clone(),
+                Arc::clone(&closing),
+            )?);
+            threads.push(spawn_egress(
+                "yadaw-ipc-request",
+                requests,
+                normal_inbox,
+            )?);
+            threads.push(spawn_egress(
+                "yadaw-ipc-priority-request",
+                priority_requests,
+                priority_inbox,
+            )?);
+            Ok(())
+        })();
+        if let Err(error) = startup_result {
+            closing.store(true, Ordering::Release);
+            drop(normal_outbound);
+            drop(priority_outbound);
+            let _ = child.kill();
+            let _ = child.wait();
+            for thread in threads {
+                let _ = thread.join();
+            }
+            return Err(error);
+        }
 
         Ok(Self {
             state: Arc::new(ClientState {
@@ -294,29 +305,32 @@ impl AudioHostIpcClient {
     #[napi]
     pub fn enqueue_parameter(
         &self,
-        target_kind: String,
-        runtime_handle: u32,
-        parameter_id: u32,
-        normalized: f64,
-        gesture: String,
-    ) -> Result<String> {
-        let target_kind = match target_kind.as_str() {
+        request: ParameterEnqueueRequest,
+    ) -> Result<ParameterEnqueueResult> {
+        let target_kind = match request.target_kind.as_str() {
             "plugin" => ParameterTargetKind::Plugin,
             "mixer-channel" => ParameterTargetKind::MixerChannel,
             "mixer-send" => ParameterTargetKind::MixerSend,
             _ => return Err(Error::new(Status::InvalidArg, "invalid parameter target")),
         };
-        let gesture = parse_gesture(&gesture)?;
+        let gesture = parse_gesture(&request.gesture)?;
+        let sequence = request.sequence.map_or_else(
+            || {
+                Ok(self
+                    .state
+                    .parameter_sequence
+                    .fetch_add(1, Ordering::Relaxed))
+            },
+            |value| value.parse::<u64>().map_err(|error| failure("invalid parameter sequence", error)),
+        )?;
         let command = ParameterCommand {
             session_epoch: self.state.session_epoch,
-            sequence: self
-                .state
-                .parameter_sequence
-                .fetch_add(1, Ordering::Relaxed),
+            sequence,
             target_kind,
-            runtime_handle,
-            parameter_id,
-            normalized,
+            runtime_handle: request.runtime_handle,
+            parameter_id: request.parameter_id,
+            normalized: request.normalized,
+            target_generation: request.target_generation.unwrap_or(0),
             gesture,
         };
         match self.state.parameters.enqueue(command) {
@@ -324,13 +338,19 @@ impl AudioHostIpcClient {
                 if wake {
                     self.send_internal_priority(PriorityCommand::ParameterWake)?;
                 }
-                Ok("queued".into())
+                Ok(ParameterEnqueueResult {
+                    outcome: "queued".into(),
+                    sequence: sequence.to_string(),
+                })
             }
             ParameterEnqueue::SoftFull => {
                 self.state
                     .parameter_soft_full
                     .fetch_add(1, Ordering::Relaxed);
-                Ok("soft-full".into())
+                Ok(ParameterEnqueueResult {
+                    outcome: "soft-full".into(),
+                    sequence: sequence.to_string(),
+                })
             }
             ParameterEnqueue::Full => {
                 self.state
@@ -341,16 +361,25 @@ impl AudioHostIpcClient {
                     self.state
                         .parameter_boundary_fallbacks
                         .fetch_add(1, Ordering::Relaxed);
-                    Ok("fallback".into())
+                    Ok(ParameterEnqueueResult {
+                        outcome: "fallback".into(),
+                        sequence: sequence.to_string(),
+                    })
                 } else {
-                    Ok("full".into())
+                    Ok(ParameterEnqueueResult {
+                        outcome: "full".into(),
+                        sequence: sequence.to_string(),
+                    })
                 }
             }
             ParameterEnqueue::StaleEpoch => {
                 self.state
                     .parameter_stale_epoch
                     .fetch_add(1, Ordering::Relaxed);
-                Ok("stale".into())
+                Ok(ParameterEnqueueResult {
+                    outcome: "stale".into(),
+                    sequence: sequence.to_string(),
+                })
             }
         }
     }
@@ -489,6 +518,11 @@ impl AudioHostIpcClient {
     #[napi(getter)]
     pub fn session_epoch(&self) -> i64 {
         self.state.session_epoch as i64
+    }
+
+    #[napi(getter)]
+    pub fn helper_epoch(&self) -> String {
+        self.state.session_epoch.to_string()
     }
 
     #[napi]

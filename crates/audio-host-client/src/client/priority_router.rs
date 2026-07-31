@@ -3,7 +3,7 @@ fn spawn_priority_router(
     pending: Arc<Mutex<HashMap<u64, Pending>>>,
     closing: Arc<AtomicBool>,
     request_timeouts: Arc<AtomicU64>,
-) -> JoinHandle<()> {
+) -> Result<JoinHandle<()>> {
     thread::Builder::new()
         .name("yadaw-ipc-priority-router".into())
         .spawn(move || {
@@ -25,5 +25,5 @@ fn spawn_priority_router(
                 }
             }
         })
-        .expect("priority response router thread must start")
+        .map_err(|error| failure("could not start priority response router thread", error))
 }

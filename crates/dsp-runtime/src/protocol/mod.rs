@@ -1,8 +1,19 @@
+#![cfg_attr(
+    not(test),
+    deny(
+        clippy::expect_used,
+        clippy::panic,
+        clippy::panic_in_result_fn,
+        clippy::unwrap_used
+    )
+)]
+
 mod audio;
 mod graph;
 mod midi_input;
 mod plugin;
 mod recording;
+mod rpc;
 mod transport;
 mod wire;
 
@@ -11,6 +22,7 @@ pub use graph::*;
 pub use midi_input::*;
 pub use plugin::*;
 pub use recording::*;
+pub use rpc::*;
 pub use transport::*;
 pub use wire::*;
 
@@ -33,7 +45,7 @@ pub enum HostEvent {
         revision: u64,
     },
     RuntimeFailure {
-        message: String,
+        error: RpcError,
         plugin_instance_id: Option<String>,
         phase: Option<String>,
     },
@@ -106,7 +118,7 @@ pub enum PriorityResult {
     Accepted,
     Busy,
     Error {
-        message: String,
+        error: RpcError,
     },
 }
 
@@ -136,6 +148,21 @@ pub enum ControlCommand {
     RoundTripLatencyMeasurementSnapshot,
     UpdateGraph {
         update: GraphUpdate,
+    },
+    PrepareGraph {
+        meta: RpcRequestMeta,
+        request: PrepareGraphRequest,
+    },
+    ActivateGraph {
+        meta: RpcRequestMeta,
+        request: GraphTransactionRequest,
+    },
+    AbortGraph {
+        meta: RpcRequestMeta,
+        request: GraphTransactionRequest,
+    },
+    GraphDeploymentSnapshot {
+        meta: RpcRequestMeta,
     },
     PreviewMixerParameter {
         preview: MixerParameterPreview,
@@ -268,6 +295,9 @@ pub enum ControlResult {
     GraphAccepted {
         revision: u64,
     },
+    GraphTransaction {
+        result: Box<RpcResult<GraphTransactionValue>>,
+    },
     RevisionMismatch {
         current_revision: u64,
     },
@@ -277,7 +307,7 @@ pub enum ControlResult {
         open: bool,
     },
     Error {
-        message: String,
+        error: RpcError,
     },
 }
 
@@ -313,6 +343,7 @@ mod tests {
                     target_kind: ParameterTargetKind::Plugin,
                     runtime_handle: 5,
                     parameter_id: 11,
+                    target_generation: 7,
                     normalized: 0.25,
                     gesture: ParameterGesture::Perform,
                 },
@@ -322,9 +353,10 @@ mod tests {
             encoded_hex(&priority),
             concat!(
                 "82aa726571756573745f696409a7636f6d6d616e6482a474797065b2706172616d",
-                "657465722d626f756e64617279a7636f6d6d616e6487ad73657373696f6e5f6570",
+                "657465722d626f756e64617279a7636f6d6d616e6488ad73657373696f6e5f6570",
                 "6f636803a873657175656e636511ab7461726765745f6b696e64a6706c7567696e",
-                "ae72756e74696d655f68616e646c6505ac706172616d657465725f69640baa6e6f",
+                "ae72756e74696d655f68616e646c6505ac706172616d657465725f69640bb17461",
+                "726765745f67656e65726174696f6e07aa6e6f",
                 "726d616c697a6564cb3fd0000000000000a767657374757265a7706572666f726d"
             )
         );
@@ -378,6 +410,47 @@ mod tests {
         assert_eq!(
             read_message::<ControlRequest>(&mut bytes.as_slice()).unwrap(),
             request
+        );
+    }
+
+    #[test]
+    fn graph_transaction_envelopes_round_trip_with_lossless_epochs() {
+        let engine = ResourceRef {
+            kind: ResourceKind::AudioEngine,
+            id: "engine".to_owned(),
+            epoch: u64::MAX.to_string(),
+            generation: 2,
+        };
+        let project_graph = ResourceRef {
+            kind: ResourceKind::ProjectGraph,
+            id: "graph".to_owned(),
+            epoch: "main-epoch".to_owned(),
+            generation: 4,
+        };
+        let command = ControlCommand::PrepareGraph {
+            meta: RpcRequestMeta {
+                protocol_version: IPC_PROTOCOL_VERSION,
+                request_id: "request-1".to_owned(),
+                target: Some(engine),
+                expected_revision: Some(7),
+                mutation: Some(RpcMutationMeta {
+                    operation_id: "operation-1".to_owned(),
+                    idempotency_key: "graph:8".to_owned(),
+                }),
+            },
+            request: PrepareGraphRequest {
+                helper_epoch: u64::MAX.to_string(),
+                project_graph,
+                base_revision: 7,
+                graph_revision: 8,
+                graph: empty_graph(),
+            },
+        };
+
+        let bytes = rmp_serde::to_vec_named(&command).expect("graph transaction must encode");
+        assert_eq!(
+            rmp_serde::from_slice::<ControlCommand>(&bytes).expect("graph transaction must decode"),
+            command
         );
     }
 

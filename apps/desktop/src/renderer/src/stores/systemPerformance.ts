@@ -2,6 +2,8 @@ import { useIntervalFn } from "@vueuse/core"
 import { acceptHMRUpdate, defineStore } from "pinia"
 import { computed, shallowRef } from "vue"
 import type { StorageSpaceSnapshot, SystemPerformanceSnapshot } from "@yadaw/contracts"
+import { readMeta, rpcErrorMessage } from "../rpc"
+import { useProjectStore } from "./project"
 
 const POLLING_INTERVAL_MS = 1_000
 const GIBIBYTE = 1024 ** 3
@@ -90,6 +92,7 @@ export function storageSeverity(space: StorageSpaceSnapshot): HealthSeverity {
 
 export const useSystemPerformanceStore = defineStore("system-performance", () => {
   const snapshot = shallowRef<SystemPerformanceSnapshot | null>(null)
+  const projectStore = useProjectStore()
   const lastError = shallowRef("")
   const isRefreshing = shallowRef(false)
 
@@ -97,7 +100,14 @@ export const useSystemPerformanceStore = defineStore("system-performance", () =>
     if (isRefreshing.value) return
     isRefreshing.value = true
     try {
-      snapshot.value = await window.yadaw.systemPerformanceSnapshot()
+      const target = projectStore.desktopSession
+      if (!target) return
+      const result = await window.yadaw.systemPerformanceSnapshot(readMeta(target))
+      if (!result.ok) {
+        lastError.value = rpcErrorMessage(result.error)
+        return
+      }
+      snapshot.value = result.value
       lastError.value = ""
     } catch (error) {
       lastError.value =

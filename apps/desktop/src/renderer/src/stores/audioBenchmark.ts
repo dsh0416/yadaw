@@ -1,12 +1,15 @@
 import { acceptHMRUpdate, defineStore } from "pinia"
 import { shallowRef } from "vue"
 import type { AudioBenchmarkReport } from "@yadaw/contracts"
+import { mutationMeta, rpcErrorMessage } from "../rpc"
+import { useAudioRuntimeStore } from "./audioRuntime"
 
 export type AudioBenchmarkStatus = "idle" | "running" | "complete" | "error"
 
 export const useAudioBenchmarkStore = defineStore("audio-benchmark", () => {
   const isOpen = shallowRef(false)
   const status = shallowRef<AudioBenchmarkStatus>("idle")
+  const audioRuntime = useAudioRuntimeStore()
   const report = shallowRef<AudioBenchmarkReport | null>(null)
   const errorMessage = shallowRef("")
 
@@ -24,7 +27,15 @@ export const useAudioBenchmarkStore = defineStore("audio-benchmark", () => {
     report.value = null
     errorMessage.value = ""
     try {
-      report.value = await window.yadaw.runAudioBenchmark()
+      const target = audioRuntime.audioHostRef
+      if (!target) throw new Error("Audio host resource is unavailable.")
+      const result = await window.yadaw.runAudioBenchmark(mutationMeta(target, "audio-benchmark"))
+      if (!result.ok) {
+        errorMessage.value = rpcErrorMessage(result.error)
+        status.value = "error"
+        return
+      }
+      report.value = result.value
       status.value = "complete"
     } catch (error) {
       errorMessage.value =

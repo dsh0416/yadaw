@@ -3,10 +3,17 @@ import { createPinia } from "pinia"
 import { createMemoryHistory, createRouter } from "vue-router"
 import { defineComponent, h } from "vue"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import type { ApplicationCommandId, ProjectSession } from "@yadaw/contracts"
+import type {
+  ApplicationBootstrapSnapshot,
+  ApplicationCommandId,
+  ProjectSession,
+  ProjectWorkspaceSnapshot
+} from "@yadaw/contracts"
 import { useApplicationCommands } from "./useApplicationCommands"
 import { useGlobalDialog } from "./useGlobalDialog"
+import { useAudioRuntimeStore } from "../stores/audioRuntime"
 import { useProjectStore } from "../stores/project"
+import { rpcEvent } from "../test/ipc"
 
 const session: ProjectSession = {
   id: "project",
@@ -20,6 +27,96 @@ const session: ProjectSession = {
   },
   dirty: false,
   recoveredWorkingCopy: false
+}
+
+function workspace(value: ProjectSession): ProjectWorkspaceSnapshot {
+  return {
+    project: {
+      kind: "project-session",
+      id: value.id,
+      epoch: "main-epoch",
+      generation: 1
+    },
+    projectGraph: {
+      kind: "project-graph",
+      id: `${value.id}:graph`,
+      epoch: "main-epoch",
+      generation: 1
+    },
+    revision: 1,
+    session: value,
+    graph: {
+      sampleRate: value.configuration.sampleRate,
+      tracks: [],
+      channels: [],
+      audioClips: [],
+      sends: [],
+      plugins: [],
+      midiClips: [],
+      tempoMap: {
+        ticksPerQuarter: 960,
+        tempoEvents: [{ tick: 0, beatsPerMinute: 120 }],
+        timeSignatureEvents: [{ tick: 0, numerator: 4, denominator: 4 }]
+      },
+      keySignatureEvents: [{ tick: 0, fifths: 0, mode: "major" }]
+    },
+    assets: []
+  }
+}
+
+function closedBootstrap(): ApplicationBootstrapSnapshot {
+  return {
+    protocolVersion: 2,
+    mainEpoch: "main-epoch",
+    desktopSession: {
+      kind: "desktop-session",
+      id: "desktop",
+      epoch: "main-epoch",
+      generation: 1
+    },
+    applicationSettings: {
+      kind: "application-settings",
+      id: "settings",
+      epoch: "main-epoch",
+      generation: 1
+    },
+    offlineTools: {
+      worker: {
+        kind: "offline-worker",
+        id: "offline-tools",
+        epoch: "offline-epoch",
+        generation: 1
+      },
+      revision: 1
+    },
+    audioResources: {
+      host: {
+        kind: "audio-host",
+        id: "audio-host",
+        epoch: "main-epoch",
+        generation: 1
+      },
+      midiRuntime: {
+        kind: "midi-runtime",
+        id: "midi-runtime",
+        epoch: "main-epoch",
+        generation: 1
+      },
+      engine: null,
+      transport: null,
+      revision: 0
+    },
+    recordingResource: null,
+    revision: 2,
+    lifecycle: {
+      revision: 2,
+      project: { status: "closed", error: null },
+      audio: {} as ApplicationBootstrapSnapshot["lifecycle"]["audio"],
+      recording: { status: "idle", error: null }
+    },
+    settings: {} as ApplicationBootstrapSnapshot["settings"],
+    workspace: null
+  }
 }
 
 function createHarness() {
@@ -56,11 +153,38 @@ function createHarness() {
   const wrapper = mount(Harness, {
     global: { plugins: [pinia, router] }
   })
+  useAudioRuntimeStore(pinia).applyResources({
+    midiRuntime: {
+      kind: "midi-runtime",
+      id: "midi-runtime",
+      epoch: "main-epoch",
+      generation: 1
+    },
+    host: {
+      kind: "audio-host",
+      id: "audio-host",
+      epoch: "main-epoch",
+      generation: 1
+    },
+    engine: {
+      kind: "audio-engine",
+      id: "audio-engine",
+      epoch: "main-epoch",
+      generation: 1
+    },
+    transport: {
+      kind: "transport",
+      id: "transport",
+      epoch: "main-epoch",
+      generation: 1
+    },
+    revision: 0
+  })
   return { pinia, router, wrapper }
 }
 
 describe("useApplicationCommands", () => {
-  let nativeCommandListener: ((command: ApplicationCommandId) => void) | null
+  let nativeCommandListener: Parameters<typeof window.yadaw.subscribeApplicationCommands>[0] | null
 
   beforeEach(() => {
     vi.clearAllMocks()
@@ -74,9 +198,16 @@ describe("useApplicationCommands", () => {
       return () => undefined
     })
     window.yadaw.transportCommand = vi.fn().mockResolvedValue({
-      state: "stopped",
-      positionFrames: 0,
-      sampleRate: 48_000
+      ok: true,
+      requestId: "transport",
+      operationId: "transport-operation",
+      resourceRevision: 1,
+      value: {
+        state: "stopped",
+        positionFrames: 0,
+        sampleRate: 48_000
+      },
+      warnings: []
     })
   })
 
@@ -110,7 +241,7 @@ describe("useApplicationCommands", () => {
   it("routes macOS system-menu commands through the same command dispatcher", async () => {
     const { router } = createHarness()
 
-    nativeCommandListener?.("application.preferences")
+    nativeCommandListener?.(rpcEvent("application.preferences"))
     await flushPromises()
 
     expect(router.currentRoute.value.name).toBe("system-settings")
@@ -119,23 +250,42 @@ describe("useApplicationCommands", () => {
   it.each(["window.close", "application.quit"] as const)(
     "prompts before %s and continues only after the dirty project is closed",
     async (command) => {
-      window.yadaw.closeProject = vi.fn().mockResolvedValue(true)
-      const { pinia } = createHarness()
-      useProjectStore(pinia).applyLifecycleState({
-        status: "open",
-        session: { ...session, dirty: true },
-        error: null
+      window.yadaw.closeProject = vi.fn().mockResolvedValue({
+        ok: true,
+        requestId: "close",
+        value: { closed: true, snapshot: closedBootstrap() },
+        warnings: []
       })
+      const { pinia } = createHarness()
+      useProjectStore(pinia).applyWorkspace(workspace({ ...session, dirty: true }))
       const { activeDialog, selectDialogAction } = useGlobalDialog()
 
-      nativeCommandListener?.(command)
+      nativeCommandListener?.(rpcEvent(command))
       await vi.waitFor(() => expect(activeDialog.value?.title).toBe("Save project before closing?"))
       expect(window.yadaw.executeApplicationWindowCommand).not.toHaveBeenCalledWith(command)
+      expect(window.yadaw.transportCommand).not.toHaveBeenCalled()
       selectDialogAction("discard")
       await flushPromises()
 
-      expect(window.yadaw.closeProject).toHaveBeenCalledWith("discard")
-      expect(window.yadaw.executeApplicationWindowCommand).toHaveBeenCalledWith(command)
+      expect(window.yadaw.transportCommand).toHaveBeenCalledWith(
+        expect.objectContaining({
+          target: expect.objectContaining({ kind: "transport" }),
+          expectedRevision: 0,
+          mutation: expect.any(Object)
+        }),
+        { type: "pause" }
+      )
+      expect(window.yadaw.closeProject).toHaveBeenCalledWith(
+        expect.objectContaining({
+          target: expect.objectContaining({ kind: "project-session" }),
+          mutation: expect.any(Object)
+        }),
+        "discard"
+      )
+      expect(window.yadaw.executeApplicationWindowCommand).toHaveBeenCalledWith(
+        expect.any(Object),
+        command
+      )
     }
   )
 
@@ -143,14 +293,10 @@ describe("useApplicationCommands", () => {
     window.yadaw.prepareOpenProject = vi.fn()
     const { pinia } = createHarness()
     const projectStore = useProjectStore(pinia)
-    projectStore.applyLifecycleState({
-      status: "open",
-      session: { ...session, dirty: true },
-      error: null
-    })
+    projectStore.applyWorkspace(workspace({ ...session, dirty: true }))
     const { activeDialog, dismissDialog } = useGlobalDialog()
 
-    nativeCommandListener?.("project.open")
+    nativeCommandListener?.(rpcEvent("project.open"))
     await vi.waitFor(() => expect(activeDialog.value?.title).toBe("Save project before closing?"))
     dismissDialog()
     await flushPromises()

@@ -1,3 +1,5 @@
+import type { ResourceRef, RpcError } from "./rpc"
+
 export type OperationPhase =
   | "closing-recording"
   | "repairing-header"
@@ -23,14 +25,24 @@ export interface OperationSnapshot {
   description?: string | null
   phase: OperationPhase
   state: OperationState
+
   completedUnits: number | null
   totalUnits: number | null
   cancellable: boolean
-  message: string | null
+  error: RpcError | null
   dropoutFrames: number
 }
 
 export interface OperationEvent {
   type: "upsert" | "remove"
   operation: OperationSnapshot
+}
+
+export interface OperationStatusSnapshot {
+  operationId: string
+  state: "running" | "cancel-requested" | "terminal"
+  outcome?: "committed" | "not-committed" | "quarantined"
+  target: ResourceRef
+  cancellable: boolean
+  acknowledged: boolean
 }

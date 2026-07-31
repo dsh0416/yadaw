@@ -4,11 +4,14 @@ import { DEFAULT_AUDIO_PREFERENCES, INITIAL_AUDIO_RUNTIME_SNAPSHOT } from "@yada
 import type {
   AudioBackendDescriptor,
   AudioDeviceList,
+  AudioEngineSessionSnapshot,
   AudioPreferences,
-  AudioRuntimeSnapshot
+  AudioRuntimeSnapshot,
+  RpcResult
 } from "@yadaw/contracts"
 import { useAudioPreferencesStore } from "./audioPreferences"
 import { useAudioRuntimeStore } from "./audioRuntime"
+import { rpcFailure, rpcSuccess } from "../test/ipc"
 
 const STORAGE_KEY = "yadaw.audio-preferences.v1"
 
@@ -24,6 +27,63 @@ function preferences(overrides: Partial<AudioPreferences> = {}): AudioPreference
 
 function runtimeSnapshot(overrides: Partial<AudioRuntimeSnapshot> = {}): AudioRuntimeSnapshot {
   return { ...INITIAL_AUDIO_RUNTIME_SNAPSHOT, state: "running", ...overrides }
+}
+
+function engineSuccess(runtime: AudioRuntimeSnapshot): RpcResult<AudioEngineSessionSnapshot> {
+  return {
+    ok: true,
+    requestId: "request",
+    operationId: "operation",
+    value: {
+      host: {
+        kind: "audio-host",
+        id: "audio-host",
+        epoch: "main-epoch",
+        generation: 1
+      },
+      midiRuntime: {
+        kind: "midi-runtime",
+        id: "midi-runtime",
+        epoch: "main-epoch",
+        generation: 1
+      },
+      engine: {
+        kind: "audio-engine",
+        id: "audio-engine",
+        epoch: "main-epoch",
+        generation: 1
+      },
+      transport: {
+        kind: "transport",
+        id: "transport",
+        epoch: "main-epoch",
+        generation: 1
+      },
+      revision: 0,
+      runtime
+    },
+    warnings: []
+  }
+}
+
+function applyAudioHost(): void {
+  useAudioRuntimeStore().applyResources({
+    midiRuntime: {
+      kind: "midi-runtime",
+      id: "midi-runtime",
+      epoch: "main-epoch",
+      generation: 1
+    },
+    host: {
+      kind: "audio-host",
+      id: "audio-host",
+      epoch: "main-epoch",
+      generation: 1
+    },
+    engine: null,
+    transport: null,
+    revision: 0
+  })
 }
 
 function device(id: string, isDefault = false) {
@@ -67,6 +127,7 @@ let storage: Storage
 beforeEach(() => {
   setActivePinia(createPinia())
   storage = installMemoryStorage()
+  applyAudioHost()
 })
 
 describe("persisted preferences", () => {
@@ -110,13 +171,21 @@ describe("persisted preferences", () => {
 
 describe("apply", () => {
   it("starts the engine and stores the accepted preferences", async () => {
-    const startAudioEngine = vi.fn(async () => runtimeSnapshot({ outputBufferSize: 256 }))
+    const startAudioEngine = vi.fn(async () =>
+      engineSuccess(runtimeSnapshot({ outputBufferSize: 256 }))
+    )
     stubApi({ startAudioEngine })
     const store = useAudioPreferencesStore()
 
     await expect(store.apply(preferences())).resolves.toBe(true)
 
-    expect(startAudioEngine).toHaveBeenCalledWith(preferences())
+    expect(startAudioEngine).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target: expect.objectContaining({ kind: "audio-host" }),
+        mutation: expect.any(Object)
+      }),
+      preferences()
+    )
     expect(store.preferences).toEqual(preferences())
     expect(store.applying).toBe(false)
     expect(store.applyError).toBe("")
@@ -125,7 +194,7 @@ describe("apply", () => {
   it("adopts the buffer size the engine actually negotiated and explains the fallback", async () => {
     stubApi({
       startAudioEngine: vi.fn(async () =>
-        runtimeSnapshot({ outputBufferSize: 512, bufferFallback: true })
+        engineSuccess(runtimeSnapshot({ outputBufferSize: 512, bufferFallback: true }))
       )
     })
     const store = useAudioPreferencesStore()
@@ -137,17 +206,32 @@ describe("apply", () => {
     expect(store.applyNotice).toContain("64")
   })
 
-  it("reports the engine failure and leaves applying settled", async () => {
+  it("reports the typed engine failure and leaves applying settled", async () => {
     stubApi({
-      startAudioEngine: vi.fn(async () => {
-        throw new Error("Device is in use")
-      })
+      startAudioEngine: vi.fn(async () => ({
+        ok: false,
+        requestId: "request",
+        operationId: "operation",
+        error: {
+          code: "resource-unavailable",
+          category: "unavailable",
+          outcome: "not-committed",
+          retry: "safe",
+          correlationId: "correlation",
+          userMessageKey: "errors.audioEngineUnavailable",
+          details: {
+            type: "resource-unavailable",
+            component: "audio-host",
+            dispatched: true
+          }
+        }
+      }))
     })
     const store = useAudioPreferencesStore()
 
     await expect(store.apply(preferences())).resolves.toBe(false)
 
-    expect(store.applyError).toBe("Device is in use")
+    expect(store.applyError).toBe("The audio engine is unavailable.")
     expect(store.applying).toBe(false)
   })
 
@@ -161,7 +245,7 @@ describe("apply", () => {
   })
 
   it("skips a restart when the running engine already uses those preferences", async () => {
-    const startAudioEngine = vi.fn(async () => runtimeSnapshot())
+    const startAudioEngine = vi.fn(async () => engineSuccess(runtimeSnapshot()))
     stubApi({ startAudioEngine })
     const store = useAudioPreferencesStore()
     useAudioRuntimeStore().applyLifecycleState({
@@ -178,7 +262,7 @@ describe("apply", () => {
   })
 
   it("restarts the engine when any single preference differs", async () => {
-    const startAudioEngine = vi.fn(async () => runtimeSnapshot())
+    const startAudioEngine = vi.fn(async () => engineSuccess(runtimeSnapshot()))
     stubApi({ startAudioEngine })
     const store = useAudioPreferencesStore()
     useAudioRuntimeStore().applyLifecycleState({
@@ -196,14 +280,35 @@ describe("apply", () => {
 })
 
 describe("restore", () => {
+  it("waits for the bootstrapped audio host before consuming the restore attempt", async () => {
+    storage.setItem(STORAGE_KEY, JSON.stringify(preferences({ backend: "asio" })))
+    setActivePinia(createPinia())
+    const startAudioEngine = vi.fn(async () => engineSuccess(runtimeSnapshot()))
+    stubApi({
+      audioEngineSnapshot: vi.fn(),
+      startAudioEngine
+    })
+    const store = useAudioPreferencesStore()
+
+    await store.restore()
+    expect(startAudioEngine).not.toHaveBeenCalled()
+
+    applyAudioHost()
+    await store.restore()
+    await store.restore()
+
+    expect(startAudioEngine).toHaveBeenCalledTimes(1)
+    expect(startAudioEngine).toHaveBeenCalledWith(
+      expect.objectContaining({ target: expect.objectContaining({ kind: "audio-host" }) }),
+      preferences({ backend: "asio" })
+    )
+  })
+
   it("starts the engine once when a stopped session has a saved device pair", async () => {
     storage.setItem(STORAGE_KEY, JSON.stringify(preferences()))
-    const startAudioEngine = vi.fn(async () => runtimeSnapshot())
+    const startAudioEngine = vi.fn(async () => engineSuccess(runtimeSnapshot()))
     stubApi({
-      audioEngineSnapshot: vi.fn(async () => ({
-        ...INITIAL_AUDIO_RUNTIME_SNAPSHOT,
-        state: "stopped" as const
-      })),
+      audioEngineSnapshot: vi.fn(),
       startAudioEngine
     })
     const store = useAudioPreferencesStore()
@@ -226,12 +331,17 @@ describe("restore", () => {
 
   it("leaves an already running engine alone", async () => {
     storage.setItem(STORAGE_KEY, JSON.stringify(preferences()))
-    const startAudioEngine = vi.fn(async () => runtimeSnapshot())
+    const startAudioEngine = vi.fn(async () => engineSuccess(runtimeSnapshot()))
     stubApi({
-      audioEngineSnapshot: vi.fn(async () => runtimeSnapshot()),
+      audioEngineSnapshot: vi.fn(),
       startAudioEngine
     })
     const store = useAudioPreferencesStore()
+    useAudioRuntimeStore().applyLifecycleState({
+      status: "running",
+      runtime: runtimeSnapshot(),
+      error: null
+    })
 
     await store.restore()
 
@@ -246,7 +356,7 @@ describe("backend discovery", () => {
   ]
 
   it("publishes the reported backends and marks discovery ready", async () => {
-    stubApi({ listAudioBackends: vi.fn(async () => backends) })
+    stubApi({ listAudioBackends: vi.fn(async () => rpcSuccess(backends)) })
     const store = useAudioPreferencesStore()
 
     await expect(store.discoverBackends()).resolves.toEqual(backends)
@@ -258,44 +368,42 @@ describe("backend discovery", () => {
 
   it("marks discovery unavailable when the host query fails", async () => {
     stubApi({
-      listAudioBackends: vi.fn(async () => {
-        throw new Error("no cpal hosts")
-      })
+      listAudioBackends: vi.fn(async () => rpcFailure("errors.audioEngineUnavailable"))
     })
     const store = useAudioPreferencesStore()
 
     await expect(store.discoverBackends()).resolves.toEqual([])
 
     expect(store.discoveryState).toBe("unavailable")
-    expect(store.discoveryError).toBe("no cpal hosts")
+    expect(store.discoveryError).not.toBe("")
   })
 
-  it("uses a generic message when the host query rejects without an Error", async () => {
+  it("uses the typed message when the host query fails", async () => {
     stubApi({
-      listAudioBackends: vi.fn().mockRejectedValue("boom")
+      listAudioBackends: vi.fn().mockResolvedValue(rpcFailure("errors.audioEngineUnavailable"))
     })
     const store = useAudioPreferencesStore()
 
     await store.discoverBackends()
 
-    expect(store.discoveryError).toBe("Unable to query cpal backends.")
+    expect(store.discoveryError).not.toBe("")
   })
 
   it("ignores a stale backend query that resolves after a newer one", async () => {
-    let releaseFirst: (value: AudioBackendDescriptor[]) => void = () => undefined
-    const first = new Promise<AudioBackendDescriptor[]>((resolve) => {
+    let releaseFirst: (value: RpcResult<AudioBackendDescriptor[]>) => void = () => undefined
+    const first = new Promise<RpcResult<AudioBackendDescriptor[]>>((resolve) => {
       releaseFirst = resolve
     })
     const listAudioBackends = vi
-      .fn<() => Promise<AudioBackendDescriptor[]>>()
+      .fn<() => Promise<RpcResult<AudioBackendDescriptor[]>>>()
       .mockReturnValueOnce(first)
-      .mockResolvedValueOnce(backends)
+      .mockResolvedValueOnce(rpcSuccess(backends))
     stubApi({ listAudioBackends })
     const store = useAudioPreferencesStore()
 
     const stale = store.discoverBackends()
     await store.discoverBackends()
-    releaseFirst([{ id: "coreaudio", label: "CoreAudio", available: true }])
+    releaseFirst(rpcSuccess([{ id: "coreaudio", label: "CoreAudio", available: true }]))
     await stale
 
     expect(store.backends).toEqual(backends)
@@ -309,7 +417,7 @@ describe("device discovery", () => {
   }
 
   it("splits the reported devices into inputs and outputs", async () => {
-    stubApi({ listAudioDevices: vi.fn(async () => devices) })
+    stubApi({ listAudioDevices: vi.fn(async () => rpcSuccess(devices)) })
     const store = useAudioPreferencesStore()
 
     await store.discoverDevices("alsa")
@@ -320,49 +428,47 @@ describe("device discovery", () => {
   })
 
   it("clears the device lists when enumeration fails", async () => {
-    stubApi({ listAudioDevices: vi.fn(async () => devices) })
+    stubApi({ listAudioDevices: vi.fn(async () => rpcSuccess(devices)) })
     const store = useAudioPreferencesStore()
     await store.discoverDevices("alsa")
 
     stubApi({
-      listAudioDevices: vi.fn(async () => {
-        throw new Error("device vanished")
-      })
+      listAudioDevices: vi.fn(async () => rpcFailure("errors.audioEngineUnavailable"))
     })
     await store.discoverDevices("alsa")
 
     expect(store.inputDevices).toEqual([])
     expect(store.outputDevices).toEqual([])
     expect(store.discoveryState).toBe("unavailable")
-    expect(store.discoveryError).toBe("device vanished")
+    expect(store.discoveryError).not.toBe("")
   })
 
-  it("uses a generic message when enumeration rejects without an Error", async () => {
+  it("uses the typed message when enumeration fails", async () => {
     stubApi({
-      listAudioDevices: vi.fn().mockRejectedValue("boom")
+      listAudioDevices: vi.fn().mockResolvedValue(rpcFailure("errors.audioEngineUnavailable"))
     })
     const store = useAudioPreferencesStore()
 
     await store.discoverDevices("alsa")
 
-    expect(store.discoveryError).toBe("cpal device enumeration failed.")
+    expect(store.discoveryError).not.toBe("")
   })
 
   it("ignores a stale device query that resolves after a newer one", async () => {
-    let releaseFirst: (value: AudioDeviceList) => void = () => undefined
-    const first = new Promise<AudioDeviceList>((resolve) => {
+    let releaseFirst: (value: RpcResult<AudioDeviceList>) => void = () => undefined
+    const first = new Promise<RpcResult<AudioDeviceList>>((resolve) => {
       releaseFirst = resolve
     })
     const listAudioDevices = vi
-      .fn<() => Promise<AudioDeviceList>>()
+      .fn<() => Promise<RpcResult<AudioDeviceList>>>()
       .mockReturnValueOnce(first)
-      .mockResolvedValueOnce(devices)
+      .mockResolvedValueOnce(rpcSuccess(devices))
     stubApi({ listAudioDevices })
     const store = useAudioPreferencesStore()
 
     const stale = store.discoverDevices("alsa")
     await store.discoverDevices("alsa")
-    releaseFirst({ inputs: [device("stale")], outputs: [] })
+    releaseFirst(rpcSuccess({ inputs: [device("stale")], outputs: [] }))
     await stale
 
     expect(store.inputDevices.map((entry) => entry.id)).toEqual(["in-1", "in-2"])
@@ -372,10 +478,12 @@ describe("device discovery", () => {
 describe("markBackendUnavailable", () => {
   it("clears the device lists and records the reason", async () => {
     stubApi({
-      listAudioDevices: vi.fn(async () => ({
-        inputs: [device("in-1")],
-        outputs: [device("out-1")]
-      }))
+      listAudioDevices: vi.fn(async () =>
+        rpcSuccess({
+          inputs: [device("in-1")],
+          outputs: [device("out-1")]
+        })
+      )
     })
     const store = useAudioPreferencesStore()
     await store.discoverDevices("alsa")
@@ -389,11 +497,11 @@ describe("markBackendUnavailable", () => {
   })
 
   it("cancels an in-flight device query so it cannot overwrite the reason", async () => {
-    let release: (value: AudioDeviceList) => void = () => undefined
+    let release: (value: RpcResult<AudioDeviceList>) => void = () => undefined
     stubApi({
       listAudioDevices: vi.fn(
         () =>
-          new Promise<AudioDeviceList>((resolve) => {
+          new Promise<RpcResult<AudioDeviceList>>((resolve) => {
             release = resolve
           })
       )
@@ -402,7 +510,7 @@ describe("markBackendUnavailable", () => {
 
     const pending = store.discoverDevices("asio")
     store.markBackendUnavailable("ASIO driver is missing")
-    release({ inputs: [device("in-1")], outputs: [] })
+    release(rpcSuccess({ inputs: [device("in-1")], outputs: [] }))
     await pending
 
     expect(store.inputDevices).toEqual([])

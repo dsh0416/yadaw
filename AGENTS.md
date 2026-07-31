@@ -22,6 +22,12 @@ under `.agents/skills/`.
   a PGlite/Drizzle project database.
 - Process boundary: the renderer uses the narrow typed preload API exposed as
   `window.yadaw`; it must never import the native `.node` addon directly.
+- Cross-process calls use explicit resource handles and serializable
+  success/error unions. Stateful mutations require one commit point,
+  prepare/abort cleanup, idempotency or operation-status reconciliation, and a
+  documented recoverable or quarantined failure state. Do not use exceptions,
+  rejected Promises, Rust panics, ambient "current" resources, or free-form
+  error strings as cross-process protocol semantics.
 - Real-time boundary: keep Electron IPC, UI work, filesystem access, allocation,
   and blocking synchronization out of audio callbacks.
 - Runtime management: `mise` with locked Node.js, pnpm, Rust, and APM versions
@@ -87,6 +93,7 @@ mise exec -- pnpm lint
 - [Rust performance benchmarks](agents/docs/benchmarks.md)
 - [Development environment](agents/docs/environment.md)
 - [Renderer/native-call boundary](agents/docs/native-call-boundary.md)
+- [Cross-process resource and error contract](agents/docs/cross-process-error-contract.md)
 - [Project database development rules](agents/docs/project-database.md)
 - [Agent development notes](agents/docs/README.md)
 - [Agent skill dependencies](apm.yml)

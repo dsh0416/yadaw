@@ -1,3 +1,4 @@
+import type { ApplicationBootstrapSnapshot, ProjectCloseResult } from "./bootstrap"
 import type {
   ApplicationCommandId,
   ApplicationWindowCommandId,
@@ -10,6 +11,8 @@ import type {
   AudioBackend,
   AudioBackendDescriptor,
   AudioDeviceList,
+  AudioEngineSessionSnapshot,
+  AudioEngineStopSnapshot,
   AudioPreferences,
   AudioRuntimeSnapshot,
   DesktopLifecycleEvent,
@@ -29,17 +32,19 @@ import type {
   TransportSnapshot
 } from "./mixer"
 import type {
+  MidiImportCommitResult,
   MidiImportPlan,
   MidiImportPreview,
-  MidiInputSnapshot,
+  MidiRuntimeResourceSnapshot,
   MidiSyncPreferences
 } from "./midi"
-import type { OperationEvent } from "./operations"
+import type { OperationEvent, OperationStatusSnapshot } from "./operations"
 import type {
   PluginCatalogSnapshot,
-  PluginParameterChange,
+  PluginEditorOpenResult,
+  PluginParameterCommand,
+  PluginParameterEnqueueResult,
   PluginParameterInfo,
-  PluginRuntimeStatus,
   PluginScanEvent,
   PluginScanRequest
 } from "./plugins"
@@ -55,15 +60,23 @@ import type {
   WaveformPeakWindow,
   WaveformWindowRequest
 } from "./project"
-import type { PendingRecording, RecordingSession } from "./recording"
 import type {
-  ApplicationSettings,
+  PendingRecording,
+  RecordingResourceSnapshot,
+  RecordingRecoveryResult,
+  RecordingStartRequest,
+  RecordingStopResult
+} from "./recording"
+import type {
+  ApplicationSettingsResourceSnapshot,
   ApplicationSettingsPatch,
   AudioHostRuntimePreferences
 } from "./settings"
 import type { ShortcutPreferences } from "./shortcuts"
+import type { RpcEvent, RpcRequestMeta, RpcResult } from "./rpc"
 
 export const IPC_CHANNELS = {
+  bootstrap: "application:bootstrap",
   engineInfo: "engine:info",
   processGain: "engine:process-gain",
   audioBackends: "audio:list-backends",
@@ -83,7 +96,6 @@ export const IPC_CHANNELS = {
   transportSnapshot: "transport:snapshot",
   lifecycleSnapshot: "lifecycle:snapshot",
   lifecycleEvent: "lifecycle:event",
-  startupProgressSnapshot: "startup:progress-snapshot",
   startupProgressEvent: "startup:progress-event",
   systemPerformanceSnapshot: "system:performance-snapshot",
   audioBenchmarkRun: "audio-benchmark:run",
@@ -127,75 +139,170 @@ export const IPC_CHANNELS = {
   midiInputConfigure: "midi-input:configure",
   midiControlLearning: "midi-control:learning",
   operationCancel: "operation:cancel",
-  operationEvent: "operation:event"
+  operationEvent: "operation:event",
+  operationStatus: "operation:status",
+  operationAcknowledge: "operation:acknowledge"
 } as const
 
 export interface YadawDesktopApi {
   readonly platform: DesktopPlatform
-  engineInfo(): Promise<NativeEngineInfo>
-  processGain(request: ProcessGainRequest): Promise<ProcessGainResult>
-  listAudioBackends(): Promise<AudioBackendDescriptor[]>
-  listAudioDevices(backend: AudioBackend): Promise<AudioDeviceList>
-  startAudioEngine(preferences: AudioPreferences): Promise<AudioRuntimeSnapshot>
-  stopAudioEngine(): Promise<AudioRuntimeSnapshot>
-  audioEngineSnapshot(): Promise<AudioRuntimeSnapshot>
+  bootstrap(meta: RpcRequestMeta): Promise<RpcResult<ApplicationBootstrapSnapshot>>
+  engineInfo(meta: RpcRequestMeta): Promise<RpcResult<NativeEngineInfo>>
+  processGain(
+    meta: RpcRequestMeta,
+    request: ProcessGainRequest
+  ): Promise<RpcResult<ProcessGainResult>>
+  listAudioBackends(meta: RpcRequestMeta): Promise<RpcResult<AudioBackendDescriptor[]>>
+  listAudioDevices(meta: RpcRequestMeta, backend: AudioBackend): Promise<RpcResult<AudioDeviceList>>
+  startAudioEngine(
+    meta: RpcRequestMeta,
+    preferences: AudioPreferences
+  ): Promise<RpcResult<AudioEngineSessionSnapshot>>
+  stopAudioEngine(meta: RpcRequestMeta): Promise<RpcResult<AudioEngineStopSnapshot>>
+  audioEngineSnapshot(meta: RpcRequestMeta): Promise<RpcResult<AudioRuntimeSnapshot>>
   startRoundTripLatencyMeasurement(
+    meta: RpcRequestMeta,
     request: RoundTripLatencyMeasurementRequest
-  ): Promise<RoundTripLatencyMeasurement>
-  roundTripLatencyMeasurementSnapshot(): Promise<RoundTripLatencyMeasurement>
-  loadProjectGraph(): Promise<ProjectGraphSnapshot>
-  reloadProjectGraph(): Promise<ProjectGraphSnapshot>
-  executeProjectCommand(command: ProjectCommand): Promise<ProjectCommandResult>
-  previewMixerParameter(preview: MixerParameterPreview): Promise<void>
-  mixerSnapshot(): Promise<MixerRuntimeSnapshot>
-  clearMixerMeterClips(): Promise<MixerRuntimeSnapshot>
-  transportCommand(command: TransportCommand): Promise<TransportSnapshot>
-  transportSnapshot(): Promise<TransportSnapshot>
-  lifecycleSnapshot(): Promise<DesktopLifecycleSnapshot>
-  subscribeLifecycle(listener: (event: DesktopLifecycleEvent) => void): () => void
-  startupProgressSnapshot(): Promise<StartupProgressSnapshot>
-  subscribeStartupProgress(listener: (progress: StartupProgressSnapshot) => void): () => void
-  systemPerformanceSnapshot(): Promise<SystemPerformanceSnapshot>
-  runAudioBenchmark(): Promise<AudioBenchmarkReport>
-  compiledAudioGraphSnapshot(): Promise<CompiledAudioGraphSnapshot | null>
-  subscribeApplicationCommands(listener: (command: ApplicationCommandId) => void): () => void
-  executeApplicationWindowCommand(command: ApplicationWindowCommandId): Promise<void>
-  setApplicationWindowTheme(theme: "light" | "dark"): Promise<void>
-  createProject(request: CreateProjectRequest): Promise<ProjectWorkspaceSnapshot>
-  prepareOpenProject(path?: string): Promise<ProjectOpenPreparation | null>
-  openProject(path: string, recover?: boolean): Promise<ProjectWorkspaceSnapshot>
-  saveProject(path?: string): Promise<ProjectSession | null>
-  closeProject(disposition?: ProjectCloseDisposition): Promise<boolean>
-  listProjectAssets(): Promise<ProjectAssetSummary[]>
-  updateProjectConfiguration(configuration: ProjectConfiguration): Promise<ProjectSession>
-  getApplicationSettings(): Promise<ApplicationSettings>
-  updateApplicationSettings(patch: ApplicationSettingsPatch): Promise<ApplicationSettings>
-  setSoftwareMonitoringEnabled(enabled: boolean): Promise<ApplicationSettings>
-  configureAudioHostRuntime(preferences: AudioHostRuntimePreferences): Promise<ApplicationSettings>
-  configureShortcuts(preferences: ShortcutPreferences): Promise<ApplicationSettings>
-  chooseSwapDirectory(): Promise<ApplicationSettings>
-  openSwapDirectory(): Promise<void>
-  startRecording(): Promise<RecordingSession>
-  stopRecording(): Promise<PendingRecording>
-  listPendingRecordings(): Promise<PendingRecording[]>
-  recoverRecording(id: string): Promise<void>
-  deletePendingRecording(id: string): Promise<void>
-  readAssetAudio(id: string): Promise<Uint8Array>
-  readAssetWaveform(request: WaveformWindowRequest): Promise<WaveformPeakWindow>
-  recordingWaveformSnapshot(request: WaveformWindowRequest): Promise<WaveformPeakWindow>
-  listPlugins(): Promise<PluginCatalogSnapshot>
-  scanPlugins(request?: PluginScanRequest): Promise<PluginCatalogSnapshot>
-  subscribePluginScan(listener: (event: PluginScanEvent) => void): () => void
-  openPluginEditor(instanceId: string): Promise<PluginRuntimeStatus>
-  closePluginEditor(instanceId: string): Promise<void>
-  getPluginParameters(instanceId: string): Promise<PluginParameterInfo[]>
-  setPluginParameter(request: PluginParameterChange): Promise<void>
-  prepareMidiImport(path?: string): Promise<MidiImportPreview | null>
-  commitMidiImport(plan: MidiImportPlan): Promise<ProjectCommandResult>
-  midiInputSnapshot(): Promise<MidiInputSnapshot>
-  subscribeMidiInput(listener: (snapshot: MidiInputSnapshot) => void): () => void
-  configureMidiInput(preferences: MidiSyncPreferences): Promise<MidiInputSnapshot>
-  setMidiControlLearning(enabled: boolean): Promise<void>
-  subscribeOperations(listener: (event: OperationEvent) => void): () => void
-  cancelOperation(id: string): Promise<void>
+  ): Promise<RpcResult<RoundTripLatencyMeasurement>>
+  roundTripLatencyMeasurementSnapshot(
+    meta: RpcRequestMeta
+  ): Promise<RpcResult<RoundTripLatencyMeasurement>>
+  loadProjectGraph(meta: RpcRequestMeta): Promise<RpcResult<ProjectGraphSnapshot>>
+  reloadProjectGraph(meta: RpcRequestMeta): Promise<RpcResult<ProjectGraphSnapshot>>
+  executeProjectCommand(
+    meta: RpcRequestMeta,
+    command: ProjectCommand
+  ): Promise<RpcResult<ProjectCommandResult>>
+  previewMixerParameter(
+    meta: RpcRequestMeta,
+    preview: MixerParameterPreview
+  ): Promise<RpcResult<void>>
+  mixerSnapshot(meta: RpcRequestMeta): Promise<RpcResult<MixerRuntimeSnapshot>>
+  clearMixerMeterClips(meta: RpcRequestMeta): Promise<RpcResult<MixerRuntimeSnapshot>>
+  transportCommand(
+    meta: RpcRequestMeta,
+    command: TransportCommand
+  ): Promise<RpcResult<TransportSnapshot>>
+  transportSnapshot(meta: RpcRequestMeta): Promise<RpcResult<TransportSnapshot>>
+  lifecycleSnapshot(meta: RpcRequestMeta): Promise<RpcResult<DesktopLifecycleSnapshot>>
+  subscribeLifecycle(listener: (event: RpcEvent<DesktopLifecycleEvent>) => void): () => void
+  subscribeStartupProgress(listener: (event: RpcEvent<StartupProgressSnapshot>) => void): () => void
+  systemPerformanceSnapshot(meta: RpcRequestMeta): Promise<RpcResult<SystemPerformanceSnapshot>>
+  runAudioBenchmark(meta: RpcRequestMeta): Promise<RpcResult<AudioBenchmarkReport>>
+  compiledAudioGraphSnapshot(
+    meta: RpcRequestMeta
+  ): Promise<RpcResult<CompiledAudioGraphSnapshot | null>>
+  subscribeApplicationCommands(
+    listener: (event: RpcEvent<ApplicationCommandId>) => void
+  ): () => void
+  executeApplicationWindowCommand(
+    meta: RpcRequestMeta,
+    command: ApplicationWindowCommandId
+  ): Promise<RpcResult<void>>
+  setApplicationWindowTheme(meta: RpcRequestMeta, theme: "light" | "dark"): Promise<RpcResult<void>>
+  createProject(
+    meta: RpcRequestMeta,
+    request: CreateProjectRequest
+  ): Promise<RpcResult<ProjectWorkspaceSnapshot>>
+  prepareOpenProject(
+    meta: RpcRequestMeta,
+    path?: string
+  ): Promise<RpcResult<ProjectOpenPreparation | null>>
+  openProject(
+    meta: RpcRequestMeta,
+    path: string,
+    recover?: boolean
+  ): Promise<RpcResult<ProjectWorkspaceSnapshot>>
+  saveProject(meta: RpcRequestMeta, path?: string): Promise<RpcResult<ProjectWorkspaceSnapshot>>
+  closeProject(
+    meta: RpcRequestMeta,
+    disposition?: ProjectCloseDisposition
+  ): Promise<RpcResult<ProjectCloseResult>>
+  listProjectAssets(meta: RpcRequestMeta): Promise<RpcResult<ProjectAssetSummary[]>>
+  updateProjectConfiguration(
+    meta: RpcRequestMeta,
+    configuration: ProjectConfiguration
+  ): Promise<RpcResult<ProjectSession>>
+  getApplicationSettings(
+    meta: RpcRequestMeta
+  ): Promise<RpcResult<ApplicationSettingsResourceSnapshot>>
+  updateApplicationSettings(
+    meta: RpcRequestMeta,
+    patch: ApplicationSettingsPatch
+  ): Promise<RpcResult<ApplicationSettingsResourceSnapshot>>
+  setSoftwareMonitoringEnabled(
+    meta: RpcRequestMeta,
+    enabled: boolean
+  ): Promise<RpcResult<ApplicationSettingsResourceSnapshot>>
+  configureAudioHostRuntime(
+    meta: RpcRequestMeta,
+    preferences: AudioHostRuntimePreferences
+  ): Promise<RpcResult<ApplicationSettingsResourceSnapshot>>
+  configureShortcuts(
+    meta: RpcRequestMeta,
+    preferences: ShortcutPreferences
+  ): Promise<RpcResult<ApplicationSettingsResourceSnapshot>>
+  chooseSwapDirectory(meta: RpcRequestMeta): Promise<RpcResult<ApplicationSettingsResourceSnapshot>>
+  openSwapDirectory(meta: RpcRequestMeta): Promise<RpcResult<void>>
+  startRecording(
+    meta: RpcRequestMeta,
+    request: RecordingStartRequest
+  ): Promise<RpcResult<RecordingResourceSnapshot>>
+  stopRecording(meta: RpcRequestMeta): Promise<RpcResult<RecordingStopResult>>
+  listPendingRecordings(meta: RpcRequestMeta): Promise<RpcResult<PendingRecording[]>>
+  recoverRecording(meta: RpcRequestMeta, id: string): Promise<RpcResult<RecordingRecoveryResult>>
+  deletePendingRecording(meta: RpcRequestMeta, id: string): Promise<RpcResult<void>>
+  readAssetAudio(meta: RpcRequestMeta, id: string): Promise<RpcResult<Uint8Array>>
+  readAssetWaveform(
+    meta: RpcRequestMeta,
+    request: WaveformWindowRequest
+  ): Promise<RpcResult<WaveformPeakWindow>>
+  recordingWaveformSnapshot(
+    meta: RpcRequestMeta,
+    request: WaveformWindowRequest
+  ): Promise<RpcResult<WaveformPeakWindow>>
+  listPlugins(meta: RpcRequestMeta): Promise<RpcResult<PluginCatalogSnapshot>>
+  scanPlugins(
+    meta: RpcRequestMeta,
+    request?: PluginScanRequest
+  ): Promise<RpcResult<PluginCatalogSnapshot>>
+  subscribePluginScan(listener: (event: RpcEvent<PluginScanEvent>) => void): () => void
+  openPluginEditor(
+    meta: RpcRequestMeta,
+    instanceId: string
+  ): Promise<RpcResult<PluginEditorOpenResult>>
+  closePluginEditor(meta: RpcRequestMeta): Promise<RpcResult<void>>
+  getPluginParameters(meta: RpcRequestMeta): Promise<RpcResult<PluginParameterInfo[]>>
+  setPluginParameter(
+    meta: RpcRequestMeta,
+    request: PluginParameterCommand
+  ): Promise<RpcResult<PluginParameterEnqueueResult>>
+  prepareMidiImport(
+    meta: RpcRequestMeta,
+    path?: string
+  ): Promise<RpcResult<MidiImportPreview | null>>
+  commitMidiImport(
+    meta: RpcRequestMeta,
+    plan: MidiImportPlan
+  ): Promise<RpcResult<MidiImportCommitResult>>
+  midiInputSnapshot(meta: RpcRequestMeta): Promise<RpcResult<MidiRuntimeResourceSnapshot>>
+  subscribeMidiInput(listener: (event: RpcEvent<MidiRuntimeResourceSnapshot>) => void): () => void
+  configureMidiInput(
+    meta: RpcRequestMeta,
+    preferences: MidiSyncPreferences
+  ): Promise<RpcResult<MidiRuntimeResourceSnapshot>>
+  setMidiControlLearning(
+    meta: RpcRequestMeta,
+    enabled: boolean
+  ): Promise<RpcResult<MidiRuntimeResourceSnapshot>>
+  subscribeOperations(listener: (event: RpcEvent<OperationEvent>) => void): () => void
+  operationStatus(
+    meta: RpcRequestMeta,
+    id: string
+  ): Promise<RpcResult<OperationStatusSnapshot | null>>
+  cancelOperation(
+    meta: RpcRequestMeta,
+    id: string
+  ): Promise<RpcResult<OperationStatusSnapshot | null>>
+  acknowledgeOperation(meta: RpcRequestMeta, id: string): Promise<RpcResult<boolean>>
 }

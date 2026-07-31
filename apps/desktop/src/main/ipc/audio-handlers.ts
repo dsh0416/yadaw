@@ -1,93 +1,293 @@
-import { ipcMain } from "electron"
-import { IPC_CHANNELS } from "@yadaw/contracts"
+import { randomUUID } from "node:crypto"
+import { IPC_CHANNELS, rpcFailure, rpcSuccess } from "@yadaw/contracts"
+import type { ResourceRef, RpcError, RpcRequestMeta, RpcResult } from "@yadaw/contracts"
 import type { IpcHandlerContext } from "./context"
+import { registerRpcHandler } from "./rpc"
+import { validateMutationTarget, validateReadTarget } from "./resource-validation"
 import {
-  assertTrustedSender,
   normalizeAudioDeviceList,
   normalizeAudioRuntime,
   validateAudioBackend,
   validateAudioPreferences,
   validateRoundTripLatencyMeasurementRequest
 } from "./support"
+
+function sameRef(left: ResourceRef | undefined, right: ResourceRef | null): boolean {
+  return Boolean(
+    right &&
+    left?.kind === right.kind &&
+    left.id === right.id &&
+    left.epoch === right.epoch &&
+    left.generation === right.generation
+  )
+}
+
+function failure(
+  meta: RpcRequestMeta,
+  code: "validation-failed" | "stale-resource" | "resource-unavailable",
+  component: "main" | "audio-host" = "main"
+): RpcError {
+  if (code === "validation-failed") {
+    return {
+      code,
+      category: "validation",
+      outcome: "not-committed",
+      retry: "never",
+      correlationId: randomUUID(),
+      userMessageKey: "errors.invalidRpcRequest",
+      ...(meta.target ? { resource: meta.target } : {}),
+      details: { type: code, field: "mutation" }
+    }
+  }
+  if (code === "stale-resource") {
+    return {
+      code,
+      category: "stale-resource",
+      outcome: "not-committed",
+      retry: "after-reconcile",
+      correlationId: randomUUID(),
+      userMessageKey: "errors.staleResource",
+      ...(meta.target ? { resource: meta.target } : {}),
+      details: { type: code, reason: "generation-mismatch" }
+    }
+  }
+  return {
+    code,
+    category: "unavailable",
+    outcome: "not-committed",
+    retry: "safe",
+    correlationId: randomUUID(),
+    userMessageKey: "errors.audioEngineUnavailable",
+    ...(meta.target ? { resource: meta.target } : {}),
+    details: { type: code, component, dispatched: true }
+  }
+}
+
+function operationBusy(meta: RpcRequestMeta, activeOperationId: string): RpcError {
+  return {
+    code: "resource-busy",
+    category: "busy",
+    outcome: "not-committed",
+    retry: "safe",
+    correlationId: randomUUID(),
+    userMessageKey: "errors.resourceBusy",
+    ...(meta.target ? { resource: meta.target } : {}),
+    details: { type: "resource-busy", activeOperationId }
+  }
+}
+
+function rebindResult(meta: RpcRequestMeta, result: RpcResult<unknown>): RpcResult<unknown> {
+  return {
+    ...structuredClone(result),
+    requestId: meta.requestId
+  }
+}
+
+function replayOperation(
+  context: IpcHandlerContext,
+  meta: RpcRequestMeta
+): RpcResult<unknown> | null {
+  const operationId = meta.mutation?.operationId
+  if (!operationId) return null
+  const existing = context.operations.registry.status(operationId)
+  if (!existing.ok) return null
+  return existing.value.result
+    ? rebindResult(meta, existing.value.result)
+    : rpcFailure(meta, operationBusy(meta, existing.value.operationId))
+}
+
 export function registerAudioHandlers(context: IpcHandlerContext): void {
-  const { audioHost: audioHostService, projects, projectGraph, lifecycle, isShuttingDown } = context
-  ipcMain.handle(IPC_CHANNELS.audioBackends, async (event) => {
-    assertTrustedSender(event)
-    if (!audioHostService) throw new Error("Audio host is not running")
+  const {
+    audioHost: audioHostService,
+    projects,
+    projectGraph,
+    lifecycle,
+    operations,
+    recordings,
+    isShuttingDown
+  } = context
+  const reconcileAudioHost = async (): Promise<void> => {
+    const state = lifecycle.applicationState
+    const previousRecording = state.recordingResourceSnapshot()
+    const helperEpoch = audioHostService.helperEpoch()
+    if (!helperEpoch) return
+    await state.reconcileAudioHost(helperEpoch)
+    if (previousRecording && !state.recordingResourceSnapshot()) {
+      await recordings.abortStart()
+    }
+  }
+  registerRpcHandler(IPC_CHANNELS.audioBackends, async ({ meta }) => {
+    await reconcileAudioHost()
+    const invalid = validateReadTarget(meta, lifecycle.applicationState.audioHost)
+    if (invalid) return invalid
     return audioHostService.listAudioBackends()
   })
 
-  ipcMain.handle(IPC_CHANNELS.audioDevices, async (event, value: unknown) => {
-    assertTrustedSender(event)
-    if (!audioHostService) throw new Error("Audio host is not running")
+  registerRpcHandler(IPC_CHANNELS.audioDevices, async ({ meta }, value: unknown) => {
+    await reconcileAudioHost()
+    const invalid = validateReadTarget(meta, lifecycle.applicationState.audioHost)
+    if (invalid) return invalid
     return normalizeAudioDeviceList(
       await audioHostService.listAudioDevices(validateAudioBackend(value))
     )
   })
 
-  ipcMain.handle(IPC_CHANNELS.audioStart, async (event, value: unknown) => {
-    assertTrustedSender(event)
-    const transition =
-      lifecycle.snapshot().audio.status === "running" ? "reconfiguring" : "starting"
-    lifecycle.beginAudio(transition)
+  registerRpcHandler(IPC_CHANNELS.audioStart, async ({ meta }, value: unknown) => {
+    const state = lifecycle.applicationState
+    if (!meta.mutation) return rpcFailure(meta, failure(meta, "validation-failed"))
+    const replay = replayOperation(context, meta)
+    if (replay) return replay
+    await reconcileAudioHost()
+    if (!sameRef(meta.target, state.audioHost)) {
+      return rpcFailure(meta, failure(meta, "stale-resource"))
+    }
+    const begun = operations.registry.begin({
+      operationId: meta.mutation.operationId,
+      idempotencyKey: meta.mutation.idempotencyKey,
+      target: state.audioHost
+    })
+    if (!begun.ok) return rpcFailure(meta, failure(meta, "validation-failed"))
+    if (begun.value.disposition !== "started") {
+      return begun.value.operation.result
+        ? rebindResult(meta, begun.value.operation.result)
+        : rpcFailure(meta, operationBusy(meta, begun.value.operation.operationId))
+    }
     try {
-      if (!audioHostService) throw new Error("Audio host is not running")
-      const snapshot = normalizeAudioRuntime(
+      const transition =
+        lifecycle.snapshot().audio.status === "running" ? "reconfiguring" : "starting"
+      lifecycle.beginAudio(transition)
+      const runtime = normalizeAudioRuntime(
         await audioHostService.startAudioEngine(validateAudioPreferences(value))
       )
-      if (projects.current) await projectGraph.load()
-      lifecycle.completeAudio(snapshot)
-      return snapshot
+      const resources = await state.commitAudioEngine(runtime)
+      lifecycle.completeAudio(runtime)
+      const warnings = []
+      if (projects.current) {
+        try {
+          await projectGraph.load()
+        } catch {
+          warnings.push({
+            code: "project-graph-deployment-failed",
+            userMessageKey: "warnings.audio.projectGraphDeploymentFailed",
+            resource: resources.engine!
+          })
+        }
+      }
+      const result = rpcSuccess(
+        meta,
+        {
+          ...resources,
+          engine: resources.engine!,
+          transport: resources.transport!,
+          runtime
+        },
+        { warnings }
+      )
+      operations.registry.finish(meta.mutation.operationId, "committed", result)
+      return result
     } catch (error) {
-      const snapshot = audioHostService
-        ? await audioHostService
-            .audioEngineSnapshot()
-            .catch(() => lifecycle.snapshot().audio.runtime)
-        : lifecycle.snapshot().audio.runtime
-      lifecycle.failAudio(error, normalizeAudioRuntime(snapshot))
-      throw error
+      const runtime = await audioHostService
+        .audioEngineSnapshot()
+        .catch(() => lifecycle.snapshot().audio.runtime)
+      lifecycle.failAudio(error, normalizeAudioRuntime(runtime))
+      const result = rpcFailure(meta, failure(meta, "resource-unavailable", "audio-host"))
+      operations.registry.finish(meta.mutation.operationId, "not-committed", result)
+      return result
     }
   })
 
-  ipcMain.handle(IPC_CHANNELS.audioStop, async (event) => {
-    assertTrustedSender(event)
-    lifecycle.beginAudio("stopping")
+  registerRpcHandler(IPC_CHANNELS.audioStop, async ({ meta }) => {
+    const state = lifecycle.applicationState
+    if (!meta.mutation) return rpcFailure(meta, failure(meta, "validation-failed"))
+    const replay = replayOperation(context, meta)
+    if (replay) return replay
+    await reconcileAudioHost()
+    const current = state.audioResourceSnapshot()
+    if (!sameRef(meta.target, current.engine)) {
+      return rpcFailure(meta, failure(meta, "stale-resource"))
+    }
+    const begun = operations.registry.begin({
+      operationId: meta.mutation.operationId,
+      idempotencyKey: meta.mutation.idempotencyKey,
+      target: current.engine!
+    })
+    if (!begun.ok) return rpcFailure(meta, failure(meta, "validation-failed"))
+    if (begun.value.disposition !== "started") {
+      return begun.value.operation.result
+        ? rebindResult(meta, begun.value.operation.result)
+        : rpcFailure(meta, operationBusy(meta, begun.value.operation.operationId))
+    }
     try {
-      if (!audioHostService) throw new Error("Audio host is not running")
-      const snapshot = normalizeAudioRuntime(await audioHostService.stopAudioEngine())
-      lifecycle.completeAudio(snapshot)
-      return snapshot
+      lifecycle.beginAudio("stopping")
+      const runtime = normalizeAudioRuntime(await audioHostService.stopAudioEngine())
+      const resources = await state.dropAudioEngine()
+      lifecycle.completeAudio(runtime)
+      const result = rpcSuccess(meta, { ...resources, engine: null, transport: null, runtime })
+      operations.registry.finish(meta.mutation.operationId, "committed", result)
+      return result
     } catch (error) {
-      const snapshot = audioHostService
-        ? await audioHostService
-            .audioEngineSnapshot()
-            .catch(() => lifecycle.snapshot().audio.runtime)
-        : lifecycle.snapshot().audio.runtime
-      lifecycle.failAudio(error, normalizeAudioRuntime(snapshot))
-      throw error
+      const runtime = await audioHostService
+        .audioEngineSnapshot()
+        .catch(() => lifecycle.snapshot().audio.runtime)
+      if (runtime.state === "stopped") {
+        const resources = await state.dropAudioEngine()
+        const normalized = normalizeAudioRuntime(runtime)
+        lifecycle.completeAudio(normalized)
+        const result = rpcSuccess(meta, {
+          ...resources,
+          engine: null,
+          transport: null,
+          runtime: normalized
+        })
+        operations.registry.finish(meta.mutation.operationId, "committed", result)
+        return result
+      }
+      lifecycle.failAudio(error, normalizeAudioRuntime(runtime))
+      const result = rpcFailure(meta, failure(meta, "resource-unavailable", "audio-host"))
+      operations.registry.finish(meta.mutation.operationId, "not-committed", result)
+      return result
     }
   })
 
-  ipcMain.handle(IPC_CHANNELS.audioSnapshot, async (event) => {
-    assertTrustedSender(event)
+  registerRpcHandler(IPC_CHANNELS.audioSnapshot, async ({ meta }) => {
+    const state = lifecycle.applicationState
+    await reconcileAudioHost()
+    const current = state.audioResourceSnapshot()
+    if (!sameRef(meta.target, current.engine)) {
+      return rpcFailure(meta, failure(meta, "stale-resource"))
+    }
     if (isShuttingDown()) return lifecycle.snapshot().audio.runtime
-    if (!audioHostService) throw new Error("Audio host is not running")
     const snapshot = normalizeAudioRuntime(await audioHostService.audioEngineSnapshot())
     lifecycle.refreshAudio(snapshot)
     return snapshot
   })
 
-  ipcMain.handle(IPC_CHANNELS.audioRoundTripLatencyStart, async (event, value: unknown) => {
-    assertTrustedSender(event)
-    if (!audioHostService) throw new Error("Audio host is not running")
-    return audioHostService.startRoundTripLatencyMeasurement(
+  registerRpcHandler(IPC_CHANNELS.audioRoundTripLatencyStart, async ({ meta }, value: unknown) => {
+    await reconcileAudioHost()
+    const target = lifecycle.applicationState.audioHost
+    const invalid = validateMutationTarget(meta, target)
+    if (invalid) return invalid
+    const begun = operations.registry.begin({
+      operationId: meta.mutation!.operationId,
+      idempotencyKey: meta.mutation!.idempotencyKey,
+      target
+    })
+    if (!begun.ok) throw new Error(begun.error.code)
+    if (begun.value.disposition !== "started" && begun.value.operation.result) {
+      return begun.value.operation.result
+    }
+    const valueResult = await audioHostService.startRoundTripLatencyMeasurement(
       validateRoundTripLatencyMeasurementRequest(value)
     )
+    const result = rpcSuccess(meta, valueResult)
+    operations.registry.finish(meta.mutation!.operationId, "committed", result)
+    return result
   })
 
-  ipcMain.handle(IPC_CHANNELS.audioRoundTripLatencySnapshot, async (event) => {
-    assertTrustedSender(event)
-    if (!audioHostService) throw new Error("Audio host is not running")
+  registerRpcHandler(IPC_CHANNELS.audioRoundTripLatencySnapshot, async ({ meta }) => {
+    await reconcileAudioHost()
+    const invalid = validateReadTarget(meta, lifecycle.applicationState.audioHost)
+    if (invalid) return invalid
     return audioHostService.roundTripLatencyMeasurementSnapshot()
   })
 }

@@ -5,6 +5,8 @@ import type { ApplicationSettings, MidiInputSnapshot, ShortcutPreferences } from
 import ShortcutSettings from "./ShortcutSettings.vue"
 import { useApplicationSettingsStore } from "../../stores/applicationSettings"
 
+import { useAudioRuntimeStore } from "../../stores/audioRuntime"
+import { rpcEvent } from "../../test/ipc"
 const EMPTY_MIDI_SNAPSHOT: MidiInputSnapshot = {
   ports: [{ id: "controller", name: "Studio Controller", connected: true }],
   sync: {
@@ -48,6 +50,37 @@ function applicationSettings(shortcuts: ShortcutPreferences): ApplicationSetting
     recentProjects: []
   }
 }
+const host = {
+  kind: "audio-host" as const,
+  id: "audio-host",
+  epoch: "helper-epoch",
+  generation: 1
+}
+
+const midiRuntime = {
+  kind: "midi-runtime" as const,
+  id: "midi-runtime",
+  epoch: "helper-epoch",
+  generation: 1
+}
+
+function midiResource(snapshot: MidiInputSnapshot) {
+  return {
+    runtime: midiRuntime,
+    host,
+    revision: 1,
+    snapshot: structuredClone(snapshot)
+  }
+}
+
+function midiSuccess(snapshot: MidiInputSnapshot) {
+  return {
+    ok: true as const,
+    requestId: "midi-request",
+    value: midiResource(snapshot),
+    warnings: []
+  }
+}
 
 function commandRow(wrapper: ReturnType<typeof mount>, command: string) {
   return wrapper.findAll(".shortcut-row").find((row) => row.text().includes(command))!
@@ -62,12 +95,6 @@ describe("ShortcutSettings", () => {
       configurable: true,
       value: "win32"
     })
-    window.yadaw.midiInputSnapshot = vi.fn().mockResolvedValue(EMPTY_MIDI_SNAPSHOT)
-    window.yadaw.subscribeMidiInput = vi.fn((listener) => {
-      publishMidi = listener
-      return () => undefined
-    })
-    window.yadaw.setMidiControlLearning = vi.fn().mockResolvedValue(undefined)
   })
 
   function mountSettings(shortcuts: ShortcutPreferences = { keyboard: {}, midi: {} }) {
@@ -75,7 +102,43 @@ describe("ShortcutSettings", () => {
     setActivePinia(pinia)
     const settingsStore = useApplicationSettingsStore()
     settingsStore.settings = applicationSettings(shortcuts)
-    window.yadaw.configureShortcuts = vi.fn(async (next) => applicationSettings(next))
+    settingsStore.resource = {
+      kind: "application-settings",
+      id: "settings",
+      epoch: "main-epoch",
+      generation: 1
+    }
+    settingsStore.revision = 1
+    useAudioRuntimeStore().applyResources({
+      host,
+      engine: null,
+      transport: null,
+      midiRuntime,
+      revision: 0
+    })
+    window.yadaw.midiInputSnapshot = vi.fn().mockResolvedValue(midiSuccess(EMPTY_MIDI_SNAPSHOT))
+    window.yadaw.subscribeMidiInput = vi.fn((listener) => {
+      publishMidi = (snapshot) =>
+        listener(rpcEvent(midiResource(snapshot), snapshot.capturedAt, host.epoch))
+      return () => undefined
+    })
+    window.yadaw.setMidiControlLearning = vi.fn(async (_meta, enabled) => {
+      return midiSuccess({
+        ...EMPTY_MIDI_SNAPSHOT,
+        capturedAt: enabled ? 2 : 3
+      })
+    })
+    window.yadaw.configureShortcuts = vi.fn(async (_meta, next) => ({
+      ok: true as const,
+      requestId: "settings-shortcuts",
+      resourceRevision: 2,
+      value: {
+        settings: settingsStore.resource!,
+        revision: 2,
+        value: applicationSettings(next)
+      },
+      warnings: []
+    }))
     const wrapper = mount(ShortcutSettings, {
       global: {
         plugins: [pinia],
@@ -142,7 +205,7 @@ describe("ShortcutSettings", () => {
     const saveRow = commandRow(wrapper, "project.save")
     await saveRow.findAll(".binding-button")[1]!.trigger("click")
     await flushPromises()
-    expect(window.yadaw.setMidiControlLearning).toHaveBeenCalledWith(true)
+    expect(window.yadaw.setMidiControlLearning).toHaveBeenCalledWith(expect.any(Object), true)
 
     publishMidi?.({
       ...EMPTY_MIDI_SNAPSHOT,
@@ -166,7 +229,7 @@ describe("ShortcutSettings", () => {
       number: 64
     })
     expect(saveRow.text()).toContain("CC 64")
-    expect(window.yadaw.setMidiControlLearning).toHaveBeenLastCalledWith(false)
+    expect(window.yadaw.setMidiControlLearning).toHaveBeenLastCalledWith(expect.any(Object), false)
 
     await saveRow.get(".clear-button").trigger("click")
     await flushPromises()

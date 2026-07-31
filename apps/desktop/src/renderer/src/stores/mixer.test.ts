@@ -1,7 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { createPinia, setActivePinia } from "pinia"
-import type { ProjectGraphSnapshot, ProjectSession } from "@yadaw/contracts"
+import type {
+  ProjectGraphSnapshot,
+  ProjectSession,
+  ProjectWorkspaceSnapshot,
+  RpcResult
+} from "@yadaw/contracts"
 import { useProjectStore } from "./project"
+import { useAudioRuntimeStore } from "./audioRuntime"
 import { useMixerStore } from "./mixer"
 
 function graph(): ProjectGraphSnapshot {
@@ -161,13 +167,63 @@ const session: ProjectSession = {
   recoveredWorkingCopy: false
 }
 
+function workspace(value: ProjectGraphSnapshot): ProjectWorkspaceSnapshot {
+  return {
+    project: {
+      kind: "project-session",
+      id: session.id,
+      epoch: "test-main",
+      generation: 1
+    },
+    projectGraph: {
+      kind: "project-graph",
+      id: `${session.id}:graph`,
+      epoch: "test-main",
+      generation: 1
+    },
+    revision: 1,
+    session: structuredClone(session),
+    graph: structuredClone(value),
+    assets: []
+  }
+}
+
+function success<T>(value: T, resourceRevision = 1): RpcResult<T> {
+  return {
+    ok: true,
+    requestId: "test-request",
+    operationId: "test-operation",
+    resourceRevision,
+    value,
+    warnings: []
+  }
+}
+
 describe("mixer store", () => {
   beforeEach(() => {
     setActivePinia(createPinia())
-    useProjectStore().applyLifecycleState({
-      status: "open",
-      session: structuredClone(session),
-      error: null
+    useProjectStore().applyWorkspace(workspace(graph()))
+    useAudioRuntimeStore().applyResources({
+      host: {
+        kind: "audio-host",
+        id: "audio-host",
+        epoch: "helper-epoch",
+        generation: 1
+      },
+      engine: {
+        kind: "audio-engine",
+        id: "audio-engine",
+        epoch: "helper-epoch",
+        generation: 1
+      },
+      transport: null,
+      midiRuntime: {
+        kind: "midi-runtime",
+        id: "midi-runtime",
+        epoch: "helper-epoch",
+        generation: 1
+      },
+      revision: 0
     })
   })
 
@@ -175,17 +231,27 @@ describe("mixer store", () => {
     const initial = graph()
     const changed = structuredClone(initial)
     changed.channels[0]!.gainDb = -6
-    window.yadaw.loadProjectGraph = vi.fn().mockResolvedValue(initial)
+    window.yadaw.loadProjectGraph = vi.fn().mockResolvedValue(success(initial))
     window.yadaw.executeProjectCommand = vi
       .fn()
-      .mockResolvedValueOnce({
-        graph: changed,
-        inverse: { type: "update-channel", channelId: "audio", patch: { gainDb: 0 } }
-      })
-      .mockResolvedValueOnce({
-        graph: initial,
-        inverse: { type: "update-channel", channelId: "audio", patch: { gainDb: -6 } }
-      })
+      .mockResolvedValueOnce(
+        success(
+          {
+            graph: changed,
+            inverse: { type: "update-channel", channelId: "audio", patch: { gainDb: 0 } }
+          },
+          2
+        )
+      )
+      .mockResolvedValueOnce(
+        success(
+          {
+            graph: initial,
+            inverse: { type: "update-channel", channelId: "audio", patch: { gainDb: -6 } }
+          },
+          3
+        )
+      )
 
     const mixer = useMixerStore()
     await mixer.load()
@@ -195,11 +261,14 @@ describe("mixer store", () => {
 
     await mixer.undo()
     expect(mixer.graph.channels[0]?.gainDb).toBe(0)
-    expect(window.yadaw.executeProjectCommand).toHaveBeenLastCalledWith({
-      type: "update-channel",
-      channelId: "audio",
-      patch: { gainDb: 0 }
-    })
+    expect(window.yadaw.executeProjectCommand).toHaveBeenLastCalledWith(
+      expect.objectContaining({ expectedRevision: 2 }),
+      {
+        type: "update-channel",
+        channelId: "audio",
+        patch: { gainDb: 0 }
+      }
+    )
     expect(mixer.canRedo).toBe(true)
   })
 
@@ -207,33 +276,48 @@ describe("mixer store", () => {
     const initial = graph()
     const monitored = structuredClone(initial)
     monitored.channels[0]!.inputMonitoring = true
-    window.yadaw.loadProjectGraph = vi.fn().mockResolvedValue(initial)
+    window.yadaw.loadProjectGraph = vi.fn().mockResolvedValue(success(initial))
     window.yadaw.executeProjectCommand = vi
       .fn()
-      .mockResolvedValueOnce({
-        graph: monitored,
-        inverse: {
-          type: "update-channel",
-          channelId: "audio",
-          patch: { inputMonitoring: false }
-        }
-      })
-      .mockResolvedValueOnce({
-        graph: initial,
-        inverse: {
-          type: "update-channel",
-          channelId: "audio",
-          patch: { inputMonitoring: true }
-        }
-      })
-      .mockResolvedValueOnce({
-        graph: monitored,
-        inverse: {
-          type: "update-channel",
-          channelId: "audio",
-          patch: { inputMonitoring: false }
-        }
-      })
+      .mockResolvedValueOnce(
+        success(
+          {
+            graph: monitored,
+            inverse: {
+              type: "update-channel",
+              channelId: "audio",
+              patch: { inputMonitoring: false }
+            }
+          },
+          2
+        )
+      )
+      .mockResolvedValueOnce(
+        success(
+          {
+            graph: initial,
+            inverse: {
+              type: "update-channel",
+              channelId: "audio",
+              patch: { inputMonitoring: true }
+            }
+          },
+          3
+        )
+      )
+      .mockResolvedValueOnce(
+        success(
+          {
+            graph: monitored,
+            inverse: {
+              type: "update-channel",
+              channelId: "audio",
+              patch: { inputMonitoring: false }
+            }
+          },
+          4
+        )
+      )
 
     const mixer = useMixerStore()
     await mixer.load()
@@ -245,11 +329,14 @@ describe("mixer store", () => {
 
     await mixer.redo()
     expect(mixer.graph.channels[0]?.inputMonitoring).toBe(true)
-    expect(window.yadaw.executeProjectCommand).toHaveBeenLastCalledWith({
-      type: "update-channel",
-      channelId: "audio",
-      patch: { inputMonitoring: true }
-    })
+    expect(window.yadaw.executeProjectCommand).toHaveBeenLastCalledWith(
+      expect.objectContaining({ expectedRevision: 3 }),
+      {
+        type: "update-channel",
+        channelId: "audio",
+        patch: { inputMonitoring: true }
+      }
+    )
   })
 
   it("hydrates the ready workspace graph synchronously without reloading the audio host", () => {
@@ -287,30 +374,37 @@ describe("mixer store", () => {
     const initial = graph()
     window.yadaw.executeProjectCommand = vi
       .fn()
-      .mockImplementation((command) => Promise.resolve({ graph: initial, inverse: command }))
+      .mockImplementation((_meta, command) =>
+        Promise.resolve(success({ graph: initial, inverse: command }))
+      )
     const mixer = useMixerStore()
     mixer.graph = initial
 
     await mixer.addSend("audio", { kind: "output", channelId: "output" })
 
-    expect(window.yadaw.executeProjectCommand).toHaveBeenCalledWith({
-      type: "create-send",
-      send: expect.objectContaining({
-        sourceChannelId: "audio",
-        targetChannelId: "output",
-        targetBus: null,
-        enabled: false,
-        tap: "post-pan",
-        levelDb: -90
-      })
-    })
+    expect(window.yadaw.executeProjectCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ target: expect.objectContaining({ kind: "project-graph" }) }),
+      {
+        type: "create-send",
+        send: expect.objectContaining({
+          sourceChannelId: "audio",
+          targetChannelId: "output",
+          targetBus: null,
+          enabled: false,
+          tap: "post-pan",
+          levelDb: -90
+        })
+      }
+    )
   })
 
   it("uses one default color per channel type and still accepts custom colors", async () => {
     const initial = graph()
     window.yadaw.executeProjectCommand = vi
       .fn()
-      .mockImplementation((command) => Promise.resolve({ graph: initial, inverse: command }))
+      .mockImplementation((_meta, command) =>
+        Promise.resolve(success({ graph: initial, inverse: command }))
+      )
     const mixer = useMixerStore()
     mixer.graph = initial
 
@@ -321,7 +415,7 @@ describe("mixer store", () => {
 
     const commands = vi
       .mocked(window.yadaw.executeProjectCommand)
-      .mock.calls.map(([command]) => command)
+      .mock.calls.map(([, command]) => command)
     expect(commands[0]).toMatchObject({
       type: "create-track",
       channel: { kind: "audio", color: "#4F8CFF" }
@@ -351,13 +445,15 @@ describe("mixer store", () => {
     const initial = graph()
     window.yadaw.executeProjectCommand = vi
       .fn()
-      .mockImplementation((command) => Promise.resolve({ graph: initial, inverse: command }))
+      .mockImplementation((_meta, command) =>
+        Promise.resolve(success({ graph: initial, inverse: command }))
+      )
     const mixer = useMixerStore()
     mixer.graph = initial
 
     await mixer.createInstrumentTrack()
 
-    expect(window.yadaw.executeProjectCommand).toHaveBeenCalledWith({
+    expect(window.yadaw.executeProjectCommand).toHaveBeenCalledWith(expect.any(Object), {
       type: "create-track",
       track: expect.objectContaining({ channelId: expect.any(String), sortOrder: 0 }),
       channel: expect.objectContaining({
@@ -381,10 +477,12 @@ describe("mixer store", () => {
     const metronome = enabled.channels.find((channel) => channel.systemRole === "metronome")
     if (!metronome) throw new Error("test graph requires metronome")
     metronome.muted = false
-    window.yadaw.executeProjectCommand = vi.fn().mockResolvedValue({
-      graph: enabled,
-      inverse: { type: "update-channel", channelId: "metronome", patch: { muted: true } }
-    })
+    window.yadaw.executeProjectCommand = vi.fn().mockResolvedValue(
+      success({
+        graph: enabled,
+        inverse: { type: "update-channel", channelId: "metronome", patch: { muted: true } }
+      })
+    )
     const mixer = useMixerStore()
     mixer.graph = initial
 
@@ -393,7 +491,7 @@ describe("mixer store", () => {
     expect(mixer.orderedChannels.map((channel) => channel.id)).toContain("metronome")
     await mixer.toggleMetronome()
 
-    expect(window.yadaw.executeProjectCommand).toHaveBeenCalledWith({
+    expect(window.yadaw.executeProjectCommand).toHaveBeenCalledWith(expect.any(Object), {
       type: "update-channel",
       channelId: "metronome",
       patch: { muted: false }
@@ -418,10 +516,12 @@ describe("mixer store", () => {
             resolveFirst = resolve
           })
       )
-      .mockResolvedValueOnce({
-        graph: secondGraph,
-        inverse: { type: "update-channel", channelId: "audio", patch: { pan: 0 } }
-      })
+      .mockResolvedValueOnce(
+        success({
+          graph: secondGraph,
+          inverse: { type: "update-channel", channelId: "audio", patch: { pan: 0 } }
+        })
+      )
     const mixer = useMixerStore()
     mixer.graph = initial
 
@@ -431,10 +531,12 @@ describe("mixer store", () => {
       expect(window.yadaw.executeProjectCommand).toHaveBeenCalledTimes(1)
     })
 
-    resolveFirst({
-      graph: firstGraph,
-      inverse: { type: "update-channel", channelId: "audio", patch: { gainDb: 0 } }
-    })
+    resolveFirst(
+      success({
+        graph: firstGraph,
+        inverse: { type: "update-channel", channelId: "audio", patch: { gainDb: 0 } }
+      })
+    )
     await first
     await second
 
@@ -443,18 +545,20 @@ describe("mixer store", () => {
   })
 
   it("clears latched meter clipping in the UI and native engine", async () => {
-    window.yadaw.clearMixerMeterClips = vi.fn().mockResolvedValue({
-      capturedAt: 2,
-      meters: [
-        {
-          channelId: "audio",
-          preFaderPeak: [1, 1],
-          postFaderPeak: [1, 1],
-          heldPeak: [0, 0],
-          clipped: false
-        }
-      ]
-    })
+    window.yadaw.clearMixerMeterClips = vi.fn().mockResolvedValue(
+      success({
+        capturedAt: 2,
+        meters: [
+          {
+            channelId: "audio",
+            preFaderPeak: [1, 1],
+            postFaderPeak: [1, 1],
+            heldPeak: [0, 0],
+            clipped: false
+          }
+        ]
+      })
+    )
     const mixer = useMixerStore()
     mixer.runtime = {
       capturedAt: 1,

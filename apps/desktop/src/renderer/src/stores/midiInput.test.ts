@@ -1,8 +1,15 @@
 import { createPinia, setActivePinia } from "pinia"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import type { MidiInputSnapshot, MidiSyncPreferences } from "@yadaw/contracts"
+import type {
+  MidiInputSnapshot,
+  MidiRuntimeResourceSnapshot,
+  MidiSyncPreferences,
+  RpcResult
+} from "@yadaw/contracts"
 import { useApplicationSettingsStore } from "./applicationSettings"
+import { useAudioRuntimeStore } from "./audioRuntime"
 import { useMidiInputStore } from "./midiInput"
+import { rpcEvent } from "../test/ipc"
 
 function snapshot(overrides: Partial<MidiInputSnapshot> = {}): MidiInputSnapshot {
   return {
@@ -34,8 +41,103 @@ const preferences: MidiSyncPreferences = {
   inputOffsetsMs: { "port-1": -4 }
 }
 
+const host = {
+  kind: "audio-host" as const,
+  id: "audio-host",
+  epoch: "helper-epoch",
+  generation: 1
+}
+
+const midiRuntime = {
+  kind: "midi-runtime" as const,
+  id: "midi-runtime",
+  epoch: "helper-epoch",
+  generation: 1
+}
+
+function resource(value: MidiInputSnapshot): MidiRuntimeResourceSnapshot {
+  return {
+    runtime: midiRuntime,
+    host,
+    revision: 1,
+    snapshot: structuredClone(value)
+  }
+}
+
+function success(value: MidiInputSnapshot): RpcResult<MidiRuntimeResourceSnapshot> {
+  return {
+    ok: true,
+    requestId: "midi-request",
+    resourceRevision: 1,
+    value: resource(value),
+    warnings: []
+  }
+}
+
+function failure(): RpcResult<MidiRuntimeResourceSnapshot> {
+  return {
+    ok: false,
+    requestId: "midi-request",
+    error: {
+      code: "resource-unavailable",
+      category: "unavailable",
+      outcome: "not-committed",
+      retry: "safe",
+      correlationId: "midi-test",
+      userMessageKey: "missing.midi.test.error",
+      resource: midiRuntime,
+      details: {
+        type: "resource-unavailable",
+        component: "audio-host",
+        dispatched: true
+      }
+    }
+  }
+}
+
 function stubApi(overrides: Record<string, unknown>): void {
-  Object.assign(window.yadaw as unknown as Record<string, unknown>, overrides)
+  const wrapped = { ...overrides }
+  const snapshotCall = overrides.midiInputSnapshot
+  if (typeof snapshotCall === "function") {
+    wrapped.midiInputSnapshot = vi.fn(async () => {
+      try {
+        return success((await snapshotCall()) as MidiInputSnapshot)
+      } catch {
+        return failure()
+      }
+    })
+  }
+  const subscribeCall = overrides.subscribeMidiInput
+  if (typeof subscribeCall === "function") {
+    wrapped.subscribeMidiInput = vi.fn(
+      (listener: Parameters<typeof window.yadaw.subscribeMidiInput>[0]) =>
+        subscribeCall((value: MidiInputSnapshot) =>
+          listener(rpcEvent(resource(value), value.capturedAt, host.epoch))
+        )
+    )
+  }
+  const configureCall = overrides.configureMidiInput
+  if (typeof configureCall === "function") {
+    wrapped.configureMidiInput = vi.fn(async (_meta: unknown, value: MidiSyncPreferences) => {
+      try {
+        return success((await configureCall(value)) as MidiInputSnapshot)
+      } catch {
+        return failure()
+      }
+    })
+  }
+  const learningCall = overrides.setMidiControlLearning
+  if (typeof learningCall === "function") {
+    wrapped.setMidiControlLearning = vi.fn(async (_meta: unknown, value: boolean) => {
+      try {
+        await learningCall(value)
+        return success(snapshot())
+      } catch {
+        return failure()
+      }
+    })
+  }
+  Object.assign(window.yadaw as unknown as Record<string, unknown>, wrapped)
 }
 
 beforeEach(() => {
@@ -43,7 +145,15 @@ beforeEach(() => {
   stubApi({
     midiInputSnapshot: vi.fn(async () => snapshot()),
     subscribeMidiInput: vi.fn(() => () => undefined),
-    configureMidiInput: vi.fn(async () => snapshot())
+    configureMidiInput: vi.fn(async () => snapshot()),
+    setMidiControlLearning: vi.fn(async () => undefined)
+  })
+  useAudioRuntimeStore().applyResources({
+    host,
+    engine: null,
+    transport: null,
+    midiRuntime,
+    revision: 0
   })
 })
 
@@ -66,7 +176,7 @@ describe("load", () => {
     await store.load()
     await store.load()
 
-    expect(midiInputSnapshot).toHaveBeenCalledTimes(1)
+    expect(midiInputSnapshot).toHaveBeenCalledTimes(2)
     expect(window.yadaw.subscribeMidiInput).toHaveBeenCalledTimes(1)
   })
 
@@ -109,7 +219,7 @@ describe("load", () => {
     expect(store.error).toBe("")
   })
 
-  it("reports why the port list could not be read and does not subscribe", async () => {
+  it("reports a typed failure after subscribing for a gap-free snapshot", async () => {
     stubApi({
       midiInputSnapshot: vi.fn(async () => {
         throw new Error("MIDI service is down")
@@ -119,12 +229,12 @@ describe("load", () => {
 
     await store.load()
 
-    expect(store.error).toBe("MIDI service is down")
+    expect(store.error).toBe("resource-unavailable")
     expect(store.loading).toBe(false)
-    expect(window.yadaw.subscribeMidiInput).not.toHaveBeenCalled()
+    expect(window.yadaw.subscribeMidiInput).toHaveBeenCalledOnce()
   })
 
-  it("uses a generic message for non-Error rejections", async () => {
+  it("maps non-Error transport failures to the typed unavailable error", async () => {
     stubApi({
       midiInputSnapshot: vi.fn().mockRejectedValue("boom")
     })
@@ -132,7 +242,7 @@ describe("load", () => {
 
     await store.load()
 
-    expect(store.error).toBe("Unable to read MIDI inputs.")
+    expect(store.error).toBe("resource-unavailable")
   })
 })
 
@@ -238,12 +348,12 @@ describe("configure", () => {
 
     await expect(store.configure(preferences)).resolves.toBe(false)
 
-    expect(store.error).toBe("Port disappeared")
+    expect(store.error).toBe("resource-unavailable")
     expect(store.applying).toBe(false)
     expect(store.snapshot.capturedAt).toBe(1_000)
   })
 
-  it("uses a generic message for non-Error rejections", async () => {
+  it("maps non-Error configuration failures to the typed unavailable error", async () => {
     stubApi({
       configureMidiInput: vi.fn().mockRejectedValue("boom")
     })
@@ -251,7 +361,7 @@ describe("configure", () => {
 
     await store.configure(preferences)
 
-    expect(store.error).toBe("Unable to configure MIDI input.")
+    expect(store.error).toBe("resource-unavailable")
   })
 
   it("ignores a second request while one is still applying", async () => {
@@ -334,10 +444,19 @@ describe("midi input control events", () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     publish = null
-    window.yadaw.midiInputSnapshot = vi.fn().mockResolvedValue(controlSnapshot([1, 2]))
-    window.yadaw.subscribeMidiInput = vi.fn((listener) => {
-      publish = listener
-      return () => undefined
+    stubApi({
+      midiInputSnapshot: vi.fn().mockResolvedValue(controlSnapshot([1, 2])),
+      subscribeMidiInput: vi.fn((listener: (value: MidiInputSnapshot) => void) => {
+        publish = listener
+        return () => undefined
+      })
+    })
+    useAudioRuntimeStore().applyResources({
+      host,
+      engine: null,
+      transport: null,
+      midiRuntime,
+      revision: 0
     })
   })
 

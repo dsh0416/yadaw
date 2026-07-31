@@ -23,7 +23,7 @@ fn spawn_ingress(
     leases: Arc<Mutex<LeaseRegistry>>,
     request_arena: Arc<Mutex<ArenaReceiver>>,
     liveness: Liveness,
-) -> thread::JoinHandle<()> {
+) -> std::io::Result<thread::JoinHandle<()>> {
     thread::Builder::new()
         .name("yadaw-ipc-ingress".into())
         .spawn(move || {
@@ -247,5 +247,4 @@ fn spawn_ingress(
                 }
             }
         })
-        .expect("IPC ingress thread must start")
 }

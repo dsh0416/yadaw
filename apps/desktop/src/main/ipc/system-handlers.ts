@@ -1,19 +1,22 @@
-import { app, BrowserWindow, ipcMain } from "electron"
+import { app, BrowserWindow } from "electron"
 import { IPC_CHANNELS } from "@yadaw/contracts"
 import { engineInfo, processGain } from "@yadaw/dsp-node"
-import {
-  assertTrustedSender,
-  validateApplicationWindowCommand,
-  validateGainRequest
-} from "./support"
-export function registerSystemHandlers(): void {
-  ipcMain.handle(IPC_CHANNELS.engineInfo, (event) => {
-    assertTrustedSender(event)
+import type { IpcHandlerContext } from "./context"
+import { registerRpcHandler } from "./rpc"
+import { validateMutationTarget, validateReadTarget } from "./resource-validation"
+import { validateApplicationWindowCommand, validateGainRequest } from "./support"
+
+export function registerSystemHandlers(context: IpcHandlerContext): void {
+  const state = context.lifecycle.applicationState
+  registerRpcHandler(IPC_CHANNELS.engineInfo, ({ meta }) => {
+    const invalid = validateReadTarget(meta, state.offlineWorker)
+    if (invalid) return invalid
     return engineInfo()
   })
 
-  ipcMain.handle(IPC_CHANNELS.applicationWindowCommand, (event, value: unknown) => {
-    assertTrustedSender(event)
+  registerRpcHandler(IPC_CHANNELS.applicationWindowCommand, ({ event, meta }, value: unknown) => {
+    const invalid = validateMutationTarget(meta, state.desktopSession)
+    if (invalid) return invalid
     const command = validateApplicationWindowCommand(value)
     const window = BrowserWindow.fromWebContents(event.sender)
     switch (command) {
@@ -57,8 +60,9 @@ export function registerSystemHandlers(): void {
     }
   })
 
-  ipcMain.handle(IPC_CHANNELS.applicationWindowTheme, (event, value: unknown) => {
-    assertTrustedSender(event)
+  registerRpcHandler(IPC_CHANNELS.applicationWindowTheme, ({ event, meta }, value: unknown) => {
+    const invalid = validateMutationTarget(meta, state.desktopSession)
+    if (invalid) return invalid
     if (value !== "light" && value !== "dark") {
       throw new TypeError("Unknown application window theme")
     }
@@ -71,8 +75,9 @@ export function registerSystemHandlers(): void {
     })
   })
 
-  ipcMain.handle(IPC_CHANNELS.processGain, (event, value: unknown) => {
-    assertTrustedSender(event)
+  registerRpcHandler(IPC_CHANNELS.processGain, ({ meta }, value: unknown) => {
+    const invalid = validateReadTarget(meta, state.offlineWorker)
+    if (invalid) return invalid
     const request = validateGainRequest(value)
     return processGain(request.samples, request.gain)
   })

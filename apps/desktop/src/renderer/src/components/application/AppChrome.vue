@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { ApplicationWindowCommandId } from "@yadaw/contracts"
 import { computed } from "vue"
 import { storeToRefs } from "pinia"
 import AppTitleBar from "./AppTitleBar.vue"
@@ -8,10 +9,17 @@ import { useProjectStore } from "../../stores/project"
 
 const projectStore = useProjectStore()
 const applicationWindowStore = useApplicationWindowStore()
-const { session } = storeToRefs(projectStore)
+const { hasUnsavedChanges, session } = storeToRefs(projectStore)
 const { platform, menus, execute } = useApplicationCommands()
 const projectName = computed(() => session.value?.configuration.name ?? null)
-const dirty = computed(() => session.value?.dirty ?? false)
+
+function executeWindowCommand(command: ApplicationWindowCommandId): void {
+  if (command === "window.close") {
+    void execute(command)
+    return
+  }
+  void applicationWindowStore.execute(command)
+}
 </script>
 
 <template>
@@ -20,9 +28,9 @@ const dirty = computed(() => session.value?.dirty ?? false)
       :platform="platform"
       :menus="menus"
       :project-name="projectName"
-      :dirty="dirty"
+      :dirty="hasUnsavedChanges"
       @command="execute"
-      @window-command="applicationWindowStore.execute"
+      @window-command="executeWindowCommand"
     />
     <div class="app-chrome__content">
       <slot />

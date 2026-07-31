@@ -1,6 +1,7 @@
-import { app, BrowserWindow, ipcMain } from "electron"
+import { app, BrowserWindow } from "electron"
 import { basename, join, resolve } from "node:path"
-import { IPC_CHANNELS } from "@yadaw/contracts"
+import { randomUUID } from "node:crypto"
+import { IPC_CHANNELS, IPC_PROTOCOL_VERSION } from "@yadaw/contracts"
 import { ApplicationSettingsStore } from "./application-settings"
 import { AssetMaterializer } from "./asset-materializer"
 import { AudioGraphCompiler } from "./audio-graph-compiler"
@@ -12,6 +13,7 @@ import { LifecycleCoordinator } from "./lifecycle-coordinator"
 import { MidiImportService } from "./midi-import-service"
 import { MixerRuntimeService } from "./mixer-runtime-service"
 import { OperationService } from "./operation-service"
+import { OperationRegistry } from "./kernel/operation-registry"
 import { PluginCatalogService } from "./plugin-catalog-service"
 import { ProjectCommandService } from "./project-command-service"
 import { ProjectGraphService } from "./project-graph-service"
@@ -21,7 +23,7 @@ import { StartupProgress } from "./startup-progress"
 import { WaveformService } from "./waveform-service"
 import { TransportService } from "./transport-service"
 import { registerIpcHandlers } from "./ipc/register"
-import { assertTrustedSender, normalizeAudioRuntime } from "./ipc/support"
+import { normalizeAudioRuntime } from "./ipc/support"
 import {
   createMainWindow,
   createSplashWindow,
@@ -46,17 +48,26 @@ export function startApplication(
     setMainLocale(applicationSettings.locale)
 
     const startup = new StartupProgress()
-    ipcMain.handle(IPC_CHANNELS.startupProgressSnapshot, (event) => {
-      assertTrustedSender(event)
-      return startup.snapshot()
-    })
-    startup.subscribe((progress) => {
+    const startupEpoch = randomUUID()
+    let startupSequence = 0
+    const publishStartupProgress = (progress: ReturnType<StartupProgress["snapshot"]>): void => {
+      startupSequence += 1
       const window = splashWindow
       if (window && !window.isDestroyed()) {
-        window.webContents.send(IPC_CHANNELS.startupProgressEvent, progress)
+        window.webContents.send(IPC_CHANNELS.startupProgressEvent, {
+          protocolVersion: IPC_PROTOCOL_VERSION,
+          sourceEpoch: startupEpoch,
+          sequence: startupSequence,
+          resourceRevision: startupSequence,
+          payload: progress
+        })
       }
+    }
+    startup.subscribe(publishStartupProgress)
+    const splash = createSplashWindow()
+    splash.webContents.once("did-finish-load", () => {
+      publishStartupProgress(startup.snapshot())
     })
-    createSplashWindow()
 
     try {
       startup.update({
@@ -195,7 +206,6 @@ export function startApplication(
       const projectService = new ProjectService(app.getPath("userData"), settings)
       setWindowProjectService(projectService)
       onServices({ audioHostService, projectService })
-      const operations = new OperationService()
       const graphPublisher = new AudioGraphPublisher(
         new AudioGraphCompiler(),
         new AssetMaterializer(app.getPath("userData"), projectService),
@@ -207,7 +217,6 @@ export function startApplication(
       const projectCommands = new ProjectCommandService(
         projectGraph,
         projectService,
-        graphPublisher,
         audioHostService
       )
       const mixerRuntime = new MixerRuntimeService(audioHostService)
@@ -247,6 +256,25 @@ export function startApplication(
         }
       })
       const midiImport = new MidiImportService(projectGraph, projectCommands, plugins)
+      const initialAudioRuntime = await audioHostService.audioEngineSnapshot()
+      const lifecycle = new LifecycleCoordinator(
+        projectService.current,
+        normalizeAudioRuntime(initialAudioRuntime),
+        {
+          allowRecordingWithoutAudio: process.env.YADAW_TEST_CAPTURE_SOURCE === "1",
+          audioHostEpoch: audioHostService.helperEpoch() ?? undefined
+        }
+      )
+      if (initialAudioRuntime.state === "running") {
+        await lifecycle.applicationState.commitAudioEngine(
+          normalizeAudioRuntime(initialAudioRuntime)
+        )
+      }
+      const operations = new OperationService(
+        new OperationRegistry(),
+        lifecycle.applicationState.desktopSession
+      )
+      projectCommands.attachKernel(lifecycle, operations)
       const recordings = new RecordingService(
         settings,
         projectService,
@@ -256,12 +284,6 @@ export function startApplication(
         audioHostService
       )
       const waveforms = new WaveformService(settings, projectService)
-      const initialAudioRuntime = await audioHostService.audioEngineSnapshot()
-      const lifecycle = new LifecycleCoordinator(
-        projectService.current,
-        normalizeAudioRuntime(initialAudioRuntime),
-        { allowRecordingWithoutAudio: process.env.YADAW_TEST_CAPTURE_SOURCE === "1" }
-      )
       registerIpcHandlers({
         settings,
         projects: projectService,

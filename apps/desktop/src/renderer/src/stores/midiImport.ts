@@ -2,8 +2,10 @@ import { acceptHMRUpdate, defineStore } from "pinia"
 import { computed, shallowRef } from "vue"
 import type { MidiImportPlan, MidiImportPreview, MidiImportTrackTarget } from "@yadaw/contracts"
 import { secondsToTick } from "../utils/tempoMap"
+import { mutationMeta, rpcErrorMessage } from "../rpc"
 import { useMixerStore } from "./mixer"
 import { useProjectHistoryStore } from "./projectHistory"
+import { useProjectStore } from "./project"
 import { useTransportStore } from "./transport"
 
 function key(sourceTrack: number, sequence: number): string {
@@ -15,6 +17,7 @@ export type MidiTempoMode = "project" | "midi"
 export const useMidiImportStore = defineStore("midi-import", () => {
   const mixerStore = useMixerStore()
   const projectHistoryStore = useProjectHistoryStore()
+  const projectStore = useProjectStore()
   const transportStore = useTransportStore()
   const preview = shallowRef<MidiImportPreview | null>(null)
   const targets = shallowRef<Record<string, MidiImportTrackTarget>>({})
@@ -26,22 +29,26 @@ export const useMidiImportStore = defineStore("midi-import", () => {
   async function prepare(path?: string): Promise<void> {
     busy.value = true
     error.value = ""
-    try {
-      const value = await window.yadaw.prepareMidiImport(path)
-      if (!value) return
-      preview.value = value
+    const target = projectStore.projectRef
+    if (!target) {
+      busy.value = false
+      return
+    }
+    const result = await window.yadaw.prepareMidiImport(
+      mutationMeta(target, "midi-import-prepare"),
+      path
+    )
+    if (result.ok && result.value) {
+      preview.value = result.value
       targets.value = Object.fromEntries(
-        value.tracks.map((track) => [
+        result.value.tracks.map((track) => [
           key(track.sourceTrack, track.sequence),
           { type: track.noteCount > 0 ? "new" : "ignore" }
         ])
       )
       tempoMode.value = "project"
-    } catch (reason) {
-      error.value = reason instanceof Error ? reason.message : "Unable to read the MIDI file."
-    } finally {
-      busy.value = false
-    }
+    } else if (!result.ok) error.value = rpcErrorMessage(result.error)
+    busy.value = false
   }
 
   function targetFor(sourceTrack: number, sequence: number): MidiImportTrackTarget {
@@ -70,17 +77,25 @@ export const useMidiImportStore = defineStore("midi-import", () => {
         target: targetFor(track.sourceTrack, track.sequence)
       }))
     }
-    try {
-      const result = await window.yadaw.commitMidiImport(plan)
-      projectHistoryStore.acceptExternalResult(result)
-      preview.value = null
-      return true
-    } catch (reason) {
-      error.value = reason instanceof Error ? reason.message : "MIDI import failed."
-      return false
-    } finally {
+    const target = projectStore.projectGraphRef
+    if (!target) {
       busy.value = false
+      return false
     }
+    const result = await window.yadaw.commitMidiImport(
+      mutationMeta(target, "midi-import-commit", projectStore.projectRevision),
+      plan
+    )
+    if (!result.ok) {
+      error.value = rpcErrorMessage(result.error)
+      busy.value = false
+      return false
+    }
+    projectStore.applyWorkspace(result.value.workspace)
+    projectHistoryStore.acceptExternalResult(result.value.command)
+    preview.value = null
+    busy.value = false
+    return true
   }
 
   function close(): void {

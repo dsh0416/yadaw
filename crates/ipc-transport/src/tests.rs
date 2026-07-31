@@ -591,6 +591,7 @@ fn parameter_ring_reserves_gesture_boundaries() {
         target_kind: ParameterTargetKind::Plugin,
         runtime_handle: 2,
         parameter_id: 8,
+        target_generation: 4,
         normalized: 0.5,
         gesture,
     };
@@ -634,6 +635,7 @@ fn parameter_ring_discards_a_stale_session_epoch() {
         target_kind: ParameterTargetKind::Plugin,
         runtime_handle: 2,
         parameter_id: 8,
+        target_generation: 4,
         normalized: 0.5,
         gesture: ParameterGesture::Begin,
     };

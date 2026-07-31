@@ -76,6 +76,7 @@ pub struct ParameterCommand {
     pub target_kind: ParameterTargetKind,
     pub runtime_handle: u32,
     pub parameter_id: u32,
+    pub target_generation: u32,
     pub normalized: f64,
     pub gesture: ParameterGesture,
 }

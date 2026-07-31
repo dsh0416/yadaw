@@ -1,11 +1,17 @@
 import { parentPort } from "node:worker_threads"
+import { randomUUID } from "node:crypto"
 import type { ProjectDatabase as ProjectDatabaseInstance } from "@yadaw/project-db/node"
 import type {
+  PreparedProjectCommand,
+  ProjectCommandTransactionStatus,
+  ProjectCommandTransactionToken,
   WorkerProgress,
   WorkerRequest,
   WorkerResponse,
-  WorkerResult
+  WorkerResult,
+  WorkerResultMap
 } from "@yadaw/project-db/protocol"
+import { applyToGraph, validateGraph } from "@yadaw/project-model"
 
 if (!parentPort) throw new Error("Project worker requires a parent port")
 const port = parentPort
@@ -13,6 +19,16 @@ const port = parentPort
 let database: ProjectDatabaseInstance | null = null
 let projectDatabaseModule: Promise<typeof import("@yadaw/project-db/node")> | null = null
 const cancelledOperations = new Set<string>()
+const preparedCommands = new Map<
+  string,
+  {
+    token: ProjectCommandTransactionToken
+    command: Parameters<ProjectDatabaseInstance["applyCommand"]>[0]
+    fallbackOutputId: string
+    graph: PreparedProjectCommand["graph"]
+  }
+>()
+const committedCommands = new Map<string, WorkerResultMap["commit-project-command"]>()
 
 function loadProjectDatabase(): Promise<typeof import("@yadaw/project-db/node")> {
   projectDatabaseModule ??= import("@yadaw/project-db/node")
@@ -20,6 +36,8 @@ function loadProjectDatabase(): Promise<typeof import("@yadaw/project-db/node")>
 }
 
 async function closeCurrentDatabase(): Promise<void> {
+  preparedCommands.clear()
+  committedCommands.clear()
   if (!database) return
   const current = database
   database = null
@@ -59,8 +77,79 @@ async function handle(request: WorkerRequest): Promise<WorkerResult> {
       return requireDatabase().listAssets()
     case "mixer-snapshot":
       return requireDatabase().mixerSnapshot()
-    case "apply-project-command":
-      return requireDatabase().applyCommand(request.command, request.fallbackOutputId)
+    case "prepare-project-command": {
+      const committed = committedCommands.get(request.operationId)
+      if (committed) {
+        return {
+          token: structuredClone(committed.token),
+          graph: structuredClone(committed.graph)
+        }
+      }
+      if (committedCommands.size >= 2_048) {
+        throw new Error("Project command terminal retention limit reached")
+      }
+      const existing = [...preparedCommands.values()].find(
+        (candidate) => candidate.token.operationId === request.operationId
+      )
+      if (existing) {
+        return {
+          token: structuredClone(existing.token),
+          graph: structuredClone(existing.graph)
+        }
+      }
+      const before = await requireDatabase().mixerSnapshot()
+      const graph = applyToGraph(before, request.command)
+      validateGraph(graph)
+      const token: ProjectCommandTransactionToken = {
+        id: randomUUID(),
+        operationId: request.operationId,
+        baseRevision: request.baseRevision
+      }
+      preparedCommands.set(token.id, {
+        token,
+        command: structuredClone(request.command),
+        fallbackOutputId: request.fallbackOutputId,
+        graph: structuredClone(graph)
+      })
+      return { token: structuredClone(token), graph }
+    }
+    case "commit-project-command": {
+      const prepared = preparedCommands.get(request.token.id)
+      if (
+        !prepared ||
+        prepared.token.operationId !== request.token.operationId ||
+        prepared.token.baseRevision !== request.token.baseRevision
+      ) {
+        throw new Error("Project command transaction token is stale")
+      }
+      await requireDatabase().applyCommand(prepared.command, prepared.fallbackOutputId)
+      const result = {
+        token: structuredClone(prepared.token),
+        graph: await requireDatabase().mixerSnapshot()
+      }
+      preparedCommands.delete(request.token.id)
+      committedCommands.set(prepared.token.operationId, structuredClone(result))
+      return result
+    }
+    case "abort-project-command":
+      preparedCommands.delete(request.token.id)
+      return
+    case "project-command-status": {
+      const committed = committedCommands.get(request.operationId)
+      if (committed) {
+        const status: ProjectCommandTransactionStatus = {
+          state: "committed",
+          result: structuredClone(committed)
+        }
+        return status
+      }
+      const prepared = [...preparedCommands.values()].find(
+        (candidate) => candidate.token.operationId === request.operationId
+      )
+      return prepared
+        ? { state: "prepared", token: structuredClone(prepared.token) }
+        : { state: "absent" }
+    }
     case "import-midi":
       return requireDatabase().importMidi(request.source, request.command, request.fallbackOutputId)
     case "rollback-midi":
@@ -138,18 +227,23 @@ function respond(request: WorkerRequest): Promise<void> {
       port.postMessage(response)
     },
     (error: unknown) => {
-      const normalized = error instanceof Error ? error : new Error(String(error))
+      const correlationId = randomUUID()
+      console.error(`[project-worker] ${correlationId} request failed`, error)
       const response: WorkerResponse = {
         id: request.id,
         type: request.type,
         ok: false,
         error: {
-          message: normalized.message,
-          stack: normalized.stack,
-          code:
-            typeof (normalized as Error & { code?: unknown }).code === "string"
-              ? (normalized as Error & { code: string }).code
-              : undefined
+          code: "invariant-violation",
+          category: "invariant-violation",
+          outcome: "quarantined",
+          retry: "after-reconcile",
+          correlationId,
+          userMessageKey: "errors.projectWorkerFailed",
+          details: {
+            type: "invariant-violation",
+            component: "project-worker"
+          }
         }
       }
       port.postMessage(response)
@@ -169,5 +263,8 @@ port.on("message", (request: WorkerRequest) => {
     port.postMessage(response)
     return
   }
-  queue = queue.then(() => respond(request))
+  queue = queue.then(
+    () => respond(request),
+    () => respond(request)
+  )
 })

@@ -121,7 +121,11 @@ impl LeaseRegistry {
                 .ok_or(TransportError::LeaseCapacity)?;
             allocation = Some((index, value));
         }
-        let (region_index, allocation) = allocation.expect("allocation is established");
+        let Some((region_index, allocation)) = allocation else {
+            return Err(TransportError::Invariant(
+                "arena reservation completed without an allocation",
+            ));
+        };
         let lease_id = self.next_lease_id();
         let region = &mut self.regions[region_index];
         region.write(allocation.offset, bytes)?;

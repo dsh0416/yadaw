@@ -3,13 +3,19 @@ import { acceptHMRUpdate, defineStore } from "pinia"
 import { computed, ref, shallowRef } from "vue"
 import { INITIAL_AUDIO_RUNTIME_SNAPSHOT } from "@yadaw/contracts"
 import type {
+  AudioEngineRef,
+  AudioHostRef,
   AudioLifecycleState,
   AudioPreferences,
+  AudioResourceSnapshot,
   AudioRuntimeSnapshot,
   RoundTripLatencyMeasurement,
-  RoundTripLatencyMeasurementRequest
+  MidiRuntimeRef,
+  RoundTripLatencyMeasurementRequest,
+  TransportRef
 } from "@yadaw/contracts"
 import { i18n } from "../i18n"
+import { mutationMeta, readMeta, rpcErrorMessage } from "../rpc"
 
 function t(key: string, params?: Record<string, string | number>): string {
   return i18n.global.t(key, params ?? {})
@@ -84,8 +90,14 @@ export const useAudioRuntimeStore = defineStore("audio-runtime", () => {
     measuredRoundTripLatencyMs: null,
     failure: null
   })
-  const lastError = computed(() => lifecycle.value.error ?? "")
+  const rpcError = shallowRef("")
+  const lastError = computed(() => lifecycle.value.error ?? rpcError.value)
   const lastUpdatedAt = ref<number | null>(null)
+  const audioHostRef = shallowRef<AudioHostRef | null>(null)
+  const audioEngineRef = shallowRef<AudioEngineRef | null>(null)
+  const transportRef = shallowRef<TransportRef | null>(null)
+  const midiRuntimeRef = shallowRef<MidiRuntimeRef | null>(null)
+  const transportRevision = ref(0)
   const xrunBaseline = ref(0)
   let sessionStartedAt = 0
   let requestGeneration = 0
@@ -138,18 +150,19 @@ export const useAudioRuntimeStore = defineStore("audio-runtime", () => {
   }
 
   async function refresh(): Promise<void> {
+    if (!audioEngineRef.value) return
     const generation = ++requestGeneration
-    try {
-      const snapshot = await window.yadaw.audioEngineSnapshot()
-      if (generation === requestGeneration) updateRuntime(snapshot)
-    } catch (error) {
-      if (generation !== requestGeneration) return
+    const result = await window.yadaw.audioEngineSnapshot(readMeta(audioEngineRef.value))
+    if (generation !== requestGeneration) return
+    if (!result.ok) {
       lifecycle.value = {
         status: "error",
         runtime: runtime.value,
-        error: error instanceof Error ? error.message : t("errors.unableToReadAudioEngineState")
+        error: rpcErrorMessage(result.error)
       }
+      return
     }
+    updateRuntime(result.value)
   }
 
   async function startEngine(preferences: AudioPreferences): Promise<AudioRuntimeSnapshot> {
@@ -159,51 +172,79 @@ export const useAudioRuntimeStore = defineStore("audio-runtime", () => {
       runtime: runtime.value,
       error: null
     }
-    try {
-      const snapshot = await window.yadaw.startAudioEngine(preferences)
-      if (generation === requestGeneration) updateRuntime(snapshot)
-      return snapshot
-    } catch (error) {
-      if (generation !== requestGeneration) throw error
+    const host = audioHostRef.value
+    if (!host) throw new Error(t("errors.unableToStartAudioEngine"))
+    const result = await window.yadaw.startAudioEngine(
+      mutationMeta(host, "audio-engine-start"),
+      preferences
+    )
+    if (!result.ok) {
+      const message = rpcErrorMessage(result.error)
+      if (generation !== requestGeneration) throw new Error(message)
       lifecycle.value = {
         status: "error",
         runtime: runtime.value,
-        error: error instanceof Error ? error.message : t("errors.unableToStartAudioEngine")
+        error: message
       }
-      throw error
+      throw new Error(message)
     }
+    audioEngineRef.value = structuredClone(result.value.engine)
+    transportRef.value = structuredClone(result.value.transport)
+    transportRevision.value = result.value.revision
+    if (generation === requestGeneration) updateRuntime(result.value.runtime)
+    return result.value.runtime
   }
 
   async function stopEngine(): Promise<AudioRuntimeSnapshot> {
     const generation = ++requestGeneration
     lifecycle.value = { status: "stopping", runtime: runtime.value, error: null }
-    try {
-      const snapshot = await window.yadaw.stopAudioEngine()
-      if (generation === requestGeneration) updateRuntime(snapshot)
-      return snapshot
-    } catch (error) {
-      if (generation !== requestGeneration) throw error
+    const engine = audioEngineRef.value
+    if (!engine) return runtime.value
+    const result = await window.yadaw.stopAudioEngine(mutationMeta(engine, "audio-engine-stop"))
+    if (!result.ok) {
+      const message = rpcErrorMessage(result.error)
+      if (generation !== requestGeneration) throw new Error(message)
       lifecycle.value = {
         status: "error",
         runtime: runtime.value,
-        error: error instanceof Error ? error.message : t("errors.unableToStopAudioEngine")
+        error: message
       }
-      throw error
+      throw new Error(message)
     }
+    audioEngineRef.value = null
+    transportRef.value = null
+    transportRevision.value = result.value.revision
+    if (generation === requestGeneration) updateRuntime(result.value.runtime)
+    return result.value.runtime
   }
 
   async function startRoundTripLatencyMeasurement(
     request: RoundTripLatencyMeasurementRequest
   ): Promise<RoundTripLatencyMeasurement> {
-    const measurement = await window.yadaw.startRoundTripLatencyMeasurement(request)
-    roundTripLatencyMeasurement.value = measurement
-    return measurement
+    const target = audioHostRef.value
+    if (!target) return roundTripLatencyMeasurement.value
+    const result = await window.yadaw.startRoundTripLatencyMeasurement(
+      mutationMeta(target, "audio-round-trip-latency"),
+      request
+    )
+    if (!result.ok) {
+      rpcError.value = rpcErrorMessage(result.error)
+      return roundTripLatencyMeasurement.value
+    }
+    roundTripLatencyMeasurement.value = result.value
+    return result.value
   }
 
   async function refreshRoundTripLatencyMeasurement(): Promise<RoundTripLatencyMeasurement> {
-    const measurement = await window.yadaw.roundTripLatencyMeasurementSnapshot()
-    roundTripLatencyMeasurement.value = measurement
-    return measurement
+    const target = audioHostRef.value
+    if (!target) return roundTripLatencyMeasurement.value
+    const result = await window.yadaw.roundTripLatencyMeasurementSnapshot(readMeta(target))
+    if (!result.ok) {
+      rpcError.value = rpcErrorMessage(result.error)
+      return roundTripLatencyMeasurement.value
+    }
+    roundTripLatencyMeasurement.value = result.value
+    return result.value
   }
 
   function applyLifecycleState(state: AudioLifecycleState): void {
@@ -211,6 +252,18 @@ export const useAudioRuntimeStore = defineStore("audio-runtime", () => {
     const accepted = structuredClone(state)
     updateRuntime(accepted.runtime)
     lifecycle.value = accepted
+  }
+
+  function applyResources(resources: AudioResourceSnapshot): void {
+    audioHostRef.value = structuredClone(resources.host)
+    audioEngineRef.value = resources.engine ? structuredClone(resources.engine) : null
+    transportRef.value = resources.transport ? structuredClone(resources.transport) : null
+    midiRuntimeRef.value = structuredClone(resources.midiRuntime)
+    transportRevision.value = resources.revision
+  }
+
+  function advanceTransportRevision(revision: number): void {
+    if (revision > transportRevision.value) transportRevision.value = revision
   }
 
   const polling = useIntervalFn(() => void refresh(), POLLING_INTERVAL_MS, { immediate: false })
@@ -374,7 +427,14 @@ export const useAudioRuntimeStore = defineStore("audio-runtime", () => {
     warnings,
     lastError,
     lastUpdatedAt,
+    audioHostRef,
+    audioEngineRef,
+    transportRef,
+    midiRuntimeRef,
+    transportRevision,
     applyLifecycleState,
+    applyResources,
+    advanceTransportRevision,
     refresh,
     startEngine,
     stopEngine,

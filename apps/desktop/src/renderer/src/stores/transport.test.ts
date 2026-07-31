@@ -4,10 +4,12 @@ import type {
   ProjectGraphSnapshot,
   PluginInstanceState,
   PluginRuntimeStatus,
+  RpcResult,
   TransportSnapshot
 } from "@yadaw/contracts"
 import type { ProjectAssetSummary as Asset } from "@yadaw/contracts"
 import { assetsToTimelineClips, useTransportStore } from "./transport"
+import { useAudioRuntimeStore } from "./audioRuntime"
 import { useMixerStore } from "./mixer"
 import { usePluginStore } from "./plugins"
 
@@ -79,10 +81,48 @@ const emptyGraph: ProjectGraphSnapshot = {
   }
 }
 
+function success(value: TransportSnapshot, resourceRevision = 1): RpcResult<TransportSnapshot> {
+  return {
+    ok: true,
+    requestId: "request",
+    operationId: "operation",
+    resourceRevision,
+    value,
+    warnings: []
+  }
+}
+
 describe("transport store", () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     useMixerStore().graph = structuredClone(emptyGraph)
+    useAudioRuntimeStore().applyResources({
+      host: {
+        kind: "audio-host",
+        id: "audio-host",
+        epoch: "main-epoch",
+        generation: 1
+      },
+      midiRuntime: {
+        kind: "midi-runtime",
+        id: "midi-runtime",
+        epoch: "main-epoch",
+        generation: 1
+      },
+      engine: {
+        kind: "audio-engine",
+        id: "audio-engine",
+        epoch: "main-epoch",
+        generation: 1
+      },
+      transport: {
+        kind: "transport",
+        id: "transport",
+        epoch: "main-epoch",
+        generation: 1
+      },
+      revision: 0
+    })
   })
 
   it("lays project recordings out consecutively using their real frame durations", () => {
@@ -95,31 +135,29 @@ describe("transport store", () => {
   })
 
   it("ignores a stale polling response that resolves last", async () => {
-    let resolveOld!: (value: TransportSnapshot) => void
-    const old = new Promise<TransportSnapshot>((resolve) => {
+    let resolveOld!: (value: RpcResult<TransportSnapshot>) => void
+    const old = new Promise<RpcResult<TransportSnapshot>>((resolve) => {
       resolveOld = resolve
     })
     window.yadaw.transportSnapshot = vi
       .fn()
       .mockReturnValueOnce(old)
-      .mockResolvedValueOnce({ state: "playing", positionFrames: 200, sampleRate: 48_000 })
+      .mockResolvedValueOnce(success({ state: "playing", positionFrames: 200, sampleRate: 48_000 }))
     const transport = useTransportStore()
 
     const first = transport.refresh()
     const second = transport.refresh()
     await second
-    resolveOld({ state: "stopped", positionFrames: 10, sampleRate: 48_000 })
+    resolveOld(success({ state: "stopped", positionFrames: 10, sampleRate: 48_000 }))
     await first
 
     expect(transport.snapshot).toMatchObject({ state: "playing", positionFrames: 200 })
   })
 
   it("coalesces same-turn seek requests to the latest position", async () => {
-    window.yadaw.transportCommand = vi.fn().mockResolvedValue({
-      state: "stopped",
-      positionFrames: 144_000,
-      sampleRate: 48_000
-    })
+    window.yadaw.transportCommand = vi
+      .fn()
+      .mockResolvedValue(success({ state: "stopped", positionFrames: 144_000, sampleRate: 48_000 }))
     const transport = useTransportStore()
 
     transport.seek(1)
@@ -129,10 +167,17 @@ describe("transport store", () => {
     await Promise.resolve()
 
     expect(window.yadaw.transportCommand).toHaveBeenCalledOnce()
-    expect(window.yadaw.transportCommand).toHaveBeenCalledWith({
-      type: "seek",
-      positionFrames: 144_000
-    })
+    expect(window.yadaw.transportCommand).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target: expect.objectContaining({ kind: "transport" }),
+        expectedRevision: 0,
+        mutation: expect.any(Object)
+      }),
+      {
+        type: "seek",
+        positionFrames: 144_000
+      }
+    )
   })
 
   it("can play an empty project while the metronome system channel is enabled", async () => {
@@ -161,17 +206,18 @@ describe("transport store", () => {
         }
       ]
     }
-    window.yadaw.transportCommand = vi.fn().mockResolvedValue({
-      state: "playing",
-      positionFrames: 0,
-      sampleRate: 48_000
-    })
+    window.yadaw.transportCommand = vi
+      .fn()
+      .mockResolvedValue(success({ state: "playing", positionFrames: 0, sampleRate: 48_000 }))
     const transport = useTransportStore()
 
     expect(transport.canPlay).toBe(true)
     await transport.play()
 
-    expect(window.yadaw.transportCommand).toHaveBeenCalledWith({ type: "play" })
+    expect(window.yadaw.transportCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ target: expect.objectContaining({ kind: "transport" }) }),
+      { type: "play" }
+    )
   })
 
   it("rewinds to the start before playing when the playhead is at the content end", async () => {
@@ -194,16 +240,12 @@ describe("transport store", () => {
     }
     window.yadaw.transportCommand = vi
       .fn()
-      .mockResolvedValueOnce({
-        state: "stopped",
-        positionFrames: 0,
-        sampleRate: 48_000
-      })
-      .mockResolvedValueOnce({
-        state: "playing",
-        positionFrames: 0,
-        sampleRate: 48_000
-      })
+      .mockResolvedValueOnce(
+        success({ state: "stopped", positionFrames: 0, sampleRate: 48_000 }, 1)
+      )
+      .mockResolvedValueOnce(
+        success({ state: "playing", positionFrames: 0, sampleRate: 48_000 }, 2)
+      )
     const transport = useTransportStore()
     transport.snapshot = {
       state: "stopped",
@@ -213,11 +255,16 @@ describe("transport store", () => {
 
     await transport.play()
 
-    expect(window.yadaw.transportCommand).toHaveBeenNthCalledWith(1, {
-      type: "seek",
-      positionFrames: 0
-    })
-    expect(window.yadaw.transportCommand).toHaveBeenNthCalledWith(2, { type: "play" })
+    expect(window.yadaw.transportCommand).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ expectedRevision: 0 }),
+      { type: "seek", positionFrames: 0 }
+    )
+    expect(window.yadaw.transportCommand).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ expectedRevision: 1 }),
+      { type: "play" }
+    )
   })
 
   it("keeps the playhead when paused inside a finite plugin tail window", async () => {
@@ -240,11 +287,9 @@ describe("transport store", () => {
       plugins: [effectInstance("reverb-1")]
     }
     usePluginStore().runtime = { "reverb-1": activeRuntime("reverb-1", 48_000) }
-    window.yadaw.transportCommand = vi.fn().mockResolvedValue({
-      state: "playing",
-      positionFrames: 60_000,
-      sampleRate: 48_000
-    })
+    window.yadaw.transportCommand = vi
+      .fn()
+      .mockResolvedValue(success({ state: "playing", positionFrames: 60_000, sampleRate: 48_000 }))
     const transport = useTransportStore()
     // Paused past the content end but before the tail finishes decaying.
     transport.snapshot = {
@@ -256,7 +301,10 @@ describe("transport store", () => {
     await transport.play()
 
     expect(window.yadaw.transportCommand).toHaveBeenCalledOnce()
-    expect(window.yadaw.transportCommand).toHaveBeenCalledWith({ type: "play" })
+    expect(window.yadaw.transportCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ expectedRevision: 0 }),
+      { type: "play" }
+    )
   })
 
   it("rewinds before playing once the playhead reaches the end of the plugin tail", async () => {
@@ -279,11 +327,9 @@ describe("transport store", () => {
       plugins: [effectInstance("reverb-1")]
     }
     usePluginStore().runtime = { "reverb-1": activeRuntime("reverb-1", 48_000) }
-    window.yadaw.transportCommand = vi.fn().mockResolvedValue({
-      state: "stopped",
-      positionFrames: 0,
-      sampleRate: 48_000
-    })
+    window.yadaw.transportCommand = vi
+      .fn()
+      .mockResolvedValue(success({ state: "stopped", positionFrames: 0, sampleRate: 48_000 }))
     const transport = useTransportStore()
     transport.snapshot = {
       state: "stopped",
@@ -293,11 +339,16 @@ describe("transport store", () => {
 
     await transport.play()
 
-    expect(window.yadaw.transportCommand).toHaveBeenNthCalledWith(1, {
-      type: "seek",
-      positionFrames: 0
-    })
-    expect(window.yadaw.transportCommand).toHaveBeenNthCalledWith(2, { type: "play" })
+    expect(window.yadaw.transportCommand).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ expectedRevision: 0 }),
+      { type: "seek", positionFrames: 0 }
+    )
+    expect(window.yadaw.transportCommand).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ expectedRevision: 1 }),
+      { type: "play" }
+    )
   })
 
   it("never auto-rewinds while a plugin reports an unbounded tail", async () => {
@@ -320,11 +371,9 @@ describe("transport store", () => {
       plugins: [effectInstance("freeze-1")]
     }
     usePluginStore().runtime = { "freeze-1": activeRuntime("freeze-1", null) }
-    window.yadaw.transportCommand = vi.fn().mockResolvedValue({
-      state: "playing",
-      positionFrames: 240_000,
-      sampleRate: 48_000
-    })
+    window.yadaw.transportCommand = vi
+      .fn()
+      .mockResolvedValue(success({ state: "playing", positionFrames: 240_000, sampleRate: 48_000 }))
     const transport = useTransportStore()
     transport.snapshot = {
       state: "stopped",
@@ -335,7 +384,10 @@ describe("transport store", () => {
     await transport.play()
 
     expect(window.yadaw.transportCommand).toHaveBeenCalledOnce()
-    expect(window.yadaw.transportCommand).toHaveBeenCalledWith({ type: "play" })
+    expect(window.yadaw.transportCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ expectedRevision: 0 }),
+      { type: "play" }
+    )
   })
 
   it("can play a MIDI-only project and treats MIDI length as content end", async () => {
@@ -356,16 +408,17 @@ describe("transport store", () => {
         }
       ]
     }
-    window.yadaw.transportCommand = vi.fn().mockResolvedValue({
-      state: "playing",
-      positionFrames: 0,
-      sampleRate: 48_000
-    })
+    window.yadaw.transportCommand = vi
+      .fn()
+      .mockResolvedValue(success({ state: "playing", positionFrames: 0, sampleRate: 48_000 }))
     const transport = useTransportStore()
 
     expect(transport.canPlay).toBe(true)
     expect(transport.contentEndSeconds).toBe(2)
     await transport.play()
-    expect(window.yadaw.transportCommand).toHaveBeenCalledWith({ type: "play" })
+    expect(window.yadaw.transportCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ expectedRevision: 0 }),
+      { type: "play" }
+    )
   })
 })

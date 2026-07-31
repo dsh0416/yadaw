@@ -4,6 +4,8 @@ import { graphDiff, readCrashMarker } from "./audio-host-graph-client"
 import { AudioHostRecordingClient } from "./audio-host-recording-client"
 import { AudioHostPluginClient } from "./audio-host-plugin-client"
 import { AudioHostTransportClient } from "./audio-host-transport-client"
+import { AudioHostGraphTransactions } from "./audio-host-graph-transactions"
+import type { PreparedGraphDeployment } from "./audio-host-graph-transactions"
 import type { AudioHostIpcClient } from "@yadaw/audio-host-client"
 import type {
   AudioBackendDescriptor,
@@ -25,7 +27,12 @@ import type {
   PluginDescriptor,
   PluginInstanceState,
   PluginParameterChange,
+  PluginParameterCommand,
+  PluginParameterEnqueueResult,
   PluginParameterInfo,
+  ProjectGraphRef,
+  RpcRequestMeta,
+  RpcResult,
   RoundTripLatencyMeasurement,
   RoundTripLatencyMeasurementRequest,
   ShortcutPreferences,
@@ -60,6 +67,7 @@ export type {
   AudioHostRecordingResult,
   AudioHostWaveform
 } from "./audio-host-wire"
+export type { PreparedGraphDeployment } from "./audio-host-graph-transactions"
 
 export class AudioHostService {
   private heartbeatInFlight = false
@@ -123,6 +131,23 @@ export class AudioHostService {
     (value) => this.plugins.coalesceParameter(value)
   )
 
+  private readonly graphTransactions = new AudioHostGraphTransactions({
+    client: () => this.client,
+    request: (command) => this.request(command),
+    loadPlugin: (plugin, sampleRate) =>
+      this.plugins.loadPluginWithRequest(plugin, sampleRate, false),
+    pluginStatus: (instanceId) => this.plugins.status(instanceId),
+    isPluginBypassed: (instanceId) => this.plugins.isBypassed(instanceId),
+    commit: (deployment) => {
+      this.commitDesiredGraph(deployment)
+      this.publishedGraph = {
+        revision: deployment.graphRevision,
+        runtime: structuredClone(deployment.runtime)
+      }
+      this.audioTransport.setChannelIds(deployment.runtime.channels)
+    }
+  })
+
   constructor(
     private readonly executablePath: string,
     private readonly crashMarkerPath: string,
@@ -152,6 +177,9 @@ export class AudioHostService {
   }
   private set client(value: AudioHostIpcClient | null) {
     this.supervisor.client = value
+  }
+  helperEpoch(): string | null {
+    return this.client?.helperEpoch ?? null
   }
   private get heartbeat(): NodeJS.Timeout | null {
     return this.supervisor.heartbeat
@@ -339,6 +367,36 @@ export class AudioHostService {
     expectedClient?: AudioHostIpcClient
   ): Promise<PriorityResponse> {
     return this.gateway.priority(command, expectedClient)
+  }
+
+  async prepareGraphDeployment(
+    meta: RpcRequestMeta,
+    projectGraph: ProjectGraphRef,
+    graphRevision: number,
+    project: ProjectGraphSnapshot,
+    runtimeInput: AudioHostGraph
+  ): Promise<RpcResult<PreparedGraphDeployment>> {
+    return this.graphTransactions.prepare(meta, projectGraph, graphRevision, project, runtimeInput)
+  }
+
+  async activateGraphDeployment(
+    deployment: PreparedGraphDeployment
+  ): ReturnType<AudioHostGraphTransactions["activate"]> {
+    return this.graphTransactions.activate(deployment)
+  }
+
+  async abortGraphDeployment(
+    deployment: PreparedGraphDeployment
+  ): ReturnType<AudioHostGraphTransactions["abort"]> {
+    return this.graphTransactions.abort(deployment)
+  }
+
+  commitDesiredGraph(deployment: PreparedGraphDeployment): void {
+    this.lastGraph = {
+      revision: deployment.graphRevision,
+      project: structuredClone(deployment.project),
+      runtime: structuredClone(deployment.runtime)
+    }
   }
 
   async loadGraph(
@@ -592,7 +650,7 @@ export class AudioHostService {
   private midiInputResult(response: ControlResponse): MidiInputSnapshot {
     const value = response.result.midi_input
     if (response.result.type !== "midi-input-snapshot" || !value) {
-      throw new Error(response.result.message ?? "audio host returned an invalid MIDI snapshot")
+      throw new Error(response.result.error?.userMessageKey ?? "errors.audioEngineUnavailable")
     }
     return {
       ports: value.ports,
@@ -808,6 +866,10 @@ export class AudioHostService {
 
   setPluginParameter(change: PluginParameterChange): Promise<void> {
     return this.plugins.setPluginParameter(change)
+  }
+
+  enqueuePluginParameter(command: PluginParameterCommand): Promise<PluginParameterEnqueueResult> {
+    return this.plugins.enqueuePluginParameter(command)
   }
 
   savePluginState(instanceId: string): Promise<{

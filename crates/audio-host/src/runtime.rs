@@ -1,3 +1,12 @@
+#![cfg_attr(
+    not(test),
+    deny(
+        clippy::expect_used,
+        clippy::panic,
+        clippy::panic_in_result_fn,
+        clippy::unwrap_used
+    )
+)]
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
     env,
@@ -39,10 +48,14 @@ use winit::{
 };
 use yadaw_dsp_runtime::protocol::{
     AudioBackend, AudioDevice, AudioDeviceList, AudioRuntime, BinaryPayload, ControlCommand,
-    ControlRequest, ControlResponse, ControlResult, GraphUpdate, HostEvent, LiveMixerGraph,
-    MixerChannelMeter, NATIVE_BUILD_FINGERPRINT, PluginEditorPreference, PriorityCommand,
-    PriorityRequest, PriorityResponse, PriorityResult, RecordingResult, RecordingWaveform,
-    RoundTripLatencyMeasurement, TransportState, read_message, write_message,
+    ControlRequest, ControlResponse, ControlResult, GraphCandidateSnapshot,
+    GraphDeploymentSnapshot, GraphDeploymentStatus, GraphOperationOutcome, GraphOperationSnapshot,
+    GraphTransactionRequest, GraphTransactionValue, GraphUpdate, HostEvent, IPC_PROTOCOL_VERSION,
+    LiveMixerGraph, MixerChannelMeter, NATIVE_BUILD_FINGERPRINT, PluginEditorPreference,
+    PriorityCommand, PriorityRequest, PriorityResponse, PriorityResult, RecordingResult,
+    RecordingWaveform, ResourceKind, ResourceRef, RoundTripLatencyMeasurement, RpcError,
+    RpcErrorCategory, RpcErrorCode, RpcErrorDetails, RpcFailure, RpcMutationOutcome,
+    RpcRequestMeta, RpcResult, RpcRetry, RpcSuccess, TransportState, read_message, write_message,
 };
 use yadaw_dsp_runtime::tempo::{TempoEvent, TimeSignatureEvent};
 use yadaw_ipc_transport::{
@@ -53,6 +66,7 @@ use yadaw_ipc_transport::{
 };
 
 include!("runtime/wire_adapters.rs");
+include!("runtime/graph_transactions.rs");
 include!("runtime/engine_actor.rs");
 include!("runtime/plugin_actor.rs");
 include!("runtime/egress.rs");

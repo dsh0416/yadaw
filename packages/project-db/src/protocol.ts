@@ -3,7 +3,8 @@ import type {
   MidiSourceState,
   ProjectAssetSummary,
   ProjectCommand,
-  ProjectConfiguration
+  ProjectConfiguration,
+  RpcError
 } from "@yadaw/contracts"
 
 export type MidiSourceInput = MidiSourceState
@@ -63,6 +64,27 @@ export interface StoredWaveformWindow {
   peaks: Uint8Array
 }
 
+export interface ProjectCommandTransactionToken {
+  id: string
+  operationId: string
+  baseRevision: number
+}
+
+export interface PreparedProjectCommand {
+  token: ProjectCommandTransactionToken
+  graph: ProjectGraphSnapshot
+}
+
+export interface CommittedProjectCommand {
+  token: ProjectCommandTransactionToken
+  graph: ProjectGraphSnapshot
+}
+
+export type ProjectCommandTransactionStatus =
+  | { state: "absent" }
+  | { state: "prepared"; token: ProjectCommandTransactionToken }
+  | { state: "committed"; result: CommittedProjectCommand }
+
 export interface WorkerRequestMap {
   create: {
     dataDir: string
@@ -77,7 +99,15 @@ export interface WorkerRequestMap {
   "update-configuration": { configuration: ProjectConfiguration }
   "list-assets": Record<never, never>
   "mixer-snapshot": Record<never, never>
-  "apply-project-command": { command: ProjectCommand; fallbackOutputId: string }
+  "prepare-project-command": {
+    operationId: string
+    baseRevision: number
+    command: ProjectCommand
+    fallbackOutputId: string
+  }
+  "commit-project-command": { token: ProjectCommandTransactionToken }
+  "abort-project-command": { token: ProjectCommandTransactionToken }
+  "project-command-status": { operationId: string }
   "import-midi": {
     source: MidiSourceInput
     command: ProjectCommand
@@ -118,7 +148,10 @@ export interface WorkerResultMap {
   "update-configuration": ProjectConfiguration
   "list-assets": ProjectAssetSummary[]
   "mixer-snapshot": ProjectGraphSnapshot
-  "apply-project-command": void
+  "prepare-project-command": PreparedProjectCommand
+  "commit-project-command": CommittedProjectCommand
+  "abort-project-command": void
+  "project-command-status": ProjectCommandTransactionStatus
   "import-midi": void
   "rollback-midi": void
   "save-plugin-states": void
@@ -153,7 +186,7 @@ export type WorkerResponseFor<K extends WorkerOperation> =
       id: number
       type: K
       ok: false
-      error: { message: string; stack?: string; code?: string }
+      error: RpcError
     }
 
 export type WorkerResponse = {

@@ -1,7 +1,13 @@
-import type { ProjectGraphSnapshot } from "@yadaw/contracts"
+import type {
+  ProjectGraphRef,
+  ProjectGraphSnapshot,
+  RpcRequestMeta,
+  RpcResult
+} from "@yadaw/contracts"
 import type { PluginStateInput } from "@yadaw/project-db/protocol"
 import { cloneGraph, validateGraph } from "@yadaw/project-model"
 import type { AudioGraphPublisher } from "./audio-graph-publisher"
+import type { PreparedProjectGraph } from "./audio-graph-publisher"
 import type { ProjectService } from "./project-service"
 
 export class ProjectGraphService {
@@ -51,6 +57,70 @@ export class ProjectGraphService {
 
   load(): Promise<ProjectGraphSnapshot> {
     return this.refreshFromDatabase(true)
+  }
+
+  prepareCandidate(
+    meta: RpcRequestMeta,
+    projectGraph: ProjectGraphRef,
+    graph: ProjectGraphSnapshot
+  ): Promise<RpcResult<PreparedProjectGraph>> {
+    const assets = this.projects.candidateAssetReader()
+    return this.enqueue(() => this.publisher.prepare(meta, projectGraph, graph, assets))
+  }
+
+  prepareMutation(
+    meta: RpcRequestMeta,
+    projectGraph: ProjectGraphRef,
+    graph: ProjectGraphSnapshot
+  ): Promise<RpcResult<PreparedProjectGraph>> {
+    const assets = this.projects.activeAssetReader()
+    return this.publisher.prepare(meta, projectGraph, graph, assets)
+  }
+
+  activateMutation(
+    meta: RpcRequestMeta,
+    prepared: PreparedProjectGraph
+  ): Promise<RpcResult<ProjectGraphSnapshot>> {
+    return this.publisher.activate(meta, prepared)
+  }
+
+  abortMutation(prepared: PreparedProjectGraph): Promise<void> {
+    return this.publisher.abort(prepared)
+  }
+
+  prepareSilentCandidate(
+    meta: RpcRequestMeta,
+    projectGraph: ProjectGraphRef
+  ): Promise<RpcResult<PreparedProjectGraph>> {
+    const current = this.snapshotNow()
+    const silent: ProjectGraphSnapshot = {
+      ...cloneGraph(current),
+      tracks: [],
+      channels: current.channels
+        .filter((channel) => channel.kind === "master" || channel.kind === "output")
+        .map((channel) => structuredClone(channel)),
+      audioClips: [],
+      sends: [],
+      plugins: [],
+      midiClips: []
+    }
+    const assets = this.projects.activeAssetReader()
+    return this.enqueue(() => this.publisher.prepare(meta, projectGraph, silent, assets))
+  }
+
+  activateCandidate(
+    meta: RpcRequestMeta,
+    prepared: PreparedProjectGraph
+  ): Promise<RpcResult<ProjectGraphSnapshot>> {
+    return this.enqueue(() => this.publisher.activate(meta, prepared))
+  }
+
+  abortCandidate(prepared: PreparedProjectGraph): Promise<void> {
+    return this.enqueue(() => this.publisher.abort(prepared))
+  }
+
+  commitCandidate(projectId: string, prepared: PreparedProjectGraph): void {
+    this.commit(projectId, prepared.graph)
   }
 
   refreshFromDatabase(publish: boolean): Promise<ProjectGraphSnapshot> {
