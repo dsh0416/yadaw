@@ -112,7 +112,7 @@ export default defineConfig({
       themeConfig: {
         nav: [
           { text: "手册", link: "/zh/manual/" },
-          { text: "发布版本", link: "https://github.com/dsh0416/yadaw/releases" }
+          { text: "下载", link: "https://github.com/dsh0416/yadaw/releases" }
         ],
         sidebar: {
           "/zh/manual/": [
