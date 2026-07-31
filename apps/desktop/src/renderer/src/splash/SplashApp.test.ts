@@ -1,3 +1,4 @@
+import { createHead } from "@unhead/vue/client"
 import { flushPromises, mount } from "@vue/test-utils"
 import { createPinia, setActivePinia } from "pinia"
 import { describe, expect, it, vi } from "vitest"
@@ -29,7 +30,11 @@ describe("SplashApp", () => {
     })
     setActivePinia(createPinia())
 
-    const wrapper = mount(SplashApp)
+    const wrapper = mount(SplashApp, {
+      global: {
+        plugins: [createHead()]
+      }
+    })
     await flushPromises()
     expect(wrapper.text()).toContain("https://github.com/dsh0416/yadaw")
     expect(wrapper.text()).toContain(`v${__APP_VERSION__}`)
