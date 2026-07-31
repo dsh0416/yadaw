@@ -16,7 +16,8 @@ export function registerProjectHandlers(context: IpcHandlerContext): void {
     recordings,
     operations,
     waveforms,
-    mixer,
+    projectGraph,
+    transport,
     lifecycle,
     audioHost: audioHostService,
     synchronizePluginStates
@@ -41,7 +42,7 @@ export function registerProjectHandlers(context: IpcHandlerContext): void {
         path = result.filePath
       }
       const created = await projects.create({ ...request, path })
-      const graph = await mixer.load()
+      const graph = await projectGraph.load()
       const assets = await projects.listAssets()
       lifecycle.completeProject(created)
       return { session: created, graph, assets }
@@ -51,7 +52,7 @@ export function registerProjectHandlers(context: IpcHandlerContext): void {
       } catch {
         // Preserve the original create failure; shutdown will terminate a stuck worker.
       }
-      await mixer.clearProject()
+      await projectGraph.clearProject()
       if (lifecycle.snapshot().project.status === "creating") lifecycle.failProject(error)
       throw error
     }
@@ -115,7 +116,7 @@ export function registerProjectHandlers(context: IpcHandlerContext): void {
         },
         true
       )
-      const graph = await mixer.load()
+      const graph = await projectGraph.load()
       operations.patch(
         operationId,
         {
@@ -151,7 +152,7 @@ export function registerProjectHandlers(context: IpcHandlerContext): void {
       } catch {
         // Preserve the original open failure; shutdown will terminate a stuck worker.
       }
-      await mixer.clearProject()
+      await projectGraph.clearProject()
       lifecycle.failProject(error)
       const activeOperation = lifecycle.snapshot().project.status === "closed"
       if (activeOperation) {
@@ -236,9 +237,9 @@ export function registerProjectHandlers(context: IpcHandlerContext): void {
         lifecycle.cancelProject()
         return false
       }
-      await mixer.clearProject()
+      await projectGraph.clearProject()
       try {
-        await mixer.transport({ type: "stop" })
+        await transport.command({ type: "stop" })
       } catch {
         // The audio engine may already be stopped.
       }
@@ -273,7 +274,7 @@ export function registerProjectHandlers(context: IpcHandlerContext): void {
     try {
       const session = await projects.updateConfiguration(configuration)
       configurationUpdated = true
-      await mixer.refreshFromDatabase(graphConfigurationChanged)
+      await projectGraph.refreshFromDatabase(graphConfigurationChanged)
       lifecycle.syncProject(session)
       if (sampleRateChanged && audioWasRunning && audioHostService) {
         lifecycle.completeAudio(normalizeAudioRuntime(await audioHostService.audioEngineSnapshot()))
@@ -291,7 +292,7 @@ export function registerProjectHandlers(context: IpcHandlerContext): void {
       }
       try {
         const restored = await projects.updateConfiguration(previous.configuration)
-        await mixer.refreshFromDatabase(graphConfigurationChanged)
+        await projectGraph.refreshFromDatabase(graphConfigurationChanged)
         lifecycle.syncProject(restored)
         if (sampleRateChanged && audioWasRunning && audioHostService) {
           let runtime = await audioHostService.audioEngineSnapshot()

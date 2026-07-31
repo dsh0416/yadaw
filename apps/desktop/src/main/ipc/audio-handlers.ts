@@ -10,7 +10,7 @@ import {
   validateRoundTripLatencyMeasurementRequest
 } from "./support"
 export function registerAudioHandlers(context: IpcHandlerContext): void {
-  const { audioHost: audioHostService, projects, mixer, lifecycle, isShuttingDown } = context
+  const { audioHost: audioHostService, projects, projectGraph, lifecycle, isShuttingDown } = context
   ipcMain.handle(IPC_CHANNELS.audioBackends, async (event) => {
     assertTrustedSender(event)
     if (!audioHostService) throw new Error("Audio host is not running")
@@ -35,7 +35,7 @@ export function registerAudioHandlers(context: IpcHandlerContext): void {
       const snapshot = normalizeAudioRuntime(
         await audioHostService.startAudioEngine(validateAudioPreferences(value))
       )
-      if (projects.current) await mixer.load()
+      if (projects.current) await projectGraph.load()
       lifecycle.completeAudio(snapshot)
       return snapshot
     } catch (error) {

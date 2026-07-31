@@ -20,7 +20,7 @@ export function registerSettingsHandlers(context: IpcHandlerContext): void {
     projects,
     recordings,
     operations,
-    mixer,
+    projectGraph,
     audioHost: audioHostService,
     synchronizePluginStates
   } = context
@@ -56,11 +56,11 @@ export function registerSettingsHandlers(context: IpcHandlerContext): void {
     if (current.softwareMonitoringEnabled === value) return current
     if (!projects.current) return settings.setSoftwareMonitoringEnabled(value)
 
-    await mixer.setSoftwareMonitoringEnabled(value)
+    await projectGraph.setSoftwareMonitoringEnabled(value)
     try {
       return await settings.setSoftwareMonitoringEnabled(value)
     } catch (error) {
-      await mixer.setSoftwareMonitoringEnabled(current.softwareMonitoringEnabled)
+      await projectGraph.setSoftwareMonitoringEnabled(current.softwareMonitoringEnabled)
       throw error
     }
   })

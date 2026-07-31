@@ -16,8 +16,9 @@ import type {
 import { DEFAULT_INSTRUMENT_COLOR, MUSICAL_TICKS_PER_QUARTER } from "@yadaw/contracts"
 import { parseMidiFile } from "@yadaw/dsp-node"
 import type { NativeNormalizedSmf } from "@yadaw/dsp-node"
-import type { MixerService } from "./mixer-service"
 import type { PluginCatalogService } from "./plugin-catalog-service"
+import type { ProjectCommandService } from "./project-command-service"
+import type { ProjectGraphService } from "./project-graph-service"
 
 interface PreparedImport {
   preview: MidiImportPreview
@@ -44,12 +45,13 @@ export class MidiImportService {
   private readonly prepared = new Map<string, PreparedImport>()
 
   constructor(
-    private readonly mixer: MixerService,
+    private readonly graphs: ProjectGraphService,
+    private readonly commands: ProjectCommandService,
     private readonly plugins: PluginCatalogService
   ) {}
 
   async prepare(path: string): Promise<MidiImportPreview> {
-    const graph = await this.mixer.snapshot()
+    const graph = await this.graphs.snapshot()
     const parsed = await parseMidiFile(path, {
       tempoEvents: graph.tempoMap.tempoEvents,
       timeSignatureEvents: graph.tempoMap.timeSignatureEvents
@@ -108,7 +110,7 @@ export class MidiImportService {
       throw new Error("Import one Format 2 sequence at a time")
     }
 
-    const graph = await this.mixer.snapshot()
+    const graph = await this.graphs.snapshot()
     const defaultOutput = graph.channels.find((channel) => channel.kind === "output")
     if (!defaultOutput) throw new Error("Project has no hardware Output")
     const sourceId = randomUUID()
@@ -212,7 +214,7 @@ export class MidiImportService {
       }
       commands.push({ type: "create-midi-clip", clip })
     }
-    const result = await this.mixer.executeMidiImport(
+    const result = await this.commands.executeMidiImport(
       {
         id: sourceId,
         name: basename(prepared.preview.path),

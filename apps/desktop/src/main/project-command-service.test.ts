@@ -9,8 +9,12 @@ import type {
   ProjectSession
 } from "@yadaw/contracts"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { AssetMaterializer } from "./asset-materializer"
+import { AudioGraphCompiler } from "./audio-graph-compiler"
+import { AudioGraphPublisher } from "./audio-graph-publisher"
 import type { AudioHostService } from "./audio-host-service"
-import { MixerService } from "./mixer-service"
+import { ProjectCommandService } from "./project-command-service"
+import { ProjectGraphService } from "./project-graph-service"
 import type { ProjectService } from "./project-service"
 
 const effectDescriptor: PluginDescriptor = {
@@ -144,17 +148,43 @@ function projectMock(initialGraph = graph()): ProjectMock {
 
 const directories: string[] = []
 
+interface ProjectHarness {
+  load: ProjectGraphService["load"]
+  snapshot: ProjectGraphService["snapshot"]
+  savePluginStates: ProjectGraphService["savePluginStates"]
+  refreshFromDatabase: ProjectGraphService["refreshFromDatabase"]
+  clearProject: ProjectGraphService["clearProject"]
+  deleteUnusedAssets: ProjectGraphService["deleteUnusedAssets"]
+  execute: ProjectCommandService["execute"]
+  executeMidiImport: ProjectCommandService["executeMidiImport"]
+}
+
 async function mixer(
   projects: ProjectMock,
   audioHost?: Partial<AudioHostService>
-): Promise<MixerService> {
+): Promise<ProjectHarness> {
   const directory = await mkdtemp(join(tmpdir(), "yadaw-mixer-service-"))
   directories.push(directory)
-  return new MixerService(
-    directory,
-    projects.service,
-    (audioHost ?? null) as AudioHostService | null
+  const host = (audioHost ?? null) as AudioHostService | null
+  const publisher = new AudioGraphPublisher(
+    new AudioGraphCompiler(),
+    new AssetMaterializer(directory, projects.service),
+    host,
+    null,
+    null
   )
+  const graphs = new ProjectGraphService(projects.service, publisher)
+  const commands = new ProjectCommandService(graphs, projects.service, publisher, host)
+  return {
+    load: graphs.load.bind(graphs),
+    snapshot: graphs.snapshot.bind(graphs),
+    savePluginStates: graphs.savePluginStates.bind(graphs),
+    refreshFromDatabase: graphs.refreshFromDatabase.bind(graphs),
+    clearProject: graphs.clearProject.bind(graphs),
+    deleteUnusedAssets: graphs.deleteUnusedAssets.bind(graphs),
+    execute: commands.execute.bind(commands),
+    executeMidiImport: commands.executeMidiImport.bind(commands)
+  }
 }
 
 afterEach(async () => {
@@ -162,7 +192,7 @@ afterEach(async () => {
   await Promise.all(directories.splice(0).map((directory) => rm(directory, { recursive: true })))
 })
 
-describe("MixerService project graph cache", () => {
+describe("project graph and command services", () => {
   it("loads once and returns defensive cached snapshots", async () => {
     const projects = projectMock()
     const service = await mixer(projects)
@@ -335,11 +365,11 @@ describe("MixerService project graph cache", () => {
     expect((await service.snapshot()).sampleRate).toBe(96_000)
 
     projects.session = { ...projects.session!, id: "project-2" }
-    await expect(service.snapshot()).rejects.toThrow("Mixer graph is not loaded")
+    await expect(service.snapshot()).rejects.toThrow("Project graph is not loaded")
     projects.mixerSnapshot.mockResolvedValueOnce(graph())
     await service.load()
     await service.clearProject()
-    await expect(service.snapshot()).rejects.toThrow("Mixer graph is not loaded")
+    await expect(service.snapshot()).rejects.toThrow("Project graph is not loaded")
   })
 
   it("deletes only assets that are not referenced by the cached graph", async () => {
@@ -363,7 +393,7 @@ describe("MixerService project graph cache", () => {
     await service.load()
 
     await expect(service.deleteUnusedAssets(["used-asset"])).rejects.toThrow(
-      "is still used by a timeline clip"
+      "is still used by an audio clip"
     )
     await service.deleteUnusedAssets(["unused-asset"])
 

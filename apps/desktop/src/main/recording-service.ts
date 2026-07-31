@@ -18,8 +18,9 @@ import type { AudioHostService } from "./audio-host-service"
 import type { ApplicationSettingsStore } from "./application-settings"
 import { t } from "./i18n"
 import type { OperationService } from "./operation-service"
+import type { ProjectGraphService } from "./project-graph-service"
 import type { ProjectService } from "./project-service"
-import type { MixerService } from "./mixer-service"
+import type { TransportService } from "./transport-service"
 
 interface RecordingTrackSidecar {
   assetId: string
@@ -58,7 +59,8 @@ export class RecordingService {
     private readonly settings: ApplicationSettingsStore,
     private readonly projects: ProjectService,
     private readonly operations: OperationService,
-    private readonly mixer: MixerService,
+    private readonly graphs: ProjectGraphService,
+    private readonly transport: TransportService,
     private readonly audioHost: AudioHostService | null = null
   ) {}
 
@@ -101,7 +103,7 @@ export class RecordingService {
       throw new Error("Start the audio engine before recording")
     }
     const applicationSettings = await this.settings.get()
-    const graph = await this.mixer.snapshot()
+    const graph = await this.graphs.snapshot()
     const targets = graph.channels.filter(
       (channel) => channel.kind === "audio" && channel.recordArmed
     )
@@ -109,7 +111,7 @@ export class RecordingService {
     await mkdir(applicationSettings.swapDirectory, { recursive: true })
     const id = randomUUID()
     const startedAt = Date.now()
-    const transportBeforeRecording = await this.mixer.transportSnapshot()
+    const transportBeforeRecording = await this.transport.snapshot()
     const startFrame = transportBeforeRecording.positionFrames
     const partialPath = join(applicationSettings.swapDirectory, `${id}.partial.bwf`)
     const sidecarPath = join(applicationSettings.swapDirectory, `${id}.recording.json`)
@@ -157,7 +159,7 @@ export class RecordingService {
             (startFrame * sidecar.sampleRate) / project.configuration.sampleRate
           )
         })
-      await this.mixer.transport({ type: "record" })
+      await this.transport.command({ type: "record" })
     } catch (error) {
       await rm(sidecarPath, { force: true })
       throw error
@@ -211,7 +213,7 @@ export class RecordingService {
               )
             : await this.audioHost!.stopRecording()
       } finally {
-        await this.mixer.transport({
+        await this.transport.command({
           type: recording.resumePlaybackAfterRecording ? "play" : "pause"
         })
       }
@@ -428,7 +430,7 @@ export class RecordingService {
       }
     } catch (error) {
       if (imported.length > 0) {
-        await this.mixer.deleteUnusedAssets(imported)
+        await this.graphs.deleteUnusedAssets(imported)
       }
       throw error
     }
@@ -558,7 +560,7 @@ export class RecordingService {
     )
       return
     const recoverableIds = recording.tracks?.map((track) => track.assetId) ?? [recording.id]
-    await this.mixer.deleteUnusedAssets(recoverableIds)
+    await this.graphs.deleteUnusedAssets(recoverableIds)
     if (recording.state === "partial") {
       this.operations.upsert(
         {

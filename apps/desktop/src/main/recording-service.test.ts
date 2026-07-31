@@ -45,6 +45,7 @@ describe("RecordingService archive cleanup", () => {
       settings as never,
       projects as never,
       {} as never,
+      {} as never,
       {} as never
     )
     await service.cleanupCommittedForProject(projectPath)
@@ -94,6 +95,7 @@ describe("RecordingService archive cleanup", () => {
       settings as never,
       projects as never,
       operations as never,
+      {} as never,
       {} as never
     )
 

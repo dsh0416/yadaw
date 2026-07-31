@@ -12,8 +12,9 @@ import type {
 } from "@yadaw/contracts"
 import type { NativeMidiTrack, NativeNormalizedSmf } from "@yadaw/dsp-node"
 import { MidiImportService } from "./midi-import-service"
-import type { MixerService } from "./mixer-service"
 import type { PluginCatalogService } from "./plugin-catalog-service"
+import type { ProjectCommandService } from "./project-command-service"
+import type { ProjectGraphService } from "./project-graph-service"
 
 const parseMidiFile = vi.hoisted(() => vi.fn())
 
@@ -147,7 +148,8 @@ function createService(
     mixer,
     plugins,
     service: new MidiImportService(
-      mixer as unknown as MixerService,
+      mixer as unknown as ProjectGraphService,
+      mixer as unknown as ProjectCommandService,
       plugins as unknown as PluginCatalogService
     )
   }
