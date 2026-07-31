@@ -166,10 +166,11 @@ describe("StudioTopbar", () => {
 
   it("reflects and emits the one-bar count-in control", async () => {
     const wrapper = mountTopbar()
-    await wrapper.setProps({ countInEnabled: true })
+    await wrapper.setProps({ countInEnabled: true, metronomeChannel: null })
 
     const button = wrapper.get('button[aria-label="Count-in"]')
     expect(button.attributes("aria-pressed")).toBe("true")
+    expect(button.attributes("aria-disabled")).toBeUndefined()
     await button.trigger("click")
 
     expect(wrapper.emitted("toggleCountIn")).toHaveLength(1)

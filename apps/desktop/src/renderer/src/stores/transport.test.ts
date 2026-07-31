@@ -422,8 +422,9 @@ describe("transport store", () => {
     )
   })
 
-  it("toggles and resets the one-bar count-in preference", () => {
+  it("toggles and resets the one-bar count-in preference", async () => {
     const transport = useTransportStore()
+    window.yadaw.transportCommand = vi.fn()
 
     expect(transport.countInEnabled).toBe(false)
     transport.toggleCountIn()
@@ -434,7 +435,11 @@ describe("transport store", () => {
       positionFrames: 0,
       sampleRate: 48_000
     }
-    expect(transport.playing).toBe(true)
+    expect(transport.countingIn).toBe(true)
+    expect(transport.playing).toBe(false)
+
+    await transport.toggle()
+    expect(window.yadaw.transportCommand).not.toHaveBeenCalled()
 
     transport.reset()
     expect(transport.countInEnabled).toBe(false)

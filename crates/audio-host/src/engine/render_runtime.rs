@@ -3,20 +3,33 @@ impl NativeMixerRuntime {
         match command {
             EngineCommand::LoadMixer(mut runtime) => {
                 self.all_notes_off();
-                if runtime.transport.state.load(Ordering::Relaxed) == TRANSPORT_COUNTING_IN {
-                    runtime
-                        .transport
-                        .state
-                        .store(TRANSPORT_STOPPED, Ordering::Relaxed);
+                let state = runtime.transport.state.load(Ordering::Relaxed);
+                if state == TRANSPORT_COUNTING_IN {
+                    if let Some(count_in) = self.count_in {
+                        runtime.count_in = Some(count_in);
+                        runtime.chase_notes(count_in.virtual_position);
+                    } else {
+                        runtime.count_in = None;
+                        // The shared transport says count-in is active but the
+                        // private scheduler state was lost. Enter recording so
+                        // the already-committed session cannot remain silent.
+                        runtime
+                            .transport
+                            .state
+                            .store(TRANSPORT_RECORDING, Ordering::Relaxed);
+                        let position = runtime.transport.position_frames.load(Ordering::Relaxed);
+                        runtime.chase_notes(position);
+                    }
+                } else {
+                    runtime.count_in = None;
+                    let position = runtime.transport.position_frames.load(Ordering::Relaxed);
+                    runtime.metronome.reposition(
+                        &runtime.tempo_map,
+                        runtime.sample_rate,
+                        position,
+                        true,
+                    );
                 }
-                runtime.count_in = None;
-                let position = runtime.transport.position_frames.load(Ordering::Relaxed);
-                runtime.metronome.reposition(
-                    &runtime.tempo_map,
-                    runtime.sample_rate,
-                    position,
-                    true,
-                );
                 return Some(runtime);
             }
             EngineCommand::Preview(preview) => {

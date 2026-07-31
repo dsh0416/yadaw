@@ -147,7 +147,6 @@ const { t } = useI18n()
       <StudioControlButton
         :label="t('studio.topbar.countIn')"
         :pressed="countInEnabled"
-        :disabled="metronomeChannel === null"
         compact-hidden
         tone="accent"
         @activate="emit('toggleCountIn')"

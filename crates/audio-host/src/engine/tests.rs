@@ -950,6 +950,60 @@ mod tests {
             314
         );
     }
+
+    #[test]
+    fn mixer_reload_preserves_active_record_count_in() {
+        let mut runtime = transport_test_runtime(48_000, 200_000, 250, TRANSPORT_STOPPED);
+        let inputs = vec![[0.0; MAX_INPUT_CHANNELS]; 256];
+        let mut outputs = vec![[0.0; MAX_OUTPUT_CHANNELS]; 256];
+
+        let _ = runtime.handle_command(EngineCommand::Transport(
+            TransportAction::Record { count_in: true },
+            0,
+        ));
+        assert!(!runtime.render_block(&inputs, &mut outputs, None));
+        let count_in_before = runtime
+            .count_in
+            .expect("record count-in should have private scheduler state");
+
+        let mut replacement =
+            transport_test_runtime(48_000, 200_000, 250, TRANSPORT_STOPPED);
+        replacement.transport = Arc::clone(&runtime.transport);
+        runtime = runtime
+            .handle_command(EngineCommand::LoadMixer(replacement))
+            .expect("mixer load should replace the runtime");
+
+        let count_in_after = runtime
+            .count_in
+            .expect("mixer reload should preserve count-in state");
+        assert_eq!(count_in_after.virtual_position, count_in_before.virtual_position);
+        assert_eq!(count_in_after.end_frame, count_in_before.end_frame);
+        assert_eq!(
+            runtime.transport.state.load(Ordering::Relaxed),
+            TRANSPORT_COUNTING_IN
+        );
+        assert_eq!(
+            runtime.transport.position_frames.load(Ordering::Relaxed),
+            250
+        );
+
+        for _ in 0..375 {
+            if runtime.transport.state.load(Ordering::Relaxed) == TRANSPORT_RECORDING {
+                break;
+            }
+            assert!(!runtime.render_block(&inputs, &mut outputs, None));
+        }
+
+        assert_eq!(
+            runtime.transport.state.load(Ordering::Relaxed),
+            TRANSPORT_RECORDING
+        );
+        assert_eq!(
+            runtime.transport.position_frames.load(Ordering::Relaxed),
+            250
+        );
+    }
+
     #[test]
     fn auto_stop_at_content_end_then_play_restarts_from_beginning() {
         let mut runtime = transport_test_runtime(48_000, 1_000, 980, TRANSPORT_PLAYING);

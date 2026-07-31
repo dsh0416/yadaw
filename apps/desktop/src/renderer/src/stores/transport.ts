@@ -86,9 +86,7 @@ export const useTransportStore = defineStore("transport", () => {
     snapshot.value.sampleRate > 0 ? snapshot.value.positionFrames / snapshot.value.sampleRate : 0
   )
   const countingIn = computed(() => snapshot.value.state === "counting-in")
-  const playing = computed(
-    () => snapshot.value.state === "playing" || snapshot.value.state === "counting-in"
-  )
+  const playing = computed(() => snapshot.value.state === "playing")
   const recording = computed(() => snapshot.value.state === "recording")
   const contentEndSeconds = computed(() => projectContentEndSeconds(mixerStore.graph))
   const timelineDurationSeconds = computed(() =>
@@ -164,7 +162,8 @@ export const useTransportStore = defineStore("transport", () => {
   }
 
   async function play(): Promise<void> {
-    if (!canPlay.value || playing.value || loading.value) return
+    if (!canPlay.value || playing.value || countingIn.value || recording.value || loading.value)
+      return
     loading.value = true
     try {
       // Engine auto-stop leaves the playhead at the end of the content plus any
@@ -190,7 +189,8 @@ export const useTransportStore = defineStore("transport", () => {
   }
 
   function toggle(): Promise<void> | void {
-    if (playing.value || recording.value) return command({ type: "pause" })
+    if (countingIn.value || recording.value) return
+    if (playing.value) return command({ type: "pause" })
     return play()
   }
 
