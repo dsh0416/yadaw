@@ -2,6 +2,7 @@ import { tmpdir } from "node:os"
 import { resolve } from "node:path"
 import { decode, encode } from "@msgpack/msgpack"
 import { AudioHostIpcClient } from "@yadaw/audio-host-client"
+import { audioHostBinary } from "./native-binaries.ts"
 
 interface BenchmarkScenario {
   plugins: number
@@ -22,8 +23,7 @@ interface WireResponse {
 }
 
 const repositoryRoot = resolve(import.meta.dirname, "..", "..", "..")
-const executableSuffix = process.platform === "win32" ? ".exe" : ""
-const helperPath = resolve(repositoryRoot, "target", "debug", `yadaw-audio-host${executableSuffix}`)
+const helperPath = audioHostBinary(repositoryRoot)
 const pluginPath = resolve(repositoryRoot, "target", "bundles", "YADAW Gain.vst3")
 const client = new AudioHostIpcClient(
   helperPath,

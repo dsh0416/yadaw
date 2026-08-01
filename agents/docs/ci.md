@@ -50,8 +50,8 @@ uses sccache's GitHub Actions backend. Check jobs may restore a Cargo `target`
 cache; packaging jobs leave it disabled because the directory is large and can
 retain stale platform-specific build state. On Linux, coverage is collected
 in the Checks test pass itself: Vitest writes lcov as it runs and
-`cargo llvm-cov` doubles as the Rust test run, writing instrumented artifacts
-to `target-coverage/` so they stay out of the shared Checks `target` cache.
+`scripts/rust-coverage.ts` drives instrumented Rust builds into
+`target-coverage/` so they stay out of the shared Checks `target` cache.
 cargo-llvm-cov chains the sccache `RUSTC_WRAPPER` and instruments only
 workspace crates, so sccache caches those builds and repeat runs reuse them.
 
@@ -60,9 +60,24 @@ workspace crates, so sccache caches those builds and repeat runs reuse them.
 On the Linux Checks leg, CI runs `pnpm check:coverage`: `pnpm check` with
 `check:rust:coverage` in place of `check:rust` and `test:coverage:js` in place
 of the plain Vitest runs, so every test suite executes exactly once with
-coverage enabled. `cargo llvm-cov` doubles as the Rust test run; doc tests
-do not run under it and remain exercised by the Windows and macOS legs. The
-same `pnpm check:coverage` command reproduces the Linux leg locally.
+coverage enabled. Rust coverage follows the cargo-llvm-cov external-tests
+pattern in `scripts/rust-coverage.ts`:
+
+1. `cargo llvm-cov show-env` exports `RUSTFLAGS`, `LLVM_PROFILE_FILE`, and the
+   coverage target directory (`target-coverage/`).
+2. Instrumented `cargo test --workspace` runs the usual Rust suite.
+3. Instrumented `yadaw-audio-host` and `yadaw-vst3-probe` binaries are built.
+4. Steinberg VST3 fixtures and built-in truce plugs are built; the JS smokes
+   (`test:vst3-helper`, `test:vst3-editor`, `test:builtin-vst3`) launch those
+   instrumented binaries so plugin load/init/process/editor/shutdown paths
+   contribute `.profraw` data. Headless Linux uses `xvfb-run` when `DISPLAY`
+   is unset.
+5. `cargo llvm-cov report` merges profiles into `coverage/rust/lcov.info`.
+
+Doc tests do not run under this path and remain exercised by the Windows and
+macOS legs. The same `pnpm check:coverage` command reproduces the Linux leg
+locally. Set `YADAW_COVERAGE_SKIP_VST3_SMOKE=1` to skip fixture builds and JS
+smokes when iterating on unit-test coverage only.
 
 For ad-hoc local coverage, use the dedicated scripts:
 
@@ -75,11 +90,16 @@ pnpm test:coverage
 
 JavaScript coverage requires `@vitest/coverage-v8` (installed with the
 workspace). Rust coverage requires the locked `cargo-llvm-cov` tool and the
-`llvm-tools-preview` Rust component from `mise.toml`. Reports land under
-`coverage/` (gitignored) and are uploaded to Codecov with the repository
-`CODECOV_TOKEN` secret. The Rust coverage run writes instrumented objects to
-`target-coverage/` so they stay out of the shared `target/` cache, and keeps
-the sccache wrapper so repeat runs reuse cached builds.
+`llvm-tools` Rust component from `mise.toml`. Full Rust coverage also needs
+the pinned VST3 SDK checkout (as CI's setup-build action provides), CMake for
+SDK fixtures, and on headless Linux the `xvfb` package for editor smokes.
+Reports land under `coverage/` (gitignored) and are uploaded to Codecov with
+the repository `CODECOV_TOKEN` secret. The Rust coverage run writes
+instrumented objects to `target-coverage/` so they stay out of the shared
+`target/` cache, and keeps the sccache wrapper so repeat runs reuse cached
+builds. Smoke scripts resolve host/probe paths through `CARGO_TARGET_DIR` /
+`CARGO_LLVM_COV_TARGET_DIR` (or `YADAW_AUDIO_HOST` / `YADAW_VST3_PROBE`) so
+they use the instrumented binaries instead of a plain `target/debug` build.
 
 `codecov.yml` tags uploads with `javascript` and `rust` flags, and defines
 Codecov components for each coverage-producing workspace package or crate

@@ -2,6 +2,7 @@ import { tmpdir } from "node:os"
 import { resolve } from "node:path"
 import { decode, encode } from "@msgpack/msgpack"
 import { AudioHostIpcClient } from "@yadaw/audio-host-client"
+import { audioHostBinary } from "./native-binaries.ts"
 
 interface AttachmentReference {
   index: number
@@ -39,9 +40,8 @@ function decodeWire<T>(bytes: Uint8Array): T {
 }
 
 const repositoryRoot = resolve(import.meta.dirname, "..", "..", "..")
-const executableSuffix = process.platform === "win32" ? ".exe" : ""
 const client = new AudioHostIpcClient(
-  resolve(repositoryRoot, "target", "debug", `yadaw-audio-host${executableSuffix}`),
+  audioHostBinary(repositoryRoot),
   resolve(tmpdir(), `yadaw-ipc-${process.pid}.marker`),
   2,
   4,

@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process"
 import { promisify } from "node:util"
 import { resolve } from "node:path"
+import { vst3ProbeBinary } from "./native-binaries.ts"
 
 interface ProbeOutput {
   module?: {
@@ -18,8 +19,7 @@ interface ProbeOutput {
 
 const execFileAsync = promisify(execFile)
 const repositoryRoot = resolve(import.meta.dirname, "..", "..", "..")
-const executableSuffix = process.platform === "win32" ? ".exe" : ""
-const probePath = resolve(repositoryRoot, "target", "debug", `yadaw-vst3-probe${executableSuffix}`)
+const probePath = vst3ProbeBinary(repositoryRoot)
 
 const expected = [
   {

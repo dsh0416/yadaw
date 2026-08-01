@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url"
 import { resolve } from "node:path"
 import { tmpdir } from "node:os"
 import { decode, encode } from "@msgpack/msgpack"
+import { audioHostBinary } from "./native-binaries.ts"
 
 interface PluginParameter {
   id: number
@@ -37,10 +38,8 @@ interface PendingRequest {
 }
 
 const repositoryRoot = fileURLToPath(new URL("../../..", import.meta.url))
-const executableSuffix = process.platform === "win32" ? ".exe" : ""
 const [helperPath, pluginPath] = process.argv.slice(2)
-const resolvedHelper =
-  helperPath ?? resolve(repositoryRoot, "target", "debug", `yadaw-audio-host${executableSuffix}`)
+const resolvedHelper = helperPath ?? audioHostBinary(repositoryRoot)
 const resolvedPlugin =
   pluginPath ?? resolve(repositoryRoot, "target", "vst3-fixtures", "VST3", "Debug", "again.vst3")
 const resolvedSynth = resolve(

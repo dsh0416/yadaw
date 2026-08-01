@@ -32,7 +32,8 @@ runs:
           libopenjp2-tools \
           libxrandr-dev \
           libwayland-dev \
-          libx11-xcb-dev
+          libx11-xcb-dev \
+          xvfb
 
     - name: Install locked toolchain
       uses: jdx/mise-action@v4

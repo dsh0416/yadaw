@@ -35,13 +35,14 @@ jobs:
       fail-fast: false
       matrix:
         # Linux runs the full repository checks with coverage: every test
-        # suite executes exactly once with coverage enabled, and
-        # cargo llvm-cov doubles as the cargo test run. Windows and macOS
-        # only run the platform-dependent subset (Rust checks, napi-rs
-        # builds, unit and project-database tests); Prettier, ESLint, design
-        # audits, TypeScript-only checks, and Storybook produce identical
-        # results on every platform and would otherwise dominate the slower
-        # runners.
+        # suite executes exactly once with coverage enabled. Rust coverage
+        # instruments cargo tests plus JS VST3 smoke launches of
+        # yadaw-audio-host / yadaw-vst3-probe, then merges .profraw into
+        # LCOV. Windows and macOS only run the platform-dependent subset
+        # (Rust checks, napi-rs builds, unit and project-database tests);
+        # Prettier, ESLint, design audits, TypeScript-only checks, and
+        # Storybook produce identical results on every platform and would
+        # otherwise dominate the slower runners.
         include:
           - name: Linux x64
             os: ubuntu-latest
@@ -75,9 +76,10 @@ jobs:
         run: pnpm ${{ matrix.check-script }}
 
       # On Linux the checks above already produced both coverage reports:
-      # Vitest wrote lcov during the test pass and cargo llvm-cov doubled as
-      # the Rust test run, keeping instrumented output in target-coverage/ so
-      # it stays out of the shared Cargo target cache.
+      # Vitest wrote lcov during the test pass and scripts/rust-coverage.ts
+      # merged cargo-test plus VST3 smoke .profraw into coverage/rust/,
+      # keeping instrumented objects in target-coverage/ so they stay out of
+      # the shared Cargo target cache.
       - name: Upload JavaScript coverage to Codecov
         if: runner.os == 'Linux'
         uses: codecov/codecov-action@v5

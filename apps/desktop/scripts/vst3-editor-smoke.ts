@@ -2,6 +2,7 @@ import { tmpdir } from "node:os"
 import { resolve } from "node:path"
 import { decode, encode } from "@msgpack/msgpack"
 import { AudioHostIpcClient } from "@yadaw/audio-host-client"
+import { audioHostBinary } from "./native-binaries.ts"
 
 interface WireResponse {
   request_id: number
@@ -14,11 +15,8 @@ interface WireResponse {
 }
 
 const repositoryRoot = resolve(import.meta.dirname, "..", "..", "..")
-const executableSuffix = process.platform === "win32" ? ".exe" : ""
 const [helperArgument, pluginArgument, classIdArgument, pluginKindArgument] = process.argv.slice(2)
-const helperPath =
-  helperArgument ??
-  resolve(repositoryRoot, "target", "debug", `yadaw-audio-host${executableSuffix}`)
+const helperPath = helperArgument ?? audioHostBinary(repositoryRoot)
 const pluginPath =
   pluginArgument ??
   resolve(repositoryRoot, "target", "vst3-fixtures", "VST3", "Debug", "note-expression-synth.vst3")
