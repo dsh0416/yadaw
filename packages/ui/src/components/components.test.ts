@@ -274,6 +274,7 @@ describe("UI controls", () => {
         modelValue: "1",
         size: "compact",
         appearance: "embedded",
+        hoverTreatment: "host-tint",
         options: [
           { label: "IN 1", value: "1" },
           { label: "IN 2", value: "2" }
@@ -286,6 +287,7 @@ describe("UI controls", () => {
 
     const trigger = wrapper.get("button")
     expect(trigger.classes()).toContain("ui-cascading-select--embedded")
+    expect(trigger.classes()).toContain("ui-cascading-select--hover-host-tint")
     expect(trigger.text()).toBe("IN 1")
 
     await trigger.trigger("click")

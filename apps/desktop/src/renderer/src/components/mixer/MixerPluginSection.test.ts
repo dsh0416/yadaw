@@ -135,8 +135,10 @@ describe("MixerPluginSection", () => {
       1
     ])
 
-    await wrapper.get('button[aria-label="Add VST3 audio effect"]').trigger("click")
+    const pickerTrigger = wrapper.get('button[aria-label="Add VST3 audio effect"]')
+    await pickerTrigger.trigger("click")
     await flushPromises()
+    expect(pickerTrigger.attributes("data-state")).toBe("open")
     await openPickerSubmenu("Browse YADAW plug-ins")
     await openPickerSubmenu("Choose Delay")
     expect(wrapper.emitted("insert")).toHaveLength(1)

@@ -171,6 +171,7 @@ defineExpose({
   max-width: min(320px, calc(100vw - 16px));
   max-height: min(420px, calc(100dvh - 16px));
   padding: 5px;
+  overflow-x: hidden;
   overflow-y: auto;
   border: 1px solid var(--ui-color-border-strong);
   border-radius: 7px;
@@ -178,6 +179,47 @@ defineExpose({
   background: var(--ui-color-surface-raised);
   box-shadow: var(--ui-shadow-md);
   animation: ui-menu-in var(--ui-motion-fast) var(--ui-ease-standard);
+}
+
+.ui-menu__content::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.ui-menu__content::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.ui-menu__content::-webkit-scrollbar-track,
+.ui-menu__content::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.ui-menu__content::-webkit-scrollbar-thumb {
+  min-height: 24px;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ui-color-text-subtle) 72%, transparent);
+  background-clip: padding-box;
+}
+
+.ui-menu__content::-webkit-scrollbar-thumb:hover {
+  background: var(--ui-color-text-muted);
+  background-clip: padding-box;
+}
+
+.ui-menu__content::-webkit-scrollbar-thumb:active {
+  background: var(--ui-color-action);
+  background-clip: padding-box;
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  .ui-menu__content {
+    scrollbar-color: color-mix(in srgb, var(--ui-color-text-subtle) 72%, transparent) transparent;
+    scrollbar-width: thin;
+  }
 }
 
 .ui-menu__root-content {
@@ -447,6 +489,15 @@ defineExpose({
 }
 
 @media (forced-colors: active) {
+  .ui-menu__content {
+    scrollbar-color: auto;
+  }
+
+  .ui-menu__content::-webkit-scrollbar-thumb {
+    background: CanvasText;
+    background-clip: padding-box;
+  }
+
   .ui-menu__item[data-highlighted],
   .ui-menu__sub-trigger[data-state="open"] {
     outline: 1px solid Highlight;

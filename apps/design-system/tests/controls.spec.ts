@@ -18,6 +18,35 @@ test("cascading select menus use compact dropdown typography", async ({ page }) 
   await expect(bus).toHaveCSS("font-size", "9px")
 })
 
+test("embedded cascading selects can tint their host instead of using surface color", async ({
+  page
+}) => {
+  await page.goto(
+    "/iframe.html?id=components-forms-field--embedded-hover-treatments&viewMode=story&globals=theme:dark;motion:disabled"
+  )
+  const hostTint = page.getByRole("button", { name: "Host tint embedded hover" })
+  const surface = page.getByRole("button", { name: "Surface embedded hover" })
+  const hostTintInitial = await hostTint.evaluate(
+    (element) => getComputedStyle(element).backgroundColor
+  )
+  const hoverColors = await page.evaluate(() => {
+    const probe = document.createElement("div")
+    document.body.append(probe)
+    probe.style.backgroundColor = "var(--ui-domain-color-ffffff22)"
+    const hostTint = getComputedStyle(probe).backgroundColor
+    probe.style.backgroundColor = "var(--ui-color-surface-hover)"
+    const surface = getComputedStyle(probe).backgroundColor
+    probe.remove()
+    return { hostTint, surface }
+  })
+
+  await hostTint.hover()
+  await expect(hostTint).toHaveCSS("background-color", hoverColors.hostTint)
+  expect(hoverColors.hostTint).not.toBe(hostTintInitial)
+
+  await surface.hover()
+  await expect(surface).toHaveCSS("background-color", hoverColors.surface)
+})
 test("direct select options keep their indicator column and stay on one line", async ({ page }) => {
   await page.goto(
     "/iframe.html?id=components-forms-field--select-sizes-and-groups&viewMode=story&globals=theme:dark;motion:disabled"

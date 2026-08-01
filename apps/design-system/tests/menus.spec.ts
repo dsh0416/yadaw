@@ -37,3 +37,38 @@ test("context menu opens at the pointer and exposes nested and destructive comma
   await deleteItem.click()
   await expect(page.getByText("delete", { exact: true })).toBeVisible()
 })
+
+test("long context menus use the compact menu scrollbar and remain wheel-scrollable", async ({
+  page
+}) => {
+  await page.goto(
+    "/iframe.html?id=components-menus--scrollable-context-menu&viewMode=story&globals=theme:dark;motion:disabled"
+  )
+
+  await page.getByText("Right-click for a long command menu").click({ button: "right" })
+  const menu = page.getByRole("menu", { name: "Scrollable clip commands" })
+  await expect(menu).toBeVisible()
+
+  const metrics = await menu.evaluate((element) => {
+    const style = getComputedStyle(element)
+    const scrollbar = getComputedStyle(element, "::-webkit-scrollbar")
+    const thumb = getComputedStyle(element, "::-webkit-scrollbar-thumb")
+    return {
+      clientHeight: element.clientHeight,
+      scrollHeight: element.scrollHeight,
+      overflowX: style.overflowX,
+      scrollbarWidth: style.scrollbarWidth,
+      webkitWidth: scrollbar.width,
+      thumbBackground: thumb.backgroundColor
+    }
+  })
+  expect(metrics.scrollHeight).toBeGreaterThan(metrics.clientHeight)
+  expect(metrics.overflowX).toBe("hidden")
+  expect(metrics.scrollbarWidth).toBe("auto")
+  expect(metrics.webkitWidth).toBe("8px")
+  expect(metrics.thumbBackground).not.toBe("rgba(0, 0, 0, 0)")
+
+  await menu.hover()
+  await page.mouse.wheel(0, 240)
+  await expect.poll(() => menu.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
+})

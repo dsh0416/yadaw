@@ -424,9 +424,13 @@ function confirmDrop(selection: PluginSelection): void {
   font: var(--ui-type-size-micro) var(--ui-type-family-data);
   letter-spacing: var(--ui-type-tracking-wide);
 }
-.plugin-row.empty:not(.disabled):hover {
+.plugin-row.empty:not(.disabled):hover,
+.plugin-row.empty:not(.disabled)[data-state="open"] {
   border-color: var(--ui-domain-color-4e8dbf);
   color: var(--ui-domain-color-b7d9f3);
+  background:
+    linear-gradient(var(--ui-domain-color-ffffff22), var(--ui-domain-color-ffffff22)),
+    var(--ui-domain-color-4d4d4d);
 }
 .plugin-row.picker-trigger {
   width: 100%;

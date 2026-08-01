@@ -91,6 +91,13 @@ const clipEntries: readonly UiMenuEntry[] = [
   { kind: "item", id: "delete", label: "Delete", shortcut: "Del", tone: "danger" }
 ]
 
+const scrollEntries: readonly UiMenuEntry[] = Array.from({ length: 28 }, (_, index) => ({
+  kind: "item",
+  id: "command:" + String(index + 1),
+  label: "Command " + String(index + 1).padStart(2, "0"),
+  shortcut: index % 4 === 0 ? "⌘" + String(index + 1) : undefined
+}))
+
 const meta = {
   title: "Components/Menus",
   component: UiDropdownMenu,
@@ -174,6 +181,33 @@ export const ClipContextMenu: Story = {
           {{ lastAction }}
         </output>
       </div>
+    `
+  })
+}
+
+export const ScrollableContextMenu: Story = {
+  render: () => ({
+    components: { UiContextMenu },
+    setup() {
+      return { scrollEntries }
+    },
+    template: `
+      <UiContextMenu :entries="scrollEntries" menu-label="Scrollable clip commands">
+        <div
+          tabindex="0"
+          style="
+            width:22rem;
+            min-height:5rem;
+            padding:var(--ui-space-3);
+            border:1px solid var(--ui-color-border-strong);
+            border-radius:var(--ui-radius-sm);
+            color:var(--ui-color-text);
+            background:var(--ui-color-surface);
+          "
+        >
+          Right-click for a long command menu
+        </div>
+      </UiContextMenu>
     `
   })
 }

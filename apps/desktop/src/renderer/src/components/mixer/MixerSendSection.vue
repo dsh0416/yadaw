@@ -256,6 +256,7 @@ function createSend(value: string): void {
           placeholder=""
           size="compact"
           appearance="embedded"
+          hover-treatment="host-tint"
           class="send-target-picker"
           :aria-label="t('mixer.sendSection.addSend')"
           @update:model-value="createSend"
@@ -343,13 +344,15 @@ function createSend(value: string): void {
   cursor: default;
 }
 .send-row.empty-slot {
+  overflow: hidden;
   padding: 0;
   cursor: pointer;
 }
-.send-target-picker {
+/* The 1px row border leaves a 23px content box; override embedded's 26px default. */
+.send-row.empty-slot .send-target-picker {
   width: 100%;
-  height: 23px;
-  min-height: 23px;
+  height: 100%;
+  min-height: 0;
 }
 .send-row.empty-slot:hover {
   border-color: var(--ui-domain-color-4e8dbf);

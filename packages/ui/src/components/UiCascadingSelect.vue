@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import { computed, useAttrs } from "vue"
 import type { UiMenuEntry, UiMenuRadioOption, UiMenuSearchOptions } from "../menu"
-import type { UiCascadingSelectGroup, UiSelectOption, UiSelectSize } from "../types"
+import type {
+  UiCascadingSelectGroup,
+  UiCascadingSelectHoverTreatment,
+  UiSelectOption,
+  UiSelectSize
+} from "../types"
 import UiDropdownMenu from "./UiDropdownMenu.vue"
 
 defineOptions({ inheritAttrs: false })
@@ -14,6 +19,7 @@ const props = withDefaults(
     placeholder?: string
     size?: UiSelectSize
     appearance?: "default" | "embedded"
+    hoverTreatment?: UiCascadingSelectHoverTreatment
     invalid?: boolean
     disabled?: boolean
     searchOptions?: UiMenuSearchOptions
@@ -25,6 +31,7 @@ const props = withDefaults(
     placeholder: "Choose…",
     size: "md",
     appearance: "default",
+    hoverTreatment: "surface",
     invalid: false,
     disabled: false
   }
@@ -103,7 +110,11 @@ function choose(value: string): void {
       v-bind="attrs"
       type="button"
       class="ui-cascading-select"
-      :class="[`ui-cascading-select--${props.size}`, `ui-cascading-select--${props.appearance}`]"
+      :class="[
+        `ui-cascading-select--${props.size}`,
+        `ui-cascading-select--${props.appearance}`,
+        `ui-cascading-select--hover-${props.hoverTreatment}`
+      ]"
       :aria-invalid="props.invalid || undefined"
       :disabled="!hasSelectableOptions || props.disabled"
     >
@@ -135,8 +146,8 @@ function choose(value: string): void {
     background-color var(--ui-motion-fast) var(--ui-ease-standard);
 }
 
-.ui-cascading-select:hover:not(:disabled),
-.ui-cascading-select[data-state="open"] {
+.ui-cascading-select--hover-surface:hover:not(:disabled),
+.ui-cascading-select--hover-surface[data-state="open"] {
   border-color: var(--ui-color-border-strong);
   background: var(--ui-color-surface);
 }
@@ -197,10 +208,16 @@ function choose(value: string): void {
   box-shadow: none;
 }
 
-.ui-cascading-select--embedded:hover:not(:disabled),
-.ui-cascading-select--embedded[data-state="open"] {
+.ui-cascading-select--embedded.ui-cascading-select--hover-surface:hover:not(:disabled),
+.ui-cascading-select--embedded.ui-cascading-select--hover-surface[data-state="open"] {
   border-color: transparent;
   background: var(--ui-color-surface-hover);
+}
+
+.ui-cascading-select--embedded.ui-cascading-select--hover-host-tint:hover:not(:disabled),
+.ui-cascading-select--embedded.ui-cascading-select--hover-host-tint[data-state="open"] {
+  border-color: transparent;
+  background: var(--ui-domain-color-ffffff22);
 }
 
 .ui-cascading-select--embedded:focus-visible {

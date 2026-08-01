@@ -115,6 +115,7 @@ function toggleStereo(): void {
         :groups="inputGroups"
         size="compact"
         appearance="embedded"
+        hover-treatment="host-tint"
         :aria-label="t('mixer.inputCapsule.inputChannel', { name: channelName })"
         @update:model-value="selectInput"
       />

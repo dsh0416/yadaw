@@ -211,6 +211,19 @@ a terminal action.
 - Close or reposition when the target is removed, leaves its local viewport, or window geometry
   changes materially.
 
+### Panel scrollbar
+
+- Only the active panel scrolls. Horizontal overflow is clipped.
+- Use an 8 CSS px interaction lane with a 4 px visible thumb created by a 2 px transparent
+  inset. Do not show platform arrow buttons.
+- The track and corner remain transparent so the panel reads as one continuous raised surface.
+- The resting thumb derives from `--ui-color-text-subtle`, hover uses
+  `--ui-color-text-muted`, and active dragging uses `--ui-color-action`.
+- Keep a 24 px minimum thumb length. Wheel, touchpad, touch, Page Up/Down, Home/End, and menu
+  keyboard navigation retain native scrolling behavior.
+- Apply the same scrollbar to context roots, dropdown roots, search results, and submenu panels.
+  In forced-colors mode, return control of the scrollbar palette to the operating system.
+
 ## Visual specification
 
 Existing YADAW semantic tokens are the source of truth. Do not introduce raw menu colors or
