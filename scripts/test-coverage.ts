@@ -68,23 +68,29 @@ function cargoCoverageEnvironment(target: string): NodeJS.ProcessEnv {
     ...process.env,
     CARGO_TARGET_DIR: coverageTarget
   }
-  const output = capture(cargo, ["llvm-cov", "show-env", "--target", target], baseEnvironment)
+  // Request cmd syntax on every host because it is a simple `set KEY=VALUE`
+  // grammar. The default POSIX output shell-quotes values, which must not be
+  // copied literally into spawn's environment.
+  const output = capture(
+    cargo,
+    ["llvm-cov", "show-env", "--cmd", "--target", target],
+    baseEnvironment
+  )
   const environment: NodeJS.ProcessEnv = { ...baseEnvironment }
 
   for (const rawLine of output.split(/\r?\n/u)) {
     const line = rawLine.trim()
     if (!line || line.startsWith("#")) continue
 
-    const assignment = line.replace(/^(?:export\s+|set\s+)/u, "")
+    if (!line.startsWith("set ")) {
+      fail(`Unexpected cargo llvm-cov environment line: ${rawLine}`)
+    }
+    const assignment = line.slice("set ".length)
     const separator = assignment.indexOf("=")
     if (separator <= 0) fail(`Unexpected cargo llvm-cov environment line: ${rawLine}`)
 
     const key = assignment.slice(0, separator).trim()
-    let value = assignment.slice(separator + 1).trim()
-    if (value.startsWith('"') && value.endsWith('"')) {
-      value = value.slice(1, -1).replaceAll('\\"', '"').replaceAll("\\\\", "\\")
-    }
-
+    const value = assignment.slice(separator + 1)
     environment[key] = value
   }
 

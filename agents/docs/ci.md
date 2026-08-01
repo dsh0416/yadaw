@@ -70,6 +70,13 @@ native build is repeated. Doc tests do not run under it and remain exercised by
 the Windows and macOS legs. The same `pnpm check:coverage` command reproduces the
 Linux leg locally.
 
+The workspace and `yadaw-dsp-node/bench-internals` feature selectors apply when
+Cargo creates the instrumented test binaries and napi-rs modules. The final
+`cargo llvm-cov report` follows cargo-llvm-cov's external-test workflow and
+exports every object and raw profile collected through that environment. It does
+not repeat build selectors; the locked cargo-llvm-cov version rejects them on the
+`report` subcommand.
+
 For ad-hoc local coverage, use the dedicated scripts:
 
 ```sh
