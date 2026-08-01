@@ -4,7 +4,9 @@ export { default as UiCascadingMenu } from "./components/UiCascadingMenu.vue"
 export { default as UiCascadingSelect } from "./components/UiCascadingSelect.vue"
 export { default as UiCheckbox } from "./components/UiCheckbox.vue"
 export { default as UiChoiceChip } from "./components/UiChoiceChip.vue"
+export { default as UiContextMenu } from "./components/UiContextMenu.vue"
 export { default as UiDialog } from "./components/UiDialog.vue"
+export { default as UiDropdownMenu } from "./components/UiDropdownMenu.vue"
 export { default as UiEmptyState } from "./components/UiEmptyState.vue"
 export { default as UiField } from "./components/UiField.vue"
 export { default as UiIconButton } from "./components/UiIconButton.vue"
@@ -28,11 +30,19 @@ export { default as UiToolbar } from "./components/UiToolbar.vue"
 export { default as YadawLogo } from "./components/YadawLogo.vue"
 export { useLocaleFonts } from "./composables/useLocaleFonts"
 export { UI_DOMAIN_COLORS } from "./domainColors"
+export {
+  countMenuTerminals,
+  menuHasDetails,
+  normalizeMenuSearchText,
+  searchMenuEntries
+} from "./menu"
 
 export type {
   UiActionVariant,
   UiAlertAction,
   UiCascadingMenuItem,
+  UiCascadingSelectAppearance,
+  UiCascadingSelectHoverTreatment,
   UiCascadingSelectGroup,
   UiControlSize,
   UiMenubarItem,
@@ -44,3 +54,18 @@ export type {
   UiSelectOption,
   UiSegmentedOption
 } from "./types"
+
+export type {
+  UiMenuCheckboxItem,
+  UiMenuDensity,
+  UiMenuEntry,
+  UiMenuGroup,
+  UiMenuItem,
+  UiMenuRadioGroup,
+  UiMenuRadioOption,
+  UiMenuSearchOptions,
+  UiMenuSearchResults,
+  UiMenuSeparator,
+  UiMenuSubmenu,
+  UiMenuTone
+} from "./menu"

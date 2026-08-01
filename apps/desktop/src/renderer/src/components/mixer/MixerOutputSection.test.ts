@@ -51,6 +51,7 @@ describe("MixerOutputSection", () => {
     })
 
     const routeMenu = wrapper.getComponent(UiCascadingSelect)
+    expect(routeMenu.props("appearance")).toBe("workspace")
     expect(routeMenu.props("groups")).toEqual([
       {
         label: "Buses",

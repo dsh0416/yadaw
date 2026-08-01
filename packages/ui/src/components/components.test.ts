@@ -1,4 +1,4 @@
-import { DOMWrapper, flushPromises, mount } from "@vue/test-utils"
+import { DOMWrapper, mount } from "@vue/test-utils"
 import { afterEach, describe, expect, it } from "vitest"
 
 import UiButton from "./UiButton.vue"
@@ -215,6 +215,39 @@ describe("UI controls", () => {
     expect(wrapper.emitted("update:modelValue")).toEqual([["reverb"]])
   })
 
+  it("disables empty cascading select groups instead of opening blank submenus", async () => {
+    const wrapper = mount(UiCascadingSelect, {
+      attachTo: document.body,
+      props: {
+        modelValue: "output",
+        size: "compact",
+        groups: [
+          {
+            label: "Outputs",
+            options: [{ label: "Output 1–2", value: "output" }]
+          },
+          {
+            label: "Buses",
+            options: []
+          }
+        ]
+      },
+      attrs: {
+        "aria-label": "Vocal output"
+      }
+    })
+
+    await wrapper.get("button").trigger("click")
+    const buses = [
+      ...document.body.querySelectorAll<HTMLElement>(".ui-cascading-select__sub-trigger")
+    ].find((item) => item.textContent?.includes("Buses"))
+    expect(buses).toBeDefined()
+    expect(buses?.getAttribute("data-disabled")).toBe("")
+    expect(buses?.hasAttribute("disabled") || buses?.getAttribute("aria-disabled") === "true").toBe(
+      true
+    )
+  })
+
   it("searches and chooses from a multi-level cascading menu", async () => {
     const wrapper = mount(UiCascadingMenu, {
       attachTo: document.body,
@@ -257,22 +290,12 @@ describe("UI controls", () => {
     await new DOMWrapper(search).setValue("delay")
     expect(wrapper.props("search")).toBe("delay")
 
-    const vendor = new DOMWrapper(
-      document.body.querySelector<HTMLElement>('[aria-label="Browse YADAW plug-ins"]')
-    )
-    await vendor.trigger("focus")
-    await vendor.trigger("keydown", { key: "ArrowRight" })
-    await flushPromises()
-    const plugin = new DOMWrapper(
-      document.body.querySelector<HTMLElement>('[aria-label="Choose Delay"]')
-    )
-    await plugin.trigger("focus")
-    await plugin.trigger("keydown", { key: "ArrowRight" })
-    await flushPromises()
-    expect(document.body.querySelector(".ui-cascading-menu__sub-content--detailed")).not.toBeNull()
     const modeElement = document.body.querySelector<HTMLElement>(".ui-cascading-menu__item")
     expect(modeElement).not.toBeNull()
     expect(modeElement?.classList.contains("ui-cascading-menu__item--detailed")).toBe(true)
+    expect(modeElement?.classList.contains("ui-menu__item--detailed")).toBe(true)
+    expect(modeElement?.classList.contains("ui-menu__item--leading")).toBe(true)
+    expect(modeElement?.textContent).toContain("YADAW / Delay")
     const mode = new DOMWrapper(modeElement)
     await mode.trigger("click")
 
@@ -286,6 +309,7 @@ describe("UI controls", () => {
         modelValue: "1",
         size: "compact",
         appearance: "embedded",
+        hoverTreatment: "host-tint",
         options: [
           { label: "IN 1", value: "1" },
           { label: "IN 2", value: "2" }
@@ -298,6 +322,7 @@ describe("UI controls", () => {
 
     const trigger = wrapper.get("button")
     expect(trigger.classes()).toContain("ui-cascading-select--embedded")
+    expect(trigger.classes()).toContain("ui-cascading-select--hover-host-tint")
     expect(trigger.text()).toBe("IN 1")
 
     await trigger.trigger("click")

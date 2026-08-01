@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest"
 import { DOMWrapper, flushPromises, mount } from "@vue/test-utils"
 import type { MixerBusState, MixerChannelState, MixerSendState } from "@yadaw/contracts"
+import { UiCascadingSelect } from "@yadaw/ui"
 import MixerSendSection from "./MixerSendSection.vue"
 
 const channel: MixerChannelState = {
@@ -129,6 +130,8 @@ describe("MixerSendSection", () => {
     expect(wrapper.find(".send-row.alignment-spacer").exists()).toBe(false)
     expect(wrapper.find('button[aria-label="Add send"]').exists()).toBe(false)
     expect(wrapper.get('button[aria-label="Add send in empty slot"]').text()).toBe("")
+    expect(wrapper.getComponent(UiCascadingSelect).props("hoverTreatment")).toBe("host-tint")
+
     await wrapper.get('button[aria-label="Add send in empty slot"]').trigger("click")
     await flushPromises()
     const routeGroups = Array.from(

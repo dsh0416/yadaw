@@ -250,7 +250,7 @@ WCAG 2.2 AA is the release floor:
 - numeric fields expose min, max, current value, and keyboard stepping.
 
 Every Storybook story runs Axe with `parameters.a11y.test = "error"`. Complex behavior also has a
-`play` test. Critical dark/light product examples are the review surfaces for visual snapshots.
+`play` test. Critical dark/light product examples are the review surfaces for manual visual checks.
 
 ## Storybook
 
@@ -268,12 +268,11 @@ Stories are CSF TypeScript. Principles and foundations are MDX. Autodocs provide
 hand-written stories still explain behavior, boundaries, failure states, long text, keyboard
 interaction, and dark/light themes.
 
-The toolbar disables motion by default for deterministic screenshots. Choose **Motion enabled**
-only for a motion-specific review.
+The toolbar disables motion by default for deterministic interaction and reflow checks. Choose
+**Motion enabled** only for a motion-specific review.
 
-Pixel-based visual snapshots run with the bundled Fontsource faces for deterministic rendering.
-Run them with `mise exec -- pnpm design:test`. Storybook browser tests plus the controls and
-reflow Playwright tests also remain enabled in CI.
+Storybook browser tests plus the controls, menus, and reflow Playwright tests run in CI via
+`mise exec -- pnpm design:test`.
 
 ## Contribution checklist
 

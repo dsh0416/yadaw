@@ -1,6 +1,8 @@
 export type UiActionVariant = "primary" | "secondary" | "ghost" | "danger"
 export type UiControlSize = "sm" | "md" | "lg"
 export type UiSelectSize = "compact" | UiControlSize
+export type UiCascadingSelectAppearance = "default" | "embedded" | "workspace"
+export type UiCascadingSelectHoverTreatment = "surface" | "host-tint"
 export type UiNoticeTone = "neutral" | "info" | "success" | "warning" | "danger"
 
 export interface UiSelectOption {

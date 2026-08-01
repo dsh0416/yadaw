@@ -7,9 +7,9 @@
     "dev": "storybook dev -p 6006",
     "build": "storybook build --output-dir dist",
     "check": "vue-tsc --noEmit",
-    "test": "pnpm test:stories && pnpm test:visual",
+    "test": "pnpm test:stories && pnpm test:playwright",
     "test:stories": "vitest run --project storybook",
-    "test:visual": "playwright test"
+    "test:playwright": "playwright test"
   },
   "dependencies": {
     "@fontsource-variable/cascadia-mono": "^5.3.0",

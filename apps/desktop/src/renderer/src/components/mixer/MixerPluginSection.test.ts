@@ -135,8 +135,10 @@ describe("MixerPluginSection", () => {
       1
     ])
 
-    await wrapper.get('button[aria-label="Add VST3 audio effect"]').trigger("click")
+    const pickerTrigger = wrapper.get('button[aria-label="Add VST3 audio effect"]')
+    await pickerTrigger.trigger("click")
     await flushPromises()
+    expect(pickerTrigger.attributes("data-state")).toBe("open")
     await openPickerSubmenu("Browse YADAW plug-ins")
     await openPickerSubmenu("Choose Delay")
     expect(wrapper.emitted("insert")).toHaveLength(1)
@@ -188,8 +190,6 @@ describe("MixerPluginSection", () => {
     await new DOMWrapper(search).setValue("missing")
     expect(document.body.textContent).toContain("No plug-ins match this search.")
     await new DOMWrapper(search).setValue("compressor")
-    await openPickerSubmenu("Browse YADAW plug-ins")
-    await openPickerSubmenu("Choose Compressor")
 
     expect(document.body.querySelector('[title="Mono: 1 → 1"]')).not.toBeNull()
     expect(document.body.querySelector('[title="Mono to stereo: 1 → 2"]')).not.toBeNull()

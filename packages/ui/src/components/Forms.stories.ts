@@ -203,7 +203,7 @@ export const SelectSizesAndGroups: Story = {
         </UiField>
         <UiField label="Cascading route">
           <template #default="{ controlId }">
-            <UiCascadingSelect v-model="routeValue" :id="controlId" :groups="routeGroups" size="compact" />
+            <UiCascadingSelect v-model="routeValue" :id="controlId" :groups="routeGroups" size="compact" appearance="workspace" />
           </template>
         </UiField>
         <UiField label="Direct menu">
@@ -211,6 +211,30 @@ export const SelectSizesAndGroups: Story = {
             <UiCascadingSelect v-model="inputValue" :id="controlId" :options="inputOptions" size="compact" />
           </template>
         </UiField>
+      </div>
+    `
+  })
+}
+
+export const EmbeddedHoverTreatments: Story = {
+  render: () => ({
+    components: { UiCascadingSelect },
+    data: () => ({
+      hostTintValue: "input:1",
+      surfaceValue: "input:1",
+      options: [
+        { label: "IN 1–2", value: "input:1" },
+        { label: "IN 3–4", value: "input:3" }
+      ]
+    }),
+    template: `
+      <div class="storybook-stack" style="max-width:28rem">
+        <div style="overflow:hidden;border-radius:var(--ui-radius-sm);color:white;background:linear-gradient(var(--ui-domain-color-3f91d4),var(--ui-domain-color-2871ae))">
+          <UiCascadingSelect v-model="hostTintValue" :options="options" size="compact" appearance="embedded" hover-treatment="host-tint" aria-label="Host tint embedded hover" />
+        </div>
+        <div style="overflow:hidden;border-radius:var(--ui-radius-sm);color:white;background:linear-gradient(var(--ui-domain-color-3f91d4),var(--ui-domain-color-2871ae))">
+          <UiCascadingSelect v-model="surfaceValue" :options="options" size="compact" appearance="embedded" hover-treatment="surface" aria-label="Surface embedded hover" />
+        </div>
       </div>
     `
   })

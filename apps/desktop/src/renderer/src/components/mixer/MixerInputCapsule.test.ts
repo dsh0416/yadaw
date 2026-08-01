@@ -22,6 +22,7 @@ describe("MixerInputCapsule", () => {
     const select = wrapper.get('button[aria-label="Audio 1 input channel"]')
     expect(select.text()).toBe("IN 2")
     const routeMenu = wrapper.getComponent(UiCascadingSelect)
+    expect(routeMenu.props("hoverTreatment")).toBe("host-tint")
     expect(routeMenu.props("groups")?.map((group) => group.options.length)).toEqual([32, 256])
 
     const stereoButton = wrapper.get(
@@ -54,6 +55,7 @@ describe("MixerInputCapsule", () => {
     expect(formatButton.get('[role="img"]').attributes("aria-label")).toBe("2 channels audio")
     expect(formatButton.findAll("path")).toHaveLength(2)
     const routeMenu = wrapper.getComponent(UiCascadingSelect)
+    expect(routeMenu.props("hoverTreatment")).toBe("host-tint")
     expect(routeMenu.props("groups")?.map((group) => group.options.length)).toEqual([16, 128])
     routeMenu.vm.$emit("update:modelValue", "hardware:5")
     await wrapper.vm.$nextTick()
