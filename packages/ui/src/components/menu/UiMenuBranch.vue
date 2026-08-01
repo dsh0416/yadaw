@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue"
+import { computed, inject } from "vue"
 import {
   ContextMenuCheckboxItem,
   ContextMenuGroup,
@@ -28,6 +28,7 @@ import {
 } from "reka-ui"
 import type { UiMenuEntry } from "../../menu"
 import { menuHasDetails } from "../../menu"
+import { uiMenuPanelKeydownKey } from "./context"
 
 const props = withDefaults(
   defineProps<{
@@ -42,7 +43,10 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   select: [id: string]
+  toggle: [id: string]
 }>()
+
+const handleRootPanelKeydown = inject(uiMenuPanelKeydownKey, undefined)
 
 const primitives = computed(() =>
   props.variant === "context"
@@ -91,6 +95,12 @@ function entryClasses(entry: UiMenuEntry): Record<string, boolean> {
 function radioValue(value: unknown): void {
   if (typeof value === "string") emit("select", value)
 }
+
+function chooseCheckbox(event: Event, id: string): void {
+  // Component emits do not honor Vue's `.prevent` modifier; cancel Reka's close here.
+  event.preventDefault()
+  emit("toggle", id)
+}
 </script>
 
 <template>
@@ -110,6 +120,7 @@ function radioValue(value: unknown): void {
         :variant="props.variant"
         :depth="props.depth"
         @select="emit('select', $event)"
+        @toggle="emit('toggle', $event)"
       />
     </component>
 
@@ -179,12 +190,14 @@ function radioValue(value: unknown): void {
           :side-offset="4"
           :align-offset="-5"
           :collision-padding="8"
+          @keydown.capture="handleRootPanelKeydown?.($event)"
         >
           <UiMenuBranch
             :entries="entry.children"
             :variant="props.variant"
             :depth="props.depth + 1"
             @select="emit('select', $event)"
+            @toggle="emit('toggle', $event)"
           />
         </component>
       </component>
@@ -200,7 +213,7 @@ function radioValue(value: unknown): void {
       :aria-label="entry.ariaLabel"
       :aria-description="entry.disabledReason"
       :title="entry.title"
-      @select="emit('select', entry.id)"
+      @select="chooseCheckbox($event, entry.id)"
     >
       <span class="ui-menu__leading ui-menu__indicator-slot" aria-hidden="true">
         <component :is="primitives.indicator" class="ui-menu__indicator">

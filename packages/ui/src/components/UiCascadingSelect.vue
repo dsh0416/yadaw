@@ -68,7 +68,7 @@ const entries = computed<readonly UiMenuEntry[]>(() => {
       kind: "submenu",
       id: `group:${index}:${group.label}`,
       label: group.label,
-      disabled: group.disabled,
+      disabled: Boolean(group.disabled) || !group.options.some((option) => !option.disabled),
       children: [
         {
           kind: "radio-group",

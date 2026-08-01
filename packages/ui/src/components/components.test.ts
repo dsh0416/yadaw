@@ -215,6 +215,39 @@ describe("UI controls", () => {
     expect(wrapper.emitted("update:modelValue")).toEqual([["reverb"]])
   })
 
+  it("disables empty cascading select groups instead of opening blank submenus", async () => {
+    const wrapper = mount(UiCascadingSelect, {
+      attachTo: document.body,
+      props: {
+        modelValue: "output",
+        size: "compact",
+        groups: [
+          {
+            label: "Outputs",
+            options: [{ label: "Output 1–2", value: "output" }]
+          },
+          {
+            label: "Buses",
+            options: []
+          }
+        ]
+      },
+      attrs: {
+        "aria-label": "Vocal output"
+      }
+    })
+
+    await wrapper.get("button").trigger("click")
+    const buses = [
+      ...document.body.querySelectorAll<HTMLElement>(".ui-cascading-select__sub-trigger")
+    ].find((item) => item.textContent?.includes("Buses"))
+    expect(buses).toBeDefined()
+    expect(buses?.getAttribute("data-disabled")).toBe("")
+    expect(buses?.hasAttribute("disabled") || buses?.getAttribute("aria-disabled") === "true").toBe(
+      true
+    )
+  })
+
   it("searches and chooses from a multi-level cascading menu", async () => {
     const wrapper = mount(UiCascadingMenu, {
       attachTo: document.body,

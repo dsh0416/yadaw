@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, nextTick, useTemplateRef } from "vue"
+import { computed, nextTick, provide, useTemplateRef } from "vue"
 import type { UiMenuDensity, UiMenuEntry, UiMenuSearchOptions } from "../../menu"
 import { menuHasDetails, searchMenuEntries } from "../../menu"
+import { uiMenuPanelKeydownKey } from "./context"
 import UiMenuBranch from "./UiMenuBranch.vue"
 
 const props = withDefaults(
@@ -22,6 +23,7 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   select: [id: string]
+  toggle: [id: string]
   "update:query": [value: string]
   close: []
 }>()
@@ -37,7 +39,9 @@ const visibleEntries = computed(() =>
 )
 const isEmpty = computed(() => visibleEntries.value.length === 0)
 const emptyCopy = computed(() =>
-  normalizedQuery.value ? props.search?.emptyMessage : props.emptyMessage
+  normalizedQuery.value && props.entries.length > 0
+    ? props.search?.emptyMessage
+    : props.emptyMessage
 )
 const resultCountCopy = computed(() => {
   if (!normalizedQuery.value) return ""
@@ -107,6 +111,8 @@ function focusFirstItem(): void {
   panel.value?.querySelector<HTMLElement>(".ui-menu__item:not([data-disabled])")?.focus()
 }
 
+provide(uiMenuPanelKeydownKey, handlePanelKeydown)
+
 defineExpose({
   focusSearch,
   handlePanelKeydown
@@ -160,6 +166,7 @@ defineExpose({
       :entries="visibleEntries"
       :variant="props.variant"
       @select="emit('select', $event)"
+      @toggle="emit('toggle', $event)"
     />
   </div>
 </template>

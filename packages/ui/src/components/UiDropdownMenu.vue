@@ -48,6 +48,10 @@ function choose(id: string): void {
   open.value = false
 }
 
+function toggle(id: string): void {
+  emit("select", id)
+}
+
 function handleOpenAutoFocus(event: Event): void {
   if (!props.searchOptions) return
   event.preventDefault()
@@ -81,6 +85,7 @@ function handleOpenAutoFocus(event: Event): void {
           :density="props.density"
           @update:query="search = $event"
           @select="choose"
+          @toggle="toggle"
           @close="open = false"
         />
       </DropdownMenuContent>

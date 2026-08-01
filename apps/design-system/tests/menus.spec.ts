@@ -49,6 +49,42 @@ test("context menu opens at the pointer and exposes nested and destructive comma
   await expect(page.getByText("delete", { exact: true })).toBeVisible()
 })
 
+test("checkbox commands stay open after toggle and submenu typing focuses search", async ({
+  page
+}) => {
+  await page.goto(
+    "/iframe.html?id=components-menus--clip-context-menu&viewMode=story&globals=theme:dark;motion:disabled"
+  )
+
+  await page.getByText("Verse · guitar").click({ button: "right" })
+  const loop = page.getByRole("menuitemcheckbox", { name: "Loop clip" })
+  await expect(loop).toBeChecked()
+  await loop.click()
+  await expect(page.getByRole("menu", { name: "Verse clip commands" })).toBeVisible()
+  await expect(page.getByText("loop", { exact: true })).toBeVisible()
+})
+
+test("searchable dropdown accepts typed characters from an open submenu", async ({ page }) => {
+  await page.goto(
+    "/iframe.html?id=components-menus--searchable-taxonomy&viewMode=story&globals=theme:dark;motion:disabled"
+  )
+
+  await page.getByRole("button", { name: "Add audio effect" }).click()
+  const search = page.getByRole("textbox", { name: "Search effects" })
+  await expect(search).toBeFocused()
+
+  const dynamics = page.getByRole("menuitem", { name: "Dynamics" })
+  await dynamics.focus()
+  await page.keyboard.press("ArrowRight")
+  const compressor = page.getByRole("menuitem", { name: "Compressors" })
+  await expect(compressor).toBeVisible()
+  await compressor.focus()
+  await page.keyboard.type("pro")
+  await expect(search).toHaveValue("pro")
+  await expect(search).toBeFocused()
+  await expect(page.getByRole("menuitem", { name: "Pro-C 2" })).toBeVisible()
+})
+
 test("long context menus use the compact menu scrollbar and remain wheel-scrollable", async ({
   page
 }) => {

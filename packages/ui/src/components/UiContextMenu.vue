@@ -38,6 +38,10 @@ function choose(id: string): void {
   emit("select", id)
   open.value = false
 }
+
+function toggle(id: string): void {
+  emit("select", id)
+}
 </script>
 
 <template>
@@ -64,6 +68,7 @@ function choose(id: string): void {
           :density="props.density"
           @update:query="search = $event"
           @select="choose"
+          @toggle="toggle"
           @close="open = false"
         />
       </ContextMenuContent>

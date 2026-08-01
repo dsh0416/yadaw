@@ -1,4 +1,4 @@
-import { DOMWrapper, flushPromises, mount } from "@vue/test-utils"
+import { DOMWrapper, flushPromises, mount, type VueWrapper } from "@vue/test-utils"
 import { afterEach, describe, expect, it } from "vitest"
 import type { UiMenuEntry } from "../menu"
 import UiContextMenu from "./UiContextMenu.vue"
@@ -28,13 +28,17 @@ const effectEntries: readonly UiMenuEntry[] = [
   }
 ]
 
+let mounted: VueWrapper | undefined
+
 afterEach(() => {
+  mounted?.unmount()
+  mounted = undefined
   document.body.innerHTML = ""
 })
 
 describe("menu components", () => {
   it("flattens searchable dropdown results and emits the terminal action", async () => {
-    const wrapper = mount(UiDropdownMenu, {
+    mounted = mount(UiDropdownMenu, {
       attachTo: document.body,
       props: {
         entries: effectEntries,
@@ -50,7 +54,7 @@ describe("menu components", () => {
       }
     })
 
-    await wrapper.get("button").trigger("click")
+    await mounted.get("button").trigger("click")
     const search = document.body.querySelector<HTMLInputElement>(
       'input[aria-label="Search effects"]'
     )
@@ -64,11 +68,68 @@ describe("menu components", () => {
     expect(document.body.querySelector('[data-state="open"] .ui-menu__sub-content')).toBeNull()
 
     await new DOMWrapper(result).trigger("click")
-    expect(wrapper.emitted("select")).toEqual([["compressor"]])
+    expect(mounted.emitted("select")).toEqual([["compressor"]])
+  })
+
+  it("keeps the menu open after toggling a checked command", async () => {
+    mounted = mount(UiDropdownMenu, {
+      attachTo: document.body,
+      props: {
+        entries: effectEntries,
+        menuLabel: "Effect options",
+        open: false,
+        "onUpdate:open": (value: boolean) => void mounted?.setProps({ open: value })
+      },
+      slots: {
+        default: '<button type="button">Options</button>'
+      }
+    })
+
+    await mounted.get("button").trigger("click")
+    expect(mounted.props("open")).toBe(true)
+    const autoGain = document.body.querySelector<HTMLElement>(
+      '[role="menuitemcheckbox"][aria-checked="true"]'
+    )
+    expect(autoGain?.textContent).toContain("Auto gain")
+    await new DOMWrapper(autoGain).trigger("click")
+    await flushPromises()
+
+    expect(mounted.emitted("select")).toEqual([["auto-gain"]])
+    expect(mounted.props("open")).toBe(true)
+  })
+
+  it("keeps the host empty copy when the unfiltered tree is empty", async () => {
+    mounted = mount(UiDropdownMenu, {
+      attachTo: document.body,
+      props: {
+        entries: [],
+        menuLabel: "Add audio effect",
+        emptyMessage: "No compatible effects found.",
+        searchOptions: {
+          label: "Search effects",
+          emptyMessage: "No effects match this search."
+        }
+      },
+      slots: {
+        default: '<button type="button">Add effect</button>'
+      }
+    })
+
+    await mounted.get("button").trigger("click")
+    const search = document.body.querySelector<HTMLInputElement>(
+      'input[aria-label="Search effects"]'
+    )
+    expect(search).not.toBeNull()
+    await new DOMWrapper(search).setValue("delay")
+    await flushPromises()
+
+    expect(document.body.querySelector(".ui-menu__empty")?.textContent).toBe(
+      "No compatible effects found."
+    )
   })
 
   it("opens from a native contextmenu event and emits the selected action", async () => {
-    const wrapper = mount(UiContextMenu, {
+    mounted = mount(UiContextMenu, {
       attachTo: document.body,
       props: {
         entries: [
@@ -92,37 +153,18 @@ describe("menu components", () => {
       }
     })
 
-    await wrapper.get("button").trigger("contextmenu", {
+    await mounted.get("button").trigger("contextmenu", {
       clientX: 20,
       clientY: 20
     })
     await flushPromises()
 
-    expect(wrapper.emitted("openContext")).toHaveLength(1)
+    expect(mounted.emitted("openContext")).toHaveLength(1)
     const rename = [...document.body.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
       (item) => item.textContent?.includes("Rename")
     )
     expect(rename).toBeDefined()
     await new DOMWrapper(rename).trigger("click")
-    expect(wrapper.emitted("select")).toEqual([["rename"]])
-  })
-
-  it("renders checked commands with checkbox menu semantics", async () => {
-    const wrapper = mount(UiDropdownMenu, {
-      attachTo: document.body,
-      props: {
-        entries: effectEntries,
-        menuLabel: "Effect options"
-      },
-      slots: {
-        default: '<button type="button">Options</button>'
-      }
-    })
-
-    await wrapper.get("button").trigger("click")
-    const autoGain = document.body.querySelector<HTMLElement>(
-      '[role="menuitemcheckbox"][aria-checked="true"]'
-    )
-    expect(autoGain?.textContent).toContain("Auto gain")
+    expect(mounted.emitted("select")).toEqual([["rename"]])
   })
 })

@@ -106,7 +106,9 @@ function select(id: string): void {
   <UiDropdownMenu
     :entries="pickerMenu.entries"
     :menu-label="props.title"
-    :empty-message="props.emptyMessage"
+    :empty-message="
+      props.plugins.length === 0 ? props.emptyMessage : t('mixer.pluginPicker.noSearchResults')
+    "
     :search-options="{
       label: props.searchLabel,
       placeholder: t('mixer.pluginPicker.searchPlaceholder'),
