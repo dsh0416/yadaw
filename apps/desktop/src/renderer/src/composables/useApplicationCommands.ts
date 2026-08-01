@@ -1,3 +1,4 @@
+import { useEventListener } from "@vueuse/core"
 import { computed, onMounted, onUnmounted } from "vue"
 import { storeToRefs } from "pinia"
 import { useI18n } from "vue-i18n"
@@ -353,12 +354,13 @@ export function useApplicationCommands() {
     void execute(command)
   }
 
+  useEventListener(window, "keydown", handleShortcut)
+
   onMounted(() => {
     unsubscribe = applicationWindowStore.subscribeCommands((command) => {
       void execute(command)
     })
     unsubscribeMidi = midiInputStore.subscribeControls(handleMidiControl)
-    window.addEventListener("keydown", handleShortcut)
   })
 
   onUnmounted(() => {
@@ -366,7 +368,6 @@ export function useApplicationCommands() {
     unsubscribe = null
     unsubscribeMidi?.()
     unsubscribeMidi = null
-    window.removeEventListener("keydown", handleShortcut)
   })
 
   return {

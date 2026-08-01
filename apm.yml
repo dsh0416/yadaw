@@ -15,5 +15,6 @@ dependencies:
     - antfu/skills/skills/vue-best-practices
     - antfu/skills/skills/vue-testing-best-practices
     - leonardomso/rust-skills
+    - vueuse/skills
 includes: auto
 scripts: {}

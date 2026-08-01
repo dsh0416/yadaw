@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { UiProvider, useLocaleFonts } from "@yadaw/ui"
+import { useEventListener } from "@vueuse/core"
 import { computed, onMounted, onUnmounted, watch } from "vue"
 import { storeToRefs } from "pinia"
 import { useTheme } from "./composables/useTheme"
@@ -67,6 +68,8 @@ function stopRuntimePolling(): void {
   systemPerformanceStore.stopPolling()
 }
 
+useEventListener(window, "beforeunload", stopRuntimePolling)
+
 onMounted(() => {
   operationStore.startSubscription()
   void lifecycleStore.initialize()
@@ -74,11 +77,9 @@ onMounted(() => {
   systemPerformanceStore.startPolling()
   void applicationSettingsStore.load()
   void midiInputStore.load()
-  window.addEventListener("beforeunload", stopRuntimePolling)
 })
 
 onUnmounted(() => {
-  window.removeEventListener("beforeunload", stopRuntimePolling)
   lifecycleStore.dispose()
   operationStore.stopSubscription()
   midiInputStore.dispose()

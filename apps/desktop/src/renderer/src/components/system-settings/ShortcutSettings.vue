@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useEventListener } from "@vueuse/core"
 import { computed, onBeforeUnmount, onMounted, shallowRef } from "vue"
 import { storeToRefs } from "pinia"
 import { useI18n } from "vue-i18n"
@@ -211,8 +212,9 @@ function midiLabel(command: ApplicationCommandId): string {
   })} · ${message}`
 }
 
+useEventListener(window, "keydown", captureKeyboard, { capture: true })
+
 onMounted(() => {
-  window.addEventListener("keydown", captureKeyboard, true)
   unsubscribeControls = midiInputStore.subscribeControls((event) => {
     void handleMidiControl(event)
   })
@@ -221,7 +223,6 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  window.removeEventListener("keydown", captureKeyboard, true)
   unsubscribeControls?.()
   void midiInputStore.endLearning()
 })
