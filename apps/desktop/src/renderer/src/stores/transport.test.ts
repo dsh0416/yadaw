@@ -157,6 +157,33 @@ describe("transport store", () => {
     expect(transport.snapshot).toMatchObject({ state: "playing", positionFrames: 200 })
   })
 
+  it("reconciles the transport revision from a read before the next mutation", async () => {
+    window.yadaw.transportSnapshot = vi
+      .fn()
+      .mockResolvedValue(success({ state: "stopped", positionFrames: 0, sampleRate: 48_000 }, 7))
+    window.yadaw.transportCommand = vi.fn().mockResolvedValue(
+      success(
+        {
+          state: "stopped",
+          positionFrames: 0,
+          sampleRate: 48_000,
+          loopEnabled: true,
+          loopRange: { startTick: 0, endTick: 3_840 }
+        },
+        8
+      )
+    )
+    const transport = useTransportStore()
+
+    await transport.refresh()
+    await transport.setLoop(true, { startTick: 0, endTick: 3_840 })
+
+    expect(window.yadaw.transportCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ expectedRevision: 7 }),
+      expect.objectContaining({ type: "set-loop" })
+    )
+  })
+
   it("coalesces same-turn seek requests to the latest position", async () => {
     window.yadaw.transportCommand = vi
       .fn()

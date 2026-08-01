@@ -843,6 +843,171 @@ describe("ProjectDatabase", () => {
     expect((await database.mixerSnapshot()).midiClips).toContainEqual(clip)
   })
 
+  it("restores non-destructive audio and MIDI clip edits after reopening", async () => {
+    const resource = await createDatabase()
+    const audioPath = join(resource.directory, "editable-audio.wav")
+    await writeFile(audioPath, new Uint8Array())
+    await resource.database.importLargeObject(audioPath, {
+      id: "editable-audio",
+      name: "Editable audio",
+      mimeType: "audio/x-bwf",
+      contentHash: "editable-audio-hash",
+      sampleRate: 96_000,
+      channels: 2,
+      bitDepth: "float32",
+      frameCount: 192_000n,
+      bwfTimeReference: 0n
+    })
+
+    const audioChannel: MixerChannelState = {
+      id: "audio-edit",
+      kind: "audio",
+      systemRole: null,
+      name: "Audio edit",
+      color: "#5BC0EB",
+      sortOrder: 0,
+      inputSource: "hardware",
+      inputFormat: "stereo",
+      gainDb: 0,
+      pan: 0,
+      muted: false,
+      soloed: false,
+      outputChannelId: "output-1-2",
+      outputBus: null,
+      recordArmed: false,
+      inputMonitoring: false,
+      inputChannels: [1, 2],
+      hardwareOutputChannels: []
+    }
+    const instrumentChannel: MixerChannelState = {
+      ...audioChannel,
+      id: "instrument-edit",
+      kind: "instrument",
+      name: "Instrument edit",
+      sortOrder: 1,
+      inputSource: null,
+      inputFormat: null,
+      inputChannels: []
+    }
+    await resource.database.applyCommand(
+      {
+        type: "batch",
+        commands: [
+          {
+            type: "create-track",
+            track: { id: "track:audio-edit", channelId: audioChannel.id, sortOrder: 0 },
+            channel: audioChannel
+          },
+          {
+            type: "create-track",
+            track: {
+              id: "track:instrument-edit",
+              channelId: instrumentChannel.id,
+              sortOrder: 1
+            },
+            channel: instrumentChannel
+          },
+          {
+            type: "create-midi-source",
+            source: {
+              id: "editable-midi-source",
+              name: "Editable MIDI",
+              contentHash: "blank:editable-midi-source",
+              rawBytes: new Uint8Array()
+            }
+          },
+          {
+            type: "create-midi-clip",
+            clip: {
+              id: "editable-midi-clip",
+              sourceId: "editable-midi-source",
+              trackId: "track:instrument-edit",
+              name: "Editable MIDI",
+              startTick: 0,
+              sourceOffsetTicks: 0,
+              lengthTicks: 3_840,
+              sourceLengthTicks: 3_840,
+              notes: [],
+              events: []
+            }
+          },
+          {
+            type: "create-audio-clip",
+            clip: {
+              id: "editable-audio-clip",
+              assetId: "editable-audio",
+              trackId: "track:audio-edit",
+              name: "Editable audio",
+              startFrame: 0,
+              sourceOffsetFrames: 0,
+              lengthFrames: 48_000,
+              sourceLengthFrames: 96_000,
+              fadeInFrames: 0,
+              fadeOutFrames: 0,
+              assetSampleRate: 96_000,
+              assetChannels: 2
+            }
+          }
+        ]
+      },
+      "output-1-2"
+    )
+    await resource.database.applyCommand(
+      {
+        type: "batch",
+        commands: [
+          {
+            type: "update-audio-clip",
+            clipId: "editable-audio-clip",
+            patch: {
+              sourceOffsetFrames: 12_000,
+              lengthFrames: 36_000,
+              fadeInFrames: 2_400,
+              fadeOutFrames: 4_800
+            }
+          },
+          {
+            type: "update-midi-clip-range",
+            clipId: "editable-midi-clip",
+            patch: {
+              startTick: 960,
+              sourceOffsetTicks: 480,
+              lengthTicks: 2_880,
+              sourceLengthTicks: 7_680
+            }
+          }
+        ]
+      },
+      "output-1-2"
+    )
+
+    await resource.database.close()
+    databases.splice(databases.indexOf(resource), 1)
+    const reopened = await ProjectDatabase.open(join(resource.directory, "pgdata"))
+    databases.push({ database: reopened, directory: resource.directory })
+
+    const restored = await reopened.mixerSnapshot()
+    expect(restored.audioClips).toContainEqual(
+      expect.objectContaining({
+        id: "editable-audio-clip",
+        sourceOffsetFrames: 12_000,
+        lengthFrames: 36_000,
+        sourceLengthFrames: 96_000,
+        fadeInFrames: 2_400,
+        fadeOutFrames: 4_800
+      })
+    )
+    expect(restored.midiClips).toContainEqual(
+      expect.objectContaining({
+        id: "editable-midi-clip",
+        startTick: 960,
+        sourceOffsetTicks: 480,
+        lengthTicks: 2_880,
+        sourceLengthTicks: 7_680
+      })
+    )
+  })
+
   it("round-trips atomic piano-roll note edits at 1/3840-note resolution", async () => {
     const { database } = await createDatabase()
     const instrument = {

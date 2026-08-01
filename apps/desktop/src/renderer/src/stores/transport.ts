@@ -173,6 +173,9 @@ export const useTransportStore = defineStore("transport", () => {
     const next = await window.yadaw.transportSnapshot(readMeta(target))
     if (!next.ok) return
     if (generation === requestGeneration) snapshot.value = next.value
+    if (next.resourceRevision !== undefined) {
+      audioRuntimeStore.advanceTransportRevision(next.resourceRevision)
+    }
   }
 
   const polling = useIntervalFn(() => void refresh(), 33, { immediate: false })
