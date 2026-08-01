@@ -240,8 +240,13 @@ numeric z-indexes.
 | Panel radius          | 7 px                          | `--ui-radius-md`             |
 | Inter-panel gap       | 4 px                          | 4 px                         |
 
-- Surface uses `--ui-color-surface-raised`, `--ui-color-border-strong`,
-  `--ui-shadow-md`, and `--ui-z-dropdown`.
+Shared menus default to the lower bound for detailed and searchable roots: 260 px in compact
+workspaces and 280 px in standard UI. Widen only when visible labels or metadata require it.
+
+- Floating menu surfaces use the neutral `--ui-color-menu-*` role tokens plus
+  `--ui-shadow-md` and `--ui-z-dropdown`. Do not inherit the general blue-tinted raised-surface
+  palette or fill a highlighted row with the saturated action color.
+- Highlight stays neutral gray and uses `--ui-color-menu-accent` only as a narrow leading edge.
 - Labels use the interface family. Shortcuts, channel numbers, dB, BPM, and technical metadata
   use the data family.
 - Pointer and keyboard highlight share one visual treatment. Focus remains visible in

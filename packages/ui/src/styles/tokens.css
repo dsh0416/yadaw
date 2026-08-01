@@ -45,6 +45,19 @@
   --ui-color-control: var(--ui-palette-neutral-800);
   --ui-color-control-hover: var(--ui-palette-neutral-700);
   --ui-color-control-pressed: var(--ui-palette-neutral-900);
+  --ui-color-menu-surface: #303030;
+  --ui-color-menu-control: #262626;
+  --ui-color-menu-control-hover: #3b3b3b;
+  --ui-color-menu-highlight: #454545;
+  --ui-color-menu-text: #f3f3f3;
+  --ui-color-menu-text-muted: #c4c4c4;
+  --ui-color-menu-text-subtle: #929292;
+  --ui-color-menu-border: #565656;
+  --ui-color-menu-divider: #414141;
+  --ui-color-menu-accent: #8eb9c8;
+  --ui-shadow-menu-highlight: 2px 0 0 var(--ui-color-menu-accent) inset;
+  --ui-shadow-menu-focus-ring: 0 0 0 3px
+    color-mix(in srgb, var(--ui-color-menu-accent) 38%, transparent);
   --ui-color-selection: color-mix(in srgb, var(--ui-color-action) 14%, var(--ui-color-surface));
   --ui-color-selection-hover: color-mix(
     in srgb,
@@ -270,6 +283,16 @@
   --ui-color-control: var(--ui-palette-neutral-0);
   --ui-color-control-hover: var(--ui-palette-neutral-100);
   --ui-color-control-pressed: var(--ui-palette-neutral-200);
+  --ui-color-menu-surface: #f7f7f7;
+  --ui-color-menu-control: #ffffff;
+  --ui-color-menu-control-hover: #ededed;
+  --ui-color-menu-highlight: #e2e2e2;
+  --ui-color-menu-text: #202020;
+  --ui-color-menu-text-muted: #555555;
+  --ui-color-menu-text-subtle: #757575;
+  --ui-color-menu-border: #aaaaaa;
+  --ui-color-menu-divider: #d5d5d5;
+  --ui-color-menu-accent: #44636d;
   --ui-color-selection: color-mix(in srgb, var(--ui-color-action) 12%, var(--ui-color-surface));
   --ui-color-selection-hover: color-mix(
     in srgb,

@@ -173,10 +173,10 @@ defineExpose({
   padding: 5px;
   overflow-x: hidden;
   overflow-y: auto;
-  border: 1px solid var(--ui-color-border-strong);
+  border: 1px solid var(--ui-color-menu-border);
   border-radius: 7px;
-  color: var(--ui-color-text-muted);
-  background: var(--ui-color-surface-raised);
+  color: var(--ui-color-menu-text-muted);
+  background: var(--ui-color-menu-surface);
   box-shadow: var(--ui-shadow-md);
   animation: ui-menu-in var(--ui-motion-fast) var(--ui-ease-standard);
 }
@@ -201,23 +201,24 @@ defineExpose({
   min-height: 24px;
   border: 2px solid transparent;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--ui-color-text-subtle) 72%, transparent);
+  background: color-mix(in srgb, var(--ui-color-menu-text-subtle) 72%, transparent);
   background-clip: padding-box;
 }
 
 .ui-menu__content::-webkit-scrollbar-thumb:hover {
-  background: var(--ui-color-text-muted);
+  background: var(--ui-color-menu-text-muted);
   background-clip: padding-box;
 }
 
 .ui-menu__content::-webkit-scrollbar-thumb:active {
-  background: var(--ui-color-action);
+  background: var(--ui-color-menu-accent);
   background-clip: padding-box;
 }
 
 @supports not selector(::-webkit-scrollbar) {
   .ui-menu__content {
-    scrollbar-color: color-mix(in srgb, var(--ui-color-text-subtle) 72%, transparent) transparent;
+    scrollbar-color: color-mix(in srgb, var(--ui-color-menu-text-subtle) 72%, transparent)
+      transparent;
     scrollbar-width: thin;
   }
 }
@@ -234,7 +235,12 @@ defineExpose({
 
 .ui-menu__root-content:has(.ui-menu__panel--detailed),
 .ui-menu__root-content:has(.ui-menu__panel--searchable) {
-  width: min(300px, calc(100vw - 16px));
+  width: min(260px, calc(100vw - 16px));
+}
+
+.ui-menu__root-content:has(.ui-menu__panel--standard.ui-menu__panel--detailed),
+.ui-menu__root-content:has(.ui-menu__panel--standard.ui-menu__panel--searchable) {
+  width: min(280px, calc(100vw - 16px));
 }
 
 .ui-menu__sub-content {
@@ -288,8 +294,9 @@ defineExpose({
 
 .ui-menu__item[data-highlighted],
 .ui-menu__sub-trigger[data-state="open"] {
-  color: var(--ui-color-action-text);
-  background: var(--ui-color-action-pressed);
+  color: var(--ui-color-menu-text);
+  background: var(--ui-color-menu-highlight);
+  box-shadow: var(--ui-shadow-menu-highlight);
 }
 
 .ui-menu__item--danger:not([data-highlighted]) {
@@ -298,7 +305,7 @@ defineExpose({
 
 .ui-menu__item[data-disabled] {
   opacity: var(--ui-opacity-disabled);
-  color: var(--ui-color-text-subtle);
+  color: var(--ui-color-menu-text-subtle);
   pointer-events: none;
 }
 
@@ -311,7 +318,7 @@ defineExpose({
 
 .ui-menu__leading {
   min-width: 0;
-  color: var(--ui-color-action);
+  color: var(--ui-color-menu-accent);
   font: var(--ui-type-weight-semibold) var(--ui-type-size-control) var(--ui-type-family-data);
   text-align: center;
   white-space: nowrap;
@@ -319,7 +326,7 @@ defineExpose({
 
 .ui-menu__metadata,
 .ui-menu__shortcut {
-  color: var(--ui-color-text-subtle);
+  color: var(--ui-color-menu-text-subtle);
   font: var(--ui-type-size-micro) var(--ui-type-family-data);
   white-space: nowrap;
 }
@@ -358,7 +365,7 @@ defineExpose({
 }
 
 .ui-menu__indicator {
-  color: var(--ui-color-action);
+  color: var(--ui-color-menu-accent);
 }
 
 .ui-menu__indicator svg {
@@ -380,14 +387,14 @@ defineExpose({
   align-items: end;
   min-height: 22px;
   padding: 6px 8px 3px;
-  color: var(--ui-color-text-subtle);
+  color: var(--ui-color-menu-text-subtle);
   font: var(--ui-type-weight-semibold) var(--ui-type-size-control) var(--ui-type-family-interface);
 }
 
 .ui-menu__separator {
   height: 1px;
   margin: 4px 6px;
-  background: var(--ui-color-border);
+  background: var(--ui-color-menu-divider);
 }
 
 .ui-menu__search {
@@ -398,10 +405,10 @@ defineExpose({
   min-height: 28px;
   margin-bottom: 4px;
   padding: 0 5px 0 7px;
-  border: 1px solid var(--ui-color-border-strong);
+  border: 1px solid var(--ui-color-menu-border);
   border-radius: var(--ui-radius-sm);
-  color: var(--ui-color-text-subtle);
-  background: var(--ui-color-control);
+  color: var(--ui-color-menu-text-subtle);
+  background: var(--ui-color-menu-control);
 }
 
 .ui-menu__panel--standard .ui-menu__search {
@@ -409,8 +416,8 @@ defineExpose({
 }
 
 .ui-menu__search:focus-within {
-  border-color: var(--ui-color-focus);
-  box-shadow: var(--ui-focus-ring);
+  border-color: var(--ui-color-menu-accent);
+  box-shadow: var(--ui-shadow-menu-focus-ring);
 }
 
 .ui-menu__search-icon,
@@ -427,7 +434,7 @@ defineExpose({
   min-width: 0;
   border: 0;
   outline: 0;
-  color: var(--ui-color-text);
+  color: var(--ui-color-menu-text);
   background: transparent;
   font: var(--ui-type-size-control) var(--ui-type-family-interface);
 }
@@ -436,8 +443,14 @@ defineExpose({
   font-size: var(--ui-font-size-xs);
 }
 
+.ui-menu__search-input:focus,
+.ui-menu__search-input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
 .ui-menu__search-input::placeholder {
-  color: var(--ui-color-text-subtle);
+  color: var(--ui-color-menu-text-subtle);
 }
 
 .ui-menu__search-clear {
@@ -448,18 +461,18 @@ defineExpose({
   padding: 0;
   border: 0;
   border-radius: var(--ui-radius-sm);
-  color: var(--ui-color-text-subtle);
+  color: var(--ui-color-menu-text-subtle);
   background: transparent;
 }
 
 .ui-menu__search-clear:hover {
-  color: var(--ui-color-text);
-  background: var(--ui-color-control-hover);
+  color: var(--ui-color-menu-text);
+  background: var(--ui-color-menu-control-hover);
 }
 
 .ui-menu__empty {
   margin: 8px;
-  color: var(--ui-color-text-subtle);
+  color: var(--ui-color-menu-text-subtle);
   font-size: var(--ui-type-size-body-compact);
   line-height: var(--ui-type-leading-normal);
 }

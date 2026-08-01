@@ -6,12 +6,21 @@ test("search flattens nested menu results and keeps their category path", async 
   )
 
   await page.getByRole("button", { name: "Add audio effect" }).click()
+  const menu = page.getByRole("menu", { name: "Add audio effect" })
+  await expect(menu).toHaveCSS("width", "260px")
+  await expect(menu).toHaveCSS("background-color", "rgb(48, 48, 48)")
   const search = page.getByRole("textbox", { name: "Search effects" })
   await expect(search).toBeFocused()
+  await expect(search).toHaveCSS("outline-style", "none")
+  await expect(search).toHaveCSS("box-shadow", "none")
   await search.fill("pro")
 
   const result = page.getByRole("menuitem", { name: "Pro-C 2" })
   await expect(result).toBeVisible()
+  await result.hover()
+  await expect(result).toHaveCSS("background-color", "rgb(69, 69, 69)")
+  await expect(result).toHaveCSS("color", "rgb(243, 243, 243)")
+  await expect(result).not.toHaveCSS("box-shadow", "none")
   await expect(result).toContainText("Dynamics / Compressors")
   await expect(page.getByRole("menuitem", { name: "Dynamics", exact: true })).toHaveCount(0)
 
@@ -29,7 +38,9 @@ test("context menu opens at the pointer and exposes nested and destructive comma
   const clip = page.getByText("Verse · guitar")
   await clip.click({ button: "right" })
 
-  await expect(page.getByRole("menu", { name: "Verse clip commands" })).toBeVisible()
+  const menu = page.getByRole("menu", { name: "Verse clip commands" })
+  await expect(menu).toBeVisible()
+  await expect(menu).toHaveCSS("background-color", "rgb(247, 247, 247)")
   await expect(page.getByRole("menuitem", { name: "Transform" })).toBeVisible()
   const deleteItem = page.getByRole("menuitem", { name: "Delete" })
   await expect(deleteItem).toHaveCSS("color", "rgb(180, 35, 45)")
