@@ -1,17 +1,17 @@
 <script setup lang="ts">
-import { YadawLogo, useLocaleFonts } from "@yadaw/ui"
-import { computed, onMounted } from "vue"
-import { DEFAULT_LOCALE } from "../../../shared/i18n"
-import { useStartupStore } from "../stores/startup"
+import { YadawLogo, useLocaleFonts } from "@yadaw/ui";
+import { computed, onMounted } from "vue";
+import { DEFAULT_LOCALE } from "../../../shared/i18n";
+import { useStartupStore } from "../stores/startup";
 
-const startup = useStartupStore()
-const projectUrl = "https://github.com/dsh0416/yadaw"
-const appVersion = __APP_VERSION__
-const percentage = computed(() => Math.round(startup.progress.progress * 100))
+const startup = useStartupStore();
+const projectUrl = "https://github.com/dsh0416/yadaw";
+const appVersion = __APP_VERSION__;
+const percentage = computed(() => Math.round(startup.progress.progress * 100));
 
-useLocaleFonts(DEFAULT_LOCALE)
+useLocaleFonts(DEFAULT_LOCALE);
 
-onMounted(() => void startup.load())
+onMounted(() => void startup.load());
 </script>
 
 <template>
@@ -72,18 +72,29 @@ onMounted(() => void startup.load())
   padding: 44px 48px 40px;
   overflow: hidden;
   border: 1px solid var(--ui-color-border);
-  background:
-    radial-gradient(
-      circle at 50% 34%,
-      color-mix(in srgb, var(--ui-signal-audio) 8%, transparent),
-      transparent 42%
-    ),
-    var(--ui-color-canvas-subtle);
+  background: var(--ui-color-canvas-subtle);
   box-shadow: var(--ui-shadow-highlight-inset);
   -webkit-app-region: drag;
 }
 
+.splash-shell::before {
+  position: absolute;
+  inset: -28% -12% 12%;
+  background: radial-gradient(
+    circle at 50% 52%,
+    color-mix(in srgb, var(--ui-signal-audio) 14%, transparent),
+    transparent 48%
+  );
+  content: "";
+  pointer-events: none;
+  transform-origin: 50% 48%;
+  animation: splash-glow-breathe 4.8s ease-in-out infinite;
+  will-change: opacity, transform;
+}
+
 .brand {
+  position: relative;
+  z-index: var(--ui-z-local-content);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -126,6 +137,8 @@ onMounted(() => void startup.load())
 }
 
 .startup-status {
+  position: relative;
+  z-index: var(--ui-z-local-content);
   width: 100%;
 }
 
@@ -187,7 +200,26 @@ onMounted(() => void startup.load())
   box-shadow: var(--ui-focus-ring);
 }
 
+@keyframes splash-glow-breathe {
+  0%,
+  100% {
+    opacity: 0.48;
+    transform: scale(0.94);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .splash-shell::before {
+    opacity: 0.72;
+    transform: none;
+    animation: none;
+  }
+
   .progress-fill {
     transition: none;
   }
