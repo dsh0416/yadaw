@@ -431,7 +431,13 @@ fn engine_command(
             snapshot: engine::compiled_audio_graph_snapshot(),
         },
         ControlCommand::ClearMeterClips => {
-            match engine::transport_command("clear-meter-clips".to_owned(), None) {
+            match engine::transport_command(
+                "clear-meter-clips".to_owned(),
+                None,
+                None,
+                None,
+                None,
+            ) {
                 Ok(_) => ControlResult::Accepted,
                 Err(error) => control_error! {
                     message: error.to_string(),
@@ -439,7 +445,13 @@ fn engine_command(
             }
         }
         ControlCommand::Transport { command } => {
-            match engine::transport_command(command.kind, command.position_frames) {
+            match engine::transport_command(
+                command.kind,
+                command.position_frames,
+                command.loop_enabled,
+                command.loop_start_tick,
+                command.loop_end_tick,
+            ) {
                 Ok(value) => ControlResult::TransportSnapshot {
                     transport: TransportState {
                         state: value.state,
@@ -449,6 +461,9 @@ fn engine_command(
                         effective_bpm: value.effective_bpm,
                         clock_source: value.clock_source,
                         waiting_for: value.waiting_for,
+                        loop_enabled: value.loop_enabled,
+                        loop_start_tick: value.loop_start_tick,
+                        loop_end_tick: value.loop_end_tick,
                     },
                 },
                 Err(error) => control_error! {
@@ -466,6 +481,9 @@ fn engine_command(
                     effective_bpm: value.effective_bpm,
                     clock_source: value.clock_source,
                     waiting_for: value.waiting_for,
+                    loop_enabled: value.loop_enabled,
+                    loop_start_tick: value.loop_start_tick,
+                    loop_end_tick: value.loop_end_tick,
                 },
             },
             Err(error) => control_error! {

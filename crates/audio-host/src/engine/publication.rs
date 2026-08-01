@@ -51,6 +51,10 @@ fn engine_transport_handles(
                     effective_bpm_bits: AtomicU64::new(f64::NAN.to_bits()),
                     clock_source: AtomicU32::new(0),
                     waiting_for: AtomicU32::new(0),
+                    loop_enabled: AtomicBool::new(false),
+                    loop_has_range: AtomicBool::new(false),
+                    loop_start_tick: AtomicU64::new(0),
+                    loop_end_tick: AtomicU64::new(0),
                 }),
                 Arc::new(InputPeakBank::new()),
             )
@@ -250,6 +254,9 @@ pub fn mixer_snapshot() -> Result<NativeMixerSnapshot> {
 pub fn transport_command(
     kind: String,
     position_frames: Option<i64>,
+    loop_enabled: Option<bool>,
+    loop_start_tick: Option<i64>,
+    loop_end_tick: Option<i64>,
 ) -> Result<NativeTransportSnapshot> {
     let mut guard = engine_slot()
         .lock()
@@ -258,6 +265,28 @@ pub fn transport_command(
         .as_mut()
         .ok_or_else(|| invalid_config("audio engine must be running before transport"))?;
     let position = position_frames.unwrap_or(0).max(0) as u64;
+    if kind == "set-loop" {
+        let range = match (loop_start_tick, loop_end_tick) {
+            (Some(start), Some(end)) if start >= 0 && end > start => {
+                Some((start as u64, end as u64))
+            }
+            (None, None) => None,
+            _ => return Err(invalid_config("loop range must have increasing non-negative ticks")),
+        };
+        engine.transport.loop_enabled.store(false, Ordering::Release);
+        if let Some((start, end)) = range {
+            engine.transport.loop_start_tick.store(start, Ordering::Relaxed);
+            engine.transport.loop_end_tick.store(end, Ordering::Relaxed);
+            engine.transport.loop_has_range.store(true, Ordering::Release);
+        } else {
+            engine.transport.loop_has_range.store(false, Ordering::Release);
+        }
+        engine
+            .transport
+            .loop_enabled
+            .store(loop_enabled.unwrap_or(false), Ordering::Release);
+        return Ok(engine.transport.snapshot());
+    }
     let command = match kind.as_str() {
         "clear-meter-clips" => EngineCommand::ClearMeterClips,
         "play" => EngineCommand::Transport(TransportAction::Play, position),
@@ -305,6 +334,9 @@ pub fn transport_snapshot() -> Result<NativeTransportSnapshot> {
             effective_bpm: None,
             clock_source: "internal".to_owned(),
             waiting_for: None,
+            loop_enabled: false,
+            loop_start_tick: None,
+            loop_end_tick: None,
         },
         |engine| engine.transport.snapshot(),
     ))

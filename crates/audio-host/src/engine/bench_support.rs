@@ -91,6 +91,10 @@ pub mod bench_support {
             effective_bpm_bits: super::AtomicU64::new(f64::NAN.to_bits()),
             clock_source: super::AtomicU32::new(0),
             waiting_for: super::AtomicU32::new(0),
+            loop_enabled: super::AtomicBool::new(false),
+            loop_has_range: super::AtomicBool::new(false),
+            loop_start_tick: super::AtomicU64::new(0),
+            loop_end_tick: super::AtomicU64::new(0),
         });
         let input_peaks = Arc::new(InputPeakBank::new());
         let clip_frames = scenario.clip_frames.max(1);

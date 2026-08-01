@@ -55,9 +55,17 @@ impl NativeMixerRuntime {
                 TransportAction::Play => {
                     self.count_in = None;
                     let mut position = self.transport.position_frames.load(Ordering::Relaxed);
+                    if !crate::midi_input::external_sync_enabled()
+                        && let Some((loop_start, loop_end)) = self.configured_loop_frames()
+                        && position >= loop_end
+                    {
+                        self.rewind_playback_loop(loop_start);
+                        position = loop_start;
+                    }
                     // Auto-stop leaves the playhead at/past the finite content tail.
                     // Restart from the beginning so Play after song-end is not a no-op.
-                    if self.content_end_frame > 0
+                    if self.configured_loop_frames().is_none()
+                        && self.content_end_frame > 0
                         && !self.has_infinite_tail
                         && self.tail_end_frame.is_some_and(|end| position >= end)
                     {
@@ -200,6 +208,14 @@ impl NativeMixerRuntime {
                 break;
             }
 
+            let playback_loop = self.playback_loop_frames(state);
+            if let Some((loop_start, loop_end)) = playback_loop
+                && position >= loop_end
+            {
+                self.rewind_playback_loop(loop_start);
+                continue;
+            }
+
             let mut frame_count = outputs.len() - offset;
             if advancing {
                 frame_count =
@@ -218,8 +234,12 @@ impl NativeMixerRuntime {
                     continue;
                 }
             }
+            if let Some((_, loop_end)) = playback_loop {
+                frame_count = frame_count.min((loop_end - position) as usize);
+            }
             if state == TRANSPORT_PLAYING
                 && self.transport.clock_source.load(Ordering::Relaxed) == 0
+                && playback_loop.is_none()
                 && self.content_end_frame > 0
                 && !self.has_infinite_tail
                 && let Some(end) = self.tail_end_frame
@@ -274,8 +294,15 @@ impl NativeMixerRuntime {
                         .unwrap_or(0);
                     self.transport.position_ticks.store(tick, Ordering::Relaxed);
                 }
+                if let Some((loop_start, loop_end)) = playback_loop
+                    && next >= loop_end
+                {
+                    self.rewind_playback_loop(loop_start);
+                    continue;
+                }
                 if state == TRANSPORT_PLAYING
                     && self.transport.clock_source.load(Ordering::Relaxed) == 0
+                    && playback_loop.is_none()
                     && self.content_end_frame > 0
                     && !self.has_infinite_tail
                     && self.tail_end_frame.is_some_and(|end| next >= end)
@@ -288,6 +315,49 @@ impl NativeMixerRuntime {
             }
         }
         stream_underrun
+    }
+
+    fn playback_loop_frames(&self, state: u32) -> Option<(u64, u64)> {
+        if state != TRANSPORT_PLAYING
+            || self.transport.clock_source.load(Ordering::Relaxed) != 0
+        {
+            return None;
+        }
+        self.configured_loop_frames()
+    }
+
+    fn configured_loop_frames(&self) -> Option<(u64, u64)> {
+        if !self.transport.loop_enabled.load(Ordering::Acquire)
+            || !self.transport.loop_has_range.load(Ordering::Acquire)
+        {
+            return None;
+        }
+        let start_tick = self.transport.loop_start_tick.load(Ordering::Relaxed);
+        let end_tick = self.transport.loop_end_tick.load(Ordering::Relaxed);
+        if end_tick <= start_tick {
+            return None;
+        }
+        let start = self
+            .tempo_map
+            .tick_to_frame(start_tick, self.sample_rate)
+            .ok()?;
+        let end = self
+            .tempo_map
+            .tick_to_frame(end_tick, self.sample_rate)
+            .ok()?;
+        (end > start).then_some((start, end))
+    }
+
+    fn rewind_playback_loop(&mut self, start_frame: u64) {
+        self.all_notes_off();
+        self.transport
+            .position_frames
+            .store(start_frame, Ordering::Relaxed);
+        self.transport.position_ticks.store(
+            self.transport.loop_start_tick.load(Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
+        self.chase_notes(start_frame);
     }
 
     fn render_segment(

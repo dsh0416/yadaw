@@ -103,7 +103,9 @@ describe("MIDI import tempo choice", () => {
     transport.snapshot = {
       state: "stopped",
       positionFrames: 192_000,
-      sampleRate: 48_000
+      sampleRate: 48_000,
+      loopEnabled: false,
+      loopRange: null
     }
     const store = useMidiImportStore()
     store.preview = preview

@@ -50,6 +50,9 @@ const fakeHost = vi.hoisted(() => {
     } | null = null
     transportState = 0
     positionFrames = 0
+    loopEnabled = false
+    loopStartTick: number | null = null
+    loopEndTick: number | null = null
     latencyMeasurement = {
       status: "idle",
       input_channel: null as number | null,
@@ -77,7 +80,13 @@ const fakeHost = vi.hoisted(() => {
       const request = decode(payload) as {
         request_id: number
         command: Record<string, unknown> & {
-          command?: { kind?: string; position_frames?: number | null }
+          command?: {
+            kind?: string
+            position_frames?: number | null
+            loop_enabled?: boolean
+            loop_start_tick?: number | null
+            loop_end_tick?: number | null
+          }
         }
       }
       this.commands.push(request.command)
@@ -215,6 +224,10 @@ const fakeHost = vi.hoisted(() => {
           this.transportState = 0
         } else if (kind === "play") {
           this.transportState = 1
+        } else if (kind === "set-loop") {
+          this.loopEnabled = request.command.command?.loop_enabled ?? false
+          this.loopStartTick = request.command.command?.loop_start_tick ?? null
+          this.loopEndTick = request.command.command?.loop_end_tick ?? null
         } else {
           this.transportState = 0
         }
@@ -223,7 +236,14 @@ const fakeHost = vi.hoisted(() => {
           transport: {
             state: this.transportState === 1 ? "playing" : "stopped",
             position_frames: this.positionFrames,
-            sample_rate: this.sessionSampleRate
+            position_ticks: 0,
+            sample_rate: this.sessionSampleRate,
+            effective_bpm: null,
+            clock_source: "internal",
+            waiting_for: null,
+            loop_enabled: this.loopEnabled,
+            loop_start_tick: this.loopStartTick,
+            loop_end_tick: this.loopEndTick
           }
         })
       }
@@ -521,7 +541,7 @@ describe("AudioHostService recovery", () => {
     const transportKinds = replacement.commands
       .filter((command) => command.type === "transport")
       .map((command) => (command.command as { kind: string }).kind)
-    expect(transportKinds).toEqual(["seek", "play", "pause"])
+    expect(transportKinds).toEqual(["set-loop", "seek", "play", "pause"])
     const restoredConfig = replacement.commands.find(
       (command) => command.type === "start-audio-engine"
     )?.config as { session_sample_rate?: number | null }
@@ -569,8 +589,15 @@ describe("AudioHostService recovery", () => {
     const transportCommands = client.commands
       .filter((command) => command.type === "transport")
       .map((command) => command.command as { kind: string; position_frames?: number })
-    expect(transportCommands.slice(-3)).toEqual([
+    expect(transportCommands.slice(-4)).toEqual([
       { kind: "pause", position_frames: null },
+      {
+        kind: "set-loop",
+        position_frames: null,
+        loop_enabled: false,
+        loop_start_tick: null,
+        loop_end_tick: null
+      },
       { kind: "seek", position_frames: 44_100 },
       { kind: "play", position_frames: null }
     ])

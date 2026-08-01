@@ -215,6 +215,9 @@ mod tests {
                 command: TransportControl {
                     kind: "play".into(),
                     position_frames: None,
+                    loop_enabled: None,
+                    loop_start_tick: None,
+                    loop_end_tick: None,
                 },
             },
             ControlCommand::TransportSnapshot,

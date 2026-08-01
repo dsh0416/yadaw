@@ -8,7 +8,8 @@ mod tests {
     };
 
     use super::{
-        AdaptiveResampler, AtomicU32, AtomicU64, AudioEngineKey, BufferSelection, BufferSize,
+        AdaptiveResampler, AtomicBool, AtomicU32, AtomicU64, AudioEngineKey, BufferSelection,
+        BufferSize,
         ClipSamples, ClipStoragePolicy, EngineCommand, GRAPH_TEST_LOCK, InputPeakBank, LivePlugin,
         LoadedClip, MAX_INPUT_CHANNELS, MAX_OUTPUT_CHANNELS, MAX_PLUGIN_BLOCK_FRAMES,
         MEMORY_DECODE_LIMIT_BYTES, METRONOME_ACCENT_NOTE, METRONOME_BEAT_NOTE, MeterAtomics,
@@ -875,6 +876,10 @@ mod tests {
                 effective_bpm_bits: AtomicU64::new(f64::NAN.to_bits()),
                 clock_source: AtomicU32::new(0),
                 waiting_for: AtomicU32::new(0),
+                loop_enabled: AtomicBool::new(false),
+                loop_has_range: AtomicBool::new(false),
+                loop_start_tick: AtomicU64::new(0),
+                loop_end_tick: AtomicU64::new(0),
             }),
             sample_rate,
             content_end_frame,
@@ -934,6 +939,45 @@ mod tests {
             runtime.transport.position_frames.load(Ordering::Relaxed),
             250
         );
+    }
+
+    #[test]
+    fn playback_loop_splits_a_block_and_suppresses_content_auto_stop() {
+        let mut runtime = transport_test_runtime(960, 920, 900, TRANSPORT_PLAYING);
+        runtime.transport.loop_start_tick.store(960, Ordering::Relaxed);
+        runtime.transport.loop_end_tick.store(1_920, Ordering::Relaxed);
+        runtime.transport.loop_has_range.store(true, Ordering::Release);
+        runtime.transport.loop_enabled.store(true, Ordering::Release);
+        let inputs = vec![[0.0; MAX_INPUT_CHANNELS]; 128];
+        let mut outputs = vec![[0.0; MAX_OUTPUT_CHANNELS]; 128];
+
+        assert!(!runtime.render_block(&inputs, &mut outputs, None));
+
+        assert_eq!(runtime.transport.position_frames.load(Ordering::Relaxed), 548);
+        assert_eq!(
+            runtime.transport.state.load(Ordering::Relaxed),
+            TRANSPORT_PLAYING
+        );
+    }
+
+    #[test]
+    fn playback_loop_is_inert_while_recording_or_using_external_clock() {
+        for (state, external) in [(TRANSPORT_RECORDING, false), (TRANSPORT_PLAYING, true)] {
+            let mut runtime = transport_test_runtime(960, 2_000, 900, state);
+            runtime.transport.loop_start_tick.store(960, Ordering::Relaxed);
+            runtime.transport.loop_end_tick.store(1_920, Ordering::Relaxed);
+            runtime.transport.loop_has_range.store(true, Ordering::Release);
+            runtime.transport.loop_enabled.store(true, Ordering::Release);
+            runtime
+                .transport
+                .clock_source
+                .store(u32::from(external), Ordering::Relaxed);
+            let inputs = vec![[0.0; MAX_INPUT_CHANNELS]; 128];
+            let mut outputs = vec![[0.0; MAX_OUTPUT_CHANNELS]; 128];
+
+            assert!(!runtime.render_block(&inputs, &mut outputs, None));
+            assert_eq!(runtime.transport.position_frames.load(Ordering::Relaxed), 1_028);
+        }
     }
 
     #[test]
@@ -1185,6 +1229,10 @@ mod tests {
             effective_bpm_bits: AtomicU64::new(f64::NAN.to_bits()),
             clock_source: AtomicU32::new(0),
             waiting_for: AtomicU32::new(0),
+            loop_enabled: AtomicBool::new(false),
+            loop_has_range: AtomicBool::new(false),
+            loop_start_tick: AtomicU64::new(0),
+            loop_end_tick: AtomicU64::new(0),
         })
     }
 

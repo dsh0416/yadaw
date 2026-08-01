@@ -225,6 +225,9 @@ export interface AudioHostTransport {
   effective_bpm: number | null
   clock_source: string
   waiting_for: string | null
+  loop_enabled: boolean
+  loop_start_tick: number | null
+  loop_end_tick: number | null
 }
 
 export interface AudioHostMidiInputRoute {

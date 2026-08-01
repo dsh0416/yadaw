@@ -259,6 +259,10 @@ export interface MixerRuntimeSnapshot {
 export type TransportState = "stopped" | "waiting" | "counting-in" | "playing" | "recording"
 export type TransportWaitingAction = "play" | "record"
 export type TransportClockSource = "internal" | "external"
+export interface TransportLoopRange {
+  startTick: number
+  endTick: number
+}
 export interface TransportSnapshot {
   state: TransportState
   positionFrames: number
@@ -267,6 +271,8 @@ export interface TransportSnapshot {
   effectiveBpm?: number
   clockSource?: TransportClockSource
   waitingFor?: TransportWaitingAction | null
+  loopEnabled: boolean
+  loopRange: TransportLoopRange | null
 }
 
 export type TransportCommand =
@@ -276,3 +282,4 @@ export type TransportCommand =
   | { type: "record-count-in" }
   | { type: "stop" }
   | { type: "seek"; positionFrames: number }
+  | { type: "set-loop"; enabled: boolean; range: TransportLoopRange | null }

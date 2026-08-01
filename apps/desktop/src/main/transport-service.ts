@@ -6,7 +6,9 @@ export class TransportService {
   private testSnapshot: TransportSnapshot = {
     state: "stopped",
     positionFrames: 0,
-    sampleRate: 48_000
+    sampleRate: 48_000,
+    loopEnabled: false,
+    loopRange: null
   }
   private commandTail: Promise<void> = Promise.resolve()
 
@@ -42,6 +44,10 @@ export class TransportService {
       else if (command.type === "play") this.testSnapshot.state = "playing"
       else if (command.type === "record") this.testSnapshot.state = "recording"
       else if (command.type === "record-count-in") this.testSnapshot.state = "counting-in"
+      else if (command.type === "set-loop") {
+        this.testSnapshot.loopEnabled = command.enabled
+        this.testSnapshot.loopRange = command.range ? { ...command.range } : null
+      }
       return { ...this.testSnapshot }
     }
     if (!this.audioHost) throw new Error("Audio host is not running")
@@ -57,7 +63,9 @@ export class TransportService {
           state: "stopped",
           positionFrames: 0,
           sampleRate:
-            this.projects.current?.configuration.sampleRate ?? this.testSnapshot.sampleRate
+            this.projects.current?.configuration.sampleRate ?? this.testSnapshot.sampleRate,
+          loopEnabled: false,
+          loopRange: null
         }
       }
       throw error
@@ -72,7 +80,13 @@ export class TransportService {
       return Promise.resolve({ ...this.testSnapshot })
     }
     if (!this.audioHost) {
-      return Promise.resolve({ state: "stopped", positionFrames: 0, sampleRate: 0 })
+      return Promise.resolve({
+        state: "stopped",
+        positionFrames: 0,
+        sampleRate: 0,
+        loopEnabled: false,
+        loopRange: null
+      })
     }
     return this.audioHost.transportSnapshot()
   }

@@ -23,7 +23,9 @@ export class AudioHostTransportClient {
   private lastTransport: TransportSnapshot = {
     state: "stopped",
     positionFrames: 0,
-    sampleRate: 0
+    sampleRate: 0,
+    loopEnabled: false,
+    loopRange: null
   }
   private readonly channelIdsByHandle = new Map<number, string>()
 
@@ -304,7 +306,14 @@ export class AudioHostTransportClient {
       type: "transport",
       command: {
         kind: command.type,
-        position_frames: command.type === "seek" ? command.positionFrames : null
+        position_frames: command.type === "seek" ? command.positionFrames : null,
+        ...(command.type === "set-loop"
+          ? {
+              loop_enabled: command.enabled,
+              loop_start_tick: command.range?.startTick ?? null,
+              loop_end_tick: command.range?.endTick ?? null
+            }
+          : {})
       }
     })
     return this.rememberTransport(this.transportResult(response))
@@ -354,7 +363,12 @@ export class AudioHostTransportClient {
       effectiveBpm: value.effective_bpm ?? undefined,
       clockSource: value.clock_source === "external" ? "external" : "internal",
       waitingFor:
-        value.waiting_for === "play" || value.waiting_for === "record" ? value.waiting_for : null
+        value.waiting_for === "play" || value.waiting_for === "record" ? value.waiting_for : null,
+      loopEnabled: Boolean(value.loop_enabled),
+      loopRange:
+        typeof value.loop_start_tick === "number" && typeof value.loop_end_tick === "number"
+          ? { startTick: value.loop_start_tick, endTick: value.loop_end_tick }
+          : null
     }
   }
 
@@ -371,6 +385,7 @@ export class AudioHostTransportClient {
     try {
       const telemetry = decode(client.readTelemetry()) as TelemetryWire
       this.rememberTransport({
+        ...this.lastTransport,
         state:
           telemetry[3] === 1
             ? "playing"

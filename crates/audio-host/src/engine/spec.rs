@@ -176,4 +176,7 @@ pub struct NativeTransportSnapshot {
     pub effective_bpm: Option<f64>,
     pub clock_source: String,
     pub waiting_for: Option<String>,
+    pub loop_enabled: bool,
+    pub loop_start_tick: Option<i64>,
+    pub loop_end_tick: Option<i64>,
 }
