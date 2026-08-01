@@ -12,6 +12,7 @@ import type {
 import { useApplicationCommands } from "./useApplicationCommands"
 import { useGlobalDialog } from "./useGlobalDialog"
 import { useAudioRuntimeStore } from "../stores/audioRuntime"
+import { useAboutStore } from "../stores/about"
 import { useProjectStore } from "../stores/project"
 import { rpcEvent } from "../test/ipc"
 
@@ -245,6 +246,16 @@ describe("useApplicationCommands", () => {
     await flushPromises()
 
     expect(router.currentRoute.value.name).toBe("system-settings")
+  })
+
+  it("opens the renderer About dialog from a native application-menu command", async () => {
+    const { pinia } = createHarness()
+
+    nativeCommandListener?.(rpcEvent("application.about"))
+    await flushPromises()
+
+    expect(useAboutStore(pinia).isOpen).toBe(true)
+    expect(window.yadaw.executeApplicationWindowCommand).not.toHaveBeenCalled()
   })
 
   it.each(["window.close", "application.quit"] as const)(

@@ -15,6 +15,7 @@ import { useApplicationWindowStore } from "./stores/applicationWindow"
 import { useMidiInputStore } from "./stores/midiInput"
 import GlobalOperationHost from "./components/operations/GlobalOperationHost.vue"
 import AudioBenchmarkHost from "./components/benchmark/AudioBenchmarkHost.vue"
+import AboutYadawHost from "./components/about/AboutYadawHost.vue"
 import CompiledEffectGraphHost from "./components/effect-graph/CompiledEffectGraphHost.vue"
 import GlobalDialogHost from "./components/dialog/GlobalDialogHost.vue"
 import AppChrome from "./components/application/AppChrome.vue"
@@ -94,6 +95,7 @@ onUnmounted(() => {
     </AppChrome>
     <GlobalOperationHost />
     <AudioBenchmarkHost />
+    <AboutYadawHost />
     <CompiledEffectGraphHost />
     <GlobalDialogHost />
   </UiProvider>

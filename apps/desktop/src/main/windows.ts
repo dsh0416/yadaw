@@ -1,4 +1,4 @@
-import { BrowserWindow } from "electron"
+import { BrowserWindow, shell } from "electron"
 import { join } from "node:path"
 import { deferDirtyProjectClose } from "./dirty-project-close"
 import type { ProjectService } from "./project-service"
@@ -12,6 +12,19 @@ export function setWindowProjectService(service: ProjectService): void {
 
 export let mainWindow: BrowserWindow | null = null
 export let splashWindow: BrowserWindow | null = null
+
+export function openExternalUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return false
+    void shell.openExternal(parsed.toString()).catch((error: unknown) => {
+      console.error("YADAW could not open an external URL", error)
+    })
+    return true
+  } catch {
+    return false
+  }
+}
 
 export function loadMainWindow(window: BrowserWindow): void {
   if (process.env.YADAW_RENDERER_URL) {
@@ -113,7 +126,10 @@ export function createMainWindow(loadContent = true): BrowserWindow {
     if (mainWindow === window) mainWindow = null
   })
 
-  window.webContents.setWindowOpenHandler(() => ({ action: "deny" }))
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    openExternalUrl(url)
+    return { action: "deny" }
+  })
   window.webContents.on("will-navigate", (event, url) => {
     if (url !== window.webContents.getURL()) {
       event.preventDefault()

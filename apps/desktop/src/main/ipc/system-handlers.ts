@@ -54,9 +54,6 @@ export function registerSystemHandlers(context: IpcHandlerContext): void {
       case "view.toggle-full-screen":
         if (window) window.setFullScreen(!window.isFullScreen())
         break
-      case "application.about":
-        app.showAboutPanel()
-        break
     }
   })
 

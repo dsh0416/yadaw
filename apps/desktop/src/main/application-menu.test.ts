@@ -3,13 +3,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 const electron = vi.hoisted(() => ({
   buildFromTemplate: vi.fn((template) => template),
   setApplicationMenu: vi.fn(),
-  showAboutPanel: vi.fn(),
   send: vi.fn(),
   show: vi.fn()
 }))
 
 vi.mock("electron", () => ({
-  app: { showAboutPanel: electron.showAboutPanel },
   BrowserWindow: {
     getFocusedWindow: () => ({
       show: electron.show,
@@ -41,6 +39,9 @@ describe("installApplicationMenu", () => {
     const preferences = application?.submenu?.find(
       (item: { label?: string }) => item.label === "Preferences…"
     )
+    const about = application?.submenu?.find(
+      (item: { label?: string }) => item.label === "About YADAW"
+    )
     const file = template?.find((item: { label?: string }) => item.label === "File")
     const projectSettings = file?.submenu?.find(
       (item: { label?: string }) => item.label === "Project Settings…"
@@ -53,6 +54,7 @@ describe("installApplicationMenu", () => {
       (item: { label?: string }) => item.label === "Effect Chain Graph…"
     )
 
+    about?.click()
     preferences?.click()
     projectSettings?.click()
     benchmark?.click()
@@ -61,25 +63,31 @@ describe("installApplicationMenu", () => {
     expect(electron.send).toHaveBeenNthCalledWith(
       1,
       IPC_CHANNELS.applicationCommandRequested,
-      expect.objectContaining({ payload: "application.preferences" })
+      expect.objectContaining({ payload: "application.about" })
     )
     expect(electron.send).toHaveBeenNthCalledWith(
       2,
       IPC_CHANNELS.applicationCommandRequested,
-      expect.objectContaining({ payload: "project.settings" })
+      expect.objectContaining({ payload: "application.preferences" })
     )
     expect(electron.send).toHaveBeenNthCalledWith(
       3,
       IPC_CHANNELS.applicationCommandRequested,
-      expect.objectContaining({ payload: "help.audio-benchmark" })
+      expect.objectContaining({ payload: "project.settings" })
     )
     expect(electron.send).toHaveBeenNthCalledWith(
       4,
+      IPC_CHANNELS.applicationCommandRequested,
+      expect.objectContaining({ payload: "help.audio-benchmark" })
+    )
+    expect(electron.send).toHaveBeenNthCalledWith(
+      5,
       IPC_CHANNELS.applicationCommandRequested,
       expect.objectContaining({ payload: "help.effect-chain-graph" })
     )
     expect(benchmark).toBeDefined()
     expect(effectGraph).toBeDefined()
+    expect(about).toBeDefined()
     expect(electron.setApplicationMenu).toHaveBeenCalledOnce()
   })
 

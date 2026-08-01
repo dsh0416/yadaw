@@ -40,6 +40,20 @@
     "name": "YADAW",
     "about": "About YADAW"
   },
+  "about": {
+    "version": "Version",
+    "platform": "Platform",
+    "platforms": {
+      "darwin": "macOS",
+      "win32": "Windows",
+      "linux": "Linux"
+    },
+    "license": "License",
+    "links": "YADAW resources",
+    "projectWebsite": "Project on GitHub",
+    "userManual": "User manual",
+    "close": "Close"
+  },
   "menu": {
     "file": "File",
     "edit": "Edit",

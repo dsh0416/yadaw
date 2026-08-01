@@ -44,8 +44,7 @@ export const APPLICATION_WINDOW_COMMAND_IDS = [
   "window.toggle-maximize",
   "window.close",
   "application.quit",
-  "view.toggle-full-screen",
-  "application.about"
+  "view.toggle-full-screen"
 ] as const
 
 export type ApplicationWindowCommandId = (typeof APPLICATION_WINDOW_COMMAND_IDS)[number]
