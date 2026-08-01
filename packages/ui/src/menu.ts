@@ -106,7 +106,7 @@ export function searchMenuEntries(
 
   return {
     total: matches.length,
-    entries: matches.slice(0, Math.max(1, maxResults)).map(({ candidate }) => {
+    entries: matches.slice(0, Math.max(0, maxResults)).map(({ candidate }) => {
       const breadcrumb = candidate.path.join(" / ")
       const metadata =
         candidate.entry.kind === "radio-group"
