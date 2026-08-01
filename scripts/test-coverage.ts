@@ -69,11 +69,21 @@ function cargoCoverageEnvironment(target: string): NodeJS.ProcessEnv {
   const output = capture(cargo, ["llvm-cov", "show-env", "--target", target], baseEnvironment)
   const environment: NodeJS.ProcessEnv = { ...baseEnvironment }
 
-  for (const line of output.split(/\r?\n/u)) {
-    if (!line) continue
-    const separator = line.indexOf("=")
-    if (separator <= 0) fail(`Unexpected cargo llvm-cov environment line: ${line}`)
-    environment[line.slice(0, separator)] = line.slice(separator + 1)
+  for (const rawLine of output.split(/\r?\n/u)) {
+    const line = rawLine.trim()
+    if (!line || line.startsWith("#")) continue
+
+    const assignment = line.replace(/^(?:export\s+|set\s+)/u, "")
+    const separator = assignment.indexOf("=")
+    if (separator <= 0) fail(`Unexpected cargo llvm-cov environment line: ${rawLine}`)
+
+    const key = assignment.slice(0, separator).trim()
+    let value = assignment.slice(separator + 1).trim()
+    if (value.startsWith('"') && value.endsWith('"')) {
+      value = value.slice(1, -1).replaceAll('\\"', '"').replaceAll("\\\\", "\\")
+    }
+
+    environment[key] = value
   }
 
   return environment
