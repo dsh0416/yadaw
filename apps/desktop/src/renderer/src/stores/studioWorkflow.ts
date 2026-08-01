@@ -103,6 +103,7 @@ export const useStudioWorkflowStore = defineStore("studio-workflow", () => {
     if (!(await prepareToLeaveStudio())) return false
     const disposition = await projectStore.prepareClose()
     if (!disposition) return false
+    await transportStore.setLoop(false, null)
     await transportStore.stop()
     if (!(await projectStore.close(disposition))) return false
     transportStore.reset()

@@ -438,6 +438,7 @@
         },
         "transport": {
           "toggle-playback": "Play / pause",
+          "toggle-loop": "Toggle Cycle",
           "go-to-start": "Return to start"
         },
         "recording": {
@@ -1302,7 +1303,10 @@
       "record": "Record",
       "recordTooltip": "Record · R",
       "captureRecording": "Capture Recording",
-      "cycle": "Cycle"
+      "cycle": "Cycle",
+      "cycleTooltip": "Cycle · L",
+      "cycleExternalClockTooltip": "Cycle is unavailable while following external MIDI Clock",
+      "cycleRecordingTooltip": "Cycle · L · Applies to playback after recording"
     },
     "musical": {
       "ariaLabel": "Project musical display",
@@ -1377,6 +1381,7 @@
       "deleteClip": "Delete clip",
       "trackRenameLabel": "{name}; double-click to rename; Alt+Arrow Up or Down to reorder",
       "timelineRulerAria": "Timeline ruler",
+      "cycleLaneAria": "Cycle range lane; drag to create a playback loop",
       "instrumentLaneAria": "Instrument lane; double-click empty space or press Enter to create a MIDI clip",
       "createMidiClipHint": "Double-click to create MIDI clip",
       "recordingAria": "Recording",

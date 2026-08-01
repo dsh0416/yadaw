@@ -438,6 +438,7 @@
         },
         "transport": {
           "toggle-playback": "播放 / 暂停",
+          "toggle-loop": "切换循环",
           "go-to-start": "返回开头"
         },
         "recording": {
@@ -993,7 +994,10 @@
       "record": "录音",
       "recordTooltip": "录音 · R",
       "captureRecording": "捕获录音",
-      "cycle": "循环"
+      "cycle": "循环",
+      "cycleTooltip": "循环 · L",
+      "cycleExternalClockTooltip": "跟随外部 MIDI 时钟时无法使用循环",
+      "cycleRecordingTooltip": "循环 · L · 录音结束后的播放中生效"
     },
     "musical": {
       "ariaLabel": "工程音乐显示",
@@ -1068,6 +1072,7 @@
       "deleteClip": "删除片段",
       "trackRenameLabel": "{name}；双击重命名；Alt+上/下箭头重新排序",
       "timelineRulerAria": "时间线标尺",
+      "cycleLaneAria": "循环范围轨道；拖动以创建播放循环",
       "instrumentLaneAria": "乐器轨；双击空白处或按 Enter 创建 MIDI 片段",
       "createMidiClipHint": "双击以创建 MIDI 片段",
       "recordingAria": "正在录音",

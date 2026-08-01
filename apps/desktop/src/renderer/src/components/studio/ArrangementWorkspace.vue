@@ -61,6 +61,8 @@ const {
   playheadSeconds,
   selectedClipId,
   error,
+  loopEnabled,
+  loopRange,
   contentEndSeconds,
   timelineDurationSeconds
 } = storeToRefs(transportStore)
@@ -258,6 +260,9 @@ function handleSeek(seconds: number): void {
   transportStore.clearSelection()
   pianoRollStore.clearArrangementSelection()
   transportStore.seek(seconds)
+}
+function updateCycleRange(range: { startTick: number; endTick: number }): void {
+  void transportStore.setLoop(true, range)
 }
 function selectAudioClip(clipId: string): void {
   pianoRollStore.clearArrangementSelection()
@@ -563,7 +568,11 @@ function createMidiClip(trackId: string, requestedStartTick: number): void {
               :content-width="contentWidth"
               :pixels-per-quarter="pixelsPerQuarter"
               :tempo-map="mixerStore.graph.tempoMap"
+              :loop-enabled="loopEnabled"
+              :loop-range="loopRange"
+              :cycle-disabled="transportStore.snapshot.clockSource === 'external'"
               @seek="handleSeek"
+              @update-loop-range="updateCycleRange"
             />
             <TempoTrackLane
               :tempo-map="mixerStore.graph.tempoMap"

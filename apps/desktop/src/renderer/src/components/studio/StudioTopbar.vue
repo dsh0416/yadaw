@@ -35,6 +35,8 @@ defineProps<{
   playLoading: boolean
   canPlay: boolean
   countInEnabled: boolean
+  cycleEnabled: boolean
+  externalClock: boolean
   playheadSeconds: number
   tempoMap: TempoMapSnapshot
   soundBrowserOpen: boolean
@@ -53,6 +55,7 @@ const emit = defineEmits<{
   togglePlayback: []
   goToStart: []
   toggleCountIn: []
+  toggleCycle: []
   updateTempo: [beatsPerMinute: number]
   toggleMetronome: []
   previewMaster: [preview: MixerParameterPreview]
@@ -115,9 +118,12 @@ const { t } = useI18n()
         :playing="playing"
         :play-loading="playLoading"
         :can-play="canPlay"
+        :cycle-enabled="cycleEnabled"
+        :external-clock="externalClock"
         @go-to-start="emit('goToStart')"
         @toggle-playback="emit('togglePlayback')"
         @toggle-recording="emit('toggleRecording')"
+        @toggle-cycle="emit('toggleCycle')"
       />
     </div>
 

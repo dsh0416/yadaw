@@ -24,6 +24,7 @@ export const APPLICATION_COMMAND_IDS = [
   "view.toggle-full-screen",
   "view.toggle-mixer-dock",
   "transport.toggle-playback",
+  "transport.toggle-loop",
   "transport.go-to-start",
   "recording.toggle",
   "help.audio-benchmark",

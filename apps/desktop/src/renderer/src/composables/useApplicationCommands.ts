@@ -31,6 +31,7 @@ import { useStudioWorkspaceStore } from "../stores/studioWorkspace"
 import { useTransportStore } from "../stores/transport"
 import { planAudioClipSplit, planMidiClipSplits } from "../utils/clipEditing"
 import { secondsToTick } from "../utils/tempoMap"
+import { defaultCycleRange } from "../utils/cycleRange"
 
 function defaultProject(name: string): CreateProjectRequest {
   return {
@@ -316,6 +317,23 @@ export function useApplicationCommands() {
       case "transport.toggle-playback":
         if (router.currentRoute.value.name === "studio" && !activeRecording.value) {
           await transportStore.toggle()
+        }
+        break
+      case "transport.toggle-loop":
+        if (
+          router.currentRoute.value.name === "studio" &&
+          transportStore.snapshot.clockSource !== "external"
+        ) {
+          const range =
+            transportStore.loopRange ??
+            defaultCycleRange(
+              mixerStore.graph.tempoMap,
+              secondsToTick(mixerStore.graph.tempoMap, transportStore.playheadSeconds)
+            )
+          await transportStore.setLoop(
+            !transportStore.loopEnabled || transportStore.loopRange === null,
+            range
+          )
         }
         break
       case "transport.go-to-start":

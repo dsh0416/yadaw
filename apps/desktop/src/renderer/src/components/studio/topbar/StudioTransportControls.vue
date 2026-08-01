@@ -22,11 +22,14 @@ const props = defineProps<{
   playing: boolean
   playLoading: boolean
   canPlay: boolean
+  cycleEnabled: boolean
+  externalClock: boolean
 }>()
 const emit = defineEmits<{
   goToStart: []
   togglePlayback: []
   toggleRecording: []
+  toggleCycle: []
 }>()
 
 const { t } = useI18n()
@@ -35,6 +38,13 @@ const playLabel = computed(() =>
 )
 const playTooltip = computed(() =>
   props.playing ? t("studio.transport.pauseTooltip") : t("studio.transport.playTooltip")
+)
+const cycleTooltip = computed(() =>
+  props.externalClock
+    ? t("studio.transport.cycleExternalClockTooltip")
+    : props.recording
+      ? t("studio.transport.cycleRecordingTooltip")
+      : t("studio.transport.cycleTooltip")
 )
 </script>
 
@@ -83,7 +93,15 @@ const playTooltip = computed(() =>
     >
       <CircleDashed :size="16" />
     </StudioControlButton>
-    <StudioControlButton :label="t('studio.transport.cycle')" unavailable compact-hidden>
+    <StudioControlButton
+      :label="t('studio.transport.cycle')"
+      :tooltip="cycleTooltip"
+      :pressed="cycleEnabled"
+      :disabled="externalClock"
+      compact-hidden
+      tone="accent"
+      @activate="emit('toggleCycle')"
+    >
       <Repeat2 :size="15" />
     </StudioControlButton>
     <StudioMidiSyncStatus />
