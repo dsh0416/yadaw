@@ -300,6 +300,31 @@ describe("useApplicationCommands", () => {
     }
   )
 
+  it("closes a clean project before closing the macOS window", async () => {
+    Object.defineProperty(window.yadaw, "platform", {
+      configurable: true,
+      value: "darwin"
+    })
+    window.yadaw.closeProject = vi.fn().mockResolvedValue({
+      ok: true,
+      requestId: "close",
+      value: { closed: true, snapshot: closedBootstrap() },
+      warnings: []
+    })
+    const { pinia } = createHarness()
+    useProjectStore(pinia).applyWorkspace(workspace(session))
+    const { activeDialog } = useGlobalDialog()
+
+    nativeCommandListener?.(rpcEvent("window.close"))
+    await vi.waitFor(() => expect(window.yadaw.closeProject).toHaveBeenCalledOnce())
+
+    expect(activeDialog.value).toBeNull()
+    expect(window.yadaw.executeApplicationWindowCommand).toHaveBeenCalledWith(
+      expect.any(Object),
+      "window.close"
+    )
+  })
+
   it("keeps the current dirty project when switching projects is cancelled", async () => {
     window.yadaw.prepareOpenProject = vi.fn()
     const { pinia } = createHarness()

@@ -19,6 +19,11 @@ mod tests {
         assert_eq!(effective_iced_scale(1.0, 4.0), 4.0);
     }
 
+    #[test]
+    fn native_container_starts_below_toolbar_on_every_platform() {
+        assert_eq!(container_origin(72), 72);
+    }
+
     #[cfg(not(target_os = "macos"))]
     #[test]
     fn windows_and_x11_use_physical_view_rects() {
