@@ -29,7 +29,10 @@ const tokenSourceFiles = [
 ]
 const definedUiTokens = new Set(
   tokenSourceFiles.flatMap((file) =>
-    [...readFileSync(file, "utf8").matchAll(/(--ui-[\w-]+)\s*:/g)].map((match) => match[1]!)
+    [...readFileSync(file, "utf8").matchAll(/(--ui-[\w-]+)\s*:/g)].flatMap((match) => {
+      const token = match[1]
+      return token === undefined ? [] : [token]
+    })
   )
 )
 const rawColor = /#[0-9a-f]{3,8}\b|(?:rgb|hsl)a?\([^)]*\)/gi
@@ -74,7 +77,8 @@ function auditTypography(file: string, source: string, isTokenSource = false): v
 
 function auditTokenReferences(file: string, source: string): void {
   for (const match of source.matchAll(/var\((--ui-[\w-]+)/g)) {
-    const token = match[1]!
+    const token = match[1]
+    if (token === undefined) continue
     if (!token.endsWith("-") && !definedUiTokens.has(token)) {
       report(file, "undefined-ui-token", token)
     }

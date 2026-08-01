@@ -103,12 +103,17 @@ Prefer the root `mise run check` task before handing off a completed change
 because it is the repository's full validation path.
 
 `pnpm check` and `pnpm check:native` run `pnpm sync:napi-bindings` before
-type-aware ESLint, package TypeScript checks, and tests that resolve
-`@yadaw/dsp-node` / `@yadaw/audio-host-client`, so the gitignored loaders and
-typings exist in CI and clean checkouts.
+type-aware Oxlint, residual Vue ESLint, package TypeScript checks, and tests
+that resolve `@yadaw/dsp-node` / `@yadaw/audio-host-client`, so the gitignored
+loaders and typings exist in CI and clean checkouts.
 
-Prettier formats the tracked TypeScript, JavaScript, Vue, JSON, YAML, Markdown,
-and CSS sources. ESLint performs type-aware TypeScript and Vue checks, while
+Oxfmt formats the tracked TypeScript, JavaScript, Vue, JSON, YAML, Markdown,
+and CSS sources. Oxlint performs the primary type-aware TypeScript and Vue
+script checks, while residual ESLint covers Vue templates and typed Vue
+scripts. `eslint-plugin-oxlint` disables native rule overlap without disabling
+the typed rules that Oxlint cannot yet execute inside Vue SFCs. Keep `oxlint`
+and `eslint-plugin-oxlint` on matching versions when updating this toolchain.
+
 rustfmt and Clippy cover every Rust workspace crate. Generated napi-rs loaders
 and typings (gitignored under the native addon crates), Drizzle migration
 metadata, lockfiles, build output, and third-party sources are excluded from

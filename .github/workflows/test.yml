@@ -38,8 +38,8 @@ jobs:
         # suite executes exactly once with coverage enabled, and
         # cargo llvm-cov doubles as the cargo test run. Windows and macOS
         # only run the platform-dependent subset (Rust checks, napi-rs
-        # builds, unit and project-database tests); Prettier, ESLint, design
-        # audits, TypeScript-only checks, and Storybook produce identical
+        # builds, unit and project-database tests); Oxfmt, Oxlint, Vue ESLint,
+        # design audits, TypeScript-only checks, and Storybook produce identical
         # results on every platform and would otherwise dominate the slower
         # runners.
         include:
