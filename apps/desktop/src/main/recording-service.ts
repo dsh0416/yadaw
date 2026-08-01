@@ -515,7 +515,9 @@ export class RecordingService {
         },
         true
       )
-      this.operations.setCancelHandler(operationId, () => this.projects.cancelOperation(operationId))
+      this.operations.setCancelHandler(operationId, () =>
+        this.projects.cancelOperation(operationId)
+      )
       const imported: string[] = []
       try {
         for (const { track, finalized } of finalizedTracks) {

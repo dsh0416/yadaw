@@ -80,12 +80,7 @@ impl MidiRecordingSession {
         })
     }
 
-    pub fn observe(
-        &mut self,
-        timestamp_micros: u64,
-        port_key: u64,
-        message: &MidiInputMessage,
-    ) {
+    pub fn observe(&mut self, timestamp_micros: u64, port_key: u64, message: &MidiInputMessage) {
         if !message.is_recordable() {
             return;
         }
@@ -145,8 +140,7 @@ mod tests {
         time::{SystemTime, UNIX_EPOCH},
     };
     use yadaw_dsp_runtime::{
-        midi_journal::recover_midi_journal,
-        protocol::MidiRecordingTakeConfig,
+        midi_journal::recover_midi_journal, protocol::MidiRecordingTakeConfig,
     };
 
     fn temporary_path(label: &str) -> PathBuf {

@@ -497,7 +497,10 @@ mod tests {
         assert_eq!(take.notes[1].duration_ticks, 480);
         assert_eq!(take.notes[1].release_velocity, 0);
         assert_eq!(take.events.len(), 1);
-        assert_eq!(take.events[0].kind, crate::midi::NormalizedMidiEventKind::ControlChange);
+        assert_eq!(
+            take.events[0].kind,
+            crate::midi::NormalizedMidiEventKind::ControlChange
+        );
         assert!(
             take.warnings
                 .iter()

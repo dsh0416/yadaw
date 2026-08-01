@@ -9,7 +9,9 @@ describe("commitMidiRecordingTakes", () => {
   const directories: string[] = []
 
   afterEach(async () => {
-    await Promise.all(directories.splice(0).map((path) => rm(path, { recursive: true, force: true })))
+    await Promise.all(
+      directories.splice(0).map((path) => rm(path, { recursive: true, force: true }))
+    )
   })
 
   it("converts a journal into a MIDI source and clip commit", async () => {

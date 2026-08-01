@@ -993,6 +993,7 @@ mod tests {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn message_sink<'a>(
         preferences: &'a MidiSyncPreferences,
         clock: &'a mut MidiClockSlave,
