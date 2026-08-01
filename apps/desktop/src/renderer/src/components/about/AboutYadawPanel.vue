@@ -37,7 +37,7 @@ const manualUrl = "https://yadaw.minori.live/manual/"
     </dl>
 
     <nav class="about-links" :aria-label="t('about.links')">
-      <a class="about-link" :href="projectUrl" target="_blank" rel="noreferrer">
+      <a class="about-link" :href="projectUrl" target="_blank" rel="noopener noreferrer">
         <span class="link-label">{{ t("about.projectWebsite") }}</span>
         <span class="link-arrow" aria-hidden="true">↗</span>
       </a>
