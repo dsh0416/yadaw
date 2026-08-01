@@ -71,10 +71,10 @@ describe("stopRecording", () => {
         }
       ]
     })
-    vi.mocked(projectStore.refreshAssets).mockResolvedValue(undefined as never)
+    vi.mocked(projectStore.refreshAssets).mockResolvedValue(undefined)
     vi.mocked(projectStore.markDirty).mockImplementation(() => undefined)
     vi.mocked(recordingStore.refreshPending).mockResolvedValue([] as never)
-    vi.mocked(mixerStore.reload).mockResolvedValue(undefined as never)
+    vi.mocked(mixerStore.reload).mockResolvedValue(undefined)
     vi.mocked(mixerStore.execute).mockResolvedValue(undefined as never)
 
     await expect(workflowStore.stopRecording()).resolves.toMatchObject({ id: "take-1" })
@@ -94,7 +94,7 @@ describe("stopRecording", () => {
       ...structuredClone(EMPTY_PROJECT_GRAPH),
       sampleRate: 48_000,
       tracks: [{ id: "track:audio", channelId: "audio", sortOrder: 0 }]
-    } as never
+    }
     recordingStore.resource = {
       recording: { kind: "recording", id: "take-1", epoch: "1", generation: 1 },
       revision: 1,
@@ -127,10 +127,10 @@ describe("stopRecording", () => {
       ],
       midiTakes: []
     })
-    vi.mocked(projectStore.refreshAssets).mockResolvedValue(undefined as never)
+    vi.mocked(projectStore.refreshAssets).mockResolvedValue(undefined)
     vi.mocked(projectStore.markDirty).mockImplementation(() => undefined)
     vi.mocked(recordingStore.refreshPending).mockResolvedValue([] as never)
-    vi.mocked(mixerStore.reload).mockResolvedValue(undefined as never)
+    vi.mocked(mixerStore.reload).mockResolvedValue(undefined)
     vi.mocked(mixerStore.execute).mockResolvedValue(undefined as never)
 
     await workflowStore.stopRecording()
