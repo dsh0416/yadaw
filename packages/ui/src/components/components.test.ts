@@ -293,6 +293,8 @@ describe("UI controls", () => {
     const modeElement = document.body.querySelector<HTMLElement>(".ui-cascading-menu__item")
     expect(modeElement).not.toBeNull()
     expect(modeElement?.classList.contains("ui-cascading-menu__item--detailed")).toBe(true)
+    expect(modeElement?.classList.contains("ui-menu__item--detailed")).toBe(true)
+    expect(modeElement?.classList.contains("ui-menu__item--leading")).toBe(true)
     expect(modeElement?.textContent).toContain("YADAW / Delay")
     const mode = new DOMWrapper(modeElement)
     await mode.trigger("click")

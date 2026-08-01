@@ -87,7 +87,7 @@ function entryClasses(entry: UiMenuEntry): Record<string, boolean> {
 
   return {
     "ui-menu__item--leading": Boolean(entry.leading),
-    "ui-menu__item--detailed": Boolean(entry.metadata || entry.shortcut),
+    "ui-menu__item--detailed": Boolean(entry.leading || entry.metadata || entry.shortcut),
     "ui-menu__item--danger": entry.kind === "item" && entry.tone === "danger"
   }
 }

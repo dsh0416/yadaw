@@ -289,6 +289,12 @@ defineExpose({
   column-gap: 7px;
 }
 
+/* Audio-mode badges (M→S, 2×M, …) need a wider leading track than check indicators. */
+.ui-menu__item--leading.ui-menu__item--detailed {
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  min-height: 34px;
+}
+
 .ui-menu__sub-trigger {
   grid-template-columns: minmax(0, 1fr) auto 12px;
   column-gap: 12px;
@@ -297,6 +303,11 @@ defineExpose({
 .ui-menu__sub-trigger.ui-menu__item--leading {
   grid-template-columns: 16px minmax(0, 1fr) auto 12px;
   column-gap: 7px;
+}
+
+.ui-menu__sub-trigger.ui-menu__item--leading.ui-menu__item--detailed {
+  grid-template-columns: 34px minmax(0, 1fr) auto 12px;
+  min-height: 34px;
 }
 
 .ui-menu__item[data-highlighted],
@@ -329,6 +340,11 @@ defineExpose({
   font: var(--ui-type-weight-semibold) var(--ui-type-size-control) var(--ui-type-family-data);
   text-align: center;
   white-space: nowrap;
+}
+
+.ui-menu__item--leading.ui-menu__item--detailed > .ui-menu__leading {
+  min-width: auto;
+  font-weight: var(--ui-type-weight-bold);
 }
 
 .ui-menu__metadata,
