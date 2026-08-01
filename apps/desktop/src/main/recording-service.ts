@@ -636,6 +636,8 @@ export class RecordingService {
       assetExists,
       startFrame,
       startTick,
+      audioTrackIds,
+      midiTrackIds,
       midiTakes
     } = recording
     const recordedTracks: RecordedTrackAsset[] = (recording.tracks ?? [])
@@ -661,6 +663,8 @@ export class RecordingService {
       startedAt,
       startFrame,
       startTick,
+      audioTrackIds,
+      midiTrackIds,
       dropoutFrames,
       assetExists,
       recordedTracks,

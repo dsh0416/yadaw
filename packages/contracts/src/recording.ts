@@ -68,6 +68,8 @@ export interface PendingRecording {
   startedAt: number
   startFrame?: number | null
   startTick?: number | null
+  audioTrackIds?: string[]
+  midiTrackIds?: string[]
   dropoutFrames: number
   assetExists: boolean
   recordedTracks: RecordedTrackAsset[]
