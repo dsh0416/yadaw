@@ -49,17 +49,19 @@ export function useArrangementViewport(options: ArrangementViewportOptions) {
     )
   )
 
-  function syncRailScroll(element: HTMLElement): void {
-    const railElement = rail.value
-    if (!railElement) return
-    railElement.style.paddingBottom = `${Math.max(0, element.offsetHeight - element.clientHeight)}px`
-    railElement.scrollTop = element.scrollTop
+  function timelineViewportWidth(element: HTMLElement): number {
+    return Math.max(1, element.clientWidth - (rail.value?.offsetWidth ?? 0))
+  }
+
+  function updateViewportWidth(): void {
+    const element = viewport.value
+    if (!element) return
+    viewportWidth.value = timelineViewportWidth(element)
   }
 
   function handleScroll(): void {
     const element = viewport.value
     scrollLeft.value = element?.scrollLeft ?? 0
-    if (element) syncRailScroll(element)
   }
 
   function handleWheel(event: WheelEvent): void {
@@ -69,7 +71,11 @@ export function useArrangementViewport(options: ArrangementViewportOptions) {
       const element = viewport.value
       if (element) {
         const bounds = element.getBoundingClientRect()
-        const viewportX = Math.max(0, Math.min(element.clientWidth, event.clientX - bounds.left))
+        const width = timelineViewportWidth(element)
+        const viewportX = Math.max(
+          0,
+          Math.min(width, event.clientX - bounds.left - (rail.value?.offsetWidth ?? 0))
+        )
         timeZoomAnchor = {
           seconds: timelineXToSeconds(
             options.tempoMap(),
@@ -90,33 +96,15 @@ export function useArrangementViewport(options: ArrangementViewportOptions) {
     event.preventDefault()
   }
 
-  function handleRailWheel(event: WheelEvent): void {
-    const element = viewport.value
-    if (!element) return
-    if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) {
-      handleWheel(event)
-      return
-    }
-    element.scrollTop += event.deltaY
-    element.scrollLeft += event.deltaX
-    syncRailScroll(element)
-    event.preventDefault()
-  }
-
-  useResizeObserver(viewport, (entries) => {
-    viewportWidth.value = Math.max(1, entries[0]?.contentRect.width ?? 1)
-    if (viewport.value) syncRailScroll(viewport.value)
-  })
+  useResizeObserver(viewport, updateViewportWidth)
+  useResizeObserver(rail, updateViewportWidth)
   watch(options.pixelsPerQuarter, (value, previous) => {
     const element = viewport.value
     if (!element || !previous) return
+    const width = timelineViewportWidth(element)
     const anchor = timeZoomAnchor ?? {
-      seconds: timelineXToSeconds(
-        options.tempoMap(),
-        element.scrollLeft + element.clientWidth / 2,
-        previous
-      ),
-      viewportX: element.clientWidth / 2
+      seconds: timelineXToSeconds(options.tempoMap(), element.scrollLeft + width / 2, previous),
+      viewportX: width / 2
     }
     timeZoomAnchor = null
     void nextTick(() => {
@@ -135,7 +123,6 @@ export function useArrangementViewport(options: ArrangementViewportOptions) {
     viewportStartSeconds,
     viewportEndSeconds,
     handleScroll,
-    handleWheel,
-    handleRailWheel
+    handleWheel
   }
 }
