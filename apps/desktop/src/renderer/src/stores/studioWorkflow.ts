@@ -69,6 +69,10 @@ export const useStudioWorkflowStore = defineStore("studio-workflow", () => {
         })
       })
     }
+    // MIDI takes are committed into the project graph by main during finalize.
+    if ((completed.midiTakes?.length ?? 0) > 0) {
+      await mixerStore.reload()
+    }
     projectStore.markDirty()
     await recordingStore.refreshPending()
     return completed

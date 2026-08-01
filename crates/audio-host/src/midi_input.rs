@@ -21,9 +21,13 @@ use yadaw_dsp_runtime::{
     },
     protocol::{
         MidiControlEvent, MidiControlEventKind, MidiInputPort as WireMidiInputPort,
-        MidiInputSnapshot, MidiSyncPreferences, MidiSyncRuntime,
+        MidiInputSnapshot, MidiRecordingResult, MidiRecordingStartConfig, MidiSyncPreferences,
+        MidiSyncRuntime,
     },
 };
+
+use crate::engine::TransportClockHandle;
+use crate::midi_recording::MidiRecordingSession;
 
 const PORT_POLL_INTERVAL: Duration = Duration::from_secs(1);
 const ACTOR_POLL_INTERVAL: Duration = Duration::from_millis(20);
@@ -312,6 +316,14 @@ enum Command {
         port_ids: BTreeSet<String>,
     },
     Snapshot(mpsc::Sender<MidiInputSnapshot>),
+    StartRecording {
+        config: MidiRecordingStartConfig,
+        clock: TransportClockHandle,
+        reply: mpsc::Sender<Result<(), String>>,
+    },
+    StopRecording {
+        reply: mpsc::Sender<Result<MidiRecordingResult, String>>,
+    },
     Shutdown,
 }
 
@@ -358,6 +370,34 @@ impl MidiInputActor {
             .recv_timeout(Duration::from_secs(2))
             .unwrap_or_else(|_| unavailable_snapshot("MIDI input snapshot timed out"))
     }
+
+    pub fn start_recording(
+        &self,
+        config: MidiRecordingStartConfig,
+        clock: TransportClockHandle,
+    ) -> Result<(), String> {
+        let (sender, receiver) = mpsc::channel();
+        self.sender
+            .send(Command::StartRecording {
+                config,
+                clock,
+                reply: sender,
+            })
+            .map_err(|_| "MIDI input actor is unavailable".to_owned())?;
+        receiver
+            .recv_timeout(Duration::from_secs(2))
+            .map_err(|_| "MIDI recording start timed out".to_owned())?
+    }
+
+    pub fn stop_recording(&self) -> Result<MidiRecordingResult, String> {
+        let (sender, receiver) = mpsc::channel();
+        self.sender
+            .send(Command::StopRecording { reply: sender })
+            .map_err(|_| "MIDI input actor is unavailable".to_owned())?;
+        receiver
+            .recv_timeout(Duration::from_secs(5))
+            .map_err(|_| "MIDI recording stop timed out".to_owned())?
+    }
 }
 
 impl Drop for MidiInputActor {
@@ -384,6 +424,7 @@ struct ActorState {
     pending_events: Vec<PendingMidiEvent>,
     control_generation: u64,
     control_events: VecDeque<MidiControlEvent>,
+    recording: Option<MidiRecordingSession>,
 }
 
 struct PendingMidiEvent {
@@ -409,6 +450,7 @@ fn run_actor(receiver: mpsc::Receiver<Command>, preferences: MidiSyncPreferences
         pending_events: Vec::with_capacity(MIDI_SHORT_QUEUE_CAPACITY),
         control_generation: 0,
         control_events: VecDeque::with_capacity(CONTROL_EVENT_CAPACITY),
+        recording: None,
     };
     state
         .realtime_shared
@@ -443,6 +485,39 @@ fn run_actor(receiver: mpsc::Receiver<Command>, preferences: MidiSyncPreferences
             }
             Ok(Command::Snapshot(reply)) => {
                 let _ = reply.send(snapshot(&state));
+            }
+            Ok(Command::StartRecording {
+                config,
+                clock,
+                reply,
+            }) => {
+                if state.recording.is_some() {
+                    let _ = reply.send(Err("A MIDI recording is already active".to_owned()));
+                    continue;
+                }
+                match MidiRecordingSession::start(config, clock) {
+                    Ok(session) => {
+                        state.recording = Some(session);
+                        let _ = reply.send(Ok(()));
+                    }
+                    Err(error) => {
+                        let _ = reply.send(Err(error));
+                    }
+                }
+            }
+            Ok(Command::StopRecording { reply }) => {
+                let Some(session) = state.recording.take() else {
+                    let _ = reply.send(Err("No MIDI recording is active".to_owned()));
+                    continue;
+                };
+                match session.stop() {
+                    Ok(takes) => {
+                        let _ = reply.send(Ok(MidiRecordingResult { takes }));
+                    }
+                    Err(error) => {
+                        let _ = reply.send(Err(error));
+                    }
+                }
             }
             Ok(Command::Shutdown) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
             Err(mpsc::RecvTimeoutError::Timeout) => {}
@@ -595,6 +670,7 @@ fn drain_connections(state: &mut ActorState) {
                         pending_events: &mut state.pending_events,
                         control_generation: &mut state.control_generation,
                         control_events: &mut state.control_events,
+                        recording: &mut state.recording,
                     },
                     port_id,
                     port_name,
@@ -624,6 +700,7 @@ fn drain_connections(state: &mut ActorState) {
                         pending_events: &mut state.pending_events,
                         control_generation: &mut state.control_generation,
                         control_events: &mut state.control_events,
+                        recording: &mut state.recording,
                     },
                     port_id,
                     port_name,
@@ -646,6 +723,7 @@ struct MessageSink<'a> {
     pending_events: &'a mut Vec<PendingMidiEvent>,
     control_generation: &'a mut u64,
     control_events: &'a mut VecDeque<MidiControlEvent>,
+    recording: &'a mut Option<MidiRecordingSession>,
 }
 
 fn process_messages(
@@ -711,6 +789,9 @@ fn process_messages(
             }
         }
         if message.is_recordable() {
+            if let Some(recording) = sink.recording.as_mut() {
+                recording.observe(timestamp_micros, port_key, &message);
+            }
             sink.pending_events.push(PendingMidiEvent {
                 timestamp_micros,
                 port_key,
@@ -912,6 +993,7 @@ mod tests {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn message_sink<'a>(
         preferences: &'a MidiSyncPreferences,
         clock: &'a mut MidiClockSlave,
@@ -920,6 +1002,7 @@ mod tests {
         pending: &'a mut Vec<PendingMidiEvent>,
         generation: &'a mut u64,
         controls: &'a mut VecDeque<MidiControlEvent>,
+        recording: &'a mut Option<MidiRecordingSession>,
     ) -> MessageSink<'a> {
         MessageSink {
             preferences,
@@ -929,6 +1012,7 @@ mod tests {
             pending_events: pending,
             control_generation: generation,
             control_events: controls,
+            recording,
         }
     }
 
@@ -1255,6 +1339,7 @@ mod tests {
         let mut pending = Vec::new();
         let mut generation = 0;
         let mut controls = VecDeque::new();
+        let mut recording = None;
         process_messages(
             &mut message_sink(
                 &preferences,
@@ -1264,6 +1349,7 @@ mod tests {
                 &mut pending,
                 &mut generation,
                 &mut controls,
+                &mut recording,
             ),
             "controller",
             "Studio Controller",
@@ -1304,6 +1390,7 @@ mod tests {
         let mut pending = Vec::new();
         let mut generation = 0;
         let mut controls = VecDeque::new();
+        let mut recording = None;
         process_messages(
             &mut message_sink(
                 &preferences,
@@ -1313,6 +1400,7 @@ mod tests {
                 &mut pending,
                 &mut generation,
                 &mut controls,
+                &mut recording,
             ),
             "clock",
             "Clock",
@@ -1356,6 +1444,7 @@ mod tests {
         let mut pending = Vec::new();
         let mut generation = 0;
         let mut controls = VecDeque::new();
+        let mut recording = None;
         let messages = (0..(CONTROL_EVENT_CAPACITY as u8 + 3))
             .map(|index| MidiInputMessage::ControlChange(0, index, 1))
             .collect::<Vec<_>>();
@@ -1368,6 +1457,7 @@ mod tests {
                 &mut pending,
                 &mut generation,
                 &mut controls,
+                &mut recording,
             ),
             "any",
             "Any",
@@ -1411,6 +1501,7 @@ mod tests {
             pending_events,
             control_generation: 0,
             control_events: VecDeque::new(),
+            recording: None,
         };
         (state, Cons::new(events), Cons::new(sysex))
     }

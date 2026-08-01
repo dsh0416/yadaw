@@ -1,11 +1,20 @@
 struct TransportShared {
     state: Arc<AtomicU32>,
-    position_frames: AtomicU64,
-    position_ticks: AtomicU64,
+    position_frames: Arc<AtomicU64>,
+    position_ticks: Arc<AtomicU64>,
     sample_rate: AtomicU32,
     effective_bpm_bits: AtomicU64,
     clock_source: AtomicU32,
     waiting_for: AtomicU32,
+}
+
+/// Read-only transport atomics shared with the MIDI recording actor.
+#[derive(Clone)]
+pub struct TransportClockHandle {
+    pub state: Arc<AtomicU32>,
+    pub position_frames: Arc<AtomicU64>,
+    pub position_ticks: Arc<AtomicU64>,
+    pub recording_state: u32,
 }
 
 impl TransportShared {

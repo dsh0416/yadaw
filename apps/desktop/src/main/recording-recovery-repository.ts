@@ -7,6 +7,7 @@ export interface RecordingSidecarRecord {
   sidecarPath: string
   finalPath: string | null
   tracks?: { finalPath: string | null }[]
+  midiTakes?: { journalPath: string }[]
 }
 
 export class RecordingRecoveryRepository {
@@ -42,11 +43,12 @@ export class RecordingRecoveryRepository {
 
   async remove(recording: RecordingSidecarRecord): Promise<void> {
     await Promise.all([
-      rm(recording.audioPath, { force: true }),
+      recording.audioPath ? rm(recording.audioPath, { force: true }) : Promise.resolve(),
       recording.finalPath ? rm(recording.finalPath, { force: true }) : Promise.resolve(),
       ...(recording.tracks ?? [])
         .filter((track) => track.finalPath && track.finalPath !== recording.finalPath)
         .map((track) => rm(track.finalPath!, { force: true })),
+      ...(recording.midiTakes ?? []).map((take) => rm(take.journalPath, { force: true })),
       rm(recording.sidecarPath, { force: true })
     ])
   }

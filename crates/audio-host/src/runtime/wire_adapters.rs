@@ -513,6 +513,28 @@ fn engine_command(
                 message: error.to_string(),
             },
         },
+        ControlCommand::StartMidiRecording { config } => {
+            match (|| {
+                let clock = engine::transport_clock_handle().map_err(|error| error.to_string())?;
+                let actor = MIDI_INPUT
+                    .get()
+                    .ok_or_else(|| "MIDI input actor is unavailable".to_owned())?;
+                actor.start_recording(config, clock)
+            })() {
+                Ok(()) => ControlResult::Accepted,
+                Err(message) => control_error! { message },
+            }
+        }
+        ControlCommand::StopMidiRecording => {
+            match MIDI_INPUT
+                .get()
+                .ok_or_else(|| "MIDI input actor is unavailable".to_owned())
+                .and_then(|actor| actor.stop_recording())
+            {
+                Ok(recording) => ControlResult::MidiRecordingStopped { recording },
+                Err(message) => control_error! { message },
+            }
+        }
         ControlCommand::RecordingWaveform {
             start_frame,
             end_frame,

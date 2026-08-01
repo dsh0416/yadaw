@@ -78,4 +78,27 @@ describe("RecordingRecoveryRepository", () => {
 
     await expect(repository.list(filePath)).rejects.toMatchObject({ code: "ENOTDIR" })
   })
+
+  it("removes MIDI journals alongside audio artifacts", async () => {
+    directory = await mkdtemp(join(tmpdir(), "recording-recovery-midi-"))
+    const audioPath = join(directory, "audio.bwf")
+    const journalPath = join(directory, "take.midijournal")
+    const missingJournal = join(directory, "missing.midijournal")
+    const sidecarPath = join(directory, "rec.recording.json")
+    await writeFile(audioPath, "a")
+    await writeFile(journalPath, "j")
+    await writeFile(sidecarPath, "{}")
+
+    await repository.remove({
+      id: "rec",
+      audioPath,
+      sidecarPath,
+      finalPath: null,
+      midiTakes: [{ journalPath }, { journalPath: missingJournal }]
+    })
+
+    await expect(readFile(audioPath)).rejects.toMatchObject({ code: "ENOENT" })
+    await expect(readFile(journalPath)).rejects.toMatchObject({ code: "ENOENT" })
+    await expect(readFile(sidecarPath)).rejects.toMatchObject({ code: "ENOENT" })
+  })
 })

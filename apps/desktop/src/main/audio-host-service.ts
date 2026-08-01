@@ -54,6 +54,8 @@ import { AudioHostProcessSupervisor } from "./audio-host-process-supervisor"
 import { AudioHostSessionCoordinator } from "./audio-host-session-coordinator"
 import type {
   AudioHostGraph,
+  AudioHostMidiRecordingConfig,
+  AudioHostMidiRecordingResult,
   AudioHostRecordingConfig,
   AudioHostRecordingResult,
   AudioHostWaveform,
@@ -63,6 +65,8 @@ import type {
 } from "./audio-host-wire"
 export type {
   AudioHostGraph,
+  AudioHostMidiRecordingConfig,
+  AudioHostMidiRecordingResult,
   AudioHostRecordingConfig,
   AudioHostRecordingResult,
   AudioHostWaveform
@@ -576,6 +580,10 @@ export class AudioHostService {
     return this.audioTransport.transportSnapshot()
   }
 
+  transportControlSnapshot(): Promise<TransportSnapshot> {
+    return this.audioTransport.transportControlSnapshot()
+  }
+
   async midiInputSnapshot(): Promise<MidiInputSnapshot> {
     return this.midiInputResult(await this.request({ type: "midi-input-snapshot" }))
   }
@@ -832,6 +840,14 @@ export class AudioHostService {
 
   stopRecording(): Promise<AudioHostRecordingResult> {
     return this.recording.stopRecording()
+  }
+
+  startMidiRecording(config: AudioHostMidiRecordingConfig): Promise<void> {
+    return this.recording.startMidiRecording(config)
+  }
+
+  stopMidiRecording(): Promise<AudioHostMidiRecordingResult> {
+    return this.recording.stopMidiRecording()
   }
 
   recordingWaveform(

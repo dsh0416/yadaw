@@ -281,7 +281,8 @@ export function startApplication(
         operations,
         projectGraph,
         transport,
-        audioHostService
+        audioHostService,
+        projectCommands
       )
       const waveforms = new WaveformService(settings, projectService)
       registerIpcHandlers({

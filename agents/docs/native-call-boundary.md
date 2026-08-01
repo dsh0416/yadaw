@@ -149,12 +149,16 @@ on the MIDI actor and IPC threads, never the `midir` or audio callback.
 
 The `midir` callback may only copy a timestamp and bytes into the fixed
 16,384-message/4 MiB SysEx ingress. Parsing, device names, hot-plug polling,
-diagnostics, and journal I/O stay on non-real-time actors. The audio callback
-may drain the preallocated queue, scan preallocated scratch, calculate sample
-offsets, update atomics, and enqueue fixed-capacity VST3 events or parameter
-points. It must not allocate, deallocate, lock, format, touch the filesystem,
-or emit IPC. A dropped event that could strand a note sets an atomic panic
-consumed at the next block.
+diagnostics, and journal I/O stay on non-real-time actors. While a MIDI
+recording session is active, the MIDI actor appends matching recordable
+messages to per-take journals with transport frame/tick checkpoints; count-in
+and waiting states keep journals open but do not append. Offline journal
+recovery and note pairing run in `dsp-node` / Electron main during finalize and
+crash recovery. The audio callback may drain the preallocated queue, scan
+preallocated scratch, calculate sample offsets, update atomics, and enqueue
+fixed-capacity VST3 events or parameter points. It must not allocate,
+deallocate, lock, format, touch the filesystem, or emit IPC. A dropped event
+that could strand a note sets an atomic panic consumed at the next block.
 
 `configureAudioHostRuntime` is intentionally separate from the ordinary
 settings patch API. The `applicationSettings` store owns its loading/error

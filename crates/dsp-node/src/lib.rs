@@ -4,6 +4,7 @@ use yadaw_dsp_core::apply_gain;
 
 mod benchmark;
 mod midi;
+mod midi_journal;
 mod recording;
 
 #[cfg(feature = "bench-internals")]
@@ -16,6 +17,7 @@ pub mod bench_support {
 
 pub use benchmark::run_audio_benchmark;
 pub use midi::parse_midi_file;
+pub use midi_journal::recover_midi_journal_take;
 pub use recording::{
     analyze_waveform, finalize_recording, repair_recording_header,
     write_deterministic_test_recording,

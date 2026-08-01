@@ -59,6 +59,7 @@ export interface ControlResponse {
       | "transport-snapshot"
       | "midi-input-snapshot"
       | "recording-stopped"
+      | "midi-recording-stopped"
       | "recording-waveform"
       | "plugin-loaded"
       | "plugin-parameters"
@@ -130,6 +131,7 @@ export interface ControlResponse {
     transport?: AudioHostTransport
     midi_input?: AudioHostMidiInputSnapshot
     recording?: AudioHostRecordingResultWire
+    midi_recording?: AudioHostMidiRecordingResultWire
     waveform?: AudioHostWaveformWire
   }
 }
@@ -544,6 +546,45 @@ export interface AudioHostRecordingResultWire {
   channels: number
   frame_count: number
   dropout_frames: number
+}
+
+export interface AudioHostMidiRecordingTakeConfig {
+  path: string
+  sourceId: string
+  clipId: string
+  trackId: string
+  portId: string | null
+  channel: number | null
+}
+
+export interface AudioHostMidiRecordingConfig {
+  takes: AudioHostMidiRecordingTakeConfig[]
+}
+
+export interface AudioHostMidiRecordingTakeResultWire {
+  path: string
+  source_id: string
+  clip_id: string
+  track_id: string
+  event_count: number
+  dropped_events: number
+}
+
+export interface AudioHostMidiRecordingResultWire {
+  takes: AudioHostMidiRecordingTakeResultWire[]
+}
+
+export interface AudioHostMidiRecordingTakeResult {
+  path: string
+  sourceId: string
+  clipId: string
+  trackId: string
+  eventCount: number
+  droppedEvents: number
+}
+
+export interface AudioHostMidiRecordingResult {
+  takes: AudioHostMidiRecordingTakeResult[]
 }
 
 export interface AudioHostWaveformWire {

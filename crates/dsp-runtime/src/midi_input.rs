@@ -58,6 +58,56 @@ impl MidiInputMessage {
                 | Self::SysEx(_)
         )
     }
+
+    #[must_use]
+    pub fn encode(&self) -> Vec<u8> {
+        match self {
+            Self::NoteOff(channel, key, velocity) => {
+                vec![0x80 | (channel & 0x0f), *key, *velocity]
+            }
+            Self::NoteOn(channel, key, velocity) => {
+                vec![0x90 | (channel & 0x0f), *key, *velocity]
+            }
+            Self::PolyPressure(channel, key, pressure) => {
+                vec![0xa0 | (channel & 0x0f), *key, *pressure]
+            }
+            Self::ControlChange(channel, controller, value) => {
+                vec![0xb0 | (channel & 0x0f), *controller, *value]
+            }
+            Self::ProgramChange(channel, program) => {
+                vec![0xc0 | (channel & 0x0f), *program]
+            }
+            Self::ChannelPressure(channel, pressure) => {
+                vec![0xd0 | (channel & 0x0f), *pressure]
+            }
+            Self::PitchBend(channel, value) => {
+                vec![
+                    0xe0 | (channel & 0x0f),
+                    (*value & 0x7f) as u8,
+                    ((*value >> 7) & 0x7f) as u8,
+                ]
+            }
+            Self::SysEx(bytes) => {
+                let mut encoded = Vec::with_capacity(bytes.len().saturating_add(2));
+                encoded.push(0xf0);
+                encoded.extend_from_slice(bytes);
+                encoded.push(0xf7);
+                encoded
+            }
+            Self::Clock => vec![0xf8],
+            Self::Start => vec![0xfa],
+            Self::Continue => vec![0xfb],
+            Self::Stop => vec![0xfc],
+            Self::SongPosition(position) => vec![
+                0xf2,
+                (*position & 0x7f) as u8,
+                ((*position >> 7) & 0x7f) as u8,
+            ],
+            Self::ActiveSensing => vec![0xfe],
+            Self::SystemReset => vec![0xff],
+            Self::IgnoredSystem(status) => vec![*status],
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -401,5 +451,66 @@ mod tests {
         assert_eq!(clock.snapshot().state, MidiSyncState::Freewheel);
         clock.advance(13 * 20_833 + MIDI_CLOCK_FREEWHEEL_MICROS + 1);
         assert_eq!(clock.snapshot().state, MidiSyncState::Lost);
+    }
+
+    #[test]
+    fn encode_round_trips_channel_voice_and_system_messages() {
+        let cases = [
+            MidiInputMessage::NoteOff(3, 10, 20),
+            MidiInputMessage::NoteOn(0xf, 60, 100),
+            MidiInputMessage::PolyPressure(1, 12, 34),
+            MidiInputMessage::ControlChange(2, 7, 100),
+            MidiInputMessage::ProgramChange(4, 8),
+            MidiInputMessage::ChannelPressure(5, 90),
+            MidiInputMessage::PitchBend(0, 0),
+            MidiInputMessage::PitchBend(6, 8_192),
+            MidiInputMessage::PitchBend(7, 16_383),
+            MidiInputMessage::SysEx(vec![1, 2, 3]),
+            MidiInputMessage::Clock,
+            MidiInputMessage::Start,
+            MidiInputMessage::Continue,
+            MidiInputMessage::Stop,
+            MidiInputMessage::SongPosition(123),
+            MidiInputMessage::ActiveSensing,
+            MidiInputMessage::SystemReset,
+        ];
+        for message in cases {
+            let mut parser = MidiInputParser::default();
+            let encoded = message.encode();
+            let decoded = parser.push(&encoded).unwrap();
+            assert_eq!(
+                decoded,
+                vec![message.clone()],
+                "encode mismatch for {message:?}"
+            );
+        }
+        assert_eq!(MidiInputMessage::IgnoredSystem(0xf1).encode(), vec![0xf1]);
+        assert_eq!(
+            MidiInputMessage::NoteOn(0x1f, 1, 2).encode(),
+            vec![0x9f, 1, 2]
+        );
+        assert_eq!(
+            MidiInputMessage::PitchBend(0, 8_192).encode(),
+            vec![0xe0, 0x00, 0x40]
+        );
+        assert_eq!(
+            MidiInputMessage::SysEx(vec![9]).encode(),
+            vec![0xf0, 9, 0xf7]
+        );
+    }
+
+    #[test]
+    fn is_recordable_accepts_channel_voice_and_sysex_only() {
+        assert!(MidiInputMessage::NoteOn(0, 60, 1).is_recordable());
+        assert!(MidiInputMessage::NoteOff(0, 60, 0).is_recordable());
+        assert!(MidiInputMessage::ControlChange(0, 1, 2).is_recordable());
+        assert!(MidiInputMessage::SysEx(vec![]).is_recordable());
+        assert!(!MidiInputMessage::Clock.is_recordable());
+        assert!(!MidiInputMessage::Start.is_recordable());
+        assert!(!MidiInputMessage::Stop.is_recordable());
+        assert!(!MidiInputMessage::SongPosition(0).is_recordable());
+        assert!(!MidiInputMessage::ActiveSensing.is_recordable());
+        assert!(!MidiInputMessage::SystemReset.is_recordable());
+        assert!(!MidiInputMessage::IgnoredSystem(0xf1).is_recordable());
     }
 }

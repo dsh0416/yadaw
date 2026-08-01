@@ -85,8 +85,8 @@ pub mod bench_support {
         });
         let transport = Arc::new(TransportShared {
             state: Arc::new(super::AtomicU32::new(TRANSPORT_PLAYING)),
-            position_frames: super::AtomicU64::new(0),
-            position_ticks: super::AtomicU64::new(0),
+            position_frames: Arc::new(super::AtomicU64::new(0)),
+            position_ticks: Arc::new(super::AtomicU64::new(0)),
             sample_rate: super::AtomicU32::new(scenario.sample_rate),
             effective_bpm_bits: super::AtomicU64::new(f64::NAN.to_bits()),
             clock_source: super::AtomicU32::new(0),
