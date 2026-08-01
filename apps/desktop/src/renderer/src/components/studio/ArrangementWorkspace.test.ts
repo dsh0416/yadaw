@@ -135,6 +135,9 @@ describe("ArrangementWorkspace", () => {
           name: "First take",
           startFrame: 0,
           sourceOffsetFrames: 0,
+          sourceLengthFrames: Number.MAX_SAFE_INTEGER,
+          fadeInFrames: 0,
+          fadeOutFrames: 0,
           lengthFrames: 48_000,
           assetSampleRate: 48_000,
           assetChannels: 2
@@ -625,6 +628,7 @@ describe("ArrangementWorkspace", () => {
             startTick: 960,
             lengthTicks: 3_840,
             sourceOffsetTicks: 0,
+            sourceLengthTicks: 3_840,
             notes: [],
             events: []
           }

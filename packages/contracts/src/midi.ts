@@ -153,12 +153,13 @@ export interface MidiClipState {
   startTick: number
   lengthTicks: number
   sourceOffsetTicks: number
+  sourceLengthTicks: number
   notes: MidiNoteState[]
   events: MidiEventState[]
 }
 
 export type MidiClipRangePatch = Partial<
-  Pick<MidiClipState, "startTick" | "lengthTicks" | "sourceOffsetTicks">
+  Pick<MidiClipState, "startTick" | "lengthTicks" | "sourceOffsetTicks" | "sourceLengthTicks">
 >
 
 export interface MidiImportTrackPreview {

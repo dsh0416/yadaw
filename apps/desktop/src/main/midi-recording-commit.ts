@@ -90,6 +90,7 @@ export async function commitMidiRecordingTakes(
       startTick,
       lengthTicks: Math.max(1, recovered.lengthTicks),
       sourceOffsetTicks: 0,
+      sourceLengthTicks: Math.max(1, recovered.lengthTicks),
       notes,
       events
     }

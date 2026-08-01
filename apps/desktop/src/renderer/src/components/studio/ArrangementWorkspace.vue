@@ -306,14 +306,16 @@ function createMidiClip(trackId: string, requestedStartTick: number): void {
     contentHash: `blank:${sourceId}`,
     rawBytes: new Uint8Array()
   }
+  const lengthTicks = barLengthTicksAtTick(mixerStore.graph.tempoMap, startTick)
   const clip: MidiClipState = {
     id: clipId,
     sourceId,
     trackId,
     name,
     startTick,
-    lengthTicks: barLengthTicksAtTick(mixerStore.graph.tempoMap, startTick),
+    lengthTicks,
     sourceOffsetTicks: 0,
+    sourceLengthTicks: lengthTicks,
     notes: [],
     events: []
   }

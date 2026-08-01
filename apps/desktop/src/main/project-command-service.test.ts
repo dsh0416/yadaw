@@ -492,6 +492,7 @@ describe("project graph and command services", () => {
         startTick: 0,
         lengthTicks: 960,
         sourceOffsetTicks: 0,
+        sourceLengthTicks: Number.MAX_SAFE_INTEGER,
         notes: [],
         events: []
       }
@@ -565,6 +566,9 @@ describe("project graph and command services", () => {
       name: "Clip",
       startFrame: 0,
       sourceOffsetFrames: 0,
+      sourceLengthFrames: Number.MAX_SAFE_INTEGER,
+      fadeInFrames: 0,
+      fadeOutFrames: 0,
       lengthFrames: 100,
       assetSampleRate: 48_000,
       assetChannels: 2

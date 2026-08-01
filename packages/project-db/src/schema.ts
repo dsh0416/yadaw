@@ -320,14 +320,26 @@ export const audioClips = pgTable(
     sourceOffsetFrames: int8BigInt("source_offset_frames")
       .notNull()
       .default(sql`0`),
-    lengthFrames: int8BigInt("length_frames").notNull()
+    lengthFrames: int8BigInt("length_frames").notNull(),
+    fadeInFrames: int8BigInt("fade_in_frames")
+      .notNull()
+      .default(sql`0`),
+    fadeOutFrames: int8BigInt("fade_out_frames")
+      .notNull()
+      .default(sql`0`)
   },
   (table) => [
     index("audio_clips_track_start").on(table.trackId, table.startFrame),
     check("audio_clips_name_check", sql`length(trim(${table.name})) > 0`),
     check("audio_clips_start_frame_check", sql`${table.startFrame} >= 0`),
     check("audio_clips_source_offset_frames_check", sql`${table.sourceOffsetFrames} >= 0`),
-    check("audio_clips_length_frames_check", sql`${table.lengthFrames} > 0`)
+    check("audio_clips_length_frames_check", sql`${table.lengthFrames} > 0`),
+    check("audio_clips_fade_in_frames_check", sql`${table.fadeInFrames} >= 0`),
+    check("audio_clips_fade_out_frames_check", sql`${table.fadeOutFrames} >= 0`),
+    check(
+      "audio_clips_fade_length_check",
+      sql`${table.fadeInFrames} + ${table.fadeOutFrames} <= ${table.lengthFrames}`
+    )
   ]
 )
 
@@ -482,14 +494,20 @@ export const midiClips = pgTable(
     name: text("name").notNull(),
     startTick: int8Number("start_tick").notNull(),
     lengthTicks: int8Number("length_ticks").notNull(),
-    sourceOffsetTicks: int8Number("source_offset_ticks").notNull().default(0)
+    sourceOffsetTicks: int8Number("source_offset_ticks").notNull().default(0),
+    sourceLengthTicks: int8Number("source_length_ticks").notNull()
   },
   (table) => [
     index("midi_clips_track_start").on(table.trackId, table.startTick),
     check("midi_clips_name_check", sql`length(trim(${table.name})) > 0`),
     check("midi_clips_start_tick_check", sql`${table.startTick} >= 0`),
     check("midi_clips_length_ticks_check", sql`${table.lengthTicks} > 0`),
-    check("midi_clips_source_offset_ticks_check", sql`${table.sourceOffsetTicks} >= 0`)
+    check("midi_clips_source_offset_ticks_check", sql`${table.sourceOffsetTicks} >= 0`),
+    check("midi_clips_source_length_ticks_check", sql`${table.sourceLengthTicks} > 0`),
+    check(
+      "midi_clips_source_window_check",
+      sql`${table.sourceOffsetTicks} + ${table.lengthTicks} <= ${table.sourceLengthTicks}`
+    )
   ]
 )
 

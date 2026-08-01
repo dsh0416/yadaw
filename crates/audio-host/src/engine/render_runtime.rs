@@ -341,10 +341,11 @@ impl NativeMixerRuntime {
                     }
                     let is_streaming = matches!(&clip.samples, ClipSamples::Streaming(_));
                     if let Some(sample) = clip.sample_at(relative) {
+                        let gain = clip.gain_at(relative);
                         let target = &mut self.channel_source_block
                             [clip.channel_index * frame_count + frame];
-                        target[0] += sample[0];
-                        target[1] += sample[1];
+                        target[0] += sample[0] * gain;
+                        target[1] += sample[1] * gain;
                     } else if is_streaming {
                         stream_underrun = true;
                     }

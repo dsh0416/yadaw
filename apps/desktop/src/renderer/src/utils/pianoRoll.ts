@@ -71,6 +71,7 @@ export interface PlannedClipEdit {
   startTick: number
   lengthTicks: number
   sourceOffsetTicks: number
+  sourceLengthTicks: number
 }
 
 export function planExistingNoteEdits(
@@ -82,7 +83,8 @@ export function planExistingNoteEdits(
       commands: [],
       startTick: clip.startTick,
       lengthTicks: clip.lengthTicks,
-      sourceOffsetTicks: clip.sourceOffsetTicks
+      sourceOffsetTicks: clip.sourceOffsetTicks,
+      sourceLengthTicks: clip.sourceLengthTicks
     }
   }
 
@@ -106,6 +108,10 @@ export function planExistingNoteEdits(
     clip.lengthTicks + leftGrowth,
     latest - nextStartTick
   )
+  const nextSourceLengthTicks = Math.max(
+    Math.min(Number.MAX_SAFE_INTEGER, clip.sourceLengthTicks + rebaseTicks),
+    nextSourceOffsetTicks + nextLengthTicks
+  )
 
   const commands: ProjectCommand[] = []
   if (rebaseTicks > 0) {
@@ -118,16 +124,21 @@ export function planExistingNoteEdits(
   if (
     nextStartTick !== clip.startTick ||
     nextLengthTicks !== clip.lengthTicks ||
-    nextSourceOffsetTicks !== clip.sourceOffsetTicks
+    nextSourceOffsetTicks !== clip.sourceOffsetTicks ||
+    nextSourceLengthTicks !== clip.sourceLengthTicks
   ) {
+    const patch = {
+      startTick: nextStartTick,
+      lengthTicks: nextLengthTicks,
+      sourceOffsetTicks: nextSourceOffsetTicks,
+      ...(nextSourceLengthTicks === clip.sourceLengthTicks
+        ? {}
+        : { sourceLengthTicks: nextSourceLengthTicks })
+    }
     commands.push({
       type: "update-midi-clip-range",
       clipId: clip.id,
-      patch: {
-        startTick: nextStartTick,
-        lengthTicks: nextLengthTicks,
-        sourceOffsetTicks: nextSourceOffsetTicks
-      }
+      patch
     })
   }
   commands.push({
@@ -146,7 +157,8 @@ export function planExistingNoteEdits(
     commands,
     startTick: nextStartTick,
     lengthTicks: nextLengthTicks,
-    sourceOffsetTicks: nextSourceOffsetTicks
+    sourceOffsetTicks: nextSourceOffsetTicks,
+    sourceLengthTicks: nextSourceLengthTicks
   }
 }
 

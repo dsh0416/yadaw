@@ -372,6 +372,7 @@ describe("ProjectDatabase", () => {
           startTick: 960,
           lengthTicks: 1920,
           sourceOffsetTicks: 120,
+          sourceLengthTicks: 2040,
           notes: [],
           events: []
         }
@@ -747,6 +748,7 @@ describe("ProjectDatabase", () => {
             startTick: 0,
             sourceOffsetTicks: 0,
             lengthTicks: 960,
+            sourceLengthTicks: 960,
             notes: [],
             events: []
           }
@@ -800,6 +802,7 @@ describe("ProjectDatabase", () => {
       startTick: 960,
       lengthTicks: 3_840,
       sourceOffsetTicks: 0,
+      sourceLengthTicks: 3_840,
       notes: [],
       events: []
     }
@@ -870,6 +873,7 @@ describe("ProjectDatabase", () => {
       startTick: 960,
       sourceOffsetTicks: 0,
       lengthTicks: 960,
+      sourceLengthTicks: 960,
       notes: [
         {
           id: "note-1",
@@ -928,7 +932,7 @@ describe("ProjectDatabase", () => {
           {
             type: "update-midi-clip-range",
             clipId: clip.id,
-            patch: { startTick: 720, lengthTicks: 1_200 }
+            patch: { startTick: 720, lengthTicks: 1_200, sourceLengthTicks: 1_200 }
           },
           {
             type: "update-midi-notes",

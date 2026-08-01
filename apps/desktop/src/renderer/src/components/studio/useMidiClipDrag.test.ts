@@ -18,6 +18,7 @@ const clip: MidiClipState = {
   startTick: 0,
   lengthTicks: 960,
   sourceOffsetTicks: 0,
+  sourceLengthTicks: Number.MAX_SAFE_INTEGER,
   notes: [],
   events: []
 }

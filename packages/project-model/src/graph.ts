@@ -225,6 +225,14 @@ export function inverseFor(graph: ProjectGraphSnapshot, command: ProjectCommand)
         startFrame: clip.startFrame
       }
     }
+    case "update-audio-clip": {
+      const clip = clipById(graph, command.clipId)
+      return {
+        type: "update-audio-clip",
+        clipId: clip.id,
+        patch: patchFromKeys(clip, command.patch)
+      }
+    }
     case "create-plugin":
       return { type: "delete-plugin", pluginId: command.plugin.id }
     case "delete-plugin":
@@ -405,6 +413,9 @@ export function applyToGraph(
       clip.startFrame = command.startFrame
       break
     }
+    case "update-audio-clip":
+      Object.assign(clipById(next, command.clipId), command.patch)
+      break
     case "create-plugin":
       next.plugins.push(structuredClone(command.plugin))
       break
@@ -703,7 +714,15 @@ export function validateGraph(graph: ProjectGraphSnapshot): void {
       !Number.isSafeInteger(clip.sourceOffsetFrames) ||
       clip.sourceOffsetFrames < 0 ||
       !Number.isSafeInteger(clip.lengthFrames) ||
-      clip.lengthFrames < 1
+      clip.lengthFrames < 1 ||
+      !Number.isSafeInteger(clip.sourceLengthFrames) ||
+      clip.sourceLengthFrames < 1 ||
+      clip.sourceOffsetFrames + clip.lengthFrames > clip.sourceLengthFrames ||
+      !Number.isSafeInteger(clip.fadeInFrames) ||
+      clip.fadeInFrames < 0 ||
+      !Number.isSafeInteger(clip.fadeOutFrames) ||
+      clip.fadeOutFrames < 0 ||
+      clip.fadeInFrames + clip.fadeOutFrames > clip.lengthFrames
     ) {
       throw new Error("Clip source offset and length must use valid sample frames")
     }
@@ -815,7 +834,10 @@ export function validateGraph(graph: ProjectGraphSnapshot): void {
       !Number.isSafeInteger(clip.sourceOffsetTicks) ||
       clip.sourceOffsetTicks < 0 ||
       !Number.isSafeInteger(clip.lengthTicks) ||
-      clip.lengthTicks < 1
+      clip.lengthTicks < 1 ||
+      !Number.isSafeInteger(clip.sourceLengthTicks) ||
+      clip.sourceLengthTicks < 1 ||
+      clip.sourceOffsetTicks + clip.lengthTicks > clip.sourceLengthTicks
     ) {
       throw new Error("MIDI clip positions must use valid musical ticks")
     }

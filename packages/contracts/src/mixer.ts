@@ -64,9 +64,19 @@ export interface AudioClipState {
   startFrame: number
   sourceOffsetFrames: number
   lengthFrames: number
+  sourceLengthFrames: number
+  fadeInFrames: number
+  fadeOutFrames: number
   assetSampleRate: number
   assetChannels: number
 }
+
+export type AudioClipPatch = Partial<
+  Pick<
+    AudioClipState,
+    "startFrame" | "sourceOffsetFrames" | "lengthFrames" | "fadeInFrames" | "fadeOutFrames"
+  >
+>
 
 export interface MixerSendState {
   id: string
@@ -184,6 +194,7 @@ export type ProjectCommand =
   | { type: "create-audio-clip"; clip: AudioClipState }
   | { type: "delete-audio-clip"; clipId: string }
   | { type: "move-audio-clip"; clipId: string; trackId: string; startFrame: number }
+  | { type: "update-audio-clip"; clipId: string; patch: AudioClipPatch }
   | { type: "create-plugin"; plugin: PluginInstanceState }
   | { type: "delete-plugin"; pluginId: string }
   | { type: "update-plugin"; pluginId: string; patch: PluginInstancePatch }

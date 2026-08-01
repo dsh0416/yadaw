@@ -191,6 +191,9 @@ fn build_mixer_runtime(
             || clip.start_frame < 0
             || clip.source_offset_frames < 0
             || clip.length_frames <= 0
+            || clip.fade_in_frames < 0
+            || clip.fade_out_frames < 0
+            || clip.fade_in_frames.saturating_add(clip.fade_out_frames) > clip.length_frames
         {
             return Err(invalid_config("mixer clip has invalid placement"));
         }
@@ -213,12 +216,17 @@ fn build_mixer_runtime(
         };
         let available = sample_frames.saturating_sub(source_offset_frames);
         let length_frames = (clip.length_frames as usize).min(available);
+        let fade_in_frames = (clip.fade_in_frames as usize).min(length_frames);
+        let fade_out_frames =
+            (clip.fade_out_frames as usize).min(length_frames.saturating_sub(fade_in_frames));
         content_end_frame = content_end_frame.max(start_frame.saturating_add(length_frames as u64));
         clips.push(LoadedClip {
             channel_index,
             start_frame,
             source_offset_frames,
             length_frames,
+            fade_in_frames,
+            fade_out_frames,
             samples,
         });
     }

@@ -858,6 +858,8 @@ mod tests {
                 start_frame: 0,
                 source_offset_frames: 0,
                 length_frames,
+                fade_in_frames: 0,
+                fade_out_frames: 0,
                 samples: ClipSamples::Memory(vec![[0.25, -0.25]; length_frames]),
             }],
             meter_bank: Arc::new(MeterBank {
@@ -884,6 +886,25 @@ mod tests {
             input_peak_scratch: [0.0; MAX_INPUT_CHANNELS],
             meter_frame_clock: 0,
         })
+    }
+
+    #[test]
+    fn clip_fades_apply_fixed_equal_power_gain_without_state() {
+        let clip = LoadedClip {
+            channel_index: 0,
+            start_frame: 0,
+            source_offset_frames: 0,
+            length_frames: 8,
+            fade_in_frames: 4,
+            fade_out_frames: 2,
+            samples: ClipSamples::Memory(vec![[1.0, 1.0]; 8]),
+        };
+
+        assert_eq!(clip.gain_at(0), 0.0);
+        assert!((clip.gain_at(2) - 0.5_f32.sqrt()).abs() < f32::EPSILON);
+        assert_eq!(clip.gain_at(4), 1.0);
+        assert_eq!(clip.gain_at(6), 1.0);
+        assert!((clip.gain_at(7) - 0.5_f32.sqrt()).abs() < f32::EPSILON);
     }
 
     #[test]

@@ -127,6 +127,7 @@ function graph(): ProjectGraphSnapshot {
         startTick: 0,
         lengthTicks: 960,
         sourceOffsetTicks: 0,
+        sourceLengthTicks: 960,
         notes: [
           {
             id: "note-1",
@@ -173,6 +174,7 @@ describe("MIDI note project commands", () => {
             startTick: 960,
             lengthTicks: 3_840,
             sourceOffsetTicks: 0,
+            sourceLengthTicks: 3_840,
             notes: [],
             events: []
           }
@@ -254,6 +256,9 @@ describe("project graph command characterization", () => {
       startFrame: 48_000,
       sourceOffsetFrames: 0,
       lengthFrames: 24_000,
+      sourceLengthFrames: 24_000,
+      fadeInFrames: 0,
+      fadeOutFrames: 0,
       assetSampleRate: 48_000,
       assetChannels: 2
     })
@@ -446,10 +451,28 @@ describe("additional project graph commands", () => {
       startFrame: 0,
       sourceOffsetFrames: 0,
       lengthFrames: 480,
+      sourceLengthFrames: 480,
+      fadeInFrames: 0,
+      fadeOutFrames: 0,
       assetSampleRate: 48_000,
       assetChannels: 2
     }
     const created = applyToGraph(before, { type: "create-audio-clip", clip })
+    const editCommand: ProjectCommand = {
+      type: "update-audio-clip",
+      clipId: clip.id,
+      patch: {
+        startFrame: 120,
+        sourceOffsetFrames: 120,
+        lengthFrames: 360,
+        fadeInFrames: 60,
+        fadeOutFrames: 60
+      }
+    }
+    const edited = applyToGraph(created, editCommand)
+    expect(edited.audioClips[0]).toMatchObject(editCommand.patch)
+    expect(applyToGraph(edited, inverseFor(created, editCommand))).toEqual(created)
+
     const moveCommand: ProjectCommand = {
       type: "move-audio-clip",
       clipId: "audio-clip-1",
@@ -860,6 +883,9 @@ describe("project graph validation and command guards", () => {
       startFrame: 0,
       sourceOffsetFrames: 0,
       lengthFrames: 480,
+      sourceLengthFrames: 480,
+      fadeInFrames: 0,
+      fadeOutFrames: 0,
       assetSampleRate: 48_000,
       assetChannels: 2
     })
@@ -1035,6 +1061,9 @@ describe("project graph validation and command guards", () => {
       startFrame: 0,
       sourceOffsetFrames: 0,
       lengthFrames: 100,
+      sourceLengthFrames: 100,
+      fadeInFrames: 0,
+      fadeOutFrames: 0,
       assetSampleRate: 48_000,
       assetChannels: 2
     })
@@ -1060,6 +1089,9 @@ describe("project graph validation and command guards", () => {
       startFrame: -1,
       sourceOffsetFrames: 0,
       lengthFrames: 100,
+      sourceLengthFrames: 100,
+      fadeInFrames: 0,
+      fadeOutFrames: 0,
       assetSampleRate: 48_000,
       assetChannels: 2
     })

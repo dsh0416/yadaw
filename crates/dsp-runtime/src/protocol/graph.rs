@@ -61,6 +61,8 @@ pub struct LiveMixerClip {
     pub start_frame: i64,
     pub source_offset_frames: i64,
     pub length_frames: i64,
+    pub fade_in_frames: i64,
+    pub fade_out_frames: i64,
     pub path: String,
 }
 

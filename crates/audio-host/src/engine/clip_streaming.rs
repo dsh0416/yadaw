@@ -110,6 +110,8 @@ struct LoadedClip {
     start_frame: u64,
     source_offset_frames: usize,
     length_frames: usize,
+    fade_in_frames: usize,
+    fade_out_frames: usize,
     samples: ClipSamples,
 }
 
@@ -120,5 +122,20 @@ impl LoadedClip {
             ClipSamples::Memory(samples) => samples.get(source_frame).copied(),
             ClipSamples::Streaming(stream) => stream.sample_at(source_frame),
         }
+    }
+
+    fn gain_at(&self, relative: usize) -> f32 {
+        let fade_in = if self.fade_in_frames == 0 || relative >= self.fade_in_frames {
+            1.0
+        } else {
+            ((relative as f32) / (self.fade_in_frames as f32)).sqrt()
+        };
+        let remaining = self.length_frames.saturating_sub(relative);
+        let fade_out = if self.fade_out_frames == 0 || remaining > self.fade_out_frames {
+            1.0
+        } else {
+            ((remaining as f32) / (self.fade_out_frames as f32)).sqrt()
+        };
+        fade_in * fade_out
     }
 }

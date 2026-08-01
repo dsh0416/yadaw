@@ -25,6 +25,7 @@ function rangePatch(patch: MidiClipRangePatch): Partial<typeof midiClips.$inferI
   if (patch.startTick !== undefined) result.startTick = patch.startTick
   if (patch.lengthTicks !== undefined) result.lengthTicks = patch.lengthTicks
   if (patch.sourceOffsetTicks !== undefined) result.sourceOffsetTicks = patch.sourceOffsetTicks
+  if (patch.sourceLengthTicks !== undefined) result.sourceLengthTicks = patch.sourceLengthTicks
   return result
 }
 
@@ -50,7 +51,8 @@ async function insertClip(
     name: clip.name,
     startTick: clip.startTick,
     lengthTicks: clip.lengthTicks,
-    sourceOffsetTicks: clip.sourceOffsetTicks
+    sourceOffsetTicks: clip.sourceOffsetTicks,
+    sourceLengthTicks: clip.sourceLengthTicks
   })
   if (clip.notes.length > 0) {
     await tx.insert(midiNotes).values(

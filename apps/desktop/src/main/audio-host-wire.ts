@@ -484,6 +484,8 @@ export interface AudioHostGraph {
     start_frame: number
     source_offset_frames: number
     length_frames: number
+    fade_in_frames: number
+    fade_out_frames: number
     path: string
   }>
   plugins: Array<{

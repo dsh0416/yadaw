@@ -50,10 +50,15 @@ CREATE TABLE "audio_clips" (
 	"start_frame" bigint NOT NULL,
 	"source_offset_frames" bigint DEFAULT 0 NOT NULL,
 	"length_frames" bigint NOT NULL,
+	"fade_in_frames" bigint DEFAULT 0 NOT NULL,
+	"fade_out_frames" bigint DEFAULT 0 NOT NULL,
 	CONSTRAINT "audio_clips_name_check" CHECK (length(trim("audio_clips"."name")) > 0),
 	CONSTRAINT "audio_clips_start_frame_check" CHECK ("audio_clips"."start_frame" >= 0),
 	CONSTRAINT "audio_clips_source_offset_frames_check" CHECK ("audio_clips"."source_offset_frames" >= 0),
-	CONSTRAINT "audio_clips_length_frames_check" CHECK ("audio_clips"."length_frames" > 0)
+	CONSTRAINT "audio_clips_length_frames_check" CHECK ("audio_clips"."length_frames" > 0),
+	CONSTRAINT "audio_clips_fade_in_frames_check" CHECK ("audio_clips"."fade_in_frames" >= 0),
+	CONSTRAINT "audio_clips_fade_out_frames_check" CHECK ("audio_clips"."fade_out_frames" >= 0),
+	CONSTRAINT "audio_clips_fade_length_check" CHECK ("audio_clips"."fade_in_frames" + "audio_clips"."fade_out_frames" <= "audio_clips"."length_frames")
 );
 --> statement-breakpoint
 CREATE TABLE "key_signature_events" (
@@ -73,10 +78,13 @@ CREATE TABLE "midi_clips" (
 	"start_tick" bigint NOT NULL,
 	"length_ticks" bigint NOT NULL,
 	"source_offset_ticks" bigint DEFAULT 0 NOT NULL,
+	"source_length_ticks" bigint NOT NULL,
 	CONSTRAINT "midi_clips_name_check" CHECK (length(trim("midi_clips"."name")) > 0),
 	CONSTRAINT "midi_clips_start_tick_check" CHECK ("midi_clips"."start_tick" >= 0),
 	CONSTRAINT "midi_clips_length_ticks_check" CHECK ("midi_clips"."length_ticks" > 0),
-	CONSTRAINT "midi_clips_source_offset_ticks_check" CHECK ("midi_clips"."source_offset_ticks" >= 0)
+	CONSTRAINT "midi_clips_source_offset_ticks_check" CHECK ("midi_clips"."source_offset_ticks" >= 0),
+	CONSTRAINT "midi_clips_source_length_ticks_check" CHECK ("midi_clips"."source_length_ticks" > 0),
+	CONSTRAINT "midi_clips_source_window_check" CHECK ("midi_clips"."source_offset_ticks" + "midi_clips"."length_ticks" <= "midi_clips"."source_length_ticks")
 );
 --> statement-breakpoint
 CREATE TABLE "midi_events" (

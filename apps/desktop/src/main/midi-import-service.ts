@@ -211,6 +211,7 @@ export class MidiImportService {
         startTick: plan.importTempoMap ? 0 : plan.insertionTick,
         lengthTicks: Math.max(1, parsedTrack.lengthTicks),
         sourceOffsetTicks: 0,
+        sourceLengthTicks: Math.max(1, parsedTrack.lengthTicks),
         notes: parsedTrack.notes.map((note) => ({
           id: randomUUID(),
           startTick: note.startTick,

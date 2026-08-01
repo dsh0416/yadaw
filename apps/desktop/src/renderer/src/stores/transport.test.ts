@@ -234,6 +234,9 @@ describe("transport store", () => {
           assetSampleRate: 48_000,
           startFrame: 0,
           sourceOffsetFrames: 0,
+          sourceLengthFrames: Number.MAX_SAFE_INTEGER,
+          fadeInFrames: 0,
+          fadeOutFrames: 0,
           lengthFrames: 48_000
         }
       ]
@@ -281,6 +284,9 @@ describe("transport store", () => {
           assetSampleRate: 48_000,
           startFrame: 0,
           sourceOffsetFrames: 0,
+          sourceLengthFrames: Number.MAX_SAFE_INTEGER,
+          fadeInFrames: 0,
+          fadeOutFrames: 0,
           lengthFrames: 48_000
         }
       ],
@@ -321,6 +327,9 @@ describe("transport store", () => {
           assetSampleRate: 48_000,
           startFrame: 0,
           sourceOffsetFrames: 0,
+          sourceLengthFrames: Number.MAX_SAFE_INTEGER,
+          fadeInFrames: 0,
+          fadeOutFrames: 0,
           lengthFrames: 48_000
         }
       ],
@@ -365,6 +374,9 @@ describe("transport store", () => {
           assetSampleRate: 48_000,
           startFrame: 0,
           sourceOffsetFrames: 0,
+          sourceLengthFrames: Number.MAX_SAFE_INTEGER,
+          fadeInFrames: 0,
+          fadeOutFrames: 0,
           lengthFrames: 48_000
         }
       ],
@@ -403,6 +415,7 @@ describe("transport store", () => {
           startTick: 0,
           lengthTicks: 3_840,
           sourceOffsetTicks: 0,
+          sourceLengthTicks: Number.MAX_SAFE_INTEGER,
           notes: [],
           events: []
         }

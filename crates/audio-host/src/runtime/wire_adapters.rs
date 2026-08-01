@@ -107,6 +107,8 @@ fn live_graph(
                 start_frame: clip.start_frame,
                 source_offset_frames: clip.source_offset_frames,
                 length_frames: clip.length_frames,
+                fade_in_frames: clip.fade_in_frames,
+                fade_out_frames: clip.fade_out_frames,
                 path: clip.path.clone(),
             })
         })

@@ -48,8 +48,11 @@ export async function readMixerSnapshot(
         startFrame: audioClips.startFrame,
         sourceOffsetFrames: audioClips.sourceOffsetFrames,
         lengthFrames: audioClips.lengthFrames,
+        fadeInFrames: audioClips.fadeInFrames,
+        fadeOutFrames: audioClips.fadeOutFrames,
         assetSampleRate: assets.sampleRate,
-        assetChannels: assets.channels
+        assetChannels: assets.channels,
+        assetFrameCount: assets.frameCount
       })
       .from(audioClips)
       .innerJoin(assets, eq(assets.id, audioClips.assetId))
@@ -153,11 +156,17 @@ export async function readMixerSnapshot(
       inputChannels: channel.inputChannels,
       hardwareOutputChannels: channel.hardwareOutputChannels
     })),
-    audioClips: clipRows.map((clip) => ({
+    audioClips: clipRows.map(({ assetFrameCount, ...clip }) => ({
       ...clip,
       startFrame: Number(clip.startFrame),
       sourceOffsetFrames: Number(clip.sourceOffsetFrames),
-      lengthFrames: Number(clip.lengthFrames)
+      lengthFrames: Number(clip.lengthFrames),
+      sourceLengthFrames: Math.max(
+        1,
+        Math.round((Number(assetFrameCount) * configuration.sampleRate) / clip.assetSampleRate)
+      ),
+      fadeInFrames: Number(clip.fadeInFrames),
+      fadeOutFrames: Number(clip.fadeOutFrames)
     })),
     sends: sendRows,
     plugins: pluginRows.map((plugin) => ({
@@ -181,6 +190,7 @@ export async function readMixerSnapshot(
       startTick: clip.startTick,
       lengthTicks: clip.lengthTicks,
       sourceOffsetTicks: clip.sourceOffsetTicks,
+      sourceLengthTicks: clip.sourceLengthTicks,
       notes: notesByClip.get(clip.id) ?? [],
       events: eventsByClip.get(clip.id) ?? []
     })),

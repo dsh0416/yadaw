@@ -106,6 +106,8 @@ pub mod bench_support {
                     },
                     source_offset_frames: 0,
                     length_frames: if active { clip_frames } else { 1 },
+                    fade_in_frames: 0,
+                    fade_out_frames: 0,
                     samples: ClipSamples::Memory(if active {
                         vec![[0.03125, -0.015625]; clip_frames]
                     } else {
