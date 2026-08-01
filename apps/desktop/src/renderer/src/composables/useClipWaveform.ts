@@ -1,4 +1,4 @@
-import { useDebounceFn, useIntervalFn } from "@vueuse/core"
+import { useIntervalFn, useTimeoutFn } from "@vueuse/core"
 import { onScopeDispose, readonly, shallowRef, toValue, watch } from "vue"
 import type { MaybeRefOrGetter } from "vue"
 import type { WaveformPeakWindow } from "@yadaw/contracts"
@@ -47,7 +47,12 @@ export function useClipWaveform(options: UseClipWaveformOptions) {
     }
   }
 
-  const schedule = useDebounceFn(() => void load(), VIEWPORT_DEBOUNCE_MS)
+  // Restart-on-start debounce; useDebounceFn in VueUse 14 cannot be canceled on dispose.
+  const { start: schedule, stop: cancelSchedule } = useTimeoutFn(
+    () => void load(),
+    VIEWPORT_DEBOUNCE_MS,
+    { immediate: false }
+  )
   const polling = useIntervalFn(() => void load(), RECORDING_POLL_MS, { immediate: false })
 
   watch(
@@ -61,7 +66,8 @@ export function useClipWaveform(options: UseClipWaveformOptions) {
     () => {
       generation += 1
       polling.pause()
-      void schedule()
+      cancelSchedule()
+      schedule()
       if (toValue(options.recording)) polling.resume()
     },
     { immediate: true }
@@ -69,6 +75,8 @@ export function useClipWaveform(options: UseClipWaveformOptions) {
 
   onScopeDispose(() => {
     generation += 1
+    cancelSchedule()
+    polling.pause()
   })
 
   return { data: readonly(data), loading: readonly(loading), error: readonly(error) }

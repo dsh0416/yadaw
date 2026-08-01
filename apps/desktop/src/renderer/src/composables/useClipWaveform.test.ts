@@ -112,6 +112,32 @@ describe("useClipWaveform", () => {
     expect(read).toHaveBeenCalledTimes(2)
   })
 
+  it("cancels a pending debounced viewport reload after unmount", async () => {
+    const startFrame = ref(0)
+    window.yadaw.readAssetWaveform = vi.fn().mockResolvedValue(success(response("asset", 9_600)))
+    const component = defineComponent({
+      setup() {
+        const waveform = useClipWaveform({
+          id: "asset",
+          recording: false,
+          startFrame,
+          endFrame: 9_600,
+          pixelWidth: 200
+        })
+        return () => h("span", String(waveform.data.value?.frameCount ?? 0))
+      }
+    })
+    const wrapper = mount(component)
+    await vi.advanceTimersByTimeAsync(40)
+    expect(window.yadaw.readAssetWaveform).toHaveBeenCalledTimes(1)
+
+    startFrame.value = 128
+    await nextTick()
+    wrapper.unmount()
+    await vi.advanceTimersByTimeAsync(200)
+    expect(window.yadaw.readAssetWaveform).toHaveBeenCalledTimes(1)
+  })
+
   it("debounces viewport changes and discards stale responses", async () => {
     const startFrame = ref(0)
     let resolveFirst!: (value: ReturnType<typeof success>) => void
