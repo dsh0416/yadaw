@@ -63,16 +63,17 @@ of the plain Vitest runs, so every test suite executes exactly once with
 coverage enabled. Rust coverage follows the cargo-llvm-cov external-tests
 pattern in `scripts/rust-coverage.ts`:
 
-1. `cargo llvm-cov show-env` exports `RUSTFLAGS`, `LLVM_PROFILE_FILE`, and the
-   coverage target directory (`target-coverage/`).
-2. Instrumented `cargo test --workspace` runs the usual Rust suite.
+1. `cargo llvm-cov --no-report` runs the usual instrumented Rust suite into
+   `target-coverage/` (sccache-friendly; no workspace clean).
+2. `cargo llvm-cov show-env` exports `LLVM_PROFILE_FILE` for external binaries.
 3. Instrumented `yadaw-audio-host` and `yadaw-vst3-probe` binaries are built.
 4. Built-in truce VST3 plugs are built; JS smokes launch the instrumented
    binaries so plugin load/init/process/editor/shutdown paths contribute
    `.profraw` data (`builtin-vst3` probe, audio-benchmark host processing,
    editor smoke, and helper live-graph smoke against YADAW Gain/Sine).
-   Headless Linux uses `xvfb-run` when `DISPLAY` is unset. Steinberg SDK
-   fixtures remain available via `pnpm test:vst3-fixtures` outside this path.
+   Headless Linux uses `xvfb-run` when `DISPLAY` is unset; each smoke has a
+   soft timeout. Steinberg SDK fixtures remain available via
+   `pnpm test:vst3-fixtures` outside this path.
 5. `cargo llvm-cov report` merges profiles into `coverage/rust/lcov.info`.
 
 Doc tests do not run under this path and remain exercised by the Windows and
