@@ -60,7 +60,6 @@ function handleOpenAutoFocus(event: Event): void {
     pendingSearchFocus.value = false
   })
 }
-
 </script>
 
 <template>
