@@ -6,7 +6,16 @@ import { MidiJournalWriter } from "./midi-recording-commit.fixture"
 import { RecordingService } from "./recording-service"
 
 const commitMidiRecordingTakes = vi.hoisted(() =>
-  vi.fn(async (_commands: unknown, workspace: unknown) => workspace)
+  vi.fn(
+    async (
+      _commands: unknown,
+      workspace: unknown,
+      _operationId?: unknown,
+      _startTick?: unknown,
+      _takes?: unknown,
+      _trackNames?: unknown
+    ) => workspace
+  )
 )
 
 vi.mock("./midi-recording-commit", () => ({
@@ -43,30 +52,39 @@ describe("RecordingService MIDI orchestration", () => {
     directories.push(swapDirectory)
     const projectPath = join(swapDirectory, "project.yadaw")
     const midiClips = options?.midiClips ?? []
-    const channels = [
+    type HarnessChannel = {
+      id: string
+      kind: "instrument" | "audio"
+      systemRole: "metronome" | null
+      name: string
+      recordArmed: boolean
+      inputChannels: number[]
+      midiInput: { portId: string; channel: number } | null
+    }
+    const channels: HarnessChannel[] = [
       {
         id: "ch:keys",
-        kind: "instrument" as const,
+        kind: "instrument",
         systemRole: null,
         name: "Keys",
         recordArmed: true,
-        inputChannels: [] as number[],
+        inputChannels: [],
         midiInput: { portId: "port-a", channel: 3 }
       },
       {
         id: "metronome",
-        kind: "instrument" as const,
-        systemRole: "metronome" as const,
+        kind: "instrument",
+        systemRole: "metronome",
         name: "Metronome",
         recordArmed: true,
-        inputChannels: [] as number[],
+        inputChannels: [],
         midiInput: null
       }
     ]
     if (options?.armedAudio) {
       channels.unshift({
         id: "ch:audio",
-        kind: "audio" as never,
+        kind: "audio",
         systemRole: null,
         name: "Audio",
         recordArmed: true,
