@@ -1,17 +1,17 @@
 <script setup lang="ts">
-import { YadawLogo, useLocaleFonts } from "@yadaw/ui";
-import { computed, onMounted } from "vue";
-import { DEFAULT_LOCALE } from "../../../shared/i18n";
-import { useStartupStore } from "../stores/startup";
+import { YadawLogo, useLocaleFonts } from "@yadaw/ui"
+import { computed, onMounted } from "vue"
+import { DEFAULT_LOCALE } from "../../../shared/i18n"
+import { useStartupStore } from "../stores/startup"
 
-const startup = useStartupStore();
-const projectUrl = "https://github.com/dsh0416/yadaw";
-const appVersion = __APP_VERSION__;
-const percentage = computed(() => Math.round(startup.progress.progress * 100));
+const startup = useStartupStore()
+const projectUrl = "https://github.com/dsh0416/yadaw"
+const appVersion = __APP_VERSION__
+const percentage = computed(() => Math.round(startup.progress.progress * 100))
 
-useLocaleFonts(DEFAULT_LOCALE);
+useLocaleFonts(DEFAULT_LOCALE)
 
-onMounted(() => void startup.load());
+onMounted(() => void startup.load())
 </script>
 
 <template>
