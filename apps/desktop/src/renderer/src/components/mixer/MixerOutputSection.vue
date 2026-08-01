@@ -61,6 +61,7 @@ function updateHardwareOutput(index: number, value: string): void {
       :groups="routeGroups"
       :placeholder="t('mixer.outputSection.noRoute')"
       size="compact"
+      appearance="workspace"
       :aria-label="t('mixer.outputSection.outputAria', { name: channel.name })"
       @update:model-value="updateRoute"
     />

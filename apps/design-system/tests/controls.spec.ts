@@ -7,6 +7,16 @@ test("cascading select menus use compact dropdown typography", async ({ page }) 
 
   const trigger = page.locator(".ui-cascading-select").first()
   await expect(trigger).toBeVisible()
+  await expect(trigger).toHaveClass(/ui-cascading-select--workspace/)
+  await expect(trigger).toHaveCSS(
+    "background-image",
+    "linear-gradient(rgb(109, 109, 109), rgb(93, 93, 93))"
+  )
+  await trigger.hover()
+  await expect(trigger).toHaveCSS(
+    "background-image",
+    "linear-gradient(rgb(116, 116, 116), rgb(98, 98, 98))"
+  )
   await trigger.click()
 
   const buses = page.getByRole("menuitem", { name: "Buses" })

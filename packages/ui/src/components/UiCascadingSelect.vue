@@ -2,6 +2,7 @@
 import { computed, useAttrs } from "vue"
 import type { UiMenuEntry, UiMenuRadioOption, UiMenuSearchOptions } from "../menu"
 import type {
+  UiCascadingSelectAppearance,
   UiCascadingSelectGroup,
   UiCascadingSelectHoverTreatment,
   UiSelectOption,
@@ -18,7 +19,7 @@ const props = withDefaults(
     options?: readonly UiSelectOption[]
     placeholder?: string
     size?: UiSelectSize
-    appearance?: "default" | "embedded"
+    appearance?: UiCascadingSelectAppearance
     hoverTreatment?: UiCascadingSelectHoverTreatment
     invalid?: boolean
     disabled?: boolean
@@ -195,6 +196,27 @@ function choose(value: string): void {
 .ui-cascading-select--compact .ui-cascading-select__chevron {
   width: 10px;
   height: 10px;
+}
+
+.ui-cascading-select--workspace {
+  border-color: var(--ui-domain-color-747474);
+  color: var(--ui-domain-color-f2f2f2);
+  background: linear-gradient(var(--ui-domain-color-6d6d6d), var(--ui-domain-color-5d5d5d));
+}
+
+.ui-cascading-select--workspace.ui-cascading-select--hover-surface:hover:not(:disabled),
+.ui-cascading-select--workspace.ui-cascading-select--hover-surface[data-state="open"] {
+  border-color: var(--ui-domain-color-929292);
+  background: linear-gradient(var(--ui-domain-color-747474), var(--ui-domain-color-626262));
+}
+
+.ui-cascading-select--workspace:focus-visible {
+  outline-color: var(--focus);
+  box-shadow: none;
+}
+
+.ui-cascading-select--workspace .ui-cascading-select__chevron {
+  color: var(--ui-domain-color-b8b8b8);
 }
 
 .ui-cascading-select--embedded {

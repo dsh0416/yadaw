@@ -203,7 +203,7 @@ export const SelectSizesAndGroups: Story = {
         </UiField>
         <UiField label="Cascading route">
           <template #default="{ controlId }">
-            <UiCascadingSelect v-model="routeValue" :id="controlId" :groups="routeGroups" size="compact" />
+            <UiCascadingSelect v-model="routeValue" :id="controlId" :groups="routeGroups" size="compact" appearance="workspace" />
           </template>
         </UiField>
         <UiField label="Direct menu">

@@ -41,6 +41,7 @@ export type {
   UiActionVariant,
   UiAlertAction,
   UiCascadingMenuItem,
+  UiCascadingSelectAppearance,
   UiCascadingSelectHoverTreatment,
   UiCascadingSelectGroup,
   UiControlSize,
