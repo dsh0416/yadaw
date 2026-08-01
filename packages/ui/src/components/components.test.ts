@@ -1,4 +1,4 @@
-import { DOMWrapper, flushPromises, mount } from "@vue/test-utils"
+import { DOMWrapper, mount } from "@vue/test-utils"
 import { afterEach, describe, expect, it } from "vitest"
 
 import UiButton from "./UiButton.vue"
@@ -257,22 +257,10 @@ describe("UI controls", () => {
     await new DOMWrapper(search).setValue("delay")
     expect(wrapper.props("search")).toBe("delay")
 
-    const vendor = new DOMWrapper(
-      document.body.querySelector<HTMLElement>('[aria-label="Browse YADAW plug-ins"]')
-    )
-    await vendor.trigger("focus")
-    await vendor.trigger("keydown", { key: "ArrowRight" })
-    await flushPromises()
-    const plugin = new DOMWrapper(
-      document.body.querySelector<HTMLElement>('[aria-label="Choose Delay"]')
-    )
-    await plugin.trigger("focus")
-    await plugin.trigger("keydown", { key: "ArrowRight" })
-    await flushPromises()
-    expect(document.body.querySelector(".ui-cascading-menu__sub-content--detailed")).not.toBeNull()
     const modeElement = document.body.querySelector<HTMLElement>(".ui-cascading-menu__item")
     expect(modeElement).not.toBeNull()
     expect(modeElement?.classList.contains("ui-cascading-menu__item--detailed")).toBe(true)
+    expect(modeElement?.textContent).toContain("YADAW / Delay")
     const mode = new DOMWrapper(modeElement)
     await mode.trigger("click")
 

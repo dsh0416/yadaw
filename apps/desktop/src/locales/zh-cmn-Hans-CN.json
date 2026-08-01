@@ -1279,9 +1279,11 @@
     "pluginPicker": {
       "vst3": "VST3",
       "searchPlaceholder": "搜索插件",
+      "clearSearch": "清除插件搜索",
       "addPlugin": "添加 {name}",
       "builtin": "内置",
       "noSearchResults": "没有匹配此搜索的插件。",
+      "searchResultCount": "{count} 个匹配的插件",
       "browseVendor": "浏览 {vendor} 插件",
       "choosePlugin": "选择 {name}",
       "modeNotSupported": "此插件不支持 {mode}",

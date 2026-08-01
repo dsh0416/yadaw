@@ -188,8 +188,6 @@ describe("MixerPluginSection", () => {
     await new DOMWrapper(search).setValue("missing")
     expect(document.body.textContent).toContain("No plug-ins match this search.")
     await new DOMWrapper(search).setValue("compressor")
-    await openPickerSubmenu("Browse YADAW plug-ins")
-    await openPickerSubmenu("Choose Compressor")
 
     expect(document.body.querySelector('[title="Mono: 1 → 1"]')).not.toBeNull()
     expect(document.body.querySelector('[title="Mono to stereo: 1 → 2"]')).not.toBeNull()

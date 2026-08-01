@@ -1098,9 +1098,11 @@
     "pluginPicker": {
       "vst3": "VST3",
       "searchPlaceholder": "Search plug-ins",
+      "clearSearch": "Clear plug-in search",
       "addPlugin": "Add {name}",
       "builtin": "Built-in",
       "noSearchResults": "No plug-ins match this search.",
+      "searchResultCount": "{count} matching plug-ins",
       "browseVendor": "Browse {vendor} plug-ins",
       "choosePlugin": "Choose {name}",
       "modeNotSupported": "{mode} is not supported by this plug-in",
