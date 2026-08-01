@@ -4,12 +4,13 @@ import { storeToRefs } from "pinia"
 import { useI18n } from "vue-i18n"
 import { UiDialog } from "@yadaw/ui"
 import { useAboutStore } from "../../stores/about"
+import { useApplicationWindowStore } from "../../stores/applicationWindow"
 import AboutYadawPanel from "./AboutYadawPanel.vue"
 
 const { t } = useI18n()
 const aboutStore = useAboutStore()
+const applicationWindowStore = useApplicationWindowStore()
 const { isOpen } = storeToRefs(aboutStore)
-const platform = window.yadaw.platform
 const appVersion = __APP_VERSION__
 const open = computed({
   get: () => isOpen.value,
@@ -27,6 +28,6 @@ const open = computed({
     :close-label="t('about.close')"
     size="sm"
   >
-    <AboutYadawPanel :version="appVersion" :platform="platform" />
+    <AboutYadawPanel :version="appVersion" :platform="applicationWindowStore.platform" />
   </UiDialog>
 </template>
