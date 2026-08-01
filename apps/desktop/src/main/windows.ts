@@ -1,6 +1,6 @@
 import { BrowserWindow, shell } from "electron"
 import { join } from "node:path"
-import { deferDirtyProjectClose } from "./dirty-project-close"
+import { deferProjectClose } from "./dirty-project-close"
 import type { ProjectService } from "./project-service"
 import { applicationIconPath, rendererDirectory } from "./runtime-paths"
 
@@ -115,7 +115,7 @@ export function createMainWindow(loadContent = true): BrowserWindow {
   })
   mainWindow = window
   window.on("close", (event) => {
-    deferDirtyProjectClose({
+    deferProjectClose({
       command: "window.close",
       event,
       project: projectService?.current ?? null,

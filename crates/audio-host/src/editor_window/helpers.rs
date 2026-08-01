@@ -87,12 +87,6 @@ fn toolbar_platform_extent(monitor_scale: f64, user_zoom: f64) -> u32 {
     (TOOLBAR_HEIGHT * monitor_scale * user_zoom).round() as u32
 }
 
-#[cfg(target_os = "macos")]
-fn container_origin(_toolbar: u32) -> i32 {
-    0
-}
-
-#[cfg(not(target_os = "macos"))]
 fn container_origin(toolbar: u32) -> i32 {
     toolbar as i32
 }

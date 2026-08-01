@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest"
 import { IPC_CHANNELS, IPC_PROTOCOL_VERSION } from "@yadaw/contracts"
-import { deferDirtyProjectClose } from "./dirty-project-close"
+import { deferProjectClose } from "./dirty-project-close"
 
-describe("deferDirtyProjectClose", () => {
+describe("deferProjectClose", () => {
   it.each(["window.close", "application.quit"] as const)(
     "defers %s to the renderer while the project is dirty",
     (command) => {
@@ -10,7 +10,7 @@ describe("deferDirtyProjectClose", () => {
       const send = vi.fn()
 
       expect(
-        deferDirtyProjectClose({
+        deferProjectClose({
           command,
           event,
           project: { dirty: true },
@@ -34,15 +34,34 @@ describe("deferDirtyProjectClose", () => {
     }
   )
 
-  it("allows closing without renderer confirmation when the project is clean", () => {
+  it("defers clean projects so the renderer releases them before closing", () => {
     const event = { preventDefault: vi.fn() }
     const send = vi.fn()
 
     expect(
-      deferDirtyProjectClose({
+      deferProjectClose({
         command: "window.close",
         event,
         project: { dirty: false },
+        window: {
+          isDestroyed: () => false,
+          webContents: { send }
+        }
+      })
+    ).toBe(true)
+    expect(event.preventDefault).toHaveBeenCalledOnce()
+    expect(send).toHaveBeenCalledOnce()
+  })
+
+  it("allows closing immediately when no project is open", () => {
+    const event = { preventDefault: vi.fn() }
+    const send = vi.fn()
+
+    expect(
+      deferProjectClose({
+        command: "window.close",
+        event,
+        project: null,
         window: {
           isDestroyed: () => false,
           webContents: { send }

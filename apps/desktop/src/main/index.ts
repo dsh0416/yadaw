@@ -1,6 +1,6 @@
 import { app } from "electron"
 import { AudioHostService } from "./audio-host-service"
-import { deferDirtyProjectClose } from "./dirty-project-close"
+import { deferProjectClose } from "./dirty-project-close"
 import { ProjectService } from "./project-service"
 import { startApplication } from "./startup"
 import { mainWindow } from "./windows"
@@ -57,7 +57,7 @@ app.on("window-all-closed", () => {
 app.on("before-quit", (event) => {
   if (shutdownComplete) return
   if (
-    deferDirtyProjectClose({
+    deferProjectClose({
       command: "application.quit",
       event,
       project: projectService?.current ?? null,
