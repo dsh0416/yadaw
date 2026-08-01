@@ -52,7 +52,12 @@ export interface UiMenuSeparator {
 }
 
 export type UiMenuEntry =
-  UiMenuItem | UiMenuCheckboxItem | UiMenuRadioGroup | UiMenuSubmenu | UiMenuGroup | UiMenuSeparator
+  | UiMenuItem
+  | UiMenuCheckboxItem
+  | UiMenuRadioGroup
+  | UiMenuSubmenu
+  | UiMenuGroup
+  | UiMenuSeparator
 
 export interface UiMenuSearchOptions {
   label: string

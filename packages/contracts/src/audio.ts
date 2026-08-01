@@ -95,7 +95,11 @@ export interface RoundTripLatencyMeasurementRequest {
 }
 
 export type RoundTripLatencyMeasurementStatus =
-  "idle" | "preparing" | "measuring" | "complete" | "failed"
+  | "idle"
+  | "preparing"
+  | "measuring"
+  | "complete"
+  | "failed"
 
 export type RoundTripLatencyMeasurementFailure = "input-too-loud" | "signal-not-detected"
 

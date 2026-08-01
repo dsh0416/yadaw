@@ -150,7 +150,13 @@ export interface PluginInstanceState {
 }
 
 export type PluginRuntimeState =
-  "unloaded" | "loading" | "active" | "bypassed" | "missing" | "quarantined" | "failed"
+  | "unloaded"
+  | "loading"
+  | "active"
+  | "bypassed"
+  | "missing"
+  | "quarantined"
+  | "failed"
 
 export interface PluginRuntimeStatus {
   instanceId: string

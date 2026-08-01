@@ -2,9 +2,10 @@
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "erasableSyntaxOnly": true,
+    "allowImportingTsExtensions": true,
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "types": ["node"]
   },
-  "include": ["eslint.config.ts", "prettier.config.ts", "scripts/**/*.ts"]
+  "include": ["eslint.config.ts", "oxfmt.config.ts", "oxlint.config.ts", "scripts/**/*.ts"]
 }

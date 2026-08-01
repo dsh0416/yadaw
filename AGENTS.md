@@ -58,11 +58,12 @@ mise run format-check
 mise run lint
 ```
 
-`mise run check` is the full validation path: Prettier, ESLint, Rust formatting,
-Clippy, tests, real-time allocation invariants, benchmark compilation, napi-rs
-builds, TypeScript checks, Vue unit tests, and project-database integration
-tests. `mise run format` applies Prettier and rustfmt; `mise run format-check`
-and `mise run lint` provide the corresponding non-mutating checks.
+`mise run check` is the full validation path: Oxfmt, Oxlint, residual Vue
+ESLint, Rust formatting, Clippy, tests, real-time allocation invariants,
+benchmark compilation, napi-rs builds, TypeScript checks, Vue unit tests, and
+project-database integration tests. `mise run format` applies Oxfmt and
+rustfmt; `mise run format-check` and `mise run lint` provide the corresponding
+non-mutating checks.
 
 When running from a non-login shell, use `mise exec --` so commands resolve the
 repository-managed Node.js, pnpm, Rust, and APM versions:

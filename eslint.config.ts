@@ -1,73 +1,40 @@
-import eslint from "@eslint/js"
 import prettier from "eslint-config-prettier"
+import oxlintPlugin from "eslint-plugin-oxlint"
 import vue from "eslint-plugin-vue"
 import globals from "globals"
 import tseslint from "typescript-eslint"
 
-const generatedAndBuildPaths = [
-  ".agents/skills/",
-  ".pnpm-store/",
-  "apm_modules/",
-  "**/.vitepress/cache/",
-  "**/node_modules/",
-  "**/dist/",
-  "**/out/",
-  "**/playwright-report/",
-  "**/release/",
-  "**/target/",
-  "**/test-results/",
-  "**/third_party/",
-  "crates/audio-host-client/index.d.ts",
-  "crates/audio-host-client/index.js",
-  "crates/dsp-node/index.d.ts",
-  "crates/dsp-node/index.js",
-  "packages/project-db/drizzle/meta/"
-]
+import oxlintConfig, { generatedAndBuildPaths } from "./oxlint.config.ts"
 
-const disableTypeCheckedForJavaScript = {
-  ...tseslint.configs.disableTypeChecked,
-  files: ["**/*.{cjs,js,mjs}"]
-}
+const vueFiles = ["**/*.vue"]
+const scopeToVue = <Config extends object>(configs: Config[]) =>
+  configs.map((config) => ({ ...config, files: vueFiles }))
 
 export default tseslint.config(
   {
     ignores: generatedAndBuildPaths
   },
-  eslint.configs.recommended,
-  ...tseslint.configs.recommendedTypeChecked,
-  ...vue.configs["flat/recommended"],
+  ...scopeToVue(tseslint.configs.recommendedTypeChecked),
+  ...scopeToVue(vue.configs["flat/recommended"]),
   {
-    files: ["**/*.{ts,vue}"],
+    files: vueFiles,
     languageOptions: {
+      globals: globals.browser,
       parserOptions: {
         extraFileExtensions: [".vue"],
+        parser: tseslint.parser,
         project: [
-          "./tsconfig.config.json",
           "./apps/desktop/tsconfig.eslint.json",
-          "./apps/desktop/tsconfig.scripts.json",
-          "./apps/design-system/tsconfig.json",
           "./docs/tsconfig.json",
-          "./packages/contracts/tsconfig.json",
-          "./packages/project-db/tsconfig.eslint.json",
-          "./packages/project-model/tsconfig.json",
           "./packages/ui/tsconfig.json"
         ],
         tsconfigRootDir: import.meta.dirname
       }
-    }
-  },
-  {
-    files: ["**/*.vue"],
-    languageOptions: {
-      parserOptions: {
-        extraFileExtensions: [".vue"],
-        parser: tseslint.parser
-      }
-    }
-  },
-  disableTypeCheckedForJavaScript,
-  {
+    },
     rules: {
+      "no-dupe-args": "error",
+      "no-octal": "error",
+      "no-undef": "error",
       "@typescript-eslint/no-unused-vars": [
         "error",
         {
@@ -80,56 +47,13 @@ export default tseslint.config(
     }
   },
   {
-    files: ["**/*.{spec,test}.ts"],
-    rules: {
-      "@typescript-eslint/no-unsafe-argument": "off",
-      "@typescript-eslint/no-unsafe-assignment": "off",
-      "@typescript-eslint/no-unsafe-call": "off",
-      "@typescript-eslint/no-unsafe-member-access": "off",
-      "@typescript-eslint/no-unsafe-return": "off",
-      "@typescript-eslint/unbound-method": "off",
-      "vue/one-component-per-file": "off"
-    }
-  },
-  {
-    files: ["**/*.stories.ts", "apps/design-system/.storybook/**/*.ts"],
-    rules: {
-      "@typescript-eslint/no-unsafe-argument": "off",
-      "@typescript-eslint/no-unsafe-assignment": "off",
-      "@typescript-eslint/no-unsafe-call": "off",
-      "@typescript-eslint/no-unsafe-member-access": "off",
-      "@typescript-eslint/no-unsafe-return": "off"
-    }
-  },
-  {
-    files: ["apps/desktop/src/renderer/src/main.ts"],
-    rules: {
-      "@typescript-eslint/no-unsafe-argument": "off"
-    }
-  },
-  {
-    files: [
-      "*.config.{cjs,js,mjs,ts}",
-      "apps/desktop/e2e/**/*.ts",
-      "apps/desktop/scripts/**/*.{cjs,js,mjs,ts}",
-      "apps/desktop/src/main/**/*.ts",
-      "apps/desktop/src/preload/**/*.ts",
-      "docs/.vitepress/**/*.ts",
-      "scripts/**/*.ts",
-      "packages/project-db/**/*.ts"
-    ],
-    languageOptions: {
-      globals: globals.node
-    }
-  },
-  {
-    files: ["apps/desktop/src/renderer/**/*.{ts,vue}"],
+    files: ["apps/desktop/src/renderer/**/*.vue"],
     languageOptions: {
       globals: {
-        ...globals.browser,
         __APP_VERSION__: "readonly"
       }
     }
   },
+  ...oxlintPlugin.buildFromOxlintConfig(oxlintConfig, { typeAware: false }),
   prettier
 )

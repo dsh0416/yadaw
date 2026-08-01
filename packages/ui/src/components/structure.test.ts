@@ -215,9 +215,13 @@ describe("UiRadioGroup", () => {
     })
 
     const inputs = wrapper.findAll("input")
-    expect((inputs[0]?.element as HTMLInputElement).checked).toBe(true)
+    const monoInput = inputs[0]
+    if (!monoInput) throw new Error("Expected the mono radio option")
+    expect((monoInput.element as HTMLInputElement).checked).toBe(true)
 
-    await inputs[1]?.setValue()
+    const stereoInput = inputs[1]
+    if (!stereoInput) throw new Error("Expected the stereo radio option")
+    await stereoInput.setValue()
     expect(wrapper.emitted("update:modelValue")).toEqual([["stereo"]])
   })
 

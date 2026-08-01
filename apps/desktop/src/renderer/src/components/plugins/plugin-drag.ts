@@ -3,7 +3,8 @@ import type { PluginDescriptor } from "@yadaw/contracts"
 export const PLUGIN_DRAG_TYPE = "application/x-yadaw-plugin"
 
 export type PluginDragPayload =
-  { source: "catalog"; descriptor: PluginDescriptor } | { source: "rack"; instanceId: string }
+  | { source: "catalog"; descriptor: PluginDescriptor }
+  | { source: "rack"; instanceId: string }
 
 type PluginDropPreviewOwner = () => void
 

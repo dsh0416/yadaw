@@ -86,8 +86,8 @@ export function registerSettingsRpcHandlers(context: IpcHandlerContext): void {
     if (begun.value.disposition !== "started") {
       return (
         (begun.value.operation.result as
-          RpcResult<ApplicationSettingsResourceSnapshot> | undefined) ??
-        operationFailure(meta, before.settings, false)
+          | RpcResult<ApplicationSettingsResourceSnapshot>
+          | undefined) ?? operationFailure(meta, before.settings, false)
       )
     }
     try {

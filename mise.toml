@@ -67,12 +67,12 @@ depends = ["install"]
 run = "pnpm format"
 
 [tasks.format-check]
-description = "Check Prettier and Rust formatting without modifying files"
+description = "Check Oxfmt and Rust formatting without modifying files"
 depends = ["install"]
 run = "pnpm format:check"
 
 [tasks.lint]
-description = "Run ESLint and Clippy"
+description = "Run Oxlint, residual Vue ESLint, and Clippy"
 depends = ["install"]
 run = "pnpm lint"
 
