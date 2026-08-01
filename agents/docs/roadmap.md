@@ -58,17 +58,17 @@ Make the existing vertical slice reliable for daily experimentation.
 
 ## M1 — Composition MVP
 
-**Next primary focus.** Write and edit music inside YADAW without an external
-DAW for MIDI work.
+**Complete.** Write and edit music inside YADAW without an external DAW for
+MIDI work.
 
 - [x] Piano roll UI
 - [x] Note-level MIDI create / edit / delete
 - [x] Velocity and basic note properties editing
-- [ ] MIDI clip trim / split (minimum useful set)
-- [ ] Audio clip trim / split / fade basics (minimum useful set)
-- [ ] Transport loop
-- [ ] Count-in
-- [ ] Arrangement undo covering edit operations (not only mixer commands)
+- [x] MIDI clip trim / split (minimum useful set)
+- [x] Audio clip trim / split / fade basics (minimum useful set)
+- [x] Transport loop
+- [x] Count-in
+- [x] Arrangement undo covering edit operations (not only mixer commands)
 - [x] MIDI hardware input into the session (routing, monitoring, hot-plug
       recovery, external MIDI Clock slave, journal capture, take commit, and
       crash-recovery integration)

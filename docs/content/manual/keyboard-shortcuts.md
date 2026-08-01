@@ -30,14 +30,15 @@ unassigned.
 
 ## Editing
 
-| Action     | Shortcut                                              |
-| ---------- | ----------------------------------------------------- |
-| Undo       | <kbd>Cmd/Ctrl</kbd> + <kbd>Z</kbd>                    |
-| Redo       | <kbd>Cmd/Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Z</kbd> |
-| Cut        | <kbd>Cmd/Ctrl</kbd> + <kbd>X</kbd>                    |
-| Copy       | <kbd>Cmd/Ctrl</kbd> + <kbd>C</kbd>                    |
-| Paste      | <kbd>Cmd/Ctrl</kbd> + <kbd>V</kbd>                    |
-| Select all | <kbd>Cmd/Ctrl</kbd> + <kbd>A</kbd>                    |
+| Action            | Shortcut                                              |
+| ----------------- | ----------------------------------------------------- |
+| Undo              | <kbd>Cmd/Ctrl</kbd> + <kbd>Z</kbd>                    |
+| Redo              | <kbd>Cmd/Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Z</kbd> |
+| Cut               | <kbd>Cmd/Ctrl</kbd> + <kbd>X</kbd>                    |
+| Copy              | <kbd>Cmd/Ctrl</kbd> + <kbd>C</kbd>                    |
+| Paste             | <kbd>Cmd/Ctrl</kbd> + <kbd>V</kbd>                    |
+| Select all        | <kbd>Cmd/Ctrl</kbd> + <kbd>A</kbd>                    |
+| Split at playhead | <kbd>Cmd/Ctrl</kbd> + <kbd>E</kbd>                    |
 
 Editing commands apply to the active workspace or editor. A command can be
 unavailable when the current selection does not support it.
@@ -49,6 +50,7 @@ unavailable when the current selection does not support it.
 | Play or pause                                   | <kbd>Space</kbd>                           |
 | Start or stop recording                         | <kbd>R</kbd>                               |
 | Go to beginning                                 | <kbd>Home</kbd>                            |
+| Toggle Cycle                                    | <kbd>L</kbd>                               |
 | Toggle mixer                                    | <kbd>M</kbd>                               |
 | Create a MIDI clip on a focused instrument lane | <kbd>Enter</kbd>                           |
 | Move a focused track up or down                 | <kbd>Alt</kbd> + <kbd>↑</kbd>/<kbd>↓</kbd> |
