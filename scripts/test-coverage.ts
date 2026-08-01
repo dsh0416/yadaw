@@ -7,7 +7,7 @@
  * the single Cargo test run before exporting LCOV.
  */
 import { spawnSync } from "node:child_process"
-import { mkdirSync } from "node:fs"
+import { existsSync, mkdirSync } from "node:fs"
 import { resolve } from "node:path"
 
 const workspaceRoot = resolve(import.meta.dirname, "..")
@@ -15,6 +15,8 @@ const coverageTarget = resolve(workspaceRoot, "target-coverage")
 const rustCoveragePath = resolve(workspaceRoot, "coverage/rust/lcov.info")
 const cargo = process.platform === "win32" ? "cargo.exe" : "cargo"
 const rustCoverageFeatures = "yadaw-dsp-node/bench-internals"
+const coveragePhases = ["all", "prepare", "finish"] as const
+type CoveragePhase = (typeof coveragePhases)[number]
 
 function fail(message: string): never {
   console.error(message)
@@ -89,40 +91,74 @@ function cargoCoverageEnvironment(target: string): NodeJS.ProcessEnv {
   return environment
 }
 
+function requestedCoveragePhase(): CoveragePhase {
+  const requested = process.argv[2] ?? "all"
+  if (!coveragePhases.includes(requested as CoveragePhase)) {
+    fail(`Unknown coverage phase '${requested}'. Expected: ${coveragePhases.join(", ")}.`)
+  }
+  return requested as CoveragePhase
+}
+
+function prepareCoverage(target: string, environment: NodeJS.ProcessEnv): void {
+  // cargo-llvm-cov recommends cleaning after show-env and before instrumented builds.
+  run(cargo, ["llvm-cov", "clean", "--workspace"], environment)
+
+  run(
+    cargo,
+    ["test", "--workspace", "--features", rustCoverageFeatures, "--target", target],
+    environment
+  )
+
+  // Build the cdylibs after Cargo tests so the final objects discovered by the
+  // report match the binaries copied into the JS packages and loaded by Node.
+  // This also generates the gitignored loaders and typings required by typed lint.
+  runPnpm(["--filter", "@yadaw/dsp-node", "build:debug"], environment)
+  runPnpm(["--filter", "@yadaw/audio-host-client", "build:debug"], environment)
+}
+
+function requirePreparedBindings(): void {
+  const requiredFiles = [
+    "crates/dsp-node/index.js",
+    "crates/dsp-node/index.d.ts",
+    "crates/audio-host-client/index.js",
+    "crates/audio-host-client/index.d.ts"
+  ]
+  const missingFiles = requiredFiles.filter((path) => !existsSync(resolve(workspaceRoot, path)))
+  if (missingFiles.length > 0) {
+    fail(
+      `Coverage preparation is incomplete; missing ${missingFiles.join(", ")}. Run pnpm test:coverage:prepare first.`
+    )
+  }
+}
+
+function finishCoverage(target: string, environment: NodeJS.ProcessEnv): void {
+  requirePreparedBindings()
+  runPnpm(["test:coverage:js"], environment)
+  runPnpm(["test:native-bindings"], environment)
+
+  mkdirSync(resolve(workspaceRoot, "coverage/rust"), { recursive: true })
+  run(
+    cargo,
+    [
+      "llvm-cov",
+      "report",
+      "--target",
+      target,
+      "--ignore-filename-regex",
+      "(/|^)third_party/",
+      "--lcov",
+      "--output-path",
+      rustCoveragePath
+    ],
+    environment
+  )
+
+  console.log(`\nCombined Rust coverage written to ${rustCoveragePath}`)
+}
+
+const phase = requestedCoveragePhase()
 const target = hostTarget(process.env)
 const coverageEnvironment = cargoCoverageEnvironment(target)
 
-// cargo-llvm-cov recommends cleaning after show-env and before instrumented builds.
-run(cargo, ["llvm-cov", "clean", "--workspace"], coverageEnvironment)
-
-run(
-  cargo,
-  ["test", "--workspace", "--features", rustCoverageFeatures, "--target", target],
-  coverageEnvironment
-)
-
-// Build the cdylibs after Cargo tests so the final objects discovered by the
-// report match the binaries copied into the JS packages and loaded by Node.
-runPnpm(["--filter", "@yadaw/dsp-node", "build:debug"], coverageEnvironment)
-runPnpm(["--filter", "@yadaw/audio-host-client", "build:debug"], coverageEnvironment)
-runPnpm(["test:coverage:js"], coverageEnvironment)
-runPnpm(["test:native-bindings"], coverageEnvironment)
-
-mkdirSync(resolve(workspaceRoot, "coverage/rust"), { recursive: true })
-run(
-  cargo,
-  [
-    "llvm-cov",
-    "report",
-    "--target",
-    target,
-    "--ignore-filename-regex",
-    "(/|^)third_party/",
-    "--lcov",
-    "--output-path",
-    rustCoveragePath
-  ],
-  coverageEnvironment
-)
-
-console.log(`\nCombined Rust coverage written to ${rustCoveragePath}`)
+if (phase !== "finish") prepareCoverage(target, coverageEnvironment)
+if (phase !== "prepare") finishCoverage(target, coverageEnvironment)

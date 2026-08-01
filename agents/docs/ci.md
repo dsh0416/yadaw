@@ -62,10 +62,13 @@ those builds and repeat runs reuse them.
 On the Linux Checks leg, CI runs `pnpm check:coverage`: `pnpm check` with the
 combined coverage orchestrator in place of the plain Rust and Vitest runs, so
 every test suite executes exactly once with coverage enabled. The orchestrator
-builds instrumented napi-rs modules before the JavaScript tests, which lets native
-calls contribute to the Rust LCOV report. Doc tests do not run under it and remain
-exercised by the Windows and macOS legs. The same `pnpm check:coverage` command
-reproduces the Linux leg locally.
+first runs the Rust tests and builds instrumented napi-rs modules. That preparation
+also generates the gitignored package loaders and typings required by type-aware
+Oxlint on a clean checkout. The check then runs the JavaScript linters before the
+orchestrator resumes with the JavaScript tests and merged report; no test suite or
+native build is repeated. Doc tests do not run under it and remain exercised by
+the Windows and macOS legs. The same `pnpm check:coverage` command reproduces the
+Linux leg locally.
 
 For ad-hoc local coverage, use the dedicated scripts:
 
