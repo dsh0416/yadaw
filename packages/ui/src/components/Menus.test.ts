@@ -1,4 +1,4 @@
-import { DOMWrapper, flushPromises, mount, type VueWrapper } from "@vue/test-utils"
+import { DOMWrapper, enableAutoUnmount, flushPromises, mount } from "@vue/test-utils"
 import { afterEach, describe, expect, it } from "vitest"
 import type { UiMenuEntry } from "../menu"
 import UiContextMenu from "./UiContextMenu.vue"
@@ -28,17 +28,12 @@ const effectEntries: readonly UiMenuEntry[] = [
   }
 ]
 
-let mounted: VueWrapper | undefined
-
-afterEach(() => {
-  mounted?.unmount()
-  mounted = undefined
-  document.body.innerHTML = ""
-})
+// Menu content teleports into `document.body`, so wrappers must unmount between tests.
+enableAutoUnmount(afterEach)
 
 describe("menu components", () => {
   it("flattens searchable dropdown results and emits the terminal action", async () => {
-    mounted = mount(UiDropdownMenu, {
+    const wrapper = mount(UiDropdownMenu, {
       attachTo: document.body,
       props: {
         entries: effectEntries,
@@ -54,7 +49,7 @@ describe("menu components", () => {
       }
     })
 
-    await mounted.get("button").trigger("click")
+    await wrapper.get("button").trigger("click")
     const search = document.body.querySelector<HTMLInputElement>(
       'input[aria-label="Search effects"]'
     )
@@ -68,25 +63,25 @@ describe("menu components", () => {
     expect(document.body.querySelector('[data-state="open"] .ui-menu__sub-content')).toBeNull()
 
     await new DOMWrapper(result).trigger("click")
-    expect(mounted.emitted("select")).toEqual([["compressor"]])
+    expect(wrapper.emitted("select")).toEqual([["compressor"]])
   })
 
   it("keeps the menu open after toggling a checked command", async () => {
-    mounted = mount(UiDropdownMenu, {
+    const wrapper = mount(UiDropdownMenu, {
       attachTo: document.body,
       props: {
         entries: effectEntries,
         menuLabel: "Effect options",
         open: false,
-        "onUpdate:open": (value: boolean) => void mounted?.setProps({ open: value })
+        "onUpdate:open": (value: boolean) => void wrapper.setProps({ open: value })
       },
       slots: {
         default: '<button type="button">Options</button>'
       }
     })
 
-    await mounted.get("button").trigger("click")
-    expect(mounted.props("open")).toBe(true)
+    await wrapper.get("button").trigger("click")
+    expect(wrapper.props("open")).toBe(true)
     const autoGain = document.body.querySelector<HTMLElement>(
       '[role="menuitemcheckbox"][aria-checked="true"]'
     )
@@ -94,12 +89,12 @@ describe("menu components", () => {
     await new DOMWrapper(autoGain).trigger("click")
     await flushPromises()
 
-    expect(mounted.emitted("select")).toEqual([["auto-gain"]])
-    expect(mounted.props("open")).toBe(true)
+    expect(wrapper.emitted("select")).toEqual([["auto-gain"]])
+    expect(wrapper.props("open")).toBe(true)
   })
 
   it("keeps the host empty copy when the unfiltered tree is empty", async () => {
-    mounted = mount(UiDropdownMenu, {
+    const wrapper = mount(UiDropdownMenu, {
       attachTo: document.body,
       props: {
         entries: [],
@@ -115,7 +110,7 @@ describe("menu components", () => {
       }
     })
 
-    await mounted.get("button").trigger("click")
+    await wrapper.get("button").trigger("click")
     const search = document.body.querySelector<HTMLInputElement>(
       'input[aria-label="Search effects"]'
     )
@@ -129,7 +124,7 @@ describe("menu components", () => {
   })
 
   it("opens from a native contextmenu event and emits the selected action", async () => {
-    mounted = mount(UiContextMenu, {
+    const wrapper = mount(UiContextMenu, {
       attachTo: document.body,
       props: {
         entries: [
@@ -153,18 +148,18 @@ describe("menu components", () => {
       }
     })
 
-    await mounted.get("button").trigger("contextmenu", {
+    await wrapper.get("button").trigger("contextmenu", {
       clientX: 20,
       clientY: 20
     })
     await flushPromises()
 
-    expect(mounted.emitted("openContext")).toHaveLength(1)
+    expect(wrapper.emitted("openContext")).toHaveLength(1)
     const rename = [...document.body.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
       (item) => item.textContent?.includes("Rename")
     )
     expect(rename).toBeDefined()
     await new DOMWrapper(rename).trigger("click")
-    expect(mounted.emitted("select")).toEqual([["rename"]])
+    expect(wrapper.emitted("select")).toEqual([["rename"]])
   })
 })
