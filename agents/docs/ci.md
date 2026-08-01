@@ -48,28 +48,31 @@ required. The mise installation, pnpm store, Cargo downloads, and Electron
 downloads have separate platform-and-architecture cache keys. Rust compilation
 uses sccache's GitHub Actions backend. Check jobs may restore a Cargo `target`
 cache; packaging jobs leave it disabled because the directory is large and can
-retain stale platform-specific build state. On Linux, coverage is collected
-in the Checks test pass itself: Vitest writes lcov as it runs and
-`cargo llvm-cov` doubles as the Rust test run, writing instrumented artifacts
-to `target-coverage/` so they stay out of the shared Checks `target` cache.
-cargo-llvm-cov chains the sccache `RUSTC_WRAPPER` and instruments only
-workspace crates, so sccache caches those builds and repeat runs reuse them.
+retain stale platform-specific build state. On Linux, coverage is collected in
+the Checks test pass itself. The coverage orchestrator uses cargo-llvm-cov's
+external-test environment to run Cargo tests, build the two napi-rs modules with
+instrumentation, run the JavaScript tests, and export the merged Rust profiles
+after Node exits. Each test suite runs once. Instrumented artifacts stay in
+`target-coverage/`, outside the shared Checks `target` cache. cargo-llvm-cov chains
+the sccache `RUSTC_WRAPPER` and instruments only workspace crates, so sccache caches
+those builds and repeat runs reuse them.
 
 ## Coverage
 
-On the Linux Checks leg, CI runs `pnpm check:coverage`: `pnpm check` with
-`check:rust:coverage` in place of `check:rust` and `test:coverage:js` in place
-of the plain Vitest runs, so every test suite executes exactly once with
-coverage enabled. `cargo llvm-cov` doubles as the Rust test run; doc tests
-do not run under it and remain exercised by the Windows and macOS legs. The
-same `pnpm check:coverage` command reproduces the Linux leg locally.
+On the Linux Checks leg, CI runs `pnpm check:coverage`: `pnpm check` with the
+combined coverage orchestrator in place of the plain Rust and Vitest runs, so
+every test suite executes exactly once with coverage enabled. The orchestrator
+builds instrumented napi-rs modules before the JavaScript tests, which lets native
+calls contribute to the Rust LCOV report. Doc tests do not run under it and remain
+exercised by the Windows and macOS legs. The same `pnpm check:coverage` command
+reproduces the Linux leg locally.
 
 For ad-hoc local coverage, use the dedicated scripts:
 
 ```sh
 pnpm test:coverage:js
 pnpm test:coverage:rust
-# or both:
+# or the combined cross-language pass:
 pnpm test:coverage
 ```
 
@@ -77,9 +80,12 @@ JavaScript coverage requires `@vitest/coverage-v8` (installed with the
 workspace). Rust coverage requires the locked `cargo-llvm-cov` tool and the
 `llvm-tools-preview` Rust component from `mise.toml`. Reports land under
 `coverage/` (gitignored) and are uploaded to Codecov with the repository
-`CODECOV_TOKEN` secret. The Rust coverage run writes instrumented objects to
-`target-coverage/` so they stay out of the shared `target/` cache, and keeps
-the sccache wrapper so repeat runs reuse cached builds.
+`CODECOV_TOKEN` secret. The combined Rust coverage run writes instrumented
+objects to `target-coverage/` so they stay out of the shared `target/` cache,
+and keeps the sccache wrapper so repeat runs reuse cached builds. Use the
+combined command when native calls made by JavaScript must be reflected in
+Rust coverage; the language-specific commands intentionally produce only their
+own report.
 
 `codecov.yml` tags uploads with `javascript` and `rust` flags, and defines
 Codecov components for each coverage-producing workspace package or crate

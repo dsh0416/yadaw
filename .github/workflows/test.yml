@@ -36,7 +36,7 @@ jobs:
       matrix:
         # Linux runs the full repository checks with coverage: every test
         # suite executes exactly once with coverage enabled, and
-        # cargo llvm-cov doubles as the cargo test run. Windows and macOS
+        # the combined coverage pass runs Cargo and Vitest once each. Windows and macOS
         # only run the platform-dependent subset (Rust checks, napi-rs
         # builds, unit and project-database tests); Oxfmt, Oxlint, Vue ESLint,
         # design audits, TypeScript-only checks, and Storybook produce identical
@@ -75,9 +75,10 @@ jobs:
         run: pnpm ${{ matrix.check-script }}
 
       # On Linux the checks above already produced both coverage reports:
-      # Vitest wrote lcov during the test pass and cargo llvm-cov doubled as
-      # the Rust test run, keeping instrumented output in target-coverage/ so
-      # it stays out of the shared Cargo target cache.
+      # Vitest wrote lcov during the test pass and the combined coverage
+      # orchestrator merged Rust profiles from Cargo tests and instrumented
+      # napi calls, keeping output in target-coverage/ so it stays out of the
+      # shared Cargo target cache.
       - name: Upload JavaScript coverage to Codecov
         if: runner.os == 'Linux'
         uses: codecov/codecov-action@v5
