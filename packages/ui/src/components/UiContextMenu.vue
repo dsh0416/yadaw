@@ -1,12 +1,8 @@
 <script setup lang="ts">
-import { useTemplateRef, watch } from "vue"
+import { watch } from "vue"
 import { ContextMenuContent, ContextMenuPortal, ContextMenuRoot, ContextMenuTrigger } from "reka-ui"
 import type { UiMenuDensity, UiMenuEntry, UiMenuSearchOptions } from "../menu"
 import UiMenuPanel from "./menu/UiMenuPanel.vue"
-
-interface UiMenuPanelExposed {
-  handlePanelKeydown(event: KeyboardEvent): void
-}
 
 const open = defineModel<boolean>("open", { default: false })
 const search = defineModel<string>("search", { default: "" })
@@ -34,8 +30,6 @@ const emit = defineEmits<{
   openContext: [event: MouseEvent]
 }>()
 
-const panel = useTemplateRef<UiMenuPanelExposed>("panel")
-
 watch(open, (isOpen) => {
   if (!isOpen) search.value = ""
 })
@@ -62,7 +56,6 @@ function choose(id: string): void {
         :aria-label="props.menuLabel"
       >
         <UiMenuPanel
-          ref="panel"
           :entries="props.entries"
           variant="context"
           :query="search"

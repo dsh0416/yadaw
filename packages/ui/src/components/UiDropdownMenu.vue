@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, shallowRef, useTemplateRef, watch } from "vue"
+import { nextTick, useTemplateRef, watch } from "vue"
 import {
   DropdownMenuContent,
   DropdownMenuPortal,
@@ -11,7 +11,6 @@ import UiMenuPanel from "./menu/UiMenuPanel.vue"
 
 interface UiMenuPanelExposed {
   focusSearch(): void
-  handlePanelKeydown(event: KeyboardEvent): void
 }
 
 const open = defineModel<boolean>("open", { default: false })
@@ -38,12 +37,10 @@ const emit = defineEmits<{
 }>()
 
 const panel = useTemplateRef<UiMenuPanelExposed>("panel")
-const pendingSearchFocus = shallowRef(false)
 
 watch(open, (isOpen) => {
   if (isOpen) return
   search.value = ""
-  pendingSearchFocus.value = false
 })
 
 function choose(id: string): void {
@@ -54,10 +51,8 @@ function choose(id: string): void {
 function handleOpenAutoFocus(event: Event): void {
   if (!props.searchOptions) return
   event.preventDefault()
-  pendingSearchFocus.value = true
   void nextTick(() => {
     panel.value?.focusSearch()
-    pendingSearchFocus.value = false
   })
 }
 </script>
@@ -75,7 +70,6 @@ function handleOpenAutoFocus(event: Event): void {
         :collision-padding="8"
         :aria-label="props.menuLabel"
         @open-auto-focus="handleOpenAutoFocus"
-        @keydown.capture="handleContentKeydown"
       >
         <UiMenuPanel
           ref="panel"
