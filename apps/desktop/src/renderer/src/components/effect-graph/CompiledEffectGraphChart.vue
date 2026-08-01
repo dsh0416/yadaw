@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useMutationObserver, usePreferredReducedMotion, useResizeObserver } from "@vueuse/core"
 import { onBeforeUnmount, onMounted, shallowRef, useTemplateRef, watch } from "vue"
 import { useI18n } from "vue-i18n"
 import type { CompiledAudioGraphSnapshot } from "@yadaw/contracts"
@@ -13,8 +14,7 @@ const { t } = useI18n()
 
 const chartElement = useTemplateRef<HTMLDivElement>("chart")
 const chart = shallowRef<import("echarts/core").ECharts | null>(null)
-let resizeObserver: ResizeObserver | null = null
-let themeObserver: MutationObserver | null = null
+const preferredReducedMotion = usePreferredReducedMotion()
 let disposed = false
 
 function cssColor(name: string): string {
@@ -45,7 +45,7 @@ async function render(): Promise<void> {
   const purple = cssColor("--ui-domain-color-b894ff")
   const muted = cssColor("--text-muted")
   const surface = cssColor("--surface-2")
-  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  const reducedMotion = preferredReducedMotion.value === "reduce"
   const nodeColor = (node: (typeof layout.nodes)[number]) => {
     if (node.pluginState === "bypassed" || node.pluginState === "unavailable") return muted
     if (node.kind === "effect") return orange
@@ -162,21 +162,18 @@ watch(
   () => chart.value?.dispatchAction({ type: "restore" })
 )
 
+useResizeObserver(chartElement, () => chart.value?.resize())
+useMutationObserver(document.documentElement, () => void render(), {
+  attributes: true,
+  attributeFilter: ["data-theme"]
+})
+
 onMounted(() => {
   void render()
-  resizeObserver = new ResizeObserver(() => chart.value?.resize())
-  if (chartElement.value) resizeObserver.observe(chartElement.value)
-  themeObserver = new MutationObserver(() => void render())
-  themeObserver.observe(document.documentElement, {
-    attributes: true,
-    attributeFilter: ["data-theme"]
-  })
 })
 
 onBeforeUnmount(() => {
   disposed = true
-  resizeObserver?.disconnect()
-  themeObserver?.disconnect()
   chart.value?.dispose()
   chart.value = null
 })

@@ -1,3 +1,4 @@
+import { useIntervalFn } from "@vueuse/core"
 import { acceptHMRUpdate, defineStore } from "pinia"
 import { shallowRef } from "vue"
 import type { CompiledAudioGraphSnapshot } from "@yadaw/contracts"
@@ -5,6 +6,8 @@ import { readMeta, rpcErrorMessage } from "../rpc"
 import { useProjectStore } from "./project"
 
 export type CompiledEffectGraphStatus = "idle" | "loading" | "ready" | "empty" | "error"
+
+const POLLING_INTERVAL_MS = 1_000
 
 function isSamePublishedBuild(
   current: CompiledAudioGraphSnapshot | null,
@@ -25,7 +28,6 @@ export const useCompiledEffectGraphStore = defineStore("compiled-effect-graph", 
   const status = shallowRef<CompiledEffectGraphStatus>("idle")
   const snapshot = shallowRef<CompiledAudioGraphSnapshot | null>(null)
   const errorMessage = shallowRef("")
-  let pollTimer: ReturnType<typeof setInterval> | null = null
   let requestGeneration = 0
   let refreshPromise: Promise<void> | null = null
   let refreshQueued = false
@@ -70,20 +72,21 @@ export const useCompiledEffectGraphStore = defineStore("compiled-effect-graph", 
     return refreshPromise
   }
 
+  const polling = useIntervalFn(() => void refresh(), POLLING_INTERVAL_MS, { immediate: false })
+
   function open(): void {
     if (isOpen.value) return
     isOpen.value = true
     status.value = snapshot.value ? "ready" : "loading"
     void refresh()
-    pollTimer = setInterval(() => void refresh(), 1_000)
+    polling.resume()
   }
 
   function close(): void {
     isOpen.value = false
     requestGeneration += 1
     refreshQueued = false
-    if (pollTimer) clearInterval(pollTimer)
-    pollTimer = null
+    polling.pause()
   }
 
   return { isOpen, status, snapshot, errorMessage, open, close, refresh }

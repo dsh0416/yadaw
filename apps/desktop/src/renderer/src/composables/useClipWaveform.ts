@@ -1,6 +1,6 @@
-import { onScopeDispose, readonly, shallowRef, watch } from "vue"
+import { useIntervalFn, useTimeoutFn } from "@vueuse/core"
+import { onScopeDispose, readonly, shallowRef, toValue, watch } from "vue"
 import type { MaybeRefOrGetter } from "vue"
-import { toValue } from "vue"
 import type { WaveformPeakWindow } from "@yadaw/contracts"
 import { useWaveformStore } from "../stores/waveform"
 
@@ -12,13 +12,14 @@ interface UseClipWaveformOptions {
   pixelWidth: MaybeRefOrGetter<number>
 }
 
+const VIEWPORT_DEBOUNCE_MS = 40
+const RECORDING_POLL_MS = 50
+
 export function useClipWaveform(options: UseClipWaveformOptions) {
   const store = useWaveformStore()
   const data = shallowRef<WaveformPeakWindow | null>(null)
   const loading = shallowRef(false)
   const error = shallowRef("")
-  let timer: ReturnType<typeof setTimeout> | null = null
-  let poller: ReturnType<typeof setInterval> | null = null
   let generation = 0
 
   async function load(): Promise<void> {
@@ -46,10 +47,13 @@ export function useClipWaveform(options: UseClipWaveformOptions) {
     }
   }
 
-  function schedule(): void {
-    if (timer) clearTimeout(timer)
-    timer = setTimeout(() => void load(), 40)
-  }
+  // Restart-on-start debounce; useDebounceFn in VueUse 14 cannot be canceled on dispose.
+  const { start: schedule, stop: cancelSchedule } = useTimeoutFn(
+    () => void load(),
+    VIEWPORT_DEBOUNCE_MS,
+    { immediate: false }
+  )
+  const polling = useIntervalFn(() => void load(), RECORDING_POLL_MS, { immediate: false })
 
   watch(
     () => [
@@ -61,18 +65,18 @@ export function useClipWaveform(options: UseClipWaveformOptions) {
     ],
     () => {
       generation += 1
-      if (poller) clearInterval(poller)
-      poller = null
+      polling.pause()
+      cancelSchedule()
       schedule()
-      if (toValue(options.recording)) poller = setInterval(() => void load(), 50)
+      if (toValue(options.recording)) polling.resume()
     },
     { immediate: true }
   )
 
   onScopeDispose(() => {
     generation += 1
-    if (timer) clearTimeout(timer)
-    if (poller) clearInterval(poller)
+    cancelSchedule()
+    polling.pause()
   })
 
   return { data: readonly(data), loading: readonly(loading), error: readonly(error) }
