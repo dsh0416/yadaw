@@ -1,7 +1,53 @@
 import { describe, expect, it } from "vitest"
-import type { ProjectGraphSnapshot, ProjectCommand } from "@yadaw/contracts"
-import { applyToGraph, inverseFor, validateGraph } from "./graph"
+import type {
+  PluginDescriptor,
+  PluginInstanceState,
+  ProjectGraphSnapshot,
+  ProjectCommand
+} from "@yadaw/contracts"
+import {
+  applyToGraph,
+  cloneGraph,
+  deletedChannelIds,
+  finiteRange,
+  inverseFor,
+  onlyRealtimeParameters,
+  validateGraph
+} from "./graph"
 import { projectContentEndSeconds } from "./selectors"
+
+const effectDescriptor: PluginDescriptor = {
+  source: { kind: "external" },
+  classId: "effect-class",
+  modulePath: "/plugins/Effect.vst3",
+  name: "Effect",
+  vendor: "YADAW",
+  version: "1.0",
+  categories: ["Fx"],
+  kind: "effect",
+  architecture: "x86_64",
+  buses: [],
+  supportedAudioModes: ["stereo"],
+  hasEditor: false,
+  compatibility: "compatible",
+  compatibilityReason: null
+}
+
+function plugin(overrides: Partial<PluginInstanceState> = {}): PluginInstanceState {
+  return {
+    id: "plugin-1",
+    channelId: "instrument-1",
+    role: "insert",
+    slotOrder: 0,
+    classId: effectDescriptor.classId,
+    descriptor: effectDescriptor,
+    audioMode: "stereo",
+    enabled: true,
+    componentState: new Uint8Array([1]),
+    controllerState: new Uint8Array([2]),
+    ...overrides
+  }
+}
 
 function graph(): ProjectGraphSnapshot {
   return {
@@ -303,5 +349,737 @@ describe("project graph command characterization", () => {
     expect(after.tempoMap.tempoEvents).toHaveLength(2)
     expect(after.keySignatureEvents).toHaveLength(2)
     expect(applyToGraph(after, inverse)).toEqual(before)
+  })
+})
+
+describe("additional project graph commands", () => {
+  it("updates and deletes tracks invertibly", () => {
+    const before = graph()
+    const updateCommand: ProjectCommand = {
+      type: "update-track",
+      trackId: "track:instrument-1",
+      patch: { sortOrder: 7 }
+    }
+    const updated = applyToGraph(before, updateCommand)
+    expect(updated.tracks[0]?.sortOrder).toBe(7)
+    expect(applyToGraph(updated, inverseFor(before, updateCommand))).toEqual(before)
+
+    const deleteCommand: ProjectCommand = {
+      type: "delete-track",
+      trackId: "track:instrument-1"
+    }
+    const deleted = applyToGraph(before, deleteCommand)
+    expect(deleted.tracks).toEqual([])
+    expect(deleted.channels.some((channel) => channel.id === "instrument-1")).toBe(false)
+    expect(deleted.midiClips).toEqual([])
+    const restored = applyToGraph(deleted, inverseFor(before, deleteCommand))
+    expect(restored.tracks).toEqual(before.tracks)
+    expect(restored.midiClips).toEqual(before.midiClips)
+    expect(restored.channels).toEqual(expect.arrayContaining(before.channels))
+  })
+
+  it("creates, updates, and deletes aux channels and sends invertibly", () => {
+    const before = graph()
+    const aux = {
+      ...structuredClone(before.channels[0]!),
+      id: "aux-1",
+      kind: "aux" as const,
+      name: "Aux",
+      inputSource: "bus" as const,
+      inputFormat: "mono" as const,
+      inputChannels: [1],
+      outputChannelId: "output",
+      midiInput: undefined
+    }
+    const withAux = applyToGraph(before, { type: "create-channel", channel: aux })
+    expect(withAux.channels).toContainEqual(aux)
+
+    const send = {
+      id: "send-1",
+      sourceChannelId: "instrument-1",
+      targetChannelId: null,
+      targetBus: 1,
+      sortOrder: 0,
+      enabled: true,
+      tap: "post" as const,
+      levelDb: -6
+    }
+    const withSend = applyToGraph(withAux, { type: "create-send", send })
+    const updateSend: ProjectCommand = {
+      type: "update-send",
+      sendId: "send-1",
+      patch: { levelDb: -3, enabled: false }
+    }
+    const updatedSend = applyToGraph(withSend, updateSend)
+    expect(updatedSend.sends[0]).toMatchObject({ levelDb: -3, enabled: false })
+    expect(applyToGraph(updatedSend, inverseFor(withSend, updateSend))).toEqual(withSend)
+
+    const deleteSend: ProjectCommand = { type: "delete-send", sendId: "send-1" }
+    const withoutSend = applyToGraph(updatedSend, deleteSend)
+    expect(withoutSend.sends).toEqual([])
+    expect(applyToGraph(withoutSend, inverseFor(updatedSend, deleteSend))).toEqual(updatedSend)
+
+    const deleteChannel: ProjectCommand = { type: "delete-channel", channelId: "aux-1" }
+    const withoutAux = applyToGraph(withAux, deleteChannel)
+    expect(withoutAux.channels.some((channel) => channel.id === "aux-1")).toBe(false)
+    expect(applyToGraph(withoutAux, inverseFor(withAux, deleteChannel))).toEqual(withAux)
+  })
+
+  it("round-trips audio clip create/move/delete", () => {
+    const before = graph()
+    before.tracks.push({ id: "track:audio-1", channelId: "audio-1", sortOrder: 1 })
+    before.channels.push({
+      ...structuredClone(before.channels[0]!),
+      id: "audio-1",
+      kind: "audio",
+      name: "Audio",
+      inputSource: "hardware",
+      inputFormat: "stereo",
+      inputChannels: [1, 2],
+      midiInput: undefined
+    })
+    const clip = {
+      id: "audio-clip-1",
+      assetId: "asset-1",
+      trackId: "track:audio-1",
+      name: "Take",
+      startFrame: 0,
+      sourceOffsetFrames: 0,
+      lengthFrames: 480,
+      assetSampleRate: 48_000,
+      assetChannels: 2
+    }
+    const created = applyToGraph(before, { type: "create-audio-clip", clip })
+    const moveCommand: ProjectCommand = {
+      type: "move-audio-clip",
+      clipId: "audio-clip-1",
+      trackId: "track:audio-1",
+      startFrame: 960
+    }
+    const moved = applyToGraph(created, moveCommand)
+    expect(moved.audioClips[0]?.startFrame).toBe(960)
+    expect(applyToGraph(moved, inverseFor(created, moveCommand))).toEqual(created)
+
+    const deleteCommand: ProjectCommand = {
+      type: "delete-audio-clip",
+      clipId: "audio-clip-1"
+    }
+    const deleted = applyToGraph(moved, deleteCommand)
+    expect(deleted.audioClips).toEqual([])
+    expect(applyToGraph(deleted, inverseFor(moved, deleteCommand))).toEqual(moved)
+  })
+
+  it("round-trips plugin create/update/move/replace/delete", () => {
+    const before = graph()
+    const created = applyToGraph(before, { type: "create-plugin", plugin: plugin() })
+    const updated = applyToGraph(created, {
+      type: "update-plugin",
+      pluginId: "plugin-1",
+      patch: { enabled: false, slotOrder: 0 }
+    })
+    expect(updated.plugins[0]?.enabled).toBe(false)
+
+    const second = plugin({ id: "plugin-2", slotOrder: 1 })
+    const withTwo = applyToGraph(updated, { type: "create-plugin", plugin: second })
+    const moved = applyToGraph(withTwo, {
+      type: "move-plugin",
+      pluginId: "plugin-2",
+      channelId: "instrument-1",
+      role: "insert",
+      slotOrder: 0
+    })
+    expect(moved.plugins.find((candidate) => candidate.id === "plugin-2")?.slotOrder).toBe(0)
+
+    const replacement = plugin({
+      id: "plugin-1",
+      enabled: true,
+      componentState: new Uint8Array([9])
+    })
+    const replaceCommand: ProjectCommand = {
+      type: "replace-plugin",
+      pluginId: "plugin-1",
+      plugin: replacement
+    }
+    const replaced = applyToGraph(created, replaceCommand)
+    expect(replaced.plugins[0]?.componentState).toEqual(new Uint8Array([9]))
+    expect(applyToGraph(replaced, inverseFor(created, replaceCommand))).toEqual(created)
+
+    const deleteCommand: ProjectCommand = { type: "delete-plugin", pluginId: "plugin-1" }
+    const deleted = applyToGraph(created, deleteCommand)
+    expect(deleted.plugins).toEqual([])
+    expect(applyToGraph(deleted, inverseFor(created, deleteCommand))).toEqual(created)
+  })
+
+  it("round-trips midi clip range, move, notes, and source delete no-ops", () => {
+    const before = graph()
+    const rangeCommand: ProjectCommand = {
+      type: "update-midi-clip-range",
+      clipId: "clip-1",
+      patch: { lengthTicks: 1_920, sourceOffsetTicks: 10 }
+    }
+    const ranged = applyToGraph(before, rangeCommand)
+    expect(ranged.midiClips[0]).toMatchObject({ lengthTicks: 1_920, sourceOffsetTicks: 10 })
+    expect(applyToGraph(ranged, inverseFor(before, rangeCommand))).toEqual(before)
+
+    const withNotes = applyToGraph(before, {
+      type: "create-midi-notes",
+      clipId: "clip-1",
+      notes: [
+        {
+          id: "note-2",
+          startTick: 480,
+          durationTicks: 120,
+          channel: 0,
+          key: 64,
+          velocity: 90,
+          releaseVelocity: 0
+        }
+      ]
+    })
+    expect(withNotes.midiClips[0]?.notes).toHaveLength(2)
+    const deleteNotes: ProjectCommand = {
+      type: "delete-midi-notes",
+      clipId: "clip-1",
+      noteIds: ["note-2"]
+    }
+    const withoutNote = applyToGraph(withNotes, deleteNotes)
+    expect(withoutNote.midiClips[0]?.notes.map((note) => note.id)).toEqual(["note-1"])
+    expect(applyToGraph(withoutNote, inverseFor(withNotes, deleteNotes))).toEqual(withNotes)
+
+    const moved = applyToGraph(before, {
+      type: "move-midi-clip",
+      clipId: "clip-1",
+      trackId: "track:instrument-1",
+      startTick: 480
+    })
+    expect(moved.midiClips[0]?.startTick).toBe(480)
+
+    const source = {
+      id: "source-1",
+      name: "Source",
+      contentHash: "hash",
+      rawBytes: new Uint8Array()
+    }
+    expect(applyToGraph(before, { type: "delete-midi-source", source })).toEqual(before)
+    expect(inverseFor(before, { type: "delete-midi-source", source })).toEqual({
+      type: "create-midi-source",
+      source
+    })
+
+    const deleteClip: ProjectCommand = { type: "delete-midi-clip", clipId: "clip-1" }
+    const withoutClip = applyToGraph(before, deleteClip)
+    expect(withoutClip.midiClips).toEqual([])
+    expect(applyToGraph(withoutClip, inverseFor(before, deleteClip))).toEqual(before)
+  })
+
+  it("classifies realtime parameter patches and deleted channel ids", () => {
+    expect(
+      onlyRealtimeParameters({
+        type: "update-channel",
+        channelId: "instrument-1",
+        patch: { gainDb: -3, pan: 0.1 }
+      })
+    ).toBe(true)
+    expect(
+      onlyRealtimeParameters({
+        type: "update-channel",
+        channelId: "instrument-1",
+        patch: { name: "Lead" }
+      })
+    ).toBe(false)
+    expect(
+      onlyRealtimeParameters({
+        type: "batch",
+        commands: [
+          { type: "replace-key-signature-map", events: [{ tick: 0, fifths: 0, mode: "major" }] },
+          { type: "update-send", sendId: "send", patch: { levelDb: -6 } }
+        ]
+      })
+    ).toBe(true)
+    expect(
+      onlyRealtimeParameters({
+        type: "create-send",
+        send: {
+          id: "send",
+          sourceChannelId: "instrument-1",
+          targetBus: 1,
+          sortOrder: 0,
+          enabled: true,
+          tap: "post",
+          levelDb: 0
+        }
+      })
+    ).toBe(false)
+
+    const value = graph()
+    expect([
+      ...deletedChannelIds(value, { type: "delete-track", trackId: "track:instrument-1" })
+    ]).toEqual(["instrument-1"])
+    expect([...deletedChannelIds(value, { type: "delete-channel", channelId: "output" })]).toEqual([
+      "output"
+    ])
+    expect(
+      [
+        ...deletedChannelIds(value, {
+          type: "batch",
+          commands: [
+            { type: "delete-track", trackId: "track:instrument-1" },
+            { type: "update-channel", channelId: "master", patch: { gainDb: -1 } }
+          ]
+        })
+      ].sort()
+    ).toEqual(["instrument-1"])
+    expect([
+      ...deletedChannelIds(value, { type: "update-channel", channelId: "master", patch: {} })
+    ]).toEqual([])
+  })
+})
+
+describe("project graph validation and command guards", () => {
+  it("validates finite ranges and rejects unknown lookup targets", () => {
+    expect(() => finiteRange(0.5, 0, 1, "Sample")).not.toThrow()
+    expect(() => finiteRange(Number.NaN, 0, 1, "Sample")).toThrow("Sample must be between")
+    expect(() => finiteRange(2, 0, 1, "Sample")).toThrow("Sample must be between")
+
+    const value = graph()
+    expect(() =>
+      applyToGraph(value, { type: "update-track", trackId: "missing", patch: { sortOrder: 1 } })
+    ).toThrow("Project track 'missing' was not found")
+    expect(() =>
+      applyToGraph(value, { type: "update-channel", channelId: "missing", patch: { gainDb: 0 } })
+    ).toThrow("Mixer channel 'missing' was not found")
+    expect(() =>
+      applyToGraph(value, { type: "update-send", sendId: "missing", patch: { levelDb: 0 } })
+    ).toThrow("Mixer send 'missing' was not found")
+    expect(() =>
+      applyToGraph(value, {
+        type: "move-audio-clip",
+        clipId: "missing",
+        trackId: "track:instrument-1",
+        startFrame: 0
+      })
+    ).toThrow("Timeline clip 'missing' was not found")
+    expect(() =>
+      applyToGraph(value, {
+        type: "update-plugin",
+        pluginId: "missing",
+        patch: { enabled: false }
+      })
+    ).toThrow("Plugin instance 'missing' was not found")
+    expect(() =>
+      applyToGraph(value, {
+        type: "move-midi-clip",
+        clipId: "missing",
+        trackId: "track:instrument-1",
+        startTick: 0
+      })
+    ).toThrow("MIDI clip 'missing' was not found")
+    expect(() =>
+      applyToGraph(value, {
+        type: "update-midi-notes",
+        clipId: "clip-1",
+        updates: [{ noteId: "missing", patch: { key: 1 } }]
+      })
+    ).toThrow("MIDI note 'missing' was not found")
+    expect(() => inverseFor(value, { type: "delete-send", sendId: "missing" })).toThrow(
+      "Mixer send 'missing' was not found"
+    )
+    expect(cloneGraph(value)).toEqual(value)
+    expect(cloneGraph(value)).not.toBe(value)
+  })
+
+  it("rejects deleting master, system, track-owned, and still-routed output channels", () => {
+    const value = graph()
+    expect(() => applyToGraph(value, { type: "delete-channel", channelId: "master" })).toThrow(
+      "Master cannot be deleted"
+    )
+    expect(() =>
+      applyToGraph(value, { type: "delete-channel", channelId: "instrument-1" })
+    ).toThrow("Track-owned channels must be deleted through delete-track")
+
+    const withSystem = graph()
+    withSystem.channels.push({
+      ...structuredClone(withSystem.channels[0]!),
+      id: "metronome",
+      systemRole: "metronome",
+      name: "Metronome",
+      midiInput: undefined
+    })
+    expect(() =>
+      applyToGraph(withSystem, { type: "delete-channel", channelId: "metronome" })
+    ).toThrow("System channels cannot be deleted")
+    expect(() =>
+      inverseFor(withSystem, { type: "delete-channel", channelId: "metronome" })
+    ).toThrow("System channels cannot be deleted")
+
+    expect(() => applyToGraph(value, { type: "delete-channel", channelId: "output" })).toThrow(
+      "An Output must be unused before it can be deleted"
+    )
+    expect(() => inverseFor(value, { type: "delete-channel", channelId: "instrument-1" })).toThrow(
+      "Track-owned channels must be deleted through delete-track"
+    )
+    expect(() => inverseFor(value, { type: "delete-channel", channelId: "master" })).toThrow(
+      "Master cannot be deleted"
+    )
+  })
+
+  it("rejects moving an instrument into an occupied slot and replacing a missing plugin", () => {
+    const instrumentDescriptor: PluginDescriptor = {
+      ...effectDescriptor,
+      classId: "instrument-class",
+      kind: "instrument",
+      name: "Synth",
+      supportedAudioModes: ["stereo"]
+    }
+    const before = graph()
+    const withInstrument = applyToGraph(before, {
+      type: "create-plugin",
+      plugin: plugin({
+        id: "inst-1",
+        role: "instrument",
+        slotOrder: 0,
+        classId: instrumentDescriptor.classId,
+        descriptor: instrumentDescriptor,
+        audioMode: "stereo"
+      })
+    })
+    const second = applyToGraph(withInstrument, {
+      type: "create-plugin",
+      plugin: plugin({
+        id: "inst-2",
+        channelId: "master",
+        role: "instrument",
+        slotOrder: 0,
+        classId: instrumentDescriptor.classId,
+        descriptor: instrumentDescriptor,
+        audioMode: "stereo"
+      })
+    })
+    expect(() =>
+      applyToGraph(second, {
+        type: "move-plugin",
+        pluginId: "inst-2",
+        channelId: "instrument-1",
+        role: "instrument",
+        slotOrder: 0
+      })
+    ).toThrow("Replace the assigned instrument instead of moving into an occupied slot")
+
+    expect(() =>
+      applyToGraph(before, {
+        type: "replace-plugin",
+        pluginId: "missing",
+        plugin: plugin()
+      })
+    ).toThrow("Plugin instance 'missing' was not found")
+  })
+
+  it("moves insert plugins across channels and reindexes source slots", () => {
+    const before = graph()
+    before.tracks.push({ id: "track:instrument-2", channelId: "instrument-2", sortOrder: 1 })
+    before.channels.push({
+      ...structuredClone(before.channels[0]!),
+      id: "instrument-2",
+      name: "Instrument 2",
+      sortOrder: 1
+    })
+    const withPlugins = applyToGraph(
+      applyToGraph(before, {
+        type: "create-plugin",
+        plugin: plugin({ id: "fx-a", slotOrder: 0 })
+      }),
+      {
+        type: "create-plugin",
+        plugin: plugin({ id: "fx-b", slotOrder: 1 })
+      }
+    )
+    const moved = applyToGraph(withPlugins, {
+      type: "move-plugin",
+      pluginId: "fx-a",
+      channelId: "instrument-2",
+      role: "insert",
+      slotOrder: 0
+    })
+    expect(moved.plugins.find((candidate) => candidate.id === "fx-a")).toMatchObject({
+      channelId: "instrument-2",
+      slotOrder: 0
+    })
+    expect(moved.plugins.find((candidate) => candidate.id === "fx-b")?.slotOrder).toBe(0)
+    expect(
+      applyToGraph(
+        moved,
+        inverseFor(withPlugins, {
+          type: "move-plugin",
+          pluginId: "fx-a",
+          channelId: "instrument-2",
+          role: "insert",
+          slotOrder: 0
+        })
+      )
+    ).toEqual(withPlugins)
+  })
+
+  it("deletes unused output channels with fallback rewiring and invertible restore", () => {
+    const before = graph()
+    const spareOutput = {
+      ...structuredClone(before.channels.find((channel) => channel.id === "output")!),
+      id: "output-2",
+      name: "Output 2",
+      hardwareOutputChannels: [3, 4] as [number, number],
+      sortOrder: 1
+    }
+    const withSpare = applyToGraph(before, { type: "create-channel", channel: spareOutput })
+    const deleted = applyToGraph(withSpare, { type: "delete-channel", channelId: "output-2" })
+    expect(deleted.channels.some((channel) => channel.id === "output-2")).toBe(false)
+    expect(
+      applyToGraph(
+        deleted,
+        inverseFor(withSpare, { type: "delete-channel", channelId: "output-2" })
+      )
+    ).toEqual(withSpare)
+  })
+
+  it("covers delete-track inverse restoration of dependent graph entities", () => {
+    const before = graph()
+    before.tracks.push({ id: "track:audio-1", channelId: "audio-1", sortOrder: 1 })
+    before.channels.push({
+      ...structuredClone(before.channels[0]!),
+      id: "audio-1",
+      kind: "audio",
+      name: "Audio",
+      inputSource: "hardware",
+      inputFormat: "stereo",
+      inputChannels: [1, 2],
+      midiInput: undefined
+    })
+    before.audioClips.push({
+      id: "audio-clip-1",
+      assetId: "asset-1",
+      trackId: "track:audio-1",
+      name: "Take",
+      startFrame: 0,
+      sourceOffsetFrames: 0,
+      lengthFrames: 480,
+      assetSampleRate: 48_000,
+      assetChannels: 2
+    })
+    before.sends.push({
+      id: "send-1",
+      sourceChannelId: "audio-1",
+      targetChannelId: "output",
+      targetBus: null,
+      sortOrder: 0,
+      enabled: true,
+      tap: "post",
+      levelDb: -6
+    })
+    before.plugins.push(plugin({ id: "fx-1", channelId: "audio-1" }))
+    const deleteTrack: ProjectCommand = { type: "delete-track", trackId: "track:audio-1" }
+    const deleted = applyToGraph(before, deleteTrack)
+    expect(deleted.tracks.some((track) => track.id === "track:audio-1")).toBe(false)
+    const restored = applyToGraph(deleted, inverseFor(before, deleteTrack))
+    expect(restored.audioClips).toEqual(before.audioClips)
+    expect(restored.sends).toEqual(before.sends)
+    expect(restored.plugins).toEqual(before.plugins)
+  })
+
+  it("validates track, channel, send, plugin, tempo, and routing constraints", () => {
+    const duplicateTrack = graph()
+    duplicateTrack.tracks.push({ ...duplicateTrack.tracks[0]! })
+    expect(() => validateGraph(duplicateTrack)).toThrow("Project track IDs must be unique")
+
+    const longTrack = graph()
+    longTrack.tracks[0]!.id = "t".repeat(65)
+    expect(() => validateGraph(longTrack)).toThrow("at most 64 UTF-8 bytes")
+
+    const badOrder = graph()
+    badOrder.tracks[0]!.sortOrder = -1
+    expect(() => validateGraph(badOrder)).toThrow("non-negative safe integer")
+
+    const badGain = graph()
+    badGain.channels[0]!.gainDb = 100
+    expect(() => validateGraph(badGain)).toThrow("Channel gain")
+
+    const audio = graph()
+    audio.tracks.push({ id: "track:audio", channelId: "audio", sortOrder: 1 })
+    audio.channels.push({
+      ...structuredClone(audio.channels[0]!),
+      id: "audio",
+      kind: "audio",
+      name: "Audio",
+      inputSource: "hardware",
+      inputFormat: "stereo",
+      inputChannels: [1],
+      midiInput: undefined
+    })
+    expect(() => validateGraph(audio)).toThrow("input mappings must match their input format")
+
+    const soloMaster = graph()
+    soloMaster.channels.find((channel) => channel.kind === "master")!.soloed = true
+    expect(() => validateGraph(soloMaster)).toThrow("Master cannot be soloed")
+
+    const noOutput = graph()
+    noOutput.channels = noOutput.channels.filter((channel) => channel.kind !== "output")
+    noOutput.channels[0]!.outputChannelId = null
+    noOutput.channels[0]!.outputBus = 1
+    expect(() => validateGraph(noOutput)).toThrow("at least one hardware Output")
+
+    const duplicateOutputMap = graph()
+    duplicateOutputMap.channels.push({
+      ...structuredClone(duplicateOutputMap.channels.find((channel) => channel.id === "output")!),
+      id: "output-2",
+      hardwareOutputChannels: [1, 2],
+      sortOrder: 1
+    })
+    expect(() => validateGraph(duplicateOutputMap)).toThrow(
+      "Hardware Output channel pairs must be unique"
+    )
+
+    const badSend = graph()
+    badSend.sends.push({
+      id: "send-1",
+      sourceChannelId: "master",
+      targetBus: 1,
+      targetChannelId: null,
+      sortOrder: 0,
+      enabled: true,
+      tap: "post",
+      levelDb: 0
+    })
+    expect(() => validateGraph(badSend)).toThrow(
+      "Only Audio, Instrument, and Aux channels can source sends"
+    )
+
+    const badPlugin = graph()
+    badPlugin.plugins.push(
+      plugin({
+        role: "instrument",
+        descriptor: { ...effectDescriptor, kind: "effect" },
+        classId: effectDescriptor.classId
+      })
+    )
+    expect(() => validateGraph(badPlugin)).toThrow(
+      "An instrument slot requires an instrument plugin on an Instrument track"
+    )
+
+    const badTempo = graph()
+    ;(badTempo.tempoMap as { ticksPerQuarter: number }).ticksPerQuarter = 480
+    expect(() => validateGraph(badTempo)).toThrow("960 PPQ")
+
+    const badKey = graph()
+    badKey.keySignatureEvents = [{ tick: 10, fifths: 0, mode: "major" }]
+    expect(() => validateGraph(badKey)).toThrow("Key-signature maps require an event at tick 0")
+
+    const midiOnAudio = graph()
+    midiOnAudio.tracks.push({ id: "track:audio", channelId: "audio", sortOrder: 1 })
+    midiOnAudio.channels.push({
+      ...structuredClone(midiOnAudio.channels[0]!),
+      id: "audio",
+      kind: "audio",
+      name: "Audio",
+      inputSource: "hardware",
+      inputFormat: "stereo",
+      inputChannels: [1, 2],
+      midiInput: undefined
+    })
+    midiOnAudio.midiClips[0]!.trackId = "track:audio"
+    expect(() => validateGraph(midiOnAudio)).toThrow("MIDI clips must belong to Instrument tracks")
+
+    const feedback = graph()
+    feedback.channels.push({
+      ...structuredClone(feedback.channels[0]!),
+      id: "aux-1",
+      kind: "aux",
+      name: "Aux",
+      inputSource: "bus",
+      inputFormat: "mono",
+      inputChannels: [1],
+      outputBus: 1,
+      outputChannelId: null,
+      midiInput: undefined
+    })
+    // Aux feeds BUS 1 and also consumes BUS 1.
+    expect(() => validateGraph(feedback)).toThrow("feedback loop")
+  })
+
+  it("validates instrument MIDI routes and audio clip ownership", () => {
+    const badMidi = graph()
+    badMidi.channels[0]!.midiInput = { portId: "port", portName: null, channel: 0 }
+    expect(() => validateGraph(badMidi)).toThrow(
+      "Instrument MIDI routes require a valid port and channel"
+    )
+
+    const armedMaster = graph()
+    armedMaster.channels.find((channel) => channel.kind === "master")!.recordArmed = true
+    expect(() => validateGraph(armedMaster)).toThrow(
+      "Only Audio and ordinary Instrument tracks can arm recording"
+    )
+
+    const value = graph()
+    value.tracks.push({ id: "track:audio", channelId: "audio", sortOrder: 1 })
+    value.channels.push({
+      ...structuredClone(value.channels[0]!),
+      id: "audio",
+      kind: "audio",
+      name: "Audio",
+      inputSource: "hardware",
+      inputFormat: "stereo",
+      inputChannels: [1, 2],
+      midiInput: undefined
+    })
+    value.audioClips.push({
+      id: "clip",
+      assetId: "asset",
+      trackId: "track:instrument-1",
+      name: "Misplaced",
+      startFrame: 0,
+      sourceOffsetFrames: 0,
+      lengthFrames: 100,
+      assetSampleRate: 48_000,
+      assetChannels: 2
+    })
+    expect(() => validateGraph(value)).toThrow("Timeline clips must belong to audio tracks")
+
+    const badClipFrames = graph()
+    badClipFrames.tracks.push({ id: "track:audio", channelId: "audio", sortOrder: 1 })
+    badClipFrames.channels.push({
+      ...structuredClone(badClipFrames.channels[0]!),
+      id: "audio",
+      kind: "audio",
+      name: "Audio",
+      inputSource: "hardware",
+      inputFormat: "stereo",
+      inputChannels: [1, 2],
+      midiInput: undefined
+    })
+    badClipFrames.audioClips.push({
+      id: "clip",
+      assetId: "asset",
+      trackId: "track:audio",
+      name: "Bad",
+      startFrame: -1,
+      sourceOffsetFrames: 0,
+      lengthFrames: 100,
+      assetSampleRate: 48_000,
+      assetChannels: 2
+    })
+    expect(() => validateGraph(badClipFrames)).toThrow(
+      "Clip start frame must be a non-negative safe integer"
+    )
+  })
+
+  it("treats midi source commands as no-ops while preserving invertibility", () => {
+    const before = graph()
+    const source = {
+      id: "source-2",
+      name: "Source",
+      contentHash: "hash",
+      rawBytes: new Uint8Array([1])
+    }
+    expect(applyToGraph(before, { type: "create-midi-source", source })).toEqual(before)
+    expect(inverseFor(before, { type: "create-midi-source", source })).toEqual({
+      type: "delete-midi-source",
+      source
+    })
   })
 })

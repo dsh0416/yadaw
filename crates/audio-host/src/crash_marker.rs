@@ -226,17 +226,31 @@ unsafe extern "C" {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
 
-    #[test]
-    fn opens_a_marker_while_an_existing_view_is_mapped() {
-        let path = std::env::temp_dir().join(format!(
-            "yadaw-crash-marker-mapped-{}-{}",
+    // Process-global MARKER must be exercised serially across these tests.
+    static CRASH_MARKER_TEST_LOCK: Mutex<()> = Mutex::new(());
+
+    fn marker_path(label: &str) -> std::path::PathBuf {
+        std::env::temp_dir().join(format!(
+            "yadaw-crash-marker-{label}-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .expect("system clock must follow the Unix epoch")
                 .as_nanos()
-        ));
+        ))
+    }
+
+    fn ensure_initialized(path: &Path) {
+        if MARKER.get().is_none() {
+            initialize(path).expect("crash marker must initialize once per process");
+        }
+    }
+
+    #[test]
+    fn opens_a_marker_while_an_existing_view_is_mapped() {
+        let path = marker_path("mapped");
         let original = open_marker_file(&path).expect("test marker must open");
         let mapping = map_file(&original).expect("test marker must map");
 
@@ -248,5 +262,90 @@ mod tests {
         drop(mapping);
         drop(original);
         std::fs::remove_file(path).expect("test marker must be removable after unmapping");
+    }
+
+    #[test]
+    fn open_grows_short_file_to_marker_bytes() {
+        let path = marker_path("short");
+        std::fs::write(&path, [0_u8; 8]).expect("short marker fixture must write");
+        assert_eq!(std::fs::metadata(&path).unwrap().len(), 8);
+
+        let file = open_marker_file(&path).expect("short marker must open and grow");
+        assert_eq!(file.metadata().unwrap().len(), MARKER_BYTES);
+        drop(file);
+        assert_eq!(std::fs::metadata(&path).unwrap().len(), MARKER_BYTES);
+        std::fs::remove_file(path).expect("short marker must be removable");
+    }
+
+    #[test]
+    fn mark_and_clean_without_initialize_are_noops() {
+        let _guard = CRASH_MARKER_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if MARKER.get().is_some() {
+            // Another test already claimed the process-global marker.
+            return;
+        }
+        mark(11, 2, STAGE_PROCESS);
+        clean(11);
+        assert!(MARKER.get().is_none());
+    }
+
+    #[test]
+    fn initialize_mark_and_clean_write_cycle() {
+        let _guard = CRASH_MARKER_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let path = marker_path("lifecycle");
+        let initialized_here = MARKER.get().is_none();
+        if initialized_here {
+            // Cover the uninitialized no-op path before claiming the global marker.
+            mark(1, 0, STAGE_PROCESS);
+            clean(1);
+            assert!(MARKER.get().is_none());
+        }
+        ensure_initialized(&path);
+
+        let marker = MARKER.get().expect("marker must exist after initialize");
+        mark(9, 3, STAGE_PROCESS);
+        assert_eq!(marker.atomic(0).load(Ordering::Acquire), MAGIC);
+        assert_eq!(marker.atomic(8).load(Ordering::Acquire), 9);
+        assert_eq!(marker.atomic(16).load(Ordering::Acquire), 3);
+        assert_eq!(marker.atomic(24).load(Ordering::Acquire), STAGE_PROCESS);
+        assert_eq!(
+            marker.atomic(32).load(Ordering::Acquire),
+            MAGIC ^ 9 ^ 3 ^ STAGE_PROCESS ^ CHECKSUM_SALT
+        );
+
+        clean(9);
+        assert_eq!(marker.atomic(8).load(Ordering::Acquire), 9);
+        assert_eq!(marker.atomic(16).load(Ordering::Acquire), u64::MAX);
+        assert_eq!(marker.atomic(24).load(Ordering::Acquire), STAGE_CLEAN);
+        assert_eq!(
+            marker.atomic(32).load(Ordering::Acquire),
+            MAGIC ^ 9 ^ u64::MAX ^ STAGE_CLEAN ^ CHECKSUM_SALT
+        );
+
+        if initialized_here {
+            // Shared mapping should also be visible via a fresh file read of the
+            // path that backs this process-global marker.
+            let bytes = std::fs::read(&path).expect("marker file must be readable");
+            assert!(bytes.len() >= MARKER_BYTES as usize);
+            let stage = u64::from_le_bytes(bytes[24..32].try_into().unwrap());
+            assert_eq!(stage, STAGE_CLEAN);
+            let _ = std::fs::remove_file(path);
+        }
+    }
+
+    #[test]
+    fn double_initialize_returns_already_exists() {
+        let _guard = CRASH_MARKER_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let path = marker_path("double");
+        ensure_initialized(&path);
+        let error =
+            initialize(&marker_path("double-again")).expect_err("second initialize must fail");
+        assert_eq!(error.kind(), io::ErrorKind::AlreadyExists);
     }
 }

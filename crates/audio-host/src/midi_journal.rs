@@ -222,6 +222,7 @@ mod tests {
     use super::*;
     use std::{
         fs::OpenOptions,
+        io::Write,
         time::{SystemTime, UNIX_EPOCH},
     };
 
@@ -236,23 +237,50 @@ mod tests {
         ))
     }
 
-    #[test]
-    fn round_trips_checkpoints_and_raw_timestamps() {
-        let path = path("journal-round-trip");
-        let header = MidiJournalHeader {
+    fn sample_header() -> MidiJournalHeader {
+        MidiJournalHeader {
             source_id: "source".to_owned(),
             clip_id: "clip".to_owned(),
             track_id: "track".to_owned(),
-        };
+        }
+    }
+
+    fn sample_record(
+        timestamp_micros: u64,
+        transport_frame: Option<u64>,
+        transport_tick: Option<u64>,
+        bytes: Vec<u8>,
+    ) -> MidiJournalRecord {
+        MidiJournalRecord {
+            timestamp_micros,
+            transport_frame,
+            transport_tick,
+            port_key: 7,
+            bytes,
+        }
+    }
+
+    fn append_raw_tail(path: &Path, bytes: &[u8]) {
+        OpenOptions::new()
+            .append(true)
+            .open(path)
+            .unwrap()
+            .write_all(bytes)
+            .unwrap();
+    }
+
+    #[test]
+    fn round_trips_checkpoints_and_raw_timestamps() {
+        let path = path("journal-round-trip");
+        let header = sample_header();
         let mut writer = MidiJournalWriter::create(&path, &header).unwrap();
         writer
-            .append(&MidiJournalRecord {
-                timestamp_micros: 42,
-                transport_frame: Some(480),
-                transport_tick: Some(960),
-                port_key: 7,
-                bytes: vec![0x90, 60, 100],
-            })
+            .append(&sample_record(
+                42,
+                Some(480),
+                Some(960),
+                vec![0x90, 60, 100],
+            ))
             .unwrap();
         writer.flush().unwrap();
         drop(writer);
@@ -266,31 +294,266 @@ mod tests {
     }
 
     #[test]
+    fn round_trips_multiple_records_with_none_checkpoints() {
+        let path = path("journal-multi-none");
+        let header = sample_header();
+        let mut writer = MidiJournalWriter::create(&path, &header).unwrap();
+        let first = sample_record(10, None, None, vec![0x90, 60, 100]);
+        let second = sample_record(20, None, None, vec![0x80, 60, 0]);
+        let third = sample_record(30, None, None, vec![0xb0, 1, 64]);
+        writer.append(&first).unwrap();
+        writer.append(&second).unwrap();
+        writer.append(&third).unwrap();
+        writer.flush().unwrap();
+        drop(writer);
+
+        let recovered = recover_midi_journal(&path).unwrap();
+        assert_eq!(recovered.header, header);
+        assert!(!recovered.ignored_corrupt_tail);
+        assert_eq!(recovered.records, vec![first, second, third]);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
     fn ignores_a_truncated_or_corrupt_tail() {
         let path = path("journal-tail");
-        let header = MidiJournalHeader {
-            source_id: "source".to_owned(),
-            clip_id: "clip".to_owned(),
-            track_id: "track".to_owned(),
-        };
+        let header = sample_header();
         let mut writer = MidiJournalWriter::create(&path, &header).unwrap();
         writer
-            .append(&MidiJournalRecord {
-                timestamp_micros: 1,
-                transport_frame: None,
-                transport_tick: None,
-                port_key: 2,
-                bytes: vec![0xb0, 1, 64],
-            })
+            .append(&sample_record(1, None, None, vec![0xb0, 1, 64]))
             .unwrap();
         writer.flush().unwrap();
         drop(writer);
-        OpenOptions::new()
-            .append(true)
-            .open(&path)
-            .unwrap()
-            .write_all(&[20, 0, 0, 0, 1, 2, 3])
+        append_raw_tail(&path, &[20, 0, 0, 0, 1, 2, 3]);
+
+        let recovered = recover_midi_journal(&path).unwrap();
+        assert_eq!(recovered.records.len(), 1);
+        assert!(recovered.ignored_corrupt_tail);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn rejects_invalid_magic() {
+        let path = path("journal-bad-magic");
+        std::fs::write(&path, b"BADMAGIC\x01\x00").unwrap();
+        let error = recover_midi_journal(&path).unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert!(error.to_string().contains("magic"));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn rejects_unsupported_version() {
+        let path = path("journal-bad-version");
+        let mut file = File::create(&path).unwrap();
+        file.write_all(MAGIC).unwrap();
+        file.write_all(&2_u16.to_le_bytes()).unwrap();
+        write_string(&mut file, "source").unwrap();
+        write_string(&mut file, "clip").unwrap();
+        write_string(&mut file, "track").unwrap();
+        drop(file);
+
+        let error = recover_midi_journal(&path).unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert!(error.to_string().contains("version"));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn rejects_invalid_utf8_id() {
+        let path = path("journal-bad-utf8");
+        let mut file = File::create(&path).unwrap();
+        file.write_all(MAGIC).unwrap();
+        file.write_all(&VERSION.to_le_bytes()).unwrap();
+        file.write_all(&2_u16.to_le_bytes()).unwrap();
+        file.write_all(&[0xff, 0xff]).unwrap();
+        drop(file);
+
+        let error = recover_midi_journal(&path).unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert!(error.to_string().contains("UTF-8"));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn rejects_id_that_is_too_long_on_write() {
+        let path = path("journal-long-id");
+        let too_long = "x".repeat(usize::from(u16::MAX) + 1);
+        let header = MidiJournalHeader {
+            source_id: too_long,
+            clip_id: "clip".to_owned(),
+            track_id: "track".to_owned(),
+        };
+        let error = match MidiJournalWriter::create(&path, &header) {
+            Ok(_) => panic!("oversized journal ID must fail"),
+            Err(error) => error,
+        };
+        assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+        assert!(error.to_string().contains("too long"));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn rejects_record_that_exceeds_journal_limit() {
+        let path = path("journal-huge-record");
+        let header = sample_header();
+        let mut writer = MidiJournalWriter::create(&path, &header).unwrap();
+        let error = writer
+            .append(&sample_record(1, None, None, vec![0; MAX_RECORD_BYTES]))
+            .unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+        assert!(error.to_string().contains("exceeds journal limit"));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn corrupt_checksum_mid_stream_keeps_prior_records() {
+        let path = path("journal-bad-checksum");
+        let header = sample_header();
+        let mut writer = MidiJournalWriter::create(&path, &header).unwrap();
+        let first = sample_record(1, Some(10), Some(20), vec![0x90, 60, 100]);
+        let second = sample_record(2, None, None, vec![0x80, 60, 0]);
+        writer.append(&first).unwrap();
+        writer.append(&second).unwrap();
+        writer.flush().unwrap();
+        drop(writer);
+
+        let mut payload = Vec::new();
+        payload.extend_from_slice(&3_u64.to_le_bytes());
+        encode_checkpoint(&mut payload, None);
+        encode_checkpoint(&mut payload, None);
+        payload.extend_from_slice(&9_u64.to_le_bytes());
+        payload.extend_from_slice(&3_u32.to_le_bytes());
+        payload.extend_from_slice(&[0x90, 61, 100]);
+        let mut tail = Vec::new();
+        tail.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+        tail.extend_from_slice(&0xdead_beef_u32.to_le_bytes());
+        tail.extend_from_slice(&payload);
+        tail.extend_from_slice(&[1, 2, 3, 4]);
+        append_raw_tail(&path, &tail);
+
+        let recovered = recover_midi_journal(&path).unwrap();
+        assert_eq!(recovered.records, vec![first, second]);
+        assert!(recovered.ignored_corrupt_tail);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn zero_length_prefix_is_treated_as_corrupt_tail() {
+        let path = path("journal-zero-len");
+        let header = sample_header();
+        let mut writer = MidiJournalWriter::create(&path, &header).unwrap();
+        writer
+            .append(&sample_record(1, None, None, vec![0x90, 60, 100]))
             .unwrap();
+        writer.flush().unwrap();
+        drop(writer);
+        append_raw_tail(&path, &[0, 0, 0, 0, 0, 0, 0, 0]);
+
+        let recovered = recover_midi_journal(&path).unwrap();
+        assert_eq!(recovered.records.len(), 1);
+        assert!(recovered.ignored_corrupt_tail);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn oversized_length_prefix_is_treated_as_corrupt_tail() {
+        let path = path("journal-oversize-len");
+        let header = sample_header();
+        let mut writer = MidiJournalWriter::create(&path, &header).unwrap();
+        writer
+            .append(&sample_record(1, None, None, vec![0x90, 60, 100]))
+            .unwrap();
+        writer.flush().unwrap();
+        drop(writer);
+        let mut tail = Vec::new();
+        tail.extend_from_slice(&((MAX_RECORD_BYTES as u32) + 1).to_le_bytes());
+        tail.extend_from_slice(&0_u32.to_le_bytes());
+        append_raw_tail(&path, &tail);
+
+        let recovered = recover_midi_journal(&path).unwrap();
+        assert_eq!(recovered.records.len(), 1);
+        assert!(recovered.ignored_corrupt_tail);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn decode_record_rejects_truncated_payload() {
+        assert!(decode_record(&[]).is_none());
+        assert!(decode_record(&[0; 37]).is_none());
+
+        let mut payload = Vec::new();
+        payload.extend_from_slice(&1_u64.to_le_bytes());
+        encode_checkpoint(&mut payload, None);
+        encode_checkpoint(&mut payload, None);
+        payload.extend_from_slice(&2_u64.to_le_bytes());
+        payload.extend_from_slice(&8_u32.to_le_bytes());
+        payload.extend_from_slice(&[1, 2, 3]);
+        assert!(decode_record(&payload).is_none());
+    }
+
+    #[test]
+    fn decode_record_rejects_trailing_bytes_after_midi_payload() {
+        let mut payload = Vec::new();
+        payload.extend_from_slice(&1_u64.to_le_bytes());
+        encode_checkpoint(&mut payload, Some(5));
+        encode_checkpoint(&mut payload, Some(6));
+        payload.extend_from_slice(&2_u64.to_le_bytes());
+        payload.extend_from_slice(&3_u32.to_le_bytes());
+        payload.extend_from_slice(&[0x90, 60, 100, 0xff]);
+        assert!(decode_record(&payload).is_none());
+    }
+
+    #[test]
+    fn truncated_payload_after_valid_prefix_is_corrupt_tail() {
+        let path = path("journal-truncated-payload");
+        let header = sample_header();
+        let mut writer = MidiJournalWriter::create(&path, &header).unwrap();
+        writer
+            .append(&sample_record(1, None, None, vec![0x90, 60, 100]))
+            .unwrap();
+        writer.flush().unwrap();
+        drop(writer);
+
+        let mut payload = Vec::new();
+        payload.extend_from_slice(&2_u64.to_le_bytes());
+        encode_checkpoint(&mut payload, None);
+        encode_checkpoint(&mut payload, None);
+        payload.extend_from_slice(&3_u64.to_le_bytes());
+        payload.extend_from_slice(&3_u32.to_le_bytes());
+        payload.extend_from_slice(&[0x90, 60]);
+        // Claim a longer length than the bytes we append so recovery hits EOF.
+        let claimed_len = (payload.len() + 8) as u32;
+        let mut tail = Vec::new();
+        tail.extend_from_slice(&claimed_len.to_le_bytes());
+        tail.extend_from_slice(&checksum(&payload).to_le_bytes());
+        tail.extend_from_slice(&payload);
+        append_raw_tail(&path, &tail);
+
+        let recovered = recover_midi_journal(&path).unwrap();
+        assert_eq!(recovered.records.len(), 1);
+        assert!(recovered.ignored_corrupt_tail);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn decode_failure_after_checksum_match_is_corrupt_tail() {
+        let path = path("journal-decode-fail");
+        let header = sample_header();
+        let mut writer = MidiJournalWriter::create(&path, &header).unwrap();
+        writer
+            .append(&sample_record(1, None, None, vec![0x90, 60, 100]))
+            .unwrap();
+        writer.flush().unwrap();
+        drop(writer);
+
+        // Valid framing and checksum, but payload is too short for decode_record.
+        let payload = vec![0_u8; 20];
+        let mut tail = Vec::new();
+        tail.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+        tail.extend_from_slice(&checksum(&payload).to_le_bytes());
+        tail.extend_from_slice(&payload);
+        append_raw_tail(&path, &tail);
 
         let recovered = recover_midi_journal(&path).unwrap();
         assert_eq!(recovered.records.len(), 1);

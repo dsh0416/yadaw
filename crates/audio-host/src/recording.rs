@@ -557,29 +557,287 @@ pub fn write_deterministic_test_recording(
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        path::PathBuf,
+        time::{SystemTime, UNIX_EPOCH},
+    };
+
     use super::*;
+
+    const TRANSPORT_RECORDING: u32 = 2;
+    const TRANSPORT_COUNTING_IN: u32 = 4;
+
+    fn temporary_path(label: &str) -> PathBuf {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time moves forward")
+            .as_nanos();
+        std::env::temp_dir().join(format!(
+            "yadaw-audio-host-{label}-{}-{nonce}.bwf",
+            std::process::id()
+        ))
+    }
+
+    fn start_config(path: &std::path::Path) -> NativeRecordingStartConfig {
+        NativeRecordingStartConfig {
+            path: path.to_string_lossy().into_owned(),
+            asset_id: "asset-42".to_owned(),
+            originator: "YADAW test".to_owned(),
+            origination_date: "2026-07-31".to_owned(),
+            origination_time: "16:00:00".to_owned(),
+            time_reference: -7,
+        }
+    }
+
+    fn decode_peaks(bytes: &[u8]) -> Vec<f32> {
+        bytes
+            .chunks_exact(4)
+            .map(|chunk| f32::from_le_bytes(chunk.try_into().unwrap()))
+            .collect()
+    }
+
+    fn recording_controller(
+        sample_rate: u32,
+        channel_count: usize,
+    ) -> (RecorderController, RecordingTap) {
+        RecorderController::new(
+            sample_rate,
+            channel_count,
+            Arc::new(AtomicU32::new(TRANSPORT_RECORDING)),
+            TRANSPORT_RECORDING,
+        )
+    }
+
+    #[test]
+    fn finite_sample_clamps_and_replaces_non_finite_values() {
+        assert_eq!(finite_sample(0.5), 0.5);
+        assert_eq!(finite_sample(2.0), 1.0);
+        assert_eq!(finite_sample(-2.0), -1.0);
+        assert_eq!(finite_sample(f32::NAN), 0.0);
+        assert_eq!(finite_sample(f32::INFINITY), 0.0);
+        assert_eq!(finite_sample(f32::NEG_INFINITY), 0.0);
+    }
+
+    #[test]
+    fn encode_peaks_writes_little_endian_f32_bytes() {
+        assert!(encode_peaks(&[]).is_empty());
+        let encoded = encode_peaks(&[1.0, -0.5]);
+        assert_eq!(encoded.len(), 8);
+        assert_eq!(&encoded[..4], &1.0_f32.to_le_bytes());
+        assert_eq!(&encoded[4..], &(-0.5_f32).to_le_bytes());
+    }
+
+    #[test]
+    fn aggregate_peak_level_reduces_groups_of_four_buckets() {
+        // 4 buckets × 1 channel × (min, max)
+        let source = [
+            -0.1, 0.2, // bucket 0
+            -0.4, 0.1, // bucket 1
+            -0.2, 0.5, // bucket 2
+            -0.3, 0.3, // bucket 3
+        ];
+        let aggregated = aggregate_peak_level(&source, 1);
+        assert_eq!(aggregated, vec![-0.4, 0.5]);
+    }
+
+    #[test]
+    fn aggregate_peak_level_handles_partial_trailing_group() {
+        // 5 buckets → one full group of 4, then a remainder of 1
+        let source = [
+            -0.1, 0.1, -0.2, 0.2, -0.3, 0.3, -0.4, 0.4, // group 0
+            -0.9, 0.8, // group 1 (partial)
+        ];
+        let aggregated = aggregate_peak_level(&source, 1);
+        assert_eq!(aggregated, vec![-0.4, 0.4, -0.9, 0.8]);
+    }
+
+    #[test]
+    fn aggregate_peak_level_preserves_multichannel_extrema() {
+        // 4 buckets × 2 channels × (min, max)
+        let source = [
+            -0.1, 0.2, -0.5, 0.1, // bucket 0 L/R
+            -0.4, 0.1, -0.2, 0.6, // bucket 1
+            -0.2, 0.5, -0.7, 0.3, // bucket 2
+            -0.3, 0.3, -0.1, 0.4, // bucket 3
+        ];
+        let aggregated = aggregate_peak_level(&source, 2);
+        assert_eq!(aggregated, vec![-0.4, 0.5, -0.7, 0.6]);
+    }
+
+    #[test]
+    fn float_format_clamps_channels_and_sets_float_pcm_fields() {
+        let format = float_format(48_000, 2);
+        assert_eq!(format.tag, WAVE_TAG_FLOAT);
+        assert_eq!(format.channel_count, 2);
+        assert_eq!(format.sample_rate, 48_000);
+        assert_eq!(format.bits_per_sample, 32);
+        assert_eq!(format.block_alignment, 8);
+        assert_eq!(format.bytes_per_second, 48_000 * 8);
+        assert!(format.extended_format.is_none());
+
+        let mono = float_format(44_100, 0);
+        assert_eq!(mono.channel_count, 1);
+        assert_eq!(mono.block_alignment, 4);
+    }
+
+    #[test]
+    fn metadata_copies_identity_fields_and_clamps_negative_time_reference() {
+        let path = temporary_path("metadata");
+        let config = start_config(&path);
+        let bext = metadata(&config, 48_000, 2);
+        assert!(bext.description.contains("asset-42"));
+        assert_eq!(bext.originator, "YADAW test");
+        assert_eq!(bext.originator_reference, "asset-42");
+        assert_eq!(bext.origination_date, "2026-07-31");
+        assert_eq!(bext.origination_time, "16:00:00");
+        assert_eq!(bext.time_reference, 0);
+        assert_eq!(bext.version, 1);
+        assert!(bext.coding_history.contains("F=48000"));
+        assert!(bext.coding_history.contains("M=2 channel"));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn live_waveform_sanitizes_samples_and_keeps_partial_bucket() {
+        let mut waveform = LiveWaveform::default();
+        waveform.reset(48_000, 2);
+        let mut samples = vec![0.0_f32; WAVEFORM_BASE_FRAMES * 2];
+        samples[0] = -0.75;
+        samples[1] = 0.5;
+        samples[2] = f32::NAN;
+        samples[3] = f32::INFINITY;
+        samples[(WAVEFORM_BASE_FRAMES - 1) * 2] = 0.25;
+        samples[(WAVEFORM_BASE_FRAMES - 1) * 2 + 1] = -0.25;
+        waveform.push(&samples);
+        // One extra partial bucket frame.
+        waveform.push(&[0.9, -0.9]);
+
+        let snapshot = waveform.snapshot(0, waveform.frame_count, 16);
+        assert_eq!(snapshot.sample_rate, 48_000);
+        assert_eq!(snapshot.channels, 2);
+        assert_eq!(snapshot.frame_count, (WAVEFORM_BASE_FRAMES + 1) as i64);
+        assert_eq!(snapshot.bucket_count, 2);
+        let peaks = decode_peaks(&snapshot.peaks);
+        assert_eq!(peaks.len(), 8);
+        assert_eq!(peaks[0], -0.75);
+        assert_eq!(peaks[1], 0.25);
+        assert_eq!(peaks[2], -0.25);
+        assert_eq!(peaks[3], 0.5);
+        assert_eq!(peaks[4], 0.9);
+        assert_eq!(peaks[5], 0.9);
+        assert_eq!(peaks[6], -0.9);
+        assert_eq!(peaks[7], -0.9);
+    }
+
+    #[test]
+    fn live_waveform_aggregates_when_max_buckets_is_small() {
+        let mut waveform = LiveWaveform::default();
+        waveform.reset(48_000, 1);
+        let frames = WAVEFORM_BASE_FRAMES * WAVEFORM_LEVEL_FACTOR * 2;
+        waveform.push(&vec![0.5_f32; frames]);
+        let snapshot = waveform.snapshot(0, frames, 1);
+        assert_eq!(snapshot.bucket_count, 1);
+        assert!(snapshot.frames_per_bucket >= WAVEFORM_BASE_FRAMES as u32);
+        let peaks = decode_peaks(&snapshot.peaks);
+        assert_eq!(peaks, vec![0.5, 0.5]);
+    }
+
+    #[test]
+    fn recording_tap_ignores_inactive_pushes_and_counts_dropouts() {
+        let (controller, mut tap) = recording_controller(8_000, 2);
+        tap.push(&[0.1, -0.1]);
+        assert_eq!(tap.dropout_frames.load(Ordering::Relaxed), 0);
+
+        // Activate the tap flag without opening a writer so the ring can fill.
+        controller.active.store(true, Ordering::Release);
+        for _ in 0..100_000 {
+            tap.push(&[0.25, -0.25]);
+        }
+        assert!(tap.dropout_frames.load(Ordering::Relaxed) > 0);
+        drop(controller);
+    }
+
+    #[test]
+    fn recorder_controller_writes_and_snapshots_waveform_via_tempdir() {
+        let path = temporary_path("controller");
+        let (controller, mut tap) = recording_controller(8_000, 2);
+        controller
+            .start(start_config(&path))
+            .expect("start recording");
+        for _ in 0..(WAVEFORM_BASE_FRAMES + 8) {
+            tap.push(&[0.5, -0.25]);
+        }
+        // Allow the writer thread to drain the ring.
+        std::thread::sleep(Duration::from_millis(50));
+        let snapshot = controller
+            .waveform_snapshot(0, 10_000, 8)
+            .expect("waveform snapshot");
+        assert_eq!(snapshot.channels, 2);
+        assert!(snapshot.frame_count > 0);
+        assert!(snapshot.bucket_count > 0);
+
+        assert!(
+            controller
+                .waveform_snapshot(-1, 10, 8)
+                .is_err_and(|error| error.to_string().contains("invalid waveform window"))
+        );
+        assert!(controller.waveform_snapshot(10, 9, 8).is_err());
+        assert!(controller.waveform_snapshot(0, 10, 0).is_err());
+
+        let result = controller.stop().expect("stop recording");
+        assert_eq!(result.path, path.to_string_lossy());
+        assert_eq!(result.sample_rate, 8_000);
+        assert_eq!(result.channels, 2);
+        assert!(result.frame_count >= WAVEFORM_BASE_FRAMES as i64);
+        assert!(path.exists());
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn recorder_controller_rejects_double_start_and_stop_without_start() {
+        let path = temporary_path("double-start");
+        let (controller, _tap) = recording_controller(8_000, 1);
+        assert!(controller.stop().is_err());
+        controller.start(start_config(&path)).expect("first start");
+        assert!(controller.start(start_config(&path)).is_err());
+        let _ = controller.stop();
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn write_deterministic_test_recording_rejects_zero_and_writes_bwf() {
+        let path = temporary_path("deterministic");
+        let config = start_config(&path);
+        assert!(write_deterministic_test_recording(config.clone(), 0, 16).is_err());
+        assert!(write_deterministic_test_recording(config.clone(), 8_000, 0).is_err());
+        let result =
+            write_deterministic_test_recording(config, 8_000, 32).expect("deterministic write");
+        assert_eq!(result.frame_count, 32);
+        assert_eq!(result.channels, 2);
+        assert_eq!(result.dropout_frames, 0);
+        assert!(path.exists());
+        let _ = std::fs::remove_file(path);
+    }
 
     #[test]
     fn recording_tap_ignores_input_until_transport_is_recording() {
-        const RECORDING: u32 = 2;
-        const COUNTING_IN: u32 = 4;
         let ring = HeapRb::<InputFrame>::new(4);
         let (producer, mut consumer) = ring.split();
         let active = Arc::new(AtomicBool::new(true));
-        let transport_state = Arc::new(AtomicU32::new(COUNTING_IN));
+        let transport_state = Arc::new(AtomicU32::new(TRANSPORT_COUNTING_IN));
         let mut tap = RecordingTap {
             producer,
             active,
             dropout_frames: Arc::new(AtomicU64::new(0)),
             channel_count: 2,
             transport_state: Arc::clone(&transport_state),
-            recording_state: RECORDING,
+            recording_state: TRANSPORT_RECORDING,
         };
 
         tap.push(&[0.25, -0.25]);
         assert!(consumer.try_pop().is_none());
 
-        transport_state.store(RECORDING, Ordering::Relaxed);
+        transport_state.store(TRANSPORT_RECORDING, Ordering::Relaxed);
         tap.push(&[0.25, -0.25]);
         assert_eq!(
             consumer.try_pop().map(|frame| [frame[0], frame[1]]),

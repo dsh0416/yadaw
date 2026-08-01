@@ -1,10 +1,203 @@
 import { describe, expect, it, vi } from "vitest"
-import { IPC_PROTOCOL_VERSION } from "@yadaw/contracts"
-import type { ProjectGraphSnapshot } from "@yadaw/contracts"
+import { IPC_PROTOCOL_VERSION, rpcFailure, rpcSuccess } from "@yadaw/contracts"
+import type { PluginDescriptor, ProjectGraphSnapshot, RpcRequestMeta } from "@yadaw/contracts"
 import { AudioGraphPublisher } from "./audio-graph-publisher"
-import type { PreparedProjectGraph } from "./audio-graph-publisher"
 
-describe("AudioGraphPublisher.activate", () => {
+const descriptor: PluginDescriptor = {
+  source: { kind: "external" },
+  classId: "ABCDEF0123456789ABCDEF0123456789",
+  modulePath: "/plugins/Effect.vst3",
+  name: "Effect",
+  vendor: "YADAW",
+  version: "1.0",
+  categories: ["Fx"],
+  kind: "effect",
+  architecture: "x86_64",
+  buses: [],
+  supportedAudioModes: ["stereo"],
+  hasEditor: true,
+  compatibility: "compatible",
+  compatibilityReason: null
+}
+
+const graph: ProjectGraphSnapshot = {
+  sampleRate: 48_000,
+  tracks: [],
+  channels: [
+    {
+      id: "master",
+      kind: "master",
+      systemRole: null,
+      name: "Master",
+      color: "#fff",
+      sortOrder: 0,
+      inputSource: null,
+      inputFormat: null,
+      gainDb: 0,
+      pan: 0,
+      muted: false,
+      soloed: false,
+      outputChannelId: null,
+      outputBus: null,
+      recordArmed: false,
+      inputMonitoring: false,
+      inputChannels: [],
+      hardwareOutputChannels: []
+    },
+    {
+      id: "output",
+      kind: "output",
+      systemRole: null,
+      name: "Output",
+      color: "#000",
+      sortOrder: 1,
+      inputSource: null,
+      inputFormat: null,
+      gainDb: 0,
+      pan: 0,
+      muted: false,
+      soloed: false,
+      outputChannelId: null,
+      outputBus: null,
+      recordArmed: false,
+      inputMonitoring: false,
+      inputChannels: [],
+      hardwareOutputChannels: [1, 2]
+    }
+  ],
+  audioClips: [],
+  sends: [],
+  plugins: [
+    {
+      id: "plugin-1",
+      channelId: "master",
+      role: "insert",
+      slotOrder: 0,
+      classId: descriptor.classId,
+      descriptor: { ...descriptor, name: "Stale" },
+      audioMode: "stereo",
+      enabled: true,
+      componentState: new Uint8Array(),
+      controllerState: new Uint8Array()
+    }
+  ],
+  midiClips: [],
+  tempoMap: {
+    ticksPerQuarter: 960,
+    tempoEvents: [{ tick: 0, beatsPerMinute: 120 }],
+    timeSignatureEvents: [{ tick: 0, numerator: 4, denominator: 4 }]
+  },
+  keySignatureEvents: [{ tick: 0, fifths: 0, mode: "major" }]
+}
+
+const meta: RpcRequestMeta = {
+  protocolVersion: IPC_PROTOCOL_VERSION,
+  requestId: "request-1"
+}
+
+const projectGraph = {
+  kind: "project-graph" as const,
+  id: "project:graph",
+  epoch: "epoch-1",
+  generation: 1
+}
+
+describe("AudioGraphPublisher", () => {
+  it("resolves plugin descriptors through the catalog", () => {
+    const plugins = {
+      resolveDescriptor: vi.fn(() => descriptor)
+    }
+    const publisher = new AudioGraphPublisher(
+      { compile: vi.fn(() => ({ sample_rate: 48_000 })) } as never,
+      { materialize: vi.fn(async () => new Map()) } as never,
+      null,
+      plugins as never,
+      null
+    )
+
+    const resolved = publisher.resolve(graph)
+    expect(resolved.plugins[0]?.descriptor).toEqual(descriptor)
+    expect(plugins.resolveDescriptor).toHaveBeenCalled()
+  })
+
+  it("prepares a graph without an audio host", async () => {
+    const compiler = { compile: vi.fn(() => ({ sample_rate: 48_000, channels: [] })) }
+    const assets = { materialize: vi.fn(async () => new Map()) }
+    const settings = { get: vi.fn(async () => ({ softwareMonitoringEnabled: true })) }
+    const publisher = new AudioGraphPublisher(
+      compiler as never,
+      assets as never,
+      null,
+      null,
+      settings as never
+    )
+
+    const result = await publisher.prepare(meta, projectGraph, graph)
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: { revision: 1, native: null }
+    })
+    expect(compiler.compile).toHaveBeenCalledWith(expect.anything(), expect.any(Map), true)
+  })
+
+  it("propagates prepare failures from the audio host", async () => {
+    const failure = rpcFailure(meta, {
+      code: "resource-unavailable",
+      category: "unavailable",
+      outcome: "not-committed",
+      retry: "safe",
+      correlationId: "c",
+      userMessageKey: "errors.operationFailed",
+      details: { type: "resource-unavailable", component: "audio-host", dispatched: true }
+    })
+    const audioHost = {
+      prepareGraphDeployment: vi.fn(async () => failure)
+    }
+    const publisher = new AudioGraphPublisher(
+      { compile: vi.fn(() => ({ sample_rate: 48_000 })) } as never,
+      { materialize: vi.fn(async () => new Map()) } as never,
+      audioHost as never,
+      null,
+      null
+    )
+
+    await expect(publisher.prepare(meta, projectGraph, graph)).resolves.toBe(failure)
+  })
+
+  it("activates a prepared native deployment", async () => {
+    const activated = rpcSuccess(meta, { ready: true })
+    const audioHost = {
+      activateGraphDeployment: vi.fn(async () => activated)
+    }
+    const publisher = new AudioGraphPublisher(
+      { compile: vi.fn() },
+      { materialize: vi.fn() } as never,
+      audioHost as never,
+      null,
+      null
+    )
+    const prepared = {
+      graph,
+      revision: 3,
+      native: {
+        meta,
+        projectGraph,
+        baseRevision: 2,
+        graphRevision: 3,
+        project: graph,
+        runtime: {} as never
+      }
+    }
+
+    const result = await publisher.activate(meta, prepared)
+    expect(result).toMatchObject({
+      ok: true,
+      value: expect.objectContaining({ sampleRate: 48_000 })
+    })
+    expect(audioHost.activateGraphDeployment).toHaveBeenCalledWith(prepared.native)
+  })
+
   it("fails when a native preparation exists without an audio host", async () => {
     const publisher = new AudioGraphPublisher(
       { compile: vi.fn() },
@@ -12,44 +205,21 @@ describe("AudioGraphPublisher.activate", () => {
       null,
       null,
       null
-    ) // host intentionally absent
-    const graph = {
-      sampleRate: 48_000,
-      tracks: [],
-      channels: [],
-      audioClips: [],
-      sends: [],
-      plugins: [],
-      midiClips: [],
-      tempoMap: {
-        ticksPerQuarter: 960,
-        tempoEvents: [{ tick: 0, beatsPerMinute: 120 }],
-        timeSignatureEvents: [{ tick: 0, numerator: 4, denominator: 4 }]
-      },
-      keySignatureEvents: [{ tick: 0, fifths: 0, mode: "major" }]
-    } as ProjectGraphSnapshot
-    const prepared: PreparedProjectGraph = {
+    )
+    const prepared = {
       graph,
       revision: 1,
       native: {
-        meta: {
-          protocolVersion: IPC_PROTOCOL_VERSION,
-          requestId: "activate-1",
-          mutation: { operationId: "activate-1", idempotencyKey: "activate-1" }
-        },
-        projectGraph: {
-          kind: "project-graph",
-          id: "project:graph",
-          epoch: "main",
-          generation: 1
-        },
+        meta,
+        projectGraph,
         baseRevision: 0,
         graphRevision: 1,
         project: graph,
         runtime: {} as never
       }
     }
-    const result = await publisher.activate(prepared.native!.meta, prepared)
+
+    const result = await publisher.activate(meta, prepared)
     expect(result).toMatchObject({
       ok: false,
       error: {
@@ -57,5 +227,51 @@ describe("AudioGraphPublisher.activate", () => {
         details: { component: "audio-host", dispatched: false }
       }
     })
+  })
+
+  it("aborts native deployments through the audio host", async () => {
+    const audioHost = {
+      abortGraphDeployment: vi.fn(async () => undefined)
+    }
+    const publisher = new AudioGraphPublisher(
+      { compile: vi.fn() },
+      { materialize: vi.fn() } as never,
+      audioHost as never,
+      null,
+      null
+    )
+
+    await publisher.abort({
+      graph,
+      revision: 1,
+      native: {
+        meta,
+        projectGraph,
+        baseRevision: 0,
+        graphRevision: 1,
+        project: graph,
+        runtime: {} as never
+      }
+    })
+    expect(audioHost.abortGraphDeployment).toHaveBeenCalled()
+  })
+
+  it("publishes a graph through loadGraph", async () => {
+    const audioHost = {
+      loadGraph: vi.fn(async () => undefined)
+    }
+    const compiler = { compile: vi.fn(() => ({ sample_rate: 48_000 })) }
+    const assets = { materialize: vi.fn(async () => new Map()) }
+    const publisher = new AudioGraphPublisher(
+      compiler as never,
+      assets as never,
+      audioHost as never,
+      null,
+      null
+    )
+
+    const published = await publisher.publish(graph, false, true)
+    expect(published.sampleRate).toBe(48_000)
+    expect(audioHost.loadGraph).toHaveBeenCalledWith(1, expect.anything(), expect.anything(), true)
   })
 })
