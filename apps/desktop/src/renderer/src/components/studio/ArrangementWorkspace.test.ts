@@ -399,7 +399,7 @@ describe("ArrangementWorkspace", () => {
     expect(wrapper.find('[role="status"]').exists()).toBe(false)
   })
 
-  it("keeps the track rail aligned with vertical timeline scrolling", async () => {
+  it("uses the timeline viewport as the track rail's vertical scroll source", async () => {
     const pinia = createPinia()
     setActivePinia(pinia)
     const mixer = useMixerStore()
@@ -496,18 +496,11 @@ describe("ArrangementWorkspace", () => {
     const viewport = wrapper.get<HTMLElement>('[data-testid="timeline-viewport"]')
     const rail = wrapper.get<HTMLElement>('[data-testid="timeline-rail"]')
 
-    Object.defineProperties(viewport.element, {
-      offsetHeight: { configurable: true, value: 400 },
-      clientHeight: { configurable: true, value: 384 }
-    })
-    viewport.element.scrollTop = 240
-    await viewport.trigger("scroll")
-    expect(rail.element.scrollTop).toBe(240)
-    expect(rail.element.style.paddingBottom).toBe("16px")
+    expect(viewport.element.contains(rail.element)).toBe(true)
+    expect(rail.element.nextElementSibling).toBe(wrapper.get(".timeline-content").element)
 
-    await rail.trigger("wheel", { deltaY: 80 })
-    expect(viewport.element.scrollTop).toBe(320)
-    expect(rail.element.scrollTop).toBe(320)
+    await rail.trigger("wheel", { shiftKey: true, deltaY: 80 })
+    expect(viewport.element.scrollLeft).toBe(80)
   })
 
   it("creates a snapped one-bar MIDI clip and opens it from an empty Instrument lane", async () => {

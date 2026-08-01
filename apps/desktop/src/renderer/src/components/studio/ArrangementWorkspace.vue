@@ -145,21 +145,15 @@ const visibleDuration = computed(() =>
     (liveClips.value[0]?.endSeconds ?? contentEndSeconds.value) + 2
   )
 )
-const {
-  contentWidth,
-  viewportStartSeconds,
-  viewportEndSeconds,
-  handleScroll,
-  handleWheel,
-  handleRailWheel
-} = useArrangementViewport({
-  tempoMap: () => mixerStore.graph.tempoMap,
-  pixelsPerQuarter,
-  visibleDuration,
-  zoomTime: viewStore.zoomTime,
-  zoomTrack: viewStore.zoomTrack,
-  zoomAmplitude: viewStore.zoomAmplitude
-})
+const { contentWidth, viewportStartSeconds, viewportEndSeconds, handleScroll, handleWheel } =
+  useArrangementViewport({
+    tempoMap: () => mixerStore.graph.tempoMap,
+    pixelsPerQuarter,
+    visibleDuration,
+    zoomTime: viewStore.zoomTime,
+    zoomTrack: viewStore.zoomTrack,
+    zoomAmplitude: viewStore.zoomAmplitude
+  })
 const {
   content,
   clipDrag,
@@ -208,6 +202,9 @@ const trackGridRows = computed(() => {
 })
 const railStyle = computed(() => ({
   gridTemplateRows: trackGridRows.value
+}))
+const scrollContentStyle = computed(() => ({
+  gridTemplateColumns: `var(--arrangement-rail-width) ${contentWidth.value}px`
 }))
 const contentStyle = computed(() => ({
   width: `${contentWidth.value}px`,
@@ -356,229 +353,225 @@ function createMidiClip(trackId: string, requestedStartTick: number): void {
 
     <div class="timeline-grid">
       <div
-        ref="rail"
-        class="timeline-rail"
-        data-testid="timeline-rail"
-        :style="railStyle"
-        @wheel="handleRailWheel"
-      >
-        <div class="ruler-corner">{{ t("studio.arrangement.tracks") }}</div>
-        <GlobalLaneHeader
-          :label="t('studio.arrangement.tempo')"
-          :eyebrow="t('studio.arrangement.globalTrack')"
-          :value="selectedTempo.beatsPerMinute"
-          unit="BPM"
-          :minimum="20"
-          :maximum="300"
-          :expanded="tempoLaneExpanded"
-          color="var(--ui-domain-color-65a8ff)"
-          @toggle="viewStore.toggleTempoLane"
-          @update-value="updateSelectedTempo"
-        />
-        <GlobalEventLaneHeader
-          :label="t('studio.arrangement.meter')"
-          :eyebrow="t('studio.arrangement.globalTrack')"
-          :expanded="meterLaneExpanded"
-          color="var(--ui-domain-color-f2a65a)"
-          @toggle="viewStore.toggleMeterLane"
-        >
-          <template #controls>
-            <input
-              :value="selectedMeter.numerator"
-              type="number"
-              min="1"
-              max="32"
-              :aria-label="t('studio.arrangement.meterNumeratorAria')"
-              @change="
-                updateSelectedMeter({
-                  numerator: Math.min(
-                    32,
-                    Math.max(1, Number(($event.target as HTMLInputElement).value))
-                  )
-                })
-              "
-            />
-            <span aria-hidden="true">/</span>
-            <UiSelect
-              :model-value="String(selectedMeter.denominator)"
-              size="compact"
-              :aria-label="t('studio.arrangement.meterDenominatorAria')"
-              @update:model-value="
-                updateSelectedMeter({
-                  denominator: Number($event)
-                })
-              "
-            >
-              <option
-                v-for="denominator in meterDenominators"
-                :key="denominator"
-                :value="String(denominator)"
-              >
-                {{ denominator }}
-              </option>
-            </UiSelect>
-          </template>
-        </GlobalEventLaneHeader>
-        <GlobalEventLaneHeader
-          :label="t('studio.arrangement.key')"
-          :eyebrow="t('studio.arrangement.globalTrack')"
-          :expanded="keyLaneExpanded"
-          color="var(--ui-domain-color-b894ff)"
-          @toggle="viewStore.toggleKeyLane"
-        >
-          <template #controls>
-            <UiSelect
-              :model-value="selectedKeyValue"
-              :groups="keySignatureGroups"
-              size="compact"
-              :aria-label="t('studio.arrangement.keySignatureAria')"
-              @update:model-value="updateSelectedKey"
-            />
-          </template>
-        </GlobalEventLaneHeader>
-        <div
-          v-for="({ track, scale }, index) in trackRows"
-          :key="track.id"
-          :class="['track-header', { selected: track.id === mixerStore.selectedChannelId }]"
-          @click="mixerStore.selectedChannelId = track.id"
-          @keydown="handleTrackKeydown($event, index)"
-        >
-          <span class="track-color" :style="{ background: track.color }" /><strong>{{
-            String(index + 1).padStart(2, "0")
-          }}</strong>
-          <div class="track-copy">
-            <InlineTrackNameEditor
-              class="track-name-editor"
-              :name="track.name"
-              :label="t('studio.arrangement.trackRenameLabel', { name: track.name })"
-              @rename="mixerStore.updateChannel(track.id, { name: $event })"
-            />
-          </div>
-          <TrackQuickControls
-            class="track-quick-controls"
-            :channel="track"
-            :meter="mixerStore.meterFor(track.id)"
-            @preview="mixerStore.preview"
-            @update-channel="mixerStore.updateChannel"
-          />
-          <TrackHeightResizeHandle
-            :base-height="trackHeight"
-            :scale="scale"
-            :track-name="track.name"
-            @set-scale="viewStore.setTrackScale(track.trackId, $event)"
-            @reset="viewStore.resetTrackScale(track.trackId)"
-          />
-        </div>
-        <div class="track-spacer" aria-hidden="true" />
-      </div>
-      <div
         ref="viewport"
         class="timeline-viewport"
         data-testid="timeline-viewport"
         @scroll="handleScroll"
         @wheel="handleWheel"
       >
-        <div
-          ref="content"
-          class="timeline-content"
-          :style="contentStyle"
-          @dragover="updateArrangementDrag"
-          @drop="handleArrangementDrop"
-        >
-          <TimelineRuler
-            :content-width="contentWidth"
-            :pixels-per-quarter="pixelsPerQuarter"
-            :tempo-map="mixerStore.graph.tempoMap"
-            @seek="handleSeek"
-          />
-          <TempoTrackLane
-            :tempo-map="mixerStore.graph.tempoMap"
-            :selected-tick="selectedTempoTick"
-            :content-width="contentWidth"
-            :pixels-per-quarter="pixelsPerQuarter"
-            :height="tempoLaneHeight"
-            :expanded="tempoLaneExpanded"
-            @replace="replaceTempoMap"
-            @select="selectedTempoTick = $event"
-          />
-          <MeterTrackLane
-            :tempo-map="mixerStore.graph.tempoMap"
-            :selected-tick="selectedMeterTick"
-            :content-width="contentWidth"
-            :pixels-per-quarter="pixelsPerQuarter"
-            :height="meterLaneHeight"
-            :expanded="meterLaneExpanded"
-            @replace="replaceTempoMap"
-            @select="selectedMeterTick = $event"
-          />
-          <KeyTrackLane
-            :events="mixerStore.graph.keySignatureEvents"
-            :tempo-map="mixerStore.graph.tempoMap"
-            :selected-tick="selectedKeyTick"
-            :content-width="contentWidth"
-            :pixels-per-quarter="pixelsPerQuarter"
-            :height="keyLaneHeight"
-            :expanded="keyLaneExpanded"
-            @replace="replaceKeySignatureMap"
-            @select="selectedKeyTick = $event"
-          />
-          <template
-            v-for="{ track, audioClips: trackClips, midiClips, height } in trackRows"
-            :key="track.id"
-          >
-            <ArrangementTrack
-              v-if="track.kind === 'audio'"
-              :track-id="track.trackId"
-              :track-color="track.color"
-              :drag-preview="dragPreview?.trackId === track.trackId ? dragPreview : null"
-              :dragging-clip-id="clipDrag?.clipId ?? null"
-              :clips="trackClips"
-              :tempo-map="mixerStore.graph.tempoMap"
-              :content-width="contentWidth"
-              :pixels-per-quarter="pixelsPerQuarter"
-              :track-height="height"
-              :amplitude-scale="amplitudeScale"
-              :display-mode="displayMode"
-              :viewport-start-seconds="viewportStartSeconds"
-              :viewport-end-seconds="viewportEndSeconds"
-              :selected-clip-id="selectedClipId"
-              :live-clip="liveClips.find((clip) => clip.trackId === track.trackId) ?? null"
-              @seek="handleSeek"
-              @select-clip="selectAudioClip"
-              @waveform-frame-count="handleWaveformFrameCount"
-              @clip-drag-start="handleClipDragStart"
-              @clip-drag-end="handleClipDragEnd"
+        <div class="timeline-scroll-content" :style="scrollContentStyle">
+          <div ref="rail" class="timeline-rail" data-testid="timeline-rail" :style="railStyle">
+            <div class="ruler-corner">{{ t("studio.arrangement.tracks") }}</div>
+            <GlobalLaneHeader
+              :label="t('studio.arrangement.tempo')"
+              :eyebrow="t('studio.arrangement.globalTrack')"
+              :value="selectedTempo.beatsPerMinute"
+              unit="BPM"
+              :minimum="20"
+              :maximum="300"
+              :expanded="tempoLaneExpanded"
+              color="var(--ui-domain-color-65a8ff)"
+              @toggle="viewStore.toggleTempoLane"
+              @update-value="updateSelectedTempo"
             />
-            <MidiArrangementTrack
-              v-else
-              :track-id="track.trackId"
-              :track-color="track.color"
-              :clips="midiClips"
-              :tempo-map="mixerStore.graph.tempoMap"
-              :content-width="contentWidth"
-              :pixels-per-quarter="pixelsPerQuarter"
-              :track-height="height"
-              :selected-clip-ids="pianoRollStore.arrangementClipIds"
-              :keyboard-insertion-tick="secondsToTick(mixerStore.graph.tempoMap, playheadSeconds)"
-              :drag-preview="midiDragPreview?.trackId === track.trackId ? midiDragPreview : null"
-              :dragging-clip-id="midiClipDrag?.clipId ?? null"
-              @remove="removeMidiClip"
-              @select="selectMidiClip"
-              @open="openMidiClip"
-              @create="createMidiClip"
-              @clip-drag-start="handleMidiClipDragStart"
-              @clip-drag-end="handleMidiClipDragEnd"
-            />
-          </template>
-          <div
-            class="timeline-playhead"
-            data-testid="timeline-playhead"
-            :style="playheadStyle"
-            aria-hidden="true"
-          >
-            <span />
+            <GlobalEventLaneHeader
+              :label="t('studio.arrangement.meter')"
+              :eyebrow="t('studio.arrangement.globalTrack')"
+              :expanded="meterLaneExpanded"
+              color="var(--ui-domain-color-f2a65a)"
+              @toggle="viewStore.toggleMeterLane"
+            >
+              <template #controls>
+                <input
+                  :value="selectedMeter.numerator"
+                  type="number"
+                  min="1"
+                  max="32"
+                  :aria-label="t('studio.arrangement.meterNumeratorAria')"
+                  @change="
+                    updateSelectedMeter({
+                      numerator: Math.min(
+                        32,
+                        Math.max(1, Number(($event.target as HTMLInputElement).value))
+                      )
+                    })
+                  "
+                />
+                <span aria-hidden="true">/</span>
+                <UiSelect
+                  :model-value="String(selectedMeter.denominator)"
+                  size="compact"
+                  :aria-label="t('studio.arrangement.meterDenominatorAria')"
+                  @update:model-value="
+                    updateSelectedMeter({
+                      denominator: Number($event)
+                    })
+                  "
+                >
+                  <option
+                    v-for="denominator in meterDenominators"
+                    :key="denominator"
+                    :value="String(denominator)"
+                  >
+                    {{ denominator }}
+                  </option>
+                </UiSelect>
+              </template>
+            </GlobalEventLaneHeader>
+            <GlobalEventLaneHeader
+              :label="t('studio.arrangement.key')"
+              :eyebrow="t('studio.arrangement.globalTrack')"
+              :expanded="keyLaneExpanded"
+              color="var(--ui-domain-color-b894ff)"
+              @toggle="viewStore.toggleKeyLane"
+            >
+              <template #controls>
+                <UiSelect
+                  :model-value="selectedKeyValue"
+                  :groups="keySignatureGroups"
+                  size="compact"
+                  :aria-label="t('studio.arrangement.keySignatureAria')"
+                  @update:model-value="updateSelectedKey"
+                />
+              </template>
+            </GlobalEventLaneHeader>
+            <div
+              v-for="({ track, scale }, index) in trackRows"
+              :key="track.id"
+              :class="['track-header', { selected: track.id === mixerStore.selectedChannelId }]"
+              @click="mixerStore.selectedChannelId = track.id"
+              @keydown="handleTrackKeydown($event, index)"
+            >
+              <span class="track-color" :style="{ background: track.color }" /><strong>{{
+                String(index + 1).padStart(2, "0")
+              }}</strong>
+              <div class="track-copy">
+                <InlineTrackNameEditor
+                  class="track-name-editor"
+                  :name="track.name"
+                  :label="t('studio.arrangement.trackRenameLabel', { name: track.name })"
+                  @rename="mixerStore.updateChannel(track.id, { name: $event })"
+                />
+              </div>
+              <TrackQuickControls
+                class="track-quick-controls"
+                :channel="track"
+                :meter="mixerStore.meterFor(track.id)"
+                @preview="mixerStore.preview"
+                @update-channel="mixerStore.updateChannel"
+              />
+              <TrackHeightResizeHandle
+                :base-height="trackHeight"
+                :scale="scale"
+                :track-name="track.name"
+                @set-scale="viewStore.setTrackScale(track.trackId, $event)"
+                @reset="viewStore.resetTrackScale(track.trackId)"
+              />
+            </div>
+            <div class="track-spacer" aria-hidden="true" />
           </div>
-          <div class="empty-lane" aria-hidden="true" />
+          <div
+            ref="content"
+            class="timeline-content"
+            :style="contentStyle"
+            @dragover="updateArrangementDrag"
+            @drop="handleArrangementDrop"
+          >
+            <TimelineRuler
+              :content-width="contentWidth"
+              :pixels-per-quarter="pixelsPerQuarter"
+              :tempo-map="mixerStore.graph.tempoMap"
+              @seek="handleSeek"
+            />
+            <TempoTrackLane
+              :tempo-map="mixerStore.graph.tempoMap"
+              :selected-tick="selectedTempoTick"
+              :content-width="contentWidth"
+              :pixels-per-quarter="pixelsPerQuarter"
+              :height="tempoLaneHeight"
+              :expanded="tempoLaneExpanded"
+              @replace="replaceTempoMap"
+              @select="selectedTempoTick = $event"
+            />
+            <MeterTrackLane
+              :tempo-map="mixerStore.graph.tempoMap"
+              :selected-tick="selectedMeterTick"
+              :content-width="contentWidth"
+              :pixels-per-quarter="pixelsPerQuarter"
+              :height="meterLaneHeight"
+              :expanded="meterLaneExpanded"
+              @replace="replaceTempoMap"
+              @select="selectedMeterTick = $event"
+            />
+            <KeyTrackLane
+              :events="mixerStore.graph.keySignatureEvents"
+              :tempo-map="mixerStore.graph.tempoMap"
+              :selected-tick="selectedKeyTick"
+              :content-width="contentWidth"
+              :pixels-per-quarter="pixelsPerQuarter"
+              :height="keyLaneHeight"
+              :expanded="keyLaneExpanded"
+              @replace="replaceKeySignatureMap"
+              @select="selectedKeyTick = $event"
+            />
+            <template
+              v-for="{ track, audioClips: trackClips, midiClips, height } in trackRows"
+              :key="track.id"
+            >
+              <ArrangementTrack
+                v-if="track.kind === 'audio'"
+                :track-id="track.trackId"
+                :track-color="track.color"
+                :drag-preview="dragPreview?.trackId === track.trackId ? dragPreview : null"
+                :dragging-clip-id="clipDrag?.clipId ?? null"
+                :clips="trackClips"
+                :tempo-map="mixerStore.graph.tempoMap"
+                :content-width="contentWidth"
+                :pixels-per-quarter="pixelsPerQuarter"
+                :track-height="height"
+                :amplitude-scale="amplitudeScale"
+                :display-mode="displayMode"
+                :viewport-start-seconds="viewportStartSeconds"
+                :viewport-end-seconds="viewportEndSeconds"
+                :selected-clip-id="selectedClipId"
+                :live-clip="liveClips.find((clip) => clip.trackId === track.trackId) ?? null"
+                @seek="handleSeek"
+                @select-clip="selectAudioClip"
+                @waveform-frame-count="handleWaveformFrameCount"
+                @clip-drag-start="handleClipDragStart"
+                @clip-drag-end="handleClipDragEnd"
+              />
+              <MidiArrangementTrack
+                v-else
+                :track-id="track.trackId"
+                :track-color="track.color"
+                :clips="midiClips"
+                :tempo-map="mixerStore.graph.tempoMap"
+                :content-width="contentWidth"
+                :pixels-per-quarter="pixelsPerQuarter"
+                :track-height="height"
+                :selected-clip-ids="pianoRollStore.arrangementClipIds"
+                :keyboard-insertion-tick="secondsToTick(mixerStore.graph.tempoMap, playheadSeconds)"
+                :drag-preview="midiDragPreview?.trackId === track.trackId ? midiDragPreview : null"
+                :dragging-clip-id="midiClipDrag?.clipId ?? null"
+                @remove="removeMidiClip"
+                @select="selectMidiClip"
+                @open="openMidiClip"
+                @create="createMidiClip"
+                @clip-drag-start="handleMidiClipDragStart"
+                @clip-drag-end="handleMidiClipDragEnd"
+              />
+            </template>
+            <div
+              class="timeline-playhead"
+              data-testid="timeline-playhead"
+              :style="playheadStyle"
+              aria-hidden="true"
+            >
+              <span />
+            </div>
+            <div class="empty-lane" aria-hidden="true" />
+          </div>
         </div>
       </div>
     </div>
@@ -610,9 +603,17 @@ function createMidiClip(trackId: string, requestedStartTick: number): void {
   margin-left: auto;
 }
 .timeline-grid {
-  display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
+  --arrangement-rail-width: 220px;
+
+  min-width: 0;
   min-height: 0;
+}
+.timeline-scroll-content {
+  display: grid;
+  width: max-content;
+  min-width: 100%;
+  min-height: 100%;
+  isolation: isolate;
 }
 .timeline-rail,
 .timeline-content {
@@ -620,15 +621,20 @@ function createMidiClip(trackId: string, requestedStartTick: number): void {
 }
 .timeline-content {
   position: relative;
+  z-index: var(--ui-z-local-base);
   min-height: 100%;
 }
 .timeline-rail {
+  position: sticky;
+  z-index: var(--ui-z-local-sticky);
+  left: 0;
   min-height: 0;
-  overflow: hidden;
   border-right: 1px solid var(--line-soft);
   background: var(--daw-track-header);
 }
 .timeline-viewport {
+  width: 100%;
+  height: 100%;
   min-width: 0;
   min-height: 0;
   overflow: auto;
@@ -742,7 +748,7 @@ function createMidiClip(trackId: string, requestedStartTick: number): void {
 }
 @media (max-width: 1100px) {
   .timeline-grid {
-    grid-template-columns: 204px minmax(0, 1fr);
+    --arrangement-rail-width: 204px;
   }
 }
 .track-name-editor {
