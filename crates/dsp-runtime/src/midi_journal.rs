@@ -468,6 +468,101 @@ mod tests {
     }
 
     #[test]
+    fn converts_timestamp_fallback_and_event_kinds() {
+        let recovered = RecoveredMidiJournal {
+            header: sample_header(),
+            records: vec![
+                sample_record(1_000_000, None, None, vec![0x90, 60, 100]),
+                sample_record(1_500_000, None, None, vec![0x80, 60, 10]),
+                sample_record(1_500_000, None, None, vec![0xe0, 0x00, 0x40]),
+                sample_record(1_500_000, None, None, vec![0xc0, 12]),
+                sample_record(1_500_000, None, None, vec![0xd0, 77]),
+                sample_record(1_500_000, None, None, vec![0xa0, 61, 40]),
+                sample_record(1_500_000, None, None, vec![0xf0, 1, 2, 0xf7]),
+            ],
+            ignored_corrupt_tail: true,
+        };
+        let take = journal_records_to_take(&recovered, 0);
+        assert_eq!(take.notes.len(), 1);
+        assert_eq!(take.notes[0].start_tick, 0);
+        assert_eq!(take.notes[0].duration_ticks, 960);
+        assert_eq!(take.events.len(), 5);
+        assert!(take.events.iter().any(|event| event.kind
+            == crate::midi::NormalizedMidiEventKind::PitchBend
+            && event.data == 0_i16.to_le_bytes()));
+        assert!(take.events.iter().any(|event| event.kind
+            == crate::midi::NormalizedMidiEventKind::ProgramChange
+            && event.data == [12]));
+        assert!(take.events.iter().any(|event| event.kind
+            == crate::midi::NormalizedMidiEventKind::ChannelPressure
+            && event.data == [77]));
+        assert!(take.events.iter().any(|event| event.kind
+            == crate::midi::NormalizedMidiEventKind::PolyPressure
+            && event.data == [61, 40]));
+        assert!(take.events.iter().any(|event| event.kind
+            == crate::midi::NormalizedMidiEventKind::SysEx
+            && event.data == [1, 2]));
+        assert!(take.ignored_corrupt_tail);
+    }
+
+    #[test]
+    fn conversion_warns_on_unmatched_note_off_and_bad_bytes() {
+        let recovered = RecoveredMidiJournal {
+            header: sample_header(),
+            records: vec![
+                // Data bytes before any status must fail without running status.
+                sample_record(1, Some(0), Some(0), vec![0x20, 0x30]),
+                sample_record(2, Some(0), Some(100), vec![0x80, 60, 40]),
+            ],
+            ignored_corrupt_tail: false,
+        };
+        let take = journal_records_to_take(&recovered, 0);
+        assert!(take.notes.is_empty());
+        assert!(
+            take.warnings
+                .iter()
+                .any(|warning| warning.contains("undecodable"))
+        );
+        assert!(
+            take.warnings
+                .iter()
+                .any(|warning| warning.contains("unmatched note-off"))
+        );
+    }
+
+    #[test]
+    fn conversion_pairs_stacked_notes_fifo_and_empty_take_has_unit_length() {
+        let stacked = RecoveredMidiJournal {
+            header: sample_header(),
+            records: vec![
+                sample_record(1, Some(0), Some(0), vec![0x90, 60, 10]),
+                sample_record(2, Some(0), Some(100), vec![0x90, 60, 20]),
+                sample_record(3, Some(0), Some(200), vec![0x80, 60, 1]),
+                sample_record(4, Some(0), Some(400), vec![0x80, 60, 2]),
+            ],
+            ignored_corrupt_tail: false,
+        };
+        let take = journal_records_to_take(&stacked, 0);
+        assert_eq!(take.notes.len(), 2);
+        assert_eq!(take.notes[0].duration_ticks, 200);
+        assert_eq!(take.notes[0].velocity, 10);
+        assert_eq!(take.notes[0].release_velocity, 1);
+        assert_eq!(take.notes[1].duration_ticks, 300);
+        assert_eq!(take.notes[1].velocity, 20);
+        assert_eq!(take.notes[1].release_velocity, 2);
+
+        let empty = RecoveredMidiJournal {
+            header: sample_header(),
+            records: Vec::new(),
+            ignored_corrupt_tail: false,
+        };
+        let empty_take = journal_records_to_take(&empty, 0);
+        assert!(empty_take.notes.is_empty());
+        assert!(empty_take.events.is_empty());
+        assert_eq!(empty_take.length_ticks, 1);
+    }
+
+    #[test]
     fn converts_journal_records_into_notes_and_closes_unterminated() {
         let path = path("journal-to-take");
         let header = sample_header();

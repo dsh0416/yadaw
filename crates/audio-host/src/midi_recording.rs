@@ -207,4 +207,126 @@ mod tests {
         assert_eq!(recovered.records[0].bytes, vec![0x91, 62, 100]);
         let _ = std::fs::remove_file(path);
     }
+
+    #[test]
+    fn start_rejects_empty_takes_and_invalid_fields() {
+        let handle = clock(2, 0, 0);
+        let empty = MidiRecordingSession::start(
+            MidiRecordingStartConfig { takes: Vec::new() },
+            handle.clone(),
+        );
+        match empty {
+            Err(message) => assert!(message.contains("at least one take")),
+            Ok(_) => panic!("expected empty takes to fail"),
+        }
+
+        let invalid_channel = MidiRecordingSession::start(
+            MidiRecordingStartConfig {
+                takes: vec![MidiRecordingTakeConfig {
+                    path: temporary_path("invalid-channel")
+                        .to_string_lossy()
+                        .into_owned(),
+                    source_id: "source".to_owned(),
+                    clip_id: "clip".to_owned(),
+                    track_id: "track".to_owned(),
+                    port_id: None,
+                    channel: Some(16),
+                }],
+            },
+            handle.clone(),
+        );
+        match invalid_channel {
+            Err(message) => assert!(message.contains("0 and 15")),
+            Ok(_) => panic!("expected invalid channel to fail"),
+        }
+
+        let empty_id = MidiRecordingSession::start(
+            MidiRecordingStartConfig {
+                takes: vec![MidiRecordingTakeConfig {
+                    path: temporary_path("empty-id").to_string_lossy().into_owned(),
+                    source_id: String::new(),
+                    clip_id: "clip".to_owned(),
+                    track_id: "track".to_owned(),
+                    port_id: None,
+                    channel: None,
+                }],
+            },
+            handle,
+        );
+        match empty_id {
+            Err(message) => assert!(message.contains("non-empty")),
+            Ok(_) => panic!("expected empty source id to fail"),
+        }
+    }
+
+    #[test]
+    fn accept_all_route_records_any_port_and_ignores_non_recordable() {
+        let path = temporary_path("accept-all");
+        let handle = clock(2, 0, 0);
+        let mut session = MidiRecordingSession::start(
+            MidiRecordingStartConfig {
+                takes: vec![MidiRecordingTakeConfig {
+                    path: path.to_string_lossy().into_owned(),
+                    source_id: "source".to_owned(),
+                    clip_id: "clip".to_owned(),
+                    track_id: "track".to_owned(),
+                    port_id: None,
+                    channel: None,
+                }],
+            },
+            handle,
+        )
+        .unwrap();
+        session.observe(1, 99, &MidiInputMessage::Clock);
+        session.observe(2, 99, &MidiInputMessage::NoteOn(9, 40, 80));
+        let results = session.stop().unwrap();
+        assert_eq!(results[0].event_count, 1);
+        let recovered = recover_midi_journal(&path).unwrap();
+        assert_eq!(recovered.records.len(), 1);
+        assert_eq!(recovered.records[0].bytes, vec![0x99, 40, 80]);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn multi_take_session_fans_out_by_port() {
+        let path_a = temporary_path("multi-a");
+        let path_b = temporary_path("multi-b");
+        let handle = clock(2, 10, 20);
+        let mut session = MidiRecordingSession::start(
+            MidiRecordingStartConfig {
+                takes: vec![
+                    MidiRecordingTakeConfig {
+                        path: path_a.to_string_lossy().into_owned(),
+                        source_id: "source-a".to_owned(),
+                        clip_id: "clip-a".to_owned(),
+                        track_id: "track-a".to_owned(),
+                        port_id: Some("port-a".to_owned()),
+                        channel: None,
+                    },
+                    MidiRecordingTakeConfig {
+                        path: path_b.to_string_lossy().into_owned(),
+                        source_id: "source-b".to_owned(),
+                        clip_id: "clip-b".to_owned(),
+                        track_id: "track-b".to_owned(),
+                        port_id: Some("port-b".to_owned()),
+                        channel: None,
+                    },
+                ],
+            },
+            handle,
+        )
+        .unwrap();
+        let port_a = stable_port_key("port-a");
+        let port_b = stable_port_key("port-b");
+        session.observe(1, port_a, &MidiInputMessage::ControlChange(0, 1, 2));
+        session.observe(2, port_b, &MidiInputMessage::ControlChange(0, 3, 4));
+        let results = session.stop().unwrap();
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].event_count, 1);
+        assert_eq!(results[1].event_count, 1);
+        assert_eq!(recover_midi_journal(&path_a).unwrap().records.len(), 1);
+        assert_eq!(recover_midi_journal(&path_b).unwrap().records.len(), 1);
+        let _ = std::fs::remove_file(path_a);
+        let _ = std::fs::remove_file(path_b);
+    }
 }

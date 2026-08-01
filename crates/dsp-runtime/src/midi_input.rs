@@ -452,4 +452,65 @@ mod tests {
         clock.advance(13 * 20_833 + MIDI_CLOCK_FREEWHEEL_MICROS + 1);
         assert_eq!(clock.snapshot().state, MidiSyncState::Lost);
     }
+
+    #[test]
+    fn encode_round_trips_channel_voice_and_system_messages() {
+        let cases = [
+            MidiInputMessage::NoteOff(3, 10, 20),
+            MidiInputMessage::NoteOn(0xf, 60, 100),
+            MidiInputMessage::PolyPressure(1, 12, 34),
+            MidiInputMessage::ControlChange(2, 7, 100),
+            MidiInputMessage::ProgramChange(4, 8),
+            MidiInputMessage::ChannelPressure(5, 90),
+            MidiInputMessage::PitchBend(0, 0),
+            MidiInputMessage::PitchBend(6, 8_192),
+            MidiInputMessage::PitchBend(7, 16_383),
+            MidiInputMessage::SysEx(vec![1, 2, 3]),
+            MidiInputMessage::Clock,
+            MidiInputMessage::Start,
+            MidiInputMessage::Continue,
+            MidiInputMessage::Stop,
+            MidiInputMessage::SongPosition(123),
+            MidiInputMessage::ActiveSensing,
+            MidiInputMessage::SystemReset,
+        ];
+        for message in cases {
+            let mut parser = MidiInputParser::default();
+            let encoded = message.encode();
+            let decoded = parser.push(&encoded).unwrap();
+            assert_eq!(
+                decoded,
+                vec![message.clone()],
+                "encode mismatch for {message:?}"
+            );
+        }
+        assert_eq!(MidiInputMessage::IgnoredSystem(0xf1).encode(), vec![0xf1]);
+        assert_eq!(
+            MidiInputMessage::NoteOn(0x1f, 1, 2).encode(),
+            vec![0x9f, 1, 2]
+        );
+        assert_eq!(
+            MidiInputMessage::PitchBend(0, 8_192).encode(),
+            vec![0xe0, 0x00, 0x40]
+        );
+        assert_eq!(
+            MidiInputMessage::SysEx(vec![9]).encode(),
+            vec![0xf0, 9, 0xf7]
+        );
+    }
+
+    #[test]
+    fn is_recordable_accepts_channel_voice_and_sysex_only() {
+        assert!(MidiInputMessage::NoteOn(0, 60, 1).is_recordable());
+        assert!(MidiInputMessage::NoteOff(0, 60, 0).is_recordable());
+        assert!(MidiInputMessage::ControlChange(0, 1, 2).is_recordable());
+        assert!(MidiInputMessage::SysEx(vec![]).is_recordable());
+        assert!(!MidiInputMessage::Clock.is_recordable());
+        assert!(!MidiInputMessage::Start.is_recordable());
+        assert!(!MidiInputMessage::Stop.is_recordable());
+        assert!(!MidiInputMessage::SongPosition(0).is_recordable());
+        assert!(!MidiInputMessage::ActiveSensing.is_recordable());
+        assert!(!MidiInputMessage::SystemReset.is_recordable());
+        assert!(!MidiInputMessage::IgnoredSystem(0xf1).is_recordable());
+    }
 }
