@@ -40,6 +40,20 @@
     "name": "YADAW",
     "about": "关于 YADAW"
   },
+  "about": {
+    "version": "版本",
+    "platform": "平台",
+    "platforms": {
+      "darwin": "macOS",
+      "win32": "Windows",
+      "linux": "Linux"
+    },
+    "license": "许可证",
+    "links": "YADAW 资源",
+    "projectWebsite": "GitHub 项目",
+    "userManual": "用户手册",
+    "close": "关闭"
+  },
   "menu": {
     "file": "文件",
     "edit": "编辑",

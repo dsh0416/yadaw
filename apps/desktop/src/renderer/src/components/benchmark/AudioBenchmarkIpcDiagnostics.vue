@@ -72,3 +72,120 @@ function ipcRate(scenario: AudioIpcBenchmarkScenario): string {
     </template>
   </p>
 </template>
+
+<style scoped>
+.result-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--ui-space-6);
+  margin: var(--ui-space-6) var(--ui-space-1) var(--ui-space-3);
+}
+
+.kicker {
+  color: var(--ui-signal-audio);
+  font: var(--ui-type-weight-semibold) var(--ui-font-size-xs) var(--ui-type-family-data);
+  letter-spacing: var(--ui-type-tracking-wider);
+  text-transform: uppercase;
+}
+
+.result-heading h3 {
+  margin: var(--ui-space-1) 0 0;
+  font-size: var(--ui-font-size-lg);
+  font-weight: var(--ui-type-weight-semibold);
+  line-height: var(--ui-type-leading-tight);
+}
+
+.result-heading > small {
+  color: var(--ui-color-text-subtle);
+  font: var(--ui-font-size-xs) var(--ui-type-family-data);
+}
+
+.ipc-table {
+  overflow: hidden;
+  border: 1px solid var(--ui-color-border);
+  border-radius: var(--ui-radius-md);
+  background: var(--ui-color-surface-raised);
+}
+
+.ipc-row {
+  display: grid;
+  grid-template-columns: minmax(210px, 1.7fr) 0.65fr 0.65fr 0.65fr 0.8fr;
+  align-items: center;
+  min-height: var(--ui-control-lg);
+  border-top: 1px solid var(--ui-color-border);
+}
+
+.ipc-row:first-child {
+  border-top: 0;
+}
+
+.ipc-row > span {
+  padding: var(--ui-space-2) var(--ui-space-3);
+  color: var(--ui-color-text-muted);
+  font: var(--ui-font-size-xs) var(--ui-type-family-data);
+  font-variant-numeric: tabular-nums;
+}
+
+.ipc-table-header {
+  min-height: var(--ui-control-sm);
+  background: var(--ui-color-canvas-subtle);
+}
+
+.ipc-table-header > span {
+  color: var(--ui-color-text-subtle);
+  font-family: var(--ui-type-family-interface);
+  font-weight: var(--ui-type-weight-semibold);
+}
+
+.ipc-name strong,
+.ipc-name small {
+  display: block;
+}
+
+.ipc-name strong {
+  color: var(--ui-color-text);
+  font-family: var(--ui-type-family-interface);
+  font-weight: var(--ui-type-weight-semibold);
+}
+
+.ipc-name small {
+  margin-top: var(--ui-space-1);
+  color: var(--ui-color-text-subtle);
+  font-family: var(--ui-type-family-interface);
+  line-height: var(--ui-type-leading-normal);
+}
+
+.ipc-row .ipc-rate {
+  color: var(--ui-signal-audio);
+}
+
+.ipc-diagnostics-note {
+  margin: var(--ui-space-3) 0 0;
+  color: var(--ui-color-text-subtle);
+  font: var(--ui-font-size-xs) var(--ui-type-family-data);
+  line-height: var(--ui-type-leading-normal);
+}
+
+.ipc-diagnostics-note b {
+  color: var(--ui-signal-audio);
+}
+
+@media (max-width: 700px) {
+  .ipc-table {
+    overflow-x: auto;
+  }
+
+  .ipc-row {
+    min-width: 720px;
+  }
+}
+
+@media (max-width: 560px) {
+  .result-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: var(--ui-space-2);
+  }
+}
+</style>

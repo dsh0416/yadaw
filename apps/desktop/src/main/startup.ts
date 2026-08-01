@@ -24,6 +24,7 @@ import { WaveformService } from "./waveform-service"
 import { TransportService } from "./transport-service"
 import { registerIpcHandlers } from "./ipc/register"
 import { normalizeAudioRuntime } from "./ipc/support"
+import { applicationIconPath } from "./runtime-paths"
 import {
   createMainWindow,
   createSplashWindow,
@@ -43,6 +44,7 @@ export function startApplication(
   onServices: (services: StartedApplicationServices) => void
 ): void {
   void app.whenReady().then(async () => {
+    if (!app.isPackaged) app.dock?.setIcon(applicationIconPath)
     const settings = new ApplicationSettingsStore(app.getPath("userData"))
     const applicationSettings = await settings.get()
     setMainLocale(applicationSettings.locale)

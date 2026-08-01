@@ -73,7 +73,7 @@ function macApplicationMenu(shortcuts: ShortcutPreferences): MenuItemConstructor
     {
       label: t("app.name"),
       submenu: [
-        { role: "about", label: t("app.about") },
+        commandItem(t("app.about"), "application.about"),
         { type: "separator" },
         commandItem(
           t("menu.preferences"),

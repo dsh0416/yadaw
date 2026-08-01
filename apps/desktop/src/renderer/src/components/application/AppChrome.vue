@@ -1,21 +1,33 @@
 <script setup lang="ts">
-import type { ApplicationWindowCommandId } from "@yadaw/contracts"
+import type {
+  ApplicationCommandId,
+  ApplicationWindowCommandId,
+  DesktopPlatform
+} from "@yadaw/contracts"
+import type { UiMenubarMenu } from "@yadaw/ui"
 import { computed } from "vue"
 import { storeToRefs } from "pinia"
 import AppTitleBar from "./AppTitleBar.vue"
-import { useApplicationCommands } from "../../composables/useApplicationCommands"
 import { useApplicationWindowStore } from "../../stores/applicationWindow"
 import { useProjectStore } from "../../stores/project"
+
+defineProps<{
+  platform: DesktopPlatform
+  menus: UiMenubarMenu[]
+}>()
+
+const emit = defineEmits<{
+  command: [command: ApplicationCommandId]
+}>()
 
 const projectStore = useProjectStore()
 const applicationWindowStore = useApplicationWindowStore()
 const { hasUnsavedChanges, session } = storeToRefs(projectStore)
-const { platform, menus, execute } = useApplicationCommands()
 const projectName = computed(() => session.value?.configuration.name ?? null)
 
 function executeWindowCommand(command: ApplicationWindowCommandId): void {
   if (command === "window.close") {
-    void execute(command)
+    emit("command", command)
     return
   }
   void applicationWindowStore.execute(command)
@@ -29,7 +41,7 @@ function executeWindowCommand(command: ApplicationWindowCommandId): void {
       :menus="menus"
       :project-name="projectName"
       :dirty="hasUnsavedChanges"
-      @command="execute"
+      @command="emit('command', $event)"
       @window-command="executeWindowCommand"
     />
     <div class="app-chrome__content">

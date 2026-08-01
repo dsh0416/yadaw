@@ -63,7 +63,10 @@ fn run_ipc() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut event_loop_builder = EventLoop::<UiEvent>::with_user_event();
     #[cfg(target_os = "macos")]
-    event_loop_builder.with_activation_policy(ActivationPolicy::Accessory);
+    event_loop_builder
+        .with_activation_policy(ActivationPolicy::Accessory)
+        .with_default_menu(false)
+        .with_activate_ignoring_other_apps(false);
     let event_loop = event_loop_builder.build()?;
     let compositor = iced_tiny_skia::window::compositor::new(
         iced_tiny_skia::Settings::default(),

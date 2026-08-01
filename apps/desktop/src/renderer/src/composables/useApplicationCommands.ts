@@ -17,6 +17,7 @@ import type {
 } from "@yadaw/contracts"
 import type { UiMenubarMenu } from "@yadaw/ui"
 import { useAudioBenchmarkStore } from "../stores/audioBenchmark"
+import { useAboutStore } from "../stores/about"
 import { useCompiledEffectGraphStore } from "../stores/compiledEffectGraph"
 import { useApplicationWindowStore } from "../stores/applicationWindow"
 import { useMixerStore } from "../stores/mixer"
@@ -54,6 +55,7 @@ export function useApplicationCommands() {
   const studioWorkflowStore = useStudioWorkflowStore()
   const pianoRollStore = usePianoRollStore()
   const benchmarkStore = useAudioBenchmarkStore()
+  const aboutStore = useAboutStore()
   const compiledEffectGraphStore = useCompiledEffectGraphStore()
   const applicationWindowStore = useApplicationWindowStore()
   const applicationSettingsStore = useApplicationSettingsStore()
@@ -275,8 +277,10 @@ export function useApplicationCommands() {
         await closeApplication(command)
         break
       case "view.toggle-full-screen":
-      case "application.about":
         await applicationWindowStore.execute(command)
+        break
+      case "application.about":
+        aboutStore.open()
         break
       case "view.toggle-mixer-dock":
         if (router.currentRoute.value.name === "studio") workspaceStore.toggleMixerDock()

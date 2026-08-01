@@ -98,6 +98,7 @@ jobs:
           X64_TARGET: x86_64-apple-darwin
         run: |
           rustup target add "$ARM_TARGET" "$X64_TARGET"
+          test "$(plutil -extract LSUIElement raw build/macos-agent-info.plist)" = "true"
 
           for package in @yadaw/dsp-node @yadaw/audio-host-client; do
             pnpm --filter "$package" exec napi build \
@@ -128,6 +129,10 @@ jobs:
               --target "$target" \
               -p yadaw-audio-host \
               -p yadaw-vst3-host
+            for binary in yadaw-audio-host yadaw-vst3-probe; do
+              otool -l "target/$target/release/$binary" | \
+                grep -q "sectname __info_plist"
+            done
             cargo truce build --vst3 --target "$target"
           done
 

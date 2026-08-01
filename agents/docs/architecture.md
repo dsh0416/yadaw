@@ -36,10 +36,19 @@ Desktop-shell identity remains owned by Electron even though editor windows
 live in `audio-host`. Both processes use the stable `dev.yadaw.studio`
 application ID. On Windows, Electron passes its main-window HWND through the
 native client only at helper bootstrap; winit creates each editor as an owned
-window and omits its independent taskbar item. On macOS the helper uses the
-Accessory activation policy so it does not create a second Dock application.
-On X11 and Wayland the Electron class and winit `WM_CLASS`/application ID use
-the same value. The helper never creates a tray icon.
+window and omits its independent taskbar item. On macOS the helper and VST3
+probe embed `LSUIElement` before AppKit starts. The helper also uses the
+Accessory activation policy, disables winit's default menu, and does not
+activate itself at launch, so neither native executable creates a second Dock
+application or steals focus from Electron. The helper's plug-in editor windows
+may still become active when the user clicks them. On X11 and Wayland the
+Electron class and winit `WM_CLASS`/application ID use the same value. The
+helper never creates a tray icon.
+
+Electron packaging derives the macOS, Windows, and Linux application icons
+from `apps/desktop/build/icon.svg`. The matching PNG is packaged for runtime
+window icons and the development-mode macOS Dock, so no surface falls back to
+Electron's default icon.
 
 On Windows, the winit main thread initializes OLE before loading any VST3
 module and keeps it initialized until every view, controller, component, and

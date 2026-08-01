@@ -80,7 +80,8 @@ describe("AudioBenchmarkDialog", () => {
     expect(wrapper.text()).toContain("bundled VST3 effects")
     expect(wrapper.text()).toContain("Pause playback and close CPU-heavy apps")
     expect(wrapper.find(".signal-map").exists()).toBe(false)
-    await wrapper.get(".primary-button").trigger("click")
+    expect(wrapper.get(".benchmark-run-button").classes()).toContain("ui-button--primary")
+    await wrapper.get(".benchmark-run-button").trigger("click")
     expect(wrapper.emitted("run")).toHaveLength(1)
   })
 
@@ -90,7 +91,10 @@ describe("AudioBenchmarkDialog", () => {
     })
 
     expect(wrapper.text()).toContain("Measuring engine paths")
-    expect(wrapper.find(".progress-track").exists()).toBe(true)
+    expect(wrapper.find(".benchmark-progress").exists()).toBe(true)
+    expect(wrapper.get('[role="progressbar"]').attributes("aria-label")).toContain(
+      "VST3 processing"
+    )
   })
 
   it("renders the rating, timing lane, and machine details", () => {

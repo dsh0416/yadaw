@@ -1,8 +1,8 @@
-import { BrowserWindow } from "electron"
+import { BrowserWindow, shell } from "electron"
 import { join } from "node:path"
 import { deferDirtyProjectClose } from "./dirty-project-close"
 import type { ProjectService } from "./project-service"
-import { rendererDirectory } from "./runtime-paths"
+import { applicationIconPath, rendererDirectory } from "./runtime-paths"
 
 let projectService: ProjectService | null = null
 
@@ -12,6 +12,19 @@ export function setWindowProjectService(service: ProjectService): void {
 
 export let mainWindow: BrowserWindow | null = null
 export let splashWindow: BrowserWindow | null = null
+
+export function openExternalUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return false
+    void shell.openExternal(parsed.toString()).catch((error: unknown) => {
+      console.error("YADAW could not open an external URL", error)
+    })
+    return true
+  } catch {
+    return false
+  }
+}
 
 export function loadMainWindow(window: BrowserWindow): void {
   if (process.env.YADAW_RENDERER_URL) {
@@ -31,6 +44,7 @@ export function loadSplashWindow(window: BrowserWindow): void {
 
 export function createSplashWindow(): BrowserWindow {
   const window = new BrowserWindow({
+    icon: applicationIconPath,
     show: false,
     width: 620,
     height: 360,
@@ -73,6 +87,7 @@ export function createMainWindow(loadContent = true): BrowserWindow {
   const isMacOS = process.platform === "darwin"
   const usesWindowControlsOverlay = process.platform === "linux"
   const window = new BrowserWindow({
+    icon: applicationIconPath,
     show: loadContent,
     width: 1440,
     height: 900,
@@ -111,7 +126,10 @@ export function createMainWindow(loadContent = true): BrowserWindow {
     if (mainWindow === window) mainWindow = null
   })
 
-  window.webContents.setWindowOpenHandler(() => ({ action: "deny" }))
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    openExternalUrl(url)
+    return { action: "deny" }
+  })
   window.webContents.on("will-navigate", (event, url) => {
     if (url !== window.webContents.getURL()) {
       event.preventDefault()

@@ -3,6 +3,7 @@ import { UiProvider, useLocaleFonts } from "@yadaw/ui"
 import { useEventListener } from "@vueuse/core"
 import { computed, onMounted, onUnmounted, watch } from "vue"
 import { storeToRefs } from "pinia"
+import { useApplicationCommands } from "./composables/useApplicationCommands"
 import { useTheme } from "./composables/useTheme"
 import { setAppLocale } from "./i18n"
 import { useApplicationSettingsStore } from "./stores/applicationSettings"
@@ -15,6 +16,7 @@ import { useApplicationWindowStore } from "./stores/applicationWindow"
 import { useMidiInputStore } from "./stores/midiInput"
 import GlobalOperationHost from "./components/operations/GlobalOperationHost.vue"
 import AudioBenchmarkHost from "./components/benchmark/AudioBenchmarkHost.vue"
+import AboutYadawHost from "./components/about/AboutYadawHost.vue"
 import CompiledEffectGraphHost from "./components/effect-graph/CompiledEffectGraphHost.vue"
 import GlobalDialogHost from "./components/dialog/GlobalDialogHost.vue"
 import AppChrome from "./components/application/AppChrome.vue"
@@ -32,6 +34,7 @@ const midiInputStore = useMidiInputStore()
 const { settings } = storeToRefs(applicationSettingsStore)
 const { ready: lifecycleReady } = storeToRefs(lifecycleStore)
 const { audioHostRef } = storeToRefs(audioRuntimeStore)
+const { platform, menus, execute: executeApplicationCommand } = useApplicationCommands()
 const themePreference = computed(() => settings.value?.theme ?? "system")
 const documentLocale = computed(() => settings.value?.locale ?? DEFAULT_LOCALE)
 const uiLocale = computed(() => rekaLocale(documentLocale.value))
@@ -89,11 +92,17 @@ onUnmounted(() => {
 
 <template>
   <UiProvider dir="ltr" :locale="uiLocale" :tooltip-delay="350" :tooltip-skip-delay="100">
-    <AppChrome v-if="lifecycleReady">
+    <AppChrome
+      v-if="lifecycleReady"
+      :platform="platform"
+      :menus="menus"
+      @command="executeApplicationCommand"
+    >
       <AppRouteView />
     </AppChrome>
     <GlobalOperationHost />
     <AudioBenchmarkHost />
+    <AboutYadawHost />
     <CompiledEffectGraphHost />
     <GlobalDialogHost />
   </UiProvider>

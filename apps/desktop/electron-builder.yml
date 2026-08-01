@@ -16,6 +16,7 @@ artifactName: "${productName}-${version}-${os}-${arch}.${ext}"
 
 files:
   - out/**/*
+  - build/icon.png
   - package.json
   - node_modules/**/*
   - "!node_modules/@yadaw/dsp-node/src/**/*"
@@ -27,6 +28,7 @@ files:
   - "!node_modules/@unhead/bundler/**/*"
 
 win:
+  icon: build/icon.svg
   extraResources:
     - from: ../../target/release/yadaw-audio-host.exe
       to: yadaw-audio-host.exe
@@ -42,6 +44,7 @@ win:
     - nsis
 
 mac:
+  icon: build/icon.svg
   hardenedRuntime: true
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
@@ -60,6 +63,7 @@ mac:
     - dmg
 
 linux:
+  icon: build/icon.svg
   extraResources:
     - from: ../../target/release/yadaw-audio-host
       to: yadaw-audio-host
