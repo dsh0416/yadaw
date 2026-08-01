@@ -61,10 +61,6 @@ function handleOpenAutoFocus(event: Event): void {
   })
 }
 
-function handleContentKeydown(event: KeyboardEvent): void {
-  if (pendingSearchFocus.value) return
-  panel.value?.handlePanelKeydown(event)
-}
 </script>
 
 <template>

@@ -60,7 +60,6 @@ function choose(id: string): void {
         class="ui-menu__content ui-menu__root-content"
         :collision-padding="8"
         :aria-label="props.menuLabel"
-        @keydown.capture="panel?.handlePanelKeydown($event)"
       >
         <UiMenuPanel
           ref="panel"
