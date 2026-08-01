@@ -29,6 +29,8 @@ import { useMidiInputStore } from "../stores/midiInput"
 import { useRecordingStore } from "../stores/recording"
 import { useStudioWorkspaceStore } from "../stores/studioWorkspace"
 import { useTransportStore } from "../stores/transport"
+import { planAudioClipSplit, planMidiClipSplits } from "../utils/clipEditing"
+import { secondsToTick } from "../utils/tempoMap"
 
 function defaultProject(name: string): CreateProjectRequest {
   return {
@@ -146,6 +148,13 @@ export function useApplicationCommands() {
           value: "edit.select-all",
           label: t("menu.selectAll"),
           shortcut: shortcutLabel("edit.select-all")
+        },
+        {
+          value: "edit.split-at-playhead",
+          label: t("menu.splitAtPlayhead"),
+          shortcut: shortcutLabel("edit.split-at-playhead"),
+          separatorBefore: true,
+          disabled: !projectReady.value
         },
         {
           value: "application.preferences",
@@ -267,6 +276,25 @@ export function useApplicationCommands() {
           command.slice("edit.".length) as "cut" | "copy" | "paste" | "select-all"
         )
         if (!handled) await applicationWindowStore.execute(command)
+        break
+      }
+      case "edit.split-at-playhead": {
+        if (!projectReady.value || router.currentRoute.value.name !== "studio") break
+        const playheadFrame = Math.round(
+          transportStore.playheadSeconds * mixerStore.graph.sampleRate
+        )
+        const audioClip = mixerStore.graph.audioClips.find(
+          (clip) => clip.id === transportStore.selectedClipId
+        )
+        const split = audioClip
+          ? planAudioClipSplit(audioClip, playheadFrame)
+          : planMidiClipSplits(
+              mixerStore.graph.midiClips.filter((clip) =>
+                pianoRollStore.arrangementClipIds.includes(clip.id)
+              ),
+              Math.round(secondsToTick(mixerStore.graph.tempoMap, transportStore.playheadSeconds))
+            )
+        if (split) await mixerStore.execute(split)
         break
       }
       case "application.preferences":

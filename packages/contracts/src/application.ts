@@ -17,6 +17,7 @@ export const APPLICATION_COMMAND_IDS = [
   "edit.copy",
   "edit.paste",
   "edit.select-all",
+  "edit.split-at-playhead",
   "application.preferences",
   "application.quit",
   "window.close",

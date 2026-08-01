@@ -111,7 +111,13 @@ function macApplicationMenu(shortcuts: ShortcutPreferences): MenuItemConstructor
         commandItem(t("menu.cut"), "edit.cut", accelerator("edit.cut")),
         commandItem(t("menu.copy"), "edit.copy", accelerator("edit.copy")),
         commandItem(t("menu.paste"), "edit.paste", accelerator("edit.paste")),
-        commandItem(t("menu.selectAll"), "edit.select-all", accelerator("edit.select-all"))
+        commandItem(t("menu.selectAll"), "edit.select-all", accelerator("edit.select-all")),
+        { type: "separator" },
+        commandItem(
+          t("menu.splitAtPlayhead"),
+          "edit.split-at-playhead",
+          accelerator("edit.split-at-playhead")
+        )
       ]
     },
     {

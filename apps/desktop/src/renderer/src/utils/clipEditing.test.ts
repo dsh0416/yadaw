@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest"
-import type { MidiClipState } from "@yadaw/contracts"
-import { planMidiClipSplits, planMidiClipTrim, previewMidiClipTrim } from "./clipEditing"
+import type { AudioClipState, MidiClipState } from "@yadaw/contracts"
+import {
+  planAudioClipFade,
+  planAudioClipSplit,
+  planAudioClipTrim,
+  planMidiClipSplits,
+  planMidiClipTrim,
+  previewAudioClipTrim,
+  previewMidiClipTrim,
+  projectFrameToAssetFrame
+} from "./clipEditing"
 
 function clip(overrides: Partial<MidiClipState> = {}): MidiClipState {
   return {
@@ -35,6 +44,79 @@ function clip(overrides: Partial<MidiClipState> = {}): MidiClipState {
     ...overrides
   }
 }
+
+function audioClip(overrides: Partial<AudioClipState> = {}): AudioClipState {
+  return {
+    id: "audio-1",
+    assetId: "asset-1",
+    trackId: "track-1",
+    name: "Take",
+    startFrame: 1_000,
+    sourceOffsetFrames: 200,
+    lengthFrames: 800,
+    sourceLengthFrames: 1_600,
+    fadeInFrames: 100,
+    fadeOutFrames: 120,
+    assetSampleRate: 96_000,
+    assetChannels: 2,
+    ...overrides
+  }
+}
+
+describe("arrangement audio clip editing", () => {
+  it("trims within source bounds and keeps fades valid", () => {
+    const value = audioClip()
+
+    expect(previewAudioClipTrim(value, "start", 1_750)).toMatchObject({
+      startFrame: 1_750,
+      sourceOffsetFrames: 950,
+      lengthFrames: 50,
+      fadeInFrames: 0,
+      fadeOutFrames: 50
+    })
+    expect(previewAudioClipTrim(value, "start", 0)).toMatchObject({
+      startFrame: 800,
+      sourceOffsetFrames: 0,
+      lengthFrames: 1_000
+    })
+    expect(previewAudioClipTrim(value, "end", 9_999)).toMatchObject({ lengthFrames: 1_400 })
+    expect(planAudioClipTrim(value, "end", 1_800)).toBeNull()
+  })
+
+  it("splits as one batch, preserving only the outer fades", () => {
+    expect(planAudioClipSplit(audioClip(), 1_400, () => "audio-2")).toEqual({
+      type: "batch",
+      commands: [
+        {
+          type: "update-audio-clip",
+          clipId: "audio-1",
+          patch: { lengthFrames: 400, fadeInFrames: 100, fadeOutFrames: 0 }
+        },
+        {
+          type: "create-audio-clip",
+          clip: expect.objectContaining({
+            id: "audio-2",
+            startFrame: 1_400,
+            sourceOffsetFrames: 600,
+            lengthFrames: 400,
+            fadeInFrames: 0,
+            fadeOutFrames: 120
+          })
+        }
+      ]
+    })
+  })
+
+  it("clamps fades and converts project source frames to native asset frames", () => {
+    expect(planAudioClipFade(audioClip(), "in", 750)).toEqual({
+      type: "update-audio-clip",
+      clipId: "audio-1",
+      patch: { fadeInFrames: 680 }
+    })
+    expect(projectFrameToAssetFrame(240, 48_000, 96_000)).toBe(480)
+    expect(projectFrameToAssetFrame(241, 48_000, 44_100, "ceil")).toBe(222)
+  })
+})
 
 describe("arrangement MIDI clip editing", () => {
   it("trims and re-extends both edges within preserved source bounds", () => {

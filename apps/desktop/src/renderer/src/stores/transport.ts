@@ -22,6 +22,13 @@ export interface TimelineClip {
   endSeconds: number
   channels: number
   sampleRate: number
+  projectSampleRate: number
+  startFrame: number
+  sourceOffsetFrames: number
+  lengthFrames: number
+  sourceLengthFrames: number
+  fadeInFrames: number
+  fadeOutFrames: number
 }
 
 export function assetsToTimelineClips(assets: Asset[]): TimelineClip[] {
@@ -37,7 +44,14 @@ export function assetsToTimelineClips(assets: Asset[]): TimelineClip[] {
       durationSeconds,
       endSeconds: cursor + durationSeconds,
       channels: asset.channels,
-      sampleRate: asset.sampleRate
+      sampleRate: asset.sampleRate,
+      projectSampleRate: asset.sampleRate,
+      startFrame: Math.round(cursor * asset.sampleRate),
+      sourceOffsetFrames: 0,
+      lengthFrames: Number(asset.frameCount),
+      sourceLengthFrames: Number(asset.frameCount),
+      fadeInFrames: 0,
+      fadeOutFrames: 0
     }
     cursor = clip.endSeconds
     return clip
@@ -78,7 +92,14 @@ export const useTransportStore = defineStore("transport", () => {
         durationSeconds,
         endSeconds: startSeconds + durationSeconds,
         channels: clip.assetChannels,
-        sampleRate: clip.assetSampleRate
+        sampleRate: clip.assetSampleRate,
+        projectSampleRate: sampleRate,
+        startFrame: clip.startFrame,
+        sourceOffsetFrames: clip.sourceOffsetFrames,
+        lengthFrames: clip.lengthFrames,
+        sourceLengthFrames: clip.sourceLengthFrames,
+        fadeInFrames: clip.fadeInFrames,
+        fadeOutFrames: clip.fadeOutFrames
       }
     })
   )

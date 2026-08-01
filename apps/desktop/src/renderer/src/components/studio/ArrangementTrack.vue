@@ -2,6 +2,7 @@
 import { computed } from "vue"
 import type { TempoMapSnapshot, WaveformDisplayMode } from "@yadaw/contracts"
 import type { TimelineClip } from "../../stores/transport"
+import type { AudioFadeEdge, ClipTrimEdge } from "../../utils/clipEditing"
 import { barTicksThroughTick, beatTicksThroughTick } from "../../utils/tempoMap"
 import {
   secondsToTimelineX,
@@ -26,6 +27,8 @@ const props = defineProps<{
   trackColor: string
   dragPreview: TimelineClip | null
   draggingClipId: string | null
+  playheadFrame: number
+  splitShortcut?: string
 }>()
 
 const emit = defineEmits<{
@@ -34,6 +37,11 @@ const emit = defineEmits<{
   waveformFrameCount: [frameCount: number, sampleRate: number]
   clipDragStart: [clipId: string, offsetPixels: number]
   clipDragEnd: []
+  remove: [clipId: string]
+  split: [clipId: string]
+  trim: [clipId: string, edge: ClipTrimEdge, frame: number]
+  fade: [clipId: string, edge: AudioFadeEdge, frames: number]
+  resetFades: [clipId: string]
 }>()
 
 const laneStyle = computed(() => ({
@@ -92,6 +100,12 @@ function relayWaveformFrameCount(frameCount: number, sampleRate: number): void {
 function relayClipDragStart(clipId: string, offsetPixels: number): void {
   emit("clipDragStart", clipId, offsetPixels)
 }
+function relayTrim(clipId: string, edge: ClipTrimEdge, frame: number): void {
+  emit("trim", clipId, edge, frame)
+}
+function relayFade(clipId: string, edge: AudioFadeEdge, frames: number): void {
+  emit("fade", clipId, edge, frames)
+}
 </script>
 
 <template>
@@ -128,10 +142,17 @@ function relayClipDragStart(clipId: string, offsetPixels: number): void {
       :selected="clip.id === selectedClipId"
       :recording="clip.id === liveClip?.id"
       :dragging="clip.id === draggingClipId"
+      :playhead-frame="playheadFrame"
+      :split-shortcut="splitShortcut"
       @select="emit('selectClip', $event)"
       @waveform-frame-count="relayWaveformFrameCount"
       @drag-start="relayClipDragStart"
       @drag-end="emit('clipDragEnd')"
+      @remove="emit('remove', $event)"
+      @split="emit('split', $event)"
+      @trim="relayTrim"
+      @fade="relayFade"
+      @reset-fades="emit('resetFades', $event)"
     />
     <div
       v-if="dragPreview"

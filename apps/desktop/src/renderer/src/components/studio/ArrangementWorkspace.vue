@@ -30,7 +30,15 @@ import { useArrangementViewport } from "./useArrangementViewport"
 import { useArrangementClipDrag } from "./useArrangementClipDrag"
 import { useGlobalLaneSelection } from "./useGlobalLaneSelection"
 import { snapTicks } from "../../utils/pianoRoll"
-import { type ClipTrimEdge, planMidiClipSplits, planMidiClipTrim } from "../../utils/clipEditing"
+import {
+  type AudioFadeEdge,
+  type ClipTrimEdge,
+  planAudioClipFade,
+  planAudioClipSplit,
+  planAudioClipTrim,
+  planMidiClipSplits,
+  planMidiClipTrim
+} from "../../utils/clipEditing"
 import { useMidiClipDrag } from "./useMidiClipDrag"
 
 const props = defineProps<{
@@ -131,7 +139,24 @@ const liveClips = computed<TimelineClip[]>(() =>
                 durationSeconds: recordingDuration.value,
                 endSeconds: recordingStartSeconds.value + recordingDuration.value,
                 channels: channel.inputFormat === "mono" ? 1 : 2,
-                sampleRate: session.value?.configuration.sampleRate ?? 48_000
+                sampleRate: session.value?.configuration.sampleRate ?? 48_000,
+                projectSampleRate: session.value?.configuration.sampleRate ?? 48_000,
+                startFrame: props.recordingStartFrame ?? 0,
+                sourceOffsetFrames: 0,
+                lengthFrames: Math.max(
+                  1,
+                  Math.round(
+                    recordingDuration.value * (session.value?.configuration.sampleRate ?? 48_000)
+                  )
+                ),
+                sourceLengthFrames: Math.max(
+                  1,
+                  Math.round(
+                    recordingDuration.value * (session.value?.configuration.sampleRate ?? 48_000)
+                  )
+                ),
+                fadeInFrames: 0,
+                fadeOutFrames: 0
               }
             ]
           : []
@@ -219,6 +244,9 @@ const playheadStyle = computed(() => ({
   )}px`
 }))
 const playheadTick = computed(() => secondsToTick(mixerStore.graph.tempoMap, playheadSeconds.value))
+const playheadFrame = computed(() =>
+  Math.round(playheadSeconds.value * mixerStore.graph.sampleRate)
+)
 
 watch(
   () => props.recordingStartedAt,
@@ -244,6 +272,38 @@ function handleMoveClip(clipId: string, trackId: string, startSeconds: number): 
     clipId,
     trackId,
     startFrame: Math.round(startSeconds * mixerStore.graph.sampleRate)
+  })
+}
+function removeAudioClip(clipId: string): void {
+  void mixerStore.execute({ type: "delete-audio-clip", clipId }).then(() => {
+    if (transportStore.selectedClipId === clipId) transportStore.clearSelection()
+  })
+}
+function trimAudioClip(clipId: string, edge: ClipTrimEdge, frame: number): void {
+  const clip = mixerStore.graph.audioClips.find((candidate) => candidate.id === clipId)
+  if (!clip) return
+  const command = planAudioClipTrim(clip, edge, frame)
+  if (command) void mixerStore.execute(command)
+}
+function splitAudioClip(clipId: string): void {
+  const clip = mixerStore.graph.audioClips.find((candidate) => candidate.id === clipId)
+  if (!clip) return
+  const command = planAudioClipSplit(clip, playheadFrame.value)
+  if (command) void mixerStore.execute(command)
+}
+function updateAudioFade(clipId: string, edge: AudioFadeEdge, frames: number): void {
+  const clip = mixerStore.graph.audioClips.find((candidate) => candidate.id === clipId)
+  if (!clip) return
+  const command = planAudioClipFade(clip, edge, frames)
+  if (command) void mixerStore.execute(command)
+}
+function resetAudioFades(clipId: string): void {
+  const clip = mixerStore.graph.audioClips.find((candidate) => candidate.id === clipId)
+  if (!clip || (clip.fadeInFrames === 0 && clip.fadeOutFrames === 0)) return
+  void mixerStore.execute({
+    type: "update-audio-clip",
+    clipId,
+    patch: { fadeInFrames: 0, fadeOutFrames: 0 }
   })
 }
 function reorderTrack(index: number, direction: -1 | 1): void {
@@ -557,11 +617,17 @@ function createMidiClip(trackId: string, requestedStartTick: number): void {
                 :viewport-end-seconds="viewportEndSeconds"
                 :selected-clip-id="selectedClipId"
                 :live-clip="liveClips.find((clip) => clip.trackId === track.trackId) ?? null"
+                :playhead-frame="playheadFrame"
                 @seek="handleSeek"
                 @select-clip="selectAudioClip"
                 @waveform-frame-count="handleWaveformFrameCount"
                 @clip-drag-start="handleClipDragStart"
                 @clip-drag-end="handleClipDragEnd"
+                @remove="removeAudioClip"
+                @split="splitAudioClip"
+                @trim="trimAudioClip"
+                @fade="updateAudioFade"
+                @reset-fades="resetAudioFades"
               />
               <MidiArrangementTrack
                 v-else
