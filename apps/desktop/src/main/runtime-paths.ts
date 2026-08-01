@@ -4,3 +4,4 @@ import { join } from "node:path"
 // Keeping this calculation shared prevents source-directory-relative paths from
 // resolving differently after bundling.
 export const rendererDirectory = join(import.meta.dirname, "../renderer")
+export const applicationIconPath = join(import.meta.dirname, "../../build/icon.png")

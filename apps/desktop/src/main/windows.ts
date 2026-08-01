@@ -2,7 +2,7 @@ import { BrowserWindow } from "electron"
 import { join } from "node:path"
 import { deferDirtyProjectClose } from "./dirty-project-close"
 import type { ProjectService } from "./project-service"
-import { rendererDirectory } from "./runtime-paths"
+import { applicationIconPath, rendererDirectory } from "./runtime-paths"
 
 let projectService: ProjectService | null = null
 
@@ -31,6 +31,7 @@ export function loadSplashWindow(window: BrowserWindow): void {
 
 export function createSplashWindow(): BrowserWindow {
   const window = new BrowserWindow({
+    icon: applicationIconPath,
     show: false,
     width: 620,
     height: 360,
@@ -73,6 +74,7 @@ export function createMainWindow(loadContent = true): BrowserWindow {
   const isMacOS = process.platform === "darwin"
   const usesWindowControlsOverlay = process.platform === "linux"
   const window = new BrowserWindow({
+    icon: applicationIconPath,
     show: loadContent,
     width: 1440,
     height: 900,
