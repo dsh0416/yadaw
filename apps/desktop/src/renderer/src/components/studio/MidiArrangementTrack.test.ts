@@ -39,7 +39,7 @@ describe("MidiArrangementTrack", () => {
         draggingClipId: null
       }
     })
-    const renderedClip = wrapper.get('button[aria-label="Verse, MIDI clip"]')
+    const renderedClip = wrapper.get('[role="button"][aria-label="Verse, MIDI clip"]')
 
     expect(renderedClip.attributes("aria-pressed")).toBe("true")
     await renderedClip.trigger("mousedown", { detail: 1 })

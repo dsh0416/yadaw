@@ -30,6 +30,7 @@ import { useArrangementViewport } from "./useArrangementViewport"
 import { useArrangementClipDrag } from "./useArrangementClipDrag"
 import { useGlobalLaneSelection } from "./useGlobalLaneSelection"
 import { snapTicks } from "../../utils/pianoRoll"
+import { type ClipTrimEdge, planMidiClipSplits, planMidiClipTrim } from "../../utils/clipEditing"
 import { useMidiClipDrag } from "./useMidiClipDrag"
 
 const props = defineProps<{
@@ -217,6 +218,7 @@ const playheadStyle = computed(() => ({
     pixelsPerQuarter.value
   )}px`
 }))
+const playheadTick = computed(() => secondsToTick(mixerStore.graph.tempoMap, playheadSeconds.value))
 
 watch(
   () => props.recordingStartedAt,
@@ -267,6 +269,24 @@ function removeMidiClip(clipId: string): void {
   void mixerStore.execute({ type: "delete-midi-clip", clipId }).then(() => {
     pianoRollStore.clearArrangementSelection()
   })
+}
+
+function trimMidiClip(clipId: string, edge: ClipTrimEdge, requestedTick: number): void {
+  const clip = mixerStore.graph.midiClips.find((candidate) => candidate.id === clipId)
+  if (!clip) return
+  const command = planMidiClipTrim(clip, edge, snapTicks(requestedTick, pianoRollStore.snap))
+  if (command) void mixerStore.execute(command)
+}
+
+function splitMidiClip(clipId: string): void {
+  const selectedIds = pianoRollStore.arrangementClipIds.includes(clipId)
+    ? new Set(pianoRollStore.arrangementClipIds)
+    : new Set([clipId])
+  const command = planMidiClipSplits(
+    mixerStore.graph.midiClips.filter((clip) => selectedIds.has(clip.id)),
+    playheadTick.value
+  )
+  if (command) void mixerStore.execute(command)
 }
 
 function moveMidiClip(clipId: string, trackId: string, startTick: number): void {
@@ -553,13 +573,17 @@ function createMidiClip(trackId: string, requestedStartTick: number): void {
                 :pixels-per-quarter="pixelsPerQuarter"
                 :track-height="height"
                 :selected-clip-ids="pianoRollStore.arrangementClipIds"
-                :keyboard-insertion-tick="secondsToTick(mixerStore.graph.tempoMap, playheadSeconds)"
+                :keyboard-insertion-tick="playheadTick"
+                :playhead-tick="playheadTick"
+                :snap="pianoRollSnap"
                 :drag-preview="midiDragPreview?.trackId === track.trackId ? midiDragPreview : null"
                 :dragging-clip-id="midiClipDrag?.clipId ?? null"
                 @remove="removeMidiClip"
                 @select="selectMidiClip"
                 @open="openMidiClip"
                 @create="createMidiClip"
+                @split="splitMidiClip"
+                @trim="trimMidiClip"
                 @clip-drag-start="handleMidiClipDragStart"
                 @clip-drag-end="handleMidiClipDragEnd"
               />
