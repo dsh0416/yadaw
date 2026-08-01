@@ -1,6 +1,22 @@
 import { yadawFontsOptions } from "@yadaw/ui/fonts"
 import Unfonts from "unplugin-fonts/vite"
-import { defineConfig, type HeadConfig, type PageData } from "vitepress"
+import { defineConfig, type HeadConfig, type MarkdownOptions, type PageData } from "vitepress"
+
+const markdown: MarkdownOptions = {
+  config(md) {
+    const defaultFence = md.renderer.rules.fence
+    md.renderer.rules.fence = (tokens, idx, options, env, self) => {
+      const token = tokens[idx]
+      if (token !== undefined && token.info.trim() === "mermaid") {
+        return `<ClientOnly><MermaidDiagram code="${encodeURIComponent(token.content)}" /></ClientOnly>\n`
+      }
+      if (defaultFence !== undefined) {
+        return defaultFence(tokens, idx, options, env, self)
+      }
+      return self.renderToken(tokens, idx, options)
+    }
+  }
+}
 
 const docsRoot = "https://yadaw.minori.live"
 const ogImage = `${docsRoot}/og.png`
@@ -63,8 +79,10 @@ export default defineConfig({
   sitemap: {
     hostname: docsRoot
   },
+  markdown,
   vite: {
-    plugins: [Unfonts(yadawFontsOptions)]
+    // unplugin-fonts resolves against workspace Vite 8; VitePress pins Vite 5.
+    plugins: [Unfonts(yadawFontsOptions) as never]
   },
   head: [
     ["link", { rel: "icon", href: "/logo.svg", type: "image/svg+xml" }],

@@ -5,7 +5,7 @@ description: Why native Logic Pro on Apple Silicon still cannot host ARA plug-in
 tags: [ara]
 ---
 
-# Why ARA went missing on Apple Silicon
+# The journey to ARA support
 
 Ever since I moved to Apple Silicon, I have barely used ARA plug-ins in Logic Pro. The only reliable way to load them is to open Logic under Rosetta — and that tax on performance is hard to accept on a machine that is otherwise excellent for music production.
 
