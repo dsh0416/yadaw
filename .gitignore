@@ -23,3 +23,4 @@ crates/dsp-node/index.js
 # APM dependencies
 apm_modules/
 .agents/skills/
+*.tsbuildinfo
