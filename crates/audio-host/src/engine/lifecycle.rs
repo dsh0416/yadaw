@@ -126,8 +126,8 @@ pub fn start_audio_engine(config: NativeAudioEngineConfig) -> Result<NativeAudio
         || {
             Arc::new(TransportShared {
                 state: Arc::new(AtomicU32::new(TRANSPORT_STOPPED)),
-                position_frames: AtomicU64::new(0),
-                position_ticks: AtomicU64::new(0),
+                position_frames: Arc::new(AtomicU64::new(0)),
+                position_ticks: Arc::new(AtomicU64::new(0)),
                 sample_rate: AtomicU32::new(session_sample_rate),
                 effective_bpm_bits: AtomicU64::new(f64::NAN.to_bits()),
                 clock_source: AtomicU32::new(0),

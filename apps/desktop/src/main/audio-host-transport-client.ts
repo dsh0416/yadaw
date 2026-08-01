@@ -329,6 +329,12 @@ export class AudioHostTransportClient {
     })
   }
 
+  /** Control-plane snapshot including authoritative musical ticks. */
+  async transportControlSnapshot(): Promise<TransportSnapshot> {
+    const response = await this.request({ type: "transport-snapshot" })
+    return this.rememberTransport(this.transportResult(response))
+  }
+
   private transportResult(response: ControlResponse): TransportSnapshot {
     const value = response.result.transport
     if (response.result.type !== "transport-snapshot" || !value) {

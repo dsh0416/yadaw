@@ -205,8 +205,8 @@ fn benchmark_runtime(
 ) -> std::result::Result<NativeMixerRuntime, String> {
     let transport = Arc::new(TransportShared {
         state: Arc::new(AtomicU32::new(TRANSPORT_STOPPED)),
-        position_frames: AtomicU64::new(0),
-        position_ticks: AtomicU64::new(0),
+        position_frames: Arc::new(AtomicU64::new(0)),
+        position_ticks: Arc::new(AtomicU64::new(0)),
         sample_rate: AtomicU32::new(BENCHMARK_SAMPLE_RATE),
         effective_bpm_bits: AtomicU64::new(f64::NAN.to_bits()),
         clock_source: AtomicU32::new(0),

@@ -32,3 +32,34 @@ pub struct RecordingWaveform {
     pub bucket_count: u32,
     pub peaks: BinaryPayload,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MidiRecordingTakeConfig {
+    pub path: String,
+    pub source_id: String,
+    pub clip_id: String,
+    pub track_id: String,
+    /// Stable MIDI input port id, or `None` for all inputs.
+    pub port_id: Option<String>,
+    pub channel: Option<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MidiRecordingStartConfig {
+    pub takes: Vec<MidiRecordingTakeConfig>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MidiRecordingTakeResult {
+    pub path: String,
+    pub source_id: String,
+    pub clip_id: String,
+    pub track_id: String,
+    pub event_count: u64,
+    pub dropped_events: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MidiRecordingResult {
+    pub takes: Vec<MidiRecordingTakeResult>,
+}

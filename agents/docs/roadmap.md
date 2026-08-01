@@ -69,9 +69,9 @@ DAW for MIDI work.
 - [ ] Transport loop
 - [ ] Count-in
 - [ ] Arrangement undo covering edit operations (not only mixer commands)
-- [ ] MIDI hardware input into the session (routing, monitoring, hot-plug
-      recovery, external MIDI Clock slave, and journal format are implemented;
-      MIDI take commit and crash-recovery integration remain)
+- [x] MIDI hardware input into the session (routing, monitoring, hot-plug
+      recovery, external MIDI Clock slave, journal capture, take commit, and
+      crash-recovery integration)
 
 ## M2 — Mix and deliver
 

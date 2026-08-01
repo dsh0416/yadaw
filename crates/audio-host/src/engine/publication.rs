@@ -45,8 +45,8 @@ fn engine_transport_handles(
             (
                 Arc::new(TransportShared {
                     state: Arc::new(AtomicU32::new(TRANSPORT_STOPPED)),
-                    position_frames: AtomicU64::new(0),
-                    position_ticks: AtomicU64::new(0),
+                    position_frames: Arc::new(AtomicU64::new(0)),
+                    position_ticks: Arc::new(AtomicU64::new(0)),
                     sample_rate: AtomicU32::new(sample_rate),
                     effective_bpm_bits: AtomicU64::new(f64::NAN.to_bits()),
                     clock_source: AtomicU32::new(0),
@@ -275,6 +275,21 @@ pub fn transport_command(
         .try_push(command)
         .map_err(|_| audio_error("mixer control queue", "full"))?;
     Ok(engine.transport.snapshot())
+}
+
+pub fn transport_clock_handle() -> Result<TransportClockHandle> {
+    let guard = engine_slot()
+        .lock()
+        .map_err(|_| audio_error("audio engine lock", "poisoned"))?;
+    let engine = guard
+        .as_ref()
+        .ok_or_else(|| invalid_config("audio engine is not running"))?;
+    Ok(TransportClockHandle {
+        state: Arc::clone(&engine.transport.state),
+        position_frames: Arc::clone(&engine.transport.position_frames),
+        position_ticks: Arc::clone(&engine.transport.position_ticks),
+        recording_state: TRANSPORT_RECORDING,
+    })
 }
 
 pub fn transport_snapshot() -> Result<NativeTransportSnapshot> {

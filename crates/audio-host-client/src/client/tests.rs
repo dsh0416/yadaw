@@ -240,6 +240,10 @@ mod tests {
                 },
             },
             ControlCommand::StopRecording,
+            ControlCommand::StartMidiRecording {
+                config: yadaw_dsp_runtime::protocol::MidiRecordingStartConfig { takes: Vec::new() },
+            },
+            ControlCommand::StopMidiRecording,
             ControlCommand::RecordingWaveform {
                 start_frame: 0,
                 end_frame: 100,

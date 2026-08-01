@@ -58,6 +58,56 @@ impl MidiInputMessage {
                 | Self::SysEx(_)
         )
     }
+
+    #[must_use]
+    pub fn encode(&self) -> Vec<u8> {
+        match self {
+            Self::NoteOff(channel, key, velocity) => {
+                vec![0x80 | (channel & 0x0f), *key, *velocity]
+            }
+            Self::NoteOn(channel, key, velocity) => {
+                vec![0x90 | (channel & 0x0f), *key, *velocity]
+            }
+            Self::PolyPressure(channel, key, pressure) => {
+                vec![0xa0 | (channel & 0x0f), *key, *pressure]
+            }
+            Self::ControlChange(channel, controller, value) => {
+                vec![0xb0 | (channel & 0x0f), *controller, *value]
+            }
+            Self::ProgramChange(channel, program) => {
+                vec![0xc0 | (channel & 0x0f), *program]
+            }
+            Self::ChannelPressure(channel, pressure) => {
+                vec![0xd0 | (channel & 0x0f), *pressure]
+            }
+            Self::PitchBend(channel, value) => {
+                vec![
+                    0xe0 | (channel & 0x0f),
+                    (*value & 0x7f) as u8,
+                    ((*value >> 7) & 0x7f) as u8,
+                ]
+            }
+            Self::SysEx(bytes) => {
+                let mut encoded = Vec::with_capacity(bytes.len().saturating_add(2));
+                encoded.push(0xf0);
+                encoded.extend_from_slice(bytes);
+                encoded.push(0xf7);
+                encoded
+            }
+            Self::Clock => vec![0xf8],
+            Self::Start => vec![0xfa],
+            Self::Continue => vec![0xfb],
+            Self::Stop => vec![0xfc],
+            Self::SongPosition(position) => vec![
+                0xf2,
+                (*position & 0x7f) as u8,
+                ((*position >> 7) & 0x7f) as u8,
+            ],
+            Self::ActiveSensing => vec![0xfe],
+            Self::SystemReset => vec![0xff],
+            Self::IgnoredSystem(status) => vec![*status],
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

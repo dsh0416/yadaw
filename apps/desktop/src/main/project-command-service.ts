@@ -348,7 +348,7 @@ export class ProjectCommandService {
     if (!meta.mutation || meta.expectedRevision === undefined) {
       return rpcFailure(meta, validationError(meta, "mutation"))
     }
-    const workspace = this.workspace()
+    const workspace = this.currentWorkspace()
     if (!workspace || !sameRef(meta.target, workspace.projectGraph)) {
       return rpcFailure(meta, staleError(meta))
     }
@@ -360,12 +360,12 @@ export class ProjectCommandService {
     return rpcSuccess(meta, { workspace, revision: resolved.value.revision })
   }
 
-  private workspace(): ProjectWorkspaceSnapshot | null {
+  currentWorkspace(): ProjectWorkspaceSnapshot | null {
     return this.lifecycle?.applicationState.workspaceSnapshot() ?? null
   }
 
   private requireWorkspace(): ProjectWorkspaceSnapshot {
-    const workspace = this.workspace()
+    const workspace = this.currentWorkspace()
     if (!workspace) throw new Error("No project workspace is committed")
     return workspace
   }

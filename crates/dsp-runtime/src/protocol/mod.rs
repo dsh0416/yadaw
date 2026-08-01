@@ -182,6 +182,10 @@ pub enum ControlCommand {
         config: RecordingStartConfig,
     },
     StopRecording,
+    StartMidiRecording {
+        config: MidiRecordingStartConfig,
+    },
+    StopMidiRecording,
     RecordingWaveform {
         start_frame: i64,
         end_frame: i64,
@@ -275,6 +279,9 @@ pub enum ControlResult {
     },
     RecordingStopped {
         recording: RecordingResult,
+    },
+    MidiRecordingStopped {
+        recording: MidiRecordingResult,
     },
     RecordingWaveform {
         waveform: RecordingWaveform,

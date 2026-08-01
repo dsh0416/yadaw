@@ -1,8 +1,12 @@
 use std::{
+    collections::{BTreeMap, VecDeque},
     fs::{File, OpenOptions},
     io::{self, BufReader, BufWriter, Read, Write},
     path::Path,
 };
+
+use crate::midi::{NormalizedMidiEvent, NormalizedMidiEventKind, NormalizedMidiNote};
+use crate::midi_input::{MidiInputMessage, MidiInputParser};
 
 const MAGIC: &[u8; 8] = b"YDMIDIJ1";
 const VERSION: u16 = 1;
@@ -217,6 +221,200 @@ fn checksum(bytes: &[u8]) -> u32 {
     })
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MidiJournalTake {
+    pub header: MidiJournalHeader,
+    pub notes: Vec<NormalizedMidiNote>,
+    pub events: Vec<NormalizedMidiEvent>,
+    pub length_ticks: u64,
+    pub warnings: Vec<String>,
+    pub ignored_corrupt_tail: bool,
+}
+
+/// Convert a recovered journal into clip-local notes/events.
+///
+/// `start_tick` is subtracted from absolute transport ticks so clip content is
+/// relative to the take origin. Unfinished notes are closed at the last
+/// observed tick (or zero) with release velocity 0.
+pub fn journal_records_to_take(
+    recovered: &RecoveredMidiJournal,
+    start_tick: u64,
+) -> MidiJournalTake {
+    let mut open_notes: BTreeMap<(u8, u8), VecDeque<(u64, u8)>> = BTreeMap::new();
+    let mut notes = Vec::new();
+    let mut events = Vec::new();
+    let mut warnings = Vec::new();
+    let mut last_tick = 0_u64;
+    let mut parser = MidiInputParser::default();
+    let mut first_timestamp = None;
+
+    for record in &recovered.records {
+        let Some(tick) = record_tick(record, start_tick, &mut first_timestamp) else {
+            warnings.push("Ignored MIDI journal record without a resolvable tick".to_owned());
+            continue;
+        };
+        last_tick = last_tick.max(tick);
+        let Ok(messages) = parser.push(&record.bytes) else {
+            warnings.push("Ignored undecodable MIDI journal record".to_owned());
+            continue;
+        };
+        for message in messages {
+            apply_recordable_message(
+                &message,
+                tick,
+                &mut open_notes,
+                &mut notes,
+                &mut events,
+                &mut warnings,
+                &mut last_tick,
+            );
+        }
+    }
+
+    for ((channel, key), pending) in open_notes {
+        for (note_start, velocity) in pending {
+            notes.push(NormalizedMidiNote {
+                start_tick: note_start,
+                duration_ticks: last_tick.saturating_sub(note_start).max(1),
+                channel,
+                key,
+                velocity,
+                release_velocity: 0,
+            });
+            warnings.push(format!(
+                "Closed unterminated note {key} on channel {} at take end",
+                channel + 1
+            ));
+        }
+    }
+
+    notes.sort_by_key(|note| (note.start_tick, note.channel, note.key));
+    events.sort_by_key(|event| event.tick);
+    let length_ticks = notes
+        .iter()
+        .map(|note| note.start_tick.saturating_add(note.duration_ticks))
+        .chain(events.iter().map(|event| event.tick.saturating_add(1)))
+        .max()
+        .unwrap_or(last_tick)
+        .max(1);
+
+    MidiJournalTake {
+        header: recovered.header.clone(),
+        notes,
+        events,
+        length_ticks,
+        warnings,
+        ignored_corrupt_tail: recovered.ignored_corrupt_tail,
+    }
+}
+
+fn record_tick(
+    record: &MidiJournalRecord,
+    start_tick: u64,
+    first_timestamp: &mut Option<u64>,
+) -> Option<u64> {
+    if let Some(tick) = record.transport_tick {
+        return Some(tick.saturating_sub(start_tick));
+    }
+    let first = *first_timestamp.get_or_insert(record.timestamp_micros);
+    let elapsed_micros = record.timestamp_micros.saturating_sub(first);
+    // Fallback when transport checkpoints are missing: assume 120 BPM / 960 PPQ.
+    let ticks = elapsed_micros.saturating_mul(960) / 500_000;
+    Some(ticks)
+}
+
+fn apply_recordable_message(
+    message: &MidiInputMessage,
+    tick: u64,
+    open_notes: &mut BTreeMap<(u8, u8), VecDeque<(u64, u8)>>,
+    notes: &mut Vec<NormalizedMidiNote>,
+    events: &mut Vec<NormalizedMidiEvent>,
+    warnings: &mut Vec<String>,
+    last_tick: &mut u64,
+) {
+    *last_tick = (*last_tick).max(tick);
+    match *message {
+        MidiInputMessage::NoteOn(channel, key, velocity) if velocity > 0 => {
+            open_notes
+                .entry((channel, key))
+                .or_default()
+                .push_back((tick, velocity));
+        }
+        MidiInputMessage::NoteOn(channel, key, _) | MidiInputMessage::NoteOff(channel, key, _) => {
+            let release_velocity = match *message {
+                MidiInputMessage::NoteOff(_, _, velocity) => velocity,
+                _ => 0,
+            };
+            let pending = open_notes.get_mut(&(channel, key));
+            let Some((start_tick, velocity)) = pending.and_then(VecDeque::pop_front) else {
+                warnings.push(format!(
+                    "Ignored unmatched note-off {key} on channel {}",
+                    channel + 1
+                ));
+                return;
+            };
+            notes.push(NormalizedMidiNote {
+                start_tick,
+                duration_ticks: tick.saturating_sub(start_tick).max(1),
+                channel,
+                key,
+                velocity,
+                release_velocity,
+            });
+        }
+        MidiInputMessage::ControlChange(channel, controller, value) => {
+            events.push(NormalizedMidiEvent {
+                tick,
+                channel: Some(channel),
+                kind: NormalizedMidiEventKind::ControlChange,
+                data: vec![controller, value],
+            });
+        }
+        MidiInputMessage::PitchBend(channel, value) => {
+            let bend = i16::try_from(i32::from(value) - 8_192).unwrap_or(0);
+            events.push(NormalizedMidiEvent {
+                tick,
+                channel: Some(channel),
+                kind: NormalizedMidiEventKind::PitchBend,
+                data: bend.to_le_bytes().to_vec(),
+            });
+        }
+        MidiInputMessage::ProgramChange(channel, program) => {
+            events.push(NormalizedMidiEvent {
+                tick,
+                channel: Some(channel),
+                kind: NormalizedMidiEventKind::ProgramChange,
+                data: vec![program],
+            });
+        }
+        MidiInputMessage::ChannelPressure(channel, pressure) => {
+            events.push(NormalizedMidiEvent {
+                tick,
+                channel: Some(channel),
+                kind: NormalizedMidiEventKind::ChannelPressure,
+                data: vec![pressure],
+            });
+        }
+        MidiInputMessage::PolyPressure(channel, key, pressure) => {
+            events.push(NormalizedMidiEvent {
+                tick,
+                channel: Some(channel),
+                kind: NormalizedMidiEventKind::PolyPressure,
+                data: vec![key, pressure],
+            });
+        }
+        MidiInputMessage::SysEx(ref bytes) => {
+            events.push(NormalizedMidiEvent {
+                tick,
+                channel: None,
+                kind: NormalizedMidiEventKind::SysEx,
+                data: bytes.clone(),
+            });
+        }
+        _ => {}
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -267,6 +465,45 @@ mod tests {
             .unwrap()
             .write_all(bytes)
             .unwrap();
+    }
+
+    #[test]
+    fn converts_journal_records_into_notes_and_closes_unterminated() {
+        let path = path("journal-to-take");
+        let header = sample_header();
+        let mut writer = MidiJournalWriter::create(&path, &header).unwrap();
+        writer
+            .append(&sample_record(1, Some(0), Some(960), vec![0x90, 60, 100]))
+            .unwrap();
+        writer
+            .append(&sample_record(2, Some(0), Some(1_920), vec![0x80, 60, 40]))
+            .unwrap();
+        writer
+            .append(&sample_record(3, Some(0), Some(2_400), vec![0x90, 64, 90]))
+            .unwrap();
+        writer
+            .append(&sample_record(4, Some(0), Some(2_880), vec![0xb0, 7, 100]))
+            .unwrap();
+        writer.flush().unwrap();
+        drop(writer);
+
+        let recovered = recover_midi_journal(&path).unwrap();
+        let take = journal_records_to_take(&recovered, 960);
+        assert_eq!(take.notes.len(), 2);
+        assert_eq!(take.notes[0].start_tick, 0);
+        assert_eq!(take.notes[0].duration_ticks, 960);
+        assert_eq!(take.notes[0].release_velocity, 40);
+        assert_eq!(take.notes[1].start_tick, 1_440);
+        assert_eq!(take.notes[1].duration_ticks, 480);
+        assert_eq!(take.notes[1].release_velocity, 0);
+        assert_eq!(take.events.len(), 1);
+        assert_eq!(take.events[0].kind, crate::midi::NormalizedMidiEventKind::ControlChange);
+        assert!(
+            take.warnings
+                .iter()
+                .any(|warning| warning.contains("unterminated"))
+        );
+        let _ = std::fs::remove_file(path);
     }
 
     #[test]

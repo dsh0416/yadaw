@@ -1,12 +1,12 @@
 ---
-title: Record audio
-description: Choose an input, arm a track, monitor it, and capture audio safely.
+title: Record audio and MIDI
+description: Arm tracks, monitor inputs, and capture audio or MIDI safely.
 ---
 
-# Record audio
+# Record audio and MIDI
 
-Recording requires an active input device, an audio track, and a selected
-hardware input.
+Recording requires an active audio engine. Arm one or more audio tracks, instrument
+tracks, or both before pressing Record.
 
 ## Prepare the system
 
@@ -14,11 +14,13 @@ hardware input.
 2. Select the input and output devices.
 3. Apply the configuration and confirm that the status bar says **Audio active**.
 4. In **Audio → Recording**, choose the recording format and swap location.
+5. For MIDI hardware, open **Settings → MIDI Input & sync** and confirm the
+   expected ports are available.
 
 Use a buffer that is small enough to monitor comfortably but large enough to
 avoid XRUNs. Start larger, then reduce it after the signal is stable.
 
-## Prepare the track
+## Prepare an audio track
 
 1. Open the **Mixer** and add an **Audio** track.
 2. In the channel's **Input** section, select a mono hardware input or link an
@@ -34,20 +36,36 @@ Do not monitor an open microphone through nearby speakers. Use headphones or
 turn monitoring off to prevent feedback.
 :::
 
+## Prepare an instrument track
+
+1. Open the **Mixer** and add an **Instrument** track.
+2. Choose a MIDI input port and channel in the track's MIDI input control, or
+   leave the defaults for all inputs / omni.
+3. Turn on **Record enable** for the track.
+4. Turn on **Input monitoring** if you want live MIDI to reach the instrument
+   while you play.
+
+Recording does not require monitoring. An armed instrument still journals MIDI
+even when monitoring is off.
+
 ## Capture
 
 Move the playhead to the start position, then select **Record** or press
 <kbd>R</kbd>. Record-enabled audio tracks capture their selected inputs.
+Record-enabled instrument tracks capture matching MIDI into a durable journal
+and commit a MIDI clip when you stop.
 
-Select **Record** again to stop. YADAW closes the recording, repairs its audio
-header, processes it into a project asset, and creates an arrangement clip.
-Keep the application open while the finalization dialog is active.
+Select **Record** again to stop. YADAW closes the recording, repairs audio
+headers when needed, processes audio into project assets, converts MIDI journals
+into clips, and updates the arrangement. Keep the application open while the
+finalization dialog is active.
 
 ## Recovery
 
-During capture, audio is written to the configured swap directory. This allows
-YADAW to recover a take if recording or the application stops before the
-project archive is saved.
+During capture, audio and MIDI journals are written to the configured swap
+directory. This allows YADAW to recover a take if recording or the application
+stops before the project archive is saved. Recovered MIDI takes close any
+notes that were still held when capture ended.
 
 After a successful capture:
 
