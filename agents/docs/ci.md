@@ -67,16 +67,17 @@ pattern in `scripts/rust-coverage.ts`:
    coverage target directory (`target-coverage/`).
 2. Instrumented `cargo test --workspace` runs the usual Rust suite.
 3. Instrumented `yadaw-audio-host` and `yadaw-vst3-probe` binaries are built.
-4. Steinberg VST3 fixtures and built-in truce plugs are built; the JS smokes
-   (`test:vst3-helper`, `test:vst3-editor`, `test:builtin-vst3`) launch those
-   instrumented binaries so plugin load/init/process/editor/shutdown paths
-   contribute `.profraw` data. Headless Linux uses `xvfb-run` when `DISPLAY`
-   is unset.
+4. Built-in truce VST3 plugs are built; JS smokes launch the instrumented
+   binaries so plugin load/init/process/editor/shutdown paths contribute
+   `.profraw` data (`builtin-vst3` probe, audio-benchmark host processing,
+   editor smoke, and helper live-graph smoke against YADAW Gain/Sine).
+   Headless Linux uses `xvfb-run` when `DISPLAY` is unset. Steinberg SDK
+   fixtures remain available via `pnpm test:vst3-fixtures` outside this path.
 5. `cargo llvm-cov report` merges profiles into `coverage/rust/lcov.info`.
 
 Doc tests do not run under this path and remain exercised by the Windows and
 macOS legs. The same `pnpm check:coverage` command reproduces the Linux leg
-locally. Set `YADAW_COVERAGE_SKIP_VST3_SMOKE=1` to skip fixture builds and JS
+locally. Set `YADAW_COVERAGE_SKIP_VST3_SMOKE=1` to skip plugin builds and JS
 smokes when iterating on unit-test coverage only.
 
 For ad-hoc local coverage, use the dedicated scripts:
@@ -91,8 +92,8 @@ pnpm test:coverage
 JavaScript coverage requires `@vitest/coverage-v8` (installed with the
 workspace). Rust coverage requires the locked `cargo-llvm-cov` tool and the
 `llvm-tools` Rust component from `mise.toml`. Full Rust coverage also needs
-the pinned VST3 SDK checkout (as CI's setup-build action provides), CMake for
-SDK fixtures, and on headless Linux the `xvfb` package for editor smokes.
+`cargo-truce` for built-in plugs and, on headless Linux, the `xvfb` package
+for editor/helper smokes.
 Reports land under `coverage/` (gitignored) and are uploaded to Codecov with
 the repository `CODECOV_TOKEN` secret. The Rust coverage run writes
 instrumented objects to `target-coverage/` so they stay out of the shared

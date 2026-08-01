@@ -60,6 +60,7 @@ try {
     module_path: pluginPath,
     class_id: classId,
     plugin_kind: pluginKind,
+    audio_mode: "stereo",
     sample_rate: 48_000,
     component_state: { storage: "inline", bytes: new Uint8Array() },
     controller_state: { storage: "inline", bytes: new Uint8Array() }

@@ -38,18 +38,24 @@ interface PendingRequest {
 }
 
 const repositoryRoot = fileURLToPath(new URL("../../..", import.meta.url))
-const [helperPath, pluginPath] = process.argv.slice(2)
+const [helperPath, pluginPath, synthPath, effectClassIdArg, synthClassIdArg] = process.argv.slice(2)
 const resolvedHelper = helperPath ?? audioHostBinary(repositoryRoot)
 const resolvedPlugin =
-  pluginPath ?? resolve(repositoryRoot, "target", "vst3-fixtures", "VST3", "Debug", "again.vst3")
-const resolvedSynth = resolve(
-  repositoryRoot,
-  "target",
-  "vst3-fixtures",
-  "VST3",
-  "Debug",
-  "note-expression-synth.vst3"
-)
+  pluginPath ??
+  process.env.YADAW_VST3_SMOKE_EFFECT_PATH ??
+  resolve(repositoryRoot, "target", "vst3-fixtures", "VST3", "Debug", "again.vst3")
+const resolvedSynth =
+  synthPath ??
+  process.env.YADAW_VST3_SMOKE_SYNTH_PATH ??
+  resolve(repositoryRoot, "target", "vst3-fixtures", "VST3", "Debug", "note-expression-synth.vst3")
+const effectClassId =
+  effectClassIdArg ??
+  process.env.YADAW_VST3_SMOKE_EFFECT_CLASS_ID ??
+  "84E8DE5F92554F5396FAE4133C935A18"
+const synthClassId =
+  synthClassIdArg ??
+  process.env.YADAW_VST3_SMOKE_SYNTH_CLASS_ID ??
+  "41466D9BB0654576B641098F686371B3"
 const crashMarker = resolve(tmpdir(), `yadaw-vst3-smoke-${process.pid}.marker`)
 const child = spawn(resolvedHelper, ["--crash-marker", crashMarker], {
   stdio: ["pipe", "pipe", "inherit"]
@@ -105,7 +111,7 @@ try {
     type: "load-plugin",
     instance_id: "again-1",
     module_path: resolvedPlugin,
-    class_id: "84E8DE5F92554F5396FAE4133C935A18",
+    class_id: effectClassId,
     plugin_kind: "effect",
     audio_mode: "stereo",
     sample_rate: 48_000,
@@ -117,7 +123,7 @@ try {
     type: "load-plugin",
     instance_id: "synth-1",
     module_path: resolvedSynth,
-    class_id: "41466D9BB0654576B641098F686371B3",
+    class_id: synthClassId,
     plugin_kind: "instrument",
     audio_mode: "stereo",
     sample_rate: 48_000,

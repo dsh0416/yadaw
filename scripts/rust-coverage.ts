@@ -7,10 +7,10 @@
  * 1. show-env → RUSTFLAGS / LLVM_PROFILE_FILE / target dir
  * 2. cargo test (instrumented)
  * 3. cargo build instrumented host + probe
- * 4. build VST3 fixtures / built-in plugs and run JS smokes against those bins
+ * 4. build built-in VST3 plugs and run JS smokes against those bins
  * 5. cargo llvm-cov report merges .profraw into coverage/rust/lcov.info
  *
- * Set YADAW_COVERAGE_SKIP_VST3_SMOKE=1 to skip fixture builds and smokes.
+ * Set YADAW_COVERAGE_SKIP_VST3_SMOKE=1 to skip plugin builds and smokes.
  */
 import { mkdirSync } from "node:fs"
 import { spawn } from "node:child_process"
@@ -22,6 +22,7 @@ const lcovPath = resolve(repositoryRoot, "coverage/rust/lcov.info")
 const ignoreFilenameRegex = "(/|^)third_party/"
 const rustFeatures = "yadaw-dsp-node/bench-internals"
 const skipVst3Smoke = process.env.YADAW_COVERAGE_SKIP_VST3_SMOKE === "1"
+const executableSuffix = process.platform === "win32" ? ".exe" : ""
 
 function fail(message: string): never {
   console.error(message)
@@ -111,66 +112,57 @@ function withDisplay(command: string, args: string[]): { command: string; args: 
   return { command: "xvfb-run", args: ["-a", "--", command, ...args] }
 }
 
-async function buildVst3Fixtures(env: NodeJS.ProcessEnv): Promise<void> {
-  await run(
-    "cmake",
-    ["-S", ".", "-B", "target/vst3-fixtures", "-DYADAW_BUILD_VST3_FIXTURES=ON"],
-    env
-  )
-  await run(
-    "cmake",
-    [
-      "--build",
-      "target/vst3-fixtures/third_party/vst3sdk/public.sdk/samples/vst/again",
-      "--config",
-      "Debug",
-      "--target",
-      "again"
-    ],
-    env
-  )
-  await run(
-    "cmake",
-    [
-      "--build",
-      "target/vst3-fixtures/third_party/vst3sdk/public.sdk/samples/vst/note_expression_synth",
-      "--config",
-      "Debug",
-      "--target",
-      "note-expression-synth"
-    ],
-    env
-  )
+function debugBinary(name: string): string {
+  return resolve(targetDir, "debug", `${name}${executableSuffix}`)
 }
 
 async function runVst3Smokes(smokeEnv: NodeJS.ProcessEnv): Promise<void> {
-  // Fixtures and plugins are not coverage-instrumented; only the host/probe are.
-  await buildVst3Fixtures(process.env)
+  // Built-in plugs are not coverage-instrumented; only the host/probe are.
   await run("cargo", ["truce", "build", "--vst3", "--debug"], process.env)
   await run("pnpm", ["--filter", "@yadaw/audio-host-client", "build:debug"], process.env)
 
-  const helperSmoke = withDisplay("node", ["apps/desktop/scripts/vst3-helper-smoke.ts"])
-  await run(helperSmoke.command, helperSmoke.args, smokeEnv)
+  const hostPath = debugBinary("yadaw-audio-host")
+  const gainPath = resolve(repositoryRoot, "target", "bundles", "YADAW Gain.vst3")
+  const sinePath = resolve(repositoryRoot, "target", "bundles", "YADAW Sine.vst3")
 
-  const editorSmoke = withDisplay("node", ["apps/desktop/scripts/vst3-editor-smoke.ts"])
+  // Probe exercises module open / class init / processor setup / teardown.
+  await run("node", ["apps/desktop/scripts/builtin-vst3-smoke.ts"], smokeEnv)
+
+  // Host live-graph + processing coverage via the audio benchmark smoke.
+  await run("node", ["apps/desktop/scripts/audio-benchmark-smoke.ts"], smokeEnv)
+
+  // Editor open/focus/close against a built-in plug (Steinberg SDK fixtures are
+  // still covered by `pnpm test:vst3-fixtures` outside the coverage path).
+  const editorSmoke = withDisplay("node", [
+    "apps/desktop/scripts/vst3-editor-smoke.ts",
+    hostPath,
+    gainPath,
+    "59CABE21E605B9C9EE928D6C3B236BBF",
+    "effect"
+  ])
   await run(editorSmoke.command, editorSmoke.args, smokeEnv)
 
-  await run("node", ["apps/desktop/scripts/builtin-vst3-smoke.ts"], smokeEnv)
-  await run("node", ["apps/desktop/scripts/audio-benchmark-smoke.ts"], smokeEnv)
+  // Helper smoke against built-in instrument + effect, so load/parameter/editor/
+  // graph/transport paths write .profraw from the instrumented host.
+  const helperSmoke = withDisplay("node", [
+    "apps/desktop/scripts/vst3-helper-smoke.ts",
+    hostPath,
+    gainPath,
+    sinePath,
+    "59CABE21E605B9C9EE928D6C3B236BBF",
+    "F7BC8CA3E5E8B9C9EE928D7114950FBF"
+  ])
+  await run(helperSmoke.command, helperSmoke.args, smokeEnv)
 }
 
 async function main(): Promise<void> {
   mkdirSync(resolve(repositoryRoot, "coverage/rust"), { recursive: true })
 
   const showEnv = parseShowEnv(
-    await capture(
-      "cargo",
-      ["llvm-cov", "show-env", "--sh"],
-      {
-        ...process.env,
-        CARGO_TARGET_DIR: targetDir
-      }
-    )
+    await capture("cargo", ["llvm-cov", "show-env", "--sh"], {
+      ...process.env,
+      CARGO_TARGET_DIR: targetDir
+    })
   )
 
   const covEnv: NodeJS.ProcessEnv = {
@@ -182,11 +174,10 @@ async function main(): Promise<void> {
   // show-env must precede clean; both must precede instrumented builds.
   await run("cargo", ["llvm-cov", "clean", "--workspace"], covEnv)
   await run("cargo", ["test", "--workspace", "--features", rustFeatures], covEnv)
-  await run(
-    "cargo",
-    ["build", "-p", "yadaw-audio-host", "-p", "yadaw-vst3-host", "--bin", "yadaw-vst3-probe"],
-    covEnv
-  )
+  // Build packages separately: `--bin yadaw-vst3-probe` would otherwise skip
+  // yadaw-audio-host, which has a different binary name.
+  await run("cargo", ["build", "-p", "yadaw-audio-host"], covEnv)
+  await run("cargo", ["build", "-p", "yadaw-vst3-host", "--bin", "yadaw-vst3-probe"], covEnv)
 
   if (skipVst3Smoke) {
     console.log("Skipping VST3 JS smoke coverage (YADAW_COVERAGE_SKIP_VST3_SMOKE=1)")
