@@ -264,6 +264,30 @@ describe("registerProjectHandlers", () => {
     })
   })
 
+  it("does not commit an archive when plug-in state synchronization fails", async () => {
+    const context = createContext()
+    vi.mocked(context.synchronizePluginStates).mockRejectedValue(
+      new Error("plug-in state unavailable")
+    )
+    registerProjectHandlers(context)
+    const workspace = installWorkspace(context.lifecycle)
+
+    const result = await invoke(
+      electronMocks,
+      IPC_CHANNELS.projectSave,
+      mutationMeta(workspace.project, {
+        expectedRevision: workspace.revision,
+        mutation: { operationId: "op-state-fail", idempotencyKey: "idem-state-fail" }
+      })
+    )
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: "resource-unavailable", outcome: "not-committed" }
+    })
+    expect(context.projects.save).not.toHaveBeenCalled()
+  })
+
   it("maps post-archive save cleanup failures to timeout-unknown", async () => {
     const context = createContext()
     const saved = { ...projectSession, dirty: false }

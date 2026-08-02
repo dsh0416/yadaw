@@ -525,12 +525,14 @@ describe("project graph and command services", () => {
       {
         id: "effect-1",
         componentState: new Uint8Array([3, 4]),
-        controllerState: new Uint8Array([5, 6])
+        controllerState: new Uint8Array([5, 6]),
+        araDocumentState: new Uint8Array([7, 8])
       }
     ])
     expect((await service.snapshot()).plugins[0]).toMatchObject({
       componentState: new Uint8Array([3, 4]),
-      controllerState: new Uint8Array([5, 6])
+      controllerState: new Uint8Array([5, 6]),
+      araDocumentState: new Uint8Array([7, 8])
     })
 
     const refreshed = graph()

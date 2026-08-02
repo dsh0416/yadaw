@@ -864,13 +864,16 @@ impl HostedPlugin {
                 })?;
                 if let Some(controller) = &self.controller {
                     component_stream.rewind();
-                    check("IEditController::setComponentState", unsafe {
-                        // SAFETY: controller and stream are live on the UI thread.
-                        ((*controller_table(controller)).set_component_state)(
-                            controller.as_ptr(),
-                            component_stream.as_interface(),
-                        )
-                    })?;
+                    check_optional_controller_state(
+                        "IEditController::setComponentState",
+                        unsafe {
+                            // SAFETY: controller and stream are live on the UI thread.
+                            ((*controller_table(controller)).set_component_state)(
+                                controller.as_ptr(),
+                                component_stream.as_interface(),
+                            )
+                        },
+                    )?;
                     if !controller_state.is_empty() {
                         let mut stream = MemoryStream::from_slice(controller_state);
                         check("IEditController::setState", unsafe {
@@ -905,14 +908,23 @@ impl HostedPlugin {
         })?;
         let controller_state = if let Some(controller) = &self.controller {
             let mut stream = MemoryStream::empty();
-            check("IEditController::getState", unsafe {
+            let result = unsafe {
                 // SAFETY: controller is live on the owning UI thread and stream is writable.
                 ((*controller_table(controller)).get_state)(
                     controller.as_ptr(),
                     stream.as_interface(),
                 )
-            })?;
-            stream.into_bytes()
+            };
+            if result == 0 {
+                stream.into_bytes()
+            } else if is_not_implemented(result) {
+                Vec::new()
+            } else {
+                return Err(HostError::Operation {
+                    operation: "IEditController::getState",
+                    result,
+                });
+            }
         } else {
             Vec::new()
         };
@@ -1227,6 +1239,20 @@ fn check(operation: &'static str, result: i32) -> HostResult<()> {
     }
 }
 
+fn is_not_implemented(result: i32) -> bool {
+    // SDK-native kNotImplemented on macOS/Linux plus the COM-compatible
+    // encodings used by Windows toolchains and some cross-platform wrappers.
+    [3, 0x8000_4001_u32 as i32, 0x8000_0001_u32 as i32].contains(&result)
+}
+
+fn check_optional_controller_state(operation: &'static str, result: i32) -> HostResult<()> {
+    if result == 0 || is_not_implemented(result) {
+        Ok(())
+    } else {
+        Err(HostError::Operation { operation, result })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1243,11 +1269,8 @@ mod tests {
 
     #[test]
     fn midi_mapping_returns_only_assigned_parameters() {
-        let mut parameters =
-            vec![UNMAPPED_PARAMETER; MIDI_MAPPING_CHANNELS * MIDI_MAPPING_CONTROLLERS]
-                .into_boxed_slice();
-        parameters[MIDI_MAPPING_CONTROLLERS + MIDI_PITCH_BEND] = 77;
-        let mapping = MidiMappingTable { parameters };
+        let mapping = MidiMappingTable::query(None);
+        mapping.parameters[MIDI_MAPPING_CONTROLLERS + MIDI_PITCH_BEND].store(77, Ordering::Release);
 
         assert_eq!(mapping.parameter(1, MIDI_PITCH_BEND), Some(77));
         assert_eq!(mapping.parameter(1, MIDI_AFTERTOUCH), None);
@@ -1273,5 +1296,21 @@ mod tests {
                 result: -7,
             })
         ));
+    }
+
+    #[test]
+    fn recognizes_every_sdk_not_implemented_encoding() {
+        for result in [3, 0x8000_4001_u32 as i32, 0x8000_0001_u32 as i32] {
+            assert!(is_not_implemented(result));
+        }
+        assert!(!is_not_implemented(0));
+        assert!(!is_not_implemented(1));
+    }
+
+    #[test]
+    fn optional_controller_state_rejects_real_failures() {
+        assert!(check_optional_controller_state("fixture", 0).is_ok());
+        assert!(check_optional_controller_state("fixture", 3).is_ok());
+        assert!(check_optional_controller_state("fixture", 1).is_err());
     }
 }
