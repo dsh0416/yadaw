@@ -12,10 +12,11 @@ use crate::Steinberg::{
     Linux::{IEventHandler, IRunLoop, ITimerHandler},
     PClassInfo, PClassInfo2, PClassInfoW, PFactoryInfo, TBool, TUID, ViewRect,
     Vst::{
-        AudioBusBuffers, BusDirection, BusInfo, CtrlNumber, Event, IAudioProcessor, IComponent,
-        IComponentHandler, IConnectionPoint, IEditController, IEventList, IHostApplication,
-        IMessage, IMidiMapping, IParamValueQueue, IParameterChanges, IoMode, MediaType, ParamID,
-        ParamValue, ParameterInfo, ProcessData, ProcessSetup, RoutingInfo, SpeakerArrangement,
+        AudioBusBuffers, BusDirection, BusInfo, CtrlNumber, Event, IAttributeList, IAudioProcessor,
+        IComponent, IComponentHandler, IConnectionPoint, IEditController, IEventList,
+        IHostApplication, IMessage, IMidiMapping, IParamValueQueue, IParameterChanges, IoMode,
+        MediaType, ParamID, ParamValue, ParameterInfo, ProcessData, ProcessSetup, RoutingInfo,
+        SpeakerArrangement,
     },
     int16, int32, int64, tresult, uint32,
 };
@@ -260,6 +261,59 @@ pub struct HostApplicationVTable {
         class_id: *mut c_char,
         interface_id: *mut c_char,
         object: *mut *mut c_void,
+    ) -> tresult,
+}
+
+#[repr(C)]
+pub struct MessageVTable {
+    pub base: FUnknownVTable,
+    pub get_message_id: unsafe extern "system" fn(this: *mut IMessage) -> FIDString,
+    pub set_message_id: unsafe extern "system" fn(this: *mut IMessage, id: FIDString),
+    pub get_attributes: unsafe extern "system" fn(this: *mut IMessage) -> *mut IAttributeList,
+}
+
+#[repr(C)]
+pub struct AttributeListVTable {
+    pub base: FUnknownVTable,
+    pub set_int: unsafe extern "system" fn(
+        this: *mut IAttributeList,
+        id: FIDString,
+        value: int64,
+    ) -> tresult,
+    pub get_int: unsafe extern "system" fn(
+        this: *mut IAttributeList,
+        id: FIDString,
+        value: *mut int64,
+    ) -> tresult,
+    pub set_float:
+        unsafe extern "system" fn(this: *mut IAttributeList, id: FIDString, value: f64) -> tresult,
+    pub get_float: unsafe extern "system" fn(
+        this: *mut IAttributeList,
+        id: FIDString,
+        value: *mut f64,
+    ) -> tresult,
+    pub set_string: unsafe extern "system" fn(
+        this: *mut IAttributeList,
+        id: FIDString,
+        value: *const u16,
+    ) -> tresult,
+    pub get_string: unsafe extern "system" fn(
+        this: *mut IAttributeList,
+        id: FIDString,
+        value: *mut u16,
+        size_in_bytes: uint32,
+    ) -> tresult,
+    pub set_binary: unsafe extern "system" fn(
+        this: *mut IAttributeList,
+        id: FIDString,
+        data: *const c_void,
+        size_in_bytes: uint32,
+    ) -> tresult,
+    pub get_binary: unsafe extern "system" fn(
+        this: *mut IAttributeList,
+        id: FIDString,
+        data: *mut *const c_void,
+        size_in_bytes: *mut uint32,
     ) -> tresult,
 }
 

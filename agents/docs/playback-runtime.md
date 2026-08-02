@@ -568,9 +568,18 @@ last point for each changed parameter into a fixed-capacity, preallocated
 latest-value bridge. It must never call the thread-affine controller. While an
 editor is open, the winit main thread drains that bridge at the editor tick and
 calls `IEditController::setParamNormalized`; these values are not enqueued back
-as processor inputs. This is the path used by plug-in meters and other dynamic
-native-editor displays. Unknown IDs and invalid normalized values are dropped,
-and a slow UI may coalesce intermediate values while retaining the latest one.
+as processor inputs. This is the standard path used by plug-in meters and other
+dynamic native-editor displays. Unknown IDs and invalid normalized values are
+dropped, and a slow UI may coalesce intermediate values while retaining the
+latest one.
+
+Some plug-ins also establish private component/controller buses with VST3
+`IMessage` objects. `IHostApplication::createInstance` must therefore provide
+the mandatory, heap-owned `IMessage` and `IAttributeList` implementations with
+COM reference counting; returning `kNoInterface` can leave audio and ordinary
+parameters working while a native editor's dynamic displays remain inert.
+Message notification follows VST3's connected/UI-thread contract and is not an
+audio-callback transport.
 
 When a plug-in supplies a separate controller class, both sides of
 `IConnectionPoint` are connected and both results are checked. A half-complete

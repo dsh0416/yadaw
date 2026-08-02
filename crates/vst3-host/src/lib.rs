@@ -9,6 +9,7 @@ mod error;
 mod event_list;
 mod frame;
 mod host_context;
+mod host_objects;
 mod hosted;
 mod id;
 mod module;

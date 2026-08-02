@@ -7,8 +7,9 @@ use yadaw_vst3_host_sys::{
         Linux::{IEventHandler, IRunLoop, ITimerHandler},
         TUID,
         Vst::{
-            IAudioProcessor, IComponent, IComponentHandler, IConnectionPoint, IEditController,
-            IEventList, IHostApplication, IMidiMapping, IParamValueQueue, IParameterChanges,
+            IAttributeList, IAudioProcessor, IComponent, IComponentHandler, IConnectionPoint,
+            IEditController, IEventList, IHostApplication, IMessage, IMidiMapping,
+            IParamValueQueue, IParameterChanges,
         },
     },
     abi::FUnknownVTable,
@@ -46,6 +47,8 @@ interface!(IPluginFactory2, iid::IPLUGIN_FACTORY2);
 interface!(IPluginFactory3, iid::IPLUGIN_FACTORY3);
 interface!(IBStream, iid::IBSTREAM);
 interface!(IHostApplication, iid::IHOST_APPLICATION);
+interface!(IMessage, iid::IMESSAGE);
+interface!(IAttributeList, iid::IATTRIBUTE_LIST);
 interface!(IComponent, iid::ICOMPONENT);
 interface!(IAudioProcessor, iid::IAUDIO_PROCESSOR);
 interface!(IEditController, iid::IEDIT_CONTROLLER);
