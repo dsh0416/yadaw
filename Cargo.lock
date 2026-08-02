@@ -6031,7 +6031,6 @@ dependencies = [
  "getrandom",
  "libc",
  "serde",
- "sha2",
  "thiserror 2.0.19",
  "windows 0.61.3",
 ]

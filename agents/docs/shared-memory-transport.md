@@ -157,13 +157,17 @@ pub struct SharedRegionDescriptor {
 }
 ```
 
-Backends derive their OS name from a SHA-256 domain-separated digest of the
-cryptographically random object ID, logical length, and generation, plus a
-YADAW-owned prefix. Binding all descriptor identity fields into the name is
-required because Darwin rounds POSIX shared-object metadata to its VM page
-size. Opening code treats every descriptor as untrusted and rejects unsupported
-versions, zero or oversized lengths, malformed identity, unexpected
-generations, and incompatible mapped lengths before typed access.
+Backends compress the cryptographically random object ID, logical length, and
+generation with a fixed non-cryptographic 128-bit mixer, then add a YADAW-owned
+prefix. This is deterministic name derivation, not authentication or payload
+integrity. POSIX uses a 96-bit projection to remain below Darwin's shared-memory
+name limit; Windows uses the complete mixed key. Including length and generation
+makes an inconsistent descriptor resolve to a missing object even though Darwin
+rounds shared-object metadata to its VM page size. Name collisions are detected
+atomically by the platform create call and cause a new random ID to be generated.
+Opening code rejects unsupported versions, zero or oversized lengths, malformed
+identity, unexpected generations, and incompatible mapped lengths before typed
+access.
 
 Named objects are an initial delivery choice, not part of the public contract.
 A later backend may transfer an inherited or duplicated handle without changing
