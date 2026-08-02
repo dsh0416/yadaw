@@ -25,9 +25,49 @@ pub struct HostBootstrap {
     pub priority_requests: IpcReceiver<WirePacket>,
     pub priority_responses: IpcSender<WirePacket>,
     pub events: IpcSender<WirePacket>,
-    pub telemetry_page: IpcSharedMemory,
-    pub parameter_ring: IpcSharedMemory,
+    pub telemetry_page: SharedMemoryDescriptor,
+    pub parameter_ring: SharedMemoryDescriptor,
+    pub mapping_commands: IpcReceiver<MappingCommand>,
+    pub mapping_events: IpcSender<MappingEvent>,
     pub session_epoch: u64,
+}
+
+/// Fail-closed activation command sent by the mapping creator.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MappingCommand {
+    Activate {
+        telemetry_generation: u64,
+        parameter_generation: u64,
+    },
+    Abort,
+}
+
+/// Mapping lifecycle result sent by the helper before product-level Ready.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MappingEvent {
+    Mapped {
+        telemetry_generation: u64,
+        parameter_generation: u64,
+    },
+    Active {
+        telemetry_generation: u64,
+        parameter_generation: u64,
+    },
+    Aborted {
+        failure: MappingFailure,
+    },
+}
+
+/// Stable cross-process reason for selecting the bounded control fallback.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MappingFailure {
+    Descriptor,
+    Open,
+    Layout,
+    Generation,
+    Challenge,
+    Timeout,
+    ControlChannel,
 }
 
 pub(crate) struct AttachmentBuilder<'a> {

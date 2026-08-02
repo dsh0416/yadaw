@@ -90,6 +90,81 @@ mod tests {
     }
 
     #[test]
+    fn shared_page_negotiation_activates_only_after_two_way_verification() {
+        let telemetry_page = create_telemetry_page(64, 33, 1).expect("telemetry page");
+        let parameter_page = create_parameter_ring(33, 1).expect("parameter page");
+        let telemetry = TelemetryReader::map(telemetry_page).expect("telemetry reader");
+        let parameters = ParameterProducer::map(parameter_page).expect("parameter producer");
+        let peer_telemetry = yadaw_ipc_transport::TelemetryWriter::open_and_acknowledge(
+            telemetry.descriptor(),
+        )
+        .expect("peer telemetry writer");
+        let peer_parameters = yadaw_ipc_transport::ParameterConsumer::open_and_acknowledge(
+            parameters.descriptor(),
+        )
+        .expect("peer parameter consumer");
+        let (commands, command_receiver) = ipc::channel().expect("mapping command channel");
+        let (event_sender, events) = ipc::channel().expect("mapping event channel");
+        let peer = thread::spawn(move || {
+            event_sender
+                .send(MappingEvent::Mapped {
+                    telemetry_generation: 1,
+                    parameter_generation: 1,
+                })
+                .expect("send Mapped");
+            assert_eq!(
+                command_receiver.recv().expect("receive Activate"),
+                MappingCommand::Activate {
+                    telemetry_generation: 1,
+                    parameter_generation: 1,
+                }
+            );
+            event_sender
+                .send(MappingEvent::Active {
+                    telemetry_generation: 1,
+                    parameter_generation: 1,
+                })
+                .expect("send Active");
+            (peer_telemetry, peer_parameters)
+        });
+
+        assert!(negotiate_shared_pages(
+            &commands,
+            &events,
+            &telemetry,
+            &parameters,
+        ));
+        let _peer_mappings = peer.join().expect("peer thread");
+    }
+
+    #[test]
+    fn shared_page_negotiation_aborts_an_unverified_generation() {
+        let telemetry_page = create_telemetry_page(64, 34, 1).expect("telemetry page");
+        let parameter_page = create_parameter_ring(34, 1).expect("parameter page");
+        let telemetry = TelemetryReader::map(telemetry_page).expect("telemetry reader");
+        let parameters = ParameterProducer::map(parameter_page).expect("parameter producer");
+        let (commands, command_receiver) = ipc::channel().expect("mapping command channel");
+        let (event_sender, events) = ipc::channel().expect("mapping event channel");
+        event_sender
+            .send(MappingEvent::Mapped {
+                telemetry_generation: 2,
+                parameter_generation: 1,
+            })
+            .expect("send invalid Mapped");
+
+        assert!(!negotiate_shared_pages(
+            &commands,
+            &events,
+            &telemetry,
+            &parameters,
+        ));
+        assert_eq!(
+            command_receiver.recv().expect("receive Abort"),
+            MappingCommand::Abort
+        );
+    }
+
+    #[test]
     fn request_deadline_uses_sixty_seconds_for_audio_benchmark() {
         assert_eq!(
             request_deadline(&ControlCommand::RunAudioBenchmark {

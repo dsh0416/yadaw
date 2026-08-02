@@ -32,7 +32,10 @@ use crate::{
     workers::WorkerSupervisor,
 };
 use iced_wgpu::window::Compositor as WgpuCompositor;
-use ipc_channel::ipc::{self, IpcSender};
+use ipc_channel::{
+    TryRecvError,
+    ipc::{self, IpcSender},
+};
 use tokio::{
     sync::{Semaphore, mpsc, oneshot, watch},
     task::JoinSet,
@@ -59,10 +62,12 @@ use yadaw_dsp_runtime::protocol::{
 };
 use yadaw_dsp_runtime::tempo::{TempoEvent, TimeSignatureEvent};
 use yadaw_ipc_transport::{
-    ArenaReceiver, HostBootstrap, LeaseRegistry, MidiNoteBatchView, ParameterConsumer, RegionOffer,
-    ResolvedBlob, TelemetryMeter, TelemetrySnapshot, TelemetryWriter, WirePacket,
-    create_telemetry_page, decode_body, decode_request_deferred, encode_event, encode_priority,
-    encode_response_from_arena, materialize_mixer_graph, resolve_midi_note_batch,
+    ArenaReceiver, HostBootstrap, INITIAL_TELEMETRY_CAPACITY, LeaseRegistry, MappingCommand,
+    MappingEvent, MappingFailure, MidiNoteBatchView, ParameterConsumer, ResolvedBlob,
+    SharedMemoryDescriptor, TelemetryMeter, TelemetrySnapshot, TelemetryWriter, TransportError,
+    WirePacket, create_parameter_ring, create_telemetry_page, decode_body, decode_request_deferred,
+    encode_event, encode_priority, encode_response_from_arena, materialize_mixer_graph,
+    resolve_midi_note_batch,
 };
 
 include!("runtime/wire_adapters.rs");

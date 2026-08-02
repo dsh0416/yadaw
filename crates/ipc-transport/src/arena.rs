@@ -537,7 +537,7 @@ impl ArenaReceiver {
         if slot >= MAX_REGION_SLOTS {
             return Err(TransportError::InvalidRange);
         }
-        let page = AtomicPage::new(&region.memory);
+        let page = AtomicPage::new(region.memory.as_ref());
         let base = arena_slot_offset(slot);
         if page.load_u64(base, Ordering::Acquire) != SLOT_READY
             || page.load_u64(base + 8, Ordering::Relaxed) != reference.allocation_generation

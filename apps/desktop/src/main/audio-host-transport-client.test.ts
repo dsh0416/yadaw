@@ -12,12 +12,12 @@ function createClient(request: (command: Record<string, unknown>) => Promise<Con
     readTelemetry,
     () => 48_000,
     vi.fn(),
-    false
+    () => false
   )
   return { client, readTelemetry }
 }
 
-describe("AudioHostTransportClient macOS shared-page fallback", () => {
+describe("AudioHostTransportClient negotiated shared-page fallback", () => {
   it("reads the authoritative transport snapshot over the control channel", async () => {
     const request = vi.fn(
       async () =>

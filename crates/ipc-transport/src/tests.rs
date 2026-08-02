@@ -536,7 +536,7 @@ fn stale_allocation_generation_is_rejected() {
 
 #[test]
 fn telemetry_snapshot_is_coherent() {
-    let memory = create_telemetry_page(64, 9).unwrap();
+    let memory = create_telemetry_page(64, 9, 1).unwrap();
     let writer = TelemetryWriter::map(memory.clone()).unwrap();
     let reader = TelemetryReader::map(memory).unwrap();
     assert_eq!(reader.capacity(), 64);
@@ -565,7 +565,7 @@ fn telemetry_snapshot_is_coherent() {
 
 #[test]
 fn telemetry_capacity_rounds_up_without_a_track_limit() {
-    let memory = create_telemetry_page(65, 11).unwrap();
+    let memory = create_telemetry_page(65, 11, 1).unwrap();
     let writer = TelemetryWriter::map(memory).unwrap();
     assert_eq!(writer.capacity(), 128);
     assert_eq!(writer.epoch(), 11);
@@ -573,7 +573,7 @@ fn telemetry_capacity_rounds_up_without_a_track_limit() {
 
 #[test]
 fn short_persistent_page_is_rejected_before_atomic_access() {
-    let memory = IpcSharedMemory::from_bytes(&[0; 8]);
+    let memory = SharedMemory::create(std::num::NonZeroUsize::new(8).unwrap(), 1).unwrap();
     assert!(matches!(
         TelemetryReader::map(memory),
         Err(TransportError::InvalidSharedLayout)
@@ -582,7 +582,7 @@ fn short_persistent_page_is_rejected_before_atomic_access() {
 
 #[test]
 fn parameter_ring_reserves_gesture_boundaries() {
-    let memory = create_parameter_ring(3).unwrap();
+    let memory = create_parameter_ring(3, 1).unwrap();
     let producer = ParameterProducer::map(memory.clone()).unwrap();
     let consumer = ParameterConsumer::map(memory).unwrap();
     let command = |sequence, gesture| ParameterCommand {
@@ -626,7 +626,7 @@ fn parameter_ring_reserves_gesture_boundaries() {
 
 #[test]
 fn parameter_ring_discards_a_stale_session_epoch() {
-    let memory = create_parameter_ring(3).unwrap();
+    let memory = create_parameter_ring(3, 1).unwrap();
     let producer = ParameterProducer::map(memory.clone()).unwrap();
     let consumer = ParameterConsumer::map(memory).unwrap();
     let stale = ParameterCommand {

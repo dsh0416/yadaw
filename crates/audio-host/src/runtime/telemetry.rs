@@ -8,12 +8,18 @@ fn transport_state_code(state: &str) -> u32 {
     }
 }
 
+struct TelemetryPages {
+    active: Mutex<TelemetryWriter>,
+    pending: Mutex<Option<TelemetryWriter>>,
+    next_generation: AtomicU64,
+    persistent: bool,
+}
+
 async fn publish_telemetry(
-    writer: &Arc<Mutex<TelemetryWriter>>,
+    pages: &TelemetryPages,
     outbound: &mpsc::Sender<OutboundMessage>,
     graph_revision: u64,
     session_epoch: u64,
-    page_epoch: &AtomicU64,
     audio_engine: &engine::AudioEngine,
 ) {
     let (callback_generation, transport_state) = audio_engine.heartbeat_snapshot();
@@ -34,40 +40,50 @@ async fn publish_telemetry(
             clipped: meter.clipped,
         })
         .collect::<Vec<_>>();
-    let current_capacity = writer
+    let current_capacity = pages
+        .active
         .lock()
         .map(|writer| writer.capacity())
         .unwrap_or_default();
-    if meters.len() > current_capacity as usize {
+    let has_pending = pages
+        .pending
+        .lock()
+        .map(|value| value.is_some())
+        .unwrap_or(true);
+    if pages.persistent && !has_pending && meters.len() > current_capacity as usize {
         let Some(capacity) = u32::try_from(meters.len())
             .ok()
             .and_then(u32::checked_next_power_of_two)
         else {
             return;
         };
-        let epoch = session_epoch.wrapping_add(page_epoch.fetch_add(1, Ordering::AcqRel) + 1);
-        if let Ok(memory) = create_telemetry_page(capacity, epoch)
-            && let Ok(next) = TelemetryWriter::map(memory.clone())
+        let generation = pages.next_generation.fetch_add(1, Ordering::AcqRel);
+        let epoch = session_epoch.wrapping_add(generation);
+        if let Ok(memory) = create_telemetry_page(capacity, epoch, generation)
+            && let Ok(next) = TelemetryWriter::map(memory)
         {
-            if let Ok(mut current) = writer.lock() {
-                *current = next;
+            let descriptor = next.descriptor();
+            if let Ok(mut value) = pages.pending.lock() {
+                *value = Some(next);
             }
             if let Ok(packet) = encode_event(
-                &HostEvent::TelemetryPageOffer { epoch, capacity },
-                vec![RegionOffer {
-                    session_epoch,
-                    region_id: 0,
-                    region_generation: epoch,
-                    capacity: memory.len() as u64,
-                    memory,
-                }],
+                &HostEvent::TelemetryPageOffer {
+                    epoch,
+                    capacity,
+                    descriptor_version: descriptor.descriptor_version(),
+                    object_id: descriptor.object_id(),
+                    byte_len: descriptor.byte_len(),
+                    generation,
+                },
+                Vec::new(),
             ) {
                 let _ = outbound.send(OutboundMessage::Event(packet)).await;
             }
         }
     }
     let snapshot = TelemetrySnapshot {
-        epoch: writer
+        epoch: pages
+            .active
             .lock()
             .map(|value| value.epoch())
             .unwrap_or(session_epoch),
@@ -78,7 +94,7 @@ async fn publish_telemetry(
         sample_rate: transport.as_ref().map_or(0, |value| value.sample_rate),
         meters,
     };
-    if let Ok(writer) = writer.lock() {
+    if let Ok(writer) = pages.active.lock() {
         let _ = writer.publish(&snapshot);
     }
 }

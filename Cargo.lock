@@ -6001,6 +6001,7 @@ dependencies = [
  "serde",
  "thiserror 2.0.19",
  "yadaw-dsp-runtime",
+ "yadaw-shared-memory",
  "zerocopy",
 ]
 

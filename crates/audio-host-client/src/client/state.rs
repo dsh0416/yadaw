@@ -28,6 +28,50 @@ fn failure(context: &str, error: impl std::fmt::Display) -> Error {
     Error::new(Status::GenericFailure, format!("{context}: {error}"))
 }
 
+fn negotiate_shared_pages(
+    commands: &IpcSender<MappingCommand>,
+    events: &IpcReceiver<MappingEvent>,
+    telemetry: &TelemetryReader,
+    parameters: &ParameterProducer,
+) -> bool {
+    const TIMEOUT: Duration = Duration::from_secs(5);
+    let telemetry_generation = telemetry.descriptor().generation();
+    let parameter_generation = parameters.descriptor().generation();
+    let mapped = matches!(
+        events.try_recv_timeout(TIMEOUT),
+        Ok(MappingEvent::Mapped {
+            telemetry_generation: received_telemetry,
+            parameter_generation: received_parameter,
+        }) if received_telemetry == telemetry_generation
+            && received_parameter == parameter_generation
+    );
+    if !mapped || !telemetry.peer_verified() || !parameters.peer_verified() {
+        let _ = commands.send(MappingCommand::Abort);
+        return false;
+    }
+    if telemetry.unlink().is_err() || parameters.unlink().is_err() {
+        let _ = commands.send(MappingCommand::Abort);
+        return false;
+    }
+    if commands
+        .send(MappingCommand::Activate {
+            telemetry_generation,
+            parameter_generation,
+        })
+        .is_err()
+    {
+        return false;
+    }
+    matches!(
+        events.try_recv_timeout(TIMEOUT),
+        Ok(MappingEvent::Active {
+            telemetry_generation: received_telemetry,
+            parameter_generation: received_parameter,
+        }) if received_telemetry == telemetry_generation
+            && received_parameter == parameter_generation
+    )
+}
+
 struct Pending {
     deferred: ResponseDeferred,
     deadline: Instant,
@@ -51,6 +95,8 @@ struct ClientState {
     telemetry: Arc<RwLock<TelemetryReader>>,
     last_telemetry: Mutex<TelemetrySnapshot>,
     parameters: ParameterProducer,
+    persistent_shared_pages: bool,
+    shared_page_activation_failures: AtomicU64,
     events: Arc<Mutex<VecDeque<Vec<u8>>>>,
     child: Mutex<Child>,
     threads: Mutex<Vec<JoinHandle<()>>>,

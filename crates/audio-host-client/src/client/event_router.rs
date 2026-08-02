@@ -9,6 +9,7 @@ fn spawn_event_router(
     thread::Builder::new()
         .name("yadaw-ipc-event-router".into())
         .spawn(move || {
+            let mut pending_telemetry = None;
             while !closing.load(Ordering::Acquire) {
                 let packet = match receiver.try_recv_timeout(ROUTER_POLL) {
                     Ok(packet) => packet,
@@ -33,24 +34,45 @@ fn spawn_event_router(
                             registry.release(lease_ids);
                         }
                     }
-                    HostEvent::TelemetryPageOffer { epoch, .. } => {
-                        if let Some(memory) = packet
-                            .region_offers
-                            .into_iter()
-                            .next()
-                            .map(|offer| offer.memory)
-                            && let Ok(reader) = TelemetryReader::map(memory)
+                    HostEvent::TelemetryPageOffer {
+                        epoch,
+                        descriptor_version,
+                        object_id,
+                        byte_len,
+                        generation,
+                        ..
+                    } => {
+                        if let Ok(descriptor) = SharedMemoryDescriptor::from_parts(
+                            *descriptor_version,
+                            *object_id,
+                            *byte_len,
+                            *generation,
+                        )
+                            && let Ok(reader) =
+                                TelemetryReader::open_and_acknowledge(descriptor)
                         {
-                            if let Ok(mut current) = telemetry.write() {
-                                *current = reader;
-                            }
+                            pending_telemetry = Some((*epoch, *generation, reader));
                             let request = PriorityRequest {
                                 request_id: 0,
-                                command: PriorityCommand::TelemetryPageReady { epoch: *epoch },
+                                command: PriorityCommand::TelemetryPageReady {
+                                    epoch: *epoch,
+                                    generation: *generation,
+                                },
                             };
                             if let Ok(packet) = encode_priority(&request) {
                                 let _ = priority_outbound.try_send(packet);
                             }
+                        }
+                    }
+                    HostEvent::TelemetryPageActive { epoch, generation } => {
+                        if matches!(
+                            pending_telemetry.as_ref(),
+                            Some((pending_epoch, pending_generation, _))
+                                if pending_epoch == epoch && pending_generation == generation
+                        ) && let Some((_, _, reader)) = pending_telemetry.take()
+                            && let Ok(mut current) = telemetry.write()
+                        {
+                            *current = reader;
                         }
                     }
                     _ => {

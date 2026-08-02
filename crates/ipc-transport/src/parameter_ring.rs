@@ -7,22 +7,14 @@ const RING_OFFSET_TAIL: usize = 40;
 
 const _: () = assert!(PARAMETER_SLOT_BYTES.is_multiple_of(align_of::<AtomicU64>()));
 
-pub fn create_parameter_ring(epoch: u64) -> Result<IpcSharedMemory, TransportError> {
+pub fn create_parameter_ring(epoch: u64, generation: u64) -> Result<SharedMemory, TransportError> {
     let length = page_length(PARAMETER_RING_CAPACITY, PARAMETER_SLOT_BYTES)?;
-    let memory = IpcSharedMemory::from_byte(0, length);
+    let memory = SharedMemory::create(
+        std::num::NonZeroUsize::new(length).ok_or(TransportError::InvalidCapacity)?,
+        generation,
+    )?;
     let page = AtomicPage::new(&memory);
-    page.store_u64(OFFSET_MAGIC, PARAMETER_MAGIC, Ordering::Relaxed);
-    page.store_u64(
-        OFFSET_LAYOUT_VERSION,
-        SHARED_LAYOUT_VERSION,
-        Ordering::Relaxed,
-    );
-    page.store_u64(OFFSET_EPOCH, epoch, Ordering::Relaxed);
-    page.store_u64(
-        OFFSET_CAPACITY,
-        u64::from(PARAMETER_RING_CAPACITY),
-        Ordering::Release,
-    );
+    initialize_page(&page, PARAMETER_MAGIC, PARAMETER_RING_CAPACITY, epoch);
     Ok(memory)
 }
 
@@ -35,13 +27,13 @@ pub enum ParameterEnqueue {
 }
 
 pub struct ParameterProducer {
-    memory: IpcSharedMemory,
+    memory: SharedMemory,
     capacity: u64,
     epoch: u64,
 }
 
 impl ParameterProducer {
-    pub fn map(memory: IpcSharedMemory) -> Result<Self, TransportError> {
+    pub fn map(memory: SharedMemory) -> Result<Self, TransportError> {
         let page = AtomicPage::new(&memory);
         validate_page(&page, PARAMETER_MAGIC, PARAMETER_SLOT_BYTES)?;
         Ok(Self {
@@ -49,6 +41,21 @@ impl ParameterProducer {
             epoch: page.load_u64(OFFSET_EPOCH, Ordering::Acquire),
             memory,
         })
+    }
+
+    #[must_use]
+    pub fn peer_verified(&self) -> bool {
+        AtomicPage::new(&self.memory).peer_verified()
+    }
+
+    pub fn unlink(&self) -> Result<(), TransportError> {
+        self.memory.unlink()?;
+        Ok(())
+    }
+
+    #[must_use]
+    pub const fn descriptor(&self) -> SharedMemoryDescriptor {
+        self.memory.descriptor()
     }
 
     pub fn enqueue(&self, command: ParameterCommand) -> ParameterEnqueue {
@@ -81,13 +88,13 @@ impl ParameterProducer {
 }
 
 pub struct ParameterConsumer {
-    memory: IpcSharedMemory,
+    memory: SharedMemory,
     capacity: u64,
     epoch: u64,
 }
 
 impl ParameterConsumer {
-    pub fn map(memory: IpcSharedMemory) -> Result<Self, TransportError> {
+    pub fn map(memory: SharedMemory) -> Result<Self, TransportError> {
         let page = AtomicPage::new(&memory);
         validate_page(&page, PARAMETER_MAGIC, PARAMETER_SLOT_BYTES)?;
         Ok(Self {
@@ -95,6 +102,14 @@ impl ParameterConsumer {
             epoch: page.load_u64(OFFSET_EPOCH, Ordering::Acquire),
             memory,
         })
+    }
+
+    pub fn open_and_acknowledge(
+        descriptor: SharedMemoryDescriptor,
+    ) -> Result<Self, TransportError> {
+        let consumer = Self::map(SharedMemory::open(descriptor)?)?;
+        AtomicPage::new(&consumer.memory).acknowledge_mapping();
+        Ok(consumer)
     }
 
     pub fn drain(&self, limit: usize, target: &mut Vec<ParameterCommand>) {

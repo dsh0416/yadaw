@@ -7,7 +7,7 @@ enum PriorityIngress {
     ParameterWake,
     ParameterBoundary(yadaw_dsp_runtime::protocol::ParameterCommand),
     Shutdown,
-    TelemetryPageReady,
+    TelemetryPageReady { epoch: u64, generation: u64 },
 }
 
 enum OutboundMessage {

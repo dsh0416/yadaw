@@ -11,6 +11,7 @@ rmp-serde.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 yadaw-dsp-runtime.workspace = true
+yadaw-shared-memory = { workspace = true, features = ["serde"] }
 zerocopy.workspace = true
 
 [dev-dependencies]

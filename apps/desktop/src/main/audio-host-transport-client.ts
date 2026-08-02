@@ -40,7 +40,7 @@ export class AudioHostTransportClient {
       parameterId: number
       normalized: number
     }) => void,
-    private readonly persistentSharedPages = true
+    private readonly persistentSharedPages: () => boolean = () => true
   ) {}
 
   audioPreferences(): AudioPreferences | null {
@@ -246,7 +246,7 @@ export class AudioHostTransportClient {
   }
 
   async mixerSnapshot(): Promise<MixerRuntimeSnapshot> {
-    if (!this.persistentSharedPages) {
+    if (!this.persistentSharedPages()) {
       const response = await this.request({ type: "mixer-snapshot" })
       if (response.result.type !== "mixer-snapshot") {
         throw new Error("audio host returned an invalid mixer snapshot")
@@ -337,7 +337,7 @@ export class AudioHostTransportClient {
   }
 
   async transportSnapshot(): Promise<TransportSnapshot> {
-    if (!this.persistentSharedPages) return this.transportControlSnapshot()
+    if (!this.persistentSharedPages()) return this.transportControlSnapshot()
     const telemetry = this.readTelemetry()
     return this.rememberTransport({
       ...this.lastTransport,
@@ -400,7 +400,7 @@ export class AudioHostTransportClient {
   }
 
   captureTransport(client: AudioHostIpcClient): void {
-    if (!this.persistentSharedPages) return
+    if (!this.persistentSharedPages()) return
     try {
       const telemetry = decode(client.readTelemetry()) as TelemetryWire
       this.rememberTransport({

@@ -228,7 +228,7 @@ fn warm_saturated(
 }
 
 fn telemetry_reads() -> Result<(), String> {
-    let page = create_telemetry_page(64, 1).map_err(|e| e.to_string())?;
+    let page = create_telemetry_page(64, 1, 1).map_err(|e| e.to_string())?;
     let writer = TelemetryWriter::map(page.clone()).map_err(|e| e.to_string())?;
     let reader = TelemetryReader::map(page).map_err(|e| e.to_string())?;
     writer

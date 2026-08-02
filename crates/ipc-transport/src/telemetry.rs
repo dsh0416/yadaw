@@ -36,33 +36,33 @@ pub struct TelemetrySnapshot {
     pub meters: Vec<TelemetryMeter>,
 }
 
-pub fn create_telemetry_page(capacity: u32, epoch: u64) -> Result<IpcSharedMemory, TransportError> {
+pub fn create_telemetry_page(
+    capacity: u32,
+    epoch: u64,
+    generation: u64,
+) -> Result<SharedMemory, TransportError> {
     let capacity = capacity
         .max(INITIAL_TELEMETRY_CAPACITY)
         .checked_next_power_of_two()
         .ok_or(TransportError::InvalidCapacity)?;
     let length = page_length(capacity, METER_SLOT_BYTES)?;
-    let memory = IpcSharedMemory::from_byte(0, length);
+    let memory = SharedMemory::create(
+        std::num::NonZeroUsize::new(length).ok_or(TransportError::InvalidCapacity)?,
+        generation,
+    )?;
     let page = AtomicPage::new(&memory);
-    page.store_u64(OFFSET_MAGIC, TELEMETRY_MAGIC, Ordering::Relaxed);
-    page.store_u64(
-        OFFSET_LAYOUT_VERSION,
-        SHARED_LAYOUT_VERSION,
-        Ordering::Relaxed,
-    );
-    page.store_u64(OFFSET_EPOCH, epoch, Ordering::Relaxed);
-    page.store_u64(OFFSET_CAPACITY, u64::from(capacity), Ordering::Release);
+    initialize_page(&page, TELEMETRY_MAGIC, capacity, epoch);
     Ok(memory)
 }
 
 pub struct TelemetryWriter {
-    memory: IpcSharedMemory,
+    memory: SharedMemory,
     capacity: u32,
     epoch: u64,
 }
 
 impl TelemetryWriter {
-    pub fn map(memory: IpcSharedMemory) -> Result<Self, TransportError> {
+    pub fn map(memory: SharedMemory) -> Result<Self, TransportError> {
         let page = AtomicPage::new(&memory);
         validate_page(&page, TELEMETRY_MAGIC, METER_SLOT_BYTES)?;
         let capacity = u32::try_from(page.load_u64(OFFSET_CAPACITY, Ordering::Acquire))
@@ -73,6 +73,29 @@ impl TelemetryWriter {
             capacity,
             epoch,
         })
+    }
+
+    pub fn open_and_acknowledge(
+        descriptor: SharedMemoryDescriptor,
+    ) -> Result<Self, TransportError> {
+        let writer = Self::map(SharedMemory::open(descriptor)?)?;
+        AtomicPage::new(&writer.memory).acknowledge_mapping();
+        Ok(writer)
+    }
+
+    #[must_use]
+    pub fn peer_verified(&self) -> bool {
+        AtomicPage::new(&self.memory).peer_verified()
+    }
+
+    pub fn unlink(&self) -> Result<(), TransportError> {
+        self.memory.unlink()?;
+        Ok(())
+    }
+
+    #[must_use]
+    pub const fn descriptor(&self) -> SharedMemoryDescriptor {
+        self.memory.descriptor()
     }
 
     #[must_use]
@@ -128,13 +151,13 @@ impl TelemetryWriter {
 }
 
 pub struct TelemetryReader {
-    memory: IpcSharedMemory,
+    memory: SharedMemory,
     capacity: u32,
     epoch: u64,
 }
 
 impl TelemetryReader {
-    pub fn map(memory: IpcSharedMemory) -> Result<Self, TransportError> {
+    pub fn map(memory: SharedMemory) -> Result<Self, TransportError> {
         let page = AtomicPage::new(&memory);
         validate_page(&page, TELEMETRY_MAGIC, METER_SLOT_BYTES)?;
         let capacity = u32::try_from(page.load_u64(OFFSET_CAPACITY, Ordering::Acquire))
@@ -145,6 +168,29 @@ impl TelemetryReader {
             capacity,
             epoch,
         })
+    }
+
+    pub fn open_and_acknowledge(
+        descriptor: SharedMemoryDescriptor,
+    ) -> Result<Self, TransportError> {
+        let reader = Self::map(SharedMemory::open(descriptor)?)?;
+        AtomicPage::new(&reader.memory).acknowledge_mapping();
+        Ok(reader)
+    }
+
+    #[must_use]
+    pub fn peer_verified(&self) -> bool {
+        AtomicPage::new(&self.memory).peer_verified()
+    }
+
+    pub fn unlink(&self) -> Result<(), TransportError> {
+        self.memory.unlink()?;
+        Ok(())
+    }
+
+    #[must_use]
+    pub const fn descriptor(&self) -> SharedMemoryDescriptor {
+        self.memory.descriptor()
     }
 
     pub fn read(&self) -> Option<TelemetrySnapshot> {

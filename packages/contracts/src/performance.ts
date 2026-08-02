@@ -52,6 +52,8 @@ export interface AudioIpcPerformanceSnapshot {
     timeouts: number
   }
   sharedMemory: {
+    persistentPagesActive: boolean
+    activationFailures: number
     outstandingLeases: number
     outstandingBytes: number
     maxLeases: number

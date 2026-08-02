@@ -37,7 +37,8 @@ type TransportDiagnosticsWire = [
     maxBlockingThreads: number,
     egressConcurrency: number,
     arenaRegions: number
-  ]
+  ],
+  persistentPages: [active: boolean, activationFailures: number]
 ]
 
 function decodeWire<T>(bytes: Uint8Array): T {
@@ -124,6 +125,9 @@ try {
   if (typeof diagnostics[0] !== "string" || diagnostics[7][0] !== 2 || diagnostics[7][2] !== 2) {
     throw new Error("runtime diagnostics mismatch")
   }
+  if (!client.persistentSharedPages || !diagnostics[8][0] || diagnostics[8][1] !== 0) {
+    throw new Error("persistent shared-page activation mismatch")
+  }
   const parameter = client.enqueueParameter({
     targetKind: "mixer-channel",
     runtimeHandle: 1,
@@ -131,7 +135,7 @@ try {
     normalized: 0.5,
     gesture: "perform"
   })
-  if (parameter.outcome !== (process.platform === "darwin" ? "fallback" : "queued")) {
+  if (parameter.outcome !== (client.persistentSharedPages ? "queued" : "fallback")) {
     throw new Error(`parameter transport mismatch: ${parameter.outcome}`)
   }
   await new Promise((resolve) => setTimeout(resolve, 50))
