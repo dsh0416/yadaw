@@ -47,8 +47,12 @@ impl RunningAudioEngine {
             && !self.metrics.faulted.load(Ordering::Relaxed)
     }
 
-    fn reclaim_retired_mixers(&mut self) {
-        while self.retired_mixers.try_pop().is_some() {}
+    fn reclaim_retired_mixers(&mut self) -> usize {
+        let mut reclaimed = 0;
+        while self.retired_mixers.try_pop().is_some() {
+            reclaimed += 1;
+        }
+        reclaimed
     }
 }
 

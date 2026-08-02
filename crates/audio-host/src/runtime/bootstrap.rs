@@ -135,6 +135,7 @@ fn run_ipc() -> Result<(), Box<dyn std::error::Error>> {
         editors: HashMap::new(),
         editor_instances: HashMap::new(),
         next_editor_tick: None,
+        next_retirement_tick: None,
         output_parameter_error_reported: false,
     };
     event_loop.run_app(&mut application)?;

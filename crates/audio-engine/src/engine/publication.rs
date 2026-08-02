@@ -357,23 +357,18 @@ pub fn heartbeat_snapshot(&self) -> (u64, String) {
     })
 }
 
-/// Returns true when the last candidate/native mixer graph still lists `instance_id`.
+/// Drops graph generations that the audio callback has finished using.
 ///
-/// Unload callers use this to decide whether the VST3 allocation must be retained for a mixer
-/// generation that may still hold a processor lease.
-pub fn native_graph_references_plugin(&self, instance_id: &str) -> bool {
-    self.last_native_graph
+/// Callers must run this on a control thread. Destructors can release plug-in processor leases and
+/// are therefore intentionally kept out of the real-time callback.
+pub fn reclaim_retired_graphs(&self) -> Result<usize> {
+    let mut guard = self
+        .running
         .lock()
-        .ok()
-        .and_then(|graph| {
-            graph.as_ref().map(|graph| {
-                graph
-                    .plugins
-                    .iter()
-                    .any(|plugin| plugin.instance_id == instance_id)
-            })
-        })
-        .unwrap_or(false)
+        .map_err(|_| audio_error("audio engine lock", "poisoned"))?;
+    Ok(guard
+        .as_mut()
+        .map_or(0, RunningAudioEngine::reclaim_retired_mixers))
 }
 
 #[cfg(any(test, feature = "bench-internals"))]

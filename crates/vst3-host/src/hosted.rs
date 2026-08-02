@@ -138,6 +138,7 @@ impl ProcessorCell {
 pub struct ProcessorLease {
     cell: NonNull<ProcessorCell>,
     midi_mapping: Arc<MidiMappingTable>,
+    _lifetime: Arc<()>,
     _not_sync: PhantomData<Cell<()>>,
 }
 
@@ -146,6 +147,7 @@ impl Clone for ProcessorLease {
         Self {
             cell: self.cell,
             midi_mapping: Arc::clone(&self.midi_mapping),
+            _lifetime: Arc::clone(&self._lifetime),
             _not_sync: PhantomData,
         }
     }
@@ -359,6 +361,7 @@ impl ProcessorLease {
 
 pub struct HostedPlugin {
     processor: Box<ProcessorCell>,
+    processor_lifetime: Arc<()>,
     midi_mapping: Arc<MidiMappingTable>,
     controller: Option<ComPtr<IEditController>>,
     connections: Option<ComponentConnections>,
@@ -522,6 +525,7 @@ impl HostedPlugin {
         Ok((
             Self {
                 processor: ProcessorCell::new(processor),
+                processor_lifetime: Arc::new(()),
                 midi_mapping,
                 controller,
                 connections,
@@ -554,8 +558,18 @@ impl HostedPlugin {
         ProcessorLease {
             cell: NonNull::from(self.processor.as_ref()),
             midi_mapping: Arc::clone(&self.midi_mapping),
+            _lifetime: Arc::clone(&self.processor_lifetime),
             _not_sync: PhantomData,
         }
+    }
+
+    /// Returns true while an audio graph can still dereference this plug-in's processor cell.
+    ///
+    /// The owner must first prevent new leases from being created. Once the count reaches one,
+    /// no external lease remains that could clone itself, so dropping the stable cell is safe.
+    #[must_use]
+    pub fn has_outstanding_processor_leases(&self) -> bool {
+        Arc::strong_count(&self.processor_lifetime) > 1
     }
 
     #[must_use]

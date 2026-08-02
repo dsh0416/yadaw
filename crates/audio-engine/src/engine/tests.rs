@@ -745,38 +745,12 @@ mod tests {
     }
 
     #[test]
-    fn native_graph_plugin_references_follow_the_last_committed_graph() {
+    fn reclaiming_retired_graphs_without_a_running_engine_is_a_noop() {
         let _guard = GRAPH_TEST_LOCK
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let engine = AudioEngine::new();
-        engine.set_last_native_graph_for_test(None);
-        assert!(!engine.native_graph_references_plugin("bench-0"));
-
-        engine.set_last_native_graph_for_test(Some(NativeMixerGraph {
-            generation: 1,
-            sample_rate: 48_000,
-            channels: Vec::new(),
-            sends: Vec::new(),
-            clips: Vec::new(),
-            plugins: vec![NativePluginInstance {
-                instance_id: "session-fx".to_owned(),
-                channel_index: 0,
-                role: "insert".to_owned(),
-                slot_order: 0,
-                audio_mode: PluginAudioMode::Stereo,
-                enabled: true,
-                latency_samples: 0,
-                tail_samples: Some(0),
-                processor: None,
-            }],
-            midi_clips: Vec::new(),
-            tempo_events: Vec::new(),
-            time_signature_events: Vec::new(),
-        }));
-        assert!(engine.native_graph_references_plugin("session-fx"));
-        assert!(!engine.native_graph_references_plugin("bench-0"));
-        engine.set_last_native_graph_for_test(None);
+        assert_eq!(engine.reclaim_retired_graphs().expect("reclaim graphs"), 0);
     }
 
     #[test]

@@ -18,6 +18,7 @@ struct WinitHost {
     editors: HashMap<WindowId, EditorWindow>,
     editor_instances: HashMap<String, WindowId>,
     next_editor_tick: Option<Instant>,
+    next_retirement_tick: Option<Instant>,
     output_parameter_error_reported: bool,
 }
 
@@ -28,6 +29,7 @@ impl WinitHost {
     const UI_BATCH: usize = 4;
     const UI_BUDGET: std::time::Duration = std::time::Duration::from_millis(2);
     const EDITOR_TICK: Duration = Duration::from_millis(16);
+    const RETIREMENT_TICK: Duration = Duration::from_millis(16);
 
     fn open_editor(
         &mut self,
@@ -163,11 +165,11 @@ impl WinitHost {
                     });
                     return;
                 };
-                // Benchmark (and other non-graph) instances are dropped immediately. Instances that
-                // still appear in the last native mixer graph are retained until helper shutdown so
-                // retiring mixer generations cannot use a freed ProcessorLease.
-                let retain_for_graph = self.audio_engine.native_graph_references_plugin(&instance_id);
-                let _ = reply.send(runtime.unload_plugin(&instance_id, retain_for_graph));
+                let result = runtime.unload_plugin(&instance_id);
+                if runtime.has_retired_instances() {
+                    self.next_retirement_tick = Some(Instant::now());
+                }
+                let _ = reply.send(result);
                 return;
             }
             ActorCommand::SyncAraGraph { graph } => {
@@ -230,7 +232,7 @@ impl WinitHost {
                     && let Some(instance_id) = loaded_id.as_ref()
                     && let Err(message) = runtime.sync_ara_graph(self.ara_graph.as_ref())
                 {
-                    let _ = runtime.unload_plugin(instance_id, false);
+                    let _ = runtime.unload_plugin(instance_id);
                     result = control_error! { message };
                 }
                 if matches!(result, ControlResult::PluginLoaded { .. })
@@ -304,15 +306,27 @@ impl ApplicationHandler<UiEvent> for WinitHost {
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
-        if self.editors.is_empty() {
-            self.next_editor_tick = None;
-            event_loop.set_control_flow(ControlFlow::Wait);
-            return;
+        let now = Instant::now();
+        let retirement_due = self
+            .next_retirement_tick
+            .is_some_and(|deadline| now >= deadline);
+        if retirement_due {
+            if let Err(error) = self.audio_engine.reclaim_retired_graphs() {
+                eprintln!("audio-host: could not reclaim retired audio graph: {error}");
+            }
+            if let Some(runtime) = self.vst3.as_mut() {
+                runtime.reclaim_retired_instances();
+                self.next_retirement_tick = runtime
+                    .has_retired_instances()
+                    .then_some(now + Self::RETIREMENT_TICK);
+            } else {
+                self.next_retirement_tick = None;
+            }
         }
 
-        let now = Instant::now();
-        let tick_due = self.next_editor_tick.is_none_or(|deadline| now >= deadline);
-        if tick_due {
+        if self.editors.is_empty() {
+            self.next_editor_tick = None;
+        } else if self.next_editor_tick.is_none_or(|deadline| now >= deadline) {
             if let Some(runtime) = self.vst3.as_mut()
                 && let Err(error) = runtime.flush_output_parameters()
                 && !self.output_parameter_error_reported
@@ -323,18 +337,23 @@ impl ApplicationHandler<UiEvent> for WinitHost {
             self.next_editor_tick = Some(now + Self::EDITOR_TICK);
         }
 
-        let next_plugin_timer = self
-            .editors
-            .values_mut()
-            .filter_map(|editor| editor.dispatch_native_run_loop(now))
-            .min();
+        let next_plugin_timer = (!self.editors.is_empty())
+            .then(|| {
+                self.editors
+                    .values_mut()
+                    .filter_map(|editor| editor.dispatch_native_run_loop(now))
+                    .min()
+            })
+            .flatten();
         let deadline = self
             .next_editor_tick
             .into_iter()
+            .chain(self.next_retirement_tick)
             .chain(next_plugin_timer)
-            .min()
-            .unwrap_or(now + Self::EDITOR_TICK);
-        event_loop.set_control_flow(ControlFlow::WaitUntil(deadline));
+            .min();
+        event_loop.set_control_flow(
+            deadline.map_or(ControlFlow::Wait, ControlFlow::WaitUntil),
+        );
     }
 
     fn window_event(
