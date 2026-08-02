@@ -121,12 +121,38 @@ try {
     throw new Error("4 MiB attachment response mismatch")
   }
 
+  const warmPayload = Buffer.alloc(4 * 1024 * 1024, 0x33)
+  const warmEcho = await request(
+    {
+      type: "benchmark-echo",
+      payload: {
+        storage: "attachment",
+        index: 0,
+        offset: 0,
+        length: warmPayload.byteLength
+      }
+    },
+    [warmPayload]
+  )
+  const warmReference = warmEcho.decoded.result.payload
+  if (!warmReference) throw new Error("warm response did not include an attachment reference")
+  const warmReturned = warmEcho.attachments[warmReference.index]?.subarray(
+    warmReference.offset,
+    warmReference.offset + warmReference.length
+  )
+  if (warmReturned?.byteLength !== warmPayload.byteLength || warmReturned[0] !== 0x33) {
+    throw new Error("warm 4 MiB attachment response mismatch")
+  }
+
   const diagnostics = decodeWire<TransportDiagnosticsWire>(client.transportDiagnostics())
   if (typeof diagnostics[0] !== "string" || diagnostics[7][0] !== 2 || diagnostics[7][2] !== 2) {
     throw new Error("runtime diagnostics mismatch")
   }
   if (!client.persistentSharedPages || !diagnostics[8][0] || diagnostics[8][1] !== 0) {
     throw new Error("persistent shared-page activation mismatch")
+  }
+  if (diagnostics[7][7] !== 1) {
+    throw new Error(`warm arena unexpectedly sent ${diagnostics[7][7]} region offers`)
   }
   const parameter = client.enqueueParameter({
     targetKind: "mixer-channel",

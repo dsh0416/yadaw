@@ -135,15 +135,13 @@ impl LeaseRegistry {
             allocation.offset,
             bytes.len(),
         );
-        // Always attach a region offer. On macOS, ipc-channel delivers shared
-        // memory with MACH_MSG_VIRTUAL_COPY, so a one-time offer leaves the
-        // consumer on a COW snapshot that diverges after the producer writes
-        // again. Re-offering refreshes the consumer mapping for this packet.
-        if !region.offered {
+        let offer = if region.offered {
+            None
+        } else {
             region.offered = true;
             self.offers = self.offers.saturating_add(1);
-        }
-        let offer = Some(region.offer(self.session_epoch));
+            Some(region.offer(self.session_epoch))
+        };
         self.bytes += bytes.len();
         self.entries.insert(
             lease_id,
@@ -176,12 +174,28 @@ impl LeaseRegistry {
     }
 
     pub fn release(&mut self, lease_ids: &[u64]) {
+        self.release_inner(lease_ids, true);
+    }
+
+    pub(crate) fn abort(&mut self, lease_ids: &[u64]) {
+        self.release_inner(lease_ids, false);
+    }
+
+    fn release_inner(&mut self, lease_ids: &[u64], require_peer_mapping: bool) {
         for id in lease_ids {
             if let Some(entry) = self.entries.remove(id) {
                 self.bytes = self.bytes.saturating_sub(entry.bytes);
                 if let Some(region) = self.regions.get_mut(entry.region_index)
                     && !region.quarantined
                 {
+                    if !require_peer_mapping && !region.peer_confirmed {
+                        region.offered = false;
+                    }
+                    if require_peer_mapping && !region.confirm_peer_mapping() {
+                        region.quarantine();
+                        self.quarantined = self.quarantined.saturating_add(1);
+                        continue;
+                    }
                     region.release(
                         entry.slot,
                         entry.allocation_generation,
@@ -288,10 +302,11 @@ struct ArenaRegion {
     id: u32,
     generation: u64,
     capacity: usize,
-    memory: IpcSharedMemory,
+    memory: SharedMemory,
     free: BTreeMap<usize, usize>,
     slot_generations: [u64; MAX_REGION_SLOTS],
     offered: bool,
+    peer_confirmed: bool,
     quarantined: bool,
     used: usize,
     high_water: usize,
@@ -307,7 +322,10 @@ impl ArenaRegion {
         let total = ARENA_HEADER_BYTES
             .checked_add(capacity)
             .ok_or(TransportError::MessageTooLarge)?;
-        let memory = IpcSharedMemory::from_byte(0, total);
+        let memory = SharedMemory::create(
+            std::num::NonZeroUsize::new(total).ok_or(TransportError::MessageTooLarge)?,
+            generation,
+        )?;
         let page = AtomicPage::new(&memory);
         page.store_u64(0, ARENA_MAGIC, Ordering::Relaxed);
         page.store_u64(8, ARENA_LAYOUT_VERSION, Ordering::Relaxed);
@@ -317,8 +335,14 @@ impl ArenaRegion {
         page.store_u64(
             40,
             u64::try_from(capacity).map_err(|_| TransportError::MessageTooLarge)?,
-            Ordering::Release,
+            Ordering::Relaxed,
         );
+        page.store_u64(
+            48,
+            arena_mapping_challenge(session_epoch, id, generation),
+            Ordering::Relaxed,
+        );
+        page.store_u64(56, 0, Ordering::Release);
         Ok(Self {
             id,
             generation,
@@ -327,6 +351,7 @@ impl ArenaRegion {
             free: BTreeMap::from([(0, capacity)]),
             slot_generations: [0; MAX_REGION_SLOTS],
             offered: false,
+            peer_confirmed: false,
             quarantined: false,
             used: 0,
             high_water: 0,
@@ -358,14 +383,19 @@ impl ArenaRegion {
         let end = start
             .checked_add(bytes.len())
             .ok_or(TransportError::InvalidRange)?;
-        if end > self.memory.len() {
+        if end > self.memory.len().get() {
             return Err(TransportError::InvalidRange);
         }
-        // SAFETY: The producer owns allocation extents until their lease is
-        // released. It writes only a currently non-published extent; readers
-        // observe it after the slot's Release publication.
+        // SAFETY: The mapping is alive and start..end was checked against its
+        // byte length. The producer owns this extent until lease release and
+        // writes it only before the slot's Release publication. The receiver
+        // treats a published extent as immutable until it releases the lease.
         unsafe {
-            self.memory.deref_mut()[start..end].copy_from_slice(bytes);
+            std::ptr::copy_nonoverlapping(
+                bytes.as_ptr(),
+                self.memory.address().as_ptr().add(start),
+                bytes.len(),
+            );
         }
         Ok(())
     }
@@ -401,6 +431,21 @@ impl ArenaRegion {
         }
     }
 
+    fn confirm_peer_mapping(&mut self) -> bool {
+        if self.peer_confirmed {
+            return true;
+        }
+        let page = AtomicPage::new(&self.memory);
+        let challenge = page.load_u64(48, Ordering::Acquire);
+        let expected = arena_mapping_response(challenge);
+        if challenge == 0 || page.load_u64(56, Ordering::Acquire) != expected {
+            return false;
+        }
+        self.peer_confirmed = true;
+        let _ = self.memory.unlink();
+        true
+    }
+
     fn insert_free_extent(&mut self, mut offset: usize, mut length: usize) {
         if let Some((&previous_offset, &previous_length)) = self.free.range(..offset).next_back()
             && previous_offset.saturating_add(previous_length) == offset
@@ -428,7 +473,7 @@ impl ArenaRegion {
             region_id: self.id,
             region_generation: self.generation,
             capacity: self.capacity as u64,
-            memory: self.memory.clone(),
+            descriptor: self.memory.descriptor(),
         }
     }
 }
@@ -443,11 +488,11 @@ pub struct ArenaReceiver {
 struct ReceivedRegion {
     generation: u64,
     capacity: usize,
-    memory: Arc<IpcSharedMemory>,
+    memory: Arc<SharedMemory>,
 }
 
 pub struct ResolvedBlob {
-    memory: Arc<IpcSharedMemory>,
+    memory: Arc<SharedMemory>,
     start: usize,
     end: usize,
 }
@@ -455,7 +500,7 @@ pub struct ResolvedBlob {
 impl ResolvedBlob {
     #[must_use]
     pub fn as_slice(&self) -> &[u8] {
-        &self.memory[self.start..self.end]
+        shared_slice(&self.memory, self.start, self.end)
     }
 }
 
@@ -475,21 +520,25 @@ impl ArenaReceiver {
             }
             let capacity =
                 usize::try_from(offer.capacity).map_err(|_| TransportError::InvalidRange)?;
-            validate_arena_region(&offer, capacity)?;
-            if let Some(existing) = self.regions.get(&offer.region_id)
-                && existing.generation != offer.region_generation
-            {
-                return Err(TransportError::StaleRegion);
+            if let Some(existing) = self.regions.get(&offer.region_id) {
+                if existing.generation != offer.region_generation
+                    || existing.capacity != capacity
+                    || existing.memory.descriptor() != offer.descriptor
+                {
+                    return Err(TransportError::StaleRegion);
+                }
+                continue;
             }
-            // Replace the mapping even when region_id is unchanged. macOS
-            // VIRTUAL_COPY offers are snapshots; keeping the first mapping
-            // makes later warm allocations appear stale.
+            validate_arena_descriptor(&offer, capacity)?;
+            let memory = SharedMemory::open(offer.descriptor)?;
+            validate_arena_region(&offer, capacity, &memory)?;
+            acknowledge_arena_mapping(&memory);
             self.regions.insert(
                 offer.region_id,
                 ReceivedRegion {
                     generation: offer.region_generation,
                     capacity,
-                    memory: Arc::new(offer.memory),
+                    memory: Arc::new(memory),
                 },
             );
         }
@@ -513,7 +562,7 @@ impl ArenaReceiver {
             .ok_or(TransportError::InvalidRange)?;
         let end = start
             .checked_add(length)
-            .filter(|end| *end <= region.memory.len())
+            .filter(|end| *end <= region.memory.len().get())
             .ok_or(TransportError::InvalidRange)?;
         Ok(ResolvedBlob {
             memory: Arc::clone(&region.memory),
@@ -558,7 +607,11 @@ impl ArenaReceiver {
         let start = ARENA_HEADER_BYTES
             .checked_add(offset)
             .ok_or(TransportError::InvalidRange)?;
-        Ok(&region.memory[start..ARENA_HEADER_BYTES + end])
+        Ok(shared_slice(
+            &region.memory,
+            start,
+            ARENA_HEADER_BYTES + end,
+        ))
     }
 }
 
@@ -572,14 +625,30 @@ fn align_up(value: usize, alignment: usize) -> Option<usize> {
         .map(|value| value & !(alignment - 1))
 }
 
-fn validate_arena_region(offer: &RegionOffer, capacity: usize) -> Result<(), TransportError> {
+fn validate_arena_descriptor(offer: &RegionOffer, capacity: usize) -> Result<(), TransportError> {
     let expected = ARENA_HEADER_BYTES
         .checked_add(capacity)
         .ok_or(TransportError::InvalidRange)?;
-    if offer.memory.len() != expected {
+    if offer.descriptor.byte_len() != expected as u64
+        || offer.descriptor.generation() != offer.region_generation
+    {
         return Err(TransportError::InvalidRange);
     }
-    let page = AtomicPage::new(&offer.memory);
+    Ok(())
+}
+
+fn validate_arena_region(
+    offer: &RegionOffer,
+    capacity: usize,
+    memory: &SharedMemory,
+) -> Result<(), TransportError> {
+    let expected = ARENA_HEADER_BYTES
+        .checked_add(capacity)
+        .ok_or(TransportError::InvalidRange)?;
+    if memory.len().get() != expected {
+        return Err(TransportError::InvalidRange);
+    }
+    let page = AtomicPage::new(memory);
     if page.load_u64(0, Ordering::Acquire) != ARENA_MAGIC
         || page.load_u64(8, Ordering::Acquire) != ARENA_LAYOUT_VERSION
         || page.load_u64(16, Ordering::Acquire) != offer.session_epoch
@@ -590,4 +659,31 @@ fn validate_arena_region(offer: &RegionOffer, capacity: usize) -> Result<(), Tra
         return Err(TransportError::InvalidSharedLayout);
     }
     Ok(())
+}
+
+fn acknowledge_arena_mapping(memory: &SharedMemory) {
+    let page = AtomicPage::new(memory);
+    let challenge = page.load_u64(48, Ordering::Acquire);
+    page.store_u64(56, arena_mapping_response(challenge), Ordering::Release);
+}
+
+fn arena_mapping_response(challenge: u64) -> u64 {
+    challenge.rotate_left(23) ^ 0x6172_656e_612d_6163
+}
+
+fn arena_mapping_challenge(session_epoch: u64, region_id: u32, generation: u64) -> u64 {
+    let value = session_epoch.rotate_left(13)
+        ^ u64::from(region_id).rotate_left(31)
+        ^ generation
+        ^ ARENA_MAGIC;
+    if value == 0 { ARENA_MAGIC } else { value }
+}
+
+fn shared_slice(memory: &SharedMemory, start: usize, end: usize) -> &[u8] {
+    debug_assert!(start <= end && end <= memory.len().get());
+    // SAFETY: the mapping outlives the returned borrow and the caller validated
+    // start..end against its length. Arena publication makes the allocation
+    // immutable from Release publication until the receiver releases its
+    // lease; every returned slice is confined to that published allocation.
+    unsafe { std::slice::from_raw_parts(memory.address().as_ptr().add(start), end - start) }
 }

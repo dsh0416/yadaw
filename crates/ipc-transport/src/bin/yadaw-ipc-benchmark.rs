@@ -1,13 +1,14 @@
 use std::{
     env,
+    num::NonZeroUsize,
     process::{Command, ExitCode, Stdio},
     time::{Duration, Instant},
 };
 
-use ipc_channel::ipc::{self, IpcOneShotServer, IpcReceiver, IpcSender, IpcSharedMemory};
+use ipc_channel::ipc::{self, IpcOneShotServer, IpcReceiver, IpcSender};
 use serde::{Deserialize, Serialize};
 use yadaw_ipc_transport::{
-    RegionOffer, TelemetryReader, TelemetrySnapshot, TelemetryWriter, WirePacket,
+    RegionOffer, SharedMemory, TelemetryReader, TelemetrySnapshot, TelemetryWriter, WirePacket,
     create_telemetry_page,
 };
 
@@ -51,12 +52,13 @@ fn child(token: String) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
     let bootstrap = bootstrap_receiver.recv().map_err(|e| e.to_string())?;
     let mut retained_request_regions = Vec::new();
-    let response_region = IpcSharedMemory::from_byte(9, BULK_BYTES);
+    let response_region = benchmark_region(9)?;
     let mut response_region_offered = false;
 
     while let Ok(packet) = bootstrap.requests.recv() {
         for offer in packet.region_offers {
-            retained_request_regions.push(offer.memory);
+            retained_request_regions
+                .push(SharedMemory::open(offer.descriptor).map_err(|error| error.to_string())?);
         }
         let body = decode_body(&packet.body)?;
         if matches!(body, BenchmarkBody::Shutdown) {
@@ -70,7 +72,7 @@ fn child(token: String) -> Result<(), String> {
                     region_id: 2,
                     region_generation: 1,
                     capacity: BULK_BYTES as u64,
-                    memory: response_region.clone(),
+                    descriptor: response_region.descriptor(),
                 }]
             } else {
                 Vec::new()
@@ -122,8 +124,8 @@ fn inline_sequential_rtt(
 fn shared_cold_first_use(
     requests: &IpcSender<WirePacket>,
     responses: &IpcReceiver<WirePacket>,
-) -> Result<(IpcSharedMemory, IpcSharedMemory, usize), String> {
-    let request_region = IpcSharedMemory::from_byte(7, BULK_BYTES);
+) -> Result<(SharedMemory, SharedMemory, usize), String> {
+    let request_region = benchmark_region(7)?;
     let body = encode_body(&BenchmarkBody::Shared {
         sequence: 0,
         request_region: 1,
@@ -139,7 +141,7 @@ fn shared_cold_first_use(
                 region_id: 1,
                 region_generation: 1,
                 capacity: BULK_BYTES as u64,
-                memory: request_region.clone(),
+                descriptor: request_region.descriptor(),
             }],
         })
         .map_err(|e| e.to_string())?;
@@ -150,12 +152,27 @@ fn shared_cold_first_use(
         .into_iter()
         .next()
         .ok_or_else(|| "cold response did not offer its persistent arena region".to_owned())?
-        .memory;
+        .descriptor;
+    let response_region = SharedMemory::open(response_region).map_err(|error| error.to_string())?;
     println!(
         "shared cold first-use latency (two 4 MiB mappings): {:.3} ms",
         elapsed.as_secs_f64() * 1_000.0
     );
     Ok((request_region, response_region, body.len()))
+}
+
+fn benchmark_region(fill: u8) -> Result<SharedMemory, String> {
+    let memory = SharedMemory::create(
+        NonZeroUsize::new(BULK_BYTES).ok_or_else(|| "bulk size is zero".to_owned())?,
+        1,
+    )
+    .map_err(|error| error.to_string())?;
+    // SAFETY: the freshly created mapping is live, exactly BULK_BYTES long,
+    // and has not been offered to another process yet.
+    unsafe {
+        std::ptr::write_bytes(memory.address().as_ptr(), fill, BULK_BYTES);
+    }
+    Ok(memory)
 }
 
 fn warm_sequential(

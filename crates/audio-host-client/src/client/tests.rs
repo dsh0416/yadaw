@@ -1,7 +1,6 @@
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ipc_channel::ipc::IpcSharedMemory;
     use std::sync::mpsc;
     use yadaw_dsp_runtime::protocol::{
         AudioEngineConfig, BinaryPayload, GraphTransactionRequest, GraphUpdate,
@@ -422,6 +421,16 @@ mod tests {
     #[test]
     fn transport_traffic_separates_inline_and_shared_packets() {
         let traffic = TransportTraffic::default();
+        let first_region = yadaw_ipc_transport::SharedMemory::create(
+            std::num::NonZeroUsize::new(17).expect("non-zero region"),
+            1,
+        )
+        .expect("first region");
+        let second_region = yadaw_ipc_transport::SharedMemory::create(
+            std::num::NonZeroUsize::new(8).expect("non-zero region"),
+            1,
+        )
+        .expect("second region");
         record_packet(
             &WirePacket {
                 body: vec![1, 2, 3],
@@ -438,14 +447,14 @@ mod tests {
                         region_id: 1,
                         region_generation: 1,
                         capacity: 17,
-                        memory: IpcSharedMemory::from_bytes(&[0; 17]),
+                        descriptor: first_region.descriptor(),
                     },
                     RegionOffer {
                         session_epoch: 1,
                         region_id: 2,
                         region_generation: 1,
                         capacity: 8,
-                        memory: IpcSharedMemory::from_bytes(&[0; 8]),
+                        descriptor: second_region.descriptor(),
                     },
                 ],
             },

@@ -23,7 +23,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use ipc_channel::ipc::{IpcReceiver, IpcSender, IpcSharedMemory};
+use ipc_channel::ipc::{IpcReceiver, IpcSender};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use thiserror::Error;
 use yadaw_dsp_runtime::protocol::{

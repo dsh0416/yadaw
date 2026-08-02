@@ -168,22 +168,6 @@ impl AtomicMemory for SharedMemory {
     }
 }
 
-impl AtomicMemory for IpcSharedMemory {
-    fn atomic_address(&self) -> std::ptr::NonNull<u8> {
-        // SAFETY: ipc-channel exposes a live slice pointer for the lifetime of
-        // this borrow. AtomicPage checks field bounds before dereferencing it.
-        unsafe { std::ptr::NonNull::new_unchecked(self.as_ptr().cast_mut()) }
-    }
-
-    fn atomic_length(&self) -> usize {
-        self.len()
-    }
-
-    fn atomic_generation(&self) -> u64 {
-        0
-    }
-}
-
 fn mapping_challenge(epoch: u64, generation: u64, magic: u64) -> u64 {
     let value = epoch.rotate_left(17) ^ generation.rotate_right(11) ^ magic ^ CHALLENGE_SALT;
     if value == 0 { CHALLENGE_SALT } else { value }
