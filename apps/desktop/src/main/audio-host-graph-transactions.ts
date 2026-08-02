@@ -54,6 +54,7 @@ export class AudioHostGraphTransactions {
     for (const [index, result] of loaded.entries()) {
       if (result.status === "rejected") {
         const plugin = project.plugins[index]
+        const reason: unknown = result.reason
         console.error(`Could not prepare VST3 instance ${plugin?.id}:`, {
           request: plugin
             ? {
@@ -68,7 +69,7 @@ export class AudioHostGraphTransactions {
                 araDocumentStateBytes: plugin.araDocumentState?.byteLength ?? 0
               }
             : null,
-          reason: result.reason
+          reason
         })
         return rpcFailure(meta, {
           code: "dependency-failed",
