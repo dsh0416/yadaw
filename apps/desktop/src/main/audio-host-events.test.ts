@@ -1,11 +1,12 @@
 import { encode } from "@msgpack/msgpack"
-import { describe, expect, it, vi } from "vitest"
+import type { AudioHostIpcClient } from "@yadaw/audio-host-client"
+import { describe, expect, it } from "vitest"
 import { drainHostEvents } from "./audio-host-events"
 
-function clientWithEvents(events: unknown[]) {
+function clientWithEvents(events: unknown[]): AudioHostIpcClient {
   return {
     drainEvents: () => events.map((event) => Buffer.from(encode(event)))
-  }
+  } as AudioHostIpcClient
 }
 
 describe("drainHostEvents", () => {
@@ -24,7 +25,7 @@ describe("drainHostEvents", () => {
           class_id: "AAAABBBBCCCCDDDDEEEEFFFF00001111",
           preference: { mode: "parameters", zoom_percent: 150 }
         }
-      ]) as never,
+      ]),
       async (classId, preference) => {
         writes.push({ classId, preference })
       },
@@ -47,7 +48,7 @@ describe("drainHostEvents", () => {
         { type: "plugin-editor-closed", instance_id: "fx-1" },
         { type: "plugin-editor-closed", instance_id: "fx-1" },
         { type: "plugin-editor-closed", instance_id: "" }
-      ]) as never,
+      ]),
       async () => {},
       new Set(),
       (instanceId) => closed.push(instanceId)
