@@ -84,12 +84,9 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: >-
-            apps/desktop/coverage/lcov.info,
-            packages/contracts/coverage/lcov.info,
-            packages/project-db/coverage/lcov.info,
-            packages/project-model/coverage/lcov.info,
-            packages/ui/coverage/lcov.info
+          # Keep this comma-separated list free of spaces: codecov-action
+          # forwards each segment verbatim as a --file argument.
+          files: apps/desktop/coverage/lcov.info,packages/contracts/coverage/lcov.info,packages/project-db/coverage/lcov.info,packages/project-model/coverage/lcov.info,packages/ui/coverage/lcov.info
           flags: javascript
           name: javascript
           fail_ci_if_error: true
