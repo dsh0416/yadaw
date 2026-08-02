@@ -9,11 +9,13 @@ export type OperationPhase =
   | "writing-large-object"
   | "committing-database"
   | "saving-archive"
+  | "preparing-project"
   | "loading-project-archive"
   | "loading-project-database"
   | "restoring-project-state"
   | "loading-mixer"
   | "loading-project-assets"
+  | "preparing-project-graph"
   | "preparing-waveforms"
   | "cleaning-up"
 
