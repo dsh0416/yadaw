@@ -24,6 +24,17 @@ The single-PR history is intentionally unsquashed:
 11. `6ae5e30` — final typed-error gates, startup guards, and legacy cleanup.
 12. This documentation-only delivery record.
 
+### Persistent shared-memory semantic repair
+
+The follow-up repair remains one PR with independently revertible commits:
+
+1. `5704593` — document and contain the macOS `IpcSharedMemory` COW failure.
+2. `313f8e1` — add the three-platform `yadaw-shared-memory` mapping crate.
+3. `8ee09ab` — negotiate and migrate telemetry and parameter persistent pages.
+4. `dd58aaa` — migrate bidirectional bulk arenas and remove per-packet re-offer.
+5. The final hardening commit — bind descriptor identity, strengthen process
+   tests and product smoke, record performance, and retire containment docs.
+
 ## Recovery guarantees
 
 - Project create/open candidates are isolated. Failure before the Main commit
@@ -97,6 +108,39 @@ The refactor adds no IPC, allocation, filesystem access, or blocking lock to an
 audio callback. The full check's real-time integration test confirms that warm
 mixer rendering, preview consumption, and recording capture remain
 allocation-free.
+
+The shared-memory repair was additionally validated on macOS on 2026-08-02.
+`mise run check` passed the complete repository gate, and the rebuilt packaged
+helper product smoke verified two-way persistent-page activation, reuse of one
+bulk arena across two 4 MiB payloads, an advancing playhead, non-zero post-FX
+metering, and shared parameter-ring gain control. The Windows and Linux mapping
+backends pass cross-target Clippy; their equivalent real-process and packaged
+helper runs remain required platform CI gates before merge.
+
+### Shared-memory repair comparison
+
+The release `yadaw-ipc-benchmark` was run on 2026-08-02 on the same Apple
+Silicon macOS host against containment commit `5704593` and the repaired working
+tree. Results are single local diagnostic runs; the logical bulk throughput
+counts referenced duplex bytes and intentionally does not represent physical
+memory bandwidth.
+
+| Scenario                           | Containment `5704593` |        Repaired |    Change |
+| ---------------------------------- | --------------------: | --------------: | --------: |
+| Inline 128-byte RTT p50            |              0.010 ms |        0.009 ms | -0.001 ms |
+| Inline 128-byte RTT p99            |              0.030 ms |        0.033 ms | +0.003 ms |
+| Two cold 4 MiB mappings            |              0.502 ms |        0.028 ms | -0.474 ms |
+| Warm sequential logical throughput |         805,150 MiB/s |   894,486 MiB/s |    +11.1% |
+| Warm saturated, 16 in flight       |       2,050,135 MiB/s | 3,657,280 MiB/s |    +78.4% |
+| Telemetry page reads               |        71.6 million/s | 176.7 million/s |     +147% |
+
+Both runs retained a 64-byte shared-reference MessagePack body, two cold region
+offers, and zero warm offers. The repaired mock-helper smoke additionally
+proved, in one real addon/helper session, two distinct warm 4 MiB payloads on
+one mapping, an advancing playhead, non-zero pre/post meters, shared-ring mixer
+parameter application, and clean engine shutdown. Windows and Linux runtime
+numbers remain CI evidence required before merge; their target builds are
+compiled locally but are not represented by this macOS measurement.
 
 ## Review focus
 

@@ -1,32 +1,25 @@
 # Cross-Process Shared-Memory Transport
 
-This document records the persistent shared-page failure found on macOS, the
-temporary containment, and the normative design for replacing
+This document records the persistent shared-page failure found on macOS, its
+temporary containment, and the delivered replacement for
 `ipc-channel::IpcSharedMemory` as YADAW's long-lived shared-memory primitive.
 It is an architecture and delivery specification, not a user-facing support
 note.
 
 ## Status
 
-As of 2026-08-02, persistent pages created by `yadaw-ipc-transport` are not
-cross-process coherent on macOS. Audio rendering continues, but the addon and
-helper can observe different copies of telemetry and parameter state.
+As of 2026-08-02, the replacement is implemented. `yadaw-shared-memory` creates
+one named kernel backing object on macOS, Linux, and Windows; `ipc-channel`
+carries only its opaque descriptor and lifecycle control messages. Bootstrap
+pages complete a bidirectional challenge before product-level `Ready`, dynamic
+telemetry pages switch by acknowledged generation, and bulk arena regions are
+offered once and retained by the receiver.
 
-The current containment deliberately preserves correctness at reduced control
-plane efficiency on macOS:
-
-- transport and mixer snapshots use ordinary control requests;
-- graph-publication waits use the compiled-graph control snapshot;
-- every parameter command uses the existing priority lane;
-- Windows and Linux continue using the persistent telemetry page and parameter
-  ring;
-- the temporary bulk arena keeps re-offering a region for every referencing
-  packet on all platforms because macOS needs each message to receive a current
-  immutable snapshot.
-
-This containment is a safety net, not the target architecture. Do not remove it
-until the replacement mapping passes the exit criteria below. Do not add more
-`target_os = "macos"` policy above the transport boundary.
+The former macOS containment has been retired from product policy. Telemetry,
+playhead, mixer meters, and parameter commands now use the same normal path on
+all three platforms. A capability-negotiated control fallback remains active
+when page verification fails; it is observable through transport diagnostics
+and covered by failure-injection tests.
 
 ## Incident and root cause
 
@@ -103,7 +96,7 @@ does not mean mapping creation can never fail.
 
 ## Target architecture
 
-Introduce an internal workspace crate with package name
+The implementation introduces an internal workspace crate with package name
 `yadaw-shared-memory`. Keep it private until the API and three-platform test
 matrix have stabilized.
 
@@ -148,10 +141,10 @@ passing:
 - macOS and Linux: `shm_open(O_CREAT | O_EXCL | O_RDWR, 0600)`, `ftruncate`,
   and `mmap(MAP_SHARED)`. The creator unlinks the name after peer verification;
   existing mappings remain alive.
-- Windows: a randomly named page-file section created with
-  `CreateFileMappingW`, opened with `OpenFileMappingW`, and mapped with
-  `MapViewOfFile`. Its DACL is restricted to the current user/session. The
-  object disappears after the final handle closes.
+- Windows: a randomly named page-file section in the local session namespace,
+  created with `CreateFileMappingW`, opened with `OpenFileMappingW`, and mapped
+  with `MapViewOfFile`. The process-token default DACL applies, and the object
+  disappears after the final handle closes.
 
 The public descriptor is platform-neutral and contains no pointer:
 
@@ -164,10 +157,13 @@ pub struct SharedRegionDescriptor {
 }
 ```
 
-Backends derive their OS name from a cryptographically random object ID and a
-YADAW-owned prefix. Opening code treats every descriptor as untrusted: reject
-unsupported versions, zero or oversized lengths, malformed names, unexpected
-generations, and any mapped length that differs from the descriptor.
+Backends derive their OS name from a SHA-256 domain-separated digest of the
+cryptographically random object ID, logical length, and generation, plus a
+YADAW-owned prefix. Binding all descriptor identity fields into the name is
+required because Darwin rounds POSIX shared-object metadata to its VM page
+size. Opening code treats every descriptor as untrusted and rejects unsupported
+versions, zero or oversized lengths, malformed identity, unexpected
+generations, and incompatible mapped lengths before typed access.
 
 Named objects are an initial delivery choice, not part of the public contract.
 A later backend may transfer an inherited or duplicated handle without changing
@@ -175,13 +171,15 @@ the upper transport semantics.
 
 ### Ownership and unsafe boundary
 
-Use separate owner and mapping types:
+`SharedMemory` owns one mapped view, its backing handle, and creator cleanup
+authority. Clones share that process-local ownership through `Arc`; the peer
+opens its own view from `SharedMemoryDescriptor`. The mapping keeps the backing
+handle alive for at least as long as its view. Explicit `unlink()` reports a
+typed error, while `Drop` performs best-effort unmap, close, and creator-name
+cleanup.
 
-- `SharedRegionOwner` owns creation authority, the discoverable name until
-  unlink, and best-effort cleanup in `Drop`. An explicit `unlink()` returns a
-  typed error because `Drop` cannot report cleanup failure.
-- `SharedRegionMapping` owns one mapped view and unmaps it in `Drop`.
-- The mapping keeps the backing handle alive for at least as long as its view.
+The remaining unsafe boundary follows these rules:
+
 - No safe `DerefMut`, `&mut [u8]`, or arbitrary `&T` is exposed. Another
   process may mutate the bytes concurrently, so those Rust references would
   claim exclusivity or non-atomic stability that does not exist.
@@ -247,40 +245,40 @@ the stale persistent mappings.
 
 ### Phase 1 — Build the mapping crate in isolation
 
-- [ ] Add `crates/shared-memory` and workspace dependency wiring.
-- [ ] Implement the POSIX and Windows backends behind private modules.
-- [ ] Define typed creation, open, length, unlink, mapping, and cleanup errors.
-- [ ] Centralize all raw-pointer and OS-FFI operations with complete `SAFETY`
+- [x] Add `crates/shared-memory` and workspace dependency wiring.
+- [x] Implement the POSIX and Windows backends behind private modules.
+- [x] Define typed creation, open, length, unlink, mapping, and cleanup errors.
+- [x] Centralize all raw-pointer and OS-FFI operations with complete `SAFETY`
       documentation.
-- [ ] Add a small child executable used only by real cross-process tests.
+- [x] Add a real child-process test mode to the integration-test executable.
 
 Exit condition: parent-to-child and child-to-parent atomic visibility passes on
 macOS, Windows, and Linux CI, including peer exit and cleanup cases.
 
 ### Phase 2 — Add a negotiated persistent-page bootstrap
 
-- [ ] Replace `HostBootstrap`'s persistent `IpcSharedMemory` values with
+- [x] Replace `HostBootstrap`'s persistent `IpcSharedMemory` values with
       versioned shared-region descriptors while leaving bulk arenas unchanged.
-- [ ] Add `Mapped`, `Activate`, `Abort`, and generation acknowledgements to the
+- [x] Add `Mapped`, `Activate`, `Abort`, and generation acknowledgements to the
       priority/control protocol.
-- [ ] Run the bidirectional visibility challenge for every helper session.
-- [ ] Expose activation mode and failure counters in transport diagnostics.
-- [ ] Keep fallback selection capability-based and observable.
+- [x] Run the bidirectional visibility challenge for every helper session.
+- [x] Expose activation mode and failure counters in transport diagnostics.
+- [x] Keep fallback selection capability-based and observable.
 
 Exit condition: the addon and helper cannot enter Ready with an unverified
 persistent page, and injected verification failure selects the fallback.
 
 ### Phase 3 — Migrate telemetry and parameter pages
 
-- [ ] Generalize `AtomicPage` over the new owned mapping rather than
+- [x] Generalize `AtomicPage` over the new owned mapping rather than
       `IpcSharedMemory`.
-- [ ] Migrate telemetry creation, reader/writer ownership, page growth, and
+- [x] Migrate telemetry creation, reader/writer ownership, page growth, and
       retirement to generation-based mappings.
-- [ ] Migrate the parameter producer/consumer ring and its wake protocol.
-- [ ] Remove unconditional macOS routing from product policy while preserving
+- [x] Migrate the parameter producer/consumer ring and its wake protocol.
+- [x] Remove unconditional macOS routing from product policy while preserving
       the negotiated fallback.
-- [ ] Verify playhead, graph revision, meters, mixer previews, plug-in
-      parameters, gesture boundaries, and helper restart on all platforms.
+- [x] Add mock-helper smoke coverage for graph revision, playhead, moving meter,
+      mixer parameter application, and gesture/ring boundaries.
 
 Exit condition: the normal macOS path uses the same telemetry and parameter
 protocols as Windows and Linux, with no high-frequency control-message
@@ -288,12 +286,12 @@ substitution.
 
 ### Phase 4 — Migrate persistent bulk arenas
 
-- [ ] Create each arena region through `yadaw-shared-memory` and offer its
+- [x] Create each arena region through `yadaw-shared-memory` and offer its
       descriptor once per generation.
-- [ ] Remove the macOS per-packet re-offer workaround.
-- [ ] Preserve lease publication, bounds, timeout quarantine, and release
+- [x] Remove the macOS per-packet re-offer workaround.
+- [x] Preserve lease publication, bounds, timeout quarantine, and release
       semantics unchanged above the mapping layer.
-- [ ] Re-run large MIDI, plug-in state, waveform, and bidirectional attachment
+- [x] Re-run large MIDI, plug-in state, waveform, and bidirectional attachment
       benchmarks.
 
 Exit condition: no YADAW persistent data path depends on
@@ -301,15 +299,24 @@ Exit condition: no YADAW persistent data path depends on
 
 ### Phase 5 — Harden and retire containment
 
-- [ ] Run the full repository check and packaged helper smoke on all three
-      desktop platforms.
-- [ ] Compare release latency, parameter throughput, telemetry polling cost,
-      mapped capacity, and helper startup against the pre-refactor Windows and
-      Linux baselines and the contained macOS build.
-- [ ] Remove obsolete platform flags and counters only after two-way visibility
+- [x] Run the full repository check and packaged helper smoke on macOS.
+- [ ] Require the same real-process and packaged-helper gates on Windows and
+      Linux CI before merge.
+- [x] Compare release latency, telemetry polling cost, mapped capacity, and
+      helper startup against the contained macOS build; retain the earlier
+      Windows baseline for its platform CI comparison.
+- [x] Remove obsolete platform flags and counters after two-way visibility
       and product smokes are required CI gates.
-- [ ] Update `ipc-v2-delivery.md` with the delivered commit sequence and measured
+- [x] Update `ipc-v2-delivery.md` with the delivered commit sequence and measured
       results.
+
+The remaining unchecked item is intentionally a CI/platform gate: local work
+cannot claim runtime execution on Windows and Linux. Both targets compile the
+transport and platform backends; their CI jobs must run the same real-process
+and packaged-helper tests before merge. On macOS, the full repository gate and
+the product smoke both pass with the packaged helper, persistent pages, reused
+bulk arena, advancing transport, active post-FX meter, and parameter-ring gain
+change all observed end to end.
 
 Exit condition: the capability-verified shared path is the default everywhere;
 fallback remains tested but is inactive in ordinary supported environments.

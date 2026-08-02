@@ -51,7 +51,7 @@ impl SharedMemory {
         for _ in 0..CREATE_ATTEMPTS {
             let object_id = random_object_id()?;
             let descriptor = SharedMemoryDescriptor::new(object_id, byte_len, generation);
-            match Mapping::create(object_id, byte_len) {
+            match Mapping::create(object_id, byte_len, generation) {
                 Ok(mapping) => {
                     return Ok(Self {
                         mapping: Arc::new(mapping),
@@ -73,7 +73,7 @@ impl SharedMemory {
     /// object, a size mismatch, or a platform mapping failure.
     pub fn open(descriptor: SharedMemoryDescriptor) -> Result<Self, SharedMemoryError> {
         let byte_len = descriptor.validate()?;
-        let mapping = Mapping::open(descriptor.object_id(), byte_len)?;
+        let mapping = Mapping::open(descriptor.object_id(), byte_len, descriptor.generation())?;
         Ok(Self {
             mapping: Arc::new(mapping),
             descriptor,

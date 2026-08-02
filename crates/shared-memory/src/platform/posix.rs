@@ -12,7 +12,7 @@ use libc::{
     c_void, fcntl, fstat, ftruncate, mmap, munmap, shm_open, shm_unlink, stat,
 };
 
-use crate::SharedMemoryError;
+use crate::{SharedMemoryError, platform::object_key};
 
 pub(crate) struct Mapping {
     address: NonNull<u8>,
@@ -35,8 +35,9 @@ impl Mapping {
     pub(crate) fn create(
         object_id: [u8; 16],
         length: NonZeroUsize,
+        generation: u64,
     ) -> Result<Self, SharedMemoryError> {
-        let name = object_name(object_id);
+        let name = object_name(object_id, length, generation);
         // SAFETY: name is a valid NUL-terminated POSIX shared-memory name and
         // the flags/mode contain no borrowed pointers.
         let raw_fd = unsafe { shm_open(name.as_ptr(), O_CREAT | O_EXCL | O_RDWR, 0o600) };
@@ -71,8 +72,9 @@ impl Mapping {
     pub(crate) fn open(
         object_id: [u8; 16],
         length: NonZeroUsize,
+        generation: u64,
     ) -> Result<Self, SharedMemoryError> {
-        let name = object_name(object_id);
+        let name = object_name(object_id, length, generation);
         // SAFETY: name is a valid NUL-terminated POSIX shared-memory name.
         let raw_fd = unsafe { shm_open(name.as_ptr(), O_RDWR, 0) };
         if raw_fd < 0 {
@@ -224,13 +226,16 @@ fn unlink_name(name: &CStr) -> Result<(), SharedMemoryError> {
     }
 }
 
-fn object_name(object_id: [u8; 16]) -> CString {
+fn object_name(object_id: [u8; 16], length: NonZeroUsize, generation: u64) -> CString {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     // Darwin limits POSIX shared-memory names to 31 bytes. A 96-bit projection
     // retains ample collision resistance while keeping `/ydw-` + hex below it.
     let mut bytes = Vec::with_capacity(30);
     bytes.extend_from_slice(b"/ydw-");
-    for byte in object_id.into_iter().take(12) {
+    for byte in object_key(object_id, length, generation)
+        .into_iter()
+        .take(12)
+    {
         bytes.push(HEX[usize::from(byte >> 4)]);
         bytes.push(HEX[usize::from(byte & 0x0f)]);
     }

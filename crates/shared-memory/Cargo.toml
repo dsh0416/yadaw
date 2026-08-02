@@ -12,6 +12,7 @@ serde = ["dep:serde"]
 [dependencies]
 getrandom.workspace = true
 serde = { workspace = true, optional = true }
+sha2.workspace = true
 thiserror.workspace = true
 
 [target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]

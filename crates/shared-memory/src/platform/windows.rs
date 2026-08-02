@@ -13,7 +13,7 @@ use windows::{
     core::PCWSTR,
 };
 
-use crate::SharedMemoryError;
+use crate::{SharedMemoryError, platform::object_key};
 
 pub(crate) struct Mapping {
     address: NonNull<u8>,
@@ -33,8 +33,9 @@ impl Mapping {
     pub(crate) fn create(
         object_id: [u8; 16],
         length: NonZeroUsize,
+        generation: u64,
     ) -> Result<Self, SharedMemoryError> {
-        let name = object_name(object_id);
+        let name = object_name(object_id, length, generation);
         let length_u64 = u64::try_from(length.get())
             .map_err(|_| SharedMemoryError::invalid_descriptor("byte length exceeds u64"))?;
         let high = u32::try_from(length_u64 >> 32)
@@ -68,8 +69,9 @@ impl Mapping {
     pub(crate) fn open(
         object_id: [u8; 16],
         length: NonZeroUsize,
+        generation: u64,
     ) -> Result<Self, SharedMemoryError> {
-        let name = object_name(object_id);
+        let name = object_name(object_id, length, generation);
         // SAFETY: the UTF-16 name is NUL-terminated and no borrowed buffer is
         // retained by OpenFileMappingW.
         let handle =
@@ -124,11 +126,11 @@ impl Drop for SectionHandle {
     }
 }
 
-fn object_name(object_id: [u8; 16]) -> Vec<u16> {
+fn object_name(object_id: [u8; 16], length: NonZeroUsize, generation: u64) -> Vec<u16> {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     let mut bytes = Vec::with_capacity(16 + object_id.len() * 2);
     bytes.extend_from_slice(b"Local\\YADAW-shm-");
-    for byte in object_id {
+    for byte in object_key(object_id, length, generation) {
         bytes.push(HEX[usize::from(byte >> 4)]);
         bytes.push(HEX[usize::from(byte & 0x0f)]);
     }

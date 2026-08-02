@@ -19,6 +19,7 @@ const PARENT_CHALLENGE: u64 = 0x7061_7265_6e74_0001;
 const CHILD_CHALLENGE: u64 = 0x6368_696c_6400_0002;
 const UNLINK_CHALLENGE: u64 = 0x756e_6c69_6e6b_0003;
 const CHILD_ACK: u64 = 0x6163_6b00_0000_0004;
+const PUBLICATION_COUNT: u64 = 10_000;
 
 #[test]
 fn process_visibility_child() {
@@ -39,6 +40,8 @@ fn process_visibility_child() {
     assert_eq!(wait_for(&mapping, 0, PARENT_CHALLENGE), PARENT_CHALLENGE);
     atomic(&mapping, 1).store(CHILD_CHALLENGE, Ordering::Release);
     assert_eq!(wait_for(&mapping, 2, UNLINK_CHALLENGE), UNLINK_CHALLENGE);
+    wait_for_publication(&mapping, 4, 5, PUBLICATION_COUNT);
+    publish_sequence(&mapping, 7, 8, PUBLICATION_COUNT);
     atomic(&mapping, 3).store(CHILD_ACK, Ordering::Release);
 }
 
@@ -47,6 +50,22 @@ fn writes_remain_visible_in_both_directions_and_after_unlink() {
     let mapping = SharedMemory::create(NonZeroUsize::new(4096).unwrap(), 7)
         .expect("parent creates shared mapping");
     let descriptor = mapping.descriptor();
+    let wrong_length = SharedMemoryDescriptor::from_parts(
+        descriptor.descriptor_version(),
+        descriptor.object_id(),
+        descriptor.byte_len() + 1,
+        descriptor.generation(),
+    )
+    .expect("forged length is structurally valid");
+    let wrong_generation = SharedMemoryDescriptor::from_parts(
+        descriptor.descriptor_version(),
+        descriptor.object_id(),
+        descriptor.byte_len(),
+        descriptor.generation() + 1,
+    )
+    .expect("forged generation is structurally valid");
+    assert!(SharedMemory::open(wrong_length).is_err());
+    assert!(SharedMemory::open(wrong_generation).is_err());
     atomic(&mapping, 0).store(PARENT_CHALLENGE, Ordering::Release);
 
     let mut child = Command::new(env::current_exe().expect("test executable is available"))
@@ -65,6 +84,8 @@ fn writes_remain_visible_in_both_directions_and_after_unlink() {
         .unlink()
         .expect("creator removes the discoverable name");
     atomic(&mapping, 2).store(UNLINK_CHALLENGE, Ordering::Release);
+    publish_sequence(&mapping, 4, 5, PUBLICATION_COUNT);
+    wait_for_publication(&mapping, 7, 8, PUBLICATION_COUNT);
     assert_eq!(wait_for(&mapping, 3, CHILD_ACK), CHILD_ACK);
     let status = wait_for_child(&mut child);
     assert!(status.success(), "child exited with {status}");
@@ -74,6 +95,45 @@ fn writes_remain_visible_in_both_directions_and_after_unlink() {
         SharedMemory::open(descriptor).is_err(),
         "mapping must not be discoverable after all owners close"
     );
+}
+
+fn publish_sequence(
+    mapping: &SharedMemory,
+    sequence_index: usize,
+    payload_index: usize,
+    count: u64,
+) {
+    for value in 1..=count {
+        atomic(mapping, sequence_index).store(value * 2 - 1, Ordering::Release);
+        atomic(mapping, payload_index).store(value, Ordering::Relaxed);
+        atomic(mapping, sequence_index).store(value * 2, Ordering::Release);
+    }
+}
+
+fn wait_for_publication(
+    mapping: &SharedMemory,
+    sequence_index: usize,
+    payload_index: usize,
+    terminal: u64,
+) {
+    let deadline = Instant::now() + TIMEOUT;
+    loop {
+        let before = atomic(mapping, sequence_index).load(Ordering::Acquire);
+        if before & 1 != 0 {
+            std::hint::spin_loop();
+            continue;
+        }
+        let payload = atomic(mapping, payload_index).load(Ordering::Relaxed);
+        let after = atomic(mapping, sequence_index).load(Ordering::Acquire);
+        if before == after && after & 1 == 0 {
+            assert_eq!(payload, after / 2, "publication payload was torn");
+            if payload == terminal {
+                return;
+            }
+        }
+        assert!(Instant::now() < deadline, "publication did not converge");
+        thread::yield_now();
+    }
 }
 
 fn atomic(mapping: &SharedMemory, index: usize) -> &AtomicU64 {
