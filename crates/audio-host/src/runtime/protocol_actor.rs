@@ -405,9 +405,9 @@ fn fallback_helper_pages(
 
 fn mapping_failure(error: &TransportError) -> MappingFailure {
     match error {
-        TransportError::SharedMemory(yadaw_shared_memory::SharedMemoryError::InvalidDescriptor {
-            ..
-        }) => MappingFailure::Descriptor,
+        TransportError::SharedMemory(SharedMemoryError::InvalidDescriptor { .. }) => {
+            MappingFailure::Descriptor
+        }
         TransportError::SharedMemory(_) => MappingFailure::Open,
         TransportError::InvalidSharedLayout | TransportError::InvalidCapacity => {
             MappingFailure::Layout
