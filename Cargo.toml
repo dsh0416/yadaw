@@ -35,7 +35,7 @@ futures-util = "0.3"
 iced_core = "0.14.0"
 iced_renderer = { version = "0.14.0", features = ["wgpu-bare"] }
 iced_tiny_skia = "0.14.0"
-iced_widget = "0.14.0"
+iced_widget = "0.14.2"
 iced_winit = "0.14.0"
 ipc-channel = { version = "0.22.0", features = ["async"] }
 # Standalone Rust tests and benchmarks link the N-API crates without a Node
@@ -56,7 +56,7 @@ serde = { version = "1", features = ["derive"] }
 serde_bytes = "0.11"
 serde_json = "1"
 thiserror = "2"
-tokio = { version = "1.53.0", default-features = false, features = ["macros", "rt-multi-thread", "sync", "time"] }
+tokio = { version = "1.53.1", default-features = false, features = ["macros", "rt-multi-thread", "sync", "time"] }
 tokio-util = { version = "0.7", default-features = false, features = ["rt"] }
 truce = { version = "=6.3.0", default-features = false }
 truce-gui-types = "=6.3.0"
