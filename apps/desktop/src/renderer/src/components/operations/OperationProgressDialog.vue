@@ -18,11 +18,13 @@ const phaseKeys: Record<OperationSnapshot["phase"], string> = {
   "writing-large-object": "operation.phase.writingLargeObject",
   "committing-database": "operation.phase.committingDatabase",
   "saving-archive": "operation.phase.savingArchive",
+  "preparing-project": "operation.phase.preparingProject",
   "loading-project-archive": "operation.phase.loadingProjectArchive",
   "loading-project-database": "operation.phase.loadingProjectDatabase",
   "restoring-project-state": "operation.phase.restoringProjectState",
   "loading-mixer": "operation.phase.loadingMixer",
   "loading-project-assets": "operation.phase.loadingProjectAssets",
+  "preparing-project-graph": "operation.phase.preparingProjectGraph",
   "preparing-waveforms": "operation.phase.preparingWaveforms",
   "cleaning-up": "operation.phase.cleaningUp"
 }
@@ -69,6 +71,7 @@ const description = computed(() => `${props.operation.title} · ${detailLabel.va
         }"
         :title="description"
         :aria-live="operation.state === 'failed' ? 'assertive' : 'polite'"
+        aria-atomic="true"
       >
         {{ description }}
       </p>

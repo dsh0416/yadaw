@@ -223,11 +223,13 @@
       "writingLargeObject": "Writing project asset",
       "committingDatabase": "Committing database",
       "savingArchive": "Saving project archive",
+      "preparingProject": "Preparing project",
       "loadingProjectArchive": "Reading project archive",
       "loadingProjectDatabase": "Loading project database",
       "restoringProjectState": "Restoring project state",
       "loadingMixer": "Loading mixer",
       "loadingProjectAssets": "Loading project assets",
+      "preparingProjectGraph": "Preparing project graph",
       "preparingWaveforms": "Preparing waveforms",
       "cleaningUp": "Cleaning swap files"
     }

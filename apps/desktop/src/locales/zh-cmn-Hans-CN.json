@@ -223,11 +223,13 @@
       "writingLargeObject": "正在写入工程资源",
       "committingDatabase": "正在提交数据库",
       "savingArchive": "正在保存工程归档",
+      "preparingProject": "正在准备工程",
       "loadingProjectArchive": "正在读取工程归档",
       "loadingProjectDatabase": "正在加载工程数据库",
       "restoringProjectState": "正在恢复工程状态",
       "loadingMixer": "正在加载混音台",
       "loadingProjectAssets": "正在加载工程资源",
+      "preparingProjectGraph": "正在准备工程图",
       "preparingWaveforms": "正在准备波形",
       "cleaningUp": "正在清理交换文件"
     }

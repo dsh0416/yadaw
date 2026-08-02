@@ -110,14 +110,14 @@ describe("OperationProgressDialog", () => {
     expect(wrapper.find("[role=alert]").exists()).toBe(false)
   })
 
-  it("labels project opening phases and exposes step progress", () => {
+  it("labels project graph preparation and exposes step progress", () => {
     const wrapper = mount(OperationProgressDialog, {
       props: {
         operation: {
           id: "open-project",
           title: "Opening project",
           description: "Demo",
-          phase: "loading-mixer",
+          phase: "preparing-project-graph",
           state: "running",
           completedUnits: 2,
           totalUnits: 4,
@@ -127,9 +127,14 @@ describe("OperationProgressDialog", () => {
         }
       }
     })
-    expect(wrapper.get(".operation-description").text()).toBe("Opening project · Loading mixer")
+    expect(wrapper.get(".operation-description").text()).toBe(
+      "Opening project · Preparing project graph"
+    )
+    expect(wrapper.get(".operation-description").attributes("aria-atomic")).toBe("true")
     expect(wrapper.text()).not.toContain("50%")
     expect(wrapper.find("h3").exists()).toBe(false)
-    expect(wrapper.get("[role=progressbar]").attributes("aria-label")).toBe("Loading mixer")
+    expect(wrapper.get("[role=progressbar]").attributes("aria-label")).toBe(
+      "Preparing project graph"
+    )
   })
 })

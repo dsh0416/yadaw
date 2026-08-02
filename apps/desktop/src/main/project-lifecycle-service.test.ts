@@ -60,10 +60,25 @@ function mutation(target: RpcRequestMeta["target"], suffix: string): RpcRequestM
 function fixture() {
   const lifecycle = new LifecycleCoordinator(null)
   let candidate: ProjectSession | null = null
-  const prepareOpen = vi.fn().mockImplementation(async () => {
-    candidate = structuredClone(session)
-    return structuredClone(session)
-  })
+  const prepareOpen = vi
+    .fn()
+    .mockImplementation(
+      async (
+        _path: string,
+        recover: boolean,
+        onProgress: (progress: {
+          phase: "loading-project-archive" | "loading-project-database"
+          completedUnits: number
+        }) => void
+      ) => {
+        onProgress({
+          phase: recover ? "loading-project-database" : "loading-project-archive",
+          completedUnits: 0
+        })
+        candidate = structuredClone(session)
+        return structuredClone(session)
+      }
+    )
   const prepareCreate = vi.fn().mockImplementation(async () => {
     candidate = structuredClone(session)
     return structuredClone(session)
@@ -133,7 +148,7 @@ describe("ProjectLifecycleService", () => {
       suffix: "open-progress",
       title: "Opening project",
       description: "Healthy.yadaw",
-      initialPhase: "loading-project-archive",
+      initialPhase: "preparing-project",
       run: (service: ProjectLifecycleService, meta: RpcRequestMeta) =>
         service.open(meta, "/projects/Healthy.yadaw", false)
     }
@@ -170,6 +185,15 @@ describe("ProjectLifecycleService", () => {
         }),
         true
       )
+      expect(patch).toHaveBeenCalledWith(
+        `operation-${suffix}`,
+        expect.objectContaining({
+          phase: "preparing-project-graph",
+          completedUnits: 4,
+          totalUnits: 5
+        }),
+        true
+      )
       expect(patch).toHaveBeenLastCalledWith(
         `operation-${suffix}`,
         {
@@ -182,6 +206,28 @@ describe("ProjectLifecycleService", () => {
       )
     }
   )
+
+  it("reports database loading only after recovery is confirmed", async () => {
+    const { lifecycle, operations, service } = fixture()
+    const patch = vi.spyOn(operations, "patch")
+
+    const result = await service.open(
+      mutation(lifecycle.applicationState.desktopSession, "recover-progress"),
+      "Recovered.yadaw",
+      true
+    )
+
+    expect(result.ok).toBe(true)
+    expect(patch).toHaveBeenCalledWith(
+      "operation-recover-progress",
+      {
+        phase: "loading-project-database",
+        completedUnits: 0,
+        totalUnits: 5
+      },
+      true
+    )
+  })
 
   it("keeps a failed open isolated so the next healthy project can commit", async () => {
     const { lifecycle, operations, projects, service } = fixture()

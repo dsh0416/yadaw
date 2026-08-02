@@ -201,7 +201,7 @@ export class ProjectLifecycleService {
           transition === "creating" ? "operation.creatingProject" : "operation.openingProject"
         ),
         description,
-        phase: transition === "creating" ? "committing-database" : "loading-project-archive",
+        phase: transition === "creating" ? "committing-database" : "preparing-project",
         state: "running",
         completedUnits: 0,
         totalUnits: PROJECT_LOAD_TOTAL_UNITS,
@@ -233,7 +233,7 @@ export class ProjectLifecycleService {
       const graph = await this.projects.candidateMixerSnapshot()
       reportProgress({ phase: "loading-project-assets", completedUnits: 3 })
       const assets = await this.projects.candidateAssets()
-      reportProgress({ phase: "loading-mixer", completedUnits: 4 })
+      reportProgress({ phase: "preparing-project-graph", completedUnits: 4 })
       resources = this.createCandidateResources(session)
       const prepared = await this.projectGraph.prepareCandidate(meta, resources.graph, graph)
       if (!prepared.ok) {
