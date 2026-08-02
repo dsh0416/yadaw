@@ -177,3 +177,147 @@ unsafe fn unknown_vtable(pointer: *mut FUnknown) -> *const FUnknownVTable {
         *pointer.cast::<*const FUnknownVTable>()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::{
+        os::raw::c_char,
+        sync::atomic::{AtomicBool, AtomicU32, Ordering},
+    };
+
+    const INVALID_ARGUMENT: i32 = -2147024809;
+    const NO_INTERFACE: i32 = -2147467262;
+
+    #[repr(C)]
+    struct FakeUnknown {
+        vtable: *const FUnknownVTable,
+        references: AtomicU32,
+        null_on_success: AtomicBool,
+    }
+
+    impl FakeUnknown {
+        fn new(null_on_success: bool) -> Box<Self> {
+            Box::new(Self {
+                vtable: &FAKE_UNKNOWN_VTABLE,
+                references: AtomicU32::new(1),
+                null_on_success: AtomicBool::new(null_on_success),
+            })
+        }
+
+        fn as_unknown(&mut self) -> *mut FUnknown {
+            std::ptr::from_mut(self).cast()
+        }
+    }
+
+    unsafe extern "system" fn fake_query_interface(
+        this: *mut FUnknown,
+        requested: *const c_char,
+        output: *mut *mut c_void,
+    ) -> i32 {
+        if requested.is_null() || output.is_null() {
+            return INVALID_ARGUMENT;
+        }
+        // SAFETY: the test only installs this vtable on a live FakeUnknown allocation.
+        let fake = unsafe { &*this.cast::<FakeUnknown>() };
+        // SAFETY: callers supply a VST3 TUID, which is exactly 16 bytes.
+        let requested = unsafe { std::slice::from_raw_parts(requested, 16) };
+        if requested != iid::FUNKNOWN {
+            // SAFETY: output was validated as non-null and points to writable pointer storage.
+            unsafe { output.write(std::ptr::null_mut()) };
+            return NO_INTERFACE;
+        }
+        if fake.null_on_success.load(Ordering::Relaxed) {
+            // SAFETY: output was validated as non-null and points to writable pointer storage.
+            unsafe { output.write(std::ptr::null_mut()) };
+            return 0;
+        }
+        fake.references.fetch_add(1, Ordering::Relaxed);
+        // SAFETY: output was validated and this is the requested live FUnknown interface.
+        unsafe { output.write(this.cast()) };
+        0
+    }
+
+    unsafe extern "system" fn fake_add_ref(this: *mut FUnknown) -> u32 {
+        // SAFETY: the test only calls through this vtable while FakeUnknown is alive.
+        let fake = unsafe { &*this.cast::<FakeUnknown>() };
+        fake.references.fetch_add(1, Ordering::Relaxed) + 1
+    }
+
+    unsafe extern "system" fn fake_release(this: *mut FUnknown) -> u32 {
+        // SAFETY: the test only calls through this vtable while FakeUnknown is alive and balances
+        // every owned reference without underflowing the counter.
+        let fake = unsafe { &*this.cast::<FakeUnknown>() };
+        fake.references.fetch_sub(1, Ordering::Release) - 1
+    }
+
+    static FAKE_UNKNOWN_VTABLE: FUnknownVTable = FUnknownVTable {
+        query_interface: fake_query_interface,
+        add_ref: fake_add_ref,
+        release: fake_release,
+    };
+
+    #[test]
+    fn com_ptr_rejects_null_owned_interfaces() {
+        // SAFETY: a null pointer is intentionally supplied to verify validation before use.
+        let result = unsafe { ComPtr::<FUnknown>::from_raw(std::ptr::null_mut(), "fixture") };
+        assert!(matches!(result, Err(HostError::NullInterface("fixture"))));
+    }
+
+    #[test]
+    fn com_ptr_clone_query_and_drop_balance_owned_references() {
+        let mut fake = FakeUnknown::new(false);
+        let raw = fake.as_unknown();
+        // SAFETY: raw points to the live FakeUnknown, which owns one initial reference and starts
+        // with the matching FUnknown vtable.
+        let owner =
+            unsafe { ComPtr::<FUnknown>::from_raw(raw, "fixture") }.expect("owned fake interface");
+        assert_eq!(fake.references.load(Ordering::Relaxed), 1);
+
+        let cloned = owner.clone();
+        assert_eq!(fake.references.load(Ordering::Relaxed), 2);
+        drop(cloned);
+        assert_eq!(fake.references.load(Ordering::Relaxed), 1);
+
+        let queried = owner.query::<FUnknown>().expect("query FUnknown");
+        assert_eq!(queried.as_ptr(), raw);
+        assert_eq!(fake.references.load(Ordering::Relaxed), 2);
+        drop(queried);
+        assert_eq!(fake.references.load(Ordering::Relaxed), 1);
+
+        drop(owner);
+        assert_eq!(fake.references.load(Ordering::Relaxed), 0);
+    }
+
+    #[test]
+    fn com_ptr_query_reports_unsupported_and_null_success_results() {
+        let mut unsupported = FakeUnknown::new(false);
+        // SAFETY: the fake owns one initial reference and exposes a valid FUnknown vtable.
+        let owner = unsafe {
+            ComPtr::<FUnknown>::from_raw(unsupported.as_unknown(), "unsupported fixture")
+        }
+        .expect("owned unsupported fixture");
+        assert!(matches!(
+            owner.query::<IBStream>(),
+            Err(HostError::Operation {
+                operation: "queryInterface",
+                result: NO_INTERFACE,
+            })
+        ));
+        drop(owner);
+        assert_eq!(unsupported.references.load(Ordering::Relaxed), 0);
+
+        let mut null_success = FakeUnknown::new(true);
+        // SAFETY: the fake owns one initial reference and exposes a valid FUnknown vtable.
+        let owner = unsafe {
+            ComPtr::<FUnknown>::from_raw(null_success.as_unknown(), "null-success fixture")
+        }
+        .expect("owned null-success fixture");
+        assert!(matches!(
+            owner.query::<FUnknown>(),
+            Err(HostError::NullInterface("queryInterface"))
+        ));
+        drop(owner);
+        assert_eq!(null_success.references.load(Ordering::Relaxed), 0);
+    }
+}

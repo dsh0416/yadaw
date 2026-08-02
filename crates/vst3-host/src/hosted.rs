@@ -1023,3 +1023,52 @@ fn check(operation: &'static str, result: i32) -> HostResult<()> {
         Err(HostError::Operation { operation, result })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn empty_midi_mapping_and_out_of_range_queries_are_unmapped() {
+        let mapping = MidiMappingTable::query(None);
+
+        assert_eq!(mapping.parameter(0, 0), None);
+        assert_eq!(mapping.parameter(15, MIDI_PROGRAM_CHANGE), None);
+        assert_eq!(mapping.parameter(16, 0), None);
+        assert_eq!(mapping.parameter(0, MIDI_MAPPING_CONTROLLERS), None);
+    }
+
+    #[test]
+    fn midi_mapping_returns_only_assigned_parameters() {
+        let mut parameters =
+            vec![UNMAPPED_PARAMETER; MIDI_MAPPING_CHANNELS * MIDI_MAPPING_CONTROLLERS]
+                .into_boxed_slice();
+        parameters[MIDI_MAPPING_CONTROLLERS + MIDI_PITCH_BEND] = 77;
+        let mapping = MidiMappingTable { parameters };
+
+        assert_eq!(mapping.parameter(1, MIDI_PITCH_BEND), Some(77));
+        assert_eq!(mapping.parameter(1, MIDI_AFTERTOUCH), None);
+    }
+
+    #[test]
+    fn utf16_string_stops_at_nul_and_replaces_invalid_sequences() {
+        assert_eq!(
+            utf16_string(&[b'A' as u16, b'B' as u16, 0, b'C' as u16]),
+            "AB"
+        );
+        assert_eq!(utf16_string(&[0xd800, 0]), "�");
+        assert_eq!(utf16_string(&[]), "");
+    }
+
+    #[test]
+    fn vst3_result_mapping_preserves_operation_and_result_code() {
+        assert!(check("activate", 0).is_ok());
+        assert!(matches!(
+            check("activate", -7),
+            Err(HostError::Operation {
+                operation: "activate",
+                result: -7,
+            })
+        ));
+    }
+}
