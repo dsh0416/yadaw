@@ -247,6 +247,41 @@ const fakeHost = vi.hoisted(() => {
           }
         })
       }
+      if (request.command.type === "transport-snapshot") {
+        return response({
+          type: "transport-snapshot",
+          transport: {
+            state: this.transportState === 1 ? "playing" : "stopped",
+            position_frames: this.positionFrames,
+            position_ticks: 0,
+            sample_rate: this.sessionSampleRate,
+            effective_bpm: null,
+            clock_source: "internal",
+            waiting_for: null,
+            loop_enabled: this.loopEnabled,
+            loop_start_tick: this.loopStartTick,
+            loop_end_tick: this.loopEndTick
+          }
+        })
+      }
+      if (request.command.type === "mixer-snapshot") {
+        return response({ type: "mixer-snapshot", meters: [] })
+      }
+      if (request.command.type === "compiled-graph-snapshot") {
+        return response({
+          type: "compiled-graph-snapshot",
+          snapshot:
+            this.graphRevision === 0
+              ? null
+              : {
+                  graph_revision: this.graphRevision,
+                  build_generation: this.graphRevision,
+                  sample_rate: this.sessionSampleRate,
+                  nodes: [],
+                  edges: []
+                }
+        })
+      }
       if (request.command.type === "load-plugin") {
         return response({
           type: "plugin-loaded",

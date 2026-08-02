@@ -98,12 +98,20 @@ High-frequency meter, transport-position, performance, and waveform samples
 are observations rather than lifecycle states. They use sampling and stale
 response suppression and never run inside the audio callback.
 
-Live meter and transport snapshots are an exception to the usual asynchronous
-native-call shape: Electron main synchronously reads the addon-owned coherent
-telemetry page, and the existing preload methods return that observation. They
-must not be reimplemented as 30 Hz request/reply IPC. Plugin and mixer preview
-parameters similarly use the addon-owned SPSC producer; only gesture-boundary
-fallbacks and wake/lifecycle messages use priority IPC.
+Live meter and transport snapshots are normally an exception to the usual
+asynchronous native-call shape: Electron main synchronously reads the
+addon-owned, capability-verified telemetry page, and the existing preload
+methods return that observation. Plugin and mixer preview parameters normally
+use the addon-owned SPSC producer; only gesture-boundary fallbacks and
+wake/lifecycle messages use priority IPC.
+
+The current macOS containment temporarily uses control snapshots for telemetry
+and the priority lane for every parameter command because
+`ipc-channel::IpcSharedMemory` delivers a copy-on-write mapping there. This is
+not a new product-level transport policy. New work must preserve the shared-page
+API target, avoid adding more platform branches, and follow the replacement and
+exit plan in
+[Cross-process shared-memory transport](shared-memory-transport.md).
 
 The one-second `systemPerformance` sample also includes an audio IPC diagnostic
 snapshot. `AudioHostService` combines its cached priority-heartbeat generations

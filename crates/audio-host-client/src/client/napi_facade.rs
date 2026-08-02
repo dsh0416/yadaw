@@ -331,6 +331,22 @@ impl AudioHostIpcClient {
             target_generation: request.target_generation.unwrap_or(0),
             gesture,
         };
+        // Mach out-of-line memory transfer gives the receiver a copy-on-write
+        // mapping, not a persistently coherent mapping. Route every parameter
+        // command through the existing priority lane on macOS instead of the
+        // shared ring so automation remains visible to the helper.
+        #[cfg(target_os = "macos")]
+        {
+            self.send_internal_priority(PriorityCommand::ParameterBoundary { command })?;
+            self.state
+                .parameter_boundary_fallbacks
+                .fetch_add(1, Ordering::Relaxed);
+            Ok(ParameterEnqueueResult {
+                outcome: "fallback".into(),
+                sequence: sequence.to_string(),
+            })
+        }
+        #[cfg(not(target_os = "macos"))]
         match self.state.parameters.enqueue(command) {
             ParameterEnqueue::Queued { wake } => {
                 if wake {

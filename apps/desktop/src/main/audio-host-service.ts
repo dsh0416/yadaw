@@ -103,6 +103,9 @@ export class AudioHostService {
     arenaCopiedBytes: 0
   }
   private readonly pendingPreferenceWrites = new Set<Promise<void>>()
+  // ipc-channel transfers Mach out-of-line memory as copy-on-write mappings,
+  // so long-lived shared pages are not cross-process coherent on macOS.
+  private readonly persistentSharedPages = process.platform !== "darwin"
   private readonly supervisor: AudioHostProcessSupervisor
   private readonly session = new AudioHostSessionCoordinator()
   private readonly gateway: AudioHostGateway
@@ -132,7 +135,8 @@ export class AudioHostService {
     (command) => this.request(command),
     () => this.diagnostics.readTelemetry(),
     () => this.lastGraph?.project.sampleRate ?? null,
-    (value) => this.plugins.coalesceParameter(value)
+    (value) => this.plugins.coalesceParameter(value),
+    this.persistentSharedPages
   )
 
   private readonly graphTransactions = new AudioHostGraphTransactions({
@@ -1132,8 +1136,18 @@ export class AudioHostService {
   private async waitForGraphPublication(revision: number): Promise<void> {
     const deadline = Date.now() + 5_000
     while (Date.now() < deadline) {
-      const telemetry = this.readTelemetry()
-      if (telemetry[1] === revision) return
+      if (this.persistentSharedPages) {
+        const telemetry = this.readTelemetry()
+        if (telemetry[1] === revision) return
+      } else {
+        const response = await this.requestImmediately({ type: "compiled-graph-snapshot" })
+        if (
+          response.result.type === "compiled-graph-snapshot" &&
+          response.result.snapshot?.graph_revision === revision
+        ) {
+          return
+        }
+      }
       await new Promise((resolve) => setTimeout(resolve, 10))
     }
     throw new Error(`Audio graph revision ${revision} was not published after restart`)

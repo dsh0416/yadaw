@@ -39,6 +39,11 @@ Already usable for experimentation; keep these checked as the floor.
 
 Make the existing vertical slice reliable for daily experimentation.
 
+- [ ] Replace `ipc-channel::IpcSharedMemory` as the persistent mapping primitive
+      with capability-verified, process-shared mappings on macOS, Windows, and
+      Linux; migrate telemetry, parameter, and bulk-arena paths and retain a
+      bounded negotiated fallback (see `shared-memory-transport.md`)
+
 - [x] Recording pending recovery across stop / crash / relaunch (swap sidecars,
       `partial` → `ready` repair, commit into the open project; covered by e2e)
 - [x] Plug-in failure / bypass / missing-module recovery (crash marker, helper

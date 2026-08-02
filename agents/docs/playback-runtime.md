@@ -6,7 +6,9 @@ defines ownership and real-time invariants for the VST3/Tokio migration.
 
 The helper control plane uses lockstep application messages over `ipc-channel`,
 a configurable Tokio multi-thread runtime, bounded actor mailboxes, persistent
-bulk arenas, and a winit process main thread.
+mapping interfaces, and a winit process main thread. Windows and Linux use the
+shared-page implementation; macOS currently selects the documented bounded
+fallback until capability-verified mappings replace it.
 Streaming clips are cooperatively serviced by a fixed pool of two to four
 background lanes; there is no production prefetch thread per clip. Graph
 construction and PDC calculation run on the supervised graph worker owned by
@@ -26,7 +28,7 @@ Vue / Pinia
   -> audio-host-client (.node)
        ├─ request_id -> JsDeferred response router (up to 256 in flight)
        ├─ independent normal, priority-heartbeat, and event channels
-       ├─ shared telemetry reader and parameter-ring producer
+       ├─ telemetry reader and parameter producer (shared page or fallback)
        ├─ helper lifecycle and lease ownership
        └─ servo/ipc-channel
             |
@@ -125,16 +127,22 @@ errors.
 
 Cross-process messages use `servo/ipc-channel`. There is no message-level
 protocol version and no compatibility branch: addon and helper are lockstep
-application resources. Bootstrap transfers channels and persistent shared pages;
-it does not infer compatibility from a version or source fingerprint. Packaging
-and the native smoke test guarantee that the addon launches the helper from the
-same build.
+application resources. Bootstrap transfers channels and currently carries
+persistent pages as `IpcSharedMemory` attachments. The target bootstrap replaces
+those attachments with persistent-page descriptors; neither form infers
+compatibility from a version or source fingerprint. Packaging and the native
+smoke test guarantee that the addon launches the helper from the same build.
+Mapping capability is a separate runtime invariant: a target persistent page
+must complete the two-way verification defined in
+[Cross-process shared-memory transport](shared-memory-transport.md) before
+activation.
 
 The outer value is `WirePacket { body, region_offers }`: `body` is a bounded
-MessagePack request/reply/event and `region_offers` contains only mappings not
-already registered by the receiver. Shared-page and MIDI layout versions remain
-independent safety invariants for typed memory access; they are not message
-compatibility versions.
+MessagePack request/reply/event. The current `region_offers` re-offers every
+mapping referenced by a packet because macOS needs a fresh snapshot; after the
+mapping refactor it will contain only descriptors not already registered by the
+receiver. Shared-page and MIDI layout versions remain independent safety
+invariants for typed memory access; they are not message compatibility versions.
 
 ```text
 WirePacket
@@ -177,19 +185,22 @@ extent allocator that supports out-of-order release and adjacent-extent
 coalescing. Each direction is limited to 32 regions, 256 MiB mapped capacity,
 256 in-flight leases, and a 64 MiB blob/packet. The producer writes an
 unpublished extent, then publishes slot metadata with Release; the consumer
-validates it with Acquire before reading. Every packet that references a
-region re-offers that region's `IpcSharedMemory` handle, and receivers replace
-their mapping for the region id. macOS `ipc-channel` delivers those handles
-with `MACH_MSG_VIRTUAL_COPY`, so a one-time offer would leave the consumer on
-a COW snapshot that goes stale after the producer writes again.
+validates it with Acquire before reading. Every packet that references a region
+currently re-offers that region's `IpcSharedMemory` handle, and receivers
+replace their mapping for the region id. This is temporary containment for
+macOS, where `ipc-channel` delivers a copy-on-write snapshot that goes stale
+after the producer writes again. The shared-memory refactor will offer one
+verified mapping per arena generation and remove the per-packet re-offer.
 
 The sender retains an allocation until `ReleaseLeases`. Release happens after
 the final command consumer completes, or after the addon copies a response
 into its owned `Vec`/Node Buffer. A 30-second timeout quarantines the whole
 region until session close; it is never reused, preventing a late-reader
 use-after-free. Arena exhaustion returns typed `Busy`; there is no unbounded
-wait queue. Telemetry pages and the parameter ring remain separate persistent
-mappings.
+wait queue. Telemetry pages and the parameter ring are logically separate
+persistent mappings. Until the new mapping layer is delivered, the macOS
+product path does not rely on those stale mappings and uses bounded
+control/priority fallbacks instead.
 
 Bootstrap transfers these independent paths:
 
@@ -235,6 +246,13 @@ from a plugin editor hang or audio callback stall.
 
 ### Persistent real-time pages
 
+The following is the normative steady-state design. The existing
+`IpcSharedMemory` bootstrap meets it on Windows and Linux but not macOS. The
+macOS containment reads transport/mixer/graph observations through control
+requests and sends every parameter command on the priority lane. It must be
+removed only after the new mappings pass cross-process two-way verification;
+see [Cross-process shared-memory transport](shared-memory-transport.md).
+
 Telemetry is a dynamically sized shared page with a fixed ABI: magic, layout
 version, session/page epoch, power-of-two capacity, graph revision, transport
 snapshot, callback generation, and atomic meter slots. The writer brackets a
@@ -259,10 +277,12 @@ arena, or normal egress is saturated. These values are observational only and
 are never written or sampled from the audio callback.
 
 When a graph needs more meter slots, the helper creates a larger power-of-two
-page and sends `TelemetryPageOffer(epoch)`. The addon maps it and acknowledges
-on the priority path. Publication switches at a graph/block boundary; the old
-page stays mapped until the reader releases it. There is no product-level
-track-count limit derived from the initial 64 slots.
+page and sends `TelemetryPageOffer(epoch, descriptor, generation)`. The addon
+maps and verifies it, then acknowledges on the priority path. Publication
+switches at a graph/block boundary; the old page stays mapped until the reader
+releases it. There is no product-level track-count limit derived from the
+initial 64 slots. Until the refactor lands, the existing offer still contains
+`IpcSharedMemory` and macOS remains on its control fallback.
 
 The parameter page is a 4096-entry cross-process SPSC ring. Electron
 main/addon is the sole producer and helper is the sole consumer. Entries carry

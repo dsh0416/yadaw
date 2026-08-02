@@ -96,6 +96,7 @@ mise exec -- pnpm lint
 - [Development environment](agents/docs/environment.md)
 - [Renderer/native-call boundary](agents/docs/native-call-boundary.md)
 - [Cross-process resource and error contract](agents/docs/cross-process-error-contract.md)
+- [Cross-process shared-memory transport](agents/docs/shared-memory-transport.md)
 - [Project database development rules](agents/docs/project-database.md)
 - [Agent development notes](agents/docs/README.md)
 - [Agent skill dependencies](apm.yml)

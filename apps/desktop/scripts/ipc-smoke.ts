@@ -23,7 +23,14 @@ type TransportDiagnosticsWire = [
   sharedMemory: unknown,
   eventQueueDepth: number,
   telemetry: unknown,
-  parameterRing: unknown,
+  parameterRing: [
+    used: number,
+    capacity: number,
+    softFull: number,
+    hardFull: number,
+    boundaryFallbacks: number,
+    staleEpoch: number
+  ],
   closing: boolean,
   runtimeAndArena: [
     workerThreads: number,
@@ -116,6 +123,21 @@ try {
   const diagnostics = decodeWire<TransportDiagnosticsWire>(client.transportDiagnostics())
   if (typeof diagnostics[0] !== "string" || diagnostics[7][0] !== 2 || diagnostics[7][2] !== 2) {
     throw new Error("runtime diagnostics mismatch")
+  }
+  const parameter = client.enqueueParameter({
+    targetKind: "mixer-channel",
+    runtimeHandle: 1,
+    parameterId: 0,
+    normalized: 0.5,
+    gesture: "perform"
+  })
+  if (parameter.outcome !== (process.platform === "darwin" ? "fallback" : "queued")) {
+    throw new Error(`parameter transport mismatch: ${parameter.outcome}`)
+  }
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  const afterParameter = decodeWire<TransportDiagnosticsWire>(client.transportDiagnostics())
+  if (afterParameter[5][0] !== 0) {
+    throw new Error("parameter command was not consumed by the helper")
   }
   console.log(
     `IPC smoke passed (session ${diagnostics[0]}, ${returned.byteLength} bytes, ${diagnostics[7][3]} client arena region)`

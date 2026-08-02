@@ -121,6 +121,21 @@ There is one audio-device namespace. cpal supplies the available hosts, device
 names, stable IDs, and defaults. Chromium `MediaDevices` and Web Audio devices
 must not be mixed into project settings.
 
+## Cross-process shared memory
+
+Persistent telemetry, parameter, and bulk-arena mappings require a stronger
+contract than transferring the current bytes of an IPC attachment. In
+particular, every process must map the same kernel backing object and verify
+two-way visibility before the mapping becomes active. A platform backend that
+delivers a copy-on-write snapshot does not satisfy that contract even when the
+initial bytes compare equal.
+
+The current macOS containment and the planned `yadaw-shared-memory` replacement
+are specified in
+[Cross-process shared-memory transport](shared-memory-transport.md). Keep OS
+mapping, cleanup, and unsafe pointer access below that boundary. Electron
+renderer and preload code must never receive a shared-memory descriptor.
+
 ## Mock audio backend
 
 Alongside WASAPI, ASIO, CoreAudio, and ALSA, the audio host ships a `mock`

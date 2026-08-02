@@ -20,6 +20,7 @@ installed copies under `.agents/skills/`.
 - [Development environment](environment.md)
 - [Native call boundary](native-call-boundary.md)
 - [Cross-process resource and error contract](cross-process-error-contract.md)
+- [Cross-process shared-memory transport](shared-memory-transport.md)
 - [IPC v2 delivery verification](ipc-v2-delivery.md)
 - [Playback runtime architecture](playback-runtime.md)
 - [Project database development rules](project-database.md)
