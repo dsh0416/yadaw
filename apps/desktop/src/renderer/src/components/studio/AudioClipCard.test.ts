@@ -23,10 +23,10 @@ const clip: TimelineClip = {
   fadeOutFrames: 0
 }
 
-function mountCard() {
+function mountCard(clipOverrides: Partial<TimelineClip> = {}) {
   return mount(AudioClipCard, {
     props: {
-      clip,
+      clip: { ...clip, ...clipOverrides },
       tempoMap: {
         ticksPerQuarter: 960,
         tempoEvents: [{ tick: 0, beatsPerMinute: 120 }],
@@ -73,5 +73,17 @@ describe("AudioClipCard", () => {
     expect(document.body.textContent).toContain("Split at playhead")
     expect(document.body.textContent).toContain("Reset fades")
     expect(document.body.textContent).toContain("Ctrl+E")
+  })
+
+  it("renders full-height equal-power fade envelopes", () => {
+    const wrapper = mountCard({ fadeInFrames: 12_000, fadeOutFrames: 24_000 })
+    const [fadeIn, fadeOut] = wrapper.findAll("svg.fade-region")
+
+    expect(fadeIn?.attributes("viewBox")).toBe("0 0 100 100")
+    expect(fadeIn?.attributes("style")).toContain("width: 25%")
+    expect(fadeIn?.get(".fade-curve").attributes("d")).toMatch(/^M 0 100 .* L 100 0$/)
+    expect(fadeOut?.attributes("viewBox")).toBe("0 0 100 100")
+    expect(fadeOut?.attributes("style")).toContain("width: 50%")
+    expect(fadeOut?.get(".fade-curve").attributes("d")).toMatch(/^M 0 0 .* L 100 100$/)
   })
 })

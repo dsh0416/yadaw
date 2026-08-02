@@ -5,6 +5,10 @@ import { UiContextMenu, type UiMenuEntry } from "@yadaw/ui"
 import type { AudioClipState, TempoMapSnapshot, WaveformDisplayMode } from "@yadaw/contracts"
 import type { TimelineClip } from "../../stores/transport"
 import { useClipWaveform } from "../../composables/useClipWaveform"
+import {
+  createEqualPowerFadeCurvePath,
+  createEqualPowerFadeShadePath
+} from "../../utils/audioFadeCurve"
 import { secondsToTimelineX } from "../../utils/timelineCoordinates"
 import { secondsToTick, tempoAtTick } from "../../utils/tempoMap"
 import {
@@ -195,6 +199,10 @@ const fadeInStyle = computed(() => ({
 const fadeOutStyle = computed(() => ({
   width: `${(displayedClip.value.fadeOutFrames / displayedClip.value.lengthFrames) * 100}%`
 }))
+const fadeInCurvePath = createEqualPowerFadeCurvePath("in")
+const fadeOutCurvePath = createEqualPowerFadeCurvePath("out")
+const fadeInShadePath = createEqualPowerFadeShadePath("in")
+const fadeOutShadePath = createEqualPowerFadeShadePath("out")
 
 watch(
   () => waveformData.value?.frameCount,
@@ -302,8 +310,26 @@ function handleKeydown(event: KeyboardEvent): void {
         @pointerup.stop.prevent="finish"
         @pointercancel="cancel"
       />
-      <span class="fade-region fade-region-in" :style="fadeInStyle" aria-hidden="true" />
-      <span class="fade-region fade-region-out" :style="fadeOutStyle" aria-hidden="true" />
+      <svg
+        class="fade-region fade-region-in"
+        :style="fadeInStyle"
+        viewBox="0 0 100 100"
+        preserveAspectRatio="none"
+        aria-hidden="true"
+      >
+        <path class="fade-shade" :d="fadeInShadePath" />
+        <path class="fade-curve" :d="fadeInCurvePath" />
+      </svg>
+      <svg
+        class="fade-region fade-region-out"
+        :style="fadeOutStyle"
+        viewBox="0 0 100 100"
+        preserveAspectRatio="none"
+        aria-hidden="true"
+      >
+        <path class="fade-shade" :d="fadeOutShadePath" />
+        <path class="fade-curve" :d="fadeOutCurvePath" />
+      </svg>
       <span class="clip-heading" :title="clip.name">
         <b class="clip-name">{{ clip.name }}</b>
         <span
@@ -518,18 +544,25 @@ function handleKeydown(event: KeyboardEvent): void {
 }
 .fade-region {
   position: absolute;
-  z-index: calc(var(--ui-z-local-content) + 1);
-  top: 22px;
+  z-index: calc(var(--ui-z-local-selection) + 1);
+  top: 0;
   bottom: 0;
+  height: 100%;
   pointer-events: none;
-  opacity: 0.35;
 }
 .fade-region-in {
   left: 0;
-  background: linear-gradient(135deg, transparent 49%, var(--ui-domain-color-fff) 50%);
 }
 .fade-region-out {
   right: 0;
-  background: linear-gradient(225deg, transparent 49%, var(--ui-domain-color-fff) 50%);
+}
+.fade-shade {
+  fill: var(--ui-domain-color-0008);
+}
+.fade-curve {
+  fill: none;
+  stroke: var(--ui-domain-color-fff);
+  stroke-width: 1.25px;
+  vector-effect: non-scaling-stroke;
 }
 </style>
