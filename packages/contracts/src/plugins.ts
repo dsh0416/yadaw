@@ -96,9 +96,11 @@ export function pluginLooksLikeInstrument(categories: readonly string[]): boolea
 export function normalizePluginDescriptor(
   value: PluginDescriptor & { category?: string }
 ): PluginDescriptor {
-  const supportedAudioModes = Array.isArray(value.supportedAudioModes)
-    ? value.supportedAudioModes
-    : (["stereo"] as PluginAudioMode[])
+  const supportedAudioModes = (
+    Array.isArray(value.supportedAudioModes)
+      ? value.supportedAudioModes
+      : (["stereo"] as PluginAudioMode[])
+  ).filter((mode) => mode !== "dual-mono" || value.ara === undefined)
   const categories = parsePluginCategories(value.categories ?? value.category)
   const { category: _legacyCategory, ...rest } = value
   return {

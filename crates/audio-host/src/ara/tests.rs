@@ -169,8 +169,13 @@ fn official_vst3_fixture_binds_and_archives_an_ara_document() {
         },
     )
     .unwrap();
-    let audio_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../third_party/vst3sdk/public.sdk/samples/vst/again_auv3/Shared/drumLoop.wav");
+    let audio_path = std::env::var_os("YADAW_ARA_TEST_AUDIO")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| {
+            Path::new(env!("CARGO_MANIFEST_DIR")).join(
+                "../../third_party/vst3sdk/public.sdk/samples/vst/again_auv3/Shared/drumLoop.wav",
+            )
+        });
     let graph = LiveMixerGraph {
         sample_rate: 48_000,
         channels: Vec::new(),

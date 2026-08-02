@@ -1,5 +1,6 @@
 import { decode, encode } from "@msgpack/msgpack"
 import type { AudioHostIpcClient } from "@yadaw/audio-host-client"
+import type { RpcError } from "@yadaw/contracts"
 import { drainHostEvents } from "./audio-host-events"
 import {
   extractLargeAttachments,
@@ -9,6 +10,28 @@ import {
 } from "./audio-host-wire"
 
 const MAX_LOGICAL_REQUEST_BYTES = 128 * 1024 * 1024
+
+export class AudioHostRequestError extends Error {
+  readonly commandType: string
+  readonly rpcError: RpcError
+
+  constructor(commandType: string, rpcError: RpcError) {
+    super(
+      `${rpcError.userMessageKey} (${commandType}, ${rpcError.code}, ${rpcError.correlationId})`
+    )
+    this.name = "AudioHostRequestError"
+    this.commandType = commandType
+    this.rpcError = structuredClone(rpcError)
+  }
+}
+
+function requestError(command: Record<string, unknown>, error?: RpcError): Error {
+  if (!error) return new Error("errors.audioEngineUnavailable")
+  return new AudioHostRequestError(
+    typeof command.type === "string" ? command.type : "unknown-command",
+    error
+  )
+}
 
 export class AudioHostGateway {
   private nextRequestId = 1
@@ -58,7 +81,7 @@ export class AudioHostGateway {
       throw new Error("audio host returned an invalid priority response")
     }
     if (response.result.type === "error") {
-      throw new Error(response.result.error?.userMessageKey ?? "errors.audioEngineUnavailable")
+      throw requestError(command, response.result.error)
     }
     drainHostEvents(
       client,
@@ -95,7 +118,7 @@ export class AudioHostGateway {
       throw new Error("audio host returned an out-of-order response")
     }
     if (response.result.type === "error") {
-      throw new Error(response.result.error?.userMessageKey ?? "errors.audioEngineUnavailable")
+      throw requestError(command, response.result.error)
     }
     return response
   }

@@ -305,12 +305,15 @@ export function descriptorFromProbe(
   const categories = parsePluginCategories(value.categories ?? value.category)
   const kind = pluginLooksLikeInstrument(categories) ? "instrument" : "effect"
   const resolvedCategories = categories.length > 0 ? categories : defaultPluginCategories(kind)
+  const araFactoryClassId = textValue(value.ara?.factoryClassId)
   const probedModes = (value.supportedAudioModes ?? []).filter(isPluginAudioMode)
   const nativeModes = probedModes.filter((mode) =>
     kind === "instrument" ? mode === "mono" || mode === "stereo" : mode !== "dual-mono"
   )
   const supportedAudioModes: PluginAudioMode[] =
-    kind === "effect" && nativeModes.includes("mono") ? [...nativeModes, "dual-mono"] : nativeModes
+    kind === "effect" && !araFactoryClassId && nativeModes.includes("mono")
+      ? [...nativeModes, "dual-mono"]
+      : nativeModes
   let compatibility: PluginDescriptor["compatibility"] = "compatible"
   let compatibilityReason: string | null = null
   if (!value.initialized) {
@@ -355,11 +358,11 @@ export function descriptorFromProbe(
     buses: busesForMode(kind, preferredMode),
     supportedAudioModes,
     hasEditor: value.hasEditor === true,
-    ...(textValue(value.ara?.factoryClassId)
+    ...(araFactoryClassId
       ? {
           ara: {
             apiGeneration: 2 as const,
-            factoryClassId: textValue(value.ara?.factoryClassId),
+            factoryClassId: araFactoryClassId,
             factoryId: textValue(value.ara?.factoryId),
             documentArchiveId: textValue(value.ara?.documentArchiveId),
             lowestApiGeneration: value.ara?.lowestApiGeneration ?? 4,
@@ -402,7 +405,11 @@ export class PluginCatalogService {
   async initialize(): Promise<void> {
     const parsed = await this.cache.load<StoredCatalog>()
     if (parsed?.scannerVersion === SCANNER_VERSION && Array.isArray(parsed.plugins)) {
-      this.catalog = { ...parsed, scanning: false }
+      this.catalog = {
+        ...parsed,
+        scanning: false,
+        plugins: parsed.plugins.map((plugin) => normalizePluginDescriptor(plugin))
+      }
       this.fingerprints = parsed.fingerprints ?? {}
     }
     await this.refreshBuiltins()

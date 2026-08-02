@@ -496,10 +496,16 @@ impl Vst3Runtime {
                 PluginAudioMode::MonoToStereo | PluginAudioMode::DualMono
             )
         {
-            return control_error("unsupported instrument audio mode");
+            return crate::plugin_capability_error_result(
+                "unsupported instrument audio mode",
+                "audio_mode",
+            );
         }
         if ara_factory_class_id.is_some() && audio_mode == PluginAudioMode::DualMono {
-            return control_error("ARA plug-ins do not support the dual-mono hosting mode");
+            return crate::plugin_capability_error_result(
+                "ARA plug-ins do not support the dual-mono hosting mode",
+                "audio_mode",
+            );
         }
         let (plugin, ara) = match ara_factory_class_id {
             Some(factory_class_id) => {
@@ -754,5 +760,31 @@ mod tests {
     fn an_infinite_dual_mono_tail_dominates_a_finite_tail() {
         assert_eq!(max_tail(Some(128), None), None);
         assert_eq!(max_tail(Some(128), Some(256)), Some(256));
+    }
+
+    #[test]
+    fn ara_dual_mono_is_a_plugin_capability_error() {
+        let mut runtime = Vst3Runtime::new();
+        let result = runtime.load_plugin(LoadPluginRequest {
+            instance_id: "ara-dual-mono".into(),
+            module_path: "unused.vst3".into(),
+            class_id: "00000000000000000000000000000000".into(),
+            plugin_kind: "effect".into(),
+            audio_mode: PluginAudioMode::DualMono,
+            sample_rate: 48_000.0,
+            component_state: Vec::new(),
+            controller_state: Vec::new(),
+            ara_factory_class_id: Some("00000000000000000000000000000001".into()),
+            ara_document_state: Vec::new(),
+        });
+        let ControlResult::Error { error } = result else {
+            panic!("ARA dual-mono must be rejected before module loading");
+        };
+        assert_eq!(
+            error.code,
+            yadaw_dsp_runtime::protocol::RpcErrorCode::ValidationFailed
+        );
+        assert_eq!(error.retry, yadaw_dsp_runtime::protocol::RpcRetry::Never);
+        assert_eq!(error.user_message_key, "errors.pluginUnavailable");
     }
 }

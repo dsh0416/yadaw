@@ -234,4 +234,27 @@ describe("descriptorFromProbe", () => {
       }
     })
   })
+
+  it("does not derive dual mono for an ARA effect", () => {
+    const descriptor = descriptorFromProbe("ara-effect.vst3", "Vendor", {
+      classId: "ara-effect",
+      categories: ["Fx"],
+      initialized: true,
+      sample32: true,
+      audioInputs: 1,
+      audioOutputs: 1,
+      supportedAudioModes: ["mono", "mono-to-stereo", "stereo"],
+      ara: {
+        factoryClassId: "ara-main-factory-class",
+        factoryId: "com.vendor.ara-effect",
+        documentArchiveId: "com.vendor.ara-effect.archive",
+        lowestApiGeneration: 4,
+        highestApiGeneration: 5,
+        playbackTransformationFlags: 0,
+        supportsStoringAudioFileChunks: false
+      }
+    })
+
+    expect(descriptor?.supportedAudioModes).toEqual(["mono", "mono-to-stereo", "stereo"])
+  })
 })
