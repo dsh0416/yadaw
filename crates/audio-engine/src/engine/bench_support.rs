@@ -145,6 +145,7 @@ pub mod bench_support {
             live_midi_routes: vec![None; scenario.tracks + 2],
             live_midi_events: Vec::new(),
             live_notes: vec![false; (scenario.tracks + 2) * 16 * 128],
+            external_sync_enabled: false,
             live_sysex_scratch: vec![0; yadaw_dsp_runtime::midi_input::MIDI_MAX_SYSEX_BYTES],
             metronome: MetronomeScheduler::new(
                 None,

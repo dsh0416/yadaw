@@ -70,6 +70,7 @@ struct Vst3ActorDeps {
     request_arena: Arc<Mutex<ArenaReceiver>>,
     background_sender: mpsc::Sender<ActorRequest>,
     engine_sender: mpsc::Sender<ActorRequest>,
+    audio_engine: Arc<engine::AudioEngine>,
     session_epoch: u64,
 }
 
@@ -82,6 +83,7 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
         request_arena,
         background_sender,
         engine_sender,
+        audio_engine,
         session_epoch,
     } = deps;
     let mut graph_revision = 0_u64;
@@ -242,7 +244,7 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
                                 &meta,
                                 candidate.graph_revision,
                                 GraphTransactionValue::Prepared {
-                                    snapshot: graph_transactions.snapshot(),
+                                    snapshot: graph_transactions.snapshot_with_engine(&audio_engine),
                                 },
                             )
                         } else {
@@ -288,7 +290,7 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
                             continue;
                         }
                     };
-                    let input = match engine::begin_graph_build(native) {
+                    let input = match audio_engine.begin_graph_build(native) {
                         Ok(input) => input,
                         Err(error) => {
                             log_graph_transaction_failure(&meta, "begin", &error);
@@ -334,7 +336,7 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
                         &meta,
                         request.graph_revision,
                         GraphTransactionValue::Prepared {
-                            snapshot: graph_transactions.snapshot(),
+                            snapshot: graph_transactions.snapshot_with_engine(&audio_engine),
                         },
                     )
                 }
@@ -436,12 +438,12 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
                                 project_graph,
                                 candidate_revision,
                             );
-                            if wait_for_graph_publication(candidate_revision).await {
+                            if wait_for_graph_publication(&audio_engine, candidate_revision).await {
                                 graph_success(
                                     &meta,
                                     candidate_revision,
                                     GraphTransactionValue::Activated {
-                                        snapshot: graph_transactions.snapshot(),
+                                        snapshot: graph_transactions.snapshot_with_engine(&audio_engine),
                                     },
                                 )
                             } else {
@@ -462,13 +464,13 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
                                 operation_id,
                                 candidate_revision,
                             );
-                            if engine::published_graph_generation() >= candidate_revision {
+                            if audio_engine.published_graph_generation() >= candidate_revision {
                                 graph_failure(
                                     &meta,
                                     graph_conflict_error(
                                         &meta,
                                         candidate_revision,
-                                        engine::published_graph_generation(),
+                                        audio_engine.published_graph_generation(),
                                     ),
                                 )
                             } else {
@@ -531,7 +533,7 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
                         GraphTransactionValue::Aborted {
                             operation_id,
                             existed,
-                            snapshot: graph_transactions.snapshot(),
+                            snapshot: graph_transactions.snapshot_with_engine(&audio_engine),
                         },
                     )
                 }
@@ -543,7 +545,7 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
                                 &meta,
                                 graph_transactions.committed_revision,
                                 GraphTransactionValue::Snapshot {
-                                    snapshot: graph_transactions.snapshot(),
+                                    snapshot: graph_transactions.snapshot_with_engine(&audio_engine),
                                 },
                             )
                         }

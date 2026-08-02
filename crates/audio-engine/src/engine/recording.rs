@@ -1,5 +1,6 @@
-pub fn start_recording(config: NativeRecordingStartConfig) -> Result<()> {
-    let guard = engine_slot()
+impl AudioEngine {
+pub fn start_recording(&self, config: NativeRecordingStartConfig) -> Result<()> {
+    let guard = self.running
         .lock()
         .map_err(|_| audio_error("audio engine lock", "poisoned"))?;
     let engine = guard
@@ -8,8 +9,8 @@ pub fn start_recording(config: NativeRecordingStartConfig) -> Result<()> {
     engine.recorder.start(config)
 }
 
-pub fn stop_recording() -> Result<NativeRecordingResult> {
-    let guard = engine_slot()
+pub fn stop_recording(&self) -> Result<NativeRecordingResult> {
+    let guard = self.running
         .lock()
         .map_err(|_| audio_error("audio engine lock", "poisoned"))?;
     let engine = guard
@@ -19,11 +20,12 @@ pub fn stop_recording() -> Result<NativeRecordingResult> {
 }
 
 pub fn recording_waveform_snapshot(
+    &self,
     start_frame: i64,
     end_frame: i64,
     max_buckets: u32,
 ) -> Result<NativeWaveformSnapshot> {
-    let guard = engine_slot()
+    let guard = self.running
         .lock()
         .map_err(|_| audio_error("audio engine lock", "poisoned"))?;
     let engine = guard
@@ -32,4 +34,5 @@ pub fn recording_waveform_snapshot(
     engine
         .recorder
         .waveform_snapshot(start_frame, end_frame, max_buckets)
+}
 }

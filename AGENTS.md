@@ -51,6 +51,7 @@ mise install
 mise run dev
 mise run docs
 mise run check
+mise run check-fast
 mise run build
 mise run docs-build
 mise run format

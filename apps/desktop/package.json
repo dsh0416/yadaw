@@ -7,7 +7,7 @@
   "type": "module",
   "main": "./out/main/index.js",
   "scripts": {
-    "predev": "pnpm --filter @yadaw/dsp-node build:debug && pnpm --filter @yadaw/audio-host-client build:debug && cargo build -p yadaw-audio-host && cargo build -p yadaw-vst3-host --bin yadaw-vst3-probe && cargo truce build --vst3 --debug",
+    "predev": "pnpm --workspace-root exec node scripts/native-build.ts debug",
     "dev": "node scripts/dev.ts",
     "build": "pnpm build:main && pnpm build:preload && pnpm build:renderer",
     "build:main": "vite build --config vite.main.config.ts",

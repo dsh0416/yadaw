@@ -26,7 +26,7 @@ use yadaw_dsp_runtime::{
     },
 };
 
-use crate::engine::TransportClockHandle;
+use crate::TransportClockHandle;
 use crate::midi_recording::MidiRecordingSession;
 
 const PORT_POLL_INTERVAL: Duration = Duration::from_secs(1);
@@ -164,13 +164,6 @@ pub fn realtime_consumer() -> RealtimeMidiConsumer {
         shared,
         pending: None,
     }
-}
-
-#[must_use]
-pub fn external_sync_enabled() -> bool {
-    REALTIME_INPUT
-        .get()
-        .is_some_and(|shared| shared.external_sync_enabled.load(Ordering::Acquire))
 }
 
 #[must_use]
@@ -976,6 +969,14 @@ mod tests {
     // Midi realtime rings and the actor share process-global state; serialize those tests.
     static GLOBAL_MIDI_TEST_LOCK: Mutex<()> = Mutex::new(());
 
+    struct ExternalSyncReset(Arc<RealtimeInputShared>);
+
+    impl Drop for ExternalSyncReset {
+        fn drop(&mut self) {
+            self.0.external_sync_enabled.store(false, Ordering::Release);
+        }
+    }
+
     fn prefs(
         enabled: bool,
         source: Option<(&str, &str)>,
@@ -1246,6 +1247,7 @@ mod tests {
             .lock()
             .unwrap_or_else(|error| error.into_inner());
         let shared = RealtimeInputShared::get();
+        let _external_sync_reset = ExternalSyncReset(Arc::clone(&shared));
         let mut producer = Prod::new(Arc::clone(&shared.events));
         let mut sysex_prod = Prod::new(Arc::clone(&shared.sysex));
         let mut consumer = realtime_consumer();
@@ -1321,7 +1323,6 @@ mod tests {
         assert!(consumer.pop_sysex(&mut sysex));
         assert_eq!(sysex, [0xF0, 0xF7]);
         assert!(!consumer.pop_sysex(&mut [0]));
-        assert!(external_sync_enabled());
     }
 
     #[test]

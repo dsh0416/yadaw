@@ -914,7 +914,6 @@
     "ipcSection": {
       "title": "Audio IPC transport",
       "unavailable": "Unavailable",
-      "build": "Build {fingerprint}",
       "placeholder": "Audio helper diagnostics are unavailable.",
       "requestRouter": "Request router",
       "normalPriority": "{normal} normal · {priority} priority",

@@ -14,6 +14,7 @@ mod id;
 mod module;
 mod parameter_changes;
 mod processor;
+mod processor_handle;
 mod stream;
 
 pub use ara::{AraMainFactory, AraPluginEntry};
@@ -24,4 +25,5 @@ pub use hosted::{HostedParameter, HostedPlugin, PlugView, ProcessorLease};
 pub use id::ClassId;
 pub use module::{AraFactoryInfo, ClassInfo, FactoryInfo, Module};
 pub use processor::{AudioLayout, HostProcessContext, PluginKind, StereoProcessor};
+pub use processor_handle::Vst3ProcessorHandle;
 pub use yadaw_vst3_host_sys::Steinberg::ViewRect;

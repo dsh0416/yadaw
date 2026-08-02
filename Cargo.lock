@@ -1052,16 +1052,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "424e0138278faeb2b401f174ad17e715c829512d74f3d1e81eb43365c2e0590e"
 dependencies = [
  "ctor-proc-macro",
- "dtor 0.1.1",
-]
-
-[[package]]
-name = "ctor"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83cf0d42651b16c6dfe68685716d18480d18a9c39c62d76e8cf3eb6ed5d8bcbf"
-dependencies = [
- "dtor 0.8.1",
+ "dtor",
 ]
 
 [[package]]
@@ -1156,12 +1147,6 @@ checksum = "404d02eeb088a82cfd873006cb713fe411306c7d182c344905e101fb1167d301"
 dependencies = [
  "dtor-proc-macro",
 ]
-
-[[package]]
-name = "dtor"
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "edf234dd1594d6dd434a8fb8cada51ddbbc593e40e4a01556a0b31c62da2775b"
 
 [[package]]
 name = "dtor-proc-macro"
@@ -2478,7 +2463,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3a1135cfe16ca43ac82ac05858554fc39c037d8e4592f2b4a83d7ef8e822f43"
 dependencies = [
  "bitflags 2.13.1",
- "ctor 0.6.3",
+ "ctor",
  "napi-build",
  "napi-sys",
  "nohash-hasher",
@@ -2498,7 +2483,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "78665d6bdf10e9a4e6b38123efb0f66962e6197c1aea2f07cff3f159a374696d"
 dependencies = [
  "convert_case",
- "ctor 0.6.3",
+ "ctor",
  "napi-derive-backend",
  "proc-macro2",
  "quote",
@@ -4019,11 +4004,8 @@ version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aac18da81ebbf05109ab275b157c22a653bb3c12cf884450179942f81bcbf6c3"
 dependencies = [
- "as-raw-xcb-connection",
  "bytemuck",
- "fastrand",
  "js-sys",
- "memmap2",
  "ndk",
  "objc2 0.6.4",
  "objc2-core-foundation",
@@ -4032,16 +4014,10 @@ dependencies = [
  "objc2-quartz-core 0.3.2",
  "raw-window-handle 0.6.2",
  "redox_syscall 0.5.18",
- "rustix 1.1.4",
- "tiny-xlib",
  "tracing",
  "wasm-bindgen",
- "wayland-backend",
- "wayland-client",
- "wayland-sys",
  "web-sys",
  "windows-sys 0.61.2",
- "x11rb",
 ]
 
 [[package]]
@@ -4263,19 +4239,6 @@ dependencies = [
  "arrayref",
  "bytemuck",
  "strict-num",
-]
-
-[[package]]
-name = "tiny-xlib"
-version = "0.2.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a90a0ca3ee6a69f2ad28fd11621a4c3f03b371f366be500b64df260c4ffbafb4"
-dependencies = [
- "as-raw-xcb-connection",
- "ctor 0.10.1",
- "libloading 0.8.9",
- "pkg-config",
- "tracing",
 ]
 
 [[package]]
@@ -5916,6 +5879,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ae8337f8a065cfc972643663ea4279e04e7256de865aa66fe25cec5fb912d3f"
 
 [[package]]
+name = "yadaw-audio-engine"
+version = "0.2.1"
+dependencies = [
+ "bwavfile",
+ "cpal",
+ "midir",
+ "ringbuf",
+ "rubato",
+ "thiserror 2.0.19",
+ "yadaw-dsp-core",
+ "yadaw-dsp-render",
+ "yadaw-dsp-runtime",
+ "yadaw-vst3-host",
+]
+
+[[package]]
 name = "yadaw-audio-host"
 version = "0.2.1"
 dependencies = [
@@ -5923,24 +5902,21 @@ dependencies = [
  "ara2-bridge-host",
  "ara2-bridge-sys",
  "bwavfile",
- "cpal",
  "futures-util",
  "iced_core",
  "iced_renderer",
- "iced_tiny_skia",
+ "iced_wgpu",
  "iced_widget",
  "iced_winit",
  "ipc-channel",
  "midir",
+ "pollster",
  "raw-window-handle 0.6.2",
- "ringbuf",
  "rmp-serde",
- "rubato",
  "sha2",
  "tokio",
  "winit",
- "yadaw-dsp-core",
- "yadaw-dsp-render",
+ "yadaw-audio-engine",
  "yadaw-dsp-runtime",
  "yadaw-ipc-transport",
  "yadaw-vst3-host",

@@ -2,8 +2,10 @@
 
 This record accompanies the breaking IPC protocol version 2 rollout. Renderer,
 preload, Electron main, project workers, the native addon, and the audio helper
-must ship from the same build. Version or native build-fingerprint mismatch is
-rejected during bootstrap; version 1 compatibility is intentionally absent.
+must ship from the same build. Native bootstrap does not negotiate a version or
+build fingerprint; the packaged helper heartbeat smoke test is the lockstep-build
+guard. Version 1 compatibility is intentionally absent at the application IPC
+boundary.
 
 ## Logical commit sequence
 

@@ -44,20 +44,14 @@ use crate::recording::{
     MAX_INPUT_CHANNELS, NativeRecordingResult, NativeRecordingStartConfig, NativeWaveformSnapshot,
     RecorderController, RecordingTap, StereoFrame,
 };
-use crate::vst3::{ProcessContext, Vst3ProcessorHandle};
 use crate::{HostError as Error, HostResult as Result, Status};
+use yadaw_vst3_host::{HostProcessContext as ProcessContext, Vst3ProcessorHandle};
 
 const UNKNOWN_LATENCY_US: u64 = u64::MAX;
 const RING_BUFFER_BLOCKS: usize = 8;
-static AUDIO_ENGINE: OnceLock<Mutex<Option<AudioEngine>>> = OnceLock::new();
-static PENDING_MIXER: OnceLock<Mutex<Option<Box<NativeMixerRuntime>>>> = OnceLock::new();
-static LAST_NATIVE_GRAPH: OnceLock<Mutex<Option<NativeMixerGraph>>> = OnceLock::new();
-static COMPILED_GRAPH_SNAPSHOTS: OnceLock<Mutex<BTreeMap<u64, CompiledAudioGraphSnapshot>>> =
-    OnceLock::new();
-static NEXT_BUILD_GENERATION: AtomicU64 = AtomicU64::new(1);
 static STREAM_WORKERS: OnceLock<StreamWorkerPool> = OnceLock::new();
-#[cfg(test)]
-pub(crate) static GRAPH_TEST_LOCK: Mutex<()> = Mutex::new(());
+#[cfg(any(test, feature = "bench-internals"))]
+pub static GRAPH_TEST_LOCK: Mutex<()> = Mutex::new(());
 
 const ENGINE_COMMAND_CAPACITY: usize = 256;
 const MEMORY_DECODE_LIMIT_BYTES: u64 = 32 * 1024 * 1024;
@@ -90,6 +84,39 @@ const LOOPBACK_PROBE: [f32; 13] = [
     1.0, 1.0, 1.0, 1.0, 1.0, -1.0, -1.0, 1.0, 1.0, -1.0, 1.0, -1.0, 1.0,
 ];
 type InputFrame = [f32; MAX_INPUT_CHANNELS];
+
+/// Owned control-plane state for one audio-helper process.
+///
+/// The host creates exactly one instance and passes an explicit reference to
+/// actors that need engine snapshots or mutations. The object is intentionally
+/// not `Clone`; real-time callbacks only retain the narrow atomic/ring-buffer
+/// endpoints constructed while a stream is running.
+pub struct AudioEngine {
+    running: Mutex<Option<RunningAudioEngine>>,
+    pending_mixer: Mutex<Option<Box<NativeMixerRuntime>>>,
+    last_native_graph: Mutex<Option<NativeMixerGraph>>,
+    compiled_graph_snapshots: Mutex<BTreeMap<u64, CompiledAudioGraphSnapshot>>,
+    next_build_generation: AtomicU64,
+}
+
+impl AudioEngine {
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            running: Mutex::new(None),
+            pending_mixer: Mutex::new(None),
+            last_native_graph: Mutex::new(None),
+            compiled_graph_snapshots: Mutex::new(BTreeMap::new()),
+            next_build_generation: AtomicU64::new(1),
+        }
+    }
+}
+
+impl Default for AudioEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ClipStoragePolicy {

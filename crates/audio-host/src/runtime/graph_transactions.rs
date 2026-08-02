@@ -30,7 +30,16 @@ impl GraphTransactionState {
         }
     }
 
+    #[cfg(test)]
     fn snapshot(&self) -> GraphDeploymentSnapshot {
+        self.snapshot_at(self.committed_revision)
+    }
+
+    fn snapshot_with_engine(&self, audio_engine: &engine::AudioEngine) -> GraphDeploymentSnapshot {
+        self.snapshot_at(audio_engine.published_graph_generation())
+    }
+
+    fn snapshot_at(&self, observed_revision: u64) -> GraphDeploymentSnapshot {
         let status = if self.degraded {
             GraphDeploymentStatus::Degraded
         } else if self.candidate.is_some() {
@@ -51,7 +60,7 @@ impl GraphTransactionState {
             status,
             committed_project_graph: self.committed_project_graph.clone(),
             committed_revision: self.committed_revision,
-            observed_revision: engine::published_graph_generation(),
+            observed_revision,
             candidate: self
                 .candidate
                 .as_ref()
@@ -343,10 +352,13 @@ fn graph_failure(meta: &RpcRequestMeta, error: impl Into<Box<RpcError>>) -> Cont
     }
 }
 
-async fn wait_for_graph_publication(revision: u64) -> bool {
+async fn wait_for_graph_publication(
+    audio_engine: &engine::AudioEngine,
+    revision: u64,
+) -> bool {
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(2);
     loop {
-        if engine::published_graph_generation() >= revision {
+        if audio_engine.published_graph_generation() >= revision {
             return true;
         }
         if tokio::time::Instant::now() >= deadline {

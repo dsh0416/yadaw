@@ -7,7 +7,6 @@ function audioIpc(
   overrides: Partial<AudioIpcPerformanceSnapshot> = {}
 ): AudioIpcPerformanceSnapshot {
   return {
-    nativeBuildFingerprint: "0123456789abcdef",
     sessionEpoch: "1",
     heartbeat: {
       ageMs: 100,

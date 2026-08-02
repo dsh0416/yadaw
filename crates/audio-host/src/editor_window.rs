@@ -7,10 +7,10 @@ use std::{
 };
 
 use iced_core::{Color, Element, Length, Point, Size, mouse::Cursor, renderer};
-use iced_tiny_skia::{
+use iced_wgpu::{
     Renderer,
     graphics::{Compositor as _, Viewport},
-    window::{Compositor, Surface},
+    window::Compositor,
 };
 use iced_widget::{
     Column, Row, Theme, container, pick_list, scrollable, slider, space, text, text_input,
@@ -174,7 +174,7 @@ pub struct EditorWindow {
     user_zoom: Rc<Cell<f64>>,
     viewport: Viewport,
     renderer: Renderer,
-    surface: Surface,
+    surface: iced_wgpu::wgpu::Surface<'static>,
     cache: Cache,
     clipboard: Clipboard,
     cursor: Cursor,

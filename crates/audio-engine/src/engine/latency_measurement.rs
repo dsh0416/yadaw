@@ -14,6 +14,7 @@ struct NativeMixerRuntime {
     live_midi_events: Vec<BlockMidiEvent>,
     live_notes: Vec<bool>,
     count_in: Option<CountInState>,
+    external_sync_enabled: bool,
     live_sysex_scratch: Vec<u8>,
     metronome: MetronomeScheduler,
     tempo_map: TempoMap,

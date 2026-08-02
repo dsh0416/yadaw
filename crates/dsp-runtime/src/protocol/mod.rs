@@ -505,16 +505,6 @@ mod tests {
     }
 
     #[test]
-    fn native_build_fingerprint_is_a_stable_hex_identifier() {
-        assert_eq!(NATIVE_BUILD_FINGERPRINT.len(), 16);
-        assert!(
-            NATIVE_BUILD_FINGERPRINT
-                .bytes()
-                .all(|byte| byte.is_ascii_hexdigit())
-        );
-    }
-
-    #[test]
     fn mixer_send_taps_use_stable_kebab_case_wire_values() {
         for (tap, wire_value) in [
             (LiveMixerSendTap::Pre, "pre"),

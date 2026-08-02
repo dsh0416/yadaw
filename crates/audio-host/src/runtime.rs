@@ -31,7 +31,7 @@ use crate::{
     vst3,
     workers::WorkerSupervisor,
 };
-use iced_tiny_skia::window::Compositor as TinySkiaCompositor;
+use iced_wgpu::window::Compositor as WgpuCompositor;
 use ipc_channel::ipc::{self, IpcSender};
 use tokio::{
     sync::{Semaphore, mpsc, oneshot, watch},
@@ -51,11 +51,11 @@ use yadaw_dsp_runtime::protocol::{
     ControlRequest, ControlResponse, ControlResult, GraphCandidateSnapshot,
     GraphDeploymentSnapshot, GraphDeploymentStatus, GraphOperationOutcome, GraphOperationSnapshot,
     GraphTransactionRequest, GraphTransactionValue, GraphUpdate, HostEvent, IPC_PROTOCOL_VERSION,
-    LiveMixerGraph, MixerChannelMeter, NATIVE_BUILD_FINGERPRINT, PluginEditorPreference,
-    PriorityCommand, PriorityRequest, PriorityResponse, PriorityResult, RecordingResult,
-    RecordingWaveform, ResourceKind, ResourceRef, RoundTripLatencyMeasurement, RpcError,
-    RpcErrorCategory, RpcErrorCode, RpcErrorDetails, RpcFailure, RpcMutationOutcome,
-    RpcRequestMeta, RpcResult, RpcRetry, RpcSuccess, TransportState, read_message, write_message,
+    LiveMixerGraph, MixerChannelMeter, PluginEditorPreference, PriorityCommand, PriorityRequest,
+    PriorityResponse, PriorityResult, RecordingResult, RecordingWaveform, ResourceKind,
+    ResourceRef, RoundTripLatencyMeasurement, RpcError, RpcErrorCategory, RpcErrorCode,
+    RpcErrorDetails, RpcFailure, RpcMutationOutcome, RpcRequestMeta, RpcResult, RpcRetry,
+    RpcSuccess, TransportState, read_message, write_message,
 };
 use yadaw_dsp_runtime::tempo::{TempoEvent, TimeSignatureEvent};
 use yadaw_ipc_transport::{

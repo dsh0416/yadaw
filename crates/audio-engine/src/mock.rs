@@ -46,7 +46,7 @@ use ringbuf::{
     traits::{Consumer, Observer, Producer, Split},
 };
 
-/// The backend identifier accepted by [`crate::device`] and [`crate::engine`].
+/// The backend identifier accepted by [`crate::device`] and the audio engine.
 pub const BACKEND_ID: &str = "mock";
 
 /// The human-readable backend name shown in the audio device settings.

@@ -37,7 +37,6 @@ export interface SystemPerformanceSnapshot {
 }
 
 export interface AudioIpcPerformanceSnapshot {
-  nativeBuildFingerprint: string
   sessionEpoch: string
   heartbeat: {
     ageMs: number | null

@@ -310,7 +310,6 @@ export type TelemetryWire = [
 ]
 
 export type TransportDiagnosticsWire = [
-  nativeBuildFingerprint: string,
   sessionEpoch: string,
   requests: [normalPending: number, priorityPending: number, capacity: number, timeouts: number],
   sharedMemory: [

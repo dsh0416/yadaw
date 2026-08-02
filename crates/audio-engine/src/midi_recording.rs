@@ -9,7 +9,7 @@ use yadaw_dsp_runtime::{
     protocol::{MidiRecordingStartConfig, MidiRecordingTakeResult},
 };
 
-use crate::engine::TransportClockHandle;
+use crate::TransportClockHandle;
 use crate::midi_input::stable_port_key;
 
 struct ActiveMidiTake {

@@ -354,7 +354,6 @@ const fakeHost = vi.hoisted(() => {
     transportDiagnostics(): Buffer {
       return Buffer.from(
         encode([
-          "0123456789abcdef",
           "test-session",
           [0, 0, 256, 0],
           [0, 0, 256, 128 * 1024 * 1024, 0, 0, 0, 0, 0],

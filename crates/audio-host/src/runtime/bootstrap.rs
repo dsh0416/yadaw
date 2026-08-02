@@ -68,10 +68,6 @@ fn run_ipc() -> Result<(), Box<dyn std::error::Error>> {
         .with_default_menu(false)
         .with_activate_ignoring_other_apps(false);
     let event_loop = event_loop_builder.build()?;
-    let compositor = iced_tiny_skia::window::compositor::new(
-        iced_tiny_skia::Settings::default(),
-        event_loop.owned_display_handle(),
-    );
     let proxy = event_loop.create_proxy();
     let application_proxy = proxy.clone();
     let (ui_sender, ui_inbox) = std_mpsc::sync_channel(UI_MAILBOX_CAPACITY);
@@ -79,6 +75,8 @@ fn run_ipc() -> Result<(), Box<dyn std::error::Error>> {
     let (background_sender, background_inbox) = mpsc::channel(UI_MAILBOX_CAPACITY);
     let winit_background_sender = background_sender.clone();
     let processors = Arc::new(Mutex::new(HashMap::new()));
+    let audio_engine = Arc::new(engine::AudioEngine::new());
+    let protocol_audio_engine = Arc::clone(&audio_engine);
     let protocol_processors = processors.clone();
     let winit_generation = Arc::new(AtomicU64::new(0));
     let protocol_winit_generation = winit_generation.clone();
@@ -108,6 +106,7 @@ fn run_ipc() -> Result<(), Box<dyn std::error::Error>> {
                         ui_sender,
                         host_event_inbox,
                         processors: protocol_processors,
+                        audio_engine: protocol_audio_engine,
                         winit_generation: protocol_winit_generation,
                         runtime_config,
                         background_sender,
@@ -126,11 +125,12 @@ fn run_ipc() -> Result<(), Box<dyn std::error::Error>> {
         proxy: application_proxy,
         inbox: ui_inbox,
         processors,
+        audio_engine,
         background_sender: winit_background_sender,
         host_events: host_event_sender,
         vst3: Some(vst3::Vst3Runtime::new()),
         ara_graph: None,
-        compositor,
+        compositor: None,
         editor_owner_window,
         editors: HashMap::new(),
         editor_instances: HashMap::new(),

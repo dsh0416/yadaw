@@ -1,17 +1,10 @@
 <script setup lang="ts">
-import { computed } from "vue"
 import { Activity } from "@lucide/vue"
 import { useI18n } from "vue-i18n"
 import type { AudioIpcPerformanceSnapshot } from "@yadaw/contracts"
 
 const props = defineProps<{ audioIpc: AudioIpcPerformanceSnapshot | null }>()
 const { t } = useI18n()
-const buildLabel = computed(() => {
-  const fingerprint = props.audioIpc?.nativeBuildFingerprint
-  return fingerprint
-    ? t("performance.ipcSection.build", { fingerprint: fingerprint.slice(0, 8) })
-    : t("performance.ipcSection.unavailable")
-})
 function formatHeartbeatAge(value: number | null): string {
   return value === null ? t("performance.ipcSection.waiting") : `${Math.round(value)} ms`
 }
@@ -36,7 +29,7 @@ function formatBytes(value: number): string {
       <div>
         <Activity :size="13" /><strong>{{ t("performance.ipcSection.title") }}</strong>
       </div>
-      <span>{{ buildLabel }}</span>
+      <span>{{ props.audioIpc?.sessionEpoch ?? t("performance.ipcSection.unavailable") }}</span>
     </div>
     <dl v-if="audioIpc" class="ipc-diagnostics-grid">
       <div>

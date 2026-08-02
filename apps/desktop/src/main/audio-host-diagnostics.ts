@@ -300,8 +300,7 @@ export class AudioHostDiagnostics {
       const diagnostics = decode(client.transportDiagnostics()) as TransportDiagnosticsWire
       const lastHeartbeatAt = this.state().lastHeartbeatAt
       return {
-        nativeBuildFingerprint: diagnostics[0],
-        sessionEpoch: diagnostics[1],
+        sessionEpoch: diagnostics[0],
         heartbeat: {
           ageMs: lastHeartbeatAt === null ? null : Date.now() - lastHeartbeatAt,
           ipcGeneration: this.state().lastHeartbeatGenerations.ipc,
@@ -310,39 +309,39 @@ export class AudioHostDiagnostics {
           callbackGeneration: this.state().lastHeartbeatGenerations.callback
         },
         requests: {
-          normalPending: diagnostics[2][0],
-          priorityPending: diagnostics[2][1],
-          capacity: diagnostics[2][2],
-          timeouts: diagnostics[2][3]
+          normalPending: diagnostics[1][0],
+          priorityPending: diagnostics[1][1],
+          capacity: diagnostics[1][2],
+          timeouts: diagnostics[1][3]
         },
         sharedMemory: {
-          outstandingLeases: diagnostics[3][0],
-          outstandingBytes: diagnostics[3][1],
-          maxLeases: diagnostics[3][2],
-          maxBytes: diagnostics[3][3],
-          inlinePackets: diagnostics[3][4],
-          inlineBytes: diagnostics[3][5],
-          sharedPackets: diagnostics[3][6],
-          sharedRegions: diagnostics[3][7],
-          sharedBytes: diagnostics[3][8],
-          arenaRegions: diagnostics[8][3] + this.state().lastHostIpcMetrics.arenaRegions,
+          outstandingLeases: diagnostics[2][0],
+          outstandingBytes: diagnostics[2][1],
+          maxLeases: diagnostics[2][2],
+          maxBytes: diagnostics[2][3],
+          inlinePackets: diagnostics[2][4],
+          inlineBytes: diagnostics[2][5],
+          sharedPackets: diagnostics[2][6],
+          sharedRegions: diagnostics[2][7],
+          sharedBytes: diagnostics[2][8],
+          arenaRegions: diagnostics[7][3] + this.state().lastHostIpcMetrics.arenaRegions,
           arenaCapacityBytes:
-            diagnostics[8][4] + this.state().lastHostIpcMetrics.arenaCapacityBytes,
-          arenaUsedBytes: diagnostics[8][5] + this.state().lastHostIpcMetrics.arenaUsedBytes,
+            diagnostics[7][4] + this.state().lastHostIpcMetrics.arenaCapacityBytes,
+          arenaUsedBytes: diagnostics[7][5] + this.state().lastHostIpcMetrics.arenaUsedBytes,
           arenaHighWaterBytes:
-            diagnostics[8][6] + this.state().lastHostIpcMetrics.arenaHighWaterBytes,
-          arenaOffers: diagnostics[8][7] + this.state().lastHostIpcMetrics.arenaOffers,
-          arenaBusy: diagnostics[8][8] + this.state().lastHostIpcMetrics.arenaBusy,
+            diagnostics[7][6] + this.state().lastHostIpcMetrics.arenaHighWaterBytes,
+          arenaOffers: diagnostics[7][7] + this.state().lastHostIpcMetrics.arenaOffers,
+          arenaBusy: diagnostics[7][8] + this.state().lastHostIpcMetrics.arenaBusy,
           arenaQuarantinedRegions:
-            diagnostics[8][9] + this.state().lastHostIpcMetrics.arenaQuarantinedRegions,
-          copiedBytes: diagnostics[8][10] + this.state().lastHostIpcMetrics.arenaCopiedBytes
+            diagnostics[7][9] + this.state().lastHostIpcMetrics.arenaQuarantinedRegions,
+          copiedBytes: diagnostics[7][10] + this.state().lastHostIpcMetrics.arenaCopiedBytes
         },
         runtime: {
           requested: structuredClone(this.state().runtimePreferences),
           resolved: {
-            workerThreads: diagnostics[8][0],
-            maxBlockingThreads: diagnostics[8][1],
-            egressConcurrency: diagnostics[8][2]
+            workerThreads: diagnostics[7][0],
+            maxBlockingThreads: diagnostics[7][1],
+            egressConcurrency: diagnostics[7][2]
           },
           egressActive: this.state().lastHostIpcMetrics.egressActive,
           egressQueueDepth: this.state().lastHostIpcMetrics.egressQueueDepth,
@@ -350,22 +349,22 @@ export class AudioHostDiagnostics {
           egressBatches: this.state().lastHostIpcMetrics.egressBatches,
           blockingJobs: this.state().lastHostIpcMetrics.blockingJobs
         },
-        eventQueueDepth: diagnostics[4],
+        eventQueueDepth: diagnostics[3],
         telemetry: {
-          epoch: diagnostics[5][0],
-          capacity: diagnostics[5][1],
-          graphRevision: diagnostics[5][2],
-          callbackGeneration: diagnostics[5][3],
-          meterSlots: diagnostics[5][4],
-          fallbackReads: diagnostics[5][5]
+          epoch: diagnostics[4][0],
+          capacity: diagnostics[4][1],
+          graphRevision: diagnostics[4][2],
+          callbackGeneration: diagnostics[4][3],
+          meterSlots: diagnostics[4][4],
+          fallbackReads: diagnostics[4][5]
         },
         parameterRing: {
-          used: diagnostics[6][0],
-          capacity: diagnostics[6][1],
-          softFull: diagnostics[6][2],
-          hardFull: diagnostics[6][3],
-          boundaryFallbacks: diagnostics[6][4],
-          staleEpoch: diagnostics[6][5]
+          used: diagnostics[5][0],
+          capacity: diagnostics[5][1],
+          softFull: diagnostics[5][2],
+          hardFull: diagnostics[5][3],
+          boundaryFallbacks: diagnostics[5][4],
+          staleEpoch: diagnostics[5][5]
         }
       }
     } catch {

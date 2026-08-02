@@ -1,23 +1,9 @@
-fn validate_native_bootstrap(protocol_version: u8, value: &str) -> Result<(), String> {
-    if protocol_version != IPC_PROTOCOL_VERSION {
-        return Err(format!(
-            "audio-host protocol mismatch: addon={protocol_version}, helper={IPC_PROTOCOL_VERSION}"
-        ));
-    }
-    if value == NATIVE_BUILD_FINGERPRINT {
-        Ok(())
-    } else {
-        Err(format!(
-            "audio-host native build mismatch: addon={value}, helper={NATIVE_BUILD_FINGERPRINT}"
-        ))
-    }
-}
-
 struct ProtocolActorDeps {
     ui_proxy: EventLoopProxy<UiEvent>,
     ui_sender: std_mpsc::SyncSender<ActorRequest>,
     host_event_inbox: std_mpsc::Receiver<HostEvent>,
     processors: Arc<Mutex<HashMap<String, vst3::Vst3ProcessorHandle>>>,
+    audio_engine: Arc<engine::AudioEngine>,
     winit_generation: Arc<AtomicU64>,
     runtime_config: RuntimeConfig,
     background_sender: mpsc::Sender<ActorRequest>,
@@ -35,14 +21,13 @@ async fn run_protocol_actor(
         ui_sender,
         host_event_inbox,
         processors,
+        audio_engine,
         winit_generation,
         runtime_config,
         background_sender,
         background_inbox,
     } = deps;
     let HostBootstrap {
-        protocol_version,
-        native_build_fingerprint,
         requests,
         responses,
         priority_requests,
@@ -52,7 +37,6 @@ async fn run_protocol_actor(
         parameter_ring,
         session_epoch,
     } = bootstrap;
-    validate_native_bootstrap(protocol_version, &native_build_fingerprint)?;
     let telemetry = Arc::new(Mutex::new(
         TelemetryWriter::map(telemetry_page).map_err(|error| error.to_string())?,
     ));
@@ -97,6 +81,7 @@ async fn run_protocol_actor(
         response_leases,
         request_arena.clone(),
         Liveness {
+            audio_engine: Arc::clone(&audio_engine),
             ipc: ipc_generation.clone(),
             tokio: tokio_generation.clone(),
             winit: winit_generation,
@@ -109,7 +94,11 @@ async fn run_protocol_actor(
     let (engine_sender, engine_inbox) = mpsc::channel(ACTOR_CAPACITY);
     let (vst3_sender, vst3_inbox) = mpsc::channel(ACTOR_CAPACITY);
     let worker_supervisor = WorkerSupervisor::new();
-    tokio::spawn(engine_actor(engine_inbox, handles.clone()));
+    tokio::spawn(engine_actor(
+        engine_inbox,
+        handles.clone(),
+        Arc::clone(&audio_engine),
+    ));
     tokio::task::spawn_local(vst3_actor(
         vst3_inbox,
         Vst3ActorDeps {
@@ -120,6 +109,7 @@ async fn run_protocol_actor(
             request_arena: request_arena.clone(),
             background_sender: background_sender.clone(),
             engine_sender: engine_sender.clone(),
+            audio_engine: Arc::clone(&audio_engine),
             session_epoch,
         },
     ));
@@ -127,6 +117,7 @@ async fn run_protocol_actor(
         background_inbox,
         engine_sender.clone(),
         worker_supervisor,
+        Arc::clone(&audio_engine),
     ));
 
     outbound
@@ -141,6 +132,7 @@ async fn run_protocol_actor(
     let telemetry_host_events = host_event_inbox.clone();
     let telemetry_event_revision = published_event_revision.clone();
     let telemetry_page_epoch = page_epoch.clone();
+    let telemetry_audio_engine = Arc::clone(&audio_engine);
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(std::time::Duration::from_millis(33));
         loop {
@@ -156,13 +148,14 @@ async fn run_protocol_actor(
                         .await;
                 }
             }
-            let published_revision = engine::published_graph_generation();
+            let published_revision = telemetry_audio_engine.published_graph_generation();
             publish_telemetry(
                 &telemetry_writer,
                 &telemetry_outbound,
                 published_revision,
                 session_epoch,
                 &telemetry_page_epoch,
+                &telemetry_audio_engine,
             )
             .await;
             if published_revision != 0
@@ -207,6 +200,7 @@ async fn run_protocol_actor(
                 let vst3_sender = vst3_sender.clone();
                 let background_sender = background_sender.clone();
                 let outbound = outbound.clone();
+                let audio_engine = Arc::clone(&audio_engine);
                 tokio::spawn(async move {
                     let _permit = permit;
                     let ControlRequest {
@@ -218,7 +212,7 @@ async fn run_protocol_actor(
                     let deadline = protocol_deadline(&command);
                     let work = async move {
                         if shutdown {
-                            let _ = engine::stop_audio_engine();
+                            let _ = audio_engine.stop_audio_engine();
                             ControlResult::Accepted
                         } else {
                             match command {
@@ -272,7 +266,7 @@ async fn run_protocol_actor(
                         let _ = dispatch_parameter(sender, command).await;
                     }
                     PriorityIngress::Shutdown => {
-                        let _ = engine::stop_audio_engine();
+                        let _ = audio_engine.stop_audio_engine();
                     }
                     PriorityIngress::TelemetryPageReady => {}
                 }

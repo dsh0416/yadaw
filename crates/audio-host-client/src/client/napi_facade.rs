@@ -75,8 +75,6 @@ impl AudioHostIpcClient {
         })?;
         bootstrap_sender
             .send(HostBootstrap {
-                protocol_version: IPC_PROTOCOL_VERSION,
-                native_build_fingerprint: NATIVE_BUILD_FINGERPRINT.to_owned(),
                 requests: request_receiver,
                 responses: response_sender,
                 priority_requests: priority_request_receiver,
@@ -443,7 +441,6 @@ impl AudioHostIpcClient {
         };
         let (parameter_ring_used, parameter_ring_capacity) = self.state.parameters.usage();
         rmp_serde::to_vec_named(&(
-            NATIVE_BUILD_FINGERPRINT,
             self.state.session_epoch.to_string(),
             (
                 normal_pending,

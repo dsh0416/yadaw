@@ -8,7 +8,7 @@ mod tests {
     };
 
     use super::{
-        AdaptiveResampler, AtomicBool, AtomicU32, AtomicU64, AudioEngineKey, BufferSelection,
+        AdaptiveResampler, AtomicBool, AtomicU32, AtomicU64, AudioEngine, AudioEngineKey, BufferSelection,
         BufferSize,
         ClipSamples, ClipStoragePolicy, EngineCommand, GRAPH_TEST_LOCK, InputPeakBank, LivePlugin,
         LoadedClip, MAX_INPUT_CHANNELS, MAX_OUTPUT_CHANNELS, MAX_PLUGIN_BLOCK_FRAMES,
@@ -22,15 +22,13 @@ mod tests {
         StreamDirection, StreamErrorImpact, SupportedBufferSize, TRANSPORT_COUNTING_IN,
         TRANSPORT_PLAYING, TRANSPORT_RECORDING, TRANSPORT_STOPPED, TRANSPORT_WAITING,
         TransportAction, TransportShared, build_mixer_runtime, clip_storage_policy,
-        compiled_graph_snapshot, frames_to_nanos, native_graph_references_plugin,
-        parse_channel_kind, resolve_stream_devices, select_buffer_size,
-        set_last_native_graph_for_test, spawn_streaming_clip, stream_error_impact,
-        validate_session_sample_rate,
+        compiled_graph_snapshot, frames_to_nanos, parse_channel_kind, resolve_stream_devices,
+        select_buffer_size, spawn_streaming_clip, stream_error_impact,
     };
     use crate::recording::{
         NativeRecordingStartConfig, StereoFrame, write_deterministic_test_recording,
     };
-    use crate::vst3::ProcessContext;
+    use yadaw_vst3_host::HostProcessContext as ProcessContext;
     use ringbuf::{
         HeapRb,
         traits::{Producer, Split},
@@ -316,8 +314,8 @@ mod tests {
 
     #[test]
     fn graph_publication_rejects_a_different_session_rate() {
-        assert!(validate_session_sample_rate(44_100, 44_100).is_ok());
-        let error = validate_session_sample_rate(44_100, 48_000).unwrap_err();
+        assert!(AudioEngine::validate_session_sample_rate(44_100, 44_100).is_ok());
+        let error = AudioEngine::validate_session_sample_rate(44_100, 48_000).unwrap_err();
         assert!(
             error
                 .to_string()
@@ -751,10 +749,11 @@ mod tests {
         let _guard = GRAPH_TEST_LOCK
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        set_last_native_graph_for_test(None);
-        assert!(!native_graph_references_plugin("bench-0"));
+        let engine = AudioEngine::new();
+        engine.set_last_native_graph_for_test(None);
+        assert!(!engine.native_graph_references_plugin("bench-0"));
 
-        set_last_native_graph_for_test(Some(NativeMixerGraph {
+        engine.set_last_native_graph_for_test(Some(NativeMixerGraph {
             generation: 1,
             sample_rate: 48_000,
             channels: Vec::new(),
@@ -775,9 +774,9 @@ mod tests {
             tempo_events: Vec::new(),
             time_signature_events: Vec::new(),
         }));
-        assert!(native_graph_references_plugin("session-fx"));
-        assert!(!native_graph_references_plugin("bench-0"));
-        set_last_native_graph_for_test(None);
+        assert!(engine.native_graph_references_plugin("session-fx"));
+        assert!(!engine.native_graph_references_plugin("bench-0"));
+        engine.set_last_native_graph_for_test(None);
     }
 
     fn transport_test_runtime(
@@ -849,6 +848,7 @@ mod tests {
             live_midi_routes: vec![None; 3],
             live_midi_events: Vec::new(),
             live_notes: vec![false; 3 * 16 * 128],
+            external_sync_enabled: false,
             live_sysex_scratch: vec![0; yadaw_dsp_runtime::midi_input::MIDI_MAX_SYSEX_BYTES],
             metronome: MetronomeScheduler::new(None, &TempoMap::default_120_bpm(), sample_rate, 0),
             count_in: None,
@@ -938,6 +938,24 @@ mod tests {
         assert_eq!(
             runtime.transport.position_frames.load(Ordering::Relaxed),
             250
+        );
+    }
+
+    #[test]
+    fn external_sync_mode_is_scoped_to_each_runtime() {
+        let mut external = transport_test_runtime(48_000, 1_000, 250, TRANSPORT_STOPPED);
+        external.external_sync_enabled = true;
+        let _ = external.handle_command(EngineCommand::Transport(TransportAction::Play, 0));
+        assert_eq!(
+            external.transport.state.load(Ordering::Relaxed),
+            TRANSPORT_WAITING
+        );
+
+        let mut internal = transport_test_runtime(48_000, 1_000, 250, TRANSPORT_STOPPED);
+        let _ = internal.handle_command(EngineCommand::Transport(TransportAction::Play, 0));
+        assert_eq!(
+            internal.transport.state.load(Ordering::Relaxed),
+            TRANSPORT_PLAYING
         );
     }
 
