@@ -1,6 +1,7 @@
 import { yadawFontsOptions } from "@yadaw/ui/fonts"
 import Unfonts from "unplugin-fonts/vite"
 import { defineConfig, type HeadConfig, type MarkdownOptions, type PageData } from "vitepress"
+import { createBlogSidebar } from "./blog-sidebar"
 
 const markdown: MarkdownOptions = {
   config(md) {
@@ -81,8 +82,7 @@ export default defineConfig({
   },
   markdown,
   vite: {
-    // unplugin-fonts resolves against workspace Vite 8; VitePress pins Vite 5.
-    plugins: [Unfonts(yadawFontsOptions) as never]
+    plugins: [Unfonts(yadawFontsOptions)]
   },
   head: [
     ["link", { rel: "icon", href: "/logo.svg", type: "image/svg+xml" }],
@@ -129,7 +129,7 @@ export default defineConfig({
           "/blog/": [
             {
               text: "Development log",
-              items: [{ text: "All posts", link: "/blog/" }]
+              items: createBlogSidebar()
             }
           ],
           "/manual/": [
