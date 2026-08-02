@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest"
 import { mount } from "@vue/test-utils"
 import { createPinia } from "pinia"
+import { UiContextMenu } from "@yadaw/ui"
 import type { TimelineClip } from "../../stores/transport"
 import AudioClipCard from "./AudioClipCard.vue"
 
@@ -85,5 +86,45 @@ describe("AudioClipCard", () => {
     expect(fadeOut?.attributes("viewBox")).toBe("0 0 100 100")
     expect(fadeOut?.attributes("style")).toContain("width: 50%")
     expect(fadeOut?.get(".fade-curve").attributes("d")).toMatch(/^M 0 0 .* L 100 100$/)
+  })
+
+  it("exposes fade slider range semantics and commits menu actions", async () => {
+    const wrapper = mountCard({ fadeInFrames: 12_000, fadeOutFrames: 24_000 })
+    const fadeIn = wrapper.get('[data-testid="audio-fade-in"]')
+    const fadeOut = wrapper.get('[data-testid="audio-fade-out"]')
+
+    expect(fadeIn.attributes("aria-valuemin")).toBe("0")
+    expect(fadeIn.attributes("aria-valuemax")).toBe("24000")
+    expect(fadeIn.attributes("aria-valuenow")).toBe("12000")
+    expect(fadeOut.attributes("aria-valuemin")).toBe("0")
+    expect(fadeOut.attributes("aria-valuemax")).toBe("36000")
+    expect(fadeOut.attributes("aria-valuenow")).toBe("24000")
+
+    await wrapper.getComponent(UiContextMenu).vm.$emit("select", "split")
+    await wrapper.getComponent(UiContextMenu).vm.$emit("select", "trim-start")
+    await wrapper.getComponent(UiContextMenu).vm.$emit("select", "trim-end")
+    await wrapper.getComponent(UiContextMenu).vm.$emit("select", "reset-fades")
+    await wrapper.getComponent(UiContextMenu).vm.$emit("select", "delete")
+    await wrapper.get('[role="button"]').trigger("keydown", { key: "Backspace" })
+
+    expect(wrapper.emitted("split")).toEqual([["clip-1"]])
+    expect(wrapper.emitted("trim")).toEqual([
+      ["clip-1", "start", 72_000],
+      ["clip-1", "end", 72_000]
+    ])
+    expect(wrapper.emitted("resetFades")).toEqual([["clip-1"]])
+    expect(wrapper.emitted("remove")).toEqual([["clip-1"], ["clip-1"]])
+  })
+
+  it("previews and commits a fade-out drag from the fade handle", async () => {
+    const wrapper = mountCard({ fadeOutFrames: 0 })
+    const handle = wrapper.get('[data-testid="audio-fade-out"]')
+
+    await handle.trigger("pointerdown", { pointerId: 4, clientX: 1_920 })
+    await handle.trigger("pointermove", { pointerId: 4, clientX: 1_680 })
+    expect(handle.attributes("style")).toContain("width: 25%")
+    await handle.trigger("pointerup", { pointerId: 4, clientX: 1_680 })
+
+    expect(wrapper.emitted("fade")).toEqual([["clip-1", "out", 12_000]])
   })
 })

@@ -7,6 +7,7 @@ import { type ClipTrimEdge, previewMidiClipTrim } from "../../utils/clipEditing"
 interface UseMidiClipTrimOptions {
   clip: () => MidiClipState
   pixelsPerQuarter: () => number
+  ticksPerQuarter: () => number
   snap: () => PianoRollSnap
   commit: (edge: ClipTrimEdge, tick: number) => void
 }
@@ -23,7 +24,8 @@ export function useMidiClipTrim(options: UseMidiClipTrimOptions) {
   const active = shallowRef<ActiveTrim | null>(null)
 
   function requestedTick(event: PointerEvent, trim: ActiveTrim): number {
-    const pixelsPerTick = options.pixelsPerQuarter() / 960
+    const ticksPerQuarter = Math.max(1, options.ticksPerQuarter())
+    const pixelsPerTick = options.pixelsPerQuarter() / ticksPerQuarter
     const rawTick =
       trim.edgeStartTick +
       (event.clientX - trim.pointerStartX) / Math.max(Number.EPSILON, pixelsPerTick)

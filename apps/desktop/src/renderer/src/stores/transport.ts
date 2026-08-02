@@ -5,6 +5,7 @@ import type { TransportLoopRange, TransportSnapshot } from "@yadaw/contracts"
 import type { ProjectAssetSummary as Asset } from "@yadaw/contracts"
 import { projectContentEndSeconds } from "@yadaw/project-model"
 import { mutationMeta, readMeta, rpcErrorMessage } from "../rpc"
+import { tickToSeconds } from "../utils/tempoMap"
 import { useAudioRuntimeStore } from "./audioRuntime"
 import { useMixerStore } from "./mixer"
 import { usePluginStore } from "./plugins"
@@ -196,15 +197,23 @@ export const useTransportStore = defineStore("transport", () => {
     try {
       // Engine auto-stop leaves the playhead at the end of the content plus any
       // finite plugin tail; restart from zero so Play after song-end is not a
-      // no-op even before the host applies Play. A playhead paused inside the
-      // tail window keeps its position so the decaying tail can play out.
+      // no-op even before the host applies Play. When Cycle is enabled, restart
+      // from the cycle start instead. A playhead paused inside the tail window
+      // keeps its position so the decaying tail can play out.
       const autoStopEnd = autoStopEndSeconds.value
       if (
         contentEndSeconds.value > 0 &&
         autoStopEnd !== null &&
         playheadSeconds.value >= autoStopEnd
       ) {
-        await command({ type: "seek", positionFrames: 0 })
+        const restartSeconds =
+          loopEnabled.value && loopRange.value
+            ? tickToSeconds(mixerStore.graph.tempoMap, loopRange.value.startTick)
+            : 0
+        await command({
+          type: "seek",
+          positionFrames: Math.round(restartSeconds * mixerStore.graph.sampleRate)
+        })
       }
       await command({ type: "play" })
     } finally {

@@ -276,6 +276,59 @@ describe("transport store", () => {
     )
   })
 
+  it("rewinds to the cycle start before playing when Cycle is enabled at content end", async () => {
+    const mixer = useMixerStore()
+    mixer.graph = {
+      ...structuredClone(emptyGraph),
+      audioClips: [
+        {
+          id: "clip-1",
+          name: "Clip",
+          trackId: "track:audio-1",
+          assetId: "asset-1",
+          assetChannels: 2,
+          assetSampleRate: 48_000,
+          startFrame: 0,
+          sourceOffsetFrames: 0,
+          sourceLengthFrames: Number.MAX_SAFE_INTEGER,
+          fadeInFrames: 0,
+          fadeOutFrames: 0,
+          lengthFrames: 192_000
+        }
+      ]
+    }
+    window.yadaw.transportCommand = vi
+      .fn()
+      .mockResolvedValueOnce(
+        success({ state: "stopped", positionFrames: 96_000, sampleRate: 48_000 }, 1)
+      )
+      .mockResolvedValueOnce(
+        success({ state: "playing", positionFrames: 96_000, sampleRate: 48_000 }, 2)
+      )
+    const transport = useTransportStore()
+    transport.snapshot = {
+      state: "stopped",
+      positionFrames: 192_000,
+      sampleRate: 48_000,
+      loopEnabled: true,
+      loopRange: { startTick: 1_920, endTick: 5_760 }
+    }
+
+    await transport.play()
+
+    // 1920 ticks at 120 BPM / 960 TPQ => 1 second => 48_000 frames.
+    expect(window.yadaw.transportCommand).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ expectedRevision: 0 }),
+      { type: "seek", positionFrames: 48_000 }
+    )
+    expect(window.yadaw.transportCommand).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ expectedRevision: 1 }),
+      { type: "play" }
+    )
+  })
+
   it("rewinds to the start before playing when the playhead is at the content end", async () => {
     const mixer = useMixerStore()
     mixer.graph = {

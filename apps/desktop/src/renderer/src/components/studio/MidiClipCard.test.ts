@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest"
 import { mount } from "@vue/test-utils"
 import type { MidiClipState } from "@yadaw/contracts"
+import { UiContextMenu } from "@yadaw/ui"
 import MidiClipCard from "./MidiClipCard.vue"
 
 const clip: MidiClipState = {
@@ -61,5 +62,29 @@ describe("MidiClipCard", () => {
     expect(wrapper.emitted("select")).toEqual([["clip-1", false]])
     expect(document.body.textContent).toContain("Split at playhead")
     expect(document.body.textContent).toContain("Trim start to playhead")
+  })
+
+  it("emits playhead and keyboard clip actions from the context menu and keys", async () => {
+    const wrapper = mountCard()
+    const card = wrapper.get('[role="button"]')
+
+    await wrapper.getComponent(UiContextMenu).vm.$emit("select", "split")
+    await wrapper.getComponent(UiContextMenu).vm.$emit("select", "trim-start")
+    await wrapper.getComponent(UiContextMenu).vm.$emit("select", "trim-end")
+    await wrapper.getComponent(UiContextMenu).vm.$emit("select", "delete")
+    await card.trigger("keydown", { key: "Enter" })
+    await card.trigger("keydown", { key: "Delete" })
+    await card.trigger("dblclick")
+
+    expect(wrapper.emitted("split")).toEqual([["clip-1"]])
+    expect(wrapper.emitted("trim")).toEqual([
+      ["clip-1", "start", 1_440],
+      ["clip-1", "end", 1_440]
+    ])
+    expect(wrapper.emitted("remove")).toEqual([["clip-1"], ["clip-1"]])
+    expect(wrapper.emitted("open")).toEqual([
+      ["clip-1", ["clip-1"]],
+      ["clip-1", ["clip-1"]]
+    ])
   })
 })
