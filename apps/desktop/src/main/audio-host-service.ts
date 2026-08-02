@@ -413,10 +413,7 @@ export class AudioHostService {
     )
     for (const [index, result] of retired.entries()) {
       if (result.status === "rejected") {
-        console.error(
-          `Could not retire VST3 instance ${retiredInstanceIds[index]}:`,
-          result.reason
-        )
+        console.error(`Could not retire VST3 instance ${retiredInstanceIds[index]}:`, result.reason)
       }
     }
   }
