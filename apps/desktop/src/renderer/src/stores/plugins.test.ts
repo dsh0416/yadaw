@@ -5,8 +5,10 @@ import type {
   ProjectGraphSnapshot,
   PluginDescriptor,
   ProjectWorkspaceSnapshot,
+  RpcEvent,
   RpcResult
 } from "@yadaw/contracts"
+import { IPC_PROTOCOL_VERSION } from "@yadaw/contracts"
 import { applyToGraph } from "@yadaw/project-model"
 import { useMixerStore } from "./mixer"
 import { useAudioRuntimeStore } from "./audioRuntime"
@@ -262,19 +264,13 @@ describe("plugin store", () => {
   })
 
   it("reconciles editor open state when the helper reports a native close", async () => {
-    let onClosed:
-      | ((event: {
-          protocolVersion: number
-          sourceEpoch: string
-          sequence: number
-          resourceRevision: number
-          payload: { instanceId: string }
-        }) => void)
-      | null = null
+    const closedBridge: {
+      listener: ((event: RpcEvent<{ instanceId: string }>) => void) | null
+    } = { listener: null }
     window.yadaw.subscribePluginEditorClosed = vi.fn((listener) => {
-      onClosed = listener
+      closedBridge.listener = listener
       return () => {
-        onClosed = null
+        closedBridge.listener = null
       }
     })
     window.yadaw.listPlugins = vi.fn().mockResolvedValue(
@@ -324,9 +320,10 @@ describe("plugin store", () => {
     await store.load()
     await store.openEditor("plugin-1")
     expect(store.resources["plugin-1"]).toBeTruthy()
+    expect(closedBridge.listener).toEqual(expect.any(Function))
 
-    onClosed?.({
-      protocolVersion: 2,
+    closedBridge.listener?.({
+      protocolVersion: IPC_PROTOCOL_VERSION,
       sourceEpoch: "helper-epoch",
       sequence: 1,
       resourceRevision: 1,
