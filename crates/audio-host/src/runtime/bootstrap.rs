@@ -128,6 +128,7 @@ fn run_ipc() -> Result<(), Box<dyn std::error::Error>> {
         audio_engine,
         background_sender: winit_background_sender,
         host_events: host_event_sender,
+        pending_ara_events: VecDeque::new(),
         vst3: Some(vst3::Vst3Runtime::new()),
         ara_graph: None,
         compositor: None,
@@ -135,6 +136,7 @@ fn run_ipc() -> Result<(), Box<dyn std::error::Error>> {
         editors: HashMap::new(),
         editor_instances: HashMap::new(),
         next_editor_tick: None,
+        next_ara_tick: None,
         next_retirement_tick: None,
         output_parameter_error_reported: false,
     };

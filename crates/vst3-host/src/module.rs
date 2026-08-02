@@ -4,13 +4,18 @@ use std::{
 };
 
 use yadaw_vst3_host_sys::{
-    Steinberg::{IPluginFactory, IPluginFactory2, PClassInfo, PClassInfo2, PFactoryInfo},
+    Steinberg::{
+        IPluginFactory, IPluginFactory2, IPluginFactory3, PClassInfo, PClassInfo2, PFactoryInfo,
+    },
     YadawAraFactoryInfo,
-    abi::{PluginFactory2VTable, PluginFactoryVTable},
+    abi::{PluginFactory2VTable, PluginFactory3VTable, PluginFactoryVTable},
     yadaw_ara_query_factory,
 };
 
-use crate::{ClassId, ComInterface, ComPtr, HostError, HostResult, id::fixed_c_string};
+use crate::{
+    ClassId, ComInterface, ComPtr, HostError, HostResult, host_context::HostContext,
+    id::fixed_c_string,
+};
 
 #[cfg(target_os = "macos")]
 #[path = "module_macos.rs"]
@@ -119,6 +124,7 @@ mod dynamic {
         };
         Ok(Module {
             factory: Some(factory),
+            host_context: None,
             library,
             binary_path,
             exit,
@@ -180,6 +186,8 @@ pub struct ClassInfo {
 /// library / bundle is unloaded.
 pub struct Module {
     factory: Option<ComPtr<IPluginFactory>>,
+    // The factory is explicitly released in Drop before this context is released.
+    host_context: Option<Box<HostContext>>,
     #[cfg(target_os = "macos")]
     mac_bundle: Option<MacBundle>,
     #[cfg(not(target_os = "macos"))]
@@ -201,16 +209,50 @@ impl Module {
                 // an owned factory reference on success.
                 ComPtr::from_raw(factory_fn(), "GetPluginFactory")?
             };
-            Ok(Self {
+            let mut module = Self {
                 factory: Some(factory),
+                host_context: None,
                 mac_bundle: Some(mac_bundle),
                 binary_path,
-            })
+            };
+            module.install_host_context()?;
+            Ok(module)
         }
         #[cfg(not(target_os = "macos"))]
         {
-            dynamic::open(path)
+            let mut module = dynamic::open(path)?;
+            module.install_host_context()?;
+            Ok(module)
         }
+    }
+
+    fn install_host_context(&mut self) -> HostResult<()> {
+        let context = HostContext::new();
+        self.host_context = Some(context);
+        let Some(factory3) = self.factory().query::<IPluginFactory3>().ok() else {
+            return Ok(());
+        };
+        let table = unsafe {
+            // SAFETY: factory3 is a live IPluginFactory3 interface.
+            *factory3.as_ptr().cast::<*const PluginFactory3VTable>()
+        };
+        let result = unsafe {
+            // SAFETY: the context is stored in Module and outlives the factory reference.
+            ((*table).set_host_context)(factory3.as_ptr(), self.host_context().as_unknown())
+        };
+        if result < 0 {
+            return Err(HostError::Operation {
+                operation: "IPluginFactory3::setHostContext",
+                result,
+            });
+        }
+        Ok(())
+    }
+
+    pub(crate) fn host_context(&self) -> &HostContext {
+        self.host_context
+            .as_deref()
+            .expect("module host context is installed before use")
     }
 
     #[must_use]

@@ -9,12 +9,13 @@ use yadaw_vst3_host_sys::{
         IPluginBase,
         Vst::{
             self, AudioBusBuffers, AudioBusBuffers__bindgen_ty_1, BusDirections, DataEvent, Event,
-            Event__bindgen_ty_1, IAudioProcessor, IComponent, NoteOffEvent, NoteOnEvent,
-            PolyPressureEvent, ProcessContext, ProcessData, ProcessSetup, SpeakerArrangement,
+            Event__bindgen_ty_1, IAudioProcessor, IComponent, IProcessContextRequirements,
+            NoteOffEvent, NoteOnEvent, PolyPressureEvent, ProcessContext, ProcessData,
+            ProcessSetup, SpeakerArrangement,
         },
     },
-    abi::{AudioProcessorVTable, ComponentVTable},
-    compat::{as_bus_direction, as_int32, as_media_type, as_uint32, process_context_state},
+    abi::{AudioProcessorVTable, ComponentVTable, ProcessContextRequirementsVTable},
+    compat::{as_bus_direction, as_int32, as_media_type, as_uint32},
 };
 
 use crate::{
@@ -85,12 +86,13 @@ pub(crate) struct QueuedParameter {
 pub struct StereoProcessor {
     processor: ComPtr<IAudioProcessor>,
     component: ComPtr<IComponent>,
-    host: Box<HostContext>,
     input_events: Box<EventList>,
     input_parameters: Box<ParameterChanges>,
     output_parameters: Box<ParameterChanges>,
     output_parameter_writer: Option<OutputParameterWriter>,
     process_context: Box<ProcessContext>,
+    process_context_requirements: u32,
+    sample_rate: f64,
     parameter_consumer: HeapCons<QueuedParameter>,
     module: Rc<Module>,
     kind: PluginKind,
@@ -126,15 +128,16 @@ impl StereoProcessor {
         kind: PluginKind,
         layout: AudioLayout,
     ) -> HostResult<(Self, HeapProd<QueuedParameter>)> {
-        Self::create_with_parameter_queue_and_hook(
+        let (mut processor, producer, ()) = Self::create_with_parameter_queue_and_hook(
             module,
             class_id,
             sample_rate,
             kind,
             layout,
             |_| Ok(()),
-        )
-        .map(|(processor, producer, ())| (processor, producer))
+        )?;
+        processor.activate()?;
+        Ok((processor, producer))
     }
 
     pub(crate) fn create_with_parameter_queue_and_hook<T>(
@@ -152,7 +155,6 @@ impl StereoProcessor {
             });
         }
         let component = module.create::<IComponent>(class_id)?;
-        let host = HostContext::new();
         let input_events = EventList::new();
         let input_parameters = ParameterChanges::new();
         let output_parameters = ParameterChanges::new();
@@ -163,12 +165,21 @@ impl StereoProcessor {
             // value represents no active flags and neutral optional fields.
             std::mem::MaybeUninit::<ProcessContext>::zeroed().assume_init()
         });
+        if kind == PluginKind::Instrument {
+            check_optional("IComponent::setIoMode(simple)", unsafe {
+                // SAFETY: setIoMode is an optional Created-state call made before initialize.
+                ((*component_table(&component)).set_io_mode)(
+                    component.as_ptr(),
+                    as_int32(Vst::IoModes_kSimple),
+                )
+            })?;
+        }
         check("IComponent::initialize", unsafe {
             // SAFETY: component and host are live and owned by this
             // construction path.
             ((*component_table(&component)).base.initialize)(
                 component.as_ptr().cast::<IPluginBase>(),
-                host.as_unknown(),
+                module.host_context().as_unknown(),
             )
         })?;
         // After initialize(), any failure must terminate before release.
@@ -178,94 +189,112 @@ impl StereoProcessor {
         let hook_result = hook(lifecycle.component().as_ptr().cast())?;
         let processor = lifecycle.component().query::<IAudioProcessor>()?;
         lifecycle.set_processor(processor);
-        {
-            let processor = lifecycle.processor();
-            let component = lifecycle.component();
-            let processor_table = processor_table(processor);
-            let component_table = component_table(component);
-            check("canProcessSampleSize(sample32)", unsafe {
-                // SAFETY: processor is initialized and live.
-                ((*processor_table).can_process_sample_size)(
-                    processor.as_ptr(),
-                    as_int32(Vst::SymbolicSampleSizes_kSample32),
-                )
-            })?;
-
-            negotiate_bus_arrangements(component, processor, layout)?;
-
-            if kind == PluginKind::Effect {
-                check("activate audio input", unsafe {
-                    // SAFETY: component is initialized; bus zero is the
-                    // negotiated stereo main input.
-                    ((*component_table).activate_bus)(
-                        component.as_ptr(),
-                        as_media_type(Vst::MediaTypes_kAudio),
-                        as_bus_direction(Vst::BusDirections_kInput),
-                        0,
-                        1,
-                    )
-                })?;
-            }
-            check("activate audio output", unsafe {
-                // SAFETY: component is initialized; bus zero is the
-                // negotiated stereo main output.
-                ((*component_table).activate_bus)(
-                    component.as_ptr(),
-                    as_media_type(Vst::MediaTypes_kAudio),
-                    as_bus_direction(Vst::BusDirections_kOutput),
-                    0,
-                    1,
-                )
-            })?;
-            activate_event_input_buses(component)?;
-            let mut setup = ProcessSetup {
-                processMode: as_int32(Vst::ProcessModes_kRealtime),
-                symbolicSampleSize: as_int32(Vst::SymbolicSampleSizes_kSample32),
-                maxSamplesPerBlock: MAX_BLOCK_FRAMES,
-                sampleRate: sample_rate,
-            };
-            check("setupProcessing", unsafe {
-                // SAFETY: setup is initialized and valid for this call.
-                ((*processor_table).setup_processing)(
-                    processor.as_ptr(),
-                    std::ptr::addr_of_mut!(setup),
-                )
-            })?;
-            check("setActive(true)", unsafe {
-                // SAFETY: all buses and processing configuration are set.
-                ((*component_table).set_active)(component.as_ptr(), 1)
-            })?;
-        }
-        lifecycle.active = true;
-        {
-            let processor = lifecycle.processor();
-            let processor_table = processor_table(processor);
-            check_optional("setProcessing(true)", unsafe {
-                // SAFETY: component is active.
-                ((*processor_table).set_processing)(processor.as_ptr(), 1)
-            })?;
-        }
-        lifecycle.processing = true;
         let (component, processor) = lifecycle.take();
         Ok((
             Self {
                 processor,
                 component,
-                host,
                 input_events,
                 input_parameters,
                 output_parameters,
                 output_parameter_writer: None,
                 process_context,
+                process_context_requirements: 0,
+                sample_rate,
                 parameter_consumer,
                 module,
                 kind,
                 layout,
-                active: true,
+                active: false,
             },
             parameter_producer,
             hook_result,
         ))
+    }
+
+    /// Completes capability negotiation and enters the VST3 active/processing states.
+    /// Controller handlers and connection points must be installed before this call.
+    pub(crate) fn activate(&mut self) -> HostResult<()> {
+        if self.active {
+            return Ok(());
+        }
+        self.process_context_requirements = self
+            .processor
+            .query::<IProcessContextRequirements>()
+            .ok()
+            .map_or_else(legacy_process_context_requirements, |requirements| unsafe {
+                // SAFETY: requirements is a live extension queried from the initialized processor.
+                ((*process_context_requirements_table(&requirements))
+                    .get_process_context_requirements)(requirements.as_ptr())
+            });
+        let processor_table = processor_table(&self.processor);
+        let component_table = component_table(&self.component);
+        check("canProcessSampleSize(sample32)", unsafe {
+            // SAFETY: processor is initialized and live.
+            ((*processor_table).can_process_sample_size)(
+                self.processor.as_ptr(),
+                as_int32(Vst::SymbolicSampleSizes_kSample32),
+            )
+        })?;
+        negotiate_bus_arrangements(&self.component, &self.processor, self.layout)?;
+        if self.kind == PluginKind::Effect {
+            check("activate audio input", unsafe {
+                // SAFETY: component is initialized; bus zero is the negotiated main input.
+                ((*component_table).activate_bus)(
+                    self.component.as_ptr(),
+                    as_media_type(Vst::MediaTypes_kAudio),
+                    as_bus_direction(Vst::BusDirections_kInput),
+                    0,
+                    1,
+                )
+            })?;
+        }
+        check("activate audio output", unsafe {
+            // SAFETY: component is initialized; bus zero is the negotiated main output.
+            ((*component_table).activate_bus)(
+                self.component.as_ptr(),
+                as_media_type(Vst::MediaTypes_kAudio),
+                as_bus_direction(Vst::BusDirections_kOutput),
+                0,
+                1,
+            )
+        })?;
+        activate_event_input_buses(&self.component)?;
+        let mut setup = ProcessSetup {
+            processMode: as_int32(Vst::ProcessModes_kRealtime),
+            symbolicSampleSize: as_int32(Vst::SymbolicSampleSizes_kSample32),
+            maxSamplesPerBlock: MAX_BLOCK_FRAMES,
+            sampleRate: self.sample_rate,
+        };
+        check("setupProcessing", unsafe {
+            // SAFETY: setup is initialized and valid for this call.
+            ((*processor_table).setup_processing)(
+                self.processor.as_ptr(),
+                std::ptr::addr_of_mut!(setup),
+            )
+        })?;
+        check("setActive(true)", unsafe {
+            // SAFETY: all buses and processing configuration are set.
+            ((*component_table).set_active)(self.component.as_ptr(), 1)
+        })?;
+        self.active = true;
+        check_optional("setProcessing(true)", unsafe {
+            // SAFETY: component is active.
+            ((*processor_table).set_processing)(self.processor.as_ptr(), 1)
+        })?;
+        Ok(())
+    }
+
+    pub(crate) fn restart_processing(&mut self) -> HostResult<()> {
+        if self.active {
+            unsafe {
+                // SAFETY: processing and activation are stopped in reverse order on the UI thread.
+                ((*processor_table(&self.processor)).set_processing)(self.processor.as_ptr(), 0);
+                ((*component_table(&self.component)).set_active)(self.component.as_ptr(), 0);
+            }
+            self.active = false;
+        }
+        self.activate()
     }
 
     #[must_use]
@@ -355,26 +384,12 @@ impl StereoProcessor {
         let output_parameter_changes = self.output_parameters.as_interface();
         let process_context = context.map(|context| {
             let value = &mut self.process_context;
-            value.state = process_context_state(&[
-                Vst::ProcessContext_StatesAndFlags_kContTimeValid,
-                Vst::ProcessContext_StatesAndFlags_kProjectTimeMusicValid,
-                Vst::ProcessContext_StatesAndFlags_kBarPositionValid,
-                Vst::ProcessContext_StatesAndFlags_kTempoValid,
-                Vst::ProcessContext_StatesAndFlags_kTimeSigValid,
-            ]);
-            if context.playing {
-                value.state |= as_uint32(Vst::ProcessContext_StatesAndFlags_kPlaying);
-            }
-            if context.recording {
-                value.state |= as_uint32(Vst::ProcessContext_StatesAndFlags_kRecording);
-            }
-            value.projectTimeSamples = context.project_time_samples;
-            value.continousTimeSamples = context.continuous_time_samples;
-            value.projectTimeMusic = context.project_time_quarters;
-            value.barPositionMusic = context.bar_position_quarters;
-            value.tempo = context.tempo;
-            value.timeSigNumerator = context.time_signature_numerator;
-            value.timeSigDenominator = context.time_signature_denominator;
+            update_process_context(
+                value,
+                self.process_context_requirements,
+                self.sample_rate,
+                context,
+            );
             std::ptr::from_mut(value.as_mut())
         });
         let mut data = ProcessData {
@@ -421,7 +436,7 @@ impl StereoProcessor {
     }
 
     pub(crate) fn host(&self) -> &HostContext {
-        &self.host
+        self.module.host_context()
     }
 
     pub(crate) fn flush_parameters(&mut self) -> HostResult<()> {
@@ -582,20 +597,102 @@ impl StereoProcessor {
 
 impl Drop for StereoProcessor {
     fn drop(&mut self) {
+        let component_table = component_table(&self.component);
         if self.active {
             let processor_table = processor_table(&self.processor);
-            let component_table = component_table(&self.component);
             unsafe {
                 // SAFETY: lifecycle teardown is performed once in reverse
                 // activation order while all interfaces and the module live.
                 ((*processor_table).set_processing)(self.processor.as_ptr(), 0);
                 ((*component_table).set_active)(self.component.as_ptr(), 0);
-                ((*component_table).base.terminate)(self.component.as_ptr().cast::<IPluginBase>());
             }
             self.active = false;
         }
-        let _keep_alive = (&self.module, &self.host);
+        unsafe {
+            // SAFETY: every StereoProcessor owns one successfully initialized component.
+            ((*component_table).base.terminate)(self.component.as_ptr().cast::<IPluginBase>());
+        }
+        let _keep_alive = &self.module;
     }
+}
+
+fn legacy_process_context_requirements() -> u32 {
+    Vst::IProcessContextRequirements_Flags_kNeedContinousTimeSamples
+        | Vst::IProcessContextRequirements_Flags_kNeedProjectTimeMusic
+        | Vst::IProcessContextRequirements_Flags_kNeedBarPositionMusic
+        | Vst::IProcessContextRequirements_Flags_kNeedTempo
+        | Vst::IProcessContextRequirements_Flags_kNeedTimeSignature
+        | Vst::IProcessContextRequirements_Flags_kNeedTransportState
+}
+
+fn requirement_enabled(requirements: u32, flag: u32) -> bool {
+    requirements & flag != 0
+}
+
+fn supported_process_context_state(requirements: u32) -> u32 {
+    let mut state = 0;
+    if requirement_enabled(
+        requirements,
+        Vst::IProcessContextRequirements_Flags_kNeedContinousTimeSamples,
+    ) {
+        state |= as_uint32(Vst::ProcessContext_StatesAndFlags_kContTimeValid);
+    }
+    if requirement_enabled(
+        requirements,
+        Vst::IProcessContextRequirements_Flags_kNeedProjectTimeMusic,
+    ) {
+        state |= as_uint32(Vst::ProcessContext_StatesAndFlags_kProjectTimeMusicValid);
+    }
+    if requirement_enabled(
+        requirements,
+        Vst::IProcessContextRequirements_Flags_kNeedBarPositionMusic,
+    ) {
+        state |= as_uint32(Vst::ProcessContext_StatesAndFlags_kBarPositionValid);
+    }
+    if requirement_enabled(
+        requirements,
+        Vst::IProcessContextRequirements_Flags_kNeedTempo,
+    ) {
+        state |= as_uint32(Vst::ProcessContext_StatesAndFlags_kTempoValid);
+    }
+    if requirement_enabled(
+        requirements,
+        Vst::IProcessContextRequirements_Flags_kNeedTimeSignature,
+    ) {
+        state |= as_uint32(Vst::ProcessContext_StatesAndFlags_kTimeSigValid);
+    }
+    state
+}
+
+fn update_process_context(
+    value: &mut ProcessContext,
+    requirements: u32,
+    sample_rate: f64,
+    context: &HostProcessContext,
+) {
+    value.state = supported_process_context_state(requirements);
+    value.sampleRate = sample_rate;
+    if requirement_enabled(
+        requirements,
+        Vst::IProcessContextRequirements_Flags_kNeedTransportState,
+    ) && context.playing
+    {
+        value.state |= as_uint32(Vst::ProcessContext_StatesAndFlags_kPlaying);
+    }
+    if requirement_enabled(
+        requirements,
+        Vst::IProcessContextRequirements_Flags_kNeedTransportState,
+    ) && context.recording
+    {
+        value.state |= as_uint32(Vst::ProcessContext_StatesAndFlags_kRecording);
+    }
+    value.projectTimeSamples = context.project_time_samples;
+    value.continousTimeSamples = context.continuous_time_samples;
+    value.projectTimeMusic = context.project_time_quarters;
+    value.barPositionMusic = context.bar_position_quarters;
+    value.tempo = context.tempo;
+    value.timeSigNumerator = context.time_signature_numerator;
+    value.timeSigDenominator = context.time_signature_denominator;
 }
 
 /// Owns an initialized VST3 component until construction succeeds or fails.
@@ -624,12 +721,6 @@ impl InitializedComponent {
         self.component
             .as_ref()
             .expect("initialized component is present until take()")
-    }
-
-    fn processor(&self) -> &ComPtr<IAudioProcessor> {
-        self.processor
-            .as_ref()
-            .expect("audio processor is present after set_processor()")
     }
 
     fn set_processor(&mut self, processor: ComPtr<IAudioProcessor>) {
@@ -876,6 +967,17 @@ fn processor_table(processor: &ComPtr<IAudioProcessor>) -> *const AudioProcessor
     }
 }
 
+fn process_context_requirements_table(
+    requirements: &ComPtr<IProcessContextRequirements>,
+) -> *const ProcessContextRequirementsVTable {
+    unsafe {
+        // SAFETY: ComPtr guarantees the object's leading vtable pointer.
+        *requirements
+            .as_ptr()
+            .cast::<*const ProcessContextRequirementsVTable>()
+    }
+}
+
 fn check(operation: &'static str, result: i32) -> HostResult<()> {
     if result == 0 {
         Ok(())
@@ -888,7 +990,7 @@ fn check_optional(operation: &'static str, result: i32) -> HostResult<()> {
     // Valid components may inherit the default kNotImplemented
     // setProcessing implementation. setupProcessing plus setActive still
     // establishes a legal processing lifecycle in that case.
-    if result == 0 || result == -2147467263 {
+    if result == 0 || result == 1 || result == -2147467263 {
         Ok(())
     } else {
         Err(HostError::Operation { operation, result })
@@ -898,6 +1000,8 @@ fn check_optional(operation: &'static str, result: i32) -> HostResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use yadaw_vst3_host_sys::Steinberg::Vst;
 
     #[test]
     fn audio_layouts_report_their_input_and_output_channel_contracts() {
@@ -927,5 +1031,34 @@ mod tests {
                 result: -2,
             })
         ));
+    #[test]
+    fn process_context_uses_real_sample_rate_and_only_requested_validity_bits() {
+        let mut value = unsafe {
+            // SAFETY: ProcessContext is an SDK POD and zero is a valid empty context.
+            std::mem::MaybeUninit::<ProcessContext>::zeroed().assume_init()
+        };
+        let requirements = Vst::IProcessContextRequirements_Flags_kNeedTempo;
+        update_process_context(
+            &mut value,
+            requirements,
+            96_000.0,
+            &HostProcessContext {
+                project_time_samples: 12,
+                continuous_time_samples: 13,
+                project_time_quarters: 1.0,
+                bar_position_quarters: 0.0,
+                tempo: 127.0,
+                time_signature_numerator: 7,
+                time_signature_denominator: 8,
+                playing: true,
+                recording: true,
+            },
+        );
+        assert_eq!(value.sampleRate, 96_000.0);
+        assert_eq!(
+            value.state,
+            as_uint32(Vst::ProcessContext_StatesAndFlags_kTempoValid)
+        );
+        assert_eq!(value.tempo, 127.0);
     }
 }

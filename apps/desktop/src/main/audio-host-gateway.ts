@@ -19,7 +19,8 @@ export class AudioHostGateway {
     private readonly unavailable: () => "stopping" | Promise<void> | null,
     private readonly onEditorPreferenceChanged: Parameters<typeof drainHostEvents>[1],
     private readonly pendingPreferenceWrites: Set<Promise<void>>,
-    private readonly onEditorClosed?: (instanceId: string) => void
+    private readonly onEditorClosed?: (instanceId: string) => void,
+    private readonly onAraCallback?: Parameters<typeof drainHostEvents>[4]
   ) {}
 
   request(command: Record<string, unknown>): Promise<ControlResponse> {
@@ -63,7 +64,8 @@ export class AudioHostGateway {
       client,
       this.onEditorPreferenceChanged,
       this.pendingPreferenceWrites,
-      this.onEditorClosed
+      this.onEditorClosed,
+      this.onAraCallback
     )
     return response
   }

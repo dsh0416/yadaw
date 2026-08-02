@@ -144,11 +144,24 @@ impl EditorWindow {
                         let step = parameter_step(parameter.step_count);
                         let id = parameter.id;
                         let value = parameter.normalized.clamp(0.0, 1.0);
-                        let value_text = if parameter.units.is_empty() {
+                        let value_text = if !parameter.formatted.is_empty() {
+                            parameter.formatted.clone()
+                        } else if parameter.units.is_empty() {
                             format!("{:.1}%", value * 100.0)
                         } else {
                             format!("{:.1}%  {}", value * 100.0, parameter.units)
                         };
+                        let control: Element<'_, Message, Theme, Renderer> =
+                            if parameter.flags & 2 != 0 {
+                                container(text(value_text.clone())).width(Length::Fill).into()
+                            } else {
+                                slider(0.0..=1.0, value, move |normalized| {
+                                    Message::ParameterChanged(id, normalized)
+                                })
+                                .step(step)
+                                .on_release(Message::ParameterReleased(id))
+                                .into()
+                            };
                         column.push(
                             Column::new()
                                 .spacing(5)
@@ -156,15 +169,9 @@ impl EditorWindow {
                                     Row::new()
                                         .push(text(&parameter.title))
                                         .push(space::horizontal())
-                                        .push(text(value_text).size(13)),
+                                        .push(text(value_text.clone()).size(13)),
                                 )
-                                .push(
-                                    slider(0.0..=1.0, value, move |normalized| {
-                                        Message::ParameterChanged(id, normalized)
-                                    })
-                                    .step(step)
-                                    .on_release(Message::ParameterReleased(id)),
-                                ),
+                                .push(control),
                         )
                     },
                 )

@@ -41,6 +41,7 @@ import type {
 import type { OperationEvent, OperationStatusSnapshot } from "./operations"
 import type {
   PluginCatalogSnapshot,
+  AraCallbackNotification,
   PluginEditorOpenResult,
   PluginParameterCommand,
   PluginParameterEnqueueResult,
@@ -131,6 +132,7 @@ export const IPC_CHANNELS = {
   pluginEditorOpen: "plugin-editor:open",
   pluginEditorClose: "plugin-editor:close",
   pluginEditorClosedEvent: "plugin-editor:closed-event",
+  araCallbackEvent: "ara:callback-event",
   pluginParametersGet: "plugin-parameters:get",
   pluginParameterSet: "plugin-parameter:set",
   midiImportPrepare: "midi-import:prepare",
@@ -276,6 +278,7 @@ export interface YadawDesktopApi {
   subscribePluginEditorClosed(
     listener: (event: RpcEvent<{ instanceId: string }>) => void
   ): () => void
+  subscribeAraCallbacks(listener: (event: RpcEvent<AraCallbackNotification>) => void): () => void
   getPluginParameters(meta: RpcRequestMeta): Promise<RpcResult<PluginParameterInfo[]>>
   setPluginParameter(
     meta: RpcRequestMeta,

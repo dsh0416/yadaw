@@ -6,14 +6,14 @@ use std::{
     rc::Rc,
     sync::{
         Arc,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU32, Ordering},
     },
 };
 
 use yadaw_vst3_host_sys::{
     Steinberg::{
         IPlugFrame, IPlugView, IPlugViewContentScaleSupport, IPluginBase, TUID, ViewRect,
-        Vst::{IComponent, IConnectionPoint, IEditController, IMidiMapping, ParameterInfo},
+        Vst::{self, IComponent, IConnectionPoint, IEditController, IMidiMapping, ParameterInfo},
     },
     abi::{
         ComponentVTable, ConnectionPointVTable, EditControllerVTable, MidiMappingVTable,
@@ -48,6 +48,7 @@ pub struct HostedParameter {
     pub step_count: i32,
     pub default_normalized: f64,
     pub normalized: f64,
+    pub formatted: String,
     pub flags: u32,
 }
 
@@ -58,20 +59,36 @@ const MIDI_PITCH_BEND: usize = 129;
 const MIDI_PROGRAM_CHANGE: usize = 130;
 const UNMAPPED_PARAMETER: u32 = u32::MAX;
 
-#[derive(Clone)]
 struct MidiMappingTable {
-    parameters: Box<[u32]>,
+    parameters: Box<[AtomicU32]>,
 }
 
 impl MidiMappingTable {
     fn query(controller: Option<&ComPtr<IEditController>>) -> Self {
-        let mut parameters =
-            vec![UNMAPPED_PARAMETER; MIDI_MAPPING_CHANNELS * MIDI_MAPPING_CONTROLLERS]
-                .into_boxed_slice();
+        let parameters = (0..MIDI_MAPPING_CHANNELS * MIDI_MAPPING_CONTROLLERS)
+            .map(|_| AtomicU32::new(UNMAPPED_PARAMETER))
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
         let Some(mapping) = controller.and_then(|value| value.query::<IMidiMapping>().ok()) else {
             return Self { parameters };
         };
-        let table = midi_mapping_table(&mapping);
+        let table = Self { parameters };
+        table.refresh_mapping(&mapping);
+        table
+    }
+
+    fn refresh(&self, controller: Option<&ComPtr<IEditController>>) {
+        let Some(mapping) = controller.and_then(|value| value.query::<IMidiMapping>().ok()) else {
+            for parameter in &self.parameters {
+                parameter.store(UNMAPPED_PARAMETER, Ordering::Release);
+            }
+            return;
+        };
+        self.refresh_mapping(&mapping);
+    }
+
+    fn refresh_mapping(&self, mapping: &ComPtr<IMidiMapping>) {
+        let table = midi_mapping_table(mapping);
         for channel in 0..MIDI_MAPPING_CHANNELS {
             for controller in 0..MIDI_MAPPING_CONTROLLERS {
                 let mut parameter = UNMAPPED_PARAMETER;
@@ -86,12 +103,16 @@ impl MidiMappingTable {
                         std::ptr::addr_of_mut!(parameter),
                     )
                 };
-                if result == 0 {
-                    parameters[channel * MIDI_MAPPING_CONTROLLERS + controller] = parameter;
-                }
+                self.parameters[channel * MIDI_MAPPING_CONTROLLERS + controller].store(
+                    if result == 0 {
+                        parameter
+                    } else {
+                        UNMAPPED_PARAMETER
+                    },
+                    Ordering::Release,
+                );
             }
         }
-        Self { parameters }
     }
 
     fn parameter(&self, channel: u8, controller: usize) -> Option<u32> {
@@ -100,7 +121,7 @@ impl MidiMappingTable {
             .checked_add(controller)?;
         self.parameters
             .get(index)
-            .copied()
+            .map(|value| value.load(Ordering::Acquire))
             .filter(|value| *value != UNMAPPED_PARAMETER)
     }
 }
@@ -509,19 +530,21 @@ impl HostedPlugin {
         }
         let connections = if separate_controller {
             match (
-                processor.component().query::<IConnectionPoint>().ok(),
+                processor.component().query::<IConnectionPoint>(),
                 controller
                     .as_ref()
-                    .and_then(|value| value.query::<IConnectionPoint>().ok()),
+                    .ok_or(HostError::NullInterface("IEditController"))?
+                    .query::<IConnectionPoint>(),
             ) {
-                (Some(component), Some(controller)) => {
+                (Ok(component), Ok(controller)) => {
                     Some(ComponentConnections::connect(component, controller)?)
                 }
-                _ => None,
+                (Err(error), _) | (_, Err(error)) => return Err(error),
             }
         } else {
             None
         };
+        processor.activate()?;
         Ok((
             Self {
                 processor: ProcessorCell::new(processor),
@@ -585,8 +608,39 @@ impl HostedPlugin {
     }
 
     #[must_use]
-    pub fn take_latency_changed(&self) -> bool {
-        self.shared.take_latency_changed()
+    pub fn take_restart_requests(&self) -> crate::Vst3RestartRequest {
+        self.shared.take_restart_requests()
+    }
+
+    pub fn apply_restart_requests(&mut self, request: crate::Vst3RestartRequest) -> HostResult<()> {
+        if request.contains(crate::Vst3RestartRequest::RELOAD_COMPONENT) {
+            return Err(HostError::Operation {
+                operation: "restartComponent(kReloadComponent) requires instance reload",
+                result: -2147467259,
+            });
+        }
+        if request.contains(crate::Vst3RestartRequest::MIDI_CC_ASSIGNMENT_CHANGED) {
+            self.midi_mapping.refresh(self.controller.as_ref());
+        }
+        if request.contains(crate::Vst3RestartRequest::PARAM_ID_MAPPING_CHANGED) {
+            let parameter_ids = self
+                .controller
+                .as_ref()
+                .map(controller_parameter_ids)
+                .transpose()?
+                .unwrap_or_default();
+            let (writer, reader) = output_parameter_bridge(parameter_ids);
+            self.processor
+                .with_paused(|processor| processor.set_output_parameter_writer(writer));
+            self.output_parameter_reader = reader;
+        }
+        if request.contains(crate::Vst3RestartRequest::IO_CHANGED)
+            || request.contains(crate::Vst3RestartRequest::LATENCY_CHANGED)
+        {
+            self.processor
+                .with_paused(StereoProcessor::restart_processing)?;
+        }
+        Ok(())
     }
 
     pub fn flush_output_parameters(&mut self) -> HostResult<usize> {
@@ -637,6 +691,20 @@ impl HostedPlugin {
                 // SAFETY: controller is live and raw.id came from this controller.
                 ((*table).parameter_normalized)(controller.as_ptr(), raw.id)
             };
+            let mut text = [0_u16; 128];
+            let string_result = unsafe {
+                // SAFETY: controller is live, raw.id belongs to it, and text is writable String128 storage.
+                ((*table).parameter_string)(
+                    controller.as_ptr(),
+                    raw.id,
+                    normalized,
+                    text.as_mut_ptr(),
+                )
+            };
+            let flags = raw.flags as u32;
+            if flags & Vst::ParameterInfo_ParameterFlags_kIsHidden as u32 != 0 {
+                continue;
+            }
             parameters.push(HostedParameter {
                 id: raw.id,
                 title: utf16_string(&raw.title),
@@ -645,7 +713,12 @@ impl HostedPlugin {
                 step_count: raw.stepCount,
                 default_normalized: raw.defaultNormalizedValue,
                 normalized,
-                flags: raw.flags as u32,
+                formatted: if string_result == 0 {
+                    utf16_string(&text)
+                } else {
+                    String::new()
+                },
+                flags,
             });
         }
         Ok(parameters)
@@ -656,6 +729,18 @@ impl HostedPlugin {
             return Err(HostError::Operation {
                 operation: "parameter value outside 0...1",
                 result: -2147024809,
+            });
+        }
+        if let Some(controller) = &self.controller
+            && let Some(flags) = controller_parameter_flags(controller, id)?
+            && flags
+                & (Vst::ParameterInfo_ParameterFlags_kIsReadOnly as u32
+                    | Vst::ParameterInfo_ParameterFlags_kIsHidden as u32)
+                != 0
+        {
+            return Err(HostError::Operation {
+                operation: "parameter is read-only or hidden",
+                result: -2147024891,
             });
         }
         if !self.shared.enqueue_parameter(id, normalized) {
@@ -971,6 +1056,33 @@ fn controller_parameter_ids(controller: &ComPtr<IEditController>) -> HostResult<
         ids.push(raw.id);
     }
     Ok(ids)
+}
+
+fn controller_parameter_flags(
+    controller: &ComPtr<IEditController>,
+    id: u32,
+) -> HostResult<Option<u32>> {
+    let table = controller_table(controller);
+    let count = unsafe {
+        // SAFETY: controller is initialized and live on its owning UI thread.
+        ((*table).parameter_count)(controller.as_ptr())
+    }
+    .max(0);
+    for index in 0..count {
+        let mut raw = std::mem::MaybeUninit::<ParameterInfo>::zeroed();
+        check("IEditController::getParameterInfo(flags)", unsafe {
+            // SAFETY: index is below parameter_count and raw is writable SDK storage.
+            ((*table).parameter_info)(controller.as_ptr(), index, raw.as_mut_ptr())
+        })?;
+        let raw = unsafe {
+            // SAFETY: successful parameter_info initialized the POD.
+            raw.assume_init()
+        };
+        if raw.id == id {
+            return Ok(Some(raw.flags as u32));
+        }
+    }
+    Ok(None)
 }
 
 fn component_table(component: &ComPtr<IComponent>) -> *const ComponentVTable {

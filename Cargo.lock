@@ -159,6 +159,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "940b3a0ca603d1eade50a4846a2afffd5ef57a9feac2c0e2ec2e14f9ead76000"
 
 [[package]]
+name = "ara2-bridge-companion"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "521013bb178b09d0f8b55957cc72f4f546866238884446150c0758ce026c9bfc"
+dependencies = [
+ "ara2-bridge-core",
+ "ara2-bridge-sys",
+ "bitflags 2.13.1",
+ "cc",
+]
+
+[[package]]
 name = "ara2-bridge-core"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -179,6 +191,29 @@ version = "0.3.0"
 dependencies = [
  "ara2-bridge-core",
  "ara2-bridge-sys",
+ "ara2-bridge-testkit",
+ "bitflags 2.13.1",
+]
+
+[[package]]
+name = "ara2-bridge-host"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "736a86b4844d67ec9c10cd88a1b143ab8bdf3056ac9de775a72ec5e0557f3533"
+dependencies = [
+ "ara2-bridge-core",
+ "ara2-bridge-sys",
+ "bitflags 2.13.1",
+]
+
+[[package]]
+name = "ara2-bridge-plugin"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e26942bb040ab3ee138b6c7660849feb333fb29ba9a9400699d5d44d64b0befc"
+dependencies = [
+ "ara2-bridge-core",
+ "ara2-bridge-sys",
  "bitflags 2.13.1",
 ]
 
@@ -187,6 +222,23 @@ name = "ara2-bridge-sys"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6cf9d3c135a26222784f66636c6e6e21ae02ca16a482f5305e5e2719ded32f11"
+
+[[package]]
+name = "ara2-bridge-testkit"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "211a178428af5bb88881fcdea7ddc0399ee8589ab94114cbf873f089801b584f"
+dependencies = [
+ "ara2-bridge-companion",
+ "ara2-bridge-core",
+ "ara2-bridge-host 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ara2-bridge-plugin",
+ "ara2-bridge-sys",
+ "cc",
+ "libc",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "arrayref"
@@ -5899,7 +5951,7 @@ name = "yadaw-audio-host"
 version = "0.2.2"
 dependencies = [
  "ara2-bridge-core",
- "ara2-bridge-host",
+ "ara2-bridge-host 0.3.0",
  "ara2-bridge-sys",
  "bwavfile",
  "futures-util",
@@ -6051,6 +6103,7 @@ dependencies = [
 name = "yadaw-vst3-host"
 version = "0.2.2"
 dependencies = [
+ "bitflags 2.13.1",
  "cc",
  "libc",
  "libloading 0.8.9",

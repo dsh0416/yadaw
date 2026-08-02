@@ -55,4 +55,30 @@ describe("drainHostEvents", () => {
     )
     expect(closed).toEqual(["fx-1"])
   })
+
+  it("forwards valid typed ARA callback events", () => {
+    const callbacks: Array<{ instanceId: string; sequence: number; event: { kind: string } }> = []
+    drainHostEvents(
+      clientWithEvents([
+        {
+          type: "ara-callback",
+          instance_id: "ara-1",
+          sequence: 7,
+          event: { kind: "analysis-progress", progress: 0.5 }
+        },
+        { type: "ara-callback", instance_id: "ara-1", sequence: 0, event: { kind: "bad" } }
+      ]),
+      async () => {},
+      new Set(),
+      undefined,
+      (callback) => callbacks.push(callback)
+    )
+    expect(callbacks).toEqual([
+      {
+        instanceId: "ara-1",
+        sequence: 7,
+        event: { kind: "analysis-progress", progress: 0.5 }
+      }
+    ])
+  })
 })

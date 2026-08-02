@@ -10,7 +10,7 @@ use yadaw_dsp_runtime::{
 pub use yadaw_vst3_host::Vst3ProcessorHandle;
 use yadaw_vst3_host::{AudioLayout, ClassId, HostedPlugin, PlugView, PluginKind};
 
-use crate::ara::{AraDocument, AraFactoryHost};
+use crate::ara::{AraCallbackBatch, AraDocument, AraFactoryHost};
 
 pub struct Vst3Runtime {
     instances: HashMap<String, Instance>,
@@ -19,6 +19,7 @@ pub struct Vst3Runtime {
     benchmark_lifetime_guards: Vec<GuardedInstance>,
     ara_factories: HashMap<(String, String), Rc<AraFactoryHost>>,
     next_runtime_handle: u32,
+    restart_failures: Vec<(String, String)>,
 }
 
 struct GuardedInstance {
@@ -136,6 +137,7 @@ impl Vst3Runtime {
             benchmark_lifetime_guards: Vec::new(),
             ara_factories: HashMap::new(),
             next_runtime_handle: 1,
+            restart_failures: Vec::new(),
         }
     }
 
@@ -322,6 +324,7 @@ impl Vst3Runtime {
                         step_count: parameter.step_count,
                         default_normalized: parameter.default_normalized,
                         normalized: parameter.normalized,
+                        formatted: parameter.formatted,
                         flags: parameter.flags,
                     })
                     .collect()
@@ -358,24 +361,42 @@ impl Vst3Runtime {
         }
     }
 
-    pub fn take_timing_changes(&self) -> Vec<(String, u32, Option<u32>)> {
-        self.instances
-            .iter()
-            .filter(|(_, instance)| {
-                instance.plugin.take_latency_changed()
-                    || instance
-                        .secondary
-                        .as_ref()
-                        .is_some_and(HostedPlugin::take_latency_changed)
-            })
-            .map(|(id, instance)| {
-                (
+    pub fn take_timing_changes(&mut self) -> Vec<(String, u32, Option<u32>)> {
+        let mut timing = Vec::new();
+        for (id, instance) in &mut self.instances {
+            let primary = instance.plugin.take_restart_requests();
+            let secondary = instance
+                .secondary
+                .as_ref()
+                .map(HostedPlugin::take_restart_requests)
+                .unwrap_or_default();
+            let request = primary | secondary;
+            if request.is_empty() {
+                continue;
+            }
+            if let Err(error) = instance.plugin.apply_restart_requests(primary) {
+                self.restart_failures.push((id.clone(), error.to_string()));
+            }
+            if let Some(secondary_plugin) = &mut instance.secondary
+                && let Err(error) = secondary_plugin.apply_restart_requests(secondary)
+            {
+                self.restart_failures.push((id.clone(), error.to_string()));
+            }
+            if request.contains(yadaw_vst3_host::Vst3RestartRequest::LATENCY_CHANGED)
+                || request.contains(yadaw_vst3_host::Vst3RestartRequest::IO_CHANGED)
+            {
+                timing.push((
                     id.clone(),
                     instance.latency_samples(),
                     instance.tail_samples(),
-                )
-            })
-            .collect()
+                ));
+            }
+        }
+        timing
+    }
+
+    pub fn take_restart_failures(&mut self) -> Vec<(String, String)> {
+        std::mem::take(&mut self.restart_failures)
     }
 
     pub fn flush_output_parameters(&mut self) -> Result<usize, String> {
@@ -402,6 +423,20 @@ impl Vst3Runtime {
             }
         }
         Ok(())
+    }
+
+    #[must_use]
+    pub fn has_ara_documents(&self) -> bool {
+        self.instances
+            .values()
+            .any(|instance| instance.ara.is_some())
+    }
+
+    pub(crate) fn poll_ara_callbacks(&mut self) -> Vec<AraCallbackBatch> {
+        self.instances
+            .values_mut()
+            .filter_map(|instance| instance.ara.as_mut().map(AraDocument::poll_host_callbacks))
+            .collect()
     }
 
     fn load_plugin(&mut self, request: LoadPluginRequest) -> ControlResult {

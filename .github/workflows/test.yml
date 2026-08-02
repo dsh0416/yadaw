@@ -74,6 +74,44 @@ jobs:
       - name: Run repository checks
         run: pnpm ${{ matrix.check-script }}
 
+      - name: Build real VST3 controller fixtures
+        if: runner.os == 'Linux'
+        run: |
+          cmake -S . -B target/vst3-fixtures \
+            -DYADAW_BUILD_VST3_FIXTURES=ON \
+            -DCMAKE_BUILD_TYPE=Debug
+          cmake --build \
+            target/vst3-fixtures/third_party/vst3sdk/public.sdk/samples/vst/again \
+            --config Debug \
+            --target again \
+            --parallel
+          cmake --build \
+            target/vst3-fixtures/third_party/vst3sdk/public.sdk/samples/vst/note_expression_synth \
+            --config Debug \
+            --target note-expression-synth \
+            --parallel
+          node scripts/native-build.ts debug binaries
+          pnpm --filter @yadaw/desktop test:vst3-helper
+
+      - name: Build and test the official ARA VST3 fixture
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          cmake \
+            -S third_party/ARA_SDK/ARA_Examples \
+            -B target/ara-fixture \
+            -DARA_VST3_SDK_DIR="$PWD/third_party/vst3sdk" \
+            -DARA_SETUP_DEBUGGING=OFF \
+            -DCMAKE_BUILD_TYPE=Debug
+          cmake --build target/ara-fixture \
+            --config Debug \
+            --target ARATestPlugInVST3 \
+            --parallel
+          YADAW_ARA_TEST_PLUGIN="$PWD/target/ara-fixture/bin/Debug/ARATestPlugIn.vst3" \
+            cargo test --locked -p yadaw-audio-host \
+              official_vst3_fixture_binds_and_archives_an_ara_document \
+              -- --ignored --nocapture
+
       # On Linux the checks above already produced both coverage reports:
       # Vitest wrote lcov during the test pass and the combined coverage
       # orchestrator merged Rust profiles from Cargo tests and instrumented

@@ -9,7 +9,7 @@ use yadaw_vst3_host_sys::{
         Vst::{
             IAttributeList, IAudioProcessor, IComponent, IComponentHandler, IConnectionPoint,
             IEditController, IEventList, IHostApplication, IMessage, IMidiMapping,
-            IParamValueQueue, IParameterChanges,
+            IParamValueQueue, IParameterChanges, IProcessContextRequirements,
         },
     },
     abi::FUnknownVTable,
@@ -51,6 +51,10 @@ interface!(IMessage, iid::IMESSAGE);
 interface!(IAttributeList, iid::IATTRIBUTE_LIST);
 interface!(IComponent, iid::ICOMPONENT);
 interface!(IAudioProcessor, iid::IAUDIO_PROCESSOR);
+interface!(
+    IProcessContextRequirements,
+    iid::IPROCESS_CONTEXT_REQUIREMENTS
+);
 interface!(IEditController, iid::IEDIT_CONTROLLER);
 interface!(IMidiMapping, iid::IMIDI_MAPPING);
 interface!(IComponentHandler, iid::ICOMPONENT_HANDLER);

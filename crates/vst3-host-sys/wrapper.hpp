@@ -12,6 +12,7 @@
 #include "pluginterfaces/vst/ivsthostapplication.h"
 #include "pluginterfaces/vst/ivstmessage.h"
 #include "pluginterfaces/vst/ivstparameterchanges.h"
+#include "pluginterfaces/vst/ivstpluginterfacesupport.h"
 
 #include "ARAInterface.h"
 #include "ARAVST3.h"

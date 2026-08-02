@@ -3,7 +3,6 @@ name = "ara2-bridge-host"
 version = "0.3.0"
 edition = "2021"
 rust-version = "1.82"
-autotests = false
 description = "Safe ARA host authoring runtime"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/entrepeneur4lyf/ara2-bridge"
@@ -12,3 +11,6 @@ repository = "https://github.com/entrepeneur4lyf/ara2-bridge"
 ara2-bridge-core = "=0.3.0"
 ara2-bridge-sys = "=0.3.0"
 bitflags = "2"
+
+[dev-dependencies]
+ara2-bridge-testkit = "=0.3.0"

@@ -62,6 +62,11 @@ pub enum HostEvent {
         kind: String,
         value: String,
     },
+    AraCallback {
+        instance_id: String,
+        sequence: u64,
+        event: AraCallbackEvent,
+    },
     PluginEditorPreferenceChanged {
         class_id: String,
         preference: PluginEditorPreference,

@@ -120,7 +120,7 @@ fn latest_build_generation(&self) -> u64 {
         .saturating_sub(1)
 }
 
-#[cfg(any(test, feature = "bench-internals"))]
+#[cfg(any(test, feature = "bench-internals", feature = "test-support"))]
 pub fn latest_build_generation_for_test(&self) -> u64 {
     self.latest_build_generation()
 }
@@ -425,14 +425,14 @@ pub fn reclaim_retired_graphs(&self) -> Result<usize> {
         .map_or(0, RunningAudioEngine::reclaim_retired_mixers))
 }
 
-#[cfg(any(test, feature = "bench-internals"))]
+#[cfg(any(test, feature = "bench-internals", feature = "test-support"))]
 pub fn set_last_native_graph_for_test(&self, graph: Option<NativeMixerGraph>) {
     *self.last_native_graph
         .lock()
         .expect("last mixer graph lock") = graph;
 }
 
-#[cfg(any(test, feature = "bench-internals"))]
+#[cfg(any(test, feature = "bench-internals", feature = "test-support"))]
 pub fn last_native_graph_generation_for_test(&self) -> Option<u64> {
     self.last_native_graph
         .lock()

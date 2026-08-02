@@ -50,7 +50,7 @@ use yadaw_vst3_host::{HostProcessContext as ProcessContext, Vst3ProcessorHandle}
 const UNKNOWN_LATENCY_US: u64 = u64::MAX;
 const RING_BUFFER_BLOCKS: usize = 8;
 static STREAM_WORKERS: OnceLock<StreamWorkerPool> = OnceLock::new();
-#[cfg(any(test, feature = "bench-internals"))]
+#[cfg(any(test, feature = "bench-internals", feature = "test-support"))]
 pub static GRAPH_TEST_LOCK: Mutex<()> = Mutex::new(());
 
 const ENGINE_COMMAND_CAPACITY: usize = 256;

@@ -2,11 +2,21 @@ import { decode } from "@msgpack/msgpack"
 import type { AudioHostIpcClient } from "@yadaw/audio-host-client"
 import type { PluginEditorPreference } from "@yadaw/contracts"
 
+export interface AraHostCallback {
+  instanceId: string
+  sequence: number
+  event: {
+    kind: string
+    [key: string]: unknown
+  }
+}
+
 export function drainHostEvents(
   client: AudioHostIpcClient,
   onEditorPreferenceChanged: (classId: string, preference: PluginEditorPreference) => Promise<void>,
   pendingWrites: Set<Promise<void>>,
-  onEditorClosed?: (instanceId: string) => void
+  onEditorClosed?: (instanceId: string) => void,
+  onAraCallback?: (callback: AraHostCallback) => void
 ): void {
   const latestPreferences = new Map<string, PluginEditorPreference>()
   const closedEditors = new Set<string>()
@@ -20,6 +30,8 @@ export function drainHostEvents(
         mode?: string
         zoom_percent?: number
       }
+      sequence?: number
+      event?: unknown
     }
     if (decoded.type === "graph-published" && decoded.revision !== undefined) {
       // Telemetry carries the same revision; draining avoids idle event buildup.
@@ -41,6 +53,21 @@ export function drainHostEvents(
       decoded.instance_id.length > 0
     ) {
       closedEditors.add(decoded.instance_id)
+    } else if (
+      decoded.type === "ara-callback" &&
+      typeof decoded.instance_id === "string" &&
+      decoded.instance_id.length > 0 &&
+      Number.isSafeInteger(decoded.sequence) &&
+      (decoded.sequence as number) > 0 &&
+      typeof decoded.event === "object" &&
+      decoded.event !== null &&
+      typeof (decoded.event as { kind?: unknown }).kind === "string"
+    ) {
+      onAraCallback?.({
+        instanceId: decoded.instance_id,
+        sequence: decoded.sequence as number,
+        event: decoded.event as AraHostCallback["event"]
+      })
     }
   }
   for (const [classId, preference] of latestPreferences) {

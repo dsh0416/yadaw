@@ -220,6 +220,36 @@ export function startApplication(
         applicationSettings.shortcuts
       )
       const projectService = new ProjectService(app.getPath("userData"), settings)
+      let araUiSequence = 0
+      audioHostService.setAraCallbackHandler(async (callback) => {
+        if (
+          callback.event.kind === "content-changed" ||
+          callback.event.kind === "document-data-changed"
+        ) {
+          await projectService.markExternalStateDirty()
+        }
+        if (
+          callback.event.kind === "analysis-progress" ||
+          callback.event.kind === "archive-progress" ||
+          callback.event.kind === "quarantined"
+        ) {
+          const epoch = audioHostService.helperEpoch() ?? "0"
+          araUiSequence += 1
+          for (const candidate of BrowserWindow.getAllWindows()) {
+            candidate.webContents.send(IPC_CHANNELS.araCallbackEvent, {
+              protocolVersion: IPC_PROTOCOL_VERSION,
+              sourceEpoch: epoch,
+              sequence: araUiSequence,
+              resourceRevision: araUiSequence,
+              payload: {
+                instanceId: callback.instanceId,
+                callbackSequence: callback.sequence,
+                event: callback.event
+              }
+            })
+          }
+        }
+      })
       setWindowProjectService(projectService)
       onServices({ audioHostService, projectService })
       const graphPublisher = new AudioGraphPublisher(

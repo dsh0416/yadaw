@@ -178,6 +178,7 @@ export interface PluginParameterInfo {
   stepCount: number
   defaultNormalized: number
   normalized: number
+  formatted?: string
   flags: number
 }
 
@@ -217,4 +218,32 @@ export interface PluginParameterEnqueueResult {
   helperEpoch: string
   sequence: string
   outcome: PluginParameterEnqueueOutcome
+}
+export type AraCallbackEvent =
+  | {
+      kind: "analysis-progress"
+      object_id: string
+      state: "started" | "updated" | "completed"
+      progress: number
+    }
+  | {
+      kind: "content-changed"
+      object_kind: "audio-source" | "audio-modification" | "playback-region" | "document"
+      object_id: string
+      start_seconds?: number
+      duration_seconds?: number
+      scopes: number
+    }
+  | { kind: "document-data-changed" }
+  | { kind: "archive-progress"; direction: "store" | "restore"; progress: number }
+  | {
+      kind: "quarantined"
+      category: "invalid-reference" | "queue-overflow" | "provider-panic" | "host-state"
+      recoverable: boolean
+    }
+
+export interface AraCallbackNotification {
+  instanceId: string
+  callbackSequence: number
+  event: AraCallbackEvent
 }
