@@ -1,7 +1,9 @@
-import { DOMWrapper, mount } from "@vue/test-utils"
+import { DOMWrapper, enableAutoUnmount, mount } from "@vue/test-utils"
 import { createPinia } from "pinia"
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it } from "vitest"
 import StudioTopbar from "./StudioTopbar.vue"
+
+enableAutoUnmount(afterEach)
 
 const tempoMap = {
   ticksPerQuarter: 960 as const,
@@ -249,6 +251,7 @@ describe("StudioTopbar", () => {
 
     await wrapper.get('button[aria-label^="Meter 3/4"]').trigger("dblclick")
     const input = wrapper.get('input[aria-label="Edit current meter"]')
+    expect(input.attributes("inputmode")).toBeUndefined()
     await input.setValue("7/8")
     await input.trigger("keydown", { key: "Enter" })
 

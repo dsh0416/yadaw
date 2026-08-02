@@ -1,9 +1,37 @@
 import { createPinia, setActivePinia } from "pinia"
+import { nextTick } from "vue"
 import { beforeEach, describe, expect, it } from "vitest"
 import { useArrangementViewStore } from "./arrangementView"
 
+const storedValues = new Map<string, string>()
+const storage: Storage = {
+  get length() {
+    return storedValues.size
+  },
+  clear() {
+    storedValues.clear()
+  },
+  getItem(key) {
+    return storedValues.get(key) ?? null
+  },
+  key(index) {
+    return [...storedValues.keys()][index] ?? null
+  },
+  removeItem(key) {
+    storedValues.delete(key)
+  },
+  setItem(key, value) {
+    storedValues.set(key, value)
+  }
+}
+
 describe("arrangement view store", () => {
-  beforeEach(() => setActivePinia(createPinia()))
+  beforeEach(() => {
+    Object.defineProperty(globalThis, "localStorage", { configurable: true, value: storage })
+    Object.defineProperty(window, "localStorage", { configurable: true, value: storage })
+    storage.clear()
+    setActivePinia(createPinia())
+  })
 
   it("keeps time, track, and amplitude zoom independent and resettable", () => {
     const store = useArrangementViewStore()
@@ -99,5 +127,17 @@ describe("arrangement view store", () => {
     store.toggleGlobalTracks()
     store.reset()
     expect(store.globalTracksExpanded).toBe(true)
+  })
+
+  it("persists global track visibility", async () => {
+    const store = useArrangementViewStore()
+
+    store.setGlobalTracksExpanded(false)
+    await nextTick()
+
+    expect(localStorage.getItem("yadaw.arrangement.global-tracks-expanded.v1")).toBe("false")
+
+    setActivePinia(createPinia())
+    expect(useArrangementViewStore().globalTracksExpanded).toBe(false)
   })
 })

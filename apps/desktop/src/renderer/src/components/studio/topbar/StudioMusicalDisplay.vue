@@ -155,7 +155,6 @@ function commitMeterEdit(): void {
         v-model="meterDraft"
         class="meter-input"
         :aria-label="t('studio.musical.editMeterAria')"
-        inputmode="numeric"
         @blur="commitMeterEdit"
         @keydown.enter.prevent="commitMeterEdit"
         @keydown.escape.prevent="cancelMeterEdit"

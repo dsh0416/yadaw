@@ -1,3 +1,4 @@
+import { useStorage } from "@vueuse/core"
 import { acceptHMRUpdate, defineStore } from "pinia"
 import { shallowRef } from "vue"
 
@@ -12,7 +13,7 @@ export const useArrangementViewStore = defineStore("arrangement-view", () => {
   const trackHeight = shallowRef(104)
   const trackScales = shallowRef<Record<string, number>>({})
   const amplitudeScale = shallowRef(1)
-  const globalTracksExpanded = shallowRef(true)
+  const globalTracksExpanded = useStorage("yadaw.arrangement.global-tracks-expanded.v1", true)
 
   function setTimeZoom(value: number): void {
     pixelsPerQuarter.value = clamp(value, 12.5, 800)
