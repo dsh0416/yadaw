@@ -32,7 +32,7 @@ use yadaw_dsp_runtime::protocol::{
     MAX_MESSAGE_BYTES, MidiEventBatch, MidiNoteBatch, ParameterCommand, ParameterGesture,
     ParameterTargetKind, SharedBlobRef,
 };
-pub use yadaw_shared_memory::{SharedMemory, SharedMemoryDescriptor};
+pub use yadaw_shared_memory::{SharedMemory, SharedMemoryDescriptor, SharedMemoryError};
 use zerocopy::{
     FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned,
     byteorder::little_endian::{U16, U32, U64},
