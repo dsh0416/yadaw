@@ -67,9 +67,37 @@ project Tempo Track or replace it with the imported tempo map.
 
 ## Global lanes
 
-The Tempo, Meter, and Key lanes describe the musical timeline. Expand a lane to
-inspect its events. Tempo and meter affect musical positioning and MIDI import;
-project key editing is still under development.
+The Tempo, Meter, and Key lanes describe the musical timeline. Use the
+**Global Tracks** control to show or hide all three lanes. Tempo and meter affect
+musical positioning and MIDI import; project key editing is still under
+development.
+
+### Supported meter denominators
+
+YADAW currently accepts meter numerators from 1 through 32 and the denominators
+1, 2, 4, 8, 16, and 32. The same choices appear in Project Settings, the top-bar
+musical display, and the Meter global lane. A missing value such as 11 is a
+current limitation, not an input or project error.
+
+The project timeline uses 960 pulses per quarter note (PPQ), so a whole note is
+3840 ticks. Every supported denominator divides that duration into exact integer
+tick positions. A meter such as 7/11 would instead make one notated beat
+3840 / 11 ticks. That is not an integer, and allowing different parts of the
+application to round these fractional positions separately could make bar
+lines, snapping, count-in, the metronome, and plug-in timing disagree or drift
+over time. YADAW rejects such a denominator rather than silently approximating
+it.
+
+Standard MIDI Files have a separate compatibility limit: their Time Signature
+event stores the denominator as a power of two, so a signature such as 7/11
+cannot be represented losslessly in a `.mid` file regardless of its PPQ value.
+
+If you need to sketch music based on an unsupported denominator, turn piano-roll
+snap **Off** and place notes manually. The project must still use a supported
+displayed meter, and its bar grid, metronome accents, and count-in will follow
+that displayed meter. Supporting these meters correctly requires a shared
+rational-meter grid; that can be added without changing the project's 960 PPQ
+timebase, but is not implemented today.
 
 ## Undo and redo
 

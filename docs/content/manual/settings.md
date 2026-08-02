@@ -83,5 +83,10 @@ Open **File → Project Settings** to edit settings stored with the project,
 including the project name, session sample rate, musical meter, and waveform
 display mode.
 
+The meter denominator selector intentionally offers 1, 2, 4, 8, 16, and 32.
+Other denominators are not currently supported; see **Supported meter
+denominators** in [Tracks and clips](tracks-and-clips.md) for the timing and MIDI
+compatibility details.
+
 Changing session sample rate changes the project clock. YADAW converts audio at
 the device boundary when the hardware runs at a different rate.
