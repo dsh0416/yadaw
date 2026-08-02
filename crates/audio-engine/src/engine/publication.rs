@@ -132,8 +132,15 @@ pub fn publish_mixer_runtime(&self, built: CompiledGraphBuild) -> Result<Publish
     if build_generation != self.latest_build_generation() {
         return Ok(PublishOutcome::Superseded);
     }
-    let source_graph = built.source_graph;
-    let snapshot = built.snapshot;
+    let CompiledGraphBuild {
+        mut runtime,
+        snapshot,
+        mut source_graph,
+    } = built;
+    let _transition = self
+        .runtime_transition
+        .lock()
+        .map_err(|_| audio_error("audio runtime transition lock", "poisoned"))?;
     let mut last_graph = self.last_native_graph
         .lock()
         .map_err(|_| audio_error("last mixer graph lock", "poisoned"))?;
@@ -143,18 +150,39 @@ pub fn publish_mixer_runtime(&self, built: CompiledGraphBuild) -> Result<Publish
     if build_generation != self.latest_build_generation() {
         return Ok(PublishOutcome::Superseded);
     }
+    if let Some(current_graph) = last_graph.as_ref() {
+        if source_graph.generation < current_graph.generation {
+            return Ok(PublishOutcome::Superseded);
+        }
+        // Dynamic latency rebuilds retain the project generation. Preserve any
+        // newer realtime bypass preview that arrived while such a build was in
+        // flight, so publication cannot resurrect the stale enabled state.
+        if source_graph.generation == current_graph.generation {
+            for plugin in &mut source_graph.plugins {
+                let Some(current_plugin) = current_graph
+                    .plugins
+                    .iter()
+                    .find(|candidate| candidate.instance_id == plugin.instance_id)
+                else {
+                    continue;
+                };
+                plugin.enabled = current_plugin.enabled;
+                runtime.set_plugin_enabled(&plugin.instance_id, plugin.enabled);
+            }
+        }
+    }
     if let Some(engine) = guard.as_mut() {
-        Self::validate_session_sample_rate(engine.metrics.sample_rate, built.runtime.sample_rate)?;
+        Self::validate_session_sample_rate(engine.metrics.sample_rate, runtime.sample_rate)?;
         engine.reclaim_retired_mixers();
-        engine.meter_bank = Arc::clone(&built.runtime.meter_bank);
+        engine.meter_bank = Arc::clone(&runtime.meter_bank);
         engine
             .commands
-            .try_push(EngineCommand::LoadMixer(built.runtime))
+            .try_push(EngineCommand::LoadMixer(runtime))
             .map_err(|_| audio_error("mixer control queue", "full"))?;
     } else {
         *self.pending_mixer
             .lock()
-            .map_err(|_| audio_error("pending mixer lock", "poisoned"))? = Some(built.runtime);
+            .map_err(|_| audio_error("pending mixer lock", "poisoned"))? = Some(runtime);
     }
     *last_graph = Some(source_graph);
     if let Ok(mut snapshots) = self.compiled_graph_snapshots.lock()
@@ -223,18 +251,44 @@ pub fn update_plugin_timing(
 }
 
 pub fn preview_mixer_parameter(&self, preview: NativeMixerParameterPreview) -> Result<()> {
-    let mut guard = self.running
+    let plugin_enabled = (preview.target == "plugin" && preview.parameter == "enabled")
+        .then_some(preview.value >= 0.5);
+    let command = RealtimeParameterCommand::from_preview(preview)?;
+    let _transition = self
+        .runtime_transition
+        .lock()
+        .map_err(|_| audio_error("audio runtime transition lock", "poisoned"))?;
+    let mut last_graph = self
+        .last_native_graph
+        .lock()
+        .map_err(|_| audio_error("last mixer graph lock", "poisoned"))?;
+    let mut guard = self
+        .running
         .lock()
         .map_err(|_| audio_error("audio engine lock", "poisoned"))?;
-    let Some(engine) = guard.as_mut() else {
-        return Ok(());
-    };
-    engine
-        .commands
-        .try_push(EngineCommand::Preview(
-            RealtimeParameterCommand::from_preview(preview)?,
-        ))
-        .map_err(|_| audio_error("mixer control queue", "full"))
+    if let Some(engine) = guard.as_mut() {
+        engine
+            .commands
+            .try_push(EngineCommand::Preview(command))
+            .map_err(|_| audio_error("mixer control queue", "full"))?;
+    } else if let Some(runtime) = self
+        .pending_mixer
+        .lock()
+        .map_err(|_| audio_error("pending mixer lock", "poisoned"))?
+        .as_mut()
+    {
+        runtime.handle_command(EngineCommand::Preview(command));
+    }
+    if let Some(enabled) = plugin_enabled
+        && let Some(graph) = last_graph.as_mut()
+        && let Some(plugin) = graph
+            .plugins
+            .iter_mut()
+            .find(|plugin| plugin.instance_id == command.id())
+    {
+        plugin.enabled = enabled;
+    }
+    Ok(())
 }
 
 pub fn mixer_snapshot(&self) -> Result<NativeMixerSnapshot> {

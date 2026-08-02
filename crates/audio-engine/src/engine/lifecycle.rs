@@ -41,6 +41,12 @@ pub fn start_audio_engine(
         requested_buffer_size: config.buffer_size,
         requested_session_sample_rate: config.session_sample_rate,
     };
+    // Keep pending -> starting -> running ownership transfer atomic to control
+    // commands. Otherwise a preview can observe neither runtime and be lost.
+    let _transition = self
+        .runtime_transition
+        .lock()
+        .map_err(|_| audio_error("audio runtime transition lock", "poisoned"))?;
 
     {
         let guard = self.running
@@ -238,6 +244,10 @@ pub fn start_audio_engine(
 }
 
 pub fn stop_audio_engine(&self) -> Result<NativeAudioRuntimeSnapshot> {
+    let _transition = self
+        .runtime_transition
+        .lock()
+        .map_err(|_| audio_error("audio runtime transition lock", "poisoned"))?;
     *self.running
         .lock()
         .map_err(|_| audio_error("audio engine lock", "poisoned"))? = None;

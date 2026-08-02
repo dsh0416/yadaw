@@ -222,6 +222,13 @@ export class AudioHostTransportClient {
   }
 
   async previewMixerParameter(preview: MixerParameterPreview): Promise<void> {
+    if (preview.target === "plugin") {
+      await this.request({
+        type: "preview-mixer-parameter",
+        preview
+      })
+      return
+    }
     const client = this.getClient()
     if (!client) throw new Error("audio host is not running")
     const targetKind = preview.target === "channel" ? "mixer-channel" : "mixer-send"

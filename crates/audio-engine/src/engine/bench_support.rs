@@ -296,6 +296,7 @@ pub mod bench_support {
 
     fn missing_effect(audio_mode: PluginAudioMode) -> LivePlugin {
         LivePlugin {
+            instance_id: "missing-effect".to_owned(),
             processor: None,
             audio_mode,
             enabled: false,

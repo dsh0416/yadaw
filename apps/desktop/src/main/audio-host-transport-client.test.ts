@@ -18,6 +18,25 @@ function createClient(request: (command: Record<string, unknown>) => Promise<Con
 }
 
 describe("AudioHostTransportClient negotiated shared-page fallback", () => {
+  it("sends plug-in bypass previews over the control path", async () => {
+    const request = vi.fn(
+      async () => ({ request_id: 1, result: { type: "accepted" } }) satisfies ControlResponse
+    )
+    const { client } = createClient(request)
+
+    await client.previewMixerParameter({
+      target: "plugin",
+      id: "effect",
+      parameter: "enabled",
+      value: 0
+    })
+
+    expect(request).toHaveBeenCalledWith({
+      type: "preview-mixer-parameter",
+      preview: { target: "plugin", id: "effect", parameter: "enabled", value: 0 }
+    })
+  })
+
   it("reads the authoritative transport snapshot over the control channel", async () => {
     const request = vi.fn(
       async () =>

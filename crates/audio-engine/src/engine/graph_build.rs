@@ -263,6 +263,7 @@ fn build_mixer_runtime(
             None => has_infinite_tail = true,
         }
         plugins_by_channel[channel_index].push(LivePlugin {
+            instance_id: plugin.instance_id,
             processor: plugin.processor,
             audio_mode: plugin.audio_mode,
             enabled: plugin.enabled,

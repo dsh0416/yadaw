@@ -145,6 +145,34 @@ export const useMixerStore = defineStore("mixer", () => {
     return execute({ type: "update-send", sendId, patch })
   }
 
+  async function setPluginEnabled(instanceId: string, enabled: boolean): Promise<boolean> {
+    const plugin = graph.value.plugins.find((candidate) => candidate.id === instanceId)
+    if (!plugin) return false
+    if (plugin.enabled === enabled) return true
+    const previous = plugin.enabled
+    preview({
+      target: "plugin",
+      id: instanceId,
+      parameter: "enabled",
+      value: enabled ? 1 : 0
+    })
+    const committed = await execute({
+      type: "update-plugin",
+      pluginId: instanceId,
+      patch: { enabled }
+    })
+    if (!committed) {
+      preview({
+        target: "plugin",
+        id: instanceId,
+        parameter: "enabled",
+        value: previous ? 1 : 0
+      })
+      await graphStore.flushPreviews()
+    }
+    return committed
+  }
+
   function createAudioTrack(inputFormat: "mono" | "stereo" = "stereo"): Promise<boolean> {
     const index = audioTracks.value.length
     const defaultOutput = outputs.value[0]
@@ -369,6 +397,7 @@ export const useMixerStore = defineStore("mixer", () => {
     updateChannel,
     toggleMetronome,
     updateSend,
+    setPluginEnabled,
     createAudioTrack,
     createInstrumentTrack,
     createAux,

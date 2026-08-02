@@ -148,10 +148,38 @@ function graph(overrides: Partial<ProjectGraphSnapshot> = {}): ProjectGraphSnaps
 }
 
 describe("patchMixerGraph", () => {
-  it("patches matching channels and sends without mutating the original", () => {
+  it("patches matching channels, sends, and plugins without mutating the original", () => {
     const before = graph()
+    before.plugins.push({
+      id: "effect",
+      channelId: "audio",
+      role: "insert",
+      slotOrder: 0,
+      classId: "effect-class",
+      descriptor: {
+        source: { kind: "external" },
+        classId: "effect-class",
+        modulePath: "effect.vst3",
+        name: "Effect",
+        vendor: "YADAW",
+        version: "1.0",
+        categories: ["Fx"],
+        kind: "effect",
+        architecture: "x86_64",
+        buses: [],
+        supportedAudioModes: ["stereo"],
+        hasEditor: true,
+        compatibility: "compatible",
+        compatibilityReason: null
+      },
+      audioMode: "stereo",
+      enabled: true,
+      componentState: new Uint8Array(),
+      controllerState: new Uint8Array()
+    })
     const patchedChannel = patchMixerGraph(before, "channel", "audio", { gainDb: -6, pan: 0.5 })
     const patchedSend = patchMixerGraph(before, "send", "audio-to-output", { levelDb: -6 })
+    const patchedPlugin = patchMixerGraph(before, "plugin", "effect", { enabled: false })
 
     expect(before.channels.find((candidate) => candidate.id === "audio")?.gainDb).toBe(0)
     expect(patchedChannel.channels.find((candidate) => candidate.id === "audio")).toMatchObject({
@@ -161,6 +189,8 @@ describe("patchMixerGraph", () => {
     expect(patchedSend.sends.find((candidate) => candidate.id === "audio-to-output")?.levelDb).toBe(
       -6
     )
+    expect(before.plugins[0]?.enabled).toBe(true)
+    expect(patchedPlugin.plugins[0]?.enabled).toBe(false)
   })
 
   it("leaves the graph unchanged when the id is missing", () => {

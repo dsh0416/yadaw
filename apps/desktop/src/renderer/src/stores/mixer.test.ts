@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from "pinia"
 import type {
   ProjectGraphSnapshot,
   ProjectCommand,
+  PluginInstanceState,
   ProjectSession,
   ProjectWorkspaceSnapshot,
   RpcResult
@@ -203,6 +204,36 @@ function success<T>(value: T, resourceRevision = 1): RpcResult<T> {
   }
 }
 
+function effectPlugin(): PluginInstanceState {
+  return {
+    id: "effect",
+    channelId: "audio",
+    role: "insert",
+    slotOrder: 0,
+    classId: "effect-class",
+    descriptor: {
+      source: { kind: "external" },
+      classId: "effect-class",
+      modulePath: "effect.vst3",
+      name: "Effect",
+      vendor: "YADAW",
+      version: "1.0",
+      categories: ["Fx"],
+      kind: "effect",
+      architecture: "x86_64",
+      buses: [],
+      supportedAudioModes: ["stereo"],
+      hasEditor: true,
+      compatibility: "compatible",
+      compatibilityReason: null
+    },
+    audioMode: "stereo",
+    enabled: true,
+    componentState: new Uint8Array(),
+    controllerState: new Uint8Array()
+  }
+}
+
 describe("mixer store", () => {
   beforeEach(() => {
     setActivePinia(createPinia())
@@ -229,6 +260,70 @@ describe("mixer store", () => {
       },
       revision: 0
     })
+  })
+
+  it("previews plug-in bypass immediately before committing the project command", async () => {
+    const initial = graph()
+    initial.plugins.push(effectPlugin())
+    const changed = applyToGraph(initial, {
+      type: "update-plugin",
+      pluginId: "effect",
+      patch: { enabled: false }
+    })
+    window.yadaw.previewMixerParameter = vi.fn(async () => success(undefined))
+    window.yadaw.executeProjectCommand = vi.fn(async () =>
+      success(
+        {
+          graph: changed,
+          inverse: {
+            type: "update-plugin" as const,
+            pluginId: "effect",
+            patch: { enabled: true }
+          }
+        },
+        2
+      )
+    )
+    const mixer = useMixerStore()
+    mixer.hydrate(initial)
+
+    const committed = mixer.setPluginEnabled("effect", false)
+
+    expect(mixer.graph.plugins[0]?.enabled).toBe(false)
+    await expect(committed).resolves.toBe(true)
+    expect(window.yadaw.previewMixerParameter).toHaveBeenCalledWith(expect.any(Object), {
+      target: "plugin",
+      id: "effect",
+      parameter: "enabled",
+      value: 0
+    })
+    expect(window.yadaw.executeProjectCommand).toHaveBeenCalledWith(expect.any(Object), {
+      type: "update-plugin",
+      pluginId: "effect",
+      patch: { enabled: false }
+    })
+  })
+
+  it("rolls back the live bypass preview when persistence fails", async () => {
+    const initial = graph()
+    initial.plugins.push(effectPlugin())
+    window.yadaw.previewMixerParameter = vi.fn(async () => success(undefined))
+    window.yadaw.executeProjectCommand = vi.fn(async () => {
+      throw new Error("database unavailable")
+    })
+    window.yadaw.loadProjectGraph = vi.fn(async () => success(initial, 1))
+    const mixer = useMixerStore()
+    mixer.hydrate(initial)
+
+    await expect(mixer.setPluginEnabled("effect", false)).resolves.toBe(false)
+
+    expect(mixer.graph.plugins[0]?.enabled).toBe(true)
+    expect(
+      vi.mocked(window.yadaw.previewMixerParameter).mock.calls.map(([, value]) => value)
+    ).toEqual([
+      { target: "plugin", id: "effect", parameter: "enabled", value: 0 },
+      { target: "plugin", id: "effect", parameter: "enabled", value: 1 }
+    ])
   })
 
   it("records one history entry and applies the inverse on undo", async () => {
