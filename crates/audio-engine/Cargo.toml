@@ -25,6 +25,7 @@ cpal = { workspace = true, features = ["custom"] }
 [features]
 default = []
 bench-internals = []
+test-support = []
 
 [lints]
 workspace = true

@@ -14,9 +14,9 @@ use crate::Steinberg::{
     Vst::{
         AudioBusBuffers, BusDirection, BusInfo, CtrlNumber, Event, IAttributeList, IAudioProcessor,
         IComponent, IComponentHandler, IConnectionPoint, IEditController, IEventList,
-        IHostApplication, IMessage, IMidiMapping, IParamValueQueue, IParameterChanges, IoMode,
-        MediaType, ParamID, ParamValue, ParameterInfo, ProcessData, ProcessSetup, RoutingInfo,
-        SpeakerArrangement,
+        IHostApplication, IMessage, IMidiMapping, IParamValueQueue, IParameterChanges,
+        IPlugInterfaceSupport, IProcessContextRequirements, IoMode, MediaType, ParamID, ParamValue,
+        ParameterInfo, ProcessData, ProcessSetup, RoutingInfo, SpeakerArrangement,
     },
     int16, int32, int64, tresult, uint32,
 };
@@ -175,6 +175,13 @@ pub struct AudioProcessorVTable {
 }
 
 #[repr(C)]
+pub struct ProcessContextRequirementsVTable {
+    pub base: FUnknownVTable,
+    pub get_process_context_requirements:
+        unsafe extern "system" fn(this: *mut IProcessContextRequirements) -> uint32,
+}
+
+#[repr(C)]
 pub struct EditControllerVTable {
     pub base: PluginBaseVTable,
     pub set_component_state:
@@ -262,6 +269,13 @@ pub struct HostApplicationVTable {
         interface_id: *mut c_char,
         object: *mut *mut c_void,
     ) -> tresult,
+}
+
+#[repr(C)]
+pub struct PlugInterfaceSupportVTable {
+    pub base: FUnknownVTable,
+    pub is_plug_interface_supported:
+        unsafe extern "system" fn(this: *mut IPlugInterfaceSupport, iid: *const c_char) -> tresult,
 }
 
 #[repr(C)]

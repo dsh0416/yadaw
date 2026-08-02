@@ -31,6 +31,31 @@ fn control_error_result(diagnostic: impl fmt::Display) -> ControlResult {
     }
 }
 
+fn plugin_capability_error_result(
+    diagnostic: impl fmt::Display,
+    field: &'static str,
+) -> ControlResult {
+    let correlation_id = format!(
+        "audio-host-{}",
+        ERROR_CORRELATION.fetch_add(1, Ordering::Relaxed)
+    );
+    eprintln!("audio-host [{correlation_id}]: {diagnostic}");
+    ControlResult::Error {
+        error: RpcError {
+            code: RpcErrorCode::ValidationFailed,
+            category: RpcErrorCategory::Validation,
+            outcome: RpcMutationOutcome::NotCommitted,
+            retry: RpcRetry::Never,
+            correlation_id,
+            user_message_key: "errors.pluginUnavailable".to_owned(),
+            resource: None,
+            details: Some(RpcErrorDetails::ValidationFailed {
+                field: Some(field.to_owned()),
+            }),
+        },
+    }
+}
+
 macro_rules! control_error {
     (message: $message:expr $(,)?) => {{
         let diagnostic: String = $message;

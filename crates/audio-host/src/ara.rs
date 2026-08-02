@@ -1,12 +1,12 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, VecDeque},
     ffi::{c_char, c_void},
     fmt::Write as _,
     path::Path,
     rc::Rc,
     sync::{
         Arc, Mutex, RwLock,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU8, Ordering},
     },
 };
 
@@ -30,7 +30,11 @@ use bwavfile::WaveReader;
 use sha2::{Digest, Sha256};
 use yadaw_dsp_runtime::{
     MUSICAL_TICKS_PER_QUARTER,
-    protocol::{LiveMixerClip, LiveMixerGraph, LiveTempoEvent, LiveTimeSignatureEvent},
+    protocol::{
+        AraAnalysisProgressState, AraArchiveDirection, AraCallbackEvent,
+        AraCallbackFailureCategory, AraObjectKind, LiveMixerClip, LiveMixerGraph, LiveTempoEvent,
+        LiveTimeSignatureEvent,
+    },
     tempo::{TempoEvent as RuntimeTempoEvent, TempoMap, TimeSignatureEvent},
 };
 use yadaw_vst3_host::{AraMainFactory, AraPluginEntry, ClassId, HostError, Module};
@@ -58,6 +62,350 @@ struct SourceSpec {
     path: String,
     sample_rate: u32,
     sample_count: i64,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum AraTransportRequest {
+    Start,
+    Stop,
+    SetPosition(f64),
+    SetCycleRange { start: f64, duration: f64 },
+    EnableCycle(bool),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+enum CallbackObjectKind {
+    AudioSource,
+    AudioModification,
+    PlaybackRegion,
+}
+
+impl CallbackObjectKind {
+    const fn protocol(self) -> AraObjectKind {
+        match self {
+            Self::AudioSource => AraObjectKind::AudioSource,
+            Self::AudioModification => AraObjectKind::AudioModification,
+            Self::PlaybackRegion => AraObjectKind::PlaybackRegion,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+struct CallbackObjectKey {
+    kind: CallbackObjectKind,
+    address: usize,
+}
+
+#[derive(Clone, Debug)]
+struct PendingContentChange {
+    object_id: String,
+    range: Option<(f64, f64)>,
+    scopes: u32,
+}
+
+#[derive(Default)]
+struct CallbackState {
+    identities: HashMap<CallbackObjectKey, String>,
+    analysis: HashMap<usize, (String, AraAnalysisProgressState, f32)>,
+    content: HashMap<CallbackObjectKey, PendingContentChange>,
+    document_dirty: bool,
+    archive_store_progress: Option<f32>,
+    archive_restore_progress: Option<f32>,
+    transport: VecDeque<AraTransportRequest>,
+}
+
+#[derive(Clone, Default)]
+struct AraCallbackSink {
+    state: Arc<Mutex<CallbackState>>,
+    active: Arc<AtomicBool>,
+    quarantine_reason: Arc<AtomicU8>,
+}
+
+pub(crate) struct AraCallbackBatch {
+    pub(crate) instance_id: String,
+    pub(crate) events: Vec<(u64, AraCallbackEvent)>,
+    pub(crate) transport: Vec<AraTransportCommand>,
+    pub(crate) failures: Vec<String>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum AraTransportCommand {
+    Play,
+    Pause,
+    SeekFrames(i64),
+    SetLoop {
+        enabled: bool,
+        start_tick: i64,
+        end_tick: i64,
+    },
+}
+
+impl AraCallbackSink {
+    const TRANSPORT_CAPACITY: usize = 64;
+
+    fn activate(&self) {
+        self.active.store(true, Ordering::Release);
+    }
+
+    fn deactivate(&self) {
+        self.active.store(false, Ordering::Release);
+        if let Ok(mut state) = self.state.lock() {
+            state.transport.clear();
+        }
+    }
+
+    fn is_quarantined(&self) -> bool {
+        self.quarantine_reason.load(Ordering::Acquire) != 0
+    }
+
+    fn quarantine(&self, category: AraCallbackFailureCategory) {
+        let value = match category {
+            AraCallbackFailureCategory::InvalidReference => 1,
+            AraCallbackFailureCategory::QueueOverflow => 2,
+            AraCallbackFailureCategory::ProviderPanic => 3,
+            AraCallbackFailureCategory::HostState => 4,
+        };
+        let _ =
+            self.quarantine_reason
+                .compare_exchange(0, value, Ordering::AcqRel, Ordering::Acquire);
+    }
+
+    fn quarantine_category(&self) -> Option<AraCallbackFailureCategory> {
+        match self.quarantine_reason.load(Ordering::Acquire) {
+            1 => Some(AraCallbackFailureCategory::InvalidReference),
+            2 => Some(AraCallbackFailureCategory::QueueOverflow),
+            3 => Some(AraCallbackFailureCategory::ProviderPanic),
+            4 => Some(AraCallbackFailureCategory::HostState),
+            _ => None,
+        }
+    }
+
+    fn with_state<T>(
+        &self,
+        operation: impl FnOnce(&mut CallbackState) -> Result<T, AraError>,
+    ) -> Result<T, AraError> {
+        if !self.active.load(Ordering::Acquire) {
+            return Err(AraError::InvalidState("ARA callback sink is inactive"));
+        }
+        if self.is_quarantined() {
+            return Err(AraError::InvalidState("ARA callback sink is quarantined"));
+        }
+        let mut state = self.state.lock().map_err(|_| {
+            self.quarantine(AraCallbackFailureCategory::ProviderPanic);
+            AraError::Poisoned
+        })?;
+        operation(&mut state)
+    }
+
+    fn register(
+        &self,
+        kind: CallbackObjectKind,
+        address: usize,
+        id: String,
+    ) -> Result<(), AraError> {
+        self.with_state(|state| {
+            let key = CallbackObjectKey { kind, address };
+            if state.identities.insert(key, id).is_some() {
+                return Err(AraError::InvalidState(
+                    "duplicate ARA host object reference",
+                ));
+            }
+            Ok(())
+        })
+        .inspect_err(|_| self.quarantine(AraCallbackFailureCategory::InvalidReference))
+    }
+
+    fn unregister(&self, kind: CallbackObjectKind, address: usize) {
+        if let Ok(mut state) = self.state.lock() {
+            let key = CallbackObjectKey { kind, address };
+            state.identities.remove(&key);
+            state.content.remove(&key);
+            if kind == CallbackObjectKind::AudioSource {
+                state.analysis.remove(&address);
+            }
+        }
+    }
+
+    fn identity(
+        state: &CallbackState,
+        kind: CallbackObjectKind,
+        address: usize,
+    ) -> Result<String, AraError> {
+        state
+            .identities
+            .get(&CallbackObjectKey { kind, address })
+            .cloned()
+            .ok_or(AraError::InvalidArgument(
+                "unknown or stale ARA host object reference",
+            ))
+    }
+
+    fn analysis_progress(
+        &self,
+        source: AudioSourceId,
+        raw_state: i32,
+        progress: f32,
+    ) -> Result<(), AraError> {
+        if !progress.is_finite() || !(0.0..=1.0).contains(&progress) {
+            return Err(AraError::InvalidArgument("invalid ARA analysis progress"));
+        }
+        let state = match raw_state {
+            value if value == ara2_bridge_sys::kARAAnalysisProgressStarted as i32 => {
+                AraAnalysisProgressState::Started
+            }
+            value if value == ara2_bridge_sys::kARAAnalysisProgressUpdated as i32 => {
+                AraAnalysisProgressState::Updated
+            }
+            value if value == ara2_bridge_sys::kARAAnalysisProgressCompleted as i32 => {
+                AraAnalysisProgressState::Completed
+            }
+            _ => {
+                return Err(AraError::InvalidArgument(
+                    "unknown ARA analysis progress state",
+                ));
+            }
+        };
+        self.with_state(|pending| {
+            let id = Self::identity(pending, CallbackObjectKind::AudioSource, source.address())?;
+            pending
+                .analysis
+                .insert(source.address(), (id, state, progress));
+            Ok(())
+        })
+        .inspect_err(|_| self.quarantine(AraCallbackFailureCategory::InvalidReference))
+    }
+
+    fn content_changed(
+        &self,
+        kind: CallbackObjectKind,
+        address: usize,
+        range: Option<ContentTimeRange>,
+        scopes: i32,
+    ) -> Result<(), AraError> {
+        let scopes = u32::try_from(scopes)
+            .map_err(|_| AraError::InvalidArgument("negative ARA content scope flags"))?;
+        self.with_state(|state| {
+            let object_id = Self::identity(state, kind, address)?;
+            let key = CallbackObjectKey { kind, address };
+            let range = range.map(|value| (value.start(), value.duration()));
+            state
+                .content
+                .entry(key)
+                .and_modify(|pending| {
+                    pending.scopes |= scopes;
+                    pending.range = merge_content_ranges(pending.range, range);
+                })
+                .or_insert(PendingContentChange {
+                    object_id,
+                    range,
+                    scopes,
+                });
+            Ok(())
+        })
+        .inspect_err(|_| self.quarantine(AraCallbackFailureCategory::InvalidReference))
+    }
+
+    fn archive_progress(
+        &self,
+        direction: AraArchiveDirection,
+        progress: f32,
+    ) -> Result<(), AraError> {
+        if !progress.is_finite() || !(0.0..=1.0).contains(&progress) {
+            return Err(AraError::InvalidArgument("invalid ARA archive progress"));
+        }
+        self.with_state(|state| {
+            match direction {
+                AraArchiveDirection::Store => state.archive_store_progress = Some(progress),
+                AraArchiveDirection::Restore => state.archive_restore_progress = Some(progress),
+            }
+            Ok(())
+        })
+    }
+
+    fn transport(&self, request: AraTransportRequest) -> Result<(), AraError> {
+        self.with_state(|state| {
+            if state.transport.len() >= Self::TRANSPORT_CAPACITY {
+                return Err(AraError::InvalidState("ARA transport callback queue is full"));
+            }
+            state.transport.push_back(request);
+            Ok(())
+        })
+        .inspect_err(|error| {
+            if matches!(error, AraError::InvalidState(message) if *message == "ARA transport callback queue is full") {
+                self.quarantine(AraCallbackFailureCategory::QueueOverflow);
+            }
+        })
+    }
+
+    fn drain(
+        &self,
+        include_model_events: bool,
+    ) -> Result<(Vec<AraCallbackEvent>, Vec<AraTransportRequest>), AraError> {
+        let mut state = self.state.lock().map_err(|_| AraError::Poisoned)?;
+        if !include_model_events {
+            return Ok((Vec::new(), state.transport.drain(..).collect()));
+        }
+        let mut events = Vec::with_capacity(
+            state.analysis.len()
+                + state.content.len()
+                + usize::from(state.document_dirty)
+                + usize::from(state.archive_store_progress.is_some())
+                + usize::from(state.archive_restore_progress.is_some()),
+        );
+        events.extend(
+            state
+                .analysis
+                .drain()
+                .map(
+                    |(_, (object_id, state, progress))| AraCallbackEvent::AnalysisProgress {
+                        object_id,
+                        state,
+                        progress,
+                    },
+                ),
+        );
+        events.extend(state.content.drain().map(|(key, pending)| {
+            let (start_seconds, duration_seconds) =
+                pending.range.map_or((None, None), |(start, duration)| {
+                    (Some(start), Some(duration))
+                });
+            AraCallbackEvent::ContentChanged {
+                object_kind: key.kind.protocol(),
+                object_id: pending.object_id,
+                start_seconds,
+                duration_seconds,
+                scopes: pending.scopes,
+            }
+        }));
+        if std::mem::take(&mut state.document_dirty) {
+            events.push(AraCallbackEvent::DocumentDataChanged);
+        }
+        if let Some(progress) = state.archive_store_progress.take() {
+            events.push(AraCallbackEvent::ArchiveProgress {
+                direction: AraArchiveDirection::Store,
+                progress,
+            });
+        }
+        if let Some(progress) = state.archive_restore_progress.take() {
+            events.push(AraCallbackEvent::ArchiveProgress {
+                direction: AraArchiveDirection::Restore,
+                progress,
+            });
+        }
+        Ok((events, state.transport.drain(..).collect()))
+    }
+}
+
+fn merge_content_ranges(left: Option<(f64, f64)>, right: Option<(f64, f64)>) -> Option<(f64, f64)> {
+    match (left, right) {
+        (Some((left_start, left_duration)), Some((right_start, right_duration))) => {
+            let start = left_start.min(right_start);
+            let end = (left_start + left_duration).max(right_start + right_duration);
+            Some((start, end - start))
+        }
+        (Some(range), None) | (None, Some(range)) => Some(range),
+        (None, None) => None,
+    }
 }
 
 #[derive(Clone, Default)]
@@ -194,9 +542,10 @@ struct ArchiveEntry {
     writable: bool,
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 struct ArchiveRegistry {
     entries: Arc<Mutex<HashMap<usize, ArchiveEntry>>>,
+    callbacks: AraCallbackSink,
 }
 
 struct ArchiveToken {
@@ -204,6 +553,13 @@ struct ArchiveToken {
 }
 
 impl ArchiveRegistry {
+    fn new(callbacks: AraCallbackSink) -> Self {
+        Self {
+            entries: Arc::new(Mutex::new(HashMap::new())),
+            callbacks,
+        }
+    }
+
     fn with_reader<T>(
         &self,
         bytes: Vec<u8>,
@@ -312,53 +668,118 @@ impl ArchivingProvider for ArchiveRegistry {
     fn document_archive_id(&self, reader: ArchiveReaderId) -> Result<Option<String>, AraError> {
         Ok(Some(self.entry(reader.address())?.document_archive_id))
     }
-}
 
-#[derive(Clone, Default)]
-struct ModelUpdates {
-    dirty: Arc<AtomicBool>,
-}
+    fn archiving_progress(&self, value: f32) -> Result<(), AraError> {
+        self.callbacks
+            .archive_progress(AraArchiveDirection::Store, value)
+    }
 
-impl ModelUpdates {
-    fn mark(&self) {
-        self.dirty.store(true, Ordering::Release);
+    fn unarchiving_progress(&self, value: f32) -> Result<(), AraError> {
+        self.callbacks
+            .archive_progress(AraArchiveDirection::Restore, value)
     }
 }
 
+#[derive(Clone)]
+struct ModelUpdates {
+    callbacks: AraCallbackSink,
+}
+
 impl ModelUpdateProvider for ModelUpdates {
+    fn audio_source_analysis_progress(
+        &self,
+        source: AudioSourceId,
+        state: i32,
+        value: f32,
+    ) -> Result<(), AraError> {
+        self.callbacks.analysis_progress(source, state, value)
+    }
+
     fn audio_source_content_changed(
         &self,
-        _source: AudioSourceId,
-        _range: Option<ContentTimeRange>,
-        _flags: i32,
+        source: AudioSourceId,
+        range: Option<ContentTimeRange>,
+        flags: i32,
     ) -> Result<(), AraError> {
-        self.mark();
-        Ok(())
+        self.callbacks.content_changed(
+            CallbackObjectKind::AudioSource,
+            source.address(),
+            range,
+            flags,
+        )
     }
 
     fn audio_modification_content_changed(
         &self,
-        _modification: AudioModificationId,
-        _range: Option<ContentTimeRange>,
-        _flags: i32,
+        modification: AudioModificationId,
+        range: Option<ContentTimeRange>,
+        flags: i32,
     ) -> Result<(), AraError> {
-        self.mark();
-        Ok(())
+        self.callbacks.content_changed(
+            CallbackObjectKind::AudioModification,
+            modification.address(),
+            range,
+            flags,
+        )
     }
 
     fn playback_region_content_changed(
         &self,
-        _region: PlaybackRegionId,
-        _range: Option<ContentTimeRange>,
-        _flags: i32,
+        region: PlaybackRegionId,
+        range: Option<ContentTimeRange>,
+        flags: i32,
     ) -> Result<(), AraError> {
-        self.mark();
-        Ok(())
+        self.callbacks.content_changed(
+            CallbackObjectKind::PlaybackRegion,
+            region.address(),
+            range,
+            flags,
+        )
     }
 
     fn document_data_changed(&self) -> Result<(), AraError> {
-        self.mark();
-        Ok(())
+        self.callbacks.with_state(|state| {
+            state.document_dirty = true;
+            Ok(())
+        })
+    }
+}
+
+#[derive(Clone)]
+struct PlaybackRequests {
+    callbacks: AraCallbackSink,
+}
+
+impl ara2_bridge_host::PlaybackProvider for PlaybackRequests {
+    fn start(&self) -> Result<(), AraError> {
+        self.callbacks.transport(AraTransportRequest::Start)
+    }
+
+    fn stop(&self) -> Result<(), AraError> {
+        self.callbacks.transport(AraTransportRequest::Stop)
+    }
+
+    fn set_position(&self, position: f64) -> Result<(), AraError> {
+        if !position.is_finite() || position < 0.0 {
+            return Err(AraError::InvalidArgument("invalid ARA playback position"));
+        }
+        self.callbacks
+            .transport(AraTransportRequest::SetPosition(position))
+    }
+
+    fn set_cycle_range(&self, start: f64, duration: f64) -> Result<(), AraError> {
+        if !start.is_finite() || !duration.is_finite() || start < 0.0 || duration <= 0.0 {
+            return Err(AraError::InvalidArgument(
+                "invalid ARA playback cycle range",
+            ));
+        }
+        self.callbacks
+            .transport(AraTransportRequest::SetCycleRange { start, duration })
+    }
+
+    fn enable_cycle(&self, enable: bool) -> Result<(), AraError> {
+        self.callbacks
+            .transport(AraTransportRequest::EnableCycle(enable))
     }
 }
 
@@ -370,26 +791,7 @@ struct TimelineContent {
 
 impl TimelineContent {
     fn set_graph(&self, graph: &TrackGraph) -> Result<(), AraError> {
-        let tempo_map = TempoMap::new(
-            graph
-                .tempo_events
-                .iter()
-                .map(|event| RuntimeTempoEvent {
-                    tick: event.tick,
-                    beats_per_minute: event.beats_per_minute,
-                })
-                .collect(),
-            graph
-                .time_signature_events
-                .iter()
-                .map(|event| TimeSignatureEvent {
-                    tick: event.tick,
-                    numerator: event.numerator,
-                    denominator: event.denominator,
-                })
-                .collect(),
-        )
-        .map_err(|_| AraError::InvalidArgument("invalid ARA tempo map"))?;
+        let tempo_map = tempo_map(graph)?;
         let tempos = graph
             .tempo_events
             .iter()
@@ -439,6 +841,29 @@ impl TimelineContent {
             .contains(&context.address());
         Ok(known && (content_type == Tempo::RAW_TYPE || content_type == BarSignatures::RAW_TYPE))
     }
+}
+
+fn tempo_map(graph: &TrackGraph) -> Result<TempoMap, AraError> {
+    TempoMap::new(
+        graph
+            .tempo_events
+            .iter()
+            .map(|event| RuntimeTempoEvent {
+                tick: event.tick,
+                beats_per_minute: event.beats_per_minute,
+            })
+            .collect(),
+        graph
+            .time_signature_events
+            .iter()
+            .map(|event| TimeSignatureEvent {
+                tick: event.tick,
+                numerator: event.numerator,
+                denominator: event.denominator,
+            })
+            .collect(),
+    )
+    .map_err(|_| AraError::InvalidArgument("invalid ARA tempo map"))
 }
 
 impl ContentAccessProvider for TimelineContent {
@@ -512,10 +937,14 @@ pub(crate) struct AraDocument {
     audio: AudioRegistry,
     timeline: TimelineContent,
     archives: ArchiveRegistry,
+    callbacks: AraCallbackSink,
+    quarantine_reported: bool,
     archive_id: String,
     pending_archive: Option<Vec<u8>>,
     model: GraphHandles,
     graph: Option<TrackGraph>,
+    cycle_range_ticks: Option<(i64, i64)>,
+    cycle_enabled: bool,
 }
 
 pub(crate) struct AraFactoryHost {
@@ -584,13 +1013,20 @@ impl AraDocument {
         }
         let audio = AudioRegistry::default();
         let timeline = TimelineContent::default();
-        let archives = ArchiveRegistry::default();
+        let callbacks = AraCallbackSink::default();
+        callbacks.activate();
+        let archives = ArchiveRegistry::new(callbacks.clone());
         let services = Box::new(
             HostServicesBuilder::new()
                 .audio(audio.clone())
                 .archiving(archives.clone())
                 .content(timeline.clone())
-                .model_updates(ModelUpdates::default())
+                .model_updates(ModelUpdates {
+                    callbacks: callbacks.clone(),
+                })
+                .playback(PlaybackRequests {
+                    callbacks: callbacks.clone(),
+                })
                 .build(factory.generation)
                 .map_err(|error| HostError::Ara(error.to_string()))?,
         );
@@ -638,11 +1074,144 @@ impl AraDocument {
             audio,
             timeline,
             archives,
+            callbacks,
+            quarantine_reported: false,
             archive_id,
             pending_archive: (!archive.is_empty()).then_some(archive),
             model: GraphHandles::default(),
             graph: None,
+            cycle_range_ticks: None,
+            cycle_enabled: false,
         })
+    }
+
+    pub(crate) fn poll_host_callbacks(
+        &mut self,
+        include_model_events: bool,
+        callback_sequence: &mut u64,
+    ) -> AraCallbackBatch {
+        if !self.callbacks.is_quarantined() {
+            let notify_result = self
+                .session
+                .as_mut()
+                .ok_or(AraError::InvalidState("ARA document session is closed"))
+                .and_then(DocumentSession::notify_model_updates);
+            if notify_result.is_err() {
+                let category = if self
+                    .services
+                    .as_ref()
+                    .is_some_and(|services| services.is_poisoned())
+                {
+                    AraCallbackFailureCategory::ProviderPanic
+                } else {
+                    AraCallbackFailureCategory::HostState
+                };
+                self.callbacks.quarantine(category);
+            }
+        }
+
+        let (events, transport) = self
+            .callbacks
+            .drain(include_model_events)
+            .unwrap_or_else(|_| {
+                self.callbacks
+                    .quarantine(AraCallbackFailureCategory::ProviderPanic);
+                (Vec::new(), Vec::new())
+            });
+        let mut events = events
+            .into_iter()
+            .map(|event| (next_callback_sequence(callback_sequence), event))
+            .collect::<Vec<_>>();
+        if include_model_events
+            && !self.quarantine_reported
+            && let Some(category) = self.callbacks.quarantine_category()
+        {
+            self.quarantine_reported = true;
+            let sequence = next_callback_sequence(callback_sequence);
+            events.push((
+                sequence,
+                AraCallbackEvent::Quarantined {
+                    category,
+                    recoverable: false,
+                },
+            ));
+        }
+        let (transport, failures) = if self.callbacks.is_quarantined() {
+            (Vec::new(), Vec::new())
+        } else {
+            let mut commands = Vec::with_capacity(transport.len());
+            let mut failures = Vec::new();
+            for request in transport {
+                match self.resolve_transport_request(request) {
+                    Ok(command) => commands.push(command),
+                    Err(error) => failures.push(error.to_string()),
+                }
+            }
+            (commands, failures)
+        };
+        AraCallbackBatch {
+            instance_id: self.instance_id.clone(),
+            events,
+            transport,
+            failures,
+        }
+    }
+
+    fn resolve_transport_request(
+        &mut self,
+        request: AraTransportRequest,
+    ) -> Result<AraTransportCommand, AraError> {
+        match request {
+            AraTransportRequest::Start => Ok(AraTransportCommand::Play),
+            AraTransportRequest::Stop => Ok(AraTransportCommand::Pause),
+            AraTransportRequest::SetPosition(seconds) => {
+                let sample_rate = self
+                    .graph
+                    .as_ref()
+                    .map(|graph| graph.sample_rate)
+                    .filter(|sample_rate| *sample_rate > 0)
+                    .ok_or(AraError::InvalidState(
+                        "ARA document has no active sample rate",
+                    ))?;
+                let frame = (seconds * f64::from(sample_rate)).round();
+                if frame > i64::MAX as f64 {
+                    return Err(AraError::InvalidArgument(
+                        "ARA playback position is too large",
+                    ));
+                }
+                Ok(AraTransportCommand::SeekFrames(frame as i64))
+            }
+            AraTransportRequest::SetCycleRange { start, duration } => {
+                let graph = self.graph.as_ref().ok_or(AraError::InvalidState(
+                    "ARA document has no active tempo map",
+                ))?;
+                let tempo_map = tempo_map(graph)?;
+                let start_tick = i64::try_from(tempo_map.seconds_to_tick(start))
+                    .map_err(|_| AraError::InvalidArgument("ARA cycle start is too large"))?;
+                let end_tick = i64::try_from(tempo_map.seconds_to_tick(start + duration))
+                    .map_err(|_| AraError::InvalidArgument("ARA cycle end is too large"))?;
+                if end_tick <= start_tick {
+                    return Err(AraError::InvalidArgument("ARA cycle range is empty"));
+                }
+                self.cycle_range_ticks = Some((start_tick, end_tick));
+                Ok(AraTransportCommand::SetLoop {
+                    enabled: self.cycle_enabled,
+                    start_tick,
+                    end_tick,
+                })
+            }
+            AraTransportRequest::EnableCycle(enabled) => {
+                let (start_tick, end_tick) = self
+                    .cycle_range_ticks
+                    .ok_or(AraError::InvalidState("ARA cycle range is not set"))?;
+                self.cycle_enabled = enabled;
+                Ok(AraTransportCommand::SetLoop {
+                    enabled,
+                    start_tick,
+                    end_tick,
+                })
+            }
+        }
     }
 
     pub(crate) fn sync_live_graph(&mut self, graph: Option<&LiveMixerGraph>) -> Result<(), String> {
@@ -783,6 +1352,8 @@ impl AraDocument {
                     )?)?;
                     handles.sources.push(source);
                     let address = edit.audio_source_ref(source)?.as_raw() as usize;
+                    self.callbacks
+                        .register(CallbackObjectKind::AudioSource, address, source_id)?;
                     self.audio.insert(address, spec)?;
                     edit.set_audio_source_samples_access(source, true)?;
                     let modification_id = persistent_id(
@@ -794,6 +1365,13 @@ impl AraDocument {
                         AudioModificationProperties::new(name, &modification_id)?,
                     )?;
                     handles.modifications.push(modification);
+                    let modification_address =
+                        edit.audio_modification_ref(modification)?.as_raw() as usize;
+                    self.callbacks.register(
+                        CallbackObjectKind::AudioModification,
+                        modification_address,
+                        modification_id,
+                    )?;
                     sources.insert(clip.path.clone(), (source, modification));
                     (source, modification)
                 }
@@ -817,6 +1395,12 @@ impl AraDocument {
                 )?,
             )?;
             handles.regions.push(region);
+            let region_address = edit.playback_region_ref(region)?.as_raw() as usize;
+            self.callbacks.register(
+                CallbackObjectKind::PlaybackRegion,
+                region_address,
+                clip.id.clone(),
+            )?;
         }
         if let Some(archive) = self.pending_archive.take() {
             let archives = self.archives.clone();
@@ -845,12 +1429,21 @@ impl AraDocument {
             .ok_or(AraError::InvalidState("ARA document session is closed"))?;
         let mut edit = session.edit()?;
         for region in self.model.regions.drain(..) {
+            let address = edit.playback_region_ref(region)?.as_raw() as usize;
+            self.callbacks
+                .unregister(CallbackObjectKind::PlaybackRegion, address);
             edit.destroy_playback_region(region)?;
         }
         for modification in self.model.modifications.drain(..) {
+            let address = edit.audio_modification_ref(modification)?.as_raw() as usize;
+            self.callbacks
+                .unregister(CallbackObjectKind::AudioModification, address);
             edit.destroy_audio_modification(modification)?;
         }
         for source in self.model.sources.drain(..) {
+            let address = edit.audio_source_ref(source)?.as_raw() as usize;
+            self.callbacks
+                .unregister(CallbackObjectKind::AudioSource, address);
             edit.destroy_audio_source(source)?;
         }
         if let Some(sequence) = self.model.sequence.take() {
@@ -865,12 +1458,18 @@ impl AraDocument {
     }
 }
 
+fn next_callback_sequence(sequence: &mut u64) -> u64 {
+    *sequence = sequence.saturating_add(1);
+    *sequence
+}
+
 impl Drop for AraDocument {
     fn drop(&mut self) {
-        let _ = self.clear_graph();
+        self.callbacks.deactivate();
         self.playback_assignments.clear();
         self.sequence_assignments.clear();
         self.extension.take();
+        let _ = self.clear_graph();
         if let Some(session) = self.session.take() {
             let _ = session.close();
         }

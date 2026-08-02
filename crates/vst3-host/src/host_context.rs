@@ -5,8 +5,12 @@ use std::{
 };
 
 use yadaw_vst3_host_sys::{
-    Steinberg::{FUnknown, Vst::IHostApplication, tresult, uint32},
-    abi::{FUnknownVTable, HostApplicationVTable},
+    Steinberg::{
+        FUnknown,
+        Vst::{IHostApplication, IPlugInterfaceSupport},
+        tresult, uint32,
+    },
+    abi::{FUnknownVTable, HostApplicationVTable, PlugInterfaceSupportVTable},
     iid,
 };
 
@@ -16,14 +20,27 @@ use crate::host_objects::{HostAttributeList, HostMessage};
 pub(crate) struct HostContext {
     vtable: *const HostApplicationVTable,
     references: AtomicU32,
+    plug_interface_support: PlugInterfaceSupportObject,
+}
+
+#[repr(C)]
+struct PlugInterfaceSupportObject {
+    vtable: *const PlugInterfaceSupportVTable,
+    owner: *const HostContext,
 }
 
 impl HostContext {
     pub(crate) fn new() -> Box<Self> {
-        Box::new(Self {
+        let mut context = Box::new(Self {
             vtable: &HOST_APPLICATION_VTABLE,
             references: AtomicU32::new(1),
-        })
+            plug_interface_support: PlugInterfaceSupportObject {
+                vtable: &PLUG_INTERFACE_SUPPORT_VTABLE,
+                owner: std::ptr::null(),
+            },
+        });
+        context.plug_interface_support.owner = std::ptr::from_ref(context.as_ref());
+        context
     }
 
     pub(crate) fn as_unknown(&self) -> *mut FUnknown {
@@ -51,12 +68,95 @@ unsafe extern "system" fn query_interface(
             add_ref(this);
         }
         0
+    } else if requested == iid::IPLUG_INTERFACE_SUPPORT {
+        let context = this.cast::<HostContext>();
+        unsafe {
+            // SAFETY: this is HostContext's leading interface and the embedded support object is
+            // stable for the same lifetime.
+            output.write(std::ptr::addr_of_mut!((*context).plug_interface_support).cast());
+            add_ref(this);
+        }
+        0
     } else {
         unsafe {
             // SAFETY: output is validated above.
             output.write(std::ptr::null_mut());
         }
         -2147467262
+    }
+}
+
+unsafe extern "system" fn support_query_interface(
+    this: *mut FUnknown,
+    requested: *const c_char,
+    output: *mut *mut c_void,
+) -> tresult {
+    if this.is_null() {
+        return -2147024809;
+    }
+    let support = this.cast::<PlugInterfaceSupportObject>();
+    let owner = unsafe {
+        // SAFETY: this is the embedded support interface of a live HostContext.
+        (*support).owner
+    };
+    if owner.is_null() {
+        return -2147467262;
+    }
+    unsafe {
+        // SAFETY: owner remains live with the embedded support object.
+        query_interface(owner.cast_mut().cast(), requested, output)
+    }
+}
+
+unsafe extern "system" fn support_add_ref(this: *mut FUnknown) -> uint32 {
+    let support = this.cast::<PlugInterfaceSupportObject>();
+    let owner = unsafe {
+        // SAFETY: this is the embedded support interface of a live HostContext.
+        (*support).owner
+    };
+    unsafe {
+        // SAFETY: owner remains live with the embedded support object.
+        add_ref(owner.cast_mut().cast())
+    }
+}
+
+unsafe extern "system" fn support_release(this: *mut FUnknown) -> uint32 {
+    let support = this.cast::<PlugInterfaceSupportObject>();
+    let owner = unsafe {
+        // SAFETY: this is the embedded support interface of a live HostContext.
+        (*support).owner
+    };
+    unsafe {
+        // SAFETY: owner remains live with the embedded support object.
+        release(owner.cast_mut().cast())
+    }
+}
+
+unsafe extern "system" fn is_plug_interface_supported(
+    _this: *mut IPlugInterfaceSupport,
+    requested: *const c_char,
+) -> tresult {
+    if requested.is_null() {
+        return -2147024809;
+    }
+    let requested = unsafe {
+        // SAFETY: VST3 supplies a 16-byte interface TUID.
+        std::slice::from_raw_parts(requested, 16)
+    };
+    let supported = [
+        iid::ICOMPONENT,
+        iid::IAUDIO_PROCESSOR,
+        iid::IEDIT_CONTROLLER,
+        iid::IMIDI_MAPPING,
+        iid::ICONNECTION_POINT,
+        iid::IPLUG_VIEW,
+        iid::IPLUG_VIEW_CONTENT_SCALE_SUPPORT,
+        iid::IPROCESS_CONTEXT_REQUIREMENTS,
+    ];
+    if supported.iter().any(|iid| requested == iid) {
+        0
+    } else {
+        1
     }
 }
 
@@ -134,6 +234,15 @@ static HOST_APPLICATION_VTABLE: HostApplicationVTable = HostApplicationVTable {
     },
     get_name,
     create_instance,
+};
+
+static PLUG_INTERFACE_SUPPORT_VTABLE: PlugInterfaceSupportVTable = PlugInterfaceSupportVTable {
+    base: FUnknownVTable {
+        query_interface: support_query_interface,
+        add_ref: support_add_ref,
+        release: support_release,
+    },
+    is_plug_interface_supported,
 };
 
 #[cfg(test)]

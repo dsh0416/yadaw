@@ -1,5 +1,6 @@
 import { AudioHostDiagnostics } from "./audio-host-diagnostics"
-import { drainHostEvents } from "./audio-host-events"
+import { AraCallbackSequenceTracker, drainHostEvents } from "./audio-host-events"
+import type { AraHostCallback } from "./audio-host-events"
 import { graphDiff, readCrashMarker } from "./audio-host-graph-client"
 import { AudioHostRecordingClient } from "./audio-host-recording-client"
 import { AudioHostPluginClient } from "./audio-host-plugin-client"
@@ -103,6 +104,9 @@ export class AudioHostService {
     arenaCopiedBytes: 0
   }
   private readonly pendingPreferenceWrites = new Set<Promise<void>>()
+  private readonly pendingAraCallbacks = new Set<Promise<void>>()
+  private readonly araCallbackSequences = new AraCallbackSequenceTracker()
+  private araCallbackHandler: (callback: AraHostCallback) => void | Promise<void> = () => {}
   private readonly supervisor: AudioHostProcessSupervisor
   private readonly session = new AudioHostSessionCoordinator()
   private readonly gateway: AudioHostGateway
@@ -176,8 +180,26 @@ export class AudioHostService {
       () => (this.stopping ? "stopping" : this.recovery),
       onEditorPreferenceChanged,
       this.pendingPreferenceWrites,
-      onEditorClosed
+      onEditorClosed,
+      (callback) => this.handleAraCallback(callback)
     )
+  }
+
+  setAraCallbackHandler(handler: (callback: AraHostCallback) => void | Promise<void>): void {
+    this.araCallbackHandler = handler
+  }
+
+  private handleAraCallback(callback: AraHostCallback): void {
+    if (callback.helperEpoch !== this.helperEpoch()) return
+    if (!this.araCallbackSequences.accept(callback.helperEpoch, callback.sequence)) return
+    const pending = Promise.resolve(this.araCallbackHandler(callback))
+      .catch((error: unknown) => {
+        console.error("Could not reconcile an ARA host callback", error)
+      })
+      .finally(() => {
+        this.pendingAraCallbacks.delete(pending)
+      })
+    this.pendingAraCallbacks.add(pending)
   }
 
   private get client(): AudioHostIpcClient | null {
@@ -939,6 +961,7 @@ export class AudioHostService {
     if (this.client !== client) return
     this.audioTransport.captureTransport(client)
     this.client = null
+    this.araCallbackSequences.clear()
     this.heartbeatInFlight = false
     this.plugins.resetConnection()
     this.publishedGraph = null
@@ -1184,12 +1207,15 @@ export class AudioHostService {
       client,
       this.onEditorPreferenceChanged,
       this.pendingPreferenceWrites,
-      this.onEditorClosed
+      this.onEditorClosed,
+      (callback) => this.handleAraCallback(callback)
     )
     if (this.client === client) this.client = null
     client.close()
     await this.gateway.settle()
     await Promise.allSettled([...this.pendingPreferenceWrites])
+    await Promise.allSettled([...this.pendingAraCallbacks])
+    this.araCallbackSequences.clear()
     this.publishedGraph = null
     this.audioTransport.resetConnection()
   }

@@ -89,5 +89,65 @@ pub struct PluginParameter {
     pub step_count: i32,
     pub default_normalized: f64,
     pub normalized: f64,
+    pub formatted: String,
     pub flags: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum AraObjectKind {
+    AudioSource,
+    AudioModification,
+    PlaybackRegion,
+    Document,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum AraAnalysisProgressState {
+    Started,
+    Updated,
+    Completed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum AraArchiveDirection {
+    Store,
+    Restore,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum AraCallbackFailureCategory {
+    InvalidReference,
+    QueueOverflow,
+    ProviderPanic,
+    HostState,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum AraCallbackEvent {
+    AnalysisProgress {
+        object_id: String,
+        state: AraAnalysisProgressState,
+        progress: f32,
+    },
+    ContentChanged {
+        object_kind: AraObjectKind,
+        object_id: String,
+        start_seconds: Option<f64>,
+        duration_seconds: Option<f64>,
+        scopes: u32,
+    },
+    DocumentDataChanged,
+    ArchiveProgress {
+        direction: AraArchiveDirection,
+        progress: f32,
+    },
+    Quarantined {
+        category: AraCallbackFailureCategory,
+        recoverable: bool,
+    },
 }

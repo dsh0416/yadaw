@@ -54,7 +54,23 @@ export class AudioHostGraphTransactions {
     for (const [index, result] of loaded.entries()) {
       if (result.status === "rejected") {
         const plugin = project.plugins[index]
-        console.error(`Could not prepare VST3 instance ${plugin?.id}:`, result.reason)
+        const reason: unknown = result.reason
+        console.error(`Could not prepare VST3 instance ${plugin?.id}:`, {
+          request: plugin
+            ? {
+                classId: plugin.classId,
+                modulePath: plugin.descriptor.modulePath,
+                kind: plugin.descriptor.kind,
+                audioMode: plugin.audioMode,
+                sampleRate: project.sampleRate,
+                araFactoryClassId: plugin.descriptor.ara?.factoryClassId ?? null,
+                componentStateBytes: plugin.componentState.byteLength,
+                controllerStateBytes: plugin.controllerState.byteLength,
+                araDocumentStateBytes: plugin.araDocumentState?.byteLength ?? 0
+              }
+            : null,
+          reason
+        })
         return rpcFailure(meta, {
           code: "dependency-failed",
           category: "dependency-failed",

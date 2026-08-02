@@ -6,20 +6,20 @@ use std::{
     rc::Rc,
     sync::{
         Arc,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU32, Ordering},
     },
 };
 
 use yadaw_vst3_host_sys::{
     Steinberg::{
         IPlugFrame, IPlugView, IPlugViewContentScaleSupport, IPluginBase, TUID, ViewRect,
-        Vst::{IComponent, IConnectionPoint, IEditController, IMidiMapping, ParameterInfo},
+        Vst::{self, IComponent, IConnectionPoint, IEditController, IMidiMapping, ParameterInfo},
     },
     abi::{
         ComponentVTable, ConnectionPointVTable, EditControllerVTable, MidiMappingVTable,
         PlugViewContentScaleSupportVTable, PlugViewVTable,
     },
-    compat::tuid_byte,
+    compat::{as_uint32, tuid_byte},
 };
 
 use crate::{
@@ -48,6 +48,7 @@ pub struct HostedParameter {
     pub step_count: i32,
     pub default_normalized: f64,
     pub normalized: f64,
+    pub formatted: String,
     pub flags: u32,
 }
 
@@ -58,20 +59,36 @@ const MIDI_PITCH_BEND: usize = 129;
 const MIDI_PROGRAM_CHANGE: usize = 130;
 const UNMAPPED_PARAMETER: u32 = u32::MAX;
 
-#[derive(Clone)]
 struct MidiMappingTable {
-    parameters: Box<[u32]>,
+    parameters: Box<[AtomicU32]>,
 }
 
 impl MidiMappingTable {
     fn query(controller: Option<&ComPtr<IEditController>>) -> Self {
-        let mut parameters =
-            vec![UNMAPPED_PARAMETER; MIDI_MAPPING_CHANNELS * MIDI_MAPPING_CONTROLLERS]
-                .into_boxed_slice();
+        let parameters = (0..MIDI_MAPPING_CHANNELS * MIDI_MAPPING_CONTROLLERS)
+            .map(|_| AtomicU32::new(UNMAPPED_PARAMETER))
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
         let Some(mapping) = controller.and_then(|value| value.query::<IMidiMapping>().ok()) else {
             return Self { parameters };
         };
-        let table = midi_mapping_table(&mapping);
+        let table = Self { parameters };
+        table.refresh_mapping(&mapping);
+        table
+    }
+
+    fn refresh(&self, controller: Option<&ComPtr<IEditController>>) {
+        let Some(mapping) = controller.and_then(|value| value.query::<IMidiMapping>().ok()) else {
+            for parameter in &self.parameters {
+                parameter.store(UNMAPPED_PARAMETER, Ordering::Release);
+            }
+            return;
+        };
+        self.refresh_mapping(&mapping);
+    }
+
+    fn refresh_mapping(&self, mapping: &ComPtr<IMidiMapping>) {
+        let table = midi_mapping_table(mapping);
         for channel in 0..MIDI_MAPPING_CHANNELS {
             for controller in 0..MIDI_MAPPING_CONTROLLERS {
                 let mut parameter = UNMAPPED_PARAMETER;
@@ -86,12 +103,16 @@ impl MidiMappingTable {
                         std::ptr::addr_of_mut!(parameter),
                     )
                 };
-                if result == 0 {
-                    parameters[channel * MIDI_MAPPING_CONTROLLERS + controller] = parameter;
-                }
+                self.parameters[channel * MIDI_MAPPING_CONTROLLERS + controller].store(
+                    if result == 0 {
+                        parameter
+                    } else {
+                        UNMAPPED_PARAMETER
+                    },
+                    Ordering::Release,
+                );
             }
         }
-        Self { parameters }
     }
 
     fn parameter(&self, channel: u8, controller: usize) -> Option<u32> {
@@ -100,7 +121,7 @@ impl MidiMappingTable {
             .checked_add(controller)?;
         self.parameters
             .get(index)
-            .copied()
+            .map(|value| value.load(Ordering::Acquire))
             .filter(|value| *value != UNMAPPED_PARAMETER)
     }
 }
@@ -379,6 +400,97 @@ struct ComponentConnections {
     controller_connected: bool,
 }
 
+/// Owns an initialized edit controller while `HostedPlugin` construction can
+/// still fail. Its drop order mirrors the successful host teardown: detach the
+/// component handler, release the handler, terminate a separately initialized
+/// controller, then release the controller interface.
+struct InitializedController {
+    controller: Option<ComPtr<IEditController>>,
+    handler: Option<Box<ComponentHandler>>,
+    initialized_separately: bool,
+    handler_attached: bool,
+}
+
+impl InitializedController {
+    fn new(controller: Option<ComPtr<IEditController>>, initialized_separately: bool) -> Self {
+        Self {
+            controller,
+            handler: None,
+            initialized_separately,
+            handler_attached: false,
+        }
+    }
+
+    fn controller(&self) -> Option<&ComPtr<IEditController>> {
+        self.controller.as_ref()
+    }
+
+    fn attach_handler(&mut self, mut handler: Box<ComponentHandler>) -> HostResult<()> {
+        let Some(controller) = &self.controller else {
+            return Ok(());
+        };
+        check("IEditController::setComponentHandler", unsafe {
+            // SAFETY: controller is initialized and handler has a stable Box
+            // address that this guard retains until it detaches the handler.
+            ((*controller_table(controller)).set_component_handler)(
+                controller.as_ptr(),
+                handler.as_interface(),
+            )
+        })?;
+        self.handler = Some(handler);
+        self.handler_attached = true;
+        Ok(())
+    }
+
+    fn take(
+        mut self,
+    ) -> (
+        Option<ComPtr<IEditController>>,
+        Option<Box<ComponentHandler>>,
+        bool,
+    ) {
+        self.handler_attached = false;
+        let initialized_separately = self.initialized_separately;
+        self.initialized_separately = false;
+        (
+            self.controller.take(),
+            self.handler.take(),
+            initialized_separately,
+        )
+    }
+}
+
+impl Drop for InitializedController {
+    fn drop(&mut self) {
+        if self.handler_attached {
+            if let Some(controller) = &self.controller {
+                unsafe {
+                    // SAFETY: controller and retained handler are both live;
+                    // clearing the callback precedes handler destruction.
+                    ((*controller_table(controller)).set_component_handler)(
+                        controller.as_ptr(),
+                        std::ptr::null_mut(),
+                    );
+                }
+            }
+            self.handler_attached = false;
+        }
+        self.handler.take();
+        if self.initialized_separately {
+            if let Some(controller) = &self.controller {
+                unsafe {
+                    // SAFETY: this guard owns the one successful initialize
+                    // call and terminates it exactly once before ComPtr release.
+                    ((*controller_table(controller)).base.terminate)(
+                        controller.as_ptr().cast::<IPluginBase>(),
+                    );
+                }
+            }
+            self.initialized_separately = false;
+        }
+    }
+}
+
 impl ComponentConnections {
     fn connect(
         component: ComPtr<IConnectionPoint>,
@@ -485,43 +597,37 @@ impl HostedPlugin {
             )?;
         let shared = HandlerShared::new(parameter_producer);
         let (controller, separate_controller) = create_controller(&module, &processor)?;
-        let parameter_ids = controller
-            .as_ref()
+        let mut controller_lifecycle = InitializedController::new(controller, separate_controller);
+        let parameter_ids = controller_lifecycle
+            .controller()
             .map(controller_parameter_ids)
             .transpose()?
             .unwrap_or_default();
         let (output_parameter_writer, output_parameter_reader) =
             output_parameter_bridge(parameter_ids);
         processor.set_output_parameter_writer(output_parameter_writer);
-        let midi_mapping = Arc::new(MidiMappingTable::query(controller.as_ref()));
-        let mut handler = controller
-            .as_ref()
-            .map(|_| ComponentHandler::new(shared.clone()));
-        if let (Some(controller), Some(handler)) = (&controller, handler.as_mut()) {
-            check("IEditController::setComponentHandler", unsafe {
-                // SAFETY: controller is initialized and handler has a stable Box address that
-                // remains owned until setComponentHandler(null) during Drop.
-                ((*controller_table(controller)).set_component_handler)(
-                    controller.as_ptr(),
-                    handler.as_interface(),
-                )
-            })?;
+        let midi_mapping = Arc::new(MidiMappingTable::query(controller_lifecycle.controller()));
+        if controller_lifecycle.controller().is_some() {
+            controller_lifecycle.attach_handler(ComponentHandler::new(shared.clone()))?;
         }
         let connections = if separate_controller {
             match (
-                processor.component().query::<IConnectionPoint>().ok(),
-                controller
-                    .as_ref()
-                    .and_then(|value| value.query::<IConnectionPoint>().ok()),
+                processor.component().query::<IConnectionPoint>(),
+                controller_lifecycle
+                    .controller()
+                    .ok_or(HostError::NullInterface("IEditController"))?
+                    .query::<IConnectionPoint>(),
             ) {
-                (Some(component), Some(controller)) => {
+                (Ok(component), Ok(controller)) => {
                     Some(ComponentConnections::connect(component, controller)?)
                 }
-                _ => None,
+                (Err(error), _) | (_, Err(error)) => return Err(error),
             }
         } else {
             None
         };
+        processor.activate()?;
+        let (controller, handler, controller_initialized) = controller_lifecycle.take();
         Ok((
             Self {
                 processor: ProcessorCell::new(processor),
@@ -532,7 +638,7 @@ impl HostedPlugin {
                 handler,
                 shared,
                 output_parameter_reader,
-                controller_initialized: true,
+                controller_initialized,
                 class_id,
             },
             hook_result,
@@ -585,8 +691,39 @@ impl HostedPlugin {
     }
 
     #[must_use]
-    pub fn take_latency_changed(&self) -> bool {
-        self.shared.take_latency_changed()
+    pub fn take_restart_requests(&self) -> crate::Vst3RestartRequest {
+        self.shared.take_restart_requests()
+    }
+
+    pub fn apply_restart_requests(&mut self, request: crate::Vst3RestartRequest) -> HostResult<()> {
+        if request.contains(crate::Vst3RestartRequest::RELOAD_COMPONENT) {
+            return Err(HostError::Operation {
+                operation: "restartComponent(kReloadComponent) requires instance reload",
+                result: -2147467259,
+            });
+        }
+        if request.contains(crate::Vst3RestartRequest::MIDI_CC_ASSIGNMENT_CHANGED) {
+            self.midi_mapping.refresh(self.controller.as_ref());
+        }
+        if request.contains(crate::Vst3RestartRequest::PARAM_ID_MAPPING_CHANGED) {
+            let parameter_ids = self
+                .controller
+                .as_ref()
+                .map(controller_parameter_ids)
+                .transpose()?
+                .unwrap_or_default();
+            let (writer, reader) = output_parameter_bridge(parameter_ids);
+            self.processor
+                .with_paused(|processor| processor.set_output_parameter_writer(writer));
+            self.output_parameter_reader = reader;
+        }
+        if request.contains(crate::Vst3RestartRequest::IO_CHANGED)
+            || request.contains(crate::Vst3RestartRequest::LATENCY_CHANGED)
+        {
+            self.processor
+                .with_paused(StereoProcessor::restart_processing)?;
+        }
+        Ok(())
     }
 
     pub fn flush_output_parameters(&mut self) -> HostResult<usize> {
@@ -637,6 +774,20 @@ impl HostedPlugin {
                 // SAFETY: controller is live and raw.id came from this controller.
                 ((*table).parameter_normalized)(controller.as_ptr(), raw.id)
             };
+            let mut text = [0_u16; 128];
+            let string_result = unsafe {
+                // SAFETY: controller is live, raw.id belongs to it, and text is writable String128 storage.
+                ((*table).parameter_string)(
+                    controller.as_ptr(),
+                    raw.id,
+                    normalized,
+                    text.as_mut_ptr(),
+                )
+            };
+            let flags = as_uint32(raw.flags);
+            if flags & as_uint32(Vst::ParameterInfo_ParameterFlags_kIsHidden) != 0 {
+                continue;
+            }
             parameters.push(HostedParameter {
                 id: raw.id,
                 title: utf16_string(&raw.title),
@@ -645,7 +796,12 @@ impl HostedPlugin {
                 step_count: raw.stepCount,
                 default_normalized: raw.defaultNormalizedValue,
                 normalized,
-                flags: raw.flags as u32,
+                formatted: if string_result == 0 {
+                    utf16_string(&text)
+                } else {
+                    String::new()
+                },
+                flags,
             });
         }
         Ok(parameters)
@@ -656,6 +812,18 @@ impl HostedPlugin {
             return Err(HostError::Operation {
                 operation: "parameter value outside 0...1",
                 result: -2147024809,
+            });
+        }
+        if let Some(controller) = &self.controller
+            && let Some(flags) = controller_parameter_flags(controller, id)?
+            && flags
+                & (as_uint32(Vst::ParameterInfo_ParameterFlags_kIsReadOnly)
+                    | as_uint32(Vst::ParameterInfo_ParameterFlags_kIsHidden))
+                != 0
+        {
+            return Err(HostError::Operation {
+                operation: "parameter is read-only or hidden",
+                result: -2147024891,
             });
         }
         if !self.shared.enqueue_parameter(id, normalized) {
@@ -683,35 +851,46 @@ impl HostedPlugin {
 
     pub fn restore_state(&self, component_state: &[u8], controller_state: &[u8]) -> HostResult<()> {
         self.processor.with_paused(|processor| {
-            let mut component_stream = MemoryStream::from_slice(component_state);
-            check("IComponent::setState", unsafe {
-                // SAFETY: component is live, processing is paused, and stream remains valid.
-                ((*component_table(processor.component())).set_state)(
-                    processor.component().as_ptr(),
-                    component_stream.as_interface(),
-                )
-            })?;
-            if let Some(controller) = &self.controller {
-                component_stream.rewind();
-                check("IEditController::setComponentState", unsafe {
-                    // SAFETY: controller and stream are live on the UI thread.
-                    ((*controller_table(controller)).set_component_state)(
-                        controller.as_ptr(),
+            processor.deactivate()?;
+            let restore_result = (|| {
+                let mut component_stream = MemoryStream::from_slice(component_state);
+                check("IComponent::setState", unsafe {
+                    // SAFETY: the component is initialized but inactive, and
+                    // the stream remains valid for this synchronous call.
+                    ((*component_table(processor.component())).set_state)(
+                        processor.component().as_ptr(),
                         component_stream.as_interface(),
                     )
                 })?;
-                if !controller_state.is_empty() {
-                    let mut stream = MemoryStream::from_slice(controller_state);
-                    check("IEditController::setState", unsafe {
-                        // SAFETY: controller and stream are live on the UI thread.
-                        ((*controller_table(controller)).set_state)(
-                            controller.as_ptr(),
-                            stream.as_interface(),
-                        )
-                    })?;
+                if let Some(controller) = &self.controller {
+                    component_stream.rewind();
+                    check_optional_controller_state(
+                        "IEditController::setComponentState",
+                        unsafe {
+                            // SAFETY: controller and stream are live on the UI thread.
+                            ((*controller_table(controller)).set_component_state)(
+                                controller.as_ptr(),
+                                component_stream.as_interface(),
+                            )
+                        },
+                    )?;
+                    if !controller_state.is_empty() {
+                        let mut stream = MemoryStream::from_slice(controller_state);
+                        check("IEditController::setState", unsafe {
+                            // SAFETY: controller and stream are live on the UI thread.
+                            ((*controller_table(controller)).set_state)(
+                                controller.as_ptr(),
+                                stream.as_interface(),
+                            )
+                        })?;
+                    }
                 }
-            }
-            Ok(())
+                Ok(())
+            })();
+            // Re-enter a usable processing state even when a malformed plug-in
+            // state was rejected; callers still receive the restore failure.
+            let activation_result = processor.activate();
+            restore_result.and(activation_result)
         })
     }
 
@@ -729,14 +908,23 @@ impl HostedPlugin {
         })?;
         let controller_state = if let Some(controller) = &self.controller {
             let mut stream = MemoryStream::empty();
-            check("IEditController::getState", unsafe {
+            let result = unsafe {
                 // SAFETY: controller is live on the owning UI thread and stream is writable.
                 ((*controller_table(controller)).get_state)(
                     controller.as_ptr(),
                     stream.as_interface(),
                 )
-            })?;
-            stream.into_bytes()
+            };
+            if result == 0 {
+                stream.into_bytes()
+            } else if is_not_implemented(result) {
+                Vec::new()
+            } else {
+                return Err(HostError::Operation {
+                    operation: "IEditController::getState",
+                    result,
+                });
+            }
         } else {
             Vec::new()
         };
@@ -973,6 +1161,33 @@ fn controller_parameter_ids(controller: &ComPtr<IEditController>) -> HostResult<
     Ok(ids)
 }
 
+fn controller_parameter_flags(
+    controller: &ComPtr<IEditController>,
+    id: u32,
+) -> HostResult<Option<u32>> {
+    let table = controller_table(controller);
+    let count = unsafe {
+        // SAFETY: controller is initialized and live on its owning UI thread.
+        ((*table).parameter_count)(controller.as_ptr())
+    }
+    .max(0);
+    for index in 0..count {
+        let mut raw = std::mem::MaybeUninit::<ParameterInfo>::zeroed();
+        check("IEditController::getParameterInfo(flags)", unsafe {
+            // SAFETY: index is below parameter_count and raw is writable SDK storage.
+            ((*table).parameter_info)(controller.as_ptr(), index, raw.as_mut_ptr())
+        })?;
+        let raw = unsafe {
+            // SAFETY: successful parameter_info initialized the POD.
+            raw.assume_init()
+        };
+        if raw.id == id {
+            return Ok(Some(as_uint32(raw.flags)));
+        }
+    }
+    Ok(None)
+}
+
 fn component_table(component: &ComPtr<IComponent>) -> *const ComponentVTable {
     unsafe {
         // SAFETY: ComPtr guarantees the object's leading vtable pointer.
@@ -1024,6 +1239,20 @@ fn check(operation: &'static str, result: i32) -> HostResult<()> {
     }
 }
 
+fn is_not_implemented(result: i32) -> bool {
+    // SDK-native kNotImplemented on macOS/Linux plus the COM-compatible
+    // encodings used by Windows toolchains and some cross-platform wrappers.
+    [3, 0x8000_4001_u32 as i32, 0x8000_0001_u32 as i32].contains(&result)
+}
+
+fn check_optional_controller_state(operation: &'static str, result: i32) -> HostResult<()> {
+    if result == 0 || is_not_implemented(result) {
+        Ok(())
+    } else {
+        Err(HostError::Operation { operation, result })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1040,11 +1269,8 @@ mod tests {
 
     #[test]
     fn midi_mapping_returns_only_assigned_parameters() {
-        let mut parameters =
-            vec![UNMAPPED_PARAMETER; MIDI_MAPPING_CHANNELS * MIDI_MAPPING_CONTROLLERS]
-                .into_boxed_slice();
-        parameters[MIDI_MAPPING_CONTROLLERS + MIDI_PITCH_BEND] = 77;
-        let mapping = MidiMappingTable { parameters };
+        let mapping = MidiMappingTable::query(None);
+        mapping.parameters[MIDI_MAPPING_CONTROLLERS + MIDI_PITCH_BEND].store(77, Ordering::Release);
 
         assert_eq!(mapping.parameter(1, MIDI_PITCH_BEND), Some(77));
         assert_eq!(mapping.parameter(1, MIDI_AFTERTOUCH), None);
@@ -1070,5 +1296,21 @@ mod tests {
                 result: -7,
             })
         ));
+    }
+
+    #[test]
+    fn recognizes_every_sdk_not_implemented_encoding() {
+        for result in [3, 0x8000_4001_u32 as i32, 0x8000_0001_u32 as i32] {
+            assert!(is_not_implemented(result));
+        }
+        assert!(!is_not_implemented(0));
+        assert!(!is_not_implemented(1));
+    }
+
+    #[test]
+    fn optional_controller_state_rejects_real_failures() {
+        assert!(check_optional_controller_state("fixture", 0).is_ok());
+        assert!(check_optional_controller_state("fixture", 3).is_ok());
+        assert!(check_optional_controller_state("fixture", 1).is_err());
     }
 }

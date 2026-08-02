@@ -164,6 +164,7 @@ export class ProjectGraphService {
         if (!state) continue
         plugin.componentState = new Uint8Array(state.componentState)
         plugin.controllerState = new Uint8Array(state.controllerState)
+        plugin.araDocumentState = new Uint8Array(state.araDocumentState ?? [])
       }
       this.commit(projectId, next)
     })

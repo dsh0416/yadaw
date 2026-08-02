@@ -11,6 +11,7 @@ struct WinitHost {
     audio_engine: Arc<engine::AudioEngine>,
     background_sender: mpsc::Sender<ActorRequest>,
     host_events: std_mpsc::SyncSender<HostEvent>,
+    pending_ara_events: VecDeque<HostEvent>,
     vst3: Option<vst3::Vst3Runtime>,
     ara_graph: Option<LiveMixerGraph>,
     compositor: Option<WgpuCompositor>,
@@ -18,6 +19,7 @@ struct WinitHost {
     editors: HashMap<WindowId, EditorWindow>,
     editor_instances: HashMap<String, WindowId>,
     next_editor_tick: Option<Instant>,
+    next_ara_tick: Option<Instant>,
     next_retirement_tick: Option<Instant>,
     output_parameter_error_reported: bool,
 }
@@ -29,7 +31,93 @@ impl WinitHost {
     const UI_BATCH: usize = 4;
     const UI_BUDGET: std::time::Duration = std::time::Duration::from_millis(2);
     const EDITOR_TICK: Duration = Duration::from_millis(16);
+    const ARA_CALLBACK_TICK: Duration = Duration::from_millis(33);
     const RETIREMENT_TICK: Duration = Duration::from_millis(16);
+
+    fn poll_ara_callbacks(&mut self) {
+        self.flush_pending_ara_events();
+        let include_model_events = self.pending_ara_events.is_empty();
+        let batches = self
+            .vst3
+            .as_mut()
+            .map(|runtime| runtime.poll_ara_callbacks(include_model_events))
+            .unwrap_or_default();
+        for batch in batches {
+            for (sequence, event) in batch.events {
+                self.pending_ara_events.push_back(HostEvent::AraCallback {
+                    instance_id: batch.instance_id.clone(),
+                    sequence,
+                    event,
+                });
+            }
+            for command in batch.transport {
+                let result = match command {
+                    crate::ara::AraTransportCommand::Play => self.audio_engine.transport_command(
+                        "play".to_owned(), None, None, None, None,
+                    ),
+                    crate::ara::AraTransportCommand::Pause => self.audio_engine.transport_command(
+                        "pause".to_owned(), None, None, None, None,
+                    ),
+                    crate::ara::AraTransportCommand::SeekFrames(position) => self
+                        .audio_engine
+                        .transport_command("seek".to_owned(), Some(position), None, None, None),
+                    crate::ara::AraTransportCommand::SetLoop {
+                        enabled,
+                        start_tick,
+                        end_tick,
+                    } => self.audio_engine.transport_command(
+                        "set-loop".to_owned(),
+                        None,
+                        Some(enabled),
+                        Some(start_tick),
+                        Some(end_tick),
+                    ),
+                };
+                if let Err(error) = result {
+                    self.publish_ara_runtime_failure(&batch.instance_id, error);
+                }
+            }
+            for failure in batch.failures {
+                self.publish_ara_runtime_failure(&batch.instance_id, failure);
+            }
+        }
+        self.flush_pending_ara_events();
+    }
+
+    fn flush_pending_ara_events(&mut self) {
+        while let Some(event) = self.pending_ara_events.pop_front() {
+            match self.host_events.try_send(event) {
+                Ok(()) => {}
+                Err(std_mpsc::TrySendError::Full(event)) => {
+                    self.pending_ara_events.push_front(event);
+                    break;
+                }
+                Err(std_mpsc::TrySendError::Disconnected(_)) => {
+                    self.pending_ara_events.clear();
+                    break;
+                }
+            }
+        }
+    }
+
+    fn publish_ara_runtime_failure(&self, instance_id: &str, diagnostic: impl std::fmt::Display) {
+        self.publish_plugin_runtime_failure(instance_id, "ara-playback-callback", diagnostic);
+    }
+
+    fn publish_plugin_runtime_failure(
+        &self,
+        instance_id: &str,
+        phase: &str,
+        diagnostic: impl std::fmt::Display,
+    ) {
+        if let ControlResult::Error { error } = crate::control_error_result(diagnostic) {
+            let _ = self.host_events.try_send(HostEvent::RuntimeFailure {
+                error,
+                plugin_instance_id: Some(instance_id.to_owned()),
+                phase: Some(phase.to_owned()),
+            });
+        }
+    }
 
     fn open_editor(
         &mut self,
@@ -182,6 +270,7 @@ impl WinitHost {
                 let result = match runtime.sync_ara_graph(graph.as_ref()) {
                     Ok(()) => {
                         self.ara_graph = graph;
+                        self.next_ara_tick = Some(Instant::now());
                         ControlResult::Accepted
                     }
                     Err(message) => control_error! { message },
@@ -212,6 +301,9 @@ impl WinitHost {
                             );
                         }
                     }
+                }
+                for (instance_id, failure) in runtime.take_restart_failures() {
+                    self.publish_plugin_runtime_failure(&instance_id, "vst3-restart", failure);
                 }
                 let (callback_generation, transport_state) = self.audio_engine.heartbeat_snapshot();
                 ControlResult::Heartbeat {
@@ -337,6 +429,17 @@ impl ApplicationHandler<UiEvent> for WinitHost {
             self.next_editor_tick = Some(now + Self::EDITOR_TICK);
         }
 
+        let has_ara_documents = self
+            .vst3
+            .as_ref()
+            .is_some_and(vst3::Vst3Runtime::has_ara_documents);
+        if !has_ara_documents {
+            self.next_ara_tick = None;
+        } else if self.next_ara_tick.is_none_or(|deadline| now >= deadline) {
+            self.poll_ara_callbacks();
+            self.next_ara_tick = Some(now + Self::ARA_CALLBACK_TICK);
+        }
+
         let next_plugin_timer = (!self.editors.is_empty())
             .then(|| {
                 self.editors
@@ -348,6 +451,7 @@ impl ApplicationHandler<UiEvent> for WinitHost {
         let deadline = self
             .next_editor_tick
             .into_iter()
+            .chain(self.next_ara_tick)
             .chain(self.next_retirement_tick)
             .chain(next_plugin_timer)
             .min();

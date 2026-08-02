@@ -4,10 +4,11 @@ use std::{
     os::raw::c_char,
     sync::{
         Arc,
-        atomic::{AtomicBool, AtomicU32, Ordering},
+        atomic::{AtomicU32, Ordering},
     },
 };
 
+use bitflags::bitflags;
 use ringbuf::{HeapProd, traits::Producer};
 use yadaw_vst3_host_sys::{
     Steinberg::{
@@ -24,7 +25,26 @@ use crate::processor::QueuedParameter;
 pub(crate) struct HandlerShared {
     parameter_producer: UnsafeCell<HeapProd<QueuedParameter>>,
     parameter_mirror: UnsafeCell<Option<Arc<HandlerShared>>>,
-    latency_changed: AtomicBool,
+    restart_requests: AtomicU32,
+}
+
+bitflags! {
+    /// Typed `IComponentHandler::restartComponent` requests published by a plug-in.
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub struct Vst3RestartRequest: u32 {
+        const RELOAD_COMPONENT = 1 << 0;
+        const IO_CHANGED = 1 << 1;
+        const PARAM_VALUES_CHANGED = 1 << 2;
+        const LATENCY_CHANGED = 1 << 3;
+        const PARAM_TITLES_CHANGED = 1 << 4;
+        const MIDI_CC_ASSIGNMENT_CHANGED = 1 << 5;
+        const NOTE_EXPRESSION_CHANGED = 1 << 6;
+        const IO_TITLES_CHANGED = 1 << 7;
+        const PREFETCHABLE_SUPPORT_CHANGED = 1 << 8;
+        const ROUTING_INFO_CHANGED = 1 << 9;
+        const KEYSWITCH_CHANGED = 1 << 10;
+        const PARAM_ID_MAPPING_CHANGED = 1 << 11;
+    }
 }
 
 impl HandlerShared {
@@ -32,7 +52,7 @@ impl HandlerShared {
         Arc::new(Self {
             parameter_producer: UnsafeCell::new(parameter_producer),
             parameter_mirror: UnsafeCell::new(None),
-            latency_changed: AtomicBool::new(false),
+            restart_requests: AtomicU32::new(0),
         })
     }
 
@@ -69,8 +89,8 @@ impl HandlerShared {
         }
     }
 
-    pub(crate) fn take_latency_changed(&self) -> bool {
-        self.latency_changed.swap(false, Ordering::AcqRel)
+    pub(crate) fn take_restart_requests(&self) -> Vst3RestartRequest {
+        Vst3RestartRequest::from_bits_retain(self.restart_requests.swap(0, Ordering::AcqRel))
     }
 }
 
@@ -176,13 +196,16 @@ unsafe extern "system" fn restart_component(this: *mut IComponentHandler, flags:
         // SAFETY: this is the interface pointer of a live ComponentHandler.
         &*this.cast::<ComponentHandler>()
     };
-    const LATENCY_CHANGED: i32 = 1 << 4;
-    if flags & LATENCY_CHANGED != 0 {
-        handler
-            .shared
-            .latency_changed
-            .store(true, Ordering::Release);
-    }
+    let Ok(flags) = u32::try_from(flags) else {
+        return -2147024809;
+    };
+    let Some(request) = Vst3RestartRequest::from_bits(flags) else {
+        return -2147024809;
+    };
+    handler
+        .shared
+        .restart_requests
+        .fetch_or(request.bits(), Ordering::AcqRel);
     0
 }
 
@@ -205,7 +228,7 @@ mod tests {
         traits::{Consumer, Split},
     };
 
-    use super::HandlerShared;
+    use super::{HandlerShared, Vst3RestartRequest, restart_component};
 
     #[test]
     fn parameter_mirror_queues_the_same_change_for_both_mono_processors() {
@@ -222,5 +245,53 @@ mod tests {
         let secondary_change = secondary_consumer.try_pop().unwrap();
         assert_eq!(primary_change.id, secondary_change.id);
         assert_eq!(primary_change.value, secondary_change.value);
+    }
+
+    #[test]
+    fn restart_component_uses_the_sdk_latency_bit_and_preserves_all_known_flags() {
+        let ring = HeapRb::new(8);
+        let (producer, _consumer) = ring.split();
+        let shared = HandlerShared::new(producer);
+        let mut handler = super::ComponentHandler::new(shared.clone());
+        let flags = (Vst3RestartRequest::LATENCY_CHANGED
+            | Vst3RestartRequest::PARAM_TITLES_CHANGED
+            | Vst3RestartRequest::ROUTING_INFO_CHANGED)
+            .bits();
+        let result = unsafe {
+            // SAFETY: handler owns a live interface for the duration of this direct ABI call.
+            restart_component(handler.as_interface(), flags as i32)
+        };
+        assert_eq!(result, 0);
+        let request = shared.take_restart_requests();
+        assert!(request.contains(Vst3RestartRequest::LATENCY_CHANGED));
+        assert!(request.contains(Vst3RestartRequest::PARAM_TITLES_CHANGED));
+        assert!(request.contains(Vst3RestartRequest::ROUTING_INFO_CHANGED));
+    }
+
+    #[test]
+    fn restart_component_accepts_every_sdk_flag_and_rejects_reserved_bits() {
+        let ring = HeapRb::new(8);
+        let (producer, _consumer) = ring.split();
+        let shared = HandlerShared::new(producer);
+        let mut handler = super::ComponentHandler::new(shared.clone());
+        let accepted = unsafe {
+            // SAFETY: handler owns a live interface for the duration of this direct ABI call.
+            restart_component(
+                handler.as_interface(),
+                Vst3RestartRequest::all().bits() as i32,
+            )
+        };
+        assert_eq!(accepted, 0);
+        assert_eq!(
+            shared.take_restart_requests().bits(),
+            Vst3RestartRequest::all().bits()
+        );
+
+        let rejected = unsafe {
+            // SAFETY: same live handler; the reserved bit is intentionally invalid input.
+            restart_component(handler.as_interface(), (1_u32 << 31) as i32)
+        };
+        assert_ne!(rejected, 0);
+        assert!(shared.take_restart_requests().is_empty());
     }
 }

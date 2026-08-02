@@ -10,7 +10,7 @@ use yadaw_dsp_runtime::{
 pub use yadaw_vst3_host::Vst3ProcessorHandle;
 use yadaw_vst3_host::{AudioLayout, ClassId, HostedPlugin, PlugView, PluginKind};
 
-use crate::ara::{AraDocument, AraFactoryHost};
+use crate::ara::{AraCallbackBatch, AraDocument, AraFactoryHost};
 
 pub struct Vst3Runtime {
     instances: HashMap<String, Instance>,
@@ -19,6 +19,8 @@ pub struct Vst3Runtime {
     benchmark_lifetime_guards: Vec<GuardedInstance>,
     ara_factories: HashMap<(String, String), Rc<AraFactoryHost>>,
     next_runtime_handle: u32,
+    next_ara_callback_sequence: u64,
+    restart_failures: Vec<(String, String)>,
 }
 
 struct GuardedInstance {
@@ -136,6 +138,8 @@ impl Vst3Runtime {
             benchmark_lifetime_guards: Vec::new(),
             ara_factories: HashMap::new(),
             next_runtime_handle: 1,
+            next_ara_callback_sequence: 0,
+            restart_failures: Vec::new(),
         }
     }
 
@@ -322,6 +326,7 @@ impl Vst3Runtime {
                         step_count: parameter.step_count,
                         default_normalized: parameter.default_normalized,
                         normalized: parameter.normalized,
+                        formatted: parameter.formatted,
                         flags: parameter.flags,
                     })
                     .collect()
@@ -358,24 +363,42 @@ impl Vst3Runtime {
         }
     }
 
-    pub fn take_timing_changes(&self) -> Vec<(String, u32, Option<u32>)> {
-        self.instances
-            .iter()
-            .filter(|(_, instance)| {
-                instance.plugin.take_latency_changed()
-                    || instance
-                        .secondary
-                        .as_ref()
-                        .is_some_and(HostedPlugin::take_latency_changed)
-            })
-            .map(|(id, instance)| {
-                (
+    pub fn take_timing_changes(&mut self) -> Vec<(String, u32, Option<u32>)> {
+        let mut timing = Vec::new();
+        for (id, instance) in &mut self.instances {
+            let primary = instance.plugin.take_restart_requests();
+            let secondary = instance
+                .secondary
+                .as_ref()
+                .map(HostedPlugin::take_restart_requests)
+                .unwrap_or_default();
+            let request = primary | secondary;
+            if request.is_empty() {
+                continue;
+            }
+            if let Err(error) = instance.plugin.apply_restart_requests(primary) {
+                self.restart_failures.push((id.clone(), error.to_string()));
+            }
+            if let Some(secondary_plugin) = &mut instance.secondary
+                && let Err(error) = secondary_plugin.apply_restart_requests(secondary)
+            {
+                self.restart_failures.push((id.clone(), error.to_string()));
+            }
+            if request.contains(yadaw_vst3_host::Vst3RestartRequest::LATENCY_CHANGED)
+                || request.contains(yadaw_vst3_host::Vst3RestartRequest::IO_CHANGED)
+            {
+                timing.push((
                     id.clone(),
                     instance.latency_samples(),
                     instance.tail_samples(),
-                )
-            })
-            .collect()
+                ));
+            }
+        }
+        timing
+    }
+
+    pub fn take_restart_failures(&mut self) -> Vec<(String, String)> {
+        std::mem::take(&mut self.restart_failures)
     }
 
     pub fn flush_output_parameters(&mut self) -> Result<usize, String> {
@@ -402,6 +425,28 @@ impl Vst3Runtime {
             }
         }
         Ok(())
+    }
+
+    #[must_use]
+    pub fn has_ara_documents(&self) -> bool {
+        self.instances
+            .values()
+            .any(|instance| instance.ara.is_some())
+    }
+
+    pub(crate) fn poll_ara_callbacks(
+        &mut self,
+        include_model_events: bool,
+    ) -> Vec<AraCallbackBatch> {
+        let callback_sequence = &mut self.next_ara_callback_sequence;
+        self.instances
+            .values_mut()
+            .filter_map(|instance| {
+                instance.ara.as_mut().map(|document| {
+                    document.poll_host_callbacks(include_model_events, callback_sequence)
+                })
+            })
+            .collect()
     }
 
     fn load_plugin(&mut self, request: LoadPluginRequest) -> ControlResult {
@@ -461,10 +506,16 @@ impl Vst3Runtime {
                 PluginAudioMode::MonoToStereo | PluginAudioMode::DualMono
             )
         {
-            return control_error("unsupported instrument audio mode");
+            return crate::plugin_capability_error_result(
+                "unsupported instrument audio mode",
+                "audio_mode",
+            );
         }
         if ara_factory_class_id.is_some() && audio_mode == PluginAudioMode::DualMono {
-            return control_error("ARA plug-ins do not support the dual-mono hosting mode");
+            return crate::plugin_capability_error_result(
+                "ARA plug-ins do not support the dual-mono hosting mode",
+                "audio_mode",
+            );
         }
         let (plugin, ara) = match ara_factory_class_id {
             Some(factory_class_id) => {
@@ -719,5 +770,31 @@ mod tests {
     fn an_infinite_dual_mono_tail_dominates_a_finite_tail() {
         assert_eq!(max_tail(Some(128), None), None);
         assert_eq!(max_tail(Some(128), Some(256)), Some(256));
+    }
+
+    #[test]
+    fn ara_dual_mono_is_a_plugin_capability_error() {
+        let mut runtime = Vst3Runtime::new();
+        let result = runtime.load_plugin(LoadPluginRequest {
+            instance_id: "ara-dual-mono".into(),
+            module_path: "unused.vst3".into(),
+            class_id: "00000000000000000000000000000000".into(),
+            plugin_kind: "effect".into(),
+            audio_mode: PluginAudioMode::DualMono,
+            sample_rate: 48_000.0,
+            component_state: Vec::new(),
+            controller_state: Vec::new(),
+            ara_factory_class_id: Some("00000000000000000000000000000001".into()),
+            ara_document_state: Vec::new(),
+        });
+        let ControlResult::Error { error } = result else {
+            panic!("ARA dual-mono must be rejected before module loading");
+        };
+        assert_eq!(
+            error.code,
+            yadaw_dsp_runtime::protocol::RpcErrorCode::ValidationFailed
+        );
+        assert_eq!(error.retry, yadaw_dsp_runtime::protocol::RpcRetry::Never);
+        assert_eq!(error.user_message_key, "errors.pluginUnavailable");
     }
 }

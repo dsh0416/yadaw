@@ -9,10 +9,10 @@ use super::{
     },
 };
 use ara2_bridge_core::{
-    ApiGeneration, AraBool, AraError, AudioModificationProperties, AudioSourceProperties,
-    ContentTimeRange, ContentUpdateScopes, DocumentProperties, ModelRef, MusicalContextKind,
-    MusicalContextProperties, PlaybackRegionProperties, RegionSequenceKind,
-    RegionSequenceProperties, RestoreFilter,
+    ApiGeneration, AraBool, AraError, AudioModificationKind, AudioModificationProperties,
+    AudioSourceProperties, ContentTimeRange, ContentUpdateScopes, DocumentProperties, ModelRef,
+    MusicalContextKind, MusicalContextProperties, PlaybackRegionKind, PlaybackRegionProperties,
+    RegionSequenceKind, RegionSequenceProperties, RestoreFilter,
 };
 use ara2_bridge_sys::{
     ARAArchiveReaderHostRef, ARAAudioModificationHostRef, ARAAudioModificationRef,
@@ -59,6 +59,22 @@ impl<'session, 'factory, 'services> EditSession<'session, 'factory, 'services> {
         handle: AudioSourceHandle,
     ) -> Result<ModelRef<ara2_bridge_core::AudioSourceKind>, AraError> {
         self.session.audio_source_ref(handle)
+    }
+
+    /// Returns the stable host reference for a modification created in this edit scope.
+    pub fn audio_modification_ref(
+        &self,
+        handle: AudioModificationHandle,
+    ) -> Result<ModelRef<AudioModificationKind>, AraError> {
+        self.session.audio_modification_ref(handle)
+    }
+
+    /// Returns the stable host reference for a playback region created in this edit scope.
+    pub fn playback_region_ref(
+        &self,
+        handle: PlaybackRegionHandle,
+    ) -> Result<ModelRef<PlaybackRegionKind>, AraError> {
+        self.session.playback_region_ref(handle)
     }
 
     /// Selects one advertised processing algorithm for a live audio source.

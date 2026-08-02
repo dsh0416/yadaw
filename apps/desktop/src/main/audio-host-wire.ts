@@ -89,6 +89,7 @@ export interface ControlResponse {
       step_count: number
       default_normalized: number
       normalized: number
+      formatted?: string
       flags: number
     }>
     component_state?: BinaryPayloadWire

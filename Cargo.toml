@@ -82,6 +82,12 @@ yadaw-vst3-host = { path = "crates/vst3-host" }
 yadaw-vst3-host-sys = { path = "crates/vst3-host-sys" }
 yadaw-plugin-ui = { path = "plugins/yadaw-plugin-ui" }
 
+[patch.crates-io]
+# The published testkit depends on the published host crate. Redirect that edge
+# to the audited in-tree host implementation so integration tests exercise the
+# same code that ships and Cargo never links two ABI-identical host runtimes.
+ara2-bridge-host = { path = "third_party/ara2-bridge-host" }
+
 [workspace.lints.rust]
 unexpected_cfgs = "warn"
 unsafe_op_in_unsafe_fn = "deny"

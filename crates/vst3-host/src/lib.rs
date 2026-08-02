@@ -21,6 +21,7 @@ mod stream;
 
 pub use ara::{AraMainFactory, AraPluginEntry};
 pub use com::{ComInterface, ComPtr};
+pub use component_handler::Vst3RestartRequest;
 pub use error::{HostError, HostResult};
 pub use frame::PlugFrame;
 pub use hosted::{HostedParameter, HostedPlugin, PlugView, ProcessorLease};

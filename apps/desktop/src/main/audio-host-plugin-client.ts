@@ -141,6 +141,7 @@ export class AudioHostPluginClient {
       stepCount: parameter.step_count,
       defaultNormalized: parameter.default_normalized,
       normalized: parameter.normalized,
+      ...(parameter.formatted === undefined ? {} : { formatted: parameter.formatted }),
       flags: parameter.flags
     }))
   }

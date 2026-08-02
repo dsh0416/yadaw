@@ -96,9 +96,11 @@ export function pluginLooksLikeInstrument(categories: readonly string[]): boolea
 export function normalizePluginDescriptor(
   value: PluginDescriptor & { category?: string }
 ): PluginDescriptor {
-  const supportedAudioModes = Array.isArray(value.supportedAudioModes)
-    ? value.supportedAudioModes
-    : (["stereo"] as PluginAudioMode[])
+  const supportedAudioModes = (
+    Array.isArray(value.supportedAudioModes)
+      ? value.supportedAudioModes
+      : (["stereo"] as PluginAudioMode[])
+  ).filter((mode) => mode !== "dual-mono" || value.ara === undefined)
   const categories = parsePluginCategories(value.categories ?? value.category)
   const { category: _legacyCategory, ...rest } = value
   return {
@@ -178,6 +180,7 @@ export interface PluginParameterInfo {
   stepCount: number
   defaultNormalized: number
   normalized: number
+  formatted?: string
   flags: number
 }
 
@@ -217,4 +220,32 @@ export interface PluginParameterEnqueueResult {
   helperEpoch: string
   sequence: string
   outcome: PluginParameterEnqueueOutcome
+}
+export type AraCallbackEvent =
+  | {
+      kind: "analysis-progress"
+      objectId: string
+      state: "started" | "updated" | "completed"
+      progress: number
+    }
+  | {
+      kind: "content-changed"
+      objectKind: "audio-source" | "audio-modification" | "playback-region" | "document"
+      objectId: string
+      startSeconds?: number
+      durationSeconds?: number
+      scopes: number
+    }
+  | { kind: "document-data-changed" }
+  | { kind: "archive-progress"; direction: "store" | "restore"; progress: number }
+  | {
+      kind: "quarantined"
+      category: "invalid-reference" | "queue-overflow" | "provider-panic" | "host-state"
+      recoverable: boolean
+    }
+
+export interface AraCallbackNotification {
+  instanceId: string
+  callbackSequence: number
+  event: AraCallbackEvent
 }

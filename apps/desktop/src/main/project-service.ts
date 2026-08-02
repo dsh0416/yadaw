@@ -488,6 +488,10 @@ export class ProjectService {
     return this.requireActive().worker.cancel(operationId)
   }
 
+  async markExternalStateDirty(): Promise<void> {
+    await this.markDirty()
+  }
+
   private async markDirty(): Promise<void> {
     const context = this.active
     if (!context || context.session.dirty) return

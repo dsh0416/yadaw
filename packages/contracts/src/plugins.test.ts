@@ -203,6 +203,24 @@ describe("normalizePluginDescriptor", () => {
     expect(modes).toEqual(["mono", "dual-mono"])
   })
 
+  it("removes derived dual mono from ARA descriptors", () => {
+    const ara = descriptor({
+      supportedAudioModes: ["mono", "stereo", "dual-mono"],
+      ara: {
+        apiGeneration: 2,
+        factoryClassId: "ara-factory",
+        factoryId: "com.vendor.ara",
+        documentArchiveId: "com.vendor.ara.archive",
+        lowestApiGeneration: 4,
+        highestApiGeneration: 5,
+        playbackTransformationFlags: 0,
+        supportsStoringAudioFileChunks: false
+      }
+    })
+
+    expect(normalizePluginDescriptor(ara).supportedAudioModes).toEqual(["mono", "stereo"])
+  })
+
   it("preserves every other descriptor field", () => {
     const original = descriptor({
       hasEditor: true,

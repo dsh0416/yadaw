@@ -594,7 +594,7 @@ fn run_legacy() -> Result<(), Box<dyn std::error::Error>> {
         let result = match request.command {
             ControlCommand::BenchmarkEcho { payload } => ControlResult::BenchmarkEcho { payload },
             ControlCommand::Ping => {
-                if let Some(runtime) = vst3.as_ref() {
+                if let Some(runtime) = vst3.as_mut() {
                     for (instance_id, latency, tail) in runtime.take_timing_changes() {
                         if let Err(error) =
                             audio_engine.update_plugin_timing(&instance_id, latency, tail)
@@ -603,6 +603,9 @@ fn run_legacy() -> Result<(), Box<dyn std::error::Error>> {
                                 "audio-host: could not rebuild dynamic plugin latency: {error}"
                             );
                         }
+                    }
+                    for (instance_id, error) in runtime.take_restart_failures() {
+                        eprintln!("audio-host: VST3 restart failed for {instance_id}: {error}");
                     }
                 }
                 let (callback_generation, transport_state) = audio_engine.heartbeat_snapshot();

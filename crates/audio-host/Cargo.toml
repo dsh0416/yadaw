@@ -29,6 +29,9 @@ yadaw-audio-engine.workspace = true
 yadaw-ipc-transport.workspace = true
 yadaw-vst3-host.workspace = true
 
+[dev-dependencies]
+yadaw-audio-engine = { workspace = true, features = ["test-support"] }
+
 [lints]
 workspace = true
 
