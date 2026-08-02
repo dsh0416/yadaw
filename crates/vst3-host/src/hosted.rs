@@ -400,6 +400,97 @@ struct ComponentConnections {
     controller_connected: bool,
 }
 
+/// Owns an initialized edit controller while `HostedPlugin` construction can
+/// still fail. Its drop order mirrors the successful host teardown: detach the
+/// component handler, release the handler, terminate a separately initialized
+/// controller, then release the controller interface.
+struct InitializedController {
+    controller: Option<ComPtr<IEditController>>,
+    handler: Option<Box<ComponentHandler>>,
+    initialized_separately: bool,
+    handler_attached: bool,
+}
+
+impl InitializedController {
+    fn new(controller: Option<ComPtr<IEditController>>, initialized_separately: bool) -> Self {
+        Self {
+            controller,
+            handler: None,
+            initialized_separately,
+            handler_attached: false,
+        }
+    }
+
+    fn controller(&self) -> Option<&ComPtr<IEditController>> {
+        self.controller.as_ref()
+    }
+
+    fn attach_handler(&mut self, mut handler: Box<ComponentHandler>) -> HostResult<()> {
+        let Some(controller) = &self.controller else {
+            return Ok(());
+        };
+        check("IEditController::setComponentHandler", unsafe {
+            // SAFETY: controller is initialized and handler has a stable Box
+            // address that this guard retains until it detaches the handler.
+            ((*controller_table(controller)).set_component_handler)(
+                controller.as_ptr(),
+                handler.as_interface(),
+            )
+        })?;
+        self.handler = Some(handler);
+        self.handler_attached = true;
+        Ok(())
+    }
+
+    fn take(
+        mut self,
+    ) -> (
+        Option<ComPtr<IEditController>>,
+        Option<Box<ComponentHandler>>,
+        bool,
+    ) {
+        self.handler_attached = false;
+        let initialized_separately = self.initialized_separately;
+        self.initialized_separately = false;
+        (
+            self.controller.take(),
+            self.handler.take(),
+            initialized_separately,
+        )
+    }
+}
+
+impl Drop for InitializedController {
+    fn drop(&mut self) {
+        if self.handler_attached {
+            if let Some(controller) = &self.controller {
+                unsafe {
+                    // SAFETY: controller and retained handler are both live;
+                    // clearing the callback precedes handler destruction.
+                    ((*controller_table(controller)).set_component_handler)(
+                        controller.as_ptr(),
+                        std::ptr::null_mut(),
+                    );
+                }
+            }
+            self.handler_attached = false;
+        }
+        self.handler.take();
+        if self.initialized_separately {
+            if let Some(controller) = &self.controller {
+                unsafe {
+                    // SAFETY: this guard owns the one successful initialize
+                    // call and terminates it exactly once before ComPtr release.
+                    ((*controller_table(controller)).base.terminate)(
+                        controller.as_ptr().cast::<IPluginBase>(),
+                    );
+                }
+            }
+            self.initialized_separately = false;
+        }
+    }
+}
+
 impl ComponentConnections {
     fn connect(
         component: ComPtr<IConnectionPoint>,
@@ -506,33 +597,24 @@ impl HostedPlugin {
             )?;
         let shared = HandlerShared::new(parameter_producer);
         let (controller, separate_controller) = create_controller(&module, &processor)?;
-        let parameter_ids = controller
-            .as_ref()
+        let mut controller_lifecycle = InitializedController::new(controller, separate_controller);
+        let parameter_ids = controller_lifecycle
+            .controller()
             .map(controller_parameter_ids)
             .transpose()?
             .unwrap_or_default();
         let (output_parameter_writer, output_parameter_reader) =
             output_parameter_bridge(parameter_ids);
         processor.set_output_parameter_writer(output_parameter_writer);
-        let midi_mapping = Arc::new(MidiMappingTable::query(controller.as_ref()));
-        let mut handler = controller
-            .as_ref()
-            .map(|_| ComponentHandler::new(shared.clone()));
-        if let (Some(controller), Some(handler)) = (&controller, handler.as_mut()) {
-            check("IEditController::setComponentHandler", unsafe {
-                // SAFETY: controller is initialized and handler has a stable Box address that
-                // remains owned until setComponentHandler(null) during Drop.
-                ((*controller_table(controller)).set_component_handler)(
-                    controller.as_ptr(),
-                    handler.as_interface(),
-                )
-            })?;
+        let midi_mapping = Arc::new(MidiMappingTable::query(controller_lifecycle.controller()));
+        if controller_lifecycle.controller().is_some() {
+            controller_lifecycle.attach_handler(ComponentHandler::new(shared.clone()))?;
         }
         let connections = if separate_controller {
             match (
                 processor.component().query::<IConnectionPoint>(),
-                controller
-                    .as_ref()
+                controller_lifecycle
+                    .controller()
                     .ok_or(HostError::NullInterface("IEditController"))?
                     .query::<IConnectionPoint>(),
             ) {
@@ -545,6 +627,7 @@ impl HostedPlugin {
             None
         };
         processor.activate()?;
+        let (controller, handler, controller_initialized) = controller_lifecycle.take();
         Ok((
             Self {
                 processor: ProcessorCell::new(processor),
@@ -555,7 +638,7 @@ impl HostedPlugin {
                 handler,
                 shared,
                 output_parameter_reader,
-                controller_initialized: true,
+                controller_initialized,
                 class_id,
             },
             hook_result,
@@ -768,35 +851,43 @@ impl HostedPlugin {
 
     pub fn restore_state(&self, component_state: &[u8], controller_state: &[u8]) -> HostResult<()> {
         self.processor.with_paused(|processor| {
-            let mut component_stream = MemoryStream::from_slice(component_state);
-            check("IComponent::setState", unsafe {
-                // SAFETY: component is live, processing is paused, and stream remains valid.
-                ((*component_table(processor.component())).set_state)(
-                    processor.component().as_ptr(),
-                    component_stream.as_interface(),
-                )
-            })?;
-            if let Some(controller) = &self.controller {
-                component_stream.rewind();
-                check("IEditController::setComponentState", unsafe {
-                    // SAFETY: controller and stream are live on the UI thread.
-                    ((*controller_table(controller)).set_component_state)(
-                        controller.as_ptr(),
+            processor.deactivate()?;
+            let restore_result = (|| {
+                let mut component_stream = MemoryStream::from_slice(component_state);
+                check("IComponent::setState", unsafe {
+                    // SAFETY: the component is initialized but inactive, and
+                    // the stream remains valid for this synchronous call.
+                    ((*component_table(processor.component())).set_state)(
+                        processor.component().as_ptr(),
                         component_stream.as_interface(),
                     )
                 })?;
-                if !controller_state.is_empty() {
-                    let mut stream = MemoryStream::from_slice(controller_state);
-                    check("IEditController::setState", unsafe {
+                if let Some(controller) = &self.controller {
+                    component_stream.rewind();
+                    check("IEditController::setComponentState", unsafe {
                         // SAFETY: controller and stream are live on the UI thread.
-                        ((*controller_table(controller)).set_state)(
+                        ((*controller_table(controller)).set_component_state)(
                             controller.as_ptr(),
-                            stream.as_interface(),
+                            component_stream.as_interface(),
                         )
                     })?;
+                    if !controller_state.is_empty() {
+                        let mut stream = MemoryStream::from_slice(controller_state);
+                        check("IEditController::setState", unsafe {
+                            // SAFETY: controller and stream are live on the UI thread.
+                            ((*controller_table(controller)).set_state)(
+                                controller.as_ptr(),
+                                stream.as_interface(),
+                            )
+                        })?;
+                    }
                 }
-            }
-            Ok(())
+                Ok(())
+            })();
+            // Re-enter a usable processing state even when a malformed plug-in
+            // state was rejected; callers still receive the restore failure.
+            let activation_result = processor.activate();
+            restore_result.and(activation_result)
         })
     }
 

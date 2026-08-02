@@ -8,10 +8,10 @@ use yadaw_vst3_host_sys::{
     Steinberg::{
         IPluginBase,
         Vst::{
-            self, AudioBusBuffers, AudioBusBuffers__bindgen_ty_1, BusDirections, DataEvent, Event,
-            Event__bindgen_ty_1, IAudioProcessor, IComponent, IProcessContextRequirements,
-            NoteOffEvent, NoteOnEvent, PolyPressureEvent, ProcessContext, ProcessData,
-            ProcessSetup, SpeakerArrangement,
+            self, AudioBusBuffers, AudioBusBuffers__bindgen_ty_1, BusDirections, BusInfo,
+            DataEvent, Event, Event__bindgen_ty_1, IAudioProcessor, IComponent,
+            IProcessContextRequirements, NoteOffEvent, NoteOnEvent, PolyPressureEvent,
+            ProcessContext, ProcessData, ProcessSetup, SpeakerArrangement,
         },
     },
     abi::{AudioProcessorVTable, ComponentVTable, ProcessContextRequirementsVTable},
@@ -82,6 +82,45 @@ pub(crate) struct QueuedParameter {
     pub(crate) sample_offset: i32,
 }
 
+struct AudioBusStorage {
+    descriptors: Vec<AudioBusBuffers>,
+    channel_pointers: Vec<Vec<*mut f32>>,
+    scratch: Vec<Vec<f32>>,
+    input: bool,
+}
+
+impl AudioBusStorage {
+    const fn empty(input: bool) -> Self {
+        Self {
+            descriptors: Vec::new(),
+            channel_pointers: Vec::new(),
+            scratch: Vec::new(),
+            input,
+        }
+    }
+
+    fn connect_main(&mut self, channels: &mut [*mut f32]) {
+        self.channel_pointers[0].copy_from_slice(channels);
+        self.descriptors[0].silenceFlags = 0;
+    }
+
+    fn disconnect_main(&mut self) {
+        let scratch = self.scratch[0].as_mut_ptr();
+        for (channel, pointer) in self.channel_pointers[0].iter_mut().enumerate() {
+            *pointer = unsafe {
+                // SAFETY: every bus scratch allocation contains MAX_BLOCK_FRAMES
+                // samples for each channel in its matching pointer array.
+                scratch.add(channel * MAX_BLOCK_FRAMES as usize)
+            };
+        }
+        self.descriptors[0].silenceFlags = if self.input {
+            silence_flags(self.channel_pointers[0].len())
+        } else {
+            0
+        };
+    }
+}
+
 /// A mono/stereo sample32 VST3 component with explicit lifecycle ownership.
 pub struct StereoProcessor {
     processor: ComPtr<IAudioProcessor>,
@@ -97,6 +136,8 @@ pub struct StereoProcessor {
     module: Rc<Module>,
     kind: PluginKind,
     layout: AudioLayout,
+    audio_input_buses: AudioBusStorage,
+    audio_output_buses: AudioBusStorage,
     active: bool,
 }
 
@@ -205,6 +246,8 @@ impl StereoProcessor {
                 module,
                 kind,
                 layout,
+                audio_input_buses: AudioBusStorage::empty(true),
+                audio_output_buses: AudioBusStorage::empty(false),
                 active: false,
             },
             parameter_producer,
@@ -237,28 +280,17 @@ impl StereoProcessor {
             )
         })?;
         negotiate_bus_arrangements(&self.component, &self.processor, self.layout)?;
-        if self.kind == PluginKind::Effect {
-            check("activate audio input", unsafe {
-                // SAFETY: component is initialized; bus zero is the negotiated main input.
-                ((*component_table).activate_bus)(
-                    self.component.as_ptr(),
-                    as_media_type(Vst::MediaTypes_kAudio),
-                    as_bus_direction(Vst::BusDirections_kInput),
-                    0,
-                    1,
-                )
-            })?;
-        }
-        check("activate audio output", unsafe {
-            // SAFETY: component is initialized; bus zero is the negotiated main output.
-            ((*component_table).activate_bus)(
-                self.component.as_ptr(),
-                as_media_type(Vst::MediaTypes_kAudio),
-                as_bus_direction(Vst::BusDirections_kOutput),
-                0,
-                1,
-            )
-        })?;
+        configure_audio_bus_activation(&self.component, self.kind)?;
+        self.audio_input_buses =
+            prepare_audio_bus_storage(&self.component, Vst::BusDirections_kInput)?;
+        self.audio_output_buses =
+            prepare_audio_bus_storage(&self.component, Vst::BusDirections_kOutput)?;
+        validate_main_bus_layout(
+            &self.audio_input_buses,
+            &self.audio_output_buses,
+            self.kind,
+            self.layout,
+        )?;
         activate_event_input_buses(&self.component)?;
         let mut setup = ProcessSetup {
             processMode: as_int32(Vst::ProcessModes_kRealtime),
@@ -286,15 +318,25 @@ impl StereoProcessor {
     }
 
     pub(crate) fn restart_processing(&mut self) -> HostResult<()> {
-        if self.active {
-            unsafe {
-                // SAFETY: processing and activation are stopped in reverse order on the UI thread.
-                ((*processor_table(&self.processor)).set_processing)(self.processor.as_ptr(), 0);
-                ((*component_table(&self.component)).set_active)(self.component.as_ptr(), 0);
-            }
-            self.active = false;
-        }
+        self.deactivate()?;
         self.activate()
+    }
+
+    pub(crate) fn deactivate(&mut self) -> HostResult<()> {
+        if !self.active {
+            return Ok(());
+        }
+        check_optional("setProcessing(false)", unsafe {
+            // SAFETY: the component is processing and this runs while the
+            // processor lease is paused on the owning control thread.
+            ((*processor_table(&self.processor)).set_processing)(self.processor.as_ptr(), 0)
+        })?;
+        check("setActive(false)", unsafe {
+            // SAFETY: processing has stopped and the initialized component is live.
+            ((*component_table(&self.component)).set_active)(self.component.as_ptr(), 0)
+        })?;
+        self.active = false;
+        Ok(())
     }
 
     #[must_use]
@@ -357,20 +399,12 @@ impl StereoProcessor {
         }
         let mut input_channels = [input_left.as_mut_ptr(), input_right.as_mut_ptr()];
         let mut output_channels = [output_left.as_mut_ptr(), output_right.as_mut_ptr()];
-        let mut input_bus = AudioBusBuffers {
-            numChannels: self.layout.input_channels(),
-            silenceFlags: 0,
-            __bindgen_anon_1: AudioBusBuffers__bindgen_ty_1 {
-                channelBuffers32: input_channels.as_mut_ptr(),
-            },
-        };
-        let mut output_bus = AudioBusBuffers {
-            numChannels: self.layout.output_channels(),
-            silenceFlags: 0,
-            __bindgen_anon_1: AudioBusBuffers__bindgen_ty_1 {
-                channelBuffers32: output_channels.as_mut_ptr(),
-            },
-        };
+        if self.kind == PluginKind::Effect {
+            self.audio_input_buses
+                .connect_main(&mut input_channels[..self.layout.input_channels() as usize]);
+        }
+        self.audio_output_buses
+            .connect_main(&mut output_channels[..self.layout.output_channels() as usize]);
         let event_list = (!self.input_events.is_empty()).then(|| self.input_events.as_interface());
         while let Some(parameter) = self.parameter_consumer.try_pop() {
             let _ = self.input_parameters.add_value(
@@ -396,14 +430,14 @@ impl StereoProcessor {
             processMode: as_int32(Vst::ProcessModes_kRealtime),
             symbolicSampleSize: as_int32(Vst::SymbolicSampleSizes_kSample32),
             numSamples: frames as i32,
-            numInputs: i32::from(self.kind == PluginKind::Effect),
-            numOutputs: 1,
-            inputs: if self.kind == PluginKind::Effect {
-                std::ptr::addr_of_mut!(input_bus)
-            } else {
+            numInputs: self.audio_input_buses.descriptors.len() as i32,
+            numOutputs: self.audio_output_buses.descriptors.len() as i32,
+            inputs: if self.audio_input_buses.descriptors.is_empty() {
                 std::ptr::null_mut()
+            } else {
+                self.audio_input_buses.descriptors.as_mut_ptr()
             },
-            outputs: std::ptr::addr_of_mut!(output_bus),
+            outputs: self.audio_output_buses.descriptors.as_mut_ptr(),
             inputParameterChanges: parameter_changes,
             outputParameterChanges: output_parameter_changes,
             inputEvents: event_list.unwrap_or(std::ptr::null_mut()),
@@ -421,6 +455,10 @@ impl StereoProcessor {
         if result.is_ok() {
             self.publish_output_parameters();
         }
+        if self.kind == PluginKind::Effect {
+            self.audio_input_buses.disconnect_main();
+        }
+        self.audio_output_buses.disconnect_main();
         self.input_events.clear();
         self.input_parameters.clear();
         self.output_parameters.clear();
@@ -778,6 +816,176 @@ fn audio_bus_count(component: &ComPtr<IComponent>, direction: BusDirections) -> 
     .max(0)
 }
 
+fn silence_flags(channels: usize) -> u64 {
+    match channels {
+        0 => 0,
+        64.. => u64::MAX,
+        _ => (1_u64 << channels) - 1,
+    }
+}
+
+fn prepare_audio_bus_storage(
+    component: &ComPtr<IComponent>,
+    direction: BusDirections,
+) -> HostResult<AudioBusStorage> {
+    let count = audio_bus_count(component, direction) as usize;
+    let input = direction == Vst::BusDirections_kInput;
+    let mut channel_counts = Vec::with_capacity(count);
+    let component_table = component_table(component);
+
+    for index in 0..count {
+        let mut info = unsafe {
+            // SAFETY: BusInfo is an SDK POD and getBusInfo initializes every field.
+            std::mem::MaybeUninit::<BusInfo>::zeroed().assume_init()
+        };
+        check("get audio bus info", unsafe {
+            // SAFETY: index is within getBusCount for this audio direction and
+            // info points to live writable SDK storage.
+            ((*component_table).get_bus_info)(
+                component.as_ptr(),
+                as_media_type(Vst::MediaTypes_kAudio),
+                as_bus_direction(direction),
+                index as i32,
+                std::ptr::addr_of_mut!(info),
+            )
+        })?;
+        let channels = usize::try_from(info.channelCount).map_err(|_| HostError::Operation {
+            operation: "audio bus channel count",
+            result: -2147024809,
+        })?;
+        if channels > 64 {
+            return Err(HostError::Operation {
+                operation: "audio bus channel count",
+                result: -2147024809,
+            });
+        }
+        channel_counts.push(channels);
+    }
+
+    Ok(build_audio_bus_storage(&channel_counts, input))
+}
+
+fn build_audio_bus_storage(channel_counts: &[usize], input: bool) -> AudioBusStorage {
+    let mut descriptors = Vec::with_capacity(channel_counts.len());
+    let mut channel_pointers = Vec::with_capacity(channel_counts.len());
+    let mut scratch = Vec::with_capacity(channel_counts.len());
+
+    for &channels in channel_counts {
+        let sample_count = channels * MAX_BLOCK_FRAMES as usize;
+        let mut bus_scratch = vec![0.0_f32; sample_count];
+        let base = bus_scratch.as_mut_ptr();
+        let mut bus_channel_pointers = (0..channels)
+            .map(|channel| unsafe {
+                // SAFETY: sample_count reserves MAX_BLOCK_FRAMES samples for
+                // every channel and channel is strictly below channels.
+                base.add(channel * MAX_BLOCK_FRAMES as usize)
+            })
+            .collect::<Vec<_>>();
+        let channel_buffers = if bus_channel_pointers.is_empty() {
+            std::ptr::null_mut()
+        } else {
+            bus_channel_pointers.as_mut_ptr()
+        };
+        descriptors.push(AudioBusBuffers {
+            numChannels: channels as i32,
+            silenceFlags: if input { silence_flags(channels) } else { 0 },
+            __bindgen_anon_1: AudioBusBuffers__bindgen_ty_1 {
+                channelBuffers32: channel_buffers,
+            },
+        });
+        channel_pointers.push(bus_channel_pointers);
+        scratch.push(bus_scratch);
+    }
+
+    AudioBusStorage {
+        descriptors,
+        channel_pointers,
+        scratch,
+        input,
+    }
+}
+
+fn validate_main_bus_layout(
+    inputs: &AudioBusStorage,
+    outputs: &AudioBusStorage,
+    kind: PluginKind,
+    layout: AudioLayout,
+) -> HostResult<()> {
+    if kind == PluginKind::Effect
+        && inputs.descriptors.first().map(|bus| bus.numChannels) != Some(layout.input_channels())
+    {
+        return Err(HostError::Operation {
+            operation: "main audio input layout",
+            result: -2147024809,
+        });
+    }
+    if outputs.descriptors.first().map(|bus| bus.numChannels) != Some(layout.output_channels()) {
+        return Err(HostError::Operation {
+            operation: "main audio output layout",
+            result: -2147024809,
+        });
+    }
+    Ok(())
+}
+
+/// Synchronizes the component's bus state with the process buffers YADAW can
+/// route today: the first main bus is active and every auxiliary bus is not.
+///
+/// Some commercial multi-out instruments keep their default-active auxiliary
+/// busses in their render loop until the host explicitly deactivates them.
+/// Leaving those busses implicit while supplying only the main bus lets such a
+/// plug-in index beyond the host's `AudioBusBuffers` array.
+fn configure_audio_bus_activation(
+    component: &ComPtr<IComponent>,
+    kind: PluginKind,
+) -> HostResult<()> {
+    let component_table = component_table(component);
+    let input_count = audio_bus_count(component, Vst::BusDirections_kInput);
+    let output_count = audio_bus_count(component, Vst::BusDirections_kOutput);
+    if kind == PluginKind::Effect && input_count == 0 {
+        return Err(HostError::Operation {
+            operation: "audio input bus count",
+            result: -2147024809,
+        });
+    }
+    if output_count == 0 {
+        return Err(HostError::Operation {
+            operation: "audio output bus count",
+            result: -2147024809,
+        });
+    }
+
+    for index in 0..input_count {
+        let active = u8::from(kind == PluginKind::Effect && index == 0);
+        check("configure audio input bus", unsafe {
+            // SAFETY: index is within getBusCount(kAudio, kInput), and bus
+            // activation happens before the component enters the active state.
+            ((*component_table).activate_bus)(
+                component.as_ptr(),
+                as_media_type(Vst::MediaTypes_kAudio),
+                as_bus_direction(Vst::BusDirections_kInput),
+                index,
+                active,
+            )
+        })?;
+    }
+    for index in 0..output_count {
+        let active = u8::from(index == 0);
+        check("configure audio output bus", unsafe {
+            // SAFETY: index is within getBusCount(kAudio, kOutput), and bus
+            // activation happens before the component enters the active state.
+            ((*component_table).activate_bus)(
+                component.as_ptr(),
+                as_media_type(Vst::MediaTypes_kAudio),
+                as_bus_direction(Vst::BusDirections_kOutput),
+                index,
+                active,
+            )
+        })?;
+    }
+    Ok(())
+}
+
 fn bus_arrangement(
     processor: &ComPtr<IAudioProcessor>,
     direction: BusDirections,
@@ -1073,5 +1281,30 @@ mod tests {
             as_uint32(Vst::ProcessContext_StatesAndFlags_kTempoValid)
         );
         assert_eq!(value.tempo, 127.0);
+    }
+
+    #[test]
+    fn multi_output_storage_keeps_every_bus_and_channel_pointer_valid() {
+        let storage = build_audio_bus_storage(&[2; 18], false);
+
+        assert_eq!(storage.descriptors.len(), 18);
+        assert_eq!(storage.channel_pointers.len(), 18);
+        assert_eq!(storage.scratch.len(), 18);
+        for (descriptor, pointers) in storage.descriptors.iter().zip(&storage.channel_pointers) {
+            assert_eq!(descriptor.numChannels, 2);
+            assert_eq!(pointers.len(), 2);
+            // SAFETY: the storage builder initialized the active sample32 union member.
+            assert!(!unsafe { descriptor.__bindgen_anon_1.channelBuffers32 }.is_null());
+            assert!(pointers.iter().all(|pointer| !pointer.is_null()));
+        }
+    }
+
+    #[test]
+    fn inactive_input_storage_reports_silent_channels() {
+        let storage = build_audio_bus_storage(&[1, 2, 64], true);
+
+        assert_eq!(storage.descriptors[0].silenceFlags, 0b1);
+        assert_eq!(storage.descriptors[1].silenceFlags, 0b11);
+        assert_eq!(storage.descriptors[2].silenceFlags, u64::MAX);
     }
 }
