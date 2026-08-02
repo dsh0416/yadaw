@@ -24,18 +24,23 @@ export function createBlogSidebar(): DefaultTheme.SidebarItem[] {
 function readBlogSidebarEntry(entry: { name: string }): BlogSidebarEntry | undefined {
   const filename = join(blogDirectory, entry.name)
   const { data } = matter(readFileSync(filename, "utf8"))
-  if (!data.date) {
+  const date = formatDate(data.date)
+  if (date === undefined) {
     return undefined
   }
 
   return {
     text: String(data.title ?? "Untitled"),
     link: `/blog/${parse(entry.name).name}`,
-    date: formatDate(data.date)
+    date
   }
 }
 
-function formatDate(value: unknown): string {
+function formatDate(value: unknown): string | undefined {
   const date = value instanceof Date ? value : new Date(String(value))
+  if (Number.isNaN(date.getTime())) {
+    return undefined
+  }
+
   return date.toISOString().slice(0, 10)
 }
