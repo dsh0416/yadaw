@@ -19,6 +19,7 @@ pub struct Vst3Runtime {
     benchmark_lifetime_guards: Vec<GuardedInstance>,
     ara_factories: HashMap<(String, String), Rc<AraFactoryHost>>,
     next_runtime_handle: u32,
+    next_ara_callback_sequence: u64,
     restart_failures: Vec<(String, String)>,
 }
 
@@ -137,6 +138,7 @@ impl Vst3Runtime {
             benchmark_lifetime_guards: Vec::new(),
             ara_factories: HashMap::new(),
             next_runtime_handle: 1,
+            next_ara_callback_sequence: 0,
             restart_failures: Vec::new(),
         }
     }
@@ -432,10 +434,18 @@ impl Vst3Runtime {
             .any(|instance| instance.ara.is_some())
     }
 
-    pub(crate) fn poll_ara_callbacks(&mut self) -> Vec<AraCallbackBatch> {
+    pub(crate) fn poll_ara_callbacks(
+        &mut self,
+        include_model_events: bool,
+    ) -> Vec<AraCallbackBatch> {
+        let callback_sequence = &mut self.next_ara_callback_sequence;
         self.instances
             .values_mut()
-            .filter_map(|instance| instance.ara.as_mut().map(AraDocument::poll_host_callbacks))
+            .filter_map(|instance| {
+                instance.ara.as_mut().map(|document| {
+                    document.poll_host_callbacks(include_model_events, callback_sequence)
+                })
+            })
             .collect()
     }
 

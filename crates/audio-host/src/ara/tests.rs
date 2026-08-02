@@ -51,7 +51,7 @@ fn callback_sink_coalesces_content_ranges_scopes_and_document_dirty() {
     })
     .unwrap();
 
-    let (events, transport) = sink.drain().unwrap();
+    let (events, transport) = sink.drain(true).unwrap();
     assert!(transport.is_empty());
     assert!(events.contains(&AraCallbackEvent::ContentChanged {
         object_kind: AraObjectKind::PlaybackRegion,
@@ -61,7 +61,47 @@ fn callback_sink_coalesces_content_ranges_scopes_and_document_dirty() {
         scopes: 5,
     }));
     assert!(events.contains(&AraCallbackEvent::DocumentDataChanged));
-    assert!(sink.drain().unwrap().0.is_empty());
+    assert!(sink.drain(true).unwrap().0.is_empty());
+}
+
+#[test]
+fn content_range_coalescing_keeps_the_available_interval() {
+    assert_eq!(
+        merge_content_ranges(None, Some((2.0, 3.0))),
+        Some((2.0, 3.0))
+    );
+    assert_eq!(
+        merge_content_ranges(Some((2.0, 3.0)), None),
+        Some((2.0, 3.0))
+    );
+    assert_eq!(merge_content_ranges(None, None), None);
+}
+
+#[test]
+fn transport_only_drain_preserves_aggregated_model_events() {
+    let sink = AraCallbackSink::default();
+    sink.activate();
+    sink.register(CallbackObjectKind::PlaybackRegion, 41, "clip-41".into())
+        .unwrap();
+    sink.content_changed(CallbackObjectKind::PlaybackRegion, 41, None, 1)
+        .unwrap();
+    sink.transport(AraTransportRequest::Start).unwrap();
+
+    let (events, transport) = sink.drain(false).unwrap();
+    assert!(events.is_empty());
+    assert_eq!(transport, vec![AraTransportRequest::Start]);
+    assert!(
+        sink.drain(true)
+            .unwrap()
+            .0
+            .contains(&AraCallbackEvent::ContentChanged {
+                object_kind: AraObjectKind::PlaybackRegion,
+                object_id: "clip-41".into(),
+                start_seconds: None,
+                duration_seconds: None,
+                scopes: 1,
+            })
+    );
 }
 
 #[test]
@@ -77,7 +117,7 @@ fn transport_overflow_quarantines_only_that_callback_sink() {
         Some(AraCallbackFailureCategory::QueueOverflow)
     );
     assert_eq!(
-        sink.drain().unwrap().1.len(),
+        sink.drain(true).unwrap().1.len(),
         AraCallbackSink::TRANSPORT_CAPACITY
     );
 }
@@ -92,7 +132,7 @@ fn archive_progress_keeps_only_the_latest_value_per_direction() {
         .unwrap();
     sink.archive_progress(AraArchiveDirection::Restore, 0.5)
         .unwrap();
-    let (events, _) = sink.drain().unwrap();
+    let (events, _) = sink.drain(true).unwrap();
     assert!(events.contains(&AraCallbackEvent::ArchiveProgress {
         direction: AraArchiveDirection::Store,
         progress: 0.75,
@@ -117,7 +157,7 @@ fn playback_provider_preserves_all_five_requests_in_order() {
     ara2_bridge_host::PlaybackProvider::stop(&playback).unwrap();
 
     assert_eq!(
-        sink.drain().unwrap().1,
+        sink.drain(true).unwrap().1,
         vec![
             AraTransportRequest::Start,
             AraTransportRequest::SetPosition(1.25),

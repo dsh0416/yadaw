@@ -36,13 +36,11 @@ impl WinitHost {
 
     fn poll_ara_callbacks(&mut self) {
         self.flush_pending_ara_events();
-        if !self.pending_ara_events.is_empty() {
-            return;
-        }
+        let include_model_events = self.pending_ara_events.is_empty();
         let batches = self
             .vst3
             .as_mut()
-            .map(vst3::Vst3Runtime::poll_ara_callbacks)
+            .map(|runtime| runtime.poll_ara_callbacks(include_model_events))
             .unwrap_or_default();
         for batch in batches {
             for (sequence, event) in batch.events {

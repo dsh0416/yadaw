@@ -1,3 +1,5 @@
+const VST3_PARAMETER_FLAG_READ_ONLY: u32 = 1 << 1;
+
 impl EditorWindow {
     fn update(&mut self, message: Message, actions: &mut Vec<EditorAction>) {
         match message {
@@ -152,7 +154,7 @@ impl EditorWindow {
                             format!("{:.1}%  {}", value * 100.0, parameter.units)
                         };
                         let control: Element<'_, Message, Theme, Renderer> =
-                            if parameter.flags & 2 != 0 {
+                            if parameter.flags & VST3_PARAMETER_FLAG_READ_ONLY != 0 {
                                 container(text(value_text.clone())).width(Length::Fill).into()
                             } else {
                                 slider(0.0..=1.0, value, move |normalized| {

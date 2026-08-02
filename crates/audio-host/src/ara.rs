@@ -6,7 +6,7 @@ use std::{
     rc::Rc,
     sync::{
         Arc, Mutex, RwLock,
-        atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU8, Ordering},
     },
 };
 
@@ -337,8 +337,14 @@ impl AraCallbackSink {
         })
     }
 
-    fn drain(&self) -> Result<(Vec<AraCallbackEvent>, Vec<AraTransportRequest>), AraError> {
+    fn drain(
+        &self,
+        include_model_events: bool,
+    ) -> Result<(Vec<AraCallbackEvent>, Vec<AraTransportRequest>), AraError> {
         let mut state = self.state.lock().map_err(|_| AraError::Poisoned)?;
+        if !include_model_events {
+            return Ok((Vec::new(), state.transport.drain(..).collect()));
+        }
         let mut events = Vec::with_capacity(
             state.analysis.len()
                 + state.content.len()
@@ -397,7 +403,8 @@ fn merge_content_ranges(left: Option<(f64, f64)>, right: Option<(f64, f64)>) -> 
             let end = (left_start + left_duration).max(right_start + right_duration);
             Some((start, end - start))
         }
-        _ => None,
+        (Some(range), None) | (None, Some(range)) => Some(range),
+        (None, None) => None,
     }
 }
 
@@ -931,7 +938,6 @@ pub(crate) struct AraDocument {
     timeline: TimelineContent,
     archives: ArchiveRegistry,
     callbacks: AraCallbackSink,
-    callback_sequence: AtomicU64,
     quarantine_reported: bool,
     archive_id: String,
     pending_archive: Option<Vec<u8>>,
@@ -1069,7 +1075,6 @@ impl AraDocument {
             timeline,
             archives,
             callbacks,
-            callback_sequence: AtomicU64::new(0),
             quarantine_reported: false,
             archive_id,
             pending_archive: (!archive.is_empty()).then_some(archive),
@@ -1080,7 +1085,11 @@ impl AraDocument {
         })
     }
 
-    pub(crate) fn poll_host_callbacks(&mut self) -> AraCallbackBatch {
+    pub(crate) fn poll_host_callbacks(
+        &mut self,
+        include_model_events: bool,
+        callback_sequence: &mut u64,
+    ) -> AraCallbackBatch {
         if !self.callbacks.is_quarantined() {
             let notify_result = self
                 .session
@@ -1101,20 +1110,24 @@ impl AraDocument {
             }
         }
 
-        let (events, transport) = self.callbacks.drain().unwrap_or_else(|_| {
-            self.callbacks
-                .quarantine(AraCallbackFailureCategory::ProviderPanic);
-            (Vec::new(), Vec::new())
-        });
+        let (events, transport) = self
+            .callbacks
+            .drain(include_model_events)
+            .unwrap_or_else(|_| {
+                self.callbacks
+                    .quarantine(AraCallbackFailureCategory::ProviderPanic);
+                (Vec::new(), Vec::new())
+            });
         let mut events = events
             .into_iter()
-            .map(|event| (self.next_callback_sequence(), event))
+            .map(|event| (next_callback_sequence(callback_sequence), event))
             .collect::<Vec<_>>();
-        if !self.quarantine_reported
+        if include_model_events
+            && !self.quarantine_reported
             && let Some(category) = self.callbacks.quarantine_category()
         {
             self.quarantine_reported = true;
-            let sequence = self.next_callback_sequence();
+            let sequence = next_callback_sequence(callback_sequence);
             events.push((
                 sequence,
                 AraCallbackEvent::Quarantined {
@@ -1142,10 +1155,6 @@ impl AraDocument {
             transport,
             failures,
         }
-    }
-
-    fn next_callback_sequence(&self) -> u64 {
-        self.callback_sequence.fetch_add(1, Ordering::Relaxed) + 1
     }
 
     fn resolve_transport_request(
@@ -1447,6 +1456,11 @@ impl AraDocument {
         self.audio.clear()?;
         self.timeline.clear()
     }
+}
+
+fn next_callback_sequence(sequence: &mut u64) -> u64 {
+    *sequence = sequence.saturating_add(1);
+    *sequence
 }
 
 impl Drop for AraDocument {

@@ -224,16 +224,16 @@ export interface PluginParameterEnqueueResult {
 export type AraCallbackEvent =
   | {
       kind: "analysis-progress"
-      object_id: string
+      objectId: string
       state: "started" | "updated" | "completed"
       progress: number
     }
   | {
       kind: "content-changed"
-      object_kind: "audio-source" | "audio-modification" | "playback-region" | "document"
-      object_id: string
-      start_seconds?: number
-      duration_seconds?: number
+      objectKind: "audio-source" | "audio-modification" | "playback-region" | "document"
+      objectId: string
+      startSeconds?: number
+      durationSeconds?: number
       scopes: number
     }
   | { kind: "document-data-changed" }

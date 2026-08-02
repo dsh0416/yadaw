@@ -13,6 +13,7 @@ import { registerSystemHandlers } from "./system-handlers"
 import { registerTransportHandlers } from "./transport-handlers"
 import { sampleSystemPerformance } from "./support"
 import { ProjectLifecycleService } from "../project-lifecycle-service"
+import { synchronizePluginStatesAtomically } from "../plugin-state-synchronizer"
 
 export function registerIpcHandlers(services: ApplicationServices): void {
   const { plugins, audioHost, projectGraph, settings } = services
@@ -56,30 +57,8 @@ export function registerIpcHandlers(services: ApplicationServices): void {
   }
   const midiSnapshotTimer = setInterval(() => void publishMidiSnapshot(), 100)
   midiSnapshotTimer.unref()
-  const synchronizePluginStates = async (): Promise<void> => {
-    const graph = await projectGraph.snapshot()
-    const states = []
-    const failures: unknown[] = []
-    for (const plugin of graph.plugins) {
-      try {
-        await audioHost.loadPlugin(plugin, graph.sampleRate)
-        const state = await audioHost.savePluginState(plugin.id)
-        states.push({
-          id: plugin.id,
-          componentState: state.componentState,
-          controllerState: state.controllerState,
-          araDocumentState: state.araDocumentState
-        })
-      } catch (error) {
-        console.error(`Could not synchronize VST3 state for ${plugin.id}:`, error)
-        failures.push(error)
-      }
-    }
-    if (states.length > 0) await projectGraph.savePluginStates(states)
-    if (failures.length > 0) {
-      throw new AggregateError(failures, "Could not synchronize every VST3 plug-in state")
-    }
-  }
+  const synchronizePluginStates = (): Promise<void> =>
+    synchronizePluginStatesAtomically(audioHost, projectGraph)
   const context: IpcHandlerContext = {
     ...services,
     projectLifecycle: new ProjectLifecycleService(

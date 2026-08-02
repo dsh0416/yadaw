@@ -1,5 +1,5 @@
 import { AudioHostDiagnostics } from "./audio-host-diagnostics"
-import { drainHostEvents } from "./audio-host-events"
+import { AraCallbackSequenceTracker, drainHostEvents } from "./audio-host-events"
 import type { AraHostCallback } from "./audio-host-events"
 import { graphDiff, readCrashMarker } from "./audio-host-graph-client"
 import { AudioHostRecordingClient } from "./audio-host-recording-client"
@@ -105,7 +105,7 @@ export class AudioHostService {
   }
   private readonly pendingPreferenceWrites = new Set<Promise<void>>()
   private readonly pendingAraCallbacks = new Set<Promise<void>>()
-  private readonly lastAraSequences = new Map<string, number>()
+  private readonly araCallbackSequences = new AraCallbackSequenceTracker()
   private araCallbackHandler: (callback: AraHostCallback) => void | Promise<void> = () => {}
   private readonly supervisor: AudioHostProcessSupervisor
   private readonly session = new AudioHostSessionCoordinator()
@@ -190,11 +190,8 @@ export class AudioHostService {
   }
 
   private handleAraCallback(callback: AraHostCallback): void {
-    const epoch = this.helperEpoch() ?? "0"
-    const key = `${epoch}\u0000${callback.instanceId}`
-    const previous = this.lastAraSequences.get(key) ?? 0
-    if (callback.sequence <= previous) return
-    this.lastAraSequences.set(key, callback.sequence)
+    if (callback.helperEpoch !== this.helperEpoch()) return
+    if (!this.araCallbackSequences.accept(callback.helperEpoch, callback.sequence)) return
     const pending = Promise.resolve(this.araCallbackHandler(callback))
       .catch((error: unknown) => {
         console.error("Could not reconcile an ARA host callback", error)
@@ -964,6 +961,7 @@ export class AudioHostService {
     if (this.client !== client) return
     this.audioTransport.captureTransport(client)
     this.client = null
+    this.araCallbackSequences.clear()
     this.heartbeatInFlight = false
     this.plugins.resetConnection()
     this.publishedGraph = null
@@ -1217,6 +1215,7 @@ export class AudioHostService {
     await this.gateway.settle()
     await Promise.allSettled([...this.pendingPreferenceWrites])
     await Promise.allSettled([...this.pendingAraCallbacks])
+    this.araCallbackSequences.clear()
     this.publishedGraph = null
     this.audioTransport.resetConnection()
   }

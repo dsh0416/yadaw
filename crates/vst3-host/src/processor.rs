@@ -1205,7 +1205,7 @@ fn check_optional(operation: &'static str, result: i32) -> HostResult<()> {
     // setupProcessing plus setActive still establishes a legal processing
     // lifecycle when an optional hint is ignored.
     const SDK_NOT_IMPLEMENTED: [i32; 3] = [3, 0x8000_4001_u32 as i32, 0x8000_0001_u32 as i32];
-    if result == 0 || result == 1 || SDK_NOT_IMPLEMENTED.contains(&result) {
+    if result == 0 || SDK_NOT_IMPLEMENTED.contains(&result) {
         Ok(())
     } else {
         Err(HostError::Operation { operation, result })
@@ -1233,6 +1233,7 @@ mod tests {
         for result in [3, 0x8000_4001_u32 as i32, 0x8000_0001_u32 as i32] {
             assert!(check_optional("optional fixture", result).is_ok());
         }
+        assert!(check_optional("optional fixture", 1).is_err());
         assert!(check_optional("optional fixture", 0x8000_0008_u32 as i32).is_err());
     }
 
