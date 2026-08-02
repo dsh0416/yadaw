@@ -44,6 +44,7 @@ export const usePluginStore = defineStore("plugins", () => {
   let unsubscribe: (() => void) | null = null
   let unsubscribeEditorClosed: (() => void) | null = null
   let parameterSequence = 0n
+  const openingEditors = new Map<string, Promise<void>>()
   let scanSourceEpoch: string | null = null
   let scanSequence = 0
 
@@ -365,7 +366,10 @@ export const usePluginStore = defineStore("plugins", () => {
       : addEffect(selection)
   }
 
-  async function openEditor(instanceId: string): Promise<void> {
+  async function openEditorNow(instanceId: string): Promise<void> {
+    // Opening an editor does not modify the project, but its request must use
+    // the graph handle that survives any already-running project mutation.
+    await projectStore.waitForProjectMutations()
     const target = projectStore.projectGraphRef
     if (!target) return
     const result = await window.yadaw.openPluginEditor(
@@ -378,6 +382,16 @@ export const usePluginStore = defineStore("plugins", () => {
     }
     resources.value = { ...resources.value, [instanceId]: result.value.resource }
     runtime.value = { ...runtime.value, [instanceId]: result.value.status }
+  }
+
+  function openEditor(instanceId: string): Promise<void> {
+    const existing = openingEditors.get(instanceId)
+    if (existing) return existing
+    const operation = openEditorNow(instanceId).finally(() => {
+      if (openingEditors.get(instanceId) === operation) openingEditors.delete(instanceId)
+    })
+    openingEditors.set(instanceId, operation)
+    return operation
   }
 
   async function closeEditor(instanceId: string): Promise<void> {

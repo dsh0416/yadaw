@@ -296,6 +296,10 @@ export const useProjectStore = defineStore("project", () => {
     }
   }
 
+  async function waitForProjectMutations(): Promise<void> {
+    await projectMutationTail
+  }
+
   return {
     lifecycle,
     session,
@@ -323,7 +327,8 @@ export const useProjectStore = defineStore("project", () => {
     updateConfiguration,
     refreshAssets,
     markDirty,
-    beginProjectMutation
+    beginProjectMutation,
+    waitForProjectMutations
   }
 })
 

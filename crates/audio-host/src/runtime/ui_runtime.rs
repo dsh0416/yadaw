@@ -45,7 +45,7 @@ impl WinitHost {
         if let Some(window_id) = self.editor_instances.get(&instance_id).copied()
             && let Some(editor) = self.editors.get(&window_id)
         {
-            editor.focus();
+            editor.present();
             return ControlResult::PluginEditor {
                 active_mode: editor.active_mode(),
                 open: true,
@@ -65,10 +65,7 @@ impl WinitHost {
             .display_name(&instance_id)
             .unwrap_or("VST3 plug-in")
             .to_owned();
-        let attributes = WindowAttributes::default()
-            .with_title(format!("{display_name} — YADAW"))
-            .with_inner_size(LogicalSize::new(720.0, 640.0));
-        let attributes = configure_editor_window_attributes(attributes, self.editor_owner_window);
+        let attributes = plugin_editor_window_attributes(&display_name, self.editor_owner_window);
         let window = match event_loop.create_window(attributes) {
             Ok(window) => Arc::new(window),
             Err(error) => {
@@ -109,6 +106,9 @@ impl WinitHost {
         let active_mode = editor.active_mode();
         self.editor_instances.insert(instance_id, window_id);
         self.editors.insert(window_id, editor);
+        if let Some(editor) = self.editors.get(&window_id) {
+            editor.present();
+        }
         ControlResult::PluginEditor {
             active_mode,
             open: true,
@@ -428,6 +428,19 @@ impl ApplicationHandler<UiEvent> for WinitHost {
             self.close_editor(&instance_id);
         }
     }
+}
+
+fn plugin_editor_window_attributes(
+    display_name: &str,
+    editor_owner_window: Option<usize>,
+) -> WindowAttributes {
+    let attributes = WindowAttributes::default()
+        .with_title(format!("{display_name} — YADAW"))
+        .with_inner_size(LogicalSize::new(720.0, 640.0))
+        // Do not expose a half-initialized surface. `present` makes the fully
+        // attached editor visible and activates it in one sequence.
+        .with_visible(false);
+    configure_editor_window_attributes(attributes, editor_owner_window)
 }
 
 fn configure_editor_window_attributes(

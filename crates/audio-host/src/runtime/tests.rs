@@ -10,6 +10,13 @@ mod tests {
     }
 
     #[test]
+    fn plugin_editor_is_created_hidden_until_native_attachment_is_ready() {
+        let attributes = plugin_editor_window_attributes("Pro-C", None);
+        assert!(!attributes.visible);
+        assert_eq!(attributes.title, "Pro-C — YADAW");
+    }
+
+    #[test]
     fn ui_mailbox_always_services_one_request_but_respects_fairness_limits() {
         assert!(should_drain_ui_request(
             0,
