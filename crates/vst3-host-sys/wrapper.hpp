@@ -13,6 +13,8 @@
 #include "pluginterfaces/vst/ivstmessage.h"
 #include "pluginterfaces/vst/ivstparameterchanges.h"
 #include "pluginterfaces/vst/ivstpluginterfacesupport.h"
+#include "pluginterfaces/vst/ivstattributes.h"
+#include "pluginterfaces/vst/ivstunits.h"
 
 #include "ARAInterface.h"
 #include "ARAVST3.h"

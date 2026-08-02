@@ -1,7 +1,7 @@
 use std::{
     cell::UnsafeCell,
     collections::VecDeque,
-    ffi::c_void,
+    ffi::{CStr, c_void},
     os::raw::c_char,
     sync::{
         Arc, Mutex,
@@ -13,11 +13,17 @@ use bitflags::bitflags;
 use ringbuf::{HeapProd, traits::Producer};
 use yadaw_vst3_host_sys::{
     Steinberg::{
-        FUnknown,
-        Vst::{IComponentHandler, ParamID, ParamValue},
+        FIDString, FUnknown, TBool,
+        Vst::{
+            BusDirection, IComponentHandler, IComponentHandler2, IComponentHandlerBusActivation,
+            IUnitHandler, IUnitHandler2, MediaType, ParamID, ParamValue, ProgramListID, UnitID,
+        },
         int32, tresult, uint32,
     },
-    abi::{ComponentHandlerVTable, FUnknownVTable},
+    abi::{
+        ComponentHandler2VTable, ComponentHandlerBusActivationVTable, ComponentHandlerVTable,
+        FUnknownVTable, UnitHandler2VTable, UnitHandlerVTable,
+    },
     iid,
 };
 
@@ -28,9 +34,11 @@ pub(crate) struct HandlerShared {
     parameter_mirror: UnsafeCell<Option<Arc<HandlerShared>>>,
     restart_requests: AtomicU32,
     editor_gestures: Mutex<VecDeque<EditorParameterGesture>>,
+    host_requests: Mutex<VecDeque<Vst3HostRequest>>,
 }
 
 const EDITOR_GESTURE_CAPACITY: usize = 1_024;
+const HOST_REQUEST_CAPACITY: usize = 256;
 
 /// Parameter gesture reported by a plug-in's native edit controller.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -38,6 +46,31 @@ pub enum EditorParameterGesture {
     Begin { parameter_id: u32 },
     Perform { parameter_id: u32, normalized: f64 },
     End { parameter_id: u32 },
+}
+
+/// Typed requests published by optional VST3 controller-to-host interfaces.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Vst3HostRequest {
+    DirtyChanged(bool),
+    OpenEditor {
+        view_name: String,
+    },
+    GroupEditStarted,
+    GroupEditFinished,
+    BusActivation {
+        media_type: i32,
+        direction: i32,
+        index: i32,
+        active: bool,
+    },
+    UnitSelected {
+        unit_id: i32,
+    },
+    ProgramListChanged {
+        list_id: i32,
+        program_index: i32,
+    },
+    UnitByBusChanged,
 }
 
 bitflags! {
@@ -66,6 +99,7 @@ impl HandlerShared {
             parameter_mirror: UnsafeCell::new(None),
             restart_requests: AtomicU32::new(0),
             editor_gestures: Mutex::new(VecDeque::with_capacity(EDITOR_GESTURE_CAPACITY)),
+            host_requests: Mutex::new(VecDeque::with_capacity(HOST_REQUEST_CAPACITY)),
         })
     }
 
@@ -122,6 +156,23 @@ impl HandlerShared {
         };
         gestures.drain(..).collect()
     }
+
+    fn publish_host_request(&self, request: Vst3HostRequest) {
+        let Ok(mut requests) = self.host_requests.lock() else {
+            return;
+        };
+        if requests.len() == HOST_REQUEST_CAPACITY {
+            requests.pop_front();
+        }
+        requests.push_back(request);
+    }
+
+    pub(crate) fn take_host_requests(&self) -> Vec<Vst3HostRequest> {
+        let Ok(mut requests) = self.host_requests.lock() else {
+            return Vec::new();
+        };
+        requests.drain(..).collect()
+    }
 }
 
 // SAFETY: The SPSC producer is only touched by the serialized VST3 UI thread; its consumer lives
@@ -133,19 +184,95 @@ pub(crate) struct ComponentHandler {
     vtable: *const ComponentHandlerVTable,
     references: AtomicU32,
     shared: Arc<HandlerShared>,
+    handler2: ComponentHandler2Interface,
+    bus_activation: BusActivationInterface,
+    unit_handler: UnitHandlerInterface,
+    unit_handler2: UnitHandler2Interface,
+}
+
+#[repr(C)]
+struct ComponentHandler2Interface {
+    vtable: *const ComponentHandler2VTable,
+    owner: *mut ComponentHandler,
+}
+
+#[repr(C)]
+struct BusActivationInterface {
+    vtable: *const ComponentHandlerBusActivationVTable,
+    owner: *mut ComponentHandler,
+}
+
+#[repr(C)]
+struct UnitHandlerInterface {
+    vtable: *const UnitHandlerVTable,
+    owner: *mut ComponentHandler,
+}
+
+#[repr(C)]
+struct UnitHandler2Interface {
+    vtable: *const UnitHandler2VTable,
+    owner: *mut ComponentHandler,
+}
+
+#[repr(C)]
+struct SecondaryInterface {
+    vtable: *const c_void,
+    owner: *mut ComponentHandler,
 }
 
 impl ComponentHandler {
     pub(crate) fn new(shared: Arc<HandlerShared>) -> Box<Self> {
-        Box::new(Self {
+        let mut handler = Box::new(Self {
             vtable: &COMPONENT_HANDLER_VTABLE,
             references: AtomicU32::new(1),
             shared,
-        })
+            handler2: ComponentHandler2Interface {
+                vtable: &COMPONENT_HANDLER2_VTABLE,
+                owner: std::ptr::null_mut(),
+            },
+            bus_activation: BusActivationInterface {
+                vtable: &BUS_ACTIVATION_VTABLE,
+                owner: std::ptr::null_mut(),
+            },
+            unit_handler: UnitHandlerInterface {
+                vtable: &UNIT_HANDLER_VTABLE,
+                owner: std::ptr::null_mut(),
+            },
+            unit_handler2: UnitHandler2Interface {
+                vtable: &UNIT_HANDLER2_VTABLE,
+                owner: std::ptr::null_mut(),
+            },
+        });
+        let owner = std::ptr::from_mut(handler.as_mut());
+        handler.handler2.owner = owner;
+        handler.bus_activation.owner = owner;
+        handler.unit_handler.owner = owner;
+        handler.unit_handler2.owner = owner;
+        handler
     }
 
     pub(crate) fn as_interface(&mut self) -> *mut IComponentHandler {
         std::ptr::from_mut(self).cast()
+    }
+
+    #[cfg(test)]
+    fn handler2_ptr(&mut self) -> *mut IComponentHandler2 {
+        std::ptr::addr_of_mut!(self.handler2).cast()
+    }
+
+    #[cfg(test)]
+    fn bus_activation_ptr(&mut self) -> *mut IComponentHandlerBusActivation {
+        std::ptr::addr_of_mut!(self.bus_activation).cast()
+    }
+
+    #[cfg(test)]
+    fn unit_handler_ptr(&mut self) -> *mut IUnitHandler {
+        std::ptr::addr_of_mut!(self.unit_handler).cast()
+    }
+
+    #[cfg(test)]
+    fn unit_handler2_ptr(&mut self) -> *mut IUnitHandler2 {
+        std::ptr::addr_of_mut!(self.unit_handler2).cast()
     }
 }
 
@@ -169,12 +296,64 @@ unsafe extern "system" fn query_interface(
         }
         0
     } else {
+        let handler = this.cast::<ComponentHandler>();
+        let interface: *mut c_void = unsafe {
+            // SAFETY: this is the leading interface of a live ComponentHandler.
+            if requested == iid::ICOMPONENT_HANDLER2 {
+                std::ptr::addr_of_mut!((*handler).handler2).cast()
+            } else if requested == iid::ICOMPONENT_HANDLER_BUS_ACTIVATION {
+                std::ptr::addr_of_mut!((*handler).bus_activation).cast()
+            } else if requested == iid::IUNIT_HANDLER {
+                std::ptr::addr_of_mut!((*handler).unit_handler).cast()
+            } else if requested == iid::IUNIT_HANDLER2 {
+                std::ptr::addr_of_mut!((*handler).unit_handler2).cast()
+            } else {
+                std::ptr::null_mut()
+            }
+        };
+        if !interface.is_null() {
+            unsafe {
+                // SAFETY: output is writable and the embedded interface shares handler lifetime.
+                output.write(interface);
+                add_ref(this);
+            }
+            return 0;
+        }
         unsafe {
             // SAFETY: output is writable as validated above.
             output.write(std::ptr::null_mut());
         }
         -2147467262
     }
+}
+
+unsafe fn secondary_owner(this: *mut FUnknown) -> *mut ComponentHandler {
+    // SAFETY: every caller receives one of ComponentHandler's live embedded interfaces.
+    unsafe { (*this.cast::<SecondaryInterface>()).owner }
+}
+
+unsafe extern "system" fn secondary_query_interface(
+    this: *mut FUnknown,
+    requested: *const c_char,
+    output: *mut *mut c_void,
+) -> tresult {
+    // SAFETY: this is a live embedded handler interface supplied by VST3.
+    let owner = unsafe { secondary_owner(this) };
+    if owner.is_null() {
+        return -2147467262;
+    }
+    // SAFETY: owner is the live primary interface and arguments retain queryInterface semantics.
+    unsafe { query_interface(owner.cast(), requested, output) }
+}
+
+unsafe extern "system" fn secondary_add_ref(this: *mut FUnknown) -> uint32 {
+    // SAFETY: the embedded interface stores its live primary handler owner.
+    unsafe { add_ref(secondary_owner(this).cast()) }
+}
+
+unsafe extern "system" fn secondary_release(this: *mut FUnknown) -> uint32 {
+    // SAFETY: the embedded interface stores its live primary handler owner.
+    unsafe { release(secondary_owner(this).cast()) }
 }
 
 unsafe extern "system" fn add_ref(this: *mut FUnknown) -> uint32 {
@@ -259,6 +438,167 @@ unsafe extern "system" fn restart_component(this: *mut IComponentHandler, flags:
     0
 }
 
+fn bool_from_tbool(value: TBool) -> Option<bool> {
+    match value {
+        0 => Some(false),
+        1 => Some(true),
+        _ => None,
+    }
+}
+
+unsafe fn handler2_owner(this: *mut IComponentHandler2) -> *mut ComponentHandler {
+    // SAFETY: this callback is installed only on ComponentHandler's embedded Handler2 interface.
+    unsafe { (*this.cast::<ComponentHandler2Interface>()).owner }
+}
+
+unsafe extern "system" fn set_dirty(this: *mut IComponentHandler2, state: TBool) -> tresult {
+    let Some(dirty) = bool_from_tbool(state) else {
+        return -2147024809;
+    };
+    // SAFETY: this is the live embedded Handler2 interface supplied by VST3.
+    let owner = unsafe { handler2_owner(this) };
+    // SAFETY: the embedded interface cannot outlive its owner.
+    let Some(handler) = (unsafe { owner.as_ref() }) else {
+        return -2147467262;
+    };
+    handler
+        .shared
+        .publish_host_request(Vst3HostRequest::DirtyChanged(dirty));
+    0
+}
+
+unsafe extern "system" fn request_open_editor(
+    this: *mut IComponentHandler2,
+    name: FIDString,
+) -> tresult {
+    // SAFETY: this is the live embedded Handler2 interface supplied by VST3.
+    let owner = unsafe { handler2_owner(this) };
+    // SAFETY: the embedded interface cannot outlive its owner.
+    let Some(handler) = (unsafe { owner.as_ref() }) else {
+        return -2147467262;
+    };
+    let view_name = if name.is_null() {
+        "editor".to_owned()
+    } else {
+        // SAFETY: non-null VST3 FIDString values are NUL-terminated.
+        unsafe { CStr::from_ptr(name) }
+            .to_string_lossy()
+            .into_owned()
+    };
+    handler
+        .shared
+        .publish_host_request(Vst3HostRequest::OpenEditor { view_name });
+    0
+}
+
+unsafe extern "system" fn start_group_edit(this: *mut IComponentHandler2) -> tresult {
+    // SAFETY: this is the live embedded Handler2 interface supplied by VST3.
+    let owner = unsafe { handler2_owner(this) };
+    // SAFETY: the embedded interface cannot outlive its owner.
+    let Some(handler) = (unsafe { owner.as_ref() }) else {
+        return -2147467262;
+    };
+    handler
+        .shared
+        .publish_host_request(Vst3HostRequest::GroupEditStarted);
+    0
+}
+
+unsafe extern "system" fn finish_group_edit(this: *mut IComponentHandler2) -> tresult {
+    // SAFETY: this is the live embedded Handler2 interface supplied by VST3.
+    let owner = unsafe { handler2_owner(this) };
+    // SAFETY: the embedded interface cannot outlive its owner.
+    let Some(handler) = (unsafe { owner.as_ref() }) else {
+        return -2147467262;
+    };
+    handler
+        .shared
+        .publish_host_request(Vst3HostRequest::GroupEditFinished);
+    0
+}
+
+unsafe extern "system" fn request_bus_activation(
+    this: *mut IComponentHandlerBusActivation,
+    media_type: MediaType,
+    direction: BusDirection,
+    index: int32,
+    state: TBool,
+) -> tresult {
+    let Some(active) = bool_from_tbool(state) else {
+        return -2147024809;
+    };
+    if !(0..=1).contains(&media_type) || !(0..=1).contains(&direction) || index < 0 {
+        return -2147024809;
+    }
+    // SAFETY: this callback is installed only on the embedded bus-activation interface.
+    let owner = unsafe { (*this.cast::<BusActivationInterface>()).owner };
+    // SAFETY: the embedded interface cannot outlive its owner.
+    let Some(handler) = (unsafe { owner.as_ref() }) else {
+        return -2147467262;
+    };
+    handler
+        .shared
+        .publish_host_request(Vst3HostRequest::BusActivation {
+            media_type,
+            direction,
+            index,
+            active,
+        });
+    0
+}
+
+unsafe extern "system" fn notify_unit_selection(
+    this: *mut IUnitHandler,
+    unit_id: UnitID,
+) -> tresult {
+    // SAFETY: this callback is installed only on the embedded unit-handler interface.
+    let owner = unsafe { (*this.cast::<UnitHandlerInterface>()).owner };
+    // SAFETY: the embedded interface cannot outlive its owner.
+    let Some(handler) = (unsafe { owner.as_ref() }) else {
+        return -2147467262;
+    };
+    handler
+        .shared
+        .publish_host_request(Vst3HostRequest::UnitSelected { unit_id });
+    0
+}
+
+unsafe extern "system" fn notify_program_list_change(
+    this: *mut IUnitHandler,
+    list_id: ProgramListID,
+    program_index: int32,
+) -> tresult {
+    if program_index < -1 {
+        return -2147024809;
+    }
+    // SAFETY: this callback is installed only on the embedded unit-handler interface.
+    let owner = unsafe { (*this.cast::<UnitHandlerInterface>()).owner };
+    // SAFETY: the embedded interface cannot outlive its owner.
+    let Some(handler) = (unsafe { owner.as_ref() }) else {
+        return -2147467262;
+    };
+    handler
+        .shared
+        .publish_host_request(Vst3HostRequest::ProgramListChanged {
+            list_id,
+            program_index,
+        });
+    0
+}
+
+unsafe extern "system" fn notify_unit_by_bus_change(this: *mut IUnitHandler2) -> tresult {
+    // SAFETY: this callback is installed only on the embedded unit-handler2 interface.
+    let owner = unsafe { (*this.cast::<UnitHandler2Interface>()).owner };
+    // SAFETY: the embedded interface cannot outlive its owner.
+    let Some(handler) = (unsafe { owner.as_ref() }) else {
+        return -2147467262;
+    };
+    handler
+        .shared
+        .publish_host_request(Vst3HostRequest::UnitByBusChanged);
+    0
+}
+
 static COMPONENT_HANDLER_VTABLE: ComponentHandlerVTable = ComponentHandlerVTable {
     base: FUnknownVTable {
         query_interface,
@@ -269,6 +609,47 @@ static COMPONENT_HANDLER_VTABLE: ComponentHandlerVTable = ComponentHandlerVTable
     perform_edit,
     end_edit,
     restart_component,
+};
+
+static COMPONENT_HANDLER2_VTABLE: ComponentHandler2VTable = ComponentHandler2VTable {
+    base: FUnknownVTable {
+        query_interface: secondary_query_interface,
+        add_ref: secondary_add_ref,
+        release: secondary_release,
+    },
+    set_dirty,
+    request_open_editor,
+    start_group_edit,
+    finish_group_edit,
+};
+
+static BUS_ACTIVATION_VTABLE: ComponentHandlerBusActivationVTable =
+    ComponentHandlerBusActivationVTable {
+        base: FUnknownVTable {
+            query_interface: secondary_query_interface,
+            add_ref: secondary_add_ref,
+            release: secondary_release,
+        },
+        request_bus_activation,
+    };
+
+static UNIT_HANDLER_VTABLE: UnitHandlerVTable = UnitHandlerVTable {
+    base: FUnknownVTable {
+        query_interface: secondary_query_interface,
+        add_ref: secondary_add_ref,
+        release: secondary_release,
+    },
+    notify_unit_selection,
+    notify_program_list_change,
+};
+
+static UNIT_HANDLER2_VTABLE: UnitHandler2VTable = UnitHandler2VTable {
+    base: FUnknownVTable {
+        query_interface: secondary_query_interface,
+        add_ref: secondary_add_ref,
+        release: secondary_release,
+    },
+    notify_unit_by_bus_change,
 };
 
 #[cfg(test)]
@@ -373,5 +754,109 @@ mod tests {
         };
         assert_ne!(rejected, 0);
         assert!(shared.take_restart_requests().is_empty());
+    }
+
+    #[test]
+    fn optional_handler_interfaces_publish_typed_requests() {
+        let ring = HeapRb::new(8);
+        let (producer, _consumer) = ring.split();
+        let shared = HandlerShared::new(producer);
+        let mut handler = super::ComponentHandler::new(shared.clone());
+
+        unsafe {
+            // SAFETY: every embedded interface belongs to the same live boxed handler.
+            assert_eq!(super::set_dirty(handler.handler2_ptr(), 1), 0);
+            assert_eq!(
+                super::request_open_editor(handler.handler2_ptr(), std::ptr::null()),
+                0
+            );
+            assert_eq!(super::start_group_edit(handler.handler2_ptr()), 0);
+            assert_eq!(
+                super::request_bus_activation(handler.bus_activation_ptr(), 0, 1, 2, 1),
+                0
+            );
+            assert_eq!(
+                super::notify_unit_selection(handler.unit_handler_ptr(), 7),
+                0
+            );
+            assert_eq!(
+                super::notify_program_list_change(handler.unit_handler_ptr(), 4, -1),
+                0
+            );
+            assert_eq!(
+                super::notify_unit_by_bus_change(handler.unit_handler2_ptr()),
+                0
+            );
+            assert_eq!(super::finish_group_edit(handler.handler2_ptr()), 0);
+        }
+
+        assert_eq!(
+            shared.take_host_requests(),
+            vec![
+                super::Vst3HostRequest::DirtyChanged(true),
+                super::Vst3HostRequest::OpenEditor {
+                    view_name: "editor".to_owned(),
+                },
+                super::Vst3HostRequest::GroupEditStarted,
+                super::Vst3HostRequest::BusActivation {
+                    media_type: 0,
+                    direction: 1,
+                    index: 2,
+                    active: true,
+                },
+                super::Vst3HostRequest::UnitSelected { unit_id: 7 },
+                super::Vst3HostRequest::ProgramListChanged {
+                    list_id: 4,
+                    program_index: -1,
+                },
+                super::Vst3HostRequest::UnitByBusChanged,
+                super::Vst3HostRequest::GroupEditFinished,
+            ]
+        );
+    }
+
+    #[test]
+    fn query_interface_exposes_each_optional_handler_with_shared_identity() {
+        let ring = HeapRb::new(8);
+        let (producer, _consumer) = ring.split();
+        let shared = HandlerShared::new(producer);
+        let mut handler = super::ComponentHandler::new(shared);
+        let unknown = handler.as_interface().cast();
+
+        for interface_id in [
+            yadaw_vst3_host_sys::iid::ICOMPONENT_HANDLER2,
+            yadaw_vst3_host_sys::iid::ICOMPONENT_HANDLER_BUS_ACTIVATION,
+            yadaw_vst3_host_sys::iid::IUNIT_HANDLER,
+            yadaw_vst3_host_sys::iid::IUNIT_HANDLER2,
+        ] {
+            let mut output = std::ptr::null_mut();
+            // SAFETY: unknown is the live leading interface and output is writable.
+            let result =
+                unsafe { super::query_interface(unknown, interface_id.as_ptr(), &mut output) };
+            assert_eq!(result, 0);
+            assert!(!output.is_null());
+            let mut canonical = std::ptr::null_mut();
+            // SAFETY: output is a queried live secondary interface and canonical is writable.
+            let result = unsafe {
+                super::secondary_query_interface(
+                    output.cast(),
+                    yadaw_vst3_host_sys::iid::FUNKNOWN.as_ptr(),
+                    &mut canonical,
+                )
+            };
+            assert_eq!(result, 0);
+            assert_eq!(canonical, unknown.cast());
+            // SAFETY: both references were returned owned by successful queryInterface calls.
+            unsafe {
+                super::secondary_release(output.cast());
+                super::release(canonical.cast());
+            }
+        }
+        assert_eq!(
+            handler
+                .references
+                .load(std::sync::atomic::Ordering::Relaxed),
+            1
+        );
     }
 }

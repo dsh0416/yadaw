@@ -13,11 +13,14 @@ use std::{
 use yadaw_vst3_host_sys::{
     Steinberg::{
         IPlugFrame, IPlugView, IPlugViewContentScaleSupport, IPluginBase, TUID, ViewRect,
-        Vst::{self, IComponent, IConnectionPoint, IEditController, IMidiMapping, ParameterInfo},
+        Vst::{
+            self, IComponent, IConnectionPoint, IEditController, IMidiMapping, IUnitInfo,
+            ParameterInfo, ProgramListInfo, UnitInfo,
+        },
     },
     abi::{
         ComponentVTable, ConnectionPointVTable, EditControllerVTable, MidiMappingVTable,
-        PlugViewContentScaleSupportVTable, PlugViewVTable,
+        PlugViewContentScaleSupportVTable, PlugViewVTable, UnitInfoVTable,
     },
     compat::{as_uint32, tuid_byte},
 };
@@ -50,6 +53,28 @@ pub struct HostedParameter {
     pub normalized: f64,
     pub formatted: String,
     pub flags: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HostedUnit {
+    pub id: i32,
+    pub parent_id: i32,
+    pub name: String,
+    pub program_list_id: i32,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HostedProgramList {
+    pub id: i32,
+    pub name: String,
+    pub programs: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HostedUnitInfo {
+    pub units: Vec<HostedUnit>,
+    pub program_lists: Vec<HostedProgramList>,
+    pub selected_unit_id: i32,
 }
 
 const MIDI_MAPPING_CHANNELS: usize = 16;
@@ -700,6 +725,241 @@ impl HostedPlugin {
         self.shared.take_editor_gestures()
     }
 
+    /// Drains requests sent through optional controller-to-host interfaces.
+    pub fn take_host_requests(&self) -> Vec<crate::Vst3HostRequest> {
+        self.shared.take_host_requests()
+    }
+
+    /// Applies a previously received bus activation request while processing is paused.
+    pub fn set_bus_active(
+        &self,
+        media_type: i32,
+        direction: i32,
+        index: i32,
+        active: bool,
+    ) -> HostResult<()> {
+        self.processor
+            .with_paused(|processor| processor.set_bus_active(media_type, direction, index, active))
+    }
+
+    /// Queries the optional controller-side unit and program hierarchy.
+    pub fn unit_info(&self) -> HostResult<Option<HostedUnitInfo>> {
+        let Some(unit_info) = self
+            .controller
+            .as_ref()
+            .and_then(|controller| controller.query::<IUnitInfo>().ok())
+        else {
+            return Ok(None);
+        };
+        let table = unit_info_table(&unit_info);
+        // SAFETY: unit_info is live on its owning UI thread.
+        let unit_count = unsafe { ((*table).get_unit_count)(unit_info.as_ptr()) };
+        // SAFETY: unit_info is live on its owning UI thread.
+        let list_count = unsafe { ((*table).get_program_list_count)(unit_info.as_ptr()) };
+        if unit_count < 0 || list_count < 0 {
+            return Err(HostError::Operation {
+                operation: "IUnitInfo count",
+                result: -2147024809,
+            });
+        }
+
+        let mut units = Vec::with_capacity(unit_count as usize);
+        for index in 0..unit_count {
+            // SAFETY: UnitInfo is an SDK POD fully initialized by getUnitInfo.
+            let mut raw = unsafe { std::mem::MaybeUninit::<UnitInfo>::zeroed().assume_init() };
+            // SAFETY: index is within getUnitCount and raw is writable.
+            check("IUnitInfo::getUnitInfo", unsafe {
+                ((*table).get_unit_info)(unit_info.as_ptr(), index, &mut raw)
+            })?;
+            units.push(HostedUnit {
+                id: raw.id,
+                parent_id: raw.parentUnitId,
+                name: utf16_string(&raw.name),
+                program_list_id: raw.programListId,
+            });
+        }
+
+        let mut program_lists = Vec::with_capacity(list_count as usize);
+        for index in 0..list_count {
+            // SAFETY: ProgramListInfo is an SDK POD fully initialized by getProgramListInfo.
+            let mut raw =
+                unsafe { std::mem::MaybeUninit::<ProgramListInfo>::zeroed().assume_init() };
+            // SAFETY: index is within getProgramListCount and raw is writable.
+            check("IUnitInfo::getProgramListInfo", unsafe {
+                ((*table).get_program_list_info)(unit_info.as_ptr(), index, &mut raw)
+            })?;
+            if raw.programCount < 0 {
+                return Err(HostError::Operation {
+                    operation: "IUnitInfo program count",
+                    result: -2147024809,
+                });
+            }
+            let mut programs = Vec::with_capacity(raw.programCount as usize);
+            for program_index in 0..raw.programCount {
+                let mut name = [0_u16; 128];
+                // SAFETY: IDs and program index came from the plug-in; name is String128 storage.
+                check("IUnitInfo::getProgramName", unsafe {
+                    ((*table).get_program_name)(
+                        unit_info.as_ptr(),
+                        raw.id,
+                        program_index,
+                        name.as_mut_ptr(),
+                    )
+                })?;
+                programs.push(utf16_string(&name));
+            }
+            program_lists.push(HostedProgramList {
+                id: raw.id,
+                name: utf16_string(&raw.name),
+                programs,
+            });
+        }
+
+        Ok(Some(HostedUnitInfo {
+            units,
+            program_lists,
+            // SAFETY: unit_info remains live through snapshot construction.
+            selected_unit_id: unsafe { ((*table).get_selected_unit)(unit_info.as_ptr()) },
+        }))
+    }
+
+    pub fn select_unit(&self, unit_id: i32) -> HostResult<()> {
+        let unit_info = self
+            .controller
+            .as_ref()
+            .ok_or(HostError::NullInterface("IEditController"))?
+            .query::<IUnitInfo>()?;
+        // SAFETY: unit_info is live and unit_id is passed through as the SDK identifier type.
+        check("IUnitInfo::selectUnit", unsafe {
+            ((*unit_info_table(&unit_info)).select_unit)(unit_info.as_ptr(), unit_id)
+        })
+    }
+
+    pub fn unit_for_bus(
+        &self,
+        media_type: i32,
+        direction: i32,
+        bus_index: i32,
+        channel: i32,
+    ) -> HostResult<Option<i32>> {
+        let Some(unit_info) = self
+            .controller
+            .as_ref()
+            .and_then(|controller| controller.query::<IUnitInfo>().ok())
+        else {
+            return Ok(None);
+        };
+        let mut unit_id = 0;
+        // SAFETY: unit_info is live and unit_id points to writable output storage.
+        let result = unsafe {
+            ((*unit_info_table(&unit_info)).get_unit_by_bus)(
+                unit_info.as_ptr(),
+                media_type,
+                direction,
+                bus_index,
+                channel,
+                &mut unit_id,
+            )
+        };
+        if result == 0 {
+            Ok(Some(unit_id))
+        } else if result == 1 {
+            Ok(None)
+        } else {
+            Err(HostError::Operation {
+                operation: "IUnitInfo::getUnitByBus",
+                result,
+            })
+        }
+    }
+
+    pub fn program_attribute(
+        &self,
+        list_id: i32,
+        program_index: i32,
+        attribute_id: &std::ffi::CStr,
+    ) -> HostResult<Option<String>> {
+        let unit_info = self
+            .controller
+            .as_ref()
+            .ok_or(HostError::NullInterface("IEditController"))?
+            .query::<IUnitInfo>()?;
+        let mut value = [0_u16; 128];
+        // SAFETY: unit_info and attribute ID are live and value is String128 storage.
+        let result = unsafe {
+            ((*unit_info_table(&unit_info)).get_program_info)(
+                unit_info.as_ptr(),
+                list_id,
+                program_index,
+                attribute_id.as_ptr(),
+                value.as_mut_ptr(),
+            )
+        };
+        optional_unit_string_result("IUnitInfo::getProgramInfo", result, &value)
+    }
+
+    pub fn program_pitch_name(
+        &self,
+        list_id: i32,
+        program_index: i32,
+        midi_pitch: i16,
+    ) -> HostResult<Option<String>> {
+        let unit_info = self
+            .controller
+            .as_ref()
+            .ok_or(HostError::NullInterface("IEditController"))?
+            .query::<IUnitInfo>()?;
+        let table = unit_info_table(&unit_info);
+        // SAFETY: unit_info is live and the program address is passed through unchanged.
+        let supported = unsafe {
+            ((*table).has_program_pitch_names)(unit_info.as_ptr(), list_id, program_index)
+        };
+        if supported == 1 {
+            return Ok(None);
+        }
+        if supported != 0 {
+            return Err(HostError::Operation {
+                operation: "IUnitInfo::hasProgramPitchNames",
+                result: supported,
+            });
+        }
+        let mut name = [0_u16; 128];
+        // SAFETY: unit_info is live and name is writable String128 storage.
+        let result = unsafe {
+            ((*table).get_program_pitch_name)(
+                unit_info.as_ptr(),
+                list_id,
+                program_index,
+                midi_pitch,
+                name.as_mut_ptr(),
+            )
+        };
+        optional_unit_string_result("IUnitInfo::getProgramPitchName", result, &name)
+    }
+
+    pub fn set_unit_program_data(
+        &self,
+        list_or_unit_id: i32,
+        program_index: i32,
+        data: &[u8],
+    ) -> HostResult<()> {
+        let unit_info = self
+            .controller
+            .as_ref()
+            .ok_or(HostError::NullInterface("IEditController"))?
+            .query::<IUnitInfo>()?;
+        let mut stream = MemoryStream::from_slice(data);
+        // SAFETY: unit_info and stream are live for this synchronous controller-thread call.
+        check("IUnitInfo::setUnitProgramData", unsafe {
+            ((*unit_info_table(&unit_info)).set_unit_program_data)(
+                unit_info.as_ptr(),
+                list_or_unit_id,
+                program_index,
+                stream.as_interface(),
+            )
+        })
+    }
+
     pub fn apply_restart_requests(&mut self, request: crate::Vst3RestartRequest) -> HostResult<()> {
         if request.contains(crate::Vst3RestartRequest::RELOAD_COMPONENT) {
             return Err(HostError::Operation {
@@ -1207,6 +1467,13 @@ fn midi_mapping_table(mapping: &ComPtr<IMidiMapping>) -> *const MidiMappingVTabl
     }
 }
 
+fn unit_info_table(unit_info: &ComPtr<IUnitInfo>) -> *const UnitInfoVTable {
+    unsafe {
+        // SAFETY: ComPtr guarantees a live IUnitInfo with the matching leading vtable.
+        *unit_info.as_ptr().cast::<*const UnitInfoVTable>()
+    }
+}
+
 fn controller_table(controller: &ComPtr<IEditController>) -> *const EditControllerVTable {
     unsafe {
         // SAFETY: ComPtr guarantees the object's leading vtable pointer.
@@ -1234,6 +1501,18 @@ fn utf16_string(value: &[u16]) -> String {
         .position(|character| *character == 0)
         .unwrap_or(value.len());
     String::from_utf16_lossy(&value[..length])
+}
+
+fn optional_unit_string_result(
+    operation: &'static str,
+    result: i32,
+    value: &[u16],
+) -> HostResult<Option<String>> {
+    match result {
+        0 => Ok(Some(utf16_string(value))),
+        1 => Ok(None),
+        result => Err(HostError::Operation { operation, result }),
+    }
 }
 
 fn check(operation: &'static str, result: i32) -> HostResult<()> {

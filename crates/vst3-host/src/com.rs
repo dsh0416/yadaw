@@ -3,13 +3,14 @@ use std::{ffi::c_void, marker::PhantomData, ptr::NonNull};
 use yadaw_vst3_host_sys::{
     Steinberg::{
         FUnknown, IBStream, IPlugFrame, IPlugView, IPlugViewContentScaleSupport, IPluginBase,
-        IPluginFactory, IPluginFactory2, IPluginFactory3,
+        IPluginFactory, IPluginFactory2, IPluginFactory3, ISizeableStream,
         Linux::{IEventHandler, IRunLoop, ITimerHandler},
         TUID,
         Vst::{
-            IAttributeList, IAudioProcessor, IComponent, IComponentHandler, IConnectionPoint,
-            IEditController, IEventList, IHostApplication, IMessage, IMidiMapping,
-            IParamValueQueue, IParameterChanges, IProcessContextRequirements,
+            IAttributeList, IAudioProcessor, IComponent, IComponentHandler, IComponentHandler2,
+            IComponentHandlerBusActivation, IConnectionPoint, IEditController, IEventList,
+            IHostApplication, IMessage, IMidiMapping, IParamValueQueue, IParameterChanges,
+            IProcessContextRequirements, IStreamAttributes, IUnitHandler, IUnitHandler2, IUnitInfo,
         },
     },
     abi::FUnknownVTable,
@@ -46,6 +47,8 @@ interface!(IPluginFactory, iid::IPLUGIN_FACTORY);
 interface!(IPluginFactory2, iid::IPLUGIN_FACTORY2);
 interface!(IPluginFactory3, iid::IPLUGIN_FACTORY3);
 interface!(IBStream, iid::IBSTREAM);
+interface!(ISizeableStream, iid::ISIZEABLE_STREAM);
+interface!(IStreamAttributes, iid::ISTREAM_ATTRIBUTES);
 interface!(IHostApplication, iid::IHOST_APPLICATION);
 interface!(IMessage, iid::IMESSAGE);
 interface!(IAttributeList, iid::IATTRIBUTE_LIST);
@@ -58,6 +61,14 @@ interface!(
 interface!(IEditController, iid::IEDIT_CONTROLLER);
 interface!(IMidiMapping, iid::IMIDI_MAPPING);
 interface!(IComponentHandler, iid::ICOMPONENT_HANDLER);
+interface!(IComponentHandler2, iid::ICOMPONENT_HANDLER2);
+interface!(
+    IComponentHandlerBusActivation,
+    iid::ICOMPONENT_HANDLER_BUS_ACTIVATION
+);
+interface!(IUnitHandler, iid::IUNIT_HANDLER);
+interface!(IUnitHandler2, iid::IUNIT_HANDLER2);
+interface!(IUnitInfo, iid::IUNIT_INFO);
 interface!(IEventList, iid::IEVENT_LIST);
 interface!(IParameterChanges, iid::IPARAMETER_CHANGES);
 interface!(IParamValueQueue, iid::IPARAM_VALUE_QUEUE);

@@ -140,6 +140,15 @@ pub struct StereoProcessor {
     layout: AudioLayout,
     audio_input_buses: AudioBusStorage,
     audio_output_buses: AudioBusStorage,
+    bus_activation_overrides: Vec<BusActivationOverride>,
+    active: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct BusActivationOverride {
+    media_type: i32,
+    direction: i32,
+    index: i32,
     active: bool,
 }
 
@@ -250,6 +259,7 @@ impl StereoProcessor {
                 layout,
                 audio_input_buses: AudioBusStorage::empty(true),
                 audio_output_buses: AudioBusStorage::empty(false),
+                bus_activation_overrides: Vec::new(),
                 active: false,
             },
             parameter_producer,
@@ -294,6 +304,7 @@ impl StereoProcessor {
             self.layout,
         )?;
         activate_event_input_buses(&self.component)?;
+        apply_bus_activation_overrides(&self.component, &self.bus_activation_overrides)?;
         let mut setup = ProcessSetup {
             processMode: as_int32(Vst::ProcessModes_kRealtime),
             symbolicSampleSize: as_int32(Vst::SymbolicSampleSizes_kSample32),
@@ -322,6 +333,29 @@ impl StereoProcessor {
     pub(crate) fn restart_processing(&mut self) -> HostResult<()> {
         self.deactivate()?;
         self.activate()
+    }
+
+    pub(crate) fn set_bus_active(
+        &mut self,
+        media_type: i32,
+        direction: i32,
+        index: i32,
+        active: bool,
+    ) -> HostResult<()> {
+        validate_bus_address(&self.component, media_type, direction, index)?;
+        if let Some(existing) = self.bus_activation_overrides.iter_mut().find(|entry| {
+            entry.media_type == media_type && entry.direction == direction && entry.index == index
+        }) {
+            existing.active = active;
+        } else {
+            self.bus_activation_overrides.push(BusActivationOverride {
+                media_type,
+                direction,
+                index,
+                active,
+            });
+        }
+        self.restart_processing()
     }
 
     pub(crate) fn deactivate(&mut self) -> HostResult<()> {
@@ -984,6 +1018,51 @@ fn configure_audio_bus_activation(
                 as_bus_direction(Vst::BusDirections_kOutput),
                 index,
                 active,
+            )
+        })?;
+    }
+    Ok(())
+}
+
+fn validate_bus_address(
+    component: &ComPtr<IComponent>,
+    media_type: i32,
+    direction: i32,
+    index: i32,
+) -> HostResult<()> {
+    if !(0..=1).contains(&media_type) || !(0..=1).contains(&direction) || index < 0 {
+        return Err(HostError::Operation {
+            operation: "VST3 bus address",
+            result: -2147024809,
+        });
+    }
+    let count = unsafe {
+        // SAFETY: media type and direction were validated against the SDK enum ranges.
+        ((*component_table(component)).get_bus_count)(component.as_ptr(), media_type, direction)
+    };
+    if index >= count.max(0) {
+        return Err(HostError::Operation {
+            operation: "VST3 bus index",
+            result: -2147024809,
+        });
+    }
+    Ok(())
+}
+
+fn apply_bus_activation_overrides(
+    component: &ComPtr<IComponent>,
+    overrides: &[BusActivationOverride],
+) -> HostResult<()> {
+    for entry in overrides {
+        validate_bus_address(component, entry.media_type, entry.direction, entry.index)?;
+        check("IComponent::activateBus", unsafe {
+            // SAFETY: the address is valid and this runs while the component is inactive.
+            ((*component_table(component)).activate_bus)(
+                component.as_ptr(),
+                entry.media_type,
+                entry.direction,
+                entry.index,
+                u8::from(entry.active),
             )
         })?;
     }

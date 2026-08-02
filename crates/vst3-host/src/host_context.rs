@@ -148,6 +148,7 @@ unsafe extern "system" fn is_plug_interface_supported(
         iid::IAUDIO_PROCESSOR,
         iid::IEDIT_CONTROLLER,
         iid::IMIDI_MAPPING,
+        iid::IUNIT_INFO,
         iid::ICONNECTION_POINT,
         iid::IPLUG_VIEW,
         iid::IPLUG_VIEW_CONTENT_SCALE_SUPPORT,
