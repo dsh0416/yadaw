@@ -261,6 +261,80 @@ describe("plugin store", () => {
     expect(window.yadaw.getPluginParameters).not.toHaveBeenCalled()
   })
 
+  it("reconciles editor open state when the helper reports a native close", async () => {
+    let onClosed: ((event: {
+      protocolVersion: number
+      sourceEpoch: string
+      sequence: number
+      resourceRevision: number
+      payload: { instanceId: string }
+    }) => void) | null = null
+    window.yadaw.subscribePluginEditorClosed = vi.fn((listener) => {
+      onClosed = listener
+      return () => {
+        onClosed = null
+      }
+    })
+    window.yadaw.listPlugins = vi.fn().mockResolvedValue(
+      success({
+        scannerVersion: 7,
+        scanning: false,
+        scannedAt: null,
+        plugins: [effectDescriptor]
+      })
+    )
+    window.yadaw.openPluginEditor = vi.fn().mockResolvedValue(
+      success({
+        resource: {
+          plugin: {
+            kind: "plugin-instance",
+            id: "plugin-1",
+            epoch: "test-main",
+            generation: 1
+          },
+          projectGraph: workspace(graph()).projectGraph,
+          revision: 1,
+          instance: {
+            id: "plugin-1",
+            channelId: "audio",
+            role: "insert",
+            slotOrder: 0,
+            classId: effectDescriptor.classId,
+            descriptor: effectDescriptor,
+            audioMode: "stereo",
+            enabled: true,
+            componentState: new Uint8Array(),
+            controllerState: new Uint8Array()
+          }
+        },
+        status: {
+          instanceId: "plugin-1",
+          state: "active",
+          editorOpen: true,
+          editorMode: "native",
+          latencySamples: 0,
+          tailSamples: 0,
+          error: null
+        }
+      })
+    )
+    const store = usePluginStore()
+    await store.load()
+    await store.openEditor("plugin-1")
+    expect(store.resources["plugin-1"]).toBeTruthy()
+
+    onClosed?.({
+      protocolVersion: 2,
+      sourceEpoch: "helper-epoch",
+      sequence: 1,
+      resourceRevision: 1,
+      payload: { instanceId: "plugin-1" }
+    })
+
+    expect(store.resources["plugin-1"]).toBeUndefined()
+    expect(store.runtime["plugin-1"]).toMatchObject({ editorOpen: false })
+  })
+
   it("updates parameter feedback while preserving gesture boundaries", async () => {
     window.yadaw.setPluginParameter = vi.fn().mockResolvedValue(
       success({

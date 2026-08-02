@@ -38,6 +38,16 @@ export function hostTarget(): string {
   return target
 }
 
+/** Cargo args before `--` (binary args). Mutates `cargoArgs` when injecting. */
+export function ensureHostCargoTarget(cargoArgs: string[], target = hostTarget()): string[] {
+  const separator = cargoArgs.indexOf("--")
+  const cargoOwned = separator === -1 ? cargoArgs : cargoArgs.slice(0, separator)
+  if (cargoOwned.includes("--target")) return cargoArgs
+  const insertion = separator === -1 ? cargoArgs.length : separator
+  cargoArgs.splice(insertion, 0, "--target", target)
+  return cargoArgs
+}
+
 export function runPnpm(args: readonly string[]): void {
   if (process.platform === "win32") {
     run(process.env.ComSpec ?? "cmd.exe", ["/d", "/s", "/c", "pnpm", ...args])

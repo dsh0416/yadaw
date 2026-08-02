@@ -42,9 +42,25 @@ export const usePluginStore = defineStore("plugins", () => {
   const error = shallowRef("")
   let catalogFailureIds = new Set<string>()
   let unsubscribe: (() => void) | null = null
+  let unsubscribeEditorClosed: (() => void) | null = null
   let parameterSequence = 0n
   let scanSourceEpoch: string | null = null
   let scanSequence = 0
+
+  function markEditorClosed(instanceId: string): void {
+    if (resources.value[instanceId]) {
+      const nextResources = { ...resources.value }
+      delete nextResources[instanceId]
+      resources.value = nextResources
+    }
+    const status = runtime.value[instanceId]
+    if (status?.editorOpen) {
+      runtime.value = {
+        ...runtime.value,
+        [instanceId]: { ...status, editorOpen: false }
+      }
+    }
+  }
 
   const compatibleInstruments = computed(() =>
     catalog.value.plugins.filter(
@@ -145,6 +161,9 @@ export const usePluginStore = defineStore("plugins", () => {
     loading.value = true
     error.value = ""
     unsubscribe ??= window.yadaw.subscribePluginScan(receiveScanEvent)
+    unsubscribeEditorClosed ??= window.yadaw.subscribePluginEditorClosed((event) => {
+      markEditorClosed(event.payload.instanceId)
+    })
     const target = projectStore.desktopSession
     if (!target) {
       loading.value = false
@@ -371,9 +390,7 @@ export const usePluginStore = defineStore("plugins", () => {
       error.value = rpcErrorMessage(result.error)
       return
     }
-    const nextResources = { ...resources.value }
-    delete nextResources[instanceId]
-    resources.value = nextResources
+    markEditorClosed(instanceId)
   }
 
   async function setParameter(change: PluginParameterChange): Promise<void> {
@@ -443,6 +460,8 @@ export const usePluginStore = defineStore("plugins", () => {
   onScopeDispose(() => {
     unsubscribe?.()
     unsubscribe = null
+    unsubscribeEditorClosed?.()
+    unsubscribeEditorClosed = null
   })
 
   return {

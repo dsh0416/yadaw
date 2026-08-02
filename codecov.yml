@@ -83,6 +83,10 @@ component_management:
       name: ipc-transport
       paths:
         - crates/ipc-transport/**
+    - component_id: audio-engine
+      name: audio-engine
+      paths:
+        - crates/audio-engine/**
     - component_id: audio-host
       name: audio-host
       paths:

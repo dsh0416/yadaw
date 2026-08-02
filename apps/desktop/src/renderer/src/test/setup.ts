@@ -8,6 +8,8 @@ const api = {
   platform: "win32",
   bootstrap: vi.fn(async () => rpcSuccess(testBootstrap())),
   subscribeOperations: vi.fn(() => () => undefined),
+  subscribePluginScan: vi.fn(() => () => undefined),
+  subscribePluginEditorClosed: vi.fn(() => () => undefined),
   cancelOperation: vi.fn(async () => rpcSuccess({ state: "cancelled" })),
   acknowledgeOperation: vi.fn(async () => rpcSuccess(undefined)),
   subscribeApplicationCommands: vi.fn(() => () => undefined),

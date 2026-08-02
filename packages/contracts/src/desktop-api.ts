@@ -130,6 +130,7 @@ export const IPC_CHANNELS = {
   pluginsScanEvent: "plugins:scan-event",
   pluginEditorOpen: "plugin-editor:open",
   pluginEditorClose: "plugin-editor:close",
+  pluginEditorClosedEvent: "plugin-editor:closed-event",
   pluginParametersGet: "plugin-parameters:get",
   pluginParameterSet: "plugin-parameter:set",
   midiImportPrepare: "midi-import:prepare",
@@ -272,6 +273,7 @@ export interface YadawDesktopApi {
     instanceId: string
   ): Promise<RpcResult<PluginEditorOpenResult>>
   closePluginEditor(meta: RpcRequestMeta): Promise<RpcResult<void>>
+  subscribePluginEditorClosed(listener: (event: RpcEvent<{ instanceId: string }>) => void): () => void
   getPluginParameters(meta: RpcRequestMeta): Promise<RpcResult<PluginParameterInfo[]>>
   setPluginParameter(
     meta: RpcRequestMeta,
