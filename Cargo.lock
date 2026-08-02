@@ -6024,6 +6024,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "yadaw-shared-memory"
+version = "0.2.2"
+dependencies = [
+ "getrandom",
+ "libc",
+ "serde",
+ "thiserror 2.0.19",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "yadaw-sine"
 version = "0.2.2"
 dependencies = [
