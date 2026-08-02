@@ -19,12 +19,7 @@ fn resolve_pending(
         .ok()
         .and_then(|mut values| values.remove(&request_id));
     if let Some(value) = value {
-        value.deferred.resolve(Box::new(move |_env| {
-            Ok(IpcResponse {
-                body: bytes.into(),
-                attachments: attachments.into_iter().map(Buffer::from).collect(),
-            })
-        }));
+        value.responder.resolve(bytes, attachments);
     }
 }
 
@@ -34,7 +29,7 @@ fn reject_pending(pending: &Mutex<HashMap<u64, Pending>>, request_id: u64, error
         .ok()
         .and_then(|mut values| values.remove(&request_id));
     if let Some(value) = value {
-        value.deferred.reject(error);
+        value.responder.reject(error);
     }
 }
 
@@ -79,7 +74,7 @@ fn reject_all(pending: &Mutex<HashMap<u64, Pending>>, error: Error) {
         .unwrap_or_default();
     for value in values {
         value
-            .deferred
+            .responder
             .reject(Error::new(error.status, error.reason.clone()));
     }
 }

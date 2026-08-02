@@ -3,13 +3,92 @@ mod tests {
     use super::*;
     use std::sync::mpsc;
     use yadaw_dsp_runtime::protocol::{
-        AudioEngineConfig, BinaryPayload, GraphTransactionRequest, GraphUpdate,
-        LiveMixerGraph, LiveTempoEvent, LiveTimeSignatureEvent, MixerParameterPreview,
-        MidiSyncPreferences, PluginAudioMode, PluginEditorPreference, PrepareGraphRequest,
-        RecordingStartConfig, ResourceKind, ResourceRef, RoundTripLatencyMeasurementRequest,
-        RpcRequestMeta, TransportControl,
+        AudioEngineConfig, BinaryPayload, ControlResponse, ControlResult, GraphTransactionRequest,
+        GraphUpdate, INLINE_BLOB_LIMIT, LiveMixerGraph, LiveTempoEvent, LiveTimeSignatureEvent,
+        MidiSyncPreferences, MixerParameterPreview, PluginAudioMode, PluginEditorPreference,
+        PrepareGraphRequest, PriorityResult, RecordingStartConfig, ResourceKind, ResourceRef,
+        RoundTripLatencyMeasurementRequest, RpcRequestMeta, TransportControl,
     };
-    use yadaw_ipc_transport::RegionOffer;
+    use yadaw_ipc_transport::{RegionOffer, TelemetryWriter, encode_response};
+
+    #[derive(Debug, PartialEq)]
+    enum PendingOutcome {
+        Resolved {
+            bytes: Vec<u8>,
+            attachments: Vec<Vec<u8>>,
+        },
+        Rejected {
+            status: Status,
+            reason: String,
+        },
+    }
+
+    struct TestPendingResponder(mpsc::SyncSender<PendingOutcome>);
+
+    impl PendingResponder for TestPendingResponder {
+        fn resolve(self: Box<Self>, bytes: Vec<u8>, attachments: Vec<Vec<u8>>) {
+            let _ = self.0.send(PendingOutcome::Resolved { bytes, attachments });
+        }
+
+        fn reject(self: Box<Self>, error: Error) {
+            let _ = self.0.send(PendingOutcome::Rejected {
+                status: error.status,
+                reason: error.reason.clone(),
+            });
+        }
+    }
+
+    struct RouterThread {
+        closing: Arc<AtomicBool>,
+        handle: Option<JoinHandle<()>>,
+    }
+
+    impl RouterThread {
+        fn new(closing: Arc<AtomicBool>, handle: JoinHandle<()>) -> Self {
+            Self {
+                closing,
+                handle: Some(handle),
+            }
+        }
+    }
+
+    impl Drop for RouterThread {
+        fn drop(&mut self) {
+            self.closing.store(true, Ordering::Release);
+            if let Some(handle) = self.handle.take() {
+                handle.join().expect("router thread should stop cleanly");
+            }
+        }
+    }
+
+    fn test_pending(deadline: Instant) -> (Pending, mpsc::Receiver<PendingOutcome>) {
+        let (sender, receiver) = mpsc::sync_channel(1);
+        (
+            Pending {
+                responder: Box::new(TestPendingResponder(sender)),
+                deadline,
+            },
+            receiver,
+        )
+    }
+
+    fn packet(body: Vec<u8>) -> WirePacket {
+        WirePacket {
+            body,
+            region_offers: Vec::new(),
+        }
+    }
+
+    fn wait_for_queued_event(events: &Mutex<VecDeque<Vec<u8>>>) -> Vec<u8> {
+        let deadline = Instant::now() + Duration::from_secs(2);
+        loop {
+            if let Some(event) = events.lock().expect("event queue lock").pop_front() {
+                return event;
+            }
+            assert!(Instant::now() < deadline, "event router did not enqueue an event");
+            thread::yield_now();
+        }
+    }
 
     fn empty_live_graph() -> LiveMixerGraph {
         LiveMixerGraph {
@@ -388,6 +467,540 @@ mod tests {
     fn router_timeout_falls_back_to_poll_interval_when_nothing_is_pending() {
         let pending = Mutex::new(HashMap::<u64, Pending>::new());
         assert_eq!(router_timeout(&pending), ROUTER_POLL);
+    }
+
+    #[test]
+    fn pending_registration_preserves_the_original_request_on_duplicate_id() {
+        let pending = Mutex::new(HashMap::new());
+        let (first, first_outcome) = test_pending(Instant::now() + Duration::from_secs(1));
+        let (duplicate, duplicate_outcome) =
+            test_pending(Instant::now() + Duration::from_secs(1));
+
+        register_pending(&pending, 7, first).expect("register first request");
+        let error = register_pending(&pending, 7, duplicate).expect_err("reject duplicate ID");
+        resolve_pending(&pending, 7, vec![1, 2, 3], Vec::new());
+
+        assert!(error.reason.contains("duplicate request identifier"));
+        assert_eq!(
+            first_outcome
+                .recv_timeout(Duration::from_secs(1))
+                .expect("original responder outcome"),
+            PendingOutcome::Resolved {
+                bytes: vec![1, 2, 3],
+                attachments: Vec::new(),
+            }
+        );
+        assert!(duplicate_outcome.try_recv().is_err());
+    }
+
+    #[test]
+    fn pending_registration_enforces_the_outbound_capacity() {
+        let pending = Mutex::new(HashMap::new());
+        let mut responders = Vec::with_capacity(OUTBOUND_CAPACITY);
+        for request_id in 0..OUTBOUND_CAPACITY as u64 {
+            let (value, outcome) = test_pending(Instant::now() + Duration::from_secs(1));
+            register_pending(&pending, request_id, value).expect("register within capacity");
+            responders.push(outcome);
+        }
+        let (overflow, overflow_outcome) = test_pending(Instant::now() + Duration::from_secs(1));
+
+        let error = register_pending(&pending, u64::MAX, overflow)
+            .expect_err("reject request beyond capacity");
+
+        assert!(error.reason.contains("too many requests in flight"));
+        assert_eq!(
+            pending.lock().expect("pending lock").len(),
+            OUTBOUND_CAPACITY
+        );
+        assert!(overflow_outcome.try_recv().is_err());
+        reject_all(&pending, failure("test", "cleanup"));
+        for outcome in responders {
+            assert!(matches!(
+                outcome.recv_timeout(Duration::from_secs(1)),
+                Ok(PendingOutcome::Rejected { .. })
+            ));
+        }
+    }
+
+    #[test]
+    fn queue_failure_rejects_and_removes_the_registered_request() {
+        let pending = Mutex::new(HashMap::new());
+        let (value, outcome) = test_pending(Instant::now() + Duration::from_secs(1));
+        register_pending(&pending, 9, value).expect("register request");
+        let (sender, _receiver) = mpsc::sync_channel(1);
+        sender.send(packet(vec![0])).expect("fill outbound queue");
+        let outbound = Mutex::new(Some(sender));
+
+        queue_pending_request(&pending, &outbound, 9, packet(vec![1]))
+            .expect("full queue rejects the promise asynchronously");
+
+        assert!(pending.lock().expect("pending lock").is_empty());
+        let rejected = outcome
+            .recv_timeout(Duration::from_secs(1))
+            .expect("queue rejection");
+        assert!(matches!(
+            rejected,
+            PendingOutcome::Rejected { reason, .. }
+                if reason.contains("could not queue audio-host request")
+        ));
+    }
+
+    #[test]
+    fn closed_outbound_rejects_and_removes_the_registered_request() {
+        let pending = Mutex::new(HashMap::new());
+        let (value, outcome) = test_pending(Instant::now() + Duration::from_secs(1));
+        register_pending(&pending, 10, value).expect("register request");
+
+        let error = queue_pending_request(&pending, &Mutex::new(None), 10, packet(vec![1]))
+            .expect_err("closed queue returns an error");
+
+        assert!(error.reason.contains("outbound queue: closed"));
+        assert!(pending.lock().expect("pending lock").is_empty());
+        assert!(matches!(
+            outcome.recv_timeout(Duration::from_secs(1)),
+            Ok(PendingOutcome::Rejected { reason, .. }) if reason.contains("outbound queue: closed")
+        ));
+    }
+
+    #[test]
+    fn disconnected_outbound_rejects_and_removes_the_registered_request() {
+        let pending = Mutex::new(HashMap::new());
+        let (value, outcome) = test_pending(Instant::now() + Duration::from_secs(1));
+        register_pending(&pending, 11, value).expect("register request");
+        let (sender, receiver) = mpsc::sync_channel(1);
+        drop(receiver);
+
+        queue_pending_request(
+            &pending,
+            &Mutex::new(Some(sender)),
+            11,
+            packet(vec![1]),
+        )
+        .expect("disconnected queue rejects the promise asynchronously");
+
+        assert!(pending.lock().expect("pending lock").is_empty());
+        assert!(matches!(
+            outcome.recv_timeout(Duration::from_secs(1)),
+            Ok(PendingOutcome::Rejected { reason, .. })
+                if reason.contains("could not queue audio-host request")
+        ));
+    }
+
+    #[test]
+    fn poisoned_outbound_rejects_and_removes_the_registered_request() {
+        let pending = Mutex::new(HashMap::new());
+        let (value, outcome) = test_pending(Instant::now() + Duration::from_secs(1));
+        register_pending(&pending, 12, value).expect("register request");
+        let (sender, _receiver) = mpsc::sync_channel(1);
+        let outbound = Arc::new(Mutex::new(Some(sender)));
+        let poison_target = Arc::clone(&outbound);
+        let poisoner = thread::spawn(move || {
+            let _guard = poison_target.lock().expect("outbound lock");
+            panic!("poison outbound queue for the test");
+        });
+        assert!(poisoner.join().is_err());
+
+        let error = queue_pending_request(&pending, &outbound, 12, packet(vec![1]))
+            .expect_err("poisoned queue returns an error");
+
+        assert!(error.reason.contains("outbound queue: poisoned"));
+        assert!(pending.lock().expect("pending lock").is_empty());
+        assert!(matches!(
+            outcome.recv_timeout(Duration::from_secs(1)),
+            Ok(PendingOutcome::Rejected { reason, .. })
+                if reason.contains("outbound queue: poisoned")
+        ));
+    }
+
+    #[test]
+    fn expiry_rejects_only_elapsed_requests_and_counts_each_timeout() {
+        let pending = Mutex::new(HashMap::new());
+        let (expired, expired_outcome) =
+            test_pending(Instant::now() - Duration::from_millis(1));
+        let (active, active_outcome) = test_pending(Instant::now() + Duration::from_secs(30));
+        register_pending(&pending, 1, expired).expect("register expired request");
+        register_pending(&pending, 2, active).expect("register active request");
+        let timeouts = AtomicU64::new(0);
+
+        expire_pending(&pending, &timeouts);
+
+        assert_eq!(timeouts.load(Ordering::Relaxed), 1);
+        assert!(matches!(
+            expired_outcome.recv_timeout(Duration::from_secs(1)),
+            Ok(PendingOutcome::Rejected { reason, .. }) if reason.contains("deadline exceeded")
+        ));
+        assert!(active_outcome.try_recv().is_err());
+        assert!(pending.lock().expect("pending lock").contains_key(&2));
+        reject_all(&pending, failure("test", "cleanup"));
+    }
+
+    #[test]
+    fn response_router_resolves_known_response_and_ignores_unknown_id() {
+        let (sender, receiver) = ipc::channel().expect("response channel");
+        let pending = Arc::new(Mutex::new(HashMap::new()));
+        let (value, outcome) = test_pending(Instant::now() + Duration::from_secs(5));
+        register_pending(&pending, 42, value).expect("register response");
+        let (priority_outbound, _priority_inbox) = mpsc::sync_channel(4);
+        let closing = Arc::new(AtomicBool::new(false));
+        let handle = spawn_response_router(
+            receiver,
+            Arc::clone(&pending),
+            priority_outbound,
+            Arc::clone(&closing),
+            Arc::new(AtomicU64::new(0)),
+            Arc::new(TransportTraffic::default()),
+            Arc::new(Mutex::new(ArenaReceiver::new(1))),
+        )
+        .expect("spawn response router");
+        let _guard = RouterThread::new(closing, handle);
+        let mut leases = LeaseRegistry::with_session_epoch(1);
+        sender
+            .send(
+                encode_response(
+                    ControlResponse {
+                        request_id: 99,
+                        result: ControlResult::Accepted,
+                    },
+                    &mut leases,
+                )
+                .expect("encode unknown response"),
+            )
+            .expect("send unknown response");
+        sender
+            .send(
+                encode_response(
+                    ControlResponse {
+                        request_id: 42,
+                        result: ControlResult::Pong,
+                    },
+                    &mut leases,
+                )
+                .expect("encode known response"),
+            )
+            .expect("send known response");
+
+        let PendingOutcome::Resolved { bytes, attachments } = outcome
+            .recv_timeout(Duration::from_secs(2))
+            .expect("resolved response")
+        else {
+            panic!("response should resolve");
+        };
+        let response = decode_body::<ControlResponse>(&bytes).expect("decode resolved response");
+        assert_eq!(response.request_id, 42);
+        assert_eq!(response.result, ControlResult::Pong);
+        assert!(attachments.is_empty());
+        assert!(pending.lock().expect("pending lock").is_empty());
+    }
+
+    #[test]
+    fn response_router_materializes_shared_payload_and_releases_its_lease() {
+        let (sender, receiver) = ipc::channel().expect("response channel");
+        let pending = Arc::new(Mutex::new(HashMap::new()));
+        let (value, outcome) = test_pending(Instant::now() + Duration::from_secs(5));
+        register_pending(&pending, 43, value).expect("register response");
+        let (priority_outbound, priority_inbox) = mpsc::sync_channel(4);
+        let closing = Arc::new(AtomicBool::new(false));
+        let handle = spawn_response_router(
+            receiver,
+            Arc::clone(&pending),
+            priority_outbound,
+            Arc::clone(&closing),
+            Arc::new(AtomicU64::new(0)),
+            Arc::new(TransportTraffic::default()),
+            Arc::new(Mutex::new(ArenaReceiver::new(7))),
+        )
+        .expect("spawn response router");
+        let _guard = RouterThread::new(closing, handle);
+        let payload = vec![0xa5; INLINE_BLOB_LIMIT + 1];
+        let mut leases = LeaseRegistry::with_session_epoch(7);
+        sender
+            .send(
+                encode_response(
+                    ControlResponse {
+                        request_id: 43,
+                        result: ControlResult::BenchmarkEcho {
+                            payload: BinaryPayload::inline(payload.clone()),
+                        },
+                    },
+                    &mut leases,
+                )
+                .expect("encode shared response"),
+            )
+            .expect("send shared response");
+
+        let PendingOutcome::Resolved { bytes, attachments } = outcome
+            .recv_timeout(Duration::from_secs(2))
+            .expect("resolved shared response")
+        else {
+            panic!("response should resolve");
+        };
+        let response = decode_body::<ControlResponse>(&bytes).expect("decode response body");
+        let ControlResult::BenchmarkEcho {
+            payload: BinaryPayload::Attachment { index, length, .. },
+        } = response.result
+        else {
+            panic!("shared response should become an attachment");
+        };
+        assert_eq!(index, 0);
+        assert_eq!(length, payload.len() as u64);
+        assert_eq!(attachments, vec![payload]);
+        let release = priority_inbox
+            .recv_timeout(Duration::from_secs(2))
+            .expect("lease release command");
+        let release = decode_body::<PriorityRequest>(&release.body).expect("decode release");
+        assert!(matches!(
+            release.command,
+            PriorityCommand::ReleaseLeases { lease_ids } if lease_ids.len() == 1
+        ));
+    }
+
+    #[test]
+    fn invalid_response_rejects_all_pending_requests() {
+        let (sender, receiver) = ipc::channel().expect("response channel");
+        let pending = Arc::new(Mutex::new(HashMap::new()));
+        let (first, first_outcome) = test_pending(Instant::now() + Duration::from_secs(5));
+        let (second, second_outcome) = test_pending(Instant::now() + Duration::from_secs(5));
+        register_pending(&pending, 1, first).expect("register first response");
+        register_pending(&pending, 2, second).expect("register second response");
+        let (priority_outbound, _priority_inbox) = mpsc::sync_channel(1);
+        let closing = Arc::new(AtomicBool::new(false));
+        let handle = spawn_response_router(
+            receiver,
+            Arc::clone(&pending),
+            priority_outbound,
+            Arc::clone(&closing),
+            Arc::new(AtomicU64::new(0)),
+            Arc::new(TransportTraffic::default()),
+            Arc::new(Mutex::new(ArenaReceiver::new(1))),
+        )
+        .expect("spawn response router");
+        let _guard = RouterThread::new(closing, handle);
+
+        sender.send(packet(vec![0xc1])).expect("send malformed response");
+
+        for outcome in [first_outcome, second_outcome] {
+            assert!(matches!(
+                outcome.recv_timeout(Duration::from_secs(2)),
+                Ok(PendingOutcome::Rejected { reason, .. })
+                    if reason.contains("invalid audio-host response")
+            ));
+        }
+        assert!(pending.lock().expect("pending lock").is_empty());
+    }
+
+    #[test]
+    fn priority_router_resolves_valid_packet_and_rejects_invalid_packet() {
+        let (sender, receiver) = ipc::channel().expect("priority response channel");
+        let pending = Arc::new(Mutex::new(HashMap::new()));
+        let (valid, valid_outcome) = test_pending(Instant::now() + Duration::from_secs(5));
+        register_pending(&pending, 7, valid).expect("register priority response");
+        let closing = Arc::new(AtomicBool::new(false));
+        let handle = spawn_priority_router(
+            receiver,
+            Arc::clone(&pending),
+            Arc::clone(&closing),
+            Arc::new(AtomicU64::new(0)),
+        )
+        .expect("spawn priority router");
+        let _guard = RouterThread::new(closing, handle);
+        sender
+            .send(
+                encode_priority(&PriorityResponse {
+                    request_id: 7,
+                    result: PriorityResult::Accepted,
+                })
+                .expect("encode priority response"),
+            )
+            .expect("send priority response");
+
+        let PendingOutcome::Resolved { bytes, attachments } = valid_outcome
+            .recv_timeout(Duration::from_secs(2))
+            .expect("resolved priority response")
+        else {
+            panic!("priority response should resolve");
+        };
+        assert!(attachments.is_empty());
+        assert_eq!(
+            decode_body::<PriorityResponse>(&bytes).expect("decode priority response"),
+            PriorityResponse {
+                request_id: 7,
+                result: PriorityResult::Accepted,
+            }
+        );
+
+        let (invalid, invalid_outcome) = test_pending(Instant::now() + Duration::from_secs(5));
+        register_pending(&pending, 8, invalid).expect("register invalid response target");
+        sender.send(packet(vec![0xc1])).expect("send invalid priority packet");
+        assert!(matches!(
+            invalid_outcome.recv_timeout(Duration::from_secs(2)),
+            Ok(PendingOutcome::Rejected { reason, .. }) if reason.contains("invalid priority response")
+        ));
+    }
+
+    #[test]
+    fn event_router_bounds_fifo_and_keeps_the_newest_events() {
+        let (sender, receiver) = ipc::channel().expect("event channel");
+        let current_page = create_telemetry_page(64, 1, 1).expect("current telemetry page");
+        let events = Arc::new(Mutex::new(VecDeque::new()));
+        let (priority_outbound, priority_inbox) = mpsc::sync_channel(1);
+        let closing = Arc::new(AtomicBool::new(false));
+        let handle = spawn_event_router(
+            receiver,
+            Arc::new(Mutex::new(LeaseRegistry::new())),
+            Arc::new(RwLock::new(
+                TelemetryReader::map(current_page).expect("current telemetry reader"),
+            )),
+            Arc::clone(&events),
+            priority_outbound,
+            Arc::clone(&closing),
+        )
+        .expect("spawn event router");
+        let _guard = RouterThread::new(closing, handle);
+        for revision in 0..=OUTBOUND_CAPACITY as u64 {
+            sender
+                .send(packet(
+                    encode_body(&HostEvent::GraphPublished { revision })
+                        .expect("encode graph event"),
+                ))
+                .expect("send graph event");
+        }
+        let barrier_page = create_telemetry_page(64, 2, 2).expect("barrier telemetry page");
+        let barrier_writer =
+            TelemetryWriter::map(barrier_page).expect("barrier telemetry writer");
+        let descriptor = barrier_writer.descriptor();
+        sender
+            .send(packet(
+                encode_body(&HostEvent::TelemetryPageOffer {
+                    epoch: 2,
+                    capacity: 64,
+                    descriptor_version: descriptor.descriptor_version(),
+                    object_id: descriptor.object_id(),
+                    byte_len: descriptor.byte_len(),
+                    generation: descriptor.generation(),
+                })
+                .expect("encode barrier offer"),
+            ))
+            .expect("send barrier offer");
+        priority_inbox
+            .recv_timeout(Duration::from_secs(2))
+            .expect("event processing barrier");
+
+        let queue = events.lock().expect("event queue lock");
+        let first = decode_body::<HostEvent>(queue.front().expect("first event"))
+            .expect("decode first event");
+        let last =
+            decode_body::<HostEvent>(queue.back().expect("last event")).expect("decode last event");
+        assert_eq!(first, HostEvent::GraphPublished { revision: 1 });
+        assert_eq!(
+            last,
+            HostEvent::GraphPublished {
+                revision: OUTBOUND_CAPACITY as u64,
+            }
+        );
+    }
+
+    #[test]
+    fn telemetry_page_activates_only_after_matching_active_event() {
+        let (sender, receiver) = ipc::channel().expect("event channel");
+        let current_page = create_telemetry_page(64, 10, 1).expect("current telemetry page");
+        let telemetry = Arc::new(RwLock::new(
+            TelemetryReader::map(current_page).expect("current telemetry reader"),
+        ));
+        let events = Arc::new(Mutex::new(VecDeque::new()));
+        let (priority_outbound, priority_inbox) = mpsc::sync_channel(2);
+        let closing = Arc::new(AtomicBool::new(false));
+        let handle = spawn_event_router(
+            receiver,
+            Arc::new(Mutex::new(LeaseRegistry::new())),
+            Arc::clone(&telemetry),
+            Arc::clone(&events),
+            priority_outbound,
+            Arc::clone(&closing),
+        )
+        .expect("spawn event router");
+        let _guard = RouterThread::new(closing, handle);
+        let next_page = create_telemetry_page(64, 11, 2).expect("next telemetry page");
+        let next_writer = TelemetryWriter::map(next_page).expect("next telemetry writer");
+        let descriptor = next_writer.descriptor();
+        sender
+            .send(packet(
+                encode_body(&HostEvent::TelemetryPageOffer {
+                    epoch: 11,
+                    capacity: 64,
+                    descriptor_version: descriptor.descriptor_version(),
+                    object_id: descriptor.object_id(),
+                    byte_len: descriptor.byte_len(),
+                    generation: descriptor.generation(),
+                })
+                .expect("encode telemetry offer"),
+            ))
+            .expect("send telemetry offer");
+        let ready = priority_inbox
+            .recv_timeout(Duration::from_secs(2))
+            .expect("telemetry ready command");
+        assert!(matches!(
+            decode_body::<PriorityRequest>(&ready.body)
+                .expect("decode telemetry ready")
+                .command,
+            PriorityCommand::TelemetryPageReady {
+                epoch: 11,
+                generation: 2,
+            }
+        ));
+        sender
+            .send(packet(
+                encode_body(&HostEvent::TelemetryPageActive {
+                    epoch: 99,
+                    generation: 2,
+                })
+                .expect("encode stale active"),
+            ))
+            .expect("send stale active");
+        sender
+            .send(packet(
+                encode_body(&HostEvent::GraphPublished { revision: 1 })
+                    .expect("encode barrier event"),
+            ))
+            .expect("send barrier event");
+        let _barrier = wait_for_queued_event(&events);
+        assert_eq!(telemetry.read().expect("telemetry read lock").epoch(), 10);
+
+        sender
+            .send(packet(
+                encode_body(&HostEvent::TelemetryPageActive {
+                    epoch: 11,
+                    generation: 2,
+                })
+                .expect("encode active event"),
+            ))
+            .expect("send active event");
+        sender
+            .send(packet(
+                encode_body(&HostEvent::GraphPublished { revision: 2 })
+                    .expect("encode activation barrier"),
+            ))
+            .expect("send activation barrier");
+        let _barrier = wait_for_queued_event(&events);
+        assert_eq!(telemetry.read().expect("telemetry read lock").epoch(), 11);
+    }
+
+    #[test]
+    fn egress_thread_forwards_packets_until_the_queue_closes() {
+        let (ipc_sender, ipc_receiver) = ipc::channel().expect("IPC channel");
+        let (sender, receiver) = mpsc::sync_channel(2);
+        let handle = spawn_egress("test-egress", ipc_sender, receiver).expect("spawn egress");
+        let expected_body = vec![1, 2, 3];
+
+        sender
+            .send(packet(expected_body.clone()))
+            .expect("queue packet");
+        let received = ipc_receiver
+            .try_recv_timeout(Duration::from_secs(2))
+            .expect("receive forwarded packet");
+        assert_eq!(received.body, expected_body);
+        assert!(received.region_offers.is_empty());
+        drop(sender);
+        handle.join().expect("egress exits after queue closes");
     }
 
     #[test]
