@@ -83,6 +83,12 @@ impl EditorWindow {
         }
     }
 
+    pub fn dispatch_native_run_loop(&mut self, now: Instant) -> Option<Instant> {
+        self.native
+            .as_mut()
+            .and_then(|native| native.frame.dispatch_run_loop(now))
+    }
+
     pub fn close(&mut self) {
         if let Some(native) = self.native.take() {
             native.detach();

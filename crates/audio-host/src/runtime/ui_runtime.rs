@@ -17,6 +17,8 @@ struct WinitHost {
     editor_owner_window: Option<usize>,
     editors: HashMap<WindowId, EditorWindow>,
     editor_instances: HashMap<String, WindowId>,
+    next_editor_tick: Option<Instant>,
+    output_parameter_error_reported: bool,
 }
 
 impl WinitHost {
@@ -25,6 +27,7 @@ impl WinitHost {
     // cannot indefinitely delay the next platform-message dispatch.
     const UI_BATCH: usize = 4;
     const UI_BUDGET: std::time::Duration = std::time::Duration::from_millis(2);
+    const EDITOR_TICK: Duration = Duration::from_millis(16);
 
     fn open_editor(
         &mut self,
@@ -298,6 +301,40 @@ impl ApplicationHandler<UiEvent> for WinitHost {
                 event_loop.exit();
             }
         }
+    }
+
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        if self.editors.is_empty() {
+            self.next_editor_tick = None;
+            event_loop.set_control_flow(ControlFlow::Wait);
+            return;
+        }
+
+        let now = Instant::now();
+        let tick_due = self.next_editor_tick.is_none_or(|deadline| now >= deadline);
+        if tick_due {
+            if let Some(runtime) = self.vst3.as_mut()
+                && let Err(error) = runtime.flush_output_parameters()
+                && !self.output_parameter_error_reported
+            {
+                eprintln!("audio-host: could not apply VST3 output parameter: {error}");
+                self.output_parameter_error_reported = true;
+            }
+            self.next_editor_tick = Some(now + Self::EDITOR_TICK);
+        }
+
+        let next_plugin_timer = self
+            .editors
+            .values_mut()
+            .filter_map(|editor| editor.dispatch_native_run_loop(now))
+            .min();
+        let deadline = self
+            .next_editor_tick
+            .into_iter()
+            .chain(next_plugin_timer)
+            .min()
+            .unwrap_or(now + Self::EDITOR_TICK);
+        event_loop.set_control_flow(ControlFlow::WaitUntil(deadline));
     }
 
     fn window_event(

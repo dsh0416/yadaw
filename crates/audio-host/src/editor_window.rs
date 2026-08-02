@@ -4,6 +4,7 @@ use std::{
     fmt,
     rc::Rc,
     sync::Arc,
+    time::Instant,
 };
 
 use iced_core::{Color, Element, Length, Point, Size, mouse::Cursor, renderer};

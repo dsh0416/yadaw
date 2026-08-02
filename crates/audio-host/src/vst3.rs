@@ -346,6 +346,22 @@ impl Vst3Runtime {
             .collect()
     }
 
+    pub fn flush_output_parameters(&mut self) -> Result<usize, String> {
+        let mut applied = 0;
+        for (instance_id, instance) in &mut self.instances {
+            applied += instance
+                .plugin
+                .flush_output_parameters()
+                .map_err(|error| format!("{instance_id}: {error}"))?;
+            if let Some(secondary) = &mut instance.secondary {
+                applied += secondary
+                    .flush_output_parameters()
+                    .map_err(|error| format!("{instance_id} (secondary): {error}"))?;
+            }
+        }
+        Ok(applied)
+    }
+
     pub fn sync_ara_graph(&mut self, graph: Option<&LiveMixerGraph>) -> Result<(), String> {
         for instance in self.instances.values_mut() {
             let Instance { ara, plugin, .. } = instance;

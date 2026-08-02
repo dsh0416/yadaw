@@ -562,6 +562,26 @@ VST3 component/controller and processor ownership is split deliberately:
 - parameter input/output and latency notifications cross the boundary through
   bounded queues or atomics.
 
+Processor-generated `outputParameterChanges` are observable state, not scratch
+storage. After each successful process call, the audio thread publishes the
+last point for each changed parameter into a fixed-capacity, preallocated
+latest-value bridge. It must never call the thread-affine controller. While an
+editor is open, the winit main thread drains that bridge at the editor tick and
+calls `IEditController::setParamNormalized`; these values are not enqueued back
+as processor inputs. This is the path used by plug-in meters and other dynamic
+native-editor displays. Unknown IDs and invalid normalized values are dropped,
+and a slow UI may coalesce intermediate values while retaining the latest one.
+
+When a plug-in supplies a separate controller class, both sides of
+`IConnectionPoint` are connected and both results are checked. A half-complete
+connection is rolled back, and established connections are disconnected in
+reverse order before either peer is terminated. A single-component plug-in is
+not connected to itself. On Linux, `IPlugFrame` also exposes `IRunLoop`; event
+descriptors are polled without blocking from the winit loop, repeating timers
+participate in its next wake deadline, and registered handlers are retained
+until explicit unregister or frame destruction. Callbacks run without holding
+the registration store borrow so they may unregister reentrantly.
+
 The Tokio control actor writes a capacity-64 mailbox and wakes winit through
 `EventLoopProxy`. Winit drains at most 16 requests per wake and wakes itself
 again while work remains, so plug-in traffic cannot starve native window

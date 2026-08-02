@@ -19,6 +19,7 @@ use std::{
         mpsc as std_mpsc,
     },
     thread,
+    time::{Duration, Instant},
 };
 
 use crate::{
@@ -46,7 +47,7 @@ use winit::{
     application::ApplicationHandler,
     dpi::LogicalSize,
     event::WindowEvent,
-    event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy},
+    event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy},
     window::{WindowAttributes, WindowId},
 };
 use yadaw_dsp_runtime::protocol::{

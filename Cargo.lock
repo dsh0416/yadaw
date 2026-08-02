@@ -6053,6 +6053,7 @@ name = "yadaw-vst3-host"
 version = "0.2.2"
 dependencies = [
  "cc",
+ "libc",
  "libloading 0.8.9",
  "ringbuf",
  "serde",

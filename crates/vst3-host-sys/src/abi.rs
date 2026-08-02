@@ -8,8 +8,9 @@ use std::{ffi::c_void, os::raw::c_char};
 
 use crate::Steinberg::{
     self, FIDString, FUnknown, IBStream, IPlugFrame, IPlugView, IPlugViewContentScaleSupport,
-    IPluginBase, IPluginFactory, IPluginFactory2, IPluginFactory3, PClassInfo, PClassInfo2,
-    PClassInfoW, PFactoryInfo, TBool, TUID, ViewRect,
+    IPluginBase, IPluginFactory, IPluginFactory2, IPluginFactory3,
+    Linux::{IEventHandler, IRunLoop, ITimerHandler},
+    PClassInfo, PClassInfo2, PClassInfoW, PFactoryInfo, TBool, TUID, ViewRect,
     Vst::{
         AudioBusBuffers, BusDirection, BusInfo, CtrlNumber, Event, IAudioProcessor, IComponent,
         IComponentHandler, IConnectionPoint, IEditController, IEventList, IHostApplication,
@@ -365,6 +366,37 @@ pub struct PlugFrameVTable {
         view: *mut IPlugView,
         size: *mut ViewRect,
     ) -> tresult,
+}
+
+#[repr(C)]
+pub struct EventHandlerVTable {
+    pub base: FUnknownVTable,
+    pub on_fd_is_set: unsafe extern "system" fn(this: *mut IEventHandler, fd: i32),
+}
+
+#[repr(C)]
+pub struct TimerHandlerVTable {
+    pub base: FUnknownVTable,
+    pub on_timer: unsafe extern "system" fn(this: *mut ITimerHandler),
+}
+
+#[repr(C)]
+pub struct RunLoopVTable {
+    pub base: FUnknownVTable,
+    pub register_event_handler: unsafe extern "system" fn(
+        this: *mut IRunLoop,
+        handler: *mut IEventHandler,
+        fd: i32,
+    ) -> tresult,
+    pub unregister_event_handler:
+        unsafe extern "system" fn(this: *mut IRunLoop, handler: *mut IEventHandler) -> tresult,
+    pub register_timer: unsafe extern "system" fn(
+        this: *mut IRunLoop,
+        handler: *mut ITimerHandler,
+        milliseconds: u64,
+    ) -> tresult,
+    pub unregister_timer:
+        unsafe extern "system" fn(this: *mut IRunLoop, handler: *mut ITimerHandler) -> tresult,
 }
 
 #[repr(C)]

@@ -25,6 +25,7 @@ use yadaw_vst3_host_sys::{
 use crate::{
     AudioLayout, ClassId, ComPtr, HostError, HostResult, Module, PluginKind, StereoProcessor,
     component_handler::{ComponentHandler, HandlerShared},
+    output_parameter_bridge::{OutputParameterReader, output_parameter_bridge},
     processor::HostProcessContext,
     stream::MemoryStream,
 };
@@ -360,12 +361,70 @@ pub struct HostedPlugin {
     processor: Box<ProcessorCell>,
     midi_mapping: Arc<MidiMappingTable>,
     controller: Option<ComPtr<IEditController>>,
-    controller_connection: Option<ComPtr<IConnectionPoint>>,
-    component_connection: Option<ComPtr<IConnectionPoint>>,
+    connections: Option<ComponentConnections>,
     handler: Option<Box<ComponentHandler>>,
     shared: Arc<HandlerShared>,
+    output_parameter_reader: OutputParameterReader,
     controller_initialized: bool,
     class_id: ClassId,
+}
+
+struct ComponentConnections {
+    component: ComPtr<IConnectionPoint>,
+    controller: ComPtr<IConnectionPoint>,
+    component_connected: bool,
+    controller_connected: bool,
+}
+
+impl ComponentConnections {
+    fn connect(
+        component: ComPtr<IConnectionPoint>,
+        controller: ComPtr<IConnectionPoint>,
+    ) -> HostResult<Self> {
+        let mut connections = Self {
+            component,
+            controller,
+            component_connected: false,
+            controller_connected: false,
+        };
+        check("IConnectionPoint::connect(component)", unsafe {
+            // SAFETY: both retained connection points are initialized and live.
+            ((*connection_table(&connections.component)).connect)(
+                connections.component.as_ptr(),
+                connections.controller.as_ptr(),
+            )
+        })?;
+        connections.component_connected = true;
+        check("IConnectionPoint::connect(controller)", unsafe {
+            // SAFETY: both retained connection points are initialized and live.
+            ((*connection_table(&connections.controller)).connect)(
+                connections.controller.as_ptr(),
+                connections.component.as_ptr(),
+            )
+        })?;
+        connections.controller_connected = true;
+        Ok(connections)
+    }
+}
+
+impl Drop for ComponentConnections {
+    fn drop(&mut self) {
+        unsafe {
+            // SAFETY: each successful connect is balanced once while both retained peers live.
+            if self.controller_connected {
+                ((*connection_table(&self.controller)).disconnect)(
+                    self.controller.as_ptr(),
+                    self.component.as_ptr(),
+                );
+            }
+            if self.component_connected {
+                ((*connection_table(&self.component)).disconnect)(
+                    self.component.as_ptr(),
+                    self.controller.as_ptr(),
+                );
+            }
+        }
+    }
 }
 
 impl HostedPlugin {
@@ -412,7 +471,7 @@ impl HostedPlugin {
     ) -> HostResult<(Self, T)> {
         let module = Rc::new(Module::open(module_path)?);
         let hook_module = Rc::clone(&module);
-        let (processor, parameter_producer, hook_result) =
+        let (mut processor, parameter_producer, hook_result) =
             StereoProcessor::create_with_parameter_queue_and_hook(
                 module.clone(),
                 class_id,
@@ -422,7 +481,15 @@ impl HostedPlugin {
                 move |component| hook(&hook_module, component),
             )?;
         let shared = HandlerShared::new(parameter_producer);
-        let controller = create_controller(&module, &processor)?;
+        let (controller, separate_controller) = create_controller(&module, &processor)?;
+        let parameter_ids = controller
+            .as_ref()
+            .map(controller_parameter_ids)
+            .transpose()?
+            .unwrap_or_default();
+        let (output_parameter_writer, output_parameter_reader) =
+            output_parameter_bridge(parameter_ids);
+        processor.set_output_parameter_writer(output_parameter_writer);
         let midi_mapping = Arc::new(MidiMappingTable::query(controller.as_ref()));
         let mut handler = controller
             .as_ref()
@@ -437,30 +504,30 @@ impl HostedPlugin {
                 )
             })?;
         }
-        let component_connection = processor.component().query::<IConnectionPoint>().ok();
-        let controller_connection = controller
-            .as_ref()
-            .and_then(|controller| controller.query::<IConnectionPoint>().ok());
-        if let (Some(component), Some(controller)) = (&component_connection, &controller_connection)
-        {
-            let _ = unsafe {
-                // SAFETY: both connection points are live and retained by HostedPlugin.
-                ((*connection_table(component)).connect)(component.as_ptr(), controller.as_ptr())
-            };
-            let _ = unsafe {
-                // SAFETY: both connection points are live and retained by HostedPlugin.
-                ((*connection_table(controller)).connect)(controller.as_ptr(), component.as_ptr())
-            };
-        }
+        let connections = if separate_controller {
+            match (
+                processor.component().query::<IConnectionPoint>().ok(),
+                controller
+                    .as_ref()
+                    .and_then(|value| value.query::<IConnectionPoint>().ok()),
+            ) {
+                (Some(component), Some(controller)) => {
+                    Some(ComponentConnections::connect(component, controller)?)
+                }
+                _ => None,
+            }
+        } else {
+            None
+        };
         Ok((
             Self {
                 processor: ProcessorCell::new(processor),
                 midi_mapping,
                 controller,
-                controller_connection,
-                component_connection,
+                connections,
                 handler,
                 shared,
+                output_parameter_reader,
                 controller_initialized: true,
                 class_id,
             },
@@ -506,6 +573,29 @@ impl HostedPlugin {
     #[must_use]
     pub fn take_latency_changed(&self) -> bool {
         self.shared.take_latency_changed()
+    }
+
+    pub fn flush_output_parameters(&mut self) -> HostResult<usize> {
+        let Some(controller) = &self.controller else {
+            return Ok(0);
+        };
+        let table = controller_table(controller);
+        let mut first_error = None;
+        let applied = self.output_parameter_reader.drain(|id, value| {
+            let result = unsafe {
+                // SAFETY: the controller is live and this method only runs on its owning UI
+                // thread. Output parameters update the controller without feeding the value back
+                // into the processor's input queue.
+                ((*table).set_parameter_normalized)(controller.as_ptr(), id, value)
+            };
+            if result != 0 && first_error.is_none() {
+                first_error = Some(HostError::Operation {
+                    operation: "IEditController::setParamNormalized(output)",
+                    result,
+                });
+            }
+        });
+        first_error.map_or(Ok(applied), Err)
     }
 
     pub fn parameters(&self) -> HostResult<Vec<HostedParameter>> {
@@ -658,21 +748,7 @@ impl HostedPlugin {
 
 impl Drop for HostedPlugin {
     fn drop(&mut self) {
-        if let (Some(component), Some(controller)) =
-            (&self.component_connection, &self.controller_connection)
-        {
-            unsafe {
-                // SAFETY: both connection points are retained and disconnected before release.
-                ((*connection_table(component)).disconnect)(
-                    component.as_ptr(),
-                    controller.as_ptr(),
-                );
-                ((*connection_table(controller)).disconnect)(
-                    controller.as_ptr(),
-                    component.as_ptr(),
-                );
-            }
-        }
+        self.connections.take();
         if let Some(controller) = &self.controller {
             unsafe {
                 // SAFETY: controller is live; clearing the handler precedes handler release.
@@ -837,7 +913,7 @@ impl PlugView {
 fn create_controller(
     module: &Rc<Module>,
     processor: &StereoProcessor,
-) -> HostResult<Option<ComPtr<IEditController>>> {
+) -> HostResult<(Option<ComPtr<IEditController>>, bool)> {
     let mut controller_id: TUID = [tuid_byte(0); 16];
     let result = unsafe {
         // SAFETY: component is initialized and controller_id is writable TUID storage.
@@ -847,7 +923,7 @@ fn create_controller(
         )
     };
     if result != 0 {
-        return Ok(processor.component().query::<IEditController>().ok());
+        return Ok((processor.component().query::<IEditController>().ok(), false));
     }
     let controller = module.create::<IEditController>(ClassId::from_tuid(controller_id))?;
     check("IEditController::initialize", unsafe {
@@ -857,7 +933,30 @@ fn create_controller(
             processor.host().as_unknown(),
         )
     })?;
-    Ok(Some(controller))
+    Ok((Some(controller), true))
+}
+
+fn controller_parameter_ids(controller: &ComPtr<IEditController>) -> HostResult<Vec<u32>> {
+    let table = controller_table(controller);
+    let count = unsafe {
+        // SAFETY: controller is initialized and live on its owning UI thread.
+        ((*table).parameter_count)(controller.as_ptr())
+    }
+    .max(0);
+    let mut ids = Vec::with_capacity(count as usize);
+    for index in 0..count {
+        let mut raw = std::mem::MaybeUninit::<ParameterInfo>::zeroed();
+        check("IEditController::getParameterInfo(output bridge)", unsafe {
+            // SAFETY: index is below parameter_count and raw is writable SDK storage.
+            ((*table).parameter_info)(controller.as_ptr(), index, raw.as_mut_ptr())
+        })?;
+        let raw = unsafe {
+            // SAFETY: a successful parameter_info call initialized the POD.
+            raw.assume_init()
+        };
+        ids.push(raw.id);
+    }
+    Ok(ids)
 }
 
 fn component_table(component: &ComPtr<IComponent>) -> *const ComponentVTable {

@@ -12,6 +12,7 @@ mod host_context;
 mod hosted;
 mod id;
 mod module;
+mod output_parameter_bridge;
 mod parameter_changes;
 mod processor;
 mod processor_handle;

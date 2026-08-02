@@ -64,6 +64,7 @@ fn main() {
         .allowlist_type("Steinberg::ViewRect")
         .allowlist_type("Steinberg::IPlugView.*")
         .allowlist_type("Steinberg::IPlugFrame")
+        .allowlist_type("Steinberg::Linux::.*")
         .allowlist_type("Steinberg::Vst::.*")
         .allowlist_type("ARA::.*")
         .allowlist_var("Steinberg::.*")

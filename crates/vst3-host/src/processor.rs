@@ -19,7 +19,8 @@ use yadaw_vst3_host_sys::{
 
 use crate::{
     ClassId, ComPtr, HostError, HostResult, Module, event_list::EventList,
-    host_context::HostContext, parameter_changes::ParameterChanges,
+    host_context::HostContext, output_parameter_bridge::OutputParameterWriter,
+    parameter_changes::ParameterChanges,
 };
 
 const MAX_BLOCK_FRAMES: i32 = 4096;
@@ -88,6 +89,7 @@ pub struct StereoProcessor {
     input_events: Box<EventList>,
     input_parameters: Box<ParameterChanges>,
     output_parameters: Box<ParameterChanges>,
+    output_parameter_writer: Option<OutputParameterWriter>,
     process_context: Box<ProcessContext>,
     parameter_consumer: HeapCons<QueuedParameter>,
     module: Rc<Module>,
@@ -253,6 +255,7 @@ impl StereoProcessor {
                 input_events,
                 input_parameters,
                 output_parameters,
+                output_parameter_writer: None,
                 process_context,
                 parameter_consumer,
                 module,
@@ -400,6 +403,9 @@ impl StereoProcessor {
                 std::ptr::addr_of_mut!(data),
             )
         });
+        if result.is_ok() {
+            self.publish_output_parameters();
+        }
         self.input_events.clear();
         self.input_parameters.clear();
         self.output_parameters.clear();
@@ -408,6 +414,10 @@ impl StereoProcessor {
 
     pub(crate) fn component(&self) -> &ComPtr<IComponent> {
         &self.component
+    }
+
+    pub(crate) fn set_output_parameter_writer(&mut self, writer: OutputParameterWriter) {
+        self.output_parameter_writer = Some(writer);
     }
 
     pub(crate) fn host(&self) -> &HostContext {
@@ -445,9 +455,21 @@ impl StereoProcessor {
                 std::ptr::addr_of_mut!(data),
             )
         });
+        if result.is_ok() {
+            self.publish_output_parameters();
+        }
         self.input_parameters.clear();
         self.output_parameters.clear();
         result
+    }
+
+    fn publish_output_parameters(&self) {
+        let Some(writer) = &self.output_parameter_writer else {
+            return;
+        };
+        self.output_parameters.for_each_last(|id, value| {
+            let _ = writer.publish(id, value);
+        });
     }
 
     pub fn queue_note_on(
