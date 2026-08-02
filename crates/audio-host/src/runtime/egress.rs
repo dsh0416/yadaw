@@ -96,6 +96,7 @@ async fn run_egress(
             eprintln!("audio-host: IPC response task failed during drain: {error}");
         }
     }
+    metrics.queue_depth.store(0, Ordering::Release);
 }
 
 async fn dispatch_egress(

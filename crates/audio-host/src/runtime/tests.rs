@@ -2,6 +2,136 @@
 mod tests {
     use super::*;
 
+    struct TestIngress {
+        requests: Option<ipc_channel::ipc::IpcSender<WirePacket>>,
+        priority_requests: Option<ipc_channel::ipc::IpcSender<WirePacket>>,
+        priority_responses: ipc_channel::ipc::IpcReceiver<WirePacket>,
+        inbound_sender: mpsc::Sender<InboundRequest>,
+        inbound: mpsc::Receiver<InboundRequest>,
+        priority_sender: mpsc::Sender<PriorityIngress>,
+        priority: mpsc::Receiver<PriorityIngress>,
+        outbound: mpsc::Receiver<OutboundMessage>,
+        handle: Option<thread::JoinHandle<()>>,
+    }
+
+    impl TestIngress {
+        fn new(capacity: usize) -> Self {
+            let (requests, request_receiver) = ipc::channel().expect("request IPC channel");
+            let (priority_requests, priority_request_receiver) =
+                ipc::channel().expect("priority request IPC channel");
+            let (priority_response_sender, priority_responses) =
+                ipc::channel().expect("priority response IPC channel");
+            let (inbound_sender, inbound) = mpsc::channel(capacity);
+            let (priority_sender, priority) = mpsc::channel(capacity);
+            let (outbound_sender, outbound) = mpsc::channel(capacity);
+            let audio_engine = Arc::new(engine::AudioEngine::new());
+            let metrics = Arc::new(EgressMetrics::default());
+            let handle = spawn_ingress(
+                IngressChannels {
+                    requests: request_receiver,
+                    priority_requests: priority_request_receiver,
+                    priority_responses: priority_response_sender,
+                },
+                IngressMailboxes {
+                    inbound: inbound_sender.clone(),
+                    priority: priority_sender.clone(),
+                    outbound: outbound_sender,
+                },
+                Arc::new(Mutex::new(LeaseRegistry::with_session_epoch(1))),
+                Arc::new(Mutex::new(ArenaReceiver::new(1))),
+                Liveness {
+                    audio_engine,
+                    ipc: Arc::new(AtomicU64::new(0)),
+                    tokio: Arc::new(AtomicU64::new(0)),
+                    winit: Arc::new(AtomicU64::new(0)),
+                    egress: metrics,
+                },
+            )
+            .expect("spawn ingress");
+            Self {
+                requests: Some(requests),
+                priority_requests: Some(priority_requests),
+                priority_responses,
+                inbound_sender,
+                inbound,
+                priority_sender,
+                priority,
+                outbound,
+                handle: Some(handle),
+            }
+        }
+
+        fn send_request(&self, request: ControlRequest) {
+            let mut leases = LeaseRegistry::with_session_epoch(1);
+            let packet = yadaw_ipc_transport::encode_request(request, &mut leases)
+                .expect("encode request");
+            self.requests
+                .as_ref()
+                .expect("request sender")
+                .send(packet)
+                .expect("send request");
+        }
+
+        fn send_priority(&self, request: PriorityRequest) {
+            let packet = encode_priority(&request).expect("encode priority request");
+            self.priority_requests
+                .as_ref()
+                .expect("priority request sender")
+                .send(packet)
+                .expect("send priority request");
+        }
+
+        fn receive_priority_response(&self) -> PriorityResponse {
+            let packet = self
+                .priority_responses
+                .try_recv_timeout(Duration::from_secs(2))
+                .expect("priority response");
+            decode_body(&packet.body).expect("decode priority response")
+        }
+    }
+
+    impl Drop for TestIngress {
+        fn drop(&mut self) {
+            self.requests.take();
+            self.priority_requests.take();
+            if let Some(handle) = self.handle.take() {
+                handle.join().expect("ingress thread should stop cleanly");
+            }
+        }
+    }
+
+    fn parameter_command(
+        target_kind: yadaw_dsp_runtime::protocol::ParameterTargetKind,
+        runtime_handle: u32,
+        parameter_id: u32,
+        normalized: f64,
+    ) -> yadaw_dsp_runtime::protocol::ParameterCommand {
+        yadaw_dsp_runtime::protocol::ParameterCommand {
+            session_epoch: 1,
+            sequence: 1,
+            target_kind,
+            runtime_handle,
+            parameter_id,
+            target_generation: 1,
+            normalized,
+            gesture: yadaw_dsp_runtime::protocol::ParameterGesture::Perform,
+        }
+    }
+
+    async fn receive_ipc_packet(
+        receiver: Arc<Mutex<ipc_channel::ipc::IpcReceiver<WirePacket>>>,
+    ) -> WirePacket {
+        tokio::task::spawn_blocking(move || {
+            receiver
+                .lock()
+                .expect("IPC receiver lock")
+                .try_recv_timeout(Duration::from_secs(2))
+                .expect("IPC packet")
+        })
+        .await
+        .expect("IPC receiver task")
+    }
+
     #[test]
     fn editor_owner_window_rejects_null_and_invalid_handles() {
         assert_eq!(parse_editor_owner_window("4660"), Ok(4660));
@@ -137,6 +267,41 @@ mod tests {
             midi_clips: vec![],
             tempo_events: vec![],
             time_signature_events: vec![],
+        }
+    }
+
+    fn mixer_parameter_graph() -> LiveMixerGraph {
+        use yadaw_dsp_runtime::protocol::{LiveMixerChannel, LiveMixerSend, LiveMixerSendTap};
+        LiveMixerGraph {
+            channels: vec![LiveMixerChannel {
+                id: "channel-1".into(),
+                kind: "audio".into(),
+                system_role: None,
+                gain_db: 0.0,
+                pan: 0.0,
+                muted: false,
+                soloed: false,
+                output_channel_id: None,
+                output_bus: None,
+                record_armed: false,
+                input_monitoring: false,
+                midi_input_port_id: None,
+                midi_input_port_name: None,
+                midi_input_channel: None,
+                input_source: None,
+                input_channels: Vec::new(),
+                hardware_output_channels: Vec::new(),
+            }],
+            sends: vec![LiveMixerSend {
+                id: "send-1".into(),
+                source_channel_id: "channel-1".into(),
+                target_channel_id: None,
+                target_bus: None,
+                enabled: true,
+                tap: LiveMixerSendTap::Post,
+                level_db: 0.0,
+            }],
+            ..empty_live_graph()
         }
     }
 
@@ -625,5 +790,469 @@ mod tests {
             }
             other => panic!("expected audio runtime, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn runtime_config_validates_each_bound_and_cross_field_constraint() {
+        assert!(RuntimeConfig::auto().validate().is_ok());
+        assert!(RuntimeConfig {
+            worker_threads: 1,
+            max_blocking_threads: 2,
+            egress_concurrency: 1,
+        }
+        .validate()
+        .is_ok());
+        for invalid in [
+            RuntimeConfig {
+                worker_threads: 0,
+                max_blocking_threads: 2,
+                egress_concurrency: 1,
+            },
+            RuntimeConfig {
+                worker_threads: 9,
+                max_blocking_threads: 2,
+                egress_concurrency: 1,
+            },
+            RuntimeConfig {
+                worker_threads: 1,
+                max_blocking_threads: 1,
+                egress_concurrency: 1,
+            },
+            RuntimeConfig {
+                worker_threads: 1,
+                max_blocking_threads: 17,
+                egress_concurrency: 1,
+            },
+            RuntimeConfig {
+                worker_threads: 1,
+                max_blocking_threads: 2,
+                egress_concurrency: 0,
+            },
+            RuntimeConfig {
+                worker_threads: 1,
+                max_blocking_threads: 2,
+                egress_concurrency: 3,
+            },
+        ] {
+            assert!(invalid.validate().is_err(), "{invalid:?}");
+        }
+    }
+
+    #[test]
+    fn protocol_routing_classifies_commands_and_deadlines_by_owner() {
+        assert!(is_vst3_command(&ControlCommand::Ping));
+        assert!(is_vst3_command(&ControlCommand::PluginParameters {
+            instance_id: "plugin".into(),
+        }));
+        assert!(!is_vst3_command(&ControlCommand::AudioEngineSnapshot));
+        assert!(is_background_io_command(&ControlCommand::ListAudioBackends));
+        assert!(is_background_io_command(&ControlCommand::ListAudioDevices {
+            backend: "mock".into(),
+        }));
+        assert!(!is_background_io_command(&ControlCommand::Ping));
+        assert_eq!(
+            protocol_deadline(&ControlCommand::RunAudioBenchmark {
+                plugin_instance_ids: Vec::new(),
+            }),
+            Duration::from_secs(60)
+        );
+        assert_eq!(
+            protocol_deadline(&ControlCommand::OpenPluginEditor {
+                instance_id: "plugin".into(),
+                preference: PluginEditorPreference::default(),
+            }),
+            Duration::from_secs(15)
+        );
+        assert_eq!(
+            protocol_deadline(&ControlCommand::AudioEngineSnapshot),
+            Duration::from_secs(2)
+        );
+    }
+
+    #[test]
+    fn deferred_binary_accepts_inline_and_rejects_unresolved_attachment() {
+        let arena = Arc::new(Mutex::new(ArenaReceiver::new(1)));
+        let inline = resolve_deferred_binary(BinaryPayload::inline(vec![1, 2, 3]), &arena)
+            .expect("inline binary");
+        assert_eq!(inline.as_slice(), [1, 2, 3]);
+
+        let error = match resolve_deferred_binary(
+            BinaryPayload::Attachment {
+                index: 0,
+                offset: 0,
+                length: 3,
+            },
+            &arena,
+        ) {
+            Ok(_) => panic!("attachment should be materialized before the actor"),
+            Err(error) => error,
+        };
+        assert!(error.contains("Node attachment"));
+    }
+
+    #[test]
+    fn telemetry_transport_state_codes_are_stable() {
+        assert_eq!(transport_state_code("stopped"), 0);
+        assert_eq!(transport_state_code("playing"), 1);
+        assert_eq!(transport_state_code("recording"), 2);
+        assert_eq!(transport_state_code("waiting"), 3);
+        assert_eq!(transport_state_code("counting-in"), 4);
+        assert_eq!(transport_state_code("future-state"), 0);
+    }
+
+    #[test]
+    fn graph_parameter_handles_refresh_without_retaining_stale_entries() {
+        let handles = Mutex::new(GraphParameterHandles::default());
+        let graph = mixer_parameter_graph();
+
+        refresh_graph_handles(&handles, &graph);
+
+        let channel_handle = stable_runtime_handle(1, "channel-1");
+        let send_handle = stable_runtime_handle(2, "send-1");
+        let values = handles.lock().expect("parameter handles");
+        assert_eq!(values.channels.get(&channel_handle).map(String::as_str), Some("channel-1"));
+        assert_eq!(values.sends.get(&send_handle).map(String::as_str), Some("send-1"));
+        assert_ne!(channel_handle, send_handle);
+        drop(values);
+
+        refresh_graph_handles(&handles, &empty_live_graph());
+        let values = handles.lock().expect("refreshed parameter handles");
+        assert!(values.channels.is_empty());
+        assert!(values.sends.is_empty());
+    }
+
+    #[test]
+    fn mixer_parameter_routing_accepts_gain_and_pan_and_rejects_invalid_targets() {
+        use yadaw_dsp_runtime::protocol::ParameterTargetKind;
+        let audio_engine = engine::AudioEngine::new();
+        let handles = Mutex::new(GraphParameterHandles::default());
+        refresh_graph_handles(&handles, &mixer_parameter_graph());
+        let channel_handle = stable_runtime_handle(1, "channel-1");
+        let send_handle = stable_runtime_handle(2, "send-1");
+
+        assert!(matches!(
+            mixer_parameter_command(
+                &audio_engine,
+                &handles,
+                parameter_command(ParameterTargetKind::MixerChannel, channel_handle, 0, 0.5),
+            ),
+            ControlResult::Accepted
+        ));
+        assert!(matches!(
+            mixer_parameter_command(
+                &audio_engine,
+                &handles,
+                parameter_command(ParameterTargetKind::MixerChannel, channel_handle, 1, 0.25),
+            ),
+            ControlResult::Accepted
+        ));
+        assert!(matches!(
+            mixer_parameter_command(
+                &audio_engine,
+                &handles,
+                parameter_command(ParameterTargetKind::MixerSend, send_handle, 0, 0.75),
+            ),
+            ControlResult::Accepted
+        ));
+        for invalid in [
+            parameter_command(ParameterTargetKind::MixerChannel, u32::MAX, 0, 0.5),
+            parameter_command(ParameterTargetKind::MixerChannel, channel_handle, 99, 0.5),
+            parameter_command(ParameterTargetKind::MixerSend, send_handle, 99, 0.5),
+            parameter_command(ParameterTargetKind::Plugin, 1, 0, 0.5),
+        ] {
+            assert!(matches!(
+                mixer_parameter_command(&audio_engine, &handles, invalid),
+                ControlResult::Error { .. }
+            ));
+        }
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn actor_dispatch_reports_closed_sender_and_dropped_response() {
+        let (closed_sender, closed_inbox) = mpsc::channel(1);
+        drop(closed_inbox);
+        assert!(matches!(
+            dispatch_actor_command(&closed_sender, ActorCommand::Control(ControlCommand::Ping))
+                .await,
+            ControlResult::Error { error } if error.code == RpcErrorCode::InvariantViolation
+        ));
+
+        let (dropped_sender, mut dropped_inbox) = mpsc::channel::<ActorRequest>(1);
+        let dropper = tokio::spawn(async move {
+            let request = dropped_inbox.recv().await.expect("actor request");
+            drop(request.reply);
+        });
+        assert!(matches!(
+            dispatch_actor_command(&dropped_sender, ActorCommand::Control(ControlCommand::Ping))
+                .await,
+            ControlResult::Error { error } if error.code == RpcErrorCode::InvariantViolation
+        ));
+        dropper.await.expect("dropper task");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn engine_and_background_actors_enforce_command_ownership() {
+        use yadaw_dsp_runtime::protocol::ParameterTargetKind;
+        let audio_engine = Arc::new(engine::AudioEngine::new());
+        let handles = Arc::new(Mutex::new(GraphParameterHandles::default()));
+        let (engine_sender, engine_inbox) = mpsc::channel(4);
+        let engine_task = tokio::spawn(engine_actor(
+            engine_inbox,
+            Arc::clone(&handles),
+            Arc::clone(&audio_engine),
+        ));
+        assert!(matches!(
+            dispatch_actor_command(
+                &engine_sender,
+                ActorCommand::SyncAraGraph {
+                    graph: Some(empty_live_graph()),
+                },
+            )
+            .await,
+            ControlResult::Error { error } if error.code == RpcErrorCode::InvariantViolation
+        ));
+        assert!(matches!(
+            dispatch_actor_command(
+                &engine_sender,
+                ActorCommand::BuildGraph {
+                    graph: minimal_native_graph(1),
+                },
+            )
+            .await,
+            ControlResult::Error { error } if error.code == RpcErrorCode::InvariantViolation
+        ));
+        assert!(matches!(
+            dispatch_actor_command(
+                &engine_sender,
+                ActorCommand::Parameter(parameter_command(ParameterTargetKind::Plugin, 1, 0, 0.5)),
+            )
+            .await,
+            ControlResult::Error { error } if error.code == RpcErrorCode::InvariantViolation
+        ));
+        drop(engine_sender);
+        engine_task.await.expect("engine actor task");
+
+        let (unused_engine_sender, unused_engine_inbox) = mpsc::channel(1);
+        drop(unused_engine_inbox);
+        let (background_sender, background_inbox) = mpsc::channel(4);
+        let background_task = tokio::spawn(background_io_actor(
+            background_inbox,
+            unused_engine_sender,
+            WorkerSupervisor::new(),
+            audio_engine,
+        ));
+        assert!(matches!(
+            dispatch_actor_command(
+                &background_sender,
+                ActorCommand::Parameter(parameter_command(
+                    ParameterTargetKind::MixerChannel,
+                    1,
+                    0,
+                    0.5,
+                )),
+            )
+            .await,
+            ControlResult::Error { error } if error.code == RpcErrorCode::InvariantViolation
+        ));
+        assert!(matches!(
+            dispatch_actor_command(
+                &background_sender,
+                ActorCommand::SyncAraGraph { graph: None },
+            )
+            .await,
+            ControlResult::Error { error } if error.code == RpcErrorCode::InvariantViolation
+        ));
+        drop(background_sender);
+        background_task.await.expect("background actor task");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn ingress_forwards_normal_requests_and_reports_a_full_mailbox() {
+        let mut ingress = TestIngress::new(1);
+        ingress.send_request(ControlRequest {
+            request_id: 1,
+            command: ControlCommand::Ping,
+        });
+        let received = tokio::time::timeout(Duration::from_secs(2), ingress.inbound.recv())
+            .await
+            .expect("normal ingress timeout")
+            .expect("normal ingress request");
+        assert_eq!(received.request.request_id, 1);
+        assert!(matches!(received.request.command, ControlCommand::Ping));
+        assert!(received.received_leases.is_empty());
+
+        ingress
+            .inbound_sender
+            .try_send(InboundRequest {
+                request: ControlRequest {
+                    request_id: 99,
+                    command: ControlCommand::Ping,
+                },
+                received_leases: Vec::new(),
+            })
+            .expect("fill inbound mailbox");
+        ingress.send_request(ControlRequest {
+            request_id: 2,
+            command: ControlCommand::Ping,
+        });
+        let busy = tokio::time::timeout(Duration::from_secs(2), ingress.outbound.recv())
+            .await
+            .expect("busy response timeout")
+            .expect("busy response");
+        assert!(matches!(
+            busy,
+            OutboundMessage::Response {
+                value: ControlResponse {
+                    request_id: 2,
+                    result: ControlResult::Busy,
+                },
+                request_leases,
+            } if request_leases.is_empty()
+        ));
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn priority_ingress_handles_heartbeat_busy_and_acknowledged_shutdown() {
+        let mut ingress = TestIngress::new(1);
+        ingress.send_priority(PriorityRequest {
+            request_id: 1,
+            command: PriorityCommand::Heartbeat,
+        });
+        assert!(matches!(
+            ingress.receive_priority_response(),
+            PriorityResponse {
+                request_id: 1,
+                result: PriorityResult::Heartbeat {
+                    ipc_generation: 1,
+                    ..
+                },
+            }
+        ));
+
+        ingress
+            .priority_sender
+            .try_send(PriorityIngress::ParameterWake)
+            .expect("fill priority mailbox");
+        ingress.send_priority(PriorityRequest {
+            request_id: 2,
+            command: PriorityCommand::ParameterWake,
+        });
+        assert_eq!(
+            ingress.receive_priority_response(),
+            PriorityResponse {
+                request_id: 2,
+                result: PriorityResult::Busy,
+            }
+        );
+        assert!(matches!(
+            ingress.priority.try_recv(),
+            Ok(PriorityIngress::ParameterWake)
+        ));
+
+        ingress.send_priority(PriorityRequest {
+            request_id: 3,
+            command: PriorityCommand::Shutdown,
+        });
+        assert_eq!(
+            ingress.receive_priority_response(),
+            PriorityResponse {
+                request_id: 3,
+                result: PriorityResult::Accepted,
+            }
+        );
+        assert!(matches!(
+            tokio::time::timeout(Duration::from_secs(2), ingress.priority.recv())
+                .await
+                .expect("shutdown notification timeout"),
+            Some(PriorityIngress::Shutdown)
+        ));
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn egress_sends_responses_release_events_and_drains_on_shutdown() {
+        let (response_sender, responses) = ipc::channel().expect("response IPC channel");
+        let responses = Arc::new(Mutex::new(responses));
+        let (event_sender, events) = ipc::channel().expect("event IPC channel");
+        let events = Arc::new(Mutex::new(events));
+        let (outbound, outbound_inbox) = mpsc::channel(4);
+        let (shutdown, shutdown_rx) = watch::channel(false);
+        let metrics = Arc::new(EgressMetrics::default());
+        let task = tokio::spawn(run_egress(
+            outbound_inbox,
+            response_sender,
+            event_sender,
+            EgressArenas {
+                responses: Arc::new(Mutex::new(LeaseRegistry::with_session_epoch(1))),
+                requests: Arc::new(Mutex::new(ArenaReceiver::new(1))),
+            },
+            1,
+            shutdown_rx,
+            Arc::clone(&metrics),
+        ));
+        outbound
+            .send(OutboundMessage::Response {
+                value: ControlResponse {
+                    request_id: 7,
+                    result: ControlResult::Accepted,
+                },
+                request_leases: vec![11],
+            })
+            .await
+            .expect("queue response");
+        let mut response_arena = ArenaReceiver::new(1);
+        let (response, attachments, release) = yadaw_ipc_transport::decode_response_to_attachments(
+            receive_ipc_packet(Arc::clone(&responses)).await,
+            &mut response_arena,
+        )
+        .expect("decode egress response");
+        assert_eq!(response.request_id, 7);
+        assert_eq!(response.result, ControlResult::Accepted);
+        assert!(attachments.is_empty());
+        assert!(release.is_empty());
+        let release_event = receive_ipc_packet(Arc::clone(&events)).await;
+        assert_eq!(
+            decode_body::<HostEvent>(&release_event.body).expect("decode release event"),
+            HostEvent::ReleaseLeases {
+                lease_ids: vec![11],
+            }
+        );
+
+        outbound
+            .send(OutboundMessage::Event(
+                encode_event(&HostEvent::GraphPublished { revision: 4 }, Vec::new())
+                    .expect("encode host event"),
+            ))
+            .await
+            .expect("queue host event");
+        let event = receive_ipc_packet(Arc::clone(&events)).await;
+        assert_eq!(
+            decode_body::<HostEvent>(&event.body).expect("decode host event"),
+            HostEvent::GraphPublished { revision: 4 }
+        );
+
+        outbound
+            .try_send(OutboundMessage::Response {
+                value: ControlResponse {
+                    request_id: 8,
+                    result: ControlResult::Pong,
+                },
+                request_leases: Vec::new(),
+            })
+            .expect("queue response for shutdown drain");
+        shutdown.send(true).expect("signal egress shutdown");
+        let (drained, _, _) = yadaw_ipc_transport::decode_response_to_attachments(
+            receive_ipc_packet(responses).await,
+            &mut response_arena,
+        )
+        .expect("decode drained response");
+        assert_eq!(drained.request_id, 8);
+        tokio::time::timeout(Duration::from_secs(2), task)
+            .await
+            .expect("egress task timeout")
+            .expect("egress task");
+        assert_eq!(metrics.active.load(Ordering::Acquire), 0);
+        assert_eq!(metrics.blocking_jobs.load(Ordering::Acquire), 0);
+        assert_eq!(metrics.queue_depth.load(Ordering::Acquire), 0);
+        assert!(metrics.batches.load(Ordering::Relaxed) >= 3);
     }
 }
