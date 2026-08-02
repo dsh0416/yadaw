@@ -894,3 +894,38 @@ fn check_optional(operation: &'static str, result: i32) -> HostResult<()> {
         Err(HostError::Operation { operation, result })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn audio_layouts_report_their_input_and_output_channel_contracts() {
+        assert_eq!(AudioLayout::Mono.input_channels(), 1);
+        assert_eq!(AudioLayout::Mono.output_channels(), 1);
+        assert_eq!(AudioLayout::MonoToStereo.input_channels(), 1);
+        assert_eq!(AudioLayout::MonoToStereo.output_channels(), 2);
+        assert_eq!(AudioLayout::Stereo.input_channels(), 2);
+        assert_eq!(AudioLayout::Stereo.output_channels(), 2);
+    }
+
+    #[test]
+    fn optional_vst3_operations_accept_not_implemented_only() {
+        assert!(check_optional("setProcessing", 0).is_ok());
+        assert!(check_optional("setProcessing", -2147467263).is_ok());
+        assert!(matches!(
+            check_optional("setProcessing", -1),
+            Err(HostError::Operation {
+                operation: "setProcessing",
+                result: -1,
+            })
+        ));
+        assert!(matches!(
+            check("setupProcessing", -2),
+            Err(HostError::Operation {
+                operation: "setupProcessing",
+                result: -2,
+            })
+        ));
+    }
+}

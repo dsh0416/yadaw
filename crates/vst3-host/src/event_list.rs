@@ -136,3 +136,115 @@ static EVENT_LIST_VTABLE: EventListVTable = EventListVTable {
     event,
     add_event,
 };
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const INVALID_ARGUMENT: tresult = -2147024809;
+    const NO_INTERFACE: tresult = -2147467262;
+    const NOT_IMPLEMENTED: tresult = -2147467263;
+
+    fn zero_event() -> Event {
+        // SAFETY: the generated VST3 Event is a C data carrier made only of integer/floating
+        // fields and a C union whose all-zero representation is valid.
+        unsafe { MaybeUninit::<Event>::zeroed().assume_init() }
+    }
+
+    #[test]
+    fn event_list_enforces_capacity_and_clear_reuses_storage() {
+        let mut list = EventList::new();
+        let event = zero_event();
+        for _ in 0..EVENT_CAPACITY {
+            assert!(list.push(event));
+        }
+        assert!(!list.push(event));
+        assert!(!list.is_empty());
+
+        list.clear();
+
+        assert!(list.is_empty());
+        assert!(list.push(event));
+    }
+
+    #[test]
+    fn event_list_vtable_reports_count_and_copies_initialized_events() {
+        let mut list = EventList::new();
+        let mut expected = zero_event();
+        expected.busIndex = 3;
+        expected.sampleOffset = 17;
+        assert!(list.push(expected));
+        let interface = list.as_interface();
+        let mut output = zero_event();
+
+        // SAFETY: interface belongs to the live list and output is writable for one Event.
+        assert_eq!(unsafe { (EVENT_LIST_VTABLE.event_count)(interface) }, 1);
+        // SAFETY: index zero is initialized and output is writable for one Event.
+        let result =
+            unsafe { (EVENT_LIST_VTABLE.event)(interface, 0, std::ptr::addr_of_mut!(output)) };
+        assert_eq!(result, 0);
+        assert_eq!(output.busIndex, 3);
+        assert_eq!(output.sampleOffset, 17);
+    }
+
+    #[test]
+    fn event_list_vtable_rejects_invalid_indices_and_mutation() {
+        let mut list = EventList::new();
+        let interface = list.as_interface();
+        let mut output = zero_event();
+        let mut input = zero_event();
+
+        // SAFETY: interface belongs to the live list; invalid arguments are checked before any
+        // event storage is read or written.
+        unsafe {
+            assert_eq!(
+                (EVENT_LIST_VTABLE.event)(interface, -1, std::ptr::addr_of_mut!(output),),
+                INVALID_ARGUMENT
+            );
+            assert_eq!(
+                (EVENT_LIST_VTABLE.event)(interface, 0, std::ptr::null_mut()),
+                INVALID_ARGUMENT
+            );
+            assert_eq!(
+                (EVENT_LIST_VTABLE.event)(interface, 0, std::ptr::addr_of_mut!(output),),
+                1
+            );
+            assert_eq!(
+                (EVENT_LIST_VTABLE.add_event)(interface, std::ptr::addr_of_mut!(input),),
+                NOT_IMPLEMENTED
+            );
+        }
+    }
+
+    #[test]
+    fn event_list_exposes_only_the_event_list_and_unknown_interfaces() {
+        let mut list = EventList::new();
+        let unknown = list.as_interface().cast::<FUnknown>();
+        let mut output = std::ptr::null_mut::<c_void>();
+
+        // SAFETY: unknown belongs to the live list, the IID contains 16 bytes, and output is
+        // writable for one interface pointer.
+        let result = unsafe {
+            (EVENT_LIST_VTABLE.base.query_interface)(
+                unknown,
+                iid::IEVENT_LIST.as_ptr(),
+                std::ptr::addr_of_mut!(output),
+            )
+        };
+        assert_eq!(result, 0);
+        assert_eq!(output, unknown.cast());
+        let unsupported = [0 as c_char; 16];
+        output = unknown.cast();
+        // SAFETY: unknown belongs to the live list, unsupported contains 16 bytes, and output is
+        // writable for one interface pointer.
+        let result = unsafe {
+            (EVENT_LIST_VTABLE.base.query_interface)(
+                unknown,
+                unsupported.as_ptr(),
+                std::ptr::addr_of_mut!(output),
+            )
+        };
+        assert_eq!(result, NO_INTERFACE);
+        assert!(output.is_null());
+    }
+}

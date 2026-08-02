@@ -24,6 +24,28 @@ pub struct ParameterEnqueueRequest {
 type ResponseResolver = Box<dyn FnOnce(Env) -> Result<IpcResponse> + Send>;
 type ResponseDeferred = JsDeferred<IpcResponse, ResponseResolver>;
 
+trait PendingResponder: Send {
+    fn resolve(self: Box<Self>, bytes: Vec<u8>, attachments: Vec<Vec<u8>>);
+    fn reject(self: Box<Self>, error: Error);
+}
+
+struct NapiPendingResponder(ResponseDeferred);
+
+impl PendingResponder for NapiPendingResponder {
+    fn resolve(self: Box<Self>, bytes: Vec<u8>, attachments: Vec<Vec<u8>>) {
+        self.0.resolve(Box::new(move |_env| {
+            Ok(IpcResponse {
+                body: bytes.into(),
+                attachments: attachments.into_iter().map(Buffer::from).collect(),
+            })
+        }));
+    }
+
+    fn reject(self: Box<Self>, error: Error) {
+        self.0.reject(error);
+    }
+}
+
 fn failure(context: &str, error: impl std::fmt::Display) -> Error {
     Error::new(Status::GenericFailure, format!("{context}: {error}"))
 }
@@ -73,7 +95,7 @@ fn negotiate_shared_pages(
 }
 
 struct Pending {
-    deferred: ResponseDeferred,
+    responder: Box<dyn PendingResponder>,
     deadline: Instant,
 }
 

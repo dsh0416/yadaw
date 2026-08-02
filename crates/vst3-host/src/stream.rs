@@ -235,3 +235,171 @@ static STREAM_VTABLE: StreamVTable = StreamVTable {
     seek,
     tell,
 };
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const INVALID_ARGUMENT: tresult = -2147024809;
+    const NO_INTERFACE: tresult = -2147467262;
+
+    #[test]
+    fn memory_stream_reads_writes_seeks_and_reports_position() {
+        let mut stream = MemoryStream::from_slice(&[1, 2, 3, 4]);
+        let interface = stream.as_interface();
+        let mut first = [0_u8; 2];
+        let mut bytes_read = -1;
+
+        // SAFETY: interface belongs to the live stream, first is writable for two bytes, and the
+        // result pointer is valid for one int32.
+        let result = unsafe {
+            (STREAM_VTABLE.read)(
+                interface,
+                first.as_mut_ptr().cast(),
+                2,
+                std::ptr::addr_of_mut!(bytes_read),
+            )
+        };
+        assert_eq!(result, 0);
+        assert_eq!(first, [1, 2]);
+        assert_eq!(bytes_read, 2);
+
+        let replacement = [9_u8, 8];
+        let mut bytes_written = -1;
+        // SAFETY: interface belongs to the live stream, replacement is readable for two bytes,
+        // and the result pointer is valid for one int32.
+        let result = unsafe {
+            (STREAM_VTABLE.write)(
+                interface,
+                replacement.as_ptr().cast_mut().cast(),
+                2,
+                std::ptr::addr_of_mut!(bytes_written),
+            )
+        };
+        assert_eq!(result, 0);
+        assert_eq!(bytes_written, 2);
+
+        let mut position = -1;
+        // SAFETY: interface belongs to the live stream and position is writable.
+        let result = unsafe { (STREAM_VTABLE.tell)(interface, std::ptr::addr_of_mut!(position)) };
+        assert_eq!(result, 0);
+        assert_eq!(position, 4);
+        stream.rewind();
+        assert_eq!(stream.into_bytes(), vec![1, 2, 9, 8]);
+    }
+
+    #[test]
+    fn memory_stream_supports_sparse_writes_and_eof_reads() {
+        let mut stream = MemoryStream::empty();
+        let interface = stream.as_interface();
+        let mut position = -1;
+
+        // SAFETY: interface belongs to the live stream and position is writable.
+        let result =
+            unsafe { (STREAM_VTABLE.seek)(interface, 4, 0, std::ptr::addr_of_mut!(position)) };
+        assert_eq!(result, 0);
+        let byte = [7_u8];
+        // SAFETY: interface belongs to the live stream and byte is readable for one byte.
+        let result = unsafe {
+            (STREAM_VTABLE.write)(
+                interface,
+                byte.as_ptr().cast_mut().cast(),
+                1,
+                std::ptr::null_mut(),
+            )
+        };
+        assert_eq!(result, 0);
+        let mut eof = [0_u8; 1];
+        let mut bytes_read = -1;
+        // SAFETY: interface belongs to the live stream, eof is writable for one byte, and the
+        // count output is writable.
+        let result = unsafe {
+            (STREAM_VTABLE.read)(
+                interface,
+                eof.as_mut_ptr().cast(),
+                1,
+                std::ptr::addr_of_mut!(bytes_read),
+            )
+        };
+        assert_eq!(result, 0);
+        assert_eq!(bytes_read, 0);
+        assert_eq!(stream.into_bytes(), vec![0, 0, 0, 0, 7]);
+    }
+
+    #[test]
+    fn memory_stream_rejects_invalid_arguments_and_seek_modes() {
+        let mut stream = MemoryStream::from_slice(&[1, 2]);
+        let interface = stream.as_interface();
+        let unknown = interface.cast::<FUnknown>();
+
+        // SAFETY: interface and unknown belong to the live stream; every intentionally-null
+        // pointer is passed to exercise validation before dereference.
+        unsafe {
+            assert_eq!(
+                (STREAM_VTABLE.read)(interface, std::ptr::null_mut(), 1, std::ptr::null_mut()),
+                INVALID_ARGUMENT
+            );
+            assert_eq!(
+                (STREAM_VTABLE.write)(interface, std::ptr::null_mut(), -1, std::ptr::null_mut()),
+                INVALID_ARGUMENT
+            );
+            assert_eq!(
+                (STREAM_VTABLE.seek)(interface, -1, 0, std::ptr::null_mut()),
+                INVALID_ARGUMENT
+            );
+            assert_eq!(
+                (STREAM_VTABLE.seek)(interface, 0, 99, std::ptr::null_mut()),
+                INVALID_ARGUMENT
+            );
+            assert_eq!(
+                (STREAM_VTABLE.tell)(interface, std::ptr::null_mut()),
+                INVALID_ARGUMENT
+            );
+            assert_eq!(
+                (STREAM_VTABLE.base.query_interface)(
+                    unknown,
+                    std::ptr::null(),
+                    std::ptr::null_mut(),
+                ),
+                INVALID_ARGUMENT
+            );
+        }
+    }
+
+    #[test]
+    fn memory_stream_exposes_expected_interfaces_and_balances_references() {
+        let mut stream = MemoryStream::empty();
+        let unknown = stream.as_interface().cast::<FUnknown>();
+        let mut output = std::ptr::null_mut::<c_void>();
+
+        // SAFETY: unknown belongs to the live stream, the SDK IIDs contain 16 bytes, and output
+        // is writable for one interface pointer.
+        let result = unsafe {
+            (STREAM_VTABLE.base.query_interface)(
+                unknown,
+                iid::IBSTREAM.as_ptr(),
+                std::ptr::addr_of_mut!(output),
+            )
+        };
+        assert_eq!(result, 0);
+        assert_eq!(output, unknown.cast());
+        assert_eq!(stream.references.load(Ordering::Relaxed), 2);
+        // SAFETY: query_interface returned one owned reference for this live interface.
+        assert_eq!(unsafe { (STREAM_VTABLE.base.release)(unknown) }, 1);
+
+        let unsupported = [0 as c_char; 16];
+        output = unknown.cast();
+        // SAFETY: unknown belongs to the live stream, unsupported contains 16 bytes, and output
+        // is writable for one interface pointer.
+        let result = unsafe {
+            (STREAM_VTABLE.base.query_interface)(
+                unknown,
+                unsupported.as_ptr(),
+                std::ptr::addr_of_mut!(output),
+            )
+        };
+        assert_eq!(result, NO_INTERFACE);
+        assert!(output.is_null());
+        assert_eq!(stream.references.load(Ordering::Relaxed), 1);
+    }
+}
