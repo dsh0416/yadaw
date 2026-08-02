@@ -4,12 +4,105 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+catalogs:
+  default:
+    '@electric-sql/pglite':
+      specifier: 0.5.4
+      version: 0.5.4
+    '@emnapi/runtime':
+      specifier: 2.0.0-alpha.3
+      version: 2.0.0-alpha.3
+    '@fontsource-variable/cascadia-mono':
+      specifier: ^5.3.0
+      version: 5.3.0
+    '@fontsource-variable/inter':
+      specifier: ^5.3.0
+      version: 5.3.0
+    '@fontsource-variable/noto-sans-sc':
+      specifier: ^5.3.0
+      version: 5.3.0
+    '@fontsource/barlow-condensed':
+      specifier: ^5.3.0
+      version: 5.3.0
+    '@napi-rs/cli':
+      specifier: ^3.8.2
+      version: 3.8.2
+    '@playwright/test':
+      specifier: 1.62.1
+      version: 1.62.1
+    '@storybook/addon-a11y':
+      specifier: 10.5.5
+      version: 10.5.5
+    '@storybook/addon-docs':
+      specifier: 10.5.5
+      version: 10.5.5
+    '@storybook/addon-themes':
+      specifier: 10.5.5
+      version: 10.5.5
+    '@storybook/addon-vitest':
+      specifier: 10.5.5
+      version: 10.5.5
+    '@storybook/vue3':
+      specifier: 10.5.5
+      version: 10.5.5
+    '@storybook/vue3-vite':
+      specifier: 10.5.5
+      version: 10.5.5
+    '@types/node':
+      specifier: ^26.1.2
+      version: 26.1.2
+    '@unhead/vue':
+      specifier: ^3.2.3
+      version: 3.2.3
+    '@vitejs/plugin-vue':
+      specifier: 6.0.8
+      version: 6.0.8
+    '@vitest/browser-playwright':
+      specifier: 4.1.10
+      version: 4.1.10
+    '@vitest/coverage-v8':
+      specifier: 4.1.10
+      version: 4.1.10
+    '@vue/test-utils':
+      specifier: 2.4.11
+      version: 2.4.11
+    happy-dom:
+      specifier: 20.11.1
+      version: 20.11.1
+    pinia:
+      specifier: 4.0.2
+      version: 4.0.2
+    playwright:
+      specifier: 1.62.1
+      version: 1.62.1
+    storybook:
+      specifier: 10.5.5
+      version: 10.5.5
+    typescript:
+      specifier: 5.9.3
+      version: 5.9.3
+    unplugin-fonts:
+      specifier: ^2.0.0
+      version: 2.0.0
+    vite:
+      specifier: 8.2.0
+      version: 8.2.0
+    vitest:
+      specifier: 4.1.10
+      version: 4.1.10
+    vue:
+      specifier: 3.5.40
+      version: 3.5.40
+    vue-tsc:
+      specifier: 3.3.9
+      version: 3.3.9
+
 importers:
 
   .:
     devDependencies:
       '@types/node':
-        specifier: ^26.1.2
+        specifier: 'catalog:'
         version: 26.1.2
       eslint:
         specifier: ^10.8.0
@@ -36,7 +129,7 @@ importers:
         specifier: 7.0.2001
         version: 7.0.2001
       typescript:
-        specifier: ^5.9.3
+        specifier: 'catalog:'
         version: 5.9.3
       typescript-eslint:
         specifier: ^8.65.0
@@ -45,62 +138,62 @@ importers:
   apps/design-system:
     dependencies:
       '@fontsource-variable/cascadia-mono':
-        specifier: ^5.3.0
+        specifier: 'catalog:'
         version: 5.3.0
       '@fontsource-variable/inter':
-        specifier: ^5.3.0
+        specifier: 'catalog:'
         version: 5.3.0
       '@fontsource-variable/noto-sans-sc':
-        specifier: ^5.3.0
+        specifier: 'catalog:'
         version: 5.3.0
       '@fontsource/barlow-condensed':
-        specifier: ^5.3.0
+        specifier: 'catalog:'
         version: 5.3.0
       '@yadaw/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       pinia:
-        specifier: 4.0.2
+        specifier: 'catalog:'
         version: 4.0.2(@vue/devtools-api@8.2.1)(typescript@5.9.3)(vue@3.5.40(typescript@5.9.3))
       vue:
-        specifier: 3.5.40
+        specifier: 'catalog:'
         version: 3.5.40(typescript@5.9.3)
     devDependencies:
       '@playwright/test':
-        specifier: 1.62.1
+        specifier: 'catalog:'
         version: 1.62.1
       '@storybook/addon-a11y':
-        specifier: 10.5.5
+        specifier: 'catalog:'
         version: 10.5.5(storybook@10.5.5(@types/react@19.2.18)(prettier@3.9.6)(react@19.2.8))
       '@storybook/addon-docs':
-        specifier: 10.5.5
+        specifier: 'catalog:'
         version: 10.5.5(@types/react@19.2.18)(esbuild@0.28.1)(rollup@4.62.3)(storybook@10.5.5(@types/react@19.2.18)(prettier@3.9.6)(react@19.2.8))(vite@8.2.0(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))
       '@storybook/addon-themes':
-        specifier: 10.5.5
+        specifier: 'catalog:'
         version: 10.5.5(storybook@10.5.5(@types/react@19.2.18)(prettier@3.9.6)(react@19.2.8))
       '@storybook/addon-vitest':
-        specifier: 10.5.5
+        specifier: 'catalog:'
         version: 10.5.5(@vitest/browser-playwright@4.1.10)(@vitest/browser@4.1.10)(@vitest/runner@4.1.10)(react@19.2.8)(storybook@10.5.5(@types/react@19.2.18)(prettier@3.9.6)(react@19.2.8))(vitest@4.1.10)
       '@storybook/vue3':
-        specifier: 10.5.5
+        specifier: 'catalog:'
         version: 10.5.5(storybook@10.5.5(@types/react@19.2.18)(prettier@3.9.6)(react@19.2.8))(vue@3.5.40(typescript@5.9.3))
       '@storybook/vue3-vite':
-        specifier: 10.5.5
+        specifier: 'catalog:'
         version: 10.5.5(esbuild@0.28.1)(rollup@4.62.3)(storybook@10.5.5(@types/react@19.2.18)(prettier@3.9.6)(react@19.2.8))(vite@8.2.0(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))(vue@3.5.40(typescript@5.9.3))
       '@types/react':
         specifier: 19.2.18
         version: 19.2.18
       '@unhead/vue':
-        specifier: ^3.2.3
+        specifier: 'catalog:'
         version: 3.2.3(@oxc-project/types@0.142.0)(esbuild@0.28.1)(lightningcss@1.33.0)(rolldown@1.2.1)(rollup@4.62.3)(srvx@0.12.5)(typescript@5.9.3)(vite@8.2.0(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))(vue@3.5.40(typescript@5.9.3))
       '@vitejs/plugin-vue':
-        specifier: 6.0.8
+        specifier: 'catalog:'
         version: 6.0.8(vite@8.2.0(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))(vue@3.5.40(typescript@5.9.3))
       '@vitest/browser-playwright':
-        specifier: 4.1.10
+        specifier: 'catalog:'
         version: 4.1.10(playwright@1.62.1)(vite@8.2.0(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))(vitest@4.1.10)
       playwright:
-        specifier: 1.62.1
+        specifier: 'catalog:'
         version: 1.62.1
       react:
         specifier: 19.2.8
@@ -109,31 +202,31 @@ importers:
         specifier: 19.2.8
         version: 19.2.8(react@19.2.8)
       storybook:
-        specifier: 10.5.5
+        specifier: 'catalog:'
         version: 10.5.5(@types/react@19.2.18)(prettier@3.9.6)(react@19.2.8)
       typescript:
-        specifier: 5.9.3
+        specifier: 'catalog:'
         version: 5.9.3
       unplugin-fonts:
-        specifier: ^2.0.0
+        specifier: 'catalog:'
         version: 2.0.0(esbuild@0.28.1)(rolldown@1.2.1)(rollup@4.62.3)(vite@8.2.0(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))
       vite:
-        specifier: 8.2.0
+        specifier: 'catalog:'
         version: 8.2.0(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0)
       vitest:
-        specifier: 4.1.10
+        specifier: 'catalog:'
         version: 4.1.10(@types/node@26.1.2)(@vitest/browser-playwright@4.1.10)(@vitest/coverage-v8@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))
       vue-component-meta:
         specifier: 3.3.9
         version: 3.3.9(typescript@5.9.3)
       vue-tsc:
-        specifier: 3.3.9
+        specifier: 'catalog:'
         version: 3.3.9(typescript@5.9.3)
 
   apps/desktop:
     dependencies:
       '@electric-sql/pglite':
-        specifier: 0.5.4
+        specifier: 'catalog:'
         version: 0.5.4
       '@lucide/vue':
         specifier: ^1.28.0
@@ -164,16 +257,16 @@ importers:
         version: 11.4.8(vue@3.5.40(typescript@5.9.3))
     devDependencies:
       '@fontsource-variable/cascadia-mono':
-        specifier: ^5.3.0
+        specifier: 'catalog:'
         version: 5.3.0
       '@fontsource-variable/inter':
-        specifier: ^5.3.0
+        specifier: 'catalog:'
         version: 5.3.0
       '@fontsource-variable/noto-sans-sc':
-        specifier: ^5.3.0
+        specifier: 'catalog:'
         version: 5.3.0
       '@fontsource/barlow-condensed':
-        specifier: ^5.3.0
+        specifier: 'catalog:'
         version: 5.3.0
       '@intlify/unplugin-vue-i18n':
         specifier: ^11.2.4
@@ -182,22 +275,22 @@ importers:
         specifier: 2.0.1
         version: 2.0.1(pinia@4.0.2(@vue/devtools-api@8.2.1)(typescript@5.9.3)(vue@3.5.40(typescript@5.9.3)))
       '@playwright/test':
-        specifier: 1.62.1
+        specifier: 'catalog:'
         version: 1.62.1
       '@types/node':
-        specifier: ^26.1.2
+        specifier: 'catalog:'
         version: 26.1.2
       '@unhead/vue':
-        specifier: ^3.2.3
+        specifier: 'catalog:'
         version: 3.2.3(@oxc-project/types@0.142.0)(esbuild@0.28.1)(lightningcss@1.33.0)(rolldown@1.2.1)(rollup@4.62.3)(srvx@0.12.5)(typescript@5.9.3)(vite@8.2.0(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))(vue@3.5.40(typescript@5.9.3))
       '@vitejs/plugin-vue':
-        specifier: ^6.0.8
+        specifier: 'catalog:'
         version: 6.0.8(vite@8.2.0(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))(vue@3.5.40(typescript@5.9.3))
       '@vitest/coverage-v8':
-        specifier: 4.1.10
+        specifier: 'catalog:'
         version: 4.1.10(@vitest/browser@4.1.10)(vitest@4.1.10)
       '@vue/test-utils':
-        specifier: 2.4.11
+        specifier: 'catalog:'
         version: 2.4.11(@vue/compiler-dom@3.5.40)(@vue/server-renderer@3.5.40)(vue@3.5.40(typescript@5.9.3))
       '@vueuse/core':
         specifier: ^14.4.0
@@ -212,71 +305,71 @@ importers:
         specifier: ^26.15.3
         version: 26.15.3(electron-builder-squirrel-windows@26.15.3)(supports-color@7.2.0)
       happy-dom:
-        specifier: 20.11.1
+        specifier: 'catalog:'
         version: 20.11.1
       pinia:
-        specifier: ^4.0.2
+        specifier: 'catalog:'
         version: 4.0.2(@vue/devtools-api@8.2.1)(typescript@5.9.3)(vue@3.5.40(typescript@5.9.3))
       typescript:
-        specifier: ^5.9.3
+        specifier: 'catalog:'
         version: 5.9.3
       unplugin-fonts:
-        specifier: ^2.0.0
+        specifier: 'catalog:'
         version: 2.0.0(esbuild@0.28.1)(rolldown@1.2.1)(rollup@4.62.3)(vite@8.2.0(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))
       vite:
-        specifier: ^8.2.0
+        specifier: 'catalog:'
         version: 8.2.0(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0)
       vitest:
-        specifier: 4.1.10
+        specifier: 'catalog:'
         version: 4.1.10(@types/node@26.1.2)(@vitest/browser-playwright@4.1.10)(@vitest/coverage-v8@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))
       vue:
-        specifier: ^3.5.40
+        specifier: 'catalog:'
         version: 3.5.40(typescript@5.9.3)
       vue-router:
         specifier: ^5.2.0
         version: 5.2.0(@vue/compiler-sfc@3.5.40)(esbuild@0.28.1)(pinia@4.0.2(@vue/devtools-api@8.2.1)(typescript@5.9.3)(vue@3.5.40(typescript@5.9.3)))(rolldown@1.2.1)(rollup@4.62.3)(vite@8.2.0(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))(vue@3.5.40(typescript@5.9.3))
       vue-tsc:
-        specifier: ^3.3.9
+        specifier: 'catalog:'
         version: 3.3.9(typescript@5.9.3)
 
   crates/audio-host-client:
     devDependencies:
       '@emnapi/runtime':
-        specifier: 2.0.0-alpha.3
+        specifier: 'catalog:'
         version: 2.0.0-alpha.3
       '@napi-rs/cli':
-        specifier: ^3.8.2
+        specifier: 'catalog:'
         version: 3.8.2(@emnapi/runtime@2.0.0-alpha.3)(@types/node@26.1.2)(supports-color@7.2.0)
 
   crates/dsp-node:
     devDependencies:
       '@emnapi/runtime':
-        specifier: 2.0.0-alpha.3
+        specifier: 'catalog:'
         version: 2.0.0-alpha.3
       '@napi-rs/cli':
-        specifier: ^3.8.2
+        specifier: 'catalog:'
         version: 3.8.2(@emnapi/runtime@2.0.0-alpha.3)(@types/node@26.1.2)(supports-color@7.2.0)
 
   docs:
     dependencies:
       '@fontsource-variable/cascadia-mono':
-        specifier: ^5.3.0
+        specifier: 'catalog:'
         version: 5.3.0
       '@fontsource-variable/inter':
-        specifier: ^5.3.0
+        specifier: 'catalog:'
         version: 5.3.0
       '@fontsource-variable/noto-sans-sc':
-        specifier: ^5.3.0
+        specifier: 'catalog:'
         version: 5.3.0
       '@fontsource/barlow-condensed':
-        specifier: ^5.3.0
+        specifier: 'catalog:'
         version: 5.3.0
       '@yadaw/ui':
         specifier: workspace:*
         version: link:../packages/ui
     devDependencies:
       '@types/node':
-        specifier: ^26.1.2
+        specifier: 'catalog:'
         version: 26.1.2
       gray-matter:
         specifier: ^4.0.3
@@ -285,31 +378,31 @@ importers:
         specifier: ^11.16.0
         version: 11.16.0
       unplugin-fonts:
-        specifier: ^2.0.0
+        specifier: 'catalog:'
         version: 2.0.0(esbuild@0.28.1)(rolldown@1.2.1)(rollup@4.62.3)(vite@8.2.0(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))
       vitepress:
         specifier: 2.0.0-alpha.18
         version: 2.0.0-alpha.18(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(postcss@8.5.25)(tsx@4.23.1)(typescript@5.9.3)(yaml@2.9.0)
       vue:
-        specifier: ^3.5.40
+        specifier: 'catalog:'
         version: 3.5.40(typescript@5.9.3)
 
   packages/contracts:
     devDependencies:
       '@vitest/coverage-v8':
-        specifier: 4.1.10
+        specifier: 'catalog:'
         version: 4.1.10(@vitest/browser@4.1.10)(vitest@4.1.10)
       typescript:
-        specifier: ^5.9.3
+        specifier: 'catalog:'
         version: 5.9.3
       vitest:
-        specifier: 4.1.10
+        specifier: 'catalog:'
         version: 4.1.10(@types/node@26.1.2)(@vitest/browser-playwright@4.1.10)(@vitest/coverage-v8@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))
 
   packages/project-db:
     dependencies:
       '@electric-sql/pglite':
-        specifier: 0.5.4
+        specifier: 'catalog:'
         version: 0.5.4
       '@yadaw/contracts':
         specifier: workspace:*
@@ -319,19 +412,19 @@ importers:
         version: 0.45.2(@electric-sql/pglite@0.5.4)
     devDependencies:
       '@types/node':
-        specifier: ^26.1.2
+        specifier: 'catalog:'
         version: 26.1.2
       '@vitest/coverage-v8':
-        specifier: 4.1.10
+        specifier: 'catalog:'
         version: 4.1.10(@vitest/browser@4.1.10)(vitest@4.1.10)
       drizzle-kit:
         specifier: 0.31.10
         version: 0.31.10
       typescript:
-        specifier: ^5.9.3
+        specifier: 'catalog:'
         version: 5.9.3
       vitest:
-        specifier: 4.1.10
+        specifier: 'catalog:'
         version: 4.1.10(@types/node@26.1.2)(@vitest/browser-playwright@4.1.10)(@vitest/coverage-v8@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))
 
   packages/project-model:
@@ -341,71 +434,71 @@ importers:
         version: link:../contracts
     devDependencies:
       '@vitest/coverage-v8':
-        specifier: 4.1.10
+        specifier: 'catalog:'
         version: 4.1.10(@vitest/browser@4.1.10)(vitest@4.1.10)
       typescript:
-        specifier: ^5.9.3
+        specifier: 'catalog:'
         version: 5.9.3
       vitest:
-        specifier: 4.1.10
+        specifier: 'catalog:'
         version: 4.1.10(@types/node@26.1.2)(@vitest/browser-playwright@4.1.10)(@vitest/coverage-v8@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))
 
   packages/ui:
     dependencies:
       '@fontsource-variable/cascadia-mono':
-        specifier: ^5.3.0
+        specifier: 'catalog:'
         version: 5.3.0
       '@fontsource-variable/inter':
-        specifier: ^5.3.0
+        specifier: 'catalog:'
         version: 5.3.0
       '@fontsource-variable/noto-sans-sc':
-        specifier: ^5.3.0
+        specifier: 'catalog:'
         version: 5.3.0
       '@fontsource/barlow-condensed':
-        specifier: ^5.3.0
+        specifier: 'catalog:'
         version: 5.3.0
       reka-ui:
         specifier: 2.10.1
         version: 2.10.1(vue@3.5.40(typescript@5.9.3))
     devDependencies:
       '@storybook/vue3-vite':
-        specifier: 10.5.5
+        specifier: 'catalog:'
         version: 10.5.5(esbuild@0.28.1)(rollup@4.62.3)(storybook@10.5.5(@types/react@19.2.18)(prettier@3.9.6)(react@19.2.8))(vite@8.2.0(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))(vue@3.5.40(typescript@5.9.3))
       '@unhead/vue':
-        specifier: ^3.2.3
+        specifier: 'catalog:'
         version: 3.2.3(@oxc-project/types@0.142.0)(esbuild@0.28.1)(lightningcss@1.33.0)(rolldown@1.2.1)(rollup@4.62.3)(srvx@0.12.5)(typescript@5.9.3)(vite@8.2.0(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))(vue@3.5.40(typescript@5.9.3))
       '@vitejs/plugin-vue':
-        specifier: 6.0.8
+        specifier: 'catalog:'
         version: 6.0.8(vite@8.2.0(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))(vue@3.5.40(typescript@5.9.3))
       '@vitest/coverage-v8':
-        specifier: 4.1.10
+        specifier: 'catalog:'
         version: 4.1.10(@vitest/browser@4.1.10)(vitest@4.1.10)
       '@vue/test-utils':
-        specifier: 2.4.11
+        specifier: 'catalog:'
         version: 2.4.11(@vue/compiler-dom@3.5.40)(@vue/server-renderer@3.5.40)(vue@3.5.40(typescript@5.9.3))
       happy-dom:
-        specifier: 20.11.1
+        specifier: 'catalog:'
         version: 20.11.1
       storybook:
-        specifier: 10.5.5
+        specifier: 'catalog:'
         version: 10.5.5(@types/react@19.2.18)(prettier@3.9.6)(react@19.2.8)
       typescript:
-        specifier: 5.9.3
+        specifier: 'catalog:'
         version: 5.9.3
       unplugin-fonts:
-        specifier: ^2.0.0
+        specifier: 'catalog:'
         version: 2.0.0(esbuild@0.28.1)(rolldown@1.2.1)(rollup@4.62.3)(vite@8.2.0(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))
       vite:
-        specifier: 8.2.0
+        specifier: 'catalog:'
         version: 8.2.0(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0)
       vitest:
-        specifier: 4.1.10
+        specifier: 'catalog:'
         version: 4.1.10(@types/node@26.1.2)(@vitest/browser-playwright@4.1.10)(@vitest/coverage-v8@4.1.10)(happy-dom@20.11.1)(vite@8.2.0(@types/node@26.1.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))
       vue:
-        specifier: 3.5.40
+        specifier: 'catalog:'
         version: 3.5.40(typescript@5.9.3)
       vue-tsc:
-        specifier: 3.3.9
+        specifier: 'catalog:'
         version: 3.3.9(typescript@5.9.3)
 
 packages:
