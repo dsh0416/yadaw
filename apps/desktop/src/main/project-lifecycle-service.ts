@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto"
+import { basename } from "node:path"
 import { rpcFailure, rpcSuccess } from "@yadaw/contracts"
 import type {
   ApplicationBootstrapSnapshot,
@@ -9,6 +10,7 @@ import type {
   ProjectSessionRef,
   ProjectGraphRef,
   ProjectWorkspaceSnapshot,
+  OperationPhase,
   ResourceRef,
   RpcError,
   RpcRequestMeta,
@@ -21,20 +23,23 @@ import type { ProjectGraphService } from "./project-graph-service"
 import type { ProjectService } from "./project-service"
 import type { ApplicationSettingsStore } from "./application-settings"
 import type { WaveformService } from "./waveform-service"
+import { t } from "./i18n"
 
 interface ProjectCandidateResources {
   project: ProjectSessionRef
   graph: ProjectGraphRef
 }
 
-interface ProjectOpenProgress {
-  phase: "loading-project-archive" | "loading-project-database" | "restoring-project-state"
+interface ProjectLoadProgress {
+  phase: OperationPhase
   completedUnits: number
 }
 
 type PrepareProject = (
-  onProgress: (progress: ProjectOpenProgress) => void
+  onProgress: (progress: ProjectLoadProgress) => void
 ) => Promise<ProjectSession>
+
+const PROJECT_LOAD_TOTAL_UNITS = 5
 
 function sameRef(left: ResourceRef | undefined, right: ResourceRef): boolean {
   return (
@@ -156,40 +161,28 @@ export class ProjectLifecycleService {
 
   async create(
     meta: RpcRequestMeta,
-    request: CreateProjectRequest & { path: string },
-    onProgress: (progress: ProjectOpenProgress) => void
+    request: CreateProjectRequest & { path: string }
   ): Promise<RpcResult<ProjectWorkspaceSnapshot>> {
-    return this.openCandidate(
-      meta,
-      "creating",
-      (progress) =>
-        this.projects.prepareCreate(request).then((session) => {
-          progress({ phase: "restoring-project-state", completedUnits: 1 })
-          return session
-        }),
-      onProgress
+    return this.openCandidate(meta, "creating", request.name, (progress) =>
+      this.projects.prepareCreate(request, progress)
     )
   }
 
   async open(
     meta: RpcRequestMeta,
     path: string,
-    recover: boolean,
-    onProgress: (progress: ProjectOpenProgress) => void
+    recover: boolean
   ): Promise<RpcResult<ProjectWorkspaceSnapshot>> {
-    return this.openCandidate(
-      meta,
-      "opening",
-      (progress) => this.projects.prepareOpen(path, recover, progress),
-      onProgress
+    return this.openCandidate(meta, "opening", basename(path), (progress) =>
+      this.projects.prepareOpen(path, recover, progress)
     )
   }
 
   private async openCandidate(
     meta: RpcRequestMeta,
     transition: "creating" | "opening",
-    prepareProject: PrepareProject,
-    onProgress: (progress: ProjectOpenProgress) => void
+    description: string,
+    prepareProject: PrepareProject
   ): Promise<RpcResult<ProjectWorkspaceSnapshot>> {
     const targetFailure = this.validateMutationTarget(
       meta,
@@ -200,20 +193,53 @@ export class ProjectLifecycleService {
     if (!begin.ok) return begin
     if (begin.value) return begin.value as RpcResult<ProjectWorkspaceSnapshot>
 
+    const operationId = meta.mutation!.operationId
+    this.operations.upsert(
+      {
+        id: operationId,
+        title: t(
+          transition === "creating" ? "operation.creatingProject" : "operation.openingProject"
+        ),
+        description,
+        phase: transition === "creating" ? "committing-database" : "loading-project-archive",
+        state: "running",
+        completedUnits: 0,
+        totalUnits: PROJECT_LOAD_TOTAL_UNITS,
+        cancellable: false,
+        error: null,
+        dropoutFrames: 0
+      },
+      true
+    )
+    const reportProgress = (progress: ProjectLoadProgress): void => {
+      this.operations.patch(
+        operationId,
+        {
+          phase: progress.phase,
+          completedUnits: Math.min(PROJECT_LOAD_TOTAL_UNITS, progress.completedUnits),
+          totalUnits: PROJECT_LOAD_TOTAL_UNITS
+        },
+        true
+      )
+    }
+
     this.lifecycle.beginProject(transition)
     let resources: ProjectCandidateResources | null = null
     let preparedGraph: PreparedProjectGraph | null = null
     let nativeActivated = false
     try {
-      const session = await prepareProject(onProgress)
+      const session = await prepareProject(reportProgress)
+      reportProgress({ phase: "loading-mixer", completedUnits: 2 })
       const graph = await this.projects.candidateMixerSnapshot()
+      reportProgress({ phase: "loading-project-assets", completedUnits: 3 })
       const assets = await this.projects.candidateAssets()
+      reportProgress({ phase: "loading-mixer", completedUnits: 4 })
       resources = this.createCandidateResources(session)
       const prepared = await this.projectGraph.prepareCandidate(meta, resources.graph, graph)
       if (!prepared.ok) {
         await this.rollbackOpen(resources, null, false)
         this.lifecycle.failProject(prepared.error.userMessageKey)
-        this.finishOperation(meta, "not-committed", prepared)
+        this.finishPublishedOperation(meta, "not-committed", prepared)
         return prepared
       }
       preparedGraph = prepared.value
@@ -221,7 +247,7 @@ export class ProjectLifecycleService {
       if (!activated.ok) {
         await this.rollbackOpen(resources, preparedGraph, false)
         this.lifecycle.failProject(activated.error.userMessageKey)
-        this.finishOperation(
+        this.finishPublishedOperation(
           meta,
           activated.error.outcome === "quarantined" ? "quarantined" : "not-committed",
           activated
@@ -253,7 +279,7 @@ export class ProjectLifecycleService {
       const result = rpcSuccess(meta, workspace, {
         resourceRevision: projectCommit.value.revision
       })
-      this.finishOperation(meta, "committed", result)
+      this.finishPublishedOperation(meta, "committed", result)
       this.startPostCommitWork()
       return result
     } catch (error) {
@@ -262,7 +288,7 @@ export class ProjectLifecycleService {
       console.error(`[project-lifecycle] ${rpcError.correlationId} open candidate failed`, error)
       const result = rpcFailure(meta, rpcError)
       this.lifecycle.failProject(rpcError.userMessageKey)
-      this.finishOperation(meta, nativeActivated ? "quarantined" : "not-committed", result)
+      this.finishPublishedOperation(meta, nativeActivated ? "quarantined" : "not-committed", result)
       return result
     }
   }
@@ -406,6 +432,30 @@ export class ProjectLifecycleService {
     if (meta.mutation) {
       this.operations.registry.finish(meta.mutation.operationId, outcome, result)
     }
+  }
+
+  private finishPublishedOperation(
+    meta: RpcRequestMeta,
+    outcome: "committed" | "not-committed" | "quarantined",
+    result: RpcResult<unknown>
+  ): void {
+    this.finishOperation(meta, outcome, result)
+    if (!meta.mutation) return
+    this.operations.patch(
+      meta.mutation.operationId,
+      result.ok
+        ? {
+            state: "completed",
+            completedUnits: PROJECT_LOAD_TOTAL_UNITS,
+            totalUnits: PROJECT_LOAD_TOTAL_UNITS,
+            error: null
+          }
+        : {
+            state: result.error.category === "cancelled" ? "cancelled" : "failed",
+            error: result.error
+          },
+      true
+    )
   }
 
   private createCandidateResources(session: ProjectSession): ProjectCandidateResources {

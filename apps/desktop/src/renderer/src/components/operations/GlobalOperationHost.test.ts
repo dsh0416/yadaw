@@ -33,12 +33,14 @@ describe("GlobalOperationHost", () => {
     await wrapper.vm.$nextTick()
     const dialog = document.body.querySelector("[role=dialog]")
     expect(dialog?.querySelectorAll(".ui-dialog__title")).toHaveLength(1)
-    expect(dialog?.querySelector(".ui-dialog__eyebrow")?.textContent?.trim()).toBe(
-      "Background operation"
+    expect(dialog?.querySelector(".ui-dialog__eyebrow")).toBeNull()
+    expect(dialog?.querySelector(".ui-dialog__title")?.textContent).toBe("Background operation")
+    expect(dialog?.querySelector(".ui-dialog__description")).toBeNull()
+    expect(dialog?.querySelector(".operation-description")?.textContent?.trim()).toBe(
+      "Saving project · Saving project archive"
     )
-    expect(dialog?.querySelector(".ui-dialog__title")?.textContent).toBe("Saving project")
-    expect(dialog?.querySelector(".ui-dialog__description")?.textContent?.trim()).toBe("Lifecycle")
-    expect(dialog?.querySelector("h3")?.textContent).toBe("Saving project archive")
+    expect(dialog?.textContent).not.toContain("Lifecycle")
+    expect(dialog?.querySelector("h3")).toBeNull()
     expect(dialog?.textContent).not.toContain("Track progress and review")
     wrapper.unmount()
     expect(unsubscribe).not.toHaveBeenCalled()

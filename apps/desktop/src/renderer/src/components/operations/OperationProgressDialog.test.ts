@@ -19,11 +19,11 @@ describe("OperationProgressDialog", () => {
         }
       }
     })
-    expect(wrapper.text()).not.toContain("Import")
-    expect(wrapper.get("h3").text()).toBe("Writing project asset")
-    expect(wrapper.text()).toContain("In progress")
+    expect(wrapper.get(".operation-description").text()).toBe("Import · Writing project asset")
+    expect(wrapper.find("h3").exists()).toBe(false)
+    expect(wrapper.text()).not.toContain("In progress")
     expect(wrapper.get("[role=progressbar]").attributes("aria-valuenow")).toBe("50")
-    expect(wrapper.text()).toContain("50%")
+    expect(wrapper.text()).not.toContain("50%")
     await wrapper.get("button").trigger("click")
     expect(wrapper.emitted("cancel")).toHaveLength(1)
   })
@@ -46,7 +46,9 @@ describe("OperationProgressDialog", () => {
     })
     expect(wrapper.get("[role=progressbar]").classes()).toContain("ui-progress--indeterminate")
     expect(wrapper.find("button").exists()).toBe(false)
-    expect(wrapper.text()).toContain("8 captured frames were dropped")
+    expect(wrapper.get(".operation-description").text()).toBe(
+      "Commit · 8 captured frames were dropped."
+    )
   })
 
   it("renders a successful terminal operation without a close button", () => {
@@ -65,9 +67,47 @@ describe("OperationProgressDialog", () => {
         }
       }
     })
-    expect(wrapper.text()).toContain("Completed")
+    expect(wrapper.get(".operation-description").text()).toBe("Finalize · Completed")
     expect(wrapper.get("[role=progressbar]").attributes("aria-valuenow")).toBe("100")
     expect(wrapper.find("button").exists()).toBe(false)
+  })
+
+  it("folds a failure into the single compact description", () => {
+    const wrapper = mount(OperationProgressDialog, {
+      props: {
+        operation: {
+          id: "failed",
+          title: "Opening project",
+          phase: "loading-project-archive",
+          state: "failed",
+          completedUnits: 1,
+          totalUnits: 5,
+          cancellable: false,
+          error: {
+            code: "resource-unavailable",
+            category: "unavailable",
+            outcome: "not-committed",
+            retry: "safe",
+            correlationId: "open-failed",
+            userMessageKey: "errors.operationFailed",
+            details: {
+              type: "resource-unavailable",
+              component: "project-worker",
+              dispatched: true
+            }
+          },
+          dropoutFrames: 0
+        }
+      }
+    })
+
+    expect(wrapper.get(".operation-description").text()).toBe(
+      "Opening project · The operation could not be completed."
+    )
+    expect(wrapper.get(".operation-description").classes()).toContain(
+      "operation-description--danger"
+    )
+    expect(wrapper.find("[role=alert]").exists()).toBe(false)
   })
 
   it("labels project opening phases and exposes step progress", () => {
@@ -87,9 +127,9 @@ describe("OperationProgressDialog", () => {
         }
       }
     })
-    expect(wrapper.text()).toContain("Loading mixer")
-    expect(wrapper.text()).toContain("50%")
-    expect(wrapper.get("h3").text()).toBe("Loading mixer")
+    expect(wrapper.get(".operation-description").text()).toBe("Opening project · Loading mixer")
+    expect(wrapper.text()).not.toContain("50%")
+    expect(wrapper.find("h3").exists()).toBe(false)
     expect(wrapper.get("[role=progressbar]").attributes("aria-label")).toBe("Loading mixer")
   })
 })

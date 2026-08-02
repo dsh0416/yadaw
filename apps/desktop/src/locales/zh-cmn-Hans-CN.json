@@ -200,6 +200,8 @@
     }
   },
   "operation": {
+    "eyebrow": "后台操作",
+    "creatingProject": "正在创建工程",
     "openingProject": "正在打开工程",
     "savingProject": "正在保存工程",
     "finalizingRecording": "正在完成录音",

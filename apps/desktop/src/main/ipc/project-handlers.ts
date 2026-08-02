@@ -76,7 +76,7 @@ export function registerProjectHandlers(context: IpcHandlerContext): void {
       if (result.canceled || !result.filePath) return cancelledFailure(meta)
       path = result.filePath
     }
-    return projectLifecycle.create(meta, { ...request, path }, () => undefined)
+    return projectLifecycle.create(meta, { ...request, path })
   })
 
   registerRpcHandler(IPC_CHANNELS.projectPrepareOpen, async ({ meta }, value: unknown) => {
@@ -110,7 +110,7 @@ export function registerProjectHandlers(context: IpcHandlerContext): void {
       if (recoverValue !== undefined && typeof recoverValue !== "boolean") {
         return validationFailure(meta, "recover")
       }
-      return projectLifecycle.open(meta, value, recoverValue === true, () => undefined)
+      return projectLifecycle.open(meta, value, recoverValue === true)
     }
   )
 

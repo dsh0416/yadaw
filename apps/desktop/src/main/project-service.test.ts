@@ -48,15 +48,19 @@ describe("ProjectService.create", () => {
     const userData = await mkdtemp(join(tmpdir(), "yadaw-project-create-"))
     const projectPath = join(userData, "Untitled.yadaw")
     service = new ProjectService(userData, new ApplicationSettingsStore(userData))
+    const progress = vi.fn()
 
-    const session = await service.create({
-      path: projectPath,
-      name: "Untitled",
-      sampleRate: 48_000,
-      timeSignatureNumerator: 4,
-      timeSignatureDenominator: 4,
-      waveformDisplayMode: "separate"
-    })
+    const session = await service.create(
+      {
+        path: projectPath,
+        name: "Untitled",
+        sampleRate: 48_000,
+        timeSignatureNumerator: 4,
+        timeSignatureDenominator: 4,
+        waveformDisplayMode: "separate"
+      },
+      progress
+    )
 
     await access(projectPath)
     expect(dump).toHaveBeenCalledOnce()
@@ -67,6 +71,10 @@ describe("ProjectService.create", () => {
       configuration: { name: "Untitled", sampleRate: 48_000 }
     })
     expect(service.current).toMatchObject({ path: projectPath, dirty: false })
+    expect(progress.mock.calls.map(([snapshot]) => snapshot)).toEqual([
+      { phase: "committing-database", completedUnits: 0 },
+      { phase: "saving-archive", completedUnits: 1 }
+    ])
   })
 
   it("leaves the source archive byte-for-byte untouched when migration fails", async () => {
@@ -97,12 +105,18 @@ describe("ProjectService.create", () => {
     expect(service.current).toBeNull()
     expect(terminatedWorkers[0]).toHaveBeenCalledOnce()
 
-    await expect(service.open(healthyPath, false)).resolves.toMatchObject({
+    const progress = vi.fn()
+    await expect(service.open(healthyPath, false, progress)).resolves.toMatchObject({
       path: healthyPath,
       configuration: { name: "Recovered" }
     })
     expect(service.current?.path).toBe(healthyPath)
     expect(terminatedWorkers).toHaveLength(2)
     expect(terminatedWorkers[1]).not.toHaveBeenCalled()
+    expect(progress.mock.calls.map(([snapshot]) => snapshot)).toEqual([
+      { phase: "loading-project-archive", completedUnits: 0 },
+      { phase: "restoring-project-state", completedUnits: 1 },
+      { phase: "restoring-project-state", completedUnits: 2 }
+    ])
   })
 })

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue"
 import type { OperationSnapshot } from "@yadaw/contracts"
-import { UiButton, UiProgress, UiStatusNotice } from "@yadaw/ui"
+import { UiButton, UiProgress } from "@yadaw/ui"
 import { useI18n } from "vue-i18n"
 
 const props = defineProps<{ operation: OperationSnapshot }>()
@@ -45,64 +45,72 @@ const stateLabel = computed(() => {
 })
 
 const phaseLabel = computed(() => t(phaseKeys[props.operation.phase]))
+const detailLabel = computed(() => {
+  if (props.operation.error) return t(props.operation.error.userMessageKey)
+  if (props.operation.dropoutFrames > 0) {
+    return t("operation.recordingDropoutsCaptured", {
+      count: props.operation.dropoutFrames
+    })
+  }
+  if (props.operation.state !== "running") return stateLabel.value
+  return phaseLabel.value
+})
+const description = computed(() => `${props.operation.title} · ${detailLabel.value}`)
 </script>
 
 <template>
   <section class="operation-dialog">
-    <span class="operation-kicker">{{ stateLabel }}</span>
-    <div class="operation-status">
-      <h3>{{ phaseLabel }}</h3>
-      <span v-if="progressLabel">{{ progressLabel }}</span>
+    <div class="operation-meta">
+      <p
+        class="operation-description"
+        :class="{
+          'operation-description--danger': operation.state === 'failed',
+          'operation-description--warning': !operation.error && operation.dropoutFrames > 0
+        }"
+        :title="description"
+        :aria-live="operation.state === 'failed' ? 'assertive' : 'polite'"
+      >
+        {{ description }}
+      </p>
+      <UiButton
+        v-if="operation.state === 'running' && operation.cancellable"
+        size="sm"
+        variant="ghost"
+        @click="emit('cancel')"
+      >
+        {{ t("dialog.actions.cancel") }}
+      </UiButton>
     </div>
     <UiProgress :value="progress" :label="phaseLabel" :value-text="progressLabel ?? undefined" />
-    <UiStatusNotice
-      v-if="operation.error"
-      :tone="operation.state === 'failed' ? 'danger' : 'info'"
-      :live="operation.state === 'failed' ? 'assertive' : 'polite'"
-    >
-      {{ t(operation.error.userMessageKey) }}
-    </UiStatusNotice>
-    <UiStatusNotice v-if="operation.dropoutFrames > 0" tone="warning" live="polite">
-      {{ t("operation.recordingDropoutsCaptured", { count: operation.dropoutFrames }) }}
-    </UiStatusNotice>
-    <div v-if="operation.state === 'running' && operation.cancellable" class="operation-actions">
-      <UiButton @click="emit('cancel')">{{ t("dialog.actions.cancel") }}</UiButton>
-    </div>
   </section>
 </template>
 
 <style scoped>
 .operation-dialog {
   display: grid;
-  gap: var(--ui-space-4);
+  gap: var(--ui-space-2);
 }
-.operation-kicker {
-  color: var(--ui-color-action);
-  font: var(--ui-type-weight-semibold) var(--ui-font-size-xs) var(--ui-type-family-data);
-  letter-spacing: var(--ui-type-tracking-wider);
-  text-transform: uppercase;
-}
-.operation-status h3 {
-  margin: 0;
-  color: var(--ui-color-text);
-  font-size: var(--ui-font-size-lg);
-  font-weight: var(--ui-type-weight-semibold);
-  line-height: var(--ui-type-leading-tight);
-}
-.operation-status {
+.operation-meta {
   display: flex;
+  min-width: 0;
   align-items: center;
   justify-content: space-between;
-  gap: var(--ui-space-4);
+  gap: var(--ui-space-2);
 }
-.operation-status span {
+.operation-description {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
   color: var(--ui-color-text-muted);
-  font: var(--ui-type-weight-semibold) var(--ui-font-size-sm) var(--ui-type-family-data);
-  font-variant-numeric: tabular-nums;
+  font-size: var(--ui-font-size-xs);
+  line-height: var(--ui-type-leading-tight);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.operation-actions {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: var(--ui-space-5);
+.operation-description--danger {
+  color: var(--ui-color-danger);
+}
+.operation-description--warning {
+  color: var(--ui-color-warning);
 }
 </style>

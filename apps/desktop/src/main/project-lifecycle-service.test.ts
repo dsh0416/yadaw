@@ -64,7 +64,12 @@ function fixture() {
     candidate = structuredClone(session)
     return structuredClone(session)
   })
+  const prepareCreate = vi.fn().mockImplementation(async () => {
+    candidate = structuredClone(session)
+    return structuredClone(session)
+  })
   const projects = {
+    prepareCreate,
     prepareOpen,
     candidateMixerSnapshot: vi.fn(async () => structuredClone(graph)),
     candidateAssets: vi.fn(async () => []),
@@ -106,21 +111,85 @@ function fixture() {
     { get: vi.fn(async () => ({})) } as never,
     { prepareMissing: vi.fn(async () => undefined) } as never
   )
-  return { lifecycle, projects, projectGraph, service }
+  return { lifecycle, operations, projects, projectGraph, service }
 }
 
 describe("ProjectLifecycleService", () => {
+  it.each([
+    {
+      kind: "create",
+      suffix: "create-progress",
+      title: "Creating project",
+      description: "Healthy",
+      initialPhase: "committing-database",
+      run: (service: ProjectLifecycleService, meta: RpcRequestMeta) =>
+        service.create(meta, {
+          path: "Healthy.yadaw",
+          ...session.configuration
+        })
+    },
+    {
+      kind: "open",
+      suffix: "open-progress",
+      title: "Opening project",
+      description: "Healthy.yadaw",
+      initialPhase: "loading-project-archive",
+      run: (service: ProjectLifecycleService, meta: RpcRequestMeta) =>
+        service.open(meta, "/projects/Healthy.yadaw", false)
+    }
+  ])(
+    "publishes shared progress while a project is being $kind",
+    async ({ suffix, title, description, initialPhase, run }) => {
+      const { lifecycle, operations, service } = fixture()
+      const upsert = vi.spyOn(operations, "upsert")
+      const patch = vi.spyOn(operations, "patch")
+      const requestMeta = mutation(lifecycle.applicationState.desktopSession, suffix)
+
+      const result = await run(service, requestMeta)
+
+      expect(result.ok).toBe(true)
+      expect(upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: `operation-${suffix}`,
+          title,
+          description,
+          phase: initialPhase,
+          state: "running",
+          completedUnits: 0,
+          totalUnits: 5,
+          cancellable: false
+        }),
+        true
+      )
+      expect(patch).toHaveBeenCalledWith(
+        `operation-${suffix}`,
+        expect.objectContaining({
+          phase: "loading-project-assets",
+          completedUnits: 3,
+          totalUnits: 5
+        }),
+        true
+      )
+      expect(patch).toHaveBeenLastCalledWith(
+        `operation-${suffix}`,
+        {
+          state: "completed",
+          completedUnits: 5,
+          totalUnits: 5,
+          error: null
+        },
+        true
+      )
+    }
+  )
+
   it("keeps a failed open isolated so the next healthy project can commit", async () => {
-    const { lifecycle, projects, service } = fixture()
+    const { lifecycle, operations, projects, service } = fixture()
     const desktop = lifecycle.applicationState.desktopSession
+    const patch = vi.spyOn(operations, "patch")
     projects.prepareOpen.mockRejectedValueOnce(new Error("corrupt archive"))
 
-    const failed = await service.open(
-      mutation(desktop, "broken"),
-      "Broken.yadaw",
-      false,
-      () => undefined
-    )
+    const failed = await service.open(mutation(desktop, "broken"), "Broken.yadaw", false)
     expect(failed).toMatchObject({
       ok: false,
       error: { outcome: "not-committed", details: { component: "project-worker" } }
@@ -128,13 +197,13 @@ describe("ProjectLifecycleService", () => {
     expect(lifecycle.snapshot().project.status).toBe("closed")
     expect(lifecycle.applicationState.workspaceSnapshot()).toBeNull()
     expect(projects.abortCandidate).toHaveBeenCalledOnce()
-
-    const opened = await service.open(
-      mutation(desktop, "healthy"),
-      "Healthy.yadaw",
-      false,
-      () => undefined
+    expect(patch).toHaveBeenCalledWith(
+      "operation-broken",
+      expect.objectContaining({ state: "failed", error: expect.anything() }),
+      true
     )
+
+    const opened = await service.open(mutation(desktop, "healthy"), "Healthy.yadaw", false)
     expect(opened).toMatchObject({
       ok: true,
       value: {
@@ -155,12 +224,7 @@ describe("ProjectLifecycleService", () => {
     projects[method].mockRejectedValueOnce(new Error(`${method} failed`))
     const desktop = lifecycle.applicationState.desktopSession
 
-    const failed = await service.open(
-      mutation(desktop, `${method}-failed`),
-      "Broken.yadaw",
-      false,
-      () => undefined
-    )
+    const failed = await service.open(mutation(desktop, `${method}-failed`), "Broken.yadaw", false)
     expect(failed).toMatchObject({
       ok: false,
       error: { outcome: "not-committed", details: { component: "project-worker" } }
@@ -170,8 +234,7 @@ describe("ProjectLifecycleService", () => {
     const opened = await service.open(
       mutation(desktop, `${method}-healthy`),
       "Healthy.yadaw",
-      false,
-      () => undefined
+      false
     )
     expect(opened.ok).toBe(true)
     expect(lifecycle.applicationState.workspaceSnapshot()?.session.path).toBe("Healthy.yadaw")
@@ -199,8 +262,7 @@ describe("ProjectLifecycleService", () => {
     const failed = await service.open(
       mutation(lifecycle.applicationState.desktopSession, "prepare-failure"),
       "Healthy.yadaw",
-      false,
-      () => undefined
+      false
     )
 
     expect(failed).toMatchObject({ ok: false, error: { code: "dependency-failed" } })
@@ -211,8 +273,7 @@ describe("ProjectLifecycleService", () => {
     const opened = await service.open(
       mutation(lifecycle.applicationState.desktopSession, "prepare-recovered"),
       "Healthy.yadaw",
-      false,
-      () => undefined
+      false
     )
     expect(opened.ok).toBe(true)
   })
@@ -239,8 +300,7 @@ describe("ProjectLifecycleService", () => {
     const failed = await service.open(
       mutation(lifecycle.applicationState.desktopSession, "activate-failure"),
       "Broken.yadaw",
-      false,
-      () => undefined
+      false
     )
     expect(failed).toMatchObject({
       ok: false,
@@ -251,8 +311,7 @@ describe("ProjectLifecycleService", () => {
     const opened = await service.open(
       mutation(lifecycle.applicationState.desktopSession, "activate-recovered"),
       "Healthy.yadaw",
-      false,
-      () => undefined
+      false
     )
     expect(opened.ok).toBe(true)
   })

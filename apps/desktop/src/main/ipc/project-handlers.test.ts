@@ -199,8 +199,7 @@ describe("registerProjectHandlers", () => {
     expect(context.projectLifecycle.open).toHaveBeenCalledWith(
       expect.anything(),
       "/projects/demo.yadaw",
-      true,
-      expect.any(Function)
+      true
     )
     expect(result).toMatchObject({ ok: true, value: workspace })
   })

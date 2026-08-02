@@ -38,8 +38,13 @@ interface WorkingCopyState {
   updatedAt: number
 }
 
-interface ProjectOpenProgress {
-  phase: "loading-project-archive" | "loading-project-database" | "restoring-project-state"
+interface ProjectLoadProgress {
+  phase:
+    | "committing-database"
+    | "saving-archive"
+    | "loading-project-archive"
+    | "loading-project-database"
+    | "restoring-project-state"
   completedUnits: number
 }
 
@@ -146,7 +151,10 @@ export class ProjectService {
     if (this.candidate) throw new Error("A project candidate is already being prepared")
   }
 
-  async prepareCreate(request: CreateProjectRequest & { path: string }): Promise<ProjectSession> {
+  async prepareCreate(
+    request: CreateProjectRequest & { path: string },
+    onProgress?: (progress: ProjectLoadProgress) => void
+  ): Promise<ProjectSession> {
     await this.archiveJournal.recover()
     this.assertCanPrepare()
     const configuration = validateConfiguration(request)
@@ -167,6 +175,7 @@ export class ProjectService {
     }
     this.candidate = context
     try {
+      onProgress?.({ phase: "committing-database", completedUnits: 0 })
       await rm(context.workingRoot, { recursive: true, force: true })
       await mkdir(context.workingRoot, { recursive: true })
       await context.worker.create(join(context.workingRoot, "pgdata"), {
@@ -176,6 +185,7 @@ export class ProjectService {
         denominator: configuration.timeSignatureDenominator,
         waveformDisplayMode: configuration.waveformDisplayMode
       })
+      onProgress?.({ phase: "saving-archive", completedUnits: 1 })
       await this.persistContextState(context)
       // Initialize the .yadaw archive before commit so a successful create
       // always returns a durable, loadable project.
@@ -187,8 +197,11 @@ export class ProjectService {
     }
   }
 
-  async create(request: CreateProjectRequest & { path: string }): Promise<ProjectSession> {
-    await this.prepareCreate(request)
+  async create(
+    request: CreateProjectRequest & { path: string },
+    onProgress?: (progress: ProjectLoadProgress) => void
+  ): Promise<ProjectSession> {
+    await this.prepareCreate(request, onProgress)
     return this.commitCandidate()
   }
 
@@ -213,7 +226,7 @@ export class ProjectService {
   async prepareOpen(
     projectPathValue: string,
     recoverWorkingCopy = true,
-    onProgress?: (progress: ProjectOpenProgress) => void
+    onProgress?: (progress: ProjectLoadProgress) => void
   ): Promise<ProjectSession> {
     await this.archiveJournal.recover()
     this.assertCanPrepare()
@@ -253,6 +266,7 @@ export class ProjectService {
       const context = { worker, session, workingRoot }
       this.candidate = context
       await this.persistContextState(context)
+      onProgress?.({ phase: "restoring-project-state", completedUnits: 2 })
       return structuredClone(session)
     } catch (error) {
       await worker.terminate().catch(() => undefined)
@@ -263,7 +277,7 @@ export class ProjectService {
   async open(
     projectPathValue: string,
     recoverWorkingCopy = true,
-    onProgress?: (progress: ProjectOpenProgress) => void
+    onProgress?: (progress: ProjectLoadProgress) => void
   ): Promise<ProjectSession> {
     await this.prepareOpen(projectPathValue, recoverWorkingCopy, onProgress)
     return this.commitCandidate()

@@ -200,6 +200,8 @@
     }
   },
   "operation": {
+    "eyebrow": "Background operation",
+    "creatingProject": "Creating project",
     "openingProject": "Opening project",
     "savingProject": "Saving project",
     "finalizingRecording": "Finalizing recording",
