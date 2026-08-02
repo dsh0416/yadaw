@@ -19,7 +19,7 @@ use yadaw_vst3_host_sys::{
         ComponentVTable, ConnectionPointVTable, EditControllerVTable, MidiMappingVTable,
         PlugViewContentScaleSupportVTable, PlugViewVTable,
     },
-    compat::tuid_byte,
+    compat::{as_uint32, tuid_byte},
 };
 
 use crate::{
@@ -784,8 +784,8 @@ impl HostedPlugin {
                     text.as_mut_ptr(),
                 )
             };
-            let flags = raw.flags as u32;
-            if flags & Vst::ParameterInfo_ParameterFlags_kIsHidden as u32 != 0 {
+            let flags = as_uint32(raw.flags);
+            if flags & as_uint32(Vst::ParameterInfo_ParameterFlags_kIsHidden) != 0 {
                 continue;
             }
             parameters.push(HostedParameter {
@@ -817,8 +817,8 @@ impl HostedPlugin {
         if let Some(controller) = &self.controller
             && let Some(flags) = controller_parameter_flags(controller, id)?
             && flags
-                & (Vst::ParameterInfo_ParameterFlags_kIsReadOnly as u32
-                    | Vst::ParameterInfo_ParameterFlags_kIsHidden as u32)
+                & (as_uint32(Vst::ParameterInfo_ParameterFlags_kIsReadOnly)
+                    | as_uint32(Vst::ParameterInfo_ParameterFlags_kIsHidden))
                 != 0
         {
             return Err(HostError::Operation {
@@ -1182,7 +1182,7 @@ fn controller_parameter_flags(
             raw.assume_init()
         };
         if raw.id == id {
-            return Ok(Some(raw.flags as u32));
+            return Ok(Some(as_uint32(raw.flags)));
         }
     }
     Ok(None)

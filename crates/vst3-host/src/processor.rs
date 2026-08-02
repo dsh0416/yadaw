@@ -15,7 +15,9 @@ use yadaw_vst3_host_sys::{
         },
     },
     abi::{AudioProcessorVTable, ComponentVTable, ProcessContextRequirementsVTable},
-    compat::{as_bus_direction, as_int32, as_media_type, as_uint32},
+    compat::{
+        BindgenEnum, as_bus_direction, as_int32, as_media_type, as_uint32, combine_uint32_flags,
+    },
 };
 
 use crate::{
@@ -26,10 +28,10 @@ use crate::{
 
 const MAX_BLOCK_FRAMES: i32 = 4096;
 
-#[cfg(windows)]
-const MIDI_SYSEX_DATA_TYPE: u32 = Vst::DataEvent_DataTypes_kMidiSysEx as u32;
-#[cfg(not(windows))]
-const MIDI_SYSEX_DATA_TYPE: u32 = Vst::DataEvent_DataTypes_kMidiSysEx;
+#[inline]
+fn midi_sysex_data_type() -> u32 {
+    as_uint32(Vst::DataEvent_DataTypes_kMidiSysEx)
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PluginKind {
@@ -615,7 +617,7 @@ impl StereoProcessor {
             __bindgen_anon_1: Event__bindgen_ty_1 {
                 data: DataEvent {
                     size,
-                    type_: MIDI_SYSEX_DATA_TYPE,
+                    type_: midi_sysex_data_type(),
                     bytes: bytes.as_ptr(),
                 },
             },
@@ -655,16 +657,18 @@ impl Drop for StereoProcessor {
 }
 
 fn legacy_process_context_requirements() -> u32 {
-    Vst::IProcessContextRequirements_Flags_kNeedContinousTimeSamples
-        | Vst::IProcessContextRequirements_Flags_kNeedProjectTimeMusic
-        | Vst::IProcessContextRequirements_Flags_kNeedBarPositionMusic
-        | Vst::IProcessContextRequirements_Flags_kNeedTempo
-        | Vst::IProcessContextRequirements_Flags_kNeedTimeSignature
-        | Vst::IProcessContextRequirements_Flags_kNeedTransportState
+    combine_uint32_flags(&[
+        Vst::IProcessContextRequirements_Flags_kNeedContinousTimeSamples,
+        Vst::IProcessContextRequirements_Flags_kNeedProjectTimeMusic,
+        Vst::IProcessContextRequirements_Flags_kNeedBarPositionMusic,
+        Vst::IProcessContextRequirements_Flags_kNeedTempo,
+        Vst::IProcessContextRequirements_Flags_kNeedTimeSignature,
+        Vst::IProcessContextRequirements_Flags_kNeedTransportState,
+    ])
 }
 
-fn requirement_enabled(requirements: u32, flag: u32) -> bool {
-    requirements & flag != 0
+fn requirement_enabled(requirements: u32, flag: impl BindgenEnum) -> bool {
+    requirements & as_uint32(flag) != 0
 }
 
 fn supported_process_context_state(requirements: u32) -> u32 {
@@ -1233,6 +1237,14 @@ mod tests {
     }
 
     #[test]
+    fn process_context_requirements_accept_signed_and_unsigned_bindgen_flags() {
+        assert!(requirement_enabled(0b10, 0b10_i32));
+        assert!(requirement_enabled(0b10, 0b10_u32));
+        assert!(!requirement_enabled(0b10, 0b100_i32));
+        assert!(!requirement_enabled(0b10, 0b100_u32));
+    }
+
+    #[test]
     fn optional_vst3_operations_accept_not_implemented_only() {
         assert!(check_optional("setProcessing", 0).is_ok());
         assert!(check_optional("setProcessing", -2147467263).is_ok());
@@ -1258,7 +1270,7 @@ mod tests {
             // SAFETY: ProcessContext is an SDK POD and zero is a valid empty context.
             std::mem::MaybeUninit::<ProcessContext>::zeroed().assume_init()
         };
-        let requirements = Vst::IProcessContextRequirements_Flags_kNeedTempo;
+        let requirements = as_uint32(Vst::IProcessContextRequirements_Flags_kNeedTempo);
         update_process_context(
             &mut value,
             requirements,

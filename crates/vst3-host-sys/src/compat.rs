@@ -78,15 +78,22 @@ pub fn as_bus_direction(value: impl BindgenEnum) -> BusDirection {
     as_int32(value)
 }
 
-/// Combines `ProcessContext_StatesAndFlags` enum constants into the `uint32` state field.
+/// Combines bindgen enum constants into a Steinberg `uint32` bit set.
 #[inline]
 #[must_use]
-pub fn process_context_state<E: BindgenEnum>(flags: &[E]) -> uint32 {
+pub fn combine_uint32_flags<E: BindgenEnum>(flags: &[E]) -> uint32 {
     let mut state = 0_u32;
     for flag in flags {
         state |= flag.to_u32();
     }
     state
+}
+
+/// Combines `ProcessContext_StatesAndFlags` enum constants into the `uint32` state field.
+#[inline]
+#[must_use]
+pub fn process_context_state<E: BindgenEnum>(flags: &[E]) -> uint32 {
+    combine_uint32_flags(flags)
 }
 
 #[cfg(test)]
@@ -133,5 +140,7 @@ mod tests {
         assert_eq!(as_uint32(2_u32), 2);
         assert_eq!(process_context_state(&[1_i32, 2_i32]), 3);
         assert_eq!(process_context_state(&[1_u32, 2_u32]), 3);
+        assert_eq!(combine_uint32_flags(&[1_i32, 2_i32, 4_i32]), 7);
+        assert_eq!(combine_uint32_flags(&[1_u32, 2_u32, 4_u32]), 7);
     }
 }
