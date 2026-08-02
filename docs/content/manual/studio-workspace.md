@@ -18,6 +18,8 @@ The top bar is divided into functional groups:
 - The **transport** returns to the beginning, plays or pauses, and records.
 - The **musical display** shows the playhead position, tempo, and meter.
 - **Metronome** turns the metronome channel on or off.
+- **Cycle** enables or disables playback of the selected loop range.
+- **1234** enables a one-bar count-in before recording.
 - The **master control** gives quick access to the master level and meter.
 
 Dimmed controls labeled as coming soon are not available yet.
@@ -27,6 +29,17 @@ Dimmed controls labeled as coming soon are not available yet.
 The arrangement lines tracks up against a shared musical ruler. Global Tempo,
 Meter, and Key lanes sit above the channel lanes. Audio clips show waveforms;
 MIDI clips represent note regions.
+
+The top 16 pixels of the ruler form the Cycle lane. Drag empty space there to
+create a loop range, drag either edge to resize it, or drag the range itself to
+move it. Cycle edits snap to beats and keep a minimum length of one beat.
+Creating or editing a range enables Cycle automatically. If no range exists,
+selecting **Cycle** creates a one-bar range around the playhead.
+
+Cycle applies to internal-clock playback. It is unavailable while following
+external MIDI Clock. During recording the button keeps its selected state, but
+the loop takes effect only on later playback; recording never wraps at the
+Cycle boundary.
 
 Use the controls at the bottom of the arrangement to change:
 

@@ -62,6 +62,12 @@ pub struct LiveTimeSignatureEvent {
 pub struct TransportControl {
     pub kind: String,
     pub position_frames: Option<i64>,
+    #[serde(default)]
+    pub loop_enabled: Option<bool>,
+    #[serde(default)]
+    pub loop_start_tick: Option<i64>,
+    #[serde(default)]
+    pub loop_end_tick: Option<i64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -77,6 +83,12 @@ pub struct TransportState {
     pub clock_source: String,
     #[serde(default)]
     pub waiting_for: Option<String>,
+    #[serde(default)]
+    pub loop_enabled: bool,
+    #[serde(default)]
+    pub loop_start_tick: Option<i64>,
+    #[serde(default)]
+    pub loop_end_tick: Option<i64>,
 }
 
 fn internal_clock_source() -> String {

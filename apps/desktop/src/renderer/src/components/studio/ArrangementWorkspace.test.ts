@@ -135,6 +135,9 @@ describe("ArrangementWorkspace", () => {
           name: "First take",
           startFrame: 0,
           sourceOffsetFrames: 0,
+          sourceLengthFrames: Number.MAX_SAFE_INTEGER,
+          fadeInFrames: 0,
+          fadeOutFrames: 0,
           lengthFrames: 48_000,
           assetSampleRate: 48_000,
           assetChannels: 2
@@ -217,7 +220,7 @@ describe("ArrangementWorkspace", () => {
     })
     expect(wrapper.findAll(".point-handle")).toHaveLength(1)
     expect(wrapper.findAll(".event-handle")).toHaveLength(2)
-    const clip = wrapper.get('button[aria-label="Audio clip First take"]')
+    const clip = wrapper.get('[role="button"][aria-label="Audio clip First take"]')
     expect(clip.attributes("aria-pressed")).toBe("false")
     expect(clip.attributes("style")).toContain("width: 100px")
     mixer.graph = {
@@ -255,7 +258,7 @@ describe("ArrangementWorkspace", () => {
     await wrapper.get('button[aria-label="Collapse Key track"]').trigger("click")
     expect(arrangementView.keyLaneExpanded).toBe(false)
     await wrapper.get('button[aria-label="Expand Key track"]').trigger("click")
-    const resizeHandles = wrapper.findAll('[role="separator"]')
+    const resizeHandles = wrapper.findAll('.track-height-resize-handle[role="separator"]')
     expect(resizeHandles).toHaveLength(2)
     expect(wrapper.findAll<HTMLElement>(".track-lane")[0]?.element.style.height).toBe("104px")
     expect(wrapper.findAll<HTMLElement>(".track-lane")[1]?.element.style.height).toBe("104px")
@@ -394,7 +397,7 @@ describe("ArrangementWorkspace", () => {
     })
 
     expect(
-      wrapper.get('button[aria-label="Recording New recording"]').attributes("aria-label")
+      wrapper.get('[role="button"][aria-label="Recording New recording"]').attributes("aria-label")
     ).toBe("Recording New recording")
     expect(wrapper.find('[role="status"]').exists()).toBe(false)
   })
@@ -625,6 +628,7 @@ describe("ArrangementWorkspace", () => {
             startTick: 960,
             lengthTicks: 3_840,
             sourceOffsetTicks: 0,
+            sourceLengthTicks: 3_840,
             notes: [],
             events: []
           }

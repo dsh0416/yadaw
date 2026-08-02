@@ -71,6 +71,7 @@
     "copy": "复制",
     "paste": "粘贴",
     "selectAll": "全选",
+    "splitAtPlayhead": "在播放头处分割",
     "toggleFullScreen": "切换全屏",
     "audioBenchmark": "音频性能基准测试…",
     "effectChainGraph": "效果链图…"
@@ -437,6 +438,7 @@
         },
         "transport": {
           "toggle-playback": "播放 / 暂停",
+          "toggle-loop": "切换循环",
           "go-to-start": "返回开头"
         },
         "recording": {
@@ -992,7 +994,10 @@
       "record": "录音",
       "recordTooltip": "录音 · R",
       "captureRecording": "捕获录音",
-      "cycle": "循环"
+      "cycle": "循环",
+      "cycleTooltip": "循环 · L",
+      "cycleExternalClockTooltip": "跟随外部 MIDI 时钟时无法使用循环",
+      "cycleRecordingTooltip": "循环 · L · 录音结束后的播放中生效"
     },
     "musical": {
       "ariaLabel": "工程音乐显示",
@@ -1053,8 +1058,21 @@
       "minorKeys": "小调",
       "newRecording": "新录音",
       "midiClipName": "MIDI 片段 {index}",
+      "midiClipMenu": "{name} MIDI 片段命令",
+      "audioClipMenu": "{name} 音频片段命令",
+      "openMidiClip": "在钢琴卷帘中打开",
+      "splitAtPlayhead": "在播放头处分割",
+      "trimStartToPlayhead": "将起点修剪到播放头",
+      "trimEndToPlayhead": "将终点修剪到播放头",
+      "trimClipStart": "修剪 {name} 的起点",
+      "trimClipEnd": "修剪 {name} 的终点",
+      "fadeIn": "调整 {name} 的淡入",
+      "fadeOut": "调整 {name} 的淡出",
+      "resetFades": "重置淡入淡出",
+      "deleteClip": "删除片段",
       "trackRenameLabel": "{name}；双击重命名；Alt+上/下箭头重新排序",
       "timelineRulerAria": "时间线标尺",
+      "cycleLaneAria": "循环范围轨道；拖动以创建播放循环",
       "instrumentLaneAria": "乐器轨；双击空白处或按 Enter 创建 MIDI 片段",
       "createMidiClipHint": "双击以创建 MIDI 片段",
       "recordingAria": "正在录音",

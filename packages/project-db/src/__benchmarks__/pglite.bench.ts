@@ -75,6 +75,7 @@ beforeAll(async () => {
       startTick: clipIndex * 3_840,
       lengthTicks: 3_840,
       sourceOffsetTicks: 0,
+      sourceLengthTicks: 3_840,
       notes: Array.from({ length: 1_000 }, (_, noteIndex) => ({
         id: `note-${clipIndex}-${noteIndex}`,
         startTick: noteIndex * 3,

@@ -231,6 +231,9 @@ describe("projectContentEndSeconds", () => {
           startFrame: 0,
           sourceOffsetFrames: 0,
           lengthFrames: 48_000,
+          sourceLengthFrames: 48_000,
+          fadeInFrames: 0,
+          fadeOutFrames: 0,
           assetSampleRate: 48_000,
           assetChannels: 2
         }
@@ -244,6 +247,7 @@ describe("projectContentEndSeconds", () => {
           startTick: 0,
           lengthTicks: 1_920,
           sourceOffsetTicks: 0,
+          sourceLengthTicks: 1_920,
           notes: [],
           events: []
         }

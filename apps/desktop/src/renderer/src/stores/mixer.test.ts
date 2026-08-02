@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import { createPinia, setActivePinia } from "pinia"
 import type {
   ProjectGraphSnapshot,
+  ProjectCommand,
   ProjectSession,
   ProjectWorkspaceSnapshot,
   RpcResult
@@ -9,6 +10,9 @@ import type {
 import { useProjectStore } from "./project"
 import { useAudioRuntimeStore } from "./audioRuntime"
 import { useMixerStore } from "./mixer"
+import { useProjectHistoryStore } from "./projectHistory"
+import { applyToGraph, inverseFor } from "@yadaw/project-model"
+import { planAudioClipSplit, planMidiClipSplits } from "../utils/clipEditing"
 
 function graph(): ProjectGraphSnapshot {
   return {
@@ -337,6 +341,186 @@ describe("mixer store", () => {
         patch: { inputMonitoring: true }
       }
     )
+  })
+
+  it("round-trips every M1 composition edit through one undo and redo entry", async () => {
+    const initial = graph()
+    initial.channels.push({
+      ...structuredClone(initial.channels[0]!),
+      id: "instrument",
+      kind: "instrument",
+      name: "Instrument",
+      sortOrder: 1,
+      inputSource: null,
+      inputFormat: null,
+      inputChannels: []
+    })
+    initial.tracks.push({ id: "track:instrument", channelId: "instrument", sortOrder: 1 })
+    initial.audioClips.push({
+      id: "audio-clip",
+      assetId: "asset",
+      trackId: "track:audio",
+      name: "Audio",
+      startFrame: 0,
+      sourceOffsetFrames: 0,
+      lengthFrames: 48_000,
+      sourceLengthFrames: 96_000,
+      fadeInFrames: 0,
+      fadeOutFrames: 0,
+      assetSampleRate: 48_000,
+      assetChannels: 2
+    })
+    let authoritative = structuredClone(initial)
+    let revision = 1
+    window.yadaw.executeProjectCommand = vi.fn(async (_meta, command: ProjectCommand) => {
+      const inverse = inverseFor(authoritative, command)
+      authoritative = applyToGraph(authoritative, command)
+      revision += 1
+      return success({ graph: structuredClone(authoritative), inverse }, revision)
+    })
+    const mixer = useMixerStore()
+    const history = useProjectHistoryStore()
+    mixer.hydrate(initial)
+
+    async function expectOneHistoryRoundTrip(command: ProjectCommand): Promise<void> {
+      const before = structuredClone(mixer.graph)
+      const historyLength = history.undoHistory.length
+      await expect(mixer.execute(command)).resolves.toBe(true)
+      const after = structuredClone(mixer.graph)
+      expect(history.undoHistory).toHaveLength(historyLength + 1)
+
+      await mixer.undo()
+      expect(mixer.graph).toEqual(before)
+      expect(history.undoHistory).toHaveLength(historyLength)
+
+      await mixer.redo()
+      expect(mixer.graph).toEqual(after)
+      expect(history.undoHistory).toHaveLength(historyLength + 1)
+    }
+
+    await expectOneHistoryRoundTrip({
+      type: "move-audio-clip",
+      clipId: "audio-clip",
+      trackId: "track:audio",
+      startFrame: 12_000
+    })
+    await expectOneHistoryRoundTrip({
+      type: "update-audio-clip",
+      clipId: "audio-clip",
+      patch: { sourceOffsetFrames: 12_000, lengthFrames: 36_000 }
+    })
+    await expectOneHistoryRoundTrip({
+      type: "update-audio-clip",
+      clipId: "audio-clip",
+      patch: { fadeInFrames: 2_000, fadeOutFrames: 4_000 }
+    })
+    const audioSplit = planAudioClipSplit(
+      mixer.graph.audioClips[0]!,
+      mixer.graph.audioClips[0]!.startFrame + 18_000,
+      () => "audio-right"
+    )
+    if (!audioSplit) throw new Error("audio split fixture must cross the playhead")
+    await expectOneHistoryRoundTrip(audioSplit)
+    await expectOneHistoryRoundTrip({ type: "delete-audio-clip", clipId: "audio-right" })
+
+    await expectOneHistoryRoundTrip({
+      type: "create-midi-clip",
+      clip: {
+        id: "midi-clip",
+        sourceId: "midi-source",
+        trackId: "track:instrument",
+        name: "MIDI",
+        startTick: 0,
+        sourceOffsetTicks: 0,
+        lengthTicks: 3_840,
+        sourceLengthTicks: 7_680,
+        notes: [
+          {
+            id: "note-1",
+            startTick: 240,
+            durationTicks: 480,
+            channel: 0,
+            key: 60,
+            velocity: 100,
+            releaseVelocity: 0
+          }
+        ],
+        events: []
+      }
+    })
+    await expectOneHistoryRoundTrip({
+      type: "move-midi-clip",
+      clipId: "midi-clip",
+      trackId: "track:instrument",
+      startTick: 960
+    })
+    await expectOneHistoryRoundTrip({
+      type: "update-midi-clip-range",
+      clipId: "midi-clip",
+      patch: { sourceOffsetTicks: 480, lengthTicks: 2_880 }
+    })
+    const midiSplit = planMidiClipSplits(
+      [mixer.graph.midiClips[0]!],
+      2_400,
+      (() => {
+        const ids = ["midi-right", "note-right"]
+        return () => ids.shift() ?? "event-right"
+      })()
+    )
+    if (!midiSplit) throw new Error("MIDI split fixture must cross the playhead")
+    await expectOneHistoryRoundTrip(midiSplit)
+    await expectOneHistoryRoundTrip({
+      type: "update-midi-notes",
+      clipId: "midi-clip",
+      updates: [{ noteId: "note-1", patch: { key: 67, velocity: 90 } }]
+    })
+    await expectOneHistoryRoundTrip({ type: "delete-midi-clip", clipId: "midi-right" })
+    await expectOneHistoryRoundTrip({
+      type: "replace-tempo-map",
+      tempoMap: {
+        ticksPerQuarter: 960,
+        tempoEvents: [
+          { tick: 0, beatsPerMinute: 110 },
+          { tick: 3_840, beatsPerMinute: 132 }
+        ],
+        timeSignatureEvents: [
+          { tick: 0, numerator: 3, denominator: 4 },
+          { tick: 5_760, numerator: 6, denominator: 8 }
+        ]
+      }
+    })
+    await expectOneHistoryRoundTrip({
+      type: "replace-key-signature-map",
+      events: [
+        { tick: 0, fifths: -3, mode: "minor" },
+        { tick: 3_840, fifths: 2, mode: "major" }
+      ]
+    })
+
+    const beforeFailure = structuredClone(mixer.graph)
+    const historyLength = history.undoHistory.length
+    vi.mocked(window.yadaw.executeProjectCommand).mockResolvedValueOnce({
+      ok: false,
+      requestId: "failed-edit",
+      error: {
+        code: "validation-failed",
+        category: "validation",
+        outcome: "not-committed",
+        retry: "never",
+        correlationId: "failed-edit",
+        userMessageKey: "errors.invalidRpcRequest",
+        details: { type: "validation-failed", field: "projectCommand" }
+      }
+    })
+    await expect(
+      mixer.execute({
+        type: "update-channel",
+        channelId: "audio",
+        patch: { gainDb: -12 }
+      })
+    ).resolves.toBe(false)
+    expect(mixer.graph).toEqual(beforeFailure)
+    expect(history.undoHistory).toHaveLength(historyLength)
   })
 
   it("hydrates the ready workspace graph synchronously without reloading the audio host", () => {

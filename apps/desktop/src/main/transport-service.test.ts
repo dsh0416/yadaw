@@ -17,7 +17,9 @@ describe("TransportService", () => {
       return {
         state: "stopped" as const,
         positionFrames: 0,
-        sampleRate: 48_000
+        sampleRate: 48_000,
+        loopEnabled: false,
+        loopRange: null
       }
     })
     const service = new TransportService(
@@ -33,7 +35,9 @@ describe("TransportService", () => {
     releaseFirst({
       state: "playing",
       positionFrames: 0,
-      sampleRate: 48_000
+      sampleRate: 48_000,
+      loopEnabled: false,
+      loopRange: null
     })
     await Promise.all([play, pause])
 

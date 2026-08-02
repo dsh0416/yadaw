@@ -77,6 +77,8 @@ pub struct NativeMixerClip {
     pub start_frame: i64,
     pub source_offset_frames: i64,
     pub length_frames: i64,
+    pub fade_in_frames: i64,
+    pub fade_out_frames: i64,
     pub path: String,
 }
 
@@ -174,4 +176,7 @@ pub struct NativeTransportSnapshot {
     pub effective_bpm: Option<f64>,
     pub clock_source: String,
     pub waiting_for: Option<String>,
+    pub loop_enabled: bool,
+    pub loop_start_tick: Option<i64>,
+    pub loop_end_tick: Option<i64>,
 }

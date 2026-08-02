@@ -100,7 +100,7 @@ fn mock_backend_uses_the_project_clock_over_native_48_khz_io() {
     };
     let built = compile_graph_build(begin_graph_build(graph).unwrap()).unwrap();
     publish_mixer_runtime(built).unwrap();
-    transport_command("play".to_owned(), None).unwrap();
+    transport_command("play".to_owned(), None, None, None, None).unwrap();
 
     let start_deadline = Instant::now() + Duration::from_secs(5);
     let (start_generation, start_position) = loop {

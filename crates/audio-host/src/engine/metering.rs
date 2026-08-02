@@ -6,6 +6,10 @@ struct TransportShared {
     effective_bpm_bits: AtomicU64,
     clock_source: AtomicU32,
     waiting_for: AtomicU32,
+    loop_enabled: AtomicBool,
+    loop_has_range: AtomicBool,
+    loop_start_tick: AtomicU64,
+    loop_end_tick: AtomicU64,
 }
 
 /// Read-only transport atomics shared with the MIDI recording actor.
@@ -52,6 +56,13 @@ impl TransportShared {
                 2 => Some("record".to_owned()),
                 _ => None,
             },
+            loop_enabled: self.loop_enabled.load(Ordering::Acquire),
+            loop_start_tick: self.loop_has_range.load(Ordering::Acquire).then(|| {
+                self.loop_start_tick.load(Ordering::Relaxed).min(i64::MAX as u64) as i64
+            }),
+            loop_end_tick: self.loop_has_range.load(Ordering::Acquire).then(|| {
+                self.loop_end_tick.load(Ordering::Relaxed).min(i64::MAX as u64) as i64
+            }),
         }
     }
 }

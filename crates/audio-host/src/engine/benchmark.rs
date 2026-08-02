@@ -211,6 +211,10 @@ fn benchmark_runtime(
         effective_bpm_bits: AtomicU64::new(f64::NAN.to_bits()),
         clock_source: AtomicU32::new(0),
         waiting_for: AtomicU32::new(0),
+        loop_enabled: AtomicBool::new(false),
+        loop_has_range: AtomicBool::new(false),
+        loop_start_tick: AtomicU64::new(0),
+        loop_end_tick: AtomicU64::new(0),
     });
     build_mixer_runtime(
         benchmark_graph(spec, processors),

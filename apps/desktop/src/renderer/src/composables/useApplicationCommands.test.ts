@@ -14,6 +14,8 @@ import { useGlobalDialog } from "./useGlobalDialog"
 import { useAudioRuntimeStore } from "../stores/audioRuntime"
 import { useAboutStore } from "../stores/about"
 import { useProjectStore } from "../stores/project"
+import { useMixerStore } from "../stores/mixer"
+import { useTransportStore } from "../stores/transport"
 import { rpcEvent } from "../test/ipc"
 
 const session: ProjectSession = {
@@ -147,7 +149,8 @@ function createHarness() {
       return () =>
         h("div", [
           button("application.preferences", "Preferences"),
-          button("project.settings", "Project settings")
+          button("project.settings", "Project settings"),
+          button("transport.toggle-loop", "Cycle")
         ])
     }
   })
@@ -206,7 +209,9 @@ describe("useApplicationCommands", () => {
       value: {
         state: "stopped",
         positionFrames: 0,
-        sampleRate: 48_000
+        sampleRate: 48_000,
+        loopEnabled: false,
+        loopRange: null
       },
       warnings: []
     })
@@ -248,6 +253,41 @@ describe("useApplicationCommands", () => {
     expect(router.currentRoute.value.name).toBe("system-settings")
   })
 
+  it("creates a one-bar range when Cycle is invoked without an existing range", async () => {
+    const { pinia, router, wrapper } = createHarness()
+    const openWorkspace = workspace(session)
+    useProjectStore(pinia).applyWorkspace(openWorkspace)
+    useMixerStore(pinia).hydrate(openWorkspace.graph)
+    vi.mocked(window.yadaw.transportCommand).mockResolvedValueOnce({
+      ok: true,
+      requestId: "cycle",
+      operationId: "cycle-operation",
+      resourceRevision: 1,
+      value: {
+        state: "stopped",
+        positionFrames: 0,
+        sampleRate: 48_000,
+        loopEnabled: true,
+        loopRange: { startTick: 0, endTick: 3_840 }
+      },
+      warnings: []
+    })
+    await router.push({ name: "studio" })
+
+    await wrapper.get("button:nth-of-type(3)").trigger("click")
+    await flushPromises()
+
+    expect(window.yadaw.transportCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ target: expect.objectContaining({ kind: "transport" }) }),
+      {
+        type: "set-loop",
+        enabled: true,
+        range: { startTick: 0, endTick: 3_840 }
+      }
+    )
+    expect(useTransportStore(pinia).loopRange).toEqual({ startTick: 0, endTick: 3_840 })
+  })
+
   it("opens the renderer About dialog from a native application-menu command", async () => {
     const { pinia } = createHarness()
 
@@ -278,10 +318,20 @@ describe("useApplicationCommands", () => {
       selectDialogAction("discard")
       await flushPromises()
 
-      expect(window.yadaw.transportCommand).toHaveBeenCalledWith(
+      expect(window.yadaw.transportCommand).toHaveBeenNthCalledWith(
+        1,
         expect.objectContaining({
           target: expect.objectContaining({ kind: "transport" }),
           expectedRevision: 0,
+          mutation: expect.any(Object)
+        }),
+        { type: "set-loop", enabled: false, range: null }
+      )
+      expect(window.yadaw.transportCommand).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          target: expect.objectContaining({ kind: "transport" }),
+          expectedRevision: 1,
           mutation: expect.any(Object)
         }),
         { type: "pause" }

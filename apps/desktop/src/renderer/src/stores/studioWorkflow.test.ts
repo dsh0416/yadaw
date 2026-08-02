@@ -206,3 +206,22 @@ describe("startRecording", () => {
     expect(mixerStore.metronome?.muted).toBe(true)
   })
 })
+
+describe("closeProject", () => {
+  it("clears the session loop in native before resetting renderer state", async () => {
+    const { useProjectStore } = await import("./project")
+    const projectStore = useProjectStore()
+    const transportStore = useTransportStore()
+    const workflowStore = useStudioWorkflowStore()
+    vi.mocked(projectStore.prepareClose).mockResolvedValue("discard")
+    vi.mocked(projectStore.close).mockResolvedValue(true)
+    vi.mocked(transportStore.setLoop).mockResolvedValue(undefined)
+    vi.mocked(transportStore.stop).mockResolvedValue(undefined)
+
+    await expect(workflowStore.closeProject()).resolves.toBe(true)
+
+    expect(transportStore.setLoop).toHaveBeenCalledWith(false, null)
+    expect(transportStore.setLoop).toHaveBeenCalledBefore(vi.mocked(transportStore.stop))
+    expect(transportStore.reset).toHaveBeenCalledOnce()
+  })
+})

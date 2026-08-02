@@ -2,30 +2,40 @@
 import { computed } from "vue"
 import { useI18n } from "vue-i18n"
 import type { MidiClipState, TempoMapSnapshot } from "@yadaw/contracts"
+import type { PianoRollSnap } from "../../utils/pianoRoll"
+import type { ClipTrimEdge } from "../../utils/clipEditing"
 import { barTicksThroughTick, beatTicksThroughTick } from "../../utils/tempoMap"
 import { timelineXToTick } from "../../utils/timelineCoordinates"
+import MidiClipCard from "./MidiClipCard.vue"
 
 const { t } = useI18n()
 
-const props = defineProps<{
-  trackId: string
-  trackColor: string
-  clips: MidiClipState[]
-  tempoMap: TempoMapSnapshot
-  contentWidth: number
-  pixelsPerQuarter: number
-  trackHeight: number
-  selectedClipIds: string[]
-  keyboardInsertionTick: number
-  dragPreview: MidiClipState | null
-  draggingClipId: string | null
-}>()
+const props = withDefaults(
+  defineProps<{
+    trackId: string
+    trackColor: string
+    clips: MidiClipState[]
+    tempoMap: TempoMapSnapshot
+    contentWidth: number
+    pixelsPerQuarter: number
+    trackHeight: number
+    selectedClipIds: string[]
+    keyboardInsertionTick: number
+    playheadTick?: number
+    snap?: PianoRollSnap
+    dragPreview: MidiClipState | null
+    draggingClipId: string | null
+  }>(),
+  { playheadTick: 0, snap: "1/16" }
+)
 
 const emit = defineEmits<{
   remove: [clipId: string]
   select: [clipId: string, additive: boolean]
   open: [clipId: string, selectedClipIds: string[]]
   create: [trackId: string, startTick: number]
+  split: [clipId: string]
+  trim: [clipId: string, edge: ClipTrimEdge, tick: number]
   clipDragStart: [clipId: string, offsetPixels: number]
   clipDragEnd: []
 }>()
@@ -59,18 +69,8 @@ const dragPreviewStyle = computed(() => {
   }
 })
 
-function clipStyle(clip: MidiClipState) {
-  const pixelsPerTick = props.pixelsPerQuarter / props.tempoMap.ticksPerQuarter
-  return {
-    left: `${clip.startTick * pixelsPerTick}px`,
-    width: `${Math.max(9, clip.lengthTicks * pixelsPerTick)}px`,
-    borderColor: props.trackColor,
-    background: `color-mix(in srgb, ${props.trackColor} 20%, var(--surface-sunken))`
-  }
-}
-
 function noteStyle(clip: MidiClipState, note: MidiClipState["notes"][number]) {
-  const left = (note.startTick / clip.lengthTicks) * 100
+  const left = ((note.startTick - clip.sourceOffsetTicks) / clip.lengthTicks) * 100
   const width = Math.max(0.8, (note.durationTicks / clip.lengthTicks) * 100)
   return {
     left: `${left}%`,
@@ -78,34 +78,6 @@ function noteStyle(clip: MidiClipState, note: MidiClipState["notes"][number]) {
     bottom: `${(note.key / 127) * 72 + 8}%`,
     background: props.trackColor
   }
-}
-
-function handleKeydown(event: KeyboardEvent, clip: MidiClipState): void {
-  if (event.key === "Delete" || event.key === "Backspace") {
-    event.preventDefault()
-    emit("remove", clip.id)
-  }
-}
-
-let openSelectionSnapshot: string[] = []
-
-function captureOpenSelection(event: MouseEvent, clipId: string): void {
-  if (event.detail > 1 && openSelectionSnapshot.length > 0) return
-  openSelectionSnapshot = props.selectedClipIds.includes(clipId)
-    ? [...props.selectedClipIds]
-    : [clipId]
-}
-
-function openClip(clipId: string): void {
-  emit("open", clipId, openSelectionSnapshot.length > 0 ? openSelectionSnapshot : [clipId])
-  openSelectionSnapshot = []
-}
-
-function startDrag(event: DragEvent, clip: MidiClipState): void {
-  event.dataTransfer?.setData("application/x-yadaw-midi-clip", clip.id)
-  if (event.dataTransfer) event.dataTransfer.effectAllowed = "move"
-  const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect()
-  emit("clipDragStart", clip.id, Math.max(0, Math.min(bounds.width, event.clientX - bounds.left)))
 }
 
 function createClipAtPointer(event: MouseEvent): void {
@@ -116,6 +88,22 @@ function createClipAtPointer(event: MouseEvent): void {
     props.pixelsPerQuarter
   )
   emit("create", props.trackId, tick)
+}
+
+function relaySelect(clipId: string, additive: boolean): void {
+  emit("select", clipId, additive)
+}
+
+function relayOpen(clipId: string, selectedClipIds: string[]): void {
+  emit("open", clipId, selectedClipIds)
+}
+
+function relayTrim(clipId: string, edge: ClipTrimEdge, tick: number): void {
+  emit("trim", clipId, edge, tick)
+}
+
+function relayDragStart(clipId: string, offsetPixels: number): void {
+  emit("clipDragStart", clipId, offsetPixels)
 }
 </script>
 
@@ -145,29 +133,25 @@ function createClipAtPointer(event: MouseEvent): void {
       class="bar-line"
       :style="{ left: `${left}px` }"
     />
-    <button
+    <MidiClipCard
       v-for="clip in clips"
       :key="clip.id"
-      :class="['midi-clip', { dragging: clip.id === draggingClipId }]"
-      draggable="true"
-      :style="clipStyle(clip)"
-      :aria-label="`${clip.name}, MIDI clip`"
-      :aria-pressed="selectedClipIds.includes(clip.id)"
-      @mousedown="captureOpenSelection($event, clip.id)"
-      @click.stop="emit('select', clip.id, $event.ctrlKey || $event.metaKey)"
-      @dblclick.stop="openClip(clip.id)"
-      @dragstart="startDrag($event, clip)"
-      @dragend="emit('clipDragEnd')"
-      @keydown="handleKeydown($event, clip)"
-    >
-      <strong>{{ clip.name }}</strong>
-      <span
-        v-for="note in clip.notes"
-        :key="note.id"
-        class="midi-note"
-        :style="noteStyle(clip, note)"
-      />
-    </button>
+      :clip="clip"
+      :tempo-map="tempoMap"
+      :pixels-per-quarter="pixelsPerQuarter"
+      :track-color="trackColor"
+      :selected-clip-ids="selectedClipIds"
+      :playhead-tick="playheadTick"
+      :snap="snap"
+      :dragging="clip.id === draggingClipId"
+      @remove="emit('remove', $event)"
+      @select="relaySelect"
+      @open="relayOpen"
+      @split="emit('split', $event)"
+      @trim="relayTrim"
+      @drag-start="relayDragStart"
+      @drag-end="emit('clipDragEnd')"
+    />
     <div
       v-if="dragPreview"
       class="midi-clip-drop-preview"
@@ -223,42 +207,6 @@ function createClipAtPointer(event: MouseEvent): void {
 }
 .beat-line {
   background: color-mix(in srgb, var(--daw-grid-line) 32%, transparent);
-}
-.midi-clip {
-  position: absolute;
-  top: 5px;
-  bottom: 5px;
-  overflow: hidden;
-  min-width: 9px;
-  padding: 4px 5px;
-  border: 1px solid;
-  border-radius: 3px;
-  color: var(--text-primary);
-  text-align: left;
-  cursor: grab;
-}
-.midi-clip:active {
-  cursor: grabbing;
-}
-.midi-clip.dragging {
-  opacity: 0.28;
-}
-.midi-clip:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 1px;
-}
-.midi-clip[aria-pressed="true"] {
-  outline: 2px solid var(--focus);
-  outline-offset: -2px;
-}
-.midi-clip strong {
-  position: relative;
-  z-index: var(--ui-z-local-raised);
-  display: block;
-  overflow: hidden;
-  font: var(--ui-type-weight-bold) var(--ui-type-size-caption) var(--ui-type-family-data);
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .midi-clip-drop-preview {
   position: absolute;

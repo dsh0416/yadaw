@@ -1,5 +1,5 @@
 {
-  "id": "dd541683-1fe5-4509-b3fd-86d35a93a9ec",
+  "id": "c4f10689-081a-4884-a896-134f30af9c37",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -344,6 +344,20 @@
           "type": "bigint",
           "primaryKey": false,
           "notNull": true
+        },
+        "fade_in_frames": {
+          "name": "fade_in_frames",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
+        },
+        "fade_out_frames": {
+          "name": "fade_out_frames",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "0"
         }
       },
       "indexes": {
@@ -416,6 +430,18 @@
         "audio_clips_length_frames_check": {
           "name": "audio_clips_length_frames_check",
           "value": "\"audio_clips\".\"length_frames\" > 0"
+        },
+        "audio_clips_fade_in_frames_check": {
+          "name": "audio_clips_fade_in_frames_check",
+          "value": "\"audio_clips\".\"fade_in_frames\" >= 0"
+        },
+        "audio_clips_fade_out_frames_check": {
+          "name": "audio_clips_fade_out_frames_check",
+          "value": "\"audio_clips\".\"fade_out_frames\" >= 0"
+        },
+        "audio_clips_fade_length_check": {
+          "name": "audio_clips_fade_length_check",
+          "value": "\"audio_clips\".\"fade_in_frames\" + \"audio_clips\".\"fade_out_frames\" <= \"audio_clips\".\"length_frames\""
         }
       },
       "isRLSEnabled": false
@@ -510,6 +536,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": 0
+        },
+        "source_length_ticks": {
+          "name": "source_length_ticks",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
         }
       },
       "indexes": {
@@ -582,6 +614,14 @@
         "midi_clips_source_offset_ticks_check": {
           "name": "midi_clips_source_offset_ticks_check",
           "value": "\"midi_clips\".\"source_offset_ticks\" >= 0"
+        },
+        "midi_clips_source_length_ticks_check": {
+          "name": "midi_clips_source_length_ticks_check",
+          "value": "\"midi_clips\".\"source_length_ticks\" > 0"
+        },
+        "midi_clips_source_window_check": {
+          "name": "midi_clips_source_window_check",
+          "value": "\"midi_clips\".\"source_offset_ticks\" + \"midi_clips\".\"length_ticks\" <= \"midi_clips\".\"source_length_ticks\""
         }
       },
       "isRLSEnabled": false

@@ -8,7 +8,8 @@ mod tests {
     };
 
     use super::{
-        AdaptiveResampler, AtomicU32, AtomicU64, AudioEngineKey, BufferSelection, BufferSize,
+        AdaptiveResampler, AtomicBool, AtomicU32, AtomicU64, AudioEngineKey, BufferSelection,
+        BufferSize,
         ClipSamples, ClipStoragePolicy, EngineCommand, GRAPH_TEST_LOCK, InputPeakBank, LivePlugin,
         LoadedClip, MAX_INPUT_CHANNELS, MAX_OUTPUT_CHANNELS, MAX_PLUGIN_BLOCK_FRAMES,
         MEMORY_DECODE_LIMIT_BYTES, METRONOME_ACCENT_NOTE, METRONOME_BEAT_NOTE, MeterAtomics,
@@ -858,6 +859,8 @@ mod tests {
                 start_frame: 0,
                 source_offset_frames: 0,
                 length_frames,
+                fade_in_frames: 0,
+                fade_out_frames: 0,
                 samples: ClipSamples::Memory(vec![[0.25, -0.25]; length_frames]),
             }],
             meter_bank: Arc::new(MeterBank {
@@ -873,6 +876,10 @@ mod tests {
                 effective_bpm_bits: AtomicU64::new(f64::NAN.to_bits()),
                 clock_source: AtomicU32::new(0),
                 waiting_for: AtomicU32::new(0),
+                loop_enabled: AtomicBool::new(false),
+                loop_has_range: AtomicBool::new(false),
+                loop_start_tick: AtomicU64::new(0),
+                loop_end_tick: AtomicU64::new(0),
             }),
             sample_rate,
             content_end_frame,
@@ -884,6 +891,25 @@ mod tests {
             input_peak_scratch: [0.0; MAX_INPUT_CHANNELS],
             meter_frame_clock: 0,
         })
+    }
+
+    #[test]
+    fn clip_fades_apply_fixed_equal_power_gain_without_state() {
+        let clip = LoadedClip {
+            channel_index: 0,
+            start_frame: 0,
+            source_offset_frames: 0,
+            length_frames: 8,
+            fade_in_frames: 4,
+            fade_out_frames: 2,
+            samples: ClipSamples::Memory(vec![[1.0, 1.0]; 8]),
+        };
+
+        assert_eq!(clip.gain_at(0), 0.0);
+        assert!((clip.gain_at(2) - 0.5_f32.sqrt()).abs() < f32::EPSILON);
+        assert_eq!(clip.gain_at(4), 1.0);
+        assert_eq!(clip.gain_at(6), 1.0);
+        assert!((clip.gain_at(7) - 0.5_f32.sqrt()).abs() < f32::EPSILON);
     }
 
     #[test]
@@ -913,6 +939,45 @@ mod tests {
             runtime.transport.position_frames.load(Ordering::Relaxed),
             250
         );
+    }
+
+    #[test]
+    fn playback_loop_splits_a_block_and_suppresses_content_auto_stop() {
+        let mut runtime = transport_test_runtime(960, 920, 900, TRANSPORT_PLAYING);
+        runtime.transport.loop_start_tick.store(960, Ordering::Relaxed);
+        runtime.transport.loop_end_tick.store(1_920, Ordering::Relaxed);
+        runtime.transport.loop_has_range.store(true, Ordering::Release);
+        runtime.transport.loop_enabled.store(true, Ordering::Release);
+        let inputs = vec![[0.0; MAX_INPUT_CHANNELS]; 128];
+        let mut outputs = vec![[0.0; MAX_OUTPUT_CHANNELS]; 128];
+
+        assert!(!runtime.render_block(&inputs, &mut outputs, None));
+
+        assert_eq!(runtime.transport.position_frames.load(Ordering::Relaxed), 548);
+        assert_eq!(
+            runtime.transport.state.load(Ordering::Relaxed),
+            TRANSPORT_PLAYING
+        );
+    }
+
+    #[test]
+    fn playback_loop_is_inert_while_recording_or_using_external_clock() {
+        for (state, external) in [(TRANSPORT_RECORDING, false), (TRANSPORT_PLAYING, true)] {
+            let mut runtime = transport_test_runtime(960, 2_000, 900, state);
+            runtime.transport.loop_start_tick.store(960, Ordering::Relaxed);
+            runtime.transport.loop_end_tick.store(1_920, Ordering::Relaxed);
+            runtime.transport.loop_has_range.store(true, Ordering::Release);
+            runtime.transport.loop_enabled.store(true, Ordering::Release);
+            runtime
+                .transport
+                .clock_source
+                .store(u32::from(external), Ordering::Relaxed);
+            let inputs = vec![[0.0; MAX_INPUT_CHANNELS]; 128];
+            let mut outputs = vec![[0.0; MAX_OUTPUT_CHANNELS]; 128];
+
+            assert!(!runtime.render_block(&inputs, &mut outputs, None));
+            assert_eq!(runtime.transport.position_frames.load(Ordering::Relaxed), 1_028);
+        }
     }
 
     #[test]
@@ -1164,6 +1229,10 @@ mod tests {
             effective_bpm_bits: AtomicU64::new(f64::NAN.to_bits()),
             clock_source: AtomicU32::new(0),
             waiting_for: AtomicU32::new(0),
+            loop_enabled: AtomicBool::new(false),
+            loop_has_range: AtomicBool::new(false),
+            loop_start_tick: AtomicU64::new(0),
+            loop_end_tick: AtomicU64::new(0),
         })
     }
 

@@ -111,6 +111,9 @@ function snapshot(overrides: Partial<ProjectGraphSnapshot> = {}): ProjectGraphSn
         startFrame: 480,
         sourceOffsetFrames: 10,
         lengthFrames: 960,
+        sourceLengthFrames: 970,
+        fadeInFrames: 48,
+        fadeOutFrames: 96,
         assetSampleRate: 48_000,
         assetChannels: 2
       }
@@ -137,6 +140,7 @@ function snapshot(overrides: Partial<ProjectGraphSnapshot> = {}): ProjectGraphSn
         startTick: 0,
         lengthTicks: 960,
         sourceOffsetTicks: 0,
+        sourceLengthTicks: Number.MAX_SAFE_INTEGER,
         notes: [
           {
             id: "note-1",
@@ -224,6 +228,8 @@ describe("AudioGraphCompiler", () => {
         start_frame: 480,
         source_offset_frames: 10,
         length_frames: 960,
+        fade_in_frames: 48,
+        fade_out_frames: 96,
         path: "/assets/take.wav"
       }
     ])

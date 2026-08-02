@@ -75,6 +75,8 @@ fn official_vst3_fixture_binds_and_archives_an_ara_document() {
             start_frame: 0,
             source_offset_frames: 0,
             length_frames: 4_800,
+            fade_in_frames: 0,
+            fade_out_frames: 0,
             path: audio_path.to_string_lossy().into_owned(),
         }],
         plugins: vec![LivePluginInstance {

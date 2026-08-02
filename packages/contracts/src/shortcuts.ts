@@ -44,8 +44,10 @@ const COMMON_DEFAULTS: Readonly<
   "edit.copy": { code: "KeyC", modifiers: PRIMARY },
   "edit.paste": { code: "KeyV", modifiers: PRIMARY },
   "edit.select-all": { code: "KeyA", modifiers: PRIMARY },
+  "edit.split-at-playhead": { code: "KeyE", modifiers: PRIMARY },
   "application.preferences": { code: "Comma", modifiers: PRIMARY },
   "transport.toggle-playback": { code: "Space", modifiers: [] },
+  "transport.toggle-loop": { code: "KeyL", modifiers: [] },
   "transport.go-to-start": { code: "Home", modifiers: [] },
   "recording.toggle": { code: "KeyR", modifiers: [] },
   "view.toggle-mixer-dock": { code: "KeyM", modifiers: [] }

@@ -17,6 +17,7 @@ const clip: MidiClipState = {
   startTick: 960,
   lengthTicks: 960,
   sourceOffsetTicks: 0,
+  sourceLengthTicks: Number.MAX_SAFE_INTEGER,
   notes: [],
   events: []
 }
@@ -38,7 +39,7 @@ describe("MidiArrangementTrack", () => {
         draggingClipId: null
       }
     })
-    const renderedClip = wrapper.get('button[aria-label="Verse, MIDI clip"]')
+    const renderedClip = wrapper.get('[role="button"][aria-label="Verse, MIDI clip"]')
 
     expect(renderedClip.attributes("aria-pressed")).toBe("true")
     await renderedClip.trigger("mousedown", { detail: 1 })

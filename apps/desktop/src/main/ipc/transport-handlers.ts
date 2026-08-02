@@ -21,6 +21,33 @@ function sameRef(left: ResourceRef | undefined, right: ResourceRef | null): bool
   )
 }
 
+function isTransportCommand(value: unknown): value is TransportCommand {
+  if (!value || typeof value !== "object") return false
+  const command = value as Record<string, unknown>
+  if (["play", "record", "pause", "record-count-in", "stop"].includes(String(command.type))) {
+    return true
+  }
+  if (command.type === "seek") {
+    return (
+      typeof command.positionFrames === "number" &&
+      Number.isSafeInteger(command.positionFrames) &&
+      command.positionFrames >= 0
+    )
+  }
+  if (command.type !== "set-loop" || typeof command.enabled !== "boolean") return false
+  if (command.range === null) return true
+  if (!command.range || typeof command.range !== "object") return false
+  const range = command.range as Record<string, unknown>
+  return (
+    typeof range.startTick === "number" &&
+    Number.isSafeInteger(range.startTick) &&
+    range.startTick >= 0 &&
+    typeof range.endTick === "number" &&
+    Number.isSafeInteger(range.endTick) &&
+    range.endTick > range.startTick
+  )
+}
+
 function error(
   meta: RpcRequestMeta,
   category: "validation" | "stale-resource" | "conflict",
@@ -110,13 +137,7 @@ export function registerTransportHandlers(context: IpcHandlerContext): void {
     })
   registerRpcHandler(IPC_CHANNELS.transportCommand, async ({ meta }, value: unknown) => {
     const state = lifecycle.applicationState
-    if (
-      !meta.mutation ||
-      meta.expectedRevision === undefined ||
-      !value ||
-      typeof value !== "object" ||
-      typeof (value as { type?: unknown }).type !== "string"
-    ) {
+    if (!meta.mutation || meta.expectedRevision === undefined || !isTransportCommand(value)) {
       return rpcFailure(meta, error(meta, "validation"))
     }
     const existing = operations.registry.status(meta.mutation.operationId)
@@ -147,7 +168,7 @@ export function registerTransportHandlers(context: IpcHandlerContext): void {
       return result
     }
     try {
-      const command = value as TransportCommand
+      const command = value
       try {
         lifecycle.assertTransportAllowed(command)
       } catch {
@@ -159,7 +180,9 @@ export function registerTransportHandlers(context: IpcHandlerContext): void {
         ? {
             state: "stopped" as const,
             positionFrames: 0,
-            sampleRate: lifecycle.snapshot().audio.runtime.sampleRate ?? 0
+            sampleRate: lifecycle.snapshot().audio.runtime.sampleRate ?? 0,
+            loopEnabled: false,
+            loopRange: null
           }
         : await transport.command(command)
       const revision = state.advanceTransport(meta.expectedRevision, snapshot)
@@ -186,7 +209,9 @@ export function registerTransportHandlers(context: IpcHandlerContext): void {
         {
           state: "stopped" as const,
           positionFrames: 0,
-          sampleRate: lifecycle.snapshot().audio.runtime.sampleRate ?? 0
+          sampleRate: lifecycle.snapshot().audio.runtime.sampleRate ?? 0,
+          loopEnabled: false,
+          loopRange: null
         },
         { resourceRevision: resources.revision }
       )

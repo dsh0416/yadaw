@@ -668,6 +668,8 @@ mod tests {
             start_frame: 0,
             source_offset_frames: 0,
             length_frames: 48_000,
+            fade_in_frames: 0,
+            fade_out_frames: 0,
             path: format!("/assets/{id}.wav"),
         }
     }

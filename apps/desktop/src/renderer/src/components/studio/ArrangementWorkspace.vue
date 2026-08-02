@@ -30,6 +30,15 @@ import { useArrangementViewport } from "./useArrangementViewport"
 import { useArrangementClipDrag } from "./useArrangementClipDrag"
 import { useGlobalLaneSelection } from "./useGlobalLaneSelection"
 import { snapTicks } from "../../utils/pianoRoll"
+import {
+  type AudioFadeEdge,
+  type ClipTrimEdge,
+  planAudioClipFade,
+  planAudioClipSplit,
+  planAudioClipTrim,
+  planMidiClipSplits,
+  planMidiClipTrim
+} from "../../utils/clipEditing"
 import { useMidiClipDrag } from "./useMidiClipDrag"
 
 const props = defineProps<{
@@ -52,6 +61,8 @@ const {
   playheadSeconds,
   selectedClipId,
   error,
+  loopEnabled,
+  loopRange,
   contentEndSeconds,
   timelineDurationSeconds
 } = storeToRefs(transportStore)
@@ -130,7 +141,24 @@ const liveClips = computed<TimelineClip[]>(() =>
                 durationSeconds: recordingDuration.value,
                 endSeconds: recordingStartSeconds.value + recordingDuration.value,
                 channels: channel.inputFormat === "mono" ? 1 : 2,
-                sampleRate: session.value?.configuration.sampleRate ?? 48_000
+                sampleRate: session.value?.configuration.sampleRate ?? 48_000,
+                projectSampleRate: session.value?.configuration.sampleRate ?? 48_000,
+                startFrame: props.recordingStartFrame ?? 0,
+                sourceOffsetFrames: 0,
+                lengthFrames: Math.max(
+                  1,
+                  Math.round(
+                    recordingDuration.value * (session.value?.configuration.sampleRate ?? 48_000)
+                  )
+                ),
+                sourceLengthFrames: Math.max(
+                  1,
+                  Math.round(
+                    recordingDuration.value * (session.value?.configuration.sampleRate ?? 48_000)
+                  )
+                ),
+                fadeInFrames: 0,
+                fadeOutFrames: 0
               }
             ]
           : []
@@ -217,6 +245,10 @@ const playheadStyle = computed(() => ({
     pixelsPerQuarter.value
   )}px`
 }))
+const playheadTick = computed(() => secondsToTick(mixerStore.graph.tempoMap, playheadSeconds.value))
+const playheadFrame = computed(() =>
+  Math.round(playheadSeconds.value * mixerStore.graph.sampleRate)
+)
 
 watch(
   () => props.recordingStartedAt,
@@ -228,6 +260,9 @@ function handleSeek(seconds: number): void {
   transportStore.clearSelection()
   pianoRollStore.clearArrangementSelection()
   transportStore.seek(seconds)
+}
+function updateCycleRange(range: { startTick: number; endTick: number }): void {
+  void transportStore.setLoop(true, range)
 }
 function selectAudioClip(clipId: string): void {
   pianoRollStore.clearArrangementSelection()
@@ -242,6 +277,38 @@ function handleMoveClip(clipId: string, trackId: string, startSeconds: number): 
     clipId,
     trackId,
     startFrame: Math.round(startSeconds * mixerStore.graph.sampleRate)
+  })
+}
+function removeAudioClip(clipId: string): void {
+  void mixerStore.execute({ type: "delete-audio-clip", clipId }).then(() => {
+    if (transportStore.selectedClipId === clipId) transportStore.clearSelection()
+  })
+}
+function trimAudioClip(clipId: string, edge: ClipTrimEdge, frame: number): void {
+  const clip = mixerStore.graph.audioClips.find((candidate) => candidate.id === clipId)
+  if (!clip) return
+  const command = planAudioClipTrim(clip, edge, frame)
+  if (command) void mixerStore.execute(command)
+}
+function splitAudioClip(clipId: string): void {
+  const clip = mixerStore.graph.audioClips.find((candidate) => candidate.id === clipId)
+  if (!clip) return
+  const command = planAudioClipSplit(clip, playheadFrame.value)
+  if (command) void mixerStore.execute(command)
+}
+function updateAudioFade(clipId: string, edge: AudioFadeEdge, frames: number): void {
+  const clip = mixerStore.graph.audioClips.find((candidate) => candidate.id === clipId)
+  if (!clip) return
+  const command = planAudioClipFade(clip, edge, frames)
+  if (command) void mixerStore.execute(command)
+}
+function resetAudioFades(clipId: string): void {
+  const clip = mixerStore.graph.audioClips.find((candidate) => candidate.id === clipId)
+  if (!clip || (clip.fadeInFrames === 0 && clip.fadeOutFrames === 0)) return
+  void mixerStore.execute({
+    type: "update-audio-clip",
+    clipId,
+    patch: { fadeInFrames: 0, fadeOutFrames: 0 }
   })
 }
 function reorderTrack(index: number, direction: -1 | 1): void {
@@ -267,6 +334,24 @@ function removeMidiClip(clipId: string): void {
   void mixerStore.execute({ type: "delete-midi-clip", clipId }).then(() => {
     pianoRollStore.clearArrangementSelection()
   })
+}
+
+function trimMidiClip(clipId: string, edge: ClipTrimEdge, requestedTick: number): void {
+  const clip = mixerStore.graph.midiClips.find((candidate) => candidate.id === clipId)
+  if (!clip) return
+  const command = planMidiClipTrim(clip, edge, snapTicks(requestedTick, pianoRollStore.snap))
+  if (command) void mixerStore.execute(command)
+}
+
+function splitMidiClip(clipId: string): void {
+  const selectedIds = pianoRollStore.arrangementClipIds.includes(clipId)
+    ? new Set(pianoRollStore.arrangementClipIds)
+    : new Set([clipId])
+  const command = planMidiClipSplits(
+    mixerStore.graph.midiClips.filter((clip) => selectedIds.has(clip.id)),
+    playheadTick.value
+  )
+  if (command) void mixerStore.execute(command)
 }
 
 function moveMidiClip(clipId: string, trackId: string, startTick: number): void {
@@ -306,14 +391,16 @@ function createMidiClip(trackId: string, requestedStartTick: number): void {
     contentHash: `blank:${sourceId}`,
     rawBytes: new Uint8Array()
   }
+  const lengthTicks = barLengthTicksAtTick(mixerStore.graph.tempoMap, startTick)
   const clip: MidiClipState = {
     id: clipId,
     sourceId,
     trackId,
     name,
     startTick,
-    lengthTicks: barLengthTicksAtTick(mixerStore.graph.tempoMap, startTick),
+    lengthTicks,
     sourceOffsetTicks: 0,
+    sourceLengthTicks: lengthTicks,
     notes: [],
     events: []
   }
@@ -481,7 +568,11 @@ function createMidiClip(trackId: string, requestedStartTick: number): void {
               :content-width="contentWidth"
               :pixels-per-quarter="pixelsPerQuarter"
               :tempo-map="mixerStore.graph.tempoMap"
+              :loop-enabled="loopEnabled"
+              :loop-range="loopRange"
+              :cycle-disabled="transportStore.snapshot.clockSource === 'external'"
               @seek="handleSeek"
+              @update-loop-range="updateCycleRange"
             />
             <TempoTrackLane
               :tempo-map="mixerStore.graph.tempoMap"
@@ -535,11 +626,17 @@ function createMidiClip(trackId: string, requestedStartTick: number): void {
                 :viewport-end-seconds="viewportEndSeconds"
                 :selected-clip-id="selectedClipId"
                 :live-clip="liveClips.find((clip) => clip.trackId === track.trackId) ?? null"
+                :playhead-frame="playheadFrame"
                 @seek="handleSeek"
                 @select-clip="selectAudioClip"
                 @waveform-frame-count="handleWaveformFrameCount"
                 @clip-drag-start="handleClipDragStart"
                 @clip-drag-end="handleClipDragEnd"
+                @remove="removeAudioClip"
+                @split="splitAudioClip"
+                @trim="trimAudioClip"
+                @fade="updateAudioFade"
+                @reset-fades="resetAudioFades"
               />
               <MidiArrangementTrack
                 v-else
@@ -551,13 +648,17 @@ function createMidiClip(trackId: string, requestedStartTick: number): void {
                 :pixels-per-quarter="pixelsPerQuarter"
                 :track-height="height"
                 :selected-clip-ids="pianoRollStore.arrangementClipIds"
-                :keyboard-insertion-tick="secondsToTick(mixerStore.graph.tempoMap, playheadSeconds)"
+                :keyboard-insertion-tick="playheadTick"
+                :playhead-tick="playheadTick"
+                :snap="pianoRollSnap"
                 :drag-preview="midiDragPreview?.trackId === track.trackId ? midiDragPreview : null"
                 :dragging-clip-id="midiClipDrag?.clipId ?? null"
                 @remove="removeMidiClip"
                 @select="selectMidiClip"
                 @open="openMidiClip"
                 @create="createMidiClip"
+                @split="splitMidiClip"
+                @trim="trimMidiClip"
                 @clip-drag-start="handleMidiClipDragStart"
                 @clip-drag-end="handleMidiClipDragEnd"
               />

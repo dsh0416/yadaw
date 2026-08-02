@@ -121,7 +121,13 @@ describe("registerTransportHandlers", () => {
 
   it("executes a transport command and advances revision", async () => {
     const context = createContext()
-    const snapshot = { state: "playing" as const, positionFrames: 100, sampleRate: 48_000 }
+    const snapshot = {
+      state: "playing" as const,
+      positionFrames: 100,
+      sampleRate: 48_000,
+      loopEnabled: false,
+      loopRange: null
+    }
     vi.mocked(context.transport.command).mockResolvedValue(snapshot)
     registerTransportHandlers(context)
     const audio = await runningAudio(context)
@@ -138,6 +144,22 @@ describe("registerTransportHandlers", () => {
       value: snapshot,
       resourceRevision: audio.revision + 1
     })
+  })
+
+  it("rejects an invalid loop range before dispatch", async () => {
+    const context = createContext()
+    registerTransportHandlers(context)
+    const audio = await runningAudio(context)
+
+    const result = await invoke(
+      electronMocks,
+      IPC_CHANNELS.transportCommand,
+      mutationMeta(audio.transport!, { expectedRevision: audio.revision }),
+      { type: "set-loop", enabled: true, range: { startTick: 960, endTick: 960 } }
+    )
+
+    expect(result).toMatchObject({ ok: false, error: { code: "validation-failed" } })
+    expect(context.transport.command).not.toHaveBeenCalled()
   })
 
   it("returns unknown outcome when transport.command throws", async () => {
@@ -164,7 +186,13 @@ describe("registerTransportHandlers", () => {
 
   it("returns a transport snapshot", async () => {
     const context = createContext()
-    const snapshot = { state: "stopped" as const, positionFrames: 0, sampleRate: 48_000 }
+    const snapshot = {
+      state: "stopped" as const,
+      positionFrames: 0,
+      sampleRate: 48_000,
+      loopEnabled: false,
+      loopRange: null
+    }
     vi.mocked(context.transport.snapshot).mockResolvedValue(snapshot)
     registerTransportHandlers(context)
     const audio = await runningAudio(context)
@@ -200,7 +228,13 @@ describe("registerTransportHandlers", () => {
 
   it("replays a completed transport operation", async () => {
     const context = createContext()
-    const snapshot = { state: "playing" as const, positionFrames: 10, sampleRate: 48_000 }
+    const snapshot = {
+      state: "playing" as const,
+      positionFrames: 10,
+      sampleRate: 48_000,
+      loopEnabled: false,
+      loopRange: null
+    }
     vi.mocked(context.transport.command).mockResolvedValue(snapshot)
     registerTransportHandlers(context)
     const audio = await runningAudio(context)

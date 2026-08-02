@@ -450,11 +450,18 @@ export class AudioHostService {
     return {
       state: transport.state,
       positionFrames,
-      sampleRate: sessionSampleRate
+      sampleRate: sessionSampleRate,
+      loopEnabled: transport.loopEnabled,
+      loopRange: transport.loopRange ? { ...transport.loopRange } : null
     }
   }
 
   private async restoreSessionRateTransition(transport: TransportSnapshot): Promise<void> {
+    await this.transport({
+      type: "set-loop",
+      enabled: transport.loopEnabled,
+      range: transport.loopRange
+    })
     await this.transport({ type: "seek", positionFrames: transport.positionFrames })
     if (transport.state === "playing") await this.transport({ type: "play" })
   }
@@ -997,6 +1004,21 @@ export class AudioHostService {
     if (!audioEngineRestored) return
     if (this.lastGraph) await this.waitForGraphPublication(this.lastGraph.revision)
 
+    const loop = await this.requestImmediately(
+      {
+        type: "transport",
+        command: {
+          kind: "set-loop",
+          position_frames: null,
+          loop_enabled: transport.loopEnabled,
+          loop_start_tick: transport.loopRange?.startTick ?? null,
+          loop_end_tick: transport.loopRange?.endTick ?? null
+        }
+      },
+      client
+    )
+    this.audioTransport.rememberTransportResponse(loop)
+
     const seek = await this.requestImmediately(
       {
         type: "transport",
@@ -1095,6 +1117,11 @@ export class AudioHostService {
       await this.waitForGraphPublication(this.lastGraph.revision)
     }
     if (audioEngineRestored) {
+      await this.transport({
+        type: "set-loop",
+        enabled: transport.loopEnabled,
+        range: transport.loopRange
+      })
       await this.transport({ type: "seek", positionFrames: transport.positionFrames })
       if (transport.state === "playing") await this.transport({ type: "play" })
     }

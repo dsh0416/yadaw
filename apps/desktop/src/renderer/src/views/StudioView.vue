@@ -19,6 +19,7 @@ import { useStudioWorkflowStore } from "../stores/studioWorkflow"
 import { usePianoRollStore } from "../stores/pianoRoll"
 import MidiImportDialog from "../components/midi/MidiImportDialog.vue"
 import { replaceTempoEventAtTick, secondsToTick } from "../utils/tempoMap"
+import { defaultCycleRange } from "../utils/cycleRange"
 
 const router = useRouter()
 const engineStore = useEngineStore()
@@ -46,7 +47,9 @@ const {
   loading: playLoading,
   canPlay,
   countInEnabled,
-  playheadSeconds
+  playheadSeconds,
+  loopEnabled,
+  loopRange
 } = storeToRefs(transportStore)
 const EMPTY_MASTER_METER: MixerChannelMeter = {
   channelId: "master",
@@ -90,6 +93,17 @@ async function toggleRecording(): Promise<void> {
   if (recordingBusy.value) return
   const completed = await studioWorkflowStore.toggleRecording()
   if (completed) transportStore.selectAndRevealClip(completed.id)
+}
+
+function toggleCycle(): void {
+  if (transportStore.snapshot.clockSource === "external") return
+  const range =
+    loopRange.value ??
+    defaultCycleRange(
+      mixerStore.graph.tempoMap,
+      secondsToTick(mixerStore.graph.tempoMap, playheadSeconds.value)
+    )
+  void transportStore.setLoop(!loopEnabled.value || loopRange.value === null, range)
 }
 
 function isEditableTarget(target: EventTarget | null): boolean {
@@ -148,6 +162,8 @@ onBeforeUnmount(() => {
       :play-loading="playLoading"
       :can-play="canPlay && !activeRecording"
       :count-in-enabled="countInEnabled"
+      :cycle-enabled="loopEnabled"
+      :external-clock="transportStore.snapshot.clockSource === 'external'"
       :playhead-seconds="playheadSeconds"
       :tempo-map="mixerStore.graph.tempoMap"
       :sound-browser-open="workspaceStore.soundBrowserOpen"
@@ -164,6 +180,7 @@ onBeforeUnmount(() => {
       @toggle-playback="transportStore.toggle"
       @go-to-start="transportStore.goToStart"
       @toggle-count-in="transportStore.toggleCountIn"
+      @toggle-cycle="toggleCycle"
       @update-tempo="updateCurrentTempo"
       @toggle-metronome="toggleMetronome"
       @preview-master="previewMaster"

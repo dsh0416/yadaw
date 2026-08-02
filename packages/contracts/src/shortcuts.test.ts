@@ -28,7 +28,12 @@ describe("defaultKeyboardShortcuts", () => {
     const shortcuts = defaultKeyboardShortcuts("linux")
     expect(shortcuts["project.save"]).toEqual({ code: "KeyS", modifiers: ["primary"] })
     expect(shortcuts["transport.toggle-playback"]).toEqual({ code: "Space", modifiers: [] })
+    expect(shortcuts["transport.toggle-loop"]).toEqual({ code: "KeyL", modifiers: [] })
     expect(shortcuts["edit.redo"]).toEqual({ code: "KeyZ", modifiers: ["primary", "shift"] })
+    expect(shortcuts["edit.split-at-playhead"]).toEqual({
+      code: "KeyE",
+      modifiers: ["primary"]
+    })
   })
 })
 

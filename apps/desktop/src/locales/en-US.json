@@ -71,6 +71,7 @@
     "copy": "Copy",
     "paste": "Paste",
     "selectAll": "Select All",
+    "splitAtPlayhead": "Split at Playhead",
     "toggleFullScreen": "Toggle Full Screen",
     "audioBenchmark": "Audio Performance Benchmark…",
     "effectChainGraph": "Effect Chain Graph…"
@@ -437,6 +438,7 @@
         },
         "transport": {
           "toggle-playback": "Play / pause",
+          "toggle-loop": "Toggle Cycle",
           "go-to-start": "Return to start"
         },
         "recording": {
@@ -1301,7 +1303,10 @@
       "record": "Record",
       "recordTooltip": "Record · R",
       "captureRecording": "Capture Recording",
-      "cycle": "Cycle"
+      "cycle": "Cycle",
+      "cycleTooltip": "Cycle · L",
+      "cycleExternalClockTooltip": "Cycle is unavailable while following external MIDI Clock",
+      "cycleRecordingTooltip": "Cycle · L · Applies to playback after recording"
     },
     "musical": {
       "ariaLabel": "Project musical display",
@@ -1362,8 +1367,21 @@
       "minorKeys": "Minor keys",
       "newRecording": "New recording",
       "midiClipName": "MIDI Clip {index}",
+      "midiClipMenu": "{name} MIDI clip commands",
+      "audioClipMenu": "{name} audio clip commands",
+      "openMidiClip": "Open in piano roll",
+      "splitAtPlayhead": "Split at playhead",
+      "trimStartToPlayhead": "Trim start to playhead",
+      "trimEndToPlayhead": "Trim end to playhead",
+      "trimClipStart": "Trim the start of {name}",
+      "trimClipEnd": "Trim the end of {name}",
+      "fadeIn": "Adjust the fade-in of {name}",
+      "fadeOut": "Adjust the fade-out of {name}",
+      "resetFades": "Reset fades",
+      "deleteClip": "Delete clip",
       "trackRenameLabel": "{name}; double-click to rename; Alt+Arrow Up or Down to reorder",
       "timelineRulerAria": "Timeline ruler",
+      "cycleLaneAria": "Cycle range lane; drag to create a playback loop",
       "instrumentLaneAria": "Instrument lane; double-click empty space or press Enter to create a MIDI clip",
       "createMidiClipHint": "Double-click to create MIDI clip",
       "recordingAria": "Recording",

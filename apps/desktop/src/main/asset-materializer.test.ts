@@ -17,6 +17,9 @@ const graph: ProjectGraphSnapshot = {
       name: "Take",
       startFrame: 0,
       sourceOffsetFrames: 0,
+      sourceLengthFrames: Number.MAX_SAFE_INTEGER,
+      fadeInFrames: 0,
+      fadeOutFrames: 0,
       lengthFrames: 10,
       assetSampleRate: 48_000,
       assetChannels: 1
@@ -28,6 +31,9 @@ const graph: ProjectGraphSnapshot = {
       name: "Take 2",
       startFrame: 10,
       sourceOffsetFrames: 0,
+      sourceLengthFrames: Number.MAX_SAFE_INTEGER,
+      fadeInFrames: 0,
+      fadeOutFrames: 0,
       lengthFrames: 10,
       assetSampleRate: 48_000,
       assetChannels: 1

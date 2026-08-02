@@ -81,13 +81,16 @@ const emptyGraph: ProjectGraphSnapshot = {
   }
 }
 
-function success(value: TransportSnapshot, resourceRevision = 1): RpcResult<TransportSnapshot> {
+type SnapshotInput = Omit<TransportSnapshot, "loopEnabled" | "loopRange"> &
+  Partial<Pick<TransportSnapshot, "loopEnabled" | "loopRange">>
+
+function success(value: SnapshotInput, resourceRevision = 1): RpcResult<TransportSnapshot> {
   return {
     ok: true,
     requestId: "request",
     operationId: "operation",
     resourceRevision,
-    value,
+    value: { loopEnabled: false, loopRange: null, ...value },
     warnings: []
   }
 }
@@ -154,6 +157,33 @@ describe("transport store", () => {
     expect(transport.snapshot).toMatchObject({ state: "playing", positionFrames: 200 })
   })
 
+  it("reconciles the transport revision from a read before the next mutation", async () => {
+    window.yadaw.transportSnapshot = vi
+      .fn()
+      .mockResolvedValue(success({ state: "stopped", positionFrames: 0, sampleRate: 48_000 }, 7))
+    window.yadaw.transportCommand = vi.fn().mockResolvedValue(
+      success(
+        {
+          state: "stopped",
+          positionFrames: 0,
+          sampleRate: 48_000,
+          loopEnabled: true,
+          loopRange: { startTick: 0, endTick: 3_840 }
+        },
+        8
+      )
+    )
+    const transport = useTransportStore()
+
+    await transport.refresh()
+    await transport.setLoop(true, { startTick: 0, endTick: 3_840 })
+
+    expect(window.yadaw.transportCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ expectedRevision: 7 }),
+      expect.objectContaining({ type: "set-loop" })
+    )
+  })
+
   it("coalesces same-turn seek requests to the latest position", async () => {
     window.yadaw.transportCommand = vi
       .fn()
@@ -178,6 +208,32 @@ describe("transport store", () => {
         positionFrames: 144_000
       }
     )
+  })
+
+  it("sets loop enabled and range as one transport mutation", async () => {
+    window.yadaw.transportCommand = vi.fn().mockResolvedValue(
+      success({
+        state: "stopped",
+        positionFrames: 0,
+        sampleRate: 48_000,
+        loopEnabled: true,
+        loopRange: { startTick: 960, endTick: 4_800 }
+      })
+    )
+    const transport = useTransportStore()
+
+    await transport.setLoop(true, { startTick: 960, endTick: 4_800 })
+
+    expect(window.yadaw.transportCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ expectedRevision: 0 }),
+      {
+        type: "set-loop",
+        enabled: true,
+        range: { startTick: 960, endTick: 4_800 }
+      }
+    )
+    expect(transport.loopEnabled).toBe(true)
+    expect(transport.loopRange).toEqual({ startTick: 960, endTick: 4_800 })
   })
 
   it("can play an empty project while the metronome system channel is enabled", async () => {
@@ -234,6 +290,9 @@ describe("transport store", () => {
           assetSampleRate: 48_000,
           startFrame: 0,
           sourceOffsetFrames: 0,
+          sourceLengthFrames: Number.MAX_SAFE_INTEGER,
+          fadeInFrames: 0,
+          fadeOutFrames: 0,
           lengthFrames: 48_000
         }
       ]
@@ -250,7 +309,9 @@ describe("transport store", () => {
     transport.snapshot = {
       state: "stopped",
       positionFrames: 48_000,
-      sampleRate: 48_000
+      sampleRate: 48_000,
+      loopEnabled: false,
+      loopRange: null
     }
 
     await transport.play()
@@ -281,6 +342,9 @@ describe("transport store", () => {
           assetSampleRate: 48_000,
           startFrame: 0,
           sourceOffsetFrames: 0,
+          sourceLengthFrames: Number.MAX_SAFE_INTEGER,
+          fadeInFrames: 0,
+          fadeOutFrames: 0,
           lengthFrames: 48_000
         }
       ],
@@ -295,7 +359,9 @@ describe("transport store", () => {
     transport.snapshot = {
       state: "stopped",
       positionFrames: 60_000,
-      sampleRate: 48_000
+      sampleRate: 48_000,
+      loopEnabled: false,
+      loopRange: null
     }
 
     await transport.play()
@@ -321,6 +387,9 @@ describe("transport store", () => {
           assetSampleRate: 48_000,
           startFrame: 0,
           sourceOffsetFrames: 0,
+          sourceLengthFrames: Number.MAX_SAFE_INTEGER,
+          fadeInFrames: 0,
+          fadeOutFrames: 0,
           lengthFrames: 48_000
         }
       ],
@@ -334,7 +403,9 @@ describe("transport store", () => {
     transport.snapshot = {
       state: "stopped",
       positionFrames: 96_000,
-      sampleRate: 48_000
+      sampleRate: 48_000,
+      loopEnabled: false,
+      loopRange: null
     }
 
     await transport.play()
@@ -365,6 +436,9 @@ describe("transport store", () => {
           assetSampleRate: 48_000,
           startFrame: 0,
           sourceOffsetFrames: 0,
+          sourceLengthFrames: Number.MAX_SAFE_INTEGER,
+          fadeInFrames: 0,
+          fadeOutFrames: 0,
           lengthFrames: 48_000
         }
       ],
@@ -378,7 +452,9 @@ describe("transport store", () => {
     transport.snapshot = {
       state: "stopped",
       positionFrames: 240_000,
-      sampleRate: 48_000
+      sampleRate: 48_000,
+      loopEnabled: false,
+      loopRange: null
     }
 
     await transport.play()
@@ -403,6 +479,7 @@ describe("transport store", () => {
           startTick: 0,
           lengthTicks: 3_840,
           sourceOffsetTicks: 0,
+          sourceLengthTicks: Number.MAX_SAFE_INTEGER,
           notes: [],
           events: []
         }
@@ -433,7 +510,9 @@ describe("transport store", () => {
     transport.snapshot = {
       state: "counting-in",
       positionFrames: 0,
-      sampleRate: 48_000
+      sampleRate: 48_000,
+      loopEnabled: false,
+      loopRange: null
     }
     expect(transport.countingIn).toBe(true)
     expect(transport.playing).toBe(false)

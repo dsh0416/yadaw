@@ -55,6 +55,14 @@ Move the playhead to the start position, then select **Record** or press
 Record-enabled instrument tracks capture matching MIDI into a durable journal
 and commit a MIDI clip when you stop.
 
+Enable **1234** in the top bar for a one-bar count-in before capture begins.
+The metronome sounds during the count-in even when the arrangement starts at
+the recording position.
+
+Cycle is a playback aid and never loops a recording. If Cycle is enabled while
+you record, capture continues past the loop end and the saved Cycle range is
+used again the next time you play.
+
 Select **Record** again to stop. YADAW closes the recording, repairs audio
 headers when needed, processes audio into project assets, converts MIDI journals
 into clips, and updates the arrangement. Keep the application open while the

@@ -287,7 +287,7 @@ export class LifecycleCoordinator {
   }
 
   assertTransportAllowed(_command: TransportCommand): void {
-    if (this.recordingBusy) {
+    if (this.recordingBusy && _command.type !== "set-loop") {
       throw new Error("Transport commands are owned by the recording workflow while recording")
     }
     if (this.projectState.status !== "open") {

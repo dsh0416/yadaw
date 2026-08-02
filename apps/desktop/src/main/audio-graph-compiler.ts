@@ -54,6 +54,8 @@ export class AudioGraphCompiler {
         start_frame: clip.startFrame,
         source_offset_frames: clip.sourceOffsetFrames,
         length_frames: clip.lengthFrames,
+        fade_in_frames: clip.fadeInFrames,
+        fade_out_frames: clip.fadeOutFrames,
         path: assetPaths.get(clip.assetId)!
       })),
       plugins: graph.plugins.map((plugin) => ({

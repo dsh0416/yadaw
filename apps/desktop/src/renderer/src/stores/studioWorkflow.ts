@@ -49,6 +49,10 @@ export const useStudioWorkflowStore = defineStore("studio-workflow", () => {
           if (!track) {
             throw new Error(`Recorded channel '${asset.trackId}' has no project track`)
           }
+          const sourceLengthFrames = Math.max(
+            1,
+            Math.round((asset.frameCount * mixerStore.graph.sampleRate) / asset.sampleRate)
+          )
           return {
             type: "create-audio-clip" as const,
             clip: {
@@ -58,10 +62,10 @@ export const useStudioWorkflowStore = defineStore("studio-workflow", () => {
               name: asset.name,
               startFrame,
               sourceOffsetFrames: 0,
-              lengthFrames: Math.max(
-                1,
-                Math.round((asset.frameCount * mixerStore.graph.sampleRate) / asset.sampleRate)
-              ),
+              lengthFrames: sourceLengthFrames,
+              sourceLengthFrames,
+              fadeInFrames: 0,
+              fadeOutFrames: 0,
               assetSampleRate: asset.sampleRate,
               assetChannels: asset.channels
             }
@@ -99,6 +103,7 @@ export const useStudioWorkflowStore = defineStore("studio-workflow", () => {
     if (!(await prepareToLeaveStudio())) return false
     const disposition = await projectStore.prepareClose()
     if (!disposition) return false
+    await transportStore.setLoop(false, null)
     await transportStore.stop()
     if (!(await projectStore.close(disposition))) return false
     transportStore.reset()

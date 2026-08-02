@@ -1,7 +1,7 @@
 import { useIntervalFn } from "@vueuse/core"
 import { acceptHMRUpdate, defineStore } from "pinia"
 import { computed, shallowRef } from "vue"
-import type { TransportSnapshot } from "@yadaw/contracts"
+import type { TransportLoopRange, TransportSnapshot } from "@yadaw/contracts"
 import type { ProjectAssetSummary as Asset } from "@yadaw/contracts"
 import { projectContentEndSeconds } from "@yadaw/project-model"
 import { mutationMeta, readMeta, rpcErrorMessage } from "../rpc"
@@ -22,6 +22,13 @@ export interface TimelineClip {
   endSeconds: number
   channels: number
   sampleRate: number
+  projectSampleRate: number
+  startFrame: number
+  sourceOffsetFrames: number
+  lengthFrames: number
+  sourceLengthFrames: number
+  fadeInFrames: number
+  fadeOutFrames: number
 }
 
 export function assetsToTimelineClips(assets: Asset[]): TimelineClip[] {
@@ -37,7 +44,14 @@ export function assetsToTimelineClips(assets: Asset[]): TimelineClip[] {
       durationSeconds,
       endSeconds: cursor + durationSeconds,
       channels: asset.channels,
-      sampleRate: asset.sampleRate
+      sampleRate: asset.sampleRate,
+      projectSampleRate: asset.sampleRate,
+      startFrame: Math.round(cursor * asset.sampleRate),
+      sourceOffsetFrames: 0,
+      lengthFrames: Number(asset.frameCount),
+      sourceLengthFrames: Number(asset.frameCount),
+      fadeInFrames: 0,
+      fadeOutFrames: 0
     }
     cursor = clip.endSeconds
     return clip
@@ -47,7 +61,9 @@ export function assetsToTimelineClips(assets: Asset[]): TimelineClip[] {
 const EMPTY_TRANSPORT: TransportSnapshot = {
   state: "stopped",
   positionFrames: 0,
-  sampleRate: 48_000
+  sampleRate: 48_000,
+  loopEnabled: false,
+  loopRange: null
 }
 
 export const useTransportStore = defineStore("transport", () => {
@@ -78,7 +94,14 @@ export const useTransportStore = defineStore("transport", () => {
         durationSeconds,
         endSeconds: startSeconds + durationSeconds,
         channels: clip.assetChannels,
-        sampleRate: clip.assetSampleRate
+        sampleRate: clip.assetSampleRate,
+        projectSampleRate: sampleRate,
+        startFrame: clip.startFrame,
+        sourceOffsetFrames: clip.sourceOffsetFrames,
+        lengthFrames: clip.lengthFrames,
+        sourceLengthFrames: clip.sourceLengthFrames,
+        fadeInFrames: clip.fadeInFrames,
+        fadeOutFrames: clip.fadeOutFrames
       }
     })
   )
@@ -88,6 +111,8 @@ export const useTransportStore = defineStore("transport", () => {
   const countingIn = computed(() => snapshot.value.state === "counting-in")
   const playing = computed(() => snapshot.value.state === "playing")
   const recording = computed(() => snapshot.value.state === "recording")
+  const loopEnabled = computed(() => snapshot.value.loopEnabled)
+  const loopRange = computed(() => snapshot.value.loopRange)
   const contentEndSeconds = computed(() => projectContentEndSeconds(mixerStore.graph))
   const timelineDurationSeconds = computed(() =>
     Math.max(MINIMUM_TIMELINE_SECONDS, contentEndSeconds.value + TIMELINE_TAIL_SECONDS)
@@ -148,6 +173,9 @@ export const useTransportStore = defineStore("transport", () => {
     const next = await window.yadaw.transportSnapshot(readMeta(target))
     if (!next.ok) return
     if (generation === requestGeneration) snapshot.value = next.value
+    if (next.resourceRevision !== undefined) {
+      audioRuntimeStore.advanceTransportRevision(next.resourceRevision)
+    }
   }
 
   const polling = useIntervalFn(() => void refresh(), 33, { immediate: false })
@@ -218,6 +246,10 @@ export const useTransportStore = defineStore("transport", () => {
     countInEnabled.value = !countInEnabled.value
   }
 
+  function setLoop(enabled: boolean, range: TransportLoopRange | null): Promise<void> {
+    return command({ type: "set-loop", enabled, range })
+  }
+
   function selectClip(id: string): void {
     selectedClipId.value = id
   }
@@ -249,6 +281,8 @@ export const useTransportStore = defineStore("transport", () => {
     countingIn,
     playing,
     recording,
+    loopEnabled,
+    loopRange,
     loading,
     error,
     contentEndSeconds,
@@ -263,6 +297,7 @@ export const useTransportStore = defineStore("transport", () => {
     seek,
     goToStart,
     toggleCountIn,
+    setLoop,
     selectClip,
     selectAndRevealClip,
     clearSelection,

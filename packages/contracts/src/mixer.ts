@@ -64,9 +64,19 @@ export interface AudioClipState {
   startFrame: number
   sourceOffsetFrames: number
   lengthFrames: number
+  sourceLengthFrames: number
+  fadeInFrames: number
+  fadeOutFrames: number
   assetSampleRate: number
   assetChannels: number
 }
+
+export type AudioClipPatch = Partial<
+  Pick<
+    AudioClipState,
+    "startFrame" | "sourceOffsetFrames" | "lengthFrames" | "fadeInFrames" | "fadeOutFrames"
+  >
+>
 
 export interface MixerSendState {
   id: string
@@ -184,6 +194,7 @@ export type ProjectCommand =
   | { type: "create-audio-clip"; clip: AudioClipState }
   | { type: "delete-audio-clip"; clipId: string }
   | { type: "move-audio-clip"; clipId: string; trackId: string; startFrame: number }
+  | { type: "update-audio-clip"; clipId: string; patch: AudioClipPatch }
   | { type: "create-plugin"; plugin: PluginInstanceState }
   | { type: "delete-plugin"; pluginId: string }
   | { type: "update-plugin"; pluginId: string; patch: PluginInstancePatch }
@@ -248,6 +259,10 @@ export interface MixerRuntimeSnapshot {
 export type TransportState = "stopped" | "waiting" | "counting-in" | "playing" | "recording"
 export type TransportWaitingAction = "play" | "record"
 export type TransportClockSource = "internal" | "external"
+export interface TransportLoopRange {
+  startTick: number
+  endTick: number
+}
 export interface TransportSnapshot {
   state: TransportState
   positionFrames: number
@@ -256,6 +271,8 @@ export interface TransportSnapshot {
   effectiveBpm?: number
   clockSource?: TransportClockSource
   waitingFor?: TransportWaitingAction | null
+  loopEnabled: boolean
+  loopRange: TransportLoopRange | null
 }
 
 export type TransportCommand =
@@ -265,3 +282,4 @@ export type TransportCommand =
   | { type: "record-count-in" }
   | { type: "stop" }
   | { type: "seek"; positionFrames: number }
+  | { type: "set-loop"; enabled: boolean; range: TransportLoopRange | null }
