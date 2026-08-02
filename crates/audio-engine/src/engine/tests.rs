@@ -16,14 +16,14 @@ mod tests {
         MeterBank, MetronomeScheduler, NativeMidiClip, NativeMidiEvent, NativeMidiEventKind,
         NativeMidiNote, NativeMixerChannel, NativeMixerGraph, NativeMixerRuntime, NativeMixerSend,
         NativePluginInstance, NativeRoundTripLatencyMeasurementRequest, OUTPUT_RESAMPLER_FRAMES,
-        Ordering, RealtimeParameter, RealtimeParameterCommand, RoundTripInputDetector,
+        Ordering, PublishOutcome, RealtimeParameter, RealtimeParameterCommand, RoundTripInputDetector,
         RoundTripLatencyMeasurement, RoundTripOutputProbe, ScheduledMidiEvent,
         ScheduledMidiEventKind, SessionOutputConverter, SignalWidth, StereoDelayLine,
         StreamDirection, StreamErrorImpact, SupportedBufferSize, TRANSPORT_COUNTING_IN,
         TRANSPORT_PLAYING, TRANSPORT_RECORDING, TRANSPORT_STOPPED, TRANSPORT_WAITING,
         TransportAction, TransportShared, build_mixer_runtime, clip_storage_policy,
-        compiled_graph_snapshot, frames_to_nanos, parse_channel_kind, resolve_stream_devices,
-        select_buffer_size, spawn_streaming_clip, stream_error_impact,
+        compile_graph_build, compiled_graph_snapshot, frames_to_nanos, parse_channel_kind,
+        resolve_stream_devices, select_buffer_size, spawn_streaming_clip, stream_error_impact,
     };
     use crate::recording::{
         NativeRecordingStartConfig, StereoFrame, write_deterministic_test_recording,
@@ -776,6 +776,93 @@ mod tests {
         }));
         assert!(engine.native_graph_references_plugin("session-fx"));
         assert!(!engine.native_graph_references_plugin("bench-0"));
+        engine.set_last_native_graph_for_test(None);
+    }
+
+    #[test]
+    fn begin_graph_build_allocates_monotonic_generations_without_a_running_engine() {
+        let _guard = GRAPH_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let engine = AudioEngine::new();
+        let first = engine
+            .begin_graph_build(simple_native_graph())
+            .expect("first build input");
+        let second = engine
+            .begin_graph_build(simple_native_graph())
+            .expect("second build input");
+        assert_eq!(first.build_generation() + 1, second.build_generation());
+        assert_eq!(
+            engine.latest_build_generation_for_test(),
+            second.build_generation()
+        );
+    }
+
+    #[test]
+    fn stale_compiled_builds_are_superseded_before_publication() {
+        let _guard = GRAPH_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let engine = AudioEngine::new();
+        let stale = engine
+            .begin_graph_build(simple_native_graph())
+            .expect("stale build input");
+        let _fresh = engine
+            .begin_graph_build(simple_native_graph())
+            .expect("fresh build input");
+        let built = compile_graph_build(stale).expect("compile stale build");
+        let outcome = engine
+            .publish_mixer_runtime(built)
+            .expect("publish stale build");
+        assert_eq!(outcome, PublishOutcome::Superseded);
+        assert!(engine.compiled_audio_graph_snapshot().is_none());
+    }
+
+    #[test]
+    fn apply_plugin_timing_returns_replacement_only_when_values_change() {
+        let _guard = GRAPH_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let engine = AudioEngine::new();
+        engine.set_last_native_graph_for_test(Some(NativeMixerGraph {
+            generation: 1,
+            sample_rate: 48_000,
+            channels: Vec::new(),
+            sends: Vec::new(),
+            clips: Vec::new(),
+            plugins: vec![NativePluginInstance {
+                instance_id: "session-fx".to_owned(),
+                channel_index: 0,
+                role: "insert".to_owned(),
+                slot_order: 0,
+                audio_mode: PluginAudioMode::Stereo,
+                enabled: true,
+                latency_samples: 0,
+                tail_samples: Some(0),
+                processor: None,
+            }],
+            midi_clips: Vec::new(),
+            tempo_events: Vec::new(),
+            time_signature_events: Vec::new(),
+        }));
+        assert!(
+            engine
+                .apply_plugin_timing("missing", 8, Some(16))
+                .expect("missing plugin")
+                .is_none()
+        );
+        assert!(
+            engine
+                .apply_plugin_timing("session-fx", 0, Some(0))
+                .expect("unchanged timing")
+                .is_none()
+        );
+        let replacement = engine
+            .apply_plugin_timing("session-fx", 32, Some(64))
+            .expect("changed timing")
+            .expect("replacement graph");
+        assert_eq!(replacement.plugins[0].latency_samples, 32);
+        assert_eq!(replacement.plugins[0].tail_samples, Some(64));
         engine.set_last_native_graph_for_test(None);
     }
 

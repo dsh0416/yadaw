@@ -18,7 +18,8 @@ export class AudioHostGateway {
     private readonly client: () => AudioHostIpcClient | null,
     private readonly unavailable: () => "stopping" | Promise<void> | null,
     private readonly onEditorPreferenceChanged: Parameters<typeof drainHostEvents>[1],
-    private readonly pendingPreferenceWrites: Set<Promise<void>>
+    private readonly pendingPreferenceWrites: Set<Promise<void>>,
+    private readonly onEditorClosed?: (instanceId: string) => void
   ) {}
 
   request(command: Record<string, unknown>): Promise<ControlResponse> {
@@ -58,7 +59,12 @@ export class AudioHostGateway {
     if (response.result.type === "error") {
       throw new Error(response.result.error?.userMessageKey ?? "errors.audioEngineUnavailable")
     }
-    drainHostEvents(client, this.onEditorPreferenceChanged, this.pendingPreferenceWrites)
+    drainHostEvents(
+      client,
+      this.onEditorPreferenceChanged,
+      this.pendingPreferenceWrites,
+      this.onEditorClosed
+    )
     return response
   }
 

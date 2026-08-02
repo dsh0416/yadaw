@@ -117,6 +117,21 @@ impl WinitHost {
         if let Some(mut editor) = self.editors.remove(&window_id) {
             editor.close();
         }
+        let _ = self
+            .host_events
+            .try_send(HostEvent::PluginEditorClosed {
+                instance_id: instance_id.to_owned(),
+            });
+    }
+
+    fn close_all_editors(&mut self) {
+        let instance_ids: Vec<String> = self.editor_instances.keys().cloned().collect();
+        for instance_id in instance_ids {
+            self.close_editor(&instance_id);
+        }
+        self.editors.clear();
+        self.editor_instances.clear();
+        self.compositor = None;
     }
 
     fn execute_vst3_request(&mut self, event_loop: &ActiveEventLoop, request: ActorRequest) {
@@ -253,11 +268,7 @@ impl WinitHost {
     }
 
     fn shutdown(&mut self) {
-        self.editor_instances.clear();
-        for (_, mut editor) in self.editors.drain() {
-            editor.close();
-        }
-        self.compositor = None;
+        self.close_all_editors();
         if let Ok(mut processors) = self.processors.lock() {
             processors.clear();
         }
@@ -314,11 +325,9 @@ impl ApplicationHandler<UiEvent> for WinitHost {
                         }
                     }
                     SurfaceError::OutOfMemory => {
-                        for (_, mut editor) in self.editors.drain() {
-                            editor.close();
-                        }
-                        self.editor_instances.clear();
-                        self.compositor = None;
+                        // Drop every editor through the normal close path so
+                        // Electron observes PluginEditorClosed host events.
+                        self.close_all_editors();
                     }
                     SurfaceError::Timeout | SurfaceError::Other => {}
                 }

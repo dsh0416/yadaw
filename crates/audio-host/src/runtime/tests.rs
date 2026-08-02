@@ -558,4 +558,65 @@ mod tests {
         assert_eq!(validated.engine.epoch, "7");
         assert_eq!(validated.operation_id.as_deref(), Some("operation-1"));
     }
+
+    #[test]
+    fn graph_snapshot_can_report_an_observed_revision_ahead_of_commit() {
+        let mut state = GraphTransactionState::new(7);
+        state.observe_legacy_commit(3);
+        let snapshot = state.snapshot_at(5);
+        assert_eq!(snapshot.committed_revision, 3);
+        assert_eq!(snapshot.observed_revision, 5);
+        assert_eq!(snapshot.status, GraphDeploymentStatus::Active);
+    }
+
+    #[test]
+    fn graph_snapshot_with_engine_reads_published_generation() {
+        let engine = engine::AudioEngine::new();
+        let state = GraphTransactionState::new(7);
+        let snapshot = state.snapshot_with_engine(&engine);
+        assert_eq!(snapshot.observed_revision, engine.published_graph_generation());
+        assert_eq!(snapshot.status, GraphDeploymentStatus::Empty);
+    }
+
+    #[test]
+    fn engine_command_rejects_graph_patches_on_the_compat_path() {
+        let engine = engine::AudioEngine::new();
+        let result = engine_command(
+            &engine,
+            ControlCommand::UpdateGraph {
+                update: GraphUpdate::Patch {
+                    base_revision: 1,
+                    revision: 2,
+                    ops: Vec::new(),
+                },
+            },
+            None,
+        )
+        .expect("compat path must answer graph patch commands");
+        assert!(matches!(result, ControlResult::Error { .. }));
+    }
+
+    #[test]
+    fn engine_command_returns_compiled_graph_snapshot_for_a_stopped_engine() {
+        let engine = engine::AudioEngine::new();
+        let result = engine_command(&engine, ControlCommand::CompiledGraphSnapshot, None)
+            .expect("compiled graph snapshot must be handled");
+        assert!(matches!(
+            result,
+            ControlResult::CompiledGraphSnapshot { snapshot: None }
+        ));
+    }
+
+    #[test]
+    fn engine_command_snapshots_a_stopped_audio_engine() {
+        let engine = engine::AudioEngine::new();
+        let result = engine_command(&engine, ControlCommand::AudioEngineSnapshot, None)
+            .expect("audio engine snapshot must be handled");
+        match result {
+            ControlResult::AudioRuntime { runtime } => {
+                assert_eq!(runtime.state, "stopped");
+            }
+            other => panic!("expected audio runtime, got {other:?}"),
+        }
+    }
 }

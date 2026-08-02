@@ -58,6 +58,11 @@ pub enum HostEvent {
         class_id: String,
         preference: PluginEditorPreference,
     },
+    /// Native editor windows closed without a matching ClosePluginEditor RPC
+    /// (user close, GPU device loss/OOM). Electron reconciles open-editor state.
+    PluginEditorClosed {
+        instance_id: String,
+    },
     MidiInputSnapshot {
         snapshot: MidiInputSnapshot,
     },

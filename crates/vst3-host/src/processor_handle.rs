@@ -195,4 +195,19 @@ mod tests {
         assert_eq!(delay.process(2.0), 0.0);
         assert_eq!(delay.process(3.0), 1.0);
     }
+
+    #[test]
+    fn zero_sample_delay_is_a_passthrough() {
+        let mut delay = SampleDelay::new(0);
+        assert_eq!(delay.process(0.5), 0.5);
+        assert_eq!(delay.process(-1.0), -1.0);
+    }
+
+    #[test]
+    fn one_sample_delay_returns_the_previous_input() {
+        let mut delay = SampleDelay::new(1);
+        assert_eq!(delay.process(3.0), 0.0);
+        assert_eq!(delay.process(4.0), 3.0);
+        assert_eq!(delay.process(5.0), 4.0);
+    }
 }

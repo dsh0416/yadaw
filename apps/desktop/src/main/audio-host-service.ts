@@ -161,7 +161,8 @@ export class AudioHostService {
     private readonly onEditorPreferenceChanged: (
       classId: string,
       preference: PluginEditorPreference
-    ) => Promise<void>
+    ) => Promise<void>,
+    private readonly onEditorClosed: (instanceId: string) => void = () => {}
   ) {
     this.supervisor = new AudioHostProcessSupervisor(
       executablePath,
@@ -172,7 +173,8 @@ export class AudioHostService {
       () => this.client,
       () => (this.stopping ? "stopping" : this.recovery),
       onEditorPreferenceChanged,
-      this.pendingPreferenceWrites
+      this.pendingPreferenceWrites,
+      onEditorClosed
     )
   }
 
@@ -1151,7 +1153,12 @@ export class AudioHostService {
     } catch {
       // Closing the client below also reaps a helper that exited early.
     }
-    drainHostEvents(client, this.onEditorPreferenceChanged, this.pendingPreferenceWrites)
+    drainHostEvents(
+      client,
+      this.onEditorPreferenceChanged,
+      this.pendingPreferenceWrites,
+      this.onEditorClosed
+    )
     if (this.client === client) this.client = null
     client.close()
     await this.gateway.settle()

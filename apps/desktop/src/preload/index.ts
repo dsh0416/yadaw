@@ -129,6 +129,14 @@ const api: YadawDesktopApi = {
   openPluginEditor: (meta, instanceId) =>
     invokeRpc(IPC_CHANNELS.pluginEditorOpen, meta, instanceId),
   closePluginEditor: (meta) => invokeRpc(IPC_CHANNELS.pluginEditorClose, meta),
+  subscribePluginEditorClosed: (listener) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      closedEvent: Parameters<typeof listener>[0]
+    ) => listener(closedEvent)
+    ipcRenderer.on(IPC_CHANNELS.pluginEditorClosedEvent, handler)
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.pluginEditorClosedEvent, handler)
+  },
   getPluginParameters: (meta) => invokeRpc(IPC_CHANNELS.pluginParametersGet, meta),
   setPluginParameter: (meta, request) => invokeRpc(IPC_CHANNELS.pluginParameterSet, meta, request),
   prepareMidiImport: (meta, path) => invokeRpc(IPC_CHANNELS.midiImportPrepare, meta, path),

@@ -5,14 +5,17 @@ import type { PluginEditorPreference } from "@yadaw/contracts"
 export function drainHostEvents(
   client: AudioHostIpcClient,
   onEditorPreferenceChanged: (classId: string, preference: PluginEditorPreference) => Promise<void>,
-  pendingWrites: Set<Promise<void>>
+  pendingWrites: Set<Promise<void>>,
+  onEditorClosed?: (instanceId: string) => void
 ): void {
   const latestPreferences = new Map<string, PluginEditorPreference>()
+  const closedEditors = new Set<string>()
   for (const event of client.drainEvents()) {
     const decoded = decode(event) as {
       type?: string
       revision?: number
       class_id?: string
+      instance_id?: string
       preference?: {
         mode?: string
         zoom_percent?: number
@@ -32,6 +35,12 @@ export function drainHostEvents(
         mode: decoded.preference.mode,
         zoomPercent: decoded.preference.zoom_percent as number
       })
+    } else if (
+      decoded.type === "plugin-editor-closed" &&
+      typeof decoded.instance_id === "string" &&
+      decoded.instance_id.length > 0
+    ) {
+      closedEditors.add(decoded.instance_id)
     }
   }
   for (const [classId, preference] of latestPreferences) {
@@ -39,5 +48,10 @@ export function drainHostEvents(
       pendingWrites.delete(write)
     })
     pendingWrites.add(write)
+  }
+  if (onEditorClosed) {
+    for (const instanceId of closedEditors) {
+      onEditorClosed(instanceId)
+    }
   }
 }

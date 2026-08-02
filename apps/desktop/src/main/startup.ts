@@ -185,6 +185,7 @@ export function startApplication(
             `yadaw-audio-host${executableSuffix}`
           )
       const window = createMainWindow(false)
+      let editorClosedSequence = 0
       const audioHostService = new AudioHostService(
         audioHostPath,
         join(app.getPath("userData"), "audio-host-crash-marker.bin"),
@@ -198,6 +199,19 @@ export function startApplication(
         },
         async (classId, preference) => {
           await settings.setPluginEditorPreference(classId, preference)
+        },
+        (instanceId) => {
+          editorClosedSequence += 1
+          const epoch = audioHostService.helperEpoch() ?? "0"
+          for (const candidate of BrowserWindow.getAllWindows()) {
+            candidate.webContents.send(IPC_CHANNELS.pluginEditorClosedEvent, {
+              protocolVersion: IPC_PROTOCOL_VERSION,
+              sourceEpoch: epoch,
+              sequence: editorClosedSequence,
+              resourceRevision: editorClosedSequence,
+              payload: { instanceId }
+            })
+          }
         }
       )
       audioHostService.start()
