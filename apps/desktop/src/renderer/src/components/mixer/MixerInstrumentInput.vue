@@ -6,6 +6,7 @@ import type { PluginDescriptor, PluginInstanceState, PluginRuntimeStatus } from 
 import { PLUGIN_DRAG_TYPE, readPluginDrag } from "../plugins/plugin-drag"
 import PluginAudioModeMenu from "../plugins/PluginAudioModeMenu.vue"
 import { pluginAudioModeBadge, type PluginSelection } from "../plugins/plugin-audio-mode"
+import { pluginDisplayState } from "../plugins/plugin-display-state"
 import MixerPluginPicker from "./MixerPluginPicker.vue"
 
 const props = defineProps<{
@@ -24,9 +25,7 @@ const { t } = useI18n()
 
 const instrumentState = computed<PluginRuntimeStatus["state"]>(() => {
   if (!props.instrument) return "unloaded"
-  return (
-    props.runtime[props.instrument.id]?.state ?? (props.instrument.enabled ? "active" : "bypassed")
-  )
+  return pluginDisplayState(props.instrument, props.runtime[props.instrument.id])
 })
 
 function allowDrop(event: DragEvent): void {
@@ -65,10 +64,12 @@ function confirmDrop(selection: PluginSelection): void {
       @drop="dropInstrument"
     >
       <button
+        type="button"
         class="instrument-name"
         :title="instrument.descriptor.name"
         :aria-label="t('mixer.instrumentInput.openEditor', { name: instrument.descriptor.name })"
-        @click="emit('open', instrument.id)"
+        @pointerdown.stop
+        @click.stop="emit('open', instrument.id)"
       >
         {{ instrument.descriptor.name }}
       </button>
@@ -78,8 +79,10 @@ function confirmDrop(selection: PluginSelection): void {
         >{{ pluginAudioModeBadge(instrument.audioMode) }}</span
       >
       <button
+        type="button"
         :aria-label="t('mixer.instrumentInput.remove', { name: instrument.descriptor.name })"
-        @click="emit('remove', instrument.id)"
+        @pointerdown.stop
+        @click.stop="emit('remove', instrument.id)"
       >
         <Trash2 :size="10" />
       </button>

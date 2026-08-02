@@ -160,6 +160,23 @@ describe("MixerPluginSection", () => {
       runtime: {
         plugin: {
           instanceId: "plugin",
+          state: "active",
+          editorOpen: true,
+          latencySamples: 0,
+          tailSamples: 0,
+          error: null
+        }
+      }
+    })
+    expect(wrapper.get('[aria-label="Compressor plugin bypassed"]').classes()).toContain("bypassed")
+    expect(wrapper.get('button[aria-label="Enable Compressor"]').attributes("aria-pressed")).toBe(
+      "false"
+    )
+
+    await wrapper.setProps({
+      runtime: {
+        plugin: {
+          instanceId: "plugin",
           state: "failed",
           editorOpen: false,
           latencySamples: 0,
