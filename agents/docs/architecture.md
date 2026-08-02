@@ -42,9 +42,12 @@ probe embed `LSUIElement` before AppKit starts. The helper also uses the
 Accessory activation policy, disables winit's default menu, and does not
 activate itself at launch, so neither native executable creates a second Dock
 application or steals focus from Electron. The helper's plug-in editor windows
-may still become active when the user clicks them. On X11 and Wayland the
-Electron class and winit `WM_CLASS`/application ID use the same value. The
-helper never creates a tray icon.
+may still become active when the user clicks them. Electron's main macOS window
+therefore accepts first-mouse events: clicking a mixer control after using a
+native editor both reactivates YADAW and dispatches that click, instead of
+silently consuming it for AppKit activation. On X11 and Wayland the Electron
+class and winit `WM_CLASS`/application ID use the same value. The helper never
+creates a tray icon.
 
 Electron packaging derives the macOS, Windows, and Linux application icons
 from `apps/desktop/build/icon.svg`. The matching PNG is packaged for runtime
