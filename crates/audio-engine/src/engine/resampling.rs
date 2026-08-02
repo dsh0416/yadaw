@@ -417,6 +417,11 @@ where
                         }),
                 );
 
+                let external_sync_enabled = realtime_midi.external_sync_enabled();
+                if let Some(runtime) = mixer.as_mut() {
+                    runtime.external_sync_enabled = external_sync_enabled;
+                }
+
                 while let Some(command) = commands.try_pop() {
                     if let Some(runtime) = mixer.as_mut() {
                         if let Some(replacement) = runtime.handle_command(command) {
@@ -435,7 +440,8 @@ where
                                 std::mem::forget(retired);
                             }
                         }
-                    } else if let EngineCommand::LoadMixer(runtime) = command {
+                    } else if let EngineCommand::LoadMixer(mut runtime) = command {
+                        runtime.external_sync_enabled = external_sync_enabled;
                         callback_metrics
                             .published_graph_generation
                             .store(runtime.generation, Ordering::Release);

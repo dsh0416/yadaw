@@ -3,6 +3,7 @@ impl NativeMixerRuntime {
         match command {
             EngineCommand::LoadMixer(mut runtime) => {
                 self.all_notes_off();
+                runtime.external_sync_enabled = self.external_sync_enabled;
                 let state = runtime.transport.state.load(Ordering::Relaxed);
                 if state == TRANSPORT_COUNTING_IN {
                     if let Some(count_in) = self.count_in {
@@ -55,7 +56,7 @@ impl NativeMixerRuntime {
                 TransportAction::Play => {
                     self.count_in = None;
                     let mut position = self.transport.position_frames.load(Ordering::Relaxed);
-                    if !crate::midi_input::external_sync_enabled()
+                    if !self.external_sync_enabled
                         && let Some((loop_start, loop_end)) = self.configured_loop_frames()
                         && position >= loop_end
                     {
@@ -73,7 +74,7 @@ impl NativeMixerRuntime {
                         self.transport.position_frames.store(0, Ordering::Relaxed);
                     }
                     self.chase_notes(position);
-                    if crate::midi_input::external_sync_enabled() {
+                    if self.external_sync_enabled {
                         self.transport.clock_source.store(1, Ordering::Relaxed);
                         self.transport.waiting_for.store(1, Ordering::Relaxed);
                         self.transport
@@ -124,7 +125,7 @@ impl NativeMixerRuntime {
                 TransportAction::Record { count_in } => {
                     let position = self.transport.position_frames.load(Ordering::Relaxed);
                     self.count_in = None;
-                    if crate::midi_input::external_sync_enabled() {
+                    if self.external_sync_enabled {
                         self.chase_notes(position);
                         self.transport.clock_source.store(1, Ordering::Relaxed);
                         self.transport.waiting_for.store(2, Ordering::Relaxed);
@@ -171,9 +172,10 @@ impl NativeMixerRuntime {
         }
 
         if let Some(input) = midi_input.as_deref_mut() {
+            self.external_sync_enabled = input.external_sync_enabled();
             self.transport
                 .clock_source
-                .store(u32::from(input.external_sync_enabled()), Ordering::Relaxed);
+                .store(u32::from(self.external_sync_enabled), Ordering::Relaxed);
             self.prepare_live_midi(outputs.len(), input);
         } else {
             self.live_midi_events.clear();

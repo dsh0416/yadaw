@@ -848,6 +848,7 @@ mod tests {
             live_midi_routes: vec![None; 3],
             live_midi_events: Vec::new(),
             live_notes: vec![false; 3 * 16 * 128],
+            external_sync_enabled: false,
             live_sysex_scratch: vec![0; yadaw_dsp_runtime::midi_input::MIDI_MAX_SYSEX_BYTES],
             metronome: MetronomeScheduler::new(None, &TempoMap::default_120_bpm(), sample_rate, 0),
             count_in: None,
@@ -937,6 +938,24 @@ mod tests {
         assert_eq!(
             runtime.transport.position_frames.load(Ordering::Relaxed),
             250
+        );
+    }
+
+    #[test]
+    fn external_sync_mode_is_scoped_to_each_runtime() {
+        let mut external = transport_test_runtime(48_000, 1_000, 250, TRANSPORT_STOPPED);
+        external.external_sync_enabled = true;
+        let _ = external.handle_command(EngineCommand::Transport(TransportAction::Play, 0));
+        assert_eq!(
+            external.transport.state.load(Ordering::Relaxed),
+            TRANSPORT_WAITING
+        );
+
+        let mut internal = transport_test_runtime(48_000, 1_000, 250, TRANSPORT_STOPPED);
+        let _ = internal.handle_command(EngineCommand::Transport(TransportAction::Play, 0));
+        assert_eq!(
+            internal.transport.state.load(Ordering::Relaxed),
+            TRANSPORT_PLAYING
         );
     }
 
