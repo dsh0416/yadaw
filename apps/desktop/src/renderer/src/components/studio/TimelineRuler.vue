@@ -69,6 +69,27 @@ function seekFromPointer(event: PointerEvent): void {
     )
   )
 }
+
+function beginCycleGesture(event: PointerEvent, mode: Parameters<typeof start>[1]): void {
+  if (props.cycleDisabled) return
+  event.stopPropagation()
+  event.preventDefault()
+  start(event, mode)
+}
+
+function continueCycleGesture(event: PointerEvent): void {
+  if (props.cycleDisabled) return
+  event.stopPropagation()
+  event.preventDefault()
+  update(event)
+}
+
+function finishCycleGesture(event: PointerEvent): void {
+  if (props.cycleDisabled) return
+  event.stopPropagation()
+  event.preventDefault()
+  finish(event)
+}
 </script>
 
 <template>
@@ -96,9 +117,9 @@ function seekFromPointer(event: PointerEvent): void {
     <div
       :class="['cycle-lane', { disabled: cycleDisabled }]"
       :aria-label="t('studio.arrangement.cycleLaneAria')"
-      @pointerdown.self.stop.prevent="!cycleDisabled && start($event, 'create')"
-      @pointermove.self.stop.prevent="update"
-      @pointerup.self.stop.prevent="finish"
+      @pointerdown.self="beginCycleGesture($event, 'create')"
+      @pointermove.self="continueCycleGesture"
+      @pointerup.self="finishCycleGesture"
       @pointercancel="cancel"
     >
       <span
@@ -106,25 +127,25 @@ function seekFromPointer(event: PointerEvent): void {
         :class="['cycle-range', { enabled: loopEnabled }]"
         :style="cycleStyle"
         data-testid="cycle-range"
-        @pointerdown.stop.prevent="!cycleDisabled && start($event, 'move')"
-        @pointermove.stop.prevent="update"
-        @pointerup.stop.prevent="finish"
+        @pointerdown="beginCycleGesture($event, 'move')"
+        @pointermove="continueCycleGesture"
+        @pointerup="finishCycleGesture"
         @pointercancel="cancel"
       >
         <i
           class="cycle-edge cycle-edge-start"
           data-testid="cycle-edge-start"
-          @pointerdown.stop.prevent="!cycleDisabled && start($event, 'resize-start')"
-          @pointermove.stop.prevent="update"
-          @pointerup.stop.prevent="finish"
+          @pointerdown="beginCycleGesture($event, 'resize-start')"
+          @pointermove="continueCycleGesture"
+          @pointerup="finishCycleGesture"
           @pointercancel="cancel"
         />
         <i
           class="cycle-edge cycle-edge-end"
           data-testid="cycle-edge-end"
-          @pointerdown.stop.prevent="!cycleDisabled && start($event, 'resize-end')"
-          @pointermove.stop.prevent="update"
-          @pointerup.stop.prevent="finish"
+          @pointerdown="beginCycleGesture($event, 'resize-end')"
+          @pointermove="continueCycleGesture"
+          @pointerup="finishCycleGesture"
           @pointercancel="cancel"
         />
       </span>

@@ -15,6 +15,7 @@ import { useAudioRuntimeStore } from "../stores/audioRuntime"
 import { useAboutStore } from "../stores/about"
 import { useProjectStore } from "../stores/project"
 import { useMixerStore } from "../stores/mixer"
+import { usePianoRollStore } from "../stores/pianoRoll"
 import { useTransportStore } from "../stores/transport"
 import { rpcEvent } from "../test/ipc"
 
@@ -150,7 +151,8 @@ function createHarness() {
         h("div", [
           button("application.preferences", "Preferences"),
           button("project.settings", "Project settings"),
-          button("transport.toggle-loop", "Cycle")
+          button("transport.toggle-loop", "Cycle"),
+          button("edit.split-at-playhead", "Split")
         ])
     }
   })
@@ -251,6 +253,112 @@ describe("useApplicationCommands", () => {
     await flushPromises()
 
     expect(router.currentRoute.value.name).toBe("system-settings")
+  })
+
+  it("splits the selected audio clip at the playhead from the application command", async () => {
+    const { pinia, router, wrapper } = createHarness()
+    const openWorkspace = workspace(session)
+    openWorkspace.graph = {
+      ...openWorkspace.graph,
+      audioClips: [
+        {
+          id: "audio-1",
+          assetId: "asset-1",
+          trackId: "track:audio-1",
+          name: "Take",
+          startFrame: 0,
+          sourceOffsetFrames: 0,
+          sourceLengthFrames: 96_000,
+          fadeInFrames: 0,
+          fadeOutFrames: 0,
+          lengthFrames: 48_000,
+          assetSampleRate: 48_000,
+          assetChannels: 2
+        }
+      ]
+    }
+    useProjectStore(pinia).applyWorkspace(openWorkspace)
+    useMixerStore(pinia).hydrate(openWorkspace.graph)
+    useTransportStore(pinia).selectClip("audio-1")
+    useTransportStore(pinia).snapshot = {
+      state: "stopped",
+      positionFrames: 24_000,
+      sampleRate: 48_000,
+      loopEnabled: false,
+      loopRange: null
+    }
+    const execute = vi.spyOn(useMixerStore(pinia), "execute").mockResolvedValue(true)
+    await router.push({ name: "studio" })
+
+    await wrapper.get("button:nth-of-type(4)").trigger("click")
+    await flushPromises()
+
+    expect(execute).toHaveBeenCalledWith({
+      type: "batch",
+      commands: [
+        {
+          type: "update-audio-clip",
+          clipId: "audio-1",
+          patch: { lengthFrames: 24_000, fadeInFrames: 0, fadeOutFrames: 0 }
+        },
+        {
+          type: "create-audio-clip",
+          clip: expect.objectContaining({
+            startFrame: 24_000,
+            sourceOffsetFrames: 24_000,
+            lengthFrames: 24_000
+          })
+        }
+      ]
+    })
+  })
+
+  it("splits selected MIDI clips at the playhead when no audio clip is selected", async () => {
+    const { pinia, router, wrapper } = createHarness()
+    const openWorkspace = workspace(session)
+    openWorkspace.graph = {
+      ...openWorkspace.graph,
+      midiClips: [
+        {
+          id: "midi-1",
+          sourceId: "source-1",
+          trackId: "track:instrument-1",
+          name: "Verse",
+          startTick: 0,
+          sourceOffsetTicks: 0,
+          lengthTicks: 3_840,
+          sourceLengthTicks: 3_840,
+          notes: [],
+          events: []
+        }
+      ]
+    }
+    useProjectStore(pinia).applyWorkspace(openWorkspace)
+    useMixerStore(pinia).hydrate(openWorkspace.graph)
+    usePianoRollStore(pinia).selectArrangementClip("midi-1")
+    useTransportStore(pinia).snapshot = {
+      state: "stopped",
+      positionFrames: 48_000,
+      sampleRate: 48_000,
+      loopEnabled: false,
+      loopRange: null
+    }
+    const execute = vi.spyOn(useMixerStore(pinia), "execute").mockResolvedValue(true)
+    await router.push({ name: "studio" })
+
+    await wrapper.get("button:nth-of-type(4)").trigger("click")
+    await flushPromises()
+
+    expect(execute).toHaveBeenCalledWith({
+      type: "batch",
+      commands: expect.arrayContaining([
+        {
+          type: "update-midi-clip-range",
+          clipId: "midi-1",
+          patch: { lengthTicks: 1_920 }
+        }
+      ])
+    })
   })
 
   it("creates a one-bar range when Cycle is invoked without an existing range", async () => {

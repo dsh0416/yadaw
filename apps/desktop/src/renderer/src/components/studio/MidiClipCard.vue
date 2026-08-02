@@ -61,6 +61,7 @@ const menuEntries = computed<readonly UiMenuEntry[]>(() => [
 const { active, preview, start, update, finish, cancel } = useMidiClipTrim({
   clip: () => props.clip,
   pixelsPerQuarter: () => props.pixelsPerQuarter,
+  ticksPerQuarter: () => props.tempoMap.ticksPerQuarter,
   snap: () => props.snap,
   commit: (edge, tick) => emit("trim", props.clip.id, edge, tick)
 })

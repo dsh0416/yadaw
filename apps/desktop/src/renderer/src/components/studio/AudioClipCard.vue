@@ -199,6 +199,12 @@ const fadeInStyle = computed(() => ({
 const fadeOutStyle = computed(() => ({
   width: `${(displayedClip.value.fadeOutFrames / displayedClip.value.lengthFrames) * 100}%`
 }))
+const fadeInMaxFrames = computed(() =>
+  Math.max(0, displayedClip.value.lengthFrames - displayedClip.value.fadeOutFrames)
+)
+const fadeOutMaxFrames = computed(() =>
+  Math.max(0, displayedClip.value.lengthFrames - displayedClip.value.fadeInFrames)
+)
 const fadeInCurvePath = createEqualPowerFadeCurvePath("in")
 const fadeOutCurvePath = createEqualPowerFadeCurvePath("out")
 const fadeInShadePath = createEqualPowerFadeShadePath("in")
@@ -292,6 +298,8 @@ function handleKeydown(event: KeyboardEvent): void {
         :style="fadeInStyle"
         :aria-label="t('studio.arrangement.fadeIn', { name: clip.name })"
         role="slider"
+        aria-valuemin="0"
+        :aria-valuemax="fadeInMaxFrames"
         :aria-valuenow="displayedClip.fadeInFrames"
         @pointerdown.stop.prevent="startFade($event, 'in')"
         @pointermove.stop.prevent="update"
@@ -304,6 +312,8 @@ function handleKeydown(event: KeyboardEvent): void {
         :style="fadeOutStyle"
         :aria-label="t('studio.arrangement.fadeOut', { name: clip.name })"
         role="slider"
+        aria-valuemin="0"
+        :aria-valuemax="fadeOutMaxFrames"
         :aria-valuenow="displayedClip.fadeOutFrames"
         @pointerdown.stop.prevent="startFade($event, 'out')"
         @pointermove.stop.prevent="update"

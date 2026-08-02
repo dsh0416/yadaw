@@ -36,12 +36,45 @@ describe("TimelineRuler cycle lane", () => {
         contentWidth: 2_000,
         pixelsPerQuarter: 480,
         tempoMap,
-        cycleDisabled: true
-      }
+        cycleDisabled: true,
+        loopRange: { startTick: 960, endTick: 2_880 }
+      },
+      attachTo: document.body
     })
 
     await wrapper.get(".cycle-lane").trigger("pointerdown", { pointerId: 1, clientX: 480 })
+    await wrapper.get('[data-testid="cycle-range"]').trigger("pointerdown", {
+      pointerId: 2,
+      clientX: 720
+    })
 
     expect(wrapper.emitted("updateLoopRange")).toBeUndefined()
+    expect(wrapper.emitted("seek")).toEqual([[0.5], [0.75]])
+  })
+
+  it("resizes an existing cycle range from its edges", async () => {
+    const wrapper = mount(TimelineRuler, {
+      props: {
+        contentWidth: 2_000,
+        pixelsPerQuarter: 480,
+        tempoMap,
+        loopEnabled: true,
+        loopRange: { startTick: 960, endTick: 2_880 }
+      },
+      attachTo: document.body
+    })
+
+    await wrapper
+      .get('[data-testid="cycle-edge-end"]')
+      .trigger("pointerdown", { pointerId: 3, clientX: 1_440 })
+    await wrapper
+      .get('[data-testid="cycle-edge-end"]')
+      .trigger("pointermove", { pointerId: 3, clientX: 1_920 })
+    await wrapper
+      .get('[data-testid="cycle-edge-end"]')
+      .trigger("pointerup", { pointerId: 3, clientX: 1_920 })
+
+    expect(wrapper.emitted("updateLoopRange")).toEqual([[{ startTick: 960, endTick: 3_840 }]])
+    expect(wrapper.emitted("seek")).toBeUndefined()
   })
 })

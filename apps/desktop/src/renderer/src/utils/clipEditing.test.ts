@@ -113,6 +113,15 @@ describe("arrangement audio clip editing", () => {
       clipId: "audio-1",
       patch: { fadeInFrames: 680 }
     })
+    expect(planAudioClipFade(audioClip(), "out", 120)).toBeNull()
+    expect(planAudioClipFade(audioClip(), "out", 0)).toEqual({
+      type: "update-audio-clip",
+      clipId: "audio-1",
+      patch: { fadeOutFrames: 0 }
+    })
+    expect(planAudioClipSplit(audioClip(), 1_000)).toBeNull()
+    expect(planAudioClipSplit(audioClip(), 1_800)).toBeNull()
+    expect(planAudioClipTrim(audioClip(), "start", 1_000)).toBeNull()
     expect(projectFrameToAssetFrame(240, 48_000, 96_000)).toBe(480)
     expect(projectFrameToAssetFrame(241, 48_000, 44_100, "ceil")).toBe(222)
   })
@@ -171,5 +180,7 @@ describe("arrangement MIDI clip editing", () => {
         }
       ]
     })
+    expect(planMidiClipSplits([clip()], 1_000)).toBeNull()
+    expect(planMidiClipTrim(clip(), "start", 1_000)).toBeNull()
   })
 })
