@@ -1,4 +1,4 @@
-import { BrowserWindow, shell } from "electron"
+import { BrowserWindow, shell, type BrowserWindowConstructorOptions } from "electron"
 import { join } from "node:path"
 import { deferProjectClose } from "./dirty-project-close"
 import type { ProjectService } from "./project-service"
@@ -12,6 +12,32 @@ export function setWindowProjectService(service: ProjectService): void {
 
 export let mainWindow: BrowserWindow | null = null
 export let splashWindow: BrowserWindow | null = null
+
+export function mainWindowPlatformOptions(
+  platform: NodeJS.Platform
+): BrowserWindowConstructorOptions {
+  if (platform === "darwin") {
+    return {
+      titleBarStyle: "hiddenInset",
+      trafficLightPosition: { x: 12, y: 11 },
+      // Native VST3 editors live in the accessory audio-host process. Once one
+      // becomes active, the next mixer click must both reactivate Electron and
+      // reach its control instead of being consumed by AppKit activation.
+      acceptFirstMouse: true
+    }
+  }
+  if (platform === "linux") {
+    return {
+      titleBarStyle: "hidden",
+      titleBarOverlay: {
+        color: "#151515",
+        symbolColor: "#e8e8e8",
+        height: 38
+      }
+    }
+  }
+  return { titleBarStyle: "hidden" }
+}
 
 export function openExternalUrl(url: string): boolean {
   try {
@@ -84,8 +110,6 @@ export function createMainWindow(loadContent = true): BrowserWindow {
     return mainWindow
   }
 
-  const isMacOS = process.platform === "darwin"
-  const usesWindowControlsOverlay = process.platform === "linux"
   const window = new BrowserWindow({
     icon: applicationIconPath,
     show: loadContent,
@@ -94,18 +118,7 @@ export function createMainWindow(loadContent = true): BrowserWindow {
     minWidth: 960,
     minHeight: 640,
     backgroundColor: "#0b0e13",
-    titleBarStyle: isMacOS ? "hiddenInset" : "hidden",
-    ...(isMacOS
-      ? { trafficLightPosition: { x: 12, y: 11 } }
-      : usesWindowControlsOverlay
-        ? {
-            titleBarOverlay: {
-              color: "#151515",
-              symbolColor: "#e8e8e8",
-              height: 38
-            }
-          }
-        : {}),
+    ...mainWindowPlatformOptions(process.platform),
     webPreferences: {
       preload: join(import.meta.dirname, "../preload/index.cjs"),
       contextIsolation: true,

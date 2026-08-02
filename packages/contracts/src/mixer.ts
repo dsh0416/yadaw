@@ -242,6 +242,12 @@ export type MixerParameterPreview =
       parameter: "levelDb"
       value: number
     }
+  | {
+      target: "plugin"
+      id: string
+      parameter: "enabled"
+      value: number
+    }
 
 export interface MixerChannelMeter {
   channelId: string

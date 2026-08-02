@@ -4,6 +4,7 @@ import { GripVertical, Power, SquareArrowOutUpRight, Trash2 } from "@lucide/vue"
 import type { PluginInstanceState, PluginRuntimeStatus } from "@yadaw/contracts"
 import { pluginAudioModeBadge } from "./plugin-audio-mode"
 import { writePluginDrag } from "./plugin-drag"
+import { pluginDisplayState } from "./plugin-display-state"
 
 defineProps<{
   plugin: PluginInstanceState
@@ -32,7 +33,7 @@ const { t } = useI18n()
     >
       <GripVertical :size="11" aria-hidden="true" />
     </span>
-    <i :class="runtime?.state ?? (plugin.enabled ? 'active' : 'bypassed')" />
+    <i :class="pluginDisplayState(plugin, runtime)" />
     <div>
       <strong>{{ plugin.descriptor.name }}</strong
       ><small>{{ plugin.descriptor.vendor }}</small>
@@ -48,6 +49,8 @@ const { t } = useI18n()
       >
     </span>
     <button
+      type="button"
+      :aria-pressed="plugin.enabled"
       :aria-label="
         t('plugins.pluginSlot.toggle', {
           action: plugin.enabled ? t('plugins.pluginSlot.bypass') : t('plugins.pluginSlot.enable'),

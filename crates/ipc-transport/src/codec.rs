@@ -1,7 +1,7 @@
 use super::*;
 
-/// Outer value serialized by `ipc-channel`; shared-memory handles are carried
-/// out of band by Servo's transport.
+/// Outer value serialized by `ipc-channel`; process-shared regions are named by
+/// opaque YADAW descriptors rather than ipc-channel memory attachments.
 #[derive(Serialize, Deserialize)]
 pub struct WirePacket {
     pub body: Vec<u8>,
@@ -14,7 +14,7 @@ pub struct RegionOffer {
     pub region_id: u32,
     pub region_generation: u64,
     pub capacity: u64,
-    pub memory: IpcSharedMemory,
+    pub descriptor: SharedMemoryDescriptor,
 }
 
 /// Channels and persistent pages transferred during the one-shot rendezvous.
@@ -25,9 +25,49 @@ pub struct HostBootstrap {
     pub priority_requests: IpcReceiver<WirePacket>,
     pub priority_responses: IpcSender<WirePacket>,
     pub events: IpcSender<WirePacket>,
-    pub telemetry_page: IpcSharedMemory,
-    pub parameter_ring: IpcSharedMemory,
+    pub telemetry_page: SharedMemoryDescriptor,
+    pub parameter_ring: SharedMemoryDescriptor,
+    pub mapping_commands: IpcReceiver<MappingCommand>,
+    pub mapping_events: IpcSender<MappingEvent>,
     pub session_epoch: u64,
+}
+
+/// Fail-closed activation command sent by the mapping creator.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MappingCommand {
+    Activate {
+        telemetry_generation: u64,
+        parameter_generation: u64,
+    },
+    Abort,
+}
+
+/// Mapping lifecycle result sent by the helper before product-level Ready.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MappingEvent {
+    Mapped {
+        telemetry_generation: u64,
+        parameter_generation: u64,
+    },
+    Active {
+        telemetry_generation: u64,
+        parameter_generation: u64,
+    },
+    Aborted {
+        failure: MappingFailure,
+    },
+}
+
+/// Stable cross-process reason for selecting the bounded control fallback.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MappingFailure {
+    Descriptor,
+    Open,
+    Layout,
+    Generation,
+    Challenge,
+    Timeout,
+    ControlChannel,
 }
 
 pub(crate) struct AttachmentBuilder<'a> {
@@ -54,8 +94,8 @@ impl<'a> AttachmentBuilder<'a> {
         let (reference, offer) = self.arena.allocate(bytes)?;
         self.lease_ids.push(reference.lease_id);
         if let Some(offer) = offer {
-            // One offer per region per packet; later allocations in the same
-            // region replace the earlier handle so the snapshot includes them.
+            // One offer per newly created region is sufficient even when a
+            // packet places multiple allocations in that region.
             if let Some(existing) = self
                 .offers
                 .iter_mut()
@@ -78,7 +118,7 @@ impl<'a> AttachmentBuilder<'a> {
 impl Drop for AttachmentBuilder<'_> {
     fn drop(&mut self) {
         if !self.committed {
-            self.arena.release(&self.lease_ids);
+            self.arena.abort(&self.lease_ids);
         }
     }
 }

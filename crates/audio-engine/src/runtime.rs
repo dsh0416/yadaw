@@ -92,6 +92,7 @@ type InputFrame = [f32; MAX_INPUT_CHANNELS];
 /// not `Clone`; real-time callbacks only retain the narrow atomic/ring-buffer
 /// endpoints constructed while a stream is running.
 pub struct AudioEngine {
+    runtime_transition: Mutex<()>,
     running: Mutex<Option<RunningAudioEngine>>,
     pending_mixer: Mutex<Option<Box<NativeMixerRuntime>>>,
     last_native_graph: Mutex<Option<NativeMixerGraph>>,
@@ -103,6 +104,7 @@ impl AudioEngine {
     #[must_use]
     pub fn new() -> Self {
         Self {
+            runtime_transition: Mutex::new(()),
             running: Mutex::new(None),
             pending_mixer: Mutex::new(None),
             last_native_graph: Mutex::new(None),

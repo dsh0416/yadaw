@@ -76,11 +76,23 @@ impl EditorWindow {
         self.window.request_redraw();
     }
 
-    pub fn focus(&self) {
+    pub fn present(&self) {
+        // New winit windows can exist before AppKit has made them visible. On
+        // macOS, focus_window intentionally does nothing for an invisible
+        // window, which made the first user request look lost. Establish the
+        // visibility/order first, then activate and focus the native child.
+        self.window.set_minimized(false);
+        self.window.set_visible(true);
         self.window.focus_window();
         if let Some(native) = &self.native {
             native.container.borrow().focus();
         }
+    }
+
+    pub fn dispatch_native_run_loop(&mut self, now: Instant) -> Option<Instant> {
+        self.native
+            .as_mut()
+            .and_then(|native| native.frame.dispatch_run_loop(now))
     }
 
     pub fn close(&mut self) {

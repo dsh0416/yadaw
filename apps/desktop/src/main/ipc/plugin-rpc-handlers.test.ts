@@ -160,7 +160,7 @@ describe("registerPluginRpcHandlers", () => {
     expect(result).toMatchObject({ ok: false, error: { code: "resource-unavailable" } })
   })
 
-  it("opens a plugin editor for a graph-resident instance", async () => {
+  it("opens a graph-resident plugin after an unrelated graph revision advanced", async () => {
     const context = createContext()
     const status: PluginRuntimeStatus = {
       instanceId: "plugin-1",
@@ -181,7 +181,7 @@ describe("registerPluginRpcHandlers", () => {
     const result = await invoke(
       electronMocks,
       IPC_CHANNELS.pluginEditorOpen,
-      mutationMeta(workspace.projectGraph, { expectedRevision: workspace.revision }),
+      mutationMeta(workspace.projectGraph, { expectedRevision: workspace.revision - 1 }),
       "plugin-1"
     )
 
@@ -189,6 +189,7 @@ describe("registerPluginRpcHandlers", () => {
       ok: true,
       value: { status, resource: expect.objectContaining({ instance: plugin }) }
     })
+    expect(context.plugins.openEditor).toHaveBeenCalledWith("plugin-1")
   })
 
   it("rejects editor open for an unknown plugin id", async () => {

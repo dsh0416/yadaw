@@ -24,8 +24,8 @@ function sameRef(left: ResourceRef | undefined | null, right: ResourceRef | unde
 
 function error(
   meta: RpcRequestMeta,
-  kind: "validation" | "stale" | "conflict" | "busy" | "unavailable",
-  value?: number | string
+  kind: "validation" | "stale" | "busy" | "unavailable",
+  value?: string
 ): RpcError {
   const common = {
     correlationId: randomUUID(),
@@ -50,21 +50,6 @@ function error(
       retry: "after-reconcile",
       userMessageKey: "errors.staleResource",
       details: { type: "stale-resource", reason: "generation-mismatch" },
-      ...common
-    }
-  }
-  if (kind === "conflict") {
-    return {
-      code: "revision-conflict",
-      category: "conflict",
-      outcome: "not-committed",
-      retry: "after-reconcile",
-      userMessageKey: "errors.revisionConflict",
-      details: {
-        type: "revision-conflict",
-        expectedRevision: meta.expectedRevision ?? -1,
-        actualRevision: typeof value === "number" ? value : -1
-      },
       ...common
     }
   }
@@ -198,9 +183,10 @@ export function registerPluginRpcHandlers(context: IpcHandlerContext): void {
     if (!workspace || !sameRef(meta.target, workspace.projectGraph)) {
       return rpcFailure(meta, error(meta, "stale"))
     }
-    if (meta.expectedRevision !== workspace.revision) {
-      return rpcFailure(meta, error(meta, "conflict", workspace.revision))
-    }
+    // The editor mutates native window state, not the project graph. A graph
+    // revision may advance between the click and this handler (for example,
+    // while persisting bypass), but pluginInstanceSnapshot below validates the
+    // requested instance against the current graph before opening anything.
     const guarded = beginMutation(context, meta, workspace.projectGraph)
     if (guarded) return guarded
     let resource = null

@@ -39,6 +39,7 @@ enum RealtimeParameter {
     ChannelGain,
     ChannelPan,
     SendLevel,
+    PluginEnabled,
 }
 
 #[derive(Clone, Copy)]
@@ -55,6 +56,7 @@ impl RealtimeParameterCommand {
             ("channel", "gainDb") => RealtimeParameter::ChannelGain,
             ("channel", "pan") => RealtimeParameter::ChannelPan,
             ("send", "levelDb") => RealtimeParameter::SendLevel,
+            ("plugin", "enabled") => RealtimeParameter::PluginEnabled,
             _ => return Err(invalid_config("unknown mixer preview parameter")),
         };
         let bytes = preview.id.as_bytes();

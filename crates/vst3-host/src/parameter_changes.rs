@@ -98,6 +98,24 @@ impl ParameterChanges {
             value,
         })
     }
+
+    pub(crate) fn for_each_last(&self, mut visit: impl FnMut(ParamID, ParamValue)) {
+        for queue in &self.queues[..self.len] {
+            let Some(point) = queue
+                .len
+                .checked_sub(1)
+                .and_then(|index| queue.points.get(index))
+            else {
+                continue;
+            };
+            let point = unsafe {
+                // SAFETY: a queue's entries below len are initialized before addPoint publishes
+                // the incremented length, and this storage cannot be mutated after process returns.
+                point.assume_init_ref()
+            };
+            visit(queue.id, point.value);
+        }
+    }
 }
 
 unsafe extern "system" fn changes_query_interface(
@@ -329,5 +347,17 @@ mod tests {
             assert!(changes.add_value(id, 0, 1.0));
         }
         assert!(!changes.add_value(QUEUE_CAPACITY as u32, 0, 1.0));
+    }
+
+    #[test]
+    fn last_values_select_the_terminal_point_from_each_queue() {
+        let mut changes = ParameterChanges::new();
+        assert!(changes.add_value(7, 0, 0.25));
+        assert!(changes.add_value(7, 15, 0.75));
+        assert!(changes.add_value(9, 3, 0.5));
+
+        let mut values = Vec::new();
+        changes.for_each_last(|id, value| values.push((id, value)));
+        assert_eq!(values, [(7, 0.75), (9, 0.5)]);
     }
 }

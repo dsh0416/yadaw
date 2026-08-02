@@ -18,12 +18,13 @@ export const MIXER_BUSES: readonly MixerBusState[] = Array.from(
 
 export function patchMixerGraph(
   graph: ProjectGraphSnapshot,
-  target: "channel" | "send",
+  target: "channel" | "send" | "plugin",
   id: string,
   patch: Record<string, unknown>
 ): ProjectGraphSnapshot {
   const next = structuredClone(graph)
-  const values = target === "channel" ? next.channels : next.sends
+  const values =
+    target === "channel" ? next.channels : target === "send" ? next.sends : next.plugins
   const value = values.find((candidate) => candidate.id === id)
   if (value) Object.assign(value, patch)
   return next

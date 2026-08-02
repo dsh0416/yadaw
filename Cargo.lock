@@ -6001,6 +6001,7 @@ dependencies = [
  "serde",
  "thiserror 2.0.19",
  "yadaw-dsp-runtime",
+ "yadaw-shared-memory",
  "zerocopy",
 ]
 
@@ -6024,6 +6025,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "yadaw-shared-memory"
+version = "0.2.2"
+dependencies = [
+ "getrandom",
+ "libc",
+ "serde",
+ "thiserror 2.0.19",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "yadaw-sine"
 version = "0.2.2"
 dependencies = [
@@ -6040,6 +6052,7 @@ name = "yadaw-vst3-host"
 version = "0.2.2"
 dependencies = [
  "cc",
+ "libc",
  "libloading 0.8.9",
  "ringbuf",
  "serde",

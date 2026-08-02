@@ -134,6 +134,9 @@ fn run_ipc() -> Result<(), Box<dyn std::error::Error>> {
         editor_owner_window,
         editors: HashMap::new(),
         editor_instances: HashMap::new(),
+        next_editor_tick: None,
+        next_retirement_tick: None,
+        output_parameter_error_reported: false,
     };
     event_loop.run_app(&mut application)?;
     protocol_thread

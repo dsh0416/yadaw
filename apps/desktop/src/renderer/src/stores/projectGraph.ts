@@ -127,7 +127,7 @@ export const useProjectGraphStore = defineStore("project-graph", () => {
 
   function preview(value: MixerParameterPreview): void {
     graph.value = patchMixerGraph(graph.value, value.target, value.id, {
-      [value.parameter]: value.value
+      [value.parameter]: value.target === "plugin" ? value.value >= 0.5 : value.value
     })
     pendingPreviews.set(`${value.target}:${value.id}:${value.parameter}`, value)
     previewFlush ??= Promise.resolve().then(flushPreviews)

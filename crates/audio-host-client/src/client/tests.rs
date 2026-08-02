@@ -1,7 +1,6 @@
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ipc_channel::ipc::IpcSharedMemory;
     use std::sync::mpsc;
     use yadaw_dsp_runtime::protocol::{
         AudioEngineConfig, BinaryPayload, GraphTransactionRequest, GraphUpdate,
@@ -87,6 +86,81 @@ mod tests {
             assert_eq!(error.status, Status::InvalidArg);
             assert!(error.reason.contains("invalid parameter gesture"));
         }
+    }
+
+    #[test]
+    fn shared_page_negotiation_activates_only_after_two_way_verification() {
+        let telemetry_page = create_telemetry_page(64, 33, 1).expect("telemetry page");
+        let parameter_page = create_parameter_ring(33, 1).expect("parameter page");
+        let telemetry = TelemetryReader::map(telemetry_page).expect("telemetry reader");
+        let parameters = ParameterProducer::map(parameter_page).expect("parameter producer");
+        let peer_telemetry = yadaw_ipc_transport::TelemetryWriter::open_and_acknowledge(
+            telemetry.descriptor(),
+        )
+        .expect("peer telemetry writer");
+        let peer_parameters = yadaw_ipc_transport::ParameterConsumer::open_and_acknowledge(
+            parameters.descriptor(),
+        )
+        .expect("peer parameter consumer");
+        let (commands, command_receiver) = ipc::channel().expect("mapping command channel");
+        let (event_sender, events) = ipc::channel().expect("mapping event channel");
+        let peer = thread::spawn(move || {
+            event_sender
+                .send(MappingEvent::Mapped {
+                    telemetry_generation: 1,
+                    parameter_generation: 1,
+                })
+                .expect("send Mapped");
+            assert_eq!(
+                command_receiver.recv().expect("receive Activate"),
+                MappingCommand::Activate {
+                    telemetry_generation: 1,
+                    parameter_generation: 1,
+                }
+            );
+            event_sender
+                .send(MappingEvent::Active {
+                    telemetry_generation: 1,
+                    parameter_generation: 1,
+                })
+                .expect("send Active");
+            (peer_telemetry, peer_parameters)
+        });
+
+        assert!(negotiate_shared_pages(
+            &commands,
+            &events,
+            &telemetry,
+            &parameters,
+        ));
+        let _peer_mappings = peer.join().expect("peer thread");
+    }
+
+    #[test]
+    fn shared_page_negotiation_aborts_an_unverified_generation() {
+        let telemetry_page = create_telemetry_page(64, 34, 1).expect("telemetry page");
+        let parameter_page = create_parameter_ring(34, 1).expect("parameter page");
+        let telemetry = TelemetryReader::map(telemetry_page).expect("telemetry reader");
+        let parameters = ParameterProducer::map(parameter_page).expect("parameter producer");
+        let (commands, command_receiver) = ipc::channel().expect("mapping command channel");
+        let (event_sender, events) = ipc::channel().expect("mapping event channel");
+        event_sender
+            .send(MappingEvent::Mapped {
+                telemetry_generation: 2,
+                parameter_generation: 1,
+            })
+            .expect("send invalid Mapped");
+
+        assert!(!negotiate_shared_pages(
+            &commands,
+            &events,
+            &telemetry,
+            &parameters,
+        ));
+        assert_eq!(
+            command_receiver.recv().expect("receive Abort"),
+            MappingCommand::Abort
+        );
     }
 
     #[test]
@@ -347,6 +421,16 @@ mod tests {
     #[test]
     fn transport_traffic_separates_inline_and_shared_packets() {
         let traffic = TransportTraffic::default();
+        let first_region = yadaw_ipc_transport::SharedMemory::create(
+            std::num::NonZeroUsize::new(17).expect("non-zero region"),
+            1,
+        )
+        .expect("first region");
+        let second_region = yadaw_ipc_transport::SharedMemory::create(
+            std::num::NonZeroUsize::new(8).expect("non-zero region"),
+            1,
+        )
+        .expect("second region");
         record_packet(
             &WirePacket {
                 body: vec![1, 2, 3],
@@ -363,14 +447,14 @@ mod tests {
                         region_id: 1,
                         region_generation: 1,
                         capacity: 17,
-                        memory: IpcSharedMemory::from_bytes(&[0; 17]),
+                        descriptor: first_region.descriptor(),
                     },
                     RegionOffer {
                         session_epoch: 1,
                         region_id: 2,
                         region_generation: 1,
                         capacity: 8,
-                        memory: IpcSharedMemory::from_bytes(&[0; 8]),
+                        descriptor: second_region.descriptor(),
                     },
                 ],
             },

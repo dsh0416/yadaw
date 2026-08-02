@@ -9,7 +9,7 @@ vi.mock("electron", () => ({
   shell: { openExternal: electron.openExternal }
 }))
 
-import { openExternalUrl } from "./windows"
+import { mainWindowPlatformOptions, openExternalUrl } from "./windows"
 
 describe("openExternalUrl", () => {
   beforeEach(() => electron.openExternal.mockClear())
@@ -22,5 +22,20 @@ describe("openExternalUrl", () => {
 
     expect(electron.openExternal).toHaveBeenCalledOnce()
     expect(electron.openExternal).toHaveBeenCalledWith("https://yadaw.minori.live/manual/")
+  })
+})
+
+describe("mainWindowPlatformOptions", () => {
+  it("dispatches the first mixer click after a macOS native plug-in editor was active", () => {
+    expect(mainWindowPlatformOptions("darwin")).toMatchObject({
+      titleBarStyle: "hiddenInset",
+      acceptFirstMouse: true,
+      trafficLightPosition: { x: 12, y: 11 }
+    })
+  })
+
+  it("does not opt other platforms into macOS first-mouse behavior", () => {
+    expect(mainWindowPlatformOptions("win32")).not.toHaveProperty("acceptFirstMouse")
+    expect(mainWindowPlatformOptions("linux")).not.toHaveProperty("acceptFirstMouse")
   })
 })

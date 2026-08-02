@@ -17,6 +17,9 @@ struct WinitHost {
     editor_owner_window: Option<usize>,
     editors: HashMap<WindowId, EditorWindow>,
     editor_instances: HashMap<String, WindowId>,
+    next_editor_tick: Option<Instant>,
+    next_retirement_tick: Option<Instant>,
+    output_parameter_error_reported: bool,
 }
 
 impl WinitHost {
@@ -25,6 +28,8 @@ impl WinitHost {
     // cannot indefinitely delay the next platform-message dispatch.
     const UI_BATCH: usize = 4;
     const UI_BUDGET: std::time::Duration = std::time::Duration::from_millis(2);
+    const EDITOR_TICK: Duration = Duration::from_millis(16);
+    const RETIREMENT_TICK: Duration = Duration::from_millis(16);
 
     fn open_editor(
         &mut self,
@@ -40,7 +45,7 @@ impl WinitHost {
         if let Some(window_id) = self.editor_instances.get(&instance_id).copied()
             && let Some(editor) = self.editors.get(&window_id)
         {
-            editor.focus();
+            editor.present();
             return ControlResult::PluginEditor {
                 active_mode: editor.active_mode(),
                 open: true,
@@ -60,10 +65,7 @@ impl WinitHost {
             .display_name(&instance_id)
             .unwrap_or("VST3 plug-in")
             .to_owned();
-        let attributes = WindowAttributes::default()
-            .with_title(format!("{display_name} — YADAW"))
-            .with_inner_size(LogicalSize::new(720.0, 640.0));
-        let attributes = configure_editor_window_attributes(attributes, self.editor_owner_window);
+        let attributes = plugin_editor_window_attributes(&display_name, self.editor_owner_window);
         let window = match event_loop.create_window(attributes) {
             Ok(window) => Arc::new(window),
             Err(error) => {
@@ -104,6 +106,9 @@ impl WinitHost {
         let active_mode = editor.active_mode();
         self.editor_instances.insert(instance_id, window_id);
         self.editors.insert(window_id, editor);
+        if let Some(editor) = self.editors.get(&window_id) {
+            editor.present();
+        }
         ControlResult::PluginEditor {
             active_mode,
             open: true,
@@ -160,11 +165,11 @@ impl WinitHost {
                     });
                     return;
                 };
-                // Benchmark (and other non-graph) instances are dropped immediately. Instances that
-                // still appear in the last native mixer graph are retained until helper shutdown so
-                // retiring mixer generations cannot use a freed ProcessorLease.
-                let retain_for_graph = self.audio_engine.native_graph_references_plugin(&instance_id);
-                let _ = reply.send(runtime.unload_plugin(&instance_id, retain_for_graph));
+                let result = runtime.unload_plugin(&instance_id);
+                if runtime.has_retired_instances() {
+                    self.next_retirement_tick = Some(Instant::now());
+                }
+                let _ = reply.send(result);
                 return;
             }
             ActorCommand::SyncAraGraph { graph } => {
@@ -227,7 +232,7 @@ impl WinitHost {
                     && let Some(instance_id) = loaded_id.as_ref()
                     && let Err(message) = runtime.sync_ara_graph(self.ara_graph.as_ref())
                 {
-                    let _ = runtime.unload_plugin(instance_id, false);
+                    let _ = runtime.unload_plugin(instance_id);
                     result = control_error! { message };
                 }
                 if matches!(result, ControlResult::PluginLoaded { .. })
@@ -298,6 +303,57 @@ impl ApplicationHandler<UiEvent> for WinitHost {
                 event_loop.exit();
             }
         }
+    }
+
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        let now = Instant::now();
+        let retirement_due = self
+            .next_retirement_tick
+            .is_some_and(|deadline| now >= deadline);
+        if retirement_due {
+            if let Err(error) = self.audio_engine.reclaim_retired_graphs() {
+                eprintln!("audio-host: could not reclaim retired audio graph: {error}");
+            }
+            if let Some(runtime) = self.vst3.as_mut() {
+                runtime.reclaim_retired_instances();
+                self.next_retirement_tick = runtime
+                    .has_retired_instances()
+                    .then_some(now + Self::RETIREMENT_TICK);
+            } else {
+                self.next_retirement_tick = None;
+            }
+        }
+
+        if self.editors.is_empty() {
+            self.next_editor_tick = None;
+        } else if self.next_editor_tick.is_none_or(|deadline| now >= deadline) {
+            if let Some(runtime) = self.vst3.as_mut()
+                && let Err(error) = runtime.flush_output_parameters()
+                && !self.output_parameter_error_reported
+            {
+                eprintln!("audio-host: could not apply VST3 output parameter: {error}");
+                self.output_parameter_error_reported = true;
+            }
+            self.next_editor_tick = Some(now + Self::EDITOR_TICK);
+        }
+
+        let next_plugin_timer = (!self.editors.is_empty())
+            .then(|| {
+                self.editors
+                    .values_mut()
+                    .filter_map(|editor| editor.dispatch_native_run_loop(now))
+                    .min()
+            })
+            .flatten();
+        let deadline = self
+            .next_editor_tick
+            .into_iter()
+            .chain(self.next_retirement_tick)
+            .chain(next_plugin_timer)
+            .min();
+        event_loop.set_control_flow(
+            deadline.map_or(ControlFlow::Wait, ControlFlow::WaitUntil),
+        );
     }
 
     fn window_event(
@@ -372,6 +428,19 @@ impl ApplicationHandler<UiEvent> for WinitHost {
             self.close_editor(&instance_id);
         }
     }
+}
+
+fn plugin_editor_window_attributes(
+    display_name: &str,
+    editor_owner_window: Option<usize>,
+) -> WindowAttributes {
+    let attributes = WindowAttributes::default()
+        .with_title(format!("{display_name} — YADAW"))
+        .with_inner_size(LogicalSize::new(720.0, 640.0))
+        // Do not expose a half-initialized surface. `present` makes the fully
+        // attached editor visible and activates it in one sequence.
+        .with_visible(false);
+    configure_editor_window_attributes(attributes, editor_owner_window)
 }
 
 fn configure_editor_window_attributes(

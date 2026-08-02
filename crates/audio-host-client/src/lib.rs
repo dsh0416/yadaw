@@ -36,9 +36,10 @@ use yadaw_dsp_runtime::protocol::{
 };
 use yadaw_ipc_transport::{
     ArenaReceiver, HostBootstrap, LeaseRegistry, MAX_OUTSTANDING_LEASE_BYTES,
-    MAX_OUTSTANDING_LEASES, ParameterEnqueue, ParameterProducer, TelemetryReader,
-    TelemetrySnapshot, WirePacket, create_parameter_ring, create_telemetry_page, decode_body,
-    decode_response_to_attachments, encode_body, encode_priority, encode_request_with_attachments,
+    MAX_OUTSTANDING_LEASES, MappingCommand, MappingEvent, ParameterEnqueue, ParameterProducer,
+    SharedMemoryDescriptor, TelemetryReader, TelemetrySnapshot, WirePacket, create_parameter_ring,
+    create_telemetry_page, decode_body, decode_response_to_attachments, encode_body,
+    encode_priority, encode_request_with_attachments,
 };
 
 const OUTBOUND_CAPACITY: usize = 256;

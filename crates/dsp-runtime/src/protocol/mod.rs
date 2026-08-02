@@ -40,6 +40,14 @@ pub enum HostEvent {
     TelemetryPageOffer {
         epoch: u64,
         capacity: u32,
+        descriptor_version: u32,
+        object_id: [u8; 16],
+        byte_len: u64,
+        generation: u64,
+    },
+    TelemetryPageActive {
+        epoch: u64,
+        generation: u64,
     },
     GraphPublished {
         revision: u64,
@@ -88,7 +96,7 @@ pub enum PriorityCommand {
     ParameterWake,
     ParameterBoundary { command: ParameterCommand },
     ReleaseLeases { lease_ids: Vec<u64> },
-    TelemetryPageReady { epoch: u64 },
+    TelemetryPageReady { epoch: u64, generation: u64 },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onUnmounted, shallowRef } from "vue"
 import { useI18n } from "vue-i18n"
-import { Power, Trash2 } from "@lucide/vue"
+import { GripVertical, Power, Trash2 } from "@lucide/vue"
 import type {
   MixerChannelState,
   PluginDescriptor,
@@ -23,6 +23,7 @@ import {
   type PluginSelection,
   type PluginSignalWidth
 } from "../plugins/plugin-audio-mode"
+import { pluginDisplayState } from "../plugins/plugin-display-state"
 import MixerAudioFxPicker from "./MixerAudioFxPicker.vue"
 
 const props = defineProps<{
@@ -69,7 +70,7 @@ function inputWidthAt(slotOrder: number): PluginSignalWidth {
 }
 
 function pluginState(plugin: PluginInstanceState): PluginRuntimeStatus["state"] {
-  return props.runtime[plugin.id]?.state ?? (plugin.enabled ? "active" : "bypassed")
+  return pluginDisplayState(plugin, props.runtime[plugin.id])
 }
 
 function accepts(event: DragEvent): boolean {
@@ -191,18 +192,27 @@ function confirmDrop(selection: PluginSelection): void {
               state: pluginState(plugin)
             })
           "
-          draggable="true"
-          @dragstart="startRackDrag($event, plugin.id)"
-          @dragend="finishRackDrag"
           @dragenter="previewDropAtRow($event, index)"
           @dragover="previewDropAtRow($event, index)"
           @drop="dropInsert($event, index)"
         >
+          <span
+            class="plugin-grip"
+            draggable="true"
+            :aria-label="t('plugins.pluginSlot.move', { name: plugin.descriptor.name })"
+            @pointerdown.stop
+            @dragstart.stop="startRackDrag($event, plugin.id)"
+            @dragend.stop="finishRackDrag"
+          >
+            <GripVertical :size="11" aria-hidden="true" />
+          </span>
           <button
+            type="button"
             class="plugin-name"
             :title="`${plugin.descriptor.name} · ${plugin.descriptor.vendor}`"
             :aria-label="t('mixer.pluginSection.openEditor', { name: plugin.descriptor.name })"
-            @click="emit('open', plugin.id)"
+            @pointerdown.stop
+            @click.stop="emit('open', plugin.id)"
           >
             {{ plugin.descriptor.name }}
           </button>
@@ -212,6 +222,8 @@ function confirmDrop(selection: PluginSelection): void {
             >{{ pluginAudioModeBadge(plugin.audioMode) }}</span
           >
           <button
+            type="button"
+            :aria-pressed="plugin.enabled"
             :aria-label="
               t('mixer.pluginSection.bypassPlugin', {
                 action: plugin.enabled
@@ -220,13 +232,16 @@ function confirmDrop(selection: PluginSelection): void {
                 name: plugin.descriptor.name
               })
             "
-            @click="emit('toggle', plugin.id, !plugin.enabled)"
+            @pointerdown.stop
+            @click.stop="emit('toggle', plugin.id, !plugin.enabled)"
           >
             <Power :size="9" />
           </button>
           <button
+            type="button"
             :aria-label="t('mixer.pluginSection.remove', { name: plugin.descriptor.name })"
-            @click="emit('remove', plugin.id)"
+            @pointerdown.stop
+            @click.stop="emit('remove', plugin.id)"
           >
             <Trash2 :size="9" />
           </button>
@@ -310,7 +325,7 @@ function confirmDrop(selection: PluginSelection): void {
 }
 .plugin-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto 18px 18px;
+  grid-template-columns: 14px minmax(0, 1fr) auto 18px 18px;
   align-items: center;
   min-width: 0;
   height: 23px;
@@ -319,6 +334,17 @@ function confirmDrop(selection: PluginSelection): void {
   color: var(--ui-domain-color-fff);
   background: linear-gradient(var(--ui-domain-color-3f91d4), var(--ui-domain-color-2871ae));
   box-shadow: 0 1px 0 var(--ui-domain-color-ffffff28) inset;
+}
+.plugin-grip {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: currentColor;
+  cursor: grab;
+  opacity: 0.62;
+}
+.plugin-grip:active {
+  cursor: grabbing;
 }
 .mode-badge {
   padding: 1px 3px;

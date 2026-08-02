@@ -150,7 +150,7 @@ describe("AudioHostGraphTransactions", () => {
     loadPlugin: vi.fn(async () => undefined),
     pluginStatus: vi.fn(() => ({ latencySamples: 64, tailSamples: 12 })),
     isPluginBypassed: vi.fn(() => false),
-    commit: vi.fn()
+    commit: vi.fn(async () => undefined)
   }
   let transactions: AudioHostGraphTransactions
 

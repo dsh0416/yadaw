@@ -35,19 +35,29 @@ async fn run_protocol_actor(
         events,
         telemetry_page,
         parameter_ring,
+        mapping_commands,
+        mapping_events,
         session_epoch,
     } = bootstrap;
-    let telemetry = Arc::new(Mutex::new(
-        TelemetryWriter::map(telemetry_page).map_err(|error| error.to_string())?,
-    ));
-    let parameter_consumer =
-        ParameterConsumer::map(parameter_ring).map_err(|error| error.to_string())?;
+    let (telemetry_writer, parameter_consumer, persistent_shared_pages) =
+        activate_helper_pages(
+            telemetry_page,
+            parameter_ring,
+            mapping_commands,
+            mapping_events,
+            session_epoch,
+        )?;
+    let telemetry = Arc::new(TelemetryPages {
+        active: Mutex::new(telemetry_writer),
+        pending: Mutex::new(None),
+        next_generation: AtomicU64::new(2),
+        persistent: persistent_shared_pages,
+    });
     let response_leases = Arc::new(Mutex::new(LeaseRegistry::with_session_epoch(session_epoch)));
     let request_arena = Arc::new(Mutex::new(ArenaReceiver::new(session_epoch)));
     let ipc_generation = Arc::new(AtomicU64::new(0));
     let tokio_generation = Arc::new(AtomicU64::new(0));
     let published_event_revision = Arc::new(AtomicU64::new(0));
-    let page_epoch = Arc::new(AtomicU64::new(0));
     let egress_metrics = Arc::new(EgressMetrics::default());
     let host_event_inbox = Arc::new(Mutex::new(host_event_inbox));
 
@@ -127,11 +137,10 @@ async fn run_protocol_actor(
         .await
         .map_err(|_| "audio-host egress stopped before Ready".to_owned())?;
 
-    let telemetry_writer = telemetry.clone();
+    let telemetry_pages = telemetry.clone();
     let telemetry_outbound = outbound.clone();
     let telemetry_host_events = host_event_inbox.clone();
     let telemetry_event_revision = published_event_revision.clone();
-    let telemetry_page_epoch = page_epoch.clone();
     let telemetry_audio_engine = Arc::clone(&audio_engine);
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(std::time::Duration::from_millis(33));
@@ -150,11 +159,10 @@ async fn run_protocol_actor(
             }
             let published_revision = telemetry_audio_engine.published_graph_generation();
             publish_telemetry(
-                &telemetry_writer,
+                &telemetry_pages,
                 &telemetry_outbound,
                 published_revision,
                 session_epoch,
-                &telemetry_page_epoch,
                 &telemetry_audio_engine,
             )
             .await;
@@ -268,7 +276,32 @@ async fn run_protocol_actor(
                     PriorityIngress::Shutdown => {
                         let _ = audio_engine.stop_audio_engine();
                     }
-                    PriorityIngress::TelemetryPageReady => {}
+                    PriorityIngress::TelemetryPageReady { epoch, generation } => {
+                        let next = telemetry
+                            .pending
+                            .lock()
+                            .ok()
+                            .and_then(|mut pending| {
+                                let matches = pending.as_ref().is_some_and(|writer| {
+                                    writer.epoch() == epoch
+                                        && writer.descriptor().generation() == generation
+                                        && writer.peer_verified()
+                                });
+                                matches.then(|| pending.take()).flatten()
+                            });
+                        if let Some(next) = next {
+                            let _ = next.unlink();
+                            if let Ok(mut current) = telemetry.active.lock() {
+                                *current = next;
+                            }
+                            if let Ok(packet) = encode_event(
+                                &HostEvent::TelemetryPageActive { epoch, generation },
+                                Vec::new(),
+                            ) {
+                                let _ = outbound.send(OutboundMessage::Event(packet)).await;
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -294,4 +327,88 @@ async fn run_protocol_actor(
     let _ = egress_task.await;
     drop((outbound, ingress_thread));
     Ok(())
+}
+
+fn activate_helper_pages(
+    telemetry_descriptor: SharedMemoryDescriptor,
+    parameter_descriptor: SharedMemoryDescriptor,
+    commands: ipc_channel::ipc::IpcReceiver<MappingCommand>,
+    events: ipc_channel::ipc::IpcSender<MappingEvent>,
+    session_epoch: u64,
+) -> Result<(TelemetryWriter, ParameterConsumer, bool), String> {
+    const TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+    let telemetry_generation = telemetry_descriptor.generation();
+    let parameter_generation = parameter_descriptor.generation();
+    let opened = TelemetryWriter::open_and_acknowledge(telemetry_descriptor)
+        .and_then(|telemetry| {
+            ParameterConsumer::open_and_acknowledge(parameter_descriptor)
+                .map(|parameters| (telemetry, parameters))
+        });
+    let (telemetry, parameters) = match opened {
+        Ok(values) => values,
+        Err(error) => {
+            let _ = events.send(MappingEvent::Aborted {
+                failure: mapping_failure(&error),
+            });
+            return fallback_helper_pages(session_epoch);
+        }
+    };
+    events
+        .send(MappingEvent::Mapped {
+            telemetry_generation,
+            parameter_generation,
+        })
+        .map_err(|_| "mapping event channel closed before Mapped".to_owned())?;
+    match commands.try_recv_timeout(TIMEOUT) {
+        Ok(MappingCommand::Activate {
+            telemetry_generation: received_telemetry,
+            parameter_generation: received_parameter,
+        }) if received_telemetry == telemetry_generation
+            && received_parameter == parameter_generation =>
+        {
+            events
+                .send(MappingEvent::Active {
+                    telemetry_generation,
+                    parameter_generation,
+                })
+                .map_err(|_| "mapping event channel closed before Active".to_owned())?;
+            Ok((telemetry, parameters, true))
+        }
+        Ok(MappingCommand::Activate { .. }) => {
+            let _ = events.send(MappingEvent::Aborted {
+                failure: MappingFailure::Generation,
+            });
+            fallback_helper_pages(session_epoch)
+        }
+        Ok(MappingCommand::Abort) => fallback_helper_pages(session_epoch),
+        Err(TryRecvError::Empty) => {
+            let _ = events.send(MappingEvent::Aborted {
+                failure: MappingFailure::Timeout,
+            });
+            fallback_helper_pages(session_epoch)
+        }
+        Err(TryRecvError::IpcError(_)) => Err("mapping command channel closed".to_owned()),
+    }
+}
+
+fn fallback_helper_pages(
+    session_epoch: u64,
+) -> Result<(TelemetryWriter, ParameterConsumer, bool), String> {
+    let telemetry = create_telemetry_page(INITIAL_TELEMETRY_CAPACITY, session_epoch, 1)
+        .and_then(TelemetryWriter::map)
+        .map_err(|error| error.to_string())?;
+    let parameters = create_parameter_ring(session_epoch, 1)
+        .and_then(ParameterConsumer::map)
+        .map_err(|error| error.to_string())?;
+    Ok((telemetry, parameters, false))
+}
+
+fn mapping_failure(error: &TransportError) -> MappingFailure {
+    match error {
+        TransportError::SharedMemory(_) => MappingFailure::Open,
+        TransportError::InvalidSharedLayout | TransportError::InvalidCapacity => {
+            MappingFailure::Layout
+        }
+        _ => MappingFailure::Challenge,
+    }
 }

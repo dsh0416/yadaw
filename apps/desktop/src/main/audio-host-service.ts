@@ -132,7 +132,8 @@ export class AudioHostService {
     (command) => this.request(command),
     () => this.diagnostics.readTelemetry(),
     () => this.lastGraph?.project.sampleRate ?? null,
-    (value) => this.plugins.coalesceParameter(value)
+    (value) => this.plugins.coalesceParameter(value),
+    () => this.client?.persistentSharedPages ?? false
   )
 
   private readonly graphTransactions = new AudioHostGraphTransactions({
@@ -142,8 +143,8 @@ export class AudioHostService {
       this.plugins.loadPluginWithRequest(plugin, sampleRate, false),
     pluginStatus: (instanceId) => this.plugins.status(instanceId),
     isPluginBypassed: (instanceId) => this.plugins.isBypassed(instanceId),
-    commit: (deployment) => {
-      this.commitDesiredGraph(deployment)
+    commit: async (deployment) => {
+      await this.commitDesiredGraph(deployment)
       this.publishedGraph = {
         revision: deployment.graphRevision,
         runtime: structuredClone(deployment.runtime)
@@ -397,11 +398,23 @@ export class AudioHostService {
     return this.graphTransactions.abort(deployment)
   }
 
-  commitDesiredGraph(deployment: PreparedGraphDeployment): void {
+  async commitDesiredGraph(deployment: PreparedGraphDeployment): Promise<void> {
     this.lastGraph = {
       revision: deployment.graphRevision,
       project: structuredClone(deployment.project),
       runtime: structuredClone(deployment.runtime)
+    }
+    const desiredInstanceIds = new Set(deployment.project.plugins.map((plugin) => plugin.id))
+    const retiredInstanceIds = this.plugins
+      .loadedInstanceIds()
+      .filter((instanceId) => !desiredInstanceIds.has(instanceId))
+    const retired = await Promise.allSettled(
+      retiredInstanceIds.map((instanceId) => this.plugins.unloadPlugin(instanceId))
+    )
+    for (const [index, result] of retired.entries()) {
+      if (result.status === "rejected") {
+        console.error(`Could not retire VST3 instance ${retiredInstanceIds[index]}:`, result.reason)
+      }
     }
   }
 
@@ -1132,8 +1145,18 @@ export class AudioHostService {
   private async waitForGraphPublication(revision: number): Promise<void> {
     const deadline = Date.now() + 5_000
     while (Date.now() < deadline) {
-      const telemetry = this.readTelemetry()
-      if (telemetry[1] === revision) return
+      if (this.client?.persistentSharedPages) {
+        const telemetry = this.readTelemetry()
+        if (telemetry[1] === revision) return
+      } else {
+        const response = await this.requestImmediately({ type: "compiled-graph-snapshot" })
+        if (
+          response.result.type === "compiled-graph-snapshot" &&
+          response.result.snapshot?.graph_revision === revision
+        ) {
+          return
+        }
+      }
       await new Promise((resolve) => setTimeout(resolve, 10))
     }
     throw new Error(`Audio graph revision ${revision} was not published after restart`)

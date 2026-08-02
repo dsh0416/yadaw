@@ -22,6 +22,8 @@ function audioIpc(
       timeouts: 0
     },
     sharedMemory: {
+      persistentPagesActive: true,
+      activationFailures: 0,
       outstandingLeases: 0,
       outstandingBytes: 0,
       maxLeases: 64,

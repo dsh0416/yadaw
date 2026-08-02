@@ -210,10 +210,10 @@ fn spawn_ingress(
                                 Err(_) => PriorityResult::Busy,
                             }
                         }
-                        PriorityCommand::TelemetryPageReady { .. } => {
+                        PriorityCommand::TelemetryPageReady { epoch, generation } => {
                             match mailboxes
                                 .priority
-                                .try_send(PriorityIngress::TelemetryPageReady)
+                                .try_send(PriorityIngress::TelemetryPageReady { epoch, generation })
                             {
                                 Ok(()) => PriorityResult::Accepted,
                                 Err(_) => PriorityResult::Busy,

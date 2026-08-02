@@ -172,6 +172,42 @@ function success<T>(value: T): RpcResult<T> {
   }
 }
 
+function editorOpenResult() {
+  return success({
+    resource: {
+      plugin: {
+        kind: "plugin-instance" as const,
+        id: "plugin-1",
+        epoch: "test-main",
+        generation: 1
+      },
+      projectGraph: workspace(graph()).projectGraph,
+      revision: 1,
+      instance: {
+        id: "plugin-1",
+        channelId: "audio",
+        role: "insert" as const,
+        slotOrder: 0,
+        classId: effectDescriptor.classId,
+        descriptor: effectDescriptor,
+        audioMode: "stereo" as const,
+        enabled: true,
+        componentState: new Uint8Array(),
+        controllerState: new Uint8Array()
+      }
+    },
+    status: {
+      instanceId: "plugin-1",
+      state: "active" as const,
+      editorOpen: true,
+      editorMode: "parameters" as const,
+      latencySamples: 64,
+      tailSamples: 0,
+      error: null
+    }
+  })
+}
+
 describe("plugin store", () => {
   beforeEach(() => {
     setActivePinia(createPinia())
@@ -217,41 +253,7 @@ describe("plugin store", () => {
 
   it("reports the helper editor state without creating an Electron parameter panel", async () => {
     window.yadaw.getPluginParameters = vi.fn()
-    window.yadaw.openPluginEditor = vi.fn().mockResolvedValue(
-      success({
-        resource: {
-          plugin: {
-            kind: "plugin-instance",
-            id: "plugin-1",
-            epoch: "test-main",
-            generation: 1
-          },
-          projectGraph: workspace(graph()).projectGraph,
-          revision: 1,
-          instance: {
-            id: "plugin-1",
-            channelId: "audio",
-            role: "insert",
-            slotOrder: 0,
-            classId: effectDescriptor.classId,
-            descriptor: effectDescriptor,
-            audioMode: "stereo",
-            enabled: true,
-            componentState: new Uint8Array(),
-            controllerState: new Uint8Array()
-          }
-        },
-        status: {
-          instanceId: "plugin-1",
-          state: "active",
-          editorOpen: true,
-          editorMode: "parameters",
-          latencySamples: 64,
-          tailSamples: 0,
-          error: null
-        }
-      })
-    )
+    window.yadaw.openPluginEditor = vi.fn().mockResolvedValue(editorOpenResult())
     const store = usePluginStore()
 
     await store.openEditor("plugin-1")
@@ -261,6 +263,24 @@ describe("plugin store", () => {
       editorMode: "parameters"
     })
     expect(window.yadaw.getPluginParameters).not.toHaveBeenCalled()
+  })
+
+  it("waits for project mutations and coalesces repeated editor clicks", async () => {
+    window.yadaw.openPluginEditor = vi.fn().mockResolvedValue(editorOpenResult())
+    const projectStore = useProjectStore()
+    const finishMutation = projectStore.beginProjectMutation()
+    const store = usePluginStore()
+
+    const first = store.openEditor("plugin-1")
+    const repeated = store.openEditor("plugin-1")
+    await nextTick()
+
+    expect(window.yadaw.openPluginEditor).not.toHaveBeenCalled()
+
+    finishMutation()
+    await Promise.all([first, repeated])
+
+    expect(window.yadaw.openPluginEditor).toHaveBeenCalledOnce()
   })
 
   it("reconciles editor open state when the helper reports a native close", async () => {

@@ -14,7 +14,7 @@ use crate::ara::{AraDocument, AraFactoryHost};
 
 pub struct Vst3Runtime {
     instances: HashMap<String, Instance>,
-    retired_instances: Vec<Instance>,
+    retired_instances: Vec<GuardedInstance>,
     process_lifetime_guard: Option<Instance>,
     benchmark_lifetime_guards: Vec<GuardedInstance>,
     ara_factories: HashMap<(String, String), Rc<AraFactoryHost>>,
@@ -66,6 +66,14 @@ impl InstanceConfiguration {
 }
 
 impl Instance {
+    fn has_outstanding_processor_leases(&self) -> bool {
+        self.plugin.has_outstanding_processor_leases()
+            || self
+                .secondary
+                .as_ref()
+                .is_some_and(HostedPlugin::has_outstanding_processor_leases)
+    }
+
     fn processor_handle(&self) -> Vst3ProcessorHandle {
         let primary_latency = self.plugin.latency_samples();
         let secondary_latency = self
@@ -170,11 +178,7 @@ impl Vst3Runtime {
                     ara_document_state,
                 })
             }
-            ControlCommand::UnloadPlugin { instance_id } => {
-                // Compatibility/wire callers do not know whether a mixer generation still holds a
-                // lease, so retain the allocation until helper shutdown.
-                self.unload_plugin(&instance_id, true)
-            }
+            ControlCommand::UnloadPlugin { instance_id } => self.unload_plugin(&instance_id),
             ControlCommand::PluginParameters { instance_id } => {
                 self.plugin_parameters(&instance_id)
             }
@@ -196,41 +200,69 @@ impl Vst3Runtime {
 
     /// Remove a live instance from the UI registry.
     ///
-    /// When `retain_for_graph` is true, keep the allocation in `retired_instances` because a live
-    /// or retiring mixer generation may still hold a `ProcessorLease` into it. Temporary owners
-    /// such as the audio benchmark must pass false so repeated runs do not accumulate plug-ins
-    /// until helper exit.
-    pub fn unload_plugin(&mut self, instance_id: &str, retain_for_graph: bool) -> ControlResult {
+    /// Instances with outstanding audio-graph leases move to `retired_instances`. The UI thread
+    /// later reclaims them after the audio engine has retired the graph generation that owns the
+    /// final lease.
+    pub fn unload_plugin(&mut self, instance_id: &str) -> ControlResult {
         if let Some(instance) = self.instances.remove(instance_id) {
-            let last_benchmark_instance = is_audio_benchmark_instance(instance_id)
-                && !self
-                    .instances
-                    .keys()
-                    .any(|loaded_id| is_audio_benchmark_instance(loaded_id));
-            if retain_for_graph {
-                self.retired_instances.push(instance);
-            } else if last_benchmark_instance {
-                // Keep one non-graph instance alive until helper shutdown. Some VST3 modules use
-                // process-global entrypoint state, and tearing down the final module while the
-                // helper continues serving IPC can terminate the process before the unload reply is
-                // delivered. Benchmark IDs are stable, so retain one exact configuration and reuse
-                // it on a later run instead of synchronously destroying the previous guard on the
-                // winit thread. Do not reuse general plug-ins: their runtime state may have changed
-                // since load even when their original configuration is identical.
-                if self.benchmark_lifetime_guards.iter().all(|guard| {
-                    guard.instance.benchmark_configuration != instance.benchmark_configuration
-                }) {
-                    self.benchmark_lifetime_guards.push(GuardedInstance {
-                        instance_id: instance_id.to_owned(),
-                        instance,
-                    });
-                }
-            } else if self.instances.is_empty() {
-                let previous = self.process_lifetime_guard.replace(instance);
-                drop(previous);
+            if instance.has_outstanding_processor_leases() {
+                self.retired_instances.push(GuardedInstance {
+                    instance_id: instance_id.to_owned(),
+                    instance,
+                });
+            } else {
+                self.finish_unload(instance_id, instance);
             }
         }
         ControlResult::Accepted
+    }
+
+    /// Reclaims instances whose final audio-graph lease has been dropped.
+    ///
+    /// This must run on the VST3 UI thread because dropping an instance invokes controller and
+    /// component teardown on their owning thread.
+    pub fn reclaim_retired_instances(&mut self) -> usize {
+        let retired = std::mem::take(&mut self.retired_instances);
+        let mut reclaimed = 0;
+        for guard in retired {
+            if guard.instance.has_outstanding_processor_leases() {
+                self.retired_instances.push(guard);
+            } else {
+                self.finish_unload(&guard.instance_id, guard.instance);
+                reclaimed += 1;
+            }
+        }
+        reclaimed
+    }
+
+    #[must_use]
+    pub fn has_retired_instances(&self) -> bool {
+        !self.retired_instances.is_empty()
+    }
+
+    fn finish_unload(&mut self, instance_id: &str, instance: Instance) {
+        let last_benchmark_instance = is_audio_benchmark_instance(instance_id)
+            && !self
+                .instances
+                .keys()
+                .any(|loaded_id| is_audio_benchmark_instance(loaded_id));
+        if last_benchmark_instance {
+            // Keep one non-graph instance alive until helper shutdown. Some VST3 modules use
+            // process-global entrypoint state, and tearing down the final module while the helper
+            // continues serving IPC can terminate the process before the unload reply is delivered.
+            // Benchmark IDs are stable, so retain one exact configuration and reuse it later.
+            if self.benchmark_lifetime_guards.iter().all(|guard| {
+                guard.instance.benchmark_configuration != instance.benchmark_configuration
+            }) {
+                self.benchmark_lifetime_guards.push(GuardedInstance {
+                    instance_id: instance_id.to_owned(),
+                    instance,
+                });
+            }
+        } else if self.instances.is_empty() {
+            let previous = self.process_lifetime_guard.replace(instance);
+            drop(previous);
+        }
     }
 
     #[cfg(test)]
@@ -344,6 +376,22 @@ impl Vst3Runtime {
                 )
             })
             .collect()
+    }
+
+    pub fn flush_output_parameters(&mut self) -> Result<usize, String> {
+        let mut applied = 0;
+        for (instance_id, instance) in &mut self.instances {
+            applied += instance
+                .plugin
+                .flush_output_parameters()
+                .map_err(|error| format!("{instance_id}: {error}"))?;
+            if let Some(secondary) = &mut instance.secondary {
+                applied += secondary
+                    .flush_output_parameters()
+                    .map_err(|error| format!("{instance_id} (secondary): {error}"))?;
+            }
+        }
+        Ok(applied)
     }
 
     pub fn sync_ara_graph(&mut self, graph: Option<&LiveMixerGraph>) -> Result<(), String> {
@@ -649,11 +697,11 @@ mod tests {
     fn unload_of_a_missing_instance_is_accepted_without_retirement() {
         let mut runtime = Vst3Runtime::new();
         assert!(matches!(
-            runtime.unload_plugin("missing", false),
+            runtime.unload_plugin("missing"),
             ControlResult::Accepted
         ));
         assert!(matches!(
-            runtime.unload_plugin("missing", true),
+            runtime.unload_plugin("missing"),
             ControlResult::Accepted
         ));
         assert_eq!(runtime.retired_instance_count(), 0);

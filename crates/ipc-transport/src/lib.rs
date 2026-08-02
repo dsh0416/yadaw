@@ -1,8 +1,8 @@
 //! Cross-process transport primitives for the audio helper.
 //!
-//! MessagePack remains the logical protocol. Large immutable payloads travel as
-//! `IpcSharedMemory` attachments, while fixed shared pages carry telemetry and
-//! parameter commands.
+//! MessagePack remains the logical protocol. Fixed process-shared mappings
+//! carry telemetry, parameter commands, and large immutable payloads, while
+//! `ipc-channel` carries only control messages and mapping descriptors.
 #![cfg_attr(
     not(test),
     deny(
@@ -23,7 +23,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use ipc_channel::ipc::{IpcReceiver, IpcSender, IpcSharedMemory};
+use ipc_channel::ipc::{IpcReceiver, IpcSender};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use thiserror::Error;
 use yadaw_dsp_runtime::protocol::{
@@ -32,6 +32,7 @@ use yadaw_dsp_runtime::protocol::{
     MAX_MESSAGE_BYTES, MidiEventBatch, MidiNoteBatch, ParameterCommand, ParameterGesture,
     ParameterTargetKind, SharedBlobRef,
 };
+pub use yadaw_shared_memory::{SharedMemory, SharedMemoryDescriptor};
 use zerocopy::{
     FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned,
     byteorder::little_endian::{U16, U32, U64},

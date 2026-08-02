@@ -42,9 +42,12 @@ probe embed `LSUIElement` before AppKit starts. The helper also uses the
 Accessory activation policy, disables winit's default menu, and does not
 activate itself at launch, so neither native executable creates a second Dock
 application or steals focus from Electron. The helper's plug-in editor windows
-may still become active when the user clicks them. On X11 and Wayland the
-Electron class and winit `WM_CLASS`/application ID use the same value. The
-helper never creates a tray icon.
+may still become active when the user clicks them. Electron's main macOS window
+therefore accepts first-mouse events: clicking a mixer control after using a
+native editor both reactivates YADAW and dispatches that click, instead of
+silently consuming it for AppKit activation. On X11 and Wayland the Electron
+class and winit `WM_CLASS`/application ID use the same value. The helper never
+creates a tray icon.
 
 Electron packaging derives the macOS, Windows, and Linux application icons
 from `apps/desktop/build/icon.svg`. The matching PNG is packaged for runtime
@@ -120,6 +123,21 @@ from the active session rate.
 There is one audio-device namespace. cpal supplies the available hosts, device
 names, stable IDs, and defaults. Chromium `MediaDevices` and Web Audio devices
 must not be mixed into project settings.
+
+## Cross-process shared memory
+
+Persistent telemetry, parameter, and bulk-arena mappings require a stronger
+contract than transferring the current bytes of an IPC attachment. In
+particular, every process must map the same kernel backing object and verify
+two-way visibility before the mapping becomes active. A platform backend that
+delivers a copy-on-write snapshot does not satisfy that contract even when the
+initial bytes compare equal.
+
+The current macOS containment and the planned `yadaw-shared-memory` replacement
+are specified in
+[Cross-process shared-memory transport](shared-memory-transport.md). Keep OS
+mapping, cleanup, and unsafe pointer access below that boundary. Electron
+renderer and preload code must never receive a shared-memory descriptor.
 
 ## Mock audio backend
 

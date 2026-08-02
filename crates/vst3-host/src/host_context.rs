@@ -10,6 +10,8 @@ use yadaw_vst3_host_sys::{
     iid,
 };
 
+use crate::host_objects::{HostAttributeList, HostMessage};
+
 #[repr(C)]
 pub(crate) struct HostContext {
     vtable: *const HostApplicationVTable,
@@ -94,17 +96,34 @@ unsafe extern "system" fn get_name(_this: *mut IHostApplication, name: *mut u16)
 
 unsafe extern "system" fn create_instance(
     _this: *mut IHostApplication,
-    _class_id: *mut c_char,
-    _interface_id: *mut c_char,
+    class_id: *mut c_char,
+    interface_id: *mut c_char,
     output: *mut *mut c_void,
 ) -> tresult {
-    if !output.is_null() {
-        unsafe {
-            // SAFETY: output was checked before writing.
-            output.write(std::ptr::null_mut());
-        }
+    if class_id.is_null() || interface_id.is_null() || output.is_null() {
+        return -2147024809;
     }
-    -2147467262
+    let class_id = unsafe {
+        // SAFETY: VST3 createInstance always supplies a 16-byte class TUID.
+        std::slice::from_raw_parts(class_id, 16)
+    };
+    let interface_id = unsafe {
+        // SAFETY: VST3 createInstance always supplies a 16-byte interface TUID.
+        std::slice::from_raw_parts(interface_id, 16)
+    };
+    let instance = if class_id == iid::IMESSAGE && interface_id == iid::IMESSAGE {
+        HostMessage::into_raw().cast()
+    } else if class_id == iid::IATTRIBUTE_LIST && interface_id == iid::IATTRIBUTE_LIST {
+        HostAttributeList::into_raw().cast()
+    } else {
+        std::ptr::null_mut()
+    };
+    unsafe {
+        // SAFETY: output was validated above and receives one owned reference
+        // for supported host-created objects.
+        output.write(instance);
+    }
+    if instance.is_null() { -2147467262 } else { 0 }
 }
 
 static HOST_APPLICATION_VTABLE: HostApplicationVTable = HostApplicationVTable {
@@ -116,3 +135,61 @@ static HOST_APPLICATION_VTABLE: HostApplicationVTable = HostApplicationVTable {
     get_name,
     create_instance,
 };
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    unsafe fn release_created(object: *mut c_void) {
+        let unknown = object.cast::<FUnknown>();
+        let vtable = unsafe {
+            // SAFETY: createInstance returned a live VST3 object with an FUnknown prefix.
+            *unknown.cast::<*const FUnknownVTable>()
+        };
+        unsafe {
+            // SAFETY: createInstance returned exactly one owned reference.
+            ((*vtable).release)(unknown);
+        }
+    }
+
+    #[test]
+    fn creates_mandatory_vst3_message_objects() {
+        let context = HostContext::new();
+        let application = context.as_unknown().cast();
+        for interface_id in [iid::IMESSAGE, iid::IATTRIBUTE_LIST] {
+            let mut object = std::ptr::null_mut();
+            let result = unsafe {
+                // SAFETY: the IDs and output storage satisfy createInstance's ABI contract.
+                create_instance(
+                    application,
+                    interface_id.as_ptr().cast_mut(),
+                    interface_id.as_ptr().cast_mut(),
+                    &mut object,
+                )
+            };
+            assert_eq!(result, 0);
+            assert!(!object.is_null());
+            unsafe {
+                // SAFETY: the successful call returned one owned reference.
+                release_created(object);
+            }
+        }
+    }
+
+    #[test]
+    fn rejects_unknown_host_objects_without_returning_a_pointer() {
+        let context = HostContext::new();
+        let mut object = std::ptr::without_provenance_mut(1);
+        let result = unsafe {
+            // SAFETY: the IDs and output storage satisfy createInstance's ABI contract.
+            create_instance(
+                context.as_unknown().cast(),
+                iid::ICOMPONENT.as_ptr().cast_mut(),
+                iid::ICOMPONENT.as_ptr().cast_mut(),
+                &mut object,
+            )
+        };
+        assert_eq!(result, -2147467262);
+        assert!(object.is_null());
+    }
+}

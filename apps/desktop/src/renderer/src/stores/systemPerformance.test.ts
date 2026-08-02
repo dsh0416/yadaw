@@ -22,6 +22,8 @@ function audioIpc(
       timeouts: 0
     },
     sharedMemory: {
+      persistentPagesActive: true,
+      activationFailures: 0,
       outstandingLeases: 0,
       outstandingBytes: 0,
       maxLeases: 256,
@@ -112,6 +114,8 @@ describe("system performance store audio IPC health", () => {
           timeouts: 3
         },
         sharedMemory: {
+          persistentPagesActive: true,
+          activationFailures: 0,
           outstandingLeases: 230,
           outstandingBytes: 0,
           maxLeases: 256,

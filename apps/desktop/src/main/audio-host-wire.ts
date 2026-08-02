@@ -353,7 +353,8 @@ export type TransportDiagnosticsWire = [
     arenaBusy: number,
     arenaQuarantinedRegions: number,
     copiedBytes: number
-  ]
+  ],
+  persistentPages: [active: boolean, activationFailures: number]
 ]
 
 export function stableRuntimeHandle(namespace: number, id: string): number {

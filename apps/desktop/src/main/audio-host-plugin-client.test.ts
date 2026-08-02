@@ -122,6 +122,23 @@ describe("AudioHostPluginClient", () => {
     expect(client.isBypassed("plugin-1")).toBe(false)
   })
 
+  it("keeps failed unloads tracked for reconciliation", async () => {
+    const { client, request } = createClient()
+    request
+      .mockResolvedValueOnce({
+        result: { type: "plugin-loaded", runtime_handle: 1, latency_samples: 0, tail_samples: null }
+      })
+      .mockRejectedValueOnce(new Error("helper unavailable"))
+      .mockResolvedValueOnce({ result: { type: "ok" } })
+    await client.loadPlugin(plugin, 48_000)
+
+    await expect(client.unloadPlugin("plugin-1")).rejects.toThrow("helper unavailable")
+    expect(client.loadedInstanceIds()).toEqual(["plugin-1"])
+
+    await expect(client.unloadPlugin("plugin-1")).resolves.toBeUndefined()
+    expect(client.loadedInstanceIds()).toEqual([])
+  })
+
   it("maps parameter list responses", async () => {
     const { client, request } = createClient()
     request.mockResolvedValue({

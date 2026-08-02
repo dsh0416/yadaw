@@ -15,9 +15,10 @@ mod tests {
         MEMORY_DECODE_LIMIT_BYTES, METRONOME_ACCENT_NOTE, METRONOME_BEAT_NOTE, MeterAtomics,
         MeterBank, MetronomeScheduler, NativeMidiClip, NativeMidiEvent, NativeMidiEventKind,
         NativeMidiNote, NativeMixerChannel, NativeMixerGraph, NativeMixerRuntime, NativeMixerSend,
-        NativePluginInstance, NativeRoundTripLatencyMeasurementRequest, OUTPUT_RESAMPLER_FRAMES,
-        Ordering, PublishOutcome, RealtimeParameter, RealtimeParameterCommand, RoundTripInputDetector,
-        RoundTripLatencyMeasurement, RoundTripOutputProbe, ScheduledMidiEvent,
+        NativeMixerParameterPreview, NativePluginInstance, NativeRoundTripLatencyMeasurementRequest,
+        OUTPUT_RESAMPLER_FRAMES, Ordering, PublishOutcome, RealtimeParameter,
+        RealtimeParameterCommand, RoundTripInputDetector, RoundTripLatencyMeasurement,
+        RoundTripOutputProbe, ScheduledMidiEvent,
         ScheduledMidiEventKind, SessionOutputConverter, SignalWidth, StereoDelayLine,
         StreamDirection, StreamErrorImpact, SupportedBufferSize, TRANSPORT_COUNTING_IN,
         TRANSPORT_PLAYING, TRANSPORT_RECORDING, TRANSPORT_STOPPED, TRANSPORT_WAITING,
@@ -539,6 +540,7 @@ mod tests {
 
     fn missing_effect(mode: PluginAudioMode, enabled: bool) -> LivePlugin {
         LivePlugin {
+            instance_id: "missing-effect".to_owned(),
             processor: None,
             audio_mode: mode,
             enabled,
@@ -745,38 +747,12 @@ mod tests {
     }
 
     #[test]
-    fn native_graph_plugin_references_follow_the_last_committed_graph() {
+    fn reclaiming_retired_graphs_without_a_running_engine_is_a_noop() {
         let _guard = GRAPH_TEST_LOCK
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let engine = AudioEngine::new();
-        engine.set_last_native_graph_for_test(None);
-        assert!(!engine.native_graph_references_plugin("bench-0"));
-
-        engine.set_last_native_graph_for_test(Some(NativeMixerGraph {
-            generation: 1,
-            sample_rate: 48_000,
-            channels: Vec::new(),
-            sends: Vec::new(),
-            clips: Vec::new(),
-            plugins: vec![NativePluginInstance {
-                instance_id: "session-fx".to_owned(),
-                channel_index: 0,
-                role: "insert".to_owned(),
-                slot_order: 0,
-                audio_mode: PluginAudioMode::Stereo,
-                enabled: true,
-                latency_samples: 0,
-                tail_samples: Some(0),
-                processor: None,
-            }],
-            midi_clips: Vec::new(),
-            tempo_events: Vec::new(),
-            time_signature_events: Vec::new(),
-        }));
-        assert!(engine.native_graph_references_plugin("session-fx"));
-        assert!(!engine.native_graph_references_plugin("bench-0"));
-        engine.set_last_native_graph_for_test(None);
+        assert_eq!(engine.reclaim_retired_graphs().expect("reclaim graphs"), 0);
     }
 
     #[test]
@@ -816,6 +792,57 @@ mod tests {
             .expect("publish stale build");
         assert_eq!(outcome, PublishOutcome::Superseded);
         assert!(engine.compiled_audio_graph_snapshot().is_none());
+    }
+
+    #[test]
+    fn same_revision_rebuild_preserves_a_newer_plugin_bypass_preview() {
+        let _guard = GRAPH_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let engine = AudioEngine::new();
+        let mut stale_graph = simple_native_graph();
+        stale_graph.plugins.push(NativePluginInstance {
+            instance_id: "fx".to_owned(),
+            channel_index: 0,
+            role: "insert".to_owned(),
+            slot_order: 0,
+            audio_mode: PluginAudioMode::Stereo,
+            enabled: true,
+            latency_samples: 0,
+            tail_samples: Some(0),
+            processor: None,
+        });
+        engine
+            .load_mixer_graph(stale_graph.clone())
+            .expect("publish initial graph");
+        engine
+            .preview_mixer_parameter(NativeMixerParameterPreview {
+                target: "plugin".to_owned(),
+                id: "fx".to_owned(),
+                parameter: "enabled".to_owned(),
+                value: 0.0,
+            })
+            .expect("preview bypass");
+
+        let stale_build = engine
+            .begin_graph_build(stale_graph)
+            .and_then(compile_graph_build)
+            .expect("compile stale same-revision graph");
+        assert_eq!(
+            engine
+                .publish_mixer_runtime(stale_build)
+                .expect("publish same-revision graph"),
+            PublishOutcome::Published
+        );
+
+        let pending = engine.pending_mixer.lock().expect("pending mixer lock");
+        assert!(!pending.as_ref().expect("pending mixer").plugins_by_channel[0][0].enabled);
+        drop(pending);
+        let graph = engine
+            .last_native_graph
+            .lock()
+            .expect("last graph lock");
+        assert!(!graph.as_ref().expect("last graph").plugins[0].enabled);
     }
 
     #[test]
@@ -2148,5 +2175,43 @@ mod tests {
                 }))
                 .is_none()
         );
+        assert!(
+            runtime
+                .handle_command(EngineCommand::Preview(RealtimeParameterCommand {
+                    id,
+                    id_len: 7,
+                    parameter: RealtimeParameter::PluginEnabled,
+                    value: 0.0,
+                }))
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn preview_plugin_enabled_switches_the_live_graph_without_rebuilding() {
+        let mut runtime = transport_test_runtime(48_000, 1_000, 0, TRANSPORT_STOPPED);
+        runtime.plugins_by_channel[0].push(LivePlugin {
+            instance_id: "effect".to_owned(),
+            processor: None,
+            audio_mode: PluginAudioMode::Stereo,
+            enabled: true,
+            is_instrument: false,
+            bypass_delay: StereoDelayLine::new(0),
+            marker_index: 0,
+        });
+        let command = RealtimeParameterCommand::from_preview(NativeMixerParameterPreview {
+            target: "plugin".to_owned(),
+            id: "effect".to_owned(),
+            parameter: "enabled".to_owned(),
+            value: 0.0,
+        })
+        .expect("plugin bypass preview");
+
+        assert!(
+            runtime
+                .handle_command(EngineCommand::Preview(command))
+                .is_none()
+        );
+        assert!(!runtime.plugins_by_channel[0][0].enabled);
     }
 }

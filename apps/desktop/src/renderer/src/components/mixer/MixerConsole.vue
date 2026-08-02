@@ -53,7 +53,7 @@ function pluginsFor(channelId: string) {
 }
 
 function togglePlugin(instanceId: string, enabled: boolean): void {
-  void mixerStore.execute({ type: "update-plugin", pluginId: instanceId, patch: { enabled } })
+  void mixerStore.setPluginEnabled(instanceId, enabled)
 }
 
 function removePlugin(instanceId: string): void {

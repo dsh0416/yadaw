@@ -1,6 +1,6 @@
 import { decode, encode } from "@msgpack/msgpack"
 import { IPC_PROTOCOL_VERSION } from "@yadaw/contracts"
-import type { ProjectGraphSnapshot } from "@yadaw/contracts"
+import type { PluginInstanceState, ProjectGraphSnapshot } from "@yadaw/contracts"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const fakeHost = vi.hoisted(() => {
@@ -247,6 +247,41 @@ const fakeHost = vi.hoisted(() => {
           }
         })
       }
+      if (request.command.type === "transport-snapshot") {
+        return response({
+          type: "transport-snapshot",
+          transport: {
+            state: this.transportState === 1 ? "playing" : "stopped",
+            position_frames: this.positionFrames,
+            position_ticks: 0,
+            sample_rate: this.sessionSampleRate,
+            effective_bpm: null,
+            clock_source: "internal",
+            waiting_for: null,
+            loop_enabled: this.loopEnabled,
+            loop_start_tick: this.loopStartTick,
+            loop_end_tick: this.loopEndTick
+          }
+        })
+      }
+      if (request.command.type === "mixer-snapshot") {
+        return response({ type: "mixer-snapshot", meters: [] })
+      }
+      if (request.command.type === "compiled-graph-snapshot") {
+        return response({
+          type: "compiled-graph-snapshot",
+          snapshot:
+            this.graphRevision === 0
+              ? null
+              : {
+                  graph_revision: this.graphRevision,
+                  build_generation: this.graphRevision,
+                  sample_rate: this.sessionSampleRate,
+                  nodes: [],
+                  edges: []
+                }
+        })
+      }
       if (request.command.type === "load-plugin") {
         return response({
           type: "plugin-loaded",
@@ -458,6 +493,36 @@ function graph(sampleRate: number): {
   }
 }
 
+function pluginInstance(id = "plugin-1"): PluginInstanceState {
+  return {
+    id,
+    channelId: "audio-1",
+    role: "insert",
+    slotOrder: 0,
+    classId: "test-gain",
+    descriptor: {
+      source: { kind: "external" },
+      classId: "test-gain",
+      modulePath: "/tmp/gain.vst3",
+      name: "Test Gain",
+      vendor: "YADAW",
+      version: "1.0",
+      categories: ["Fx"],
+      kind: "effect",
+      architecture: "x86_64",
+      buses: [],
+      supportedAudioModes: ["stereo"],
+      hasEditor: true,
+      compatibility: "compatible",
+      compatibilityReason: null
+    },
+    audioMode: "stereo",
+    enabled: true,
+    componentState: new Uint8Array(),
+    controllerState: new Uint8Array()
+  }
+}
+
 describe("AudioHostService recovery", () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -663,6 +728,48 @@ describe("AudioHostService recovery", () => {
       ).lastGraph?.revision
     ).toBe(1)
 
+    await service.stop()
+  })
+
+  it("unloads plugin instances removed from the committed graph", async () => {
+    const service = new AudioHostService(
+      "audio-host",
+      "crash-marker",
+      {
+        workerThreads: "auto",
+        maxBlockingThreads: "auto",
+        egressConcurrency: "auto"
+      },
+      undefined,
+      () => {},
+      async () => {}
+    )
+    service.start()
+    const plugin = pluginInstance()
+    await service.loadPlugin(plugin, 48_000)
+    const candidate = graph(48_000)
+
+    await service.commitDesiredGraph({
+      meta: {
+        protocolVersion: IPC_PROTOCOL_VERSION,
+        requestId: "remove-plugin"
+      },
+      projectGraph: {
+        kind: "project-graph",
+        id: "project:graph",
+        epoch: "main-epoch",
+        generation: 1
+      },
+      baseRevision: 1,
+      graphRevision: 2,
+      project: candidate.project,
+      runtime: candidate.runtime
+    })
+
+    const client = fakeHost.Client.instances[0]!
+    expect(client.commands.filter((command) => command.type === "unload-plugin")).toEqual([
+      { type: "unload-plugin", instance_id: plugin.id }
+    ])
     await service.stop()
   })
 

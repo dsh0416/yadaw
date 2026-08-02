@@ -1,4 +1,17 @@
 impl NativeMixerRuntime {
+    fn set_plugin_enabled(&mut self, instance_id: &str, enabled: bool) -> bool {
+        let Some(plugin) = self
+            .plugins_by_channel
+            .iter_mut()
+            .flatten()
+            .find(|plugin| plugin.instance_id == instance_id)
+        else {
+            return false;
+        };
+        plugin.set_enabled(enabled);
+        true
+    }
+
     fn handle_command(&mut self, command: EngineCommand) -> Option<Box<NativeMixerRuntime>> {
         match command {
             EngineCommand::LoadMixer(mut runtime) => {
@@ -49,6 +62,10 @@ impl NativeMixerRuntime {
                         .graph
                         .send_index(preview.id())
                         .and_then(|index| self.graph.preview_send_level(index, preview.value).ok()),
+                    RealtimeParameter::PluginEnabled => {
+                        self.set_plugin_enabled(preview.id(), preview.value >= 0.5)
+                            .then_some(())
+                    }
                 };
                 let _ = result;
             }

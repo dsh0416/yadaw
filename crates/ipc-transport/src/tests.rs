@@ -367,7 +367,7 @@ fn invalid_shared_range_and_stale_allocation_are_rejected() {
 }
 
 #[test]
-fn warm_allocations_reuse_a_region_and_refresh_the_consumer_mapping() {
+fn warm_allocations_reuse_one_persistent_consumer_mapping() {
     let mut sender = LeaseRegistry::with_session_epoch(17);
     let mut receiver = ArenaReceiver::new(17);
     let (first, offer) = sender.allocate(&vec![1; 128 * 1024]).unwrap();
@@ -376,13 +376,24 @@ fn warm_allocations_reuse_a_region_and_refresh_the_consumer_mapping() {
     sender.release(&[first.lease_id]);
 
     let (second, offer) = sender.allocate(&vec![2; 128 * 1024]).unwrap();
-    // Producers re-offer on every allocation so macOS VIRTUAL_COPY consumers
-    // observe the latest publication instead of a stale COW snapshot.
-    assert!(offer.is_some());
+    assert!(offer.is_none());
     assert_eq!(first.region_id, second.region_id);
     assert_ne!(first.allocation_generation, second.allocation_generation);
-    receiver.register_offers(vec![offer.unwrap()]).unwrap();
     assert_eq!(receiver.resolve(second).unwrap()[0], 2);
+}
+
+#[test]
+fn arena_release_without_peer_verification_quarantines_the_region() {
+    let mut sender = LeaseRegistry::with_session_epoch(18);
+    let (first, offer) = sender.allocate(&vec![1; 128 * 1024]).unwrap();
+    let first_region = first.region_id;
+    assert!(offer.is_some());
+
+    sender.release(&[first.lease_id]);
+    assert_eq!(sender.diagnostics().quarantined_regions, 1);
+    let (second, second_offer) = sender.allocate(&vec![2; 128 * 1024]).unwrap();
+    assert_ne!(second.region_id, first_region);
+    assert!(second_offer.is_some());
 }
 
 #[test]
@@ -430,7 +441,7 @@ fn outstanding_lease_limit_returns_busy_without_an_unbounded_waiter() {
         Err(TransportError::LeaseCapacity)
     ));
     assert_eq!(sender.diagnostics().busy, 1);
-    sender.release(&leases);
+    sender.abort(&leases);
     assert!(sender.is_empty());
 }
 
@@ -478,7 +489,9 @@ fn expired_lease_quarantines_its_region_until_session_close() {
 #[test]
 fn out_of_order_release_coalesces_extents_for_a_larger_allocation() {
     let mut sender = LeaseRegistry::with_session_epoch(23);
-    let (first, _) = sender.allocate(&vec![1; 256 * 1024]).unwrap();
+    let mut receiver = ArenaReceiver::new(23);
+    let (first, offer) = sender.allocate(&vec![1; 256 * 1024]).unwrap();
+    receiver.register_offers(vec![offer.unwrap()]).unwrap();
     let (second, _) = sender.allocate(&vec![2; 256 * 1024]).unwrap();
     let (third, _) = sender.allocate(&vec![3; 256 * 1024]).unwrap();
     sender.release(&[second.lease_id]);
@@ -487,7 +500,7 @@ fn out_of_order_release_coalesces_extents_for_a_larger_allocation() {
 
     let before = sender.diagnostics().region_count;
     let (_, offer) = sender.allocate(&vec![4; 768 * 1024]).unwrap();
-    assert!(offer.is_some());
+    assert!(offer.is_none());
     assert_eq!(sender.diagnostics().region_count, before);
 }
 
@@ -536,7 +549,7 @@ fn stale_allocation_generation_is_rejected() {
 
 #[test]
 fn telemetry_snapshot_is_coherent() {
-    let memory = create_telemetry_page(64, 9).unwrap();
+    let memory = create_telemetry_page(64, 9, 1).unwrap();
     let writer = TelemetryWriter::map(memory.clone()).unwrap();
     let reader = TelemetryReader::map(memory).unwrap();
     assert_eq!(reader.capacity(), 64);
@@ -565,7 +578,7 @@ fn telemetry_snapshot_is_coherent() {
 
 #[test]
 fn telemetry_capacity_rounds_up_without_a_track_limit() {
-    let memory = create_telemetry_page(65, 11).unwrap();
+    let memory = create_telemetry_page(65, 11, 1).unwrap();
     let writer = TelemetryWriter::map(memory).unwrap();
     assert_eq!(writer.capacity(), 128);
     assert_eq!(writer.epoch(), 11);
@@ -573,7 +586,7 @@ fn telemetry_capacity_rounds_up_without_a_track_limit() {
 
 #[test]
 fn short_persistent_page_is_rejected_before_atomic_access() {
-    let memory = IpcSharedMemory::from_bytes(&[0; 8]);
+    let memory = SharedMemory::create(std::num::NonZeroUsize::new(8).unwrap(), 1).unwrap();
     assert!(matches!(
         TelemetryReader::map(memory),
         Err(TransportError::InvalidSharedLayout)
@@ -582,7 +595,7 @@ fn short_persistent_page_is_rejected_before_atomic_access() {
 
 #[test]
 fn parameter_ring_reserves_gesture_boundaries() {
-    let memory = create_parameter_ring(3).unwrap();
+    let memory = create_parameter_ring(3, 1).unwrap();
     let producer = ParameterProducer::map(memory.clone()).unwrap();
     let consumer = ParameterConsumer::map(memory).unwrap();
     let command = |sequence, gesture| ParameterCommand {
@@ -626,7 +639,7 @@ fn parameter_ring_reserves_gesture_boundaries() {
 
 #[test]
 fn parameter_ring_discards_a_stale_session_epoch() {
-    let memory = create_parameter_ring(3).unwrap();
+    let memory = create_parameter_ring(3, 1).unwrap();
     let producer = ParameterProducer::map(memory.clone()).unwrap();
     let consumer = ParameterConsumer::map(memory).unwrap();
     let stale = ParameterCommand {
@@ -712,7 +725,7 @@ fn two_sequential_shared_benchmark_echoes_with_lease_release() {
     let mut response_leases = LeaseRegistry::with_session_epoch(1);
     let mut response_receiver = ArenaReceiver::new(1);
 
-    for request_id in [1_u64, 2] {
+    for (iteration, request_id) in [1_u64, 2].into_iter().enumerate() {
         let payload = vec![request_id as u8; INLINE_BLOB_LIMIT + 1];
         let attachments = [payload.as_slice()];
         let request = ControlRequest {
@@ -729,8 +742,8 @@ fn two_sequential_shared_benchmark_echoes_with_lease_release() {
             encode_request_with_attachments(request, &attachments, &mut request_leases).unwrap();
         assert_eq!(
             request_packet.region_offers.len(),
-            1,
-            "each shared request must re-offer its region"
+            usize::from(iteration == 0),
+            "only the first request offers its persistent region"
         );
         let (decoded, request_release) =
             decode_request_deferred(request_packet, &mut request_receiver).unwrap();
@@ -750,8 +763,8 @@ fn two_sequential_shared_benchmark_echoes_with_lease_release() {
             encode_response_from_arena(response, &mut response_leases, &request_receiver).unwrap();
         assert_eq!(
             response_packet.region_offers.len(),
-            1,
-            "each shared response must re-offer its region"
+            usize::from(iteration == 0),
+            "only the first response offers its persistent region"
         );
         // Client frees the request lease after the host has copied it into the response.
         request_leases.release(&request_release);

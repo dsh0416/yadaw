@@ -315,6 +315,8 @@ export class AudioHostDiagnostics {
           timeouts: diagnostics[1][3]
         },
         sharedMemory: {
+          persistentPagesActive: diagnostics[8][0],
+          activationFailures: diagnostics[8][1],
           outstandingLeases: diagnostics[2][0],
           outstandingBytes: diagnostics[2][1],
           maxLeases: diagnostics[2][2],

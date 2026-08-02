@@ -1,4 +1,5 @@
 struct LivePlugin {
+    instance_id: String,
     processor: Option<Vst3ProcessorHandle>,
     audio_mode: PluginAudioMode,
     enabled: bool,
@@ -8,6 +9,13 @@ struct LivePlugin {
 }
 
 impl LivePlugin {
+    fn set_enabled(&mut self, enabled: bool) {
+        if self.enabled != enabled {
+            self.enabled = enabled;
+            self.bypass_delay.clear();
+        }
+    }
+
     fn process_block(
         &mut self,
         frames: &mut [StereoFrame],

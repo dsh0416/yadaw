@@ -31,7 +31,7 @@ interface AudioHostGraphTransactionDependencies {
   loadPlugin(plugin: PluginInstanceState, sampleRate: number): Promise<unknown>
   pluginStatus(instanceId: string): PluginRuntimeStatus | undefined
   isPluginBypassed(instanceId: string): boolean
-  commit(deployment: PreparedGraphDeployment): void
+  commit(deployment: PreparedGraphDeployment): Promise<void>
 }
 
 export class AudioHostGraphTransactions {
@@ -139,7 +139,7 @@ export class AudioHostGraphTransactions {
         })
       }
     }
-    if (result.ok) this.dependencies.commit(deployment)
+    if (result.ok) await this.dependencies.commit(deployment)
     return result
   }
 

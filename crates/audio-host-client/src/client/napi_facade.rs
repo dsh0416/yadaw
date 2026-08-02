@@ -59,14 +59,18 @@ impl AudioHostIpcClient {
                 (value.as_nanos() as u64) ^ u64::from(std::process::id())
             })
             .max(1);
-        let telemetry_page = create_telemetry_page(64, session_epoch)
+        let telemetry_page = create_telemetry_page(64, session_epoch, 1)
             .map_err(|error| failure("could not create telemetry page", error))?;
-        let parameter_ring = create_parameter_ring(session_epoch)
+        let parameter_ring = create_parameter_ring(session_epoch, 1)
             .map_err(|error| failure("could not create parameter ring", error))?;
         let telemetry = TelemetryReader::map(telemetry_page.clone())
             .map_err(|error| failure("could not map telemetry page", error))?;
         let parameters = ParameterProducer::map(parameter_ring.clone())
             .map_err(|error| failure("could not map parameter ring", error))?;
+        let (mapping_commands, mapping_command_receiver) = ipc::channel()
+            .map_err(|error| failure("could not create mapping command channel", error))?;
+        let (mapping_event_sender, mapping_events) = ipc::channel()
+            .map_err(|error| failure("could not create mapping event channel", error))?;
 
         let (_, bootstrap_sender) = server.accept().map_err(|error| {
             let _ = child.kill();
@@ -80,8 +84,10 @@ impl AudioHostIpcClient {
                 priority_requests: priority_request_receiver,
                 priority_responses: priority_response_sender,
                 events: event_sender,
-                telemetry_page,
-                parameter_ring,
+                telemetry_page: telemetry_page.descriptor(),
+                parameter_ring: parameter_ring.descriptor(),
+                mapping_commands: mapping_command_receiver,
+                mapping_events: mapping_event_sender,
                 session_epoch,
             })
             .map_err(|error| {
@@ -89,6 +95,13 @@ impl AudioHostIpcClient {
                 let _ = child.wait();
                 failure("could not transfer helper channels", error)
             })?;
+
+        let persistent_shared_pages = negotiate_shared_pages(
+            &mapping_commands,
+            &mapping_events,
+            &telemetry,
+            &parameters,
+        );
 
         let (normal_outbound, normal_inbox) = mpsc::sync_channel(OUTBOUND_CAPACITY);
         let (priority_outbound, priority_inbox) = mpsc::sync_channel(OUTBOUND_CAPACITY);
@@ -169,6 +182,10 @@ impl AudioHostIpcClient {
                     meters: Vec::new(),
                 }),
                 parameters,
+                persistent_shared_pages,
+                shared_page_activation_failures: AtomicU64::new(u64::from(
+                    !persistent_shared_pages,
+                )),
                 events: event_queue,
                 child: Mutex::new(child),
                 threads: Mutex::new(threads),
@@ -331,6 +348,16 @@ impl AudioHostIpcClient {
             target_generation: request.target_generation.unwrap_or(0),
             gesture,
         };
+        if !self.state.persistent_shared_pages {
+            self.send_internal_priority(PriorityCommand::ParameterBoundary { command })?;
+            self.state
+                .parameter_boundary_fallbacks
+                .fetch_add(1, Ordering::Relaxed);
+            return Ok(ParameterEnqueueResult {
+                outcome: "fallback".into(),
+                sequence: sequence.to_string(),
+            });
+        }
         match self.state.parameters.enqueue(command) {
             ParameterEnqueue::Queued { wake } => {
                 if wake {
@@ -507,6 +534,12 @@ impl AudioHostIpcClient {
                 arena_diagnostics.quarantined_regions,
                 arena_diagnostics.copied_bytes,
             ),
+            (
+                self.state.persistent_shared_pages,
+                self.state
+                    .shared_page_activation_failures
+                    .load(Ordering::Relaxed),
+            ),
         ))
         .map(Buffer::from)
         .map_err(|error| failure("could not encode transport diagnostics", error))
@@ -520,6 +553,11 @@ impl AudioHostIpcClient {
     #[napi(getter)]
     pub fn helper_epoch(&self) -> String {
         self.state.session_epoch.to_string()
+    }
+
+    #[napi(getter)]
+    pub fn persistent_shared_pages(&self) -> bool {
+        self.state.persistent_shared_pages
     }
 
     #[napi]

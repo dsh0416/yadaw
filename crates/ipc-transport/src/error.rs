@@ -2,6 +2,8 @@ use super::*;
 
 #[derive(Debug, Error)]
 pub enum TransportError {
+    #[error("shared-memory mapping failed: {0}")]
+    SharedMemory(#[from] yadaw_shared_memory::SharedMemoryError),
     #[error("could not encode transport packet: {0}")]
     Encode(#[from] rmp_serde::encode::Error),
     #[error("could not decode transport packet: {0}")]

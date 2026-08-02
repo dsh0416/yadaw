@@ -39,7 +39,8 @@ export class AudioHostTransportClient {
       runtimeHandle: number
       parameterId: number
       normalized: number
-    }) => void
+    }) => void,
+    private readonly persistentSharedPages: () => boolean = () => true
   ) {}
 
   audioPreferences(): AudioPreferences | null {
@@ -221,6 +222,13 @@ export class AudioHostTransportClient {
   }
 
   async previewMixerParameter(preview: MixerParameterPreview): Promise<void> {
+    if (preview.target === "plugin") {
+      await this.request({
+        type: "preview-mixer-parameter",
+        preview
+      })
+      return
+    }
     const client = this.getClient()
     if (!client) throw new Error("audio host is not running")
     const targetKind = preview.target === "channel" ? "mixer-channel" : "mixer-send"
@@ -245,6 +253,22 @@ export class AudioHostTransportClient {
   }
 
   async mixerSnapshot(): Promise<MixerRuntimeSnapshot> {
+    if (!this.persistentSharedPages()) {
+      const response = await this.request({ type: "mixer-snapshot" })
+      if (response.result.type !== "mixer-snapshot") {
+        throw new Error("audio host returned an invalid mixer snapshot")
+      }
+      return {
+        meters: (response.result.meters ?? []).map((meter) => ({
+          channelId: meter.channel_id,
+          preFaderPeak: [meter.pre_left, meter.pre_right],
+          postFaderPeak: [meter.post_left, meter.post_right],
+          heldPeak: [meter.held_left, meter.held_right],
+          clipped: meter.clipped
+        })),
+        capturedAt: Date.now()
+      }
+    }
     const telemetry = this.readTelemetry()
     return {
       meters: telemetry[6].flatMap((meter) => {
@@ -320,6 +344,7 @@ export class AudioHostTransportClient {
   }
 
   async transportSnapshot(): Promise<TransportSnapshot> {
+    if (!this.persistentSharedPages()) return this.transportControlSnapshot()
     const telemetry = this.readTelemetry()
     return this.rememberTransport({
       ...this.lastTransport,
@@ -382,6 +407,7 @@ export class AudioHostTransportClient {
   }
 
   captureTransport(client: AudioHostIpcClient): void {
+    if (!this.persistentSharedPages()) return
     try {
       const telemetry = decode(client.readTelemetry()) as TelemetryWire
       this.rememberTransport({

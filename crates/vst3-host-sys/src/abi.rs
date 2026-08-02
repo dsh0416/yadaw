@@ -8,13 +8,15 @@ use std::{ffi::c_void, os::raw::c_char};
 
 use crate::Steinberg::{
     self, FIDString, FUnknown, IBStream, IPlugFrame, IPlugView, IPlugViewContentScaleSupport,
-    IPluginBase, IPluginFactory, IPluginFactory2, IPluginFactory3, PClassInfo, PClassInfo2,
-    PClassInfoW, PFactoryInfo, TBool, TUID, ViewRect,
+    IPluginBase, IPluginFactory, IPluginFactory2, IPluginFactory3,
+    Linux::{IEventHandler, IRunLoop, ITimerHandler},
+    PClassInfo, PClassInfo2, PClassInfoW, PFactoryInfo, TBool, TUID, ViewRect,
     Vst::{
-        AudioBusBuffers, BusDirection, BusInfo, CtrlNumber, Event, IAudioProcessor, IComponent,
-        IComponentHandler, IConnectionPoint, IEditController, IEventList, IHostApplication,
-        IMessage, IMidiMapping, IParamValueQueue, IParameterChanges, IoMode, MediaType, ParamID,
-        ParamValue, ParameterInfo, ProcessData, ProcessSetup, RoutingInfo, SpeakerArrangement,
+        AudioBusBuffers, BusDirection, BusInfo, CtrlNumber, Event, IAttributeList, IAudioProcessor,
+        IComponent, IComponentHandler, IConnectionPoint, IEditController, IEventList,
+        IHostApplication, IMessage, IMidiMapping, IParamValueQueue, IParameterChanges, IoMode,
+        MediaType, ParamID, ParamValue, ParameterInfo, ProcessData, ProcessSetup, RoutingInfo,
+        SpeakerArrangement,
     },
     int16, int32, int64, tresult, uint32,
 };
@@ -263,6 +265,59 @@ pub struct HostApplicationVTable {
 }
 
 #[repr(C)]
+pub struct MessageVTable {
+    pub base: FUnknownVTable,
+    pub get_message_id: unsafe extern "system" fn(this: *mut IMessage) -> FIDString,
+    pub set_message_id: unsafe extern "system" fn(this: *mut IMessage, id: FIDString),
+    pub get_attributes: unsafe extern "system" fn(this: *mut IMessage) -> *mut IAttributeList,
+}
+
+#[repr(C)]
+pub struct AttributeListVTable {
+    pub base: FUnknownVTable,
+    pub set_int: unsafe extern "system" fn(
+        this: *mut IAttributeList,
+        id: FIDString,
+        value: int64,
+    ) -> tresult,
+    pub get_int: unsafe extern "system" fn(
+        this: *mut IAttributeList,
+        id: FIDString,
+        value: *mut int64,
+    ) -> tresult,
+    pub set_float:
+        unsafe extern "system" fn(this: *mut IAttributeList, id: FIDString, value: f64) -> tresult,
+    pub get_float: unsafe extern "system" fn(
+        this: *mut IAttributeList,
+        id: FIDString,
+        value: *mut f64,
+    ) -> tresult,
+    pub set_string: unsafe extern "system" fn(
+        this: *mut IAttributeList,
+        id: FIDString,
+        value: *const u16,
+    ) -> tresult,
+    pub get_string: unsafe extern "system" fn(
+        this: *mut IAttributeList,
+        id: FIDString,
+        value: *mut u16,
+        size_in_bytes: uint32,
+    ) -> tresult,
+    pub set_binary: unsafe extern "system" fn(
+        this: *mut IAttributeList,
+        id: FIDString,
+        data: *const c_void,
+        size_in_bytes: uint32,
+    ) -> tresult,
+    pub get_binary: unsafe extern "system" fn(
+        this: *mut IAttributeList,
+        id: FIDString,
+        data: *mut *const c_void,
+        size_in_bytes: *mut uint32,
+    ) -> tresult,
+}
+
+#[repr(C)]
 pub struct EventListVTable {
     pub base: FUnknownVTable,
     pub event_count: unsafe extern "system" fn(this: *mut IEventList) -> int32,
@@ -365,6 +420,37 @@ pub struct PlugFrameVTable {
         view: *mut IPlugView,
         size: *mut ViewRect,
     ) -> tresult,
+}
+
+#[repr(C)]
+pub struct EventHandlerVTable {
+    pub base: FUnknownVTable,
+    pub on_fd_is_set: unsafe extern "system" fn(this: *mut IEventHandler, fd: i32),
+}
+
+#[repr(C)]
+pub struct TimerHandlerVTable {
+    pub base: FUnknownVTable,
+    pub on_timer: unsafe extern "system" fn(this: *mut ITimerHandler),
+}
+
+#[repr(C)]
+pub struct RunLoopVTable {
+    pub base: FUnknownVTable,
+    pub register_event_handler: unsafe extern "system" fn(
+        this: *mut IRunLoop,
+        handler: *mut IEventHandler,
+        fd: i32,
+    ) -> tresult,
+    pub unregister_event_handler:
+        unsafe extern "system" fn(this: *mut IRunLoop, handler: *mut IEventHandler) -> tresult,
+    pub register_timer: unsafe extern "system" fn(
+        this: *mut IRunLoop,
+        handler: *mut ITimerHandler,
+        milliseconds: u64,
+    ) -> tresult,
+    pub unregister_timer:
+        unsafe extern "system" fn(this: *mut IRunLoop, handler: *mut ITimerHandler) -> tresult,
 }
 
 #[repr(C)]

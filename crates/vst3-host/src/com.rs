@@ -3,10 +3,13 @@ use std::{ffi::c_void, marker::PhantomData, ptr::NonNull};
 use yadaw_vst3_host_sys::{
     Steinberg::{
         FUnknown, IBStream, IPlugFrame, IPlugView, IPlugViewContentScaleSupport, IPluginBase,
-        IPluginFactory, IPluginFactory2, IPluginFactory3, TUID,
+        IPluginFactory, IPluginFactory2, IPluginFactory3,
+        Linux::{IEventHandler, IRunLoop, ITimerHandler},
+        TUID,
         Vst::{
-            IAudioProcessor, IComponent, IComponentHandler, IConnectionPoint, IEditController,
-            IEventList, IHostApplication, IMidiMapping, IParamValueQueue, IParameterChanges,
+            IAttributeList, IAudioProcessor, IComponent, IComponentHandler, IConnectionPoint,
+            IEditController, IEventList, IHostApplication, IMessage, IMidiMapping,
+            IParamValueQueue, IParameterChanges,
         },
     },
     abi::FUnknownVTable,
@@ -44,6 +47,8 @@ interface!(IPluginFactory2, iid::IPLUGIN_FACTORY2);
 interface!(IPluginFactory3, iid::IPLUGIN_FACTORY3);
 interface!(IBStream, iid::IBSTREAM);
 interface!(IHostApplication, iid::IHOST_APPLICATION);
+interface!(IMessage, iid::IMESSAGE);
+interface!(IAttributeList, iid::IATTRIBUTE_LIST);
 interface!(IComponent, iid::ICOMPONENT);
 interface!(IAudioProcessor, iid::IAUDIO_PROCESSOR);
 interface!(IEditController, iid::IEDIT_CONTROLLER);
@@ -55,6 +60,9 @@ interface!(IParamValueQueue, iid::IPARAM_VALUE_QUEUE);
 interface!(IConnectionPoint, iid::ICONNECTION_POINT);
 interface!(IPlugView, iid::IPLUG_VIEW);
 interface!(IPlugFrame, iid::IPLUG_FRAME);
+interface!(IEventHandler, iid::IEVENT_HANDLER);
+interface!(ITimerHandler, iid::ITIMER_HANDLER);
+interface!(IRunLoop, iid::IRUN_LOOP);
 interface!(
     IPlugViewContentScaleSupport,
     iid::IPLUG_VIEW_CONTENT_SCALE_SUPPORT
@@ -80,6 +88,27 @@ impl<I: ComInterface> ComPtr<I> {
             pointer,
             marker: PhantomData,
         })
+    }
+
+    /// Retains one borrowed interface pointer and returns an owning reference.
+    ///
+    /// # Safety
+    ///
+    /// `pointer` must be a live borrowed pointer to `I` for the duration of this call, and its
+    /// leading vtable must implement the matching `FUnknown` reference-counting methods.
+    #[cfg(any(target_os = "linux", all(test, unix)))]
+    pub(crate) unsafe fn retain_raw(pointer: *mut I, operation: &'static str) -> HostResult<Self> {
+        let owned = unsafe {
+            // SAFETY: the caller provides the validity and interface-layout guarantees.
+            Self::from_raw(pointer, operation)?
+        };
+        unsafe {
+            // SAFETY: owned contains the validated live interface pointer and every VST3
+            // interface begins with the FUnknown vtable prefix.
+            let unknown = owned.pointer.cast::<FUnknown>().as_ptr();
+            ((*unknown_vtable(unknown)).add_ref)(unknown);
+        }
+        Ok(owned)
     }
 
     /// Borrows the raw interface pointer without changing its reference count.
