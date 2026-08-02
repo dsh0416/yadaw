@@ -5880,7 +5880,7 @@ checksum = "3ae8337f8a065cfc972643663ea4279e04e7256de865aa66fe25cec5fb912d3f"
 
 [[package]]
 name = "yadaw-audio-engine"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "bwavfile",
  "cpal",
@@ -5896,7 +5896,7 @@ dependencies = [
 
 [[package]]
 name = "yadaw-audio-host"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "ara2-bridge-core",
  "ara2-bridge-host",
@@ -5924,7 +5924,7 @@ dependencies = [
 
 [[package]]
 name = "yadaw-audio-host-client"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "ipc-channel",
  "napi",
@@ -5937,14 +5937,14 @@ dependencies = [
 
 [[package]]
 name = "yadaw-dsp-core"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "criterion",
 ]
 
 [[package]]
 name = "yadaw-dsp-node"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "bwavfile",
  "criterion",
@@ -5961,7 +5961,7 @@ dependencies = [
 
 [[package]]
 name = "yadaw-dsp-render"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "criterion",
  "yadaw-dsp-core",
@@ -5970,7 +5970,7 @@ dependencies = [
 
 [[package]]
 name = "yadaw-dsp-runtime"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "midly",
  "rmp-serde",
@@ -5981,7 +5981,7 @@ dependencies = [
 
 [[package]]
 name = "yadaw-gain"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "truce",
  "truce-gui-types",
@@ -5993,7 +5993,7 @@ dependencies = [
 
 [[package]]
 name = "yadaw-ipc-transport"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "ipc-channel",
  "loom",
@@ -6006,7 +6006,7 @@ dependencies = [
 
 [[package]]
 name = "yadaw-metronome"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "truce",
  "truce-gui-types",
@@ -6018,14 +6018,14 @@ dependencies = [
 
 [[package]]
 name = "yadaw-plugin-ui"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "truce-gui-types",
 ]
 
 [[package]]
 name = "yadaw-sine"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "truce",
  "truce-gui-types",
@@ -6037,7 +6037,7 @@ dependencies = [
 
 [[package]]
 name = "yadaw-vst3-host"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "cc",
  "libloading 0.8.9",
@@ -6050,7 +6050,7 @@ dependencies = [
 
 [[package]]
 name = "yadaw-vst3-host-sys"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "bindgen",
  "cc",
