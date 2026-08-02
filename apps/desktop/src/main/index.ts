@@ -1,17 +1,13 @@
 import { app } from "electron"
+import { configureApplicationIdentity, quitWhenAllWindowsAreClosed } from "./application-shell"
 import { AudioHostService } from "./audio-host-service"
 import { deferProjectClose } from "./dirty-project-close"
 import { ProjectService } from "./project-service"
 import { startApplication } from "./startup"
 import { mainWindow } from "./windows"
 
-const APPLICATION_ID = "dev.yadaw.studio"
-
-if (process.platform === "win32") {
-  app.setAppUserModelId(APPLICATION_ID)
-} else if (process.platform === "linux") {
-  app.commandLine.appendSwitch("class", APPLICATION_ID)
-}
+configureApplicationIdentity(app, process.platform)
+quitWhenAllWindowsAreClosed(app)
 
 if (process.env.YADAW_TEST_USER_DATA) {
   app.disableHardwareAcceleration()
@@ -47,12 +43,6 @@ startApplication(
     projectService = services.projectService
   }
 )
-
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
-    app.quit()
-  }
-})
 
 app.on("before-quit", (event) => {
   if (shutdownComplete) return
