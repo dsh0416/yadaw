@@ -30,6 +30,7 @@
     ]
   },
   "devDependencies": {
-    "@napi-rs/cli": "^3.0.0"
+    "@emnapi/runtime": "catalog:",
+    "@napi-rs/cli": "catalog:"
   }
 }

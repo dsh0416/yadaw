@@ -79,7 +79,6 @@ checksum = "sha256:d96c2cc1736f4eb7fa43cb9bbdf56d93551a9ae0a9aadb9c99c3c3b2b712a
 url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-22.1.8/clang%2Bllvm-22.1.8-x86_64-pc-windows-msvc.tar.xz"
 url_api = "https://api.github.com/repos/llvm/llvm-project/releases/assets/449359319"
 provenance = "github-attestations"
-provenance_verified = true
 
 [[tools."github:microsoft/apm"]]
 version = "0.26.0"

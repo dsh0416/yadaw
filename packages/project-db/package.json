@@ -19,15 +19,15 @@
     "test:coverage": "vitest run --coverage src/__tests__"
   },
   "dependencies": {
-    "@electric-sql/pglite": "0.5.4",
+    "@electric-sql/pglite": "catalog:",
     "@yadaw/contracts": "workspace:*",
     "drizzle-orm": "0.45.2"
   },
   "devDependencies": {
-    "@types/node": "^26.0.0",
-    "@vitest/coverage-v8": "4.1.10",
+    "@types/node": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
     "drizzle-kit": "0.31.10",
-    "typescript": "^5.9.3",
-    "vitest": "4.1.10"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   }
 }

@@ -19,6 +19,7 @@ export default defineConfig({
         ],
         test: {
           name: "storybook",
+          setupFiles: [join(currentDirectory, "vitest.setup.ts")],
           browser: {
             enabled: true,
             headless: true,
