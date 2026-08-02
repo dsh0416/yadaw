@@ -138,9 +138,9 @@ fn wait_for_publication(
 
 fn atomic(mapping: &SharedMemory, index: usize) -> &AtomicU64 {
     let offset = index
-        .checked_mul(size_of::<AtomicU64>())
+        .checked_mul(std::mem::size_of::<AtomicU64>())
         .expect("test atomic offset fits usize");
-    assert!(offset + size_of::<AtomicU64>() <= mapping.len().get());
+    assert!(offset + std::mem::size_of::<AtomicU64>() <= mapping.len().get());
     // SAFETY: the mapping is live for the returned borrow, mmap/MapViewOfFile is
     // page-aligned, the checked offset is naturally aligned and in bounds, the
     // zero-filled storage is a valid AtomicU64 representation, and both
