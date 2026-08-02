@@ -145,6 +145,7 @@ export class AudioHostService {
     isPluginBypassed: (instanceId) => this.plugins.isBypassed(instanceId),
     commit: async (deployment) => {
       await this.commitDesiredGraph(deployment)
+      await this.retireRemovedPlugins(deployment)
       this.publishedGraph = {
         revision: deployment.graphRevision,
         runtime: structuredClone(deployment.runtime)
@@ -404,6 +405,9 @@ export class AudioHostService {
       project: structuredClone(deployment.project),
       runtime: structuredClone(deployment.runtime)
     }
+  }
+
+  private async retireRemovedPlugins(deployment: PreparedGraphDeployment): Promise<void> {
     const desiredInstanceIds = new Set(deployment.project.plugins.map((plugin) => plugin.id))
     const retiredInstanceIds = this.plugins
       .loadedInstanceIds()

@@ -265,29 +265,40 @@ impl AudioHostIpcClient {
 
     #[napi]
     pub fn read_telemetry(&self) -> Result<Buffer> {
-        let snapshot = self
-            .state
-            .telemetry
-            .read()
-            .map_err(|_| failure("telemetry page", "poisoned"))?
-            .read();
-        let snapshot = match snapshot {
-            Some(snapshot) => {
-                if let Ok(mut previous) = self.state.last_telemetry.lock() {
-                    *previous = snapshot.clone();
+        let snapshot = if self.state.persistent_shared_pages {
+            let snapshot = self
+                .state
+                .telemetry
+                .read()
+                .map_err(|_| failure("telemetry page", "poisoned"))?
+                .read();
+            match snapshot {
+                Some(snapshot) => {
+                    if let Ok(mut previous) = self.state.last_telemetry.lock() {
+                        *previous = snapshot.clone();
+                    }
+                    snapshot
                 }
-                snapshot
+                None => {
+                    self.state
+                        .telemetry_fallback_reads
+                        .fetch_add(1, Ordering::Relaxed);
+                    self.state
+                        .last_telemetry
+                        .lock()
+                        .map_err(|_| failure("last telemetry snapshot", "poisoned"))?
+                        .clone()
+                }
             }
-            None => {
-                self.state
-                    .telemetry_fallback_reads
-                    .fetch_add(1, Ordering::Relaxed);
-                self.state
-                    .last_telemetry
-                    .lock()
-                    .map_err(|_| failure("last telemetry snapshot", "poisoned"))?
-                    .clone()
-            }
+        } else {
+            self.state
+                .telemetry_fallback_reads
+                .fetch_add(1, Ordering::Relaxed);
+            self.state
+                .last_telemetry
+                .lock()
+                .map_err(|_| failure("last telemetry snapshot", "poisoned"))?
+                .clone()
         };
         rmp_serde::to_vec_named(&(
             snapshot.epoch,

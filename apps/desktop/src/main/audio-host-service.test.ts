@@ -731,7 +731,7 @@ describe("AudioHostService recovery", () => {
     await service.stop()
   })
 
-  it("unloads plugin instances removed from the committed graph", async () => {
+  it("does not unload removed plugins until graph activation", async () => {
     const service = new AudioHostService(
       "audio-host",
       "crash-marker",
@@ -765,6 +765,49 @@ describe("AudioHostService recovery", () => {
       project: candidate.project,
       runtime: candidate.runtime
     })
+
+    const client = fakeHost.Client.instances[0]!
+    expect(client.commands.filter((command) => command.type === "unload-plugin")).toEqual([])
+    await service.stop()
+  })
+
+  it("unloads plugin instances removed from the committed graph after activation", async () => {
+    const service = new AudioHostService(
+      "audio-host",
+      "crash-marker",
+      {
+        workerThreads: "auto",
+        maxBlockingThreads: "auto",
+        egressConcurrency: "auto"
+      },
+      undefined,
+      () => {},
+      async () => {}
+    )
+    service.start()
+    const plugin = pluginInstance()
+    await service.loadPlugin(plugin, 48_000)
+    const candidate = graph(48_000)
+    const prepared = await service.prepareGraphDeployment(
+      {
+        protocolVersion: IPC_PROTOCOL_VERSION,
+        requestId: "remove-plugin"
+      },
+      {
+        kind: "project-graph",
+        id: "project:graph",
+        epoch: "main-epoch",
+        generation: 1
+      },
+      2,
+      candidate.project,
+      candidate.runtime
+    )
+    expect(prepared.ok).toBe(true)
+    if (!prepared.ok) throw new Error("test setup failed")
+
+    const activated = await service.activateGraphDeployment(prepared.value)
+    expect(activated).toMatchObject({ ok: true, value: { type: "activated" } })
 
     const client = fakeHost.Client.instances[0]!
     expect(client.commands.filter((command) => command.type === "unload-plugin")).toEqual([
