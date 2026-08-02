@@ -10,8 +10,7 @@ function clientWithEvents(events: unknown[]) {
 
 describe("drainHostEvents", () => {
   it("persists the latest valid editor preference and ignores invalid zoom", async () => {
-    const writes: Array<{ classId: string; preference: { mode: string; zoomPercent: number } }> =
-      []
+    const writes: Array<{ classId: string; preference: { mode: string; zoomPercent: number } }> = []
     const pending = new Set<Promise<void>>()
     drainHostEvents(
       clientWithEvents([

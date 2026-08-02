@@ -262,13 +262,15 @@ describe("plugin store", () => {
   })
 
   it("reconciles editor open state when the helper reports a native close", async () => {
-    let onClosed: ((event: {
-      protocolVersion: number
-      sourceEpoch: string
-      sequence: number
-      resourceRevision: number
-      payload: { instanceId: string }
-    }) => void) | null = null
+    let onClosed:
+      | ((event: {
+          protocolVersion: number
+          sourceEpoch: string
+          sequence: number
+          resourceRevision: number
+          payload: { instanceId: string }
+        }) => void)
+      | null = null
     window.yadaw.subscribePluginEditorClosed = vi.fn((listener) => {
       onClosed = listener
       return () => {

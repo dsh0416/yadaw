@@ -273,7 +273,9 @@ export interface YadawDesktopApi {
     instanceId: string
   ): Promise<RpcResult<PluginEditorOpenResult>>
   closePluginEditor(meta: RpcRequestMeta): Promise<RpcResult<void>>
-  subscribePluginEditorClosed(listener: (event: RpcEvent<{ instanceId: string }>) => void): () => void
+  subscribePluginEditorClosed(
+    listener: (event: RpcEvent<{ instanceId: string }>) => void
+  ): () => void
   getPluginParameters(meta: RpcRequestMeta): Promise<RpcResult<PluginParameterInfo[]>>
   setPluginParameter(
     meta: RpcRequestMeta,
