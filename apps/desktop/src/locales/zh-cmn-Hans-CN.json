@@ -1012,8 +1012,12 @@
       "editTempoAria": "编辑当前速度",
       "tempoButtonAria": "速度 {value} BPM；双击编辑",
       "tempoEditTitle": "双击编辑当前速度轨事件",
-      "projectKeyTooltip": "工程调号 · 即将推出",
-      "projectKeyAria": "工程调号"
+      "editMeterAria": "编辑当前拍号",
+      "meterButtonAria": "拍号 {value}；双击编辑",
+      "meterEditTitle": "双击编辑当前拍号轨事件",
+      "editKeyAria": "编辑当前调号",
+      "keyButtonAria": "调号 {value}；双击编辑",
+      "keyEditTitle": "双击编辑当前调号轨事件"
     },
     "master": {
       "ariaLabel": "主输出",

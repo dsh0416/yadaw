@@ -6,6 +6,7 @@ import {
   beatTicksThroughTick,
   musicalPositionAtTick,
   replaceTempoEventAtTick,
+  replaceTimeSignatureEventAtTick,
   secondsToTick,
   tempoEventAtTick,
   tempoAtTick,
@@ -59,6 +60,19 @@ describe("tempo map", () => {
       { tick: 3_840, beatsPerMinute: 72.5 }
     ])
     expect(map.tempoEvents[1]?.beatsPerMinute).toBe(60)
+  })
+
+  it("replaces the active meter event without inserting a marker at the playhead", () => {
+    const replaced = replaceTimeSignatureEventAtTick(map, 4_800, {
+      numerator: 7,
+      denominator: 8
+    })
+
+    expect(replaced.timeSignatureEvents).toEqual([
+      { tick: 0, numerator: 4, denominator: 4 },
+      { tick: 3_840, numerator: 7, denominator: 8 }
+    ])
+    expect(map.timeSignatureEvents[1]).toMatchObject({ numerator: 3, denominator: 4 })
   })
 
   it("places bar guides using both tempo and time-signature changes", () => {

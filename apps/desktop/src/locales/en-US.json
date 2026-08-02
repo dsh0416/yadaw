@@ -1321,8 +1321,12 @@
       "editTempoAria": "Edit current tempo",
       "tempoButtonAria": "Tempo {value} BPM; double-click to edit",
       "tempoEditTitle": "Double-click to edit the current Tempo Track event",
-      "projectKeyTooltip": "Project key · Coming soon",
-      "projectKeyAria": "Project key"
+      "editMeterAria": "Edit current meter",
+      "meterButtonAria": "Meter {value}; double-click to edit",
+      "meterEditTitle": "Double-click to edit the current Meter Track event",
+      "editKeyAria": "Edit current key signature",
+      "keyButtonAria": "Key signature {value}; double-click to edit",
+      "keyEditTitle": "Double-click to edit the current Key Track event"
     },
     "master": {
       "ariaLabel": "Master output",

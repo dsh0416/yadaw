@@ -9,8 +9,15 @@ const tempoMap = {
     { tick: 0, beatsPerMinute: 120 },
     { tick: 3_840, beatsPerMinute: 60 }
   ],
-  timeSignatureEvents: [{ tick: 0, numerator: 4, denominator: 4 }]
+  timeSignatureEvents: [
+    { tick: 0, numerator: 4, denominator: 4 },
+    { tick: 3_840, numerator: 3, denominator: 4 }
+  ]
 }
+const keySignatureEvents = [
+  { tick: 0, fifths: 0, mode: "major" as const },
+  { tick: 3_840, fifths: -3, mode: "minor" as const }
+]
 
 const masterChannel = {
   id: "master",
@@ -72,6 +79,7 @@ function mountTopbar() {
       externalClock: false,
       playheadSeconds: 3,
       tempoMap,
+      keySignatureEvents,
       soundBrowserOpen: true,
       mixerDockOpen: true,
       pianoRollDockOpen: false,
@@ -224,5 +232,33 @@ describe("StudioTopbar", () => {
     await input.trigger("keydown", { key: "Escape" })
 
     expect(wrapper.emitted("updateTempo")).toBeUndefined()
+  })
+
+  it("reflects the active Meter and Key Track events at the playhead", () => {
+    const wrapper = mountTopbar()
+
+    expect(wrapper.get('button[aria-label^="Meter 3/4"]').text()).toBe("3/4")
+    expect(wrapper.get('button[aria-label^="Key signature C minor"]').text()).toBe("C minor")
+  })
+
+  it("edits the active meter event from the musical display", async () => {
+    const wrapper = mountTopbar()
+
+    await wrapper.get('button[aria-label^="Meter 3/4"]').trigger("dblclick")
+    const input = wrapper.get('input[aria-label="Edit current meter"]')
+    await input.setValue("7/8")
+    await input.trigger("keydown", { key: "Enter" })
+
+    expect(wrapper.emitted("updateMeter")).toEqual([[{ numerator: 7, denominator: 8 }]])
+  })
+
+  it("edits the active key event from the musical display", async () => {
+    const wrapper = mountTopbar()
+
+    await wrapper.get('button[aria-label^="Key signature C minor"]').trigger("dblclick")
+    const select = wrapper.get('select[aria-label="Edit current key signature"]')
+    await select.setValue("major:2")
+
+    expect(wrapper.emitted("updateKey")).toEqual([[{ fifths: 2, mode: "major" }]])
   })
 })

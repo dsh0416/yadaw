@@ -3,7 +3,13 @@ import { computed, onBeforeUnmount, onMounted } from "vue"
 import { useEventListener } from "@vueuse/core"
 import { storeToRefs } from "pinia"
 import { useRouter } from "vue-router"
-import type { MixerChannelMeter, MixerChannelPatch, MixerParameterPreview } from "@yadaw/contracts"
+import type {
+  KeySignatureMode,
+  MixerChannelMeter,
+  MixerChannelPatch,
+  MixerParameterPreview,
+  TimeSignatureEventState
+} from "@yadaw/contracts"
 import SoundBrowser from "../components/studio/SoundBrowser.vue"
 import StudioStatusbar from "../components/studio/StudioStatusbar.vue"
 import StudioTopbar from "../components/studio/StudioTopbar.vue"
@@ -18,7 +24,12 @@ import { useStudioWorkspaceStore } from "../stores/studioWorkspace"
 import { useStudioWorkflowStore } from "../stores/studioWorkflow"
 import { usePianoRollStore } from "../stores/pianoRoll"
 import MidiImportDialog from "../components/midi/MidiImportDialog.vue"
-import { replaceTempoEventAtTick, secondsToTick } from "../utils/tempoMap"
+import {
+  replaceTempoEventAtTick,
+  replaceTimeSignatureEventAtTick,
+  secondsToTick
+} from "../utils/tempoMap"
+import { replaceKeySignatureEventAtTick } from "../utils/keySignatures"
 import { defaultCycleRange } from "../utils/cycleRange"
 
 const router = useRouter()
@@ -75,6 +86,26 @@ function updateCurrentTempo(beatsPerMinute: number): void {
     beatsPerMinute
   )
   void mixerStore.execute({ type: "replace-tempo-map", tempoMap })
+}
+
+function updateCurrentMeter(
+  signature: Pick<TimeSignatureEventState, "numerator" | "denominator">
+): void {
+  const tempoMap = replaceTimeSignatureEventAtTick(
+    mixerStore.graph.tempoMap,
+    secondsToTick(mixerStore.graph.tempoMap, playheadSeconds.value),
+    signature
+  )
+  void mixerStore.execute({ type: "replace-tempo-map", tempoMap })
+}
+
+function updateCurrentKey(signature: { fifths: number; mode: KeySignatureMode }): void {
+  const events = replaceKeySignatureEventAtTick(
+    mixerStore.graph.keySignatureEvents,
+    secondsToTick(mixerStore.graph.tempoMap, playheadSeconds.value),
+    signature
+  )
+  void mixerStore.execute({ type: "replace-key-signature-map", events })
 }
 
 function previewMaster(preview: MixerParameterPreview): void {
@@ -166,6 +197,7 @@ onBeforeUnmount(() => {
       :external-clock="transportStore.snapshot.clockSource === 'external'"
       :playhead-seconds="playheadSeconds"
       :tempo-map="mixerStore.graph.tempoMap"
+      :key-signature-events="mixerStore.graph.keySignatureEvents"
       :sound-browser-open="workspaceStore.soundBrowserOpen"
       :mixer-dock-open="workspaceStore.mixerDockOpen"
       :piano-roll-dock-open="workspaceStore.pianoRollDockOpen"
@@ -182,6 +214,8 @@ onBeforeUnmount(() => {
       @toggle-count-in="transportStore.toggleCountIn"
       @toggle-cycle="toggleCycle"
       @update-tempo="updateCurrentTempo"
+      @update-meter="updateCurrentMeter"
+      @update-key="updateCurrentKey"
       @toggle-metronome="toggleMetronome"
       @preview-master="previewMaster"
       @update-master="updateMaster"
