@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onUnmounted, shallowRef } from "vue"
 import { useI18n } from "vue-i18n"
-import { Power, Trash2 } from "@lucide/vue"
+import { GripVertical, Power, Trash2 } from "@lucide/vue"
 import type {
   MixerChannelState,
   PluginDescriptor,
@@ -191,13 +191,19 @@ function confirmDrop(selection: PluginSelection): void {
               state: pluginState(plugin)
             })
           "
-          draggable="true"
-          @dragstart="startRackDrag($event, plugin.id)"
-          @dragend="finishRackDrag"
           @dragenter="previewDropAtRow($event, index)"
           @dragover="previewDropAtRow($event, index)"
           @drop="dropInsert($event, index)"
         >
+          <span
+            class="plugin-grip"
+            draggable="true"
+            :aria-label="t('plugins.pluginSlot.move', { name: plugin.descriptor.name })"
+            @dragstart.stop="startRackDrag($event, plugin.id)"
+            @dragend.stop="finishRackDrag"
+          >
+            <GripVertical :size="11" aria-hidden="true" />
+          </span>
           <button
             class="plugin-name"
             :title="`${plugin.descriptor.name} · ${plugin.descriptor.vendor}`"
@@ -310,7 +316,7 @@ function confirmDrop(selection: PluginSelection): void {
 }
 .plugin-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto 18px 18px;
+  grid-template-columns: 14px minmax(0, 1fr) auto 18px 18px;
   align-items: center;
   min-width: 0;
   height: 23px;
@@ -319,6 +325,17 @@ function confirmDrop(selection: PluginSelection): void {
   color: var(--ui-domain-color-fff);
   background: linear-gradient(var(--ui-domain-color-3f91d4), var(--ui-domain-color-2871ae));
   box-shadow: 0 1px 0 var(--ui-domain-color-ffffff28) inset;
+}
+.plugin-grip {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: currentColor;
+  cursor: grab;
+  opacity: 0.62;
+}
+.plugin-grip:active {
+  cursor: grabbing;
 }
 .mode-badge {
   padding: 1px 3px;
