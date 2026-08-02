@@ -24,6 +24,18 @@ runs:
         sudo apt-get update
         sudo apt-get install --yes --no-install-recommends \
           libasound2-dev \
+          libcairo2-dev \
+          libfontconfig1-dev \
+          libfreetype-dev \
+          libglib2.0-dev \
+          libpango1.0-dev \
+          libx11-dev \
+          libx11-xcb-dev \
+          libxcb1-dev \
+          libxcb-cursor-dev \
+          libxcb-keysyms1-dev \
+          libxcb-util-dev \
+          libxcb-xkb-dev \
           libxcursor-dev \
           libxi-dev \
           libxinerama-dev \
@@ -32,7 +44,7 @@ runs:
           libopenjp2-tools \
           libxrandr-dev \
           libwayland-dev \
-          libx11-xcb-dev
+          wayland-protocols
 
     - name: Install locked toolchain
       uses: jdx/mise-action@v4
