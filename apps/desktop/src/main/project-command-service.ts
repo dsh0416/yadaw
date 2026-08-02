@@ -162,7 +162,7 @@ export class ProjectCommandService {
         await this.graphs.abortMutation(prepared.value).catch(() => undefined)
         throw error
       }
-      if (prepared.value.native) this.audioHost?.commitDesiredGraph(prepared.value.native)
+      if (prepared.value.native) await this.audioHost?.commitDesiredGraph(prepared.value.native)
       const updated = this.lifecycle!.applicationState.resources.update(
         workspace.projectGraph,
         workspace.revision,
@@ -276,7 +276,7 @@ export class ProjectCommandService {
         if (status.state !== "committed") throw error
         committed = status.result
       }
-      if (nativePrepared?.native) this.audioHost?.commitDesiredGraph(nativePrepared.native)
+      if (nativePrepared?.native) await this.audioHost?.commitDesiredGraph(nativePrepared.native)
       const updated = this.lifecycle!.applicationState.resources.update(
         workspace.projectGraph,
         revision,
