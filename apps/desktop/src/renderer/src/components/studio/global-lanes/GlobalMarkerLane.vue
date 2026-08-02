@@ -18,7 +18,6 @@ const props = defineProps<{
   beatGuides: number[]
   verticalGuides: number[]
   color: string
-  expanded: boolean
   valueLabel: string
   positionLabel: string
 }>()
@@ -68,11 +67,10 @@ function positionFromPointer(event: PointerEvent | MouseEvent): number {
 }
 
 function createPoint(event: MouseEvent): void {
-  if (props.expanded) emit("create", positionFromPointer(event))
+  emit("create", positionFromPointer(event))
 }
 
 function startDrag(event: PointerEvent, point: GlobalMarkerLanePoint): void {
-  if (!props.expanded) return
   event.preventDefault()
   event.stopPropagation()
   emit("select", point.id)
@@ -111,7 +109,6 @@ function handleKeydown(event: KeyboardEvent): void {
   <div
     ref="lane"
     class="marker-lane"
-    :class="{ collapsed: !expanded }"
     :style="{
       width: `${contentWidth}px`,
       height: `${height}px`,
@@ -127,35 +124,32 @@ function handleKeydown(event: KeyboardEvent): void {
     @keydown="handleKeydown"
     @pointerdown.self="emit('select', null)"
   >
-    <template v-if="expanded">
-      <span
-        v-for="guide in beatGuides"
-        :key="`beat-${guide}`"
-        class="beat-guide"
-        :style="{ left: `${guide}px` }"
-        aria-hidden="true"
-      />
-      <span
-        v-for="guide in verticalGuides"
-        :key="guide"
-        class="vertical-guide"
-        :style="{ left: `${guide}px` }"
-        aria-hidden="true"
-      />
-      <span
-        v-for="segment in segments"
-        :key="`segment-${segment.id}`"
-        class="event-segment"
-        :class="{ selected: segment.id === selectedId }"
-        :style="{ left: `${segment.left}px`, width: `${segment.width}px` }"
-        aria-hidden="true"
-      >
-        <b>{{ segment.label }}</b>
-      </span>
-    </template>
+    <span
+      v-for="guide in beatGuides"
+      :key="`beat-${guide}`"
+      class="beat-guide"
+      :style="{ left: `${guide}px` }"
+      aria-hidden="true"
+    />
+    <span
+      v-for="guide in verticalGuides"
+      :key="guide"
+      class="vertical-guide"
+      :style="{ left: `${guide}px` }"
+      aria-hidden="true"
+    />
+    <span
+      v-for="segment in segments"
+      :key="`segment-${segment.id}`"
+      class="event-segment"
+      :class="{ selected: segment.id === selectedId }"
+      :style="{ left: `${segment.left}px`, width: `${segment.width}px` }"
+      aria-hidden="true"
+    >
+      <b>{{ segment.label }}</b>
+    </span>
     <button
       v-for="point in renderedPoints"
-      v-show="expanded"
       :key="point.id"
       type="button"
       class="event-handle"
@@ -165,7 +159,6 @@ function handleKeydown(event: KeyboardEvent): void {
       @pointerdown="startDrag($event, point)"
       @click.stop="emit('select', point.id)"
     />
-    <div v-if="!expanded" class="collapsed-rule" aria-hidden="true" />
   </div>
 </template>
 
@@ -248,17 +241,5 @@ function handleKeydown(event: KeyboardEvent): void {
 .event-handle:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 3px;
-}
-.marker-lane.collapsed {
-  cursor: default;
-  background: color-mix(in srgb, var(--lane-color) 4%, var(--daw-ruler));
-}
-.collapsed-rule {
-  position: absolute;
-  top: 50%;
-  right: 0;
-  left: 0;
-  height: 1px;
-  background: color-mix(in srgb, var(--lane-color) 28%, var(--line-soft));
 }
 </style>

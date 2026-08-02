@@ -69,6 +69,20 @@ export function timeSignatureAtTick(map: TempoMapSnapshot, tick: number): TimeSi
   return current
 }
 
+export function replaceTimeSignatureEventAtTick(
+  map: TempoMapSnapshot,
+  tick: number,
+  signature: Pick<TimeSignatureEventState, "numerator" | "denominator">
+): TempoMapSnapshot {
+  const activeTick = timeSignatureAtTick(map, tick).tick
+  return {
+    ...map,
+    timeSignatureEvents: map.timeSignatureEvents.map((event) =>
+      event.tick === activeTick ? { ...event, ...signature } : event
+    )
+  }
+}
+
 export function barLengthTicksAtTick(map: TempoMapSnapshot, tick: number): number {
   const signature = timeSignatureAtTick(map, tick)
   return Math.max(

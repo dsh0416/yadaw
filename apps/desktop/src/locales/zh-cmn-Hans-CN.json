@@ -1012,8 +1012,10 @@
       "editTempoAria": "编辑当前速度",
       "tempoButtonAria": "速度 {value} BPM；双击编辑",
       "tempoEditTitle": "双击编辑当前速度轨事件",
-      "projectKeyTooltip": "工程调号 · 即将推出",
-      "projectKeyAria": "工程调号"
+      "editMeterAria": "编辑当前拍号",
+      "meterButtonAria": "拍号 {value}；双击编辑",
+      "meterEditTitle": "双击编辑当前拍号轨事件",
+      "keyButtonAria": "调号 {value}"
     },
     "master": {
       "ariaLabel": "主输出",
@@ -1053,6 +1055,9 @@
       "meter": "拍号",
       "key": "调号",
       "globalTrack": "全局轨道",
+      "globalTracks": "全局轨道",
+      "showGlobalTracksAria": "显示全局轨道",
+      "hideGlobalTracksAria": "隐藏全局轨道",
       "bpm": "BPM",
       "meterNumeratorAria": "所选拍号分子",
       "meterDenominatorAria": "所选拍号分母",
@@ -1140,9 +1145,7 @@
       "positionLabel": "拍",
       "selected": "已选",
       "selectedValueAria": "已选 {label} 值",
-      "globalTrackAria": "{label} 全局轨道",
-      "expandTrackAria": "展开 {label} 轨道",
-      "collapseTrackAria": "折叠 {label} 轨道"
+      "globalTrackAria": "{label} 全局轨道"
     },
     "rename": {
       "renameAria": "重命名 {name}",

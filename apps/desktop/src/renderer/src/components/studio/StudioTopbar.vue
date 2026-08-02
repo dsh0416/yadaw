@@ -16,11 +16,14 @@ import {
   SlidersHorizontal
 } from "@lucide/vue"
 import type {
+  KeySignatureEventState,
+  KeySignatureMode,
   MixerChannelMeter,
   MixerChannelPatch,
   MixerChannelState,
   MixerParameterPreview,
-  TempoMapSnapshot
+  TempoMapSnapshot,
+  TimeSignatureEventState
 } from "@yadaw/contracts"
 import StudioControlButton from "./topbar/StudioControlButton.vue"
 import StudioMasterControl from "./topbar/StudioMasterControl.vue"
@@ -39,6 +42,7 @@ defineProps<{
   externalClock: boolean
   playheadSeconds: number
   tempoMap: TempoMapSnapshot
+  keySignatureEvents: KeySignatureEventState[]
   soundBrowserOpen: boolean
   mixerDockOpen: boolean
   pianoRollDockOpen: boolean
@@ -57,6 +61,8 @@ const emit = defineEmits<{
   toggleCountIn: []
   toggleCycle: []
   updateTempo: [beatsPerMinute: number]
+  updateMeter: [signature: Pick<TimeSignatureEventState, "numerator" | "denominator">]
+  updateKey: [signature: { fifths: number; mode: KeySignatureMode }]
   toggleMetronome: []
   previewMaster: [preview: MixerParameterPreview]
   updateMaster: [channelId: string, patch: MixerChannelPatch]
@@ -131,7 +137,10 @@ const { t } = useI18n()
       data-topbar-group="musical-display"
       :playhead-seconds="playheadSeconds"
       :tempo-map="tempoMap"
+      :key-signature-events="keySignatureEvents"
       @update-tempo="emit('updateTempo', $event)"
+      @update-meter="emit('updateMeter', $event)"
+      @update-key="emit('updateKey', $event)"
     />
 
     <div class="control-group placeholder-only tools-group" data-topbar-group="tools">

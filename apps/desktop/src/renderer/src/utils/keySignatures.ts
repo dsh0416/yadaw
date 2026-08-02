@@ -1,4 +1,4 @@
-import type { KeySignatureMode } from "@yadaw/contracts"
+import type { KeySignatureEventState, KeySignatureMode } from "@yadaw/contracts"
 
 export interface KeySignatureChoice {
   fifths: number
@@ -68,4 +68,25 @@ export function keySignatureLabel(fifths: number, mode: KeySignatureMode): strin
     KEY_SIGNATURE_CHOICES.find((choice) => choice.fifths === fifths && choice.mode === mode)
       ?.label ?? (mode === "minor" ? "A minor" : "C Major")
   )
+}
+
+export function keySignatureAtTick(
+  events: readonly KeySignatureEventState[],
+  tick: number
+): KeySignatureEventState {
+  let current = events[0] ?? { tick: 0, fifths: 0, mode: "major" as const }
+  for (const event of events) {
+    if (event.tick > tick) break
+    current = event
+  }
+  return current
+}
+
+export function replaceKeySignatureEventAtTick(
+  events: readonly KeySignatureEventState[],
+  tick: number,
+  signature: Pick<KeySignatureEventState, "fifths" | "mode">
+): KeySignatureEventState[] {
+  const activeTick = keySignatureAtTick(events, tick).tick
+  return events.map((event) => (event.tick === activeTick ? { ...event, ...signature } : event))
 }

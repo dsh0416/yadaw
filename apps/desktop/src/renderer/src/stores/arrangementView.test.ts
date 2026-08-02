@@ -1,9 +1,37 @@
 import { createPinia, setActivePinia } from "pinia"
+import { nextTick } from "vue"
 import { beforeEach, describe, expect, it } from "vitest"
 import { useArrangementViewStore } from "./arrangementView"
 
+const storedValues = new Map<string, string>()
+const storage: Storage = {
+  get length() {
+    return storedValues.size
+  },
+  clear() {
+    storedValues.clear()
+  },
+  getItem(key) {
+    return storedValues.get(key) ?? null
+  },
+  key(index) {
+    return [...storedValues.keys()][index] ?? null
+  },
+  removeItem(key) {
+    storedValues.delete(key)
+  },
+  setItem(key, value) {
+    storedValues.set(key, value)
+  }
+}
+
 describe("arrangement view store", () => {
-  beforeEach(() => setActivePinia(createPinia()))
+  beforeEach(() => {
+    Object.defineProperty(globalThis, "localStorage", { configurable: true, value: storage })
+    Object.defineProperty(window, "localStorage", { configurable: true, value: storage })
+    storage.clear()
+    setActivePinia(createPinia())
+  })
 
   it("keeps time, track, and amplitude zoom independent and resettable", () => {
     const store = useArrangementViewStore()
@@ -21,12 +49,7 @@ describe("arrangement view store", () => {
       trackHeight: 104,
       trackScales: {},
       amplitudeScale: 1,
-      tempoLaneExpanded: true,
-      tempoLaneHeight: 112,
-      meterLaneExpanded: true,
-      meterLaneHeight: 64,
-      keyLaneExpanded: true,
-      keyLaneHeight: 64
+      globalTracksExpanded: true
     })
   })
 
@@ -92,32 +115,29 @@ describe("arrangement view store", () => {
     expect(store.amplitudeScale).toBe(0.5)
   })
 
-  it("keeps the global tempo lane expanded state and height together", () => {
+  it("shows and hides every global track with one shared state", () => {
     const store = useArrangementViewStore()
 
-    store.toggleTempoLane()
-    expect(store.tempoLaneExpanded).toBe(false)
-    expect(store.tempoLaneHeight).toBe(30)
+    store.toggleGlobalTracks()
+    expect(store.globalTracksExpanded).toBe(false)
 
-    store.setTempoLaneExpanded(true)
-    expect(store.tempoLaneExpanded).toBe(true)
-    expect(store.tempoLaneHeight).toBe(112)
+    store.setGlobalTracksExpanded(true)
+    expect(store.globalTracksExpanded).toBe(true)
+
+    store.toggleGlobalTracks()
+    store.reset()
+    expect(store.globalTracksExpanded).toBe(true)
   })
 
-  it("keeps the global meter and key lane states independent", () => {
+  it("persists global track visibility", async () => {
     const store = useArrangementViewStore()
 
-    store.toggleMeterLane()
-    expect(store.meterLaneExpanded).toBe(false)
-    expect(store.meterLaneHeight).toBe(30)
-    expect(store.keyLaneExpanded).toBe(true)
+    store.setGlobalTracksExpanded(false)
+    await nextTick()
 
-    store.toggleKeyLane()
-    expect(store.keyLaneExpanded).toBe(false)
-    expect(store.keyLaneHeight).toBe(30)
+    expect(localStorage.getItem("yadaw.arrangement.global-tracks-expanded.v1")).toBe("false")
 
-    store.reset()
-    expect(store.meterLaneHeight).toBe(64)
-    expect(store.keyLaneHeight).toBe(64)
+    setActivePinia(createPinia())
+    expect(useArrangementViewStore().globalTracksExpanded).toBe(false)
   })
 })

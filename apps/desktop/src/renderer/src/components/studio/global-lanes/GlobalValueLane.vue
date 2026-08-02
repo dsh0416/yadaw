@@ -21,7 +21,6 @@ const props = defineProps<{
   beatGuides: number[]
   verticalGuides: number[]
   color: string
-  expanded: boolean
   valueLabel: string
   positionLabel: string
 }>()
@@ -88,13 +87,11 @@ function pointFromPointer(event: PointerEvent | MouseEvent): {
 }
 
 function createPoint(event: MouseEvent): void {
-  if (!props.expanded) return
   const point = pointFromPointer(event)
   emit("create", point.position, point.value)
 }
 
 function startDrag(event: PointerEvent, point: GlobalLanePoint): void {
-  if (!props.expanded) return
   event.preventDefault()
   event.stopPropagation()
   emit("select", point.id)
@@ -139,7 +136,6 @@ function handleKeydown(event: KeyboardEvent): void {
   <div
     ref="lane"
     class="value-lane"
-    :class="{ collapsed: !expanded }"
     :style="{
       width: `${contentWidth}px`,
       height: `${height}px`,
@@ -155,13 +151,7 @@ function handleKeydown(event: KeyboardEvent): void {
     @keydown="handleKeydown"
     @pointerdown.self="emit('select', null)"
   >
-    <svg
-      v-if="expanded"
-      class="lane-graph"
-      :width="contentWidth"
-      :height="height"
-      aria-hidden="true"
-    >
+    <svg class="lane-graph" :width="contentWidth" :height="height" aria-hidden="true">
       <line
         v-for="guide in beatGuides"
         :key="`beat-${guide}`"
@@ -198,7 +188,6 @@ function handleKeydown(event: KeyboardEvent): void {
     </svg>
     <button
       v-for="point in renderedPoints"
-      v-show="expanded"
       :key="point.id"
       type="button"
       class="point-handle"
@@ -211,7 +200,6 @@ function handleKeydown(event: KeyboardEvent): void {
       @pointerdown="startDrag($event, point)"
       @click.stop="emit('select', point.id)"
     />
-    <div v-if="!expanded" class="collapsed-rule" aria-hidden="true" />
   </div>
 </template>
 
@@ -299,17 +287,5 @@ function handleKeydown(event: KeyboardEvent): void {
 .point-handle:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 3px;
-}
-.value-lane.collapsed {
-  cursor: default;
-  background: color-mix(in srgb, var(--lane-color) 4%, var(--daw-ruler));
-}
-.collapsed-rule {
-  position: absolute;
-  top: 50%;
-  right: 0;
-  left: 0;
-  height: 1px;
-  background: color-mix(in srgb, var(--lane-color) 28%, var(--line-soft));
 }
 </style>

@@ -13,13 +13,14 @@ import type { MidiClipState, MidiSourceState, ProjectCommand } from "@yadaw/cont
 import type { TimelineClip } from "../../stores/transport"
 import ArrangementTrack from "./ArrangementTrack.vue"
 import ArrangementZoomControls from "./ArrangementZoomControls.vue"
+import GlobalTracksToggle from "./GlobalTracksToggle.vue"
+import KeySignatureDropdown from "./KeySignatureDropdown.vue"
 import InlineTrackNameEditor from "../InlineTrackNameEditor.vue"
 import TimelineRuler from "./TimelineRuler.vue"
 import TrackQuickControls from "./TrackQuickControls.vue"
 import TrackHeightResizeHandle from "./TrackHeightResizeHandle.vue"
 import MidiArrangementTrack from "./MidiArrangementTrack.vue"
 import { barLengthTicksAtTick, secondsToTick, tickToSeconds } from "../../utils/tempoMap"
-import { MAJOR_KEY_SIGNATURE_CHOICES, MINOR_KEY_SIGNATURE_CHOICES } from "../../utils/keySignatures"
 import GlobalLaneHeader from "./global-lanes/GlobalLaneHeader.vue"
 import GlobalEventLaneHeader from "./global-lanes/GlobalEventLaneHeader.vue"
 import KeyTrackLane from "./global-lanes/KeyTrackLane.vue"
@@ -66,17 +67,8 @@ const {
   contentEndSeconds,
   timelineDurationSeconds
 } = storeToRefs(transportStore)
-const {
-  pixelsPerQuarter,
-  trackHeight,
-  amplitudeScale,
-  tempoLaneExpanded,
-  tempoLaneHeight,
-  meterLaneExpanded,
-  meterLaneHeight,
-  keyLaneExpanded,
-  keyLaneHeight
-} = storeToRefs(viewStore)
+const { pixelsPerQuarter, trackHeight, amplitudeScale, globalTracksExpanded } =
+  storeToRefs(viewStore)
 const liveDurationSeconds = shallowRef(0)
 const {
   selectedTempoTick,
@@ -95,17 +87,8 @@ const {
   execute: (command) => mixerStore.execute(command)
 })
 const meterDenominators = [1, 2, 4, 8, 16, 32] as const
-const keySignatureGroups = computed(() => [
-  {
-    label: t("studio.arrangement.majorKeys"),
-    options: MAJOR_KEY_SIGNATURE_CHOICES
-  },
-  {
-    label: t("studio.arrangement.minorKeys"),
-    options: MINOR_KEY_SIGNATURE_CHOICES,
-    separatorBefore: true
-  }
-])
+const TEMPO_LANE_HEIGHT = 112
+const GLOBAL_EVENT_LANE_HEIGHT = 64
 const displayMode = computed(() => session.value?.configuration.waveformDisplayMode ?? "separate")
 const recordingDuration = computed(() => {
   if (liveDurationSeconds.value > 0) return liveDurationSeconds.value
@@ -222,11 +205,21 @@ const trackRows = computed(() =>
   }))
 )
 const trackGridRows = computed(() => {
-  const rows =
-    trackRows.value.length > 0
-      ? trackRows.value.map(({ height }) => `${height}px`).join(" ")
-      : `${trackHeight.value}px`
-  return `43px ${tempoLaneHeight.value}px ${meterLaneHeight.value}px ${keyLaneHeight.value}px ${rows} minmax(64px, 1fr)`
+  const rows = ["43px"]
+  if (globalTracksExpanded.value) {
+    rows.push(
+      `${TEMPO_LANE_HEIGHT}px`,
+      `${GLOBAL_EVENT_LANE_HEIGHT}px`,
+      `${GLOBAL_EVENT_LANE_HEIGHT}px`
+    )
+  }
+  rows.push(
+    ...(trackRows.value.length > 0
+      ? trackRows.value.map(({ height }) => `${height}px`)
+      : [`${trackHeight.value}px`]),
+    "minmax(64px, 1fr)"
+  )
+  return rows.join(" ")
 })
 const railStyle = computed(() => ({
   gridTemplateRows: trackGridRows.value
@@ -424,6 +417,7 @@ function createMidiClip(trackId: string, requestedStartTick: number): void {
 <template>
   <section class="arrangement" :aria-label="t('studio.arrangement.ariaLabel')">
     <div class="arrangement-toolbar">
+      <GlobalTracksToggle :expanded="globalTracksExpanded" @toggle="viewStore.toggleGlobalTracks" />
       <ArrangementZoomControls
         class="arrangement-zoom-controls"
         :pixels-per-quarter="pixelsPerQuarter"
@@ -449,79 +443,75 @@ function createMidiClip(trackId: string, requestedStartTick: number): void {
         <div class="timeline-scroll-content" :style="scrollContentStyle">
           <div ref="rail" class="timeline-rail" data-testid="timeline-rail" :style="railStyle">
             <div class="ruler-corner">{{ t("studio.arrangement.tracks") }}</div>
-            <GlobalLaneHeader
-              :label="t('studio.arrangement.tempo')"
-              :eyebrow="t('studio.arrangement.globalTrack')"
-              :value="selectedTempo.beatsPerMinute"
-              unit="BPM"
-              :minimum="20"
-              :maximum="300"
-              :expanded="tempoLaneExpanded"
-              color="var(--ui-domain-color-65a8ff)"
-              @toggle="viewStore.toggleTempoLane"
-              @update-value="updateSelectedTempo"
-            />
-            <GlobalEventLaneHeader
-              :label="t('studio.arrangement.meter')"
-              :eyebrow="t('studio.arrangement.globalTrack')"
-              :expanded="meterLaneExpanded"
-              color="var(--ui-domain-color-f2a65a)"
-              @toggle="viewStore.toggleMeterLane"
-            >
-              <template #controls>
-                <input
-                  :value="selectedMeter.numerator"
-                  type="number"
-                  min="1"
-                  max="32"
-                  :aria-label="t('studio.arrangement.meterNumeratorAria')"
-                  @change="
-                    updateSelectedMeter({
-                      numerator: Math.min(
-                        32,
-                        Math.max(1, Number(($event.target as HTMLInputElement).value))
-                      )
-                    })
-                  "
-                />
-                <span aria-hidden="true">/</span>
-                <UiSelect
-                  :model-value="String(selectedMeter.denominator)"
-                  size="compact"
-                  :aria-label="t('studio.arrangement.meterDenominatorAria')"
-                  @update:model-value="
-                    updateSelectedMeter({
-                      denominator: Number($event)
-                    })
-                  "
-                >
-                  <option
-                    v-for="denominator in meterDenominators"
-                    :key="denominator"
-                    :value="String(denominator)"
+            <template v-if="globalTracksExpanded">
+              <GlobalLaneHeader
+                :label="t('studio.arrangement.tempo')"
+                :eyebrow="t('studio.arrangement.globalTrack')"
+                :value="selectedTempo.beatsPerMinute"
+                unit="BPM"
+                :minimum="20"
+                :maximum="300"
+                color="var(--ui-domain-color-65a8ff)"
+                @update-value="updateSelectedTempo"
+              />
+              <GlobalEventLaneHeader
+                :label="t('studio.arrangement.meter')"
+                :eyebrow="t('studio.arrangement.globalTrack')"
+                color="var(--ui-domain-color-f2a65a)"
+              >
+                <template #controls>
+                  <input
+                    :value="selectedMeter.numerator"
+                    type="number"
+                    min="1"
+                    max="32"
+                    :aria-label="t('studio.arrangement.meterNumeratorAria')"
+                    @change="
+                      updateSelectedMeter({
+                        numerator: Math.min(
+                          32,
+                          Math.max(1, Number(($event.target as HTMLInputElement).value))
+                        )
+                      })
+                    "
+                  />
+                  <span aria-hidden="true">/</span>
+                  <UiSelect
+                    :model-value="String(selectedMeter.denominator)"
+                    size="compact"
+                    :aria-label="t('studio.arrangement.meterDenominatorAria')"
+                    @update:model-value="
+                      updateSelectedMeter({
+                        denominator: Number($event)
+                      })
+                    "
                   >
-                    {{ denominator }}
-                  </option>
-                </UiSelect>
-              </template>
-            </GlobalEventLaneHeader>
-            <GlobalEventLaneHeader
-              :label="t('studio.arrangement.key')"
-              :eyebrow="t('studio.arrangement.globalTrack')"
-              :expanded="keyLaneExpanded"
-              color="var(--ui-domain-color-b894ff)"
-              @toggle="viewStore.toggleKeyLane"
-            >
-              <template #controls>
-                <UiSelect
-                  :model-value="selectedKeyValue"
-                  :groups="keySignatureGroups"
-                  size="compact"
-                  :aria-label="t('studio.arrangement.keySignatureAria')"
-                  @update:model-value="updateSelectedKey"
-                />
-              </template>
-            </GlobalEventLaneHeader>
+                    <option
+                      v-for="denominator in meterDenominators"
+                      :key="denominator"
+                      :value="String(denominator)"
+                    >
+                      {{ denominator }}
+                    </option>
+                  </UiSelect>
+                </template>
+              </GlobalEventLaneHeader>
+              <GlobalEventLaneHeader
+                :label="t('studio.arrangement.key')"
+                :eyebrow="t('studio.arrangement.globalTrack')"
+                color="var(--ui-domain-color-b894ff)"
+              >
+                <template #controls>
+                  <KeySignatureDropdown
+                    :model-value="selectedKeyValue"
+                    size="compact"
+                    appearance="workspace"
+                    :aria-label="t('studio.arrangement.keySignatureAria')"
+                    @update:model-value="updateSelectedKey"
+                  />
+                </template>
+              </GlobalEventLaneHeader>
+            </template>
             <div
               v-for="({ track, scale }, index) in trackRows"
               :key="track.id"
@@ -574,37 +564,36 @@ function createMidiClip(trackId: string, requestedStartTick: number): void {
               @seek="handleSeek"
               @update-loop-range="updateCycleRange"
             />
-            <TempoTrackLane
-              :tempo-map="mixerStore.graph.tempoMap"
-              :selected-tick="selectedTempoTick"
-              :content-width="contentWidth"
-              :pixels-per-quarter="pixelsPerQuarter"
-              :height="tempoLaneHeight"
-              :expanded="tempoLaneExpanded"
-              @replace="replaceTempoMap"
-              @select="selectedTempoTick = $event"
-            />
-            <MeterTrackLane
-              :tempo-map="mixerStore.graph.tempoMap"
-              :selected-tick="selectedMeterTick"
-              :content-width="contentWidth"
-              :pixels-per-quarter="pixelsPerQuarter"
-              :height="meterLaneHeight"
-              :expanded="meterLaneExpanded"
-              @replace="replaceTempoMap"
-              @select="selectedMeterTick = $event"
-            />
-            <KeyTrackLane
-              :events="mixerStore.graph.keySignatureEvents"
-              :tempo-map="mixerStore.graph.tempoMap"
-              :selected-tick="selectedKeyTick"
-              :content-width="contentWidth"
-              :pixels-per-quarter="pixelsPerQuarter"
-              :height="keyLaneHeight"
-              :expanded="keyLaneExpanded"
-              @replace="replaceKeySignatureMap"
-              @select="selectedKeyTick = $event"
-            />
+            <template v-if="globalTracksExpanded">
+              <TempoTrackLane
+                :tempo-map="mixerStore.graph.tempoMap"
+                :selected-tick="selectedTempoTick"
+                :content-width="contentWidth"
+                :pixels-per-quarter="pixelsPerQuarter"
+                :height="TEMPO_LANE_HEIGHT"
+                @replace="replaceTempoMap"
+                @select="selectedTempoTick = $event"
+              />
+              <MeterTrackLane
+                :tempo-map="mixerStore.graph.tempoMap"
+                :selected-tick="selectedMeterTick"
+                :content-width="contentWidth"
+                :pixels-per-quarter="pixelsPerQuarter"
+                :height="GLOBAL_EVENT_LANE_HEIGHT"
+                @replace="replaceTempoMap"
+                @select="selectedMeterTick = $event"
+              />
+              <KeyTrackLane
+                :events="mixerStore.graph.keySignatureEvents"
+                :tempo-map="mixerStore.graph.tempoMap"
+                :selected-tick="selectedKeyTick"
+                :content-width="contentWidth"
+                :pixels-per-quarter="pixelsPerQuarter"
+                :height="GLOBAL_EVENT_LANE_HEIGHT"
+                @replace="replaceKeySignatureMap"
+                @select="selectedKeyTick = $event"
+              />
+            </template>
             <template
               v-for="{ track, audioClips: trackClips, midiClips, height } in trackRows"
               :key="track.id"

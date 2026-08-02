@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest"
 import {
   MAJOR_KEY_SIGNATURE_CHOICES,
   MINOR_KEY_SIGNATURE_CHOICES,
+  keySignatureAtTick,
   keySignatureLabel,
-  parseKeySignatureValue
+  parseKeySignatureValue,
+  replaceKeySignatureEventAtTick
 } from "./keySignatures"
 
 describe("key signatures", () => {
@@ -21,5 +23,19 @@ describe("key signatures", () => {
     expect(keySignatureLabel(-5, "major")).toBe("D♭ Major")
     expect(keySignatureLabel(7, "minor")).toBe("A♯ minor")
     expect(parseKeySignatureValue("major:8")).toBeNull()
+  })
+
+  it("reads and replaces the active global key event", () => {
+    const events = [
+      { tick: 0, fifths: 0, mode: "major" as const },
+      { tick: 3_840, fifths: -3, mode: "minor" as const }
+    ]
+
+    expect(keySignatureAtTick(events, 4_800)).toEqual(events[1])
+    expect(replaceKeySignatureEventAtTick(events, 4_800, { fifths: 2, mode: "major" })).toEqual([
+      events[0],
+      { tick: 3_840, fifths: 2, mode: "major" }
+    ])
+    expect(events[1]).toMatchObject({ fifths: -3, mode: "minor" })
   })
 })

@@ -1,7 +1,9 @@
-import { mount } from "@vue/test-utils"
+import { DOMWrapper, enableAutoUnmount, mount } from "@vue/test-utils"
 import { createPinia } from "pinia"
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it } from "vitest"
 import StudioTopbar from "./StudioTopbar.vue"
+
+enableAutoUnmount(afterEach)
 
 const tempoMap = {
   ticksPerQuarter: 960 as const,
@@ -9,8 +11,15 @@ const tempoMap = {
     { tick: 0, beatsPerMinute: 120 },
     { tick: 3_840, beatsPerMinute: 60 }
   ],
-  timeSignatureEvents: [{ tick: 0, numerator: 4, denominator: 4 }]
+  timeSignatureEvents: [
+    { tick: 0, numerator: 4, denominator: 4 },
+    { tick: 3_840, numerator: 3, denominator: 4 }
+  ]
 }
+const keySignatureEvents = [
+  { tick: 0, fifths: 0, mode: "major" as const },
+  { tick: 3_840, fifths: -3, mode: "minor" as const }
+]
 
 const masterChannel = {
   id: "master",
@@ -72,6 +81,7 @@ function mountTopbar() {
       externalClock: false,
       playheadSeconds: 3,
       tempoMap,
+      keySignatureEvents,
       soundBrowserOpen: true,
       mixerDockOpen: true,
       pianoRollDockOpen: false,
@@ -224,5 +234,50 @@ describe("StudioTopbar", () => {
     await input.trigger("keydown", { key: "Escape" })
 
     expect(wrapper.emitted("updateTempo")).toBeUndefined()
+  })
+
+  it("reflects the active Meter and Key Track events at the playhead", () => {
+    const wrapper = mountTopbar()
+
+    expect(wrapper.get('button[aria-label^="Meter 3/4"]').text()).toBe("3/4")
+    const keyDropdown = wrapper.get('button[aria-label="Key signature C minor"]')
+    expect(keyDropdown.text()).toBe("C minor")
+    expect(keyDropdown.classes()).toContain("ui-cascading-select--embedded")
+    expect(keyDropdown.classes()).toContain("ui-cascading-select--hover-host-tint")
+  })
+
+  it("edits the active meter event from the musical display", async () => {
+    const wrapper = mountTopbar()
+
+    await wrapper.get('button[aria-label^="Meter 3/4"]').trigger("dblclick")
+    const input = wrapper.get('input[aria-label="Edit current meter"]')
+    expect(input.attributes("inputmode")).toBeUndefined()
+    await input.setValue("7/8")
+    await input.trigger("keydown", { key: "Enter" })
+
+    expect(wrapper.emitted("updateMeter")).toEqual([[{ numerator: 7, denominator: 8 }]])
+  })
+
+  it("edits the active key event from the musical display", async () => {
+    const wrapper = mountTopbar()
+
+    await wrapper.get('button[aria-label="Key signature C minor"]').trigger("click")
+    const keyGroups = document.body.querySelectorAll<HTMLElement>(
+      ".ui-cascading-select__sub-trigger"
+    )
+    expect([...keyGroups].map((group) => group.textContent?.trim())).toEqual([
+      "Major keys",
+      "Minor keys"
+    ])
+    const majorKeys = new DOMWrapper(keyGroups[0])
+    await majorKeys.trigger("focus")
+    await majorKeys.trigger("keydown", { key: "ArrowRight" })
+    const dMajor = [
+      ...document.body.querySelectorAll<HTMLElement>(".ui-cascading-select__item")
+    ].find((option) => option.textContent?.includes("D Major"))
+    expect(dMajor).toBeDefined()
+    await new DOMWrapper(dMajor).trigger("click")
+
+    expect(wrapper.emitted("updateKey")).toEqual([[{ fifths: 2, mode: "major" }]])
   })
 })
