@@ -1,4 +1,4 @@
-import { mount } from "@vue/test-utils"
+import { DOMWrapper, mount } from "@vue/test-utils"
 import { createPinia } from "pinia"
 import { describe, expect, it } from "vitest"
 import StudioTopbar from "./StudioTopbar.vue"
@@ -238,7 +238,10 @@ describe("StudioTopbar", () => {
     const wrapper = mountTopbar()
 
     expect(wrapper.get('button[aria-label^="Meter 3/4"]').text()).toBe("3/4")
-    expect(wrapper.get('button[aria-label^="Key signature C minor"]').text()).toBe("C minor")
+    const keyDropdown = wrapper.get('button[aria-label="Key signature C minor"]')
+    expect(keyDropdown.text()).toBe("C minor")
+    expect(keyDropdown.classes()).toContain("ui-cascading-select--embedded")
+    expect(keyDropdown.classes()).toContain("ui-cascading-select--hover-host-tint")
   })
 
   it("edits the active meter event from the musical display", async () => {
@@ -255,9 +258,22 @@ describe("StudioTopbar", () => {
   it("edits the active key event from the musical display", async () => {
     const wrapper = mountTopbar()
 
-    await wrapper.get('button[aria-label^="Key signature C minor"]').trigger("dblclick")
-    const select = wrapper.get('select[aria-label="Edit current key signature"]')
-    await select.setValue("major:2")
+    await wrapper.get('button[aria-label="Key signature C minor"]').trigger("click")
+    const keyGroups = document.body.querySelectorAll<HTMLElement>(
+      ".ui-cascading-select__sub-trigger"
+    )
+    expect([...keyGroups].map((group) => group.textContent?.trim())).toEqual([
+      "Major keys",
+      "Minor keys"
+    ])
+    const majorKeys = new DOMWrapper(keyGroups[0])
+    await majorKeys.trigger("focus")
+    await majorKeys.trigger("keydown", { key: "ArrowRight" })
+    const dMajor = [
+      ...document.body.querySelectorAll<HTMLElement>(".ui-cascading-select__item")
+    ].find((option) => option.textContent?.includes("D Major"))
+    expect(dMajor).toBeDefined()
+    await new DOMWrapper(dMajor).trigger("click")
 
     expect(wrapper.emitted("updateKey")).toEqual([[{ fifths: 2, mode: "major" }]])
   })

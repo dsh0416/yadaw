@@ -6,21 +6,13 @@ const clamp = (value: number, minimum: number, maximum: number): number =>
 
 const MIN_TRACK_SCALE = 0.5
 const MAX_TRACK_SCALE = 4
-const TEMPO_LANE_EXPANDED_HEIGHT = 112
-const GLOBAL_LANE_EXPANDED_HEIGHT = 64
-const GLOBAL_LANE_COLLAPSED_HEIGHT = 30
 
 export const useArrangementViewStore = defineStore("arrangement-view", () => {
   const pixelsPerQuarter = shallowRef(50)
   const trackHeight = shallowRef(104)
   const trackScales = shallowRef<Record<string, number>>({})
   const amplitudeScale = shallowRef(1)
-  const tempoLaneExpanded = shallowRef(true)
-  const tempoLaneHeight = shallowRef(TEMPO_LANE_EXPANDED_HEIGHT)
-  const meterLaneExpanded = shallowRef(true)
-  const meterLaneHeight = shallowRef(GLOBAL_LANE_EXPANDED_HEIGHT)
-  const keyLaneExpanded = shallowRef(true)
-  const keyLaneHeight = shallowRef(GLOBAL_LANE_EXPANDED_HEIGHT)
+  const globalTracksExpanded = shallowRef(true)
 
   function setTimeZoom(value: number): void {
     pixelsPerQuarter.value = clamp(value, 12.5, 800)
@@ -65,35 +57,18 @@ export const useArrangementViewStore = defineStore("arrangement-view", () => {
   function resetAmplitude(): void {
     amplitudeScale.value = 1
   }
-  function setTempoLaneExpanded(expanded: boolean): void {
-    tempoLaneExpanded.value = expanded
-    tempoLaneHeight.value = expanded ? TEMPO_LANE_EXPANDED_HEIGHT : GLOBAL_LANE_COLLAPSED_HEIGHT
+  function setGlobalTracksExpanded(expanded: boolean): void {
+    globalTracksExpanded.value = expanded
   }
-  function toggleTempoLane(): void {
-    setTempoLaneExpanded(!tempoLaneExpanded.value)
-  }
-  function setMeterLaneExpanded(expanded: boolean): void {
-    meterLaneExpanded.value = expanded
-    meterLaneHeight.value = expanded ? GLOBAL_LANE_EXPANDED_HEIGHT : GLOBAL_LANE_COLLAPSED_HEIGHT
-  }
-  function toggleMeterLane(): void {
-    setMeterLaneExpanded(!meterLaneExpanded.value)
-  }
-  function setKeyLaneExpanded(expanded: boolean): void {
-    keyLaneExpanded.value = expanded
-    keyLaneHeight.value = expanded ? GLOBAL_LANE_EXPANDED_HEIGHT : GLOBAL_LANE_COLLAPSED_HEIGHT
-  }
-  function toggleKeyLane(): void {
-    setKeyLaneExpanded(!keyLaneExpanded.value)
+  function toggleGlobalTracks(): void {
+    setGlobalTracksExpanded(!globalTracksExpanded.value)
   }
   function reset(): void {
     resetTime()
     resetTrack()
     trackScales.value = {}
     resetAmplitude()
-    setTempoLaneExpanded(true)
-    setMeterLaneExpanded(true)
-    setKeyLaneExpanded(true)
+    setGlobalTracksExpanded(true)
   }
 
   return {
@@ -101,12 +76,7 @@ export const useArrangementViewStore = defineStore("arrangement-view", () => {
     trackHeight,
     trackScales,
     amplitudeScale,
-    tempoLaneExpanded,
-    tempoLaneHeight,
-    meterLaneExpanded,
-    meterLaneHeight,
-    keyLaneExpanded,
-    keyLaneHeight,
+    globalTracksExpanded,
     setTimeZoom,
     zoomTime,
     setTrackHeight,
@@ -120,12 +90,8 @@ export const useArrangementViewStore = defineStore("arrangement-view", () => {
     resetTime,
     resetTrack,
     resetAmplitude,
-    setTempoLaneExpanded,
-    toggleTempoLane,
-    setMeterLaneExpanded,
-    toggleMeterLane,
-    setKeyLaneExpanded,
-    toggleKeyLane,
+    setGlobalTracksExpanded,
+    toggleGlobalTracks,
     reset
   }
 })

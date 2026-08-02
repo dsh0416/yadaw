@@ -19,7 +19,6 @@ function mountLane() {
       beatGuides: [50, 150],
       verticalGuides: [0, 100, 200],
       color: "#65A8FF",
-      expanded: true,
       valueLabel: "Tempo",
       positionLabel: "beats"
     }

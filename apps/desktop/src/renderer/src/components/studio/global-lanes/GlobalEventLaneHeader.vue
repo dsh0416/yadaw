@@ -2,40 +2,25 @@
 defineProps<{
   label: string
   eyebrow: string
-  expanded: boolean
   color: string
 }>()
 
 defineSlots<{
   controls(): unknown
 }>()
-
-const emit = defineEmits<{
-  toggle: []
-}>()
 </script>
 
 <template>
   <section
     class="global-event-lane-header"
-    :class="{ collapsed: !expanded }"
     :style="{ '--lane-color': color }"
     :aria-label="`${label} global track`"
   >
-    <button
-      class="lane-toggle"
-      type="button"
-      :aria-expanded="expanded"
-      :aria-label="`${expanded ? 'Collapse' : 'Expand'} ${label} track`"
-      @click="emit('toggle')"
-    >
-      <span aria-hidden="true">{{ expanded ? "▾" : "▸" }}</span>
-    </button>
     <div class="lane-copy">
       <span>{{ eyebrow }}</span>
       <strong>{{ label }}</strong>
     </div>
-    <div v-if="expanded" class="lane-controls">
+    <div class="lane-controls">
       <slot name="controls" />
     </div>
   </section>
@@ -46,7 +31,7 @@ const emit = defineEmits<{
   --lane-color: var(--ui-domain-color-65a8ff);
   position: relative;
   display: grid;
-  grid-template-columns: 20px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto auto;
   gap: 3px 7px;
   padding: 6px 10px;
@@ -58,34 +43,8 @@ const emit = defineEmits<{
   );
   box-shadow: 3px 0 0 var(--lane-color) inset;
 }
-.global-event-lane-header.collapsed {
-  grid-template-rows: 1fr;
-  align-items: center;
-  padding-block: 4px;
-}
-.lane-toggle {
-  grid-column: 1;
-  grid-row: 1;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  border: 1px solid var(--line-soft);
-  border-radius: 3px;
-  color: var(--text-muted);
-  background: var(--daw-control);
-  font: var(--ui-type-size-control) var(--ui-type-family-data);
-  cursor: pointer;
-}
-.lane-toggle:hover {
-  border-color: color-mix(in srgb, var(--lane-color) 55%, var(--line-strong));
-  color: var(--text-primary);
-}
-.lane-toggle:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 1px;
-}
 .lane-copy {
-  grid-column: 2;
+  grid-column: 1;
   grid-row: 1;
   min-width: 0;
 }
@@ -103,16 +62,8 @@ const emit = defineEmits<{
   color: var(--text-primary);
   font: var(--ui-type-size-label) var(--ui-type-family-display);
 }
-.collapsed .lane-copy {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-.collapsed .lane-copy strong {
-  margin: 0;
-}
 .lane-controls {
-  grid-column: 2;
+  grid-column: 1;
   grid-row: 2;
   display: flex;
   align-items: center;
@@ -134,7 +85,8 @@ const emit = defineEmits<{
   border-color: var(--lane-color);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--lane-color) 22%, transparent);
 }
-.lane-controls :deep(.ui-select-shell) {
+.lane-controls :deep(.ui-select-shell),
+.lane-controls :deep(.ui-cascading-select) {
   flex: 1;
   min-width: 0;
 }

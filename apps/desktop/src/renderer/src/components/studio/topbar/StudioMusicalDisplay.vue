@@ -14,13 +14,12 @@ import {
   timeSignatureAtTick
 } from "../../../utils/tempoMap"
 import {
-  MAJOR_KEY_SIGNATURE_CHOICES,
-  MINOR_KEY_SIGNATURE_CHOICES,
   keySignatureAtTick,
   keySignatureLabel,
   keySignatureValue,
   parseKeySignatureValue
 } from "../../../utils/keySignatures"
+import KeySignatureDropdown from "../KeySignatureDropdown.vue"
 
 const props = defineProps<{
   playheadSeconds: number
@@ -41,11 +40,8 @@ const editingTempo = shallowRef(false)
 const tempoDraft = shallowRef("")
 const editingMeter = shallowRef(false)
 const meterDraft = shallowRef("")
-const editingKey = shallowRef(false)
-const keyDraft = shallowRef("")
 const tempoInput = useTemplateRef<HTMLInputElement>("tempoInput")
 const meterInput = useTemplateRef<HTMLInputElement>("meterInput")
-const keyInput = useTemplateRef<HTMLSelectElement>("keyInput")
 const playheadTick = computed(() => secondsToTick(props.tempoMap, props.playheadSeconds))
 const musicalPosition = computed(() => musicalPositionAtTick(props.tempoMap, playheadTick.value))
 const currentTempo = computed(() => tempoAtTick(props.tempoMap, playheadTick.value))
@@ -54,6 +50,16 @@ const currentKey = computed(() => keySignatureAtTick(props.keySignatureEvents, p
 const currentKeyLabel = computed(() =>
   keySignatureLabel(currentKey.value.fifths, currentKey.value.mode)
 )
+const currentKeyValue = computed({
+  get: () => keySignatureValue(currentKey.value.fifths, currentKey.value.mode),
+  set: (value: string) => {
+    const choice = parseKeySignatureValue(value)
+    if (!choice) return
+    if (choice.fifths !== currentKey.value.fifths || choice.mode !== currentKey.value.mode) {
+      emit("updateKey", choice)
+    }
+  }
+})
 
 function beginTempoEdit(): void {
   if (editingTempo.value) return
@@ -100,27 +106,6 @@ function commitMeterEdit(): void {
     denominator !== currentSignature.value.denominator
   ) {
     emit("updateMeter", { numerator, denominator })
-  }
-}
-
-function beginKeyEdit(): void {
-  if (editingKey.value) return
-  keyDraft.value = keySignatureValue(currentKey.value.fifths, currentKey.value.mode)
-  editingKey.value = true
-  void nextTick(() => keyInput.value?.focus())
-}
-
-function cancelKeyEdit(): void {
-  editingKey.value = false
-}
-
-function commitKeyEdit(): void {
-  if (!editingKey.value) return
-  const choice = parseKeySignatureValue(keyDraft.value)
-  editingKey.value = false
-  if (!choice) return
-  if (choice.fifths !== currentKey.value.fifths || choice.mode !== currentKey.value.mode) {
-    emit("updateKey", choice)
   }
 }
 </script>
@@ -193,47 +178,13 @@ function commitKeyEdit(): void {
       <span>{{ t("studio.musical.meter") }}</span>
     </div>
     <div class="lcd-cell key-cell">
-      <select
-        v-if="editingKey"
-        ref="keyInput"
-        v-model="keyDraft"
-        class="key-input"
-        :aria-label="t('studio.musical.editKeyAria')"
-        @change="commitKeyEdit"
-        @blur="commitKeyEdit"
-        @keydown.enter.prevent="commitKeyEdit"
-        @keydown.escape.prevent="cancelKeyEdit"
-      >
-        <optgroup :label="t('studio.arrangement.majorKeys')">
-          <option
-            v-for="choice in MAJOR_KEY_SIGNATURE_CHOICES"
-            :key="choice.value"
-            :value="choice.value"
-          >
-            {{ choice.label }}
-          </option>
-        </optgroup>
-        <optgroup :label="t('studio.arrangement.minorKeys')">
-          <option
-            v-for="choice in MINOR_KEY_SIGNATURE_CHOICES"
-            :key="choice.value"
-            :value="choice.value"
-          >
-            {{ choice.label }}
-          </option>
-        </optgroup>
-      </select>
-      <button
-        v-else
-        type="button"
-        class="key-value"
+      <KeySignatureDropdown
+        v-model="currentKeyValue"
+        class="key-dropdown"
+        appearance="embedded"
+        hover-treatment="host-tint"
         :aria-label="t('studio.musical.keyButtonAria', { value: currentKeyLabel })"
-        :title="t('studio.musical.keyEditTitle')"
-        @dblclick="beginKeyEdit"
-        @keydown.enter.prevent="beginKeyEdit"
-      >
-        {{ currentKeyLabel }}
-      </button>
+      />
       <span>{{ t("studio.musical.key") }}</span>
     </div>
   </section>
@@ -273,7 +224,7 @@ function commitKeyEdit(): void {
 .tempo-input,
 .meter-value,
 .meter-input,
-.key-value {
+.key-dropdown {
   height: 22px;
   color: var(--text-primary);
   font: var(--ui-type-weight-medium) var(--ui-type-size-feature-title) / var(--ui-type-leading-none)
@@ -281,8 +232,8 @@ function commitKeyEdit(): void {
   letter-spacing: var(--ui-type-tracking-tight);
   text-shadow: 0 0 12px color-mix(in srgb, var(--signal-cyan) 23%, transparent);
 }
-.position-cell span,
-.lcd-cell span {
+.position-cell > span,
+.lcd-cell > span {
   color: var(--text-faint);
   font: var(--ui-type-weight-semibold) var(--ui-type-size-micro) var(--ui-type-family-data);
   letter-spacing: var(--ui-type-tracking-wider);
@@ -295,8 +246,7 @@ function commitKeyEdit(): void {
   cursor: text;
   text-align: center;
 }
-.meter-value,
-.key-value {
+.meter-value {
   width: 100%;
   min-width: 0;
   padding: 0 2px;
@@ -308,23 +258,31 @@ function commitKeyEdit(): void {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.key-value {
+.key-dropdown {
+  width: 100%;
+  min-width: 0;
+  min-height: 22px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   font-size: var(--ui-type-size-control);
+  text-align: center;
 }
 .tempo-value:hover,
 .meter-value:hover,
-.key-value:hover {
+.key-dropdown:hover,
+.key-dropdown[data-state="open"] {
   color: var(--signal-cyan);
 }
 .tempo-value:focus-visible,
 .meter-value:focus-visible,
-.key-value:focus-visible {
+.key-dropdown:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: -2px;
 }
 .tempo-input,
-.meter-input,
-.key-input {
+.meter-input {
   width: 56px;
   padding: 0 2px;
   border: 1px solid var(--focus);
@@ -338,11 +296,6 @@ function commitKeyEdit(): void {
 }
 .key-cell {
   overflow: hidden;
-}
-.key-input {
-  width: 68px;
-  padding-inline: 1px;
-  font-size: var(--ui-type-size-micro);
 }
 @media (max-width: 1279px) {
   .musical-display {

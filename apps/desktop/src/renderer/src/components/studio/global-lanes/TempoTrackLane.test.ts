@@ -20,8 +20,7 @@ describe("TempoTrackLane", () => {
         selectedTick: 3_840,
         contentWidth: 800,
         pixelsPerQuarter: 50,
-        height: 112,
-        expanded: true
+        height: 112
       }
     })
 
@@ -38,8 +37,7 @@ describe("TempoTrackLane", () => {
         selectedTick: 0,
         contentWidth: 800,
         pixelsPerQuarter: 50,
-        height: 112,
-        expanded: true
+        height: 112
       }
     })
 

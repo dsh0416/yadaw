@@ -15,7 +15,6 @@ const props = defineProps<{
   contentWidth: number
   pixelsPerQuarter: number
   height: number
-  expanded: boolean
 }>()
 
 const emit = defineEmits<{
@@ -135,7 +134,6 @@ function removePoint(id: string): void {
     :beat-guides="beatGuides"
     :vertical-guides="verticalGuides"
     color="var(--ui-domain-color-f2a65a)"
-    :expanded="expanded"
     :value-label="t('studio.lanes.meter')"
     :position-label="t('studio.lanes.positionLabel')"
     @create="createPoint"

@@ -1,5 +1,5 @@
 import { createPinia, setActivePinia } from "pinia"
-import { flushPromises, mount } from "@vue/test-utils"
+import { DOMWrapper, flushPromises, mount } from "@vue/test-utils"
 import { describe, expect, it, vi } from "vitest"
 import type { MixerChannelState } from "@yadaw/contracts"
 import type { ProjectAssetSummary as Asset } from "@yadaw/contracts"
@@ -171,6 +171,9 @@ describe("ArrangementWorkspace", () => {
     expect(wrapper.find('button[aria-label="Toggle mixer dock"]').exists()).toBe(false)
     expect(wrapper.find(".tempo-readout").exists()).toBe(false)
     expect(wrapper.findAll(".track-lane")).toHaveLength(2)
+    expect(wrapper.get('button[aria-label="Hide global tracks"]').attributes("aria-pressed")).toBe(
+      "true"
+    )
     expect(wrapper.findAll('[data-testid="timeline-playhead"]')).toHaveLength(1)
     expect(wrapper.findAll(".beat-mark").length).toBeGreaterThan(0)
     expect(wrapper.findAll(".beat-line").length).toBeGreaterThan(0)
@@ -178,12 +181,25 @@ describe("ArrangementWorkspace", () => {
     expect(wrapper.get('[aria-label="Tempo global track"]').text()).toContain("Tempo")
     expect(wrapper.get('[aria-label="Meter global track"]').text()).toContain("Meter")
     expect(wrapper.get('[aria-label="Key global track"]').text()).toContain("Key")
-    const keySelect = wrapper.get<HTMLSelectElement>('[aria-label="Selected Key signature"]')
-    expect(keySelect.findAll("optgroup").map((group) => group.attributes("label"))).toEqual([
+    const keySelect = wrapper.get<HTMLButtonElement>('[aria-label="Selected Key signature"]')
+    expect(keySelect.classes()).toContain("ui-cascading-select--workspace")
+    expect(keySelect.text()).toBe("C Major")
+    const executeKeyChange = vi.spyOn(mixer, "execute").mockResolvedValue(true)
+    await keySelect.trigger("click")
+    const keyGroups = document.body.querySelectorAll<HTMLElement>(
+      ".ui-cascading-select__sub-trigger"
+    )
+    expect([...keyGroups].map((group) => group.textContent?.trim())).toEqual([
       "Major keys",
       "Minor keys"
     ])
-    expect(keySelect.findAll("option").map((option) => option.text())).toEqual([
+    const majorKeys = new DOMWrapper(keyGroups[0])
+    await majorKeys.trigger("focus")
+    await majorKeys.trigger("keydown", { key: "ArrowRight" })
+    const keyOptions = [
+      ...document.body.querySelectorAll<HTMLElement>(".ui-cascading-select__item")
+    ]
+    expect(keyOptions.map((option) => option.textContent?.trim())).toEqual([
       "C♯ Major",
       "F♯ Major",
       "B Major",
@@ -198,26 +214,9 @@ describe("ArrangementWorkspace", () => {
       "A♭ Major",
       "D♭ Major",
       "G♭ Major",
-      "C♭ Major",
-      "────────────────",
-      "A♯ minor",
-      "D♯ minor",
-      "G♯ minor",
-      "C♯ minor",
-      "F♯ minor",
-      "B minor",
-      "E minor",
-      "A minor",
-      "D minor",
-      "G minor",
-      "C minor",
-      "F minor",
-      "B♭ minor",
-      "E♭ minor",
-      "A♭ minor"
+      "C♭ Major"
     ])
-    const executeKeyChange = vi.spyOn(mixer, "execute").mockResolvedValue(true)
-    await keySelect.setValue("major:-7")
+    await new DOMWrapper(keyOptions[14]).trigger("click")
     expect(executeKeyChange).toHaveBeenCalledWith({
       type: "replace-key-signature-map",
       events: [{ tick: 0, fifths: -7, mode: "major" }]
@@ -250,18 +249,25 @@ describe("ArrangementWorkspace", () => {
     expect(wrapper.text()).not.toContain("2 CH")
 
     const arrangementView = useArrangementViewStore()
-    await wrapper.get('button[aria-label="Collapse Tempo track"]').trigger("click")
-    expect(arrangementView.tempoLaneExpanded).toBe(false)
+    await wrapper.get('button[aria-label="Hide global tracks"]').trigger("click")
+    expect(arrangementView.globalTracksExpanded).toBe(false)
+    expect(wrapper.find('[aria-label="Tempo global track"]').exists()).toBe(false)
+    expect(wrapper.find('[aria-label="Meter global track"]').exists()).toBe(false)
+    expect(wrapper.find('[aria-label="Key global track"]').exists()).toBe(false)
+    expect(wrapper.find('[aria-label^="Tempo global track editor"]').exists()).toBe(false)
+    expect(wrapper.find('[aria-label^="Meter global track editor"]').exists()).toBe(false)
+    expect(wrapper.find('[aria-label^="Key global track editor"]').exists()).toBe(false)
+    expect(wrapper.find(".collapsed-rule").exists()).toBe(false)
     expect(
       wrapper.get<HTMLElement>('[data-testid="timeline-rail"]').element.style.gridTemplateRows
-    ).toContain("30px")
-    await wrapper.get('button[aria-label="Expand Tempo track"]').trigger("click")
-    await wrapper.get('button[aria-label="Collapse Meter track"]').trigger("click")
-    expect(arrangementView.meterLaneExpanded).toBe(false)
-    await wrapper.get('button[aria-label="Expand Meter track"]').trigger("click")
-    await wrapper.get('button[aria-label="Collapse Key track"]').trigger("click")
-    expect(arrangementView.keyLaneExpanded).toBe(false)
-    await wrapper.get('button[aria-label="Expand Key track"]').trigger("click")
+    ).not.toContain("112px 64px 64px")
+    const globalTracksButton = wrapper.get('button[aria-label="Show global tracks"]')
+    expect(globalTracksButton.attributes("aria-pressed")).toBe("false")
+    await globalTracksButton.trigger("click")
+    expect(arrangementView.globalTracksExpanded).toBe(true)
+    expect(wrapper.find('[aria-label="Tempo global track"]').exists()).toBe(true)
+    expect(wrapper.find('[aria-label="Meter global track"]').exists()).toBe(true)
+    expect(wrapper.find('[aria-label="Key global track"]').exists()).toBe(true)
     const resizeHandles = wrapper.findAll('.track-height-resize-handle[role="separator"]')
     expect(resizeHandles).toHaveLength(2)
     expect(wrapper.findAll<HTMLElement>(".track-lane")[0]?.element.style.height).toBe("104px")

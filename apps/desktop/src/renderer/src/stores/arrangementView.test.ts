@@ -21,12 +21,7 @@ describe("arrangement view store", () => {
       trackHeight: 104,
       trackScales: {},
       amplitudeScale: 1,
-      tempoLaneExpanded: true,
-      tempoLaneHeight: 112,
-      meterLaneExpanded: true,
-      meterLaneHeight: 64,
-      keyLaneExpanded: true,
-      keyLaneHeight: 64
+      globalTracksExpanded: true
     })
   })
 
@@ -92,32 +87,17 @@ describe("arrangement view store", () => {
     expect(store.amplitudeScale).toBe(0.5)
   })
 
-  it("keeps the global tempo lane expanded state and height together", () => {
+  it("shows and hides every global track with one shared state", () => {
     const store = useArrangementViewStore()
 
-    store.toggleTempoLane()
-    expect(store.tempoLaneExpanded).toBe(false)
-    expect(store.tempoLaneHeight).toBe(30)
+    store.toggleGlobalTracks()
+    expect(store.globalTracksExpanded).toBe(false)
 
-    store.setTempoLaneExpanded(true)
-    expect(store.tempoLaneExpanded).toBe(true)
-    expect(store.tempoLaneHeight).toBe(112)
-  })
+    store.setGlobalTracksExpanded(true)
+    expect(store.globalTracksExpanded).toBe(true)
 
-  it("keeps the global meter and key lane states independent", () => {
-    const store = useArrangementViewStore()
-
-    store.toggleMeterLane()
-    expect(store.meterLaneExpanded).toBe(false)
-    expect(store.meterLaneHeight).toBe(30)
-    expect(store.keyLaneExpanded).toBe(true)
-
-    store.toggleKeyLane()
-    expect(store.keyLaneExpanded).toBe(false)
-    expect(store.keyLaneHeight).toBe(30)
-
+    store.toggleGlobalTracks()
     store.reset()
-    expect(store.meterLaneHeight).toBe(64)
-    expect(store.keyLaneHeight).toBe(64)
+    expect(store.globalTracksExpanded).toBe(true)
   })
 })

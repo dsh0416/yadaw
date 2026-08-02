@@ -1324,9 +1324,7 @@
       "editMeterAria": "Edit current meter",
       "meterButtonAria": "Meter {value}; double-click to edit",
       "meterEditTitle": "Double-click to edit the current Meter Track event",
-      "editKeyAria": "Edit current key signature",
-      "keyButtonAria": "Key signature {value}; double-click to edit",
-      "keyEditTitle": "Double-click to edit the current Key Track event"
+      "keyButtonAria": "Key signature {value}"
     },
     "master": {
       "ariaLabel": "Master output",
@@ -1366,6 +1364,9 @@
       "meter": "Meter",
       "key": "Key",
       "globalTrack": "GLOBAL TRACK",
+      "globalTracks": "Global Tracks",
+      "showGlobalTracksAria": "Show global tracks",
+      "hideGlobalTracksAria": "Hide global tracks",
       "bpm": "BPM",
       "meterNumeratorAria": "Selected Meter numerator",
       "meterDenominatorAria": "Selected Meter denominator",
@@ -1453,9 +1454,7 @@
       "positionLabel": "beats",
       "selected": "Selected",
       "selectedValueAria": "Selected {label} value",
-      "globalTrackAria": "{label} global track",
-      "expandTrackAria": "Expand {label} track",
-      "collapseTrackAria": "Collapse {label} track"
+      "globalTrackAria": "{label} global track"
     },
     "rename": {
       "renameAria": "Rename {name}",

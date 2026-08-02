@@ -22,8 +22,7 @@ describe("KeyTrackLane", () => {
         selectedTick: 3_840,
         contentWidth: 800,
         pixelsPerQuarter: 50,
-        height: 64,
-        expanded: true
+        height: 64
       }
     })
 
@@ -41,8 +40,7 @@ describe("KeyTrackLane", () => {
         selectedTick: 0,
         contentWidth: 800,
         pixelsPerQuarter: 50,
-        height: 64,
-        expanded: true
+        height: 64
       }
     })
 
