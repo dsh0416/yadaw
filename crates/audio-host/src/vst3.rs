@@ -7,207 +7,10 @@ use yadaw_dsp_runtime::{
         ParameterGesture, PluginAudioMode, PluginEditorPreference, PluginParameter,
     },
 };
-use yadaw_vst3_host::{
-    AudioLayout, ClassId, HostProcessContext, HostedPlugin, PlugView, PluginKind, ProcessorLease,
-};
+pub use yadaw_vst3_host::Vst3ProcessorHandle;
+use yadaw_vst3_host::{AudioLayout, ClassId, HostedPlugin, PlugView, PluginKind};
 
 use crate::ara::{AraDocument, AraFactoryHost};
-
-pub type ProcessContext = HostProcessContext;
-
-#[derive(Clone)]
-pub struct Vst3ProcessorHandle {
-    primary: ProcessorLease,
-    secondary: Option<ProcessorLease>,
-    left_delay: SampleDelay,
-    right_delay: SampleDelay,
-    input_left: Vec<f32>,
-    input_right: Vec<f32>,
-    output_left: Vec<f32>,
-    output_right: Vec<f32>,
-    auxiliary_input: Vec<f32>,
-    auxiliary_output: Vec<f32>,
-}
-
-#[derive(Clone)]
-struct SampleDelay {
-    samples: Vec<f32>,
-    cursor: usize,
-}
-
-impl SampleDelay {
-    fn new(delay_samples: u32) -> Self {
-        Self {
-            samples: vec![0.0; delay_samples as usize],
-            cursor: 0,
-        }
-    }
-
-    fn process(&mut self, sample: f32) -> f32 {
-        if self.samples.is_empty() {
-            return sample;
-        }
-        let delayed = self.samples[self.cursor];
-        self.samples[self.cursor] = sample;
-        self.cursor = (self.cursor + 1) % self.samples.len();
-        delayed
-    }
-}
-
-impl Vst3ProcessorHandle {
-    pub fn process_block(&mut self, frames: &mut [[f32; 2]], context: &ProcessContext) -> bool {
-        if frames.len() > MAX_PLUGIN_BLOCK_FRAMES {
-            return false;
-        }
-        let frame_count = frames.len();
-        for (index, frame) in frames.iter().enumerate() {
-            self.input_left[index] = frame[0];
-            self.input_right[index] = frame[1];
-        }
-        self.output_left[..frame_count].fill(0.0);
-        self.output_right[..frame_count].fill(0.0);
-
-        match &mut self.secondary {
-            Some(secondary) => {
-                self.auxiliary_input[..frame_count].fill(0.0);
-                self.auxiliary_output[..frame_count].fill(0.0);
-                if !self.primary.process_block(
-                    &mut self.input_left[..frame_count],
-                    &mut self.auxiliary_input[..frame_count],
-                    &mut self.output_left[..frame_count],
-                    &mut self.auxiliary_output[..frame_count],
-                    context,
-                ) {
-                    return false;
-                }
-                self.auxiliary_input[..frame_count].fill(0.0);
-                self.auxiliary_output[..frame_count].fill(0.0);
-                if !secondary.process_block(
-                    &mut self.input_right[..frame_count],
-                    &mut self.auxiliary_input[..frame_count],
-                    &mut self.output_right[..frame_count],
-                    &mut self.auxiliary_output[..frame_count],
-                    context,
-                ) {
-                    // The primary lane already rendered valid left-channel audio.
-                    // Keep it and fall back to the dry right input (still delayed
-                    // below for latency alignment) instead of failing the block,
-                    // which would discard the primary output and pass the whole
-                    // unprocessed input through.
-                    for (index, frame) in frames.iter().enumerate() {
-                        self.output_right[index] = frame[1];
-                    }
-                }
-            }
-            None => {
-                if !self.primary.process_block(
-                    &mut self.input_left[..frame_count],
-                    &mut self.input_right[..frame_count],
-                    &mut self.output_left[..frame_count],
-                    &mut self.output_right[..frame_count],
-                    context,
-                ) {
-                    return false;
-                }
-            }
-        }
-        for (index, frame) in frames.iter_mut().enumerate() {
-            frame[0] = self.left_delay.process(self.output_left[index]);
-            frame[1] = self.right_delay.process(self.output_right[index]);
-        }
-        true
-    }
-
-    pub fn note_on(
-        &mut self,
-        sample_offset: usize,
-        channel: u8,
-        key: u8,
-        velocity: u8,
-        note_id: i32,
-    ) -> bool {
-        self.primary.note_on(
-            sample_offset.min(i32::MAX as usize) as i32,
-            channel,
-            key,
-            velocity,
-            note_id,
-        )
-    }
-
-    pub fn note_off(
-        &mut self,
-        sample_offset: usize,
-        channel: u8,
-        key: u8,
-        velocity: u8,
-        note_id: i32,
-    ) -> bool {
-        self.primary.note_off(
-            sample_offset.min(i32::MAX as usize) as i32,
-            channel,
-            key,
-            velocity,
-            note_id,
-        )
-    }
-
-    pub fn poly_pressure(
-        &mut self,
-        sample_offset: usize,
-        channel: u8,
-        key: u8,
-        pressure: u8,
-    ) -> bool {
-        self.primary.poly_pressure(
-            sample_offset.min(i32::MAX as usize) as i32,
-            channel,
-            key,
-            pressure,
-        )
-    }
-
-    pub fn control_change(
-        &mut self,
-        sample_offset: usize,
-        channel: u8,
-        controller: u8,
-        value: u8,
-    ) -> bool {
-        self.primary.control_change(
-            sample_offset.min(i32::MAX as usize) as i32,
-            channel,
-            controller,
-            value,
-        )
-    }
-
-    pub fn pitch_bend(&mut self, sample_offset: usize, channel: u8, value: u16) -> bool {
-        self.primary
-            .pitch_bend(sample_offset.min(i32::MAX as usize) as i32, channel, value)
-    }
-
-    pub fn channel_pressure(&mut self, sample_offset: usize, channel: u8, pressure: u8) -> bool {
-        self.primary.channel_pressure(
-            sample_offset.min(i32::MAX as usize) as i32,
-            channel,
-            pressure,
-        )
-    }
-
-    pub fn program_change(&mut self, sample_offset: usize, channel: u8, program: u8) -> bool {
-        self.primary.program_change(
-            sample_offset.min(i32::MAX as usize) as i32,
-            channel,
-            program,
-        )
-    }
-
-    pub fn sysex(&mut self, sample_offset: usize, bytes: &[u8]) -> bool {
-        self.primary
-            .sysex(sample_offset.min(i32::MAX as usize) as i32, bytes)
-    }
-}
 
 pub struct Vst3Runtime {
     instances: HashMap<String, Instance>,
@@ -269,19 +72,13 @@ impl Instance {
             .secondary
             .as_ref()
             .map_or(primary_latency, HostedPlugin::latency_samples);
-        let maximum_latency = primary_latency.max(secondary_latency);
-        Vst3ProcessorHandle {
-            primary: self.plugin.processor_lease(),
-            secondary: self.secondary.as_ref().map(HostedPlugin::processor_lease),
-            left_delay: SampleDelay::new(maximum_latency - primary_latency),
-            right_delay: SampleDelay::new(maximum_latency - secondary_latency),
-            input_left: vec![0.0; MAX_PLUGIN_BLOCK_FRAMES],
-            input_right: vec![0.0; MAX_PLUGIN_BLOCK_FRAMES],
-            output_left: vec![0.0; MAX_PLUGIN_BLOCK_FRAMES],
-            output_right: vec![0.0; MAX_PLUGIN_BLOCK_FRAMES],
-            auxiliary_input: vec![0.0; MAX_PLUGIN_BLOCK_FRAMES],
-            auxiliary_output: vec![0.0; MAX_PLUGIN_BLOCK_FRAMES],
-        }
+        Vst3ProcessorHandle::new(
+            self.plugin.processor_lease(),
+            self.secondary.as_ref().map(HostedPlugin::processor_lease),
+            primary_latency,
+            secondary_latency,
+            MAX_PLUGIN_BLOCK_FRAMES,
+        )
     }
 
     fn latency_samples(&self) -> u32 {
@@ -868,14 +665,6 @@ mod tests {
             "__yadaw-audio-benchmark-gain-63"
         ));
         assert!(!is_audio_benchmark_instance("project-plugin"));
-    }
-
-    #[test]
-    fn dual_mono_lane_delay_aligns_the_shorter_processor() {
-        let mut delay = SampleDelay::new(2);
-        assert_eq!(delay.process(1.0), 0.0);
-        assert_eq!(delay.process(2.0), 0.0);
-        assert_eq!(delay.process(3.0), 1.0);
     }
 
     #[test]

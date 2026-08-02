@@ -20,8 +20,6 @@ pub struct RegionOffer {
 /// Channels and persistent pages transferred during the one-shot rendezvous.
 #[derive(Serialize, Deserialize)]
 pub struct HostBootstrap {
-    pub protocol_version: u8,
-    pub native_build_fingerprint: String,
     pub requests: IpcReceiver<WirePacket>,
     pub responses: IpcSender<WirePacket>,
     pub priority_requests: IpcReceiver<WirePacket>,

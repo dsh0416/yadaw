@@ -281,6 +281,7 @@ fn recording_waveform(value: NativeWaveformSnapshot) -> RecordingWaveform {
 }
 
 fn engine_command(
+    audio_engine: &engine::AudioEngine,
     command: ControlCommand,
     processors: Option<&HashMap<String, vst3::Vst3ProcessorHandle>>,
 ) -> Option<ControlResult> {
@@ -321,7 +322,7 @@ fn engine_command(
             }
         }
         ControlCommand::StartAudioEngine { config } => {
-            match engine::start_audio_engine(engine::NativeAudioEngineConfig {
+            match audio_engine.start_audio_engine(engine::NativeAudioEngineConfig {
                 backend: config.backend,
                 input_device_id: config.input_device_id,
                 output_device_id: config.output_device_id,
@@ -336,7 +337,7 @@ fn engine_command(
                 },
             }
         }
-        ControlCommand::StopAudioEngine => match engine::stop_audio_engine() {
+        ControlCommand::StopAudioEngine => match audio_engine.stop_audio_engine() {
             Ok(runtime) => ControlResult::AudioRuntime {
                 runtime: audio_runtime(runtime),
             },
@@ -344,7 +345,7 @@ fn engine_command(
                 message: error.to_string(),
             },
         },
-        ControlCommand::AudioEngineSnapshot => match engine::audio_engine_snapshot() {
+        ControlCommand::AudioEngineSnapshot => match audio_engine.audio_engine_snapshot() {
             Ok(runtime) => ControlResult::AudioRuntime {
                 runtime: audio_runtime(runtime),
             },
@@ -353,7 +354,7 @@ fn engine_command(
             },
         },
         ControlCommand::StartRoundTripLatencyMeasurement { request } => {
-            match engine::start_round_trip_latency_measurement(
+            match audio_engine.start_round_trip_latency_measurement(
                 engine::NativeRoundTripLatencyMeasurementRequest {
                     input_channel: request.input_channel,
                     output_channel: request.output_channel,
@@ -368,7 +369,7 @@ fn engine_command(
             }
         }
         ControlCommand::RoundTripLatencyMeasurementSnapshot => {
-            match engine::round_trip_latency_measurement_snapshot() {
+            match audio_engine.round_trip_latency_measurement_snapshot() {
                 Ok(measurement) => ControlResult::RoundTripLatencyMeasurement {
                     measurement: round_trip_latency_measurement(measurement),
                 },
@@ -382,7 +383,7 @@ fn engine_command(
         } => {
             let inline_arena = ArenaReceiver::new(1);
             match live_graph(revision, &graph, processors, &inline_arena).and_then(|graph| {
-                engine::load_mixer_graph(graph).map_err(|error| error.to_string())
+                audio_engine.load_mixer_graph(graph).map_err(|error| error.to_string())
             }) {
                 Ok(()) => ControlResult::GraphAccepted { revision },
                 Err(error) => control_error! { message: error },
@@ -394,7 +395,7 @@ fn engine_command(
             message: "graph patches require the IPC protocol actor".into(),
         },
         ControlCommand::PreviewMixerParameter { preview } => {
-            match engine::preview_mixer_parameter(engine::NativeMixerParameterPreview {
+            match audio_engine.preview_mixer_parameter(engine::NativeMixerParameterPreview {
                 target: preview.target,
                 id: preview.id,
                 parameter: preview.parameter,
@@ -406,7 +407,7 @@ fn engine_command(
                 },
             }
         }
-        ControlCommand::MixerSnapshot => match engine::mixer_snapshot() {
+        ControlCommand::MixerSnapshot => match audio_engine.mixer_snapshot() {
             Ok(snapshot) => ControlResult::MixerSnapshot {
                 meters: snapshot
                     .meters
@@ -428,10 +429,10 @@ fn engine_command(
             },
         },
         ControlCommand::CompiledGraphSnapshot => ControlResult::CompiledGraphSnapshot {
-            snapshot: engine::compiled_audio_graph_snapshot(),
+            snapshot: audio_engine.compiled_audio_graph_snapshot(),
         },
         ControlCommand::ClearMeterClips => {
-            match engine::transport_command(
+            match audio_engine.transport_command(
                 "clear-meter-clips".to_owned(),
                 None,
                 None,
@@ -445,7 +446,7 @@ fn engine_command(
             }
         }
         ControlCommand::Transport { command } => {
-            match engine::transport_command(
+            match audio_engine.transport_command(
                 command.kind,
                 command.position_frames,
                 command.loop_enabled,
@@ -471,7 +472,7 @@ fn engine_command(
                 },
             }
         }
-        ControlCommand::TransportSnapshot => match engine::transport_snapshot() {
+        ControlCommand::TransportSnapshot => match audio_engine.transport_snapshot() {
             Ok(value) => ControlResult::TransportSnapshot {
                 transport: TransportState {
                     state: value.state,
@@ -511,7 +512,7 @@ fn engine_command(
             }
         }
         ControlCommand::StartRecording { config } => {
-            match engine::start_recording(NativeRecordingStartConfig {
+            match audio_engine.start_recording(NativeRecordingStartConfig {
                 path: config.path,
                 asset_id: config.asset_id,
                 originator: config.originator,
@@ -525,7 +526,7 @@ fn engine_command(
                 },
             }
         }
-        ControlCommand::StopRecording => match engine::stop_recording() {
+        ControlCommand::StopRecording => match audio_engine.stop_recording() {
             Ok(value) => ControlResult::RecordingStopped {
                 recording: recording_result(value),
             },
@@ -535,7 +536,7 @@ fn engine_command(
         },
         ControlCommand::StartMidiRecording { config } => {
             match (|| {
-                let clock = engine::transport_clock_handle().map_err(|error| error.to_string())?;
+                let clock = audio_engine.transport_clock_handle().map_err(|error| error.to_string())?;
                 let actor = MIDI_INPUT
                     .get()
                     .ok_or_else(|| "MIDI input actor is unavailable".to_owned())?;
@@ -559,7 +560,7 @@ fn engine_command(
             start_frame,
             end_frame,
             max_buckets,
-        } => match engine::recording_waveform_snapshot(start_frame, end_frame, max_buckets) {
+        } => match audio_engine.recording_waveform_snapshot(start_frame, end_frame, max_buckets) {
             Ok(value) => ControlResult::RecordingWaveform {
                 waveform: recording_waveform(value),
             },
@@ -573,6 +574,7 @@ fn engine_command(
 }
 
 fn run_legacy() -> Result<(), Box<dyn std::error::Error>> {
+    let audio_engine = engine::AudioEngine::new();
     let mut arguments = env::args_os().skip(1);
     let mut crash_marker_path: Option<PathBuf> = None;
     while let Some(argument) = arguments.next() {
@@ -595,7 +597,7 @@ fn run_legacy() -> Result<(), Box<dyn std::error::Error>> {
                 if let Some(runtime) = vst3.as_ref() {
                     for (instance_id, latency, tail) in runtime.take_timing_changes() {
                         if let Err(error) =
-                            engine::update_plugin_timing(&instance_id, latency, tail)
+                            audio_engine.update_plugin_timing(&instance_id, latency, tail)
                         {
                             eprintln!(
                                 "audio-host: could not rebuild dynamic plugin latency: {error}"
@@ -603,7 +605,7 @@ fn run_legacy() -> Result<(), Box<dyn std::error::Error>> {
                         }
                     }
                 }
-                let (callback_generation, transport_state) = engine::heartbeat_snapshot();
+                let (callback_generation, transport_state) = audio_engine.heartbeat_snapshot();
                 ControlResult::Heartbeat {
                     ipc_generation: 0,
                     tokio_generation: 0,
@@ -625,7 +627,7 @@ fn run_legacy() -> Result<(), Box<dyn std::error::Error>> {
                 },
             },
             ControlCommand::Shutdown => {
-                let _ = engine::stop_audio_engine();
+                let _ = audio_engine.stop_audio_engine();
                 write_message(
                     &mut output,
                     &ControlResponse {
@@ -637,7 +639,7 @@ fn run_legacy() -> Result<(), Box<dyn std::error::Error>> {
             }
             command => {
                 let processors = vst3.as_ref().map(vst3::Vst3Runtime::processor_handles);
-                match engine_command(command, processors.as_ref()) {
+                match engine_command(&audio_engine, command, processors.as_ref()) {
                     Some(result) => result,
                     None => control_error! {
                         message: "unsupported audio-host command".into(),

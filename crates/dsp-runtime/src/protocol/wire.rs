@@ -6,7 +6,6 @@ use std::{
 
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
-pub const NATIVE_BUILD_FINGERPRINT: &str = env!("YADAW_NATIVE_BUILD_FINGERPRINT");
 pub const MAX_MESSAGE_BYTES: usize = 64 * 1024 * 1024;
 pub const INLINE_BLOB_LIMIT: usize = 64 * 1024;
 

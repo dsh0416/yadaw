@@ -51,6 +51,11 @@ description = "Run formatting, lint, Rust, napi-rs, TypeScript, and Vue checks"
 depends = ["install"]
 run = "pnpm check"
 
+[tasks.check-fast]
+description = "Run the fast local Rust formatting, lint, and library-test path"
+depends = ["install"]
+run = "pnpm check:rust:fast"
+
 [tasks.build]
 description = "Build the native addon and all Electron bundles"
 depends = ["install"]
@@ -79,9 +84,4 @@ run = "pnpm lint"
 [tasks.native]
 description = "Build the native addon and VST3 probe (ASIO is always included on Windows)"
 depends = ["install"]
-run = [
-  "pnpm --filter @yadaw/dsp-node build",
-  "pnpm --filter @yadaw/audio-host-client build",
-  "cargo build --release -p yadaw-audio-host -p yadaw-vst3-host",
-  "cargo truce build --vst3",
-]
+run = "node scripts/native-build.ts release"

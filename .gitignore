@@ -24,3 +24,6 @@ crates/dsp-node/index.js
 apm_modules/
 .agents/skills/
 *.tsbuildinfo
+
+# Local VST3 Bindgen experiments; production bindings are emitted to OUT_DIR.
+crates/vst3-host-sys/src/generated/

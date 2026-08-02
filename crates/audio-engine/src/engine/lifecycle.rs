@@ -20,7 +20,11 @@ fn stopped_snapshot() -> NativeAudioRuntimeSnapshot {
     }
 }
 
-pub fn start_audio_engine(config: NativeAudioEngineConfig) -> Result<NativeAudioRuntimeSnapshot> {
+impl AudioEngine {
+pub fn start_audio_engine(
+    &self,
+    config: NativeAudioEngineConfig,
+) -> Result<NativeAudioRuntimeSnapshot> {
     if config.buffer_size == 0 {
         return Err(invalid_config("buffer size must be greater than zero"));
     }
@@ -39,7 +43,7 @@ pub fn start_audio_engine(config: NativeAudioEngineConfig) -> Result<NativeAudio
     };
 
     {
-        let guard = engine_slot()
+        let guard = self.running
             .lock()
             .map_err(|_| audio_error("audio engine lock", "poisoned"))?;
         if let Some(engine) = guard.as_ref().filter(|engine| engine.matches(&engine_key)) {
@@ -48,7 +52,7 @@ pub fn start_audio_engine(config: NativeAudioEngineConfig) -> Result<NativeAudio
     }
 
     // Only release devices when the requested configuration genuinely changed.
-    *engine_slot()
+    *self.running
         .lock()
         .map_err(|_| audio_error("audio engine lock", "poisoned"))? = None;
 
@@ -113,7 +117,7 @@ pub fn start_audio_engine(config: NativeAudioEngineConfig) -> Result<NativeAudio
         u32::from(output_config.channels).min(MAX_OUTPUT_CHANNELS as u32),
         input_config.sample_rate,
     ));
-    let initial_mixer = take_pending_mixer(session_sample_rate)?;
+    let initial_mixer = take_pending_mixer(self, session_sample_rate)?;
     if let Some(runtime) = initial_mixer.as_ref() {
         metrics
             .published_graph_generation
@@ -212,7 +216,7 @@ pub fn start_audio_engine(config: NativeAudioEngineConfig) -> Result<NativeAudio
         .play()
         .map_err(|error| audio_error("failed to start cpal output stream", error))?;
 
-    let engine = AudioEngine {
+    let engine = RunningAudioEngine {
         _input_stream: input_stream,
         _output_stream: output_stream,
         metrics,
@@ -226,22 +230,22 @@ pub fn start_audio_engine(config: NativeAudioEngineConfig) -> Result<NativeAudio
         round_trip_latency,
     };
     let snapshot = engine.metrics.snapshot();
-    *engine_slot()
+    *self.running
         .lock()
         .map_err(|_| audio_error("audio engine lock", "poisoned"))? = Some(engine);
 
     Ok(snapshot)
 }
 
-pub fn stop_audio_engine() -> Result<NativeAudioRuntimeSnapshot> {
-    *engine_slot()
+pub fn stop_audio_engine(&self) -> Result<NativeAudioRuntimeSnapshot> {
+    *self.running
         .lock()
         .map_err(|_| audio_error("audio engine lock", "poisoned"))? = None;
     Ok(stopped_snapshot())
 }
 
-pub fn audio_engine_snapshot() -> Result<NativeAudioRuntimeSnapshot> {
-    let guard = engine_slot()
+pub fn audio_engine_snapshot(&self) -> Result<NativeAudioRuntimeSnapshot> {
+    let guard = self.running
         .lock()
         .map_err(|_| audio_error("audio engine lock", "poisoned"))?;
     Ok(guard
@@ -250,9 +254,10 @@ pub fn audio_engine_snapshot() -> Result<NativeAudioRuntimeSnapshot> {
 }
 
 pub fn start_round_trip_latency_measurement(
+    &self,
     request: NativeRoundTripLatencyMeasurementRequest,
 ) -> Result<NativeRoundTripLatencyMeasurementSnapshot> {
-    let guard = engine_slot()
+    let guard = self.running
         .lock()
         .map_err(|_| audio_error("audio engine lock", "poisoned"))?;
     let engine = guard
@@ -267,13 +272,14 @@ pub fn start_round_trip_latency_measurement(
     Ok(engine.round_trip_latency.snapshot())
 }
 
-pub fn round_trip_latency_measurement_snapshot() -> Result<NativeRoundTripLatencyMeasurementSnapshot>
+pub fn round_trip_latency_measurement_snapshot(&self) -> Result<NativeRoundTripLatencyMeasurementSnapshot>
 {
-    let guard = engine_slot()
+    let guard = self.running
         .lock()
         .map_err(|_| audio_error("audio engine lock", "poisoned"))?;
     let engine = guard
         .as_ref()
         .ok_or_else(|| invalid_config("the audio engine must be running"))?;
     Ok(engine.round_trip_latency.snapshot())
+}
 }

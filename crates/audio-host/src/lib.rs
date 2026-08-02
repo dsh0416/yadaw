@@ -1,5 +1,4 @@
 use std::{
-    error::Error,
     fmt,
     sync::atomic::{AtomicU64, Ordering},
 };
@@ -43,50 +42,31 @@ macro_rules! control_error {
 }
 
 mod ara;
-pub mod crash_marker;
-pub mod device;
+pub use yadaw_audio_engine::{HostError, HostResult, Status};
+
+pub mod crash_marker {
+    pub use yadaw_audio_engine::crash_marker::*;
+}
+pub mod device {
+    pub use yadaw_audio_engine::device::*;
+}
 pub mod editor_platform;
 pub mod editor_window;
-pub mod engine;
-pub mod midi_input;
-pub mod midi_recording;
-pub mod mock;
-pub mod recording;
+pub mod engine {
+    pub use yadaw_audio_engine::*;
+}
+pub mod midi_input {
+    pub use yadaw_audio_engine::midi_input::*;
+}
+pub mod midi_recording {
+    pub use yadaw_audio_engine::midi_recording::*;
+}
+pub mod mock {
+    pub use yadaw_audio_engine::mock::*;
+}
+pub mod recording {
+    pub use yadaw_audio_engine::recording::*;
+}
 pub mod runtime;
 pub mod vst3;
 pub mod workers;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Status {
-    GenericFailure,
-    InvalidArg,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HostError {
-    status: Status,
-    message: String,
-}
-
-impl HostError {
-    pub fn new(status: Status, message: impl Into<String>) -> Self {
-        Self {
-            status,
-            message: message.into(),
-        }
-    }
-
-    pub fn status(&self) -> Status {
-        self.status
-    }
-}
-
-impl fmt::Display for HostError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(&self.message)
-    }
-}
-
-impl Error for HostError {}
-
-pub type HostResult<T> = Result<T, HostError>;

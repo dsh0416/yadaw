@@ -1,0 +1,30 @@
+[package]
+name = "yadaw-audio-engine"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+bwavfile.workspace = true
+midir.workspace = true
+ringbuf.workspace = true
+rubato.workspace = true
+thiserror.workspace = true
+yadaw-dsp-core.workspace = true
+yadaw-dsp-render.workspace = true
+yadaw-dsp-runtime.workspace = true
+yadaw-vst3-host.workspace = true
+
+[target.'cfg(target_os = "windows")'.dependencies]
+cpal = { workspace = true, features = ["asio", "custom", "realtime"] }
+
+[target.'cfg(not(target_os = "windows"))'.dependencies]
+cpal = { workspace = true, features = ["custom"] }
+
+[features]
+default = []
+bench-internals = []
+
+[lints]
+workspace = true

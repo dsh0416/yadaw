@@ -1,4 +1,4 @@
-pub(crate) fn decode_clip_audio(
+pub fn decode_clip_audio(
     path: &str,
     target_sample_rate: u32,
 ) -> Result<Vec<StereoFrame>> {

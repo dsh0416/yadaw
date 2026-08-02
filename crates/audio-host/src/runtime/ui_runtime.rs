@@ -8,11 +8,12 @@ struct WinitHost {
     proxy: EventLoopProxy<UiEvent>,
     inbox: std_mpsc::Receiver<ActorRequest>,
     processors: Arc<Mutex<HashMap<String, vst3::Vst3ProcessorHandle>>>,
+    audio_engine: Arc<engine::AudioEngine>,
     background_sender: mpsc::Sender<ActorRequest>,
     host_events: std_mpsc::SyncSender<HostEvent>,
     vst3: Option<vst3::Vst3Runtime>,
     ara_graph: Option<LiveMixerGraph>,
-    compositor: TinySkiaCompositor,
+    compositor: Option<WgpuCompositor>,
     editor_owner_window: Option<usize>,
     editors: HashMap<WindowId, EditorWindow>,
     editor_instances: HashMap<String, WindowId>,
@@ -72,13 +73,32 @@ impl WinitHost {
             }
         };
         let window_id = window.id();
+        if self.compositor.is_none() {
+            match pollster::block_on(iced_wgpu::window::compositor::new(
+                iced_wgpu::Settings::default(),
+                window.clone(),
+                iced_wgpu::graphics::Shell::headless(),
+            )) {
+                Ok(compositor) => self.compositor = Some(compositor),
+                Err(error) => {
+                    return control_error! {
+                        message: format!("could not initialize the Iced WGPU renderer: {error}"),
+                    };
+                }
+            }
+        }
+        let Some(compositor) = self.compositor.as_mut() else {
+            return control_error! {
+                message: "Iced WGPU renderer is unavailable".into(),
+            };
+        };
         let mut editor = EditorWindow::new(
             instance_id.clone(),
             class_id,
             preference,
             Vec::new(),
             window,
-            &mut self.compositor,
+            compositor,
         );
         editor.activate_initial_mode(runtime);
         let active_mode = editor.active_mode();
@@ -128,7 +148,7 @@ impl WinitHost {
                 // Benchmark (and other non-graph) instances are dropped immediately. Instances that
                 // still appear in the last native mixer graph are retained until helper shutdown so
                 // retiring mixer generations cannot use a freed ProcessorLease.
-                let retain_for_graph = engine::native_graph_references_plugin(&instance_id);
+                let retain_for_graph = self.audio_engine.native_graph_references_plugin(&instance_id);
                 let _ = reply.send(runtime.unload_plugin(&instance_id, retain_for_graph));
                 return;
             }
@@ -161,7 +181,7 @@ impl WinitHost {
             ActorCommand::Parameter(command) => runtime.apply_parameter_command(command),
             ActorCommand::Control(ControlCommand::Ping) => {
                 for (instance_id, latency, tail) in runtime.take_timing_changes() {
-                    match engine::apply_plugin_timing(&instance_id, latency, tail) {
+                    match self.audio_engine.apply_plugin_timing(&instance_id, latency, tail) {
                         Ok(Some(graph)) => {
                             queue_background_graph_build(&self.background_sender, graph);
                         }
@@ -173,7 +193,7 @@ impl WinitHost {
                         }
                     }
                 }
-                let (callback_generation, transport_state) = engine::heartbeat_snapshot();
+                let (callback_generation, transport_state) = self.audio_engine.heartbeat_snapshot();
                 ControlResult::Heartbeat {
                     ipc_generation: 0,
                     tokio_generation: 0,
@@ -237,6 +257,7 @@ impl WinitHost {
         for (_, mut editor) in self.editors.drain() {
             editor.close();
         }
+        self.compositor = None;
         if let Ok(mut processors) = self.processors.lock() {
             processors.clear();
         }
@@ -275,13 +296,41 @@ impl ApplicationHandler<UiEvent> for WinitHost {
         event: WindowEvent,
     ) {
         if matches!(event, WindowEvent::RedrawRequested) {
-            if let Some(editor) = self.editors.get_mut(&window_id) {
-                editor.draw(&mut self.compositor);
+            let result = self
+                .editors
+                .get_mut(&window_id)
+                .zip(self.compositor.as_mut())
+                .map(|(editor, compositor)| editor.draw(compositor));
+            if let Some(Err(error)) = result {
+                use iced_wgpu::graphics::compositor::SurfaceError;
+                match error {
+                    SurfaceError::Lost | SurfaceError::Outdated => {
+                        if let Some((editor, compositor)) = self
+                            .editors
+                            .get_mut(&window_id)
+                            .zip(self.compositor.as_mut())
+                        {
+                            editor.reconfigure_surface(compositor);
+                        }
+                    }
+                    SurfaceError::OutOfMemory => {
+                        for (_, mut editor) in self.editors.drain() {
+                            editor.close();
+                        }
+                        self.editor_instances.clear();
+                        self.compositor = None;
+                    }
+                    SurfaceError::Timeout | SurfaceError::Other => {}
+                }
             }
             return;
         }
-        let actions = match self.editors.get_mut(&window_id) {
-            Some(editor) => editor.handle_event(event, &mut self.compositor),
+        let actions = match self
+            .editors
+            .get_mut(&window_id)
+            .zip(self.compositor.as_mut())
+        {
+            Some((editor, compositor)) => editor.handle_event(event, compositor),
             None => return,
         };
         let mut close = false;

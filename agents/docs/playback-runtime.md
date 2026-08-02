@@ -125,10 +125,10 @@ errors.
 
 Cross-process messages use `servo/ipc-channel`. There is no message-level
 protocol version and no compatibility branch: addon and helper are lockstep
-application resources. Bootstrap compares a generated native build fingerprint
-once before actors or shared pages start; a mismatch means stale build artifacts
-and terminates the helper. The fingerprint is derived from the native protocol,
-transport, helper, addon, manifests, and lockfile.
+application resources. Bootstrap transfers channels and persistent shared pages;
+it does not infer compatibility from a version or source fingerprint. Packaging
+and the native smoke test guarantee that the addon launches the helper from the
+same build.
 
 The outer value is `WirePacket { body, region_offers }`: `body` is a bounded
 MessagePack request/reply/event and `region_offers` contains only mappings not
@@ -558,7 +558,7 @@ because many bundles use a different executable name and require the bundle
 ref for resource lookup.
 
 There is one winit top-level editor per plug-in instance. Reopening focuses it.
-iced 0.14 and `iced_tiny_skia` draw the toolbar and parameter list without
+iced 0.14 and its WGPU renderer draw the toolbar and parameter list without
 starting another event loop. Native mode creates a platform child below the
 toolbar: an HWND with child/clip styles, an NSView, or an X11 window carrying
 XEmbed information. Closing uses this order:

@@ -17,9 +17,11 @@ partially visible mutations are prohibited protocol semantics.
 ## Implementation status
 
 IPC protocol version 2 is implemented across renderer/preload, Electron main,
-project workers, the native addon, and the audio helper. It is a breaking
-same-build protocol: bootstrap rejects a mismatched version or native build
-fingerprint, and no compatibility adapter for version 1 is retained.
+project workers, the native addon, and the audio helper. Renderer/main/worker
+requests retain their explicit protocol version. Native addon and helper are a
+same-build pair by construction, so native bootstrap contains no compatibility
+adapter or build fingerprint; shared-memory layouts continue to validate their
+own magic and layout versions.
 
 - `bootstrap()` is the only targetless state request.
 - Every `YadawDesktopApi` request resolves to `RpcResult<T>`; Electron

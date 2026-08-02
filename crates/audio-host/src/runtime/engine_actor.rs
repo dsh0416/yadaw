@@ -76,6 +76,7 @@ fn refresh_graph_handles(handles: &Mutex<GraphParameterHandles>, graph: &LiveMix
 }
 
 fn mixer_parameter_command(
+    audio_engine: &engine::AudioEngine,
     handles: &Mutex<GraphParameterHandles>,
     command: yadaw_dsp_runtime::protocol::ParameterCommand,
 ) -> ControlResult {
@@ -129,7 +130,7 @@ fn mixer_parameter_command(
             };
         }
     };
-    match engine::preview_mixer_parameter(engine::NativeMixerParameterPreview {
+    match audio_engine.preview_mixer_parameter(engine::NativeMixerParameterPreview {
         target: target.into(),
         id,
         parameter: parameter.into(),
@@ -145,19 +146,20 @@ fn mixer_parameter_command(
 async fn engine_actor(
     mut inbox: mpsc::Receiver<ActorRequest>,
     handles: Arc<Mutex<GraphParameterHandles>>,
+    audio_engine: Arc<engine::AudioEngine>,
 ) {
     while let Some(message) = inbox.recv().await {
         let result = match message.command {
             ActorCommand::Control(command) => {
-                engine_command(command, None).unwrap_or_else(|| control_error! {
+                engine_command(&audio_engine, command, None).unwrap_or_else(|| control_error! {
                     message: "unsupported engine command".into(),
                 })
             }
-            ActorCommand::Parameter(command) => mixer_parameter_command(&handles, command),
+            ActorCommand::Parameter(command) => mixer_parameter_command(&audio_engine, &handles, command),
             ActorCommand::SyncAraGraph { .. } => control_error! {
                 message: "engine actor does not own ARA documents".into(),
             },
-            ActorCommand::PublishBuiltGraph { built } => match engine::publish_mixer_runtime(built)
+            ActorCommand::PublishBuiltGraph { built } => match audio_engine.publish_mixer_runtime(built)
             {
                 Ok(engine::PublishOutcome::Published) => ControlResult::Accepted,
                 Ok(engine::PublishOutcome::Superseded) => control_error! {
@@ -186,9 +188,10 @@ async fn build_graph_on_worker(
     supervisor: &WorkerSupervisor,
     engine_sender: &mpsc::Sender<ActorRequest>,
     graph: engine::NativeMixerGraph,
+    audio_engine: &engine::AudioEngine,
 ) -> ControlResult {
     let revision = graph.generation;
-    let input = match engine::begin_graph_build(graph) {
+    let input = match audio_engine.begin_graph_build(graph) {
         Ok(input) => input,
         Err(error) => {
             return control_error! {
@@ -212,7 +215,7 @@ async fn build_graph_on_worker(
     match publish_built_graph(engine_sender, built).await {
         ControlResult::Accepted => ControlResult::GraphAccepted { revision },
         ControlResult::Error { .. }
-            if engine::published_graph_generation() >= revision =>
+            if audio_engine.published_graph_generation() >= revision =>
         {
             ControlResult::GraphAccepted { revision }
         }
@@ -224,14 +227,15 @@ async fn background_io_actor(
     mut inbox: mpsc::Receiver<ActorRequest>,
     engine_sender: mpsc::Sender<ActorRequest>,
     supervisor: Arc<WorkerSupervisor>,
+    audio_engine: Arc<engine::AudioEngine>,
 ) {
     while let Some(message) = inbox.recv().await {
         let result = match message.command {
             ActorCommand::BuildGraph { graph } => {
-                build_graph_on_worker(&supervisor, &engine_sender, graph).await
+                build_graph_on_worker(&supervisor, &engine_sender, graph, &audio_engine).await
             }
             ActorCommand::Control(command) => {
-                engine_command(command, None).unwrap_or_else(|| control_error! {
+                engine_command(&audio_engine, command, None).unwrap_or_else(|| control_error! {
                     message: "unsupported background I/O command".into(),
                 })
             }

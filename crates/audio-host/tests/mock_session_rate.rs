@@ -4,9 +4,8 @@ use std::{
 };
 
 use yadaw_audio_host::engine::{
-    NativeAudioEngineConfig, NativeMixerChannel, NativeMixerGraph, NativeTransportSnapshot,
-    begin_graph_build, compile_graph_build, heartbeat_snapshot, publish_mixer_runtime,
-    start_audio_engine, stop_audio_engine, transport_command, transport_snapshot,
+    AudioEngine, NativeAudioEngineConfig, NativeMixerChannel, NativeMixerGraph,
+    NativeTransportSnapshot, compile_graph_build,
 };
 use yadaw_audio_host::mock;
 use yadaw_dsp_runtime::tempo::{TempoEvent, TimeSignatureEvent};
@@ -17,11 +16,11 @@ const PROJECT_SAMPLE_RATE: u64 = 44_100;
 const CALLBACKS_TO_OBSERVE: u64 = 128;
 const MAX_CLOCK_RATE_ERROR_PERCENT: u64 = 2;
 
-fn stable_transport_snapshot() -> (u64, NativeTransportSnapshot) {
+fn stable_transport_snapshot(engine: &AudioEngine) -> (u64, NativeTransportSnapshot) {
     loop {
-        let (generation_before, _) = heartbeat_snapshot();
-        let transport = transport_snapshot().unwrap();
-        let (generation_after, _) = heartbeat_snapshot();
+        let (generation_before, _) = engine.heartbeat_snapshot();
+        let transport = engine.transport_snapshot().unwrap();
+        let (generation_after, _) = engine.heartbeat_snapshot();
         if generation_before == generation_after {
             return (generation_after, transport);
         }
@@ -31,14 +30,16 @@ fn stable_transport_snapshot() -> (u64, NativeTransportSnapshot) {
 
 #[test]
 fn mock_backend_uses_the_project_clock_over_native_48_khz_io() {
-    let runtime = start_audio_engine(NativeAudioEngineConfig {
-        backend: mock::BACKEND_ID.to_owned(),
-        input_device_id: "custom:mock-input".to_owned(),
-        output_device_id: "custom:mock-output".to_owned(),
-        buffer_size: 128,
-        session_sample_rate: Some(44_100),
-    })
-    .unwrap();
+    let engine = AudioEngine::new();
+    let runtime = engine
+        .start_audio_engine(NativeAudioEngineConfig {
+            backend: mock::BACKEND_ID.to_owned(),
+            input_device_id: "custom:mock-input".to_owned(),
+            output_device_id: "custom:mock-output".to_owned(),
+            buffer_size: 128,
+            session_sample_rate: Some(44_100),
+        })
+        .unwrap();
     assert_eq!(runtime.sample_rate, Some(44_100));
     assert_eq!(runtime.input_sample_rate, Some(48_000));
     assert_eq!(runtime.output_sample_rate, Some(48_000));
@@ -98,13 +99,15 @@ fn mock_backend_uses_the_project_clock_over_native_48_khz_io() {
             denominator: 4,
         }],
     };
-    let built = compile_graph_build(begin_graph_build(graph).unwrap()).unwrap();
-    publish_mixer_runtime(built).unwrap();
-    transport_command("play".to_owned(), None, None, None, None).unwrap();
+    let built = compile_graph_build(engine.begin_graph_build(graph).unwrap()).unwrap();
+    engine.publish_mixer_runtime(built).unwrap();
+    engine
+        .transport_command("play".to_owned(), None, None, None, None)
+        .unwrap();
 
     let start_deadline = Instant::now() + Duration::from_secs(5);
     let (start_generation, start_position) = loop {
-        let (generation, transport) = stable_transport_snapshot();
+        let (generation, transport) = stable_transport_snapshot(&engine);
         if transport.state == "playing" && transport.position_frames > 0 {
             break (generation, transport.position_frames);
         }
@@ -123,7 +126,7 @@ fn mock_backend_uses_the_project_clock_over_native_48_khz_io() {
     // only has to be generous enough to catch callbacks that never advance.
     let callback_deadline = Instant::now() + Duration::from_secs(30);
     loop {
-        let (generation, _) = heartbeat_snapshot();
+        let (generation, _) = engine.heartbeat_snapshot();
         if generation >= target_generation {
             break;
         }
@@ -133,7 +136,7 @@ fn mock_backend_uses_the_project_clock_over_native_48_khz_io() {
         );
         thread::sleep(Duration::from_millis(1));
     }
-    let (end_generation, transport) = stable_transport_snapshot();
+    let (end_generation, transport) = stable_transport_snapshot(&engine);
 
     let callback_count = end_generation.saturating_sub(start_generation);
     let expected_project_frames = callback_count
@@ -157,5 +160,5 @@ fn mock_backend_uses_the_project_clock_over_native_48_khz_io() {
          {callback_count} native callbacks; expected {expected_project_frames} within \
          {MAX_CLOCK_RATE_ERROR_PERCENT}% ({max_project_frame_error} frames)"
     );
-    stop_audio_engine().unwrap();
+    engine.stop_audio_engine().unwrap();
 }

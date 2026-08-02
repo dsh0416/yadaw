@@ -199,9 +199,7 @@ fn worker_lane(queue: Arc<SharedQueue>) {
 mod tests {
     use super::*;
     use crate::engine::{
-        GRAPH_TEST_LOCK, NativeMixerChannel, NativeMixerGraph, PublishOutcome, begin_graph_build,
-        last_native_graph_generation_for_test, latest_build_generation_for_test,
-        publish_mixer_runtime, set_last_native_graph_for_test,
+        AudioEngine, GRAPH_TEST_LOCK, NativeMixerChannel, NativeMixerGraph, PublishOutcome,
     };
     use yadaw_dsp_runtime::tempo::{TempoEvent, TimeSignatureEvent};
 
@@ -286,25 +284,32 @@ mod tests {
         let _guard = GRAPH_TEST_LOCK
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let first = begin_graph_build(minimal_graph(1)).expect("first begin");
+        let engine = AudioEngine::new();
+        let first = engine
+            .begin_graph_build(minimal_graph(1))
+            .expect("first begin");
         let first_generation = first.build_generation();
         // A newer begin must win publication even if the older compile finishes later.
-        let second = begin_graph_build(minimal_graph(2)).expect("second begin");
+        let second = engine
+            .begin_graph_build(minimal_graph(2))
+            .expect("second begin");
         assert!(second.build_generation() > first_generation);
         assert_eq!(
-            latest_build_generation_for_test(),
+            engine.latest_build_generation_for_test(),
             second.build_generation()
         );
 
         let stale = compile_graph_build(first).expect("stale compile");
         assert_eq!(
-            publish_mixer_runtime(stale).expect("stale publish"),
+            engine.publish_mixer_runtime(stale).expect("stale publish"),
             PublishOutcome::Superseded
         );
 
         let current = compile_graph_build(second).expect("current compile");
         assert_eq!(
-            publish_mixer_runtime(current).expect("current publish"),
+            engine
+                .publish_mixer_runtime(current)
+                .expect("current publish"),
             PublishOutcome::Published
         );
     }
@@ -315,7 +320,8 @@ mod tests {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let supervisor = WorkerSupervisor::new();
-        let input = begin_graph_build(minimal_graph(3)).expect("begin");
+        let engine = AudioEngine::new();
+        let input = engine.begin_graph_build(minimal_graph(3)).expect("begin");
         let receiver = supervisor
             .submit_graph_build(input)
             .expect("submit graph build");
@@ -324,7 +330,7 @@ mod tests {
             .expect("worker reply")
             .expect("compile");
         assert_eq!(
-            publish_mixer_runtime(built).expect("publish"),
+            engine.publish_mixer_runtime(built).expect("publish"),
             PublishOutcome::Published
         );
         supervisor.shutdown();
@@ -335,19 +341,22 @@ mod tests {
         let _guard = GRAPH_TEST_LOCK
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        set_last_native_graph_for_test(None);
-        let input = begin_graph_build(minimal_graph(41)).expect("prepare");
-        assert_eq!(last_native_graph_generation_for_test(), None);
+        let engine = AudioEngine::new();
+        engine.set_last_native_graph_for_test(None);
+        let input = engine
+            .begin_graph_build(minimal_graph(41))
+            .expect("prepare");
+        assert_eq!(engine.last_native_graph_generation_for_test(), None);
 
         let built = compile_graph_build(input).expect("compile");
-        assert_eq!(last_native_graph_generation_for_test(), None);
+        assert_eq!(engine.last_native_graph_generation_for_test(), None);
 
         assert_eq!(
-            publish_mixer_runtime(built).expect("activate"),
+            engine.publish_mixer_runtime(built).expect("activate"),
             PublishOutcome::Published
         );
-        assert_eq!(last_native_graph_generation_for_test(), Some(41));
-        set_last_native_graph_for_test(None);
+        assert_eq!(engine.last_native_graph_generation_for_test(), Some(41));
+        engine.set_last_native_graph_for_test(None);
     }
 
     #[test]
@@ -363,8 +372,13 @@ mod tests {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let queue = SharedQueue::new();
-        let graph_input = begin_graph_build(minimal_graph(50)).expect("graph begin");
-        let seek_input = begin_graph_build(minimal_graph(51)).expect("seek begin");
+        let engine = AudioEngine::new();
+        let graph_input = engine
+            .begin_graph_build(minimal_graph(50))
+            .expect("graph begin");
+        let seek_input = engine
+            .begin_graph_build(minimal_graph(51))
+            .expect("seek begin");
         let (graph_tx, _) = oneshot::channel();
         let (seek_tx, _) = oneshot::channel();
         queue
@@ -402,7 +416,8 @@ mod tests {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let queue = SharedQueue::new();
         queue.close();
-        let input = begin_graph_build(minimal_graph(52)).expect("begin");
+        let engine = AudioEngine::new();
+        let input = engine.begin_graph_build(minimal_graph(52)).expect("begin");
         let (complete, _) = oneshot::channel();
         let error = queue
             .push(PrioritizedJob {
@@ -415,7 +430,7 @@ mod tests {
 
         let supervisor = WorkerSupervisor::new();
         supervisor.shutdown();
-        let input = begin_graph_build(minimal_graph(53)).expect("begin");
+        let input = engine.begin_graph_build(minimal_graph(53)).expect("begin");
         let error = match supervisor.submit_graph_build(input) {
             Ok(_) => panic!("shutdown supervisor must reject submit"),
             Err(error) => error,

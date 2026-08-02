@@ -3,15 +3,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn bootstrap_rejects_a_stale_protocol_or_native_build() {
-        assert!(
-            validate_native_bootstrap(IPC_PROTOCOL_VERSION, NATIVE_BUILD_FINGERPRINT).is_ok()
-        );
-        assert!(validate_native_bootstrap(IPC_PROTOCOL_VERSION - 1, NATIVE_BUILD_FINGERPRINT).is_err());
-        assert!(validate_native_bootstrap(IPC_PROTOCOL_VERSION, "stale-build").is_err());
-    }
-
-    #[test]
     fn editor_owner_window_rejects_null_and_invalid_handles() {
         assert_eq!(parse_editor_owner_window("4660"), Ok(4660));
         assert!(parse_editor_owner_window("0").is_err());
@@ -226,7 +217,8 @@ mod tests {
         base_revision: u64,
         graph_revision: u64,
     ) -> PreparedGraphCandidate {
-        let input = engine::begin_graph_build(minimal_native_graph(graph_revision))
+        let audio_engine = engine::AudioEngine::new();
+        let input = audio_engine.begin_graph_build(minimal_native_graph(graph_revision))
             .expect("begin graph build for transaction fixture");
         let built = engine::compile_graph_build(input).expect("compile graph build fixture");
         PreparedGraphCandidate {

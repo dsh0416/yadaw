@@ -18,7 +18,6 @@ interface WireResponse {
 }
 
 type TransportDiagnosticsWire = [
-  nativeBuildFingerprint: string,
   sessionEpoch: string,
   requests: [normalPending: number, priorityPending: number, capacity: number, timeouts: number],
   sharedMemory: unknown,
@@ -115,16 +114,11 @@ try {
   }
 
   const diagnostics = decodeWire<TransportDiagnosticsWire>(client.transportDiagnostics())
-  if (
-    typeof diagnostics[0] !== "string" ||
-    diagnostics[0].length !== 16 ||
-    diagnostics[8][0] !== 2 ||
-    diagnostics[8][2] !== 2
-  ) {
+  if (typeof diagnostics[0] !== "string" || diagnostics[7][0] !== 2 || diagnostics[7][2] !== 2) {
     throw new Error("runtime diagnostics mismatch")
   }
   console.log(
-    `IPC smoke passed (build ${diagnostics[0].slice(0, 8)}, ${returned.byteLength} bytes, ${diagnostics[8][3]} client arena region)`
+    `IPC smoke passed (session ${diagnostics[0]}, ${returned.byteLength} bytes, ${diagnostics[7][3]} client arena region)`
   )
 
   const shutdownId = requestId++

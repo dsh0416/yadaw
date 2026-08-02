@@ -197,7 +197,10 @@ impl EditorWindow {
         actions
     }
 
-    pub fn draw(&mut self, compositor: &mut Compositor) {
+    pub fn draw(
+        &mut self,
+        compositor: &mut Compositor,
+    ) -> Result<(), iced_wgpu::graphics::compositor::SurfaceError> {
         let logical_size = self.viewport.logical_size();
         let model = self.view_model();
         let view = Self::view(&model);
@@ -228,15 +231,21 @@ impl EditorWindow {
             self.cursor,
         );
         self.cache = interface.into_cache();
-        if let Err(error) = compositor.present(
+        let result = compositor.present(
             &mut self.renderer,
             &mut self.surface,
             &self.viewport,
             Color::from_rgb8(19, 22, 29),
             || {},
-        ) {
+        );
+        if let Err(error) = &result {
             self.warning = Some(format!("Editor shell rendering failed: {error}"));
         }
+        result
+    }
+
+    pub fn reconfigure_surface(&mut self, compositor: &mut Compositor) {
+        self.resize_surface(self.window.inner_size(), compositor);
     }
 
     pub fn apply_action(

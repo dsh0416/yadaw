@@ -1,4 +1,4 @@
-struct AudioEngine {
+struct RunningAudioEngine {
     _input_stream: Stream,
     _output_stream: Stream,
     metrics: Arc<RuntimeMetrics>,
@@ -33,7 +33,7 @@ struct AudioEngineKey {
     requested_session_sample_rate: Option<u32>,
 }
 
-impl AudioEngine {
+impl RunningAudioEngine {
     fn matches(&self, key: &AudioEngineKey) -> bool {
         self.key.backend == key.backend
             && self.key.input_device_id == key.input_device_id
@@ -52,20 +52,16 @@ impl AudioEngine {
     }
 }
 
-fn engine_slot() -> &'static Mutex<Option<AudioEngine>> {
-    AUDIO_ENGINE.get_or_init(|| Mutex::new(None))
-}
-
-fn pending_mixer_slot() -> &'static Mutex<Option<Box<NativeMixerRuntime>>> {
-    PENDING_MIXER.get_or_init(|| Mutex::new(None))
-}
-
-fn take_pending_mixer(sample_rate: u32) -> Result<Option<Box<NativeMixerRuntime>>> {
-    let mut pending = pending_mixer_slot()
+fn take_pending_mixer(
+    owner: &AudioEngine,
+    sample_rate: u32,
+) -> Result<Option<Box<NativeMixerRuntime>>> {
+    let mut pending = owner
+        .pending_mixer
         .lock()
         .map_err(|_| audio_error("pending mixer lock", "poisoned"))?;
     if let Some(runtime) = pending.as_ref() {
-        validate_session_sample_rate(sample_rate, runtime.sample_rate)?;
+        AudioEngine::validate_session_sample_rate(sample_rate, runtime.sample_rate)?;
     }
     Ok(pending.take())
 }

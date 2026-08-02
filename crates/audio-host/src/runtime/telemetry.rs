@@ -14,10 +14,11 @@ async fn publish_telemetry(
     graph_revision: u64,
     session_epoch: u64,
     page_epoch: &AtomicU64,
+    audio_engine: &engine::AudioEngine,
 ) {
-    let (callback_generation, transport_state) = engine::heartbeat_snapshot();
-    let transport = engine::transport_snapshot().ok();
-    let meter_values = engine::mixer_snapshot()
+    let (callback_generation, transport_state) = audio_engine.heartbeat_snapshot();
+    let transport = audio_engine.transport_snapshot().ok();
+    let meter_values = audio_engine.mixer_snapshot()
         .map(|snapshot| snapshot.meters)
         .unwrap_or_default();
     let meters = meter_values

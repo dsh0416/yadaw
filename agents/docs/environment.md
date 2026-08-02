@@ -32,7 +32,7 @@ with:
 mise run install
 ```
 
-The `dev`, `check`, `build`, `pack`, `format`, `format-check`, `lint`, and
+The `dev`, `check`, `check-fast`, `build`, `pack`, `format`, `format-check`, `lint`, and
 `native` tasks depend on the `install` task, so they install locked pnpm
 dependencies when necessary.
 
@@ -54,6 +54,7 @@ repository tasks directly:
 ```sh
 mise run dev
 mise run check
+mise run check-fast
 mise run build
 mise run format
 mise run format-check
@@ -101,6 +102,22 @@ mise exec -- pnpm lint
 
 Prefer the root `mise run check` task before handing off a completed change
 because it is the repository's full validation path.
+
+`mise run check-fast` is the edit-loop path: Rust formatting, workspace lib/bin
+Clippy, and library tests. It deliberately skips NAPI builds, integration tests,
+examples, and benchmark compilation; `mise run check` remains the merge gate.
+
+Repository native commands discover `rustc -vV`'s host triple and build into
+`target/<host-triple>/<profile>`. The native build script stages only
+`yadaw-audio-host` and `yadaw-vst3-probe` back into `target/debug` or
+`target/release` for stable Electron paths. An old implicit-host cache can be
+removed once with `cargo clean`; the scripts never clean it automatically.
+
+VST3 SDK bindings are generated into Cargo's `OUT_DIR` by
+`yadaw-vst3-host-sys/build.rs` and are not checked into Git. A clean build
+therefore requires the pinned LLVM/Clang toolchain, including on non-Windows
+hosts. Cargo reruns Bindgen when the wrapper or its VST3/ARA header inputs
+change.
 
 `pnpm check` and `pnpm check:native` run `pnpm sync:napi-bindings` before
 type-aware Oxlint, residual Vue ESLint, package TypeScript checks, and tests

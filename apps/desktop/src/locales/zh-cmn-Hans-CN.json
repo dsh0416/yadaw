@@ -910,7 +910,6 @@
     "ipcSection": {
       "title": "音频 IPC 传输",
       "unavailable": "不可用",
-      "build": "构建 {fingerprint}",
       "placeholder": "音频辅助进程诊断不可用。",
       "requestRouter": "请求路由",
       "normalPriority": "{normal} 普通 · {priority} 优先",

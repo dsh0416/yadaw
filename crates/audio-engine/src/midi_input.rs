@@ -26,7 +26,7 @@ use yadaw_dsp_runtime::{
     },
 };
 
-use crate::engine::TransportClockHandle;
+use crate::TransportClockHandle;
 use crate::midi_recording::MidiRecordingSession;
 
 const PORT_POLL_INTERVAL: Duration = Duration::from_secs(1);

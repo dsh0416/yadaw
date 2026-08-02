@@ -13,9 +13,10 @@ Electron main process
   │       ▼
   │   audio-host
   │     ├─ winit main thread: VST3 controller/editor ownership
-  │     ├─ iced/tiny-skia: editor chrome and parameter mode
-  │     ├─ cpal callbacks + preallocated parameter/audio queues
-  │     └─ dsp-core
+  │     ├─ lazy Iced/WGPU: editor chrome and parameter mode
+  │     └─ yadaw-audio-engine
+  │          ├─ cpal callbacks + preallocated parameter/audio queues
+  │          └─ dsp-core / dsp-render / VST3 processor endpoints
   └─ @yadaw/dsp-node (.node offline tools)
 ```
 

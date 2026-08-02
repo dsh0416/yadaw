@@ -1,4 +1,5 @@
 struct Liveness {
+    audio_engine: Arc<engine::AudioEngine>,
     ipc: Arc<AtomicU64>,
     tokio: Arc<AtomicU64>,
     winit: Arc<AtomicU64>,
@@ -130,7 +131,7 @@ fn spawn_ingress(
                     let result = match request.command {
                         PriorityCommand::Heartbeat => {
                             let (callback_generation, transport_state) =
-                                engine::heartbeat_snapshot();
+                                liveness.audio_engine.heartbeat_snapshot();
                             PriorityResult::Heartbeat {
                                 ipc_generation,
                                 tokio_generation: liveness.tokio.load(Ordering::Acquire),
