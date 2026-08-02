@@ -11,10 +11,10 @@ use yadaw_vst3_host_sys::{
     iid,
 };
 
-#[cfg(any(target_os = "linux", test))]
+#[cfg(any(target_os = "linux", all(test, unix)))]
 use std::cell::RefCell;
 
-#[cfg(any(target_os = "linux", test))]
+#[cfg(any(target_os = "linux", all(test, unix)))]
 use linux::{RunLoopInterface, RunLoopState};
 
 #[repr(C)]
@@ -22,9 +22,9 @@ pub struct PlugFrame {
     vtable: *const PlugFrameVTable,
     references: AtomicU32,
     resize: Box<dyn FnMut(*mut IPlugView, ViewRect) -> bool>,
-    #[cfg(any(target_os = "linux", test))]
+    #[cfg(any(target_os = "linux", all(test, unix)))]
     run_loop: RunLoopInterface,
-    #[cfg(any(target_os = "linux", test))]
+    #[cfg(any(target_os = "linux", all(test, unix)))]
     run_loop_state: RefCell<RunLoopState>,
 }
 
@@ -34,14 +34,14 @@ impl PlugFrame {
             vtable: &PLUG_FRAME_VTABLE,
             references: AtomicU32::new(1),
             resize: Box::new(resize),
-            #[cfg(any(target_os = "linux", test))]
+            #[cfg(any(target_os = "linux", all(test, unix)))]
             run_loop: RunLoopInterface::new(),
-            #[cfg(any(target_os = "linux", test))]
+            #[cfg(any(target_os = "linux", all(test, unix)))]
             run_loop_state: RefCell::new(RunLoopState::new()),
         });
-        #[cfg(any(target_os = "linux", test))]
+        #[cfg(any(target_os = "linux", all(test, unix)))]
         let mut frame = frame;
-        #[cfg(any(target_os = "linux", test))]
+        #[cfg(any(target_os = "linux", all(test, unix)))]
         {
             let owner = std::ptr::from_mut(frame.as_mut());
             frame.run_loop.set_owner(owner);
@@ -54,12 +54,12 @@ impl PlugFrame {
         std::ptr::from_mut(self).cast()
     }
 
-    #[cfg(all(not(target_os = "linux"), not(test)))]
+    #[cfg(not(any(target_os = "linux", all(test, unix))))]
     pub fn dispatch_run_loop(&mut self, _now: Instant) -> Option<Instant> {
         None
     }
 
-    #[cfg(any(target_os = "linux", test))]
+    #[cfg(any(target_os = "linux", all(test, unix)))]
     pub fn dispatch_run_loop(&mut self, now: Instant) -> Option<Instant> {
         linux::dispatch(self, now)
     }
@@ -77,7 +77,7 @@ unsafe extern "system" fn query_interface(
         // SAFETY: VST3 queryInterface supplies a 16-byte TUID.
         std::slice::from_raw_parts(requested, 16)
     };
-    #[cfg(any(target_os = "linux", test))]
+    #[cfg(any(target_os = "linux", all(test, unix)))]
     if requested == iid::IRUN_LOOP {
         let frame = unsafe {
             // SAFETY: this is the leading interface pointer of the live host-owned PlugFrame.
@@ -152,7 +152,7 @@ static PLUG_FRAME_VTABLE: PlugFrameVTable = PlugFrameVTable {
     resize_view,
 };
 
-#[cfg(any(target_os = "linux", test))]
+#[cfg(any(target_os = "linux", all(test, unix)))]
 mod linux {
     use std::{
         ptr::NonNull,
@@ -526,15 +526,16 @@ mod linux {
 
 #[cfg(test)]
 mod tests {
+    use std::{cell::Cell, rc::Rc};
+    #[cfg(unix)]
     use std::{
-        cell::Cell,
         ffi::c_void,
         os::raw::c_char,
-        rc::Rc,
         sync::atomic::{AtomicU32, Ordering},
         time::{Duration, Instant},
     };
 
+    #[cfg(unix)]
     use yadaw_vst3_host_sys::{
         Steinberg::{
             FUnknown,
@@ -572,6 +573,7 @@ mod tests {
         assert_eq!(width.get(), 640);
     }
 
+    #[cfg(unix)]
     #[test]
     fn run_loop_timer_is_retained_dispatched_and_unregistered() {
         let mut frame = PlugFrame::new(|_, _| true);
@@ -618,6 +620,7 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
     #[test]
     fn run_loop_event_is_retained_dispatched_and_unregistered() {
         let mut frame = PlugFrame::new(|_, _| true);
@@ -683,6 +686,7 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
     #[repr(C)]
     struct MockEventHandler {
         vtable: *const EventHandlerVTable,
@@ -690,6 +694,7 @@ mod tests {
         calls: AtomicU32,
     }
 
+    #[cfg(unix)]
     impl MockEventHandler {
         const fn new() -> Self {
             Self {
@@ -704,6 +709,7 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
     unsafe extern "system" fn mock_event_query_interface(
         this: *mut FUnknown,
         requested: *const c_char,
@@ -732,6 +738,7 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
     unsafe extern "system" fn mock_event_add_ref(this: *mut FUnknown) -> uint32 {
         let handler = this.cast::<MockEventHandler>();
         unsafe {
@@ -740,6 +747,7 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
     unsafe extern "system" fn mock_event_release(this: *mut FUnknown) -> uint32 {
         let handler = this.cast::<MockEventHandler>();
         unsafe {
@@ -748,6 +756,7 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
     unsafe extern "system" fn mock_on_fd_is_set(this: *mut IEventHandler, _fd: i32) {
         let handler = this.cast::<MockEventHandler>();
         unsafe {
@@ -756,6 +765,7 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
     static MOCK_EVENT_VTABLE: EventHandlerVTable = EventHandlerVTable {
         base: FUnknownVTable {
             query_interface: mock_event_query_interface,
@@ -765,6 +775,7 @@ mod tests {
         on_fd_is_set: mock_on_fd_is_set,
     };
 
+    #[cfg(unix)]
     #[repr(C)]
     struct MockTimerHandler {
         vtable: *const TimerHandlerVTable,
@@ -772,6 +783,7 @@ mod tests {
         calls: AtomicU32,
     }
 
+    #[cfg(unix)]
     impl MockTimerHandler {
         const fn new() -> Self {
             Self {
@@ -786,6 +798,7 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
     unsafe extern "system" fn mock_query_interface(
         this: *mut FUnknown,
         requested: *const c_char,
@@ -814,6 +827,7 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
     unsafe extern "system" fn mock_add_ref(this: *mut FUnknown) -> uint32 {
         let handler = this.cast::<MockTimerHandler>();
         unsafe {
@@ -822,6 +836,7 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
     unsafe extern "system" fn mock_release(this: *mut FUnknown) -> uint32 {
         let handler = this.cast::<MockTimerHandler>();
         unsafe {
@@ -830,6 +845,7 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
     unsafe extern "system" fn mock_on_timer(this: *mut ITimerHandler) {
         let handler = this.cast::<MockTimerHandler>();
         unsafe {
@@ -838,6 +854,7 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
     static MOCK_TIMER_VTABLE: TimerHandlerVTable = TimerHandlerVTable {
         base: FUnknownVTable {
             query_interface: mock_query_interface,

@@ -96,7 +96,7 @@ impl<I: ComInterface> ComPtr<I> {
     ///
     /// `pointer` must be a live borrowed pointer to `I` for the duration of this call, and its
     /// leading vtable must implement the matching `FUnknown` reference-counting methods.
-    #[cfg(any(target_os = "linux", test))]
+    #[cfg(any(target_os = "linux", all(test, unix)))]
     pub(crate) unsafe fn retain_raw(pointer: *mut I, operation: &'static str) -> HostResult<Self> {
         let owned = unsafe {
             // SAFETY: the caller provides the validity and interface-layout guarantees.
