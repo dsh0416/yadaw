@@ -7,6 +7,41 @@ pub enum PluginEditorMode {
     Parameters,
 }
 
+/// Resolved theme for host-owned plug-in editor chrome.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PluginEditorTheme {
+    Light,
+    #[default]
+    Dark,
+}
+
+/// Locale supported by host-owned plug-in editor chrome.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PluginEditorLocale {
+    #[serde(rename = "en-US")]
+    #[default]
+    EnUs,
+    #[serde(rename = "zh-cmn-Hans-CN")]
+    ZhCmnHansCn,
+}
+
+/// Appearance shared by all currently open host-owned editor surfaces.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PluginEditorAppearance {
+    pub theme: PluginEditorTheme,
+    pub locale: PluginEditorLocale,
+}
+
+/// Display context for one plug-in editor window.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PluginEditorContext {
+    pub channel_name: String,
+    pub channel_color: String,
+    pub plugin_name: String,
+    pub appearance: PluginEditorAppearance,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PluginEditorPreference {
     pub mode: PluginEditorMode,

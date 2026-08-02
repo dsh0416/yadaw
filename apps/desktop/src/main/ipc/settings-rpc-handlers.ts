@@ -124,6 +124,14 @@ export function registerSettingsRpcHandlers(context: IpcHandlerContext): void {
       if (patch.locale !== undefined) {
         setMainLocale(updated.locale)
         installApplicationMenu(process.platform, updated.shortcuts)
+        await audioHostService
+          .configurePluginEditorAppearance({
+            ...audioHostService.pluginEditorAppearanceSnapshot(),
+            locale: updated.locale
+          })
+          .catch((error: unknown) => {
+            console.error("Could not update plug-in editor locale", error)
+          })
       }
       return updated
     })

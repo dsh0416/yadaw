@@ -40,6 +40,10 @@ import type {
   TransportCommand,
   TransportSnapshot
 } from "@yadaw/contracts"
+import type {
+  PluginEditorAppearanceWire,
+  PluginEditorContextWire
+} from "./audio-host-plugin-client"
 
 const HEARTBEAT_INTERVAL_MS = 250
 const HEARTBEAT_TIMEOUT_MS = 2_000
@@ -75,6 +79,10 @@ export type {
 export type { PreparedGraphDeployment } from "./audio-host-graph-transactions"
 
 export class AudioHostService {
+  private pluginEditorAppearance: PluginEditorAppearanceWire = {
+    theme: "dark",
+    locale: "en-US"
+  }
   private heartbeatInFlight = false
   private audioBenchmarkInFlight = false
   private benchmarkRunnerInFlight = false
@@ -919,9 +927,19 @@ export class AudioHostService {
 
   openPluginEditor(
     instanceId: string,
-    preference: PluginEditorPreference
+    preference: PluginEditorPreference,
+    context: PluginEditorContextWire
   ): Promise<{ editorMode: PluginEditorMode; open: boolean }> {
-    return this.plugins.openPluginEditor(instanceId, preference)
+    return this.plugins.openPluginEditor(instanceId, preference, context)
+  }
+
+  pluginEditorAppearanceSnapshot(): PluginEditorAppearanceWire {
+    return { ...this.pluginEditorAppearance }
+  }
+
+  async configurePluginEditorAppearance(appearance: PluginEditorAppearanceWire): Promise<void> {
+    this.pluginEditorAppearance = { ...appearance }
+    await this.plugins.configurePluginEditorAppearance(appearance)
   }
 
   closePluginEditor(instanceId: string): Promise<void> {

@@ -11,6 +11,7 @@ members = [
     "crates/audio-host-client",
     "crates/vst3-host-sys",
     "crates/vst3-host",
+    "crates/iced-ui",
     "plugins/yadaw-plugin-ui",
     "plugins/yadaw-gain",
     "plugins/yadaw-metronome",
@@ -80,6 +81,7 @@ yadaw-audio-engine = { path = "crates/audio-engine" }
 yadaw-audio-host-client = { path = "crates/audio-host-client" }
 yadaw-vst3-host = { path = "crates/vst3-host" }
 yadaw-vst3-host-sys = { path = "crates/vst3-host-sys" }
+yadaw-iced-ui = { path = "crates/iced-ui" }
 yadaw-plugin-ui = { path = "plugins/yadaw-plugin-ui" }
 
 [patch.crates-io]

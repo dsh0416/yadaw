@@ -17,6 +17,18 @@ fn effective_iced_scale(monitor_scale: f64, user_zoom: f64) -> f64 {
     (monitor_scale * user_zoom).max(0.01)
 }
 
+fn is_narrow_toolbar(logical_width: f32) -> bool {
+    logical_width < TOOLBAR_NARROW_BREAKPOINT
+}
+
+fn editor_toolbar_height(logical_width: f32) -> f64 {
+    if is_narrow_toolbar(logical_width) {
+        TOOLBAR_HEIGHT_NARROW
+    } else {
+        TOOLBAR_HEIGHT_WIDE
+    }
+}
+
 #[cfg(target_os = "macos")]
 fn plugin_content_scale(_monitor_scale: f64, user_zoom: f64) -> f32 {
     user_zoom as f32
@@ -77,18 +89,36 @@ fn container_extent(rect: ViewRect, _monitor_scale: f64) -> (u32, u32) {
 }
 
 #[cfg(target_os = "macos")]
-fn toolbar_platform_extent(monitor_scale: f64, user_zoom: f64) -> u32 {
+fn toolbar_platform_extent(
+    toolbar_height: f64,
+    monitor_scale: f64,
+    user_zoom: f64,
+) -> u32 {
     let _ = monitor_scale;
-    (TOOLBAR_HEIGHT * user_zoom).round() as u32
+    (toolbar_height * user_zoom).round() as u32
 }
 
 #[cfg(not(target_os = "macos"))]
-fn toolbar_platform_extent(monitor_scale: f64, user_zoom: f64) -> u32 {
-    (TOOLBAR_HEIGHT * monitor_scale * user_zoom).round() as u32
+fn toolbar_platform_extent(
+    toolbar_height: f64,
+    monitor_scale: f64,
+    user_zoom: f64,
+) -> u32 {
+    (toolbar_height * monitor_scale * user_zoom).round() as u32
 }
 
 fn container_origin(toolbar: u32) -> i32 {
     toolbar as i32
+}
+
+fn toolbar_height_for_rect(rect: ViewRect, monitor_scale: f64, user_zoom: f64) -> f64 {
+    #[cfg(target_os = "macos")]
+    let plugin_physical_width = (f64::from(rect_width(rect)) * monitor_scale).round();
+    #[cfg(not(target_os = "macos"))]
+    let plugin_physical_width = f64::from(rect_width(rect));
+    editor_toolbar_height(
+        (plugin_physical_width / effective_iced_scale(monitor_scale, user_zoom)) as f32,
+    )
 }
 
 fn outer_physical_extent(rect: ViewRect, monitor_scale: f64, user_zoom: f64) -> PhysicalSize<u32> {
@@ -99,10 +129,13 @@ fn outer_physical_extent(rect: ViewRect, monitor_scale: f64, user_zoom: f64) -> 
     );
     #[cfg(not(target_os = "macos"))]
     let (plugin_width, plugin_height) = (rect_width(rect), rect_height(rect));
+    let toolbar_height = toolbar_height_for_rect(rect, monitor_scale, user_zoom);
     PhysicalSize::new(
         plugin_width.max(1),
         plugin_height
-            .saturating_add((TOOLBAR_HEIGHT * monitor_scale * user_zoom).round() as u32)
+            .saturating_add(
+                (toolbar_height * monitor_scale * user_zoom).round() as u32,
+            )
             .max(1),
     )
 }

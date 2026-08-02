@@ -4,6 +4,7 @@ impl EditorWindow {
     fn update(&mut self, message: Message, actions: &mut Vec<EditorAction>) {
         match message {
             Message::UseMode(mode) => {
+                self.compare_segment_focused = false;
                 self.close_toolbar_menu();
                 if mode != self.preference.mode {
                     actions.push(EditorAction::PreferenceChanged(PluginEditorPreference {
@@ -12,23 +13,24 @@ impl EditorWindow {
                     }));
                 }
             }
+            Message::UseCompareSlot(slot) => {
+                self.compare_segment_focused = true;
+                actions.push(EditorAction::UseCompareSlot(slot));
+            }
+            Message::CopyState => actions.push(EditorAction::CopyState),
+            Message::PasteState => actions.push(EditorAction::PasteState),
+            Message::Undo => actions.push(EditorAction::Undo),
+            Message::Redo => actions.push(EditorAction::Redo),
             Message::ZoomPreset(zoom_percent) => {
+                self.compare_segment_focused = false;
                 self.close_toolbar_menu();
                 actions.push(EditorAction::PreferenceChanged(PluginEditorPreference {
                     mode: self.preference.mode,
                     zoom_percent,
                 }));
             }
-            Message::ZoomInput(value) => {
-                self.zoom_input = value;
-                self.zoom_dirty = true;
-            }
-            Message::ZoomSubmit => {
-                if let Some(action) = self.commit_zoom_input() {
-                    actions.push(action);
-                }
-            }
             Message::MenuOpened(menu) => {
+                self.compare_segment_focused = false;
                 self.open_menu = Some(menu);
                 self.set_native_visible(false);
             }
@@ -77,9 +79,12 @@ impl EditorWindow {
     }
 
     fn view_model(&self) -> EditorViewModel {
+        let logical_width = self.viewport.logical_size().width;
         EditorViewModel {
-            zoom_input: self.zoom_input.clone(),
+            context: self.context.clone(),
             zoom_percent: self.preference.zoom_percent,
+            toolbar_height: editor_toolbar_height(logical_width) as f32,
+            narrow_toolbar: is_narrow_toolbar(logical_width),
             active_mode: self.active_mode,
             warning: self.warning.clone(),
             parameters: if self.active_mode == PluginEditorMode::Parameters {
@@ -87,17 +92,40 @@ impl EditorWindow {
             } else {
                 Vec::new()
             },
+            compare_slot: self.compare_slot,
+            can_compare: self.compare_slots.is_some(),
+            can_paste: self.can_paste,
+            can_undo: !self.undo.is_empty(),
+            can_redo: !self.redo.is_empty(),
         }
     }
 
     fn view(model: &EditorViewModel) -> EditorElement<'_> {
-        let mode = pick_list(
-            MODE_OPTIONS,
-            Some(EditorModeOption::from(model.active_mode)),
-            |option| Message::UseMode(option.into()),
-        )
+        let appearance = editor_appearance(model.context.appearance.theme);
+        let colors = appearance.palette();
+        let strings = EditorStrings::for_locale(model.context.appearance.locale);
+        let mode_options = [
+            EditorModeOption {
+                mode: PluginEditorMode::Native,
+                label: strings.editor,
+            },
+            EditorModeOption {
+                mode: PluginEditorMode::Parameters,
+                label: strings.parameters,
+            },
+        ];
+        let selected_mode = mode_options
+            .iter()
+            .copied()
+            .find(|option| option.mode == model.active_mode);
+        let mode = pick_list(mode_options, selected_mode, |option| {
+            Message::UseMode(option.mode)
+        })
         .on_open(Message::MenuOpened(ToolbarMenu::Mode))
         .on_close(Message::MenuClosed(ToolbarMenu::Mode))
+        .style(yadaw_iced_ui::select(appearance))
+        .text_size(type_size::CONTROL)
+        .padding([2, 6])
         .width(112);
         let zoom_options = ZOOM_PRESETS.map(ZoomOption);
         let zoom = pick_list(
@@ -107,41 +135,166 @@ impl EditorWindow {
         )
         .on_open(Message::MenuOpened(ToolbarMenu::Zoom))
         .on_close(Message::MenuClosed(ToolbarMenu::Zoom))
-        .width(76);
-        let toolbar = Row::new()
-            .spacing(6)
-            .padding([12, 10])
-            .height(Length::Fixed(TOOLBAR_HEIGHT as f32))
-            .push(mode)
-            .push(zoom)
-            .push(space::horizontal())
-            .push(
-                text_input("50–400", &model.zoom_input)
-                    .on_input(Message::ZoomInput)
-                    .on_submit(Message::ZoomSubmit)
-                    .width(62),
-            )
-            .push(text("%"));
+        .style(yadaw_iced_ui::select(appearance))
+        .text_size(type_size::CONTROL)
+        .padding([2, 6])
+        .width(72);
 
-        let mut content = Column::new().push(toolbar);
-        if let Some(warning) = &model.warning {
-            content = content.push(
-                container(text(warning).size(13))
-                    .padding([6, 14])
-                    .width(Length::Fill),
+        let signal_color = parse_signal_color(&model.context.channel_color).unwrap_or(colors.action);
+        let signal_rail = container(space::vertical())
+            .width(Length::Fixed(yadaw_iced_ui::SIGNAL_RAIL_WIDTH))
+            .height(Length::Fill)
+            .style(move |_| container::Style {
+                background: Some(signal_color.into()),
+                border: Border {
+                    radius: 2.0.into(),
+                    ..Border::default()
+                },
+                ..container::Style::default()
+            });
+
+        let title = Row::new()
+            .height(Length::Fixed(20.0))
+            .spacing(ui_space::SM)
+            .align_y(iced_core::alignment::Vertical::Bottom)
+            .push(
+                text(&model.context.channel_name)
+                    .size(type_size::PANEL_TITLE)
+                    .line_height(iced_core::Pixels(18.0))
+                    .color(colors.text),
+            )
+            .push(
+                text(&model.context.plugin_name)
+                    .size(type_size::CAPTION)
+                    .line_height(iced_core::Pixels(18.0))
+                    .color(colors.text_muted),
             );
+        let mut title_row = Row::new()
+            .height(Length::Fixed(24.0))
+            .spacing(ui_space::SM)
+            .align_y(iced_core::alignment::Vertical::Center)
+            .push(signal_rail)
+            .push(title);
+        if let Some(warning) = &model.warning {
+            title_row = title_row
+                .push(space::horizontal())
+                .push(text(warning).size(type_size::CAPTION).color(colors.warning));
         }
 
+        let compare_a = compare_segment_button(
+            "A",
+            Message::UseCompareSlot(CompareSlot::A),
+            model.can_compare,
+            model.compare_slot == CompareSlot::A,
+            appearance,
+        );
+        let compare_b = compare_segment_button(
+            "B",
+            Message::UseCompareSlot(CompareSlot::B),
+            model.can_compare,
+            model.compare_slot == CompareSlot::B,
+            appearance,
+        );
+        let copy = compact_button(
+            strings.copy,
+            Message::CopyState,
+            model.can_compare,
+            appearance,
+        );
+        let paste = compact_button(
+            strings.paste,
+            Message::PasteState,
+            model.can_paste,
+            appearance,
+        );
+        let undo = compact_button(
+            strings.undo,
+            Message::Undo,
+            model.can_undo,
+            appearance,
+        );
+        let redo = compact_button(
+            strings.redo,
+            Message::Redo,
+            model.can_redo,
+            appearance,
+        );
+        let compare_group = container(
+            Row::new()
+                .height(Length::Fill)
+                .push(compare_a)
+                .push(compare_b),
+        )
+            .height(Length::Fixed(yadaw_iced_ui::CONTROL_COMPACT))
+            .padding(1)
+            .style(yadaw_iced_ui::segmented_group(
+                appearance,
+                model.can_compare,
+            ));
+        let action_row = Row::new()
+            .height(Length::Fixed(24.0))
+            .spacing(ui_space::XS)
+            .align_y(iced_core::alignment::Vertical::Center)
+            .push(compare_group)
+            .push(space::horizontal().width(Length::Fixed(ui_space::XS)))
+            .push(copy)
+            .push(paste)
+            .push(undo)
+            .push(redo);
+        let settings_row = Row::new()
+            .height(Length::Fixed(24.0))
+            .spacing(ui_space::XS)
+            .align_y(iced_core::alignment::Vertical::Center)
+            .push(mode)
+            .push(space::horizontal().width(Length::Fixed(ui_space::XS)))
+            .push(zoom);
+
+        let command_section = if model.narrow_toolbar {
+            Column::new().spacing(ui_space::XS).push(action_row).push(
+                Row::new()
+                    .width(Length::Fill)
+                    .push(space::horizontal())
+                    .push(settings_row),
+            )
+        } else {
+            Column::new().push(
+                Row::new()
+                    .height(Length::Fixed(24.0))
+                    .align_y(iced_core::alignment::Vertical::Center)
+                    .push(action_row)
+                    .push(space::horizontal())
+                    .push(settings_row),
+            )
+        };
+
+        let toolbar = container(
+            Column::new()
+                .spacing(ui_space::XS)
+                .push(title_row)
+                .push(command_section),
+        )
+        .padding([6, ui_space::SM as u16])
+        .height(Length::Fixed(model.toolbar_height))
+        .width(Length::Fill)
+        .style(yadaw_iced_ui::chrome(appearance));
+
+        let mut content = Column::new().push(toolbar);
         if model.active_mode == PluginEditorMode::Parameters {
             let parameter_list = if model.parameters.is_empty() {
                 Column::new().push(
-                    container(text("This plug-in has no editable parameters"))
-                        .padding(24)
-                        .width(Length::Fill),
+                    container(
+                        text(strings.empty_parameters)
+                            .size(type_size::BODY_COMPACT)
+                            .color(colors.text_muted),
+                    )
+                    .padding(ui_space::XL)
+                    .width(Length::Fill),
                 )
             } else {
                 model.parameters.iter().fold(
-                    Column::new().spacing(10).padding([12, 16]),
+                    Column::new()
+                        .spacing(ui_space::SM)
+                        .padding([ui_space::MD, ui_space::LG]),
                     |column, parameter| {
                         let step = parameter_step(parameter.step_count);
                         let id = parameter.id;
@@ -155,25 +308,44 @@ impl EditorWindow {
                         };
                         let control: Element<'_, Message, Theme, Renderer> =
                             if parameter.flags & VST3_PARAMETER_FLAG_READ_ONLY != 0 {
-                                container(text(value_text.clone())).width(Length::Fill).into()
+                                container(
+                                    text(value_text.clone())
+                                        .size(type_size::CONTROL)
+                                        .color(colors.text_muted),
+                                )
+                                .width(Length::Fill)
+                                .into()
                             } else {
                                 slider(0.0..=1.0, value, move |normalized| {
                                     Message::ParameterChanged(id, normalized)
                                 })
                                 .step(step)
                                 .on_release(Message::ParameterReleased(id))
+                                .style(yadaw_iced_ui::parameter_slider(appearance))
                                 .into()
                             };
                         column.push(
-                            Column::new()
-                                .spacing(5)
-                                .push(
-                                    Row::new()
-                                        .push(text(&parameter.title))
-                                        .push(space::horizontal())
-                                        .push(text(value_text.clone()).size(13)),
-                                )
-                                .push(control),
+                            container(
+                                Column::new()
+                                    .spacing(ui_space::SM)
+                                    .push(
+                                        Row::new()
+                                            .push(
+                                                text(&parameter.title)
+                                                    .size(type_size::BODY_COMPACT),
+                                            )
+                                            .push(space::horizontal())
+                                            .push(
+                                                text(value_text)
+                                                    .size(type_size::CONTROL)
+                                                    .color(colors.text_muted),
+                                            ),
+                                    )
+                                    .push(control),
+                            )
+                            .padding(ui_space::MD)
+                            .width(Length::Fill)
+                            .style(yadaw_iced_ui::surface(appearance, false)),
                         )
                     },
                 )
@@ -189,23 +361,68 @@ impl EditorWindow {
         container(content)
             .width(Length::Fill)
             .height(Length::Fill)
+            .style(yadaw_iced_ui::canvas(appearance))
             .into()
     }
 
-    fn commit_zoom_input(&mut self) -> Option<EditorAction> {
-        let Ok(value) = self.zoom_input.parse::<u16>() else {
-            return None;
-        };
-        if !(50..=400).contains(&value) {
-            return None;
-        }
-        self.zoom_dirty = false;
-        if value == self.preference.zoom_percent {
-            return None;
-        }
-        Some(EditorAction::PreferenceChanged(PluginEditorPreference {
-            mode: self.preference.mode,
-            zoom_percent: value,
-        }))
+}
+
+fn compact_button<'a>(
+    label: &'a str,
+    message: Message,
+    enabled: bool,
+    appearance: Appearance,
+) -> button::Button<'a, Message, Theme, Renderer> {
+    let content = container(text(label).size(type_size::CONTROL))
+        .padding([0, 8])
+        .center_y(Length::Fill);
+    let button = button(content)
+        .height(Length::Fixed(yadaw_iced_ui::CONTROL_COMPACT))
+        .padding(0)
+        .style(yadaw_iced_ui::action_button(appearance));
+    if enabled {
+        button.on_press(message)
+    } else {
+        button
     }
+}
+
+fn compare_segment_button<'a>(
+    label: &'a str,
+    message: Message,
+    enabled: bool,
+    selected: bool,
+    appearance: Appearance,
+) -> button::Button<'a, Message, Theme, Renderer> {
+    let content = container(text(label).size(type_size::CONTROL)).center(Length::Fill);
+    let button = button(content)
+        .width(Length::Fixed(COMPARE_SEGMENT_WIDTH))
+        .height(Length::Fill)
+        .padding(0)
+        .style(yadaw_iced_ui::segmented_button(appearance, selected));
+    if enabled {
+        button.on_press(message)
+    } else {
+        button
+    }
+}
+
+fn editor_appearance(theme: PluginEditorTheme) -> Appearance {
+    match theme {
+        PluginEditorTheme::Light => Appearance::Light,
+        PluginEditorTheme::Dark => Appearance::Dark,
+    }
+}
+
+fn parse_signal_color(value: &str) -> Option<Color> {
+    let value = value.strip_prefix('#')?;
+    if value.len() != 6 {
+        return None;
+    }
+    let packed = u32::from_str_radix(value, 16).ok()?;
+    Some(Color::from_rgb8(
+        u8::try_from((packed >> 16) & 0xff).ok()?,
+        u8::try_from((packed >> 8) & 0xff).ok()?,
+        u8::try_from(packed & 0xff).ok()?,
+    ))
 }

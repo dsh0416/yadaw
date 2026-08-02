@@ -5,8 +5,9 @@ use std::sync::Arc;
 
 use truce::prelude::*;
 use truce_iced::iced::widget::{Column, Row, Space, container, text};
-use truce_iced::iced::{Alignment, Color, Element, Length, alignment};
-use truce_iced::{IcedEditor, IcedPlugin, IntoElement, Message, ParamCache, knob};
+use truce_iced::iced::{Alignment, Element, Length, alignment};
+use truce_iced::{IcedEditor, IcedPlugin, IntoElement, Message, ParamCache};
+use yadaw_plugin_ui::parameter_knob;
 
 use MetronomeParamsParamId as P;
 
@@ -131,10 +132,6 @@ impl MetronomeDspState {
     }
 }
 
-fn color(rgba: [u8; 4]) -> Color {
-    Color::from_rgba8(rgba[0], rgba[1], rgba[2], f32::from(rgba[3]) / 255.0)
-}
-
 pub struct MetronomeUi;
 
 #[derive(Clone, Debug)]
@@ -151,52 +148,69 @@ impl IcedPlugin<MetronomeParams> for MetronomeUi {
         &'a self,
         params: &'a ParamCache<MetronomeParams>,
     ) -> Element<'a, Message<Self::Message>> {
+        let palette = yadaw_plugin_ui::palette();
         let header = Row::new()
             .push(
                 text("YADAW  /  METRONOME")
-                    .size(15)
-                    .color(color(yadaw_plugin_ui::TEXT)),
+                    .size(yadaw_plugin_ui::type_size::PANEL_TITLE)
+                    .color(palette.text),
             )
             .push(Space::new().width(Length::Fill))
             .push(
                 text("C6  ACCENT   ·   C5  BEAT")
-                    .size(12)
-                    .color(color(yadaw_plugin_ui::MIDI_ACCENT)),
+                    .size(yadaw_plugin_ui::type_size::CONTROL)
+                    .color(palette.midi),
             );
-        let pulse = container(
-            text("●     ·     ·     ·")
-                .size(34)
-                .color(color(yadaw_plugin_ui::MIDI_ACCENT)),
-        )
-        .width(Length::Fill)
-        .height(Length::Fixed(86.0))
-        .align_x(Alignment::Center)
-        .align_y(Alignment::Center)
-        .style(|_| container::Style {
-            background: Some(color(yadaw_plugin_ui::SURFACE).into()),
-            ..Default::default()
-        });
+        let pulse = container(text("●     ·     ·     ·").size(34).color(palette.midi))
+            .width(Length::Fill)
+            .height(Length::Fixed(86.0))
+            .align_x(Alignment::Center)
+            .align_y(Alignment::Center)
+            .style(move |_| container::Style {
+                background: Some(palette.surface.into()),
+                ..Default::default()
+            });
         let controls = Row::new()
-            .push(knob(P::Output, params).label("OUTPUT").size(72.0).el())
-            .push(knob(P::AccentTone, params).label("ACCENT").size(72.0).el())
-            .push(knob(P::BeatTone, params).label("BEAT").size(72.0).el())
-            .push(knob(P::Decay, params).label("DECAY").size(72.0).el())
-            .spacing(28)
+            .push(
+                parameter_knob(P::Output, params)
+                    .label("OUTPUT")
+                    .size(72.0)
+                    .el(),
+            )
+            .push(
+                parameter_knob(P::AccentTone, params)
+                    .label("ACCENT")
+                    .size(72.0)
+                    .el(),
+            )
+            .push(
+                parameter_knob(P::BeatTone, params)
+                    .label("BEAT")
+                    .size(72.0)
+                    .el(),
+            )
+            .push(
+                parameter_knob(P::Decay, params)
+                    .label("DECAY")
+                    .size(72.0)
+                    .el(),
+            )
+            .spacing(yadaw_plugin_ui::space::XL)
             .align_y(alignment::Vertical::Center);
         container(
             Column::new()
                 .push(header)
                 .push(pulse)
                 .push(controls)
-                .spacing(16)
+                .spacing(yadaw_plugin_ui::space::LG)
                 .align_x(Alignment::Center),
         )
-        .padding(22)
+        .padding(yadaw_plugin_ui::space::XL)
         .width(Length::Fill)
         .height(Length::Fill)
-        .style(|_| container::Style {
-            background: Some(color(yadaw_plugin_ui::CANVAS).into()),
-            text_color: Some(color(yadaw_plugin_ui::TEXT)),
+        .style(move |_| container::Style {
+            background: Some(palette.canvas.into()),
+            text_color: Some(palette.text),
             ..Default::default()
         })
         .into()
@@ -204,6 +218,10 @@ impl IcedPlugin<MetronomeParams> for MetronomeUi {
 
     fn title(&self) -> String {
         String::from("YADAW Metronome")
+    }
+
+    fn theme(&self) -> truce_iced::iced::Theme {
+        yadaw_plugin_ui::theme()
     }
 }
 

@@ -24,6 +24,17 @@ mod tests {
         assert_eq!(container_origin(72), 72);
     }
 
+    #[test]
+    fn narrow_editors_gain_a_second_command_row() {
+        assert_eq!(editor_toolbar_height(519.0), TOOLBAR_HEIGHT_NARROW);
+        assert_eq!(editor_toolbar_height(520.0), TOOLBAR_HEIGHT_WIDE);
+    }
+
+    #[test]
+    fn compare_segments_are_equal_width_on_the_compact_grid() {
+        assert_eq!(COMPARE_SEGMENT_WIDTH % ui_space::XS, 0.0);
+    }
+
     #[cfg(not(target_os = "macos"))]
     #[test]
     fn windows_and_x11_use_physical_view_rects() {
@@ -42,15 +53,39 @@ mod tests {
         };
         assert_eq!(
             outer_physical_extent(attached, 1.5, 1.0),
-            PhysicalSize::new(525, 288)
+            PhysicalSize::new(525, 324)
         );
     }
 
     #[test]
-    fn toolbar_dropdown_options_have_compact_labels() {
-        assert_eq!(EditorModeOption::Native.to_string(), "Plug-in UI");
-        assert_eq!(EditorModeOption::Parameters.to_string(), "Parameters");
+    fn toolbar_zoom_options_have_compact_labels() {
         assert_eq!(ZoomOption(125).to_string(), "125%");
+    }
+
+    #[test]
+    fn signal_colors_accept_six_digit_hex() {
+        assert_eq!(
+            parse_signal_color("#58c6c2"),
+            Some(Color::from_rgb8(0x58, 0xc6, 0xc2))
+        );
+        assert_eq!(parse_signal_color("58c6c2"), None);
+    }
+
+    #[test]
+    fn parameter_history_discards_the_oldest_entry() {
+        let mut history = VecDeque::new();
+        for parameter_id in 0..=PARAMETER_HISTORY_LIMIT as u32 {
+            push_parameter_edit(
+                &mut history,
+                ParameterEdit {
+                    parameter_id,
+                    before: 0.0,
+                    after: 1.0,
+                },
+            );
+        }
+        assert_eq!(history.len(), PARAMETER_HISTORY_LIMIT);
+        assert_eq!(history.front().map(|edit| edit.parameter_id), Some(1));
     }
 
     #[test]
@@ -92,4 +127,23 @@ mod tests {
         });
         assert_eq!((rect_width(size), rect_height(size)), (1024, 768));
     }
+}
+
+#[test]
+fn editor_clipboard_accepts_only_the_same_vst3_class() {
+    let clipboard = EditorClipboard {
+        class_id: "same-class".to_owned(),
+        state: EditorPluginState {
+            component_state: vec![1, 2],
+            controller_state: vec![3, 4],
+        },
+    };
+    assert!(clipboard.supports("same-class"));
+    assert!(!clipboard.supports("different-class"));
+}
+
+#[test]
+fn compare_slots_have_stable_state_indices() {
+    assert_eq!(CompareSlot::A.index(), 0);
+    assert_eq!(CompareSlot::B.index(), 1);
 }

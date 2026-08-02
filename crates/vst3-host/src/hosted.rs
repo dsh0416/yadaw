@@ -695,6 +695,11 @@ impl HostedPlugin {
         self.shared.take_restart_requests()
     }
 
+    /// Drain parameter gestures reported by the native editor controller.
+    pub fn take_editor_parameter_gestures(&self) -> Vec<crate::EditorParameterGesture> {
+        self.shared.take_editor_gestures()
+    }
+
     pub fn apply_restart_requests(&mut self, request: crate::Vst3RestartRequest) -> HostResult<()> {
         if request.contains(crate::Vst3RestartRequest::RELOAD_COMPONENT) {
             return Err(HostError::Operation {

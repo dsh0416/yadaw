@@ -3,6 +3,7 @@ impl EditorWindow {
         instance_id: String,
         class_id: String,
         preference: PluginEditorPreference,
+        context: PluginEditorContext,
         parameters: Vec<PluginParameter>,
         window: Arc<Window>,
         compositor: &mut Compositor,
@@ -26,13 +27,19 @@ impl EditorWindow {
             class_id,
             window: window.clone(),
             preference,
+            context,
             active_mode: PluginEditorMode::Parameters,
             parameters,
             warning: None,
-            zoom_input: preference.zoom_percent.to_string(),
-            zoom_dirty: false,
             open_menu: None,
+            compare_segment_focused: false,
             active_gestures: HashSet::new(),
+            compare_slots: None,
+            compare_slot: CompareSlot::A,
+            can_paste: false,
+            undo: VecDeque::new(),
+            redo: VecDeque::new(),
+            pending_edits: HashMap::new(),
             monitor_scale: Rc::new(Cell::new(monitor_scale)),
             user_zoom: Rc::new(Cell::new(user_zoom)),
             viewport,
@@ -58,6 +65,14 @@ impl EditorWindow {
     }
 
     pub fn activate_initial_mode(&mut self, runtime: &Vst3Runtime) {
+        match runtime.parameters(&self.instance_id) {
+            Ok(parameters) => self.parameters = parameters,
+            Err(error) => self.warning = Some(error),
+        }
+        match runtime.editor_state(&self.instance_id) {
+            Ok(state) => self.compare_slots = Some([state.clone(), state]),
+            Err(error) => self.warning = Some(error),
+        }
         if self.preference.mode == PluginEditorMode::Native {
             if let Err(error) = self.attach_native(runtime) {
                 self.warning = Some(match self.refresh_parameters(runtime) {
@@ -100,9 +115,97 @@ impl EditorWindow {
             native.detach();
         }
         self.active_gestures.clear();
+        self.pending_edits.clear();
     }
 
-    pub fn handle_event(
+    pub fn update_context(&mut self, context: PluginEditorContext) {
+        if !context.channel_name.is_empty() {
+            self.context.channel_name = context.channel_name;
+        }
+        if !context.channel_color.is_empty() {
+            self.context.channel_color = context.channel_color;
+        }
+        if !context.plugin_name.is_empty() {
+            self.context.plugin_name = context.plugin_name;
+        }
+        self.context.appearance = context.appearance;
+        self.window.set_title(&format!(
+            "{} — {} — YADAW",
+            self.context.channel_name, self.context.plugin_name
+        ));
+        self.window.request_redraw();
+    }
+
+    pub fn update_appearance(&mut self, appearance: PluginEditorAppearance) {
+        self.context.appearance = appearance;
+        self.window.request_redraw();
+    }
+
+    pub fn set_can_paste(&mut self, can_paste: bool) {
+        if self.can_paste != can_paste {
+            self.can_paste = can_paste;
+            self.window.request_redraw();
+        }
+    }
+
+    pub fn apply_native_parameter_gestures(
+        &mut self,
+        gestures: &[yadaw_vst3_host::EditorParameterGesture],
+    ) {
+        for gesture in gestures {
+            match *gesture {
+                yadaw_vst3_host::EditorParameterGesture::Begin { parameter_id } => {
+                    if let Some(parameter) = self
+                        .parameters
+                        .iter()
+                        .find(|parameter| parameter.id == parameter_id)
+                    {
+                        self.pending_edits
+                            .entry(parameter_id)
+                            .or_insert(parameter.normalized);
+                    }
+                }
+                yadaw_vst3_host::EditorParameterGesture::Perform {
+                    parameter_id,
+                    normalized,
+                } => {
+                    if let Some(parameter) = self
+                        .parameters
+                        .iter_mut()
+                        .find(|parameter| parameter.id == parameter_id)
+                    {
+                        parameter.normalized = normalized;
+                    }
+                }
+                yadaw_vst3_host::EditorParameterGesture::End { parameter_id } => {
+                    let after = self
+                        .parameters
+                        .iter()
+                        .find(|parameter| parameter.id == parameter_id)
+                        .map(|parameter| parameter.normalized);
+                    if let (Some(before), Some(after)) =
+                        (self.pending_edits.remove(&parameter_id), after)
+                        && (before - after).abs() > f64::EPSILON
+                    {
+                        push_parameter_edit(
+                            &mut self.undo,
+                            ParameterEdit {
+                                parameter_id,
+                                before,
+                                after,
+                            },
+                        );
+                        self.redo.clear();
+                    }
+                }
+            }
+        }
+        if !gestures.is_empty() {
+            self.window.request_redraw();
+        }
+    }
+
+    pub(crate) fn handle_event(
         &mut self,
         event: WindowEvent,
         compositor: &mut Compositor,
@@ -142,33 +245,15 @@ impl EditorWindow {
             }
             WindowEvent::CursorLeft { .. } => self.cursor = Cursor::Unavailable,
             WindowEvent::ModifiersChanged(modifiers) => self.modifiers = modifiers.state(),
-            WindowEvent::Focused(false) => {
-                if let Some(action) = self.commit_zoom_input() {
-                    actions.push(action);
-                }
-            }
-            WindowEvent::MouseInput {
-                state: ElementState::Pressed,
-                button: MouseButton::Left,
-                ..
-            } if self.zoom_dirty => {
-                if let Some(action) = self.commit_zoom_input() {
-                    actions.push(action);
-                }
-            }
             WindowEvent::KeyboardInput { event, .. }
                 if event.state == ElementState::Pressed && !event.repeat =>
             {
                 match &event.logical_key {
-                    Key::Named(NamedKey::Escape) if self.zoom_dirty => {
-                        self.zoom_input = self.preference.zoom_percent.to_string();
-                        self.zoom_dirty = false;
-                        self.window.request_redraw();
+                    Key::Named(NamedKey::ArrowLeft) if self.compare_segment_focused => {
+                        actions.push(EditorAction::UseCompareSlot(CompareSlot::A));
                     }
-                    Key::Named(NamedKey::Enter) if self.zoom_dirty => {
-                        if let Some(action) = self.commit_zoom_input() {
-                            actions.push(action);
-                        }
+                    Key::Named(NamedKey::ArrowRight) if self.compare_segment_focused => {
+                        actions.push(EditorAction::UseCompareSlot(CompareSlot::B));
                     }
                     _ => {}
                 }
@@ -234,11 +319,14 @@ impl EditorWindow {
             &mut self.clipboard,
             &mut messages,
         );
+        let appearance = editor_appearance(model.context.appearance.theme);
+        let theme = appearance.theme();
+        let colors = appearance.palette();
         interface.draw(
             &mut self.renderer,
-            &Theme::TokyoNight,
+            &theme,
             &renderer::Style {
-                text_color: Color::from_rgb8(231, 235, 241),
+                text_color: colors.text,
             },
             self.cursor,
         );
@@ -247,7 +335,7 @@ impl EditorWindow {
             &mut self.renderer,
             &mut self.surface,
             &self.viewport,
-            Color::from_rgb8(19, 22, 29),
+            colors.canvas,
             || {},
         );
         if let Err(error) = &result {
@@ -260,10 +348,11 @@ impl EditorWindow {
         self.resize_surface(self.window.inner_size(), compositor);
     }
 
-    pub fn apply_action(
+    pub(crate) fn apply_action(
         &mut self,
         action: EditorAction,
         runtime: &mut Vst3Runtime,
+        clipboard: &mut Option<EditorClipboard>,
     ) -> Option<PluginEditorPreference> {
         match action {
             EditorAction::Close => None,
@@ -271,8 +360,6 @@ impl EditorWindow {
                 let mode_changed = preference.mode != self.preference.mode;
                 let zoom_changed = preference.zoom_percent != self.preference.zoom_percent;
                 self.preference = preference;
-                self.zoom_input = preference.zoom_percent.to_string();
-                self.zoom_dirty = false;
                 self.user_zoom
                     .set(f64::from(preference.zoom_percent) / 100.0);
                 self.rebuild_viewport();
@@ -285,18 +372,113 @@ impl EditorWindow {
                 self.window.request_redraw();
                 Some(preference)
             }
+            EditorAction::UseCompareSlot(slot) => {
+                if slot != self.compare_slot {
+                    let result = runtime.editor_state(&self.instance_id).and_then(|current| {
+                        let Some(slots) = self.compare_slots.as_mut() else {
+                            return Err("A/B comparison is unavailable".to_owned());
+                        };
+                        slots[self.compare_slot.index()] = current;
+                        let target = slots[slot.index()].clone();
+                        runtime.restore_editor_state(&self.instance_id, &target)
+                    });
+                    match result {
+                        Ok(()) => {
+                            self.compare_slot = slot;
+                            self.clear_parameter_history();
+                            self.refresh_after_state_restore(runtime);
+                        }
+                        Err(error) => self.warning = Some(error),
+                    }
+                }
+                self.window.request_redraw();
+                None
+            }
+            EditorAction::CopyState => {
+                match runtime.editor_state(&self.instance_id) {
+                    Ok(state) => {
+                        *clipboard = Some(EditorClipboard {
+                            class_id: self.class_id.clone(),
+                            state,
+                        });
+                    }
+                    Err(error) => self.warning = Some(error),
+                }
+                self.window.request_redraw();
+                None
+            }
+            EditorAction::PasteState => {
+                let result = clipboard
+                    .as_ref()
+                    .filter(|contents| contents.supports(&self.class_id))
+                    .ok_or_else(|| "Copied settings belong to a different plug-in".to_owned())
+                    .and_then(|contents| {
+                        runtime.restore_editor_state(&self.instance_id, &contents.state)
+                    });
+                match result {
+                    Ok(()) => {
+                        self.clear_parameter_history();
+                        self.refresh_after_state_restore(runtime);
+                    }
+                    Err(error) => self.warning = Some(error),
+                }
+                self.window.request_redraw();
+                None
+            }
+            EditorAction::Undo => {
+                if let Some(edit) = self.undo.pop_back() {
+                    match self.apply_parameter_value(runtime, edit.parameter_id, edit.before) {
+                        Ok(()) => push_parameter_edit(&mut self.redo, edit),
+                        Err(error) => {
+                            self.undo.push_back(edit);
+                            self.warning = Some(error);
+                        }
+                    }
+                }
+                self.window.request_redraw();
+                None
+            }
+            EditorAction::Redo => {
+                if let Some(edit) = self.redo.pop_back() {
+                    match self.apply_parameter_value(runtime, edit.parameter_id, edit.after) {
+                        Ok(()) => push_parameter_edit(&mut self.undo, edit),
+                        Err(error) => {
+                            self.redo.push_back(edit);
+                            self.warning = Some(error);
+                        }
+                    }
+                }
+                self.window.request_redraw();
+                None
+            }
             EditorAction::Parameter {
                 parameter_id,
                 normalized,
                 gesture,
             } => {
-                if let Err(error) = runtime.set_parameter_from_editor(
+                if gesture == ParameterGesture::Begin
+                    && !self.pending_edits.contains_key(&parameter_id)
+                    && let Ok(parameters) = runtime.parameters(&self.instance_id)
+                    && let Some(parameter) = parameters
+                        .iter()
+                        .find(|parameter| parameter.id == parameter_id)
+                {
+                    self.pending_edits
+                        .insert(parameter_id, parameter.normalized);
+                }
+                let result = runtime.set_parameter_from_editor(
                     &self.instance_id,
                     parameter_id,
                     normalized,
                     gesture,
-                ) {
+                );
+                if let Err(error) = result {
                     self.warning = Some(error);
+                    if gesture == ParameterGesture::End {
+                        self.pending_edits.remove(&parameter_id);
+                    }
+                    self.window.request_redraw();
+                    return None;
                 }
                 if gesture != ParameterGesture::Begin
                     && let Some(parameter) = self
@@ -306,9 +488,74 @@ impl EditorWindow {
                 {
                     parameter.normalized = normalized;
                 }
+                if gesture == ParameterGesture::End
+                    && let Some(before) = self.pending_edits.remove(&parameter_id)
+                    && (before - normalized).abs() > f64::EPSILON
+                {
+                    push_parameter_edit(
+                        &mut self.undo,
+                        ParameterEdit {
+                            parameter_id,
+                            before,
+                            after: normalized,
+                        },
+                    );
+                    self.redo.clear();
+                }
                 self.window.request_redraw();
                 None
             }
         }
     }
+
+    fn apply_parameter_value(
+        &mut self,
+        runtime: &mut Vst3Runtime,
+        parameter_id: u32,
+        normalized: f64,
+    ) -> Result<(), String> {
+        for gesture in [
+            ParameterGesture::Begin,
+            ParameterGesture::Perform,
+            ParameterGesture::End,
+        ] {
+            runtime.set_parameter_from_editor(
+                &self.instance_id,
+                parameter_id,
+                normalized,
+                gesture,
+            )?;
+        }
+        if let Some(parameter) = self
+            .parameters
+            .iter_mut()
+            .find(|parameter| parameter.id == parameter_id)
+        {
+            parameter.normalized = normalized;
+        }
+        Ok(())
+    }
+
+    fn clear_parameter_history(&mut self) {
+        self.undo.clear();
+        self.redo.clear();
+        self.pending_edits.clear();
+    }
+
+    fn refresh_after_state_restore(&mut self, runtime: &Vst3Runtime) {
+        match runtime.parameters(&self.instance_id) {
+            Ok(parameters) => {
+                self.parameters = parameters;
+                self.warning = None;
+            }
+            Err(error) => self.warning = Some(error),
+        }
+    }
+}
+
+fn push_parameter_edit(history: &mut VecDeque<ParameterEdit>, edit: ParameterEdit) {
+    if history.len() == PARAMETER_HISTORY_LIMIT {
+        history.pop_front();
+    }
+    history.push_back(edit);
 }

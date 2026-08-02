@@ -1,15 +1,24 @@
-//! Shared visual constants for YADAW's built-in plug-ins.
+//! Shared visual language for YADAW's built-in iced plug-ins.
 
-/// Fixed dark canvas color used by all built-in plug-in editors.
-pub const CANVAS: [u8; 4] = [0x0E, 0x10, 0x14, 0xFF];
-/// Raised control-surface color used by all built-in plug-in editors.
-pub const SURFACE: [u8; 4] = [0x1D, 0x21, 0x28, 0xFF];
-/// Primary editor text color.
-pub const TEXT: [u8; 4] = [0xF6, 0xF7, 0xF9, 0xFF];
-/// Accent used by the Sine instrument.
-pub const MIDI_ACCENT: [u8; 4] = [0xAD, 0x8C, 0xFF, 0xFF];
-/// Accent used by the Gain effect.
-pub const AUDIO_ACCENT: [u8; 4] = [0x58, 0xC6, 0xC2, 0xFF];
+mod widgets;
+
+pub use widgets::{LevelMeter, ParameterKnob, level_meter, parameter_knob};
+
+pub use yadaw_iced_ui::{self, Appearance, SemanticPalette, space, type_size};
+
+use iced_widget::Theme;
+
+/// Fixed dark palette used inside built-in plug-in content.
+#[must_use]
+pub const fn palette() -> SemanticPalette {
+    Appearance::Dark.palette()
+}
+
+/// Fixed dark iced theme used inside built-in plug-in content.
+#[must_use]
+pub fn theme() -> Theme {
+    Appearance::Dark.theme()
+}
 
 /// Logical editor size for YADAW Sine.
 pub const SINE_EDITOR_SIZE: (u32, u32) = (520, 300);
@@ -17,3 +26,14 @@ pub const SINE_EDITOR_SIZE: (u32, u32) = (520, 300);
 pub const GAIN_EDITOR_SIZE: (u32, u32) = (380, 260);
 /// Logical editor size for YADAW Metronome.
 pub const METRONOME_EDITOR_SIZE: (u32, u32) = (600, 300);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn built_in_content_stays_on_the_shared_dark_palette() {
+        assert_eq!(palette(), Appearance::Dark.palette());
+        assert_ne!(palette().canvas, palette().surface);
+    }
+}

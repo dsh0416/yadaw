@@ -1,9 +1,10 @@
 use std::{
     cell::UnsafeCell,
+    collections::VecDeque,
     ffi::c_void,
     os::raw::c_char,
     sync::{
-        Arc,
+        Arc, Mutex,
         atomic::{AtomicU32, Ordering},
     },
 };
@@ -26,6 +27,17 @@ pub(crate) struct HandlerShared {
     parameter_producer: UnsafeCell<HeapProd<QueuedParameter>>,
     parameter_mirror: UnsafeCell<Option<Arc<HandlerShared>>>,
     restart_requests: AtomicU32,
+    editor_gestures: Mutex<VecDeque<EditorParameterGesture>>,
+}
+
+const EDITOR_GESTURE_CAPACITY: usize = 1_024;
+
+/// Parameter gesture reported by a plug-in's native edit controller.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum EditorParameterGesture {
+    Begin { parameter_id: u32 },
+    Perform { parameter_id: u32, normalized: f64 },
+    End { parameter_id: u32 },
 }
 
 bitflags! {
@@ -53,6 +65,7 @@ impl HandlerShared {
             parameter_producer: UnsafeCell::new(parameter_producer),
             parameter_mirror: UnsafeCell::new(None),
             restart_requests: AtomicU32::new(0),
+            editor_gestures: Mutex::new(VecDeque::with_capacity(EDITOR_GESTURE_CAPACITY)),
         })
     }
 
@@ -92,10 +105,27 @@ impl HandlerShared {
     pub(crate) fn take_restart_requests(&self) -> Vst3RestartRequest {
         Vst3RestartRequest::from_bits_retain(self.restart_requests.swap(0, Ordering::AcqRel))
     }
+
+    fn publish_editor_gesture(&self, gesture: EditorParameterGesture) {
+        let Ok(mut gestures) = self.editor_gestures.lock() else {
+            return;
+        };
+        if gestures.len() == EDITOR_GESTURE_CAPACITY {
+            gestures.pop_front();
+        }
+        gestures.push_back(gesture);
+    }
+
+    pub(crate) fn take_editor_gestures(&self) -> Vec<EditorParameterGesture> {
+        let Ok(mut gestures) = self.editor_gestures.lock() else {
+            return Vec::new();
+        };
+        gestures.drain(..).collect()
+    }
 }
 
-// SAFETY: The only interior mutable field is an SPSC producer. VST3 requires controller and
-// component-handler calls on one UI thread, while the consumer lives on the audio thread.
+// SAFETY: The SPSC producer is only touched by the serialized VST3 UI thread; its consumer lives
+// on the audio thread. The gesture queue is independently synchronized by its mutex.
 unsafe impl Sync for HandlerShared {}
 
 #[repr(C)]
@@ -164,7 +194,14 @@ unsafe extern "system" fn release(this: *mut FUnknown) -> uint32 {
     }
 }
 
-unsafe extern "system" fn begin_edit(_this: *mut IComponentHandler, _id: ParamID) -> tresult {
+unsafe extern "system" fn begin_edit(this: *mut IComponentHandler, id: ParamID) -> tresult {
+    let handler = unsafe {
+        // SAFETY: this is the interface pointer of a live ComponentHandler.
+        &*this.cast::<ComponentHandler>()
+    };
+    handler
+        .shared
+        .publish_editor_gesture(EditorParameterGesture::Begin { parameter_id: id });
     0
 }
 
@@ -181,13 +218,26 @@ unsafe extern "system" fn perform_edit(
         &*this.cast::<ComponentHandler>()
     };
     if handler.shared.enqueue_parameter(id, normalized) {
+        handler
+            .shared
+            .publish_editor_gesture(EditorParameterGesture::Perform {
+                parameter_id: id,
+                normalized,
+            });
         0
     } else {
         1
     }
 }
 
-unsafe extern "system" fn end_edit(_this: *mut IComponentHandler, _id: ParamID) -> tresult {
+unsafe extern "system" fn end_edit(this: *mut IComponentHandler, id: ParamID) -> tresult {
+    let handler = unsafe {
+        // SAFETY: this is the interface pointer of a live ComponentHandler.
+        &*this.cast::<ComponentHandler>()
+    };
+    handler
+        .shared
+        .publish_editor_gesture(EditorParameterGesture::End { parameter_id: id });
     0
 }
 
@@ -228,7 +278,10 @@ mod tests {
         traits::{Consumer, Split},
     };
 
-    use super::{HandlerShared, Vst3RestartRequest, restart_component};
+    use super::{
+        EditorParameterGesture, HandlerShared, Vst3RestartRequest, begin_edit, end_edit,
+        perform_edit, restart_component,
+    };
 
     #[test]
     fn parameter_mirror_queues_the_same_change_for_both_mono_processors() {
@@ -245,6 +298,33 @@ mod tests {
         let secondary_change = secondary_consumer.try_pop().unwrap();
         assert_eq!(primary_change.id, secondary_change.id);
         assert_eq!(primary_change.value, secondary_change.value);
+    }
+
+    #[test]
+    fn native_editor_gestures_are_drained_in_order() {
+        let ring = HeapRb::new(8);
+        let (producer, mut consumer) = ring.split();
+        let shared = HandlerShared::new(producer);
+        let mut handler = super::ComponentHandler::new(shared.clone());
+        unsafe {
+            // SAFETY: handler owns a live interface for this complete gesture sequence.
+            assert_eq!(begin_edit(handler.as_interface(), 42), 0);
+            assert_eq!(perform_edit(handler.as_interface(), 42, 0.75), 0);
+            assert_eq!(end_edit(handler.as_interface(), 42), 0);
+        }
+        assert_eq!(consumer.try_pop().unwrap().value, 0.75);
+        assert_eq!(
+            shared.take_editor_gestures(),
+            vec![
+                EditorParameterGesture::Begin { parameter_id: 42 },
+                EditorParameterGesture::Perform {
+                    parameter_id: 42,
+                    normalized: 0.75,
+                },
+                EditorParameterGesture::End { parameter_id: 42 },
+            ]
+        );
+        assert!(shared.take_editor_gestures().is_empty());
     }
 
     #[test]

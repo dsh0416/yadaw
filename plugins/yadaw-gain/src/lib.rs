@@ -4,8 +4,9 @@ use std::sync::Arc;
 
 use truce::prelude::*;
 use truce_iced::iced::widget::{Column, Row, container, text};
-use truce_iced::iced::{Alignment, Color, Element, Length, alignment};
-use truce_iced::{IcedEditor, IcedPlugin, IntoElement, Message, ParamCache, knob, meter};
+use truce_iced::iced::{Alignment, Element, Length, alignment};
+use truce_iced::{IcedEditor, IcedPlugin, IntoElement, Message, ParamCache};
+use yadaw_plugin_ui::{level_meter, parameter_knob};
 
 use GainParamsParamId as P;
 
@@ -25,10 +26,6 @@ pub struct GainParams {
     pub meter_right: MeterSlot,
 }
 
-fn color(rgba: [u8; 4]) -> Color {
-    Color::from_rgba8(rgba[0], rgba[1], rgba[2], f32::from(rgba[3]) / 255.0)
-}
-
 /// Fixed YADAW instrument-panel UI.
 pub struct GainUi;
 
@@ -46,35 +43,39 @@ impl IcedPlugin<GainParams> for GainUi {
         &'a self,
         params: &'a ParamCache<GainParams>,
     ) -> Element<'a, Message<Self::Message>> {
+        let palette = yadaw_plugin_ui::palette();
         let title = text("YADAW  /  GAIN")
-            .size(14)
-            .color(color(yadaw_plugin_ui::TEXT));
-        let value = text(params.label(P::Gain))
-            .size(30)
-            .color(color(yadaw_plugin_ui::AUDIO_ACCENT));
+            .size(yadaw_plugin_ui::type_size::BODY_COMPACT)
+            .color(palette.text);
+        let value = text(params.label(P::Gain)).size(30).color(palette.audio);
         let control = Column::new()
             .push(title)
             .push(value)
-            .push(knob(P::Gain, params).label("GAIN").size(126.0).el())
-            .spacing(12)
+            .push(
+                parameter_knob(P::Gain, params)
+                    .label("GAIN")
+                    .size(126.0)
+                    .el(),
+            )
+            .spacing(yadaw_plugin_ui::space::MD)
             .align_x(Alignment::Center);
-        let meters = meter(&[P::MeterLeft, P::MeterRight], params)
+        let meters = level_meter(&[P::MeterLeft, P::MeterRight], params)
             .size(34.0, 180.0)
             .el();
         let surface = Row::new()
             .push(control)
             .push(meters)
-            .spacing(28)
+            .spacing(yadaw_plugin_ui::space::XL)
             .align_y(alignment::Vertical::Center);
         container(surface)
-            .padding(24)
+            .padding(yadaw_plugin_ui::space::XL)
             .width(Length::Fill)
             .height(Length::Fill)
             .align_x(Alignment::Center)
             .align_y(Alignment::Center)
-            .style(|_| container::Style {
-                background: Some(color(yadaw_plugin_ui::CANVAS).into()),
-                text_color: Some(color(yadaw_plugin_ui::TEXT)),
+            .style(move |_| container::Style {
+                background: Some(palette.canvas.into()),
+                text_color: Some(palette.text),
                 ..Default::default()
             })
             .into()
@@ -82,6 +83,10 @@ impl IcedPlugin<GainParams> for GainUi {
 
     fn title(&self) -> String {
         String::from("YADAW Gain")
+    }
+
+    fn theme(&self) -> truce_iced::iced::Theme {
+        yadaw_plugin_ui::theme()
     }
 }
 

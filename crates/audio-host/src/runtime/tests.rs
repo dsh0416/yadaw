@@ -141,9 +141,9 @@ mod tests {
 
     #[test]
     fn plugin_editor_is_created_hidden_until_native_attachment_is_ready() {
-        let attributes = plugin_editor_window_attributes("Pro-C", None);
+        let attributes = plugin_editor_window_attributes("Lead", "Pro-C", None);
         assert!(!attributes.visible);
-        assert_eq!(attributes.title, "Pro-C — YADAW");
+        assert_eq!(attributes.title, "Lead — Pro-C — YADAW");
     }
 
     #[test]
@@ -860,6 +860,7 @@ mod tests {
             protocol_deadline(&ControlCommand::OpenPluginEditor {
                 instance_id: "plugin".into(),
                 preference: PluginEditorPreference::default(),
+                context: PluginEditorContext::default(),
             }),
             Duration::from_secs(15)
         );

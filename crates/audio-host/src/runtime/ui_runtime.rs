@@ -18,6 +18,7 @@ struct WinitHost {
     editor_owner_window: Option<usize>,
     editors: HashMap<WindowId, EditorWindow>,
     editor_instances: HashMap<String, WindowId>,
+    editor_clipboard: Option<EditorClipboard>,
     next_editor_tick: Option<Instant>,
     next_ara_tick: Option<Instant>,
     next_retirement_tick: Option<Instant>,
@@ -124,6 +125,7 @@ impl WinitHost {
         event_loop: &ActiveEventLoop,
         instance_id: String,
         preference: PluginEditorPreference,
+        mut context: PluginEditorContext,
     ) -> ControlResult {
         if !preference.is_valid() {
             return control_error! {
@@ -131,8 +133,9 @@ impl WinitHost {
             };
         }
         if let Some(window_id) = self.editor_instances.get(&instance_id).copied()
-            && let Some(editor) = self.editors.get(&window_id)
+            && let Some(editor) = self.editors.get_mut(&window_id)
         {
+            editor.update_context(context);
             editor.present();
             return ControlResult::PluginEditor {
                 active_mode: editor.active_mode(),
@@ -149,11 +152,18 @@ impl WinitHost {
                 message: "VST3 instance is not loaded".into(),
             };
         };
-        let display_name = runtime
-            .display_name(&instance_id)
-            .unwrap_or("VST3 plug-in")
-            .to_owned();
-        let attributes = plugin_editor_window_attributes(&display_name, self.editor_owner_window);
+        let display_name = runtime.display_name(&instance_id).unwrap_or("VST3 plug-in");
+        if context.channel_name.is_empty() {
+            context.channel_name = "Untitled track".to_owned();
+        }
+        if context.plugin_name.is_empty() {
+            context.plugin_name = display_name.to_owned();
+        }
+        let attributes = plugin_editor_window_attributes(
+            &context.channel_name,
+            &context.plugin_name,
+            self.editor_owner_window,
+        );
         let window = match event_loop.create_window(attributes) {
             Ok(window) => Arc::new(window),
             Err(error) => {
@@ -186,6 +196,7 @@ impl WinitHost {
             instance_id.clone(),
             class_id,
             preference,
+            context,
             Vec::new(),
             window,
             compositor,
@@ -194,6 +205,7 @@ impl WinitHost {
         let active_mode = editor.active_mode();
         self.editor_instances.insert(instance_id, window_id);
         self.editors.insert(window_id, editor);
+        self.refresh_clipboard_availability();
         if let Some(editor) = self.editors.get(&window_id) {
             editor.present();
         }
@@ -233,8 +245,18 @@ impl WinitHost {
             ActorCommand::Control(ControlCommand::OpenPluginEditor {
                 instance_id,
                 preference,
+                context,
             }) => {
-                let _ = reply.send(self.open_editor(event_loop, instance_id, preference));
+                let _ = reply.send(self.open_editor(event_loop, instance_id, preference, context));
+                return;
+            }
+            ActorCommand::Control(ControlCommand::ConfigurePluginEditorAppearance {
+                appearance,
+            }) => {
+                for editor in self.editors.values_mut() {
+                    editor.update_appearance(appearance);
+                }
+                let _ = reply.send(ControlResult::Accepted);
                 return;
             }
             ActorCommand::Control(ControlCommand::ClosePluginEditor { instance_id }) => {
@@ -377,6 +399,16 @@ impl WinitHost {
             });
         }
     }
+
+    fn refresh_clipboard_availability(&mut self) {
+        let class_id = self
+            .editor_clipboard
+            .as_ref()
+            .map(|clipboard| clipboard.class_id.as_str());
+        for editor in self.editors.values_mut() {
+            editor.set_can_paste(class_id.is_some_and(|class_id| class_id == editor.class_id));
+        }
+    }
 }
 
 fn should_drain_ui_request(drained: usize, elapsed: std::time::Duration) -> bool {
@@ -419,12 +451,21 @@ impl ApplicationHandler<UiEvent> for WinitHost {
         if self.editors.is_empty() {
             self.next_editor_tick = None;
         } else if self.next_editor_tick.is_none_or(|deadline| now >= deadline) {
-            if let Some(runtime) = self.vst3.as_mut()
-                && let Err(error) = runtime.flush_output_parameters()
-                && !self.output_parameter_error_reported
-            {
-                eprintln!("audio-host: could not apply VST3 output parameter: {error}");
-                self.output_parameter_error_reported = true;
+            if let Some(runtime) = self.vst3.as_mut() {
+                if let Err(error) = runtime.flush_output_parameters()
+                    && !self.output_parameter_error_reported
+                {
+                    eprintln!("audio-host: could not apply VST3 output parameter: {error}");
+                    self.output_parameter_error_reported = true;
+                }
+                let editor_gestures = runtime.take_editor_parameter_gestures();
+                for (instance_id, gestures) in editor_gestures {
+                    if let Some(window_id) = self.editor_instances.get(&instance_id)
+                        && let Some(editor) = self.editors.get_mut(window_id)
+                    {
+                        editor.apply_native_parameter_gestures(&gestures);
+                    }
+                }
             }
             self.next_editor_tick = Some(now + Self::EDITOR_TICK);
         }
@@ -514,7 +555,9 @@ impl ApplicationHandler<UiEvent> for WinitHost {
                 continue;
             };
             let class_id = editor.class_id.clone();
-            if let Some(preference) = editor.apply_action(action, runtime) {
+            if let Some(preference) =
+                editor.apply_action(action, runtime, &mut self.editor_clipboard)
+            {
                 let _ = self
                     .host_events
                     .try_send(HostEvent::PluginEditorPreferenceChanged {
@@ -523,6 +566,7 @@ impl ApplicationHandler<UiEvent> for WinitHost {
                     });
             }
         }
+        self.refresh_clipboard_availability();
         if close
             && let Some(instance_id) = self
                 .editors
@@ -532,14 +576,16 @@ impl ApplicationHandler<UiEvent> for WinitHost {
             self.close_editor(&instance_id);
         }
     }
+
 }
 
 fn plugin_editor_window_attributes(
-    display_name: &str,
+    channel_name: &str,
+    plugin_name: &str,
     editor_owner_window: Option<usize>,
 ) -> WindowAttributes {
     let attributes = WindowAttributes::default()
-        .with_title(format!("{display_name} — YADAW"))
+        .with_title(format!("{channel_name} — {plugin_name} — YADAW"))
         .with_inner_size(LogicalSize::new(720.0, 640.0))
         // Do not expose a half-initialized surface. `present` makes the fully
         // attached editor visible and activates it in one sequence.

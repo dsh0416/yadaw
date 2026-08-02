@@ -5,8 +5,9 @@ use std::sync::Arc;
 
 use truce::prelude::*;
 use truce_iced::iced::widget::{Column, Row, Space, container, text};
-use truce_iced::iced::{Alignment, Color, Element, Length, alignment};
-use truce_iced::{IcedEditor, IcedPlugin, IntoElement, Message, ParamCache, knob};
+use truce_iced::iced::{Alignment, Element, Length, alignment};
+use truce_iced::{IcedEditor, IcedPlugin, IntoElement, Message, ParamCache};
+use yadaw_plugin_ui::parameter_knob;
 
 use SineParamsParamId as P;
 
@@ -180,10 +181,6 @@ impl SineDspState {
     }
 }
 
-fn color(rgba: [u8; 4]) -> Color {
-    Color::from_rgba8(rgba[0], rgba[1], rgba[2], f32::from(rgba[3]) / 255.0)
-}
-
 pub struct SineUi;
 
 #[derive(Clone, Debug)]
@@ -200,53 +197,69 @@ impl IcedPlugin<SineParams> for SineUi {
         &'a self,
         params: &'a ParamCache<SineParams>,
     ) -> Element<'a, Message<Self::Message>> {
+        let palette = yadaw_plugin_ui::palette();
         let voices = (params.meter(P::ActiveVoices) * MAX_VOICES as f32).round() as u8;
         let pitch = (params.meter(P::RecentPitch) * 127.0).round() as u8;
         let header = Row::new()
             .push(
                 text("YADAW  /  SINE")
-                    .size(15)
-                    .color(color(yadaw_plugin_ui::TEXT)),
+                    .size(yadaw_plugin_ui::type_size::PANEL_TITLE)
+                    .color(palette.text),
             )
             .push(Space::new().width(Length::Fill))
             .push(
                 text(format!("{voices:02} VOICES   MIDI {pitch:03}"))
-                    .size(13)
-                    .color(color(yadaw_plugin_ui::MIDI_ACCENT)),
+                    .size(yadaw_plugin_ui::type_size::BODY_COMPACT)
+                    .color(palette.midi),
             );
         let trace = container(
             text("∿      ∿      ∿      ∿      ∿")
                 .size(38)
-                .color(color(yadaw_plugin_ui::MIDI_ACCENT)),
+                .color(palette.midi),
         )
         .width(Length::Fill)
         .height(Length::Fixed(92.0))
         .align_x(Alignment::Center)
         .align_y(Alignment::Center)
-        .style(|_| container::Style {
-            background: Some(color(yadaw_plugin_ui::SURFACE).into()),
+        .style(move |_| container::Style {
+            background: Some(palette.surface.into()),
             ..Default::default()
         });
         let controls = Row::new()
-            .push(knob(P::Output, params).label("OUTPUT").size(76.0).el())
-            .push(knob(P::Attack, params).label("ATTACK").size(76.0).el())
-            .push(knob(P::Release, params).label("RELEASE").size(76.0).el())
-            .spacing(34)
+            .push(
+                parameter_knob(P::Output, params)
+                    .label("OUTPUT")
+                    .size(76.0)
+                    .el(),
+            )
+            .push(
+                parameter_knob(P::Attack, params)
+                    .label("ATTACK")
+                    .size(76.0)
+                    .el(),
+            )
+            .push(
+                parameter_knob(P::Release, params)
+                    .label("RELEASE")
+                    .size(76.0)
+                    .el(),
+            )
+            .spacing(yadaw_plugin_ui::space::XL)
             .align_y(alignment::Vertical::Center);
         container(
             Column::new()
                 .push(header)
                 .push(trace)
                 .push(controls)
-                .spacing(18)
+                .spacing(yadaw_plugin_ui::space::LG)
                 .align_x(Alignment::Center),
         )
-        .padding(22)
+        .padding(yadaw_plugin_ui::space::XL)
         .width(Length::Fill)
         .height(Length::Fill)
-        .style(|_| container::Style {
-            background: Some(color(yadaw_plugin_ui::CANVAS).into()),
-            text_color: Some(color(yadaw_plugin_ui::TEXT)),
+        .style(move |_| container::Style {
+            background: Some(palette.canvas.into()),
+            text_color: Some(palette.text),
             ..Default::default()
         })
         .into()
@@ -254,6 +267,10 @@ impl IcedPlugin<SineParams> for SineUi {
 
     fn title(&self) -> String {
         String::from("YADAW Sine")
+    }
+
+    fn theme(&self) -> truce_iced::iced::Theme {
+        yadaw_plugin_ui::theme()
     }
 }
 

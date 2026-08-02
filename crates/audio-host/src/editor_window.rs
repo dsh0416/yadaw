@@ -1,20 +1,20 @@
 use std::{
     cell::{Cell, RefCell},
-    collections::HashSet,
+    collections::{HashMap, HashSet, VecDeque},
     fmt,
     rc::Rc,
     sync::Arc,
     time::Instant,
 };
 
-use iced_core::{Color, Element, Length, Point, Size, mouse::Cursor, renderer};
+use iced_core::{Border, Color, Element, Length, Point, Size, mouse::Cursor, renderer};
 use iced_wgpu::{
     Renderer,
     graphics::{Compositor as _, Viewport},
     window::Compositor,
 };
 use iced_widget::{
-    Column, Row, Theme, container, pick_list, scrollable, slider, space, text, text_input,
+    Column, Row, Theme, button, container, pick_list, scrollable, slider, space, text,
 };
 use iced_winit::{
     Clipboard, conversion,
@@ -22,21 +22,26 @@ use iced_winit::{
 };
 use winit::{
     dpi::{PhysicalSize, Size as WinitSize},
-    event::{ElementState, MouseButton, WindowEvent},
+    event::{ElementState, WindowEvent},
     keyboard::{Key, ModifiersState, NamedKey},
     window::Window,
 };
 use yadaw_dsp_runtime::protocol::{
-    ParameterGesture, PluginEditorMode, PluginEditorPreference, PluginParameter,
+    ParameterGesture, PluginEditorAppearance, PluginEditorContext, PluginEditorLocale,
+    PluginEditorMode, PluginEditorPreference, PluginEditorTheme, PluginParameter,
 };
+use yadaw_iced_ui::{Appearance, EDITOR_CHROME_HEIGHT, space as ui_space, type_size};
 use yadaw_vst3_host::{PlugFrame, PlugView, ViewRect};
 
 use crate::{
     editor_platform::{NativeContainer, NativeUiContext},
-    vst3::Vst3Runtime,
+    vst3::{EditorPluginState, Vst3Runtime},
 };
 
-const TOOLBAR_HEIGHT: f64 = 72.0;
+const TOOLBAR_HEIGHT_WIDE: f64 = EDITOR_CHROME_HEIGHT as f64;
+const TOOLBAR_HEIGHT_NARROW: f64 = 96.0;
+const TOOLBAR_NARROW_BREAKPOINT: f32 = 520.0;
+const COMPARE_SEGMENT_WIDTH: f32 = 28.0;
 const DEFAULT_PARAMETER_WIDTH: f64 = 720.0;
 const DEFAULT_PARAMETER_HEIGHT: f64 = 640.0;
 /// Fallback content size when `IPlugView::getSize` fails or returns an empty
@@ -47,41 +52,7 @@ const DEFAULT_NATIVE_EDITOR_HEIGHT: i32 = 600;
 const MIN_PARAMETER_WIDTH: f64 = 480.0;
 const MIN_PARAMETER_HEIGHT: f64 = 240.0;
 const ZOOM_PRESETS: [u16; 6] = [75, 100, 125, 150, 175, 200];
-const MODE_OPTIONS: [EditorModeOption; 2] =
-    [EditorModeOption::Native, EditorModeOption::Parameters];
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum EditorModeOption {
-    Native,
-    Parameters,
-}
-
-impl From<PluginEditorMode> for EditorModeOption {
-    fn from(mode: PluginEditorMode) -> Self {
-        match mode {
-            PluginEditorMode::Native => Self::Native,
-            PluginEditorMode::Parameters => Self::Parameters,
-        }
-    }
-}
-
-impl From<EditorModeOption> for PluginEditorMode {
-    fn from(option: EditorModeOption) -> Self {
-        match option {
-            EditorModeOption::Native => Self::Native,
-            EditorModeOption::Parameters => Self::Parameters,
-        }
-    }
-}
-
-impl fmt::Display for EditorModeOption {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(match self {
-            Self::Native => "Plug-in UI",
-            Self::Parameters => "Parameters",
-        })
-    }
-}
+const PARAMETER_HISTORY_LIMIT: usize = 128;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct ZoomOption(u16);
@@ -98,14 +69,99 @@ enum ToolbarMenu {
     Zoom,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct EditorModeOption {
+    mode: PluginEditorMode,
+    label: &'static str,
+}
+
+impl fmt::Display for EditorModeOption {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.label)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CompareSlot {
+    A,
+    B,
+}
+
+impl CompareSlot {
+    const fn index(self) -> usize {
+        match self {
+            Self::A => 0,
+            Self::B => 1,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct ParameterEdit {
+    parameter_id: u32,
+    before: f64,
+    after: f64,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct EditorClipboard {
+    pub(crate) class_id: String,
+    pub(crate) state: EditorPluginState,
+}
+
+impl EditorClipboard {
+    fn supports(&self, class_id: &str) -> bool {
+        self.class_id == class_id
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct EditorStrings {
+    editor: &'static str,
+    parameters: &'static str,
+    copy: &'static str,
+    paste: &'static str,
+    undo: &'static str,
+    redo: &'static str,
+    empty_parameters: &'static str,
+}
+
+impl EditorStrings {
+    const fn for_locale(locale: PluginEditorLocale) -> Self {
+        match locale {
+            PluginEditorLocale::EnUs => Self {
+                editor: "Editor",
+                parameters: "Parameters",
+                copy: "Copy",
+                paste: "Paste",
+                undo: "Undo",
+                redo: "Redo",
+                empty_parameters: "This plug-in has no editable parameters",
+            },
+            PluginEditorLocale::ZhCmnHansCn => Self {
+                editor: "编辑器",
+                parameters: "参数",
+                copy: "拷贝",
+                paste: "粘贴",
+                undo: "撤销",
+                redo: "重做",
+                empty_parameters: "此插件没有可编辑参数",
+            },
+        }
+    }
+}
+
 type EditorElement<'a> = Element<'a, Message, Theme, Renderer>;
 
 #[derive(Debug, Clone)]
 enum Message {
     UseMode(PluginEditorMode),
+    UseCompareSlot(CompareSlot),
+    CopyState,
+    PasteState,
+    Undo,
+    Redo,
     ZoomPreset(u16),
-    ZoomInput(String),
-    ZoomSubmit,
     MenuOpened(ToolbarMenu),
     MenuClosed(ToolbarMenu),
     ParameterChanged(u32, f64),
@@ -114,17 +170,29 @@ enum Message {
 
 #[derive(Clone)]
 struct EditorViewModel {
-    zoom_input: String,
+    context: PluginEditorContext,
     zoom_percent: u16,
+    toolbar_height: f32,
+    narrow_toolbar: bool,
     active_mode: PluginEditorMode,
     warning: Option<String>,
     parameters: Vec<PluginParameter>,
+    compare_slot: CompareSlot,
+    can_compare: bool,
+    can_paste: bool,
+    can_undo: bool,
+    can_redo: bool,
 }
 
 #[derive(Debug)]
-pub enum EditorAction {
+pub(crate) enum EditorAction {
     Close,
     PreferenceChanged(PluginEditorPreference),
+    UseCompareSlot(CompareSlot),
+    CopyState,
+    PasteState,
+    Undo,
+    Redo,
     Parameter {
         parameter_id: u32,
         normalized: f64,
@@ -164,13 +232,19 @@ pub struct EditorWindow {
     pub class_id: String,
     pub window: Arc<Window>,
     preference: PluginEditorPreference,
+    context: PluginEditorContext,
     active_mode: PluginEditorMode,
     parameters: Vec<PluginParameter>,
     warning: Option<String>,
-    zoom_input: String,
-    zoom_dirty: bool,
     open_menu: Option<ToolbarMenu>,
+    compare_segment_focused: bool,
     active_gestures: HashSet<u32>,
+    compare_slots: Option<[EditorPluginState; 2]>,
+    compare_slot: CompareSlot,
+    can_paste: bool,
+    undo: VecDeque<ParameterEdit>,
+    redo: VecDeque<ParameterEdit>,
+    pending_edits: HashMap<u32, f64>,
     monitor_scale: Rc<Cell<f64>>,
     user_zoom: Rc<Cell<f64>>,
     viewport: Viewport,

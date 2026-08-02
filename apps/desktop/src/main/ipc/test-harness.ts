@@ -297,6 +297,8 @@ export function createContext(
         controlEvents: []
       })),
       configureMidiInput: vi.fn(async () => undefined),
+      pluginEditorAppearanceSnapshot: vi.fn(() => ({ theme: "dark", locale: "en-US" })),
+      configurePluginEditorAppearance: vi.fn(async () => undefined),
       setMidiControlLearning: vi.fn(async () => undefined),
       configureRuntime: vi.fn(async () => undefined),
       enqueuePluginParameter: vi.fn(async (command: unknown) => command)

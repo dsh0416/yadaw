@@ -5959,6 +5959,7 @@ dependencies = [
  "winit",
  "yadaw-audio-engine",
  "yadaw-dsp-runtime",
+ "yadaw-iced-ui",
  "yadaw-ipc-transport",
  "yadaw-vst3-host",
 ]
@@ -6033,6 +6034,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "yadaw-iced-ui"
+version = "0.2.2"
+dependencies = [
+ "iced_core",
+ "iced_widget",
+]
+
+[[package]]
 name = "yadaw-ipc-transport"
 version = "0.2.2"
 dependencies = [
@@ -6062,7 +6071,12 @@ dependencies = [
 name = "yadaw-plugin-ui"
 version = "0.2.2"
 dependencies = [
+ "iced_core",
+ "iced_widget",
+ "truce",
  "truce-gui-types",
+ "truce-iced",
+ "yadaw-iced-ui",
 ]
 
 [[package]]

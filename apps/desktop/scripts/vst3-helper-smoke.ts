@@ -132,10 +132,17 @@ try {
     throw new Error("AGain did not expose parameters")
   }
   const editorPreference = { mode: "native", zoom_percent: 100 }
+  const editorContext = {
+    channel_name: "AGain Smoke",
+    channel_color: "#ad8cff",
+    plugin_name: "AGain",
+    appearance: { theme: "dark", locale: "en-US" }
+  }
   const editor = await send({
     type: "open-plugin-editor",
     instance_id: "again-1",
-    preference: editorPreference
+    preference: editorPreference,
+    context: editorContext
   })
   const editorMode = editor.active_mode
   if (editorMode !== "native" && editorMode !== "parameters") {
@@ -144,7 +151,8 @@ try {
   const focused = await send({
     type: "open-plugin-editor",
     instance_id: "again-1",
-    preference: editorPreference
+    preference: editorPreference,
+    context: editorContext
   })
   if (editor.open && !focused.open) {
     throw new Error("opening the existing editor did not focus/reuse it")

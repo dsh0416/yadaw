@@ -23,6 +23,13 @@ pub struct Vst3Runtime {
     restart_failures: Vec<(String, String)>,
 }
 
+/// Opaque VST3 state used by host-owned editor compare and clipboard features.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EditorPluginState {
+    pub component_state: Vec<u8>,
+    pub controller_state: Vec<u8>,
+}
+
 struct GuardedInstance {
     instance_id: String,
     instance: Instance,
@@ -196,8 +203,10 @@ impl Vst3Runtime {
             ControlCommand::OpenPluginEditor {
                 instance_id,
                 preference,
+                ..
             } => self.editor_result(&instance_id, preference),
-            ControlCommand::ClosePluginEditor { .. } => ControlResult::Accepted,
+            ControlCommand::ClosePluginEditor { .. }
+            | ControlCommand::ConfigurePluginEditorAppearance { .. } => ControlResult::Accepted,
             _ => control_error("command is not a VST3 runtime command"),
         }
     }
@@ -334,6 +343,76 @@ impl Vst3Runtime {
             .map_err(|error| error.to_string())
     }
 
+    pub fn editor_state(&self, instance_id: &str) -> Result<EditorPluginState, String> {
+        let instance = self
+            .instances
+            .get(instance_id)
+            .ok_or_else(|| "VST3 instance is not loaded".to_owned())?;
+        instance
+            .plugin
+            .save_state()
+            .map(|(component_state, controller_state)| EditorPluginState {
+                component_state,
+                controller_state,
+            })
+            .map_err(|error| error.to_string())
+    }
+
+    pub fn restore_editor_state(
+        &self,
+        instance_id: &str,
+        state: &EditorPluginState,
+    ) -> Result<(), String> {
+        let instance = self
+            .instances
+            .get(instance_id)
+            .ok_or_else(|| "VST3 instance is not loaded".to_owned())?;
+        let primary_before = instance
+            .plugin
+            .save_state()
+            .map_err(|error| format!("could not preserve the current plug-in state: {error}"))?;
+        let secondary_before = instance
+            .secondary
+            .as_ref()
+            .map(HostedPlugin::save_state)
+            .transpose()
+            .map_err(|error| format!("could not preserve the current dual-mono state: {error}"))?;
+        if let Err(error) = instance
+            .plugin
+            .restore_state(&state.component_state, &state.controller_state)
+        {
+            let rollback = instance
+                .plugin
+                .restore_state(&primary_before.0, &primary_before.1);
+            return Err(match rollback {
+                Ok(()) => format!("could not restore plug-in state: {error}"),
+                Err(rollback_error) => format!(
+                    "could not restore plug-in state: {error}; recovery also failed: {rollback_error}"
+                ),
+            });
+        }
+        if let Some(secondary) = &instance.secondary
+            && let Err(error) =
+                secondary.restore_state(&state.component_state, &state.controller_state)
+        {
+            let primary_rollback = instance
+                .plugin
+                .restore_state(&primary_before.0, &primary_before.1);
+            let secondary_rollback = secondary_before.as_ref().map_or(Ok(()), |before| {
+                secondary.restore_state(&before.0, &before.1)
+            });
+            return Err(match (primary_rollback, secondary_rollback) {
+                (Ok(()), Ok(())) => {
+                    format!("could not restore dual-mono plug-in state: {error}")
+                }
+                (primary, secondary) => format!(
+                    "could not restore dual-mono plug-in state: {error}; recovery failed (primary: {primary:?}, secondary: {secondary:?})"
+                ),
+            });
+        }
+        Ok(())
+    }
+
     pub fn set_parameter_from_editor(
         &mut self,
         instance_id: &str,
@@ -395,6 +474,18 @@ impl Vst3Runtime {
             }
         }
         timing
+    }
+
+    pub fn take_editor_parameter_gestures(
+        &self,
+    ) -> Vec<(String, Vec<yadaw_vst3_host::EditorParameterGesture>)> {
+        self.instances
+            .iter()
+            .filter_map(|(instance_id, instance)| {
+                let gestures = instance.plugin.take_editor_parameter_gestures();
+                (!gestures.is_empty()).then(|| (instance_id.clone(), gestures))
+            })
+            .collect()
     }
 
     pub fn take_restart_failures(&mut self) -> Vec<(String, String)> {

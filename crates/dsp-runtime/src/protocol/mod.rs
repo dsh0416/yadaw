@@ -241,6 +241,11 @@ pub enum ControlCommand {
     OpenPluginEditor {
         instance_id: String,
         preference: PluginEditorPreference,
+        #[serde(default)]
+        context: PluginEditorContext,
+    },
+    ConfigurePluginEditorAppearance {
+        appearance: PluginEditorAppearance,
     },
     ClosePluginEditor {
         instance_id: String,
@@ -435,6 +440,55 @@ mod tests {
         assert_eq!(
             read_message::<ControlRequest>(&mut bytes.as_slice()).unwrap(),
             request
+        );
+    }
+
+    #[test]
+    fn plugin_editor_context_and_appearance_round_trip() {
+        let context = PluginEditorContext {
+            channel_name: "主唱".to_owned(),
+            channel_color: "#58c6c2".to_owned(),
+            plugin_name: "YADAW Gain".to_owned(),
+            appearance: PluginEditorAppearance {
+                theme: PluginEditorTheme::Light,
+                locale: PluginEditorLocale::ZhCmnHansCn,
+            },
+        };
+        for command in [
+            ControlCommand::OpenPluginEditor {
+                instance_id: "gain-1".to_owned(),
+                preference: PluginEditorPreference {
+                    mode: PluginEditorMode::Parameters,
+                    zoom_percent: 200,
+                },
+                context: context.clone(),
+            },
+            ControlCommand::ConfigurePluginEditorAppearance {
+                appearance: context.appearance,
+            },
+        ] {
+            let bytes = rmp_serde::to_vec_named(&command).unwrap();
+            assert_eq!(
+                rmp_serde::from_slice::<ControlCommand>(&bytes).unwrap(),
+                command
+            );
+        }
+    }
+
+    #[test]
+    fn legacy_open_editor_payload_defaults_its_new_context() {
+        let payload = serde_json::json!({
+            "type": "open-plugin-editor",
+            "instance_id": "legacy",
+            "preference": { "mode": "native", "zoom_percent": 100 }
+        });
+        assert_eq!(
+            serde_json::from_value::<ControlCommand>(payload).unwrap(),
+            ControlCommand::OpenPluginEditor {
+                instance_id: "legacy".to_owned(),
+                preference: PluginEditorPreference::default(),
+                context: PluginEditorContext::default(),
+            }
         );
     }
 

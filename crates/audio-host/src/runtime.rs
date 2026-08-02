@@ -25,7 +25,7 @@ use std::{
 use crate::{
     crash_marker, device,
     editor_platform::{self, NativeUiContext},
-    editor_window::{EditorAction, EditorWindow},
+    editor_window::{EditorAction, EditorClipboard, EditorWindow},
     engine,
     midi_input::MidiInputActor,
     recording::{NativeRecordingResult, NativeRecordingStartConfig, NativeWaveformSnapshot},
@@ -55,11 +55,11 @@ use yadaw_dsp_runtime::protocol::{
     ControlRequest, ControlResponse, ControlResult, GraphCandidateSnapshot,
     GraphDeploymentSnapshot, GraphDeploymentStatus, GraphOperationOutcome, GraphOperationSnapshot,
     GraphTransactionRequest, GraphTransactionValue, GraphUpdate, HostEvent, IPC_PROTOCOL_VERSION,
-    LiveMixerGraph, MixerChannelMeter, PluginEditorPreference, PriorityCommand, PriorityRequest,
-    PriorityResponse, PriorityResult, RecordingResult, RecordingWaveform, ResourceKind,
-    ResourceRef, RoundTripLatencyMeasurement, RpcError, RpcErrorCategory, RpcErrorCode,
-    RpcErrorDetails, RpcFailure, RpcMutationOutcome, RpcRequestMeta, RpcResult, RpcRetry,
-    RpcSuccess, TransportState, read_message, write_message,
+    LiveMixerGraph, MixerChannelMeter, PluginEditorContext, PluginEditorPreference,
+    PriorityCommand, PriorityRequest, PriorityResponse, PriorityResult, RecordingResult,
+    RecordingWaveform, ResourceKind, ResourceRef, RoundTripLatencyMeasurement, RpcError,
+    RpcErrorCategory, RpcErrorCode, RpcErrorDetails, RpcFailure, RpcMutationOutcome,
+    RpcRequestMeta, RpcResult, RpcRetry, RpcSuccess, TransportState, read_message, write_message,
 };
 use yadaw_dsp_runtime::tempo::{TempoEvent, TimeSignatureEvent};
 use yadaw_ipc_transport::{

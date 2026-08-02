@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from "electron"
+import { app, BrowserWindow, nativeTheme } from "electron"
 import { basename, join, resolve } from "node:path"
 import { randomUUID } from "node:crypto"
 import { IPC_CHANNELS, IPC_PROTOCOL_VERSION } from "@yadaw/contracts"
@@ -215,6 +215,15 @@ export function startApplication(
         }
       )
       audioHostService.start()
+      await audioHostService.configurePluginEditorAppearance({
+        theme:
+          applicationSettings.theme === "system"
+            ? nativeTheme.shouldUseDarkColors
+              ? "dark"
+              : "light"
+            : applicationSettings.theme,
+        locale: applicationSettings.locale
+      })
       await audioHostService.configureMidiInput(
         applicationSettings.midiSync,
         applicationSettings.shortcuts
@@ -293,8 +302,15 @@ export function startApplication(
           const graph = await projectGraph.snapshot()
           const plugin = graph.plugins.find((candidate) => candidate.id === instanceId)
           if (!plugin) throw new Error(`Plugin instance '${instanceId}' was not found`)
+          const channel = graph.channels.find((candidate) => candidate.id === plugin.channelId)
+          if (!channel) throw new Error(`Plugin channel '${plugin.channelId}' was not found`)
           const preference = await settings.pluginEditorPreference(plugin.classId)
-          return audioHostService.openPluginEditor(instanceId, preference)
+          return audioHostService.openPluginEditor(instanceId, preference, {
+            channelName: channel.name,
+            channelColor: channel.color,
+            pluginName: plugin.descriptor.name,
+            appearance: audioHostService.pluginEditorAppearanceSnapshot()
+          })
         },
         closeEditor: (instanceId) => {
           if (!audioHostService) return Promise.resolve()
