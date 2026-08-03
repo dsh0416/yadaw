@@ -1,3 +1,24 @@
+use std::{
+    collections::{HashMap, VecDeque},
+    mem::size_of,
+    process::Child,
+    sync::{
+        Arc, Mutex, RwLock,
+        atomic::{AtomicBool, AtomicU64},
+        mpsc::SyncSender,
+    },
+    thread::{self, JoinHandle},
+    time::{Duration, Instant},
+};
+
+use heron_ipc_transport::{
+    LeaseRegistry, MappingCommand, MappingEvent, ParameterProducer, TelemetryReader,
+    TelemetrySnapshot, WirePacket,
+};
+use ipc_channel::ipc::{IpcReceiver, IpcSender};
+use napi::{Env, Error, JsDeferred, Result, Status, bindgen_prelude::Buffer};
+use napi_derive::napi;
+
 #[napi(object)]
 pub struct IpcResponse {
     pub body: Buffer,
@@ -10,7 +31,6 @@ pub struct ParameterEnqueueResult {
     pub sequence: String,
 }
 
-
 #[napi(object)]
 pub struct ParameterEnqueueRequest {
     pub target_kind: String,
@@ -21,15 +41,15 @@ pub struct ParameterEnqueueRequest {
     pub sequence: Option<String>,
     pub target_generation: Option<u32>,
 }
-type ResponseResolver = Box<dyn FnOnce(Env) -> Result<IpcResponse> + Send>;
+pub(super) type ResponseResolver = Box<dyn FnOnce(Env) -> Result<IpcResponse> + Send>;
 type ResponseDeferred = JsDeferred<IpcResponse, ResponseResolver>;
 
-trait PendingResponder: Send {
+pub(super) trait PendingResponder: Send {
     fn resolve(self: Box<Self>, bytes: Vec<u8>, attachments: Vec<Vec<u8>>);
     fn reject(self: Box<Self>, error: Error);
 }
 
-struct NapiPendingResponder(ResponseDeferred);
+pub(super) struct NapiPendingResponder(pub(super) ResponseDeferred);
 
 impl PendingResponder for NapiPendingResponder {
     fn resolve(self: Box<Self>, bytes: Vec<u8>, attachments: Vec<Vec<u8>>) {
@@ -46,11 +66,11 @@ impl PendingResponder for NapiPendingResponder {
     }
 }
 
-fn failure(context: &str, error: impl std::fmt::Display) -> Error {
+pub(super) fn failure(context: &str, error: impl std::fmt::Display) -> Error {
     Error::new(Status::GenericFailure, format!("{context}: {error}"))
 }
 
-fn negotiate_shared_pages(
+pub(super) fn negotiate_shared_pages(
     commands: &IpcSender<MappingCommand>,
     events: &IpcReceiver<MappingEvent>,
     telemetry: &TelemetryReader,
@@ -94,56 +114,56 @@ fn negotiate_shared_pages(
     )
 }
 
-struct Pending {
-    responder: Box<dyn PendingResponder>,
-    deadline: Instant,
+pub(super) struct Pending {
+    pub(super) responder: Box<dyn PendingResponder>,
+    pub(super) deadline: Instant,
 }
 
 #[derive(Default)]
-struct TransportTraffic {
-    inline_packets: AtomicU64,
-    inline_bytes: AtomicU64,
-    shared_packets: AtomicU64,
-    shared_regions: AtomicU64,
-    shared_bytes: AtomicU64,
+pub(super) struct TransportTraffic {
+    pub(super) inline_packets: AtomicU64,
+    pub(super) inline_bytes: AtomicU64,
+    pub(super) shared_packets: AtomicU64,
+    pub(super) shared_regions: AtomicU64,
+    pub(super) shared_bytes: AtomicU64,
 }
 
-struct ClientState {
-    normal_outbound: Mutex<Option<SyncSender<WirePacket>>>,
-    priority_outbound: Mutex<Option<SyncSender<WirePacket>>>,
-    pending: Arc<Mutex<HashMap<u64, Pending>>>,
-    priority_pending: Arc<Mutex<HashMap<u64, Pending>>>,
-    leases: Arc<Mutex<LeaseRegistry>>,
-    telemetry: Arc<RwLock<TelemetryReader>>,
-    last_telemetry: Mutex<TelemetrySnapshot>,
-    parameters: ParameterProducer,
-    persistent_shared_pages: bool,
-    shared_page_activation_failures: AtomicU64,
-    events: Arc<Mutex<VecDeque<Vec<u8>>>>,
-    child: Mutex<Child>,
-    threads: Mutex<Vec<JoinHandle<()>>>,
-    closing: Arc<AtomicBool>,
-    session_epoch: u64,
-    parameter_sequence: AtomicU64,
-    internal_request_id: AtomicU64,
-    telemetry_fallback_reads: AtomicU64,
-    parameter_soft_full: AtomicU64,
-    parameter_hard_full: AtomicU64,
-    parameter_boundary_fallbacks: AtomicU64,
-    parameter_stale_epoch: AtomicU64,
-    request_timeouts: Arc<AtomicU64>,
-    transport_traffic: Arc<TransportTraffic>,
-    runtime_config: ResolvedRuntimeConfig,
+pub(super) struct ClientState {
+    pub(super) normal_outbound: Mutex<Option<SyncSender<WirePacket>>>,
+    pub(super) priority_outbound: Mutex<Option<SyncSender<WirePacket>>>,
+    pub(super) pending: Arc<Mutex<HashMap<u64, Pending>>>,
+    pub(super) priority_pending: Arc<Mutex<HashMap<u64, Pending>>>,
+    pub(super) leases: Arc<Mutex<LeaseRegistry>>,
+    pub(super) telemetry: Arc<RwLock<TelemetryReader>>,
+    pub(super) last_telemetry: Mutex<TelemetrySnapshot>,
+    pub(super) parameters: ParameterProducer,
+    pub(super) persistent_shared_pages: bool,
+    pub(super) shared_page_activation_failures: AtomicU64,
+    pub(super) events: Arc<Mutex<VecDeque<Vec<u8>>>>,
+    pub(super) child: Mutex<Child>,
+    pub(super) threads: Mutex<Vec<JoinHandle<()>>>,
+    pub(super) closing: Arc<AtomicBool>,
+    pub(super) session_epoch: u64,
+    pub(super) parameter_sequence: AtomicU64,
+    pub(super) internal_request_id: AtomicU64,
+    pub(super) telemetry_fallback_reads: AtomicU64,
+    pub(super) parameter_soft_full: AtomicU64,
+    pub(super) parameter_hard_full: AtomicU64,
+    pub(super) parameter_boundary_fallbacks: AtomicU64,
+    pub(super) parameter_stale_epoch: AtomicU64,
+    pub(super) request_timeouts: Arc<AtomicU64>,
+    pub(super) transport_traffic: Arc<TransportTraffic>,
+    pub(super) runtime_config: ResolvedRuntimeConfig,
 }
 
 #[derive(Clone, Copy)]
-struct ResolvedRuntimeConfig {
-    worker_threads: u32,
-    max_blocking_threads: u32,
-    egress_concurrency: u32,
+pub(super) struct ResolvedRuntimeConfig {
+    pub(super) worker_threads: u32,
+    pub(super) max_blocking_threads: u32,
+    pub(super) egress_concurrency: u32,
 }
 
-fn resolve_runtime_config(
+pub(super) fn resolve_runtime_config(
     worker_threads: Option<u32>,
     max_blocking_threads: Option<u32>,
     egress_concurrency: Option<u32>,
@@ -171,7 +191,7 @@ fn resolve_runtime_config(
     })
 }
 
-fn decode_native_window_handle(handle: Option<&[u8]>) -> Result<Option<usize>> {
+pub(super) fn decode_native_window_handle(handle: Option<&[u8]>) -> Result<Option<usize>> {
     let Some(handle) = handle else {
         return Ok(None);
     };

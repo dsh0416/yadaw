@@ -1,4 +1,27 @@
-fn spawn_response_router(
+use std::{
+    collections::HashMap,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, AtomicU64, Ordering},
+        mpsc::SyncSender,
+    },
+    thread::{self, JoinHandle},
+};
+
+use heron_ipc_transport::{ArenaReceiver, WirePacket, decode_response_to_attachments, encode_body};
+use ipc_channel::{TryRecvError, ipc::IpcReceiver};
+use napi::Result;
+
+use super::{
+    lease_release::{
+        expire_pending, reject_all, reject_pending, resolve_pending, router_timeout,
+        send_release_leases,
+    },
+    routing_helpers::record_packet,
+    state::{Pending, TransportTraffic, failure},
+};
+
+pub(super) fn spawn_response_router(
     receiver: IpcReceiver<WirePacket>,
     pending: Arc<Mutex<HashMap<u64, Pending>>>,
     priority_outbound: SyncSender<WirePacket>,

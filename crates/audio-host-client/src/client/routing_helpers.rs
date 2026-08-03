@@ -1,4 +1,12 @@
-fn request_deadline(command: &ControlCommand) -> Duration {
+use std::{sync::atomic::Ordering, time::Duration};
+
+use heron_dsp_runtime::protocol::{ControlCommand, ParameterGesture};
+use heron_ipc_transport::WirePacket;
+use napi::{Error, Result, Status};
+
+use super::state::TransportTraffic;
+
+pub(super) fn request_deadline(command: &ControlCommand) -> Duration {
     // Keep in sync with the helper-side `protocol_deadline`: the audio
     // benchmark drives up to 64 live VST3 instances through three dense mixer
     // scenarios and can legitimately run past the 15 s extended deadline.
@@ -23,7 +31,7 @@ fn request_deadline(command: &ControlCommand) -> Duration {
     }
 }
 
-fn record_packet(packet: &WirePacket, traffic: &TransportTraffic) {
+pub(super) fn record_packet(packet: &WirePacket, traffic: &TransportTraffic) {
     if packet.region_offers.is_empty() {
         traffic.inline_packets.fetch_add(1, Ordering::Relaxed);
         traffic
@@ -45,7 +53,7 @@ fn record_packet(packet: &WirePacket, traffic: &TransportTraffic) {
     );
 }
 
-fn parse_gesture(value: &str) -> Result<ParameterGesture> {
+pub(super) fn parse_gesture(value: &str) -> Result<ParameterGesture> {
     match value {
         "begin" => Ok(ParameterGesture::Begin),
         "perform" => Ok(ParameterGesture::Perform),

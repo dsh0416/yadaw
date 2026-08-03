@@ -1,4 +1,24 @@
-fn send_release_leases(outbound: &SyncSender<WirePacket>, lease_ids: Vec<u64>) {
+use std::{
+    collections::HashMap,
+    sync::{
+        Mutex,
+        atomic::{AtomicU64, Ordering},
+        mpsc::SyncSender,
+    },
+    thread,
+    time::{Duration, Instant},
+};
+
+use heron_dsp_runtime::protocol::{PriorityCommand, PriorityRequest};
+use heron_ipc_transport::{WirePacket, encode_priority};
+use napi::{Error, Result};
+
+use super::{
+    ROUTER_POLL,
+    state::{ClientState, Pending, failure},
+};
+
+pub(super) fn send_release_leases(outbound: &SyncSender<WirePacket>, lease_ids: Vec<u64>) {
     let request = PriorityRequest {
         request_id: 0,
         command: PriorityCommand::ReleaseLeases { lease_ids },
@@ -8,7 +28,7 @@ fn send_release_leases(outbound: &SyncSender<WirePacket>, lease_ids: Vec<u64>) {
     }
 }
 
-fn resolve_pending(
+pub(super) fn resolve_pending(
     pending: &Mutex<HashMap<u64, Pending>>,
     request_id: u64,
     bytes: Vec<u8>,
@@ -23,7 +43,11 @@ fn resolve_pending(
     }
 }
 
-fn reject_pending(pending: &Mutex<HashMap<u64, Pending>>, request_id: u64, error: Error) {
+pub(super) fn reject_pending(
+    pending: &Mutex<HashMap<u64, Pending>>,
+    request_id: u64,
+    error: Error,
+) {
     let value = pending
         .lock()
         .ok()
@@ -33,7 +57,7 @@ fn reject_pending(pending: &Mutex<HashMap<u64, Pending>>, request_id: u64, error
     }
 }
 
-fn expire_pending(pending: &Mutex<HashMap<u64, Pending>>, request_timeouts: &AtomicU64) {
+pub(super) fn expire_pending(pending: &Mutex<HashMap<u64, Pending>>, request_timeouts: &AtomicU64) {
     let now = Instant::now();
     let expired = pending
         .lock()
@@ -56,7 +80,7 @@ fn expire_pending(pending: &Mutex<HashMap<u64, Pending>>, request_timeouts: &Ato
     }
 }
 
-fn router_timeout(pending: &Mutex<HashMap<u64, Pending>>) -> Duration {
+pub(super) fn router_timeout(pending: &Mutex<HashMap<u64, Pending>>) -> Duration {
     let now = Instant::now();
     pending
         .lock()
@@ -67,7 +91,7 @@ fn router_timeout(pending: &Mutex<HashMap<u64, Pending>>) -> Duration {
         })
 }
 
-fn reject_all(pending: &Mutex<HashMap<u64, Pending>>, error: Error) {
+pub(super) fn reject_all(pending: &Mutex<HashMap<u64, Pending>>, error: Error) {
     let values = pending
         .lock()
         .map(|mut pending| pending.drain().map(|(_, value)| value).collect::<Vec<_>>())
@@ -79,7 +103,7 @@ fn reject_all(pending: &Mutex<HashMap<u64, Pending>>, error: Error) {
     }
 }
 
-fn close_state(state: &ClientState) -> Result<()> {
+pub(super) fn close_state(state: &ClientState) -> Result<()> {
     if state.closing.swap(true, Ordering::AcqRel) {
         return Ok(());
     }

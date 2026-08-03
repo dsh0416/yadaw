@@ -1,4 +1,21 @@
-fn register_pending(
+use std::{
+    collections::HashMap,
+    sync::{Mutex, atomic::Ordering, mpsc::SyncSender},
+    time::Instant,
+};
+
+use heron_dsp_runtime::protocol::{PriorityCommand, PriorityRequest};
+use heron_ipc_transport::{WirePacket, encode_priority};
+use napi::{Env, Error, Result, bindgen_prelude::Object};
+
+use super::{
+    OUTBOUND_CAPACITY,
+    lease_release::reject_pending,
+    napi_facade::AudioHostIpcClient,
+    state::{IpcResponse, NapiPendingResponder, Pending, ResponseResolver, failure},
+};
+
+pub(super) fn register_pending(
     pending: &Mutex<HashMap<u64, Pending>>,
     request_id: u64,
     value: Pending,
@@ -21,7 +38,7 @@ fn register_pending(
     }
 }
 
-fn queue_pending_request(
+pub(super) fn queue_pending_request(
     pending: &Mutex<HashMap<u64, Pending>>,
     outbound: &Mutex<Option<SyncSender<WirePacket>>>,
     request_id: u64,
@@ -60,7 +77,7 @@ fn queue_pending_request(
 }
 
 impl AudioHostIpcClient {
-    fn create_request_promise<'env>(
+    pub(super) fn create_request_promise<'env>(
         &self,
         env: &'env Env,
         request_id: u64,
@@ -91,7 +108,7 @@ impl AudioHostIpcClient {
         Ok(promise)
     }
 
-    fn send_internal_priority(&self, command: PriorityCommand) -> Result<()> {
+    pub(super) fn send_internal_priority(&self, command: PriorityCommand) -> Result<()> {
         let request = PriorityRequest {
             request_id: self
                 .state
