@@ -1,6 +1,6 @@
 import { createPinia, setActivePinia } from "pinia"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import type { AudioBenchmarkReport } from "@yadaw/contracts"
+import type { AudioBenchmarkReport, RpcRequestMeta, RpcResult } from "@yadaw/contracts"
 import { useAudioBenchmarkStore } from "./audioBenchmark"
 import { useAudioRuntimeStore } from "./audioRuntime"
 import { rpcFailure, rpcSuccess, testBootstrap, TEST_AUDIO_HOST_REF } from "../test/ipc"
@@ -81,12 +81,10 @@ describe("useAudioBenchmarkStore", () => {
   })
 
   it("refuses to start a second run while one is in flight", async () => {
-    let resolveBenchmark:
-      | ((value: ReturnType<typeof rpcSuccess<AudioBenchmarkReport>>) => void)
-      | null = null
+    let resolveBenchmark: ((value: RpcResult<AudioBenchmarkReport>) => void) | undefined
     const runAudioBenchmark = vi.fn(
-      () =>
-        new Promise((resolve) => {
+      (_meta: RpcRequestMeta) =>
+        new Promise<RpcResult<AudioBenchmarkReport>>((resolve) => {
           resolveBenchmark = resolve
         })
     )
@@ -115,13 +113,14 @@ describe("useAudioBenchmarkStore", () => {
   })
 
   it("uses the audio host ref from the runtime store", async () => {
-    const runAudioBenchmark = vi.fn(async () => rpcSuccess(report))
+    const runAudioBenchmark = vi.fn(async (_meta: RpcRequestMeta) => rpcSuccess(report))
     stubApi({ runAudioBenchmark })
     const store = useAudioBenchmarkStore()
 
     await store.run()
 
-    expect(runAudioBenchmark.mock.calls[0]?.[0]).toMatchObject({
+    const [meta] = runAudioBenchmark.mock.calls[0] ?? []
+    expect(meta).toMatchObject({
       target: TEST_AUDIO_HOST_REF
     })
   })

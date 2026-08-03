@@ -98,8 +98,9 @@ describe("useProjectHistoryStore", () => {
     const graphStore = useProjectGraphStore()
     const history = useProjectHistoryStore()
     const execute = vi.spyOn(graphStore, "execute").mockImplementation(async (command) => {
-      graphStore.graph = applyToGraph(graphStore.graph, command)
-      return true
+      const nextGraph = applyToGraph(graphStore.graph, command)
+      graphStore.graph = nextGraph
+      return { graph: nextGraph, inverse: command }
     })
 
     history.record({ forward: gainCommand, inverse: { ...gainCommand, patch: { gainDb: 0 } } })
@@ -119,7 +120,7 @@ describe("useProjectHistoryStore", () => {
   it("does not move history when graph execution fails", async () => {
     const graphStore = useProjectGraphStore()
     const history = useProjectHistoryStore()
-    vi.spyOn(graphStore, "execute").mockResolvedValue(false)
+    vi.spyOn(graphStore, "execute").mockResolvedValue(null)
     history.record({ forward: gainCommand, inverse: { ...gainCommand, patch: { gainDb: 0 } } })
 
     await history.undo()
