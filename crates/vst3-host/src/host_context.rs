@@ -186,7 +186,7 @@ unsafe extern "system" fn get_name(_this: *mut IHostApplication, name: *mut u16)
     if name.is_null() {
         return -2147024809;
     }
-    let encoded = "YADAW\0".encode_utf16();
+    let encoded = "Heron\0".encode_utf16();
     for (index, value) in encoded.enumerate() {
         unsafe {
             // SAFETY: VST3 String128 provides at least 128 UTF-16 elements.

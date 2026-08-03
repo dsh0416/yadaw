@@ -512,7 +512,7 @@ mod tests {
             NativeRecordingStartConfig {
                 path: path.to_string_lossy().into_owned(),
                 asset_id: "streaming-test".to_owned(),
-                originator: "YADAW test".to_owned(),
+                originator: "Heron test".to_owned(),
                 origination_date: "2026-07-24".to_owned(),
                 origination_time: "12:00:00".to_owned(),
                 time_reference: 0,

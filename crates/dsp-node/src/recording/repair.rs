@@ -22,7 +22,7 @@ pub fn write_deterministic_test_recording(
             &config.origination_date,
             &config.origination_time,
             config.time_reference.max(0) as u64,
-            format!("A=PCM,F={sample_rate},W=32,M=stereo,T=YADAW deterministic test source\r\n"),
+            format!("A=PCM,F={sample_rate},W=32,M=stereo,T=Heron deterministic test source\r\n"),
         ))
         .map_err(|error| recording_error("failed to write deterministic BWF metadata", error))?;
     let mut samples = Vec::with_capacity(frame_count as usize * 2);
@@ -434,7 +434,7 @@ pub mod bench_support {
             .start(NativeRecordingStartConfig {
                 path: path.to_string_lossy().into_owned(),
                 asset_id: "benchmark-writer".to_owned(),
-                originator: "YADAW benchmark".to_owned(),
+                originator: "Heron benchmark".to_owned(),
                 origination_date: "2026-01-01".to_owned(),
                 origination_time: "00:00:00".to_owned(),
                 time_reference: 0,
@@ -469,7 +469,7 @@ pub mod bench_support {
             target_sample_rate,
             bit_depth: bit_depth.to_owned(),
             asset_id: format!("benchmark-{target_sample_rate}-{bit_depth}"),
-            originator: "YADAW benchmark".to_owned(),
+            originator: "Heron benchmark".to_owned(),
             origination_date: "2026-01-01".to_owned(),
             origination_time: "00:00:00".to_owned(),
             time_reference: 0,

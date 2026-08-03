@@ -129,7 +129,7 @@ impl EditorWindow {
     pub fn update_context(&mut self, context: PluginEditorContext) {
         merge_editor_context(&mut self.context, context);
         self.window.set_title(&format!(
-            "{} — {} — YADAW",
+            "{} — {} — Heron",
             self.context.channel_name, self.context.plugin_name
         ));
         self.window.request_redraw();

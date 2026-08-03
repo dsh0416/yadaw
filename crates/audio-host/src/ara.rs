@@ -1038,7 +1038,7 @@ impl AraDocument {
         let mut session = DocumentSession::new(
             factory.loaded(),
             services_ref,
-            DocumentProperties::new(Some("YADAW ARA document"))
+            DocumentProperties::new(Some("Heron ARA document"))
                 .map_err(|error| HostError::Ara(error.to_string()))?,
         )
         .map_err(|error| HostError::Ara(error.to_string()))?;

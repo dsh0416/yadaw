@@ -397,7 +397,7 @@ pub(crate) fn toolbar_menu_window_attributes(
         request.effective_scale,
     );
     let attributes = winit::window::WindowAttributes::default()
-        .with_title("YADAW toolbar menu")
+        .with_title("Heron toolbar menu")
         .with_decorations(false)
         .with_resizable(false)
         .with_visible(false)

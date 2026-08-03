@@ -1,7 +1,7 @@
-appId: dev.yadaw.studio
-productName: YADAW
+appId: live.minori.heron
+productName: Heron
 # AppImage rejects `@` from the scoped package name `@heron/desktop`.
-executableName: yadaw
+executableName: heron
 asar: true
 asarUnpack:
   - "**/*.node"

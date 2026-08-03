@@ -30,7 +30,7 @@ test("records into a Large Object and reopens the PGlite project archive", async
   try {
     const splash = await application.firstWindow()
     await splash.waitForLoadState("domcontentloaded")
-    await expect(splash.getByRole("heading", { name: "YADAW" })).toBeVisible()
+    await expect(splash.getByRole("heading", { name: "Heron" })).toBeVisible()
     await expect(splash.getByRole("progressbar")).toBeVisible()
     const page =
       application.windows().find((candidate) => !candidate.url().includes("splash.html")) ??

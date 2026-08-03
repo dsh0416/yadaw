@@ -163,7 +163,7 @@ mod tests {
     fn plugin_editor_is_created_hidden_until_native_attachment_is_ready() {
         let attributes = plugin_editor_window_attributes("Lead", "Pro-C", None);
         assert!(!attributes.visible);
-        assert_eq!(attributes.title, "Lead — Pro-C — YADAW");
+        assert_eq!(attributes.title, "Lead — Pro-C — Heron");
     }
 
     #[test]

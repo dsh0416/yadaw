@@ -7,9 +7,9 @@ describe("HeronLogo", () => {
     const wrapper = mount(HeronLogo)
 
     expect(wrapper.attributes("role")).toBe("img")
-    expect(wrapper.attributes("aria-label")).toBe("YADAW")
+    expect(wrapper.attributes("aria-label")).toBe("Heron")
     expect(wrapper.get("svg").findAll("rect")).toHaveLength(5)
-    expect(wrapper.text()).toBe("YADAW")
+    expect(wrapper.text()).toBe("Heron")
   })
 
   it("supports the official mark and wordmark variants", async () => {
@@ -21,7 +21,7 @@ describe("HeronLogo", () => {
     await wrapper.setProps({ variant: "wordmark" })
 
     expect(wrapper.find("svg").exists()).toBe(false)
-    expect(wrapper.text()).toBe("YADAW")
+    expect(wrapper.text()).toBe("Heron")
   })
 
   it("can be decorative when another accessible brand label is present", () => {

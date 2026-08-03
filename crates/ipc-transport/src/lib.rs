@@ -66,7 +66,7 @@ pub const PARAMETER_BOUNDARY_RESERVE: u64 = 64;
 pub const INITIAL_TELEMETRY_CAPACITY: u32 = 64;
 
 #[cfg(target_endian = "big")]
-compile_error!("YADAW shared-page ABI currently supports little-endian targets only");
+compile_error!("Heron shared-page ABI currently supports little-endian targets only");
 
 #[cfg(test)]
 mod tests;

@@ -28,7 +28,7 @@ fn start_config(path: &std::path::Path) -> NativeRecordingStartConfig {
     NativeRecordingStartConfig {
         path: path.to_string_lossy().into_owned(),
         asset_id: "deterministic-asset".to_owned(),
-        originator: "YADAW test".to_owned(),
+        originator: "Heron test".to_owned(),
         origination_date: "2026-07-22".to_owned(),
         origination_time: "12:00:00".to_owned(),
         time_reference: 42,
@@ -96,7 +96,7 @@ fn float_swap_format_is_stereo_32_bit() {
 fn broadcast_metadata_keeps_time_reference_and_asset_id() {
     let metadata = broadcast_metadata(
         "asset-id",
-        "YADAW",
+        "Heron",
         "2026-07-22",
         "12:00:00",
         42,
@@ -179,7 +179,7 @@ fn fft_resampling_preserves_sine_length_frequency_and_all_final_formats() {
     writer
         .write_broadcast_metadata(&broadcast_metadata(
             "source",
-            "YADAW test",
+            "Heron test",
             "2026-07-22",
             "12:00:00",
             0,
@@ -204,7 +204,7 @@ fn fft_resampling_preserves_sine_length_frequency_and_all_final_formats() {
             target_sample_rate: 48_000,
             bit_depth: bit_depth.to_owned(),
             asset_id: format!("asset-{bit_depth}"),
-            originator: "YADAW test".to_owned(),
+            originator: "Heron test".to_owned(),
             origination_date: "2026-07-22".to_owned(),
             origination_time: "12:00:00".to_owned(),
             time_reference: 123,

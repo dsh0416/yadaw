@@ -104,7 +104,7 @@ fn writer_thread(
                             &config.origination_time,
                             config.time_reference.max(0) as u64,
                             format!(
-                                "A=PCM,F={sample_rate},W=32,M={channel_count} channel,T=YADAW swap\r\n"
+                                "A=PCM,F={sample_rate},W=32,M={channel_count} channel,T=Heron swap\r\n"
                             ),
                         ))
                         .map_err(|error| error.to_string())?;

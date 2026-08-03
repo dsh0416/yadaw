@@ -199,7 +199,7 @@ export class RecordingService {
         await this.audioHost!.startRecording({
           path: partialPath,
           assetId: id,
-          originator: "YADAW",
+          originator: "Heron",
           originationDate: utc.date,
           originationTime: utc.time,
           timeReference: Math.round(
@@ -293,7 +293,7 @@ export class RecordingService {
                   {
                     path: recording.audioPath,
                     assetId: recording.id,
-                    originator: "YADAW test",
+                    originator: "Heron test",
                     originationDate: startedUtc.date,
                     originationTime: startedUtc.time,
                     timeReference: recording.startFrame
@@ -486,7 +486,7 @@ export class RecordingService {
           targetSampleRate: project.configuration.sampleRate,
           bitDepth: recording.bitDepth,
           assetId: track.assetId,
-          originator: "YADAW",
+          originator: "Heron",
           originationDate: utc.date,
           originationTime: utc.time,
           timeReference: recording.startFrame,

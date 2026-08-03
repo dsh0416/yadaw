@@ -9,7 +9,7 @@ use winit::window::Window;
 #[cfg(target_os = "linux")]
 use raw_window_handle::HasDisplayHandle;
 
-pub const APPLICATION_ID: &str = "dev.yadaw.studio";
+pub const APPLICATION_ID: &str = "live.minori.heron";
 
 #[cfg(target_os = "windows")]
 pub fn configure_process_application_identity() -> Result<(), String> {

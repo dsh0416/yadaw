@@ -257,8 +257,8 @@ describe("UI controls", () => {
         emptyMessage: "No effects found.",
         items: [
           {
-            label: "YADAW",
-            ariaLabel: "Browse YADAW plug-ins",
+            label: "Heron",
+            ariaLabel: "Browse Heron plug-ins",
             children: [
               {
                 label: "Delay",
@@ -295,7 +295,7 @@ describe("UI controls", () => {
     expect(modeElement?.classList.contains("ui-cascading-menu__item--detailed")).toBe(true)
     expect(modeElement?.classList.contains("ui-menu__item--detailed")).toBe(true)
     expect(modeElement?.classList.contains("ui-menu__item--leading")).toBe(true)
-    expect(modeElement?.textContent).toContain("YADAW / Delay")
+    expect(modeElement?.textContent).toContain("Heron / Delay")
     const mode = new DOMWrapper(modeElement)
     await mode.trigger("click")
 

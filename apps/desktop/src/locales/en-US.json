@@ -37,8 +37,8 @@
     "pagesAria": "{category} settings pages"
   },
   "app": {
-    "name": "YADAW",
-    "about": "About YADAW"
+    "name": "Heron",
+    "about": "About Heron Studio"
   },
   "about": {
     "version": "Version",
@@ -52,7 +52,7 @@
     "vstCompatibility": "VST® 3 compatibility",
     "asioCompatibility": "ASIO® compatibility",
     "thirdPartyNotices": "Third-party notices",
-    "links": "YADAW resources",
+    "links": "Heron Studio resources",
     "projectWebsite": "Project on GitHub",
     "userManual": "User manual",
     "close": "Close"
@@ -93,12 +93,12 @@
       "title": "Choose recording swap directory"
     },
     "createProject": {
-      "title": "Create YADAW project",
-      "filter": "YADAW project"
+      "title": "Create Heron project",
+      "filter": "Heron project"
     },
     "openProject": {
-      "title": "Open YADAW project",
-      "filter": "YADAW project"
+      "title": "Open Heron project",
+      "filter": "Heron project"
     },
     "projectRecovery": {
       "eyebrow": "Project recovery",
@@ -238,11 +238,11 @@
     }
   },
   "startup": {
-    "starting": "Starting YADAW",
+    "starting": "Starting Heron",
     "preparing": "Preparing the audio workspace",
     "ready": "Ready",
     "failed": "Startup failed",
-    "failedDetail": "YADAW could not finish starting",
+    "failedDetail": "Heron could not finish starting",
     "loadingCatalog": "Loading plug-in catalog",
     "loadingCatalogDetail": "Reading settings and built-in VST3 modules",
     "scanningPlugins": "Scanning VST3 plug-ins",
@@ -664,7 +664,7 @@
           "signalNotDetected": "No matching probe returned within three seconds. Check the cable and selected channels.",
           "complete": "Measured {measured} ms through output {outputChannel} and input {inputChannel}.{comparison}",
           "comparison": " The callback estimate is {estimate} ms.",
-          "preparing": "Keep the selected input quiet while YADAW checks its noise floor.",
+          "preparing": "Keep the selected input quiet while Heron checks its noise floor.",
           "measuring": "A short probe has been sent. Keep the loopback cable connected.",
           "engineNotRunning": "Start the audio engine before running a physical loopback measurement.",
           "ready": "Connect the selected hardware output directly to the selected hardware input. Lower monitor volume first—the test emits a short probe.",

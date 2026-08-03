@@ -18,7 +18,7 @@ describe("AboutHeronHost", () => {
     await nextTick()
 
     const dialog = document.body.querySelector<HTMLElement>("[role=dialog]")
-    expect(dialog?.textContent).toContain("About YADAW")
+    expect(dialog?.textContent).toContain("About Heron Studio")
     expect(dialog?.textContent).toContain(`v${__APP_VERSION__}`)
     expect(dialog?.textContent).toContain("Windows")
     expect(dialog?.textContent).toContain("GPL-3.0-only")

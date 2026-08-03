@@ -129,7 +129,7 @@ impl Drop for SectionHandle {
 fn object_name(object_id: [u8; 16], length: NonZeroUsize, generation: u64) -> Vec<u16> {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     let mut bytes = Vec::with_capacity(16 + object_id.len() * 2);
-    bytes.extend_from_slice(b"Local\\YADAW-shm-");
+    bytes.extend_from_slice(b"Local\\Heron-shm-");
     for byte in object_key(object_id, length, generation) {
         bytes.push(HEX[usize::from(byte >> 4)]);
         bytes.push(HEX[usize::from(byte & 0x0f)]);

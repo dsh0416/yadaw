@@ -37,8 +37,8 @@
     "pagesAria": "{category} 设置页面"
   },
   "app": {
-    "name": "YADAW",
-    "about": "关于 YADAW"
+    "name": "Heron",
+    "about": "关于 Heron Studio"
   },
   "about": {
     "version": "版本",
@@ -52,7 +52,7 @@
     "vstCompatibility": "VST® 3 兼容性",
     "asioCompatibility": "ASIO® 兼容性",
     "thirdPartyNotices": "第三方许可声明",
-    "links": "YADAW 资源",
+    "links": "Heron Studio 资源",
     "projectWebsite": "GitHub 项目",
     "userManual": "用户手册",
     "close": "关闭"
@@ -93,12 +93,12 @@
       "title": "选择录音交换目录"
     },
     "createProject": {
-      "title": "创建 YADAW 工程",
-      "filter": "YADAW 工程"
+      "title": "创建 Heron 工程",
+      "filter": "Heron 工程"
     },
     "openProject": {
-      "title": "打开 YADAW 工程",
-      "filter": "YADAW 工程"
+      "title": "打开 Heron 工程",
+      "filter": "Heron 工程"
     },
     "projectRecovery": {
       "eyebrow": "工程恢复",
@@ -238,11 +238,11 @@
     }
   },
   "startup": {
-    "starting": "正在启动 YADAW",
+    "starting": "正在启动 Heron",
     "preparing": "正在准备音频工作区",
     "ready": "就绪",
     "failed": "启动失败",
-    "failedDetail": "YADAW 未能完成启动",
+    "failedDetail": "Heron 未能完成启动",
     "loadingCatalog": "正在加载插件目录",
     "loadingCatalogDetail": "正在读取设置与内置 VST3 模块",
     "scanningPlugins": "正在扫描 VST3 插件",
@@ -664,7 +664,7 @@
           "signalNotDetected": "三秒内未检测到匹配的探测信号。请检查线缆与所选通道。",
           "complete": "通过输出 {outputChannel} 与输入 {inputChannel} 测得 {measured} ms。{comparison}",
           "comparison": " 回调估计值为 {estimate} ms。",
-          "preparing": "YADAW 检查噪声底时，请保持所选输入安静。",
+          "preparing": "Heron 检查噪声底时，请保持所选输入安静。",
           "measuring": "已发送短探测信号。请保持环回线缆连接。",
           "engineNotRunning": "运行物理环回测量前请先启动音频引擎。",
           "ready": "将所选硬件输出直接连接到所选硬件输入。请先降低监听音量——测试会发出短探测信号。",

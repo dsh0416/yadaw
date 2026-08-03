@@ -217,7 +217,7 @@ impl DeviceTrait for MockDevice {
 
     fn description(&self) -> Result<DeviceDescription, Error> {
         Ok(DeviceDescriptionBuilder::new(self.kind.name())
-            .manufacturer("YADAW")
+            .manufacturer("Heron")
             .driver(BACKEND_LABEL)
             .device_type(self.kind.device_type())
             .interface_type(InterfaceType::Virtual)

@@ -260,7 +260,7 @@ struct PortConnection {
 
 impl PortConnection {
     fn connect(port_id: &str, panic_requested: Arc<AtomicBool>) -> Result<Self, String> {
-        let mut input = MidiInput::new("YADAW MIDI input").map_err(|error| error.to_string())?;
+        let mut input = MidiInput::new("Heron MIDI input").map_err(|error| error.to_string())?;
         input.ignore(Ignore::None);
         let port = input
             .find_port_by_id(port_id)
@@ -283,7 +283,7 @@ impl PortConnection {
         let connection = input
             .connect(
                 &port,
-                "YADAW MIDI input",
+                "Heron MIDI input",
                 |timestamp, message, state| state.receive(timestamp, message),
                 state,
             )
@@ -553,7 +553,7 @@ fn validate_preferences(preferences: &MidiSyncPreferences) -> Result<(), String>
 }
 
 fn enumerate_ports() -> Result<Vec<(MidiInputPort, WireMidiInputPort)>, String> {
-    let input = MidiInput::new("YADAW MIDI enumeration").map_err(|error| error.to_string())?;
+    let input = MidiInput::new("Heron MIDI enumeration").map_err(|error| error.to_string())?;
     Ok(input
         .ports()
         .into_iter()

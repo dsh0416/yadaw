@@ -192,7 +192,7 @@ export function startApplication(
         applicationSettings.audioHostRuntime,
         process.platform === "win32" ? window.getNativeWindowHandle() : undefined,
         (message) => {
-          console.error(`YADAW audio helper failure: ${message}`)
+          console.error(`Heron audio helper failure: ${message}`)
           for (const candidate of BrowserWindow.getAllWindows()) {
             if (candidate !== mainWindow && candidate !== splashWindow) candidate.close()
           }
@@ -472,7 +472,7 @@ export function startApplication(
         }
       })
     } catch (error) {
-      console.error("YADAW startup failed:", error)
+      console.error("Heron startup failed:", error)
       startup.fail(error)
       setTimeout(() => app.quit(), 4_000).unref()
     }

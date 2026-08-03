@@ -19,7 +19,7 @@ const classes = computed(() => ["heron-logo", `heron-logo--${props.variant}`])
   <span
     :class="classes"
     :role="props.decorative ? undefined : 'img'"
-    :aria-label="props.decorative ? undefined : 'YADAW'"
+    :aria-label="props.decorative ? undefined : 'Heron'"
     :aria-hidden="props.decorative ? 'true' : undefined"
     :data-variant="props.variant"
   >
@@ -43,7 +43,7 @@ const classes = computed(() => ["heron-logo", `heron-logo--${props.variant}`])
       <rect class="heron-logo__bar" x="26" y="11" width="4" height="10" rx="2" />
     </svg>
     <span v-if="props.variant !== 'mark'" class="heron-logo__wordmark" aria-hidden="true">
-      YADAW
+      Heron
     </span>
   </span>
 </template>

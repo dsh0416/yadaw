@@ -1256,7 +1256,7 @@ fn validate_main_bus_layout(
     Ok(())
 }
 
-/// Synchronizes the component's bus state with the process buffers YADAW can
+/// Synchronizes the component's bus state with the process buffers Heron can
 /// route today: the first main bus is active and every auxiliary bus is not.
 ///
 /// Some commercial multi-out instruments keep their default-active auxiliary
