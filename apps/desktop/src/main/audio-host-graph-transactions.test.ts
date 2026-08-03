@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { IPC_PROTOCOL_VERSION, rpcFailure, rpcSuccess } from "@yadaw/contracts"
+import { IPC_PROTOCOL_VERSION, rpcFailure, rpcSuccess } from "@heron/contracts"
 import type {
   PluginInstanceState,
   ProjectGraphRef,
   ProjectGraphSnapshot,
   RpcRequestMeta
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import { AudioHostGraphTransactions } from "./audio-host-graph-transactions"
 import type {
   AudioHostGraph,
@@ -91,7 +91,7 @@ function project(): ProjectGraphSnapshot {
           classId: "class-1",
           modulePath: "/plugins/Effect.vst3",
           name: "Effect",
-          vendor: "YADAW",
+          vendor: "Heron Studio",
           version: "1.0",
           categories: ["Fx"],
           kind: "effect",

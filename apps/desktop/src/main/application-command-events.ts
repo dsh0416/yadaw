@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto"
-import { IPC_CHANNELS, IPC_PROTOCOL_VERSION } from "@yadaw/contracts"
-import type { ApplicationCommandId, RpcEvent } from "@yadaw/contracts"
+import { IPC_CHANNELS, IPC_PROTOCOL_VERSION } from "@heron/contracts"
+import type { ApplicationCommandId, RpcEvent } from "@heron/contracts"
 
 const applicationCommandEpoch = randomUUID()
 let applicationCommandSequence = 0

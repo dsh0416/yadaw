@@ -1,4 +1,4 @@
-import { finalizeRecording } from "@yadaw/dsp-node"
+import { finalizeRecording } from "@heron/dsp-node"
 
 export class RecordingFinalizer {
   finalize(request: Parameters<typeof finalizeRecording>[0]) {

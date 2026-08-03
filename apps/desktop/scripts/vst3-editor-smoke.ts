@@ -1,7 +1,7 @@
 import { tmpdir } from "node:os"
 import { resolve } from "node:path"
 import { decode, encode } from "@msgpack/msgpack"
-import { AudioHostIpcClient } from "@yadaw/audio-host-client"
+import { AudioHostIpcClient } from "@heron/audio-host-client"
 
 interface WireResponse {
   request_id: number
@@ -18,23 +18,23 @@ const executableSuffix = process.platform === "win32" ? ".exe" : ""
 const [helperArgument, pluginArgument, classIdArgument, pluginKindArgument] = process.argv.slice(2)
 const helperPath =
   helperArgument ??
-  resolve(repositoryRoot, "target", "debug", `yadaw-audio-host${executableSuffix}`)
+  resolve(repositoryRoot, "target", "debug", `heron-audio-host${executableSuffix}`)
 const pluginPath =
   pluginArgument ??
   resolve(repositoryRoot, "target", "vst3-fixtures", "VST3", "Debug", "note-expression-synth.vst3")
 const classId = classIdArgument ?? "41466D9BB0654576B641098F686371B3"
 const pluginKind = pluginKindArgument ?? "instrument"
-const initialMode = process.env.YADAW_EDITOR_SMOKE_INITIAL_MODE ?? "native"
+const initialMode = process.env.HERON_EDITOR_SMOKE_INITIAL_MODE ?? "native"
 if (initialMode !== "native" && initialMode !== "parameters") {
-  throw new Error("YADAW_EDITOR_SMOKE_INITIAL_MODE must be native or parameters")
+  throw new Error("HERON_EDITOR_SMOKE_INITIAL_MODE must be native or parameters")
 }
-const observationDelayMs = Number.parseInt(process.env.YADAW_EDITOR_SMOKE_DELAY_MS ?? "250", 10)
+const observationDelayMs = Number.parseInt(process.env.HERON_EDITOR_SMOKE_DELAY_MS ?? "250", 10)
 if (!Number.isFinite(observationDelayMs) || observationDelayMs < 0 || observationDelayMs > 60_000) {
-  throw new Error("YADAW_EDITOR_SMOKE_DELAY_MS must be between 0 and 60000")
+  throw new Error("HERON_EDITOR_SMOKE_DELAY_MS must be between 0 and 60000")
 }
 const client = new AudioHostIpcClient(
   helperPath,
-  resolve(tmpdir(), `yadaw-vst3-editor-${process.pid}.marker`),
+  resolve(tmpdir(), `heron-vst3-editor-${process.pid}.marker`),
   2,
   4,
   2

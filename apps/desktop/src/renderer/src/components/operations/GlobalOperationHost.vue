@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue"
 import { storeToRefs } from "pinia"
-import { UiDialog } from "@yadaw/ui"
+import { UiDialog } from "@heron/ui"
 import { useI18n } from "vue-i18n"
 import OperationProgressDialog from "./OperationProgressDialog.vue"
 import { useOperationStore } from "../../stores/operations"

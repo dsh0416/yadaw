@@ -33,9 +33,9 @@ export interface HomeCopy {
 }
 
 const en: HomeCopy = {
-  heroEyebrow: "Yet Another Digital Audio Workstation",
-  heroTitleTop: "Make sound,",
-  heroTitleAccent: "of your own.",
+  heroEyebrow: "From sketch to stage.",
+  heroTitleTop: "Make sound",
+  heroTitleAccent: "your own.",
   heroLead:
     "A free, open-source workspace for recording, arranging, and mixing music on Windows, macOS, and Linux.",
   openManual: "Open the manual",
@@ -43,10 +43,10 @@ const en: HomeCopy = {
   noticeStrong: "Experimental software.",
   noticeRest: "Explore freely, but keep backups of important work.",
   captions: ["Arrangement", "Native audio", "VST® 3"],
-  sessionAriaLabel: "A stylized YADAW arrangement with audio and MIDI tracks",
+  sessionAriaLabel: "A stylized Heron arrangement with audio and MIDI tracks",
   manifestoLabel: "Built for the work between idea and mix",
   manifestoStatement:
-    "YADAW keeps the timeline, mixer, instruments, and project archive in one inspectable workspace—without an account or subscription between you and your music.",
+    "Heron keeps the timeline, mixer, instruments, and project archive in one inspectable workspace—without an account or subscription between you and your music.",
   capabilitiesLabel: "What works today",
   capabilitiesTitle: "A practical foundation for real sessions.",
   capabilities: [
@@ -81,7 +81,7 @@ const en: HomeCopy = {
 }
 
 const zh: HomeCopy = {
-  heroEyebrow: "Yet Another Digital Audio Workstation",
+  heroEyebrow: "从灵感，到舞台。",
   heroTitleTop: "创造声音，",
   heroTitleAccent: "由你做主。",
   heroLead: "一个自由、开源的工作区，在 Windows、macOS 与 Linux 上录音、编排与混音。",
@@ -90,10 +90,10 @@ const zh: HomeCopy = {
   noticeStrong: "实验性软件。",
   noticeRest: "欢迎自由探索，但请备份好重要的工作。",
   captions: ["编排", "原生音频", "VST® 3"],
-  sessionAriaLabel: "YADAW 编排界面的风格化示意，包含音频与 MIDI 轨道",
+  sessionAriaLabel: "Heron 编排界面的风格化示意，包含音频与 MIDI 轨道",
   manifestoLabel: "为从灵感到混音之间的每一步而生",
   manifestoStatement:
-    "YADAW 将时间线、混音台、乐器与工程归档放进同一个可检视的工作区——你与音乐之间，没有账号，也没有订阅。",
+    "Heron 将时间线、混音台、乐器与工程归档放进同一个可检视的工作区——你与音乐之间，没有账号，也没有订阅。",
   capabilitiesLabel: "今天就能用",
   capabilitiesTitle: "为真实会话打造的实用基础。",
   capabilities: [

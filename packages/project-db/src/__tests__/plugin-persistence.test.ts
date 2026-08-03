@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import type { PluginDescriptor, ProjectCommand } from "@yadaw/contracts"
+import type { PluginDescriptor, ProjectCommand } from "@heron/contracts"
 import { isPluginCommand, persistPluginCommand } from "../internal/plugin-persistence"
 
 const descriptor: PluginDescriptor = {
@@ -7,7 +7,7 @@ const descriptor: PluginDescriptor = {
   classId: "ABCDEF0123456789ABCDEF0123456789",
   modulePath: "/plugins/Effect.vst3",
   name: "Effect",
-  vendor: "YADAW",
+  vendor: "Heron Studio",
   version: "1.0",
   categories: ["Fx"],
   kind: "effect",

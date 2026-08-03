@@ -2,7 +2,7 @@ import { nextTick } from "vue"
 import { describe, expect, it } from "vitest"
 import { mount } from "@vue/test-utils"
 import { createPinia, setActivePinia } from "pinia"
-import type { MixerChannelState, PluginDescriptor } from "@yadaw/contracts"
+import type { MixerChannelState, PluginDescriptor } from "@heron/contracts"
 import { useMixerStore } from "../../stores/mixer"
 import MixerConsole from "./MixerConsole.vue"
 
@@ -11,7 +11,7 @@ const descriptor: PluginDescriptor = {
   classId: "effect",
   modulePath: "effect.vst3",
   name: "Effect",
-  vendor: "YADAW",
+  vendor: "Heron Studio",
   version: "1.0",
   categories: ["Fx"],
   kind: "effect",

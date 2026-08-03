@@ -47,7 +47,7 @@ function mountContainer(activePage = "engine") {
   return mount(SettingsContainer, {
     props: {
       title: "System settings",
-      scopeLabel: "Yadaw / System",
+      scopeLabel: "Heron / System",
       backLabel: "Back to studio",
       categories,
       activePage

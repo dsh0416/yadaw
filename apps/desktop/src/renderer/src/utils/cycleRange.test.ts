@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import type { TempoMapSnapshot } from "@yadaw/contracts"
+import type { TempoMapSnapshot } from "@heron/contracts"
 import { defaultCycleRange, previewCycleRange, snapTickToBeat } from "./cycleRange"
 
 const map: TempoMapSnapshot = {

@@ -6,7 +6,7 @@ import type {
   KeySignatureMode,
   TempoMapSnapshot,
   TimeSignatureEventState
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import {
   musicalPositionAtTick,
   secondsToTick,

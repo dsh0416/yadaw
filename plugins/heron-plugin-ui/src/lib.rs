@@ -1,10 +1,10 @@
-//! Shared visual language for YADAW's built-in iced plug-ins.
+//! Shared visual language for Heron's built-in iced plug-ins.
 
 mod widgets;
 
 pub use widgets::{LevelMeter, ParameterKnob, level_meter, parameter_knob};
 
-pub use yadaw_iced_ui::{self, Appearance, SemanticPalette, space, type_size};
+pub use heron_iced_ui::{self, Appearance, SemanticPalette, space, type_size};
 
 use iced_widget::Theme;
 
@@ -20,11 +20,11 @@ pub fn theme() -> Theme {
     Appearance::Dark.theme()
 }
 
-/// Logical editor size for YADAW Sine.
+/// Logical editor size for Heron Sine.
 pub const SINE_EDITOR_SIZE: (u32, u32) = (520, 300);
-/// Logical editor size for YADAW Gain.
+/// Logical editor size for Heron Gain.
 pub const GAIN_EDITOR_SIZE: (u32, u32) = (380, 260);
-/// Logical editor size for YADAW Metronome.
+/// Logical editor size for Heron Metronome.
 pub const METRONOME_EDITOR_SIZE: (u32, u32) = (600, 300);
 
 #[cfg(test)]

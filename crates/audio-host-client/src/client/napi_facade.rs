@@ -141,12 +141,12 @@ impl AudioHostIpcClient {
                 Arc::clone(&closing),
             )?);
             threads.push(spawn_egress(
-                "yadaw-ipc-request",
+                "heron-ipc-request",
                 requests,
                 normal_inbox,
             )?);
             threads.push(spawn_egress(
-                "yadaw-ipc-priority-request",
+                "heron-ipc-priority-request",
                 priority_requests,
                 priority_inbox,
             )?);

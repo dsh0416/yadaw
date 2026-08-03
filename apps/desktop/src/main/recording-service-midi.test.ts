@@ -24,19 +24,19 @@ vi.mock("./midi-recording-commit", () => ({
 
 describe("RecordingService MIDI orchestration", () => {
   const directories: string[] = []
-  const previousTestCapture = process.env.YADAW_TEST_CAPTURE_SOURCE
+  const previousTestCapture = process.env.HERON_TEST_CAPTURE_SOURCE
 
   beforeEach(() => {
-    delete process.env.YADAW_TEST_CAPTURE_SOURCE
+    delete process.env.HERON_TEST_CAPTURE_SOURCE
     commitMidiRecordingTakes.mockClear()
     commitMidiRecordingTakes.mockImplementation(async (_commands, workspace) => workspace)
   })
 
   afterEach(async () => {
     if (previousTestCapture === undefined) {
-      delete process.env.YADAW_TEST_CAPTURE_SOURCE
+      delete process.env.HERON_TEST_CAPTURE_SOURCE
     } else {
-      process.env.YADAW_TEST_CAPTURE_SOURCE = previousTestCapture
+      process.env.HERON_TEST_CAPTURE_SOURCE = previousTestCapture
     }
     await Promise.all(
       directories.splice(0).map((path) => rm(path, { recursive: true, force: true }))
@@ -48,9 +48,9 @@ describe("RecordingService MIDI orchestration", () => {
     armedAudio?: boolean
     missingTrack?: boolean
   }) {
-    const swapDirectory = await mkdtemp(join(tmpdir(), "yadaw-recording-midi-svc-"))
+    const swapDirectory = await mkdtemp(join(tmpdir(), "heron-recording-midi-svc-"))
     directories.push(swapDirectory)
-    const projectPath = join(swapDirectory, "project.yadaw")
+    const projectPath = join(swapDirectory, "project.heron")
     const midiClips = options?.midiClips ?? []
     type HarnessChannel = {
       id: string

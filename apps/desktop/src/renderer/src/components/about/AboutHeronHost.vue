@@ -2,10 +2,10 @@
 import { computed } from "vue"
 import { storeToRefs } from "pinia"
 import { useI18n } from "vue-i18n"
-import { UiDialog } from "@yadaw/ui"
+import { UiDialog } from "@heron/ui"
 import { useAboutStore } from "../../stores/about"
 import { useApplicationWindowStore } from "../../stores/applicationWindow"
-import AboutYadawPanel from "./AboutYadawPanel.vue"
+import AboutHeronPanel from "./AboutHeronPanel.vue"
 
 const { t } = useI18n()
 const aboutStore = useAboutStore()
@@ -28,6 +28,6 @@ const open = computed({
     :close-label="t('about.close')"
     size="sm"
   >
-    <AboutYadawPanel :version="appVersion" :platform="applicationWindowStore.platform" />
+    <AboutHeronPanel :version="appVersion" :platform="applicationWindowStore.platform" />
   </UiDialog>
 </template>

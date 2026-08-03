@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto"
-import { IPC_CHANNELS, rpcFailure, rpcSuccess } from "@yadaw/contracts"
-import type { RpcError, RpcRequestMeta } from "@yadaw/contracts"
+import { IPC_CHANNELS, rpcFailure, rpcSuccess } from "@heron/contracts"
+import type { RpcError, RpcRequestMeta } from "@heron/contracts"
 import type { IpcHandlerContext } from "./context"
 import { createAudioBenchmarkReport } from "../audio-benchmark-service"
 import { reconcileAudioHostEpoch } from "./audio-host-reconcile"
@@ -64,7 +64,8 @@ export function registerDiagnosticHandlers(context: IpcHandlerContext): void {
       const benchmarkEffect = plugins
         .list()
         .plugins.find(
-          (plugin) => plugin.source.kind === "builtin" && plugin.source.id === "dev.yadaw.gain"
+          (plugin) =>
+            plugin.source.kind === "builtin" && plugin.source.id === "live.minori.heron.gain"
         )
       if (!benchmarkEffect) {
         const result = rpcFailure(meta, unavailable(meta, "main"))

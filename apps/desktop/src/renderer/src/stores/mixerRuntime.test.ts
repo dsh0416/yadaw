@@ -1,6 +1,6 @@
 import { createPinia, setActivePinia } from "pinia"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import type { MixerRuntimeSnapshot } from "@yadaw/contracts"
+import type { MixerRuntimeSnapshot } from "@heron/contracts"
 import { useMixerRuntimeStore } from "./mixerRuntime"
 import { useAudioRuntimeStore } from "./audioRuntime"
 import { rpcFailure, rpcSuccess, testBootstrap, TEST_AUDIO_HOST_REF } from "../test/ipc"
@@ -27,7 +27,7 @@ const audioEngine = {
 }
 
 function stubApi(overrides: Record<string, unknown>): void {
-  Object.assign(window.yadaw as unknown as Record<string, unknown>, overrides)
+  Object.assign(window.heron as unknown as Record<string, unknown>, overrides)
 }
 
 beforeEach(() => {

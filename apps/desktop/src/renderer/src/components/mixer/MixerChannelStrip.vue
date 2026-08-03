@@ -10,8 +10,8 @@ import type {
   MixerRouteTarget,
   MixerSendPatch,
   MixerSendState
-} from "@yadaw/contracts"
-import type { PluginDescriptor, PluginInstanceState, PluginRuntimeStatus } from "@yadaw/contracts"
+} from "@heron/contracts"
+import type { PluginDescriptor, PluginInstanceState, PluginRuntimeStatus } from "@heron/contracts"
 import {
   pluginAudioModeOutputWidth,
   type PluginSelection,

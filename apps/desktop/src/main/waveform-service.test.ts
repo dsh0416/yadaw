@@ -8,7 +8,7 @@ import { WaveformService } from "./waveform-service"
 
 const analyzeWaveform = vi.hoisted(() => vi.fn())
 
-vi.mock("@yadaw/dsp-node", () => ({ analyzeWaveform }))
+vi.mock("@heron/dsp-node", () => ({ analyzeWaveform }))
 
 let swapDirectory: string
 
@@ -60,7 +60,7 @@ function createService(): Stubs {
 }
 
 beforeEach(async () => {
-  swapDirectory = join(await mkdtemp(join(tmpdir(), "yadaw-waveform-")), "swap")
+  swapDirectory = join(await mkdtemp(join(tmpdir(), "heron-waveform-")), "swap")
   analyzeWaveform.mockReset()
   analyzeWaveform.mockResolvedValue({
     sampleRate: 48_000,

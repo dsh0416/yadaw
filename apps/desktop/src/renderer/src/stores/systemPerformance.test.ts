@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest"
 import { createPinia, setActivePinia } from "pinia"
-import type { AudioIpcPerformanceSnapshot, SystemPerformanceSnapshot } from "@yadaw/contracts"
+import type { AudioIpcPerformanceSnapshot, SystemPerformanceSnapshot } from "@heron/contracts"
 import { useSystemPerformanceStore } from "./systemPerformance"
 
 function audioIpc(

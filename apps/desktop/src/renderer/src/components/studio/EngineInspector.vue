@@ -2,8 +2,8 @@
 import { computed } from "vue"
 import { useI18n } from "vue-i18n"
 import { Activity, Cpu, Zap } from "@lucide/vue"
-import { UiButton, UiSlider } from "@yadaw/ui"
-import type { AudioRuntimeSnapshot } from "@yadaw/contracts"
+import { UiButton, UiSlider } from "@heron/ui"
+import type { AudioRuntimeSnapshot } from "@heron/contracts"
 
 const props = defineProps<{ runtime: AudioRuntimeSnapshot; peak?: number; error?: string }>()
 const emit = defineEmits<{ runPreview: [] }>()

@@ -1,7 +1,7 @@
 import { useStorage } from "@vueuse/core"
 import { acceptHMRUpdate, defineStore } from "pinia"
 import { computed, shallowRef } from "vue"
-import type { MidiNoteState } from "@yadaw/contracts"
+import type { MidiNoteState } from "@heron/contracts"
 import type { PianoRollSnap } from "../utils/pianoRoll"
 
 export interface PianoRollNoteRef {
@@ -28,14 +28,14 @@ export const usePianoRollStore = defineStore("piano-roll", () => {
   const activeClipId = shallowRef<string | null>(null)
   const selectedNotes = shallowRef<PianoRollNoteRef[]>([])
   const tool = shallowRef<"select" | "draw" | "erase">("select")
-  const snap = useStorage<PianoRollSnap>("yadaw.piano-roll.snap.v1", "1/16")
-  const pixelsPerQuarter = useStorage("yadaw.piano-roll.time-zoom.v1", 120)
-  const rowHeight = useStorage("yadaw.piano-roll.row-height.v1", 18)
+  const snap = useStorage<PianoRollSnap>("heron.piano-roll.snap.v1", "1/16")
+  const pixelsPerQuarter = useStorage("heron.piano-roll.time-zoom.v1", 120)
+  const rowHeight = useStorage("heron.piano-roll.row-height.v1", 18)
   const editCursorTick = shallowRef(0)
   const editCursorKey = shallowRef(60)
   const clipboard = shallowRef<PianoRollClipboardNote[]>([])
   const editorFocused = shallowRef(false)
-  const showVelocityLane = useStorage("yadaw.piano-roll.velocity-lane.v1", true)
+  const showVelocityLane = useStorage("heron.piano-roll.velocity-lane.v1", true)
   let editCommandHandler: ((command: PianoRollEditCommand) => void) | null = null
 
   const selectedNoteKeys = computed(

@@ -1,11 +1,11 @@
 import { decode, encode } from "@msgpack/msgpack"
-import type { AudioHostIpcClient } from "@yadaw/audio-host-client"
+import type { AudioHostIpcClient } from "@heron/audio-host-client"
 import type {
   AudioIpcBenchmarkReport,
   AudioIpcBenchmarkScenario,
   AudioIpcPerformanceSnapshot,
   AudioHostRuntimePreferences
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import { binaryBytes, extractLargeAttachments, inlineBinary, percentile } from "./audio-host-wire"
 import type { ControlResponse, TelemetryWire, TransportDiagnosticsWire } from "./audio-host-wire"
 

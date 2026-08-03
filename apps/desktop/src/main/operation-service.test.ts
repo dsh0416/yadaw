@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import type { DesktopSessionRef, OperationSnapshot } from "@yadaw/contracts"
+import type { DesktopSessionRef, OperationSnapshot } from "@heron/contracts"
 
 vi.mock("electron", () => ({
   BrowserWindow: {

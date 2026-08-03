@@ -9,7 +9,7 @@ fn main() {
     // Set LSUIElement in the Mach-O before AppKit creates NSApplication. Applying
     // Accessory later through winit can otherwise allow a transient Dock icon.
     println!(
-        "cargo:rustc-link-arg-bin=yadaw-audio-host=-Wl,-sectcreate,__TEXT,__info_plist,{}",
+        "cargo:rustc-link-arg-bin=heron-audio-host=-Wl,-sectcreate,__TEXT,__info_plist,{}",
         info_plist.display()
     );
 }

@@ -1,5 +1,5 @@
 import { eq, ne } from "drizzle-orm"
-import type { ProjectCommand } from "@yadaw/contracts"
+import type { ProjectCommand } from "@heron/contracts"
 import { keySignatureEvents, tempoEvents, timeSignatureEvents } from "../schema"
 import type { ProjectTransaction } from "./database-types"
 

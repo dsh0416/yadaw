@@ -8,12 +8,12 @@ use std::{
     time::{Duration, Instant},
 };
 
-use yadaw_shared_memory::{SHARED_MEMORY_DESCRIPTOR_VERSION, SharedMemory, SharedMemoryDescriptor};
+use heron_shared_memory::{SHARED_MEMORY_DESCRIPTOR_VERSION, SharedMemory, SharedMemoryDescriptor};
 
-const CHILD_MARKER: &str = "YADAW_SHARED_MEMORY_CHILD";
-const CHILD_ID: &str = "YADAW_SHARED_MEMORY_ID";
-const CHILD_LENGTH: &str = "YADAW_SHARED_MEMORY_LENGTH";
-const CHILD_GENERATION: &str = "YADAW_SHARED_MEMORY_GENERATION";
+const CHILD_MARKER: &str = "HERON_SHARED_MEMORY_CHILD";
+const CHILD_ID: &str = "HERON_SHARED_MEMORY_ID";
+const CHILD_LENGTH: &str = "HERON_SHARED_MEMORY_LENGTH";
+const CHILD_GENERATION: &str = "HERON_SHARED_MEMORY_GENERATION";
 const TIMEOUT: Duration = Duration::from_secs(10);
 const PARENT_CHALLENGE: u64 = 0x7061_7265_6e74_0001;
 const CHILD_CHALLENGE: u64 = 0x6368_696c_6400_0002;

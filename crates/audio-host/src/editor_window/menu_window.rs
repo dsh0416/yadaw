@@ -133,7 +133,7 @@ impl EditorMenuState {
                     .width(Length::Fill)
                     .height(Length::Fixed(TOOLBAR_MENU_ROW_HEIGHT))
                     .padding(0)
-                    .style(yadaw_iced_ui::popup_menu_row(
+                    .style(heron_iced_ui::popup_menu_row(
                         self.appearance,
                         option.choice == self.selected,
                         index == self.highlighted,
@@ -145,7 +145,7 @@ impl EditorMenuState {
             .padding(TOOLBAR_MENU_PADDING as u16)
             .width(Length::Fill)
             .height(Length::Fill)
-            .style(yadaw_iced_ui::popup_surface(self.appearance))
+            .style(heron_iced_ui::popup_surface(self.appearance))
             .into()
     }
 }
@@ -397,7 +397,7 @@ pub(crate) fn toolbar_menu_window_attributes(
         request.effective_scale,
     );
     let attributes = winit::window::WindowAttributes::default()
-        .with_title("YADAW toolbar menu")
+        .with_title("Heron toolbar menu")
         .with_decorations(false)
         .with_resizable(false)
         .with_visible(false)

@@ -11,7 +11,7 @@ import { AudioHostPluginClient } from "./audio-host-plugin-client"
 import { AudioHostTransportClient } from "./audio-host-transport-client"
 import { AudioHostGraphTransactions } from "./audio-host-graph-transactions"
 import type { PreparedGraphDeployment } from "./audio-host-graph-transactions"
-import type { AudioHostIpcClient } from "@yadaw/audio-host-client"
+import type { AudioHostIpcClient } from "@heron/audio-host-client"
 import type {
   AudioBackendDescriptor,
   AudioBenchmarkScenario,
@@ -43,7 +43,7 @@ import type {
   ShortcutPreferences,
   TransportCommand,
   TransportSnapshot
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import type {
   PluginEditorAppearanceWire,
   PluginEditorContextWire
@@ -901,7 +901,7 @@ export class AudioHostService {
     this.audioBenchmarkGeneration += 1
     const pluginInstanceIds = Array.from(
       { length: pluginCount },
-      (_, index) => `__yadaw-audio-benchmark-gain-${index}`
+      (_, index) => `__heron-audio-benchmark-gain-${index}`
     )
     try {
       // Load one at a time. The VST3 actor largely serializes loads, and each IPC request's
@@ -911,7 +911,7 @@ export class AudioHostService {
         await this.plugins.loadPlugin(
           {
             id,
-            channelId: "__yadaw-audio-benchmark",
+            channelId: "__heron-audio-benchmark",
             role: "insert",
             slotOrder,
             classId: effect.classId,

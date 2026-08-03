@@ -1,7 +1,7 @@
 ---
 title: The journey to ARA support
 date: 2026-07-31
-description: Why native Logic Pro on Apple Silicon still cannot host ARA plug-ins — and why the same protocol was surprisingly straightforward to support in YADAW.
+description: Why native Logic Pro on Apple Silicon still cannot host ARA plug-ins — and why the same protocol was surprisingly straightforward to support in Heron.
 tags: [ara]
 vstTrademark: true
 ---
@@ -28,11 +28,11 @@ Lose ARA on native Logic, and the freeze-style escape hatch almost disappears. Y
 
 Dreamtonics themselves document the gap: AU ARA for Synthesizer V is compatible with Logic only on Intel or under Rosetta, and native Apple Silicon Logic gets neither deep ARA nor ARA Bridge. For a Melodyne user that is annoying. For a Synth V user trying to sculpt a voice inside the mix, it is closer to a hard stop.
 
-## ARA in YADAW was surprisingly easy
+## ARA in Heron was surprisingly easy
 
-When we wired ARA into YADAW, the surprising part was how little drama there was.
+When we wired ARA into Heron, the surprising part was how little drama there was.
 
-ARA wants a close relationship with the host: shared musical context, random access to audio samples, and bidirectional updates when either side changes the model. That sounds intimidating on paper. In practice, once the host already owns the project timeline, the audio assets, and an in-process VST 3 runtime, the ARA document-controller path fits naturally. There was no need for freeze bridges, out-of-band bounce steps, or a separate “ARA-compatible mode.” The protocol expects the host and the plug-in to share an address space — and in YADAW, they do.
+ARA wants a close relationship with the host: shared musical context, random access to audio samples, and bidirectional updates when either side changes the model. That sounds intimidating on paper. In practice, once the host already owns the project timeline, the audio assets, and an in-process VST 3 runtime, the ARA document-controller path fits naturally. There was no need for freeze bridges, out-of-band bounce steps, or a separate “ARA-compatible mode.” The protocol expects the host and the plug-in to share an address space — and in Heron, they do.
 
 That contrast made the Logic situation even more interesting. If ARA itself is not the hard part, what changed on Apple Silicon?
 
@@ -67,6 +67,6 @@ Until one of the following changes, this looks unsolvable in the current Logic +
 2. Logic (and the system hosting stack) give up simultaneous cross-architecture plug-in loading in favor of an in-process path that ARA can use; or
 3. the ARA / Audio Unit stack grows a true out-of-process replacement for pointer-based random access — something that does not exist as a drop-in today.
 
-None of those are under a third-party host’s control. YADAW can support ARA because it hosts compatible plug-ins in-process and can honor the memory model the protocol still assumes. Logic’s native Apple Silicon path optimized for a different set of constraints — stability, security, and architecture mixing — and ARA fell through the crack between them.
+None of those are under a third-party host’s control. Heron can support ARA because it hosts compatible plug-ins in-process and can honor the memory model the protocol still assumes. Logic’s native Apple Silicon path optimized for a different set of constraints — stability, security, and architecture mixing — and ARA fell through the crack between them.
 
 That is why, years after the M1, opening Logic under Rosetta still feels like the only honest answer for ARA — and why implementing ARA in a host that never made that tradeoff felt unexpectedly straightforward.

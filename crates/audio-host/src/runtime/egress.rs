@@ -5,7 +5,7 @@ struct InboundRequest {
 
 enum PriorityIngress {
     ParameterWake,
-    ParameterBoundary(yadaw_dsp_runtime::protocol::ParameterCommand),
+    ParameterBoundary(heron_dsp_runtime::protocol::ParameterCommand),
     Shutdown,
     TelemetryPageReady { epoch: u64, generation: u64 },
 }

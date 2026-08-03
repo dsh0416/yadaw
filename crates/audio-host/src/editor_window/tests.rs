@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use super::*;
-    use yadaw_dsp_runtime::protocol::LiveMixerChannel;
+    use heron_dsp_runtime::protocol::LiveMixerChannel;
 
     #[test]
     fn continuous_and_discrete_parameter_steps_are_distinct() {
@@ -788,7 +788,7 @@ mod tests {
             state.toolbar_anchors.get(&ToolbarMenu::Mode),
             Some(&Rectangle::new(
                 Point::new(195.0, 94.0),
-                Size::new(112.0, yadaw_iced_ui::CONTROL_COMPACT),
+                Size::new(112.0, heron_iced_ui::CONTROL_COMPACT),
             ))
         );
         state.update(Message::OpenToolbarMenu(ToolbarMenu::Mode), &mut actions);
@@ -1500,7 +1500,7 @@ mod tests {
 
     #[test]
     fn sidechain_cycle_detection_follows_outputs_sends_and_existing_sidechains() {
-        use yadaw_dsp_runtime::protocol::{
+        use heron_dsp_runtime::protocol::{
             LiveMixerSend, LiveMixerSendTap, LivePluginAuxInputBus, LivePluginInstance,
             PluginAudioMode,
         };
@@ -1579,7 +1579,7 @@ mod tests {
 
     #[test]
     fn sidechain_view_filters_channel_kinds_system_channels_self_and_cycles() {
-        use yadaw_dsp_runtime::protocol::{
+        use heron_dsp_runtime::protocol::{
             LiveMixerSystemRole, LivePluginAuxInputBus, LivePluginInstance, PluginAudioMode,
         };
 

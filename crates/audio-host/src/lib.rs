@@ -1,10 +1,10 @@
+use heron_dsp_runtime::protocol::{
+    ControlResult, RpcComponent, RpcError, RpcErrorCategory, RpcErrorCode, RpcErrorDetails,
+    RpcMutationOutcome, RpcRetry,
+};
 use std::{
     fmt,
     sync::atomic::{AtomicU64, Ordering},
-};
-use yadaw_dsp_runtime::protocol::{
-    ControlResult, RpcComponent, RpcError, RpcErrorCategory, RpcErrorCode, RpcErrorDetails,
-    RpcMutationOutcome, RpcRetry,
 };
 
 static ERROR_CORRELATION: AtomicU64 = AtomicU64::new(1);
@@ -67,30 +67,30 @@ macro_rules! control_error {
 }
 
 mod ara;
-pub use yadaw_audio_engine::{HostError, HostResult, Status};
+pub use heron_audio_engine::{HostError, HostResult, Status};
 
 pub mod crash_marker {
-    pub use yadaw_audio_engine::crash_marker::*;
+    pub use heron_audio_engine::crash_marker::*;
 }
 pub mod device {
-    pub use yadaw_audio_engine::device::*;
+    pub use heron_audio_engine::device::*;
 }
 pub mod editor_platform;
 pub mod editor_window;
 pub mod engine {
-    pub use yadaw_audio_engine::*;
+    pub use heron_audio_engine::*;
 }
 pub mod midi_input {
-    pub use yadaw_audio_engine::midi_input::*;
+    pub use heron_audio_engine::midi_input::*;
 }
 pub mod midi_recording {
-    pub use yadaw_audio_engine::midi_recording::*;
+    pub use heron_audio_engine::midi_recording::*;
 }
 pub mod mock {
-    pub use yadaw_audio_engine::mock::*;
+    pub use heron_audio_engine::mock::*;
 }
 pub mod recording {
-    pub use yadaw_audio_engine::recording::*;
+    pub use heron_audio_engine::recording::*;
 }
 pub mod runtime;
 pub mod vst3;

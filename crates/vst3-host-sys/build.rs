@@ -70,8 +70,8 @@ fn main() {
         .allowlist_type("ARA::.*")
         .allowlist_var("Steinberg::.*")
         .allowlist_var("ARA::.*")
-        .allowlist_type("YadawAraFactoryInfo")
-        .allowlist_function("yadaw_ara_.*")
+        .allowlist_type("HeronAraFactoryInfo")
+        .allowlist_function("heron_ara_.*")
         .opaque_type("std::.*")
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()));
 
@@ -95,7 +95,7 @@ fn main() {
         .include(&sdk_dir)
         .include(&ara_api_dir)
         .warnings(false);
-    bridge.compile("yadaw_ara_bridge");
+    bridge.compile("heron_ara_bridge");
 }
 
 fn emit_sdk_reruns(sdk_dir: &Path) {

@@ -1,5 +1,5 @@
 import { readonly, shallowRef } from "vue"
-import type { MidiClipState } from "@yadaw/contracts"
+import type { MidiClipState } from "@heron/contracts"
 import type { PianoRollSnap } from "../../utils/pianoRoll"
 import { snapTicks } from "../../utils/pianoRoll"
 import { type ClipTrimEdge, previewMidiClipTrim } from "../../utils/clipEditing"

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue"
-import type { TempoMapSnapshot, WaveformDisplayMode } from "@yadaw/contracts"
+import type { TempoMapSnapshot, WaveformDisplayMode } from "@heron/contracts"
 import type { TimelineClip } from "../../stores/transport"
 import type { AudioFadeEdge, ClipTrimEdge } from "../../utils/clipEditing"
 import { barTicksThroughTick, beatTicksThroughTick } from "../../utils/tempoMap"

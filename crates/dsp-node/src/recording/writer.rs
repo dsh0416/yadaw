@@ -104,7 +104,7 @@ fn writer_thread(
                             &config.origination_time,
                             config.time_reference.max(0) as u64,
                             format!(
-                                "A=PCM,F={sample_rate},W=32,M={channel_count} channel,T=YADAW swap\r\n"
+                                "A=PCM,F={sample_rate},W=32,M={channel_count} channel,T=Heron swap\r\n"
                             ),
                         ))
                         .map_err(|error| error.to_string())?;
@@ -201,7 +201,7 @@ impl RecorderController {
         let thread_active = Arc::clone(&active);
         let thread_dropouts = Arc::clone(&dropout_frames);
         let thread = thread::Builder::new()
-            .name("yadaw-recording-writer".to_owned())
+            .name("heron-recording-writer".to_owned())
             .spawn(move || {
                 writer_thread(
                     consumer,

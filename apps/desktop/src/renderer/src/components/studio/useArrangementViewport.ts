@@ -9,7 +9,7 @@ import {
   type Ref
 } from "vue"
 import { useResizeObserver } from "@vueuse/core"
-import type { TempoMapSnapshot } from "@yadaw/contracts"
+import type { TempoMapSnapshot } from "@heron/contracts"
 import { secondsToTimelineX, timelineXToSeconds } from "../../utils/timelineCoordinates"
 
 interface ArrangementViewportOptions {

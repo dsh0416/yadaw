@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { mount } from "@vue/test-utils"
-import type { MixerChannelState } from "@yadaw/contracts"
+import type { MixerChannelState } from "@heron/contracts"
 import MixerInputSection from "./MixerInputSection.vue"
 
 const channel: MixerChannelState = {

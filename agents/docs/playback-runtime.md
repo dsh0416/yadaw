@@ -1,6 +1,6 @@
 # Playback Runtime Architecture
 
-This document is the agent-facing specification for YADAW's playback graph,
+This document is the agent-facing specification for Heron's playback graph,
 threads, asynchronous control plane, background workers, and VST3 runtime. It
 defines ownership and real-time invariants for the VST3/Tokio migration.
 
@@ -12,7 +12,7 @@ fallback until capability-verified mappings replace it.
 Streaming clips are cooperatively serviced by a fixed pool of two to four
 background lanes; there is no production prefetch thread per clip. Graph
 construction and PDC calculation run on the supervised graph worker owned by
-`BackgroundIoActor` (general `yadaw-background-io-*` lanes with generation
+`BackgroundIoActor` (general `heron-background-io-*` lanes with generation
 cancellation). Clip prefetch and the recording writer still use their dedicated
 pools until a later migration folds them into the same supervisor priorities.
 The old length-prefixed MessagePack transport remains only as a compatibility
@@ -23,7 +23,7 @@ whenever an ownership boundary or concurrency rule changes.
 
 ```text
 Vue / Pinia
-  -> window.yadaw
+  -> window.heron
   -> Electron main services
   -> audio-host-client (.node)
        ├─ request_id -> JsDeferred response router (up to 256 in flight)
@@ -33,10 +33,10 @@ Vue / Pinia
        └─ servo/ipc-channel
             |
             v
-       yadaw-audio-host process
+       heron-audio-host process
        ├─ process main thread: winit + VST3 controller/editor/windows
-       ├─ yadaw-control: LocalSet for VST3/thread-affine work
-       ├─ yadaw-tokio workers: Engine, protocol tasks, I/O, telemetry
+       ├─ heron-control: LocalSet for VST3/thread-affine work
+       ├─ heron-tokio workers: Engine, protocol tasks, I/O, telemetry
        ├─ dedicated priority/normal IPC ingress thread
        ├─ async outbound actor + bounded blocking sends
        ├─ cpal-owned real-time callback threads
@@ -73,7 +73,7 @@ sender, immutable metadata, or atomics; it is not a second owner of the domain.
 ## Control runtime and actors
 
 The helper has exactly one explicitly constructed Tokio multi-thread runtime.
-The `yadaw-control` thread enters it through one long-lived `LocalSet` for VST3
+The `heron-control` thread enters it through one long-lived `LocalSet` for VST3
 and other thread-affine objects. `EngineActor`, background I/O, telemetry,
 request tasks, response encoding, and egress scheduling use `tokio::spawn`.
 winit is never used to periodically poll Tokio.
@@ -166,7 +166,7 @@ Large MIDI batches are not MessagePack documents inside the shared blob. They
 use a versioned, little-endian fixed ABI with a 32-byte magic/version/count
 header. Notes are a contiguous array of 24-byte POD records. Non-note events
 use fixed 40-byte descriptors whose checked offsets reference UTF-8 event-kind
-and payload bytes in a trailing data area. `yadaw-ipc-transport` validates the
+and payload bytes in a trailing data area. `heron-ipc-transport` validates the
 header, element size, total length, reserved fields, UTF-8, and every offset
 before exposing a `zerocopy` borrowed slice.
 
@@ -528,7 +528,7 @@ enumeration, component activation, stereo sample32 block processing, latency,
 tail queries, parameter/state exchange, controller connections, and editor
 interfaces. Catalog discovery prefers `moduleinfo.json` (no binary load). When
 that is absent, or when the moduleinfo lists an ARA Main Factory Class, a soft
-`yadaw-vst3-probe --soft` factory enumeration opens the module without
+`heron-vst3-probe --soft` factory enumeration opens the module without
 instantiating processors. Deep processor probing remains available for built-in
 validation and insert-time activation. Descriptors are cached in
 `userData/plugin-catalog.json` with per-bundle mtime/size fingerprints: startup
@@ -616,7 +616,7 @@ Native-mode Mode and Zoom menus are separate, borderless winit/WGPU windows,
 not iced overlays in the editor surface. Windows uses an editor-owned popup
 without a taskbar entry, AppKit uses a child `NSWindow` ordered above the
 editor, and X11 uses an override-redirect `DropdownMenu` window. This avoids
-the native-child airspace conflict: opening, choosing, or dismissing a YADAW
+the native-child airspace conflict: opening, choosing, or dismissing a Heron
 menu never hides or detaches the plug-in view. Parameters mode (including the
 Wayland fallback) continues to use iced pick-list overlays.
 
@@ -747,7 +747,7 @@ During review, reject changes that:
 For a local transport baseline, run:
 
 ```sh
-mise exec -- cargo run -p yadaw-ipc-transport --bin yadaw-ipc-benchmark --release
+mise exec -- cargo run -p heron-ipc-transport --bin heron-ipc-benchmark --release
 ```
 
 It launches a child process and reports 128-byte sequential RTT, the first

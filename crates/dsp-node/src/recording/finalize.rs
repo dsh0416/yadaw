@@ -151,7 +151,7 @@ pub(super) fn finalize(config: &NativeFinalizeRecordingConfig) -> Result<NativeF
             &config.origination_time,
             config.time_reference.max(0) as u64,
             format!(
-                "A=PCM,F={},W=32,M={} channel,T=YADAW swap\r\nA=PCM,F={},W={},T=Fft SRC + final quantization\r\n",
+                "A=PCM,F={},W=32,M={} channel,T=Heron swap\r\nA=PCM,F={},W={},T=Fft SRC + final quantization\r\n",
                 source_format.sample_rate, channels, config.target_sample_rate, bits
             ),
         ))

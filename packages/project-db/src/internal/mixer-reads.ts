@@ -1,6 +1,6 @@
 import { asc, eq } from "drizzle-orm"
 import type { PgliteDatabase } from "drizzle-orm/pglite"
-import type { ProjectGraphSnapshot, ProjectConfiguration } from "@yadaw/contracts"
+import type { ProjectGraphSnapshot, ProjectConfiguration } from "@heron/contracts"
 import {
   audioClips,
   assets,

@@ -6,13 +6,13 @@ import type {
   ProjectSession,
   ProjectWorkspaceSnapshot,
   RpcResult
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import { useGlobalDialog } from "../composables/useGlobalDialog"
 import { useProjectStore } from "./project"
 
 const session: ProjectSession = {
   id: "project",
-  path: "session.yadaw",
+  path: "session.heron",
   configuration: {
     name: "Session",
     sampleRate: 48_000,
@@ -146,9 +146,9 @@ describe("project store dialogs", () => {
   beforeEach(() => setActivePinia(createPinia()))
 
   it("asks in Vue before recovering an unsaved working copy", async () => {
-    window.yadaw.prepareOpenProject = vi.fn().mockResolvedValue(
+    window.heron.prepareOpenProject = vi.fn().mockResolvedValue(
       success({
-        path: "session.yadaw",
+        path: "session.heron",
         recoverableWorkingCopy: true
       })
     )
@@ -160,12 +160,12 @@ describe("project store dialogs", () => {
         recoveredWorkingCopy: true
       }
     }
-    window.yadaw.openProject = vi.fn().mockResolvedValue(success(recovered))
+    window.heron.openProject = vi.fn().mockResolvedValue(success(recovered))
     const store = useProjectStore()
     store.applyDesktopSession(desktopSession)
     const { activeDialog, selectDialogAction } = useGlobalDialog()
 
-    const opening = store.open("session.yadaw")
+    const opening = store.open("session.heron")
     await vi.waitFor(() => expect(activeDialog.value?.title).toBe("Recover unsaved project?"))
     selectDialogAction("recover")
 
@@ -173,22 +173,22 @@ describe("project store dialogs", () => {
       session: { recoveredWorkingCopy: true },
       graph: { sampleRate: 48_000 }
     })
-    expect(window.yadaw.openProject).toHaveBeenCalledWith(
+    expect(window.heron.openProject).toHaveBeenCalledWith(
       expect.objectContaining({ target: desktopSession, mutation: expect.any(Object) }),
-      "session.yadaw",
+      "session.heron",
       true
     )
     expect(store.session?.recoveredWorkingCopy).toBe(true)
   })
 
   it("reports archive open failures without a legacy compatibility branch", async () => {
-    window.yadaw.prepareOpenProject = vi.fn().mockResolvedValue(
+    window.heron.prepareOpenProject = vi.fn().mockResolvedValue(
       success({
-        path: "future.yadaw",
+        path: "future.heron",
         recoverableWorkingCopy: false
       })
     )
-    window.yadaw.openProject = vi.fn().mockResolvedValue({
+    window.heron.openProject = vi.fn().mockResolvedValue({
       ok: false,
       requestId: "request",
       error: {
@@ -209,14 +209,14 @@ describe("project store dialogs", () => {
     store.applyDesktopSession(desktopSession)
     const { activeDialog } = useGlobalDialog()
 
-    await expect(store.open("future.yadaw")).resolves.toBeNull()
+    await expect(store.open("future.heron")).resolves.toBeNull()
     expect(activeDialog.value).toBeNull()
     expect(store.lifecycle.status).toBe("closed")
     expect(store.error).toBe("resource-unavailable")
   })
 
   it("passes the selected dirty-project disposition to the native close operation", async () => {
-    window.yadaw.closeProject = vi
+    window.heron.closeProject = vi
       .fn()
       .mockResolvedValue(success({ closed: true, snapshot: bootstrap(null) }))
     const store = useProjectStore()
@@ -228,7 +228,7 @@ describe("project store dialogs", () => {
     selectDialogAction("discard")
 
     await expect(closing).resolves.toBe(true)
-    expect(window.yadaw.closeProject).toHaveBeenCalledWith(
+    expect(window.heron.closeProject).toHaveBeenCalledWith(
       expect.objectContaining({ target: workspace.project, mutation: expect.any(Object) }),
       "discard"
     )
@@ -236,7 +236,7 @@ describe("project store dialogs", () => {
   })
 
   it("keeps a dirty project open when the Vue dialog is cancelled", async () => {
-    window.yadaw.closeProject = vi.fn()
+    window.heron.closeProject = vi.fn()
     const store = useProjectStore()
     store.applyBootstrap(bootstrap(workspace))
     const { activeDialog, dismissDialog } = useGlobalDialog()
@@ -246,12 +246,12 @@ describe("project store dialogs", () => {
     dismissDialog()
 
     await expect(closing).resolves.toBe(false)
-    expect(window.yadaw.closeProject).not.toHaveBeenCalled()
+    expect(window.heron.closeProject).not.toHaveBeenCalled()
     expect(store.lifecycle.status).toBe("open")
   })
 
   it("keeps the authoritative project projection when save-before-close fails", async () => {
-    window.yadaw.closeProject = vi.fn().mockResolvedValue({
+    window.heron.closeProject = vi.fn().mockResolvedValue({
       ok: false,
       requestId: "request",
       operationId: "project-close",
@@ -279,7 +279,7 @@ describe("project store dialogs", () => {
     selectDialogAction("save")
 
     await expect(closing).resolves.toBe(false)
-    expect(window.yadaw.closeProject).toHaveBeenCalledWith(
+    expect(window.heron.closeProject).toHaveBeenCalledWith(
       expect.objectContaining({ target: workspace.project, mutation: expect.any(Object) }),
       "save"
     )
@@ -292,7 +292,7 @@ describe("project store dialogs", () => {
   })
 
   it("prompts for a pending mutation and waits for its commit before closing", async () => {
-    window.yadaw.closeProject = vi
+    window.heron.closeProject = vi
       .fn()
       .mockResolvedValue(success({ closed: true, snapshot: bootstrap(null) }))
     const store = useProjectStore()
@@ -310,19 +310,19 @@ describe("project store dialogs", () => {
     expect(store.hasUnsavedChanges).toBe(true)
     selectDialogAction("save")
     await Promise.resolve()
-    expect(window.yadaw.closeProject).not.toHaveBeenCalled()
+    expect(window.heron.closeProject).not.toHaveBeenCalled()
 
     finishMutation()
 
     await expect(closing).resolves.toBe(true)
-    expect(window.yadaw.closeProject).toHaveBeenCalledWith(
+    expect(window.heron.closeProject).toHaveBeenCalledWith(
       expect.objectContaining({ target: workspace.project, mutation: expect.any(Object) }),
       "save"
     )
   })
 
   it("coalesces repeated close requests into one dirty-project decision", async () => {
-    window.yadaw.closeProject = vi
+    window.heron.closeProject = vi
       .fn()
       .mockResolvedValue(success({ closed: true, snapshot: bootstrap(null) }))
     const store = useProjectStore()
@@ -335,6 +335,6 @@ describe("project store dialogs", () => {
     selectDialogAction("discard")
 
     await expect(Promise.all([firstClosing, secondClosing])).resolves.toEqual([true, true])
-    expect(window.yadaw.closeProject).toHaveBeenCalledOnce()
+    expect(window.heron.closeProject).toHaveBeenCalledOnce()
   })
 })

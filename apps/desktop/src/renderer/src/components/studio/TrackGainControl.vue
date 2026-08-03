@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, shallowRef } from "vue"
-import type { MixerChannelMeter } from "@yadaw/contracts"
+import type { MixerChannelMeter } from "@heron/contracts"
 import { useParameterGesture } from "../../composables/useParameterGesture"
 import {
   dbToLevelPercent,

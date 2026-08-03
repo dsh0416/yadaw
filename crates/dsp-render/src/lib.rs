@@ -17,8 +17,8 @@ pub use spec::{
     RenderMidiSpec, RenderPluginSpec, RenderRoute, RenderSendSpec, RenderSendTap,
 };
 
-pub use yadaw_dsp_core::mixer::{HardwareOutputFrame, StereoFrame};
-pub use yadaw_dsp_runtime::tempo::{TempoEvent, TempoMap, TimeSignatureEvent};
+pub use heron_dsp_core::mixer::{HardwareOutputFrame, StereoFrame};
+pub use heron_dsp_runtime::tempo::{TempoEvent, TempoMap, TimeSignatureEvent};
 
 #[cfg(test)]
 mod tests;

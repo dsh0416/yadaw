@@ -2,7 +2,7 @@
 import { useMutationObserver, usePreferredReducedMotion, useResizeObserver } from "@vueuse/core"
 import { onBeforeUnmount, onMounted, shallowRef, useTemplateRef, watch } from "vue"
 import { useI18n } from "vue-i18n"
-import type { CompiledAudioGraphSnapshot } from "@yadaw/contracts"
+import type { CompiledAudioGraphSnapshot } from "@heron/contracts"
 import { layoutCompiledEffectGraph } from "./compiledEffectGraphLayout"
 
 const props = defineProps<{

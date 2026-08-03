@@ -1,10 +1,10 @@
 [package]
-name = "yadaw-vst3-host-sys"
+name = "heron-vst3-host-sys"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-links = "yadaw-vst3-sdk"
+links = "heron-vst3-sdk"
 build = "build.rs"
 
 [build-dependencies]

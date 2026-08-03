@@ -1,4 +1,4 @@
-import type { AudioClipState, MidiClipState, ProjectCommand } from "@yadaw/contracts"
+import type { AudioClipState, MidiClipState, ProjectCommand } from "@heron/contracts"
 
 export type ClipTrimEdge = "start" | "end"
 export type AudioFadeEdge = "in" | "out"

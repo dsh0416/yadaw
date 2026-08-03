@@ -1,4 +1,4 @@
-import type { PluginAudioMode, PluginDescriptor } from "@yadaw/contracts"
+import type { PluginAudioMode, PluginDescriptor } from "@heron/contracts"
 
 export interface PluginSelection {
   descriptor: PluginDescriptor

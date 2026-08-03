@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { UiSegmentedControl } from "@yadaw/ui"
-import type { UiSegmentedOption } from "@yadaw/ui"
+import { UiSegmentedControl } from "@heron/ui"
+import type { UiSegmentedOption } from "@heron/ui"
 import { useData } from "vitepress"
 import { computed, shallowRef, watch } from "vue"
 import AudioBackendNode from "./AudioBackendNode.vue"
@@ -242,13 +242,13 @@ watch(selectedOs, () => {
 }
 
 .backend-figure__host-label {
-  color: var(--yadaw-cyan);
+  color: var(--heron-cyan);
 }
 
 .backend-figure__host-rail i {
   height: 1px;
-  background: var(--yadaw-cyan-dark);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--yadaw-cyan) 42%, transparent);
+  background: var(--heron-cyan-dark);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--heron-cyan) 42%, transparent);
 }
 
 .backend-figure__nodes {
@@ -269,13 +269,13 @@ watch(selectedOs, () => {
   height: 0.5rem;
   margin-top: 0.32rem;
   border-radius: 50%;
-  background: var(--yadaw-meter);
-  box-shadow: 0 0 7px color-mix(in srgb, var(--yadaw-meter) 65%, transparent);
+  background: var(--heron-meter);
+  box-shadow: 0 0 7px color-mix(in srgb, var(--heron-meter) 65%, transparent);
 }
 
 .backend-figure__detail > span[data-status="planned"] {
-  background: var(--yadaw-warning);
-  box-shadow: 0 0 7px color-mix(in srgb, var(--yadaw-warning) 65%, transparent);
+  background: var(--heron-warning);
+  box-shadow: 0 0 7px color-mix(in srgb, var(--heron-warning) 65%, transparent);
 }
 
 .backend-figure__detail strong {

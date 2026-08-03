@@ -1,6 +1,6 @@
 use std::{ffi::c_void, mem::MaybeUninit, os::raw::c_char};
 
-use yadaw_vst3_host_sys::{
+use heron_vst3_host_sys::{
     Steinberg::{
         FUnknown,
         Vst::{Event, IEventList},

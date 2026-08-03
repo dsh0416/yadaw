@@ -1,16 +1,16 @@
 ---
 title: 支持的后端与插件格式
-description: 查看 YADAW 在各操作系统上支持的音频后端与插件格式。
+description: 查看 Heron 在各操作系统上支持的音频后端与插件格式。
 vstTrademark: true
 asioTrademark: true
 ---
 
 # 支持的后端与插件格式
 
-在 YADAW 中，**后端**是音频引擎与操作系统音频驱动之间的连接。VST 3、
+在 Heron 中，**后端**是音频引擎与操作系统音频驱动之间的连接。VST 3、
 Audio Unit 等插件格式则是另一层兼容机制，用于加载乐器与效果。
 
-本页描述当前开发版本。即使 YADAW 已包含某个后端，当对应驱动或设备无法
+本页描述当前开发版本。即使 Heron 已包含某个后端，当对应驱动或设备无法
 打开时，它仍可能显示为不可用。
 
 ## 音频后端
@@ -44,9 +44,9 @@ Audio Unit 等插件格式则是另一层兼容机制，用于加载乐器与效
 设备厂商提供的 ASIO 驱动通常能提供最直接的低延迟路径。请勿使用与设备
 无关的驱动代替厂商驱动。
 
-ASIO 会将一个驱动同时作为输入与输出设备，因此 YADAW 无法组合两个不同
+ASIO 会将一个驱动同时作为输入与输出设备，因此 Heron 无法组合两个不同
 ASIO 驱动的输入与输出。WASAPI、CoreAudio 与 ALSA 可以独立选择输入和输出
-设备；当两者时钟不同时，YADAW 会使用自适应重采样与漂移校正。
+设备；当两者时钟不同时，Heron 会使用自适应重采样与漂移校正。
 
 ## 插件与 Audio Unit 格式
 
@@ -58,13 +58,13 @@ ASIO 驱动的输入与输出。WASAPI、CoreAudio 与 ALSA 可以独立选择�
 | Audio Unit（AU）  | macOS                 | 已计划 | 当前不会扫描或加载 `.component` 包；如产品提供 VST 3 版本，请改用该版本。 |
 | VST 2 与 AAX      | —                     | 不支持 | 不会扫描或加载这些格式。                                                  |
 
-当前插件目录只扫描 VST 3 位置。YADAW 内置的 Gain、Sine 与 Metronome 处理器
+当前插件目录只扫描 VST 3 位置。Heron 内置的 Gain、Sine 与 Metronome 处理器
 也以 VST 3 插件形式提供。如果只安装了某个产品的 Audio Unit 版本，它不会
-出现在 YADAW 中。
+出现在 Heron 中。
 
 ::: tip Linux 编辑器窗口
 在使用 Wayland 的 Linux 环境中，插件的原生 VST 3 编辑器可能不可用。
-YADAW 可以回退到通用参数编辑器；原生 Wayland 编辑器路径仍在计划中。
+Heron 可以回退到通用参数编辑器；原生 Wayland 编辑器路径仍在计划中。
 :::
 
 有关扫描、插入与排查受支持插件的操作，请参阅

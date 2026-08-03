@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from "vue-i18n"
 import { CircleGauge, Radio } from "@lucide/vue"
-import type { AudioRuntimeSnapshot } from "@yadaw/contracts"
+import type { AudioRuntimeSnapshot } from "@heron/contracts"
 import PerformanceMonitorPopover from "../performance/PerformanceMonitorPopover.vue"
 import type { AudioTelemetryStatistics, AudioWarning } from "../../stores/audioRuntime"
 

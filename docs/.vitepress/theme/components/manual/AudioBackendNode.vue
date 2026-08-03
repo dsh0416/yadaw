@@ -30,7 +30,7 @@ const emit = defineEmits<{
 
 <style scoped>
 .backend-node {
-  --backend-signal: var(--yadaw-meter);
+  --backend-signal: var(--heron-meter);
 
   position: relative;
   display: grid;
@@ -54,7 +54,7 @@ const emit = defineEmits<{
 }
 
 .backend-node--planned {
-  --backend-signal: var(--yadaw-warning);
+  --backend-signal: var(--heron-warning);
 }
 
 .backend-node:hover {
@@ -70,7 +70,7 @@ const emit = defineEmits<{
 }
 
 .backend-node:focus-visible {
-  outline: 2px solid var(--yadaw-cyan);
+  outline: 2px solid var(--heron-cyan);
   outline-offset: 2px;
 }
 

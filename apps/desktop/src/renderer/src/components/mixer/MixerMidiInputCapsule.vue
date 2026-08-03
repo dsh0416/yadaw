@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue"
-import { UiSelect } from "@yadaw/ui"
-import type { MidiInputPort, MidiInputRoute } from "@yadaw/contracts"
+import { UiSelect } from "@heron/ui"
+import type { MidiInputPort, MidiInputRoute } from "@heron/contracts"
 
 const props = defineProps<{
   route: MidiInputRoute

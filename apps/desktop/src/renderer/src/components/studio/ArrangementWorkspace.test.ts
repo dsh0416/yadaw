@@ -1,8 +1,8 @@
 import { createPinia, setActivePinia } from "pinia"
 import { DOMWrapper, flushPromises, mount } from "@vue/test-utils"
 import { describe, expect, it, vi } from "vitest"
-import type { MixerChannelState } from "@yadaw/contracts"
-import type { ProjectAssetSummary as Asset } from "@yadaw/contracts"
+import type { MixerChannelState } from "@heron/contracts"
+import type { ProjectAssetSummary as Asset } from "@heron/contracts"
 import { useProjectStore } from "../../stores/project"
 import { useMixerStore } from "../../stores/mixer"
 import { useArrangementViewStore } from "../../stores/arrangementView"
@@ -32,7 +32,7 @@ describe("ArrangementWorkspace", () => {
       status: "open",
       session: {
         id: "project",
-        path: "project.yadaw",
+        path: "project.heron",
         configuration: {
           name: "Session",
           sampleRate: 48_000,
@@ -307,7 +307,7 @@ describe("ArrangementWorkspace", () => {
       status: "open",
       session: {
         id: "project",
-        path: "project.yadaw",
+        path: "project.heron",
         configuration: {
           name: "Session",
           sampleRate: 48_000,
@@ -682,7 +682,7 @@ describe("ArrangementWorkspace", () => {
       status: "open",
       session: {
         id: "project",
-        path: "project.yadaw",
+        path: "project.heron",
         configuration: {
           name: "Session",
           sampleRate: 48_000,

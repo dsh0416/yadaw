@@ -9,8 +9,8 @@ import type {
   PluginRuntimeStatus,
   PluginScanEvent,
   RpcEvent
-} from "@yadaw/contracts"
-import { pluginDescriptorKey } from "@yadaw/contracts"
+} from "@heron/contracts"
+import { pluginDescriptorKey } from "@heron/contracts"
 import {
   pluginAudioModeInputWidth,
   pluginAudioModeOutputWidth,
@@ -161,8 +161,8 @@ export const usePluginStore = defineStore("plugins", () => {
   async function load(): Promise<void> {
     loading.value = true
     error.value = ""
-    unsubscribe ??= window.yadaw.subscribePluginScan(receiveScanEvent)
-    unsubscribeEditorClosed ??= window.yadaw.subscribePluginEditorClosed((event) => {
+    unsubscribe ??= window.heron.subscribePluginScan(receiveScanEvent)
+    unsubscribeEditorClosed ??= window.heron.subscribePluginEditorClosed((event) => {
       markEditorClosed(event.payload.instanceId)
     })
     const target = projectStore.desktopSession
@@ -170,7 +170,7 @@ export const usePluginStore = defineStore("plugins", () => {
       loading.value = false
       return
     }
-    const result = await window.yadaw.listPlugins(readMeta(target))
+    const result = await window.heron.listPlugins(readMeta(target))
     if (result.ok) {
       catalog.value = result.value
       reconcileRuntime()
@@ -184,7 +184,7 @@ export const usePluginStore = defineStore("plugins", () => {
     if (!target) return
     // Manual rescans always rediscover; launch-time scanning reuses fingerprints.
     // Discovery stays soft (moduleinfo / factory enum) and does not deep-load.
-    const result = await window.yadaw.scanPlugins(mutationMeta(target, "plugin-scan"), {
+    const result = await window.heron.scanPlugins(mutationMeta(target, "plugin-scan"), {
       force: true,
       retryQuarantined
     })
@@ -375,7 +375,7 @@ export const usePluginStore = defineStore("plugins", () => {
     await projectStore.waitForProjectMutations()
     const target = projectStore.projectGraphRef
     if (!target) return
-    const result = await window.yadaw.openPluginEditor(
+    const result = await window.heron.openPluginEditor(
       mutationMeta(target, "plugin-editor-open", projectStore.projectRevision),
       instanceId
     )
@@ -400,7 +400,7 @@ export const usePluginStore = defineStore("plugins", () => {
   async function closeEditor(instanceId: string): Promise<void> {
     const resource = resources.value[instanceId]
     if (!resource) return
-    const result = await window.yadaw.closePluginEditor(
+    const result = await window.heron.closePluginEditor(
       mutationMeta(resource.plugin, "plugin-editor-close", resource.revision)
     )
     if (!result.ok) {
@@ -435,7 +435,7 @@ export const usePluginStore = defineStore("plugins", () => {
       normalized: change.normalized,
       gesture: change.gesture
     }
-    const result = await window.yadaw.setPluginParameter(
+    const result = await window.heron.setPluginParameter(
       mutationMeta(resource.plugin, "plugin-parameter", resource.revision),
       command
     )

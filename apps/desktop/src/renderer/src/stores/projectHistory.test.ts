@@ -1,7 +1,7 @@
 import { createPinia, setActivePinia } from "pinia"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import type { ProjectCommand, ProjectCommandResult, ProjectGraphSnapshot } from "@yadaw/contracts"
-import { applyToGraph, inverseFor } from "@yadaw/project-model"
+import type { ProjectCommand, ProjectCommandResult, ProjectGraphSnapshot } from "@heron/contracts"
+import { applyToGraph, inverseFor } from "@heron/project-model"
 import { useProjectGraphStore } from "./projectGraph"
 import { useProjectHistoryStore } from "./projectHistory"
 

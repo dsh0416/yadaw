@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from "vue-i18n"
-import type { AudioBenchmarkScenario } from "@yadaw/contracts"
+import type { AudioBenchmarkScenario } from "@heron/contracts"
 
 defineProps<{ scenarios: readonly AudioBenchmarkScenario[] }>()
 const { t } = useI18n()

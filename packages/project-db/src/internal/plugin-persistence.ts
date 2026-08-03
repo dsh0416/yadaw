@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm"
-import type { PluginInstancePatch, ProjectCommand } from "@yadaw/contracts"
+import type { PluginInstancePatch, ProjectCommand } from "@heron/contracts"
 import { pluginInstances, pluginSidechainRoutes } from "../schema"
 import type { ProjectTransaction } from "./database-types"
 

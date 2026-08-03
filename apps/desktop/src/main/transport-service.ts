@@ -1,4 +1,4 @@
-import type { TransportCommand, TransportSnapshot } from "@yadaw/contracts"
+import type { TransportCommand, TransportSnapshot } from "@heron/contracts"
 import type { AudioHostService } from "./audio-host-service"
 import type { ProjectService } from "./project-service"
 
@@ -31,8 +31,8 @@ export class TransportService {
 
   private async commandNow(command: TransportCommand): Promise<TransportSnapshot> {
     if (
-      process.env.YADAW_TEST_CAPTURE_SOURCE === "1" &&
-      process.env.YADAW_TEST_MOCK_AUDIO !== "1"
+      process.env.HERON_TEST_CAPTURE_SOURCE === "1" &&
+      process.env.HERON_TEST_MOCK_AUDIO !== "1"
     ) {
       this.testSnapshot.sampleRate =
         this.projects.current?.configuration.sampleRate ?? this.testSnapshot.sampleRate
@@ -74,8 +74,8 @@ export class TransportService {
 
   snapshot(): Promise<TransportSnapshot> {
     if (
-      process.env.YADAW_TEST_CAPTURE_SOURCE === "1" &&
-      process.env.YADAW_TEST_MOCK_AUDIO !== "1"
+      process.env.HERON_TEST_CAPTURE_SOURCE === "1" &&
+      process.env.HERON_TEST_MOCK_AUDIO !== "1"
     ) {
       return Promise.resolve({ ...this.testSnapshot })
     }

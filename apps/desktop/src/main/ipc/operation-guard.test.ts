@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { IPC_PROTOCOL_VERSION } from "@yadaw/contracts"
-import type { ResourceRef, RpcRequestMeta } from "@yadaw/contracts"
+import { IPC_PROTOCOL_VERSION } from "@heron/contracts"
+import type { ResourceRef, RpcRequestMeta } from "@heron/contracts"
 import { OperationRegistry } from "../kernel/operation-registry"
 import type { IpcHandlerContext } from "./context"
 import { beginGuardedMutation, finishGuardedMutation } from "./operation-guard"

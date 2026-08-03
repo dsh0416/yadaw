@@ -1,13 +1,13 @@
-//! YADAW's built-in 16-voice sine instrument VST3.
+//! Heron's built-in 16-voice sine instrument VST3.
 
 use std::f32::consts::TAU;
 use std::sync::Arc;
 
+use heron_plugin_ui::parameter_knob;
 use truce::prelude::*;
 use truce_iced::iced::widget::{Column, Row, Space, container, text};
 use truce_iced::iced::{Alignment, Element, Length, alignment};
 use truce_iced::{IcedEditor, IcedPlugin, IntoElement, Message, ParamCache};
-use yadaw_plugin_ui::parameter_knob;
 
 use SineParamsParamId as P;
 
@@ -197,19 +197,19 @@ impl IcedPlugin<SineParams> for SineUi {
         &'a self,
         params: &'a ParamCache<SineParams>,
     ) -> Element<'a, Message<Self::Message>> {
-        let palette = yadaw_plugin_ui::palette();
+        let palette = heron_plugin_ui::palette();
         let voices = (params.meter(P::ActiveVoices) * MAX_VOICES as f32).round() as u8;
         let pitch = (params.meter(P::RecentPitch) * 127.0).round() as u8;
         let header = Row::new()
             .push(
-                text("YADAW  /  SINE")
-                    .size(yadaw_plugin_ui::type_size::PANEL_TITLE)
+                text("Heron  /  SINE")
+                    .size(heron_plugin_ui::type_size::PANEL_TITLE)
                     .color(palette.text),
             )
             .push(Space::new().width(Length::Fill))
             .push(
                 text(format!("{voices:02} VOICES   MIDI {pitch:03}"))
-                    .size(yadaw_plugin_ui::type_size::BODY_COMPACT)
+                    .size(heron_plugin_ui::type_size::BODY_COMPACT)
                     .color(palette.midi),
             );
         let trace = container(
@@ -244,17 +244,17 @@ impl IcedPlugin<SineParams> for SineUi {
                     .size(76.0)
                     .el(),
             )
-            .spacing(yadaw_plugin_ui::space::XL)
+            .spacing(heron_plugin_ui::space::XL)
             .align_y(alignment::Vertical::Center);
         container(
             Column::new()
                 .push(header)
                 .push(trace)
                 .push(controls)
-                .spacing(yadaw_plugin_ui::space::LG)
+                .spacing(heron_plugin_ui::space::LG)
                 .align_x(Alignment::Center),
         )
-        .padding(yadaw_plugin_ui::space::XL)
+        .padding(heron_plugin_ui::space::XL)
         .width(Length::Fill)
         .height(Length::Fill)
         .style(move |_| container::Style {
@@ -266,17 +266,17 @@ impl IcedPlugin<SineParams> for SineUi {
     }
 
     fn title(&self) -> String {
-        String::from("YADAW Sine")
+        String::from("Heron Sine")
     }
 
     fn theme(&self) -> truce_iced::iced::Theme {
-        yadaw_plugin_ui::theme()
+        heron_plugin_ui::theme()
     }
 }
 
-pub struct YadawSine;
+pub struct HeronSine;
 
-impl PluginLogic for YadawSine {
+impl PluginLogic for HeronSine {
     type Params = SineParams;
     type DspState = SineDspState;
 
@@ -371,14 +371,14 @@ impl PluginLogic for YadawSine {
     }
 
     fn editor(params: Arc<SineParams>) -> Box<dyn Editor> {
-        IcedEditor::<SineParams, SineUi>::new(params, yadaw_plugin_ui::SINE_EDITOR_SIZE)
+        IcedEditor::<SineParams, SineUi>::new(params, heron_plugin_ui::SINE_EDITOR_SIZE)
             .with_meter_ids(vec![P::ActiveVoices, P::RecentPitch])
             .into_editor()
     }
 }
 
 truce::plugin! {
-    logic: YadawSine,
+    logic: HeronSine,
     params: SineParams,
 }
 
@@ -399,7 +399,7 @@ mod tests {
 
     #[test]
     fn exposes_mono_and_stereo_instrument_outputs() {
-        let channels = YadawSine::bus_layouts()
+        let channels = HeronSine::bus_layouts()
             .into_iter()
             .map(|layout| layout.total_output_channels())
             .collect::<Vec<_>>();

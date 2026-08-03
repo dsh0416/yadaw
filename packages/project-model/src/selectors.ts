@@ -5,8 +5,8 @@ import type {
   MixerRouteTarget,
   MixerRuntimeSnapshot,
   MixerSendState
-} from "@yadaw/contracts"
-import { MIXER_BUS_COUNT } from "@yadaw/contracts"
+} from "@heron/contracts"
+import { MIXER_BUS_COUNT } from "@heron/contracts"
 
 export const MIXER_BUSES: readonly MixerBusState[] = Array.from(
   { length: MIXER_BUS_COUNT },

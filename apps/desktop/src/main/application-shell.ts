@@ -1,5 +1,5 @@
-export const APPLICATION_ID = "dev.yadaw.studio"
-export const APPLICATION_NAME = "YADAW"
+export const APPLICATION_ID = "live.minori.heron"
+export const APPLICATION_NAME = "Heron"
 
 interface ApplicationIdentity {
   commandLine: {

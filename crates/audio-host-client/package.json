@@ -1,6 +1,6 @@
 {
-  "name": "@yadaw/audio-host-client",
-  "version": "0.2.2",
+  "name": "@heron/audio-host-client",
+  "version": "0.3.0",
   "license": "GPL-3.0-only",
   "private": true,
   "main": "index.js",
@@ -19,7 +19,7 @@
     "check": "napi build --platform"
   },
   "napi": {
-    "binaryName": "yadaw-audio-host-client",
+    "binaryName": "heron-audio-host-client",
     "targets": [
       "x86_64-pc-windows-msvc",
       "x86_64-apple-darwin",

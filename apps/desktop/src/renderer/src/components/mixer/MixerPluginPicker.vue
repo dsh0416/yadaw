@@ -2,8 +2,8 @@
 import { computed, shallowRef, watch } from "vue"
 import { useI18n } from "vue-i18n"
 import { Search } from "@lucide/vue"
-import { UiPopover } from "@yadaw/ui"
-import { pluginCategoriesLabel, pluginDescriptorKey, type PluginDescriptor } from "@yadaw/contracts"
+import { UiPopover } from "@heron/ui"
+import { pluginCategoriesLabel, pluginDescriptorKey, type PluginDescriptor } from "@heron/contracts"
 import PluginAudioModeMenu from "../plugins/PluginAudioModeMenu.vue"
 import type { PluginSelection } from "../plugins/plugin-audio-mode"
 

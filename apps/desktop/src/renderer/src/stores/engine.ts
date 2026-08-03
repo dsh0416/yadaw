@@ -1,6 +1,6 @@
 import { acceptHMRUpdate, defineStore } from "pinia"
 import { ref } from "vue"
-import type { NativeEngineInfo } from "@yadaw/contracts"
+import type { NativeEngineInfo } from "@heron/contracts"
 import { readMeta, rpcErrorMessage } from "../rpc"
 import { useProjectStore } from "./project"
 
@@ -22,7 +22,7 @@ export const useEngineStore = defineStore("engine", () => {
     try {
       const target = projectStore.offlineWorkerRef
       if (!target) return
-      const result = await window.yadaw.engineInfo(readMeta(target))
+      const result = await window.heron.engineInfo(readMeta(target))
       if (!result.ok) {
         error.value = rpcErrorMessage(result.error)
         return
@@ -38,7 +38,7 @@ export const useEngineStore = defineStore("engine", () => {
     try {
       const target = projectStore.offlineWorkerRef
       if (!target) return
-      const result = await window.yadaw.processGain(readMeta(target), {
+      const result = await window.heron.processGain(readMeta(target), {
         samples: previewSamples,
         gain
       })

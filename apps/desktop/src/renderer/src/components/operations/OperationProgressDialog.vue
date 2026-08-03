@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue"
-import type { OperationSnapshot } from "@yadaw/contracts"
-import { UiButton, UiProgress } from "@yadaw/ui"
+import type { OperationSnapshot } from "@heron/contracts"
+import { UiButton, UiProgress } from "@heron/ui"
 import { useI18n } from "vue-i18n"
 
 const props = defineProps<{ operation: OperationSnapshot }>()

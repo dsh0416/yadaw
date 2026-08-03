@@ -9,7 +9,7 @@ import type {
   MixerChannelPatch,
   MixerParameterPreview,
   TimeSignatureEventState
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import SoundBrowser from "../components/studio/SoundBrowser.vue"
 import StudioStatusbar from "../components/studio/StudioStatusbar.vue"
 import StudioTopbar from "../components/studio/StudioTopbar.vue"

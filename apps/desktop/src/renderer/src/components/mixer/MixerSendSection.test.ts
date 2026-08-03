@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest"
 import { DOMWrapper, flushPromises, mount } from "@vue/test-utils"
-import type { MixerBusState, MixerChannelState, MixerSendState } from "@yadaw/contracts"
-import { UiCascadingSelect } from "@yadaw/ui"
+import type { MixerBusState, MixerChannelState, MixerSendState } from "@heron/contracts"
+import { UiCascadingSelect } from "@heron/ui"
 import MixerSendSection from "./MixerSendSection.vue"
 
 const channel: MixerChannelState = {

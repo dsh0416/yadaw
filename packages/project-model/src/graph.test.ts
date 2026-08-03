@@ -4,7 +4,7 @@ import type {
   PluginInstanceState,
   ProjectGraphSnapshot,
   ProjectCommand
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import {
   applyToGraph,
   cloneGraph,
@@ -21,7 +21,7 @@ const effectDescriptor: PluginDescriptor = {
   classId: "effect-class",
   modulePath: "/plugins/Effect.vst3",
   name: "Effect",
-  vendor: "YADAW",
+  vendor: "Heron Studio",
   version: "1.0",
   categories: ["Fx"],
   kind: "effect",

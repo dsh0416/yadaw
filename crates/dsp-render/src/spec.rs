@@ -1,4 +1,4 @@
-use yadaw_dsp_runtime::tempo::{TempoEvent, TimeSignatureEvent};
+use heron_dsp_runtime::tempo::{TempoEvent, TimeSignatureEvent};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RenderChannelKind {

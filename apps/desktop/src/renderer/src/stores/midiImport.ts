@@ -1,6 +1,6 @@
 import { acceptHMRUpdate, defineStore } from "pinia"
 import { computed, shallowRef } from "vue"
-import type { MidiImportPlan, MidiImportPreview, MidiImportTrackTarget } from "@yadaw/contracts"
+import type { MidiImportPlan, MidiImportPreview, MidiImportTrackTarget } from "@heron/contracts"
 import { secondsToTick } from "../utils/tempoMap"
 import { mutationMeta, rpcErrorMessage } from "../rpc"
 import { useMixerStore } from "./mixer"
@@ -34,7 +34,7 @@ export const useMidiImportStore = defineStore("midi-import", () => {
       busy.value = false
       return
     }
-    const result = await window.yadaw.prepareMidiImport(
+    const result = await window.heron.prepareMidiImport(
       mutationMeta(target, "midi-import-prepare"),
       path
     )
@@ -82,7 +82,7 @@ export const useMidiImportStore = defineStore("midi-import", () => {
       busy.value = false
       return false
     }
-    const result = await window.yadaw.commitMidiImport(
+    const result = await window.heron.commitMidiImport(
       mutationMeta(target, "midi-import-commit", projectStore.projectRevision),
       plan
     )

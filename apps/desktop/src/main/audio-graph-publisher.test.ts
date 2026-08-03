@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
-import { IPC_PROTOCOL_VERSION, rpcFailure, rpcSuccess } from "@yadaw/contracts"
-import type { PluginDescriptor, ProjectGraphSnapshot, RpcRequestMeta } from "@yadaw/contracts"
+import { IPC_PROTOCOL_VERSION, rpcFailure, rpcSuccess } from "@heron/contracts"
+import type { PluginDescriptor, ProjectGraphSnapshot, RpcRequestMeta } from "@heron/contracts"
 import { AudioGraphPublisher } from "./audio-graph-publisher"
 
 const descriptor: PluginDescriptor = {
@@ -8,7 +8,7 @@ const descriptor: PluginDescriptor = {
   classId: "ABCDEF0123456789ABCDEF0123456789",
   modulePath: "/plugins/Effect.vst3",
   name: "Effect",
-  vendor: "YADAW",
+  vendor: "Heron Studio",
   version: "1.0",
   categories: ["Fx"],
   kind: "effect",

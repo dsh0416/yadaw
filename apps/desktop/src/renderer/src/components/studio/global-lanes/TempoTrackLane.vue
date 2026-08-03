@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue"
 import { useI18n } from "vue-i18n"
-import type { TempoEventState, TempoMapSnapshot } from "@yadaw/contracts"
+import type { TempoEventState, TempoMapSnapshot } from "@heron/contracts"
 import { barTicksThroughTick, beatTicksThroughTick } from "../../../utils/tempoMap"
 import GlobalValueLane, { type GlobalLanePoint } from "./GlobalValueLane.vue"
 

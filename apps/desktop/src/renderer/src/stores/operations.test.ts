@@ -1,7 +1,7 @@
 import { createPinia, setActivePinia } from "pinia"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { useOperationStore } from "./operations"
-import type { OperationSnapshot } from "@yadaw/contracts"
+import type { OperationSnapshot } from "@heron/contracts"
 
 import { rpcSuccess, testBootstrap } from "../test/ipc"
 import { useProjectStore } from "./project"
@@ -50,7 +50,7 @@ describe("operation store", () => {
 
   it("delegates cancellation only through the public desktop API", async () => {
     const cancel = vi.fn().mockResolvedValue(rpcSuccess({ state: "cancelled" }))
-    window.yadaw.cancelOperation = cancel
+    window.heron.cancelOperation = cancel
     const store = useOperationStore()
     await store.cancel("one")
     expect(cancel).toHaveBeenCalledWith(expect.any(Object), "one")

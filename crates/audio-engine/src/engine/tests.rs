@@ -30,18 +30,18 @@ mod tests {
     use crate::recording::{
         NativeRecordingStartConfig, StereoFrame, write_deterministic_test_recording,
     };
-    use yadaw_vst3_host::HostProcessContext as ProcessContext;
+    use heron_vst3_host::HostProcessContext as ProcessContext;
     use ringbuf::{
         HeapRb,
         traits::{Producer, Split},
     };
-    use yadaw_dsp_core::mixer::{ChannelKind, ChannelSpec, MixerGraph, RouteTarget};
-    use yadaw_dsp_render::{RenderMeter, RenderRuntime};
-    use yadaw_dsp_runtime::protocol::{
+    use heron_dsp_core::mixer::{ChannelKind, ChannelSpec, MixerGraph, RouteTarget};
+    use heron_dsp_render::{RenderMeter, RenderRuntime};
+    use heron_dsp_runtime::protocol::{
         CompiledGraphEdgeKind, CompiledGraphNodeKind, CompiledGraphPluginState,
         CompiledGraphSignalWidth, LiveMixerSendTap, LiveMixerSystemRole, PluginAudioMode,
     };
-    use yadaw_dsp_runtime::tempo::{TempoEvent, TempoMap, TimeSignatureEvent};
+    use heron_dsp_runtime::tempo::{TempoEvent, TempoMap, TimeSignatureEvent};
 
     fn assert_fixed(selection: BufferSelection, expected: u32, fell_back: bool) {
         assert!(matches!(selection.buffer_size, BufferSize::Fixed(value) if value == expected));
@@ -505,14 +505,14 @@ mod tests {
             .unwrap()
             .as_nanos();
         let path = std::env::temp_dir().join(format!(
-            "yadaw-streaming-{}-{nonce}.bwf",
+            "heron-streaming-{}-{nonce}.bwf",
             std::process::id()
         ));
         write_deterministic_test_recording(
             NativeRecordingStartConfig {
                 path: path.to_string_lossy().into_owned(),
                 asset_id: "streaming-test".to_owned(),
-                originator: "YADAW test".to_owned(),
+                originator: "Heron test".to_owned(),
                 origination_date: "2026-07-24".to_owned(),
                 origination_time: "12:00:00".to_owned(),
                 time_reference: 0,
@@ -987,7 +987,7 @@ mod tests {
             live_midi_events: Vec::new(),
             live_notes: vec![false; 3 * 16 * 128],
             external_sync_enabled: false,
-            live_sysex_scratch: vec![0; yadaw_dsp_runtime::midi_input::MIDI_MAX_SYSEX_BYTES],
+            live_sysex_scratch: vec![0; heron_dsp_runtime::midi_input::MIDI_MAX_SYSEX_BYTES],
             metronome: MetronomeScheduler::new(None, &TempoMap::default_120_bpm(), sample_rate, 0),
             count_in: None,
             tempo_map: TempoMap::default_120_bpm(),
@@ -1343,7 +1343,7 @@ mod tests {
         });
         assert_eq!(
             runtime.transport.position_ticks.load(Ordering::Relaxed),
-            8 * yadaw_dsp_runtime::midi_input::MUSICAL_TICKS_PER_SONG_POSITION
+            8 * heron_dsp_runtime::midi_input::MUSICAL_TICKS_PER_SONG_POSITION
         );
 
         runtime.handle_external_sync(crate::midi_input::RealtimeMidiMessage::Start);
@@ -1358,7 +1358,7 @@ mod tests {
         });
         assert_eq!(
             runtime.transport.position_ticks.load(Ordering::Relaxed),
-            yadaw_dsp_runtime::midi_input::MUSICAL_TICKS_PER_MIDI_CLOCK
+            heron_dsp_runtime::midi_input::MUSICAL_TICKS_PER_MIDI_CLOCK
         );
         assert_eq!(
             f64::from_bits(runtime.transport.effective_bpm_bits.load(Ordering::Relaxed)),
@@ -1372,7 +1372,7 @@ mod tests {
         );
         assert_eq!(
             runtime.transport.position_ticks.load(Ordering::Relaxed),
-            yadaw_dsp_runtime::midi_input::MUSICAL_TICKS_PER_MIDI_CLOCK
+            heron_dsp_runtime::midi_input::MUSICAL_TICKS_PER_MIDI_CLOCK
         );
     }
 

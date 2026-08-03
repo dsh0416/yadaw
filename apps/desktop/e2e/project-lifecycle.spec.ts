@@ -5,9 +5,9 @@ import { join, resolve } from "node:path"
 
 test("records into a Large Object and reopens the PGlite project archive", async () => {
   test.setTimeout(180_000)
-  const testRoot = await mkdtemp(join(tmpdir(), "yadaw-e2e-"))
-  const projectPath = join(testRoot, "lifecycle.yadaw")
-  const executablePath = process.env.YADAW_E2E_EXECUTABLE
+  const testRoot = await mkdtemp(join(tmpdir(), "heron-e2e-"))
+  const projectPath = join(testRoot, "lifecycle.heron")
+  const executablePath = process.env.HERON_E2E_EXECUTABLE
   const application = await electron.launch({
     executablePath,
     args: [
@@ -19,10 +19,10 @@ test("records into a Large Object and reopens the PGlite project archive", async
     ],
     env: {
       ...process.env,
-      YADAW_TEST_USER_DATA: join(testRoot, "user-data"),
-      YADAW_TEST_PROJECT_PATH: projectPath,
-      YADAW_TEST_CAPTURE_SOURCE: "1",
-      YADAW_TEST_MOCK_AUDIO: "1"
+      HERON_TEST_USER_DATA: join(testRoot, "user-data"),
+      HERON_TEST_PROJECT_PATH: projectPath,
+      HERON_TEST_CAPTURE_SOURCE: "1",
+      HERON_TEST_MOCK_AUDIO: "1"
     }
   })
   application.process().stdout?.on("data", (data) => console.log(`main stdout: ${String(data)}`))
@@ -30,7 +30,7 @@ test("records into a Large Object and reopens the PGlite project archive", async
   try {
     const splash = await application.firstWindow()
     await splash.waitForLoadState("domcontentloaded")
-    await expect(splash.getByRole("heading", { name: "YADAW" })).toBeVisible()
+    await expect(splash.getByRole("heading", { name: "Heron" })).toBeVisible()
     await expect(splash.getByRole("progressbar")).toBeVisible()
     const page =
       application.windows().find((candidate) => !candidate.url().includes("splash.html")) ??
@@ -69,14 +69,14 @@ test("records into a Large Object and reopens the PGlite project archive", async
 
     async function loadProjectGraph() {
       return page.evaluate(async () => {
-        const bootstrap = await window.yadaw.bootstrap({
+        const bootstrap = await window.heron.bootstrap({
           protocolVersion: 2,
           requestId: crypto.randomUUID()
         })
         if (!bootstrap.ok || !bootstrap.value.workspace) {
           throw new Error("Project workspace is unavailable")
         }
-        const result = await window.yadaw.loadProjectGraph({
+        const result = await window.heron.loadProjectGraph({
           protocolVersion: 2,
           requestId: crypto.randomUUID(),
           target: bootstrap.value.workspace.projectGraph
@@ -166,12 +166,12 @@ test("records into a Large Object and reopens the PGlite project archive", async
     await page.getByRole("button", { name: "Back to studio" }).click()
     await expect(page.locator(".studio-shell")).toBeVisible()
     const mockRuntime = await page.evaluate(async () => {
-      const bootstrap = await window.yadaw.bootstrap({
+      const bootstrap = await window.heron.bootstrap({
         protocolVersion: 2,
         requestId: crypto.randomUUID()
       })
       if (!bootstrap.ok) throw new Error(bootstrap.error.code)
-      const result = await window.yadaw.startAudioEngine(
+      const result = await window.heron.startAudioEngine(
         {
           protocolVersion: 2,
           requestId: crypto.randomUUID(),
@@ -218,13 +218,13 @@ test("records into a Large Object and reopens the PGlite project archive", async
     await expect
       .poll(async () => {
         const snapshot = await page.evaluate(async () => {
-          const bootstrap = await window.yadaw.bootstrap({
+          const bootstrap = await window.heron.bootstrap({
             protocolVersion: 2,
             requestId: crypto.randomUUID()
           })
           const engine = bootstrap.ok ? bootstrap.value.audioResources.engine : null
           if (!engine) throw new Error("Audio engine resource is unavailable")
-          const result = await window.yadaw.mixerSnapshot({
+          const result = await window.heron.mixerSnapshot({
             protocolVersion: 2,
             requestId: crypto.randomUUID(),
             target: engine
@@ -393,12 +393,12 @@ test("records into a Large Object and reopens the PGlite project archive", async
     await expect
       .poll(async () => {
         const snapshot = await page.evaluate(async () => {
-          const bootstrap = await window.yadaw.bootstrap({
+          const bootstrap = await window.heron.bootstrap({
             protocolVersion: 2,
             requestId: crypto.randomUUID()
           })
           if (!bootstrap.ok) throw new Error(bootstrap.error.code)
-          const result = await window.yadaw.systemPerformanceSnapshot({
+          const result = await window.heron.systemPerformanceSnapshot({
             protocolVersion: 2,
             requestId: crypto.randomUUID(),
             target: bootstrap.value.desktopSession
@@ -421,14 +421,14 @@ test("records into a Large Object and reopens the PGlite project archive", async
     await page.getByRole("button", { name: "Go to beginning" }).click()
     await expect(page.getByRole("region", { name: "Project musical display" })).toContainText("001")
     const pendingAfterCommit = await page.evaluate(async () => {
-      const bootstrap = await window.yadaw.bootstrap({
+      const bootstrap = await window.heron.bootstrap({
         protocolVersion: 2,
         requestId: crypto.randomUUID()
       })
       if (!bootstrap.ok || !bootstrap.value.workspace) {
         throw new Error("Project workspace is unavailable")
       }
-      const result = await window.yadaw.listPendingRecordings({
+      const result = await window.heron.listPendingRecordings({
         protocolVersion: 2,
         requestId: crypto.randomUUID(),
         target: bootstrap.value.workspace.project
@@ -439,14 +439,14 @@ test("records into a Large Object and reopens the PGlite project archive", async
     expect(pendingAfterCommit).toHaveLength(1)
     expect(pendingAfterCommit[0]?.assetExists).toBe(true)
     await page.evaluate(async (id) => {
-      const bootstrap = await window.yadaw.bootstrap({
+      const bootstrap = await window.heron.bootstrap({
         protocolVersion: 2,
         requestId: crypto.randomUUID()
       })
       if (!bootstrap.ok || !bootstrap.value.workspace) {
         throw new Error("Project workspace is unavailable")
       }
-      const result = await window.yadaw.recoverRecording(
+      const result = await window.heron.recoverRecording(
         {
           protocolVersion: 2,
           requestId: crypto.randomUUID(),
@@ -463,7 +463,7 @@ test("records into a Large Object and reopens the PGlite project archive", async
     }, pendingAfterCommit[0]!.id)
     await expect(page.getByRole("dialog")).toBeHidden()
     const importedAssets = await page.evaluate(async () => {
-      const bootstrap = await window.yadaw.bootstrap({
+      const bootstrap = await window.heron.bootstrap({
         protocolVersion: 2,
         requestId: crypto.randomUUID()
       })
@@ -471,7 +471,7 @@ test("records into a Large Object and reopens the PGlite project archive", async
         throw new Error("Project workspace is unavailable")
       }
       const project = bootstrap.value.workspace.project
-      const listed = await window.yadaw.listProjectAssets({
+      const listed = await window.heron.listProjectAssets({
         protocolVersion: 2,
         requestId: crypto.randomUUID(),
         target: project
@@ -479,7 +479,7 @@ test("records into a Large Object and reopens the PGlite project archive", async
       if (!listed.ok) throw new Error(listed.error.code)
       return Promise.all(
         listed.value.map(async (asset) => {
-          const audio = await window.yadaw.readAssetAudio(
+          const audio = await window.heron.readAssetAudio(
             {
               protocolVersion: 2,
               requestId: crypto.randomUUID(),
@@ -504,14 +504,14 @@ test("records into a Large Object and reopens the PGlite project archive", async
     const mixerAtSave = await loadProjectGraph()
 
     const saveProject = page.evaluate(async () => {
-      const bootstrap = await window.yadaw.bootstrap({
+      const bootstrap = await window.heron.bootstrap({
         protocolVersion: 2,
         requestId: crypto.randomUUID()
       })
       if (!bootstrap.ok || !bootstrap.value.workspace) {
         throw new Error("Project workspace is unavailable")
       }
-      const result = await window.yadaw.saveProject({
+      const result = await window.heron.saveProject({
         protocolVersion: 2,
         requestId: crypto.randomUUID(),
         target: bootstrap.value.workspace.project,
@@ -535,12 +535,12 @@ test("records into a Large Object and reopens the PGlite project archive", async
 
     expect(
       await page.evaluate(async () => {
-        const bootstrap = await window.yadaw.bootstrap({
+        const bootstrap = await window.heron.bootstrap({
           protocolVersion: 2,
           requestId: crypto.randomUUID()
         })
         if (!bootstrap.ok || !bootstrap.value.workspace) return false
-        const result = await window.yadaw.closeProject(
+        const result = await window.heron.closeProject(
           {
             protocolVersion: 2,
             requestId: crypto.randomUUID(),
@@ -567,14 +567,14 @@ test("records into a Large Object and reopens the PGlite project archive", async
     await expect(page.getByLabel("Sample rate")).toHaveValue("44100")
     await expect(page.getByLabel("Waveform channels")).toHaveValue("aggregate")
     const reopenedAssets = await page.evaluate(async () => {
-      const bootstrap = await window.yadaw.bootstrap({
+      const bootstrap = await window.heron.bootstrap({
         protocolVersion: 2,
         requestId: crypto.randomUUID()
       })
       if (!bootstrap.ok || !bootstrap.value.workspace) {
         throw new Error("Project workspace is unavailable")
       }
-      const result = await window.yadaw.listProjectAssets({
+      const result = await window.heron.listProjectAssets({
         protocolVersion: 2,
         requestId: crypto.randomUUID(),
         target: bootstrap.value.workspace.project
@@ -593,7 +593,7 @@ test("records into a Large Object and reopens the PGlite project archive", async
     expect(reopenedMixer.sends).toEqual(mixerAtSave.sends)
     expect(reopenedMixer.audioClips).toHaveLength(2)
     const reopenedWaveform = await page.evaluate(async () => {
-      const bootstrap = await window.yadaw.bootstrap({
+      const bootstrap = await window.heron.bootstrap({
         protocolVersion: 2,
         requestId: crypto.randomUUID()
       })
@@ -601,7 +601,7 @@ test("records into a Large Object and reopens the PGlite project archive", async
         throw new Error("Project workspace is unavailable")
       }
       const project = bootstrap.value.workspace.project
-      const listed = await window.yadaw.listProjectAssets({
+      const listed = await window.heron.listProjectAssets({
         protocolVersion: 2,
         requestId: crypto.randomUUID(),
         target: project
@@ -609,7 +609,7 @@ test("records into a Large Object and reopens the PGlite project archive", async
       if (!listed.ok) throw new Error(listed.error.code)
       const asset = listed.value.find(({ channels }) => channels === 2)
       if (!asset) throw new Error("Expected a stereo recording asset")
-      const peakWindow = await window.yadaw.readAssetWaveform(
+      const peakWindow = await window.heron.readAssetWaveform(
         {
           protocolVersion: 2,
           requestId: crypto.randomUUID(),
@@ -634,12 +634,12 @@ test("records into a Large Object and reopens the PGlite project archive", async
     expect(reopenedWaveform.byteLength).toBe(reopenedWaveform.bucketCount * 2 * 8)
     expect(
       await page.evaluate(async () => {
-        const bootstrap = await window.yadaw.bootstrap({
+        const bootstrap = await window.heron.bootstrap({
           protocolVersion: 2,
           requestId: crypto.randomUUID()
         })
         if (!bootstrap.ok || !bootstrap.value.workspace) return false
-        const result = await window.yadaw.closeProject(
+        const result = await window.heron.closeProject(
           {
             protocolVersion: 2,
             requestId: crypto.randomUUID(),
@@ -655,12 +655,12 @@ test("records into a Large Object and reopens the PGlite project archive", async
       })
     ).toBe(true)
     await page.evaluate(async () => {
-      const bootstrap = await window.yadaw.bootstrap({
+      const bootstrap = await window.heron.bootstrap({
         protocolVersion: 2,
         requestId: crypto.randomUUID()
       })
       if (!bootstrap.ok || !bootstrap.value.audioResources.engine) return
-      const result = await window.yadaw.stopAudioEngine({
+      const result = await window.heron.stopAudioEngine({
         protocolVersion: 2,
         requestId: crypto.randomUUID(),
         target: bootstrap.value.audioResources.engine,

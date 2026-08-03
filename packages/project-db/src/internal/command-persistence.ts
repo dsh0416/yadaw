@@ -1,4 +1,4 @@
-import type { ProjectCommand } from "@yadaw/contracts"
+import type { ProjectCommand } from "@heron/contracts"
 import { isAudioClipCommand, persistAudioClipCommand } from "./audio-clip-persistence"
 import {
   isChannelTrackRoutingCommand,

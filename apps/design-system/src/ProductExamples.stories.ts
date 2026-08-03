@@ -9,8 +9,8 @@ import {
   UiSelect,
   UiStatusNotice,
   UiSurface,
-  YadawLogo
-} from "@yadaw/ui"
+  HeronLogo
+} from "@heron/ui"
 
 const meta = {
   title: "Product examples/Welcome",
@@ -25,7 +25,7 @@ type Story = StoryObj<typeof meta>
 
 export const Welcome: Story = {
   render: () => ({
-    components: { UiButton, UiSectionHeading, UiSurface, YadawLogo },
+    components: { UiButton, UiSectionHeading, UiSurface, HeronLogo },
     data: () => ({
       projects: [
         { name: "Midnight Session", meta: "Modified 12 minutes ago · 48 kHz" },
@@ -36,7 +36,7 @@ export const Welcome: Story = {
       <main style="min-height:100vh;padding:clamp(1rem,6vw,5rem);background:var(--ui-color-canvas)">
         <div style="display:grid;max-width:68rem;margin:auto;gap:var(--ui-space-8)">
           <header>
-            <YadawLogo style="color:var(--ui-color-action);font-size:var(--ui-font-size-md)" />
+            <HeronLogo style="color:var(--ui-color-action);font-size:var(--ui-font-size-md)" />
             <h1 style="margin:var(--ui-space-2) 0;font-size:clamp(var(--ui-font-size-2xl),7vw,var(--ui-font-size-5xl));line-height:var(--ui-type-leading-none)">Make the session audible.</h1>
             <p style="max-width:38rem;color:var(--ui-color-text-muted);line-height:var(--ui-type-leading-normal)">Create a project or return to a recent session. Audio configuration remains available before opening the studio.</p>
           </header>

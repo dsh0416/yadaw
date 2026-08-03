@@ -29,7 +29,7 @@ The single-PR history is intentionally unsquashed:
 The follow-up repair remains one PR with independently revertible commits:
 
 1. `5704593` — document and contain the macOS `IpcSharedMemory` COW failure.
-2. `313f8e1` — add the three-platform `yadaw-shared-memory` mapping crate.
+2. `313f8e1` — add the three-platform `heron-shared-memory` mapping crate.
 3. `8ee09ab` — negotiate and migrate telemetry and parameter persistent pages.
 4. `dd58aaa` — migrate bidirectional bulk arenas and remove per-packet re-offer.
 5. The final hardening commit — bind descriptor identity, strengthen process
@@ -62,15 +62,15 @@ pnpm 11.18.0, and Rust toolchain:
 
 ```sh
 pnpm check
-pnpm --filter @yadaw/desktop test:e2e -- \
+pnpm --filter @heron/desktop test:e2e -- \
   e2e/project-lifecycle.spec.ts \
   e2e/round-trip-latency.spec.ts \
   e2e/unsaved-close.spec.ts
 cargo clippy \
-  -p yadaw-audio-host \
-  -p yadaw-audio-host-client \
-  -p yadaw-ipc-transport \
-  -p yadaw-dsp-runtime \
+  -p heron-audio-host \
+  -p heron-audio-host-client \
+  -p heron-ipc-transport \
+  -p heron-dsp-runtime \
   --all-targets -- -D warnings
 ```
 
@@ -87,7 +87,7 @@ the project.
 
 ## Performance comparison
 
-The release `yadaw-ipc-benchmark` was run sequentially on the same machine
+The release `heron-ipc-benchmark` was run sequentially on the same machine
 against pre-refactor `ae33e10` and current `6ae5e30`. A temporary detached
 copy of the unchanged benchmark printed its existing p95 sample in addition to
 p50 and p99; no benchmark or product source change was committed.
@@ -119,7 +119,7 @@ helper runs remain required platform CI gates before merge.
 
 ### Shared-memory repair comparison
 
-The release `yadaw-ipc-benchmark` was run on 2026-08-02 on the same Apple
+The release `heron-ipc-benchmark` was run on 2026-08-02 on the same Apple
 Silicon macOS host against containment commit `5704593` and the repaired working
 tree. Results are single local diagnostic runs; the logical bulk throughput
 counts referenced duplex bytes and intentionally does not represent physical

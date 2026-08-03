@@ -3,7 +3,7 @@ import type {
   MixerChannelState,
   MixerRuntimeSnapshot,
   ProjectGraphSnapshot
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import {
   MIXER_BUSES,
   audioTracks,
@@ -161,7 +161,7 @@ describe("patchMixerGraph", () => {
         classId: "effect-class",
         modulePath: "effect.vst3",
         name: "Effect",
-        vendor: "YADAW",
+        vendor: "Heron Studio",
         version: "1.0",
         categories: ["Fx"],
         kind: "effect",

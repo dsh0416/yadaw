@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import type { TransportCommand, TransportSnapshot } from "@yadaw/contracts"
+import type { TransportCommand, TransportSnapshot } from "@heron/contracts"
 import type { AudioHostService } from "./audio-host-service"
 import type { ProjectService } from "./project-service"
 import { TransportService } from "./transport-service"

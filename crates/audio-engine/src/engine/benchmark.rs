@@ -1,6 +1,6 @@
 use std::hint::black_box;
 
-use yadaw_dsp_runtime::protocol::{AudioBenchmarkReport, AudioBenchmarkScenario};
+use heron_dsp_runtime::protocol::{AudioBenchmarkReport, AudioBenchmarkScenario};
 
 const BENCHMARK_SAMPLE_RATE: u32 = 48_000;
 const TARGET_MEASUREMENT_TIME: Duration = Duration::from_millis(200);

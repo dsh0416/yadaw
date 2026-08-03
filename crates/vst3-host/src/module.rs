@@ -3,13 +3,13 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use yadaw_vst3_host_sys::{
+use heron_vst3_host_sys::{
+    HeronAraFactoryInfo,
     Steinberg::{
         IPluginFactory, IPluginFactory2, IPluginFactory3, PClassInfo, PClassInfo2, PFactoryInfo,
     },
-    YadawAraFactoryInfo,
     abi::{PluginFactory2VTable, PluginFactory3VTable, PluginFactoryVTable},
-    yadaw_ara_query_factory,
+    heron_ara_query_factory,
 };
 
 use crate::{
@@ -43,10 +43,10 @@ mod dynamic {
         path::{Path, PathBuf},
     };
 
-    use libloading::Library;
     #[cfg(target_os = "linux")]
-    use yadaw_vst3_host_sys::abi::ModuleEntry;
-    use yadaw_vst3_host_sys::abi::{GetPluginFactory, ModuleExit};
+    use heron_vst3_host_sys::abi::ModuleEntry;
+    use heron_vst3_host_sys::abi::{GetPluginFactory, ModuleExit};
+    use libloading::Library;
 
     use super::Module;
     use crate::{ComPtr, HostError, HostResult};
@@ -194,7 +194,7 @@ pub struct Module {
     library: libloading::Library,
     binary_path: PathBuf,
     #[cfg(not(target_os = "macos"))]
-    exit: Option<yadaw_vst3_host_sys::abi::ModuleExit>,
+    exit: Option<heron_vst3_host_sys::abi::ModuleExit>,
 }
 
 impl Module {
@@ -384,11 +384,11 @@ impl Module {
     /// Reads the ARA factory exposed by an `ARA Main Factory Class`.
     pub fn ara_factory_info(&self, class_id: ClassId) -> HostResult<AraFactoryInfo> {
         let class_id = class_id.to_tuid();
-        let mut raw = std::mem::MaybeUninit::<YadawAraFactoryInfo>::zeroed();
+        let mut raw = std::mem::MaybeUninit::<HeronAraFactoryInfo>::zeroed();
         let result = unsafe {
             // SAFETY: the module factory is live, class_id is a VST3 ABI TUID, and raw is writable
             // storage. The bridge copies all plug-in-owned strings before releasing IMainFactory.
-            yadaw_ara_query_factory(self.factory().as_ptr(), class_id.as_ptr(), raw.as_mut_ptr())
+            heron_ara_query_factory(self.factory().as_ptr(), class_id.as_ptr(), raw.as_mut_ptr())
         };
         if result != 0 {
             return Err(HostError::Operation {

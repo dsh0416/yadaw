@@ -1,6 +1,6 @@
-# Contributing to YADAW
+# Contributing to Heron
 
-Thank you for contributing. YADAW is experimental and under active development;
+Thank you for contributing. Heron is experimental and under active development;
 thoughtful patches, reviews, bug reports, and design discussion all help.
 
 ## Getting started
@@ -31,7 +31,7 @@ Fill in the repository pull request template, and:
 - Keep Electron IPC, UI work, filesystem access, allocation, and blocking
   synchronization out of real-time audio callbacks.
 - Do not cross the renderer / native boundary incorrectly: the renderer talks
-  only through the typed `window.yadaw` preload API.
+  only through the typed `window.heron` preload API.
 - Ensure submissions are compatible with the
   [GNU General Public License v3.0](LICENSE). Do not paste code of unknown
   origin or with a conflicting license.
@@ -43,7 +43,7 @@ change preserves real-time and process invariants.
 
 ## AI-assisted and AI-generated contributions
 
-YADAW **welcomes** AI-assisted and AI-generated code. Building a
+Heron **welcomes** AI-assisted and AI-generated code. Building a
 cross-platform DAW involves a large surface area and a lot of careful,
 repetitive engineering. Used well, AI can raise both delivery speed and
 implementation quality.

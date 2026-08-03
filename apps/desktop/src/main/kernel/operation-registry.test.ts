@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import type { ResourceRef, RpcResult } from "@yadaw/contracts"
+import type { ResourceRef, RpcResult } from "@heron/contracts"
 import { OperationRegistry } from "./operation-registry"
 
 const target: ResourceRef = {

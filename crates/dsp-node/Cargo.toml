@@ -1,5 +1,5 @@
 [package]
-name = "yadaw-dsp-node"
+name = "heron-dsp-node"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -23,15 +23,15 @@ napi-derive.workspace = true
 ringbuf.workspace = true
 rubato.workspace = true
 sha2.workspace = true
-yadaw-dsp-core.workspace = true
-yadaw-dsp-runtime.workspace = true
+heron-dsp-core.workspace = true
+heron-dsp-runtime.workspace = true
 
 [build-dependencies]
 napi-build.workspace = true
 
 [dev-dependencies]
 criterion.workspace = true
-yadaw-audio-host = { path = "../audio-host", features = ["bench-internals"] }
+heron-audio-host = { path = "../audio-host", features = ["bench-internals"] }
 
 [[bench]]
 name = "media_streaming"

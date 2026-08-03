@@ -4,7 +4,7 @@ import type {
   AudioBenchmarkReport,
   AudioIpcBenchmarkReport,
   PluginDescriptor
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import type { AudioHostService } from "./audio-host-service"
 
 export function classifyAudioBenchmark(

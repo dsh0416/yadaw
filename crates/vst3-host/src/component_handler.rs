@@ -10,8 +10,7 @@ use std::{
 };
 
 use bitflags::bitflags;
-use ringbuf::{HeapProd, traits::Producer};
-use yadaw_vst3_host_sys::{
+use heron_vst3_host_sys::{
     Steinberg::{
         FIDString, FUnknown, TBool,
         Vst::{
@@ -26,6 +25,7 @@ use yadaw_vst3_host_sys::{
     },
     iid,
 };
+use ringbuf::{HeapProd, traits::Producer};
 
 use crate::processor::QueuedParameter;
 
@@ -824,10 +824,10 @@ mod tests {
         let unknown = handler.as_interface().cast();
 
         for interface_id in [
-            yadaw_vst3_host_sys::iid::ICOMPONENT_HANDLER2,
-            yadaw_vst3_host_sys::iid::ICOMPONENT_HANDLER_BUS_ACTIVATION,
-            yadaw_vst3_host_sys::iid::IUNIT_HANDLER,
-            yadaw_vst3_host_sys::iid::IUNIT_HANDLER2,
+            heron_vst3_host_sys::iid::ICOMPONENT_HANDLER2,
+            heron_vst3_host_sys::iid::ICOMPONENT_HANDLER_BUS_ACTIVATION,
+            heron_vst3_host_sys::iid::IUNIT_HANDLER,
+            heron_vst3_host_sys::iid::IUNIT_HANDLER2,
         ] {
             let mut output = std::ptr::null_mut();
             // SAFETY: unknown is the live leading interface and output is writable.
@@ -840,7 +840,7 @@ mod tests {
             let result = unsafe {
                 super::secondary_query_interface(
                     output.cast(),
-                    yadaw_vst3_host_sys::iid::FUNKNOWN.as_ptr(),
+                    heron_vst3_host_sys::iid::FUNKNOWN.as_ptr(),
                     &mut canonical,
                 )
             };

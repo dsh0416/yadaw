@@ -1,6 +1,6 @@
 import { acceptHMRUpdate, defineStore } from "pinia"
 import { shallowRef } from "vue"
-import type { DesktopLifecycleEvent, DesktopLifecycleSnapshot, RpcEvent } from "@yadaw/contracts"
+import type { DesktopLifecycleEvent, DesktopLifecycleSnapshot, RpcEvent } from "@heron/contracts"
 import { useAudioRuntimeStore } from "./audioRuntime"
 import { useApplicationSettingsStore } from "./applicationSettings"
 import { useProjectStore } from "./project"
@@ -79,9 +79,9 @@ export const useLifecycleStore = defineStore("lifecycle", () => {
     if (ready.value && !force) return Promise.resolve()
     initializePromise = (async () => {
       error.value = ""
-      unsubscribe ??= window.yadaw.subscribeLifecycle(receiveEvent)
+      unsubscribe ??= window.heron.subscribeLifecycle(receiveEvent)
       try {
-        const result = await window.yadaw.bootstrap(readMeta())
+        const result = await window.heron.bootstrap(readMeta())
         if (!result.ok) {
           error.value = rpcErrorMessage(result.error)
           ready.value = true

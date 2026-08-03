@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto"
-import type { AudioHostIpcClient } from "@yadaw/audio-host-client"
-import { IPC_PROTOCOL_VERSION, rpcFailure, rpcSuccess } from "@yadaw/contracts"
+import type { AudioHostIpcClient } from "@heron/audio-host-client"
+import { IPC_PROTOCOL_VERSION, rpcFailure, rpcSuccess } from "@heron/contracts"
 import type {
   AudioEngineRef,
   PluginInstanceState,
@@ -8,7 +8,7 @@ import type {
   ProjectGraphSnapshot,
   RpcRequestMeta,
   RpcResult
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import type { AudioHostGraph, ControlResponse, GraphTransactionValue } from "./audio-host-wire"
 
 export interface PreparedGraphDeployment {

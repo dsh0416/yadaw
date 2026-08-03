@@ -6,7 +6,7 @@ import ProjectWelcome from "../components/project/ProjectWelcome.vue"
 import { useApplicationSettingsStore } from "../stores/applicationSettings"
 import { useMixerStore } from "../stores/mixer"
 import { useProjectStore } from "../stores/project"
-import type { CreateProjectRequest } from "@yadaw/contracts"
+import type { CreateProjectRequest } from "@heron/contracts"
 
 const router = useRouter()
 const settingsStore = useApplicationSettingsStore()

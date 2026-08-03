@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, reactive, watch } from "vue"
 import { useI18n } from "vue-i18n"
-import { UiSelect } from "@yadaw/ui"
+import { UiSelect } from "@heron/ui"
 import type {
   AudioHostRuntimePreferences,
   ResolvedAudioHostRuntimePreferences
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import SettingsPage from "../settings/SettingsPage.vue"
 import SettingsSection from "../settings/SettingsSection.vue"
 

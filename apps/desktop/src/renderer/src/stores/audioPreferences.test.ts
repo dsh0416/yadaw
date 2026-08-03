@@ -1,6 +1,6 @@
 import { createPinia, setActivePinia } from "pinia"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { DEFAULT_AUDIO_PREFERENCES, INITIAL_AUDIO_RUNTIME_SNAPSHOT } from "@yadaw/contracts"
+import { DEFAULT_AUDIO_PREFERENCES, INITIAL_AUDIO_RUNTIME_SNAPSHOT } from "@heron/contracts"
 import type {
   AudioBackendDescriptor,
   AudioDeviceList,
@@ -8,12 +8,12 @@ import type {
   AudioPreferences,
   AudioRuntimeSnapshot,
   RpcResult
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import { useAudioPreferencesStore } from "./audioPreferences"
 import { useAudioRuntimeStore } from "./audioRuntime"
 import { rpcFailure, rpcSuccess } from "../test/ipc"
 
-const STORAGE_KEY = "yadaw.audio-preferences.v1"
+const STORAGE_KEY = "heron.audio-preferences.v1"
 
 function preferences(overrides: Partial<AudioPreferences> = {}): AudioPreferences {
   return {
@@ -99,7 +99,7 @@ function device(id: string, isDefault = false) {
 }
 
 function stubApi(overrides: Record<string, unknown>): void {
-  Object.assign(window.yadaw as unknown as Record<string, unknown>, overrides)
+  Object.assign(window.heron as unknown as Record<string, unknown>, overrides)
 }
 
 /**

@@ -1,6 +1,6 @@
 import { computed, shallowRef, watch } from "vue"
 import type { Ref } from "vue"
-import type { MeterPeakHold, MeterReturnRate, MixerChannelMeter } from "@yadaw/contracts"
+import type { MeterPeakHold, MeterReturnRate, MixerChannelMeter } from "@heron/contracts"
 import { dbToLevelPercent, METER_MAX_DB, METER_MIN_DB } from "../utils/mixerDbScale"
 
 const PEAK_HOLD_DURATION_MS: Record<MeterPeakHold, number> = {

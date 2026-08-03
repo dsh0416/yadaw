@@ -1,6 +1,6 @@
 import { decode, encode } from "@msgpack/msgpack"
-import { IPC_PROTOCOL_VERSION } from "@yadaw/contracts"
-import type { PluginInstanceState, ProjectGraphSnapshot } from "@yadaw/contracts"
+import { IPC_PROTOCOL_VERSION } from "@heron/contracts"
+import type { PluginInstanceState, ProjectGraphSnapshot } from "@heron/contracts"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const fakeHost = vi.hoisted(() => {
@@ -459,7 +459,7 @@ const fakeHost = vi.hoisted(() => {
   return { Client, Deferred, runtime }
 })
 
-vi.mock("@yadaw/audio-host-client", () => ({
+vi.mock("@heron/audio-host-client", () => ({
   AudioHostIpcClient: class extends fakeHost.Client {
     heartbeat(payload: Buffer): Promise<{ body: Buffer; attachments: Buffer[] }> {
       return this.heartbeatRequest(payload)
@@ -469,7 +469,7 @@ vi.mock("@yadaw/audio-host-client", () => ({
 
 import { AudioHostService } from "./audio-host-service"
 import type { AudioHostGraph } from "./audio-host-service"
-import type { PluginDescriptor } from "@yadaw/contracts"
+import type { PluginDescriptor } from "@heron/contracts"
 
 function graph(sampleRate: number): {
   project: ProjectGraphSnapshot
@@ -505,7 +505,7 @@ function pluginInstance(id = "plugin-1"): PluginInstanceState {
       classId: "test-gain",
       modulePath: "/tmp/gain.vst3",
       name: "Test Gain",
-      vendor: "YADAW",
+      vendor: "Heron Studio",
       version: "1.0",
       categories: ["Fx"],
       kind: "effect",

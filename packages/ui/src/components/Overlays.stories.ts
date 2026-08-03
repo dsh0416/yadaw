@@ -52,7 +52,7 @@ export const DestructiveConfirmation: Story = {
         v-model="open"
         eyebrow="Recording recovery"
         title="Delete recording?"
-        description="This removes the take from the project. The source file cannot be restored from YADAW."
+        description="This removes the take from the project. The source file cannot be restored from Heron."
         confirm-label="Delete recording"
         tone="danger"
       >

@@ -61,7 +61,7 @@ impl EditorInteractionState<'_> {
                                 cursor.x - local_position.x,
                                 cursor.y - local_position.y,
                             ),
-                            Size::new(width, yadaw_iced_ui::CONTROL_COMPACT),
+                            Size::new(width, heron_iced_ui::CONTROL_COMPACT),
                         ),
                     );
                 }
@@ -257,7 +257,7 @@ impl EditorWindow {
             pick_list(mode_options, selected_mode, |option| Message::UseMode(option.mode))
                 .on_open(Message::MenuOpened(ToolbarMenu::Mode))
                 .on_close(Message::MenuClosed(ToolbarMenu::Mode))
-                .style(yadaw_iced_ui::select(appearance))
+                .style(heron_iced_ui::select(appearance))
                 .text_size(type_size::CONTROL)
                 .padding([2, 6])
                 .width(112)
@@ -282,7 +282,7 @@ impl EditorWindow {
             )
             .on_open(Message::MenuOpened(ToolbarMenu::Zoom))
             .on_close(Message::MenuClosed(ToolbarMenu::Zoom))
-            .style(yadaw_iced_ui::select(appearance))
+            .style(heron_iced_ui::select(appearance))
             .text_size(type_size::CONTROL)
             .padding([2, 6])
             .width(72)
@@ -314,7 +314,7 @@ impl EditorWindow {
 
         let signal_color = parse_signal_color(&model.context.channel_color).unwrap_or(colors.action);
         let signal_rail = container(space::vertical())
-            .width(Length::Fixed(yadaw_iced_ui::SIGNAL_RAIL_WIDTH))
+            .width(Length::Fixed(heron_iced_ui::SIGNAL_RAIL_WIDTH))
             .height(Length::Fill)
             .style(move |_| container::Style {
                 background: Some(signal_color.into()),
@@ -397,9 +397,9 @@ impl EditorWindow {
                 .push(compare_a)
                 .push(compare_b),
         )
-            .height(Length::Fixed(yadaw_iced_ui::CONTROL_COMPACT))
+            .height(Length::Fixed(heron_iced_ui::CONTROL_COMPACT))
             .padding(1)
-            .style(yadaw_iced_ui::segmented_group(
+            .style(heron_iced_ui::segmented_group(
                 appearance,
                 model.can_compare,
             ));
@@ -455,7 +455,7 @@ impl EditorWindow {
         .padding([6, ui_space::SM as u16])
         .height(Length::Fixed(model.toolbar_height))
         .width(Length::Fill)
-        .style(yadaw_iced_ui::chrome(appearance));
+        .style(heron_iced_ui::chrome(appearance));
 
         let mut content = Column::new().push(toolbar);
         if model.active_mode == PluginEditorMode::Parameters {
@@ -500,7 +500,7 @@ impl EditorWindow {
                                 })
                                 .step(step)
                                 .on_release(Message::ParameterReleased(id))
-                                .style(yadaw_iced_ui::parameter_slider(appearance))
+                                .style(heron_iced_ui::parameter_slider(appearance))
                                 .into()
                             };
                         column.push(
@@ -524,7 +524,7 @@ impl EditorWindow {
                             )
                             .padding(ui_space::MD)
                             .width(Length::Fill)
-                            .style(yadaw_iced_ui::surface(appearance, false)),
+                            .style(heron_iced_ui::surface(appearance, false)),
                         )
                     },
                 )
@@ -540,7 +540,7 @@ impl EditorWindow {
         let content: EditorElement<'_> = container(content)
             .width(Length::Fill)
             .height(Length::Fill)
-            .style(yadaw_iced_ui::canvas(appearance))
+            .style(heron_iced_ui::canvas(appearance))
             .into();
         let Some(menu) = model.sidechain_menu else {
             return content;
@@ -576,9 +576,9 @@ fn native_select_trigger<'a>(
         .push(text("▾").size(type_size::CONTROL));
     let trigger = button(content)
         .width(Length::Fixed(width))
-        .height(Length::Fixed(yadaw_iced_ui::CONTROL_COMPACT))
+        .height(Length::Fixed(heron_iced_ui::CONTROL_COMPACT))
         .padding([2, 6])
-        .style(yadaw_iced_ui::select_trigger(appearance, open));
+        .style(heron_iced_ui::select_trigger(appearance, open));
     let trigger = if enabled {
         trigger.on_press(Message::OpenToolbarMenu(menu))
     } else {
@@ -732,7 +732,7 @@ fn fallback_toolbar_anchor(
     let y = if is_narrow_toolbar(logical_size.width) { 66.0 } else { 38.0 };
     Rectangle::new(
         Point::new((logical_size.width - right_offset - width).max(0.0), y),
-        Size::new(width, yadaw_iced_ui::CONTROL_COMPACT),
+        Size::new(width, heron_iced_ui::CONTROL_COMPACT),
     )
 }
 
@@ -947,7 +947,7 @@ fn sidechain_menu<'a>(
                 .collect(),
         );
     }
-    yadaw_iced_ui::cascading_menu(columns, appearance)
+    heron_iced_ui::cascading_menu(columns, appearance)
 }
 
 fn compact_button<'a>(
@@ -960,9 +960,9 @@ fn compact_button<'a>(
         .padding([0, 8])
         .center_y(Length::Fill);
     let button = button(content)
-        .height(Length::Fixed(yadaw_iced_ui::CONTROL_COMPACT))
+        .height(Length::Fixed(heron_iced_ui::CONTROL_COMPACT))
         .padding(0)
-        .style(yadaw_iced_ui::action_button(appearance));
+        .style(heron_iced_ui::action_button(appearance));
     if enabled {
         button.on_press(message)
     } else {
@@ -982,7 +982,7 @@ fn compare_segment_button<'a>(
         .width(Length::Fixed(COMPARE_SEGMENT_WIDTH))
         .height(Length::Fill)
         .padding(0)
-        .style(yadaw_iced_ui::segmented_button(appearance, selected));
+        .style(heron_iced_ui::segmented_button(appearance, selected));
     if enabled {
         button.on_press(message)
     } else {

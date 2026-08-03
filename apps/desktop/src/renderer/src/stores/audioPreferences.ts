@@ -1,18 +1,18 @@
 import { useStorage } from "@vueuse/core"
 import { acceptHMRUpdate, defineStore } from "pinia"
 import { ref } from "vue"
-import { AUDIO_BACKENDS, DEFAULT_AUDIO_PREFERENCES } from "@yadaw/contracts"
+import { AUDIO_BACKENDS, DEFAULT_AUDIO_PREFERENCES } from "@heron/contracts"
 import type {
   AudioBackend,
   AudioBackendDescriptor,
   AudioBufferSize,
   AudioDeviceDescriptor,
   AudioPreferences
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import { useAudioRuntimeStore } from "./audioRuntime"
 
 import { readMeta, rpcErrorMessage } from "../rpc"
-const STORAGE_KEY = "yadaw.audio-preferences.v1"
+const STORAGE_KEY = "heron.audio-preferences.v1"
 
 function isAudioBackend(value: unknown): value is AudioBackend {
   return typeof value === "string" && AUDIO_BACKENDS.includes(value as AudioBackend)
@@ -124,7 +124,7 @@ export const useAudioPreferencesStore = defineStore("audio-preferences", () => {
     try {
       const target = audioRuntimeStore.audioHostRef
       if (!target) return []
-      const response = await window.yadaw.listAudioBackends(readMeta(target))
+      const response = await window.heron.listAudioBackends(readMeta(target))
       if (!response.ok) {
         if (generation !== discoveryGeneration) return backends.value
         discoveryError.value = rpcErrorMessage(response.error)
@@ -154,7 +154,7 @@ export const useAudioPreferencesStore = defineStore("audio-preferences", () => {
     try {
       const target = audioRuntimeStore.audioHostRef
       if (!target) return
-      const response = await window.yadaw.listAudioDevices(readMeta(target), backend)
+      const response = await window.heron.listAudioDevices(readMeta(target), backend)
       if (!response.ok) {
         if (generation !== discoveryGeneration) return
         discoveryError.value = rpcErrorMessage(response.error)

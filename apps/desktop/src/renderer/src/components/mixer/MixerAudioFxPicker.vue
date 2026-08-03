@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed } from "vue"
 import { useI18n } from "vue-i18n"
-import { UiDropdownMenu } from "@yadaw/ui"
-import type { UiMenuEntry } from "@yadaw/ui"
-import { pluginCategoriesLabel, pluginDescriptorKey, type PluginDescriptor } from "@yadaw/contracts"
+import { UiDropdownMenu } from "@heron/ui"
+import type { UiMenuEntry } from "@heron/ui"
+import { pluginCategoriesLabel, pluginDescriptorKey, type PluginDescriptor } from "@heron/contracts"
 import {
   pluginAudioModeInputWidth,
   pluginAudioModeOptions,

@@ -9,12 +9,7 @@ use std::{
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
-use midir::{Ignore, MidiInput, MidiInputConnection, MidiInputPort};
-use ringbuf::{
-    Cons, HeapCons, HeapProd, HeapRb, Prod,
-    traits::{Consumer, Observer, Producer, Split},
-};
-use yadaw_dsp_runtime::{
+use heron_dsp_runtime::{
     midi_input::{
         MIDI_MAX_SYSEX_BYTES, MIDI_SHORT_QUEUE_CAPACITY, MIDI_SYSEX_SLAB_BYTES, MidiClockSlave,
         MidiInputMessage, MidiInputParser, MidiSyncState,
@@ -24,6 +19,11 @@ use yadaw_dsp_runtime::{
         MidiInputSnapshot, MidiRecordingResult, MidiRecordingStartConfig, MidiSyncPreferences,
         MidiSyncRuntime,
     },
+};
+use midir::{Ignore, MidiInput, MidiInputConnection, MidiInputPort};
+use ringbuf::{
+    Cons, HeapCons, HeapProd, HeapRb, Prod,
+    traits::{Consumer, Observer, Producer, Split},
 };
 
 use crate::TransportClockHandle;
@@ -260,7 +260,7 @@ struct PortConnection {
 
 impl PortConnection {
     fn connect(port_id: &str, panic_requested: Arc<AtomicBool>) -> Result<Self, String> {
-        let mut input = MidiInput::new("YADAW MIDI input").map_err(|error| error.to_string())?;
+        let mut input = MidiInput::new("Heron MIDI input").map_err(|error| error.to_string())?;
         input.ignore(Ignore::None);
         let port = input
             .find_port_by_id(port_id)
@@ -283,7 +283,7 @@ impl PortConnection {
         let connection = input
             .connect(
                 &port,
-                "YADAW MIDI input",
+                "Heron MIDI input",
                 |timestamp, message, state| state.receive(timestamp, message),
                 state,
             )
@@ -330,7 +330,7 @@ impl MidiInputActor {
     pub fn start(preferences: MidiSyncPreferences) -> Self {
         let (sender, receiver) = mpsc::channel();
         let thread = thread::Builder::new()
-            .name("yadaw-midi-input".to_owned())
+            .name("heron-midi-input".to_owned())
             .spawn(move || run_actor(receiver, preferences))
             .ok();
         Self { sender, thread }
@@ -553,7 +553,7 @@ fn validate_preferences(preferences: &MidiSyncPreferences) -> Result<(), String>
 }
 
 fn enumerate_ports() -> Result<Vec<(MidiInputPort, WireMidiInputPort)>, String> {
-    let input = MidiInput::new("YADAW MIDI enumeration").map_err(|error| error.to_string())?;
+    let input = MidiInput::new("Heron MIDI enumeration").map_err(|error| error.to_string())?;
     Ok(input
         .ports()
         .into_iter()
@@ -1652,7 +1652,7 @@ mod tests {
 
         state
             .clock
-            .advance(20_833 * 12 + yadaw_dsp_runtime::midi_input::MIDI_CLOCK_FREEWHEEL_MICROS + 1);
+            .advance(20_833 * 12 + heron_dsp_runtime::midi_input::MIDI_CLOCK_FREEWHEEL_MICROS + 1);
         assert_eq!(snapshot(&state).sync.state, "lost");
     }
 

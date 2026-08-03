@@ -2,13 +2,13 @@
 
 This document records the persistent shared-page failure found on macOS, its
 temporary containment, and the delivered replacement for
-`ipc-channel::IpcSharedMemory` as YADAW's long-lived shared-memory primitive.
+`ipc-channel::IpcSharedMemory` as Heron's long-lived shared-memory primitive.
 It is an architecture and delivery specification, not a user-facing support
 note.
 
 ## Status
 
-As of 2026-08-02, the replacement is implemented. `yadaw-shared-memory` creates
+As of 2026-08-02, the replacement is implemented. `heron-shared-memory` creates
 one named kernel backing object on macOS, Linux, and Windows; `ipc-channel`
 carries only its opaque descriptor and lifecycle control messages. Bootstrap
 pages complete a bidirectional challenge before product-level `Ready`, dynamic
@@ -61,7 +61,7 @@ only exposed a transport-semantic mismatch.
 documents a region made accessible to a message receiver, and its mutable
 access contract recommends a single reader/writer, no cloning, and one
 serialization/deserialization. It does not explicitly promise that a
-sender-retained clone and a receiver mapping remain mutually visible. YADAW's
+sender-retained clone and a receiver mapping remain mutually visible. Heron's
 persistent pages require that stronger contract. Linux and Windows happened to
 satisfy it; the macOS backend does not.
 
@@ -72,7 +72,7 @@ second process.
 
 ## Required semantics
 
-YADAW defines `process-shared mapping` to mean all of the following:
+Heron defines `process-shared mapping` to mean all of the following:
 
 1. Every successful opener maps the same kernel backing object, not a snapshot
    of its bytes.
@@ -89,7 +89,7 @@ YADAW defines `process-shared mapping` to mean all of the following:
    active.
 7. Creation, opening, mapping, and cleanup stay outside audio callbacks. Once
    active, the real-time path performs only the already bounded atomic or
-   memory accesses defined by `yadaw-ipc-transport`.
+   memory accesses defined by `heron-ipc-transport`.
 
 "Reliable" means a narrow verified contract with fail-closed activation. It
 does not mean mapping creation can never fail.
@@ -97,21 +97,21 @@ does not mean mapping creation can never fail.
 ## Target architecture
 
 The implementation introduces an internal workspace crate with package name
-`yadaw-shared-memory`. Keep it private until the API and three-platform test
+`heron-shared-memory`. Keep it private until the API and three-platform test
 matrix have stabilized.
 
 ```text
 audio-host-client / audio-host
           |
           v
-yadaw-ipc-transport
+heron-ipc-transport
   - telemetry ABI and seqlock
   - parameter SPSC ABI
   - arena slots, leases, and publication
   - mapping handshake and generation swap
           |
           v
-yadaw-shared-memory
+heron-shared-memory
   - create/open/map/unmap/unlink
   - opaque serializable descriptor
   - platform permissions and RAII
@@ -124,11 +124,11 @@ ipc-channel
   - never defines persistent-memory semantics
 ```
 
-`yadaw-shared-memory` owns only the OS mapping capability and its lifecycle. It
+`heron-shared-memory` owns only the OS mapping capability and its lifecycle. It
 must not become an allocator, synchronization library, typed-object store,
 resizable heap, wakeup mechanism, or second general IPC framework.
 
-`yadaw-ipc-transport` continues to own all byte layouts and concurrent
+`heron-ipc-transport` continues to own all byte layouts and concurrent
 protocols. `ipc-channel` remains the control plane and carries the mapping
 descriptor, readiness messages, wakeups, typed errors, and fallback traffic.
 
@@ -158,7 +158,7 @@ pub struct SharedRegionDescriptor {
 ```
 
 Backends compress the cryptographically random object ID, logical length, and
-generation with a fixed non-cryptographic 128-bit mixer, then add a YADAW-owned
+generation with a fixed non-cryptographic 128-bit mixer, then add a Heron-owned
 prefix. This is deterministic name derivation, not authentication or payload
 integrity. POSIX uses a 96-bit projection to remain below Darwin's shared-memory
 name limit; Windows uses the complete mixed key. Including length and generation
@@ -290,7 +290,7 @@ substitution.
 
 ### Phase 4 — Migrate persistent bulk arenas
 
-- [x] Create each arena region through `yadaw-shared-memory` and offer its
+- [x] Create each arena region through `heron-shared-memory` and offer its
       descriptor once per generation.
 - [x] Remove the macOS per-packet re-offer workaround.
 - [x] Preserve lease publication, bounds, timeout quarantine, and release
@@ -298,7 +298,7 @@ substitution.
 - [x] Re-run large MIDI, plug-in state, waveform, and bidirectional attachment
       benchmarks.
 
-Exit condition: no YADAW persistent data path depends on
+Exit condition: no Heron persistent data path depends on
 `ipc-channel::IpcSharedMemory`; `ipc-channel` carries control messages only.
 
 ### Phase 5 — Harden and retire containment
@@ -354,7 +354,7 @@ The refactor is complete only when all of these statements are true:
 
 - one normative persistent-mapping contract is documented and tested on every
   supported desktop OS;
-- platform-specific code is confined to `yadaw-shared-memory` private backends;
+- platform-specific code is confined to `heron-shared-memory` private backends;
 - upper transport and product code contain no macOS-specific semantic branch;
 - every active mapping completed two-way verification for its session and
   generation;

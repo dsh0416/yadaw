@@ -1,13 +1,13 @@
 ---
 layout: page
-title: YADAW
+title: Heron Studio
 titleTemplate: false
-description: A free and open-source digital audio workstation for Windows, macOS, and Linux.
+description: Heron Studio is a free and open-source digital audio workstation. From sketch to stage.
 sidebar: false
 aside: false
 editLink: false
 lastUpdated: false
-pageClass: yadaw-home
+pageClass: heron-home
 ---
 
 <HomePage />

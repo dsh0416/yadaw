@@ -1,5 +1,5 @@
 import { encode } from "@msgpack/msgpack"
-import type { AudioHostIpcClient } from "@yadaw/audio-host-client"
+import type { AudioHostIpcClient } from "@heron/audio-host-client"
 import { describe, expect, it } from "vitest"
 import { AudioHostGateway } from "./audio-host-gateway"
 

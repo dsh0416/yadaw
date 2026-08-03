@@ -15,7 +15,7 @@ static std::int32_t invokeAttach(Steinberg::IPlugView *view, void *parent,
   }
 }
 
-extern "C" std::int32_t yadaw_vst3_guarded_attach(
+extern "C" std::int32_t heron_vst3_guarded_attach(
     Steinberg::IPlugView *view, void *parent, const char *platform) {
 #if defined(_MSC_VER)
   __try {

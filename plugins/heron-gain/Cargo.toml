@@ -1,5 +1,5 @@
 [package]
-name = "yadaw-sine"
+name = "heron-gain"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -18,7 +18,7 @@ truce.workspace = true
 truce-gui-types.workspace = true
 truce-iced.workspace = true
 truce-vst3 = { workspace = true, optional = true }
-yadaw-plugin-ui.workspace = true
+heron-plugin-ui.workspace = true
 
 [dev-dependencies]
 truce-test.workspace = true

@@ -1,6 +1,6 @@
 # Rust performance benchmarks
 
-YADAW uses Criterion for repeatable microbenchmarks of the native mixer, render
+Heron uses Criterion for repeatable microbenchmarks of the native mixer, render
 path, media cache, and recorder. These results describe code performance on one
 machine; they are not portable scores and do not run as a pull-request gate.
 
@@ -19,7 +19,7 @@ baselines. The directories are ignored by Git and should not be copied between
 machines. `pnpm check:rust` compiles every benchmark without measuring it and
 runs the real-time allocation invariants.
 
-The live cpal runtime and graph renderer live in `yadaw-audio-engine`.
+The live cpal runtime and graph renderer live in `heron-audio-engine`.
 Development builds optimize that crate and its measured real-time dependency
 closure at level 3; UI, IPC, NAPI, and orchestration crates use Cargo's default
 unoptimized development profile with full debug information.
@@ -27,7 +27,7 @@ unoptimized development profile with full debug information.
 For compile-performance changes, record a clean build, warm workspace check,
 single-file incremental check, predev duration, and fresh target size. Use the
 same explicit host target for every comparison. A UI-only audio-host edit must
-not rebuild `yadaw-audio-engine`, and a representative workflow regression over
+not rebuild `heron-audio-engine`, and a representative workflow regression over
 10% requires investigation before merging.
 
 ## User-facing audio performance test
@@ -37,7 +37,7 @@ The packaged desktop application also exposes a short native DSP test from
 does not require a Rust toolchain or repository checkout. It renders three
 reference mixer graphs on a worker thread inside the audio helper, then runs an
 IPC suite against that helper. Each graph processes a deterministic stereo
-signal through independent instances of the bundled YADAW Gain VST3: 8 instances
+signal through independent instances of the bundled Heron Gain VST3: 8 instances
 for low-latency tracking, 32 for a production mix, and 64 for a dense session.
 Using a bundled effect keeps results reproducible while including the real VST3
 ABI, buffer adaptation, and plug-in scheduling path. The two suites run

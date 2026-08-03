@@ -1,6 +1,6 @@
 use std::{ffi::c_void, marker::PhantomData, ptr::NonNull};
 
-use yadaw_vst3_host_sys::{
+use heron_vst3_host_sys::{
     Steinberg::{
         FUnknown, IBStream, IPlugFrame, IPlugView, IPlugViewContentScaleSupport, IPluginBase,
         IPluginFactory, IPluginFactory2, IPluginFactory3, ISizeableStream,

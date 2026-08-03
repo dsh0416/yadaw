@@ -1,10 +1,10 @@
-import { IPC_CHANNELS, rpcFailure, rpcSuccess } from "@yadaw/contracts"
+import { IPC_CHANNELS, rpcFailure, rpcSuccess } from "@heron/contracts"
 import type {
   MixerParameterPreview,
   ProjectCommand,
   ResourceRef,
   RpcRequestMeta
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import type { IpcHandlerContext } from "./context"
 import { registerRpcHandler } from "./rpc"
 import {

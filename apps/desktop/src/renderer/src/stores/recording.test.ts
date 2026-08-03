@@ -9,7 +9,7 @@ import type {
   RecordingResourceSnapshot,
   RecordingSession,
   RpcResult
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import { useAudioRuntimeStore } from "./audioRuntime"
 import { useProjectStore } from "./project"
 import { useRecordingStore } from "./recording"
@@ -31,7 +31,7 @@ function pendingRecording(id: string): PendingRecording {
     state: "ready",
     audioPath: `/swap/${id}.bwf`,
     sidecarPath: `/swap/${id}.json`,
-    projectPath: "/projects/demo.yadaw",
+    projectPath: "/projects/demo.heron",
     sampleRate: 48_000,
     channels: 2,
     startedAt: 1_000,
@@ -84,7 +84,7 @@ function workspace(): ProjectWorkspaceSnapshot {
     revision: 2,
     session: {
       id: project.id,
-      path: "/projects/demo.yadaw",
+      path: "/projects/demo.heron",
       configuration: {
         name: "Demo",
         sampleRate: 48_000,
@@ -138,7 +138,7 @@ function configureDependencies(): void {
 }
 
 function stubApi(overrides: Record<string, unknown>): void {
-  Object.assign(window.yadaw as unknown as Record<string, unknown>, overrides)
+  Object.assign(window.heron as unknown as Record<string, unknown>, overrides)
 }
 
 beforeEach(() => {

@@ -1,10 +1,10 @@
 import type { Meta, StoryObj } from "@storybook/vue3-vite"
 
-import YadawLogo from "./YadawLogo.vue"
+import HeronLogo from "./HeronLogo.vue"
 
 const meta = {
   title: "Foundations/Brand/Logo",
-  component: YadawLogo,
+  component: HeronLogo,
   tags: ["autodocs"],
   args: {
     variant: "lockup",
@@ -17,16 +17,16 @@ const meta = {
     }
   },
   render: (args) => ({
-    components: { YadawLogo },
+    components: { HeronLogo },
     setup: () => ({ args }),
     template: `
-      <YadawLogo
+      <HeronLogo
         v-bind="args"
-        style="--yadaw-logo-highlight:var(--ui-signal-midi);color:var(--ui-signal-audio);font-size:var(--ui-font-size-4xl)"
+        style="--heron-logo-highlight:var(--ui-signal-midi);color:var(--ui-signal-audio);font-size:var(--ui-font-size-4xl)"
       />
     `
   })
-} satisfies Meta<typeof YadawLogo>
+} satisfies Meta<typeof HeronLogo>
 
 export default meta
 type Story = StoryObj<typeof meta>
@@ -35,14 +35,14 @@ export const Default: Story = {}
 
 export const OfficialVariants: Story = {
   render: () => ({
-    components: { YadawLogo },
+    components: { HeronLogo },
     template: `
       <div style="display:grid;gap:var(--ui-space-8)">
         <div v-for="variant in ['lockup', 'mark', 'wordmark']" :key="variant" style="display:grid;gap:var(--ui-space-2)">
           <span style="color:var(--ui-color-text-subtle);font:var(--ui-font-size-xs) var(--ui-type-family-data);text-transform:uppercase">{{ variant }}</span>
-          <YadawLogo
+          <HeronLogo
             :variant="variant"
-            style="--yadaw-logo-highlight:var(--ui-signal-midi);color:var(--ui-signal-audio);font-size:var(--ui-font-size-4xl)"
+            style="--heron-logo-highlight:var(--ui-signal-midi);color:var(--ui-signal-audio);font-size:var(--ui-font-size-4xl)"
           />
         </div>
       </div>

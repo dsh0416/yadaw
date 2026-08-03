@@ -1,4 +1,4 @@
-import type { AppLocale } from "@yadaw/contracts"
+import type { AppLocale } from "@heron/contracts"
 import enUS from "../locales/en-US.json"
 import zhCmnHansCN from "../locales/zh-cmn-Hans-CN.json"
 import { DEFAULT_LOCALE, isAppLocale, translate, type MessageTree } from "../shared/i18n"

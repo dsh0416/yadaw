@@ -8,7 +8,7 @@ import {
   UiSelect,
   UiToolbar,
   type UiSegmentedOption
-} from "@yadaw/ui"
+} from "@heron/ui"
 import { PIANO_ROLL_SNAP_OPTIONS } from "../../utils/pianoRoll"
 import { usePianoRollEditor } from "./usePianoRollEditor"
 

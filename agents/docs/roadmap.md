@@ -1,6 +1,6 @@
 # Roadmap
 
-YADAW is experimental. This checklist is the agreed product backlog and
+Heron is experimental. This checklist is the agreed product backlog and
 milestone order. Check items when they ship in a usable form; uncheck or add
 items when scope changes. Releases document what each version actually
 supports.
@@ -63,7 +63,7 @@ Make the existing vertical slice reliable for daily experimentation.
 
 ## M1 — Composition MVP
 
-**Complete.** Write and edit music inside YADAW without an external DAW for
+**Complete.** Write and edit music inside Heron without an external DAW for
 MIDI work.
 
 - [x] Piano roll UI
@@ -113,9 +113,9 @@ This work must not block M1–M3.
 ### Native iced UI (do first)
 
 - [ ] Define a shared iced design language (tokens, typography, controls) aligned
-      with `@yadaw/ui` where practical
+      with `@heron/ui` where practical
 - [ ] Apply it to `audio-host` editor chrome and the generic parameter editor
-- [ ] Apply it to existing built-ins (Gain, Sine, Metronome) via `yadaw-plugin-ui`
+- [ ] Apply it to existing built-ins (Gain, Sine, Metronome) via `heron-plugin-ui`
 
 ### Built-in processors (after UI language)
 

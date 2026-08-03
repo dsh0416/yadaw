@@ -1,6 +1,6 @@
 # Cross-Process Resource and Error Contract
 
-This document is normative for every call that crosses a YADAW process or
+This document is normative for every call that crosses a Heron process or
 thread-isolation boundary:
 
 - renderer to Electron main through preload;
@@ -24,7 +24,7 @@ adapter or build fingerprint; shared-memory layouts continue to validate their
 own magic and layout versions.
 
 - `bootstrap()` is the only targetless state request.
-- Every `YadawDesktopApi` request resolves to `RpcResult<T>`; Electron
+- Every `HeronDesktopApi` request resolves to `RpcResult<T>`; Electron
   transport rejection is converted at preload rather than exposed as application
   control flow.
 - Stateful routes validate an explicit `ResourceRef`, parent generation, and

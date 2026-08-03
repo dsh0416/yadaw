@@ -558,11 +558,11 @@ fn build_mixer_runtime(
         active_notes,
         live_midi_routes,
         live_midi_events: Vec::with_capacity(
-            yadaw_dsp_runtime::midi_input::MIDI_SHORT_QUEUE_CAPACITY,
+            heron_dsp_runtime::midi_input::MIDI_SHORT_QUEUE_CAPACITY,
         ),
         live_notes: vec![false; channels.len().saturating_mul(16 * 128)],
         external_sync_enabled: false,
-        live_sysex_scratch: vec![0; yadaw_dsp_runtime::midi_input::MIDI_MAX_SYSEX_BYTES],
+        live_sysex_scratch: vec![0; heron_dsp_runtime::midi_input::MIDI_MAX_SYSEX_BYTES],
         metronome,
         count_in: None,
         tempo_map,

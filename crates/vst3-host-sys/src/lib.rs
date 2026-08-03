@@ -2,7 +2,7 @@
 //!
 //! The bindings are generated directly from the Steinberg C++ interface
 //! headers. This crate deliberately exposes no safe constructors or ownership
-//! semantics; use `yadaw-vst3-host` instead.
+//! semantics; use `heron-vst3-host` instead.
 
 #![allow(
     clippy::missing_safety_doc,
@@ -18,10 +18,10 @@ include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 pub use root::Steinberg;
 pub use root::{
-    YadawAraFactoryInfo, YadawAraMainFactory, YadawAraPluginEntry, yadaw_ara_main_factory_create,
-    yadaw_ara_main_factory_destroy, yadaw_ara_main_factory_get, yadaw_ara_plugin_entry_bind,
-    yadaw_ara_plugin_entry_create, yadaw_ara_plugin_entry_destroy,
-    yadaw_ara_plugin_entry_get_factory, yadaw_ara_query_factory,
+    HeronAraFactoryInfo, HeronAraMainFactory, HeronAraPluginEntry, heron_ara_main_factory_create,
+    heron_ara_main_factory_destroy, heron_ara_main_factory_get, heron_ara_plugin_entry_bind,
+    heron_ara_plugin_entry_create, heron_ara_plugin_entry_destroy,
+    heron_ara_plugin_entry_get_factory, heron_ara_query_factory,
 };
 
 pub mod abi;

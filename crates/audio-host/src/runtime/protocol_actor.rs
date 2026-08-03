@@ -260,7 +260,7 @@ async fn run_protocol_actor(
                         parameter_consumer.drain(4096, &mut commands);
                         for command in commands {
                             let sender = match command.target_kind {
-                                yadaw_dsp_runtime::protocol::ParameterTargetKind::Plugin => &vst3_sender,
+                                heron_dsp_runtime::protocol::ParameterTargetKind::Plugin => &vst3_sender,
                                 _ => &engine_sender,
                             };
                             let _ = dispatch_parameter(sender, command).await;
@@ -268,7 +268,7 @@ async fn run_protocol_actor(
                     }
                     PriorityIngress::ParameterBoundary(command) => {
                         let sender = match command.target_kind {
-                            yadaw_dsp_runtime::protocol::ParameterTargetKind::Plugin => &vst3_sender,
+                            heron_dsp_runtime::protocol::ParameterTargetKind::Plugin => &vst3_sender,
                             _ => &engine_sender,
                         };
                         let _ = dispatch_parameter(sender, command).await;

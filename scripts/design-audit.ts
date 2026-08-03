@@ -90,7 +90,7 @@ for (const file of rendererFiles) {
   const isTest = /\.test\.ts$/.test(file)
 
   if (/from\s+["']reka-ui["']/.test(source)) {
-    report(file, "renderer-boundary", "import @yadaw/ui instead of reka-ui")
+    report(file, "renderer-boundary", "import @heron/ui instead of reka-ui")
   }
   if (/<Teleport\b/.test(source)) {
     report(file, "overlay-boundary", "manual Teleport overlays are not allowed")
@@ -143,7 +143,7 @@ for (const file of uiFiles) {
   auditTypography(file, source, isTokenSource)
   auditTokenReferences(file, source)
 
-  if (/from\s+["'](?:pinia|vue-router|@yadaw\/contracts|electron)["']|window\.yadaw/.test(source)) {
+  if (/from\s+["'](?:pinia|vue-router|@heron\/contracts|electron)["']|window\.heron/.test(source)) {
     report(file, "ui-package-boundary", "UI primitives cannot depend on product state or runtime")
   }
 }

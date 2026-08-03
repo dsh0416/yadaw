@@ -4,8 +4,8 @@ import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 
 test("measures mock round-trip latency through the desktop boundary", async () => {
-  const testRoot = await mkdtemp(join(tmpdir(), "yadaw-loopback-e2e-"))
-  const executablePath = process.env.YADAW_E2E_EXECUTABLE
+  const testRoot = await mkdtemp(join(tmpdir(), "heron-loopback-e2e-"))
+  const executablePath = process.env.HERON_E2E_EXECUTABLE
   const application = await electron.launch({
     executablePath,
     args: [
@@ -17,9 +17,9 @@ test("measures mock round-trip latency through the desktop boundary", async () =
     ],
     env: {
       ...process.env,
-      YADAW_TEST_USER_DATA: join(testRoot, "user-data"),
-      YADAW_TEST_PROJECT_PATH: join(testRoot, "loopback.yadaw"),
-      YADAW_TEST_MOCK_AUDIO: "1"
+      HERON_TEST_USER_DATA: join(testRoot, "user-data"),
+      HERON_TEST_PROJECT_PATH: join(testRoot, "loopback.heron"),
+      HERON_TEST_MOCK_AUDIO: "1"
     }
   })
 
@@ -34,12 +34,12 @@ test("measures mock round-trip latency through the desktop boundary", async () =
     await expect(page.getByRole("heading", { name: /Build a session/ })).toBeVisible()
 
     const runtime = await page.evaluate(async () => {
-      const bootstrap = await window.yadaw.bootstrap({
+      const bootstrap = await window.heron.bootstrap({
         protocolVersion: 2,
         requestId: crypto.randomUUID()
       })
       if (!bootstrap.ok) throw new Error(bootstrap.error.code)
-      const result = await window.yadaw.startAudioEngine(
+      const result = await window.heron.startAudioEngine(
         {
           protocolVersion: 2,
           requestId: crypto.randomUUID(),
@@ -62,12 +62,12 @@ test("measures mock round-trip latency through the desktop boundary", async () =
     expect(runtime.state).toBe("running")
 
     const started = await page.evaluate(async () => {
-      const bootstrap = await window.yadaw.bootstrap({
+      const bootstrap = await window.heron.bootstrap({
         protocolVersion: 2,
         requestId: crypto.randomUUID()
       })
       if (!bootstrap.ok) throw new Error(bootstrap.error.code)
-      return window.yadaw.startRoundTripLatencyMeasurement(
+      return window.heron.startRoundTripLatencyMeasurement(
         {
           protocolVersion: 2,
           requestId: crypto.randomUUID(),
@@ -95,12 +95,12 @@ test("measures mock round-trip latency through the desktop boundary", async () =
     await expect
       .poll(async () => {
         const measurement = await page.evaluate(async () => {
-          const bootstrap = await window.yadaw.bootstrap({
+          const bootstrap = await window.heron.bootstrap({
             protocolVersion: 2,
             requestId: crypto.randomUUID()
           })
           if (!bootstrap.ok) throw new Error(bootstrap.error.code)
-          return window.yadaw.roundTripLatencyMeasurementSnapshot({
+          return window.heron.roundTripLatencyMeasurementSnapshot({
             protocolVersion: 2,
             requestId: crypto.randomUUID(),
             target: bootstrap.value.audioResources.host
@@ -115,12 +115,12 @@ test("measures mock round-trip latency through the desktop boundary", async () =
       .toMatchObject({ status: "complete", measured: expect.any(Number) })
 
     await page.evaluate(async () => {
-      const bootstrap = await window.yadaw.bootstrap({
+      const bootstrap = await window.heron.bootstrap({
         protocolVersion: 2,
         requestId: crypto.randomUUID()
       })
       if (!bootstrap.ok || !bootstrap.value.audioResources.engine) return
-      const result = await window.yadaw.stopAudioEngine({
+      const result = await window.heron.stopAudioEngine({
         protocolVersion: 2,
         requestId: crypto.randomUUID(),
         target: bootstrap.value.audioResources.engine,

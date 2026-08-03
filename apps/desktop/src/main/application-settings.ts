@@ -4,7 +4,7 @@ import {
   APPLICATION_COMMAND_IDS,
   MAX_MIDI_INPUT_OFFSET_MS,
   SHORTCUT_MODIFIERS
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import type {
   ApplicationCommandId,
   ApplicationSettings,
@@ -18,7 +18,7 @@ import type {
   RecordingBitDepth,
   ShortcutPreferences,
   ThemePreference
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import { DEFAULT_LOCALE, isAppLocale } from "../shared/i18n"
 
 export const DEFAULT_PLUGIN_EDITOR_PREFERENCE: Readonly<PluginEditorPreference> = {

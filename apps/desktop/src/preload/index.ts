@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron"
-import { IPC_CHANNELS } from "@yadaw/contracts"
+import { IPC_CHANNELS } from "@heron/contracts"
 import type {
   ApplicationWindowCommandId,
   ApplicationSettingsPatch,
@@ -13,12 +13,12 @@ import type {
   ProjectConfiguration,
   ShortcutPreferences,
   WaveformWindowRequest,
-  YadawDesktopApi
-} from "@yadaw/contracts"
+  HeronDesktopApi
+} from "@heron/contracts"
 import { invokeRpc } from "./rpc"
 
-const api: YadawDesktopApi = {
-  platform: process.platform as YadawDesktopApi["platform"],
+const api: HeronDesktopApi = {
+  platform: process.platform as HeronDesktopApi["platform"],
   bootstrap: (meta) => invokeRpc(IPC_CHANNELS.bootstrap, meta),
   engineInfo: (meta) => invokeRpc(IPC_CHANNELS.engineInfo, meta),
   processGain: (meta, request: ProcessGainRequest) =>
@@ -168,4 +168,4 @@ const api: YadawDesktopApi = {
   acknowledgeOperation: (meta, id) => invokeRpc(IPC_CHANNELS.operationAcknowledge, meta, id)
 }
 
-contextBridge.exposeInMainWorld("yadaw", api)
+contextBridge.exposeInMainWorld("heron", api)

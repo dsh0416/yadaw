@@ -24,6 +24,7 @@ pub use com::{ComInterface, ComPtr};
 pub use component_handler::{EditorParameterGesture, Vst3HostRequest, Vst3RestartRequest};
 pub use error::{HostError, HostResult};
 pub use frame::PlugFrame;
+pub use heron_vst3_host_sys::Steinberg::ViewRect;
 pub use hosted::{
     HostedParameter, HostedPlugin, HostedProgramList, HostedUnit, HostedUnitInfo, PlugView,
     ProcessorLease,
@@ -35,4 +36,3 @@ pub use processor::{
     PluginKind, StereoProcessor,
 };
 pub use processor_handle::{Vst3AuxInputConfig, Vst3ProcessorHandle, Vst3SidechainBlock};
-pub use yadaw_vst3_host_sys::Steinberg::ViewRect;

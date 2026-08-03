@@ -1,7 +1,7 @@
 import type { IpcMainInvokeEvent } from "electron"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { IPC_PROTOCOL_VERSION, rpcFailure } from "@yadaw/contracts"
-import type { RpcRequestMeta } from "@yadaw/contracts"
+import { IPC_PROTOCOL_VERSION, rpcFailure } from "@heron/contracts"
+import type { RpcRequestMeta } from "@heron/contracts"
 import { registerRpcHandler } from "./rpc"
 
 const { handle } = vi.hoisted(() => ({ handle: vi.fn() }))

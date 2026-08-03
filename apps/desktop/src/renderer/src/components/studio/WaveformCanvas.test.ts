@@ -1,7 +1,7 @@
 import { mount } from "@vue/test-utils"
 import { nextTick } from "vue"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import type { WaveformPeakWindow } from "@yadaw/contracts"
+import type { WaveformPeakWindow } from "@heron/contracts"
 import WaveformCanvas from "./WaveformCanvas.vue"
 
 function encode(values: number[]): Uint8Array {

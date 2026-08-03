@@ -494,7 +494,7 @@ mod tests {
         let context = PluginEditorContext {
             channel_name: "主唱".to_owned(),
             channel_color: "#58c6c2".to_owned(),
-            plugin_name: "YADAW Gain".to_owned(),
+            plugin_name: "Heron Gain".to_owned(),
             appearance: PluginEditorAppearance {
                 theme: PluginEditorTheme::Light,
                 locale: PluginEditorLocale::ZhCmnHansCn,

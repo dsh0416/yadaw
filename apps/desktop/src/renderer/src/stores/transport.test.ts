@@ -6,8 +6,8 @@ import type {
   PluginRuntimeStatus,
   RpcResult,
   TransportSnapshot
-} from "@yadaw/contracts"
-import type { ProjectAssetSummary as Asset } from "@yadaw/contracts"
+} from "@heron/contracts"
+import type { ProjectAssetSummary as Asset } from "@heron/contracts"
 import { assetsToTimelineClips, useTransportStore } from "./transport"
 import { useAudioRuntimeStore } from "./audioRuntime"
 import { useMixerStore } from "./mixer"
@@ -143,7 +143,7 @@ describe("transport store", () => {
     const old = new Promise<RpcResult<TransportSnapshot>>((resolve) => {
       resolveOld = resolve
     })
-    window.yadaw.transportSnapshot = vi
+    window.heron.transportSnapshot = vi
       .fn()
       .mockReturnValueOnce(old)
       .mockResolvedValueOnce(success({ state: "playing", positionFrames: 200, sampleRate: 48_000 }))
@@ -159,10 +159,10 @@ describe("transport store", () => {
   })
 
   it("reconciles the transport revision from a read before the next mutation", async () => {
-    window.yadaw.transportSnapshot = vi
+    window.heron.transportSnapshot = vi
       .fn()
       .mockResolvedValue(success({ state: "stopped", positionFrames: 0, sampleRate: 48_000 }, 7))
-    window.yadaw.transportCommand = vi.fn().mockResolvedValue(
+    window.heron.transportCommand = vi.fn().mockResolvedValue(
       success(
         {
           state: "stopped",
@@ -179,14 +179,14 @@ describe("transport store", () => {
     await transport.refresh()
     await transport.setLoop(true, { startTick: 0, endTick: 3_840 })
 
-    expect(window.yadaw.transportCommand).toHaveBeenCalledWith(
+    expect(window.heron.transportCommand).toHaveBeenCalledWith(
       expect.objectContaining({ expectedRevision: 7 }),
       expect.objectContaining({ type: "set-loop" })
     )
   })
 
   it("coalesces same-turn seek requests to the latest position", async () => {
-    window.yadaw.transportCommand = vi
+    window.heron.transportCommand = vi
       .fn()
       .mockResolvedValue(success({ state: "stopped", positionFrames: 144_000, sampleRate: 48_000 }))
     const transport = useTransportStore()
@@ -197,8 +197,8 @@ describe("transport store", () => {
     await Promise.resolve()
     await Promise.resolve()
 
-    expect(window.yadaw.transportCommand).toHaveBeenCalledOnce()
-    expect(window.yadaw.transportCommand).toHaveBeenCalledWith(
+    expect(window.heron.transportCommand).toHaveBeenCalledOnce()
+    expect(window.heron.transportCommand).toHaveBeenCalledWith(
       expect.objectContaining({
         target: expect.objectContaining({ kind: "transport" }),
         expectedRevision: 0,
@@ -212,7 +212,7 @@ describe("transport store", () => {
   })
 
   it("sets loop enabled and range as one transport mutation", async () => {
-    window.yadaw.transportCommand = vi.fn().mockResolvedValue(
+    window.heron.transportCommand = vi.fn().mockResolvedValue(
       success({
         state: "stopped",
         positionFrames: 0,
@@ -225,7 +225,7 @@ describe("transport store", () => {
 
     await transport.setLoop(true, { startTick: 960, endTick: 4_800 })
 
-    expect(window.yadaw.transportCommand).toHaveBeenCalledWith(
+    expect(window.heron.transportCommand).toHaveBeenCalledWith(
       expect.objectContaining({ expectedRevision: 0 }),
       {
         type: "set-loop",
@@ -263,7 +263,7 @@ describe("transport store", () => {
         }
       ]
     }
-    window.yadaw.transportCommand = vi
+    window.heron.transportCommand = vi
       .fn()
       .mockResolvedValue(success({ state: "playing", positionFrames: 0, sampleRate: 48_000 }))
     const transport = useTransportStore()
@@ -271,7 +271,7 @@ describe("transport store", () => {
     expect(transport.canPlay).toBe(true)
     await transport.play()
 
-    expect(window.yadaw.transportCommand).toHaveBeenCalledWith(
+    expect(window.heron.transportCommand).toHaveBeenCalledWith(
       expect.objectContaining({ target: expect.objectContaining({ kind: "transport" }) }),
       { type: "play" }
     )
@@ -298,7 +298,7 @@ describe("transport store", () => {
         }
       ]
     }
-    window.yadaw.transportCommand = vi
+    window.heron.transportCommand = vi
       .fn()
       .mockResolvedValueOnce(
         success({ state: "stopped", positionFrames: 96_000, sampleRate: 48_000 }, 1)
@@ -318,12 +318,12 @@ describe("transport store", () => {
     await transport.play()
 
     // 1920 ticks at 120 BPM / 960 TPQ => 1 second => 48_000 frames.
-    expect(window.yadaw.transportCommand).toHaveBeenNthCalledWith(
+    expect(window.heron.transportCommand).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({ expectedRevision: 0 }),
       { type: "seek", positionFrames: 48_000 }
     )
-    expect(window.yadaw.transportCommand).toHaveBeenNthCalledWith(
+    expect(window.heron.transportCommand).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({ expectedRevision: 1 }),
       { type: "play" }
@@ -351,7 +351,7 @@ describe("transport store", () => {
         }
       ]
     }
-    window.yadaw.transportCommand = vi
+    window.heron.transportCommand = vi
       .fn()
       .mockResolvedValueOnce(
         success({ state: "stopped", positionFrames: 0, sampleRate: 48_000 }, 1)
@@ -370,12 +370,12 @@ describe("transport store", () => {
 
     await transport.play()
 
-    expect(window.yadaw.transportCommand).toHaveBeenNthCalledWith(
+    expect(window.heron.transportCommand).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({ expectedRevision: 0 }),
       { type: "seek", positionFrames: 0 }
     )
-    expect(window.yadaw.transportCommand).toHaveBeenNthCalledWith(
+    expect(window.heron.transportCommand).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({ expectedRevision: 1 }),
       { type: "play" }
@@ -405,7 +405,7 @@ describe("transport store", () => {
       plugins: [effectInstance("reverb-1")]
     }
     usePluginStore().runtime = { "reverb-1": activeRuntime("reverb-1", 48_000) }
-    window.yadaw.transportCommand = vi
+    window.heron.transportCommand = vi
       .fn()
       .mockResolvedValue(success({ state: "playing", positionFrames: 60_000, sampleRate: 48_000 }))
     const transport = useTransportStore()
@@ -420,8 +420,8 @@ describe("transport store", () => {
 
     await transport.play()
 
-    expect(window.yadaw.transportCommand).toHaveBeenCalledOnce()
-    expect(window.yadaw.transportCommand).toHaveBeenCalledWith(
+    expect(window.heron.transportCommand).toHaveBeenCalledOnce()
+    expect(window.heron.transportCommand).toHaveBeenCalledWith(
       expect.objectContaining({ expectedRevision: 0 }),
       { type: "play" }
     )
@@ -450,7 +450,7 @@ describe("transport store", () => {
       plugins: [effectInstance("reverb-1")]
     }
     usePluginStore().runtime = { "reverb-1": activeRuntime("reverb-1", 48_000) }
-    window.yadaw.transportCommand = vi
+    window.heron.transportCommand = vi
       .fn()
       .mockResolvedValue(success({ state: "stopped", positionFrames: 0, sampleRate: 48_000 }))
     const transport = useTransportStore()
@@ -464,12 +464,12 @@ describe("transport store", () => {
 
     await transport.play()
 
-    expect(window.yadaw.transportCommand).toHaveBeenNthCalledWith(
+    expect(window.heron.transportCommand).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({ expectedRevision: 0 }),
       { type: "seek", positionFrames: 0 }
     )
-    expect(window.yadaw.transportCommand).toHaveBeenNthCalledWith(
+    expect(window.heron.transportCommand).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({ expectedRevision: 1 }),
       { type: "play" }
@@ -499,7 +499,7 @@ describe("transport store", () => {
       plugins: [effectInstance("freeze-1")]
     }
     usePluginStore().runtime = { "freeze-1": activeRuntime("freeze-1", null) }
-    window.yadaw.transportCommand = vi
+    window.heron.transportCommand = vi
       .fn()
       .mockResolvedValue(success({ state: "playing", positionFrames: 240_000, sampleRate: 48_000 }))
     const transport = useTransportStore()
@@ -513,8 +513,8 @@ describe("transport store", () => {
 
     await transport.play()
 
-    expect(window.yadaw.transportCommand).toHaveBeenCalledOnce()
-    expect(window.yadaw.transportCommand).toHaveBeenCalledWith(
+    expect(window.heron.transportCommand).toHaveBeenCalledOnce()
+    expect(window.heron.transportCommand).toHaveBeenCalledWith(
       expect.objectContaining({ expectedRevision: 0 }),
       { type: "play" }
     )
@@ -539,7 +539,7 @@ describe("transport store", () => {
         }
       ]
     }
-    window.yadaw.transportCommand = vi
+    window.heron.transportCommand = vi
       .fn()
       .mockResolvedValue(success({ state: "playing", positionFrames: 0, sampleRate: 48_000 }))
     const transport = useTransportStore()
@@ -547,7 +547,7 @@ describe("transport store", () => {
     expect(transport.canPlay).toBe(true)
     expect(transport.contentEndSeconds).toBe(2)
     await transport.play()
-    expect(window.yadaw.transportCommand).toHaveBeenCalledWith(
+    expect(window.heron.transportCommand).toHaveBeenCalledWith(
       expect.objectContaining({ expectedRevision: 0 }),
       { type: "play" }
     )
@@ -555,7 +555,7 @@ describe("transport store", () => {
 
   it("toggles and resets the one-bar count-in preference", async () => {
     const transport = useTransportStore()
-    window.yadaw.transportCommand = vi.fn()
+    window.heron.transportCommand = vi.fn()
 
     expect(transport.countInEnabled).toBe(false)
     transport.toggleCountIn()
@@ -572,7 +572,7 @@ describe("transport store", () => {
     expect(transport.playing).toBe(false)
 
     await transport.toggle()
-    expect(window.yadaw.transportCommand).not.toHaveBeenCalled()
+    expect(window.heron.transportCommand).not.toHaveBeenCalled()
 
     transport.reset()
     expect(transport.countInEnabled).toBe(false)

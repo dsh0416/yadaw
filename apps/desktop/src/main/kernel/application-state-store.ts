@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto"
-import { INITIAL_AUDIO_RUNTIME_SNAPSHOT, IPC_PROTOCOL_VERSION } from "@yadaw/contracts"
+import { INITIAL_AUDIO_RUNTIME_SNAPSHOT, IPC_PROTOCOL_VERSION } from "@heron/contracts"
 import type {
   ApplicationSettingsRef,
   ApplicationSettings,
@@ -30,7 +30,7 @@ import type {
   RecordingSession,
   RecordingSessionRef,
   TransportRef
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import type { OperationRegistry } from "./operation-registry"
 import { ResourceRegistry } from "./resource-registry"
 import type { ResourceRecord, ResourceRegistryError } from "./resource-registry"

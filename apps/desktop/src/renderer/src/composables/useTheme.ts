@@ -1,7 +1,7 @@
 import { usePreferredDark } from "@vueuse/core"
 import { computed, watch } from "vue"
 import type { Ref } from "vue"
-import type { ThemePreference } from "@yadaw/contracts"
+import type { ThemePreference } from "@heron/contracts"
 
 export type ResolvedTheme = Exclude<ThemePreference, "system">
 

@@ -1,5 +1,5 @@
-import { IPC_CHANNELS } from "@yadaw/contracts"
-import type { OperationStatusSnapshot } from "@yadaw/contracts"
+import { IPC_CHANNELS } from "@heron/contracts"
+import type { OperationStatusSnapshot } from "@heron/contracts"
 import type { IpcHandlerContext } from "./context"
 import type { OperationRecord } from "../kernel/operation-registry"
 import { registerRpcHandler } from "./rpc"

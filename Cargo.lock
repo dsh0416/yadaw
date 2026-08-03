@@ -1768,6 +1768,212 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc0fef456e4baa96da950455cd02c081ca953b141298e41db3fc7e36b1da849c"
 
 [[package]]
+name = "heron-audio-engine"
+version = "0.3.0"
+dependencies = [
+ "bwavfile",
+ "cpal",
+ "heron-dsp-core",
+ "heron-dsp-render",
+ "heron-dsp-runtime",
+ "heron-vst3-host",
+ "midir",
+ "ringbuf",
+ "rubato",
+ "thiserror 2.0.19",
+]
+
+[[package]]
+name = "heron-audio-host"
+version = "0.3.0"
+dependencies = [
+ "ara2-bridge-core",
+ "ara2-bridge-host",
+ "ara2-bridge-sys",
+ "bwavfile",
+ "futures-util",
+ "heron-audio-engine",
+ "heron-dsp-runtime",
+ "heron-iced-ui",
+ "heron-ipc-transport",
+ "heron-vst3-host",
+ "iced_core",
+ "iced_renderer",
+ "iced_wgpu",
+ "iced_widget",
+ "iced_winit",
+ "ipc-channel",
+ "midir",
+ "pollster",
+ "raw-window-handle 0.6.2",
+ "rmp-serde",
+ "sha2",
+ "tokio",
+ "winit",
+]
+
+[[package]]
+name = "heron-audio-host-client"
+version = "0.3.0"
+dependencies = [
+ "heron-dsp-runtime",
+ "heron-ipc-transport",
+ "ipc-channel",
+ "napi",
+ "napi-build",
+ "napi-derive",
+ "rmp-serde",
+]
+
+[[package]]
+name = "heron-dsp-core"
+version = "0.3.0"
+dependencies = [
+ "criterion",
+]
+
+[[package]]
+name = "heron-dsp-node"
+version = "0.3.0"
+dependencies = [
+ "bwavfile",
+ "criterion",
+ "heron-audio-host",
+ "heron-dsp-core",
+ "heron-dsp-runtime",
+ "napi",
+ "napi-build",
+ "napi-derive",
+ "ringbuf",
+ "rubato",
+ "sha2",
+]
+
+[[package]]
+name = "heron-dsp-render"
+version = "0.3.0"
+dependencies = [
+ "criterion",
+ "heron-dsp-core",
+ "heron-dsp-runtime",
+]
+
+[[package]]
+name = "heron-dsp-runtime"
+version = "0.3.0"
+dependencies = [
+ "midly",
+ "rmp-serde",
+ "serde",
+ "serde_bytes",
+ "serde_json",
+]
+
+[[package]]
+name = "heron-gain"
+version = "0.3.0"
+dependencies = [
+ "heron-plugin-ui",
+ "truce",
+ "truce-gui-types",
+ "truce-iced",
+ "truce-test",
+ "truce-vst3",
+]
+
+[[package]]
+name = "heron-iced-ui"
+version = "0.3.0"
+dependencies = [
+ "iced_core",
+ "iced_widget",
+]
+
+[[package]]
+name = "heron-ipc-transport"
+version = "0.3.0"
+dependencies = [
+ "heron-dsp-runtime",
+ "heron-shared-memory",
+ "ipc-channel",
+ "loom",
+ "rmp-serde",
+ "serde",
+ "thiserror 2.0.19",
+ "zerocopy",
+]
+
+[[package]]
+name = "heron-metronome"
+version = "0.3.0"
+dependencies = [
+ "heron-plugin-ui",
+ "truce",
+ "truce-gui-types",
+ "truce-iced",
+ "truce-test",
+ "truce-vst3",
+]
+
+[[package]]
+name = "heron-plugin-ui"
+version = "0.3.0"
+dependencies = [
+ "heron-iced-ui",
+ "iced_core",
+ "iced_widget",
+ "truce",
+ "truce-gui-types",
+ "truce-iced",
+]
+
+[[package]]
+name = "heron-shared-memory"
+version = "0.3.0"
+dependencies = [
+ "getrandom",
+ "libc",
+ "serde",
+ "thiserror 2.0.19",
+ "windows 0.61.3",
+]
+
+[[package]]
+name = "heron-sine"
+version = "0.3.0"
+dependencies = [
+ "heron-plugin-ui",
+ "truce",
+ "truce-gui-types",
+ "truce-iced",
+ "truce-test",
+ "truce-vst3",
+]
+
+[[package]]
+name = "heron-vst3-host"
+version = "0.3.0"
+dependencies = [
+ "bitflags 2.13.1",
+ "cc",
+ "heron-vst3-host-sys",
+ "libc",
+ "libloading 0.8.9",
+ "ringbuf",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.19",
+]
+
+[[package]]
+name = "heron-vst3-host-sys"
+version = "0.3.0"
+dependencies = [
+ "bindgen",
+ "cc",
+]
+
+[[package]]
 name = "hexf-parse"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5918,212 +6124,6 @@ name = "xml-rs"
 version = "0.8.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ae8337f8a065cfc972643663ea4279e04e7256de865aa66fe25cec5fb912d3f"
-
-[[package]]
-name = "yadaw-audio-engine"
-version = "0.2.2"
-dependencies = [
- "bwavfile",
- "cpal",
- "midir",
- "ringbuf",
- "rubato",
- "thiserror 2.0.19",
- "yadaw-dsp-core",
- "yadaw-dsp-render",
- "yadaw-dsp-runtime",
- "yadaw-vst3-host",
-]
-
-[[package]]
-name = "yadaw-audio-host"
-version = "0.2.2"
-dependencies = [
- "ara2-bridge-core",
- "ara2-bridge-host",
- "ara2-bridge-sys",
- "bwavfile",
- "futures-util",
- "iced_core",
- "iced_renderer",
- "iced_wgpu",
- "iced_widget",
- "iced_winit",
- "ipc-channel",
- "midir",
- "pollster",
- "raw-window-handle 0.6.2",
- "rmp-serde",
- "sha2",
- "tokio",
- "winit",
- "yadaw-audio-engine",
- "yadaw-dsp-runtime",
- "yadaw-iced-ui",
- "yadaw-ipc-transport",
- "yadaw-vst3-host",
-]
-
-[[package]]
-name = "yadaw-audio-host-client"
-version = "0.2.2"
-dependencies = [
- "ipc-channel",
- "napi",
- "napi-build",
- "napi-derive",
- "rmp-serde",
- "yadaw-dsp-runtime",
- "yadaw-ipc-transport",
-]
-
-[[package]]
-name = "yadaw-dsp-core"
-version = "0.2.2"
-dependencies = [
- "criterion",
-]
-
-[[package]]
-name = "yadaw-dsp-node"
-version = "0.2.2"
-dependencies = [
- "bwavfile",
- "criterion",
- "napi",
- "napi-build",
- "napi-derive",
- "ringbuf",
- "rubato",
- "sha2",
- "yadaw-audio-host",
- "yadaw-dsp-core",
- "yadaw-dsp-runtime",
-]
-
-[[package]]
-name = "yadaw-dsp-render"
-version = "0.2.2"
-dependencies = [
- "criterion",
- "yadaw-dsp-core",
- "yadaw-dsp-runtime",
-]
-
-[[package]]
-name = "yadaw-dsp-runtime"
-version = "0.2.2"
-dependencies = [
- "midly",
- "rmp-serde",
- "serde",
- "serde_bytes",
- "serde_json",
-]
-
-[[package]]
-name = "yadaw-gain"
-version = "0.2.2"
-dependencies = [
- "truce",
- "truce-gui-types",
- "truce-iced",
- "truce-test",
- "truce-vst3",
- "yadaw-plugin-ui",
-]
-
-[[package]]
-name = "yadaw-iced-ui"
-version = "0.2.2"
-dependencies = [
- "iced_core",
- "iced_widget",
-]
-
-[[package]]
-name = "yadaw-ipc-transport"
-version = "0.2.2"
-dependencies = [
- "ipc-channel",
- "loom",
- "rmp-serde",
- "serde",
- "thiserror 2.0.19",
- "yadaw-dsp-runtime",
- "yadaw-shared-memory",
- "zerocopy",
-]
-
-[[package]]
-name = "yadaw-metronome"
-version = "0.2.2"
-dependencies = [
- "truce",
- "truce-gui-types",
- "truce-iced",
- "truce-test",
- "truce-vst3",
- "yadaw-plugin-ui",
-]
-
-[[package]]
-name = "yadaw-plugin-ui"
-version = "0.2.2"
-dependencies = [
- "iced_core",
- "iced_widget",
- "truce",
- "truce-gui-types",
- "truce-iced",
- "yadaw-iced-ui",
-]
-
-[[package]]
-name = "yadaw-shared-memory"
-version = "0.2.2"
-dependencies = [
- "getrandom",
- "libc",
- "serde",
- "thiserror 2.0.19",
- "windows 0.61.3",
-]
-
-[[package]]
-name = "yadaw-sine"
-version = "0.2.2"
-dependencies = [
- "truce",
- "truce-gui-types",
- "truce-iced",
- "truce-test",
- "truce-vst3",
- "yadaw-plugin-ui",
-]
-
-[[package]]
-name = "yadaw-vst3-host"
-version = "0.2.2"
-dependencies = [
- "bitflags 2.13.1",
- "cc",
- "libc",
- "libloading 0.8.9",
- "ringbuf",
- "serde",
- "serde_json",
- "thiserror 2.0.19",
- "yadaw-vst3-host-sys",
-]
-
-[[package]]
-name = "yadaw-vst3-host-sys"
-version = "0.2.2"
-dependencies = [
- "bindgen",
- "cc",
-]
 
 [[package]]
 name = "yazi"

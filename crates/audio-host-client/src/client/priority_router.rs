@@ -5,7 +5,7 @@ fn spawn_priority_router(
     request_timeouts: Arc<AtomicU64>,
 ) -> Result<JoinHandle<()>> {
     thread::Builder::new()
-        .name("yadaw-ipc-priority-router".into())
+        .name("heron-ipc-priority-router".into())
         .spawn(move || {
             while !closing.load(Ordering::Acquire) {
                 match receiver.try_recv_timeout(router_timeout(&pending)) {

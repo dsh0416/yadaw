@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto"
-import { rpcFailure, rpcSuccess } from "@yadaw/contracts"
+import { rpcFailure, rpcSuccess } from "@heron/contracts"
 import type {
   ProjectGraphRef,
   ProjectGraphSnapshot,
   RpcRequestMeta,
   RpcResult
-} from "@yadaw/contracts"
-import { cloneGraph, validateGraph } from "@yadaw/project-model"
+} from "@heron/contracts"
+import { cloneGraph, validateGraph } from "@heron/project-model"
 import { AssetMaterializer } from "./asset-materializer"
 import type { ProjectAssetReader } from "./asset-materializer"
 import { AudioGraphCompiler } from "./audio-graph-compiler"

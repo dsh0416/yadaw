@@ -1,4 +1,4 @@
-import type { KeySignatureEventState, KeySignatureMode } from "@yadaw/contracts"
+import type { KeySignatureEventState, KeySignatureMode } from "@heron/contracts"
 
 export interface KeySignatureChoice {
   fifths: number

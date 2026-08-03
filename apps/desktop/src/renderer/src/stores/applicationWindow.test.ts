@@ -1,12 +1,12 @@
 import { createPinia, setActivePinia } from "pinia"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import type { ApplicationCommandId } from "@yadaw/contracts"
+import type { ApplicationCommandId } from "@heron/contracts"
 import { useApplicationWindowStore } from "./applicationWindow"
 import { useProjectStore } from "./project"
 import { testBootstrap } from "../test/ipc"
 
 function stubApi(overrides: Record<string, unknown>): void {
-  Object.assign(window.yadaw as unknown as Record<string, unknown>, overrides)
+  Object.assign(window.heron as unknown as Record<string, unknown>, overrides)
 }
 
 beforeEach(() => {

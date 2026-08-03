@@ -7,9 +7,9 @@ import type {
   ProjectWorkspaceSnapshot,
   RpcEvent,
   RpcResult
-} from "@yadaw/contracts"
-import { IPC_PROTOCOL_VERSION } from "@yadaw/contracts"
-import { applyToGraph } from "@yadaw/project-model"
+} from "@heron/contracts"
+import { IPC_PROTOCOL_VERSION } from "@heron/contracts"
+import { applyToGraph } from "@heron/project-model"
 import { useMixerStore } from "./mixer"
 import { useAudioRuntimeStore } from "./audioRuntime"
 import { usePluginStore } from "./plugins"
@@ -20,7 +20,7 @@ const effectDescriptor: PluginDescriptor = {
   classId: "effect",
   modulePath: "effect.vst3",
   name: "Effect",
-  vendor: "YADAW",
+  vendor: "Heron Studio",
   version: "1.0",
   categories: ["Fx"],
   kind: "effect",
@@ -145,7 +145,7 @@ function workspace(value: ProjectGraphSnapshot): ProjectWorkspaceSnapshot {
     revision: 1,
     session: {
       id: "project",
-      path: "project.yadaw",
+      path: "project.heron",
       configuration: {
         name: "Plugin test",
         sampleRate: 48_000,
@@ -240,12 +240,12 @@ describe("plugin store", () => {
       scannedAt: 1,
       plugins: [effectDescriptor]
     }
-    window.yadaw.scanPlugins = vi.fn().mockResolvedValue(success(catalog))
+    window.heron.scanPlugins = vi.fn().mockResolvedValue(success(catalog))
     const store = usePluginStore()
 
     await store.scan(true)
 
-    expect(window.yadaw.scanPlugins).toHaveBeenCalledWith(expect.any(Object), {
+    expect(window.heron.scanPlugins).toHaveBeenCalledWith(expect.any(Object), {
       force: true,
       retryQuarantined: true
     })
@@ -253,8 +253,8 @@ describe("plugin store", () => {
   })
 
   it("reports the helper editor state without creating an Electron parameter panel", async () => {
-    window.yadaw.getPluginParameters = vi.fn()
-    window.yadaw.openPluginEditor = vi.fn().mockResolvedValue(editorOpenResult())
+    window.heron.getPluginParameters = vi.fn()
+    window.heron.openPluginEditor = vi.fn().mockResolvedValue(editorOpenResult())
     const store = usePluginStore()
 
     await store.openEditor("plugin-1")
@@ -263,11 +263,11 @@ describe("plugin store", () => {
       editorOpen: true,
       editorMode: "parameters"
     })
-    expect(window.yadaw.getPluginParameters).not.toHaveBeenCalled()
+    expect(window.heron.getPluginParameters).not.toHaveBeenCalled()
   })
 
   it("waits for project mutations and coalesces repeated editor clicks", async () => {
-    window.yadaw.openPluginEditor = vi.fn().mockResolvedValue(editorOpenResult())
+    window.heron.openPluginEditor = vi.fn().mockResolvedValue(editorOpenResult())
     const projectStore = useProjectStore()
     const finishMutation = projectStore.beginProjectMutation()
     const store = usePluginStore()
@@ -276,25 +276,25 @@ describe("plugin store", () => {
     const repeated = store.openEditor("plugin-1")
     await nextTick()
 
-    expect(window.yadaw.openPluginEditor).not.toHaveBeenCalled()
+    expect(window.heron.openPluginEditor).not.toHaveBeenCalled()
 
     finishMutation()
     await Promise.all([first, repeated])
 
-    expect(window.yadaw.openPluginEditor).toHaveBeenCalledOnce()
+    expect(window.heron.openPluginEditor).toHaveBeenCalledOnce()
   })
 
   it("reconciles editor open state when the helper reports a native close", async () => {
     const closedBridge: {
       listener: ((event: RpcEvent<{ instanceId: string }>) => void) | null
     } = { listener: null }
-    window.yadaw.subscribePluginEditorClosed = vi.fn((listener) => {
+    window.heron.subscribePluginEditorClosed = vi.fn((listener) => {
       closedBridge.listener = listener
       return () => {
         closedBridge.listener = null
       }
     })
-    window.yadaw.listPlugins = vi.fn().mockResolvedValue(
+    window.heron.listPlugins = vi.fn().mockResolvedValue(
       success({
         scannerVersion: 7,
         scanning: false,
@@ -302,7 +302,7 @@ describe("plugin store", () => {
         plugins: [effectDescriptor]
       })
     )
-    window.yadaw.openPluginEditor = vi.fn().mockResolvedValue(
+    window.heron.openPluginEditor = vi.fn().mockResolvedValue(
       success({
         resource: {
           plugin: {
@@ -357,7 +357,7 @@ describe("plugin store", () => {
   })
 
   it("updates parameter feedback while preserving gesture boundaries", async () => {
-    window.yadaw.setPluginParameter = vi.fn().mockResolvedValue(
+    window.heron.setPluginParameter = vi.fn().mockResolvedValue(
       success({
         plugin: {
           kind: "plugin-instance",
@@ -419,7 +419,7 @@ describe("plugin store", () => {
     })
 
     expect(store.parameters["plugin-1"]?.[0]?.normalized).toBe(0.75)
-    expect(window.yadaw.setPluginParameter).toHaveBeenCalledWith(
+    expect(window.heron.setPluginParameter).toHaveBeenCalledWith(
       expect.any(Object),
       expect.objectContaining({
         plugin: expect.objectContaining({ id: "plugin-1", generation: 1 }),
@@ -437,7 +437,7 @@ describe("plugin store", () => {
     const mixerStore = useMixerStore()
     let canonicalGraph = graph()
     mixerStore.graph = canonicalGraph
-    window.yadaw.executeProjectCommand = vi.fn().mockImplementation(async (_meta, command) => {
+    window.heron.executeProjectCommand = vi.fn().mockImplementation(async (_meta, command) => {
       if (command.type !== "create-plugin") throw new Error("Unexpected project command")
       canonicalGraph = applyToGraph(canonicalGraph, command)
       return success({
@@ -462,7 +462,7 @@ describe("plugin store", () => {
     ).toBe(true)
 
     const commands = vi
-      .mocked(window.yadaw.executeProjectCommand)
+      .mocked(window.heron.executeProjectCommand)
       .mock.calls.map(([, command]) => command)
     expect(commands[0]).toMatchObject({
       type: "create-plugin",
@@ -504,7 +504,7 @@ describe("plugin store", () => {
       controllerState: new Uint8Array()
     })
     mixerStore.graph = initialGraph
-    window.yadaw.listPlugins = vi.fn().mockResolvedValue(
+    window.heron.listPlugins = vi.fn().mockResolvedValue(
       success({
         scannerVersion: 4,
         scanning: false,
@@ -512,8 +512,8 @@ describe("plugin store", () => {
         plugins: [replacementInstrumentDescriptor]
       })
     )
-    window.yadaw.subscribePluginScan = vi.fn().mockReturnValue(vi.fn())
-    window.yadaw.executeProjectCommand = vi.fn().mockImplementation(async (_meta, command) => {
+    window.heron.subscribePluginScan = vi.fn().mockReturnValue(vi.fn())
+    window.heron.executeProjectCommand = vi.fn().mockImplementation(async (_meta, command) => {
       if (command.type !== "replace-plugin") throw new Error("Unexpected project command")
       const next = structuredClone(mixerStore.graph)
       const index = next.plugins.findIndex((plugin) => plugin.id === command.pluginId)
@@ -550,7 +550,7 @@ describe("plugin store", () => {
       inputFormat: "mono",
       inputChannels: [1]
     }
-    window.yadaw.executeProjectCommand = vi.fn()
+    window.heron.executeProjectCommand = vi.fn()
     const pluginStore = usePluginStore()
 
     expect(pluginStore.effectInputWidth("audio", 0)).toBe("mono")
@@ -561,7 +561,7 @@ describe("plugin store", () => {
         0
       )
     ).toBe(false)
-    expect(window.yadaw.executeProjectCommand).not.toHaveBeenCalled()
+    expect(window.heron.executeProjectCommand).not.toHaveBeenCalled()
     expect(pluginStore.error).toContain("mono-input")
 
     mixerStore.graph.plugins.push({

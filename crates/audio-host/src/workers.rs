@@ -141,7 +141,7 @@ impl WorkerSupervisor {
         for lane in 0..lane_count {
             let queue = Arc::clone(&queue);
             thread::Builder::new()
-                .name(format!("yadaw-background-io-{lane}"))
+                .name(format!("heron-background-io-{lane}"))
                 .spawn(move || worker_lane(queue))
                 .expect("background I/O worker must start");
         }
@@ -201,7 +201,7 @@ mod tests {
     use crate::engine::{
         AudioEngine, GRAPH_TEST_LOCK, NativeMixerChannel, NativeMixerGraph, PublishOutcome,
     };
-    use yadaw_dsp_runtime::tempo::{TempoEvent, TimeSignatureEvent};
+    use heron_dsp_runtime::tempo::{TempoEvent, TimeSignatureEvent};
 
     fn minimal_graph(generation: u64) -> NativeMixerGraph {
         NativeMixerGraph {

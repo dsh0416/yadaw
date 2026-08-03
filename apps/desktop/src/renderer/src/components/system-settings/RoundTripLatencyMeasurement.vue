@@ -4,9 +4,9 @@ import { useI18n } from "vue-i18n"
 import { useIntervalFn } from "@vueuse/core"
 import { storeToRefs } from "pinia"
 import { Cable } from "@lucide/vue"
-import { UiButton, UiSelect, UiStatusNotice } from "@yadaw/ui"
-import type { UiNoticeTone, UiSelectOption } from "@yadaw/ui"
-import type { AudioEngineState } from "@yadaw/contracts"
+import { UiButton, UiSelect, UiStatusNotice } from "@heron/ui"
+import type { UiNoticeTone, UiSelectOption } from "@heron/ui"
+import type { AudioEngineState } from "@heron/contracts"
 import { useAudioRuntimeStore } from "../../stores/audioRuntime"
 
 const props = defineProps<{

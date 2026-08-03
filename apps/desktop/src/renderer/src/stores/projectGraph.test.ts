@@ -5,7 +5,7 @@ import type {
   ProjectGraphSnapshot,
   ProjectWorkspaceSnapshot,
   RpcResult
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import { EMPTY_PROJECT_GRAPH, useProjectGraphStore } from "./projectGraph"
 import { useProjectStore } from "./project"
 
@@ -105,7 +105,7 @@ function workspace(value: ProjectGraphSnapshot): ProjectWorkspaceSnapshot {
     revision: 1,
     session: {
       id: "project",
-      path: "project.yadaw",
+      path: "project.heron",
       configuration: {
         name: "Graph store",
         sampleRate: 48_000,
@@ -202,8 +202,8 @@ describe("project graph store", () => {
     const store = useProjectGraphStore()
     const loaded = graph()
     loaded.channels[0]!.name = "Loaded"
-    window.yadaw.loadProjectGraph = vi.fn().mockResolvedValue(success(loaded, 3))
-    window.yadaw.reloadProjectGraph = vi.fn().mockResolvedValue(
+    window.heron.loadProjectGraph = vi.fn().mockResolvedValue(success(loaded, 3))
+    window.heron.reloadProjectGraph = vi.fn().mockResolvedValue(
       success(
         {
           ...loaded,
@@ -237,7 +237,7 @@ describe("project graph store", () => {
 
     const reloaded = graph()
     reloaded.channels[0]!.name = "Reloaded after gap"
-    window.yadaw.reloadProjectGraph = vi.fn().mockResolvedValue(success(reloaded, 5))
+    window.heron.reloadProjectGraph = vi.fn().mockResolvedValue(success(reloaded, 5))
     await expect(store.reconcileExternalResult(result, 4)).resolves.toBe("reloaded")
     expect(store.graph.channels[0]?.name).toBe("Reloaded after gap")
     expect(useProjectStore().projectRevision).toBe(5)
@@ -245,7 +245,7 @@ describe("project graph store", () => {
 
   it("records load failures without throwing", async () => {
     const store = useProjectGraphStore()
-    window.yadaw.loadProjectGraph = vi.fn().mockResolvedValue(failure())
+    window.heron.loadProjectGraph = vi.fn().mockResolvedValue(failure())
     await store.load()
     expect(store.error.length).toBeGreaterThan(0)
     expect(store.loading).toBe(false)
@@ -256,7 +256,7 @@ describe("project graph store", () => {
     store.hydrate(graph())
     const changed = graph()
     changed.channels[0]!.gainDb = -6
-    window.yadaw.executeProjectCommand = vi.fn().mockResolvedValue(
+    window.heron.executeProjectCommand = vi.fn().mockResolvedValue(
       success(
         {
           graph: changed,
@@ -280,8 +280,8 @@ describe("project graph store", () => {
   it("rolls back optimistic state when a command fails", async () => {
     const store = useProjectGraphStore()
     store.hydrate(graph())
-    window.yadaw.executeProjectCommand = vi.fn().mockResolvedValue(failure())
-    window.yadaw.loadProjectGraph = vi.fn().mockResolvedValue(success(graph(), 1))
+    window.heron.executeProjectCommand = vi.fn().mockResolvedValue(failure())
+    window.heron.loadProjectGraph = vi.fn().mockResolvedValue(success(graph(), 1))
 
     const result = await store.execute({
       type: "update-channel",
@@ -298,8 +298,8 @@ describe("project graph store", () => {
     store.hydrate(graph())
     const reconciled = graph()
     reconciled.channels[0]!.gainDb = -1
-    window.yadaw.executeProjectCommand = vi.fn().mockResolvedValue(failure("after-reconcile"))
-    window.yadaw.loadProjectGraph = vi.fn().mockResolvedValue(success(reconciled, 9))
+    window.heron.executeProjectCommand = vi.fn().mockResolvedValue(failure("after-reconcile"))
+    window.heron.loadProjectGraph = vi.fn().mockResolvedValue(success(reconciled, 9))
 
     await store.execute({
       type: "update-channel",
@@ -307,7 +307,7 @@ describe("project graph store", () => {
       patch: { gainDb: -9 }
     })
     expect(store.graph.channels[0]?.gainDb).toBe(-1)
-    expect(window.yadaw.loadProjectGraph).toHaveBeenCalled()
+    expect(window.heron.loadProjectGraph).toHaveBeenCalled()
   })
 
   it("recovers from thrown execute errors by reloading", async () => {
@@ -315,8 +315,8 @@ describe("project graph store", () => {
     store.hydrate(graph())
     const recovered = graph()
     recovered.channels[0]!.name = "Recovered"
-    window.yadaw.executeProjectCommand = vi.fn().mockRejectedValue(new Error("boom"))
-    window.yadaw.loadProjectGraph = vi.fn().mockResolvedValue(success(recovered, 2))
+    window.heron.executeProjectCommand = vi.fn().mockRejectedValue(new Error("boom"))
+    window.heron.loadProjectGraph = vi.fn().mockResolvedValue(success(recovered, 2))
 
     const result = await store.execute({
       type: "update-channel",
@@ -327,14 +327,14 @@ describe("project graph store", () => {
     // loadNow clears error after the catch path reloads successfully.
     expect(store.error).toBe("")
     expect(store.graph.channels[0]?.name).toBe("Recovered")
-    expect(window.yadaw.loadProjectGraph).toHaveBeenCalled()
+    expect(window.heron.loadProjectGraph).toHaveBeenCalled()
   })
 
   it("queues mixer previews and flushes them before the next mutation", async () => {
     const store = useProjectGraphStore()
     store.hydrate(graph())
-    window.yadaw.previewMixerParameter = vi.fn().mockResolvedValue(success(undefined))
-    window.yadaw.executeProjectCommand = vi.fn().mockResolvedValue(
+    window.heron.previewMixerParameter = vi.fn().mockResolvedValue(success(undefined))
+    window.heron.executeProjectCommand = vi.fn().mockResolvedValue(
       success({
         graph: graph(),
         inverse: { type: "batch", commands: [] }
@@ -356,8 +356,8 @@ describe("project graph store", () => {
       value: -4
     })
     await store.flushPreviews()
-    expect(window.yadaw.previewMixerParameter).toHaveBeenCalled()
-    const previewCalls = vi.mocked(window.yadaw.previewMixerParameter).mock.calls
+    expect(window.heron.previewMixerParameter).toHaveBeenCalled()
+    const previewCalls = vi.mocked(window.heron.previewMixerParameter).mock.calls
     expect(previewCalls.at(-1)?.[1]).toMatchObject({
       target: "channel",
       id: "audio",
@@ -370,13 +370,13 @@ describe("project graph store", () => {
       channelId: "audio",
       patch: { pan: 0.25 }
     })
-    expect(window.yadaw.previewMixerParameter).toHaveBeenCalled()
+    expect(window.heron.previewMixerParameter).toHaveBeenCalled()
   })
 
   it("surfaces preview flush failures", async () => {
     const store = useProjectGraphStore()
     store.hydrate(graph())
-    window.yadaw.previewMixerParameter = vi.fn().mockResolvedValue(failure())
+    window.heron.previewMixerParameter = vi.fn().mockResolvedValue(failure())
     store.preview({
       target: "channel",
       id: "audio",
@@ -395,7 +395,7 @@ describe("project graph store", () => {
     const firstGate = new Promise<void>((resolve) => {
       releaseFirst = resolve
     })
-    window.yadaw.executeProjectCommand = vi
+    window.heron.executeProjectCommand = vi
       .fn()
       .mockImplementationOnce(async () => {
         order.push("first-start")

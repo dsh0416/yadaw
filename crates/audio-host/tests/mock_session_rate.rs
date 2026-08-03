@@ -3,12 +3,12 @@ use std::{
     time::{Duration, Instant},
 };
 
-use yadaw_audio_host::engine::{
+use heron_audio_host::engine::{
     AudioEngine, NativeAudioEngineConfig, NativeMixerChannel, NativeMixerGraph,
     NativeTransportSnapshot, compile_graph_build,
 };
-use yadaw_audio_host::mock;
-use yadaw_dsp_runtime::tempo::{TempoEvent, TimeSignatureEvent};
+use heron_audio_host::mock;
+use heron_dsp_runtime::tempo::{TempoEvent, TimeSignatureEvent};
 
 const MOCK_BLOCK_FRAMES: u64 = 128;
 const NATIVE_SAMPLE_RATE: u64 = 48_000;

@@ -1,6 +1,6 @@
 use std::{fmt, os::raw::c_char, str::FromStr};
 
-use yadaw_vst3_host_sys::{Steinberg::TUID, compat::tuid_byte};
+use heron_vst3_host_sys::{Steinberg::TUID, compat::tuid_byte};
 
 use crate::HostError;
 
@@ -149,8 +149,8 @@ mod tests {
         // truce's vst3_cid() stores FNV-1a as little-endian factory bytes. Those
         // match COM GUID memory order for the registry IDs committed in desktop.
         let factory = [
-            0xDE, 0xA5, 0x10, 0xF3, 0x34, 0xDA, 0x0C, 0x82, 0x9E, 0x06, 0x8A, 0x57, 0x53, 0xF8,
-            0x3A, 0xDE,
+            0x11, 0x6A, 0xD1, 0x8C, 0x7A, 0x02, 0x7F, 0xCC, 0xDF, 0x0C, 0x14, 0x19, 0xE8, 0x6D,
+            0x10, 0x24,
         ];
         let mut tuid = [tuid_byte(0); 16];
         let mut index = 0;
@@ -159,7 +159,7 @@ mod tests {
             index += 1;
         }
         let id = ClassId::from_tuid(tuid);
-        assert_eq!(id.to_string(), "F310A5DEDA34820C9E068A5753F83ADE");
+        assert_eq!(id.to_string(), "8CD16A11027ACC7FDF0C1419E86D1024");
         assert_eq!(
             id.to_tuid()
                 .into_iter()

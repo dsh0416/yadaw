@@ -1,18 +1,18 @@
 import { describe, expect, it, vi } from "vitest"
-import { INITIAL_AUDIO_RUNTIME_SNAPSHOT } from "@yadaw/contracts"
+import { INITIAL_AUDIO_RUNTIME_SNAPSHOT } from "@heron/contracts"
 import type {
   PluginInstanceState,
   ProjectGraphRef,
   ProjectGraphSnapshot,
   ProjectSession,
   ProjectSessionRef
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import { ApplicationStateStore } from "./application-state-store"
 import { OperationRegistry } from "./operation-registry"
 
 const project: ProjectSession = {
   id: "project",
-  path: "project.yadaw",
+  path: "project.heron",
   configuration: {
     name: "Project",
     sampleRate: 48_000,
@@ -277,7 +277,7 @@ describe("ApplicationStateStore", () => {
         classId: "plugin-class",
         modulePath: "plugin.vst3",
         name: "Plugin",
-        vendor: "YADAW",
+        vendor: "Heron Studio",
         version: "1",
         categories: ["Fx"],
         kind: "effect",

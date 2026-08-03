@@ -1,6 +1,6 @@
 # Renderer UI audit
 
-This checklist records the source-wide audit introduced with `@yadaw/ui` and extended as the
+This checklist records the source-wide audit introduced with `@heron/ui` and extended as the
 renderer grew. The inventory is now collected dynamically rather than frozen at the original 61
 Vue files. On the 2026-07-30 expansion pass, `lint:design` covered 234 renderer sources, 45 UI
 sources, and 8 design-system sources. “Reviewed” means the file is covered by the automated

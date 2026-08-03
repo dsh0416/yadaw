@@ -2,7 +2,7 @@
 import { computed, shallowRef, watch } from "vue"
 import { useI18n } from "vue-i18n"
 import { Clock3, FileAudio, FolderCog, Music2, Save, SlidersHorizontal } from "@lucide/vue"
-import type { ProjectConfiguration } from "@yadaw/contracts"
+import type { ProjectConfiguration } from "@heron/contracts"
 import SettingsContainer from "../settings/SettingsContainer.vue"
 import type { SettingsCategory } from "../settings/settings"
 import ProjectGeneralSettings from "./ProjectGeneralSettings.vue"

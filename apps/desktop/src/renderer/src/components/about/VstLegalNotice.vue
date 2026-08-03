@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from "vue-i18n"
-import { VstCompatibleLogo } from "@yadaw/ui"
+import { VstCompatibleLogo } from "@heron/ui"
 
 const { t } = useI18n()
 </script>

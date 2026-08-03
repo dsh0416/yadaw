@@ -13,7 +13,7 @@ import type {
   MixerSendState,
   PluginDescriptor,
   PluginInstanceState
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import MixerChannelStrip from "../../../../../apps/desktop/src/renderer/src/components/mixer/MixerChannelStrip.vue"
 
 const props = defineProps<{
@@ -60,7 +60,7 @@ const compressorDescriptor: PluginDescriptor = {
   classId: "manual-compressor",
   modulePath: "",
   name: "Compressor",
-  vendor: "YADAW",
+  vendor: "Heron",
   version: "1.0",
   categories: ["Fx", "Dynamics"],
   kind: "effect",

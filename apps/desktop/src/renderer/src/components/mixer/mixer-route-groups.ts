@@ -1,5 +1,5 @@
-import type { UiCascadingSelectGroup } from "@yadaw/ui"
-import type { MixerBusState, MixerChannelState, MixerRouteTarget } from "@yadaw/contracts"
+import type { UiCascadingSelectGroup } from "@heron/ui"
+import type { MixerBusState, MixerChannelState, MixerRouteTarget } from "@heron/contracts"
 
 export type MixerRouteGroupsTranslator = (key: string, params?: Record<string, unknown>) => string
 

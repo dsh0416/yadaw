@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import type { WaveformPeakWindow } from "@yadaw/contracts"
+import type { WaveformPeakWindow } from "@heron/contracts"
 import {
   aggregateWaveformPeaks,
   buildWaveformGeometry,

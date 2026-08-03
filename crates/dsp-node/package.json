@@ -1,6 +1,6 @@
 {
-  "name": "@yadaw/dsp-node",
-  "version": "0.2.2",
+  "name": "@heron/dsp-node",
+  "version": "0.3.0",
   "license": "GPL-3.0-only",
   "private": true,
   "main": "index.js",
@@ -19,7 +19,7 @@
     "check": "napi build --platform"
   },
   "napi": {
-    "binaryName": "yadaw-dsp-node",
+    "binaryName": "heron-dsp-node",
     "targets": [
       "x86_64-pc-windows-msvc",
       "x86_64-apple-darwin",

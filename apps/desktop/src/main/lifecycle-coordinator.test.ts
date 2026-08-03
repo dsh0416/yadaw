@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { INITIAL_AUDIO_RUNTIME_SNAPSHOT } from "@yadaw/contracts"
-import type { ProjectSession, RecordingSession } from "@yadaw/contracts"
+import { INITIAL_AUDIO_RUNTIME_SNAPSHOT } from "@heron/contracts"
+import type { ProjectSession, RecordingSession } from "@heron/contracts"
 
 vi.mock("electron", () => ({
   BrowserWindow: { getAllWindows: vi.fn(() => []) }
@@ -10,7 +10,7 @@ import { LifecycleCoordinator } from "./lifecycle-coordinator"
 
 const project: ProjectSession = {
   id: "project",
-  path: "project.yadaw",
+  path: "project.heron",
   configuration: {
     name: "Project",
     sampleRate: 48_000,

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from "vue-i18n"
 import { GripVertical, Power, SquareArrowOutUpRight, Trash2 } from "@lucide/vue"
-import type { PluginInstanceState, PluginRuntimeStatus } from "@yadaw/contracts"
+import type { PluginInstanceState, PluginRuntimeStatus } from "@heron/contracts"
 import { pluginAudioModeBadge } from "./plugin-audio-mode"
 import { writePluginDrag } from "./plugin-drag"
 import { pluginDisplayState } from "./plugin-display-state"

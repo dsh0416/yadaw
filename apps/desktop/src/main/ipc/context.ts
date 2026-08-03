@@ -1,4 +1,4 @@
-import type { SystemPerformanceSnapshot } from "@yadaw/contracts"
+import type { SystemPerformanceSnapshot } from "@heron/contracts"
 import type { ApplicationSettingsStore } from "../application-settings"
 import type { AudioHostService } from "../audio-host-service"
 import type { LifecycleCoordinator } from "../lifecycle-coordinator"

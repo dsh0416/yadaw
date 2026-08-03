@@ -1,6 +1,6 @@
 {
-  "name": "@yadaw/project-db",
-  "version": "0.2.2",
+  "name": "@heron/project-db",
+  "version": "0.3.0",
   "license": "GPL-3.0-only",
   "private": true,
   "type": "module",
@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "@electric-sql/pglite": "catalog:",
-    "@yadaw/contracts": "workspace:*",
+    "@heron/contracts": "workspace:*",
     "drizzle-orm": "0.45.2"
   },
   "devDependencies": {

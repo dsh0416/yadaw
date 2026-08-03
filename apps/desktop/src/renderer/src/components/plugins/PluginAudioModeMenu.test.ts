@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { mount } from "@vue/test-utils"
-import type { PluginDescriptor } from "@yadaw/contracts"
+import type { PluginDescriptor } from "@heron/contracts"
 import PluginAudioModeMenu from "./PluginAudioModeMenu.vue"
 
 const descriptor: PluginDescriptor = {
@@ -8,7 +8,7 @@ const descriptor: PluginDescriptor = {
   classId: "mono-effect",
   modulePath: "mono-effect.vst3",
   name: "Mono Effect",
-  vendor: "YADAW",
+  vendor: "Heron Studio",
   version: "1.0",
   categories: ["Fx"],
   kind: "effect",

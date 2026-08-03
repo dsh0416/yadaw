@@ -1,5 +1,5 @@
 import { mount } from "@vue/test-utils"
-import type { AudioBenchmarkReport } from "@yadaw/contracts"
+import type { AudioBenchmarkReport } from "@heron/contracts"
 import { describe, expect, it } from "vitest"
 import AudioBenchmarkDialog from "./AudioBenchmarkDialog.vue"
 

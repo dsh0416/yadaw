@@ -1,5 +1,5 @@
-import { AudioHostIpcClient } from "@yadaw/audio-host-client"
-import type { AudioHostRuntimePreferences } from "@yadaw/contracts"
+import { AudioHostIpcClient } from "@heron/audio-host-client"
+import type { AudioHostRuntimePreferences } from "@heron/contracts"
 
 export class AudioHostProcessSupervisor {
   client: AudioHostIpcClient | null = null

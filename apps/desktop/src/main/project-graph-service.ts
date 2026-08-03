@@ -3,9 +3,9 @@ import type {
   ProjectGraphSnapshot,
   RpcRequestMeta,
   RpcResult
-} from "@yadaw/contracts"
-import type { PluginStateInput } from "@yadaw/project-db/protocol"
-import { cloneGraph, validateGraph } from "@yadaw/project-model"
+} from "@heron/contracts"
+import type { PluginStateInput } from "@heron/project-db/protocol"
+import { cloneGraph, validateGraph } from "@heron/project-model"
 import type { AudioGraphPublisher } from "./audio-graph-publisher"
 import type { PreparedProjectGraph } from "./audio-graph-publisher"
 import type { ProjectService } from "./project-service"

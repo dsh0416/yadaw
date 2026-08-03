@@ -1,13 +1,13 @@
 ---
 layout: page
-title: YADAW
+title: Heron Studio
 titleTemplate: false
-description: 一款自由开源的数字音频工作站，支持 Windows、macOS 与 Linux。
+description: Heron Studio 是一款自由开源的数字音频工作站。从灵感，到舞台。
 sidebar: false
 aside: false
 editLink: false
 lastUpdated: false
-pageClass: yadaw-home
+pageClass: heron-home
 ---
 
 <HomePage />

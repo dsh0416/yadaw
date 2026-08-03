@@ -17,23 +17,23 @@ describe("RecordingSettings", () => {
       recordingBitDepth: "float32",
       midiCenterCStandard: "roland-c4"
     })
-    window.yadaw.bootstrap = vi
+    window.heron.bootstrap = vi
       .fn()
       .mockResolvedValue(rpcSuccess(testBootstrap({ settings: settingsSnapshot(initial) })))
-    window.yadaw.listPendingRecordings = vi.fn().mockResolvedValue(rpcSuccess([]))
-    window.yadaw.updateApplicationSettings = vi
+    window.heron.listPendingRecordings = vi.fn().mockResolvedValue(rpcSuccess([]))
+    window.heron.updateApplicationSettings = vi
       .fn()
       .mockImplementation(async (_meta, patch) =>
         rpcSuccess(settingsSnapshot(testSettings({ ...initial, ...patch }), 2))
       )
-    window.yadaw.chooseSwapDirectory = vi
+    window.heron.chooseSwapDirectory = vi
       .fn()
       .mockResolvedValue(
         rpcSuccess(
           settingsSnapshot(testSettings({ ...initial, swapDirectory: "D:/recording-swap" }), 2)
         )
       )
-    window.yadaw.setSoftwareMonitoringEnabled = vi
+    window.heron.setSoftwareMonitoringEnabled = vi
       .fn()
       .mockImplementation(async (_meta, enabled) =>
         rpcSuccess(
@@ -47,12 +47,12 @@ describe("RecordingSettings", () => {
     await vi.waitFor(() => expect(wrapper.text()).toContain("C:/swap"))
 
     await wrapper.get("select").setValue("pcm24")
-    expect(window.yadaw.updateApplicationSettings).toHaveBeenCalledWith(expect.any(Object), {
+    expect(window.heron.updateApplicationSettings).toHaveBeenCalledWith(expect.any(Object), {
       recordingBitDepth: "pcm24"
     })
 
     await wrapper.get('button[type="button"]').trigger("click")
-    expect(window.yadaw.chooseSwapDirectory).toHaveBeenCalledOnce()
+    expect(window.heron.chooseSwapDirectory).toHaveBeenCalledOnce()
   })
 
   it("uses the dedicated software-monitoring transaction and restores the checkbox on failure", async () => {
@@ -64,11 +64,11 @@ describe("RecordingSettings", () => {
 
     await checkbox.setValue(true)
     await flushPromises()
-    expect(window.yadaw.setSoftwareMonitoringEnabled).toHaveBeenCalledWith(expect.any(Object), true)
+    expect(window.heron.setSoftwareMonitoringEnabled).toHaveBeenCalledWith(expect.any(Object), true)
     expect(checkbox.element.checked).toBe(true)
     expect(wrapper.text()).toContain("Available on Audio tracks")
 
-    window.yadaw.setSoftwareMonitoringEnabled = vi
+    window.heron.setSoftwareMonitoringEnabled = vi
       .fn()
       .mockResolvedValue(rpcFailure("errors.audioEngineUnavailable"))
     await checkbox.setValue(false)

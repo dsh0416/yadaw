@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from "vue-i18n"
-import { AsioCompatibleLogo } from "@yadaw/ui"
+import { AsioCompatibleLogo } from "@heron/ui"
 
 const { t } = useI18n()
 </script>

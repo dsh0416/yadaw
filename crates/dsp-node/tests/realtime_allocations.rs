@@ -6,12 +6,12 @@ use std::{
     hint::black_box,
 };
 
-use yadaw_audio_host::engine::bench_support::{
+use heron_audio_host::engine::bench_support::{
     ParameterQueueHarness, PluginAdapterHarness, RenderHarness, RenderScenario,
     SessionRateBridgeHarness,
 };
-use yadaw_dsp_core::mixer::{ChannelKind, ChannelSpec, MixerGraph, RouteTarget};
-use yadaw_dsp_node::bench_support::TapHarness;
+use heron_dsp_core::mixer::{ChannelKind, ChannelSpec, MixerGraph, RouteTarget};
+use heron_dsp_node::bench_support::TapHarness;
 
 thread_local! {
     static TRACKING: Cell<bool> = const { Cell::new(false) };

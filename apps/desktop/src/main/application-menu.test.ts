@@ -21,7 +21,7 @@ vi.mock("electron", () => ({
   }
 }))
 
-import { IPC_CHANNELS } from "@yadaw/contracts"
+import { IPC_CHANNELS } from "@heron/contracts"
 import { installApplicationMenu } from "./application-menu"
 import { setMainLocale } from "./i18n"
 
@@ -35,12 +35,12 @@ describe("installApplicationMenu", () => {
     installApplicationMenu("darwin")
 
     const template = electron.buildFromTemplate.mock.calls[0]?.[0]
-    const application = template?.find((item: { label?: string }) => item.label === "YADAW")
+    const application = template?.find((item: { label?: string }) => item.label === "Heron")
     const preferences = application?.submenu?.find(
       (item: { label?: string }) => item.label === "Preferences…"
     )
     const about = application?.submenu?.find(
-      (item: { label?: string }) => item.label === "About YADAW"
+      (item: { label?: string }) => item.label === "About Heron Studio"
     )
     const file = template?.find((item: { label?: string }) => item.label === "File")
     const projectSettings = file?.submenu?.find(
@@ -98,7 +98,7 @@ describe("installApplicationMenu", () => {
     const template = electron.buildFromTemplate.mock.calls[0]?.[0]
     const file = template?.find((item: { label?: string }) => item.label === "文件")
     const preferences = template
-      ?.find((item: { label?: string }) => item.label === "YADAW")
+      ?.find((item: { label?: string }) => item.label === "Heron")
       ?.submenu?.find((item: { label?: string }) => item.label === "偏好设置…")
 
     expect(file).toBeDefined()

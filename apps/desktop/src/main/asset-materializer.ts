@@ -1,7 +1,7 @@
 import { access, mkdir, rename, rm, writeFile } from "node:fs/promises"
 import { join } from "node:path"
-import type { ProjectGraphSnapshot } from "@yadaw/contracts"
-import type { AssetContentHash } from "@yadaw/project-db/protocol"
+import type { ProjectGraphSnapshot } from "@heron/contracts"
+import type { AssetContentHash } from "@heron/project-db/protocol"
 import type { ProjectService } from "./project-service"
 
 export interface ProjectAssetReader {

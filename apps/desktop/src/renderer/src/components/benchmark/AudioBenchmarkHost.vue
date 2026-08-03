@@ -2,7 +2,7 @@
 import { computed } from "vue"
 import { storeToRefs } from "pinia"
 import { useI18n } from "vue-i18n"
-import { UiDialog } from "@yadaw/ui"
+import { UiDialog } from "@heron/ui"
 import AudioBenchmarkDialog from "./AudioBenchmarkDialog.vue"
 import { useAudioBenchmarkStore } from "../../stores/audioBenchmark"
 

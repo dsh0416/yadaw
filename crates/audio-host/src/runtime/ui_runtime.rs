@@ -1049,7 +1049,7 @@ fn plugin_editor_window_attributes(
     editor_owner_window: Option<usize>,
 ) -> WindowAttributes {
     let attributes = WindowAttributes::default()
-        .with_title(format!("{channel_name} — {plugin_name} — YADAW"))
+        .with_title(format!("{channel_name} — {plugin_name} — Heron"))
         .with_inner_size(LogicalSize::new(720.0, 640.0))
         // Do not expose a half-initialized surface. `present` makes the fully
         // attached editor visible and activates it in one sequence.
@@ -1078,8 +1078,8 @@ fn configure_editor_window_attributes(
         use winit::platform::{wayland::WindowAttributesExtWayland, x11::WindowAttributesExtX11};
 
         let attributes =
-            WindowAttributesExtX11::with_name(attributes, editor_platform::APPLICATION_ID, "yadaw");
-        WindowAttributesExtWayland::with_name(attributes, editor_platform::APPLICATION_ID, "yadaw")
+            WindowAttributesExtX11::with_name(attributes, editor_platform::APPLICATION_ID, "heron");
+        WindowAttributesExtWayland::with_name(attributes, editor_platform::APPLICATION_ID, "heron")
     }
 
     #[cfg(not(any(target_os = "windows", target_os = "linux")))]

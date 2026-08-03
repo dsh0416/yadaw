@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto"
 import { mkdir, rm, writeFile } from "node:fs/promises"
 import { join } from "node:path"
-import type { WaveformPeakWindow, WaveformWindowRequest } from "@yadaw/contracts"
-import { analyzeWaveform } from "@yadaw/dsp-node"
+import type { WaveformPeakWindow, WaveformWindowRequest } from "@heron/contracts"
+import { analyzeWaveform } from "@heron/dsp-node"
 import type { ApplicationSettingsStore } from "./application-settings"
 import type { ProjectService } from "./project-service"
 

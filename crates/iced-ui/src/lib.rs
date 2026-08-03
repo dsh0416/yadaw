@@ -1,4 +1,4 @@
-//! Shared iced foundations for YADAW's host chrome and built-in plug-ins.
+//! Shared iced foundations for Heron's host chrome and built-in plug-ins.
 
 use std::borrow::Cow;
 
@@ -85,7 +85,7 @@ pub fn cascading_menu<'a, Message: Clone + 'a>(
     container(columns).into()
 }
 
-/// Four-pixel spatial scale used by native YADAW interfaces.
+/// Four-pixel spatial scale used by native Heron interfaces.
 pub mod space {
     pub const XS: f32 = 4.0;
     pub const SM: f32 = 8.0;
@@ -212,14 +212,14 @@ impl Appearance {
         }
     }
 
-    /// Build an iced theme with YADAW's semantic base colors.
+    /// Build an iced theme with Heron's semantic base colors.
     #[must_use]
     pub fn theme(self) -> Theme {
         let colors = self.palette();
         Theme::custom(
             match self {
-                Self::Dark => "YADAW Dark",
-                Self::Light => "YADAW Light",
+                Self::Dark => "Heron Dark",
+                Self::Light => "Heron Light",
             },
             Palette {
                 background: colors.canvas,

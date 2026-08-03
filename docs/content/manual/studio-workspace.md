@@ -59,7 +59,7 @@ Select **Library** to search:
 - audio already stored in the project;
 - the scanned plug-in catalog.
 
-Use **Rescan VST3** after installing a new plug-in while YADAW is open.
+Use **Rescan VST3** after installing a new plug-in while Heron is open.
 
 ## Lower dock
 

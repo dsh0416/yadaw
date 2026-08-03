@@ -9,7 +9,7 @@ const electronMocks = vi.hoisted(() => ({
   shellOpenPath: vi.fn(async () => ""),
   quit: vi.fn(),
   showAboutPanel: vi.fn(),
-  getPath: vi.fn(() => "/tmp/yadaw-test"),
+  getPath: vi.fn(() => "/tmp/heron-test"),
   shouldUseDarkColors: false
 }))
 
@@ -36,7 +36,7 @@ vi.mock("electron", () => ({
   }
 }))
 
-import { IPC_CHANNELS } from "@yadaw/contracts"
+import { IPC_CHANNELS } from "@heron/contracts"
 import { createContext, defaultSettings, invoke, meta, mutationMeta } from "./test-harness"
 import { registerSettingsRpcHandlers } from "./settings-rpc-handlers"
 

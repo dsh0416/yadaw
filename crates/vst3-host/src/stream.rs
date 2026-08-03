@@ -4,7 +4,7 @@ use std::{
     sync::atomic::{AtomicU32, Ordering},
 };
 
-use yadaw_vst3_host_sys::{
+use heron_vst3_host_sys::{
     Steinberg::{
         FUnknown, IBStream, ISizeableStream,
         Vst::{IAttributeList, IStreamAttributes},
@@ -418,7 +418,7 @@ static STREAM_ATTRIBUTES_VTABLE: StreamAttributesVTable = StreamAttributesVTable
 #[cfg(test)]
 mod tests {
     use super::*;
-    use yadaw_vst3_host_sys::abi::AttributeListVTable;
+    use heron_vst3_host_sys::abi::AttributeListVTable;
 
     const INVALID_ARGUMENT: tresult = -2147024809;
     const NO_INTERFACE: tresult = -2147467262;

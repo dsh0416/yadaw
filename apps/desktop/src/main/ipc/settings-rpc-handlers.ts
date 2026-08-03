@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto"
 import { dialog, nativeTheme, shell } from "electron"
-import { IPC_CHANNELS, rpcFailure, rpcSuccess } from "@yadaw/contracts"
+import { IPC_CHANNELS, rpcFailure, rpcSuccess } from "@heron/contracts"
 import type {
   ApplicationSettings,
   ApplicationSettingsResourceSnapshot,
@@ -9,7 +9,7 @@ import type {
   RpcRequestMeta,
   RpcResult,
   ShortcutPreferences
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import type { IpcHandlerContext } from "./context"
 import { registerRpcHandler } from "./rpc"
 import { validateMutationTarget, validateReadTarget } from "./resource-validation"

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { createPinia, setActivePinia } from "pinia"
-import { INITIAL_AUDIO_RUNTIME_SNAPSHOT } from "@yadaw/contracts"
+import { INITIAL_AUDIO_RUNTIME_SNAPSHOT } from "@heron/contracts"
 import { useAudioRuntimeStore } from "./audioRuntime"
 import { rpcSuccess, testBootstrap } from "../test/ipc"
 
@@ -76,7 +76,7 @@ describe("audio runtime sample-rate diagnostics", () => {
       },
       transport: null
     })
-    window.yadaw.startRoundTripLatencyMeasurement = vi.fn().mockResolvedValue(
+    window.heron.startRoundTripLatencyMeasurement = vi.fn().mockResolvedValue(
       rpcSuccess({
         status: "preparing",
         inputChannel: 1,
@@ -85,7 +85,7 @@ describe("audio runtime sample-rate diagnostics", () => {
         failure: null
       })
     )
-    window.yadaw.roundTripLatencyMeasurementSnapshot = vi.fn().mockResolvedValue(
+    window.heron.roundTripLatencyMeasurementSnapshot = vi.fn().mockResolvedValue(
       rpcSuccess({
         status: "complete",
         inputChannel: 1,

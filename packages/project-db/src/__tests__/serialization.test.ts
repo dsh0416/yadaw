@@ -25,7 +25,7 @@ describe("serialization helpers", () => {
       classId: "ABCDEF0123456789ABCDEF0123456789",
       modulePath: "/plugin.vst3",
       name: "Effect",
-      vendor: "YADAW",
+      vendor: "Heron Studio",
       version: "1.0",
       categories: ["Fx"],
       kind: "effect",

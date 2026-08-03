@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import type { CompiledAudioGraphSnapshot } from "@yadaw/contracts"
+import type { CompiledAudioGraphSnapshot } from "@heron/contracts"
 import { layoutCompiledEffectGraph } from "./compiledEffectGraphLayout"
 
 const snapshot: CompiledAudioGraphSnapshot = {

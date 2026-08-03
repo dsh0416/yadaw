@@ -1,7 +1,7 @@
 import { useIntervalFn, useTimeoutFn } from "@vueuse/core"
 import { onScopeDispose, readonly, shallowRef, toValue, watch } from "vue"
 import type { MaybeRefOrGetter } from "vue"
-import type { WaveformPeakWindow } from "@yadaw/contracts"
+import type { WaveformPeakWindow } from "@heron/contracts"
 import { useWaveformStore } from "../stores/waveform"
 
 interface UseClipWaveformOptions {

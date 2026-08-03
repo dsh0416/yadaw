@@ -7,14 +7,14 @@ import {
   APPLICATION_COMMAND_IDS,
   formatKeyboardShortcut,
   resolveKeyboardShortcuts
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import type {
   ApplicationCommandId,
   KeyboardShortcutBinding,
   MidiControlEvent,
   ShortcutModifier,
   ShortcutPreferences
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import SettingsPage from "../settings/SettingsPage.vue"
 import SettingsSection from "../settings/SettingsSection.vue"
 import { useApplicationSettingsStore } from "../../stores/applicationSettings"

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from "vue-i18n"
 import { RefreshCw } from "@lucide/vue"
-import { UiSelect, type UiSelectOption } from "@yadaw/ui"
+import { UiSelect, type UiSelectOption } from "@heron/ui"
 import SettingsSection from "../settings/SettingsSection.vue"
 
 defineProps<{

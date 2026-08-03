@@ -1,17 +1,17 @@
 use std::{ffi::c_void, ptr::NonNull};
 
-use yadaw_vst3_host_sys::{
+use heron_vst3_host_sys::{
+    HeronAraMainFactory, HeronAraPluginEntry,
     Steinberg::{FUnknown, IPluginFactory},
-    YadawAraMainFactory, YadawAraPluginEntry, yadaw_ara_main_factory_create,
-    yadaw_ara_main_factory_destroy, yadaw_ara_main_factory_get, yadaw_ara_plugin_entry_bind,
-    yadaw_ara_plugin_entry_create, yadaw_ara_plugin_entry_destroy,
-    yadaw_ara_plugin_entry_get_factory,
+    heron_ara_main_factory_create, heron_ara_main_factory_destroy, heron_ara_main_factory_get,
+    heron_ara_plugin_entry_bind, heron_ara_plugin_entry_create, heron_ara_plugin_entry_destroy,
+    heron_ara_plugin_entry_get_factory,
 };
 
 use crate::{ClassId, HostError, HostResult};
 
 pub struct AraMainFactory {
-    raw: NonNull<YadawAraMainFactory>,
+    raw: NonNull<HeronAraMainFactory>,
 }
 
 impl AraMainFactory {
@@ -21,7 +21,7 @@ impl AraMainFactory {
         let raw = unsafe {
             // SAFETY: factory remains live through the returned wrapper and class_id is a VST3
             // ABI TUID. The bridge owns the queried IMainFactory reference.
-            yadaw_ara_main_factory_create(factory, class_id.as_ptr(), &mut result)
+            heron_ara_main_factory_create(factory, class_id.as_ptr(), &mut result)
         };
         let raw = NonNull::new(raw).ok_or(HostError::Operation {
             operation: "create ARA main factory",
@@ -34,7 +34,7 @@ impl AraMainFactory {
     pub fn factory_ptr(&self) -> *const c_void {
         unsafe {
             // SAFETY: raw owns the provider whose factory pointer remains stable.
-            yadaw_ara_main_factory_get(self.raw.as_ptr()).cast()
+            heron_ara_main_factory_get(self.raw.as_ptr()).cast()
         }
     }
 }
@@ -43,13 +43,13 @@ impl Drop for AraMainFactory {
     fn drop(&mut self) {
         unsafe {
             // SAFETY: raw was created once by the bridge and is uniquely owned here.
-            yadaw_ara_main_factory_destroy(self.raw.as_ptr());
+            heron_ara_main_factory_destroy(self.raw.as_ptr());
         }
     }
 }
 
 pub struct AraPluginEntry {
-    raw: NonNull<YadawAraPluginEntry>,
+    raw: NonNull<HeronAraPluginEntry>,
 }
 
 impl AraPluginEntry {
@@ -62,7 +62,7 @@ impl AraPluginEntry {
         let mut result = 0;
         // SAFETY: forwarded caller contract; the bridge retains queried interfaces.
         let raw =
-            unsafe { yadaw_ara_plugin_entry_create(component.cast::<FUnknown>(), &mut result) };
+            unsafe { heron_ara_plugin_entry_create(component.cast::<FUnknown>(), &mut result) };
         let raw = NonNull::new(raw).ok_or(HostError::Operation {
             operation: "query ARA VST3 entry point",
             result,
@@ -74,7 +74,7 @@ impl AraPluginEntry {
     pub fn factory_ptr(&self) -> *const c_void {
         unsafe {
             // SAFETY: raw retains the entry-point provider.
-            yadaw_ara_plugin_entry_get_factory(self.raw.as_ptr()).cast()
+            heron_ara_plugin_entry_get_factory(self.raw.as_ptr()).cast()
         }
     }
 
@@ -92,7 +92,7 @@ impl AraPluginEntry {
         let mut result = 0;
         // SAFETY: forwarded controller and role contract.
         let extension = unsafe {
-            yadaw_ara_plugin_entry_bind(
+            heron_ara_plugin_entry_bind(
                 self.raw.as_ptr(),
                 controller.cast(),
                 known_roles,
@@ -115,7 +115,7 @@ impl Drop for AraPluginEntry {
     fn drop(&mut self) {
         unsafe {
             // SAFETY: raw was created once by the bridge and is uniquely owned here.
-            yadaw_ara_plugin_entry_destroy(self.raw.as_ptr());
+            heron_ara_plugin_entry_destroy(self.raw.as_ptr());
         }
     }
 }

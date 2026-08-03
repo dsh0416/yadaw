@@ -9,10 +9,10 @@ import { mainWindow } from "./windows"
 configureApplicationIdentity(app, process.platform)
 quitWhenAllWindowsAreClosed(app)
 
-if (process.env.YADAW_TEST_USER_DATA) {
+if (process.env.HERON_TEST_USER_DATA) {
   app.disableHardwareAcceleration()
   app.commandLine.appendSwitch("disable-gpu")
-  app.setPath("userData", process.env.YADAW_TEST_USER_DATA)
+  app.setPath("userData", process.env.HERON_TEST_USER_DATA)
 }
 
 let projectService: ProjectService | null = null

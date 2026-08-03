@@ -1,4 +1,4 @@
-import type { StartupProgressSnapshot } from "@yadaw/contracts"
+import type { StartupProgressSnapshot } from "@heron/contracts"
 import { t } from "./i18n"
 
 type StartupProgressListener = (snapshot: StartupProgressSnapshot) => void

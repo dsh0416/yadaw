@@ -193,7 +193,7 @@ fn float_format(sample_rate: u32, channels: usize) -> WaveFmt {
 
 fn metadata(config: &NativeRecordingStartConfig, sample_rate: u32, channels: usize) -> Bext {
     Bext {
-        description: format!("YADAW recording {}", config.asset_id),
+        description: format!("Heron recording {}", config.asset_id),
         originator: config.originator.clone(),
         originator_reference: config.asset_id.clone(),
         origination_date: config.origination_date.clone(),
@@ -206,7 +206,7 @@ fn metadata(config: &NativeRecordingStartConfig, sample_rate: u32, channels: usi
         max_true_peak_level: None,
         max_momentary_loudness: None,
         max_short_term_loudness: None,
-        coding_history: format!("A=PCM,F={sample_rate},W=32,M={channels} channel,T=YADAW swap\r\n"),
+        coding_history: format!("A=PCM,F={sample_rate},W=32,M={channels} channel,T=Heron swap\r\n"),
     }
 }
 
@@ -415,7 +415,7 @@ impl RecorderController {
         let (sender, receiver) = mpsc::channel();
         let waveform = Arc::new(Mutex::new(LiveWaveform::default()));
         let thread = thread::Builder::new()
-            .name("yadaw-recording-writer".to_owned())
+            .name("heron-recording-writer".to_owned())
             .spawn({
                 let active = Arc::clone(&active);
                 let dropout_frames = Arc::clone(&dropout_frames);
@@ -573,7 +573,7 @@ mod tests {
             .expect("time moves forward")
             .as_nanos();
         std::env::temp_dir().join(format!(
-            "yadaw-audio-host-{label}-{}-{nonce}.bwf",
+            "heron-audio-host-{label}-{}-{nonce}.bwf",
             std::process::id()
         ))
     }
@@ -582,7 +582,7 @@ mod tests {
         NativeRecordingStartConfig {
             path: path.to_string_lossy().into_owned(),
             asset_id: "asset-42".to_owned(),
-            originator: "YADAW test".to_owned(),
+            originator: "Heron test".to_owned(),
             origination_date: "2026-07-31".to_owned(),
             origination_time: "16:00:00".to_owned(),
             time_reference: -7,
@@ -686,7 +686,7 @@ mod tests {
         let config = start_config(&path);
         let bext = metadata(&config, 48_000, 2);
         assert!(bext.description.contains("asset-42"));
-        assert_eq!(bext.originator, "YADAW test");
+        assert_eq!(bext.originator, "Heron test");
         assert_eq!(bext.originator_reference, "asset-42");
         assert_eq!(bext.origination_date, "2026-07-31");
         assert_eq!(bext.origination_time, "16:00:00");

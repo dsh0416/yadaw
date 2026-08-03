@@ -1,5 +1,5 @@
 [package]
-name = "yadaw-ipc-transport"
+name = "heron-ipc-transport"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,8 +10,8 @@ ipc-channel.workspace = true
 rmp-serde.workspace = true
 serde.workspace = true
 thiserror.workspace = true
-yadaw-dsp-runtime.workspace = true
-yadaw-shared-memory = { workspace = true, features = ["serde"] }
+heron-dsp-runtime.workspace = true
+heron-shared-memory = { workspace = true, features = ["serde"] }
 zerocopy.workspace = true
 
 [dev-dependencies]

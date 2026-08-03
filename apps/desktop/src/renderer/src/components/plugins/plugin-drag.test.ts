@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import type { PluginDescriptor } from "@yadaw/contracts"
+import type { PluginDescriptor } from "@heron/contracts"
 import {
   PLUGIN_DRAG_TYPE,
   claimPluginDropPreview,
@@ -14,7 +14,7 @@ const descriptor = {
   classId: "effect",
   modulePath: "/Effect.vst3",
   name: "Effect",
-  vendor: "YADAW",
+  vendor: "Heron Studio",
   version: "1.0",
   categories: ["Fx"],
   kind: "effect",

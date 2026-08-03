@@ -6,7 +6,7 @@ describe("parseProbeStdout", () => {
     const payload = {
       module: {
         path: "/plugins/Demo.vst3",
-        vendor: "YADAW",
+        vendor: "Heron Studio",
         classes: [{ name: "Demo" }]
       }
     }

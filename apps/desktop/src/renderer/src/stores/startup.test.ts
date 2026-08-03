@@ -1,6 +1,6 @@
 import { createPinia, setActivePinia } from "pinia"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import type { RpcEvent, StartupProgressSnapshot } from "@yadaw/contracts"
+import type { RpcEvent, StartupProgressSnapshot } from "@heron/contracts"
 import { useStartupStore } from "./startup"
 import { rpcEvent } from "../test/ipc"
 
@@ -82,5 +82,5 @@ describe("useStartupStore", () => {
 })
 
 function stubApi(overrides: Record<string, unknown>): void {
-  Object.assign(window.yadaw as unknown as Record<string, unknown>, overrides)
+  Object.assign(window.heron as unknown as Record<string, unknown>, overrides)
 }

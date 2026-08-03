@@ -8,15 +8,15 @@ use std::{
     time::{Duration, Instant},
 };
 
-use serde::{Deserialize, Serialize};
-use yadaw_vst3_host::{
+use heron_vst3_host::{
     AraFactoryInfo, AudioBusDescriptor, AudioBusDirection, AudioBusKind, AudioLayout, ClassId,
     ClassInfo, Module, PluginKind, StereoProcessor,
 };
+use serde::{Deserialize, Serialize};
 
-const CLASS_PROBE_ENV: &str = "YADAW_VST3_PROBE_CLASS";
+const CLASS_PROBE_ENV: &str = "HERON_VST3_PROBE_CLASS";
 /// When set to `soft`, enumerate factory classes without instantiating processors.
-const PROBE_MODE_ENV: &str = "YADAW_VST3_PROBE_MODE";
+const PROBE_MODE_ENV: &str = "HERON_VST3_PROBE_MODE";
 
 #[derive(Serialize)]
 struct Output<'a> {
@@ -357,7 +357,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let path = env::args_os()
         .skip(1)
         .find(|arg| arg != "--soft")
-        .ok_or("usage: yadaw-vst3-probe [--soft] <module.vst3>")?;
+        .ok_or("usage: heron-vst3-probe [--soft] <module.vst3>")?;
     let path = PathBuf::from(path);
     if let Ok(class_id) = env::var(CLASS_PROBE_ENV) {
         return run_class_probe(&path, &class_id);

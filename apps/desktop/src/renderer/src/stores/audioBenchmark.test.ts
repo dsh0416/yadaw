@@ -1,6 +1,6 @@
 import { createPinia, setActivePinia } from "pinia"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import type { AudioBenchmarkReport, RpcRequestMeta, RpcResult } from "@yadaw/contracts"
+import type { AudioBenchmarkReport, RpcRequestMeta, RpcResult } from "@heron/contracts"
 import { useAudioBenchmarkStore } from "./audioBenchmark"
 import { useAudioRuntimeStore } from "./audioRuntime"
 import { rpcFailure, rpcSuccess, testBootstrap, TEST_AUDIO_HOST_REF } from "../test/ipc"
@@ -34,7 +34,7 @@ const report: AudioBenchmarkReport = {
 }
 
 function stubApi(overrides: Record<string, unknown>): void {
-  Object.assign(window.yadaw as unknown as Record<string, unknown>, overrides)
+  Object.assign(window.heron as unknown as Record<string, unknown>, overrides)
 }
 
 beforeEach(() => {

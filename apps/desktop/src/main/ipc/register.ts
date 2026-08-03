@@ -1,5 +1,5 @@
 import { BrowserWindow } from "electron"
-import { IPC_CHANNELS, IPC_PROTOCOL_VERSION } from "@yadaw/contracts"
+import { IPC_CHANNELS, IPC_PROTOCOL_VERSION } from "@heron/contracts"
 import type { ApplicationServices, IpcHandlerContext } from "./context"
 import { registerAudioHandlers } from "./audio-handlers"
 import { registerDiagnosticHandlers } from "./diagnostic-handlers"

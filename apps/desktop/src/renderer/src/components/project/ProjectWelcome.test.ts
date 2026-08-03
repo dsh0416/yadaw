@@ -41,13 +41,13 @@ describe("ProjectWelcome", () => {
           },
           pluginEditors: {},
           shortcuts: { keyboard: {}, midi: {} },
-          recentProjects: [{ path: "C:/song.yadaw", name: "Song", openedAt: 1 }]
+          recentProjects: [{ path: "C:/song.heron", name: "Song", openedAt: 1 }]
         },
         busy: false,
         error: ""
       }
     })
     await wrapper.findAll(".recent-item")[0]?.trigger("click")
-    expect(wrapper.emitted("open")?.[0]).toEqual(["C:/song.yadaw"])
+    expect(wrapper.emitted("open")?.[0]).toEqual(["C:/song.heron"])
   })
 })

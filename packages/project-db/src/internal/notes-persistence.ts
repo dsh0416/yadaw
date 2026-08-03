@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm"
-import type { ProjectCommand } from "@yadaw/contracts"
+import type { ProjectCommand } from "@heron/contracts"
 import { PROJECT_ID, project } from "../schema"
 import type { ProjectTransaction } from "./database-types"
 

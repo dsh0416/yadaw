@@ -1,4 +1,4 @@
-import type { TempoMapSnapshot, TransportLoopRange } from "@yadaw/contracts"
+import type { TempoMapSnapshot, TransportLoopRange } from "@heron/contracts"
 import { barLengthTicksAtTick, barTicksThroughTick, timeSignatureAtTick } from "./tempoMap"
 
 export type CycleRangeGesture = "create" | "resize-start" | "resize-end" | "move"

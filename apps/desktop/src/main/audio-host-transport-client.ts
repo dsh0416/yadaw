@@ -1,5 +1,5 @@
 import { decode } from "@msgpack/msgpack"
-import type { AudioHostIpcClient } from "@yadaw/audio-host-client"
+import type { AudioHostIpcClient } from "@heron/audio-host-client"
 import type {
   AudioBackendDescriptor,
   AudioDeviceList,
@@ -12,7 +12,7 @@ import type {
   RoundTripLatencyMeasurementRequest,
   TransportCommand,
   TransportSnapshot
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import { stableRuntimeHandle } from "./audio-host-wire"
 import type { AudioHostDevice, ControlResponse, TelemetryWire } from "./audio-host-wire"
 

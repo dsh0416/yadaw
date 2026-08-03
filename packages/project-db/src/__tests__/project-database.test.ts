@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { PGlite } from "@electric-sql/pglite"
-import type { MixerChannelState, ProjectCommand } from "@yadaw/contracts"
+import type { MixerChannelState, ProjectCommand } from "@heron/contracts"
 import { afterEach, describe, expect, it } from "vitest"
 import { ProjectDatabase } from "../node"
 
@@ -21,7 +21,7 @@ function encodePeaks(values: number[]): Uint8Array {
 }
 
 async function createDatabase(name = "Test project"): Promise<TestDatabase> {
-  const directory = await mkdtemp(join(tmpdir(), "yadaw-project-db-"))
+  const directory = await mkdtemp(join(tmpdir(), "heron-project-db-"))
   const database = await ProjectDatabase.create(join(directory, "pgdata"), {
     name,
     sampleRate: 48_000,
@@ -263,10 +263,10 @@ describe("ProjectDatabase", () => {
     })
     expect(seeded.plugins.find(({ id }) => id === "metronome-instrument")).toMatchObject({
       channelId: "metronome",
-      classId: "F310A5DEDA34820C9E068A5753F83ADE",
+      classId: "8CD16A11027ACC7FDF0C1419E86D1024",
       role: "instrument",
       descriptor: {
-        source: { kind: "builtin", id: "dev.yadaw.metronome" }
+        source: { kind: "builtin", id: "live.minori.heron.metronome" }
       }
     })
     expect(seeded.tempoMap).toEqual({
@@ -497,7 +497,7 @@ describe("ProjectDatabase", () => {
               classId: "0123456789ABCDEFFEDCBA9876543210",
               modulePath: "effect.vst3",
               name: "Effect",
-              vendor: "YADAW",
+              vendor: "Heron Studio",
               version: "1.0",
               categories: ["Fx"],
               kind: "effect" as const,
@@ -684,7 +684,7 @@ describe("ProjectDatabase", () => {
             classId: "0123456789ABCDEFFEDCBA9876543210",
             modulePath: "sidechain.vst3",
             name: "Side-chain Effect",
-            vendor: "YADAW",
+            vendor: "Heron Studio",
             version: "1.0",
             categories: ["Fx"],
             kind: "effect",
@@ -1289,7 +1289,7 @@ describe("ProjectDatabase", () => {
     expect(snapshot.plugins.filter((plugin) => plugin.channelId === "metronome")).toEqual([
       expect.objectContaining({
         id: "metronome-instrument",
-        classId: "F310A5DEDA34820C9E068A5753F83ADE",
+        classId: "8CD16A11027ACC7FDF0C1419E86D1024",
         audioMode: "stereo"
       })
     ])
@@ -1391,7 +1391,7 @@ describe("ProjectDatabase", () => {
 
     await database.dumpTo(archivePath)
     expect([...(await readFile(archivePath)).subarray(0, 2)]).not.toEqual([0x1f, 0x8b])
-    const restoredDirectory = await mkdtemp(join(tmpdir(), "yadaw-project-db-restored-"))
+    const restoredDirectory = await mkdtemp(join(tmpdir(), "heron-project-db-restored-"))
     const restored = await ProjectDatabase.open(join(restoredDirectory, "pgdata"), archivePath)
     databases.push({ database: restored, directory: restoredDirectory })
 
@@ -1505,7 +1505,7 @@ describe("ProjectDatabase", () => {
     const archivePath = join(resource.directory, "maintained-project.dump")
     await database.dumpTo(archivePath)
 
-    const verificationDirectory = await mkdtemp(join(tmpdir(), "yadaw-maintained-archive-"))
+    const verificationDirectory = await mkdtemp(join(tmpdir(), "heron-maintained-archive-"))
     const verifier = await PGlite.create({
       dataDir: join(verificationDirectory, "pgdata"),
       loadDataDir: new Blob([await readFile(archivePath)])

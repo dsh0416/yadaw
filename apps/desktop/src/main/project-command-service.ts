@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto"
-import { rpcFailure, rpcSuccess } from "@yadaw/contracts"
+import { rpcFailure, rpcSuccess } from "@heron/contracts"
 import type {
   MixerParameterPreview,
   MidiImportCommitResult,
@@ -10,14 +10,14 @@ import type {
   RpcRequestMeta,
   RpcResult,
   RpcWarning
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import {
   applyToGraph,
   deletedChannelIds,
   inverseFor,
   onlyRealtimeParameters,
   validateGraph
-} from "@yadaw/project-model"
+} from "@heron/project-model"
 import type { PreparedProjectGraph } from "./audio-graph-publisher"
 import type { AudioHostService } from "./audio-host-service"
 import type { LifecycleCoordinator } from "./lifecycle-coordinator"

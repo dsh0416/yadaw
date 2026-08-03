@@ -3,8 +3,8 @@ use std::{
     time::{Duration, Instant},
 };
 
-use yadaw_audio_host::engine::{AudioEngine, NativeAudioEngineConfig, NativeAudioRuntimeSnapshot};
-use yadaw_audio_host::mock;
+use heron_audio_host::engine::{AudioEngine, NativeAudioEngineConfig, NativeAudioRuntimeSnapshot};
+use heron_audio_host::mock;
 
 /// The block sizes the mock devices advertise.
 const MOCK_MIN_BUFFER_FRAMES: u32 = 32;

@@ -3,7 +3,7 @@ import type {
   PluginDescriptor,
   PluginInstanceState,
   PluginParameterCommand
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import { AudioHostPluginClient } from "./audio-host-plugin-client"
 import type { ControlResponse } from "./audio-host-wire"
 
@@ -14,7 +14,7 @@ const descriptor: PluginDescriptor = {
   classId: "ABCDEF0123456789ABCDEF0123456789",
   modulePath: "/plugins/Effect.vst3",
   name: "Effect",
-  vendor: "YADAW",
+  vendor: "Heron Studio",
   version: "1.0",
   categories: ["Fx"],
   kind: "effect",

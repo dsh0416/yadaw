@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed } from "vue"
 import { useI18n } from "vue-i18n"
-import { UiContextMenu, type UiMenuEntry } from "@yadaw/ui"
-import type { MidiClipState, TempoMapSnapshot } from "@yadaw/contracts"
+import { UiContextMenu, type UiMenuEntry } from "@heron/ui"
+import type { MidiClipState, TempoMapSnapshot } from "@heron/contracts"
 import type { PianoRollSnap } from "../../utils/pianoRoll"
 import type { ClipTrimEdge } from "../../utils/clipEditing"
 import { useMidiClipTrim } from "./useMidiClipTrim"
@@ -94,7 +94,7 @@ function startDrag(event: DragEvent): void {
     event.preventDefault()
     return
   }
-  event.dataTransfer.setData("application/x-yadaw-midi-clip", props.clip.id)
+  event.dataTransfer.setData("application/x-heron-midi-clip", props.clip.id)
   event.dataTransfer.effectAllowed = "move"
   const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect()
   emit("dragStart", props.clip.id, Math.max(0, Math.min(bounds.width, event.clientX - bounds.left)))

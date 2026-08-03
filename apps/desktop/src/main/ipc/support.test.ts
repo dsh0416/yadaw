@@ -2,8 +2,8 @@ import type { IpcMainInvokeEvent } from "electron"
 import { basename, dirname, join } from "node:path"
 import { pathToFileURL } from "node:url"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { AUDIO_BACKENDS } from "@yadaw/contracts"
-import type { CreateProjectRequest } from "@yadaw/contracts"
+import { AUDIO_BACKENDS } from "@heron/contracts"
+import type { CreateProjectRequest } from "@heron/contracts"
 import type { ApplicationSettingsStore } from "../application-settings"
 import type { AudioHostService } from "../audio-host-service"
 import { rendererDirectory } from "../runtime-paths"
@@ -31,7 +31,7 @@ function eventFrom(url: string): IpcMainInvokeEvent {
 
 describe("assertTrustedSender", () => {
   beforeEach(() => {
-    vi.stubEnv("YADAW_RENDERER_URL", "")
+    vi.stubEnv("HERON_RENDERER_URL", "")
   })
 
   it("accepts a packaged renderer loaded from the shared runtime directory", () => {
@@ -56,8 +56,8 @@ describe("assertTrustedSender", () => {
     )
   })
 
-  it("accepts the Vite dev server only when it matches YADAW_RENDERER_URL", () => {
-    vi.stubEnv("YADAW_RENDERER_URL", "http://localhost:5173")
+  it("accepts the Vite dev server only when it matches HERON_RENDERER_URL", () => {
+    vi.stubEnv("HERON_RENDERER_URL", "http://localhost:5173")
 
     expect(() => assertTrustedSender(eventFrom("http://localhost:5173/index.html"))).not.toThrow()
     expect(() => assertTrustedSender(eventFrom("http://localhost:5174/index.html"))).toThrow(
@@ -66,7 +66,7 @@ describe("assertTrustedSender", () => {
   })
 
   it("rejects remote origins even when a dev server is configured", () => {
-    vi.stubEnv("YADAW_RENDERER_URL", "http://localhost:5173")
+    vi.stubEnv("HERON_RENDERER_URL", "http://localhost:5173")
 
     expect(() => assertTrustedSender(eventFrom("https://example.com/index.html"))).toThrow(
       "Rejected IPC call from an untrusted renderer"
@@ -93,8 +93,8 @@ describe("validateCreateProject", () => {
 
   it("accepts a complete request, with or without a path", () => {
     expect(validateCreateProject(request)).toBe(request)
-    expect(validateCreateProject({ ...request, path: "/projects/demo.yadaw" })).toMatchObject({
-      path: "/projects/demo.yadaw"
+    expect(validateCreateProject({ ...request, path: "/projects/demo.heron" })).toMatchObject({
+      path: "/projects/demo.heron"
     })
   })
 
@@ -122,7 +122,7 @@ describe("validateCreateProject", () => {
   })
 
   it("strips the path when narrowing a request to a project configuration", () => {
-    const configuration = validateProjectConfiguration({ ...request, path: "/projects/demo.yadaw" })
+    const configuration = validateProjectConfiguration({ ...request, path: "/projects/demo.heron" })
 
     expect(configuration).toEqual(request)
     expect(configuration).not.toHaveProperty("path")

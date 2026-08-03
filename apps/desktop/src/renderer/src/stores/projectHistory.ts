@@ -1,7 +1,7 @@
 import { acceptHMRUpdate, defineStore } from "pinia"
 import { computed, shallowRef } from "vue"
-import type { ProjectCommand, ProjectCommandResult } from "@yadaw/contracts"
-import { inverseFor } from "@yadaw/project-model"
+import type { ProjectCommand, ProjectCommandResult } from "@heron/contracts"
+import { inverseFor } from "@heron/project-model"
 import { useProjectGraphStore } from "./projectGraph"
 
 export interface ProjectHistoryEntry {
@@ -49,7 +49,7 @@ export const useProjectHistoryStore = defineStore("project-history", () => {
   }
 
   function startExternalSubscription(): void {
-    unsubscribeExternal ??= window.yadaw.subscribeExternalProjectCommands((event) => {
+    unsubscribeExternal ??= window.heron.subscribeExternalProjectCommands((event) => {
       const epochChanged = sourceEpoch !== null && sourceEpoch !== event.sourceEpoch
       const sequenceGap =
         sourceEpoch === event.sourceEpoch && lastSequence > 0 && event.sequence !== lastSequence + 1

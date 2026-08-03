@@ -27,8 +27,7 @@ use ara2_bridge_host::{
 };
 use ara2_bridge_sys::{ARAAssertCategory, ARAFactory, ARAPlugInExtensionInstance};
 use bwavfile::WaveReader;
-use sha2::{Digest, Sha256};
-use yadaw_dsp_runtime::{
+use heron_dsp_runtime::{
     MUSICAL_TICKS_PER_QUARTER,
     protocol::{
         AraAnalysisProgressState, AraArchiveDirection, AraCallbackEvent,
@@ -37,7 +36,8 @@ use yadaw_dsp_runtime::{
     },
     tempo::{TempoEvent as RuntimeTempoEvent, TempoMap, TimeSignatureEvent},
 };
-use yadaw_vst3_host::{AraMainFactory, AraPluginEntry, ClassId, HostError, Module};
+use heron_vst3_host::{AraMainFactory, AraPluginEntry, ClassId, HostError, Module};
+use sha2::{Digest, Sha256};
 
 use crate::engine::decode_clip_audio;
 
@@ -1038,7 +1038,7 @@ impl AraDocument {
         let mut session = DocumentSession::new(
             factory.loaded(),
             services_ref,
-            DocumentProperties::new(Some("YADAW ARA document"))
+            DocumentProperties::new(Some("Heron ARA document"))
                 .map_err(|error| HostError::Ara(error.to_string()))?,
         )
         .map_err(|error| HostError::Ara(error.to_string()))?;
@@ -1505,7 +1505,7 @@ fn inspect_source(path: &str, target_sample_rate: u32) -> Result<SourceSpec, Ara
 
 fn persistent_id(namespace: &str, value: &str) -> String {
     let digest = Sha256::digest(value.as_bytes());
-    let mut id = format!("yadaw.{namespace}.");
+    let mut id = format!("heron.{namespace}.");
     for byte in digest {
         let _ = write!(&mut id, "{byte:02x}");
     }

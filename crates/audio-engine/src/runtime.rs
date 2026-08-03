@@ -16,20 +16,12 @@ use cpal::{
     SupportedBufferSize, SupportedStreamConfig,
     traits::{DeviceTrait, HostTrait, StreamTrait},
 };
-use ringbuf::{
-    HeapCons, HeapProd, HeapRb,
-    traits::{Consumer, Observer, Producer, Split},
-};
-use rubato::{
-    Adjustable, Async, FixedAsync, Resampler, SincInterpolationParameters,
-    audioadapter_buffers::direct::InterleavedSlice,
-};
-use yadaw_dsp_core::mixer::{
+use heron_dsp_core::mixer::{
     ChannelKind, ChannelPeak, ChannelSpec, HardwareOutputFrame, MAX_OUTPUT_CHANNELS, MixerGraph,
     RouteTarget, SendSpec, SendTap,
 };
-use yadaw_dsp_render::{RenderMeter, RenderRuntime};
-use yadaw_dsp_runtime::{
+use heron_dsp_render::{RenderMeter, RenderRuntime};
+use heron_dsp_runtime::{
     MUSICAL_TICKS_PER_QUARTER,
     block::{MAX_PLUGIN_BLOCK_FRAMES, StereoDelayLine},
     protocol::{
@@ -39,13 +31,21 @@ use yadaw_dsp_runtime::{
     },
     tempo::{TempoEvent, TempoMap, TimeSignatureEvent},
 };
+use ringbuf::{
+    HeapCons, HeapProd, HeapRb,
+    traits::{Consumer, Observer, Producer, Split},
+};
+use rubato::{
+    Adjustable, Async, FixedAsync, Resampler, SincInterpolationParameters,
+    audioadapter_buffers::direct::InterleavedSlice,
+};
 
 use crate::recording::{
     MAX_INPUT_CHANNELS, NativeRecordingResult, NativeRecordingStartConfig, NativeWaveformSnapshot,
     RecorderController, RecordingTap, StereoFrame,
 };
 use crate::{HostError as Error, HostResult as Result, Status};
-use yadaw_vst3_host::{HostProcessContext as ProcessContext, Vst3ProcessorHandle};
+use heron_vst3_host::{HostProcessContext as ProcessContext, Vst3ProcessorHandle};
 
 const UNKNOWN_LATENCY_US: u64 = u64::MAX;
 const RING_BUFFER_BLOCKS: usize = 8;

@@ -12,15 +12,15 @@ members = [
     "crates/vst3-host-sys",
     "crates/vst3-host",
     "crates/iced-ui",
-    "plugins/yadaw-plugin-ui",
-    "plugins/yadaw-gain",
-    "plugins/yadaw-metronome",
-    "plugins/yadaw-sine",
+    "plugins/heron-plugin-ui",
+    "plugins/heron-gain",
+    "plugins/heron-metronome",
+    "plugins/heron-sine",
 ]
 resolver = "3"
 
 [workspace.package]
-version = "0.2.2"
+version = "0.3.0"
 edition = "2024"
 rust-version = "1.97"
 license = "GPL-3.0-only"
@@ -72,17 +72,17 @@ truce-vst3 = "=6.3.0"
 winit = { version = "0.30.13", default-features = false, features = ["rwh_06", "x11", "wayland"] }
 windows = "0.61.3"
 zerocopy = { version = "0.8.55", features = ["derive"] }
-yadaw-dsp-core = { path = "crates/dsp-core" }
-yadaw-dsp-runtime = { path = "crates/dsp-runtime" }
-yadaw-dsp-render = { path = "crates/dsp-render" }
-yadaw-shared-memory = { path = "crates/shared-memory" }
-yadaw-ipc-transport = { path = "crates/ipc-transport" }
-yadaw-audio-engine = { path = "crates/audio-engine" }
-yadaw-audio-host-client = { path = "crates/audio-host-client" }
-yadaw-vst3-host = { path = "crates/vst3-host" }
-yadaw-vst3-host-sys = { path = "crates/vst3-host-sys" }
-yadaw-iced-ui = { path = "crates/iced-ui" }
-yadaw-plugin-ui = { path = "plugins/yadaw-plugin-ui" }
+heron-dsp-core = { path = "crates/dsp-core" }
+heron-dsp-runtime = { path = "crates/dsp-runtime" }
+heron-dsp-render = { path = "crates/dsp-render" }
+heron-shared-memory = { path = "crates/shared-memory" }
+heron-ipc-transport = { path = "crates/ipc-transport" }
+heron-audio-engine = { path = "crates/audio-engine" }
+heron-audio-host-client = { path = "crates/audio-host-client" }
+heron-vst3-host = { path = "crates/vst3-host" }
+heron-vst3-host-sys = { path = "crates/vst3-host-sys" }
+heron-iced-ui = { path = "crates/iced-ui" }
+heron-plugin-ui = { path = "plugins/heron-plugin-ui" }
 
 [patch.crates-io]
 # The published testkit depends on the published host crate. Redirect that edge
@@ -105,19 +105,19 @@ dbg_macro = "warn"
 todo = "warn"
 undocumented_unsafe_blocks = "warn"
 
-[profile.dev.package.yadaw-audio-engine]
+[profile.dev.package.heron-audio-engine]
 opt-level = 3
 
-[profile.dev.package.yadaw-dsp-core]
+[profile.dev.package.heron-dsp-core]
 opt-level = 3
 
-[profile.dev.package.yadaw-dsp-render]
+[profile.dev.package.heron-dsp-render]
 opt-level = 3
 
-[profile.dev.package.yadaw-dsp-runtime]
+[profile.dev.package.heron-dsp-runtime]
 opt-level = 3
 
-[profile.dev.package.yadaw-vst3-host]
+[profile.dev.package.heron-vst3-host]
 opt-level = 3
 
 [profile.dev.package.rubato]

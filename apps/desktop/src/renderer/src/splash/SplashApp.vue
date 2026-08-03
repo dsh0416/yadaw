@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { YadawLogo, useLocaleFonts } from "@yadaw/ui"
+import { HeronLogo, useLocaleFonts } from "@heron/ui"
 import { computed, onMounted } from "vue"
 import { DEFAULT_LOCALE } from "../../../shared/i18n"
 import { useStartupStore } from "../stores/startup"
 
 const startup = useStartupStore()
-const projectUrl = "https://github.com/dsh0416/yadaw"
+const projectUrl = "https://github.com/minori-live/heron"
 const appVersion = __APP_VERSION__
 const percentage = computed(() => Math.round(startup.progress.progress * 100))
 
@@ -17,7 +17,7 @@ onMounted(() => void startup.load())
 <template>
   <main class="splash-shell" :data-phase="startup.progress.phase">
     <header class="brand">
-      <h1 class="brand-heading"><YadawLogo class="brand-logo" /></h1>
+      <h1 class="brand-heading"><HeronLogo class="brand-logo" /></h1>
       <p class="project-url">{{ projectUrl }}</p>
       <p class="version">v{{ appVersion }}</p>
     </header>
@@ -108,8 +108,8 @@ onMounted(() => void startup.load())
 }
 
 .brand-logo {
-  --yadaw-logo-highlight: var(--ui-signal-midi);
-  --yadaw-logo-lockup-wordmark-size: 0.62em;
+  --heron-logo-highlight: var(--ui-signal-midi);
+  --heron-logo-lockup-wordmark-size: 0.62em;
 
   color: var(--ui-color-text);
   font-size: var(--ui-font-size-5xl);

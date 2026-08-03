@@ -41,7 +41,7 @@ Use the **Output** section to choose the next bus or a hardware-output channel.
 Hardware outputs map their left and right sides to channels exposed by the
 active output device.
 
-Avoid creating routes that feed a signal back into itself. YADAW keeps the
+Avoid creating routes that feed a signal back into itself. Heron keeps the
 audio graph legal and rejects invalid topology.
 
 ## Add a send

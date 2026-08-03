@@ -1,6 +1,6 @@
 import { acceptHMRUpdate, defineStore } from "pinia"
 import { computed, ref } from "vue"
-import type { OperationEvent, OperationSnapshot, RpcEvent } from "@yadaw/contracts"
+import type { OperationEvent, OperationSnapshot, RpcEvent } from "@heron/contracts"
 import { mutationMeta } from "../rpc"
 import { useProjectStore } from "./project"
 
@@ -19,7 +19,7 @@ export const useOperationStore = defineStore("operations", () => {
   let sourceEpoch: string | null = null
   let lastSequence = 0
   function startSubscription(): void {
-    unsubscribe ??= window.yadaw.subscribeOperations(receive)
+    unsubscribe ??= window.heron.subscribeOperations(receive)
   }
 
   function stopSubscription(): void {
@@ -79,13 +79,13 @@ export const useOperationStore = defineStore("operations", () => {
   async function cancel(id: string): Promise<void> {
     const target = projectStore.desktopSession
     if (!target) return
-    await window.yadaw.cancelOperation(mutationMeta(target, "operation-cancel"), id)
+    await window.heron.cancelOperation(mutationMeta(target, "operation-cancel"), id)
   }
 
   async function acknowledge(id: string): Promise<void> {
     const target = projectStore.desktopSession
     if (!target) return
-    await window.yadaw.acknowledgeOperation(mutationMeta(target, "operation-acknowledge"), id)
+    await window.heron.acknowledgeOperation(mutationMeta(target, "operation-acknowledge"), id)
   }
 
   function dismiss(id: string): void {

@@ -24,7 +24,7 @@ import type {
   MixerParameterPreview,
   TempoMapSnapshot,
   TimeSignatureEventState
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import StudioControlButton from "./topbar/StudioControlButton.vue"
 import StudioMasterControl from "./topbar/StudioMasterControl.vue"
 import StudioMusicalDisplay from "./topbar/StudioMusicalDisplay.vue"

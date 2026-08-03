@@ -129,7 +129,7 @@ impl EditorWindow {
     pub fn update_context(&mut self, context: PluginEditorContext) {
         merge_editor_context(&mut self.context, context);
         self.window.set_title(&format!(
-            "{} — {} — YADAW",
+            "{} — {} — Heron",
             self.context.channel_name, self.context.plugin_name
         ));
         self.window.request_redraw();
@@ -231,11 +231,11 @@ impl EditorWindow {
 
     pub fn apply_native_parameter_gestures(
         &mut self,
-        gestures: &[yadaw_vst3_host::EditorParameterGesture],
+        gestures: &[heron_vst3_host::EditorParameterGesture],
     ) {
         for gesture in gestures {
             match *gesture {
-                yadaw_vst3_host::EditorParameterGesture::Begin { parameter_id } => {
+                heron_vst3_host::EditorParameterGesture::Begin { parameter_id } => {
                     if let Some(parameter) = self
                         .parameters
                         .iter()
@@ -246,7 +246,7 @@ impl EditorWindow {
                             .or_insert(parameter.normalized);
                     }
                 }
-                yadaw_vst3_host::EditorParameterGesture::Perform {
+                heron_vst3_host::EditorParameterGesture::Perform {
                     parameter_id,
                     normalized,
                 } => {
@@ -258,7 +258,7 @@ impl EditorWindow {
                         parameter.normalized = normalized;
                     }
                 }
-                yadaw_vst3_host::EditorParameterGesture::End { parameter_id } => {
+                heron_vst3_host::EditorParameterGesture::End { parameter_id } => {
                     let after = self
                         .parameters
                         .iter()

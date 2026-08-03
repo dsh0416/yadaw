@@ -21,7 +21,7 @@ const FNV_PRIME_128: u128 = 0x0000_0000_0100_0000_0000_0000_0000_013b;
 /// shared-memory metadata rounds lengths to a VM page.
 fn object_key(object_id: [u8; 16], length: NonZeroUsize, generation: u64) -> [u8; 16] {
     let mut hash = FNV_OFFSET_BASIS_128;
-    update_fnv(&mut hash, b"YADAW process-shared mapping v1\0");
+    update_fnv(&mut hash, b"Heron process-shared mapping v1\0");
     update_fnv(&mut hash, &object_id);
     update_fnv(
         &mut hash,

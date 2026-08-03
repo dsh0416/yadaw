@@ -14,10 +14,10 @@ import type {
   ProjectGraphRef,
   RpcRequestMeta,
   TempoMapSnapshot
-} from "@yadaw/contracts"
-import { DEFAULT_INSTRUMENT_COLOR, MUSICAL_TICKS_PER_QUARTER } from "@yadaw/contracts"
-import { parseMidiFile } from "@yadaw/dsp-node"
-import type { NativeNormalizedSmf } from "@yadaw/dsp-node"
+} from "@heron/contracts"
+import { DEFAULT_INSTRUMENT_COLOR, MUSICAL_TICKS_PER_QUARTER } from "@heron/contracts"
+import { parseMidiFile } from "@heron/dsp-node"
+import type { NativeNormalizedSmf } from "@heron/dsp-node"
 import type { PluginCatalogService } from "./plugin-catalog-service"
 import type { ProjectCommandService } from "./project-command-service"
 import type { ProjectGraphService } from "./project-graph-service"

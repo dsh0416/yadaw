@@ -4,7 +4,7 @@ import type {
   ProjectGraphSnapshot,
   ProjectCommand,
   TempoMapSnapshot
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import { keySignatureValue, parseKeySignatureValue } from "../../utils/keySignatures"
 
 interface GlobalLaneSelectionOptions {

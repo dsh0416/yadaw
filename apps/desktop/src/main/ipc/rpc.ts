@@ -1,8 +1,8 @@
 import { ipcMain } from "electron"
 import type { IpcMainInvokeEvent } from "electron"
 import { randomUUID } from "node:crypto"
-import { IPC_PROTOCOL_VERSION, isRpcRequestMeta, rpcFailure, rpcSuccess } from "@yadaw/contracts"
-import type { RpcError, RpcRequestMeta, RpcResult } from "@yadaw/contracts"
+import { IPC_PROTOCOL_VERSION, isRpcRequestMeta, rpcFailure, rpcSuccess } from "@heron/contracts"
+import type { RpcError, RpcRequestMeta, RpcResult } from "@heron/contracts"
 import { assertTrustedSender } from "./support"
 
 export interface RpcHandlerContext {

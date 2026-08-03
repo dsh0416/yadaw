@@ -9,7 +9,7 @@ import type {
   PluginDescriptor,
   PluginInstanceState,
   PluginRuntimeStatus
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import type { PluginSelection } from "../plugins/plugin-audio-mode"
 import MixerInputCapsule from "./MixerInputCapsule.vue"
 import MixerInstrumentInput from "./MixerInstrumentInput.vue"

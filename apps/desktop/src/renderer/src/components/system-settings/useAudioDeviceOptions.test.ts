@@ -2,14 +2,14 @@ import { createPinia, setActivePinia } from "pinia"
 import { flushPromises, mount } from "@vue/test-utils"
 import { defineComponent, ref, type Ref } from "vue"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { INITIAL_AUDIO_RUNTIME_SNAPSHOT } from "@yadaw/contracts"
+import { INITIAL_AUDIO_RUNTIME_SNAPSHOT } from "@heron/contracts"
 import type {
   AudioBackendDescriptor,
   AudioDeviceDescriptor,
   AudioDeviceList,
   AudioPreferences,
   AudioRuntimeSnapshot
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import { rpcFailure, rpcSuccess, testBootstrap } from "../../test/ipc"
 import { useAudioRuntimeStore } from "../../stores/audioRuntime"
 import { useAudioDeviceOptions } from "./useAudioDeviceOptions"
@@ -30,7 +30,7 @@ function device(id: string, overrides: Partial<AudioDeviceDescriptor> = {}): Aud
 }
 
 function stubApi(overrides: Record<string, unknown>): void {
-  Object.assign(window.yadaw as unknown as Record<string, unknown>, overrides)
+  Object.assign(window.heron as unknown as Record<string, unknown>, overrides)
 }
 
 interface Harness {

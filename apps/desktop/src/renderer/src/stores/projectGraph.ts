@@ -5,9 +5,9 @@ import type {
   ProjectCommand,
   ProjectCommandResult,
   ProjectGraphSnapshot
-} from "@yadaw/contracts"
-import { MUSICAL_TICKS_PER_QUARTER } from "@yadaw/contracts"
-import { applyToGraph, patchMixerGraph } from "@yadaw/project-model"
+} from "@heron/contracts"
+import { MUSICAL_TICKS_PER_QUARTER } from "@heron/contracts"
+import { applyToGraph, patchMixerGraph } from "@heron/project-model"
 import { mutationMeta, readMeta, rpcErrorMessage } from "../rpc"
 import { useProjectStore } from "./project"
 
@@ -62,10 +62,10 @@ export const useProjectGraphStore = defineStore("project-graph", () => {
       const target = projectStore.projectGraphRef
       if (!target) return
       const result = reload
-        ? await window.yadaw.reloadProjectGraph(
+        ? await window.heron.reloadProjectGraph(
             mutationMeta(target, "project-graph-reload", projectStore.projectRevision)
           )
-        : await window.yadaw.loadProjectGraph(readMeta(target))
+        : await window.heron.loadProjectGraph(readMeta(target))
       if (!result.ok) {
         error.value = rpcErrorMessage(result.error)
         return
@@ -97,7 +97,7 @@ export const useProjectGraphStore = defineStore("project-graph", () => {
         graph.value = applyToGraph(previous, command)
         const target = projectStore.projectGraphRef
         if (!target) return null
-        const result = await window.yadaw.executeProjectCommand(
+        const result = await window.heron.executeProjectCommand(
           mutationMeta(target, "project-command", projectStore.projectRevision),
           command
         )
@@ -142,7 +142,7 @@ export const useProjectGraphStore = defineStore("project-graph", () => {
         if (!target) return
         const results = await Promise.all(
           previews.map((value) =>
-            window.yadaw.previewMixerParameter(
+            window.heron.previewMixerParameter(
               mutationMeta(target, "mixer-preview", projectStore.projectRevision),
               value
             )

@@ -4,7 +4,7 @@ use std::{
     rc::Rc,
 };
 
-use yadaw_dsp_runtime::{
+use heron_dsp_runtime::{
     block::MAX_PLUGIN_BLOCK_FRAMES,
     protocol::{
         BinaryPayload, ControlCommand, ControlResult, LiveMixerGraph, ParameterCommand,
@@ -12,8 +12,8 @@ use yadaw_dsp_runtime::{
         PluginParameter,
     },
 };
-pub use yadaw_vst3_host::Vst3ProcessorHandle;
-use yadaw_vst3_host::{
+pub use heron_vst3_host::Vst3ProcessorHandle;
+use heron_vst3_host::{
     AudioLayout, ClassId, HostedPlugin, PlugView, PluginKind, Vst3AuxInputConfig, Vst3HostRequest,
 };
 
@@ -702,8 +702,8 @@ impl Vst3Runtime {
                 self.restart_failures.push((id.clone(), error.to_string()));
             }
             if bus_activation_changed
-                || request.contains(yadaw_vst3_host::Vst3RestartRequest::LATENCY_CHANGED)
-                || request.contains(yadaw_vst3_host::Vst3RestartRequest::IO_CHANGED)
+                || request.contains(heron_vst3_host::Vst3RestartRequest::LATENCY_CHANGED)
+                || request.contains(heron_vst3_host::Vst3RestartRequest::IO_CHANGED)
             {
                 timing.push((
                     id.clone(),
@@ -717,7 +717,7 @@ impl Vst3Runtime {
 
     pub fn take_editor_parameter_gestures(
         &self,
-    ) -> Vec<(String, Vec<yadaw_vst3_host::EditorParameterGesture>)> {
+    ) -> Vec<(String, Vec<heron_vst3_host::EditorParameterGesture>)> {
         self.instances
             .iter()
             .filter_map(|(instance_id, instance)| {
@@ -1108,7 +1108,7 @@ fn max_tail(left: Option<u32>, right: Option<u32>) -> Option<u32> {
 }
 
 fn is_audio_benchmark_instance(instance_id: &str) -> bool {
-    instance_id.starts_with("__yadaw-audio-benchmark-")
+    instance_id.starts_with("__heron-audio-benchmark-")
 }
 
 fn control_error(message: &str) -> ControlResult {
@@ -1127,7 +1127,7 @@ mod tests {
         let result = runtime.editor_result(
             "missing",
             PluginEditorPreference {
-                mode: yadaw_dsp_runtime::protocol::PluginEditorMode::Native,
+                mode: heron_dsp_runtime::protocol::PluginEditorMode::Native,
                 zoom_percent: 401,
             },
         );
@@ -1151,7 +1151,7 @@ mod tests {
     #[test]
     fn only_reserved_instance_ids_use_benchmark_lifetime_reuse() {
         assert!(is_audio_benchmark_instance(
-            "__yadaw-audio-benchmark-gain-63"
+            "__heron-audio-benchmark-gain-63"
         ));
         assert!(!is_audio_benchmark_instance("project-plugin"));
     }
@@ -1219,9 +1219,9 @@ mod tests {
         };
         assert_eq!(
             error.code,
-            yadaw_dsp_runtime::protocol::RpcErrorCode::ValidationFailed
+            heron_dsp_runtime::protocol::RpcErrorCode::ValidationFailed
         );
-        assert_eq!(error.retry, yadaw_dsp_runtime::protocol::RpcRetry::Never);
+        assert_eq!(error.retry, heron_dsp_runtime::protocol::RpcRetry::Never);
         assert_eq!(error.user_message_key, "errors.pluginUnavailable");
     }
 }

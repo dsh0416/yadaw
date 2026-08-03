@@ -1,4 +1,4 @@
-import { yadawFontsOptions } from "@yadaw/ui/fonts"
+import { heronFontsOptions } from "@heron/ui/fonts"
 import Unfonts from "unplugin-fonts/vite"
 import { defineConfig, type HeadConfig, type MarkdownOptions, type PageData } from "vitepress"
 import { createBlogSidebar } from "./blog-sidebar"
@@ -19,10 +19,11 @@ const markdown: MarkdownOptions = {
   }
 }
 
-const docsRoot = "https://yadaw.minori.live"
+const docsRoot = "https://heron.minori.live"
 const ogImage = `${docsRoot}/og.png`
-const defaultDescriptionEn = "A free and open-source digital audio workstation."
-const defaultDescriptionZh = "一款自由开源的数字音频工作站。"
+const defaultDescriptionEn =
+  "Heron Studio is a free and open-source digital audio workstation. From sketch to stage."
+const defaultDescriptionZh = "Heron Studio 是一款自由开源的数字音频工作站。从灵感，到舞台。"
 
 function pageUrl(relativePath: string): string {
   const path = relativePath.replace(/(^|\/)index\.md$/, "$1").replace(/\.md$/, "")
@@ -30,18 +31,18 @@ function pageUrl(relativePath: string): string {
 }
 
 function pageTitle(pageData: PageData): string {
-  const title = pageData.title || "YADAW"
+  const title = pageData.title || "Heron Studio"
   const titleTemplate: unknown = pageData.frontmatter.titleTemplate
   if (titleTemplate === false) {
     return title
   }
 
-  const template = typeof titleTemplate === "string" ? titleTemplate : ":title · YADAW"
+  const template = typeof titleTemplate === "string" ? titleTemplate : ":title · Heron Studio"
   if (template.includes(":title")) {
     return template.replace(/:title/g, title)
   }
 
-  return `${title} · YADAW`
+  return `${title} · Heron Studio`
 }
 
 function pageDescription(pageData: PageData): string {
@@ -70,8 +71,8 @@ function isBlogArticle(relativePath: string): boolean {
 }
 
 export default defineConfig({
-  title: "YADAW",
-  titleTemplate: ":title · YADAW",
+  title: "Heron",
+  titleTemplate: ":title · Heron Studio",
   base: "/",
   srcDir: "content",
   cleanUrls: true,
@@ -87,7 +88,7 @@ export default defineConfig({
       __VUE_PROD_DEVTOOLS__: false,
       __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: false
     },
-    plugins: [Unfonts(yadawFontsOptions)],
+    plugins: [Unfonts(heronFontsOptions)],
     ssr: {
       noExternal: ["vue-i18n"]
     }
@@ -96,7 +97,7 @@ export default defineConfig({
     ["link", { rel: "icon", href: "/logo.svg", type: "image/svg+xml" }],
     ["meta", { name: "theme-color", content: "#101010" }],
     ["meta", { property: "og:type", content: "website" }],
-    ["meta", { property: "og:site_name", content: "YADAW" }],
+    ["meta", { property: "og:site_name", content: "Heron Studio" }],
     ["meta", { property: "og:image", content: ogImage }],
     ["meta", { property: "og:image:width", content: "1200" }],
     ["meta", { property: "og:image:height", content: "630" }],
@@ -131,7 +132,7 @@ export default defineConfig({
         nav: [
           { text: "Manual", link: "/manual/" },
           { text: "Blog", link: "/blog/" },
-          { text: "Releases", link: "https://github.com/dsh0416/yadaw/releases" }
+          { text: "Releases", link: "https://github.com/minori-live/heron/releases" }
         ],
         sidebar: {
           "/blog/": [
@@ -144,8 +145,8 @@ export default defineConfig({
             {
               text: "Start here",
               items: [
-                { text: "Welcome to YADAW", link: "/manual/" },
-                { text: "Install YADAW", link: "/manual/install" },
+                { text: "Welcome to Heron", link: "/manual/" },
+                { text: "Install Heron", link: "/manual/install" },
                 { text: "Your first project", link: "/manual/first-project" }
               ]
             },
@@ -177,7 +178,7 @@ export default defineConfig({
           ]
         },
         editLink: {
-          pattern: "https://github.com/dsh0416/yadaw/edit/main/docs/content/:path",
+          pattern: "https://github.com/minori-live/heron/edit/main/docs/content/:path",
           text: "Improve this page"
         },
         outline: {
@@ -193,7 +194,7 @@ export default defineConfig({
         },
         footer: {
           message: "Free software, released under GPL-3.0.",
-          copyright: "YADAW contributors"
+          copyright: "Heron Studio contributors"
         }
       }
     },
@@ -206,15 +207,15 @@ export default defineConfig({
         nav: [
           { text: "手册", link: "/zh/manual/" },
           { text: "博客", link: "/blog/" },
-          { text: "下载", link: "https://github.com/dsh0416/yadaw/releases" }
+          { text: "下载", link: "https://github.com/minori-live/heron/releases" }
         ],
         sidebar: {
           "/zh/manual/": [
             {
               text: "从这里开始",
               items: [
-                { text: "欢迎使用 YADAW", link: "/zh/manual/" },
-                { text: "安装 YADAW", link: "/zh/manual/install" },
+                { text: "欢迎使用 Heron", link: "/zh/manual/" },
+                { text: "安装 Heron", link: "/zh/manual/install" },
                 { text: "第一个工程", link: "/zh/manual/first-project" }
               ]
             },
@@ -246,7 +247,7 @@ export default defineConfig({
           ]
         },
         editLink: {
-          pattern: "https://github.com/dsh0416/yadaw/edit/main/docs/content/:path",
+          pattern: "https://github.com/minori-live/heron/edit/main/docs/content/:path",
           text: "改进此页"
         },
         outline: {
@@ -262,7 +263,7 @@ export default defineConfig({
         },
         footer: {
           message: "以 GPL-3.0 发布的自由软件。",
-          copyright: "YADAW 贡献者"
+          copyright: "Heron Studio 贡献者"
         },
         returnToTopLabel: "回到顶部",
         sidebarMenuLabel: "菜单",
@@ -283,7 +284,7 @@ export default defineConfig({
   themeConfig: {
     logo: {
       src: "/logo.svg",
-      alt: "YADAW"
+      alt: "Heron"
     },
     search: {
       provider: "local",
@@ -309,6 +310,6 @@ export default defineConfig({
         }
       }
     },
-    socialLinks: [{ icon: "github", link: "https://github.com/dsh0416/yadaw" }]
+    socialLinks: [{ icon: "github", link: "https://github.com/minori-live/heron" }]
   }
 })

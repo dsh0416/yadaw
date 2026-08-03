@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import type { AudioClipState, TempoMapSnapshot } from "@yadaw/contracts"
+import type { AudioClipState, TempoMapSnapshot } from "@heron/contracts"
 import { useAudioClipEdit } from "./useAudioClipEdit"
 
 afterEach(() => {

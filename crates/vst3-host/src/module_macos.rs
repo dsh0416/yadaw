@@ -10,7 +10,7 @@ use std::{
     ptr,
 };
 
-use yadaw_vst3_host_sys::abi::{GetPluginFactory, ModuleEntry, ModuleExit};
+use heron_vst3_host_sys::abi::{GetPluginFactory, ModuleEntry, ModuleExit};
 
 use crate::{HostError, HostResult};
 

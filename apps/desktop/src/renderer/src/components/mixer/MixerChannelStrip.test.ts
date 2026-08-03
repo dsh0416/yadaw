@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { mount } from "@vue/test-utils"
 import { createPinia, setActivePinia } from "pinia"
-import type { MixerChannelState, PluginDescriptor, PluginInstanceState } from "@yadaw/contracts"
+import type { MixerChannelState, PluginDescriptor, PluginInstanceState } from "@heron/contracts"
 import MixerChannelStrip from "./MixerChannelStrip.vue"
 import { useApplicationSettingsStore } from "../../stores/applicationSettings"
 
@@ -334,7 +334,7 @@ describe("MixerChannelStrip", () => {
       classId: "synth",
       modulePath: "synth.vst3",
       name: "Synth",
-      vendor: "YADAW",
+      vendor: "Heron Studio",
       version: "1.0",
       categories: ["Instrument"],
       kind: "instrument",

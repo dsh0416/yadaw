@@ -5,7 +5,7 @@ import type {
   MixerChannelPatch,
   MixerChannelState,
   MixerParameterPreview
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import { FADER_MIN_DB } from "../../../utils/mixerDbScale"
 import TrackGainControl from "../TrackGainControl.vue"
 

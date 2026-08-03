@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed } from "vue"
 import { useI18n } from "vue-i18n"
-import { UiCascadingSelect, type UiCascadingSelectGroup } from "@yadaw/ui"
-import type { MixerChannelPatch, MixerInputSource } from "@yadaw/contracts"
-import { MIXER_BUS_COUNT } from "@yadaw/contracts"
+import { UiCascadingSelect, type UiCascadingSelectGroup } from "@heron/ui"
+import type { MixerChannelPatch, MixerInputSource } from "@heron/contracts"
+import { MIXER_BUS_COUNT } from "@heron/contracts"
 import ChannelFormatIcon from "../studio/ChannelFormatIcon.vue"
 
 const props = withDefaults(

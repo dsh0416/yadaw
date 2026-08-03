@@ -1,5 +1,5 @@
 [package]
-name = "yadaw-shared-memory"
+name = "heron-shared-memory"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

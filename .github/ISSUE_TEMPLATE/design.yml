@@ -7,7 +7,7 @@ body:
     attributes:
       value: |
         Use this for design discussion or feature proposals. Check the
-        [roadmap](https://github.com/dsh0416/yadaw/blob/main/agents/docs/roadmap.md) first.
+        [roadmap](https://github.com/minori-live/heron/blob/main/agents/docs/roadmap.md) first.
         Prefer actionable scope over speculative wish lists.
 
   - type: textarea
@@ -54,7 +54,7 @@ body:
     attributes:
       label: Constraints and risks
       description: |
-        Note real-time safety, process boundaries (`window.yadaw` / native addon),
+        Note real-time safety, process boundaries (`window.heron` / native addon),
         compatibility before 1.0, or review cost if relevant.
     validations:
       required: false

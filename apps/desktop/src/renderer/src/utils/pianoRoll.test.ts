@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import type { MidiClipState } from "@yadaw/contracts"
+import type { MidiClipState } from "@heron/contracts"
 import {
   MIN_NOTE_TICKS,
   midiNoteName,

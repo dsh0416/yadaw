@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import type { MixerBusState, MixerChannelState, MixerRouteTarget } from "@yadaw/contracts"
+import type { MixerBusState, MixerChannelState, MixerRouteTarget } from "@heron/contracts"
 import { mixerRouteGroups } from "./mixer-route-groups"
 
 const t = (key: string): string => key

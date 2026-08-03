@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed } from "vue"
 import { useI18n } from "vue-i18n"
-import { UiButton, UiDialog, UiSelect, UiStatusNotice } from "@yadaw/ui"
-import type { MidiImportTrackTarget } from "@yadaw/contracts"
+import { UiButton, UiDialog, UiSelect, UiStatusNotice } from "@heron/ui"
+import type { MidiImportTrackTarget } from "@heron/contracts"
 import { useMidiImportStore } from "../../stores/midiImport"
 import { useMixerStore } from "../../stores/mixer"
 import { usePluginStore } from "../../stores/plugins"

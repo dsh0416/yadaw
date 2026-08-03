@@ -3,8 +3,8 @@ import type {
   ApplicationCommandId,
   ApplicationWindowCommandId,
   DesktopPlatform
-} from "@yadaw/contracts"
-import type { UiMenubarMenu } from "@yadaw/ui"
+} from "@heron/contracts"
+import type { UiMenubarMenu } from "@heron/ui"
 import { computed } from "vue"
 import { storeToRefs } from "pinia"
 import AppTitleBar from "./AppTitleBar.vue"

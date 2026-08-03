@@ -1,7 +1,7 @@
 import { mount } from "@vue/test-utils"
 import { describe, expect, it } from "vitest"
-import { UiCascadingSelect } from "@yadaw/ui"
-import type { MixerChannelState } from "@yadaw/contracts"
+import { UiCascadingSelect } from "@heron/ui"
+import type { MixerChannelState } from "@heron/contracts"
 import MixerOutputSection from "./MixerOutputSection.vue"
 
 const channel: MixerChannelState = {

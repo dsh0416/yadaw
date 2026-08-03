@@ -14,7 +14,7 @@ fn main() {
             .file("src/attach_guard.cpp")
             .flag_if_supported("/EHsc")
             .warnings(true)
-            .compile("yadaw_vst3_attach_guard");
+            .compile("heron_vst3_attach_guard");
     }
 
     if target_os.as_deref() == Ok("macos") {
@@ -24,7 +24,7 @@ fn main() {
         // A scanned plug-in may initialize AppKit, so the probe must be an
         // agent before any third-party bundle entry point runs.
         println!(
-            "cargo:rustc-link-arg-bin=yadaw-vst3-probe=-Wl,-sectcreate,__TEXT,__info_plist,{}",
+            "cargo:rustc-link-arg-bin=heron-vst3-probe=-Wl,-sectcreate,__TEXT,__info_plist,{}",
             info_plist.display()
         );
     }

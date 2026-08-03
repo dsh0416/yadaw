@@ -41,7 +41,7 @@ const repositoryRoot = fileURLToPath(new URL("../../..", import.meta.url))
 const executableSuffix = process.platform === "win32" ? ".exe" : ""
 const [helperPath, pluginPath] = process.argv.slice(2)
 const resolvedHelper =
-  helperPath ?? resolve(repositoryRoot, "target", "debug", `yadaw-audio-host${executableSuffix}`)
+  helperPath ?? resolve(repositoryRoot, "target", "debug", `heron-audio-host${executableSuffix}`)
 const resolvedPlugin =
   pluginPath ?? resolve(repositoryRoot, "target", "vst3-fixtures", "VST3", "Debug", "again.vst3")
 const resolvedSynth = resolve(
@@ -52,7 +52,7 @@ const resolvedSynth = resolve(
   "Debug",
   "note-expression-synth.vst3"
 )
-const crashMarker = resolve(tmpdir(), `yadaw-vst3-smoke-${process.pid}.marker`)
+const crashMarker = resolve(tmpdir(), `heron-vst3-smoke-${process.pid}.marker`)
 const child = spawn(resolvedHelper, ["--crash-marker", crashMarker], {
   stdio: ["pipe", "pipe", "inherit"]
 })

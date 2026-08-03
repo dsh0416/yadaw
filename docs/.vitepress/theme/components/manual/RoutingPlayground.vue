@@ -9,7 +9,7 @@ import type {
   MixerSendPatch,
   MixerSendState,
   MixerSendTap
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import ManualDemoFrame from "./ManualDemoFrame.vue"
 import ManualMixerChannelStrip from "./ManualMixerChannelStrip.vue"
 import RoutingPath from "./RoutingPath.vue"
@@ -56,7 +56,7 @@ const copyByLocale: Record<Locale, RoutingCopy> = {
     eyebrow: "Live mixer fixture",
     title: "Route from the real channel strip",
     description:
-      "This is the same mixer strip used by YADAW. Change its Output, open the Send row, or move the fader and pan control; the route map reads that in-memory state.",
+      "This is the same mixer strip used by Heron. Change its Output, open the Send row, or move the fader and pan control; the route map reads that in-memory state.",
     realStrip: "Real mixer strip",
     routeMap: "Derived route map",
     hint: "Try Output, the BUS 1 send row, Pan, or the fader. Nothing here touches audio hardware or a project file.",
@@ -91,7 +91,7 @@ const copyByLocale: Record<Locale, RoutingCopy> = {
     eyebrow: "实时混音台样例",
     title: "直接从真实通道条搭建路由",
     description:
-      "这里使用的就是 YADAW 的 Mixer Strip。改变“输出”、打开“BUS 1”发送行，或移动推子和声像；右侧路由图会读取同一份内存状态。",
+      "这里使用的就是 Heron 的 Mixer Strip。改变“输出”、打开“BUS 1”发送行，或移动推子和声像；右侧路由图会读取同一份内存状态。",
     realStrip: "真实 Mixer Strip",
     routeMap: "派生路由图",
     hint: "可以尝试输出、BUS 1 发送行、声像或推子。这里不会访问音频硬件，也不会修改工程文件。",
@@ -389,7 +389,7 @@ function deleteSend(sendId: string): void {
   border: 1px solid var(--vp-c-divider);
   border-radius: 8px;
   background:
-    linear-gradient(135deg, color-mix(in srgb, var(--yadaw-cyan) 7%, transparent), transparent 38%),
+    linear-gradient(135deg, color-mix(in srgb, var(--heron-cyan) 7%, transparent), transparent 38%),
     #242424;
   box-shadow:
     0 16px 32px rgb(0 0 0 / 20%),
@@ -408,7 +408,7 @@ function deleteSend(sendId: string): void {
 }
 
 .routing-playground__section-heading span {
-  color: var(--yadaw-cyan);
+  color: var(--heron-cyan);
   font-size: 0.56rem;
   font-weight: 750;
   letter-spacing: 0.1em;
@@ -506,7 +506,7 @@ function deleteSend(sendId: string): void {
 
 .routing-playground__summary span {
   flex: none;
-  color: var(--yadaw-cyan);
+  color: var(--heron-cyan);
   font-family: var(--vp-font-family-mono);
 }
 

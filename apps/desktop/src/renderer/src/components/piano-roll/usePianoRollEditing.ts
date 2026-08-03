@@ -4,7 +4,7 @@ import type {
   MidiNotePatch,
   ProjectGraphSnapshot,
   ProjectCommand
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import type { PianoRollNoteRef, usePianoRollStore } from "../../stores/pianoRoll"
 import {
   MIN_NOTE_TICKS,

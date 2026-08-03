@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { copyFileSync, mkdirSync } from "node:fs"
+import { copyFileSync, cpSync, mkdirSync, readdirSync } from "node:fs"
 import { resolve } from "node:path"
 import { cargoExecutable, fail, hostTarget, run, runPnpm, workspaceRoot } from "./rust-target.ts"
 
@@ -17,7 +17,7 @@ const target = hostTarget()
 const release = mode === "release"
 
 if (scope !== "binaries") {
-  for (const packageName of ["@yadaw/dsp-node", "@yadaw/audio-host-client"]) {
+  for (const packageName of ["@heron/dsp-node", "@heron/audio-host-client"]) {
     runPnpm([
       "--filter",
       packageName,
@@ -39,13 +39,13 @@ if (scope !== "addons") {
     target,
     ...(release ? ["--release"] : []),
     "-p",
-    "yadaw-audio-host",
+    "heron-audio-host",
     "-p",
-    "yadaw-vst3-host",
+    "heron-vst3-host",
     "--bin",
-    "yadaw-audio-host",
+    "heron-audio-host",
     "--bin",
-    "yadaw-vst3-probe"
+    "heron-vst3-probe"
   ])
   run(cargoExecutable, [
     "truce",
@@ -56,12 +56,22 @@ if (scope !== "addons") {
     ...(!release ? ["--debug"] : [])
   ])
 
+  const targetBundleDirectory = resolve(workspaceRoot, "target", "bundles", target)
+  const stableBundleDirectory = resolve(workspaceRoot, "target", "bundles")
+  for (const entry of readdirSync(targetBundleDirectory, { withFileTypes: true })) {
+    if (!entry.isDirectory() || !entry.name.endsWith(".vst3")) continue
+    cpSync(resolve(targetBundleDirectory, entry.name), resolve(stableBundleDirectory, entry.name), {
+      recursive: true,
+      force: true
+    })
+  }
+
   const profile = release ? "release" : "debug"
   const executableSuffix = process.platform === "win32" ? ".exe" : ""
   const sourceDirectory = resolve(workspaceRoot, "target", target, profile)
   const stableDirectory = resolve(workspaceRoot, "target", profile)
   mkdirSync(stableDirectory, { recursive: true })
-  for (const binary of ["yadaw-audio-host", "yadaw-vst3-probe"]) {
+  for (const binary of ["heron-audio-host", "heron-vst3-probe"]) {
     copyFileSync(
       resolve(sourceDirectory, `${binary}${executableSuffix}`),
       resolve(stableDirectory, `${binary}${executableSuffix}`)

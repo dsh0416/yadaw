@@ -12,7 +12,7 @@ import type {
   ProjectSession,
   ProjectSessionRef,
   ProjectWorkspaceSnapshot
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import { useGlobalDialog } from "../composables/useGlobalDialog"
 import { i18n } from "../i18n"
 import { mutationMeta, readMeta, rpcErrorMessage } from "../rpc"
@@ -92,7 +92,7 @@ export const useProjectStore = defineStore("project", () => {
     pendingIntent.value = "create"
     rpcError.value = ""
     try {
-      const result = await window.yadaw.createProject(
+      const result = await window.heron.createProject(
         mutationMeta(desktopSession.value, "project-create"),
         request
       )
@@ -114,7 +114,7 @@ export const useProjectStore = defineStore("project", () => {
     pendingIntent.value = "open"
     rpcError.value = ""
     try {
-      const prepared = await window.yadaw.prepareOpenProject(readMeta(desktopSession.value), path)
+      const prepared = await window.heron.prepareOpenProject(readMeta(desktopSession.value), path)
       if (!prepared.ok) {
         if (prepared.error.category !== "cancelled") {
           rpcError.value = rpcErrorMessage(prepared.error)
@@ -145,7 +145,7 @@ export const useProjectStore = defineStore("project", () => {
         }
         recover = choice === "recover"
       }
-      const result = await window.yadaw.openProject(
+      const result = await window.heron.openProject(
         mutationMeta(desktopSession.value, "project-open"),
         preparation.path,
         recover
@@ -169,7 +169,7 @@ export const useProjectStore = defineStore("project", () => {
     try {
       const target = projectRef.value
       if (!target) return
-      const saved = await window.yadaw.saveProject(mutationMeta(target, "project-save"))
+      const saved = await window.heron.saveProject(mutationMeta(target, "project-save"))
       if (!saved.ok) {
         rpcError.value = rpcErrorMessage(saved.error)
         lifecycle.value = openState(previous)
@@ -221,7 +221,7 @@ export const useProjectStore = defineStore("project", () => {
     pendingIntent.value = "close"
     rpcError.value = ""
     try {
-      const result = await window.yadaw.closeProject(
+      const result = await window.heron.closeProject(
         mutationMeta(target, "project-close"),
         preparedDisposition
       )
@@ -249,7 +249,7 @@ export const useProjectStore = defineStore("project", () => {
 
   async function updateConfiguration(configuration: ProjectConfiguration): Promise<void> {
     if (!projectGraphRef.value) return
-    const result = await window.yadaw.updateProjectConfiguration(
+    const result = await window.heron.updateProjectConfiguration(
       mutationMeta(projectGraphRef.value, "project-configuration", projectRevision.value),
       configuration
     )
@@ -263,7 +263,7 @@ export const useProjectStore = defineStore("project", () => {
 
   async function refreshAssets(): Promise<void> {
     if (!session.value || !projectRef.value) return
-    const result = await window.yadaw.listProjectAssets(readMeta(projectRef.value))
+    const result = await window.heron.listProjectAssets(readMeta(projectRef.value))
     if (!result.ok) {
       rpcError.value = rpcErrorMessage(result.error)
       return

@@ -9,7 +9,7 @@ import type {
   MixerChannelPatch,
   MixerChannelState,
   MixerParameterPreview
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import { usePeakMeterDisplay } from "../../composables/usePeakMeterDisplay"
 import { useParameterGesture } from "../../composables/useParameterGesture"
 import { useApplicationSettingsStore } from "../../stores/applicationSettings"

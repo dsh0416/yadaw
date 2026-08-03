@@ -188,7 +188,7 @@ fn graph_validation_error(meta: &RpcRequestMeta, field: &str) -> RpcError {
 fn graph_stale_error(
     meta: &RpcRequestMeta,
     resource: ResourceRef,
-    reason: yadaw_dsp_runtime::protocol::RpcStaleReason,
+    reason: heron_dsp_runtime::protocol::RpcStaleReason,
 ) -> RpcError {
     RpcError {
         code: RpcErrorCode::StaleResource,
@@ -277,7 +277,7 @@ fn validate_graph_meta(
         return Err(Box::new(graph_stale_error(
             meta,
             engine,
-            yadaw_dsp_runtime::protocol::RpcStaleReason::EpochMismatch,
+            heron_dsp_runtime::protocol::RpcStaleReason::EpochMismatch,
         )));
     }
     let operation_id = meta
@@ -304,7 +304,7 @@ fn validate_graph_request(
         return Err(Box::new(graph_stale_error(
             meta,
             validated.engine.clone(),
-            yadaw_dsp_runtime::protocol::RpcStaleReason::EpochMismatch,
+            heron_dsp_runtime::protocol::RpcStaleReason::EpochMismatch,
         )));
     }
     if request.project_graph.kind != ResourceKind::ProjectGraph {

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, useTemplateRef, watch } from "vue"
 import { useI18n } from "vue-i18n"
-import type { PluginAudioMode, PluginDescriptor } from "@yadaw/contracts"
+import type { PluginAudioMode, PluginDescriptor } from "@heron/contracts"
 import { pluginAudioModeOptions, type PluginSignalWidth } from "./plugin-audio-mode"
 
 const props = defineProps<{

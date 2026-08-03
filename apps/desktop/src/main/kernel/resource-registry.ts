@@ -1,4 +1,4 @@
-import type { ResourceKind, ResourceRef } from "@yadaw/contracts"
+import type { ResourceKind, ResourceRef } from "@heron/contracts"
 import { kernelFailure, kernelSuccess } from "./result"
 import type { KernelResult } from "./result"
 

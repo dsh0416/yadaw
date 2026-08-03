@@ -43,14 +43,14 @@ await test("native DSP binding processes values across the napi boundary", () =>
 })
 
 await test("native DSP binding writes and analyzes a deterministic recording", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "yadaw-native-bindings-"))
+  const directory = await mkdtemp(join(tmpdir(), "heron-native-bindings-"))
   try {
     const path = join(directory, "recording.bwf")
     const recording = writeDeterministicTestRecording(
       {
         path,
         assetId: "coverage-fixture",
-        originator: "YADAW tests",
+        originator: "Heron tests",
         originationDate: "2026-01-01",
         originationTime: "00:00:00",
         timeReference: 0

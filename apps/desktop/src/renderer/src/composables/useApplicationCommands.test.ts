@@ -8,7 +8,7 @@ import type {
   ApplicationCommandId,
   ProjectSession,
   ProjectWorkspaceSnapshot
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import { useApplicationCommands } from "./useApplicationCommands"
 import { useGlobalDialog } from "./useGlobalDialog"
 import { useAudioRuntimeStore } from "../stores/audioRuntime"
@@ -21,7 +21,7 @@ import { rpcEvent } from "../test/ipc"
 
 const session: ProjectSession = {
   id: "project",
-  path: "session.yadaw",
+  path: "session.heron",
   configuration: {
     name: "Session",
     sampleRate: 48_000,
@@ -190,20 +190,20 @@ function createHarness() {
 }
 
 describe("useApplicationCommands", () => {
-  let nativeCommandListener: Parameters<typeof window.yadaw.subscribeApplicationCommands>[0] | null
+  let nativeCommandListener: Parameters<typeof window.heron.subscribeApplicationCommands>[0] | null
 
   beforeEach(() => {
     vi.clearAllMocks()
     nativeCommandListener = null
-    Object.defineProperty(window.yadaw, "platform", {
+    Object.defineProperty(window.heron, "platform", {
       configurable: true,
       value: "win32"
     })
-    window.yadaw.subscribeApplicationCommands = vi.fn((listener) => {
+    window.heron.subscribeApplicationCommands = vi.fn((listener) => {
       nativeCommandListener = listener
       return () => undefined
     })
-    window.yadaw.transportCommand = vi.fn().mockResolvedValue({
+    window.heron.transportCommand = vi.fn().mockResolvedValue({
       ok: true,
       requestId: "transport",
       operationId: "transport-operation",
@@ -366,7 +366,7 @@ describe("useApplicationCommands", () => {
     const openWorkspace = workspace(session)
     useProjectStore(pinia).applyWorkspace(openWorkspace)
     useMixerStore(pinia).hydrate(openWorkspace.graph)
-    vi.mocked(window.yadaw.transportCommand).mockResolvedValueOnce({
+    vi.mocked(window.heron.transportCommand).mockResolvedValueOnce({
       ok: true,
       requestId: "cycle",
       operationId: "cycle-operation",
@@ -385,7 +385,7 @@ describe("useApplicationCommands", () => {
     await wrapper.get("button:nth-of-type(3)").trigger("click")
     await flushPromises()
 
-    expect(window.yadaw.transportCommand).toHaveBeenCalledWith(
+    expect(window.heron.transportCommand).toHaveBeenCalledWith(
       expect.objectContaining({ target: expect.objectContaining({ kind: "transport" }) }),
       {
         type: "set-loop",
@@ -403,13 +403,13 @@ describe("useApplicationCommands", () => {
     await flushPromises()
 
     expect(useAboutStore(pinia).isOpen).toBe(true)
-    expect(window.yadaw.executeApplicationWindowCommand).not.toHaveBeenCalled()
+    expect(window.heron.executeApplicationWindowCommand).not.toHaveBeenCalled()
   })
 
   it.each(["window.close", "application.quit"] as const)(
     "prompts before %s and continues only after the dirty project is closed",
     async (command) => {
-      window.yadaw.closeProject = vi.fn().mockResolvedValue({
+      window.heron.closeProject = vi.fn().mockResolvedValue({
         ok: true,
         requestId: "close",
         value: { closed: true, snapshot: closedBootstrap() },
@@ -421,12 +421,12 @@ describe("useApplicationCommands", () => {
 
       nativeCommandListener?.(rpcEvent(command))
       await vi.waitFor(() => expect(activeDialog.value?.title).toBe("Save project before closing?"))
-      expect(window.yadaw.executeApplicationWindowCommand).not.toHaveBeenCalledWith(command)
-      expect(window.yadaw.transportCommand).not.toHaveBeenCalled()
+      expect(window.heron.executeApplicationWindowCommand).not.toHaveBeenCalledWith(command)
+      expect(window.heron.transportCommand).not.toHaveBeenCalled()
       selectDialogAction("discard")
       await flushPromises()
 
-      expect(window.yadaw.transportCommand).toHaveBeenNthCalledWith(
+      expect(window.heron.transportCommand).toHaveBeenNthCalledWith(
         1,
         expect.objectContaining({
           target: expect.objectContaining({ kind: "transport" }),
@@ -435,7 +435,7 @@ describe("useApplicationCommands", () => {
         }),
         { type: "set-loop", enabled: false, range: null }
       )
-      expect(window.yadaw.transportCommand).toHaveBeenNthCalledWith(
+      expect(window.heron.transportCommand).toHaveBeenNthCalledWith(
         2,
         expect.objectContaining({
           target: expect.objectContaining({ kind: "transport" }),
@@ -444,14 +444,14 @@ describe("useApplicationCommands", () => {
         }),
         { type: "pause" }
       )
-      expect(window.yadaw.closeProject).toHaveBeenCalledWith(
+      expect(window.heron.closeProject).toHaveBeenCalledWith(
         expect.objectContaining({
           target: expect.objectContaining({ kind: "project-session" }),
           mutation: expect.any(Object)
         }),
         "discard"
       )
-      expect(window.yadaw.executeApplicationWindowCommand).toHaveBeenCalledWith(
+      expect(window.heron.executeApplicationWindowCommand).toHaveBeenCalledWith(
         expect.any(Object),
         command
       )
@@ -459,11 +459,11 @@ describe("useApplicationCommands", () => {
   )
 
   it("closes a clean project before closing the macOS window", async () => {
-    Object.defineProperty(window.yadaw, "platform", {
+    Object.defineProperty(window.heron, "platform", {
       configurable: true,
       value: "darwin"
     })
-    window.yadaw.closeProject = vi.fn().mockResolvedValue({
+    window.heron.closeProject = vi.fn().mockResolvedValue({
       ok: true,
       requestId: "close",
       value: { closed: true, snapshot: closedBootstrap() },
@@ -474,17 +474,17 @@ describe("useApplicationCommands", () => {
     const { activeDialog } = useGlobalDialog()
 
     nativeCommandListener?.(rpcEvent("window.close"))
-    await vi.waitFor(() => expect(window.yadaw.closeProject).toHaveBeenCalledOnce())
+    await vi.waitFor(() => expect(window.heron.closeProject).toHaveBeenCalledOnce())
 
     expect(activeDialog.value).toBeNull()
-    expect(window.yadaw.executeApplicationWindowCommand).toHaveBeenCalledWith(
+    expect(window.heron.executeApplicationWindowCommand).toHaveBeenCalledWith(
       expect.any(Object),
       "window.close"
     )
   })
 
   it("keeps the current dirty project when switching projects is cancelled", async () => {
-    window.yadaw.prepareOpenProject = vi.fn()
+    window.heron.prepareOpenProject = vi.fn()
     const { pinia } = createHarness()
     const projectStore = useProjectStore(pinia)
     projectStore.applyWorkspace(workspace({ ...session, dirty: true }))
@@ -495,8 +495,8 @@ describe("useApplicationCommands", () => {
     dismissDialog()
     await flushPromises()
 
-    expect(window.yadaw.closeProject).not.toHaveBeenCalled()
-    expect(window.yadaw.prepareOpenProject).not.toHaveBeenCalled()
+    expect(window.heron.closeProject).not.toHaveBeenCalled()
+    expect(window.heron.prepareOpenProject).not.toHaveBeenCalled()
     expect(projectStore.session?.path).toBe(session.path)
   })
 })

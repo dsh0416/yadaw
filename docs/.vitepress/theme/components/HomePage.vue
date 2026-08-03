@@ -29,7 +29,9 @@ const signalClasses = [
           <a class="button button--primary" :href="withBase(`${prefix}/manual/`)">
             {{ t.openManual }} <span>→</span>
           </a>
-          <a class="button" href="https://github.com/dsh0416/yadaw/releases">{{ t.getRelease }}</a>
+          <a class="button" href="https://github.com/minori-live/heron/releases">{{
+            t.getRelease
+          }}</a>
         </div>
         <p class="hero__notice">
           <strong>{{ t.noticeStrong }}</strong> {{ t.noticeRest }}
@@ -139,13 +141,13 @@ const signalClasses = [
 .eyebrow span {
   width: 28px;
   height: 1px;
-  background: var(--yadaw-cyan);
+  background: var(--heron-cyan);
 }
 
 .hero__title {
   margin: 28px 0 24px;
   color: var(--vp-c-text-1);
-  font-family: var(--yadaw-display);
+  font-family: var(--heron-display);
   font-size: clamp(52px, 6.8vw, 88px);
   font-stretch: condensed;
   font-weight: 720;
@@ -154,7 +156,7 @@ const signalClasses = [
 }
 
 .hero__title em {
-  color: var(--yadaw-cyan);
+  color: var(--heron-cyan);
   font-style: normal;
   font-weight: 520;
 }
@@ -203,19 +205,19 @@ const signalClasses = [
 }
 
 .button:focus-visible {
-  outline: 2px solid var(--yadaw-cyan);
+  outline: 2px solid var(--heron-cyan);
   outline-offset: 3px;
 }
 
 .button--primary {
-  border-color: var(--yadaw-cyan-dark);
+  border-color: var(--heron-cyan-dark);
   color: #071315;
-  background: var(--yadaw-cyan);
+  background: var(--heron-cyan);
 }
 
 .button--primary:hover {
-  border-color: var(--yadaw-cyan-light);
-  background: var(--yadaw-cyan-light);
+  border-color: var(--heron-cyan-light);
+  background: var(--heron-cyan-light);
 }
 
 .hero__notice {
@@ -225,7 +227,7 @@ const signalClasses = [
 }
 
 .hero__notice strong {
-  color: var(--yadaw-warning);
+  color: var(--heron-warning);
   font-weight: 650;
 }
 
@@ -271,7 +273,7 @@ const signalClasses = [
   height: 5px;
   flex: none;
   border-radius: 50%;
-  background: var(--yadaw-meter);
+  background: var(--heron-meter);
   content: "";
 }
 
@@ -286,7 +288,7 @@ const signalClasses = [
 .manifesto__statement {
   max-width: 900px;
   margin: -8px 0 0;
-  font-family: var(--yadaw-display);
+  font-family: var(--heron-display);
   font-size: clamp(30px, 4vw, 52px);
   font-weight: 520;
   letter-spacing: -0.035em;
@@ -307,7 +309,7 @@ const signalClasses = [
 .principles__copy h2,
 .final-cta h2 {
   margin: 0;
-  font-family: var(--yadaw-display);
+  font-family: var(--heron-display);
   font-size: clamp(36px, 5vw, 64px);
   font-weight: 650;
   letter-spacing: -0.045em;
@@ -342,15 +344,15 @@ const signalClasses = [
 }
 
 .capability__signal--record {
-  background: var(--yadaw-record);
+  background: var(--heron-record);
 }
 
 .capability__signal--midi {
-  background: var(--yadaw-midi);
+  background: var(--heron-midi);
 }
 
 .capability__signal--meter {
-  background: var(--yadaw-meter);
+  background: var(--heron-meter);
 }
 
 .capability__index {
@@ -363,7 +365,7 @@ const signalClasses = [
 
 .capability h3 {
   margin: 0 0 18px;
-  font-family: var(--yadaw-display);
+  font-family: var(--heron-display);
   font-size: 26px;
   font-weight: 650;
   letter-spacing: -0.025em;
@@ -406,7 +408,7 @@ const signalClasses = [
 }
 
 .principles__list span {
-  color: var(--yadaw-cyan);
+  color: var(--heron-cyan);
   font-family: var(--vp-font-family-mono);
   font-size: 10px;
 }

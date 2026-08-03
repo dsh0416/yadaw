@@ -63,7 +63,7 @@ impl StreamWorkerPool {
             for lane in 0..lane_count {
                 let (sender, receiver) = mpsc::sync_channel::<StreamTask>(128);
                 thread::Builder::new()
-                    .name(format!("yadaw-background-io-{lane}"))
+                    .name(format!("heron-background-io-{lane}"))
                     .spawn(move || stream_worker_lane(receiver))
                     .expect("background I/O worker must start");
                 lanes.push(sender);

@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-labelledby="title description">
+  <title id="title">Heron Studio</title>
+  <desc id="description">Heron Studio — From sketch to stage.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#17191a"/>
+      <stop offset="1" stop-color="#0c0d0e"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientTransform="translate(950 88) rotate(132) scale(650 440)">
+      <stop offset="0" stop-color="#72c3c7" stop-opacity=".2"/>
+      <stop offset="1" stop-color="#72c3c7" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse">
+      <path d="M48 0H0V48" fill="none" stroke="#fff" stroke-opacity=".035"/>
+    </pattern>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#background)"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+  <rect width="1200" height="630" fill="url(#grid)"/>
+  <path d="M72 72H1128" stroke="#fff" stroke-opacity=".12"/>
+
+  <g transform="translate(72 112)">
+    <rect y="24" width="12" height="32" rx="6" fill="#8da8b5"/>
+    <rect x="20" y="12" width="12" height="56" rx="6" fill="#8da8b5"/>
+    <rect x="40" width="12" height="80" rx="6" fill="#72c3c7"/>
+    <rect x="60" y="12" width="12" height="56" rx="6" fill="#8da8b5"/>
+    <rect x="80" y="24" width="12" height="32" rx="6" fill="#8da8b5"/>
+  </g>
+
+  <text x="72" y="368" fill="#f4f6f6" font-family="Arial, Helvetica, sans-serif" font-size="142" font-weight="800" letter-spacing="-8">HERON</text>
+  <text x="80" y="438" fill="#72c3c7" font-family="Arial, Helvetica, sans-serif" font-size="50" font-weight="400" letter-spacing="15">STUDIO</text>
+  <text x="78" y="522" fill="#cbd1d2" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="400" letter-spacing="1">From sketch to stage.</text>
+  <text x="1128" y="562" fill="#8b9496" font-family="Arial, Helvetica, sans-serif" font-size="18" text-anchor="end">heron.minori.live</text>
+  <path d="M72 574H1128" stroke="#fff" stroke-opacity=".12"/>
+</svg>

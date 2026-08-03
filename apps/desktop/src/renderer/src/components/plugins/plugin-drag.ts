@@ -1,6 +1,6 @@
-import type { PluginDescriptor } from "@yadaw/contracts"
+import type { PluginDescriptor } from "@heron/contracts"
 
-export const PLUGIN_DRAG_TYPE = "application/x-yadaw-plugin"
+export const PLUGIN_DRAG_TYPE = "application/x-heron-plugin"
 
 export type PluginDragPayload =
   | { source: "catalog"; descriptor: PluginDescriptor }

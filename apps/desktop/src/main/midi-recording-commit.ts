@@ -8,9 +8,9 @@ import type {
   ProjectCommand,
   ProjectWorkspaceSnapshot,
   RpcRequestMeta
-} from "@yadaw/contracts"
-import { IPC_PROTOCOL_VERSION } from "@yadaw/contracts"
-import { recoverMidiJournalTake } from "@yadaw/dsp-node"
+} from "@heron/contracts"
+import { IPC_PROTOCOL_VERSION } from "@heron/contracts"
+import { recoverMidiJournalTake } from "@heron/dsp-node"
 import type { ProjectCommandService } from "./project-command-service"
 
 function eventKind(value: string): MidiEventKind {

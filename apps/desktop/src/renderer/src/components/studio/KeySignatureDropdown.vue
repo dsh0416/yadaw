@@ -7,7 +7,7 @@ import {
   type UiCascadingSelectGroup,
   type UiCascadingSelectHoverTreatment,
   type UiSelectSize
-} from "@yadaw/ui"
+} from "@heron/ui"
 import { MAJOR_KEY_SIGNATURE_CHOICES, MINOR_KEY_SIGNATURE_CHOICES } from "../../utils/keySignatures"
 
 defineOptions({ inheritAttrs: false })

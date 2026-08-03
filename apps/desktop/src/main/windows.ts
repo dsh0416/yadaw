@@ -44,7 +44,7 @@ export function openExternalUrl(url: string): boolean {
     const parsed = new URL(url)
     if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return false
     void shell.openExternal(parsed.toString()).catch((error: unknown) => {
-      console.error("YADAW could not open an external URL", error)
+      console.error("Heron could not open an external URL", error)
     })
     return true
   } catch {
@@ -53,16 +53,16 @@ export function openExternalUrl(url: string): boolean {
 }
 
 export function loadMainWindow(window: BrowserWindow): void {
-  if (process.env.YADAW_RENDERER_URL) {
-    void window.loadURL(process.env.YADAW_RENDERER_URL)
+  if (process.env.HERON_RENDERER_URL) {
+    void window.loadURL(process.env.HERON_RENDERER_URL)
   } else {
     void window.loadFile(join(rendererDirectory, "index.html"))
   }
 }
 
 export function loadSplashWindow(window: BrowserWindow): void {
-  if (process.env.YADAW_RENDERER_URL) {
-    void window.loadURL(new URL("splash.html", process.env.YADAW_RENDERER_URL).toString())
+  if (process.env.HERON_RENDERER_URL) {
+    void window.loadURL(new URL("splash.html", process.env.HERON_RENDERER_URL).toString())
   } else {
     void window.loadFile(join(rendererDirectory, "splash.html"))
   }
@@ -149,10 +149,10 @@ export function createMainWindow(loadContent = true): BrowserWindow {
     }
   })
   window.webContents.on("render-process-gone", (_event, details) => {
-    console.error("YADAW renderer process exited", details)
+    console.error("Heron renderer process exited", details)
   })
   window.webContents.on("did-fail-load", (_event, code, description) => {
-    console.error("YADAW renderer failed to load", { code, description })
+    console.error("Heron renderer failed to load", { code, description })
   })
 
   if (loadContent) loadMainWindow(window)

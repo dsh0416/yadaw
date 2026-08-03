@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use yadaw_dsp_core::mixer::StereoFrame;
+use heron_dsp_core::mixer::StereoFrame;
 
 /// Random-access decoded audio. Implementations must keep `sample` free of
 /// blocking, I/O, locks, allocation, and deallocation.

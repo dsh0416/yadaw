@@ -8,8 +8,8 @@ import type {
   MixerSendPatch,
   MixerSendState,
   ProjectCommand
-} from "@yadaw/contracts"
-import { DEFAULT_INSTRUMENT_COLOR } from "@yadaw/contracts"
+} from "@heron/contracts"
+import { DEFAULT_INSTRUMENT_COLOR } from "@heron/contracts"
 import {
   MIXER_BUSES,
   audioTracks as selectAudioTracks,
@@ -18,8 +18,8 @@ import {
   instrumentTracks as selectInstrumentTracks,
   sendsFor as selectSendsFor,
   systemChannels as selectSystemChannels
-} from "@yadaw/project-model"
-import { UI_DOMAIN_COLORS } from "@yadaw/ui"
+} from "@heron/project-model"
+import { UI_DOMAIN_COLORS } from "@heron/ui"
 import { useMixerRuntimeStore } from "./mixerRuntime"
 import { useProjectGraphStore } from "./projectGraph"
 import { useProjectHistoryStore } from "./projectHistory"

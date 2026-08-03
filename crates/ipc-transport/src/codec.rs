@@ -1,7 +1,7 @@
 use super::*;
 
 /// Outer value serialized by `ipc-channel`; process-shared regions are named by
-/// opaque YADAW descriptors rather than ipc-channel memory attachments.
+/// opaque Heron descriptors rather than ipc-channel memory attachments.
 #[derive(Serialize, Deserialize)]
 pub struct WirePacket {
     pub body: Vec<u8>,

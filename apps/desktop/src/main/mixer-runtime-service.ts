@@ -1,5 +1,5 @@
-import type { MixerParameterPreview, MixerRuntimeSnapshot } from "@yadaw/contracts"
-import { finiteRange } from "@yadaw/project-model"
+import type { MixerParameterPreview, MixerRuntimeSnapshot } from "@heron/contracts"
+import { finiteRange } from "@heron/project-model"
 import type { AudioHostService } from "./audio-host-service"
 
 export class MixerRuntimeService {

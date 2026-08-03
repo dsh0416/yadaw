@@ -4,7 +4,7 @@ import { useI18n } from "vue-i18n"
 import DOMPurify from "dompurify"
 import { marked } from "marked"
 import { FilePenLine } from "@lucide/vue"
-import { UiButton } from "@yadaw/ui"
+import { UiButton } from "@heron/ui"
 
 const props = defineProps<{
   content: string

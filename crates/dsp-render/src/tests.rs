@@ -10,7 +10,7 @@ use crate::{
     RenderMidiNote, RenderMidiSpec, RenderPluginSpec, RenderResources, RenderRoute, RenderRuntime,
     RenderSendSpec, RenderSendTap, RenderTransport, TempoEvent, TimeSignatureEvent,
 };
-use yadaw_dsp_core::mixer::{ChannelKind, ChannelSpec, MixerGraph, RouteTarget};
+use heron_dsp_core::mixer::{ChannelKind, ChannelSpec, MixerGraph, RouteTarget};
 
 struct TrackingAllocator;
 

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, useTemplateRef, watch } from "vue"
 import { useResizeObserver } from "@vueuse/core"
-import type { TempoMapSnapshot, WaveformDisplayMode, WaveformPeakWindow } from "@yadaw/contracts"
+import type { TempoMapSnapshot, WaveformDisplayMode, WaveformPeakWindow } from "@heron/contracts"
 import { buildWarpedWaveformGeometry, buildWaveformGeometry } from "../../utils/waveform"
 import { timelineXToSeconds } from "../../utils/timelineCoordinates"
 

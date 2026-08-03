@@ -59,7 +59,7 @@ const meta = {
             <UiSelect v-model="driver" :id="controlId" :options="driverOptions" />
           </template>
         </UiField>
-        <UiCheckbox v-model="monitoring" label="Software monitoring" description="Hear armed inputs through YADAW." />
+        <UiCheckbox v-model="monitoring" label="Software monitoring" description="Hear armed inputs through Heron." />
         <UiRadioGroup v-model="mode" label="Performance profile" :options="modeOptions" />
         <UiField label="Buffer size" description="Lower values reduce latency and increase CPU demand.">
           <template #default="{ controlId, descriptionId }">

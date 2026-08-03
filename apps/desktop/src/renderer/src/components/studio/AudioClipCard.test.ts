@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest"
 import { mount } from "@vue/test-utils"
 import { createPinia } from "pinia"
-import { UiContextMenu } from "@yadaw/ui"
+import { UiContextMenu } from "@heron/ui"
 import type { TimelineClip } from "../../stores/transport"
 import AudioClipCard from "./AudioClipCard.vue"
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from "vue-i18n"
-import type { AudioIpcBenchmarkReport, AudioIpcBenchmarkScenario } from "@yadaw/contracts"
+import type { AudioIpcBenchmarkReport, AudioIpcBenchmarkScenario } from "@heron/contracts"
 
 defineProps<{ report: AudioIpcBenchmarkReport }>()
 const { t } = useI18n()

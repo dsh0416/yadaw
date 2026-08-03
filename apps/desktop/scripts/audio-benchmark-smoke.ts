@@ -1,7 +1,7 @@
 import { tmpdir } from "node:os"
 import { resolve } from "node:path"
 import { decode, encode } from "@msgpack/msgpack"
-import { AudioHostIpcClient } from "@yadaw/audio-host-client"
+import { AudioHostIpcClient } from "@heron/audio-host-client"
 
 interface BenchmarkScenario {
   plugins: number
@@ -23,11 +23,11 @@ interface WireResponse {
 
 const repositoryRoot = resolve(import.meta.dirname, "..", "..", "..")
 const executableSuffix = process.platform === "win32" ? ".exe" : ""
-const helperPath = resolve(repositoryRoot, "target", "debug", `yadaw-audio-host${executableSuffix}`)
-const pluginPath = resolve(repositoryRoot, "target", "bundles", "YADAW Gain.vst3")
+const helperPath = resolve(repositoryRoot, "target", "debug", `heron-audio-host${executableSuffix}`)
+const pluginPath = resolve(repositoryRoot, "target", "bundles", "Heron Gain.vst3")
 const client = new AudioHostIpcClient(
   helperPath,
-  resolve(tmpdir(), `yadaw-audio-benchmark-${process.pid}.marker`),
+  resolve(tmpdir(), `heron-audio-benchmark-${process.pid}.marker`),
   2,
   4,
   2
@@ -88,16 +88,16 @@ async function runIpcSmoke(): Promise<void> {
 
 const pluginInstanceIds = Array.from(
   { length: 64 },
-  (_, index) => `__yadaw-audio-benchmark-gain-${index}`
+  (_, index) => `__heron-audio-benchmark-gain-${index}`
 )
-const projectPluginInstanceId = "__yadaw-project-open-gain"
+const projectPluginInstanceId = "__heron-project-open-gain"
 
 async function loadGain(instanceId: string): Promise<void> {
   const loaded = await request({
     type: "load-plugin",
     instance_id: instanceId,
     module_path: pluginPath,
-    class_id: "59CABE21E605B9C9EE928D6C3B236BBF",
+    class_id: "46774F504DF84B4AC1F308AB88DD3677",
     plugin_kind: "effect",
     audio_mode: "stereo",
     sample_rate: 48_000,

@@ -6,8 +6,8 @@ import { RecordingService } from "./recording-service"
 
 describe("RecordingService archive cleanup", () => {
   it("cleans a ready sidecar after the saved database proves its asset exists", async () => {
-    const swapDirectory = await mkdtemp(join(tmpdir(), "yadaw-recording-cleanup-"))
-    const projectPath = join(swapDirectory, "project.yadaw")
+    const swapDirectory = await mkdtemp(join(tmpdir(), "heron-recording-cleanup-"))
+    const projectPath = join(swapDirectory, "project.heron")
     const id = "recording-id"
     const audioPath = join(swapDirectory, `${id}.ready.bwf`)
     const finalPath = join(swapDirectory, `${id}.final-float32.bwf`)
@@ -56,8 +56,8 @@ describe("RecordingService archive cleanup", () => {
   })
 
   it("treats recovery as idempotent when the working database already has the asset", async () => {
-    const swapDirectory = await mkdtemp(join(tmpdir(), "yadaw-recording-recover-"))
-    const projectPath = join(swapDirectory, "project.yadaw")
+    const swapDirectory = await mkdtemp(join(tmpdir(), "heron-recording-recover-"))
+    const projectPath = join(swapDirectory, "project.heron")
     const id = "already-imported"
     const sidecarPath = join(swapDirectory, `${id}.recording.json`)
     await writeFile(

@@ -11,10 +11,10 @@ describe("MidiSettings", () => {
       theme: "dark",
       midiCenterCStandard: "roland-c4"
     })
-    window.yadaw.bootstrap = vi
+    window.heron.bootstrap = vi
       .fn()
       .mockResolvedValue(rpcSuccess(testBootstrap({ settings: settingsSnapshot(initial) })))
-    window.yadaw.updateApplicationSettings = vi
+    window.heron.updateApplicationSettings = vi
       .fn()
       .mockImplementation(async (_meta, patch) =>
         rpcSuccess(settingsSnapshot(testSettings({ ...initial, ...patch }), 2))
@@ -41,7 +41,7 @@ describe("MidiSettings", () => {
     await yamahaOption!.trigger("click")
     await flushPromises()
 
-    expect(window.yadaw.updateApplicationSettings).toHaveBeenCalledWith(expect.any(Object), {
+    expect(window.heron.updateApplicationSettings).toHaveBeenCalledWith(expect.any(Object), {
       midiCenterCStandard: "yamaha-c3"
     })
     expect(yamahaOption!.attributes("aria-checked")).toBe("true")

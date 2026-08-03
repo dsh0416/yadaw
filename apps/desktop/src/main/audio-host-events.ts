@@ -1,6 +1,6 @@
 import { decode } from "@msgpack/msgpack"
-import type { AudioHostIpcClient } from "@yadaw/audio-host-client"
-import type { AraCallbackEvent, PluginEditorPreference } from "@yadaw/contracts"
+import type { AudioHostIpcClient } from "@heron/audio-host-client"
+import type { AraCallbackEvent, PluginEditorPreference } from "@heron/contracts"
 
 export interface AraHostCallback {
   helperEpoch: string

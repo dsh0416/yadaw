@@ -1,9 +1,9 @@
 use std::{thread, time::Duration};
 
-use yadaw_audio_host::engine::{
+use heron_audio_host::engine::{
     AudioEngine, NativeAudioEngineConfig, NativeRoundTripLatencyMeasurementRequest,
 };
-use yadaw_audio_host::mock;
+use heron_audio_host::mock;
 
 #[test]
 fn mock_backend_completes_a_loopback_measurement_through_its_duplex_device() {

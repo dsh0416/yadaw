@@ -4,9 +4,9 @@ import { createHead } from "@unhead/vue/client"
 import { createPinia, setActivePinia } from "pinia"
 import { withThemeByDataAttribute } from "@storybook/addon-themes"
 
-import { UiProvider, useLocaleFonts } from "@yadaw/ui"
+import { UiProvider, useLocaleFonts } from "@heron/ui"
 import "unfonts.css"
-import "@yadaw/ui/styles.css"
+import "@heron/ui/styles.css"
 import "./preview.css"
 
 setup((app) => {

@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, watch } from "vue"
 import { useI18n } from "vue-i18n"
-import { UiContextMenu, type UiMenuEntry } from "@yadaw/ui"
-import type { AudioClipState, TempoMapSnapshot, WaveformDisplayMode } from "@yadaw/contracts"
+import { UiContextMenu, type UiMenuEntry } from "@heron/ui"
+import type { AudioClipState, TempoMapSnapshot, WaveformDisplayMode } from "@heron/contracts"
 import type { TimelineClip } from "../../stores/transport"
 import { useClipWaveform } from "../../composables/useClipWaveform"
 import {
@@ -234,7 +234,7 @@ function startDrag(event: DragEvent): void {
   }
   const offsetPixels = Math.max(0, event.clientX - bounds.left)
   event.dataTransfer.setData(
-    "application/x-yadaw-clip",
+    "application/x-heron-clip",
     JSON.stringify({
       id: props.clip.id,
       offsetPixels

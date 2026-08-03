@@ -2,7 +2,7 @@ import type {
   CompiledAudioGraphEdge,
   CompiledAudioGraphNode,
   CompiledAudioGraphSnapshot
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 
 export interface PositionedCompiledGraphNode extends CompiledAudioGraphNode {
   x: number

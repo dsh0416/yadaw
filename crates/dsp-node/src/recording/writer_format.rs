@@ -35,7 +35,7 @@ pub(super) fn broadcast_metadata(
     coding_history: String,
 ) -> Bext {
     Bext {
-        description: format!("YADAW recording {asset_id}"),
+        description: format!("Heron recording {asset_id}"),
         originator: originator.to_owned(),
         originator_reference: asset_id.to_owned(),
         origination_date: origination_date.to_owned(),

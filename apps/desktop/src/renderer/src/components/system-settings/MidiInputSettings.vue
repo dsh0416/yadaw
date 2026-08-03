@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, watch } from "vue"
-import { UiSelect } from "@yadaw/ui"
-import type { MidiInputSnapshot, MidiSyncPreferences, MidiSyncState } from "@yadaw/contracts"
+import { UiSelect } from "@heron/ui"
+import type { MidiInputSnapshot, MidiSyncPreferences, MidiSyncState } from "@heron/contracts"
 import SettingsPage from "../settings/SettingsPage.vue"
 import SettingsSection from "../settings/SettingsSection.vue"
 

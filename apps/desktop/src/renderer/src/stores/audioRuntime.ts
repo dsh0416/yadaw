@@ -1,7 +1,7 @@
 import { useIntervalFn } from "@vueuse/core"
 import { acceptHMRUpdate, defineStore } from "pinia"
 import { computed, ref, shallowRef } from "vue"
-import { INITIAL_AUDIO_RUNTIME_SNAPSHOT } from "@yadaw/contracts"
+import { INITIAL_AUDIO_RUNTIME_SNAPSHOT } from "@heron/contracts"
 import type {
   AudioEngineRef,
   AudioHostRef,
@@ -13,7 +13,7 @@ import type {
   MidiRuntimeRef,
   RoundTripLatencyMeasurementRequest,
   TransportRef
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import { i18n } from "../i18n"
 import { mutationMeta, readMeta, rpcErrorMessage } from "../rpc"
 
@@ -152,7 +152,7 @@ export const useAudioRuntimeStore = defineStore("audio-runtime", () => {
   async function refresh(): Promise<void> {
     if (!audioEngineRef.value) return
     const generation = ++requestGeneration
-    const result = await window.yadaw.audioEngineSnapshot(readMeta(audioEngineRef.value))
+    const result = await window.heron.audioEngineSnapshot(readMeta(audioEngineRef.value))
     if (generation !== requestGeneration) return
     if (!result.ok) {
       lifecycle.value = {
@@ -174,7 +174,7 @@ export const useAudioRuntimeStore = defineStore("audio-runtime", () => {
     }
     const host = audioHostRef.value
     if (!host) throw new Error(t("errors.unableToStartAudioEngine"))
-    const result = await window.yadaw.startAudioEngine(
+    const result = await window.heron.startAudioEngine(
       mutationMeta(host, "audio-engine-start"),
       preferences
     )
@@ -200,7 +200,7 @@ export const useAudioRuntimeStore = defineStore("audio-runtime", () => {
     lifecycle.value = { status: "stopping", runtime: runtime.value, error: null }
     const engine = audioEngineRef.value
     if (!engine) return runtime.value
-    const result = await window.yadaw.stopAudioEngine(mutationMeta(engine, "audio-engine-stop"))
+    const result = await window.heron.stopAudioEngine(mutationMeta(engine, "audio-engine-stop"))
     if (!result.ok) {
       const message = rpcErrorMessage(result.error)
       if (generation !== requestGeneration) throw new Error(message)
@@ -223,7 +223,7 @@ export const useAudioRuntimeStore = defineStore("audio-runtime", () => {
   ): Promise<RoundTripLatencyMeasurement> {
     const target = audioHostRef.value
     if (!target) return roundTripLatencyMeasurement.value
-    const result = await window.yadaw.startRoundTripLatencyMeasurement(
+    const result = await window.heron.startRoundTripLatencyMeasurement(
       mutationMeta(target, "audio-round-trip-latency"),
       request
     )
@@ -238,7 +238,7 @@ export const useAudioRuntimeStore = defineStore("audio-runtime", () => {
   async function refreshRoundTripLatencyMeasurement(): Promise<RoundTripLatencyMeasurement> {
     const target = audioHostRef.value
     if (!target) return roundTripLatencyMeasurement.value
-    const result = await window.yadaw.roundTripLatencyMeasurementSnapshot(readMeta(target))
+    const result = await window.heron.roundTripLatencyMeasurementSnapshot(readMeta(target))
     if (!result.ok) {
       rpcError.value = rpcErrorMessage(result.error)
       return roundTripLatencyMeasurement.value

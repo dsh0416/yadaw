@@ -9,7 +9,7 @@ const electronMocks = vi.hoisted(() => ({
   shellOpenPath: vi.fn(async () => ""),
   quit: vi.fn(),
   showAboutPanel: vi.fn(),
-  getPath: vi.fn(() => "/tmp/yadaw-test")
+  getPath: vi.fn(() => "/tmp/heron-test")
 }))
 
 vi.mock("electron", () => ({
@@ -30,13 +30,13 @@ vi.mock("electron", () => ({
   }
 }))
 
-import { IPC_CHANNELS } from "@yadaw/contracts"
+import { IPC_CHANNELS } from "@heron/contracts"
 import type {
   PluginDescriptor,
   PluginInstanceState,
   PluginRuntimeStatus,
   ProjectWorkspaceSnapshot
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import {
   createContext,
   emptyGraph,
@@ -52,7 +52,7 @@ const descriptor: PluginDescriptor = {
   classId: "ABCDEF0123456789ABCDEF0123456789",
   modulePath: "/plugins/Effect.vst3",
   name: "Effect",
-  vendor: "YADAW",
+  vendor: "Heron Studio",
   version: "1.0",
   categories: ["Fx"],
   kind: "effect",
@@ -364,7 +364,7 @@ function createWorkspaceFrom(context: ReturnType<typeof createContext>): Project
     revision: 1,
     session: {
       id: "project",
-      path: "/projects/demo.yadaw",
+      path: "/projects/demo.heron",
       configuration: {
         name: "Demo",
         sampleRate: 48_000,

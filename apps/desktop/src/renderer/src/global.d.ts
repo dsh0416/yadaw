@@ -1,8 +1,8 @@
-import type { YadawDesktopApi } from "@yadaw/contracts"
+import type { HeronDesktopApi } from "@heron/contracts"
 
 declare global {
   interface Window {
-    yadaw: YadawDesktopApi
+    heron: HeronDesktopApi
   }
 }
 

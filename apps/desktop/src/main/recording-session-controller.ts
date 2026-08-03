@@ -1,4 +1,4 @@
-import type { WaveformPeakWindow } from "@yadaw/contracts"
+import type { WaveformPeakWindow } from "@heron/contracts"
 
 export class RecordingSessionController<T> {
   active: T | null = null

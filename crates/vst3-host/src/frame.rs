@@ -5,7 +5,7 @@ use std::{
     time::Instant,
 };
 
-use yadaw_vst3_host_sys::{
+use heron_vst3_host_sys::{
     Steinberg::{FUnknown, IPlugFrame, IPlugView, ViewRect, tresult, uint32},
     abi::{FUnknownVTable, PlugFrameVTable},
     iid,
@@ -159,8 +159,7 @@ mod linux {
         time::{Duration, Instant},
     };
 
-    use libc::{POLLERR, POLLHUP, POLLIN, poll, pollfd};
-    use yadaw_vst3_host_sys::{
+    use heron_vst3_host_sys::{
         Steinberg::{
             FUnknown,
             Linux::{IEventHandler, IRunLoop, ITimerHandler},
@@ -168,6 +167,7 @@ mod linux {
         },
         abi::{EventHandlerVTable, FUnknownVTable, RunLoopVTable, TimerHandlerVTable},
     };
+    use libc::{POLLERR, POLLHUP, POLLIN, poll, pollfd};
 
     use super::{PlugFrame, add_ref, query_interface, release};
     use crate::ComPtr;
@@ -536,7 +536,7 @@ mod tests {
     };
 
     #[cfg(unix)]
-    use yadaw_vst3_host_sys::{
+    use heron_vst3_host_sys::{
         Steinberg::{
             FUnknown,
             Linux::{IEventHandler, IRunLoop, ITimerHandler},

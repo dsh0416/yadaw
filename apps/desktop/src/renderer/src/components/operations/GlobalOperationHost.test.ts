@@ -7,7 +7,7 @@ import { useOperationStore } from "../../stores/operations"
 describe("GlobalOperationHost", () => {
   it("renders subscribed operation state without owning the subscription", async () => {
     const unsubscribe = vi.fn()
-    window.yadaw.subscribeOperations = vi.fn(() => unsubscribe)
+    window.heron.subscribeOperations = vi.fn(() => unsubscribe)
     const pinia = createPinia()
     const wrapper = mount(GlobalOperationHost, {
       attachTo: document.body,
@@ -49,7 +49,7 @@ describe("GlobalOperationHost", () => {
   })
 
   it("dismisses a retained completed warning through the shared dialog close action", async () => {
-    window.yadaw.subscribeOperations = vi.fn(() => vi.fn())
+    window.heron.subscribeOperations = vi.fn(() => vi.fn())
     const pinia = createPinia()
     const wrapper = mount(GlobalOperationHost, {
       attachTo: document.body,

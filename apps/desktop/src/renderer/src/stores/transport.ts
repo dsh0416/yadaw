@@ -1,9 +1,9 @@
 import { useIntervalFn } from "@vueuse/core"
 import { acceptHMRUpdate, defineStore } from "pinia"
 import { computed, shallowRef } from "vue"
-import type { TransportLoopRange, TransportSnapshot } from "@yadaw/contracts"
-import type { ProjectAssetSummary as Asset } from "@yadaw/contracts"
-import { projectContentEndSeconds } from "@yadaw/project-model"
+import type { TransportLoopRange, TransportSnapshot } from "@heron/contracts"
+import type { ProjectAssetSummary as Asset } from "@heron/contracts"
+import { projectContentEndSeconds } from "@heron/project-model"
 import { mutationMeta, readMeta, rpcErrorMessage } from "../rpc"
 import { tickToSeconds } from "../utils/tempoMap"
 import { useAudioRuntimeStore } from "./audioRuntime"
@@ -138,12 +138,12 @@ export const useTransportStore = defineStore("transport", () => {
       (mixerStore.metronome !== null && !mixerStore.metronome.muted)
   )
 
-  function command(value: Parameters<typeof window.yadaw.transportCommand>[1]): Promise<void> {
+  function command(value: Parameters<typeof window.heron.transportCommand>[1]): Promise<void> {
     const generation = ++requestGeneration
     const result = commandTail.then(async () => {
       const target = audioRuntimeStore.transportRef
       if (!target) return
-      const next = await window.yadaw.transportCommand(
+      const next = await window.heron.transportCommand(
         mutationMeta(target, `transport-${value.type}`, audioRuntimeStore.transportRevision),
         value
       )
@@ -171,7 +171,7 @@ export const useTransportStore = defineStore("transport", () => {
       if (generation === requestGeneration) snapshot.value = { ...EMPTY_TRANSPORT }
       return
     }
-    const next = await window.yadaw.transportSnapshot(readMeta(target))
+    const next = await window.heron.transportSnapshot(readMeta(target))
     if (!next.ok) return
     if (generation === requestGeneration) snapshot.value = next.value
     if (next.resourceRevision !== undefined) {

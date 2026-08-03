@@ -9,7 +9,7 @@ use std::{
     },
 };
 
-use yadaw_vst3_host_sys::{
+use heron_vst3_host_sys::{
     Steinberg::{
         FIDString, FUnknown, TUID,
         Vst::{IAttributeList, IMessage},

@@ -78,7 +78,7 @@ jobs:
       - name: Download installers
         uses: actions/download-artifact@v8
         with:
-          pattern: yadaw-*
+          pattern: heron-*
           path: release-assets
           merge-multiple: true
 
@@ -103,7 +103,7 @@ jobs:
           release_args=(
             --verify-tag
             --generate-notes
-            --title "YADAW $TAG_NAME"
+            --title "Heron $TAG_NAME"
             --draft
           )
 

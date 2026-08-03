@@ -1,5 +1,5 @@
 import { computed, shallowRef } from "vue"
-import type { AudioClipState, TempoMapSnapshot } from "@yadaw/contracts"
+import type { AudioClipState, TempoMapSnapshot } from "@heron/contracts"
 import type { MaybeRefOrGetter } from "vue"
 import { toValue } from "vue"
 import {

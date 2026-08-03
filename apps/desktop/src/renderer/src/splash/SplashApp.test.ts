@@ -1,7 +1,7 @@
 import { createHead } from "@unhead/vue/client"
 import { flushPromises, mount } from "@vue/test-utils"
 import { createPinia, setActivePinia } from "pinia"
-import type { StartupProgressSnapshot } from "@yadaw/contracts"
+import type { StartupProgressSnapshot } from "@heron/contracts"
 import { describe, expect, it, vi } from "vitest"
 import SplashApp from "./SplashApp.vue"
 import { rpcEvent } from "../test/ipc"
@@ -17,7 +17,7 @@ describe("SplashApp", () => {
         return vi.fn()
       }
     )
-    Object.defineProperty(window, "yadaw", {
+    Object.defineProperty(window, "heron", {
       configurable: true,
       value: {
         subscribeStartupProgress
@@ -47,7 +47,7 @@ describe("SplashApp", () => {
       )
     )
     await wrapper.vm.$nextTick()
-    expect(wrapper.text()).toContain("https://github.com/dsh0416/yadaw")
+    expect(wrapper.text()).toContain("https://github.com/minori-live/heron")
     expect(wrapper.text()).toContain(`v${__APP_VERSION__}`)
     expect(wrapper.text()).toContain("Loading plug-in catalog")
     expect(wrapper.text()).not.toContain("Reading the previous VST3 index")
