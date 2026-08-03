@@ -3,8 +3,6 @@ import type { AudioHostRuntimePreferences } from "@heron/contracts"
 
 export class AudioHostProcessSupervisor {
   client: AudioHostIpcClient | null = null
-  heartbeat: NodeJS.Timeout | null = null
-  stableTimer: NodeJS.Timeout | null = null
   restartBudget = 1
   stopping = false
 
@@ -27,17 +25,9 @@ export class AudioHostProcessSupervisor {
     return client
   }
 
-  clearTimers(): void {
-    if (this.heartbeat) clearInterval(this.heartbeat)
-    if (this.stableTimer) clearTimeout(this.stableTimer)
-    this.heartbeat = null
-    this.stableTimer = null
-  }
-
   detach(client: AudioHostIpcClient): boolean {
     if (this.client !== client) return false
     this.client = null
-    this.clearTimers()
     return true
   }
 
