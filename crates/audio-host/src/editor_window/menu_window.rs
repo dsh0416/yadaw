@@ -406,7 +406,7 @@ fn configure_toolbar_menu_window_attributes(
             return Err("editor window does not expose a Win32 handle".to_owned());
         };
         Ok(attributes
-            .with_owner_window(handle.hwnd.get() as isize)
+            .with_owner_window(handle.hwnd.get())
             .with_skip_taskbar(true))
     }
 
