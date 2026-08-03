@@ -234,9 +234,7 @@ async function save(): Promise<void> {
 .notes-tabs button[aria-selected="true"] {
   color: var(--text-primary);
   background: var(--surface-active);
-  box-shadow:
-    0 1px 0 var(--ui-domain-color-ffffff05) inset,
-    0 1px 3px var(--shadow);
+  box-shadow: var(--ui-shadow-highlight-inset);
 }
 
 .notes-tabs button[aria-selected="true"] svg {
@@ -263,7 +261,6 @@ async function save(): Promise<void> {
   height: 7px;
   flex: none;
   border-radius: 50%;
-  box-shadow: 0 0 7px currentColor;
 }
 
 .track-context span {

@@ -178,7 +178,7 @@ watch(
   overflow-y: auto;
   color: var(--text-secondary);
   font-size: var(--ui-type-size-body-compact);
-  line-height: 1.65;
+  line-height: var(--ui-type-leading-relaxed);
   user-select: text;
 }
 
@@ -186,22 +186,22 @@ watch(
   margin: 1.25em 0 0.45em;
   color: var(--text-primary);
   font-family: var(--ui-type-family-display);
-  line-height: 1.2;
+  line-height: var(--ui-type-leading-tight);
 }
 
 .markdown-preview :deep(h1) {
   margin-top: 0;
-  font-size: 1.45rem;
+  font-size: var(--ui-type-size-page-title);
 }
 
 .markdown-preview :deep(h2) {
   padding-bottom: 0.3em;
   border-bottom: 1px solid var(--line-soft);
-  font-size: 1.15rem;
+  font-size: var(--ui-type-size-feature-title);
 }
 
 .markdown-preview :deep(h3) {
-  font-size: 1rem;
+  font-size: var(--ui-type-size-view-title);
 }
 
 .markdown-preview :deep(:is(p, ul, ol, blockquote, pre)) {
@@ -281,7 +281,7 @@ watch(
   max-width: 220px;
   margin: 7px 0 14px;
   font-size: var(--ui-type-size-caption);
-  line-height: 1.5;
+  line-height: var(--ui-type-leading-normal);
 }
 
 .empty-state button {
@@ -316,7 +316,9 @@ watch(
   border-radius: 6px;
   color: var(--text-primary);
   background: var(--surface-sunken);
-  font: var(--ui-type-size-body-compact) / 1.6 var(--ui-type-family-data);
+  font-family: var(--ui-type-family-data);
+  font-size: var(--ui-type-size-body-compact);
+  line-height: var(--ui-type-leading-relaxed);
   tab-size: 2;
 }
 
