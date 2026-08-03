@@ -4,8 +4,8 @@ impl EditorWindow {
         class_id: String,
         preference: PluginEditorPreference,
         context: PluginEditorContext,
-        parameters: Vec<PluginParameter>,
         window: Arc<Window>,
+        platform_scale_fallback: bool,
         compositor: &mut Compositor,
     ) -> Self {
         let physical_size = window.inner_size();
@@ -29,9 +29,11 @@ impl EditorWindow {
             preference,
             context,
             active_mode: PluginEditorMode::Parameters,
-            parameters,
+            parameters: Vec::new(),
             warning: None,
+            native_scale_warning: None,
             open_menu: None,
+            toolbar_anchors: HashMap::new(),
             compare_segment_focused: false,
             active_gestures: HashSet::new(),
             compare_slots: None,
@@ -50,6 +52,7 @@ impl EditorWindow {
             cursor: Cursor::Unavailable,
             modifiers: ModifiersState::default(),
             platform_context: None,
+            platform_scale_fallback,
             native: None,
         }
     }
@@ -119,21 +122,37 @@ impl EditorWindow {
     }
 
     pub fn update_context(&mut self, context: PluginEditorContext) {
-        if !context.channel_name.is_empty() {
-            self.context.channel_name = context.channel_name;
-        }
-        if !context.channel_color.is_empty() {
-            self.context.channel_color = context.channel_color;
-        }
-        if !context.plugin_name.is_empty() {
-            self.context.plugin_name = context.plugin_name;
-        }
-        self.context.appearance = context.appearance;
+        merge_editor_context(&mut self.context, context);
         self.window.set_title(&format!(
             "{} — {} — YADAW",
             self.context.channel_name, self.context.plugin_name
         ));
         self.window.request_redraw();
+    }
+
+    pub(crate) fn close_popup(&mut self) {
+        self.close_toolbar_menu();
+        self.window.request_redraw();
+    }
+
+    pub(crate) fn popup_opened(&mut self, menu: ToolbarMenu) {
+        self.open_menu = Some(menu);
+        self.window.request_redraw();
+    }
+
+    pub(crate) fn report_popup_failure(&mut self, error: impl fmt::Display) {
+        self.close_toolbar_menu();
+        self.warning = Some(popup_failure_message(error));
+        self.window.request_redraw();
+    }
+
+    pub(crate) fn apply_toolbar_choice(
+        &mut self,
+        choice: ToolbarMenuChoice,
+    ) -> Option<EditorAction> {
+        self.close_toolbar_menu();
+        self.window.focus_window();
+        toolbar_choice_action(self.preference, choice)
     }
 
     pub fn update_appearance(&mut self, appearance: PluginEditorAppearance) {
@@ -223,21 +242,7 @@ impl EditorWindow {
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
                 self.monitor_scale.set(*scale_factor);
                 self.rebuild_viewport();
-                if let Some(native) = &self.native {
-                    let factor =
-                        plugin_content_scale(self.monitor_scale.get(), self.user_zoom.get());
-                    match native.view.set_content_scale_factor(factor) {
-                        Ok(true) => {}
-                        Ok(false) | Err(_) => {
-                            self.warning = Some(
-                                "This plug-in does not support native UI scaling; \
-                                 shell scaling is still applied."
-                                    .into(),
-                            );
-                        }
-                    }
-                }
-                self.layout_native_preferred();
+                self.update_native_scale();
             }
             WindowEvent::CursorMoved { position, .. } => {
                 let logical = position.to_logical::<f64>(self.effective_scale());
@@ -307,18 +312,19 @@ impl EditorWindow {
             std::mem::take(&mut self.cache),
             &mut self.renderer,
         );
-        // `UserInterface::build` restores widget state, but iced only computes
-        // the overlay layout during `update`. Event handling and drawing use
-        // separate interface instances here, so rebuild the overlay before
-        // drawing open pick lists.
-        let mut messages = Vec::new();
-        interface.update(
-            &[],
-            self.cursor,
-            &mut self.renderer,
-            &mut self.clipboard,
-            &mut messages,
-        );
+        // Parameters mode still uses iced's in-surface pick lists. Native mode
+        // has no parent-surface overlay to rebuild because its menus are owned
+        // windows managed by the runtime.
+        if model.active_mode == PluginEditorMode::Parameters {
+            let mut messages = Vec::new();
+            interface.update(
+                &[],
+                self.cursor,
+                &mut self.renderer,
+                &mut self.clipboard,
+                &mut messages,
+            );
+        }
         let appearance = editor_appearance(model.context.appearance.theme);
         let theme = appearance.theme();
         let colors = appearance.palette();
@@ -356,6 +362,7 @@ impl EditorWindow {
     ) -> Option<PluginEditorPreference> {
         match action {
             EditorAction::Close => None,
+            EditorAction::OpenToolbarMenu(_) => None,
             EditorAction::PreferenceChanged(preference) => {
                 let mode_changed = preference.mode != self.preference.mode;
                 let zoom_changed = preference.zoom_percent != self.preference.zoom_percent;
@@ -556,6 +563,44 @@ impl EditorWindow {
             }
             Err(error) => self.warning = Some(error),
         }
+    }
+}
+
+fn merge_editor_context(current: &mut PluginEditorContext, update: PluginEditorContext) {
+    if !update.channel_name.is_empty() {
+        current.channel_name = update.channel_name;
+    }
+    if !update.channel_color.is_empty() {
+        current.channel_color = update.channel_color;
+    }
+    if !update.plugin_name.is_empty() {
+        current.plugin_name = update.plugin_name;
+    }
+    current.appearance = update.appearance;
+}
+
+fn popup_failure_message(error: impl fmt::Display) -> String {
+    format!("Could not open the toolbar menu: {error}. Try again.")
+}
+
+fn toolbar_choice_action(
+    preference: PluginEditorPreference,
+    choice: ToolbarMenuChoice,
+) -> Option<EditorAction> {
+    match choice {
+        ToolbarMenuChoice::Mode(mode) if mode != preference.mode => {
+            Some(EditorAction::PreferenceChanged(PluginEditorPreference {
+                mode,
+                zoom_percent: preference.zoom_percent,
+            }))
+        }
+        ToolbarMenuChoice::Zoom(zoom_percent) if zoom_percent != preference.zoom_percent => {
+            Some(EditorAction::PreferenceChanged(PluginEditorPreference {
+                mode: preference.mode,
+                zoom_percent,
+            }))
+        }
+        ToolbarMenuChoice::Mode(_) | ToolbarMenuChoice::Zoom(_) => None,
     }
 }
 

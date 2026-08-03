@@ -135,6 +135,8 @@ fn run_ipc() -> Result<(), Box<dyn std::error::Error>> {
         editor_owner_window,
         editors: HashMap::new(),
         editor_instances: HashMap::new(),
+        editor_menus: HashMap::new(),
+        editor_menu_for_owner: HashMap::new(),
         editor_clipboard: None,
         next_editor_tick: None,
         next_ara_tick: None,

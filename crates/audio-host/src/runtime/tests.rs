@@ -2,6 +2,26 @@
 mod tests {
     use super::*;
 
+    #[test]
+    fn editor_popup_ownership_replaces_only_the_same_owner() {
+        let mut owners = HashMap::new();
+
+        assert_eq!(replace_owned_popup(&mut owners, 1_u8, 10), None);
+        assert_eq!(replace_owned_popup(&mut owners, 2, 20), None);
+        assert_eq!(replace_owned_popup(&mut owners, 1, 11), Some(10));
+        assert_eq!(owners.get(&1), Some(&11));
+        assert_eq!(owners.get(&2), Some(&20));
+    }
+
+    #[test]
+    fn editor_popup_owner_cleanup_is_isolated_and_idempotent() {
+        let mut owners = HashMap::from([(1_u8, 10_u8), (2, 20)]);
+
+        assert_eq!(remove_owned_popup(&mut owners, 1), Some(10));
+        assert_eq!(remove_owned_popup(&mut owners, 1), None);
+        assert_eq!(owners, HashMap::from([(2, 20)]));
+    }
+
     struct TestIngress {
         requests: Option<ipc_channel::ipc::IpcSender<WirePacket>>,
         priority_requests: Option<ipc_channel::ipc::IpcSender<WirePacket>>,

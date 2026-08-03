@@ -610,10 +610,26 @@ There is one winit top-level editor per plug-in instance. Reopening focuses it.
 iced 0.14 and its WGPU renderer draw the toolbar and parameter list without
 starting another event loop. Native mode creates a platform child below the
 toolbar: an HWND with child/clip styles, an NSView, or an X11 window carrying
-XEmbed information. Closing uses this order:
+XEmbed information.
+
+Native-mode Mode and Zoom menus are separate, borderless winit/WGPU windows,
+not iced overlays in the editor surface. Windows uses an editor-owned popup
+without a taskbar entry, AppKit uses a child `NSWindow` ordered above the
+editor, and X11 uses an override-redirect `DropdownMenu` window. This avoids
+the native-child airspace conflict: opening, choosing, or dismissing a YADAW
+menu never hides or detaches the plug-in view. Parameters mode (including the
+Wayland fallback) continues to use iced pick-list overlays.
+
+The UI runtime maps each popup to one owner editor and permits at most one
+popup per editor. A popup is destroyed before its owner moves, resizes,
+changes scale/appearance/locale, switches mode, or closes. Popup creation or
+rendering failure closes only the menu, leaves the native plug-in visible, and
+places a retryable warning in the editor toolbar. Closing uses this order:
 
 ```text
-IPlugView::removed
+destroy owned toolbar popup (when present)
+  -> restore focus to editor/native child
+  -> IPlugView::removed
   -> IPlugView::setFrame(null)
   -> release view
   -> destroy platform child
@@ -634,12 +650,27 @@ fresh view. Attach failure and absent editors fall back in place without
 overwriting the saved native preference. Wayland always uses this fallback
 until `IWaylandHost` is implemented.
 
-The iced/parameter scale is `winit monitor scale × user zoom`. Windows and X11
-send that same factor to `IPlugViewContentScaleSupport`; AppKit already applies
-the backing scale, so macOS sends only user zoom. Windows/X11 `ViewRect` values
-are physical pixels and AppKit values are logical points. A plug-in that
-rejects the scale interface keeps its native pixel size—there is no bitmap
-stretch—while iced still scales and reports the limitation.
+The iced/parameter scale is `winit monitor scale × user zoom`. Native editors
+select one scale strategy for each attachment. Plug-ins that accept
+`IPlugViewContentScaleSupport` own their rendering and requested `ViewRect`;
+Windows and X11 send monitor scale × user zoom, while AppKit sends only user
+zoom because the backing scale is automatic. `canResize` remains a separate
+layout capability and is not treated as evidence of content-scale support.
+
+When the optional VST3 scale interface is absent or rejects the initial
+factor, macOS scales only the native child by keeping the container `NSView`
+bounds at the plug-in's original logical size and enlarging its frame. AppKit
+therefore transforms descendant drawing and input while the iced parent stays
+normally DPI-aware. On Windows 10 1803 and later, the top-level editor HWND is
+created as a per-monitor-aware mixed-DPI host. Only the plug-in container and
+its attach call temporarily use `DPI_AWARENESS_CONTEXT_UNAWARE_GDISCALED`, so
+Windows bitmap-scales the legacy child while the editor and toolbar remain
+per-monitor aware. This compatibility path follows the monitor DPI and does
+not implement arbitrary user Zoom. X11 currently preserves the native pixel
+size when the plug-in cannot scale. Missing optional scale support at an
+identity factor is not itself a warning; the toolbar reports only a requested
+scale that cannot be applied or a later factor rejected by a previously
+scalable view.
 
 `IPlugFrame::resizeView` may synchronously reenter during `attached`. Its frame
 callback uses stable external window/container cells, applies the requested
