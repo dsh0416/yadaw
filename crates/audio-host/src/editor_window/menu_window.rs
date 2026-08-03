@@ -127,9 +127,12 @@ impl EditorMenuWindow {
         compositor: &mut Compositor,
     ) -> Option<EditorMenuAction> {
         match &event {
-            WindowEvent::CloseRequested | WindowEvent::ScaleFactorChanged { .. } => {
-                return Some(EditorMenuAction::Dismiss);
-            }
+            WindowEvent::CloseRequested => return Some(EditorMenuAction::Dismiss),
+            // On Retina displays, winit queues an initial scale-factor event
+            // for every newly created AppKit window. The popup already uses
+            // its owner's effective scale, and a real owner DPI transition is
+            // handled by `WinitHost` before it reaches this window.
+            WindowEvent::ScaleFactorChanged { .. } => {}
             WindowEvent::Focused(focused) => {
                 if self.focus_state.should_dismiss(*focused) {
                     return Some(EditorMenuAction::Dismiss);
