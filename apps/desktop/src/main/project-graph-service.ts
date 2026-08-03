@@ -218,20 +218,25 @@ export class ProjectGraphService {
             pluginBudgetSamples: Math.floor((nextBudgetMs * graph.sampleRate) / 1_000)
           }
         : { type: "normal" }
-      if (nextEnabled || oldEnabled || nextTarget !== oldTarget) {
+      const policyPublished = nextEnabled || oldEnabled || nextTarget !== oldTarget
+      if (policyPublished) {
         await this.publisher.publish(graph, { latencyPolicy: nextPolicy, awaitPublication: true })
       }
       if (nextBudgetMs !== oldBudgetMs) {
         try {
           await this.publisher.setLowLatencyPluginBudgetMs(nextBudgetMs)
         } catch (error) {
-          if (oldEnabled) {
+          if (policyPublished) {
+            const oldPolicy: RuntimeLatencyPolicy =
+              oldEnabled && oldTarget
+                ? {
+                    type: "low-latency",
+                    targetOutputChannelId: oldTarget,
+                    pluginBudgetSamples: Math.floor((oldBudgetMs * graph.sampleRate) / 1_000)
+                  }
+                : { type: "normal" }
             await this.publisher.publish(graph, {
-              latencyPolicy: {
-                type: "low-latency",
-                targetOutputChannelId: oldTarget!,
-                pluginBudgetSamples: Math.floor((oldBudgetMs * graph.sampleRate) / 1_000)
-              },
+              latencyPolicy: oldPolicy,
               awaitPublication: true
             })
           }

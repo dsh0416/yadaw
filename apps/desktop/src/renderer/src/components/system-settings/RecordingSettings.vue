@@ -86,20 +86,20 @@ function setSoftwareMonitoring(event: Event): void {
       :title="t('settings.audio.recording.lowLatencyBudget.title')"
       :description="t('settings.audio.recording.lowLatencyBudget.description')"
     >
-      <label class="latency-budget-control">
-        <span>{{ t("settings.audio.recording.lowLatencyBudget.label") }}</span>
+      <div class="latency-budget-control">
         <UiSlider
+          id="low-latency-plugin-budget"
           v-model="lowLatencyBudgetDraft"
           :min="0"
           :max="50"
           :step="1"
           :label="t('settings.audio.recording.lowLatencyBudget.ariaLabel')"
+          :value-text="`${lowLatencyBudgetDraft} ms`"
           :disabled="loading || lowLatencyModeStore.applying"
-          :aria-label="t('settings.audio.recording.lowLatencyBudget.ariaLabel')"
           @change="commitLowLatencyBudget"
         />
-        <output>{{ lowLatencyBudgetDraft }} ms</output>
-      </label>
+        <output for="low-latency-plugin-budget">{{ lowLatencyBudgetDraft }} ms</output>
+      </div>
     </SettingsSection>
 
     <SettingsSection
@@ -214,9 +214,10 @@ function setSoftwareMonitoring(event: Event): void {
 }
 .latency-budget-control {
   display: grid;
-  grid-template-columns: 150px minmax(180px, 420px) 56px;
+  grid-template-columns: minmax(180px, 1fr) 56px;
   align-items: center;
-  gap: 12px;
+  width: min(480px, 100%);
+  gap: var(--ui-space-3);
   color: var(--text-secondary);
   font-size: var(--ui-type-size-body-compact);
 }

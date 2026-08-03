@@ -617,7 +617,6 @@
         "lowLatencyBudget": {
           "title": "Low-latency plug-in budget",
           "description": "Maximum declared plug-in latency allowed on a live monitoring main path before eligible effects are temporarily bypassed.",
-          "label": "Plug-in latency budget",
           "ariaLabel": "Low-latency plug-in budget in milliseconds"
         },
         "recovery": {

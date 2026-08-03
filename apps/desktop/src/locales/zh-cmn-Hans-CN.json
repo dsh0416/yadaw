@@ -617,7 +617,6 @@
         "lowLatencyBudget": {
           "title": "低延迟插件预算",
           "description": "实时监听主路径允许的最大插件声明延迟；超出时会临时旁路符合条件的效果器。",
-          "label": "插件延迟预算",
           "ariaLabel": "低延迟插件预算（毫秒）"
         },
         "recovery": {
