@@ -12,13 +12,14 @@ use crate::Steinberg::{
     Linux::{IEventHandler, IRunLoop, ITimerHandler},
     PClassInfo, PClassInfo2, PClassInfoW, PFactoryInfo, TBool, TUID, ViewRect,
     Vst::{
-        AudioBusBuffers, BusDirection, BusInfo, CtrlNumber, Event, IAttributeList, IAudioProcessor,
-        IComponent, IComponentHandler, IComponentHandler2, IComponentHandlerBusActivation,
-        IConnectionPoint, IEditController, IEventList, IHostApplication, IMessage, IMidiMapping,
-        IParamValueQueue, IParameterChanges, IPlugInterfaceSupport, IProcessContextRequirements,
-        IStreamAttributes, IUnitHandler, IUnitHandler2, IUnitInfo, IoMode, MediaType, ParamID,
-        ParamValue, ParameterInfo, ProcessData, ProcessSetup, ProgramListID, ProgramListInfo,
-        RoutingInfo, SpeakerArrangement, UnitID, UnitInfo,
+        AudioBusBuffers, BusDirection, BusInfo, CtrlNumber, Event, IAttributeList,
+        IAudioPresentationLatency, IAudioProcessor, IComponent, IComponentHandler,
+        IComponentHandler2, IComponentHandlerBusActivation, IConnectionPoint, IEditController,
+        IEventList, IHostApplication, IMessage, IMidiMapping, IParamValueQueue, IParameterChanges,
+        IPlugInterfaceSupport, IProcessContextRequirements, IStreamAttributes, IUnitHandler,
+        IUnitHandler2, IUnitInfo, IoMode, MediaType, ParamID, ParamValue, ParameterInfo,
+        ProcessData, ProcessSetup, ProgramListID, ProgramListInfo, RoutingInfo, SpeakerArrangement,
+        UnitID, UnitInfo,
     },
     int16, int32, int64, tresult, uint32,
 };
@@ -192,6 +193,17 @@ pub struct AudioProcessorVTable {
     pub process:
         unsafe extern "system" fn(this: *mut IAudioProcessor, data: *mut ProcessData) -> tresult,
     pub tail_samples: unsafe extern "system" fn(this: *mut IAudioProcessor) -> uint32,
+}
+
+#[repr(C)]
+pub struct AudioPresentationLatencyVTable {
+    pub base: FUnknownVTable,
+    pub set_audio_presentation_latency_samples: unsafe extern "system" fn(
+        this: *mut IAudioPresentationLatency,
+        direction: BusDirection,
+        bus_index: int32,
+        latency_samples: uint32,
+    ) -> tresult,
 }
 
 #[repr(C)]

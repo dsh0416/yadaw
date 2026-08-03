@@ -60,6 +60,7 @@ pub const IMESSAGE: TUID = tuid(0x936F033B, 0xC6C047DB, 0xBB0882F8, 0x13C1E613);
 pub const IATTRIBUTE_LIST: TUID = tuid(0x1E5F0AEB, 0xCC7F4533, 0xA2544011, 0x38AD5EE4);
 pub const ICOMPONENT: TUID = tuid(0xE831FF31, 0xF2D54301, 0x928EBBEE, 0x25697802);
 pub const IAUDIO_PROCESSOR: TUID = tuid(0x42043F99, 0xB7DA453C, 0xA569E79D, 0x9AAEC33D);
+pub const IAUDIO_PRESENTATION_LATENCY: TUID = tuid(0x309ECE78, 0xEB7D4FAE, 0x8B2225D9, 0x09FD08B6);
 pub const IPROCESS_CONTEXT_REQUIREMENTS: TUID =
     tuid(0x2A654303, 0xEF764E3D, 0x95B5FE83, 0x730EF6D0);
 pub const IEDIT_CONTROLLER: TUID = tuid(0xDCD7BBE3, 0x7742448D, 0xA874AACC, 0x979C759E);
@@ -91,6 +92,7 @@ mod tests {
     fn interface_ids_have_sixteen_bytes() {
         assert_eq!(FUNKNOWN.len(), 16);
         assert_eq!(IAUDIO_PROCESSOR.len(), 16);
+        assert_eq!(IAUDIO_PRESENTATION_LATENCY.len(), 16);
         assert_eq!(ISIZEABLE_STREAM.len(), 16);
         assert_eq!(IUNIT_INFO.len(), 16);
         assert_ne!(ICOMPONENT, IAUDIO_PROCESSOR);

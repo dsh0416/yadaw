@@ -14,7 +14,10 @@ use yadaw_dsp_runtime::{
 pub use yadaw_vst3_host::Vst3ProcessorHandle;
 use yadaw_vst3_host::{AudioLayout, ClassId, HostedPlugin, PlugView, PluginKind, Vst3HostRequest};
 
-use crate::ara::{AraCallbackBatch, AraDocument, AraFactoryHost};
+use crate::{
+    ara::{AraCallbackBatch, AraDocument, AraFactoryHost},
+    vst3_presentation_latency::calculate_presentation_latencies,
+};
 
 const HOST_REQUEST_CAPACITY: usize = 1_024;
 
@@ -575,6 +578,37 @@ impl Vst3Runtime {
             let Instance { ara, plugin, .. } = instance;
             if let Some(ara) = ara {
                 plugin.with_processing_paused(|| ara.sync_live_graph(graph))?;
+            }
+        }
+        Ok(())
+    }
+
+    pub fn sync_presentation_latencies(
+        &mut self,
+        graph: Option<&LiveMixerGraph>,
+        input_device_samples: u32,
+        output_pipeline_samples: u32,
+    ) -> Result<(), String> {
+        let latencies = graph
+            .map(|graph| {
+                calculate_presentation_latencies(
+                    graph,
+                    input_device_samples,
+                    output_pipeline_samples,
+                )
+            })
+            .transpose()?
+            .unwrap_or_default();
+        for (instance_id, instance) in &self.instances {
+            let latency = latencies.get(instance_id).copied().unwrap_or_default();
+            instance
+                .plugin
+                .set_presentation_latency(latency.input_samples, latency.output_samples)
+                .map_err(|error| format!("{instance_id}: {error}"))?;
+            if let Some(secondary) = &instance.secondary {
+                secondary
+                    .set_presentation_latency(latency.input_samples, latency.output_samples)
+                    .map_err(|error| format!("{instance_id} (secondary): {error}"))?;
             }
         }
         Ok(())

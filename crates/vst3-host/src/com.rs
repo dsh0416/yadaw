@@ -7,10 +7,11 @@ use yadaw_vst3_host_sys::{
         Linux::{IEventHandler, IRunLoop, ITimerHandler},
         TUID,
         Vst::{
-            IAttributeList, IAudioProcessor, IComponent, IComponentHandler, IComponentHandler2,
-            IComponentHandlerBusActivation, IConnectionPoint, IEditController, IEventList,
-            IHostApplication, IMessage, IMidiMapping, IParamValueQueue, IParameterChanges,
-            IProcessContextRequirements, IStreamAttributes, IUnitHandler, IUnitHandler2, IUnitInfo,
+            IAttributeList, IAudioPresentationLatency, IAudioProcessor, IComponent,
+            IComponentHandler, IComponentHandler2, IComponentHandlerBusActivation,
+            IConnectionPoint, IEditController, IEventList, IHostApplication, IMessage,
+            IMidiMapping, IParamValueQueue, IParameterChanges, IProcessContextRequirements,
+            IStreamAttributes, IUnitHandler, IUnitHandler2, IUnitInfo,
         },
     },
     abi::FUnknownVTable,
@@ -54,6 +55,7 @@ interface!(IMessage, iid::IMESSAGE);
 interface!(IAttributeList, iid::IATTRIBUTE_LIST);
 interface!(IComponent, iid::ICOMPONENT);
 interface!(IAudioProcessor, iid::IAUDIO_PROCESSOR);
+interface!(IAudioPresentationLatency, iid::IAUDIO_PRESENTATION_LATENCY);
 interface!(
     IProcessContextRequirements,
     iid::IPROCESS_CONTEXT_REQUIREMENTS

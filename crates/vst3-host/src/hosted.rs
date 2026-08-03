@@ -742,6 +742,18 @@ impl HostedPlugin {
             .with_paused(|processor| processor.set_bus_active(media_type, direction, index, active))
     }
 
+    /// Informs the optional VST3 presentation-latency interface about the time before the
+    /// plug-in input arrives and after its output leaves, in session-rate samples.
+    pub fn set_presentation_latency(
+        &self,
+        input_samples: u32,
+        output_samples: u32,
+    ) -> HostResult<()> {
+        self.processor.with_paused(|processor| {
+            processor.set_presentation_latency(input_samples, output_samples)
+        })
+    }
+
     /// Queries the optional controller-side unit and program hierarchy.
     pub fn unit_info(&self) -> HostResult<Option<HostedUnitInfo>> {
         let Some(unit_info) = self

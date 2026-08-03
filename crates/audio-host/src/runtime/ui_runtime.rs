@@ -283,14 +283,28 @@ impl WinitHost {
                 return;
             }
             ActorCommand::SyncAraGraph { graph } => {
+                let (input_device_samples, output_pipeline_samples) =
+                    presentation_latency_bases(&self.audio_engine, graph.as_ref());
                 let Some(runtime) = self.vst3.as_mut() else {
                     let _ = reply.send(control_error! {
                         message: "VST3 UI runtime is shutting down".into(),
                     });
                     return;
                 };
+                let presentation_error = runtime
+                    .sync_presentation_latencies(
+                        graph.as_ref(),
+                        input_device_samples,
+                        output_pipeline_samples,
+                    )
+                    .err();
                 let result = match runtime.sync_ara_graph(graph.as_ref()) {
                     Ok(()) => {
+                        if let Some(error) = presentation_error {
+                            eprintln!(
+                                "audio-host: could not update VST3 presentation latency: {error}"
+                            );
+                        }
                         self.ara_graph = graph;
                         self.next_ara_tick = Some(Instant::now());
                         ControlResult::Accepted
@@ -312,6 +326,15 @@ impl WinitHost {
             ActorCommand::Parameter(command) => runtime.apply_parameter_command(command),
             ActorCommand::Control(ControlCommand::Ping) => {
                 for (instance_id, latency, tail) in runtime.take_timing_changes() {
+                    if let Some(plugin) = self.ara_graph.as_mut().and_then(|graph| {
+                        graph
+                            .plugins
+                            .iter_mut()
+                            .find(|plugin| plugin.instance_id == instance_id)
+                    }) {
+                        plugin.latency_samples = latency;
+                        plugin.tail_samples = tail;
+                    }
                     match self.audio_engine.apply_plugin_timing(&instance_id, latency, tail) {
                         Ok(Some(graph)) => {
                             queue_background_graph_build(&self.background_sender, graph);
@@ -323,6 +346,15 @@ impl WinitHost {
                             );
                         }
                     }
+                }
+                let (input_device_samples, output_pipeline_samples) =
+                    presentation_latency_bases(&self.audio_engine, self.ara_graph.as_ref());
+                if let Err(error) = runtime.sync_presentation_latencies(
+                    self.ara_graph.as_ref(),
+                    input_device_samples,
+                    output_pipeline_samples,
+                ) {
+                    eprintln!("audio-host: could not update VST3 presentation latency: {error}");
                 }
                 for (instance_id, failure) in runtime.take_restart_failures() {
                     self.publish_plugin_runtime_failure(&instance_id, "vst3-restart", failure);
@@ -409,6 +441,37 @@ impl WinitHost {
             editor.set_can_paste(class_id.is_some_and(|class_id| class_id == editor.class_id));
         }
     }
+}
+
+fn milliseconds_to_samples(milliseconds: f64, sample_rate: u32) -> u32 {
+    if !milliseconds.is_finite() || milliseconds <= 0.0 || sample_rate == 0 {
+        return 0;
+    }
+    (milliseconds * f64::from(sample_rate) / 1_000.0)
+        .ceil()
+        .min(f64::from(u32::MAX)) as u32
+}
+
+fn presentation_latency_bases(
+    audio_engine: &engine::AudioEngine,
+    graph: Option<&LiveMixerGraph>,
+) -> (u32, u32) {
+    let Some(graph) = graph else {
+        return (0, 0);
+    };
+    let Ok(snapshot) = audio_engine.audio_engine_snapshot() else {
+        return (0, 0);
+    };
+    let output_ms = snapshot.output_latency_ms.unwrap_or(0.0)
+        + snapshot.ring_buffer_latency_ms.unwrap_or(0.0)
+        + snapshot.engine_latency_ms.unwrap_or(0.0);
+    (
+        milliseconds_to_samples(
+            snapshot.input_latency_ms.unwrap_or(0.0),
+            graph.sample_rate,
+        ),
+        milliseconds_to_samples(output_ms, graph.sample_rate),
+    )
 }
 
 fn should_drain_ui_request(drained: usize, elapsed: std::time::Duration) -> bool {
