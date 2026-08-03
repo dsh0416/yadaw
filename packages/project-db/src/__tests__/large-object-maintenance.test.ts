@@ -11,6 +11,13 @@ import {
 } from "../large-object"
 import { listLargeObjectOids, vacuumAndAnalyze } from "../maintenance"
 
+function mockResults(
+  rows: Array<Record<string, unknown>>,
+  affectedRows = 0
+): Results<Record<string, unknown>> {
+  return { rows, affectedRows, fields: [] }
+}
+
 function createExecutor(responses: Array<Results<Record<string, unknown>>>) {
   let index = 0
   const queries: SQL[] = []
@@ -31,12 +38,12 @@ describe("large-object helpers", () => {
   it("creates, writes, reads, and unlinks a large object through the executor", async () => {
     const payload = new Uint8Array([1, 2, 3, 4])
     const executor = createExecutor([
-      { rows: [{ oid: 42 }], affectedRows: 0 },
-      { rows: [{ descriptor: 7 }], affectedRows: 0 },
-      { rows: [], affectedRows: 0 },
-      { rows: [], affectedRows: 0 },
-      { rows: [{ data: payload }], affectedRows: 0 },
-      { rows: [], affectedRows: 0 }
+      mockResults([{ oid: 42 }]),
+      mockResults([{ descriptor: 7 }]),
+      mockResults([]),
+      mockResults([]),
+      mockResults([{ data: payload }]),
+      mockResults([])
     ])
 
     const oid = await createLargeObject(executor)
@@ -53,7 +60,7 @@ describe("large-object helpers", () => {
   })
 
   it("rejects invalid oid and descriptor values", async () => {
-    const executor = createExecutor([{ rows: [{ oid: "bad" }], affectedRows: 0 }])
+    const executor = createExecutor([mockResults([{ oid: "bad" }])])
 
     await expect(createLargeObject(executor)).rejects.toThrow(/creation failed/)
   })
@@ -61,13 +68,13 @@ describe("large-object helpers", () => {
   it("normalizes ArrayBuffer payloads when reading", async () => {
     const buffer = new ArrayBuffer(2)
     new Uint8Array(buffer).set([9, 8])
-    const executor = createExecutor([{ rows: [{ data: buffer }], affectedRows: 0 }])
+    const executor = createExecutor([mockResults([{ data: buffer }])])
 
     await expect(readLargeObject(executor, 5)).resolves.toEqual(new Uint8Array([9, 8]))
   })
 
   it("rejects missing large-object payloads", async () => {
-    const executor = createExecutor([{ rows: [{}], affectedRows: 0 }])
+    const executor = createExecutor([mockResults([{}])])
 
     await expect(readLargeObject(executor, 5)).rejects.toThrow(/was not found/)
   })
@@ -76,14 +83,14 @@ describe("large-object helpers", () => {
 describe("maintenance helpers", () => {
   it("lists large-object oids and ignores invalid rows", async () => {
     const executor = createExecutor([
-      { rows: [{ oid: 1 }, { oid: "bad" }, { oid: 0 }, { oid: 3 }], affectedRows: 0 }
+      mockResults([{ oid: 1 }, { oid: "bad" }, { oid: 0 }, { oid: 3 }])
     ])
 
     await expect(listLargeObjectOids(executor)).resolves.toEqual([1, 3])
   })
 
   it("runs vacuum analyze outside transactions", async () => {
-    const executor = createExecutor([{ rows: [], affectedRows: 0 }])
+    const executor = createExecutor([mockResults([])])
 
     await vacuumAndAnalyze(executor)
 
