@@ -1,16 +1,18 @@
-struct ProtocolActorDeps {
-    ui_proxy: EventLoopProxy<UiEvent>,
-    ui_sender: std_mpsc::SyncSender<ActorRequest>,
-    host_event_inbox: std_mpsc::Receiver<HostEvent>,
-    processors: Arc<Mutex<HashMap<String, vst3::Vst3ProcessorHandle>>>,
-    audio_engine: Arc<engine::AudioEngine>,
-    winit_generation: Arc<AtomicU64>,
-    runtime_config: RuntimeConfig,
-    background_sender: mpsc::Sender<ActorRequest>,
-    background_inbox: mpsc::Receiver<ActorRequest>,
+use super::*;
+
+pub(super) struct ProtocolActorDeps {
+    pub(super) ui_proxy: EventLoopProxy<UiEvent>,
+    pub(super) ui_sender: std_mpsc::SyncSender<ActorRequest>,
+    pub(super) host_event_inbox: std_mpsc::Receiver<HostEvent>,
+    pub(super) processors: Arc<Mutex<HashMap<String, vst3::Vst3ProcessorHandle>>>,
+    pub(super) audio_engine: Arc<engine::AudioEngine>,
+    pub(super) winit_generation: Arc<AtomicU64>,
+    pub(super) runtime_config: RuntimeConfig,
+    pub(super) background_sender: mpsc::Sender<ActorRequest>,
+    pub(super) background_inbox: mpsc::Receiver<ActorRequest>,
 }
 
-async fn run_protocol_actor(
+pub(super) async fn run_protocol_actor(
     bootstrap: HostBootstrap,
     deps: ProtocolActorDeps,
 ) -> Result<(), String> {
@@ -39,14 +41,13 @@ async fn run_protocol_actor(
         mapping_events,
         session_epoch,
     } = bootstrap;
-    let (telemetry_writer, parameter_consumer, persistent_shared_pages) =
-        activate_helper_pages(
-            telemetry_page,
-            parameter_ring,
-            mapping_commands,
-            mapping_events,
-            session_epoch,
-        )?;
+    let (telemetry_writer, parameter_consumer, persistent_shared_pages) = activate_helper_pages(
+        telemetry_page,
+        parameter_ring,
+        mapping_commands,
+        mapping_events,
+        session_epoch,
+    )?;
     let telemetry = Arc::new(TelemetryPages {
         active: Mutex::new(telemetry_writer),
         pending: Mutex::new(None),
@@ -339,8 +340,8 @@ fn activate_helper_pages(
     const TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
     let telemetry_generation = telemetry_descriptor.generation();
     let parameter_generation = parameter_descriptor.generation();
-    let opened = TelemetryWriter::open_and_acknowledge(telemetry_descriptor)
-        .and_then(|telemetry| {
+    let opened =
+        TelemetryWriter::open_and_acknowledge(telemetry_descriptor).and_then(|telemetry| {
             ParameterConsumer::open_and_acknowledge(parameter_descriptor)
                 .map(|parameters| (telemetry, parameters))
         });

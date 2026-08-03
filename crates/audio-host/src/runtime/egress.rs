@@ -1,16 +1,18 @@
-struct InboundRequest {
-    request: ControlRequest,
-    received_leases: Vec<u64>,
+use super::*;
+
+pub(super) struct InboundRequest {
+    pub(super) request: ControlRequest,
+    pub(super) received_leases: Vec<u64>,
 }
 
-enum PriorityIngress {
+pub(super) enum PriorityIngress {
     ParameterWake,
     ParameterBoundary(heron_dsp_runtime::protocol::ParameterCommand),
     Shutdown,
     TelemetryPageReady { epoch: u64, generation: u64 },
 }
 
-enum OutboundMessage {
+pub(super) enum OutboundMessage {
     Response {
         value: ControlResponse,
         request_leases: Vec<u64>,
@@ -18,17 +20,17 @@ enum OutboundMessage {
     Event(WirePacket),
 }
 
-fn response(request_id: u64, result: ControlResult) -> ControlResponse {
+pub(super) fn response(request_id: u64, result: ControlResult) -> ControlResponse {
     ControlResponse { request_id, result }
 }
 
 #[derive(Clone)]
-struct EgressArenas {
-    responses: Arc<Mutex<LeaseRegistry>>,
-    requests: Arc<Mutex<ArenaReceiver>>,
+pub(super) struct EgressArenas {
+    pub(super) responses: Arc<Mutex<LeaseRegistry>>,
+    pub(super) requests: Arc<Mutex<ArenaReceiver>>,
 }
 
-async fn run_egress(
+pub(super) async fn run_egress(
     mut outbound: mpsc::Receiver<OutboundMessage>,
     responses: ipc_channel::ipc::IpcSender<WirePacket>,
     events: ipc_channel::ipc::IpcSender<WirePacket>,
@@ -174,20 +176,20 @@ async fn dispatch_egress(
 }
 
 #[derive(Default)]
-struct EgressMetrics {
-    active: AtomicU64,
-    queue_depth: AtomicU64,
-    queue_high_water: AtomicU64,
-    batches: AtomicU64,
-    blocking_jobs: AtomicU64,
-    arena_regions: AtomicU64,
-    arena_capacity_bytes: AtomicU64,
-    arena_used_bytes: AtomicU64,
-    arena_high_water_bytes: AtomicU64,
-    arena_offers: AtomicU64,
-    arena_busy: AtomicU64,
-    arena_quarantined_regions: AtomicU64,
-    arena_copied_bytes: AtomicU64,
+pub(super) struct EgressMetrics {
+    pub(super) active: AtomicU64,
+    pub(super) queue_depth: AtomicU64,
+    pub(super) queue_high_water: AtomicU64,
+    pub(super) batches: AtomicU64,
+    pub(super) blocking_jobs: AtomicU64,
+    pub(super) arena_regions: AtomicU64,
+    pub(super) arena_capacity_bytes: AtomicU64,
+    pub(super) arena_used_bytes: AtomicU64,
+    pub(super) arena_high_water_bytes: AtomicU64,
+    pub(super) arena_offers: AtomicU64,
+    pub(super) arena_busy: AtomicU64,
+    pub(super) arena_quarantined_regions: AtomicU64,
+    pub(super) arena_copied_bytes: AtomicU64,
 }
 
 fn publish_arena_metrics(metrics: &EgressMetrics, arena: &LeaseRegistry) {

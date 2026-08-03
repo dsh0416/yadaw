@@ -1,39 +1,41 @@
-enum UiEvent {
+use super::*;
+
+pub(super) enum UiEvent {
     Wake,
     Exit,
 }
 
-struct WinitHost {
-    generation: Arc<AtomicU64>,
-    proxy: EventLoopProxy<UiEvent>,
-    inbox: std_mpsc::Receiver<ActorRequest>,
-    processors: Arc<Mutex<HashMap<String, vst3::Vst3ProcessorHandle>>>,
-    audio_engine: Arc<engine::AudioEngine>,
-    background_sender: mpsc::Sender<ActorRequest>,
-    host_events: std_mpsc::SyncSender<HostEvent>,
-    pending_ara_events: VecDeque<HostEvent>,
-    vst3: Option<vst3::Vst3Runtime>,
-    ara_graph: Option<LiveMixerGraph>,
-    compositor: Option<WgpuCompositor>,
-    editor_owner_window: Option<usize>,
-    editors: HashMap<WindowId, EditorWindow>,
-    editor_instances: HashMap<String, WindowId>,
-    editor_menus: HashMap<WindowId, EditorMenuWindow>,
-    editor_menu_for_owner: HashMap<WindowId, WindowId>,
-    editor_clipboard: Option<EditorClipboard>,
-    next_editor_tick: Option<Instant>,
-    next_ara_tick: Option<Instant>,
-    next_retirement_tick: Option<Instant>,
-    output_parameter_error_reported: bool,
-    next_sidechain_request_id: u64,
+pub(super) struct WinitHost {
+    pub(super) generation: Arc<AtomicU64>,
+    pub(super) proxy: EventLoopProxy<UiEvent>,
+    pub(super) inbox: std_mpsc::Receiver<ActorRequest>,
+    pub(super) processors: Arc<Mutex<HashMap<String, vst3::Vst3ProcessorHandle>>>,
+    pub(super) audio_engine: Arc<engine::AudioEngine>,
+    pub(super) background_sender: mpsc::Sender<ActorRequest>,
+    pub(super) host_events: std_mpsc::SyncSender<HostEvent>,
+    pub(super) pending_ara_events: VecDeque<HostEvent>,
+    pub(super) vst3: Option<vst3::Vst3Runtime>,
+    pub(super) ara_graph: Option<LiveMixerGraph>,
+    pub(super) compositor: Option<WgpuCompositor>,
+    pub(super) editor_owner_window: Option<usize>,
+    pub(super) editors: HashMap<WindowId, EditorWindow>,
+    pub(super) editor_instances: HashMap<String, WindowId>,
+    pub(super) editor_menus: HashMap<WindowId, EditorMenuWindow>,
+    pub(super) editor_menu_for_owner: HashMap<WindowId, WindowId>,
+    pub(super) editor_clipboard: Option<EditorClipboard>,
+    pub(super) next_editor_tick: Option<Instant>,
+    pub(super) next_ara_tick: Option<Instant>,
+    pub(super) next_retirement_tick: Option<Instant>,
+    pub(super) output_parameter_error_reported: bool,
+    pub(super) next_sidechain_request_id: u64,
 }
 
 impl WinitHost {
     // VST3 controller calls must stay on this thread, but the same thread also
     // owns every native editor window. Bound each mailbox turn so plug-in code
     // cannot indefinitely delay the next platform-message dispatch.
-    const UI_BATCH: usize = 4;
-    const UI_BUDGET: std::time::Duration = std::time::Duration::from_millis(2);
+    pub(super) const UI_BATCH: usize = 4;
+    pub(super) const UI_BUDGET: std::time::Duration = std::time::Duration::from_millis(2);
     const EDITOR_TICK: Duration = Duration::from_millis(16);
     const ARA_CALLBACK_TICK: Duration = Duration::from_millis(33);
     const RETIREMENT_TICK: Duration = Duration::from_millis(16);
@@ -55,28 +57,29 @@ impl WinitHost {
                 });
             }
             for command in batch.transport {
-                let result = match command {
-                    crate::ara::AraTransportCommand::Play => self.audio_engine.transport_command(
-                        "play".to_owned(), None, None, None, None,
-                    ),
-                    crate::ara::AraTransportCommand::Pause => self.audio_engine.transport_command(
-                        "pause".to_owned(), None, None, None, None,
-                    ),
-                    crate::ara::AraTransportCommand::SeekFrames(position) => self
-                        .audio_engine
-                        .transport_command("seek".to_owned(), Some(position), None, None, None),
-                    crate::ara::AraTransportCommand::SetLoop {
-                        enabled,
-                        start_tick,
-                        end_tick,
-                    } => self.audio_engine.transport_command(
-                        "set-loop".to_owned(),
-                        None,
-                        Some(enabled),
-                        Some(start_tick),
-                        Some(end_tick),
-                    ),
-                };
+                let result =
+                    match command {
+                        crate::ara::AraTransportCommand::Play => self
+                            .audio_engine
+                            .transport_command("play".to_owned(), None, None, None, None),
+                        crate::ara::AraTransportCommand::Pause => self
+                            .audio_engine
+                            .transport_command("pause".to_owned(), None, None, None, None),
+                        crate::ara::AraTransportCommand::SeekFrames(position) => self
+                            .audio_engine
+                            .transport_command("seek".to_owned(), Some(position), None, None, None),
+                        crate::ara::AraTransportCommand::SetLoop {
+                            enabled,
+                            start_tick,
+                            end_tick,
+                        } => self.audio_engine.transport_command(
+                            "set-loop".to_owned(),
+                            None,
+                            Some(enabled),
+                            Some(start_tick),
+                            Some(end_tick),
+                        ),
+                    };
                 if let Err(error) = result {
                     self.publish_ara_runtime_failure(&batch.instance_id, error);
                 }
@@ -251,11 +254,9 @@ impl WinitHost {
         if let Some(mut editor) = self.editors.remove(&window_id) {
             editor.close();
         }
-        let _ = self
-            .host_events
-            .try_send(HostEvent::PluginEditorClosed {
-                instance_id: instance_id.to_owned(),
-            });
+        let _ = self.host_events.try_send(HostEvent::PluginEditorClosed {
+            instance_id: instance_id.to_owned(),
+        });
     }
 
     fn close_all_editors(&mut self) {
@@ -280,16 +281,19 @@ impl WinitHost {
         if let Some(editor) = self.editors.get_mut(&owner_id) {
             editor.popup_opened(request.menu);
         }
-        let Some(parent) = self.editors.get(&owner_id).map(|editor| editor.window.clone()) else {
+        let Some(parent) = self
+            .editors
+            .get(&owner_id)
+            .map(|editor| editor.window.clone())
+        else {
             return;
         };
-        let result = toolbar_menu_window_attributes(&parent, &request)
-            .and_then(|attributes| {
-                event_loop
-                    .create_window(attributes)
-                    .map(Arc::new)
-                    .map_err(|error| format!("could not create popup window: {error}"))
-            });
+        let result = toolbar_menu_window_attributes(&parent, &request).and_then(|attributes| {
+            event_loop
+                .create_window(attributes)
+                .map(Arc::new)
+                .map_err(|error| format!("could not create popup window: {error}"))
+        });
         let window = match result {
             Ok(window) => window,
             Err(error) => {
@@ -537,7 +541,10 @@ impl WinitHost {
                         plugin.latency_samples = latency;
                         plugin.tail_samples = tail;
                     }
-                    match self.audio_engine.apply_plugin_timing(&instance_id, latency, tail) {
+                    match self
+                        .audio_engine
+                        .apply_plugin_timing(&instance_id, latency, tail)
+                    {
                         Ok(Some(graph)) => {
                             queue_background_graph_build(&self.background_sender, graph);
                         }
@@ -698,14 +705,18 @@ impl WinitHost {
     }
 }
 
-fn replace_owned_popup<Id>(owners: &mut HashMap<Id, Id>, owner: Id, popup: Id) -> Option<Id>
+pub(super) fn replace_owned_popup<Id>(
+    owners: &mut HashMap<Id, Id>,
+    owner: Id,
+    popup: Id,
+) -> Option<Id>
 where
     Id: Copy + Eq + std::hash::Hash,
 {
     owners.insert(owner, popup)
 }
 
-fn remove_owned_popup<Id>(owners: &mut HashMap<Id, Id>, owner: Id) -> Option<Id>
+pub(super) fn remove_owned_popup<Id>(owners: &mut HashMap<Id, Id>, owner: Id) -> Option<Id>
 where
     Id: Copy + Eq + std::hash::Hash,
 {
@@ -721,26 +732,19 @@ fn milliseconds_to_samples(milliseconds: f64, sample_rate: u32) -> u32 {
         .min(f64::from(u32::MAX)) as u32
 }
 
-fn vst3_host_request_payload(request: &Vst3HostRequest) -> Option<(&'static str, String)> {
+pub(super) fn vst3_host_request_payload(
+    request: &Vst3HostRequest,
+) -> Option<(&'static str, String)> {
     match request {
-        Vst3HostRequest::DirtyChanged(dirty) => {
-            Some(("dirty-changed", dirty.to_string()))
-        }
-        Vst3HostRequest::OpenEditor { view_name } => {
-            Some(("open-editor", view_name.clone()))
-        }
+        Vst3HostRequest::DirtyChanged(dirty) => Some(("dirty-changed", dirty.to_string())),
+        Vst3HostRequest::OpenEditor { view_name } => Some(("open-editor", view_name.clone())),
         Vst3HostRequest::GroupEditStarted => Some(("group-edit-started", String::new())),
         Vst3HostRequest::GroupEditFinished => Some(("group-edit-finished", String::new())),
-        Vst3HostRequest::UnitSelected { unit_id } => {
-            Some(("unit-selected", unit_id.to_string()))
-        }
+        Vst3HostRequest::UnitSelected { unit_id } => Some(("unit-selected", unit_id.to_string())),
         Vst3HostRequest::ProgramListChanged {
             list_id,
             program_index,
-        } => Some((
-            "program-list-changed",
-            format!("{list_id}:{program_index}"),
-        )),
+        } => Some(("program-list-changed", format!("{list_id}:{program_index}"))),
         Vst3HostRequest::UnitByBusChanged => Some(("unit-by-bus-changed", String::new())),
         Vst3HostRequest::BusActivation { .. } => None,
     }
@@ -760,15 +764,12 @@ fn presentation_latency_bases(
         + snapshot.ring_buffer_latency_ms.unwrap_or(0.0)
         + snapshot.engine_latency_ms.unwrap_or(0.0);
     (
-        milliseconds_to_samples(
-            snapshot.input_latency_ms.unwrap_or(0.0),
-            graph.sample_rate,
-        ),
+        milliseconds_to_samples(snapshot.input_latency_ms.unwrap_or(0.0), graph.sample_rate),
         milliseconds_to_samples(output_ms, graph.sample_rate),
     )
 }
 
-fn should_drain_ui_request(drained: usize, elapsed: std::time::Duration) -> bool {
+pub(super) fn should_drain_ui_request(drained: usize, elapsed: std::time::Duration) -> bool {
     drained < WinitHost::UI_BATCH && (drained == 0 || elapsed < WinitHost::UI_BUDGET)
 }
 
@@ -853,9 +854,7 @@ impl ApplicationHandler<UiEvent> for WinitHost {
             .chain(self.next_retirement_tick)
             .chain(next_plugin_timer)
             .min();
-        event_loop.set_control_flow(
-            deadline.map_or(ControlFlow::Wait, ControlFlow::WaitUntil),
-        );
+        event_loop.set_control_flow(deadline.map_or(ControlFlow::Wait, ControlFlow::WaitUntil));
     }
 
     fn window_event(
@@ -879,7 +878,9 @@ impl ApplicationHandler<UiEvent> for WinitHost {
                     if let Some((owner_id, menu)) = popup {
                         self.close_editor_menu(owner_id, true);
                         if let Some(editor) = self.editors.get_mut(&owner_id) {
-                            editor.report_popup_failure(format!("{menu:?} rendering failed: {error}"));
+                            editor.report_popup_failure(format!(
+                                "{menu:?} rendering failed: {error}"
+                            ));
                         }
                     }
                 }
@@ -893,11 +894,7 @@ impl ApplicationHandler<UiEvent> for WinitHost {
             let Some(action) = action else {
                 return;
             };
-            let Some(owner_id) = self
-                .editor_menus
-                .get(&window_id)
-                .map(|menu| menu.owner_id)
-            else {
+            let Some(owner_id) = self.editor_menus.get(&window_id).map(|menu| menu.owner_id) else {
                 return;
             };
             self.close_editor_menu(owner_id, true);
@@ -981,7 +978,6 @@ impl ApplicationHandler<UiEvent> for WinitHost {
             self.close_editor(&instance_id);
         }
     }
-
 }
 
 impl WinitHost {
@@ -1030,9 +1026,7 @@ impl WinitHost {
             return;
         };
         let class_id = editor.class_id.clone();
-        if let Some(preference) =
-            editor.apply_action(action, runtime, &mut self.editor_clipboard)
-        {
+        if let Some(preference) = editor.apply_action(action, runtime, &mut self.editor_clipboard) {
             let _ = self
                 .host_events
                 .try_send(HostEvent::PluginEditorPreferenceChanged {
@@ -1043,7 +1037,7 @@ impl WinitHost {
     }
 }
 
-fn plugin_editor_window_attributes(
+pub(super) fn plugin_editor_window_attributes(
     channel_name: &str,
     plugin_name: &str,
     editor_owner_window: Option<usize>,
@@ -1086,7 +1080,7 @@ fn configure_editor_window_attributes(
     attributes
 }
 
-fn parse_editor_owner_window(value: &str) -> Result<usize, &'static str> {
+pub(super) fn parse_editor_owner_window(value: &str) -> Result<usize, &'static str> {
     let handle = value
         .parse::<usize>()
         .map_err(|_| "invalid --editor-owner-window value")?;

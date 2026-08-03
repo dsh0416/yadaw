@@ -75,17 +75,29 @@ use winit::{
     window::{WindowAttributes, WindowId},
 };
 
-include!("runtime/wire_adapters.rs");
-include!("runtime/graph_transactions.rs");
-include!("runtime/engine_actor.rs");
-include!("runtime/plugin_actor.rs");
-include!("runtime/egress.rs");
-include!("runtime/ingress.rs");
-include!("runtime/telemetry.rs");
-include!("runtime/protocol_actor.rs");
-include!("runtime/runtime_config.rs");
-include!("runtime/ui_runtime.rs");
-include!("runtime/bootstrap.rs");
+mod bootstrap;
+mod egress;
+mod engine_actor;
+mod graph_transactions;
+mod ingress;
+mod plugin_actor;
+mod protocol_actor;
+mod runtime_config;
+mod telemetry;
+mod ui_runtime;
+mod wire_adapters;
+
+use bootstrap::*;
+use egress::*;
+use engine_actor::*;
+use graph_transactions::*;
+use ingress::*;
+use plugin_actor::*;
+use protocol_actor::*;
+use runtime_config::*;
+use telemetry::*;
+use ui_runtime::*;
+use wire_adapters::*;
 
 static MIDI_INPUT: OnceLock<MidiInputActor> = OnceLock::new();
 
@@ -111,4 +123,5 @@ pub fn run() -> ExitCode {
     }
 }
 
-include!("runtime/tests.rs");
+#[cfg(test)]
+mod tests;
