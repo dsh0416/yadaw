@@ -438,8 +438,9 @@ fn main() -> ExitCode {
 #[cfg(test)]
 mod tests {
     use super::{
-        PluginKind, categories_for_output, classify_plugin_kind, looks_like_instrument,
-        parse_subcategories,
+        AudioBusDescriptor, AudioBusDirection, AudioBusKind, AudioBusOutput, PluginKind,
+        categories_for_output, classify_plugin_kind, looks_like_instrument, parse_subcategories,
+        soft_buses,
     };
 
     fn modes(names: &[&str]) -> Vec<String> {
@@ -500,5 +501,52 @@ mod tests {
         );
         assert_eq!(categories_for_output("", false), modes(&["Fx"]));
         assert_eq!(parse_subcategories(" Fx | EQ | "), modes(&["Fx", "EQ"]));
+    }
+
+    #[test]
+    fn audio_bus_output_preserves_real_vst3_metadata() {
+        let input = AudioBusOutput::from(AudioBusDescriptor {
+            index: 2,
+            direction: AudioBusDirection::Input,
+            kind: AudioBusKind::Main,
+            name: "Detector".to_owned(),
+            channels: 1,
+            default_active: false,
+        });
+        assert_eq!(input.index, 2);
+        assert_eq!(input.direction, "input");
+        assert_eq!(input.kind, "main");
+        assert_eq!(input.name, "Detector");
+        assert_eq!(input.channels, 1);
+        assert!(!input.default_active);
+
+        let output = AudioBusOutput::from(AudioBusDescriptor {
+            index: 4,
+            direction: AudioBusDirection::Output,
+            kind: AudioBusKind::Aux,
+            name: "Monitor".to_owned(),
+            channels: 2,
+            default_active: true,
+        });
+        assert_eq!(output.direction, "output");
+        assert_eq!(output.kind, "aux");
+        assert!(output.default_active);
+    }
+
+    #[test]
+    fn soft_bus_metadata_matches_effect_and_instrument_fallbacks() {
+        let effect = soft_buses(false);
+        assert_eq!(effect.len(), 2);
+        assert_eq!(effect[0].direction, "input");
+        assert_eq!(effect[0].name, "Stereo In");
+        assert_eq!(effect[1].direction, "output");
+        assert_eq!(effect[1].name, "Stereo Out");
+        assert!(effect.iter().all(|bus| {
+            bus.index == 0 && bus.kind == "main" && bus.channels == 2 && bus.default_active
+        }));
+
+        let instrument = soft_buses(true);
+        assert_eq!(instrument.len(), 1);
+        assert_eq!(instrument[0].direction, "output");
     }
 }

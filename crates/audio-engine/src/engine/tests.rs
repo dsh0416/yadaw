@@ -1717,6 +1717,18 @@ mod tests {
             },
         ];
 
+        let snapshot = compiled_graph_snapshot(&graph, 1);
+        let route = snapshot
+            .edges
+            .iter()
+            .find(|edge| edge.kind == CompiledGraphEdgeKind::SidechainRoute)
+            .expect("side-chain diagnostic edge");
+        assert_eq!(route.target_input_bus_index, Some(1));
+        assert_eq!(route.signal_width, CompiledGraphSignalWidth::Stereo);
+        assert!(snapshot.nodes.iter().any(|node| {
+            node.id == "pdc:main:sidechain-target" && node.latency_samples == 64
+        }));
+
         let runtime = build_mixer_runtime(
             graph,
             1,
@@ -1727,6 +1739,141 @@ mod tests {
         let target = &runtime.plugins_by_channel[1][0];
         assert_eq!(target.main_delay.delay_frames(), 64);
         assert_eq!(target.aux_inputs[0].delay.delay_frames(), 0);
+    }
+
+    #[test]
+    fn sidechain_pdc_delays_an_earlier_aux_source_at_a_later_slot() {
+        let mut graph = simple_native_graph();
+        graph.channels.insert(
+            1,
+            mixer_channel(
+                "sidechain-target",
+                "audio",
+                Some(3),
+                None,
+                Some("hardware"),
+                vec![3, 4],
+                Vec::new(),
+            ),
+        );
+        graph.channels[0].output_index = Some(3);
+        graph.plugins = vec![
+            NativePluginInstance {
+                instance_id: "target-latency".into(),
+                channel_index: 1,
+                role: "insert".into(),
+                slot_order: 0,
+                audio_mode: PluginAudioMode::Stereo,
+                enabled: true,
+                aux_input_buses: Vec::new(),
+                latency_samples: 64,
+                tail_samples: Some(0),
+                processor: None,
+            },
+            NativePluginInstance {
+                instance_id: "sidechain-target".into(),
+                channel_index: 1,
+                role: "insert".into(),
+                slot_order: 1,
+                audio_mode: PluginAudioMode::Stereo,
+                enabled: true,
+                aux_input_buses: vec![NativePluginAuxInputBus {
+                    input_bus_index: 2,
+                    name: "Key".into(),
+                    channels: 1,
+                    source_index: Some(0),
+                }],
+                latency_samples: 0,
+                tail_samples: Some(0),
+                processor: None,
+            },
+        ];
+
+        let snapshot = compiled_graph_snapshot(&graph, 2);
+        assert!(snapshot.nodes.iter().any(|node| {
+            node.id == "pdc:sidechain:sidechain-target:2" && node.latency_samples == 64
+        }));
+        let route = snapshot
+            .edges
+            .iter()
+            .find(|edge| edge.kind == CompiledGraphEdgeKind::SidechainRoute)
+            .expect("side-chain diagnostic edge");
+        assert_eq!(route.target_input_bus_index, Some(2));
+        assert_eq!(route.signal_width, CompiledGraphSignalWidth::Mono);
+        assert!(route.source.starts_with("pdc:sidechain:"));
+
+        let runtime = build_mixer_runtime(
+            graph,
+            2,
+            test_transport(48_000),
+            Arc::new(InputPeakBank::new()),
+        )
+        .expect("side-chain graph");
+        let target = &runtime.plugins_by_channel[1][1];
+        assert_eq!(target.main_delay.delay_frames(), 0);
+        assert_eq!(target.aux_inputs[0].delay.delay_frames(), 64);
+    }
+
+    #[test]
+    fn sidechain_graph_validation_rejects_every_invalid_bus_shape() {
+        for (target, source, channels) in [(3, 0, 2), (0, 3, 2), (0, 0, 2), (1, 0, 3)] {
+            let mut graph = simple_native_graph();
+            graph.plugins.push(NativePluginInstance {
+                instance_id: "invalid-sidechain".into(),
+                channel_index: target,
+                role: "insert".into(),
+                slot_order: 0,
+                audio_mode: PluginAudioMode::Stereo,
+                enabled: true,
+                aux_input_buses: vec![NativePluginAuxInputBus {
+                    input_bus_index: 1,
+                    name: "Invalid".into(),
+                    channels,
+                    source_index: Some(source),
+                }],
+                latency_samples: 0,
+                tail_samples: Some(0),
+                processor: None,
+            });
+
+            let result = build_mixer_runtime(
+                graph,
+                1,
+                test_transport(48_000),
+                Arc::new(InputPeakBank::new()),
+            );
+            let Err(error) = result else {
+                panic!("invalid side-chain route was accepted");
+            };
+            assert!(error.to_string().contains("side-chain route is invalid"));
+        }
+
+        let mut disconnected = simple_native_graph();
+        disconnected.plugins.push(NativePluginInstance {
+            instance_id: "disconnected-sidechain".into(),
+            channel_index: 0,
+            role: "insert".into(),
+            slot_order: 0,
+            audio_mode: PluginAudioMode::Stereo,
+            enabled: true,
+            aux_input_buses: vec![NativePluginAuxInputBus {
+                input_bus_index: 1,
+                name: "Disconnected".into(),
+                channels: 2,
+                source_index: None,
+            }],
+            latency_samples: 0,
+            tail_samples: Some(0),
+            processor: None,
+        });
+        let runtime = build_mixer_runtime(
+            disconnected,
+            1,
+            test_transport(48_000),
+            Arc::new(InputPeakBank::new()),
+        )
+        .expect("inactive aux buses are ignored");
+        assert!(runtime.plugins_by_channel[0][0].aux_inputs.is_empty());
     }
 
     #[test]

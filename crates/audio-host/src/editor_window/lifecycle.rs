@@ -166,17 +166,7 @@ impl EditorWindow {
     }
 
     pub fn sync_sidechain_graph(&mut self, graph: Option<&LiveMixerGraph>) {
-        let Some(graph) = graph else {
-            self.sidechain_buses.clear();
-            self.sidechain_sources.clear();
-            self.close_toolbar_menu();
-            self.window.request_redraw();
-            return;
-        };
-        let Some(plugin) = graph
-            .plugins
-            .iter()
-            .find(|plugin| plugin.instance_id == self.instance_id)
+        let Some((buses, sources)) = sidechain_view_for_graph(graph, &self.instance_id)
         else {
             self.sidechain_buses.clear();
             self.sidechain_sources.clear();
@@ -184,40 +174,8 @@ impl EditorWindow {
             self.window.request_redraw();
             return;
         };
-        self.sidechain_buses = plugin
-            .aux_input_buses
-            .iter()
-            .map(|bus| SidechainBus {
-                input_bus_index: bus.input_bus_index,
-                name: bus.name.clone(),
-                source_channel_id: bus.source_channel_id.clone(),
-            })
-            .collect();
-        self.sidechain_sources = graph
-            .channels
-            .iter()
-            .filter_map(|channel| {
-                if channel.system_role.is_some() || channel.id == plugin.channel_id {
-                    return None;
-                }
-                let kind = match channel.kind.as_str() {
-                    "audio" => SidechainSourceKind::Audio,
-                    "instrument" => SidechainSourceKind::Instrument,
-                    "aux" => SidechainSourceKind::Aux,
-                    _ => return None,
-                };
-                (!sidechain_route_would_cycle(
-                    graph,
-                    &plugin.channel_id,
-                    &channel.id,
-                ))
-                .then(|| SidechainSource {
-                    id: channel.id.clone(),
-                    name: channel.name.clone(),
-                    kind,
-                })
-            })
-            .collect();
+        self.sidechain_buses = buses;
+        self.sidechain_sources = sources;
         if self.sidechain_buses.is_empty() {
             self.close_toolbar_menu();
         } else if let Some(menu) = &mut self.sidechain_menu {
@@ -232,20 +190,15 @@ impl EditorWindow {
         input_bus_index: u32,
         source_channel_id: Option<String>,
     ) -> bool {
-        if self.pending_sidechain.is_some() {
-            return false;
-        }
-        let displayed_source_channel_id = self
-            .sidechain_buses
-            .iter()
-            .find(|bus| bus.input_bus_index == input_bus_index)
-            .and_then(|bus| bus.source_channel_id.clone());
-        self.pending_sidechain = Some(PendingSidechainRequest {
+        if !begin_sidechain_pending(
+            &mut self.pending_sidechain,
+            &self.sidechain_buses,
             request_id,
             input_bus_index,
             source_channel_id,
-            displayed_source_channel_id,
-        });
+        ) {
+            return false;
+        }
         self.close_toolbar_menu();
         self.window.request_redraw();
         true
@@ -257,20 +210,14 @@ impl EditorWindow {
         accepted: bool,
         warning: Option<String>,
     ) {
-        if self
-            .pending_sidechain
-            .as_ref()
-            .is_none_or(|pending| pending.request_id != request_id)
-        {
+        if !resolve_sidechain_pending(
+            &mut self.pending_sidechain,
+            &mut self.warning,
+            request_id,
+            accepted,
+            warning,
+        ) {
             return;
-        }
-        self.pending_sidechain = None;
-        if !accepted {
-            self.warning = Some(warning.unwrap_or_else(|| {
-                "Side-chain routing could not be committed.".to_owned()
-            }));
-        } else if let Some(warning) = warning {
-            self.warning = Some(warning);
         }
         self.window.request_redraw();
     }

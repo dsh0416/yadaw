@@ -1709,4 +1709,114 @@ mod tests {
         assert_eq!(storage.descriptors[1].silenceFlags, 0b11);
         assert_eq!(storage.descriptors[2].silenceFlags, u64::MAX);
     }
+
+    #[test]
+    fn auxiliary_inputs_connect_mono_and_stereo_buffers_then_restore_scratch() {
+        let mut storage = build_audio_bus_storage(&[2, 1, 2], true);
+        let mono = AuxiliaryAudioInput {
+            bus_index: 1,
+            channels: 1,
+            left: vec![0.25; 8],
+            right: Vec::new(),
+        };
+        let stereo = AuxiliaryAudioInput {
+            bus_index: 2,
+            channels: 2,
+            left: vec![0.5; 8],
+            right: vec![0.75; 8],
+        };
+
+        storage.connect_aux(&mono, 8).unwrap();
+        storage.connect_aux(&stereo, 8).unwrap();
+
+        assert_eq!(storage.descriptors[1].silenceFlags, 0);
+        assert_eq!(storage.descriptors[2].silenceFlags, 0);
+        assert_eq!(
+            storage.channel_pointers[1],
+            vec![mono.left.as_ptr().cast_mut()]
+        );
+        assert_eq!(
+            storage.channel_pointers[2],
+            vec![
+                stereo.left.as_ptr().cast_mut(),
+                stereo.right.as_ptr().cast_mut()
+            ]
+        );
+
+        storage.disconnect_bus(1);
+        storage.disconnect_bus(2);
+
+        assert_eq!(storage.descriptors[1].silenceFlags, 0b1);
+        assert_eq!(storage.descriptors[2].silenceFlags, 0b11);
+        assert_eq!(
+            storage.channel_pointers[1][0],
+            storage.scratch[1].as_mut_ptr()
+        );
+        assert_eq!(
+            storage.channel_pointers[2][0],
+            storage.scratch[2].as_mut_ptr()
+        );
+        assert_eq!(
+            storage.channel_pointers[2][1],
+            // SAFETY: the stereo bus scratch allocation reserves one full maximum-size block
+            // for each of its two channels.
+            unsafe {
+                storage.scratch[2]
+                    .as_mut_ptr()
+                    .add(MAX_BLOCK_FRAMES as usize)
+            }
+        );
+    }
+
+    #[test]
+    fn auxiliary_input_connection_rejects_invalid_bus_storage_and_block_shapes() {
+        let mono = AuxiliaryAudioInput {
+            bus_index: 1,
+            channels: 1,
+            left: vec![0.25; 8],
+            right: Vec::new(),
+        };
+        let invalid_bus = AuxiliaryAudioInput {
+            bus_index: 9,
+            ..mono.clone()
+        };
+        let wrong_channels = AuxiliaryAudioInput {
+            channels: 2,
+            right: vec![0.5; 8],
+            ..mono.clone()
+        };
+        let short_left = AuxiliaryAudioInput {
+            left: vec![0.25; 7],
+            ..mono.clone()
+        };
+        let short_right = AuxiliaryAudioInput {
+            bus_index: 2,
+            channels: 2,
+            right: vec![0.5; 7],
+            ..mono.clone()
+        };
+
+        let mut storage = build_audio_bus_storage(&[2, 1, 2], true);
+        for input in [&invalid_bus, &wrong_channels, &short_left, &short_right] {
+            assert!(matches!(
+                storage.connect_aux(input, 8),
+                Err(HostError::Operation {
+                    result: -2147024809,
+                    ..
+                })
+            ));
+        }
+
+        storage.channel_pointers.pop();
+        storage.channel_pointers.pop();
+        assert!(matches!(
+            storage.connect_aux(&mono, 8),
+            Err(HostError::Operation {
+                operation: "aux audio input bus storage",
+                result: -2147024809,
+            })
+        ));
+
+        storage.disconnect_bus(99);
+    }
 }

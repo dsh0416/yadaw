@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests {
     use super::*;
+    use yadaw_dsp_runtime::protocol::LiveMixerChannel;
 
     #[test]
     fn continuous_and_discrete_parameter_steps_are_distinct() {
@@ -435,7 +436,7 @@ mod tests {
         ];
 
         assert_eq!(
-            initial_toolbar_highlight(&options, ToolbarMenuChoice::Zoom(225)),
+            initial_toolbar_highlight(&options, &ToolbarMenuChoice::Zoom(225)),
             1
         );
     }
@@ -448,11 +449,11 @@ mod tests {
         }];
 
         assert_eq!(
-            initial_toolbar_highlight(&options, ToolbarMenuChoice::Zoom(200)),
+            initial_toolbar_highlight(&options, &ToolbarMenuChoice::Zoom(200)),
             0
         );
         assert_eq!(
-            initial_toolbar_highlight(&[], ToolbarMenuChoice::Zoom(100)),
+            initial_toolbar_highlight(&[], &ToolbarMenuChoice::Zoom(100)),
             0
         );
     }
@@ -553,10 +554,15 @@ mod tests {
         let mode = toolbar_menu_request_for(
             ToolbarMenu::Mode,
             anchor,
-            PluginEditorMode::Parameters,
-            225,
-            appearance,
-            1.5,
+            ToolbarMenuContext {
+                active_mode: PluginEditorMode::Parameters,
+                zoom_percent: 225,
+                appearance,
+                effective_scale: 1.5,
+                sidechain_buses: &[],
+                sidechain_sources: &[],
+                pending_sidechain: &None,
+            },
         );
         assert_eq!(
             mode.selected,
@@ -570,15 +576,93 @@ mod tests {
         let zoom = toolbar_menu_request_for(
             ToolbarMenu::Zoom,
             anchor,
-            PluginEditorMode::Native,
-            225,
-            appearance,
-            2.0,
+            ToolbarMenuContext {
+                active_mode: PluginEditorMode::Native,
+                zoom_percent: 225,
+                appearance,
+                effective_scale: 2.0,
+                sidechain_buses: &[],
+                sidechain_sources: &[],
+                pending_sidechain: &None,
+            },
         );
         assert_eq!(zoom.selected, ToolbarMenuChoice::Zoom(225));
         assert!(zoom.options.iter().any(|option| {
             option.choice == ToolbarMenuChoice::Zoom(225) && option.label == "225%"
         }));
+    }
+
+    #[test]
+    fn native_toolbar_popup_flattens_sidechain_routes_without_losing_typed_ids() {
+        let buses = vec![SidechainBus {
+            input_bus_index: 3,
+            name: "Detector".to_owned(),
+            source_channel_id: Some("audio-old".to_owned()),
+        }];
+        let sources = vec![
+            SidechainSource {
+                id: "audio-old".to_owned(),
+                name: "Old Key".to_owned(),
+                kind: SidechainSourceKind::Audio,
+            },
+            SidechainSource {
+                id: "aux-new".to_owned(),
+                name: "Drum Bus".to_owned(),
+                kind: SidechainSourceKind::Aux,
+            },
+        ];
+        let pending = Some(PendingSidechainRequest {
+            request_id: 9,
+            input_bus_index: 3,
+            source_channel_id: Some("aux-new".to_owned()),
+            displayed_source_channel_id: Some("audio-old".to_owned()),
+        });
+
+        let request = toolbar_menu_request_for(
+            ToolbarMenu::Sidechain,
+            Rectangle::default(),
+            ToolbarMenuContext {
+                active_mode: PluginEditorMode::Native,
+                zoom_percent: 100,
+                appearance: PluginEditorAppearance::default(),
+                effective_scale: 1.0,
+                sidechain_buses: &buses,
+                sidechain_sources: &sources,
+                pending_sidechain: &pending,
+            },
+        );
+
+        assert_eq!(request.menu, ToolbarMenu::Sidechain);
+        assert_eq!(request.options.len(), 3);
+        assert_eq!(request.options[0].label, "Detector · None");
+        assert!(request.options.iter().any(|option| {
+            option.label == "Detector · Aux · Drum Bus"
+                && option.choice
+                    == ToolbarMenuChoice::SidechainRoute {
+                        input_bus_index: 3,
+                        source_channel_id: Some("aux-new".to_owned()),
+                    }
+        }));
+        assert_eq!(
+            request.selected,
+            ToolbarMenuChoice::SidechainRoute {
+                input_bus_index: 3,
+                source_channel_id: Some("audio-old".to_owned()),
+            }
+        );
+        assert!(matches!(
+            toolbar_choice_action(
+                PluginEditorPreference::default(),
+                ToolbarMenuChoice::SidechainRoute {
+                    input_bus_index: 3,
+                    source_channel_id: Some("aux-new".to_owned()),
+                }
+            ),
+            Some(EditorAction::SidechainRoute {
+                input_bus_index: 3,
+                source_channel_id: Some(source),
+            }) if source == "aux-new"
+        ));
     }
 
     fn editor_view_model(
@@ -605,6 +689,10 @@ mod tests {
             can_paste: true,
             can_undo: true,
             can_redo: false,
+            sidechain_buses: Vec::new(),
+            sidechain_sources: Vec::new(),
+            sidechain_menu: None,
+            pending_sidechain: None,
         }
     }
 
@@ -619,6 +707,10 @@ mod tests {
         let mut toolbar_anchors = HashMap::new();
         let mut parameters = Vec::new();
         let mut active_gestures = HashSet::new();
+        let sidechain_buses = Vec::new();
+        let sidechain_sources = Vec::new();
+        let mut sidechain_menu = None;
+        let pending_sidechain = None;
         let mut state = EditorInteractionState {
             preference,
             active_mode: PluginEditorMode::Native,
@@ -631,6 +723,10 @@ mod tests {
             toolbar_anchors: &mut toolbar_anchors,
             parameters: &mut parameters,
             active_gestures: &mut active_gestures,
+            sidechain_buses: &sidechain_buses,
+            sidechain_sources: &sidechain_sources,
+            sidechain_menu: &mut sidechain_menu,
+            pending_sidechain: &pending_sidechain,
         };
         let mut actions = Vec::new();
 
@@ -714,7 +810,8 @@ mod tests {
         assert!(matches!(
             actions.as_slice(),
             [EditorAction::OpenToolbarMenu(request)]
-                if request.anchor == fallback_toolbar_anchor(state.logical_size, ToolbarMenu::Zoom)
+                if request.anchor
+                    == fallback_toolbar_anchor(state.logical_size, ToolbarMenu::Zoom, false)
         ));
         actions.clear();
 
@@ -741,6 +838,10 @@ mod tests {
             flags: 0,
         }];
         let mut active_gestures = HashSet::new();
+        let sidechain_buses = Vec::new();
+        let sidechain_sources = Vec::new();
+        let mut sidechain_menu = None;
+        let pending_sidechain = None;
         let mut state = EditorInteractionState {
             preference: PluginEditorPreference::default(),
             active_mode: PluginEditorMode::Parameters,
@@ -753,6 +854,10 @@ mod tests {
             toolbar_anchors: &mut toolbar_anchors,
             parameters: &mut parameters,
             active_gestures: &mut active_gestures,
+            sidechain_buses: &sidechain_buses,
+            sidechain_sources: &sidechain_sources,
+            sidechain_menu: &mut sidechain_menu,
+            pending_sidechain: &pending_sidechain,
         };
         let mut actions = Vec::new();
 
@@ -944,6 +1049,685 @@ mod tests {
             true
         });
         assert_eq!((rect_width(size), rect_height(size)), (1024, 768));
+    }
+
+    fn view_model(
+        active_mode: PluginEditorMode,
+        parameters: Vec<PluginParameter>,
+    ) -> EditorViewModel {
+        EditorViewModel {
+            context: PluginEditorContext {
+                channel_name: "Lead".to_owned(),
+                channel_color: "#58c6c2".to_owned(),
+                plugin_name: "Fixture".to_owned(),
+                appearance: PluginEditorAppearance {
+                    theme: PluginEditorTheme::Dark,
+                    locale: PluginEditorLocale::EnUs,
+                },
+            },
+            zoom_percent: 125,
+            toolbar_height: TOOLBAR_HEIGHT_WIDE as f32,
+            narrow_toolbar: false,
+            active_mode,
+            open_menu: None,
+            warning: None,
+            parameters,
+            compare_slot: CompareSlot::A,
+            can_compare: true,
+            can_paste: true,
+            can_undo: true,
+            can_redo: true,
+            sidechain_buses: Vec::new(),
+            sidechain_sources: Vec::new(),
+            sidechain_menu: None,
+            pending_sidechain: None,
+        }
+    }
+
+    #[test]
+    fn editor_view_builds_native_and_empty_parameter_layouts() {
+        let native = view_model(PluginEditorMode::Native, Vec::new());
+        let _native_element = EditorWindow::view(&native);
+
+        let mut parameters = view_model(PluginEditorMode::Parameters, Vec::new());
+        parameters.narrow_toolbar = true;
+        parameters.toolbar_height = TOOLBAR_HEIGHT_NARROW as f32;
+        parameters.warning = Some("Fixture warning".to_owned());
+        parameters.context.channel_color = "invalid".to_owned();
+        parameters.context.appearance.theme = PluginEditorTheme::Light;
+        parameters.context.appearance.locale = PluginEditorLocale::ZhCmnHansCn;
+        let _parameter_element = EditorWindow::view(&parameters);
+    }
+
+    #[test]
+    fn editor_view_builds_parameter_controls_and_all_sidechain_columns() {
+        let mut model = view_model(
+            PluginEditorMode::Parameters,
+            vec![
+                PluginParameter {
+                    id: 1,
+                    title: "Input".to_owned(),
+                    units: "dB".to_owned(),
+                    step_count: 0,
+                    default_normalized: 0.5,
+                    normalized: 0.75,
+                    formatted: "-6.0 dB".to_owned(),
+                    flags: 0,
+                },
+                PluginParameter {
+                    id: 2,
+                    title: "Meter".to_owned(),
+                    units: String::new(),
+                    step_count: 10,
+                    default_normalized: 0.0,
+                    normalized: 0.25,
+                    formatted: String::new(),
+                    flags: VST3_PARAMETER_FLAG_READ_ONLY,
+                },
+            ],
+        );
+        model.compare_slot = CompareSlot::B;
+        model.sidechain_buses = vec![SidechainBus {
+            input_bus_index: 1,
+            name: "Side-chain".to_owned(),
+            source_channel_id: Some("audio-1".to_owned()),
+        }];
+        model.sidechain_sources = vec![
+            SidechainSource {
+                id: "audio-1".to_owned(),
+                name: "Audio 1".to_owned(),
+                kind: SidechainSourceKind::Audio,
+            },
+            SidechainSource {
+                id: "instrument-1".to_owned(),
+                name: "Instrument 1".to_owned(),
+                kind: SidechainSourceKind::Instrument,
+            },
+            SidechainSource {
+                id: "aux-1".to_owned(),
+                name: "Aux 1".to_owned(),
+                kind: SidechainSourceKind::Aux,
+            },
+        ];
+        model.sidechain_menu = Some(SidechainMenuState {
+            bus: 0,
+            group: Some(SidechainSourceKind::Audio),
+            level: 2,
+            focused: 0,
+        });
+        model.pending_sidechain = Some(PendingSidechainRequest {
+            request_id: 7,
+            input_bus_index: 1,
+            source_channel_id: Some("aux-1".to_owned()),
+            displayed_source_channel_id: Some("audio-1".to_owned()),
+        });
+
+        let _element = EditorWindow::view(&model);
+    }
+
+    fn sidechain_key_fixture() -> (Vec<SidechainBus>, Vec<SidechainSource>) {
+        (
+            vec![
+                SidechainBus {
+                    input_bus_index: 1,
+                    name: "Side-chain A".to_owned(),
+                    source_channel_id: None,
+                },
+                SidechainBus {
+                    input_bus_index: 7,
+                    name: "Side-chain B".to_owned(),
+                    source_channel_id: None,
+                },
+            ],
+            vec![
+                SidechainSource {
+                    id: "audio-1".to_owned(),
+                    name: "Audio 1".to_owned(),
+                    kind: SidechainSourceKind::Audio,
+                },
+                SidechainSource {
+                    id: "audio-2".to_owned(),
+                    name: "Audio 2".to_owned(),
+                    kind: SidechainSourceKind::Audio,
+                },
+                SidechainSource {
+                    id: "instrument-1".to_owned(),
+                    name: "Instrument 1".to_owned(),
+                    kind: SidechainSourceKind::Instrument,
+                },
+                SidechainSource {
+                    id: "aux-1".to_owned(),
+                    name: "Aux 1".to_owned(),
+                    kind: SidechainSourceKind::Aux,
+                },
+            ],
+        )
+    }
+
+    #[test]
+    fn sidechain_keyboard_navigates_buses_groups_and_sources() {
+        let (buses, sources) = sidechain_key_fixture();
+        let mut menu = Some(SidechainMenuState {
+            bus: 0,
+            group: None,
+            level: 0,
+            focused: 0,
+        });
+
+        assert!(
+            sidechain_key_action(
+                &mut menu,
+                &buses,
+                &sources,
+                &Key::Named(NamedKey::ArrowDown),
+            )
+            .0
+        );
+        assert_eq!(menu.map(|state| state.focused), Some(1));
+        sidechain_key_action(
+            &mut menu,
+            &buses,
+            &sources,
+            &Key::Named(NamedKey::Enter),
+        );
+        assert_eq!(menu.map(|state| (state.bus, state.level)), Some((1, 1)));
+        sidechain_key_action(
+            &mut menu,
+            &buses,
+            &sources,
+            &Key::Named(NamedKey::ArrowDown),
+        );
+        sidechain_key_action(
+            &mut menu,
+            &buses,
+            &sources,
+            &Key::Named(NamedKey::Enter),
+        );
+        assert_eq!(
+            menu.map(|state| (state.group, state.level, state.focused)),
+            Some((Some(SidechainSourceKind::Audio), 2, 0))
+        );
+        sidechain_key_action(
+            &mut menu,
+            &buses,
+            &sources,
+            &Key::Named(NamedKey::ArrowDown),
+        );
+        let (_, close, action) = sidechain_key_action(
+            &mut menu,
+            &buses,
+            &sources,
+            &Key::Named(NamedKey::Enter),
+        );
+        assert!(!close);
+        assert!(matches!(
+            action,
+            Some(EditorAction::SidechainRoute {
+                input_bus_index: 7,
+                source_channel_id: Some(source),
+            }) if source == "audio-2"
+        ));
+
+        sidechain_key_action(
+            &mut menu,
+            &buses,
+            &sources,
+            &Key::Named(NamedKey::ArrowLeft),
+        );
+        assert_eq!(menu.map(|state| (state.level, state.focused)), Some((1, 1)));
+        sidechain_key_action(
+            &mut menu,
+            &buses,
+            &sources,
+            &Key::Named(NamedKey::ArrowLeft),
+        );
+        assert_eq!(menu.map(|state| (state.level, state.focused)), Some((0, 1)));
+        sidechain_key_action(
+            &mut menu,
+            &buses,
+            &sources,
+            &Key::Named(NamedKey::ArrowUp),
+        );
+        assert_eq!(menu.map(|state| state.focused), Some(0));
+        let (handled, close, action) = sidechain_key_action(
+            &mut menu,
+            &buses,
+            &sources,
+            &Key::Named(NamedKey::Escape),
+        );
+        assert_eq!((handled, close), (true, true));
+        assert!(action.is_none());
+    }
+
+    #[test]
+    fn sidechain_keyboard_handles_none_empty_and_unhandled_paths() {
+        let (buses, sources) = sidechain_key_fixture();
+        let mut closed = None;
+        let (handled, close, action) = sidechain_key_action(
+            &mut closed,
+            &buses,
+            &sources,
+            &Key::Character("x".into()),
+        );
+        assert_eq!((handled, close), (false, false));
+        assert!(action.is_none());
+
+        let mut menu = Some(SidechainMenuState {
+            bus: 0,
+            group: None,
+            level: 1,
+            focused: 0,
+        });
+        let (handled, close, action) = sidechain_key_action(
+            &mut menu,
+            &buses,
+            &sources,
+            &Key::Named(NamedKey::ArrowRight),
+        );
+        assert_eq!((handled, close), (true, false));
+        assert!(action.is_none());
+        let (_, _, action) = sidechain_key_action(
+            &mut menu,
+            &buses,
+            &sources,
+            &Key::Named(NamedKey::Enter),
+        );
+        assert!(matches!(
+            action,
+            Some(EditorAction::SidechainRoute {
+                input_bus_index: 1,
+                source_channel_id: None,
+            })
+        ));
+
+        menu = Some(SidechainMenuState {
+            bus: 0,
+            group: None,
+            level: 2,
+            focused: 0,
+        });
+        let (handled, close, action) = sidechain_key_action(
+            &mut menu,
+            &buses,
+            &sources,
+            &Key::Named(NamedKey::Enter),
+        );
+        assert_eq!((handled, close), (true, false));
+        assert!(action.is_none());
+        menu = Some(SidechainMenuState {
+            bus: 0,
+            group: Some(SidechainSourceKind::Audio),
+            level: 2,
+            focused: 99,
+        });
+        let (handled, close, action) = sidechain_key_action(
+            &mut menu,
+            &buses,
+            &sources,
+            &Key::Named(NamedKey::Enter),
+        );
+        assert_eq!((handled, close), (true, false));
+        assert!(action.is_none());
+        let (handled, close, action) = sidechain_key_action(
+            &mut menu,
+            &buses,
+            &sources,
+            &Key::Character("x".into()),
+        );
+        assert_eq!((handled, close), (false, false));
+        assert!(action.is_none());
+    }
+
+    #[test]
+    fn sidechain_keyboard_restores_each_group_focus() {
+        let (buses, sources) = sidechain_key_fixture();
+        for (focused, group) in [
+            (2, SidechainSourceKind::Instrument),
+            (3, SidechainSourceKind::Aux),
+        ] {
+            let mut menu = Some(SidechainMenuState {
+                bus: 0,
+                group: None,
+                level: 1,
+                focused,
+            });
+            sidechain_key_action(
+                &mut menu,
+                &buses,
+                &sources,
+                &Key::Named(NamedKey::Enter),
+            );
+            assert_eq!(menu.map(|state| state.group), Some(Some(group)));
+            sidechain_key_action(
+                &mut menu,
+                &buses,
+                &sources,
+                &Key::Named(NamedKey::ArrowLeft),
+            );
+            assert_eq!(menu.map(|state| state.focused), Some(focused));
+        }
+
+        let mut empty_group = Some(SidechainMenuState {
+            bus: 0,
+            group: None,
+            level: 1,
+            focused: 1,
+        });
+        sidechain_key_action(
+            &mut empty_group,
+            &buses,
+            &[],
+            &Key::Named(NamedKey::Enter),
+        );
+        assert_eq!(empty_group.map(|state| state.level), Some(1));
+        assert_eq!(source_count_for_group(&sources, None), 0);
+    }
+
+    #[test]
+    fn sidechain_menu_messages_preserve_pending_request_serialization() {
+        let mut menu = None;
+        open_sidechain_menu(&mut menu);
+        assert_eq!(
+            menu.map(|state| (state.bus, state.group, state.level, state.focused)),
+            Some((0, None, 0, 0))
+        );
+
+        select_sidechain_bus(&mut menu, 3);
+        assert_eq!(
+            menu.map(|state| (state.bus, state.group, state.level, state.focused)),
+            Some((3, None, 1, 0))
+        );
+        select_sidechain_group(&mut menu, SidechainSourceKind::Aux);
+        assert_eq!(
+            menu.map(|state| (state.group, state.level, state.focused)),
+            Some((Some(SidechainSourceKind::Aux), 2, 0))
+        );
+
+        let mut closed = None;
+        select_sidechain_group(&mut closed, SidechainSourceKind::Audio);
+        assert!(closed.is_none());
+        assert!(sidechain_route_action(true, 7, Some("audio-1".to_owned())).is_none());
+        assert!(matches!(
+            sidechain_route_action(false, 7, Some("audio-1".to_owned())),
+            Some(EditorAction::SidechainRoute {
+                input_bus_index: 7,
+                source_channel_id: Some(source),
+            }) if source == "audio-1"
+        ));
+    }
+
+    fn routing_channel(id: &str, output_channel_id: Option<&str>) -> LiveMixerChannel {
+        LiveMixerChannel {
+            id: id.to_owned(),
+            name: id.to_owned(),
+            color: String::new(),
+            kind: "audio".to_owned(),
+            system_role: None,
+            gain_db: 0.0,
+            pan: 0.0,
+            muted: false,
+            soloed: false,
+            output_channel_id: output_channel_id.map(str::to_owned),
+            output_bus: None,
+            record_armed: false,
+            input_monitoring: false,
+            midi_input_port_id: None,
+            midi_input_port_name: None,
+            midi_input_channel: None,
+            input_source: None,
+            input_channels: Vec::new(),
+            hardware_output_channels: Vec::new(),
+        }
+    }
+
+    fn routing_graph() -> LiveMixerGraph {
+        LiveMixerGraph {
+            sample_rate: 48_000,
+            channels: vec![
+                routing_channel("target", None),
+                routing_channel("source", None),
+                routing_channel("middle", None),
+                routing_channel("isolated", None),
+            ],
+            sends: Vec::new(),
+            clips: Vec::new(),
+            plugins: Vec::new(),
+            midi_clips: Vec::new(),
+            tempo_events: Vec::new(),
+            time_signature_events: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn sidechain_cycle_detection_follows_outputs_sends_and_existing_sidechains() {
+        use yadaw_dsp_runtime::protocol::{
+            LiveMixerSend, LiveMixerSendTap, LivePluginAuxInputBus, LivePluginInstance,
+            PluginAudioMode,
+        };
+
+        let graph = routing_graph();
+        assert!(sidechain_route_would_cycle(&graph, "target", "target"));
+        assert!(!sidechain_route_would_cycle(
+            &graph, "target", "isolated"
+        ));
+
+        let mut output_graph = graph.clone();
+        output_graph.channels[0].output_channel_id = Some("middle".to_owned());
+        output_graph.channels[2].output_channel_id = Some("source".to_owned());
+        assert!(sidechain_route_would_cycle(
+            &output_graph,
+            "target",
+            "source"
+        ));
+
+        let mut send_graph = graph.clone();
+        send_graph.sends.push(LiveMixerSend {
+            id: "send".to_owned(),
+            source_channel_id: "target".to_owned(),
+            target_channel_id: Some("source".to_owned()),
+            target_bus: None,
+            enabled: true,
+            tap: LiveMixerSendTap::PostPan,
+            level_db: 0.0,
+        });
+        assert!(sidechain_route_would_cycle(
+            &send_graph,
+            "target",
+            "source"
+        ));
+        send_graph.sends[0].enabled = false;
+        assert!(!sidechain_route_would_cycle(
+            &send_graph,
+            "target",
+            "source"
+        ));
+
+        let mut plugin_graph = graph;
+        plugin_graph.plugins.push(LivePluginInstance {
+            instance_id: "fixture".to_owned(),
+            channel_id: "source".to_owned(),
+            role: "effect".to_owned(),
+            slot_order: 0,
+            audio_mode: PluginAudioMode::Stereo,
+            enabled: true,
+            aux_input_buses: vec![LivePluginAuxInputBus {
+                input_bus_index: 1,
+                name: "Side-chain".to_owned(),
+                channels: 2,
+                source_channel_id: Some("target".to_owned()),
+            }],
+            latency_samples: 0,
+            tail_samples: Some(0),
+        });
+        assert!(sidechain_route_would_cycle(
+            &plugin_graph,
+            "target",
+            "source"
+        ));
+    }
+
+    #[test]
+    fn sidechain_cycle_detection_terminates_on_an_unrelated_loop() {
+        let mut graph = routing_graph();
+        graph.channels[0].output_channel_id = Some("middle".to_owned());
+        graph.channels[2].output_channel_id = Some("target".to_owned());
+
+        assert!(!sidechain_route_would_cycle(
+            &graph, "target", "isolated"
+        ));
+    }
+
+    #[test]
+    fn sidechain_view_filters_channel_kinds_system_channels_self_and_cycles() {
+        use yadaw_dsp_runtime::protocol::{
+            LiveMixerSystemRole, LivePluginAuxInputBus, LivePluginInstance, PluginAudioMode,
+        };
+
+        let mut graph = routing_graph();
+        graph.channels[0].output_channel_id = Some("cycle".to_owned());
+        graph.channels[1].id = "audio".to_owned();
+        graph.channels[1].name = "Audio".to_owned();
+        graph.channels[2].id = "instrument".to_owned();
+        graph.channels[2].name = "Instrument".to_owned();
+        graph.channels[2].kind = "instrument".to_owned();
+        graph.channels[3].id = "aux".to_owned();
+        graph.channels[3].name = "Aux".to_owned();
+        graph.channels[3].kind = "aux".to_owned();
+        let mut system = routing_channel("metronome", None);
+        system.system_role = Some(LiveMixerSystemRole::Metronome);
+        let mut unsupported = routing_channel("midi", None);
+        unsupported.kind = "midi".to_owned();
+        graph.channels.extend([
+            system,
+            unsupported,
+            routing_channel("cycle", None),
+        ]);
+        graph.plugins.push(LivePluginInstance {
+            instance_id: "fixture".to_owned(),
+            channel_id: "target".to_owned(),
+            role: "effect".to_owned(),
+            slot_order: 0,
+            audio_mode: PluginAudioMode::Stereo,
+            enabled: true,
+            aux_input_buses: vec![LivePluginAuxInputBus {
+                input_bus_index: 3,
+                name: "Detector".to_owned(),
+                channels: 1,
+                source_channel_id: Some("audio".to_owned()),
+            }],
+            latency_samples: 0,
+            tail_samples: Some(0),
+        });
+
+        assert!(sidechain_view_for_graph(None, "fixture").is_none());
+        assert!(sidechain_view_for_graph(Some(&graph), "missing").is_none());
+        let (buses, sources) = sidechain_view_for_graph(Some(&graph), "fixture").unwrap();
+        assert_eq!(buses.len(), 1);
+        assert_eq!(buses[0].input_bus_index, 3);
+        assert_eq!(buses[0].name, "Detector");
+        assert_eq!(buses[0].source_channel_id.as_deref(), Some("audio"));
+        assert_eq!(
+            sources
+                .iter()
+                .map(|source| (source.id.as_str(), source.kind))
+                .collect::<Vec<_>>(),
+            vec![
+                ("audio", SidechainSourceKind::Audio),
+                ("instrument", SidechainSourceKind::Instrument),
+                ("aux", SidechainSourceKind::Aux),
+            ]
+        );
+    }
+
+    #[test]
+    fn sidechain_pending_state_keeps_displayed_value_until_matching_resolution() {
+        let buses = vec![SidechainBus {
+            input_bus_index: 3,
+            name: "Detector".to_owned(),
+            source_channel_id: Some("old-source".to_owned()),
+        }];
+        let mut pending = None;
+        assert!(begin_sidechain_pending(
+            &mut pending,
+            &buses,
+            11,
+            3,
+            Some("new-source".to_owned()),
+        ));
+        let request = pending.as_ref().unwrap();
+        assert_eq!(request.request_id, 11);
+        assert_eq!(request.input_bus_index, 3);
+        assert_eq!(request.source_channel_id.as_deref(), Some("new-source"));
+        assert_eq!(
+            request.displayed_source_channel_id.as_deref(),
+            Some("old-source")
+        );
+        assert!(!begin_sidechain_pending(
+            &mut pending,
+            &buses,
+            12,
+            3,
+            None,
+        ));
+
+        let mut warning = None;
+        assert!(!resolve_sidechain_pending(
+            &mut pending,
+            &mut warning,
+            12,
+            true,
+            None,
+        ));
+        assert!(pending.is_some());
+        assert!(resolve_sidechain_pending(
+            &mut pending,
+            &mut warning,
+            11,
+            true,
+            Some("Audio deployment is degraded".to_owned()),
+        ));
+        assert!(pending.is_none());
+        assert_eq!(warning.as_deref(), Some("Audio deployment is degraded"));
+    }
+
+    #[test]
+    fn sidechain_pending_rejection_uses_host_warning_or_fallback() {
+        let mut warning = Some("old warning".to_owned());
+        for (request_id, supplied, expected) in [
+            (1, Some("database rejected"), "database rejected"),
+            (2, None, "Side-chain routing could not be committed."),
+        ] {
+            let mut pending = None;
+            assert!(begin_sidechain_pending(
+                &mut pending,
+                &[],
+                request_id,
+                9,
+                None,
+            ));
+            assert!(resolve_sidechain_pending(
+                &mut pending,
+                &mut warning,
+                request_id,
+                false,
+                supplied.map(str::to_owned),
+            ));
+            assert_eq!(warning.as_deref(), Some(expected));
+        }
+
+        let mut pending = None;
+        assert!(begin_sidechain_pending(&mut pending, &[], 3, 9, None));
+        assert!(resolve_sidechain_pending(
+            &mut pending,
+            &mut warning,
+            3,
+            true,
+            None,
+        ));
+        assert_eq!(
+            warning.as_deref(),
+            Some("Side-chain routing could not be committed.")
+        );
     }
 }
 

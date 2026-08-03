@@ -1,4 +1,94 @@
 
+fn sidechain_view_for_graph(
+    graph: Option<&LiveMixerGraph>,
+    instance_id: &str,
+) -> Option<(Vec<SidechainBus>, Vec<SidechainSource>)> {
+    let graph = graph?;
+    let plugin = graph
+        .plugins
+        .iter()
+        .find(|plugin| plugin.instance_id == instance_id)?;
+    let buses = plugin
+        .aux_input_buses
+        .iter()
+        .map(|bus| SidechainBus {
+            input_bus_index: bus.input_bus_index,
+            name: bus.name.clone(),
+            source_channel_id: bus.source_channel_id.clone(),
+        })
+        .collect();
+    let sources = graph
+        .channels
+        .iter()
+        .filter_map(|channel| {
+            if channel.system_role.is_some() || channel.id == plugin.channel_id {
+                return None;
+            }
+            let kind = match channel.kind.as_str() {
+                "audio" => SidechainSourceKind::Audio,
+                "instrument" => SidechainSourceKind::Instrument,
+                "aux" => SidechainSourceKind::Aux,
+                _ => return None,
+            };
+            (!sidechain_route_would_cycle(graph, &plugin.channel_id, &channel.id)).then(|| {
+                SidechainSource {
+                    id: channel.id.clone(),
+                    name: channel.name.clone(),
+                    kind,
+                }
+            })
+        })
+        .collect();
+    Some((buses, sources))
+}
+
+fn begin_sidechain_pending(
+    pending: &mut Option<PendingSidechainRequest>,
+    buses: &[SidechainBus],
+    request_id: u64,
+    input_bus_index: u32,
+    source_channel_id: Option<String>,
+) -> bool {
+    if pending.is_some() {
+        return false;
+    }
+    let displayed_source_channel_id = buses
+        .iter()
+        .find(|bus| bus.input_bus_index == input_bus_index)
+        .and_then(|bus| bus.source_channel_id.clone());
+    *pending = Some(PendingSidechainRequest {
+        request_id,
+        input_bus_index,
+        source_channel_id,
+        displayed_source_channel_id,
+    });
+    true
+}
+
+fn resolve_sidechain_pending(
+    pending: &mut Option<PendingSidechainRequest>,
+    current_warning: &mut Option<String>,
+    request_id: u64,
+    accepted: bool,
+    warning: Option<String>,
+) -> bool {
+    if pending
+        .as_ref()
+        .is_none_or(|pending| pending.request_id != request_id)
+    {
+        return false;
+    }
+    *pending = None;
+    if !accepted {
+        *current_warning = Some(
+            warning.unwrap_or_else(|| "Side-chain routing could not be committed.".to_owned()),
+        );
+    } else if let Some(warning) = warning {
+        *current_warning = Some(warning);
+    }
+    true
+}
+
 fn sidechain_route_would_cycle(
     graph: &LiveMixerGraph,
     target_channel_id: &str,
