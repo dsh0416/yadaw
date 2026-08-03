@@ -81,8 +81,9 @@ describe("useAudioBenchmarkStore", () => {
   })
 
   it("refuses to start a second run while one is in flight", async () => {
-    let resolveBenchmark: ((value: ReturnType<typeof rpcSuccess<AudioBenchmarkReport>>) => void) | null =
-      null
+    let resolveBenchmark:
+      | ((value: ReturnType<typeof rpcSuccess<AudioBenchmarkReport>>) => void)
+      | null = null
     const runAudioBenchmark = vi.fn(
       () =>
         new Promise((resolve) => {

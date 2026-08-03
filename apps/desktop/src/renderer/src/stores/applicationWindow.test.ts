@@ -25,7 +25,9 @@ describe("useApplicationWindowStore", () => {
   it("forwards application commands from the preload event stream", () => {
     const listeners: Array<(command: ApplicationCommandId) => void> = []
     stubApi({
-      subscribeApplicationCommands: (listener: (event: { payload: ApplicationCommandId }) => void) => {
+      subscribeApplicationCommands: (
+        listener: (event: { payload: ApplicationCommandId }) => void
+      ) => {
         listeners.push((command) => listener({ payload: command }))
         return () => {
           listeners.length = 0

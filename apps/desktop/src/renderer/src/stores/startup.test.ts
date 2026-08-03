@@ -3,9 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { StartupProgressSnapshot } from "@yadaw/contracts"
 import { useStartupStore } from "./startup"
 
-function progress(
-  overrides: Partial<StartupProgressSnapshot> = {}
-): StartupProgressSnapshot {
+function progress(overrides: Partial<StartupProgressSnapshot> = {}): StartupProgressSnapshot {
   return {
     phase: "loading-catalog",
     progress: 25,
@@ -24,11 +22,13 @@ beforeEach(() => {
 
 describe("useStartupStore", () => {
   it("ignores backwards progress except for terminal phases", () => {
-    let listener: ((event: {
-      sourceEpoch: string
-      sequence: number
-      payload: StartupProgressSnapshot
-    }) => void) | null = null
+    let listener:
+      | ((event: {
+          sourceEpoch: string
+          sequence: number
+          payload: StartupProgressSnapshot
+        }) => void)
+      | null = null
     stubApi({
       subscribeStartupProgress: (callback: typeof listener) => {
         listener = callback
@@ -54,11 +54,13 @@ describe("useStartupStore", () => {
   })
 
   it("deduplicates out-of-order startup events by source epoch and sequence", () => {
-    let listener: ((event: {
-      sourceEpoch: string
-      sequence: number
-      payload: StartupProgressSnapshot
-    }) => void) | null = null
+    let listener:
+      | ((event: {
+          sourceEpoch: string
+          sequence: number
+          payload: StartupProgressSnapshot
+        }) => void)
+      | null = null
     stubApi({
       subscribeStartupProgress: (callback: typeof listener) => {
         listener = callback
@@ -75,7 +77,11 @@ describe("useStartupStore", () => {
 
     expect(store.progress.label).toBe("Second")
 
-    listener?.({ sourceEpoch: "epoch-2", sequence: 1, payload: progress({ progress: 30, label: "First" }) })
+    listener?.({
+      sourceEpoch: "epoch-2",
+      sequence: 1,
+      payload: progress({ progress: 30, label: "First" })
+    })
     expect(store.progress.label).toBe("First")
   })
 
