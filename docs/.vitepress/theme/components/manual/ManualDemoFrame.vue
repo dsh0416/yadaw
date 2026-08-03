@@ -56,6 +56,7 @@ const locale = computed(() => (localeIndex.value === "zh" ? "zh-CN" : "en-US"))
   --ui-control-sm: 2rem;
   --ui-ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --ui-font-size-xs: 0.75rem;
+  --ui-font-size-sm: 0.875rem;
   --ui-focus-ring: 0 0 0 3px color-mix(in srgb, var(--yadaw-cyan) 36%, transparent);
   --ui-motion-fast: 100ms;
   --ui-opacity-disabled: 0.55;
@@ -66,6 +67,7 @@ const locale = computed(() => (localeIndex.value === "zh" ? "zh-CN" : "en-US"))
   --ui-space-3: 0.75rem;
   --ui-target-min: 1.5rem;
   --ui-type-leading-tight: 1.2;
+  --ui-type-leading-normal: 1.5;
   --ui-type-weight-medium: 500;
 
   position: relative;

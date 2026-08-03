@@ -25,6 +25,7 @@ import MixerOutputSection from "./MixerOutputSection.vue"
 import MixerPanKnob from "./MixerPanKnob.vue"
 import MixerPluginSection from "./MixerPluginSection.vue"
 import MixerSendSection from "./MixerSendSection.vue"
+import type { MixerStripDisplayOptions } from "./mixer-strip-display-options"
 
 const props = defineProps<{
   channel: MixerChannelState
@@ -41,6 +42,7 @@ const props = defineProps<{
   pluginSlotRows: number
   sendSlotRows: number
   selected: boolean
+  displayOptions?: MixerStripDisplayOptions
 }>()
 
 const emit = defineEmits<{
@@ -161,6 +163,7 @@ function preview(parameter: "gainDb" | "pan", value: number): void {
     <MixerFaderSection
       :channel="channel"
       :meter="meter"
+      :display-options="displayOptions"
       @preview="emit('preview', $event)"
       @update-channel="emit('updateChannel', channel.id, $event)"
       @reset-meter-clips="emit('resetMeterClips')"
