@@ -27,6 +27,30 @@ enum MenuKeyResult {
     Select,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct MenuFocusState {
+    ignore_initial_focus_lost: bool,
+}
+
+impl MenuFocusState {
+    const fn new(ignore_initial_focus_lost: bool) -> Self {
+        Self {
+            ignore_initial_focus_lost,
+        }
+    }
+
+    fn should_dismiss(&mut self, focused: bool) -> bool {
+        if focused {
+            return false;
+        }
+        if self.ignore_initial_focus_lost {
+            self.ignore_initial_focus_lost = false;
+            return false;
+        }
+        true
+    }
+}
+
 type EditorMenuElement<'a> = Element<'a, EditorMenuMessage, Theme, Renderer>;
 
 pub(crate) struct EditorMenuWindow {
@@ -45,7 +69,7 @@ pub(crate) struct EditorMenuWindow {
     clipboard: Clipboard,
     cursor: Cursor,
     modifiers: ModifiersState,
-    focused_once: bool,
+    focus_state: MenuFocusState,
 }
 
 impl EditorMenuWindow {
@@ -83,7 +107,11 @@ impl EditorMenuWindow {
             clipboard: Clipboard::connect(window),
             cursor: Cursor::Unavailable,
             modifiers: ModifiersState::default(),
-            focused_once: false,
+            // winit's macOS backend queues one synthetic `Focused(false)` as
+            // part of window creation. `focus_window` can make the real
+            // `Focused(true)` arrive first, so the first lost-focus event must
+            // be consumed regardless of event order.
+            focus_state: MenuFocusState::new(cfg!(target_os = "macos")),
         }
     }
 
@@ -102,9 +130,10 @@ impl EditorMenuWindow {
             WindowEvent::CloseRequested | WindowEvent::ScaleFactorChanged { .. } => {
                 return Some(EditorMenuAction::Dismiss);
             }
-            WindowEvent::Focused(true) => self.focused_once = true,
-            WindowEvent::Focused(false) if self.focused_once => {
-                return Some(EditorMenuAction::Dismiss);
+            WindowEvent::Focused(focused) => {
+                if self.focus_state.should_dismiss(*focused) {
+                    return Some(EditorMenuAction::Dismiss);
+                }
             }
             WindowEvent::Resized(size) => self.resize_surface(*size, compositor),
             WindowEvent::CursorMoved { position, .. } => {

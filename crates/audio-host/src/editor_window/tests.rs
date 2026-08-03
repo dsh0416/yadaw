@@ -181,6 +181,31 @@ mod tests {
     }
 
     #[test]
+    fn macos_popup_ignores_synthetic_focus_loss_after_real_focus() {
+        let mut focus = MenuFocusState::new(true);
+
+        assert!(!focus.should_dismiss(true));
+        assert!(!focus.should_dismiss(false));
+        assert!(focus.should_dismiss(false));
+    }
+
+    #[test]
+    fn macos_popup_ignores_synthetic_focus_loss_before_real_focus() {
+        let mut focus = MenuFocusState::new(true);
+
+        assert!(!focus.should_dismiss(false));
+        assert!(!focus.should_dismiss(true));
+        assert!(focus.should_dismiss(false));
+    }
+
+    #[test]
+    fn other_platform_popups_dismiss_on_the_first_focus_loss() {
+        let mut focus = MenuFocusState::new(false);
+
+        assert!(focus.should_dismiss(false));
+    }
+
+    #[test]
     fn toolbar_menu_initially_highlights_the_current_typed_choice() {
         let options = vec![
             ToolbarMenuOption {
