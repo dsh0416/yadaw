@@ -198,7 +198,7 @@ impl EditorWindow {
         let copy = compact_button(
             strings.copy,
             Message::CopyState,
-            model.can_compare,
+            true,
             appearance,
         );
         let paste = compact_button(

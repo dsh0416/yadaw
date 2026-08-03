@@ -86,6 +86,10 @@ impl MemoryStream {
         self.position = 0;
     }
 
+    #[allow(
+        clippy::boxed_local,
+        reason = "the IBStream interface requires a stable allocation until the final FFI call"
+    )]
     pub(crate) fn into_bytes(mut self: Box<Self>) -> Vec<u8> {
         std::mem::take(&mut self.bytes)
     }

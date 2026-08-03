@@ -163,6 +163,36 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn vst3_controller_requests_are_forwarded_as_typed_runtime_notifications() {
+        assert_eq!(
+            vst3_host_request_payload(&Vst3HostRequest::DirtyChanged(true)),
+            Some(("dirty-changed", "true".to_owned()))
+        );
+        assert_eq!(
+            vst3_host_request_payload(&Vst3HostRequest::OpenEditor {
+                view_name: "editor".to_owned(),
+            }),
+            Some(("open-editor", "editor".to_owned()))
+        );
+        assert_eq!(
+            vst3_host_request_payload(&Vst3HostRequest::ProgramListChanged {
+                list_id: 7,
+                program_index: 3,
+            }),
+            Some(("program-list-changed", "7:3".to_owned()))
+        );
+        assert_eq!(
+            vst3_host_request_payload(&Vst3HostRequest::BusActivation {
+                media_type: 0,
+                direction: 1,
+                index: 0,
+                active: true,
+            }),
+            None
+        );
+    }
+
     fn graph_meta(epoch: &str, expected_revision: u64) -> RpcRequestMeta {
         RpcRequestMeta {
             protocol_version: IPC_PROTOCOL_VERSION,

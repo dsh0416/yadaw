@@ -135,7 +135,19 @@ impl WinitHost {
         if let Some(window_id) = self.editor_instances.get(&instance_id).copied()
             && let Some(editor) = self.editors.get_mut(&window_id)
         {
+            let Some(runtime) = self.vst3.as_mut() else {
+                return control_error! {
+                    message: "VST3 UI runtime is shutting down".into(),
+                };
+            };
             editor.update_context(context);
+            if editor.preference() != preference {
+                let _ = editor.apply_action(
+                    EditorAction::PreferenceChanged(preference),
+                    runtime,
+                    &mut self.editor_clipboard,
+                );
+            }
             editor.present();
             return ControlResult::PluginEditor {
                 active_mode: editor.active_mode(),
@@ -356,7 +368,53 @@ impl WinitHost {
                 ) {
                     eprintln!("audio-host: could not update VST3 presentation latency: {error}");
                 }
-                for (instance_id, failure) in runtime.take_restart_failures() {
+                let restart_failures = runtime.take_restart_failures();
+                for (instance_id, request) in runtime.take_host_requests() {
+                    match &request {
+                        Vst3HostRequest::OpenEditor { .. } => {
+                            if let Some(window_id) = self.editor_instances.get(&instance_id)
+                                && let Some(editor) = self.editors.get(window_id)
+                            {
+                                editor.present();
+                            }
+                        }
+                        Vst3HostRequest::UnitSelected { .. }
+                        | Vst3HostRequest::ProgramListChanged { .. }
+                        | Vst3HostRequest::UnitByBusChanged => {
+                            if let Some(window_id) = self.editor_instances.get(&instance_id)
+                                && let Some(editor) = self.editors.get_mut(window_id)
+                            {
+                                if let Err(error) = editor.refresh_parameters(runtime) {
+                                    eprintln!(
+                                        "audio-host: could not refresh VST3 parameter metadata: {error}"
+                                    );
+                                }
+                                editor.window.request_redraw();
+                            }
+                        }
+                        Vst3HostRequest::DirtyChanged(_)
+                        | Vst3HostRequest::GroupEditStarted
+                        | Vst3HostRequest::GroupEditFinished => {}
+                        Vst3HostRequest::BusActivation { .. } => {
+                            eprintln!(
+                                "audio-host: an already handled VST3 bus activation reached the notification queue"
+                            );
+                        }
+                    }
+                    if let Some((kind, value)) = vst3_host_request_payload(&request)
+                        && self
+                            .host_events
+                            .try_send(HostEvent::PluginRuntime {
+                                instance_id,
+                                kind: kind.to_owned(),
+                                value,
+                            })
+                            .is_err()
+                    {
+                        eprintln!("audio-host: VST3 host request notification queue is full");
+                    }
+                }
+                for (instance_id, failure) in restart_failures {
                     self.publish_plugin_runtime_failure(&instance_id, "vst3-restart", failure);
                 }
                 let (callback_generation, transport_state) = self.audio_engine.heartbeat_snapshot();
@@ -450,6 +508,31 @@ fn milliseconds_to_samples(milliseconds: f64, sample_rate: u32) -> u32 {
     (milliseconds * f64::from(sample_rate) / 1_000.0)
         .ceil()
         .min(f64::from(u32::MAX)) as u32
+}
+
+fn vst3_host_request_payload(request: &Vst3HostRequest) -> Option<(&'static str, String)> {
+    match request {
+        Vst3HostRequest::DirtyChanged(dirty) => {
+            Some(("dirty-changed", dirty.to_string()))
+        }
+        Vst3HostRequest::OpenEditor { view_name } => {
+            Some(("open-editor", view_name.clone()))
+        }
+        Vst3HostRequest::GroupEditStarted => Some(("group-edit-started", String::new())),
+        Vst3HostRequest::GroupEditFinished => Some(("group-edit-finished", String::new())),
+        Vst3HostRequest::UnitSelected { unit_id } => {
+            Some(("unit-selected", unit_id.to_string()))
+        }
+        Vst3HostRequest::ProgramListChanged {
+            list_id,
+            program_index,
+        } => Some((
+            "program-list-changed",
+            format!("{list_id}:{program_index}"),
+        )),
+        Vst3HostRequest::UnitByBusChanged => Some(("unit-by-bus-changed", String::new())),
+        Vst3HostRequest::BusActivation { .. } => None,
+    }
 }
 
 fn presentation_latency_bases(

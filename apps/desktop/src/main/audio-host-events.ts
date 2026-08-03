@@ -9,6 +9,12 @@ export interface AraHostCallback {
   event: AraCallbackEvent
 }
 
+export interface Vst3HostNotification {
+  instanceId: string
+  kind: string
+  value: string
+}
+
 export class AraCallbackSequenceTracker {
   private epoch: string | null = null
   private sequence = 0
@@ -148,10 +154,12 @@ export function drainHostEvents(
   onEditorPreferenceChanged: (classId: string, preference: PluginEditorPreference) => Promise<void>,
   pendingWrites: Set<Promise<void>>,
   onEditorClosed?: (instanceId: string) => void,
-  onAraCallback?: (callback: AraHostCallback) => void
+  onAraCallback?: (callback: AraHostCallback) => void,
+  onVst3HostNotification?: (notification: Vst3HostNotification) => void
 ): void {
   const latestPreferences = new Map<string, PluginEditorPreference>()
   const closedEditors = new Set<string>()
+  const vst3Notifications: Vst3HostNotification[] = []
   for (const event of client.drainEvents()) {
     const decoded = decode(event) as {
       type?: string
@@ -164,6 +172,8 @@ export function drainHostEvents(
       }
       sequence?: number
       event?: unknown
+      kind?: string
+      value?: string
     }
     if (decoded.type === "graph-published" && decoded.revision !== undefined) {
       // Telemetry carries the same revision; draining avoids idle event buildup.
@@ -185,6 +195,19 @@ export function drainHostEvents(
       decoded.instance_id.length > 0
     ) {
       closedEditors.add(decoded.instance_id)
+    } else if (
+      decoded.type === "plugin-runtime" &&
+      typeof decoded.instance_id === "string" &&
+      decoded.instance_id.length > 0 &&
+      typeof decoded.kind === "string" &&
+      decoded.kind.length > 0 &&
+      typeof decoded.value === "string"
+    ) {
+      vst3Notifications.push({
+        instanceId: decoded.instance_id,
+        kind: decoded.kind,
+        value: decoded.value
+      })
     } else if (
       decoded.type === "ara-callback" &&
       typeof decoded.instance_id === "string" &&
@@ -213,6 +236,11 @@ export function drainHostEvents(
   if (onEditorClosed) {
     for (const instanceId of closedEditors) {
       onEditorClosed(instanceId)
+    }
+  }
+  if (onVst3HostNotification) {
+    for (const notification of vst3Notifications) {
+      onVst3HostNotification(notification)
     }
   }
 }

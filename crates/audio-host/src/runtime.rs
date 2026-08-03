@@ -70,6 +70,7 @@ use yadaw_ipc_transport::{
     decode_request_deferred, encode_event, encode_priority, encode_response_from_arena,
     materialize_mixer_graph, resolve_midi_note_batch,
 };
+use yadaw_vst3_host::Vst3HostRequest;
 
 include!("runtime/wire_adapters.rs");
 include!("runtime/graph_transactions.rs");

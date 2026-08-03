@@ -85,6 +85,29 @@ impl InstanceConfiguration {
 }
 
 impl Instance {
+    fn set_bus_active(
+        &self,
+        media_type: i32,
+        direction: i32,
+        index: i32,
+        active: bool,
+    ) -> Result<(), String> {
+        let primary = self
+            .plugin
+            .set_bus_active(media_type, direction, index, active);
+        let secondary = self.secondary.as_ref().map_or(Ok(()), |plugin| {
+            plugin.set_bus_active(media_type, direction, index, active)
+        });
+        match (primary, secondary) {
+            (Ok(()), Ok(())) => Ok(()),
+            (Err(primary), Ok(())) => Err(primary.to_string()),
+            (Ok(()), Err(secondary)) => Err(format!("secondary dual-mono bus: {secondary}")),
+            (Err(primary), Err(secondary)) => Err(format!(
+                "primary bus: {primary}; secondary dual-mono bus: {secondary}"
+            )),
+        }
+    }
+
     fn has_outstanding_processor_leases(&self) -> bool {
         self.plugin.has_outstanding_processor_leases()
             || self
@@ -465,15 +488,9 @@ impl Vst3Runtime {
                     active,
                 } = request
                 {
-                    let primary_result = instance
-                        .plugin
-                        .set_bus_active(media_type, direction, index, active);
-                    let secondary_result = instance.secondary.as_ref().map_or(Ok(()), |plugin| {
-                        plugin.set_bus_active(media_type, direction, index, active)
-                    });
-                    match primary_result.and(secondary_result) {
+                    match instance.set_bus_active(media_type, direction, index, active) {
                         Ok(()) => bus_activation_changed = true,
-                        Err(error) => self.restart_failures.push((id.clone(), error.to_string())),
+                        Err(error) => self.restart_failures.push((id.clone(), error)),
                     }
                 } else {
                     if self.pending_host_requests.len() == HOST_REQUEST_CAPACITY {
@@ -491,11 +508,9 @@ impl Vst3Runtime {
                         active,
                     } = request
                     {
-                        match secondary.set_bus_active(media_type, direction, index, active) {
+                        match instance.set_bus_active(media_type, direction, index, active) {
                             Ok(()) => bus_activation_changed = true,
-                            Err(error) => {
-                                self.restart_failures.push((id.clone(), error.to_string()))
-                            }
+                            Err(error) => self.restart_failures.push((id.clone(), error)),
                         }
                     } else {
                         if self.pending_host_requests.len() == HOST_REQUEST_CAPACITY {

@@ -29,7 +29,7 @@ impl EditorWindow {
         }
     }
 
-    fn refresh_parameters(&mut self, runtime: &Vst3Runtime) -> Result<(), String> {
+    pub(crate) fn refresh_parameters(&mut self, runtime: &Vst3Runtime) -> Result<(), String> {
         match runtime.parameters(&self.instance_id) {
             Ok(parameters) => {
                 self.parameters = parameters;

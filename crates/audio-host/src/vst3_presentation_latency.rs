@@ -52,6 +52,9 @@ pub(crate) fn calculate_presentation_latencies(
         .iter()
         .map(|plugins| {
             plugins.iter().try_fold(0_u32, |total, plugin| {
+                // Disabled plug-ins are latency-preserving bypass nodes in the render runtime:
+                // `LivePlugin::process_block` routes them through a delay line sized to the
+                // plug-in latency. Keep that delay in both PDC and presentation calculations.
                 total
                     .checked_add(plugin.latency_samples)
                     .ok_or_else(|| "presentation latency exceeds the supported range".to_owned())
@@ -363,5 +366,31 @@ mod tests {
         let latency = calculate_presentation_latencies(&graph, 0, 0).unwrap();
         assert_eq!(latency["slow-fx"].output_samples, 0);
         assert_eq!(latency["fast-fx"].output_samples, 48);
+    }
+
+    #[test]
+    fn bypassed_plugins_keep_the_render_paths_latency_preserving_delay() {
+        let mut bypassed = plugin("bypassed", "track", 0, 64);
+        bypassed.enabled = false;
+        let graph = graph(
+            vec![channel("track", Some("hardware"), None, true)],
+            vec![bypassed, plugin("active", "track", 1, 32)],
+        );
+
+        let latency = calculate_presentation_latencies(&graph, 10, 20).unwrap();
+        assert_eq!(
+            latency["bypassed"],
+            PresentationLatency {
+                input_samples: 10,
+                output_samples: 52,
+            }
+        );
+        assert_eq!(
+            latency["active"],
+            PresentationLatency {
+                input_samples: 74,
+                output_samples: 20,
+            }
+        );
     }
 }

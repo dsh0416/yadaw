@@ -57,6 +57,28 @@ describe("drainHostEvents", () => {
     expect(closed).toEqual(["fx-1"])
   })
 
+  it("forwards valid VST3 host notifications instead of dropping them", () => {
+    const notifications: Array<{ instanceId: string; kind: string; value: string }> = []
+    drainHostEvents(
+      clientWithEvents([
+        {
+          type: "plugin-runtime",
+          instance_id: "fx-1",
+          kind: "dirty-changed",
+          value: "true"
+        },
+        { type: "plugin-runtime", instance_id: "", kind: "open-editor", value: "editor" },
+        { type: "plugin-runtime", instance_id: "fx-2", kind: "", value: "editor" }
+      ]),
+      async () => {},
+      new Set(),
+      undefined,
+      undefined,
+      (notification) => notifications.push(notification)
+    )
+    expect(notifications).toEqual([{ instanceId: "fx-1", kind: "dirty-changed", value: "true" }])
+  })
+
   it("forwards valid typed ARA callback events", () => {
     const callbacks: Array<{ instanceId: string; sequence: number; event: { kind: string } }> = []
     drainHostEvents(

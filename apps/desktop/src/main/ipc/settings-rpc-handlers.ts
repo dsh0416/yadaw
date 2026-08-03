@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto"
-import { dialog, shell } from "electron"
+import { dialog, nativeTheme, shell } from "electron"
 import { IPC_CHANNELS, rpcFailure, rpcSuccess } from "@yadaw/contracts"
 import type {
   ApplicationSettings,
@@ -124,13 +124,20 @@ export function registerSettingsRpcHandlers(context: IpcHandlerContext): void {
       if (patch.locale !== undefined) {
         setMainLocale(updated.locale)
         installApplicationMenu(process.platform, updated.shortcuts)
+      }
+      if (patch.locale !== undefined || patch.theme !== undefined) {
         await audioHostService
           .configurePluginEditorAppearance({
-            ...audioHostService.pluginEditorAppearanceSnapshot(),
+            theme:
+              updated.theme === "system"
+                ? nativeTheme.shouldUseDarkColors
+                  ? "dark"
+                  : "light"
+                : updated.theme,
             locale: updated.locale
           })
           .catch((error: unknown) => {
-            console.error("Could not update plug-in editor locale", error)
+            console.error("Could not update plug-in editor appearance", error)
           })
       }
       return updated

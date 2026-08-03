@@ -378,9 +378,9 @@ impl EditorWindow {
                         let Some(slots) = self.compare_slots.as_mut() else {
                             return Err("A/B comparison is unavailable".to_owned());
                         };
-                        slots[self.compare_slot.index()] = current;
-                        let target = slots[slot.index()].clone();
-                        runtime.restore_editor_state(&self.instance_id, &target)
+                        restore_compare_slot(slots, self.compare_slot, slot, current, |target| {
+                            runtime.restore_editor_state(&self.instance_id, target)
+                        })
                     });
                     match result {
                         Ok(()) => {

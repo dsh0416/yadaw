@@ -96,6 +96,19 @@ impl CompareSlot {
     }
 }
 
+fn restore_compare_slot(
+    slots: &mut [EditorPluginState; 2],
+    current_slot: CompareSlot,
+    target_slot: CompareSlot,
+    current_state: EditorPluginState,
+    restore: impl FnOnce(&EditorPluginState) -> Result<(), String>,
+) -> Result<(), String> {
+    let target_state = slots[target_slot.index()].clone();
+    restore(&target_state)?;
+    slots[current_slot.index()] = current_state;
+    Ok(())
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct ParameterEdit {
     parameter_id: u32,

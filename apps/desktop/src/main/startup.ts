@@ -317,6 +317,13 @@ export function startApplication(
           return audioHostService.closePluginEditor(instanceId)
         }
       })
+      audioHostService.setVst3HostNotificationHandler(async (notification) => {
+        if (notification.kind === "dirty-changed" && notification.value === "true") {
+          await projectService.markExternalStateDirty()
+        } else if (notification.kind === "open-editor") {
+          await plugins.openEditor(notification.instanceId)
+        }
+      })
       const midiImport = new MidiImportService(projectGraph, projectCommands, plugins)
       const initialAudioRuntime = await audioHostService.audioEngineSnapshot()
       const lifecycle = new LifecycleCoordinator(

@@ -147,3 +147,33 @@ fn compare_slots_have_stable_state_indices() {
     assert_eq!(CompareSlot::A.index(), 0);
     assert_eq!(CompareSlot::B.index(), 1);
 }
+
+#[test]
+fn failed_compare_restore_preserves_both_saved_slots() {
+    let original = [
+        EditorPluginState {
+            component_state: vec![1],
+            controller_state: vec![2],
+        },
+        EditorPluginState {
+            component_state: vec![3],
+            controller_state: vec![4],
+        },
+    ];
+    let mut slots = original.clone();
+    let live = EditorPluginState {
+        component_state: vec![5],
+        controller_state: vec![6],
+    };
+
+    let result = restore_compare_slot(
+        &mut slots,
+        CompareSlot::A,
+        CompareSlot::B,
+        live,
+        |_| Err("restore failed".to_owned()),
+    );
+
+    assert_eq!(result, Err("restore failed".to_owned()));
+    assert_eq!(slots, original);
+}
