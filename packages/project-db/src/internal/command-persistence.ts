@@ -6,6 +6,7 @@ import {
 } from "./channel-track-routing-persistence"
 import type { ProjectTransaction } from "./database-types"
 import { isMidiCommand, persistMidiCommand } from "./midi-persistence"
+import { isNotesCommand, persistNotesCommand } from "./notes-persistence"
 import { isPluginCommand, persistPluginCommand } from "./plugin-persistence"
 import { isTimelineMapCommand, persistTimelineMapCommand } from "./timeline-map-persistence"
 
@@ -28,6 +29,7 @@ export async function applyProjectCommand(
   if (isAudioClipCommand(command)) return persistAudioClipCommand(tx, command)
   if (isPluginCommand(command)) return persistPluginCommand(tx, command)
   if (isMidiCommand(command)) return persistMidiCommand(tx, command)
+  if (isNotesCommand(command)) return persistNotesCommand(tx, command)
   if (isTimelineMapCommand(command)) return persistTimelineMapCommand(tx, command)
 
   command satisfies never

@@ -114,6 +114,8 @@ function patchFromKeys<T extends object>(source: T, patch: Partial<T>): Partial<
 
 export function inverseFor(graph: ProjectGraphSnapshot, command: ProjectCommand): ProjectCommand {
   switch (command.type) {
+    case "update-project-notes":
+      return { type: "update-project-notes", notes: graph.projectNotes ?? "" }
     case "create-track":
       return { type: "delete-track", trackId: command.track.id }
     case "delete-track": {
@@ -343,6 +345,9 @@ export function applyToGraph(
 ): ProjectGraphSnapshot {
   const next = cloneGraph(graph)
   switch (command.type) {
+    case "update-project-notes":
+      next.projectNotes = command.notes
+      break
     case "create-track":
       next.channels.push(structuredClone(command.channel))
       next.tracks.push(structuredClone(command.track))
@@ -489,6 +494,9 @@ export function applyToGraph(
 }
 
 export function validateGraph(graph: ProjectGraphSnapshot): void {
+  if (typeof graph.projectNotes !== "undefined" && typeof graph.projectNotes !== "string") {
+    throw new Error("Project notes must be text")
+  }
   const trackIds = new Set<string>()
   const tracksByChannel = new Map<string, TrackState>()
   for (const track of graph.tracks) {
@@ -498,6 +506,9 @@ export function validateGraph(graph: ProjectGraphSnapshot): void {
     }
     if (!Number.isSafeInteger(track.sortOrder) || track.sortOrder < 0) {
       throw new Error("Project track order must be a non-negative safe integer")
+    }
+    if (typeof track.notes !== "undefined" && typeof track.notes !== "string") {
+      throw new Error("Track notes must be text")
     }
     if (tracksByChannel.has(track.channelId)) {
       throw new Error("A mixer channel can belong to at most one project track")
@@ -889,7 +900,11 @@ export function validateGraph(graph: ProjectGraphSnapshot): void {
 
 export function onlyRealtimeParameters(command: ProjectCommand): boolean {
   if (command.type === "batch") return command.commands.every(onlyRealtimeParameters)
+  if (command.type === "update-project-notes") return true
   if (command.type === "replace-key-signature-map") return true
+  if (command.type === "update-track") {
+    return Object.keys(command.patch).every((key) => key === "notes")
+  }
   if (command.type === "update-channel") {
     return Object.keys(command.patch).every((key) => key === "gainDb" || key === "pan")
   }

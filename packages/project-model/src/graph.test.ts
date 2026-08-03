@@ -246,6 +246,29 @@ describe("MIDI note project commands", () => {
 })
 
 describe("project graph command characterization", () => {
+  it("updates project and track Markdown notes invertibly", () => {
+    const before = graph()
+    before.projectNotes = "Initial project note"
+    before.tracks[0]!.notes = "Initial track note"
+    const command: ProjectCommand = {
+      type: "batch",
+      commands: [
+        { type: "update-project-notes", notes: "# Mix pass" },
+        {
+          type: "update-track",
+          trackId: "track:instrument-1",
+          patch: { notes: "Try a **shorter** release." }
+        }
+      ]
+    }
+
+    const after = applyToGraph(before, command)
+
+    expect(after.projectNotes).toBe("# Mix pass")
+    expect(after.tracks[0]?.notes).toBe("Try a **shorter** release.")
+    expect(applyToGraph(after, inverseFor(before, command))).toEqual(before)
+  })
+
   it("selects the transport content end across audio frames and musical ticks", () => {
     const value = graph()
     value.audioClips.push({
@@ -615,10 +638,19 @@ describe("additional project graph commands", () => {
         type: "batch",
         commands: [
           { type: "replace-key-signature-map", events: [{ tick: 0, fifths: 0, mode: "major" }] },
-          { type: "update-send", sendId: "send", patch: { levelDb: -6 } }
+          { type: "update-send", sendId: "send", patch: { levelDb: -6 } },
+          { type: "update-project-notes", notes: "Project note" },
+          { type: "update-track", trackId: "track:instrument-1", patch: { notes: "Track note" } }
         ]
       })
     ).toBe(true)
+    expect(
+      onlyRealtimeParameters({
+        type: "update-track",
+        trackId: "track:instrument-1",
+        patch: { sortOrder: 2 }
+      })
+    ).toBe(false)
     expect(
       onlyRealtimeParameters({
         type: "create-send",
@@ -659,6 +691,16 @@ describe("additional project graph commands", () => {
 })
 
 describe("project graph validation and command guards", () => {
+  it("rejects non-text project and track notes", () => {
+    expect(() => validateGraph({ ...graph(), projectNotes: 42 as unknown as string })).toThrowError(
+      "Project notes must be text"
+    )
+
+    const invalidTrackNotes = graph()
+    invalidTrackNotes.tracks[0]!.notes = 42 as unknown as string
+    expect(() => validateGraph(invalidTrackNotes)).toThrowError("Track notes must be text")
+  })
+
   it("validates finite ranges and rejects unknown lookup targets", () => {
     expect(() => finiteRange(0.5, 0, 1, "Sample")).not.toThrow()
     expect(() => finiteRange(Number.NaN, 0, 1, "Sample")).toThrow("Sample must be between")

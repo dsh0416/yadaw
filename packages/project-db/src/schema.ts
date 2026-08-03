@@ -50,7 +50,8 @@ export const project = pgTable(
     id: text("id").primaryKey(),
     name: text("name").notNull(),
     sampleRate: integer("sample_rate").notNull(),
-    waveformDisplayMode: text("waveform_display_mode").$type<"separate" | "aggregate">().notNull()
+    waveformDisplayMode: text("waveform_display_mode").$type<"separate" | "aggregate">().notNull(),
+    notes: text("notes").notNull().default("")
   },
   (table) => [
     check("project_singleton_id_check", sql`${table.id} = 'project'`),
@@ -296,7 +297,8 @@ export const tracks = pgTable(
     channelId: text("channel_id")
       .notNull()
       .references(() => mixerChannels.id, { onDelete: "cascade" }),
-    sortOrder: integer("sort_order").notNull()
+    sortOrder: integer("sort_order").notNull(),
+    notes: text("notes").notNull().default("")
   },
   (table) => [
     uniqueIndex("tracks_channel_id_unique").on(table.channelId),

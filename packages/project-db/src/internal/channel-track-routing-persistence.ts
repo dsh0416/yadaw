@@ -1,5 +1,10 @@
 import { eq } from "drizzle-orm"
-import type { MixerChannelPatch, MixerSendPatch, ProjectCommand } from "@yadaw/contracts"
+import type {
+  MixerChannelPatch,
+  MixerSendPatch,
+  ProjectCommand,
+  TrackPatch
+} from "@yadaw/contracts"
 import { mixerChannels, mixerSends, tracks } from "../schema"
 import type { ProjectTransaction } from "./database-types"
 
@@ -18,6 +23,13 @@ type ChannelCommand = Extract<
       | "update-send"
   }
 >
+
+function trackPatch(patch: TrackPatch): Partial<typeof tracks.$inferInsert> {
+  const result: Partial<typeof tracks.$inferInsert> = {}
+  if (patch.sortOrder !== undefined) result.sortOrder = patch.sortOrder
+  if (patch.notes !== undefined) result.notes = patch.notes
+  return result
+}
 
 function channelPatch(patch: MixerChannelPatch): Partial<typeof mixerChannels.$inferInsert> {
   const result: Partial<typeof mixerChannels.$inferInsert> = {}
@@ -140,14 +152,13 @@ export async function persistChannelTrackRoutingCommand(
       await tx.delete(mixerChannels).where(eq(mixerChannels.id, channelId))
       return
     }
-    case "update-track":
-      if (command.patch.sortOrder !== undefined) {
-        await tx
-          .update(tracks)
-          .set({ sortOrder: command.patch.sortOrder })
-          .where(eq(tracks.id, command.trackId))
+    case "update-track": {
+      const patch = trackPatch(command.patch)
+      if (Object.keys(patch).length > 0) {
+        await tx.update(tracks).set(patch).where(eq(tracks.id, command.trackId))
       }
       return
+    }
     case "create-channel":
       await tx.insert(mixerChannels).values(channelValue(command.channel))
       return
