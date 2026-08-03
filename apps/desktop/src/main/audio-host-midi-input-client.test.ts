@@ -36,7 +36,7 @@ function midiResponse(): ControlResponse {
         captured_at: 9
       }
     }
-  } as ControlResponse
+  }
 }
 
 describe("AudioHostMidiInputClient", () => {

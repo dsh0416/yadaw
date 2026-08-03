@@ -10,18 +10,19 @@ import { useMixerStore } from "../../stores/mixer"
 import { useMidiInputStore } from "../../stores/midiInput"
 import { usePianoRollStore } from "../../stores/pianoRoll"
 import { useStudioWorkspaceStore } from "../../stores/studioWorkspace"
-import type { MidiClipState, MidiSourceState, ProjectCommand } from "@heron/contracts"
-import type { TimelineClip } from "../../stores/transport"
-import ArrangementTrack from "./ArrangementTrack.vue"
+import type {
+  MidiClipState,
+  MidiSourceState,
+  MixerChannelMeter,
+  ProjectCommand
+} from "@heron/contracts"
+import ArrangementTimelineTrack from "./ArrangementTimelineTrack.vue"
+import ArrangementTrackRail from "./ArrangementTrackRail.vue"
 import ArrangementZoomControls from "./ArrangementZoomControls.vue"
 import GlobalTracksToggle from "./GlobalTracksToggle.vue"
 import KeySignatureDropdown from "./KeySignatureDropdown.vue"
-import InlineTrackNameEditor from "../InlineTrackNameEditor.vue"
 import TimelineRuler from "./TimelineRuler.vue"
-import TrackQuickControls from "./TrackQuickControls.vue"
-import TrackHeightResizeHandle from "./TrackHeightResizeHandle.vue"
-import MidiArrangementTrack from "./MidiArrangementTrack.vue"
-import { barLengthTicksAtTick, secondsToTick, tickToSeconds } from "../../utils/tempoMap"
+import { barLengthTicksAtTick, secondsToTick } from "../../utils/tempoMap"
 import GlobalLaneHeader from "./global-lanes/GlobalLaneHeader.vue"
 import GlobalEventLaneHeader from "./global-lanes/GlobalEventLaneHeader.vue"
 import KeyTrackLane from "./global-lanes/KeyTrackLane.vue"
@@ -42,6 +43,8 @@ import {
   planMidiClipTrim
 } from "../../utils/clipEditing"
 import { useMidiClipDrag } from "./useMidiClipDrag"
+import { useArrangementRecordingProjection } from "./useArrangementRecordingProjection"
+import type { ArrangementTrackRow } from "./arrangementWorkspaceTypes"
 
 const props = defineProps<{
   recordingId: string | null
@@ -95,122 +98,33 @@ const meterDenominators = [1, 2, 4, 8, 16, 32] as const
 const TEMPO_LANE_HEIGHT = 112
 const GLOBAL_EVENT_LANE_HEIGHT = 64
 const displayMode = computed(() => session.value?.configuration.waveformDisplayMode ?? "separate")
-const recordingDuration = computed(() => {
-  if (props.recordingStartedAt === null) return 0
-  return Math.max(
-    0.05,
-    liveDurationSeconds.value,
-    playheadSeconds.value - recordingStartSeconds.value
-  )
+const {
+  liveClips,
+  hasRecordingStartTick,
+  recordingStartTick: recordingStartTickValue,
+  recordingPositionTick,
+  recordingMidiTrackIds: recordingMidiTrackIdSet,
+  liveMidiPreview,
+  visibleDuration
+} = useArrangementRecordingProjection({
+  recordingId: () => props.recordingId,
+  recordingStartedAt: () => props.recordingStartedAt,
+  recordingStartFrame: () => props.recordingStartFrame,
+  recordingStartTick: () => props.recordingStartTick,
+  recordingAudioTrackIds: () => props.recordingAudioTrackIds,
+  recordingMidiTrackIds: () => props.recordingMidiTrackIds,
+  liveDurationSeconds,
+  sampleRate: () => session.value?.configuration.sampleRate ?? 48_000,
+  playheadSeconds,
+  contentEndSeconds,
+  timelineDurationSeconds,
+  selectedChannelId: () => mixerStore.selectedChannelId,
+  audioTracks: () => mixerStore.audioTracks,
+  instrumentTracks: () => mixerStore.instrumentTracks,
+  graph: () => mixerStore.graph,
+  midiRecordingPreview: () => midiInputStore.snapshot.recordingPreview ?? null,
+  recordingName: () => t("studio.arrangement.newRecording")
 })
-const recordingStartSeconds = computed(() =>
-  props.recordingStartFrame === null
-    ? playheadSeconds.value
-    : props.recordingStartFrame / (session.value?.configuration.sampleRate ?? 48_000)
-)
-const recordingTracks = computed(() => {
-  const requestedTrackIds = new Set(props.recordingAudioTrackIds ?? [])
-  if (requestedTrackIds.size > 0) {
-    return mixerStore.audioTracks.filter((channel) => requestedTrackIds.has(channel.id))
-  }
-  const armed = mixerStore.audioTracks.filter((track) => track.recordArmed)
-  if (armed.length > 0) return armed
-  return mixerStore.audioTracks
-    .filter((track) => track.id === mixerStore.selectedChannelId)
-    .slice(0, 1)
-})
-const liveClips = computed<TimelineClip[]>(() =>
-  props.recordingStartedAt === null || props.recordingId === null
-    ? []
-    : recordingTracks.value.flatMap((channel) => {
-        const track = mixerStore.graph.tracks.find(
-          (candidate) => candidate.channelId === channel.id
-        )
-        return track
-          ? [
-              {
-                id: `${props.recordingId}-${track.id}`,
-                assetId: props.recordingId!,
-                trackId: track.id,
-                name: t("studio.arrangement.newRecording"),
-                startSeconds: recordingStartSeconds.value,
-                durationSeconds: recordingDuration.value,
-                endSeconds: recordingStartSeconds.value + recordingDuration.value,
-                channels: channel.inputFormat === "mono" ? 1 : 2,
-                sampleRate: session.value?.configuration.sampleRate ?? 48_000,
-                projectSampleRate: session.value?.configuration.sampleRate ?? 48_000,
-                startFrame: props.recordingStartFrame ?? 0,
-                sourceOffsetFrames: 0,
-                lengthFrames: Math.max(
-                  1,
-                  Math.round(
-                    recordingDuration.value * (session.value?.configuration.sampleRate ?? 48_000)
-                  )
-                ),
-                sourceLengthFrames: Math.max(
-                  1,
-                  Math.round(
-                    recordingDuration.value * (session.value?.configuration.sampleRate ?? 48_000)
-                  )
-                ),
-                fadeInFrames: 0,
-                fadeOutFrames: 0
-              }
-            ]
-          : []
-      })
-)
-const hasRecordingStartTick = computed(() => {
-  const startTick = props.recordingStartTick
-  return typeof startTick === "number" && Number.isFinite(startTick)
-})
-const recordingStartTickValue = computed(() =>
-  hasRecordingStartTick.value ? Math.max(0, Math.floor(props.recordingStartTick!)) : 0
-)
-const liveMidiPreview = computed(() =>
-  props.recordingId === null || !hasRecordingStartTick.value
-    ? null
-    : (midiInputStore.snapshot.recordingPreview ?? null)
-)
-const recordingPositionTick = computed(() =>
-  Math.max(
-    recordingStartTickValue.value,
-    secondsToTick(mixerStore.graph.tempoMap, playheadSeconds.value),
-    liveMidiPreview.value?.positionTick ?? 0
-  )
-)
-const recordingMidiTrackIdSet = computed(() => {
-  if ((props.recordingMidiTrackIds?.length ?? 0) > 0) {
-    return new Set(props.recordingMidiTrackIds)
-  }
-  return new Set(
-    mixerStore.instrumentTracks
-      .filter((channel) => channel.recordArmed)
-      .flatMap((channel) => {
-        const track = mixerStore.graph.tracks.find(
-          (candidate) => candidate.channelId === channel.id
-        )
-        return track ? [track.id] : []
-      })
-  )
-})
-const liveRecordingEndSeconds = computed(() =>
-  props.recordingId === null
-    ? contentEndSeconds.value
-    : Math.max(
-        recordingStartSeconds.value + recordingDuration.value,
-        tickToSeconds(mixerStore.graph.tempoMap, recordingPositionTick.value)
-      )
-)
-const visibleDuration = computed(() =>
-  Math.max(
-    timelineDurationSeconds.value,
-    ...mixerStore.graph.midiClips.map((clip) =>
-      tickToSeconds(mixerStore.graph.tempoMap, clip.startTick + clip.lengthTicks)
-    ),
-    liveRecordingEndSeconds.value + 2
-  )
-)
 const { contentWidth, viewportStartSeconds, viewportEndSeconds, handleScroll, handleWheel } =
   useArrangementViewport({
     tempoMap: () => mixerStore.graph.tempoMap,
@@ -250,7 +164,7 @@ const {
   snap: pianoRollSnap,
   moveClip: moveMidiClip
 })
-const trackRows = computed(() =>
+const trackRows = computed<ArrangementTrackRow[]>(() =>
   mixerStore.timelineTracks.map((track) => ({
     track,
     audioClips: clips.value.filter((clip) => clip.trackId === track.trackId),
@@ -258,6 +172,9 @@ const trackRows = computed(() =>
     scale: viewStore.trackScale(track.trackId),
     height: viewStore.effectiveTrackHeight(track.trackId)
   }))
+)
+const trackMeters = computed<Record<string, MixerChannelMeter>>(() =>
+  Object.fromEntries(trackRows.value.map(({ track }) => [track.id, mixerStore.meterFor(track.id)]))
 )
 const trackGridRows = computed(() => {
   const rows = ["43px"]
@@ -372,12 +289,6 @@ function reorderTrack(index: number, direction: -1 | 1): void {
     ]
   })
 }
-function handleTrackKeydown(event: KeyboardEvent, index: number): void {
-  if (!event.altKey || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) return
-  event.preventDefault()
-  reorderTrack(index, event.key === "ArrowUp" ? -1 : 1)
-}
-
 function removeMidiClip(clipId: string): void {
   void mixerStore.execute({ type: "delete-midi-clip", clipId }).then(() => {
     pianoRollStore.clearArrangementSelection()
@@ -567,40 +478,19 @@ function createMidiClip(trackId: string, requestedStartTick: number): void {
                 </template>
               </GlobalEventLaneHeader>
             </template>
-            <div
-              v-for="({ track, scale }, index) in trackRows"
-              :key="track.id"
-              :class="['track-header', { selected: track.id === mixerStore.selectedChannelId }]"
-              @click="mixerStore.selectedChannelId = track.id"
-              @keydown="handleTrackKeydown($event, index)"
-            >
-              <span class="track-color" :style="{ background: track.color }" /><strong>{{
-                String(index + 1).padStart(2, "0")
-              }}</strong>
-              <div class="track-copy">
-                <InlineTrackNameEditor
-                  class="track-name-editor"
-                  :name="track.name"
-                  :label="t('studio.arrangement.trackRenameLabel', { name: track.name })"
-                  @rename="mixerStore.updateChannel(track.id, { name: $event })"
-                />
-              </div>
-              <TrackQuickControls
-                class="track-quick-controls"
-                :channel="track"
-                :meter="mixerStore.meterFor(track.id)"
-                @preview="mixerStore.preview"
-                @update-channel="mixerStore.updateChannel"
-              />
-              <TrackHeightResizeHandle
-                :base-height="trackHeight"
-                :scale="scale"
-                :track-name="track.name"
-                @set-scale="viewStore.setTrackScale(track.trackId, $event)"
-                @reset="viewStore.resetTrackScale(track.trackId)"
-              />
-            </div>
-            <div class="track-spacer" aria-hidden="true" />
+            <ArrangementTrackRail
+              :rows="trackRows"
+              :selected-channel-id="mixerStore.selectedChannelId"
+              :track-height="trackHeight"
+              :meters="trackMeters"
+              @select="mixerStore.selectedChannelId = $event"
+              @reorder="reorderTrack"
+              @rename="(channelId, name) => mixerStore.updateChannel(channelId, { name })"
+              @preview="mixerStore.preview"
+              @update-channel="mixerStore.updateChannel"
+              @set-scale="viewStore.setTrackScale"
+              @reset-scale="viewStore.resetTrackScale"
+            />
           </div>
           <div
             ref="content"
@@ -649,74 +539,61 @@ function createMidiClip(trackId: string, requestedStartTick: number): void {
                 @select="selectedKeyTick = $event"
               />
             </template>
-            <template
-              v-for="{ track, audioClips: trackClips, midiClips, height } in trackRows"
-              :key="track.id"
-            >
-              <ArrangementTrack
-                v-if="track.kind === 'audio'"
-                :track-id="track.trackId"
-                :track-color="track.color"
-                :drag-preview="dragPreview?.trackId === track.trackId ? dragPreview : null"
-                :dragging-clip-id="clipDrag?.clipId ?? null"
-                :clips="trackClips"
-                :tempo-map="mixerStore.graph.tempoMap"
-                :content-width="contentWidth"
-                :pixels-per-quarter="pixelsPerQuarter"
-                :track-height="height"
-                :amplitude-scale="amplitudeScale"
-                :display-mode="displayMode"
-                :viewport-start-seconds="viewportStartSeconds"
-                :viewport-end-seconds="viewportEndSeconds"
-                :selected-clip-id="selectedClipId"
-                :live-clip="liveClips.find((clip) => clip.trackId === track.trackId) ?? null"
-                :playhead-frame="playheadFrame"
-                @seek="handleSeek"
-                @select-clip="selectAudioClip"
-                @waveform-frame-count="handleWaveformFrameCount"
-                @clip-drag-start="handleClipDragStart"
-                @clip-drag-end="handleClipDragEnd"
-                @remove="removeAudioClip"
-                @split="splitAudioClip"
-                @trim="trimAudioClip"
-                @fade="updateAudioFade"
-                @reset-fades="resetAudioFades"
-              />
-              <MidiArrangementTrack
-                v-else
-                :track-id="track.trackId"
-                :track-color="track.color"
-                :clips="midiClips"
-                :tempo-map="mixerStore.graph.tempoMap"
-                :content-width="contentWidth"
-                :pixels-per-quarter="pixelsPerQuarter"
-                :track-height="height"
-                :selected-clip-ids="pianoRollStore.arrangementClipIds"
-                :keyboard-insertion-tick="playheadTick"
-                :playhead-tick="playheadTick"
-                :snap="pianoRollSnap"
-                :drag-preview="midiDragPreview?.trackId === track.trackId ? midiDragPreview : null"
-                :dragging-clip-id="midiClipDrag?.clipId ?? null"
-                :recording="
-                  recordingId !== null &&
-                  hasRecordingStartTick &&
-                  recordingMidiTrackIdSet.has(track.trackId)
-                "
-                :recording-start-tick="recordingStartTickValue"
-                :recording-position-tick="recordingPositionTick"
-                :live-take="
-                  liveMidiPreview?.takes.find((take) => take.trackId === track.trackId) ?? null
-                "
-                @remove="removeMidiClip"
-                @select="selectMidiClip"
-                @open="openMidiClip"
-                @create="createMidiClip"
-                @split="splitMidiClip"
-                @trim="trimMidiClip"
-                @clip-drag-start="handleMidiClipDragStart"
-                @clip-drag-end="handleMidiClipDragEnd"
-              />
-            </template>
+            <ArrangementTimelineTrack
+              v-for="row in trackRows"
+              :key="row.track.id"
+              :row="row"
+              :tempo-map="mixerStore.graph.tempoMap"
+              :content-width="contentWidth"
+              :pixels-per-quarter="pixelsPerQuarter"
+              :amplitude-scale="amplitudeScale"
+              :display-mode="displayMode"
+              :viewport-start-seconds="viewportStartSeconds"
+              :viewport-end-seconds="viewportEndSeconds"
+              :selected-audio-clip-id="selectedClipId"
+              :selected-midi-clip-ids="pianoRollStore.arrangementClipIds"
+              :keyboard-insertion-tick="playheadTick"
+              :playhead-tick="playheadTick"
+              :playhead-frame="playheadFrame"
+              :snap="pianoRollSnap"
+              :audio-drag-preview="dragPreview?.trackId === row.track.trackId ? dragPreview : null"
+              :dragging-audio-clip-id="clipDrag?.clipId ?? null"
+              :midi-drag-preview="
+                midiDragPreview?.trackId === row.track.trackId ? midiDragPreview : null
+              "
+              :dragging-midi-clip-id="midiClipDrag?.clipId ?? null"
+              :live-audio-clip="
+                liveClips.find((clip) => clip.trackId === row.track.trackId) ?? null
+              "
+              :recording-midi="
+                recordingId !== null &&
+                hasRecordingStartTick &&
+                recordingMidiTrackIdSet.has(row.track.trackId)
+              "
+              :recording-start-tick="recordingStartTickValue"
+              :recording-position-tick="recordingPositionTick"
+              :live-midi-take="
+                liveMidiPreview?.takes.find((take) => take.trackId === row.track.trackId) ?? null
+              "
+              @seek="handleSeek"
+              @select-audio-clip="selectAudioClip"
+              @waveform-frame-count="handleWaveformFrameCount"
+              @audio-clip-drag-start="handleClipDragStart"
+              @audio-clip-drag-end="handleClipDragEnd"
+              @remove-audio-clip="removeAudioClip"
+              @split-audio-clip="splitAudioClip"
+              @trim-audio-clip="trimAudioClip"
+              @fade-audio-clip="updateAudioFade"
+              @reset-audio-fades="resetAudioFades"
+              @remove-midi-clip="removeMidiClip"
+              @select-midi-clip="selectMidiClip"
+              @open-midi-clip="openMidiClip"
+              @create-midi-clip="createMidiClip"
+              @split-midi-clip="splitMidiClip"
+              @trim-midi-clip="trimMidiClip"
+              @midi-clip-drag-start="handleMidiClipDragStart"
+              @midi-clip-drag-end="handleMidiClipDragEnd"
+            />
             <div
               class="timeline-playhead"
               data-testid="timeline-playhead"
@@ -805,68 +682,6 @@ function createMidiClip(trackId: string, requestedStartTick: number): void {
   font: var(--ui-type-weight-bold) var(--ui-type-size-caption) var(--ui-type-family-data);
   letter-spacing: var(--ui-type-tracking-wider);
 }
-.track-header {
-  position: relative;
-  display: grid;
-  grid-template-columns: 3px 20px minmax(0, 1fr);
-  grid-template-rows: minmax(9px, auto) 23px;
-  align-content: center;
-  align-items: center;
-  column-gap: 6px;
-  row-gap: 1px;
-  padding: 1px 8px;
-  border: 0;
-  border-bottom: 1px solid var(--line-strong);
-  color: var(--text-primary);
-  background: var(--daw-track-header);
-  text-align: left;
-  cursor: pointer;
-}
-.track-header:hover,
-.track-header:focus-within {
-  z-index: var(--ui-z-local-selection);
-}
-.track-header:hover {
-  background: var(--daw-track-header-hover);
-}
-.track-header.selected {
-  background: var(--daw-track-header-selected);
-  box-shadow: 3px 0 0 var(--accent) inset;
-}
-.track-header:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: -2px;
-}
-.track-color {
-  grid-row: 1/3;
-  align-self: stretch;
-  border-radius: 2px;
-}
-.track-header > strong {
-  grid-column: 2;
-  grid-row: 1;
-  color: var(--text-muted);
-  font: var(--ui-type-size-control) var(--ui-type-family-data);
-}
-.track-copy {
-  grid-column: 3;
-  grid-row: 1;
-  min-width: 0;
-}
-.track-copy b {
-  display: block;
-  overflow: hidden;
-  font-size: var(--ui-type-size-body-compact);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.track-quick-controls {
-  grid-column: 2/4;
-  grid-row: 2;
-}
-.track-spacer {
-  background: var(--daw-ruler);
-}
 .timeline-playhead {
   position: absolute;
   z-index: var(--ui-z-local-controls);
@@ -905,10 +720,5 @@ function createMidiClip(trackId: string, requestedStartTick: number): void {
   .timeline-grid {
     --arrangement-rail-width: 204px;
   }
-}
-.track-name-editor {
-  display: block;
-  font-size: var(--ui-type-size-body-compact);
-  font-weight: var(--ui-type-weight-bold);
 }
 </style>

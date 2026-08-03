@@ -14,7 +14,7 @@ function heartbeat(callbackGeneration: number, transportState = "stopped"): Prio
       callback_generation: callbackGeneration,
       transport_state: transportState
     }
-  } as PriorityResponse
+  }
 }
 
 describe("AudioHostHealthMonitor", () => {
