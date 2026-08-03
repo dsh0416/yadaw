@@ -145,6 +145,57 @@ describe("AudioGraphPublisher", () => {
     })
   })
 
+  it("deep-resolves descriptors before compiling a used plug-in", async () => {
+    const sidechainDescriptor: PluginDescriptor = {
+      ...descriptor,
+      buses: [
+        {
+          index: 1,
+          direction: "input",
+          kind: "aux",
+          name: "Stereo Side Chain",
+          channels: 2,
+          defaultActive: true
+        }
+      ]
+    }
+    const plugins = {
+      resolveDescriptorForRuntime: vi.fn(async () => sidechainDescriptor)
+    }
+    const compiler = { compile: vi.fn(() => ({ sample_rate: 48_000, channels: [] })) }
+    const publisher = new AudioGraphPublisher(
+      compiler as never,
+      { materialize: vi.fn(async () => new Map()) } as never,
+      null,
+      plugins as never,
+      null
+    )
+
+    const result = await publisher.prepare(meta, projectGraph, graph)
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        graph: {
+          plugins: [
+            {
+              descriptor: {
+                buses: [expect.objectContaining({ index: 1, kind: "aux", channels: 2 })]
+              }
+            }
+          ]
+        }
+      }
+    })
+    expect(compiler.compile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        plugins: [expect.objectContaining({ descriptor: sidechainDescriptor })]
+      }),
+      expect.any(Map),
+      false
+    )
+  })
+
   it("propagates prepare failures from the audio host", async () => {
     const failure = rpcFailure(meta, {
       code: "resource-unavailable",

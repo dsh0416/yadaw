@@ -48,6 +48,17 @@ describe("LifecycleCoordinator", () => {
     expect(lifecycle.snapshot().project).toMatchObject({ status: "open", session: project })
   })
 
+  it("publishes externally synchronized dirty project state", () => {
+    const lifecycle = new LifecycleCoordinator(project)
+
+    lifecycle.syncProject({ ...project, dirty: true })
+
+    expect(lifecycle.snapshot().project).toMatchObject({
+      status: "open",
+      session: { id: project.id, dirty: true }
+    })
+  })
+
   it("makes recording authoritative across project, audio, transport and mixer guards", () => {
     const lifecycle = new LifecycleCoordinator(project, {
       ...INITIAL_AUDIO_RUNTIME_SNAPSHOT,

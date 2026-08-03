@@ -746,6 +746,9 @@ impl StereoProcessor {
             );
         }
         self.output_parameters.clear();
+        if self.input_parameters.is_empty() {
+            return Ok(());
+        }
         let mut data = ProcessData {
             processMode: as_int32(Vst::ProcessModes_kRealtime),
             symbolicSampleSize: as_int32(Vst::SymbolicSampleSizes_kSample32),

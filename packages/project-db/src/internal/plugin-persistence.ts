@@ -14,6 +14,7 @@ function pluginPatch(patch: PluginInstancePatch): Partial<typeof pluginInstances
   const result: Partial<typeof pluginInstances.$inferInsert> = {}
   if (patch.slotOrder !== undefined) result.slotOrder = patch.slotOrder
   if (patch.enabled !== undefined) result.enabled = patch.enabled
+  if (patch.descriptor !== undefined) result.descriptorSnapshot = JSON.stringify(patch.descriptor)
   if (patch.componentState !== undefined) result.componentState = patch.componentState
   if (patch.controllerState !== undefined) result.controllerState = patch.controllerState
   if (patch.araDocumentState !== undefined) result.araDocumentState = patch.araDocumentState

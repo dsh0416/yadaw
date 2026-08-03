@@ -427,6 +427,7 @@ export class PluginCatalogService {
   private fingerprints: Record<string, PluginFingerprint> = {}
   private readonly scanner = new PluginScanner<PluginScanRequest, PluginCatalogSnapshot>()
   private readonly runtime = new PluginRuntimeService()
+  private readonly runtimeBundleProbes = new Map<string, Promise<PluginDescriptor[]>>()
 
   constructor(
     userData: string,
@@ -528,6 +529,35 @@ export class PluginCatalogService {
       )
     })
     return normalizePluginDescriptor(descriptor ? structuredClone(descriptor) : snapshot)
+  }
+
+  async resolveDescriptorForRuntime(snapshot: PluginDescriptor): Promise<PluginDescriptor> {
+    const resolved = this.resolveDescriptor(snapshot)
+    if (resolved.source.kind === "builtin") return resolved
+    let pending = this.runtimeBundleProbes.get(resolved.modulePath)
+    if (!pending) {
+      pending = this.probe(resolved.modulePath, "deep")
+      this.runtimeBundleProbes.set(resolved.modulePath, pending)
+    }
+    try {
+      const descriptors = await pending
+      const byClassId = new Map(descriptors.map((descriptor) => [descriptor.classId, descriptor]))
+      this.catalog = {
+        ...this.catalog,
+        plugins: this.catalog.plugins.map((descriptor) =>
+          descriptor.source.kind === "external" && descriptor.modulePath === resolved.modulePath
+            ? (byClassId.get(descriptor.classId) ?? descriptor)
+            : descriptor
+        )
+      }
+      return structuredClone(
+        descriptors.find((descriptor) => descriptor.classId === resolved.classId) ?? resolved
+      )
+    } catch {
+      // The audio host still owns the authoritative load attempt. A failed
+      // isolated capability probe must not make an otherwise loadable project unavailable.
+      return resolved
+    }
   }
 
   subscribe(listener: ScanListener): () => void {

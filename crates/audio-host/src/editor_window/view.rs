@@ -125,6 +125,7 @@ impl EditorInteractionState<'_> {
                     .find(|parameter| parameter.id == parameter_id)
                 {
                     parameter.normalized = normalized;
+                    parameter.formatted.clear();
                 }
                 if self.active_gestures.insert(parameter_id) {
                     actions.push(EditorAction::Parameter {
@@ -614,7 +615,7 @@ fn toolbar_menu_request_for(
         pending_sidechain,
     } = context;
     let strings = EditorStrings::for_locale(appearance.locale);
-    let (options, selected) = match menu {
+    let (options, hierarchy, selected) = match menu {
         ToolbarMenu::Mode => (
             vec![
                 ToolbarMenuOption {
@@ -626,6 +627,7 @@ fn toolbar_menu_request_for(
                     label: strings.parameters.to_owned(),
                 },
             ],
+            None,
             ToolbarMenuChoice::Mode(active_mode),
         ),
         ToolbarMenu::Zoom => (
@@ -636,34 +638,51 @@ fn toolbar_menu_request_for(
                     label: option.to_string(),
                 })
                 .collect(),
+            None,
             ToolbarMenuChoice::Zoom(zoom_percent),
         ),
         ToolbarMenu::Sidechain => {
-            let options = sidechain_buses
+            let hierarchy = sidechain_buses
                 .iter()
-                .flat_map(|bus| {
-                    let disconnected = std::iter::once(ToolbarMenuOption {
-                        choice: ToolbarMenuChoice::SidechainRoute {
+                .map(|bus| {
+                    let disconnected = ToolbarMenuNode {
+                        label: strings.none.to_owned(),
+                        choice: Some(ToolbarMenuChoice::SidechainRoute {
                             input_bus_index: bus.input_bus_index,
                             source_channel_id: None,
-                        },
-                        label: format!("{} · {}", bus.name, strings.none),
+                        }),
+                        children: Vec::new(),
+                    };
+                    let groups = [
+                        (SidechainSourceKind::Audio, strings.audio),
+                        (SidechainSourceKind::Instrument, strings.instrument),
+                        (SidechainSourceKind::Aux, strings.aux),
+                    ]
+                    .into_iter()
+                    .filter_map(|(kind, label)| {
+                        let children = sidechain_sources
+                            .iter()
+                            .filter(|source| source.kind == kind)
+                            .map(|source| ToolbarMenuNode {
+                                label: source.name.clone(),
+                                choice: Some(ToolbarMenuChoice::SidechainRoute {
+                                    input_bus_index: bus.input_bus_index,
+                                    source_channel_id: Some(source.id.clone()),
+                                }),
+                                children: Vec::new(),
+                            })
+                            .collect::<Vec<_>>();
+                        (!children.is_empty()).then_some(ToolbarMenuNode {
+                            label: label.to_owned(),
+                            choice: None,
+                            children,
+                        })
                     });
-                    let sources = sidechain_sources.iter().map(|source| {
-                        let group = match source.kind {
-                            SidechainSourceKind::Audio => strings.audio,
-                            SidechainSourceKind::Instrument => strings.instrument,
-                            SidechainSourceKind::Aux => strings.aux,
-                        };
-                        ToolbarMenuOption {
-                            choice: ToolbarMenuChoice::SidechainRoute {
-                                input_bus_index: bus.input_bus_index,
-                                source_channel_id: Some(source.id.clone()),
-                            },
-                            label: format!("{} · {} · {}", bus.name, group, source.name),
-                        }
-                    });
-                    disconnected.chain(sources)
+                    ToolbarMenuNode {
+                        label: bus.name.clone(),
+                        choice: None,
+                        children: std::iter::once(disconnected).chain(groups).collect(),
+                    }
                 })
                 .collect();
             let selected = sidechain_buses.first().map_or(
@@ -683,13 +702,14 @@ fn toolbar_menu_request_for(
                     }
                 },
             );
-            (options, selected)
+            (Vec::new(), Some(hierarchy), selected)
         }
     };
     ToolbarMenuRequest {
         menu,
         anchor,
         options,
+        hierarchy,
         selected,
         appearance: editor_appearance(appearance.theme),
         effective_scale,

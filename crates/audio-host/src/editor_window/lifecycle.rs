@@ -464,6 +464,7 @@ impl EditorWindow {
                     match result {
                         Ok(()) => {
                             self.compare_slot = slot;
+                            runtime.mark_editor_state_dirty(&self.instance_id);
                             self.clear_parameter_history();
                             self.refresh_after_state_restore(runtime);
                         }
@@ -497,6 +498,7 @@ impl EditorWindow {
                     });
                 match result {
                     Ok(state) => {
+                        runtime.mark_editor_state_dirty(&self.instance_id);
                         update_active_compare_slot(
                             &mut self.compare_slots,
                             self.compare_slot,
@@ -572,6 +574,9 @@ impl EditorWindow {
                         .find(|parameter| parameter.id == parameter_id)
                 {
                     parameter.normalized = normalized;
+                    parameter.formatted = runtime
+                        .format_parameter_value(&self.instance_id, parameter_id, normalized)
+                        .unwrap_or_default();
                 }
                 if gesture == ParameterGesture::End
                     && let Some(before) = self.pending_edits.remove(&parameter_id)
@@ -618,6 +623,9 @@ impl EditorWindow {
             .find(|parameter| parameter.id == parameter_id)
         {
             parameter.normalized = normalized;
+            parameter.formatted = runtime
+                .format_parameter_value(&self.instance_id, parameter_id, normalized)
+                .unwrap_or_default();
         }
         Ok(())
     }

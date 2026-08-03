@@ -76,6 +76,10 @@ impl ParameterChanges {
         self.len = 0;
     }
 
+    pub(crate) fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
     pub(crate) fn add_value(
         &mut self,
         id: ParamID,

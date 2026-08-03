@@ -172,6 +172,13 @@ export class LifecycleCoordinator {
       this.projectState.status === "closing"
     )
       return
+    const workspace = this.state.workspaceSnapshot()
+    if (session && workspace?.session.id === session.id) {
+      this.state.setWorkspace({
+        ...workspace,
+        session: structuredClone(session)
+      })
+    }
     this.completeProject(session)
   }
 

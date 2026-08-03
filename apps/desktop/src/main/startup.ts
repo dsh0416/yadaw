@@ -7,6 +7,7 @@ import { AssetMaterializer } from "./asset-materializer"
 import { AudioGraphCompiler } from "./audio-graph-compiler"
 import { AudioGraphPublisher } from "./audio-graph-publisher"
 import { AudioHostService } from "./audio-host-service"
+import { commitExternalProjectDirty } from "./external-project-dirty"
 import { installApplicationMenu } from "./application-menu"
 import { setMainLocale, t } from "./i18n"
 import { LifecycleCoordinator } from "./lifecycle-coordinator"
@@ -230,35 +231,6 @@ export function startApplication(
       )
       const projectService = new ProjectService(app.getPath("userData"), settings)
       let araUiSequence = 0
-      audioHostService.setAraCallbackHandler(async (callback) => {
-        if (
-          callback.event.kind === "content-changed" ||
-          callback.event.kind === "document-data-changed"
-        ) {
-          await projectService.markExternalStateDirty()
-        }
-        if (
-          callback.event.kind === "analysis-progress" ||
-          callback.event.kind === "archive-progress" ||
-          callback.event.kind === "quarantined"
-        ) {
-          const epoch = audioHostService.helperEpoch() ?? "0"
-          araUiSequence += 1
-          for (const candidate of BrowserWindow.getAllWindows()) {
-            candidate.webContents.send(IPC_CHANNELS.araCallbackEvent, {
-              protocolVersion: IPC_PROTOCOL_VERSION,
-              sourceEpoch: epoch,
-              sequence: araUiSequence,
-              resourceRevision: araUiSequence,
-              payload: {
-                instanceId: callback.instanceId,
-                callbackSequence: callback.sequence,
-                event: callback.event
-              }
-            })
-          }
-        }
-      })
       setWindowProjectService(projectService)
       onServices({ audioHostService, projectService })
       const graphPublisher = new AudioGraphPublisher(
@@ -272,7 +244,8 @@ export function startApplication(
       const projectCommands = new ProjectCommandService(
         projectGraph,
         projectService,
-        audioHostService
+        audioHostService,
+        plugins
       )
       const mixerRuntime = new MixerRuntimeService(audioHostService)
       const transport = new TransportService(projectService, audioHostService)
@@ -317,13 +290,6 @@ export function startApplication(
           return audioHostService.closePluginEditor(instanceId)
         }
       })
-      audioHostService.setVst3HostNotificationHandler(async (notification) => {
-        if (notification.kind === "dirty-changed" && notification.value === "true") {
-          await projectService.markExternalStateDirty()
-        } else if (notification.kind === "open-editor") {
-          await plugins.openEditor(notification.instanceId)
-        }
-      })
       const midiImport = new MidiImportService(projectGraph, projectCommands, plugins)
       const initialAudioRuntime = await audioHostService.audioEngineSnapshot()
       const lifecycle = new LifecycleCoordinator(
@@ -334,6 +300,42 @@ export function startApplication(
           audioHostEpoch: audioHostService.helperEpoch() ?? undefined
         }
       )
+      audioHostService.setAraCallbackHandler(async (callback) => {
+        if (
+          callback.event.kind === "content-changed" ||
+          callback.event.kind === "document-data-changed"
+        ) {
+          await commitExternalProjectDirty(projectService, lifecycle)
+        }
+        if (
+          callback.event.kind === "analysis-progress" ||
+          callback.event.kind === "archive-progress" ||
+          callback.event.kind === "quarantined"
+        ) {
+          const epoch = audioHostService.helperEpoch() ?? "0"
+          araUiSequence += 1
+          for (const candidate of BrowserWindow.getAllWindows()) {
+            candidate.webContents.send(IPC_CHANNELS.araCallbackEvent, {
+              protocolVersion: IPC_PROTOCOL_VERSION,
+              sourceEpoch: epoch,
+              sequence: araUiSequence,
+              resourceRevision: araUiSequence,
+              payload: {
+                instanceId: callback.instanceId,
+                callbackSequence: callback.sequence,
+                event: callback.event
+              }
+            })
+          }
+        }
+      })
+      audioHostService.setVst3HostNotificationHandler(async (notification) => {
+        if (notification.kind === "dirty-changed" && notification.value === "true") {
+          await commitExternalProjectDirty(projectService, lifecycle)
+        } else if (notification.kind === "open-editor") {
+          await plugins.openEditor(notification.instanceId)
+        }
+      })
       if (initialAudioRuntime.state === "running") {
         await lifecycle.applicationState.commitAudioEngine(
           normalizeAudioRuntime(initialAudioRuntime)
@@ -384,7 +386,7 @@ export function startApplication(
           {
             type: "update-plugin",
             pluginId: plugin.id,
-            patch: { sidechainInputs }
+            patch: { descriptor: plugin.descriptor, sidechainInputs }
           }
         )
         if (!result.ok) {
