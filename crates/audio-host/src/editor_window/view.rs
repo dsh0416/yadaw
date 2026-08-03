@@ -127,7 +127,7 @@ impl EditorWindow {
         .text_size(type_size::CONTROL)
         .padding([2, 6])
         .width(112);
-        let zoom_options = ZOOM_PRESETS.map(ZoomOption);
+        let zoom_options = zoom_options(model.zoom_percent);
         let zoom = pick_list(
             zoom_options,
             Some(ZoomOption(model.zoom_percent)),

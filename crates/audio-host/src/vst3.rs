@@ -480,7 +480,15 @@ impl Vst3Runtime {
         let mut timing = Vec::new();
         for (id, instance) in &mut self.instances {
             let mut bus_activation_changed = false;
-            for request in instance.plugin.take_host_requests() {
+            let primary_host_requests = instance.plugin.take_host_requests();
+            let secondary_host_requests = instance
+                .secondary
+                .as_ref()
+                .map(HostedPlugin::take_host_requests)
+                .unwrap_or_default();
+            for request in
+                merge_dual_mono_host_requests(primary_host_requests, secondary_host_requests)
+            {
                 if let Vst3HostRequest::BusActivation {
                     media_type,
                     direction,
@@ -497,27 +505,6 @@ impl Vst3Runtime {
                         self.pending_host_requests.pop_front();
                     }
                     self.pending_host_requests.push_back((id.clone(), request));
-                }
-            }
-            if let Some(secondary) = &instance.secondary {
-                for request in secondary.take_host_requests() {
-                    if let Vst3HostRequest::BusActivation {
-                        media_type,
-                        direction,
-                        index,
-                        active,
-                    } = request
-                    {
-                        match instance.set_bus_active(media_type, direction, index, active) {
-                            Ok(()) => bus_activation_changed = true,
-                            Err(error) => self.restart_failures.push((id.clone(), error)),
-                        }
-                    } else {
-                        if self.pending_host_requests.len() == HOST_REQUEST_CAPACITY {
-                            self.pending_host_requests.pop_front();
-                        }
-                        self.pending_host_requests.push_back((id.clone(), request));
-                    }
                 }
             }
             let primary = instance.plugin.take_restart_requests();
@@ -912,6 +899,20 @@ fn inline_bytes(payload: BinaryPayload) -> Result<Vec<u8>, &'static str> {
     }
 }
 
+fn merge_dual_mono_host_requests(
+    primary: Vec<Vst3HostRequest>,
+    secondary: Vec<Vst3HostRequest>,
+) -> Vec<Vst3HostRequest> {
+    let primary_len = primary.len();
+    let mut merged = primary;
+    for request in secondary {
+        if !merged[..primary_len].contains(&request) {
+            merged.push(request);
+        }
+    }
+    merged
+}
+
 fn max_tail(left: Option<u32>, right: Option<u32>) -> Option<u32> {
     match (left, right) {
         (Some(left), Some(right)) => Some(left.max(right)),
@@ -972,6 +973,42 @@ mod tests {
     fn an_infinite_dual_mono_tail_dominates_a_finite_tail() {
         assert_eq!(max_tail(Some(128), None), None);
         assert_eq!(max_tail(Some(128), Some(256)), Some(256));
+    }
+
+    #[test]
+    fn dual_mono_host_requests_are_forwarded_once_across_lanes() {
+        let duplicated = Vst3HostRequest::DirtyChanged(true);
+        let primary_only = Vst3HostRequest::GroupEditStarted;
+        let secondary_only = Vst3HostRequest::OpenEditor {
+            view_name: "editor".to_owned(),
+        };
+
+        let merged = merge_dual_mono_host_requests(
+            vec![duplicated.clone(), primary_only.clone()],
+            vec![duplicated, secondary_only.clone()],
+        );
+
+        assert_eq!(
+            merged,
+            vec![
+                Vst3HostRequest::DirtyChanged(true),
+                primary_only,
+                secondary_only
+            ]
+        );
+    }
+
+    #[test]
+    fn host_request_merge_preserves_repeated_requests_from_one_lane() {
+        let repeated = Vst3HostRequest::GroupEditFinished;
+        assert_eq!(
+            merge_dual_mono_host_requests(Vec::new(), vec![repeated.clone(), repeated.clone()]),
+            vec![repeated.clone(), repeated.clone()]
+        );
+        assert_eq!(
+            merge_dual_mono_host_requests(vec![repeated.clone(), repeated.clone()], Vec::new()),
+            vec![repeated.clone(), repeated]
+        );
     }
 
     #[test]

@@ -413,10 +413,16 @@ impl EditorWindow {
                     .filter(|contents| contents.supports(&self.class_id))
                     .ok_or_else(|| "Copied settings belong to a different plug-in".to_owned())
                     .and_then(|contents| {
-                        runtime.restore_editor_state(&self.instance_id, &contents.state)
+                        runtime.restore_editor_state(&self.instance_id, &contents.state)?;
+                        Ok(contents.state.clone())
                     });
                 match result {
-                    Ok(()) => {
+                    Ok(state) => {
+                        update_active_compare_slot(
+                            &mut self.compare_slots,
+                            self.compare_slot,
+                            state,
+                        );
                         self.clear_parameter_history();
                         self.refresh_after_state_restore(runtime);
                     }

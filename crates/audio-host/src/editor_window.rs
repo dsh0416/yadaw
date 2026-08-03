@@ -51,7 +51,7 @@ const DEFAULT_NATIVE_EDITOR_WIDTH: i32 = 800;
 const DEFAULT_NATIVE_EDITOR_HEIGHT: i32 = 600;
 const MIN_PARAMETER_WIDTH: f64 = 480.0;
 const MIN_PARAMETER_HEIGHT: f64 = 240.0;
-const ZOOM_PRESETS: [u16; 6] = [75, 100, 125, 150, 175, 200];
+const ZOOM_PRESETS: [u16; 10] = [50, 75, 100, 125, 150, 175, 200, 250, 300, 400];
 const PARAMETER_HISTORY_LIMIT: usize = 128;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -61,6 +61,14 @@ impl fmt::Display for ZoomOption {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(formatter, "{}%", self.0)
     }
+}
+
+fn zoom_options(current: u16) -> Vec<ZoomOption> {
+    let mut options = ZOOM_PRESETS.map(ZoomOption).to_vec();
+    if let Err(index) = options.binary_search_by_key(&current, |option| option.0) {
+        options.insert(index, ZoomOption(current));
+    }
+    options
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -107,6 +115,16 @@ fn restore_compare_slot(
     restore(&target_state)?;
     slots[current_slot.index()] = current_state;
     Ok(())
+}
+
+fn update_active_compare_slot(
+    slots: &mut Option<[EditorPluginState; 2]>,
+    active_slot: CompareSlot,
+    state: EditorPluginState,
+) {
+    if let Some(slots) = slots {
+        slots[active_slot.index()] = state;
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

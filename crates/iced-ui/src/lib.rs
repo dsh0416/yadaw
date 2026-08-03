@@ -471,4 +471,88 @@ mod tests {
             assert_eq!(disabled.shadow, Shadow::default());
         }
     }
+
+    #[test]
+    fn action_and_segmented_styles_cover_all_interaction_states() {
+        for appearance in [Appearance::Dark, Appearance::Light] {
+            let theme = appearance.theme();
+            let action = action_button(appearance);
+            let active = action(&theme, button::Status::Active);
+            let hovered = action(&theme, button::Status::Hovered);
+            let pressed = action(&theme, button::Status::Pressed);
+            assert_ne!(active.background, hovered.background);
+            assert_ne!(hovered.background, pressed.background);
+
+            let selected = segmented_button(appearance, true);
+            assert_ne!(
+                selected(&theme, button::Status::Active).background,
+                selected(&theme, button::Status::Hovered).background
+            );
+            assert_eq!(
+                selected(&theme, button::Status::Hovered).background,
+                selected(&theme, button::Status::Pressed).background
+            );
+
+            let unselected = segmented_button(appearance, false);
+            assert_ne!(
+                unselected(&theme, button::Status::Active).background,
+                unselected(&theme, button::Status::Hovered).background
+            );
+            assert_ne!(
+                unselected(&theme, button::Status::Hovered).background,
+                unselected(&theme, button::Status::Pressed).background
+            );
+        }
+    }
+
+    #[test]
+    fn surface_styles_resolve_every_semantic_layer() {
+        for appearance in [Appearance::Dark, Appearance::Light] {
+            let theme = appearance.theme();
+            let flat = surface(appearance, false)(&theme);
+            let raised = surface(appearance, true)(&theme);
+            let chrome = chrome(appearance)(&theme);
+            let canvas = canvas(appearance)(&theme);
+
+            assert_ne!(flat.background, raised.background);
+            assert_ne!(chrome.background, canvas.background);
+            assert_eq!(flat.border.radius, 4.0.into());
+            assert_eq!(raised.border.radius, 8.0.into());
+        }
+    }
+
+    #[test]
+    fn select_number_input_and_slider_styles_cover_all_states() {
+        for appearance in [Appearance::Dark, Appearance::Light] {
+            let theme = appearance.theme();
+            let select = select(appearance);
+            let select_active = select(&theme, pick_list::Status::Active);
+            let select_hovered = select(&theme, pick_list::Status::Hovered);
+            let select_open = select(&theme, pick_list::Status::Opened { is_hovered: false });
+            assert_ne!(select_active.background, select_hovered.background);
+            assert_eq!(select_hovered.background, select_open.background);
+
+            let input = number_input(appearance);
+            let input_active = input(&theme, text_input::Status::Active);
+            let input_hovered = input(&theme, text_input::Status::Hovered);
+            let input_focused = input(&theme, text_input::Status::Focused { is_hovered: false });
+            let input_disabled = input(&theme, text_input::Status::Disabled);
+            assert_ne!(input_active.background, input_hovered.background);
+            assert_eq!(input_focused.border.width, 2.0);
+            assert_ne!(input_disabled.background, input_hovered.background);
+
+            let slider = parameter_slider(appearance);
+            let slider_active = slider(&theme, slider::Status::Active);
+            let slider_hovered = slider(&theme, slider::Status::Hovered);
+            let slider_dragged = slider(&theme, slider::Status::Dragged);
+            assert_ne!(
+                slider_active.handle.background,
+                slider_hovered.handle.background
+            );
+            assert_eq!(
+                slider_hovered.handle.background,
+                slider_dragged.handle.background
+            );
+        }
+    }
 }

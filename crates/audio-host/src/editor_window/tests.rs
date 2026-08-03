@@ -63,6 +63,26 @@ mod tests {
     }
 
     #[test]
+    fn zoom_picker_includes_supported_boundaries() {
+        let options = zoom_options(100);
+        assert_eq!(options.first(), Some(&ZoomOption(50)));
+        assert_eq!(options.last(), Some(&ZoomOption(400)));
+    }
+
+    #[test]
+    fn zoom_picker_keeps_a_non_preset_current_value_visible() {
+        let options = zoom_options(225);
+        assert!(options.windows(2).all(|pair| pair[0].0 < pair[1].0));
+        assert_eq!(
+            options
+                .iter()
+                .filter(|option| **option == ZoomOption(225))
+                .count(),
+            1
+        );
+    }
+
+    #[test]
     fn signal_colors_accept_six_digit_hex() {
         assert_eq!(
             parse_signal_color("#58c6c2"),
@@ -176,4 +196,41 @@ fn failed_compare_restore_preserves_both_saved_slots() {
 
     assert_eq!(result, Err("restore failed".to_owned()));
     assert_eq!(slots, original);
+}
+
+#[test]
+fn pasted_state_replaces_only_the_active_compare_slot() {
+    let untouched = EditorPluginState {
+        component_state: vec![3],
+        controller_state: vec![4],
+    };
+    let mut slots = Some([
+        EditorPluginState {
+            component_state: vec![1],
+            controller_state: vec![2],
+        },
+        untouched.clone(),
+    ]);
+    let pasted = EditorPluginState {
+        component_state: vec![5],
+        controller_state: vec![6],
+    };
+
+    update_active_compare_slot(&mut slots, CompareSlot::A, pasted.clone());
+
+    assert_eq!(slots, Some([pasted, untouched]));
+}
+
+#[test]
+fn pasted_state_is_safe_when_comparison_is_unavailable() {
+    let mut slots = None;
+    update_active_compare_slot(
+        &mut slots,
+        CompareSlot::B,
+        EditorPluginState {
+            component_state: vec![1],
+            controller_state: vec![2],
+        },
+    );
+    assert_eq!(slots, None);
 }
