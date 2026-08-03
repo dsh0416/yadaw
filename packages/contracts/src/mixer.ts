@@ -140,7 +140,12 @@ export type CompiledAudioGraphNodeKind =
   | "width-adapter"
   | "pdc-delay"
 
-export type CompiledAudioGraphEdgeKind = "signal" | "main-route" | "send-route" | "hardware-route"
+export type CompiledAudioGraphEdgeKind =
+  | "signal"
+  | "main-route"
+  | "send-route"
+  | "sidechain-route"
+  | "hardware-route"
 
 export interface CompiledAudioGraphNode {
   id: string
@@ -159,6 +164,8 @@ export interface CompiledAudioGraphEdge {
   target: string
   kind: CompiledAudioGraphEdgeKind
   signalWidth: CompiledAudioGraphSignalWidth
+  /** VST3 input bus index for side-chain edges. */
+  targetInputBusIndex?: number
 }
 
 export interface CompiledAudioGraphSnapshot {
@@ -179,7 +186,12 @@ export type MixerSendPatch = Partial<
 export type PluginInstancePatch = Partial<
   Pick<
     PluginInstanceState,
-    "slotOrder" | "enabled" | "componentState" | "controllerState" | "araDocumentState"
+    | "slotOrder"
+    | "enabled"
+    | "sidechainInputs"
+    | "componentState"
+    | "controllerState"
+    | "araDocumentState"
   >
 >
 

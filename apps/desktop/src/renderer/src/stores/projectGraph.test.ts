@@ -222,6 +222,27 @@ describe("project graph store", () => {
     expect(useProjectStore().projectRevision).toBe(4)
   })
 
+  it("accepts the next external revision and reloads on a revision gap", async () => {
+    const store = useProjectGraphStore()
+    const external = graph()
+    external.channels[0]!.name = "Native side-chain commit"
+    const result = {
+      graph: external,
+      inverse: { type: "batch", commands: [] }
+    } satisfies ProjectCommandResult
+
+    await expect(store.reconcileExternalResult(result, 2)).resolves.toBe("accepted")
+    expect(store.graph.channels[0]?.name).toBe("Native side-chain commit")
+    expect(useProjectStore().projectRevision).toBe(2)
+
+    const reloaded = graph()
+    reloaded.channels[0]!.name = "Reloaded after gap"
+    window.yadaw.reloadProjectGraph = vi.fn().mockResolvedValue(success(reloaded, 5))
+    await expect(store.reconcileExternalResult(result, 4)).resolves.toBe("reloaded")
+    expect(store.graph.channels[0]?.name).toBe("Reloaded after gap")
+    expect(useProjectStore().projectRevision).toBe(5)
+  })
+
   it("records load failures without throwing", async () => {
     const store = useProjectGraphStore()
     window.yadaw.loadProjectGraph = vi.fn().mockResolvedValue(failure())

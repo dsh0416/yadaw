@@ -38,6 +38,12 @@ const api: YadawDesktopApi = {
   reloadProjectGraph: (meta) => invokeRpc(IPC_CHANNELS.projectGraphReload, meta),
   executeProjectCommand: (meta, command) =>
     invokeRpc(IPC_CHANNELS.projectCommandExecute, meta, command),
+  subscribeExternalProjectCommands: (listener) => {
+    const handler = (_event: Electron.IpcRendererEvent, command: Parameters<typeof listener>[0]) =>
+      listener(command)
+    ipcRenderer.on(IPC_CHANNELS.projectCommandExternalEvent, handler)
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.projectCommandExternalEvent, handler)
+  },
   previewMixerParameter: (meta, preview) => invokeRpc(IPC_CHANNELS.mixerPreview, meta, preview),
   mixerSnapshot: (meta) => invokeRpc(IPC_CHANNELS.mixerSnapshot, meta),
   clearMixerMeterClips: (meta) => invokeRpc(IPC_CHANNELS.mixerClearMeterClips, meta),

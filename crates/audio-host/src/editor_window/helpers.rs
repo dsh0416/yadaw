@@ -1,4 +1,142 @@
 
+fn sidechain_view_for_graph(
+    graph: Option<&LiveMixerGraph>,
+    instance_id: &str,
+) -> Option<(Vec<SidechainBus>, Vec<SidechainSource>)> {
+    let graph = graph?;
+    let plugin = graph
+        .plugins
+        .iter()
+        .find(|plugin| plugin.instance_id == instance_id)?;
+    let buses = plugin
+        .aux_input_buses
+        .iter()
+        .map(|bus| SidechainBus {
+            input_bus_index: bus.input_bus_index,
+            name: bus.name.clone(),
+            source_channel_id: bus.source_channel_id.clone(),
+        })
+        .collect();
+    let sources = graph
+        .channels
+        .iter()
+        .filter_map(|channel| {
+            if channel.system_role.is_some() || channel.id == plugin.channel_id {
+                return None;
+            }
+            let kind = match channel.kind.as_str() {
+                "audio" => SidechainSourceKind::Audio,
+                "instrument" => SidechainSourceKind::Instrument,
+                "aux" => SidechainSourceKind::Aux,
+                _ => return None,
+            };
+            (!sidechain_route_would_cycle(graph, &plugin.channel_id, &channel.id)).then(|| {
+                SidechainSource {
+                    id: channel.id.clone(),
+                    name: channel.name.clone(),
+                    kind,
+                }
+            })
+        })
+        .collect();
+    Some((buses, sources))
+}
+
+fn begin_sidechain_pending(
+    pending: &mut Option<PendingSidechainRequest>,
+    buses: &[SidechainBus],
+    request_id: u64,
+    input_bus_index: u32,
+    source_channel_id: Option<String>,
+) -> bool {
+    if pending.is_some() {
+        return false;
+    }
+    let displayed_source_channel_id = buses
+        .iter()
+        .find(|bus| bus.input_bus_index == input_bus_index)
+        .and_then(|bus| bus.source_channel_id.clone());
+    *pending = Some(PendingSidechainRequest {
+        request_id,
+        input_bus_index,
+        source_channel_id,
+        displayed_source_channel_id,
+    });
+    true
+}
+
+fn resolve_sidechain_pending(
+    pending: &mut Option<PendingSidechainRequest>,
+    current_warning: &mut Option<String>,
+    request_id: u64,
+    accepted: bool,
+    warning: Option<String>,
+) -> bool {
+    if pending
+        .as_ref()
+        .is_none_or(|pending| pending.request_id != request_id)
+    {
+        return false;
+    }
+    *pending = None;
+    if !accepted {
+        *current_warning = Some(
+            warning.unwrap_or_else(|| "Side-chain routing could not be committed.".to_owned()),
+        );
+    } else if let Some(warning) = warning {
+        *current_warning = Some(warning);
+    }
+    true
+}
+
+fn sidechain_route_would_cycle(
+    graph: &LiveMixerGraph,
+    target_channel_id: &str,
+    source_channel_id: &str,
+) -> bool {
+    if source_channel_id == target_channel_id {
+        return true;
+    }
+    let mut edges: HashMap<&str, Vec<&str>> = HashMap::new();
+    for channel in &graph.channels {
+        if let Some(target) = channel.output_channel_id.as_deref() {
+            edges.entry(&channel.id).or_default().push(target);
+        }
+    }
+    for send in graph.sends.iter().filter(|send| send.enabled) {
+        if let Some(target) = send.target_channel_id.as_deref() {
+            edges
+                .entry(&send.source_channel_id)
+                .or_default()
+                .push(target);
+        }
+    }
+    for plugin in &graph.plugins {
+        for bus in &plugin.aux_input_buses {
+            if let Some(source) = bus.source_channel_id.as_deref() {
+                edges
+                    .entry(source)
+                    .or_default()
+                    .push(&plugin.channel_id);
+            }
+        }
+    }
+    let mut pending = vec![target_channel_id];
+    let mut visited = HashSet::new();
+    while let Some(channel) = pending.pop() {
+        if channel == source_channel_id {
+            return true;
+        }
+        if !visited.insert(channel) {
+            continue;
+        }
+        if let Some(targets) = edges.get(channel) {
+            pending.extend(targets.iter().copied());
+        }
+    }
+    false
+}
+
 impl Drop for EditorWindow {
     fn drop(&mut self) {
         self.close();

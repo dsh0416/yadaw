@@ -14,7 +14,8 @@ use iced_wgpu::{
     window::Compositor,
 };
 use iced_widget::{
-    Column, Row, Theme, button, container, mouse_area, pick_list, scrollable, slider, space, text,
+    Column, Row, Theme, button, container, mouse_area, opaque, pick_list, scrollable, slider,
+    space, stack, text,
 };
 use iced_winit::{
     Clipboard, conversion,
@@ -27,10 +28,13 @@ use winit::{
     window::Window,
 };
 use yadaw_dsp_runtime::protocol::{
-    ParameterGesture, PluginEditorAppearance, PluginEditorContext, PluginEditorLocale,
-    PluginEditorMode, PluginEditorPreference, PluginEditorTheme, PluginParameter,
+    LiveMixerGraph, ParameterGesture, PluginEditorAppearance, PluginEditorContext,
+    PluginEditorLocale, PluginEditorMode, PluginEditorPreference, PluginEditorTheme,
+    PluginParameter,
 };
-use yadaw_iced_ui::{Appearance, EDITOR_CHROME_HEIGHT, space as ui_space, type_size};
+use yadaw_iced_ui::{
+    Appearance, CascadingMenuEntry, EDITOR_CHROME_HEIGHT, space as ui_space, type_size,
+};
 use yadaw_vst3_host::{PlugFrame, PlugView, ViewRect};
 
 use crate::{
@@ -77,12 +81,54 @@ fn zoom_options(current: u16) -> Vec<ZoomOption> {
 pub(crate) enum ToolbarMenu {
     Mode,
     Zoom,
+    Sidechain,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SidechainSourceKind {
+    Audio,
+    Instrument,
+    Aux,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SidechainSource {
+    id: String,
+    name: String,
+    kind: SidechainSourceKind,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SidechainBus {
+    input_bus_index: u32,
+    name: String,
+    source_channel_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct SidechainMenuState {
+    bus: usize,
+    group: Option<SidechainSourceKind>,
+    level: usize,
+    focused: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PendingSidechainRequest {
+    request_id: u64,
+    input_bus_index: u32,
+    source_channel_id: Option<String>,
+    displayed_source_channel_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ToolbarMenuChoice {
     Mode(PluginEditorMode),
     Zoom(u16),
+    SidechainRoute {
+        input_bus_index: u32,
+        source_channel_id: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -179,6 +225,12 @@ struct EditorStrings {
     undo: &'static str,
     redo: &'static str,
     empty_parameters: &'static str,
+    sidechain: &'static str,
+    none: &'static str,
+    audio: &'static str,
+    instrument: &'static str,
+    aux: &'static str,
+    pending: &'static str,
 }
 
 impl EditorStrings {
@@ -192,6 +244,12 @@ impl EditorStrings {
                 undo: "Undo",
                 redo: "Redo",
                 empty_parameters: "This plug-in has no editable parameters",
+                sidechain: "Side-chain",
+                none: "None",
+                audio: "Audio",
+                instrument: "Instrument",
+                aux: "Aux",
+                pending: "Pending…",
             },
             PluginEditorLocale::ZhCmnHansCn => Self {
                 editor: "编辑器",
@@ -201,6 +259,12 @@ impl EditorStrings {
                 undo: "撤销",
                 redo: "重做",
                 empty_parameters: "此插件没有可编辑参数",
+                sidechain: "侧链",
+                none: "无",
+                audio: "音频",
+                instrument: "乐器",
+                aux: "辅助",
+                pending: "正在提交…",
             },
         }
     }
@@ -221,6 +285,9 @@ enum Message {
     OpenToolbarMenu(ToolbarMenu),
     MenuOpened(ToolbarMenu),
     MenuClosed(ToolbarMenu),
+    SidechainBus(usize),
+    SidechainGroup(SidechainSourceKind),
+    SidechainRoute(u32, Option<String>),
     ParameterChanged(u32, f64),
     ParameterReleased(u32),
 }
@@ -240,6 +307,10 @@ struct EditorViewModel {
     can_paste: bool,
     can_undo: bool,
     can_redo: bool,
+    sidechain_buses: Vec<SidechainBus>,
+    sidechain_sources: Vec<SidechainSource>,
+    sidechain_menu: Option<SidechainMenuState>,
+    pending_sidechain: Option<PendingSidechainRequest>,
 }
 
 #[derive(Debug)]
@@ -256,6 +327,10 @@ pub(crate) enum EditorAction {
         parameter_id: u32,
         normalized: f64,
         gesture: ParameterGesture,
+    },
+    SidechainRoute {
+        input_bus_index: u32,
+        source_channel_id: Option<String>,
     },
 }
 
@@ -333,6 +408,10 @@ pub struct EditorWindow {
     undo: VecDeque<ParameterEdit>,
     redo: VecDeque<ParameterEdit>,
     pending_edits: HashMap<u32, f64>,
+    sidechain_buses: Vec<SidechainBus>,
+    sidechain_sources: Vec<SidechainSource>,
+    sidechain_menu: Option<SidechainMenuState>,
+    pending_sidechain: Option<PendingSidechainRequest>,
     monitor_scale: Rc<Cell<f64>>,
     user_zoom: Rc<Cell<f64>>,
     viewport: Viewport,

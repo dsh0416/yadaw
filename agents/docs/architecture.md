@@ -207,6 +207,32 @@ and output routing. It preallocates VST processors, adapters, dual-mono alignmen
 delays, and plug-in bypass delay lines before publishing a graph generation;
 the audio callback performs no allocation, locking, IPC, or filesystem work.
 
+VST3 auxiliary audio inputs are persisted as one route per plug-in input bus.
+Only mono and stereo aux buses are exposed. Their sources are ordinary `Audio`,
+`Instrument`, or `Aux` channels, sampled from a preallocated channel-major
+post-pan block after the source plug-in chain, fader, mute/solo, and pan, but
+before its final output route. Hardware inputs and BUS slots are therefore not
+side-chain sources. Side-chain edges participate in the same routing DAG as
+main routes and Sends, so self-routes and feedback are rejected before commit.
+
+The graph compiler aligns main and auxiliary arrivals at every target plug-in
+slot rather than only at the channel boundary. It preallocates the main and
+per-aux delay lines and the mono/stereo conversion scratch before publication;
+mono aux inputs receive `(L + R) × 0.5`, stereo inputs receive L/R, and a
+dual-mono insert feeds its two processors from the source's left and right lanes.
+Compiled diagnostics retain the side-chain edge and target bus index.
+
+An unassigned VST3 aux bus remains inactive. When a route change alters the set
+of active aux buses, `audio-host` captures the current component, controller,
+and ARA state into a candidate instance configured before `setActive(true)`.
+Graph activation swaps the processor registry and rebinds open native editors;
+abort or publication failure restores the old instance, editor binding, and
+graph. Changing only the source of an already-active bus reuses the instance.
+The native editor sends a request ID and routing intent to Electron main, which
+commits `update-plugin` through the project command queue. The host never writes
+the database, and the editor displays a route only after the committed graph is
+synchronized back to it.
+
 VST3 classes that expose an ARA 2 main factory use the same insert entities,
 slot ordering, move/bypass commands, and editor entry point as ordinary VST3
 effects. `audio-host` binds the VST3 component to one ARA document controller

@@ -349,7 +349,7 @@ fn block_processing_matches_frame_processing_and_visits_each_channel_once() {
     let mut actual = [[0.0; super::MAX_OUTPUT_CHANNELS]; 4];
     let mut channel_visits = 0;
     block_graph
-        .process_block_with_sources(&mut sources, &mut actual, &mut |_, frames| {
+        .process_block_with_sources(&mut sources, &mut actual, &mut |_, frames, _| {
             channel_visits += 1;
             for frame in frames {
                 frame[0] *= 0.5;

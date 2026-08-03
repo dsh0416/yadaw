@@ -15,6 +15,13 @@ export interface Vst3HostNotification {
   value: string
 }
 
+export interface PluginSidechainRouteRequest {
+  requestId: number
+  instanceId: string
+  inputBusIndex: number
+  sourceChannelId: string | null
+}
+
 export class AraCallbackSequenceTracker {
   private epoch: string | null = null
   private sequence = 0
@@ -155,11 +162,13 @@ export function drainHostEvents(
   pendingWrites: Set<Promise<void>>,
   onEditorClosed?: (instanceId: string) => void,
   onAraCallback?: (callback: AraHostCallback) => void,
-  onVst3HostNotification?: (notification: Vst3HostNotification) => void
+  onVst3HostNotification?: (notification: Vst3HostNotification) => void,
+  onPluginSidechainRouteRequested?: (request: PluginSidechainRouteRequest) => void
 ): void {
   const latestPreferences = new Map<string, PluginEditorPreference>()
   const closedEditors = new Set<string>()
   const vst3Notifications: Vst3HostNotification[] = []
+  const sidechainRequests: PluginSidechainRouteRequest[] = []
   for (const event of client.drainEvents()) {
     const decoded = decode(event) as {
       type?: string
@@ -174,6 +183,9 @@ export function drainHostEvents(
       event?: unknown
       kind?: string
       value?: string
+      request_id?: number
+      input_bus_index?: number
+      source_channel_id?: string | null
     }
     if (decoded.type === "graph-published" && decoded.revision !== undefined) {
       // Telemetry carries the same revision; draining avoids idle event buildup.
@@ -195,6 +207,22 @@ export function drainHostEvents(
       decoded.instance_id.length > 0
     ) {
       closedEditors.add(decoded.instance_id)
+    } else if (
+      decoded.type === "plugin-sidechain-route-requested" &&
+      Number.isSafeInteger(decoded.request_id) &&
+      (decoded.request_id as number) > 0 &&
+      typeof decoded.instance_id === "string" &&
+      decoded.instance_id.length > 0 &&
+      Number.isSafeInteger(decoded.input_bus_index) &&
+      (decoded.input_bus_index as number) >= 0 &&
+      (decoded.source_channel_id === null || typeof decoded.source_channel_id === "string")
+    ) {
+      sidechainRequests.push({
+        requestId: decoded.request_id as number,
+        instanceId: decoded.instance_id,
+        inputBusIndex: decoded.input_bus_index as number,
+        sourceChannelId: decoded.source_channel_id ?? null
+      })
     } else if (
       decoded.type === "plugin-runtime" &&
       typeof decoded.instance_id === "string" &&
@@ -242,5 +270,8 @@ export function drainHostEvents(
     for (const notification of vst3Notifications) {
       onVst3HostNotification(notification)
     }
+  }
+  if (onPluginSidechainRouteRequested) {
+    for (const request of sidechainRequests) onPluginSidechainRouteRequested(request)
   }
 }

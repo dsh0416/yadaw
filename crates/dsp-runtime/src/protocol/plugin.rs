@@ -75,6 +75,20 @@ pub enum PluginAudioMode {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LivePluginAuxInputBus {
+    pub input_bus_index: u32,
+    pub name: String,
+    pub channels: u8,
+    pub source_channel_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PluginAuxInputConfiguration {
+    pub input_bus_index: u32,
+    pub channels: u8,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LivePluginInstance {
     pub instance_id: String,
     pub channel_id: String,
@@ -83,6 +97,8 @@ pub struct LivePluginInstance {
     #[serde(default)]
     pub audio_mode: PluginAudioMode,
     pub enabled: bool,
+    #[serde(default)]
+    pub aux_input_buses: Vec<LivePluginAuxInputBus>,
     pub latency_samples: u32,
     pub tail_samples: Option<u32>,
 }

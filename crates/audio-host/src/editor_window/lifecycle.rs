@@ -42,6 +42,10 @@ impl EditorWindow {
             undo: VecDeque::new(),
             redo: VecDeque::new(),
             pending_edits: HashMap::new(),
+            sidechain_buses: Vec::new(),
+            sidechain_sources: Vec::new(),
+            sidechain_menu: None,
+            pending_sidechain: None,
             monitor_scale: Rc::new(Cell::new(monitor_scale)),
             user_zoom: Rc::new(Cell::new(user_zoom)),
             viewport,
@@ -119,6 +123,7 @@ impl EditorWindow {
         }
         self.active_gestures.clear();
         self.pending_edits.clear();
+        self.pending_sidechain = None;
     }
 
     pub fn update_context(&mut self, context: PluginEditorContext) {
@@ -157,6 +162,63 @@ impl EditorWindow {
 
     pub fn update_appearance(&mut self, appearance: PluginEditorAppearance) {
         self.context.appearance = appearance;
+        self.window.request_redraw();
+    }
+
+    pub fn sync_sidechain_graph(&mut self, graph: Option<&LiveMixerGraph>) {
+        let Some((buses, sources)) = sidechain_view_for_graph(graph, &self.instance_id)
+        else {
+            self.sidechain_buses.clear();
+            self.sidechain_sources.clear();
+            self.close_toolbar_menu();
+            self.window.request_redraw();
+            return;
+        };
+        self.sidechain_buses = buses;
+        self.sidechain_sources = sources;
+        if self.sidechain_buses.is_empty() {
+            self.close_toolbar_menu();
+        } else if let Some(menu) = &mut self.sidechain_menu {
+            menu.bus = menu.bus.min(self.sidechain_buses.len().saturating_sub(1));
+        }
+        self.window.request_redraw();
+    }
+
+    pub fn begin_sidechain_request(
+        &mut self,
+        request_id: u64,
+        input_bus_index: u32,
+        source_channel_id: Option<String>,
+    ) -> bool {
+        if !begin_sidechain_pending(
+            &mut self.pending_sidechain,
+            &self.sidechain_buses,
+            request_id,
+            input_bus_index,
+            source_channel_id,
+        ) {
+            return false;
+        }
+        self.close_toolbar_menu();
+        self.window.request_redraw();
+        true
+    }
+
+    pub fn resolve_sidechain_request(
+        &mut self,
+        request_id: u64,
+        accepted: bool,
+        warning: Option<String>,
+    ) {
+        if !resolve_sidechain_pending(
+            &mut self.pending_sidechain,
+            &mut self.warning,
+            request_id,
+            accepted,
+            warning,
+        ) {
+            return;
+        }
         self.window.request_redraw();
     }
 
@@ -253,6 +315,16 @@ impl EditorWindow {
             WindowEvent::KeyboardInput { event, .. }
                 if event.state == ElementState::Pressed && !event.repeat =>
             {
+                let (consumed, action) = self.handle_sidechain_key(&event.logical_key);
+                if consumed {
+                    if let Some(action) = action
+                        && self.pending_sidechain.is_none()
+                    {
+                        actions.push(action);
+                    }
+                    self.window.request_redraw();
+                    return actions;
+                }
                 match &event.logical_key {
                     Key::Named(NamedKey::ArrowLeft) if self.compare_segment_focused => {
                         actions.push(EditorAction::UseCompareSlot(CompareSlot::A));
@@ -518,6 +590,7 @@ impl EditorWindow {
                 self.window.request_redraw();
                 None
             }
+            EditorAction::SidechainRoute { .. } => None,
         }
     }
 
@@ -600,6 +673,13 @@ fn toolbar_choice_action(
                 zoom_percent,
             }))
         }
+        ToolbarMenuChoice::SidechainRoute {
+            input_bus_index,
+            source_channel_id,
+        } => Some(EditorAction::SidechainRoute {
+            input_bus_index,
+            source_channel_id,
+        }),
         ToolbarMenuChoice::Mode(_) | ToolbarMenuChoice::Zoom(_) => None,
     }
 }

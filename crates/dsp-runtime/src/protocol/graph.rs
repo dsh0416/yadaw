@@ -13,6 +13,10 @@ pub enum LiveMixerSystemRole {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LiveMixerChannel {
     pub id: String,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub color: String,
     pub kind: String,
     pub system_role: Option<LiveMixerSystemRole>,
     pub gain_db: f64,
@@ -345,6 +349,7 @@ pub enum CompiledGraphEdgeKind {
     Signal,
     MainRoute,
     SendRoute,
+    SidechainRoute,
     HardwareRoute,
 }
 
@@ -367,6 +372,8 @@ pub struct CompiledGraphEdge {
     pub target: String,
     pub kind: CompiledGraphEdgeKind,
     pub signal_width: CompiledGraphSignalWidth,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_input_bus_index: Option<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -104,6 +104,7 @@ function project(): ProjectGraphSnapshot {
         },
         audioMode: "stereo",
         enabled: true,
+        sidechainInputs: [],
         componentState: new Uint8Array(),
         controllerState: new Uint8Array()
       } satisfies PluginInstanceState
@@ -132,6 +133,7 @@ function runtimeGraph(): AudioHostGraph {
         slot_order: 0,
         audio_mode: "stereo",
         enabled: true,
+        aux_input_buses: [],
         latency_samples: 0,
         tail_samples: 0
       }

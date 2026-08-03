@@ -49,6 +49,7 @@ function effectInstance(id: string): PluginInstanceState {
     },
     audioMode: "stereo",
     enabled: true,
+    sidechainInputs: [],
     componentState: new Uint8Array(),
     controllerState: new Uint8Array()
   }

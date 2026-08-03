@@ -109,6 +109,18 @@ export class AudioHostPluginClient {
       class_id: plugin.classId,
       plugin_kind: plugin.descriptor.kind,
       audio_mode: plugin.audioMode,
+      active_aux_inputs: plugin.sidechainInputs.map((route) => {
+        const bus = plugin.descriptor.buses.find(
+          (candidate) =>
+            candidate.direction === "input" &&
+            candidate.kind === "aux" &&
+            candidate.index === route.inputBusIndex
+        )
+        if (!bus || (bus.channels !== 1 && bus.channels !== 2)) {
+          throw new Error(`Plugin side-chain bus ${route.inputBusIndex} is unavailable`)
+        }
+        return { input_bus_index: route.inputBusIndex, channels: bus.channels }
+      }),
       sample_rate: sampleRate,
       component_state: inlineBinary(plugin.componentState),
       controller_state: inlineBinary(plugin.controllerState),

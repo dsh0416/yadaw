@@ -240,7 +240,7 @@ impl Module {
             // SAFETY: the context is stored in Module and outlives the factory reference.
             ((*table).set_host_context)(factory3.as_ptr(), self.host_context().as_unknown())
         };
-        if result < 0 {
+        if result < 0 && !is_not_implemented(result) {
             return Err(HostError::Operation {
                 operation: "IPluginFactory3::setHostContext",
                 result,
@@ -412,6 +412,10 @@ impl Module {
             supports_storing_audio_file_chunks: raw.supports_storing_audio_file_chunks != 0,
         })
     }
+}
+
+fn is_not_implemented(result: i32) -> bool {
+    [3, 0x8000_4001_u32 as i32, 0x8000_0001_u32 as i32].contains(&result)
 }
 
 struct ClassInfo2Fields {

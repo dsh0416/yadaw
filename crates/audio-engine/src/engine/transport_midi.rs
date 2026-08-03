@@ -4,8 +4,19 @@ struct LivePlugin {
     audio_mode: PluginAudioMode,
     enabled: bool,
     is_instrument: bool,
+    latency_samples: u32,
+    main_delay: StereoDelayLine,
     bypass_delay: StereoDelayLine,
     marker_index: usize,
+    aux_inputs: Vec<LivePluginAuxInput>,
+}
+
+struct LivePluginAuxInput {
+    bus_index: u32,
+    channels: u8,
+    source_index: usize,
+    delay: StereoDelayLine,
+    block: Vec<StereoFrame>,
 }
 
 impl LivePlugin {
@@ -21,8 +32,10 @@ impl LivePlugin {
         frames: &mut [StereoFrame],
         width: &mut SignalWidth,
         context: &ProcessContext,
+        post_pan: &[StereoFrame],
     ) {
         for frame in frames.iter_mut() {
+            *frame = self.main_delay.process(*frame);
             *frame = self.prepare_input(*frame, *width);
         }
         let output_width = self.output_width();
@@ -42,8 +55,30 @@ impl LivePlugin {
             }
             return;
         };
+        let frame_count = frames.len();
+        for input in &mut self.aux_inputs {
+            debug_assert!(input.channels == 1 || input.channels == 2);
+            let source_start = input.source_index.saturating_mul(frame_count);
+            let Some(source) = post_pan.get(source_start..source_start + frame_count) else {
+                continue;
+            };
+            for (target, source) in input.block[..frame_count].iter_mut().zip(source) {
+                *target = input.delay.process(*source);
+            }
+        }
+        let aux_inputs = &self.aux_inputs;
         *width = output_width;
-        if !processor.process_block(frames, context) && !self.is_instrument {
+        if !processor.process_block_with_sidechain_source(
+            frames,
+            |bus_index| {
+                aux_inputs
+                    .iter()
+                    .find(|input| input.bus_index == bus_index)
+                    .map(|input| &input.block[..frame_count])
+            },
+            context,
+        ) && !self.is_instrument
+        {
             for frame in frames {
                 *frame = self.passthrough(*frame);
             }

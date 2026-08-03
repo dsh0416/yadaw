@@ -30,6 +30,9 @@ pub use hosted::{
 };
 pub use id::ClassId;
 pub use module::{AraFactoryInfo, ClassInfo, FactoryInfo, Module};
-pub use processor::{AudioLayout, HostProcessContext, PluginKind, StereoProcessor};
-pub use processor_handle::Vst3ProcessorHandle;
+pub use processor::{
+    AudioBusDescriptor, AudioBusDirection, AudioBusKind, AudioLayout, HostProcessContext,
+    PluginKind, StereoProcessor,
+};
+pub use processor_handle::{Vst3AuxInputConfig, Vst3ProcessorHandle, Vst3SidechainBlock};
 pub use yadaw_vst3_host_sys::Steinberg::ViewRect;

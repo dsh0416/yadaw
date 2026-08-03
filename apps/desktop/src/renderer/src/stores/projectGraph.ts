@@ -162,6 +162,23 @@ export const useProjectGraphStore = defineStore("project-graph", () => {
     projectStore.markDirty()
   }
 
+  function reconcileExternalResult(
+    result: ProjectCommandResult,
+    resourceRevision: number,
+    forceReload = false
+  ): Promise<"accepted" | "ignored" | "reloaded"> {
+    return enqueue(async () => {
+      if (resourceRevision <= projectStore.projectRevision) return "ignored"
+      if (forceReload || resourceRevision !== projectStore.projectRevision + 1) {
+        await loadNow(true)
+        return "reloaded"
+      }
+      acceptExternalResult(result)
+      projectStore.projectRevision = resourceRevision
+      return "accepted"
+    })
+  }
+
   function reset(): void {
     graph.value = structuredClone(EMPTY_PROJECT_GRAPH)
     error.value = ""
@@ -182,6 +199,7 @@ export const useProjectGraphStore = defineStore("project-graph", () => {
     preview,
     flushPreviews,
     acceptExternalResult,
+    reconcileExternalResult,
     reset
   }
 })

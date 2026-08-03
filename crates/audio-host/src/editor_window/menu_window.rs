@@ -1,7 +1,7 @@
 const TOOLBAR_MENU_ROW_HEIGHT: f32 = 24.0;
 const TOOLBAR_MENU_PADDING: f32 = 4.0;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum EditorMenuAction {
     Dismiss,
     Selected(ToolbarMenuChoice),
@@ -66,7 +66,7 @@ struct EditorMenuState {
 
 impl EditorMenuState {
     fn new(request: ToolbarMenuRequest) -> (ToolbarMenu, Self) {
-        let highlighted = initial_toolbar_highlight(&request.options, request.selected);
+        let highlighted = initial_toolbar_highlight(&request.options, &request.selected);
         (
             request.menu,
             Self {
@@ -116,7 +116,7 @@ impl EditorMenuState {
     fn select(&self, index: usize) -> Option<EditorMenuAction> {
         self.options
             .get(index)
-            .map(|option| EditorMenuAction::Selected(option.choice))
+            .map(|option| EditorMenuAction::Selected(option.choice.clone()))
     }
 
     fn view(&self) -> EditorMenuElement<'_> {
@@ -335,11 +335,11 @@ fn toolbar_menu_key(key: &Key, highlighted: &mut usize, len: usize) -> MenuKeyRe
 
 fn initial_toolbar_highlight(
     options: &[ToolbarMenuOption],
-    selected: ToolbarMenuChoice,
+    selected: &ToolbarMenuChoice,
 ) -> usize {
     options
         .iter()
-        .position(|option| option.choice == selected)
+        .position(|option| &option.choice == selected)
         .unwrap_or(0)
 }
 

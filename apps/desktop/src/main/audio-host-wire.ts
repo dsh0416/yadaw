@@ -127,6 +127,7 @@ export interface ControlResponse {
         target: string
         kind: CompiledAudioGraphSnapshot["edges"][number]["kind"]
         signal_width: CompiledAudioGraphSnapshot["edges"][number]["signalWidth"]
+        target_input_bus_index?: number
       }>
     } | null
     transport?: AudioHostTransport
@@ -472,6 +473,8 @@ export interface AudioHostGraph {
   sample_rate: number
   channels: Array<{
     id: string
+    name: string
+    color: string
     kind: string
     system_role?: "metronome"
     gain_db: number
@@ -515,6 +518,12 @@ export interface AudioHostGraph {
     slot_order: number
     audio_mode: PluginAudioMode
     enabled: boolean
+    aux_input_buses: Array<{
+      input_bus_index: number
+      name: string
+      channels: number
+      source_channel_id?: string
+    }>
     latency_samples: number
     tail_samples: number | null
   }>

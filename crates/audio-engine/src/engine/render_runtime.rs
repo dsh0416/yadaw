@@ -117,7 +117,11 @@ impl NativeMixerRuntime {
                     self.transport.waiting_for.store(0, Ordering::Relaxed);
                     self.graph.clear_delays();
                     for plugin in self.plugins_by_channel.iter_mut().flatten() {
+                        plugin.main_delay.clear();
                         plugin.bypass_delay.clear();
+                        for input in &mut plugin.aux_inputs {
+                            input.delay.clear();
+                        }
                     }
                     self.transport
                         .state
@@ -474,7 +478,11 @@ impl NativeMixerRuntime {
         let input_widths = &self.channel_input_widths;
         let plugins = &mut self.plugins_by_channel;
         let generation = self.generation;
-        let mut process_plugins = |channel_index: usize, frames: &mut [StereoFrame]| {
+        let mut process_plugins = |
+            channel_index: usize,
+            frames: &mut [StereoFrame],
+            post_pan: &[StereoFrame],
+        | {
             let mut width = input_widths[channel_index];
             for plugin in &mut plugins[channel_index] {
                 crate::crash_marker::mark(
@@ -482,7 +490,7 @@ impl NativeMixerRuntime {
                     plugin.marker_index,
                     crate::crash_marker::STAGE_PROCESS,
                 );
-                plugin.process_block(frames, &mut width, &context);
+                plugin.process_block(frames, &mut width, &context, post_pan);
                 crate::crash_marker::clean(generation);
             }
             if matches!(width, SignalWidth::Mono) {

@@ -76,6 +76,14 @@ pub enum HostEvent {
     PluginEditorClosed {
         instance_id: String,
     },
+    /// A route intent emitted by host-owned editor chrome. Electron main is the
+    /// only process allowed to turn it into a persisted project command.
+    PluginSidechainRouteRequested {
+        request_id: u64,
+        instance_id: String,
+        input_bus_index: u32,
+        source_channel_id: Option<String>,
+    },
     MidiInputSnapshot {
         snapshot: MidiInputSnapshot,
     },
@@ -215,6 +223,8 @@ pub enum ControlCommand {
         class_id: String,
         plugin_kind: String,
         audio_mode: PluginAudioMode,
+        #[serde(default)]
+        active_aux_inputs: Vec<PluginAuxInputConfiguration>,
         sample_rate: f64,
         component_state: BinaryPayload,
         controller_state: BinaryPayload,
@@ -246,6 +256,12 @@ pub enum ControlCommand {
     },
     ConfigurePluginEditorAppearance {
         appearance: PluginEditorAppearance,
+    },
+    ResolvePluginSidechainRoute {
+        request_id: u64,
+        instance_id: String,
+        accepted: bool,
+        warning: Option<String>,
     },
     ClosePluginEditor {
         instance_id: String,
@@ -639,6 +655,8 @@ mod tests {
     fn stable_id_patch_matches_the_equivalent_full_graph() {
         let output = LiveMixerChannel {
             id: "output".into(),
+            name: "Output".into(),
+            color: "#000000".into(),
             kind: "output".into(),
             system_role: None,
             gain_db: 0.0,
@@ -675,6 +693,8 @@ mod tests {
         };
         let audio = LiveMixerChannel {
             id: "audio-1".into(),
+            name: "Audio 1".into(),
+            color: "#000000".into(),
             kind: "audio".into(),
             system_role: None,
             gain_db: -3.0,
@@ -722,6 +742,8 @@ mod tests {
     fn channel(id: &str) -> LiveMixerChannel {
         LiveMixerChannel {
             id: id.into(),
+            name: id.into(),
+            color: "#000000".into(),
             kind: "audio".into(),
             system_role: None,
             gain_db: 0.0,
@@ -774,6 +796,7 @@ mod tests {
             slot_order: 0,
             audio_mode: PluginAudioMode::Stereo,
             enabled: true,
+            aux_input_buses: vec![],
             latency_samples: 0,
             tail_samples: None,
         }

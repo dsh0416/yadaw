@@ -40,6 +40,8 @@ describe("graphDiff", () => {
       channels: [
         {
           id: "audio-1",
+          name: "Audio 1",
+          color: "#58c6c2",
           kind: "audio",
           gain_db: 0,
           pan: 0,
@@ -61,6 +63,8 @@ describe("graphDiff", () => {
       channels: [
         {
           id: "audio-1",
+          name: "Audio 1",
+          color: "#58c6c2",
           kind: "audio",
           gain_db: 0,
           pan: 0,
@@ -80,6 +84,7 @@ describe("graphDiff", () => {
           slot_order: 0,
           audio_mode: "stereo",
           enabled: true,
+          aux_input_buses: [],
           latency_samples: 0,
           tail_samples: null
         }
@@ -89,6 +94,8 @@ describe("graphDiff", () => {
       channels: [
         {
           id: "audio-1",
+          name: "Audio 1",
+          color: "#58c6c2",
           kind: "audio",
           gain_db: -3,
           pan: 0,
@@ -141,6 +148,7 @@ describe("readCrashMarker", () => {
           slot_order: 0,
           audio_mode: "stereo",
           enabled: true,
+          aux_input_buses: [],
           latency_samples: 0,
           tail_samples: null
         },
@@ -151,6 +159,7 @@ describe("readCrashMarker", () => {
           slot_order: 0,
           audio_mode: "stereo",
           enabled: true,
+          aux_input_buses: [],
           latency_samples: 0,
           tail_samples: null
         }

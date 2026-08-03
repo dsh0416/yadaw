@@ -182,6 +182,11 @@ function isAcyclic(graph: ProjectGraphSnapshot): boolean {
       }
     }
   }
+  for (const plugin of graph.plugins) {
+    for (const route of plugin.sidechainInputs) {
+      edges.get(route.sourceChannelId)?.push(plugin.channelId)
+    }
+  }
   const visiting = new Set<string>()
   const visited = new Set<string>()
   const visit = (id: string): boolean => {

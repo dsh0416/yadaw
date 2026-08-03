@@ -817,13 +817,13 @@ fn block_processing_needs_prepared_scratch_and_then_matches_frame_rendering() {
 
     assert!(
         runtime
-            .process_channel_source_block(&mut sources, &mut output, &mut |_, _| {})
+            .process_channel_source_block(&mut sources, &mut output, &mut |_, _, _| {})
             .is_err()
     );
 
     runtime.prepare_block_processing(1);
     runtime
-        .process_channel_source_block(&mut sources, &mut output, &mut |_, _| {})
+        .process_channel_source_block(&mut sources, &mut output, &mut |_, _, _| {})
         .expect("prepared scratch should accept a one-frame block");
 
     assert!((output[0][0] - 0.25).abs() < 1.0e-6);

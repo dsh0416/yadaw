@@ -10,6 +10,7 @@ const api = {
   subscribeOperations: vi.fn(() => () => undefined),
   subscribePluginScan: vi.fn(() => () => undefined),
   subscribePluginEditorClosed: vi.fn(() => () => undefined),
+  subscribeExternalProjectCommands: vi.fn(() => () => undefined),
   cancelOperation: vi.fn(async () => rpcSuccess({ state: "cancelled" })),
   acknowledgeOperation: vi.fn(async () => rpcSuccess(undefined)),
   subscribeApplicationCommands: vi.fn(() => () => undefined),

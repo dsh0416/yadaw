@@ -200,6 +200,7 @@ export class ProjectDatabase {
             architecture: process.arch,
             buses: [
               {
+                index: 0,
                 direction: "output",
                 kind: "main",
                 name: "Stereo Out",

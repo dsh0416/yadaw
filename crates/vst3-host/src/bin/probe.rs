@@ -10,7 +10,8 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use yadaw_vst3_host::{
-    AraFactoryInfo, AudioLayout, ClassId, ClassInfo, Module, PluginKind, StereoProcessor,
+    AraFactoryInfo, AudioBusDescriptor, AudioBusDirection, AudioBusKind, AudioLayout, ClassId,
+    ClassInfo, Module, PluginKind, StereoProcessor,
 };
 
 const CLASS_PROBE_ENV: &str = "YADAW_VST3_PROBE_CLASS";
@@ -44,7 +45,64 @@ struct ClassOutput {
     audio_outputs: u32,
     event_inputs: u32,
     supported_audio_modes: Vec<String>,
+    #[serde(default)]
+    buses: Vec<AudioBusOutput>,
     ara: Option<AraOutput>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AudioBusOutput {
+    index: i32,
+    direction: String,
+    kind: String,
+    name: String,
+    channels: i32,
+    default_active: bool,
+}
+
+impl From<AudioBusDescriptor> for AudioBusOutput {
+    fn from(bus: AudioBusDescriptor) -> Self {
+        Self {
+            index: bus.index,
+            direction: match bus.direction {
+                AudioBusDirection::Input => "input",
+                AudioBusDirection::Output => "output",
+            }
+            .into(),
+            kind: match bus.kind {
+                AudioBusKind::Main => "main",
+                AudioBusKind::Aux => "aux",
+            }
+            .into(),
+            name: bus.name,
+            channels: bus.channels,
+            default_active: bus.default_active,
+        }
+    }
+}
+
+fn soft_buses(instrument: bool) -> Vec<AudioBusOutput> {
+    let mut buses = Vec::with_capacity(2);
+    if !instrument {
+        buses.push(AudioBusOutput {
+            index: 0,
+            direction: "input".into(),
+            kind: "main".into(),
+            name: "Stereo In".into(),
+            channels: 2,
+            default_active: true,
+        });
+    }
+    buses.push(AudioBusOutput {
+        index: 0,
+        direction: "output".into(),
+        kind: "main".into(),
+        name: "Stereo Out".into(),
+        channels: 2,
+        default_active: true,
+    });
+    buses
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -142,6 +200,7 @@ fn soft_inspect(class: &ClassInfo) -> ClassOutput {
                 .map(str::to_owned)
                 .collect()
         },
+        buses: soft_buses(instrument),
         ara: None,
     }
 }
@@ -170,6 +229,27 @@ fn deep_inspect(module: &Rc<Module>, class: ClassInfo) -> ClassOutput {
         classify_plugin_kind(&factory_categories, &effect_modes, &instrument_modes);
     let initialized = !supported_audio_modes.is_empty();
     let instrument = kind == PluginKind::Instrument;
+    let preferred_layout = supported_audio_modes
+        .iter()
+        .find(|mode| mode.as_str() == "stereo")
+        .or_else(|| supported_audio_modes.first())
+        .map(|mode| match mode.as_str() {
+            "mono" => AudioLayout::Mono,
+            "mono-to-stereo" => AudioLayout::MonoToStereo,
+            _ => AudioLayout::Stereo,
+        });
+    let buses = preferred_layout
+        .and_then(|layout| {
+            StereoProcessor::create_with_layout(Rc::clone(module), class.id, 48_000.0, kind, layout)
+                .ok()
+        })
+        .and_then(|processor| processor.audio_buses().ok())
+        .unwrap_or_default()
+        .into_iter()
+        .map(AudioBusOutput::from)
+        .collect::<Vec<_>>();
+    let audio_inputs = buses.iter().filter(|bus| bus.direction == "input").count() as u32;
+    let audio_outputs = buses.iter().filter(|bus| bus.direction == "output").count() as u32;
     ClassOutput {
         class_id: class.id.to_string(),
         name: class.name,
@@ -179,10 +259,11 @@ fn deep_inspect(module: &Rc<Module>, class: ClassInfo) -> ClassOutput {
         initialized,
         sample32: initialized,
         has_editor: initialized,
-        audio_inputs: u32::from(!instrument),
-        audio_outputs: u32::from(initialized),
+        audio_inputs,
+        audio_outputs,
         event_inputs: u32::from(instrument),
         supported_audio_modes,
+        buses,
         ara: None,
     }
 }
@@ -357,8 +438,9 @@ fn main() -> ExitCode {
 #[cfg(test)]
 mod tests {
     use super::{
-        PluginKind, categories_for_output, classify_plugin_kind, looks_like_instrument,
-        parse_subcategories,
+        AudioBusDescriptor, AudioBusDirection, AudioBusKind, AudioBusOutput, PluginKind,
+        categories_for_output, classify_plugin_kind, looks_like_instrument, parse_subcategories,
+        soft_buses,
     };
 
     fn modes(names: &[&str]) -> Vec<String> {
@@ -419,5 +501,52 @@ mod tests {
         );
         assert_eq!(categories_for_output("", false), modes(&["Fx"]));
         assert_eq!(parse_subcategories(" Fx | EQ | "), modes(&["Fx", "EQ"]));
+    }
+
+    #[test]
+    fn audio_bus_output_preserves_real_vst3_metadata() {
+        let input = AudioBusOutput::from(AudioBusDescriptor {
+            index: 2,
+            direction: AudioBusDirection::Input,
+            kind: AudioBusKind::Main,
+            name: "Detector".to_owned(),
+            channels: 1,
+            default_active: false,
+        });
+        assert_eq!(input.index, 2);
+        assert_eq!(input.direction, "input");
+        assert_eq!(input.kind, "main");
+        assert_eq!(input.name, "Detector");
+        assert_eq!(input.channels, 1);
+        assert!(!input.default_active);
+
+        let output = AudioBusOutput::from(AudioBusDescriptor {
+            index: 4,
+            direction: AudioBusDirection::Output,
+            kind: AudioBusKind::Aux,
+            name: "Monitor".to_owned(),
+            channels: 2,
+            default_active: true,
+        });
+        assert_eq!(output.direction, "output");
+        assert_eq!(output.kind, "aux");
+        assert!(output.default_active);
+    }
+
+    #[test]
+    fn soft_bus_metadata_matches_effect_and_instrument_fallbacks() {
+        let effect = soft_buses(false);
+        assert_eq!(effect.len(), 2);
+        assert_eq!(effect[0].direction, "input");
+        assert_eq!(effect[0].name, "Stereo In");
+        assert_eq!(effect[1].direction, "output");
+        assert_eq!(effect[1].name, "Stereo Out");
+        assert!(effect.iter().all(|bus| {
+            bus.index == 0 && bus.kind == "main" && bus.channels == 2 && bus.default_active
+        }));
+
+        let instrument = soft_buses(true);
+        assert_eq!(instrument.len(), 1);
+        assert_eq!(instrument[0].direction, "output");
     }
 }

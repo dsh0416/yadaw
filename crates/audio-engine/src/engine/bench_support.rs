@@ -278,7 +278,7 @@ pub mod bench_support {
             let mut width = SignalWidth::Stereo;
             let mut frames = [frame];
             for plugin in &mut self.plugins {
-                plugin.process_block(&mut frames, &mut width, &self.context);
+                plugin.process_block(&mut frames, &mut width, &self.context, &[]);
             }
             frame = frames[0];
             match width {
@@ -301,8 +301,11 @@ pub mod bench_support {
             audio_mode,
             enabled: false,
             is_instrument: false,
+            latency_samples: 0,
+            main_delay: StereoDelayLine::new(0),
             bypass_delay: StereoDelayLine::new(0),
             marker_index: 0,
+            aux_inputs: Vec::new(),
         }
     }
 

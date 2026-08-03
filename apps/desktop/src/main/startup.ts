@@ -344,6 +344,82 @@ export function startApplication(
         lifecycle.applicationState.desktopSession
       )
       projectCommands.attachKernel(lifecycle, operations)
+      let externalProjectCommandSequence = 0
+      audioHostService.setPluginSidechainRouteRequestHandler(async (request) => {
+        const workspace = projectCommands.currentWorkspace()
+        const plugin = workspace?.graph.plugins.find(
+          (candidate) => candidate.id === request.instanceId
+        )
+        if (!workspace || !plugin) {
+          await audioHostService.resolvePluginSidechainRoute(
+            request.requestId,
+            request.instanceId,
+            false,
+            "The plug-in or project is no longer available."
+          )
+          return
+        }
+        const sidechainInputs = plugin.sidechainInputs.filter(
+          (route) => route.inputBusIndex !== request.inputBusIndex
+        )
+        if (request.sourceChannelId) {
+          sidechainInputs.push({
+            inputBusIndex: request.inputBusIndex,
+            sourceChannelId: request.sourceChannelId
+          })
+        }
+        sidechainInputs.sort((left, right) => left.inputBusIndex - right.inputBusIndex)
+        const operationId = `native-sidechain:${randomUUID()}`
+        const result = await projectCommands.execute(
+          {
+            protocolVersion: IPC_PROTOCOL_VERSION,
+            requestId: `native-sidechain-request:${randomUUID()}`,
+            target: structuredClone(workspace.projectGraph),
+            expectedRevision: workspace.revision,
+            mutation: {
+              operationId,
+              idempotencyKey: operationId
+            }
+          },
+          {
+            type: "update-plugin",
+            pluginId: plugin.id,
+            patch: { sidechainInputs }
+          }
+        )
+        if (!result.ok) {
+          await audioHostService.resolvePluginSidechainRoute(
+            request.requestId,
+            request.instanceId,
+            false,
+            "Side-chain routing could not be committed."
+          )
+          return
+        }
+        const revision = result.resourceRevision ?? workspace.revision + 1
+        externalProjectCommandSequence += 1
+        for (const candidate of BrowserWindow.getAllWindows()) {
+          candidate.webContents.send(IPC_CHANNELS.projectCommandExternalEvent, {
+            protocolVersion: IPC_PROTOCOL_VERSION,
+            sourceEpoch: startupEpoch,
+            sequence: externalProjectCommandSequence,
+            resourceRevision: revision,
+            payload: {
+              result: result.value,
+              warnings: result.warnings ?? []
+            }
+          })
+        }
+        const degraded = result.warnings?.some(
+          (warning) => warning.code === "audio-deployment-degraded"
+        )
+        await audioHostService.resolvePluginSidechainRoute(
+          request.requestId,
+          request.instanceId,
+          true,
+          degraded ? "Route saved, but audio deployment is degraded." : undefined
+        )
+      })
       const recordings = new RecordingService(
         settings,
         projectService,

@@ -56,6 +56,28 @@ pub enum AudioLayout {
     Stereo,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AudioBusDirection {
+    Input,
+    Output,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AudioBusKind {
+    Main,
+    Aux,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AudioBusDescriptor {
+    pub index: i32,
+    pub direction: AudioBusDirection,
+    pub kind: AudioBusKind,
+    pub name: String,
+    pub channels: i32,
+    pub default_active: bool,
+}
+
 impl AudioLayout {
     #[must_use]
     pub const fn input_channels(self) -> i32 {
@@ -101,6 +123,14 @@ struct AudioBusStorage {
     input: bool,
 }
 
+#[derive(Clone)]
+pub(crate) struct AuxiliaryAudioInput {
+    pub(crate) bus_index: usize,
+    pub(crate) channels: u8,
+    pub(crate) left: Vec<f32>,
+    pub(crate) right: Vec<f32>,
+}
+
 impl AudioBusStorage {
     const fn empty(input: bool) -> Self {
         Self {
@@ -130,6 +160,51 @@ impl AudioBusStorage {
         } else {
             0
         };
+    }
+
+    fn connect_aux(&mut self, input: &AuxiliaryAudioInput, frames: usize) -> HostResult<()> {
+        let Some(descriptor) = self.descriptors.get_mut(input.bus_index) else {
+            return Err(HostError::Operation {
+                operation: "aux audio input bus index",
+                result: -2147024809,
+            });
+        };
+        let Some(pointers) = self.channel_pointers.get_mut(input.bus_index) else {
+            return Err(HostError::Operation {
+                operation: "aux audio input bus storage",
+                result: -2147024809,
+            });
+        };
+        let channels = usize::from(input.channels);
+        if channels != pointers.len()
+            || input.left.len() < frames
+            || (channels == 2 && input.right.len() < frames)
+        {
+            return Err(HostError::Operation {
+                operation: "aux audio input block shape",
+                result: -2147024809,
+            });
+        }
+        pointers[0] = input.left.as_ptr().cast_mut();
+        if channels == 2 {
+            pointers[1] = input.right.as_ptr().cast_mut();
+        }
+        descriptor.silenceFlags = 0;
+        Ok(())
+    }
+
+    fn disconnect_bus(&mut self, bus_index: usize) {
+        let Some(pointers) = self.channel_pointers.get_mut(bus_index) else {
+            return;
+        };
+        let scratch = self.scratch[bus_index].as_mut_ptr();
+        for (channel, pointer) in pointers.iter_mut().enumerate() {
+            *pointer = unsafe {
+                // SAFETY: every bus scratch allocation contains MAX_BLOCK_FRAMES per channel.
+                scratch.add(channel * MAX_BLOCK_FRAMES as usize)
+            };
+        }
+        self.descriptors[bus_index].silenceFlags = silence_flags(pointers.len());
     }
 }
 
@@ -376,6 +451,34 @@ impl StereoProcessor {
         self.restart_processing()
     }
 
+    pub(crate) fn configure_aux_input_buses(&mut self, indices: &[u32]) -> HostResult<()> {
+        if self.active {
+            return Err(HostError::Operation {
+                operation: "configure aux audio inputs before activation",
+                result: -2147024809,
+            });
+        }
+        for &index in indices {
+            let index = i32::try_from(index).map_err(|_| HostError::Operation {
+                operation: "aux audio input bus index",
+                result: -2147024809,
+            })?;
+            validate_bus_address(
+                &self.component,
+                as_media_type(Vst::MediaTypes_kAudio),
+                as_bus_direction(Vst::BusDirections_kInput),
+                index,
+            )?;
+            self.bus_activation_overrides.push(BusActivationOverride {
+                media_type: as_media_type(Vst::MediaTypes_kAudio),
+                direction: as_bus_direction(Vst::BusDirections_kInput),
+                index,
+                active: true,
+            });
+        }
+        Ok(())
+    }
+
     pub(crate) fn set_presentation_latency(
         &mut self,
         input_samples: u32,
@@ -457,6 +560,24 @@ impl StereoProcessor {
         self.kind
     }
 
+    /// Returns the component's negotiated VST3 audio bus metadata.
+    pub fn audio_buses(&self) -> HostResult<Vec<AudioBusDescriptor>> {
+        let input_count = audio_bus_count(&self.component, Vst::BusDirections_kInput).max(0);
+        let output_count = audio_bus_count(&self.component, Vst::BusDirections_kOutput).max(0);
+        let mut buses = Vec::with_capacity((input_count + output_count) as usize);
+        buses.extend(audio_bus_descriptors(
+            &self.component,
+            Vst::BusDirections_kInput,
+            AudioBusDirection::Input,
+        )?);
+        buses.extend(audio_bus_descriptors(
+            &self.component,
+            Vst::BusDirections_kOutput,
+            AudioBusDirection::Output,
+        )?);
+        Ok(buses)
+    }
+
     #[must_use]
     pub fn layout(&self) -> AudioLayout {
         self.layout
@@ -499,6 +620,25 @@ impl StereoProcessor {
         output_right: &mut [f32],
         context: Option<&HostProcessContext>,
     ) -> HostResult<()> {
+        self.process_stereo_with_aux_context(
+            input_left,
+            input_right,
+            output_left,
+            output_right,
+            &[],
+            context,
+        )
+    }
+
+    pub(crate) fn process_stereo_with_aux_context(
+        &mut self,
+        input_left: &mut [f32],
+        input_right: &mut [f32],
+        output_left: &mut [f32],
+        output_right: &mut [f32],
+        auxiliary_inputs: &[AuxiliaryAudioInput],
+        context: Option<&HostProcessContext>,
+    ) -> HostResult<()> {
         let frames = input_left.len();
         if frames > MAX_BLOCK_FRAMES as usize
             || input_right.len() != frames
@@ -515,6 +655,9 @@ impl StereoProcessor {
         if self.kind == PluginKind::Effect {
             self.audio_input_buses
                 .connect_main(&mut input_channels[..self.layout.input_channels() as usize]);
+        }
+        for input in auxiliary_inputs {
+            self.audio_input_buses.connect_aux(input, frames)?;
         }
         self.audio_output_buses
             .connect_main(&mut output_channels[..self.layout.output_channels() as usize]);
@@ -570,6 +713,9 @@ impl StereoProcessor {
         }
         if self.kind == PluginKind::Effect {
             self.audio_input_buses.disconnect_main();
+        }
+        for input in auxiliary_inputs {
+            self.audio_input_buses.disconnect_bus(input.bus_index);
         }
         self.audio_output_buses.disconnect_main();
         self.input_events.clear();
@@ -1001,6 +1147,50 @@ fn prepare_audio_bus_storage(
     }
 
     Ok(build_audio_bus_storage(&channel_counts, input))
+}
+
+fn audio_bus_descriptors(
+    component: &ComPtr<IComponent>,
+    direction: BusDirections,
+    public_direction: AudioBusDirection,
+) -> HostResult<Vec<AudioBusDescriptor>> {
+    let count = audio_bus_count(component, direction).max(0);
+    let mut buses = Vec::with_capacity(count as usize);
+    let table = component_table(component);
+    for index in 0..count {
+        let mut info = unsafe {
+            // SAFETY: BusInfo is an SDK POD and getBusInfo initializes every field.
+            std::mem::MaybeUninit::<BusInfo>::zeroed().assume_init()
+        };
+        check("get audio bus info", unsafe {
+            // SAFETY: index is within getBusCount for this audio direction and info is writable.
+            ((*table).get_bus_info)(
+                component.as_ptr(),
+                as_media_type(Vst::MediaTypes_kAudio),
+                as_bus_direction(direction),
+                index,
+                std::ptr::addr_of_mut!(info),
+            )
+        })?;
+        let name_length = info
+            .name
+            .iter()
+            .position(|character| *character == 0)
+            .unwrap_or(info.name.len());
+        buses.push(AudioBusDescriptor {
+            index,
+            direction: public_direction,
+            kind: if info.busType == as_int32(Vst::BusTypes_kMain) {
+                AudioBusKind::Main
+            } else {
+                AudioBusKind::Aux
+            },
+            name: String::from_utf16_lossy(&info.name[..name_length]),
+            channels: info.channelCount,
+            default_active: info.flags & as_uint32(Vst::BusInfo_BusFlags_kDefaultActive) != 0,
+        });
+    }
+    Ok(buses)
 }
 
 fn build_audio_bus_storage(channel_counts: &[usize], input: bool) -> AudioBusStorage {
@@ -1518,5 +1708,115 @@ mod tests {
         assert_eq!(storage.descriptors[0].silenceFlags, 0b1);
         assert_eq!(storage.descriptors[1].silenceFlags, 0b11);
         assert_eq!(storage.descriptors[2].silenceFlags, u64::MAX);
+    }
+
+    #[test]
+    fn auxiliary_inputs_connect_mono_and_stereo_buffers_then_restore_scratch() {
+        let mut storage = build_audio_bus_storage(&[2, 1, 2], true);
+        let mono = AuxiliaryAudioInput {
+            bus_index: 1,
+            channels: 1,
+            left: vec![0.25; 8],
+            right: Vec::new(),
+        };
+        let stereo = AuxiliaryAudioInput {
+            bus_index: 2,
+            channels: 2,
+            left: vec![0.5; 8],
+            right: vec![0.75; 8],
+        };
+
+        storage.connect_aux(&mono, 8).unwrap();
+        storage.connect_aux(&stereo, 8).unwrap();
+
+        assert_eq!(storage.descriptors[1].silenceFlags, 0);
+        assert_eq!(storage.descriptors[2].silenceFlags, 0);
+        assert_eq!(
+            storage.channel_pointers[1],
+            vec![mono.left.as_ptr().cast_mut()]
+        );
+        assert_eq!(
+            storage.channel_pointers[2],
+            vec![
+                stereo.left.as_ptr().cast_mut(),
+                stereo.right.as_ptr().cast_mut()
+            ]
+        );
+
+        storage.disconnect_bus(1);
+        storage.disconnect_bus(2);
+
+        assert_eq!(storage.descriptors[1].silenceFlags, 0b1);
+        assert_eq!(storage.descriptors[2].silenceFlags, 0b11);
+        assert_eq!(
+            storage.channel_pointers[1][0],
+            storage.scratch[1].as_mut_ptr()
+        );
+        assert_eq!(
+            storage.channel_pointers[2][0],
+            storage.scratch[2].as_mut_ptr()
+        );
+        assert_eq!(
+            storage.channel_pointers[2][1],
+            // SAFETY: the stereo bus scratch allocation reserves one full maximum-size block
+            // for each of its two channels.
+            unsafe {
+                storage.scratch[2]
+                    .as_mut_ptr()
+                    .add(MAX_BLOCK_FRAMES as usize)
+            }
+        );
+    }
+
+    #[test]
+    fn auxiliary_input_connection_rejects_invalid_bus_storage_and_block_shapes() {
+        let mono = AuxiliaryAudioInput {
+            bus_index: 1,
+            channels: 1,
+            left: vec![0.25; 8],
+            right: Vec::new(),
+        };
+        let invalid_bus = AuxiliaryAudioInput {
+            bus_index: 9,
+            ..mono.clone()
+        };
+        let wrong_channels = AuxiliaryAudioInput {
+            channels: 2,
+            right: vec![0.5; 8],
+            ..mono.clone()
+        };
+        let short_left = AuxiliaryAudioInput {
+            left: vec![0.25; 7],
+            ..mono.clone()
+        };
+        let short_right = AuxiliaryAudioInput {
+            bus_index: 2,
+            channels: 2,
+            right: vec![0.5; 7],
+            ..mono.clone()
+        };
+
+        let mut storage = build_audio_bus_storage(&[2, 1, 2], true);
+        for input in [&invalid_bus, &wrong_channels, &short_left, &short_right] {
+            assert!(matches!(
+                storage.connect_aux(input, 8),
+                Err(HostError::Operation {
+                    result: -2147024809,
+                    ..
+                })
+            ));
+        }
+
+        storage.channel_pointers.pop();
+        storage.channel_pointers.pop();
+        assert!(matches!(
+            storage.connect_aux(&mono, 8),
+            Err(HostError::Operation {
+                operation: "aux audio input bus storage",
+                result: -2147024809,
+            })
+        ));
+
+        storage.disconnect_bus(99);
     }
 }

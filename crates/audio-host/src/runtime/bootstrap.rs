@@ -142,6 +142,7 @@ fn run_ipc() -> Result<(), Box<dyn std::error::Error>> {
         next_ara_tick: None,
         next_retirement_tick: None,
         output_parameter_error_reported: false,
+        next_sidechain_request_id: 0,
     };
     event_loop.run_app(&mut application)?;
     protocol_thread

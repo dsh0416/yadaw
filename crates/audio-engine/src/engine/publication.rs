@@ -400,8 +400,13 @@ pub fn transport_snapshot(&self) -> Result<NativeTransportSnapshot> {
 }
 
 pub fn heartbeat_snapshot(&self) -> (u64, String) {
-    let Ok(guard) = self.running.lock() else {
-        return (0, "error".to_owned());
+    // Heartbeat is the helper's last-resort liveness path. It must not wait behind a driver or
+    // graph transition that owns the runtime state lock, otherwise a healthy-but-busy helper is
+    // misclassified as crashed and restarted with every plug-in bypassed.
+    let guard = match self.running.try_lock() {
+        Ok(guard) => guard,
+        Err(TryLockError::WouldBlock) => return (0, "transitioning".to_owned()),
+        Err(TryLockError::Poisoned(_)) => return (0, "error".to_owned()),
     };
     guard.as_ref().map_or((0, "stopped".to_owned()), |engine| {
         (

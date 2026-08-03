@@ -178,6 +178,7 @@ pub struct MixerGraph {
     block_bus_accumulation: Vec<f32>,
     block_master_gains: Vec<f32>,
     block_master_pans: Vec<f32>,
+    block_post_pan: Vec<StereoFrame>,
 }
 
 mod graph;

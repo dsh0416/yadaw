@@ -42,6 +42,8 @@ pub struct NativeRoundTripLatencyMeasurementSnapshot {
 #[derive(Clone)]
 pub struct NativeMixerChannel {
     pub id: String,
+    pub name: String,
+    pub color: String,
     pub kind: String,
     pub system_role: Option<LiveMixerSystemRole>,
     pub gain_db: f64,
@@ -57,6 +59,14 @@ pub struct NativeMixerChannel {
     pub hardware_output_channels: Vec<u32>,
     pub midi_input_port_id: Option<String>,
     pub midi_input_channel: Option<u8>,
+}
+
+#[derive(Clone)]
+pub struct NativePluginAuxInputBus {
+    pub input_bus_index: u32,
+    pub name: String,
+    pub channels: u8,
+    pub source_index: Option<u32>,
 }
 
 #[derive(Clone)]
@@ -90,6 +100,7 @@ pub struct NativePluginInstance {
     pub slot_order: u32,
     pub audio_mode: PluginAudioMode,
     pub enabled: bool,
+    pub aux_input_buses: Vec<NativePluginAuxInputBus>,
     pub latency_samples: u32,
     pub tail_samples: Option<u32>,
     pub processor: Option<Vst3ProcessorHandle>,

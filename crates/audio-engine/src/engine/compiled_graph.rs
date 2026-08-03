@@ -15,6 +15,7 @@ fn compiled_graph_snapshot(
             target: target.to_owned(),
             kind,
             signal_width: width,
+            target_input_bus_index: None,
         });
     }
 
@@ -38,22 +39,9 @@ fn compiled_graph_snapshot(
     enum DiagnosticInputEdge {
         Main(usize),
         Send(usize),
+        Sidechain { source: usize },
     }
 
-    let intrinsic_latencies = native
-        .channels
-        .iter()
-        .enumerate()
-        .map(|(channel_index, _)| {
-            native
-                .plugins
-                .iter()
-                .filter(|plugin| plugin.channel_index as usize == channel_index)
-                .fold(0_u32, |latency, plugin| {
-                    latency.saturating_add(plugin.latency_samples)
-                })
-        })
-        .collect::<Vec<_>>();
     let mut input_edges = (0..native.channels.len())
         .map(|_| Vec::new())
         .collect::<Vec<Vec<DiagnosticInputEdge>>>();
@@ -90,41 +78,109 @@ fn compiled_graph_snapshot(
             }
         }
     }
-    let latency_nodes = input_edges
-        .iter()
-        .enumerate()
-        .map(|(index, edges)| LatencyNode {
-            id: native.channels[index].id.clone(),
-            intrinsic_latency: intrinsic_latencies[index],
-            inputs: edges
-                .iter()
-                .filter_map(|edge| match edge {
-                    DiagnosticInputEdge::Main(source) => Some(*source),
-                    DiagnosticInputEdge::Send(send) => native
-                        .sends
-                        .get(*send)
-                        .map(|send| send.source_index as usize),
-                })
-                .collect(),
-        })
-        .collect::<Vec<_>>();
-    let latency_plan = plan_latency_compensation(&latency_nodes).ok();
-    let mut channel_output_delays = vec![0_u32; native.channels.len()];
-    let mut send_delays = vec![0_u32; native.sends.len()];
-    if let Some(latency_plan) = latency_plan {
-        for (target, edges) in input_edges.iter().enumerate() {
-            for (input, edge) in edges.iter().enumerate() {
-                let delay = latency_plan[target].input_delays[input];
-                match edge {
-                    DiagnosticInputEdge::Main(source) => {
-                        channel_output_delays[*source] = channel_output_delays[*source].max(delay);
-                    }
-                    DiagnosticInputEdge::Send(send) => {
-                        send_delays[*send] = send_delays[*send].max(delay);
-                    }
-                }
+    for plugin in &native.plugins {
+        let target = plugin.channel_index as usize;
+        for bus in &plugin.aux_input_buses {
+            if let (Some(source), Some(edges)) = (bus.source_index, input_edges.get_mut(target)) {
+                edges.push(DiagnosticInputEdge::Sidechain {
+                    source: source as usize,
+                });
             }
         }
+    }
+    let mut channel_output_delays = vec![0_u32; native.channels.len()];
+    let mut send_delays = vec![0_u32; native.sends.len()];
+    let mut sidechain_delays = std::collections::HashMap::new();
+    let mut main_slot_delays = std::collections::HashMap::new();
+    let mut adjacency = vec![Vec::new(); native.channels.len()];
+    let mut indegree = vec![0_usize; native.channels.len()];
+    for (target, inputs) in input_edges.iter().enumerate() {
+        for source in inputs.iter().filter_map(|edge| match edge {
+            DiagnosticInputEdge::Main(source) => Some(*source),
+            DiagnosticInputEdge::Send(send) => native
+                .sends
+                .get(*send)
+                .map(|send| send.source_index as usize),
+            DiagnosticInputEdge::Sidechain { source, .. } => Some(*source),
+        }) {
+            adjacency[source].push(target);
+            indegree[target] += 1;
+        }
+    }
+    let mut ready = std::collections::VecDeque::new();
+    for (index, degree) in indegree.iter().enumerate() {
+        if *degree == 0 {
+            ready.push_back(index);
+        }
+    }
+    let mut order = Vec::with_capacity(native.channels.len());
+    while let Some(source) = ready.pop_front() {
+        order.push(source);
+        for target in &adjacency[source] {
+            indegree[*target] = indegree[*target].saturating_sub(1);
+            if indegree[*target] == 0 {
+                ready.push_back(*target);
+            }
+        }
+    }
+    let mut channel_latencies = vec![0_u32; native.channels.len()];
+    for target in order {
+        let main_arrival = input_edges[target]
+            .iter()
+            .filter_map(|edge| match edge {
+                DiagnosticInputEdge::Main(source) => Some(channel_latencies[*source]),
+                DiagnosticInputEdge::Send(send) => native
+                    .sends
+                    .get(*send)
+                    .map(|send| channel_latencies[send.source_index as usize]),
+                DiagnosticInputEdge::Sidechain { .. } => None,
+            })
+            .max()
+            .unwrap_or(0);
+        for edge in &input_edges[target] {
+            match edge {
+                DiagnosticInputEdge::Main(source) => {
+                    channel_output_delays[*source] = main_arrival
+                        .saturating_sub(channel_latencies[*source]);
+                }
+                DiagnosticInputEdge::Send(send) => {
+                    if let Some(source) = native.sends.get(*send) {
+                        send_delays[*send] = main_arrival
+                            .saturating_sub(channel_latencies[source.source_index as usize]);
+                    }
+                }
+                DiagnosticInputEdge::Sidechain { .. } => {}
+            }
+        }
+        let mut slot_arrival = main_arrival;
+        let mut plugins = native
+            .plugins
+            .iter()
+            .enumerate()
+            .filter(|(_, plugin)| plugin.channel_index as usize == target)
+            .collect::<Vec<_>>();
+        plugins.sort_by_key(|(_, plugin)| {
+            (if plugin.role == "instrument" { 0 } else { 1 }, plugin.slot_order)
+        });
+        for (plugin_index, plugin) in plugins {
+            let convergence = plugin
+                .aux_input_buses
+                .iter()
+                .filter_map(|bus| bus.source_index)
+                .map(|source| channel_latencies[source as usize])
+                .fold(slot_arrival, u32::max);
+            main_slot_delays.insert(plugin_index, convergence.saturating_sub(slot_arrival));
+            for bus in &plugin.aux_input_buses {
+                if let Some(source) = bus.source_index {
+                    sidechain_delays.insert(
+                        (plugin_index, bus.input_bus_index),
+                        convergence.saturating_sub(channel_latencies[source as usize]),
+                    );
+                }
+            }
+            slot_arrival = convergence.saturating_add(plugin.latency_samples);
+        }
+        channel_latencies[target] = slot_arrival;
     }
 
     let mut nodes = Vec::new();
@@ -167,10 +223,35 @@ fn compiled_graph_snapshot(
         let mut plugins = native
             .plugins
             .iter()
-            .filter(|plugin| plugin.channel_index as usize == channel_index)
+            .enumerate()
+            .filter(|(_, plugin)| plugin.channel_index as usize == channel_index)
             .collect::<Vec<_>>();
-        plugins.sort_by_key(|plugin| (plugin.role.as_str(), plugin.slot_order));
-        for plugin in plugins {
+        plugins.sort_by_key(|(_, plugin)| {
+            (if plugin.role == "instrument" { 0 } else { 1 }, plugin.slot_order)
+        });
+        for (plugin_index, plugin) in plugins {
+            let main_delay = main_slot_delays.get(&plugin_index).copied().unwrap_or(0);
+            if main_delay > 0 {
+                let delay_id = format!("pdc:main:{}", plugin.instance_id);
+                nodes.push(CompiledGraphNode {
+                    id: delay_id.clone(),
+                    kind: CompiledGraphNodeKind::PdcDelay,
+                    label: "Main-input PDC".to_owned(),
+                    channel_id: Some(channel_id.clone()),
+                    plugin_instance_id: Some(plugin.instance_id.clone()),
+                    signal_width: width,
+                    latency_samples: main_delay,
+                    plugin_state: None,
+                });
+                edge(
+                    &mut edges,
+                    &previous,
+                    &delay_id,
+                    CompiledGraphEdgeKind::Signal,
+                    width,
+                );
+                previous = delay_id;
+            }
             let required = plugin_input_width(plugin.audio_mode);
             if required != width {
                 let adapter_id = format!("adapter:{}:{}", plugin.instance_id, nodes.len());
@@ -439,6 +520,58 @@ fn compiled_graph_snapshot(
                     CompiledGraphSignalWidth::Stereo,
                 );
             }
+        }
+    }
+    for (plugin_index, plugin) in native.plugins.iter().enumerate() {
+        for bus in &plugin.aux_input_buses {
+            let Some(source) = bus
+                .source_index
+                .and_then(|index| native.channels.get(index as usize))
+            else {
+                continue;
+            };
+            let delay = sidechain_delays
+                .get(&(plugin_index, bus.input_bus_index))
+                .copied()
+                .unwrap_or(0);
+            let route_source = if delay > 0 {
+                let delay_id = format!(
+                    "pdc:sidechain:{}:{}",
+                    plugin.instance_id, bus.input_bus_index
+                );
+                nodes.push(CompiledGraphNode {
+                    id: delay_id.clone(),
+                    kind: CompiledGraphNodeKind::PdcDelay,
+                    label: format!("Side-chain PDC · bus {}", bus.input_bus_index),
+                    channel_id: Some(source.id.clone()),
+                    plugin_instance_id: Some(plugin.instance_id.clone()),
+                    signal_width: CompiledGraphSignalWidth::Stereo,
+                    latency_samples: delay,
+                    plugin_state: None,
+                });
+                edge(
+                    &mut edges,
+                    &format!("channel:{}", source.id),
+                    &delay_id,
+                    CompiledGraphEdgeKind::Signal,
+                    CompiledGraphSignalWidth::Stereo,
+                );
+                delay_id
+            } else {
+                format!("channel:{}", source.id)
+            };
+            edges.push(CompiledGraphEdge {
+                id: format!("{route_source}->effect:{}:{}", plugin.instance_id, edges.len()),
+                source: route_source,
+                target: format!("effect:{}", plugin.instance_id),
+                kind: CompiledGraphEdgeKind::SidechainRoute,
+                signal_width: if bus.channels == 1 {
+                    CompiledGraphSignalWidth::Mono
+                } else {
+                    CompiledGraphSignalWidth::Stereo
+                },
+                target_input_bus_index: Some(bus.input_bus_index),
+            });
         }
     }
 

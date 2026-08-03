@@ -92,6 +92,7 @@ function graph(): ProjectGraphSnapshot {
         descriptor: effectDescriptor,
         audioMode: "stereo",
         enabled: true,
+        sidechainInputs: [],
         componentState: new Uint8Array([1]),
         controllerState: new Uint8Array([2])
       }

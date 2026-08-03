@@ -24,7 +24,7 @@ import { PluginRuntimeService, type PluginRuntime } from "./plugin-runtime-servi
 
 export { parseProbeStdout } from "./plugin-descriptor-decoder"
 
-const SCANNER_VERSION = 7
+const SCANNER_VERSION = 8
 const execFileAsync = promisify(execFile)
 const AUDIO_MODES = ["mono", "mono-to-stereo", "stereo", "dual-mono"] as const
 const INSTRUMENT_SOFT_MODES: PluginAudioMode[] = ["mono", "stereo"]
@@ -40,6 +40,7 @@ function busesForMode(kind: PluginDescriptor["kind"], mode: PluginAudioMode) {
   const buses: PluginDescriptor["buses"] = []
   if (kind === "effect") {
     buses.push({
+      index: 0,
       direction: "input",
       kind: "main",
       name: inputChannels === 1 ? "Mono In" : "Stereo In",
@@ -48,6 +49,7 @@ function busesForMode(kind: PluginDescriptor["kind"], mode: PluginAudioMode) {
     })
   }
   buses.push({
+    index: 0,
     direction: "output",
     kind: "main",
     name: outputChannels === 1 ? "Mono Out" : "Stereo Out",
@@ -282,6 +284,14 @@ interface ProbeOutput {
       audioOutputs?: number
       eventInputs?: number
       supportedAudioModes?: unknown[]
+      buses?: Array<{
+        index?: number
+        direction?: string
+        kind?: string
+        name?: string
+        channels?: number
+        defaultActive?: boolean
+      }>
       ara?: {
         factoryClassId?: string
         factoryId?: string
@@ -324,27 +334,55 @@ export function descriptorFromProbe(
     compatibilityReason = "Plugin does not support 32-bit floating-point processing"
   } else if (
     kind === "instrument" &&
-    ((value.audioInputs ?? 0) !== 0 ||
-      (value.eventInputs ?? 0) < 1 ||
-      (value.audioOutputs ?? 0) !== 1 ||
-      supportedAudioModes.length === 0)
+    ((value.eventInputs ?? 0) < 1 || supportedAudioModes.length === 0)
   ) {
     compatibility = "unsupported-buses"
-    compatibilityReason =
-      "Instrument requires event input, no audio input, and a mono or stereo main output"
-  } else if (
-    kind === "effect" &&
-    ((value.audioInputs ?? 0) !== 1 ||
-      (value.audioOutputs ?? 0) !== 1 ||
-      supportedAudioModes.length === 0)
-  ) {
+    compatibilityReason = "Instrument requires an event input and a mono or stereo main output"
+  } else if (kind === "effect" && supportedAudioModes.length === 0) {
     compatibility = "unsupported-buses"
-    compatibilityReason = "Effect requires one supported mono/stereo main input and output layout"
+    compatibilityReason = "Effect requires a supported mono/stereo main input and output layout"
   }
   const preferredMode =
     supportedAudioModes.find((mode) => mode === "stereo") ??
     supportedAudioModes.find((mode) => mode !== "dual-mono") ??
     "stereo"
+  const probedBuses = (value.buses ?? []).flatMap<PluginDescriptor["buses"][number]>((bus) => {
+    if (
+      !Number.isSafeInteger(bus.index) ||
+      bus.index! < 0 ||
+      (bus.direction !== "input" && bus.direction !== "output") ||
+      (bus.kind !== "main" && bus.kind !== "aux") ||
+      !Number.isSafeInteger(bus.channels) ||
+      bus.channels! < 0
+    ) {
+      return []
+    }
+    return [
+      {
+        index: bus.index!,
+        direction: bus.direction,
+        kind: bus.kind,
+        name: textValue(bus.name, `${bus.kind === "main" ? "Main" : "Aux"} ${bus.index! + 1}`),
+        channels: bus.channels!,
+        defaultActive: bus.defaultActive === true
+      }
+    ]
+  })
+  const buses = probedBuses.length > 0 ? probedBuses : busesForMode(kind, preferredMode)
+  const mainInputs = buses.filter((bus) => bus.direction === "input" && bus.kind === "main")
+  const mainOutputs = buses.filter((bus) => bus.direction === "output" && bus.kind === "main")
+  if (
+    compatibility === "compatible" &&
+    ((kind === "instrument" && mainInputs.length !== 0) ||
+      (kind === "effect" && mainInputs.length !== 1) ||
+      mainOutputs.length !== 1)
+  ) {
+    compatibility = "unsupported-buses"
+    compatibilityReason =
+      kind === "instrument"
+        ? "Instrument requires no main audio input and one supported main output"
+        : "Effect requires one supported main input and output; auxiliary inputs are supported"
+  }
   return {
     source: { kind: "external" },
     classId,
@@ -355,7 +393,7 @@ export function descriptorFromProbe(
     categories: resolvedCategories,
     kind,
     architecture: process.arch,
-    buses: busesForMode(kind, preferredMode),
+    buses,
     supportedAudioModes,
     hasEditor: value.hasEditor === true,
     ...(araFactoryClassId
@@ -432,6 +470,7 @@ export class PluginCatalogService {
       } catch (error) {
         const reason = error instanceof Error ? error.message : "Built-in VST3 probe failed"
         const inputBus = {
+          index: 0,
           direction: "input" as const,
           kind: "main" as const,
           name: "Stereo In",
@@ -439,6 +478,7 @@ export class PluginCatalogService {
           defaultActive: true
         }
         const outputBus = {
+          index: 0,
           direction: "output" as const,
           kind: "main" as const,
           name: "Stereo Out",

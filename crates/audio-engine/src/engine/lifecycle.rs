@@ -57,10 +57,15 @@ pub fn start_audio_engine(
         }
     }
 
-    // Only release devices when the requested configuration genuinely changed.
-    *self.running
+    // Only release devices when the requested configuration genuinely changed. Drop the CPAL
+    // streams after releasing the state lock: some platform drivers synchronously wait while a
+    // stream is destroyed, and liveness/snapshot reads must not queue behind that wait.
+    let previous = self
+        .running
         .lock()
-        .map_err(|_| audio_error("audio engine lock", "poisoned"))? = None;
+        .map_err(|_| audio_error("audio engine lock", "poisoned"))?
+        .take();
+    drop(previous);
 
     let host = crate::device::host_for_backend(&config.backend)?;
     let (input_device, output_device) = resolve_stream_devices(
@@ -248,9 +253,14 @@ pub fn stop_audio_engine(&self) -> Result<NativeAudioRuntimeSnapshot> {
         .runtime_transition
         .lock()
         .map_err(|_| audio_error("audio runtime transition lock", "poisoned"))?;
-    *self.running
+    // Destroy streams outside the state lock. In particular, an ASIO driver may block while its
+    // stream is torn down; heartbeat must remain able to observe the transition in that case.
+    let previous = self
+        .running
         .lock()
-        .map_err(|_| audio_error("audio engine lock", "poisoned"))? = None;
+        .map_err(|_| audio_error("audio engine lock", "poisoned"))?
+        .take();
+    drop(previous);
     Ok(stopped_snapshot())
 }
 

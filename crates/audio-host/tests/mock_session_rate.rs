@@ -50,6 +50,8 @@ fn mock_backend_uses_the_project_clock_over_native_48_khz_io() {
         channels: vec![
             NativeMixerChannel {
                 id: "master".to_owned(),
+                name: "Master".to_owned(),
+                color: String::new(),
                 kind: "master".to_owned(),
                 system_role: None,
                 gain_db: 0.0,
@@ -68,6 +70,8 @@ fn mock_backend_uses_the_project_clock_over_native_48_khz_io() {
             },
             NativeMixerChannel {
                 id: "output".to_owned(),
+                name: "Output".to_owned(),
+                color: String::new(),
                 kind: "output".to_owned(),
                 system_role: None,
                 gain_db: 0.0,

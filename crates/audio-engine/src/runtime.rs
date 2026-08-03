@@ -2,7 +2,7 @@ use std::{
     collections::BTreeMap,
     fs,
     sync::{
-        Arc, Mutex, OnceLock,
+        Arc, Mutex, OnceLock, TryLockError,
         atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering},
         mpsc,
     },
@@ -31,7 +31,7 @@ use yadaw_dsp_core::mixer::{
 use yadaw_dsp_render::{RenderMeter, RenderRuntime};
 use yadaw_dsp_runtime::{
     MUSICAL_TICKS_PER_QUARTER,
-    block::{LatencyNode, MAX_PLUGIN_BLOCK_FRAMES, StereoDelayLine, plan_latency_compensation},
+    block::{MAX_PLUGIN_BLOCK_FRAMES, StereoDelayLine},
     protocol::{
         CompiledAudioGraphSnapshot, CompiledGraphEdge, CompiledGraphEdgeKind, CompiledGraphNode,
         CompiledGraphNodeKind, CompiledGraphPluginState, CompiledGraphSignalWidth,

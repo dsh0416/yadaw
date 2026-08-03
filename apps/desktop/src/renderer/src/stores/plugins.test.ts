@@ -192,6 +192,7 @@ function editorOpenResult() {
         descriptor: effectDescriptor,
         audioMode: "stereo" as const,
         enabled: true,
+        sidechainInputs: [],
         componentState: new Uint8Array(),
         controllerState: new Uint8Array()
       }
@@ -321,6 +322,7 @@ describe("plugin store", () => {
             descriptor: effectDescriptor,
             audioMode: "stereo",
             enabled: true,
+            sidechainInputs: [],
             componentState: new Uint8Array(),
             controllerState: new Uint8Array()
           }
@@ -402,6 +404,7 @@ describe("plugin store", () => {
           descriptor: effectDescriptor,
           audioMode: "stereo",
           enabled: true,
+          sidechainInputs: [],
           componentState: new Uint8Array(),
           controllerState: new Uint8Array()
         }
@@ -496,6 +499,7 @@ describe("plugin store", () => {
       descriptor: instrumentDescriptor,
       audioMode: "stereo",
       enabled: true,
+      sidechainInputs: [],
       componentState: new Uint8Array(),
       controllerState: new Uint8Array()
     })
@@ -569,6 +573,7 @@ describe("plugin store", () => {
       descriptor: effectDescriptor,
       audioMode: "mono-to-stereo",
       enabled: true,
+      sidechainInputs: [],
       componentState: new Uint8Array(),
       controllerState: new Uint8Array()
     })

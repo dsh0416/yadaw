@@ -11,6 +11,7 @@ import {
   mixerChannels,
   mixerSends,
   pluginInstances,
+  pluginSidechainRoutes,
   PROJECT_ID,
   project,
   tempoEvents,
@@ -32,6 +33,7 @@ export async function readMixerSnapshot(
     clipRows,
     sendRows,
     pluginRows,
+    pluginSidechainRouteRows,
     midiClipRows,
     midiNoteRows,
     midiEventRows,
@@ -73,6 +75,10 @@ export async function readMixerSnapshot(
         asc(pluginInstances.slotOrder),
         asc(pluginInstances.id)
       ),
+    db
+      .select()
+      .from(pluginSidechainRoutes)
+      .orderBy(asc(pluginSidechainRoutes.pluginId), asc(pluginSidechainRoutes.inputBusIndex)),
     db.select().from(midiClips).orderBy(asc(midiClips.startTick), asc(midiClips.id)),
     db
       .select()
@@ -103,6 +109,18 @@ export async function readMixerSnapshot(
   )
 
   const notesByClip = new Map<string, ProjectGraphSnapshot["midiClips"][number]["notes"]>()
+  const sidechainRoutesByPlugin = new Map<
+    string,
+    ProjectGraphSnapshot["plugins"][number]["sidechainInputs"]
+  >()
+  for (const route of pluginSidechainRouteRows) {
+    const routes = sidechainRoutesByPlugin.get(route.pluginId) ?? []
+    routes.push({
+      inputBusIndex: route.inputBusIndex,
+      sourceChannelId: route.sourceChannelId
+    })
+    sidechainRoutesByPlugin.set(route.pluginId, routes)
+  }
   for (const note of midiNoteRows) {
     const notes = notesByClip.get(note.clipId) ?? []
     notes.push({
@@ -183,6 +201,7 @@ export async function readMixerSnapshot(
       descriptor: pluginDescriptor(plugin.descriptorSnapshot),
       audioMode: plugin.audioMode,
       enabled: plugin.enabled,
+      sidechainInputs: sidechainRoutesByPlugin.get(plugin.id) ?? [],
       componentState: bytes(plugin.componentState),
       controllerState: bytes(plugin.controllerState),
       araDocumentState: bytes(plugin.araDocumentState)
