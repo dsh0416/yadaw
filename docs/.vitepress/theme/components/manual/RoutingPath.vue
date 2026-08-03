@@ -1,9 +1,5 @@
 <script setup lang="ts">
-export interface RoutingPathNode {
-  id: string
-  eyebrow: string
-  label: string
-}
+import type { RoutingPathNode } from "./routing-path"
 
 const props = withDefaults(
   defineProps<{

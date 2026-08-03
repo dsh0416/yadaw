@@ -13,7 +13,7 @@ import type {
 import ManualDemoFrame from "./ManualDemoFrame.vue"
 import ManualMixerChannelStrip from "./ManualMixerChannelStrip.vue"
 import RoutingPath from "./RoutingPath.vue"
-import type { RoutingPathNode } from "./RoutingPath.vue"
+import type { RoutingPathNode } from "./routing-path"
 
 type Locale = "en" | "zh"
 
