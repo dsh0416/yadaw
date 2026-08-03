@@ -1,6 +1,8 @@
 ---
 title: Troubleshooting
 description: Resolve silent output, unavailable inputs, dropouts, latency, and plug-in failures.
+vstTrademark: true
+asioTrademark: true
 ---
 
 # Troubleshooting
@@ -28,7 +30,7 @@ or cabling.
 2. Allow microphone or audio-input permission for YADAW.
 3. Select the device under **Audio → Devices** and apply the change.
 4. Reopen the audio channel's input selector.
-5. On Windows, install and select the manufacturer's 64-bit ASIO driver when
+5. On Windows, install and select the manufacturer's 64-bit ASIO® driver when
    appropriate.
 
 ## No audio device can be opened at all
@@ -64,9 +66,9 @@ plug-ins in the monitored path and use the round-trip latency readout to compare
 configurations. Direct hardware monitoring, when offered by the interface, can
 avoid the software round trip.
 
-## A VST3 plug-in is absent or quarantined
+## A VST® 3 plug-in is absent or quarantined
 
-1. Check that the correct architecture and VST3 version are installed.
+1. Check that the correct architecture and VST 3 version are installed.
 2. Open the Sound Browser and select **Rescan VST3**.
 3. Restart YADAW after installing or updating the plug-in.
 4. Check startup messages for the failed module.

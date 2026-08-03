@@ -1,6 +1,7 @@
 ---
 title: Mixer and routing
 description: Balance channels, choose inputs and outputs, and create buses and sends.
+vstTrademark: true
 ---
 
 # Mixer and routing
@@ -12,8 +13,8 @@ master channel in the project.
 
 Each strip follows the signal from top to bottom:
 
-1. **Input** — hardware input, bus input, or VST3 instrument.
-2. **Audio FX** — ordered VST3 effect inserts.
+1. **Input** — hardware input, bus input, or VST® 3 instrument.
+2. **Audio FX** — ordered VST 3 effect inserts.
 3. **Sends** — copies of the signal routed elsewhere.
 4. **Output** — a bus or hardware output destination.
 5. **Pan** and **Volume** — channel placement and final level.
@@ -29,7 +30,7 @@ Audio channels can receive:
 - an adjacent linked stereo pair;
 - a bus.
 
-Instrument channels receive the output of their assigned VST3 instrument.
+Instrument channels receive the output of their assigned VST 3 instrument.
 Auxes normally receive audio through a bus or sends.
 
 ## Route to an output

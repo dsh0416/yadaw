@@ -1,6 +1,7 @@
 import DefaultTheme from "vitepress/theme-without-fonts"
 import type { Theme } from "vitepress"
 import BlogIndex from "./components/BlogIndex.vue"
+import DocsLayout from "./components/DocsLayout.vue"
 import HomePage from "./components/HomePage.vue"
 import MermaidDiagram from "./components/MermaidDiagram.vue"
 import "unfonts.css"
@@ -9,6 +10,7 @@ import "./custom.css"
 
 export default {
   extends: DefaultTheme,
+  Layout: DocsLayout,
   enhanceApp({ app }) {
     app.component("BlogIndex", BlogIndex)
     app.component("HomePage", HomePage)

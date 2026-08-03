@@ -1,6 +1,8 @@
 ---
 title: Install YADAW
 description: Download and start YADAW on Windows, macOS, or Linux.
+vstTrademark: true
+asioTrademark: true
 ---
 
 # Install YADAW
@@ -27,7 +29,7 @@ That process is intended for contributors.
 
 ## Windows
 
-Run the downloaded installer. Windows audio builds include ASIO support. For
+Run the downloaded installer. Windows audio builds include ASIO® support. For
 low-latency work, install the 64-bit ASIO driver supplied by your audio-interface
 manufacturer before opening YADAW.
 
@@ -57,7 +59,7 @@ sure the user running YADAW can access the selected device.
 
 ## First launch
 
-YADAW scans the system and user VST3 locations, starts its isolated audio
+YADAW scans the system and user VST® 3 locations, starts its isolated audio
 services, and opens the project workspace. A large plug-in collection can make
 the first scan take longer than later launches.
 

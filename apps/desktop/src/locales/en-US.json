@@ -49,6 +49,9 @@
       "linux": "Linux"
     },
     "license": "License",
+    "vstCompatibility": "VST® 3 compatibility",
+    "asioCompatibility": "ASIO® compatibility",
+    "thirdPartyNotices": "Third-party notices",
     "links": "YADAW resources",
     "projectWebsite": "Project on GitHub",
     "userManual": "User manual",
@@ -461,7 +464,7 @@
         "description": "Windows shared and exclusive audio"
       },
       "asio": {
-        "label": "ASIO",
+        "label": "ASIO®",
         "platform": "Windows",
         "description": "Low-latency professional audio drivers"
       },
@@ -495,7 +498,8 @@
         "scanning": "Scanning cpal hosts…",
         "unavailable": "No CPAL audio backend is available.",
         "hostUnavailable": "This CPAL host is not available in the current native build.",
-        "noHostReported": "CPAL did not report an available audio host."
+        "noHostReported": "CPAL did not report an available audio host.",
+        "asioCompatibility": "ASIO® compatibility"
       },
       "deviceSections": {
         "output": {

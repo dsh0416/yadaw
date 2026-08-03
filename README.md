@@ -57,12 +57,20 @@ products or incompatible project formats.
 
 ## Current direction
 
-The foundation is in place: a native real-time audio engine, project
-persistence, arrangement and mixer workflows, audio recording, MIDI clips, and
-VST3 hosting. The next primary focus is composition depth—especially MIDI
-editing and the piano roll—then mixing/export, live performance, and finally a
-broader built-in plug-in rack for out-of-the-box use. After VST3, hosted formats
-are planned as ARA, then CLAP, then AU.
+The foundation is in place: a native real-time audio engine with ASIO® support
+on Windows, project persistence, arrangement and mixer workflows, audio
+recording, MIDI clips, and VST® 3 hosting. The next primary focus is composition
+depth—especially MIDI editing and the piano roll—then mixing/export, live
+performance, and finally a broader built-in plug-in rack for out-of-the-box use.
+After VST 3, hosted formats are planned as ARA, then CLAP, then AU.
+
+<img src="packages/ui/src/assets/VST_Compatible_Logo_Steinberg.svg" alt="VST Compatible" width="128">
+
+VST is a registered trademark of Steinberg Media Technologies GmbH.
+
+<img src="packages/ui/src/assets/ASIO_Compatible_Logo_Steinberg_BW.svg" alt="ASIO Compatible" width="128">
+
+ASIO is a registered trademark of Steinberg Media Technologies GmbH.
 
 Until 1.0, project formats and compatibility may change without a migration
 guarantee. See the [roadmap](agents/docs/roadmap.md) for milestones and priorities.

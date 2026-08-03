@@ -30,6 +30,8 @@ files:
 win:
   icon: build/icon.svg
   extraResources:
+    - from: ../../THIRD_PARTY_NOTICES.txt
+      to: THIRD_PARTY_NOTICES.txt
     - from: ../../target/release/yadaw-audio-host.exe
       to: yadaw-audio-host.exe
     - from: ../../target/release/yadaw-vst3-probe.exe
@@ -49,6 +51,8 @@ mac:
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
   extraResources:
+    - from: ../../THIRD_PARTY_NOTICES.txt
+      to: THIRD_PARTY_NOTICES.txt
     - from: ../../target/release/yadaw-audio-host
       to: yadaw-audio-host
     - from: ../../target/release/yadaw-vst3-probe
@@ -65,6 +69,8 @@ mac:
 linux:
   icon: build/icon.svg
   extraResources:
+    - from: ../../THIRD_PARTY_NOTICES.txt
+      to: THIRD_PARTY_NOTICES.txt
     - from: ../../target/release/yadaw-audio-host
       to: yadaw-audio-host
     - from: ../../target/release/yadaw-vst3-probe

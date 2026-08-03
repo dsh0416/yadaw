@@ -3,6 +3,7 @@ title: The journey to ARA support
 date: 2026-07-31
 description: Why native Logic Pro on Apple Silicon still cannot host ARA plug-ins — and why the same protocol was surprisingly straightforward to support in YADAW.
 tags: [ara]
+vstTrademark: true
 ---
 
 # The journey to ARA support
@@ -11,7 +12,7 @@ Ever since I moved to Apple Silicon, I have barely used ARA plug-ins in Logic Pr
 
 ## The workaround treadmill
 
-The usual advice is familiar: freeze the track, bounce in place, or otherwise hand a static audio file to a regular VST/AU plug-in that can do something similar. Those workflows work until they do not.
+The usual advice is familiar: freeze the track, bounce in place, or otherwise hand a static audio file to a regular VST® 3 or AU plug-in that can do something similar. Those workflows work until they do not.
 
 Once the audio is frozen or rendered, you lose the interactive loop that made ARA useful in the first place. You cannot freely move the clip, tweak timing, or keep editing against a live analysis model without bouncing again. For tools that are supposed to sit _inside_ the arrangement — Melodyne-style editing, tempo-aware processing, region-level analysis — that is a severe downgrade, not a substitute.
 
@@ -31,7 +32,7 @@ Dreamtonics themselves document the gap: AU ARA for Synthesizer V is compatible 
 
 When we wired ARA into YADAW, the surprising part was how little drama there was.
 
-ARA wants a close relationship with the host: shared musical context, random access to audio samples, and bidirectional updates when either side changes the model. That sounds intimidating on paper. In practice, once the host already owns the project timeline, the audio assets, and an in-process VST3 runtime, the ARA document-controller path fits naturally. There was no need for freeze bridges, out-of-band bounce steps, or a separate “ARA-compatible mode.” The protocol expects the host and the plug-in to share an address space — and in YADAW, they do.
+ARA wants a close relationship with the host: shared musical context, random access to audio samples, and bidirectional updates when either side changes the model. That sounds intimidating on paper. In practice, once the host already owns the project timeline, the audio assets, and an in-process VST 3 runtime, the ARA document-controller path fits naturally. There was no need for freeze bridges, out-of-band bounce steps, or a separate “ARA-compatible mode.” The protocol expects the host and the plug-in to share an address space — and in YADAW, they do.
 
 That contrast made the Logic situation even more interesting. If ARA itself is not the hard part, what changed on Apple Silicon?
 

@@ -1,12 +1,13 @@
 ---
 title: Welcome to YADAW
 description: Learn what YADAW can do and find your way through the user manual.
+vstTrademark: true
 ---
 
 # Welcome to YADAW
 
 YADAW is a free, open-source digital audio workstation for Windows, macOS, and
-Linux. It brings audio recording, MIDI arrangement, VST3 instruments and
+Linux. It brings audio recording, MIDI arrangement, VST® 3 instruments and
 effects, routing, and mixing into one desktop workspace.
 
 ::: warning Experimental software
@@ -35,7 +36,7 @@ The current foundation includes:
 - audio recording with recoverable swap files;
 - Standard MIDI File import, MIDI clips, and piano-roll editing;
 - mixer channels, aux buses, sends, hardware outputs, metering, mute, and solo;
-- VST3 instrument and effect discovery, hosting, and plug-in editors;
+- VST 3 instrument and effect discovery, hosting, and plug-in editors;
 - English and Simplified Chinese interfaces, with dark, light, and system themes.
 
 Features shown as **Soon** in the application are placeholders, not completed

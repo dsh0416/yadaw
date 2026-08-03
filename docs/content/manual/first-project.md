@@ -1,6 +1,7 @@
 ---
 title: Your first project
 description: Configure audio, create a project, add a track, and save your work.
+vstTrademark: true
 ---
 
 # Your first project
@@ -38,7 +39,7 @@ in **File → Project Settings**.
 
 Open the **Mixer** from the top bar.
 
-- Choose **Instrument** to add an instrument track, then assign a VST3
+- Choose **Instrument** to add an instrument track, then assign a VST® 3
   instrument from the input slot or Sound Browser.
 - Choose **Audio** to add an audio track. Select its hardware input before
   recording.
