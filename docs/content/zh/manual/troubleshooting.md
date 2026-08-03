@@ -2,6 +2,7 @@
 title: 故障排除
 description: 解决无声输出、输入不可用、丢失、延迟与插件故障。
 vstTrademark: true
+asioTrademark: true
 ---
 
 # 故障排除
@@ -28,7 +29,7 @@ vstTrademark: true
 2. 为 YADAW 授予麦克风或音频输入权限。
 3. 在**音频 → 设备**下选择该设备并应用更改。
 4. 重新打开音频通道的输入选择器。
-5. 在 Windows 上，视情况安装并选择设备厂商的 64 位 ASIO 驱动。
+5. 在 Windows 上，视情况安装并选择设备厂商的 64 位 ASIO® 驱动。
 
 ## 完全无法打开任何音频设备
 

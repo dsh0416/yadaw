@@ -2,6 +2,7 @@
 title: 安装 YADAW
 description: 在 Windows、macOS 或 Linux 上下载并启动 YADAW。
 vstTrademark: true
+asioTrademark: true
 ---
 
 # 安装 YADAW
@@ -26,7 +27,7 @@ YADAW 仍处于实验阶段。如果发布页面还没有可用的安装包，�
 
 ## Windows
 
-运行下载的安装程序。Windows 音频构建包含 ASIO 支持。要进行低延迟工作，
+运行下载的安装程序。Windows 音频构建包含 ASIO® 支持。要进行低延迟工作，
 请在打开 YADAW 前安装音频接口厂商提供的 64 位 ASIO 驱动。
 
 如果 Windows 提示无法识别的应用，请确认下载来自官方仓库，并在继续前校验

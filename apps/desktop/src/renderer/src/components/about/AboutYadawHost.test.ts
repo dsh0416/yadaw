@@ -26,8 +26,15 @@ describe("AboutYadawHost", () => {
     expect(dialog?.textContent).toContain(
       "VST is a registered trademark of Steinberg Media Technologies GmbH."
     )
+    expect(dialog?.textContent).toContain("ASIO® compatibility")
+    expect(dialog?.textContent).toContain(
+      "ASIO is a registered trademark of Steinberg Media Technologies GmbH."
+    )
     expect(dialog?.textContent).toContain("Copyright (c) 2025, Steinberg Media Technologies GmbH")
+    expect(dialog?.textContent).toContain("Steinberg ASIO SDK 2.3.4")
+    expect(dialog?.textContent).toContain("General Public License (GPL) Version 3")
     expect(dialog?.querySelector('[data-appearance="on-dark"]')).not.toBeNull()
+    expect(dialog?.querySelector(".asio-compatible-logo")).not.toBeNull()
 
     const links = [...(dialog?.querySelectorAll<HTMLAnchorElement>("a") ?? [])]
     expect(links.map((link) => link.getAttribute("href"))).toEqual([

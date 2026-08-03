@@ -1,9 +1,11 @@
 <script setup lang="ts">
+import { computed } from "vue"
 import { useI18n } from "vue-i18n"
 import { UiRadioGroup, type UiRadioOption } from "@yadaw/ui"
 import SettingsSection from "../settings/SettingsSection.vue"
+import AsioConfigurationNotice from "./AsioConfigurationNotice.vue"
 
-defineProps<{
+const props = defineProps<{
   modelValue: string
   options: readonly UiRadioOption[]
   optionCount: number
@@ -12,6 +14,7 @@ defineProps<{
 const emit = defineEmits<{ "update:modelValue": [value: string] }>()
 
 const { t } = useI18n()
+const hasAsioOption = computed(() => props.options.some((option) => option.value === "asio"))
 </script>
 
 <template>
@@ -34,5 +37,6 @@ const { t } = useI18n()
         }}
       </p>
     </div>
+    <AsioConfigurationNotice v-if="hasAsioOption" />
   </SettingsSection>
 </template>

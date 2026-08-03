@@ -2,6 +2,7 @@
 title: Troubleshooting
 description: Resolve silent output, unavailable inputs, dropouts, latency, and plug-in failures.
 vstTrademark: true
+asioTrademark: true
 ---
 
 # Troubleshooting
@@ -29,7 +30,7 @@ or cabling.
 2. Allow microphone or audio-input permission for YADAW.
 3. Select the device under **Audio → Devices** and apply the change.
 4. Reopen the audio channel's input selector.
-5. On Windows, install and select the manufacturer's 64-bit ASIO driver when
+5. On Windows, install and select the manufacturer's 64-bit ASIO® driver when
    appropriate.
 
 ## No audio device can be opened at all

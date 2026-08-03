@@ -26,13 +26,13 @@ const meta = {
     },
     data: () => ({
       projectName: "Midnight session",
-      driver: "asio",
+      driver: "shared",
       monitoring: true,
       mode: "balanced",
       bufferSize: 256,
       driverOptions: [
-        { label: "ASIO", value: "asio" },
-        { label: "WASAPI", value: "wasapi" }
+        { label: "Native shared", value: "shared" },
+        { label: "Native exclusive", value: "exclusive" }
       ],
       modeOptions: [
         {
@@ -119,7 +119,7 @@ export const SelectSizesAndGroups: Story = {
     components: { UiCascadingSelect, UiField, UiSelect },
     data: () => ({
       compactValue: "post",
-      standardValue: "asio",
+      standardValue: "shared",
       keyValue: "major:0",
       routeValue: "output",
       inputValue: "1",
@@ -129,8 +129,8 @@ export const SelectSizesAndGroups: Story = {
         { label: "Post-pan", value: "post-pan" }
       ],
       driverOptions: [
-        { label: "ASIO", value: "asio" },
-        { label: "WASAPI", value: "wasapi" }
+        { label: "Native shared", value: "shared" },
+        { label: "Native exclusive", value: "exclusive" }
       ],
       keyGroups: [
         {

@@ -22,7 +22,7 @@ const meta = {
     },
     template: `
       <div class="storybook-stack">
-        <UiStatusNotice tone="info" title="Audio engine ready">ASIO · 48 kHz · 256 samples</UiStatusNotice>
+        <UiStatusNotice tone="info" title="Audio engine ready">Low latency · 48 kHz · 256 samples</UiStatusNotice>
         <UiStatusNotice tone="success" title="Project saved">All referenced audio is up to date.</UiStatusNotice>
         <UiStatusNotice tone="warning" title="High buffer usage">Consider freezing processor-heavy tracks.</UiStatusNotice>
         <UiStatusNotice tone="danger" title="Audio device disconnected" live="assertive">Reconnect the device or choose another output.</UiStatusNotice>

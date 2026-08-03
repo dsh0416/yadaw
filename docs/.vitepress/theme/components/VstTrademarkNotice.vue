@@ -28,7 +28,7 @@ const title = computed(() =>
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 20px;
-  margin-top: 40px;
+  margin-top: var(--trademark-notice-margin-top, 40px);
   padding: 18px 20px;
   border: 1px solid var(--vp-c-divider);
   border-left: 4px solid var(--yadaw-cyan);
@@ -38,7 +38,7 @@ const title = computed(() =>
 }
 
 .vst-compatible-logo {
-  --vst-compatible-logo-width: 18mm;
+  --vst-compatible-logo-width: var(--trademark-logo-width, 24mm);
 }
 
 .vst-trademark-copy {

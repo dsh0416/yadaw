@@ -3,6 +3,8 @@ import { computed } from "vue"
 import { useI18n } from "vue-i18n"
 import type { DesktopPlatform } from "@yadaw/contracts"
 import { YadawLogo } from "@yadaw/ui"
+import AsioLegalNotice from "./AsioLegalNotice.vue"
+import ThirdPartyNotices from "./ThirdPartyNotices.vue"
 import VstLegalNotice from "./VstLegalNotice.vue"
 
 const props = defineProps<{
@@ -38,6 +40,8 @@ const manualUrl = "https://yadaw.minori.live/manual/"
     </dl>
 
     <VstLegalNotice />
+    <AsioLegalNotice />
+    <ThirdPartyNotices />
 
     <nav class="about-links" :aria-label="t('about.links')">
       <a class="about-link" :href="projectUrl" target="_blank" rel="noopener noreferrer">
