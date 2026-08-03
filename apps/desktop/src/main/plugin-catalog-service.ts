@@ -61,24 +61,24 @@ function busesForMode(kind: PluginDescriptor["kind"], mode: PluginAudioMode) {
 
 const BUILTIN_PLUGINS = [
   {
-    id: "dev.yadaw.gain",
-    bundleName: "YADAW Gain.vst3",
-    classId: "59CABE21E605B9C9EE928D6C3B236BBF",
-    name: "YADAW Gain",
+    id: "live.minori.heron.gain",
+    bundleName: "Heron Gain.vst3",
+    classId: "46774F504DF84B4AC1F308AB88DD3677",
+    name: "Heron Gain",
     kind: "effect" as const
   },
   {
-    id: "dev.yadaw.sine",
-    bundleName: "YADAW Sine.vst3",
-    classId: "F7BC8CA3E5E8B9C9EE928D7114950FBF",
-    name: "YADAW Sine",
+    id: "live.minori.heron.sine",
+    bundleName: "Heron Sine.vst3",
+    classId: "C1351DFA4DDD4B4AC1F30896F6D9DF76",
+    name: "Heron Sine",
     kind: "instrument" as const
   },
   {
-    id: "dev.yadaw.metronome",
-    bundleName: "YADAW Metronome.vst3",
-    classId: "F310A5DEDA34820C9E068A5753F83ADE",
-    name: "YADAW Metronome",
+    id: "live.minori.heron.metronome",
+    bundleName: "Heron Metronome.vst3",
+    classId: "8CD16A11027ACC7FDF0C1419E86D1024",
+    name: "Heron Metronome",
     kind: "instrument" as const
   }
 ] as const
@@ -465,7 +465,7 @@ export class PluginCatalogService {
         builtins.push({
           ...descriptor,
           source: { kind: "builtin", id: spec.id },
-          vendor: descriptor.vendor === "Unknown vendor" ? "YADAW" : descriptor.vendor
+          vendor: descriptor.vendor === "Unknown vendor" ? "Heron Studio" : descriptor.vendor
         })
       } catch (error) {
         const reason = error instanceof Error ? error.message : "Built-in VST3 probe failed"
@@ -490,7 +490,7 @@ export class PluginCatalogService {
           classId: spec.classId,
           modulePath,
           name: spec.name,
-          vendor: "YADAW",
+          vendor: "Heron Studio",
           version: "",
           categories: defaultPluginCategories(spec.kind),
           kind: spec.kind,

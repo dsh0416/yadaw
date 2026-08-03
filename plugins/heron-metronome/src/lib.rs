@@ -1,4 +1,4 @@
-//! YADAW's built-in sample-accurate metronome instrument VST3.
+//! Heron's built-in sample-accurate metronome instrument VST3.
 
 use std::f32::consts::TAU;
 use std::sync::Arc;
@@ -151,7 +151,7 @@ impl IcedPlugin<MetronomeParams> for MetronomeUi {
         let palette = heron_plugin_ui::palette();
         let header = Row::new()
             .push(
-                text("YADAW  /  METRONOME")
+                text("Heron  /  METRONOME")
                     .size(heron_plugin_ui::type_size::PANEL_TITLE)
                     .color(palette.text),
             )
@@ -217,7 +217,7 @@ impl IcedPlugin<MetronomeParams> for MetronomeUi {
     }
 
     fn title(&self) -> String {
-        String::from("YADAW Metronome")
+        String::from("Heron Metronome")
     }
 
     fn theme(&self) -> truce_iced::iced::Theme {

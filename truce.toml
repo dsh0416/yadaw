@@ -1,32 +1,32 @@
 [vendor]
-name = "YADAW"
-id = "dev.yadaw"
-url = "https://github.com/dsh0416/yadaw"
-au_manufacturer = "YDAW"
+name = "Heron Studio"
+id = "live.minori.heron"
+url = "https://github.com/dsh0416/heron"
+au_manufacturer = "HRON"
 
 [[plugin]]
-name = "YADAW Gain"
+name = "Heron Gain"
 bundle_id = "gain"
 crate = "heron-gain"
 category = "effect"
-fourcc = "YDGN"
+fourcc = "HRGN"
 au_tag = "Effects"
 vst3_subcategory = "Tools"
 
 [[plugin]]
-name = "YADAW Sine"
+name = "Heron Sine"
 bundle_id = "sine"
 crate = "heron-sine"
 category = "instrument"
-fourcc = "YDSN"
+fourcc = "HRSN"
 au_tag = "Synthesizer"
 vst3_subcategory = "Synth"
 
 [[plugin]]
-name = "YADAW Metronome"
+name = "Heron Metronome"
 bundle_id = "metronome"
 crate = "heron-metronome"
 category = "instrument"
-fourcc = "YDMT"
+fourcc = "HRMT"
 au_tag = "Synthesizer"
 vst3_subcategory = "Synth"

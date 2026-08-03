@@ -1,4 +1,4 @@
-//! YADAW's built-in 16-voice sine instrument VST3.
+//! Heron's built-in 16-voice sine instrument VST3.
 
 use std::f32::consts::TAU;
 use std::sync::Arc;
@@ -202,7 +202,7 @@ impl IcedPlugin<SineParams> for SineUi {
         let pitch = (params.meter(P::RecentPitch) * 127.0).round() as u8;
         let header = Row::new()
             .push(
-                text("YADAW  /  SINE")
+                text("Heron  /  SINE")
                     .size(heron_plugin_ui::type_size::PANEL_TITLE)
                     .color(palette.text),
             )
@@ -266,7 +266,7 @@ impl IcedPlugin<SineParams> for SineUi {
     }
 
     fn title(&self) -> String {
-        String::from("YADAW Sine")
+        String::from("Heron Sine")
     }
 
     fn theme(&self) -> truce_iced::iced::Theme {

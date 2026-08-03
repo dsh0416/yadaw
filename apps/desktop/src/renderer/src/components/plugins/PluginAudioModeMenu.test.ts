@@ -8,7 +8,7 @@ const descriptor: PluginDescriptor = {
   classId: "mono-effect",
   modulePath: "mono-effect.vst3",
   name: "Mono Effect",
-  vendor: "YADAW",
+  vendor: "Heron Studio",
   version: "1.0",
   categories: ["Fx"],
   kind: "effect",

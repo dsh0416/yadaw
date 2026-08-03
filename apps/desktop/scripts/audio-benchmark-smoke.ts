@@ -24,7 +24,7 @@ interface WireResponse {
 const repositoryRoot = resolve(import.meta.dirname, "..", "..", "..")
 const executableSuffix = process.platform === "win32" ? ".exe" : ""
 const helperPath = resolve(repositoryRoot, "target", "debug", `heron-audio-host${executableSuffix}`)
-const pluginPath = resolve(repositoryRoot, "target", "bundles", "YADAW Gain.vst3")
+const pluginPath = resolve(repositoryRoot, "target", "bundles", "Heron Gain.vst3")
 const client = new AudioHostIpcClient(
   helperPath,
   resolve(tmpdir(), `heron-audio-benchmark-${process.pid}.marker`),
@@ -97,7 +97,7 @@ async function loadGain(instanceId: string): Promise<void> {
     type: "load-plugin",
     instance_id: instanceId,
     module_path: pluginPath,
-    class_id: "59CABE21E605B9C9EE928D6C3B236BBF",
+    class_id: "46774F504DF84B4AC1F308AB88DD3677",
     plugin_kind: "effect",
     audio_mode: "stereo",
     sample_rate: 48_000,

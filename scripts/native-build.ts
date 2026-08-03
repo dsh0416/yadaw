@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { copyFileSync, mkdirSync } from "node:fs"
+import { copyFileSync, cpSync, mkdirSync, readdirSync } from "node:fs"
 import { resolve } from "node:path"
 import { cargoExecutable, fail, hostTarget, run, runPnpm, workspaceRoot } from "./rust-target.ts"
 
@@ -55,6 +55,16 @@ if (scope !== "addons") {
     target,
     ...(!release ? ["--debug"] : [])
   ])
+
+  const targetBundleDirectory = resolve(workspaceRoot, "target", "bundles", target)
+  const stableBundleDirectory = resolve(workspaceRoot, "target", "bundles")
+  for (const entry of readdirSync(targetBundleDirectory, { withFileTypes: true })) {
+    if (!entry.isDirectory() || !entry.name.endsWith(".vst3")) continue
+    cpSync(resolve(targetBundleDirectory, entry.name), resolve(stableBundleDirectory, entry.name), {
+      recursive: true,
+      force: true
+    })
+  }
 
   const profile = release ? "release" : "debug"
   const executableSuffix = process.platform === "win32" ? ".exe" : ""

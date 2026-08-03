@@ -39,9 +39,9 @@ win:
     - from: ../../target/bundles
       to: plugins
       filter:
-        - YADAW Gain.vst3/**/*
-        - YADAW Metronome.vst3/**/*
-        - YADAW Sine.vst3/**/*
+        - Heron Gain.vst3/**/*
+        - Heron Metronome.vst3/**/*
+        - Heron Sine.vst3/**/*
   target:
     - nsis
 
@@ -60,9 +60,9 @@ mac:
     - from: ../../target/bundles
       to: plugins
       filter:
-        - YADAW Gain.vst3/**/*
-        - YADAW Metronome.vst3/**/*
-        - YADAW Sine.vst3/**/*
+        - Heron Gain.vst3/**/*
+        - Heron Metronome.vst3/**/*
+        - Heron Sine.vst3/**/*
   target:
     - dmg
 
@@ -78,8 +78,8 @@ linux:
     - from: ../../target/bundles
       to: plugins
       filter:
-        - YADAW Gain.vst3/**/*
-        - YADAW Metronome.vst3/**/*
-        - YADAW Sine.vst3/**/*
+        - Heron Gain.vst3/**/*
+        - Heron Metronome.vst3/**/*
+        - Heron Sine.vst3/**/*
   target:
     - AppImage

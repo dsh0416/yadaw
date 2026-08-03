@@ -23,22 +23,22 @@ const probePath = resolve(repositoryRoot, "target", "debug", `heron-vst3-probe${
 
 const expected = [
   {
-    bundle: "YADAW Gain.vst3",
-    classId: "59CABE21E605B9C9EE928D6C3B236BBF",
+    bundle: "Heron Gain.vst3",
+    classId: "46774F504DF84B4AC1F308AB88DD3677",
     audioInputs: 1,
     audioOutputs: 1,
     eventInputs: 0
   },
   {
-    bundle: "YADAW Sine.vst3",
-    classId: "F7BC8CA3E5E8B9C9EE928D7114950FBF",
+    bundle: "Heron Sine.vst3",
+    classId: "C1351DFA4DDD4B4AC1F30896F6D9DF76",
     audioInputs: 0,
     audioOutputs: 1,
     eventInputs: 1
   },
   {
-    bundle: "YADAW Metronome.vst3",
-    classId: "F310A5DEDA34820C9E068A5753F83ADE",
+    bundle: "Heron Metronome.vst3",
+    classId: "8CD16A11027ACC7FDF0C1419E86D1024",
     audioInputs: 0,
     audioOutputs: 1,
     eventInputs: 1

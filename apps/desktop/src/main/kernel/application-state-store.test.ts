@@ -277,7 +277,7 @@ describe("ApplicationStateStore", () => {
         classId: "plugin-class",
         modulePath: "plugin.vst3",
         name: "Plugin",
-        vendor: "YADAW",
+        vendor: "Heron Studio",
         version: "1",
         categories: ["Fx"],
         kind: "effect",

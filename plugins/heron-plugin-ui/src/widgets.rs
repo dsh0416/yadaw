@@ -21,7 +21,7 @@ const START_ANGLE: f32 = std::f32::consts::PI * 0.75;
 const END_ANGLE: f32 = std::f32::consts::PI * 2.25;
 const DRAG_SENSITIVITY: f32 = 200.0;
 
-/// Create a parameter knob whose drawing is sourced from YADAW semantic tokens.
+/// Create a parameter knob whose drawing is sourced from Heron semantic tokens.
 pub fn parameter_knob<M: Clone + Debug + 'static>(
     id: impl Into<u32>,
     params: &ParamCache<impl Params>,
@@ -29,7 +29,7 @@ pub fn parameter_knob<M: Clone + Debug + 'static>(
     ParameterKnob::new(id.into(), params)
 }
 
-/// Create a fixed-dark built-in plug-in meter using YADAW signal colors.
+/// Create a fixed-dark built-in plug-in meter using Heron signal colors.
 pub fn level_meter<'a, M: Clone + Debug + 'static>(
     ids: &[impl Into<u32> + Copy],
     params: &'a ParamCache<impl Params>,

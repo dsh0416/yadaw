@@ -9,7 +9,7 @@ const descriptor: PluginDescriptor = {
   classId: "synth",
   modulePath: "synth.vst3",
   name: "Synth",
-  vendor: "YADAW",
+  vendor: "Heron Studio",
   version: "1.0",
   categories: ["Instrument"],
   kind: "instrument",

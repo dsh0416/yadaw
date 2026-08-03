@@ -505,7 +505,7 @@ function pluginInstance(id = "plugin-1"): PluginInstanceState {
       classId: "test-gain",
       modulePath: "/tmp/gain.vst3",
       name: "Test Gain",
-      vendor: "YADAW",
+      vendor: "Heron Studio",
       version: "1.0",
       categories: ["Fx"],
       kind: "effect",

@@ -263,10 +263,10 @@ describe("ProjectDatabase", () => {
     })
     expect(seeded.plugins.find(({ id }) => id === "metronome-instrument")).toMatchObject({
       channelId: "metronome",
-      classId: "F310A5DEDA34820C9E068A5753F83ADE",
+      classId: "8CD16A11027ACC7FDF0C1419E86D1024",
       role: "instrument",
       descriptor: {
-        source: { kind: "builtin", id: "dev.yadaw.metronome" }
+        source: { kind: "builtin", id: "live.minori.heron.metronome" }
       }
     })
     expect(seeded.tempoMap).toEqual({
@@ -497,7 +497,7 @@ describe("ProjectDatabase", () => {
               classId: "0123456789ABCDEFFEDCBA9876543210",
               modulePath: "effect.vst3",
               name: "Effect",
-              vendor: "YADAW",
+              vendor: "Heron Studio",
               version: "1.0",
               categories: ["Fx"],
               kind: "effect" as const,
@@ -684,7 +684,7 @@ describe("ProjectDatabase", () => {
             classId: "0123456789ABCDEFFEDCBA9876543210",
             modulePath: "sidechain.vst3",
             name: "Side-chain Effect",
-            vendor: "YADAW",
+            vendor: "Heron Studio",
             version: "1.0",
             categories: ["Fx"],
             kind: "effect",
@@ -1289,7 +1289,7 @@ describe("ProjectDatabase", () => {
     expect(snapshot.plugins.filter((plugin) => plugin.channelId === "metronome")).toEqual([
       expect.objectContaining({
         id: "metronome-instrument",
-        classId: "F310A5DEDA34820C9E068A5753F83ADE",
+        classId: "8CD16A11027ACC7FDF0C1419E86D1024",
         audioMode: "stereo"
       })
     ])

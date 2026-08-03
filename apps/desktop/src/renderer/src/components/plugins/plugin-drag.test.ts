@@ -14,7 +14,7 @@ const descriptor = {
   classId: "effect",
   modulePath: "/Effect.vst3",
   name: "Effect",
-  vendor: "YADAW",
+  vendor: "Heron Studio",
   version: "1.0",
   categories: ["Fx"],
   kind: "effect",

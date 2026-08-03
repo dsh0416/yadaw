@@ -29,7 +29,7 @@ const descriptor: PluginDescriptor = {
   classId: "compressor",
   modulePath: "compressor.vst3",
   name: "Compressor",
-  vendor: "YADAW",
+  vendor: "Heron Studio",
   version: "1.0",
   categories: ["Fx"],
   kind: "effect",
@@ -143,7 +143,7 @@ describe("MixerPluginSection", () => {
     await pickerTrigger.trigger("click")
     await flushPromises()
     expect(pickerTrigger.attributes("data-state")).toBe("open")
-    await openPickerSubmenu("Browse YADAW plug-ins")
+    await openPickerSubmenu("Browse Heron Studio plug-ins")
     await openPickerSubmenu("Choose Delay")
     expect(wrapper.emitted("insert")).toHaveLength(1)
     const stereoMode = document.body.querySelector<HTMLElement>('[title="Stereo: 2 → 2"]')

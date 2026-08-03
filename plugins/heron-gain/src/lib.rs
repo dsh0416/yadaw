@@ -1,4 +1,4 @@
-//! YADAW's built-in stereo gain VST3.
+//! Heron's built-in stereo gain VST3.
 
 use std::sync::Arc;
 
@@ -26,7 +26,7 @@ pub struct GainParams {
     pub meter_right: MeterSlot,
 }
 
-/// Fixed YADAW instrument-panel UI.
+/// Fixed Heron instrument-panel UI.
 pub struct GainUi;
 
 #[derive(Clone, Debug)]
@@ -44,7 +44,7 @@ impl IcedPlugin<GainParams> for GainUi {
         params: &'a ParamCache<GainParams>,
     ) -> Element<'a, Message<Self::Message>> {
         let palette = heron_plugin_ui::palette();
-        let title = text("YADAW  /  GAIN")
+        let title = text("Heron  /  GAIN")
             .size(heron_plugin_ui::type_size::BODY_COMPACT)
             .color(palette.text);
         let value = text(params.label(P::Gain)).size(30).color(palette.audio);
@@ -82,7 +82,7 @@ impl IcedPlugin<GainParams> for GainUi {
     }
 
     fn title(&self) -> String {
-        String::from("YADAW Gain")
+        String::from("Heron Gain")
     }
 
     fn theme(&self) -> truce_iced::iced::Theme {

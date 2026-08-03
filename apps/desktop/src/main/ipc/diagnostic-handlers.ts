@@ -64,7 +64,8 @@ export function registerDiagnosticHandlers(context: IpcHandlerContext): void {
       const benchmarkEffect = plugins
         .list()
         .plugins.find(
-          (plugin) => plugin.source.kind === "builtin" && plugin.source.id === "dev.yadaw.gain"
+          (plugin) =>
+            plugin.source.kind === "builtin" && plugin.source.id === "live.minori.heron.gain"
         )
       if (!benchmarkEffect) {
         const result = rpcFailure(meta, unavailable(meta, "main"))

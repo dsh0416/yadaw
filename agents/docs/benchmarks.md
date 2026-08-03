@@ -37,7 +37,7 @@ The packaged desktop application also exposes a short native DSP test from
 does not require a Rust toolchain or repository checkout. It renders three
 reference mixer graphs on a worker thread inside the audio helper, then runs an
 IPC suite against that helper. Each graph processes a deterministic stereo
-signal through independent instances of the bundled YADAW Gain VST3: 8 instances
+signal through independent instances of the bundled Heron Gain VST3: 8 instances
 for low-latency tracking, 32 for a production mix, and 64 for a dense session.
 Using a bundled effect keeps results reproducible while including the real VST3
 ABI, buffer adaptation, and plug-in scheduling path. The two suites run
