@@ -83,6 +83,123 @@ mod tests {
     }
 
     #[test]
+    fn toolbar_menu_opens_downward_when_space_is_available() {
+        let geometry = toolbar_menu_geometry(
+            Rectangle::new(Point::new(600.0, 40.0), Size::new(112.0, 24.0)),
+            2,
+            PhysicalPosition::new(100, 200),
+            PhysicalSize::new(800, 600),
+            1.0,
+        );
+
+        assert!(!geometry.opens_upward);
+        assert_eq!(geometry.position, PhysicalPosition::new(700, 264));
+        assert_eq!(geometry.size, PhysicalSize::new(112, 56));
+        assert_eq!(geometry.visible_rows, 2);
+    }
+
+    #[test]
+    fn toolbar_menu_opens_upward_near_the_editor_bottom() {
+        let geometry = toolbar_menu_geometry(
+            Rectangle::new(Point::new(20.0, 560.0), Size::new(72.0, 24.0)),
+            10,
+            PhysicalPosition::new(0, 0),
+            PhysicalSize::new(800, 600),
+            1.0,
+        );
+
+        assert!(geometry.opens_upward);
+        assert_eq!(geometry.position.y, 312);
+        assert_eq!(geometry.size.height, 248);
+        assert_eq!(geometry.visible_rows, 10);
+    }
+
+    #[test]
+    fn toolbar_menu_limits_height_and_enables_scrolling_at_edges() {
+        let geometry = toolbar_menu_geometry(
+            Rectangle::new(Point::new(20.0, 40.0), Size::new(72.0, 24.0)),
+            10,
+            PhysicalPosition::new(0, 0),
+            PhysicalSize::new(120, 100),
+            1.0,
+        );
+
+        assert!(geometry.opens_upward);
+        assert_eq!(geometry.size.height, 40);
+        assert_eq!(geometry.visible_rows, 1);
+    }
+
+    #[test]
+    fn toolbar_menu_geometry_converts_hidpi_and_user_zoom_once() {
+        let geometry = toolbar_menu_geometry(
+            Rectangle::new(Point::new(180.0, 20.0), Size::new(72.0, 24.0)),
+            10,
+            PhysicalPosition::new(30, 40),
+            PhysicalSize::new(400, 300),
+            2.0,
+        );
+
+        assert_eq!(geometry.position.x, 286);
+        assert_eq!(geometry.position.y, 128);
+        assert_eq!(geometry.size.width, 144);
+        assert_eq!(geometry.visible_rows, 4);
+    }
+
+    #[test]
+    fn toolbar_menu_keyboard_navigation_wraps_and_reaches_boundaries() {
+        let mut highlighted = 0;
+
+        assert_eq!(
+            toolbar_menu_key(&Key::Named(NamedKey::ArrowUp), &mut highlighted, 4),
+            MenuKeyResult::None
+        );
+        assert_eq!(highlighted, 3);
+        toolbar_menu_key(&Key::Named(NamedKey::Home), &mut highlighted, 4);
+        assert_eq!(highlighted, 0);
+        toolbar_menu_key(&Key::Named(NamedKey::End), &mut highlighted, 4);
+        assert_eq!(highlighted, 3);
+        toolbar_menu_key(&Key::Named(NamedKey::ArrowDown), &mut highlighted, 4);
+        assert_eq!(highlighted, 0);
+    }
+
+    #[test]
+    fn toolbar_menu_keyboard_selection_and_cancellation_are_typed() {
+        let mut highlighted = 0;
+
+        for key in [NamedKey::Enter, NamedKey::Space] {
+            assert_eq!(
+                toolbar_menu_key(&Key::Named(key), &mut highlighted, 2),
+                MenuKeyResult::Select
+            );
+        }
+        for key in [NamedKey::Escape, NamedKey::Tab] {
+            assert_eq!(
+                toolbar_menu_key(&Key::Named(key), &mut highlighted, 2),
+                MenuKeyResult::Dismiss
+            );
+        }
+    }
+
+    #[test]
+    fn toolbar_menu_initially_highlights_the_current_typed_choice() {
+        let options = vec![
+            ToolbarMenuOption {
+                choice: ToolbarMenuChoice::Zoom(100),
+                label: "100%".to_owned(),
+            },
+            ToolbarMenuOption {
+                choice: ToolbarMenuChoice::Zoom(225),
+                label: "225%".to_owned(),
+            },
+        ];
+
+        assert_eq!(
+            initial_toolbar_highlight(&options, ToolbarMenuChoice::Zoom(225)),
+            1
+        );
+    }
+
+    #[test]
     fn signal_colors_accept_six_digit_hex() {
         assert_eq!(
             parse_signal_color("#58c6c2"),

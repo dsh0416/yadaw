@@ -18,6 +18,8 @@ struct WinitHost {
     editor_owner_window: Option<usize>,
     editors: HashMap<WindowId, EditorWindow>,
     editor_instances: HashMap<String, WindowId>,
+    editor_menus: HashMap<WindowId, EditorMenuWindow>,
+    editor_menu_for_owner: HashMap<WindowId, WindowId>,
     editor_clipboard: Option<EditorClipboard>,
     next_editor_tick: Option<Instant>,
     next_ara_tick: Option<Instant>,
@@ -132,9 +134,13 @@ impl WinitHost {
                 message: "VST3 editor zoom is outside 50...400".into(),
             };
         }
-        if let Some(window_id) = self.editor_instances.get(&instance_id).copied()
-            && let Some(editor) = self.editors.get_mut(&window_id)
-        {
+        if let Some(window_id) = self.editor_instances.get(&instance_id).copied() {
+            self.close_editor_menu(window_id, false);
+            let Some(editor) = self.editors.get_mut(&window_id) else {
+                return control_error! {
+                    message: "VST3 editor ownership is inconsistent".into(),
+                };
+            };
             let Some(runtime) = self.vst3.as_mut() else {
                 return control_error! {
                     message: "VST3 UI runtime is shutting down".into(),
@@ -231,6 +237,7 @@ impl WinitHost {
         let Some(window_id) = self.editor_instances.remove(instance_id) else {
             return;
         };
+        self.close_editor_menu(window_id, false);
         if let Some(mut editor) = self.editors.remove(&window_id) {
             editor.close();
         }
@@ -248,7 +255,74 @@ impl WinitHost {
         }
         self.editors.clear();
         self.editor_instances.clear();
+        self.editor_menus.clear();
+        self.editor_menu_for_owner.clear();
         self.compositor = None;
+    }
+
+    fn open_editor_menu(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        owner_id: WindowId,
+        request: crate::editor_window::ToolbarMenuRequest,
+    ) {
+        self.close_editor_menu(owner_id, false);
+        if let Some(editor) = self.editors.get_mut(&owner_id) {
+            editor.popup_opened(request.menu);
+        }
+        let Some(parent) = self.editors.get(&owner_id).map(|editor| editor.window.clone()) else {
+            return;
+        };
+        let result = toolbar_menu_window_attributes(&parent, &request)
+            .and_then(|attributes| {
+                event_loop
+                    .create_window(attributes)
+                    .map(Arc::new)
+                    .map_err(|error| format!("could not create popup window: {error}"))
+            });
+        let window = match result {
+            Ok(window) => window,
+            Err(error) => {
+                if let Some(editor) = self.editors.get_mut(&owner_id) {
+                    editor.report_popup_failure(error);
+                }
+                return;
+            }
+        };
+        let Some(compositor) = self.compositor.as_mut() else {
+            if let Some(editor) = self.editors.get_mut(&owner_id) {
+                editor.report_popup_failure("the renderer is unavailable");
+            }
+            return;
+        };
+        let popup_id = window.id();
+        let menu = EditorMenuWindow::new(owner_id, request, window, compositor);
+        let replaced = replace_owned_popup(&mut self.editor_menu_for_owner, owner_id, popup_id);
+        debug_assert!(replaced.is_none());
+        self.editor_menus.insert(popup_id, menu);
+        if let Some(menu) = self.editor_menus.get(&popup_id) {
+            menu.present();
+        }
+    }
+
+    fn close_editor_menu(&mut self, owner_id: WindowId, restore_focus: bool) {
+        let Some(popup_id) = remove_owned_popup(&mut self.editor_menu_for_owner, owner_id) else {
+            return;
+        };
+        self.editor_menus.remove(&popup_id);
+        if let Some(editor) = self.editors.get_mut(&owner_id) {
+            editor.close_popup();
+            if restore_focus {
+                editor.present();
+            }
+        }
+    }
+
+    fn close_all_editor_menus(&mut self) {
+        let owners: Vec<WindowId> = self.editor_menu_for_owner.keys().copied().collect();
+        for owner_id in owners {
+            self.close_editor_menu(owner_id, false);
+        }
     }
 
     fn execute_vst3_request(&mut self, event_loop: &ActiveEventLoop, request: ActorRequest) {
@@ -265,6 +339,7 @@ impl WinitHost {
             ActorCommand::Control(ControlCommand::ConfigurePluginEditorAppearance {
                 appearance,
             }) => {
+                self.close_all_editor_menus();
                 for editor in self.editors.values_mut() {
                     editor.update_appearance(appearance);
                 }
@@ -501,6 +576,20 @@ impl WinitHost {
     }
 }
 
+fn replace_owned_popup<Id>(owners: &mut HashMap<Id, Id>, owner: Id, popup: Id) -> Option<Id>
+where
+    Id: Copy + Eq + std::hash::Hash,
+{
+    owners.insert(owner, popup)
+}
+
+fn remove_owned_popup<Id>(owners: &mut HashMap<Id, Id>, owner: Id) -> Option<Id>
+where
+    Id: Copy + Eq + std::hash::Hash,
+{
+    owners.remove(&owner)
+}
+
 fn milliseconds_to_samples(milliseconds: f64, sample_rate: u32) -> u32 {
     if !milliseconds.is_finite() || milliseconds <= 0.0 || sample_rate == 0 {
         return 0;
@@ -649,10 +738,69 @@ impl ApplicationHandler<UiEvent> for WinitHost {
 
     fn window_event(
         &mut self,
-        _event_loop: &ActiveEventLoop,
+        event_loop: &ActiveEventLoop,
         window_id: WindowId,
         event: WindowEvent,
     ) {
+        if self.editor_menus.contains_key(&window_id) {
+            if matches!(event, WindowEvent::RedrawRequested) {
+                let result = self
+                    .editor_menus
+                    .get_mut(&window_id)
+                    .zip(self.compositor.as_mut())
+                    .map(|(menu, compositor)| menu.draw(compositor));
+                if let Some(Err(error)) = result {
+                    let popup = self
+                        .editor_menus
+                        .get(&window_id)
+                        .map(|menu| (menu.owner_id, menu.menu));
+                    if let Some((owner_id, menu)) = popup {
+                        self.close_editor_menu(owner_id, true);
+                        if let Some(editor) = self.editors.get_mut(&owner_id) {
+                            editor.report_popup_failure(format!("{menu:?} rendering failed: {error}"));
+                        }
+                    }
+                }
+                return;
+            }
+            let action = self
+                .editor_menus
+                .get_mut(&window_id)
+                .zip(self.compositor.as_mut())
+                .and_then(|(menu, compositor)| menu.handle_event(event, compositor));
+            let Some(action) = action else {
+                return;
+            };
+            let Some(owner_id) = self
+                .editor_menus
+                .get(&window_id)
+                .map(|menu| menu.owner_id)
+            else {
+                return;
+            };
+            self.close_editor_menu(owner_id, true);
+            if let EditorMenuAction::Selected(choice) = action {
+                let editor_action = self
+                    .editors
+                    .get_mut(&owner_id)
+                    .and_then(|editor| editor.apply_toolbar_choice(choice));
+                if let Some(editor_action) = editor_action {
+                    self.apply_editor_action(owner_id, editor_action);
+                }
+            }
+            return;
+        }
+
+        if self.editors.contains_key(&window_id)
+            && matches!(
+                event,
+                WindowEvent::Moved(_)
+                    | WindowEvent::Resized(_)
+                    | WindowEvent::ScaleFactorChanged { .. }
+            )
+        {
+            self.close_editor_menu(window_id, false);
+        }
         if matches!(event, WindowEvent::RedrawRequested) {
             let result = self
                 .editors
@@ -695,21 +843,10 @@ impl ApplicationHandler<UiEvent> for WinitHost {
                 close = true;
                 continue;
             }
-            let (editors, runtime) = (&mut self.editors, &mut self.vst3);
-            let (Some(editor), Some(runtime)) = (editors.get_mut(&window_id), runtime.as_mut())
-            else {
-                continue;
-            };
-            let class_id = editor.class_id.clone();
-            if let Some(preference) =
-                editor.apply_action(action, runtime, &mut self.editor_clipboard)
-            {
-                let _ = self
-                    .host_events
-                    .try_send(HostEvent::PluginEditorPreferenceChanged {
-                        class_id,
-                        preference,
-                    });
+            if let EditorAction::OpenToolbarMenu(request) = action {
+                self.open_editor_menu(event_loop, window_id, request);
+            } else {
+                self.apply_editor_action(window_id, action);
             }
         }
         self.refresh_clipboard_availability();
@@ -723,6 +860,29 @@ impl ApplicationHandler<UiEvent> for WinitHost {
         }
     }
 
+}
+
+impl WinitHost {
+    fn apply_editor_action(&mut self, window_id: WindowId, action: EditorAction) {
+        if matches!(action, EditorAction::PreferenceChanged(_)) {
+            self.close_editor_menu(window_id, false);
+        }
+        let (editors, runtime) = (&mut self.editors, &mut self.vst3);
+        let (Some(editor), Some(runtime)) = (editors.get_mut(&window_id), runtime.as_mut()) else {
+            return;
+        };
+        let class_id = editor.class_id.clone();
+        if let Some(preference) =
+            editor.apply_action(action, runtime, &mut self.editor_clipboard)
+        {
+            let _ = self
+                .host_events
+                .try_send(HostEvent::PluginEditorPreferenceChanged {
+                    class_id,
+                    preference,
+                });
+        }
+    }
 }
 
 fn plugin_editor_window_attributes(

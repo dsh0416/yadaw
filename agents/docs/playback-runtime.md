@@ -610,10 +610,26 @@ There is one winit top-level editor per plug-in instance. Reopening focuses it.
 iced 0.14 and its WGPU renderer draw the toolbar and parameter list without
 starting another event loop. Native mode creates a platform child below the
 toolbar: an HWND with child/clip styles, an NSView, or an X11 window carrying
-XEmbed information. Closing uses this order:
+XEmbed information.
+
+Native-mode Mode and Zoom menus are separate, borderless winit/WGPU windows,
+not iced overlays in the editor surface. Windows uses an editor-owned popup
+without a taskbar entry, AppKit uses a child `NSWindow` ordered above the
+editor, and X11 uses an override-redirect `DropdownMenu` window. This avoids
+the native-child airspace conflict: opening, choosing, or dismissing a YADAW
+menu never hides or detaches the plug-in view. Parameters mode (including the
+Wayland fallback) continues to use iced pick-list overlays.
+
+The UI runtime maps each popup to one owner editor and permits at most one
+popup per editor. A popup is destroyed before its owner moves, resizes,
+changes scale/appearance/locale, switches mode, or closes. Popup creation or
+rendering failure closes only the menu, leaves the native plug-in visible, and
+places a retryable warning in the editor toolbar. Closing uses this order:
 
 ```text
-IPlugView::removed
+destroy owned toolbar popup (when present)
+  -> restore focus to editor/native child
+  -> IPlugView::removed
   -> IPlugView::setFrame(null)
   -> release view
   -> destroy platform child

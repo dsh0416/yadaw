@@ -32,6 +32,7 @@ impl EditorWindow {
             parameters,
             warning: None,
             open_menu: None,
+            toolbar_anchors: HashMap::new(),
             compare_segment_focused: false,
             active_gestures: HashSet::new(),
             compare_slots: None,
@@ -134,6 +135,47 @@ impl EditorWindow {
             self.context.channel_name, self.context.plugin_name
         ));
         self.window.request_redraw();
+    }
+
+    pub(crate) fn close_popup(&mut self) {
+        self.close_toolbar_menu();
+        self.window.request_redraw();
+    }
+
+    pub(crate) fn popup_opened(&mut self, menu: ToolbarMenu) {
+        self.open_menu = Some(menu);
+        self.window.request_redraw();
+    }
+
+    pub(crate) fn report_popup_failure(&mut self, error: impl fmt::Display) {
+        self.close_toolbar_menu();
+        self.warning = Some(format!("Could not open the toolbar menu: {error}. Try again."));
+        self.window.request_redraw();
+    }
+
+    pub(crate) fn apply_toolbar_choice(
+        &mut self,
+        choice: ToolbarMenuChoice,
+    ) -> Option<EditorAction> {
+        self.close_toolbar_menu();
+        self.window.focus_window();
+        match choice {
+            ToolbarMenuChoice::Mode(mode) if mode != self.preference.mode => {
+                Some(EditorAction::PreferenceChanged(PluginEditorPreference {
+                    mode,
+                    zoom_percent: self.preference.zoom_percent,
+                }))
+            }
+            ToolbarMenuChoice::Zoom(zoom_percent)
+                if zoom_percent != self.preference.zoom_percent =>
+            {
+                Some(EditorAction::PreferenceChanged(PluginEditorPreference {
+                    mode: self.preference.mode,
+                    zoom_percent,
+                }))
+            }
+            ToolbarMenuChoice::Mode(_) | ToolbarMenuChoice::Zoom(_) => None,
+        }
     }
 
     pub fn update_appearance(&mut self, appearance: PluginEditorAppearance) {
@@ -307,18 +349,19 @@ impl EditorWindow {
             std::mem::take(&mut self.cache),
             &mut self.renderer,
         );
-        // `UserInterface::build` restores widget state, but iced only computes
-        // the overlay layout during `update`. Event handling and drawing use
-        // separate interface instances here, so rebuild the overlay before
-        // drawing open pick lists.
-        let mut messages = Vec::new();
-        interface.update(
-            &[],
-            self.cursor,
-            &mut self.renderer,
-            &mut self.clipboard,
-            &mut messages,
-        );
+        // Parameters mode still uses iced's in-surface pick lists. Native mode
+        // has no parent-surface overlay to rebuild because its menus are owned
+        // windows managed by the runtime.
+        if model.active_mode == PluginEditorMode::Parameters {
+            let mut messages = Vec::new();
+            interface.update(
+                &[],
+                self.cursor,
+                &mut self.renderer,
+                &mut self.clipboard,
+                &mut messages,
+            );
+        }
         let appearance = editor_appearance(model.context.appearance.theme);
         let theme = appearance.theme();
         let colors = appearance.palette();
@@ -356,6 +399,7 @@ impl EditorWindow {
     ) -> Option<PluginEditorPreference> {
         match action {
             EditorAction::Close => None,
+            EditorAction::OpenToolbarMenu(_) => None,
             EditorAction::PreferenceChanged(preference) => {
                 let mode_changed = preference.mode != self.preference.mode;
                 let zoom_changed = preference.zoom_percent != self.preference.zoom_percent;

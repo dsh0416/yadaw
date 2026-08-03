@@ -7,21 +7,21 @@ use std::{
     time::Instant,
 };
 
-use iced_core::{Border, Color, Element, Length, Point, Size, mouse::Cursor, renderer};
+use iced_core::{Border, Color, Element, Length, Point, Rectangle, Size, mouse::Cursor, renderer};
 use iced_wgpu::{
     Renderer,
     graphics::{Compositor as _, Viewport},
     window::Compositor,
 };
 use iced_widget::{
-    Column, Row, Theme, button, container, pick_list, scrollable, slider, space, text,
+    Column, Row, Theme, button, container, mouse_area, pick_list, scrollable, slider, space, text,
 };
 use iced_winit::{
     Clipboard, conversion,
     runtime::user_interface::{Cache, UserInterface},
 };
 use winit::{
-    dpi::{PhysicalSize, Size as WinitSize},
+    dpi::{PhysicalPosition, PhysicalSize, Size as WinitSize},
     event::{ElementState, WindowEvent},
     keyboard::{Key, ModifiersState, NamedKey},
     window::Window,
@@ -71,10 +71,32 @@ fn zoom_options(current: u16) -> Vec<ZoomOption> {
     options
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ToolbarMenu {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) enum ToolbarMenu {
     Mode,
     Zoom,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ToolbarMenuChoice {
+    Mode(PluginEditorMode),
+    Zoom(u16),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ToolbarMenuOption {
+    pub(crate) choice: ToolbarMenuChoice,
+    pub(crate) label: String,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct ToolbarMenuRequest {
+    pub(crate) menu: ToolbarMenu,
+    pub(crate) anchor: Rectangle,
+    pub(crate) options: Vec<ToolbarMenuOption>,
+    pub(crate) selected: ToolbarMenuChoice,
+    pub(crate) appearance: Appearance,
+    pub(crate) effective_scale: f64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -193,6 +215,8 @@ enum Message {
     Undo,
     Redo,
     ZoomPreset(u16),
+    ToolbarTriggerHovered(ToolbarMenu, Point),
+    OpenToolbarMenu(ToolbarMenu),
     MenuOpened(ToolbarMenu),
     MenuClosed(ToolbarMenu),
     ParameterChanged(u32, f64),
@@ -206,6 +230,7 @@ struct EditorViewModel {
     toolbar_height: f32,
     narrow_toolbar: bool,
     active_mode: PluginEditorMode,
+    open_menu: Option<ToolbarMenu>,
     warning: Option<String>,
     parameters: Vec<PluginParameter>,
     compare_slot: CompareSlot,
@@ -218,6 +243,7 @@ struct EditorViewModel {
 #[derive(Debug)]
 pub(crate) enum EditorAction {
     Close,
+    OpenToolbarMenu(ToolbarMenuRequest),
     PreferenceChanged(PluginEditorPreference),
     UseCompareSlot(CompareSlot),
     CopyState,
@@ -268,6 +294,7 @@ pub struct EditorWindow {
     parameters: Vec<PluginParameter>,
     warning: Option<String>,
     open_menu: Option<ToolbarMenu>,
+    toolbar_anchors: HashMap<ToolbarMenu, Rectangle>,
     compare_segment_focused: bool,
     active_gestures: HashSet<u32>,
     compare_slots: Option<[EditorPluginState; 2]>,
@@ -291,6 +318,7 @@ pub struct EditorWindow {
 
 include!("editor_window/lifecycle.rs");
 include!("editor_window/view.rs");
+include!("editor_window/menu_window.rs");
 include!("editor_window/native.rs");
 include!("editor_window/helpers.rs");
 include!("editor_window/tests.rs");

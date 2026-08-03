@@ -86,10 +86,6 @@ impl NativeContainer {
     pub fn focus(&self) {
         self.inner.focus();
     }
-
-    pub fn set_visible(&self, visible: bool) {
-        self.inner.set_visible(visible);
-    }
 }
 
 fn nonzero_extent(value: u32) -> u32 {
@@ -109,8 +105,6 @@ mod platform {
     const WS_CLIPCHILDREN: u32 = 0x0200_0000;
     const SWP_NOACTIVATE: u32 = 0x0010;
     const SWP_NOZORDER: u32 = 0x0004;
-    const SW_HIDE: i32 = 0;
-    const SW_SHOWNA: i32 = 8;
 
     pub const PLATFORM_TYPE: &CStr = c"HWND";
 
@@ -215,13 +209,6 @@ mod platform {
                 SetFocus(self.hwnd);
             }
         }
-
-        pub fn set_visible(&self, visible: bool) {
-            unsafe {
-                // SAFETY: hwnd is a live child window owned by this UI thread.
-                ShowWindow(self.hwnd, if visible { SW_SHOWNA } else { SW_HIDE });
-            }
-        }
     }
 
     impl Drop for Container {
@@ -259,7 +246,6 @@ mod platform {
             flags: u32,
         ) -> i32;
         fn SetFocus(hwnd: Hwnd) -> Hwnd;
-        fn ShowWindow(hwnd: Hwnd, command: i32) -> i32;
         fn DestroyWindow(hwnd: Hwnd) -> i32;
     }
 
@@ -374,17 +360,6 @@ mod platform {
         }
 
         pub fn focus(&self) {}
-
-        pub fn set_visible(&self, visible: bool) {
-            unsafe {
-                // SAFETY: view is a live NSView and setHidden: accepts one Objective-C BOOL.
-                send_void_bool(
-                    self.view,
-                    sel_registerName(c"setHidden:".as_ptr()),
-                    if visible { 0 } else { 1 },
-                );
-            }
-        }
     }
 
     impl Drop for Container {
@@ -464,17 +439,6 @@ mod platform {
         };
         unsafe {
             // SAFETY: receiver, selector, and Rect argument match this Objective-C message.
-            function(receiver, selector, value)
-        }
-    }
-
-    unsafe fn send_void_bool(receiver: *mut c_void, selector: Sel, value: i8) {
-        let function: unsafe extern "C" fn(*mut c_void, Sel, i8) = unsafe {
-            // SAFETY: casts objc_msgSend to the void/BOOL selector signature used below.
-            std::mem::transmute(objc_msgSend as *const ())
-        };
-        unsafe {
-            // SAFETY: receiver, selector, and BOOL argument match this Objective-C message.
             function(receiver, selector, value)
         }
     }
@@ -610,18 +574,6 @@ mod platform {
                 XFlush(self.display);
             }
         }
-
-        pub fn set_visible(&self, visible: bool) {
-            unsafe {
-                // SAFETY: display/window remain live until Drop.
-                if visible {
-                    XMapWindow(self.display, self.window);
-                } else {
-                    XUnmapWindow(self.display, self.window);
-                }
-                XFlush(self.display);
-            }
-        }
     }
 
     impl Drop for Container {
@@ -689,7 +641,6 @@ mod platform {
             element_count: c_int,
         ) -> c_int;
         fn XMapWindow(display: *mut Display, window: XWindow) -> c_int;
-        fn XUnmapWindow(display: *mut Display, window: XWindow) -> c_int;
         fn XMoveResizeWindow(
             display: *mut Display,
             window: XWindow,
@@ -743,7 +694,5 @@ mod platform {
         pub fn resize(&mut self, _x: i32, _y: i32, _width: u32, _height: u32) {}
 
         pub fn focus(&self) {}
-
-        pub fn set_visible(&self, _visible: bool) {}
     }
 }

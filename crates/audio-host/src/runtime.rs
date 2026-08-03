@@ -25,7 +25,10 @@ use std::{
 use crate::{
     crash_marker, device,
     editor_platform::{self, NativeUiContext},
-    editor_window::{EditorAction, EditorClipboard, EditorWindow},
+    editor_window::{
+        EditorAction, EditorClipboard, EditorMenuAction, EditorMenuWindow, EditorWindow,
+        toolbar_menu_window_attributes,
+    },
     engine,
     midi_input::MidiInputActor,
     recording::{NativeRecordingResult, NativeRecordingStartConfig, NativeWaveformSnapshot},

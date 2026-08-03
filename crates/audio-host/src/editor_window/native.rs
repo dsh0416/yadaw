@@ -182,7 +182,6 @@ impl EditorWindow {
             container,
             scale_supported,
         });
-        self.set_native_visible(self.open_menu.is_none());
         self.active_mode = PluginEditorMode::Native;
         Ok(())
     }
@@ -298,14 +297,7 @@ impl EditorWindow {
         effective_iced_scale(self.monitor_scale.get(), self.user_zoom.get())
     }
 
-    fn set_native_visible(&self, visible: bool) {
-        if let Some(native) = &self.native {
-            native.container.borrow().set_visible(visible);
-        }
-    }
-
     fn close_toolbar_menu(&mut self) {
         self.open_menu = None;
-        self.set_native_visible(true);
     }
 }

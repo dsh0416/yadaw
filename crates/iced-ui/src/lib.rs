@@ -339,6 +339,91 @@ pub fn select(
     }
 }
 
+/// Style a select trigger whose menu is rendered in a separate native window.
+pub fn select_trigger(
+    appearance: Appearance,
+    open: bool,
+) -> impl Fn(&Theme, button::Status) -> button::Style + Clone {
+    move |_, status| {
+        let colors = appearance.palette();
+        let background = match (open, status) {
+            (_, button::Status::Disabled) => colors.surface,
+            (true, _) | (_, button::Status::Hovered) => colors.control_hover,
+            (_, button::Status::Pressed) => colors.control_pressed,
+            (false, button::Status::Active) => colors.control,
+        };
+        button::Style {
+            background: Some(background.into()),
+            text_color: if matches!(status, button::Status::Disabled) {
+                colors.text_subtle
+            } else {
+                colors.text
+            },
+            border: Border {
+                radius: 4.0.into(),
+                width: if open { 2.0 } else { 1.0 },
+                color: if open {
+                    colors.focus
+                } else {
+                    colors.border_strong
+                },
+            },
+            shadow: Shadow::default(),
+            ..button::Style::default()
+        }
+    }
+}
+
+/// Style the surface of a native toolbar menu window.
+pub fn popup_surface(appearance: Appearance) -> impl Fn(&Theme) -> container::Style + Clone {
+    move |_| {
+        let colors = appearance.palette();
+        container::Style {
+            text_color: Some(colors.text),
+            background: Some(colors.surface_raised.into()),
+            border: Border {
+                radius: 4.0.into(),
+                width: 1.0,
+                color: colors.border_strong,
+            },
+            shadow: Shadow::default(),
+            ..container::Style::default()
+        }
+    }
+}
+
+/// Style one row in a native toolbar menu window.
+pub fn popup_menu_row(
+    appearance: Appearance,
+    selected: bool,
+    focused: bool,
+) -> impl Fn(&Theme, button::Status) -> button::Style + Clone {
+    move |_, status| {
+        let colors = appearance.palette();
+        let background = match (selected, focused, status) {
+            (_, _, button::Status::Pressed) => Some(colors.selection_hover),
+            (_, _, button::Status::Hovered) | (_, true, _) => Some(colors.selection_hover),
+            (true, false, _) => Some(colors.selection),
+            (false, false, _) => None,
+        };
+        button::Style {
+            background: background.map(Background::Color),
+            text_color: colors.text,
+            border: Border {
+                radius: 3.0.into(),
+                width: if focused { 1.0 } else { 0.0 },
+                color: if focused {
+                    colors.focus
+                } else {
+                    Color::TRANSPARENT
+                },
+            },
+            shadow: Shadow::default(),
+            ..button::Style::default()
+        }
+    }
+}
+
 /// Style the compact percentage input.
 pub fn number_input(
     appearance: Appearance,
@@ -553,6 +638,43 @@ mod tests {
                 slider_hovered.handle.background,
                 slider_dragged.handle.background
             );
+        }
+    }
+
+    #[test]
+    fn native_select_trigger_and_popup_styles_cover_all_states() {
+        for appearance in [Appearance::Dark, Appearance::Light] {
+            let theme = appearance.theme();
+            let closed = select_trigger(appearance, false);
+            let open = select_trigger(appearance, true);
+            assert_ne!(
+                closed(&theme, button::Status::Active).border,
+                open(&theme, button::Status::Active).border
+            );
+            assert_ne!(
+                closed(&theme, button::Status::Active).background,
+                closed(&theme, button::Status::Hovered).background
+            );
+
+            let normal = popup_menu_row(appearance, false, false);
+            let selected = popup_menu_row(appearance, true, false);
+            let focused = popup_menu_row(appearance, false, true);
+            assert_ne!(
+                normal(&theme, button::Status::Active).background,
+                selected(&theme, button::Status::Active).background
+            );
+            assert_eq!(
+                selected(&theme, button::Status::Hovered).background,
+                focused(&theme, button::Status::Active).background
+            );
+            assert_eq!(focused(&theme, button::Status::Active).border.width, 1.0);
+
+            let surface = popup_surface(appearance)(&theme);
+            assert_eq!(
+                surface.background,
+                Some(appearance.palette().surface_raised.into())
+            );
+            assert_eq!(surface.border.width, 1.0);
         }
     }
 }

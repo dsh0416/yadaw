@@ -29,15 +29,41 @@ impl EditorWindow {
                     zoom_percent,
                 }));
             }
+            Message::ToolbarTriggerHovered(menu, local_position) => {
+                if let Cursor::Available(cursor) = self.cursor {
+                    let width = match menu {
+                        ToolbarMenu::Mode => 112.0,
+                        ToolbarMenu::Zoom => 72.0,
+                    };
+                    self.toolbar_anchors.insert(
+                        menu,
+                        Rectangle::new(
+                            Point::new(
+                                cursor.x - local_position.x,
+                                cursor.y - local_position.y,
+                            ),
+                            Size::new(width, yadaw_iced_ui::CONTROL_COMPACT),
+                        ),
+                    );
+                }
+            }
+            Message::OpenToolbarMenu(menu) => {
+                self.compare_segment_focused = false;
+                self.open_menu = Some(menu);
+                let anchor = self
+                    .toolbar_anchors
+                    .get(&menu)
+                    .copied()
+                    .unwrap_or_else(|| fallback_toolbar_anchor(self.viewport.logical_size(), menu));
+                actions.push(EditorAction::OpenToolbarMenu(self.toolbar_menu_request(menu, anchor)));
+            }
             Message::MenuOpened(menu) => {
                 self.compare_segment_focused = false;
                 self.open_menu = Some(menu);
-                self.set_native_visible(false);
             }
             Message::MenuClosed(menu) => {
                 if self.open_menu == Some(menu) {
                     self.open_menu = None;
-                    self.set_native_visible(true);
                 }
             }
             Message::ParameterChanged(parameter_id, normalized) => {
@@ -86,6 +112,7 @@ impl EditorWindow {
             toolbar_height: editor_toolbar_height(logical_width) as f32,
             narrow_toolbar: is_narrow_toolbar(logical_width),
             active_mode: self.active_mode,
+            open_menu: self.open_menu,
             warning: self.warning.clone(),
             parameters: if self.active_mode == PluginEditorMode::Parameters {
                 self.parameters.clone()
@@ -118,27 +145,50 @@ impl EditorWindow {
             .iter()
             .copied()
             .find(|option| option.mode == model.active_mode);
-        let mode = pick_list(mode_options, selected_mode, |option| {
-            Message::UseMode(option.mode)
-        })
-        .on_open(Message::MenuOpened(ToolbarMenu::Mode))
-        .on_close(Message::MenuClosed(ToolbarMenu::Mode))
-        .style(yadaw_iced_ui::select(appearance))
-        .text_size(type_size::CONTROL)
-        .padding([2, 6])
-        .width(112);
+        let mode: EditorElement<'_> = if model.active_mode == PluginEditorMode::Native {
+            native_select_trigger(
+                selected_mode
+                    .map_or(strings.editor, |option| option.label)
+                    .to_owned(),
+                ToolbarMenu::Mode,
+                112.0,
+                model.open_menu == Some(ToolbarMenu::Mode),
+                appearance,
+            )
+        } else {
+            pick_list(mode_options, selected_mode, |option| Message::UseMode(option.mode))
+                .on_open(Message::MenuOpened(ToolbarMenu::Mode))
+                .on_close(Message::MenuClosed(ToolbarMenu::Mode))
+                .style(yadaw_iced_ui::select(appearance))
+                .text_size(type_size::CONTROL)
+                .padding([2, 6])
+                .width(112)
+                .into()
+        };
         let zoom_options = zoom_options(model.zoom_percent);
-        let zoom = pick_list(
-            zoom_options,
-            Some(ZoomOption(model.zoom_percent)),
-            |option| Message::ZoomPreset(option.0),
-        )
-        .on_open(Message::MenuOpened(ToolbarMenu::Zoom))
-        .on_close(Message::MenuClosed(ToolbarMenu::Zoom))
-        .style(yadaw_iced_ui::select(appearance))
-        .text_size(type_size::CONTROL)
-        .padding([2, 6])
-        .width(72);
+        let zoom_label = ZoomOption(model.zoom_percent).to_string();
+        let zoom: EditorElement<'_> = if model.active_mode == PluginEditorMode::Native {
+            native_select_trigger(
+                zoom_label,
+                ToolbarMenu::Zoom,
+                72.0,
+                model.open_menu == Some(ToolbarMenu::Zoom),
+                appearance,
+            )
+        } else {
+            pick_list(
+                zoom_options,
+                Some(ZoomOption(model.zoom_percent)),
+                |option| Message::ZoomPreset(option.0),
+            )
+            .on_open(Message::MenuOpened(ToolbarMenu::Zoom))
+            .on_close(Message::MenuClosed(ToolbarMenu::Zoom))
+            .style(yadaw_iced_ui::select(appearance))
+            .text_size(type_size::CONTROL)
+            .padding([2, 6])
+            .width(72)
+            .into()
+        };
 
         let signal_color = parse_signal_color(&model.context.channel_color).unwrap_or(colors.action);
         let signal_rail = container(space::vertical())
@@ -365,6 +415,87 @@ impl EditorWindow {
             .into()
     }
 
+}
+
+fn native_select_trigger<'a>(
+    label: String,
+    menu: ToolbarMenu,
+    width: f32,
+    open: bool,
+    appearance: Appearance,
+) -> EditorElement<'a> {
+    let content = Row::new()
+        .align_y(iced_core::alignment::Vertical::Center)
+        .push(text(label).size(type_size::CONTROL))
+        .push(space::horizontal())
+        .push(text("▾").size(type_size::CONTROL));
+    let trigger = button(content)
+        .on_press(Message::OpenToolbarMenu(menu))
+        .width(Length::Fixed(width))
+        .height(Length::Fixed(yadaw_iced_ui::CONTROL_COMPACT))
+        .padding([2, 6])
+        .style(yadaw_iced_ui::select_trigger(appearance, open));
+    mouse_area(trigger)
+        .on_move(move |position| Message::ToolbarTriggerHovered(menu, position))
+        .into()
+}
+
+impl EditorWindow {
+    fn toolbar_menu_request(
+        &self,
+        menu: ToolbarMenu,
+        anchor: Rectangle,
+    ) -> ToolbarMenuRequest {
+        let strings = EditorStrings::for_locale(self.context.appearance.locale);
+        let (options, selected) = match menu {
+            ToolbarMenu::Mode => (
+                vec![
+                    ToolbarMenuOption {
+                        choice: ToolbarMenuChoice::Mode(PluginEditorMode::Native),
+                        label: strings.editor.to_owned(),
+                    },
+                    ToolbarMenuOption {
+                        choice: ToolbarMenuChoice::Mode(PluginEditorMode::Parameters),
+                        label: strings.parameters.to_owned(),
+                    },
+                ],
+                ToolbarMenuChoice::Mode(self.active_mode),
+            ),
+            ToolbarMenu::Zoom => (
+                zoom_options(self.preference.zoom_percent)
+                    .into_iter()
+                    .map(|option| ToolbarMenuOption {
+                        choice: ToolbarMenuChoice::Zoom(option.0),
+                        label: option.to_string(),
+                    })
+                    .collect(),
+                ToolbarMenuChoice::Zoom(self.preference.zoom_percent),
+            ),
+        };
+        ToolbarMenuRequest {
+            menu,
+            anchor,
+            options,
+            selected,
+            appearance: editor_appearance(self.context.appearance.theme),
+            effective_scale: self.effective_scale(),
+        }
+    }
+}
+
+fn fallback_toolbar_anchor(logical_size: Size, menu: ToolbarMenu) -> Rectangle {
+    let right_padding = ui_space::SM;
+    let zoom_width = 72.0;
+    let gap = ui_space::XS * 2.0;
+    let (width, right_offset) = match menu {
+        ToolbarMenu::Mode => (112.0, right_padding + zoom_width + gap),
+        ToolbarMenu::Zoom => (zoom_width, right_padding),
+    };
+    let y = if is_narrow_toolbar(logical_size.width) { 66.0 } else { 38.0 };
+    Rectangle::new(
+        Point::new((logical_size.width - right_offset - width).max(0.0), y),
+        Size::new(width, yadaw_iced_ui::CONTROL_COMPACT),
+    )
 }
 
 fn compact_button<'a>(
