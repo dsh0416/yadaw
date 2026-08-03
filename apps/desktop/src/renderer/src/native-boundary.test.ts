@@ -25,12 +25,15 @@ describe("renderer native-call boundary", () => {
     expect(violations).toEqual([])
   })
 
-  it("keeps the native addon out of renderer and preload", () => {
+  it("keeps native audio host packages out of renderer and preload", () => {
     const roots = [rendererRoot, resolve(desktopSourceRoot, "preload")]
-    const violations = roots
-      .flatMap(sourceFiles)
-      .filter((path) => readFileSync(path, "utf8").includes("@heron/dsp-node"))
-      .map((path) => relative(desktopSourceRoot, path))
+    const forbiddenPackages = ["@heron/audio-host-client", "@heron/dsp-node"]
+    const violations = roots.flatMap(sourceFiles).flatMap((path) => {
+      const source = readFileSync(path, "utf8")
+      return forbiddenPackages
+        .filter((packageName) => source.includes(packageName))
+        .map((packageName) => ({ packageName, path: relative(desktopSourceRoot, path) }))
+    })
 
     expect(violations).toEqual([])
   })
