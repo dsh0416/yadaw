@@ -11,6 +11,10 @@ locations. Plug-ins run through an isolated audio-host process so a failed
 module can be reported and quarantined without loading native code directly
 into the interface.
 
+Audio Unit, CLAP, VST 2, and AAX plug-ins are not currently scanned. See
+[Supported backends and plug-in formats](supported-backends.md) for the full
+platform matrix and planned formats.
+
 ## Scan the catalog
 
 YADAW scans on startup. To look again after installing a plug-in:
