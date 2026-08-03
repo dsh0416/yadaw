@@ -1,4 +1,6 @@
 import { AudioHostDiagnostics } from "./audio-host-diagnostics"
+import { AudioHostBenchmarkRunner } from "./audio-host-benchmark-runner"
+import type { AudioHostBenchmarkReport } from "./audio-host-benchmark-runner"
 import { AudioHostHealthMonitor } from "./audio-host-health-monitor"
 import { AudioHostMidiInputClient } from "./audio-host-midi-input-client"
 import { AraCallbackSequenceTracker, drainHostEvents } from "./audio-host-events"
@@ -16,9 +18,7 @@ import type { PreparedGraphDeployment } from "./audio-host-graph-transactions"
 import type { AudioHostIpcClient } from "@heron/audio-host-client"
 import type {
   AudioBackendDescriptor,
-  AudioBenchmarkScenario,
   AudioDeviceList,
-  AudioIpcBenchmarkReport,
   AudioIpcPerformanceSnapshot,
   AudioHostRuntimePreferences,
   AudioPreferences,
@@ -51,12 +51,6 @@ import type {
   PluginEditorContextWire
 } from "./audio-host-plugin-client"
 
-function benchmarkStageError(stage: string, error: unknown, helperFailure: string | null): Error {
-  const message = error instanceof Error ? error.message : String(error)
-  const failure = helperFailure && !message.includes(helperFailure) ? ` (${helperFailure})` : ""
-  return new Error(`${stage} failed: ${message}${failure}`, { cause: error })
-}
-
 import { AudioHostGateway } from "./audio-host-gateway"
 import { AudioHostProcessSupervisor } from "./audio-host-process-supervisor"
 import { AudioHostSessionCoordinator } from "./audio-host-session-coordinator"
@@ -86,7 +80,6 @@ export class AudioHostService {
     theme: "dark",
     locale: "en-US"
   }
-  private benchmarkRunnerInFlight = false
   private readonly pendingPreferenceWrites = new Set<Promise<void>>()
   private readonly pendingAraCallbacks = new Set<Promise<void>>()
   private readonly pendingVst3HostNotifications = new Set<Promise<void>>()
@@ -127,6 +120,26 @@ export class AudioHostService {
     (command) => this.request(command),
     (command, client) => this.requestImmediately(command, client)
   )
+
+  private readonly benchmarkRunner = new AudioHostBenchmarkRunner((onFailure) => {
+    const host = new AudioHostService(
+      this.executablePath,
+      `${this.crashMarkerPath}.benchmark`,
+      structuredClone(this.runtimePreferences),
+      undefined,
+      onFailure,
+      async () => {}
+    )
+    return {
+      start: () => host.start(false),
+      stop: () => host.stop(),
+      loadPlugin: (plugin, sampleRate) => host.loadPlugin(plugin, sampleRate),
+      request: (command) => host.request(command),
+      runIpcBenchmark: () => host.diagnostics.runIpcBenchmark(),
+      beginBenchmark: () => host.health.beginBenchmark(),
+      endBenchmark: (generation) => host.health.endBenchmark(generation)
+    }
+  })
 
   private readonly recording = new AudioHostRecordingClient((command) => this.request(command))
 
@@ -582,143 +595,8 @@ export class AudioHostService {
     return this.midiInput.setControlLearning(enabled)
   }
 
-  private runIpcBenchmarkInCurrentHost(): Promise<AudioIpcBenchmarkReport> {
-    return this.diagnostics.runIpcBenchmark()
-  }
-
-  async runAudioBenchmark(effect: PluginDescriptor): Promise<{
-    durationMs: number
-    overallRealtimeFactor: number
-    worstP99DeadlineUtilizationPercent: number
-    scenarios: AudioBenchmarkScenario[]
-    ipc: AudioIpcBenchmarkReport
-  }> {
-    if (this.benchmarkRunnerInFlight) {
-      throw new Error("audio benchmark is already running")
-    }
-    this.benchmarkRunnerInFlight = true
-    let helperFailure: string | null = null
-    const benchmarkHost = new AudioHostService(
-      this.executablePath,
-      `${this.crashMarkerPath}.benchmark`,
-      structuredClone(this.runtimePreferences),
-      undefined,
-      (message) => {
-        helperFailure = message
-      },
-      async () => {}
-    )
-    benchmarkHost.start(false)
-    try {
-      let dsp
-      try {
-        dsp = await benchmarkHost.runAudioBenchmarkInCurrentHost(effect)
-      } catch (error) {
-        throw benchmarkStageError("audio DSP benchmark", error, helperFailure)
-      }
-      let ipc: AudioIpcBenchmarkReport
-      try {
-        // Keep the CPU-bound DSP suite and IPC suite separate so neither distorts the other's
-        // latency distribution, while still using the same isolated one-shot helper.
-        ipc = await benchmarkHost.runIpcBenchmarkInCurrentHost()
-      } catch (error) {
-        throw benchmarkStageError("audio IPC benchmark", error, helperFailure)
-      }
-      return { ...dsp, ipc }
-    } finally {
-      try {
-        await benchmarkHost.stop()
-      } finally {
-        this.benchmarkRunnerInFlight = false
-      }
-    }
-  }
-
-  private async runAudioBenchmarkInCurrentHost(effect: PluginDescriptor): Promise<{
-    durationMs: number
-    overallRealtimeFactor: number
-    worstP99DeadlineUtilizationPercent: number
-    scenarios: AudioBenchmarkScenario[]
-  }> {
-    const pluginCount = 64
-    if (
-      effect.kind !== "effect" ||
-      effect.compatibility !== "compatible" ||
-      !effect.supportedAudioModes.includes("stereo")
-    ) {
-      throw new Error("audio benchmark requires a compatible stereo VST3 effect")
-    }
-    if (this.health.isBenchmarkActive()) {
-      throw new Error("audio benchmark is already running")
-    }
-    const benchmarkGeneration = this.health.beginBenchmark()
-    const pluginInstanceIds = Array.from(
-      { length: pluginCount },
-      (_, index) => `__heron-audio-benchmark-gain-${index}`
-    )
-    try {
-      // Load one at a time. The VST3 actor largely serializes loads, and each IPC request's
-      // deadline starts when the client sends it — firing all 64 at once lets later requests
-      // time out while still queued behind earlier successful loads.
-      for (const [slotOrder, id] of pluginInstanceIds.entries()) {
-        await this.plugins.loadPlugin(
-          {
-            id,
-            channelId: "__heron-audio-benchmark",
-            role: "insert",
-            slotOrder,
-            classId: effect.classId,
-            descriptor: effect,
-            audioMode: "stereo",
-            enabled: true,
-            sidechainInputs: [],
-            componentState: new Uint8Array(),
-            controllerState: new Uint8Array()
-          },
-          48_000
-        )
-      }
-
-      const response = await this.request({
-        type: "run-audio-benchmark",
-        plugin_instance_ids: pluginInstanceIds
-      })
-      if (response.result.type !== "audio-benchmark" || !response.result.report) {
-        throw new Error("audio host returned an invalid audio benchmark response")
-      }
-      const report = response.result.report
-      return {
-        durationMs: report.duration_ms,
-        overallRealtimeFactor: report.overall_realtime_factor,
-        worstP99DeadlineUtilizationPercent: report.worst_p99_deadline_utilization_percent,
-        scenarios: report.scenarios.map((scenario) => ({
-          id: scenario.id,
-          label: scenario.label,
-          description: scenario.description,
-          sampleRate: scenario.sample_rate,
-          blockSize: scenario.block_size,
-          tracks: scenario.tracks,
-          buses: scenario.buses,
-          sends: scenario.sends,
-          plugins: scenario.plugins,
-          elapsedMs: scenario.elapsed_ms,
-          audioDurationMs: scenario.audio_duration_ms,
-          averageBlockMs: scenario.average_block_ms,
-          p95BlockMs: scenario.p95_block_ms,
-          p99BlockMs: scenario.p99_block_ms,
-          maxBlockMs: scenario.max_block_ms,
-          bufferBudgetMs: scenario.buffer_budget_ms,
-          p99DeadlineUtilizationPercent: scenario.p99_deadline_utilization_percent,
-          deadlineMisses: scenario.deadline_misses,
-          measuredBlocks: scenario.measured_blocks,
-          realtimeFactor: scenario.realtime_factor
-        }))
-      }
-    } finally {
-      // This helper exists only for one benchmark suite. Its process shutdown owns VST3 teardown,
-      // so no per-instance unload can block the project helper or leave an uncancellable worker.
-      this.health.endBenchmark(benchmarkGeneration)
-    }
+  runAudioBenchmark(effect: PluginDescriptor): Promise<AudioHostBenchmarkReport> {
+    return this.benchmarkRunner.run(effect)
   }
 
   performanceDiagnostics(): AudioIpcPerformanceSnapshot | null {
