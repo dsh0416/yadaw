@@ -2,7 +2,7 @@ use std::{
     collections::BTreeMap,
     fs,
     sync::{
-        Arc, Mutex, OnceLock,
+        Arc, Mutex, OnceLock, TryLockError,
         atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering},
         mpsc,
     },

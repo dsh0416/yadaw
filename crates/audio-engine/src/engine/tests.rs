@@ -116,6 +116,20 @@ mod tests {
     }
 
     #[test]
+    fn heartbeat_does_not_wait_for_the_audio_runtime_lock() {
+        let engine = AudioEngine::new();
+        let runtime = engine.running.lock().expect("audio runtime lock");
+
+        assert_eq!(
+            engine.heartbeat_snapshot(),
+            (0, "transitioning".to_owned())
+        );
+
+        drop(runtime);
+        assert_eq!(engine.heartbeat_snapshot(), (0, "stopped".to_owned()));
+    }
+
+    #[test]
     fn matched_loopback_probe_reports_the_synthetic_physical_delay() {
         let measurement = Arc::new(RoundTripLatencyMeasurement::new(2, 2, 48_000));
         measurement
