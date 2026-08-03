@@ -17,6 +17,8 @@ opened.
 
 ## Audio backends
 
+<AudioBackendSupportFigure />
+
 **Supported** means the backend is included today. **Planned** means it is on
 the roadmap but is not yet included or selectable. A dash means the backend is
 not intended for that operating system.
@@ -27,7 +29,7 @@ not intended for that operating system.
 | ASIO®      | Supported | —         | —         | Requires a 64-bit ASIO driver. Input and output must use the same ASIO driver.       |
 | CoreAudio  | —         | Supported | —         | Recording requires microphone permission from macOS.                                 |
 | ALSA       | —         | —         | Supported | Device access and availability depend on the system's ALSA configuration.            |
-| JACK       | —         | —         | Planned   | A dedicated JACK backend will be added in a future version.                          |
+| JACK       | Planned   | Planned   | Planned   | A dedicated JACK backend is planned on all three platforms.                          |
 | PipeWire   | —         | —         | Planned   | Native PipeWire integration will be added in a future version.                       |
 | PulseAudio | —         | —         | Planned   | A dedicated PulseAudio backend will be added in a future version.                    |
 | Mock       | Supported | Supported | Supported | Runs the engine without audio hardware. Capture is silent and playback is discarded. |
