@@ -208,6 +208,7 @@ export type PluginInstancePatch = Partial<
     PluginInstanceState,
     | "slotOrder"
     | "enabled"
+    | "descriptor"
     | "sidechainInputs"
     | "componentState"
     | "controllerState"

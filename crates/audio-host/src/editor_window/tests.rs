@@ -489,6 +489,7 @@ mod tests {
             menu: ToolbarMenu::Mode,
             anchor: Rectangle::default(),
             options,
+            hierarchy: None,
             selected: ToolbarMenuChoice::Mode(PluginEditorMode::Native),
             appearance: Appearance::Dark,
             effective_scale: 2.0,
@@ -593,7 +594,7 @@ mod tests {
     }
 
     #[test]
-    fn native_toolbar_popup_flattens_sidechain_routes_without_losing_typed_ids() {
+    fn native_toolbar_popup_nests_sidechain_routes_without_losing_typed_ids() {
         let buses = vec![SidechainBus {
             input_bus_index: 3,
             name: "Detector".to_owned(),
@@ -633,15 +634,23 @@ mod tests {
         );
 
         assert_eq!(request.menu, ToolbarMenu::Sidechain);
-        assert_eq!(request.options.len(), 3);
-        assert_eq!(request.options[0].label, "Detector · None");
-        assert!(request.options.iter().any(|option| {
-            option.label == "Detector · Aux · Drum Bus"
-                && option.choice
-                    == ToolbarMenuChoice::SidechainRoute {
+        assert!(request.options.is_empty());
+        let hierarchy = request.hierarchy.as_ref().expect("side-chain hierarchy");
+        assert_eq!(hierarchy.len(), 1);
+        assert_eq!(hierarchy[0].label, "Detector");
+        assert_eq!(hierarchy[0].children[0].label, "None");
+        let aux = hierarchy[0]
+            .children
+            .iter()
+            .find(|node| node.label == "Aux")
+            .expect("aux layer");
+        assert!(aux.children.iter().any(|node| {
+            node.label == "Drum Bus"
+                && node.choice
+                    == Some(ToolbarMenuChoice::SidechainRoute {
                         input_bus_index: 3,
                         source_channel_id: Some("aux-new".to_owned()),
-                    }
+                    })
         }));
         assert_eq!(
             request.selected,
@@ -663,6 +672,72 @@ mod tests {
                 source_channel_id: Some(source),
             }) if source == "aux-new"
         ));
+    }
+
+    #[test]
+    fn native_sidechain_popup_drills_down_and_back_with_a_readable_width() {
+        let buses = vec![SidechainBus {
+            input_bus_index: 1,
+            name: "Stereo Side Chain".to_owned(),
+            source_channel_id: Some("audio-1".to_owned()),
+        }];
+        let sources = vec![
+            SidechainSource {
+                id: "audio-1".to_owned(),
+                name: "Kick".to_owned(),
+                kind: SidechainSourceKind::Audio,
+            },
+            SidechainSource {
+                id: "aux-1".to_owned(),
+                name: "Aux 1".to_owned(),
+                kind: SidechainSourceKind::Aux,
+            },
+        ];
+        let request = toolbar_menu_request_for(
+            ToolbarMenu::Sidechain,
+            Rectangle::new(Point::ORIGIN, Size::new(112.0, 24.0)),
+            ToolbarMenuContext {
+                active_mode: PluginEditorMode::Native,
+                zoom_percent: 100,
+                appearance: PluginEditorAppearance::default(),
+                effective_scale: 1.0,
+                sidechain_buses: &buses,
+                sidechain_sources: &sources,
+                pending_sidechain: &None,
+            },
+        );
+
+        let (anchor, visible_rows) = toolbar_menu_layout(&request);
+        assert_eq!(anchor.width, SIDECHAIN_MENU_WIDTH);
+        assert_eq!(visible_rows, 4);
+
+        let (_, mut state) = EditorMenuState::new(request);
+        assert_eq!(state.path, vec![0]);
+        assert_eq!(state.highlighted, 1);
+        assert_eq!(state.select(2), None);
+        assert_eq!(state.path, vec![0, 2]);
+        assert_eq!(state.highlighted, 0);
+
+        assert_eq!(
+            state.key_pressed(&Key::Named(NamedKey::ArrowLeft)),
+            None
+        );
+        assert_eq!(state.path, vec![0]);
+        assert_eq!(state.highlighted, 2);
+        assert_eq!(
+            state.key_pressed(&Key::Named(NamedKey::ArrowRight)),
+            None
+        );
+        assert_eq!(state.path, vec![0, 2]);
+        assert_eq!(
+            state.key_pressed(&Key::Named(NamedKey::Enter)),
+            Some(EditorMenuAction::Selected(
+                ToolbarMenuChoice::SidechainRoute {
+                    input_bus_index: 1,
+                    source_channel_id: Some("aux-1".to_owned()),
+                }
+            ))
+        );
     }
 
     fn editor_view_model(
@@ -834,7 +909,7 @@ mod tests {
             step_count: 0,
             default_normalized: 0.5,
             normalized: 0.5,
-            formatted: String::new(),
+            formatted: "-6.0 dB".to_owned(),
             flags: 0,
         }];
         let mut active_gestures = HashSet::new();
@@ -863,6 +938,7 @@ mod tests {
 
         state.update(Message::ParameterChanged(7, 0.75), &mut actions);
         assert_eq!(state.parameters[0].normalized, 0.75);
+        assert!(state.parameters[0].formatted.is_empty());
         assert!(matches!(
             actions.as_slice(),
             [

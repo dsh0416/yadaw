@@ -88,11 +88,15 @@ describe("plugin-persistence", () => {
     await persistPluginCommand(tx as never, {
       type: "update-plugin",
       pluginId: "plugin-1",
-      patch: { enabled: false, slotOrder: 2 }
+      patch: { enabled: false, slotOrder: 2, descriptor }
     })
     expect(tx.update).toHaveBeenCalled()
     expect(tx.updateSet).toHaveBeenCalledWith(
-      expect.objectContaining({ enabled: false, slotOrder: 2 })
+      expect.objectContaining({
+        enabled: false,
+        slotOrder: 2,
+        descriptorSnapshot: JSON.stringify(descriptor)
+      })
     )
   })
 

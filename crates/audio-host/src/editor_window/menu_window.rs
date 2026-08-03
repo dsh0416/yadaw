@@ -1,5 +1,6 @@
 const TOOLBAR_MENU_ROW_HEIGHT: f32 = 24.0;
 const TOOLBAR_MENU_PADDING: f32 = 4.0;
+const SIDECHAIN_MENU_WIDTH: f32 = 248.0;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum EditorMenuAction {
@@ -17,6 +18,7 @@ struct ToolbarMenuGeometry {
 
 #[derive(Debug, Clone, Copy)]
 enum EditorMenuMessage {
+    Back,
     Select(usize),
 }
 
@@ -55,6 +57,8 @@ type EditorMenuElement<'a> = Element<'a, EditorMenuMessage, Theme, Renderer>;
 
 struct EditorMenuState {
     options: Vec<ToolbarMenuOption>,
+    hierarchy: Option<Vec<ToolbarMenuNode>>,
+    path: Vec<usize>,
     selected: ToolbarMenuChoice,
     highlighted: usize,
     appearance: Appearance,
@@ -66,15 +70,34 @@ struct EditorMenuState {
 
 impl EditorMenuState {
     fn new(request: ToolbarMenuRequest) -> (ToolbarMenu, Self) {
-        let highlighted = initial_toolbar_highlight(&request.options, &request.selected);
+        let ToolbarMenuRequest {
+            menu,
+            options,
+            hierarchy,
+            selected,
+            appearance,
+            effective_scale,
+            ..
+        } = request;
+        let path = hierarchy
+            .as_ref()
+            .filter(|nodes| nodes.len() == 1 && !nodes[0].children.is_empty())
+            .map(|_| vec![0])
+            .unwrap_or_default();
+        let highlighted = hierarchy.as_ref().map_or_else(
+            || initial_toolbar_highlight(&options, &selected),
+            |nodes| initial_hierarchy_highlight(hierarchy_level(nodes, &path), &selected),
+        );
         (
-            request.menu,
+            menu,
             Self {
-                options: request.options,
-                selected: request.selected,
+                options,
+                hierarchy,
+                path,
+                selected,
                 highlighted,
-                appearance: request.appearance,
-                effective_scale: request.effective_scale,
+                appearance,
+                effective_scale,
                 cursor: Cursor::Unavailable,
                 modifiers: ModifiersState::default(),
                 // winit's macOS backend queues one synthetic `Focused(false)` as
@@ -106,6 +129,9 @@ impl EditorMenuState {
     }
 
     fn key_pressed(&mut self, key: &Key) -> Option<EditorMenuAction> {
+        if self.hierarchy.is_some() {
+            return self.hierarchy_key_pressed(key);
+        }
         match toolbar_menu_key(key, &mut self.highlighted, self.options.len()) {
             MenuKeyResult::Select => self.select(self.highlighted),
             MenuKeyResult::Dismiss => Some(EditorMenuAction::Dismiss),
@@ -113,13 +139,87 @@ impl EditorMenuState {
         }
     }
 
-    fn select(&self, index: usize) -> Option<EditorMenuAction> {
+    fn hierarchy_key_pressed(&mut self, key: &Key) -> Option<EditorMenuAction> {
+        let len = self.visible_hierarchy().map_or(0, <[ToolbarMenuNode]>::len);
+        match key {
+            Key::Named(NamedKey::Escape | NamedKey::Tab) => Some(EditorMenuAction::Dismiss),
+            Key::Named(NamedKey::ArrowLeft) => {
+                self.back();
+                None
+            }
+            Key::Named(NamedKey::ArrowRight) => {
+                self.descend(self.highlighted);
+                None
+            }
+            Key::Named(NamedKey::Enter | NamedKey::Space) => self.select(self.highlighted),
+            _ if len == 0 => None,
+            Key::Named(NamedKey::ArrowUp) => {
+                self.highlighted = self.highlighted.checked_sub(1).unwrap_or(len - 1);
+                None
+            }
+            Key::Named(NamedKey::ArrowDown) => {
+                self.highlighted = (self.highlighted + 1) % len;
+                None
+            }
+            Key::Named(NamedKey::Home) => {
+                self.highlighted = 0;
+                None
+            }
+            Key::Named(NamedKey::End) => {
+                self.highlighted = len - 1;
+                None
+            }
+            _ => None,
+        }
+    }
+
+    fn visible_hierarchy(&self) -> Option<&[ToolbarMenuNode]> {
+        self.hierarchy
+            .as_deref()
+            .map(|nodes| hierarchy_level(nodes, &self.path))
+    }
+
+    fn descend(&mut self, index: usize) -> bool {
+        let has_children = self
+            .visible_hierarchy()
+            .and_then(|nodes| nodes.get(index))
+            .is_some_and(|node| !node.children.is_empty());
+        if !has_children {
+            return false;
+        }
+        self.path.push(index);
+        self.highlighted = self.visible_hierarchy().map_or(0, |nodes| {
+            initial_hierarchy_highlight(nodes, &self.selected)
+        });
+        true
+    }
+
+    fn back(&mut self) {
+        if let Some(parent_index) = self.path.pop() {
+            self.highlighted = parent_index;
+        }
+    }
+
+    fn select(&mut self, index: usize) -> Option<EditorMenuAction> {
+        if self.hierarchy.is_some() {
+            if self.descend(index) {
+                return None;
+            }
+            return self
+                .visible_hierarchy()
+                .and_then(|nodes| nodes.get(index))
+                .and_then(|node| node.choice.clone())
+                .map(EditorMenuAction::Selected);
+        }
         self.options
             .get(index)
             .map(|option| EditorMenuAction::Selected(option.choice.clone()))
     }
 
     fn view(&self) -> EditorMenuElement<'_> {
+        if let Some(nodes) = self.visible_hierarchy() {
+            return self.hierarchy_view(nodes);
+        }
         let rows = self.options.iter().enumerate().fold(
             Column::new().spacing(0),
             |column, (index, option)| {
@@ -141,6 +241,61 @@ impl EditorMenuState {
                 )
             },
         );
+        container(scrollable(rows).width(Length::Fill).height(Length::Fill))
+            .padding(TOOLBAR_MENU_PADDING as u16)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .style(heron_iced_ui::popup_surface(self.appearance))
+            .into()
+    }
+
+    fn hierarchy_view<'a>(&'a self, nodes: &'a [ToolbarMenuNode]) -> EditorMenuElement<'a> {
+        let mut rows = Column::new().spacing(0);
+        if !self.path.is_empty() {
+            let title = hierarchy_node(&self.hierarchy, &self.path)
+                .map_or("Side-chain", |node| node.label.as_str());
+            let header = Row::new()
+                .spacing(6)
+                .align_y(iced_core::alignment::Vertical::Center)
+                .push(text("‹").size(type_size::BODY_COMPACT))
+                .push(text(title).size(type_size::CONTROL));
+            rows = rows.push(
+                button(container(header).padding([0, 6]).center_y(Length::Fill))
+                    .on_press(EditorMenuMessage::Back)
+                    .width(Length::Fill)
+                    .height(Length::Fixed(TOOLBAR_MENU_ROW_HEIGHT))
+                    .padding(0)
+                    .style(heron_iced_ui::popup_menu_row(
+                        self.appearance,
+                        false,
+                        false,
+                    )),
+            );
+        }
+        let rows = nodes.iter().enumerate().fold(rows, |column, (index, node)| {
+            let selected = hierarchy_contains_choice(node, &self.selected);
+            let marker = if selected { "✓" } else { " " };
+            let child = if node.children.is_empty() { "" } else { "›" };
+            let content = Row::new()
+                .spacing(6)
+                .align_y(iced_core::alignment::Vertical::Center)
+                .push(text(marker).size(type_size::CONTROL))
+                .push(text(&node.label).size(type_size::CONTROL))
+                .push(space::horizontal())
+                .push(text(child).size(type_size::CONTROL));
+            column.push(
+                button(container(content).padding([0, 6]).center_y(Length::Fill))
+                    .on_press(EditorMenuMessage::Select(index))
+                    .width(Length::Fill)
+                    .height(Length::Fixed(TOOLBAR_MENU_ROW_HEIGHT))
+                    .padding(0)
+                    .style(heron_iced_ui::popup_menu_row(
+                        self.appearance,
+                        selected,
+                        index == self.highlighted,
+                    )),
+            )
+        });
         container(scrollable(rows).width(Length::Fill).height(Length::Fill))
             .padding(TOOLBAR_MENU_PADDING as u16)
             .width(Length::Fill)
@@ -257,8 +412,16 @@ impl EditorMenuWindow {
             &mut messages,
         );
         self.cache = interface.into_cache();
-        if let Some(EditorMenuMessage::Select(index)) = messages.into_iter().next() {
-            return self.state.select(index);
+        if let Some(message) = messages.into_iter().next() {
+            let action = match message {
+                EditorMenuMessage::Back => {
+                    self.state.back();
+                    None
+                }
+                EditorMenuMessage::Select(index) => self.state.select(index),
+            };
+            self.window.request_redraw();
+            return action;
         }
         None
     }
@@ -343,6 +506,57 @@ fn initial_toolbar_highlight(
         .unwrap_or(0)
 }
 
+fn hierarchy_level<'a>(
+    roots: &'a [ToolbarMenuNode],
+    path: &[usize],
+) -> &'a [ToolbarMenuNode] {
+    let mut nodes = roots;
+    for &index in path {
+        let Some(node) = nodes.get(index) else {
+            return &[];
+        };
+        nodes = &node.children;
+    }
+    nodes
+}
+
+fn hierarchy_node<'a>(
+    hierarchy: &'a Option<Vec<ToolbarMenuNode>>,
+    path: &[usize],
+) -> Option<&'a ToolbarMenuNode> {
+    let mut nodes = hierarchy.as_deref()?;
+    let mut current = None;
+    for &index in path {
+        current = nodes.get(index);
+        nodes = &current?.children;
+    }
+    current
+}
+
+fn hierarchy_contains_choice(node: &ToolbarMenuNode, selected: &ToolbarMenuChoice) -> bool {
+    node.choice.as_ref() == Some(selected)
+        || node
+            .children
+            .iter()
+            .any(|child| hierarchy_contains_choice(child, selected))
+}
+
+fn initial_hierarchy_highlight(
+    nodes: &[ToolbarMenuNode],
+    selected: &ToolbarMenuChoice,
+) -> usize {
+    nodes
+        .iter()
+        .position(|node| hierarchy_contains_choice(node, selected))
+        .unwrap_or(0)
+}
+
+fn max_hierarchy_level_len(nodes: &[ToolbarMenuNode]) -> usize {
+    nodes.iter().fold(nodes.len(), |largest, node| {
+        largest.max(max_hierarchy_level_len(&node.children))
+    })
+}
+
 fn toolbar_menu_geometry(
     anchor: Rectangle,
     option_count: usize,
@@ -389,9 +603,10 @@ pub(crate) fn toolbar_menu_window_attributes(
     let origin = parent
         .inner_position()
         .map_err(|error| format!("could not locate the editor window: {error}"))?;
+    let (anchor, option_count) = toolbar_menu_layout(request);
     let geometry = toolbar_menu_geometry(
-        request.anchor,
-        request.options.len(),
+        anchor,
+        option_count,
         origin,
         parent.inner_size(),
         request.effective_scale,
@@ -405,6 +620,16 @@ pub(crate) fn toolbar_menu_window_attributes(
         .with_position(geometry.position)
         .with_inner_size(geometry.size);
     configure_toolbar_menu_window_attributes(attributes, parent)
+}
+
+fn toolbar_menu_layout(request: &ToolbarMenuRequest) -> (Rectangle, usize) {
+    let mut anchor = request.anchor;
+    let option_count = request.hierarchy.as_ref().map_or(request.options.len(), |nodes| {
+        anchor.width = SIDECHAIN_MENU_WIDTH;
+        let header_rows = usize::from(nodes.len() == 1 && !nodes[0].children.is_empty());
+        max_hierarchy_level_len(nodes).saturating_add(header_rows)
+    });
+    (anchor, option_count)
 }
 
 fn configure_toolbar_menu_window_attributes(

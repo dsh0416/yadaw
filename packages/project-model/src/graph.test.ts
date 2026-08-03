@@ -247,6 +247,50 @@ describe("MIDI note project commands", () => {
 })
 
 describe("project graph command characterization", () => {
+  it("commits a discovered aux descriptor and its first route atomically", () => {
+    const before = graph()
+    before.channels.push({
+      ...structuredClone(before.channels[0]!),
+      id: "aux-1",
+      kind: "aux",
+      name: "Aux 1",
+      inputSource: "bus",
+      inputFormat: "stereo",
+      inputChannels: [1, 2]
+    })
+    before.plugins.push(plugin())
+    const descriptor: PluginDescriptor = {
+      ...effectDescriptor,
+      buses: [
+        {
+          index: 1,
+          direction: "input",
+          kind: "aux",
+          name: "Stereo Side Chain",
+          channels: 2,
+          defaultActive: true
+        }
+      ]
+    }
+    const command: ProjectCommand = {
+      type: "update-plugin",
+      pluginId: "plugin-1",
+      patch: {
+        descriptor,
+        sidechainInputs: [{ inputBusIndex: 1, sourceChannelId: "aux-1" }]
+      }
+    }
+
+    const after = applyToGraph(before, command)
+
+    expect(() => validateGraph(after)).not.toThrow()
+    expect(after.plugins[0]).toMatchObject({
+      descriptor,
+      sidechainInputs: [{ inputBusIndex: 1, sourceChannelId: "aux-1" }]
+    })
+    expect(applyToGraph(after, inverseFor(before, command))).toEqual(before)
+  })
+
   it("validates aux side-chain buses and rejects feedback candidates", () => {
     const value = graph()
     value.channels.push({

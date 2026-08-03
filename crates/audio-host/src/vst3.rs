@@ -553,6 +553,30 @@ impl Vst3Runtime {
             .map_err(|error| error.to_string())
     }
 
+    pub fn format_parameter_value(
+        &self,
+        instance_id: &str,
+        parameter_id: u32,
+        normalized: f64,
+    ) -> Result<String, String> {
+        self.instances
+            .get(instance_id)
+            .ok_or_else(|| "VST3 instance is not loaded".to_owned())?
+            .plugin
+            .format_parameter_value(parameter_id, normalized)
+            .map_err(|error| error.to_string())
+    }
+
+    pub fn mark_editor_state_dirty(&mut self, instance_id: &str) {
+        if self.instances.contains_key(instance_id) {
+            push_pending_host_request(
+                &mut self.pending_host_requests,
+                instance_id.to_owned(),
+                Vst3HostRequest::DirtyChanged(true),
+            );
+        }
+    }
+
     pub fn editor_state(&self, instance_id: &str) -> Result<EditorPluginState, String> {
         let instance = self
             .instances
@@ -677,10 +701,7 @@ impl Vst3Runtime {
                         Err(error) => self.restart_failures.push((id.clone(), error)),
                     }
                 } else {
-                    if self.pending_host_requests.len() == HOST_REQUEST_CAPACITY {
-                        self.pending_host_requests.pop_front();
-                    }
-                    self.pending_host_requests.push_back((id.clone(), request));
+                    push_pending_host_request(&mut self.pending_host_requests, id.clone(), request);
                 }
             }
             let primary = instance.plugin.take_restart_requests();
@@ -1032,6 +1053,13 @@ impl Vst3Runtime {
         if let Err(error) = primary_result {
             return control_error(&error.to_string());
         }
+        if gesture == ParameterGesture::Perform {
+            push_pending_host_request(
+                &mut self.pending_host_requests,
+                instance_id.to_owned(),
+                Vst3HostRequest::DirtyChanged(true),
+            );
+        }
         ControlResult::Accepted
     }
 
@@ -1098,6 +1126,24 @@ fn merge_dual_mono_host_requests(
         }
     }
     merged
+}
+
+fn push_pending_host_request(
+    pending: &mut VecDeque<(String, Vst3HostRequest)>,
+    instance_id: String,
+    request: Vst3HostRequest,
+) {
+    if request == Vst3HostRequest::DirtyChanged(true)
+        && pending.iter().any(|(pending_id, pending_request)| {
+            pending_id == &instance_id && pending_request == &request
+        })
+    {
+        return;
+    }
+    if pending.len() == HOST_REQUEST_CAPACITY {
+        pending.pop_front();
+    }
+    pending.push_back((instance_id, request));
 }
 
 fn max_tail(left: Option<u32>, right: Option<u32>) -> Option<u32> {
@@ -1195,6 +1241,40 @@ mod tests {
         assert_eq!(
             merge_dual_mono_host_requests(vec![repeated.clone(), repeated.clone()], Vec::new()),
             vec![repeated.clone(), repeated]
+        );
+    }
+
+    #[test]
+    fn pending_dirty_requests_are_coalesced_per_instance() {
+        let mut pending = VecDeque::new();
+        push_pending_host_request(
+            &mut pending,
+            "first".to_owned(),
+            Vst3HostRequest::DirtyChanged(true),
+        );
+        push_pending_host_request(
+            &mut pending,
+            "first".to_owned(),
+            Vst3HostRequest::DirtyChanged(true),
+        );
+        push_pending_host_request(
+            &mut pending,
+            "second".to_owned(),
+            Vst3HostRequest::DirtyChanged(true),
+        );
+        push_pending_host_request(
+            &mut pending,
+            "first".to_owned(),
+            Vst3HostRequest::GroupEditStarted,
+        );
+
+        assert_eq!(
+            pending,
+            VecDeque::from([
+                ("first".to_owned(), Vst3HostRequest::DirtyChanged(true)),
+                ("second".to_owned(), Vst3HostRequest::DirtyChanged(true)),
+                ("first".to_owned(), Vst3HostRequest::GroupEditStarted),
+            ])
         );
     }
 

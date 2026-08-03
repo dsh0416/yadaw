@@ -1186,6 +1186,34 @@ impl HostedPlugin {
         Ok(())
     }
 
+    pub fn format_parameter_value(&self, id: u32, normalized: f64) -> HostResult<String> {
+        if !normalized.is_finite() || !(0.0..=1.0).contains(&normalized) {
+            return Err(HostError::Operation {
+                operation: "parameter value outside 0...1",
+                result: -2147024809,
+            });
+        }
+        let Some(controller) = &self.controller else {
+            return Ok(String::new());
+        };
+        let mut text = [0_u16; 128];
+        let result = unsafe {
+            // SAFETY: controller is live, the normalized value is validated, and text is writable
+            // String128 storage for the duration of this synchronous call.
+            ((*controller_table(controller)).parameter_string)(
+                controller.as_ptr(),
+                id,
+                normalized,
+                text.as_mut_ptr(),
+            )
+        };
+        Ok(if result == 0 {
+            utf16_string(&text)
+        } else {
+            String::new()
+        })
+    }
+
     pub fn restore_state(&self, component_state: &[u8], controller_state: &[u8]) -> HostResult<()> {
         self.processor.with_paused(|processor| {
             processor.deactivate()?;
@@ -1233,6 +1261,7 @@ impl HostedPlugin {
 
     pub fn save_state(&self) -> HostResult<(Vec<u8>, Vec<u8>)> {
         let component_state = self.processor.with_paused(|processor| {
+            processor.flush_parameters()?;
             let mut stream = MemoryStream::empty();
             check("IComponent::getState", unsafe {
                 // SAFETY: component is live, processing is paused, and stream is writable.

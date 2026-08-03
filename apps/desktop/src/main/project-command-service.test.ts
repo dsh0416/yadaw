@@ -22,6 +22,7 @@ import type { ProjectService } from "./project-service"
 import { LifecycleCoordinator } from "./lifecycle-coordinator"
 import { OperationRegistry } from "./kernel/operation-registry"
 import { OperationService } from "./operation-service"
+import type { PluginCatalogService } from "./plugin-catalog-service"
 
 vi.mock("electron", () => ({
   BrowserWindow: { getAllWindows: () => [] }
@@ -215,7 +216,8 @@ interface ProjectHarness {
 
 async function mixer(
   projects: ProjectMock,
-  audioHost?: Partial<AudioHostService>
+  audioHost?: Partial<AudioHostService>,
+  plugins?: Partial<PluginCatalogService>
 ): Promise<ProjectHarness> {
   const directory = await mkdtemp(join(tmpdir(), "heron-mixer-service-"))
   directories.push(directory)
@@ -247,11 +249,16 @@ async function mixer(
     new AudioGraphCompiler(),
     new AssetMaterializer(directory, projects.service),
     host,
-    null,
+    (plugins as PluginCatalogService | undefined) ?? null,
     null
   )
   const graphs = new ProjectGraphService(projects.service, publisher)
-  const commands = new ProjectCommandService(graphs, projects.service, host)
+  const commands = new ProjectCommandService(
+    graphs,
+    projects.service,
+    host,
+    (plugins as PluginCatalogService | undefined) ?? null
+  )
   const lifecycle = new LifecycleCoordinator(projects.session)
   const resources = lifecycle.applicationState.resources
   const projectCandidate = resources.create({
@@ -353,6 +360,61 @@ describe("project graph and command services", () => {
     expect(projects.mixerSnapshot).toHaveBeenCalledTimes(1)
     expect(second.channels[0]!.name).toBe("audio")
     expect(second.plugins[0]!.componentState).toEqual(new Uint8Array([1]))
+  })
+
+  it("persists a deep-resolved descriptor when creating a used plug-in", async () => {
+    const projects = projectMock()
+    const sidechainDescriptor: PluginDescriptor = {
+      ...effectDescriptor,
+      classId: "sidechain-effect",
+      buses: [
+        {
+          index: 1,
+          direction: "input",
+          kind: "aux",
+          name: "Stereo Side Chain",
+          channels: 2,
+          defaultActive: true
+        }
+      ]
+    }
+    const plugins = {
+      resolveDescriptor: vi.fn((value: PluginDescriptor) => value),
+      resolveDescriptorForRuntime: vi.fn(async (value: PluginDescriptor) =>
+        value.classId === sidechainDescriptor.classId ? sidechainDescriptor : value
+      )
+    }
+    const service = await mixer(projects, undefined, plugins)
+    await service.load()
+
+    const result = await service.execute({
+      type: "create-plugin",
+      plugin: {
+        id: "sidechain-1",
+        channelId: "audio",
+        role: "insert",
+        slotOrder: 1,
+        classId: sidechainDescriptor.classId,
+        descriptor: { ...sidechainDescriptor, buses: [] },
+        audioMode: "stereo",
+        enabled: true,
+        sidechainInputs: [],
+        componentState: new Uint8Array(),
+        controllerState: new Uint8Array()
+      }
+    })
+
+    expect(result.graph.plugins.find((plugin) => plugin.id === "sidechain-1")?.descriptor).toEqual(
+      sidechainDescriptor
+    )
+    expect(projects.prepareProjectCommand).toHaveBeenLastCalledWith(
+      expect.any(String),
+      expect.any(Number),
+      expect.objectContaining({
+        plugin: expect.objectContaining({ descriptor: sidechainDescriptor })
+      }),
+      "output"
+    )
   })
 
   it("commits realtime and structural candidates without rebuilding the database graph", async () => {

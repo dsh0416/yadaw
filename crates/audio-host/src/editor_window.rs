@@ -137,11 +137,19 @@ pub(crate) struct ToolbarMenuOption {
     pub(crate) label: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ToolbarMenuNode {
+    pub(crate) label: String,
+    pub(crate) choice: Option<ToolbarMenuChoice>,
+    pub(crate) children: Vec<ToolbarMenuNode>,
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct ToolbarMenuRequest {
     pub(crate) menu: ToolbarMenu,
     pub(crate) anchor: Rectangle,
     pub(crate) options: Vec<ToolbarMenuOption>,
+    pub(crate) hierarchy: Option<Vec<ToolbarMenuNode>>,
     pub(crate) selected: ToolbarMenuChoice,
     pub(crate) appearance: Appearance,
     pub(crate) effective_scale: f64,

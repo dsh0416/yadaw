@@ -161,6 +161,9 @@ impl HandlerShared {
         let Ok(mut requests) = self.host_requests.lock() else {
             return;
         };
+        if request == Vst3HostRequest::DirtyChanged(true) && requests.contains(&request) {
+            return;
+        }
         if requests.len() == HOST_REQUEST_CAPACITY {
             requests.pop_front();
         }
@@ -397,6 +400,9 @@ unsafe extern "system" fn perform_edit(
         &*this.cast::<ComponentHandler>()
     };
     if handler.shared.enqueue_parameter(id, normalized) {
+        handler
+            .shared
+            .publish_host_request(Vst3HostRequest::DirtyChanged(true));
         handler
             .shared
             .publish_editor_gesture(EditorParameterGesture::Perform {
@@ -660,8 +666,8 @@ mod tests {
     };
 
     use super::{
-        EditorParameterGesture, HandlerShared, Vst3RestartRequest, begin_edit, end_edit,
-        perform_edit, restart_component,
+        EditorParameterGesture, HandlerShared, Vst3HostRequest, Vst3RestartRequest, begin_edit,
+        end_edit, perform_edit, restart_component,
     };
 
     #[test]
@@ -706,6 +712,39 @@ mod tests {
             ]
         );
         assert!(shared.take_editor_gestures().is_empty());
+        assert_eq!(
+            shared.take_host_requests(),
+            vec![Vst3HostRequest::DirtyChanged(true)]
+        );
+    }
+
+    #[test]
+    fn native_editor_drag_coalesces_dirty_requests_until_the_host_drains_them() {
+        let ring = HeapRb::new(8);
+        let (producer, _consumer) = ring.split();
+        let shared = HandlerShared::new(producer);
+        let mut handler = super::ComponentHandler::new(shared.clone());
+        unsafe {
+            // SAFETY: handler owns a live interface for both complete gesture sequences.
+            assert_eq!(begin_edit(handler.as_interface(), 42), 0);
+            assert_eq!(perform_edit(handler.as_interface(), 42, 0.75), 0);
+            assert_eq!(perform_edit(handler.as_interface(), 42, 0.5), 0);
+            assert_eq!(end_edit(handler.as_interface(), 42), 0);
+        }
+        assert_eq!(
+            shared.take_host_requests(),
+            vec![Vst3HostRequest::DirtyChanged(true)]
+        );
+        unsafe {
+            // SAFETY: handler still owns the live interface for this second complete gesture.
+            assert_eq!(begin_edit(handler.as_interface(), 42), 0);
+            assert_eq!(perform_edit(handler.as_interface(), 42, 0.25), 0);
+            assert_eq!(end_edit(handler.as_interface(), 42), 0);
+        }
+        assert_eq!(
+            shared.take_host_requests(),
+            vec![Vst3HostRequest::DirtyChanged(true)]
+        );
     }
 
     #[test]

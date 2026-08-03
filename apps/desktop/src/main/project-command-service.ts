@@ -22,6 +22,7 @@ import type { PreparedProjectGraph } from "./audio-graph-publisher"
 import type { AudioHostService } from "./audio-host-service"
 import type { LifecycleCoordinator } from "./lifecycle-coordinator"
 import type { OperationService } from "./operation-service"
+import type { PluginCatalogService } from "./plugin-catalog-service"
 import type { ProjectGraphService } from "./project-graph-service"
 import type { ProjectService } from "./project-service"
 
@@ -121,8 +122,31 @@ export class ProjectCommandService {
   constructor(
     private readonly graphs: ProjectGraphService,
     private readonly projects: ProjectService,
-    private readonly audioHost: AudioHostService | null
+    private readonly audioHost: AudioHostService | null,
+    private readonly plugins: PluginCatalogService | null = null
   ) {}
+
+  private async resolvePluginDescriptors(command: ProjectCommand): Promise<ProjectCommand> {
+    if (!this.plugins) return command
+    if (command.type === "create-plugin" || command.type === "replace-plugin") {
+      return {
+        ...command,
+        plugin: {
+          ...command.plugin,
+          descriptor: await this.plugins.resolveDescriptorForRuntime(command.plugin.descriptor)
+        }
+      }
+    }
+    if (command.type === "batch") {
+      return {
+        ...command,
+        commands: await Promise.all(
+          command.commands.map((nested) => this.resolvePluginDescriptors(nested))
+        )
+      }
+    }
+    return command
+  }
 
   attachKernel(lifecycle: LifecycleCoordinator, operations: OperationService): void {
     this.lifecycle = lifecycle
@@ -232,12 +256,13 @@ export class ProjectCommandService {
     let nativePrepared: PreparedProjectGraph | null = null
     let commitDispatched = false
     try {
+      const resolvedCommand = await this.resolvePluginDescriptors(command)
       const projectId = this.graphs.currentProjectId()
       const before = this.graphs.snapshotNow()
-      const inverse = inverseFor(before, command)
-      const candidate = applyToGraph(before, command)
+      const inverse = inverseFor(before, resolvedCommand)
+      const candidate = applyToGraph(before, resolvedCommand)
       validateGraph(candidate)
-      const deletedIds = deletedChannelIds(before, command)
+      const deletedIds = deletedChannelIds(before, resolvedCommand)
       const fallbackOutput = before.channels.find(
         (channel) => channel.kind === "output" && !deletedIds.has(channel.id)
       )
@@ -250,10 +275,10 @@ export class ProjectCommandService {
       workerPrepared = await this.projects.prepareProjectCommand(
         meta.mutation!.operationId,
         revision,
-        command,
+        resolvedCommand,
         fallbackOutput.id
       )
-      if (!onlyRealtimeParameters(command)) {
+      if (!onlyRealtimeParameters(resolvedCommand)) {
         const prepared = await this.graphs.prepareMutation(
           meta,
           workspace.projectGraph,
@@ -270,7 +295,7 @@ export class ProjectCommandService {
       commitDispatched = true
       let committed
       try {
-        committed = await this.projects.commitProjectCommand(workerPrepared.token, command)
+        committed = await this.projects.commitProjectCommand(workerPrepared.token, resolvedCommand)
       } catch (error) {
         const status = await this.projects.projectCommandStatus(meta.mutation!.operationId)
         if (status.state !== "committed") throw error
@@ -311,7 +336,7 @@ export class ProjectCommandService {
         }
       } else {
         try {
-          await this.previewCommitted(command)
+          await this.previewCommitted(resolvedCommand)
         } catch {
           warnings.push({
             code: "audio-parameter-degraded",

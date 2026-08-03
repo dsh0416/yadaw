@@ -48,6 +48,19 @@ export class AudioGraphPublisher {
     return resolved
   }
 
+  private async resolveForRuntime(graph: ProjectGraphSnapshot): Promise<ProjectGraphSnapshot> {
+    const resolved = cloneGraph(graph)
+    const plugins = this.plugins
+    if (!plugins) return resolved
+    resolved.plugins = await Promise.all(
+      resolved.plugins.map(async (plugin) => ({
+        ...plugin,
+        descriptor: await plugins.resolveDescriptorForRuntime(plugin.descriptor)
+      }))
+    )
+    return resolved
+  }
+
   async prepare(
     meta: RpcRequestMeta,
     projectGraph: ProjectGraphRef,
@@ -55,7 +68,7 @@ export class AudioGraphPublisher {
     assetSource?: ProjectAssetReader,
     options: GraphPublicationOptions = {}
   ): Promise<RpcResult<PreparedProjectGraph>> {
-    const graph = this.resolve(source)
+    const graph = await this.resolveForRuntime(source)
     validateGraph(graph)
     const softwareMonitoringEnabled =
       (await this.settings?.get())?.softwareMonitoringEnabled ?? false
@@ -147,7 +160,7 @@ export class AudioGraphPublisher {
       typeof input === "boolean"
         ? { softwareMonitoringOverride: input, awaitPublication: legacyAwaitPublication }
         : input
-    const graph = this.resolve(source)
+    const graph = await this.resolveForRuntime(source)
     validateGraph(graph)
     const softwareMonitoringEnabled =
       options.softwareMonitoringOverride ??
