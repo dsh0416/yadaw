@@ -1,7 +1,7 @@
 ---
 layout: page
 title: Development log
-description: Notes from building YADAW — milestones, architecture choices, and the work between releases.
+description: Notes from building Heron — milestones, architecture choices, and the work between releases.
 sidebar: false
 aside: false
 editLink: false

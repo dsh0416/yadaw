@@ -6,7 +6,7 @@ vstTrademark: true
 
 # VST® 3 plug-ins
 
-YADAW discovers VST 3 instruments and effects from standard system and user
+Heron discovers VST 3 instruments and effects from standard system and user
 locations. Plug-ins run through an isolated audio-host process so a failed
 module can be reported and quarantined without loading native code directly
 into the interface.
@@ -17,7 +17,7 @@ platform matrix and planned formats.
 
 ## Scan the catalog
 
-YADAW scans on startup. To look again after installing a plug-in:
+Heron scans on startup. To look again after installing a plug-in:
 
 1. open **Library**;
 2. choose the plug-in catalog;
@@ -84,7 +84,7 @@ quarantined, or fails to start. Check the slot state and catalog status, then:
 
 1. confirm that the correct plug-in and architecture are installed;
 2. rescan the catalog;
-3. restart YADAW if the plug-in was installed while the host was active;
+3. restart Heron if the plug-in was installed while the host was active;
 4. bypass or remove a plug-in that repeatedly fails.
 
 Never assume two plug-ins with similar names or vendors are interchangeable;

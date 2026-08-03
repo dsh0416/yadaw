@@ -1,6 +1,6 @@
 # Context menu and dropdown menu design specification
 
-This specification defines the shared menu language for YADAW. It covers contextual commands
+This specification defines the shared menu language for Heron. It covers contextual commands
 opened with a right click and command or selection menus opened from a button. Both entry points
 must render the same content model so command names, ordering, states, shortcuts, search, and
 nested categories do not drift between surfaces.
@@ -18,7 +18,7 @@ must make three things immediately legible:
 2. which rows perform an action and which rows open a category;
 3. where a result belongs when search has flattened its hierarchy.
 
-The signature YADAW element remains outside the floating surface: the target track, clip, note,
+The signature Heron element remains outside the floating surface: the target track, clip, note,
 slot, or route keeps its normal signal rail or selection outline while the menu is open. The menu
 itself stays neutral and quiet. It must never resemble a second inspector.
 
@@ -226,7 +226,7 @@ a terminal action.
 
 ## Visual specification
 
-Existing YADAW semantic tokens are the source of truth. Do not introduce raw menu colors or
+Existing Heron semantic tokens are the source of truth. Do not introduce raw menu colors or
 numeric z-indexes.
 
 | Property              | Compact workspace             | Standard UI                  |

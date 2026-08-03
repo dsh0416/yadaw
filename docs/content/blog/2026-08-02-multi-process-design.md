@@ -1,14 +1,14 @@
 ---
-title: The multiprocess design of YADAW
+title: The multiprocess design of Heron
 date: 2026-08-02
 description: Why we chose Electron over Tauri, why audio lives in a separate host process, and how a typed IPC protocol keeps that split both fast and reliable.
 tags: [architecture, electron, ipc]
 vstTrademark: true
 ---
 
-# The multiprocess design of YADAW
+# The multiprocess design of Heron
 
-A DAW is not really one app with a UI glued on top. It is a control surface, a real-time engine, a plug-in host, and a persistence layer that ought to be allowed to fail without taking the open session with them. Early on we decided YADAW would lean into that reality instead of pretending everything could live in one happy address space — and that choice keeps showing up in almost every layer we touch.
+A DAW is not really one app with a UI glued on top. It is a control surface, a real-time engine, a plug-in host, and a persistence layer that ought to be allowed to fail without taking the open session with them. Early on we decided Heron would lean into that reality instead of pretending everything could live in one happy address space — and that choice keeps showing up in almost every layer we touch.
 
 ## Why not Tauri
 
@@ -72,7 +72,7 @@ And nothing in this stack runs inside the audio callback. Serialization, channel
 
 ## When a call can fail without lying
 
-Speed is useless if a lost reply leaves the session in an ambiguous state. So every YADAW call that crosses a process boundary returns a serializable result — conceptually an `RpcResult<T>` — not a thrown exception, not a rejected Promise as application control flow, not a free-form string, not a Rust panic smuggled across the wire:
+Speed is useless if a lost reply leaves the session in an ambiguous state. So every Heron call that crosses a process boundary returns a serializable result — conceptually an `RpcResult<T>` — not a thrown exception, not a rejected Promise as application control flow, not a free-form string, not a Rust panic smuggled across the wire:
 
 ```ts
 type RpcResult<T> =
@@ -94,6 +94,6 @@ Put together, IPC reliability is not “retry until it looks fine.” It is a sm
 
 Electron gives us a consistent shell. The audio host gives us isolation, a quieter working set, and scheduling that respects real-time work. Shared arenas, telemetry pages, and parameter rings keep the hot control paths off the slow request lane. The typed result protocol makes every failure say what happened to the resource, not just that something went wrong.
 
-None of that is meant to be invisible architecture. It is the reason a plug-in crash, a saturated control mailbox, or a lost reply can leave YADAW in a state we can name — and recover from — without pretending the whole application is still one process that never lies.
+None of that is meant to be invisible architecture. It is the reason a plug-in crash, a saturated control mailbox, or a lost reply can leave Heron in a state we can name — and recover from — without pretending the whole application is still one process that never lies.
 
 And Electron itself does not have to be permanent. The part we were unwilling to give up was Chromium consistency, not Node-as-the-desktop-runtime. A path that keeps looking more plausible is `winit` plus [`tauri-apps/cef-rs`](https://github.com/tauri-apps/cef-rs): same embedded Chromium discipline, but the shell owned in Rust beside the audio host instead of behind Electron’s main process. I have already put that stack through its paces in another project, [`dsh0416/godot-cef`](https://github.com/dsh0416/godot-cef), so the question is less “does CEF work from Rust?” and more “how much of our napi glue can disappear when the UI host and the audio host speak the same language.” If that migration happens, the multi-process story above mostly stays — we would just be carrying fewer Node-shaped adapters between the pieces that already matter.

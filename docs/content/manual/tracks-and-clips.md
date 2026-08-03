@@ -43,7 +43,7 @@ Audio files stored in the project appear under **Library → Samples**.
 Drag a clip's left or right edge to trim it without changing the underlying
 audio. Trimmed material remains available, so dragging the edge back out
 restores it. Drag either handle along the top edge to set a fade-in or fade-out;
-YADAW renders the fades with a smooth equal-power gain curve.
+Heron renders the fades with a smooth equal-power gain curve.
 
 Right-click a clip for **Split at playhead**, **Trim start to playhead**,
 **Trim end to playhead**, **Reset fades**, and **Delete**. The playhead must be
@@ -75,7 +75,7 @@ development.
 
 ### Supported meter denominators
 
-YADAW currently accepts meter numerators from 1 through 32 and the denominators
+Heron currently accepts meter numerators from 1 through 32 and the denominators
 1, 2, 4, 8, 16, and 32. The same choices appear in Project Settings, the top-bar
 musical display, and the Meter global lane. A missing value such as 11 is a
 current limitation, not an input or project error.
@@ -86,7 +86,7 @@ tick positions. A meter such as 7/11 would instead make one notated beat
 3840 / 11 ticks. That is not an integer, and allowing different parts of the
 application to round these fractional positions separately could make bar
 lines, snapping, count-in, the metronome, and plug-in timing disagree or drift
-over time. YADAW rejects such a denominator rather than silently approximating
+over time. Heron rejects such a denominator rather than silently approximating
 it.
 
 Standard MIDI Files have a separate compatibility limit: their Time Signature

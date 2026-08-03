@@ -26,7 +26,7 @@ avoid XRUNs. Start larger, then reduce it after the signal is stable.
 2. In the channel's **Input** section, select a mono hardware input or link an
    adjacent pair for stereo.
 3. Turn on **Record enable** for the track.
-4. Turn on **Input monitoring** if you need to hear the input through YADAW.
+4. Turn on **Input monitoring** if you need to hear the input through Heron.
 
 Software monitoring must be enabled in recording settings, and the track must
 have a hardware input, before input monitoring becomes available.
@@ -63,7 +63,7 @@ Cycle is a playback aid and never loops a recording. If Cycle is enabled while
 you record, capture continues past the loop end and the saved Cycle range is
 used again the next time you play.
 
-Select **Record** again to stop. YADAW closes the recording, repairs audio
+Select **Record** again to stop. Heron closes the recording, repairs audio
 headers when needed, processes audio into project assets, converts MIDI journals
 into clips, and updates the arrangement. Keep the application open while the
 finalization dialog is active.
@@ -71,7 +71,7 @@ finalization dialog is active.
 ## Recovery
 
 During capture, audio and MIDI journals are written to the configured swap
-directory. This allows YADAW to recover a take if recording or the application
+directory. This allows Heron to recover a take if recording or the application
 stops before the project archive is saved. Recovered MIDI takes close any
 notes that were still held when capture ended.
 
@@ -85,5 +85,5 @@ After a successful capture:
 
 An XRUN or dropout warning means the audio callback did not receive or deliver
 data on time. Stop recording, increase the buffer size, close CPU-heavy
-applications or plug-ins, and try again. YADAW reports dropped input or
+applications or plug-ins, and try again. Heron reports dropped input or
 captured frames during finalization rather than hiding the problem.

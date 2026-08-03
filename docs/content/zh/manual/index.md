@@ -1,22 +1,22 @@
 ---
-title: 欢迎使用 YADAW
-description: 了解 YADAW 的功能，并找到使用手册的阅读路径。
+title: 欢迎使用 Heron
+description: 了解 Heron 的功能，并找到使用手册的阅读路径。
 vstTrademark: true
 ---
 
-# 欢迎使用 YADAW
+# 欢迎使用 Heron
 
-YADAW 是一款自由、开源的数字音频工作站，支持 Windows、macOS 与 Linux。
+Heron 是一款自由、开源的数字音频工作站，支持 Windows、macOS 与 Linux。
 它将音频录制、MIDI 编排、VST® 3 乐器与效果、路由与混音整合进同一个桌面工作区。
 
 ::: warning 实验性软件
-YADAW 正在积极开发中，暂不建议用于制作会话或现场演出。请为重要的录音与
+Heron 正在积极开发中，暂不建议用于制作会话或现场演出。请为重要的录音与
 工程保留独立的备份。在 1.0 版本之前，工程兼容性可能发生变化。
 :::
 
 ## 选择从哪里开始
 
-- **第一次使用 YADAW？**先[安装应用](install.md)，然后
+- **第一次使用 Heron？**先[安装应用](install.md)，然后
   [创建你的第一个工程](first-project.md)。
 - **准备录音？**设置好输入，然后按照[音频录音指南](recording.md)操作。
 - **在处理音符？**了解 [MIDI 片段与钢琴卷帘](midi-and-piano-roll.md)。
@@ -39,7 +39,7 @@ YADAW 正在积极开发中，暂不建议用于制作会话或现场演出。�
 - English 与简体中文界面，提供深色、浅色与跟随系统主题。
 
 应用中标注为**即将推出**的功能只是占位符，并非已完成的控件。计划中的工作请参阅
-[公开路线图](https://github.com/dsh0416/yadaw/blob/main/agents/docs/roadmap.md)。
+[公开路线图](https://github.com/dsh0416/heron/blob/main/agents/docs/roadmap.md)。
 
 ## 关于本手册
 

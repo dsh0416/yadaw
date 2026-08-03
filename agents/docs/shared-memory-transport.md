@@ -2,7 +2,7 @@
 
 This document records the persistent shared-page failure found on macOS, its
 temporary containment, and the delivered replacement for
-`ipc-channel::IpcSharedMemory` as YADAW's long-lived shared-memory primitive.
+`ipc-channel::IpcSharedMemory` as Heron's long-lived shared-memory primitive.
 It is an architecture and delivery specification, not a user-facing support
 note.
 
@@ -61,7 +61,7 @@ only exposed a transport-semantic mismatch.
 documents a region made accessible to a message receiver, and its mutable
 access contract recommends a single reader/writer, no cloning, and one
 serialization/deserialization. It does not explicitly promise that a
-sender-retained clone and a receiver mapping remain mutually visible. YADAW's
+sender-retained clone and a receiver mapping remain mutually visible. Heron's
 persistent pages require that stronger contract. Linux and Windows happened to
 satisfy it; the macOS backend does not.
 
@@ -72,7 +72,7 @@ second process.
 
 ## Required semantics
 
-YADAW defines `process-shared mapping` to mean all of the following:
+Heron defines `process-shared mapping` to mean all of the following:
 
 1. Every successful opener maps the same kernel backing object, not a snapshot
    of its bytes.
@@ -158,7 +158,7 @@ pub struct SharedRegionDescriptor {
 ```
 
 Backends compress the cryptographically random object ID, logical length, and
-generation with a fixed non-cryptographic 128-bit mixer, then add a YADAW-owned
+generation with a fixed non-cryptographic 128-bit mixer, then add a Heron-owned
 prefix. This is deterministic name derivation, not authentication or payload
 integrity. POSIX uses a 96-bit projection to remain below Darwin's shared-memory
 name limit; Windows uses the complete mixed key. Including length and generation
@@ -298,7 +298,7 @@ substitution.
 - [x] Re-run large MIDI, plug-in state, waveform, and bidirectional attachment
       benchmarks.
 
-Exit condition: no YADAW persistent data path depends on
+Exit condition: no Heron persistent data path depends on
 `ipc-channel::IpcSharedMemory`; `ipc-channel` carries control messages only.
 
 ### Phase 5 — Harden and retire containment

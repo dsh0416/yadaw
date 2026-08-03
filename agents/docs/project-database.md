@@ -1,7 +1,7 @@
 # Project Database Development Rules
 
 This document defines the implemented architecture and non-negotiable development
-rules for the YADAW project database. It applies to all work involving PGlite,
+rules for the Heron project database. It applies to all work involving PGlite,
 Drizzle, project persistence, project archives, or database-facing IPC.
 
 The former handwritten migration array, generic SQL proxy, and desktop-service
@@ -67,7 +67,7 @@ The following rules are mandatory:
 - A custom SQL migration requires an explicit review note explaining why
   Drizzle cannot express the change. It is an exception, not a convenience.
 
-YADAW has not released a stable project format. Until that policy changes, old
+Heron has not released a stable project format. Until that policy changes, old
 development archives receive no migration, backfill, or compatibility
 guarantee. A rewritten baseline may allow an old archive to fail naturally.
 Do not add compatibility branches unless the product policy is changed first.

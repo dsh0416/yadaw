@@ -1,7 +1,7 @@
 # Development Environment
 
 This document describes the runtime and command-execution conventions for the
-YADAW development environment.
+Heron development environment.
 
 ## Runtime Management
 

@@ -1,6 +1,6 @@
-# Contributing to YADAW
+# Contributing to Heron
 
-Thank you for contributing. YADAW is experimental and under active development;
+Thank you for contributing. Heron is experimental and under active development;
 thoughtful patches, reviews, bug reports, and design discussion all help.
 
 ## Getting started
@@ -43,7 +43,7 @@ change preserves real-time and process invariants.
 
 ## AI-assisted and AI-generated contributions
 
-YADAW **welcomes** AI-assisted and AI-generated code. Building a
+Heron **welcomes** AI-assisted and AI-generated code. Building a
 cross-platform DAW involves a large surface area and a lot of careful,
 repetitive engineering. Used well, AI can raise both delivery speed and
 implementation quality.

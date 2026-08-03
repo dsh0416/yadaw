@@ -29,7 +29,7 @@ const signalClasses = [
           <a class="button button--primary" :href="withBase(`${prefix}/manual/`)">
             {{ t.openManual }} <span>→</span>
           </a>
-          <a class="button" href="https://github.com/dsh0416/yadaw/releases">{{ t.getRelease }}</a>
+          <a class="button" href="https://github.com/dsh0416/heron/releases">{{ t.getRelease }}</a>
         </div>
         <p class="hero__notice">
           <strong>{{ t.noticeStrong }}</strong> {{ t.noticeRest }}

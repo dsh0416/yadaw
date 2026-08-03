@@ -16,7 +16,7 @@ function formatDisplayDate(isoDate: string): string {
   <main class="blog">
     <header class="blog__header">
       <p class="blog__eyebrow">Development log</p>
-      <h1 class="blog__title">Notes from building YADAW.</h1>
+      <h1 class="blog__title">Notes from building Heron.</h1>
       <p class="blog__lead">
         Short posts about milestones, architecture choices, and the work between releases.
       </p>

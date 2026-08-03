@@ -74,7 +74,7 @@ export const LongRunningOperation: Story = {
     components: { UiButton, UiLoadingState, UiSurface },
     template: `
       <UiSurface style="max-width:42rem">
-        <UiLoadingState title="Consolidating audio" description="Copying referenced files into the project. Keep YADAW open until this finishes." :value="68" />
+        <UiLoadingState title="Consolidating audio" description="Copying referenced files into the project. Keep Heron open until this finishes." :value="68" />
         <div style="display:flex;justify-content:center;padding-bottom:var(--ui-space-5)"><UiButton>Run in background</UiButton></div>
       </UiSurface>
     `

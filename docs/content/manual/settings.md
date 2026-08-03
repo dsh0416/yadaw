@@ -12,10 +12,10 @@ current session. For the platform compatibility matrix, see
 ## Audio engine
 
 The engine page controls how the isolated native audio service runs. Use the
-resolved values shown by YADAW when diagnosing which runtime configuration is
+resolved values shown by Heron when diagnosing which runtime configuration is
 actually active.
 
-If you change runtime options, let YADAW restart the audio helper before
+If you change runtime options, let Heron restart the audio helper before
 resuming playback or recording.
 
 ## Audio devices
@@ -23,7 +23,7 @@ resuming playback or recording.
 Choose input and output devices independently, then select their channel
 configuration and requested buffer size.
 
-YADAW can keep devices working when:
+Heron can keep devices working when:
 
 - input and output use different sample rates;
 - devices have independent hardware clocks;
@@ -42,7 +42,7 @@ never opens a real device: capture is silent and playback is discarded.
 
 Use it to keep working when no interface is connected, when another application
 is holding the device, or when you want to edit a project without producing
-sound. YADAW selects it automatically only when no other backend can be reached.
+sound. Heron selects it automatically only when no other backend can be reached.
 
 Mock devices run at 48 kHz in stereo and route playback back into capture, so
 metering and the round-trip latency measurement still respond. Switch back to a
@@ -89,5 +89,5 @@ Other denominators are not currently supported; see **Supported meter
 denominators** in [Tracks and clips](tracks-and-clips.md) for the timing and MIDI
 compatibility details.
 
-Changing session sample rate changes the project clock. YADAW converts audio at
+Changing session sample rate changes the project clock. Heron converts audio at
 the device boundary when the hardware runs at a different rate.

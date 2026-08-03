@@ -1,6 +1,6 @@
 # Playback Runtime Architecture
 
-This document is the agent-facing specification for YADAW's playback graph,
+This document is the agent-facing specification for Heron's playback graph,
 threads, asynchronous control plane, background workers, and VST3 runtime. It
 defines ownership and real-time invariants for the VST3/Tokio migration.
 
@@ -616,7 +616,7 @@ Native-mode Mode and Zoom menus are separate, borderless winit/WGPU windows,
 not iced overlays in the editor surface. Windows uses an editor-owned popup
 without a taskbar entry, AppKit uses a child `NSWindow` ordered above the
 editor, and X11 uses an override-redirect `DropdownMenu` window. This avoids
-the native-child airspace conflict: opening, choosing, or dismissing a YADAW
+the native-child airspace conflict: opening, choosing, or dismissing a Heron
 menu never hides or detaches the plug-in view. Parameters mode (including the
 Wayland fallback) continues to use iced pick-list overlays.
 

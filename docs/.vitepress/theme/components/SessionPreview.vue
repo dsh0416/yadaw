@@ -7,8 +7,8 @@ const t = useHomeCopy()
 <template>
   <div class="session" role="img" :aria-label="t.sessionAriaLabel">
     <div class="session__chrome">
-      <span class="session__brand">YADAW</span>
-      <span class="session__project">night-drive.yadaw</span>
+      <span class="session__brand">Heron</span>
+      <span class="session__project">night-drive.heron</span>
       <span class="session__status">48 kHz</span>
     </div>
 

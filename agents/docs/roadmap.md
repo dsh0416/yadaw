@@ -1,6 +1,6 @@
 # Roadmap
 
-YADAW is experimental. This checklist is the agreed product backlog and
+Heron is experimental. This checklist is the agreed product backlog and
 milestone order. Check items when they ship in a usable form; uncheck or add
 items when scope changes. Releases document what each version actually
 supports.
@@ -63,7 +63,7 @@ Make the existing vertical slice reliable for daily experimentation.
 
 ## M1 — Composition MVP
 
-**Complete.** Write and edit music inside YADAW without an external DAW for
+**Complete.** Write and edit music inside Heron without an external DAW for
 MIDI work.
 
 - [x] Piano roll UI

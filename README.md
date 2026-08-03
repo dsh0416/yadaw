@@ -1,26 +1,26 @@
-# YADAW
+# Heron Studio
 
-[![CI](https://github.com/dsh0416/yadaw/actions/workflows/ci.yml/badge.svg)](https://github.com/dsh0416/yadaw/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/dsh0416/yadaw/graph/badge.svg)](https://codecov.io/gh/dsh0416/yadaw)
-[![Latest release](https://img.shields.io/github/v/tag/dsh0416/yadaw?label=version)](https://github.com/dsh0416/yadaw/releases/latest)
+[![CI](https://github.com/dsh0416/heron/actions/workflows/ci.yml/badge.svg)](https://github.com/dsh0416/heron/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/dsh0416/heron/graph/badge.svg)](https://codecov.io/gh/dsh0416/heron)
+[![Latest release](https://img.shields.io/github/v/tag/dsh0416/heron?label=version)](https://github.com/dsh0416/heron/releases/latest)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 ![Status](https://img.shields.io/badge/status-experimental-orange)
 
-**Yet Another Digital Audio Workstation**
+**From sketch to stage.**
 
-YADAW is a free and open-source digital audio workstation for creating,
+Heron Studio is a free and open-source digital audio workstation for creating,
 recording, and performing music. It aims to provide a fast, dependable creative
 environment across Windows, macOS, and Linux—one that can follow an idea from
 its first sketch to a finished production or a live stage.
 
-YADAW is currently experimental and under active development. It is not yet
+Heron is currently experimental and under active development. It is not yet
 recommended for production sessions or live performances.
 
 ## Vision
 
 Music-making should not require choosing between creative freedom, technical
-control, and reliable performance. YADAW's long-term vision is a single,
+control, and reliable performance. Heron's long-term vision is a single,
 coherent workspace that serves:
 
 - **Composition and production** — arranging audio and MIDI, shaping sounds,
@@ -40,7 +40,7 @@ products or incompatible project formats.
 - **A genuinely cross-platform experience.** Make the same core workflow and
   project available on Windows, macOS, and Linux while integrating well with
   each platform's audio system.
-- **Freedom and user ownership.** Keep YADAW free software, keep creative work
+- **Freedom and user ownership.** Keep Heron free software, keep creative work
   under the user's control, and avoid making a service account or subscription
   a prerequisite for making music.
 - **Interoperability.** Work with established plug-in ecosystems, audio and MIDI
@@ -77,7 +77,7 @@ guarantee. See the [roadmap](agents/docs/roadmap.md) for milestones and prioriti
 
 ## User manual
 
-The [YADAW user manual](https://yadaw.minori.live/manual/) covers installation,
+The [Heron user manual](https://heron.minori.live/manual/) covers installation,
 projects, recording, MIDI editing, mixing, plug-ins, audio-device setup, and
 troubleshooting.
 
@@ -104,5 +104,5 @@ Contributor-facing details live outside this README:
 
 ## License
 
-YADAW is licensed under the
+Heron Studio is licensed under the
 [GNU General Public License v3.0](LICENSE).

@@ -29,7 +29,7 @@ SOFTWARE.
 Steinberg ASIO SDK 2.3.4
 -------------------------
 
-YADAW uses the ASIO SDK under the General Public License (GPL) Version 3
+Heron uses the ASIO SDK under the General Public License (GPL) Version 3
 option. The SDK license notice follows, with line endings and trailing whitespace normalized.
 
 //-----------------------------------------------------------------------------

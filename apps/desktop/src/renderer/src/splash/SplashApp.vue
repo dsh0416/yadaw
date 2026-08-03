@@ -5,7 +5,7 @@ import { DEFAULT_LOCALE } from "../../../shared/i18n"
 import { useStartupStore } from "../stores/startup"
 
 const startup = useStartupStore()
-const projectUrl = "https://github.com/dsh0416/yadaw"
+const projectUrl = "https://github.com/dsh0416/heron"
 const appVersion = __APP_VERSION__
 const percentage = computed(() => Math.round(startup.progress.progress * 100))
 

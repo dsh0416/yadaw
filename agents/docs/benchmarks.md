@@ -1,6 +1,6 @@
 # Rust performance benchmarks
 
-YADAW uses Criterion for repeatable microbenchmarks of the native mixer, render
+Heron uses Criterion for repeatable microbenchmarks of the native mixer, render
 path, media cache, and recorder. These results describe code performance on one
 machine; they are not portable scores and do not run as a pull-request gate.
 

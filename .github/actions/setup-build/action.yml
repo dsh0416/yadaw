@@ -1,4 +1,4 @@
-name: Setup YADAW build
+name: Setup Heron build
 description: Install the locked toolchain, native dependencies, caches, and workspace packages.
 
 inputs:

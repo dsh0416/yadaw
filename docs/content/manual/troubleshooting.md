@@ -7,7 +7,7 @@ asioTrademark: true
 
 # Troubleshooting
 
-Start with the status bar and the warning shown by YADAW. They report the
+Start with the status bar and the warning shown by Heron. They report the
 active device state rather than only the requested settings.
 
 ## There is no sound
@@ -27,7 +27,7 @@ or cabling.
 ## An input is missing
 
 1. Confirm that the operating system can see the device.
-2. Allow microphone or audio-input permission for YADAW.
+2. Allow microphone or audio-input permission for Heron.
 3. Select the device under **Audio → Devices** and apply the change.
 4. Reopen the audio channel's input selector.
 5. On Windows, install and select the manufacturer's 64-bit ASIO® driver when
@@ -38,7 +38,7 @@ or cabling.
 When no backend reports a usable device, or another application is holding the
 interface, select the **Mock** backend under **Settings → Audio → Devices**. It
 starts the engine without touching hardware, so you can keep editing, arranging,
-and configuring the project, and it lets YADAW report the rest of its state
+and configuring the project, and it lets Heron report the rest of its state
 normally. Playback is discarded while it is selected, so switch back to a
 hardware backend to hear the session.
 
@@ -70,28 +70,28 @@ avoid the software round trip.
 
 1. Check that the correct architecture and VST 3 version are installed.
 2. Open the Sound Browser and select **Rescan VST3**.
-3. Restart YADAW after installing or updating the plug-in.
+3. Restart Heron after installing or updating the plug-in.
 4. Check startup messages for the failed module.
 5. Remove or bypass a plug-in that repeatedly stops the audio host.
 
-YADAW preserves a legal route when a stored plug-in cannot load, so the rest of
+Heron preserves a legal route when a stored plug-in cannot load, so the rest of
 the project can remain usable.
 
 ## The project did not close cleanly
 
-On the next open, choose **Recover working copy** when YADAW reports that the
+On the next open, choose **Recover working copy** when Heron reports that the
 working state is newer than the saved archive. Choose **Open last saved** only
 when you intentionally want to discard the newer working state.
 
-For an interrupted recording, let YADAW recover and finalize available swap
+For an interrupted recording, let Heron recover and finalize available swap
 audio before moving or deleting the swap directory.
 
 ## Ask for help
 
-Search existing [GitHub issues](https://github.com/dsh0416/yadaw/issues) before
+Search existing [GitHub issues](https://github.com/dsh0416/heron/issues) before
 opening a report. Include:
 
-- operating system and YADAW version;
+- operating system and Heron version;
 - audio interface, driver, sample rate, and buffer;
 - the exact warning or error;
 - steps that reproduce the problem;

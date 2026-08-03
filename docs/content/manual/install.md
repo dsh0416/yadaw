@@ -1,18 +1,18 @@
 ---
-title: Install YADAW
-description: Download and start YADAW on Windows, macOS, or Linux.
+title: Install Heron
+description: Download and start Heron on Windows, macOS, or Linux.
 vstTrademark: true
 asioTrademark: true
 ---
 
-# Install YADAW
+# Install Heron
 
-YADAW publishes installers for Windows, macOS, and Linux with each tagged
+Heron publishes installers for Windows, macOS, and Linux with each tagged
 release.
 
 ## Download a release
 
-1. Open [YADAW Releases](https://github.com/dsh0416/yadaw/releases).
+1. Open [Heron Releases](https://github.com/dsh0416/heron/releases).
 2. Choose the newest release and expand **Assets**.
 3. Download the file for your system:
    - **Windows x64:** `.exe`
@@ -21,9 +21,9 @@ release.
 4. Keep the accompanying `SHA256SUMS` file if you want to verify the download.
 
 ::: tip No release listed?
-YADAW is experimental. If the Releases page has no published installer yet,
+Heron is experimental. If the Releases page has no published installer yet,
 you can build it from source by following the
-[development environment guide](https://github.com/dsh0416/yadaw/blob/main/agents/docs/environment.md).
+[development environment guide](https://github.com/dsh0416/heron/blob/main/agents/docs/environment.md).
 That process is intended for contributors.
 :::
 
@@ -31,18 +31,18 @@ That process is intended for contributors.
 
 Run the downloaded installer. Windows audio builds include ASIO® support. For
 low-latency work, install the 64-bit ASIO driver supplied by your audio-interface
-manufacturer before opening YADAW.
+manufacturer before opening Heron.
 
 If Windows warns about an unrecognized application, confirm that the download
 came from the official repository and verify its checksum before continuing.
 
 ## macOS
 
-Open the `.dmg` and move YADAW to Applications. The first launch may require
+Open the `.dmg` and move Heron to Applications. The first launch may require
 confirmation in **System Settings → Privacy & Security**, especially for an
 experimental or unsigned build.
 
-Allow microphone access when macOS asks; YADAW needs that permission to record
+Allow microphone access when macOS asks; Heron needs that permission to record
 from audio inputs.
 
 ## Linux
@@ -50,16 +50,16 @@ from audio inputs.
 Make the AppImage executable, then run it:
 
 ```sh
-chmod +x YADAW-*.AppImage
-./YADAW-*.AppImage
+chmod +x Heron-*.AppImage
+./Heron-*.AppImage
 ```
 
 Your desktop audio configuration determines which devices are available. Make
-sure the user running YADAW can access the selected device.
+sure the user running Heron can access the selected device.
 
 ## First launch
 
-YADAW scans the system and user VST® 3 locations, starts its isolated audio
+Heron scans the system and user VST® 3 locations, starts its isolated audio
 services, and opens the project workspace. A large plug-in collection can make
 the first scan take longer than later launches.
 

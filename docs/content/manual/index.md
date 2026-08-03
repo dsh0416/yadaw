@@ -1,24 +1,24 @@
 ---
-title: Welcome to YADAW
-description: Learn what YADAW can do and find your way through the user manual.
+title: Welcome to Heron
+description: Learn what Heron can do and find your way through the user manual.
 vstTrademark: true
 ---
 
-# Welcome to YADAW
+# Welcome to Heron
 
-YADAW is a free, open-source digital audio workstation for Windows, macOS, and
+Heron is a free, open-source digital audio workstation for Windows, macOS, and
 Linux. It brings audio recording, MIDI arrangement, VST® 3 instruments and
 effects, routing, and mixing into one desktop workspace.
 
 ::: warning Experimental software
-YADAW is under active development and is not yet recommended for production
+Heron is under active development and is not yet recommended for production
 sessions or live performances. Keep separate backups of important recordings
 and projects. Project compatibility may change before version 1.0.
 :::
 
 ## Choose where to begin
 
-- **New to YADAW?** [Install the application](install.md), then
+- **New to Heron?** [Install the application](install.md), then
   [make your first project](first-project.md).
 - **Ready to record?** Set up an input and follow the
   [audio recording guide](recording.md).
@@ -42,7 +42,7 @@ The current foundation includes:
 - English and Simplified Chinese interfaces, with dark, light, and system themes.
 
 Features shown as **Soon** in the application are placeholders, not completed
-controls. Follow the [public roadmap](https://github.com/dsh0416/yadaw/blob/main/agents/docs/roadmap.md)
+controls. Follow the [public roadmap](https://github.com/dsh0416/heron/blob/main/agents/docs/roadmap.md)
 for planned work.
 
 ## A note on this manual

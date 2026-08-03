@@ -61,7 +61,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: YADAW version
+      label: Heron version
       description: Release tag, commit SHA, or `dev` build details.
       placeholder: v0.x.y or commit abc1234
     validations:

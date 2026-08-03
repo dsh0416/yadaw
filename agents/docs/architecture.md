@@ -34,7 +34,7 @@ plug-in editor is attached to a child HWND, NSView, or X11 XEmbed window below
 the toolbar. Wayland falls back to the parameter editor.
 
 Desktop-shell identity remains owned by Electron even though editor windows
-live in `audio-host`. Both processes use the stable `dev.yadaw.studio`
+live in `audio-host`. Both processes use the stable `live.minori.heron`
 application ID. On Windows, Electron passes its main-window HWND through the
 native client only at helper bootstrap; winit creates each editor as an owned
 window and omits its independent taskbar item. On macOS the helper and VST3
@@ -44,7 +44,7 @@ activate itself at launch, so neither native executable creates a second Dock
 application or steals focus from Electron. The helper's plug-in editor windows
 may still become active when the user clicks them. Electron's main macOS window
 therefore accepts first-mouse events: clicking a mixer control after using a
-native editor both reactivates YADAW and dispatches that click, instead of
+native editor both reactivates Heron and dispatches that click, instead of
 silently consuming it for AppKit activation. On X11 and Wayland the Electron
 class and winit `WM_CLASS`/application ID use the same value. The helper never
 creates a tray icon.

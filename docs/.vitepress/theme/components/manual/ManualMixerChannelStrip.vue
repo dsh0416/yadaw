@@ -60,7 +60,7 @@ const compressorDescriptor: PluginDescriptor = {
   classId: "manual-compressor",
   modulePath: "",
   name: "Compressor",
-  vendor: "YADAW",
+  vendor: "Heron",
   version: "1.0",
   categories: ["Fx", "Dynamics"],
   kind: "effect",

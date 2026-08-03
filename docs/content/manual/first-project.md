@@ -6,7 +6,7 @@ vstTrademark: true
 
 # Your first project
 
-This walkthrough gets sound through YADAW and saves a small session.
+This walkthrough gets sound through Heron and saves a small session.
 
 ## 1. Check the audio device
 
@@ -63,7 +63,7 @@ Choose **File → Save Project** or press <kbd>Ctrl</kbd>/<kbd>Cmd</kbd> +
 the archive has been written.
 
 ::: info Working copy and archive
-YADAW keeps an active working copy while the project is open. Saving writes
+Heron keeps an active working copy while the project is open. Saving writes
 that state and its media into the `.heron` archive. If the application closes
-unexpectedly, YADAW can offer to recover a newer working copy next time.
+unexpectedly, Heron can offer to recover a newer working copy next time.
 :::

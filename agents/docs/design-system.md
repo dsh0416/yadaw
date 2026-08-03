@@ -1,6 +1,6 @@
-# YADAW Design System
+# Heron Design System
 
-YADAW is a dense professional audio workstation. Its interface should feel precise, calm, and
+Heron is a dense professional audio workstation. Its interface should feel precise, calm, and
 signal-led: large surfaces remain neutral, while color is reserved for focus, primary action,
 feedback, recording, MIDI, audio, meters, and other data-bearing states.
 
@@ -10,7 +10,7 @@ generic component system.
 
 ## Visual thesis
 
-YADAW is built for musicians, editors, and audio engineers who may keep the same workspace open
+Heron is built for musicians, editors, and audio engineers who may keep the same workspace open
 for hours. The interface's single job is to keep musical position, editable scope, and audio state
 legible without competing with the material being edited.
 

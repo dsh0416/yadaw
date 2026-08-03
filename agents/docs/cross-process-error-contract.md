@@ -1,6 +1,6 @@
 # Cross-Process Resource and Error Contract
 
-This document is normative for every call that crosses a YADAW process or
+This document is normative for every call that crosses a Heron process or
 thread-isolation boundary:
 
 - renderer to Electron main through preload;
