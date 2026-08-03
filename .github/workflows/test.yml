@@ -81,7 +81,7 @@ jobs:
       # shared Cargo target cache.
       - name: Upload JavaScript coverage to Codecov
         if: runner.os == 'Linux'
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           # Keep this comma-separated list free of spaces: codecov-action
@@ -94,7 +94,7 @@ jobs:
 
       - name: Upload Rust coverage to Codecov
         if: runner.os == 'Linux'
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage/rust/lcov.info
