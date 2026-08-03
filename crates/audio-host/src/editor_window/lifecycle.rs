@@ -4,8 +4,8 @@ impl EditorWindow {
         class_id: String,
         preference: PluginEditorPreference,
         context: PluginEditorContext,
-        parameters: Vec<PluginParameter>,
         window: Arc<Window>,
+        platform_scale_fallback: bool,
         compositor: &mut Compositor,
     ) -> Self {
         let physical_size = window.inner_size();
@@ -29,8 +29,9 @@ impl EditorWindow {
             preference,
             context,
             active_mode: PluginEditorMode::Parameters,
-            parameters,
+            parameters: Vec::new(),
             warning: None,
+            native_scale_warning: None,
             open_menu: None,
             toolbar_anchors: HashMap::new(),
             compare_segment_focused: false,
@@ -51,6 +52,7 @@ impl EditorWindow {
             cursor: Cursor::Unavailable,
             modifiers: ModifiersState::default(),
             platform_context: None,
+            platform_scale_fallback,
             native: None,
         }
     }
@@ -265,21 +267,7 @@ impl EditorWindow {
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
                 self.monitor_scale.set(*scale_factor);
                 self.rebuild_viewport();
-                if let Some(native) = &self.native {
-                    let factor =
-                        plugin_content_scale(self.monitor_scale.get(), self.user_zoom.get());
-                    match native.view.set_content_scale_factor(factor) {
-                        Ok(true) => {}
-                        Ok(false) | Err(_) => {
-                            self.warning = Some(
-                                "This plug-in does not support native UI scaling; \
-                                 shell scaling is still applied."
-                                    .into(),
-                            );
-                        }
-                    }
-                }
-                self.layout_native_preferred();
+                self.update_native_scale();
             }
             WindowEvent::CursorMoved { position, .. } => {
                 let logical = position.to_logical::<f64>(self.effective_scale());

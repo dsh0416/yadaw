@@ -34,7 +34,9 @@ use yadaw_iced_ui::{Appearance, EDITOR_CHROME_HEIGHT, space as ui_space, type_si
 use yadaw_vst3_host::{PlugFrame, PlugView, ViewRect};
 
 use crate::{
-    editor_platform::{NativeContainer, NativeUiContext},
+    editor_platform::{
+        NativeContainer, NativeContainerGeometry, NativeUiContext, with_native_child_scale_context,
+    },
     vst3::{EditorPluginState, Vst3Runtime},
 };
 
@@ -261,7 +263,34 @@ struct NativeAttachment {
     view: PlugView,
     frame: Box<PlugFrame>,
     container: Rc<RefCell<NativeContainer>>,
-    scale_supported: bool,
+    scale_strategy: NativeScaleStrategy,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NativeScaleStrategy {
+    /// The plug-in accepted `IPlugViewContentScaleSupport` and owns rendering
+    /// and size changes for the requested scale.
+    Plugin,
+    /// The platform scales only the native plug-in child/container.
+    Platform,
+    /// Neither the plug-in nor this platform can scale the native child.
+    Unscaled,
+}
+
+impl NativeScaleStrategy {
+    fn resolve(plugin_scaled: bool, platform_fallback: bool) -> Self {
+        if plugin_scaled {
+            Self::Plugin
+        } else if platform_fallback {
+            Self::Platform
+        } else {
+            Self::Unscaled
+        }
+    }
+
+    const fn uses_platform_fallback(self) -> bool {
+        matches!(self, Self::Platform)
+    }
 }
 
 impl NativeAttachment {
@@ -293,6 +322,7 @@ pub struct EditorWindow {
     active_mode: PluginEditorMode,
     parameters: Vec<PluginParameter>,
     warning: Option<String>,
+    native_scale_warning: Option<String>,
     open_menu: Option<ToolbarMenu>,
     toolbar_anchors: HashMap<ToolbarMenu, Rectangle>,
     compare_segment_focused: bool,
@@ -313,6 +343,7 @@ pub struct EditorWindow {
     cursor: Cursor,
     modifiers: ModifiersState,
     platform_context: Option<NativeUiContext>,
+    platform_scale_fallback: bool,
     native: Option<NativeAttachment>,
 }
 

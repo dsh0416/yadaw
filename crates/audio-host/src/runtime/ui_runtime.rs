@@ -182,7 +182,14 @@ impl WinitHost {
             &context.plugin_name,
             self.editor_owner_window,
         );
-        let window = match event_loop.create_window(attributes) {
+        let (window_result, platform_scale_fallback) = {
+            let window_context = editor_platform::NativeEditorWindowContext::begin();
+            (
+                event_loop.create_window(attributes),
+                window_context.supports_platform_scale_fallback(),
+            )
+        };
+        let window = match window_result {
             Ok(window) => Arc::new(window),
             Err(error) => {
                 return control_error! {
@@ -215,8 +222,8 @@ impl WinitHost {
             class_id,
             preference,
             context,
-            Vec::new(),
             window,
+            platform_scale_fallback,
             compositor,
         );
         editor.activate_initial_mode(runtime);

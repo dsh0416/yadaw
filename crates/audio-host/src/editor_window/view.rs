@@ -113,7 +113,10 @@ impl EditorWindow {
             narrow_toolbar: is_narrow_toolbar(logical_width),
             active_mode: self.active_mode,
             open_menu: self.open_menu,
-            warning: self.warning.clone(),
+            warning: self
+                .warning
+                .clone()
+                .or_else(|| self.native_scale_warning.clone()),
             parameters: if self.active_mode == PluginEditorMode::Parameters {
                 self.parameters.clone()
             } else {

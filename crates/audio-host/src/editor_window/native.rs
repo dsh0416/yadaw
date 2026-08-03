@@ -4,6 +4,7 @@ impl EditorWindow {
             native.detach();
         }
         self.warning = None;
+        self.native_scale_warning = None;
         match mode {
             PluginEditorMode::Native => {
                 if let Err(error) = self.attach_native(runtime) {
@@ -56,31 +57,41 @@ impl EditorWindow {
         // Apply content scale before reading size: some adaptive editors only
         // report a usable getSize after IPlugViewContentScaleSupport.
         let scale = plugin_content_scale(self.monitor_scale.get(), self.user_zoom.get());
-        let scale_supported = view
+        let plugin_scaled = view
             .set_content_scale_factor(scale)
             .map_err(|error| format!("Could not set the plug-in UI scale: {error}"))?;
-        if !scale_supported {
-            self.warning = Some(
-                "This plug-in does not support native UI scaling; shell scaling is still applied."
-                    .into(),
-            );
-        }
+        let scale_strategy =
+            NativeScaleStrategy::resolve(plugin_scaled, self.platform_scale_fallback);
+        self.native_scale_warning = native_scale_warning(
+            scale_strategy,
+            self.monitor_scale.get(),
+            self.user_zoom.get(),
+            false,
+        );
 
         let size = initial_native_view_rect(view.size(), |rect| view.constrain_size(rect).is_ok());
-        let (container_width, container_height) = container_extent(size, self.monitor_scale.get());
-        let toolbar_height =
-            toolbar_height_for_rect(size, self.monitor_scale.get(), self.user_zoom.get());
+        let toolbar_height = toolbar_height_for_rect(
+            size,
+            scale_strategy,
+            self.monitor_scale.get(),
+            self.user_zoom.get(),
+        );
         let toolbar = toolbar_platform_extent(
             toolbar_height,
             self.monitor_scale.get(),
             self.user_zoom.get(),
         );
+        let geometry = native_container_geometry(
+            size,
+            scale_strategy,
+            self.monitor_scale.get(),
+            self.user_zoom.get(),
+            toolbar,
+        );
         let Some(container) = NativeContainer::create(
             &self.window,
-            0,
-            container_origin(toolbar),
-            container_width,
-            container_height,
+            geometry,
+            scale_strategy.uses_platform_fallback(),
         )?
         else {
             return Err("This display server does not support native VST3 editors; \
@@ -102,18 +113,33 @@ impl EditorWindow {
         let callback_window = self.window.clone();
         let callback_monitor_scale = self.monitor_scale.clone();
         let callback_user_zoom = self.user_zoom.clone();
+        let callback_scale_strategy = scale_strategy;
         let attached_size = Rc::new(Cell::new(None));
         let callback_attached_size = attached_size.clone();
         let mut frame = PlugFrame::new(move |raw_view, mut requested| {
             let monitor_scale = callback_monitor_scale.get();
             let user_zoom = callback_user_zoom.get();
-            let (width, height) = container_extent(requested, monitor_scale);
-            let toolbar_height = toolbar_height_for_rect(requested, monitor_scale, user_zoom);
+            let toolbar_height = toolbar_height_for_rect(
+                requested,
+                callback_scale_strategy,
+                monitor_scale,
+                user_zoom,
+            );
             let toolbar = toolbar_platform_extent(toolbar_height, monitor_scale, user_zoom);
-            callback_container
-                .borrow_mut()
-                .resize(0, container_origin(toolbar), width, height);
-            let physical = outer_physical_extent(requested, monitor_scale, user_zoom);
+            let geometry = native_container_geometry(
+                requested,
+                callback_scale_strategy,
+                monitor_scale,
+                user_zoom,
+                toolbar,
+            );
+            callback_container.borrow_mut().resize(geometry);
+            let physical = outer_physical_extent(
+                requested,
+                callback_scale_strategy,
+                monitor_scale,
+                user_zoom,
+            );
             let _ = callback_window.request_inner_size(WinitSize::Physical(PhysicalSize::new(
                 physical.width.max(1),
                 physical.height.max(1),
@@ -140,10 +166,14 @@ impl EditorWindow {
             let container = container.borrow();
             (container.attach_handle(), container.platform_type())
         };
-        if let Err(error) = unsafe {
-            // SAFETY: the platform child remains owned by the attachment until removed.
-            view.attach(attach_handle, platform_type)
-        } {
+        let attach_result = with_native_child_scale_context(
+            scale_strategy.uses_platform_fallback(),
+            || unsafe {
+                // SAFETY: the platform child remains owned by the attachment until removed.
+                view.attach(attach_handle, platform_type)
+            },
+        );
+        if let Err(error) = attach_result {
             let _ = unsafe {
                 // SAFETY: null clears the frame before cleanup of a failed attach.
                 view.set_frame(std::ptr::null_mut())
@@ -160,19 +190,31 @@ impl EditorWindow {
             .get()
             .or_else(|| view.size().ok())
             .unwrap_or(size);
-        let (final_width, final_height) = container_extent(final_size, self.monitor_scale.get());
-        let toolbar_height =
-            toolbar_height_for_rect(final_size, self.monitor_scale.get(), self.user_zoom.get());
+        let toolbar_height = toolbar_height_for_rect(
+            final_size,
+            scale_strategy,
+            self.monitor_scale.get(),
+            self.user_zoom.get(),
+        );
         let toolbar = toolbar_platform_extent(
             toolbar_height,
             self.monitor_scale.get(),
             self.user_zoom.get(),
         );
-        container
-            .borrow_mut()
-            .resize(0, container_origin(toolbar), final_width, final_height);
-        let physical =
-            outer_physical_extent(final_size, self.monitor_scale.get(), self.user_zoom.get());
+        let geometry = native_container_geometry(
+            final_size,
+            scale_strategy,
+            self.monitor_scale.get(),
+            self.user_zoom.get(),
+            toolbar,
+        );
+        container.borrow_mut().resize(geometry);
+        let physical = outer_physical_extent(
+            final_size,
+            scale_strategy,
+            self.monitor_scale.get(),
+            self.user_zoom.get(),
+        );
         let _ = self
             .window
             .request_inner_size(WinitSize::Physical(physical));
@@ -180,28 +222,25 @@ impl EditorWindow {
             view,
             frame,
             container,
-            scale_supported,
+            scale_strategy,
         });
         self.active_mode = PluginEditorMode::Native;
         Ok(())
     }
 
     fn update_native_scale(&mut self) {
-        let Some(native) = &mut self.native else {
+        let Some(native) = &self.native else {
             return;
         };
         let factor = plugin_content_scale(self.monitor_scale.get(), self.user_zoom.get());
-        match native.view.set_content_scale_factor(factor) {
-            Ok(true) => native.scale_supported = true,
-            Ok(false) | Err(_) => {
-                native.scale_supported = false;
-                self.warning = Some(
-                    "This plug-in does not support native UI scaling; \
-                     shell scaling is still applied."
-                        .into(),
-                );
-            }
-        }
+        let rejected = native.scale_strategy == NativeScaleStrategy::Plugin
+            && !matches!(native.view.set_content_scale_factor(factor), Ok(true));
+        self.native_scale_warning = native_scale_warning(
+            native.scale_strategy,
+            self.monitor_scale.get(),
+            self.user_zoom.get(),
+            rejected,
+        );
         self.layout_native_preferred();
     }
 
@@ -215,14 +254,13 @@ impl EditorWindow {
         };
         let monitor_scale = self.monitor_scale.get();
         let user_zoom = self.user_zoom.get();
-        let (width, height) = container_extent(rect, monitor_scale);
-        let toolbar_height = toolbar_height_for_rect(rect, monitor_scale, user_zoom);
+        let strategy = native.scale_strategy;
+        let toolbar_height = toolbar_height_for_rect(rect, strategy, monitor_scale, user_zoom);
         let toolbar = toolbar_platform_extent(toolbar_height, monitor_scale, user_zoom);
-        native
-            .container
-            .borrow_mut()
-            .resize(0, container_origin(toolbar), width, height);
-        let physical = outer_physical_extent(rect, monitor_scale, user_zoom);
+        let geometry =
+            native_container_geometry(rect, strategy, monitor_scale, user_zoom, toolbar);
+        native.container.borrow_mut().resize(geometry);
+        let physical = outer_physical_extent(rect, strategy, monitor_scale, user_zoom);
         let _ = self
             .window
             .request_inner_size(WinitSize::Physical(physical));
@@ -244,15 +282,19 @@ impl EditorWindow {
         let toolbar_physical =
             (toolbar_height * monitor_scale * user_zoom).round() as u32;
         let plugin_physical_height = physical.height.saturating_sub(toolbar_physical).max(1);
-        let mut rect =
-            view_rect_from_physical(physical.width.max(1), plugin_physical_height, monitor_scale);
+        let strategy = native.scale_strategy;
+        let mut rect = view_rect_from_physical(
+            physical.width.max(1),
+            plugin_physical_height,
+            strategy,
+            monitor_scale,
+            user_zoom,
+        );
         let _ = native.view.constrain_size(&mut rect);
-        let (width, height) = container_extent(rect, monitor_scale);
         let toolbar = toolbar_platform_extent(toolbar_height, monitor_scale, user_zoom);
-        native
-            .container
-            .borrow_mut()
-            .resize(0, container_origin(toolbar), width, height);
+        let geometry =
+            native_container_geometry(rect, strategy, monitor_scale, user_zoom, toolbar);
+        native.container.borrow_mut().resize(geometry);
         let _ = native.view.on_size(&mut rect);
     }
 

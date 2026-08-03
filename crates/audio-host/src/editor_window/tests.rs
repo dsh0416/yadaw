@@ -25,6 +25,66 @@ mod tests {
     }
 
     #[test]
+    fn native_scale_strategy_prefers_plugin_then_platform() {
+        assert_eq!(
+            NativeScaleStrategy::resolve(true, true),
+            NativeScaleStrategy::Plugin
+        );
+        assert_eq!(
+            NativeScaleStrategy::resolve(false, true),
+            NativeScaleStrategy::Platform
+        );
+        assert_eq!(
+            NativeScaleStrategy::resolve(false, false),
+            NativeScaleStrategy::Unscaled
+        );
+    }
+
+    #[test]
+    fn platform_fallback_scales_only_for_the_platforms_that_support_it() {
+        assert_eq!(
+            platform_frame_scale_for(
+                NativeScaleStrategy::Platform,
+                2.0,
+                1.5,
+                true,
+                false
+            ),
+            1.5
+        );
+        assert_eq!(
+            platform_frame_scale_for(
+                NativeScaleStrategy::Platform,
+                2.0,
+                1.5,
+                false,
+                true
+            ),
+            2.0
+        );
+        assert_eq!(
+            platform_frame_scale_for(
+                NativeScaleStrategy::Platform,
+                2.0,
+                1.5,
+                false,
+                false
+            ),
+            1.0
+        );
+        assert_eq!(
+            platform_frame_scale_for(
+                NativeScaleStrategy::Plugin,
+                2.0,
+                1.5,
+                true,
+                false
+            ),
+            1.0
+        );
+    }
+
+    #[test]
     fn narrow_editors_gain_a_second_command_row() {
         assert_eq!(editor_toolbar_height(519.0), TOOLBAR_HEIGHT_NARROW);
         assert_eq!(editor_toolbar_height(520.0), TOOLBAR_HEIGHT_WIDE);
@@ -38,7 +98,17 @@ mod tests {
     #[cfg(not(target_os = "macos"))]
     #[test]
     fn windows_and_x11_use_physical_view_rects() {
-        assert_eq!(view_rect_from_physical(900, 600, 1.5).right, 900);
+        assert_eq!(
+            view_rect_from_physical(
+                900,
+                600,
+                NativeScaleStrategy::Plugin,
+                1.5,
+                1.25
+            )
+            .right,
+            900
+        );
         assert_eq!(plugin_content_scale(1.5, 1.25), 1.875);
     }
 
@@ -52,8 +122,45 @@ mod tests {
             bottom: 180,
         };
         assert_eq!(
-            outer_physical_extent(attached, 1.5, 1.0),
+            outer_physical_extent(attached, NativeScaleStrategy::Plugin, 1.5, 1.0),
             PhysicalSize::new(525, 324)
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn appkit_fallback_scales_frame_but_preserves_plugin_coordinates() {
+        let attached = ViewRect {
+            left: 0,
+            top: 0,
+            right: 500,
+            bottom: 200,
+        };
+        assert_eq!(content_extent(attached), (500, 200));
+        assert_eq!(
+            container_extent(attached, NativeScaleStrategy::Platform, 2.0, 1.5),
+            (750, 300)
+        );
+        assert_eq!(
+            outer_physical_extent(attached, NativeScaleStrategy::Platform, 2.0, 1.5).width,
+            1500
+        );
+        let recovered = view_rect_from_physical(
+            1500,
+            600,
+            NativeScaleStrategy::Platform,
+            2.0,
+            1.5,
+        );
+        assert_eq!(recovered.right, attached.right);
+        assert_eq!(recovered.bottom, attached.bottom);
+    }
+
+    #[test]
+    fn identity_scale_does_not_warn_when_native_scaling_is_unavailable() {
+        assert_eq!(
+            native_scale_warning(NativeScaleStrategy::Unscaled, 1.0, 1.0, false),
+            None
         );
     }
 

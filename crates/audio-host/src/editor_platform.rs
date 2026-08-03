@@ -47,8 +47,39 @@ pub struct NativeContainer {
     inner: platform::Container,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NativeContainerGeometry {
+    pub x: i32,
+    pub y: i32,
+    pub frame_width: u32,
+    pub frame_height: u32,
+    pub content_width: u32,
+    pub content_height: u32,
+}
+
 pub struct NativeUiContext {
     _inner: platform::UiContext,
+}
+
+/// Scoped platform state applied while a top-level plug-in editor window is
+/// created. On Windows this records mixed-DPI hosting on the new HWND without
+/// changing that window's own per-monitor DPI awareness.
+pub struct NativeEditorWindowContext {
+    inner: platform::EditorWindowContext,
+}
+
+impl NativeEditorWindowContext {
+    #[must_use]
+    pub fn begin() -> Self {
+        Self {
+            inner: platform::EditorWindowContext::begin(),
+        }
+    }
+
+    #[must_use]
+    pub fn supports_platform_scale_fallback(&self) -> bool {
+        self.inner.supports_platform_scale_fallback()
+    }
 }
 
 impl NativeUiContext {
@@ -60,12 +91,10 @@ impl NativeUiContext {
 impl NativeContainer {
     pub fn create(
         parent: &Window,
-        x: i32,
-        y: i32,
-        width: u32,
-        height: u32,
+        geometry: NativeContainerGeometry,
+        platform_scaled: bool,
     ) -> Result<Option<Self>, String> {
-        platform::Container::create(parent, x, y, width, height)
+        platform::Container::create(parent, geometry, platform_scaled)
             .map(|container| container.map(|inner| Self { inner }))
     }
 
@@ -79,13 +108,20 @@ impl NativeContainer {
         self.inner.attach_handle()
     }
 
-    pub fn resize(&mut self, x: i32, y: i32, width: u32, height: u32) {
-        self.inner.resize(x, y, width, height);
+    pub fn resize(&mut self, geometry: NativeContainerGeometry) {
+        self.inner.resize(geometry);
     }
 
     pub fn focus(&self) {
         self.inner.focus();
     }
+}
+
+pub fn with_native_child_scale_context<T>(
+    platform_scaled: bool,
+    operation: impl FnOnce() -> T,
+) -> T {
+    platform::with_native_child_scale_context(platform_scaled, operation)
 }
 
 fn nonzero_extent(value: u32) -> u32 {
@@ -96,6 +132,10 @@ fn nonzero_extent(value: u32) -> u32 {
 mod platform {
     use super::*;
 
+    mod dpi {
+        include!("editor_platform/windows_dpi.rs");
+    }
+
     type Hwnd = *mut c_void;
     type Hinstance = *mut c_void;
 
@@ -105,8 +145,16 @@ mod platform {
     const WS_CLIPCHILDREN: u32 = 0x0200_0000;
     const SWP_NOACTIVATE: u32 = 0x0010;
     const SWP_NOZORDER: u32 = 0x0004;
-
     pub const PLATFORM_TYPE: &CStr = c"HWND";
+
+    pub use dpi::EditorWindowContext;
+
+    pub fn with_native_child_scale_context<T>(
+        platform_scaled: bool,
+        operation: impl FnOnce() -> T,
+    ) -> T {
+        dpi::with_native_child_scale_context(platform_scaled, operation)
+    }
 
     pub struct UiContext;
 
@@ -143,10 +191,8 @@ mod platform {
     impl Container {
         pub fn create(
             parent: &Window,
-            x: i32,
-            y: i32,
-            width: u32,
-            height: u32,
+            geometry: NativeContainerGeometry,
+            platform_scaled: bool,
         ) -> Result<Option<Self>, String> {
             let handle = parent
                 .window_handle()
@@ -161,23 +207,23 @@ mod platform {
             let class_name = [
                 'S' as u16, 'T' as u16, 'A' as u16, 'T' as u16, 'I' as u16, 'C' as u16, 0,
             ];
-            let hwnd = unsafe {
+            let hwnd = with_native_child_scale_context(platform_scaled, || unsafe {
                 // SAFETY: all pointers are either static UTF-16 data, null, or a live winit HWND.
                 CreateWindowExW(
                     0,
                     class_name.as_ptr(),
                     std::ptr::null(),
                     WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS | WS_CLIPCHILDREN,
-                    x,
-                    y,
-                    nonzero_extent(width) as i32,
-                    nonzero_extent(height) as i32,
+                    geometry.x,
+                    geometry.y,
+                    nonzero_extent(geometry.frame_width) as i32,
+                    nonzero_extent(geometry.frame_height) as i32,
                     parent,
                     std::ptr::null_mut(),
                     hinstance,
                     std::ptr::null_mut(),
                 )
-            };
+            });
             if hwnd.is_null() {
                 return Err("CreateWindowExW failed for VST3 child container".into());
             }
@@ -188,16 +234,16 @@ mod platform {
             self.hwnd
         }
 
-        pub fn resize(&mut self, x: i32, y: i32, width: u32, height: u32) {
+        pub fn resize(&mut self, geometry: NativeContainerGeometry) {
             unsafe {
                 // SAFETY: hwnd is live until Drop and dimensions are clamped non-zero.
                 SetWindowPos(
                     self.hwnd,
                     std::ptr::null_mut(),
-                    x,
-                    y,
-                    nonzero_extent(width) as i32,
-                    nonzero_extent(height) as i32,
+                    geometry.x,
+                    geometry.y,
+                    nonzero_extent(geometry.frame_width) as i32,
+                    nonzero_extent(geometry.frame_height) as i32,
                     SWP_NOACTIVATE | SWP_NOZORDER,
                 );
             }
@@ -284,6 +330,25 @@ mod platform {
 
     pub const PLATFORM_TYPE: &CStr = c"NSView";
 
+    pub struct EditorWindowContext;
+
+    impl EditorWindowContext {
+        pub fn begin() -> Self {
+            Self
+        }
+
+        pub fn supports_platform_scale_fallback(&self) -> bool {
+            true
+        }
+    }
+
+    pub fn with_native_child_scale_context<T>(
+        _platform_scaled: bool,
+        operation: impl FnOnce() -> T,
+    ) -> T {
+        operation()
+    }
+
     pub struct UiContext;
 
     impl UiContext {
@@ -299,10 +364,8 @@ mod platform {
     impl Container {
         pub fn create(
             parent: &Window,
-            x: i32,
-            y: i32,
-            width: u32,
-            height: u32,
+            geometry: NativeContainerGeometry,
+            _platform_scaled: bool,
         ) -> Result<Option<Self>, String> {
             let handle = parent
                 .window_handle()
@@ -310,7 +373,12 @@ mod platform {
             let RawWindowHandle::AppKit(handle) = handle.as_raw() else {
                 return Ok(None);
             };
-            let frame = rect(x, y, width, height);
+            let frame = rect(
+                geometry.x,
+                geometry.y,
+                geometry.frame_width,
+                geometry.frame_height,
+            );
             let class = unsafe {
                 // SAFETY: NSView is a process-lifetime Objective-C class name.
                 objc_getClass(c"NSView".as_ptr())
@@ -340,6 +408,13 @@ mod platform {
                     sel_registerName(c"addSubview:".as_ptr()),
                     view,
                 );
+                // SAFETY: the container owns its coordinate system; keeping bounds at the
+                // plug-in's original size scales all attached descendant views into frame.
+                send_void_rect(
+                    view,
+                    sel_registerName(c"setBounds:".as_ptr()),
+                    rect(0, 0, geometry.content_width, geometry.content_height),
+                );
             }
             Ok(Some(Self { view }))
         }
@@ -348,13 +423,25 @@ mod platform {
             self.view
         }
 
-        pub fn resize(&mut self, x: i32, y: i32, width: u32, height: u32) {
+        pub fn resize(&mut self, geometry: NativeContainerGeometry) {
             unsafe {
                 // SAFETY: view is live and setFrame: accepts one NSRect by value.
                 send_void_rect(
                     self.view,
                     sel_registerName(c"setFrame:".as_ptr()),
-                    rect(x, y, width, height),
+                    rect(
+                        geometry.x,
+                        geometry.y,
+                        geometry.frame_width,
+                        geometry.frame_height,
+                    ),
+                );
+                // SAFETY: setBounds: uses the same ABI and preserves the plug-in's logical
+                // coordinate size while AppKit maps it into the scaled frame.
+                send_void_rect(
+                    self.view,
+                    sel_registerName(c"setBounds:".as_ptr()),
+                    rect(0, 0, geometry.content_width, geometry.content_height),
                 );
             }
         }
@@ -474,6 +561,25 @@ mod platform {
 
     pub const PLATFORM_TYPE: &CStr = c"X11EmbedWindowID";
 
+    pub struct EditorWindowContext;
+
+    impl EditorWindowContext {
+        pub fn begin() -> Self {
+            Self
+        }
+
+        pub fn supports_platform_scale_fallback(&self) -> bool {
+            false
+        }
+    }
+
+    pub fn with_native_child_scale_context<T>(
+        _platform_scaled: bool,
+        operation: impl FnOnce() -> T,
+    ) -> T {
+        operation()
+    }
+
     pub struct UiContext;
 
     impl UiContext {
@@ -490,10 +596,8 @@ mod platform {
     impl Container {
         pub fn create(
             parent: &Window,
-            x: i32,
-            y: i32,
-            width: u32,
-            height: u32,
+            geometry: NativeContainerGeometry,
+            _platform_scaled: bool,
         ) -> Result<Option<Self>, String> {
             let window_handle = parent
                 .window_handle()
@@ -515,10 +619,10 @@ mod platform {
                 XCreateSimpleWindow(
                     display,
                     parent.window,
-                    x,
-                    y,
-                    nonzero_extent(width),
-                    nonzero_extent(height),
+                    geometry.x,
+                    geometry.y,
+                    nonzero_extent(geometry.frame_width),
+                    nonzero_extent(geometry.frame_height),
                     0,
                     0,
                     0,
@@ -552,16 +656,16 @@ mod platform {
             self.window as usize as *mut c_void
         }
 
-        pub fn resize(&mut self, x: i32, y: i32, width: u32, height: u32) {
+        pub fn resize(&mut self, geometry: NativeContainerGeometry) {
             unsafe {
                 // SAFETY: display/window remain live until Drop.
                 XMoveResizeWindow(
                     self.display,
                     self.window,
-                    x,
-                    y,
-                    nonzero_extent(width),
-                    nonzero_extent(height),
+                    geometry.x,
+                    geometry.y,
+                    nonzero_extent(geometry.frame_width),
+                    nonzero_extent(geometry.frame_height),
                 );
                 XFlush(self.display);
             }
@@ -666,6 +770,25 @@ mod platform {
 
     pub const PLATFORM_TYPE: &CStr = c"unsupported";
 
+    pub struct EditorWindowContext;
+
+    impl EditorWindowContext {
+        pub fn begin() -> Self {
+            Self
+        }
+
+        pub fn supports_platform_scale_fallback(&self) -> bool {
+            false
+        }
+    }
+
+    pub fn with_native_child_scale_context<T>(
+        _platform_scaled: bool,
+        operation: impl FnOnce() -> T,
+    ) -> T {
+        operation()
+    }
+
     pub struct UiContext;
 
     impl UiContext {
@@ -679,10 +802,8 @@ mod platform {
     impl Container {
         pub fn create(
             _parent: &Window,
-            _x: i32,
-            _y: i32,
-            _width: u32,
-            _height: u32,
+            _geometry: NativeContainerGeometry,
+            _platform_scaled: bool,
         ) -> Result<Option<Self>, String> {
             Ok(None)
         }
@@ -691,7 +812,7 @@ mod platform {
             std::ptr::null_mut()
         }
 
-        pub fn resize(&mut self, _x: i32, _y: i32, _width: u32, _height: u32) {}
+        pub fn resize(&mut self, _geometry: NativeContainerGeometry) {}
 
         pub fn focus(&self) {}
     }
