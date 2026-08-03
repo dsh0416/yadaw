@@ -192,7 +192,10 @@ describe("AudioGraphPublisher", () => {
         plugins: [expect.objectContaining({ descriptor: sidechainDescriptor })]
       }),
       expect.any(Map),
-      false
+      {
+        softwareMonitoringEnabled: false,
+        latencyPolicy: { type: "normal" }
+      }
     )
   })
 
