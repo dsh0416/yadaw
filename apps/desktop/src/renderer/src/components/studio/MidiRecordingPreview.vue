@@ -85,7 +85,7 @@ function noteStyle(note: MidiRecordingPreviewTake["notes"][number]) {
   height: 20px;
   padding: 3px 5px;
   overflow: hidden;
-  background: linear-gradient(180deg, var(--ui-domain-color-111111c8), transparent);
+  background: linear-gradient(180deg, var(--ui-domain-color-111111b8), transparent);
   white-space: nowrap;
 }
 .preview-heading i {

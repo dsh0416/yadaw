@@ -410,6 +410,7 @@ describe("ArrangementWorkspace", () => {
         recordingId: "recording-live",
         recordingStartedAt: Date.now() - 1_000,
         recordingStartFrame: 0,
+        recordingAudioTrackIds: ["audio-1"],
         recordingError: ""
       },
       global: { plugins: [pinia] }
@@ -660,6 +661,14 @@ describe("ArrangementWorkspace", () => {
     })
     expect(usePianoRollStore().openClipIds).toEqual(["00000000-0000-4000-8000-000000000002"])
     expect(useStudioWorkspaceStore().activeLowerDock).toBe("piano-roll")
+
+    await wrapper.setProps({
+      recordingId: "midi-recording-live",
+      recordingMidiTrackIds: ["track:instrument-1"]
+    })
+    expect(wrapper.find('[data-testid="midi-recording-preview"]').exists()).toBe(false)
+    await wrapper.setProps({ recordingStartTick: 960 })
+    expect(wrapper.find('[data-testid="midi-recording-preview"]').exists()).toBe(true)
 
     randomUuid.mockRestore()
     wrapper.unmount()

@@ -111,11 +111,7 @@ const recordingStartSeconds = computed(() =>
 const recordingTracks = computed(() => {
   const requestedTrackIds = new Set(props.recordingAudioTrackIds ?? [])
   if (requestedTrackIds.size > 0) {
-    return mixerStore.audioTracks.filter((channel) =>
-      mixerStore.graph.tracks.some(
-        (track) => track.channelId === channel.id && requestedTrackIds.has(track.id)
-      )
-    )
+    return mixerStore.audioTracks.filter((channel) => requestedTrackIds.has(channel.id))
   }
   const armed = mixerStore.audioTracks.filter((track) => track.recordArmed)
   if (armed.length > 0) return armed
@@ -164,11 +160,17 @@ const liveClips = computed<TimelineClip[]>(() =>
           : []
       })
 )
+const hasRecordingStartTick = computed(() => {
+  const startTick = props.recordingStartTick
+  return typeof startTick === "number" && Number.isFinite(startTick)
+})
 const recordingStartTickValue = computed(() =>
-  Math.max(0, Math.floor(props.recordingStartTick ?? 0))
+  hasRecordingStartTick.value ? Math.max(0, Math.floor(props.recordingStartTick!)) : 0
 )
 const liveMidiPreview = computed(() =>
-  props.recordingId === null ? null : (midiInputStore.snapshot.recordingPreview ?? null)
+  props.recordingId === null || !hasRecordingStartTick.value
+    ? null
+    : (midiInputStore.snapshot.recordingPreview ?? null)
 )
 const recordingPositionTick = computed(() =>
   Math.max(
@@ -695,7 +697,11 @@ function createMidiClip(trackId: string, requestedStartTick: number): void {
                 :snap="pianoRollSnap"
                 :drag-preview="midiDragPreview?.trackId === track.trackId ? midiDragPreview : null"
                 :dragging-clip-id="midiClipDrag?.clipId ?? null"
-                :recording="recordingId !== null && recordingMidiTrackIdSet.has(track.trackId)"
+                :recording="
+                  recordingId !== null &&
+                  hasRecordingStartTick &&
+                  recordingMidiTrackIdSet.has(track.trackId)
+                "
                 :recording-start-tick="recordingStartTickValue"
                 :recording-position-tick="recordingPositionTick"
                 :live-take="

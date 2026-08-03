@@ -25,8 +25,9 @@ const accessibleLabel = computed(() => {
   return `Waveform, ${props.window.channels} channels, ${props.window.frameCount} frames`
 })
 
-function canvasColor(element: HTMLCanvasElement, property: string, fallback: string): string {
-  return window.getComputedStyle(element).getPropertyValue(property).trim() || fallback
+function canvasColor(element: HTMLCanvasElement, property: string): string {
+  const style = window.getComputedStyle(element)
+  return style.getPropertyValue(property).trim() || style.color || "currentColor"
 }
 
 function draw(): void {
@@ -61,8 +62,8 @@ function draw(): void {
       )
     : buildWaveformGeometry(props.window, props.displayMode, width, height, props.amplitudeScale)
   context.strokeStyle = props.recording
-    ? canvasColor(element, "--ui-domain-color-ffb3be", "#ffb3be")
-    : canvasColor(element, "--ui-domain-color-87a8b7", "#87a8b7")
+    ? canvasColor(element, "--ui-domain-color-ffb3be")
+    : canvasColor(element, "--ui-domain-color-87a8b7")
   context.globalAlpha = 0.28
   context.lineWidth = 1
   context.beginPath()
@@ -73,8 +74,8 @@ function draw(): void {
   }
   context.stroke()
   context.strokeStyle = props.recording
-    ? canvasColor(element, "--ui-domain-color-ffd2d8", "#ffd2d8")
-    : canvasColor(element, "--ui-domain-color-b7e9fa", "#b7e9fa")
+    ? canvasColor(element, "--ui-domain-color-ffd2d8")
+    : canvasColor(element, "--ui-domain-color-b7e9fa")
   context.globalAlpha = 0.86
   context.lineWidth = 1
   context.beginPath()

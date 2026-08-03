@@ -18,6 +18,8 @@ use yadaw_dsp_runtime::{
 use crate::TransportClockHandle;
 use crate::midi_input::stable_port_key;
 
+const MAX_PREVIEW_NOTES_PER_TAKE: usize = 4_096;
+
 struct ActiveMidiTake {
     path: String,
     source_id: String,
@@ -28,13 +30,14 @@ struct ActiveMidiTake {
     writer: MidiJournalWriter,
     event_count: u64,
     dropped_events: u64,
-    next_preview_note_id: u64,
-    preview_notes: Vec<PreviewNote>,
-    open_preview_notes: BTreeMap<(u8, u8), VecDeque<usize>>,
+    next_preview_note_id: u32,
+    preview_notes: BTreeMap<u32, PreviewNote>,
+    preview_note_order: VecDeque<u32>,
+    open_preview_notes: BTreeMap<(u8, u8), VecDeque<u32>>,
 }
 
 struct PreviewNote {
-    id: u64,
+    id: u32,
     start_tick: u64,
     end_tick: Option<u64>,
     channel: u8,
@@ -88,7 +91,8 @@ impl MidiRecordingSession {
                 event_count: 0,
                 dropped_events: 0,
                 next_preview_note_id: 0,
-                preview_notes: Vec::new(),
+                preview_notes: BTreeMap::new(),
+                preview_note_order: VecDeque::new(),
                 open_preview_notes: BTreeMap::new(),
             });
         }
@@ -149,8 +153,9 @@ impl MidiRecordingSession {
                     clip_id: take.clip_id.clone(),
                     track_id: take.track_id.clone(),
                     notes: take
-                        .preview_notes
+                        .preview_note_order
                         .iter()
+                        .filter_map(|id| take.preview_notes.get(id))
                         .map(|note| MidiRecordingPreviewNote {
                             id: note.id,
                             start_tick: note.start_tick,
@@ -192,35 +197,72 @@ impl ActiveMidiTake {
     fn observe_preview(&mut self, tick: u64, message: &MidiInputMessage) {
         match *message {
             MidiInputMessage::NoteOn(channel, key, velocity) if velocity > 0 => {
-                let index = self.preview_notes.len();
-                self.preview_notes.push(PreviewNote {
-                    id: self.next_preview_note_id,
-                    start_tick: tick,
-                    end_tick: None,
-                    channel,
-                    key,
-                    velocity,
-                });
-                self.next_preview_note_id = self.next_preview_note_id.saturating_add(1);
+                let id = self.allocate_preview_note_id();
+                self.preview_notes.insert(
+                    id,
+                    PreviewNote {
+                        id,
+                        start_tick: tick,
+                        end_tick: None,
+                        channel,
+                        key,
+                        velocity,
+                    },
+                );
+                self.preview_note_order.push_back(id);
                 self.open_preview_notes
                     .entry((channel, key))
                     .or_default()
-                    .push_back(index);
+                    .push_back(id);
+                self.prune_preview_notes();
             }
             MidiInputMessage::NoteOn(channel, key, _)
             | MidiInputMessage::NoteOff(channel, key, _) => {
-                let Some(index) = self
-                    .open_preview_notes
-                    .get_mut(&(channel, key))
-                    .and_then(VecDeque::pop_front)
-                else {
+                let route = (channel, key);
+                let (id, route_is_empty) = {
+                    let Some(open_notes) = self.open_preview_notes.get_mut(&route) else {
+                        return;
+                    };
+                    (open_notes.pop_front(), open_notes.is_empty())
+                };
+                if route_is_empty {
+                    self.open_preview_notes.remove(&route);
+                }
+                let Some(id) = id else {
                     return;
                 };
-                if let Some(note) = self.preview_notes.get_mut(index) {
+                if let Some(note) = self.preview_notes.get_mut(&id) {
                     note.end_tick = Some(tick.max(note.start_tick.saturating_add(1)));
                 }
+                self.prune_preview_notes();
             }
             _ => {}
+        }
+    }
+
+    fn allocate_preview_note_id(&mut self) -> u32 {
+        loop {
+            let id = self.next_preview_note_id;
+            self.next_preview_note_id = self.next_preview_note_id.wrapping_add(1);
+            if !self.preview_notes.contains_key(&id) {
+                return id;
+            }
+        }
+    }
+
+    fn prune_preview_notes(&mut self) {
+        while self.preview_notes.len() > MAX_PREVIEW_NOTES_PER_TAKE {
+            let Some(index) = self.preview_note_order.iter().position(|id| {
+                self.preview_notes
+                    .get(id)
+                    .is_some_and(|note| note.end_tick.is_some())
+            }) else {
+                // Active notes must remain addressable until their matching note-off arrives.
+                break;
+            };
+            if let Some(id) = self.preview_note_order.remove(index) {
+                self.preview_notes.remove(&id);
+            }
         }
     }
 }
@@ -455,6 +497,47 @@ mod tests {
         let released = session.preview();
         assert_eq!(released.takes[0].notes[0].end_tick, 1_200);
         assert!(!released.takes[0].notes[0].active);
+
+        let _ = session.stop();
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn preview_bounds_closed_history_without_dropping_active_notes() {
+        let path = temporary_path("preview-bound");
+        let handle = clock(2, 0, 1);
+        let mut session = MidiRecordingSession::start(
+            MidiRecordingStartConfig {
+                takes: vec![MidiRecordingTakeConfig {
+                    path: path.to_string_lossy().into_owned(),
+                    source_id: "source".to_owned(),
+                    clip_id: "clip".to_owned(),
+                    track_id: "track".to_owned(),
+                    port_id: None,
+                    channel: None,
+                }],
+            },
+            handle.clone(),
+        )
+        .unwrap();
+
+        session.observe(1, 1, &MidiInputMessage::NoteOn(0, 60, 100));
+        for index in 0..(MAX_PREVIEW_NOTES_PER_TAKE + 32) {
+            let tick = u64::try_from(index).unwrap().saturating_mul(2) + 2;
+            handle.position_ticks.store(tick, Ordering::Relaxed);
+            session.observe(tick, 1, &MidiInputMessage::NoteOn(1, 61, 80));
+            handle.position_ticks.store(tick + 1, Ordering::Relaxed);
+            session.observe(tick + 1, 1, &MidiInputMessage::NoteOff(1, 61, 0));
+        }
+
+        let preview = session.preview();
+        assert_eq!(preview.takes[0].notes.len(), MAX_PREVIEW_NOTES_PER_TAKE);
+        assert!(
+            preview.takes[0]
+                .notes
+                .iter()
+                .any(|note| note.id == 0 && note.active)
+        );
 
         let _ = session.stop();
         let _ = std::fs::remove_file(path);

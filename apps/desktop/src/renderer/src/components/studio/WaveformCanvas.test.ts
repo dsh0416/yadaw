@@ -88,6 +88,11 @@ describe("WaveformCanvas", () => {
   })
 
   it("resolves a visible recording color before drawing into the canvas", async () => {
+    vi.spyOn(window, "getComputedStyle").mockReturnValue({
+      color: "rgb(17, 17, 17)",
+      getPropertyValue: (property: string) =>
+        property === "--ui-domain-color-ffd2d8" ? "rgb(255, 210, 216)" : ""
+    } as CSSStyleDeclaration)
     const wrapper = mount(WaveformCanvas, {
       props: {
         window: peaks,
@@ -99,7 +104,7 @@ describe("WaveformCanvas", () => {
     })
     await nextTick()
 
-    expect(context.strokeStyle).toBe("#ffd2d8")
+    expect(context.strokeStyle).toBe("rgb(255, 210, 216)")
     wrapper.unmount()
   })
 

@@ -51,7 +51,7 @@ pub struct MidiRecordingStartConfig {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MidiRecordingPreviewNote {
-    pub id: u64,
+    pub id: u32,
     pub start_tick: u64,
     pub end_tick: u64,
     pub channel: u8,
