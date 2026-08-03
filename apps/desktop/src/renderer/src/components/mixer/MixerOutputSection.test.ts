@@ -67,4 +67,28 @@ describe("MixerOutputSection", () => {
     await wrapper.vm.$nextTick()
     expect(wrapper.emitted("updateChannel")).toEqual([[{ outputChannelId: null, outputBus: 7 }]])
   })
+
+  it("uses a lightning icon and success state for the low-latency target", async () => {
+    const wrapper = mount(MixerOutputSection, {
+      props: {
+        channel: output,
+        buses: [],
+        outputs: [output],
+        targets: [],
+        lowLatencyTarget: false,
+        lowLatencyTargetDisabled: false
+      }
+    })
+
+    const button = wrapper.get(
+      'button[aria-label="Set Output 1–2 as the Low Latency Mode monitoring target"]'
+    )
+    expect(button.attributes("aria-pressed")).toBe("false")
+    expect(button.find(".lucide-zap").exists()).toBe(true)
+    expect(button.classes()).not.toContain("active")
+
+    await wrapper.setProps({ lowLatencyTarget: true })
+    expect(button.attributes("aria-pressed")).toBe("true")
+    expect(button.classes()).toContain("active")
+  })
 })

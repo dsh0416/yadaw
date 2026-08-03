@@ -1,12 +1,29 @@
 import type { ProjectGraphSnapshot } from "@heron/contracts"
 import type { AudioHostGraph } from "./audio-host-service"
 
+export type RuntimeLatencyPolicy =
+  | { type: "normal" }
+  | {
+      type: "low-latency"
+      targetOutputChannelId: string
+      pluginBudgetSamples: number
+    }
+
+export interface RuntimeGraphOptions {
+  softwareMonitoringEnabled: boolean
+  latencyPolicy: RuntimeLatencyPolicy
+}
+
 export class AudioGraphCompiler {
   compile(
     graph: ProjectGraphSnapshot,
     assetPaths: ReadonlyMap<string, string>,
-    softwareMonitoringEnabled: boolean
+    options: RuntimeGraphOptions | boolean
   ): AudioHostGraph {
+    const runtimeOptions: RuntimeGraphOptions =
+      typeof options === "boolean"
+        ? { softwareMonitoringEnabled: options, latencyPolicy: { type: "normal" } }
+        : options
     const channelIdForTrack = (trackId: string): string => {
       const track = graph.tracks.find((candidate) => candidate.id === trackId)
       if (!track) throw new Error(`Project track '${trackId}' was not found`)
@@ -14,6 +31,14 @@ export class AudioGraphCompiler {
     }
     return {
       sample_rate: graph.sampleRate,
+      latency_policy:
+        runtimeOptions.latencyPolicy.type === "normal"
+          ? { type: "normal" }
+          : {
+              type: "low-latency",
+              target_output_channel_id: runtimeOptions.latencyPolicy.targetOutputChannelId,
+              plugin_budget_samples: runtimeOptions.latencyPolicy.pluginBudgetSamples
+            },
       channels: graph.channels.map((channel) => ({
         id: channel.id,
         name: channel.name,
@@ -28,7 +53,7 @@ export class AudioGraphCompiler {
         input_monitoring:
           channel.kind === "instrument" && channel.systemRole === null
             ? channel.inputMonitoring
-            : softwareMonitoringEnabled &&
+            : runtimeOptions.softwareMonitoringEnabled &&
               channel.kind === "audio" &&
               channel.inputMonitoring &&
               channel.inputSource === "hardware",

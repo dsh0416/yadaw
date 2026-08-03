@@ -24,6 +24,7 @@ use heron_dsp_render::{RenderMeter, RenderRuntime};
 use heron_dsp_runtime::{
     MUSICAL_TICKS_PER_QUARTER,
     block::{MAX_PLUGIN_BLOCK_FRAMES, StereoDelayLine},
+    low_latency::{LowLatencyChannel, LowLatencyPlan, LowLatencyPlugin, plan_low_latency},
     protocol::{
         CompiledAudioGraphSnapshot, CompiledGraphEdge, CompiledGraphEdgeKind, CompiledGraphNode,
         CompiledGraphNodeKind, CompiledGraphPluginState, CompiledGraphSignalWidth,

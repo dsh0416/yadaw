@@ -111,6 +111,8 @@ export interface ControlResponse {
       graph_revision: number
       build_generation: number
       sample_rate: number
+      low_latency_unavoidable_latency_samples?: number
+      has_low_latency_monitoring_path?: boolean
       nodes: Array<{
         id: string
         kind: CompiledAudioGraphSnapshot["nodes"][number]["kind"]
@@ -120,6 +122,8 @@ export interface ControlResponse {
         signal_width: CompiledAudioGraphSnapshot["nodes"][number]["signalWidth"]
         latency_samples: number
         plugin_state: CompiledAudioGraphSnapshot["nodes"][number]["pluginState"]
+        latency_sensitive: boolean
+        low_latency_bypassed: boolean
       }>
       edges: Array<{
         id: string
@@ -471,6 +475,13 @@ export function percentile(values: readonly number[], fraction: number): number 
 
 export interface AudioHostGraph {
   sample_rate: number
+  latency_policy?:
+    | { type: "normal" }
+    | {
+        type: "low-latency"
+        target_output_channel_id: string
+        plugin_budget_samples: number
+      }
   channels: Array<{
     id: string
     name: string

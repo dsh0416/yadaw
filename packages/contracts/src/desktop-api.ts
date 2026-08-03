@@ -23,6 +23,8 @@ import type {
 import type { AudioBenchmarkReport, SystemPerformanceSnapshot } from "./performance"
 import type {
   CompiledAudioGraphSnapshot,
+  LowLatencyModeConfiguration,
+  LowLatencyModeSnapshot,
   ProjectGraphSnapshot,
   MixerParameterPreview,
   MixerRuntimeSnapshot,
@@ -107,6 +109,8 @@ export const IPC_CHANNELS = {
   systemPerformanceSnapshot: "system:performance-snapshot",
   audioBenchmarkRun: "audio-benchmark:run",
   compiledAudioGraphSnapshot: "compiled-audio-graph:snapshot",
+  lowLatencyModeSnapshot: "low-latency-mode:snapshot",
+  lowLatencyModeConfigure: "low-latency-mode:configure",
   applicationCommandRequested: "application-command:requested",
   applicationWindowCommand: "application-window:command",
   applicationWindowTheme: "application-window:theme",
@@ -204,6 +208,11 @@ export interface HeronDesktopApi {
   compiledAudioGraphSnapshot(
     meta: RpcRequestMeta
   ): Promise<RpcResult<CompiledAudioGraphSnapshot | null>>
+  lowLatencyModeSnapshot(meta: RpcRequestMeta): Promise<RpcResult<LowLatencyModeSnapshot>>
+  configureLowLatencyMode(
+    meta: RpcRequestMeta,
+    configuration: LowLatencyModeConfiguration
+  ): Promise<RpcResult<LowLatencyModeSnapshot>>
   subscribeApplicationCommands(
     listener: (event: RpcEvent<ApplicationCommandId>) => void
   ): () => void

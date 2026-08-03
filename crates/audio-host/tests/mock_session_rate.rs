@@ -47,6 +47,7 @@ fn mock_backend_uses_the_project_clock_over_native_48_khz_io() {
     let graph = NativeMixerGraph {
         generation: 1,
         sample_rate: 44_100,
+        latency_policy: heron_audio_engine::NativeLatencyPolicy::Normal,
         channels: vec![
             NativeMixerChannel {
                 id: "master".to_owned(),

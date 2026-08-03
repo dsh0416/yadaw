@@ -611,7 +611,10 @@ export class AudioHostService {
     this.audioTransport.setChannelIds(runtime.channels)
     const previous = this.publishedGraph
     const update =
-      previous && previous.runtime.sample_rate === runtime.sample_rate
+      previous &&
+      previous.runtime.sample_rate === runtime.sample_rate &&
+      JSON.stringify(previous.runtime.latency_policy ?? { type: "normal" }) ===
+        JSON.stringify(runtime.latency_policy ?? { type: "normal" })
         ? {
             type: "patch",
             base_revision: previous.revision,

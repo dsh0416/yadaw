@@ -134,6 +134,7 @@
     "unableToStartAudioEngine": "无法启动原生音频引擎。",
     "unableToStopAudioEngine": "无法停止原生音频引擎。",
     "invalidRpcRequest": "请求无效。",
+    "lowLatencyModeUnavailable": "只能在走带停止且已选择有效 Output 时更改低延迟模式。",
     "protocolMismatch": "此应用组件使用了不兼容的协议版本。",
     "untrustedSender": "请求来自不受信任的应用上下文。",
     "internalInvariant": "内部不变量检查失败；受影响的资源已被隔离。",
@@ -613,6 +614,12 @@
           "enabled": "可用于带硬件输入的音频轨道。",
           "disabled": "已关闭。现有各轨道监听选择会保留。"
         },
+        "lowLatencyBudget": {
+          "title": "低延迟插件预算",
+          "description": "实时监听主路径允许的最大插件声明延迟；超出时会临时旁路符合条件的效果器。",
+          "label": "插件延迟预算",
+          "ariaLabel": "低延迟插件预算（毫秒）"
+        },
         "recovery": {
           "title": "恢复",
           "description": "文件不会因工程未保存就关闭而被删除。",
@@ -790,7 +797,9 @@
       "tooltip": {
         "state": "状态：{state}",
         "latency": "延迟：{samples} 采样",
-        "signal": "信号：{width}"
+        "signal": "信号：{width}",
+        "latencySensitive": "低延迟监听路径",
+        "lowLatencyBypassed": "由低延迟模式临时旁路"
       }
     }
   },
@@ -987,6 +996,11 @@
       "notes": "备注",
       "loopBrowser": "循环浏览器",
       "mediaBrowser": "媒体浏览器"
+    },
+    "lowLatency": {
+      "noOutput": "无 Output",
+      "tooltip": "低延迟模式 · {output} · {budget} ms 预算 · 临时旁路 {count} 个插件",
+      "noMonitoringPath": "低延迟模式已启用 · {output} · {budget} ms 预算 · 当前无监听路径"
     },
     "transport": {
       "ariaLabel": "走带控制",
@@ -1298,7 +1312,8 @@
       "right": "右",
       "hardwareOutputN": "{name} 硬件输出 {n}",
       "outputN": "输出 {n}",
-      "global": "全局"
+      "global": "全局",
+      "lowLatencyTarget": "将 {name} 设为低延迟监听目标"
     },
     "pluginSection": {
       "ariaLabel": "音频效果",

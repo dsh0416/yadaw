@@ -40,10 +40,10 @@ use heron_dsp_runtime::protocol::{
     ControlRequest, ControlResponse, ControlResult, GraphCandidateSnapshot,
     GraphDeploymentSnapshot, GraphDeploymentStatus, GraphOperationOutcome, GraphOperationSnapshot,
     GraphTransactionRequest, GraphTransactionValue, GraphUpdate, HostEvent, IPC_PROTOCOL_VERSION,
-    LiveMixerGraph, MixerChannelMeter, PluginEditorContext, PluginEditorPreference,
-    PriorityCommand, PriorityRequest, PriorityResponse, PriorityResult, RecordingResult,
-    RecordingWaveform, ResourceKind, ResourceRef, RoundTripLatencyMeasurement, RpcError,
-    RpcErrorCategory, RpcErrorCode, RpcErrorDetails, RpcFailure, RpcMutationOutcome,
+    LiveLatencyPolicy, LiveMixerGraph, MixerChannelMeter, PluginEditorContext,
+    PluginEditorPreference, PriorityCommand, PriorityRequest, PriorityResponse, PriorityResult,
+    RecordingResult, RecordingWaveform, ResourceKind, ResourceRef, RoundTripLatencyMeasurement,
+    RpcError, RpcErrorCategory, RpcErrorCode, RpcErrorDetails, RpcFailure, RpcMutationOutcome,
     RpcRequestMeta, RpcResult, RpcRetry, RpcSuccess, TransportState, read_message, write_message,
 };
 use heron_dsp_runtime::tempo::{TempoEvent, TimeSignatureEvent};

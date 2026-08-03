@@ -134,6 +134,7 @@
     "unableToStartAudioEngine": "Unable to start the native audio engine.",
     "unableToStopAudioEngine": "Unable to stop the native audio engine.",
     "invalidRpcRequest": "The request was invalid.",
+    "lowLatencyModeUnavailable": "Low Latency Mode can only be changed while transport is stopped and a valid Output is selected.",
     "protocolMismatch": "This application component uses an incompatible protocol version.",
     "untrustedSender": "The request came from an untrusted application context.",
     "internalInvariant": "An internal invariant failed. The affected resource was isolated.",
@@ -613,6 +614,12 @@
           "enabled": "Available on Audio tracks with hardware inputs.",
           "disabled": "Off. Existing per-track monitoring choices are preserved."
         },
+        "lowLatencyBudget": {
+          "title": "Low-latency plug-in budget",
+          "description": "Maximum declared plug-in latency allowed on a live monitoring main path before eligible effects are temporarily bypassed.",
+          "label": "Plug-in latency budget",
+          "ariaLabel": "Low-latency plug-in budget in milliseconds"
+        },
         "recovery": {
           "title": "Recovery",
           "description": "Files are never removed merely because the project was closed without saving.",
@@ -790,7 +797,9 @@
       "tooltip": {
         "state": "State: {state}",
         "latency": "Latency: {samples} samples",
-        "signal": "Signal: {width}"
+        "signal": "Signal: {width}",
+        "latencySensitive": "Low-latency monitoring path",
+        "lowLatencyBypassed": "Temporarily bypassed by Low Latency Mode"
       }
     }
   },
@@ -1075,7 +1084,8 @@
       "right": "Right",
       "hardwareOutputN": "{name} hardware output {n}",
       "outputN": "Output {n}",
-      "global": "GLOBAL"
+      "global": "GLOBAL",
+      "lowLatencyTarget": "Set {name} as the Low Latency Mode monitoring target"
     },
     "pluginSection": {
       "ariaLabel": "Audio effects",
@@ -1296,6 +1306,11 @@
       "notes": "Notes",
       "loopBrowser": "Loop Browser",
       "mediaBrowser": "Media Browser"
+    },
+    "lowLatency": {
+      "noOutput": "No Output",
+      "tooltip": "Low Latency Mode · {output} · {budget} ms budget · {count} temporarily bypassed",
+      "noMonitoringPath": "Low Latency Mode enabled · {output} · {budget} ms budget · no active monitoring path"
     },
     "transport": {
       "ariaLabel": "Transport controls",

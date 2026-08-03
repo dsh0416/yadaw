@@ -758,3 +758,13 @@ referenced bytes: this transport-only binary does not cross the Node boundary
 and therefore does not perform the addon's intentional arena-to-Buffer copy.
 Use the desktop performance benchmark for end-to-end addon/helper bandwidth.
 This remains a developer benchmark rather than a GitHub Actions gate.
+
+## Low Latency Mode
+
+The runtime graph policy is either `normal` or `low-latency` with a logical
+Output ID and a sample budget. In low-latency mode, the worker plans only live
+monitoring main paths to that Output. Eligible non-instrument inserts are
+temporarily bypassed largest-latency-first until every monitored path fits the
+budget or only unavoidable instrument latency remains. Normal user bypass keeps
+its latency-preserving delay; low-latency bypass is a distinct zero-delay
+passthrough. Other Outputs and send paths retain ordinary playback and PDC.

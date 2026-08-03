@@ -45,9 +45,12 @@ async function render(): Promise<void> {
   const purple = cssColor("--ui-domain-color-b894ff")
   const muted = cssColor("--text-muted")
   const surface = cssColor("--surface-2")
+  const accent = cssColor("--accent")
   const reducedMotion = preferredReducedMotion.value === "reduce"
   const nodeColor = (node: (typeof layout.nodes)[number]) => {
+    if (node.lowLatencyBypassed) return purple
     if (node.pluginState === "bypassed" || node.pluginState === "unavailable") return muted
+    if (node.latencySensitive) return accent
     if (node.kind === "effect") return orange
     if (node.kind === "pdc-delay") return purple
     if (node.kind === "width-adapter") return cyan
@@ -131,6 +134,8 @@ async function render(): Promise<void> {
             node.pluginState
               ? t("effectGraph.chart.tooltip.state", { state: node.pluginState })
               : "",
+            node.latencySensitive ? t("effectGraph.chart.tooltip.latencySensitive") : "",
+            node.lowLatencyBypassed ? t("effectGraph.chart.tooltip.lowLatencyBypassed") : "",
             node.latencySamples > 0
               ? t("effectGraph.chart.tooltip.latency", { samples: node.latencySamples })
               : "",

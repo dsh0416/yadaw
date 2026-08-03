@@ -2,6 +2,7 @@
 import { computed } from "vue"
 import { useI18n } from "vue-i18n"
 import { UiCascadingSelect, UiPopover, UiSelect } from "@heron/ui"
+import { Zap } from "@lucide/vue"
 import type {
   MixerBusState,
   MixerChannelPatch,
@@ -15,10 +16,13 @@ const props = defineProps<{
   buses: readonly MixerBusState[]
   outputs: MixerChannelState[]
   targets: MixerRouteTarget[]
+  lowLatencyTarget?: boolean
+  lowLatencyTargetDisabled?: boolean
 }>()
 
 const emit = defineEmits<{
   updateChannel: [patch: MixerChannelPatch]
+  selectLowLatencyOutput: []
 }>()
 
 const { t } = useI18n()
@@ -65,39 +69,51 @@ function updateHardwareOutput(index: number, value: string): void {
       :aria-label="t('mixer.outputSection.outputAria', { name: channel.name })"
       @update:model-value="updateRoute"
     />
-    <UiPopover v-else-if="channel.kind === 'output'" side="top" :side-offset="7">
-      <template #trigger>
-        <button
-          class="output-control"
-          :aria-label="t('mixer.outputSection.hardwareRouting', { name: channel.name })"
-        >
-          {{ hardwareSummary }}
-        </button>
-      </template>
-      <div class="mixer-popover output-popover">
-        <header>
-          <span>{{ t("mixer.outputSection.hardwareOutput") }}</span>
-          <strong>{{ channel.name }}</strong>
-        </header>
-        <label v-for="(_, index) in channel.hardwareOutputChannels" :key="index">
-          <span>{{
-            index === 0 ? t("mixer.outputSection.left") : t("mixer.outputSection.right")
-          }}</span>
-          <UiSelect
-            :model-value="String(channel.hardwareOutputChannels[index])"
-            size="compact"
-            :aria-label="
-              t('mixer.outputSection.hardwareOutputN', { name: channel.name, n: index + 1 })
-            "
-            @update:model-value="updateHardwareOutput(index, $event)"
+    <div v-else-if="channel.kind === 'output'" class="output-controls">
+      <UiPopover side="top" :side-offset="7">
+        <template #trigger>
+          <button
+            class="output-control"
+            :aria-label="t('mixer.outputSection.hardwareRouting', { name: channel.name })"
           >
-            <option v-for="output in hardwareOptions" :key="output" :value="String(output)">
-              {{ t("mixer.outputSection.outputN", { n: output }) }}
-            </option>
-          </UiSelect>
-        </label>
-      </div>
-    </UiPopover>
+            {{ hardwareSummary }}
+          </button>
+        </template>
+        <div class="mixer-popover output-popover">
+          <header>
+            <span>{{ t("mixer.outputSection.hardwareOutput") }}</span>
+            <strong>{{ channel.name }}</strong>
+          </header>
+          <label v-for="(_, index) in channel.hardwareOutputChannels" :key="index">
+            <span>{{
+              index === 0 ? t("mixer.outputSection.left") : t("mixer.outputSection.right")
+            }}</span>
+            <UiSelect
+              :model-value="String(channel.hardwareOutputChannels[index])"
+              size="compact"
+              :aria-label="
+                t('mixer.outputSection.hardwareOutputN', { name: channel.name, n: index + 1 })
+              "
+              @update:model-value="updateHardwareOutput(index, $event)"
+            >
+              <option v-for="output in hardwareOptions" :key="output" :value="String(output)">
+                {{ t("mixer.outputSection.outputN", { n: output }) }}
+              </option>
+            </UiSelect>
+          </label>
+        </div>
+      </UiPopover>
+      <button
+        type="button"
+        :class="['monitor-target', { active: lowLatencyTarget }]"
+        :disabled="lowLatencyTargetDisabled"
+        :aria-pressed="lowLatencyTarget"
+        :aria-label="t('mixer.outputSection.lowLatencyTarget', { name: channel.name })"
+        @click="emit('selectLowLatencyOutput')"
+      >
+        <Zap :size="13" />
+      </button>
+    </div>
     <button v-else class="output-control" disabled aria-disabled="true">
       {{ t("mixer.outputSection.global") }}
     </button>
@@ -126,6 +142,35 @@ function updateHardwareOutput(index: number, value: string): void {
   font-size: var(--ui-type-size-control);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.output-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px;
+  gap: 4px;
+}
+.monitor-target {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--ui-domain-color-747474);
+  border-radius: 4px;
+  color: var(--text-muted);
+  background: var(--daw-control);
+  cursor: pointer;
+}
+.monitor-target.active {
+  border-color: color-mix(in srgb, var(--ui-color-success) 62%, var(--ui-domain-color-747474));
+  color: var(--ui-color-success);
+  background: color-mix(in srgb, var(--ui-color-success) 14%, var(--surface-active));
+  box-shadow:
+    0 -2px 0 var(--ui-color-success) inset,
+    0 0 9px color-mix(in srgb, var(--ui-color-success) 18%, transparent);
+}
+.monitor-target:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 .output-control {
   cursor: pointer;

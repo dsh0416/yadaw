@@ -267,6 +267,7 @@ export class ApplicationSettingsStore {
       meterReturnRate: "iec-type-i",
       midiCenterCStandard: "roland-c4",
       softwareMonitoringEnabled: false,
+      lowLatencyPluginBudgetMs: 5,
       midiSync: {
         enabled: false,
         sourcePortId: null,
@@ -310,6 +311,13 @@ export class ApplicationSettingsStore {
           typeof raw.softwareMonitoringEnabled === "boolean"
             ? raw.softwareMonitoringEnabled
             : value.softwareMonitoringEnabled,
+        lowLatencyPluginBudgetMs:
+          typeof raw.lowLatencyPluginBudgetMs === "number" &&
+          Number.isInteger(raw.lowLatencyPluginBudgetMs) &&
+          raw.lowLatencyPluginBudgetMs >= 0 &&
+          raw.lowLatencyPluginBudgetMs <= 50
+            ? raw.lowLatencyPluginBudgetMs
+            : value.lowLatencyPluginBudgetMs,
         midiSync: (() => {
           try {
             return validateMidiSyncPreferences(raw.midiSync)
@@ -385,6 +393,16 @@ export class ApplicationSettingsStore {
         throw new TypeError("Unsupported MIDI center C standard")
       current.midiCenterCStandard = patch.midiCenterCStandard
     }
+    if (patch.lowLatencyPluginBudgetMs !== undefined) {
+      if (
+        !Number.isInteger(patch.lowLatencyPluginBudgetMs) ||
+        patch.lowLatencyPluginBudgetMs < 0 ||
+        patch.lowLatencyPluginBudgetMs > 50
+      ) {
+        throw new TypeError("Low-latency plug-in budget must be an integer from 0 to 50 ms")
+      }
+      current.lowLatencyPluginBudgetMs = patch.lowLatencyPluginBudgetMs
+    }
     return this.write(current)
   }
 
@@ -421,6 +439,10 @@ export class ApplicationSettingsStore {
     const current = await this.get()
     current.softwareMonitoringEnabled = enabled
     return this.write(current)
+  }
+
+  setLowLatencyPluginBudgetMs(value: number): Promise<ApplicationSettings> {
+    return this.update({ lowLatencyPluginBudgetMs: value })
   }
 
   async pluginEditorPreference(classId: string): Promise<PluginEditorPreference> {

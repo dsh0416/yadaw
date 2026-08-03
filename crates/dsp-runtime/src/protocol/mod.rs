@@ -463,6 +463,7 @@ mod tests {
                     revision: 7,
                     graph: LiveMixerGraph {
                         sample_rate: 48_000,
+                        latency_policy: LiveLatencyPolicy::Normal,
                         channels: vec![],
                         sends: vec![],
                         clips: vec![],
@@ -676,6 +677,7 @@ mod tests {
         };
         let mut patched = LiveMixerGraph {
             sample_rate: 48_000,
+            latency_policy: LiveLatencyPolicy::Normal,
             channels: vec![output.clone()],
             sends: vec![],
             clips: vec![],
@@ -817,6 +819,7 @@ mod tests {
     fn empty_graph() -> LiveMixerGraph {
         LiveMixerGraph {
             sample_rate: 48_000,
+            latency_policy: LiveLatencyPolicy::Normal,
             channels: vec![],
             sends: vec![],
             clips: vec![],

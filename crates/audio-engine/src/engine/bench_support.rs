@@ -302,6 +302,7 @@ pub mod bench_support {
             enabled: false,
             is_instrument: false,
             latency_samples: 0,
+            low_latency_bypassed: false,
             main_delay: StereoDelayLine::new(0),
             bypass_delay: StereoDelayLine::new(0),
             marker_index: 0,

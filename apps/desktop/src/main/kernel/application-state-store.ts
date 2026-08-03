@@ -463,6 +463,13 @@ export class ApplicationStateStore {
     return updated.value.revision
   }
 
+  advanceAudioEngine(expectedRevision: number, snapshot: unknown): number {
+    if (!this.audioEngine) throw new Error("audio-engine-unavailable")
+    const updated = this.resources.update(this.audioEngine, expectedRevision, snapshot)
+    if (!updated.ok) throw new Error(updated.error.code)
+    return updated.value.revision
+  }
+
   setWorkspace(workspace: ProjectWorkspaceSnapshot | null): void {
     this.workspace = workspace ? structuredClone(workspace) : null
   }

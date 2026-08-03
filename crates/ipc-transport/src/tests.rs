@@ -1,8 +1,8 @@
 use super::*;
 use heron_dsp_runtime::protocol::{
-    ControlCommand, ControlRequest, GraphUpdate, LiveMidiClip, LiveMidiEvent, LiveMidiNote,
-    LiveMixerGraph, LiveTempoEvent, LiveTimeSignatureEvent, MidiEventBatch, MidiNoteBatch,
-    RecordingWaveform,
+    ControlCommand, ControlRequest, GraphUpdate, LiveLatencyPolicy, LiveMidiClip, LiveMidiEvent,
+    LiveMidiNote, LiveMixerGraph, LiveTempoEvent, LiveTimeSignatureEvent, MidiEventBatch,
+    MidiNoteBatch, RecordingWaveform,
 };
 
 #[test]
@@ -162,6 +162,7 @@ fn large_midi_sysex_batch_uses_and_restores_a_shared_attachment() {
                 revision: 1,
                 graph: LiveMixerGraph {
                     sample_rate: 48_000,
+                    latency_policy: LiveLatencyPolicy::Normal,
                     channels: Vec::new(),
                     sends: Vec::new(),
                     clips: Vec::new(),
@@ -235,6 +236,7 @@ fn large_midi_notes_use_a_borrowed_fixed_layout_before_snapshot_materialization(
                 revision: 2,
                 graph: LiveMixerGraph {
                     sample_rate: 48_000,
+                    latency_policy: LiveLatencyPolicy::Normal,
                     channels: Vec::new(),
                     sends: Vec::new(),
                     clips: Vec::new(),

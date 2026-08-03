@@ -14,7 +14,8 @@ mod tests {
         LoadedClip, MAX_INPUT_CHANNELS, MAX_OUTPUT_CHANNELS, MAX_PLUGIN_BLOCK_FRAMES,
         MEMORY_DECODE_LIMIT_BYTES, METRONOME_ACCENT_NOTE, METRONOME_BEAT_NOTE, MeterAtomics,
         MeterBank, MetronomeScheduler, NativeMidiClip, NativeMidiEvent, NativeMidiEventKind,
-        NativeMidiNote, NativeMixerChannel, NativeMixerGraph, NativeMixerRuntime, NativeMixerSend,
+        NativeLatencyPolicy, NativeMidiNote, NativeMixerChannel, NativeMixerGraph,
+        NativeMixerRuntime, NativeMixerSend,
         NativeMixerParameterPreview, NativePluginAuxInputBus, NativePluginInstance,
         NativeRoundTripLatencyMeasurementRequest,
         OUTPUT_RESAMPLER_FRAMES, Ordering, PublishOutcome, RealtimeParameter,
@@ -561,6 +562,7 @@ mod tests {
             enabled,
             is_instrument: false,
             latency_samples: 0,
+            low_latency_bypassed: false,
             main_delay: StereoDelayLine::new(0),
             bypass_delay: StereoDelayLine::new(0),
             marker_index: 0,
@@ -684,6 +686,7 @@ mod tests {
         let graph = NativeMixerGraph {
             generation: 17,
             sample_rate: 48_000,
+            latency_policy: NativeLatencyPolicy::Normal,
             channels: vec![
                 channel("wet", Some(3), vec![1]),
                 channel("send-source", None, vec![2, 3]),
@@ -877,6 +880,7 @@ mod tests {
         engine.set_last_native_graph_for_test(Some(NativeMixerGraph {
             generation: 1,
             sample_rate: 48_000,
+            latency_policy: NativeLatencyPolicy::Normal,
             channels: Vec::new(),
             sends: Vec::new(),
             clips: Vec::new(),
@@ -1427,6 +1431,7 @@ mod tests {
         NativeMixerGraph {
             generation: 3,
             sample_rate: 48_000,
+            latency_policy: NativeLatencyPolicy::Normal,
             channels: vec![
                 mixer_channel(
                     "audio-0",
@@ -1977,6 +1982,7 @@ mod tests {
         let graph = NativeMixerGraph {
             generation: 5,
             sample_rate: 48_000,
+            latency_policy: NativeLatencyPolicy::Normal,
             channels: vec![
                 {
                     let mut channel = mixer_channel(
@@ -2075,6 +2081,7 @@ mod tests {
         let graph = NativeMixerGraph {
             generation: 11,
             sample_rate: 48_000,
+            latency_policy: NativeLatencyPolicy::Normal,
             channels: vec![
                 mixer_channel(
                     "instrument-0",
@@ -2433,6 +2440,7 @@ mod tests {
             enabled: true,
             is_instrument: false,
             latency_samples: 0,
+            low_latency_bypassed: false,
             main_delay: StereoDelayLine::new(0),
             bypass_delay: StereoDelayLine::new(0),
             marker_index: 0,

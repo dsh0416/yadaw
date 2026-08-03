@@ -70,9 +70,22 @@ pub struct LiveMixerClip {
     pub path: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "kebab-case")]
+pub enum LiveLatencyPolicy {
+    #[default]
+    Normal,
+    LowLatency {
+        target_output_channel_id: String,
+        plugin_budget_samples: u32,
+    },
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LiveMixerGraph {
     pub sample_rate: u32,
+    #[serde(default)]
+    pub latency_policy: LiveLatencyPolicy,
     pub channels: Vec<LiveMixerChannel>,
     pub sends: Vec<LiveMixerSend>,
     pub clips: Vec<LiveMixerClip>,
@@ -363,6 +376,10 @@ pub struct CompiledGraphNode {
     pub signal_width: CompiledGraphSignalWidth,
     pub latency_samples: u32,
     pub plugin_state: Option<CompiledGraphPluginState>,
+    #[serde(default)]
+    pub latency_sensitive: bool,
+    #[serde(default)]
+    pub low_latency_bypassed: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -381,6 +398,10 @@ pub struct CompiledAudioGraphSnapshot {
     pub graph_revision: u64,
     pub build_generation: u64,
     pub sample_rate: u32,
+    #[serde(default)]
+    pub low_latency_unavoidable_latency_samples: u32,
+    #[serde(default)]
+    pub has_low_latency_monitoring_path: bool,
     pub nodes: Vec<CompiledGraphNode>,
     pub edges: Vec<CompiledGraphEdge>,
 }

@@ -89,7 +89,11 @@ function mountTopbar() {
       pianoRollAvailable: true,
       metronomeChannel,
       masterChannel,
-      masterMeter
+      masterMeter,
+      lowLatencyModeEnabled: false,
+      lowLatencyModeBusy: false,
+      lowLatencyModeDisabled: false,
+      lowLatencyModeTooltip: "Output 3–4 · 5 ms"
     },
     global: {
       plugins: [createPinia()],
@@ -138,6 +142,7 @@ describe("StudioTopbar", () => {
     await wrapper.get('button[aria-label="Metronome"]').trigger("click")
     await wrapper.get('button[aria-label="Count-in"]').trigger("click")
     await wrapper.get('button[aria-label="Cycle"]').trigger("click")
+    await wrapper.get('button[aria-label="Low Latency Mode"]').trigger("click")
 
     expect(wrapper.emitted("toggleSoundBrowser")).toHaveLength(1)
     expect(wrapper.emitted("toggleMixerDock")).toHaveLength(1)
@@ -148,11 +153,24 @@ describe("StudioTopbar", () => {
     expect(wrapper.emitted("toggleMetronome")).toHaveLength(1)
     expect(wrapper.emitted("toggleCountIn")).toHaveLength(1)
     expect(wrapper.emitted("toggleCycle")).toHaveLength(1)
+    expect(wrapper.emitted("toggleLowLatencyMode")).toHaveLength(1)
 
     const placeholders = wrapper.findAll('button[aria-disabled="true"][data-placeholder]')
     expect(placeholders.length).toBeGreaterThan(10)
     expect(wrapper.get('button[aria-label="Metronome"]').attributes("aria-pressed")).toBe("false")
     expect(wrapper.get('button[aria-label="Count-in"]').attributes("aria-pressed")).toBe("false")
+  })
+
+  it("shows published low-latency state and locks the toggle while applying", async () => {
+    const wrapper = mountTopbar()
+    const button = wrapper.get('button[aria-label="Low Latency Mode"]')
+    expect(button.attributes("aria-pressed")).toBe("false")
+    expect(button.classes()).toContain("tone-success")
+    expect(button.find(".lucide-zap").exists()).toBe(true)
+
+    await wrapper.setProps({ lowLatencyModeEnabled: true, lowLatencyModeBusy: true })
+    expect(button.attributes("aria-pressed")).toBe("true")
+    expect(button.attributes("aria-disabled")).toBe("true")
   })
 
   it("uses the existing topbar control state for the Piano Roll editor", async () => {
