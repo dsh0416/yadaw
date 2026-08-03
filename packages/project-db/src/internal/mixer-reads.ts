@@ -11,6 +11,7 @@ import {
   mixerChannels,
   mixerSends,
   pluginInstances,
+  PROJECT_ID,
   project,
   tempoEvents,
   tracks,
@@ -84,7 +85,7 @@ export async function readMixerSnapshot(
     db.select().from(tempoEvents).orderBy(asc(tempoEvents.tick)),
     db.select().from(timeSignatureEvents).orderBy(asc(timeSignatureEvents.tick)),
     db.select().from(keySignatureEvents).orderBy(asc(keySignatureEvents.tick)),
-    db.select({ notes: project.notes }).from(project).limit(1)
+    db.select({ notes: project.notes }).from(project).where(eq(project.id, PROJECT_ID)).limit(1)
   ])
 
   const kindOrder = new Map([

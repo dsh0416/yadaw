@@ -13,6 +13,9 @@ const editing = shallowRef(false)
 const saving = shallowRef(false)
 const draft = shallowRef("")
 
+type EditingTarget = { type: "project" } | { type: "track"; trackId: string }
+const editingTarget = shallowRef<EditingTarget>()
+
 const selectedTrack = computed(() =>
   mixerStore.graph.tracks.find((track) => track.channelId === mixerStore.selectedChannelId)
 )
@@ -47,30 +50,34 @@ function selectTab(tab: "project" | "track"): void {
 
 function beginEditing(): void {
   if (unavailableDescription.value) return
+  editingTarget.value =
+    workspaceStore.activeNotesTab === "project"
+      ? { type: "project" }
+      : { type: "track", trackId: selectedTrack.value!.id }
   draft.value = content.value
   editing.value = true
 }
 
 function cancelEditing(): void {
   editing.value = false
+  editingTarget.value = undefined
   draft.value = ""
 }
 
 async function save(): Promise<void> {
-  if (saving.value || unavailableDescription.value) return
+  const target = editingTarget.value
+  if (saving.value || !target) return
   saving.value = true
   try {
     const command =
-      workspaceStore.activeNotesTab === "project"
+      target.type === "project"
         ? ({ type: "update-project-notes", notes: draft.value } as const)
-        : selectedTrack.value
-          ? ({
-              type: "update-track",
-              trackId: selectedTrack.value.id,
-              patch: { notes: draft.value }
-            } as const)
-          : null
-    if (command && (await mixerStore.execute(command))) cancelEditing()
+        : ({
+            type: "update-track",
+            trackId: target.trackId,
+            patch: { notes: draft.value }
+          } as const)
+    if (await mixerStore.execute(command)) cancelEditing()
   } finally {
     saving.value = false
   }

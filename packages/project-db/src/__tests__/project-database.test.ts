@@ -287,9 +287,13 @@ describe("ProjectDatabase", () => {
       { type: "update-track", trackId: "track:audio-1", patch: { notes: "Use take 3." } },
       "output-1-2"
     )
+    await database.applyCommand(
+      { type: "update-track", trackId: "track:audio-1", patch: { sortOrder: 2 } },
+      "output-1-2"
+    )
     const noted = await database.mixerSnapshot()
     expect(noted.projectNotes).toBe("# Recording plan")
-    expect(noted.tracks[0]?.notes).toBe("Use take 3.")
+    expect(noted.tracks[0]).toMatchObject({ notes: "Use take 3.", sortOrder: 2 })
 
     await database.updateConfiguration({
       name: "Renamed",

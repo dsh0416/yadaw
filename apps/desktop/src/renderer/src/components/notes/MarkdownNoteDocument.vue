@@ -39,10 +39,12 @@ renderer.html = ({ text }) =>
         "'": "&#39;"
       })[character]!
   )
+renderer.link = ({ tokens }) => renderer.parser.parseInline(tokens)
+renderer.image = () => ""
 
 const renderedMarkdown = computed(() =>
   DOMPurify.sanitize(marked.parse(props.content, { async: false, renderer }), {
-    FORBID_TAGS: ["script", "style", "iframe", "object", "embed"],
+    FORBID_TAGS: ["a", "img", "script", "style", "iframe", "object", "embed"],
     USE_PROFILES: { html: true }
   })
 )
@@ -56,10 +58,6 @@ function handleEditorKeydown(event: KeyboardEvent): void {
     event.preventDefault()
     emit("save")
   }
-}
-
-function preventPreviewNavigation(event: MouseEvent): void {
-  if ((event.target as HTMLElement).closest("a")) event.preventDefault()
 }
 
 watch(
@@ -119,7 +117,6 @@ watch(
         v-if="content.trim()"
         class="markdown-preview"
         data-testid="markdown-preview"
-        @click="preventPreviewNavigation"
         v-html="renderedMarkdown"
       />
       <!-- eslint-enable vue/no-v-html -->
@@ -243,11 +240,6 @@ watch(
   border: 0;
   color: var(--text-secondary);
   background: transparent;
-}
-
-.markdown-preview :deep(a) {
-  color: var(--accent-soft);
-  text-decoration-color: color-mix(in srgb, var(--accent) 55%, transparent);
 }
 
 .markdown-preview :deep(hr) {

@@ -691,6 +691,16 @@ describe("additional project graph commands", () => {
 })
 
 describe("project graph validation and command guards", () => {
+  it("rejects non-text project and track notes", () => {
+    expect(() => validateGraph({ ...graph(), projectNotes: 42 as unknown as string })).toThrowError(
+      "Project notes must be text"
+    )
+
+    const invalidTrackNotes = graph()
+    invalidTrackNotes.tracks[0]!.notes = 42 as unknown as string
+    expect(() => validateGraph(invalidTrackNotes)).toThrowError("Track notes must be text")
+  })
+
   it("validates finite ranges and rejects unknown lookup targets", () => {
     expect(() => finiteRange(0.5, 0, 1, "Sample")).not.toThrow()
     expect(() => finiteRange(Number.NaN, 0, 1, "Sample")).toThrow("Sample must be between")
