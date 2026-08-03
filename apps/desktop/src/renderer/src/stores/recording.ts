@@ -5,7 +5,7 @@ import type {
   RecordingLifecycleState,
   RecordingResourceSnapshot,
   RecordingSession
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import { mutationMeta, readMeta, rpcErrorMessage } from "../rpc"
 import { useAudioRuntimeStore } from "./audioRuntime"
 import { useProjectStore } from "./project"
@@ -41,7 +41,7 @@ export const useRecordingStore = defineStore("recording", () => {
       return null
     }
     lifecycle.value = { status: "starting", error: null }
-    const result = await window.yadaw.startRecording(
+    const result = await window.heron.startRecording(
       mutationMeta(project, "recording-start", projectStore.projectRevision),
       { project, projectGraph, audioEngine, countIn }
     )
@@ -66,7 +66,7 @@ export const useRecordingStore = defineStore("recording", () => {
     if (lifecycle.value.status !== "recording" || !current) return null
     const session = current.session
     lifecycle.value = { status: "stopping", session, error: null }
-    const result = await window.yadaw.stopRecording(
+    const result = await window.heron.stopRecording(
       mutationMeta(current.recording, "recording-stop", current.revision)
     )
     applyResource(null)
@@ -89,7 +89,7 @@ export const useRecordingStore = defineStore("recording", () => {
       pending.value = []
       return
     }
-    const result = await window.yadaw.listPendingRecordings(readMeta(project))
+    const result = await window.heron.listPendingRecordings(readMeta(project))
     if (!result.ok) {
       lifecycle.value = { status: "idle", error: rpcErrorMessage(result.error) }
       return
@@ -102,7 +102,7 @@ export const useRecordingStore = defineStore("recording", () => {
     const project = projectStore.projectRef
     if (!project) return false
     lifecycle.value = { status: "recovering", recordingId: recording.id, error: null }
-    const result = await window.yadaw.recoverRecording(
+    const result = await window.heron.recoverRecording(
       mutationMeta(project, "recording-recover", projectStore.projectRevision),
       recording.id
     )
@@ -123,7 +123,7 @@ export const useRecordingStore = defineStore("recording", () => {
     if (lifecycle.value.status !== "idle") return
     const project = projectStore.projectRef
     if (!project) return
-    const result = await window.yadaw.deletePendingRecording(
+    const result = await window.heron.deletePendingRecording(
       mutationMeta(project, "recording-delete", projectStore.projectRevision),
       recording.id
     )

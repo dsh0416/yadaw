@@ -4,7 +4,7 @@ import type {
   PluginParameterChange,
   PluginParameterInfo,
   PluginRuntimeStatus
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 
 export interface PluginRuntime {
   resolveInstance(instanceId: string): Promise<{ plugin: PluginInstanceState; sampleRate: number }>

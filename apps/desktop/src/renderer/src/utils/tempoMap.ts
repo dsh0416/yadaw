@@ -1,4 +1,4 @@
-import type { TempoEventState, TempoMapSnapshot, TimeSignatureEventState } from "@yadaw/contracts"
+import type { TempoEventState, TempoMapSnapshot, TimeSignatureEventState } from "@heron/contracts"
 
 export function tickToSeconds(map: TempoMapSnapshot, tick: number): number {
   let seconds = 0

@@ -1,6 +1,6 @@
 import { acceptHMRUpdate, defineStore } from "pinia"
 import { shallowRef } from "vue"
-import type { AudioBenchmarkReport } from "@yadaw/contracts"
+import type { AudioBenchmarkReport } from "@heron/contracts"
 import { mutationMeta, rpcErrorMessage } from "../rpc"
 import { useAudioRuntimeStore } from "./audioRuntime"
 
@@ -29,7 +29,7 @@ export const useAudioBenchmarkStore = defineStore("audio-benchmark", () => {
     try {
       const target = audioRuntime.audioHostRef
       if (!target) throw new Error("Audio host resource is unavailable.")
-      const result = await window.yadaw.runAudioBenchmark(mutationMeta(target, "audio-benchmark"))
+      const result = await window.heron.runAudioBenchmark(mutationMeta(target, "audio-benchmark"))
       if (!result.ok) {
         errorMessage.value = rpcErrorMessage(result.error)
         status.value = "error"

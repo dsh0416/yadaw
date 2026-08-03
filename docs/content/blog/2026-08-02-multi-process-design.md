@@ -22,7 +22,7 @@ So we took Electron: one Chromium, one Node addon boundary, a boring main/render
 
 ## Putting audio somewhere else
 
-Electron main loads a native client (`.node`), but that client does not own cpal, the playback graph, or VST® 3 editors. It talks to `yadaw-audio-host` — a separate process whose whole job is devices, streams, the real-time graph, and plug-in windows.
+Electron main loads a native client (`.node`), but that client does not own cpal, the playback graph, or VST® 3 editors. It talks to `heron-audio-host` — a separate process whose whole job is devices, streams, the real-time graph, and plug-in windows.
 
 We did not do that for architectural purity. A misbehaving plug-in, a host-side assertion, or a hung helper should not take down the project UI. The helper has its own epoch; when it dies, Electron main throws away every resource that belonged to that epoch and rebuilds from committed state. The renderer never gets to pretend a dead process is still “the current engine.”
 
@@ -33,11 +33,11 @@ The shape ends up looking like this:
 ```mermaid
 flowchart TB
   renderer["Vue renderer"]
-  preload["window.yadaw<br/>typed preload"]
+  preload["window.heron<br/>typed preload"]
   main["Electron main"]
   workers["project workers / registry"]
   client["audio-host-client<br/>.node"]
-  host["yadaw-audio-host"]
+  host["heron-audio-host"]
   editors["winit + VST 3 editors"]
   tokio["Tokio control plane"]
   cpal["cpal real-time callbacks"]

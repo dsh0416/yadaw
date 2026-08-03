@@ -7,7 +7,7 @@ import type {
   PluginDescriptor,
   PluginInstanceState,
   PluginRuntimeStatus
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import {
   claimPluginDropPreview,
   clearActivePluginDropPreview,

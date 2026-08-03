@@ -31,7 +31,7 @@ Fill in the repository pull request template, and:
 - Keep Electron IPC, UI work, filesystem access, allocation, and blocking
   synchronization out of real-time audio callbacks.
 - Do not cross the renderer / native boundary incorrectly: the renderer talks
-  only through the typed `window.yadaw` preload API.
+  only through the typed `window.heron` preload API.
 - Ensure submissions are compatible with the
   [GNU General Public License v3.0](LICENSE). Do not paste code of unknown
   origin or with a conflicting license.

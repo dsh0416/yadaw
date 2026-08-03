@@ -1,6 +1,6 @@
 use std::{env, process::ExitCode, rc::Rc};
 
-use yadaw_vst3_host::{Module, PluginKind, StereoProcessor};
+use heron_vst3_host::{Module, PluginKind, StereoProcessor};
 
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     let path = env::args_os()

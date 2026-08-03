@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue"
 import { useI18n } from "vue-i18n"
-import type { TempoMapSnapshot, TransportLoopRange } from "@yadaw/contracts"
+import type { TempoMapSnapshot, TransportLoopRange } from "@heron/contracts"
 import { barTicksThroughTick, beatTicksThroughTick } from "../../utils/tempoMap"
 import { timelineXToSeconds } from "../../utils/timelineCoordinates"
 import { tickToTimelineX } from "../../utils/timelineCoordinates"

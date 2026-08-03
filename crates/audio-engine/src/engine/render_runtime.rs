@@ -740,7 +740,7 @@ impl NativeMixerRuntime {
             }
             RealtimeMidiMessage::SongPosition { position } => {
                 let tick = u64::from(position)
-                    .saturating_mul(yadaw_dsp_runtime::midi_input::MUSICAL_TICKS_PER_SONG_POSITION);
+                    .saturating_mul(heron_dsp_runtime::midi_input::MUSICAL_TICKS_PER_SONG_POSITION);
                 self.transport.position_ticks.store(tick, Ordering::Relaxed);
                 if let Ok(frame) = self.tempo_map.tick_to_frame(tick, self.sample_rate) {
                     self.transport
@@ -761,7 +761,7 @@ impl NativeMixerRuntime {
                     )
                 {
                     self.transport.position_ticks.fetch_add(
-                        yadaw_dsp_runtime::midi_input::MUSICAL_TICKS_PER_MIDI_CLOCK,
+                        heron_dsp_runtime::midi_input::MUSICAL_TICKS_PER_MIDI_CLOCK,
                         Ordering::Relaxed,
                     );
                 }

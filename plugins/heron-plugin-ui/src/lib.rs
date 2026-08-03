@@ -4,7 +4,7 @@ mod widgets;
 
 pub use widgets::{LevelMeter, ParameterKnob, level_meter, parameter_knob};
 
-pub use yadaw_iced_ui::{self, Appearance, SemanticPalette, space, type_size};
+pub use heron_iced_ui::{self, Appearance, SemanticPalette, space, type_size};
 
 use iced_widget::Theme;
 

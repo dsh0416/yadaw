@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest"
 import { mount } from "@vue/test-utils"
-import type { MidiClipState } from "@yadaw/contracts"
-import { UiContextMenu } from "@yadaw/ui"
+import type { MidiClipState } from "@heron/contracts"
+import { UiContextMenu } from "@heron/ui"
 import MidiClipCard from "./MidiClipCard.vue"
 
 const clip: MidiClipState = {

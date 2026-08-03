@@ -3,8 +3,8 @@ import { storeToRefs } from "pinia"
 import { computed } from "vue"
 import { useI18n } from "vue-i18n"
 import { CircleAlert, RefreshCw, TriangleAlert } from "@lucide/vue"
-import type { AudioRuntimeSnapshot } from "@yadaw/contracts"
-import { UiPopover } from "@yadaw/ui"
+import type { AudioRuntimeSnapshot } from "@heron/contracts"
+import { UiPopover } from "@heron/ui"
 import type { AudioTelemetryStatistics, AudioWarning } from "../../stores/audioRuntime"
 import {
   classifyUpperBound,

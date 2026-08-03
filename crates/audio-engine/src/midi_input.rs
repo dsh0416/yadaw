@@ -9,12 +9,7 @@ use std::{
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
-use midir::{Ignore, MidiInput, MidiInputConnection, MidiInputPort};
-use ringbuf::{
-    Cons, HeapCons, HeapProd, HeapRb, Prod,
-    traits::{Consumer, Observer, Producer, Split},
-};
-use yadaw_dsp_runtime::{
+use heron_dsp_runtime::{
     midi_input::{
         MIDI_MAX_SYSEX_BYTES, MIDI_SHORT_QUEUE_CAPACITY, MIDI_SYSEX_SLAB_BYTES, MidiClockSlave,
         MidiInputMessage, MidiInputParser, MidiSyncState,
@@ -24,6 +19,11 @@ use yadaw_dsp_runtime::{
         MidiInputSnapshot, MidiRecordingResult, MidiRecordingStartConfig, MidiSyncPreferences,
         MidiSyncRuntime,
     },
+};
+use midir::{Ignore, MidiInput, MidiInputConnection, MidiInputPort};
+use ringbuf::{
+    Cons, HeapCons, HeapProd, HeapRb, Prod,
+    traits::{Consumer, Observer, Producer, Split},
 };
 
 use crate::TransportClockHandle;
@@ -330,7 +330,7 @@ impl MidiInputActor {
     pub fn start(preferences: MidiSyncPreferences) -> Self {
         let (sender, receiver) = mpsc::channel();
         let thread = thread::Builder::new()
-            .name("yadaw-midi-input".to_owned())
+            .name("heron-midi-input".to_owned())
             .spawn(move || run_actor(receiver, preferences))
             .ok();
         Self { sender, thread }
@@ -1652,7 +1652,7 @@ mod tests {
 
         state
             .clock
-            .advance(20_833 * 12 + yadaw_dsp_runtime::midi_input::MIDI_CLOCK_FREEWHEEL_MICROS + 1);
+            .advance(20_833 * 12 + heron_dsp_runtime::midi_input::MIDI_CLOCK_FREEWHEEL_MICROS + 1);
         assert_eq!(snapshot(&state).sync.state, "lost");
     }
 

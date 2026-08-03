@@ -1,7 +1,7 @@
 import { mount } from "@vue/test-utils"
 import { defineComponent, nextTick, shallowRef } from "vue"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import type { ThemePreference } from "@yadaw/contracts"
+import type { ThemePreference } from "@heron/contracts"
 import { useTheme } from "./useTheme"
 
 describe("useTheme", () => {

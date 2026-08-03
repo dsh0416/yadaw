@@ -1,6 +1,6 @@
 use std::{fmt, os::raw::c_char, str::FromStr};
 
-use yadaw_vst3_host_sys::{Steinberg::TUID, compat::tuid_byte};
+use heron_vst3_host_sys::{Steinberg::TUID, compat::tuid_byte};
 
 use crate::HostError;
 

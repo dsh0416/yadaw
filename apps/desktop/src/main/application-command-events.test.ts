@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { IPC_CHANNELS, IPC_PROTOCOL_VERSION } from "@yadaw/contracts"
+import { IPC_CHANNELS, IPC_PROTOCOL_VERSION } from "@heron/contracts"
 import { applicationCommandEvent, sendApplicationCommand } from "./application-command-events"
 
 describe("application command envelopes", () => {

@@ -1,7 +1,7 @@
 import { app, BrowserWindow, nativeTheme } from "electron"
 import { basename, join, resolve } from "node:path"
 import { randomUUID } from "node:crypto"
-import { IPC_CHANNELS, IPC_PROTOCOL_VERSION } from "@yadaw/contracts"
+import { IPC_CHANNELS, IPC_PROTOCOL_VERSION } from "@heron/contracts"
 import { ApplicationSettingsStore } from "./application-settings"
 import { AssetMaterializer } from "./asset-materializer"
 import { AudioGraphCompiler } from "./audio-graph-compiler"
@@ -80,14 +80,14 @@ export function startApplication(
       })
       const executableSuffix = process.platform === "win32" ? ".exe" : ""
       const probePath = app.isPackaged
-        ? join(process.resourcesPath, `yadaw-vst3-probe${executableSuffix}`)
+        ? join(process.resourcesPath, `heron-vst3-probe${executableSuffix}`)
         : resolve(
             app.getAppPath(),
             "..",
             "..",
             "target",
             "debug",
-            `yadaw-vst3-probe${executableSuffix}`
+            `heron-vst3-probe${executableSuffix}`
           )
       const builtinPluginDirectory = app.isPackaged
         ? join(process.resourcesPath, "plugins")
@@ -175,14 +175,14 @@ export function startApplication(
         total: null
       })
       const audioHostPath = app.isPackaged
-        ? join(process.resourcesPath, `yadaw-audio-host${executableSuffix}`)
+        ? join(process.resourcesPath, `heron-audio-host${executableSuffix}`)
         : resolve(
             app.getAppPath(),
             "..",
             "..",
             "target",
             "debug",
-            `yadaw-audio-host${executableSuffix}`
+            `heron-audio-host${executableSuffix}`
           )
       const window = createMainWindow(false)
       let editorClosedSequence = 0
@@ -330,7 +330,7 @@ export function startApplication(
         projectService.current,
         normalizeAudioRuntime(initialAudioRuntime),
         {
-          allowRecordingWithoutAudio: process.env.YADAW_TEST_CAPTURE_SOURCE === "1",
+          allowRecordingWithoutAudio: process.env.HERON_TEST_CAPTURE_SOURCE === "1",
           audioHostEpoch: audioHostService.helperEpoch() ?? undefined
         }
       )

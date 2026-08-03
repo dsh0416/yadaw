@@ -1,4 +1,4 @@
-import { INITIAL_AUDIO_RUNTIME_SNAPSHOT, IPC_PROTOCOL_VERSION } from "@yadaw/contracts"
+import { INITIAL_AUDIO_RUNTIME_SNAPSHOT, IPC_PROTOCOL_VERSION } from "@heron/contracts"
 import type {
   ApplicationBootstrapSnapshot,
   ApplicationSettings,
@@ -6,7 +6,7 @@ import type {
   RpcError,
   RpcEvent,
   RpcResult
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 
 export const TEST_MAIN_EPOCH = "test-main-epoch"
 

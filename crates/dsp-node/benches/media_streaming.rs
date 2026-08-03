@@ -6,8 +6,8 @@ use std::{
 };
 
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use yadaw_audio_host::engine::bench_support::{StreamingHarness, decode_clip};
-use yadaw_dsp_node::bench_support::write_float_fixture;
+use heron_audio_host::engine::bench_support::{StreamingHarness, decode_clip};
+use heron_dsp_node::bench_support::write_float_fixture;
 
 struct FixtureDirectory {
     path: PathBuf,
@@ -20,7 +20,7 @@ impl FixtureDirectory {
             .expect("time moves forward")
             .as_nanos();
         let path = std::env::temp_dir().join(format!(
-            "yadaw-criterion-media-{}-{nonce}",
+            "heron-criterion-media-{}-{nonce}",
             std::process::id()
         ));
         fs::create_dir_all(&path).expect("create benchmark fixture directory");

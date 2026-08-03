@@ -6,8 +6,8 @@ import type {
   MidiNoteState,
   ProjectGraphSnapshot,
   ProjectCommand
-} from "@yadaw/contracts"
-import { channelForTrack } from "@yadaw/project-model"
+} from "@heron/contracts"
+import { channelForTrack } from "@heron/project-model"
 import { useApplicationSettingsStore } from "../../stores/applicationSettings"
 import { useMixerStore } from "../../stores/mixer"
 import { usePianoRollStore } from "../../stores/pianoRoll"

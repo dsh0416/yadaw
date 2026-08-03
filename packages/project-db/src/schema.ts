@@ -1,5 +1,5 @@
 import { relations, sql } from "drizzle-orm"
-import type { PluginAudioMode } from "@yadaw/contracts"
+import type { PluginAudioMode } from "@heron/contracts"
 import {
   boolean,
   check,

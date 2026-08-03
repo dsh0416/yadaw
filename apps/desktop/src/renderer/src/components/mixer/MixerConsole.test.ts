@@ -2,7 +2,7 @@ import { nextTick } from "vue"
 import { describe, expect, it } from "vitest"
 import { mount } from "@vue/test-utils"
 import { createPinia, setActivePinia } from "pinia"
-import type { MixerChannelState, PluginDescriptor } from "@yadaw/contracts"
+import type { MixerChannelState, PluginDescriptor } from "@heron/contracts"
 import { useMixerStore } from "../../stores/mixer"
 import MixerConsole from "./MixerConsole.vue"
 

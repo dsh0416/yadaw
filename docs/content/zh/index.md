@@ -7,7 +7,7 @@ sidebar: false
 aside: false
 editLink: false
 lastUpdated: false
-pageClass: yadaw-home
+pageClass: heron-home
 ---
 
 <HomePage />

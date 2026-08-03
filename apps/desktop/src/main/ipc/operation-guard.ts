@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto"
-import { rpcFailure } from "@yadaw/contracts"
-import type { ResourceRef, RpcError, RpcRequestMeta, RpcResult } from "@yadaw/contracts"
+import { rpcFailure } from "@heron/contracts"
+import type { ResourceRef, RpcError, RpcRequestMeta, RpcResult } from "@heron/contracts"
 import type { IpcHandlerContext } from "./context"
 
 function rebindResult(meta: RpcRequestMeta, result: RpcResult<unknown>): RpcResult<unknown> {

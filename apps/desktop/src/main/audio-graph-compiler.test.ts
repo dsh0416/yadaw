@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import type { PluginDescriptor, PluginInstanceState, ProjectGraphSnapshot } from "@yadaw/contracts"
+import type { PluginDescriptor, PluginInstanceState, ProjectGraphSnapshot } from "@heron/contracts"
 import { AudioGraphCompiler } from "./audio-graph-compiler"
 
 const descriptor: PluginDescriptor = {

@@ -5,7 +5,7 @@ import type {
   MidiRuntimeResourceSnapshot,
   MidiSyncPreferences,
   RpcResult
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import { useApplicationSettingsStore } from "./applicationSettings"
 import { useAudioRuntimeStore } from "./audioRuntime"
 import { useMidiInputStore } from "./midiInput"
@@ -110,7 +110,7 @@ function stubApi(overrides: Record<string, unknown>): void {
   const subscribeCall = overrides.subscribeMidiInput
   if (typeof subscribeCall === "function") {
     wrapped.subscribeMidiInput = vi.fn(
-      (listener: Parameters<typeof window.yadaw.subscribeMidiInput>[0]) =>
+      (listener: Parameters<typeof window.heron.subscribeMidiInput>[0]) =>
         subscribeCall((value: MidiInputSnapshot) =>
           listener(rpcEvent(resource(value), value.capturedAt, host.epoch))
         )
@@ -137,7 +137,7 @@ function stubApi(overrides: Record<string, unknown>): void {
       }
     })
   }
-  Object.assign(window.yadaw as unknown as Record<string, unknown>, wrapped)
+  Object.assign(window.heron as unknown as Record<string, unknown>, wrapped)
 }
 
 beforeEach(() => {
@@ -165,7 +165,7 @@ describe("load", () => {
 
     expect(store.snapshot.ports).toHaveLength(2)
     expect(store.loading).toBe(false)
-    expect(window.yadaw.subscribeMidiInput).toHaveBeenCalledTimes(1)
+    expect(window.heron.subscribeMidiInput).toHaveBeenCalledTimes(1)
   })
 
   it("subscribes only once across repeated loads", async () => {
@@ -177,7 +177,7 @@ describe("load", () => {
     await store.load()
 
     expect(midiInputSnapshot).toHaveBeenCalledTimes(2)
-    expect(window.yadaw.subscribeMidiInput).toHaveBeenCalledTimes(1)
+    expect(window.heron.subscribeMidiInput).toHaveBeenCalledTimes(1)
   })
 
   it("applies pushed snapshots and their sync errors", async () => {
@@ -231,7 +231,7 @@ describe("load", () => {
 
     expect(store.error).toBe("resource-unavailable")
     expect(store.loading).toBe(false)
-    expect(window.yadaw.subscribeMidiInput).toHaveBeenCalledOnce()
+    expect(window.heron.subscribeMidiInput).toHaveBeenCalledOnce()
   })
 
   it("maps non-Error transport failures to the typed unavailable error", async () => {
@@ -411,7 +411,7 @@ describe("dispose", () => {
 
     await store.load()
 
-    expect(window.yadaw.subscribeMidiInput).toHaveBeenCalledTimes(2)
+    expect(window.heron.subscribeMidiInput).toHaveBeenCalledTimes(2)
   })
 
   it("is safe to call before anything was loaded", () => {

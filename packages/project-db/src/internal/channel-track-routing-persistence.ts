@@ -4,7 +4,7 @@ import type {
   MixerSendPatch,
   ProjectCommand,
   TrackPatch
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import { mixerChannels, mixerSends, tracks } from "../schema"
 import type { ProjectTransaction } from "./database-types"
 

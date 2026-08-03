@@ -1,6 +1,6 @@
+use heron_dsp_core::apply_gain;
 use napi::{Error, Result, Status};
 use napi_derive::napi;
-use yadaw_dsp_core::apply_gain;
 
 mod benchmark;
 mod midi;

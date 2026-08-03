@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue"
 import { useI18n } from "vue-i18n"
-import type { MidiClipState, MidiRecordingPreviewTake, TempoMapSnapshot } from "@yadaw/contracts"
+import type { MidiClipState, MidiRecordingPreviewTake, TempoMapSnapshot } from "@heron/contracts"
 import type { PianoRollSnap } from "../../utils/pianoRoll"
 import type { ClipTrimEdge } from "../../utils/clipEditing"
 import { barTicksThroughTick, beatTicksThroughTick } from "../../utils/tempoMap"

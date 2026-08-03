@@ -3,10 +3,10 @@
 //!
 //! This crate owns mapping identity, OS resources, and cleanup. It deliberately
 //! exposes no safe byte slice because another process may mutate the mapping at
-//! any time. Typed layouts and atomic protocols belong to `yadaw-ipc-transport`.
+//! any time. Typed layouts and atomic protocols belong to `heron-ipc-transport`.
 
 #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
-compile_error!("yadaw-shared-memory supports only Linux, macOS, and Windows");
+compile_error!("heron-shared-memory supports only Linux, macOS, and Windows");
 
 mod descriptor;
 mod error;

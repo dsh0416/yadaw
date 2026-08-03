@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
-import { IPC_PROTOCOL_VERSION, rpcFailure, rpcSuccess } from "@yadaw/contracts"
-import type { PluginDescriptor, ProjectGraphSnapshot, RpcRequestMeta } from "@yadaw/contracts"
+import { IPC_PROTOCOL_VERSION, rpcFailure, rpcSuccess } from "@heron/contracts"
+import type { PluginDescriptor, ProjectGraphSnapshot, RpcRequestMeta } from "@heron/contracts"
 import { AudioGraphPublisher } from "./audio-graph-publisher"
 
 const descriptor: PluginDescriptor = {

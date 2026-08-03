@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from "vue-i18n"
 import { MoreHorizontal, Trash2 } from "@lucide/vue"
-import { UiPopover } from "@yadaw/ui"
+import { UiPopover } from "@heron/ui"
 
 defineProps<{
   channelName: string

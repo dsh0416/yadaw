@@ -1,6 +1,6 @@
-name: yadaw
+name: heron
 version: 1.0.0
-description: APM project for yadaw
+description: APM project for Heron
 author: Delton Ding
 targets:
   - agent-skills

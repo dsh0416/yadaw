@@ -1,6 +1,6 @@
 import { mount } from "@vue/test-utils"
 import { describe, expect, it } from "vitest"
-import type { TempoMapSnapshot } from "@yadaw/contracts"
+import type { TempoMapSnapshot } from "@heron/contracts"
 import GlobalMarkerLane from "./GlobalMarkerLane.vue"
 import MeterTrackLane from "./MeterTrackLane.vue"
 

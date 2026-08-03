@@ -81,12 +81,12 @@ fn run_ipc() -> Result<(), Box<dyn std::error::Error>> {
     let winit_generation = Arc::new(AtomicU64::new(0));
     let protocol_winit_generation = winit_generation.clone();
     let protocol_thread = thread::Builder::new()
-        .name("yadaw-control".into())
+        .name("heron-control".into())
         .spawn(move || {
             let runtime = match tokio::runtime::Builder::new_multi_thread()
                 .worker_threads(runtime_config.worker_threads)
                 .max_blocking_threads(runtime_config.max_blocking_threads)
-                .thread_name("yadaw-tokio")
+                .thread_name("heron-tokio")
                 .enable_all()
                 .build()
             {

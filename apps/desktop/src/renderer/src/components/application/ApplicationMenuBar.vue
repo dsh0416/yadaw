@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { APPLICATION_COMMAND_IDS } from "@yadaw/contracts"
-import type { ApplicationCommandId } from "@yadaw/contracts"
-import { UiMenubar } from "@yadaw/ui"
-import type { UiMenubarMenu } from "@yadaw/ui"
+import { APPLICATION_COMMAND_IDS } from "@heron/contracts"
+import type { ApplicationCommandId } from "@heron/contracts"
+import { UiMenubar } from "@heron/ui"
+import type { UiMenubarMenu } from "@heron/ui"
 import { useI18n } from "vue-i18n"
 
 defineProps<{

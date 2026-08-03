@@ -1,5 +1,5 @@
 [package]
-name = "yadaw-vst3-host"
+name = "heron-vst3-host"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -13,7 +13,7 @@ ringbuf.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-yadaw-vst3-host-sys.workspace = true
+heron-vst3-host-sys.workspace = true
 
 [build-dependencies]
 cc.workspace = true
@@ -22,5 +22,5 @@ cc.workspace = true
 workspace = true
 
 [[bin]]
-name = "yadaw-vst3-probe"
+name = "heron-vst3-probe"
 path = "src/bin/probe.rs"

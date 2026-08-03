@@ -2,7 +2,7 @@ import { rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { resolve } from "node:path"
 import { decode, encode } from "@msgpack/msgpack"
-import { AudioHostIpcClient } from "@yadaw/audio-host-client"
+import { AudioHostIpcClient } from "@heron/audio-host-client"
 
 interface AttachmentReference {
   index: number
@@ -113,11 +113,11 @@ function writeSineWave(path: string): void {
 
 const repositoryRoot = resolve(import.meta.dirname, "..", "..", "..")
 const executableSuffix = process.platform === "win32" ? ".exe" : ""
-const audioFixturePath = resolve(tmpdir(), `yadaw-ipc-${process.pid}.wav`)
+const audioFixturePath = resolve(tmpdir(), `heron-ipc-${process.pid}.wav`)
 writeSineWave(audioFixturePath)
 const client = new AudioHostIpcClient(
-  resolve(repositoryRoot, "target", "debug", `yadaw-audio-host${executableSuffix}`),
-  resolve(tmpdir(), `yadaw-ipc-${process.pid}.marker`),
+  resolve(repositoryRoot, "target", "debug", `heron-audio-host${executableSuffix}`),
+  resolve(tmpdir(), `heron-ipc-${process.pid}.marker`),
   2,
   4,
   2

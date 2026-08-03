@@ -83,7 +83,7 @@ mod tests {
 
         fn send_request(&self, request: ControlRequest) {
             let mut leases = LeaseRegistry::with_session_epoch(1);
-            let packet = yadaw_ipc_transport::encode_request(request, &mut leases)
+            let packet = heron_ipc_transport::encode_request(request, &mut leases)
                 .expect("encode request");
             self.requests
                 .as_ref()
@@ -121,12 +121,12 @@ mod tests {
     }
 
     fn parameter_command(
-        target_kind: yadaw_dsp_runtime::protocol::ParameterTargetKind,
+        target_kind: heron_dsp_runtime::protocol::ParameterTargetKind,
         runtime_handle: u32,
         parameter_id: u32,
         normalized: f64,
-    ) -> yadaw_dsp_runtime::protocol::ParameterCommand {
-        yadaw_dsp_runtime::protocol::ParameterCommand {
+    ) -> heron_dsp_runtime::protocol::ParameterCommand {
+        heron_dsp_runtime::protocol::ParameterCommand {
             session_epoch: 1,
             sequence: 1,
             target_kind,
@@ -134,7 +134,7 @@ mod tests {
             parameter_id,
             target_generation: 1,
             normalized,
-            gesture: yadaw_dsp_runtime::protocol::ParameterGesture::Perform,
+            gesture: heron_dsp_runtime::protocol::ParameterGesture::Perform,
         }
     }
 
@@ -224,7 +224,7 @@ mod tests {
                 generation: 1,
             }),
             expected_revision: Some(expected_revision),
-            mutation: Some(yadaw_dsp_runtime::protocol::RpcMutationMeta {
+            mutation: Some(heron_dsp_runtime::protocol::RpcMutationMeta {
                 operation_id: "operation-1".to_owned(),
                 idempotency_key: "graph-1".to_owned(),
             }),
@@ -321,7 +321,7 @@ mod tests {
     }
 
     fn mixer_parameter_graph() -> LiveMixerGraph {
-        use yadaw_dsp_runtime::protocol::{LiveMixerChannel, LiveMixerSend, LiveMixerSendTap};
+        use heron_dsp_runtime::protocol::{LiveMixerChannel, LiveMixerSend, LiveMixerSendTap};
         LiveMixerGraph {
             channels: vec![LiveMixerChannel {
                 id: "channel-1".into(),
@@ -359,7 +359,7 @@ mod tests {
 
     fn minimal_native_graph(generation: u64) -> engine::NativeMixerGraph {
         use engine::NativeMixerChannel;
-        use yadaw_dsp_runtime::tempo::{TempoEvent, TimeSignatureEvent};
+        use heron_dsp_runtime::tempo::{TempoEvent, TimeSignatureEvent};
         engine::NativeMixerGraph {
             generation,
             sample_rate: 48_000,
@@ -982,7 +982,7 @@ mod tests {
 
     #[test]
     fn mixer_parameter_routing_accepts_gain_and_pan_and_rejects_invalid_targets() {
-        use yadaw_dsp_runtime::protocol::ParameterTargetKind;
+        use heron_dsp_runtime::protocol::ParameterTargetKind;
         let audio_engine = engine::AudioEngine::new();
         let handles = Mutex::new(GraphParameterHandles::default());
         refresh_graph_handles(&handles, &mixer_parameter_graph());
@@ -1051,7 +1051,7 @@ mod tests {
 
     #[tokio::test(flavor = "current_thread")]
     async fn engine_and_background_actors_enforce_command_ownership() {
-        use yadaw_dsp_runtime::protocol::ParameterTargetKind;
+        use heron_dsp_runtime::protocol::ParameterTargetKind;
         let audio_engine = Arc::new(engine::AudioEngine::new());
         let handles = Arc::new(Mutex::new(GraphParameterHandles::default()));
         let (engine_sender, engine_inbox) = mpsc::channel(4);
@@ -1259,7 +1259,7 @@ mod tests {
             .await
             .expect("queue response");
         let mut response_arena = ArenaReceiver::new(1);
-        let (response, attachments, release) = yadaw_ipc_transport::decode_response_to_attachments(
+        let (response, attachments, release) = heron_ipc_transport::decode_response_to_attachments(
             receive_ipc_packet(Arc::clone(&responses)).await,
             &mut response_arena,
         )
@@ -1299,7 +1299,7 @@ mod tests {
             })
             .expect("queue response for shutdown drain");
         shutdown.send(true).expect("signal egress shutdown");
-        let (drained, _, _) = yadaw_ipc_transport::decode_response_to_attachments(
+        let (drained, _, _) = heron_ipc_transport::decode_response_to_attachments(
             receive_ipc_packet(responses).await,
             &mut response_arena,
         )

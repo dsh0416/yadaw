@@ -64,7 +64,7 @@ run = "pnpm build"
 [tasks.pack]
 description = "Create an unpacked Electron application"
 depends = ["install"]
-run = "pnpm --filter @yadaw/desktop run pack"
+run = "pnpm --filter @heron/desktop run pack"
 
 [tasks.format]
 description = "Format TypeScript, JavaScript, Vue, configuration, docs, and Rust"

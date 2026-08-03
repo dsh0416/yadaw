@@ -7,9 +7,9 @@ pub mod bench_support {
         HeapCons, HeapProd, HeapRb,
         traits::{Consumer, Producer, Split},
     };
-    use yadaw_dsp_core::mixer::{ChannelKind, ChannelSpec, MixerGraph, RouteTarget, StereoFrame};
-    use yadaw_dsp_render::{RenderMeter, RenderRuntime};
-    use yadaw_dsp_runtime::{protocol::PluginAudioMode, tempo::TempoMap};
+    use heron_dsp_core::mixer::{ChannelKind, ChannelSpec, MixerGraph, RouteTarget, StereoFrame};
+    use heron_dsp_render::{RenderMeter, RenderRuntime};
+    use heron_dsp_runtime::{protocol::PluginAudioMode, tempo::TempoMap};
 
     use super::{
         AdaptiveResampler, ClipSamples, EngineCommand, InputPeakBank, LivePlugin, LoadedClip,
@@ -146,7 +146,7 @@ pub mod bench_support {
             live_midi_events: Vec::new(),
             live_notes: vec![false; (scenario.tracks + 2) * 16 * 128],
             external_sync_enabled: false,
-            live_sysex_scratch: vec![0; yadaw_dsp_runtime::midi_input::MIDI_MAX_SYSEX_BYTES],
+            live_sysex_scratch: vec![0; heron_dsp_runtime::midi_input::MIDI_MAX_SYSEX_BYTES],
             metronome: MetronomeScheduler::new(
                 None,
                 &TempoMap::default_120_bpm(),

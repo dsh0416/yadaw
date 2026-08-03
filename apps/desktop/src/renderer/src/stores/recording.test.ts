@@ -9,7 +9,7 @@ import type {
   RecordingResourceSnapshot,
   RecordingSession,
   RpcResult
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import { useAudioRuntimeStore } from "./audioRuntime"
 import { useProjectStore } from "./project"
 import { useRecordingStore } from "./recording"
@@ -138,7 +138,7 @@ function configureDependencies(): void {
 }
 
 function stubApi(overrides: Record<string, unknown>): void {
-  Object.assign(window.yadaw as unknown as Record<string, unknown>, overrides)
+  Object.assign(window.heron as unknown as Record<string, unknown>, overrides)
 }
 
 beforeEach(() => {

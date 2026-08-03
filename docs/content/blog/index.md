@@ -6,7 +6,7 @@ sidebar: false
 aside: false
 editLink: false
 lastUpdated: false
-pageClass: yadaw-blog
+pageClass: heron-blog
 ---
 
 <BlogIndex />

@@ -6,7 +6,7 @@ import type {
   PendingRecording,
   RecordingLifecycleState,
   RecordingStopResult
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import { IPC_PROTOCOL_VERSION } from "./rpc"
 
 function wireRoundTrip<T>(value: T): T {

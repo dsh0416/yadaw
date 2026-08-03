@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { useI18n } from "vue-i18n"
 import { shallowRef } from "vue"
-import type { PluginDescriptor } from "@yadaw/contracts"
-import type { PluginInstanceState, PluginRuntimeStatus } from "@yadaw/contracts"
+import type { PluginDescriptor } from "@heron/contracts"
+import type { PluginInstanceState, PluginRuntimeStatus } from "@heron/contracts"
 import PluginSlot from "./PluginSlot.vue"
 import { PLUGIN_DRAG_TYPE, readPluginDrag } from "./plugin-drag"
 

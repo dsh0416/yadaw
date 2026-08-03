@@ -1,6 +1,6 @@
 import { shallowRef } from "vue"
 import { describe, expect, it, vi } from "vitest"
-import type { MidiClipState, TempoMapSnapshot } from "@yadaw/contracts"
+import type { MidiClipState, TempoMapSnapshot } from "@heron/contracts"
 import type { PianoRollSnap } from "../../utils/pianoRoll"
 import { useMidiClipDrag } from "./useMidiClipDrag"
 

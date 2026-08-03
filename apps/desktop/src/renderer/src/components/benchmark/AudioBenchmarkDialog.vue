@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed } from "vue"
 import { useI18n } from "vue-i18n"
-import { UiButton, UiProgress, UiStatusNotice } from "@yadaw/ui"
-import type { AudioBenchmarkRating, AudioBenchmarkReport } from "@yadaw/contracts"
+import { UiButton, UiProgress, UiStatusNotice } from "@heron/ui"
+import type { AudioBenchmarkRating, AudioBenchmarkReport } from "@heron/contracts"
 import type { AudioBenchmarkStatus } from "../../stores/audioBenchmark"
 import AudioBenchmarkIpcDiagnostics from "./AudioBenchmarkIpcDiagnostics.vue"
 import AudioBenchmarkScenarioTable from "./AudioBenchmarkScenarioTable.vue"

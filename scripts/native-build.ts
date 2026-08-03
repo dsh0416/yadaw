@@ -17,7 +17,7 @@ const target = hostTarget()
 const release = mode === "release"
 
 if (scope !== "binaries") {
-  for (const packageName of ["@yadaw/dsp-node", "@yadaw/audio-host-client"]) {
+  for (const packageName of ["@heron/dsp-node", "@heron/audio-host-client"]) {
     runPnpm([
       "--filter",
       packageName,
@@ -39,13 +39,13 @@ if (scope !== "addons") {
     target,
     ...(release ? ["--release"] : []),
     "-p",
-    "yadaw-audio-host",
+    "heron-audio-host",
     "-p",
-    "yadaw-vst3-host",
+    "heron-vst3-host",
     "--bin",
-    "yadaw-audio-host",
+    "heron-audio-host",
     "--bin",
-    "yadaw-vst3-probe"
+    "heron-vst3-probe"
   ])
   run(cargoExecutable, [
     "truce",
@@ -61,7 +61,7 @@ if (scope !== "addons") {
   const sourceDirectory = resolve(workspaceRoot, "target", target, profile)
   const stableDirectory = resolve(workspaceRoot, "target", profile)
   mkdirSync(stableDirectory, { recursive: true })
-  for (const binary of ["yadaw-audio-host", "yadaw-vst3-probe"]) {
+  for (const binary of ["heron-audio-host", "heron-vst3-probe"]) {
     copyFileSync(
       resolve(sourceDirectory, `${binary}${executableSuffix}`),
       resolve(stableDirectory, `${binary}${executableSuffix}`)

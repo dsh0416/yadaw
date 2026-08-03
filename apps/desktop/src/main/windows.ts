@@ -53,16 +53,16 @@ export function openExternalUrl(url: string): boolean {
 }
 
 export function loadMainWindow(window: BrowserWindow): void {
-  if (process.env.YADAW_RENDERER_URL) {
-    void window.loadURL(process.env.YADAW_RENDERER_URL)
+  if (process.env.HERON_RENDERER_URL) {
+    void window.loadURL(process.env.HERON_RENDERER_URL)
   } else {
     void window.loadFile(join(rendererDirectory, "index.html"))
   }
 }
 
 export function loadSplashWindow(window: BrowserWindow): void {
-  if (process.env.YADAW_RENDERER_URL) {
-    void window.loadURL(new URL("splash.html", process.env.YADAW_RENDERER_URL).toString())
+  if (process.env.HERON_RENDERER_URL) {
+    void window.loadURL(new URL("splash.html", process.env.HERON_RENDERER_URL).toString())
   } else {
     void window.loadFile(join(rendererDirectory, "splash.html"))
   }

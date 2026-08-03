@@ -3,7 +3,7 @@ import type {
   MixerChannelState,
   MixerRuntimeSnapshot,
   ProjectGraphSnapshot
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import {
   MIXER_BUSES,
   audioTracks,

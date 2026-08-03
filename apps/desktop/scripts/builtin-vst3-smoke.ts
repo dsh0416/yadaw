@@ -19,7 +19,7 @@ interface ProbeOutput {
 const execFileAsync = promisify(execFile)
 const repositoryRoot = resolve(import.meta.dirname, "..", "..", "..")
 const executableSuffix = process.platform === "win32" ? ".exe" : ""
-const probePath = resolve(repositoryRoot, "target", "debug", `yadaw-vst3-probe${executableSuffix}`)
+const probePath = resolve(repositoryRoot, "target", "debug", `heron-vst3-probe${executableSuffix}`)
 
 const expected = [
   {

@@ -1,11 +1,11 @@
 import { BrowserWindow, Menu } from "electron"
 import type { MenuItemConstructorOptions } from "electron"
-import { resolveKeyboardShortcuts } from "@yadaw/contracts"
+import { resolveKeyboardShortcuts } from "@heron/contracts"
 import type {
   ApplicationCommandId,
   KeyboardShortcutBinding,
   ShortcutPreferences
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import { sendApplicationCommand } from "./application-command-events"
 import { t } from "./i18n"
 

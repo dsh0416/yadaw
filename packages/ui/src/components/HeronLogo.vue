@@ -12,7 +12,7 @@ const props = withDefaults(
   }
 )
 
-const classes = computed(() => ["yadaw-logo", `yadaw-logo--${props.variant}`])
+const classes = computed(() => ["heron-logo", `heron-logo--${props.variant}`])
 </script>
 
 <template>
@@ -25,33 +25,33 @@ const classes = computed(() => ["yadaw-logo", `yadaw-logo--${props.variant}`])
   >
     <svg
       v-if="props.variant !== 'wordmark'"
-      class="yadaw-logo__mark"
+      class="heron-logo__mark"
       viewBox="0 0 32 32"
       aria-hidden="true"
     >
-      <rect class="yadaw-logo__bar" x="2" y="11" width="4" height="10" rx="2" />
-      <rect class="yadaw-logo__bar" x="8" y="6" width="4" height="20" rx="2" />
+      <rect class="heron-logo__bar" x="2" y="11" width="4" height="10" rx="2" />
+      <rect class="heron-logo__bar" x="8" y="6" width="4" height="20" rx="2" />
       <rect
-        class="yadaw-logo__bar yadaw-logo__bar--center"
+        class="heron-logo__bar heron-logo__bar--center"
         x="14"
         y="1"
         width="4"
         height="30"
         rx="2"
       />
-      <rect class="yadaw-logo__bar" x="20" y="6" width="4" height="20" rx="2" />
-      <rect class="yadaw-logo__bar" x="26" y="11" width="4" height="10" rx="2" />
+      <rect class="heron-logo__bar" x="20" y="6" width="4" height="20" rx="2" />
+      <rect class="heron-logo__bar" x="26" y="11" width="4" height="10" rx="2" />
     </svg>
-    <span v-if="props.variant !== 'mark'" class="yadaw-logo__wordmark" aria-hidden="true">
+    <span v-if="props.variant !== 'mark'" class="heron-logo__wordmark" aria-hidden="true">
       YADAW
     </span>
   </span>
 </template>
 
 <style scoped>
-.yadaw-logo {
-  --yadaw-logo-wordmark-size: 1em;
-  --yadaw-logo-lockup-wordmark-size: 0.68em;
+.heron-logo {
+  --heron-logo-wordmark-size: 1em;
+  --heron-logo-lockup-wordmark-size: 0.68em;
 
   display: inline-flex;
   align-items: center;
@@ -62,7 +62,7 @@ const classes = computed(() => ["yadaw-logo", `yadaw-logo--${props.variant}`])
   white-space: nowrap;
 }
 
-.yadaw-logo__mark {
+.heron-logo__mark {
   display: block;
   width: 1em;
   height: 1em;
@@ -70,24 +70,24 @@ const classes = computed(() => ["yadaw-logo", `yadaw-logo--${props.variant}`])
   overflow: visible;
 }
 
-.yadaw-logo__bar {
+.heron-logo__bar {
   fill: currentColor;
 }
 
-.yadaw-logo__bar--center {
-  fill: var(--yadaw-logo-highlight, currentColor);
+.heron-logo__bar--center {
+  fill: var(--heron-logo-highlight, currentColor);
 }
 
-.yadaw-logo__wordmark {
-  display: var(--yadaw-logo-wordmark-display, inline);
+.heron-logo__wordmark {
+  display: var(--heron-logo-wordmark-display, inline);
   margin-right: -0.16em;
   font-family: var(--ui-type-family-data);
-  font-size: var(--yadaw-logo-wordmark-size);
+  font-size: var(--heron-logo-wordmark-size);
   font-weight: var(--ui-type-weight-bold);
   letter-spacing: var(--ui-type-tracking-widest);
 }
 
-.yadaw-logo--lockup .yadaw-logo__wordmark {
-  font-size: var(--yadaw-logo-lockup-wordmark-size);
+.heron-logo--lockup .heron-logo__wordmark {
+  font-size: var(--heron-logo-lockup-wordmark-size);
 }
 </style>

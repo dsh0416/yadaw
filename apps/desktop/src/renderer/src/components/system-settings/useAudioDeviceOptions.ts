@@ -1,14 +1,14 @@
 import { computed, onMounted, reactive, watch, type Ref } from "vue"
 import { useI18n } from "vue-i18n"
 import { storeToRefs } from "pinia"
-import { AUDIO_BUFFER_SIZES } from "@yadaw/contracts"
+import { AUDIO_BUFFER_SIZES } from "@heron/contracts"
 import type {
   AudioBackend,
   AudioDeviceDescriptor,
   AudioPreferences,
   AudioRuntimeSnapshot
-} from "@yadaw/contracts"
-import type { UiRadioOption, UiSelectOption } from "@yadaw/ui"
+} from "@heron/contracts"
+import type { UiRadioOption, UiSelectOption } from "@heron/ui"
 import { useAudioPreferencesStore } from "../../stores/audioPreferences"
 
 const BACKEND_IDS: readonly AudioBackend[] = ["wasapi", "asio", "coreaudio", "alsa", "mock"]

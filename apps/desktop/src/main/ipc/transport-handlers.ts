@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto"
-import { IPC_CHANNELS, rpcFailure, rpcSuccess } from "@yadaw/contracts"
+import { IPC_CHANNELS, rpcFailure, rpcSuccess } from "@heron/contracts"
 import type {
   ResourceRef,
   RpcError,
   RpcRequestMeta,
   RpcResult,
   TransportCommand
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import type { IpcHandlerContext } from "./context"
 import { reconcileAudioHostEpoch } from "./audio-host-reconcile"
 import { registerRpcHandler } from "./rpc"

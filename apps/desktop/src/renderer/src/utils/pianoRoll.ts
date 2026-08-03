@@ -6,7 +6,7 @@ import {
   type MidiNotePatch,
   type MidiNoteState,
   type ProjectCommand
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 
 export const WHOLE_NOTE_TICKS = MUSICAL_TICKS_PER_WHOLE_NOTE
 export const MIN_NOTE_TICKS = MIN_MIDI_NOTE_DURATION_TICKS

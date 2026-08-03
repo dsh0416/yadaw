@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm"
 import type { PgliteDatabase } from "drizzle-orm/pglite"
-import type { ProjectCommand } from "@yadaw/contracts"
+import type { ProjectCommand } from "@heron/contracts"
 import type { MidiSourceInput } from "../protocol"
 import { midiSources } from "../schema"
 import * as schema from "../schema"

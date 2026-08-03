@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed } from "vue"
 import { useI18n } from "vue-i18n"
-import type { DesktopPlatform } from "@yadaw/contracts"
-import { YadawLogo } from "@yadaw/ui"
+import type { DesktopPlatform } from "@heron/contracts"
+import { HeronLogo } from "@heron/ui"
 import AsioLegalNotice from "./AsioLegalNotice.vue"
 import ThirdPartyNotices from "./ThirdPartyNotices.vue"
 import VstLegalNotice from "./VstLegalNotice.vue"
@@ -21,7 +21,7 @@ const manualUrl = "https://yadaw.minori.live/manual/"
 <template>
   <article class="about-panel">
     <div class="brand-stage">
-      <YadawLogo class="brand-logo" />
+      <HeronLogo class="brand-logo" />
     </div>
 
     <dl class="build-facts">
@@ -76,8 +76,8 @@ const manualUrl = "https://yadaw.minori.live/manual/"
 }
 
 .brand-logo {
-  --yadaw-logo-highlight: var(--ui-signal-midi);
-  --yadaw-logo-lockup-wordmark-size: 0.62em;
+  --heron-logo-highlight: var(--ui-signal-midi);
+  --heron-logo-lockup-wordmark-size: 0.62em;
 
   color: var(--ui-color-text);
   font-size: var(--ui-font-size-4xl);

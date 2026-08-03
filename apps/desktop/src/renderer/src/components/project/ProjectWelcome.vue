@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type { ApplicationSettings, CreateProjectRequest } from "@yadaw/contracts"
-import { YadawLogo } from "@yadaw/ui"
+import type { ApplicationSettings, CreateProjectRequest } from "@heron/contracts"
+import { HeronLogo } from "@heron/ui"
 import { useI18n } from "vue-i18n"
 
 defineProps<{ settings: ApplicationSettings | null; busy: boolean; error: string }>()
@@ -22,7 +22,7 @@ function createProject(): void {
   <main class="welcome-shell">
     <section class="welcome-card">
       <div class="welcome-brand">
-        <YadawLogo class="welcome-logo" />
+        <HeronLogo class="welcome-logo" />
         <h1>{{ t("welcome.headline") }}</h1>
         <p>{{ t("welcome.body") }}</p>
       </div>
@@ -98,7 +98,7 @@ function createProject(): void {
   letter-spacing: var(--ui-type-tracking-widest);
 }
 .welcome-logo {
-  --yadaw-logo-highlight: var(--signal-cyan);
+  --heron-logo-highlight: var(--signal-cyan);
 
   font-size: var(--ui-font-size-sm);
   letter-spacing: var(--ui-type-tracking-normal);

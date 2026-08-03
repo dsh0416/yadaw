@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { createPinia, setActivePinia } from "pinia"
-import { INITIAL_AUDIO_RUNTIME_SNAPSHOT } from "@yadaw/contracts"
+import { INITIAL_AUDIO_RUNTIME_SNAPSHOT } from "@heron/contracts"
 import type {
   ApplicationBootstrapSnapshot,
   DesktopLifecycleSnapshot,
   ProjectSession
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import { useLifecycleStore } from "./lifecycle"
 import { useAudioRuntimeStore } from "./audioRuntime"
 import { useProjectStore } from "./project"
@@ -91,13 +91,13 @@ describe("lifecycle store", () => {
   beforeEach(() => setActivePinia(createPinia()))
 
   it("subscribes before hydrating and ignores an older snapshot", async () => {
-    let listener: Parameters<typeof window.yadaw.subscribeLifecycle>[0] = () => undefined
-    window.yadaw.subscribeLifecycle = vi.fn((next) => {
+    let listener: Parameters<typeof window.heron.subscribeLifecycle>[0] = () => undefined
+    window.heron.subscribeLifecycle = vi.fn((next) => {
       listener = next
       return vi.fn()
     })
     let resolveSnapshot!: (value: ApplicationBootstrapSnapshot) => void
-    window.yadaw.bootstrap = vi.fn(() =>
+    window.heron.bootstrap = vi.fn(() =>
       new Promise<ApplicationBootstrapSnapshot>((resolve) => {
         resolveSnapshot = resolve
       }).then((value) => ({ ok: true as const, requestId: "request", value, warnings: [] }))
@@ -128,13 +128,13 @@ describe("lifecycle store", () => {
     expect(lifecycle.ready).toBe(true)
   })
   it("resets domain revisions when bootstrap replaces a stale event epoch", async () => {
-    let listener: Parameters<typeof window.yadaw.subscribeLifecycle>[0] = () => undefined
-    window.yadaw.subscribeLifecycle = vi.fn((next) => {
+    let listener: Parameters<typeof window.heron.subscribeLifecycle>[0] = () => undefined
+    window.heron.subscribeLifecycle = vi.fn((next) => {
       listener = next
       return vi.fn()
     })
     let resolveSnapshot!: (value: ApplicationBootstrapSnapshot) => void
-    window.yadaw.bootstrap = vi.fn(() =>
+    window.heron.bootstrap = vi.fn(() =>
       new Promise<ApplicationBootstrapSnapshot>((resolve) => {
         resolveSnapshot = resolve
       }).then((value) => ({ ok: true as const, requestId: "request", value, warnings: [] }))
@@ -171,13 +171,13 @@ describe("lifecycle store", () => {
     })
 
     expect(project.session?.path).toBe("new.yadaw")
-    expect(window.yadaw.bootstrap).toHaveBeenCalledOnce()
+    expect(window.heron.bootstrap).toHaveBeenCalledOnce()
   })
 
   it("disposes its single native subscription", async () => {
     const unsubscribe = vi.fn()
-    window.yadaw.subscribeLifecycle = vi.fn(() => unsubscribe)
-    window.yadaw.bootstrap = vi.fn().mockResolvedValue({
+    window.heron.subscribeLifecycle = vi.fn(() => unsubscribe)
+    window.heron.bootstrap = vi.fn().mockResolvedValue({
       ok: true,
       requestId: "request",
       value: bootstrap(snapshot(0)),

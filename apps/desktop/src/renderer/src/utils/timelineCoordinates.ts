@@ -1,4 +1,4 @@
-import type { TempoMapSnapshot } from "@yadaw/contracts"
+import type { TempoMapSnapshot } from "@heron/contracts"
 import { secondsToTick, tickToSeconds } from "./tempoMap"
 
 export function tickToTimelineX(

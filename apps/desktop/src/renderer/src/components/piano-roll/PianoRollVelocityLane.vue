@@ -2,7 +2,7 @@
 import { shallowRef, type CSSProperties } from "vue"
 import { useI18n } from "vue-i18n"
 import { useEventListener } from "@vueuse/core"
-import type { ProjectCommand } from "@yadaw/contracts"
+import type { ProjectCommand } from "@heron/contracts"
 import { usePianoRollEditor } from "./usePianoRollEditor"
 import type { NoteGestureItem } from "./usePianoRollGestures"
 

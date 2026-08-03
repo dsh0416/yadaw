@@ -10,7 +10,7 @@ import type {
   ProjectAssetSummary,
   ProjectCommand,
   ProjectConfiguration
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import type {
   AssetContentHash,
   DefaultRecordingTrack,

@@ -6,7 +6,7 @@ import { ApplicationSettingsStore } from "./application-settings"
 import { ProjectService } from "./project-service"
 
 const dump = vi.fn(async (outputPath: string) => {
-  await writeFile(outputPath, "yadaw-archive")
+  await writeFile(outputPath, "heron-archive")
 })
 const openProject = vi.fn().mockResolvedValue(undefined)
 const terminatedWorkers: Array<ReturnType<typeof vi.fn>> = []
@@ -45,7 +45,7 @@ describe("ProjectService.create", () => {
   })
 
   it("writes the initial .yadaw archive and returns a clean session", async () => {
-    const userData = await mkdtemp(join(tmpdir(), "yadaw-project-create-"))
+    const userData = await mkdtemp(join(tmpdir(), "heron-project-create-"))
     const projectPath = join(userData, "Untitled.yadaw")
     service = new ProjectService(userData, new ApplicationSettingsStore(userData))
     const progress = vi.fn()
@@ -78,7 +78,7 @@ describe("ProjectService.create", () => {
   })
 
   it("leaves the source archive byte-for-byte untouched when migration fails", async () => {
-    const userData = await mkdtemp(join(tmpdir(), "yadaw-project-open-failure-"))
+    const userData = await mkdtemp(join(tmpdir(), "heron-project-open-failure-"))
     const projectPath = join(userData, "Existing.yadaw")
     const contents = new Uint8Array([0x59, 0x41, 0x44, 0x41, 0x57])
     await writeFile(projectPath, contents)
@@ -93,7 +93,7 @@ describe("ProjectService.create", () => {
   })
 
   it("discards a failed candidate worker before a later healthy open", async () => {
-    const userData = await mkdtemp(join(tmpdir(), "yadaw-project-worker-recovery-"))
+    const userData = await mkdtemp(join(tmpdir(), "heron-project-worker-recovery-"))
     const brokenPath = join(userData, "Broken.yadaw")
     const healthyPath = join(userData, "Healthy.yadaw")
     await writeFile(brokenPath, "broken")

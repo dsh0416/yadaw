@@ -14,7 +14,7 @@ import type {
   MidiCenterCStandard,
   ShortcutPreferences,
   ThemePreference
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import { i18n } from "../i18n"
 
 import { mutationMeta, readMeta, rpcErrorMessage } from "../rpc"
@@ -48,7 +48,7 @@ export const useApplicationSettingsStore = defineStore("application-settings", (
 
   async function reconcileSettings(): Promise<boolean> {
     if (resource.value) {
-      const current = await window.yadaw.getApplicationSettings(readMeta(resource.value))
+      const current = await window.heron.getApplicationSettings(readMeta(resource.value))
       if (current.ok) {
         applySnapshot(current.value)
         return true
@@ -58,7 +58,7 @@ export const useApplicationSettingsStore = defineStore("application-settings", (
         return false
       }
     }
-    const bootstrap = await window.yadaw.bootstrap(readMeta())
+    const bootstrap = await window.heron.bootstrap(readMeta())
     if (!bootstrap.ok) {
       error.value = rpcErrorMessage(bootstrap.error)
       return false
@@ -71,7 +71,7 @@ export const useApplicationSettingsStore = defineStore("application-settings", (
     operation: string,
     invoke: (
       meta: ReturnType<typeof mutationMeta>
-    ) => ReturnType<typeof window.yadaw.updateApplicationSettings>
+    ) => ReturnType<typeof window.heron.updateApplicationSettings>
   ): Promise<boolean> {
     const scheduled = mutationTail.then(async () => {
       if (!resource.value) await load()
@@ -107,14 +107,14 @@ export const useApplicationSettingsStore = defineStore("application-settings", (
       error.value = ""
       try {
         if (!resource.value) {
-          const bootstrap = await window.yadaw.bootstrap(readMeta())
+          const bootstrap = await window.heron.bootstrap(readMeta())
           if (!bootstrap.ok) {
             error.value = rpcErrorMessage(bootstrap.error)
             return
           }
           applySnapshot(bootstrap.value.settings, bootstrap.value.desktopSession)
         } else {
-          const result = await window.yadaw.getApplicationSettings(readMeta(resource.value))
+          const result = await window.heron.getApplicationSettings(readMeta(resource.value))
           if (!result.ok) error.value = rpcErrorMessage(result.error)
           else applySnapshot(result.value)
         }
@@ -131,7 +131,7 @@ export const useApplicationSettingsStore = defineStore("application-settings", (
 
   async function update(patch: ApplicationSettingsPatch): Promise<void> {
     await applyMutation("settings-update", (meta) =>
-      window.yadaw.updateApplicationSettings(meta, patch)
+      window.heron.updateApplicationSettings(meta, patch)
     )
   }
 
@@ -144,7 +144,7 @@ export const useApplicationSettingsStore = defineStore("application-settings", (
     error.value = ""
     try {
       const applied = await applyMutation("settings-theme", (meta) =>
-        window.yadaw.updateApplicationSettings(meta, { theme })
+        window.heron.updateApplicationSettings(meta, { theme })
       )
       if (!applied) settings.value = previous
     } catch (reason) {
@@ -163,7 +163,7 @@ export const useApplicationSettingsStore = defineStore("application-settings", (
     error.value = ""
     try {
       const applied = await applyMutation("settings-locale", (meta) =>
-        window.yadaw.updateApplicationSettings(meta, { locale })
+        window.heron.updateApplicationSettings(meta, { locale })
       )
       if (!applied) settings.value = previous
     } catch (reason) {
@@ -184,7 +184,7 @@ export const useApplicationSettingsStore = defineStore("application-settings", (
     error.value = ""
     try {
       const applied = await applyMutation("settings-display", (meta) =>
-        window.yadaw.updateApplicationSettings(meta, patch)
+        window.heron.updateApplicationSettings(meta, patch)
       )
       if (!applied) settings.value = previous
     } catch (reason) {
@@ -211,7 +211,7 @@ export const useApplicationSettingsStore = defineStore("application-settings", (
     error.value = ""
     try {
       const applied = await applyMutation("settings-midi-center", (meta) =>
-        window.yadaw.updateApplicationSettings(meta, { midiCenterCStandard })
+        window.heron.updateApplicationSettings(meta, { midiCenterCStandard })
       )
       if (!applied) settings.value = previous
     } catch (reason) {
@@ -221,13 +221,13 @@ export const useApplicationSettingsStore = defineStore("application-settings", (
   }
 
   async function chooseSwapDirectory(): Promise<void> {
-    await applyMutation("settings-choose-swap", (meta) => window.yadaw.chooseSwapDirectory(meta))
+    await applyMutation("settings-choose-swap", (meta) => window.heron.chooseSwapDirectory(meta))
   }
 
   async function openSwapDirectory(): Promise<void> {
     if (!resource.value) await load()
     if (!resource.value) return
-    const result = await window.yadaw.openSwapDirectory(
+    const result = await window.heron.openSwapDirectory(
       mutationMeta(resource.value, "settings-open-swap", revision.value)
     )
     if (!result.ok) error.value = rpcErrorMessage(result.error)
@@ -241,7 +241,7 @@ export const useApplicationSettingsStore = defineStore("application-settings", (
     error.value = ""
     try {
       const applied = await applyMutation("settings-audio-runtime", (meta) =>
-        window.yadaw.configureAudioHostRuntime(meta, preferences)
+        window.heron.configureAudioHostRuntime(meta, preferences)
       )
       if (!applied) throw new Error(error.value)
       await refreshAudioHostRuntimeDiagnostics()
@@ -265,7 +265,7 @@ export const useApplicationSettingsStore = defineStore("application-settings", (
     error.value = ""
     try {
       const applied = await applyMutation("settings-software-monitoring", (meta) =>
-        window.yadaw.setSoftwareMonitoringEnabled(meta, enabled)
+        window.heron.setSoftwareMonitoringEnabled(meta, enabled)
       )
       if (!applied) settings.value = previous
     } catch (reason) {
@@ -286,7 +286,7 @@ export const useApplicationSettingsStore = defineStore("application-settings", (
     error.value = ""
     try {
       const applied = await applyMutation("settings-shortcuts", (meta) =>
-        window.yadaw.configureShortcuts(meta, shortcuts)
+        window.heron.configureShortcuts(meta, shortcuts)
       )
       if (!applied) settings.value = previous
     } catch (reason) {
@@ -300,7 +300,7 @@ export const useApplicationSettingsStore = defineStore("application-settings", (
   async function refreshAudioHostRuntimeDiagnostics(): Promise<void> {
     const target = desktopSession.value
     if (!target) return
-    const result = await window.yadaw.systemPerformanceSnapshot(readMeta(target))
+    const result = await window.heron.systemPerformanceSnapshot(readMeta(target))
     if (result.ok) resolvedAudioHostRuntime.value = result.value.audioIpc?.runtime.resolved ?? null
     else error.value = rpcErrorMessage(result.error)
   }

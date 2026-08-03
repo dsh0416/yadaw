@@ -21,7 +21,7 @@ under `.agents/skills/`.
 - Shared packages: serializable IPC contracts, reusable Vue UI primitives, and
   a PGlite/Drizzle project database.
 - Process boundary: the renderer uses the narrow typed preload API exposed as
-  `window.yadaw`; it must never import the native `.node` addon directly.
+  `window.heron`; it must never import the native `.node` addon directly.
 - Cross-process calls use explicit resource handles and serializable
   success/error unions. Stateful mutations require one commit point,
   prepare/abort cleanup, idempotency or operation-status reconciliation, and a
@@ -78,8 +78,8 @@ mise exec -- pnpm --version
 Use package-level scripts for narrower validation when appropriate:
 
 ```sh
-mise exec -- pnpm --filter @yadaw/desktop test:unit
-mise exec -- pnpm --filter @yadaw/project-db test:integration
+mise exec -- pnpm --filter @heron/desktop test:unit
+mise exec -- pnpm --filter @heron/project-db test:integration
 mise exec -- pnpm test:e2e
 mise exec -- pnpm check:rust
 mise exec -- pnpm format:check

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { MidiClipState, MidiNoteState } from "@yadaw/contracts"
+import type { MidiClipState, MidiNoteState } from "@heron/contracts"
 import { usePianoRollEditor } from "./usePianoRollEditor"
 
 const props = defineProps<{ clip: MidiClipState; note: MidiNoteState }>()

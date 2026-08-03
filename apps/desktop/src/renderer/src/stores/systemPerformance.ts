@@ -1,7 +1,7 @@
 import { useIntervalFn } from "@vueuse/core"
 import { acceptHMRUpdate, defineStore } from "pinia"
 import { computed, shallowRef } from "vue"
-import type { StorageSpaceSnapshot, SystemPerformanceSnapshot } from "@yadaw/contracts"
+import type { StorageSpaceSnapshot, SystemPerformanceSnapshot } from "@heron/contracts"
 import { readMeta, rpcErrorMessage } from "../rpc"
 import { useProjectStore } from "./project"
 
@@ -102,7 +102,7 @@ export const useSystemPerformanceStore = defineStore("system-performance", () =>
     try {
       const target = projectStore.desktopSession
       if (!target) return
-      const result = await window.yadaw.systemPerformanceSnapshot(readMeta(target))
+      const result = await window.heron.systemPerformanceSnapshot(readMeta(target))
       if (!result.ok) {
         lastError.value = rpcErrorMessage(result.error)
         return

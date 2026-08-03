@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import type { AudioClipState, MidiClipState } from "@yadaw/contracts"
+import type { AudioClipState, MidiClipState } from "@heron/contracts"
 import {
   planAudioClipFade,
   planAudioClipSplit,

@@ -135,7 +135,7 @@ describe("arrangement view store", () => {
     store.setGlobalTracksExpanded(false)
     await nextTick()
 
-    expect(localStorage.getItem("yadaw.arrangement.global-tracks-expanded.v1")).toBe("false")
+    expect(localStorage.getItem("heron.arrangement.global-tracks-expanded.v1")).toBe("false")
 
     setActivePinia(createPinia())
     expect(useArrangementViewStore().globalTracksExpanded).toBe(false)

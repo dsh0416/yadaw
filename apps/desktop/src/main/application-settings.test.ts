@@ -6,7 +6,7 @@ import { ApplicationSettingsStore } from "./application-settings"
 
 describe("ApplicationSettingsStore", () => {
   it("creates defaults and atomically persists validated recording settings", async () => {
-    const userData = await mkdtemp(join(tmpdir(), "yadaw-settings-"))
+    const userData = await mkdtemp(join(tmpdir(), "heron-settings-"))
     const first = new ApplicationSettingsStore(userData)
     expect(await first.get()).toMatchObject({
       recordingBitDepth: "float32",
@@ -44,7 +44,7 @@ describe("ApplicationSettingsStore", () => {
   })
 
   it("defaults legacy files to Roland C4 and rejects unsupported center C standards", async () => {
-    const userData = await mkdtemp(join(tmpdir(), "yadaw-midi-center-c-"))
+    const userData = await mkdtemp(join(tmpdir(), "heron-midi-center-c-"))
     await writeFile(
       join(userData, "settings.json"),
       JSON.stringify({ recordingBitDepth: "pcm24" }),
@@ -59,7 +59,7 @@ describe("ApplicationSettingsStore", () => {
   })
 
   it("migrates editor preferences and persists validated values by normalized class ID", async () => {
-    const userData = await mkdtemp(join(tmpdir(), "yadaw-editor-settings-"))
+    const userData = await mkdtemp(join(tmpdir(), "heron-editor-settings-"))
     const classId = "0123456789abcdef0123456789abcdef"
     await writeFile(
       join(userData, "settings.json"),
@@ -98,7 +98,7 @@ describe("ApplicationSettingsStore", () => {
   })
 
   it("persists validated audio helper thread settings through the dedicated path", async () => {
-    const userData = await mkdtemp(join(tmpdir(), "yadaw-runtime-settings-"))
+    const userData = await mkdtemp(join(tmpdir(), "heron-runtime-settings-"))
     const store = new ApplicationSettingsStore(userData)
     await store.configureAudioHostRuntime({
       workerThreads: 3,
@@ -120,7 +120,7 @@ describe("ApplicationSettingsStore", () => {
   })
 
   it("defaults legacy files to disabled and persists software monitoring through its named path", async () => {
-    const userData = await mkdtemp(join(tmpdir(), "yadaw-monitoring-settings-"))
+    const userData = await mkdtemp(join(tmpdir(), "heron-monitoring-settings-"))
     await writeFile(
       join(userData, "settings.json"),
       JSON.stringify({ recordingBitDepth: "pcm24" }),
@@ -137,7 +137,7 @@ describe("ApplicationSettingsStore", () => {
   })
 
   it("persists one validated MIDI clock source and bounded per-port offsets", async () => {
-    const userData = await mkdtemp(join(tmpdir(), "yadaw-midi-settings-"))
+    const userData = await mkdtemp(join(tmpdir(), "heron-midi-settings-"))
     const store = new ApplicationSettingsStore(userData)
 
     await store.configureMidiInput({
@@ -178,7 +178,7 @@ describe("ApplicationSettingsStore", () => {
   })
 
   it("persists validated keyboard and MIDI shortcut overrides", async () => {
-    const userData = await mkdtemp(join(tmpdir(), "yadaw-shortcut-settings-"))
+    const userData = await mkdtemp(join(tmpdir(), "heron-shortcut-settings-"))
     const store = new ApplicationSettingsStore(userData)
     await store.configureShortcuts({
       keyboard: {

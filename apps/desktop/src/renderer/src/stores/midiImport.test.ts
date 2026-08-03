@@ -6,7 +6,7 @@ import type {
   ProjectGraphSnapshot,
   ProjectWorkspaceSnapshot,
   RpcResult
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import { useMidiImportStore } from "./midiImport"
 import { useMixerStore } from "./mixer"
 import { useProjectHistoryStore } from "./projectHistory"
@@ -94,7 +94,7 @@ describe("MIDI import tempo choice", () => {
     setActivePinia(createPinia())
     const mixer = useMixerStore()
     useProjectStore().applyWorkspace(workspace(mixer.graph))
-    Object.assign(window.yadaw, { commitMidiImport: vi.fn() })
+    Object.assign(window.heron, { commitMidiImport: vi.fn() })
   })
 
   it("keeps the project Tempo Track by default and imports at the playhead", async () => {
@@ -110,12 +110,12 @@ describe("MIDI import tempo choice", () => {
     const store = useMidiImportStore()
     store.preview = preview
     store.targets = { "0:0": { type: "new" } }
-    vi.mocked(window.yadaw.commitMidiImport).mockResolvedValue(success(mixer.graph))
+    vi.mocked(window.heron.commitMidiImport).mockResolvedValue(success(mixer.graph))
 
     await store.commit()
 
     expect(useProjectHistoryStore().canUndo).toBe(true)
-    expect(window.yadaw.commitMidiImport).toHaveBeenCalledWith(
+    expect(window.heron.commitMidiImport).toHaveBeenCalledWith(
       expect.any(Object),
       expect.objectContaining({
         importTempoMap: false,
@@ -130,11 +130,11 @@ describe("MIDI import tempo choice", () => {
     store.preview = preview
     store.targets = { "0:0": { type: "new" } }
     store.tempoMode = "midi"
-    vi.mocked(window.yadaw.commitMidiImport).mockResolvedValue(success(mixer.graph))
+    vi.mocked(window.heron.commitMidiImport).mockResolvedValue(success(mixer.graph))
 
     await store.commit()
 
-    expect(window.yadaw.commitMidiImport).toHaveBeenCalledWith(
+    expect(window.heron.commitMidiImport).toHaveBeenCalledWith(
       expect.any(Object),
       expect.objectContaining({
         importTempoMap: true,

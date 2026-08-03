@@ -16,7 +16,7 @@ function descriptor(overrides: Partial<PluginDescriptor> = {}): PluginDescriptor
     classId: "class-id",
     modulePath: "/plugins/Reverb.vst3",
     name: "Reverb",
-    vendor: "Yadaw",
+    vendor: "Heron",
     version: "1.0.0",
     categories: ["Fx", "Reverb"],
     kind: "effect",
@@ -41,11 +41,11 @@ describe("pluginDescriptorKey", () => {
 
   it("keys builtin plugins by their builtin id rather than the module path", () => {
     const builtin = descriptor({
-      source: { kind: "builtin", id: "yadaw-gain" },
+      source: { kind: "builtin", id: "heron-gain" },
       modulePath: "/wherever/it/was/installed.vst3"
     })
 
-    expect(pluginDescriptorKey(builtin)).toBe("yadaw-gain:class-id")
+    expect(pluginDescriptorKey(builtin)).toBe("heron-gain:class-id")
   })
 
   it("distinguishes classes shipped inside the same bundle", () => {

@@ -7,7 +7,7 @@ const { finalizeRecording } = vi.hoisted(() => ({
   }))
 }))
 
-vi.mock("@yadaw/dsp-node", () => ({
+vi.mock("@heron/dsp-node", () => ({
   finalizeRecording
 }))
 

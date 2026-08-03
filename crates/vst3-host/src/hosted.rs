@@ -10,7 +10,7 @@ use std::{
     },
 };
 
-use yadaw_vst3_host_sys::{
+use heron_vst3_host_sys::{
     Steinberg::{
         IPlugFrame, IPlugView, IPlugViewContentScaleSupport, IPluginBase, TUID, ViewRect,
         Vst::{
@@ -35,7 +35,7 @@ use crate::{
 
 #[cfg(target_os = "windows")]
 unsafe extern "C" {
-    fn yadaw_vst3_guarded_attach(
+    fn heron_vst3_guarded_attach(
         view: *mut IPlugView,
         parent: *mut c_void,
         platform: *const std::ffi::c_char,
@@ -1385,7 +1385,7 @@ impl PlugView {
             // SAFETY: the platform-specific child container stays alive until removed. The
             // narrow native guard converts a third-party structured exception into a failed
             // attach result so the host can fall back to its parameter editor.
-            yadaw_vst3_guarded_attach(self.view.as_ptr(), parent, platform.as_ptr())
+            heron_vst3_guarded_attach(self.view.as_ptr(), parent, platform.as_ptr())
         };
         #[cfg(not(target_os = "windows"))]
         let result = unsafe {

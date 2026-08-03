@@ -3,7 +3,7 @@ import {
   formatKeyboardShortcut,
   keyboardBindingMatches,
   resolveKeyboardShortcuts
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 
 describe("shortcut bindings", () => {
   it("merges overrides and explicit removals over platform defaults", () => {

@@ -15,7 +15,7 @@ describe("commitMidiRecordingTakes", () => {
   })
 
   it("converts a journal into a MIDI source and clip commit", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "yadaw-midi-commit-"))
+    const directory = await mkdtemp(join(tmpdir(), "heron-midi-commit-"))
     directories.push(directory)
     const journalPath = join(directory, "take.partial.midijournal")
     await MidiJournalWriter.write(journalPath, {
@@ -139,7 +139,7 @@ describe("commitMidiRecordingTakes", () => {
   })
 
   it("commits non-note events and defaults the track name", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "yadaw-midi-commit-events-"))
+    const directory = await mkdtemp(join(tmpdir(), "heron-midi-commit-events-"))
     directories.push(directory)
     const journalPath = join(directory, "take.midijournal")
     await MidiJournalWriter.write(journalPath, {
@@ -197,7 +197,7 @@ describe("commitMidiRecordingTakes", () => {
   })
 
   it("chains revisions across multiple takes", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "yadaw-midi-commit-multi-"))
+    const directory = await mkdtemp(join(tmpdir(), "heron-midi-commit-multi-"))
     directories.push(directory)
     const firstPath = join(directory, "a.midijournal")
     const secondPath = join(directory, "b.midijournal")

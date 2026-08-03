@@ -18,7 +18,7 @@ fn persistent_ids_are_ascii_stable_and_namespaced() {
     let second = persistent_id("source", "C:/音频/take.wav");
     assert_eq!(first, second);
     assert!(first.is_ascii());
-    assert!(first.starts_with("yadaw.source."));
+    assert!(first.starts_with("heron.source."));
 }
 
 #[test]

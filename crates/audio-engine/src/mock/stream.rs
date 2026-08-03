@@ -118,7 +118,7 @@ impl MockStream {
         let period = block_duration(frames);
         let block_frames = frames as usize;
         let backlog_limit = block_frames * LOOPBACK_SLACK_BLOCKS;
-        Self::spawn("yadaw-mock-capture", frames, origin, move |controls| {
+        Self::spawn("heron-mock-capture", frames, origin, move |controls| {
             let mut buffer = vec![0.0_f32; block_frames * channels];
             let mut clock = BlockClock::new(period);
             let poll = poll_interval(period);
@@ -197,7 +197,7 @@ impl MockStream {
                 let _ = loopback.try_push([0.0; CHANNELS as usize]);
             }
         }
-        Self::spawn("yadaw-mock-playback", frames, origin, move |controls| {
+        Self::spawn("heron-mock-playback", frames, origin, move |controls| {
             let mut buffer = vec![0.0_f32; block_frames * channels];
             let mut clock = BlockClock::new(period);
             let poll = poll_interval(period);

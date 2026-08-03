@@ -77,10 +77,10 @@ describe("piano roll store", () => {
     store.showVelocityLane = false
     await nextTick()
 
-    expect(window.localStorage.getItem("yadaw.piano-roll.snap.v1")).toBe("1/8")
-    expect(window.localStorage.getItem("yadaw.piano-roll.time-zoom.v1")).toBe("240")
-    expect(window.localStorage.getItem("yadaw.piano-roll.row-height.v1")).toBe("24")
-    expect(window.localStorage.getItem("yadaw.piano-roll.velocity-lane.v1")).toBe("false")
+    expect(window.localStorage.getItem("heron.piano-roll.snap.v1")).toBe("1/8")
+    expect(window.localStorage.getItem("heron.piano-roll.time-zoom.v1")).toBe("240")
+    expect(window.localStorage.getItem("heron.piano-roll.row-height.v1")).toBe("24")
+    expect(window.localStorage.getItem("heron.piano-roll.velocity-lane.v1")).toBe("false")
 
     store.reset()
     expect(store.snap).toBe("1/16")

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import type { MidiClipState } from "@yadaw/contracts"
+import type { MidiClipState } from "@heron/contracts"
 import { useMidiClipTrim } from "./useMidiClipTrim"
 
 const clip: MidiClipState = {

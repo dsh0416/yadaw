@@ -1,6 +1,6 @@
 import { config } from "@vue/test-utils"
 import { afterEach, vi } from "vitest"
-import type { YadawDesktopApi } from "@yadaw/contracts"
+import type { HeronDesktopApi } from "@heron/contracts"
 import { i18n } from "../i18n"
 import { rpcSuccess, testBootstrap } from "./ipc"
 
@@ -16,9 +16,9 @@ const api = {
   subscribeApplicationCommands: vi.fn(() => () => undefined),
   executeApplicationWindowCommand: vi.fn(),
   setApplicationWindowTheme: vi.fn()
-} as unknown as YadawDesktopApi
+} as unknown as HeronDesktopApi
 
-Object.defineProperty(window, "yadaw", { configurable: true, value: api })
+Object.defineProperty(window, "heron", { configurable: true, value: api })
 
 if (!config.global.plugins.includes(i18n)) {
   config.global.plugins.push(i18n)

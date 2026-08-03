@@ -415,7 +415,7 @@ impl RecorderController {
         let (sender, receiver) = mpsc::channel();
         let waveform = Arc::new(Mutex::new(LiveWaveform::default()));
         let thread = thread::Builder::new()
-            .name("yadaw-recording-writer".to_owned())
+            .name("heron-recording-writer".to_owned())
             .spawn({
                 let active = Arc::clone(&active);
                 let dropout_frames = Arc::clone(&dropout_frames);
@@ -573,7 +573,7 @@ mod tests {
             .expect("time moves forward")
             .as_nanos();
         std::env::temp_dir().join(format!(
-            "yadaw-audio-host-{label}-{}-{nonce}.bwf",
+            "heron-audio-host-{label}-{}-{nonce}.bwf",
             std::process::id()
         ))
     }

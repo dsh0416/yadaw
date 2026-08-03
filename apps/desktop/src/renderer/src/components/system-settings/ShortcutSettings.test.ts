@@ -1,7 +1,7 @@
 import { flushPromises, mount } from "@vue/test-utils"
 import { createPinia, setActivePinia } from "pinia"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import type { ApplicationSettings, MidiInputSnapshot, ShortcutPreferences } from "@yadaw/contracts"
+import type { ApplicationSettings, MidiInputSnapshot, ShortcutPreferences } from "@heron/contracts"
 import ShortcutSettings from "./ShortcutSettings.vue"
 import { useApplicationSettingsStore } from "../../stores/applicationSettings"
 
@@ -91,7 +91,7 @@ describe("ShortcutSettings", () => {
 
   beforeEach(() => {
     publishMidi = null
-    Object.defineProperty(window.yadaw, "platform", {
+    Object.defineProperty(window.heron, "platform", {
       configurable: true,
       value: "win32"
     })
@@ -116,19 +116,19 @@ describe("ShortcutSettings", () => {
       midiRuntime,
       revision: 0
     })
-    window.yadaw.midiInputSnapshot = vi.fn().mockResolvedValue(midiSuccess(EMPTY_MIDI_SNAPSHOT))
-    window.yadaw.subscribeMidiInput = vi.fn((listener) => {
+    window.heron.midiInputSnapshot = vi.fn().mockResolvedValue(midiSuccess(EMPTY_MIDI_SNAPSHOT))
+    window.heron.subscribeMidiInput = vi.fn((listener) => {
       publishMidi = (snapshot) =>
         listener(rpcEvent(midiResource(snapshot), snapshot.capturedAt, host.epoch))
       return () => undefined
     })
-    window.yadaw.setMidiControlLearning = vi.fn(async (_meta, enabled) => {
+    window.heron.setMidiControlLearning = vi.fn(async (_meta, enabled) => {
       return midiSuccess({
         ...EMPTY_MIDI_SNAPSHOT,
         capturedAt: enabled ? 2 : 3
       })
     })
-    window.yadaw.configureShortcuts = vi.fn(async (_meta, next) => ({
+    window.heron.configureShortcuts = vi.fn(async (_meta, next) => ({
       ok: true as const,
       requestId: "settings-shortcuts",
       resourceRevision: 2,
@@ -205,7 +205,7 @@ describe("ShortcutSettings", () => {
     const saveRow = commandRow(wrapper, "project.save")
     await saveRow.findAll(".binding-button")[1]!.trigger("click")
     await flushPromises()
-    expect(window.yadaw.setMidiControlLearning).toHaveBeenCalledWith(expect.any(Object), true)
+    expect(window.heron.setMidiControlLearning).toHaveBeenCalledWith(expect.any(Object), true)
 
     publishMidi?.({
       ...EMPTY_MIDI_SNAPSHOT,
@@ -229,7 +229,7 @@ describe("ShortcutSettings", () => {
       number: 64
     })
     expect(saveRow.text()).toContain("CC 64")
-    expect(window.yadaw.setMidiControlLearning).toHaveBeenLastCalledWith(expect.any(Object), false)
+    expect(window.heron.setMidiControlLearning).toHaveBeenLastCalledWith(expect.any(Object), false)
 
     await saveRow.get(".clear-button").trigger("click")
     await flushPromises()

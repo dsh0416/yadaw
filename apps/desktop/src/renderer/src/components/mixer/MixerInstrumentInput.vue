@@ -2,7 +2,7 @@
 import { computed, shallowRef } from "vue"
 import { useI18n } from "vue-i18n"
 import { Trash2 } from "@lucide/vue"
-import type { PluginDescriptor, PluginInstanceState, PluginRuntimeStatus } from "@yadaw/contracts"
+import type { PluginDescriptor, PluginInstanceState, PluginRuntimeStatus } from "@heron/contracts"
 import { PLUGIN_DRAG_TYPE, readPluginDrag } from "../plugins/plugin-drag"
 import PluginAudioModeMenu from "../plugins/PluginAudioModeMenu.vue"
 import { pluginAudioModeBadge, type PluginSelection } from "../plugins/plugin-audio-mode"

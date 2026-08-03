@@ -1,4 +1,4 @@
-import type { ResourceRef, RpcError, RpcResult } from "@yadaw/contracts"
+import type { ResourceRef, RpcError, RpcResult } from "@heron/contracts"
 import { kernelFailure, kernelSuccess } from "./result"
 import type { KernelResult } from "./result"
 

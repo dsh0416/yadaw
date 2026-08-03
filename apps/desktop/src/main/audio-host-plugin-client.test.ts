@@ -3,7 +3,7 @@ import type {
   PluginDescriptor,
   PluginInstanceState,
   PluginParameterCommand
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import { AudioHostPluginClient } from "./audio-host-plugin-client"
 import type { ControlResponse } from "./audio-host-wire"
 

@@ -91,7 +91,7 @@ Vue / Pinia
 - Do not add a generic `query`, `execute`, `transaction`, or database command
   IPC channel.
 - Renderer code must not create a Drizzle proxy or import persistence rows as
-  UI models. Define narrow serializable DTOs in `@yadaw/contracts`.
+  UI models. Define narrow serializable DTOs in `@heron/contracts`.
 - Main-process services call named `ProjectService` methods. The service owns
   dirty-state updates and refreshes session configuration when a mutation
   changes configuration or the tick-zero time signature.

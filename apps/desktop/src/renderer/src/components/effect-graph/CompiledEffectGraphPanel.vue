@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { shallowRef } from "vue"
 import { useI18n } from "vue-i18n"
-import type { CompiledAudioGraphSnapshot } from "@yadaw/contracts"
+import type { CompiledAudioGraphSnapshot } from "@heron/contracts"
 import type { CompiledEffectGraphStatus } from "../../stores/compiledEffectGraph"
 import CompiledEffectGraphChart from "./CompiledEffectGraphChart.vue"
 

@@ -1,6 +1,6 @@
 import { effectScope, nextTick, shallowRef } from "vue"
 import { describe, expect, it } from "vitest"
-import type { MeterPeakHold, MeterReturnRate, MixerChannelMeter } from "@yadaw/contracts"
+import type { MeterPeakHold, MeterReturnRate, MixerChannelMeter } from "@heron/contracts"
 import { usePeakMeterDisplay } from "./usePeakMeterDisplay"
 
 function meter(peak: number, clipped = false): MixerChannelMeter {

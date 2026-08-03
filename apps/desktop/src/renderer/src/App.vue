@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { UiProvider, useLocaleFonts } from "@yadaw/ui"
+import { UiProvider, useLocaleFonts } from "@heron/ui"
 import { useEventListener } from "@vueuse/core"
 import { computed, onMounted, onUnmounted, watch } from "vue"
 import { storeToRefs } from "pinia"
@@ -17,7 +17,7 @@ import { useMidiInputStore } from "./stores/midiInput"
 import { useProjectHistoryStore } from "./stores/projectHistory"
 import GlobalOperationHost from "./components/operations/GlobalOperationHost.vue"
 import AudioBenchmarkHost from "./components/benchmark/AudioBenchmarkHost.vue"
-import AboutYadawHost from "./components/about/AboutYadawHost.vue"
+import AboutHeronHost from "./components/about/AboutHeronHost.vue"
 import CompiledEffectGraphHost from "./components/effect-graph/CompiledEffectGraphHost.vue"
 import GlobalDialogHost from "./components/dialog/GlobalDialogHost.vue"
 import AppChrome from "./components/application/AppChrome.vue"
@@ -106,7 +106,7 @@ onUnmounted(() => {
     </AppChrome>
     <GlobalOperationHost />
     <AudioBenchmarkHost />
-    <AboutYadawHost />
+    <AboutHeronHost />
     <CompiledEffectGraphHost />
     <GlobalDialogHost />
   </UiProvider>

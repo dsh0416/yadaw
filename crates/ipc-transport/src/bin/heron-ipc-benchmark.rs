@@ -5,12 +5,12 @@ use std::{
     time::{Duration, Instant},
 };
 
-use ipc_channel::ipc::{self, IpcOneShotServer, IpcReceiver, IpcSender};
-use serde::{Deserialize, Serialize};
-use yadaw_ipc_transport::{
+use heron_ipc_transport::{
     RegionOffer, SharedMemory, TelemetryReader, TelemetrySnapshot, TelemetryWriter, WirePacket,
     create_telemetry_page,
 };
+use ipc_channel::ipc::{self, IpcOneShotServer, IpcReceiver, IpcSender};
+use serde::{Deserialize, Serialize};
 
 const BULK_BYTES: usize = 4 * 1024 * 1024;
 const INLINE_ITERATIONS: usize = 2_000;

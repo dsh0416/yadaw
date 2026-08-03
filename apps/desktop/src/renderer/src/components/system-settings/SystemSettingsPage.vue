@@ -9,7 +9,7 @@ import type {
   MidiInputSnapshot,
   MidiSyncPreferences,
   ResolvedAudioHostRuntimePreferences
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import SettingsContainer from "../settings/SettingsContainer.vue"
 import type { SettingsCategory } from "../settings/settings"
 import AudioDeviceSettings from "./AudioDeviceSettings.vue"

@@ -1,6 +1,6 @@
 import { mount } from "@vue/test-utils"
 import { describe, expect, it } from "vitest"
-import type { MidiClipState, TempoMapSnapshot } from "@yadaw/contracts"
+import type { MidiClipState, TempoMapSnapshot } from "@heron/contracts"
 import MidiArrangementTrack from "./MidiArrangementTrack.vue"
 
 const tempoMap: TempoMapSnapshot = {

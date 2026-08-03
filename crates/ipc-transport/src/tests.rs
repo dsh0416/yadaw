@@ -1,5 +1,5 @@
 use super::*;
-use yadaw_dsp_runtime::protocol::{
+use heron_dsp_runtime::protocol::{
     ControlCommand, ControlRequest, GraphUpdate, LiveMidiClip, LiveMidiEvent, LiveMidiNote,
     LiveMixerGraph, LiveTempoEvent, LiveTimeSignatureEvent, MidiEventBatch, MidiNoteBatch,
     RecordingWaveform,
@@ -14,7 +14,7 @@ fn payload_at_threshold_stays_inline_and_larger_payload_uses_shared_memory() {
             module_path: "fixture.vst3".into(),
             class_id: "fixture".into(),
             plugin_kind: "effect".into(),
-            audio_mode: yadaw_dsp_runtime::protocol::PluginAudioMode::Stereo,
+            audio_mode: heron_dsp_runtime::protocol::PluginAudioMode::Stereo,
             active_aux_inputs: Vec::new(),
             sample_rate: 48_000.0,
             component_state: BinaryPayload::inline(vec![7; size]),
@@ -101,7 +101,7 @@ fn multiple_large_fields_share_one_aligned_persistent_region() {
             module_path: "fixture.vst3".into(),
             class_id: "fixture".into(),
             plugin_kind: "effect".into(),
-            audio_mode: yadaw_dsp_runtime::protocol::PluginAudioMode::Stereo,
+            audio_mode: heron_dsp_runtime::protocol::PluginAudioMode::Stereo,
             active_aux_inputs: Vec::new(),
             sample_rate: 48_000.0,
             component_state: BinaryPayload::inline(vec![1; INLINE_BLOB_LIMIT + 3]),

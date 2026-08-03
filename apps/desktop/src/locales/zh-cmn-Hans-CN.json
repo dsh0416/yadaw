@@ -32,7 +32,7 @@
     "close": "关闭",
     "applicationMenu": "应用程序菜单",
     "settings": "设置",
-    "buildLabel": "Yadaw / 构建 {version}",
+    "buildLabel": "Heron / 构建 {version}",
     "categoriesAria": "{title} 分类",
     "pagesAria": "{category} 设置页面"
   },
@@ -331,7 +331,7 @@
     },
     "system": {
       "title": "系统设置",
-      "scopeLabel": "Yadaw / 系统",
+      "scopeLabel": "Heron / 系统",
       "categories": {
         "system": {
           "label": "系统",
@@ -675,7 +675,7 @@
     },
     "project": {
       "title": "工程设置",
-      "scopeLabel": "Yadaw / 工程",
+      "scopeLabel": "Heron / 工程",
       "categories": {
         "project": {
           "label": "工程",

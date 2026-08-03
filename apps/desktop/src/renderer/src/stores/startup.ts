@@ -1,6 +1,6 @@
 import { defineStore } from "pinia"
 import { onScopeDispose, shallowRef } from "vue"
-import type { RpcEvent, StartupProgressSnapshot } from "@yadaw/contracts"
+import type { RpcEvent, StartupProgressSnapshot } from "@heron/contracts"
 import { i18n } from "../i18n"
 const INITIAL_PROGRESS: StartupProgressSnapshot = {
   phase: "starting",
@@ -38,7 +38,7 @@ export const useStartupStore = defineStore("startup", () => {
   }
 
   function load(): void {
-    unsubscribe ??= window.yadaw.subscribeStartupProgress(receiveEvent)
+    unsubscribe ??= window.heron.subscribeStartupProgress(receiveEvent)
   }
 
   function dispose(): void {

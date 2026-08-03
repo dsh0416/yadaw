@@ -2,7 +2,7 @@ import type { IpcMainInvokeEvent } from "electron"
 import { join } from "node:path"
 import { pathToFileURL } from "node:url"
 import { vi } from "vitest"
-import { IPC_PROTOCOL_VERSION } from "@yadaw/contracts"
+import { IPC_PROTOCOL_VERSION } from "@heron/contracts"
 import type {
   ApplicationSettings,
   ProjectGraphSnapshot,
@@ -10,7 +10,7 @@ import type {
   ProjectWorkspaceSnapshot,
   ResourceRef,
   RpcRequestMeta
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import { LifecycleCoordinator } from "../lifecycle-coordinator"
 import { OperationRegistry } from "../kernel/operation-registry"
 import { OperationService } from "../operation-service"

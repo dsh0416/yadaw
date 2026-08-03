@@ -1,5 +1,5 @@
 import { computed, shallowRef, type Ref, type ShallowRef } from "vue"
-import type { MidiClipState, TempoMapSnapshot } from "@yadaw/contracts"
+import type { MidiClipState, TempoMapSnapshot } from "@heron/contracts"
 import type { PianoRollSnap } from "../../utils/pianoRoll"
 import { snapTicks } from "../../utils/pianoRoll"
 import { findNearestTrackId } from "../../utils/clipDrag"

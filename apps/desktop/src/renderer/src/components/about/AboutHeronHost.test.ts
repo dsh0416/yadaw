@@ -2,16 +2,16 @@ import { mount } from "@vue/test-utils"
 import { createPinia } from "pinia"
 import { nextTick } from "vue"
 import { describe, expect, it } from "vitest"
-import AboutYadawHost from "./AboutYadawHost.vue"
+import AboutHeronHost from "./AboutHeronHost.vue"
 import { useAboutStore } from "../../stores/about"
 
-describe("AboutYadawHost", () => {
+describe("AboutHeronHost", () => {
   it("shows product identity, build details, and trusted project links", async () => {
     const pinia = createPinia()
     const aboutStore = useAboutStore(pinia)
     aboutStore.open()
 
-    const wrapper = mount(AboutYadawHost, {
+    const wrapper = mount(AboutHeronHost, {
       attachTo: document.body,
       global: { plugins: [pinia] }
     })

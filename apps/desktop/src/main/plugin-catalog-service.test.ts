@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import type { PluginDescriptor } from "@yadaw/contracts"
+import type { PluginDescriptor } from "@heron/contracts"
 import {
   canReuseCachedBundle,
   descriptorFromProbe,

@@ -1,7 +1,7 @@
 use std::{hint::black_box, time::Duration};
 
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use yadaw_dsp_core::mixer::{
+use heron_dsp_core::mixer::{
     ChannelKind, ChannelPeak, ChannelSpec, GraphError, HardwareOutputFrame, MixerGraph,
     RouteTarget, SendSpec, SendTap, StereoFrame,
 };

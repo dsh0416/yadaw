@@ -6,7 +6,7 @@ import {
   DEFAULT_INSTRUMENT_COLOR,
   IPC_PROTOCOL_VERSION,
   MUSICAL_TICKS_PER_QUARTER
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import type {
   MidiImportPlan,
   MixerChannelState,
@@ -15,8 +15,8 @@ import type {
   ProjectCommand,
   ProjectGraphRef,
   RpcRequestMeta
-} from "@yadaw/contracts"
-import type { NativeMidiTrack, NativeNormalizedSmf } from "@yadaw/dsp-node"
+} from "@heron/contracts"
+import type { NativeMidiTrack, NativeNormalizedSmf } from "@heron/dsp-node"
 import { MidiImportService } from "./midi-import-service"
 import type { PluginCatalogService } from "./plugin-catalog-service"
 import type { ProjectCommandService } from "./project-command-service"
@@ -24,7 +24,7 @@ import type { ProjectGraphService } from "./project-graph-service"
 
 const parseMidiFile = vi.hoisted(() => vi.fn())
 
-vi.mock("@yadaw/dsp-node", () => ({ parseMidiFile }))
+vi.mock("@heron/dsp-node", () => ({ parseMidiFile }))
 
 let directory: string
 let midiPath: string
@@ -85,11 +85,11 @@ function channel(overrides: Partial<MixerChannelState> = {}): MixerChannelState 
 
 function descriptor(overrides: Partial<PluginDescriptor> = {}): PluginDescriptor {
   return {
-    source: { kind: "builtin", id: "yadaw-sine" },
+    source: { kind: "builtin", id: "heron-sine" },
     classId: "sine-class",
     modulePath: "/plugins/Sine.vst3",
     name: "Sine",
-    vendor: "Yadaw",
+    vendor: "Heron",
     version: "1.0.0",
     categories: ["Instrument", "Synth"],
     kind: "instrument",
@@ -209,7 +209,7 @@ function commandsFrom(mixer: Harness["mixer"]): ProjectCommand[] {
 }
 
 beforeEach(async () => {
-  directory = await mkdtemp(join(tmpdir(), "yadaw-midi-"))
+  directory = await mkdtemp(join(tmpdir(), "heron-midi-"))
   midiPath = join(directory, "song.mid")
   await writeFile(midiPath, Buffer.from("MThd-fixture"))
   parseMidiFile.mockReset()

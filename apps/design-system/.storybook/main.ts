@@ -2,7 +2,7 @@ import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
 import type { StorybookConfig } from "@storybook/vue3-vite"
-import { yadawFontsOptions } from "@yadaw/ui/fonts"
+import { heronFontsOptions } from "@heron/ui/fonts"
 import vue from "@vitejs/plugin-vue"
 import Unfonts from "unplugin-fonts/vite"
 
@@ -44,20 +44,20 @@ const config: StorybookConfig = {
 
     return {
       ...viteConfig,
-      plugins: [vue(), Unfonts(yadawFontsOptions), ...plugins],
+      plugins: [vue(), Unfonts(heronFontsOptions), ...plugins],
       resolve: {
         ...viteConfig.resolve,
         alias: [
           {
-            find: /^@yadaw\/ui\/styles\.css$/,
+            find: /^@heron\/ui\/styles\.css$/,
             replacement: resolve(workspaceRoot, "packages/ui/src/styles/index.css")
           },
           {
-            find: /^@yadaw\/ui\/fonts$/,
+            find: /^@heron\/ui\/fonts$/,
             replacement: resolve(workspaceRoot, "packages/ui/fonts.ts")
           },
           {
-            find: /^@yadaw\/ui$/,
+            find: /^@heron\/ui$/,
             replacement: resolve(workspaceRoot, "packages/ui/src/index.ts")
           },
           ...existingAliases

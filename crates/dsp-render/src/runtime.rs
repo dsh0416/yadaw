@@ -1,10 +1,10 @@
 use std::{error::Error, fmt};
 
-use yadaw_dsp_core::mixer::{
+use heron_dsp_core::mixer::{
     ChannelKind, ChannelPeak, ChannelSpec, GraphError, HardwareOutputFrame, MixerGraph,
     RouteTarget, SendSpec, SendTap, StereoFrame,
 };
-use yadaw_dsp_runtime::tempo::{TempoMap, TempoMapError};
+use heron_dsp_runtime::tempo::{TempoMap, TempoMapError};
 
 use crate::{
     PluginProcessContext, PluginProcessor, RenderChannelKind, RenderClipSpec, RenderGraphSpec,

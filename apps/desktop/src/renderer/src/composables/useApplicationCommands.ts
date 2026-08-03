@@ -8,14 +8,14 @@ import {
   formatKeyboardShortcut,
   keyboardBindingMatches,
   resolveKeyboardShortcuts
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import type {
   ApplicationCommandId,
   CreateProjectRequest,
   KeyboardShortcutBinding,
   MidiControlEvent
-} from "@yadaw/contracts"
-import type { UiMenubarMenu } from "@yadaw/ui"
+} from "@heron/contracts"
+import type { UiMenubarMenu } from "@heron/ui"
 import { useAudioBenchmarkStore } from "../stores/audioBenchmark"
 import { useAboutStore } from "../stores/about"
 import { useCompiledEffectGraphStore } from "../stores/compiledEffectGraph"

@@ -1,6 +1,6 @@
 import { mount } from "@vue/test-utils"
 import { describe, expect, it } from "vitest"
-import type { KeySignatureEventState, TempoMapSnapshot } from "@yadaw/contracts"
+import type { KeySignatureEventState, TempoMapSnapshot } from "@heron/contracts"
 import KeyTrackLane from "./KeyTrackLane.vue"
 
 const tempoMap: TempoMapSnapshot = {

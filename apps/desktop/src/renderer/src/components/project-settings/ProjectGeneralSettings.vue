@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { useI18n } from "vue-i18n"
-import { UiSelect } from "@yadaw/ui"
-import { PROJECT_SAMPLE_RATES } from "@yadaw/contracts"
-import type { ProjectConfiguration } from "@yadaw/contracts"
+import { UiSelect } from "@heron/ui"
+import { PROJECT_SAMPLE_RATES } from "@heron/contracts"
+import type { ProjectConfiguration } from "@heron/contracts"
 import SettingsPage from "../settings/SettingsPage.vue"
 import SettingsSection from "../settings/SettingsSection.vue"
 

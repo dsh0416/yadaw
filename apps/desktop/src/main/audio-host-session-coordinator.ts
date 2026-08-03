@@ -1,4 +1,4 @@
-import type { MidiSyncPreferences, ProjectGraphSnapshot } from "@yadaw/contracts"
+import type { MidiSyncPreferences, ProjectGraphSnapshot } from "@heron/contracts"
 import type { AudioHostGraph } from "./audio-host-wire"
 
 export class AudioHostSessionCoordinator {

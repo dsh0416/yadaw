@@ -1,4 +1,4 @@
-import type { AppLocale } from "@yadaw/contracts"
+import type { AppLocale } from "@heron/contracts"
 
 export const APP_LOCALES = ["en-US", "zh-cmn-Hans-CN"] as const satisfies readonly AppLocale[]
 

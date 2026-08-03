@@ -7,7 +7,7 @@ import type {
   ProjectCommand,
   ProjectGraphSnapshot,
   TrackState
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 
 export function finiteRange(value: number, minimum: number, maximum: number, label: string): void {
   if (!Number.isFinite(value) || value < minimum || value > maximum) {

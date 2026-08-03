@@ -9,7 +9,7 @@ const electronMocks = vi.hoisted(() => ({
   shellOpenPath: vi.fn(async () => ""),
   quit: vi.fn(),
   showAboutPanel: vi.fn(),
-  getPath: vi.fn(() => "/tmp/yadaw-test")
+  getPath: vi.fn(() => "/tmp/heron-test")
 }))
 
 vi.mock("electron", () => ({
@@ -30,7 +30,7 @@ vi.mock("electron", () => ({
   }
 }))
 
-import { IPC_CHANNELS } from "@yadaw/contracts"
+import { IPC_CHANNELS } from "@heron/contracts"
 import {
   createContext,
   invoke,
@@ -46,7 +46,7 @@ const { engineInfo, processGain } = vi.hoisted(() => ({
   processGain: vi.fn((samples: number[], gain: number) => samples.map((s) => s * gain))
 }))
 
-vi.mock("@yadaw/dsp-node", () => ({
+vi.mock("@heron/dsp-node", () => ({
   engineInfo,
   processGain
 }))

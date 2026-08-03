@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Activity } from "@lucide/vue"
 import { useI18n } from "vue-i18n"
-import type { AudioIpcPerformanceSnapshot } from "@yadaw/contracts"
+import type { AudioIpcPerformanceSnapshot } from "@heron/contracts"
 
 const props = defineProps<{ audioIpc: AudioIpcPerformanceSnapshot | null }>()
 const { t } = useI18n()

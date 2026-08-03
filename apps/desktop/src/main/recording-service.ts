@@ -10,8 +10,8 @@ import type {
   RpcError,
   WaveformPeakWindow,
   WaveformWindowRequest
-} from "@yadaw/contracts"
-import { repairRecordingHeader, writeDeterministicTestRecording } from "@yadaw/dsp-node"
+} from "@heron/contracts"
+import { repairRecordingHeader, writeDeterministicTestRecording } from "@heron/dsp-node"
 import type { AudioHostService } from "./audio-host-service"
 import type { ApplicationSettingsStore } from "./application-settings"
 import { t } from "./i18n"
@@ -99,7 +99,7 @@ export class RecordingService {
     this.sessions.lastWaveformSnapshot = null
     const project = this.projects.current
     if (!project) throw new Error("Open a project before recording")
-    const deterministicTestCapture = process.env.YADAW_TEST_CAPTURE_SOURCE === "1"
+    const deterministicTestCapture = process.env.HERON_TEST_CAPTURE_SOURCE === "1"
     const runtime = deterministicTestCapture
       ? {
           state: "running" as const,
@@ -248,7 +248,7 @@ export class RecordingService {
     if (!this.sessions.active) return
     const recording = this.sessions.take()
     await Promise.allSettled([
-      process.env.YADAW_TEST_CAPTURE_SOURCE === "1" || recording.tracks.length === 0
+      process.env.HERON_TEST_CAPTURE_SOURCE === "1" || recording.tracks.length === 0
         ? Promise.resolve()
         : (this.audioHost?.stopRecording() ?? Promise.resolve()),
       recording.midiTakes.length > 0
@@ -288,7 +288,7 @@ export class RecordingService {
       try {
         if (hasAudio) {
           const captured =
-            process.env.YADAW_TEST_CAPTURE_SOURCE === "1"
+            process.env.HERON_TEST_CAPTURE_SOURCE === "1"
               ? writeDeterministicTestRecording(
                   {
                     path: recording.audioPath,
@@ -313,7 +313,7 @@ export class RecordingService {
           recording.dropoutFrames = 0
           recording.channels = 0
         }
-        if (hasMidi && process.env.YADAW_TEST_CAPTURE_SOURCE !== "1") {
+        if (hasMidi && process.env.HERON_TEST_CAPTURE_SOURCE !== "1") {
           const midiStopped = await this.audioHost!.stopMidiRecording()
           const byClipId = new Map(midiStopped.takes.map((take) => [take.clipId, take]))
           recording.midiTakes = recording.midiTakes.map((take) => {
@@ -378,7 +378,7 @@ export class RecordingService {
     ) {
       throw new TypeError("Invalid recording waveform request")
     }
-    if (process.env.YADAW_TEST_CAPTURE_SOURCE === "1") {
+    if (process.env.HERON_TEST_CAPTURE_SOURCE === "1") {
       const frameCount = Math.max(
         1,
         Math.floor(((Date.now() - recording.startedAt) / 1_000) * recording.sampleRate)

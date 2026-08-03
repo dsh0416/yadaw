@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue"
 import { useData } from "vitepress"
-import { AsioCompatibleLogo } from "@yadaw/ui"
+import { AsioCompatibleLogo } from "@heron/ui"
 
 const { localeIndex } = useData()
 const title = computed(() => (localeIndex.value === "zh" ? "ASIO® 兼容性" : "ASIO® compatibility"))
@@ -30,7 +30,7 @@ const title = computed(() => (localeIndex.value === "zh" ? "ASIO® 兼容性" : 
   margin-top: var(--trademark-notice-margin-top, 40px);
   padding: 18px 20px;
   border: 1px solid var(--vp-c-divider);
-  border-left: 4px solid var(--yadaw-cyan);
+  border-left: 4px solid var(--heron-cyan);
   border-radius: 7px;
   color: var(--vp-c-text-1);
   background: var(--vp-c-bg-soft);

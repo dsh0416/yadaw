@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue"
 import { useI18n } from "vue-i18n"
-import { UiButton, UiField, UiNumberInput } from "@yadaw/ui"
+import { UiButton, UiField, UiNumberInput } from "@heron/ui"
 import { usePianoRollEditor } from "./usePianoRollEditor"
 
 const { pianoRollStore, selectedItems, applyInspector, commonValue, quantizeSelected } =

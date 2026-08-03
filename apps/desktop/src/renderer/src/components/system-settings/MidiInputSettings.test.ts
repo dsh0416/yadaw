@@ -2,7 +2,7 @@ import { mount } from "@vue/test-utils"
 import { describe, expect, it, vi } from "vitest"
 import MidiInputSettings from "./MidiInputSettings.vue"
 
-vi.mock("@yadaw/ui", () => ({
+vi.mock("@heron/ui", () => ({
   UiSelect: {
     props: ["modelValue"],
     emits: ["update:modelValue"],

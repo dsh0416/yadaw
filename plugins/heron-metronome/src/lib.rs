@@ -3,11 +3,11 @@
 use std::f32::consts::TAU;
 use std::sync::Arc;
 
+use heron_plugin_ui::parameter_knob;
 use truce::prelude::*;
 use truce_iced::iced::widget::{Column, Row, Space, container, text};
 use truce_iced::iced::{Alignment, Element, Length, alignment};
 use truce_iced::{IcedEditor, IcedPlugin, IntoElement, Message, ParamCache};
-use yadaw_plugin_ui::parameter_knob;
 
 use MetronomeParamsParamId as P;
 
@@ -148,17 +148,17 @@ impl IcedPlugin<MetronomeParams> for MetronomeUi {
         &'a self,
         params: &'a ParamCache<MetronomeParams>,
     ) -> Element<'a, Message<Self::Message>> {
-        let palette = yadaw_plugin_ui::palette();
+        let palette = heron_plugin_ui::palette();
         let header = Row::new()
             .push(
                 text("YADAW  /  METRONOME")
-                    .size(yadaw_plugin_ui::type_size::PANEL_TITLE)
+                    .size(heron_plugin_ui::type_size::PANEL_TITLE)
                     .color(palette.text),
             )
             .push(Space::new().width(Length::Fill))
             .push(
                 text("C6  ACCENT   ·   C5  BEAT")
-                    .size(yadaw_plugin_ui::type_size::CONTROL)
+                    .size(heron_plugin_ui::type_size::CONTROL)
                     .color(palette.midi),
             );
         let pulse = container(text("●     ·     ·     ·").size(34).color(palette.midi))
@@ -195,17 +195,17 @@ impl IcedPlugin<MetronomeParams> for MetronomeUi {
                     .size(72.0)
                     .el(),
             )
-            .spacing(yadaw_plugin_ui::space::XL)
+            .spacing(heron_plugin_ui::space::XL)
             .align_y(alignment::Vertical::Center);
         container(
             Column::new()
                 .push(header)
                 .push(pulse)
                 .push(controls)
-                .spacing(yadaw_plugin_ui::space::LG)
+                .spacing(heron_plugin_ui::space::LG)
                 .align_x(Alignment::Center),
         )
-        .padding(yadaw_plugin_ui::space::XL)
+        .padding(heron_plugin_ui::space::XL)
         .width(Length::Fill)
         .height(Length::Fill)
         .style(move |_| container::Style {
@@ -221,13 +221,13 @@ impl IcedPlugin<MetronomeParams> for MetronomeUi {
     }
 
     fn theme(&self) -> truce_iced::iced::Theme {
-        yadaw_plugin_ui::theme()
+        heron_plugin_ui::theme()
     }
 }
 
-pub struct YadawMetronome;
+pub struct HeronMetronome;
 
-impl PluginLogic for YadawMetronome {
+impl PluginLogic for HeronMetronome {
     type Params = MetronomeParams;
     type DspState = MetronomeDspState;
 
@@ -295,14 +295,14 @@ impl PluginLogic for YadawMetronome {
     fn editor(params: Arc<MetronomeParams>) -> Box<dyn Editor> {
         IcedEditor::<MetronomeParams, MetronomeUi>::new(
             params,
-            yadaw_plugin_ui::METRONOME_EDITOR_SIZE,
+            heron_plugin_ui::METRONOME_EDITOR_SIZE,
         )
         .into_editor()
     }
 }
 
 truce::plugin! {
-    logic: YadawMetronome,
+    logic: HeronMetronome,
     params: MetronomeParams,
 }
 

@@ -1,7 +1,7 @@
 import { createPinia, setActivePinia } from "pinia"
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils"
 import { describe, expect, it, vi } from "vitest"
-import type { ProjectGraphSnapshot, ProjectCommand } from "@yadaw/contracts"
+import type { ProjectGraphSnapshot, ProjectCommand } from "@heron/contracts"
 import { useMixerStore } from "../../stores/mixer"
 import { usePianoRollStore } from "../../stores/pianoRoll"
 import PianoRollDock from "./PianoRollDock.vue"

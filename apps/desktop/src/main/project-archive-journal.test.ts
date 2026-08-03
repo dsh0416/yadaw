@@ -15,7 +15,7 @@ async function exists(path: string): Promise<boolean> {
 
 describe("ProjectArchiveJournal", () => {
   it("commits a dump through the journal and preserves the previous archive as backup", async () => {
-    const root = await mkdtemp(join(tmpdir(), "yadaw-archive-journal-"))
+    const root = await mkdtemp(join(tmpdir(), "heron-archive-journal-"))
     const target = join(root, "Project.yadaw")
     const temporary = join(root, ".Project.tmp")
     const backup = `${target}.bak`
@@ -36,7 +36,7 @@ describe("ProjectArchiveJournal", () => {
   })
 
   it("restores the backup when recovery finds a rename interrupted before commit", async () => {
-    const root = await mkdtemp(join(tmpdir(), "yadaw-archive-rollback-"))
+    const root = await mkdtemp(join(tmpdir(), "heron-archive-rollback-"))
     const target = join(root, "Project.yadaw")
     const temporary = join(root, ".Project.tmp")
     const backup = `${target}.bak`
@@ -64,7 +64,7 @@ describe("ProjectArchiveJournal", () => {
   })
 
   it("keeps the new archive when recovery observes the commit rename after response loss", async () => {
-    const root = await mkdtemp(join(tmpdir(), "yadaw-archive-committed-"))
+    const root = await mkdtemp(join(tmpdir(), "heron-archive-committed-"))
     const target = join(root, "Project.yadaw")
     const temporary = join(root, ".Project.tmp")
     const backup = `${target}.bak`

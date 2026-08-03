@@ -7,7 +7,7 @@ fn spawn_event_router(
     closing: Arc<AtomicBool>,
 ) -> Result<JoinHandle<()>> {
     thread::Builder::new()
-        .name("yadaw-ipc-event-router".into())
+        .name("heron-ipc-event-router".into())
         .spawn(move || {
             let mut pending_telemetry = None;
             while !closing.load(Ordering::Acquire) {

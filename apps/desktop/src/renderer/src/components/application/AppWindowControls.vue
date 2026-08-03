@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Minus, Square, X } from "@lucide/vue"
-import type { ApplicationWindowCommandId } from "@yadaw/contracts"
+import type { ApplicationWindowCommandId } from "@heron/contracts"
 import { useI18n } from "vue-i18n"
 
 const emit = defineEmits<{

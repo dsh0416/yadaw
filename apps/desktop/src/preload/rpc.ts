@@ -1,6 +1,6 @@
 import { ipcRenderer } from "electron"
-import { rpcFailure } from "@yadaw/contracts"
-import type { RpcError, RpcRequestMeta, RpcResult } from "@yadaw/contracts"
+import { rpcFailure } from "@heron/contracts"
+import type { RpcError, RpcRequestMeta, RpcResult } from "@heron/contracts"
 
 export async function invokeRpc<Value, Args extends readonly unknown[]>(
   channel: string,

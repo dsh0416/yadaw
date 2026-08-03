@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest"
 import { mount } from "@vue/test-utils"
-import type { TempoMapSnapshot } from "@yadaw/contracts"
+import type { TempoMapSnapshot } from "@heron/contracts"
 import TimelineRuler from "./TimelineRuler.vue"
 
 const tempoMap: TempoMapSnapshot = {

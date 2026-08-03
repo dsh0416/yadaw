@@ -2,7 +2,7 @@
 import { computed } from "vue"
 import { Cpu, HardDrive, MemoryStick } from "@lucide/vue"
 import { useI18n } from "vue-i18n"
-import type { StorageSpaceSnapshot, SystemPerformanceSnapshot } from "@yadaw/contracts"
+import type { StorageSpaceSnapshot, SystemPerformanceSnapshot } from "@heron/contracts"
 import {
   classifyUpperBound,
   PERFORMANCE_THRESHOLDS,

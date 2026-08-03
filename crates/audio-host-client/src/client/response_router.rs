@@ -8,7 +8,7 @@ fn spawn_response_router(
     response_arena: Arc<Mutex<ArenaReceiver>>,
 ) -> Result<JoinHandle<()>> {
     thread::Builder::new()
-        .name("yadaw-ipc-response-router".into())
+        .name("heron-ipc-response-router".into())
         .spawn(move || {
             while !closing.load(Ordering::Acquire) {
                 match receiver.try_recv_timeout(router_timeout(&pending)) {

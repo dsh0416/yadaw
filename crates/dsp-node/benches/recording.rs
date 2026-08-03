@@ -6,7 +6,7 @@ use std::{
 };
 
 use criterion::{BatchSize, BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use yadaw_dsp_node::bench_support::{
+use heron_dsp_node::bench_support::{
     TapHarness, WaveformHarness, finalize_fixture, write_float_fixture, write_recording_session,
 };
 
@@ -21,7 +21,7 @@ impl FixtureDirectory {
             .expect("time moves forward")
             .as_nanos();
         let path = std::env::temp_dir().join(format!(
-            "yadaw-criterion-recording-{}-{nonce}",
+            "heron-criterion-recording-{}-{nonce}",
             std::process::id()
         ));
         fs::create_dir_all(&path).expect("create benchmark fixture directory");

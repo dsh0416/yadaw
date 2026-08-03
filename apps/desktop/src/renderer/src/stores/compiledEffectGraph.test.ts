@@ -1,6 +1,6 @@
 import { createPinia, setActivePinia } from "pinia"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import type { CompiledAudioGraphSnapshot } from "@yadaw/contracts"
+import type { CompiledAudioGraphSnapshot } from "@heron/contracts"
 import { useCompiledEffectGraphStore } from "./compiledEffectGraph"
 import { rpcFailure, rpcSuccess } from "../test/ipc"
 import { useProjectStore } from "./project"
@@ -28,7 +28,7 @@ describe("compiled effect graph store", () => {
   afterEach(() => vi.useRealTimers())
 
   it("polls while open without replacing an unchanged published build", async () => {
-    window.yadaw.compiledAudioGraphSnapshot = vi
+    window.heron.compiledAudioGraphSnapshot = vi
       .fn()
       .mockImplementation(() => Promise.resolve(rpcSuccess(structuredClone(snapshot))))
     const store = useCompiledEffectGraphStore()
@@ -39,16 +39,16 @@ describe("compiled effect graph store", () => {
     const firstReference = store.snapshot
 
     await vi.advanceTimersByTimeAsync(1_000)
-    expect(window.yadaw.compiledAudioGraphSnapshot).toHaveBeenCalledTimes(2)
+    expect(window.heron.compiledAudioGraphSnapshot).toHaveBeenCalledTimes(2)
     expect(store.snapshot).toBe(firstReference)
 
     store.close()
     await vi.advanceTimersByTimeAsync(2_000)
-    expect(window.yadaw.compiledAudioGraphSnapshot).toHaveBeenCalledTimes(2)
+    expect(window.heron.compiledAudioGraphSnapshot).toHaveBeenCalledTimes(2)
   })
 
   it("distinguishes an unpublished graph from a helper error and can retry", async () => {
-    window.yadaw.compiledAudioGraphSnapshot = vi
+    window.heron.compiledAudioGraphSnapshot = vi
       .fn()
       .mockResolvedValueOnce(rpcSuccess(null))
       .mockResolvedValueOnce(rpcFailure("errors.audioEngineUnavailable"))
@@ -75,7 +75,7 @@ describe("compiled effect graph store", () => {
       }
     )
     const newer = { ...snapshot, buildGeneration: 6 }
-    window.yadaw.compiledAudioGraphSnapshot = vi
+    window.heron.compiledAudioGraphSnapshot = vi
       .fn()
       .mockReturnValueOnce(first)
       .mockResolvedValueOnce(rpcSuccess(newer))
@@ -87,7 +87,7 @@ describe("compiled effect graph store", () => {
     resolveFirst(rpcSuccess(snapshot))
 
     await vi.waitFor(() => expect(store.snapshot).toEqual(newer))
-    expect(window.yadaw.compiledAudioGraphSnapshot).toHaveBeenCalledTimes(2)
+    expect(window.heron.compiledAudioGraphSnapshot).toHaveBeenCalledTimes(2)
     store.close()
   })
 })

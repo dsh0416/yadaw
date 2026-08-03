@@ -44,22 +44,22 @@ with a text, shape, or programmatic state, so color is never the only carrier.
 3. **Semantic first.** Components consume semantic color, spacing, typography, focus, motion,
    elevation, and layer tokens.
 4. **Composition stays in the product.** Views and hosts own stores, routing, and workflows.
-   `@yadaw/ui` owns visual behavior and accessibility.
+   `@heron/ui` owns visual behavior and accessibility.
 5. **Accessibility is behavior.** Keyboard operation, focus restoration, live regions, reflow,
    contrast, and reduced motion are tested rather than inferred from appearance.
 6. **One interaction, one primitive.** Actions, modes, navigation, selection, and numeric values
    are different behaviors and must not share an improvised button style.
 7. **The canvas is exceptional, its chrome is not.** Notes, clips, waveforms, faders, rulers, and
    meters may use domain geometry. Their toolbars, fields, menus, status, and selection controls
-   still use `@yadaw/ui`.
+   still use `@heron/ui`.
 
 ## Package boundary
 
-`@yadaw/ui` may depend on Vue and Reka UI. It must not depend on Pinia, Vue Router, Electron,
-`window.yadaw`, IPC contracts, the project database, or product stores. Vue is a peer dependency
+`@heron/ui` may depend on Vue and Reka UI. It must not depend on Pinia, Vue Router, Electron,
+`window.heron`, IPC contracts, the project database, or product stores. Vue is a peer dependency
 to prevent multiple runtimes.
 
-Renderer code imports Reka behavior only through `@yadaw/ui`. A controller host reads stores and
+Renderer code imports Reka behavior only through `@heron/ui`. A controller host reads stores and
 passes serializable props to a presenter. A presenter emits intent; it does not call the preload
 API. Storybook product examples render from plain fixtures.
 
@@ -277,7 +277,7 @@ Storybook browser tests plus the controls, menus, and reflow Playwright tests ru
 ## Contribution checklist
 
 - Choose an existing primitive before creating a new generic component.
-- Keep stores, routing, contracts, and preload calls outside `@yadaw/ui`.
+- Keep stores, routing, contracts, and preload calls outside `@heron/ui`.
 - Use semantic tokens; justify any domain palette or runtime signal color.
 - Keep every `--ui-` reference resolvable from the shared token sources.
 - Cover default, disabled/loading/error as applicable, long text, both themes, and keyboard state.

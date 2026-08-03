@@ -14,7 +14,7 @@ const workspaceRoot = resolve(import.meta.dirname, "..")
 const coverageTarget = resolve(workspaceRoot, "target-coverage")
 const rustCoveragePath = resolve(workspaceRoot, "coverage/rust/lcov.info")
 const cargo = process.platform === "win32" ? "cargo.exe" : "cargo"
-const rustCoverageFeatures = "yadaw-dsp-node/bench-internals"
+const rustCoverageFeatures = "heron-dsp-node/bench-internals"
 const coveragePhases = ["all", "prepare", "finish"] as const
 type CoveragePhase = (typeof coveragePhases)[number]
 
@@ -118,8 +118,8 @@ function prepareCoverage(target: string, environment: NodeJS.ProcessEnv): void {
   // Build the cdylibs after Cargo tests so the final objects discovered by the
   // report match the binaries copied into the JS packages and loaded by Node.
   // This also generates the gitignored loaders and typings required by typed lint.
-  runPnpm(["--filter", "@yadaw/dsp-node", "build:debug"], environment)
-  runPnpm(["--filter", "@yadaw/audio-host-client", "build:debug"], environment)
+  runPnpm(["--filter", "@heron/dsp-node", "build:debug"], environment)
+  runPnpm(["--filter", "@heron/audio-host-client", "build:debug"], environment)
 }
 
 function requirePreparedBindings(): void {

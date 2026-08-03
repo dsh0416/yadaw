@@ -5,19 +5,19 @@
 ```text
 Vue renderer
   ├─ Reka UI / native-engine state projection
-  └─ window.yadaw (narrow, typed preload API)
+  └─ window.heron (narrow, typed preload API)
           │ structured-clone IPC
 Electron main process
-  ├─ @yadaw/audio-host-client (.node IPC transport)
+  ├─ @heron/audio-host-client (.node IPC transport)
   │       │ ipc-channel
   │       ▼
   │   audio-host
   │     ├─ winit main thread: VST3 controller/editor ownership
   │     ├─ lazy Iced/WGPU: editor chrome and parameter mode
-  │     └─ yadaw-audio-engine
+  │     └─ heron-audio-engine
   │          ├─ cpal callbacks + preallocated parameter/audio queues
   │          └─ dsp-core / dsp-render / VST3 processor endpoints
-  └─ @yadaw/dsp-node (.node offline tools)
+  └─ @heron/dsp-node (.node offline tools)
 ```
 
 The `.node` binary is a Node addon, not a browser module. It is loaded in the
@@ -133,7 +133,7 @@ two-way visibility before the mapping becomes active. A platform backend that
 delivers a copy-on-write snapshot does not satisfy that contract even when the
 initial bytes compare equal.
 
-The current macOS containment and the planned `yadaw-shared-memory` replacement
+The current macOS containment and the planned `heron-shared-memory` replacement
 are specified in
 [Cross-process shared-memory transport](shared-memory-transport.md). Keep OS
 mapping, cleanup, and unsafe pointer access below that boundary. Electron

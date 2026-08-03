@@ -1,6 +1,6 @@
 import { computed, shallowRef, toValue } from "vue"
 import type { MaybeRefOrGetter } from "vue"
-import type { TempoMapSnapshot, TransportLoopRange } from "@yadaw/contracts"
+import type { TempoMapSnapshot, TransportLoopRange } from "@heron/contracts"
 import { timelineXToTick } from "../../utils/timelineCoordinates"
 import { previewCycleRange, type CycleRangeGesture } from "../../utils/cycleRange"
 

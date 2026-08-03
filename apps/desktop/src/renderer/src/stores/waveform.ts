@@ -1,5 +1,5 @@
 import { acceptHMRUpdate, defineStore } from "pinia"
-import type { WaveformPeakWindow, WaveformWindowRequest } from "@yadaw/contracts"
+import type { WaveformPeakWindow, WaveformWindowRequest } from "@heron/contracts"
 import { readMeta, rpcErrorMessage } from "../rpc"
 import { useRecordingStore } from "./recording"
 import { useProjectStore } from "./project"
@@ -33,7 +33,7 @@ export const useWaveformStore = defineStore("waveform", () => {
     }
     const target = projectStore.projectRef
     if (!target) throw new Error("Project resource is unavailable.")
-    const result = await window.yadaw.readAssetWaveform(readMeta(target), request)
+    const result = await window.heron.readAssetWaveform(readMeta(target), request)
     if (!result.ok) throw new Error(rpcErrorMessage(result.error))
     remember(key, result.value)
     return result.value
@@ -44,7 +44,7 @@ export const useWaveformStore = defineStore("waveform", () => {
     if (!recording || recording.session.id !== request.id) {
       throw new Error("Recording resource is unavailable.")
     }
-    const result = await window.yadaw.recordingWaveformSnapshot(
+    const result = await window.heron.recordingWaveformSnapshot(
       readMeta(recording.recording),
       request
     )

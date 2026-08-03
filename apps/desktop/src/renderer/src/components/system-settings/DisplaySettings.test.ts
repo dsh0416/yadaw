@@ -7,10 +7,10 @@ import { rpcSuccess, settingsSnapshot, testBootstrap, testSettings } from "../..
 describe("DisplaySettings", () => {
   beforeEach(() => {
     const initial = testSettings({ swapDirectory: "C:/swap", theme: "dark" })
-    window.yadaw.bootstrap = vi
+    window.heron.bootstrap = vi
       .fn()
       .mockResolvedValue(rpcSuccess(testBootstrap({ settings: settingsSnapshot(initial) })))
-    window.yadaw.updateApplicationSettings = vi
+    window.heron.updateApplicationSettings = vi
       .fn()
       .mockImplementation(async (_meta, patch) =>
         rpcSuccess(settingsSnapshot(testSettings({ ...initial, ...patch }), 2))
@@ -30,7 +30,7 @@ describe("DisplaySettings", () => {
     await lightOption!.trigger("click")
     await flushPromises()
 
-    expect(window.yadaw.updateApplicationSettings).toHaveBeenCalledWith(expect.any(Object), {
+    expect(window.heron.updateApplicationSettings).toHaveBeenCalledWith(expect.any(Object), {
       theme: "light"
     })
     expect(lightOption!.attributes("aria-checked")).toBe("true")
@@ -49,7 +49,7 @@ describe("DisplaySettings", () => {
     await chineseOption!.trigger("click")
     await flushPromises()
 
-    expect(window.yadaw.updateApplicationSettings).toHaveBeenCalledWith(expect.any(Object), {
+    expect(window.heron.updateApplicationSettings).toHaveBeenCalledWith(expect.any(Object), {
       locale: "zh-cmn-Hans-CN"
     })
     expect(chineseOption!.attributes("aria-checked")).toBe("true")

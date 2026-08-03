@@ -1,5 +1,5 @@
-import { IPC_PROTOCOL_VERSION } from "@yadaw/contracts"
-import type { ResourceRef, RpcError, RpcRequestMeta } from "@yadaw/contracts"
+import { IPC_PROTOCOL_VERSION } from "@heron/contracts"
+import type { ResourceRef, RpcError, RpcRequestMeta } from "@heron/contracts"
 import { i18n } from "./i18n"
 
 function nextId(prefix: string): string {

@@ -1,10 +1,6 @@
 use std::rc::Rc;
 
-use ringbuf::{
-    HeapCons, HeapProd, HeapRb,
-    traits::{Consumer, Split},
-};
-use yadaw_vst3_host_sys::{
+use heron_vst3_host_sys::{
     Steinberg::{
         IPluginBase,
         Vst::{
@@ -21,6 +17,10 @@ use yadaw_vst3_host_sys::{
     compat::{
         BindgenEnum, as_bus_direction, as_int32, as_media_type, as_uint32, combine_uint32_flags,
     },
+};
+use ringbuf::{
+    HeapCons, HeapProd, HeapRb,
+    traits::{Consumer, Split},
 };
 
 use crate::{
@@ -1596,7 +1596,7 @@ fn check_optional(operation: &'static str, result: i32) -> HostResult<()> {
 mod tests {
     use super::*;
 
-    use yadaw_vst3_host_sys::Steinberg::Vst;
+    use heron_vst3_host_sys::Steinberg::Vst;
 
     #[test]
     fn audio_layouts_report_their_input_and_output_channel_contracts() {

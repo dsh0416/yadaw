@@ -1,6 +1,6 @@
 import { decode, encode } from "@msgpack/msgpack"
-import type { AudioHostIpcClient } from "@yadaw/audio-host-client"
-import type { RpcError } from "@yadaw/contracts"
+import type { AudioHostIpcClient } from "@heron/audio-host-client"
+import type { RpcError } from "@heron/contracts"
 import { drainHostEvents } from "./audio-host-events"
 import {
   extractLargeAttachments,

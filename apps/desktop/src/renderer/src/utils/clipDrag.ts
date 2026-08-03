@@ -38,5 +38,5 @@ export function clipStartSecondsFromPointer(
     pixelsPerQuarter
   )
 }
-import type { TempoMapSnapshot } from "@yadaw/contracts"
+import type { TempoMapSnapshot } from "@heron/contracts"
 import { timelineXToSeconds } from "./timelineCoordinates"

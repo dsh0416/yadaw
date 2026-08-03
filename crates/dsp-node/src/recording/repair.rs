@@ -196,7 +196,7 @@ mod header_repair_tests {
             .expect("time moves forward")
             .as_nanos();
         std::env::temp_dir().join(format!(
-            "yadaw-repair-{label}-{}-{nonce}.bwf",
+            "heron-repair-{label}-{}-{nonce}.bwf",
             std::process::id()
         ))
     }

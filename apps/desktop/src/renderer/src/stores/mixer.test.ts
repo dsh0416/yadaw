@@ -7,12 +7,12 @@ import type {
   ProjectSession,
   ProjectWorkspaceSnapshot,
   RpcResult
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import { useProjectStore } from "./project"
 import { useAudioRuntimeStore } from "./audioRuntime"
 import { useMixerStore } from "./mixer"
 import { useProjectHistoryStore } from "./projectHistory"
-import { applyToGraph, inverseFor } from "@yadaw/project-model"
+import { applyToGraph, inverseFor } from "@heron/project-model"
 import { planAudioClipSplit, planMidiClipSplits } from "../utils/clipEditing"
 
 function graph(): ProjectGraphSnapshot {
@@ -271,8 +271,8 @@ describe("mixer store", () => {
       pluginId: "effect",
       patch: { enabled: false }
     })
-    window.yadaw.previewMixerParameter = vi.fn(async () => success(undefined))
-    window.yadaw.executeProjectCommand = vi.fn(async () =>
+    window.heron.previewMixerParameter = vi.fn(async () => success(undefined))
+    window.heron.executeProjectCommand = vi.fn(async () =>
       success(
         {
           graph: changed,
@@ -292,13 +292,13 @@ describe("mixer store", () => {
 
     expect(mixer.graph.plugins[0]?.enabled).toBe(false)
     await expect(committed).resolves.toBe(true)
-    expect(window.yadaw.previewMixerParameter).toHaveBeenCalledWith(expect.any(Object), {
+    expect(window.heron.previewMixerParameter).toHaveBeenCalledWith(expect.any(Object), {
       target: "plugin",
       id: "effect",
       parameter: "enabled",
       value: 0
     })
-    expect(window.yadaw.executeProjectCommand).toHaveBeenCalledWith(expect.any(Object), {
+    expect(window.heron.executeProjectCommand).toHaveBeenCalledWith(expect.any(Object), {
       type: "update-plugin",
       pluginId: "effect",
       patch: { enabled: false }
@@ -308,11 +308,11 @@ describe("mixer store", () => {
   it("rolls back the live bypass preview when persistence fails", async () => {
     const initial = graph()
     initial.plugins.push(effectPlugin())
-    window.yadaw.previewMixerParameter = vi.fn(async () => success(undefined))
-    window.yadaw.executeProjectCommand = vi.fn(async () => {
+    window.heron.previewMixerParameter = vi.fn(async () => success(undefined))
+    window.heron.executeProjectCommand = vi.fn(async () => {
       throw new Error("database unavailable")
     })
-    window.yadaw.loadProjectGraph = vi.fn(async () => success(initial, 1))
+    window.heron.loadProjectGraph = vi.fn(async () => success(initial, 1))
     const mixer = useMixerStore()
     mixer.hydrate(initial)
 
@@ -320,7 +320,7 @@ describe("mixer store", () => {
 
     expect(mixer.graph.plugins[0]?.enabled).toBe(true)
     expect(
-      vi.mocked(window.yadaw.previewMixerParameter).mock.calls.map(([, value]) => value)
+      vi.mocked(window.heron.previewMixerParameter).mock.calls.map(([, value]) => value)
     ).toEqual([
       { target: "plugin", id: "effect", parameter: "enabled", value: 0 },
       { target: "plugin", id: "effect", parameter: "enabled", value: 1 }
@@ -331,8 +331,8 @@ describe("mixer store", () => {
     const initial = graph()
     const changed = structuredClone(initial)
     changed.channels[0]!.gainDb = -6
-    window.yadaw.loadProjectGraph = vi.fn().mockResolvedValue(success(initial))
-    window.yadaw.executeProjectCommand = vi
+    window.heron.loadProjectGraph = vi.fn().mockResolvedValue(success(initial))
+    window.heron.executeProjectCommand = vi
       .fn()
       .mockResolvedValueOnce(
         success(
@@ -361,7 +361,7 @@ describe("mixer store", () => {
 
     await mixer.undo()
     expect(mixer.graph.channels[0]?.gainDb).toBe(0)
-    expect(window.yadaw.executeProjectCommand).toHaveBeenLastCalledWith(
+    expect(window.heron.executeProjectCommand).toHaveBeenLastCalledWith(
       expect.objectContaining({ expectedRevision: 2 }),
       {
         type: "update-channel",
@@ -376,8 +376,8 @@ describe("mixer store", () => {
     const initial = graph()
     const monitored = structuredClone(initial)
     monitored.channels[0]!.inputMonitoring = true
-    window.yadaw.loadProjectGraph = vi.fn().mockResolvedValue(success(initial))
-    window.yadaw.executeProjectCommand = vi
+    window.heron.loadProjectGraph = vi.fn().mockResolvedValue(success(initial))
+    window.heron.executeProjectCommand = vi
       .fn()
       .mockResolvedValueOnce(
         success(
@@ -429,7 +429,7 @@ describe("mixer store", () => {
 
     await mixer.redo()
     expect(mixer.graph.channels[0]?.inputMonitoring).toBe(true)
-    expect(window.yadaw.executeProjectCommand).toHaveBeenLastCalledWith(
+    expect(window.heron.executeProjectCommand).toHaveBeenLastCalledWith(
       expect.objectContaining({ expectedRevision: 3 }),
       {
         type: "update-channel",
@@ -468,7 +468,7 @@ describe("mixer store", () => {
     })
     let authoritative = structuredClone(initial)
     let revision = 1
-    window.yadaw.executeProjectCommand = vi.fn(async (_meta, command: ProjectCommand) => {
+    window.heron.executeProjectCommand = vi.fn(async (_meta, command: ProjectCommand) => {
       const inverse = inverseFor(authoritative, command)
       authoritative = applyToGraph(authoritative, command)
       revision += 1
@@ -595,7 +595,7 @@ describe("mixer store", () => {
 
     const beforeFailure = structuredClone(mixer.graph)
     const historyLength = history.undoHistory.length
-    vi.mocked(window.yadaw.executeProjectCommand).mockResolvedValueOnce({
+    vi.mocked(window.heron.executeProjectCommand).mockResolvedValueOnce({
       ok: false,
       requestId: "failed-edit",
       error: {
@@ -621,7 +621,7 @@ describe("mixer store", () => {
 
   it("hydrates the ready workspace graph synchronously without reloading the audio host", () => {
     const initial = graph()
-    window.yadaw.loadProjectGraph = vi.fn()
+    window.heron.loadProjectGraph = vi.fn()
     const mixer = useMixerStore()
 
     mixer.hydrate(initial)
@@ -629,7 +629,7 @@ describe("mixer store", () => {
     expect(mixer.graph).toEqual(initial)
     expect(mixer.selectedChannelId).toBe("audio")
     expect(mixer.loading).toBe(false)
-    expect(window.yadaw.loadProjectGraph).not.toHaveBeenCalled()
+    expect(window.heron.loadProjectGraph).not.toHaveBeenCalled()
   })
 
   it("hides output and send targets that would create a routing cycle", () => {
@@ -652,7 +652,7 @@ describe("mixer store", () => {
 
   it("creates new sends at the post-pan tap", async () => {
     const initial = graph()
-    window.yadaw.executeProjectCommand = vi
+    window.heron.executeProjectCommand = vi
       .fn()
       .mockImplementation((_meta, command) =>
         Promise.resolve(success({ graph: initial, inverse: command }))
@@ -662,7 +662,7 @@ describe("mixer store", () => {
 
     await mixer.addSend("audio", { kind: "output", channelId: "output" })
 
-    expect(window.yadaw.executeProjectCommand).toHaveBeenCalledWith(
+    expect(window.heron.executeProjectCommand).toHaveBeenCalledWith(
       expect.objectContaining({ target: expect.objectContaining({ kind: "project-graph" }) }),
       {
         type: "create-send",
@@ -680,7 +680,7 @@ describe("mixer store", () => {
 
   it("uses one default color per channel type and still accepts custom colors", async () => {
     const initial = graph()
-    window.yadaw.executeProjectCommand = vi
+    window.heron.executeProjectCommand = vi
       .fn()
       .mockImplementation((_meta, command) =>
         Promise.resolve(success({ graph: initial, inverse: command }))
@@ -694,7 +694,7 @@ describe("mixer store", () => {
     await mixer.updateChannel("audio", { color: "#123456" })
 
     const commands = vi
-      .mocked(window.yadaw.executeProjectCommand)
+      .mocked(window.heron.executeProjectCommand)
       .mock.calls.map(([, command]) => command)
     expect(commands[0]).toMatchObject({
       type: "create-track",
@@ -723,7 +723,7 @@ describe("mixer store", () => {
 
   it("creates an unassigned green instrument track", async () => {
     const initial = graph()
-    window.yadaw.executeProjectCommand = vi
+    window.heron.executeProjectCommand = vi
       .fn()
       .mockImplementation((_meta, command) =>
         Promise.resolve(success({ graph: initial, inverse: command }))
@@ -733,7 +733,7 @@ describe("mixer store", () => {
 
     await mixer.createInstrumentTrack()
 
-    expect(window.yadaw.executeProjectCommand).toHaveBeenCalledWith(expect.any(Object), {
+    expect(window.heron.executeProjectCommand).toHaveBeenCalledWith(expect.any(Object), {
       type: "create-track",
       track: expect.objectContaining({ channelId: expect.any(String), sortOrder: 0 }),
       channel: expect.objectContaining({
@@ -757,7 +757,7 @@ describe("mixer store", () => {
     const metronome = enabled.channels.find((channel) => channel.systemRole === "metronome")
     if (!metronome) throw new Error("test graph requires metronome")
     metronome.muted = false
-    window.yadaw.executeProjectCommand = vi.fn().mockResolvedValue(
+    window.heron.executeProjectCommand = vi.fn().mockResolvedValue(
       success({
         graph: enabled,
         inverse: { type: "update-channel", channelId: "metronome", patch: { muted: true } }
@@ -771,7 +771,7 @@ describe("mixer store", () => {
     expect(mixer.orderedChannels.map((channel) => channel.id)).toContain("metronome")
     await mixer.toggleMetronome()
 
-    expect(window.yadaw.executeProjectCommand).toHaveBeenCalledWith(expect.any(Object), {
+    expect(window.heron.executeProjectCommand).toHaveBeenCalledWith(expect.any(Object), {
       type: "update-channel",
       channelId: "metronome",
       patch: { muted: false }
@@ -788,7 +788,7 @@ describe("mixer store", () => {
     const secondGraph = structuredClone(firstGraph)
     secondGraph.channels[0]!.pan = 0.5
     let resolveFirst!: (value: unknown) => void
-    window.yadaw.executeProjectCommand = vi
+    window.heron.executeProjectCommand = vi
       .fn()
       .mockImplementationOnce(
         () =>
@@ -808,7 +808,7 @@ describe("mixer store", () => {
     const first = mixer.updateChannel("audio", { gainDb: -3 })
     const second = mixer.updateChannel("audio", { pan: 0.5 })
     await vi.waitFor(() => {
-      expect(window.yadaw.executeProjectCommand).toHaveBeenCalledTimes(1)
+      expect(window.heron.executeProjectCommand).toHaveBeenCalledTimes(1)
     })
 
     resolveFirst(
@@ -820,12 +820,12 @@ describe("mixer store", () => {
     await first
     await second
 
-    expect(window.yadaw.executeProjectCommand).toHaveBeenCalledTimes(2)
+    expect(window.heron.executeProjectCommand).toHaveBeenCalledTimes(2)
     expect(mixer.graph.channels[0]).toMatchObject({ gainDb: -3, pan: 0.5 })
   })
 
   it("clears latched meter clipping in the UI and native engine", async () => {
-    window.yadaw.clearMixerMeterClips = vi.fn().mockResolvedValue(
+    window.heron.clearMixerMeterClips = vi.fn().mockResolvedValue(
       success({
         capturedAt: 2,
         meters: [
@@ -859,6 +859,6 @@ describe("mixer store", () => {
       heldPeak: [0, 0],
       clipped: false
     })
-    expect(window.yadaw.clearMixerMeterClips).toHaveBeenCalledOnce()
+    expect(window.heron.clearMixerMeterClips).toHaveBeenCalledOnce()
   })
 })

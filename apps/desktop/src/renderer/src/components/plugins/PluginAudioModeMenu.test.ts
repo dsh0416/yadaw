@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { mount } from "@vue/test-utils"
-import type { PluginDescriptor } from "@yadaw/contracts"
+import type { PluginDescriptor } from "@heron/contracts"
 import PluginAudioModeMenu from "./PluginAudioModeMenu.vue"
 
 const descriptor: PluginDescriptor = {

@@ -4,7 +4,7 @@ import type {
   PluginInstanceState,
   ProjectGraphSnapshot,
   ProjectCommand
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import {
   applyToGraph,
   cloneGraph,

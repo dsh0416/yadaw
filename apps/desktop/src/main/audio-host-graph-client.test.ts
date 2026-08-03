@@ -137,7 +137,7 @@ describe("graphDiff", () => {
 
 describe("readCrashMarker", () => {
   it("returns the plugin instance id for a valid crash marker", () => {
-    const directory = mkdtempSync(join(tmpdir(), "yadaw-crash-"))
+    const directory = mkdtempSync(join(tmpdir(), "heron-crash-"))
     const path = join(directory, "crash.marker")
     const graph = emptyGraph({
       plugins: [
@@ -171,7 +171,7 @@ describe("readCrashMarker", () => {
   })
 
   it("ignores markers with the wrong revision, checksum, or stage", () => {
-    const directory = mkdtempSync(join(tmpdir(), "yadaw-crash-"))
+    const directory = mkdtempSync(join(tmpdir(), "heron-crash-"))
     const path = join(directory, "crash.marker")
     writeFileSync(path, buildCrashMarker(7, 0, 2n))
 
@@ -183,7 +183,7 @@ describe("readCrashMarker", () => {
   })
 
   it("returns null when the marker file is missing or truncated", () => {
-    const directory = mkdtempSync(join(tmpdir(), "yadaw-crash-"))
+    const directory = mkdtempSync(join(tmpdir(), "heron-crash-"))
     const path = join(directory, "missing.marker")
 
     expect(readCrashMarker(path, 1, emptyGraph())).toBeNull()

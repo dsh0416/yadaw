@@ -21,7 +21,7 @@ vi.mock("electron", () => ({
   }
 }))
 
-import { IPC_CHANNELS } from "@yadaw/contracts"
+import { IPC_CHANNELS } from "@heron/contracts"
 import { installApplicationMenu } from "./application-menu"
 import { setMainLocale } from "./i18n"
 

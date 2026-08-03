@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { computed } from "vue"
 import { useI18n } from "vue-i18n"
-import { UiCascadingSelect, UiPopover, UiSelect } from "@yadaw/ui"
+import { UiCascadingSelect, UiPopover, UiSelect } from "@heron/ui"
 import type {
   MixerBusState,
   MixerChannelPatch,
   MixerChannelState,
   MixerRouteTarget
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import { mixerRouteGroups } from "./mixer-route-groups"
 
 const props = defineProps<{

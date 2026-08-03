@@ -1,7 +1,7 @@
 import { acceptHMRUpdate, defineStore } from "pinia"
 import { shallowRef } from "vue"
-import type { MixerRuntimeSnapshot } from "@yadaw/contracts"
-import { meterFor as selectMeterFor } from "@yadaw/project-model"
+import type { MixerRuntimeSnapshot } from "@heron/contracts"
+import { meterFor as selectMeterFor } from "@heron/project-model"
 import { useMixerMeterPolling } from "./mixer-meter-polling"
 import { mutationMeta, readMeta, rpcErrorMessage } from "../rpc"
 import { useAudioRuntimeStore } from "./audioRuntime"
@@ -21,7 +21,7 @@ export const useMixerRuntimeStore = defineStore("mixer-runtime", () => {
     try {
       const target = audioRuntime.audioEngineRef
       if (!target) return
-      const result = await window.yadaw.mixerSnapshot(readMeta(target))
+      const result = await window.heron.mixerSnapshot(readMeta(target))
       if (result.ok) runtime.value = result.value
       else error.value = rpcErrorMessage(result.error)
     } catch {
@@ -41,7 +41,7 @@ export const useMixerRuntimeStore = defineStore("mixer-runtime", () => {
     try {
       const target = audioRuntime.audioEngineRef
       if (!target) return
-      const result = await window.yadaw.clearMixerMeterClips(
+      const result = await window.heron.clearMixerMeterClips(
         mutationMeta(target, "mixer-clear-clips", audioRuntime.transportRevision)
       )
       if (result.ok) runtime.value = result.value

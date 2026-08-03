@@ -7,7 +7,7 @@ import {
   UiLoadingState,
   UiStatusNotice,
   UiSurface
-} from "@yadaw/ui"
+} from "@heron/ui"
 
 const meta = {
   title: "Patterns/Async states",

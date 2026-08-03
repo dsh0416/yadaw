@@ -1,7 +1,7 @@
 use std::{hint::black_box, time::Duration};
 
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use yadaw_dsp_render::{
+use heron_dsp_render::{
     AudioClipSource, RenderChannelKind, RenderChannelSpec, RenderClipSpec, RenderGraphSpec,
     RenderResources, RenderRoute, RenderRuntime, RenderTransport, TempoEvent, TimeSignatureEvent,
 };
@@ -168,7 +168,7 @@ fn control_and_meter(c: &mut Criterion) {
         });
     });
     let mut meters = vec![
-        yadaw_dsp_render::RenderMeter {
+        heron_dsp_render::RenderMeter {
             pre: [0.0; 2],
             post: [0.0; 2],
         };

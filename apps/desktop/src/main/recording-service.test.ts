@@ -6,7 +6,7 @@ import { RecordingService } from "./recording-service"
 
 describe("RecordingService archive cleanup", () => {
   it("cleans a ready sidecar after the saved database proves its asset exists", async () => {
-    const swapDirectory = await mkdtemp(join(tmpdir(), "yadaw-recording-cleanup-"))
+    const swapDirectory = await mkdtemp(join(tmpdir(), "heron-recording-cleanup-"))
     const projectPath = join(swapDirectory, "project.yadaw")
     const id = "recording-id"
     const audioPath = join(swapDirectory, `${id}.ready.bwf`)
@@ -56,7 +56,7 @@ describe("RecordingService archive cleanup", () => {
   })
 
   it("treats recovery as idempotent when the working database already has the asset", async () => {
-    const swapDirectory = await mkdtemp(join(tmpdir(), "yadaw-recording-recover-"))
+    const swapDirectory = await mkdtemp(join(tmpdir(), "heron-recording-recover-"))
     const projectPath = join(swapDirectory, "project.yadaw")
     const id = "already-imported"
     const sidecarPath = join(swapDirectory, `${id}.recording.json`)

@@ -12,14 +12,14 @@ recovery rules are in
 ```text
 Vue component or composable
   -> Pinia action
-  -> window.yadaw typed preload API
+  -> window.heron typed preload API
   -> validated Electron main handler
   -> authoritative main-process service/lifecycle coordinator
-      ├─ live playback -> @yadaw/audio-host-client -> ipc-channel -> audio-host
-      └─ offline tools -> @yadaw/dsp-node
+      ├─ live playback -> @heron/audio-host-client -> ipc-channel -> audio-host
+      └─ offline tools -> @heron/dsp-node
 ```
 
-- Production renderer code may invoke or subscribe to `window.yadaw` only from
+- Production renderer code may invoke or subscribe to `window.heron` only from
   `apps/desktop/src/renderer/src/stores/**/*.ts`.
 - Components, views, routers, and composables express user intent through store
   actions and consume reactive store state. They never call the preload API.
@@ -31,8 +31,8 @@ Vue component or composable
 - Pinia is the renderer projection, not a security boundary. Main validates the
   sender, payload, lifecycle transition, and cross-domain preconditions for
   every request.
-- Only Electron main may import `@yadaw/audio-host-client` or
-  `@yadaw/dsp-node`. The renderer and preload may not load either addon
+- Only Electron main may import `@heron/audio-host-client` or
+  `@heron/dsp-node`. The renderer and preload may not load either addon
   directly.
 - `audio-host-client` owns the live helper lifecycle, typed cross-process
   protocol, watchdog, and restart coordination. `dsp-node` owns offline tools
@@ -43,7 +43,7 @@ Vue component or composable
   and thread rules are in [Playback runtime architecture](playback-runtime.md).
   See also [Architecture and real-time constraints](architecture.md).
 
-Tests may mock `window.yadaw`. E2E tests may call it to inspect native state,
+Tests may mock `window.heron`. E2E tests may call it to inspect native state,
 but product behavior should normally be exercised through the UI.
 
 ## Ownership and concurrency
@@ -73,7 +73,7 @@ capability boundaries.
 ## Lifecycle rules
 
 Project, audio, and recording use discriminated-union states shared through
-`@yadaw/contracts`. Main transitions first and publishes revisioned lifecycle
+`@heron/contracts`. Main transitions first and publishes revisioned lifecycle
 events. Pinia may expose a pending intent immediately for UI feedback, but it
 must not mutate authoritative lifecycle state. It reconciles with main and
 ignores any event older than the last accepted revision.
@@ -239,7 +239,7 @@ taskbar entry. Electron remains the sole tray/Dock identity owner.
 
 Before adding or changing a native call:
 
-1. Add a serializable request/result to `@yadaw/contracts` and a named preload
+1. Add a serializable request/result to `@heron/contracts` and a named preload
    method. Do not add a stringly typed generic command.
 2. Assign exactly one owner Pinia store and update the table above.
 3. Validate the sender and all untrusted payload fields in Electron main.

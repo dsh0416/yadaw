@@ -1,6 +1,6 @@
 import { parentPort } from "node:worker_threads"
 import { randomUUID } from "node:crypto"
-import type { ProjectDatabase as ProjectDatabaseInstance } from "@yadaw/project-db/node"
+import type { ProjectDatabase as ProjectDatabaseInstance } from "@heron/project-db/node"
 import type {
   PreparedProjectCommand,
   ProjectCommandTransactionStatus,
@@ -10,14 +10,14 @@ import type {
   WorkerResponse,
   WorkerResult,
   WorkerResultMap
-} from "@yadaw/project-db/protocol"
-import { applyToGraph, validateGraph } from "@yadaw/project-model"
+} from "@heron/project-db/protocol"
+import { applyToGraph, validateGraph } from "@heron/project-model"
 
 if (!parentPort) throw new Error("Project worker requires a parent port")
 const port = parentPort
 
 let database: ProjectDatabaseInstance | null = null
-let projectDatabaseModule: Promise<typeof import("@yadaw/project-db/node")> | null = null
+let projectDatabaseModule: Promise<typeof import("@heron/project-db/node")> | null = null
 const cancelledOperations = new Set<string>()
 const preparedCommands = new Map<
   string,
@@ -30,8 +30,8 @@ const preparedCommands = new Map<
 >()
 const committedCommands = new Map<string, WorkerResultMap["commit-project-command"]>()
 
-function loadProjectDatabase(): Promise<typeof import("@yadaw/project-db/node")> {
-  projectDatabaseModule ??= import("@yadaw/project-db/node")
+function loadProjectDatabase(): Promise<typeof import("@heron/project-db/node")> {
+  projectDatabaseModule ??= import("@heron/project-db/node")
   return projectDatabaseModule
 }
 

@@ -2,7 +2,7 @@ import { createPinia, setActivePinia } from "pinia"
 import { flushPromises, mount } from "@vue/test-utils"
 import { defineComponent, h, nextTick, ref } from "vue"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import type { WaveformPeakWindow } from "@yadaw/contracts"
+import type { WaveformPeakWindow } from "@heron/contracts"
 import { useRecordingStore } from "../stores/recording"
 import { useClipWaveform } from "./useClipWaveform"
 
@@ -85,7 +85,7 @@ describe("useClipWaveform", () => {
       .fn()
       .mockResolvedValueOnce(success(response("recording", 2_400)))
       .mockResolvedValue(success(response("recording", 4_800)))
-    window.yadaw.recordingWaveformSnapshot = read
+    window.heron.recordingWaveformSnapshot = read
     const component = defineComponent({
       setup() {
         const waveform = useClipWaveform({
@@ -114,7 +114,7 @@ describe("useClipWaveform", () => {
 
   it("cancels a pending debounced viewport reload after unmount", async () => {
     const startFrame = ref(0)
-    window.yadaw.readAssetWaveform = vi.fn().mockResolvedValue(success(response("asset", 9_600)))
+    window.heron.readAssetWaveform = vi.fn().mockResolvedValue(success(response("asset", 9_600)))
     const component = defineComponent({
       setup() {
         const waveform = useClipWaveform({
@@ -129,20 +129,20 @@ describe("useClipWaveform", () => {
     })
     const wrapper = mount(component)
     await vi.advanceTimersByTimeAsync(40)
-    expect(window.yadaw.readAssetWaveform).toHaveBeenCalledTimes(1)
+    expect(window.heron.readAssetWaveform).toHaveBeenCalledTimes(1)
 
     startFrame.value = 128
     await nextTick()
     wrapper.unmount()
     await vi.advanceTimersByTimeAsync(200)
-    expect(window.yadaw.readAssetWaveform).toHaveBeenCalledTimes(1)
+    expect(window.heron.readAssetWaveform).toHaveBeenCalledTimes(1)
   })
 
   it("debounces viewport changes and discards stale responses", async () => {
     const startFrame = ref(0)
     let resolveFirst!: (value: ReturnType<typeof success>) => void
     let resolveSecond!: (value: ReturnType<typeof success>) => void
-    window.yadaw.readAssetWaveform = vi
+    window.heron.readAssetWaveform = vi
       .fn()
       .mockImplementationOnce(
         () =>
@@ -174,9 +174,9 @@ describe("useClipWaveform", () => {
     startFrame.value = 64
     await nextTick()
     await vi.advanceTimersByTimeAsync(39)
-    expect(window.yadaw.readAssetWaveform).toHaveBeenCalledTimes(1)
+    expect(window.heron.readAssetWaveform).toHaveBeenCalledTimes(1)
     await vi.advanceTimersByTimeAsync(1)
-    expect(window.yadaw.readAssetWaveform).toHaveBeenCalledTimes(2)
+    expect(window.heron.readAssetWaveform).toHaveBeenCalledTimes(2)
 
     resolveSecond(success(response("asset", 9_600)))
     await flushPromises()
@@ -191,10 +191,10 @@ describe("useClipWaveform", () => {
     const recording = ref(true)
     let resolveAsset!: (value: ReturnType<typeof success>) => void
     attachRecording("take")
-    window.yadaw.recordingWaveformSnapshot = vi
+    window.heron.recordingWaveformSnapshot = vi
       .fn()
       .mockResolvedValue(success(response("take", 4_800)))
-    window.yadaw.readAssetWaveform = vi.fn().mockImplementation(
+    window.heron.readAssetWaveform = vi.fn().mockImplementation(
       () =>
         new Promise((resolve) => {
           resolveAsset = resolve

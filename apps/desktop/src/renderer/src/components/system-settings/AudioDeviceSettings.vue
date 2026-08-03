@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from "vue-i18n"
-import type { AudioPreferences, AudioRuntimeSnapshot } from "@yadaw/contracts"
+import type { AudioPreferences, AudioRuntimeSnapshot } from "@heron/contracts"
 import SettingsPage from "../settings/SettingsPage.vue"
 import AudioBackendSection from "./AudioBackendSection.vue"
 import AudioBufferLatencySections from "./AudioBufferLatencySections.vue"

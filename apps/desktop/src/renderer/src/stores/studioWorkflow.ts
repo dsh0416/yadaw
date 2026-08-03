@@ -1,5 +1,5 @@
 import { acceptHMRUpdate, defineStore } from "pinia"
-import type { PendingRecording } from "@yadaw/contracts"
+import type { PendingRecording } from "@heron/contracts"
 import { useArrangementViewStore } from "./arrangementView"
 import { useMixerStore } from "./mixer"
 import { useProjectStore } from "./project"

@@ -6,7 +6,7 @@ use std::{
     },
 };
 
-use yadaw_dsp_runtime::{
+use heron_dsp_runtime::{
     midi_input::MidiInputMessage,
     midi_journal::{MidiJournalHeader, MidiJournalRecord, MidiJournalWriter},
     protocol::{
@@ -270,12 +270,12 @@ impl ActiveMidiTake {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use heron_dsp_runtime::{
+        midi_journal::recover_midi_journal, protocol::MidiRecordingTakeConfig,
+    };
     use std::{
         path::PathBuf,
         time::{SystemTime, UNIX_EPOCH},
-    };
-    use yadaw_dsp_runtime::{
-        midi_journal::recover_midi_journal, protocol::MidiRecordingTakeConfig,
     };
 
     fn temporary_path(label: &str) -> PathBuf {
@@ -284,7 +284,7 @@ mod tests {
             .expect("time moves forward")
             .as_nanos();
         std::env::temp_dir().join(format!(
-            "yadaw-midi-rec-{label}-{}-{nonce}.midijournal",
+            "heron-midi-rec-{label}-{}-{nonce}.midijournal",
             std::process::id()
         ))
     }

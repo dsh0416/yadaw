@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue"
 import { useI18n } from "vue-i18n"
-import { UiRadioGroup, type UiRadioOption } from "@yadaw/ui"
+import { UiRadioGroup, type UiRadioOption } from "@heron/ui"
 import SettingsSection from "../settings/SettingsSection.vue"
 import AsioConfigurationNotice from "./AsioConfigurationNotice.vue"
 

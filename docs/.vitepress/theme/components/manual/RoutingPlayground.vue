@@ -9,7 +9,7 @@ import type {
   MixerSendPatch,
   MixerSendState,
   MixerSendTap
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import ManualDemoFrame from "./ManualDemoFrame.vue"
 import ManualMixerChannelStrip from "./ManualMixerChannelStrip.vue"
 import RoutingPath from "./RoutingPath.vue"
@@ -389,7 +389,7 @@ function deleteSend(sendId: string): void {
   border: 1px solid var(--vp-c-divider);
   border-radius: 8px;
   background:
-    linear-gradient(135deg, color-mix(in srgb, var(--yadaw-cyan) 7%, transparent), transparent 38%),
+    linear-gradient(135deg, color-mix(in srgb, var(--heron-cyan) 7%, transparent), transparent 38%),
     #242424;
   box-shadow:
     0 16px 32px rgb(0 0 0 / 20%),
@@ -408,7 +408,7 @@ function deleteSend(sendId: string): void {
 }
 
 .routing-playground__section-heading span {
-  color: var(--yadaw-cyan);
+  color: var(--heron-cyan);
   font-size: 0.56rem;
   font-weight: 750;
   letter-spacing: 0.1em;
@@ -506,7 +506,7 @@ function deleteSend(sendId: string): void {
 
 .routing-playground__summary span {
   flex: none;
-  color: var(--yadaw-cyan);
+  color: var(--heron-cyan);
   font-family: var(--vp-font-family-mono);
 }
 

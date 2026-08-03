@@ -30,7 +30,7 @@ async function renderDiagram(): Promise<void> {
     theme: isDark.value ? "dark" : "neutral"
   })
 
-  const id = `yadaw-mermaid-${generation}`
+  const id = `heron-mermaid-${generation}`
   const { svg } = await mermaid.render(id, source)
 
   if (generation !== renderGeneration || container.value === null) {
@@ -51,17 +51,17 @@ watch([isDark, () => props.code], () => {
 </script>
 
 <template>
-  <div ref="container" class="yadaw-mermaid" aria-label="Diagram" />
+  <div ref="container" class="heron-mermaid" aria-label="Diagram" />
 </template>
 
 <style scoped>
-.yadaw-mermaid {
+.heron-mermaid {
   margin: 1.25rem 0;
   overflow-x: auto;
   text-align: center;
 }
 
-.yadaw-mermaid :deep(svg) {
+.heron-mermaid :deep(svg) {
   max-width: 100%;
   height: auto;
 }

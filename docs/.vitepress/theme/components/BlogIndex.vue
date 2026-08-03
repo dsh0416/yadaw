@@ -56,12 +56,12 @@ function formatDisplayDate(isoDate: string): string {
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--yadaw-cyan);
+  color: var(--heron-cyan);
 }
 
 .blog__title {
   margin: 0;
-  font-family: var(--yadaw-display);
+  font-family: var(--heron-display);
   font-size: clamp(36px, 6vw, 52px);
   font-weight: 700;
   line-height: 1.05;
@@ -104,7 +104,7 @@ function formatDisplayDate(isoDate: string): string {
 }
 
 .blog__link:hover .blog__post-title {
-  color: var(--yadaw-cyan);
+  color: var(--heron-cyan);
 }
 
 .blog__date {
@@ -116,7 +116,7 @@ function formatDisplayDate(isoDate: string): string {
 
 .blog__post-title {
   margin: 0;
-  font-family: var(--yadaw-display);
+  font-family: var(--heron-display);
   font-size: 28px;
   font-weight: 700;
   line-height: 1.15;

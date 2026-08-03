@@ -1,4 +1,4 @@
-import type { PluginInstanceState, PluginRuntimeStatus } from "@yadaw/contracts"
+import type { PluginInstanceState, PluginRuntimeStatus } from "@heron/contracts"
 
 export function pluginDisplayState(
   plugin: PluginInstanceState,

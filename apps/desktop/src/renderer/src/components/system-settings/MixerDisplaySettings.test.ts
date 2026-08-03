@@ -17,12 +17,12 @@ const settings = {
 
 describe("MixerDisplaySettings", () => {
   beforeEach(() => {
-    window.yadaw.bootstrap = vi
+    window.heron.bootstrap = vi
       .fn()
       .mockResolvedValue(
         rpcSuccess(testBootstrap({ settings: settingsSnapshot(testSettings(settings)) }))
       )
-    window.yadaw.updateApplicationSettings = vi
+    window.heron.updateApplicationSettings = vi
       .fn()
       .mockImplementation(async (_meta, patch) =>
         rpcSuccess(settingsSnapshot(testSettings({ ...settings, ...patch }), 2))
@@ -39,7 +39,7 @@ describe("MixerDisplaySettings", () => {
     await peakHold.setValue("4s")
     await flushPromises()
 
-    expect(window.yadaw.updateApplicationSettings).toHaveBeenCalledWith(expect.any(Object), {
+    expect(window.heron.updateApplicationSettings).toHaveBeenCalledWith(expect.any(Object), {
       meterPeakHold: "4s"
     })
     expect(wrapper.get('select[aria-label="Mixer meter return time"]').text()).toContain(

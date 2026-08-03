@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto"
-import { IPC_CHANNELS, isResourceRef, rpcFailure, rpcSuccess } from "@yadaw/contracts"
+import { IPC_CHANNELS, isResourceRef, rpcFailure, rpcSuccess } from "@heron/contracts"
 import type {
   RecordingStartRequest,
   RecordingResourceSnapshot,
@@ -8,7 +8,7 @@ import type {
   RpcRequestMeta,
   RpcResult,
   WaveformWindowRequest
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import type { BeginOperationResult } from "../kernel/operation-registry"
 import type { IpcHandlerContext } from "./context"
 import { reconcileAudioHostEpoch } from "./audio-host-reconcile"

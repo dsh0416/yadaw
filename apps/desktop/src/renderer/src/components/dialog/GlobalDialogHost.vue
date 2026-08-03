@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue"
-import { UiAlertDialog } from "@yadaw/ui"
-import type { UiAlertAction } from "@yadaw/ui"
+import { UiAlertDialog } from "@heron/ui"
+import type { UiAlertAction } from "@heron/ui"
 import { useGlobalDialog } from "../../composables/useGlobalDialog"
 
 const { activeDialog, selectDialogAction, dismissDialog } = useGlobalDialog()

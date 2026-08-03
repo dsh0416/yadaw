@@ -2,7 +2,7 @@ import { createPinia, setActivePinia } from "pinia"
 import { flushPromises, mount } from "@vue/test-utils"
 import { nextTick } from "vue"
 import { describe, expect, it } from "vitest"
-import type { MidiImportPreview } from "@yadaw/contracts"
+import type { MidiImportPreview } from "@heron/contracts"
 import { useMidiImportStore } from "../../stores/midiImport"
 import MidiImportDialog from "./MidiImportDialog.vue"
 

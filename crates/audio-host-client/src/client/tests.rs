@@ -2,7 +2,7 @@
 mod tests {
     use super::*;
     use std::sync::mpsc;
-    use yadaw_dsp_runtime::protocol::{
+    use heron_dsp_runtime::protocol::{
         AudioEngineConfig, BinaryPayload, ControlResponse, ControlResult, GraphTransactionRequest,
         GraphUpdate, INLINE_BLOB_LIMIT, LiveMixerGraph, LiveTempoEvent, LiveTimeSignatureEvent,
         MidiSyncPreferences, MixerParameterPreview, PluginAudioMode, PluginEditorContext,
@@ -10,7 +10,7 @@ mod tests {
         ResourceKind, ResourceRef, RoundTripLatencyMeasurementRequest, RpcRequestMeta,
         TransportControl,
     };
-    use yadaw_ipc_transport::{RegionOffer, TelemetryWriter, encode_response};
+    use heron_ipc_transport::{RegionOffer, TelemetryWriter, encode_response};
 
     #[derive(Debug, PartialEq)]
     enum PendingOutcome {
@@ -174,11 +174,11 @@ mod tests {
         let parameter_page = create_parameter_ring(33, 1).expect("parameter page");
         let telemetry = TelemetryReader::map(telemetry_page).expect("telemetry reader");
         let parameters = ParameterProducer::map(parameter_page).expect("parameter producer");
-        let peer_telemetry = yadaw_ipc_transport::TelemetryWriter::open_and_acknowledge(
+        let peer_telemetry = heron_ipc_transport::TelemetryWriter::open_and_acknowledge(
             telemetry.descriptor(),
         )
         .expect("peer telemetry writer");
-        let peer_parameters = yadaw_ipc_transport::ParameterConsumer::open_and_acknowledge(
+        let peer_parameters = heron_ipc_transport::ParameterConsumer::open_and_acknowledge(
             parameters.descriptor(),
         )
         .expect("peer parameter consumer");
@@ -400,7 +400,7 @@ mod tests {
             },
             ControlCommand::StopRecording,
             ControlCommand::StartMidiRecording {
-                config: yadaw_dsp_runtime::protocol::MidiRecordingStartConfig { takes: Vec::new() },
+                config: heron_dsp_runtime::protocol::MidiRecordingStartConfig { takes: Vec::new() },
             },
             ControlCommand::StopMidiRecording,
             ControlCommand::RecordingWaveform {
@@ -1037,12 +1037,12 @@ mod tests {
     #[test]
     fn transport_traffic_separates_inline_and_shared_packets() {
         let traffic = TransportTraffic::default();
-        let first_region = yadaw_ipc_transport::SharedMemory::create(
+        let first_region = heron_ipc_transport::SharedMemory::create(
             std::num::NonZeroUsize::new(17).expect("non-zero region"),
             1,
         )
         .expect("first region");
-        let second_region = yadaw_ipc_transport::SharedMemory::create(
+        let second_region = heron_ipc_transport::SharedMemory::create(
             std::num::NonZeroUsize::new(8).expect("non-zero region"),
             1,
         )

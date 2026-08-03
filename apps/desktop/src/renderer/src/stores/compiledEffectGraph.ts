@@ -1,7 +1,7 @@
 import { useIntervalFn } from "@vueuse/core"
 import { acceptHMRUpdate, defineStore } from "pinia"
 import { shallowRef } from "vue"
-import type { CompiledAudioGraphSnapshot } from "@yadaw/contracts"
+import type { CompiledAudioGraphSnapshot } from "@heron/contracts"
 import { readMeta, rpcErrorMessage } from "../rpc"
 import { useProjectStore } from "./project"
 
@@ -46,7 +46,7 @@ export const useCompiledEffectGraphStore = defineStore("compiled-effect-graph", 
       try {
         const target = projectStore.projectGraphRef
         if (!target) return
-        const result = await window.yadaw.compiledAudioGraphSnapshot(readMeta(target))
+        const result = await window.heron.compiledAudioGraphSnapshot(readMeta(target))
         if (!result.ok) {
           errorMessage.value = rpcErrorMessage(result.error)
           status.value = "error"

@@ -1,6 +1,6 @@
 import { mount } from "@vue/test-utils"
 import { describe, expect, it } from "vitest"
-import type { AudioIpcPerformanceSnapshot } from "@yadaw/contracts"
+import type { AudioIpcPerformanceSnapshot } from "@heron/contracts"
 import PerformanceIpcSection from "./PerformanceIpcSection.vue"
 
 function audioIpc(

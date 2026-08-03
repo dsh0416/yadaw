@@ -1,7 +1,7 @@
 import { createPinia, setActivePinia } from "pinia"
 import { computed, nextTick } from "vue"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import type { MidiClipState, MidiNoteState, ProjectCommand } from "@yadaw/contracts"
+import type { MidiClipState, MidiNoteState, ProjectCommand } from "@heron/contracts"
 import { usePianoRollStore } from "../../stores/pianoRoll"
 import {
   createPianoRollGestures,

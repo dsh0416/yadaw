@@ -2,7 +2,7 @@
 import { computed } from "vue"
 import { useI18n } from "vue-i18n"
 import { Trash2 } from "@lucide/vue"
-import { UiCascadingSelect, UiPopover, UiSelect } from "@yadaw/ui"
+import { UiCascadingSelect, UiPopover, UiSelect } from "@heron/ui"
 import type {
   MixerBusState,
   MixerChannelState,
@@ -11,7 +11,7 @@ import type {
   MixerSendPatch,
   MixerSendState,
   MixerSendTap
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import { useParameterGesture } from "../../composables/useParameterGesture"
 import { mixerRouteGroups } from "./mixer-route-groups"
 

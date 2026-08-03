@@ -27,7 +27,7 @@ describe("RoundTripLatencyMeasurement", () => {
       },
       transport: null
     })
-    window.yadaw.startRoundTripLatencyMeasurement = vi.fn().mockResolvedValue(
+    window.heron.startRoundTripLatencyMeasurement = vi.fn().mockResolvedValue(
       rpcSuccess({
         status: "preparing",
         inputChannel: 2,
@@ -36,7 +36,7 @@ describe("RoundTripLatencyMeasurement", () => {
         failure: null
       })
     )
-    window.yadaw.roundTripLatencyMeasurementSnapshot = vi.fn().mockResolvedValue(
+    window.heron.roundTripLatencyMeasurementSnapshot = vi.fn().mockResolvedValue(
       rpcSuccess({
         status: "complete",
         inputChannel: 2,
@@ -59,7 +59,7 @@ describe("RoundTripLatencyMeasurement", () => {
     await wrapper.get("button").trigger("click")
     await flushPromises()
 
-    expect(window.yadaw.startRoundTripLatencyMeasurement).toHaveBeenCalledWith(expect.any(Object), {
+    expect(window.heron.startRoundTripLatencyMeasurement).toHaveBeenCalledWith(expect.any(Object), {
       inputChannel: 2,
       outputChannel: 2
     })

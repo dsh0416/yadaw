@@ -16,7 +16,7 @@ import {
   type PluginRuntimeStatus,
   type PluginScanEvent,
   type PluginScanRequest
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import { PluginCatalogCache } from "./plugin-catalog-cache"
 import { parseProbeStdout } from "./plugin-descriptor-decoder"
 import { PluginScanner } from "./plugin-scanner"
@@ -664,7 +664,7 @@ export class PluginCatalogService {
         encoding: "utf8",
         env: {
           ...process.env,
-          ...(mode === "soft" ? { YADAW_VST3_PROBE_MODE: "soft" } : {})
+          ...(mode === "soft" ? { HERON_VST3_PROBE_MODE: "soft" } : {})
         }
       }
     )

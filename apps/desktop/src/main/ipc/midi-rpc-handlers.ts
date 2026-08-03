@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto"
 import { BrowserWindow, dialog } from "electron"
-import { IPC_CHANNELS, rpcFailure, rpcSuccess } from "@yadaw/contracts"
+import { IPC_CHANNELS, rpcFailure, rpcSuccess } from "@heron/contracts"
 import type {
   MidiImportPlan,
   MidiRuntimeResourceSnapshot,
@@ -9,7 +9,7 @@ import type {
   RpcError,
   RpcRequestMeta,
   RpcResult
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import { validateMidiSyncPreferences } from "../application-settings"
 import { t } from "../i18n"
 import type { IpcHandlerContext } from "./context"

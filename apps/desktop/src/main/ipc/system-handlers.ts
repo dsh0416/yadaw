@@ -1,6 +1,6 @@
 import { app, BrowserWindow } from "electron"
-import { IPC_CHANNELS } from "@yadaw/contracts"
-import { engineInfo, processGain } from "@yadaw/dsp-node"
+import { IPC_CHANNELS } from "@heron/contracts"
+import { engineInfo, processGain } from "@heron/dsp-node"
 import type { IpcHandlerContext } from "./context"
 import { registerRpcHandler } from "./rpc"
 import { validateMutationTarget, validateReadTarget } from "./resource-validation"

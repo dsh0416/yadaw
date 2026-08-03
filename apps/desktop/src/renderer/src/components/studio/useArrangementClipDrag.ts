@@ -1,5 +1,5 @@
 import { computed, shallowRef, useTemplateRef, type Ref } from "vue"
-import type { TempoMapSnapshot } from "@yadaw/contracts"
+import type { TempoMapSnapshot } from "@heron/contracts"
 import type { TimelineClip } from "../../stores/transport"
 import { clipStartSecondsFromPointer, findNearestTrackId } from "../../utils/clipDrag"
 

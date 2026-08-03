@@ -2,7 +2,7 @@ import { access, mkdtemp, readFile, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import type { ProjectGraphSnapshot } from "@yadaw/contracts"
+import type { ProjectGraphSnapshot } from "@heron/contracts"
 import { AssetMaterializer } from "./asset-materializer"
 
 const graph: ProjectGraphSnapshot = {

@@ -89,7 +89,7 @@ function launchElectron(): void {
   if (!rendererUrl) throw new Error("Vite renderer URL is unavailable")
 
   const launchedProcess = spawn(electronPath, [appDirectory], {
-    env: { ...process.env, YADAW_RENDERER_URL: rendererUrl },
+    env: { ...process.env, HERON_RENDERER_URL: rendererUrl },
     stdio: "inherit"
   })
   electronProcess = launchedProcess

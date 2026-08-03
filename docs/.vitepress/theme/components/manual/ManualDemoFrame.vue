@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { UiProvider } from "@yadaw/ui"
+import { UiProvider } from "@heron/ui"
 import { useData } from "vitepress"
 import { computed } from "vue"
 
@@ -39,16 +39,16 @@ const locale = computed(() => (localeIndex.value === "zh" ? "zh-CN" : "en-US"))
 
 <style scoped>
 .manual-demo-frame {
-  --ui-color-action: var(--yadaw-cyan);
-  --ui-color-action-hover: var(--yadaw-cyan-light);
-  --ui-color-action-pressed: var(--yadaw-cyan-dark);
+  --ui-color-action: var(--heron-cyan);
+  --ui-color-action-hover: var(--heron-cyan-light);
+  --ui-color-action-pressed: var(--heron-cyan-dark);
   --ui-color-action-text: #071315;
   --ui-color-border: var(--vp-c-divider);
   --ui-color-border-strong: var(--vp-c-border);
   --ui-color-control-pressed: var(--vp-c-bg);
   --ui-color-control-hover: var(--vp-c-bg-elv);
-  --ui-color-focus: var(--yadaw-cyan);
-  --ui-color-selection: color-mix(in srgb, var(--yadaw-cyan) 16%, var(--vp-c-bg-soft));
+  --ui-color-focus: var(--heron-cyan);
+  --ui-color-selection: color-mix(in srgb, var(--heron-cyan) 16%, var(--vp-c-bg-soft));
   --ui-color-surface-hover: var(--vp-c-bg-elv);
   --ui-color-surface-raised: var(--vp-c-bg-soft);
   --ui-color-text: var(--vp-c-text-1);
@@ -57,7 +57,7 @@ const locale = computed(() => (localeIndex.value === "zh" ? "zh-CN" : "en-US"))
   --ui-ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --ui-font-size-xs: 0.75rem;
   --ui-font-size-sm: 0.875rem;
-  --ui-focus-ring: 0 0 0 3px color-mix(in srgb, var(--yadaw-cyan) 36%, transparent);
+  --ui-focus-ring: 0 0 0 3px color-mix(in srgb, var(--heron-cyan) 36%, transparent);
   --ui-motion-fast: 100ms;
   --ui-opacity-disabled: 0.55;
   --ui-radius-md: 0.5rem;
@@ -104,15 +104,15 @@ const locale = computed(() => (localeIndex.value === "zh" ? "zh-CN" : "en-US"))
 .manual-demo-frame__eyebrow span {
   width: 1.75rem;
   height: 1px;
-  background: var(--yadaw-cyan);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--yadaw-cyan) 58%, transparent);
+  background: var(--heron-cyan);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--heron-cyan) 58%, transparent);
 }
 
 .manual-demo-frame__title {
   margin: 0;
   border: 0;
   color: var(--vp-c-text-1);
-  font-family: var(--yadaw-display);
+  font-family: var(--heron-display);
   font-size: 1.6rem;
   font-weight: 650;
   letter-spacing: -0.025em;

@@ -3,7 +3,7 @@ import {
   INITIAL_AUDIO_RUNTIME_SNAPSHOT,
   IPC_CHANNELS,
   IPC_PROTOCOL_VERSION
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import type {
   AudioLifecycleState,
   AudioRuntimeSnapshot,
@@ -15,7 +15,7 @@ import type {
   RecordingLifecycleState,
   RecordingSession,
   TransportCommand
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import { ApplicationStateStore } from "./kernel/application-state-store"
 
 type ProjectTransition = "creating" | "opening" | "saving" | "closing"

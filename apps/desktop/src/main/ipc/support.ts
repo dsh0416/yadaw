@@ -4,7 +4,7 @@ import { statfs } from "node:fs/promises"
 import { cpus, freemem, totalmem } from "node:os"
 import { isAbsolute, join, relative } from "node:path"
 import { fileURLToPath } from "node:url"
-import { APPLICATION_WINDOW_COMMAND_IDS, AUDIO_BACKENDS } from "@yadaw/contracts"
+import { APPLICATION_WINDOW_COMMAND_IDS, AUDIO_BACKENDS } from "@heron/contracts"
 import type {
   ApplicationWindowCommandId,
   ApplicationSettingsPatch,
@@ -19,7 +19,7 @@ import type {
   StorageSpaceSnapshot,
   SystemPerformanceSnapshot,
   WaveformWindowRequest
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import { isAppLocale } from "../../shared/i18n"
 import type { ApplicationSettingsStore } from "../application-settings"
 import type { AudioHostService } from "../audio-host-service"
@@ -231,7 +231,7 @@ export function assertTrustedSender(event: IpcMainInvokeEvent): void {
   }
 
   const senderUrl = new URL(event.senderFrame.url)
-  const developmentUrl = process.env.YADAW_RENDERER_URL
+  const developmentUrl = process.env.HERON_RENDERER_URL
 
   if (developmentUrl && senderUrl.origin === new URL(developmentUrl).origin) {
     return

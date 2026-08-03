@@ -26,7 +26,7 @@ fn spawn_ingress(
     liveness: Liveness,
 ) -> std::io::Result<thread::JoinHandle<()>> {
     thread::Builder::new()
-        .name("yadaw-ipc-ingress".into())
+        .name("heron-ipc-ingress".into())
         .spawn(move || {
             let mut receivers = match ipc_channel::ipc::IpcReceiverSet::new() {
                 Ok(value) => value,

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Radio } from "@lucide/vue"
 import { useI18n } from "vue-i18n"
-import type { AudioRuntimeSnapshot } from "@yadaw/contracts"
+import type { AudioRuntimeSnapshot } from "@heron/contracts"
 import type { AudioTelemetryStatistics } from "../../stores/audioRuntime"
 
 defineProps<{

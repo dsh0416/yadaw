@@ -1,4 +1,4 @@
-import type { WaveformDisplayMode, WaveformPeakWindow } from "@yadaw/contracts"
+import type { WaveformDisplayMode, WaveformPeakWindow } from "@heron/contracts"
 
 export interface WaveformLine {
   x: number

@@ -1,5 +1,5 @@
 [package]
-name = "yadaw-iced-ui"
+name = "heron-iced-ui"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

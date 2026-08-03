@@ -6,7 +6,7 @@ import { i18n, setAppLocale } from "./i18n"
 import { router } from "./router"
 import { useApplicationSettingsStore } from "./stores/applicationSettings"
 import "unfonts.css"
-import "@yadaw/ui/styles.css"
+import "@heron/ui/styles.css"
 import "./styles.css"
 
 async function bootstrap(): Promise<void> {

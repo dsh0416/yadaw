@@ -21,6 +21,17 @@ use std::{
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
+use heron_dsp_runtime::protocol::{
+    ControlCommand, ControlRequest, HostEvent, MAX_MESSAGE_BYTES, ParameterCommand,
+    ParameterGesture, ParameterTargetKind, PriorityCommand, PriorityRequest, PriorityResponse,
+};
+use heron_ipc_transport::{
+    ArenaReceiver, HostBootstrap, LeaseRegistry, MAX_OUTSTANDING_LEASE_BYTES,
+    MAX_OUTSTANDING_LEASES, MappingCommand, MappingEvent, ParameterEnqueue, ParameterProducer,
+    SharedMemoryDescriptor, TelemetryReader, TelemetrySnapshot, WirePacket, create_parameter_ring,
+    create_telemetry_page, decode_body, decode_response_to_attachments, encode_body,
+    encode_priority, encode_request_with_attachments,
+};
 use ipc_channel::{
     TryRecvError,
     ipc::{self, IpcOneShotServer, IpcReceiver, IpcSender},
@@ -30,17 +41,6 @@ use napi::{
     bindgen_prelude::{Buffer, Object},
 };
 use napi_derive::napi;
-use yadaw_dsp_runtime::protocol::{
-    ControlCommand, ControlRequest, HostEvent, MAX_MESSAGE_BYTES, ParameterCommand,
-    ParameterGesture, ParameterTargetKind, PriorityCommand, PriorityRequest, PriorityResponse,
-};
-use yadaw_ipc_transport::{
-    ArenaReceiver, HostBootstrap, LeaseRegistry, MAX_OUTSTANDING_LEASE_BYTES,
-    MAX_OUTSTANDING_LEASES, MappingCommand, MappingEvent, ParameterEnqueue, ParameterProducer,
-    SharedMemoryDescriptor, TelemetryReader, TelemetrySnapshot, WirePacket, create_parameter_ring,
-    create_telemetry_page, decode_body, decode_response_to_attachments, encode_body,
-    encode_priority, encode_request_with_attachments,
-};
 
 const OUTBOUND_CAPACITY: usize = 256;
 const ROUTER_POLL: Duration = Duration::from_millis(50);

@@ -1,6 +1,6 @@
 import { mount } from "@vue/test-utils"
 import { afterEach, describe, expect, it } from "vitest"
-import { UiCascadingSelect } from "@yadaw/ui"
+import { UiCascadingSelect } from "@heron/ui"
 import MixerInputCapsule from "./MixerInputCapsule.vue"
 
 afterEach(() => {

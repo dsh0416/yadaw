@@ -1,4 +1,4 @@
-import { normalizePluginDescriptor, type PluginDescriptor } from "@yadaw/contracts"
+import { normalizePluginDescriptor, type PluginDescriptor } from "@heron/contracts"
 
 export function bytes(value: unknown): Uint8Array {
   if (value instanceof Uint8Array) return value

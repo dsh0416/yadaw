@@ -68,7 +68,7 @@ jobs:
       - name: Install Playwright Chromium and Linux dependencies
         if: runner.os == 'Linux'
         run: >-
-          pnpm --filter @yadaw/design-system exec playwright install
+          pnpm --filter @heron/design-system exec playwright install
           --with-deps chromium
 
       - name: Run repository checks

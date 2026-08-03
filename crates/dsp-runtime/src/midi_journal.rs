@@ -426,7 +426,7 @@ mod tests {
 
     fn path(label: &str) -> std::path::PathBuf {
         std::env::temp_dir().join(format!(
-            "yadaw-{label}-{}-{}.midijournal",
+            "heron-{label}-{}-{}.midijournal",
             std::process::id(),
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)

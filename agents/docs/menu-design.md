@@ -284,7 +284,7 @@ Every applicable row or panel defines:
 ## Content model
 
 The shared renderer consumes an explicit discriminated union. Product hosts derive it from stores
-and translate the emitted stable ID into intent. `@yadaw/ui` does not read Pinia, Electron, IPC,
+and translate the emitted stable ID into intent. `@heron/ui` does not read Pinia, Electron, IPC,
 or project data.
 
 ```ts

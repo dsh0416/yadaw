@@ -1,6 +1,6 @@
 appId: dev.yadaw.studio
 productName: YADAW
-# AppImage rejects `@` from the scoped package name `@yadaw/desktop`.
+# AppImage rejects `@` from the scoped package name `@heron/desktop`.
 executableName: yadaw
 asar: true
 asarUnpack:
@@ -19,9 +19,9 @@ files:
   - build/icon.png
   - package.json
   - node_modules/**/*
-  - "!node_modules/@yadaw/dsp-node/src/**/*"
-  - "!node_modules/@yadaw/dsp-node/Cargo.toml"
-  - "!node_modules/@yadaw/dsp-node/build.rs"
+  - "!node_modules/@heron/dsp-node/src/**/*"
+  - "!node_modules/@heron/dsp-node/Cargo.toml"
+  - "!node_modules/@heron/dsp-node/build.rs"
   # Build-only native parsers pulled by Unhead/Unplugin must not enter universal packages.
   - "!node_modules/@oxc-parser/**/*"
   - "!node_modules/oxc-parser/**/*"
@@ -32,10 +32,10 @@ win:
   extraResources:
     - from: ../../THIRD_PARTY_NOTICES.txt
       to: THIRD_PARTY_NOTICES.txt
-    - from: ../../target/release/yadaw-audio-host.exe
-      to: yadaw-audio-host.exe
-    - from: ../../target/release/yadaw-vst3-probe.exe
-      to: yadaw-vst3-probe.exe
+    - from: ../../target/release/heron-audio-host.exe
+      to: heron-audio-host.exe
+    - from: ../../target/release/heron-vst3-probe.exe
+      to: heron-vst3-probe.exe
     - from: ../../target/bundles
       to: plugins
       filter:
@@ -53,10 +53,10 @@ mac:
   extraResources:
     - from: ../../THIRD_PARTY_NOTICES.txt
       to: THIRD_PARTY_NOTICES.txt
-    - from: ../../target/release/yadaw-audio-host
-      to: yadaw-audio-host
-    - from: ../../target/release/yadaw-vst3-probe
-      to: yadaw-vst3-probe
+    - from: ../../target/release/heron-audio-host
+      to: heron-audio-host
+    - from: ../../target/release/heron-vst3-probe
+      to: heron-vst3-probe
     - from: ../../target/bundles
       to: plugins
       filter:
@@ -71,10 +71,10 @@ linux:
   extraResources:
     - from: ../../THIRD_PARTY_NOTICES.txt
       to: THIRD_PARTY_NOTICES.txt
-    - from: ../../target/release/yadaw-audio-host
-      to: yadaw-audio-host
-    - from: ../../target/release/yadaw-vst3-probe
-      to: yadaw-vst3-probe
+    - from: ../../target/release/heron-audio-host
+      to: heron-audio-host
+    - from: ../../target/release/heron-vst3-probe
+      to: heron-vst3-probe
     - from: ../../target/bundles
       to: plugins
       filter:

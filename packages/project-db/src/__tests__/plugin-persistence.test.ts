@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import type { PluginDescriptor, ProjectCommand } from "@yadaw/contracts"
+import type { PluginDescriptor, ProjectCommand } from "@heron/contracts"
 import { isPluginCommand, persistPluginCommand } from "../internal/plugin-persistence"
 
 const descriptor: PluginDescriptor = {

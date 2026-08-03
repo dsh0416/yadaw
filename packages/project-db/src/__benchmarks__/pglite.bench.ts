@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { performance } from "node:perf_hooks"
-import type { ProjectCommand } from "@yadaw/contracts"
+import type { ProjectCommand } from "@heron/contracts"
 import { afterAll, beforeAll, bench, describe } from "vitest"
 import { ProjectDatabase } from "../node"
 
@@ -31,7 +31,7 @@ function formatPercentiles(samples: number[]): string {
 }
 
 beforeAll(async () => {
-  directory = await mkdtemp(join(tmpdir(), "yadaw-pglite-bench-"))
+  directory = await mkdtemp(join(tmpdir(), "heron-pglite-bench-"))
   database = await ProjectDatabase.create(join(directory, "pgdata"), {
     name: "PGlite benchmark",
     sampleRate: 48_000,

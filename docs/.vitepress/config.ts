@@ -1,4 +1,4 @@
-import { yadawFontsOptions } from "@yadaw/ui/fonts"
+import { heronFontsOptions } from "@heron/ui/fonts"
 import Unfonts from "unplugin-fonts/vite"
 import { defineConfig, type HeadConfig, type MarkdownOptions, type PageData } from "vitepress"
 import { createBlogSidebar } from "./blog-sidebar"
@@ -87,7 +87,7 @@ export default defineConfig({
       __VUE_PROD_DEVTOOLS__: false,
       __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: false
     },
-    plugins: [Unfonts(yadawFontsOptions)],
+    plugins: [Unfonts(heronFontsOptions)],
     ssr: {
       noExternal: ["vue-i18n"]
     }

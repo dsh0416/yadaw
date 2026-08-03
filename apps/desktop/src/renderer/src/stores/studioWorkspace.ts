@@ -3,15 +3,15 @@ import { acceptHMRUpdate, defineStore } from "pinia"
 import { computed } from "vue"
 
 export const useStudioWorkspaceStore = defineStore("studio-workspace", () => {
-  const soundBrowserOpen = useStorage("yadaw.workspace.sound-browser.v1", true)
-  const notesPanelOpen = useStorage("yadaw.workspace.notes-panel.v1", false)
-  const activeNotesTab = useStorage<"project" | "track">("yadaw.workspace.notes-tab.v1", "project")
-  const lowerDockOpen = useStorage("yadaw.workspace.mixer-dock.v1", true)
+  const soundBrowserOpen = useStorage("heron.workspace.sound-browser.v1", true)
+  const notesPanelOpen = useStorage("heron.workspace.notes-panel.v1", false)
+  const activeNotesTab = useStorage<"project" | "track">("heron.workspace.notes-tab.v1", "project")
+  const lowerDockOpen = useStorage("heron.workspace.mixer-dock.v1", true)
   const activeLowerDock = useStorage<"mixer" | "piano-roll">(
-    "yadaw.workspace.lower-dock-tab.v1",
+    "heron.workspace.lower-dock-tab.v1",
     "mixer"
   )
-  const mixerDockHeight = useStorage("yadaw.workspace.mixer-dock-height.v1", 284)
+  const mixerDockHeight = useStorage("heron.workspace.mixer-dock-height.v1", 284)
 
   const mixerDockOpen = computed({
     get: () => lowerDockOpen.value && activeLowerDock.value === "mixer",

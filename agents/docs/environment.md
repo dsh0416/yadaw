@@ -93,9 +93,9 @@ from silently replacing the versions declared by the repository.
 Use pnpm workspace filters for package-level commands:
 
 ```sh
-mise exec -- pnpm --filter @yadaw/desktop test:unit
-mise exec -- pnpm --filter @yadaw/project-db test:integration
-mise exec -- pnpm --filter @yadaw/dsp-node build
+mise exec -- pnpm --filter @heron/desktop test:unit
+mise exec -- pnpm --filter @heron/project-db test:integration
+mise exec -- pnpm --filter @heron/dsp-node build
 mise exec -- pnpm format:check
 mise exec -- pnpm lint
 ```
@@ -109,19 +109,19 @@ examples, and benchmark compilation; `mise run check` remains the merge gate.
 
 Repository native commands discover `rustc -vV`'s host triple and build into
 `target/<host-triple>/<profile>`. The native build script stages only
-`yadaw-audio-host` and `yadaw-vst3-probe` back into `target/debug` or
+`heron-audio-host` and `heron-vst3-probe` back into `target/debug` or
 `target/release` for stable Electron paths. An old implicit-host cache can be
 removed once with `cargo clean`; the scripts never clean it automatically.
 
 VST3 SDK bindings are generated into Cargo's `OUT_DIR` by
-`yadaw-vst3-host-sys/build.rs` and are not checked into Git. A clean build
+`heron-vst3-host-sys/build.rs` and are not checked into Git. A clean build
 therefore requires the pinned LLVM/Clang toolchain, including on non-Windows
 hosts. Cargo reruns Bindgen when the wrapper or its VST3/ARA header inputs
 change.
 
 `pnpm check` and `pnpm check:native` run `pnpm sync:napi-bindings` before
 type-aware Oxlint, residual Vue ESLint, package TypeScript checks, and tests
-that resolve `@yadaw/dsp-node` / `@yadaw/audio-host-client`, so the gitignored
+that resolve `@heron/dsp-node` / `@heron/audio-host-client`, so the gitignored
 loaders and typings exist in CI and clean checkouts.
 
 Oxfmt formats the tracked TypeScript, JavaScript, Vue, JSON, YAML, Markdown,

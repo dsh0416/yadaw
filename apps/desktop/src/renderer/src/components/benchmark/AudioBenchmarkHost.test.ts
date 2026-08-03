@@ -26,7 +26,7 @@ describe("AudioBenchmarkHost", () => {
   it("runs the desktop benchmark API from the dialog action", async () => {
     const pinia = createPinia()
     useAudioRuntimeStore(pinia).applyResources(testBootstrap().audioResources)
-    window.yadaw.runAudioBenchmark = vi.fn().mockResolvedValue(
+    window.heron.runAudioBenchmark = vi.fn().mockResolvedValue(
       rpcSuccess({
         measuredAt: 1,
         durationMs: 600,
@@ -65,7 +65,7 @@ describe("AudioBenchmarkHost", () => {
     runButton?.click()
     await flushPromises()
 
-    expect(window.yadaw.runAudioBenchmark).toHaveBeenCalledOnce()
+    expect(window.heron.runAudioBenchmark).toHaveBeenCalledOnce()
     expect(document.body.textContent).toContain("50% headroom")
     wrapper.unmount()
   })

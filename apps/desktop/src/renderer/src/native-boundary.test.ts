@@ -16,9 +16,9 @@ describe("renderer native-call boundary", () => {
   const rendererRoot = import.meta.dirname
   const desktopSourceRoot = resolve(rendererRoot, "../..")
 
-  it("allows window.yadaw only in Pinia stores", () => {
+  it("allows window.heron only in Pinia stores", () => {
     const violations = sourceFiles(rendererRoot)
-      .filter((path) => readFileSync(path, "utf8").includes("window.yadaw"))
+      .filter((path) => readFileSync(path, "utf8").includes("window.heron"))
       .filter((path) => !relative(rendererRoot, path).replaceAll("\\", "/").startsWith("stores/"))
       .map((path) => relative(rendererRoot, path))
 
@@ -29,7 +29,7 @@ describe("renderer native-call boundary", () => {
     const roots = [rendererRoot, resolve(desktopSourceRoot, "preload")]
     const violations = roots
       .flatMap(sourceFiles)
-      .filter((path) => readFileSync(path, "utf8").includes("@yadaw/dsp-node"))
+      .filter((path) => readFileSync(path, "utf8").includes("@heron/dsp-node"))
       .map((path) => relative(desktopSourceRoot, path))
 
     expect(violations).toEqual([])

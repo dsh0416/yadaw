@@ -1,4 +1,4 @@
-import type { ProjectGraphSnapshot } from "@yadaw/contracts"
+import type { ProjectGraphSnapshot } from "@heron/contracts"
 import type { AudioHostGraph } from "./audio-host-service"
 
 export class AudioGraphCompiler {

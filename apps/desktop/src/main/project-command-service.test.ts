@@ -8,9 +8,9 @@ import type {
   ProjectCommand,
   ProjectCommandResult,
   ProjectSession
-} from "@yadaw/contracts"
-import { IPC_PROTOCOL_VERSION, rpcSuccess } from "@yadaw/contracts"
-import { applyToGraph } from "@yadaw/project-model"
+} from "@heron/contracts"
+import { IPC_PROTOCOL_VERSION, rpcSuccess } from "@heron/contracts"
+import { applyToGraph } from "@heron/project-model"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { AssetMaterializer } from "./asset-materializer"
 import { AudioGraphCompiler } from "./audio-graph-compiler"
@@ -217,7 +217,7 @@ async function mixer(
   projects: ProjectMock,
   audioHost?: Partial<AudioHostService>
 ): Promise<ProjectHarness> {
-  const directory = await mkdtemp(join(tmpdir(), "yadaw-mixer-service-"))
+  const directory = await mkdtemp(join(tmpdir(), "heron-mixer-service-"))
   directories.push(directory)
   const initialGraph = structuredClone(projects.initialGraph)
   const host = audioHost

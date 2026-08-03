@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue"
 import { useI18n } from "vue-i18n"
-import type { TempoMapSnapshot, TimeSignatureEventState } from "@yadaw/contracts"
+import type { TempoMapSnapshot, TimeSignatureEventState } from "@heron/contracts"
 import {
   barTicksThroughTick,
   beatTicksThroughTick,

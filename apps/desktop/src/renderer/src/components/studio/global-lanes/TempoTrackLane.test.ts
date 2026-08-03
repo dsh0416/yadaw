@@ -1,6 +1,6 @@
 import { mount } from "@vue/test-utils"
 import { describe, expect, it } from "vitest"
-import type { TempoMapSnapshot } from "@yadaw/contracts"
+import type { TempoMapSnapshot } from "@heron/contracts"
 import TempoTrackLane from "./TempoTrackLane.vue"
 
 const tempoMap: TempoMapSnapshot = {

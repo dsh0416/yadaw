@@ -153,7 +153,7 @@ export const IPC_CHANNELS = {
   operationAcknowledge: "operation:acknowledge"
 } as const
 
-export interface YadawDesktopApi {
+export interface HeronDesktopApi {
   readonly platform: DesktopPlatform
   bootstrap(meta: RpcRequestMeta): Promise<RpcResult<ApplicationBootstrapSnapshot>>
   engineInfo(meta: RpcRequestMeta): Promise<RpcResult<NativeEngineInfo>>

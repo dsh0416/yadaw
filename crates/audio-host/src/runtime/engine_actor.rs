@@ -30,7 +30,7 @@ async fn forward_to_ui(
 
 enum ActorCommand {
     Control(ControlCommand),
-    Parameter(yadaw_dsp_runtime::protocol::ParameterCommand),
+    Parameter(heron_dsp_runtime::protocol::ParameterCommand),
     /// ARA document model mutation owned by the winit/VST3 controller thread.
     SyncAraGraph {
         graph: Option<LiveMixerGraph>,
@@ -94,11 +94,11 @@ fn refresh_graph_handles(handles: &Mutex<GraphParameterHandles>, graph: &LiveMix
 fn mixer_parameter_command(
     audio_engine: &engine::AudioEngine,
     handles: &Mutex<GraphParameterHandles>,
-    command: yadaw_dsp_runtime::protocol::ParameterCommand,
+    command: heron_dsp_runtime::protocol::ParameterCommand,
 ) -> ControlResult {
     let mapping = handles.lock().ok();
     let (target, id, parameter, value) = match command.target_kind {
-        yadaw_dsp_runtime::protocol::ParameterTargetKind::MixerChannel => {
+        heron_dsp_runtime::protocol::ParameterTargetKind::MixerChannel => {
             let Some(id) = mapping
                 .as_ref()
                 .and_then(|values| values.channels.get(&command.runtime_handle))
@@ -119,7 +119,7 @@ fn mixer_parameter_command(
             };
             ("channel", id, parameter, value)
         }
-        yadaw_dsp_runtime::protocol::ParameterTargetKind::MixerSend => {
+        heron_dsp_runtime::protocol::ParameterTargetKind::MixerSend => {
             let Some(id) = mapping
                 .as_ref()
                 .and_then(|values| values.sends.get(&command.runtime_handle))
@@ -140,7 +140,7 @@ fn mixer_parameter_command(
             };
             ("send", id, parameter, value)
         }
-        yadaw_dsp_runtime::protocol::ParameterTargetKind::Plugin => {
+        heron_dsp_runtime::protocol::ParameterTargetKind::Plugin => {
             return control_error! {
                 message: "plugin parameter was routed to the engine actor".into(),
             };

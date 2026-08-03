@@ -1,10 +1,10 @@
 import { mount } from "@vue/test-utils"
 import { describe, expect, it } from "vitest"
-import YadawLogo from "./YadawLogo.vue"
+import HeronLogo from "./HeronLogo.vue"
 
-describe("YadawLogo", () => {
+describe("HeronLogo", () => {
   it("uses the canonical lockup by default", () => {
-    const wrapper = mount(YadawLogo)
+    const wrapper = mount(HeronLogo)
 
     expect(wrapper.attributes("role")).toBe("img")
     expect(wrapper.attributes("aria-label")).toBe("YADAW")
@@ -13,7 +13,7 @@ describe("YadawLogo", () => {
   })
 
   it("supports the official mark and wordmark variants", async () => {
-    const wrapper = mount(YadawLogo, { props: { variant: "mark" } })
+    const wrapper = mount(HeronLogo, { props: { variant: "mark" } })
 
     expect(wrapper.find("svg").exists()).toBe(true)
     expect(wrapper.text()).toBe("")
@@ -25,7 +25,7 @@ describe("YadawLogo", () => {
   })
 
   it("can be decorative when another accessible brand label is present", () => {
-    const wrapper = mount(YadawLogo, { props: { decorative: true } })
+    const wrapper = mount(HeronLogo, { props: { decorative: true } })
 
     expect(wrapper.attributes("aria-hidden")).toBe("true")
     expect(wrapper.attributes("role")).toBeUndefined()

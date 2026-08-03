@@ -1,9 +1,9 @@
 use std::fs;
 
+use heron_dsp_runtime::midi::NormalizedMidiEventKind;
+use heron_dsp_runtime::midi_journal::{journal_records_to_take, recover_midi_journal};
 use napi::{Error, Result, Status, bindgen_prelude::Buffer};
 use napi_derive::napi;
-use yadaw_dsp_runtime::midi::NormalizedMidiEventKind;
-use yadaw_dsp_runtime::midi_journal::{journal_records_to_take, recover_midi_journal};
 
 use crate::midi::{NativeMidiEvent, NativeMidiNote};
 

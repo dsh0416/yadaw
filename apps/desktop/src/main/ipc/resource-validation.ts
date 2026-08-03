@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto"
-import { rpcFailure } from "@yadaw/contracts"
-import type { ResourceRef, RpcRequestMeta, RpcResult } from "@yadaw/contracts"
+import { rpcFailure } from "@heron/contracts"
+import type { ResourceRef, RpcRequestMeta, RpcResult } from "@heron/contracts"
 
 export function sameResourceRef(left: ResourceRef | undefined, right: ResourceRef): boolean {
   return (

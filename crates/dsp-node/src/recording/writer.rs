@@ -201,7 +201,7 @@ impl RecorderController {
         let thread_active = Arc::clone(&active);
         let thread_dropouts = Arc::clone(&dropout_frames);
         let thread = thread::Builder::new()
-            .name("yadaw-recording-writer".to_owned())
+            .name("heron-recording-writer".to_owned())
             .spawn(move || {
                 writer_thread(
                     consumer,

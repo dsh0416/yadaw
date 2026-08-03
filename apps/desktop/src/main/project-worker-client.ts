@@ -4,7 +4,7 @@ import type {
   ProjectAssetSummary,
   ProjectCommand,
   ProjectConfiguration
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import type {
   AssetContentHash,
   CommittedProjectCommand,
@@ -23,7 +23,7 @@ import type {
   WorkerResponse,
   WorkerResult,
   WorkerResultMap
-} from "@yadaw/project-db/protocol"
+} from "@heron/project-db/protocol"
 
 interface PendingCall {
   settle(message: WorkerResponse): void

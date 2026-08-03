@@ -9,8 +9,8 @@ import type {
   ProjectCommand,
   ProjectConfiguration,
   ProjectSession
-} from "@yadaw/contracts"
-import { PROJECT_SAMPLE_RATES } from "@yadaw/contracts"
+} from "@heron/contracts"
+import { PROJECT_SAMPLE_RATES } from "@heron/contracts"
 import type {
   AssetContentHash,
   CommittedProjectCommand,
@@ -23,7 +23,7 @@ import type {
   ProjectCommandTransactionStatus,
   StoredWaveformWindow,
   WaveformAssetInput
-} from "@yadaw/project-db/protocol"
+} from "@heron/project-db/protocol"
 import type { ApplicationSettingsStore } from "./application-settings"
 import type { ProjectAssetReader } from "./asset-materializer"
 import { ProjectArchiveJournal } from "./project-archive-journal"

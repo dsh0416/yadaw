@@ -21,7 +21,7 @@ fn temporary_file(label: &str) -> PathBuf {
         .duration_since(UNIX_EPOCH)
         .expect("time moves forward")
         .as_nanos();
-    std::env::temp_dir().join(format!("yadaw-{label}-{}-{nonce}.bwf", std::process::id()))
+    std::env::temp_dir().join(format!("heron-{label}-{}-{nonce}.bwf", std::process::id()))
 }
 
 fn start_config(path: &std::path::Path) -> NativeRecordingStartConfig {

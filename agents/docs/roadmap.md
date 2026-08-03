@@ -113,9 +113,9 @@ This work must not block M1–M3.
 ### Native iced UI (do first)
 
 - [ ] Define a shared iced design language (tokens, typography, controls) aligned
-      with `@yadaw/ui` where practical
+      with `@heron/ui` where practical
 - [ ] Apply it to `audio-host` editor chrome and the generic parameter editor
-- [ ] Apply it to existing built-ins (Gain, Sine, Metronome) via `yadaw-plugin-ui`
+- [ ] Apply it to existing built-ins (Gain, Sine, Metronome) via `heron-plugin-ui`
 
 ### Built-in processors (after UI language)
 

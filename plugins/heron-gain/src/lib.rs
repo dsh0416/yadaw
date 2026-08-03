@@ -2,11 +2,11 @@
 
 use std::sync::Arc;
 
+use heron_plugin_ui::{level_meter, parameter_knob};
 use truce::prelude::*;
 use truce_iced::iced::widget::{Column, Row, container, text};
 use truce_iced::iced::{Alignment, Element, Length, alignment};
 use truce_iced::{IcedEditor, IcedPlugin, IntoElement, Message, ParamCache};
-use yadaw_plugin_ui::{level_meter, parameter_knob};
 
 use GainParamsParamId as P;
 
@@ -43,9 +43,9 @@ impl IcedPlugin<GainParams> for GainUi {
         &'a self,
         params: &'a ParamCache<GainParams>,
     ) -> Element<'a, Message<Self::Message>> {
-        let palette = yadaw_plugin_ui::palette();
+        let palette = heron_plugin_ui::palette();
         let title = text("YADAW  /  GAIN")
-            .size(yadaw_plugin_ui::type_size::BODY_COMPACT)
+            .size(heron_plugin_ui::type_size::BODY_COMPACT)
             .color(palette.text);
         let value = text(params.label(P::Gain)).size(30).color(palette.audio);
         let control = Column::new()
@@ -57,7 +57,7 @@ impl IcedPlugin<GainParams> for GainUi {
                     .size(126.0)
                     .el(),
             )
-            .spacing(yadaw_plugin_ui::space::MD)
+            .spacing(heron_plugin_ui::space::MD)
             .align_x(Alignment::Center);
         let meters = level_meter(&[P::MeterLeft, P::MeterRight], params)
             .size(34.0, 180.0)
@@ -65,10 +65,10 @@ impl IcedPlugin<GainParams> for GainUi {
         let surface = Row::new()
             .push(control)
             .push(meters)
-            .spacing(yadaw_plugin_ui::space::XL)
+            .spacing(heron_plugin_ui::space::XL)
             .align_y(alignment::Vertical::Center);
         container(surface)
-            .padding(yadaw_plugin_ui::space::XL)
+            .padding(heron_plugin_ui::space::XL)
             .width(Length::Fill)
             .height(Length::Fill)
             .align_x(Alignment::Center)
@@ -86,14 +86,14 @@ impl IcedPlugin<GainParams> for GainUi {
     }
 
     fn theme(&self) -> truce_iced::iced::Theme {
-        yadaw_plugin_ui::theme()
+        heron_plugin_ui::theme()
     }
 }
 
 /// Stateless gain processor.
-pub struct YadawGain;
+pub struct HeronGain;
 
-impl PurePluginLogic for YadawGain {
+impl PurePluginLogic for HeronGain {
     type Params = GainParams;
 
     fn bus_layouts() -> Vec<BusLayout> {
@@ -137,14 +137,14 @@ impl PurePluginLogic for YadawGain {
     }
 
     fn editor(params: Arc<GainParams>) -> Box<dyn Editor> {
-        IcedEditor::<GainParams, GainUi>::new(params, yadaw_plugin_ui::GAIN_EDITOR_SIZE)
+        IcedEditor::<GainParams, GainUi>::new(params, heron_plugin_ui::GAIN_EDITOR_SIZE)
             .with_meter_ids(vec![P::MeterLeft, P::MeterRight])
             .into_editor()
     }
 }
 
 truce::plugin! {
-    logic: YadawGain,
+    logic: HeronGain,
     params: GainParams,
 }
 
@@ -165,7 +165,7 @@ mod tests {
 
     #[test]
     fn exposes_mono_mono_to_stereo_and_stereo_layouts() {
-        let layouts = <YadawGain as PurePluginLogic>::bus_layouts()
+        let layouts = <HeronGain as PurePluginLogic>::bus_layouts()
             .into_iter()
             .map(|layout| {
                 (

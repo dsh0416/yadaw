@@ -9,7 +9,7 @@ const migrationsDirectory = resolve(import.meta.dirname, "../../packages/project
 const bundledMigrationsDirectory = resolve(import.meta.dirname, "out/drizzle")
 
 const projectMigrations: Plugin = {
-  name: "yadaw-project-migrations",
+  name: "heron-project-migrations",
   buildStart() {
     this.addWatchFile(migrationsDirectory)
   },
@@ -38,8 +38,8 @@ export default defineConfig({
       external: [
         "electron",
         "@electric-sql/pglite",
-        "@yadaw/audio-host-client",
-        "@yadaw/dsp-node",
+        "@heron/audio-host-client",
+        "@heron/dsp-node",
         ...nodeBuiltins
       ]
     },

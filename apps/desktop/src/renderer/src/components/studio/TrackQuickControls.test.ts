@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { mount } from "@vue/test-utils"
 import { createPinia } from "pinia"
-import type { MixerChannelState } from "@yadaw/contracts"
+import type { MixerChannelState } from "@heron/contracts"
 import TrackQuickControls from "./TrackQuickControls.vue"
 
 const channel: MixerChannelState = {

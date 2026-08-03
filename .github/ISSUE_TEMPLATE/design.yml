@@ -54,7 +54,7 @@ body:
     attributes:
       label: Constraints and risks
       description: |
-        Note real-time safety, process boundaries (`window.yadaw` / native addon),
+        Note real-time safety, process boundaries (`window.heron` / native addon),
         compatibility before 1.0, or review cost if relevant.
     validations:
       required: false

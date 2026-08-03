@@ -5,7 +5,7 @@ import type {
   ApplicationSettingsResourceSnapshot,
   RpcRequestMeta,
   RpcResult
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import { rpcFailure, rpcSuccess, settingsSnapshot, testBootstrap } from "../test/ipc"
 import { useApplicationSettingsStore } from "./applicationSettings"
 
@@ -33,7 +33,7 @@ function settings(overrides: Partial<ApplicationSettings> = {}): ApplicationSett
 }
 
 function stubApi(overrides: Record<string, unknown>): void {
-  Object.assign(window.yadaw as unknown as Record<string, unknown>, overrides)
+  Object.assign(window.heron as unknown as Record<string, unknown>, overrides)
 }
 
 beforeEach(() => {
@@ -130,7 +130,7 @@ describe("optimistic display settings", () => {
 
     await store.setTheme("system")
 
-    expect(window.yadaw.updateApplicationSettings).not.toHaveBeenCalled()
+    expect(window.heron.updateApplicationSettings).not.toHaveBeenCalled()
   })
 
   it("rolls the theme back and reports the failure", async () => {
@@ -220,7 +220,7 @@ describe("optimistic display settings", () => {
     expect(store.settings?.locale).toBe("zh-cmn-Hans-CN")
 
     await store.setLocale("zh-cmn-Hans-CN")
-    expect(window.yadaw.updateApplicationSettings).toHaveBeenCalledTimes(1)
+    expect(window.heron.updateApplicationSettings).toHaveBeenCalledTimes(1)
 
     stubApi({
       updateApplicationSettings: vi.fn(async () => rpcFailure("errors.unableToSaveDisplaySettings"))
@@ -238,7 +238,7 @@ describe("optimistic display settings", () => {
     expect(store.settings?.meterPeakHold).toBe("4s")
 
     await store.setMeterReturnRate("iec-type-i")
-    expect(window.yadaw.updateApplicationSettings).toHaveBeenLastCalledWith(expect.any(Object), {
+    expect(window.heron.updateApplicationSettings).toHaveBeenLastCalledWith(expect.any(Object), {
       meterReturnRate: "iec-type-i"
     })
   })
@@ -267,7 +267,7 @@ describe("optimistic display settings", () => {
     await store.setMeterPeakHold("2s")
 
     expect(store.settings).toBeNull()
-    expect(window.yadaw.updateApplicationSettings).not.toHaveBeenCalled()
+    expect(window.heron.updateApplicationSettings).not.toHaveBeenCalled()
   })
 
   it("applies and rolls back the center C standard", async () => {
@@ -278,7 +278,7 @@ describe("optimistic display settings", () => {
     expect(store.settings?.midiCenterCStandard).toBe("roland-c4")
 
     await store.setMidiCenterCStandard("roland-c4")
-    expect(window.yadaw.updateApplicationSettings).toHaveBeenCalledTimes(1)
+    expect(window.heron.updateApplicationSettings).toHaveBeenCalledTimes(1)
 
     stubApi({
       updateApplicationSettings: vi.fn(async () => rpcFailure("errors.unableToSaveMidiSettings"))
@@ -313,7 +313,7 @@ describe("swap directory", () => {
 
     await store.openSwapDirectory()
 
-    expect(window.yadaw.openSwapDirectory).toHaveBeenCalledTimes(1)
+    expect(window.heron.openSwapDirectory).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -334,7 +334,7 @@ describe("software monitoring", () => {
 
     await store.setSoftwareMonitoringEnabled(false)
 
-    expect(window.yadaw.setSoftwareMonitoringEnabled).not.toHaveBeenCalled()
+    expect(window.heron.setSoftwareMonitoringEnabled).not.toHaveBeenCalled()
   })
 
   it("rolls back when the engine returns a typed failure", async () => {
@@ -395,7 +395,7 @@ describe("audio host runtime", () => {
 
     await store.configureAudioHostRuntime(runtime)
 
-    expect(window.yadaw.configureAudioHostRuntime).toHaveBeenCalledWith(expect.any(Object), runtime)
+    expect(window.heron.configureAudioHostRuntime).toHaveBeenCalledWith(expect.any(Object), runtime)
     expect(store.resolvedAudioHostRuntime).toEqual({
       workerThreads: 4,
       maxBlockingThreads: 8,

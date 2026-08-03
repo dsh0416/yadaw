@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { classifyAudioBenchmark } from "./audio-benchmark-service"
-import type { AudioIpcBenchmarkReport } from "@yadaw/contracts"
+import type { AudioIpcBenchmarkReport } from "@heron/contracts"
 
 function ipcReport(
   buildProfile: "debug" | "release",

@@ -8,7 +8,7 @@ import type { Options } from "unplugin-fonts/types"
  * Locale-specific faces (for example Noto Sans SC for Chinese) are loaded through
  * Unhead once the active document language is known — see `htmlLangForFontLocale`.
  */
-export const yadawFontsOptions = {
+export const heronFontsOptions = {
   fontsource: {
     families: [
       {

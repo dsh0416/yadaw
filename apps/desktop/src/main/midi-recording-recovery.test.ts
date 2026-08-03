@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
-import { recoverMidiJournalTake } from "@yadaw/dsp-node"
+import { recoverMidiJournalTake } from "@heron/dsp-node"
 import { MidiJournalWriter } from "./midi-recording-commit.fixture"
 
 describe("recoverMidiJournalTake", () => {
@@ -22,7 +22,7 @@ describe("recoverMidiJournalTake", () => {
   })
 
   it("maps notes and non-note event kinds from a journal", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "yadaw-midi-recover-napi-"))
+    const directory = await mkdtemp(join(tmpdir(), "heron-midi-recover-napi-"))
     directories.push(directory)
     const journalPath = join(directory, "take.midijournal")
     await MidiJournalWriter.write(journalPath, {
@@ -71,7 +71,7 @@ describe("recoverMidiJournalTake", () => {
   })
 
   it("propagates a corrupt journal tail flag", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "yadaw-midi-recover-tail-"))
+    const directory = await mkdtemp(join(tmpdir(), "heron-midi-recover-tail-"))
     directories.push(directory)
     const journalPath = join(directory, "take.midijournal")
     await MidiJournalWriter.write(journalPath, {

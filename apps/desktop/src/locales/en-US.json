@@ -32,7 +32,7 @@
     "close": "Close",
     "applicationMenu": "Application menu",
     "settings": "Settings",
-    "buildLabel": "Yadaw / build {version}",
+    "buildLabel": "Heron / build {version}",
     "categoriesAria": "{title} categories",
     "pagesAria": "{category} settings pages"
   },
@@ -331,7 +331,7 @@
     },
     "system": {
       "title": "System settings",
-      "scopeLabel": "Yadaw / System",
+      "scopeLabel": "Heron / System",
       "categories": {
         "system": {
           "label": "System",
@@ -675,7 +675,7 @@
     },
     "project": {
       "title": "Project settings",
-      "scopeLabel": "Yadaw / Project",
+      "scopeLabel": "Heron / Project",
       "categories": {
         "project": {
           "label": "Project",

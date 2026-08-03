@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm"
-import type { AudioClipPatch, ProjectCommand } from "@yadaw/contracts"
+import type { AudioClipPatch, ProjectCommand } from "@heron/contracts"
 import { audioClips } from "../schema"
 import type { ProjectTransaction } from "./database-types"
 

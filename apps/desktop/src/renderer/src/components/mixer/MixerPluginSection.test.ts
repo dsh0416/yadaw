@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest"
 import { DOMWrapper, flushPromises, mount } from "@vue/test-utils"
-import type { MixerChannelState, PluginDescriptor, PluginInstanceState } from "@yadaw/contracts"
+import type { MixerChannelState, PluginDescriptor, PluginInstanceState } from "@heron/contracts"
 import { PLUGIN_DRAG_TYPE } from "../plugins/plugin-drag"
 import MixerPluginSection from "./MixerPluginSection.vue"
 

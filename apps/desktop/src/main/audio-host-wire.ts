@@ -3,8 +3,8 @@ import type {
   CompiledAudioGraphSnapshot,
   PluginEditorMode,
   PluginAudioMode
-} from "@yadaw/contracts"
-import type { AudioEngineRef, ProjectGraphRef, RpcError, RpcResult } from "@yadaw/contracts"
+} from "@heron/contracts"
+import type { AudioEngineRef, ProjectGraphRef, RpcError, RpcResult } from "@heron/contracts"
 
 export interface GraphCandidateSnapshot {
   operationId: string

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import type { TempoMapSnapshot, TransportLoopRange } from "@yadaw/contracts"
+import type { TempoMapSnapshot, TransportLoopRange } from "@heron/contracts"
 import { useCycleRangeDrag } from "./useCycleRangeDrag"
 
 afterEach(() => {

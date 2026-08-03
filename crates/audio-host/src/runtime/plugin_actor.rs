@@ -435,7 +435,7 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
                             graph_stale_error(
                                 &meta,
                                 request.project_graph,
-                                yadaw_dsp_runtime::protocol::RpcStaleReason::Missing,
+                                heron_dsp_runtime::protocol::RpcStaleReason::Missing,
                             ),
                         ));
                         continue;
@@ -846,7 +846,7 @@ async fn dispatch_actor(
 
 async fn dispatch_parameter(
     sender: &mpsc::Sender<ActorRequest>,
-    command: yadaw_dsp_runtime::protocol::ParameterCommand,
+    command: heron_dsp_runtime::protocol::ParameterCommand,
 ) -> ControlResult {
     let (reply, response) = oneshot::channel();
     if sender

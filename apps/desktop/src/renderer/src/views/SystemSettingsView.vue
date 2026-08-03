@@ -6,7 +6,7 @@ import type {
   AudioHostRuntimePreferences,
   AudioPreferences,
   MidiSyncPreferences
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import SystemSettingsPage from "../components/system-settings/SystemSettingsPage.vue"
 import { useApplicationSettingsStore } from "../stores/applicationSettings"
 import { useAudioPreferencesStore } from "../stores/audioPreferences"

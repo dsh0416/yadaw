@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { IPC_PROTOCOL_VERSION } from "@yadaw/contracts"
-import type { RpcRequestMeta } from "@yadaw/contracts"
+import { IPC_PROTOCOL_VERSION } from "@heron/contracts"
+import type { RpcRequestMeta } from "@heron/contracts"
 import { invokeRpc } from "../../preload/rpc"
 
 const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }))

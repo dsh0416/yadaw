@@ -1,5 +1,5 @@
 [package]
-name = "yadaw-dsp-runtime"
+name = "heron-dsp-runtime"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

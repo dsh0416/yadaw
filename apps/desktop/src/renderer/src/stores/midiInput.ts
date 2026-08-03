@@ -7,7 +7,7 @@ import type {
   MidiSyncPreferences,
   ResourceRef,
   RpcEvent
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import { mutationMeta, readMeta, rpcErrorMessage } from "../rpc"
 import { useApplicationSettingsStore } from "./applicationSettings"
 import { useAudioRuntimeStore } from "./audioRuntime"
@@ -109,9 +109,9 @@ export const useMidiInputStore = defineStore("midi-input", () => {
     }
 
     if (!unsubscribe) {
-      unsubscribe = window.yadaw.subscribeMidiInput(receiveResource)
+      unsubscribe = window.heron.subscribeMidiInput(receiveResource)
     }
-    const result = await window.yadaw.midiInputSnapshot(readMeta(target))
+    const result = await window.heron.midiInputSnapshot(readMeta(target))
     if (!result.ok) {
       error.value = rpcErrorMessage(result.error)
       loading.value = false
@@ -127,7 +127,7 @@ export const useMidiInputStore = defineStore("midi-input", () => {
     if (!target) return false
     applying.value = true
     error.value = ""
-    const result = await window.yadaw.configureMidiInput(
+    const result = await window.heron.configureMidiInput(
       mutationMeta(target, "midi-input-configure", resource.value?.revision ?? 0),
       preferences
     )
@@ -156,7 +156,7 @@ export const useMidiInputStore = defineStore("midi-input", () => {
     const target = audioRuntime.midiRuntimeRef
     if (!target) return false
     error.value = ""
-    const result = await window.yadaw.setMidiControlLearning(
+    const result = await window.heron.setMidiControlLearning(
       mutationMeta(target, "midi-control-learning", resource.value?.revision ?? 0),
       true
     )
@@ -174,7 +174,7 @@ export const useMidiInputStore = defineStore("midi-input", () => {
     learning.value = false
     const target = audioRuntime.midiRuntimeRef
     if (!target) return
-    const result = await window.yadaw.setMidiControlLearning(
+    const result = await window.heron.setMidiControlLearning(
       mutationMeta(target, "midi-control-learning", resource.value?.revision ?? 0),
       false
     )

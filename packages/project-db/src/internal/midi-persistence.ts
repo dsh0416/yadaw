@@ -1,5 +1,5 @@
 import { and, eq, inArray } from "drizzle-orm"
-import type { MidiClipRangePatch, MidiNotePatch, ProjectCommand } from "@yadaw/contracts"
+import type { MidiClipRangePatch, MidiNotePatch, ProjectCommand } from "@heron/contracts"
 import { midiClips, midiEvents, midiNotes, midiSources } from "../schema"
 import type { ProjectTransaction } from "./database-types"
 

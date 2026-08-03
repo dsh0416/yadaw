@@ -1,4 +1,4 @@
-import type { ApplicationCommandId, ProjectSession, RpcEvent } from "@yadaw/contracts"
+import type { ApplicationCommandId, ProjectSession, RpcEvent } from "@heron/contracts"
 import { sendApplicationCommand } from "./application-command-events"
 
 export type ProjectCloseCommand = Extract<ApplicationCommandId, "application.quit" | "window.close">

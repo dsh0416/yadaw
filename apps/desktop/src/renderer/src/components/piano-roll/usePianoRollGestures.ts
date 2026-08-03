@@ -1,6 +1,6 @@
 import { computed, shallowRef, type ComputedRef, type CSSProperties } from "vue"
 import { useEventListener } from "@vueuse/core"
-import type { MidiClipState, MidiNotePatch, MidiNoteState, ProjectCommand } from "@yadaw/contracts"
+import type { MidiClipState, MidiNotePatch, MidiNoteState, ProjectCommand } from "@heron/contracts"
 import type { PianoRollNoteRef, usePianoRollStore } from "../../stores/pianoRoll"
 import {
   MIN_NOTE_TICKS,

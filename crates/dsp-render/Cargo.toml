@@ -1,13 +1,13 @@
 [package]
-name = "yadaw-dsp-render"
+name = "heron-dsp-render"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
-yadaw-dsp-core.workspace = true
-yadaw-dsp-runtime.workspace = true
+heron-dsp-core.workspace = true
+heron-dsp-runtime.workspace = true
 
 [dev-dependencies]
 criterion.workspace = true

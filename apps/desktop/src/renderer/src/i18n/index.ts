@@ -1,5 +1,5 @@
 import { createI18n } from "vue-i18n"
-import type { AppLocale } from "@yadaw/contracts"
+import type { AppLocale } from "@heron/contracts"
 import enUS from "../../../locales/en-US.json"
 import zhCmnHansCN from "../../../locales/zh-cmn-Hans-CN.json"
 import { DEFAULT_LOCALE } from "../../../shared/i18n"

@@ -23,23 +23,23 @@ void copy_text(char (&destination)[Size], const char* source)
 }
 } // namespace
 
-struct YadawAraMainFactory
+struct HeronAraMainFactory
 {
     ARA::IMainFactory* interface {};
     const ARA::ARAFactory* factory {};
 };
 
-struct YadawAraPluginEntry
+struct HeronAraPluginEntry
 {
     ARA::IPlugInEntryPoint* entry {};
     ARA::IPlugInEntryPoint2* entry2 {};
     bool bound {};
 };
 
-extern "C" std::int32_t yadaw_ara_query_factory(
+extern "C" std::int32_t heron_ara_query_factory(
     Steinberg::IPluginFactory* plugin_factory,
     const char factory_class_id[16],
-    YadawAraFactoryInfo* info)
+    HeronAraFactoryInfo* info)
 {
     if (!plugin_factory || !factory_class_id || !info)
         return Steinberg::kInvalidArgument;
@@ -73,7 +73,7 @@ extern "C" std::int32_t yadaw_ara_query_factory(
     return Steinberg::kResultOk;
 }
 
-extern "C" YadawAraMainFactory* yadaw_ara_main_factory_create(
+extern "C" HeronAraMainFactory* heron_ara_main_factory_create(
     Steinberg::IPluginFactory* plugin_factory,
     const char factory_class_id[16],
     std::int32_t* result)
@@ -94,16 +94,16 @@ extern "C" YadawAraMainFactory* yadaw_ara_main_factory_create(
         *result = Steinberg::kInternalError;
         return nullptr;
     }
-    return new YadawAraMainFactory { interface, factory };
+    return new HeronAraMainFactory { interface, factory };
 }
 
-extern "C" const ARA::ARAFactory* yadaw_ara_main_factory_get(
-    const YadawAraMainFactory* main_factory)
+extern "C" const ARA::ARAFactory* heron_ara_main_factory_get(
+    const HeronAraMainFactory* main_factory)
 {
     return main_factory ? main_factory->factory : nullptr;
 }
 
-extern "C" void yadaw_ara_main_factory_destroy(YadawAraMainFactory* main_factory)
+extern "C" void heron_ara_main_factory_destroy(HeronAraMainFactory* main_factory)
 {
     if (!main_factory)
         return;
@@ -111,7 +111,7 @@ extern "C" void yadaw_ara_main_factory_destroy(YadawAraMainFactory* main_factory
     delete main_factory;
 }
 
-extern "C" YadawAraPluginEntry* yadaw_ara_plugin_entry_create(
+extern "C" HeronAraPluginEntry* heron_ara_plugin_entry_create(
     Steinberg::FUnknown* component,
     std::int32_t* result)
 {
@@ -127,17 +127,17 @@ extern "C" YadawAraPluginEntry* yadaw_ara_plugin_entry_create(
     component->queryInterface(
         ARA::IPlugInEntryPoint2::iid,
         reinterpret_cast<void**>(&entry2));
-    return new YadawAraPluginEntry { entry, entry2, false };
+    return new HeronAraPluginEntry { entry, entry2, false };
 }
 
-extern "C" const ARA::ARAFactory* yadaw_ara_plugin_entry_get_factory(
-    const YadawAraPluginEntry* entry)
+extern "C" const ARA::ARAFactory* heron_ara_plugin_entry_get_factory(
+    const HeronAraPluginEntry* entry)
 {
     return entry ? entry->entry->getFactory() : nullptr;
 }
 
-extern "C" const ARA::ARAPlugInExtensionInstance* yadaw_ara_plugin_entry_bind(
-    YadawAraPluginEntry* entry,
+extern "C" const ARA::ARAPlugInExtensionInstance* heron_ara_plugin_entry_bind(
+    HeronAraPluginEntry* entry,
     ARA::ARADocumentControllerRef document_controller,
     ARA::ARAPlugInInstanceRoleFlags known_roles,
     ARA::ARAPlugInInstanceRoleFlags assigned_roles,
@@ -164,7 +164,7 @@ extern "C" const ARA::ARAPlugInExtensionInstance* yadaw_ara_plugin_entry_bind(
     return extension;
 }
 
-extern "C" void yadaw_ara_plugin_entry_destroy(YadawAraPluginEntry* entry)
+extern "C" void heron_ara_plugin_entry_destroy(HeronAraPluginEntry* entry)
 {
     if (!entry)
         return;

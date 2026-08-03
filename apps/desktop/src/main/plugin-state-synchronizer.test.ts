@@ -1,4 +1,4 @@
-import type { PluginInstanceState, ProjectGraphSnapshot } from "@yadaw/contracts"
+import type { PluginInstanceState, ProjectGraphSnapshot } from "@heron/contracts"
 import { describe, expect, it, vi } from "vitest"
 import { synchronizePluginStatesAtomically } from "./plugin-state-synchronizer"
 

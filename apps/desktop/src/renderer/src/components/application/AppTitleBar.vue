@@ -3,8 +3,8 @@ import type {
   ApplicationCommandId,
   ApplicationWindowCommandId,
   DesktopPlatform
-} from "@yadaw/contracts"
-import { YadawLogo, type UiMenubarMenu } from "@yadaw/ui"
+} from "@heron/contracts"
+import { HeronLogo, type UiMenubarMenu } from "@heron/ui"
 import { useI18n } from "vue-i18n"
 import ApplicationMenuBar from "./ApplicationMenuBar.vue"
 import AppWindowControls from "./AppWindowControls.vue"
@@ -28,7 +28,7 @@ const { t } = useI18n()
   <header class="app-titlebar" :data-platform="platform">
     <div class="app-titlebar__safe-area">
       <div class="app-titlebar__identity">
-        <YadawLogo class="app-titlebar__logo" />
+        <HeronLogo class="app-titlebar__logo" />
       </div>
 
       <ApplicationMenuBar
@@ -148,7 +148,7 @@ const { t } = useI18n()
 
 @media (max-width: 980px) {
   .app-titlebar__logo {
-    --yadaw-logo-wordmark-display: none;
+    --heron-logo-wordmark-display: none;
   }
 
   .app-titlebar__drag {

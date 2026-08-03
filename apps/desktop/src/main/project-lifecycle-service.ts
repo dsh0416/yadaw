@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto"
 import { basename } from "node:path"
-import { rpcFailure, rpcSuccess } from "@yadaw/contracts"
+import { rpcFailure, rpcSuccess } from "@heron/contracts"
 import type {
   ApplicationBootstrapSnapshot,
   CreateProjectRequest,
@@ -15,7 +15,7 @@ import type {
   RpcError,
   RpcRequestMeta,
   RpcResult
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import type { PreparedProjectGraph } from "./audio-graph-publisher"
 import type { LifecycleCoordinator } from "./lifecycle-coordinator"
 import type { OperationService } from "./operation-service"

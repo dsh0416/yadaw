@@ -1,6 +1,6 @@
 import { dialog } from "electron"
-import { IPC_CHANNELS, rpcFailure, rpcSuccess } from "@yadaw/contracts"
-import type { ProjectCloseDisposition, RpcRequestMeta } from "@yadaw/contracts"
+import { IPC_CHANNELS, rpcFailure, rpcSuccess } from "@heron/contracts"
+import type { ProjectCloseDisposition, RpcRequestMeta } from "@heron/contracts"
 import type { IpcHandlerContext } from "./context"
 import { t } from "../i18n"
 import { registerRpcHandler } from "./rpc"
@@ -66,7 +66,7 @@ export function registerProjectHandlers(context: IpcHandlerContext): void {
     } catch {
       return validationFailure(meta, "request")
     }
-    let path = request.path ?? process.env.YADAW_TEST_PROJECT_PATH
+    let path = request.path ?? process.env.HERON_TEST_PROJECT_PATH
     if (!path) {
       const result = await dialog.showSaveDialog({
         title: t("dialog.createProject.title"),

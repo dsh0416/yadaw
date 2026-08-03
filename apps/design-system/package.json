@@ -1,5 +1,5 @@
 {
-  "name": "@yadaw/design-system",
+  "name": "@heron/design-system",
   "version": "0.2.2",
   "private": true,
   "type": "module",
@@ -16,7 +16,7 @@
     "@fontsource-variable/inter": "catalog:",
     "@fontsource-variable/noto-sans-sc": "catalog:",
     "@fontsource/barlow-condensed": "catalog:",
-    "@yadaw/ui": "workspace:*",
+    "@heron/ui": "workspace:*",
     "pinia": "catalog:",
     "vue": "catalog:"
   },

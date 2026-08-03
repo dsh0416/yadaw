@@ -1,12 +1,12 @@
 import { BrowserWindow } from "electron"
-import { IPC_CHANNELS, IPC_PROTOCOL_VERSION } from "@yadaw/contracts"
+import { IPC_CHANNELS, IPC_PROTOCOL_VERSION } from "@heron/contracts"
 import type {
   OperationEvent,
   OperationSnapshot,
   ResourceRef,
   RpcError,
   RpcResult
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import { OperationRegistry } from "./kernel/operation-registry"
 import type { OperationRecord } from "./kernel/operation-registry"
 

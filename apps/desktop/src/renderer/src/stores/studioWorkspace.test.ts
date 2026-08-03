@@ -50,10 +50,10 @@ describe("studio workspace store", () => {
     expect(workspace.notesPanelOpen).toBe(true)
     expect(workspace.activeNotesTab).toBe("track")
     expect(workspace.mixerDockOpen).toBe(false)
-    expect(localStorage.getItem("yadaw.workspace.sound-browser.v1")).toBe("false")
-    expect(localStorage.getItem("yadaw.workspace.notes-panel.v1")).toBe("true")
-    expect(localStorage.getItem("yadaw.workspace.notes-tab.v1")).toBe("track")
-    expect(localStorage.getItem("yadaw.workspace.mixer-dock.v1")).toBe("false")
+    expect(localStorage.getItem("heron.workspace.sound-browser.v1")).toBe("false")
+    expect(localStorage.getItem("heron.workspace.notes-panel.v1")).toBe("true")
+    expect(localStorage.getItem("heron.workspace.notes-tab.v1")).toBe("track")
+    expect(localStorage.getItem("heron.workspace.mixer-dock.v1")).toBe("false")
   })
 
   it("restores the default workspace state", () => {

@@ -9,7 +9,7 @@ const electronMocks = vi.hoisted(() => ({
   shellOpenPath: vi.fn(async () => ""),
   quit: vi.fn(),
   showAboutPanel: vi.fn(),
-  getPath: vi.fn(() => "/tmp/yadaw-test")
+  getPath: vi.fn(() => "/tmp/heron-test")
 }))
 
 vi.mock("electron", () => ({
@@ -30,7 +30,7 @@ vi.mock("electron", () => ({
   }
 }))
 
-import { IPC_CHANNELS } from "@yadaw/contracts"
+import { IPC_CHANNELS } from "@heron/contracts"
 import {
   createContext,
   createWorkspace,
@@ -60,7 +60,7 @@ describe("registerProjectHandlers", () => {
     electronMocks.handle.mockReset()
     electronMocks.showSaveDialog.mockReset()
     electronMocks.showOpenDialog.mockReset()
-    delete process.env.YADAW_TEST_PROJECT_PATH
+    delete process.env.HERON_TEST_PROJECT_PATH
   })
 
   it("bootstraps without a target or mutation", async () => {

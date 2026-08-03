@@ -45,8 +45,8 @@ const props = withDefaults(
 
 <style scoped>
 .routing-path {
-  --path-color: var(--yadaw-cyan);
-  --path-color-dark: var(--yadaw-cyan-dark);
+  --path-color: var(--heron-cyan);
+  --path-color-dark: var(--heron-cyan-dark);
 
   min-width: 0;
   padding: 0.85rem;
@@ -61,8 +61,8 @@ const props = withDefaults(
 }
 
 .routing-path--send {
-  --path-color: var(--yadaw-warning);
-  --path-color-dark: color-mix(in srgb, var(--yadaw-warning) 68%, var(--vp-c-text-1));
+  --path-color: var(--heron-warning);
+  --path-color-dark: color-mix(in srgb, var(--heron-warning) 68%, var(--vp-c-text-1));
 }
 
 .routing-path--inactive {

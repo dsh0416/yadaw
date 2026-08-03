@@ -13,7 +13,7 @@ import type {
   MixerSendState,
   PluginDescriptor,
   PluginInstanceState
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import MixerChannelStrip from "../../../../../apps/desktop/src/renderer/src/components/mixer/MixerChannelStrip.vue"
 
 const props = defineProps<{

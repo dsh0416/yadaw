@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use yadaw_dsp_runtime::{
+use heron_dsp_runtime::{
     block::{LatencyNode, plan_latency_compensation},
     protocol::LiveMixerGraph,
 };
@@ -241,7 +241,7 @@ fn visit_downstream_latency(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use yadaw_dsp_runtime::protocol::{
+    use heron_dsp_runtime::protocol::{
         LiveMixerChannel, LiveMixerSystemRole, LivePluginInstance, PluginAudioMode,
     };
 

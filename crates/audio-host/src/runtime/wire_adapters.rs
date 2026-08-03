@@ -179,7 +179,7 @@ fn live_graph(
                     }));
                 }
             }
-            let yadaw_dsp_runtime::protocol::MidiEventBatch::Inline { events } = &clip.events else {
+            let heron_dsp_runtime::protocol::MidiEventBatch::Inline { events } = &clip.events else {
                 return Err("MIDI event batch must be materialized before graph build".to_owned());
             };
             let mut native_events = Vec::with_capacity(events.len());

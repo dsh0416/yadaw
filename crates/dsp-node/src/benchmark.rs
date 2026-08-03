@@ -3,11 +3,11 @@ use std::{
     time::{Duration, Instant},
 };
 
-use napi::{Result, Task, bindgen_prelude::AsyncTask};
-use napi_derive::napi;
-use yadaw_dsp_core::mixer::{
+use heron_dsp_core::mixer::{
     ChannelKind, ChannelSpec, MixerGraph, RouteTarget, SendSpec, SendTap, StereoFrame,
 };
+use napi::{Result, Task, bindgen_prelude::AsyncTask};
+use napi_derive::napi;
 
 const SAMPLE_RATE: u32 = 48_000;
 const TARGET_MEASUREMENT_TIME: Duration = Duration::from_millis(200);

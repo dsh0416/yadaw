@@ -4,7 +4,7 @@ import type {
   MixerChannelPatch,
   MixerChannelState,
   MixerParameterPreview
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 import TrackGainControl from "./TrackGainControl.vue"
 import TrackPanControl from "./TrackPanControl.vue"
 import { computed } from "vue"

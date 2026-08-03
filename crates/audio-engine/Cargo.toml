@@ -1,5 +1,5 @@
 [package]
-name = "yadaw-audio-engine"
+name = "heron-audio-engine"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -11,10 +11,10 @@ midir.workspace = true
 ringbuf.workspace = true
 rubato.workspace = true
 thiserror.workspace = true
-yadaw-dsp-core.workspace = true
-yadaw-dsp-render.workspace = true
-yadaw-dsp-runtime.workspace = true
-yadaw-vst3-host.workspace = true
+heron-dsp-core.workspace = true
+heron-dsp-render.workspace = true
+heron-dsp-runtime.workspace = true
+heron-vst3-host.workspace = true
 
 [target.'cfg(target_os = "windows")'.dependencies]
 cpal = { workspace = true, features = ["asio", "custom", "realtime"] }

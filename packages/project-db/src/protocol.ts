@@ -5,7 +5,7 @@ import type {
   ProjectCommand,
   ProjectConfiguration,
   RpcError
-} from "@yadaw/contracts"
+} from "@heron/contracts"
 
 export type MidiSourceInput = MidiSourceState
 

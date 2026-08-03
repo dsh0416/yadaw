@@ -1,5 +1,5 @@
 {
-  "name": "@yadaw/project-model",
+  "name": "@heron/project-model",
   "version": "0.2.2",
   "license": "GPL-3.0-only",
   "private": true,
@@ -14,7 +14,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@yadaw/contracts": "workspace:*"
+    "@heron/contracts": "workspace:*"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "catalog:",

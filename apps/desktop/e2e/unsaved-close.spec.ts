@@ -5,21 +5,21 @@ import { join, resolve } from "node:path"
 
 test("prompts before closing a project with a committed mutation", async () => {
   test.setTimeout(60_000)
-  const testRoot = await mkdtemp(join(tmpdir(), "yadaw-unsaved-close-"))
+  const testRoot = await mkdtemp(join(tmpdir(), "heron-unsaved-close-"))
   const application = await electron.launch({
-    executablePath: process.env.YADAW_E2E_EXECUTABLE,
+    executablePath: process.env.HERON_E2E_EXECUTABLE,
     args: [
       "--disable-gpu",
       "--disable-gpu-compositing",
       "--disable-gpu-sandbox",
       "--no-sandbox",
-      ...(process.env.YADAW_E2E_EXECUTABLE ? [] : [resolve(import.meta.dirname, "..")])
+      ...(process.env.HERON_E2E_EXECUTABLE ? [] : [resolve(import.meta.dirname, "..")])
     ],
     env: {
       ...process.env,
-      YADAW_TEST_USER_DATA: join(testRoot, "user-data"),
-      YADAW_TEST_PROJECT_PATH: join(testRoot, "unsaved.yadaw"),
-      YADAW_TEST_MOCK_AUDIO: "1"
+      HERON_TEST_USER_DATA: join(testRoot, "user-data"),
+      HERON_TEST_PROJECT_PATH: join(testRoot, "unsaved.yadaw"),
+      HERON_TEST_MOCK_AUDIO: "1"
     }
   })
 
@@ -40,7 +40,7 @@ test("prompts before closing a project with a committed mutation", async () => {
     await expect
       .poll(async () => {
         const bootstrap = await page.evaluate(() =>
-          window.yadaw.bootstrap({
+          window.heron.bootstrap({
             protocolVersion: 2,
             requestId: crypto.randomUUID()
           })
@@ -69,12 +69,12 @@ test("prompts before closing a project with a committed mutation", async () => {
     await expect(page.locator(".studio-shell")).toBeVisible()
 
     const closed = await page.evaluate(async () => {
-      const bootstrap = await window.yadaw.bootstrap({
+      const bootstrap = await window.heron.bootstrap({
         protocolVersion: 2,
         requestId: crypto.randomUUID()
       })
       if (!bootstrap.ok || !bootstrap.value.workspace) return false
-      const result = await window.yadaw.closeProject(
+      const result = await window.heron.closeProject(
         {
           protocolVersion: 2,
           requestId: crypto.randomUUID(),
