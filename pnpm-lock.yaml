@@ -249,9 +249,15 @@ importers:
       '@yadaw/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      dompurify:
+        specifier: 3.4.12
+        version: 3.4.12
       echarts:
         specifier: ^6.1.0
         version: 6.1.0
+      marked:
+        specifier: 16.3.0
+        version: 16.3.0
       vue-i18n:
         specifier: ^11.4.8
         version: 11.4.8(vue@3.5.40(typescript@5.9.3))

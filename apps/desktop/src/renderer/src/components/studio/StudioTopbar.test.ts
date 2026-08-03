@@ -83,6 +83,7 @@ function mountTopbar() {
       tempoMap,
       keySignatureEvents,
       soundBrowserOpen: true,
+      notesPanelOpen: false,
       mixerDockOpen: true,
       pianoRollDockOpen: false,
       pianoRollAvailable: true,
@@ -131,6 +132,7 @@ describe("StudioTopbar", () => {
     await wrapper.get('button[aria-label="Library"]').trigger("click")
     await wrapper.get('button[aria-label="Mixer"]').trigger("click")
     await wrapper.get('button[aria-label="Piano Roll"]').trigger("click")
+    await wrapper.get('button[aria-label="Notes"]').trigger("click")
     await wrapper.get('button[aria-label="Go to beginning"]').trigger("click")
     await wrapper.get('button[aria-label="Play"]').trigger("click")
     await wrapper.get('button[aria-label="Metronome"]').trigger("click")
@@ -140,6 +142,7 @@ describe("StudioTopbar", () => {
     expect(wrapper.emitted("toggleSoundBrowser")).toHaveLength(1)
     expect(wrapper.emitted("toggleMixerDock")).toHaveLength(1)
     expect(wrapper.emitted("togglePianoRollDock")).toHaveLength(1)
+    expect(wrapper.emitted("toggleNotesPanel")).toHaveLength(1)
     expect(wrapper.emitted("goToStart")).toHaveLength(1)
     expect(wrapper.emitted("togglePlayback")).toHaveLength(1)
     expect(wrapper.emitted("toggleMetronome")).toHaveLength(1)

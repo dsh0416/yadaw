@@ -11,6 +11,7 @@ import {
   mixerChannels,
   mixerSends,
   pluginInstances,
+  project,
   tempoEvents,
   tracks,
   timeSignatureEvents
@@ -35,7 +36,8 @@ export async function readMixerSnapshot(
     midiEventRows,
     tempoRows,
     signatureRows,
-    keySignatureRows
+    keySignatureRows,
+    projectRows
   ] = await Promise.all([
     db.select().from(tracks).orderBy(asc(tracks.sortOrder), asc(tracks.id)),
     db.select().from(mixerChannels).orderBy(asc(mixerChannels.sortOrder), asc(mixerChannels.id)),
@@ -81,7 +83,8 @@ export async function readMixerSnapshot(
       .orderBy(asc(midiEvents.clipId), asc(midiEvents.tick), asc(midiEvents.id)),
     db.select().from(tempoEvents).orderBy(asc(tempoEvents.tick)),
     db.select().from(timeSignatureEvents).orderBy(asc(timeSignatureEvents.tick)),
-    db.select().from(keySignatureEvents).orderBy(asc(keySignatureEvents.tick))
+    db.select().from(keySignatureEvents).orderBy(asc(keySignatureEvents.tick)),
+    db.select({ notes: project.notes }).from(project).limit(1)
   ])
 
   const kindOrder = new Map([
@@ -127,6 +130,7 @@ export async function readMixerSnapshot(
 
   return {
     sampleRate: configuration.sampleRate,
+    projectNotes: projectRows[0]?.notes ?? "",
     tracks: trackRows,
     channels: channelRows.map((channel) => ({
       id: channel.id,

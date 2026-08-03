@@ -141,10 +141,10 @@ export async function persistChannelTrackRoutingCommand(
       return
     }
     case "update-track":
-      if (command.patch.sortOrder !== undefined) {
+      if (command.patch.sortOrder !== undefined || command.patch.notes !== undefined) {
         await tx
           .update(tracks)
-          .set({ sortOrder: command.patch.sortOrder })
+          .set({ sortOrder: command.patch.sortOrder, notes: command.patch.notes })
           .where(eq(tracks.id, command.trackId))
       }
       return

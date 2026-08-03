@@ -44,6 +44,7 @@ defineProps<{
   tempoMap: TempoMapSnapshot
   keySignatureEvents: KeySignatureEventState[]
   soundBrowserOpen: boolean
+  notesPanelOpen: boolean
   mixerDockOpen: boolean
   pianoRollDockOpen: boolean
   pianoRollAvailable: boolean
@@ -53,6 +54,7 @@ defineProps<{
 }>()
 const emit = defineEmits<{
   toggleSoundBrowser: []
+  toggleNotesPanel: []
   toggleMixerDock: []
   togglePianoRollDock: []
   toggleRecording: []
@@ -187,17 +189,22 @@ const { t } = useI18n()
       @update-channel="(channelId, patch) => emit('updateMaster', channelId, patch)"
     />
 
-    <div class="control-group placeholder-only right-panel-group" data-topbar-group="right-panel">
-      <StudioControlButton :label="t('studio.topbar.listEditors')" unavailable>
+    <div class="control-group right-panel-group" data-topbar-group="right-panel">
+      <StudioControlButton :label="t('studio.topbar.listEditors')" unavailable compact-hidden>
         <List :size="15" />
       </StudioControlButton>
-      <StudioControlButton :label="t('studio.topbar.notes')" unavailable>
+      <StudioControlButton
+        :label="t('studio.topbar.notes')"
+        :pressed="notesPanelOpen"
+        tone="accent"
+        @activate="emit('toggleNotesPanel')"
+      >
         <NotebookTabs :size="15" />
       </StudioControlButton>
-      <StudioControlButton :label="t('studio.topbar.loopBrowser')" unavailable>
+      <StudioControlButton :label="t('studio.topbar.loopBrowser')" unavailable compact-hidden>
         <ListMusic :size="15" />
       </StudioControlButton>
-      <StudioControlButton :label="t('studio.topbar.mediaBrowser')" unavailable>
+      <StudioControlButton :label="t('studio.topbar.mediaBrowser')" unavailable compact-hidden>
         <Library :size="15" />
       </StudioControlButton>
     </div>

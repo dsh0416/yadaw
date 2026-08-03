@@ -33,31 +33,42 @@ describe("studio workspace store", () => {
     setActivePinia(createPinia())
   })
 
-  it("persists browser and mixer visibility", async () => {
+  it("persists browser, notes, and mixer visibility", async () => {
     const workspace = useStudioWorkspaceStore()
 
     expect(workspace.soundBrowserOpen).toBe(true)
+    expect(workspace.notesPanelOpen).toBe(false)
     expect(workspace.mixerDockOpen).toBe(true)
 
     workspace.toggleSoundBrowser()
+    workspace.toggleNotesPanel()
+    workspace.setActiveNotesTab("track")
     workspace.toggleMixerDock()
     await nextTick()
 
     expect(workspace.soundBrowserOpen).toBe(false)
+    expect(workspace.notesPanelOpen).toBe(true)
+    expect(workspace.activeNotesTab).toBe("track")
     expect(workspace.mixerDockOpen).toBe(false)
     expect(localStorage.getItem("yadaw.workspace.sound-browser.v1")).toBe("false")
+    expect(localStorage.getItem("yadaw.workspace.notes-panel.v1")).toBe("true")
+    expect(localStorage.getItem("yadaw.workspace.notes-tab.v1")).toBe("track")
     expect(localStorage.getItem("yadaw.workspace.mixer-dock.v1")).toBe("false")
   })
 
   it("restores the default workspace state", () => {
     const workspace = useStudioWorkspaceStore()
     workspace.soundBrowserOpen = false
+    workspace.notesPanelOpen = true
+    workspace.activeNotesTab = "track"
     workspace.mixerDockOpen = false
     workspace.mixerDockHeight = 430
 
     workspace.reset()
 
     expect(workspace.soundBrowserOpen).toBe(true)
+    expect(workspace.notesPanelOpen).toBe(false)
+    expect(workspace.activeNotesTab).toBe("project")
     expect(workspace.mixerDockOpen).toBe(true)
     expect(workspace.mixerDockHeight).toBe(284)
     expect(workspace.dockStyle).toEqual({ height: "284px" })

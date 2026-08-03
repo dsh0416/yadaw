@@ -4,6 +4,8 @@ import { computed } from "vue"
 
 export const useStudioWorkspaceStore = defineStore("studio-workspace", () => {
   const soundBrowserOpen = useStorage("yadaw.workspace.sound-browser.v1", true)
+  const notesPanelOpen = useStorage("yadaw.workspace.notes-panel.v1", false)
+  const activeNotesTab = useStorage<"project" | "track">("yadaw.workspace.notes-tab.v1", "project")
   const lowerDockOpen = useStorage("yadaw.workspace.mixer-dock.v1", true)
   const activeLowerDock = useStorage<"mixer" | "piano-roll">(
     "yadaw.workspace.lower-dock-tab.v1",
@@ -27,6 +29,18 @@ export const useStudioWorkspaceStore = defineStore("studio-workspace", () => {
 
   function toggleSoundBrowser(): void {
     soundBrowserOpen.value = !soundBrowserOpen.value
+  }
+
+  function toggleNotesPanel(): void {
+    notesPanelOpen.value = !notesPanelOpen.value
+  }
+
+  function closeNotesPanel(): void {
+    notesPanelOpen.value = false
+  }
+
+  function setActiveNotesTab(tab: "project" | "track"): void {
+    activeNotesTab.value = tab
   }
 
   function toggleMixerDock(): void {
@@ -60,6 +74,8 @@ export const useStudioWorkspaceStore = defineStore("studio-workspace", () => {
 
   function reset(): void {
     soundBrowserOpen.value = true
+    notesPanelOpen.value = false
+    activeNotesTab.value = "project"
     lowerDockOpen.value = true
     activeLowerDock.value = "mixer"
     mixerDockHeight.value = 284
@@ -67,6 +83,8 @@ export const useStudioWorkspaceStore = defineStore("studio-workspace", () => {
 
   return {
     soundBrowserOpen,
+    notesPanelOpen,
+    activeNotesTab,
     lowerDockOpen,
     activeLowerDock,
     mixerDockOpen,
@@ -74,6 +92,9 @@ export const useStudioWorkspaceStore = defineStore("studio-workspace", () => {
     mixerDockHeight,
     dockStyle,
     toggleSoundBrowser,
+    toggleNotesPanel,
+    closeNotesPanel,
+    setActiveNotesTab,
     toggleMixerDock,
     togglePianoRollDock,
     openPianoRollDock,

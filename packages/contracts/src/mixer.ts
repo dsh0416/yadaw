@@ -52,9 +52,10 @@ export interface TrackState {
   id: string
   channelId: string
   sortOrder: number
+  notes?: string
 }
 
-export type TrackPatch = Partial<Pick<TrackState, "sortOrder">>
+export type TrackPatch = Partial<Pick<TrackState, "sortOrder" | "notes">>
 
 export interface AudioClipState {
   id: string
@@ -91,6 +92,7 @@ export interface MixerSendState {
 
 export interface ProjectGraphSnapshot {
   sampleRate: number
+  projectNotes?: string
   tracks: TrackState[]
   channels: MixerChannelState[]
   audioClips: AudioClipState[]
@@ -182,6 +184,7 @@ export type PluginInstancePatch = Partial<
 >
 
 export type ProjectCommand =
+  | { type: "update-project-notes"; notes: string }
   | { type: "create-track"; track: TrackState; channel: MixerChannelState }
   | { type: "delete-track"; trackId: string }
   | { type: "update-track"; trackId: string; patch: TrackPatch }

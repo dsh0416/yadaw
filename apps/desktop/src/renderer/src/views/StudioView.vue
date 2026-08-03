@@ -24,6 +24,7 @@ import { useStudioWorkspaceStore } from "../stores/studioWorkspace"
 import { useStudioWorkflowStore } from "../stores/studioWorkflow"
 import { usePianoRollStore } from "../stores/pianoRoll"
 import MidiImportDialog from "../components/midi/MidiImportDialog.vue"
+import NotesPanel from "../components/notes/NotesPanel.vue"
 import {
   replaceTempoEventAtTick,
   replaceTimeSignatureEventAtTick,
@@ -183,7 +184,13 @@ onBeforeUnmount(() => {
 <template>
   <main
     v-if="session"
-    :class="['studio-shell', { 'sound-browser-open': workspaceStore.soundBrowserOpen }]"
+    :class="[
+      'studio-shell',
+      {
+        'sound-browser-open': workspaceStore.soundBrowserOpen,
+        'notes-panel-open': workspaceStore.notesPanelOpen
+      }
+    ]"
   >
     <StudioTopbar
       :engine-running="audioRuntime.state === 'running'"
@@ -199,6 +206,7 @@ onBeforeUnmount(() => {
       :tempo-map="mixerStore.graph.tempoMap"
       :key-signature-events="mixerStore.graph.keySignatureEvents"
       :sound-browser-open="workspaceStore.soundBrowserOpen"
+      :notes-panel-open="workspaceStore.notesPanelOpen"
       :mixer-dock-open="workspaceStore.mixerDockOpen"
       :piano-roll-dock-open="workspaceStore.pianoRollDockOpen"
       :piano-roll-available="pianoRollStore.openClipIds.length > 0"
@@ -206,6 +214,7 @@ onBeforeUnmount(() => {
       :master-channel="mixerStore.master"
       :master-meter="masterMeter"
       @toggle-sound-browser="workspaceStore.toggleSoundBrowser"
+      @toggle-notes-panel="workspaceStore.toggleNotesPanel"
       @toggle-mixer-dock="workspaceStore.toggleMixerDock"
       @toggle-piano-roll-dock="workspaceStore.togglePianoRollDock"
       @toggle-recording="toggleRecording"
@@ -230,6 +239,7 @@ onBeforeUnmount(() => {
       :recording-midi-track-ids="activeRecording?.midiTrackIds ?? []"
       :recording-error="recordingError"
     />
+    <NotesPanel v-show="workspaceStore.notesPanelOpen" />
     <StudioStatusbar
       :runtime="audioRuntime"
       :statistics="audioStatistics"
@@ -253,6 +263,12 @@ onBeforeUnmount(() => {
 .studio-shell.sound-browser-open {
   grid-template-columns: 214px minmax(0, 1fr);
 }
+.studio-shell.notes-panel-open {
+  grid-template-columns: minmax(0, 1fr) 292px;
+}
+.studio-shell.sound-browser-open.notes-panel-open {
+  grid-template-columns: 214px minmax(0, 1fr) 292px;
+}
 .studio-shell
   :deep(:is(input, textarea, select, [contenteditable]:not([contenteditable="false"]))) {
   -webkit-user-select: text;
@@ -261,6 +277,12 @@ onBeforeUnmount(() => {
 @media (max-width: 1100px) {
   .studio-shell.sound-browser-open {
     grid-template-columns: 184px minmax(0, 1fr);
+  }
+  .studio-shell.notes-panel-open {
+    grid-template-columns: minmax(0, 1fr) 264px;
+  }
+  .studio-shell.sound-browser-open.notes-panel-open {
+    grid-template-columns: 184px minmax(0, 1fr) 264px;
   }
 }
 </style>
