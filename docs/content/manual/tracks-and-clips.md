@@ -1,6 +1,7 @@
 ---
 title: Tracks and clips
 description: Add channels, arrange audio and MIDI clips, and work with global musical lanes.
+vstTrademark: true
 ---
 
 # Tracks and clips
@@ -14,7 +15,7 @@ level.
 Open the Mixer and use its add controls:
 
 - **Audio** creates an audio track and channel for recordings or project audio.
-- **Instrument** creates a MIDI track with a VST3 instrument input slot.
+- **Instrument** creates a MIDI track with a VST® 3 instrument input slot.
 - **Aux** creates a return or submix channel without an arrangement lane.
 - **Output** creates a hardware-output channel.
 

@@ -1,17 +1,18 @@
 ---
 title: MIDI and piano roll
 description: Create or import MIDI clips and edit notes, timing, and velocity.
+vstTrademark: true
 ---
 
 # MIDI and piano roll
 
-Instrument tracks hold MIDI clips and send their notes to a VST3 instrument.
+Instrument tracks hold MIDI clips and send their notes to a VST® 3 instrument.
 
 ## Create an instrument track
 
 1. Open the **Mixer** and choose **Instrument**.
 2. Select the empty instrument input slot.
-3. Search for a VST3 instrument and choose a supported audio mode.
+3. Search for a VST 3 instrument and choose a supported audio mode.
 4. Double-click the instrument lane in the arrangement to create a MIDI clip.
 
 Double-click the instrument slot later to open the plug-in's editor.
@@ -23,7 +24,7 @@ lists its sequences and note counts.
 
 For each sequence:
 
-- choose **New Instrument track** and optionally assign a VST3 instrument; or
+- choose **New Instrument track** and optionally assign a VST 3 instrument; or
 - choose **Ignore**.
 
 Choose whether to keep the current project Tempo Track or import the file's

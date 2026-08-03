@@ -1,6 +1,7 @@
 ---
 title: 安装 YADAW
 description: 在 Windows、macOS 或 Linux 上下载并启动 YADAW。
+vstTrademark: true
 ---
 
 # 安装 YADAW
@@ -51,7 +52,7 @@ chmod +x YADAW-*.AppImage
 
 ## 首次启动
 
-YADAW 会扫描系统与用户的 VST3 位置，启动隔离的音频服务，并打开工程工作区。
+YADAW 会扫描系统与用户的 VST® 3 位置，启动隔离的音频服务，并打开工程工作区。
 插件较多时，首次扫描可能比之后的启动更慢。
 
 继续阅读[第一个工程](first-project.md)。

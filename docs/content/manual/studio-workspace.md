@@ -1,6 +1,7 @@
 ---
 title: The studio workspace
 description: Find the transport, timeline, Sound Browser, mixer, piano roll, and status bar.
+vstTrademark: true
 ---
 
 # The studio workspace
@@ -53,8 +54,8 @@ Double-click a zoom control to return it to its default.
 
 Select **Library** to search:
 
-- VST3 instruments;
-- VST3 audio effects;
+- VST® 3 instruments;
+- VST 3 audio effects;
 - audio already stored in the project;
 - the scanned plug-in catalog.
 

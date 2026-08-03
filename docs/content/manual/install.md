@@ -1,6 +1,7 @@
 ---
 title: Install YADAW
 description: Download and start YADAW on Windows, macOS, or Linux.
+vstTrademark: true
 ---
 
 # Install YADAW
@@ -57,7 +58,7 @@ sure the user running YADAW can access the selected device.
 
 ## First launch
 
-YADAW scans the system and user VST3 locations, starts its isolated audio
+YADAW scans the system and user VST® 3 locations, starts its isolated audio
 services, and opens the project workspace. A large plug-in collection can make
 the first scan take longer than later launches.
 

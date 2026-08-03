@@ -28,6 +28,7 @@ export { default as UiTextInput } from "./components/UiTextInput.vue"
 export { default as UiTooltip } from "./components/UiTooltip.vue"
 export { default as UiToolbar } from "./components/UiToolbar.vue"
 export { default as YadawLogo } from "./components/YadawLogo.vue"
+export { default as VstCompatibleLogo } from "./components/VstCompatibleLogo.vue"
 export { useLocaleFonts } from "./composables/useLocaleFonts"
 export { UI_DOMAIN_COLORS } from "./domainColors"
 export {

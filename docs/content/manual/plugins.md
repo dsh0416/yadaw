@@ -1,11 +1,12 @@
 ---
-title: VST3 plug-ins
-description: Discover, add, configure, and troubleshoot VST3 instruments and effects.
+title: VST® 3 plug-ins
+description: Discover, add, configure, and troubleshoot VST 3 instruments and effects.
+vstTrademark: true
 ---
 
-# VST3 plug-ins
+# VST® 3 plug-ins
 
-YADAW discovers VST3 instruments and effects from standard system and user
+YADAW discovers VST 3 instruments and effects from standard system and user
 locations. Plug-ins run through an isolated audio-host process so a failed
 module can be reported and quarantined without loading native code directly
 into the interface.
@@ -34,7 +35,7 @@ loading it. Instrument modes include mono and stereo output.
 On any compatible mixer channel:
 
 1. select an empty slot under **Audio FX**;
-2. search the VST3 effect catalog;
+2. search the VST 3 effect catalog;
 3. choose a supported mode;
 4. select the loaded insert to open its editor.
 

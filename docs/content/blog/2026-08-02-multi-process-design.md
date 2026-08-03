@@ -3,6 +3,7 @@ title: The multiprocess design of YADAW
 date: 2026-08-02
 description: Why we chose Electron over Tauri, why audio lives in a separate host process, and how a typed IPC protocol keeps that split both fast and reliable.
 tags: [architecture, electron, ipc]
+vstTrademark: true
 ---
 
 # The multiprocess design of YADAW
@@ -21,7 +22,7 @@ So we took Electron: one Chromium, one Node addon boundary, a boring main/render
 
 ## Putting audio somewhere else
 
-Electron main loads a native client (`.node`), but that client does not own cpal, the playback graph, or VST3 editors. It talks to `yadaw-audio-host` — a separate process whose whole job is devices, streams, the real-time graph, and plug-in windows.
+Electron main loads a native client (`.node`), but that client does not own cpal, the playback graph, or VST® 3 editors. It talks to `yadaw-audio-host` — a separate process whose whole job is devices, streams, the real-time graph, and plug-in windows.
 
 We did not do that for architectural purity. A misbehaving plug-in, a host-side assertion, or a hung helper should not take down the project UI. The helper has its own epoch; when it dies, Electron main throws away every resource that belonged to that epoch and rebuilds from committed state. The renderer never gets to pretend a dead process is still “the current engine.”
 
@@ -37,7 +38,7 @@ flowchart TB
   workers["project workers / registry"]
   client["audio-host-client<br/>.node"]
   host["yadaw-audio-host"]
-  editors["winit + VST3 editors"]
+  editors["winit + VST 3 editors"]
   tokio["Tokio control plane"]
   cpal["cpal real-time callbacks"]
   dsp["dsp-core"]
@@ -59,7 +60,7 @@ Editor windows are winit top-levels owned by the helper, not Electron BrowserWin
 
 Once audio lives next door, the boring question becomes: how do you talk to it without lying about cost?
 
-Small commands want low round-trip latency. Large blobs want bandwidth. Metering wants a path that does not schedule a request every frame. Parameter gestures want a ring the UI can write without waiting for a reply. So bootstrap opens independent normal and priority request/reply lanes, an event channel, and two persistent shared mappings — a telemetry page and a parameter SPSC ring. Priority ingress answers heartbeats from atomics and never waits for Tokio, VST3, or a full normal mailbox. When the control plane is busy, liveness still moves.
+Small commands want low round-trip latency. Large blobs want bandwidth. Metering wants a path that does not schedule a request every frame. Parameter gestures want a ring the UI can write without waiting for a reply. So bootstrap opens independent normal and priority request/reply lanes, an event channel, and two persistent shared mappings — a telemetry page and a parameter SPSC ring. Priority ingress answers heartbeats from atomics and never waits for Tokio, VST 3, or a full normal mailbox. When the control plane is busy, liveness still moves.
 
 Payloads stay inline in a bounded MessagePack body up to 64 KiB. Past that they become `BinaryPayload::Shared`: the producer writes into a lazily grown arena, publishes slot metadata with release/acquire ordering, and the packet only carries a typed reference — session epoch, region, slot, offset, length, lease. Component state, waveform peaks, large MIDI batches take this path. The envelope stays small; the bytes stay in mapped memory. Each direction owns an arena with fixed region classes and a hard mapped-capacity ceiling. The sender keeps an allocation until `ReleaseLeases`. A late reader that misses its window quarantines the region instead of risking use-after-free. Exhaustion returns typed `Busy` — there is no unbounded wait queue pretending to be backpressure.
 

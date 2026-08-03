@@ -2,6 +2,7 @@
 import { withBase } from "vitepress"
 import { useHomeCopy, useLocalePrefix } from "../i18n"
 import SessionPreview from "./SessionPreview.vue"
+import VstTrademarkNotice from "./VstTrademarkNotice.vue"
 
 const t = useHomeCopy()
 const prefix = useLocalePrefix()
@@ -68,6 +69,7 @@ const signalClasses = [
           </p>
         </article>
       </div>
+      <VstTrademarkNotice />
     </section>
 
     <section class="principles">

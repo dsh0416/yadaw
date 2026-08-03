@@ -42,7 +42,7 @@ const en: HomeCopy = {
   getRelease: "Get a release",
   noticeStrong: "Experimental software.",
   noticeRest: "Explore freely, but keep backups of important work.",
-  captions: ["Arrangement", "Native audio", "VST3"],
+  captions: ["Arrangement", "Native audio", "VST® 3"],
   sessionAriaLabel: "A stylized YADAW arrangement with audio and MIDI tracks",
   manifestoLabel: "Built for the work between idea and mix",
   manifestoStatement:
@@ -63,7 +63,7 @@ const en: HomeCopy = {
     {
       index: "MIX",
       title: "Route, meter, and process.",
-      body: "Balance channels, create sends and buses, and host VST3 effects in a supervised audio process designed to contain plug-in failures."
+      body: "Balance channels, create sends and buses, and host VST 3 effects in a supervised audio process designed to contain plug-in failures."
     }
   ],
   principlesLabel: "The project is yours",
@@ -89,7 +89,7 @@ const zh: HomeCopy = {
   getRelease: "获取发布版本",
   noticeStrong: "实验性软件。",
   noticeRest: "欢迎自由探索，但请备份好重要的工作。",
-  captions: ["编排", "原生音频", "VST3"],
+  captions: ["编排", "原生音频", "VST® 3"],
   sessionAriaLabel: "YADAW 编排界面的风格化示意，包含音频与 MIDI 轨道",
   manifestoLabel: "为从灵感到混音之间的每一步而生",
   manifestoStatement:
@@ -110,7 +110,7 @@ const zh: HomeCopy = {
     {
       index: "MIX",
       title: "路由、电平与处理。",
-      body: "平衡通道，创建发送与总线，并在受监督的音频进程中托管 VST3 效果，将插件故障隔离在外。"
+      body: "平衡通道，创建发送与总线，并在受监督的音频进程中托管 VST 3 效果，将插件故障隔离在外。"
     }
   ],
   principlesLabel: "工程属于你",

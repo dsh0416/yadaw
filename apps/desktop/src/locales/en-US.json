@@ -49,6 +49,8 @@
       "linux": "Linux"
     },
     "license": "License",
+    "vstCompatibility": "VST® 3 compatibility",
+    "thirdPartyNotices": "Third-party notices",
     "links": "YADAW resources",
     "projectWebsite": "Project on GitHub",
     "userManual": "User manual",
