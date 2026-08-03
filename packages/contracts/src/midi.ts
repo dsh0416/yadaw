@@ -60,11 +60,34 @@ export interface MidiControlEvent {
   value: number
 }
 
+export interface MidiRecordingPreviewNote {
+  id: number
+  startTick: number
+  endTick: number
+  channel: number
+  key: number
+  velocity: number
+  active: boolean
+}
+
+export interface MidiRecordingPreviewTake {
+  clipId: string
+  trackId: string
+  notes: MidiRecordingPreviewNote[]
+}
+
+export interface MidiRecordingPreview {
+  positionTick: number
+  takes: MidiRecordingPreviewTake[]
+}
+
 export interface MidiInputSnapshot {
   ports: MidiInputPort[]
   sync: MidiSyncRuntimeSnapshot
   /** A bounded, generation-ordered window of recently received control events. */
   controlEvents: MidiControlEvent[]
+  /** Lightweight note geometry for the active recording; absent while idle. */
+  recordingPreview?: MidiRecordingPreview | null
   capturedAt: number
 }
 

@@ -731,6 +731,24 @@ export class AudioHostService {
         number: event.number,
         value: event.value
       })),
+      recordingPreview: value.recording_preview
+        ? {
+            positionTick: value.recording_preview.position_tick,
+            takes: value.recording_preview.takes.map((take) => ({
+              clipId: take.clip_id,
+              trackId: take.track_id,
+              notes: take.notes.map((note) => ({
+                id: note.id,
+                startTick: note.start_tick,
+                endTick: note.end_tick,
+                channel: note.channel,
+                key: note.key,
+                velocity: note.velocity,
+                active: note.active
+              }))
+            }))
+          }
+        : null,
       capturedAt: value.captured_at
     }
   }

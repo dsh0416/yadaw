@@ -13,6 +13,9 @@ defineProps<{
   recordingId: string | null
   recordingStartedAt: number | null
   recordingStartFrame: number | null
+  recordingStartTick?: number | null
+  recordingAudioTrackIds?: string[]
+  recordingMidiTrackIds?: string[]
   recordingError: string
 }>()
 
@@ -45,6 +48,9 @@ useEventListener(window, "pointerup", stopResize)
         :recording-id="recordingId"
         :recording-started-at="recordingStartedAt"
         :recording-start-frame="recordingStartFrame"
+        :recording-start-tick="recordingStartTick"
+        :recording-audio-track-ids="recordingAudioTrackIds"
+        :recording-midi-track-ids="recordingMidiTrackIds"
         :recording-error="recordingError"
       />
       <div

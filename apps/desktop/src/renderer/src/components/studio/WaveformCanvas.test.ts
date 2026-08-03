@@ -87,6 +87,27 @@ describe("WaveformCanvas", () => {
     expect(context.stroke.mock.calls.length).toBeGreaterThan(strokes)
   })
 
+  it("resolves a visible recording color before drawing into the canvas", async () => {
+    vi.spyOn(window, "getComputedStyle").mockReturnValue({
+      color: "rgb(17, 17, 17)",
+      getPropertyValue: (property: string) =>
+        property === "--ui-domain-color-ffd2d8" ? "rgb(255, 210, 216)" : ""
+    } as CSSStyleDeclaration)
+    const wrapper = mount(WaveformCanvas, {
+      props: {
+        window: peaks,
+        displayMode: "separate",
+        amplitudeScale: 1,
+        loading: false,
+        recording: true
+      }
+    })
+    await nextTick()
+
+    expect(context.strokeStyle).toBe("rgb(255, 210, 216)")
+    wrapper.unmount()
+  })
+
   it("announces loading and unavailable empty states without fake peaks", async () => {
     const wrapper = mount(WaveformCanvas, {
       props: {

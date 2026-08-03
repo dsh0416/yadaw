@@ -932,6 +932,11 @@ fn snapshot(state: &ActorState) -> MidiInputSnapshot {
             error: state.error.clone(),
         },
         control_events: state.control_events.iter().cloned().collect(),
+        recording_preview: state
+            .recording
+            .as_ref()
+            .map(MidiRecordingSession::preview)
+            .map(Box::new),
         captured_at: SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
@@ -956,6 +961,7 @@ fn unavailable_snapshot(message: &str) -> MidiInputSnapshot {
             error: Some(message.to_owned()),
         },
         control_events: Vec::new(),
+        recording_preview: None,
         captured_at: 0,
     }
 }

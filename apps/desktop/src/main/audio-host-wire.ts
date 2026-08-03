@@ -260,6 +260,22 @@ export interface AudioHostMidiInputSnapshot {
     number: number
     value: number
   }>
+  recording_preview?: {
+    position_tick: number
+    takes: Array<{
+      clip_id: string
+      track_id: string
+      notes: Array<{
+        id: number
+        start_tick: number
+        end_tick: number
+        channel: number
+        key: number
+        velocity: number
+        active: boolean
+      }>
+    }>
+  }
   captured_at: number
 }
 

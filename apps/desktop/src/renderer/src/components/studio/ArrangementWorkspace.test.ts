@@ -157,7 +157,6 @@ describe("ArrangementWorkspace", () => {
         timeSignatureEvents: [{ tick: 0, numerator: 4, denominator: 4 }]
       }
     }
-
     const wrapper = mount(ArrangementWorkspace, {
       props: {
         recordingId: null,
@@ -396,11 +395,22 @@ describe("ArrangementWorkspace", () => {
       }
     }
 
+    const transport = useTransportStore()
+    transport.snapshot = {
+      state: "recording",
+      positionFrames: 48_000,
+      positionTicks: 1_920,
+      sampleRate: 48_000,
+      loopEnabled: false,
+      loopRange: null
+    }
+
     const wrapper = mount(ArrangementWorkspace, {
       props: {
         recordingId: "recording-live",
         recordingStartedAt: Date.now() - 1_000,
         recordingStartFrame: 0,
+        recordingAudioTrackIds: ["audio-1"],
         recordingError: ""
       },
       global: { plugins: [pinia] }
@@ -409,6 +419,10 @@ describe("ArrangementWorkspace", () => {
     expect(
       wrapper.get('[role="button"][aria-label="Recording New recording"]').attributes("aria-label")
     ).toBe("Recording New recording")
+    expect(
+      wrapper.get<HTMLElement>('[role="button"][aria-label="Recording New recording"]').element
+        .style.width
+    ).toBe("100px")
     expect(wrapper.find('[role="status"]').exists()).toBe(false)
   })
 
@@ -647,6 +661,14 @@ describe("ArrangementWorkspace", () => {
     })
     expect(usePianoRollStore().openClipIds).toEqual(["00000000-0000-4000-8000-000000000002"])
     expect(useStudioWorkspaceStore().activeLowerDock).toBe("piano-roll")
+
+    await wrapper.setProps({
+      recordingId: "midi-recording-live",
+      recordingMidiTrackIds: ["track:instrument-1"]
+    })
+    expect(wrapper.find('[data-testid="midi-recording-preview"]').exists()).toBe(false)
+    await wrapper.setProps({ recordingStartTick: 960 })
+    expect(wrapper.find('[data-testid="midi-recording-preview"]').exists()).toBe(true)
 
     randomUuid.mockRestore()
     wrapper.unmount()

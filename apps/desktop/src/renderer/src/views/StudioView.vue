@@ -225,6 +225,9 @@ onBeforeUnmount(() => {
       :recording-id="activeRecording?.id ?? null"
       :recording-started-at="activeRecording?.startedAt ?? null"
       :recording-start-frame="activeRecording?.startFrame ?? null"
+      :recording-start-tick="activeRecording?.startTick ?? null"
+      :recording-audio-track-ids="activeRecording?.audioTrackIds ?? []"
+      :recording-midi-track-ids="activeRecording?.midiTrackIds ?? []"
       :recording-error="recordingError"
     />
     <StudioStatusbar

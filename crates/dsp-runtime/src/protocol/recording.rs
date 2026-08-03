@@ -50,6 +50,30 @@ pub struct MidiRecordingStartConfig {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MidiRecordingPreviewNote {
+    pub id: u32,
+    pub start_tick: u64,
+    pub end_tick: u64,
+    pub channel: u8,
+    pub key: u8,
+    pub velocity: u8,
+    pub active: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MidiRecordingTakePreview {
+    pub clip_id: String,
+    pub track_id: String,
+    pub notes: Vec<MidiRecordingPreviewNote>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MidiRecordingPreview {
+    pub position_tick: u64,
+    pub takes: Vec<MidiRecordingTakePreview>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MidiRecordingTakeResult {
     pub path: String,
     pub source_id: String,

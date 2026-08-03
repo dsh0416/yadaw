@@ -28,6 +28,13 @@ use crate::{
 
 const MAX_BLOCK_FRAMES: i32 = 4096;
 
+/// VST3 reserves note identifiers from -10000 through -1000 for plug-in use.
+/// MIDI 1.0 input does not carry a note identifier, so normalize every host
+/// value below the SDK's "not available" sentinel to -1 at the FFI boundary.
+const fn vst3_note_id(note_id: i32) -> i32 {
+    if note_id < -1 { -1 } else { note_id }
+}
+
 #[inline]
 fn midi_sysex_data_type() -> u32 {
     as_uint32(Vst::DataEvent_DataTypes_kMidiSysEx)
@@ -548,7 +555,7 @@ impl StereoProcessor {
                     tuning: 0.0,
                     velocity: velocity.clamp(0.0, 1.0),
                     length: 0,
-                    noteId: note_id,
+                    noteId: vst3_note_id(note_id),
                 },
             },
         })
@@ -573,7 +580,7 @@ impl StereoProcessor {
                     channel,
                     pitch,
                     velocity: velocity.clamp(0.0, 1.0),
-                    noteId: note_id,
+                    noteId: vst3_note_id(note_id),
                     tuning: 0.0,
                 },
             },
@@ -1243,6 +1250,15 @@ mod tests {
         assert!(requirement_enabled(0b10, 0b10_u32));
         assert!(!requirement_enabled(0b10, 0b100_i32));
         assert!(!requirement_enabled(0b10, 0b100_u32));
+    }
+
+    #[test]
+    fn midi_note_ids_never_enter_the_plugin_reserved_negative_range() {
+        assert_eq!(vst3_note_id(-10_000), -1);
+        assert_eq!(vst3_note_id(-2), -1);
+        assert_eq!(vst3_note_id(-1), -1);
+        assert_eq!(vst3_note_id(0), 0);
+        assert_eq!(vst3_note_id(i32::MAX), i32::MAX);
     }
 
     #[test]

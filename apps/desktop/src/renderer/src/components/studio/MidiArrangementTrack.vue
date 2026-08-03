@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed } from "vue"
 import { useI18n } from "vue-i18n"
-import type { MidiClipState, TempoMapSnapshot } from "@yadaw/contracts"
+import type { MidiClipState, MidiRecordingPreviewTake, TempoMapSnapshot } from "@yadaw/contracts"
 import type { PianoRollSnap } from "../../utils/pianoRoll"
 import type { ClipTrimEdge } from "../../utils/clipEditing"
 import { barTicksThroughTick, beatTicksThroughTick } from "../../utils/tempoMap"
 import { timelineXToTick } from "../../utils/timelineCoordinates"
 import MidiClipCard from "./MidiClipCard.vue"
+import MidiRecordingPreview from "./MidiRecordingPreview.vue"
 
 const { t } = useI18n()
 
@@ -25,8 +26,19 @@ const props = withDefaults(
     snap?: PianoRollSnap
     dragPreview: MidiClipState | null
     draggingClipId: string | null
+    recording?: boolean
+    recordingStartTick?: number
+    recordingPositionTick?: number
+    liveTake?: MidiRecordingPreviewTake | null
   }>(),
-  { playheadTick: 0, snap: "1/16" }
+  {
+    playheadTick: 0,
+    snap: "1/16",
+    recording: false,
+    recordingStartTick: 0,
+    recordingPositionTick: 0,
+    liveTake: null
+  }
 )
 
 const emit = defineEmits<{
@@ -118,7 +130,7 @@ function relayDragStart(clipId: string, offsetPixels: number): void {
     @dblclick.self="createClipAtPointer"
     @keydown.enter.self="emit('create', trackId, keyboardInsertionTick)"
   >
-    <span v-if="clips.length === 0 && !dragPreview" class="empty-hint">
+    <span v-if="clips.length === 0 && !dragPreview && !recording" class="empty-hint">
       {{ t("studio.arrangement.createMidiClipHint") }}
     </span>
     <i
@@ -151,6 +163,15 @@ function relayDragStart(clipId: string, offsetPixels: number): void {
       @trim="relayTrim"
       @drag-start="relayDragStart"
       @drag-end="emit('clipDragEnd')"
+    />
+    <MidiRecordingPreview
+      v-if="recording"
+      :take="liveTake"
+      :start-tick="recordingStartTick"
+      :position-tick="recordingPositionTick"
+      :tempo-map="tempoMap"
+      :pixels-per-quarter="pixelsPerQuarter"
+      :track-color="trackColor"
     />
     <div
       v-if="dragPreview"

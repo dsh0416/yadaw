@@ -299,6 +299,7 @@ pub enum ControlResult {
         recording: RecordingResult,
     },
     MidiRecordingStopped {
+        #[serde(rename = "midi_recording")]
         recording: MidiRecordingResult,
     },
     RecordingWaveform {
@@ -401,6 +402,35 @@ mod tests {
                 "747261636b2d31"
             )
         );
+    }
+
+    #[test]
+    fn midi_recording_stop_uses_the_desktop_wire_field() {
+        let response = ControlResponse {
+            request_id: 7,
+            result: ControlResult::MidiRecordingStopped {
+                recording: MidiRecordingResult {
+                    takes: vec![MidiRecordingTakeResult {
+                        path: "/swap/take.midijournal".to_owned(),
+                        source_id: "source-1".to_owned(),
+                        clip_id: "clip-1".to_owned(),
+                        track_id: "track-1".to_owned(),
+                        event_count: 4,
+                        dropped_events: 1,
+                    }],
+                },
+            },
+        };
+        let bytes = rmp_serde::to_vec_named(&response).expect("response must encode");
+        let wire = rmp_serde::from_slice::<serde_json::Value>(&bytes)
+            .expect("response must decode as a MessagePack map");
+
+        assert_eq!(wire["result"]["type"], "midi-recording-stopped");
+        assert_eq!(
+            wire["result"]["midi_recording"]["takes"][0]["event_count"],
+            4
+        );
+        assert!(wire["result"].get("recording").is_none());
     }
 
     #[test]
