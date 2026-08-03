@@ -6,6 +6,7 @@ import { ApplicationSettingsStore } from "./application-settings"
 import { AssetMaterializer } from "./asset-materializer"
 import { AudioGraphCompiler } from "./audio-graph-compiler"
 import { AudioGraphPublisher } from "./audio-graph-publisher"
+import { bindAudioHostApplicationEvents } from "./audio-host-application-events"
 import { AudioHostService } from "./audio-host-service"
 import { commitExternalProjectDirty } from "./external-project-dirty"
 import { installApplicationMenu } from "./application-menu"
@@ -230,7 +231,6 @@ export function startApplication(
         applicationSettings.shortcuts
       )
       const projectService = new ProjectService(app.getPath("userData"), settings)
-      let araUiSequence = 0
       setWindowProjectService(projectService)
       onServices({ audioHostService, projectService })
       const graphPublisher = new AudioGraphPublisher(
@@ -300,42 +300,6 @@ export function startApplication(
           audioHostEpoch: audioHostService.helperEpoch() ?? undefined
         }
       )
-      audioHostService.setAraCallbackHandler(async (callback) => {
-        if (
-          callback.event.kind === "content-changed" ||
-          callback.event.kind === "document-data-changed"
-        ) {
-          await commitExternalProjectDirty(projectService, lifecycle)
-        }
-        if (
-          callback.event.kind === "analysis-progress" ||
-          callback.event.kind === "archive-progress" ||
-          callback.event.kind === "quarantined"
-        ) {
-          const epoch = audioHostService.helperEpoch() ?? "0"
-          araUiSequence += 1
-          for (const candidate of BrowserWindow.getAllWindows()) {
-            candidate.webContents.send(IPC_CHANNELS.araCallbackEvent, {
-              protocolVersion: IPC_PROTOCOL_VERSION,
-              sourceEpoch: epoch,
-              sequence: araUiSequence,
-              resourceRevision: araUiSequence,
-              payload: {
-                instanceId: callback.instanceId,
-                callbackSequence: callback.sequence,
-                event: callback.event
-              }
-            })
-          }
-        }
-      })
-      audioHostService.setVst3HostNotificationHandler(async (notification) => {
-        if (notification.kind === "dirty-changed" && notification.value === "true") {
-          await commitExternalProjectDirty(projectService, lifecycle)
-        } else if (notification.kind === "open-editor") {
-          await plugins.openEditor(notification.instanceId)
-        }
-      })
       if (initialAudioRuntime.state === "running") {
         await lifecycle.applicationState.commitAudioEngine(
           normalizeAudioRuntime(initialAudioRuntime)
@@ -346,81 +310,13 @@ export function startApplication(
         lifecycle.applicationState.desktopSession
       )
       projectCommands.attachKernel(lifecycle, operations)
-      let externalProjectCommandSequence = 0
-      audioHostService.setPluginSidechainRouteRequestHandler(async (request) => {
-        const workspace = projectCommands.currentWorkspace()
-        const plugin = workspace?.graph.plugins.find(
-          (candidate) => candidate.id === request.instanceId
-        )
-        if (!workspace || !plugin) {
-          await audioHostService.resolvePluginSidechainRoute(
-            request.requestId,
-            request.instanceId,
-            false,
-            "The plug-in or project is no longer available."
-          )
-          return
-        }
-        const sidechainInputs = plugin.sidechainInputs.filter(
-          (route) => route.inputBusIndex !== request.inputBusIndex
-        )
-        if (request.sourceChannelId) {
-          sidechainInputs.push({
-            inputBusIndex: request.inputBusIndex,
-            sourceChannelId: request.sourceChannelId
-          })
-        }
-        sidechainInputs.sort((left, right) => left.inputBusIndex - right.inputBusIndex)
-        const operationId = `native-sidechain:${randomUUID()}`
-        const result = await projectCommands.execute(
-          {
-            protocolVersion: IPC_PROTOCOL_VERSION,
-            requestId: `native-sidechain-request:${randomUUID()}`,
-            target: structuredClone(workspace.projectGraph),
-            expectedRevision: workspace.revision,
-            mutation: {
-              operationId,
-              idempotencyKey: operationId
-            }
-          },
-          {
-            type: "update-plugin",
-            pluginId: plugin.id,
-            patch: { descriptor: plugin.descriptor, sidechainInputs }
-          }
-        )
-        if (!result.ok) {
-          await audioHostService.resolvePluginSidechainRoute(
-            request.requestId,
-            request.instanceId,
-            false,
-            "Side-chain routing could not be committed."
-          )
-          return
-        }
-        const revision = result.resourceRevision ?? workspace.revision + 1
-        externalProjectCommandSequence += 1
-        for (const candidate of BrowserWindow.getAllWindows()) {
-          candidate.webContents.send(IPC_CHANNELS.projectCommandExternalEvent, {
-            protocolVersion: IPC_PROTOCOL_VERSION,
-            sourceEpoch: startupEpoch,
-            sequence: externalProjectCommandSequence,
-            resourceRevision: revision,
-            payload: {
-              result: result.value,
-              warnings: result.warnings ?? []
-            }
-          })
-        }
-        const degraded = result.warnings?.some(
-          (warning) => warning.code === "audio-deployment-degraded"
-        )
-        await audioHostService.resolvePluginSidechainRoute(
-          request.requestId,
-          request.instanceId,
-          true,
-          degraded ? "Route saved, but audio deployment is degraded." : undefined
-        )
+      bindAudioHostApplicationEvents({
+        audioHost: audioHostService,
+        projectCommands,
+        plugins,
+        sourceEpoch: startupEpoch,
+        targets: () => BrowserWindow.getAllWindows(),
+        markProjectDirty: () => commitExternalProjectDirty(projectService, lifecycle)
       })
       const recordings = new RecordingService(
         settings,
