@@ -57,6 +57,7 @@ fn main() {
         .generate_comments(false)
         .allowlist_type("Steinberg::FUnknown")
         .allowlist_type("Steinberg::IBStream")
+        .allowlist_type("Steinberg::ISizeableStream")
         .allowlist_type("Steinberg::IPluginBase")
         .allowlist_type("Steinberg::IPluginFactory.*")
         .allowlist_type("Steinberg::PFactoryInfo")
@@ -111,6 +112,8 @@ fn emit_sdk_reruns(sdk_dir: &Path) {
         "pluginterfaces/vst/ivsthostapplication.h",
         "pluginterfaces/vst/ivstmessage.h",
         "pluginterfaces/vst/ivstparameterchanges.h",
+        "pluginterfaces/vst/ivstattributes.h",
+        "pluginterfaces/vst/ivstunits.h",
     ] {
         println!("cargo:rerun-if-changed={}", sdk_dir.join(path).display());
     }

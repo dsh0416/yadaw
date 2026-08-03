@@ -5,9 +5,10 @@ mod tests {
     use yadaw_dsp_runtime::protocol::{
         AudioEngineConfig, BinaryPayload, ControlResponse, ControlResult, GraphTransactionRequest,
         GraphUpdate, INLINE_BLOB_LIMIT, LiveMixerGraph, LiveTempoEvent, LiveTimeSignatureEvent,
-        MidiSyncPreferences, MixerParameterPreview, PluginAudioMode, PluginEditorPreference,
-        PrepareGraphRequest, PriorityResult, RecordingStartConfig, ResourceKind, ResourceRef,
-        RoundTripLatencyMeasurementRequest, RpcRequestMeta, TransportControl,
+        MidiSyncPreferences, MixerParameterPreview, PluginAudioMode, PluginEditorContext,
+        PluginEditorPreference, PrepareGraphRequest, PriorityResult, RecordingStartConfig,
+        ResourceKind, ResourceRef, RoundTripLatencyMeasurementRequest, RpcRequestMeta,
+        TransportControl,
     };
     use yadaw_ipc_transport::{RegionOffer, TelemetryWriter, encode_response};
 
@@ -308,6 +309,7 @@ mod tests {
             ControlCommand::OpenPluginEditor {
                 instance_id: "plugin".into(),
                 preference: PluginEditorPreference::default(),
+                context: PluginEditorContext::default(),
             },
             ControlCommand::ClosePluginEditor {
                 instance_id: "plugin".into(),

@@ -29,7 +29,7 @@ impl EditorWindow {
         }
     }
 
-    fn refresh_parameters(&mut self, runtime: &Vst3Runtime) -> Result<(), String> {
+    pub(crate) fn refresh_parameters(&mut self, runtime: &Vst3Runtime) -> Result<(), String> {
         match runtime.parameters(&self.instance_id) {
             Ok(parameters) => {
                 self.parameters = parameters;
@@ -68,7 +68,13 @@ impl EditorWindow {
 
         let size = initial_native_view_rect(view.size(), |rect| view.constrain_size(rect).is_ok());
         let (container_width, container_height) = container_extent(size, self.monitor_scale.get());
-        let toolbar = toolbar_platform_extent(self.monitor_scale.get(), self.user_zoom.get());
+        let toolbar_height =
+            toolbar_height_for_rect(size, self.monitor_scale.get(), self.user_zoom.get());
+        let toolbar = toolbar_platform_extent(
+            toolbar_height,
+            self.monitor_scale.get(),
+            self.user_zoom.get(),
+        );
         let Some(container) = NativeContainer::create(
             &self.window,
             0,
@@ -102,7 +108,8 @@ impl EditorWindow {
             let monitor_scale = callback_monitor_scale.get();
             let user_zoom = callback_user_zoom.get();
             let (width, height) = container_extent(requested, monitor_scale);
-            let toolbar = toolbar_platform_extent(monitor_scale, user_zoom);
+            let toolbar_height = toolbar_height_for_rect(requested, monitor_scale, user_zoom);
+            let toolbar = toolbar_platform_extent(toolbar_height, monitor_scale, user_zoom);
             callback_container
                 .borrow_mut()
                 .resize(0, container_origin(toolbar), width, height);
@@ -154,7 +161,13 @@ impl EditorWindow {
             .or_else(|| view.size().ok())
             .unwrap_or(size);
         let (final_width, final_height) = container_extent(final_size, self.monitor_scale.get());
-        let toolbar = toolbar_platform_extent(self.monitor_scale.get(), self.user_zoom.get());
+        let toolbar_height =
+            toolbar_height_for_rect(final_size, self.monitor_scale.get(), self.user_zoom.get());
+        let toolbar = toolbar_platform_extent(
+            toolbar_height,
+            self.monitor_scale.get(),
+            self.user_zoom.get(),
+        );
         container
             .borrow_mut()
             .resize(0, container_origin(toolbar), final_width, final_height);
@@ -204,7 +217,8 @@ impl EditorWindow {
         let monitor_scale = self.monitor_scale.get();
         let user_zoom = self.user_zoom.get();
         let (width, height) = container_extent(rect, monitor_scale);
-        let toolbar = toolbar_platform_extent(monitor_scale, user_zoom);
+        let toolbar_height = toolbar_height_for_rect(rect, monitor_scale, user_zoom);
+        let toolbar = toolbar_platform_extent(toolbar_height, monitor_scale, user_zoom);
         native
             .container
             .borrow_mut()
@@ -225,13 +239,17 @@ impl EditorWindow {
         let physical = self.window.inner_size();
         let monitor_scale = self.monitor_scale.get();
         let user_zoom = self.user_zoom.get();
-        let toolbar_physical = (TOOLBAR_HEIGHT * monitor_scale * user_zoom).round() as u32;
+        let toolbar_height = editor_toolbar_height(
+            (f64::from(physical.width) / effective_iced_scale(monitor_scale, user_zoom)) as f32,
+        );
+        let toolbar_physical =
+            (toolbar_height * monitor_scale * user_zoom).round() as u32;
         let plugin_physical_height = physical.height.saturating_sub(toolbar_physical).max(1);
         let mut rect =
             view_rect_from_physical(physical.width.max(1), plugin_physical_height, monitor_scale);
         let _ = native.view.constrain_size(&mut rect);
         let (width, height) = container_extent(rect, monitor_scale);
-        let toolbar = toolbar_platform_extent(monitor_scale, user_zoom);
+        let toolbar = toolbar_platform_extent(toolbar_height, monitor_scale, user_zoom);
         native
             .container
             .borrow_mut()

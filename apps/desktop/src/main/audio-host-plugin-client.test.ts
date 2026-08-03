@@ -181,10 +181,42 @@ describe("AudioHostPluginClient", () => {
       .mockResolvedValueOnce({ result: { type: "ok" } })
 
     await expect(
-      client.openPluginEditor("plugin-1", { mode: "native", zoomPercent: 100 })
+      client.openPluginEditor(
+        "plugin-1",
+        { mode: "native", zoomPercent: 100 },
+        {
+          channelName: "Lead",
+          channelColor: "#58c6c2",
+          pluginName: "Fixture",
+          appearance: { theme: "dark", locale: "en-US" }
+        }
+      )
     ).resolves.toEqual({ editorMode: "native", open: true })
+    expect(request).toHaveBeenNthCalledWith(1, {
+      type: "open-plugin-editor",
+      instance_id: "plugin-1",
+      preference: { mode: "native", zoom_percent: 100 },
+      context: {
+        channel_name: "Lead",
+        channel_color: "#58c6c2",
+        plugin_name: "Fixture",
+        appearance: { theme: "dark", locale: "en-US" }
+      }
+    })
     await client.closePluginEditor("plugin-1")
     expect(request).toHaveBeenCalledTimes(2)
+  })
+
+  it("forwards resolved editor appearance updates", async () => {
+    const { client, request } = createClient()
+    request.mockResolvedValue({ result: { type: "ok" } })
+
+    await client.configurePluginEditorAppearance({ theme: "light", locale: "zh-cmn-Hans-CN" })
+
+    expect(request).toHaveBeenCalledWith({
+      type: "configure-plugin-editor-appearance",
+      appearance: { theme: "light", locale: "zh-cmn-Hans-CN" }
+    })
   })
 
   it("falls back to request when enqueue has no live client/handle", async () => {

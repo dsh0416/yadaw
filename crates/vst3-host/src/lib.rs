@@ -21,10 +21,13 @@ mod stream;
 
 pub use ara::{AraMainFactory, AraPluginEntry};
 pub use com::{ComInterface, ComPtr};
-pub use component_handler::Vst3RestartRequest;
+pub use component_handler::{EditorParameterGesture, Vst3HostRequest, Vst3RestartRequest};
 pub use error::{HostError, HostResult};
 pub use frame::PlugFrame;
-pub use hosted::{HostedParameter, HostedPlugin, PlugView, ProcessorLease};
+pub use hosted::{
+    HostedParameter, HostedPlugin, HostedProgramList, HostedUnit, HostedUnitInfo, PlugView,
+    ProcessorLease,
+};
 pub use id::ClassId;
 pub use module::{AraFactoryInfo, ClassInfo, FactoryInfo, Module};
 pub use processor::{AudioLayout, HostProcessContext, PluginKind, StereoProcessor};

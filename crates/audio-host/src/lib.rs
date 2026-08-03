@@ -94,4 +94,5 @@ pub mod recording {
 }
 pub mod runtime;
 pub mod vst3;
+mod vst3_presentation_latency;
 pub mod workers;

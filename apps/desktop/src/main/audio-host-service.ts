@@ -1,6 +1,6 @@
 import { AudioHostDiagnostics } from "./audio-host-diagnostics"
 import { AraCallbackSequenceTracker, drainHostEvents } from "./audio-host-events"
-import type { AraHostCallback } from "./audio-host-events"
+import type { AraHostCallback, Vst3HostNotification } from "./audio-host-events"
 import { graphDiff, readCrashMarker } from "./audio-host-graph-client"
 import { AudioHostRecordingClient } from "./audio-host-recording-client"
 import { AudioHostPluginClient } from "./audio-host-plugin-client"
@@ -40,6 +40,10 @@ import type {
   TransportCommand,
   TransportSnapshot
 } from "@yadaw/contracts"
+import type {
+  PluginEditorAppearanceWire,
+  PluginEditorContextWire
+} from "./audio-host-plugin-client"
 
 const HEARTBEAT_INTERVAL_MS = 250
 const HEARTBEAT_TIMEOUT_MS = 2_000
@@ -75,6 +79,10 @@ export type {
 export type { PreparedGraphDeployment } from "./audio-host-graph-transactions"
 
 export class AudioHostService {
+  private pluginEditorAppearance: PluginEditorAppearanceWire = {
+    theme: "dark",
+    locale: "en-US"
+  }
   private heartbeatInFlight = false
   private audioBenchmarkInFlight = false
   private benchmarkRunnerInFlight = false
@@ -105,8 +113,12 @@ export class AudioHostService {
   }
   private readonly pendingPreferenceWrites = new Set<Promise<void>>()
   private readonly pendingAraCallbacks = new Set<Promise<void>>()
+  private readonly pendingVst3HostNotifications = new Set<Promise<void>>()
   private readonly araCallbackSequences = new AraCallbackSequenceTracker()
   private araCallbackHandler: (callback: AraHostCallback) => void | Promise<void> = () => {}
+  private vst3HostNotificationHandler: (
+    notification: Vst3HostNotification
+  ) => void | Promise<void> = () => {}
   private readonly supervisor: AudioHostProcessSupervisor
   private readonly session = new AudioHostSessionCoordinator()
   private readonly gateway: AudioHostGateway
@@ -181,12 +193,30 @@ export class AudioHostService {
       onEditorPreferenceChanged,
       this.pendingPreferenceWrites,
       onEditorClosed,
-      (callback) => this.handleAraCallback(callback)
+      (callback) => this.handleAraCallback(callback),
+      (notification) => this.handleVst3HostNotification(notification)
     )
   }
 
   setAraCallbackHandler(handler: (callback: AraHostCallback) => void | Promise<void>): void {
     this.araCallbackHandler = handler
+  }
+
+  setVst3HostNotificationHandler(
+    handler: (notification: Vst3HostNotification) => void | Promise<void>
+  ): void {
+    this.vst3HostNotificationHandler = handler
+  }
+
+  private handleVst3HostNotification(notification: Vst3HostNotification): void {
+    const pending = Promise.resolve(this.vst3HostNotificationHandler(notification))
+      .catch((error: unknown) => {
+        console.error("Could not reconcile a VST3 host notification", error)
+      })
+      .finally(() => {
+        this.pendingVst3HostNotifications.delete(pending)
+      })
+    this.pendingVst3HostNotifications.add(pending)
   }
 
   private handleAraCallback(callback: AraHostCallback): void {
@@ -937,9 +967,19 @@ export class AudioHostService {
 
   openPluginEditor(
     instanceId: string,
-    preference: PluginEditorPreference
+    preference: PluginEditorPreference,
+    context: PluginEditorContextWire
   ): Promise<{ editorMode: PluginEditorMode; open: boolean }> {
-    return this.plugins.openPluginEditor(instanceId, preference)
+    return this.plugins.openPluginEditor(instanceId, preference, context)
+  }
+
+  pluginEditorAppearanceSnapshot(): PluginEditorAppearanceWire {
+    return { ...this.pluginEditorAppearance }
+  }
+
+  async configurePluginEditorAppearance(appearance: PluginEditorAppearanceWire): Promise<void> {
+    this.pluginEditorAppearance = { ...appearance }
+    await this.plugins.configurePluginEditorAppearance(appearance)
   }
 
   closePluginEditor(instanceId: string): Promise<void> {
@@ -1226,13 +1266,15 @@ export class AudioHostService {
       this.onEditorPreferenceChanged,
       this.pendingPreferenceWrites,
       this.onEditorClosed,
-      (callback) => this.handleAraCallback(callback)
+      (callback) => this.handleAraCallback(callback),
+      (notification) => this.handleVst3HostNotification(notification)
     )
     if (this.client === client) this.client = null
     client.close()
     await this.gateway.settle()
     await Promise.allSettled([...this.pendingPreferenceWrites])
     await Promise.allSettled([...this.pendingAraCallbacks])
+    await Promise.allSettled([...this.pendingVst3HostNotifications])
     this.araCallbackSequences.clear()
     this.publishedGraph = null
     this.audioTransport.resetConnection()

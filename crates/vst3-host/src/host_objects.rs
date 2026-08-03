@@ -47,6 +47,17 @@ impl HostAttributeList {
         }))
         .cast()
     }
+
+    pub(crate) fn project_state() -> *mut IAttributeList {
+        let attributes = Self::into_raw();
+        let state_type = "Project\0".encode_utf16().collect::<Vec<_>>();
+        unsafe {
+            // SAFETY: attributes is a newly owned host list, the static ID is NUL-terminated,
+            // and state_type remains readable for this synchronous copy.
+            set_string(attributes, c"StateType".as_ptr(), state_type.as_ptr());
+        }
+        attributes
+    }
 }
 
 #[repr(C)]
@@ -224,7 +235,7 @@ unsafe extern "system" fn attribute_add_ref(this: *mut FUnknown) -> uint32 {
     }
 }
 
-unsafe extern "system" fn attribute_release(this: *mut FUnknown) -> uint32 {
+pub(crate) unsafe extern "system" fn attribute_release(this: *mut FUnknown) -> uint32 {
     let attributes = this.cast::<HostAttributeList>();
     let previous = unsafe {
         // SAFETY: this is the leading interface pointer of a live HostAttributeList.

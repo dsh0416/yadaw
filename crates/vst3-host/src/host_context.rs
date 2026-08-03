@@ -146,8 +146,10 @@ unsafe extern "system" fn is_plug_interface_supported(
     let supported = [
         iid::ICOMPONENT,
         iid::IAUDIO_PROCESSOR,
+        iid::IAUDIO_PRESENTATION_LATENCY,
         iid::IEDIT_CONTROLLER,
         iid::IMIDI_MAPPING,
+        iid::IUNIT_INFO,
         iid::ICONNECTION_POINT,
         iid::IPLUG_VIEW,
         iid::IPLUG_VIEW_CONTENT_SCALE_SUPPORT,

@@ -1,4 +1,8 @@
-use std::{collections::HashMap, path::Path, rc::Rc};
+use std::{
+    collections::{HashMap, VecDeque},
+    path::Path,
+    rc::Rc,
+};
 
 use yadaw_dsp_runtime::{
     block::MAX_PLUGIN_BLOCK_FRAMES,
@@ -8,9 +12,14 @@ use yadaw_dsp_runtime::{
     },
 };
 pub use yadaw_vst3_host::Vst3ProcessorHandle;
-use yadaw_vst3_host::{AudioLayout, ClassId, HostedPlugin, PlugView, PluginKind};
+use yadaw_vst3_host::{AudioLayout, ClassId, HostedPlugin, PlugView, PluginKind, Vst3HostRequest};
 
-use crate::ara::{AraCallbackBatch, AraDocument, AraFactoryHost};
+use crate::{
+    ara::{AraCallbackBatch, AraDocument, AraFactoryHost},
+    vst3_presentation_latency::calculate_presentation_latencies,
+};
+
+const HOST_REQUEST_CAPACITY: usize = 1_024;
 
 pub struct Vst3Runtime {
     instances: HashMap<String, Instance>,
@@ -21,6 +30,14 @@ pub struct Vst3Runtime {
     next_runtime_handle: u32,
     next_ara_callback_sequence: u64,
     restart_failures: Vec<(String, String)>,
+    pending_host_requests: VecDeque<(String, Vst3HostRequest)>,
+}
+
+/// Opaque VST3 state used by host-owned editor compare and clipboard features.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EditorPluginState {
+    pub component_state: Vec<u8>,
+    pub controller_state: Vec<u8>,
 }
 
 struct GuardedInstance {
@@ -68,6 +85,29 @@ impl InstanceConfiguration {
 }
 
 impl Instance {
+    fn set_bus_active(
+        &self,
+        media_type: i32,
+        direction: i32,
+        index: i32,
+        active: bool,
+    ) -> Result<(), String> {
+        let primary = self
+            .plugin
+            .set_bus_active(media_type, direction, index, active);
+        let secondary = self.secondary.as_ref().map_or(Ok(()), |plugin| {
+            plugin.set_bus_active(media_type, direction, index, active)
+        });
+        match (primary, secondary) {
+            (Ok(()), Ok(())) => Ok(()),
+            (Err(primary), Ok(())) => Err(primary.to_string()),
+            (Ok(()), Err(secondary)) => Err(format!("secondary dual-mono bus: {secondary}")),
+            (Err(primary), Err(secondary)) => Err(format!(
+                "primary bus: {primary}; secondary dual-mono bus: {secondary}"
+            )),
+        }
+    }
+
     fn has_outstanding_processor_leases(&self) -> bool {
         self.plugin.has_outstanding_processor_leases()
             || self
@@ -140,6 +180,7 @@ impl Vst3Runtime {
             next_runtime_handle: 1,
             next_ara_callback_sequence: 0,
             restart_failures: Vec::new(),
+            pending_host_requests: VecDeque::with_capacity(HOST_REQUEST_CAPACITY),
         }
     }
 
@@ -196,8 +237,10 @@ impl Vst3Runtime {
             ControlCommand::OpenPluginEditor {
                 instance_id,
                 preference,
+                ..
             } => self.editor_result(&instance_id, preference),
-            ControlCommand::ClosePluginEditor { .. } => ControlResult::Accepted,
+            ControlCommand::ClosePluginEditor { .. }
+            | ControlCommand::ConfigurePluginEditorAppearance { .. } => ControlResult::Accepted,
             _ => control_error("command is not a VST3 runtime command"),
         }
     }
@@ -334,6 +377,76 @@ impl Vst3Runtime {
             .map_err(|error| error.to_string())
     }
 
+    pub fn editor_state(&self, instance_id: &str) -> Result<EditorPluginState, String> {
+        let instance = self
+            .instances
+            .get(instance_id)
+            .ok_or_else(|| "VST3 instance is not loaded".to_owned())?;
+        instance
+            .plugin
+            .save_state()
+            .map(|(component_state, controller_state)| EditorPluginState {
+                component_state,
+                controller_state,
+            })
+            .map_err(|error| error.to_string())
+    }
+
+    pub fn restore_editor_state(
+        &self,
+        instance_id: &str,
+        state: &EditorPluginState,
+    ) -> Result<(), String> {
+        let instance = self
+            .instances
+            .get(instance_id)
+            .ok_or_else(|| "VST3 instance is not loaded".to_owned())?;
+        let primary_before = instance
+            .plugin
+            .save_state()
+            .map_err(|error| format!("could not preserve the current plug-in state: {error}"))?;
+        let secondary_before = instance
+            .secondary
+            .as_ref()
+            .map(HostedPlugin::save_state)
+            .transpose()
+            .map_err(|error| format!("could not preserve the current dual-mono state: {error}"))?;
+        if let Err(error) = instance
+            .plugin
+            .restore_state(&state.component_state, &state.controller_state)
+        {
+            let rollback = instance
+                .plugin
+                .restore_state(&primary_before.0, &primary_before.1);
+            return Err(match rollback {
+                Ok(()) => format!("could not restore plug-in state: {error}"),
+                Err(rollback_error) => format!(
+                    "could not restore plug-in state: {error}; recovery also failed: {rollback_error}"
+                ),
+            });
+        }
+        if let Some(secondary) = &instance.secondary
+            && let Err(error) =
+                secondary.restore_state(&state.component_state, &state.controller_state)
+        {
+            let primary_rollback = instance
+                .plugin
+                .restore_state(&primary_before.0, &primary_before.1);
+            let secondary_rollback = secondary_before.as_ref().map_or(Ok(()), |before| {
+                secondary.restore_state(&before.0, &before.1)
+            });
+            return Err(match (primary_rollback, secondary_rollback) {
+                (Ok(()), Ok(())) => {
+                    format!("could not restore dual-mono plug-in state: {error}")
+                }
+                (primary, secondary) => format!(
+                    "could not restore dual-mono plug-in state: {error}; recovery failed (primary: {primary:?}, secondary: {secondary:?})"
+                ),
+            });
+        }
+        Ok(())
+    }
+
     pub fn set_parameter_from_editor(
         &mut self,
         instance_id: &str,
@@ -366,6 +479,34 @@ impl Vst3Runtime {
     pub fn take_timing_changes(&mut self) -> Vec<(String, u32, Option<u32>)> {
         let mut timing = Vec::new();
         for (id, instance) in &mut self.instances {
+            let mut bus_activation_changed = false;
+            let primary_host_requests = instance.plugin.take_host_requests();
+            let secondary_host_requests = instance
+                .secondary
+                .as_ref()
+                .map(HostedPlugin::take_host_requests)
+                .unwrap_or_default();
+            for request in
+                merge_dual_mono_host_requests(primary_host_requests, secondary_host_requests)
+            {
+                if let Vst3HostRequest::BusActivation {
+                    media_type,
+                    direction,
+                    index,
+                    active,
+                } = request
+                {
+                    match instance.set_bus_active(media_type, direction, index, active) {
+                        Ok(()) => bus_activation_changed = true,
+                        Err(error) => self.restart_failures.push((id.clone(), error)),
+                    }
+                } else {
+                    if self.pending_host_requests.len() == HOST_REQUEST_CAPACITY {
+                        self.pending_host_requests.pop_front();
+                    }
+                    self.pending_host_requests.push_back((id.clone(), request));
+                }
+            }
             let primary = instance.plugin.take_restart_requests();
             let secondary = instance
                 .secondary
@@ -373,7 +514,7 @@ impl Vst3Runtime {
                 .map(HostedPlugin::take_restart_requests)
                 .unwrap_or_default();
             let request = primary | secondary;
-            if request.is_empty() {
+            if request.is_empty() && !bus_activation_changed {
                 continue;
             }
             if let Err(error) = instance.plugin.apply_restart_requests(primary) {
@@ -384,7 +525,8 @@ impl Vst3Runtime {
             {
                 self.restart_failures.push((id.clone(), error.to_string()));
             }
-            if request.contains(yadaw_vst3_host::Vst3RestartRequest::LATENCY_CHANGED)
+            if bus_activation_changed
+                || request.contains(yadaw_vst3_host::Vst3RestartRequest::LATENCY_CHANGED)
                 || request.contains(yadaw_vst3_host::Vst3RestartRequest::IO_CHANGED)
             {
                 timing.push((
@@ -397,8 +539,24 @@ impl Vst3Runtime {
         timing
     }
 
+    pub fn take_editor_parameter_gestures(
+        &self,
+    ) -> Vec<(String, Vec<yadaw_vst3_host::EditorParameterGesture>)> {
+        self.instances
+            .iter()
+            .filter_map(|(instance_id, instance)| {
+                let gestures = instance.plugin.take_editor_parameter_gestures();
+                (!gestures.is_empty()).then(|| (instance_id.clone(), gestures))
+            })
+            .collect()
+    }
+
     pub fn take_restart_failures(&mut self) -> Vec<(String, String)> {
         std::mem::take(&mut self.restart_failures)
+    }
+
+    pub fn take_host_requests(&mut self) -> Vec<(String, Vst3HostRequest)> {
+        self.pending_host_requests.drain(..).collect()
     }
 
     pub fn flush_output_parameters(&mut self) -> Result<usize, String> {
@@ -422,6 +580,37 @@ impl Vst3Runtime {
             let Instance { ara, plugin, .. } = instance;
             if let Some(ara) = ara {
                 plugin.with_processing_paused(|| ara.sync_live_graph(graph))?;
+            }
+        }
+        Ok(())
+    }
+
+    pub fn sync_presentation_latencies(
+        &mut self,
+        graph: Option<&LiveMixerGraph>,
+        input_device_samples: u32,
+        output_pipeline_samples: u32,
+    ) -> Result<(), String> {
+        let latencies = graph
+            .map(|graph| {
+                calculate_presentation_latencies(
+                    graph,
+                    input_device_samples,
+                    output_pipeline_samples,
+                )
+            })
+            .transpose()?
+            .unwrap_or_default();
+        for (instance_id, instance) in &self.instances {
+            let latency = latencies.get(instance_id).copied().unwrap_or_default();
+            instance
+                .plugin
+                .set_presentation_latency(latency.input_samples, latency.output_samples)
+                .map_err(|error| format!("{instance_id}: {error}"))?;
+            if let Some(secondary) = &instance.secondary {
+                secondary
+                    .set_presentation_latency(latency.input_samples, latency.output_samples)
+                    .map_err(|error| format!("{instance_id} (secondary): {error}"))?;
             }
         }
         Ok(())
@@ -710,6 +899,20 @@ fn inline_bytes(payload: BinaryPayload) -> Result<Vec<u8>, &'static str> {
     }
 }
 
+fn merge_dual_mono_host_requests(
+    primary: Vec<Vst3HostRequest>,
+    secondary: Vec<Vst3HostRequest>,
+) -> Vec<Vst3HostRequest> {
+    let primary_len = primary.len();
+    let mut merged = primary;
+    for request in secondary {
+        if !merged[..primary_len].contains(&request) {
+            merged.push(request);
+        }
+    }
+    merged
+}
+
 fn max_tail(left: Option<u32>, right: Option<u32>) -> Option<u32> {
     match (left, right) {
         (Some(left), Some(right)) => Some(left.max(right)),
@@ -770,6 +973,42 @@ mod tests {
     fn an_infinite_dual_mono_tail_dominates_a_finite_tail() {
         assert_eq!(max_tail(Some(128), None), None);
         assert_eq!(max_tail(Some(128), Some(256)), Some(256));
+    }
+
+    #[test]
+    fn dual_mono_host_requests_are_forwarded_once_across_lanes() {
+        let duplicated = Vst3HostRequest::DirtyChanged(true);
+        let primary_only = Vst3HostRequest::GroupEditStarted;
+        let secondary_only = Vst3HostRequest::OpenEditor {
+            view_name: "editor".to_owned(),
+        };
+
+        let merged = merge_dual_mono_host_requests(
+            vec![duplicated.clone(), primary_only.clone()],
+            vec![duplicated, secondary_only.clone()],
+        );
+
+        assert_eq!(
+            merged,
+            vec![
+                Vst3HostRequest::DirtyChanged(true),
+                primary_only,
+                secondary_only
+            ]
+        );
+    }
+
+    #[test]
+    fn host_request_merge_preserves_repeated_requests_from_one_lane() {
+        let repeated = Vst3HostRequest::GroupEditFinished;
+        assert_eq!(
+            merge_dual_mono_host_requests(Vec::new(), vec![repeated.clone(), repeated.clone()]),
+            vec![repeated.clone(), repeated.clone()]
+        );
+        assert_eq!(
+            merge_dual_mono_host_requests(vec![repeated.clone(), repeated.clone()], Vec::new()),
+            vec![repeated.clone(), repeated]
+        );
     }
 
     #[test]

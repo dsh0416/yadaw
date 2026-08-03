@@ -1,5 +1,6 @@
 import type { AudioHostIpcClient } from "@yadaw/audio-host-client"
 import type {
+  AppLocale,
   PluginEditorMode,
   PluginEditorPreference,
   PluginInstanceState,
@@ -16,6 +17,18 @@ interface LoadedPlugin {
   runtimeHandle: number
   latencySamples: number
   tailSamples: number | null
+}
+
+export interface PluginEditorAppearanceWire {
+  theme: "light" | "dark"
+  locale: AppLocale
+}
+
+export interface PluginEditorContextWire {
+  channelName: string
+  channelColor: string
+  pluginName: string
+  appearance: PluginEditorAppearanceWire
 }
 
 export class AudioHostPluginClient {
@@ -148,7 +161,8 @@ export class AudioHostPluginClient {
 
   async openPluginEditor(
     instanceId: string,
-    preference: PluginEditorPreference
+    preference: PluginEditorPreference,
+    context: PluginEditorContextWire
   ): Promise<{
     editorMode: PluginEditorMode
     open: boolean
@@ -159,6 +173,12 @@ export class AudioHostPluginClient {
       preference: {
         mode: preference.mode,
         zoom_percent: preference.zoomPercent
+      },
+      context: {
+        channel_name: context.channelName,
+        channel_color: context.channelColor,
+        plugin_name: context.pluginName,
+        appearance: context.appearance
       }
     })
     if (response.result.type !== "plugin-editor") {
@@ -168,6 +188,13 @@ export class AudioHostPluginClient {
       editorMode: response.result.active_mode === "native" ? "native" : "parameters",
       open: response.result.open === true
     }
+  }
+
+  async configurePluginEditorAppearance(appearance: PluginEditorAppearanceWire): Promise<void> {
+    await this.request({
+      type: "configure-plugin-editor-appearance",
+      appearance
+    })
   }
 
   async closePluginEditor(instanceId: string): Promise<void> {

@@ -63,6 +63,14 @@ export function registerSystemHandlers(context: IpcHandlerContext): void {
     if (value !== "light" && value !== "dark") {
       throw new TypeError("Unknown application window theme")
     }
+    void Promise.resolve(
+      context.audioHost.configurePluginEditorAppearance({
+        ...context.audioHost.pluginEditorAppearanceSnapshot(),
+        theme: value
+      })
+    ).catch((error: unknown) => {
+      console.error("Could not update plug-in editor appearance", error)
+    })
     const window = BrowserWindow.fromWebContents(event.sender)
     if (!window || process.platform !== "linux") return
     window.setTitleBarOverlay({

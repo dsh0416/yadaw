@@ -8,15 +8,18 @@ use std::{ffi::c_void, os::raw::c_char};
 
 use crate::Steinberg::{
     self, FIDString, FUnknown, IBStream, IPlugFrame, IPlugView, IPlugViewContentScaleSupport,
-    IPluginBase, IPluginFactory, IPluginFactory2, IPluginFactory3,
+    IPluginBase, IPluginFactory, IPluginFactory2, IPluginFactory3, ISizeableStream,
     Linux::{IEventHandler, IRunLoop, ITimerHandler},
     PClassInfo, PClassInfo2, PClassInfoW, PFactoryInfo, TBool, TUID, ViewRect,
     Vst::{
-        AudioBusBuffers, BusDirection, BusInfo, CtrlNumber, Event, IAttributeList, IAudioProcessor,
-        IComponent, IComponentHandler, IConnectionPoint, IEditController, IEventList,
-        IHostApplication, IMessage, IMidiMapping, IParamValueQueue, IParameterChanges,
-        IPlugInterfaceSupport, IProcessContextRequirements, IoMode, MediaType, ParamID, ParamValue,
-        ParameterInfo, ProcessData, ProcessSetup, RoutingInfo, SpeakerArrangement,
+        AudioBusBuffers, BusDirection, BusInfo, CtrlNumber, Event, IAttributeList,
+        IAudioPresentationLatency, IAudioProcessor, IComponent, IComponentHandler,
+        IComponentHandler2, IComponentHandlerBusActivation, IConnectionPoint, IEditController,
+        IEventList, IHostApplication, IMessage, IMidiMapping, IParamValueQueue, IParameterChanges,
+        IPlugInterfaceSupport, IProcessContextRequirements, IStreamAttributes, IUnitHandler,
+        IUnitHandler2, IUnitInfo, IoMode, MediaType, ParamID, ParamValue, ParameterInfo,
+        ProcessData, ProcessSetup, ProgramListID, ProgramListInfo, RoutingInfo, SpeakerArrangement,
+        UnitID, UnitInfo,
     },
     int16, int32, int64, tresult, uint32,
 };
@@ -110,6 +113,24 @@ pub struct StreamVTable {
 }
 
 #[repr(C)]
+pub struct SizeableStreamVTable {
+    pub base: FUnknownVTable,
+    pub get_stream_size:
+        unsafe extern "system" fn(this: *mut ISizeableStream, size: *mut int64) -> tresult,
+    pub set_stream_size:
+        unsafe extern "system" fn(this: *mut ISizeableStream, size: int64) -> tresult,
+}
+
+#[repr(C)]
+pub struct StreamAttributesVTable {
+    pub base: FUnknownVTable,
+    pub get_file_name:
+        unsafe extern "system" fn(this: *mut IStreamAttributes, name: *mut u16) -> tresult,
+    pub get_attributes:
+        unsafe extern "system" fn(this: *mut IStreamAttributes) -> *mut IAttributeList,
+}
+
+#[repr(C)]
 pub struct ComponentVTable {
     pub base: PluginBaseVTable,
     pub get_controller_class_id:
@@ -172,6 +193,17 @@ pub struct AudioProcessorVTable {
     pub process:
         unsafe extern "system" fn(this: *mut IAudioProcessor, data: *mut ProcessData) -> tresult,
     pub tail_samples: unsafe extern "system" fn(this: *mut IAudioProcessor) -> uint32,
+}
+
+#[repr(C)]
+pub struct AudioPresentationLatencyVTable {
+    pub base: FUnknownVTable,
+    pub set_audio_presentation_latency_samples: unsafe extern "system" fn(
+        this: *mut IAudioPresentationLatency,
+        direction: BusDirection,
+        bus_index: int32,
+        latency_samples: uint32,
+    ) -> tresult,
 }
 
 #[repr(C)]
@@ -257,6 +289,105 @@ pub struct ComponentHandlerVTable {
     pub end_edit: unsafe extern "system" fn(this: *mut IComponentHandler, id: ParamID) -> tresult,
     pub restart_component:
         unsafe extern "system" fn(this: *mut IComponentHandler, flags: int32) -> tresult,
+}
+
+#[repr(C)]
+pub struct ComponentHandler2VTable {
+    pub base: FUnknownVTable,
+    pub set_dirty:
+        unsafe extern "system" fn(this: *mut IComponentHandler2, state: TBool) -> tresult,
+    pub request_open_editor:
+        unsafe extern "system" fn(this: *mut IComponentHandler2, name: FIDString) -> tresult,
+    pub start_group_edit: unsafe extern "system" fn(this: *mut IComponentHandler2) -> tresult,
+    pub finish_group_edit: unsafe extern "system" fn(this: *mut IComponentHandler2) -> tresult,
+}
+
+#[repr(C)]
+pub struct ComponentHandlerBusActivationVTable {
+    pub base: FUnknownVTable,
+    pub request_bus_activation: unsafe extern "system" fn(
+        this: *mut IComponentHandlerBusActivation,
+        media_type: MediaType,
+        direction: BusDirection,
+        index: int32,
+        state: TBool,
+    ) -> tresult,
+}
+
+#[repr(C)]
+pub struct UnitHandlerVTable {
+    pub base: FUnknownVTable,
+    pub notify_unit_selection:
+        unsafe extern "system" fn(this: *mut IUnitHandler, unit_id: UnitID) -> tresult,
+    pub notify_program_list_change: unsafe extern "system" fn(
+        this: *mut IUnitHandler,
+        list_id: ProgramListID,
+        program_index: int32,
+    ) -> tresult,
+}
+
+#[repr(C)]
+pub struct UnitHandler2VTable {
+    pub base: FUnknownVTable,
+    pub notify_unit_by_bus_change: unsafe extern "system" fn(this: *mut IUnitHandler2) -> tresult,
+}
+
+#[repr(C)]
+pub struct UnitInfoVTable {
+    pub base: FUnknownVTable,
+    pub get_unit_count: unsafe extern "system" fn(this: *mut IUnitInfo) -> int32,
+    pub get_unit_info: unsafe extern "system" fn(
+        this: *mut IUnitInfo,
+        unit_index: int32,
+        info: *mut UnitInfo,
+    ) -> tresult,
+    pub get_program_list_count: unsafe extern "system" fn(this: *mut IUnitInfo) -> int32,
+    pub get_program_list_info: unsafe extern "system" fn(
+        this: *mut IUnitInfo,
+        list_index: int32,
+        info: *mut ProgramListInfo,
+    ) -> tresult,
+    pub get_program_name: unsafe extern "system" fn(
+        this: *mut IUnitInfo,
+        list_id: ProgramListID,
+        program_index: int32,
+        name: *mut u16,
+    ) -> tresult,
+    pub get_program_info: unsafe extern "system" fn(
+        this: *mut IUnitInfo,
+        list_id: ProgramListID,
+        program_index: int32,
+        attribute_id: FIDString,
+        attribute_value: *mut u16,
+    ) -> tresult,
+    pub has_program_pitch_names: unsafe extern "system" fn(
+        this: *mut IUnitInfo,
+        list_id: ProgramListID,
+        program_index: int32,
+    ) -> tresult,
+    pub get_program_pitch_name: unsafe extern "system" fn(
+        this: *mut IUnitInfo,
+        list_id: ProgramListID,
+        program_index: int32,
+        midi_pitch: int16,
+        name: *mut u16,
+    ) -> tresult,
+    pub get_selected_unit: unsafe extern "system" fn(this: *mut IUnitInfo) -> UnitID,
+    pub select_unit: unsafe extern "system" fn(this: *mut IUnitInfo, unit_id: UnitID) -> tresult,
+    pub get_unit_by_bus: unsafe extern "system" fn(
+        this: *mut IUnitInfo,
+        media_type: MediaType,
+        direction: BusDirection,
+        bus_index: int32,
+        channel: int32,
+        unit_id: *mut UnitID,
+    ) -> tresult,
+    pub set_unit_program_data: unsafe extern "system" fn(
+        this: *mut IUnitInfo,
+        list_or_unit_id: int32,
+        program_index: int32,
+        data: *mut IBStream,
+    ) -> tresult,
 }
 
 #[repr(C)]

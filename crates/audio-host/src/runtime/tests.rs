@@ -141,9 +141,9 @@ mod tests {
 
     #[test]
     fn plugin_editor_is_created_hidden_until_native_attachment_is_ready() {
-        let attributes = plugin_editor_window_attributes("Pro-C", None);
+        let attributes = plugin_editor_window_attributes("Lead", "Pro-C", None);
         assert!(!attributes.visible);
-        assert_eq!(attributes.title, "Pro-C — YADAW");
+        assert_eq!(attributes.title, "Lead — Pro-C — YADAW");
     }
 
     #[test]
@@ -161,6 +161,36 @@ mod tests {
             WinitHost::UI_BATCH,
             std::time::Duration::ZERO
         ));
+    }
+
+    #[test]
+    fn vst3_controller_requests_are_forwarded_as_typed_runtime_notifications() {
+        assert_eq!(
+            vst3_host_request_payload(&Vst3HostRequest::DirtyChanged(true)),
+            Some(("dirty-changed", "true".to_owned()))
+        );
+        assert_eq!(
+            vst3_host_request_payload(&Vst3HostRequest::OpenEditor {
+                view_name: "editor".to_owned(),
+            }),
+            Some(("open-editor", "editor".to_owned()))
+        );
+        assert_eq!(
+            vst3_host_request_payload(&Vst3HostRequest::ProgramListChanged {
+                list_id: 7,
+                program_index: 3,
+            }),
+            Some(("program-list-changed", "7:3".to_owned()))
+        );
+        assert_eq!(
+            vst3_host_request_payload(&Vst3HostRequest::BusActivation {
+                media_type: 0,
+                direction: 1,
+                index: 0,
+                active: true,
+            }),
+            None
+        );
     }
 
     fn graph_meta(epoch: &str, expected_revision: u64) -> RpcRequestMeta {
@@ -860,6 +890,7 @@ mod tests {
             protocol_deadline(&ControlCommand::OpenPluginEditor {
                 instance_id: "plugin".into(),
                 preference: PluginEditorPreference::default(),
+                context: PluginEditorContext::default(),
             }),
             Duration::from_secs(15)
         );

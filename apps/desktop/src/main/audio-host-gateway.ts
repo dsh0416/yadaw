@@ -43,7 +43,8 @@ export class AudioHostGateway {
     private readonly onEditorPreferenceChanged: Parameters<typeof drainHostEvents>[1],
     private readonly pendingPreferenceWrites: Set<Promise<void>>,
     private readonly onEditorClosed?: (instanceId: string) => void,
-    private readonly onAraCallback?: Parameters<typeof drainHostEvents>[4]
+    private readonly onAraCallback?: Parameters<typeof drainHostEvents>[4],
+    private readonly onVst3HostNotification?: Parameters<typeof drainHostEvents>[5]
   ) {}
 
   request(command: Record<string, unknown>): Promise<ControlResponse> {
@@ -88,7 +89,8 @@ export class AudioHostGateway {
       this.onEditorPreferenceChanged,
       this.pendingPreferenceWrites,
       this.onEditorClosed,
-      this.onAraCallback
+      this.onAraCallback,
+      this.onVst3HostNotification
     )
     return response
   }

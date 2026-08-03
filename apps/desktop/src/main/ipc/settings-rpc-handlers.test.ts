@@ -9,7 +9,8 @@ const electronMocks = vi.hoisted(() => ({
   shellOpenPath: vi.fn(async () => ""),
   quit: vi.fn(),
   showAboutPanel: vi.fn(),
-  getPath: vi.fn(() => "/tmp/yadaw-test")
+  getPath: vi.fn(() => "/tmp/yadaw-test"),
+  shouldUseDarkColors: false
 }))
 
 vi.mock("electron", () => ({
@@ -27,6 +28,11 @@ vi.mock("electron", () => ({
   BrowserWindow: {
     getAllWindows: electronMocks.getAllWindows,
     fromWebContents: electronMocks.fromWebContents
+  },
+  nativeTheme: {
+    get shouldUseDarkColors() {
+      return electronMocks.shouldUseDarkColors
+    }
   }
 }))
 
@@ -107,6 +113,26 @@ describe("registerSettingsRpcHandlers", () => {
     expect(result).toMatchObject({
       ok: true,
       value: { value: expect.objectContaining({ theme: "dark" }) }
+    })
+  })
+
+  it("forwards a combined theme and locale update without using the stale theme", async () => {
+    const context = createContext()
+    registerSettingsRpcHandlers(context)
+    const before =
+      context.lifecycle.applicationState.synchronizeApplicationSettings(defaultSettings)
+
+    const result = await invoke(
+      electronMocks,
+      IPC_CHANNELS.settingsUpdate,
+      mutationMeta(before.settings, { expectedRevision: before.revision }),
+      { theme: "light", locale: "zh-cmn-Hans-CN" }
+    )
+
+    expect(result).toMatchObject({ ok: true })
+    expect(context.audioHost.configurePluginEditorAppearance).toHaveBeenCalledWith({
+      theme: "light",
+      locale: "zh-cmn-Hans-CN"
     })
   })
 

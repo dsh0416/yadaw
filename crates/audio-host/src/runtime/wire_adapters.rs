@@ -623,6 +623,7 @@ fn run_legacy() -> Result<(), Box<dyn std::error::Error>> {
             | ControlCommand::SetPluginParameter { .. }
             | ControlCommand::SavePluginState { .. }
             | ControlCommand::OpenPluginEditor { .. }
+            | ControlCommand::ConfigurePluginEditorAppearance { .. }
             | ControlCommand::ClosePluginEditor { .. }) => match vst3.as_mut() {
                 Some(runtime) => runtime.execute(command),
                 None => control_error! {

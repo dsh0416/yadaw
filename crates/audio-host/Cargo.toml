@@ -28,6 +28,7 @@ yadaw-dsp-runtime.workspace = true
 yadaw-audio-engine.workspace = true
 yadaw-ipc-transport.workspace = true
 yadaw-vst3-host.workspace = true
+yadaw-iced-ui.workspace = true
 
 [dev-dependencies]
 yadaw-audio-engine = { workspace = true, features = ["test-support"] }

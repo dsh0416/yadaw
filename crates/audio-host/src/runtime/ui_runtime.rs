@@ -18,6 +18,7 @@ struct WinitHost {
     editor_owner_window: Option<usize>,
     editors: HashMap<WindowId, EditorWindow>,
     editor_instances: HashMap<String, WindowId>,
+    editor_clipboard: Option<EditorClipboard>,
     next_editor_tick: Option<Instant>,
     next_ara_tick: Option<Instant>,
     next_retirement_tick: Option<Instant>,
@@ -124,6 +125,7 @@ impl WinitHost {
         event_loop: &ActiveEventLoop,
         instance_id: String,
         preference: PluginEditorPreference,
+        mut context: PluginEditorContext,
     ) -> ControlResult {
         if !preference.is_valid() {
             return control_error! {
@@ -131,8 +133,21 @@ impl WinitHost {
             };
         }
         if let Some(window_id) = self.editor_instances.get(&instance_id).copied()
-            && let Some(editor) = self.editors.get(&window_id)
+            && let Some(editor) = self.editors.get_mut(&window_id)
         {
+            let Some(runtime) = self.vst3.as_mut() else {
+                return control_error! {
+                    message: "VST3 UI runtime is shutting down".into(),
+                };
+            };
+            editor.update_context(context);
+            if editor.preference() != preference {
+                let _ = editor.apply_action(
+                    EditorAction::PreferenceChanged(preference),
+                    runtime,
+                    &mut self.editor_clipboard,
+                );
+            }
             editor.present();
             return ControlResult::PluginEditor {
                 active_mode: editor.active_mode(),
@@ -149,11 +164,18 @@ impl WinitHost {
                 message: "VST3 instance is not loaded".into(),
             };
         };
-        let display_name = runtime
-            .display_name(&instance_id)
-            .unwrap_or("VST3 plug-in")
-            .to_owned();
-        let attributes = plugin_editor_window_attributes(&display_name, self.editor_owner_window);
+        let display_name = runtime.display_name(&instance_id).unwrap_or("VST3 plug-in");
+        if context.channel_name.is_empty() {
+            context.channel_name = "Untitled track".to_owned();
+        }
+        if context.plugin_name.is_empty() {
+            context.plugin_name = display_name.to_owned();
+        }
+        let attributes = plugin_editor_window_attributes(
+            &context.channel_name,
+            &context.plugin_name,
+            self.editor_owner_window,
+        );
         let window = match event_loop.create_window(attributes) {
             Ok(window) => Arc::new(window),
             Err(error) => {
@@ -186,6 +208,7 @@ impl WinitHost {
             instance_id.clone(),
             class_id,
             preference,
+            context,
             Vec::new(),
             window,
             compositor,
@@ -194,6 +217,7 @@ impl WinitHost {
         let active_mode = editor.active_mode();
         self.editor_instances.insert(instance_id, window_id);
         self.editors.insert(window_id, editor);
+        self.refresh_clipboard_availability();
         if let Some(editor) = self.editors.get(&window_id) {
             editor.present();
         }
@@ -233,8 +257,18 @@ impl WinitHost {
             ActorCommand::Control(ControlCommand::OpenPluginEditor {
                 instance_id,
                 preference,
+                context,
             }) => {
-                let _ = reply.send(self.open_editor(event_loop, instance_id, preference));
+                let _ = reply.send(self.open_editor(event_loop, instance_id, preference, context));
+                return;
+            }
+            ActorCommand::Control(ControlCommand::ConfigurePluginEditorAppearance {
+                appearance,
+            }) => {
+                for editor in self.editors.values_mut() {
+                    editor.update_appearance(appearance);
+                }
+                let _ = reply.send(ControlResult::Accepted);
                 return;
             }
             ActorCommand::Control(ControlCommand::ClosePluginEditor { instance_id }) => {
@@ -261,14 +295,28 @@ impl WinitHost {
                 return;
             }
             ActorCommand::SyncAraGraph { graph } => {
+                let (input_device_samples, output_pipeline_samples) =
+                    presentation_latency_bases(&self.audio_engine, graph.as_ref());
                 let Some(runtime) = self.vst3.as_mut() else {
                     let _ = reply.send(control_error! {
                         message: "VST3 UI runtime is shutting down".into(),
                     });
                     return;
                 };
+                let presentation_error = runtime
+                    .sync_presentation_latencies(
+                        graph.as_ref(),
+                        input_device_samples,
+                        output_pipeline_samples,
+                    )
+                    .err();
                 let result = match runtime.sync_ara_graph(graph.as_ref()) {
                     Ok(()) => {
+                        if let Some(error) = presentation_error {
+                            eprintln!(
+                                "audio-host: could not update VST3 presentation latency: {error}"
+                            );
+                        }
                         self.ara_graph = graph;
                         self.next_ara_tick = Some(Instant::now());
                         ControlResult::Accepted
@@ -290,6 +338,15 @@ impl WinitHost {
             ActorCommand::Parameter(command) => runtime.apply_parameter_command(command),
             ActorCommand::Control(ControlCommand::Ping) => {
                 for (instance_id, latency, tail) in runtime.take_timing_changes() {
+                    if let Some(plugin) = self.ara_graph.as_mut().and_then(|graph| {
+                        graph
+                            .plugins
+                            .iter_mut()
+                            .find(|plugin| plugin.instance_id == instance_id)
+                    }) {
+                        plugin.latency_samples = latency;
+                        plugin.tail_samples = tail;
+                    }
                     match self.audio_engine.apply_plugin_timing(&instance_id, latency, tail) {
                         Ok(Some(graph)) => {
                             queue_background_graph_build(&self.background_sender, graph);
@@ -302,7 +359,62 @@ impl WinitHost {
                         }
                     }
                 }
-                for (instance_id, failure) in runtime.take_restart_failures() {
+                let (input_device_samples, output_pipeline_samples) =
+                    presentation_latency_bases(&self.audio_engine, self.ara_graph.as_ref());
+                if let Err(error) = runtime.sync_presentation_latencies(
+                    self.ara_graph.as_ref(),
+                    input_device_samples,
+                    output_pipeline_samples,
+                ) {
+                    eprintln!("audio-host: could not update VST3 presentation latency: {error}");
+                }
+                let restart_failures = runtime.take_restart_failures();
+                for (instance_id, request) in runtime.take_host_requests() {
+                    match &request {
+                        Vst3HostRequest::OpenEditor { .. } => {
+                            if let Some(window_id) = self.editor_instances.get(&instance_id)
+                                && let Some(editor) = self.editors.get(window_id)
+                            {
+                                editor.present();
+                            }
+                        }
+                        Vst3HostRequest::UnitSelected { .. }
+                        | Vst3HostRequest::ProgramListChanged { .. }
+                        | Vst3HostRequest::UnitByBusChanged => {
+                            if let Some(window_id) = self.editor_instances.get(&instance_id)
+                                && let Some(editor) = self.editors.get_mut(window_id)
+                            {
+                                if let Err(error) = editor.refresh_parameters(runtime) {
+                                    eprintln!(
+                                        "audio-host: could not refresh VST3 parameter metadata: {error}"
+                                    );
+                                }
+                                editor.window.request_redraw();
+                            }
+                        }
+                        Vst3HostRequest::DirtyChanged(_)
+                        | Vst3HostRequest::GroupEditStarted
+                        | Vst3HostRequest::GroupEditFinished => {}
+                        Vst3HostRequest::BusActivation { .. } => {
+                            eprintln!(
+                                "audio-host: an already handled VST3 bus activation reached the notification queue"
+                            );
+                        }
+                    }
+                    if let Some((kind, value)) = vst3_host_request_payload(&request)
+                        && self
+                            .host_events
+                            .try_send(HostEvent::PluginRuntime {
+                                instance_id,
+                                kind: kind.to_owned(),
+                                value,
+                            })
+                            .is_err()
+                    {
+                        eprintln!("audio-host: VST3 host request notification queue is full");
+                    }
+                }
+                for (instance_id, failure) in restart_failures {
                     self.publish_plugin_runtime_failure(&instance_id, "vst3-restart", failure);
                 }
                 let (callback_generation, transport_state) = self.audio_engine.heartbeat_snapshot();
@@ -377,6 +489,72 @@ impl WinitHost {
             });
         }
     }
+
+    fn refresh_clipboard_availability(&mut self) {
+        let class_id = self
+            .editor_clipboard
+            .as_ref()
+            .map(|clipboard| clipboard.class_id.as_str());
+        for editor in self.editors.values_mut() {
+            editor.set_can_paste(class_id.is_some_and(|class_id| class_id == editor.class_id));
+        }
+    }
+}
+
+fn milliseconds_to_samples(milliseconds: f64, sample_rate: u32) -> u32 {
+    if !milliseconds.is_finite() || milliseconds <= 0.0 || sample_rate == 0 {
+        return 0;
+    }
+    (milliseconds * f64::from(sample_rate) / 1_000.0)
+        .ceil()
+        .min(f64::from(u32::MAX)) as u32
+}
+
+fn vst3_host_request_payload(request: &Vst3HostRequest) -> Option<(&'static str, String)> {
+    match request {
+        Vst3HostRequest::DirtyChanged(dirty) => {
+            Some(("dirty-changed", dirty.to_string()))
+        }
+        Vst3HostRequest::OpenEditor { view_name } => {
+            Some(("open-editor", view_name.clone()))
+        }
+        Vst3HostRequest::GroupEditStarted => Some(("group-edit-started", String::new())),
+        Vst3HostRequest::GroupEditFinished => Some(("group-edit-finished", String::new())),
+        Vst3HostRequest::UnitSelected { unit_id } => {
+            Some(("unit-selected", unit_id.to_string()))
+        }
+        Vst3HostRequest::ProgramListChanged {
+            list_id,
+            program_index,
+        } => Some((
+            "program-list-changed",
+            format!("{list_id}:{program_index}"),
+        )),
+        Vst3HostRequest::UnitByBusChanged => Some(("unit-by-bus-changed", String::new())),
+        Vst3HostRequest::BusActivation { .. } => None,
+    }
+}
+
+fn presentation_latency_bases(
+    audio_engine: &engine::AudioEngine,
+    graph: Option<&LiveMixerGraph>,
+) -> (u32, u32) {
+    let Some(graph) = graph else {
+        return (0, 0);
+    };
+    let Ok(snapshot) = audio_engine.audio_engine_snapshot() else {
+        return (0, 0);
+    };
+    let output_ms = snapshot.output_latency_ms.unwrap_or(0.0)
+        + snapshot.ring_buffer_latency_ms.unwrap_or(0.0)
+        + snapshot.engine_latency_ms.unwrap_or(0.0);
+    (
+        milliseconds_to_samples(
+            snapshot.input_latency_ms.unwrap_or(0.0),
+            graph.sample_rate,
+        ),
+        milliseconds_to_samples(output_ms, graph.sample_rate),
+    )
 }
 
 fn should_drain_ui_request(drained: usize, elapsed: std::time::Duration) -> bool {
@@ -419,12 +597,21 @@ impl ApplicationHandler<UiEvent> for WinitHost {
         if self.editors.is_empty() {
             self.next_editor_tick = None;
         } else if self.next_editor_tick.is_none_or(|deadline| now >= deadline) {
-            if let Some(runtime) = self.vst3.as_mut()
-                && let Err(error) = runtime.flush_output_parameters()
-                && !self.output_parameter_error_reported
-            {
-                eprintln!("audio-host: could not apply VST3 output parameter: {error}");
-                self.output_parameter_error_reported = true;
+            if let Some(runtime) = self.vst3.as_mut() {
+                if let Err(error) = runtime.flush_output_parameters()
+                    && !self.output_parameter_error_reported
+                {
+                    eprintln!("audio-host: could not apply VST3 output parameter: {error}");
+                    self.output_parameter_error_reported = true;
+                }
+                let editor_gestures = runtime.take_editor_parameter_gestures();
+                for (instance_id, gestures) in editor_gestures {
+                    if let Some(window_id) = self.editor_instances.get(&instance_id)
+                        && let Some(editor) = self.editors.get_mut(window_id)
+                    {
+                        editor.apply_native_parameter_gestures(&gestures);
+                    }
+                }
             }
             self.next_editor_tick = Some(now + Self::EDITOR_TICK);
         }
@@ -514,7 +701,9 @@ impl ApplicationHandler<UiEvent> for WinitHost {
                 continue;
             };
             let class_id = editor.class_id.clone();
-            if let Some(preference) = editor.apply_action(action, runtime) {
+            if let Some(preference) =
+                editor.apply_action(action, runtime, &mut self.editor_clipboard)
+            {
                 let _ = self
                     .host_events
                     .try_send(HostEvent::PluginEditorPreferenceChanged {
@@ -523,6 +712,7 @@ impl ApplicationHandler<UiEvent> for WinitHost {
                     });
             }
         }
+        self.refresh_clipboard_availability();
         if close
             && let Some(instance_id) = self
                 .editors
@@ -532,14 +722,16 @@ impl ApplicationHandler<UiEvent> for WinitHost {
             self.close_editor(&instance_id);
         }
     }
+
 }
 
 fn plugin_editor_window_attributes(
-    display_name: &str,
+    channel_name: &str,
+    plugin_name: &str,
     editor_owner_window: Option<usize>,
 ) -> WindowAttributes {
     let attributes = WindowAttributes::default()
-        .with_title(format!("{display_name} — YADAW"))
+        .with_title(format!("{channel_name} — {plugin_name} — YADAW"))
         .with_inner_size(LogicalSize::new(720.0, 640.0))
         // Do not expose a half-initialized surface. `present` makes the fully
         // attached editor visible and activates it in one sequence.

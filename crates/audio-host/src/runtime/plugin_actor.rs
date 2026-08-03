@@ -190,6 +190,7 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
                 | ControlCommand::SetPluginParameter { .. }
                 | ControlCommand::SavePluginState { .. }
                 | ControlCommand::OpenPluginEditor { .. }
+                | ControlCommand::ConfigurePluginEditorAppearance { .. }
                 | ControlCommand::ClosePluginEditor { .. }) => {
                     forward_to_ui(
                         &ui_sender,
@@ -763,6 +764,7 @@ fn is_vst3_command(command: &ControlCommand) -> bool {
             | ControlCommand::SetPluginParameter { .. }
             | ControlCommand::SavePluginState { .. }
             | ControlCommand::OpenPluginEditor { .. }
+            | ControlCommand::ConfigurePluginEditorAppearance { .. }
             | ControlCommand::ClosePluginEditor { .. }
             | ControlCommand::RunAudioBenchmark { .. }
     )
@@ -791,6 +793,7 @@ fn protocol_deadline(command: &ControlCommand) -> std::time::Duration {
             | ControlCommand::UnloadPlugin { .. }
             | ControlCommand::SavePluginState { .. }
             | ControlCommand::OpenPluginEditor { .. }
+            | ControlCommand::ConfigurePluginEditorAppearance { .. }
             | ControlCommand::ClosePluginEditor { .. }
             | ControlCommand::BenchmarkEcho { .. }
     ) {

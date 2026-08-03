@@ -9,12 +9,15 @@ use yadaw_vst3_host_sys::{
         IPluginBase,
         Vst::{
             self, AudioBusBuffers, AudioBusBuffers__bindgen_ty_1, BusDirections, BusInfo,
-            DataEvent, Event, Event__bindgen_ty_1, IAudioProcessor, IComponent,
-            IProcessContextRequirements, NoteOffEvent, NoteOnEvent, PolyPressureEvent,
+            DataEvent, Event, Event__bindgen_ty_1, IAudioPresentationLatency, IAudioProcessor,
+            IComponent, IProcessContextRequirements, NoteOffEvent, NoteOnEvent, PolyPressureEvent,
             ProcessContext, ProcessData, ProcessSetup, SpeakerArrangement,
         },
     },
-    abi::{AudioProcessorVTable, ComponentVTable, ProcessContextRequirementsVTable},
+    abi::{
+        AudioPresentationLatencyVTable, AudioProcessorVTable, ComponentVTable,
+        ProcessContextRequirementsVTable,
+    },
     compat::{
         BindgenEnum, as_bus_direction, as_int32, as_media_type, as_uint32, combine_uint32_flags,
     },
@@ -133,6 +136,7 @@ impl AudioBusStorage {
 /// A mono/stereo sample32 VST3 component with explicit lifecycle ownership.
 pub struct StereoProcessor {
     processor: ComPtr<IAudioProcessor>,
+    presentation_latency: Option<ComPtr<IAudioPresentationLatency>>,
     component: ComPtr<IComponent>,
     input_events: Box<EventList>,
     input_parameters: Box<ParameterChanges>,
@@ -147,6 +151,17 @@ pub struct StereoProcessor {
     layout: AudioLayout,
     audio_input_buses: AudioBusStorage,
     audio_output_buses: AudioBusStorage,
+    bus_activation_overrides: Vec<BusActivationOverride>,
+    input_presentation_latency_samples: u32,
+    output_presentation_latency_samples: u32,
+    active: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct BusActivationOverride {
+    media_type: i32,
+    direction: i32,
+    index: i32,
     active: bool,
 }
 
@@ -240,9 +255,11 @@ impl StereoProcessor {
         let processor = lifecycle.component().query::<IAudioProcessor>()?;
         lifecycle.set_processor(processor);
         let (component, processor) = lifecycle.take();
+        let presentation_latency = processor.query::<IAudioPresentationLatency>().ok();
         Ok((
             Self {
                 processor,
+                presentation_latency,
                 component,
                 input_events,
                 input_parameters,
@@ -257,6 +274,9 @@ impl StereoProcessor {
                 layout,
                 audio_input_buses: AudioBusStorage::empty(true),
                 audio_output_buses: AudioBusStorage::empty(false),
+                bus_activation_overrides: Vec::new(),
+                input_presentation_latency_samples: 0,
+                output_presentation_latency_samples: 0,
                 active: false,
             },
             parameter_producer,
@@ -301,6 +321,7 @@ impl StereoProcessor {
             self.layout,
         )?;
         activate_event_input_buses(&self.component)?;
+        apply_bus_activation_overrides(&self.component, &self.bus_activation_overrides)?;
         let mut setup = ProcessSetup {
             processMode: as_int32(Vst::ProcessModes_kRealtime),
             symbolicSampleSize: as_int32(Vst::SymbolicSampleSizes_kSample32),
@@ -319,6 +340,7 @@ impl StereoProcessor {
             ((*component_table).set_active)(self.component.as_ptr(), 1)
         })?;
         self.active = true;
+        self.apply_presentation_latency()?;
         check_optional("setProcessing(true)", unsafe {
             // SAFETY: component is active.
             ((*processor_table).set_processing)(self.processor.as_ptr(), 1)
@@ -329,6 +351,88 @@ impl StereoProcessor {
     pub(crate) fn restart_processing(&mut self) -> HostResult<()> {
         self.deactivate()?;
         self.activate()
+    }
+
+    pub(crate) fn set_bus_active(
+        &mut self,
+        media_type: i32,
+        direction: i32,
+        index: i32,
+        active: bool,
+    ) -> HostResult<()> {
+        validate_bus_address(&self.component, media_type, direction, index)?;
+        if let Some(existing) = self.bus_activation_overrides.iter_mut().find(|entry| {
+            entry.media_type == media_type && entry.direction == direction && entry.index == index
+        }) {
+            existing.active = active;
+        } else {
+            self.bus_activation_overrides.push(BusActivationOverride {
+                media_type,
+                direction,
+                index,
+                active,
+            });
+        }
+        self.restart_processing()
+    }
+
+    pub(crate) fn set_presentation_latency(
+        &mut self,
+        input_samples: u32,
+        output_samples: u32,
+    ) -> HostResult<()> {
+        if self.input_presentation_latency_samples == input_samples
+            && self.output_presentation_latency_samples == output_samples
+        {
+            return Ok(());
+        }
+        let previous_input = self.input_presentation_latency_samples;
+        let previous_output = self.output_presentation_latency_samples;
+        self.input_presentation_latency_samples = input_samples;
+        self.output_presentation_latency_samples = output_samples;
+        if self.active
+            && let Err(error) = self.apply_presentation_latency()
+        {
+            self.input_presentation_latency_samples = previous_input;
+            self.output_presentation_latency_samples = previous_output;
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    fn apply_presentation_latency(&self) -> HostResult<()> {
+        let Some(interface) = &self.presentation_latency else {
+            return Ok(());
+        };
+        let table = presentation_latency_table(interface);
+        for direction in [Vst::BusDirections_kInput, Vst::BusDirections_kOutput] {
+            let count = audio_bus_count(&self.component, direction);
+            let latency = if direction == Vst::BusDirections_kInput {
+                self.input_presentation_latency_samples
+            } else {
+                self.output_presentation_latency_samples
+            };
+            for index in 0..count {
+                if !audio_bus_is_active(self.kind, direction, index, &self.bus_activation_overrides)
+                {
+                    continue;
+                }
+                check(
+                    "IAudioPresentationLatency::setAudioPresentationLatencySamples",
+                    unsafe {
+                        // SAFETY: the interface and component are activated, and index identifies an
+                        // active audio bus returned by IComponent::getBusCount.
+                        ((*table).set_audio_presentation_latency_samples)(
+                            interface.as_ptr(),
+                            as_bus_direction(direction),
+                            index,
+                            latency,
+                        )
+                    },
+                )?;
+            }
+        }
+        Ok(())
     }
 
     pub(crate) fn deactivate(&mut self) -> HostResult<()> {
@@ -827,6 +931,29 @@ fn audio_bus_count(component: &ComPtr<IComponent>, direction: BusDirections) -> 
     .max(0)
 }
 
+fn audio_bus_is_active(
+    kind: PluginKind,
+    direction: BusDirections,
+    index: i32,
+    overrides: &[BusActivationOverride],
+) -> bool {
+    overrides
+        .iter()
+        .rev()
+        .find(|entry| {
+            entry.media_type == as_media_type(Vst::MediaTypes_kAudio)
+                && entry.direction == as_bus_direction(direction)
+                && entry.index == index
+        })
+        .map_or_else(
+            || {
+                index == 0
+                    && (direction == Vst::BusDirections_kOutput || kind == PluginKind::Effect)
+            },
+            |entry| entry.active,
+        )
+}
+
 fn silence_flags(channels: usize) -> u64 {
     match channels {
         0 => 0,
@@ -991,6 +1118,51 @@ fn configure_audio_bus_activation(
                 as_bus_direction(Vst::BusDirections_kOutput),
                 index,
                 active,
+            )
+        })?;
+    }
+    Ok(())
+}
+
+fn validate_bus_address(
+    component: &ComPtr<IComponent>,
+    media_type: i32,
+    direction: i32,
+    index: i32,
+) -> HostResult<()> {
+    if !(0..=1).contains(&media_type) || !(0..=1).contains(&direction) || index < 0 {
+        return Err(HostError::Operation {
+            operation: "VST3 bus address",
+            result: -2147024809,
+        });
+    }
+    let count = unsafe {
+        // SAFETY: media type and direction were validated against the SDK enum ranges.
+        ((*component_table(component)).get_bus_count)(component.as_ptr(), media_type, direction)
+    };
+    if index >= count.max(0) {
+        return Err(HostError::Operation {
+            operation: "VST3 bus index",
+            result: -2147024809,
+        });
+    }
+    Ok(())
+}
+
+fn apply_bus_activation_overrides(
+    component: &ComPtr<IComponent>,
+    overrides: &[BusActivationOverride],
+) -> HostResult<()> {
+    for entry in overrides {
+        validate_bus_address(component, entry.media_type, entry.direction, entry.index)?;
+        check("IComponent::activateBus", unsafe {
+            // SAFETY: the address is valid and this runs while the component is inactive.
+            ((*component_table(component)).activate_bus)(
+                component.as_ptr(),
+                entry.media_type,
+                entry.direction,
+                entry.index,
+                u8::from(entry.active),
             )
         })?;
     }
@@ -1183,6 +1355,17 @@ fn processor_table(processor: &ComPtr<IAudioProcessor>) -> *const AudioProcessor
     unsafe {
         // SAFETY: ComPtr guarantees the object's leading vtable pointer.
         *processor.as_ptr().cast::<*const AudioProcessorVTable>()
+    }
+}
+
+fn presentation_latency_table(
+    latency: &ComPtr<IAudioPresentationLatency>,
+) -> *const AudioPresentationLatencyVTable {
+    unsafe {
+        // SAFETY: ComPtr guarantees the object's leading matching vtable pointer.
+        *latency
+            .as_ptr()
+            .cast::<*const AudioPresentationLatencyVTable>()
     }
 }
 
