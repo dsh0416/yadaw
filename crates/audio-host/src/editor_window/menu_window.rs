@@ -53,23 +53,113 @@ impl MenuFocusState {
 
 type EditorMenuElement<'a> = Element<'a, EditorMenuMessage, Theme, Renderer>;
 
-pub(crate) struct EditorMenuWindow {
-    pub(crate) owner_id: winit::window::WindowId,
-    pub(crate) menu: ToolbarMenu,
-    window: Arc<Window>,
+struct EditorMenuState {
     options: Vec<ToolbarMenuOption>,
     selected: ToolbarMenuChoice,
     highlighted: usize,
     appearance: Appearance,
     effective_scale: f64,
+    cursor: Cursor,
+    modifiers: ModifiersState,
+    focus: MenuFocusState,
+}
+
+impl EditorMenuState {
+    fn new(request: ToolbarMenuRequest) -> (ToolbarMenu, Self) {
+        let highlighted = initial_toolbar_highlight(&request.options, request.selected);
+        (
+            request.menu,
+            Self {
+                options: request.options,
+                selected: request.selected,
+                highlighted,
+                appearance: request.appearance,
+                effective_scale: request.effective_scale,
+                cursor: Cursor::Unavailable,
+                modifiers: ModifiersState::default(),
+                // winit's macOS backend queues one synthetic `Focused(false)` as
+                // part of window creation. `focus_window` can make the real
+                // `Focused(true)` arrive first, so the first lost-focus event must
+                // be consumed regardless of event order.
+                focus: MenuFocusState::new(cfg!(target_os = "macos")),
+            },
+        )
+    }
+
+    fn focus_changed(&mut self, focused: bool) -> Option<EditorMenuAction> {
+        self.focus
+            .should_dismiss(focused)
+            .then_some(EditorMenuAction::Dismiss)
+    }
+
+    fn cursor_moved(&mut self, position: PhysicalPosition<f64>) {
+        let logical = position.to_logical::<f64>(self.effective_scale);
+        self.cursor = Cursor::Available(Point::new(logical.x as f32, logical.y as f32));
+    }
+
+    fn cursor_left(&mut self) {
+        self.cursor = Cursor::Unavailable;
+    }
+
+    fn modifiers_changed(&mut self, modifiers: ModifiersState) {
+        self.modifiers = modifiers;
+    }
+
+    fn key_pressed(&mut self, key: &Key) -> Option<EditorMenuAction> {
+        match toolbar_menu_key(key, &mut self.highlighted, self.options.len()) {
+            MenuKeyResult::Select => self.select(self.highlighted),
+            MenuKeyResult::Dismiss => Some(EditorMenuAction::Dismiss),
+            MenuKeyResult::None => None,
+        }
+    }
+
+    fn select(&self, index: usize) -> Option<EditorMenuAction> {
+        self.options
+            .get(index)
+            .map(|option| EditorMenuAction::Selected(option.choice))
+    }
+
+    fn view(&self) -> EditorMenuElement<'_> {
+        let rows = self.options.iter().enumerate().fold(
+            Column::new().spacing(0),
+            |column, (index, option)| {
+                column.push(
+                    button(
+                        container(text(&option.label).size(type_size::CONTROL))
+                            .padding([0, 6])
+                            .center_y(Length::Fill),
+                    )
+                    .on_press(EditorMenuMessage::Select(index))
+                    .width(Length::Fill)
+                    .height(Length::Fixed(TOOLBAR_MENU_ROW_HEIGHT))
+                    .padding(0)
+                    .style(yadaw_iced_ui::popup_menu_row(
+                        self.appearance,
+                        option.choice == self.selected,
+                        index == self.highlighted,
+                    )),
+                )
+            },
+        );
+        container(scrollable(rows).width(Length::Fill).height(Length::Fill))
+            .padding(TOOLBAR_MENU_PADDING as u16)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .style(yadaw_iced_ui::popup_surface(self.appearance))
+            .into()
+    }
+}
+
+pub(crate) struct EditorMenuWindow {
+    pub(crate) owner_id: winit::window::WindowId,
+    pub(crate) menu: ToolbarMenu,
+    window: Arc<Window>,
+    state: EditorMenuState,
     viewport: Viewport,
     renderer: Renderer,
     surface: iced_wgpu::wgpu::Surface<'static>,
     cache: Cache,
     clipboard: Clipboard,
-    cursor: Cursor,
-    modifiers: ModifiersState,
-    focus_state: MenuFocusState,
 }
 
 impl EditorMenuWindow {
@@ -90,28 +180,17 @@ impl EditorMenuWindow {
             Size::new(physical_size.width.max(1), physical_size.height.max(1)),
             request.effective_scale as f32,
         );
-        let highlighted = initial_toolbar_highlight(&request.options, request.selected);
+        let (menu, state) = EditorMenuState::new(request);
         Self {
             owner_id,
-            menu: request.menu,
+            menu,
             window: window.clone(),
-            options: request.options,
-            selected: request.selected,
-            highlighted,
-            appearance: request.appearance,
-            effective_scale: request.effective_scale,
+            state,
             viewport,
             renderer,
             surface,
             cache: Cache::new(),
             clipboard: Clipboard::connect(window),
-            cursor: Cursor::Unavailable,
-            modifiers: ModifiersState::default(),
-            // winit's macOS backend queues one synthetic `Focused(false)` as
-            // part of window creation. `focus_window` can make the real
-            // `Focused(true)` arrive first, so the first lost-focus event must
-            // be consumed regardless of event order.
-            focus_state: MenuFocusState::new(cfg!(target_os = "macos")),
         }
     }
 
@@ -134,33 +213,21 @@ impl EditorMenuWindow {
             // handled by `WinitHost` before it reaches this window.
             WindowEvent::ScaleFactorChanged { .. } => {}
             WindowEvent::Focused(focused) => {
-                if self.focus_state.should_dismiss(*focused) {
-                    return Some(EditorMenuAction::Dismiss);
+                if let Some(action) = self.state.focus_changed(*focused) {
+                    return Some(action);
                 }
             }
             WindowEvent::Resized(size) => self.resize_surface(*size, compositor),
-            WindowEvent::CursorMoved { position, .. } => {
-                let logical = position.to_logical::<f64>(self.effective_scale);
-                self.cursor = Cursor::Available(Point::new(logical.x as f32, logical.y as f32));
+            WindowEvent::CursorMoved { position, .. } => self.state.cursor_moved(*position),
+            WindowEvent::CursorLeft { .. } => self.state.cursor_left(),
+            WindowEvent::ModifiersChanged(modifiers) => {
+                self.state.modifiers_changed(modifiers.state());
             }
-            WindowEvent::CursorLeft { .. } => self.cursor = Cursor::Unavailable,
-            WindowEvent::ModifiersChanged(modifiers) => self.modifiers = modifiers.state(),
             WindowEvent::KeyboardInput { event, .. }
                 if event.state == ElementState::Pressed && !event.repeat =>
             {
-                match toolbar_menu_key(
-                    &event.logical_key,
-                    &mut self.highlighted,
-                    self.options.len(),
-                ) {
-                    MenuKeyResult::Select => {
-                        return self
-                            .options
-                            .get(self.highlighted)
-                            .map(|option| EditorMenuAction::Selected(option.choice));
-                    }
-                    MenuKeyResult::Dismiss => return Some(EditorMenuAction::Dismiss),
-                    MenuKeyResult::None => {}
+                if let Some(action) = self.state.key_pressed(&event.logical_key) {
+                    return Some(action);
                 }
                 self.window.request_redraw();
                 return None;
@@ -170,17 +237,11 @@ impl EditorMenuWindow {
 
         let event = conversion::window_event(
             event,
-            self.effective_scale as f32,
-            self.modifiers,
+            self.state.effective_scale as f32,
+            self.state.modifiers,
         )?;
         let logical_size = self.viewport.logical_size();
-        let options = self.options.clone();
-        let view = Self::view(
-            &options,
-            self.selected,
-            self.highlighted,
-            self.appearance,
-        );
+        let view = self.state.view();
         let mut interface = UserInterface::build(
             view,
             logical_size,
@@ -190,17 +251,14 @@ impl EditorMenuWindow {
         let mut messages = Vec::new();
         interface.update(
             &[event],
-            self.cursor,
+            self.state.cursor,
             &mut self.renderer,
             &mut self.clipboard,
             &mut messages,
         );
         self.cache = interface.into_cache();
         if let Some(EditorMenuMessage::Select(index)) = messages.into_iter().next() {
-            return self
-                .options
-                .get(index)
-                .map(|option| EditorMenuAction::Selected(option.choice));
+            return self.state.select(index);
         }
         None
     }
@@ -210,28 +268,22 @@ impl EditorMenuWindow {
         compositor: &mut Compositor,
     ) -> Result<(), iced_wgpu::graphics::compositor::SurfaceError> {
         let logical_size = self.viewport.logical_size();
-        let options = self.options.clone();
-        let view = Self::view(
-            &options,
-            self.selected,
-            self.highlighted,
-            self.appearance,
-        );
+        let view = self.state.view();
         let mut interface = UserInterface::build(
             view,
             logical_size,
             std::mem::take(&mut self.cache),
             &mut self.renderer,
         );
-        let theme = self.appearance.theme();
-        let colors = self.appearance.palette();
+        let theme = self.state.appearance.theme();
+        let colors = self.state.appearance.palette();
         interface.draw(
             &mut self.renderer,
             &theme,
             &renderer::Style {
                 text_color: colors.text,
             },
-            self.cursor,
+            self.state.cursor,
         );
         self.cache = interface.into_cache();
         compositor.present(
@@ -243,41 +295,6 @@ impl EditorMenuWindow {
         )
     }
 
-    fn view(
-        options: &[ToolbarMenuOption],
-        selected: ToolbarMenuChoice,
-        highlighted: usize,
-        appearance: Appearance,
-    ) -> EditorMenuElement<'_> {
-        let rows = options.iter().enumerate().fold(
-            Column::new().spacing(0),
-            |column, (index, option)| {
-                column.push(
-                    button(
-                        container(text(&option.label).size(type_size::CONTROL))
-                            .padding([0, 6])
-                            .center_y(Length::Fill),
-                    )
-                    .on_press(EditorMenuMessage::Select(index))
-                    .width(Length::Fill)
-                    .height(Length::Fixed(TOOLBAR_MENU_ROW_HEIGHT))
-                    .padding(0)
-                    .style(yadaw_iced_ui::popup_menu_row(
-                        appearance,
-                        option.choice == selected,
-                        index == highlighted,
-                    )),
-                )
-            },
-        );
-        container(scrollable(rows).width(Length::Fill).height(Length::Fill))
-            .padding(TOOLBAR_MENU_PADDING as u16)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .style(yadaw_iced_ui::popup_surface(appearance))
-            .into()
-    }
-
     fn resize_surface(&mut self, size: PhysicalSize<u32>, compositor: &mut Compositor) {
         if size.width == 0 || size.height == 0 {
             return;
@@ -285,7 +302,7 @@ impl EditorMenuWindow {
         compositor.configure_surface(&mut self.surface, size.width, size.height);
         self.viewport = Viewport::with_physical_size(
             Size::new(size.width, size.height),
-            self.effective_scale as f32,
+            self.state.effective_scale as f32,
         );
         self.window.request_redraw();
     }

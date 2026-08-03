@@ -122,16 +122,7 @@ impl EditorWindow {
     }
 
     pub fn update_context(&mut self, context: PluginEditorContext) {
-        if !context.channel_name.is_empty() {
-            self.context.channel_name = context.channel_name;
-        }
-        if !context.channel_color.is_empty() {
-            self.context.channel_color = context.channel_color;
-        }
-        if !context.plugin_name.is_empty() {
-            self.context.plugin_name = context.plugin_name;
-        }
-        self.context.appearance = context.appearance;
+        merge_editor_context(&mut self.context, context);
         self.window.set_title(&format!(
             "{} — {} — YADAW",
             self.context.channel_name, self.context.plugin_name
@@ -151,7 +142,7 @@ impl EditorWindow {
 
     pub(crate) fn report_popup_failure(&mut self, error: impl fmt::Display) {
         self.close_toolbar_menu();
-        self.warning = Some(format!("Could not open the toolbar menu: {error}. Try again."));
+        self.warning = Some(popup_failure_message(error));
         self.window.request_redraw();
     }
 
@@ -161,23 +152,7 @@ impl EditorWindow {
     ) -> Option<EditorAction> {
         self.close_toolbar_menu();
         self.window.focus_window();
-        match choice {
-            ToolbarMenuChoice::Mode(mode) if mode != self.preference.mode => {
-                Some(EditorAction::PreferenceChanged(PluginEditorPreference {
-                    mode,
-                    zoom_percent: self.preference.zoom_percent,
-                }))
-            }
-            ToolbarMenuChoice::Zoom(zoom_percent)
-                if zoom_percent != self.preference.zoom_percent =>
-            {
-                Some(EditorAction::PreferenceChanged(PluginEditorPreference {
-                    mode: self.preference.mode,
-                    zoom_percent,
-                }))
-            }
-            ToolbarMenuChoice::Mode(_) | ToolbarMenuChoice::Zoom(_) => None,
-        }
+        toolbar_choice_action(self.preference, choice)
     }
 
     pub fn update_appearance(&mut self, appearance: PluginEditorAppearance) {
@@ -588,6 +563,44 @@ impl EditorWindow {
             }
             Err(error) => self.warning = Some(error),
         }
+    }
+}
+
+fn merge_editor_context(current: &mut PluginEditorContext, update: PluginEditorContext) {
+    if !update.channel_name.is_empty() {
+        current.channel_name = update.channel_name;
+    }
+    if !update.channel_color.is_empty() {
+        current.channel_color = update.channel_color;
+    }
+    if !update.plugin_name.is_empty() {
+        current.plugin_name = update.plugin_name;
+    }
+    current.appearance = update.appearance;
+}
+
+fn popup_failure_message(error: impl fmt::Display) -> String {
+    format!("Could not open the toolbar menu: {error}. Try again.")
+}
+
+fn toolbar_choice_action(
+    preference: PluginEditorPreference,
+    choice: ToolbarMenuChoice,
+) -> Option<EditorAction> {
+    match choice {
+        ToolbarMenuChoice::Mode(mode) if mode != preference.mode => {
+            Some(EditorAction::PreferenceChanged(PluginEditorPreference {
+                mode,
+                zoom_percent: preference.zoom_percent,
+            }))
+        }
+        ToolbarMenuChoice::Zoom(zoom_percent) if zoom_percent != preference.zoom_percent => {
+            Some(EditorAction::PreferenceChanged(PluginEditorPreference {
+                mode: preference.mode,
+                zoom_percent,
+            }))
+        }
+        ToolbarMenuChoice::Mode(_) | ToolbarMenuChoice::Zoom(_) => None,
     }
 }
 

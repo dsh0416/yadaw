@@ -1,11 +1,25 @@
 const VST3_PARAMETER_FLAG_READ_ONLY: u32 = 1 << 1;
 
-impl EditorWindow {
+struct EditorInteractionState<'a> {
+    preference: PluginEditorPreference,
+    active_mode: PluginEditorMode,
+    appearance: PluginEditorAppearance,
+    effective_scale: f64,
+    logical_size: Size,
+    cursor: Cursor,
+    compare_segment_focused: &'a mut bool,
+    open_menu: &'a mut Option<ToolbarMenu>,
+    toolbar_anchors: &'a mut HashMap<ToolbarMenu, Rectangle>,
+    parameters: &'a mut [PluginParameter],
+    active_gestures: &'a mut HashSet<u32>,
+}
+
+impl EditorInteractionState<'_> {
     fn update(&mut self, message: Message, actions: &mut Vec<EditorAction>) {
         match message {
             Message::UseMode(mode) => {
-                self.compare_segment_focused = false;
-                self.close_toolbar_menu();
+                *self.compare_segment_focused = false;
+                *self.open_menu = None;
                 if mode != self.preference.mode {
                     actions.push(EditorAction::PreferenceChanged(PluginEditorPreference {
                         mode,
@@ -14,7 +28,7 @@ impl EditorWindow {
                 }
             }
             Message::UseCompareSlot(slot) => {
-                self.compare_segment_focused = true;
+                *self.compare_segment_focused = true;
                 actions.push(EditorAction::UseCompareSlot(slot));
             }
             Message::CopyState => actions.push(EditorAction::CopyState),
@@ -22,8 +36,8 @@ impl EditorWindow {
             Message::Undo => actions.push(EditorAction::Undo),
             Message::Redo => actions.push(EditorAction::Redo),
             Message::ZoomPreset(zoom_percent) => {
-                self.compare_segment_focused = false;
-                self.close_toolbar_menu();
+                *self.compare_segment_focused = false;
+                *self.open_menu = None;
                 actions.push(EditorAction::PreferenceChanged(PluginEditorPreference {
                     mode: self.preference.mode,
                     zoom_percent,
@@ -48,22 +62,27 @@ impl EditorWindow {
                 }
             }
             Message::OpenToolbarMenu(menu) => {
-                self.compare_segment_focused = false;
-                self.open_menu = Some(menu);
-                let anchor = self
-                    .toolbar_anchors
-                    .get(&menu)
-                    .copied()
-                    .unwrap_or_else(|| fallback_toolbar_anchor(self.viewport.logical_size(), menu));
-                actions.push(EditorAction::OpenToolbarMenu(self.toolbar_menu_request(menu, anchor)));
+                *self.compare_segment_focused = false;
+                *self.open_menu = Some(menu);
+                let anchor = self.toolbar_anchors.get(&menu).copied().unwrap_or_else(|| {
+                    fallback_toolbar_anchor(self.logical_size, menu)
+                });
+                actions.push(EditorAction::OpenToolbarMenu(toolbar_menu_request_for(
+                    menu,
+                    anchor,
+                    self.active_mode,
+                    self.preference.zoom_percent,
+                    self.appearance,
+                    self.effective_scale,
+                )));
             }
             Message::MenuOpened(menu) => {
-                self.compare_segment_focused = false;
-                self.open_menu = Some(menu);
+                *self.compare_segment_focused = false;
+                *self.open_menu = Some(menu);
             }
             Message::MenuClosed(menu) => {
-                if self.open_menu == Some(menu) {
-                    self.open_menu = None;
+                if *self.open_menu == Some(menu) {
+                    *self.open_menu = None;
                 }
             }
             Message::ParameterChanged(parameter_id, normalized) => {
@@ -102,6 +121,27 @@ impl EditorWindow {
                 }
             }
         }
+    }
+}
+
+impl EditorWindow {
+    fn update(&mut self, message: Message, actions: &mut Vec<EditorAction>) {
+        let effective_scale = self.effective_scale();
+        let logical_size = self.viewport.logical_size();
+        EditorInteractionState {
+            preference: self.preference,
+            active_mode: self.active_mode,
+            appearance: self.context.appearance,
+            effective_scale,
+            logical_size,
+            cursor: self.cursor,
+            compare_segment_focused: &mut self.compare_segment_focused,
+            open_menu: &mut self.open_menu,
+            toolbar_anchors: &mut self.toolbar_anchors,
+            parameters: &mut self.parameters,
+            active_gestures: &mut self.active_gestures,
+        }
+        .update(message, actions);
     }
 
     fn view_model(&self) -> EditorViewModel {
@@ -443,46 +483,47 @@ fn native_select_trigger<'a>(
         .into()
 }
 
-impl EditorWindow {
-    fn toolbar_menu_request(
-        &self,
-        menu: ToolbarMenu,
-        anchor: Rectangle,
-    ) -> ToolbarMenuRequest {
-        let strings = EditorStrings::for_locale(self.context.appearance.locale);
-        let (options, selected) = match menu {
-            ToolbarMenu::Mode => (
-                vec![
-                    ToolbarMenuOption {
-                        choice: ToolbarMenuChoice::Mode(PluginEditorMode::Native),
-                        label: strings.editor.to_owned(),
-                    },
-                    ToolbarMenuOption {
-                        choice: ToolbarMenuChoice::Mode(PluginEditorMode::Parameters),
-                        label: strings.parameters.to_owned(),
-                    },
-                ],
-                ToolbarMenuChoice::Mode(self.active_mode),
-            ),
-            ToolbarMenu::Zoom => (
-                zoom_options(self.preference.zoom_percent)
-                    .into_iter()
-                    .map(|option| ToolbarMenuOption {
-                        choice: ToolbarMenuChoice::Zoom(option.0),
-                        label: option.to_string(),
-                    })
-                    .collect(),
-                ToolbarMenuChoice::Zoom(self.preference.zoom_percent),
-            ),
-        };
-        ToolbarMenuRequest {
-            menu,
-            anchor,
-            options,
-            selected,
-            appearance: editor_appearance(self.context.appearance.theme),
-            effective_scale: self.effective_scale(),
-        }
+fn toolbar_menu_request_for(
+    menu: ToolbarMenu,
+    anchor: Rectangle,
+    active_mode: PluginEditorMode,
+    zoom_percent: u16,
+    appearance: PluginEditorAppearance,
+    effective_scale: f64,
+) -> ToolbarMenuRequest {
+    let strings = EditorStrings::for_locale(appearance.locale);
+    let (options, selected) = match menu {
+        ToolbarMenu::Mode => (
+            vec![
+                ToolbarMenuOption {
+                    choice: ToolbarMenuChoice::Mode(PluginEditorMode::Native),
+                    label: strings.editor.to_owned(),
+                },
+                ToolbarMenuOption {
+                    choice: ToolbarMenuChoice::Mode(PluginEditorMode::Parameters),
+                    label: strings.parameters.to_owned(),
+                },
+            ],
+            ToolbarMenuChoice::Mode(active_mode),
+        ),
+        ToolbarMenu::Zoom => (
+            zoom_options(zoom_percent)
+                .into_iter()
+                .map(|option| ToolbarMenuOption {
+                    choice: ToolbarMenuChoice::Zoom(option.0),
+                    label: option.to_string(),
+                })
+                .collect(),
+            ToolbarMenuChoice::Zoom(zoom_percent),
+        ),
+    };
+    ToolbarMenuRequest {
+        menu,
+        anchor,
+        options,
+        selected,
+        appearance: editor_appearance(appearance.theme),
+        effective_scale,
     }
 }
 
