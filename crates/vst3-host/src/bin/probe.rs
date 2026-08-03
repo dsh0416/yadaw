@@ -10,7 +10,8 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use yadaw_vst3_host::{
-    AraFactoryInfo, AudioLayout, ClassId, ClassInfo, Module, PluginKind, StereoProcessor,
+    AraFactoryInfo, AudioBusDescriptor, AudioBusDirection, AudioBusKind, AudioLayout, ClassId,
+    ClassInfo, Module, PluginKind, StereoProcessor,
 };
 
 const CLASS_PROBE_ENV: &str = "YADAW_VST3_PROBE_CLASS";
@@ -44,7 +45,64 @@ struct ClassOutput {
     audio_outputs: u32,
     event_inputs: u32,
     supported_audio_modes: Vec<String>,
+    #[serde(default)]
+    buses: Vec<AudioBusOutput>,
     ara: Option<AraOutput>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AudioBusOutput {
+    index: i32,
+    direction: String,
+    kind: String,
+    name: String,
+    channels: i32,
+    default_active: bool,
+}
+
+impl From<AudioBusDescriptor> for AudioBusOutput {
+    fn from(bus: AudioBusDescriptor) -> Self {
+        Self {
+            index: bus.index,
+            direction: match bus.direction {
+                AudioBusDirection::Input => "input",
+                AudioBusDirection::Output => "output",
+            }
+            .into(),
+            kind: match bus.kind {
+                AudioBusKind::Main => "main",
+                AudioBusKind::Aux => "aux",
+            }
+            .into(),
+            name: bus.name,
+            channels: bus.channels,
+            default_active: bus.default_active,
+        }
+    }
+}
+
+fn soft_buses(instrument: bool) -> Vec<AudioBusOutput> {
+    let mut buses = Vec::with_capacity(2);
+    if !instrument {
+        buses.push(AudioBusOutput {
+            index: 0,
+            direction: "input".into(),
+            kind: "main".into(),
+            name: "Stereo In".into(),
+            channels: 2,
+            default_active: true,
+        });
+    }
+    buses.push(AudioBusOutput {
+        index: 0,
+        direction: "output".into(),
+        kind: "main".into(),
+        name: "Stereo Out".into(),
+        channels: 2,
+        default_active: true,
+    });
+    buses
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -142,6 +200,7 @@ fn soft_inspect(class: &ClassInfo) -> ClassOutput {
                 .map(str::to_owned)
                 .collect()
         },
+        buses: soft_buses(instrument),
         ara: None,
     }
 }
@@ -170,6 +229,27 @@ fn deep_inspect(module: &Rc<Module>, class: ClassInfo) -> ClassOutput {
         classify_plugin_kind(&factory_categories, &effect_modes, &instrument_modes);
     let initialized = !supported_audio_modes.is_empty();
     let instrument = kind == PluginKind::Instrument;
+    let preferred_layout = supported_audio_modes
+        .iter()
+        .find(|mode| mode.as_str() == "stereo")
+        .or_else(|| supported_audio_modes.first())
+        .map(|mode| match mode.as_str() {
+            "mono" => AudioLayout::Mono,
+            "mono-to-stereo" => AudioLayout::MonoToStereo,
+            _ => AudioLayout::Stereo,
+        });
+    let buses = preferred_layout
+        .and_then(|layout| {
+            StereoProcessor::create_with_layout(Rc::clone(module), class.id, 48_000.0, kind, layout)
+                .ok()
+        })
+        .and_then(|processor| processor.audio_buses().ok())
+        .unwrap_or_default()
+        .into_iter()
+        .map(AudioBusOutput::from)
+        .collect::<Vec<_>>();
+    let audio_inputs = buses.iter().filter(|bus| bus.direction == "input").count() as u32;
+    let audio_outputs = buses.iter().filter(|bus| bus.direction == "output").count() as u32;
     ClassOutput {
         class_id: class.id.to_string(),
         name: class.name,
@@ -179,10 +259,11 @@ fn deep_inspect(module: &Rc<Module>, class: ClassInfo) -> ClassOutput {
         initialized,
         sample32: initialized,
         has_editor: initialized,
-        audio_inputs: u32::from(!instrument),
-        audio_outputs: u32::from(initialized),
+        audio_inputs,
+        audio_outputs,
         event_inputs: u32::from(instrument),
         supported_audio_modes,
+        buses,
         ara: None,
     }
 }

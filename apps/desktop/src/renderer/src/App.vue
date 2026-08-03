@@ -14,6 +14,7 @@ import { useLifecycleStore } from "./stores/lifecycle"
 import { useOperationStore } from "./stores/operations"
 import { useApplicationWindowStore } from "./stores/applicationWindow"
 import { useMidiInputStore } from "./stores/midiInput"
+import { useProjectHistoryStore } from "./stores/projectHistory"
 import GlobalOperationHost from "./components/operations/GlobalOperationHost.vue"
 import AudioBenchmarkHost from "./components/benchmark/AudioBenchmarkHost.vue"
 import AboutYadawHost from "./components/about/AboutYadawHost.vue"
@@ -31,6 +32,7 @@ const lifecycleStore = useLifecycleStore()
 const operationStore = useOperationStore()
 const applicationWindowStore = useApplicationWindowStore()
 const midiInputStore = useMidiInputStore()
+const projectHistoryStore = useProjectHistoryStore()
 const { settings } = storeToRefs(applicationSettingsStore)
 const { ready: lifecycleReady } = storeToRefs(lifecycleStore)
 const { audioHostRef } = storeToRefs(audioRuntimeStore)
@@ -74,6 +76,7 @@ function stopRuntimePolling(): void {
 useEventListener(window, "beforeunload", stopRuntimePolling)
 
 onMounted(() => {
+  projectHistoryStore.startExternalSubscription()
   operationStore.startSubscription()
   void lifecycleStore.initialize()
   audioRuntimeStore.startPolling()
@@ -83,6 +86,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  projectHistoryStore.stopExternalSubscription()
   lifecycleStore.dispose()
   operationStore.stopSubscription()
   midiInputStore.dispose()

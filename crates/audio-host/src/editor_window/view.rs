@@ -12,6 +12,10 @@ struct EditorInteractionState<'a> {
     toolbar_anchors: &'a mut HashMap<ToolbarMenu, Rectangle>,
     parameters: &'a mut [PluginParameter],
     active_gestures: &'a mut HashSet<u32>,
+    sidechain_buses: &'a [SidechainBus],
+    sidechain_sources: &'a [SidechainSource],
+    sidechain_menu: &'a mut Option<SidechainMenuState>,
+    pending_sidechain: &'a Option<PendingSidechainRequest>,
 }
 
 impl EditorInteractionState<'_> {
@@ -48,6 +52,7 @@ impl EditorInteractionState<'_> {
                     let width = match menu {
                         ToolbarMenu::Mode => 112.0,
                         ToolbarMenu::Zoom => 72.0,
+                        ToolbarMenu::Sidechain => 112.0,
                     };
                     self.toolbar_anchors.insert(
                         menu,
@@ -65,7 +70,11 @@ impl EditorInteractionState<'_> {
                 *self.compare_segment_focused = false;
                 *self.open_menu = Some(menu);
                 let anchor = self.toolbar_anchors.get(&menu).copied().unwrap_or_else(|| {
-                    fallback_toolbar_anchor(self.logical_size, menu)
+                    fallback_toolbar_anchor(
+                        self.logical_size,
+                        menu,
+                        !self.sidechain_buses.is_empty(),
+                    )
                 });
                 actions.push(EditorAction::OpenToolbarMenu(toolbar_menu_request_for(
                     menu,
@@ -74,15 +83,52 @@ impl EditorInteractionState<'_> {
                     self.preference.zoom_percent,
                     self.appearance,
                     self.effective_scale,
+                    self.sidechain_buses,
+                    self.sidechain_sources,
+                    self.pending_sidechain,
                 )));
             }
             Message::MenuOpened(menu) => {
                 *self.compare_segment_focused = false;
                 *self.open_menu = Some(menu);
+                if menu == ToolbarMenu::Sidechain {
+                    *self.sidechain_menu = Some(SidechainMenuState {
+                        bus: 0,
+                        group: None,
+                        level: 0,
+                        focused: 0,
+                    });
+                }
             }
             Message::MenuClosed(menu) => {
                 if *self.open_menu == Some(menu) {
                     *self.open_menu = None;
+                    if menu == ToolbarMenu::Sidechain {
+                        *self.sidechain_menu = None;
+                    }
+                }
+            }
+            Message::SidechainBus(bus) => {
+                *self.sidechain_menu = Some(SidechainMenuState {
+                    bus,
+                    group: None,
+                    level: 1,
+                    focused: 0,
+                });
+            }
+            Message::SidechainGroup(group) => {
+                if let Some(menu) = self.sidechain_menu {
+                    menu.group = Some(group);
+                    menu.level = 2;
+                    menu.focused = 0;
+                }
+            }
+            Message::SidechainRoute(input_bus_index, source_channel_id) => {
+                if self.pending_sidechain.is_none() {
+                    actions.push(EditorAction::SidechainRoute {
+                        input_bus_index,
+                        source_channel_id,
+                    });
                 }
             }
             Message::ParameterChanged(parameter_id, normalized) => {
@@ -125,6 +171,92 @@ impl EditorInteractionState<'_> {
 }
 
 impl EditorWindow {
+    fn handle_sidechain_key(&mut self, key: &Key) -> (bool, Option<EditorAction>) {
+        let Some(mut menu) = self.sidechain_menu else {
+            return (false, None);
+        };
+        if matches!(key, Key::Named(NamedKey::Escape)) {
+            self.close_toolbar_menu();
+            return (true, None);
+        }
+        let source_count = source_count_for_group(&self.sidechain_sources, menu.group);
+        let length = match menu.level {
+            0 => self.sidechain_buses.len(),
+            1 => 4,
+            _ => source_count,
+        };
+        match key {
+            Key::Named(NamedKey::ArrowUp) => {
+                menu.focused = menu.focused.saturating_sub(1);
+            }
+            Key::Named(NamedKey::ArrowDown) => {
+                menu.focused = (menu.focused + 1).min(length.saturating_sub(1));
+            }
+            Key::Named(NamedKey::ArrowLeft) => {
+                menu.level = menu.level.saturating_sub(1);
+                menu.focused = if menu.level == 0 {
+                    menu.bus
+                } else {
+                    menu.group.map_or(0, |group| match group {
+                        SidechainSourceKind::Audio => 1,
+                        SidechainSourceKind::Instrument => 2,
+                        SidechainSourceKind::Aux => 3,
+                    })
+                };
+            }
+            Key::Named(NamedKey::ArrowRight) | Key::Named(NamedKey::Enter) => {
+                if menu.level == 0 {
+                    menu.bus = menu.focused;
+                    menu.level = 1;
+                    menu.focused = 0;
+                } else if menu.level == 1 {
+                    if menu.focused == 0 {
+                        let bus = self.sidechain_buses[menu.bus].input_bus_index;
+                        self.sidechain_menu = Some(menu);
+                        return (
+                            true,
+                            matches!(key, Key::Named(NamedKey::Enter)).then_some(
+                                EditorAction::SidechainRoute {
+                                    input_bus_index: bus,
+                                    source_channel_id: None,
+                                },
+                            ),
+                        );
+                    }
+                    menu.group = Some(match menu.focused {
+                        1 => SidechainSourceKind::Audio,
+                        2 => SidechainSourceKind::Instrument,
+                        _ => SidechainSourceKind::Aux,
+                    });
+                    if source_count_for_group(&self.sidechain_sources, menu.group) > 0 {
+                        menu.level = 2;
+                        menu.focused = 0;
+                    }
+                } else if matches!(key, Key::Named(NamedKey::Enter)) {
+                    let Some(group) = menu.group else {
+                        return (true, None);
+                    };
+                    let source = self
+                        .sidechain_sources
+                        .iter()
+                        .filter(|source| source.kind == group)
+                        .nth(menu.focused);
+                    if let Some(source) = source {
+                        let action = EditorAction::SidechainRoute {
+                            input_bus_index: self.sidechain_buses[menu.bus].input_bus_index,
+                            source_channel_id: Some(source.id.clone()),
+                        };
+                        self.sidechain_menu = Some(menu);
+                        return (true, Some(action));
+                    }
+                }
+            }
+            _ => return (false, None),
+        }
+        self.sidechain_menu = Some(menu);
+        (true, None)
+    }
+
     fn update(&mut self, message: Message, actions: &mut Vec<EditorAction>) {
         let effective_scale = self.effective_scale();
         let logical_size = self.viewport.logical_size();
@@ -140,6 +272,10 @@ impl EditorWindow {
             toolbar_anchors: &mut self.toolbar_anchors,
             parameters: &mut self.parameters,
             active_gestures: &mut self.active_gestures,
+            sidechain_buses: &self.sidechain_buses,
+            sidechain_sources: &self.sidechain_sources,
+            sidechain_menu: &mut self.sidechain_menu,
+            pending_sidechain: &self.pending_sidechain,
         }
         .update(message, actions);
     }
@@ -167,6 +303,10 @@ impl EditorWindow {
             can_paste: self.can_paste,
             can_undo: !self.undo.is_empty(),
             can_redo: !self.redo.is_empty(),
+            sidechain_buses: self.sidechain_buses.clone(),
+            sidechain_sources: self.sidechain_sources.clone(),
+            sidechain_menu: self.sidechain_menu,
+            pending_sidechain: self.pending_sidechain.clone(),
         }
     }
 
@@ -196,6 +336,7 @@ impl EditorWindow {
                 ToolbarMenu::Mode,
                 112.0,
                 model.open_menu == Some(ToolbarMenu::Mode),
+                true,
                 appearance,
             )
         } else {
@@ -216,6 +357,7 @@ impl EditorWindow {
                 ToolbarMenu::Zoom,
                 72.0,
                 model.open_menu == Some(ToolbarMenu::Zoom),
+                true,
                 appearance,
             )
         } else {
@@ -230,6 +372,30 @@ impl EditorWindow {
             .text_size(type_size::CONTROL)
             .padding([2, 6])
             .width(72)
+            .into()
+        };
+        let sidechain_label = if model.pending_sidechain.is_some() {
+            strings.pending
+        } else {
+            strings.sidechain
+        };
+        let sidechain: EditorElement<'_> = if model.active_mode == PluginEditorMode::Native {
+            let trigger = native_select_trigger(
+                sidechain_label.to_owned(),
+                ToolbarMenu::Sidechain,
+                112.0,
+                model.open_menu == Some(ToolbarMenu::Sidechain),
+                model.pending_sidechain.is_none(),
+                appearance,
+            );
+            trigger
+        } else {
+            compact_button(
+                sidechain_label,
+                Message::MenuOpened(ToolbarMenu::Sidechain),
+                model.pending_sidechain.is_none(),
+                appearance,
+            )
             .into()
         };
 
@@ -341,6 +507,13 @@ impl EditorWindow {
             .push(mode)
             .push(space::horizontal().width(Length::Fixed(ui_space::XS)))
             .push(zoom);
+        let settings_row = if model.sidechain_buses.is_empty() {
+            settings_row
+        } else {
+            settings_row
+                .push(space::horizontal().width(Length::Fixed(ui_space::XS)))
+                .push(sidechain)
+        };
 
         let command_section = if model.narrow_toolbar {
             Column::new().spacing(ui_space::XS).push(action_row).push(
@@ -451,11 +624,26 @@ impl EditorWindow {
         } else {
             content = content.push(container(text("")).width(Length::Fill).height(Length::Fill));
         }
-        container(content)
+        let content: EditorElement<'_> = container(content)
             .width(Length::Fill)
             .height(Length::Fill)
             .style(yadaw_iced_ui::canvas(appearance))
-            .into()
+            .into();
+        let Some(menu) = model.sidechain_menu else {
+            return content;
+        };
+        let menu = sidechain_menu(model, menu, strings, appearance);
+        let overlay = container(
+            Row::new()
+                .width(Length::Fill)
+                .push(space::horizontal())
+                .push(opaque(menu)),
+        )
+        .padding([model.toolbar_height as u16, ui_space::SM as u16])
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .align_y(iced_core::alignment::Vertical::Top);
+        stack([content, overlay.into()]).into()
     }
 
 }
@@ -465,6 +653,7 @@ fn native_select_trigger<'a>(
     menu: ToolbarMenu,
     width: f32,
     open: bool,
+    enabled: bool,
     appearance: Appearance,
 ) -> EditorElement<'a> {
     let content = Row::new()
@@ -473,11 +662,15 @@ fn native_select_trigger<'a>(
         .push(space::horizontal())
         .push(text("▾").size(type_size::CONTROL));
     let trigger = button(content)
-        .on_press(Message::OpenToolbarMenu(menu))
         .width(Length::Fixed(width))
         .height(Length::Fixed(yadaw_iced_ui::CONTROL_COMPACT))
         .padding([2, 6])
         .style(yadaw_iced_ui::select_trigger(appearance, open));
+    let trigger = if enabled {
+        trigger.on_press(Message::OpenToolbarMenu(menu))
+    } else {
+        trigger
+    };
     mouse_area(trigger)
         .on_move(move |position| Message::ToolbarTriggerHovered(menu, position))
         .into()
@@ -490,6 +683,9 @@ fn toolbar_menu_request_for(
     zoom_percent: u16,
     appearance: PluginEditorAppearance,
     effective_scale: f64,
+    sidechain_buses: &[SidechainBus],
+    sidechain_sources: &[SidechainSource],
+    pending_sidechain: &Option<PendingSidechainRequest>,
 ) -> ToolbarMenuRequest {
     let strings = EditorStrings::for_locale(appearance.locale);
     let (options, selected) = match menu {
@@ -516,6 +712,53 @@ fn toolbar_menu_request_for(
                 .collect(),
             ToolbarMenuChoice::Zoom(zoom_percent),
         ),
+        ToolbarMenu::Sidechain => {
+            let options = sidechain_buses
+                .iter()
+                .flat_map(|bus| {
+                    let disconnected = std::iter::once(ToolbarMenuOption {
+                        choice: ToolbarMenuChoice::SidechainRoute {
+                            input_bus_index: bus.input_bus_index,
+                            source_channel_id: None,
+                        },
+                        label: format!("{} · {}", bus.name, strings.none),
+                    });
+                    let sources = sidechain_sources.iter().map(|source| {
+                        let group = match source.kind {
+                            SidechainSourceKind::Audio => strings.audio,
+                            SidechainSourceKind::Instrument => strings.instrument,
+                            SidechainSourceKind::Aux => strings.aux,
+                        };
+                        ToolbarMenuOption {
+                            choice: ToolbarMenuChoice::SidechainRoute {
+                                input_bus_index: bus.input_bus_index,
+                                source_channel_id: Some(source.id.clone()),
+                            },
+                            label: format!("{} · {} · {}", bus.name, group, source.name),
+                        }
+                    });
+                    disconnected.chain(sources)
+                })
+                .collect();
+            let selected = sidechain_buses.first().map_or(
+                ToolbarMenuChoice::SidechainRoute {
+                    input_bus_index: 0,
+                    source_channel_id: None,
+                },
+                |bus| {
+                    let source_channel_id = pending_sidechain
+                        .as_ref()
+                        .filter(|pending| pending.input_bus_index == bus.input_bus_index)
+                        .map(|pending| pending.displayed_source_channel_id.clone())
+                        .unwrap_or_else(|| bus.source_channel_id.clone());
+                    ToolbarMenuChoice::SidechainRoute {
+                        input_bus_index: bus.input_bus_index,
+                        source_channel_id,
+                    }
+                },
+            );
+            (options, selected)
+        }
     };
     ToolbarMenuRequest {
         menu,
@@ -527,19 +770,128 @@ fn toolbar_menu_request_for(
     }
 }
 
-fn fallback_toolbar_anchor(logical_size: Size, menu: ToolbarMenu) -> Rectangle {
+fn fallback_toolbar_anchor(
+    logical_size: Size,
+    menu: ToolbarMenu,
+    has_sidechain: bool,
+) -> Rectangle {
     let right_padding = ui_space::SM;
+    let mode_width = 112.0;
     let zoom_width = 72.0;
+    let sidechain_width = 112.0;
     let gap = ui_space::XS * 2.0;
     let (width, right_offset) = match menu {
-        ToolbarMenu::Mode => (112.0, right_padding + zoom_width + gap),
-        ToolbarMenu::Zoom => (zoom_width, right_padding),
+        ToolbarMenu::Mode => (
+            mode_width,
+            right_padding
+                + zoom_width
+                + gap
+                + if has_sidechain {
+                    sidechain_width + gap
+                } else {
+                    0.0
+                },
+        ),
+        ToolbarMenu::Zoom => (
+            zoom_width,
+            right_padding
+                + if has_sidechain {
+                    sidechain_width + gap
+                } else {
+                    0.0
+                },
+        ),
+        ToolbarMenu::Sidechain => (sidechain_width, right_padding),
     };
     let y = if is_narrow_toolbar(logical_size.width) { 66.0 } else { 38.0 };
     Rectangle::new(
         Point::new((logical_size.width - right_offset - width).max(0.0), y),
         Size::new(width, yadaw_iced_ui::CONTROL_COMPACT),
     )
+}
+
+fn source_count_for_group(
+    sources: &[SidechainSource],
+    group: Option<SidechainSourceKind>,
+) -> usize {
+    group.map_or(0, |group| {
+        sources.iter().filter(|source| source.kind == group).count()
+    })
+}
+
+fn sidechain_menu<'a>(
+    model: &'a EditorViewModel,
+    menu: SidechainMenuState,
+    strings: EditorStrings,
+    appearance: Appearance,
+) -> EditorElement<'a> {
+    let pending_display = model.pending_sidechain.as_ref();
+    let bus_entries = model
+        .sidechain_buses
+        .iter()
+        .enumerate()
+        .map(|(index, bus)| {
+            let displayed_source = pending_display
+                .filter(|pending| pending.input_bus_index == bus.input_bus_index)
+                .map_or(bus.source_channel_id.as_ref(), |pending| {
+                    pending.displayed_source_channel_id.as_ref()
+                });
+            let source_name = displayed_source
+                .and_then(|source| model.sidechain_sources.iter().find(|item| &item.id == source))
+                .map(|source| source.name.as_str())
+                .unwrap_or(strings.none);
+            CascadingMenuEntry {
+                label: format!("{} · {}", bus.name, source_name).into(),
+                message: Some(Message::SidechainBus(index)),
+                selected: index == menu.bus,
+                focused: menu.level == 0 && index == menu.focused,
+                has_children: true,
+            }
+        })
+        .collect::<Vec<_>>();
+    let groups = [
+        (None, strings.none),
+        (Some(SidechainSourceKind::Audio), strings.audio),
+        (Some(SidechainSourceKind::Instrument), strings.instrument),
+        (Some(SidechainSourceKind::Aux), strings.aux),
+    ];
+    let bus = &model.sidechain_buses[menu.bus];
+    let group_entries = groups
+        .into_iter()
+        .enumerate()
+        .map(|(index, (group, label))| CascadingMenuEntry {
+            label: label.into(),
+            message: Some(match group {
+                Some(group) => Message::SidechainGroup(group),
+                None => Message::SidechainRoute(bus.input_bus_index, None),
+            }),
+            selected: group.is_some_and(|group| Some(group) == menu.group),
+            focused: menu.level == 1 && index == menu.focused,
+            has_children: group.is_some(),
+        })
+        .collect::<Vec<_>>();
+    let mut columns = vec![bus_entries, group_entries];
+    if let Some(group) = menu.group {
+        columns.push(
+            model
+                .sidechain_sources
+                .iter()
+                .filter(|source| source.kind == group)
+                .enumerate()
+                .map(|(index, source)| CascadingMenuEntry {
+                    label: source.name.clone().into(),
+                    message: Some(Message::SidechainRoute(
+                        bus.input_bus_index,
+                        Some(source.id.clone()),
+                    )),
+                    selected: bus.source_channel_id.as_ref() == Some(&source.id),
+                    focused: menu.level == 2 && index == menu.focused,
+                    has_children: false,
+                })
+                .collect(),
+        );
+    }
+    yadaw_iced_ui::cascading_menu(columns, appearance)
 }
 
 fn compact_button<'a>(

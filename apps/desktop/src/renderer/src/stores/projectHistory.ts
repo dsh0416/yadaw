@@ -15,6 +15,9 @@ export const useProjectHistoryStore = defineStore("project-history", () => {
   const redoHistory = shallowRef<ProjectHistoryEntry[]>([])
   const canUndo = computed(() => undoHistory.value.length > 0)
   const canRedo = computed(() => redoHistory.value.length > 0)
+  let sourceEpoch: string | null = null
+  let lastSequence = 0
+  let unsubscribeExternal: (() => void) | null = null
 
   function record(entry: ProjectHistoryEntry): void {
     undoHistory.value = [...undoHistory.value, entry]
@@ -45,6 +48,39 @@ export const useProjectHistoryStore = defineStore("project-history", () => {
     redoHistory.value = []
   }
 
+  function startExternalSubscription(): void {
+    unsubscribeExternal ??= window.yadaw.subscribeExternalProjectCommands((event) => {
+      const epochChanged = sourceEpoch !== null && sourceEpoch !== event.sourceEpoch
+      const sequenceGap =
+        sourceEpoch === event.sourceEpoch && lastSequence > 0 && event.sequence !== lastSequence + 1
+      sourceEpoch = event.sourceEpoch
+      lastSequence = event.sequence
+      void graphStore
+        .reconcileExternalResult(
+          event.payload.result,
+          event.resourceRevision,
+          epochChanged || sequenceGap
+        )
+        .then((outcome) => {
+          if (outcome === "accepted") {
+            record({
+              forward: inverseFor(event.payload.result.graph, event.payload.result.inverse),
+              inverse: event.payload.result.inverse
+            })
+          } else if (outcome === "reloaded") {
+            clear()
+          }
+        })
+    })
+  }
+
+  function stopExternalSubscription(): void {
+    unsubscribeExternal?.()
+    unsubscribeExternal = null
+    sourceEpoch = null
+    lastSequence = 0
+  }
+
   return {
     undoHistory,
     redoHistory,
@@ -54,7 +90,9 @@ export const useProjectHistoryStore = defineStore("project-history", () => {
     acceptExternalResult,
     undo,
     redo,
-    clear
+    clear,
+    startExternalSubscription,
+    stopExternalSubscription
   }
 })
 

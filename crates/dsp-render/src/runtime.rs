@@ -327,7 +327,7 @@ impl RenderRuntime {
         &mut self,
         sources: &mut [StereoFrame],
         output: &mut [HardwareOutputFrame],
-        process: &mut impl FnMut(usize, &mut [StereoFrame]),
+        process: &mut impl FnMut(usize, &mut [StereoFrame], &[StereoFrame]),
     ) -> Result<(), GraphError> {
         self.mixer
             .process_block_with_sources(sources, output, process)

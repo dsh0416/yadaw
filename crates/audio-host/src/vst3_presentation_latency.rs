@@ -253,6 +253,8 @@ mod tests {
     ) -> LiveMixerChannel {
         LiveMixerChannel {
             id: id.to_owned(),
+            name: id.to_owned(),
+            color: String::new(),
             kind: "audio".to_owned(),
             system_role: None::<LiveMixerSystemRole>,
             gain_db: 0.0,
@@ -293,6 +295,7 @@ mod tests {
             slot_order,
             audio_mode: PluginAudioMode::Stereo,
             enabled: true,
+            aux_input_buses: Vec::new(),
             latency_samples,
             tail_samples: Some(0),
         }

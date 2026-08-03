@@ -216,6 +216,7 @@ export const usePluginStore = defineStore("plugins", () => {
         descriptor: structuredClone(descriptor),
         audioMode,
         enabled: true,
+        sidechainInputs: [],
         componentState: new Uint8Array(),
         controllerState: new Uint8Array()
       }
@@ -287,6 +288,7 @@ export const usePluginStore = defineStore("plugins", () => {
       descriptor: structuredClone(descriptor),
       audioMode,
       enabled: true,
+      sidechainInputs: [],
       componentState: new Uint8Array(),
       controllerState: new Uint8Array()
     }
@@ -350,6 +352,7 @@ export const usePluginStore = defineStore("plugins", () => {
       descriptor: structuredClone(descriptor),
       audioMode,
       enabled: true,
+      sidechainInputs: [],
       componentState: new Uint8Array(),
       controllerState: new Uint8Array()
     }

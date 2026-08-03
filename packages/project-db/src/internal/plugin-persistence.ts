@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm"
 import type { PluginInstancePatch, ProjectCommand } from "@yadaw/contracts"
-import { pluginInstances } from "../schema"
+import { pluginInstances, pluginSidechainRoutes } from "../schema"
 import type { ProjectTransaction } from "./database-types"
 
 type PluginCommand = Extract<
@@ -38,6 +38,23 @@ function pluginValue(
   }
 }
 
+async function replaceSidechainRoutes(
+  tx: ProjectTransaction,
+  pluginId: string,
+  routes: readonly { inputBusIndex: number; sourceChannelId: string }[]
+): Promise<void> {
+  await tx.delete(pluginSidechainRoutes).where(eq(pluginSidechainRoutes.pluginId, pluginId))
+  if (routes.length > 0) {
+    await tx.insert(pluginSidechainRoutes).values(
+      routes.map((route) => ({
+        pluginId,
+        inputBusIndex: route.inputBusIndex,
+        sourceChannelId: route.sourceChannelId
+      }))
+    )
+  }
+}
+
 export function isPluginCommand(command: ProjectCommand): command is PluginCommand {
   return [
     "create-plugin",
@@ -55,6 +72,7 @@ export async function persistPluginCommand(
   switch (command.type) {
     case "create-plugin":
       await tx.insert(pluginInstances).values(pluginValue(command.plugin))
+      await replaceSidechainRoutes(tx, command.plugin.id, command.plugin.sidechainInputs)
       return
     case "delete-plugin":
       await tx.delete(pluginInstances).where(eq(pluginInstances.id, command.pluginId))
@@ -63,6 +81,9 @@ export async function persistPluginCommand(
       const patch = pluginPatch(command.patch)
       if (Object.keys(patch).length > 0) {
         await tx.update(pluginInstances).set(patch).where(eq(pluginInstances.id, command.pluginId))
+      }
+      if (command.patch.sidechainInputs !== undefined) {
+        await replaceSidechainRoutes(tx, command.pluginId, command.patch.sidechainInputs)
       }
       return
     }
@@ -144,5 +165,6 @@ export async function persistPluginCommand(
     case "replace-plugin":
       await tx.delete(pluginInstances).where(eq(pluginInstances.id, command.pluginId))
       await tx.insert(pluginInstances).values(pluginValue(command.plugin))
+      await replaceSidechainRoutes(tx, command.plugin.id, command.plugin.sidechainInputs)
   }
 }

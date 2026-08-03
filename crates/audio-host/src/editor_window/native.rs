@@ -1,4 +1,21 @@
 impl EditorWindow {
+    pub(crate) fn rebind_plugin(&mut self, runtime: &Vst3Runtime) {
+        if self.active_mode == PluginEditorMode::Native {
+            if let Some(native) = self.native.take() {
+                native.detach();
+            }
+            if let Err(error) = self.attach_native(runtime) {
+                self.warning = Some(error);
+                self.active_mode = PluginEditorMode::Parameters;
+                let _ = self.refresh_parameters(runtime);
+                self.request_parameter_window_size();
+            }
+        } else if let Err(error) = self.refresh_parameters(runtime) {
+            self.warning = Some(error);
+        }
+        self.window.request_redraw();
+    }
+
     fn switch_mode(&mut self, mode: PluginEditorMode, runtime: &Vst3Runtime) {
         if let Some(native) = self.native.take() {
             native.detach();
@@ -341,5 +358,6 @@ impl EditorWindow {
 
     fn close_toolbar_menu(&mut self) {
         self.open_menu = None;
+        self.sidechain_menu = None;
     }
 }

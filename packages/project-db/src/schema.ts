@@ -426,6 +426,24 @@ export const pluginInstances = pgTable(
   ]
 )
 
+export const pluginSidechainRoutes = pgTable(
+  "plugin_sidechain_routes",
+  {
+    pluginId: text("plugin_id")
+      .notNull()
+      .references(() => pluginInstances.id, { onDelete: "cascade" }),
+    inputBusIndex: integer("input_bus_index").notNull(),
+    sourceChannelId: text("source_channel_id")
+      .notNull()
+      .references(() => mixerChannels.id, { onDelete: "cascade" })
+  },
+  (table) => [
+    primaryKey({ columns: [table.pluginId, table.inputBusIndex] }),
+    index("plugin_sidechain_routes_source_channel").on(table.sourceChannelId),
+    check("plugin_sidechain_routes_bus_index_check", sql`${table.inputBusIndex} >= 0`)
+  ]
+)
+
 export const tempoEvents = pgTable(
   "tempo_events",
   {
@@ -598,7 +616,8 @@ export const mixerChannelsRelations = relations(mixerChannels, ({ many, one }) =
   track: one(tracks),
   plugins: many(pluginInstances),
   sourcedSends: many(mixerSends, { relationName: "sendSource" }),
-  targetedSends: many(mixerSends, { relationName: "sendTarget" })
+  targetedSends: many(mixerSends, { relationName: "sendTarget" }),
+  sourcedPluginSidechains: many(pluginSidechainRoutes, { relationName: "sidechainSource" })
 }))
 
 export const tracksRelations = relations(tracks, ({ many, one }) => ({
@@ -634,10 +653,23 @@ export const mixerSendsRelations = relations(mixerSends, ({ one }) => ({
   })
 }))
 
-export const pluginInstancesRelations = relations(pluginInstances, ({ one }) => ({
+export const pluginInstancesRelations = relations(pluginInstances, ({ many, one }) => ({
   channel: one(mixerChannels, {
     fields: [pluginInstances.channelId],
     references: [mixerChannels.id]
+  }),
+  sidechainRoutes: many(pluginSidechainRoutes)
+}))
+
+export const pluginSidechainRoutesRelations = relations(pluginSidechainRoutes, ({ one }) => ({
+  plugin: one(pluginInstances, {
+    fields: [pluginSidechainRoutes.pluginId],
+    references: [pluginInstances.id]
+  }),
+  sourceChannel: one(mixerChannels, {
+    fields: [pluginSidechainRoutes.sourceChannelId],
+    references: [mixerChannels.id],
+    relationName: "sidechainSource"
   })
 }))
 
@@ -680,6 +712,7 @@ export type Track = typeof tracks.$inferSelect
 export type AudioClip = typeof audioClips.$inferSelect
 export type MixerSend = typeof mixerSends.$inferSelect
 export type PluginInstance = typeof pluginInstances.$inferSelect
+export type PluginSidechainRoute = typeof pluginSidechainRoutes.$inferSelect
 export type TempoEvent = typeof tempoEvents.$inferSelect
 export type TimeSignatureEvent = typeof timeSignatureEvents.$inferSelect
 export type KeySignatureEvent = typeof keySignatureEvents.$inferSelect

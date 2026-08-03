@@ -16,6 +16,8 @@ export class AudioGraphCompiler {
       sample_rate: graph.sampleRate,
       channels: graph.channels.map((channel) => ({
         id: channel.id,
+        name: channel.name,
+        color: channel.color,
         kind: channel.kind,
         system_role: channel.systemRole ?? undefined,
         gain_db: channel.gainDb,
@@ -65,6 +67,21 @@ export class AudioGraphCompiler {
         slot_order: plugin.slotOrder,
         audio_mode: plugin.audioMode,
         enabled: plugin.enabled,
+        aux_input_buses: plugin.descriptor.buses
+          .filter(
+            (bus) =>
+              bus.direction === "input" &&
+              bus.kind === "aux" &&
+              (bus.channels === 1 || bus.channels === 2)
+          )
+          .map((bus) => ({
+            input_bus_index: bus.index,
+            name: bus.name,
+            channels: bus.channels,
+            source_channel_id: plugin.sidechainInputs.find(
+              (route) => route.inputBusIndex === bus.index
+            )?.sourceChannelId
+          })),
         latency_samples: 0,
         tail_samples: 0
       })),

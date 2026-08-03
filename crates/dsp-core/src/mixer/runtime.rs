@@ -4,10 +4,26 @@ use super::graph::{
 use super::*;
 
 impl MixerGraph {
+    /// Stable topological channel order, including non-audible scheduling
+    /// dependencies such as plug-in side-chain sources.
+    #[must_use]
+    pub fn processing_order(&self) -> &[usize] {
+        &self.order
+    }
+
     pub fn new(
         sample_rate: u32,
         channels: Vec<ChannelSpec>,
         sends: Vec<SendSpec>,
+    ) -> Result<Self, GraphError> {
+        Self::new_with_dependencies(sample_rate, channels, sends, &[])
+    }
+
+    pub fn new_with_dependencies(
+        sample_rate: u32,
+        channels: Vec<ChannelSpec>,
+        sends: Vec<SendSpec>,
+        dependencies: &[(usize, usize)],
     ) -> Result<Self, GraphError> {
         if sample_rate == 0
             || channels
@@ -51,7 +67,7 @@ impl MixerGraph {
         }) {
             return Err(GraphError::InvalidOutput);
         }
-        let edges = graph_edges(&channels, &sends)?;
+        let edges = graph_edges(&channels, &sends, dependencies)?;
         let order = topological_order(&edges)?;
         let (audible, output_audible, send_audible) = solo_audibility(&channels, &edges, &sends);
         let channel_runtime = channels
@@ -105,6 +121,7 @@ impl MixerGraph {
             block_bus_accumulation: Vec::new(),
             block_master_gains: Vec::new(),
             block_master_pans: Vec::new(),
+            block_post_pan: Vec::new(),
         })
     }
 
@@ -190,6 +207,7 @@ impl MixerGraph {
             vec![0.0; self.block_bus_count.saturating_mul(maximum_frames)];
         self.block_master_gains = vec![0.0; maximum_frames];
         self.block_master_pans = vec![0.0; maximum_frames];
+        self.block_post_pan = vec![[0.0, 0.0]; self.channels.len().saturating_mul(maximum_frames)];
     }
 
     pub fn process_frame(&mut self, audio_inputs: &[StereoFrame]) -> HardwareOutputFrame {
@@ -232,7 +250,7 @@ impl MixerGraph {
         &mut self,
         channel_sources: &mut [StereoFrame],
         output: &mut [HardwareOutputFrame],
-        processor: &mut impl FnMut(usize, &mut [StereoFrame]),
+        processor: &mut impl FnMut(usize, &mut [StereoFrame], &[StereoFrame]),
     ) -> Result<(), GraphError> {
         let frame_count = output.len();
         let required_sources = self.channels.len().saturating_mul(frame_count);
@@ -247,6 +265,7 @@ impl MixerGraph {
         output.fill([0.0; MAX_OUTPUT_CHANNELS]);
         let used_bus_samples = self.block_bus_count.saturating_mul(frame_count);
         self.block_bus_accumulation[..used_bus_samples].fill(0.0);
+        self.block_post_pan[..required_sources].fill([0.0, 0.0]);
 
         let master = &self.channels[self.master];
         let master_gate = if master.muted { 0.0 } else { 1.0 };
@@ -274,7 +293,11 @@ impl MixerGraph {
                         self.block_bus_accumulation[right_start + frame];
                 }
             }
-            processor(index, &mut channel_sources[start..end]);
+            processor(
+                index,
+                &mut channel_sources[start..end],
+                &self.block_post_pan[..required_sources],
+            );
 
             let muted = self.channels[index].muted;
             let output_route = self.channels[index].output;
@@ -293,6 +316,7 @@ impl MixerGraph {
                 };
                 let post_fader = scale(pre, self.channel_runtime[index].gain.next() * gate);
                 let post = balance_stereo(post_fader, self.channel_runtime[index].pan.next());
+                self.block_post_pan[source_index] = post;
 
                 for &send_index in &self.sends_by_source[index] {
                     let send = &self.sends[send_index];

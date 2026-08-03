@@ -264,6 +264,7 @@ export class MidiImportService {
       descriptor: structuredClone(descriptor),
       audioMode: descriptor.supportedAudioModes.includes("stereo") ? "stereo" : "mono",
       enabled: true,
+      sidechainInputs: [],
       componentState: new Uint8Array(),
       controllerState: new Uint8Array()
     }

@@ -212,6 +212,25 @@ impl ProcessorLease {
         output_right: &mut [f32],
         context: &HostProcessContext,
     ) -> bool {
+        self.process_block_with_aux(
+            input_left,
+            input_right,
+            output_left,
+            output_right,
+            &[],
+            context,
+        )
+    }
+
+    pub(crate) fn process_block_with_aux(
+        &mut self,
+        input_left: &mut [f32],
+        input_right: &mut [f32],
+        output_left: &mut [f32],
+        output_right: &mut [f32],
+        auxiliary_inputs: &[crate::processor::AuxiliaryAudioInput],
+        context: &HostProcessContext,
+    ) -> bool {
         let cell = unsafe {
             // SAFETY: HostedPlugin keeps the stable ProcessorCell allocation alive for the helper
             // lifetime and graph retirement prevents use after owner drop.
@@ -227,11 +246,12 @@ impl ProcessorLease {
         let result = unsafe {
             // SAFETY: processing is an exclusive single-audio-thread guard and the UI pause path
             // waits for it to clear before accessing the processor.
-            (&mut *cell.processor.get()).process_stereo_with_context(
+            (&mut *cell.processor.get()).process_stereo_with_aux_context(
                 input_left,
                 input_right,
                 output_left,
                 output_right,
+                auxiliary_inputs,
                 Some(context),
             )
         };
@@ -590,12 +610,31 @@ impl HostedPlugin {
         kind: PluginKind,
         layout: AudioLayout,
     ) -> HostResult<Self> {
-        Self::create_with_layout_and_hook(
+        Self::create_with_layout_and_aux_inputs(
             module_path,
             class_id,
             sample_rate,
             kind,
             layout,
+            &[],
+        )
+    }
+
+    pub fn create_with_layout_and_aux_inputs(
+        module_path: impl AsRef<std::path::Path>,
+        class_id: ClassId,
+        sample_rate: f64,
+        kind: PluginKind,
+        layout: AudioLayout,
+        active_aux_input_buses: &[u32],
+    ) -> HostResult<Self> {
+        Self::create_with_layout_aux_and_hook(
+            module_path,
+            class_id,
+            sample_rate,
+            kind,
+            layout,
+            active_aux_input_buses,
             |_, _| Ok(()),
         )
         .map(|(plugin, ())| plugin)
@@ -607,6 +646,26 @@ impl HostedPlugin {
         sample_rate: f64,
         kind: PluginKind,
         layout: AudioLayout,
+        hook: impl FnOnce(&Module, *mut c_void) -> HostResult<T>,
+    ) -> HostResult<(Self, T)> {
+        Self::create_with_layout_aux_and_hook(
+            module_path,
+            class_id,
+            sample_rate,
+            kind,
+            layout,
+            &[],
+            hook,
+        )
+    }
+
+    pub fn create_with_layout_aux_and_hook<T>(
+        module_path: impl AsRef<std::path::Path>,
+        class_id: ClassId,
+        sample_rate: f64,
+        kind: PluginKind,
+        layout: AudioLayout,
+        active_aux_input_buses: &[u32],
         hook: impl FnOnce(&Module, *mut c_void) -> HostResult<T>,
     ) -> HostResult<(Self, T)> {
         let module = Rc::new(Module::open(module_path)?);
@@ -651,6 +710,7 @@ impl HostedPlugin {
         } else {
             None
         };
+        processor.configure_aux_input_buses(active_aux_input_buses)?;
         processor.activate()?;
         let (controller, handler, controller_initialized) = controller_lifecycle.take();
         Ok((

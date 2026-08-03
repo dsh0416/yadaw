@@ -294,6 +294,7 @@ mod tests {
                 class_id: "fixture".into(),
                 plugin_kind: "effect".into(),
                 audio_mode: PluginAudioMode::Stereo,
+                active_aux_inputs: Vec::new(),
                 sample_rate: 48_000.0,
                 component_state: BinaryPayload::inline(Vec::new()),
                 controller_state: BinaryPayload::inline(Vec::new()),

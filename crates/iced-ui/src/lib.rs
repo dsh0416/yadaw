@@ -1,7 +1,9 @@
 //! Shared iced foundations for YADAW's host chrome and built-in plug-ins.
 
-use iced_core::{Background, Border, Color, Shadow, theme::Palette};
-use iced_widget::{Theme, button, container, pick_list, slider, text_input};
+use std::borrow::Cow;
+
+use iced_core::{Background, Border, Color, Element, Length, Shadow, theme::Palette};
+use iced_widget::{Column, Row, Theme, button, container, pick_list, slider, text, text_input};
 
 /// Compact DAW control height in logical pixels.
 pub const CONTROL_COMPACT: f32 = 24.0;
@@ -11,6 +13,77 @@ pub const CONTROL_SMALL: f32 = 32.0;
 pub const EDITOR_CHROME_HEIGHT: f32 = 72.0;
 /// Width of the active signal rail.
 pub const SIGNAL_RAIL_WIDTH: f32 = 3.0;
+
+/// One entry in a host-owned cascading menu column.
+#[derive(Debug, Clone)]
+pub struct CascadingMenuEntry<'a, Message> {
+    pub label: Cow<'a, str>,
+    pub message: Option<Message>,
+    pub selected: bool,
+    pub focused: bool,
+    pub has_children: bool,
+}
+
+/// Build the shared visual surface for a multi-level host menu. Navigation
+/// state stays with the owning feature so the component can be reused for
+/// route, preset, and device hierarchies.
+pub fn cascading_menu<'a, Message: Clone + 'a>(
+    columns: impl IntoIterator<Item = Vec<CascadingMenuEntry<'a, Message>>>,
+    appearance: Appearance,
+) -> Element<'a, Message, Theme, iced_widget::Renderer> {
+    let colors = appearance.palette();
+    let columns = columns
+        .into_iter()
+        .fold(Row::new().spacing(space::XS), |row, entries| {
+            let column = entries
+                .into_iter()
+                .fold(Column::new().spacing(1), |column, entry| {
+                    let marker = if entry.selected { "✓" } else { " " };
+                    let child = if entry.has_children { "›" } else { "" };
+                    let content = Row::new()
+                        .spacing(space::SM)
+                        .push(text(marker).size(type_size::CONTROL))
+                        .push(text(entry.label).size(type_size::CONTROL))
+                        .push(iced_widget::space::horizontal())
+                        .push(text(child).size(type_size::CONTROL));
+                    let control = button(content)
+                        .width(Length::Fixed(190.0))
+                        .height(Length::Fixed(CONTROL_COMPACT))
+                        .padding([0, 6])
+                        .style(segmented_button(
+                            appearance,
+                            entry.selected || entry.focused,
+                        ));
+                    column.push(match entry.message {
+                        Some(message) => control.on_press(message),
+                        None => control,
+                    })
+                });
+            row.push(
+                container(column)
+                    .padding(space::XS)
+                    .style(move |_| container::Style {
+                        text_color: Some(colors.text),
+                        background: Some(colors.surface_raised.into()),
+                        border: Border {
+                            radius: 4.0.into(),
+                            width: 1.0,
+                            color: colors.border_strong,
+                        },
+                        shadow: Shadow {
+                            color: Color {
+                                a: 0.32,
+                                ..Color::BLACK
+                            },
+                            offset: iced_core::Vector::new(0.0, 4.0),
+                            blur_radius: 12.0,
+                        },
+                        ..container::Style::default()
+                    }),
+            )
+        });
+    container(columns).into()
+}
 
 /// Four-pixel spatial scale used by native YADAW interfaces.
 pub mod space {

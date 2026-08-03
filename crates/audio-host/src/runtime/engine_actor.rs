@@ -35,6 +35,22 @@ enum ActorCommand {
     SyncAraGraph {
         graph: Option<LiveMixerGraph>,
     },
+    PreparePluginGraph {
+        operation_id: String,
+        graph: LiveMixerGraph,
+    },
+    ActivatePluginGraph {
+        operation_id: String,
+    },
+    FinishPluginGraph {
+        operation_id: String,
+    },
+    RollbackPluginGraph {
+        operation_id: String,
+    },
+    AbortPluginGraph {
+        operation_id: String,
+    },
     /// Immutable mixer graph compile+publish owned by `BackgroundIoActor`.
     BuildGraph {
         graph: engine::NativeMixerGraph,
@@ -156,8 +172,13 @@ async fn engine_actor(
                 })
             }
             ActorCommand::Parameter(command) => mixer_parameter_command(&audio_engine, &handles, command),
-            ActorCommand::SyncAraGraph { .. } => control_error! {
-                message: "engine actor does not own ARA documents".into(),
+            ActorCommand::SyncAraGraph { .. }
+            | ActorCommand::PreparePluginGraph { .. }
+            | ActorCommand::ActivatePluginGraph { .. }
+            | ActorCommand::FinishPluginGraph { .. }
+            | ActorCommand::RollbackPluginGraph { .. }
+            | ActorCommand::AbortPluginGraph { .. } => control_error! {
+                message: "engine actor does not own VST3 UI state".into(),
             },
             ActorCommand::PublishBuiltGraph { built } => match audio_engine.publish_mixer_runtime(built)
             {
@@ -242,8 +263,13 @@ async fn background_io_actor(
             ActorCommand::Parameter(_) => control_error! {
                 message: "background I/O actor does not own parameters".into(),
             },
-            ActorCommand::SyncAraGraph { .. } => control_error! {
-                message: "background I/O actor does not own ARA documents".into(),
+            ActorCommand::SyncAraGraph { .. }
+            | ActorCommand::PreparePluginGraph { .. }
+            | ActorCommand::ActivatePluginGraph { .. }
+            | ActorCommand::FinishPluginGraph { .. }
+            | ActorCommand::RollbackPluginGraph { .. }
+            | ActorCommand::AbortPluginGraph { .. } => control_error! {
+                message: "background I/O actor does not own VST3 UI state".into(),
             },
             ActorCommand::PublishBuiltGraph { .. } => control_error! {
                 message: "background I/O actor does not publish graphs".into(),

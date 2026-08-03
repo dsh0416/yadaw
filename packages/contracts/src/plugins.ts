@@ -14,11 +14,20 @@ export type PluginCompatibility =
   | "load-error"
 
 export interface PluginAudioBusInfo {
+  /** Zero-based VST3 bus index within its media type and direction. */
+  index: number
   direction: "input" | "output"
   kind: "main" | "aux"
   name: string
   channels: number
   defaultActive: boolean
+}
+
+export interface PluginSidechainRoute {
+  /** Zero-based VST3 audio input bus index. */
+  inputBusIndex: number
+  /** Mixer channel whose post-pan signal feeds this bus. */
+  sourceChannelId: string
 }
 
 export interface PluginAraCapability {
@@ -102,10 +111,21 @@ export function normalizePluginDescriptor(
       : (["stereo"] as PluginAudioMode[])
   ).filter((mode) => mode !== "dual-mono" || value.ara === undefined)
   const categories = parsePluginCategories(value.categories ?? value.category)
+  const nextBusIndex = new Map<PluginAudioBusInfo["direction"], number>([
+    ["input", 0],
+    ["output", 0]
+  ])
+  const buses = (value.buses ?? []).map((bus) => {
+    const fallbackIndex = nextBusIndex.get(bus.direction) ?? 0
+    const index = Number.isSafeInteger(bus.index) && bus.index >= 0 ? bus.index : fallbackIndex
+    nextBusIndex.set(bus.direction, Math.max(fallbackIndex, index) + 1)
+    return { ...bus, index }
+  })
   const { category: _legacyCategory, ...rest } = value
   return {
     ...rest,
     supportedAudioModes,
+    buses,
     categories: categories.length > 0 ? categories : defaultPluginCategories(value.kind ?? "effect")
   }
 }
@@ -145,6 +165,7 @@ export interface PluginInstanceState {
   descriptor: PluginDescriptor
   audioMode: PluginAudioMode
   enabled: boolean
+  sidechainInputs: PluginSidechainRoute[]
   componentState: Uint8Array
   controllerState: Uint8Array
   /** Opaque ARA document archive. The plug-in owns its contents. */

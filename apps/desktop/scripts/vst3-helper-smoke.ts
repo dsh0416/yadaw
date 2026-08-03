@@ -32,6 +32,7 @@ interface WireResponse {
 }
 
 interface PendingRequest {
+  commandType: string
   resolve: (result: WireResult) => void
   reject: (reason?: unknown) => void
 }
@@ -68,7 +69,11 @@ child.once("exit", (code, signal) => {
 function send(command: unknown): Promise<WireResult> {
   return new Promise((resolveResult, reject) => {
     const requestId = nextRequestId++
-    pending.set(requestId, { resolve: resolveResult, reject })
+    const commandType =
+      typeof command === "object" && command !== null && "type" in command
+        ? String(command.type)
+        : "unknown"
+    pending.set(requestId, { commandType, resolve: resolveResult, reject })
     const payload = Buffer.from(
       encode({
         request_id: requestId,
@@ -94,7 +99,9 @@ child.stdout.on("data", (chunk: Buffer) => {
       throw new Error(`received response for unknown request ${response.request_id}`)
     }
     if (response.result.type === "error") {
-      waiter.reject(new Error(response.result.message))
+      waiter.reject(
+        new Error(`${waiter.commandType} failed: ${response.result.message ?? "unknown error"}`)
+      )
     } else {
       waiter.resolve(response.result)
     }
@@ -102,13 +109,31 @@ child.stdout.on("data", (chunk: Buffer) => {
 })
 
 try {
+  const inactiveSidechain = await send({
+    type: "load-plugin",
+    instance_id: "again-sidechain-inactive",
+    module_path: resolvedPlugin,
+    class_id: "41347FD6FED64094AFBB12B7DBA1D441",
+    plugin_kind: "effect",
+    audio_mode: "stereo",
+    active_aux_inputs: [],
+    sample_rate: 48_000,
+    component_state: { storage: "inline", bytes: new Uint8Array() },
+    controller_state: { storage: "inline", bytes: new Uint8Array() }
+  })
+  if (inactiveSidechain.type !== "plugin-loaded") {
+    throw new Error("inactive AGain SideChain load response mismatch")
+  }
+  await send({ type: "unload-plugin", instance_id: "again-sidechain-inactive" })
+
   const loaded = await send({
     type: "load-plugin",
     instance_id: "again-1",
     module_path: resolvedPlugin,
-    class_id: "84E8DE5F92554F5396FAE4133C935A18",
+    class_id: "41347FD6FED64094AFBB12B7DBA1D441",
     plugin_kind: "effect",
     audio_mode: "stereo",
+    active_aux_inputs: [{ input_bus_index: 1, channels: 1 }],
     sample_rate: 48_000,
     component_state: { storage: "inline", bytes: new Uint8Array() },
     controller_state: { storage: "inline", bytes: new Uint8Array() }
@@ -135,7 +160,7 @@ try {
   const editorContext = {
     channel_name: "AGain Smoke",
     channel_color: "#ad8cff",
-    plugin_name: "AGain",
+    plugin_name: "AGain SideChain",
     appearance: { theme: "dark", locale: "en-US" }
   }
   const editor = await send({

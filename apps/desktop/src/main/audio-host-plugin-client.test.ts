@@ -35,6 +35,7 @@ const plugin: PluginInstanceState = {
   descriptor,
   audioMode: "stereo",
   enabled: true,
+  sidechainInputs: [],
   componentState: new Uint8Array([1, 2]),
   controllerState: new Uint8Array([3, 4])
 }

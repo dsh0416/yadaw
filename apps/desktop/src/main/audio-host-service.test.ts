@@ -518,6 +518,7 @@ function pluginInstance(id = "plugin-1"): PluginInstanceState {
     },
     audioMode: "stereo",
     enabled: true,
+    sidechainInputs: [],
     componentState: new Uint8Array(),
     controllerState: new Uint8Array()
   }

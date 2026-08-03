@@ -42,6 +42,10 @@ impl EditorWindow {
             undo: VecDeque::new(),
             redo: VecDeque::new(),
             pending_edits: HashMap::new(),
+            sidechain_buses: Vec::new(),
+            sidechain_sources: Vec::new(),
+            sidechain_menu: None,
+            pending_sidechain: None,
             monitor_scale: Rc::new(Cell::new(monitor_scale)),
             user_zoom: Rc::new(Cell::new(user_zoom)),
             viewport,
@@ -119,6 +123,7 @@ impl EditorWindow {
         }
         self.active_gestures.clear();
         self.pending_edits.clear();
+        self.pending_sidechain = None;
     }
 
     pub fn update_context(&mut self, context: PluginEditorContext) {
@@ -157,6 +162,116 @@ impl EditorWindow {
 
     pub fn update_appearance(&mut self, appearance: PluginEditorAppearance) {
         self.context.appearance = appearance;
+        self.window.request_redraw();
+    }
+
+    pub fn sync_sidechain_graph(&mut self, graph: Option<&LiveMixerGraph>) {
+        let Some(graph) = graph else {
+            self.sidechain_buses.clear();
+            self.sidechain_sources.clear();
+            self.close_toolbar_menu();
+            self.window.request_redraw();
+            return;
+        };
+        let Some(plugin) = graph
+            .plugins
+            .iter()
+            .find(|plugin| plugin.instance_id == self.instance_id)
+        else {
+            self.sidechain_buses.clear();
+            self.sidechain_sources.clear();
+            self.close_toolbar_menu();
+            self.window.request_redraw();
+            return;
+        };
+        self.sidechain_buses = plugin
+            .aux_input_buses
+            .iter()
+            .map(|bus| SidechainBus {
+                input_bus_index: bus.input_bus_index,
+                name: bus.name.clone(),
+                source_channel_id: bus.source_channel_id.clone(),
+            })
+            .collect();
+        self.sidechain_sources = graph
+            .channels
+            .iter()
+            .filter_map(|channel| {
+                if channel.system_role.is_some() || channel.id == plugin.channel_id {
+                    return None;
+                }
+                let kind = match channel.kind.as_str() {
+                    "audio" => SidechainSourceKind::Audio,
+                    "instrument" => SidechainSourceKind::Instrument,
+                    "aux" => SidechainSourceKind::Aux,
+                    _ => return None,
+                };
+                (!sidechain_route_would_cycle(
+                    graph,
+                    &plugin.channel_id,
+                    &channel.id,
+                ))
+                .then(|| SidechainSource {
+                    id: channel.id.clone(),
+                    name: channel.name.clone(),
+                    kind,
+                })
+            })
+            .collect();
+        if self.sidechain_buses.is_empty() {
+            self.close_toolbar_menu();
+        } else if let Some(menu) = &mut self.sidechain_menu {
+            menu.bus = menu.bus.min(self.sidechain_buses.len().saturating_sub(1));
+        }
+        self.window.request_redraw();
+    }
+
+    pub fn begin_sidechain_request(
+        &mut self,
+        request_id: u64,
+        input_bus_index: u32,
+        source_channel_id: Option<String>,
+    ) -> bool {
+        if self.pending_sidechain.is_some() {
+            return false;
+        }
+        let displayed_source_channel_id = self
+            .sidechain_buses
+            .iter()
+            .find(|bus| bus.input_bus_index == input_bus_index)
+            .and_then(|bus| bus.source_channel_id.clone());
+        self.pending_sidechain = Some(PendingSidechainRequest {
+            request_id,
+            input_bus_index,
+            source_channel_id,
+            displayed_source_channel_id,
+        });
+        self.close_toolbar_menu();
+        self.window.request_redraw();
+        true
+    }
+
+    pub fn resolve_sidechain_request(
+        &mut self,
+        request_id: u64,
+        accepted: bool,
+        warning: Option<String>,
+    ) {
+        if self
+            .pending_sidechain
+            .as_ref()
+            .is_none_or(|pending| pending.request_id != request_id)
+        {
+            return;
+        }
+        self.pending_sidechain = None;
+        if !accepted {
+            self.warning = Some(warning.unwrap_or_else(|| {
+                "Side-chain routing could not be committed.".to_owned()
+            }));
+        } else if let Some(warning) = warning {
+            self.warning = Some(warning);
+        }
         self.window.request_redraw();
     }
 
@@ -253,6 +368,16 @@ impl EditorWindow {
             WindowEvent::KeyboardInput { event, .. }
                 if event.state == ElementState::Pressed && !event.repeat =>
             {
+                let (consumed, action) = self.handle_sidechain_key(&event.logical_key);
+                if consumed {
+                    if let Some(action) = action
+                        && self.pending_sidechain.is_none()
+                    {
+                        actions.push(action);
+                    }
+                    self.window.request_redraw();
+                    return actions;
+                }
                 match &event.logical_key {
                     Key::Named(NamedKey::ArrowLeft) if self.compare_segment_focused => {
                         actions.push(EditorAction::UseCompareSlot(CompareSlot::A));
@@ -518,6 +643,7 @@ impl EditorWindow {
                 self.window.request_redraw();
                 None
             }
+            EditorAction::SidechainRoute { .. } => None,
         }
     }
 
@@ -600,6 +726,13 @@ fn toolbar_choice_action(
                 zoom_percent,
             }))
         }
+        ToolbarMenuChoice::SidechainRoute {
+            input_bus_index,
+            source_channel_id,
+        } => Some(EditorAction::SidechainRoute {
+            input_bus_index,
+            source_channel_id,
+        }),
         ToolbarMenuChoice::Mode(_) | ToolbarMenuChoice::Zoom(_) => None,
     }
 }

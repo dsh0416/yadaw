@@ -1,4 +1,52 @@
 
+fn sidechain_route_would_cycle(
+    graph: &LiveMixerGraph,
+    target_channel_id: &str,
+    source_channel_id: &str,
+) -> bool {
+    if source_channel_id == target_channel_id {
+        return true;
+    }
+    let mut edges: HashMap<&str, Vec<&str>> = HashMap::new();
+    for channel in &graph.channels {
+        if let Some(target) = channel.output_channel_id.as_deref() {
+            edges.entry(&channel.id).or_default().push(target);
+        }
+    }
+    for send in graph.sends.iter().filter(|send| send.enabled) {
+        if let Some(target) = send.target_channel_id.as_deref() {
+            edges
+                .entry(&send.source_channel_id)
+                .or_default()
+                .push(target);
+        }
+    }
+    for plugin in &graph.plugins {
+        for bus in &plugin.aux_input_buses {
+            if let Some(source) = bus.source_channel_id.as_deref() {
+                edges
+                    .entry(source)
+                    .or_default()
+                    .push(&plugin.channel_id);
+            }
+        }
+    }
+    let mut pending = vec![target_channel_id];
+    let mut visited = HashSet::new();
+    while let Some(channel) = pending.pop() {
+        if channel == source_channel_id {
+            return true;
+        }
+        if !visited.insert(channel) {
+            continue;
+        }
+        if let Some(targets) = edges.get(channel) {
+            pending.extend(targets.iter().copied());
+        }
+    }
+    false
+}
+
 impl Drop for EditorWindow {
     fn drop(&mut self) {
         self.close();

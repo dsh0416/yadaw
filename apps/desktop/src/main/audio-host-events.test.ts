@@ -79,6 +79,50 @@ describe("drainHostEvents", () => {
     expect(notifications).toEqual([{ instanceId: "fx-1", kind: "dirty-changed", value: "true" }])
   })
 
+  it("forwards only well-formed native side-chain route intents", () => {
+    const requests: Array<{
+      requestId: number
+      instanceId: string
+      inputBusIndex: number
+      sourceChannelId: string | null
+    }> = []
+    drainHostEvents(
+      clientWithEvents([
+        {
+          type: "plugin-sidechain-route-requested",
+          request_id: 4,
+          instance_id: "fx-1",
+          input_bus_index: 1,
+          source_channel_id: "audio-1"
+        },
+        {
+          type: "plugin-sidechain-route-requested",
+          request_id: 5,
+          instance_id: "fx-1",
+          input_bus_index: 2,
+          source_channel_id: null
+        },
+        {
+          type: "plugin-sidechain-route-requested",
+          request_id: 0,
+          instance_id: "fx-1",
+          input_bus_index: 2,
+          source_channel_id: null
+        }
+      ]),
+      async () => {},
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      (request) => requests.push(request)
+    )
+    expect(requests).toEqual([
+      { requestId: 4, instanceId: "fx-1", inputBusIndex: 1, sourceChannelId: "audio-1" },
+      { requestId: 5, instanceId: "fx-1", inputBusIndex: 2, sourceChannelId: null }
+    ])
+  })
+
   it("forwards valid typed ARA callback events", () => {
     const callbacks: Array<{ instanceId: string; sequence: number; event: { kind: string } }> = []
     drainHostEvents(

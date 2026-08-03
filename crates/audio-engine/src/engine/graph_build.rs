@@ -172,7 +172,38 @@ fn build_mixer_runtime(
         .channels
         .iter()
         .position(|channel| channel.system_role == Some(LiveMixerSystemRole::Metronome));
-    let mut graph = MixerGraph::new(native.sample_rate, channels.clone(), sends)
+    let mut sidechain_edges = Vec::new();
+    for plugin in &native.plugins {
+        let target = plugin.channel_index as usize;
+        for bus in &plugin.aux_input_buses {
+            let Some(source) = bus.source_index.map(|index| index as usize) else {
+                continue;
+            };
+            if target >= channels.len()
+                || source >= channels.len()
+                || source == target
+                || (bus.channels != 1 && bus.channels != 2)
+            {
+                return Err(invalid_config("plugin side-chain route is invalid"));
+            }
+            sidechain_edges.push((
+                source,
+                target,
+                plugin.instance_id.clone(),
+                bus.input_bus_index,
+            ));
+        }
+    }
+    let dependencies = sidechain_edges
+        .iter()
+        .map(|(source, target, _, _)| (*source, *target))
+        .collect::<Vec<_>>();
+    let mut graph = MixerGraph::new_with_dependencies(
+        native.sample_rate,
+        channels.clone(),
+        sends,
+        &dependencies,
+    )
         .map_err(|error| invalid_config(error.to_string()))?;
     let meter_bank = Arc::new(MeterBank {
         channels: native
@@ -241,7 +272,6 @@ fn build_mixer_runtime(
             plugin.slot_order,
         )
     });
-    let mut intrinsic_latencies = vec![0_u32; channels.len()];
     let mut maximum_tail = 0_u64;
     let mut has_infinite_tail = false;
     for (marker_index, plugin) in plugin_specs.into_iter().enumerate() {
@@ -255,9 +285,6 @@ fn build_mixer_runtime(
                 "instrument plugin is assigned to a non-instrument track",
             ));
         }
-        intrinsic_latencies[channel_index] = intrinsic_latencies[channel_index]
-            .checked_add(plugin.latency_samples)
-            .ok_or_else(|| invalid_config("plugin latency exceeds the supported range"))?;
         match plugin.tail_samples {
             Some(tail) => maximum_tail = maximum_tail.saturating_add(u64::from(tail)),
             None => has_infinite_tail = true,
@@ -268,8 +295,23 @@ fn build_mixer_runtime(
             audio_mode: plugin.audio_mode,
             enabled: plugin.enabled,
             is_instrument,
+            latency_samples: plugin.latency_samples,
+            main_delay: StereoDelayLine::new(0),
             bypass_delay: StereoDelayLine::new(plugin.latency_samples as usize),
             marker_index,
+            aux_inputs: plugin
+                .aux_input_buses
+                .into_iter()
+                .filter_map(|bus| {
+                    bus.source_index.map(|source_index| LivePluginAuxInput {
+                        bus_index: bus.input_bus_index,
+                        channels: bus.channels,
+                        source_index: source_index as usize,
+                        delay: StereoDelayLine::new(0),
+                        block: vec![[0.0, 0.0]; MAX_PLUGIN_BLOCK_FRAMES],
+                    })
+                })
+                .collect(),
         });
     }
 
@@ -319,45 +361,60 @@ fn build_mixer_runtime(
             }
         }
     }
-    let latency_nodes = input_edges
-        .iter()
-        .enumerate()
-        .map(|(index, edges)| LatencyNode {
-            id: channels[index].id.clone(),
-            intrinsic_latency: intrinsic_latencies[index],
-            inputs: edges
-                .iter()
-                .map(|edge| match edge {
-                    InputEdge::Main(source) => *source,
-                    InputEdge::Send(send_index) => native.sends[*send_index].source_index as usize,
-                })
-                .collect(),
-        })
-        .collect::<Vec<_>>();
-    let latency_plan = plan_latency_compensation(&latency_nodes)
-        .map_err(|error| invalid_config(error.to_string()))?;
-    let mut channel_output_delays = vec![0_usize; channels.len()];
-    let mut send_delays = vec![0_usize; native.sends.len()];
-    for (target, edges) in input_edges.iter().enumerate() {
-        for (input, edge) in edges.iter().enumerate() {
-            let delay = latency_plan[target].input_delays[input] as usize;
-            match edge {
-                InputEdge::Main(source) => {
-                    channel_output_delays[*source] = channel_output_delays[*source].max(delay);
+    // Resolve PDC at each plug-in slot. A side-chain source is the source
+    // channel's final post-pan signal, while the main path has only accumulated
+    // latency up to the target slot. Both are delayed to the same convergence
+    // point before the processor runs.
+    let mut channel_latencies = vec![0_u32; channels.len()];
+    let processing_order = graph.processing_order().to_vec();
+    for target in processing_order {
+        let main_arrival = input_edges[target]
+            .iter()
+            .map(|edge| match edge {
+                InputEdge::Main(source) => channel_latencies[*source],
+                InputEdge::Send(send) => {
+                    channel_latencies[native.sends[*send].source_index as usize]
                 }
-                InputEdge::Send(send) => send_delays[*send] = send_delays[*send].max(delay),
+            })
+            .max()
+            .unwrap_or(0);
+        for edge in &input_edges[target] {
+            match *edge {
+                InputEdge::Main(source) => {
+                    let delay = main_arrival.saturating_sub(channel_latencies[source]) as usize;
+                    graph
+                        .set_channel_output_delay(source, delay)
+                        .map_err(|error| invalid_config(error.to_string()))?;
+                }
+                InputEdge::Send(send) => {
+                    let source = native.sends[send].source_index as usize;
+                    let delay = main_arrival.saturating_sub(channel_latencies[source]) as usize;
+                    graph
+                        .set_send_delay(send, delay)
+                        .map_err(|error| invalid_config(error.to_string()))?;
+                }
             }
         }
-    }
-    for (channel, delay) in channel_output_delays.into_iter().enumerate() {
-        graph
-            .set_channel_output_delay(channel, delay)
-            .map_err(|error| invalid_config(error.to_string()))?;
-    }
-    for (send, delay) in send_delays.into_iter().enumerate() {
-        graph
-            .set_send_delay(send, delay)
-            .map_err(|error| invalid_config(error.to_string()))?;
+        let mut slot_arrival = main_arrival;
+        for plugin in &mut plugins_by_channel[target] {
+            let convergence = plugin
+                .aux_inputs
+                .iter()
+                .map(|input| channel_latencies[input.source_index])
+                .fold(slot_arrival, u32::max);
+            plugin.main_delay = StereoDelayLine::new(
+                convergence.saturating_sub(slot_arrival) as usize,
+            );
+            for input in &mut plugin.aux_inputs {
+                input.delay = StereoDelayLine::new(
+                    convergence.saturating_sub(channel_latencies[input.source_index]) as usize,
+                );
+            }
+            slot_arrival = convergence
+                .checked_add(plugin.latency_samples)
+                .ok_or_else(|| invalid_config("plugin latency exceeds the supported range"))?;
+        }
+        channel_latencies[target] = slot_arrival;
     }
     let render_tempo_map = TempoMap::new(
         tempo_map.tempo_events().to_vec(),

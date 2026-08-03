@@ -56,6 +56,8 @@ fn live_graph(
         .map(|channel| {
             Ok(engine::NativeMixerChannel {
                 id: channel.id.clone(),
+                name: channel.name.clone(),
+                color: channel.color.clone(),
                 kind: channel.kind.clone(),
                 system_role: channel.system_role,
                 gain_db: channel.gain_db,
@@ -127,6 +129,22 @@ fn live_graph(
                 slot_order: plugin.slot_order,
                 audio_mode: plugin.audio_mode,
                 enabled: plugin.enabled,
+                aux_input_buses: plugin
+                    .aux_input_buses
+                    .iter()
+                    .map(|bus| {
+                        Ok(engine::NativePluginAuxInputBus {
+                            input_bus_index: bus.input_bus_index,
+                            name: bus.name.clone(),
+                            channels: bus.channels,
+                            source_index: bus
+                                .source_channel_id
+                                .as_deref()
+                                .map(channel_index)
+                                .transpose()?,
+                        })
+                    })
+                    .collect::<Result<Vec<_>, String>>()?,
                 latency_samples: plugin.latency_samples,
                 tail_samples: plugin.tail_samples,
             })
@@ -624,6 +642,7 @@ fn run_legacy() -> Result<(), Box<dyn std::error::Error>> {
             | ControlCommand::SavePluginState { .. }
             | ControlCommand::OpenPluginEditor { .. }
             | ControlCommand::ConfigurePluginEditorAppearance { .. }
+            | ControlCommand::ResolvePluginSidechainRoute { .. }
             | ControlCommand::ClosePluginEditor { .. }) => match vst3.as_mut() {
                 Some(runtime) => runtime.execute(command),
                 None => control_error! {

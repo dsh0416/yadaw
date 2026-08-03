@@ -510,6 +510,7 @@ describe("ProjectDatabase", () => {
             },
             audioMode,
             enabled: true,
+            sidechainInputs: [],
             componentState: new Uint8Array(),
             controllerState: new Uint8Array()
           }
@@ -669,7 +670,58 @@ describe("ProjectDatabase", () => {
     )
     expect(persistedSend).toMatchObject({ id: "post-pan-send", tap: "post-pan" })
     expect(persistedSend).not.toHaveProperty("pan")
+    await database.applyCommand(
+      {
+        type: "create-plugin",
+        plugin: {
+          id: "sidechain-effect",
+          channelId: "audio-1",
+          role: "insert",
+          slotOrder: 0,
+          classId: "0123456789ABCDEFFEDCBA9876543210",
+          descriptor: {
+            source: { kind: "external" },
+            classId: "0123456789ABCDEFFEDCBA9876543210",
+            modulePath: "sidechain.vst3",
+            name: "Side-chain Effect",
+            vendor: "YADAW",
+            version: "1.0",
+            categories: ["Fx"],
+            kind: "effect",
+            architecture: "x86_64",
+            buses: [
+              {
+                index: 1,
+                direction: "input",
+                kind: "aux",
+                name: "Side-chain",
+                channels: 1,
+                defaultActive: false
+              }
+            ],
+            supportedAudioModes: ["stereo"],
+            hasEditor: true,
+            compatibility: "compatible",
+            compatibilityReason: null
+          },
+          audioMode: "stereo",
+          enabled: true,
+          sidechainInputs: [{ inputBusIndex: 1, sourceChannelId: aux.id }],
+          componentState: new Uint8Array(),
+          controllerState: new Uint8Array()
+        }
+      },
+      "output-1-2"
+    )
+    expect(
+      (await database.mixerSnapshot()).plugins.find(({ id }) => id === "sidechain-effect")
+        ?.sidechainInputs
+    ).toEqual([{ inputBusIndex: 1, sourceChannelId: aux.id }])
     await database.applyCommand({ type: "delete-channel", channelId: aux.id }, "output-1-2")
+    expect(
+      (await database.mixerSnapshot()).plugins.find(({ id }) => id === "sidechain-effect")
+        ?.sidechainInputs
+    ).toEqual([])
     expect(
       (await database.mixerSnapshot()).channels.find(({ id }) => id === "audio-1")
     ).toMatchObject({ outputChannelId: "output-1-2" })

@@ -15,7 +15,8 @@ mod tests {
         MEMORY_DECODE_LIMIT_BYTES, METRONOME_ACCENT_NOTE, METRONOME_BEAT_NOTE, MeterAtomics,
         MeterBank, MetronomeScheduler, NativeMidiClip, NativeMidiEvent, NativeMidiEventKind,
         NativeMidiNote, NativeMixerChannel, NativeMixerGraph, NativeMixerRuntime, NativeMixerSend,
-        NativeMixerParameterPreview, NativePluginInstance, NativeRoundTripLatencyMeasurementRequest,
+        NativeMixerParameterPreview, NativePluginAuxInputBus, NativePluginInstance,
+        NativeRoundTripLatencyMeasurementRequest,
         OUTPUT_RESAMPLER_FRAMES, Ordering, PublishOutcome, RealtimeParameter,
         RealtimeParameterCommand, RoundTripInputDetector, RoundTripLatencyMeasurement,
         RoundTripOutputProbe, ScheduledMidiEvent,
@@ -545,8 +546,11 @@ mod tests {
             audio_mode: mode,
             enabled,
             is_instrument: false,
+            latency_samples: 0,
+            main_delay: StereoDelayLine::new(0),
             bypass_delay: StereoDelayLine::new(0),
             marker_index: 0,
+            aux_inputs: Vec::new(),
         }
     }
 
@@ -557,7 +561,7 @@ mod tests {
         context: &ProcessContext,
     ) -> StereoFrame {
         let mut frames = [input];
-        plugin.process_block(&mut frames, width, context);
+        plugin.process_block(&mut frames, width, context, &[]);
         frames[0]
     }
 
@@ -642,6 +646,8 @@ mod tests {
         ) -> NativeMixerChannel {
             NativeMixerChannel {
                 id: id.to_owned(),
+                name: id.to_owned(),
+                color: "#000000".to_owned(),
                 kind: if id == "output" { "output" } else { "audio" }.to_owned(),
                 system_role: None,
                 gain_db: 0.0,
@@ -688,6 +694,7 @@ mod tests {
                     slot_order: 0,
                     audio_mode: PluginAudioMode::Stereo,
                     enabled: true,
+                    aux_input_buses: Vec::new(),
                     latency_samples: 64,
                     tail_samples: Some(0),
                     processor: None,
@@ -699,6 +706,7 @@ mod tests {
                     slot_order: 0,
                     audio_mode: PluginAudioMode::Stereo,
                     enabled: false,
+                    aux_input_buses: Vec::new(),
                     latency_samples: 32,
                     tail_samples: Some(0),
                     processor: None,
@@ -808,6 +816,7 @@ mod tests {
             slot_order: 0,
             audio_mode: PluginAudioMode::Stereo,
             enabled: true,
+            aux_input_buses: Vec::new(),
             latency_samples: 0,
             tail_samples: Some(0),
             processor: None,
@@ -864,6 +873,7 @@ mod tests {
                 slot_order: 0,
                 audio_mode: PluginAudioMode::Stereo,
                 enabled: true,
+                aux_input_buses: Vec::new(),
                 latency_samples: 0,
                 tail_samples: Some(0),
                 processor: None,
@@ -1379,6 +1389,8 @@ mod tests {
     ) -> NativeMixerChannel {
         NativeMixerChannel {
             id: id.to_owned(),
+            name: id.to_owned(),
+            color: "#000000".to_owned(),
             kind: kind.to_owned(),
             system_role: None,
             gain_db: 0.0,
@@ -1596,6 +1608,7 @@ mod tests {
             slot_order: 0,
             audio_mode: PluginAudioMode::Stereo,
             enabled: true,
+            aux_input_buses: Vec::new(),
             latency_samples: 0,
             tail_samples: Some(0),
             processor: None,
@@ -1617,6 +1630,7 @@ mod tests {
             slot_order: 0,
             audio_mode: PluginAudioMode::Mono,
             enabled: true,
+            aux_input_buses: Vec::new(),
             latency_samples: 32,
             tail_samples: Some(64),
             processor: None,
@@ -1639,6 +1653,66 @@ mod tests {
         assert!(runtime.monitor_input_routes[0].is_some());
         assert_eq!(runtime.tail_end_frame, Some(64));
         assert!(!runtime.has_infinite_tail);
+    }
+
+    #[test]
+    fn sidechain_pdc_aligns_at_the_target_plugin_slot() {
+        let mut graph = simple_native_graph();
+        graph.channels.insert(
+            1,
+            mixer_channel(
+                "sidechain-target",
+                "audio",
+                Some(3),
+                None,
+                Some("hardware"),
+                vec![3, 4],
+                Vec::new(),
+            ),
+        );
+        graph.channels[0].output_index = Some(3);
+        graph.plugins = vec![
+            NativePluginInstance {
+                instance_id: "source-latency".into(),
+                channel_index: 0,
+                role: "insert".into(),
+                slot_order: 0,
+                audio_mode: PluginAudioMode::Stereo,
+                enabled: true,
+                aux_input_buses: Vec::new(),
+                latency_samples: 64,
+                tail_samples: Some(0),
+                processor: None,
+            },
+            NativePluginInstance {
+                instance_id: "sidechain-target".into(),
+                channel_index: 1,
+                role: "insert".into(),
+                slot_order: 0,
+                audio_mode: PluginAudioMode::Stereo,
+                enabled: true,
+                aux_input_buses: vec![NativePluginAuxInputBus {
+                    input_bus_index: 1,
+                    name: "Side-chain".into(),
+                    channels: 2,
+                    source_index: Some(0),
+                }],
+                latency_samples: 0,
+                tail_samples: Some(0),
+                processor: None,
+            },
+        ];
+
+        let runtime = build_mixer_runtime(
+            graph,
+            1,
+            test_transport(48_000),
+            Arc::new(InputPeakBank::new()),
+        )
+        .expect("side-chain graph");
+        let target = &runtime.plugins_by_channel[1][0];
+        assert_eq!(target.main_delay.delay_frames(), 64);
+        assert_eq!(target.aux_inputs[0].delay.delay_frames(), 0);
     }
 
     #[test]
@@ -1895,6 +1969,7 @@ mod tests {
                 slot_order: 0,
                 audio_mode: PluginAudioMode::DualMono,
                 enabled: true,
+                aux_input_buses: Vec::new(),
                 latency_samples: 0,
                 tail_samples: None,
                 processor: None,
@@ -2196,8 +2271,11 @@ mod tests {
             audio_mode: PluginAudioMode::Stereo,
             enabled: true,
             is_instrument: false,
+            latency_samples: 0,
+            main_delay: StereoDelayLine::new(0),
             bypass_delay: StereoDelayLine::new(0),
             marker_index: 0,
+            aux_inputs: Vec::new(),
         });
         let command = RealtimeParameterCommand::from_preview(NativeMixerParameterPreview {
             target: "plugin".to_owned(),

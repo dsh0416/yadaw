@@ -315,7 +315,10 @@ export class AudioHostTransportClient {
         source: edge.source,
         target: edge.target,
         kind: edge.kind,
-        signalWidth: edge.signal_width
+        signalWidth: edge.signal_width,
+        ...(edge.target_input_bus_index === undefined
+          ? {}
+          : { targetInputBusIndex: edge.target_input_bus_index })
       }))
     }
   }

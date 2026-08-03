@@ -55,6 +55,24 @@ An insert can be:
 Changing or removing a plug-in is part of project history where the operation
 supports undo.
 
+## Route a side-chain input
+
+When a VST3 instrument or effect exposes a mono or stereo auxiliary audio input,
+its native editor toolbar shows **Side-chain**. Open it, choose the auxiliary
+input bus, then select **Audio**, **Instrument**, or **Aux** and a source
+channel. Choose **None** to disconnect that bus. Each auxiliary input is routed
+independently.
+
+The source is the channel's post-pan signal: its plug-in chain, fader, mute,
+solo, and pan all affect the side-chain. Hardware inputs and internal BUS slots
+cannot be selected directly. Master, Output, the plug-in's own channel, and any
+source that would create feedback are excluded.
+
+The old selection remains active while the project change is pending. A failed
+change leaves it untouched and displays a warning. If the project was saved but
+the audio graph could not be deployed completely, the new selection remains
+the project value and the editor reports the degraded audio state.
+
 ## Missing or failed plug-ins
 
 The project keeps a legal signal path when a stored plug-in is missing,

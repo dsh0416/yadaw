@@ -210,6 +210,8 @@ mod tests {
             channels: vec![
                 NativeMixerChannel {
                     id: "audio".into(),
+                    name: "Audio".into(),
+                    color: String::new(),
                     kind: "audio".into(),
                     system_role: None,
                     gain_db: 0.0,
@@ -228,6 +230,8 @@ mod tests {
                 },
                 NativeMixerChannel {
                     id: "master".into(),
+                    name: "Master".into(),
+                    color: String::new(),
                     kind: "master".into(),
                     system_role: None,
                     gain_db: 0.0,
@@ -246,6 +250,8 @@ mod tests {
                 },
                 NativeMixerChannel {
                     id: "output".into(),
+                    name: "Output".into(),
+                    color: String::new(),
                     kind: "output".into(),
                     system_role: None,
                     gain_db: 0.0,

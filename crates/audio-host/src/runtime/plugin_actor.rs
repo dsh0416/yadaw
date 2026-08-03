@@ -91,9 +91,15 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
     let mut graph_transactions = GraphTransactionState::new(session_epoch);
     while let Some(message) = inbox.recv().await {
         let result = match message.command {
-            ActorCommand::BuildGraph { .. } | ActorCommand::PublishBuiltGraph { .. } => {
+            ActorCommand::BuildGraph { .. }
+            | ActorCommand::PublishBuiltGraph { .. }
+            | ActorCommand::PreparePluginGraph { .. }
+            | ActorCommand::ActivatePluginGraph { .. }
+            | ActorCommand::FinishPluginGraph { .. }
+            | ActorCommand::RollbackPluginGraph { .. }
+            | ActorCommand::AbortPluginGraph { .. } => {
                 control_error! {
-                    message: "VST3 actor does not own graph worker jobs".into(),
+                    message: "VST3 actor does not accept internal graph lifecycle commands".into(),
                 }
             }
             ActorCommand::SyncAraGraph { graph } => {
@@ -139,6 +145,7 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
                     class_id,
                     plugin_kind,
                     audio_mode,
+                    active_aux_inputs,
                     sample_rate,
                     component_state,
                     controller_state,
@@ -162,6 +169,7 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
                                         class_id,
                                         plugin_kind,
                                         audio_mode,
+                                        active_aux_inputs,
                                         sample_rate,
                                         component_state: BinaryPayload::inline(
                                             component_state.as_slice().to_vec(),
@@ -191,6 +199,7 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
                 | ControlCommand::SavePluginState { .. }
                 | ControlCommand::OpenPluginEditor { .. }
                 | ControlCommand::ConfigurePluginEditorAppearance { .. }
+                | ControlCommand::ResolvePluginSidechainRoute { .. }
                 | ControlCommand::ClosePluginEditor { .. }) => {
                     forward_to_ui(
                         &ui_sender,
@@ -261,6 +270,24 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
                         continue;
                     }
 
+                    let plugin_prepare = dispatch_ui_actor_command(
+                        &ui_sender,
+                        &ui_proxy,
+                        ActorCommand::PreparePluginGraph {
+                            operation_id: operation_id.clone(),
+                            graph: request.graph.clone(),
+                        },
+                    )
+                    .await;
+                    if let ControlResult::Error { error } = plugin_prepare {
+                        log_graph_transaction_failure(&meta, "plugin-prepare", &error.correlation_id);
+                        let _ = message.reply.send(graph_failure(
+                            &meta,
+                            graph_dependency_error(&meta, request.project_graph),
+                        ));
+                        continue;
+                    }
+
                     let mut graph = request.graph;
                     let native = (|| {
                         let arena = request_arena
@@ -283,6 +310,14 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
                     let native = match native {
                         Ok(native) => native,
                         Err(error) => {
+                            let _ = dispatch_ui_actor_command(
+                                &ui_sender,
+                                &ui_proxy,
+                                ActorCommand::AbortPluginGraph {
+                                    operation_id: operation_id.clone(),
+                                },
+                            )
+                            .await;
                             log_graph_transaction_failure(&meta, "materialize", &error);
                             let _ = message.reply.send(graph_failure(
                                 &meta,
@@ -294,6 +329,14 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
                     let input = match audio_engine.begin_graph_build(native) {
                         Ok(input) => input,
                         Err(error) => {
+                            let _ = dispatch_ui_actor_command(
+                                &ui_sender,
+                                &ui_proxy,
+                                ActorCommand::AbortPluginGraph {
+                                    operation_id: operation_id.clone(),
+                                },
+                            )
+                            .await;
                             log_graph_transaction_failure(&meta, "begin", &error);
                             let _ = message.reply.send(graph_failure(
                                 &meta,
@@ -309,6 +352,14 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
                     {
                         Ok(Ok(built)) => built,
                         Ok(Err(error)) => {
+                            let _ = dispatch_ui_actor_command(
+                                &ui_sender,
+                                &ui_proxy,
+                                ActorCommand::AbortPluginGraph {
+                                    operation_id: operation_id.clone(),
+                                },
+                            )
+                            .await;
                             log_graph_transaction_failure(&meta, "compile", &error);
                             let _ = message.reply.send(graph_failure(
                                 &meta,
@@ -317,6 +368,14 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
                             continue;
                         }
                         Err(error) => {
+                            let _ = dispatch_ui_actor_command(
+                                &ui_sender,
+                                &ui_proxy,
+                                ActorCommand::AbortPluginGraph {
+                                    operation_id: operation_id.clone(),
+                                },
+                            )
+                            .await;
                             log_graph_transaction_failure(&meta, "compile-worker", &error);
                             let _ = message.reply.send(graph_failure(
                                 &meta,
@@ -392,6 +451,24 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
                         continue;
                     }
 
+                    let plugin_activate = dispatch_ui_actor_command(
+                        &ui_sender,
+                        &ui_proxy,
+                        ActorCommand::ActivatePluginGraph {
+                            operation_id: operation_id.clone(),
+                        },
+                    )
+                    .await;
+                    if let ControlResult::Error { error } = plugin_activate {
+                        log_graph_transaction_failure(&meta, "plugin-activate", &error.correlation_id);
+                        graph_transactions.restore_candidate(candidate);
+                        let _ = message.reply.send(graph_failure(
+                            &meta,
+                            graph_dependency_error(&meta, request.project_graph),
+                        ));
+                        continue;
+                    }
+
                     let previous_graph = graph_snapshot.clone();
                     let ara_result = dispatch_ui_actor_command(
                         &ui_sender,
@@ -408,6 +485,14 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
                             &ui_proxy,
                             ActorCommand::SyncAraGraph {
                                 graph: previous_graph,
+                            },
+                        )
+                        .await;
+                        let _ = dispatch_ui_actor_command(
+                            &ui_sender,
+                            &ui_proxy,
+                            ActorCommand::RollbackPluginGraph {
+                                operation_id: operation_id.clone(),
                             },
                         )
                         .await;
@@ -430,6 +515,14 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
                     } = candidate;
                     match publish_built_graph(&engine_sender, built).await {
                         ControlResult::Accepted => {
+                            let _ = dispatch_ui_actor_command(
+                                &ui_sender,
+                                &ui_proxy,
+                                ActorCommand::FinishPluginGraph {
+                                    operation_id: operation_id.clone(),
+                                },
+                            )
+                            .await;
                             update_graph_midi_routes(&graph);
                             refresh_graph_handles(&handles, &graph);
                             graph_revision = candidate_revision;
@@ -458,6 +551,14 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
                                 &ui_proxy,
                                 ActorCommand::SyncAraGraph {
                                     graph: previous_graph,
+                                },
+                            )
+                            .await;
+                            let _ = dispatch_ui_actor_command(
+                                &ui_sender,
+                                &ui_proxy,
+                                ActorCommand::RollbackPluginGraph {
+                                    operation_id: operation_id.clone(),
                                 },
                             )
                             .await;
@@ -496,6 +597,14 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
                                 },
                             )
                             .await;
+                            let _ = dispatch_ui_actor_command(
+                                &ui_sender,
+                                &ui_proxy,
+                                ActorCommand::RollbackPluginGraph {
+                                    operation_id: operation_id.clone(),
+                                },
+                            )
+                            .await;
                             graph_transactions.finish_not_committed(
                                 operation_id,
                                 candidate_revision,
@@ -528,6 +637,14 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
                     };
                     graph_transactions.observe_engine(validated.engine);
                     let existed = graph_transactions.abort(&operation_id);
+                    let _ = dispatch_ui_actor_command(
+                        &ui_sender,
+                        &ui_proxy,
+                        ActorCommand::AbortPluginGraph {
+                            operation_id: operation_id.clone(),
+                        },
+                    )
+                    .await;
                     graph_success(
                         &meta,
                         graph_transactions.committed_revision,
@@ -765,6 +882,7 @@ fn is_vst3_command(command: &ControlCommand) -> bool {
             | ControlCommand::SavePluginState { .. }
             | ControlCommand::OpenPluginEditor { .. }
             | ControlCommand::ConfigurePluginEditorAppearance { .. }
+            | ControlCommand::ResolvePluginSidechainRoute { .. }
             | ControlCommand::ClosePluginEditor { .. }
             | ControlCommand::RunAudioBenchmark { .. }
     )
@@ -794,6 +912,7 @@ fn protocol_deadline(command: &ControlCommand) -> std::time::Duration {
             | ControlCommand::SavePluginState { .. }
             | ControlCommand::OpenPluginEditor { .. }
             | ControlCommand::ConfigurePluginEditorAppearance { .. }
+            | ControlCommand::ResolvePluginSidechainRoute { .. }
             | ControlCommand::ClosePluginEditor { .. }
             | ControlCommand::BenchmarkEcho { .. }
     ) {

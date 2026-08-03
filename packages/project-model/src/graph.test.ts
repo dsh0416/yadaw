@@ -45,7 +45,8 @@ function plugin(overrides: Partial<PluginInstanceState> = {}): PluginInstanceSta
     enabled: true,
     componentState: new Uint8Array([1]),
     controllerState: new Uint8Array([2]),
-    ...overrides
+    ...overrides,
+    sidechainInputs: overrides.sidechainInputs ?? []
   }
 }
 
@@ -246,6 +247,111 @@ describe("MIDI note project commands", () => {
 })
 
 describe("project graph command characterization", () => {
+  it("validates aux side-chain buses and rejects feedback candidates", () => {
+    const value = graph()
+    value.channels.push({
+      ...structuredClone(value.channels[0]!),
+      id: "aux-1",
+      kind: "aux",
+      name: "Aux 1",
+      inputSource: "bus",
+      inputFormat: "stereo",
+      inputChannels: [1, 2]
+    })
+    const sidechainDescriptor: PluginDescriptor = {
+      ...effectDescriptor,
+      buses: [
+        {
+          index: 0,
+          direction: "input",
+          kind: "main",
+          name: "Main In",
+          channels: 2,
+          defaultActive: true
+        },
+        {
+          index: 1,
+          direction: "input",
+          kind: "aux",
+          name: "Side-chain",
+          channels: 2,
+          defaultActive: false
+        },
+        {
+          index: 0,
+          direction: "output",
+          kind: "main",
+          name: "Main Out",
+          channels: 2,
+          defaultActive: true
+        }
+      ]
+    }
+    value.plugins.push(
+      plugin({
+        descriptor: sidechainDescriptor,
+        sidechainInputs: [{ inputBusIndex: 1, sourceChannelId: "aux-1" }]
+      })
+    )
+    expect(() => validateGraph(value)).not.toThrow()
+
+    value.sends.push({
+      id: "feedback",
+      sourceChannelId: "instrument-1",
+      targetChannelId: null,
+      targetBus: 1,
+      sortOrder: 0,
+      enabled: true,
+      tap: "post-pan",
+      levelDb: 0
+    })
+    expect(() => validateGraph(value)).toThrow("feedback loop")
+
+    value.sends = []
+    value.plugins[0]!.sidechainInputs = [{ inputBusIndex: 1, sourceChannelId: "instrument-1" }]
+    expect(() => validateGraph(value)).toThrow("own channel")
+  })
+
+  it("clears a deleted source and restores the route through the delete inverse", () => {
+    const before = graph()
+    const sourceChannel = {
+      ...structuredClone(before.channels[0]!),
+      id: "audio-1",
+      kind: "audio" as const,
+      name: "Audio 1",
+      sortOrder: 1,
+      inputSource: "hardware" as const,
+      inputFormat: "stereo" as const,
+      inputChannels: [1, 2]
+    }
+    before.channels.push(sourceChannel)
+    before.tracks.push({ id: "track:audio-1", channelId: sourceChannel.id, sortOrder: 1 })
+    before.plugins.push(
+      plugin({
+        descriptor: {
+          ...effectDescriptor,
+          buses: [
+            {
+              index: 1,
+              direction: "input",
+              kind: "aux",
+              name: "Side-chain",
+              channels: 1,
+              defaultActive: false
+            }
+          ]
+        },
+        sidechainInputs: [{ inputBusIndex: 1, sourceChannelId: sourceChannel.id }]
+      })
+    )
+    const command: ProjectCommand = { type: "delete-track", trackId: "track:audio-1" }
+    const inverse = inverseFor(before, command)
+    const deleted = applyToGraph(before, command)
+
+    expect(deleted.plugins[0]?.sidechainInputs).toEqual([])
+    expect(applyToGraph(deleted, inverse)).toEqual(before)
+  })
+
   it("updates project and track Markdown notes invertibly", () => {
     const before = graph()
     before.projectNotes = "Initial project note"

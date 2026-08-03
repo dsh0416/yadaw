@@ -74,7 +74,12 @@ import type {
   AudioHostRuntimePreferences
 } from "./settings"
 import type { ShortcutPreferences } from "./shortcuts"
-import type { RpcEvent, RpcRequestMeta, RpcResult } from "./rpc"
+import type { RpcEvent, RpcRequestMeta, RpcResult, RpcWarning } from "./rpc"
+
+export interface ExternalProjectCommandNotification {
+  result: ProjectCommandResult
+  warnings: RpcWarning[]
+}
 
 export const IPC_CHANNELS = {
   bootstrap: "application:bootstrap",
@@ -90,6 +95,7 @@ export const IPC_CHANNELS = {
   projectGraphLoad: "project:graph-load",
   projectGraphReload: "project:graph-reload",
   projectCommandExecute: "project:command-execute",
+  projectCommandExternalEvent: "project:command-external-event",
   mixerPreview: "mixer:preview",
   mixerSnapshot: "mixer:snapshot",
   mixerClearMeterClips: "mixer:clear-meter-clips",
@@ -176,6 +182,9 @@ export interface YadawDesktopApi {
     meta: RpcRequestMeta,
     command: ProjectCommand
   ): Promise<RpcResult<ProjectCommandResult>>
+  subscribeExternalProjectCommands(
+    listener: (event: RpcEvent<ExternalProjectCommandNotification>) => void
+  ): () => void
   previewMixerParameter(
     meta: RpcRequestMeta,
     preview: MixerParameterPreview

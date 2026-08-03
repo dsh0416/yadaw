@@ -41,6 +41,7 @@ pub(super) fn scale(frame: StereoFrame, gain: f32) -> StereoFrame {
 pub(super) fn graph_edges(
     channels: &[ChannelSpec],
     sends: &[SendSpec],
+    dependencies: &[(usize, usize)],
 ) -> Result<Vec<Vec<usize>>, GraphError> {
     let mut edges = vec![Vec::new(); channels.len()];
     for (index, channel) in channels.iter().enumerate() {
@@ -102,6 +103,12 @@ pub(super) fn graph_edges(
             }
             RouteTarget::Output(output) => edges[send.source].push(output),
         }
+    }
+    for &(source, target) in dependencies {
+        if source >= channels.len() || target >= channels.len() || source == target {
+            return Err(GraphError::InvalidOutput);
+        }
+        edges[source].push(target);
     }
     Ok(edges)
 }

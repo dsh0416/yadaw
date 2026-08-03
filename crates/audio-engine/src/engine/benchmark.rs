@@ -69,6 +69,8 @@ fn benchmark_graph(
 
     for index in 0..spec.tracks {
         channels.push(NativeMixerChannel {
+            name: format!("Audio {index}"),
+            color: String::new(),
             id: format!("benchmark-track-{index}"),
             kind: "audio".into(),
             system_role: None,
@@ -90,6 +92,8 @@ fn benchmark_graph(
 
     for index in 0..spec.buses {
         channels.push(NativeMixerChannel {
+            name: format!("Aux {index}"),
+            color: String::new(),
             id: format!("benchmark-aux-{index}"),
             kind: "aux".into(),
             system_role: None,
@@ -110,6 +114,8 @@ fn benchmark_graph(
     }
 
     channels.push(NativeMixerChannel {
+        name: "Master".into(),
+        color: String::new(),
         id: "benchmark-master".into(),
         kind: "master".into(),
         system_role: None,
@@ -128,6 +134,8 @@ fn benchmark_graph(
         midi_input_channel: None,
     });
     channels.push(NativeMixerChannel {
+        name: "Output".into(),
+        color: String::new(),
         id: "benchmark-output".into(),
         kind: "output".into(),
         system_role: None,
@@ -173,6 +181,7 @@ fn benchmark_graph(
             slot_order: (index / spec.tracks) as u32,
             audio_mode: PluginAudioMode::Stereo,
             enabled: true,
+            aux_input_buses: Vec::new(),
             latency_samples: 0,
             tail_samples: Some(0),
             processor: Some(processor.clone()),

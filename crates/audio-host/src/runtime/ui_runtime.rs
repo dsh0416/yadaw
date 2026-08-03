@@ -25,6 +25,7 @@ struct WinitHost {
     next_ara_tick: Option<Instant>,
     next_retirement_tick: Option<Instant>,
     output_parameter_error_reported: bool,
+    next_sidechain_request_id: u64,
 }
 
 impl WinitHost {
@@ -147,6 +148,7 @@ impl WinitHost {
                 };
             };
             editor.update_context(context);
+            editor.sync_sidechain_graph(self.ara_graph.as_ref());
             if editor.preference() != preference {
                 let _ = editor.apply_action(
                     EditorAction::PreferenceChanged(preference),
@@ -227,6 +229,7 @@ impl WinitHost {
             compositor,
         );
         editor.activate_initial_mode(runtime);
+        editor.sync_sidechain_graph(self.ara_graph.as_ref());
         let active_mode = editor.active_mode();
         self.editor_instances.insert(instance_id, window_id);
         self.editors.insert(window_id, editor);
@@ -353,6 +356,20 @@ impl WinitHost {
                 let _ = reply.send(ControlResult::Accepted);
                 return;
             }
+            ActorCommand::Control(ControlCommand::ResolvePluginSidechainRoute {
+                request_id,
+                instance_id,
+                accepted,
+                warning,
+            }) => {
+                if let Some(window_id) = self.editor_instances.get(&instance_id)
+                    && let Some(editor) = self.editors.get_mut(window_id)
+                {
+                    editor.resolve_sidechain_request(request_id, accepted, warning);
+                }
+                let _ = reply.send(ControlResult::Accepted);
+                return;
+            }
             ActorCommand::Control(ControlCommand::ClosePluginEditor { instance_id }) => {
                 self.close_editor(&instance_id);
                 let _ = reply.send(ControlResult::Accepted);
@@ -399,6 +416,9 @@ impl WinitHost {
                                 "audio-host: could not update VST3 presentation latency: {error}"
                             );
                         }
+                        for editor in self.editors.values_mut() {
+                            editor.sync_sidechain_graph(graph.as_ref());
+                        }
                         self.ara_graph = graph;
                         self.next_ara_tick = Some(Instant::now());
                         ControlResult::Accepted
@@ -406,6 +426,94 @@ impl WinitHost {
                     Err(message) => control_error! { message },
                 };
                 let _ = reply.send(result);
+                return;
+            }
+            ActorCommand::PreparePluginGraph {
+                operation_id,
+                graph,
+            } => {
+                let Some(runtime) = self.vst3.as_mut() else {
+                    let _ = reply.send(control_error! {
+                        message: "VST3 UI runtime is shutting down".into(),
+                    });
+                    return;
+                };
+                let result = match runtime.prepare_graph_instances(&operation_id, &graph) {
+                    Ok(()) => {
+                        if let Ok(mut processors) = self.processors.lock() {
+                            *processors = runtime.graph_processor_handles(&operation_id);
+                        }
+                        ControlResult::Accepted
+                    }
+                    Err(message) => control_error! { message },
+                };
+                let _ = reply.send(result);
+                return;
+            }
+            ActorCommand::ActivatePluginGraph { operation_id } => {
+                let Some(runtime) = self.vst3.as_mut() else {
+                    let _ = reply.send(control_error! {
+                        message: "VST3 UI runtime is shutting down".into(),
+                    });
+                    return;
+                };
+                let result = match runtime.activate_graph_instances(&operation_id) {
+                    Ok(changed) => {
+                        if let Ok(mut processors) = self.processors.lock() {
+                            *processors = runtime.processor_handles();
+                        }
+                        for instance_id in changed {
+                            if let Some(window_id) = self.editor_instances.get(&instance_id)
+                                && let Some(editor) = self.editors.get_mut(window_id)
+                            {
+                                editor.rebind_plugin(runtime);
+                            }
+                        }
+                        ControlResult::Accepted
+                    }
+                    Err(message) => control_error! { message },
+                };
+                let _ = reply.send(result);
+                return;
+            }
+            ActorCommand::FinishPluginGraph { operation_id } => {
+                if let Some(runtime) = self.vst3.as_mut() {
+                    runtime.finish_graph_instances(&operation_id);
+                    if runtime.has_retired_instances() {
+                        self.next_retirement_tick = Some(Instant::now());
+                    }
+                }
+                let _ = reply.send(ControlResult::Accepted);
+                return;
+            }
+            ActorCommand::RollbackPluginGraph { operation_id } => {
+                if let Some(runtime) = self.vst3.as_mut() {
+                    let changed = runtime.rollback_graph_instances(&operation_id);
+                    if let Ok(mut processors) = self.processors.lock() {
+                        *processors = runtime.processor_handles();
+                    }
+                    for instance_id in changed {
+                        if let Some(window_id) = self.editor_instances.get(&instance_id)
+                            && let Some(editor) = self.editors.get_mut(window_id)
+                        {
+                            editor.rebind_plugin(runtime);
+                        }
+                    }
+                    if runtime.has_retired_instances() {
+                        self.next_retirement_tick = Some(Instant::now());
+                    }
+                }
+                let _ = reply.send(ControlResult::Accepted);
+                return;
+            }
+            ActorCommand::AbortPluginGraph { operation_id } => {
+                if let Some(runtime) = self.vst3.as_mut() {
+                    runtime.abort_graph_instances(&operation_id);
+                    if let Ok(mut processors) = self.processors.lock() {
+                        *processors = runtime.processor_handles();
+                    }
+                }
+                let _ = reply.send(ControlResult::Accepted);
                 return;
             }
             command => command,
@@ -537,6 +645,13 @@ impl WinitHost {
             }
             ActorCommand::SyncAraGraph { .. } => control_error! {
                 message: "ARA graph synchronization was not handled".into(),
+            },
+            ActorCommand::PreparePluginGraph { .. }
+            | ActorCommand::ActivatePluginGraph { .. }
+            | ActorCommand::FinishPluginGraph { .. }
+            | ActorCommand::RollbackPluginGraph { .. }
+            | ActorCommand::AbortPluginGraph { .. } => control_error! {
+                message: "plug-in graph lifecycle was not handled".into(),
             },
         };
         let _ = reply.send(result);
@@ -871,6 +986,42 @@ impl ApplicationHandler<UiEvent> for WinitHost {
 
 impl WinitHost {
     fn apply_editor_action(&mut self, window_id: WindowId, action: EditorAction) {
+        if let EditorAction::SidechainRoute {
+            input_bus_index,
+            source_channel_id,
+        } = action
+        {
+            self.next_sidechain_request_id = self.next_sidechain_request_id.wrapping_add(1).max(1);
+            let request_id = self.next_sidechain_request_id;
+            let Some(editor) = self.editors.get_mut(&window_id) else {
+                return;
+            };
+            let instance_id = editor.instance_id.clone();
+            if !editor.begin_sidechain_request(
+                request_id,
+                input_bus_index,
+                source_channel_id.clone(),
+            ) {
+                return;
+            }
+            if self
+                .host_events
+                .try_send(HostEvent::PluginSidechainRouteRequested {
+                    request_id,
+                    instance_id,
+                    input_bus_index,
+                    source_channel_id,
+                })
+                .is_err()
+            {
+                editor.resolve_sidechain_request(
+                    request_id,
+                    false,
+                    Some("The host event queue is busy; try again.".to_owned()),
+                );
+            }
+            return;
+        }
         if matches!(action, EditorAction::PreferenceChanged(_)) {
             self.close_editor_menu(window_id, false);
         }

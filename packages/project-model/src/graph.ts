@@ -53,6 +53,24 @@ function pluginById(graph: ProjectGraphSnapshot, id: string): PluginInstanceStat
   return plugin
 }
 
+function sidechainRoutesFromChannel(
+  graph: ProjectGraphSnapshot,
+  channelId: string,
+  excludingPluginIds: ReadonlySet<string> = new Set()
+): ProjectCommand[] {
+  return graph.plugins
+    .filter(
+      (plugin) =>
+        !excludingPluginIds.has(plugin.id) &&
+        plugin.sidechainInputs.some((route) => route.sourceChannelId === channelId)
+    )
+    .map((plugin) => ({
+      type: "update-plugin" as const,
+      pluginId: plugin.id,
+      patch: { sidechainInputs: structuredClone(plugin.sidechainInputs) }
+    }))
+}
+
 function midiClipById(graph: ProjectGraphSnapshot, id: string): MidiClipState {
   const clip = graph.midiClips.find((candidate) => candidate.id === id)
   if (!clip) throw new Error(`MIDI clip '${id}' was not found`)
@@ -137,6 +155,10 @@ export function inverseFor(graph: ProjectGraphSnapshot, command: ProjectCommand)
       const plugins = graph.plugins
         .filter((plugin) => plugin.channelId === channel.id)
         .map<ProjectCommand>((plugin) => ({ type: "create-plugin", plugin }))
+      const pluginIds = new Set(
+        graph.plugins.filter((plugin) => plugin.channelId === channel.id).map((plugin) => plugin.id)
+      )
+      const sidechainRoutes = sidechainRoutesFromChannel(graph, channel.id, pluginIds)
       const midiClips = graph.midiClips
         .filter((clip) => clip.trackId === track.id)
         .map<ProjectCommand>((clip) => ({ type: "create-midi-clip", clip }))
@@ -148,6 +170,7 @@ export function inverseFor(graph: ProjectGraphSnapshot, command: ProjectCommand)
           ...sends,
           ...audioClips,
           ...plugins,
+          ...sidechainRoutes,
           ...midiClips
         ]
       }
@@ -189,9 +212,19 @@ export function inverseFor(graph: ProjectGraphSnapshot, command: ProjectCommand)
       const plugins = graph.plugins
         .filter((plugin) => plugin.channelId === channel.id)
         .map<ProjectCommand>((plugin) => ({ type: "create-plugin", plugin }))
+      const pluginIds = new Set(
+        graph.plugins.filter((plugin) => plugin.channelId === channel.id).map((plugin) => plugin.id)
+      )
+      const sidechainRoutes = sidechainRoutesFromChannel(graph, channel.id, pluginIds)
       return {
         type: "batch",
-        commands: [{ type: "create-channel", channel }, ...affectedOutputs, ...sends, ...plugins]
+        commands: [
+          { type: "create-channel", channel },
+          ...affectedOutputs,
+          ...sends,
+          ...plugins,
+          ...sidechainRoutes
+        ]
       }
     }
     case "update-channel": {
@@ -392,6 +425,11 @@ export function applyToGraph(
       }
       next.sends = next.sends.filter((send) => send.sourceChannelId !== command.channelId)
       next.plugins = next.plugins.filter((plugin) => plugin.channelId !== command.channelId)
+      for (const plugin of next.plugins) {
+        plugin.sidechainInputs = plugin.sidechainInputs.filter(
+          (route) => route.sourceChannelId !== command.channelId
+        )
+      }
       break
     }
     case "update-channel":
@@ -775,6 +813,37 @@ export function validateGraph(graph: ProjectGraphSnapshot): void {
     }
     if (!plugin.descriptor.supportedAudioModes.includes(plugin.audioMode)) {
       throw new Error("Plugin audio mode must be supported by its descriptor snapshot")
+    }
+    const sidechainBusIndices = new Set<number>()
+    for (const route of plugin.sidechainInputs) {
+      if (!Number.isSafeInteger(route.inputBusIndex) || route.inputBusIndex < 0) {
+        throw new Error("Plugin side-chain bus indices must be non-negative safe integers")
+      }
+      if (sidechainBusIndices.has(route.inputBusIndex)) {
+        throw new Error("Each plugin aux input bus can have at most one side-chain source")
+      }
+      sidechainBusIndices.add(route.inputBusIndex)
+      const bus = plugin.descriptor.buses.find(
+        (candidate) =>
+          candidate.direction === "input" &&
+          candidate.kind === "aux" &&
+          candidate.index === route.inputBusIndex
+      )
+      if (!bus || (bus.channels !== 1 && bus.channels !== 2)) {
+        throw new Error("Plugin side-chain routes must target an exposed mono or stereo aux bus")
+      }
+      const source = channelById(graph, route.sourceChannelId)
+      const isOrdinaryTrack =
+        source.systemRole === null && (source.kind === "audio" || source.kind === "instrument")
+      if ((!isOrdinaryTrack && source.kind !== "aux") || source.systemRole !== null) {
+        throw new Error(
+          "Plugin side-chain sources must be ordinary Audio, Instrument, or Aux channels"
+        )
+      }
+      if (source.id === channel.id) {
+        throw new Error("A plugin cannot use its own channel as a side-chain source")
+      }
+      edges.get(source.id)!.push(channel.id)
     }
   }
   if (graph.tempoMap.ticksPerQuarter !== 960) {

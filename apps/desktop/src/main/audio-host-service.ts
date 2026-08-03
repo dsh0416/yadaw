@@ -1,6 +1,10 @@
 import { AudioHostDiagnostics } from "./audio-host-diagnostics"
 import { AraCallbackSequenceTracker, drainHostEvents } from "./audio-host-events"
-import type { AraHostCallback, Vst3HostNotification } from "./audio-host-events"
+import type {
+  AraHostCallback,
+  PluginSidechainRouteRequest,
+  Vst3HostNotification
+} from "./audio-host-events"
 import { graphDiff, readCrashMarker } from "./audio-host-graph-client"
 import { AudioHostRecordingClient } from "./audio-host-recording-client"
 import { AudioHostPluginClient } from "./audio-host-plugin-client"
@@ -114,10 +118,14 @@ export class AudioHostService {
   private readonly pendingPreferenceWrites = new Set<Promise<void>>()
   private readonly pendingAraCallbacks = new Set<Promise<void>>()
   private readonly pendingVst3HostNotifications = new Set<Promise<void>>()
+  private readonly pendingSidechainRouteRequests = new Set<Promise<void>>()
   private readonly araCallbackSequences = new AraCallbackSequenceTracker()
   private araCallbackHandler: (callback: AraHostCallback) => void | Promise<void> = () => {}
   private vst3HostNotificationHandler: (
     notification: Vst3HostNotification
+  ) => void | Promise<void> = () => {}
+  private sidechainRouteRequestHandler: (
+    request: PluginSidechainRouteRequest
   ) => void | Promise<void> = () => {}
   private readonly supervisor: AudioHostProcessSupervisor
   private readonly session = new AudioHostSessionCoordinator()
@@ -194,7 +202,8 @@ export class AudioHostService {
       this.pendingPreferenceWrites,
       onEditorClosed,
       (callback) => this.handleAraCallback(callback),
-      (notification) => this.handleVst3HostNotification(notification)
+      (notification) => this.handleVst3HostNotification(notification),
+      (request) => this.handleSidechainRouteRequest(request)
     )
   }
 
@@ -206,6 +215,42 @@ export class AudioHostService {
     handler: (notification: Vst3HostNotification) => void | Promise<void>
   ): void {
     this.vst3HostNotificationHandler = handler
+  }
+
+  setPluginSidechainRouteRequestHandler(
+    handler: (request: PluginSidechainRouteRequest) => void | Promise<void>
+  ): void {
+    this.sidechainRouteRequestHandler = handler
+  }
+
+  async resolvePluginSidechainRoute(
+    requestId: number,
+    instanceId: string,
+    accepted: boolean,
+    warning?: string
+  ): Promise<void> {
+    await this.request({
+      type: "resolve-plugin-sidechain-route",
+      request_id: requestId,
+      instance_id: instanceId,
+      accepted,
+      warning: warning ?? null
+    })
+  }
+
+  private handleSidechainRouteRequest(request: PluginSidechainRouteRequest): void {
+    const pending = Promise.resolve(this.sidechainRouteRequestHandler(request))
+      .catch((error: unknown) => {
+        console.error("Could not commit a VST3 side-chain route", error)
+        return this.resolvePluginSidechainRoute(
+          request.requestId,
+          request.instanceId,
+          false,
+          "Side-chain routing could not be committed."
+        )
+      })
+      .finally(() => this.pendingSidechainRouteRequests.delete(pending))
+    this.pendingSidechainRouteRequests.add(pending)
   }
 
   private handleVst3HostNotification(notification: Vst3HostNotification): void {
@@ -873,6 +918,7 @@ export class AudioHostService {
             descriptor: effect,
             audioMode: "stereo",
             enabled: true,
+            sidechainInputs: [],
             componentState: new Uint8Array(),
             controllerState: new Uint8Array()
           },
@@ -1267,7 +1313,8 @@ export class AudioHostService {
       this.pendingPreferenceWrites,
       this.onEditorClosed,
       (callback) => this.handleAraCallback(callback),
-      (notification) => this.handleVst3HostNotification(notification)
+      (notification) => this.handleVst3HostNotification(notification),
+      (request) => this.handleSidechainRouteRequest(request)
     )
     if (this.client === client) this.client = null
     client.close()
@@ -1275,6 +1322,7 @@ export class AudioHostService {
     await Promise.allSettled([...this.pendingPreferenceWrites])
     await Promise.allSettled([...this.pendingAraCallbacks])
     await Promise.allSettled([...this.pendingVst3HostNotifications])
+    await Promise.allSettled([...this.pendingSidechainRouteRequests])
     this.araCallbackSequences.clear()
     this.publishedGraph = null
     this.audioTransport.resetConnection()
