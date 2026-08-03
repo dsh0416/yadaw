@@ -103,7 +103,7 @@ jobs:
           release_args=(
             --verify-tag
             --generate-notes
-            --title "YADAW $TAG_NAME"
+            --title "Heron $TAG_NAME"
             --draft
           )
 

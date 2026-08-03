@@ -1,8 +1,8 @@
 # Heron Studio
 
-[![CI](https://github.com/dsh0416/heron/actions/workflows/ci.yml/badge.svg)](https://github.com/dsh0416/heron/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/dsh0416/heron/graph/badge.svg)](https://codecov.io/gh/dsh0416/heron)
-[![Latest release](https://img.shields.io/github/v/tag/dsh0416/heron?label=version)](https://github.com/dsh0416/heron/releases/latest)
+[![CI](https://github.com/minori-live/heron/actions/workflows/ci.yml/badge.svg)](https://github.com/minori-live/heron/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/minori-live/heron/graph/badge.svg)](https://codecov.io/gh/minori-live/heron)
+[![Latest release](https://img.shields.io/github/v/tag/minori-live/heron?label=version)](https://github.com/minori-live/heron/releases/latest)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 ![Status](https://img.shields.io/badge/status-experimental-orange)

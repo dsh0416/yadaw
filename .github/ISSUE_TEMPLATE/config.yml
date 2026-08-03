@@ -1,11 +1,11 @@
 blank_issues_enabled: true
 contact_links:
   - name: Contributing guide
-    url: https://github.com/dsh0416/heron/blob/main/CONTRIBUTING.md
+    url: https://github.com/minori-live/heron/blob/main/CONTRIBUTING.md
     about: Toolchain, pull request expectations, and AI-assisted contribution policy.
   - name: Product roadmap
-    url: https://github.com/dsh0416/heron/blob/main/agents/docs/roadmap.md
+    url: https://github.com/minori-live/heron/blob/main/agents/docs/roadmap.md
     about: Check milestones and priorities before proposing large new scope.
   - name: Architecture notes
-    url: https://github.com/dsh0416/heron/blob/main/agents/docs/architecture.md
+    url: https://github.com/minori-live/heron/blob/main/agents/docs/architecture.md
     about: Process boundaries and real-time audio constraints.

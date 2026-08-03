@@ -38,7 +38,7 @@ describe("AboutHeronHost", () => {
 
     const links = [...(dialog?.querySelectorAll<HTMLAnchorElement>("a") ?? [])]
     expect(links.map((link) => link.getAttribute("href"))).toEqual([
-      "https://github.com/dsh0416/heron",
+      "https://github.com/minori-live/heron",
       "https://heron.minori.live/manual/"
     ])
     expect(links.every((link) => link.target === "_blank")).toBe(true)

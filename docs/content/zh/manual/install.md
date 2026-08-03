@@ -11,7 +11,7 @@ Heron 会为每个带标签的发布版本提供 Windows、macOS 与 Linux 安�
 
 ## 下载发布版本
 
-1. 打开 [Heron 发布页面](https://github.com/dsh0416/heron/releases)。
+1. 打开 [Heron 发布页面](https://github.com/minori-live/heron/releases)。
 2. 选择最新的发布版本并展开 **Assets**。
 3. 下载适合你系统的文件：
    - **Windows x64：** `.exe`
@@ -21,7 +21,7 @@ Heron 会为每个带标签的发布版本提供 Windows、macOS 与 Linux 安�
 
 ::: tip 没有可用的发布版本？
 Heron 仍处于实验阶段。如果发布页面还没有可用的安装包，可以按照
-[开发环境指南](https://github.com/dsh0416/heron/blob/main/agents/docs/environment.md)
+[开发环境指南](https://github.com/minori-live/heron/blob/main/agents/docs/environment.md)
 从源码构建。该流程面向贡献者。
 :::
 

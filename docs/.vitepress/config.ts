@@ -132,7 +132,7 @@ export default defineConfig({
         nav: [
           { text: "Manual", link: "/manual/" },
           { text: "Blog", link: "/blog/" },
-          { text: "Releases", link: "https://github.com/dsh0416/heron/releases" }
+          { text: "Releases", link: "https://github.com/minori-live/heron/releases" }
         ],
         sidebar: {
           "/blog/": [
@@ -178,7 +178,7 @@ export default defineConfig({
           ]
         },
         editLink: {
-          pattern: "https://github.com/dsh0416/heron/edit/main/docs/content/:path",
+          pattern: "https://github.com/minori-live/heron/edit/main/docs/content/:path",
           text: "Improve this page"
         },
         outline: {
@@ -207,7 +207,7 @@ export default defineConfig({
         nav: [
           { text: "手册", link: "/zh/manual/" },
           { text: "博客", link: "/blog/" },
-          { text: "下载", link: "https://github.com/dsh0416/heron/releases" }
+          { text: "下载", link: "https://github.com/minori-live/heron/releases" }
         ],
         sidebar: {
           "/zh/manual/": [
@@ -247,7 +247,7 @@ export default defineConfig({
           ]
         },
         editLink: {
-          pattern: "https://github.com/dsh0416/heron/edit/main/docs/content/:path",
+          pattern: "https://github.com/minori-live/heron/edit/main/docs/content/:path",
           text: "改进此页"
         },
         outline: {
@@ -310,6 +310,6 @@ export default defineConfig({
         }
       }
     },
-    socialLinks: [{ icon: "github", link: "https://github.com/dsh0416/heron" }]
+    socialLinks: [{ icon: "github", link: "https://github.com/minori-live/heron" }]
   }
 })

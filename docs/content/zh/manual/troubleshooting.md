@@ -82,7 +82,7 @@ asioTrademark: true
 
 ## 寻求帮助
 
-提交报告前，先搜索现有的 [GitHub issues](https://github.com/dsh0416/heron/issues)。
+提交报告前，先搜索现有的 [GitHub issues](https://github.com/minori-live/heron/issues)。
 请附上：
 
 - 操作系统与 Heron 版本；

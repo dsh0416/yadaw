@@ -12,7 +12,7 @@ release.
 
 ## Download a release
 
-1. Open [Heron Releases](https://github.com/dsh0416/heron/releases).
+1. Open [Heron Releases](https://github.com/minori-live/heron/releases).
 2. Choose the newest release and expand **Assets**.
 3. Download the file for your system:
    - **Windows x64:** `.exe`
@@ -23,7 +23,7 @@ release.
 ::: tip No release listed?
 Heron is experimental. If the Releases page has no published installer yet,
 you can build it from source by following the
-[development environment guide](https://github.com/dsh0416/heron/blob/main/agents/docs/environment.md).
+[development environment guide](https://github.com/minori-live/heron/blob/main/agents/docs/environment.md).
 That process is intended for contributors.
 :::
 

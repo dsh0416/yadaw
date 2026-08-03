@@ -1,7 +1,7 @@
 [vendor]
 name = "Heron Studio"
 id = "live.minori.heron"
-url = "https://github.com/dsh0416/heron"
+url = "https://github.com/minori-live/heron"
 au_manufacturer = "HRON"
 
 [[plugin]]

@@ -39,7 +39,7 @@ Heron 正在积极开发中，暂不建议用于制作会话或现场演出。�
 - English 与简体中文界面，提供深色、浅色与跟随系统主题。
 
 应用中标注为**即将推出**的功能只是占位符，并非已完成的控件。计划中的工作请参阅
-[公开路线图](https://github.com/dsh0416/heron/blob/main/agents/docs/roadmap.md)。
+[公开路线图](https://github.com/minori-live/heron/blob/main/agents/docs/roadmap.md)。
 
 ## 关于本手册
 

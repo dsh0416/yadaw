@@ -88,7 +88,7 @@ audio before moving or deleting the swap directory.
 
 ## Ask for help
 
-Search existing [GitHub issues](https://github.com/dsh0416/heron/issues) before
+Search existing [GitHub issues](https://github.com/minori-live/heron/issues) before
 opening a report. Include:
 
 - operating system and Heron version;

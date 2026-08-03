@@ -42,7 +42,7 @@ The current foundation includes:
 - English and Simplified Chinese interfaces, with dark, light, and system themes.
 
 Features shown as **Soon** in the application are placeholders, not completed
-controls. Follow the [public roadmap](https://github.com/dsh0416/heron/blob/main/agents/docs/roadmap.md)
+controls. Follow the [public roadmap](https://github.com/minori-live/heron/blob/main/agents/docs/roadmap.md)
 for planned work.
 
 ## A note on this manual

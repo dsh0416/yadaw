@@ -14,7 +14,7 @@ const props = defineProps<{
 
 const { t } = useI18n()
 const platformLabel = computed(() => t(`about.platforms.${props.platform}`))
-const projectUrl = "https://github.com/dsh0416/heron"
+const projectUrl = "https://github.com/minori-live/heron"
 const manualUrl = "https://heron.minori.live/manual/"
 </script>
 
