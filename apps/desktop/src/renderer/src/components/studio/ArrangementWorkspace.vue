@@ -7,6 +7,7 @@ import { useProjectStore } from "../../stores/project"
 import { useTransportStore } from "../../stores/transport"
 import { useArrangementViewStore } from "../../stores/arrangementView"
 import { useMixerStore } from "../../stores/mixer"
+import { useMidiInputStore } from "../../stores/midiInput"
 import { usePianoRollStore } from "../../stores/pianoRoll"
 import { useStudioWorkspaceStore } from "../../stores/studioWorkspace"
 import type { MidiClipState, MidiSourceState, ProjectCommand } from "@yadaw/contracts"
@@ -46,6 +47,9 @@ const props = defineProps<{
   recordingId: string | null
   recordingStartedAt: number | null
   recordingStartFrame: number | null
+  recordingStartTick?: number | null
+  recordingAudioTrackIds?: string[]
+  recordingMidiTrackIds?: string[]
   recordingError: string
 }>()
 const { t } = useI18n()
@@ -53,6 +57,7 @@ const projectStore = useProjectStore()
 const transportStore = useTransportStore()
 const viewStore = useArrangementViewStore()
 const mixerStore = useMixerStore()
+const midiInputStore = useMidiInputStore()
 const pianoRollStore = usePianoRollStore()
 const workspaceStore = useStudioWorkspaceStore()
 const { snap: pianoRollSnap } = storeToRefs(pianoRollStore)
@@ -91,8 +96,12 @@ const TEMPO_LANE_HEIGHT = 112
 const GLOBAL_EVENT_LANE_HEIGHT = 64
 const displayMode = computed(() => session.value?.configuration.waveformDisplayMode ?? "separate")
 const recordingDuration = computed(() => {
-  if (liveDurationSeconds.value > 0) return liveDurationSeconds.value
-  return props.recordingStartedAt === null ? 0 : 0.05
+  if (props.recordingStartedAt === null) return 0
+  return Math.max(
+    0.05,
+    liveDurationSeconds.value,
+    playheadSeconds.value - recordingStartSeconds.value
+  )
 })
 const recordingStartSeconds = computed(() =>
   props.recordingStartFrame === null
@@ -100,6 +109,14 @@ const recordingStartSeconds = computed(() =>
     : props.recordingStartFrame / (session.value?.configuration.sampleRate ?? 48_000)
 )
 const recordingTracks = computed(() => {
+  const requestedTrackIds = new Set(props.recordingAudioTrackIds ?? [])
+  if (requestedTrackIds.size > 0) {
+    return mixerStore.audioTracks.filter((channel) =>
+      mixerStore.graph.tracks.some(
+        (track) => track.channelId === channel.id && requestedTrackIds.has(track.id)
+      )
+    )
+  }
   const armed = mixerStore.audioTracks.filter((track) => track.recordArmed)
   if (armed.length > 0) return armed
   return mixerStore.audioTracks
@@ -147,13 +164,49 @@ const liveClips = computed<TimelineClip[]>(() =>
           : []
       })
 )
+const recordingStartTickValue = computed(() =>
+  Math.max(0, Math.floor(props.recordingStartTick ?? 0))
+)
+const liveMidiPreview = computed(() =>
+  props.recordingId === null ? null : (midiInputStore.snapshot.recordingPreview ?? null)
+)
+const recordingPositionTick = computed(() =>
+  Math.max(
+    recordingStartTickValue.value,
+    secondsToTick(mixerStore.graph.tempoMap, playheadSeconds.value),
+    liveMidiPreview.value?.positionTick ?? 0
+  )
+)
+const recordingMidiTrackIdSet = computed(() => {
+  if ((props.recordingMidiTrackIds?.length ?? 0) > 0) {
+    return new Set(props.recordingMidiTrackIds)
+  }
+  return new Set(
+    mixerStore.instrumentTracks
+      .filter((channel) => channel.recordArmed)
+      .flatMap((channel) => {
+        const track = mixerStore.graph.tracks.find(
+          (candidate) => candidate.channelId === channel.id
+        )
+        return track ? [track.id] : []
+      })
+  )
+})
+const liveRecordingEndSeconds = computed(() =>
+  props.recordingId === null
+    ? contentEndSeconds.value
+    : Math.max(
+        recordingStartSeconds.value + recordingDuration.value,
+        tickToSeconds(mixerStore.graph.tempoMap, recordingPositionTick.value)
+      )
+)
 const visibleDuration = computed(() =>
   Math.max(
     timelineDurationSeconds.value,
     ...mixerStore.graph.midiClips.map((clip) =>
       tickToSeconds(mixerStore.graph.tempoMap, clip.startTick + clip.lengthTicks)
     ),
-    (liveClips.value[0]?.endSeconds ?? contentEndSeconds.value) + 2
+    liveRecordingEndSeconds.value + 2
   )
 )
 const { contentWidth, viewportStartSeconds, viewportEndSeconds, handleScroll, handleWheel } =
@@ -642,6 +695,12 @@ function createMidiClip(trackId: string, requestedStartTick: number): void {
                 :snap="pianoRollSnap"
                 :drag-preview="midiDragPreview?.trackId === track.trackId ? midiDragPreview : null"
                 :dragging-clip-id="midiClipDrag?.clipId ?? null"
+                :recording="recordingId !== null && recordingMidiTrackIdSet.has(track.trackId)"
+                :recording-start-tick="recordingStartTickValue"
+                :recording-position-tick="recordingPositionTick"
+                :live-take="
+                  liveMidiPreview?.takes.find((take) => take.trackId === track.trackId) ?? null
+                "
                 @remove="removeMidiClip"
                 @select="selectMidiClip"
                 @open="openMidiClip"

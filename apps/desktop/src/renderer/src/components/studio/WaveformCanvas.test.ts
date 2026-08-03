@@ -87,6 +87,22 @@ describe("WaveformCanvas", () => {
     expect(context.stroke.mock.calls.length).toBeGreaterThan(strokes)
   })
 
+  it("resolves a visible recording color before drawing into the canvas", async () => {
+    const wrapper = mount(WaveformCanvas, {
+      props: {
+        window: peaks,
+        displayMode: "separate",
+        amplitudeScale: 1,
+        loading: false,
+        recording: true
+      }
+    })
+    await nextTick()
+
+    expect(context.strokeStyle).toBe("#ffd2d8")
+    wrapper.unmount()
+  })
+
   it("announces loading and unavailable empty states without fake peaks", async () => {
     const wrapper = mount(WaveformCanvas, {
       props: {

@@ -107,4 +107,44 @@ describe("MidiArrangementTrack", () => {
       wrapper.get<HTMLElement>('[data-testid="midi-clip-drop-preview"]').element.style.width
     ).toBe("120px")
   })
+
+  it("renders the active recording as an in-lane piano-roll preview", () => {
+    const wrapper = mount(MidiArrangementTrack, {
+      props: {
+        trackId: "instrument-1",
+        trackColor: "#73D6A2",
+        clips: [],
+        tempoMap,
+        contentWidth: 1_200,
+        pixelsPerQuarter: 120,
+        trackHeight: 80,
+        selectedClipIds: [],
+        keyboardInsertionTick: 0,
+        dragPreview: null,
+        draggingClipId: null,
+        recording: true,
+        recordingStartTick: 960,
+        recordingPositionTick: 2_880,
+        liveTake: {
+          clipId: "live-clip",
+          trackId: "instrument-1",
+          notes: [
+            {
+              id: 0,
+              startTick: 1_440,
+              endTick: 1_920,
+              channel: 0,
+              key: 64,
+              velocity: 100,
+              active: false
+            }
+          ]
+        }
+      }
+    })
+
+    expect(wrapper.find(".empty-hint").exists()).toBe(false)
+    expect(wrapper.get('[data-testid="midi-recording-preview"]')).toBeDefined()
+    expect(wrapper.findAll(".preview-note")).toHaveLength(1)
+  })
 })

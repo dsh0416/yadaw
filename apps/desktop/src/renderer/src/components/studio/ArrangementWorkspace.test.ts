@@ -157,7 +157,6 @@ describe("ArrangementWorkspace", () => {
         timeSignatureEvents: [{ tick: 0, numerator: 4, denominator: 4 }]
       }
     }
-
     const wrapper = mount(ArrangementWorkspace, {
       props: {
         recordingId: null,
@@ -396,6 +395,16 @@ describe("ArrangementWorkspace", () => {
       }
     }
 
+    const transport = useTransportStore()
+    transport.snapshot = {
+      state: "recording",
+      positionFrames: 48_000,
+      positionTicks: 1_920,
+      sampleRate: 48_000,
+      loopEnabled: false,
+      loopRange: null
+    }
+
     const wrapper = mount(ArrangementWorkspace, {
       props: {
         recordingId: "recording-live",
@@ -409,6 +418,10 @@ describe("ArrangementWorkspace", () => {
     expect(
       wrapper.get('[role="button"][aria-label="Recording New recording"]').attributes("aria-label")
     ).toBe("Recording New recording")
+    expect(
+      wrapper.get<HTMLElement>('[role="button"][aria-label="Recording New recording"]').element
+        .style.width
+    ).toBe("100px")
     expect(wrapper.find('[role="status"]').exists()).toBe(false)
   })
 

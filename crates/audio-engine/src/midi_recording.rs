@@ -1,12 +1,18 @@
-use std::sync::{
-    Arc,
-    atomic::{AtomicU32, AtomicU64, Ordering},
+use std::{
+    collections::{BTreeMap, VecDeque},
+    sync::{
+        Arc,
+        atomic::{AtomicU32, AtomicU64, Ordering},
+    },
 };
 
 use yadaw_dsp_runtime::{
     midi_input::MidiInputMessage,
     midi_journal::{MidiJournalHeader, MidiJournalRecord, MidiJournalWriter},
-    protocol::{MidiRecordingStartConfig, MidiRecordingTakeResult},
+    protocol::{
+        MidiRecordingPreview, MidiRecordingPreviewNote, MidiRecordingStartConfig,
+        MidiRecordingTakePreview, MidiRecordingTakeResult,
+    },
 };
 
 use crate::TransportClockHandle;
@@ -22,6 +28,18 @@ struct ActiveMidiTake {
     writer: MidiJournalWriter,
     event_count: u64,
     dropped_events: u64,
+    next_preview_note_id: u64,
+    preview_notes: Vec<PreviewNote>,
+    open_preview_notes: BTreeMap<(u8, u8), VecDeque<usize>>,
+}
+
+struct PreviewNote {
+    id: u64,
+    start_tick: u64,
+    end_tick: Option<u64>,
+    channel: u8,
+    key: u8,
+    velocity: u8,
 }
 
 pub struct MidiRecordingSession {
@@ -69,6 +87,9 @@ impl MidiRecordingSession {
                 writer,
                 event_count: 0,
                 dropped_events: 0,
+                next_preview_note_id: 0,
+                preview_notes: Vec::new(),
+                open_preview_notes: BTreeMap::new(),
             });
         }
         Ok(Self {
@@ -90,7 +111,7 @@ impl MidiRecordingSession {
         }
         let channel = message.channel();
         let transport_frame = Some(self.position_frames.load(Ordering::Relaxed));
-        let transport_tick = Some(self.position_ticks.load(Ordering::Relaxed));
+        let transport_tick = self.position_ticks.load(Ordering::Relaxed);
         let bytes = message.encode();
         for take in &mut self.takes {
             if take.port_key.is_some_and(|expected| expected != port_key) {
@@ -102,14 +123,49 @@ impl MidiRecordingSession {
             let record = MidiJournalRecord {
                 timestamp_micros,
                 transport_frame,
-                transport_tick,
+                transport_tick: Some(transport_tick),
                 port_key,
                 bytes: bytes.clone(),
             };
             match take.writer.append(&record) {
-                Ok(()) => take.event_count = take.event_count.saturating_add(1),
+                Ok(()) => {
+                    take.event_count = take.event_count.saturating_add(1);
+                    take.observe_preview(transport_tick, message);
+                }
                 Err(_) => take.dropped_events = take.dropped_events.saturating_add(1),
             }
+        }
+    }
+
+    #[must_use]
+    pub fn preview(&self) -> MidiRecordingPreview {
+        let position_tick = self.position_ticks.load(Ordering::Relaxed);
+        MidiRecordingPreview {
+            position_tick,
+            takes: self
+                .takes
+                .iter()
+                .map(|take| MidiRecordingTakePreview {
+                    clip_id: take.clip_id.clone(),
+                    track_id: take.track_id.clone(),
+                    notes: take
+                        .preview_notes
+                        .iter()
+                        .map(|note| MidiRecordingPreviewNote {
+                            id: note.id,
+                            start_tick: note.start_tick,
+                            end_tick: note
+                                .end_tick
+                                .unwrap_or(position_tick)
+                                .max(note.start_tick.saturating_add(1)),
+                            channel: note.channel,
+                            key: note.key,
+                            velocity: note.velocity,
+                            active: note.end_tick.is_none(),
+                        })
+                        .collect(),
+                })
+                .collect(),
         }
     }
 
@@ -129,6 +185,43 @@ impl MidiRecordingSession {
             });
         }
         Ok(results)
+    }
+}
+
+impl ActiveMidiTake {
+    fn observe_preview(&mut self, tick: u64, message: &MidiInputMessage) {
+        match *message {
+            MidiInputMessage::NoteOn(channel, key, velocity) if velocity > 0 => {
+                let index = self.preview_notes.len();
+                self.preview_notes.push(PreviewNote {
+                    id: self.next_preview_note_id,
+                    start_tick: tick,
+                    end_tick: None,
+                    channel,
+                    key,
+                    velocity,
+                });
+                self.next_preview_note_id = self.next_preview_note_id.saturating_add(1);
+                self.open_preview_notes
+                    .entry((channel, key))
+                    .or_default()
+                    .push_back(index);
+            }
+            MidiInputMessage::NoteOn(channel, key, _)
+            | MidiInputMessage::NoteOff(channel, key, _) => {
+                let Some(index) = self
+                    .open_preview_notes
+                    .get_mut(&(channel, key))
+                    .and_then(VecDeque::pop_front)
+                else {
+                    return;
+                };
+                if let Some(note) = self.preview_notes.get_mut(index) {
+                    note.end_tick = Some(tick.max(note.start_tick.saturating_add(1)));
+                }
+            }
+            _ => {}
+        }
     }
 }
 
@@ -328,5 +421,42 @@ mod tests {
         assert_eq!(recover_midi_journal(&path_b).unwrap().records.len(), 1);
         let _ = std::fs::remove_file(path_a);
         let _ = std::fs::remove_file(path_b);
+    }
+
+    #[test]
+    fn preview_pairs_notes_and_extends_active_notes_to_the_transport_position() {
+        let path = temporary_path("preview-notes");
+        let handle = clock(2, 0, 960);
+        let mut session = MidiRecordingSession::start(
+            MidiRecordingStartConfig {
+                takes: vec![MidiRecordingTakeConfig {
+                    path: path.to_string_lossy().into_owned(),
+                    source_id: "source".to_owned(),
+                    clip_id: "clip".to_owned(),
+                    track_id: "track".to_owned(),
+                    port_id: None,
+                    channel: None,
+                }],
+            },
+            handle.clone(),
+        )
+        .unwrap();
+
+        session.observe(1, 1, &MidiInputMessage::NoteOn(0, 60, 100));
+        handle.position_ticks.store(1_200, Ordering::Relaxed);
+        let active = session.preview();
+        assert_eq!(active.position_tick, 1_200);
+        assert_eq!(active.takes[0].notes[0].start_tick, 960);
+        assert_eq!(active.takes[0].notes[0].end_tick, 1_200);
+        assert!(active.takes[0].notes[0].active);
+
+        session.observe(2, 1, &MidiInputMessage::NoteOff(0, 60, 48));
+        handle.position_ticks.store(1_440, Ordering::Relaxed);
+        let released = session.preview();
+        assert_eq!(released.takes[0].notes[0].end_tick, 1_200);
+        assert!(!released.takes[0].notes[0].active);
+
+        let _ = session.stop();
+        let _ = std::fs::remove_file(path);
     }
 }

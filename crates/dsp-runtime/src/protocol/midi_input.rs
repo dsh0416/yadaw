@@ -2,6 +2,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
+use super::MidiRecordingPreview;
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MidiInputPort {
     pub id: String,
@@ -57,5 +59,7 @@ pub struct MidiInputSnapshot {
     pub ports: Vec<MidiInputPort>,
     pub sync: MidiSyncRuntime,
     pub control_events: Vec<MidiControlEvent>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recording_preview: Option<Box<MidiRecordingPreview>>,
     pub captured_at: u64,
 }
