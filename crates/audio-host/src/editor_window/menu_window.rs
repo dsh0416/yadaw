@@ -626,7 +626,8 @@ fn toolbar_menu_layout(request: &ToolbarMenuRequest) -> (Rectangle, usize) {
     let mut anchor = request.anchor;
     let option_count = request.hierarchy.as_ref().map_or(request.options.len(), |nodes| {
         anchor.width = SIDECHAIN_MENU_WIDTH;
-        max_hierarchy_level_len(nodes).saturating_add(1)
+        let header_rows = usize::from(nodes.len() == 1 && !nodes[0].children.is_empty());
+        max_hierarchy_level_len(nodes).saturating_add(header_rows)
     });
     (anchor, option_count)
 }

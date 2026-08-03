@@ -554,6 +554,7 @@ export class PluginCatalogService {
         descriptors.find((descriptor) => descriptor.classId === resolved.classId) ?? resolved
       )
     } catch {
+      this.runtimeBundleProbes.delete(resolved.modulePath);
       // The audio host still owns the authoritative load attempt. A failed
       // isolated capability probe must not make an otherwise loadable project unavailable.
       return resolved
