@@ -24,6 +24,8 @@ and projects. Project compatibility may change before version 1.0.
   [audio recording guide](recording.md).
 - **Working with notes?** Learn about [MIDI clips and the piano roll](midi-and-piano-roll.md).
 - **Building a mix?** Start with [the mixer and routing](mixer-and-routing.md).
+- **Checking hardware or plug-in compatibility?** See
+  [supported backends and plug-in formats](supported-backends.md).
 - **Something is silent or unstable?** Work through [troubleshooting](troubleshooting.md).
 
 ## What is available today

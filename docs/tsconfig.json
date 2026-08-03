@@ -6,5 +6,9 @@
     "moduleResolution": "Bundler",
     "types": ["node", "vitepress/client", "unplugin-fonts/client"]
   },
-  "include": [".vitepress/**/*.ts", ".vitepress/**/*.vue"]
+  "include": [
+    ".vitepress/**/*.ts",
+    ".vitepress/**/*.vue",
+    "../apps/desktop/src/renderer/src/global.d.ts"
+  ]
 }

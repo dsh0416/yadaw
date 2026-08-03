@@ -21,6 +21,8 @@ YADAW 正在积极开发中，暂不建议用于制作会话或现场演出。�
 - **准备录音？**设置好输入，然后按照[音频录音指南](recording.md)操作。
 - **在处理音符？**了解 [MIDI 片段与钢琴卷帘](midi-and-piano-roll.md)。
 - **在搭建混音？**从[混音台与路由](mixer-and-routing.md)开始。
+- **在确认硬件或插件兼容性？**查看
+  [支持的后端与插件格式](supported-backends.md)。
 - **遇到无声或不稳定？**按[故障排除](troubleshooting.md)排查。
 
 ## 目前可用的功能

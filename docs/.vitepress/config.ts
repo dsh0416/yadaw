@@ -82,7 +82,15 @@ export default defineConfig({
   },
   markdown,
   vite: {
-    plugins: [Unfonts(yadawFontsOptions)]
+    define: {
+      __VUE_OPTIONS_API__: true,
+      __VUE_PROD_DEVTOOLS__: false,
+      __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: false
+    },
+    plugins: [Unfonts(yadawFontsOptions)],
+    ssr: {
+      noExternal: ["vue-i18n"]
+    }
   },
   head: [
     ["link", { rel: "icon", href: "/logo.svg", type: "image/svg+xml" }],
@@ -160,6 +168,7 @@ export default defineConfig({
             {
               text: "Reference",
               items: [
+                { text: "Supported backends", link: "/manual/supported-backends" },
                 { text: "Settings and audio devices", link: "/manual/settings" },
                 { text: "Keyboard shortcuts", link: "/manual/keyboard-shortcuts" },
                 { text: "Troubleshooting", link: "/manual/troubleshooting" }
@@ -228,6 +237,7 @@ export default defineConfig({
             {
               text: "参考",
               items: [
+                { text: "支持的后端与插件格式", link: "/zh/manual/supported-backends" },
                 { text: "设置与音频设备", link: "/zh/manual/settings" },
                 { text: "键盘快捷键", link: "/zh/manual/keyboard-shortcuts" },
                 { text: "故障排除", link: "/zh/manual/troubleshooting" }

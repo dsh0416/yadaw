@@ -9,6 +9,8 @@ vstTrademark: true
 Open **Mixer** from the top bar to see every audio, instrument, aux, output, and
 master channel in the project.
 
+<RoutingPlayground />
+
 ## Read a channel strip
 
 Each strip follows the signal from top to bottom:

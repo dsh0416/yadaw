@@ -2,6 +2,7 @@
 import { computed, nextTick, shallowRef, useTemplateRef, watch } from "vue"
 import { storeToRefs } from "pinia"
 import type {
+  ApplicationSettings,
   MeterPeakHold,
   MeterReturnRate,
   MixerChannelMeter,
@@ -21,10 +22,12 @@ import {
 import MixerChannelControls from "./MixerChannelControls.vue"
 import MixerDbScale from "./MixerDbScale.vue"
 import MixerLevelMeter from "./MixerLevelMeter.vue"
+import type { MixerStripDisplayOptions } from "./mixer-strip-display-options"
 
 const props = defineProps<{
   channel: MixerChannelState
   meter: MixerChannelMeter
+  displayOptions?: MixerStripDisplayOptions
 }>()
 const emit = defineEmits<{
   preview: [preview: MixerParameterPreview]
@@ -32,11 +35,23 @@ const emit = defineEmits<{
   resetMeterClips: []
 }>()
 
-const settingsStore = useApplicationSettingsStore()
-const { settings } = storeToRefs(settingsStore)
+const settingsStore = props.displayOptions ? null : useApplicationSettingsStore()
+const settings = settingsStore
+  ? storeToRefs(settingsStore).settings
+  : shallowRef<ApplicationSettings | null>(null)
 const meter = computed(() => props.meter)
-const peakHold = computed<MeterPeakHold>(() => settings.value?.meterPeakHold ?? "800ms")
-const returnRate = computed<MeterReturnRate>(() => settings.value?.meterReturnRate ?? "iec-type-i")
+const peakHold = computed<MeterPeakHold>(
+  () => props.displayOptions?.meterPeakHold ?? settings.value?.meterPeakHold ?? "800ms"
+)
+const returnRate = computed<MeterReturnRate>(
+  () => props.displayOptions?.meterReturnRate ?? settings.value?.meterReturnRate ?? "iec-type-i"
+)
+const softwareMonitoringEnabled = computed(
+  () =>
+    props.displayOptions?.softwareMonitoringEnabled ??
+    settings.value?.softwareMonitoringEnabled ??
+    false
+)
 const meterDisplay = usePeakMeterDisplay({ meter, peakHold, returnRate })
 const gainLabel = computed(() =>
   props.channel.gainDb <= -90 ? "−∞" : `${props.channel.gainDb.toFixed(1)} dB`
@@ -57,7 +72,7 @@ const maximumPeakState = computed(() => ({
 const monitoringAvailable = computed(
   () =>
     (props.channel.kind === "instrument" && props.channel.systemRole === null) ||
-    (settings.value?.softwareMonitoringEnabled === true &&
+    (softwareMonitoringEnabled.value &&
       props.channel.kind === "audio" &&
       props.channel.inputSource === "hardware")
 )

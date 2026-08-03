@@ -370,9 +370,15 @@ importers:
       '@fontsource/barlow-condensed':
         specifier: 'catalog:'
         version: 5.3.0
+      '@yadaw/contracts':
+        specifier: workspace:*
+        version: link:../packages/contracts
       '@yadaw/ui':
         specifier: workspace:*
         version: link:../packages/ui
+      vue-i18n:
+        specifier: ^11.4.8
+        version: 11.4.8(vue@3.5.40(typescript@5.9.3))
     devDependencies:
       '@types/node':
         specifier: 'catalog:'

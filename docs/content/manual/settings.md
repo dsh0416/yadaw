@@ -6,7 +6,8 @@ description: Configure the audio engine, devices, recording, display, and mixer 
 # Settings and audio devices
 
 Application settings apply across projects. Project settings describe the
-current session.
+current session. For the platform compatibility matrix, see
+[Supported backends and plug-in formats](supported-backends.md).
 
 ## Audio engine
 

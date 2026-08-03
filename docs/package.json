@@ -21,6 +21,8 @@
     "@fontsource-variable/inter": "catalog:",
     "@fontsource-variable/noto-sans-sc": "catalog:",
     "@fontsource/barlow-condensed": "catalog:",
-    "@yadaw/ui": "workspace:*"
+    "@yadaw/contracts": "workspace:*",
+    "@yadaw/ui": "workspace:*",
+    "vue-i18n": "^11.4.8"
   }
 }
