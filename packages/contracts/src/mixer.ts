@@ -156,6 +156,8 @@ export interface CompiledAudioGraphNode {
   signalWidth: CompiledAudioGraphSignalWidth
   latencySamples: number
   pluginState: CompiledAudioGraphPluginState | null
+  latencySensitive?: boolean
+  lowLatencyBypassed?: boolean
 }
 
 export interface CompiledAudioGraphEdge {
@@ -172,8 +174,26 @@ export interface CompiledAudioGraphSnapshot {
   graphRevision: number
   buildGeneration: number
   sampleRate: number
+  lowLatencyUnavoidableLatencySamples?: number
+  hasLowLatencyMonitoringPath?: boolean
   nodes: CompiledAudioGraphNode[]
   edges: CompiledAudioGraphEdge[]
+}
+
+export interface LowLatencyModeSnapshot {
+  enabled: boolean
+  targetOutputChannelId: string | null
+  pluginBudgetMs: number
+  effectiveBudgetSamples: number
+  bypassedPluginInstanceIds: string[]
+  unavoidableLatencySamples: number
+  hasMonitoringPath: boolean
+}
+
+export interface LowLatencyModeConfiguration {
+  enabled?: boolean
+  targetOutputChannelId?: string
+  pluginBudgetMs?: number
 }
 
 export type MixerSendPatch = Partial<

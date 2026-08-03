@@ -5,12 +5,14 @@ import { Plus, RotateCcw, RotateCw } from "@lucide/vue"
 import { useGlobalDialog } from "../../composables/useGlobalDialog"
 import { useMixerStore } from "../../stores/mixer"
 import { usePluginStore } from "../../stores/plugins"
+import { useLowLatencyModeStore } from "../../stores/lowLatencyMode"
 import type { PluginSelection } from "../plugins/plugin-audio-mode"
 import MixerChannelStrip from "./MixerChannelStrip.vue"
 import MixerSectionLabels from "./MixerSectionLabels.vue"
 
 const mixerStore = useMixerStore()
 const pluginStore = usePluginStore()
+const lowLatencyModeStore = useLowLatencyModeStore()
 const { confirm } = useGlobalDialog()
 const { t } = useI18n()
 
@@ -174,6 +176,8 @@ async function deleteChannel(channelId: string): Promise<void> {
         :plugin-slot-rows="pluginSlotRows"
         :send-slot-rows="sendSlotRows"
         :selected="channel.id === mixerStore.selectedChannelId"
+        :low-latency-target="channel.id === lowLatencyModeStore.targetOutputChannelId"
+        :low-latency-target-disabled="!lowLatencyModeStore.canConfigure"
         @select="mixerStore.selectedChannelId = $event"
         @preview="mixerStore.preview"
         @update-channel="mixerStore.updateChannel"
@@ -188,6 +192,7 @@ async function deleteChannel(channelId: string): Promise<void> {
         @assign-instrument="assignInstrument"
         @delete-channel="deleteChannel"
         @reset-meter-clips="mixerStore.clearMeterClips"
+        @select-low-latency-output="lowLatencyModeStore.selectOutput"
       />
     </div>
     <p v-if="mixerStore.error" class="mixer-error" role="alert">{{ mixerStore.error }}</p>

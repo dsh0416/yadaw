@@ -12,8 +12,8 @@ import {
   NotebookTabs,
   PanelBottom,
   Pencil,
-  ShieldX,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Zap
 } from "@lucide/vue"
 import type {
   KeySignatureEventState,
@@ -51,6 +51,10 @@ defineProps<{
   metronomeChannel: MixerChannelState | null
   masterChannel: MixerChannelState | null
   masterMeter: MixerChannelMeter
+  lowLatencyModeEnabled?: boolean
+  lowLatencyModeBusy?: boolean
+  lowLatencyModeDisabled?: boolean
+  lowLatencyModeTooltip?: string
 }>()
 const emit = defineEmits<{
   toggleSoundBrowser: []
@@ -68,6 +72,7 @@ const emit = defineEmits<{
   toggleMetronome: []
   previewMaster: [preview: MixerParameterPreview]
   updateMaster: [channelId: string, patch: MixerChannelPatch]
+  toggleLowLatencyMode: []
 }>()
 
 const { t } = useI18n()
@@ -145,17 +150,24 @@ const { t } = useI18n()
       @update-key="emit('updateKey', $event)"
     />
 
-    <div class="control-group placeholder-only tools-group" data-topbar-group="tools">
-      <StudioControlButton :label="t('studio.topbar.lowLatencyMode')" unavailable>
-        <ShieldX :size="15" />
+    <div class="control-group tools-group" data-topbar-group="tools">
+      <StudioControlButton
+        :label="t('studio.topbar.lowLatencyMode')"
+        :tooltip="lowLatencyModeTooltip"
+        :pressed="lowLatencyModeEnabled"
+        :disabled="lowLatencyModeDisabled || lowLatencyModeBusy"
+        tone="success"
+        @activate="emit('toggleLowLatencyMode')"
+      >
+        <Zap :size="15" />
       </StudioControlButton>
-      <StudioControlButton :label="t('studio.topbar.varispeed')" unavailable>
+      <StudioControlButton :label="t('studio.topbar.varispeed')" unavailable compact-hidden>
         <Gauge :size="15" />
       </StudioControlButton>
-      <StudioControlButton :label="t('studio.topbar.tuner')" unavailable>
+      <StudioControlButton :label="t('studio.topbar.tuner')" unavailable compact-hidden>
         <AudioLines :size="15" />
       </StudioControlButton>
-      <StudioControlButton :label="t('studio.topbar.solo')" unavailable>
+      <StudioControlButton :label="t('studio.topbar.solo')" unavailable compact-hidden>
         <span class="letter-control">S</span>
       </StudioControlButton>
     </div>

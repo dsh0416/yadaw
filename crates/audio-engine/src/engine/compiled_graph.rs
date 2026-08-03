@@ -2,6 +2,11 @@ fn compiled_graph_snapshot(
     native: &NativeMixerGraph,
     build_generation: u64,
 ) -> CompiledAudioGraphSnapshot {
+    let low_latency_plan = plan_native_low_latency(native);
+    let low_latency_bypassed = low_latency_plan
+        .bypassed_plugin_instance_ids
+        .iter()
+        .collect::<std::collections::HashSet<_>>();
     fn edge(
         edges: &mut Vec<CompiledGraphEdge>,
         source: &str,
@@ -125,13 +130,20 @@ fn compiled_graph_snapshot(
     }
     let mut channel_latencies = vec![0_u32; native.channels.len()];
     for target in order {
+        let latency_sensitive = low_latency_plan.sensitive_channels[target];
         let main_arrival = input_edges[target]
             .iter()
             .filter_map(|edge| match edge {
-                DiagnosticInputEdge::Main(source) => Some(channel_latencies[*source]),
+                DiagnosticInputEdge::Main(source)
+                    if !latency_sensitive || low_latency_plan.sensitive_channels[*source] =>
+                {
+                    Some(channel_latencies[*source])
+                }
+                DiagnosticInputEdge::Main(_) => None,
                 DiagnosticInputEdge::Send(send) => native
                     .sends
                     .get(*send)
+                    .filter(|_| !latency_sensitive)
                     .map(|send| channel_latencies[send.source_index as usize]),
                 DiagnosticInputEdge::Sidechain { .. } => None,
             })
@@ -140,8 +152,13 @@ fn compiled_graph_snapshot(
         for edge in &input_edges[target] {
             match edge {
                 DiagnosticInputEdge::Main(source) => {
-                    channel_output_delays[*source] = main_arrival
-                        .saturating_sub(channel_latencies[*source]);
+                    channel_output_delays[*source] = if latency_sensitive
+                        && low_latency_plan.sensitive_channels[*source]
+                    {
+                        0
+                    } else {
+                        main_arrival.saturating_sub(channel_latencies[*source])
+                    };
                 }
                 DiagnosticInputEdge::Send(send) => {
                     if let Some(source) = native.sends.get(*send) {
@@ -163,12 +180,16 @@ fn compiled_graph_snapshot(
             (if plugin.role == "instrument" { 0 } else { 1 }, plugin.slot_order)
         });
         for (plugin_index, plugin) in plugins {
-            let convergence = plugin
-                .aux_input_buses
-                .iter()
-                .filter_map(|bus| bus.source_index)
-                .map(|source| channel_latencies[source as usize])
-                .fold(slot_arrival, u32::max);
+            let convergence = if latency_sensitive {
+                slot_arrival
+            } else {
+                plugin
+                    .aux_input_buses
+                    .iter()
+                    .filter_map(|bus| bus.source_index)
+                    .map(|source| channel_latencies[source as usize])
+                    .fold(slot_arrival, u32::max)
+            };
             main_slot_delays.insert(plugin_index, convergence.saturating_sub(slot_arrival));
             for bus in &plugin.aux_input_buses {
                 if let Some(source) = bus.source_index {
@@ -178,7 +199,12 @@ fn compiled_graph_snapshot(
                     );
                 }
             }
-            slot_arrival = convergence.saturating_add(plugin.latency_samples);
+            let latency = if low_latency_bypassed.contains(&plugin.instance_id) {
+                0
+            } else {
+                plugin.latency_samples
+            };
+            slot_arrival = convergence.saturating_add(latency);
         }
         channel_latencies[target] = slot_arrival;
     }
@@ -217,6 +243,8 @@ fn compiled_graph_snapshot(
             signal_width: width,
             latency_samples: 0,
             plugin_state: None,
+            latency_sensitive: low_latency_plan.sensitive_channels[channel_index],
+            low_latency_bypassed: false,
         });
 
         let mut previous = source_id;
@@ -242,6 +270,8 @@ fn compiled_graph_snapshot(
                     signal_width: width,
                     latency_samples: main_delay,
                     plugin_state: None,
+                    latency_sensitive: low_latency_plan.sensitive_channels[channel_index],
+                    low_latency_bypassed: false,
                 });
                 edge(
                     &mut edges,
@@ -269,6 +299,8 @@ fn compiled_graph_snapshot(
                     signal_width: required,
                     latency_samples: 0,
                     plugin_state: None,
+                    latency_sensitive: low_latency_plan.sensitive_channels[channel_index],
+                    low_latency_bypassed: false,
                 });
                 edge(
                     &mut edges,
@@ -303,6 +335,8 @@ fn compiled_graph_snapshot(
                 signal_width: plugin_output_width(plugin.audio_mode),
                 latency_samples: plugin.latency_samples,
                 plugin_state: Some(plugin_state),
+                latency_sensitive: low_latency_plan.sensitive_channels[channel_index],
+                low_latency_bypassed: low_latency_bypassed.contains(&plugin.instance_id),
             });
             edge(
                 &mut edges,
@@ -314,7 +348,7 @@ fn compiled_graph_snapshot(
             previous = plugin_id;
             width = plugin_output_width(plugin.audio_mode);
 
-            if plugin.latency_samples > 0 {
+            if plugin.latency_samples > 0 && !low_latency_bypassed.contains(&plugin.instance_id) {
                 let delay_id = format!("delay:{}", plugin.instance_id);
                 nodes.push(CompiledGraphNode {
                     id: delay_id.clone(),
@@ -330,6 +364,8 @@ fn compiled_graph_snapshot(
                     signal_width: width,
                     latency_samples: plugin.latency_samples,
                     plugin_state: None,
+                    latency_sensitive: low_latency_plan.sensitive_channels[channel_index],
+                    low_latency_bypassed: low_latency_bypassed.contains(&plugin.instance_id),
                 });
                 edge(
                     &mut edges,
@@ -353,6 +389,8 @@ fn compiled_graph_snapshot(
                 signal_width: CompiledGraphSignalWidth::Stereo,
                 latency_samples: 0,
                 plugin_state: None,
+                latency_sensitive: low_latency_plan.sensitive_channels[channel_index],
+                low_latency_bypassed: false,
             });
             edge(
                 &mut edges,
@@ -380,6 +418,8 @@ fn compiled_graph_snapshot(
             signal_width: width,
             latency_samples: 0,
             plugin_state: None,
+            latency_sensitive: low_latency_plan.sensitive_channels[channel_index],
+            low_latency_bypassed: false,
         });
         edge(
             &mut edges,
@@ -403,6 +443,8 @@ fn compiled_graph_snapshot(
                 signal_width: CompiledGraphSignalWidth::Stereo,
                 latency_samples: channel_output_delays[channel_index],
                 plugin_state: None,
+                latency_sensitive: low_latency_plan.sensitive_channels[channel_index],
+                low_latency_bypassed: false,
             });
             edge(
                 &mut edges,
@@ -460,6 +502,8 @@ fn compiled_graph_snapshot(
             signal_width: CompiledGraphSignalWidth::Stereo,
             latency_samples: 0,
             plugin_state: None,
+            latency_sensitive: false,
+            low_latency_bypassed: false,
         });
         if let Some(source) = native.channels.get(send.source_index as usize) {
             edge(
@@ -484,6 +528,8 @@ fn compiled_graph_snapshot(
                 signal_width: CompiledGraphSignalWidth::Stereo,
                 latency_samples: send_delays[send_index],
                 plugin_state: None,
+                latency_sensitive: false,
+                low_latency_bypassed: false,
             });
             edge(
                 &mut edges,
@@ -548,6 +594,8 @@ fn compiled_graph_snapshot(
                     signal_width: CompiledGraphSignalWidth::Stereo,
                     latency_samples: delay,
                     plugin_state: None,
+                    latency_sensitive: false,
+                    low_latency_bypassed: false,
                 });
                 edge(
                     &mut edges,
@@ -579,6 +627,8 @@ fn compiled_graph_snapshot(
         graph_revision: native.generation,
         build_generation,
         sample_rate: native.sample_rate,
+        low_latency_unavoidable_latency_samples: low_latency_plan.unavoidable_latency_samples,
+        has_low_latency_monitoring_path: low_latency_plan.has_monitoring_path,
         nodes,
         edges,
     }

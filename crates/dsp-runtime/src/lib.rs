@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 pub mod block;
+pub mod low_latency;
 pub mod midi;
 pub mod midi_input;
 pub mod midi_journal;

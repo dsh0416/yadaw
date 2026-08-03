@@ -10,6 +10,7 @@ import { cloneGraph, validateGraph } from "@heron/project-model"
 import { AssetMaterializer } from "./asset-materializer"
 import type { ProjectAssetReader } from "./asset-materializer"
 import { AudioGraphCompiler } from "./audio-graph-compiler"
+import type { RuntimeLatencyPolicy } from "./audio-graph-compiler"
 import type { AudioHostService } from "./audio-host-service"
 import type { PreparedGraphDeployment } from "./audio-host-graph-transactions"
 import type { ApplicationSettingsStore } from "./application-settings"
@@ -19,6 +20,12 @@ export interface PreparedProjectGraph {
   graph: ProjectGraphSnapshot
   revision: number
   native: PreparedGraphDeployment | null
+}
+
+export interface GraphPublicationOptions {
+  softwareMonitoringOverride?: boolean
+  latencyPolicy?: RuntimeLatencyPolicy
+  awaitPublication?: boolean
 }
 
 export class AudioGraphPublisher {
@@ -45,14 +52,18 @@ export class AudioGraphPublisher {
     meta: RpcRequestMeta,
     projectGraph: ProjectGraphRef,
     source: ProjectGraphSnapshot,
-    assetSource?: ProjectAssetReader
+    assetSource?: ProjectAssetReader,
+    options: GraphPublicationOptions = {}
   ): Promise<RpcResult<PreparedProjectGraph>> {
     const graph = this.resolve(source)
     validateGraph(graph)
     const softwareMonitoringEnabled =
       (await this.settings?.get())?.softwareMonitoringEnabled ?? false
     const paths = await this.assets.materialize(graph, assetSource)
-    const runtimeGraph = this.compiler.compile(graph, paths, softwareMonitoringEnabled)
+    const runtimeGraph = this.compiler.compile(graph, paths, {
+      softwareMonitoringEnabled,
+      latencyPolicy: options.latencyPolicy ?? { type: "normal" }
+    })
     this.revision += 1
     if (!this.audioHost) {
       return rpcSuccess(
@@ -129,17 +140,43 @@ export class AudioGraphPublisher {
 
   async publish(
     source: ProjectGraphSnapshot,
-    softwareMonitoringOverride?: boolean,
-    awaitPublication = false
+    input: GraphPublicationOptions | boolean = {},
+    legacyAwaitPublication = false
   ): Promise<ProjectGraphSnapshot> {
+    const options: GraphPublicationOptions =
+      typeof input === "boolean"
+        ? { softwareMonitoringOverride: input, awaitPublication: legacyAwaitPublication }
+        : input
     const graph = this.resolve(source)
     validateGraph(graph)
     const softwareMonitoringEnabled =
-      softwareMonitoringOverride ?? (await this.settings?.get())?.softwareMonitoringEnabled ?? false
+      options.softwareMonitoringOverride ??
+      (await this.settings?.get())?.softwareMonitoringEnabled ??
+      false
     const paths = await this.assets.materialize(graph)
-    const runtimeGraph = this.compiler.compile(graph, paths, softwareMonitoringEnabled)
+    const runtimeGraph = this.compiler.compile(graph, paths, {
+      softwareMonitoringEnabled,
+      latencyPolicy: options.latencyPolicy ?? { type: "normal" }
+    })
     this.revision += 1
-    await this.audioHost?.loadGraph(this.revision, graph, runtimeGraph, awaitPublication)
+    await this.audioHost?.loadGraph(
+      this.revision,
+      graph,
+      runtimeGraph,
+      options.awaitPublication ?? false
+    )
     return graph
+  }
+
+  compiledAudioGraphSnapshot() {
+    return this.audioHost?.compiledAudioGraphSnapshot() ?? Promise.resolve(null)
+  }
+
+  async lowLatencyPluginBudgetMs(): Promise<number> {
+    return (await this.settings?.get())?.lowLatencyPluginBudgetMs ?? 5
+  }
+
+  async setLowLatencyPluginBudgetMs(value: number): Promise<void> {
+    await this.settings?.setLowLatencyPluginBudgetMs(value)
   }
 }

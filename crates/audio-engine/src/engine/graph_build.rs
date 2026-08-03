@@ -10,6 +10,51 @@ fn build_mixer_runtime(
     transport
         .sample_rate
         .store(native.sample_rate, Ordering::Relaxed);
+    let low_latency_plan = match &native.latency_policy {
+        NativeLatencyPolicy::Normal => LowLatencyPlan {
+            sensitive_channels: vec![false; native.channels.len()],
+            ..LowLatencyPlan::default()
+        },
+        NativeLatencyPolicy::LowLatency {
+            target_output_index,
+            plugin_budget_samples,
+        } => plan_low_latency(
+            &native
+                .channels
+                .iter()
+                .map(|channel| LowLatencyChannel {
+                    output: channel.output_index.map(|index| index as usize),
+                    input_buses: if channel.input_source.as_deref() == Some("bus") {
+                        channel.input_channels.clone()
+                    } else {
+                        Vec::new()
+                    },
+                    output_bus: channel.output_bus,
+                    monitored: channel.input_monitoring
+                        && (channel.kind == "instrument"
+                            || channel.input_source.as_deref() == Some("hardware")),
+                })
+                .collect::<Vec<_>>(),
+            &native
+                .plugins
+                .iter()
+                .map(|plugin| LowLatencyPlugin {
+                    instance_id: plugin.instance_id.clone(),
+                    channel: plugin.channel_index as usize,
+                    slot_order: plugin.slot_order,
+                    latency_samples: plugin.latency_samples,
+                    instrument: plugin.role == "instrument",
+                })
+                .collect::<Vec<_>>(),
+            *target_output_index as usize,
+            *plugin_budget_samples,
+        ),
+    };
+    let low_latency_bypassed = low_latency_plan
+        .bypassed_plugin_instance_ids
+        .iter()
+        .cloned()
+        .collect::<std::collections::HashSet<_>>();
     let input_meter_routes = native
         .channels
         .iter()
@@ -289,6 +334,7 @@ fn build_mixer_runtime(
             Some(tail) => maximum_tail = maximum_tail.saturating_add(u64::from(tail)),
             None => has_infinite_tail = true,
         }
+        let is_low_latency_bypassed = low_latency_bypassed.contains(&plugin.instance_id);
         plugins_by_channel[channel_index].push(LivePlugin {
             instance_id: plugin.instance_id,
             processor: plugin.processor,
@@ -296,6 +342,7 @@ fn build_mixer_runtime(
             enabled: plugin.enabled,
             is_instrument,
             latency_samples: plugin.latency_samples,
+            low_latency_bypassed: is_low_latency_bypassed,
             main_delay: StereoDelayLine::new(0),
             bypass_delay: StereoDelayLine::new(plugin.latency_samples as usize),
             marker_index,
@@ -368,20 +415,34 @@ fn build_mixer_runtime(
     let mut channel_latencies = vec![0_u32; channels.len()];
     let processing_order = graph.processing_order().to_vec();
     for target in processing_order {
+        let latency_sensitive = low_latency_plan.sensitive_channels[target];
         let main_arrival = input_edges[target]
             .iter()
-            .map(|edge| match edge {
-                InputEdge::Main(source) => channel_latencies[*source],
-                InputEdge::Send(send) => {
-                    channel_latencies[native.sends[*send].source_index as usize]
+            .filter_map(|edge| match edge {
+                InputEdge::Main(source)
+                    if !latency_sensitive || low_latency_plan.sensitive_channels[*source] =>
+                {
+                    Some(channel_latencies[*source])
                 }
+                InputEdge::Send(send) => {
+                    (!latency_sensitive).then_some(
+                        channel_latencies[native.sends[*send].source_index as usize],
+                    )
+                }
+                InputEdge::Main(_) => None,
             })
             .max()
             .unwrap_or(0);
         for edge in &input_edges[target] {
             match *edge {
                 InputEdge::Main(source) => {
-                    let delay = main_arrival.saturating_sub(channel_latencies[source]) as usize;
+                    let delay = if latency_sensitive
+                        && low_latency_plan.sensitive_channels[source]
+                    {
+                        0
+                    } else {
+                        main_arrival.saturating_sub(channel_latencies[source]) as usize
+                    };
                     graph
                         .set_channel_output_delay(source, delay)
                         .map_err(|error| invalid_config(error.to_string()))?;
@@ -397,11 +458,15 @@ fn build_mixer_runtime(
         }
         let mut slot_arrival = main_arrival;
         for plugin in &mut plugins_by_channel[target] {
-            let convergence = plugin
-                .aux_inputs
-                .iter()
-                .map(|input| channel_latencies[input.source_index])
-                .fold(slot_arrival, u32::max);
+            let convergence = if latency_sensitive {
+                slot_arrival
+            } else {
+                plugin
+                    .aux_inputs
+                    .iter()
+                    .map(|input| channel_latencies[input.source_index])
+                    .fold(slot_arrival, u32::max)
+            };
             plugin.main_delay = StereoDelayLine::new(
                 convergence.saturating_sub(slot_arrival) as usize,
             );
@@ -410,8 +475,13 @@ fn build_mixer_runtime(
                     convergence.saturating_sub(channel_latencies[input.source_index]) as usize,
                 );
             }
+            let effective_latency = if plugin.low_latency_bypassed {
+                0
+            } else {
+                plugin.latency_samples
+            };
             slot_arrival = convergence
-                .checked_add(plugin.latency_samples)
+                .checked_add(effective_latency)
                 .ok_or_else(|| invalid_config("plugin latency exceeds the supported range"))?;
         }
         channel_latencies[target] = slot_arrival;

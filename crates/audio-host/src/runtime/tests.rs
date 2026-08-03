@@ -310,6 +310,7 @@ mod tests {
     fn empty_live_graph() -> LiveMixerGraph {
         LiveMixerGraph {
             sample_rate: 48_000,
+            latency_policy: LiveLatencyPolicy::Normal,
             channels: vec![],
             sends: vec![],
             clips: vec![],
@@ -363,6 +364,7 @@ mod tests {
         engine::NativeMixerGraph {
             generation,
             sample_rate: 48_000,
+            latency_policy: engine::NativeLatencyPolicy::Normal,
             channels: vec![
                 NativeMixerChannel {
                     id: "audio".into(),

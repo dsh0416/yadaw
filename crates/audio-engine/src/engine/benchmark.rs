@@ -191,6 +191,7 @@ fn benchmark_graph(
     NativeMixerGraph {
         generation: 1,
         sample_rate: BENCHMARK_SAMPLE_RATE,
+        latency_policy: NativeLatencyPolicy::Normal,
         channels,
         sends,
         clips: Vec::new(),

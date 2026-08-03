@@ -156,6 +156,7 @@ export default defineConfig({
                 { text: "The studio workspace", link: "/manual/studio-workspace" },
                 { text: "Tracks and clips", link: "/manual/tracks-and-clips" },
                 { text: "Record audio", link: "/manual/recording" },
+                { text: "Low Latency Mode", link: "/manual/low-latency-mode" },
                 { text: "MIDI and piano roll", link: "/manual/midi-and-piano-roll" }
               ]
             },
@@ -225,6 +226,7 @@ export default defineConfig({
                 { text: "工作室界面", link: "/zh/manual/studio-workspace" },
                 { text: "轨道与片段", link: "/zh/manual/tracks-and-clips" },
                 { text: "录制音频", link: "/zh/manual/recording" },
+                { text: "低延迟模式", link: "/zh/manual/low-latency-mode" },
                 { text: "MIDI 与钢琴卷帘", link: "/zh/manual/midi-and-piano-roll" }
               ]
             },

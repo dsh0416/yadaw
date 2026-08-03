@@ -66,6 +66,12 @@ Recording settings control software monitoring, capture format, and the swap
 directory used for recoverable in-progress takes. Put the swap directory on a
 drive with enough free space and reliable write performance.
 
+The low-latency plug-in budget is 5 ms by default and accepts whole values from
+0–50 ms. Moving the slider is local; releasing it publishes at most one graph
+change. This budget covers plug-in and PDC graph latency, not device buffers,
+ADC/DAC, sample-rate conversion, or input-ring latency. For its effect on live
+paths, see [Low Latency Mode](low-latency-mode.md).
+
 ## Display
 
 Choose:

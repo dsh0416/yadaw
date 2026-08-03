@@ -250,6 +250,16 @@ fn live_graph(
     Ok(engine::NativeMixerGraph {
         generation,
         sample_rate: value.sample_rate,
+        latency_policy: match &value.latency_policy {
+            LiveLatencyPolicy::Normal => engine::NativeLatencyPolicy::Normal,
+            LiveLatencyPolicy::LowLatency {
+                target_output_channel_id,
+                plugin_budget_samples,
+            } => engine::NativeLatencyPolicy::LowLatency {
+                target_output_index: channel_index(target_output_channel_id)?,
+                plugin_budget_samples: *plugin_budget_samples,
+            },
+        },
         channels,
         sends,
         clips,

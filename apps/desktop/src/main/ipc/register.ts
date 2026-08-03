@@ -4,6 +4,7 @@ import type { ApplicationServices, IpcHandlerContext } from "./context"
 import { registerAudioHandlers } from "./audio-handlers"
 import { registerDiagnosticHandlers } from "./diagnostic-handlers"
 import { registerMidiHandlers } from "./midi-handlers"
+import { registerLowLatencyHandlers } from "./low-latency-handlers"
 import { registerMixerHandlers } from "./mixer-handlers"
 import { registerPluginHandlers } from "./plugin-handlers"
 import { registerProjectHandlers } from "./project-handlers"
@@ -77,6 +78,7 @@ export function registerIpcHandlers(services: ApplicationServices): void {
   registerMixerHandlers(context)
   registerPluginHandlers(context)
   registerMidiHandlers(context)
+  registerLowLatencyHandlers(context)
   registerTransportHandlers(context)
   registerDiagnosticHandlers(context)
   registerSettingsRpcHandlers(context)

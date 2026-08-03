@@ -139,7 +139,10 @@ describe("AudioGraphPublisher", () => {
       ok: true,
       value: { revision: 1, native: null }
     })
-    expect(compiler.compile).toHaveBeenCalledWith(expect.anything(), expect.any(Map), true)
+    expect(compiler.compile).toHaveBeenCalledWith(expect.anything(), expect.any(Map), {
+      softwareMonitoringEnabled: true,
+      latencyPolicy: { type: "normal" }
+    })
   })
 
   it("propagates prepare failures from the audio host", async () => {

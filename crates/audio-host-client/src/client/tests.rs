@@ -94,6 +94,7 @@ mod tests {
     fn empty_live_graph() -> LiveMixerGraph {
         LiveMixerGraph {
             sample_rate: 48_000,
+            latency_policy: heron_dsp_runtime::protocol::LiveLatencyPolicy::Normal,
             channels: vec![],
             sends: vec![],
             clips: vec![],

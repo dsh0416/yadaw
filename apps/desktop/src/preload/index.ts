@@ -67,6 +67,9 @@ const api: HeronDesktopApi = {
   systemPerformanceSnapshot: (meta) => invokeRpc(IPC_CHANNELS.systemPerformanceSnapshot, meta),
   runAudioBenchmark: (meta) => invokeRpc(IPC_CHANNELS.audioBenchmarkRun, meta),
   compiledAudioGraphSnapshot: (meta) => invokeRpc(IPC_CHANNELS.compiledAudioGraphSnapshot, meta),
+  lowLatencyModeSnapshot: (meta) => invokeRpc(IPC_CHANNELS.lowLatencyModeSnapshot, meta),
+  configureLowLatencyMode: (meta, configuration) =>
+    invokeRpc(IPC_CHANNELS.lowLatencyModeConfigure, meta, configuration),
   subscribeApplicationCommands: (listener) => {
     const handler = (_event: Electron.IpcRendererEvent, command: Parameters<typeof listener>[0]) =>
       listener(command)

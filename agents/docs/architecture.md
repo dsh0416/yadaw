@@ -274,6 +274,17 @@ dsp-node -> dsp-runtime + dsp-core
 dsp-core -> no JS or Electron dependencies
 ```
 
+## Low-latency monitoring policy
+
+Low Latency Mode is session state, not project state. The main process owns its
+enabled flag, selected logical Output, and application-level plug-in budget on
+the same serial queue as project graph mutations. Every runtime graph carries a
+backward-compatible latency policy. The graph worker discovers effective audio
+and live-MIDI monitoring roots, follows dry/main routes to the selected Output,
+and precomputes sensitive channels, zero-delay temporary bypasses, and PDC
+decisions. Sends and side-chains never make a sensitive main input wait. Audio
+callbacks only consume the published plan and swap graphs at block boundaries.
+
 ## Product roadmap
 
 Product milestones, format compatibility policy, and sequencing live in

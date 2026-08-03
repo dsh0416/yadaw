@@ -77,4 +77,26 @@ describe("RecordingSettings", () => {
     expect(checkbox.element.checked).toBe(true)
     expect(wrapper.get('[role="alert"]').text()).not.toBe("")
   })
+
+  it("uses the design-system slider without a duplicate visible label and commits only on change", async () => {
+    const wrapper = mount(RecordingSettings, { global: { plugins: [createPinia()] } })
+    await vi.waitFor(() => expect(wrapper.text()).toContain("C:/swap"))
+
+    const slider = wrapper.get<HTMLInputElement>('input[type="range"]')
+    expect(wrapper.find(".latency-budget-control .ui-field__label").exists()).toBe(false)
+    expect(slider.attributes("aria-label")).toBe("Low-latency plug-in budget in milliseconds")
+    expect(slider.attributes("aria-valuetext")).toBe("5 ms")
+
+    slider.element.value = "12"
+    await slider.trigger("input")
+    expect(window.heron.updateApplicationSettings).not.toHaveBeenCalledWith(expect.any(Object), {
+      lowLatencyPluginBudgetMs: 12
+    })
+
+    await slider.trigger("change")
+    await flushPromises()
+    expect(window.heron.updateApplicationSettings).toHaveBeenCalledWith(expect.any(Object), {
+      lowLatencyPluginBudgetMs: 12
+    })
+  })
 })

@@ -5,6 +5,7 @@ struct LivePlugin {
     enabled: bool,
     is_instrument: bool,
     latency_samples: u32,
+    low_latency_bypassed: bool,
     main_delay: StereoDelayLine,
     bypass_delay: StereoDelayLine,
     marker_index: usize,
@@ -39,6 +40,13 @@ impl LivePlugin {
             *frame = self.prepare_input(*frame, *width);
         }
         let output_width = self.output_width();
+        if self.low_latency_bypassed {
+            *width = output_width;
+            for frame in frames {
+                *frame = self.passthrough(*frame);
+            }
+            return;
+        }
         if !self.enabled {
             *width = output_width;
             for frame in frames {

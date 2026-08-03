@@ -13,7 +13,7 @@ const props = withDefaults(
     unavailable?: boolean
     disabled?: boolean
     compactHidden?: boolean
-    tone?: "default" | "play" | "record" | "accent"
+    tone?: "default" | "play" | "record" | "accent" | "success"
   }>(),
   {
     tooltip: undefined,
@@ -107,6 +107,9 @@ function activate(event: MouseEvent): void {
 .studio-control-button.tone-accent {
   color: var(--accent-soft);
 }
+.studio-control-button.tone-success {
+  color: var(--text-muted);
+}
 .studio-control-button.tone-play[aria-pressed="true"] {
   color: var(--ui-domain-color-081116);
   background: var(--signal-cyan);
@@ -116,6 +119,14 @@ function activate(event: MouseEvent): void {
   color: var(--ui-domain-color-fff);
   background: var(--record);
   box-shadow: 0 0 12px color-mix(in srgb, var(--record) 45%, transparent);
+}
+.studio-control-button.tone-success[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--ui-color-success) 62%, var(--line-strong));
+  color: var(--ui-color-success);
+  background: color-mix(in srgb, var(--ui-color-success) 14%, var(--surface-active));
+  box-shadow:
+    0 -2px 0 var(--ui-color-success) inset,
+    0 0 10px color-mix(in srgb, var(--ui-color-success) 20%, transparent);
 }
 .studio-control-button.unavailable {
   opacity: 0.48;

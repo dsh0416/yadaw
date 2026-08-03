@@ -97,7 +97,8 @@ Finish and hand off a mix.
 Live half of the product vision.
 
 - [ ] Minimal live set / scene-oriented workflow
-- [ ] Low-latency mode as a product feature
+- [x] Single-Output low-latency monitoring mode with a session-scoped target,
+      plug-in budget, temporary effect bypass, and low-latency PDC policy
 - [ ] Performance tooling usable outside developer diagnostics
 - [ ] Wayland native VST3 editor path (beyond parameter-editor fallback)
 - [ ] Signed / notarized release distribution

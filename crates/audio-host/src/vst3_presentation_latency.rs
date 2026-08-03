@@ -1,8 +1,9 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use heron_dsp_runtime::{
     block::{LatencyNode, plan_latency_compensation},
-    protocol::LiveMixerGraph,
+    low_latency::{LowLatencyChannel, LowLatencyPlugin, plan_low_latency},
+    protocol::{LiveLatencyPolicy, LiveMixerGraph},
 };
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -27,16 +28,74 @@ pub(crate) fn calculate_presentation_latencies(
         .enumerate()
         .map(|(index, channel)| (channel.id.as_str(), index))
         .collect::<HashMap<_, _>>();
+    let plugin_channel_indexes = graph
+        .plugins
+        .iter()
+        .map(|plugin| {
+            channel_indexes
+                .get(plugin.channel_id.as_str())
+                .copied()
+                .ok_or_else(|| {
+                    format!(
+                        "presentation latency references missing channel `{}`",
+                        plugin.channel_id
+                    )
+                })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let low_latency_bypassed = match &graph.latency_policy {
+        LiveLatencyPolicy::Normal => HashSet::new(),
+        LiveLatencyPolicy::LowLatency {
+            target_output_channel_id,
+            plugin_budget_samples,
+        } => {
+            let Some(&target) = channel_indexes.get(target_output_channel_id.as_str()) else {
+                return Err("low-latency presentation target is missing".to_owned());
+            };
+            plan_low_latency(
+                &graph
+                    .channels
+                    .iter()
+                    .map(|channel| LowLatencyChannel {
+                        output: channel
+                            .output_channel_id
+                            .as_deref()
+                            .and_then(|id| channel_indexes.get(id).copied()),
+                        input_buses: if channel.input_source.as_deref() == Some("bus") {
+                            channel.input_channels.clone()
+                        } else {
+                            Vec::new()
+                        },
+                        output_bus: channel.output_bus,
+                        monitored: channel.input_monitoring
+                            && (channel.kind == "instrument"
+                                || channel.input_source.as_deref() == Some("hardware")),
+                    })
+                    .collect::<Vec<_>>(),
+                &graph
+                    .plugins
+                    .iter()
+                    .zip(&plugin_channel_indexes)
+                    .map(|(plugin, &channel)| LowLatencyPlugin {
+                        instance_id: plugin.instance_id.clone(),
+                        channel,
+                        slot_order: plugin.slot_order,
+                        latency_samples: plugin.latency_samples,
+                        instrument: plugin.role == "instrument",
+                    })
+                    .collect::<Vec<_>>(),
+                target,
+                *plugin_budget_samples,
+            )
+            .bypassed_plugin_instance_ids
+            .into_iter()
+            .collect()
+        }
+    };
     let mut plugins_by_channel = (0..graph.channels.len())
         .map(|_| Vec::new())
         .collect::<Vec<Vec<_>>>();
-    for plugin in &graph.plugins {
-        let Some(&channel) = channel_indexes.get(plugin.channel_id.as_str()) else {
-            return Err(format!(
-                "presentation latency references missing channel `{}`",
-                plugin.channel_id
-            ));
-        };
+    for (plugin, &channel) in graph.plugins.iter().zip(&plugin_channel_indexes) {
         plugins_by_channel[channel].push(plugin);
     }
     for plugins in &mut plugins_by_channel {
@@ -56,7 +115,11 @@ pub(crate) fn calculate_presentation_latencies(
                 // `LivePlugin::process_block` routes them through a delay line sized to the
                 // plug-in latency. Keep that delay in both PDC and presentation calculations.
                 total
-                    .checked_add(plugin.latency_samples)
+                    .checked_add(if low_latency_bypassed.contains(&plugin.instance_id) {
+                        0
+                    } else {
+                        plugin.latency_samples
+                    })
                     .ok_or_else(|| "presentation latency exceeds the supported range".to_owned())
             })
         })
@@ -179,8 +242,13 @@ pub(crate) fn calculate_presentation_latencies(
         let mut prior = 0_u32;
         let mut remaining = plugin_latencies[channel];
         for plugin in plugins {
+            let plugin_latency = if low_latency_bypassed.contains(&plugin.instance_id) {
+                0
+            } else {
+                plugin.latency_samples
+            };
             remaining = remaining
-                .checked_sub(plugin.latency_samples)
+                .checked_sub(plugin_latency)
                 .ok_or_else(|| "presentation output latency underflowed".to_owned())?;
             result.insert(
                 plugin.instance_id.clone(),
@@ -195,7 +263,7 @@ pub(crate) fn calculate_presentation_latencies(
                         })?,
                 },
             );
-            prior = prior.checked_add(plugin.latency_samples).ok_or_else(|| {
+            prior = prior.checked_add(plugin_latency).ok_or_else(|| {
                 "presentation input latency exceeds the supported range".to_owned()
             })?;
         }
@@ -304,6 +372,7 @@ mod tests {
     fn graph(channels: Vec<LiveMixerChannel>, plugins: Vec<LivePluginInstance>) -> LiveMixerGraph {
         LiveMixerGraph {
             sample_rate: 48_000,
+            latency_policy: LiveLatencyPolicy::Normal,
             channels,
             sends: Vec::new(),
             clips: Vec::new(),
@@ -394,6 +463,23 @@ mod tests {
                 input_samples: 74,
                 output_samples: 20,
             }
+        );
+    }
+
+    #[test]
+    fn missing_plugin_channel_returns_an_error_in_low_latency_mode() {
+        let mut graph = graph(
+            vec![channel("output", None, None, true)],
+            vec![plugin("orphan", "missing", 0, 64)],
+        );
+        graph.latency_policy = LiveLatencyPolicy::LowLatency {
+            target_output_channel_id: "output".to_owned(),
+            plugin_budget_samples: 0,
+        };
+
+        assert_eq!(
+            calculate_presentation_latencies(&graph, 0, 0),
+            Err("presentation latency references missing channel `missing`".to_owned())
         );
     }
 }

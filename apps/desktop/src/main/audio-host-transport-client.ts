@@ -300,6 +300,8 @@ export class AudioHostTransportClient {
       graphRevision: value.graph_revision,
       buildGeneration: value.build_generation,
       sampleRate: value.sample_rate,
+      lowLatencyUnavoidableLatencySamples: value.low_latency_unavoidable_latency_samples ?? 0,
+      hasLowLatencyMonitoringPath: value.has_low_latency_monitoring_path ?? false,
       nodes: value.nodes.map((node) => ({
         id: node.id,
         kind: node.kind,
@@ -308,7 +310,9 @@ export class AudioHostTransportClient {
         pluginInstanceId: node.plugin_instance_id,
         signalWidth: node.signal_width,
         latencySamples: node.latency_samples,
-        pluginState: node.plugin_state
+        pluginState: node.plugin_state,
+        latencySensitive: node.latency_sensitive,
+        lowLatencyBypassed: node.low_latency_bypassed
       })),
       edges: value.edges.map((edge) => ({
         id: edge.id,

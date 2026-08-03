@@ -31,6 +31,10 @@ avoid XRUNs. Start larger, then reduce it after the signal is stable.
 Software monitoring must be enabled in recording settings, and the track must
 have a hardware input, before input monitoring becomes available.
 
+Use **Low Latency Mode** to prioritize a live monitored main path while recording.
+See [Low Latency Mode](low-latency-mode.md) for target Output selection, the
+plug-in budget, and the alignment trade-offs involved.
+
 ::: warning Feedback
 Do not monitor an open microphone through nearby speakers. Use headphones or
 turn monitoring off to prevent feedback.

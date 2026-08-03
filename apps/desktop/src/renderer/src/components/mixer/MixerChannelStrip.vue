@@ -42,6 +42,8 @@ const props = defineProps<{
   pluginSlotRows: number
   sendSlotRows: number
   selected: boolean
+  lowLatencyTarget?: boolean
+  lowLatencyTargetDisabled?: boolean
   displayOptions?: MixerStripDisplayOptions
 }>()
 
@@ -60,6 +62,7 @@ const emit = defineEmits<{
   assignInstrument: [channelId: string, selection: PluginSelection]
   deleteChannel: [channelId: string]
   resetMeterClips: []
+  selectLowLatencyOutput: [channelId: string]
 }>()
 
 const { t } = useI18n()
@@ -140,7 +143,10 @@ function preview(parameter: "gainDb" | "pan", value: number): void {
       :buses="buses"
       :outputs="outputs"
       :targets="outputTargets"
+      :low-latency-target="lowLatencyTarget"
+      :low-latency-target-disabled="lowLatencyTargetDisabled"
       @update-channel="emit('updateChannel', channel.id, $event)"
+      @select-low-latency-output="emit('selectLowLatencyOutput', channel.id)"
     />
 
     <section class="placeholder-section" data-section="group">

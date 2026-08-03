@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted } from "vue"
 import { useEventListener } from "@vueuse/core"
 import { storeToRefs } from "pinia"
 import { useRouter } from "vue-router"
+import { useI18n } from "vue-i18n"
 import type {
   KeySignatureMode,
   MixerChannelMeter,
@@ -23,6 +24,7 @@ import { useMixerStore } from "../stores/mixer"
 import { useStudioWorkspaceStore } from "../stores/studioWorkspace"
 import { useStudioWorkflowStore } from "../stores/studioWorkflow"
 import { usePianoRollStore } from "../stores/pianoRoll"
+import { useLowLatencyModeStore } from "../stores/lowLatencyMode"
 import MidiImportDialog from "../components/midi/MidiImportDialog.vue"
 import NotesPanel from "../components/notes/NotesPanel.vue"
 import {
@@ -34,6 +36,7 @@ import { replaceKeySignatureEventAtTick } from "../utils/keySignatures"
 import { defaultCycleRange } from "../utils/cycleRange"
 
 const router = useRouter()
+const { t } = useI18n()
 const engineStore = useEngineStore()
 const audioRuntimeStore = useAudioRuntimeStore()
 const {
@@ -48,6 +51,9 @@ const mixerStore = useMixerStore()
 const workspaceStore = useStudioWorkspaceStore()
 const studioWorkflowStore = useStudioWorkflowStore()
 const pianoRollStore = usePianoRollStore()
+const lowLatencyModeStore = useLowLatencyModeStore()
+const { snapshot: lowLatencySnapshot, applying: lowLatencyApplying } =
+  storeToRefs(lowLatencyModeStore)
 const { session, projectAssets } = storeToRefs(projectStore)
 const {
   active: activeRecording,
@@ -74,9 +80,30 @@ const masterMeter = computed(() =>
   mixerStore.master ? mixerStore.meterFor(mixerStore.master.id) : EMPTY_MASTER_METER
 )
 
-onMounted(() => {
+const lowLatencyTargetName = computed(
+  () =>
+    mixerStore.outputs.find(
+      (channel) => channel.id === lowLatencySnapshot.value.targetOutputChannelId
+    )?.name ?? t("studio.lowLatency.noOutput")
+)
+const lowLatencyTooltip = computed(() => {
+  if (lowLatencySnapshot.value.enabled && !lowLatencySnapshot.value.hasMonitoringPath) {
+    return t("studio.lowLatency.noMonitoringPath", {
+      output: lowLatencyTargetName.value,
+      budget: lowLatencySnapshot.value.pluginBudgetMs
+    })
+  }
+  return t("studio.lowLatency.tooltip", {
+    output: lowLatencyTargetName.value,
+    budget: lowLatencySnapshot.value.pluginBudgetMs,
+    count: lowLatencySnapshot.value.bypassedPluginInstanceIds.length
+  })
+})
+
+onMounted(async () => {
   if (!session.value) void router.replace({ name: "welcome" })
-  void engineStore.initialize()
+  await engineStore.initialize()
+  await lowLatencyModeStore.refresh()
   mixerStore.startMetering()
   transportStore.startPolling()
 })
@@ -178,6 +205,7 @@ useEventListener(window, "keydown", handleShortcut)
 onBeforeUnmount(() => {
   transportStore.stopPolling()
   mixerStore.stopMetering()
+  lowLatencyModeStore.reset()
 })
 </script>
 
@@ -213,11 +241,16 @@ onBeforeUnmount(() => {
       :metronome-channel="mixerStore.metronome"
       :master-channel="mixerStore.master"
       :master-meter="masterMeter"
+      :low-latency-mode-enabled="lowLatencySnapshot.enabled"
+      :low-latency-mode-busy="lowLatencyApplying"
+      :low-latency-mode-disabled="!lowLatencyModeStore.canConfigure"
+      :low-latency-mode-tooltip="lowLatencyTooltip"
       @toggle-sound-browser="workspaceStore.toggleSoundBrowser"
       @toggle-notes-panel="workspaceStore.toggleNotesPanel"
       @toggle-mixer-dock="workspaceStore.toggleMixerDock"
       @toggle-piano-roll-dock="workspaceStore.togglePianoRollDock"
       @toggle-recording="toggleRecording"
+      @toggle-low-latency-mode="lowLatencyModeStore.toggle"
       @toggle-playback="transportStore.toggle"
       @go-to-start="transportStore.goToStart"
       @toggle-count-in="transportStore.toggleCountIn"

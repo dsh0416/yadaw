@@ -1,30 +1,57 @@
 <script setup lang="ts">
-import { computed, onMounted } from "vue"
+import { computed, onMounted, shallowRef, watch } from "vue"
 import { useI18n } from "vue-i18n"
 import { storeToRefs } from "pinia"
-import { UiSelect } from "@heron/ui"
+import { UiSelect, UiSlider } from "@heron/ui"
 import type { RecordingBitDepth } from "@heron/contracts"
 import SettingsPage from "../settings/SettingsPage.vue"
 import SettingsSection from "../settings/SettingsSection.vue"
 import { useApplicationSettingsStore } from "../../stores/applicationSettings"
 import { useRecordingStore } from "../../stores/recording"
+import { useLowLatencyModeStore } from "../../stores/lowLatencyMode"
+import { useAudioRuntimeStore } from "../../stores/audioRuntime"
 
 const { t } = useI18n()
 const settingsStore = useApplicationSettingsStore()
 const recordingStore = useRecordingStore()
+const lowLatencyModeStore = useLowLatencyModeStore()
+const audioRuntimeStore = useAudioRuntimeStore()
 const { settings, loading, error, applyingSoftwareMonitoring } = storeToRefs(settingsStore)
 const { pending } = storeToRefs(recordingStore)
 const pendingCount = computed(
   () => pending.value.filter((recording) => !recording.assetExists).length
 )
+const lowLatencyBudgetDraft = shallowRef(5)
+watch(
+  () =>
+    [
+      lowLatencyModeStore.snapshot.pluginBudgetMs,
+      settings.value?.lowLatencyPluginBudgetMs
+    ] as const,
+  ([runtimeBudget, settingBudget]) => {
+    lowLatencyBudgetDraft.value = runtimeBudget ?? settingBudget ?? 5
+  },
+  { immediate: true }
+)
 
 onMounted(async () => {
   if (!settings.value) await settingsStore.load()
   await recordingStore.refreshPending()
+  if (audioRuntimeStore.audioEngineRef) await lowLatencyModeStore.refresh()
 })
 
 function setBitDepth(value: string): void {
   void settingsStore.update({ recordingBitDepth: value as RecordingBitDepth })
+}
+
+async function commitLowLatencyBudget(): Promise<void> {
+  const value = Math.max(0, Math.min(50, Math.round(lowLatencyBudgetDraft.value)))
+  lowLatencyBudgetDraft.value = value
+  const applied = audioRuntimeStore.audioEngineRef
+    ? await lowLatencyModeStore.setPluginBudget(value)
+    : (await settingsStore.update({ lowLatencyPluginBudgetMs: value }), true)
+  if (applied) await settingsStore.load()
+  else lowLatencyBudgetDraft.value = lowLatencyModeStore.snapshot.pluginBudgetMs
 }
 
 function setSoftwareMonitoring(event: Event): void {
@@ -52,6 +79,26 @@ function setSoftwareMonitoring(event: Event): void {
         <button type="button" :disabled="loading" @click="settingsStore.openSwapDirectory">
           {{ t("common.open") }}
         </button>
+      </div>
+    </SettingsSection>
+
+    <SettingsSection
+      :title="t('settings.audio.recording.lowLatencyBudget.title')"
+      :description="t('settings.audio.recording.lowLatencyBudget.description')"
+    >
+      <div class="latency-budget-control">
+        <UiSlider
+          id="low-latency-plugin-budget"
+          v-model="lowLatencyBudgetDraft"
+          :min="0"
+          :max="50"
+          :step="1"
+          :label="t('settings.audio.recording.lowLatencyBudget.ariaLabel')"
+          :value-text="`${lowLatencyBudgetDraft} ms`"
+          :disabled="loading || lowLatencyModeStore.applying"
+          @change="commitLowLatencyBudget"
+        />
+        <output for="low-latency-plugin-budget">{{ lowLatencyBudgetDraft }} ms</output>
       </div>
     </SettingsSection>
 
@@ -164,6 +211,20 @@ function setSoftwareMonitoring(event: Event): void {
   color: var(--text-muted);
   font: var(--ui-type-size-caption) var(--ui-type-family-data);
   letter-spacing: var(--ui-type-tracking-wide);
+}
+.latency-budget-control {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) 56px;
+  align-items: center;
+  width: min(480px, 100%);
+  gap: var(--ui-space-3);
+  color: var(--text-secondary);
+  font-size: var(--ui-type-size-body-compact);
+}
+.latency-budget-control output {
+  color: var(--signal-cyan);
+  font-family: var(--ui-type-family-data);
+  text-align: right;
 }
 
 .recovery-count {

@@ -148,6 +148,7 @@ pub struct NativeMidiClip {
 pub struct NativeMixerGraph {
     pub generation: u64,
     pub sample_rate: u32,
+    pub latency_policy: NativeLatencyPolicy,
     pub channels: Vec<NativeMixerChannel>,
     pub sends: Vec<NativeMixerSend>,
     pub clips: Vec<NativeMixerClip>,
@@ -155,6 +156,60 @@ pub struct NativeMixerGraph {
     pub midi_clips: Vec<NativeMidiClip>,
     pub tempo_events: Vec<TempoEvent>,
     pub time_signature_events: Vec<TimeSignatureEvent>,
+}
+
+#[derive(Clone, Default)]
+pub enum NativeLatencyPolicy {
+    #[default]
+    Normal,
+    LowLatency {
+        target_output_index: u32,
+        plugin_budget_samples: u32,
+    },
+}
+
+fn plan_native_low_latency(native: &NativeMixerGraph) -> LowLatencyPlan {
+    let NativeLatencyPolicy::LowLatency {
+        target_output_index,
+        plugin_budget_samples,
+    } = &native.latency_policy
+    else {
+        return LowLatencyPlan {
+            sensitive_channels: vec![false; native.channels.len()],
+            ..LowLatencyPlan::default()
+        };
+    };
+    plan_low_latency(
+        &native
+            .channels
+            .iter()
+            .map(|channel| LowLatencyChannel {
+                output: channel.output_index.map(|index| index as usize),
+                input_buses: if channel.input_source.as_deref() == Some("bus") {
+                    channel.input_channels.clone()
+                } else {
+                    Vec::new()
+                },
+                output_bus: channel.output_bus,
+                monitored: channel.input_monitoring
+                    && (channel.kind == "instrument"
+                        || channel.input_source.as_deref() == Some("hardware")),
+            })
+            .collect::<Vec<_>>(),
+        &native
+            .plugins
+            .iter()
+            .map(|plugin| LowLatencyPlugin {
+                instance_id: plugin.instance_id.clone(),
+                channel: plugin.channel_index as usize,
+                slot_order: plugin.slot_order,
+                latency_samples: plugin.latency_samples,
+                instrument: plugin.role == "instrument",
+            })
+            .collect::<Vec<_>>(),
+        *target_output_index as usize,
+        *plugin_budget_samples,
+    )
 }
 
 pub struct NativeMixerParameterPreview {

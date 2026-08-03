@@ -207,6 +207,7 @@ mod tests {
         NativeMixerGraph {
             generation,
             sample_rate: 48_000,
+            latency_policy: heron_audio_engine::NativeLatencyPolicy::Normal,
             channels: vec![
                 NativeMixerChannel {
                     id: "audio".into(),

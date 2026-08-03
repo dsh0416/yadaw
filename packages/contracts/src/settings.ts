@@ -35,6 +35,7 @@ export interface ApplicationSettings {
   meterReturnRate: MeterReturnRate
   midiCenterCStandard: MidiCenterCStandard
   softwareMonitoringEnabled: boolean
+  lowLatencyPluginBudgetMs?: number
   midiSync: MidiSyncPreferences
   audioHostRuntime: AudioHostRuntimePreferences
   pluginEditors: Record<string, PluginEditorPreference>
@@ -57,5 +58,6 @@ export type ApplicationSettingsPatch = Partial<
     | "meterPeakHold"
     | "meterReturnRate"
     | "midiCenterCStandard"
+    | "lowLatencyPluginBudgetMs"
   >
 >
