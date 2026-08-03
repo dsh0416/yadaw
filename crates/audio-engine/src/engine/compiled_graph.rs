@@ -1,4 +1,6 @@
-fn compiled_graph_snapshot(
+use super::*;
+
+pub(super) fn compiled_graph_snapshot(
     native: &NativeMixerGraph,
     build_generation: u64,
 ) -> CompiledAudioGraphSnapshot {
@@ -152,13 +154,12 @@ fn compiled_graph_snapshot(
         for edge in &input_edges[target] {
             match edge {
                 DiagnosticInputEdge::Main(source) => {
-                    channel_output_delays[*source] = if latency_sensitive
-                        && low_latency_plan.sensitive_channels[*source]
-                    {
-                        0
-                    } else {
-                        main_arrival.saturating_sub(channel_latencies[*source])
-                    };
+                    channel_output_delays[*source] =
+                        if latency_sensitive && low_latency_plan.sensitive_channels[*source] {
+                            0
+                        } else {
+                            main_arrival.saturating_sub(channel_latencies[*source])
+                        };
                 }
                 DiagnosticInputEdge::Send(send) => {
                     if let Some(source) = native.sends.get(*send) {
@@ -177,7 +178,10 @@ fn compiled_graph_snapshot(
             .filter(|(_, plugin)| plugin.channel_index as usize == target)
             .collect::<Vec<_>>();
         plugins.sort_by_key(|(_, plugin)| {
-            (if plugin.role == "instrument" { 0 } else { 1 }, plugin.slot_order)
+            (
+                if plugin.role == "instrument" { 0 } else { 1 },
+                plugin.slot_order,
+            )
         });
         for (plugin_index, plugin) in plugins {
             let convergence = if latency_sensitive {
@@ -255,7 +259,10 @@ fn compiled_graph_snapshot(
             .filter(|(_, plugin)| plugin.channel_index as usize == channel_index)
             .collect::<Vec<_>>();
         plugins.sort_by_key(|(_, plugin)| {
-            (if plugin.role == "instrument" { 0 } else { 1 }, plugin.slot_order)
+            (
+                if plugin.role == "instrument" { 0 } else { 1 },
+                plugin.slot_order,
+            )
         });
         for (plugin_index, plugin) in plugins {
             let main_delay = main_slot_delays.get(&plugin_index).copied().unwrap_or(0);
@@ -609,7 +616,11 @@ fn compiled_graph_snapshot(
                 format!("channel:{}", source.id)
             };
             edges.push(CompiledGraphEdge {
-                id: format!("{route_source}->effect:{}:{}", plugin.instance_id, edges.len()),
+                id: format!(
+                    "{route_source}->effect:{}:{}",
+                    plugin.instance_id,
+                    edges.len()
+                ),
                 source: route_source,
                 target: format!("effect:{}", plugin.instance_id),
                 kind: CompiledGraphEdgeKind::SidechainRoute,

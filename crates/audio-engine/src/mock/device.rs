@@ -1,10 +1,12 @@
+use super::*;
+
 /// The mock devices the host enumerates.
 ///
 /// A duplex device is offered so the common case matches a real audio
 /// interface and reports a shared clock, while the dedicated capture and
 /// playback devices allow exercising the engine's split-device resampling path.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-enum MockDeviceKind {
+pub(super) enum MockDeviceKind {
     Duplex,
     Input,
     Output,
@@ -54,9 +56,9 @@ impl MockDeviceKind {
 }
 
 /// State shared by every device and stream of a single mock host.
-struct MockBackend {
+pub(super) struct MockBackend {
     /// The time base shared by all streams, so their timestamps are comparable.
-    origin: Instant,
+    pub(super) origin: Instant,
     loopback: Mutex<LoopbackEnds>,
 }
 
@@ -70,7 +72,7 @@ struct LoopbackEnds {
 }
 
 impl MockBackend {
-    fn new() -> Self {
+    pub(super) fn new() -> Self {
         let (producer, consumer) = HeapRb::<LoopbackFrame>::new(LOOPBACK_CAPACITY_FRAMES).split();
         Self {
             origin: Instant::now(),
@@ -81,14 +83,14 @@ impl MockBackend {
         }
     }
 
-    fn claim_loopback_producer(&self) -> Option<HeapProd<LoopbackFrame>> {
+    pub(super) fn claim_loopback_producer(&self) -> Option<HeapProd<LoopbackFrame>> {
         self.loopback
             .lock()
             .ok()
             .and_then(|mut ends| ends.producer.take())
     }
 
-    fn claim_loopback_consumer(&self) -> Option<HeapCons<LoopbackFrame>> {
+    pub(super) fn claim_loopback_consumer(&self) -> Option<HeapCons<LoopbackFrame>> {
         self.loopback
             .lock()
             .ok()
@@ -98,18 +100,18 @@ impl MockBackend {
 
 /// A cpal host that enumerates the mock devices.
 #[derive(Clone)]
-struct MockHost {
+pub(super) struct MockHost {
     backend: Arc<MockBackend>,
 }
 
 impl MockHost {
-    fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self {
             backend: Arc::new(MockBackend::new()),
         }
     }
 
-    fn device(&self, kind: MockDeviceKind) -> MockDevice {
+    pub(super) fn device(&self, kind: MockDeviceKind) -> MockDevice {
         MockDevice {
             kind,
             backend: Arc::clone(&self.backend),
@@ -144,7 +146,7 @@ impl HostTrait for MockHost {
 
 /// A mock capture and/or playback device.
 #[derive(Clone)]
-struct MockDevice {
+pub(super) struct MockDevice {
     kind: MockDeviceKind,
     backend: Arc<MockBackend>,
 }
@@ -199,7 +201,12 @@ fn supported_configs(available: bool) -> Vec<SupportedStreamConfigRange> {
 }
 
 fn default_config() -> SupportedStreamConfig {
-    SupportedStreamConfig::new(CHANNELS, SAMPLE_RATE, supported_buffer_size(), SAMPLE_FORMAT)
+    SupportedStreamConfig::new(
+        CHANNELS,
+        SAMPLE_RATE,
+        supported_buffer_size(),
+        SAMPLE_FORMAT,
+    )
 }
 
 fn unsupported_direction(kind: MockDeviceKind, capture: bool) -> Error {
@@ -309,7 +316,10 @@ impl DeviceTrait for MockDevice {
 /// buffer range, the engine always asks for a fixed size inside it;
 /// [`BufferSize::Default`] resolves to the devices' own default block size for
 /// any other cpal caller.
-fn negotiate_frames(config: &StreamConfig, sample_format: SampleFormat) -> Result<FrameCount, Error> {
+pub(super) fn negotiate_frames(
+    config: &StreamConfig,
+    sample_format: SampleFormat,
+) -> Result<FrameCount, Error> {
     if sample_format != SAMPLE_FORMAT {
         return Err(Error::with_message(
             ErrorKind::UnsupportedConfig,
@@ -330,9 +340,7 @@ fn negotiate_frames(config: &StreamConfig, sample_format: SampleFormat) -> Resul
     }
     match config.buffer_size {
         BufferSize::Default => Ok(DEFAULT_BUFFER_FRAMES),
-        BufferSize::Fixed(frames)
-            if (MIN_BUFFER_FRAMES..=MAX_BUFFER_FRAMES).contains(&frames) =>
-        {
+        BufferSize::Fixed(frames) if (MIN_BUFFER_FRAMES..=MAX_BUFFER_FRAMES).contains(&frames) => {
             Ok(frames)
         }
         BufferSize::Fixed(frames) => Err(Error::with_message(

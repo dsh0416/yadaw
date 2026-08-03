@@ -91,6 +91,11 @@ pub fn host() -> Host {
     Host::from(CustomHost::from_host(MockHost::new()))
 }
 
-include!("mock/device.rs");
-include!("mock/stream.rs");
-include!("mock/tests.rs");
+mod device;
+mod stream;
+
+use device::*;
+use stream::*;
+
+#[cfg(test)]
+mod tests;

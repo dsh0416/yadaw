@@ -1,40 +1,42 @@
-struct RunningAudioEngine {
-    _input_stream: Stream,
-    _output_stream: Stream,
-    metrics: Arc<RuntimeMetrics>,
-    key: AudioEngineKey,
-    recorder: RecorderController,
-    commands: HeapProd<EngineCommand>,
-    retired_mixers: HeapCons<Box<NativeMixerRuntime>>,
-    meter_bank: Arc<MeterBank>,
-    transport: Arc<TransportShared>,
-    input_peaks: Arc<InputPeakBank>,
-    round_trip_latency: Arc<RoundTripLatencyMeasurement>,
+use super::*;
+
+pub(super) struct RunningAudioEngine {
+    pub(super) _input_stream: Stream,
+    pub(super) _output_stream: Stream,
+    pub(super) metrics: Arc<RuntimeMetrics>,
+    pub(super) key: AudioEngineKey,
+    pub(super) recorder: RecorderController,
+    pub(super) commands: HeapProd<EngineCommand>,
+    pub(super) retired_mixers: HeapCons<Box<NativeMixerRuntime>>,
+    pub(super) meter_bank: Arc<MeterBank>,
+    pub(super) transport: Arc<TransportShared>,
+    pub(super) input_peaks: Arc<InputPeakBank>,
+    pub(super) round_trip_latency: Arc<RoundTripLatencyMeasurement>,
 }
 
-struct OutputMixerControl {
-    commands: HeapCons<EngineCommand>,
-    mixer: Option<Box<NativeMixerRuntime>>,
-    retired_mixers: HeapProd<Box<NativeMixerRuntime>>,
+pub(super) struct OutputMixerControl {
+    pub(super) commands: HeapCons<EngineCommand>,
+    pub(super) mixer: Option<Box<NativeMixerRuntime>>,
+    pub(super) retired_mixers: HeapProd<Box<NativeMixerRuntime>>,
 }
 
-struct OutputStreamContext {
-    metrics: Arc<RuntimeMetrics>,
-    mixer_control: OutputMixerControl,
-    round_trip_latency: Arc<RoundTripLatencyMeasurement>,
+pub(super) struct OutputStreamContext {
+    pub(super) metrics: Arc<RuntimeMetrics>,
+    pub(super) mixer_control: OutputMixerControl,
+    pub(super) round_trip_latency: Arc<RoundTripLatencyMeasurement>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct AudioEngineKey {
-    backend: String,
-    input_device_id: String,
-    output_device_id: String,
-    requested_buffer_size: u32,
-    requested_session_sample_rate: Option<u32>,
+pub(super) struct AudioEngineKey {
+    pub(super) backend: String,
+    pub(super) input_device_id: String,
+    pub(super) output_device_id: String,
+    pub(super) requested_buffer_size: u32,
+    pub(super) requested_session_sample_rate: Option<u32>,
 }
 
 impl RunningAudioEngine {
-    fn matches(&self, key: &AudioEngineKey) -> bool {
+    pub(super) fn matches(&self, key: &AudioEngineKey) -> bool {
         self.key.backend == key.backend
             && self.key.input_device_id == key.input_device_id
             && self.key.output_device_id == key.output_device_id
@@ -47,7 +49,7 @@ impl RunningAudioEngine {
             && !self.metrics.faulted.load(Ordering::Relaxed)
     }
 
-    fn reclaim_retired_mixers(&mut self) -> usize {
+    pub(super) fn reclaim_retired_mixers(&mut self) -> usize {
         let mut reclaimed = 0;
         while self.retired_mixers.try_pop().is_some() {
             reclaimed += 1;
@@ -56,7 +58,7 @@ impl RunningAudioEngine {
     }
 }
 
-fn take_pending_mixer(
+pub(super) fn take_pending_mixer(
     owner: &AudioEngine,
     sample_rate: u32,
 ) -> Result<Option<Box<NativeMixerRuntime>>> {
@@ -70,10 +72,10 @@ fn take_pending_mixer(
     Ok(pending.take())
 }
 
-fn audio_error(context: &str, error: impl std::fmt::Display) -> Error {
+pub(super) fn audio_error(context: &str, error: impl std::fmt::Display) -> Error {
     Error::new(Status::GenericFailure, format!("{context}: {error}"))
 }
 
-fn invalid_config(message: impl Into<String>) -> Error {
+pub(super) fn invalid_config(message: impl Into<String>) -> Error {
     Error::new(Status::InvalidArg, message.into())
 }

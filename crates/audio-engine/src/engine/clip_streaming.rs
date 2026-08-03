@@ -1,10 +1,12 @@
-struct StreamingClip {
-    control: Arc<StreamControl>,
-    expected_frame: Option<usize>,
+use super::*;
+
+pub(super) struct StreamingClip {
+    pub(super) control: Arc<StreamControl>,
+    pub(super) expected_frame: Option<usize>,
 }
 
 impl StreamingClip {
-    fn sample_at(&mut self, frame: usize) -> Option<StereoFrame> {
+    pub(super) fn sample_at(&mut self, frame: usize) -> Option<StereoFrame> {
         if self.expected_frame != Some(frame) {
             self.control.generation.fetch_add(1, Ordering::AcqRel);
         }
@@ -43,17 +45,17 @@ impl Drop for StreamingClip {
     }
 }
 
-struct StreamTask {
-    tick: Box<dyn FnMut() -> bool + Send>,
+pub(super) struct StreamTask {
+    pub(super) tick: Box<dyn FnMut() -> bool + Send>,
 }
 
-struct StreamWorkerPool {
-    lanes: Vec<mpsc::SyncSender<StreamTask>>,
-    next_lane: AtomicUsize,
+pub(super) struct StreamWorkerPool {
+    pub(super) lanes: Vec<mpsc::SyncSender<StreamTask>>,
+    pub(super) next_lane: AtomicUsize,
 }
 
 impl StreamWorkerPool {
-    fn global() -> &'static Self {
+    pub(super) fn global() -> &'static Self {
         STREAM_WORKERS.get_or_init(|| {
             let lane_count = thread::available_parallelism()
                 .map(usize::from)
@@ -75,7 +77,7 @@ impl StreamWorkerPool {
         })
     }
 
-    fn submit(&self, task: StreamTask) -> std::result::Result<(), String> {
+    pub(super) fn submit(&self, task: StreamTask) -> std::result::Result<(), String> {
         let lane = self.next_lane.fetch_add(1, Ordering::Relaxed) % self.lanes.len();
         self.lanes[lane]
             .send(task)
@@ -100,23 +102,23 @@ fn stream_worker_lane(receiver: mpsc::Receiver<StreamTask>) {
     }
 }
 
-enum ClipSamples {
+pub(super) enum ClipSamples {
     Memory(Vec<StereoFrame>),
     Streaming(StreamingClip),
 }
 
-struct LoadedClip {
-    channel_index: usize,
-    start_frame: u64,
-    source_offset_frames: usize,
-    length_frames: usize,
-    fade_in_frames: usize,
-    fade_out_frames: usize,
-    samples: ClipSamples,
+pub(super) struct LoadedClip {
+    pub(super) channel_index: usize,
+    pub(super) start_frame: u64,
+    pub(super) source_offset_frames: usize,
+    pub(super) length_frames: usize,
+    pub(super) fade_in_frames: usize,
+    pub(super) fade_out_frames: usize,
+    pub(super) samples: ClipSamples,
 }
 
 impl LoadedClip {
-    fn sample_at(&mut self, relative: usize) -> Option<StereoFrame> {
+    pub(super) fn sample_at(&mut self, relative: usize) -> Option<StereoFrame> {
         let source_frame = self.source_offset_frames.checked_add(relative)?;
         match &mut self.samples {
             ClipSamples::Memory(samples) => samples.get(source_frame).copied(),
@@ -124,7 +126,7 @@ impl LoadedClip {
         }
     }
 
-    fn gain_at(&self, relative: usize) -> f32 {
+    pub(super) fn gain_at(&self, relative: usize) -> f32 {
         let fade_in = if self.fade_in_frames == 0 || relative >= self.fade_in_frames {
             1.0
         } else {

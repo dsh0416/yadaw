@@ -1,7 +1,6 @@
-pub fn decode_clip_audio(
-    path: &str,
-    target_sample_rate: u32,
-) -> Result<Vec<StereoFrame>> {
+use super::*;
+
+pub fn decode_clip_audio(path: &str, target_sample_rate: u32) -> Result<Vec<StereoFrame>> {
     let mut reader =
         WaveReader::open(path).map_err(|error| audio_error("failed to open mixer clip", error))?;
     let format = reader
@@ -58,7 +57,7 @@ pub fn decode_clip_audio(
         .collect())
 }
 
-fn spawn_streaming_clip(
+pub(super) fn spawn_streaming_clip(
     path: String,
     target_sample_rate: u32,
     initial_frame: usize,
@@ -232,7 +231,7 @@ fn spawn_streaming_clip(
     }
 }
 
-fn parse_channel_kind(value: &str) -> Result<ChannelKind> {
+pub(super) fn parse_channel_kind(value: &str) -> Result<ChannelKind> {
     match value {
         "audio" => Ok(ChannelKind::Audio),
         "instrument" => Ok(ChannelKind::Instrument),

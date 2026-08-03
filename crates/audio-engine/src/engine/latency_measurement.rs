@@ -1,41 +1,43 @@
-struct NativeMixerRuntime {
-    generation: u64,
-    build_generation: u64,
-    graph: RenderRuntime,
-    clips: Vec<LoadedClip>,
-    channel_source_block: Vec<StereoFrame>,
-    channel_input_widths: Vec<SignalWidth>,
-    plugins_by_channel: Vec<Vec<LivePlugin>>,
-    midi_events: Vec<ScheduledMidiEvent>,
-    midi_event_data: Vec<u8>,
-    midi_cursor: usize,
-    active_notes: Vec<bool>,
-    live_midi_routes: Vec<Option<LiveMidiRoute>>,
-    live_midi_events: Vec<BlockMidiEvent>,
-    live_notes: Vec<bool>,
-    count_in: Option<CountInState>,
-    external_sync_enabled: bool,
-    live_sysex_scratch: Vec<u8>,
-    metronome: MetronomeScheduler,
-    tempo_map: TempoMap,
-    peak_scratch: Vec<RenderMeter>,
-    held_peaks: Vec<StereoFrame>,
-    held_until: Vec<[u64; 2]>,
-    meter_bank: Arc<MeterBank>,
-    transport: Arc<TransportShared>,
-    sample_rate: u32,
-    content_end_frame: u64,
-    tail_end_frame: Option<u64>,
-    has_infinite_tail: bool,
-    input_peaks: Arc<InputPeakBank>,
-    input_meter_routes: Vec<Option<[usize; 2]>>,
-    monitor_input_routes: Vec<Option<[usize; 2]>>,
-    input_peak_scratch: [f32; MAX_INPUT_CHANNELS],
-    meter_frame_clock: u64,
+use super::*;
+
+pub(super) struct NativeMixerRuntime {
+    pub(super) generation: u64,
+    pub(super) build_generation: u64,
+    pub(super) graph: RenderRuntime,
+    pub(super) clips: Vec<LoadedClip>,
+    pub(super) channel_source_block: Vec<StereoFrame>,
+    pub(super) channel_input_widths: Vec<SignalWidth>,
+    pub(super) plugins_by_channel: Vec<Vec<LivePlugin>>,
+    pub(super) midi_events: Vec<ScheduledMidiEvent>,
+    pub(super) midi_event_data: Vec<u8>,
+    pub(super) midi_cursor: usize,
+    pub(super) active_notes: Vec<bool>,
+    pub(super) live_midi_routes: Vec<Option<LiveMidiRoute>>,
+    pub(super) live_midi_events: Vec<BlockMidiEvent>,
+    pub(super) live_notes: Vec<bool>,
+    pub(super) count_in: Option<CountInState>,
+    pub(super) external_sync_enabled: bool,
+    pub(super) live_sysex_scratch: Vec<u8>,
+    pub(super) metronome: MetronomeScheduler,
+    pub(super) tempo_map: TempoMap,
+    pub(super) peak_scratch: Vec<RenderMeter>,
+    pub(super) held_peaks: Vec<StereoFrame>,
+    pub(super) held_until: Vec<[u64; 2]>,
+    pub(super) meter_bank: Arc<MeterBank>,
+    pub(super) transport: Arc<TransportShared>,
+    pub(super) sample_rate: u32,
+    pub(super) content_end_frame: u64,
+    pub(super) tail_end_frame: Option<u64>,
+    pub(super) has_infinite_tail: bool,
+    pub(super) input_peaks: Arc<InputPeakBank>,
+    pub(super) input_meter_routes: Vec<Option<[usize; 2]>>,
+    pub(super) monitor_input_routes: Vec<Option<[usize; 2]>>,
+    pub(super) input_peak_scratch: [f32; MAX_INPUT_CHANNELS],
+    pub(super) meter_frame_clock: u64,
 }
 
 #[derive(Clone, Copy)]
-enum RealtimeParameter {
+pub(super) enum RealtimeParameter {
     ChannelGain,
     ChannelPan,
     SendLevel,
@@ -43,15 +45,15 @@ enum RealtimeParameter {
 }
 
 #[derive(Clone, Copy)]
-struct RealtimeParameterCommand {
-    id: [u8; 64],
-    id_len: u8,
-    parameter: RealtimeParameter,
-    value: f32,
+pub(super) struct RealtimeParameterCommand {
+    pub(super) id: [u8; 64],
+    pub(super) id_len: u8,
+    pub(super) parameter: RealtimeParameter,
+    pub(super) value: f32,
 }
 
 impl RealtimeParameterCommand {
-    fn from_preview(preview: NativeMixerParameterPreview) -> Result<Self> {
+    pub(super) fn from_preview(preview: NativeMixerParameterPreview) -> Result<Self> {
         let parameter = match (preview.target.as_str(), preview.parameter.as_str()) {
             ("channel", "gainDb") => RealtimeParameter::ChannelGain,
             ("channel", "pan") => RealtimeParameter::ChannelPan,
@@ -73,13 +75,13 @@ impl RealtimeParameterCommand {
         })
     }
 
-    fn id(&self) -> &str {
+    pub(super) fn id(&self) -> &str {
         std::str::from_utf8(&self.id[..usize::from(self.id_len)]).unwrap_or("")
     }
 }
 
 #[derive(Clone, Copy)]
-enum TransportAction {
+pub(super) enum TransportAction {
     Play,
     Pause,
     Stop,
@@ -87,29 +89,29 @@ enum TransportAction {
     Record { count_in: bool },
 }
 
-enum EngineCommand {
+pub(super) enum EngineCommand {
     LoadMixer(Box<NativeMixerRuntime>),
     Preview(RealtimeParameterCommand),
     Transport(TransportAction, u64),
     ClearMeterClips,
 }
 
-struct RoundTripLatencyMeasurement {
-    clock_origin: Instant,
-    state: AtomicU32,
-    generation: AtomicU64,
-    input_channel: AtomicU32,
-    output_channel: AtomicU32,
-    started_at_ns: AtomicU64,
-    emitted_at_ns: AtomicU64,
-    latency_ns: AtomicU64,
-    input_channels: u32,
-    output_channels: u32,
-    input_sample_rate: u32,
+pub(super) struct RoundTripLatencyMeasurement {
+    pub(super) clock_origin: Instant,
+    pub(super) state: AtomicU32,
+    pub(super) generation: AtomicU64,
+    pub(super) input_channel: AtomicU32,
+    pub(super) output_channel: AtomicU32,
+    pub(super) started_at_ns: AtomicU64,
+    pub(super) emitted_at_ns: AtomicU64,
+    pub(super) latency_ns: AtomicU64,
+    pub(super) input_channels: u32,
+    pub(super) output_channels: u32,
+    pub(super) input_sample_rate: u32,
 }
 
 impl RoundTripLatencyMeasurement {
-    fn new(input_channels: u32, output_channels: u32, input_sample_rate: u32) -> Self {
+    pub(super) fn new(input_channels: u32, output_channels: u32, input_sample_rate: u32) -> Self {
         Self {
             clock_origin: Instant::now(),
             state: AtomicU32::new(LOOPBACK_MEASUREMENT_IDLE),
@@ -125,14 +127,14 @@ impl RoundTripLatencyMeasurement {
         }
     }
 
-    fn now_ns(&self) -> u64 {
+    pub(super) fn now_ns(&self) -> u64 {
         self.clock_origin
             .elapsed()
             .as_nanos()
             .min(u128::from(u64::MAX)) as u64
     }
 
-    fn start(&self, request: NativeRoundTripLatencyMeasurementRequest) -> Result<()> {
+    pub(super) fn start(&self, request: NativeRoundTripLatencyMeasurementRequest) -> Result<()> {
         if request.input_channel == 0 || request.input_channel > self.input_channels {
             return Err(invalid_config(format!(
                 "loopback input channel must be between 1 and {}",
@@ -169,7 +171,7 @@ impl RoundTripLatencyMeasurement {
         Ok(())
     }
 
-    fn expire_if_needed(&self, now_ns: u64) {
+    pub(super) fn expire_if_needed(&self, now_ns: u64) {
         let state = self.state.load(Ordering::Acquire);
         if !matches!(
             state,
@@ -190,7 +192,7 @@ impl RoundTripLatencyMeasurement {
         }
     }
 
-    fn snapshot(&self) -> NativeRoundTripLatencyMeasurementSnapshot {
+    pub(super) fn snapshot(&self) -> NativeRoundTripLatencyMeasurementSnapshot {
         self.expire_if_needed(self.now_ns());
         let state = self.state.load(Ordering::Acquire);
         let has_selection = state != LOOPBACK_MEASUREMENT_IDLE;
@@ -219,17 +221,17 @@ impl RoundTripLatencyMeasurement {
     }
 }
 
-struct RoundTripInputDetector {
-    shared: Arc<RoundTripLatencyMeasurement>,
-    generation: u64,
-    quiet_frames: u32,
-    quiet_peak: f32,
-    history: [f32; LOOPBACK_PROBE.len()],
-    history_length: usize,
+pub(super) struct RoundTripInputDetector {
+    pub(super) shared: Arc<RoundTripLatencyMeasurement>,
+    pub(super) generation: u64,
+    pub(super) quiet_frames: u32,
+    pub(super) quiet_peak: f32,
+    pub(super) history: [f32; LOOPBACK_PROBE.len()],
+    pub(super) history_length: usize,
 }
 
 impl RoundTripInputDetector {
-    fn new(shared: Arc<RoundTripLatencyMeasurement>) -> Self {
+    pub(super) fn new(shared: Arc<RoundTripLatencyMeasurement>) -> Self {
         Self {
             shared,
             generation: 0,
@@ -240,7 +242,7 @@ impl RoundTripInputDetector {
         }
     }
 
-    fn reset_for_generation(&mut self, generation: u64) {
+    pub(super) fn reset_for_generation(&mut self, generation: u64) {
         self.generation = generation;
         self.quiet_frames = 0;
         self.quiet_peak = 0.0;
@@ -248,7 +250,7 @@ impl RoundTripInputDetector {
         self.history_length = 0;
     }
 
-    fn observe(&mut self, frame: &[f32], frame_time_ns: u64) {
+    pub(super) fn observe(&mut self, frame: &[f32], frame_time_ns: u64) {
         let generation = self.shared.generation.load(Ordering::Acquire);
         if generation != self.generation {
             self.reset_for_generation(generation);
@@ -326,14 +328,14 @@ impl RoundTripInputDetector {
     }
 }
 
-struct RoundTripOutputProbe {
-    shared: Arc<RoundTripLatencyMeasurement>,
-    generation: u64,
-    cursor: usize,
+pub(super) struct RoundTripOutputProbe {
+    pub(super) shared: Arc<RoundTripLatencyMeasurement>,
+    pub(super) generation: u64,
+    pub(super) cursor: usize,
 }
 
 impl RoundTripOutputProbe {
-    fn new(shared: Arc<RoundTripLatencyMeasurement>) -> Self {
+    pub(super) fn new(shared: Arc<RoundTripLatencyMeasurement>) -> Self {
         Self {
             shared,
             generation: 0,
@@ -341,7 +343,7 @@ impl RoundTripOutputProbe {
         }
     }
 
-    fn apply(&mut self, frame: &mut [f32], frame_time_ns: u64) {
+    pub(super) fn apply(&mut self, frame: &mut [f32], frame_time_ns: u64) {
         let generation = self.shared.generation.load(Ordering::Acquire);
         if generation != self.generation {
             self.generation = generation;
@@ -391,29 +393,29 @@ impl RoundTripOutputProbe {
     }
 }
 
-struct RuntimeMetrics {
-    requested_buffer_size: u32,
-    sample_rate: u32,
-    input_sample_rate: u32,
-    output_sample_rate: u32,
-    input_buffer_size: AtomicU32,
-    output_buffer_size: AtomicU32,
-    ring_buffer_capacity_frames: u32,
-    ring_buffer_fill_frames: AtomicU32,
-    input_latency_us: AtomicU64,
-    output_latency_us: AtomicU64,
-    engine_latency_us: AtomicU64,
-    xruns: AtomicU32,
-    callback_generation: AtomicU64,
-    published_graph_generation: AtomicU64,
-    published_graph_build_generation: AtomicU64,
-    faulted: AtomicBool,
-    buffer_fallback: AtomicBool,
-    clock_sync: &'static str,
+pub(super) struct RuntimeMetrics {
+    pub(super) requested_buffer_size: u32,
+    pub(super) sample_rate: u32,
+    pub(super) input_sample_rate: u32,
+    pub(super) output_sample_rate: u32,
+    pub(super) input_buffer_size: AtomicU32,
+    pub(super) output_buffer_size: AtomicU32,
+    pub(super) ring_buffer_capacity_frames: u32,
+    pub(super) ring_buffer_fill_frames: AtomicU32,
+    pub(super) input_latency_us: AtomicU64,
+    pub(super) output_latency_us: AtomicU64,
+    pub(super) engine_latency_us: AtomicU64,
+    pub(super) xruns: AtomicU32,
+    pub(super) callback_generation: AtomicU64,
+    pub(super) published_graph_generation: AtomicU64,
+    pub(super) published_graph_build_generation: AtomicU64,
+    pub(super) faulted: AtomicBool,
+    pub(super) buffer_fallback: AtomicBool,
+    pub(super) clock_sync: &'static str,
 }
 
 impl RuntimeMetrics {
-    fn snapshot(&self) -> NativeAudioRuntimeSnapshot {
+    pub(super) fn snapshot(&self) -> NativeAudioRuntimeSnapshot {
         let input_latency_us = optional_latency(self.input_latency_us.load(Ordering::Relaxed));
         let output_latency_us = optional_latency(self.output_latency_us.load(Ordering::Relaxed));
         let ring_fill = self.ring_buffer_fill_frames.load(Ordering::Relaxed);

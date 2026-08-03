@@ -1,34 +1,36 @@
-struct LivePlugin {
-    instance_id: String,
-    processor: Option<Vst3ProcessorHandle>,
-    audio_mode: PluginAudioMode,
-    enabled: bool,
-    is_instrument: bool,
-    latency_samples: u32,
-    low_latency_bypassed: bool,
-    main_delay: StereoDelayLine,
-    bypass_delay: StereoDelayLine,
-    marker_index: usize,
-    aux_inputs: Vec<LivePluginAuxInput>,
+use super::*;
+
+pub(super) struct LivePlugin {
+    pub(super) instance_id: String,
+    pub(super) processor: Option<Vst3ProcessorHandle>,
+    pub(super) audio_mode: PluginAudioMode,
+    pub(super) enabled: bool,
+    pub(super) is_instrument: bool,
+    pub(super) latency_samples: u32,
+    pub(super) low_latency_bypassed: bool,
+    pub(super) main_delay: StereoDelayLine,
+    pub(super) bypass_delay: StereoDelayLine,
+    pub(super) marker_index: usize,
+    pub(super) aux_inputs: Vec<LivePluginAuxInput>,
 }
 
-struct LivePluginAuxInput {
-    bus_index: u32,
-    channels: u8,
-    source_index: usize,
-    delay: StereoDelayLine,
-    block: Vec<StereoFrame>,
+pub(super) struct LivePluginAuxInput {
+    pub(super) bus_index: u32,
+    pub(super) channels: u8,
+    pub(super) source_index: usize,
+    pub(super) delay: StereoDelayLine,
+    pub(super) block: Vec<StereoFrame>,
 }
 
 impl LivePlugin {
-    fn set_enabled(&mut self, enabled: bool) {
+    pub(super) fn set_enabled(&mut self, enabled: bool) {
         if self.enabled != enabled {
             self.enabled = enabled;
             self.bypass_delay.clear();
         }
     }
 
-    fn process_block(
+    pub(super) fn process_block(
         &mut self,
         frames: &mut [StereoFrame],
         width: &mut SignalWidth,
@@ -93,7 +95,7 @@ impl LivePlugin {
         }
     }
 
-    fn prepare_input(&self, input: StereoFrame, width: SignalWidth) -> StereoFrame {
+    pub(super) fn prepare_input(&self, input: StereoFrame, width: SignalWidth) -> StereoFrame {
         if self.is_instrument {
             return [0.0; 2];
         }
@@ -109,7 +111,7 @@ impl LivePlugin {
         }
     }
 
-    fn passthrough(&self, input: StereoFrame) -> StereoFrame {
+    pub(super) fn passthrough(&self, input: StereoFrame) -> StereoFrame {
         match self.audio_mode {
             PluginAudioMode::Mono => [input[0], 0.0],
             PluginAudioMode::MonoToStereo => [input[0], input[0]],
@@ -117,7 +119,7 @@ impl LivePlugin {
         }
     }
 
-    fn output_width(&self) -> SignalWidth {
+    pub(super) fn output_width(&self) -> SignalWidth {
         match self.audio_mode {
             PluginAudioMode::Mono => SignalWidth::Mono,
             PluginAudioMode::MonoToStereo | PluginAudioMode::Stereo | PluginAudioMode::DualMono => {
@@ -128,13 +130,13 @@ impl LivePlugin {
 }
 
 #[derive(Clone, Copy)]
-enum SignalWidth {
+pub(super) enum SignalWidth {
     Mono,
     Stereo,
 }
 
 #[derive(Clone, Copy)]
-enum ScheduledMidiEventKind {
+pub(super) enum ScheduledMidiEventKind {
     NoteOn { note_id: i32, key: u8, velocity: u8 },
     NoteOff { note_id: i32, key: u8, velocity: u8 },
     ControlChange { controller: u8, value: u8 },
@@ -146,7 +148,7 @@ enum ScheduledMidiEventKind {
 }
 
 impl ScheduledMidiEventKind {
-    const fn sort_rank(self) -> u8 {
+    pub(super) const fn sort_rank(self) -> u8 {
         match self {
             Self::NoteOff { .. } => 0,
             Self::ControlChange { .. }
@@ -161,42 +163,46 @@ impl ScheduledMidiEventKind {
 }
 
 #[derive(Clone, Copy)]
-struct ScheduledMidiEvent {
-    frame: u64,
-    channel_index: usize,
-    channel: u8,
-    kind: ScheduledMidiEventKind,
+pub(super) struct ScheduledMidiEvent {
+    pub(super) frame: u64,
+    pub(super) channel_index: usize,
+    pub(super) channel: u8,
+    pub(super) kind: ScheduledMidiEventKind,
 }
 
 #[derive(Clone, Copy)]
-struct LiveMidiRoute {
-    port_key: Option<u64>,
-    channel: Option<u8>,
-    monitoring: bool,
+pub(super) struct LiveMidiRoute {
+    pub(super) port_key: Option<u64>,
+    pub(super) channel: Option<u8>,
+    pub(super) monitoring: bool,
 }
 
 #[derive(Clone, Copy)]
-struct BlockMidiEvent {
-    sample_offset: usize,
-    event: crate::midi_input::RealtimeMidiEvent,
+pub(super) struct BlockMidiEvent {
+    pub(super) sample_offset: usize,
+    pub(super) event: crate::midi_input::RealtimeMidiEvent,
 }
 
 #[derive(Clone, Copy)]
-struct BeatBoundary {
-    tick: u64,
-    frame: u64,
-    accent: bool,
+pub(super) struct BeatBoundary {
+    pub(super) tick: u64,
+    pub(super) frame: u64,
+    pub(super) accent: bool,
 }
 
 #[derive(Clone, Copy)]
-struct CountInState {
-    virtual_position: u64,
-    end_frame: u64,
-    record_position: u64,
+pub(super) struct CountInState {
+    pub(super) virtual_position: u64,
+    pub(super) end_frame: u64,
+    pub(super) record_position: u64,
 }
 
 impl CountInState {
-    fn one_bar(tempo_map: &TempoMap, sample_rate: u32, record_position: u64) -> Option<Self> {
+    pub(super) fn one_bar(
+        tempo_map: &TempoMap,
+        sample_rate: u32,
+        record_position: u64,
+    ) -> Option<Self> {
         let position_tick = tempo_map.frame_to_tick(record_position, sample_rate).ok()?;
         let signatures = tempo_map.time_signature_events();
         let signature_index = signatures
@@ -241,20 +247,20 @@ impl CountInState {
         })
     }
 
-    const fn remaining_frames(self) -> u64 {
+    pub(super) const fn remaining_frames(self) -> u64 {
         self.end_frame.saturating_sub(self.virtual_position)
     }
 }
 
-struct MetronomeScheduler {
-    channel_index: Option<usize>,
-    next: Option<BeatBoundary>,
-    active_key: Option<u8>,
-    note_off_frame: Option<u64>,
+pub(super) struct MetronomeScheduler {
+    pub(super) channel_index: Option<usize>,
+    pub(super) next: Option<BeatBoundary>,
+    pub(super) active_key: Option<u8>,
+    pub(super) note_off_frame: Option<u64>,
 }
 
 impl MetronomeScheduler {
-    fn new(
+    pub(super) fn new(
         channel_index: Option<usize>,
         tempo_map: &TempoMap,
         sample_rate: u32,
@@ -270,7 +276,7 @@ impl MetronomeScheduler {
         scheduler
     }
 
-    fn reposition(
+    pub(super) fn reposition(
         &mut self,
         tempo_map: &TempoMap,
         sample_rate: u32,
@@ -284,7 +290,7 @@ impl MetronomeScheduler {
         });
     }
 
-    fn boundary_at_or_after(
+    pub(super) fn boundary_at_or_after(
         tempo_map: &TempoMap,
         sample_rate: u32,
         position: u64,
@@ -332,7 +338,7 @@ impl MetronomeScheduler {
         })
     }
 
-    fn events_at(
+    pub(super) fn events_at(
         &mut self,
         tempo_map: &TempoMap,
         sample_rate: u32,
@@ -386,7 +392,7 @@ impl MetronomeScheduler {
         }
     }
 
-    fn note_off_event(&mut self, channel_index: usize) -> Option<ScheduledMidiEvent> {
+    pub(super) fn note_off_event(&mut self, channel_index: usize) -> Option<ScheduledMidiEvent> {
         let key = self.active_key.take()?;
         self.note_off_frame = None;
         Some(ScheduledMidiEvent {
@@ -401,7 +407,7 @@ impl MetronomeScheduler {
         })
     }
 
-    fn release(&mut self) -> Option<ScheduledMidiEvent> {
+    pub(super) fn release(&mut self) -> Option<ScheduledMidiEvent> {
         self.channel_index
             .and_then(|channel_index| self.note_off_event(channel_index))
     }
