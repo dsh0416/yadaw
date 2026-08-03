@@ -4,7 +4,7 @@ import type { AudioHostService } from "./audio-host-service"
 import type { PluginCatalogService } from "./plugin-catalog-service"
 import type { ProjectCommandService } from "./project-command-service"
 
-interface ApplicationEventTarget {
+export interface ApplicationEventTarget {
   webContents: {
     send(channel: string, event: unknown): void
   }
