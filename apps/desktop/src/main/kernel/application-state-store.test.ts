@@ -12,7 +12,7 @@ import { OperationRegistry } from "./operation-registry"
 
 const project: ProjectSession = {
   id: "project",
-  path: "project.yadaw",
+  path: "project.heron",
   configuration: {
     name: "Project",
     sampleRate: 48_000,

@@ -6,7 +6,7 @@ import { join, resolve } from "node:path"
 test("records into a Large Object and reopens the PGlite project archive", async () => {
   test.setTimeout(180_000)
   const testRoot = await mkdtemp(join(tmpdir(), "heron-e2e-"))
-  const projectPath = join(testRoot, "lifecycle.yadaw")
+  const projectPath = join(testRoot, "lifecycle.heron")
   const executablePath = process.env.HERON_E2E_EXECUTABLE
   const application = await electron.launch({
     executablePath,

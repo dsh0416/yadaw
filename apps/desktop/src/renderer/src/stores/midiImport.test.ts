@@ -59,7 +59,7 @@ function workspace(graph: ProjectGraphSnapshot): ProjectWorkspaceSnapshot {
     revision: 2,
     session: {
       id: "project",
-      path: "project.yadaw",
+      path: "project.heron",
       configuration: {
         name: "MIDI import test",
         sampleRate: 48_000,

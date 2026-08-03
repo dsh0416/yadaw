@@ -32,7 +32,7 @@ describe("ArrangementWorkspace", () => {
       status: "open",
       session: {
         id: "project",
-        path: "project.yadaw",
+        path: "project.heron",
         configuration: {
           name: "Session",
           sampleRate: 48_000,
@@ -307,7 +307,7 @@ describe("ArrangementWorkspace", () => {
       status: "open",
       session: {
         id: "project",
-        path: "project.yadaw",
+        path: "project.heron",
         configuration: {
           name: "Session",
           sampleRate: 48_000,
@@ -682,7 +682,7 @@ describe("ArrangementWorkspace", () => {
       status: "open",
       session: {
         id: "project",
-        path: "project.yadaw",
+        path: "project.heron",
         configuration: {
           name: "Session",
           sampleRate: 48_000,

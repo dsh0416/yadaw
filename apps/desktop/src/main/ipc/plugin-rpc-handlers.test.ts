@@ -364,7 +364,7 @@ function createWorkspaceFrom(context: ReturnType<typeof createContext>): Project
     revision: 1,
     session: {
       id: "project",
-      path: "/projects/demo.yadaw",
+      path: "/projects/demo.heron",
       configuration: {
         name: "Demo",
         sampleRate: 48_000,

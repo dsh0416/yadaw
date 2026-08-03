@@ -93,8 +93,8 @@ describe("validateCreateProject", () => {
 
   it("accepts a complete request, with or without a path", () => {
     expect(validateCreateProject(request)).toBe(request)
-    expect(validateCreateProject({ ...request, path: "/projects/demo.yadaw" })).toMatchObject({
-      path: "/projects/demo.yadaw"
+    expect(validateCreateProject({ ...request, path: "/projects/demo.heron" })).toMatchObject({
+      path: "/projects/demo.heron"
     })
   })
 
@@ -122,7 +122,7 @@ describe("validateCreateProject", () => {
   })
 
   it("strips the path when narrowing a request to a project configuration", () => {
-    const configuration = validateProjectConfiguration({ ...request, path: "/projects/demo.yadaw" })
+    const configuration = validateProjectConfiguration({ ...request, path: "/projects/demo.heron" })
 
     expect(configuration).toEqual(request)
     expect(configuration).not.toHaveProperty("path")

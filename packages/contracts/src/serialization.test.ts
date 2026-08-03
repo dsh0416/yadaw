@@ -35,7 +35,7 @@ describe("recording and operation contract serialization", () => {
       state: "ready",
       audioPath: "/swap/pending-1.bwf",
       sidecarPath: "/swap/pending-1.json",
-      projectPath: "/projects/demo.yadaw",
+      projectPath: "/projects/demo.heron",
       sampleRate: 48_000,
       channels: 2,
       startedAt: 1_700_000_000_000,
@@ -91,7 +91,7 @@ describe("recording and operation contract serialization", () => {
         revision: 4,
         session: {
           id: "project",
-          path: "/projects/demo.yadaw",
+          path: "/projects/demo.heron",
           configuration: {
             name: "Demo",
             sampleRate: 48_000,

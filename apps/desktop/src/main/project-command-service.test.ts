@@ -133,7 +133,7 @@ function projectMock(initialGraph = graph()): ProjectMock {
     initialGraph: structuredClone(initialGraph),
     session: {
       id: "project-1",
-      path: "project-1.yadaw",
+      path: "project-1.heron",
       configuration: {
         name: "Project",
         sampleRate: 48_000,

@@ -43,7 +43,7 @@ describe("commitMidiRecordingTakes", () => {
         tracks: [{ id: "track-1", channelId: "channel-1" }],
         channels: [{ id: "channel-1", name: "Keys" }]
       },
-      session: { path: "/tmp/project.yadaw" }
+      session: { path: "/tmp/project.heron" }
     }
 
     const next = await commitMidiRecordingTakes(

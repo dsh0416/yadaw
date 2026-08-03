@@ -145,7 +145,7 @@ function workspace(value: ProjectGraphSnapshot): ProjectWorkspaceSnapshot {
     revision: 1,
     session: {
       id: "project",
-      path: "project.yadaw",
+      path: "project.heron",
       configuration: {
         name: "Plugin test",
         sampleRate: 48_000,

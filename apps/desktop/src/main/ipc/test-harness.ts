@@ -20,7 +20,7 @@ import type { ElectronMocks } from "./electron-test-mock"
 
 export const projectSession: ProjectSession = {
   id: "project",
-  path: "/projects/demo.yadaw",
+  path: "/projects/demo.heron",
   configuration: {
     name: "Demo",
     sampleRate: 48_000,

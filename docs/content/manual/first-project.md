@@ -24,7 +24,7 @@ XRUN count. If the audio engine does not start, see
 ## 2. Create the project
 
 On the welcome screen, select **Create project** and choose where to save the
-`.yadaw` archive.
+`.heron` archive.
 
 A new project starts at:
 
@@ -64,6 +64,6 @@ the archive has been written.
 
 ::: info Working copy and archive
 YADAW keeps an active working copy while the project is open. Saving writes
-that state and its media into the `.yadaw` archive. If the application closes
+that state and its media into the `.heron` archive. If the application closes
 unexpectedly, YADAW can offer to recover a newer working copy next time.
 :::

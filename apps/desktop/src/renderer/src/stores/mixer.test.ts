@@ -160,7 +160,7 @@ function graph(): ProjectGraphSnapshot {
 
 const session: ProjectSession = {
   id: "project",
-  path: "project.yadaw",
+  path: "project.heron",
   configuration: {
     name: "Mixer test",
     sampleRate: 48_000,

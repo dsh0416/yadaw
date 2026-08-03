@@ -50,7 +50,7 @@ describe("RecordingService MIDI orchestration", () => {
   }) {
     const swapDirectory = await mkdtemp(join(tmpdir(), "heron-recording-midi-svc-"))
     directories.push(swapDirectory)
-    const projectPath = join(swapDirectory, "project.yadaw")
+    const projectPath = join(swapDirectory, "project.heron")
     const midiClips = options?.midiClips ?? []
     type HarnessChannel = {
       id: string

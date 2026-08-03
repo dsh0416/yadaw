@@ -3,6 +3,7 @@ import { IPC_CHANNELS, rpcFailure, rpcSuccess } from "@heron/contracts"
 import type { ProjectCloseDisposition, RpcRequestMeta } from "@heron/contracts"
 import type { IpcHandlerContext } from "./context"
 import { t } from "../i18n"
+import { isProjectFilePath, PROJECT_FILE_FILTER_EXTENSION } from "../project-service"
 import { registerRpcHandler } from "./rpc"
 import {
   validationFailure as resourceValidationFailure,
@@ -70,8 +71,10 @@ export function registerProjectHandlers(context: IpcHandlerContext): void {
     if (!path) {
       const result = await dialog.showSaveDialog({
         title: t("dialog.createProject.title"),
-        defaultPath: `${request.name}.yadaw`,
-        filters: [{ name: t("dialog.createProject.filter"), extensions: ["yadaw"] }]
+        defaultPath: `${request.name}.heron`,
+        filters: [
+          { name: t("dialog.createProject.filter"), extensions: [PROJECT_FILE_FILTER_EXTENSION] }
+        ]
       })
       if (result.canceled || !result.filePath) return cancelledFailure(meta)
       path = result.filePath
@@ -82,7 +85,10 @@ export function registerProjectHandlers(context: IpcHandlerContext): void {
   registerRpcHandler(IPC_CHANNELS.projectPrepareOpen, async ({ meta }, value: unknown) => {
     const targetFailure = projectLifecycle.validateDesktopRead(meta)
     if (targetFailure) return targetFailure
-    if (value !== undefined && (typeof value !== "string" || !value.trim())) {
+    if (
+      value !== undefined &&
+      (typeof value !== "string" || !value.trim() || !isProjectFilePath(value))
+    ) {
       return validationFailure(meta, "path")
     }
     let path = typeof value === "string" ? value : undefined
@@ -90,7 +96,9 @@ export function registerProjectHandlers(context: IpcHandlerContext): void {
       const result = await dialog.showOpenDialog({
         title: t("dialog.openProject.title"),
         properties: ["openFile"],
-        filters: [{ name: t("dialog.openProject.filter"), extensions: ["yadaw"] }]
+        filters: [
+          { name: t("dialog.openProject.filter"), extensions: [PROJECT_FILE_FILTER_EXTENSION] }
+        ]
       })
       path = result.filePaths[0]
       if (result.canceled || !path) return null
@@ -104,7 +112,7 @@ export function registerProjectHandlers(context: IpcHandlerContext): void {
   registerRpcHandler(
     IPC_CHANNELS.projectOpen,
     ({ meta }, value: unknown, recoverValue: unknown) => {
-      if (typeof value !== "string" || !value.trim()) {
+      if (typeof value !== "string" || !value.trim() || !isProjectFilePath(value)) {
         return validationFailure(meta, "path")
       }
       if (recoverValue !== undefined && typeof recoverValue !== "boolean") {

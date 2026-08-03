@@ -18,7 +18,7 @@ test("measures mock round-trip latency through the desktop boundary", async () =
     env: {
       ...process.env,
       HERON_TEST_USER_DATA: join(testRoot, "user-data"),
-      HERON_TEST_PROJECT_PATH: join(testRoot, "loopback.yadaw"),
+      HERON_TEST_PROJECT_PATH: join(testRoot, "loopback.heron"),
       HERON_TEST_MOCK_AUDIO: "1"
     }
   })

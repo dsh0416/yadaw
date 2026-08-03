@@ -44,9 +44,9 @@ describe("ProjectService.create", () => {
     terminatedWorkers.length = 0
   })
 
-  it("writes the initial .yadaw archive and returns a clean session", async () => {
+  it("writes the initial .heron archive and returns a clean session", async () => {
     const userData = await mkdtemp(join(tmpdir(), "heron-project-create-"))
-    const projectPath = join(userData, "Untitled.yadaw")
+    const projectPath = join(userData, "Untitled.heron")
     service = new ProjectService(userData, new ApplicationSettingsStore(userData))
     const progress = vi.fn()
 
@@ -77,9 +77,30 @@ describe("ProjectService.create", () => {
     ])
   })
 
+  it("rejects create and open paths with unsupported extensions", async () => {
+    const userData = await mkdtemp(join(tmpdir(), "heron-project-extension-"))
+    const legacyExtension = ["ya", "daw"].join("")
+    const projectPath = join(userData, `Legacy.${legacyExtension}`)
+    service = new ProjectService(userData, new ApplicationSettingsStore(userData))
+
+    await expect(
+      service.create({
+        path: projectPath,
+        name: "Legacy",
+        sampleRate: 48_000,
+        timeSignatureNumerator: 4,
+        timeSignatureDenominator: 4,
+        waveformDisplayMode: "separate"
+      })
+    ).rejects.toThrow("Project path must use the .heron extension")
+    await expect(service.open(projectPath, false)).rejects.toThrow(
+      "Project path must use the .heron extension"
+    )
+  })
+
   it("leaves the source archive byte-for-byte untouched when migration fails", async () => {
     const userData = await mkdtemp(join(tmpdir(), "heron-project-open-failure-"))
-    const projectPath = join(userData, "Existing.yadaw")
+    const projectPath = join(userData, "Existing.heron")
     const contents = new Uint8Array([0x59, 0x41, 0x44, 0x41, 0x57])
     await writeFile(projectPath, contents)
     const before = await stat(projectPath)
@@ -94,8 +115,8 @@ describe("ProjectService.create", () => {
 
   it("discards a failed candidate worker before a later healthy open", async () => {
     const userData = await mkdtemp(join(tmpdir(), "heron-project-worker-recovery-"))
-    const brokenPath = join(userData, "Broken.yadaw")
-    const healthyPath = join(userData, "Healthy.yadaw")
+    const brokenPath = join(userData, "Broken.heron")
+    const healthyPath = join(userData, "Healthy.heron")
     await writeFile(brokenPath, "broken")
     await writeFile(healthyPath, "healthy")
     openProject.mockRejectedValueOnce(new Error("database migration failed"))

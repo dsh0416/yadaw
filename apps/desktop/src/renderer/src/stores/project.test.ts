@@ -12,7 +12,7 @@ import { useProjectStore } from "./project"
 
 const session: ProjectSession = {
   id: "project",
-  path: "session.yadaw",
+  path: "session.heron",
   configuration: {
     name: "Session",
     sampleRate: 48_000,
@@ -148,7 +148,7 @@ describe("project store dialogs", () => {
   it("asks in Vue before recovering an unsaved working copy", async () => {
     window.heron.prepareOpenProject = vi.fn().mockResolvedValue(
       success({
-        path: "session.yadaw",
+        path: "session.heron",
         recoverableWorkingCopy: true
       })
     )
@@ -165,7 +165,7 @@ describe("project store dialogs", () => {
     store.applyDesktopSession(desktopSession)
     const { activeDialog, selectDialogAction } = useGlobalDialog()
 
-    const opening = store.open("session.yadaw")
+    const opening = store.open("session.heron")
     await vi.waitFor(() => expect(activeDialog.value?.title).toBe("Recover unsaved project?"))
     selectDialogAction("recover")
 
@@ -175,7 +175,7 @@ describe("project store dialogs", () => {
     })
     expect(window.heron.openProject).toHaveBeenCalledWith(
       expect.objectContaining({ target: desktopSession, mutation: expect.any(Object) }),
-      "session.yadaw",
+      "session.heron",
       true
     )
     expect(store.session?.recoveredWorkingCopy).toBe(true)
@@ -184,7 +184,7 @@ describe("project store dialogs", () => {
   it("reports archive open failures without a legacy compatibility branch", async () => {
     window.heron.prepareOpenProject = vi.fn().mockResolvedValue(
       success({
-        path: "future.yadaw",
+        path: "future.heron",
         recoverableWorkingCopy: false
       })
     )
@@ -209,7 +209,7 @@ describe("project store dialogs", () => {
     store.applyDesktopSession(desktopSession)
     const { activeDialog } = useGlobalDialog()
 
-    await expect(store.open("future.yadaw")).resolves.toBeNull()
+    await expect(store.open("future.heron")).resolves.toBeNull()
     expect(activeDialog.value).toBeNull()
     expect(store.lifecycle.status).toBe("closed")
     expect(store.error).toBe("resource-unavailable")

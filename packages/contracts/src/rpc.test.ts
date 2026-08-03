@@ -23,7 +23,7 @@ const mutationMeta: RpcRequestMeta = {
   expectedRevision: 11,
   mutation: {
     operationId: "operation-9",
-    idempotencyKey: "open:C:/music/demo.yadaw"
+    idempotencyKey: "open:C:/music/demo.heron"
   }
 }
 
@@ -47,7 +47,7 @@ describe("IPC v2 contracts", () => {
 
   it("serializes the representative request shape identically to Rust", () => {
     expect(JSON.stringify(mutationMeta)).toBe(
-      '{"protocolVersion":2,"requestId":"request-7","target":{"kind":"desktop-session","id":"desktop","epoch":"18446744073709551615","generation":3},"expectedRevision":11,"mutation":{"operationId":"operation-9","idempotencyKey":"open:C:/music/demo.yadaw"}}'
+      '{"protocolVersion":2,"requestId":"request-7","target":{"kind":"desktop-session","id":"desktop","epoch":"18446744073709551615","generation":3},"expectedRevision":11,"mutation":{"operationId":"operation-9","idempotencyKey":"open:C:/music/demo.heron"}}'
     )
   })
 

@@ -32,7 +32,7 @@ and projects. Project compatibility may change before version 1.0.
 
 The current foundation includes:
 
-- self-contained `.yadaw` project archives and recovery of unsaved working copies;
+- self-contained `.heron` project archives and recovery of unsaved working copies;
 - a native real-time audio engine with configurable devices and buffer sizes;
 - audio and instrument tracks on a musical timeline;
 - audio recording with recoverable swap files;

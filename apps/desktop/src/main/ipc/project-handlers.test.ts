@@ -108,7 +108,7 @@ describe("registerProjectHandlers", () => {
 
     const result = await invoke(electronMocks, IPC_CHANNELS.projectCreate, meta(), {
       ...createRequest,
-      path: "/projects/demo.yadaw"
+      path: "/projects/demo.heron"
     })
 
     expect(context.projectLifecycle.create).toHaveBeenCalled()
@@ -146,12 +146,12 @@ describe("registerProjectHandlers", () => {
       electronMocks,
       IPC_CHANNELS.projectPrepareOpen,
       meta(),
-      "/projects/demo.yadaw"
+      "/projects/demo.heron"
     )
 
     expect(result).toMatchObject({
       ok: true,
-      value: { path: "/projects/demo.yadaw", recoverableWorkingCopy: true }
+      value: { path: "/projects/demo.heron", recoverableWorkingCopy: true }
     })
   })
 
@@ -177,6 +177,35 @@ describe("registerProjectHandlers", () => {
     })
   })
 
+  it("rejects project paths with the legacy extension", async () => {
+    const context = createContext()
+    registerProjectHandlers(context)
+    const legacyExtension = ["ya", "daw"].join("")
+
+    const prepareResult = await invoke(
+      electronMocks,
+      IPC_CHANNELS.projectPrepareOpen,
+      meta(),
+      `/projects/demo.${legacyExtension}`
+    )
+    const openResult = await invoke(
+      electronMocks,
+      IPC_CHANNELS.projectOpen,
+      meta(),
+      `/projects/demo.${legacyExtension}`,
+      false
+    )
+
+    expect(prepareResult).toMatchObject({
+      ok: false,
+      error: { code: "validation-failed", details: { field: "path" } }
+    })
+    expect(openResult).toMatchObject({
+      ok: false,
+      error: { code: "validation-failed", details: { field: "path" } }
+    })
+  })
+
   it("opens a project through the lifecycle service", async () => {
     const context = createContext()
     const workspace = createWorkspace()
@@ -192,13 +221,13 @@ describe("registerProjectHandlers", () => {
       electronMocks,
       IPC_CHANNELS.projectOpen,
       meta(),
-      "/projects/demo.yadaw",
+      "/projects/demo.heron",
       true
     )
 
     expect(context.projectLifecycle.open).toHaveBeenCalledWith(
       expect.anything(),
-      "/projects/demo.yadaw",
+      "/projects/demo.heron",
       true
     )
     expect(result).toMatchObject({ ok: true, value: workspace })
@@ -212,7 +241,7 @@ describe("registerProjectHandlers", () => {
       electronMocks,
       IPC_CHANNELS.projectOpen,
       meta(),
-      "/projects/demo.yadaw",
+      "/projects/demo.heron",
       "yes"
     )
 

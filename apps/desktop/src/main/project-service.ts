@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto"
 import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises"
-import { basename, dirname, join, resolve } from "node:path"
+import { basename, dirname, extname, join, resolve } from "node:path"
 import type {
   CreateProjectRequest,
   ProjectGraphSnapshot,
@@ -52,6 +52,23 @@ interface ProjectContext {
   worker: ProjectWorkerClient
   session: ProjectSession
   workingRoot: string
+}
+
+export const PROJECT_FILE_EXTENSION = ".heron"
+export const PROJECT_FILE_FILTER_EXTENSION = "heron"
+
+export function isProjectFilePath(path: string): boolean {
+  return extname(path).toLowerCase() === PROJECT_FILE_EXTENSION
+}
+
+function resolveProjectFilePath(path: string): string {
+  const resolved = resolve(path)
+  const extension = extname(resolved).toLowerCase()
+  if (extension === "") return `${resolved}${PROJECT_FILE_EXTENSION}`
+  if (extension !== PROJECT_FILE_EXTENSION) {
+    throw new TypeError(`Project path must use the ${PROJECT_FILE_EXTENSION} extension`)
+  }
+  return resolved
 }
 
 function workspaceId(projectPath: string): string {
@@ -158,9 +175,7 @@ export class ProjectService {
     await this.archiveJournal.recover()
     this.assertCanPrepare()
     const configuration = validateConfiguration(request)
-    const projectPath = resolve(
-      request.path.endsWith(".yadaw") ? request.path : `${request.path}.yadaw`
-    )
+    const projectPath = resolveProjectFilePath(request.path)
     const id = workspaceId(projectPath)
     const context: ProjectContext = {
       worker: new ProjectWorkerClient(this.workerUrl),
@@ -187,7 +202,7 @@ export class ProjectService {
       })
       onProgress?.({ phase: "saving-archive", completedUnits: 1 })
       await this.persistContextState(context)
-      // Initialize the .yadaw archive before commit so a successful create
+      // Initialize the .heron archive before commit so a successful create
       // always returns a durable, loadable project.
       await this.saveContext(context)
       return structuredClone(context.session)
@@ -206,6 +221,9 @@ export class ProjectService {
   }
 
   async hasRecoverableWorkingCopy(projectPathValue: string): Promise<boolean> {
+    if (!isProjectFilePath(projectPathValue)) {
+      throw new TypeError(`Project path must use the ${PROJECT_FILE_EXTENSION} extension`)
+    }
     const projectPath = resolve(projectPathValue)
     const id = workspaceId(projectPath)
     try {
@@ -228,6 +246,9 @@ export class ProjectService {
     recoverWorkingCopy = true,
     onProgress?: (progress: ProjectLoadProgress) => void
   ): Promise<ProjectSession> {
+    if (!isProjectFilePath(projectPathValue)) {
+      throw new TypeError(`Project path must use the ${PROJECT_FILE_EXTENSION} extension`)
+    }
     await this.archiveJournal.recover()
     this.assertCanPrepare()
     const projectPath = resolve(projectPathValue)
@@ -515,9 +536,7 @@ export class ProjectService {
     path?: string,
     operationId = `project-save:${randomUUID()}`
   ): Promise<ProjectSession> {
-    const target = path
-      ? resolve(path.endsWith(".yadaw") ? path : `${path}.yadaw`)
-      : context.session.path
+    const target = path ? resolveProjectFilePath(path) : context.session.path
     await mkdir(dirname(target), { recursive: true })
     const temporary = join(dirname(target), `.${basename(target)}.${randomUUID()}.tmp`)
     const backup = `${target}.bak`

@@ -103,7 +103,7 @@
     "projectRecovery": {
       "eyebrow": "Project recovery",
       "title": "Recover unsaved project?",
-      "description": "A newer working copy contains changes that were not saved to the .yadaw archive.",
+      "description": "A newer working copy contains changes that were not saved to the .heron archive.",
       "detail": "Recover it, open the last saved archive, or cancel without changing either copy.",
       "recover": "Recover working copy",
       "openSaved": "Open last saved"

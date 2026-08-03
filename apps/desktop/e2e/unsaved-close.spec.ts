@@ -18,7 +18,7 @@ test("prompts before closing a project with a committed mutation", async () => {
     env: {
       ...process.env,
       HERON_TEST_USER_DATA: join(testRoot, "user-data"),
-      HERON_TEST_PROJECT_PATH: join(testRoot, "unsaved.yadaw"),
+      HERON_TEST_PROJECT_PATH: join(testRoot, "unsaved.heron"),
       HERON_TEST_MOCK_AUDIO: "1"
     }
   })

@@ -12,7 +12,7 @@ import { useProjectStore } from "./project"
 
 const session: ProjectSession = {
   id: "project",
-  path: "new.yadaw",
+  path: "new.heron",
   configuration: {
     name: "New",
     sampleRate: 48_000,
@@ -123,7 +123,7 @@ describe("lifecycle store", () => {
     resolveSnapshot(bootstrap(olderSnapshot))
     await initializing
 
-    expect(project.session?.path).toBe("new.yadaw")
+    expect(project.session?.path).toBe("new.heron")
     expect(audio.runtime.state).toBe("running")
     expect(lifecycle.ready).toBe(true)
   })
@@ -170,7 +170,7 @@ describe("lifecycle store", () => {
       }
     })
 
-    expect(project.session?.path).toBe("new.yadaw")
+    expect(project.session?.path).toBe("new.heron")
     expect(window.heron.bootstrap).toHaveBeenCalledOnce()
   })
 

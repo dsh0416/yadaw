@@ -103,7 +103,7 @@
     "projectRecovery": {
       "eyebrow": "工程恢复",
       "title": "恢复未保存的工程？",
-      "description": "较新的工作副本包含尚未保存到 .yadaw 归档的更改。",
+      "description": "较新的工作副本包含尚未保存到 .heron 归档的更改。",
       "detail": "可恢复工作副本、打开上次保存的归档，或取消且不改动任一份副本。",
       "recover": "恢复工作副本",
       "openSaved": "打开上次保存"

@@ -10,7 +10,7 @@ import { LifecycleCoordinator } from "./lifecycle-coordinator"
 
 const project: ProjectSession = {
   id: "project",
-  path: "project.yadaw",
+  path: "project.heron",
   configuration: {
     name: "Project",
     sampleRate: 48_000,

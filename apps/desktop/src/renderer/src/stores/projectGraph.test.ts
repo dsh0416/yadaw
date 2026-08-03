@@ -105,7 +105,7 @@ function workspace(value: ProjectGraphSnapshot): ProjectWorkspaceSnapshot {
     revision: 1,
     session: {
       id: "project",
-      path: "project.yadaw",
+      path: "project.heron",
       configuration: {
         name: "Graph store",
         sampleRate: 48_000,

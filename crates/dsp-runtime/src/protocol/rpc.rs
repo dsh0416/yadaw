@@ -333,7 +333,7 @@ mod tests {
             expected_revision: Some(11),
             mutation: Some(RpcMutationMeta {
                 operation_id: "operation-9".to_owned(),
-                idempotency_key: "open:C:/music/demo.yadaw".to_owned(),
+                idempotency_key: "open:C:/music/demo.heron".to_owned(),
             }),
         }
     }
@@ -346,7 +346,7 @@ mod tests {
                 "{\"protocolVersion\":2,\"requestId\":\"request-7\",\"target\":{\"kind\":",
                 "\"desktop-session\",\"id\":\"desktop\",\"epoch\":\"18446744073709551615\",",
                 "\"generation\":3},\"expectedRevision\":11,\"mutation\":{\"operationId\":",
-                "\"operation-9\",\"idempotencyKey\":\"open:C:/music/demo.yadaw\"}}"
+                "\"operation-9\",\"idempotencyKey\":\"open:C:/music/demo.heron\"}}"
             )
         );
     }

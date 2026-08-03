@@ -21,7 +21,7 @@ import { rpcEvent } from "../test/ipc"
 
 const session: ProjectSession = {
   id: "project",
-  path: "session.yadaw",
+  path: "session.heron",
   configuration: {
     name: "Session",
     sampleRate: 48_000,
