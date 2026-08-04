@@ -76,7 +76,6 @@ const manualUrl = "https://heron.minori.live/manual/"
 }
 
 .brand-logo {
-  --heron-logo-highlight: var(--ui-signal-midi);
   --heron-logo-lockup-wordmark-size: 0.62em;
 
   color: var(--ui-color-text);

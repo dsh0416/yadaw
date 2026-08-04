@@ -22,7 +22,7 @@ const meta = {
     template: `
       <HeronLogo
         v-bind="args"
-        style="--heron-logo-highlight:var(--ui-signal-midi);color:var(--ui-signal-audio);font-size:var(--ui-font-size-4xl)"
+        style="color:var(--ui-signal-audio);font-size:var(--ui-font-size-4xl)"
       />
     `
   })
@@ -42,7 +42,7 @@ export const OfficialVariants: Story = {
           <span style="color:var(--ui-color-text-subtle);font:var(--ui-font-size-xs) var(--ui-type-family-data);text-transform:uppercase">{{ variant }}</span>
           <HeronLogo
             :variant="variant"
-            style="--heron-logo-highlight:var(--ui-signal-midi);color:var(--ui-signal-audio);font-size:var(--ui-font-size-4xl)"
+            style="color:var(--ui-signal-audio);font-size:var(--ui-font-size-4xl)"
           />
         </div>
       </div>

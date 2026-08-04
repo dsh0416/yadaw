@@ -17,6 +17,7 @@ artifactName: "${productName}-${version}-${os}-${arch}.${ext}"
 files:
   - out/**/*
   - build/icon.png
+  - build/icon-macos.png
   - package.json
   - node_modules/**/*
   - "!node_modules/@heron/dsp-node/src/**/*"
@@ -28,7 +29,7 @@ files:
   - "!node_modules/@unhead/bundler/**/*"
 
 win:
-  icon: build/icon.svg
+  icon: build/icon.ico
   extraResources:
     - from: ../../THIRD_PARTY_NOTICES.txt
       to: THIRD_PARTY_NOTICES.txt
@@ -46,7 +47,7 @@ win:
     - nsis
 
 mac:
-  icon: build/icon.svg
+  icon: build/icon.icns
   hardenedRuntime: true
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
@@ -67,7 +68,7 @@ mac:
     - dmg
 
 linux:
-  icon: build/icon.svg
+  icon: build/icons
   extraResources:
     - from: ../../THIRD_PARTY_NOTICES.txt
       to: THIRD_PARTY_NOTICES.txt
