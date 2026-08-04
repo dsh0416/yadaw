@@ -1,32 +1,4 @@
-use super::{
-    HashMap, LiveMixerGraph, LogicalSize, Vst3HostRequest, WindowAttributes, WinitHost, engine,
-};
-
-#[cfg(target_os = "linux")]
-use crate::editor_platform;
-
-impl WinitHost {}
-
-pub(in crate::runtime) fn replace_owned_popup<Id>(
-    owners: &mut HashMap<Id, Id>,
-    owner: Id,
-    popup: Id,
-) -> Option<Id>
-where
-    Id: Copy + Eq + std::hash::Hash,
-{
-    owners.insert(owner, popup)
-}
-
-pub(in crate::runtime) fn remove_owned_popup<Id>(
-    owners: &mut HashMap<Id, Id>,
-    owner: Id,
-) -> Option<Id>
-where
-    Id: Copy + Eq + std::hash::Hash,
-{
-    owners.remove(&owner)
-}
+use super::{EmbeddedUiHost, LiveMixerGraph, Vst3HostRequest, engine};
 
 pub(super) fn milliseconds_to_samples(milliseconds: f64, sample_rate: u32) -> u32 {
     if !milliseconds.is_finite() || milliseconds <= 0.0 || sample_rate == 0 {
@@ -78,59 +50,5 @@ pub(in crate::runtime) fn should_drain_ui_request(
     drained: usize,
     elapsed: std::time::Duration,
 ) -> bool {
-    drained < WinitHost::UI_BATCH && (drained == 0 || elapsed < WinitHost::UI_BUDGET)
-}
-
-pub(in crate::runtime) fn plugin_editor_window_attributes(
-    channel_name: &str,
-    plugin_name: &str,
-    editor_owner_window: Option<usize>,
-) -> WindowAttributes {
-    let attributes = WindowAttributes::default()
-        .with_title(format!("{channel_name} — {plugin_name} — Heron"))
-        .with_inner_size(LogicalSize::new(720.0, 640.0))
-        // Do not expose a half-initialized surface. `present` makes the fully
-        // attached editor visible and activates it in one sequence.
-        .with_visible(false);
-    configure_editor_window_attributes(attributes, editor_owner_window)
-}
-
-pub(super) fn configure_editor_window_attributes(
-    attributes: WindowAttributes,
-    _editor_owner_window: Option<usize>,
-) -> WindowAttributes {
-    #[cfg(target_os = "windows")]
-    {
-        use winit::platform::windows::WindowAttributesExtWindows;
-
-        match _editor_owner_window {
-            Some(owner) => attributes
-                .with_owner_window(owner as isize)
-                .with_skip_taskbar(true),
-            None => attributes,
-        }
-    }
-
-    #[cfg(target_os = "linux")]
-    {
-        use winit::platform::{wayland::WindowAttributesExtWayland, x11::WindowAttributesExtX11};
-
-        let attributes =
-            WindowAttributesExtX11::with_name(attributes, editor_platform::APPLICATION_ID, "heron");
-        WindowAttributesExtWayland::with_name(attributes, editor_platform::APPLICATION_ID, "heron")
-    }
-
-    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
-    attributes
-}
-
-pub(in crate::runtime) fn parse_editor_owner_window(value: &str) -> Result<usize, &'static str> {
-    let handle = value
-        .parse::<usize>()
-        .map_err(|_| "invalid --editor-owner-window value")?;
-    if handle == 0 {
-        Err("--editor-owner-window must not be null")
-    } else {
-        Ok(handle)
-    }
+    drained < EmbeddedUiHost::UI_BATCH && (drained == 0 || elapsed < EmbeddedUiHost::UI_BUDGET)
 }

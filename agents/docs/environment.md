@@ -108,10 +108,9 @@ Clippy, and library tests. It deliberately skips NAPI builds, integration tests,
 examples, and benchmark compilation; `mise run check` remains the merge gate.
 
 Repository native commands discover `rustc -vV`'s host triple and build into
-`target/<host-triple>/<profile>`. The native build script stages only
-`heron-audio-host` and `heron-vst3-probe` back into `target/debug` or
-`target/release` for stable Electron paths. An old implicit-host cache can be
-removed once with `cargo clean`; the scripts never clean it automatically.
+`target/<host-triple>/<profile>`. The native build script builds the unified
+`@heron/dsp-node` addon and stages only `heron-vst3-probe` into
+`target/debug` or `target/release` for its stable subprocess path.
 
 VST3 SDK bindings are generated into Cargo's `OUT_DIR` by
 `heron-vst3-host-sys/build.rs` and are not checked into Git. A clean build
@@ -121,7 +120,7 @@ change.
 
 `pnpm check` and `pnpm check:native` run `pnpm sync:napi-bindings` before
 type-aware Oxlint, residual Vue ESLint, package TypeScript checks, and tests
-that resolve `@heron/dsp-node` / `@heron/audio-host-client`, so the gitignored
+that resolve `@heron/dsp-node`, so the gitignored
 loaders and typings exist in CI and clean checkouts.
 
 Oxfmt formats the tracked TypeScript, JavaScript, Vue, JSON, YAML, Markdown,

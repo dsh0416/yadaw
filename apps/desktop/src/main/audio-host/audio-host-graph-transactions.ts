@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto"
-import type { AudioHostIpcClient } from "@heron/audio-host-client"
+import type { AudioHostRuntime } from "@heron/dsp-node"
 import { IPC_PROTOCOL_VERSION, rpcFailure, rpcSuccess } from "@heron/contracts"
 import type {
   AudioEngineRef,
@@ -26,7 +26,7 @@ interface PluginRuntimeStatus {
 }
 
 interface AudioHostGraphTransactionDependencies {
-  client(): AudioHostIpcClient | null
+  client(): AudioHostRuntime | null
   request(command: Record<string, unknown>): Promise<ControlResponse>
   loadPlugin(plugin: PluginInstanceState, sampleRate: number): Promise<unknown>
   pluginStatus(instanceId: string): PluginRuntimeStatus | undefined
@@ -101,12 +101,12 @@ export class AudioHostGraphTransactions {
         tail_samples: status?.tailSamples ?? 0
       }
     })
-    const nativeMeta = this.meta(meta, client.helperEpoch, baseRevision)
+    const nativeMeta = this.meta(meta, client.runtimeEpoch, baseRevision)
     const prepared = await this.transaction({
       type: "prepare-graph",
       meta: nativeMeta,
       request: {
-        helperEpoch: client.helperEpoch,
+        helperEpoch: client.runtimeEpoch,
         projectGraph,
         baseRevision,
         graphRevision,
@@ -127,7 +127,7 @@ export class AudioHostGraphTransactions {
   async activate(deployment: PreparedGraphDeployment): Promise<RpcResult<GraphTransactionValue>> {
     const client = this.requireClient()
     const request = {
-      helperEpoch: client.helperEpoch,
+      helperEpoch: client.runtimeEpoch,
       projectGraph: deployment.projectGraph,
       baseRevision: deployment.baseRevision
     }
@@ -165,7 +165,7 @@ export class AudioHostGraphTransactions {
       type: "abort-graph",
       meta: deployment.meta,
       request: {
-        helperEpoch: client.helperEpoch,
+        helperEpoch: client.runtimeEpoch,
         projectGraph: deployment.projectGraph,
         baseRevision: deployment.baseRevision
       }
@@ -196,7 +196,7 @@ export class AudioHostGraphTransactions {
     const client = this.requireClient()
     return this.transaction({
       type: "graph-deployment-snapshot",
-      meta: this.meta(meta, client.helperEpoch)
+      meta: this.meta(meta, client.runtimeEpoch)
     })
   }
 
@@ -210,7 +210,7 @@ export class AudioHostGraphTransactions {
     return response.result.result
   }
 
-  private requireClient(): AudioHostIpcClient {
+  private requireClient(): AudioHostRuntime {
     const client = this.dependencies.client()
     if (!client) throw new Error("audio host is not running")
     return client

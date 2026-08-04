@@ -18,8 +18,7 @@ describe("ApplicationSettingsStore", () => {
       softwareMonitoringEnabled: false,
       audioHostRuntime: {
         workerThreads: "auto",
-        maxBlockingThreads: "auto",
-        egressConcurrency: "auto"
+        maxBlockingThreads: "auto"
       },
       pluginEditors: {}
     })
@@ -97,24 +96,21 @@ describe("ApplicationSettingsStore", () => {
     ).rejects.toThrow("class ID")
   })
 
-  it("persists validated audio helper thread settings through the dedicated path", async () => {
+  it("persists validated embedded runtime thread settings through the dedicated path", async () => {
     const userData = await mkdtemp(join(tmpdir(), "heron-runtime-settings-"))
     const store = new ApplicationSettingsStore(userData)
     await store.configureAudioHostRuntime({
       workerThreads: 3,
-      maxBlockingThreads: 6,
-      egressConcurrency: 2
+      maxBlockingThreads: 6
     })
     expect((await new ApplicationSettingsStore(userData).get()).audioHostRuntime).toEqual({
       workerThreads: 3,
-      maxBlockingThreads: 6,
-      egressConcurrency: 2
+      maxBlockingThreads: 6
     })
     await expect(
       store.configureAudioHostRuntime({
         workerThreads: 9,
-        maxBlockingThreads: "auto",
-        egressConcurrency: "auto"
+        maxBlockingThreads: "auto"
       })
     ).rejects.toThrow("Worker threads")
   })

@@ -144,7 +144,6 @@ fn preview_plugin_enabled_switches_the_live_graph_without_rebuilding() {
         low_latency_bypassed: false,
         main_delay: StereoDelayLine::new(0),
         bypass_delay: StereoDelayLine::new(0),
-        marker_index: 0,
         aux_inputs: Vec::new(),
     });
     let command = RealtimeParameterCommand::from_preview(NativeMixerParameterPreview {

@@ -19,7 +19,7 @@ const fakeHostInternal = vi.hoisted(() => {
   class Client {
     static instances: Client[] = []
     static failNextAudioBenchmark = false
-    static failNextIpcBenchmark = false
+    static failNextNativeBridgeBenchmark = false
     static deferNextAudioBenchmark = false
     static failNextLaunches = 0
     static launchArguments: unknown[][] = []
@@ -33,7 +33,7 @@ const fakeHostInternal = vi.hoisted(() => {
     closed = false
     closeCalls = 0
     failAudioBenchmark = false
-    failIpcBenchmark = false
+    failNativeBridgeBenchmark = false
     audioBenchmarkDeferred: Deferred<void> | null = null
     engineState: "running" | "stopped" = "stopped"
     sessionSampleRate = 48_000
@@ -71,8 +71,8 @@ const fakeHostInternal = vi.hoisted(() => {
       }
       this.failAudioBenchmark = Client.failNextAudioBenchmark
       Client.failNextAudioBenchmark = false
-      this.failIpcBenchmark = Client.failNextIpcBenchmark
-      Client.failNextIpcBenchmark = false
+      this.failNativeBridgeBenchmark = Client.failNextNativeBridgeBenchmark
+      Client.failNextNativeBridgeBenchmark = false
       if (Client.deferNextAudioBenchmark) {
         this.audioBenchmarkDeferred = new Deferred<void>()
         Client.deferNextAudioBenchmark = false
@@ -329,8 +329,8 @@ const fakeHostInternal = vi.hoisted(() => {
           : response(report)
       }
       if (request.command.type === "benchmark-echo") {
-        if (this.failIpcBenchmark) {
-          this.failIpcBenchmark = false
+        if (this.failNativeBridgeBenchmark) {
+          this.failNativeBridgeBenchmark = false
           return response({
             type: "error",
             error: {
@@ -397,19 +397,29 @@ const fakeHostInternal = vi.hoisted(() => {
       return Buffer.from(
         encode([
           "test-session",
-          [0, 0, 256, 0],
-          [0, 0, 256, 128 * 1024 * 1024, 0, 0, 0, 0, 0],
+          [0, 256, 0],
           0,
-          [1, 1, this.graphRevision, 0, 0, 0],
-          [0, 4096, 0, 0, 0, 0],
-          false,
-          [2, 4, 2, 0, 0, 0, 0, 0, 0, 0, 0]
+          ["test-session", this.graphRevision, 0, 0],
+          [256, 0, 0],
+          [2, 4]
         ])
       )
     }
 
     get helperEpoch(): string {
       return "test-session"
+    }
+
+    get runtimeEpoch(): string {
+      return this.helperEpoch
+    }
+
+    get directTelemetry(): boolean {
+      return true
+    }
+
+    drainUiWork(): boolean {
+      return false
     }
 
     private graphTransactionSnapshot(): Record<string, unknown> {
@@ -467,8 +477,8 @@ const fakeHostInternal = vi.hoisted(() => {
   return { Client, Deferred, runtime }
 })
 
-vi.mock("@heron/audio-host-client", () => ({
-  AudioHostIpcClient: class extends fakeHostInternal.Client {
+vi.mock("@heron/dsp-node", () => ({
+  AudioHostRuntime: class extends fakeHostInternal.Client {
     heartbeat(payload: Buffer): Promise<{ body: Buffer; attachments: Buffer[] }> {
       return this.heartbeatRequest(payload)
     }
@@ -537,7 +547,7 @@ export const fakeHost = fakeHostInternal
 export function resetFakeHost(): void {
   fakeHost.Client.instances.length = 0
   fakeHost.Client.failNextAudioBenchmark = false
-  fakeHost.Client.failNextIpcBenchmark = false
+  fakeHost.Client.failNextNativeBridgeBenchmark = false
   fakeHost.Client.deferNextAudioBenchmark = false
   fakeHost.Client.failNextLaunches = 0
   fakeHost.Client.launchArguments.length = 0

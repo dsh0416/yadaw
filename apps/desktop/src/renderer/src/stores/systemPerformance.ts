@@ -27,7 +27,7 @@ export const PERFORMANCE_THRESHOLDS = {
     criticalFreeBytes: 5 * GIBIBYTE
   },
   audioRoundTrip: { warningMs: 20, criticalMs: 40 },
-  audioIpc: {
+  audioRuntime: {
     warningUtilizationPercent: 75,
     criticalUtilizationPercent: 90,
     warningHeartbeatAgeMs: 750,
@@ -203,97 +203,58 @@ export const useSystemPerformanceStore = defineStore("system-performance", () =>
       })
     }
 
-    const audioIpc = current.audioIpc
-    if (audioIpc) {
+    const audioRuntime = current.audioRuntime
+    if (audioRuntime) {
       const heartbeatSeverity = classifyUpperBound(
-        audioIpc.heartbeat.ageMs,
-        PERFORMANCE_THRESHOLDS.audioIpc.warningHeartbeatAgeMs,
-        PERFORMANCE_THRESHOLDS.audioIpc.criticalHeartbeatAgeMs
+        audioRuntime.heartbeat.ageMs,
+        PERFORMANCE_THRESHOLDS.audioRuntime.warningHeartbeatAgeMs,
+        PERFORMANCE_THRESHOLDS.audioRuntime.criticalHeartbeatAgeMs
       )
       if (heartbeatSeverity !== "normal") {
         result.push({
-          id: "audio-ipc-heartbeat",
+          id: "audio-runtime-heartbeat",
           severity: heartbeatSeverity,
           title:
             heartbeatSeverity === "critical"
-              ? "Audio helper heartbeat is stalled"
-              : "Audio helper heartbeat is late",
-          message: `The priority heartbeat is ${Math.round(audioIpc.heartbeat.ageMs ?? 0)} ms old.`
+              ? "Audio runtime heartbeat is stalled"
+              : "Audio runtime heartbeat is late",
+          message: `The embedded runtime heartbeat is ${Math.round(audioRuntime.heartbeat.ageMs ?? 0)} ms old.`
         })
       }
 
       const requestUtilization = Math.max(
-        utilizationPercent(audioIpc.requests.normalPending, audioIpc.requests.capacity),
-        utilizationPercent(audioIpc.requests.priorityPending, audioIpc.requests.capacity),
-        utilizationPercent(audioIpc.eventQueueDepth, audioIpc.requests.capacity),
-        utilizationPercent(audioIpc.runtime.egressQueueDepth, audioIpc.requests.capacity)
+        utilizationPercent(audioRuntime.requests.normalPending, audioRuntime.requests.capacity),
+        utilizationPercent(audioRuntime.eventQueueDepth, audioRuntime.requests.capacity)
       )
       const requestSeverity = classifyUpperBound(
         requestUtilization,
-        PERFORMANCE_THRESHOLDS.audioIpc.warningUtilizationPercent,
-        PERFORMANCE_THRESHOLDS.audioIpc.criticalUtilizationPercent
+        PERFORMANCE_THRESHOLDS.audioRuntime.warningUtilizationPercent,
+        PERFORMANCE_THRESHOLDS.audioRuntime.criticalUtilizationPercent
       )
       if (requestSeverity !== "normal") {
         result.push({
-          id: "audio-ipc-router-pressure",
+          id: "audio-runtime-queue-pressure",
           severity: requestSeverity,
           title:
             requestSeverity === "critical"
-              ? "Audio IPC router is saturated"
-              : "Audio IPC router pressure is high",
-          message: `${Math.round(requestUtilization)}% of a request or event queue is occupied.`
-        })
-      }
-
-      const sharedMemoryUtilization = Math.max(
-        utilizationPercent(
-          audioIpc.sharedMemory.outstandingLeases,
-          audioIpc.sharedMemory.maxLeases
-        ),
-        utilizationPercent(audioIpc.sharedMemory.outstandingBytes, audioIpc.sharedMemory.maxBytes),
-        utilizationPercent(
-          audioIpc.sharedMemory.arenaUsedBytes,
-          audioIpc.sharedMemory.arenaCapacityBytes
-        )
-      )
-      let sharedMemorySeverity = classifyUpperBound(
-        sharedMemoryUtilization,
-        PERFORMANCE_THRESHOLDS.audioIpc.warningUtilizationPercent,
-        PERFORMANCE_THRESHOLDS.audioIpc.criticalUtilizationPercent
-      )
-      if (
-        sharedMemorySeverity === "normal" &&
-        (audioIpc.sharedMemory.arenaBusy > 0 || audioIpc.sharedMemory.arenaQuarantinedRegions > 0)
-      ) {
-        sharedMemorySeverity = "warning"
-      }
-      if (sharedMemorySeverity !== "normal") {
-        result.push({
-          id: "audio-ipc-shared-memory-pressure",
-          severity: sharedMemorySeverity,
-          title:
-            sharedMemorySeverity === "critical"
-              ? "Shared-memory leases are saturated"
-              : "Shared-memory lease pressure is high",
-          message:
-            `${Math.round(sharedMemoryUtilization)}% of the shared attachment budget is in use. ` +
-            `${audioIpc.sharedMemory.arenaBusy} busy and ` +
-            `${audioIpc.sharedMemory.arenaQuarantinedRegions} quarantined events were observed.`
+              ? "Audio runtime queue is saturated"
+              : "Audio runtime queue pressure is high",
+          message: `${Math.round(requestUtilization)}% of a native request or event queue is occupied.`
         })
       }
 
       const parameterRingUtilization = utilizationPercent(
-        audioIpc.parameterRing.used,
-        audioIpc.parameterRing.capacity
+        audioRuntime.parameterRing.used,
+        audioRuntime.parameterRing.capacity
       )
       const parameterRingSeverity = classifyUpperBound(
         parameterRingUtilization,
-        PERFORMANCE_THRESHOLDS.audioIpc.warningUtilizationPercent,
-        PERFORMANCE_THRESHOLDS.audioIpc.criticalUtilizationPercent
+        PERFORMANCE_THRESHOLDS.audioRuntime.warningUtilizationPercent,
+        PERFORMANCE_THRESHOLDS.audioRuntime.criticalUtilizationPercent
       )
       if (parameterRingSeverity !== "normal") {
         result.push({
-          id: "audio-ipc-parameter-ring-pressure",
+          id: "audio-runtime-parameter-pressure",
           severity: parameterRingSeverity,
           title:
             parameterRingSeverity === "critical"

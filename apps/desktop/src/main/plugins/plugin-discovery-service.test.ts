@@ -84,6 +84,22 @@ describe("PluginDiscoveryService", () => {
     expect(probe.probe).toHaveBeenCalledTimes(2)
   })
 
+  it("uses module info during startup without instantiating the plug-in", async () => {
+    const { root, probe, service } = await harness()
+    const bundle = join(root, "Sidechain.vst3")
+    await mkdir(bundle)
+    await writeFile(
+      join(bundle, "moduleinfo.json"),
+      JSON.stringify({
+        Classes: [{ CID: "sidechain", Category: "Audio Module Class", Name: "Sidechain" }]
+      })
+    )
+    const catalog = await service.scan(emptyCatalog(), { paths: [root] }, vi.fn())
+
+    expect(probe.probe).not.toHaveBeenCalled()
+    expect(catalog.plugins[0]).toMatchObject({ classId: "sidechain", name: "Sidechain" })
+  })
+
   it("keeps quarantine cached until an explicit retry succeeds", async () => {
     const { root, probe, service } = await harness()
     const bundle = join(root, "Retry.vst3")

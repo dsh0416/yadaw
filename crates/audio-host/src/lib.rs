@@ -71,14 +71,10 @@ macro_rules! control_error {
 mod ara;
 pub use heron_audio_engine::{HostError, HostResult, Status};
 
-pub mod crash_marker {
-    pub use heron_audio_engine::crash_marker::*;
-}
 pub mod device {
     pub use heron_audio_engine::device::*;
 }
 pub mod editor_platform;
-pub mod editor_window;
 pub mod engine {
     pub use heron_audio_engine::*;
 }

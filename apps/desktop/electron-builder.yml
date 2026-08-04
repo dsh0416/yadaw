@@ -43,8 +43,6 @@ win:
   extraResources:
     - from: ../../THIRD_PARTY_NOTICES.txt
       to: THIRD_PARTY_NOTICES.txt
-    - from: ../../target/release/heron-audio-host.exe
-      to: heron-audio-host.exe
     - from: ../../target/release/heron-vst3-probe.exe
       to: heron-vst3-probe.exe
     - from: ../../target/bundles
@@ -64,8 +62,6 @@ mac:
   extraResources:
     - from: ../../THIRD_PARTY_NOTICES.txt
       to: THIRD_PARTY_NOTICES.txt
-    - from: ../../target/release/heron-audio-host
-      to: heron-audio-host
     - from: ../../target/release/heron-vst3-probe
       to: heron-vst3-probe
     - from: ../../target/bundles
@@ -82,8 +78,6 @@ linux:
   extraResources:
     - from: ../../THIRD_PARTY_NOTICES.txt
       to: THIRD_PARTY_NOTICES.txt
-    - from: ../../target/release/heron-audio-host
-      to: heron-audio-host
     - from: ../../target/release/heron-vst3-probe
       to: heron-vst3-probe
     - from: ../../target/bundles

@@ -246,8 +246,7 @@ export const useApplicationSettingsStore = defineStore("application-settings", (
       if (!applied) throw new Error(error.value)
       await refreshAudioHostRuntimeDiagnostics()
     } catch (reason) {
-      error.value =
-        reason instanceof Error ? reason.message : t("errors.unableToRestartAudioHelper")
+      error.value = reason instanceof Error ? reason.message : t("errors.unableToSaveAudioRuntime")
       throw reason
     } finally {
       applyingAudioRuntime.value = false
@@ -301,7 +300,8 @@ export const useApplicationSettingsStore = defineStore("application-settings", (
     const target = desktopSession.value
     if (!target) return
     const result = await window.heron.systemPerformanceSnapshot(readMeta(target))
-    if (result.ok) resolvedAudioHostRuntime.value = result.value.audioIpc?.runtime.resolved ?? null
+    if (result.ok)
+      resolvedAudioHostRuntime.value = result.value.audioRuntime?.runtime.resolved ?? null
     else error.value = rpcErrorMessage(result.error)
   }
 

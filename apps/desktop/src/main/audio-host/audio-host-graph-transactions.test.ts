@@ -145,7 +145,7 @@ function runtimeGraph(): AudioHostGraph {
 }
 
 describe("AudioHostGraphTransactions", () => {
-  const client = { helperEpoch: "helper-epoch" }
+  const client = { runtimeEpoch: "helper-epoch" }
   const dependencies = {
     client: vi.fn(() => client as never),
     request: vi.fn(),

@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto"
 import { IPC_CHANNELS, IPC_PROTOCOL_VERSION } from "@heron/contracts"
 import { ApplicationSettingsStore } from "../settings"
 import { createApplicationServices } from "./application-services"
-import { AudioHostService } from "../audio-host"
+import { AudioHostService, ElectronPluginEditorWindows } from "../audio-host"
 import { installApplicationMenu } from "./application-menu"
 import { setMainLocale, t } from "../settings"
 import { PluginCatalogService } from "../plugins"
@@ -100,8 +100,9 @@ export function startApplication(
         detail: t("startup.discoveringPluginsDetail")
       })
       try {
-        // Soft discovery (moduleinfo / factory enum) must finish before the
-        // workspace opens so project restore can resolve plug-in descriptors.
+        // Catalog-only discovery (moduleinfo / soft factory enum) must finish
+        // before the workspace opens. Full bus/layout probing is deferred until
+        // a plug-in is about to be loaded into the runtime.
         // Fingerprint-cached descriptors are reused; quarantined modules retry.
         await plugins.scan({ retryQuarantined: true })
       } catch (error) {
@@ -119,25 +120,15 @@ export function startApplication(
         completed: null,
         total: null
       })
-      const audioHostPath = app.isPackaged
-        ? join(process.resourcesPath, `heron-audio-host${executableSuffix}`)
-        : resolve(
-            app.getAppPath(),
-            "..",
-            "..",
-            "target",
-            "debug",
-            `heron-audio-host${executableSuffix}`
-          )
       const window = createMainWindow(false)
+      const editorWindows = new ElectronPluginEditorWindows(window)
       let editorClosedSequence = 0
       const audioHostService = new AudioHostService(
-        audioHostPath,
-        join(app.getPath("userData"), "audio-host-crash-marker.bin"),
         applicationSettings.audioHostRuntime,
-        process.platform === "win32" ? window.getNativeWindowHandle() : undefined,
+        undefined,
         (message) => {
-          console.error(`Heron audio helper failure: ${message}`)
+          console.error(`Heron embedded audio runtime failure: ${message}`)
+          void editorWindows.closeAll()
           for (const candidate of BrowserWindow.getAllWindows()) {
             if (candidate !== mainWindow && candidate !== splashWindow) candidate.close()
           }
@@ -157,7 +148,8 @@ export function startApplication(
               payload: { instanceId }
             })
           }
-        }
+        },
+        editorWindows
       )
       audioHostService.start()
       await audioHostService.configurePluginEditorAppearance({

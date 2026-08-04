@@ -26,6 +26,10 @@ const phaseKeys: Record<OperationSnapshot["phase"], string> = {
   "loading-project-assets": "operation.phase.loadingProjectAssets",
   "preparing-project-graph": "operation.phase.preparingProjectGraph",
   "preparing-waveforms": "operation.phase.preparingWaveforms",
+  "synchronizing-plugin-state": "operation.phase.synchronizingPluginState",
+  "stopping-playback": "operation.phase.stoppingPlayback",
+  "closing-project-database": "operation.phase.closingProjectDatabase",
+  "releasing-project-graph": "operation.phase.releasingProjectGraph",
   "cleaning-up": "operation.phase.cleaningUp"
 }
 

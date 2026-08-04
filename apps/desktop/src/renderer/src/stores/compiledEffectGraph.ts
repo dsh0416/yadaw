@@ -59,7 +59,7 @@ export const useCompiledEffectGraphStore = defineStore("compiled-effect-graph", 
       } catch (reason) {
         if (!isOpen.value || generation !== requestGeneration) return
         errorMessage.value =
-          reason instanceof Error ? reason.message : "The audio helper did not return a graph."
+          reason instanceof Error ? reason.message : "The audio runtime did not return a graph."
         status.value = "error"
       } finally {
         refreshPromise = null

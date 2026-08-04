@@ -244,19 +244,20 @@ export function registerProjectHandlers(context: IpcHandlerContext): void {
     if (disposition !== "save" && disposition !== "discard" && disposition !== "cancel") {
       return validationFailure(meta, "disposition")
     }
-    if (disposition === "save") await synchronizePluginStates()
-    const result = await projectLifecycle.close(meta, disposition)
-    if (result.ok && result.value.closed) {
-      try {
-        await transport.command({ type: "stop" })
-      } catch {
-        // The audio engine may already be stopped.
-      }
-      if (disposition === "save") {
-        await recordings.cleanupCommittedForProject(current.path)
-      }
-    }
-    return result
+    return projectLifecycle.close(meta, disposition, {
+      preparePersistedState: disposition === "save" ? () => synchronizePluginStates() : undefined,
+      stopTransport: async () => {
+        try {
+          await transport.command({ type: "stop" })
+        } catch {
+          // The audio engine may already be stopped.
+        }
+      },
+      cleanupCommittedState:
+        disposition === "save"
+          ? () => recordings.cleanupCommittedForProject(current.path)
+          : undefined
+    })
   })
 
   registerRpcHandler(IPC_CHANNELS.projectAssetsList, async ({ meta }) => {

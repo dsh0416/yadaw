@@ -1,7 +1,6 @@
-import { tmpdir } from "node:os"
 import { resolve } from "node:path"
 import { decode, encode } from "@msgpack/msgpack"
-import { AudioHostIpcClient } from "@heron/audio-host-client"
+import { AudioHostRuntime } from "@heron/dsp-node"
 
 interface BenchmarkScenario {
   plugins: number
@@ -13,6 +12,7 @@ interface WireResponse {
   result: {
     type: string
     message?: string
+    error?: { userMessageKey?: string; code?: string }
     report?: {
       overall_realtime_factor: number
       worst_p99_deadline_utilization_percent: number
@@ -22,31 +22,24 @@ interface WireResponse {
 }
 
 const repositoryRoot = resolve(import.meta.dirname, "..", "..", "..")
-const executableSuffix = process.platform === "win32" ? ".exe" : ""
-const helperPath = resolve(repositoryRoot, "target", "debug", `heron-audio-host${executableSuffix}`)
 const pluginPath = resolve(repositoryRoot, "target", "bundles", "Heron Gain.vst3")
-const client = new AudioHostIpcClient(
-  helperPath,
-  resolve(tmpdir(), `heron-audio-benchmark-${process.pid}.marker`),
-  2,
-  4,
-  2
-)
+const client = new AudioHostRuntime(2, 4)
+const uiPump = setInterval(() => client.drainUiWork(), 8)
+uiPump.unref()
 
 let requestId = 1
-async function rawRequest(
-  command: unknown,
-  attachments: Buffer[] = []
-): Promise<{ result: WireResponse["result"]; attachments: Buffer[] }> {
-  const response = await client.request(
-    Buffer.from(encode({ request_id: requestId++, command })),
-    attachments
-  )
+async function rawRequest(command: unknown): Promise<{ result: WireResponse["result"] }> {
+  const response = await client.request(Buffer.from(encode({ request_id: requestId++, command })))
   const decoded = decode(response.body) as WireResponse
   if (decoded.result.type === "error") {
-    throw new Error(decoded.result.message ?? "audio-host request failed")
+    throw new Error(
+      decoded.result.message ??
+        decoded.result.error?.userMessageKey ??
+        decoded.result.error?.code ??
+        "audio-host request failed"
+    )
   }
-  return { result: decoded.result, attachments: response.attachments }
+  return { result: decoded.result }
 }
 
 async function request(command: unknown): Promise<WireResponse["result"]> {
@@ -56,34 +49,17 @@ async function request(command: unknown): Promise<WireResponse["result"]> {
 async function echo(payloadBytes: number): Promise<void> {
   const payload = Buffer.alloc(payloadBytes, 0x5a)
   const result = (
-    await rawRequest(
-      {
-        type: "benchmark-echo",
-        payload: {
-          storage: "attachment",
-          index: 0,
-          offset: 0,
-          length: payload.byteLength
-        }
-      },
-      [payload]
-    )
+    await rawRequest({
+      type: "benchmark-echo",
+      payload: { storage: "inline", bytes: payload }
+    })
   ).result
   if (result.type !== "benchmark-echo") throw new Error("benchmark echo response mismatch")
 }
 
-async function runIpcSmoke(): Promise<void> {
-  for (let index = 0; index < 208; index += 1) await echo(256)
-  await echo(4 * 1024 * 1024)
-  for (let index = 0; index < 26; index += 1) await echo(4 * 1024 * 1024)
-  for (const concurrency of [1, 4, 8, 16]) {
-    const rounds = Math.max(2, Math.ceil(32 / concurrency))
-    await echo(4 * 1024 * 1024)
-    for (let round = 0; round < rounds; round += 1) {
-      await Promise.all(Array.from({ length: concurrency }, () => echo(4 * 1024 * 1024)))
-    }
-  }
-  await Promise.all(Array.from({ length: 128 }, () => echo(256)))
+async function runNativeBridgeSmoke(): Promise<void> {
+  for (let index = 0; index < 64; index += 1) await echo(256)
+  await Promise.all(Array.from({ length: 32 }, () => echo(256)))
 }
 
 const pluginInstanceIds = Array.from(
@@ -237,9 +213,11 @@ try {
     )
   }
 
-  const ipcStarted = performance.now()
-  await runIpcSmoke()
-  console.log(`Audio IPC smoke passed (${(performance.now() - ipcStarted).toFixed(1)} ms)`)
+  const bridgeStarted = performance.now()
+  await runNativeBridgeSmoke()
+  console.log(
+    `Embedded audio bridge smoke passed (${(performance.now() - bridgeStarted).toFixed(1)} ms)`
+  )
 
   const stopped = await request({ type: "stop-audio-engine" })
   if (stopped.type !== "audio-runtime") throw new Error("audio engine stop response mismatch")
@@ -251,6 +229,7 @@ try {
     throw new Error("project VST3 unload response mismatch")
   }
 } finally {
+  clearInterval(uiPump)
   try {
     await client.heartbeat(
       Buffer.from(

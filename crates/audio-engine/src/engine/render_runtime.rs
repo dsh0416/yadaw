@@ -255,18 +255,11 @@ impl NativeMixerRuntime {
         let context = self.process_context(position, state);
         let input_widths = &self.channel_input_widths;
         let plugins = &mut self.plugins_by_channel;
-        let generation = self.generation;
         let mut process_plugins =
             |channel_index: usize, frames: &mut [StereoFrame], post_pan: &[StereoFrame]| {
                 let mut width = input_widths[channel_index];
                 for plugin in &mut plugins[channel_index] {
-                    crate::crash_marker::mark(
-                        generation,
-                        plugin.marker_index,
-                        crate::crash_marker::STAGE_PROCESS,
-                    );
                     plugin.process_block(frames, &mut width, &context, post_pan);
-                    crate::crash_marker::clean(generation);
                 }
                 if matches!(width, SignalWidth::Mono) {
                     for frame in frames {

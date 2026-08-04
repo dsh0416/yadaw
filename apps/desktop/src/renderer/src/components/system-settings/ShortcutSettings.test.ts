@@ -42,8 +42,7 @@ function applicationSettings(shortcuts: ShortcutPreferences): ApplicationSetting
     },
     audioHostRuntime: {
       workerThreads: "auto",
-      maxBlockingThreads: "auto",
-      egressConcurrency: "auto"
+      maxBlockingThreads: "auto"
     },
     pluginEditors: {},
     shortcuts,

@@ -39,7 +39,14 @@ type PrepareProject = (
   onProgress: (progress: ProjectLoadProgress) => void
 ) => Promise<ProjectSession>
 
+interface ProjectCloseHooks {
+  preparePersistedState?: () => Promise<void>
+  stopTransport?: () => Promise<void>
+  cleanupCommittedState?: () => Promise<void>
+}
+
 const PROJECT_LOAD_TOTAL_UNITS = 5
+const PROJECT_CLOSE_TOTAL_UNITS = 7
 
 function sameRef(left: ResourceRef | undefined, right: ResourceRef): boolean {
   return (
@@ -295,7 +302,8 @@ export class ProjectLifecycleService {
 
   async close(
     meta: RpcRequestMeta,
-    disposition: ProjectCloseDisposition
+    disposition: ProjectCloseDisposition,
+    hooks: ProjectCloseHooks = {}
   ): Promise<RpcResult<ProjectCloseResult>> {
     const workspace = this.lifecycle.applicationState.workspaceSnapshot()
     if (!workspace) {
@@ -310,18 +318,51 @@ export class ProjectLifecycleService {
     if (!begin.ok) return begin
     if (begin.value) return begin.value as RpcResult<ProjectCloseResult>
 
+    const operationId = meta.mutation!.operationId
+    const patchProgress = (phase: OperationPhase, completedUnits: number): void => {
+      this.operations.patch(
+        operationId,
+        { phase, completedUnits, totalUnits: PROJECT_CLOSE_TOTAL_UNITS },
+        true
+      )
+    }
+    this.operations.upsert(
+      {
+        id: operationId,
+        title: t("operation.closingProject"),
+        description: workspace.session.configuration.name,
+        phase: hooks.preparePersistedState ? "synchronizing-plugin-state" : "stopping-playback",
+        state: "running",
+        completedUnits: hooks.preparePersistedState ? 0 : 1,
+        totalUnits: PROJECT_CLOSE_TOTAL_UNITS,
+        cancellable: false,
+        error: null,
+        dropoutFrames: 0
+      },
+      true
+    )
+
     this.lifecycle.beginProject("closing")
     let preparedGraph: PreparedProjectGraph | null = null
     let workerClosed = false
     try {
+      if (hooks.preparePersistedState) {
+        await hooks.preparePersistedState()
+        patchProgress("stopping-playback", 1)
+      }
+      await hooks.stopTransport?.()
+      patchProgress("preparing-project-graph", 2)
       const prepared = await this.projectGraph.prepareSilentCandidate(meta, workspace.projectGraph)
       if (!prepared.ok) {
         this.lifecycle.failProject(prepared.error.userMessageKey)
-        this.finishOperation(meta, "not-committed", prepared)
+        this.finishPublishedOperation(meta, "not-committed", prepared, PROJECT_CLOSE_TOTAL_UNITS)
         return prepared
       }
       preparedGraph = prepared.value
-      const canClose = await this.projects.prepareClose(disposition)
+      patchProgress(disposition === "save" ? "saving-archive" : "closing-project-database", 3)
+      const canClose = await this.projects.prepareClose(disposition, (progress) => {
+        patchProgress(progress.phase, 3)
+      })
       if (!canClose) {
         await this.projectGraph.abortCandidate(preparedGraph)
         this.lifecycle.cancelProject()
@@ -335,23 +376,34 @@ export class ProjectLifecycleService {
           resource: workspace.project,
           details: { type: "operation-cancelled", committed: false }
         })
-        this.finishOperation(meta, "not-committed", cancelled)
+        this.finishPublishedOperation(meta, "not-committed", cancelled, PROJECT_CLOSE_TOTAL_UNITS)
         return cancelled
       }
       workerClosed = true
+      patchProgress("releasing-project-graph", 4)
       const activated = await this.projectGraph.activateCandidate(meta, preparedGraph)
       if (!activated.ok) {
         await this.projects.abortPreparedClose()
         workerClosed = false
         await this.projectGraph.abortCandidate(preparedGraph)
         this.lifecycle.failProject(activated.error.userMessageKey)
-        this.finishOperation(meta, "not-committed", activated)
+        this.finishPublishedOperation(meta, "not-committed", activated, PROJECT_CLOSE_TOTAL_UNITS)
         return activated
       }
 
-      const cleanupSucceeded = await this.projects.commitClose(disposition)
+      patchProgress("cleaning-up", 5)
+      let cleanupSucceeded = await this.projects.commitClose(disposition)
       workerClosed = false
       await this.projectGraph.clearProject()
+      patchProgress("cleaning-up", 6)
+      if (hooks.cleanupCommittedState) {
+        try {
+          await hooks.cleanupCommittedState()
+        } catch (error) {
+          cleanupSucceeded = false
+          console.error("[project-lifecycle] committed project cleanup failed", error)
+        }
+      }
       if (cleanupSucceeded) {
         await this.lifecycle.applicationState.resources.drop(workspace.project)
       } else {
@@ -375,7 +427,7 @@ export class ProjectLifecycleService {
               ]
         }
       )
-      this.finishOperation(meta, "committed", result)
+      this.finishPublishedOperation(meta, "committed", result, PROJECT_CLOSE_TOTAL_UNITS)
       return result
     } catch (error) {
       if (workerClosed) {
@@ -388,7 +440,7 @@ export class ProjectLifecycleService {
       console.error(`[project-lifecycle] ${rpcError.correlationId} close failed`, error)
       const result = rpcFailure(meta, rpcError)
       this.lifecycle.failProject(rpcError.userMessageKey)
-      this.finishOperation(meta, "not-committed", result)
+      this.finishPublishedOperation(meta, "not-committed", result, PROJECT_CLOSE_TOTAL_UNITS)
       return result
     }
   }
@@ -437,7 +489,8 @@ export class ProjectLifecycleService {
   private finishPublishedOperation(
     meta: RpcRequestMeta,
     outcome: "committed" | "not-committed" | "quarantined",
-    result: RpcResult<unknown>
+    result: RpcResult<unknown>,
+    totalUnits = PROJECT_LOAD_TOTAL_UNITS
   ): void {
     this.finishOperation(meta, outcome, result)
     if (!meta.mutation) return
@@ -446,8 +499,8 @@ export class ProjectLifecycleService {
       result.ok
         ? {
             state: "completed",
-            completedUnits: PROJECT_LOAD_TOTAL_UNITS,
-            totalUnits: PROJECT_LOAD_TOTAL_UNITS,
+            completedUnits: totalUnits,
+            totalUnits,
             error: null
           }
         : {

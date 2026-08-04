@@ -296,7 +296,6 @@ fn missing_effect(audio_mode: PluginAudioMode) -> LivePlugin {
         low_latency_bypassed: false,
         main_delay: StereoDelayLine::new(0),
         bypass_delay: StereoDelayLine::new(0),
-        marker_index: 0,
         aux_inputs: Vec::new(),
     }
 }

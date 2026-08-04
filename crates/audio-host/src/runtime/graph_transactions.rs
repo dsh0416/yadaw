@@ -38,11 +38,6 @@ impl GraphTransactionState {
         }
     }
 
-    #[cfg(test)]
-    pub(super) fn snapshot(&self) -> GraphDeploymentSnapshot {
-        self.snapshot_at(self.committed_revision)
-    }
-
     pub(super) fn snapshot_with_engine(
         &self,
         audio_engine: &engine::AudioEngine,

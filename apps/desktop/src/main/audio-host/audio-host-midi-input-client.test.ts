@@ -1,4 +1,4 @@
-import type { AudioHostIpcClient } from "@heron/audio-host-client"
+import type { AudioHostRuntime } from "@heron/dsp-node"
 import { describe, expect, it, vi } from "vitest"
 import { AudioHostMidiInputClient } from "./audio-host-midi-input-client"
 import type { ControlResponse } from "./wire"
@@ -102,7 +102,7 @@ describe("AudioHostMidiInputClient", () => {
       inputOffsetsMs: {}
     })
     await client.setControlLearning(true)
-    const helper = {} as AudioHostIpcClient
+    const helper = {} as AudioHostRuntime
 
     await client.restore(helper)
 
@@ -126,7 +126,7 @@ describe("AudioHostMidiInputClient", () => {
     const requestImmediately = vi.fn(async () => midiResponse())
     const client = new AudioHostMidiInputClient(vi.fn(), requestImmediately)
 
-    await client.restore({} as AudioHostIpcClient)
+    await client.restore({} as AudioHostRuntime)
 
     expect(requestImmediately).not.toHaveBeenCalled()
   })

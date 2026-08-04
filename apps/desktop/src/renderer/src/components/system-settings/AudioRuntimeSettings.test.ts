@@ -8,13 +8,11 @@ describe("AudioRuntimeSettings", () => {
       props: {
         modelValue: {
           workerThreads: "auto",
-          maxBlockingThreads: "auto",
-          egressConcurrency: "auto"
+          maxBlockingThreads: "auto"
         },
         resolved: {
           workerThreads: 2,
-          maxBlockingThreads: 4,
-          egressConcurrency: 2
+          maxBlockingThreads: 4
         },
         applying: false,
         error: ""
@@ -28,8 +26,7 @@ describe("AudioRuntimeSettings", () => {
 
     expect(wrapper.emitted("apply")?.[0]?.[0]).toEqual({
       workerThreads: 3,
-      maxBlockingThreads: "auto",
-      egressConcurrency: "auto"
+      maxBlockingThreads: "auto"
     })
   })
 
@@ -38,8 +35,7 @@ describe("AudioRuntimeSettings", () => {
       props: {
         modelValue: {
           workerThreads: "auto",
-          maxBlockingThreads: "auto",
-          egressConcurrency: "auto"
+          maxBlockingThreads: "auto"
         },
         resolved: null,
         applying: false,

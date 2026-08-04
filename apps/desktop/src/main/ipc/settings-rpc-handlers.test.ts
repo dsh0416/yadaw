@@ -210,8 +210,7 @@ describe("registerSettingsRpcHandlers", () => {
       context.lifecycle.applicationState.synchronizeApplicationSettings(defaultSettings)
     const preferences = {
       workerThreads: 2,
-      maxBlockingThreads: 4,
-      egressConcurrency: 2
+      maxBlockingThreads: 4
     }
 
     const result = await invoke(

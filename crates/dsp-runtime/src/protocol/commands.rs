@@ -3,9 +3,9 @@ use serde::{Deserialize, Serialize};
 use super::{
     AudioEngineConfig, BinaryPayload, GraphTransactionRequest, GraphUpdate,
     MidiRecordingStartConfig, MidiSyncPreferences, MixerParameterPreview, ParameterCommand,
-    ParameterGesture, PluginAudioMode, PluginAuxInputConfiguration, PluginEditorAppearance,
-    PluginEditorContext, PluginEditorPreference, PrepareGraphRequest, RecordingStartConfig,
-    RoundTripLatencyMeasurementRequest, RpcRequestMeta, TransportControl,
+    ParameterGesture, PluginAudioMode, PluginAuxInputConfiguration, PluginEditorAction,
+    PluginEditorAppearance, PluginEditorContext, PluginEditorPreference, PrepareGraphRequest,
+    RecordingStartConfig, RoundTripLatencyMeasurementRequest, RpcRequestMeta, TransportControl,
 };
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -139,6 +139,10 @@ pub enum ControlCommand {
     },
     ConfigurePluginEditorAppearance {
         appearance: PluginEditorAppearance,
+    },
+    ApplyPluginEditorAction {
+        instance_id: String,
+        action: PluginEditorAction,
     },
     ResolvePluginSidechainRoute {
         request_id: u64,

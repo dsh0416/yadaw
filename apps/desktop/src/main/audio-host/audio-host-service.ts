@@ -9,17 +9,17 @@ import type {
   PluginSidechainRouteRequest,
   Vst3HostNotification
 } from "./audio-host-events"
-import { graphDiff, readCrashMarker } from "./audio-host-graph-client"
+import { graphDiff } from "./audio-host-graph-client"
 import { AudioHostRecordingClient } from "./audio-host-recording-client"
 import { AudioHostPluginClient } from "./audio-host-plugin-client"
 import { AudioHostTransportClient } from "./audio-host-transport-client"
 import { AudioHostGraphTransactions } from "./audio-host-graph-transactions"
 import type { PreparedGraphDeployment } from "./audio-host-graph-transactions"
-import type { AudioHostIpcClient } from "@heron/audio-host-client"
+import { AudioHostRuntime } from "@heron/dsp-node"
 import type {
   AudioBackendDescriptor,
   AudioDeviceList,
-  AudioIpcPerformanceSnapshot,
+  AudioRuntimePerformanceSnapshot,
   AudioHostRuntimePreferences,
   AudioPreferences,
   AudioRuntimeSnapshot,
@@ -52,13 +52,9 @@ import type {
 } from "./audio-host-plugin-client"
 
 import { AudioHostGateway } from "./audio-host-gateway"
-import { AudioHostProcessSupervisor } from "./audio-host-process-supervisor"
 import { AudioHostSessionCoordinator } from "./audio-host-session-coordinator"
 import { AudioHostEventDispatcher } from "./audio-host-event-dispatcher"
-import {
-  AudioHostRestartCoordinator,
-  type AudioHostRestartState
-} from "./audio-host-restart-coordinator"
+import type { AudioHostEditorWindows } from "./audio-host-editor-windows"
 import type {
   AudioHostGraph,
   AudioHostMidiRecordingConfig,
@@ -86,7 +82,10 @@ export class AudioHostService {
     locale: "en-US"
   }
   private readonly pendingPreferenceWrites = new Set<Promise<void>>()
-  private readonly supervisor: AudioHostProcessSupervisor
+  private client: AudioHostRuntime | null = null
+  private stopping = false
+  private uiDrainTimer: ReturnType<typeof setInterval> | null = null
+  private uiDrainScheduled = false
   private readonly session = new AudioHostSessionCoordinator()
   private readonly gateway: AudioHostGateway
   private readonly events = new AudioHostEventDispatcher({
@@ -99,36 +98,10 @@ export class AudioHostService {
         "Side-chain routing could not be committed."
       )
   })
-  private readonly restarts = new AudioHostRestartCoordinator({
-    isStopping: () => this.stopping,
-    runtimePreferences: () => structuredClone(this.runtimePreferences),
-    setRuntimePreferences: (preferences) => {
-      this.runtimePreferences = structuredClone(preferences)
-    },
-    captureConfigurationState: () => this.captureConfigurationRestartState(),
-    capturePluginStates: () => this.capturePluginStatesForRestart(),
-    prepareConfigurationRestart: (state) => this.prepareConfigurationRestart(state),
-    shutdownCurrentHelper: () => this.shutdownCurrentClient(),
-    restart: (state, mode) =>
-      mode === "recovery"
-        ? this.recoverAfterFailure(
-            state.audioPreferences,
-            state.transport,
-            state.audioEngineWasRunning
-          )
-        : this.restartAfterConfiguration(
-            state.audioPreferences,
-            state.transport,
-            state.audioEngineWasRunning
-          ),
-    reportFailure: (message) => this.onFailure(message)
-  })
-
   private readonly diagnostics = new AudioHostDiagnostics(
     () => this.client,
     (command) => this.request(command),
     () => ({
-      executablePath: this.executablePath,
       runtimePreferences: this.runtimePreferences,
       ...this.health.snapshot()
     })
@@ -138,10 +111,7 @@ export class AudioHostService {
     currentClient: () => this.client,
     heartbeat: (client) => this.performPriority({ type: "heartbeat" }, client),
     captureTransport: (client) => this.audioTransport.captureTransport(client),
-    onFailure: (client, message) => this.handleExit(client, message),
-    onStable: (client) => {
-      if (this.client === client) this.restarts.markStable()
-    }
+    onFailure: (_client, message) => this.onFailure(message)
   })
 
   private readonly midiInput = new AudioHostMidiInputClient(
@@ -149,25 +119,21 @@ export class AudioHostService {
     (command, client) => this.requestImmediately(command, client)
   )
 
-  private readonly benchmarkRunner = new AudioHostBenchmarkRunner((onFailure) => {
-    const host = new AudioHostService(
-      this.executablePath,
-      `${this.crashMarkerPath}.benchmark`,
-      structuredClone(this.runtimePreferences),
-      undefined,
-      onFailure,
-      async () => {}
-    )
-    return {
-      start: () => host.start(false),
-      stop: () => host.stop(),
-      loadPlugin: (plugin, sampleRate) => host.loadPlugin(plugin, sampleRate),
-      request: (command) => host.request(command),
-      runIpcBenchmark: () => host.diagnostics.runIpcBenchmark(),
-      beginBenchmark: () => host.health.beginBenchmark(),
-      endBenchmark: (generation) => host.health.endBenchmark(generation)
-    }
-  })
+  private readonly benchmarkRunner = new AudioHostBenchmarkRunner((onFailure) => ({
+    start: () => {
+      if (!this.client) {
+        onFailure("embedded audio runtime is not running")
+        throw new Error("embedded audio runtime is not running")
+      }
+    },
+    stop: async () => {},
+    loadPlugin: (plugin, sampleRate) => this.loadPlugin(plugin, sampleRate),
+    unloadPlugin: (instanceId) => this.plugins.unloadPlugin(instanceId),
+    request: (command) => this.request(command),
+    runNativeBenchmark: () => this.diagnostics.runNativeBenchmark(),
+    beginBenchmark: () => this.health.beginBenchmark(),
+    endBenchmark: (generation) => this.health.endBenchmark(generation)
+  }))
 
   private readonly recording = new AudioHostRecordingClient((command) => this.request(command))
 
@@ -183,7 +149,7 @@ export class AudioHostService {
     () => this.diagnostics.readTelemetry(),
     () => this.lastGraph?.project.sampleRate ?? null,
     (value) => this.plugins.coalesceParameter(value),
-    () => this.client?.persistentSharedPages ?? false
+    () => this.client?.directTelemetry ?? false
   )
 
   private readonly graphTransactions = new AudioHostGraphTransactions({
@@ -205,28 +171,25 @@ export class AudioHostService {
   })
 
   constructor(
-    private readonly executablePath: string,
-    private readonly crashMarkerPath: string,
     private runtimePreferences: AudioHostRuntimePreferences,
-    editorOwnerWindowHandle: Buffer | undefined,
+    private readonly editorOwnerWindowHandle: Buffer | undefined,
     private readonly onFailure: (message: string) => void,
     private readonly onEditorPreferenceChanged: (
       classId: string,
       preference: PluginEditorPreference
     ) => Promise<void>,
-    private readonly onEditorClosed: (instanceId: string) => void = () => {}
+    private readonly onEditorClosed: (instanceId: string) => void = () => {},
+    private readonly editorWindows?: AudioHostEditorWindows
   ) {
-    this.supervisor = new AudioHostProcessSupervisor(
-      executablePath,
-      crashMarkerPath,
-      editorOwnerWindowHandle
-    )
     this.gateway = new AudioHostGateway(
       () => this.client,
-      () => (this.stopping ? "stopping" : this.restarts.recoveryPromise),
+      () => (this.stopping ? "stopping" : null),
       onEditorPreferenceChanged,
       this.pendingPreferenceWrites,
-      onEditorClosed,
+      (instanceId) => {
+        this.editorWindows?.hostClosed(instanceId)
+        onEditorClosed(instanceId)
+      },
       (callback) => this.events.dispatchAra(callback),
       (notification) => this.events.dispatchVst3(notification),
       (request) => this.events.dispatchSidechain(request)
@@ -264,20 +227,8 @@ export class AudioHostService {
     })
   }
 
-  private get client(): AudioHostIpcClient | null {
-    return this.supervisor.client
-  }
-  private set client(value: AudioHostIpcClient | null) {
-    this.supervisor.client = value
-  }
   helperEpoch(): string | null {
-    return this.client?.helperEpoch ?? null
-  }
-  private get stopping(): boolean {
-    return this.supervisor.stopping
-  }
-  private set stopping(value: boolean) {
-    this.supervisor.stopping = value
+    return this.client?.runtimeEpoch ?? null
   }
   private get lastGraph(): AudioHostSessionCoordinator["graph"] {
     return this.session.graph
@@ -293,24 +244,35 @@ export class AudioHostService {
   }
   start(restoreGraph = true): void {
     if (this.client || this.stopping) return
-    let client: AudioHostIpcClient
+    let client: AudioHostRuntime
     try {
-      client = this.supervisor.launch(this.runtimePreferences)
+      client = new AudioHostRuntime(
+        this.runtimePreferences.workerThreads === "auto"
+          ? undefined
+          : this.runtimePreferences.workerThreads,
+        this.runtimePreferences.maxBlockingThreads === "auto"
+          ? undefined
+          : this.runtimePreferences.maxBlockingThreads,
+        this.editorOwnerWindowHandle,
+        () => this.scheduleUiDrain()
+      )
+      this.client = client
     } catch (error) {
       this.onFailure(`could not start audio host: ${String(error)}`)
       return
     }
     this.health.start(client)
+    this.startUiDrain()
     if (restoreGraph && this.lastGraph)
       void this.restoreGraph().catch((error: unknown) => {
         const message = error instanceof Error ? error.message : String(error)
-        this.handleExit(client, `could not restore graph: ${message}`)
+        this.onFailure(`could not restore graph: ${message}`)
       })
   }
 
   private async performPriority(
     command: Record<string, unknown>,
-    expectedClient?: AudioHostIpcClient
+    expectedClient?: AudioHostRuntime
   ): Promise<PriorityResponse> {
     return this.gateway.priority(command, expectedClient)
   }
@@ -570,7 +532,7 @@ export class AudioHostService {
     return this.benchmarkRunner.run(effect)
   }
 
-  performanceDiagnostics(): AudioIpcPerformanceSnapshot | null {
+  performanceDiagnostics(): AudioRuntimePerformanceSnapshot | null {
     return this.diagnostics.performanceDiagnostics()
   }
 
@@ -618,7 +580,27 @@ export class AudioHostService {
     preference: PluginEditorPreference,
     context: PluginEditorContextWire
   ): Promise<{ editorMode: PluginEditorMode; open: boolean }> {
-    return this.plugins.openPluginEditor(instanceId, preference, context)
+    const client = this.client
+    if (!client || !this.editorWindows) {
+      return this.plugins.openPluginEditor(instanceId, preference, context)
+    }
+    return this.editorWindows.open(
+      client,
+      instanceId,
+      {
+        channelName: context.channelName,
+        channelColor: context.channelColor,
+        pluginName: context.pluginName,
+        theme: context.appearance.theme,
+        locale: context.appearance.locale
+      },
+      () => this.plugins.openPluginEditor(instanceId, preference, context),
+      (action) => this.plugins.applyPluginEditorAction(instanceId, action),
+      () => this.plugins.pluginParameters(instanceId),
+      (parameterId, normalized, gesture) =>
+        this.plugins.setPluginParameter({ instanceId, parameterId, normalized, gesture }),
+      () => this.plugins.closePluginEditor(instanceId)
+    )
   }
 
   pluginEditorAppearanceSnapshot(): PluginEditorAppearanceWire {
@@ -630,8 +612,9 @@ export class AudioHostService {
     await this.plugins.configurePluginEditorAppearance(appearance)
   }
 
-  closePluginEditor(instanceId: string): Promise<void> {
-    return this.plugins.closePluginEditor(instanceId)
+  async closePluginEditor(instanceId: string): Promise<void> {
+    if (this.editorWindows && (await this.editorWindows.close(instanceId))) return
+    await this.plugins.closePluginEditor(instanceId)
   }
 
   setPluginParameter(change: PluginParameterChange): Promise<void> {
@@ -656,202 +639,23 @@ export class AudioHostService {
 
   private requestImmediately(
     command: Record<string, unknown>,
-    expectedClient?: AudioHostIpcClient
+    expectedClient?: AudioHostRuntime
   ): Promise<ControlResponse> {
     return this.gateway.requestImmediately(command, expectedClient)
   }
 
-  private handleExit(client: AudioHostIpcClient, message: string): void {
-    // A timed-out request from an older helper may reject after its replacement
-    // is already running. It must never be allowed to tear down that new client.
-    if (this.client !== client) return
-    this.audioTransport.captureTransport(client)
-    this.client = null
-    this.events.resetHelper()
-    this.health.stop()
-    this.plugins.resetConnection()
-    this.publishedGraph = null
-    this.audioTransport.resetConnection()
-    try {
-      client.close()
-    } catch {
-      // The helper may already have exited.
-    }
-    if (this.stopping) return
-    const suspect = readCrashMarker(
-      this.crashMarkerPath,
-      this.lastGraph?.revision,
-      this.lastGraph?.runtime
-    )
-    if (suspect) {
-      this.plugins.bypass(suspect)
-      message = `${message}; recovering with plugin '${suspect}' bypassed`
-    } else if ((this.lastGraph?.runtime.plugins.length ?? 0) > 0) {
-      for (const plugin of this.lastGraph!.runtime.plugins) {
-        this.plugins.bypass(plugin.instance_id)
-      }
-      message = `${message}; crash marker was inconclusive, recovering with all plugins bypassed`
-    }
-    this.onFailure(message)
-    const audioPreferences = this.audioTransport.audioPreferences()
-      ? structuredClone(this.audioTransport.audioPreferences())
-      : null
-    const transport = { ...this.audioTransport.transportIntent() }
-    this.restarts.recover({
-      audioPreferences,
-      transport,
-      audioEngineWasRunning: this.audioTransport.engineExpectedRunning()
-    })
-  }
-
-  private async recoverAfterFailure(
-    audioPreferences: AudioPreferences | null,
-    transport: TransportSnapshot,
-    audioEngineWasRunning: boolean
-  ): Promise<void> {
-    this.start(false)
-    const client = this.client
-    if (!client) throw new Error("Audio helper did not restart")
-
-    this.audioTransport.runtimeResult(
-      await this.requestImmediately({ type: "audio-engine-snapshot" }, client)
-    )
-    await this.midiInput.restore(client)
-    const audioEngineRestored = audioEngineWasRunning && audioPreferences !== null
-    if (audioEngineRestored) {
-      const runtime = this.audioTransport.runtimeResult(
-        await this.requestImmediately(
-          {
-            type: "start-audio-engine",
-            config: this.audioTransport.audioEngineConfig(audioPreferences)
-          },
-          client
-        )
-      )
-      if (runtime.state !== "running") {
-        throw new Error("Audio engine did not return to running state")
-      }
-    }
-
-    await this.restoreGraph(true)
-    if (!audioEngineRestored) return
-    if (this.lastGraph) await this.waitForGraphPublication(this.lastGraph.revision)
-
-    const loop = await this.requestImmediately(
-      {
-        type: "transport",
-        command: {
-          kind: "set-loop",
-          position_frames: null,
-          loop_enabled: transport.loopEnabled,
-          loop_start_tick: transport.loopRange?.startTick ?? null,
-          loop_end_tick: transport.loopRange?.endTick ?? null
-        }
-      },
-      client
-    )
-    this.audioTransport.rememberTransportResponse(loop)
-
-    const seek = await this.requestImmediately(
-      {
-        type: "transport",
-        command: { kind: "seek", position_frames: transport.positionFrames }
-      },
-      client
-    )
-    this.audioTransport.rememberTransportResponse(seek)
-    if (transport.state === "playing") {
-      const play = await this.requestImmediately(
-        {
-          type: "transport",
-          command: { kind: "play", position_frames: null }
-        },
-        client
-      )
-      this.audioTransport.rememberTransportResponse(play)
-    }
-  }
-
   get configurationRestarting(): boolean {
-    return this.restarts.busy
+    return false
   }
 
   async configureRuntime(preferences: AudioHostRuntimePreferences): Promise<void> {
-    await this.restarts.configure(preferences)
-  }
-
-  private async captureConfigurationRestartState(): Promise<AudioHostRestartState> {
-    const transport = await this.transportSnapshot()
-    const audioRuntime = await this.audioEngineSnapshot()
-    const audioPreferences = this.audioTransport.audioPreferences()
-      ? structuredClone(this.audioTransport.audioPreferences())
-      : null
-    return {
-      audioPreferences,
-      transport,
-      audioEngineWasRunning: audioRuntime.state === "running"
-    }
-  }
-
-  private async prepareConfigurationRestart(state: AudioHostRestartState): Promise<void> {
-    if (state.transport.state !== "stopped") await this.transport({ type: "pause" })
-    for (const instanceId of this.plugins.loadedInstanceIds()) {
-      try {
-        await this.closePluginEditor(instanceId)
-      } catch {
-        // An editor may already have been closed by the plug-in.
-      }
-    }
-    if (state.audioEngineWasRunning) await this.stopAudioEngine()
-    await this.shutdownCurrentClient()
-  }
-
-  private async capturePluginStatesForRestart(): Promise<void> {
-    const graph = this.lastGraph
-    if (!graph) return
-    for (const plugin of graph.project.plugins) {
-      if (!this.plugins.has(plugin.id)) continue
-      try {
-        const state = await this.savePluginState(plugin.id)
-        plugin.componentState = state.componentState
-        plugin.controllerState = state.controllerState
-        plugin.araDocumentState = state.araDocumentState
-      } catch (error) {
-        console.warn(`Could not capture VST3 state for runtime restart (${plugin.id})`, error)
-      }
-    }
-  }
-
-  private async restartAfterConfiguration(
-    audioPreferences: AudioPreferences | null,
-    transport: TransportSnapshot,
-    audioEngineWasRunning: boolean
-  ): Promise<void> {
-    this.start(false)
-    if (!this.client) throw new Error("Audio helper did not restart")
-    await this.audioEngineSnapshot()
-    await this.midiInput.restore(this.client)
-    const audioEngineRestored = audioEngineWasRunning && audioPreferences !== null
-    if (audioEngineRestored) await this.startAudioEngine(audioPreferences)
-    await this.restoreGraph()
-    if (audioEngineRestored && this.lastGraph) {
-      await this.waitForGraphPublication(this.lastGraph.revision)
-    }
-    if (audioEngineRestored) {
-      await this.transport({
-        type: "set-loop",
-        enabled: transport.loopEnabled,
-        range: transport.loopRange
-      })
-      await this.transport({ type: "seek", positionFrames: transport.positionFrames })
-      if (transport.state === "playing") await this.transport({ type: "play" })
-    }
+    this.runtimePreferences = structuredClone(preferences)
   }
 
   private async waitForGraphPublication(revision: number): Promise<void> {
     const deadline = Date.now() + 5_000
     while (Date.now() < deadline) {
-      if (this.client?.persistentSharedPages) {
+      if (this.client?.directTelemetry) {
         const telemetry = this.readTelemetry()
         if (telemetry[1] === revision) return
       } else {
@@ -865,18 +669,19 @@ export class AudioHostService {
       }
       await new Promise((resolve) => setTimeout(resolve, 10))
     }
-    throw new Error(`Audio graph revision ${revision} was not published after restart`)
+    throw new Error(`Audio graph revision ${revision} was not published`)
   }
 
   private async shutdownCurrentClient(): Promise<void> {
     this.health.stop()
-    this.plugins.resetConnection()
     const client = this.client
     if (!client) return
+    await this.editorWindows?.closeAll()
+    this.plugins.resetConnection()
     try {
       await this.performPriority({ type: "shutdown" }, client)
     } catch {
-      // Closing the client below also reaps a helper that exited early.
+      // Closing below is idempotent if shutdown already completed.
     }
     drainHostEvents(
       client,
@@ -898,6 +703,39 @@ export class AudioHostService {
 
   async stop(): Promise<void> {
     this.stopping = true
+    this.stopUiDrain()
     await this.shutdownCurrentClient()
+  }
+
+  private scheduleUiDrain(): void {
+    if (this.uiDrainScheduled || this.stopping) return
+    this.uiDrainScheduled = true
+    setImmediate(() => {
+      this.uiDrainScheduled = false
+      const client = this.client
+      if (!client || this.stopping) return
+      try {
+        const pending = client.drainUiWork()
+        this.editorWindows?.drain(client)
+        if (pending) this.scheduleUiDrain()
+      } catch (error) {
+        if (!this.stopping) console.error("Could not drain embedded audio UI work", error)
+      }
+    })
+  }
+
+  private startUiDrain(): void {
+    if (this.uiDrainTimer) return
+    this.scheduleUiDrain()
+    // Plug-in timers and ARA callbacks require periodic main-thread service
+    // even when Tokio has not enqueued a new command.
+    this.uiDrainTimer = setInterval(() => this.scheduleUiDrain(), 16)
+    this.uiDrainTimer.unref()
+  }
+
+  private stopUiDrain(): void {
+    if (!this.uiDrainTimer) return
+    clearInterval(this.uiDrainTimer)
+    this.uiDrainTimer = null
   }
 }

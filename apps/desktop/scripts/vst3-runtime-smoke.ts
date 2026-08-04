@@ -1,0 +1,280 @@
+import { resolve } from "node:path"
+import { decode, encode } from "@msgpack/msgpack"
+import { AudioHostRuntime } from "@heron/dsp-node"
+
+interface PluginParameter {
+  id: number
+}
+
+interface AudioHostMeter {
+  channel_id: string
+  held_left: number
+  held_right: number
+}
+
+interface WireResult {
+  type: string
+  message?: string
+  active_mode?: "native" | "parameters"
+  open?: boolean
+  parameters?: PluginParameter[]
+  component_state?: { bytes?: Uint8Array }
+  latency_samples?: number
+  tail_samples?: number
+  meters?: AudioHostMeter[]
+}
+
+interface WireResponse {
+  request_id: number
+  result: WireResult
+}
+
+const repositoryRoot = resolve(import.meta.dirname, "..", "..", "..")
+const [pluginPath] = process.argv.slice(2)
+const resolvedPlugin =
+  pluginPath ?? resolve(repositoryRoot, "target", "vst3-fixtures", "VST3", "Debug", "again.vst3")
+const resolvedSynth = resolve(
+  repositoryRoot,
+  "target",
+  "vst3-fixtures",
+  "VST3",
+  "Debug",
+  "note-expression-synth.vst3"
+)
+const runtime = new AudioHostRuntime(2, 4)
+const uiPump = setInterval(() => runtime.drainUiWork(), 8)
+uiPump.unref()
+let nextRequestId = 1
+
+async function send(command: unknown): Promise<WireResult> {
+  const requestId = nextRequestId++
+  const commandType =
+    typeof command === "object" && command !== null && "type" in command
+      ? String(command.type)
+      : "unknown"
+  const response = await runtime.request(Buffer.from(encode({ request_id: requestId, command })))
+  const decoded = decode(response.body) as WireResponse
+  if (decoded.request_id !== requestId) {
+    throw new Error(`received response for unknown request ${decoded.request_id}`)
+  }
+  if (decoded.result.type === "error") {
+    throw new Error(`${commandType} failed: ${decoded.result.message ?? "unknown error"}`)
+  }
+  return decoded.result
+}
+
+try {
+  const inactiveSidechain = await send({
+    type: "load-plugin",
+    instance_id: "again-sidechain-inactive",
+    module_path: resolvedPlugin,
+    class_id: "41347FD6FED64094AFBB12B7DBA1D441",
+    plugin_kind: "effect",
+    audio_mode: "stereo",
+    active_aux_inputs: [],
+    sample_rate: 48_000,
+    component_state: { storage: "inline", bytes: new Uint8Array() },
+    controller_state: { storage: "inline", bytes: new Uint8Array() }
+  })
+  if (inactiveSidechain.type !== "plugin-loaded") {
+    throw new Error("inactive AGain SideChain load response mismatch")
+  }
+  await send({ type: "unload-plugin", instance_id: "again-sidechain-inactive" })
+
+  const loaded = await send({
+    type: "load-plugin",
+    instance_id: "again-1",
+    module_path: resolvedPlugin,
+    class_id: "41347FD6FED64094AFBB12B7DBA1D441",
+    plugin_kind: "effect",
+    audio_mode: "stereo",
+    active_aux_inputs: [{ input_bus_index: 1, channels: 1 }],
+    sample_rate: 48_000,
+    component_state: { storage: "inline", bytes: new Uint8Array() },
+    controller_state: { storage: "inline", bytes: new Uint8Array() }
+  })
+  if (loaded.type !== "plugin-loaded") throw new Error("load response mismatch")
+  const synthLoaded = await send({
+    type: "load-plugin",
+    instance_id: "synth-1",
+    module_path: resolvedSynth,
+    class_id: "41466D9BB0654576B641098F686371B3",
+    plugin_kind: "instrument",
+    audio_mode: "stereo",
+    sample_rate: 48_000,
+    component_state: { storage: "inline", bytes: new Uint8Array() },
+    controller_state: { storage: "inline", bytes: new Uint8Array() }
+  })
+  if (synthLoaded.type !== "plugin-loaded") throw new Error("synth load response mismatch")
+  const listed = await send({ type: "plugin-parameters", instance_id: "again-1" })
+  const listedParameters = listed.parameters
+  if (listed.type !== "plugin-parameters" || !listedParameters?.length) {
+    throw new Error("AGain did not expose parameters")
+  }
+  const editorPreference = { mode: "native", zoom_percent: 100 }
+  const editorContext = {
+    channel_name: "AGain Smoke",
+    channel_color: "#ad8cff",
+    plugin_name: "AGain SideChain",
+    appearance: { theme: "dark", locale: "en-US" }
+  }
+  const editor = await send({
+    type: "open-plugin-editor",
+    instance_id: "again-1",
+    preference: editorPreference,
+    context: editorContext
+  })
+  const editorMode = editor.active_mode
+  if (editorMode !== "native" && editorMode !== "parameters") {
+    throw new Error("plugin editor did not report native or parameter fallback")
+  }
+  const focused = await send({
+    type: "open-plugin-editor",
+    instance_id: "again-1",
+    preference: editorPreference,
+    context: editorContext
+  })
+  if (editor.open && !focused.open) {
+    throw new Error("opening the existing editor did not focus/reuse it")
+  }
+  await send({ type: "close-plugin-editor", instance_id: "again-1" })
+  const parameter = listedParameters[0]
+  if (!parameter) throw new Error("AGain parameter list became empty")
+  for (const gesture of ["begin", "perform", "end"]) {
+    await send({
+      type: "set-plugin-parameter",
+      instance_id: "again-1",
+      parameter_id: parameter.id,
+      normalized: 0.25,
+      gesture
+    })
+  }
+  const state = await send({ type: "save-plugin-state", instance_id: "again-1" })
+  const componentState = state.component_state?.bytes
+  if (state.type !== "plugin-state" || !(componentState instanceof Uint8Array)) {
+    throw new Error("state response mismatch")
+  }
+  await send({
+    type: "update-graph",
+    update: {
+      type: "replace",
+      revision: 1,
+      graph: {
+        sample_rate: 48_000,
+        channels: [
+          {
+            id: "instrument-1",
+            kind: "instrument",
+            gain_db: 0,
+            pan: 0,
+            muted: false,
+            soloed: false,
+            output_channel_id: "output",
+            record_armed: false,
+            input_channels: [],
+            hardware_output_channels: []
+          },
+          {
+            id: "master",
+            kind: "master",
+            gain_db: 0,
+            pan: 0,
+            muted: false,
+            soloed: false,
+            output_channel_id: null,
+            record_armed: false,
+            input_channels: [],
+            hardware_output_channels: []
+          },
+          {
+            id: "output",
+            kind: "output",
+            gain_db: 0,
+            pan: 0,
+            muted: false,
+            soloed: false,
+            output_channel_id: null,
+            record_armed: false,
+            input_channels: [],
+            hardware_output_channels: [1, 2]
+          }
+        ],
+        sends: [],
+        clips: [],
+        plugins: [
+          {
+            instance_id: "synth-1",
+            channel_id: "instrument-1",
+            role: "instrument",
+            slot_order: 0,
+            audio_mode: "stereo",
+            enabled: true,
+            latency_samples: synthLoaded.latency_samples ?? 0,
+            tail_samples: synthLoaded.tail_samples ?? 0
+          },
+          {
+            instance_id: "again-1",
+            channel_id: "instrument-1",
+            role: "insert",
+            slot_order: 0,
+            audio_mode: "stereo",
+            enabled: true,
+            latency_samples: loaded.latency_samples ?? 0,
+            tail_samples: loaded.tail_samples ?? 0
+          }
+        ],
+        midi_clips: [
+          {
+            id: "clip-1",
+            channel_id: "instrument-1",
+            start_tick: 0,
+            source_offset_ticks: 0,
+            length_ticks: 960,
+            notes: {
+              storage: "inline",
+              notes: [
+                {
+                  start_tick: 0,
+                  duration_ticks: 960,
+                  channel: 0,
+                  key: 60,
+                  velocity: 110,
+                  release_velocity: 0
+                }
+              ]
+            },
+            events: { storage: "inline", events: [] }
+          }
+        ],
+        tempo_events: [{ tick: 0, beats_per_minute: 120 }],
+        time_signature_events: [{ tick: 0, numerator: 4, denominator: 4 }]
+      }
+    }
+  })
+  await send({
+    type: "start-audio-engine",
+    config: {
+      backend: "mock",
+      input_device_id: "custom:mock-duplex",
+      output_device_id: "custom:mock-duplex",
+      buffer_size: 128
+    }
+  })
+  await send({ type: "transport", command: { kind: "play" } })
+  await new Promise((resolve) => setTimeout(resolve, 150))
+  const meters = await send({ type: "mixer-snapshot" })
+  const instrumentMeter = meters.meters?.find((meter) => meter.channel_id === "instrument-1")
+  if (!instrumentMeter || Math.max(instrumentMeter.held_left, instrumentMeter.held_right) <= 0) {
+    throw new Error("mock live graph did not render the VST3 instrument/effect chain")
+  }
+  await send({ type: "stop-audio-engine" })
+  console.log(
+    `VST3 embedded runtime live graph passed (${listedParameters.length} parameters, ` +
+      `${componentState.length} component bytes, meter ` +
+      `${Math.max(instrumentMeter.held_left, instrumentMeter.held_right).toFixed(4)})`
+  )
+  await send({ type: "shutdown" })
+} finally {
+  clearInterval(uiPump)
+  runtime.close()
+}

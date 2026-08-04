@@ -30,10 +30,10 @@ export default defineConfig({
     "apm.lock.yaml",
     "mise.lock",
     "pnpm-lock.yaml",
-    "crates/audio-host-client/index.d.ts",
-    "crates/audio-host-client/index.js",
     "crates/dsp-node/index.d.ts",
     "crates/dsp-node/index.js",
+    "crates/audio-host-client/index.d.ts",
+    "crates/audio-host-client/index.js",
     "packages/project-db/drizzle/meta/"
   ]
 })

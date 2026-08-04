@@ -1,12 +1,12 @@
 use super::graph_deployment::{log_graph_transaction_failure, update_graph_midi_routes};
 use super::loading::resolve_deferred_binary;
 use super::{
-    ActorCommand, ActorRequest, BinaryPayload, ControlCommand, ControlResult, EventLoopProxy,
+    ActorCommand, ActorRequest, BinaryPayload, ControlCommand, ControlResult,
     GraphTransactionRequest, GraphTransactionState, GraphTransactionValue, GraphUpdate,
-    LiveMixerGraph, PreparedGraphCandidate, UiEvent, Vst3ActorDeps, dispatch_build_graph, engine,
-    forward_to_ui, graph_busy_error, graph_conflict_error, graph_dependency_error, graph_failure,
-    graph_stale_error, graph_success, graph_timeout_error, graph_validation_error, live_graph,
-    materialize_mixer_graph, mpsc, oneshot, publish_built_graph, refresh_graph_handles, std_mpsc,
+    LiveMixerGraph, PreparedGraphCandidate, UiMailboxWaker, Vst3ActorDeps, dispatch_build_graph,
+    engine, forward_to_ui, graph_busy_error, graph_conflict_error, graph_dependency_error,
+    graph_failure, graph_stale_error, graph_success, graph_timeout_error, graph_validation_error,
+    live_graph, mpsc, oneshot, publish_built_graph, refresh_graph_handles, std_mpsc,
     validate_graph_meta, validate_graph_request, wait_for_graph_publication,
 };
 
@@ -19,7 +19,6 @@ pub(in crate::runtime) async fn vst3_actor(
         ui_sender,
         processors,
         handles,
-        request_arena,
         background_sender,
         engine_sender,
         audio_engine,
@@ -91,11 +90,9 @@ pub(in crate::runtime) async fn vst3_actor(
                     ara_factory_class_id,
                     ara_document_state,
                 } => {
-                    let component_state = resolve_deferred_binary(component_state, &request_arena);
-                    let controller_state =
-                        resolve_deferred_binary(controller_state, &request_arena);
-                    let ara_document_state =
-                        resolve_deferred_binary(ara_document_state, &request_arena);
+                    let component_state = resolve_deferred_binary(component_state);
+                    let controller_state = resolve_deferred_binary(controller_state);
+                    let ara_document_state = resolve_deferred_binary(ara_document_state);
                     match (component_state, controller_state, ara_document_state) {
                         (Ok(component_state), Ok(controller_state), Ok(ara_document_state)) => {
                             forward_to_ui(
@@ -138,6 +135,7 @@ pub(in crate::runtime) async fn vst3_actor(
                 | ControlCommand::SavePluginState { .. }
                 | ControlCommand::OpenPluginEditor { .. }
                 | ControlCommand::ConfigurePluginEditorAppearance { .. }
+                | ControlCommand::ApplyPluginEditorAction { .. }
                 | ControlCommand::ResolvePluginSidechainRoute { .. }
                 | ControlCommand::ClosePluginEditor { .. }) => {
                     forward_to_ui(
@@ -230,19 +228,13 @@ pub(in crate::runtime) async fn vst3_actor(
                         continue;
                     }
 
-                    let mut graph = request.graph;
+                    let graph = request.graph;
                     let native = (|| {
-                        let arena = request_arena
-                            .lock()
-                            .map_err(|_| "request arena is poisoned".to_owned())?
-                            .clone();
                         let processors = processors
                             .lock()
                             .map_err(|_| "VST3 processor registry is poisoned".to_owned())?
                             .clone();
-                        materialize_mixer_graph(&mut graph, &arena)
-                            .map_err(|error| error.to_string())?;
-                        live_graph(request.graph_revision, &graph, Some(&processors), &arena)
+                        live_graph(request.graph_revision, &graph, Some(&processors))
                     })();
                     let native = match native {
                         Ok(native) => native,
@@ -612,7 +604,7 @@ pub(in crate::runtime) async fn vst3_actor(
                     }
                 }
                 ControlCommand::UpdateGraph { update } => {
-                    let (revision, mut candidate) = match update {
+                    let (revision, candidate) = match update {
                         GraphUpdate::Replace { revision, graph } => (revision, graph),
                         GraphUpdate::Patch {
                             base_revision,
@@ -636,17 +628,11 @@ pub(in crate::runtime) async fn vst3_actor(
                         }
                     };
                     let prepared = (|| {
-                        let arena = request_arena
-                            .lock()
-                            .map_err(|_| "request arena is poisoned".to_owned())?
-                            .clone();
                         let processors = processors
                             .lock()
                             .map_err(|_| "VST3 processor registry is poisoned".to_owned())?
                             .clone();
-                        materialize_mixer_graph(&mut candidate, &arena)
-                            .map_err(|error| error.to_string())?;
-                        let graph = live_graph(revision, &candidate, Some(&processors), &arena)?;
+                        let graph = live_graph(revision, &candidate, Some(&processors))?;
                         Ok::<_, String>((graph, candidate))
                     })();
                     match prepared {
@@ -745,14 +731,14 @@ pub(in crate::runtime) async fn vst3_actor(
 
 async fn dispatch_ui_actor_command(
     sender: &std_mpsc::SyncSender<ActorRequest>,
-    proxy: &EventLoopProxy<UiEvent>,
+    proxy: &UiMailboxWaker,
     command: ActorCommand,
 ) -> ControlResult {
     let (reply, response) = oneshot::channel();
     forward_to_ui(sender, proxy, ActorRequest { command, reply }).await;
     response.await.unwrap_or_else(|_| {
         control_error! {
-            message: "winit VST3 UI actor dropped its response".into(),
+            message: "VST3 main-thread actor dropped its response".into(),
         }
     })
 }

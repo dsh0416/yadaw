@@ -1,16 +1,15 @@
 import { decode, encode } from "@msgpack/msgpack"
-import type { AudioHostIpcClient } from "@heron/audio-host-client"
+import type { AudioHostRuntime } from "@heron/dsp-node"
 import type {
-  AudioIpcBenchmarkReport,
-  AudioIpcBenchmarkScenario,
-  AudioIpcPerformanceSnapshot,
+  AudioNativeBenchmarkReport,
+  AudioNativeBenchmarkScenario,
+  AudioRuntimePerformanceSnapshot,
   AudioHostRuntimePreferences
 } from "@heron/contracts"
-import { binaryBytes, extractLargeAttachments, inlineBinary, percentile } from "./wire"
+import { binaryBytes, inlineBinary, percentile } from "./wire"
 import type { ControlResponse, TelemetryWire, TransportDiagnosticsWire } from "./wire"
 
 export interface AudioHostDiagnosticsState {
-  executablePath: string
   runtimePreferences: AudioHostRuntimePreferences
   lastHeartbeatAt: number | null
   lastHeartbeatGenerations: {
@@ -19,26 +18,11 @@ export interface AudioHostDiagnosticsState {
     winit: number
     callback: number
   }
-  lastHostIpcMetrics: {
-    egressActive: number
-    egressQueueDepth: number
-    egressQueueHighWater: number
-    egressBatches: number
-    blockingJobs: number
-    arenaRegions: number
-    arenaCapacityBytes: number
-    arenaUsedBytes: number
-    arenaHighWaterBytes: number
-    arenaOffers: number
-    arenaBusy: number
-    arenaQuarantinedRegions: number
-    arenaCopiedBytes: number
-  }
 }
 
 export class AudioHostDiagnostics {
   constructor(
-    private readonly getClient: () => AudioHostIpcClient | null,
+    private readonly getClient: () => AudioHostRuntime | null,
     private readonly request: (command: Record<string, unknown>) => Promise<ControlResponse>,
     private readonly state: () => AudioHostDiagnosticsState
   ) {}
@@ -49,62 +33,30 @@ export class AudioHostDiagnostics {
     return decode(client.readTelemetry()) as TelemetryWire
   }
 
-  async runIpcBenchmark(): Promise<AudioIpcBenchmarkReport> {
+  async runNativeBenchmark(): Promise<AudioNativeBenchmarkReport> {
     const started = performance.now()
-    const before = this.performanceDiagnostics()
-    const scenarios: AudioIpcBenchmarkScenario[] = []
+    const scenarios: AudioNativeBenchmarkScenario[] = []
     scenarios.push(
       await this.measureEchoRoundTrip(
         "inline-control",
-        "Inline control payload",
-        "256-byte MessagePack request/reply through the helper router",
-        "inline-round-trip",
+        "Embedded control payload",
+        "256-byte MessagePack request/reply through the in-process native boundary",
+        "request-round-trip",
         256,
-        200,
-        8
+        50,
+        4
       )
     )
-    scenarios.push(
-      await this.measureEchoRoundTrip(
-        "shared-cold-4m",
-        "Shared cold first use",
-        "First 4 MiB transfer includes lazy arena creation and region-handle mapping",
-        "shared-cold",
-        4 * 1024 * 1024,
-        1,
-        0
-      )
-    )
-    scenarios.push(
-      await this.measureEchoRoundTrip(
-        "shared-warm-sequential-4m",
-        "Warm sequential effective throughput",
-        "Sequential 4 MiB duplex requests reuse the registered persistent arena",
-        "shared-warm-sequential",
-        4 * 1024 * 1024,
-        24,
-        2
-      )
-    )
-    for (const concurrency of [1, 4, 8, 16]) {
-      scenarios.push(await this.measureSaturatedArena(concurrency))
-    }
     scenarios.push(await this.measureConcurrentRouting())
     scenarios.push(this.measureTelemetryReads())
     const after = this.performanceDiagnostics()
     return {
       durationMs: performance.now() - started,
-      buildProfile:
-        this.state().executablePath.includes("\\release\\") ||
-        this.state().executablePath.includes("/release/")
-          ? "release"
-          : "debug",
+      buildProfile: process.env.NODE_ENV === "production" ? "release" : "debug",
       runtime: after?.runtime.resolved ?? {
         workerThreads: 1,
-        maxBlockingThreads: 2,
-        egressConcurrency: 1
+        maxBlockingThreads: 2
       },
-      arenaOffers: (after?.sharedMemory.arenaOffers ?? 0) - (before?.sharedMemory.arenaOffers ?? 0),
       messagePackBodyBytes: this.benchmarkMessagePackBodyBytes(4 * 1024 * 1024),
       scenarios
     }
@@ -118,8 +70,6 @@ export class AudioHostDiagnostics {
         payload: inlineBinary(new Uint8Array(payloadBytes))
       }
     }
-    const attachments: Buffer[] = []
-    extractLargeAttachments(request, attachments)
     return encode(request).byteLength
   }
 
@@ -127,11 +77,11 @@ export class AudioHostDiagnostics {
     id: string,
     label: string,
     description: string,
-    kind: "inline-round-trip" | "shared-cold" | "shared-warm-sequential",
+    kind: "request-round-trip",
     payloadBytes: number,
     iterations: number,
     warmupIterations: number
-  ): Promise<AudioIpcBenchmarkScenario> {
+  ): Promise<AudioNativeBenchmarkScenario> {
     const payload = new Uint8Array(payloadBytes)
     payload.fill(0xa5)
     const echo = async (): Promise<void> => {
@@ -155,7 +105,7 @@ export class AudioHostDiagnostics {
       latencyUs.push((performance.now() - iterationStarted) * 1_000)
     }
     const elapsedMs = performance.now() - started
-    return this.ipcScenario({
+    return this.nativeScenario({
       id,
       label,
       description,
@@ -168,46 +118,8 @@ export class AudioHostDiagnostics {
     })
   }
 
-  private async measureSaturatedArena(concurrency: number): Promise<AudioIpcBenchmarkScenario> {
-    const payload = new Uint8Array(4 * 1024 * 1024)
-    payload.fill(0x5a)
-    const rounds = Math.max(2, Math.ceil(32 / concurrency))
-    const latencyUs: number[] = []
-    const echo = async (): Promise<void> => {
-      const requestStarted = performance.now()
-      const response = await this.request({
-        type: "benchmark-echo",
-        payload: inlineBinary(payload)
-      })
-      latencyUs.push((performance.now() - requestStarted) * 1_000)
-      if (
-        response.result.type !== "benchmark-echo" ||
-        binaryBytes(response.result.payload).byteLength !== payload.byteLength
-      ) {
-        throw new Error("audio host returned an invalid saturated benchmark echo")
-      }
-    }
-    await echo()
-    latencyUs.length = 0
-    const started = performance.now()
-    for (let round = 0; round < rounds; round += 1) {
-      await Promise.all(Array.from({ length: concurrency }, echo))
-    }
-    return this.ipcScenario({
-      id: `shared-saturated-4m-${concurrency}`,
-      label: `Warm saturated duplex · ${concurrency} in flight`,
-      description: "4 MiB persistent-arena duplex bandwidth with concurrent response routing",
-      kind: "shared-saturated",
-      payloadBytes: payload.byteLength,
-      iterations: rounds * concurrency,
-      concurrency,
-      elapsedMs: performance.now() - started,
-      latencyUs
-    })
-  }
-
-  private async measureConcurrentRouting(): Promise<AudioIpcBenchmarkScenario> {
-    const concurrency = 128
+  private async measureConcurrentRouting(): Promise<AudioNativeBenchmarkScenario> {
+    const concurrency = 32
     const payload = new Uint8Array(256)
     const latencyUs: number[] = []
     const started = performance.now()
@@ -225,10 +137,10 @@ export class AudioHostDiagnostics {
       })
     )
     const elapsedMs = performance.now() - started
-    return this.ipcScenario({
+    return this.nativeScenario({
       id: "concurrent-router",
       label: "Concurrent response routing",
-      description: "128 simultaneous requests resolved by request ID",
+      description: "32 simultaneous in-process requests resolved by request ID",
       kind: "concurrent-routing",
       payloadBytes: payload.byteLength,
       iterations: concurrency,
@@ -238,8 +150,8 @@ export class AudioHostDiagnostics {
     })
   }
 
-  private measureTelemetryReads(): AudioIpcBenchmarkScenario {
-    const iterations = 10_000
+  private measureTelemetryReads(): AudioNativeBenchmarkScenario {
+    const iterations = 1_000
     const latencyUs: number[] = []
     const started = performance.now()
     for (let index = 0; index < iterations; index += 1) {
@@ -247,10 +159,10 @@ export class AudioHostDiagnostics {
       this.readTelemetry()
       latencyUs.push((performance.now() - iterationStarted) * 1_000)
     }
-    return this.ipcScenario({
-      id: "telemetry-page",
-      label: "Telemetry shared page",
-      description: "Synchronous seqlock reads through the native addon",
+    return this.nativeScenario({
+      id: "direct-telemetry",
+      label: "Direct telemetry read",
+      description: "Synchronous engine snapshot reads through the native addon",
       kind: "telemetry-read",
       payloadBytes: 0,
       iterations,
@@ -260,17 +172,17 @@ export class AudioHostDiagnostics {
     })
   }
 
-  private ipcScenario(input: {
+  private nativeScenario(input: {
     id: string
     label: string
     description: string
-    kind: AudioIpcBenchmarkScenario["kind"]
+    kind: AudioNativeBenchmarkScenario["kind"]
     payloadBytes: number
     iterations: number
     concurrency: number
     elapsedMs: number
     latencyUs: readonly number[]
-  }): AudioIpcBenchmarkScenario {
+  }): AudioNativeBenchmarkScenario {
     const elapsedSeconds = input.elapsedMs / 1_000
     const transferredBytes = input.payloadBytes * input.iterations * 2
     return {
@@ -293,7 +205,7 @@ export class AudioHostDiagnostics {
     }
   }
 
-  performanceDiagnostics(): AudioIpcPerformanceSnapshot | null {
+  performanceDiagnostics(): AudioRuntimePerformanceSnapshot | null {
     const client = this.getClient()
     if (!client) return null
     try {
@@ -303,70 +215,39 @@ export class AudioHostDiagnostics {
         sessionEpoch: diagnostics[0],
         heartbeat: {
           ageMs: lastHeartbeatAt === null ? null : Date.now() - lastHeartbeatAt,
-          ipcGeneration: this.state().lastHeartbeatGenerations.ipc,
+          controlGeneration: this.state().lastHeartbeatGenerations.ipc,
           tokioGeneration: this.state().lastHeartbeatGenerations.tokio,
           winitGeneration: this.state().lastHeartbeatGenerations.winit,
           callbackGeneration: this.state().lastHeartbeatGenerations.callback
         },
         requests: {
           normalPending: diagnostics[1][0],
-          priorityPending: diagnostics[1][1],
-          capacity: diagnostics[1][2],
-          timeouts: diagnostics[1][3]
-        },
-        sharedMemory: {
-          persistentPagesActive: diagnostics[8][0],
-          activationFailures: diagnostics[8][1],
-          outstandingLeases: diagnostics[2][0],
-          outstandingBytes: diagnostics[2][1],
-          maxLeases: diagnostics[2][2],
-          maxBytes: diagnostics[2][3],
-          inlinePackets: diagnostics[2][4],
-          inlineBytes: diagnostics[2][5],
-          sharedPackets: diagnostics[2][6],
-          sharedRegions: diagnostics[2][7],
-          sharedBytes: diagnostics[2][8],
-          arenaRegions: diagnostics[7][3] + this.state().lastHostIpcMetrics.arenaRegions,
-          arenaCapacityBytes:
-            diagnostics[7][4] + this.state().lastHostIpcMetrics.arenaCapacityBytes,
-          arenaUsedBytes: diagnostics[7][5] + this.state().lastHostIpcMetrics.arenaUsedBytes,
-          arenaHighWaterBytes:
-            diagnostics[7][6] + this.state().lastHostIpcMetrics.arenaHighWaterBytes,
-          arenaOffers: diagnostics[7][7] + this.state().lastHostIpcMetrics.arenaOffers,
-          arenaBusy: diagnostics[7][8] + this.state().lastHostIpcMetrics.arenaBusy,
-          arenaQuarantinedRegions:
-            diagnostics[7][9] + this.state().lastHostIpcMetrics.arenaQuarantinedRegions,
-          copiedBytes: diagnostics[7][10] + this.state().lastHostIpcMetrics.arenaCopiedBytes
+          capacity: diagnostics[1][1],
+          slowRequests: diagnostics[1][2]
         },
         runtime: {
           requested: structuredClone(this.state().runtimePreferences),
           resolved: {
-            workerThreads: diagnostics[7][0],
-            maxBlockingThreads: diagnostics[7][1],
-            egressConcurrency: diagnostics[7][2]
-          },
-          egressActive: this.state().lastHostIpcMetrics.egressActive,
-          egressQueueDepth: this.state().lastHostIpcMetrics.egressQueueDepth,
-          egressQueueHighWater: this.state().lastHostIpcMetrics.egressQueueHighWater,
-          egressBatches: this.state().lastHostIpcMetrics.egressBatches,
-          blockingJobs: this.state().lastHostIpcMetrics.blockingJobs
+            workerThreads: diagnostics[5][0],
+            maxBlockingThreads: diagnostics[5][1]
+          }
         },
-        eventQueueDepth: diagnostics[3],
+        eventQueueDepth: diagnostics[2],
         telemetry: {
-          epoch: diagnostics[4][0],
-          capacity: diagnostics[4][1],
-          graphRevision: diagnostics[4][2],
-          callbackGeneration: diagnostics[4][3],
-          meterSlots: diagnostics[4][4],
-          fallbackReads: diagnostics[4][5]
+          epoch: diagnostics[3][0],
+          capacity: 256,
+          graphRevision: diagnostics[3][1],
+          callbackGeneration: diagnostics[3][2],
+          meterSlots: diagnostics[3][3],
+          fallbackReads: 0
         },
         parameterRing: {
-          used: diagnostics[5][0],
-          capacity: diagnostics[5][1],
-          softFull: diagnostics[5][2],
-          hardFull: diagnostics[5][3],
-          boundaryFallbacks: diagnostics[5][4],
-          staleEpoch: diagnostics[5][5]
+          used: 0,
+          capacity: diagnostics[4][0],
+          softFull: 0,
+          hardFull: diagnostics[4][1],
+          boundaryFallbacks: 0,
+          staleEpoch: diagnostics[4][2]
         }
       }
     } catch {

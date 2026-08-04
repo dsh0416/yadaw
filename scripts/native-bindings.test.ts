@@ -5,7 +5,24 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import test from "node:test"
 
+type NativeHostResponse = {
+  body: Buffer
+}
+
+type AudioHostRuntime = {
+  request: (request: Buffer) => Promise<NativeHostResponse>
+  heartbeat: (request: Buffer) => Promise<NativeHostResponse>
+  drainUiWork: () => boolean
+  close: () => void
+}
+
 type NativeBindings = {
+  AudioHostRuntime: new (
+    workerThreads?: number,
+    maxBlockingThreads?: number,
+    editorOwnerWindowHandle?: Buffer,
+    uiWakeCallback?: () => unknown
+  ) => AudioHostRuntime
   analyzeWaveform: (path: string) => Promise<{
     channels: number
     frameCount: number
@@ -29,8 +46,18 @@ type NativeBindings = {
 }
 
 const require = createRequire(import.meta.url)
-const { analyzeWaveform, engineInfo, processGain, writeDeterministicTestRecording } =
-  require("../crates/dsp-node") as NativeBindings
+const desktopRequire = createRequire(new URL("../apps/desktop/package.json", import.meta.url))
+const { decode, encode } = desktopRequire("@msgpack/msgpack") as {
+  decode: (value: Uint8Array) => unknown
+  encode: (value: unknown) => Uint8Array
+}
+const {
+  AudioHostRuntime,
+  analyzeWaveform,
+  engineInfo,
+  processGain,
+  writeDeterministicTestRecording
+} = require("../crates/dsp-node") as NativeBindings
 const expectedVersion = (await readFile(new URL("../VERSION", import.meta.url), "utf8")).trim()
 
 await test("native DSP binding processes values across the napi boundary", () => {
@@ -69,5 +96,86 @@ await test("native DSP binding writes and analyzes a deterministic recording", a
     assert.ok(waveform.waveformLevels.length > 0)
   } finally {
     await rm(directory, { force: true, recursive: true })
+  }
+})
+
+await test("a pending UI request does not occupy the native async request path", async () => {
+  const runtime = new AudioHostRuntime(2, 4)
+  let requestId = 1
+  const request = (command: unknown) =>
+    runtime.request(Buffer.from(encode({ request_id: requestId++, command })))
+  const pendingUiRequest = request({
+    type: "configure-plugin-editor-appearance",
+    appearance: { theme: "dark", locale: "en-US" }
+  }).then(
+    () => null,
+    (error: unknown) => error
+  )
+
+  try {
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    const echo = await Promise.race([
+      request({
+        type: "benchmark-echo",
+        payload: { storage: "inline", bytes: new Uint8Array([1, 2, 3]) }
+      }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("independent audio request was blocked")), 500)
+      )
+    ])
+    const echoResponse = decode(echo.body) as { result: { type: string } }
+    assert.equal(echoResponse.result.type, "benchmark-echo")
+
+    const heartbeat = await Promise.race([
+      runtime.heartbeat(
+        Buffer.from(
+          encode({
+            request_id: requestId++,
+            command: { type: "heartbeat" }
+          })
+        )
+      ),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("heartbeat was blocked by a control request")), 500)
+      )
+    ])
+    const heartbeatResponse = decode(heartbeat.body) as { result: { type: string } }
+    assert.equal(heartbeatResponse.result.type, "heartbeat")
+  } finally {
+    runtime.close()
+  }
+
+  assert.ok((await pendingUiRequest) instanceof Error)
+})
+
+await test("Tokio wakes Electron to drain bounded UI work", async () => {
+  let wakeCount = 0
+  const runtime = new AudioHostRuntime(2, 4, undefined, () => {
+    wakeCount += 1
+    setImmediate(() => runtime.drainUiWork())
+  })
+
+  try {
+    const response = await Promise.race([
+      runtime.request(
+        Buffer.from(
+          encode({
+            request_id: 1,
+            command: {
+              type: "configure-plugin-editor-appearance",
+              appearance: { theme: "dark", locale: "en-US" }
+            }
+          })
+        )
+      ),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("native UI wake did not drain the request")), 500)
+      )
+    ])
+    const decoded = decode(response.body) as { result: { type: string } }
+    assert.equal(decoded.result.type, "accepted")
+    assert.ok(wakeCount > 0)
+  } finally {
+    runtime.close()
   }
 })

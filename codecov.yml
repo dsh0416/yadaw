@@ -79,10 +79,6 @@ component_management:
       name: dsp-render
       paths:
         - crates/dsp-render/**
-    - component_id: ipc-transport
-      name: ipc-transport
-      paths:
-        - crates/ipc-transport/**
     - component_id: audio-engine
       name: audio-engine
       paths:
@@ -91,10 +87,6 @@ component_management:
       name: audio-host
       paths:
         - crates/audio-host/**
-    - component_id: audio-host-client
-      name: audio-host-client
-      paths:
-        - crates/audio-host-client/**
     - component_id: vst3-host
       name: vst3-host
       paths:

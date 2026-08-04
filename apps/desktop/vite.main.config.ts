@@ -35,13 +35,7 @@ export default defineConfig({
     minify: false,
     outDir: resolve(import.meta.dirname, "out/main"),
     rolldownOptions: {
-      external: [
-        "electron",
-        "@electric-sql/pglite",
-        "@heron/audio-host-client",
-        "@heron/dsp-node",
-        ...nodeBuiltins
-      ]
+      external: ["electron", "@electric-sql/pglite", "@heron/dsp-node", ...nodeBuiltins]
     },
     sourcemap: true,
     target: "node22"

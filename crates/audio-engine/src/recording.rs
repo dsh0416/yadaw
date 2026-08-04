@@ -574,7 +574,7 @@ mod tests {
             .expect("time moves forward")
             .as_nanos();
         std::env::temp_dir().join(format!(
-            "heron-audio-host-{label}-{}-{nonce}.bwf",
+            "heron-recording-{label}-{}-{nonce}.bwf",
             std::process::id()
         ))
     }

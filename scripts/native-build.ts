@@ -17,7 +17,7 @@ const target = hostTarget()
 const release = mode === "release"
 
 if (scope !== "binaries") {
-  for (const packageName of ["@heron/dsp-node", "@heron/audio-host-client"]) {
+  for (const packageName of ["@heron/dsp-node"]) {
     runPnpm([
       "--filter",
       packageName,
@@ -39,11 +39,7 @@ if (scope !== "addons") {
     target,
     ...(release ? ["--release"] : []),
     "-p",
-    "heron-audio-host",
-    "-p",
     "heron-vst3-host",
-    "--bin",
-    "heron-audio-host",
     "--bin",
     "heron-vst3-probe"
   ])
@@ -71,7 +67,7 @@ if (scope !== "addons") {
   const sourceDirectory = resolve(workspaceRoot, "target", target, profile)
   const stableDirectory = resolve(workspaceRoot, "target", profile)
   mkdirSync(stableDirectory, { recursive: true })
-  for (const binary of ["heron-audio-host", "heron-vst3-probe"]) {
+  for (const binary of ["heron-vst3-probe"]) {
     copyFileSync(
       resolve(sourceDirectory, `${binary}${executableSuffix}`),
       resolve(stableDirectory, `${binary}${executableSuffix}`)

@@ -1,4 +1,4 @@
-import type { AudioHostIpcClient } from "@heron/audio-host-client"
+import type { AudioHostRuntime } from "@heron/dsp-node"
 import type { MidiInputSnapshot, MidiSyncPreferences, ShortcutPreferences } from "@heron/contracts"
 import type { ControlResponse } from "./wire"
 
@@ -17,7 +17,7 @@ export class AudioHostMidiInputClient {
     private readonly request: (command: Record<string, unknown>) => Promise<ControlResponse>,
     private readonly requestImmediately: (
       command: Record<string, unknown>,
-      client: AudioHostIpcClient
+      client: AudioHostRuntime
     ) => Promise<ControlResponse>
   ) {}
 
@@ -52,7 +52,7 @@ export class AudioHostMidiInputClient {
     this.controlLearning = enabled
   }
 
-  async restore(client: AudioHostIpcClient): Promise<void> {
+  async restore(client: AudioHostRuntime): Promise<void> {
     if (!this.configured) return
     this.decode(
       await this.requestImmediately(

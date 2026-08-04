@@ -137,4 +137,32 @@ describe("OperationProgressDialog", () => {
       "Preparing project graph"
     )
   })
+
+  it("describes close-project cleanup through the shared operation UI", () => {
+    const wrapper = mount(OperationProgressDialog, {
+      props: {
+        operation: {
+          id: "close-project",
+          title: "Closing project",
+          description: "Demo",
+          phase: "closing-project-database",
+          state: "running",
+          completedUnits: 3,
+          totalUnits: 7,
+          cancellable: false,
+          error: null,
+          dropoutFrames: 0
+        }
+      }
+    })
+
+    expect(wrapper.get(".operation-description").text()).toBe(
+      "Closing project · Closing project database"
+    )
+    expect(Number(wrapper.get("[role=progressbar]").attributes("aria-valuenow"))).toBeCloseTo(
+      42.86,
+      2
+    )
+    expect(wrapper.find("button").exists()).toBe(false)
+  })
 })

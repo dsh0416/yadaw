@@ -225,6 +225,8 @@ export class PluginDiscoveryService {
     ) {
       return descriptorsFromModuleInfo(bundlePath, moduleInfo)
     }
+    // Startup discovery only needs catalog metadata. Full bus/layout probing
+    // is deferred until PluginCatalogService resolves a plug-in for loading.
     return this.probeClient.probe(bundlePath, "soft")
   }
 }

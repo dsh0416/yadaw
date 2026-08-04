@@ -1,13 +1,7 @@
 use std::{
     ffi::{CStr, c_void},
-    num::NonZeroU32,
+    num::{NonZeroU32, NonZeroUsize},
 };
-
-use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-use winit::window::Window;
-
-#[cfg(target_os = "linux")]
-use raw_window_handle::HasDisplayHandle;
 
 pub const APPLICATION_ID: &str = "live.minori.heron";
 
@@ -40,17 +34,39 @@ unsafe extern "system" {
     fn SetCurrentProcessExplicitAppUserModelID(application_id: *const u16) -> i32;
 }
 
-/// A native child owned by an editor window. The VST3 view is attached to this
-/// child instead of the winit top-level window so iced can keep a toolbar above
-/// the plug-in without overlapping it.
+/// A native child owned by an Electron editor window. The VST3 view is attached
+/// below the sandboxed web toolbar without giving the plug-in ownership of the
+/// host window.
 pub struct NativeContainer {
     inner: platform::Container,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct NativeParentHandle(NonZeroUsize);
+
+impl NativeParentHandle {
+    /// # Safety
+    ///
+    /// `value` must identify a live Electron content view/window for the current
+    /// platform. The caller must keep that parent alive until every child
+    /// [`NativeContainer`] has been dropped, and all operations must occur on
+    /// the platform UI thread that owns the parent.
+    pub unsafe fn from_raw(value: usize) -> Option<Self> {
+        NonZeroUsize::new(value).map(Self)
+    }
+
+    fn get(self) -> usize {
+        self.0.get()
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NativeContainerGeometry {
     pub x: i32,
+    /// Distance from the top edge of the parent content surface.
     pub y: i32,
+    /// Height of the parent content surface in the same coordinate space.
+    pub parent_height: u32,
     pub frame_width: u32,
     pub frame_height: u32,
     pub content_width: u32,
@@ -89,12 +105,12 @@ impl NativeUiContext {
 }
 
 impl NativeContainer {
-    pub fn create(
-        parent: &Window,
+    pub fn create_for_parent(
+        parent: NativeParentHandle,
         geometry: NativeContainerGeometry,
         platform_scaled: bool,
     ) -> Result<Option<Self>, String> {
-        platform::Container::create(parent, geometry, platform_scaled)
+        platform::Container::create_for_parent(parent, geometry, platform_scaled)
             .map(|container| container.map(|inner| Self { inner }))
     }
 
@@ -130,10 +146,7 @@ fn nonzero_extent(value: u32) -> u32 {
 
 #[cfg(target_os = "windows")]
 mod platform {
-    use super::{
-        CStr, HasWindowHandle, NativeContainerGeometry, RawWindowHandle, Window, c_void,
-        nonzero_extent,
-    };
+    use super::{CStr, NativeContainerGeometry, NativeParentHandle, c_void, nonzero_extent};
 
     mod dpi {
         include!("editor_platform/windows_dpi.rs");
@@ -142,12 +155,40 @@ mod platform {
     type Hwnd = *mut c_void;
     type Hinstance = *mut c_void;
 
+    #[repr(C)]
+    #[derive(Clone, Copy, Default)]
+    struct Rect {
+        left: i32,
+        top: i32,
+        right: i32,
+        bottom: i32,
+    }
+
+    #[repr(C)]
+    struct Point {
+        x: i32,
+        y: i32,
+    }
+
     const WS_CHILD: u32 = 0x4000_0000;
     const WS_VISIBLE: u32 = 0x1000_0000;
     const WS_CLIPSIBLINGS: u32 = 0x0400_0000;
     const WS_CLIPCHILDREN: u32 = 0x0200_0000;
     const SWP_NOACTIVATE: u32 = 0x0010;
     const SWP_NOZORDER: u32 = 0x0004;
+    const GW_CHILD: u32 = 5;
+    const WM_CONTEXTMENU: u32 = 0x007B;
+    const WM_MOUSEMOVE: u32 = 0x0200;
+    const WM_LBUTTONDOWN: u32 = 0x0201;
+    const WM_MBUTTONDBLCLK: u32 = 0x0209;
+    const WM_MOUSEWHEEL: u32 = 0x020A;
+    const WM_XBUTTONDOWN: u32 = 0x020B;
+    const WM_XBUTTONDBLCLK: u32 = 0x020D;
+    const WM_MOUSEHWHEEL: u32 = 0x020E;
+    const WM_POINTERUPDATE: u32 = 0x0245;
+    const WM_POINTERDOWN: u32 = 0x0246;
+    const WM_POINTERUP: u32 = 0x0247;
+    const PLUGIN_INPUT_SUBCLASS_ID: usize = 1;
     pub const PLATFORM_TYPE: &CStr = c"HWND";
 
     pub use dpi::EditorWindowContext;
@@ -164,7 +205,7 @@ mod platform {
     impl UiContext {
         pub fn initialize() -> Result<Self, String> {
             let result = unsafe {
-                // SAFETY: the context is initialized and dropped on the winit main thread.
+                // SAFETY: the context is initialized and dropped on the UI controller thread.
                 OleInitialize(std::ptr::null_mut())
             };
             if result < 0 {
@@ -187,31 +228,55 @@ mod platform {
         }
     }
 
+    struct InputTransform {
+        x: std::cell::Cell<f64>,
+        y: std::cell::Cell<f64>,
+        forced_width: std::cell::Cell<u32>,
+        forced_height: std::cell::Cell<u32>,
+    }
+
+    impl InputTransform {
+        fn new() -> Self {
+            Self {
+                x: std::cell::Cell::new(1.0),
+                y: std::cell::Cell::new(1.0),
+                forced_width: std::cell::Cell::new(0),
+                forced_height: std::cell::Cell::new(0),
+            }
+        }
+    }
+
     pub struct Container {
         hwnd: Hwnd,
+        attached_view: Hwnd,
+        input_transform: Box<InputTransform>,
     }
 
     impl Container {
-        pub fn create(
-            parent: &Window,
+        pub fn create_for_parent(
+            parent: NativeParentHandle,
             geometry: NativeContainerGeometry,
             platform_scaled: bool,
         ) -> Result<Option<Self>, String> {
-            let handle = parent
-                .window_handle()
-                .map_err(|error| format!("could not obtain Win32 window handle: {error}"))?;
-            let RawWindowHandle::Win32(handle) = handle.as_raw() else {
-                return Ok(None);
+            let hinstance = unsafe {
+                // SAFETY: null requests the module handle of the current process.
+                GetModuleHandleW(std::ptr::null())
             };
-            let parent = handle.hwnd.get() as Hwnd;
-            let hinstance = handle
-                .hinstance
-                .map_or(std::ptr::null_mut(), |value| value.get() as Hinstance);
+            Self::create_with_parent(parent.get() as Hwnd, hinstance, geometry, platform_scaled)
+                .map(Some)
+        }
+
+        fn create_with_parent(
+            parent: Hwnd,
+            hinstance: Hinstance,
+            geometry: NativeContainerGeometry,
+            platform_scaled: bool,
+        ) -> Result<Self, String> {
             let class_name = [
                 'S' as u16, 'T' as u16, 'A' as u16, 'T' as u16, 'I' as u16, 'C' as u16, 0,
             ];
             let hwnd = with_native_child_scale_context(platform_scaled, || unsafe {
-                // SAFETY: all pointers are either static UTF-16 data, null, or a live winit HWND.
+                // SAFETY: all pointers are static UTF-16 data, null, or a live Electron HWND.
                 CreateWindowExW(
                     0,
                     class_name.as_ptr(),
@@ -230,7 +295,11 @@ mod platform {
             if hwnd.is_null() {
                 return Err("CreateWindowExW failed for VST3 child container".into());
             }
-            Ok(Some(Self { hwnd }))
+            Ok(Self {
+                hwnd,
+                attached_view: std::ptr::null_mut(),
+                input_transform: Box::new(InputTransform::new()),
+            })
         }
 
         pub fn attach_handle(&self) -> *mut c_void {
@@ -249,6 +318,86 @@ mod platform {
                     nonzero_extent(geometry.frame_height) as i32,
                     SWP_NOACTIVATE | SWP_NOZORDER,
                 );
+                let attached_view = GetWindow(self.hwnd, GW_CHILD);
+                if !attached_view.is_null() {
+                    self.resize_attached_view(attached_view, geometry);
+                }
+            }
+        }
+
+        unsafe fn resize_attached_view(
+            &mut self,
+            attached_view: Hwnd,
+            geometry: NativeContainerGeometry,
+        ) {
+            let mut rect = Rect::default();
+            let has_extent = unsafe {
+                // SAFETY: attached_view is the live direct child returned by GetWindow.
+                GetClientRect(attached_view, &mut rect) != 0
+            };
+            let current_width = rect.right.saturating_sub(rect.left).max(1) as u32;
+            let current_height = rect.bottom.saturating_sub(rect.top).max(1) as u32;
+            let target_width = nonzero_extent(geometry.frame_width);
+            let target_height = nonzero_extent(geometry.frame_height);
+            if has_extent && current_width == target_width && current_height == target_height {
+                return;
+            }
+
+            if self.attached_view != attached_view {
+                self.attached_view = attached_view;
+                self.input_transform.x.set(1.0);
+                self.input_transform.y.set(1.0);
+                self.input_transform.forced_width.set(0);
+                self.input_transform.forced_height.set(0);
+            }
+            let previous_was_forced = self.input_transform.forced_width.get() == current_width
+                && self.input_transform.forced_height.get() == current_height;
+            let logical_width = if previous_was_forced {
+                f64::from(current_width) * self.input_transform.x.get()
+            } else {
+                f64::from(current_width)
+            };
+            let logical_height = if previous_was_forced {
+                f64::from(current_height) * self.input_transform.y.get()
+            } else {
+                f64::from(current_height)
+            };
+            self.input_transform
+                .x
+                .set(logical_width / f64::from(target_width));
+            self.input_transform
+                .y
+                .set(logical_height / f64::from(target_height));
+            self.input_transform.forced_width.set(target_width);
+            self.input_transform.forced_height.set(target_height);
+
+            if !previous_was_forced {
+                let transform = std::ptr::from_ref(self.input_transform.as_ref()) as usize;
+                unsafe {
+                    // SAFETY: input_transform has a stable boxed address until the container
+                    // destroys its child HWND during Drop. Comctl32 removes the subclass on
+                    // WM_NCDESTROY before that box is released.
+                    SetWindowSubclass(
+                        attached_view,
+                        Some(plugin_input_subclass),
+                        PLUGIN_INPUT_SUBCLASS_ID,
+                        transform,
+                    );
+                }
+            }
+            unsafe {
+                // SAFETY: attached_view is live and target dimensions are clamped non-zero.
+                // Some plug-ins accept IPlugView::onSize without resizing their root HWND;
+                // filling the container prevents their scaled content remaining top-left.
+                SetWindowPos(
+                    attached_view,
+                    std::ptr::null_mut(),
+                    0,
+                    0,
+                    target_width as i32,
+                    target_height as i32,
+                    SWP_NOACTIVATE | SWP_NOZORDER,
+                );
             }
         }
 
@@ -258,6 +407,92 @@ mod platform {
                 SetFocus(self.hwnd);
             }
         }
+    }
+
+    unsafe extern "system" fn plugin_input_subclass(
+        hwnd: Hwnd,
+        message: u32,
+        wparam: usize,
+        lparam: isize,
+        _subclass_id: usize,
+        reference_data: usize,
+    ) -> isize {
+        let transform = unsafe {
+            // SAFETY: SetWindowSubclass receives the stable boxed InputTransform pointer and
+            // invokes this procedure only while the subclassed child HWND is alive.
+            &*(reference_data as *const InputTransform)
+        };
+        let lparam = if message == WM_MOUSEMOVE
+            || (WM_LBUTTONDOWN..=WM_MBUTTONDBLCLK).contains(&message)
+            || (WM_XBUTTONDOWN..=WM_XBUTTONDBLCLK).contains(&message)
+        {
+            scale_local_point(lparam, transform)
+        } else if matches!(
+            message,
+            WM_MOUSEWHEEL
+                | WM_MOUSEHWHEEL
+                | WM_CONTEXTMENU
+                | WM_POINTERUPDATE
+                | WM_POINTERDOWN
+                | WM_POINTERUP
+        ) {
+            unsafe {
+                // SAFETY: hwnd is the live subclassed plug-in root and point conversion only
+                // borrows its coordinate system for this message dispatch.
+                scale_screen_point(hwnd, lparam, transform)
+            }
+        } else {
+            lparam
+        };
+        unsafe {
+            // SAFETY: forwards the possibly adjusted message through the remaining subclass
+            // chain and ultimately to the plug-in's original window procedure.
+            DefSubclassProc(hwnd, message, wparam, lparam)
+        }
+    }
+
+    fn scale_local_point(lparam: isize, transform: &InputTransform) -> isize {
+        let x = i16::from_ne_bytes((lparam as u16).to_ne_bytes());
+        let y = i16::from_ne_bytes(((lparam as u32 >> 16) as u16).to_ne_bytes());
+        point_lparam(
+            scale_coordinate(i32::from(x), transform.x.get()),
+            scale_coordinate(i32::from(y), transform.y.get()),
+        )
+    }
+
+    unsafe fn scale_screen_point(hwnd: Hwnd, lparam: isize, transform: &InputTransform) -> isize {
+        if lparam == -1 {
+            return lparam;
+        }
+        let x = i16::from_ne_bytes((lparam as u16).to_ne_bytes());
+        let y = i16::from_ne_bytes(((lparam as u32 >> 16) as u16).to_ne_bytes());
+        let mut point = Point {
+            x: i32::from(x),
+            y: i32::from(y),
+        };
+        // SAFETY: hwnd is the live subclassed plug-in root and point is writable.
+        if unsafe { ScreenToClient(hwnd, &mut point) } == 0 {
+            return lparam;
+        }
+        point.x = scale_coordinate(point.x, transform.x.get());
+        point.y = scale_coordinate(point.y, transform.y.get());
+        // SAFETY: hwnd remains live for the duration of this subclass callback.
+        if unsafe { ClientToScreen(hwnd, &mut point) } == 0 {
+            return lparam;
+        }
+        point_lparam(point.x, point.y)
+    }
+
+    fn scale_coordinate(value: i32, scale: f64) -> i32 {
+        (f64::from(value) * scale)
+            .round()
+            .clamp(f64::from(i16::MIN), f64::from(i16::MAX)) as i32
+    }
+
+    fn point_lparam(x: i32, y: i32) -> isize {
+        let x = x.clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16 as u16;
+        let y = y.clamp(i32::from(i16::MIN), i32::from(i16::MAX)) as i16 as u16;
+        ((u32::from(y) << 16) | u32::from(x)) as isize
     }
 
     impl Drop for Container {
@@ -294,8 +529,25 @@ mod platform {
             height: i32,
             flags: u32,
         ) -> i32;
+        fn GetWindow(hwnd: Hwnd, command: u32) -> Hwnd;
+        fn GetClientRect(hwnd: Hwnd, rect: *mut Rect) -> i32;
+        fn ScreenToClient(hwnd: Hwnd, point: *mut Point) -> i32;
+        fn ClientToScreen(hwnd: Hwnd, point: *mut Point) -> i32;
         fn SetFocus(hwnd: Hwnd) -> Hwnd;
         fn DestroyWindow(hwnd: Hwnd) -> i32;
+    }
+
+    #[link(name = "comctl32")]
+    unsafe extern "system" {
+        fn SetWindowSubclass(
+            hwnd: Hwnd,
+            procedure: Option<
+                unsafe extern "system" fn(Hwnd, u32, usize, isize, usize, usize) -> isize,
+            >,
+            subclass_id: usize,
+            reference_data: usize,
+        ) -> i32;
+        fn DefSubclassProc(hwnd: Hwnd, message: u32, wparam: usize, lparam: isize) -> isize;
     }
 
     #[link(name = "ole32")]
@@ -303,14 +555,45 @@ mod platform {
         fn OleInitialize(reserved: *mut c_void) -> i32;
         fn OleUninitialize();
     }
+
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn GetModuleHandleW(module_name: *const u16) -> Hinstance;
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn forced_child_scale_maps_mouse_back_to_plugin_coordinates() {
+            let transform = InputTransform::new();
+            transform.x.set(0.8);
+            transform.y.set(0.8);
+
+            assert_eq!(
+                scale_local_point(point_lparam(125, 250), &transform),
+                point_lparam(100, 200)
+            );
+        }
+
+        #[test]
+        fn mouse_mapping_preserves_signed_client_coordinates() {
+            let transform = InputTransform::new();
+            transform.x.set(0.5);
+            transform.y.set(0.5);
+
+            assert_eq!(
+                scale_local_point(point_lparam(-20, -10), &transform),
+                point_lparam(-10, -5)
+            );
+        }
+    }
 }
 
 #[cfg(target_os = "macos")]
 mod platform {
-    use super::{
-        CStr, HasWindowHandle, NativeContainerGeometry, RawWindowHandle, Window, c_void,
-        nonzero_extent,
-    };
+    use super::{CStr, NativeContainerGeometry, NativeParentHandle, c_void, nonzero_extent};
     use std::ffi::{c_char, c_double};
 
     #[repr(C)]
@@ -365,26 +648,29 @@ mod platform {
 
     pub struct Container {
         view: *mut c_void,
+        parent: *mut c_void,
+        child_window: *mut c_void,
     }
 
     impl Container {
-        pub fn create(
-            parent: &Window,
+        pub fn create_for_parent(
+            parent: NativeParentHandle,
             geometry: NativeContainerGeometry,
             _platform_scaled: bool,
         ) -> Result<Option<Self>, String> {
-            let handle = parent
-                .window_handle()
-                .map_err(|error| format!("could not obtain AppKit window handle: {error}"))?;
-            let RawWindowHandle::AppKit(handle) = handle.as_raw() else {
-                return Ok(None);
+            Self::create_with_parent(parent.get() as *mut c_void, geometry, true).map(Some)
+        }
+
+        fn create_with_parent(
+            parent: *mut c_void,
+            geometry: NativeContainerGeometry,
+            use_child_window: bool,
+        ) -> Result<Self, String> {
+            let frame = if use_child_window {
+                rect(0, 0, geometry.frame_width, geometry.frame_height)
+            } else {
+                container_frame(geometry)
             };
-            let frame = rect(
-                geometry.x,
-                geometry.y,
-                geometry.frame_width,
-                geometry.frame_height,
-            );
             let class = unsafe {
                 // SAFETY: NSView is a process-lifetime Objective-C class name.
                 objc_getClass(c"NSView".as_ptr())
@@ -407,13 +693,98 @@ mod platform {
             if view.is_null() {
                 return Err("could not allocate AppKit VST3 child view".into());
             }
+            let child_window = if use_child_window {
+                let parent_window = unsafe {
+                    // SAFETY: parent is Electron's live content NSView.
+                    send_id(parent, sel_registerName(c"window".as_ptr()))
+                };
+                if parent_window.is_null() {
+                    unsafe {
+                        // SAFETY: balances initWithFrame: before returning the error.
+                        send_void(view, sel_registerName(c"release".as_ptr()));
+                    }
+                    return Err("Electron editor parent has no AppKit window".into());
+                }
+                let window_class = unsafe {
+                    // SAFETY: NSWindow is a process-lifetime Objective-C class name.
+                    objc_getClass(c"NSWindow".as_ptr())
+                };
+                if window_class.is_null() {
+                    unsafe {
+                        // SAFETY: balances initWithFrame: before returning the error.
+                        send_void(view, sel_registerName(c"release".as_ptr()));
+                    }
+                    return Err("AppKit NSWindow class is unavailable".into());
+                }
+                // SAFETY: parent and parent_window are live AppKit objects on the main thread.
+                let screen_frame = unsafe { child_window_frame(parent, parent_window, geometry) };
+                let allocated_window = unsafe {
+                    // SAFETY: objc_msgSend is invoked with the signature of +[NSWindow alloc].
+                    send_id(window_class, sel_registerName(c"alloc".as_ptr()))
+                };
+                let child_window = unsafe {
+                    // SAFETY: allocated_window is an NSWindow allocation and arguments match
+                    // initWithContentRect:styleMask:backing:defer:.
+                    send_id_rect_usize_usize_bool(
+                        allocated_window,
+                        sel_registerName(c"initWithContentRect:styleMask:backing:defer:".as_ptr()),
+                        screen_frame,
+                        0,
+                        2,
+                        false,
+                    )
+                };
+                if child_window.is_null() {
+                    unsafe {
+                        // SAFETY: balances initWithFrame: before returning the error.
+                        send_void(view, sel_registerName(c"release".as_ptr()));
+                    }
+                    return Err("could not allocate AppKit VST3 child window".into());
+                }
+                unsafe {
+                    // SAFETY: these are live AppKit objects on the main thread. The child is
+                    // retained by this Container and removed before the Electron parent dies.
+                    send_void_bool(
+                        child_window,
+                        sel_registerName(c"setReleasedWhenClosed:".as_ptr()),
+                        false,
+                    );
+                    send_void_bool(
+                        child_window,
+                        sel_registerName(c"setHasShadow:".as_ptr()),
+                        false,
+                    );
+                    send_void_bool(
+                        child_window,
+                        sel_registerName(c"setIgnoresMouseEvents:".as_ptr()),
+                        false,
+                    );
+                    send_void_id(
+                        child_window,
+                        sel_registerName(c"setContentView:".as_ptr()),
+                        view,
+                    );
+                    send_void_id_isize(
+                        parent_window,
+                        sel_registerName(c"addChildWindow:ordered:".as_ptr()),
+                        child_window,
+                        1,
+                    );
+                    send_void_id(
+                        child_window,
+                        sel_registerName(c"orderFront:".as_ptr()),
+                        std::ptr::null_mut(),
+                    );
+                }
+                child_window
+            } else {
+                unsafe {
+                    // SAFETY: both objects are live NSViews on the AppKit main thread.
+                    send_void_id(parent, sel_registerName(c"addSubview:".as_ptr()), view);
+                }
+                std::ptr::null_mut()
+            };
             unsafe {
-                // SAFETY: both objects are live NSViews on the AppKit main thread.
-                send_void_id(
-                    handle.ns_view.as_ptr(),
-                    sel_registerName(c"addSubview:".as_ptr()),
-                    view,
-                );
                 // SAFETY: the container owns its coordinate system; keeping bounds at the
                 // plug-in's original size scales all attached descendant views into frame.
                 send_void_rect(
@@ -422,7 +793,11 @@ mod platform {
                     rect(0, 0, geometry.content_width, geometry.content_height),
                 );
             }
-            Ok(Some(Self { view }))
+            Ok(Self {
+                view,
+                parent,
+                child_window,
+            })
         }
 
         pub fn attach_handle(&self) -> *mut c_void {
@@ -430,18 +805,32 @@ mod platform {
         }
 
         pub fn resize(&mut self, geometry: NativeContainerGeometry) {
+            // SAFETY: all stored AppKit objects remain live until Container::drop, and resize
+            // runs on the Electron main thread that owns them.
             unsafe {
-                // SAFETY: view is live and setFrame: accepts one NSRect by value.
-                send_void_rect(
-                    self.view,
-                    sel_registerName(c"setFrame:".as_ptr()),
-                    rect(
-                        geometry.x,
-                        geometry.y,
-                        geometry.frame_width,
-                        geometry.frame_height,
-                    ),
-                );
+                if self.child_window.is_null() {
+                    // SAFETY: view is live and setFrame: accepts one NSRect by value.
+                    send_void_rect(
+                        self.view,
+                        sel_registerName(c"setFrame:".as_ptr()),
+                        container_frame(geometry),
+                    );
+                } else {
+                    let parent_window = send_id(self.parent, sel_registerName(c"window".as_ptr()));
+                    if !parent_window.is_null() {
+                        send_void_rect_bool(
+                            self.child_window,
+                            sel_registerName(c"setFrame:display:".as_ptr()),
+                            child_window_frame(self.parent, parent_window, geometry),
+                            true,
+                        );
+                    }
+                    send_void_rect(
+                        self.view,
+                        sel_registerName(c"setFrame:".as_ptr()),
+                        rect(0, 0, geometry.frame_width, geometry.frame_height),
+                    );
+                }
                 // SAFETY: setBounds: uses the same ABI and preserves the plug-in's logical
                 // coordinate size while AppKit maps it into the scaled frame.
                 send_void_rect(
@@ -452,14 +841,169 @@ mod platform {
             }
         }
 
-        pub fn focus(&self) {}
+        pub fn focus(&self) {
+            unsafe {
+                // SAFETY: view is a live NSView owned by this container. Its window and
+                // first plug-in subview, when present, are borrowed only for this AppKit turn.
+                let superview = send_id(self.view, sel_registerName(c"superview".as_ptr()));
+                if self.child_window.is_null() && !superview.is_null() {
+                    // SAFETY: re-adding an existing subview with NSWindowAbove only updates its
+                    // sibling order. This keeps Electron's bridge views from winning hit tests.
+                    send_void_id_isize_id(
+                        superview,
+                        sel_registerName(c"addSubview:positioned:relativeTo:".as_ptr()),
+                        self.view,
+                        1,
+                        std::ptr::null_mut(),
+                    );
+                    if std::env::var_os("HERON_EDITOR_HIT_TEST_DEBUG").is_some() {
+                        let bounds = send_rect(self.view, sel_registerName(c"bounds".as_ptr()));
+                        let point = Point {
+                            x: bounds.origin.x + bounds.size.width / 2.0,
+                            y: bounds.origin.y + bounds.size.height / 2.0,
+                        };
+                        let point = send_point_point_id(
+                            self.view,
+                            sel_registerName(c"convertPoint:toView:".as_ptr()),
+                            point,
+                            superview,
+                        );
+                        let hit =
+                            send_id_point(superview, sel_registerName(c"hitTest:".as_ptr()), point);
+                        let plugin_hit = hit == self.view
+                            || (!hit.is_null()
+                                && send_bool_id(
+                                    hit,
+                                    sel_registerName(c"isDescendantOf:".as_ptr()),
+                                    self.view,
+                                ));
+                        eprintln!(
+                            "audio-host: AppKit editor hit test view={:p} hit={hit:p} plugin={plugin_hit}",
+                            self.view
+                        );
+                    }
+                }
+                let window = send_id(self.view, sel_registerName(c"window".as_ptr()));
+                if window.is_null() {
+                    return;
+                }
+                send_void_bool(
+                    window,
+                    sel_registerName(c"setIgnoresMouseEvents:".as_ptr()),
+                    false,
+                );
+                send_void_bool(
+                    window,
+                    sel_registerName(c"setAcceptsMouseMovedEvents:".as_ptr()),
+                    true,
+                );
+                send_void(window, sel_registerName(c"makeKeyWindow".as_ptr()));
+                let subviews = send_id(self.view, sel_registerName(c"subviews".as_ptr()));
+                let plugin_view = if subviews.is_null() {
+                    std::ptr::null_mut()
+                } else {
+                    send_id(subviews, sel_registerName(c"firstObject".as_ptr()))
+                };
+                let responder = if plugin_view.is_null() {
+                    self.view
+                } else {
+                    plugin_view
+                };
+                let _ = send_bool_id(
+                    window,
+                    sel_registerName(c"makeFirstResponder:".as_ptr()),
+                    responder,
+                );
+            }
+        }
+    }
+
+    fn container_frame(geometry: NativeContainerGeometry) -> Rect {
+        let top = u32::try_from(geometry.y).unwrap_or(0);
+        let y = geometry
+            .parent_height
+            .saturating_sub(top)
+            .saturating_sub(geometry.frame_height)
+            .min(i32::MAX as u32) as i32;
+        rect(geometry.x, y, geometry.frame_width, geometry.frame_height)
+    }
+
+    unsafe fn child_window_frame(
+        parent_view: *mut c_void,
+        parent_window: *mut c_void,
+        geometry: NativeContainerGeometry,
+    ) -> Rect {
+        let local = container_frame(geometry);
+        let window = unsafe {
+            // SAFETY: parent_view is a live NSView and nil requests window-base coordinates.
+            send_rect_rect_id(
+                parent_view,
+                sel_registerName(c"convertRect:toView:".as_ptr()),
+                local,
+                std::ptr::null_mut(),
+            )
+        };
+        unsafe {
+            // SAFETY: parent_window is live and window is expressed in its base coordinates.
+            send_rect_rect(
+                parent_window,
+                sel_registerName(c"convertRectToScreen:".as_ptr()),
+                window,
+            )
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn electron_bottom_left_parent_keeps_top_toolbar_clear() {
+            let geometry = NativeContainerGeometry {
+                x: 0,
+                y: 60,
+                parent_height: 660,
+                frame_width: 800,
+                frame_height: 600,
+                content_width: 800,
+                content_height: 600,
+            };
+
+            let frame = container_frame(geometry);
+            assert_eq!(frame.origin.y, 0.0);
+        }
     }
 
     impl Drop for Container {
         fn drop(&mut self) {
+            // SAFETY: drop runs on the owning AppKit thread and balances every retained child
+            // view/window created by Container::create_for_parent.
             unsafe {
-                // SAFETY: remove/release are paired with addSubview and initWithFrame.
-                send_void(self.view, sel_registerName(c"removeFromSuperview".as_ptr()));
+                if self.child_window.is_null() {
+                    // SAFETY: remove/release are paired with addSubview and initWithFrame.
+                    send_void(self.view, sel_registerName(c"removeFromSuperview".as_ptr()));
+                } else {
+                    let parent_window = send_id(self.parent, sel_registerName(c"window".as_ptr()));
+                    if !parent_window.is_null() {
+                        send_void_id(
+                            parent_window,
+                            sel_registerName(c"removeChildWindow:".as_ptr()),
+                            self.child_window,
+                        );
+                    }
+                    send_void_id(
+                        self.child_window,
+                        sel_registerName(c"orderOut:".as_ptr()),
+                        std::ptr::null_mut(),
+                    );
+                    send_void_id(
+                        self.child_window,
+                        sel_registerName(c"setContentView:".as_ptr()),
+                        std::ptr::null_mut(),
+                    );
+                    send_void(self.child_window, sel_registerName(c"close".as_ptr()));
+                    send_void(self.child_window, sel_registerName(c"release".as_ptr()));
+                }
                 send_void(self.view, sel_registerName(c"release".as_ptr()));
             }
         }
@@ -503,6 +1047,103 @@ mod platform {
         }
     }
 
+    unsafe fn send_id_rect_usize_usize_bool(
+        receiver: *mut c_void,
+        selector: Sel,
+        rect: Rect,
+        style_mask: usize,
+        backing: usize,
+        defer: bool,
+    ) -> *mut c_void {
+        let function: unsafe extern "C" fn(
+            *mut c_void,
+            Sel,
+            Rect,
+            usize,
+            usize,
+            c_char,
+        ) -> *mut c_void = unsafe {
+            // SAFETY: casts objc_msgSend to the NSWindow initializer signature.
+            std::mem::transmute(objc_msgSend as *const ())
+        };
+        unsafe {
+            // SAFETY: receiver and arguments match the NSWindow initializer.
+            function(
+                receiver,
+                selector,
+                rect,
+                style_mask,
+                backing,
+                c_char::from(defer),
+            )
+        }
+    }
+
+    unsafe fn send_rect_rect(receiver: *mut c_void, selector: Sel, value: Rect) -> Rect {
+        let function: unsafe extern "C" fn(*mut c_void, Sel, Rect) -> Rect = unsafe {
+            // SAFETY: casts objc_msgSend to the NSRect/NSRect selector signature.
+            std::mem::transmute(objc_msgSend as *const ())
+        };
+        unsafe {
+            // SAFETY: receiver, selector, and NSRect match convertRectToScreen:.
+            function(receiver, selector, value)
+        }
+    }
+
+    unsafe fn send_rect_rect_id(
+        receiver: *mut c_void,
+        selector: Sel,
+        value: Rect,
+        view: *mut c_void,
+    ) -> Rect {
+        let function: unsafe extern "C" fn(*mut c_void, Sel, Rect, *mut c_void) -> Rect = unsafe {
+            // SAFETY: casts objc_msgSend to the NSRect/NSRect/id selector signature.
+            std::mem::transmute(objc_msgSend as *const ())
+        };
+        unsafe {
+            // SAFETY: receiver, selector, NSRect, and NSView match convertRect:toView:.
+            function(receiver, selector, value, view)
+        }
+    }
+
+    unsafe fn send_id_point(receiver: *mut c_void, selector: Sel, value: Point) -> *mut c_void {
+        let function: unsafe extern "C" fn(*mut c_void, Sel, Point) -> *mut c_void = unsafe {
+            // SAFETY: casts objc_msgSend to the id/NSPoint selector signature.
+            std::mem::transmute(objc_msgSend as *const ())
+        };
+        unsafe {
+            // SAFETY: receiver, selector, and NSPoint argument match hitTest:.
+            function(receiver, selector, value)
+        }
+    }
+
+    unsafe fn send_point_point_id(
+        receiver: *mut c_void,
+        selector: Sel,
+        point: Point,
+        view: *mut c_void,
+    ) -> Point {
+        let function: unsafe extern "C" fn(*mut c_void, Sel, Point, *mut c_void) -> Point = unsafe {
+            // SAFETY: casts objc_msgSend to the NSPoint/NSPoint/id selector signature.
+            std::mem::transmute(objc_msgSend as *const ())
+        };
+        unsafe {
+            // SAFETY: receiver, selector, NSPoint, and NSView match convertPoint:toView:.
+            function(receiver, selector, point, view)
+        }
+    }
+
+    unsafe fn send_rect(receiver: *mut c_void, selector: Sel) -> Rect {
+        let function: unsafe extern "C" fn(*mut c_void, Sel) -> Rect = unsafe {
+            // SAFETY: casts objc_msgSend to the NSRect-returning selector signature.
+            std::mem::transmute(objc_msgSend as *const ())
+        };
+        unsafe {
+            // SAFETY: receiver and selector match NSView bounds.
+            function(receiver, selector)
+        }
+    }
+
     unsafe fn send_void(receiver: *mut c_void, selector: Sel) {
         let function: unsafe extern "C" fn(*mut c_void, Sel) = unsafe {
             // SAFETY: casts objc_msgSend to the void selector signature used below.
@@ -522,6 +1163,77 @@ mod platform {
         unsafe {
             // SAFETY: receiver, selector, and object argument match this Objective-C message.
             function(receiver, selector, value)
+        }
+    }
+
+    unsafe fn send_void_id_isize(
+        receiver: *mut c_void,
+        selector: Sel,
+        value: *mut c_void,
+        order: isize,
+    ) {
+        let function: unsafe extern "C" fn(*mut c_void, Sel, *mut c_void, isize) = unsafe {
+            // SAFETY: casts objc_msgSend to the void/id/NSInteger selector signature.
+            std::mem::transmute(objc_msgSend as *const ())
+        };
+        unsafe {
+            // SAFETY: receiver and arguments match addChildWindow:ordered:.
+            function(receiver, selector, value, order);
+        }
+    }
+
+    unsafe fn send_void_rect_bool(
+        receiver: *mut c_void,
+        selector: Sel,
+        value: Rect,
+        display: bool,
+    ) {
+        let function: unsafe extern "C" fn(*mut c_void, Sel, Rect, c_char) = unsafe {
+            // SAFETY: casts objc_msgSend to the void/NSRect/BOOL selector signature.
+            std::mem::transmute(objc_msgSend as *const ())
+        };
+        unsafe {
+            // SAFETY: receiver and arguments match setFrame:display:.
+            function(receiver, selector, value, c_char::from(display));
+        }
+    }
+
+    unsafe fn send_void_id_isize_id(
+        receiver: *mut c_void,
+        selector: Sel,
+        first: *mut c_void,
+        second: isize,
+        third: *mut c_void,
+    ) {
+        let function: unsafe extern "C" fn(*mut c_void, Sel, *mut c_void, isize, *mut c_void) = unsafe {
+            // SAFETY: casts objc_msgSend to the id/NSInteger/id selector signature.
+            std::mem::transmute(objc_msgSend as *const ())
+        };
+        unsafe {
+            // SAFETY: receiver and arguments match addSubview:positioned:relativeTo:.
+            function(receiver, selector, first, second, third);
+        }
+    }
+
+    unsafe fn send_void_bool(receiver: *mut c_void, selector: Sel, value: bool) {
+        let function: unsafe extern "C" fn(*mut c_void, Sel, c_char) = unsafe {
+            // SAFETY: casts objc_msgSend to the void/BOOL selector signature.
+            std::mem::transmute(objc_msgSend as *const ())
+        };
+        unsafe {
+            // SAFETY: receiver, selector, and BOOL argument match this AppKit setter.
+            function(receiver, selector, c_char::from(value));
+        }
+    }
+
+    unsafe fn send_bool_id(receiver: *mut c_void, selector: Sel, value: *mut c_void) -> bool {
+        let function: unsafe extern "C" fn(*mut c_void, Sel, *mut c_void) -> c_char = unsafe {
+            // SAFETY: casts objc_msgSend to the BOOL/id selector signature used below.
+            std::mem::transmute(objc_msgSend as *const ())
+        };
+        unsafe {
+            // SAFETY: receiver, selector, and id argument match makeFirstResponder:.
+            function(receiver, selector, value) != 0
         }
     }
 
@@ -546,10 +1258,7 @@ mod platform {
 
 #[cfg(target_os = "linux")]
 mod platform {
-    use super::{
-        CStr, HasDisplayHandle, HasWindowHandle, NativeContainerGeometry, RawWindowHandle, Window,
-        c_void, nonzero_extent,
-    };
+    use super::{CStr, NativeContainerGeometry, NativeParentHandle, c_void, nonzero_extent};
     use std::ffi::{c_char, c_int, c_long, c_ulong};
 
     type Display = c_void;
@@ -600,34 +1309,45 @@ mod platform {
     pub struct Container {
         display: *mut Display,
         window: XWindow,
+        owns_display: bool,
     }
 
     impl Container {
-        pub fn create(
-            parent: &Window,
+        pub fn create_for_parent(
+            parent: NativeParentHandle,
             geometry: NativeContainerGeometry,
             _platform_scaled: bool,
         ) -> Result<Option<Self>, String> {
-            let window_handle = parent
-                .window_handle()
-                .map_err(|error| format!("could not obtain X11 window handle: {error}"))?;
-            let display_handle = parent
-                .display_handle()
-                .map_err(|error| format!("could not obtain X11 display handle: {error}"))?;
-            let (RawWindowHandle::Xlib(parent), raw_window_handle::RawDisplayHandle::Xlib(display)) =
-                (window_handle.as_raw(), display_handle.as_raw())
-            else {
+            let display = unsafe {
+                // SAFETY: null asks Xlib to open the process's configured default display.
+                XOpenDisplay(std::ptr::null())
+            };
+            if display.is_null() {
                 return Ok(None);
-            };
-            let Some(display) = display.display else {
-                return Err("winit X11 display handle is null".into());
-            };
-            let display = display.as_ptr();
+            }
+            match Self::create_with_parent(display, parent.get() as XWindow, geometry, true) {
+                Ok(container) => Ok(Some(container)),
+                Err(error) => {
+                    unsafe {
+                        // SAFETY: display was opened by this function and no child owns it.
+                        XCloseDisplay(display);
+                    }
+                    Err(error)
+                }
+            }
+        }
+
+        fn create_with_parent(
+            display: *mut Display,
+            parent: XWindow,
+            geometry: NativeContainerGeometry,
+            owns_display: bool,
+        ) -> Result<Self, String> {
             let window = unsafe {
-                // SAFETY: display and parent window are borrowed from the live winit window.
+                // SAFETY: display is live and parent is the registered Electron X11 window.
                 XCreateSimpleWindow(
                     display,
-                    parent.window,
+                    parent,
                     geometry.x,
                     geometry.y,
                     nonzero_extent(geometry.frame_width),
@@ -658,7 +1378,11 @@ mod platform {
                 XMapWindow(display, window);
                 XFlush(display);
             }
-            Ok(Some(Self { display, window }))
+            Ok(Self {
+                display,
+                window,
+                owns_display,
+            })
         }
 
         pub fn attach_handle(&self) -> *mut c_void {
@@ -695,6 +1419,9 @@ mod platform {
                 // SAFETY: the child is destroyed exactly once before the parent window.
                 XDestroyWindow(self.display, self.window);
                 XFlush(self.display);
+                if self.owns_display {
+                    XCloseDisplay(self.display);
+                }
             }
         }
     }
@@ -726,6 +1453,8 @@ mod platform {
 
     #[link(name = "X11")]
     unsafe extern "C" {
+        fn XOpenDisplay(display_name: *const c_char) -> *mut Display;
+        fn XCloseDisplay(display: *mut Display) -> c_int;
         fn XCreateSimpleWindow(
             display: *mut Display,
             parent: XWindow,
@@ -775,7 +1504,7 @@ mod platform {
 
 #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
 mod platform {
-    use super::{CStr, NativeContainerGeometry, Window, c_void};
+    use super::{CStr, NativeContainerGeometry, NativeParentHandle, c_void};
 
     pub const PLATFORM_TYPE: &CStr = c"unsupported";
 
@@ -809,8 +1538,8 @@ mod platform {
     pub struct Container;
 
     impl Container {
-        pub fn create(
-            _parent: &Window,
+        pub fn create_for_parent(
+            _parent: NativeParentHandle,
             _geometry: NativeContainerGeometry,
             _platform_scaled: bool,
         ) -> Result<Option<Self>, String> {

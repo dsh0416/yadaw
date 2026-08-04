@@ -1,4 +1,4 @@
-import type { AudioHostIpcClient } from "@heron/audio-host-client"
+import type { AudioHostRuntime } from "@heron/dsp-node"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { AudioHostHealthMonitor } from "./audio-host-health-monitor"
 import type { PriorityResponse } from "./wire"
@@ -26,15 +26,14 @@ describe("AudioHostHealthMonitor", () => {
     const pending = new Promise<PriorityResponse>((resolve) => {
       resolveHeartbeat = resolve
     })
-    const client = {} as AudioHostIpcClient
+    const client = {} as AudioHostRuntime
     const request = vi.fn(() => pending)
     const captureTransport = vi.fn()
     const monitor = new AudioHostHealthMonitor({
       currentClient: () => client,
       heartbeat: request,
       captureTransport,
-      onFailure: vi.fn(),
-      onStable: vi.fn()
+      onFailure: vi.fn()
     })
     monitor.start(client)
 
@@ -54,14 +53,13 @@ describe("AudioHostHealthMonitor", () => {
   })
 
   it("reports an active callback that makes no progress for two seconds", async () => {
-    const client = {} as AudioHostIpcClient
+    const client = {} as AudioHostRuntime
     const onFailure = vi.fn()
     const monitor = new AudioHostHealthMonitor({
       currentClient: () => client,
       heartbeat: vi.fn(async () => heartbeat(7, "playing")),
       captureTransport: vi.fn(),
-      onFailure,
-      onStable: vi.fn()
+      onFailure
     })
     monitor.start(client)
 
@@ -73,7 +71,7 @@ describe("AudioHostHealthMonitor", () => {
 
   it("suppresses an in-flight heartbeat failure when a benchmark begins", async () => {
     let rejectHeartbeat!: (error: unknown) => void
-    const client = {} as AudioHostIpcClient
+    const client = {} as AudioHostRuntime
     const onFailure = vi.fn()
     const request = vi.fn(
       () =>
@@ -85,8 +83,7 @@ describe("AudioHostHealthMonitor", () => {
       currentClient: () => client,
       heartbeat: request,
       captureTransport: vi.fn(),
-      onFailure,
-      onStable: vi.fn()
+      onFailure
     })
     monitor.start(client)
     await vi.advanceTimersByTimeAsync(250)
@@ -103,16 +100,14 @@ describe("AudioHostHealthMonitor", () => {
     monitor.stop()
   })
 
-  it("stops heartbeat and stability timers during shutdown", async () => {
-    const client = {} as AudioHostIpcClient
+  it("stops heartbeat polling during shutdown", async () => {
+    const client = {} as AudioHostRuntime
     const request = vi.fn(async () => heartbeat(1))
-    const onStable = vi.fn()
     const monitor = new AudioHostHealthMonitor({
       currentClient: () => client,
       heartbeat: request,
       captureTransport: vi.fn(),
-      onFailure: vi.fn(),
-      onStable
+      onFailure: vi.fn()
     })
     monitor.start(client)
     monitor.stop()
@@ -120,6 +115,24 @@ describe("AudioHostHealthMonitor", () => {
     await vi.advanceTimersByTimeAsync(10_000)
 
     expect(request).not.toHaveBeenCalled()
-    expect(onStable).not.toHaveBeenCalled()
+  })
+
+  it("reports a persistent failure only once", async () => {
+    const client = {} as AudioHostRuntime
+    const onFailure = vi.fn()
+    const monitor = new AudioHostHealthMonitor({
+      currentClient: () => client,
+      heartbeat: vi.fn(async () => {
+        throw new Error("runtime stalled")
+      }),
+      captureTransport: vi.fn(),
+      onFailure
+    })
+    monitor.start(client)
+
+    await vi.advanceTimersByTimeAsync(1_000)
+
+    expect(onFailure).toHaveBeenCalledOnce()
+    monitor.stop()
   })
 })

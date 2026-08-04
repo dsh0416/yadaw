@@ -41,8 +41,7 @@ function mountPage() {
       applying: false,
       audioHostRuntime: {
         workerThreads: "auto",
-        maxBlockingThreads: "auto",
-        egressConcurrency: "auto"
+        maxBlockingThreads: "auto"
       },
       resolvedAudioHostRuntime: null,
       audioHostRuntimeApplying: false,

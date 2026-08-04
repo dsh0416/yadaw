@@ -14,7 +14,7 @@ import {
 } from "../../stores/systemPerformance"
 import type { HealthSeverity, PerformanceWarning } from "../../stores/systemPerformance"
 import PerformanceAudioSection from "./PerformanceAudioSection.vue"
-import PerformanceIpcSection from "./PerformanceIpcSection.vue"
+import PerformanceAudioRuntimeSection from "./PerformanceAudioRuntimeSection.vue"
 import PerformanceResourceSections from "./PerformanceResourceSections.vue"
 
 const props = defineProps<{
@@ -85,7 +85,7 @@ const activeWarnings = computed<PerformanceWarning[]>(() => [
 
 const cpuUsage = computed(() => snapshot.value?.cpu.overallUsagePercent ?? null)
 const memoryUsage = computed(() => snapshot.value?.memory.usagePercent ?? null)
-const audioIpc = computed(() => snapshot.value?.audioIpc ?? null)
+const audioRuntime = computed(() => snapshot.value?.audioRuntime ?? null)
 
 function formatPercent(value: number | null): string {
   return value === null ? "—" : `${Math.round(value)}%`
@@ -154,7 +154,7 @@ function formatLatency(value: number | null): string {
 
       <PerformanceAudioSection :runtime="runtime" :statistics="statistics" />
 
-      <PerformanceIpcSection :audio-ipc="audioIpc" />
+      <PerformanceAudioRuntimeSection :audio-runtime="audioRuntime" />
 
       <footer class="threshold-note">
         {{

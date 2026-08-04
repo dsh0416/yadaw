@@ -8,6 +8,11 @@ vstTrademark: true
 
 # The multiprocess design of Heron
 
+> **Architecture update (2026-08-04):** This article records the former design.
+> Heron now embeds the audio runtime in the main-process N-API addon; the helper
+> process, native IPC client, and shared-memory transport described below have
+> been removed.
+
 A DAW is not really one app with a UI glued on top. It is a control surface, a real-time engine, a plug-in host, and a persistence layer that ought to be allowed to fail without taking the open session with them. Early on we decided Heron would lean into that reality instead of pretending everything could live in one happy address space — and that choice keeps showing up in almost every layer we touch.
 
 ## Why not Tauri

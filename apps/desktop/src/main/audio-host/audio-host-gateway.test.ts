@@ -1,5 +1,5 @@
 import { encode } from "@msgpack/msgpack"
-import type { AudioHostIpcClient } from "@heron/audio-host-client"
+import type { AudioHostRuntime } from "@heron/dsp-node"
 import { describe, expect, it } from "vitest"
 import { AudioHostGateway } from "./audio-host-gateway"
 
@@ -26,7 +26,7 @@ describe("AudioHostGateway", () => {
         ),
         attachments: []
       })
-    } as unknown as AudioHostIpcClient
+    } as unknown as AudioHostRuntime
     const gateway = new AudioHostGateway(
       () => client,
       () => null,

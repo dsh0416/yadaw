@@ -4,7 +4,7 @@ import { useI18n } from "vue-i18n"
 import { UiButton, UiProgress, UiStatusNotice } from "@heron/ui"
 import type { AudioBenchmarkRating, AudioBenchmarkReport } from "@heron/contracts"
 import type { AudioBenchmarkStatus } from "../../stores/audioBenchmark"
-import AudioBenchmarkIpcDiagnostics from "./AudioBenchmarkIpcDiagnostics.vue"
+import AudioBenchmarkNativeBridgeDiagnostics from "./AudioBenchmarkNativeBridgeDiagnostics.vue"
 import AudioBenchmarkScenarioTable from "./AudioBenchmarkScenarioTable.vue"
 import AudioBenchmarkSummary from "./AudioBenchmarkSummary.vue"
 
@@ -86,7 +86,7 @@ function format(value: number, digits = 1): string {
     <div v-else-if="status === 'complete' && report && rating" class="report-state">
       <AudioBenchmarkSummary :report="report" :rating="rating" />
       <AudioBenchmarkScenarioTable :scenarios="report.scenarios" />
-      <AudioBenchmarkIpcDiagnostics :report="report.ipc" />
+      <AudioBenchmarkNativeBridgeDiagnostics :report="report.nativeBridge" />
 
       <footer class="report-footer">
         <div>
