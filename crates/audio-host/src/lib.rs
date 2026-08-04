@@ -75,7 +75,6 @@ pub mod device {
     pub use heron_audio_engine::device::*;
 }
 pub mod editor_platform;
-pub mod editor_window;
 pub mod engine {
     pub use heron_audio_engine::*;
 }

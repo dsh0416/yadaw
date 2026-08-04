@@ -36,7 +36,7 @@ pub(super) async fn forward_to_ui(
 pub(super) enum ActorCommand {
     Control(ControlCommand),
     Parameter(heron_dsp_runtime::protocol::ParameterCommand),
-    /// ARA document model mutation owned by the winit/VST3 controller thread.
+    /// ARA document model mutation owned by the embedded UI/VST3 controller thread.
     SyncAraGraph {
         graph: Option<LiveMixerGraph>,
     },

@@ -20,10 +20,10 @@ use std::{
 };
 
 use super::{
-    ActorRequest, Arc as RuntimeArc, AtomicU64 as RuntimeAtomicU64, GraphParameterHandles,
-    HashMap as RuntimeHashMap, MIDI_INPUT, Mutex as RuntimeMutex, NativeUiContext, RuntimeConfig,
-    UiEvent, UiMailboxWaker, Vst3ActorDeps, WinitHost, WorkerSupervisor, background_io_actor,
-    dispatch_actor, dispatch_parameter, editor_platform, engine, engine_actor,
+    ActorRequest, Arc as RuntimeArc, AtomicU64 as RuntimeAtomicU64, EmbeddedUiHost,
+    GraphParameterHandles, HashMap as RuntimeHashMap, MIDI_INPUT, Mutex as RuntimeMutex,
+    NativeUiContext, RuntimeConfig, UiEvent, UiMailboxWaker, Vst3ActorDeps, WorkerSupervisor,
+    background_io_actor, dispatch_actor, dispatch_parameter, editor_platform, engine, engine_actor,
     is_background_io_command, is_vst3_command, mpsc, slow_request_threshold, stable_runtime_handle,
     std_mpsc as runtime_mpsc, vst3, vst3_actor,
 };
@@ -205,7 +205,7 @@ pub struct EmbeddedAudioHost {
 }
 
 struct EmbeddedUiRuntime {
-    application: WinitHost,
+    application: EmbeddedUiHost,
     _native_ui: NativeUiContext,
 }
 
@@ -218,7 +218,7 @@ impl EmbeddedUiRuntime {
 impl EmbeddedAudioHost {
     pub fn start(
         config: EmbeddedRuntimeConfig,
-        editor_owner_window: Option<usize>,
+        _editor_owner_window: Option<usize>,
         ui_wake: Option<EmbeddedUiWake>,
     ) -> Result<Self, EmbeddedRuntimeError> {
         let runtime_config = config.validate()?;
@@ -259,7 +259,7 @@ impl EmbeddedAudioHost {
         let runtime_id = NEXT_RUNTIME_ID.fetch_add(1, Ordering::Relaxed);
         let (messages, inbox) = mpsc::channel(CONTROL_CAPACITY);
 
-        let application = WinitHost {
+        let application = EmbeddedUiHost {
             generation: Arc::clone(&winit_generation),
             proxy: application_proxy,
             inbox: ui_inbox,
@@ -270,17 +270,8 @@ impl EmbeddedAudioHost {
             pending_ara_events: VecDeque::new(),
             vst3: Some(vst3::Vst3Runtime::new()),
             ara_graph: None,
-            compositor: None,
-            editor_owner_window,
-            editors: HashMap::new(),
-            editor_instances: HashMap::new(),
-            editor_menus: HashMap::new(),
-            editor_menu_for_owner: HashMap::new(),
-            editor_clipboard: None,
-            next_editor_tick: None,
             next_ara_tick: None,
             next_retirement_tick: None,
-            output_parameter_error_reported: false,
             next_sidechain_request_id: 1,
             embedded_editor_hosts: HashMap::new(),
             embedded_editor_events: std::rc::Rc::new(std::cell::RefCell::new(VecDeque::new())),

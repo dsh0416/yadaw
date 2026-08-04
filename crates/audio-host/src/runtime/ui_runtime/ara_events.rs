@@ -1,6 +1,6 @@
-use super::{ControlResult, HostEvent, WinitHost, std_mpsc};
+use super::{ControlResult, EmbeddedUiHost, HostEvent, std_mpsc};
 
-impl WinitHost {
+impl EmbeddedUiHost {
     pub(super) fn poll_ara_callbacks(&mut self) {
         self.flush_pending_ara_events();
         let include_model_events = self.pending_ara_events.is_empty();

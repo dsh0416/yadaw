@@ -12,21 +12,12 @@ ara2-bridge-core.workspace = true
 ara2-bridge-host.workspace = true
 ara2-bridge-sys.workspace = true
 bwavfile.workspace = true
-iced_core.workspace = true
-iced_renderer.workspace = true
-iced_wgpu.workspace = true
-iced_widget.workspace = true
-iced_winit.workspace = true
 midir.workspace = true
-pollster.workspace = true
-raw-window-handle.workspace = true
 sha2.workspace = true
 tokio.workspace = true
-winit.workspace = true
 heron-dsp-runtime.workspace = true
 heron-audio-engine.workspace = true
 heron-vst3-host.workspace = true
-heron-iced-ui.workspace = true
 
 [dev-dependencies]
 heron-audio-engine = { workspace = true, features = ["test-support"] }

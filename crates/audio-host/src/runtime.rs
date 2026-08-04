@@ -21,10 +21,6 @@ use std::{
 use crate::{
     device,
     editor_platform::{self, NativeUiContext},
-    editor_window::{
-        EditorAction, EditorClipboard, EditorMenuAction, EditorMenuWindow, EditorWindow,
-        toolbar_menu_window_attributes,
-    },
     engine,
     midi_input::MidiInputActor,
     recording::{NativeRecordingResult, NativeRecordingStartConfig, NativeWaveformSnapshot},
@@ -36,22 +32,14 @@ use heron_dsp_runtime::protocol::{
     ControlResult, GraphCandidateSnapshot, GraphDeploymentSnapshot, GraphDeploymentStatus,
     GraphOperationOutcome, GraphOperationSnapshot, GraphTransactionRequest, GraphTransactionValue,
     GraphUpdate, HostEvent, IPC_PROTOCOL_VERSION, LiveLatencyPolicy, LiveMixerGraph, MidiNoteBatch,
-    MixerChannelMeter, PluginEditorContext, PluginEditorPreference, RecordingResult,
-    RecordingWaveform, ResourceKind, ResourceRef, RoundTripLatencyMeasurement, RpcError,
-    RpcErrorCategory, RpcErrorCode, RpcErrorDetails, RpcFailure, RpcMutationOutcome,
-    RpcRequestMeta, RpcResult, RpcRetry, RpcSuccess, TransportState,
+    MixerChannelMeter, RecordingResult, RecordingWaveform, ResourceKind, ResourceRef,
+    RoundTripLatencyMeasurement, RpcError, RpcErrorCategory, RpcErrorCode, RpcErrorDetails,
+    RpcFailure, RpcMutationOutcome, RpcRequestMeta, RpcResult, RpcRetry, RpcSuccess,
+    TransportState,
 };
 use heron_dsp_runtime::tempo::{TempoEvent, TimeSignatureEvent};
 use heron_vst3_host::Vst3HostRequest;
-use iced_wgpu::window::Compositor as WgpuCompositor;
 use tokio::sync::{mpsc, oneshot};
-use winit::{
-    application::ApplicationHandler,
-    dpi::LogicalSize,
-    event::WindowEvent,
-    event_loop::{ActiveEventLoop, ControlFlow},
-    window::{WindowAttributes, WindowId},
-};
 
 pub mod embedded;
 mod engine_actor;
@@ -77,7 +65,7 @@ use plugin_actor::{
     slow_request_threshold, vst3_actor,
 };
 use runtime_config::RuntimeConfig;
-use ui_runtime::{UiEvent, UiMailboxWaker, WinitHost};
+use ui_runtime::{EmbeddedUiHost, UiEvent, UiMailboxWaker};
 use wire_adapters::{engine_command, live_graph};
 
 static MIDI_INPUT: OnceLock<MidiInputActor> = OnceLock::new();

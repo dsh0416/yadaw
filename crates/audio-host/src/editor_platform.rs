@@ -3,12 +3,6 @@ use std::{
     num::{NonZeroU32, NonZeroUsize},
 };
 
-use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-use winit::window::Window;
-
-#[cfg(target_os = "linux")]
-use raw_window_handle::HasDisplayHandle;
-
 pub const APPLICATION_ID: &str = "live.minori.heron";
 
 #[cfg(target_os = "windows")]
@@ -40,9 +34,9 @@ unsafe extern "system" {
     fn SetCurrentProcessExplicitAppUserModelID(application_id: *const u16) -> i32;
 }
 
-/// A native child owned by an editor window. The VST3 view is attached to this
-/// child instead of the winit top-level window so iced can keep a toolbar above
-/// the plug-in without overlapping it.
+/// A native child owned by an Electron editor window. The VST3 view is attached
+/// below the sandboxed web toolbar without giving the plug-in ownership of the
+/// host window.
 pub struct NativeContainer {
     inner: platform::Container,
 }
@@ -111,15 +105,6 @@ impl NativeUiContext {
 }
 
 impl NativeContainer {
-    pub fn create(
-        parent: &Window,
-        geometry: NativeContainerGeometry,
-        platform_scaled: bool,
-    ) -> Result<Option<Self>, String> {
-        platform::Container::create(parent, geometry, platform_scaled)
-            .map(|container| container.map(|inner| Self { inner }))
-    }
-
     pub fn create_for_parent(
         parent: NativeParentHandle,
         geometry: NativeContainerGeometry,
@@ -161,10 +146,7 @@ fn nonzero_extent(value: u32) -> u32 {
 
 #[cfg(target_os = "windows")]
 mod platform {
-    use super::{
-        CStr, HasWindowHandle, NativeContainerGeometry, NativeParentHandle, RawWindowHandle,
-        Window, c_void, nonzero_extent,
-    };
+    use super::{CStr, NativeContainerGeometry, NativeParentHandle, c_void, nonzero_extent};
 
     mod dpi {
         include!("editor_platform/windows_dpi.rs");
@@ -195,7 +177,7 @@ mod platform {
     impl UiContext {
         pub fn initialize() -> Result<Self, String> {
             let result = unsafe {
-                // SAFETY: the context is initialized and dropped on the winit main thread.
+                // SAFETY: the context is initialized and dropped on the UI controller thread.
                 OleInitialize(std::ptr::null_mut())
             };
             if result < 0 {
@@ -223,24 +205,6 @@ mod platform {
     }
 
     impl Container {
-        pub fn create(
-            parent: &Window,
-            geometry: NativeContainerGeometry,
-            platform_scaled: bool,
-        ) -> Result<Option<Self>, String> {
-            let handle = parent
-                .window_handle()
-                .map_err(|error| format!("could not obtain Win32 window handle: {error}"))?;
-            let RawWindowHandle::Win32(handle) = handle.as_raw() else {
-                return Ok(None);
-            };
-            let parent = handle.hwnd.get() as Hwnd;
-            let hinstance = handle
-                .hinstance
-                .map_or(std::ptr::null_mut(), |value| value.get() as Hinstance);
-            Self::create_with_parent(parent, hinstance, geometry, platform_scaled).map(Some)
-        }
-
         pub fn create_for_parent(
             parent: NativeParentHandle,
             geometry: NativeContainerGeometry,
@@ -264,7 +228,7 @@ mod platform {
                 'S' as u16, 'T' as u16, 'A' as u16, 'T' as u16, 'I' as u16, 'C' as u16, 0,
             ];
             let hwnd = with_native_child_scale_context(platform_scaled, || unsafe {
-                // SAFETY: all pointers are either static UTF-16 data, null, or a live winit HWND.
+                // SAFETY: all pointers are static UTF-16 data, null, or a live Electron HWND.
                 CreateWindowExW(
                     0,
                     class_name.as_ptr(),
@@ -365,10 +329,7 @@ mod platform {
 
 #[cfg(target_os = "macos")]
 mod platform {
-    use super::{
-        CStr, HasWindowHandle, NativeContainerGeometry, NativeParentHandle, RawWindowHandle,
-        Window, c_void, nonzero_extent,
-    };
+    use super::{CStr, NativeContainerGeometry, NativeParentHandle, c_void, nonzero_extent};
     use std::ffi::{c_char, c_double};
 
     #[repr(C)]
@@ -421,64 +382,30 @@ mod platform {
         }
     }
 
-    #[derive(Clone, Copy)]
-    enum ParentCoordinates {
-        TopLeft,
-        BottomLeft,
-    }
-
     pub struct Container {
         view: *mut c_void,
         parent: *mut c_void,
         child_window: *mut c_void,
-        parent_coordinates: ParentCoordinates,
     }
 
     impl Container {
-        pub fn create(
-            parent: &Window,
-            geometry: NativeContainerGeometry,
-            _platform_scaled: bool,
-        ) -> Result<Option<Self>, String> {
-            let handle = parent
-                .window_handle()
-                .map_err(|error| format!("could not obtain AppKit window handle: {error}"))?;
-            let RawWindowHandle::AppKit(handle) = handle.as_raw() else {
-                return Ok(None);
-            };
-            Self::create_with_parent(
-                handle.ns_view.as_ptr(),
-                geometry,
-                ParentCoordinates::TopLeft,
-                false,
-            )
-            .map(Some)
-        }
-
         pub fn create_for_parent(
             parent: NativeParentHandle,
             geometry: NativeContainerGeometry,
             _platform_scaled: bool,
         ) -> Result<Option<Self>, String> {
-            Self::create_with_parent(
-                parent.get() as *mut c_void,
-                geometry,
-                ParentCoordinates::BottomLeft,
-                true,
-            )
-            .map(Some)
+            Self::create_with_parent(parent.get() as *mut c_void, geometry, true).map(Some)
         }
 
         fn create_with_parent(
             parent: *mut c_void,
             geometry: NativeContainerGeometry,
-            parent_coordinates: ParentCoordinates,
             use_child_window: bool,
         ) -> Result<Self, String> {
             let frame = if use_child_window {
                 rect(0, 0, geometry.frame_width, geometry.frame_height)
             } else {
-                container_frame(geometry, parent_coordinates)
+                container_frame(geometry)
             };
             let class = unsafe {
                 // SAFETY: NSView is a process-lifetime Objective-C class name.
@@ -525,6 +452,7 @@ mod platform {
                     }
                     return Err("AppKit NSWindow class is unavailable".into());
                 }
+                // SAFETY: parent and parent_window are live AppKit objects on the main thread.
                 let screen_frame = unsafe { child_window_frame(parent, parent_window, geometry) };
                 let allocated_window = unsafe {
                     // SAFETY: objc_msgSend is invoked with the signature of +[NSWindow alloc].
@@ -605,7 +533,6 @@ mod platform {
                 view,
                 parent,
                 child_window,
-                parent_coordinates,
             })
         }
 
@@ -614,13 +541,15 @@ mod platform {
         }
 
         pub fn resize(&mut self, geometry: NativeContainerGeometry) {
+            // SAFETY: all stored AppKit objects remain live until Container::drop, and resize
+            // runs on the Electron main thread that owns them.
             unsafe {
                 if self.child_window.is_null() {
                     // SAFETY: view is live and setFrame: accepts one NSRect by value.
                     send_void_rect(
                         self.view,
                         sel_registerName(c"setFrame:".as_ptr()),
-                        container_frame(geometry, self.parent_coordinates),
+                        container_frame(geometry),
                     );
                 } else {
                     let parent_window = send_id(self.parent, sel_registerName(c"window".as_ptr()));
@@ -725,21 +654,13 @@ mod platform {
         }
     }
 
-    fn container_frame(
-        geometry: NativeContainerGeometry,
-        parent_coordinates: ParentCoordinates,
-    ) -> Rect {
-        let y = match parent_coordinates {
-            ParentCoordinates::TopLeft => geometry.y,
-            ParentCoordinates::BottomLeft => {
-                let top = u32::try_from(geometry.y).unwrap_or(0);
-                geometry
-                    .parent_height
-                    .saturating_sub(top)
-                    .saturating_sub(geometry.frame_height)
-                    .min(i32::MAX as u32) as i32
-            }
-        };
+    fn container_frame(geometry: NativeContainerGeometry) -> Rect {
+        let top = u32::try_from(geometry.y).unwrap_or(0);
+        let y = geometry
+            .parent_height
+            .saturating_sub(top)
+            .saturating_sub(geometry.frame_height)
+            .min(i32::MAX as u32) as i32;
         rect(geometry.x, y, geometry.frame_width, geometry.frame_height)
     }
 
@@ -748,7 +669,7 @@ mod platform {
         parent_window: *mut c_void,
         geometry: NativeContainerGeometry,
     ) -> Rect {
-        let local = container_frame(geometry, ParentCoordinates::BottomLeft);
+        let local = container_frame(geometry);
         let window = unsafe {
             // SAFETY: parent_view is a live NSView and nil requests window-base coordinates.
             send_rect_rect_id(
@@ -784,15 +705,15 @@ mod platform {
                 content_height: 600,
             };
 
-            let frame = container_frame(geometry, ParentCoordinates::BottomLeft);
+            let frame = container_frame(geometry);
             assert_eq!(frame.origin.y, 0.0);
-            let frame = container_frame(geometry, ParentCoordinates::TopLeft);
-            assert_eq!(frame.origin.y, 60.0);
         }
     }
 
     impl Drop for Container {
         fn drop(&mut self) {
+            // SAFETY: drop runs on the owning AppKit thread and balances every retained child
+            // view/window created by Container::create_for_parent.
             unsafe {
                 if self.child_window.is_null() {
                     // SAFETY: remove/release are paired with addSubview and initWithFrame.
@@ -1073,10 +994,7 @@ mod platform {
 
 #[cfg(target_os = "linux")]
 mod platform {
-    use super::{
-        CStr, HasDisplayHandle, HasWindowHandle, NativeContainerGeometry, NativeParentHandle,
-        RawWindowHandle, Window, c_void, nonzero_extent,
-    };
+    use super::{CStr, NativeContainerGeometry, NativeParentHandle, c_void, nonzero_extent};
     use std::ffi::{c_char, c_int, c_long, c_ulong};
 
     type Display = c_void;
@@ -1131,29 +1049,6 @@ mod platform {
     }
 
     impl Container {
-        pub fn create(
-            parent: &Window,
-            geometry: NativeContainerGeometry,
-            _platform_scaled: bool,
-        ) -> Result<Option<Self>, String> {
-            let window_handle = parent
-                .window_handle()
-                .map_err(|error| format!("could not obtain X11 window handle: {error}"))?;
-            let display_handle = parent
-                .display_handle()
-                .map_err(|error| format!("could not obtain X11 display handle: {error}"))?;
-            let (RawWindowHandle::Xlib(parent), raw_window_handle::RawDisplayHandle::Xlib(display)) =
-                (window_handle.as_raw(), display_handle.as_raw())
-            else {
-                return Ok(None);
-            };
-            let Some(display) = display.display else {
-                return Err("winit X11 display handle is null".into());
-            };
-            let display = display.as_ptr();
-            Self::create_with_parent(display, parent.window, geometry, false).map(Some)
-        }
-
         pub fn create_for_parent(
             parent: NativeParentHandle,
             geometry: NativeContainerGeometry,
@@ -1185,7 +1080,7 @@ mod platform {
             owns_display: bool,
         ) -> Result<Self, String> {
             let window = unsafe {
-                // SAFETY: display and parent window are borrowed from the live winit window.
+                // SAFETY: display is live and parent is the registered Electron X11 window.
                 XCreateSimpleWindow(
                     display,
                     parent,
@@ -1345,7 +1240,7 @@ mod platform {
 
 #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
 mod platform {
-    use super::{CStr, NativeContainerGeometry, NativeParentHandle, Window, c_void};
+    use super::{CStr, NativeContainerGeometry, NativeParentHandle, c_void};
 
     pub const PLATFORM_TYPE: &CStr = c"unsupported";
 
@@ -1379,14 +1274,6 @@ mod platform {
     pub struct Container;
 
     impl Container {
-        pub fn create(
-            _parent: &Window,
-            _geometry: NativeContainerGeometry,
-            _platform_scaled: bool,
-        ) -> Result<Option<Self>, String> {
-            Ok(None)
-        }
-
         pub fn create_for_parent(
             _parent: NativeParentHandle,
             _geometry: NativeContainerGeometry,

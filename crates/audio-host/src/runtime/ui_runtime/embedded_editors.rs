@@ -1,6 +1,6 @@
 use std::{
     cell::{Cell, RefCell},
-    collections::{HashMap, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     rc::Rc,
 };
 
@@ -16,16 +16,125 @@ use crate::{
         NativeContainer, NativeContainerGeometry, NativeParentHandle,
         with_native_child_scale_context,
     },
-    editor_window::{SidechainSourceKind, sidechain_view_for_graph},
     vst3::{EditorPluginState, Vst3Runtime},
 };
 
 use super::{
-    EmbeddedEditorHostEvent, EmbeddedEditorHostRegistration, EmbeddedEditorHostSnapshot, WinitHost,
+    EmbeddedEditorHostEvent, EmbeddedEditorHostRegistration, EmbeddedEditorHostSnapshot,
+    EmbeddedUiHost,
 };
 
 const DEFAULT_WIDTH: i32 = 800;
 const DEFAULT_HEIGHT: i32 = 600;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SidechainSourceKind {
+    Audio,
+    Instrument,
+    Aux,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SidechainSource {
+    id: String,
+    name: String,
+    kind: SidechainSourceKind,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SidechainBus {
+    input_bus_index: u32,
+    name: String,
+    source_channel_id: Option<String>,
+}
+
+fn sidechain_view_for_graph(
+    graph: Option<&heron_dsp_runtime::protocol::LiveMixerGraph>,
+    instance_id: &str,
+) -> Option<(Vec<SidechainBus>, Vec<SidechainSource>)> {
+    let graph = graph?;
+    let plugin = graph
+        .plugins
+        .iter()
+        .find(|plugin| plugin.instance_id == instance_id)?;
+    let buses = plugin
+        .aux_input_buses
+        .iter()
+        .map(|bus| SidechainBus {
+            input_bus_index: bus.input_bus_index,
+            name: bus.name.clone(),
+            source_channel_id: bus.source_channel_id.clone(),
+        })
+        .collect();
+    let sources = graph
+        .channels
+        .iter()
+        .filter_map(|channel| {
+            if channel.system_role.is_some() || channel.id == plugin.channel_id {
+                return None;
+            }
+            let kind = match channel.kind.as_str() {
+                "audio" => SidechainSourceKind::Audio,
+                "instrument" => SidechainSourceKind::Instrument,
+                "aux" => SidechainSourceKind::Aux,
+                _ => return None,
+            };
+            (!sidechain_route_would_cycle(graph, &plugin.channel_id, &channel.id)).then(|| {
+                SidechainSource {
+                    id: channel.id.clone(),
+                    name: channel.name.clone(),
+                    kind,
+                }
+            })
+        })
+        .collect();
+    Some((buses, sources))
+}
+
+fn sidechain_route_would_cycle(
+    graph: &heron_dsp_runtime::protocol::LiveMixerGraph,
+    target_channel_id: &str,
+    source_channel_id: &str,
+) -> bool {
+    if source_channel_id == target_channel_id {
+        return true;
+    }
+    let mut edges: HashMap<&str, Vec<&str>> = HashMap::new();
+    for channel in &graph.channels {
+        if let Some(target) = channel.output_channel_id.as_deref() {
+            edges.entry(&channel.id).or_default().push(target);
+        }
+    }
+    for send in graph.sends.iter().filter(|send| send.enabled) {
+        if let Some(target) = send.target_channel_id.as_deref() {
+            edges
+                .entry(&send.source_channel_id)
+                .or_default()
+                .push(target);
+        }
+    }
+    for plugin in &graph.plugins {
+        for bus in &plugin.aux_input_buses {
+            if let Some(source) = bus.source_channel_id.as_deref() {
+                edges.entry(source).or_default().push(&plugin.channel_id);
+            }
+        }
+    }
+    let mut pending = vec![target_channel_id];
+    let mut visited = HashSet::new();
+    while let Some(channel) = pending.pop() {
+        if channel == source_channel_id {
+            return true;
+        }
+        if !visited.insert(channel) {
+            continue;
+        }
+        if let Some(targets) = edges.get(channel) {
+            pending.extend(targets.iter().copied());
+        }
+    }
+    false
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ScaleStrategy {
@@ -319,10 +428,7 @@ impl EmbeddedEditorHost {
     fn toolbar_state(
         &self,
         clipboard: &Option<(String, EditorPluginState)>,
-        sidechain: Option<(
-            Vec<crate::editor_window::SidechainBus>,
-            Vec<crate::editor_window::SidechainSource>,
-        )>,
+        sidechain: Option<(Vec<SidechainBus>, Vec<SidechainSource>)>,
     ) -> PluginEditorToolbarState {
         let (sidechain_buses, sidechain_sources) = sidechain.unwrap_or_default();
         PluginEditorToolbarState {
@@ -395,7 +501,7 @@ fn attach_embedded_native_editor(
     Ok(())
 }
 
-impl WinitHost {
+impl EmbeddedUiHost {
     pub(in crate::runtime) fn register_embedded_editor_host(
         &mut self,
         registration: EmbeddedEditorHostRegistration,
@@ -810,14 +916,25 @@ impl WinitHost {
         true
     }
 
-    pub(super) fn close_all_embedded_editors(&mut self) {
-        let instance_ids = self
-            .embedded_editor_hosts
-            .keys()
-            .cloned()
-            .collect::<Vec<_>>();
-        for instance_id in instance_ids {
-            self.close_embedded_editor(&instance_id, true);
+    pub(super) fn rebind_embedded_editor(&mut self, instance_id: &str) {
+        let (runtime, hosts, events) = (
+            self.vst3.as_ref(),
+            &mut self.embedded_editor_hosts,
+            &self.embedded_editor_events,
+        );
+        let (Some(runtime), Some(host)) = (runtime, hosts.get_mut(instance_id)) else {
+            return;
+        };
+        if !host.open {
+            return;
+        }
+        if let Some(attachment) = host.attachment.take() {
+            attachment.detach();
+        }
+        if host.preference.mode == PluginEditorMode::Native
+            && attach_embedded_native_editor(runtime, instance_id, host, events).is_err()
+        {
+            host.preference.mode = PluginEditorMode::Parameters;
         }
     }
 
@@ -977,4 +1094,82 @@ fn electron_dimension(value: u32, display_scale: f64) -> u32 {
     (f64::from(value) / display_scale.max(0.01))
         .round()
         .max(1.0) as u32
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use heron_dsp_runtime::protocol::{
+        LiveLatencyPolicy, LiveMixerChannel, LiveMixerGraph, LivePluginAuxInputBus,
+        LivePluginInstance, PluginAudioMode,
+    };
+
+    fn channel(id: &str, output: Option<&str>) -> LiveMixerChannel {
+        LiveMixerChannel {
+            id: id.to_owned(),
+            name: id.to_owned(),
+            color: String::new(),
+            kind: "audio".to_owned(),
+            system_role: None,
+            gain_db: 0.0,
+            pan: 0.0,
+            muted: false,
+            soloed: false,
+            output_channel_id: output.map(str::to_owned),
+            output_bus: None,
+            record_armed: false,
+            input_monitoring: false,
+            midi_input_port_id: None,
+            midi_input_port_name: None,
+            midi_input_channel: None,
+            input_source: None,
+            input_channels: Vec::new(),
+            hardware_output_channels: Vec::new(),
+        }
+    }
+
+    fn graph() -> LiveMixerGraph {
+        LiveMixerGraph {
+            sample_rate: 48_000,
+            project_end_tick: 61_440,
+            latency_policy: LiveLatencyPolicy::Normal,
+            channels: vec![channel("target", None), channel("source", None)],
+            sends: Vec::new(),
+            clips: Vec::new(),
+            plugins: vec![LivePluginInstance {
+                instance_id: "effect".to_owned(),
+                channel_id: "target".to_owned(),
+                role: "effect".to_owned(),
+                slot_order: 0,
+                audio_mode: PluginAudioMode::Stereo,
+                enabled: true,
+                aux_input_buses: vec![LivePluginAuxInputBus {
+                    input_bus_index: 1,
+                    name: "Side Chain".to_owned(),
+                    channels: 2,
+                    source_channel_id: None,
+                }],
+                latency_samples: 0,
+                tail_samples: Some(0),
+            }],
+            midi_clips: Vec::new(),
+            tempo_events: Vec::new(),
+            time_signature_events: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn sidechain_view_exposes_aux_bus_and_valid_source() {
+        let graph = graph();
+        let (buses, sources) = sidechain_view_for_graph(Some(&graph), "effect").unwrap();
+        assert_eq!(buses[0].input_bus_index, 1);
+        assert_eq!(sources[0].id, "source");
+    }
+
+    #[test]
+    fn sidechain_cycle_detection_rejects_downstream_sources() {
+        let mut graph = graph();
+        graph.channels[0].output_channel_id = Some("source".to_owned());
+        assert!(sidechain_route_would_cycle(&graph, "target", "source"));
+    }
 }

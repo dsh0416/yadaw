@@ -77,6 +77,8 @@ interface EditorWindowEntry {
   parameters: PluginParameterInfo[]
   loadingParameters: boolean
   toolbarKey: string
+  minimumNativeWidth: number
+  minimumNativeHeight: number
 }
 
 export class ElectronPluginEditorWindows implements AudioHostEditorWindows {
@@ -162,7 +164,9 @@ export class ElectronPluginEditorWindows implements AudioHostEditorWindows {
       toolbarState: null,
       parameters: [],
       loadingParameters: false,
-      toolbarKey: ""
+      toolbarKey: "",
+      minimumNativeWidth: 1,
+      minimumNativeHeight: 1
     }
     this.entries.set(instanceId, entry)
 
@@ -329,6 +333,7 @@ export class ElectronPluginEditorWindows implements AudioHostEditorWindows {
     state: NativeEditorToolbarState
   ): Promise<void> {
     const modeChanged = entry.toolbarState?.activeMode !== state.activeMode
+    const zoomChanged = entry.toolbarState?.zoomPercent !== state.zoomPercent
     const sidechainWasPending = entry.toolbarState?.sidechainPending === true
     entry.toolbarState = state
     if (
@@ -349,12 +354,20 @@ export class ElectronPluginEditorWindows implements AudioHostEditorWindows {
     const [width = 1, height = 1] = entry.window.getContentSize()
     const toolbarHeight = toolbarHeightFor(width)
     if (state.activeMode === "parameters") {
+      entry.minimumNativeWidth = 1
+      entry.minimumNativeHeight = 1
+      entry.window.setMinimumSize(480, 240 + toolbarHeight)
       entry.window.setResizable(true)
       if (modeChanged && (width < 720 || height < 640 + toolbarHeight)) {
         entry.window.setContentSize(Math.max(width, 720), Math.max(height, 640 + toolbarHeight))
       }
       this.layoutToolbar(entry, width, toolbarHeight)
     } else {
+      if (modeChanged || zoomChanged) {
+        entry.minimumNativeWidth = 1
+        entry.minimumNativeHeight = 1
+        entry.window.setMinimumSize(1, toolbarHeight + 1)
+      }
       this.layoutToolbar(entry, width, toolbarHeight)
       entry.client.focusEditorHost(instanceId)
     }
@@ -372,9 +385,10 @@ export class ElectronPluginEditorWindows implements AudioHostEditorWindows {
     const scaleFactor = this.scaleFactor(entry.window)
     const [width = 1, height = 1] = entry.window.getContentSize()
     const toolbarHeight = toolbarHeightFor(width)
+    const requestedHeight = Math.max(1, height - toolbarHeight)
     this.layoutToolbar(entry, width, toolbarHeight)
     if (entry.toolbarState?.activeMode === "parameters") return
-    const native = nativeExtent(width, Math.max(1, height - toolbarHeight), scaleFactor)
+    const native = nativeExtent(width, requestedHeight, scaleFactor)
     entry.client.resizeEditorHost({
       instanceId,
       width: native.width,
@@ -382,6 +396,24 @@ export class ElectronPluginEditorWindows implements AudioHostEditorWindows {
       topInset: nativeDimension(toolbarHeight, scaleFactor),
       displayScale: scaleFactor
     })
+    const accepted = entry.client.editorHostSnapshot(instanceId)
+    if (
+      !accepted?.attached ||
+      (accepted.width === width && accepted.height === requestedHeight)
+    ) {
+      return
+    }
+    if (accepted.width > width) {
+      entry.minimumNativeWidth = Math.max(entry.minimumNativeWidth, accepted.width)
+    }
+    if (accepted.height > requestedHeight) {
+      entry.minimumNativeHeight = Math.max(entry.minimumNativeHeight, accepted.height)
+    }
+    entry.window.setMinimumSize(
+      entry.minimumNativeWidth,
+      entry.minimumNativeHeight + toolbarHeightFor(accepted.width)
+    )
+    this.applySnapshot(entry, accepted)
   }
 
   private cleanup(instanceId: string, entry: EditorWindowEntry): void {
