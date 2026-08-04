@@ -1489,7 +1489,7 @@ dependencies = [
 
 [[package]]
 name = "heron-audio-engine"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "bwavfile",
  "cpal",
@@ -1505,7 +1505,7 @@ dependencies = [
 
 [[package]]
 name = "heron-audio-host"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "ara2-bridge-core",
  "ara2-bridge-host",
@@ -1521,14 +1521,14 @@ dependencies = [
 
 [[package]]
 name = "heron-dsp-core"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "criterion",
 ]
 
 [[package]]
 name = "heron-dsp-node"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "bwavfile",
  "criterion",
@@ -1546,7 +1546,7 @@ dependencies = [
 
 [[package]]
 name = "heron-dsp-render"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "criterion",
  "heron-dsp-core",
@@ -1555,7 +1555,7 @@ dependencies = [
 
 [[package]]
 name = "heron-dsp-runtime"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "midly",
  "rmp-serde",
@@ -1566,7 +1566,7 @@ dependencies = [
 
 [[package]]
 name = "heron-gain"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "heron-plugin-ui",
  "truce",
@@ -1578,7 +1578,7 @@ dependencies = [
 
 [[package]]
 name = "heron-iced-ui"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "iced_core",
  "iced_widget",
@@ -1586,7 +1586,7 @@ dependencies = [
 
 [[package]]
 name = "heron-metronome"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "heron-plugin-ui",
  "truce",
@@ -1598,7 +1598,7 @@ dependencies = [
 
 [[package]]
 name = "heron-plugin-ui"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "heron-iced-ui",
  "iced_core",
@@ -1610,7 +1610,7 @@ dependencies = [
 
 [[package]]
 name = "heron-sine"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "heron-plugin-ui",
  "truce",
@@ -1622,7 +1622,7 @@ dependencies = [
 
 [[package]]
 name = "heron-vst3-host"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "bitflags 2.13.1",
  "cc",
@@ -1637,7 +1637,7 @@ dependencies = [
 
 [[package]]
 name = "heron-vst3-host-sys"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "bindgen",
  "cc",
