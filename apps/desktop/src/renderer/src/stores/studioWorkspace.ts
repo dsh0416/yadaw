@@ -2,8 +2,44 @@ import { useStorage } from "@vueuse/core"
 import { acceptHMRUpdate, defineStore } from "pinia"
 import { computed } from "vue"
 
+export type StudioLeftPanel = "browser" | "inspector" | null
+type StoredStudioLeftPanel = Exclude<StudioLeftPanel, null> | "closed"
+
+function initialLeftPanel(): StoredStudioLeftPanel {
+  try {
+    return localStorage.getItem("heron.workspace.sound-browser.v1") === "false"
+      ? "closed"
+      : "browser"
+  } catch {
+    return "browser"
+  }
+}
+
 export const useStudioWorkspaceStore = defineStore("studio-workspace", () => {
-  const soundBrowserOpen = useStorage("heron.workspace.sound-browser.v1", true)
+  const storedLeftPanel = useStorage<StoredStudioLeftPanel>(
+    "heron.workspace.left-panel.v1",
+    initialLeftPanel()
+  )
+  const activeLeftPanel = computed<StudioLeftPanel>({
+    get: () => (storedLeftPanel.value === "closed" ? null : storedLeftPanel.value),
+    set: (panel) => {
+      storedLeftPanel.value = panel ?? "closed"
+    }
+  })
+  const soundBrowserOpen = computed({
+    get: () => activeLeftPanel.value === "browser",
+    set: (open: boolean) => {
+      if (open) activeLeftPanel.value = "browser"
+      else if (activeLeftPanel.value === "browser") activeLeftPanel.value = null
+    }
+  })
+  const inspectorOpen = computed({
+    get: () => activeLeftPanel.value === "inspector",
+    set: (open: boolean) => {
+      if (open) activeLeftPanel.value = "inspector"
+      else if (activeLeftPanel.value === "inspector") activeLeftPanel.value = null
+    }
+  })
   const notesPanelOpen = useStorage("heron.workspace.notes-panel.v1", false)
   const activeNotesTab = useStorage<"project" | "track">("heron.workspace.notes-tab.v1", "project")
   const lowerDockOpen = useStorage("heron.workspace.mixer-dock.v1", true)
@@ -29,6 +65,10 @@ export const useStudioWorkspaceStore = defineStore("studio-workspace", () => {
 
   function toggleSoundBrowser(): void {
     soundBrowserOpen.value = !soundBrowserOpen.value
+  }
+
+  function toggleInspector(): void {
+    inspectorOpen.value = !inspectorOpen.value
   }
 
   function toggleNotesPanel(): void {
@@ -73,7 +113,7 @@ export const useStudioWorkspaceStore = defineStore("studio-workspace", () => {
   }
 
   function reset(): void {
-    soundBrowserOpen.value = true
+    activeLeftPanel.value = "browser"
     notesPanelOpen.value = false
     activeNotesTab.value = "project"
     lowerDockOpen.value = true
@@ -82,7 +122,9 @@ export const useStudioWorkspaceStore = defineStore("studio-workspace", () => {
   }
 
   return {
+    activeLeftPanel,
     soundBrowserOpen,
+    inspectorOpen,
     notesPanelOpen,
     activeNotesTab,
     lowerDockOpen,
@@ -92,6 +134,7 @@ export const useStudioWorkspaceStore = defineStore("studio-workspace", () => {
     mixerDockHeight,
     dockStyle,
     toggleSoundBrowser,
+    toggleInspector,
     toggleNotesPanel,
     closeNotesPanel,
     setActiveNotesTab,

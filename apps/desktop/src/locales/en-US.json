@@ -1449,6 +1449,40 @@
       "rescan": "Rescan VST3",
       "scanning": "Scanning…"
     },
+    "trackInspector": {
+      "ariaLabel": "Selected track inspector",
+      "eyebrow": "INSPECTOR",
+      "title": "Track",
+      "selectedTrack": "Selected track",
+      "types": {
+        "audio": "Audio",
+        "instrument": "Instrument"
+      },
+      "identity": {
+        "title": "Identity",
+        "name": "Name",
+        "color": "Color",
+        "type": "Type"
+      },
+      "midi": {
+        "title": "MIDI input",
+        "port": "Input",
+        "portAria": "MIDI input port",
+        "allInputs": "All Inputs",
+        "unknownPort": "Unknown MIDI input",
+        "missing": "Missing",
+        "missingDescription": "The selected MIDI input is not connected.",
+        "channel": "Channel",
+        "channelAria": "MIDI input channel",
+        "omni": "Omni",
+        "channelOption": "Ch {channel}",
+        "description": "Choose the MIDI input port and channel this track receives."
+      },
+      "empty": {
+        "title": "Select a track",
+        "description": "Select an Audio or Instrument track in the timeline to inspect its properties."
+      }
+    },
     "notes": {
       "ariaLabel": "Project and track notes",
       "eyebrow": "SESSION NOTES",

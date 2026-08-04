@@ -83,6 +83,7 @@ function mountTopbar() {
       tempoMap,
       keySignatureEvents,
       soundBrowserOpen: true,
+      inspectorOpen: false,
       notesPanelOpen: false,
       mixerDockOpen: true,
       pianoRollDockOpen: false,
@@ -131,9 +132,11 @@ describe("StudioTopbar", () => {
     ])
 
     expect(wrapper.get('button[aria-label="Library"]').attributes("aria-pressed")).toBe("true")
+    expect(wrapper.get('button[aria-label="Inspector"]').attributes("aria-pressed")).toBe("false")
     expect(wrapper.get('button[aria-label="Mixer"]').attributes("aria-pressed")).toBe("true")
     expect(wrapper.get('button[aria-label="Piano Roll"]').attributes("aria-pressed")).toBe("false")
     await wrapper.get('button[aria-label="Library"]').trigger("click")
+    await wrapper.get('button[aria-label="Inspector"]').trigger("click")
     await wrapper.get('button[aria-label="Mixer"]').trigger("click")
     await wrapper.get('button[aria-label="Piano Roll"]').trigger("click")
     await wrapper.get('button[aria-label="Notes"]').trigger("click")
@@ -145,6 +148,7 @@ describe("StudioTopbar", () => {
     await wrapper.get('button[aria-label="Low Latency Mode"]').trigger("click")
 
     expect(wrapper.emitted("toggleSoundBrowser")).toHaveLength(1)
+    expect(wrapper.emitted("toggleInspector")).toHaveLength(1)
     expect(wrapper.emitted("toggleMixerDock")).toHaveLength(1)
     expect(wrapper.emitted("togglePianoRollDock")).toHaveLength(1)
     expect(wrapper.emitted("toggleNotesPanel")).toHaveLength(1)

@@ -180,10 +180,14 @@ The application shell follows one spatial grammar:
 ```text
 ┌ application menu / project identity ─────────────────────────┐
 ├ global transport and monitoring commands ────────────────────┤
-├ browser ┆ primary musical canvas ┆ contextual inspector ─────┤
+├ library or track inspector ┆ primary musical canvas ┆ notes ─┤
 ├─────────┴ optional editor or mixer dock ┴─────────────────────┤
 └ engine, device, position, and operation status ───────────────┘
 ```
+
+Library and the contextual track inspector are mutually exclusive views of the same left panel.
+The inspector contains track properties and the complete track-specific MIDI input route. Mixer
+controls remain in Mixer.
 
 Only the musical canvas and dock may scroll in two dimensions. Toolbars, inspectors, modal
 content, and global status never rely on horizontal page scrolling. Resizers are separators with
