@@ -87,17 +87,32 @@ mod telemetry;
 mod ui_runtime;
 mod wire_adapters;
 
-use bootstrap::*;
-use egress::*;
-use engine_actor::*;
-use graph_transactions::*;
-use ingress::*;
-use plugin_actor::*;
-use protocol_actor::*;
-use runtime_config::*;
-use telemetry::*;
-use ui_runtime::*;
-use wire_adapters::*;
+use bootstrap::run_ipc;
+use egress::{
+    EgressArenas, EgressMetrics, InboundRequest, OutboundMessage, PriorityIngress, response,
+    run_egress,
+};
+use engine_actor::{
+    ActorCommand, ActorRequest, GraphParameterHandles, background_io_actor, dispatch_build_graph,
+    engine_actor, forward_to_ui, publish_built_graph, queue_background_graph_build,
+    refresh_graph_handles, stable_runtime_handle,
+};
+use graph_transactions::{
+    GraphTransactionState, PreparedGraphCandidate, graph_busy_error, graph_conflict_error,
+    graph_correlation, graph_dependency_error, graph_failure, graph_stale_error, graph_success,
+    graph_timeout_error, graph_validation_error, validate_graph_meta, validate_graph_request,
+    wait_for_graph_publication,
+};
+use ingress::{IngressChannels, IngressMailboxes, Liveness, spawn_ingress};
+use plugin_actor::{
+    Vst3ActorDeps, dispatch_actor, dispatch_parameter, is_background_io_command, is_vst3_command,
+    protocol_deadline, vst3_actor,
+};
+use protocol_actor::{ProtocolActorDeps, run_protocol_actor};
+use runtime_config::RuntimeConfig;
+use telemetry::{TelemetryPages, publish_telemetry};
+use ui_runtime::{UiEvent, WinitHost, parse_editor_owner_window};
+use wire_adapters::{engine_command, live_graph, run_legacy};
 
 static MIDI_INPUT: OnceLock<MidiInputActor> = OnceLock::new();
 
@@ -124,4 +139,5 @@ pub fn run() -> ExitCode {
 }
 
 #[cfg(test)]
+#[allow(clippy::wildcard_imports)]
 mod tests;

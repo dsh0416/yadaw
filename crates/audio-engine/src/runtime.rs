@@ -172,17 +172,30 @@ mod spec;
 #[path = "engine/transport_midi.rs"]
 mod transport_midi;
 
-use clip_decode::*;
-use clip_streaming::*;
-use compiled_graph::*;
-use device_streams::*;
-use graph_build::*;
-use latency_measurement::*;
-use lifecycle_types::*;
-use metering::*;
-use resampling::*;
-use spec::*;
-use transport_midi::*;
+use clip_decode::{parse_channel_kind, spawn_streaming_clip};
+use clip_streaming::{ClipSamples, LoadedClip, StreamTask, StreamWorkerPool, StreamingClip};
+use compiled_graph::compiled_graph_snapshot;
+use device_streams::{
+    StreamDirection, duration_to_micros, find_device, frames_to_micros, frames_to_ms,
+    frames_to_nanos, mark_stream_error, optional_latency, resolve_stream_devices, stream_config,
+};
+use graph_build::build_mixer_runtime;
+use latency_measurement::{
+    EngineCommand, NativeMixerRuntime, RealtimeParameter, RealtimeParameterCommand,
+    RoundTripInputDetector, RoundTripLatencyMeasurement, RoundTripOutputProbe, RuntimeMetrics,
+    TransportAction,
+};
+use lifecycle_types::{
+    AudioEngineKey, OutputMixerControl, OutputStreamContext, RunningAudioEngine, audio_error,
+    invalid_config, take_pending_mixer,
+};
+use metering::{InputPeakBank, MeterAtomics, MeterBank, StreamControl, TransportShared};
+use resampling::{build_input_stream, build_output_stream, build_stream_for_format};
+use spec::plan_native_low_latency;
+use transport_midi::{
+    BlockMidiEvent, CountInState, LiveMidiRoute, LivePlugin, LivePluginAuxInput,
+    MetronomeScheduler, ScheduledMidiEvent, ScheduledMidiEventKind, SignalWidth,
+};
 
 pub use benchmark::run_audio_benchmark;
 pub use clip_decode::decode_clip_audio;
@@ -198,5 +211,6 @@ pub use spec::{
 };
 
 #[cfg(test)]
+#[allow(clippy::wildcard_imports)]
 #[path = "engine/tests.rs"]
 mod tests;

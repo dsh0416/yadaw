@@ -967,6 +967,7 @@ fn unavailable_snapshot(message: &str) -> MidiInputSnapshot {
 }
 
 #[cfg(test)]
+#[allow(clippy::wildcard_imports)]
 mod tests {
     use std::sync::Mutex;
 

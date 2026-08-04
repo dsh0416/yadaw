@@ -1164,6 +1164,7 @@ fn control_error(message: &str) -> ControlResult {
 }
 
 #[cfg(test)]
+#[allow(clippy::wildcard_imports)]
 mod tests {
     use super::*;
 

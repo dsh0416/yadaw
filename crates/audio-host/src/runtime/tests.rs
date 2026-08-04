@@ -1,3 +1,10 @@
+use super::engine_actor::{dispatch_actor_command, mixer_parameter_command};
+use super::plugin_actor::resolve_deferred_binary;
+use super::telemetry::transport_state_code;
+use super::ui_runtime::{
+    plugin_editor_window_attributes, remove_owned_popup, replace_owned_popup,
+    should_drain_ui_request, vst3_host_request_payload,
+};
 use super::*;
 
 struct TestIngress {

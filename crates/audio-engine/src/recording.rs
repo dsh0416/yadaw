@@ -556,6 +556,7 @@ pub fn write_deterministic_test_recording(
 }
 
 #[cfg(test)]
+#[allow(clippy::wildcard_imports)]
 mod tests {
     use std::{
         path::PathBuf,

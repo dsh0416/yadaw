@@ -1,3 +1,5 @@
+#![deny(clippy::wildcard_imports)]
+
 use heron_dsp_runtime::protocol::{
     ControlResult, RpcComponent, RpcError, RpcErrorCategory, RpcErrorCode, RpcErrorDetails,
     RpcMutationOutcome, RpcRetry,

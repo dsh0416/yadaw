@@ -307,6 +307,7 @@ fn visit_downstream_latency(
 }
 
 #[cfg(test)]
+#[allow(clippy::wildcard_imports)]
 mod tests {
     use super::*;
     use heron_dsp_runtime::protocol::{

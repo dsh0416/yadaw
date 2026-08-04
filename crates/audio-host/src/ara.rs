@@ -1520,4 +1520,5 @@ unsafe extern "C" fn ara_assertion(
 }
 
 #[cfg(test)]
+#[allow(clippy::wildcard_imports)]
 mod tests;

@@ -1,4 +1,9 @@
-use super::*;
+use super::{
+    Arc, AtomicBool, CHANNELS, Consumer, Data, Duration, Error, ErrorKind, FrameCount,
+    InputCallbackInfo, InputStreamTimestamp, Instant, JoinHandle, LOOPBACK_SLACK_BLOCKS,
+    MockBackend, Observer, Ordering, OutputCallbackInfo, OutputStreamTimestamp, Producer,
+    SAMPLE_FORMAT, SAMPLE_RATE, StreamInstant, StreamTrait, thread,
+};
 
 /// Cooperative shutdown and transport flags shared with a stream worker.
 struct StreamControls {
