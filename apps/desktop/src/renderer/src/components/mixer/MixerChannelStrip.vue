@@ -202,8 +202,8 @@ function preview(parameter: "gainDb" | "pan", value: number): void {
   grid-template-rows:
     54px var(--plugin-section-height) var(--send-section-height) 44px 34px 34px 78px
     282px 40px;
-  flex: 0 0 136px;
-  min-width: 136px;
+  flex: 0 0 112px;
+  min-width: 112px;
   height: max-content;
   overflow: hidden;
   border-right: 1px solid var(--ui-domain-color-303030);

@@ -24,7 +24,7 @@ defineProps<{
 <style scoped>
 .db-scale {
   position: relative;
-  width: 18px;
+  width: 15px;
   min-height: 0;
   color: var(--text-faint);
   font-family: var(--ui-type-family-display);
@@ -47,7 +47,7 @@ defineProps<{
 .db-scale-mark i {
   position: absolute;
   top: 0;
-  width: 5px;
+  width: 4px;
   border-top: 1px solid color-mix(in srgb, var(--text-faint) 70%, transparent);
 }
 
@@ -67,7 +67,7 @@ defineProps<{
 }
 
 .db-scale-mark.emphasis i {
-  width: 7px;
+  width: 6px;
   border-color: color-mix(in srgb, var(--text-secondary) 85%, transparent);
 }
 
@@ -76,7 +76,7 @@ defineProps<{
 }
 
 .db-scale.left .db-scale-mark small {
-  right: 7px;
+  right: 6px;
   text-align: right;
 }
 
@@ -85,7 +85,7 @@ defineProps<{
 }
 
 .db-scale.right .db-scale-mark small {
-  left: 7px;
+  left: 6px;
   text-align: left;
 }
 </style>

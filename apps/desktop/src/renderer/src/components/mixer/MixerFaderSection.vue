@@ -161,7 +161,7 @@ function beginFaderGesture(event: PointerEvent): void {
   const max = Number(input.max)
   const value = Math.max(min, Math.min(max, props.channel.gainDb))
   const ratio = (value - min) / (max - min)
-  const thumbInset = Math.min(8, bounds.height / 2)
+  const thumbInset = Math.min(9, bounds.height / 2)
   const thumbTravel = Math.max(0, bounds.height - thumbInset * 2)
   const thumbCenterY = bounds.top + thumbInset + (1 - ratio) * thumbTravel
   if (Math.abs(event.clientY - thumbCenterY) > 13) {
@@ -273,21 +273,22 @@ function handleFaderKeydown(event: KeyboardEvent): void {
 }
 .strip-core {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 39px;
+  grid-template-columns: minmax(0, 1fr) 34px;
   grid-template-rows: 20px minmax(0, 1fr);
-  column-gap: 4px;
+  column-gap: 2px;
   row-gap: 6px;
   min-height: 0;
-  padding: 9px 10px 7px;
+  padding: 9px 7px 7px;
 }
 .fader {
   --fader-level: 0%;
+  --fader-track-center: calc(50% + 7.5px);
   position: relative;
   display: grid;
   grid-column: 1;
   grid-row: 2;
-  grid-template-columns: 18px minmax(0, 1fr);
-  gap: 1px;
+  grid-template-columns: 15px minmax(0, 1fr);
+  gap: 0;
   margin-block: 8px;
   min-height: 0;
 }
@@ -296,7 +297,7 @@ function handleFaderKeydown(event: KeyboardEvent): void {
   z-index: var(--ui-z-local-base);
   top: 0;
   bottom: 0;
-  left: calc(50% + 9.5px);
+  left: var(--fader-track-center);
   width: 4px;
   border: 1px solid var(--line-strong);
   background: linear-gradient(
@@ -329,9 +330,9 @@ function handleFaderKeydown(event: KeyboardEvent): void {
   box-shadow: none;
 }
 .fader-control::-webkit-slider-thumb {
-  width: 28px;
-  height: 13px;
-  margin-left: -13px;
+  width: 16px;
+  height: 18px;
+  margin-left: -7px;
   border: 1px solid var(--text-muted);
   border-radius: 1px;
   appearance: none;
@@ -359,8 +360,8 @@ function handleFaderKeydown(event: KeyboardEvent): void {
   background: transparent;
 }
 .fader-control::-moz-range-thumb {
-  width: 28px;
-  height: 13px;
+  width: 16px;
+  height: 18px;
   border: 1px solid var(--text-muted);
   border-radius: 1px;
   background: linear-gradient(
@@ -386,7 +387,7 @@ function handleFaderKeydown(event: KeyboardEvent): void {
   position: absolute;
   z-index: var(--ui-z-local-controls);
   bottom: -5px;
-  left: calc(50% + 9.5px);
+  left: var(--fader-track-center);
   min-width: 38px;
   padding: 3px 5px;
   border: 1px solid var(--line-strong);
@@ -412,7 +413,7 @@ function handleFaderKeydown(event: KeyboardEvent): void {
   grid-column: 1;
   grid-row: 1;
   justify-self: center;
-  width: 38px;
+  width: 34px;
   height: 20px;
   margin: 0;
   padding: 0 2px;
@@ -439,7 +440,7 @@ function handleFaderKeydown(event: KeyboardEvent): void {
   grid-column: 2;
   grid-row: 1;
   place-items: center;
-  width: 39px;
+  width: 34px;
   height: 20px;
   overflow: hidden;
   border: 1px solid var(--line-strong);

@@ -35,10 +35,10 @@ const meterStyle = computed(() => ({
   display: grid;
   grid-column: 2;
   grid-row: 2;
-  grid-template-columns: 18px 18px;
+  grid-template-columns: 15px 16px;
   align-self: stretch;
   justify-self: center;
-  gap: 2px;
+  gap: 1px;
   margin-block: 8px;
   min-height: 0;
 }
@@ -47,8 +47,8 @@ const meterStyle = computed(() => ({
   position: relative;
   display: flex;
   align-self: stretch;
-  width: 18px;
-  gap: 2px;
+  width: 16px;
+  gap: 1px;
   padding: 2px;
   border: 1px solid var(--line-strong);
   border-radius: 2px;
