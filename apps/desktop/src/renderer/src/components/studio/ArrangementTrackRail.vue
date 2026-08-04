@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from "vue-i18n"
-import type { MixerChannelMeter, MixerChannelPatch, MixerParameterPreview } from "@heron/contracts"
+import type { MixerChannelPatch, MixerParameterPreview } from "@heron/contracts"
 import InlineTrackNameEditor from "../InlineTrackNameEditor.vue"
 import TrackHeightResizeHandle from "./TrackHeightResizeHandle.vue"
 import TrackQuickControls from "./TrackQuickControls.vue"
@@ -10,7 +10,6 @@ defineProps<{
   rows: readonly ArrangementTrackRow[]
   selectedChannelId: string | null
   trackHeight: number
-  meters: Readonly<Record<string, MixerChannelMeter>>
 }>()
 
 const emit = defineEmits<{
@@ -38,7 +37,7 @@ function relayChannelUpdate(channelId: string, patch: MixerChannelPatch): void {
 
 <template>
   <div
-    v-for="({ track, scale }, index) in rows"
+    v-for="({ track, scale, meter }, index) in rows"
     :key="track.id"
     :class="['track-header', { selected: track.id === selectedChannelId }]"
     @click="emit('select', track.id)"
@@ -58,7 +57,7 @@ function relayChannelUpdate(channelId: string, patch: MixerChannelPatch): void {
     <TrackQuickControls
       class="track-quick-controls"
       :channel="track"
-      :meter="meters[track.id]!"
+      :meter="meter"
       @preview="emit('preview', $event)"
       @update-channel="relayChannelUpdate"
     />

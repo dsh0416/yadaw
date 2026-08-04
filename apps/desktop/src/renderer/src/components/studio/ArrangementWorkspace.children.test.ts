@@ -58,7 +58,8 @@ function row(kind: "audio" | "instrument" = "audio"): ArrangementTrackRow {
     audioClips: [],
     midiClips: [],
     scale: 1,
-    height: 88
+    height: 88,
+    meter: { ...meter, channelId: kind === "audio" ? channel.id : "instrument-1" }
   }
 }
 
@@ -102,8 +103,7 @@ describe("ArrangementWorkspace presentational children", () => {
       props: {
         rows: [row()],
         selectedChannelId: channel.id,
-        trackHeight: 88,
-        meters: { [channel.id]: meter }
+        trackHeight: 88
       }
     })
 
