@@ -274,7 +274,7 @@ async function deleteChannel(channelId: string): Promise<void> {
     color-mix(in srgb, var(--text-primary) 3%, transparent) 1px,
     transparent 1px
   );
-  background-size: 136px 100%;
+  background-size: 112px 100%;
 }
 .mixer-error {
   position: absolute;
