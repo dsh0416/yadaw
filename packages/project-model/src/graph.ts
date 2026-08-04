@@ -8,6 +8,7 @@ import type {
   ProjectGraphSnapshot,
   TrackState
 } from "@heron/contracts"
+import { DEFAULT_PROJECT_END_TICK } from "@heron/contracts"
 
 export function finiteRange(value: number, minimum: number, maximum: number, label: string): void {
   if (!Number.isFinite(value) || value < minimum || value > maximum) {
@@ -134,6 +135,11 @@ export function inverseFor(graph: ProjectGraphSnapshot, command: ProjectCommand)
   switch (command.type) {
     case "update-project-notes":
       return { type: "update-project-notes", notes: graph.projectNotes ?? "" }
+    case "update-project-end":
+      return {
+        type: "update-project-end",
+        endTick: graph.projectEndTick ?? DEFAULT_PROJECT_END_TICK
+      }
     case "create-track":
       return { type: "delete-track", trackId: command.track.id }
     case "delete-track": {
@@ -381,6 +387,9 @@ export function applyToGraph(
     case "update-project-notes":
       next.projectNotes = command.notes
       break
+    case "update-project-end":
+      next.projectEndTick = command.endTick
+      break
     case "create-track":
       next.channels.push(structuredClone(command.channel))
       next.tracks.push(structuredClone(command.track))
@@ -534,6 +543,12 @@ export function applyToGraph(
 export function validateGraph(graph: ProjectGraphSnapshot): void {
   if (typeof graph.projectNotes !== "undefined" && typeof graph.projectNotes !== "string") {
     throw new Error("Project notes must be text")
+  }
+  if (
+    typeof graph.projectEndTick !== "undefined" &&
+    (!Number.isSafeInteger(graph.projectEndTick) || graph.projectEndTick < 1)
+  ) {
+    throw new Error("Project end must be a positive safe-integer tick")
   }
   const trackIds = new Set<string>()
   const tracksByChannel = new Map<string, TrackState>()

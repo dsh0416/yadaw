@@ -39,8 +39,13 @@ pub(super) struct NativeMixerRuntime {
     pub(super) meter_bank: Arc<MeterBank>,
     pub(super) transport: Arc<TransportShared>,
     pub(super) sample_rate: u32,
+    // Retained for graph-build diagnostics exercised by the engine test suite.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(super) content_end_frame: u64,
+    pub(super) project_end_frame: u64,
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(super) tail_end_frame: Option<u64>,
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(super) has_infinite_tail: bool,
     pub(super) input_peaks: Arc<InputPeakBank>,
     pub(super) input_meter_routes: Vec<Option<[usize; 2]>>,

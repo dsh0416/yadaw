@@ -6,13 +6,14 @@ import type {
   ProjectCommandResult,
   ProjectGraphSnapshot
 } from "@heron/contracts"
-import { MUSICAL_TICKS_PER_QUARTER } from "@heron/contracts"
+import { DEFAULT_PROJECT_END_TICK, MUSICAL_TICKS_PER_QUARTER } from "@heron/contracts"
 import { applyToGraph, patchMixerGraph } from "@heron/project-model"
 import { mutationMeta, readMeta, rpcErrorMessage } from "../rpc"
 import { useProjectStore } from "./project"
 
 export const EMPTY_PROJECT_GRAPH: ProjectGraphSnapshot = {
   sampleRate: 48_000,
+  projectEndTick: DEFAULT_PROJECT_END_TICK,
   tracks: [],
   channels: [],
   audioClips: [],

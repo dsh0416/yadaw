@@ -1,11 +1,20 @@
 <script setup lang="ts">
 import { computed } from "vue"
 import { useI18n } from "vue-i18n"
-import type { TempoMapSnapshot, TransportLoopRange } from "@heron/contracts"
-import { barTicksThroughTick, beatTicksThroughTick } from "../../utils/tempoMap"
+import {
+  DEFAULT_PROJECT_END_TICK,
+  type TempoMapSnapshot,
+  type TransportLoopRange
+} from "@heron/contracts"
+import {
+  barLengthTicksAtTick,
+  barTicksThroughTick,
+  beatTicksThroughTick
+} from "../../utils/tempoMap"
 import { timelineXToSeconds } from "../../utils/timelineCoordinates"
 import { tickToTimelineX } from "../../utils/timelineCoordinates"
 import { useCycleRangeDrag } from "./useCycleRangeDrag"
+import { useProjectEndDrag } from "./useProjectEndDrag"
 
 const { t } = useI18n()
 
@@ -17,12 +26,19 @@ const props = withDefaults(
     loopEnabled?: boolean
     loopRange?: TransportLoopRange | null
     cycleDisabled?: boolean
+    projectEndTick?: number
   }>(),
-  { loopEnabled: false, loopRange: null, cycleDisabled: false }
+  {
+    loopEnabled: false,
+    loopRange: null,
+    cycleDisabled: false,
+    projectEndTick: DEFAULT_PROJECT_END_TICK
+  }
 )
 const emit = defineEmits<{
   seek: [seconds: number]
   updateLoopRange: [range: TransportLoopRange]
+  updateProjectEnd: [endTick: number]
 }>()
 const rulerStyle = computed(() => ({ width: `${props.contentWidth}px` }))
 const marks = computed(() =>
@@ -57,6 +73,21 @@ const cycleStyle = computed(() => {
   const right = tickToTimelineX(props.tempoMap, range.endTick, props.pixelsPerQuarter)
   return { left: `${left}px`, width: `${Math.max(2, right - left)}px` }
 })
+const projectEndDrag = useProjectEndDrag({
+  endTick: () => props.projectEndTick,
+  tempoMap: () => props.tempoMap,
+  pixelsPerQuarter: () => props.pixelsPerQuarter,
+  commit: (endTick) => emit("updateProjectEnd", endTick)
+})
+const displayedProjectEndTick = computed(() => projectEndDrag.preview.value ?? props.projectEndTick)
+const projectEndLeft = computed(() =>
+  tickToTimelineX(props.tempoMap, displayedProjectEndTick.value, props.pixelsPerQuarter)
+)
+const projectEndMarkerStyle = computed(() => ({ left: `${projectEndLeft.value}px` }))
+const projectEndShadeStyle = computed(() => ({
+  left: `${projectEndLeft.value}px`,
+  width: `${Math.max(0, props.contentWidth - projectEndLeft.value)}px`
+}))
 function seekFromPointer(event: PointerEvent): void {
   const target = event.currentTarget as HTMLElement
   const bounds = target.getBoundingClientRect()
@@ -89,6 +120,41 @@ function finishCycleGesture(event: PointerEvent): void {
   event.stopPropagation()
   event.preventDefault()
   finish(event)
+}
+
+function beginProjectEndGesture(event: PointerEvent): void {
+  event.stopPropagation()
+  event.preventDefault()
+  projectEndDrag.start(event)
+}
+
+function continueProjectEndGesture(event: PointerEvent): void {
+  event.stopPropagation()
+  event.preventDefault()
+  projectEndDrag.update(event)
+}
+
+function finishProjectEndGesture(event: PointerEvent): void {
+  event.stopPropagation()
+  event.preventDefault()
+  projectEndDrag.finish(event)
+}
+
+function moveProjectEndFromKeyboard(direction: -1 | 1): void {
+  const boundaries = barTicksThroughTick(
+    props.tempoMap,
+    props.projectEndTick + barLengthTicksAtTick(props.tempoMap, props.projectEndTick) * 2
+  ).filter((tick) => tick > 0)
+  const currentIndex = boundaries.findIndex((tick) => tick >= props.projectEndTick)
+  const targetIndex = Math.max(0, currentIndex + direction)
+  const endTick = boundaries[targetIndex]
+  if (endTick !== undefined && endTick !== props.projectEndTick) emit("updateProjectEnd", endTick)
+}
+
+function handleProjectEndKeydown(event: KeyboardEvent): void {
+  if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return
+  event.preventDefault()
+  moveProjectEndFromKeyboard(event.key === "ArrowLeft" ? -1 : 1)
 }
 </script>
 
@@ -150,6 +216,26 @@ function finishCycleGesture(event: PointerEvent): void {
         />
       </span>
     </div>
+    <span
+      class="project-end-shade"
+      :style="projectEndShadeStyle"
+      data-testid="project-end-shade"
+      aria-hidden="true"
+    />
+    <button
+      type="button"
+      class="project-end-marker"
+      :class="{ dragging: projectEndDrag.active.value }"
+      :style="projectEndMarkerStyle"
+      :aria-label="t('studio.arrangement.projectEndAria')"
+      :title="t('studio.arrangement.projectEndTooltip')"
+      data-testid="project-end-marker"
+      @keydown="handleProjectEndKeydown"
+      @pointerdown="beginProjectEndGesture"
+      @pointermove="continueProjectEndGesture"
+      @pointerup="finishProjectEndGesture"
+      @pointercancel="projectEndDrag.cancel"
+    />
   </div>
 </template>
 
@@ -191,15 +277,14 @@ function finishCycleGesture(event: PointerEvent): void {
   top: 2px;
   bottom: 2px;
   min-width: 2px;
-  border: 1px solid color-mix(in srgb, var(--accent) 70%, var(--line-strong));
+  border: 1px solid var(--loop);
   border-radius: 3px;
-  background: color-mix(in srgb, var(--accent) 26%, var(--surface-raised));
+  background: var(--loop);
   cursor: grab;
-  opacity: 0.7;
+  opacity: 0.44;
 }
 .cycle-range.enabled {
-  background: color-mix(in srgb, var(--accent) 58%, var(--surface-raised));
-  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 35%, transparent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--loop) 42%, transparent);
   opacity: 1;
 }
 .cycle-edge {
@@ -233,5 +318,36 @@ function finishCycleGesture(event: PointerEvent): void {
   width: 1px;
   background: color-mix(in srgb, var(--daw-grid-line) 32%, transparent);
   pointer-events: none;
+}
+.project-end-shade {
+  position: absolute;
+  z-index: var(--ui-z-local-raised);
+  top: 16px;
+  bottom: 0;
+  background: color-mix(in srgb, var(--ui-domain-color-000) 38%, transparent);
+  pointer-events: none;
+}
+.project-end-marker {
+  position: absolute;
+  z-index: calc(var(--ui-z-local-raised) + 1);
+  top: 0;
+  width: 13px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  color: var(--text-secondary);
+  background: currentColor;
+  clip-path: polygon(0 0, 100% 0, 100% 54%, 50% 100%, 0 54%);
+  cursor: ew-resize;
+  transform: translateX(-6px);
+  touch-action: none;
+}
+.project-end-marker:hover,
+.project-end-marker.dragging {
+  color: var(--text-primary);
+}
+.project-end-marker:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
 }
 </style>

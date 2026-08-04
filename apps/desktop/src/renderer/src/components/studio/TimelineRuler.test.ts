@@ -77,4 +77,42 @@ describe("TimelineRuler cycle lane", () => {
     expect(wrapper.emitted("updateLoopRange")).toEqual([[{ startTick: 960, endTick: 3_840 }]])
     expect(wrapper.emitted("seek")).toBeUndefined()
   })
+
+  it("drags the soft project end by whole bars without seeking", async () => {
+    const wrapper = mount(TimelineRuler, {
+      props: {
+        contentWidth: 5_000,
+        pixelsPerQuarter: 480,
+        tempoMap,
+        projectEndTick: 7_680
+      },
+      attachTo: document.body
+    })
+    const marker = wrapper.get('[data-testid="project-end-marker"]')
+
+    await marker.trigger("pointerdown", { pointerId: 8, clientX: 3_840 })
+    await marker.trigger("pointermove", { pointerId: 8, clientX: 1_920 })
+    expect(marker.attributes("style")).toContain("left: 1920px")
+    await marker.trigger("pointerup", { pointerId: 8, clientX: 1_920 })
+
+    expect(wrapper.emitted("updateProjectEnd")).toEqual([[3_840]])
+    expect(wrapper.emitted("seek")).toBeUndefined()
+  })
+
+  it("moves the project end one bar from the keyboard", async () => {
+    const wrapper = mount(TimelineRuler, {
+      props: {
+        contentWidth: 5_000,
+        pixelsPerQuarter: 480,
+        tempoMap,
+        projectEndTick: 3_840
+      }
+    })
+
+    await wrapper.get('[data-testid="project-end-marker"]').trigger("keydown", {
+      key: "ArrowRight"
+    })
+
+    expect(wrapper.emitted("updateProjectEnd")).toEqual([[7_680]])
+  })
 })

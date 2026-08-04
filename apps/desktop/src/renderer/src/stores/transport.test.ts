@@ -68,6 +68,7 @@ function activeRuntime(instanceId: string, tailSamples: number | null): PluginRu
 
 const emptyGraph: ProjectGraphSnapshot = {
   sampleRate: 48_000,
+  projectEndTick: 61_440,
   tracks: [],
   channels: [],
   audioClips: [],
@@ -237,32 +238,7 @@ describe("transport store", () => {
     expect(transport.loopRange).toEqual({ startTick: 960, endTick: 4_800 })
   })
 
-  it("can play an empty project while the metronome system channel is enabled", async () => {
-    const mixer = useMixerStore()
-    mixer.graph = {
-      ...structuredClone(emptyGraph),
-      channels: [
-        {
-          id: "metronome",
-          kind: "instrument",
-          systemRole: "metronome",
-          name: "Metronome",
-          color: "#AD8CFF",
-          sortOrder: 0,
-          inputSource: null,
-          inputFormat: null,
-          gainDb: 0,
-          pan: 0,
-          muted: false,
-          soloed: false,
-          outputChannelId: "output",
-          recordArmed: false,
-          inputMonitoring: false,
-          inputChannels: [],
-          hardwareOutputChannels: []
-        }
-      ]
-    }
+  it("can play a completely empty project until its soft end", async () => {
     window.heron.transportCommand = vi
       .fn()
       .mockResolvedValue(success({ state: "playing", positionFrames: 0, sampleRate: 48_000 }))
@@ -277,10 +253,11 @@ describe("transport store", () => {
     )
   })
 
-  it("rewinds to the cycle start before playing when Cycle is enabled at content end", async () => {
+  it("rewinds to the cycle start before playing when Cycle is enabled at project end", async () => {
     const mixer = useMixerStore()
     mixer.graph = {
       ...structuredClone(emptyGraph),
+      projectEndTick: 7_680,
       audioClips: [
         {
           id: "clip-1",
@@ -330,10 +307,11 @@ describe("transport store", () => {
     )
   })
 
-  it("rewinds to the start before playing when the playhead is at the content end", async () => {
+  it("rewinds to the start before playing when the playhead is at the project end", async () => {
     const mixer = useMixerStore()
     mixer.graph = {
       ...structuredClone(emptyGraph),
+      projectEndTick: 1_920,
       audioClips: [
         {
           id: "clip-1",
@@ -382,7 +360,7 @@ describe("transport store", () => {
     )
   })
 
-  it("keeps the playhead when paused inside a finite plugin tail window", async () => {
+  it("keeps the playhead when paused after content but before the project end", async () => {
     const mixer = useMixerStore()
     mixer.graph = {
       ...structuredClone(emptyGraph),
@@ -409,7 +387,7 @@ describe("transport store", () => {
       .fn()
       .mockResolvedValue(success({ state: "playing", positionFrames: 60_000, sampleRate: 48_000 }))
     const transport = useTransportStore()
-    // Paused past the content end but before the tail finishes decaying.
+    // Paused past the content end but before the independent soft project end.
     transport.snapshot = {
       state: "stopped",
       positionFrames: 60_000,
@@ -427,10 +405,11 @@ describe("transport store", () => {
     )
   })
 
-  it("rewinds before playing once the playhead reaches the end of the plugin tail", async () => {
+  it("rewinds at the project end regardless of a finite plugin tail", async () => {
     const mixer = useMixerStore()
     mixer.graph = {
       ...structuredClone(emptyGraph),
+      projectEndTick: 3_840,
       audioClips: [
         {
           id: "clip-1",
@@ -476,7 +455,7 @@ describe("transport store", () => {
     )
   })
 
-  it("never auto-rewinds while a plugin reports an unbounded tail", async () => {
+  it("does not rewind before the project end when a plugin reports an unbounded tail", async () => {
     const mixer = useMixerStore()
     mixer.graph = {
       ...structuredClone(emptyGraph),

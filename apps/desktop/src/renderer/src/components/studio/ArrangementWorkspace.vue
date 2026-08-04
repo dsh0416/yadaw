@@ -247,6 +247,9 @@ function handleSeek(seconds: number): void {
 function updateCycleRange(range: { startTick: number; endTick: number }): void {
   void transportStore.setLoop(true, range)
 }
+function updateProjectEnd(endTick: number): void {
+  void mixerStore.execute({ type: "update-project-end", endTick })
+}
 function handleWaveformFrameCount(frameCount: number, sampleRate: number): void {
   if (sampleRate > 0) liveDurationSeconds.value = frameCount / sampleRate
 }
@@ -385,9 +388,11 @@ function handleArrangementDrop(event: DragEvent): void {
               :tempo-map="mixerStore.graph.tempoMap"
               :loop-enabled="loopEnabled"
               :loop-range="loopRange"
+              :project-end-tick="mixerStore.graph.projectEndTick"
               :cycle-disabled="transportStore.snapshot.clockSource === 'external'"
               @seek="handleSeek"
               @update-loop-range="updateCycleRange"
+              @update-project-end="updateProjectEnd"
             />
             <template v-if="globalTracksExpanded">
               <TempoTrackLane

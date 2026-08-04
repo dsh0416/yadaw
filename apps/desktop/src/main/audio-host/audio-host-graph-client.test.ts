@@ -133,6 +133,15 @@ describe("graphDiff", () => {
       }
     ])
   })
+
+  it("patches the soft project end independently of timeline content", () => {
+    const previous = emptyGraph({ project_end_tick: 61_440 })
+    const next = emptyGraph({ project_end_tick: 15_360 })
+
+    expect(graphDiff(previous, next)).toEqual([
+      { type: "set-project-end", project_end_tick: 15_360 }
+    ])
+  })
 })
 
 describe("readCrashMarker", () => {

@@ -1,4 +1,4 @@
-import type { ProjectGraphSnapshot } from "@heron/contracts"
+import { DEFAULT_PROJECT_END_TICK, type ProjectGraphSnapshot } from "@heron/contracts"
 import type { AudioHostGraph } from "../audio-host"
 
 export type RuntimeLatencyPolicy =
@@ -31,6 +31,7 @@ export class AudioGraphCompiler {
     }
     return {
       sample_rate: graph.sampleRate,
+      project_end_tick: graph.projectEndTick ?? DEFAULT_PROJECT_END_TICK,
       latency_policy:
         runtimeOptions.latencyPolicy.type === "normal"
           ? { type: "normal" }

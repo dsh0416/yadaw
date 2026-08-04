@@ -89,18 +89,15 @@ impl NativeMixerRuntime {
             if state == TRANSPORT_PLAYING
                 && self.transport.clock_source.load(Ordering::Relaxed) == 0
                 && playback_loop.is_none()
-                && self.content_end_frame > 0
-                && !self.has_infinite_tail
-                && let Some(end) = self.tail_end_frame
             {
-                if position >= end {
+                if position >= self.project_end_frame {
                     self.all_notes_off();
                     self.transport
                         .state
                         .store(TRANSPORT_STOPPED, Ordering::Relaxed);
                     continue;
                 }
-                frame_count = frame_count.min((end - position) as usize);
+                frame_count = frame_count.min((self.project_end_frame - position) as usize);
             }
 
             let end = offset + frame_count;
@@ -152,9 +149,7 @@ impl NativeMixerRuntime {
                 if state == TRANSPORT_PLAYING
                     && self.transport.clock_source.load(Ordering::Relaxed) == 0
                     && playback_loop.is_none()
-                    && self.content_end_frame > 0
-                    && !self.has_infinite_tail
-                    && self.tail_end_frame.is_some_and(|end| next >= end)
+                    && next >= self.project_end_frame
                 {
                     self.all_notes_off();
                     self.transport

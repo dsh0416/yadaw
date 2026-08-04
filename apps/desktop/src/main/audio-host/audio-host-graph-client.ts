@@ -6,6 +6,9 @@ export function graphDiff(
   next: AudioHostGraph
 ): Array<Record<string, unknown>> {
   const operations: Array<Record<string, unknown>> = []
+  if (previous.project_end_tick !== next.project_end_tick) {
+    operations.push({ type: "set-project-end", project_end_tick: next.project_end_tick })
+  }
   const diffCollection = <T>(
     before: T[],
     after: T[],

@@ -419,6 +419,21 @@ describe("project graph command characterization", () => {
     expect(applyToGraph(after, inverseFor(before, command))).toEqual(before)
   })
 
+  it("moves the soft project end without changing clips and restores it through the inverse", () => {
+    const before = graph()
+    before.projectEndTick = 61_440
+    const audioClips = structuredClone(before.audioClips)
+    const midiClips = structuredClone(before.midiClips)
+    const command: ProjectCommand = { type: "update-project-end", endTick: 15_360 }
+
+    const after = applyToGraph(before, command)
+
+    expect(after.projectEndTick).toBe(15_360)
+    expect(after.audioClips).toEqual(audioClips)
+    expect(after.midiClips).toEqual(midiClips)
+    expect(applyToGraph(after, inverseFor(before, command))).toEqual(before)
+  })
+
   it("selects the transport content end across audio frames and musical ticks", () => {
     const value = graph()
     value.audioClips.push({

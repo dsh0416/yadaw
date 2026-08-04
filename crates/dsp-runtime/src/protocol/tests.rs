@@ -230,6 +230,7 @@ fn messagepack_frame_round_trips() {
                 revision: 7,
                 graph: LiveMixerGraph {
                     sample_rate: 48_000,
+                    project_end_tick: 61_440,
                     latency_policy: LiveLatencyPolicy::Normal,
                     channels: vec![],
                     sends: vec![],
@@ -444,6 +445,7 @@ fn stable_id_patch_matches_the_equivalent_full_graph() {
     };
     let mut patched = LiveMixerGraph {
         sample_rate: 48_000,
+        project_end_tick: 61_440,
         latency_policy: LiveLatencyPolicy::Normal,
         channels: vec![output.clone()],
         sends: vec![],
@@ -502,9 +504,13 @@ fn stable_id_patch_matches_the_equivalent_full_graph() {
                 denominator: 4,
             }],
         },
+        GraphOp::SetProjectEnd {
+            project_end_tick: 15_360,
+        },
     ]);
     let mut full = patched.clone();
     full.channels = vec![output, audio];
+    full.project_end_tick = 15_360;
     assert_eq!(patched, full);
 }
 
@@ -586,6 +592,7 @@ fn midi_clip(id: &str) -> LiveMidiClip {
 fn empty_graph() -> LiveMixerGraph {
     LiveMixerGraph {
         sample_rate: 48_000,
+        project_end_tick: 61_440,
         latency_policy: LiveLatencyPolicy::Normal,
         channels: vec![],
         sends: vec![],

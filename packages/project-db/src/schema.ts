@@ -51,7 +51,8 @@ export const project = pgTable(
     name: text("name").notNull(),
     sampleRate: integer("sample_rate").notNull(),
     waveformDisplayMode: text("waveform_display_mode").$type<"separate" | "aggregate">().notNull(),
-    notes: text("notes").notNull().default("")
+    notes: text("notes").notNull().default(""),
+    projectEndTick: integer("project_end_tick").notNull().default(61_440)
   },
   (table) => [
     check("project_singleton_id_check", sql`${table.id} = 'project'`),
@@ -63,7 +64,8 @@ export const project = pgTable(
     check(
       "project_waveform_display_mode_check",
       sql`${table.waveformDisplayMode} in ('separate', 'aggregate')`
-    )
+    ),
+    check("project_end_tick_check", sql`${table.projectEndTick} > 0`)
   ]
 )
 

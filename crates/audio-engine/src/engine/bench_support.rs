@@ -155,6 +155,7 @@ fn runtime_for(scenario: RenderScenario) -> Box<NativeMixerRuntime> {
         transport,
         sample_rate: scenario.sample_rate,
         content_end_frame: u64::MAX,
+        project_end_frame: u64::MAX,
         tail_end_frame: Some(u64::MAX),
         has_infinite_tail: false,
         input_peaks,

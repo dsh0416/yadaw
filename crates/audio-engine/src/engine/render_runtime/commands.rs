@@ -92,12 +92,8 @@ impl NativeMixerRuntime {
                         self.rewind_playback_loop(loop_start);
                         position = loop_start;
                     }
-                    // Auto-stop leaves the playhead at/past the finite content tail.
-                    // Restart from the beginning so Play after song-end is not a no-op.
-                    if self.configured_loop_frames().is_none()
-                        && self.content_end_frame > 0
-                        && !self.has_infinite_tail
-                        && self.tail_end_frame.is_some_and(|end| position >= end)
+                    // Restart from the beginning when parked at/past the soft project end.
+                    if self.configured_loop_frames().is_none() && position >= self.project_end_frame
                     {
                         position = 0;
                         self.transport.position_frames.store(0, Ordering::Relaxed);

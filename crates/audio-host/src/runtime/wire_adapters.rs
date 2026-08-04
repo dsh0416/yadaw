@@ -261,6 +261,7 @@ pub(super) fn live_graph(
     Ok(engine::NativeMixerGraph {
         generation,
         sample_rate: value.sample_rate,
+        project_end_tick: value.project_end_tick,
         latency_policy: match &value.latency_policy {
             LiveLatencyPolicy::Normal => engine::NativeLatencyPolicy::Normal,
             LiveLatencyPolicy::LowLatency {

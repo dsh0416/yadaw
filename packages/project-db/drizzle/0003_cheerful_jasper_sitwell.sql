@@ -1,0 +1,2 @@
+ALTER TABLE "project" ADD COLUMN "project_end_tick" integer DEFAULT 61440 NOT NULL;--> statement-breakpoint
+ALTER TABLE "project" ADD CONSTRAINT "project_end_tick_check" CHECK ("project"."project_end_tick" > 0);
