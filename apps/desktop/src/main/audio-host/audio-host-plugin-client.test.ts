@@ -252,9 +252,7 @@ describe("AudioHostPluginClient", () => {
       canPaste: true,
       canUndo: false,
       canRedo: true,
-      sidechainBuses: [
-        { inputBusIndex: 1, name: "Side-chain", sourceChannelId: "audio-2" }
-      ],
+      sidechainBuses: [{ inputBusIndex: 1, name: "Side-chain", sourceChannelId: "audio-2" }],
       sidechainSources: [{ id: "audio-2", name: "Audio 2", kind: "audio" }],
       sidechainPending: false
     })
