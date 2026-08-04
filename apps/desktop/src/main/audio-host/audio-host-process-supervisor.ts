@@ -3,7 +3,6 @@ import type { AudioHostRuntimePreferences } from "@heron/contracts"
 
 export class AudioHostProcessSupervisor {
   client: AudioHostIpcClient | null = null
-  restartBudget = 1
   stopping = false
 
   constructor(
@@ -29,13 +28,5 @@ export class AudioHostProcessSupervisor {
     if (this.client !== client) return false
     this.client = null
     return true
-  }
-
-  canRestart(): boolean {
-    return !this.stopping && this.restartBudget > 0
-  }
-
-  consumeRestart(): void {
-    this.restartBudget -= 1
   }
 }

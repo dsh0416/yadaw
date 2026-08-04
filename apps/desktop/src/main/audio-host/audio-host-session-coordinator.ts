@@ -8,6 +8,4 @@ export class AudioHostSessionCoordinator {
     runtime: AudioHostGraph
   } | null = null
   published: { revision: number; runtime: AudioHostGraph } | null = null
-  recovery: Promise<void> | null = null
-  reconfiguring = false
 }

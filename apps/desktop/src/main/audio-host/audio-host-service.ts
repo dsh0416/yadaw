@@ -3,7 +3,7 @@ import { AudioHostBenchmarkRunner } from "./audio-host-benchmark-runner"
 import type { AudioHostBenchmarkReport } from "./audio-host-benchmark-runner"
 import { AudioHostHealthMonitor } from "./audio-host-health-monitor"
 import { AudioHostMidiInputClient } from "./audio-host-midi-input-client"
-import { AraCallbackSequenceTracker, drainHostEvents } from "./audio-host-events"
+import { drainHostEvents } from "./audio-host-events"
 import type {
   AraHostCallback,
   PluginSidechainRouteRequest,
@@ -54,6 +54,11 @@ import type {
 import { AudioHostGateway } from "./audio-host-gateway"
 import { AudioHostProcessSupervisor } from "./audio-host-process-supervisor"
 import { AudioHostSessionCoordinator } from "./audio-host-session-coordinator"
+import { AudioHostEventDispatcher } from "./audio-host-event-dispatcher"
+import {
+  AudioHostRestartCoordinator,
+  type AudioHostRestartState
+} from "./audio-host-restart-coordinator"
 import type {
   AudioHostGraph,
   AudioHostMidiRecordingConfig,
@@ -81,20 +86,43 @@ export class AudioHostService {
     locale: "en-US"
   }
   private readonly pendingPreferenceWrites = new Set<Promise<void>>()
-  private readonly pendingAraCallbacks = new Set<Promise<void>>()
-  private readonly pendingVst3HostNotifications = new Set<Promise<void>>()
-  private readonly pendingSidechainRouteRequests = new Set<Promise<void>>()
-  private readonly araCallbackSequences = new AraCallbackSequenceTracker()
-  private araCallbackHandler: (callback: AraHostCallback) => void | Promise<void> = () => {}
-  private vst3HostNotificationHandler: (
-    notification: Vst3HostNotification
-  ) => void | Promise<void> = () => {}
-  private sidechainRouteRequestHandler: (
-    request: PluginSidechainRouteRequest
-  ) => void | Promise<void> = () => {}
   private readonly supervisor: AudioHostProcessSupervisor
   private readonly session = new AudioHostSessionCoordinator()
   private readonly gateway: AudioHostGateway
+  private readonly events = new AudioHostEventDispatcher({
+    helperEpoch: () => this.helperEpoch(),
+    rejectSidechainRoute: (request) =>
+      this.resolvePluginSidechainRoute(
+        request.requestId,
+        request.instanceId,
+        false,
+        "Side-chain routing could not be committed."
+      )
+  })
+  private readonly restarts = new AudioHostRestartCoordinator({
+    isStopping: () => this.stopping,
+    runtimePreferences: () => structuredClone(this.runtimePreferences),
+    setRuntimePreferences: (preferences) => {
+      this.runtimePreferences = structuredClone(preferences)
+    },
+    captureConfigurationState: () => this.captureConfigurationRestartState(),
+    capturePluginStates: () => this.capturePluginStatesForRestart(),
+    prepareConfigurationRestart: (state) => this.prepareConfigurationRestart(state),
+    shutdownCurrentHelper: () => this.shutdownCurrentClient(),
+    restart: (state, mode) =>
+      mode === "recovery"
+        ? this.recoverAfterFailure(
+            state.audioPreferences,
+            state.transport,
+            state.audioEngineWasRunning
+          )
+        : this.restartAfterConfiguration(
+            state.audioPreferences,
+            state.transport,
+            state.audioEngineWasRunning
+          ),
+    reportFailure: (message) => this.onFailure(message)
+  })
 
   private readonly diagnostics = new AudioHostDiagnostics(
     () => this.client,
@@ -112,7 +140,7 @@ export class AudioHostService {
     captureTransport: (client) => this.audioTransport.captureTransport(client),
     onFailure: (client, message) => this.handleExit(client, message),
     onStable: (client) => {
-      if (this.client === client) this.restartBudget = 1
+      if (this.client === client) this.restarts.markStable()
     }
   })
 
@@ -195,30 +223,30 @@ export class AudioHostService {
     )
     this.gateway = new AudioHostGateway(
       () => this.client,
-      () => (this.stopping ? "stopping" : this.recovery),
+      () => (this.stopping ? "stopping" : this.restarts.recoveryPromise),
       onEditorPreferenceChanged,
       this.pendingPreferenceWrites,
       onEditorClosed,
-      (callback) => this.handleAraCallback(callback),
-      (notification) => this.handleVst3HostNotification(notification),
-      (request) => this.handleSidechainRouteRequest(request)
+      (callback) => this.events.dispatchAra(callback),
+      (notification) => this.events.dispatchVst3(notification),
+      (request) => this.events.dispatchSidechain(request)
     )
   }
 
   setAraCallbackHandler(handler: (callback: AraHostCallback) => void | Promise<void>): void {
-    this.araCallbackHandler = handler
+    this.events.setAraHandler(handler)
   }
 
   setVst3HostNotificationHandler(
     handler: (notification: Vst3HostNotification) => void | Promise<void>
   ): void {
-    this.vst3HostNotificationHandler = handler
+    this.events.setVst3Handler(handler)
   }
 
   setPluginSidechainRouteRequestHandler(
     handler: (request: PluginSidechainRouteRequest) => void | Promise<void>
   ): void {
-    this.sidechainRouteRequestHandler = handler
+    this.events.setSidechainHandler(handler)
   }
 
   async resolvePluginSidechainRoute(
@@ -236,45 +264,6 @@ export class AudioHostService {
     })
   }
 
-  private handleSidechainRouteRequest(request: PluginSidechainRouteRequest): void {
-    const pending = Promise.resolve(this.sidechainRouteRequestHandler(request))
-      .catch((error: unknown) => {
-        console.error("Could not commit a VST3 side-chain route", error)
-        return this.resolvePluginSidechainRoute(
-          request.requestId,
-          request.instanceId,
-          false,
-          "Side-chain routing could not be committed."
-        )
-      })
-      .finally(() => this.pendingSidechainRouteRequests.delete(pending))
-    this.pendingSidechainRouteRequests.add(pending)
-  }
-
-  private handleVst3HostNotification(notification: Vst3HostNotification): void {
-    const pending = Promise.resolve(this.vst3HostNotificationHandler(notification))
-      .catch((error: unknown) => {
-        console.error("Could not reconcile a VST3 host notification", error)
-      })
-      .finally(() => {
-        this.pendingVst3HostNotifications.delete(pending)
-      })
-    this.pendingVst3HostNotifications.add(pending)
-  }
-
-  private handleAraCallback(callback: AraHostCallback): void {
-    if (callback.helperEpoch !== this.helperEpoch()) return
-    if (!this.araCallbackSequences.accept(callback.helperEpoch, callback.sequence)) return
-    const pending = Promise.resolve(this.araCallbackHandler(callback))
-      .catch((error: unknown) => {
-        console.error("Could not reconcile an ARA host callback", error)
-      })
-      .finally(() => {
-        this.pendingAraCallbacks.delete(pending)
-      })
-    this.pendingAraCallbacks.add(pending)
-  }
-
   private get client(): AudioHostIpcClient | null {
     return this.supervisor.client
   }
@@ -283,12 +272,6 @@ export class AudioHostService {
   }
   helperEpoch(): string | null {
     return this.client?.helperEpoch ?? null
-  }
-  private get restartBudget(): number {
-    return this.supervisor.restartBudget
-  }
-  private set restartBudget(value: number) {
-    this.supervisor.restartBudget = value
   }
   private get stopping(): boolean {
     return this.supervisor.stopping
@@ -307,18 +290,6 @@ export class AudioHostService {
   }
   private set publishedGraph(value: AudioHostSessionCoordinator["published"]) {
     this.session.published = value
-  }
-  private get recovery(): Promise<void> | null {
-    return this.session.recovery
-  }
-  private set recovery(value: Promise<void> | null) {
-    this.session.recovery = value
-  }
-  private get reconfiguring(): boolean {
-    return this.session.reconfiguring
-  }
-  private set reconfiguring(value: boolean) {
-    this.session.reconfiguring = value
   }
   start(restoreGraph = true): void {
     if (this.client || this.stopping) return
@@ -696,7 +667,7 @@ export class AudioHostService {
     if (this.client !== client) return
     this.audioTransport.captureTransport(client)
     this.client = null
-    this.araCallbackSequences.clear()
+    this.events.resetHelper()
     this.health.stop()
     this.plugins.resetConnection()
     this.publishedGraph = null
@@ -722,26 +693,15 @@ export class AudioHostService {
       message = `${message}; crash marker was inconclusive, recovering with all plugins bypassed`
     }
     this.onFailure(message)
-    if (this.reconfiguring || this.recovery || this.restartBudget <= 0) return
-
-    this.restartBudget -= 1
     const audioPreferences = this.audioTransport.audioPreferences()
       ? structuredClone(this.audioTransport.audioPreferences())
       : null
     const transport = { ...this.audioTransport.transportIntent() }
-    const recovery = this.recoverAfterFailure(
+    this.restarts.recover({
       audioPreferences,
       transport,
-      this.audioTransport.engineExpectedRunning()
-    )
-    this.recovery = recovery
-    void recovery
-      .catch((error: unknown) => {
-        if (!this.stopping) this.onFailure(`audio helper recovery failed: ${String(error)}`)
-      })
-      .finally(() => {
-        if (this.recovery === recovery) this.recovery = null
-      })
+      audioEngineWasRunning: this.audioTransport.engineExpectedRunning()
+    })
   }
 
   private async recoverAfterFailure(
@@ -813,49 +773,37 @@ export class AudioHostService {
   }
 
   get configurationRestarting(): boolean {
-    return this.reconfiguring || this.recovery !== null
+    return this.restarts.busy
   }
 
   async configureRuntime(preferences: AudioHostRuntimePreferences): Promise<void> {
-    if (this.reconfiguring || this.recovery || this.stopping) {
-      throw new Error("Audio host runtime configuration is busy")
-    }
-    this.reconfiguring = true
-    const previousPreferences = structuredClone(this.runtimePreferences)
+    await this.restarts.configure(preferences)
+  }
+
+  private async captureConfigurationRestartState(): Promise<AudioHostRestartState> {
     const transport = await this.transportSnapshot()
     const audioRuntime = await this.audioEngineSnapshot()
-    const audioEngineWasRunning = audioRuntime.state === "running"
     const audioPreferences = this.audioTransport.audioPreferences()
       ? structuredClone(this.audioTransport.audioPreferences())
       : null
-    try {
-      await this.capturePluginStatesForRestart()
-      if (transport.state !== "stopped") await this.transport({ type: "pause" })
-      for (const instanceId of this.plugins.loadedInstanceIds()) {
-        try {
-          await this.closePluginEditor(instanceId)
-        } catch {
-          // An editor may already have been closed by the plug-in.
-        }
-      }
-      if (audioEngineWasRunning) await this.stopAudioEngine()
-      await this.shutdownCurrentClient()
-      this.runtimePreferences = structuredClone(preferences)
-      await this.restartAfterConfiguration(audioPreferences, transport, audioEngineWasRunning)
-    } catch (error) {
-      try {
-        await this.shutdownCurrentClient()
-        this.runtimePreferences = previousPreferences
-        await this.restartAfterConfiguration(audioPreferences, transport, audioEngineWasRunning)
-      } catch (rollbackError) {
-        this.onFailure(
-          `audio runtime configuration and rollback failed: ${String(error)}; ${String(rollbackError)}`
-        )
-      }
-      throw error
-    } finally {
-      this.reconfiguring = false
+    return {
+      audioPreferences,
+      transport,
+      audioEngineWasRunning: audioRuntime.state === "running"
     }
+  }
+
+  private async prepareConfigurationRestart(state: AudioHostRestartState): Promise<void> {
+    if (state.transport.state !== "stopped") await this.transport({ type: "pause" })
+    for (const instanceId of this.plugins.loadedInstanceIds()) {
+      try {
+        await this.closePluginEditor(instanceId)
+      } catch {
+        // An editor may already have been closed by the plug-in.
+      }
+    }
+    if (state.audioEngineWasRunning) await this.stopAudioEngine()
+    await this.shutdownCurrentClient()
   }
 
   private async capturePluginStatesForRestart(): Promise<void> {
@@ -935,18 +883,15 @@ export class AudioHostService {
       this.onEditorPreferenceChanged,
       this.pendingPreferenceWrites,
       this.onEditorClosed,
-      (callback) => this.handleAraCallback(callback),
-      (notification) => this.handleVst3HostNotification(notification),
-      (request) => this.handleSidechainRouteRequest(request)
+      (callback) => this.events.dispatchAra(callback),
+      (notification) => this.events.dispatchVst3(notification),
+      (request) => this.events.dispatchSidechain(request)
     )
     if (this.client === client) this.client = null
     client.close()
     await this.gateway.settle()
     await Promise.allSettled([...this.pendingPreferenceWrites])
-    await Promise.allSettled([...this.pendingAraCallbacks])
-    await Promise.allSettled([...this.pendingVst3HostNotifications])
-    await Promise.allSettled([...this.pendingSidechainRouteRequests])
-    this.araCallbackSequences.clear()
+    await this.events.settle()
     this.publishedGraph = null
     this.audioTransport.resetConnection()
   }
