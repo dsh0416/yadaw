@@ -138,7 +138,6 @@ function updateColor(event: Event): void {
 .track-color-rail {
   grid-row: 1 / 3;
   border-radius: 2px;
-  box-shadow: 0 0 9px color-mix(in srgb, currentColor 18%, transparent);
 }
 
 .track-heading-label {
