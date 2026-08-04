@@ -1,4 +1,24 @@
-fn spawn_event_router(
+use std::{
+    collections::VecDeque,
+    sync::{
+        Arc, Mutex, RwLock,
+        atomic::{AtomicBool, Ordering},
+        mpsc::SyncSender,
+    },
+    thread::{self, JoinHandle},
+};
+
+use heron_dsp_runtime::protocol::{HostEvent, PriorityCommand, PriorityRequest};
+use heron_ipc_transport::{
+    LeaseRegistry, SharedMemoryDescriptor, TelemetryReader, WirePacket, decode_body,
+    encode_priority,
+};
+use ipc_channel::{TryRecvError, ipc::IpcReceiver};
+use napi::Result;
+
+use super::{OUTBOUND_CAPACITY, ROUTER_POLL, state::failure};
+
+pub(super) fn spawn_event_router(
     receiver: IpcReceiver<WirePacket>,
     leases: Arc<Mutex<LeaseRegistry>>,
     telemetry: Arc<RwLock<TelemetryReader>>,

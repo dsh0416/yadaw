@@ -1,24 +1,26 @@
-struct Liveness {
-    audio_engine: Arc<engine::AudioEngine>,
-    ipc: Arc<AtomicU64>,
-    tokio: Arc<AtomicU64>,
-    winit: Arc<AtomicU64>,
-    egress: Arc<EgressMetrics>,
+use super::*;
+
+pub(super) struct Liveness {
+    pub(super) audio_engine: Arc<engine::AudioEngine>,
+    pub(super) ipc: Arc<AtomicU64>,
+    pub(super) tokio: Arc<AtomicU64>,
+    pub(super) winit: Arc<AtomicU64>,
+    pub(super) egress: Arc<EgressMetrics>,
 }
 
-struct IngressChannels {
-    requests: ipc_channel::ipc::IpcReceiver<WirePacket>,
-    priority_requests: ipc_channel::ipc::IpcReceiver<WirePacket>,
-    priority_responses: ipc_channel::ipc::IpcSender<WirePacket>,
+pub(super) struct IngressChannels {
+    pub(super) requests: ipc_channel::ipc::IpcReceiver<WirePacket>,
+    pub(super) priority_requests: ipc_channel::ipc::IpcReceiver<WirePacket>,
+    pub(super) priority_responses: ipc_channel::ipc::IpcSender<WirePacket>,
 }
 
-struct IngressMailboxes {
-    inbound: mpsc::Sender<InboundRequest>,
-    priority: mpsc::Sender<PriorityIngress>,
-    outbound: mpsc::Sender<OutboundMessage>,
+pub(super) struct IngressMailboxes {
+    pub(super) inbound: mpsc::Sender<InboundRequest>,
+    pub(super) priority: mpsc::Sender<PriorityIngress>,
+    pub(super) outbound: mpsc::Sender<OutboundMessage>,
 }
 
-fn spawn_ingress(
+pub(super) fn spawn_ingress(
     channels: IngressChannels,
     mailboxes: IngressMailboxes,
     leases: Arc<Mutex<LeaseRegistry>>,
@@ -201,15 +203,13 @@ fn spawn_ingress(
                                 Err(_) => PriorityResult::Busy,
                             }
                         }
-                        PriorityCommand::Shutdown => {
-                            match mailboxes.priority.try_reserve() {
-                                Ok(permit) => {
-                                    shutdown_permit = Some(permit);
-                                    PriorityResult::Accepted
-                                }
-                                Err(_) => PriorityResult::Busy,
+                        PriorityCommand::Shutdown => match mailboxes.priority.try_reserve() {
+                            Ok(permit) => {
+                                shutdown_permit = Some(permit);
+                                PriorityResult::Accepted
                             }
-                        }
+                            Err(_) => PriorityResult::Busy,
+                        },
                         PriorityCommand::TelemetryPageReady { epoch, generation } => {
                             match mailboxes
                                 .priority

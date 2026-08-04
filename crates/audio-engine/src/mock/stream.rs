@@ -1,3 +1,5 @@
+use super::*;
+
 /// Cooperative shutdown and transport flags shared with a stream worker.
 struct StreamControls {
     exit: AtomicBool,
@@ -14,7 +16,7 @@ struct StreamControls {
 /// than synchronising with it, so a block already in flight when `pause` is
 /// called still reaches the data callback. Only dropping the stream waits for
 /// the worker to finish.
-struct MockStream {
+pub(super) struct MockStream {
     controls: Arc<StreamControls>,
     origin: Instant,
     frames: FrameCount,
@@ -104,7 +106,7 @@ impl MockStream {
         })
     }
 
-    fn capture<D>(
+    pub(super) fn capture<D>(
         backend: &Arc<MockBackend>,
         frames: FrameCount,
         channels: usize,
@@ -177,7 +179,7 @@ impl MockStream {
         })
     }
 
-    fn playback<D>(
+    pub(super) fn playback<D>(
         backend: &Arc<MockBackend>,
         frames: FrameCount,
         channels: usize,

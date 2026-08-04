@@ -1,6 +1,48 @@
+use std::{
+    collections::{HashMap, VecDeque},
+    process::{Command, Stdio},
+    sync::{
+        Arc, Mutex, RwLock,
+        atomic::{AtomicBool, AtomicU64, Ordering},
+        mpsc,
+    },
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+};
+
+use heron_dsp_runtime::protocol::{
+    ControlRequest, ParameterCommand, ParameterGesture, ParameterTargetKind, PriorityCommand,
+    PriorityRequest,
+};
+use heron_ipc_transport::{
+    ArenaReceiver, HostBootstrap, LeaseRegistry, MAX_OUTSTANDING_LEASE_BYTES,
+    MAX_OUTSTANDING_LEASES, ParameterEnqueue, ParameterProducer, TelemetryReader,
+    TelemetrySnapshot, create_parameter_ring, create_telemetry_page, encode_priority,
+    encode_request_with_attachments,
+};
+use ipc_channel::ipc::{self, IpcOneShotServer, IpcSender};
+use napi::{
+    Env, Error, Result, Status,
+    bindgen_prelude::{Buffer, Object},
+};
+use napi_derive::napi;
+
+use super::{
+    MAX_LOGICAL_REQUEST_BYTES, OUTBOUND_CAPACITY,
+    egress::spawn_egress,
+    event_router::spawn_event_router,
+    lease_release::close_state,
+    priority_router::spawn_priority_router,
+    response_router::spawn_response_router,
+    routing_helpers::{parse_gesture, record_packet, request_deadline},
+    state::{
+        ClientState, ParameterEnqueueRequest, ParameterEnqueueResult, TransportTraffic,
+        decode_native_window_handle, failure, negotiate_shared_pages, resolve_runtime_config,
+    },
+};
+
 #[napi]
 pub struct AudioHostIpcClient {
-    state: Arc<ClientState>,
+    pub(super) state: Arc<ClientState>,
 }
 
 #[napi]
@@ -96,12 +138,8 @@ impl AudioHostIpcClient {
                 failure("could not transfer helper channels", error)
             })?;
 
-        let persistent_shared_pages = negotiate_shared_pages(
-            &mapping_commands,
-            &mapping_events,
-            &telemetry,
-            &parameters,
-        );
+        let persistent_shared_pages =
+            negotiate_shared_pages(&mapping_commands, &mapping_events, &telemetry, &parameters);
 
         let (normal_outbound, normal_inbox) = mpsc::sync_channel(OUTBOUND_CAPACITY);
         let (priority_outbound, priority_inbox) = mpsc::sync_channel(OUTBOUND_CAPACITY);
@@ -140,11 +178,7 @@ impl AudioHostIpcClient {
                 priority_outbound.clone(),
                 Arc::clone(&closing),
             )?);
-            threads.push(spawn_egress(
-                "heron-ipc-request",
-                requests,
-                normal_inbox,
-            )?);
+            threads.push(spawn_egress("heron-ipc-request", requests, normal_inbox)?);
             threads.push(spawn_egress(
                 "heron-ipc-priority-request",
                 priority_requests,
@@ -347,7 +381,11 @@ impl AudioHostIpcClient {
                     .parameter_sequence
                     .fetch_add(1, Ordering::Relaxed))
             },
-            |value| value.parse::<u64>().map_err(|error| failure("invalid parameter sequence", error)),
+            |value| {
+                value
+                    .parse::<u64>()
+                    .map_err(|error| failure("invalid parameter sequence", error))
+            },
         )?;
         let command = ParameterCommand {
             session_epoch: self.state.session_epoch,

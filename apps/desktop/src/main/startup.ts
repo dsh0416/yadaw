@@ -3,28 +3,14 @@ import { basename, join, resolve } from "node:path"
 import { randomUUID } from "node:crypto"
 import { IPC_CHANNELS, IPC_PROTOCOL_VERSION } from "@heron/contracts"
 import { ApplicationSettingsStore } from "./application-settings"
-import { AssetMaterializer } from "./asset-materializer"
-import { AudioGraphCompiler } from "./audio-graph-compiler"
-import { AudioGraphPublisher } from "./audio-graph-publisher"
+import { createApplicationServices } from "./application-services"
 import { AudioHostService } from "./audio-host-service"
-import { commitExternalProjectDirty } from "./external-project-dirty"
 import { installApplicationMenu } from "./application-menu"
 import { setMainLocale, t } from "./i18n"
-import { LifecycleCoordinator } from "./lifecycle-coordinator"
-import { MidiImportService } from "./midi-import-service"
-import { MixerRuntimeService } from "./mixer-runtime-service"
-import { OperationService } from "./operation-service"
-import { OperationRegistry } from "./kernel/operation-registry"
 import { PluginCatalogService } from "./plugin-catalog-service"
-import { ProjectCommandService } from "./project-command-service"
-import { ProjectGraphService } from "./project-graph-service"
 import { ProjectService } from "./project-service"
-import { RecordingService } from "./recording-service"
 import { StartupProgress } from "./startup-progress"
-import { WaveformService } from "./waveform-service"
-import { TransportService } from "./transport-service"
 import { registerIpcHandlers } from "./ipc/register"
-import { normalizeAudioRuntime } from "./ipc/support"
 import { applicationIconPath } from "./runtime-paths"
 import {
   createMainWindow,
@@ -230,221 +216,31 @@ export function startApplication(
         applicationSettings.shortcuts
       )
       const projectService = new ProjectService(app.getPath("userData"), settings)
-      let araUiSequence = 0
       setWindowProjectService(projectService)
       onServices({ audioHostService, projectService })
-      const graphPublisher = new AudioGraphPublisher(
-        new AudioGraphCompiler(),
-        new AssetMaterializer(app.getPath("userData"), projectService),
-        audioHostService,
-        plugins,
-        settings
-      )
-      const projectGraph = new ProjectGraphService(projectService, graphPublisher)
-      const projectCommands = new ProjectCommandService(
-        projectGraph,
-        projectService,
-        audioHostService,
-        plugins
-      )
-      const mixerRuntime = new MixerRuntimeService(audioHostService)
-      const transport = new TransportService(projectService, audioHostService)
-      plugins.attachRuntime({
-        resolveInstance: async (instanceId) => {
-          const graph = await projectGraph.snapshot()
-          const plugin = graph.plugins.find((candidate) => candidate.id === instanceId)
-          if (!plugin) throw new Error(`Plugin instance '${instanceId}' was not found`)
-          return { plugin, sampleRate: graph.sampleRate }
-        },
-        load: (plugin, sampleRate) => {
-          if (!audioHostService) return Promise.reject(new Error("Audio host is not running"))
-          return audioHostService.loadPlugin(plugin, sampleRate)
-        },
-        parameters: (instanceId) => {
-          if (!audioHostService) return Promise.resolve([])
-          return audioHostService.pluginParameters(instanceId)
-        },
-        setParameter: (change) => {
-          if (!audioHostService) return Promise.reject(new Error("Audio host is not running"))
-          return audioHostService.setPluginParameter(change)
-        },
-        openEditor: async (instanceId) => {
-          if (!audioHostService) {
-            return { editorMode: "parameters" as const, open: false }
-          }
-          const graph = await projectGraph.snapshot()
-          const plugin = graph.plugins.find((candidate) => candidate.id === instanceId)
-          if (!plugin) throw new Error(`Plugin instance '${instanceId}' was not found`)
-          const channel = graph.channels.find((candidate) => candidate.id === plugin.channelId)
-          if (!channel) throw new Error(`Plugin channel '${plugin.channelId}' was not found`)
-          const preference = await settings.pluginEditorPreference(plugin.classId)
-          return audioHostService.openPluginEditor(instanceId, preference, {
-            channelName: channel.name,
-            channelColor: channel.color,
-            pluginName: plugin.descriptor.name,
-            appearance: audioHostService.pluginEditorAppearanceSnapshot()
-          })
-        },
-        closeEditor: (instanceId) => {
-          if (!audioHostService) return Promise.resolve()
-          return audioHostService.closePluginEditor(instanceId)
-        }
-      })
-      const midiImport = new MidiImportService(projectGraph, projectCommands, plugins)
-      const initialAudioRuntime = await audioHostService.audioEngineSnapshot()
-      const lifecycle = new LifecycleCoordinator(
-        projectService.current,
-        normalizeAudioRuntime(initialAudioRuntime),
-        {
-          allowRecordingWithoutAudio: process.env.HERON_TEST_CAPTURE_SOURCE === "1",
-          audioHostEpoch: audioHostService.helperEpoch() ?? undefined
-        }
-      )
-      audioHostService.setAraCallbackHandler(async (callback) => {
-        if (
-          callback.event.kind === "content-changed" ||
-          callback.event.kind === "document-data-changed"
-        ) {
-          await commitExternalProjectDirty(projectService, lifecycle)
-        }
-        if (
-          callback.event.kind === "analysis-progress" ||
-          callback.event.kind === "archive-progress" ||
-          callback.event.kind === "quarantined"
-        ) {
-          const epoch = audioHostService.helperEpoch() ?? "0"
-          araUiSequence += 1
-          for (const candidate of BrowserWindow.getAllWindows()) {
-            candidate.webContents.send(IPC_CHANNELS.araCallbackEvent, {
-              protocolVersion: IPC_PROTOCOL_VERSION,
-              sourceEpoch: epoch,
-              sequence: araUiSequence,
-              resourceRevision: araUiSequence,
-              payload: {
-                instanceId: callback.instanceId,
-                callbackSequence: callback.sequence,
-                event: callback.event
-              }
-            })
-          }
-        }
-      })
-      audioHostService.setVst3HostNotificationHandler(async (notification) => {
-        if (notification.kind === "dirty-changed" && notification.value === "true") {
-          await commitExternalProjectDirty(projectService, lifecycle)
-        } else if (notification.kind === "open-editor") {
-          await plugins.openEditor(notification.instanceId)
-        }
-      })
-      if (initialAudioRuntime.state === "running") {
-        await lifecycle.applicationState.commitAudioEngine(
-          normalizeAudioRuntime(initialAudioRuntime)
-        )
-      }
-      const operations = new OperationService(
-        new OperationRegistry(),
-        lifecycle.applicationState.desktopSession
-      )
-      projectCommands.attachKernel(lifecycle, operations)
-      let externalProjectCommandSequence = 0
-      audioHostService.setPluginSidechainRouteRequestHandler(async (request) => {
-        const workspace = projectCommands.currentWorkspace()
-        const plugin = workspace?.graph.plugins.find(
-          (candidate) => candidate.id === request.instanceId
-        )
-        if (!workspace || !plugin) {
-          await audioHostService.resolvePluginSidechainRoute(
-            request.requestId,
-            request.instanceId,
-            false,
-            "The plug-in or project is no longer available."
-          )
-          return
-        }
-        const sidechainInputs = plugin.sidechainInputs.filter(
-          (route) => route.inputBusIndex !== request.inputBusIndex
-        )
-        if (request.sourceChannelId) {
-          sidechainInputs.push({
-            inputBusIndex: request.inputBusIndex,
-            sourceChannelId: request.sourceChannelId
-          })
-        }
-        sidechainInputs.sort((left, right) => left.inputBusIndex - right.inputBusIndex)
-        const operationId = `native-sidechain:${randomUUID()}`
-        const result = await projectCommands.execute(
-          {
-            protocolVersion: IPC_PROTOCOL_VERSION,
-            requestId: `native-sidechain-request:${randomUUID()}`,
-            target: structuredClone(workspace.projectGraph),
-            expectedRevision: workspace.revision,
-            mutation: {
-              operationId,
-              idempotencyKey: operationId
-            }
-          },
-          {
-            type: "update-plugin",
-            pluginId: plugin.id,
-            patch: { descriptor: plugin.descriptor, sidechainInputs }
-          }
-        )
-        if (!result.ok) {
-          await audioHostService.resolvePluginSidechainRoute(
-            request.requestId,
-            request.instanceId,
-            false,
-            "Side-chain routing could not be committed."
-          )
-          return
-        }
-        const revision = result.resourceRevision ?? workspace.revision + 1
-        externalProjectCommandSequence += 1
-        for (const candidate of BrowserWindow.getAllWindows()) {
-          candidate.webContents.send(IPC_CHANNELS.projectCommandExternalEvent, {
-            protocolVersion: IPC_PROTOCOL_VERSION,
-            sourceEpoch: startupEpoch,
-            sequence: externalProjectCommandSequence,
-            resourceRevision: revision,
-            payload: {
-              result: result.value,
-              warnings: result.warnings ?? []
-            }
-          })
-        }
-        const degraded = result.warnings?.some(
-          (warning) => warning.code === "audio-deployment-degraded"
-        )
-        await audioHostService.resolvePluginSidechainRoute(
-          request.requestId,
-          request.instanceId,
-          true,
-          degraded ? "Route saved, but audio deployment is degraded." : undefined
-        )
-      })
-      const recordings = new RecordingService(
+      const services = await createApplicationServices({
+        userDataPath: app.getPath("userData"),
+        sourceEpoch: startupEpoch,
         settings,
         projectService,
-        operations,
-        projectGraph,
-        transport,
-        audioHostService,
-        projectCommands
-      )
-      const waveforms = new WaveformService(settings, projectService)
+        audioHost: audioHostService,
+        plugins,
+        eventTargets: () => BrowserWindow.getAllWindows(),
+        allowRecordingWithoutAudio: process.env.HERON_TEST_CAPTURE_SOURCE === "1"
+      })
       registerIpcHandlers({
         settings,
         projects: projectService,
-        recordings,
-        operations,
-        waveforms,
-        projectGraph,
-        projectCommands,
-        mixerRuntime,
-        transport,
+        recordings: services.recordings,
+        operations: services.operations,
+        waveforms: services.waveforms,
+        projectGraph: services.projectGraph,
+        projectCommands: services.projectCommands,
+        mixerRuntime: services.mixerRuntime,
+        transport: services.transport,
         plugins,
-        midiImport,
-        lifecycle,
+        midiImport: services.midiImport,
+        lifecycle: services.lifecycle,
         audioHost: audioHostService,
         isShuttingDown
       })

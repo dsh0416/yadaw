@@ -1,4 +1,8 @@
 import { AudioHostDiagnostics } from "./audio-host-diagnostics"
+import { AudioHostBenchmarkRunner } from "./audio-host-benchmark-runner"
+import type { AudioHostBenchmarkReport } from "./audio-host-benchmark-runner"
+import { AudioHostHealthMonitor } from "./audio-host-health-monitor"
+import { AudioHostMidiInputClient } from "./audio-host-midi-input-client"
 import { AraCallbackSequenceTracker, drainHostEvents } from "./audio-host-events"
 import type {
   AraHostCallback,
@@ -14,9 +18,7 @@ import type { PreparedGraphDeployment } from "./audio-host-graph-transactions"
 import type { AudioHostIpcClient } from "@heron/audio-host-client"
 import type {
   AudioBackendDescriptor,
-  AudioBenchmarkScenario,
   AudioDeviceList,
-  AudioIpcBenchmarkReport,
   AudioIpcPerformanceSnapshot,
   AudioHostRuntimePreferences,
   AudioPreferences,
@@ -49,15 +51,6 @@ import type {
   PluginEditorContextWire
 } from "./audio-host-plugin-client"
 
-const HEARTBEAT_INTERVAL_MS = 250
-const HEARTBEAT_TIMEOUT_MS = 2_000
-
-function benchmarkStageError(stage: string, error: unknown, helperFailure: string | null): Error {
-  const message = error instanceof Error ? error.message : String(error)
-  const failure = helperFailure && !message.includes(helperFailure) ? ` (${helperFailure})` : ""
-  return new Error(`${stage} failed: ${message}${failure}`, { cause: error })
-}
-
 import { AudioHostGateway } from "./audio-host-gateway"
 import { AudioHostProcessSupervisor } from "./audio-host-process-supervisor"
 import { AudioHostSessionCoordinator } from "./audio-host-session-coordinator"
@@ -87,34 +80,6 @@ export class AudioHostService {
     theme: "dark",
     locale: "en-US"
   }
-  private heartbeatInFlight = false
-  private audioBenchmarkInFlight = false
-  private benchmarkRunnerInFlight = false
-  private audioBenchmarkGeneration = 0
-  private lastCallbackGeneration: number | null = null
-  private callbackStagnantSince = 0
-  private lastHeartbeatAt: number | null = null
-  private lastHeartbeatGenerations = {
-    ipc: 0,
-    tokio: 0,
-    winit: 0,
-    callback: 0
-  }
-  private lastHostIpcMetrics = {
-    egressActive: 0,
-    egressQueueDepth: 0,
-    egressQueueHighWater: 0,
-    egressBatches: 0,
-    blockingJobs: 0,
-    arenaRegions: 0,
-    arenaCapacityBytes: 0,
-    arenaUsedBytes: 0,
-    arenaHighWaterBytes: 0,
-    arenaOffers: 0,
-    arenaBusy: 0,
-    arenaQuarantinedRegions: 0,
-    arenaCopiedBytes: 0
-  }
   private readonly pendingPreferenceWrites = new Set<Promise<void>>()
   private readonly pendingAraCallbacks = new Set<Promise<void>>()
   private readonly pendingVst3HostNotifications = new Set<Promise<void>>()
@@ -137,11 +102,44 @@ export class AudioHostService {
     () => ({
       executablePath: this.executablePath,
       runtimePreferences: this.runtimePreferences,
-      lastHeartbeatAt: this.lastHeartbeatAt,
-      lastHeartbeatGenerations: this.lastHeartbeatGenerations,
-      lastHostIpcMetrics: this.lastHostIpcMetrics
+      ...this.health.snapshot()
     })
   )
+
+  private readonly health = new AudioHostHealthMonitor({
+    currentClient: () => this.client,
+    heartbeat: (client) => this.performPriority({ type: "heartbeat" }, client),
+    captureTransport: (client) => this.audioTransport.captureTransport(client),
+    onFailure: (client, message) => this.handleExit(client, message),
+    onStable: (client) => {
+      if (this.client === client) this.restartBudget = 1
+    }
+  })
+
+  private readonly midiInput = new AudioHostMidiInputClient(
+    (command) => this.request(command),
+    (command, client) => this.requestImmediately(command, client)
+  )
+
+  private readonly benchmarkRunner = new AudioHostBenchmarkRunner((onFailure) => {
+    const host = new AudioHostService(
+      this.executablePath,
+      `${this.crashMarkerPath}.benchmark`,
+      structuredClone(this.runtimePreferences),
+      undefined,
+      onFailure,
+      async () => {}
+    )
+    return {
+      start: () => host.start(false),
+      stop: () => host.stop(),
+      loadPlugin: (plugin, sampleRate) => host.loadPlugin(plugin, sampleRate),
+      request: (command) => host.request(command),
+      runIpcBenchmark: () => host.diagnostics.runIpcBenchmark(),
+      beginBenchmark: () => host.health.beginBenchmark(),
+      endBenchmark: (generation) => host.health.endBenchmark(generation)
+    }
+  })
 
   private readonly recording = new AudioHostRecordingClient((command) => this.request(command))
 
@@ -286,18 +284,6 @@ export class AudioHostService {
   helperEpoch(): string | null {
     return this.client?.helperEpoch ?? null
   }
-  private get heartbeat(): NodeJS.Timeout | null {
-    return this.supervisor.heartbeat
-  }
-  private set heartbeat(value: NodeJS.Timeout | null) {
-    this.supervisor.heartbeat = value
-  }
-  private get stableTimer(): NodeJS.Timeout | null {
-    return this.supervisor.stableTimer
-  }
-  private set stableTimer(value: NodeJS.Timeout | null) {
-    this.supervisor.stableTimer = value
-  }
   private get restartBudget(): number {
     return this.supervisor.restartBudget
   }
@@ -334,31 +320,6 @@ export class AudioHostService {
   private set reconfiguring(value: boolean) {
     this.session.reconfiguring = value
   }
-  private get midiPreferences(): MidiSyncPreferences {
-    return this.session.midiPreferences
-  }
-  private set midiPreferences(value: MidiSyncPreferences) {
-    this.session.midiPreferences = value
-  }
-  private get midiPreferencesConfigured(): boolean {
-    return this.session.midiPreferencesConfigured
-  }
-  private set midiPreferencesConfigured(value: boolean) {
-    this.session.midiPreferencesConfigured = value
-  }
-  private get midiControlPortIds(): string[] {
-    return this.session.midiControlPortIds
-  }
-  private set midiControlPortIds(value: string[]) {
-    this.session.midiControlPortIds = value
-  }
-  private get midiControlLearning(): boolean {
-    return this.session.midiControlLearning
-  }
-  private set midiControlLearning(value: boolean) {
-    this.session.midiControlLearning = value
-  }
-
   start(restoreGraph = true): void {
     if (this.client || this.stopping) return
     let client: AudioHostIpcClient
@@ -368,103 +329,12 @@ export class AudioHostService {
       this.onFailure(`could not start audio host: ${String(error)}`)
       return
     }
-    this.heartbeatInFlight = false
-    this.lastCallbackGeneration = null
-    this.callbackStagnantSince = 0
-    this.lastHeartbeatAt = null
-    this.lastHeartbeatGenerations = { ipc: 0, tokio: 0, winit: 0, callback: 0 }
-    this.lastHostIpcMetrics = {
-      egressActive: 0,
-      egressQueueDepth: 0,
-      egressQueueHighWater: 0,
-      egressBatches: 0,
-      blockingJobs: 0,
-      arenaRegions: 0,
-      arenaCapacityBytes: 0,
-      arenaUsedBytes: 0,
-      arenaHighWaterBytes: 0,
-      arenaOffers: 0,
-      arenaBusy: 0,
-      arenaQuarantinedRegions: 0,
-      arenaCopiedBytes: 0
-    }
-    this.heartbeat = setInterval(() => {
-      if (this.client !== client || this.heartbeatInFlight || this.audioBenchmarkInFlight) return
-      const benchmarkGeneration = this.audioBenchmarkGeneration
-      this.heartbeatInFlight = true
-      void this.performHeartbeat(client)
-        .then((response) => {
-          if (this.client !== client) return
-          if (response.result.type !== "heartbeat") return
-          this.audioTransport.captureTransport(client)
-          const generation = response.result.callback_generation ?? 0
-          this.lastHeartbeatAt = Date.now()
-          this.lastHeartbeatGenerations = {
-            ipc: response.result.ipc_generation ?? 0,
-            tokio: response.result.tokio_generation ?? 0,
-            winit: response.result.winit_generation ?? 0,
-            callback: generation
-          }
-          this.lastHostIpcMetrics = {
-            egressActive: response.result.egress_active ?? 0,
-            egressQueueDepth: response.result.egress_queue_depth ?? 0,
-            egressQueueHighWater: response.result.egress_queue_high_water ?? 0,
-            egressBatches: response.result.egress_batches ?? 0,
-            blockingJobs: response.result.blocking_jobs ?? 0,
-            arenaRegions: response.result.arena_regions ?? 0,
-            arenaCapacityBytes: response.result.arena_capacity_bytes ?? 0,
-            arenaUsedBytes: response.result.arena_used_bytes ?? 0,
-            arenaHighWaterBytes: response.result.arena_high_water_bytes ?? 0,
-            arenaOffers: response.result.arena_offers ?? 0,
-            arenaBusy: response.result.arena_busy ?? 0,
-            arenaQuarantinedRegions: response.result.arena_quarantined_regions ?? 0,
-            arenaCopiedBytes: response.result.arena_copied_bytes ?? 0
-          }
-          const active =
-            response.result.transport_state === "playing" ||
-            response.result.transport_state === "recording"
-          if (!active || generation !== this.lastCallbackGeneration) {
-            this.lastCallbackGeneration = generation
-            this.callbackStagnantSince = Date.now()
-            return
-          }
-          if (this.callbackStagnantSince === 0) this.callbackStagnantSince = Date.now()
-          if (Date.now() - this.callbackStagnantSince >= HEARTBEAT_TIMEOUT_MS) {
-            this.handleExit(client, "audio callback made no progress for 2 seconds")
-          }
-        })
-        .catch((error: unknown) => {
-          // A benchmark can begin after this heartbeat was sent. Its deliberately
-          // saturating VST3 workload has a 60-second request deadline, so a
-          // two-second health-check timeout during that interval is not evidence
-          // that the helper has failed.
-          if (
-            this.audioBenchmarkInFlight ||
-            this.audioBenchmarkGeneration !== benchmarkGeneration
-          ) {
-            return
-          }
-          const message = error instanceof Error ? error.message : String(error)
-          this.handleExit(client, `heartbeat failed: ${message}`)
-        })
-        .finally(() => {
-          if (this.client === client) this.heartbeatInFlight = false
-        })
-    }, HEARTBEAT_INTERVAL_MS)
-    this.heartbeat.unref()
-    this.stableTimer = setTimeout(() => {
-      if (this.client === client) this.restartBudget = 1
-    }, 5_000)
-    this.stableTimer.unref()
+    this.health.start(client)
     if (restoreGraph && this.lastGraph)
       void this.restoreGraph().catch((error: unknown) => {
         const message = error instanceof Error ? error.message : String(error)
         this.handleExit(client, `could not restore graph: ${message}`)
       })
-  }
-
-  private async performHeartbeat(client: AudioHostIpcClient): Promise<PriorityResponse> {
-    return this.performPriority({ type: "heartbeat" }, client)
   }
 
   private async performPriority(
@@ -665,7 +535,7 @@ export class AudioHostService {
   }
 
   audioEngineSnapshot(): Promise<AudioRuntimeSnapshot> {
-    if (this.audioBenchmarkInFlight) {
+    if (this.health.isBenchmarkActive()) {
       const cached = this.audioTransport.cachedAudioEngineSnapshot()
       if (cached) return Promise.resolve(cached)
     }
@@ -711,264 +581,22 @@ export class AudioHostService {
   }
 
   async midiInputSnapshot(): Promise<MidiInputSnapshot> {
-    return this.midiInputResult(await this.request({ type: "midi-input-snapshot" }))
+    return this.midiInput.snapshot()
   }
 
   async configureMidiInput(
     preferences: MidiSyncPreferences,
     shortcuts: ShortcutPreferences = { keyboard: {}, midi: {} }
   ): Promise<MidiInputSnapshot> {
-    const controlPortIds = [
-      ...new Set(
-        Object.values(shortcuts.midi)
-          .map((binding) => binding?.portId)
-          .filter((portId): portId is string => Boolean(portId))
-      )
-    ]
-    const snapshot = this.midiInputResult(
-      await this.request({
-        type: "configure-midi-input",
-        preferences: {
-          enabled: preferences.enabled,
-          source_port_id: preferences.sourcePortId,
-          source_port_name: preferences.sourcePortName,
-          input_offsets_ms: preferences.inputOffsetsMs,
-          control_port_ids: controlPortIds,
-          capture_all_controls: this.midiControlLearning
-        }
-      })
-    )
-    this.midiPreferences = structuredClone(preferences)
-    this.midiControlPortIds = controlPortIds
-    this.midiPreferencesConfigured = true
-    return snapshot
+    return this.midiInput.configure(preferences, shortcuts)
   }
 
   async setMidiControlLearning(enabled: boolean): Promise<void> {
-    this.midiInputResult(
-      await this.request({
-        type: "configure-midi-input",
-        preferences: {
-          enabled: this.midiPreferences.enabled,
-          source_port_id: this.midiPreferences.sourcePortId,
-          source_port_name: this.midiPreferences.sourcePortName,
-          input_offsets_ms: this.midiPreferences.inputOffsetsMs,
-          control_port_ids: this.midiControlPortIds,
-          capture_all_controls: enabled
-        }
-      })
-    )
-    this.midiControlLearning = enabled
+    return this.midiInput.setControlLearning(enabled)
   }
 
-  private async restoreMidiInput(client: AudioHostIpcClient): Promise<void> {
-    if (!this.midiPreferencesConfigured) return
-    this.midiInputResult(
-      await this.requestImmediately(
-        {
-          type: "configure-midi-input",
-          preferences: {
-            enabled: this.midiPreferences.enabled,
-            source_port_id: this.midiPreferences.sourcePortId,
-            source_port_name: this.midiPreferences.sourcePortName,
-            input_offsets_ms: this.midiPreferences.inputOffsetsMs,
-            control_port_ids: this.midiControlPortIds,
-            capture_all_controls: this.midiControlLearning
-          }
-        },
-        client
-      )
-    )
-  }
-
-  private midiInputResult(response: ControlResponse): MidiInputSnapshot {
-    const value = response.result.midi_input
-    if (response.result.type !== "midi-input-snapshot" || !value) {
-      throw new Error(response.result.error?.userMessageKey ?? "errors.audioEngineUnavailable")
-    }
-    return {
-      ports: value.ports,
-      sync: {
-        state: value.sync.state as MidiInputSnapshot["sync"]["state"],
-        sourcePortId: value.sync.source_port_id,
-        sourcePortName: value.sync.source_port_name,
-        effectiveBpm: value.sync.effective_bpm,
-        jitterMicroseconds: value.sync.jitter_microseconds,
-        lastClockAgeMs: value.sync.last_clock_age_ms,
-        droppedEvents: value.sync.dropped_events,
-        ignoredSystemMessages: value.sync.ignored_system_messages,
-        error: value.sync.error
-      },
-      controlEvents: value.control_events.map((event) => ({
-        generation: event.generation,
-        timestampMicroseconds: event.timestamp_microseconds,
-        portId: event.port_id,
-        portName: event.port_name,
-        channel: event.channel,
-        type: event.type,
-        number: event.number,
-        value: event.value
-      })),
-      recordingPreview: value.recording_preview
-        ? {
-            positionTick: value.recording_preview.position_tick,
-            takes: value.recording_preview.takes.map((take) => ({
-              clipId: take.clip_id,
-              trackId: take.track_id,
-              notes: take.notes.map((note) => ({
-                id: note.id,
-                startTick: note.start_tick,
-                endTick: note.end_tick,
-                channel: note.channel,
-                key: note.key,
-                velocity: note.velocity,
-                active: note.active
-              }))
-            }))
-          }
-        : null,
-      capturedAt: value.captured_at
-    }
-  }
-
-  private runIpcBenchmarkInCurrentHost(): Promise<AudioIpcBenchmarkReport> {
-    return this.diagnostics.runIpcBenchmark()
-  }
-
-  async runAudioBenchmark(effect: PluginDescriptor): Promise<{
-    durationMs: number
-    overallRealtimeFactor: number
-    worstP99DeadlineUtilizationPercent: number
-    scenarios: AudioBenchmarkScenario[]
-    ipc: AudioIpcBenchmarkReport
-  }> {
-    if (this.benchmarkRunnerInFlight) {
-      throw new Error("audio benchmark is already running")
-    }
-    this.benchmarkRunnerInFlight = true
-    let helperFailure: string | null = null
-    const benchmarkHost = new AudioHostService(
-      this.executablePath,
-      `${this.crashMarkerPath}.benchmark`,
-      structuredClone(this.runtimePreferences),
-      undefined,
-      (message) => {
-        helperFailure = message
-      },
-      async () => {}
-    )
-    benchmarkHost.start(false)
-    try {
-      let dsp
-      try {
-        dsp = await benchmarkHost.runAudioBenchmarkInCurrentHost(effect)
-      } catch (error) {
-        throw benchmarkStageError("audio DSP benchmark", error, helperFailure)
-      }
-      let ipc: AudioIpcBenchmarkReport
-      try {
-        // Keep the CPU-bound DSP suite and IPC suite separate so neither distorts the other's
-        // latency distribution, while still using the same isolated one-shot helper.
-        ipc = await benchmarkHost.runIpcBenchmarkInCurrentHost()
-      } catch (error) {
-        throw benchmarkStageError("audio IPC benchmark", error, helperFailure)
-      }
-      return { ...dsp, ipc }
-    } finally {
-      try {
-        await benchmarkHost.stop()
-      } finally {
-        this.benchmarkRunnerInFlight = false
-      }
-    }
-  }
-
-  private async runAudioBenchmarkInCurrentHost(effect: PluginDescriptor): Promise<{
-    durationMs: number
-    overallRealtimeFactor: number
-    worstP99DeadlineUtilizationPercent: number
-    scenarios: AudioBenchmarkScenario[]
-  }> {
-    const pluginCount = 64
-    if (
-      effect.kind !== "effect" ||
-      effect.compatibility !== "compatible" ||
-      !effect.supportedAudioModes.includes("stereo")
-    ) {
-      throw new Error("audio benchmark requires a compatible stereo VST3 effect")
-    }
-    if (this.audioBenchmarkInFlight) {
-      throw new Error("audio benchmark is already running")
-    }
-    this.audioBenchmarkInFlight = true
-    this.audioBenchmarkGeneration += 1
-    const pluginInstanceIds = Array.from(
-      { length: pluginCount },
-      (_, index) => `__heron-audio-benchmark-gain-${index}`
-    )
-    try {
-      // Load one at a time. The VST3 actor largely serializes loads, and each IPC request's
-      // deadline starts when the client sends it — firing all 64 at once lets later requests
-      // time out while still queued behind earlier successful loads.
-      for (const [slotOrder, id] of pluginInstanceIds.entries()) {
-        await this.plugins.loadPlugin(
-          {
-            id,
-            channelId: "__heron-audio-benchmark",
-            role: "insert",
-            slotOrder,
-            classId: effect.classId,
-            descriptor: effect,
-            audioMode: "stereo",
-            enabled: true,
-            sidechainInputs: [],
-            componentState: new Uint8Array(),
-            controllerState: new Uint8Array()
-          },
-          48_000
-        )
-      }
-
-      const response = await this.request({
-        type: "run-audio-benchmark",
-        plugin_instance_ids: pluginInstanceIds
-      })
-      if (response.result.type !== "audio-benchmark" || !response.result.report) {
-        throw new Error("audio host returned an invalid audio benchmark response")
-      }
-      const report = response.result.report
-      return {
-        durationMs: report.duration_ms,
-        overallRealtimeFactor: report.overall_realtime_factor,
-        worstP99DeadlineUtilizationPercent: report.worst_p99_deadline_utilization_percent,
-        scenarios: report.scenarios.map((scenario) => ({
-          id: scenario.id,
-          label: scenario.label,
-          description: scenario.description,
-          sampleRate: scenario.sample_rate,
-          blockSize: scenario.block_size,
-          tracks: scenario.tracks,
-          buses: scenario.buses,
-          sends: scenario.sends,
-          plugins: scenario.plugins,
-          elapsedMs: scenario.elapsed_ms,
-          audioDurationMs: scenario.audio_duration_ms,
-          averageBlockMs: scenario.average_block_ms,
-          p95BlockMs: scenario.p95_block_ms,
-          p99BlockMs: scenario.p99_block_ms,
-          maxBlockMs: scenario.max_block_ms,
-          bufferBudgetMs: scenario.buffer_budget_ms,
-          p99DeadlineUtilizationPercent: scenario.p99_deadline_utilization_percent,
-          deadlineMisses: scenario.deadline_misses,
-          measuredBlocks: scenario.measured_blocks,
-          realtimeFactor: scenario.realtime_factor
-        }))
-      }
-    } finally {
-      // This helper exists only for one benchmark suite. Its process shutdown owns VST3 teardown,
-      // so no per-instance unload can block the project helper or leave an uncancellable worker.
-      this.audioBenchmarkInFlight = false
-    }
+  runAudioBenchmark(effect: PluginDescriptor): Promise<AudioHostBenchmarkReport> {
+    return this.benchmarkRunner.run(effect)
   }
 
   performanceDiagnostics(): AudioIpcPerformanceSnapshot | null {
@@ -1069,7 +697,7 @@ export class AudioHostService {
     this.audioTransport.captureTransport(client)
     this.client = null
     this.araCallbackSequences.clear()
-    this.heartbeatInFlight = false
+    this.health.stop()
     this.plugins.resetConnection()
     this.publishedGraph = null
     this.audioTransport.resetConnection()
@@ -1078,10 +706,6 @@ export class AudioHostService {
     } catch {
       // The helper may already have exited.
     }
-    if (this.heartbeat) clearInterval(this.heartbeat)
-    this.heartbeat = null
-    if (this.stableTimer) clearTimeout(this.stableTimer)
-    this.stableTimer = null
     if (this.stopping) return
     const suspect = readCrashMarker(
       this.crashMarkerPath,
@@ -1132,7 +756,7 @@ export class AudioHostService {
     this.audioTransport.runtimeResult(
       await this.requestImmediately({ type: "audio-engine-snapshot" }, client)
     )
-    await this.restoreMidiInput(client)
+    await this.midiInput.restore(client)
     const audioEngineRestored = audioEngineWasRunning && audioPreferences !== null
     if (audioEngineRestored) {
       const runtime = this.audioTransport.runtimeResult(
@@ -1258,7 +882,7 @@ export class AudioHostService {
     this.start(false)
     if (!this.client) throw new Error("Audio helper did not restart")
     await this.audioEngineSnapshot()
-    await this.restoreMidiInput(this.client)
+    await this.midiInput.restore(this.client)
     const audioEngineRestored = audioEngineWasRunning && audioPreferences !== null
     if (audioEngineRestored) await this.startAudioEngine(audioPreferences)
     await this.restoreGraph()
@@ -1297,11 +921,7 @@ export class AudioHostService {
   }
 
   private async shutdownCurrentClient(): Promise<void> {
-    if (this.heartbeat) clearInterval(this.heartbeat)
-    this.heartbeat = null
-    this.heartbeatInFlight = false
-    if (this.stableTimer) clearTimeout(this.stableTimer)
-    this.stableTimer = null
+    this.health.stop()
     this.plugins.resetConnection()
     const client = this.client
     if (!client) return

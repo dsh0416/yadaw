@@ -135,21 +135,68 @@ fn clip_storage_policy(file_size: u64) -> ClipStoragePolicy {
     }
 }
 
-include!("engine/spec.rs");
-include!("engine/metering.rs");
-include!("engine/clip_streaming.rs");
-include!("engine/transport_midi.rs");
-include!("engine/latency_measurement.rs");
-include!("engine/lifecycle_types.rs");
-include!("engine/clip_decode.rs");
-include!("engine/compiled_graph.rs");
-include!("engine/graph_build.rs");
-include!("engine/render_runtime.rs");
-include!("engine/device_streams.rs");
-include!("engine/resampling.rs");
-include!("engine/lifecycle.rs");
-include!("engine/publication.rs");
-include!("engine/recording.rs");
-include!("engine/benchmark.rs");
-include!("engine/bench_support.rs");
-include!("engine/tests.rs");
+#[cfg(feature = "bench-internals")]
+#[doc(hidden)]
+#[path = "engine/bench_support.rs"]
+pub mod bench_support;
+#[path = "engine/benchmark.rs"]
+mod benchmark;
+#[path = "engine/clip_decode.rs"]
+mod clip_decode;
+#[path = "engine/clip_streaming.rs"]
+mod clip_streaming;
+#[path = "engine/compiled_graph.rs"]
+mod compiled_graph;
+#[path = "engine/device_streams.rs"]
+mod device_streams;
+#[path = "engine/graph_build.rs"]
+mod graph_build;
+#[path = "engine/latency_measurement.rs"]
+mod latency_measurement;
+#[path = "engine/lifecycle.rs"]
+mod lifecycle;
+#[path = "engine/lifecycle_types.rs"]
+mod lifecycle_types;
+#[path = "engine/metering.rs"]
+mod metering;
+#[path = "engine/publication.rs"]
+mod publication;
+#[path = "engine/recording.rs"]
+mod recording;
+#[path = "engine/render_runtime.rs"]
+mod render_runtime;
+#[path = "engine/resampling.rs"]
+mod resampling;
+#[path = "engine/spec.rs"]
+mod spec;
+#[path = "engine/transport_midi.rs"]
+mod transport_midi;
+
+use clip_decode::*;
+use clip_streaming::*;
+use compiled_graph::*;
+use device_streams::*;
+use graph_build::*;
+use latency_measurement::*;
+use lifecycle_types::*;
+use metering::*;
+use resampling::*;
+use spec::*;
+use transport_midi::*;
+
+pub use benchmark::run_audio_benchmark;
+pub use clip_decode::decode_clip_audio;
+pub use metering::TransportClockHandle;
+pub use publication::{CompiledGraphBuild, GraphBuildInput, PublishOutcome, compile_graph_build};
+pub use spec::{
+    NativeAudioEngineConfig, NativeAudioRuntimeSnapshot, NativeLatencyPolicy, NativeMidiClip,
+    NativeMidiEvent, NativeMidiEventKind, NativeMidiNote, NativeMixerChannel,
+    NativeMixerChannelMeter, NativeMixerClip, NativeMixerGraph, NativeMixerParameterPreview,
+    NativeMixerSend, NativeMixerSnapshot, NativePluginAuxInputBus, NativePluginInstance,
+    NativeRoundTripLatencyMeasurementRequest, NativeRoundTripLatencyMeasurementSnapshot,
+    NativeTransportSnapshot,
+};
+
+#[cfg(test)]
+#[path = "engine/tests.rs"]
+mod tests;

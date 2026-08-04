@@ -1,3 +1,5 @@
+use super::*;
+
 pub struct NativeAudioEngineConfig {
     pub backend: String,
     pub input_device_id: String,
@@ -168,7 +170,7 @@ pub enum NativeLatencyPolicy {
     },
 }
 
-fn plan_native_low_latency(native: &NativeMixerGraph) -> LowLatencyPlan {
+pub(super) fn plan_native_low_latency(native: &NativeMixerGraph) -> LowLatencyPlan {
     let NativeLatencyPolicy::LowLatency {
         target_output_index,
         plugin_budget_samples,

@@ -1,4 +1,6 @@
-fn transport_state_code(state: &str) -> u32 {
+use super::*;
+
+pub(super) fn transport_state_code(state: &str) -> u32 {
     match state {
         "playing" => 1,
         "recording" => 2,
@@ -8,14 +10,14 @@ fn transport_state_code(state: &str) -> u32 {
     }
 }
 
-struct TelemetryPages {
-    active: Mutex<TelemetryWriter>,
-    pending: Mutex<Option<TelemetryWriter>>,
-    next_generation: AtomicU64,
-    persistent: bool,
+pub(super) struct TelemetryPages {
+    pub(super) active: Mutex<TelemetryWriter>,
+    pub(super) pending: Mutex<Option<TelemetryWriter>>,
+    pub(super) next_generation: AtomicU64,
+    pub(super) persistent: bool,
 }
 
-async fn publish_telemetry(
+pub(super) async fn publish_telemetry(
     pages: &TelemetryPages,
     outbound: &mpsc::Sender<OutboundMessage>,
     graph_revision: u64,
@@ -24,7 +26,8 @@ async fn publish_telemetry(
 ) {
     let (callback_generation, transport_state) = audio_engine.heartbeat_snapshot();
     let transport = audio_engine.transport_snapshot().ok();
-    let meter_values = audio_engine.mixer_snapshot()
+    let meter_values = audio_engine
+        .mixer_snapshot()
         .map(|snapshot| snapshot.meters)
         .unwrap_or_default();
     let meters = meter_values

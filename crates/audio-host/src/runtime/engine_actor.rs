@@ -1,9 +1,11 @@
-struct ActorRequest {
-    command: ActorCommand,
-    reply: oneshot::Sender<ControlResult>,
+use super::*;
+
+pub(super) struct ActorRequest {
+    pub(super) command: ActorCommand,
+    pub(super) reply: oneshot::Sender<ControlResult>,
 }
 
-async fn forward_to_ui(
+pub(super) async fn forward_to_ui(
     sender: &std_mpsc::SyncSender<ActorRequest>,
     proxy: &EventLoopProxy<UiEvent>,
     mut request: ActorRequest,
@@ -28,7 +30,7 @@ async fn forward_to_ui(
     }
 }
 
-enum ActorCommand {
+pub(super) enum ActorCommand {
     Control(ControlCommand),
     Parameter(heron_dsp_runtime::protocol::ParameterCommand),
     /// ARA document model mutation owned by the winit/VST3 controller thread.
@@ -62,12 +64,12 @@ enum ActorCommand {
 }
 
 #[derive(Default)]
-struct GraphParameterHandles {
-    channels: HashMap<u32, String>,
-    sends: HashMap<u32, String>,
+pub(super) struct GraphParameterHandles {
+    pub(super) channels: HashMap<u32, String>,
+    pub(super) sends: HashMap<u32, String>,
 }
 
-fn stable_runtime_handle(namespace: u8, id: &str) -> u32 {
+pub(super) fn stable_runtime_handle(namespace: u8, id: &str) -> u32 {
     let mut value = 2_166_136_261_u32 ^ u32::from(namespace);
     for byte in id.bytes() {
         value ^= u32::from(byte);
@@ -76,7 +78,10 @@ fn stable_runtime_handle(namespace: u8, id: &str) -> u32 {
     value.max(1)
 }
 
-fn refresh_graph_handles(handles: &Mutex<GraphParameterHandles>, graph: &LiveMixerGraph) {
+pub(super) fn refresh_graph_handles(
+    handles: &Mutex<GraphParameterHandles>,
+    graph: &LiveMixerGraph,
+) {
     if let Ok(mut handles) = handles.lock() {
         handles.channels = graph
             .channels
@@ -91,7 +96,7 @@ fn refresh_graph_handles(handles: &Mutex<GraphParameterHandles>, graph: &LiveMix
     }
 }
 
-fn mixer_parameter_command(
+pub(super) fn mixer_parameter_command(
     audio_engine: &engine::AudioEngine,
     handles: &Mutex<GraphParameterHandles>,
     command: heron_dsp_runtime::protocol::ParameterCommand,
@@ -159,19 +164,22 @@ fn mixer_parameter_command(
     }
 }
 
-async fn engine_actor(
+pub(super) async fn engine_actor(
     mut inbox: mpsc::Receiver<ActorRequest>,
     handles: Arc<Mutex<GraphParameterHandles>>,
     audio_engine: Arc<engine::AudioEngine>,
 ) {
     while let Some(message) = inbox.recv().await {
         let result = match message.command {
-            ActorCommand::Control(command) => {
-                engine_command(&audio_engine, command, None).unwrap_or_else(|| control_error! {
-                    message: "unsupported engine command".into(),
-                })
+            ActorCommand::Control(command) => engine_command(&audio_engine, command, None)
+                .unwrap_or_else(|| {
+                    control_error! {
+                        message: "unsupported engine command".into(),
+                    }
+                }),
+            ActorCommand::Parameter(command) => {
+                mixer_parameter_command(&audio_engine, &handles, command)
             }
-            ActorCommand::Parameter(command) => mixer_parameter_command(&audio_engine, &handles, command),
             ActorCommand::SyncAraGraph { .. }
             | ActorCommand::PreparePluginGraph { .. }
             | ActorCommand::ActivatePluginGraph { .. }
@@ -180,16 +188,17 @@ async fn engine_actor(
             | ActorCommand::AbortPluginGraph { .. } => control_error! {
                 message: "engine actor does not own VST3 UI state".into(),
             },
-            ActorCommand::PublishBuiltGraph { built } => match audio_engine.publish_mixer_runtime(built)
-            {
-                Ok(engine::PublishOutcome::Published) => ControlResult::Accepted,
-                Ok(engine::PublishOutcome::Superseded) => control_error! {
-                    message: "graph build superseded".into(),
-                },
-                Err(error) => control_error! {
-                    message: error.to_string(),
-                },
-            },
+            ActorCommand::PublishBuiltGraph { built } => {
+                match audio_engine.publish_mixer_runtime(built) {
+                    Ok(engine::PublishOutcome::Published) => ControlResult::Accepted,
+                    Ok(engine::PublishOutcome::Superseded) => control_error! {
+                        message: "graph build superseded".into(),
+                    },
+                    Err(error) => control_error! {
+                        message: error.to_string(),
+                    },
+                }
+            }
             ActorCommand::BuildGraph { .. } => control_error! {
                 message: "engine actor does not own graph construction".into(),
             },
@@ -198,7 +207,7 @@ async fn engine_actor(
     }
 }
 
-async fn publish_built_graph(
+pub(super) async fn publish_built_graph(
     engine_sender: &mpsc::Sender<ActorRequest>,
     built: engine::CompiledGraphBuild,
 ) -> ControlResult {
@@ -235,16 +244,14 @@ async fn build_graph_on_worker(
     };
     match publish_built_graph(engine_sender, built).await {
         ControlResult::Accepted => ControlResult::GraphAccepted { revision },
-        ControlResult::Error { .. }
-            if audio_engine.published_graph_generation() >= revision =>
-        {
+        ControlResult::Error { .. } if audio_engine.published_graph_generation() >= revision => {
             ControlResult::GraphAccepted { revision }
         }
         other => other,
     }
 }
 
-async fn background_io_actor(
+pub(super) async fn background_io_actor(
     mut inbox: mpsc::Receiver<ActorRequest>,
     engine_sender: mpsc::Sender<ActorRequest>,
     supervisor: Arc<WorkerSupervisor>,
@@ -255,11 +262,12 @@ async fn background_io_actor(
             ActorCommand::BuildGraph { graph } => {
                 build_graph_on_worker(&supervisor, &engine_sender, graph, &audio_engine).await
             }
-            ActorCommand::Control(command) => {
-                engine_command(&audio_engine, command, None).unwrap_or_else(|| control_error! {
-                    message: "unsupported background I/O command".into(),
-                })
-            }
+            ActorCommand::Control(command) => engine_command(&audio_engine, command, None)
+                .unwrap_or_else(|| {
+                    control_error! {
+                        message: "unsupported background I/O command".into(),
+                    }
+                }),
             ActorCommand::Parameter(_) => control_error! {
                 message: "background I/O actor does not own parameters".into(),
             },
@@ -280,7 +288,7 @@ async fn background_io_actor(
     supervisor.shutdown();
 }
 
-async fn dispatch_actor_command(
+pub(super) async fn dispatch_actor_command(
     sender: &mpsc::Sender<ActorRequest>,
     command: ActorCommand,
 ) -> ControlResult {
@@ -290,19 +298,21 @@ async fn dispatch_actor_command(
             message: "audio-host actor stopped".into(),
         };
     }
-    response.await.unwrap_or_else(|_| control_error! {
-        message: "audio-host actor dropped its response".into(),
+    response.await.unwrap_or_else(|_| {
+        control_error! {
+            message: "audio-host actor dropped its response".into(),
+        }
     })
 }
 
-async fn dispatch_build_graph(
+pub(super) async fn dispatch_build_graph(
     background_sender: &mpsc::Sender<ActorRequest>,
     graph: engine::NativeMixerGraph,
 ) -> ControlResult {
     dispatch_actor_command(background_sender, ActorCommand::BuildGraph { graph }).await
 }
 
-fn queue_background_graph_build(
+pub(super) fn queue_background_graph_build(
     background_sender: &mpsc::Sender<ActorRequest>,
     graph: engine::NativeMixerGraph,
 ) {

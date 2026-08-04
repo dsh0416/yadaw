@@ -1,24 +1,26 @@
-struct PreparedGraphCandidate {
-    operation_id: String,
-    project_graph: ResourceRef,
-    base_revision: u64,
-    graph_revision: u64,
-    graph: LiveMixerGraph,
-    built: engine::CompiledGraphBuild,
+use super::*;
+
+pub(super) struct PreparedGraphCandidate {
+    pub(super) operation_id: String,
+    pub(super) project_graph: ResourceRef,
+    pub(super) base_revision: u64,
+    pub(super) graph_revision: u64,
+    pub(super) graph: LiveMixerGraph,
+    pub(super) built: engine::CompiledGraphBuild,
 }
 
-struct GraphTransactionState {
-    helper_epoch: String,
-    engine: Option<ResourceRef>,
-    committed_project_graph: Option<ResourceRef>,
-    committed_revision: u64,
-    candidate: Option<PreparedGraphCandidate>,
-    last_operation: Option<GraphOperationSnapshot>,
-    degraded: bool,
+pub(super) struct GraphTransactionState {
+    pub(super) helper_epoch: String,
+    pub(super) engine: Option<ResourceRef>,
+    pub(super) committed_project_graph: Option<ResourceRef>,
+    pub(super) committed_revision: u64,
+    pub(super) candidate: Option<PreparedGraphCandidate>,
+    pub(super) last_operation: Option<GraphOperationSnapshot>,
+    pub(super) degraded: bool,
 }
 
 impl GraphTransactionState {
-    fn new(session_epoch: u64) -> Self {
+    pub(super) fn new(session_epoch: u64) -> Self {
         Self {
             helper_epoch: session_epoch.to_string(),
             engine: None,
@@ -31,15 +33,18 @@ impl GraphTransactionState {
     }
 
     #[cfg(test)]
-    fn snapshot(&self) -> GraphDeploymentSnapshot {
+    pub(super) fn snapshot(&self) -> GraphDeploymentSnapshot {
         self.snapshot_at(self.committed_revision)
     }
 
-    fn snapshot_with_engine(&self, audio_engine: &engine::AudioEngine) -> GraphDeploymentSnapshot {
+    pub(super) fn snapshot_with_engine(
+        &self,
+        audio_engine: &engine::AudioEngine,
+    ) -> GraphDeploymentSnapshot {
         self.snapshot_at(audio_engine.published_graph_generation())
     }
 
-    fn snapshot_at(&self, observed_revision: u64) -> GraphDeploymentSnapshot {
+    pub(super) fn snapshot_at(&self, observed_revision: u64) -> GraphDeploymentSnapshot {
         let status = if self.degraded {
             GraphDeploymentStatus::Degraded
         } else if self.candidate.is_some() {
@@ -74,22 +79,22 @@ impl GraphTransactionState {
         }
     }
 
-    fn observe_engine(&mut self, engine: ResourceRef) {
+    pub(super) fn observe_engine(&mut self, engine: ResourceRef) {
         self.engine = Some(engine);
     }
 
-    fn observe_legacy_commit(&mut self, revision: u64) {
+    pub(super) fn observe_legacy_commit(&mut self, revision: u64) {
         self.committed_project_graph = None;
         self.committed_revision = revision;
         self.last_operation = None;
         self.degraded = false;
     }
 
-    fn prepare(&mut self, candidate: PreparedGraphCandidate) {
+    pub(super) fn prepare(&mut self, candidate: PreparedGraphCandidate) {
         self.candidate = Some(candidate);
     }
 
-    fn take_candidate(&mut self, operation_id: &str) -> Option<PreparedGraphCandidate> {
+    pub(super) fn take_candidate(&mut self, operation_id: &str) -> Option<PreparedGraphCandidate> {
         if self
             .candidate
             .as_ref()
@@ -101,11 +106,11 @@ impl GraphTransactionState {
         }
     }
 
-    fn restore_candidate(&mut self, candidate: PreparedGraphCandidate) {
+    pub(super) fn restore_candidate(&mut self, candidate: PreparedGraphCandidate) {
         self.candidate = Some(candidate);
     }
 
-    fn abort(&mut self, operation_id: &str) -> bool {
+    pub(super) fn abort(&mut self, operation_id: &str) -> bool {
         let candidate = self.take_candidate(operation_id);
         if let Some(candidate) = candidate {
             self.last_operation = Some(GraphOperationSnapshot {
@@ -119,7 +124,7 @@ impl GraphTransactionState {
         }
     }
 
-    fn commit(
+    pub(super) fn commit(
         &mut self,
         operation_id: String,
         project_graph: ResourceRef,
@@ -135,7 +140,7 @@ impl GraphTransactionState {
         self.degraded = false;
     }
 
-    fn finish_not_committed(&mut self, operation_id: String, graph_revision: u64) {
+    pub(super) fn finish_not_committed(&mut self, operation_id: String, graph_revision: u64) {
         self.last_operation = Some(GraphOperationSnapshot {
             operation_id,
             outcome: GraphOperationOutcome::NotCommitted,
@@ -145,12 +150,12 @@ impl GraphTransactionState {
 }
 
 #[derive(Debug)]
-struct ValidatedGraphMeta {
-    engine: ResourceRef,
-    operation_id: Option<String>,
+pub(super) struct ValidatedGraphMeta {
+    pub(super) engine: ResourceRef,
+    pub(super) operation_id: Option<String>,
 }
 
-fn graph_correlation(meta: &RpcRequestMeta, suffix: &str) -> String {
+pub(super) fn graph_correlation(meta: &RpcRequestMeta, suffix: &str) -> String {
     format!("graph-{}-{suffix}", meta.request_id)
 }
 
@@ -170,7 +175,7 @@ fn graph_protocol_error(meta: &RpcRequestMeta) -> RpcError {
     }
 }
 
-fn graph_validation_error(meta: &RpcRequestMeta, field: &str) -> RpcError {
+pub(super) fn graph_validation_error(meta: &RpcRequestMeta, field: &str) -> RpcError {
     RpcError {
         code: RpcErrorCode::ValidationFailed,
         category: RpcErrorCategory::Validation,
@@ -185,7 +190,7 @@ fn graph_validation_error(meta: &RpcRequestMeta, field: &str) -> RpcError {
     }
 }
 
-fn graph_stale_error(
+pub(super) fn graph_stale_error(
     meta: &RpcRequestMeta,
     resource: ResourceRef,
     reason: heron_dsp_runtime::protocol::RpcStaleReason,
@@ -202,7 +207,7 @@ fn graph_stale_error(
     }
 }
 
-fn graph_conflict_error(meta: &RpcRequestMeta, expected: u64, actual: u64) -> RpcError {
+pub(super) fn graph_conflict_error(meta: &RpcRequestMeta, expected: u64, actual: u64) -> RpcError {
     RpcError {
         code: RpcErrorCode::RevisionConflict,
         category: RpcErrorCategory::Conflict,
@@ -218,7 +223,10 @@ fn graph_conflict_error(meta: &RpcRequestMeta, expected: u64, actual: u64) -> Rp
     }
 }
 
-fn graph_busy_error(meta: &RpcRequestMeta, active_operation_id: Option<String>) -> RpcError {
+pub(super) fn graph_busy_error(
+    meta: &RpcRequestMeta,
+    active_operation_id: Option<String>,
+) -> RpcError {
     RpcError {
         code: RpcErrorCode::ResourceBusy,
         category: RpcErrorCategory::Busy,
@@ -233,7 +241,7 @@ fn graph_busy_error(meta: &RpcRequestMeta, active_operation_id: Option<String>) 
     }
 }
 
-fn graph_dependency_error(meta: &RpcRequestMeta, dependency: ResourceRef) -> RpcError {
+pub(super) fn graph_dependency_error(meta: &RpcRequestMeta, dependency: ResourceRef) -> RpcError {
     RpcError {
         code: RpcErrorCode::DependencyFailed,
         category: RpcErrorCategory::DependencyFailed,
@@ -246,7 +254,7 @@ fn graph_dependency_error(meta: &RpcRequestMeta, dependency: ResourceRef) -> Rpc
     }
 }
 
-fn graph_timeout_error(meta: &RpcRequestMeta) -> RpcError {
+pub(super) fn graph_timeout_error(meta: &RpcRequestMeta) -> RpcError {
     RpcError {
         code: RpcErrorCode::OperationTimeoutUnknown,
         category: RpcErrorCategory::TimeoutUnknown,
@@ -259,7 +267,7 @@ fn graph_timeout_error(meta: &RpcRequestMeta) -> RpcError {
     }
 }
 
-fn validate_graph_meta(
+pub(super) fn validate_graph_meta(
     meta: &RpcRequestMeta,
     helper_epoch: &str,
     requires_mutation: bool,
@@ -293,7 +301,7 @@ fn validate_graph_meta(
     })
 }
 
-fn validate_graph_request(
+pub(super) fn validate_graph_request(
     meta: &RpcRequestMeta,
     request: &GraphTransactionRequest,
     helper_epoch: &str,
@@ -322,7 +330,7 @@ fn validate_graph_request(
     Ok(validated)
 }
 
-fn graph_success(
+pub(super) fn graph_success(
     meta: &RpcRequestMeta,
     resource_revision: u64,
     value: GraphTransactionValue,
@@ -340,7 +348,10 @@ fn graph_success(
     }
 }
 
-fn graph_failure(meta: &RpcRequestMeta, error: impl Into<Box<RpcError>>) -> ControlResult {
+pub(super) fn graph_failure(
+    meta: &RpcRequestMeta,
+    error: impl Into<Box<RpcError>>,
+) -> ControlResult {
     ControlResult::GraphTransaction {
         result: Box::new(RpcResult::Failure(RpcFailure::new(
             meta.request_id.clone(),
@@ -352,7 +363,7 @@ fn graph_failure(meta: &RpcRequestMeta, error: impl Into<Box<RpcError>>) -> Cont
     }
 }
 
-async fn wait_for_graph_publication(
+pub(super) async fn wait_for_graph_publication(
     audio_engine: &engine::AudioEngine,
     revision: u64,
 ) -> bool {

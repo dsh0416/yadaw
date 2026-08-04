@@ -1,15 +1,17 @@
-struct TransportShared {
-    state: Arc<AtomicU32>,
-    position_frames: Arc<AtomicU64>,
-    position_ticks: Arc<AtomicU64>,
-    sample_rate: AtomicU32,
-    effective_bpm_bits: AtomicU64,
-    clock_source: AtomicU32,
-    waiting_for: AtomicU32,
-    loop_enabled: AtomicBool,
-    loop_has_range: AtomicBool,
-    loop_start_tick: AtomicU64,
-    loop_end_tick: AtomicU64,
+use super::*;
+
+pub(super) struct TransportShared {
+    pub(super) state: Arc<AtomicU32>,
+    pub(super) position_frames: Arc<AtomicU64>,
+    pub(super) position_ticks: Arc<AtomicU64>,
+    pub(super) sample_rate: AtomicU32,
+    pub(super) effective_bpm_bits: AtomicU64,
+    pub(super) clock_source: AtomicU32,
+    pub(super) waiting_for: AtomicU32,
+    pub(super) loop_enabled: AtomicBool,
+    pub(super) loop_has_range: AtomicBool,
+    pub(super) loop_start_tick: AtomicU64,
+    pub(super) loop_end_tick: AtomicU64,
 }
 
 /// Read-only transport atomics shared with the MIDI recording actor.
@@ -22,7 +24,7 @@ pub struct TransportClockHandle {
 }
 
 impl TransportShared {
-    fn snapshot(&self) -> NativeTransportSnapshot {
+    pub(super) fn snapshot(&self) -> NativeTransportSnapshot {
         NativeTransportSnapshot {
             state: match self.state.load(Ordering::Relaxed) {
                 TRANSPORT_PLAYING => "playing",
@@ -58,28 +60,32 @@ impl TransportShared {
             },
             loop_enabled: self.loop_enabled.load(Ordering::Acquire),
             loop_start_tick: self.loop_has_range.load(Ordering::Acquire).then(|| {
-                self.loop_start_tick.load(Ordering::Relaxed).min(i64::MAX as u64) as i64
+                self.loop_start_tick
+                    .load(Ordering::Relaxed)
+                    .min(i64::MAX as u64) as i64
             }),
             loop_end_tick: self.loop_has_range.load(Ordering::Acquire).then(|| {
-                self.loop_end_tick.load(Ordering::Relaxed).min(i64::MAX as u64) as i64
+                self.loop_end_tick
+                    .load(Ordering::Relaxed)
+                    .min(i64::MAX as u64) as i64
             }),
         }
     }
 }
 
-struct MeterAtomics {
-    id: String,
-    pre_left: AtomicU32,
-    pre_right: AtomicU32,
-    post_left: AtomicU32,
-    post_right: AtomicU32,
-    held_left: AtomicU32,
-    held_right: AtomicU32,
-    clipped: AtomicBool,
+pub(super) struct MeterAtomics {
+    pub(super) id: String,
+    pub(super) pre_left: AtomicU32,
+    pub(super) pre_right: AtomicU32,
+    pub(super) post_left: AtomicU32,
+    pub(super) post_right: AtomicU32,
+    pub(super) held_left: AtomicU32,
+    pub(super) held_right: AtomicU32,
+    pub(super) clipped: AtomicBool,
 }
 
 impl MeterAtomics {
-    fn new(id: String) -> Self {
+    pub(super) fn new(id: String) -> Self {
         Self {
             id,
             pre_left: AtomicU32::new(0.0_f32.to_bits()),
@@ -92,7 +98,7 @@ impl MeterAtomics {
         }
     }
 
-    fn store(&self, peak: ChannelPeak, held: StereoFrame) {
+    pub(super) fn store(&self, peak: ChannelPeak, held: StereoFrame) {
         self.pre_left
             .store(peak.pre[0].to_bits(), Ordering::Relaxed);
         self.pre_right
@@ -108,7 +114,7 @@ impl MeterAtomics {
         }
     }
 
-    fn snapshot(&self) -> NativeMixerChannelMeter {
+    pub(super) fn snapshot(&self) -> NativeMixerChannelMeter {
         NativeMixerChannelMeter {
             channel_id: self.id.clone(),
             pre_left: f64::from(f32::from_bits(self.pre_left.load(Ordering::Relaxed))),
@@ -121,50 +127,50 @@ impl MeterAtomics {
         }
     }
 
-    fn clear_clip(&self) {
+    pub(super) fn clear_clip(&self) {
         self.clipped.store(false, Ordering::Relaxed);
         self.held_left.store(0.0_f32.to_bits(), Ordering::Relaxed);
         self.held_right.store(0.0_f32.to_bits(), Ordering::Relaxed);
     }
 }
 
-struct MeterBank {
-    channels: Vec<MeterAtomics>,
+pub(super) struct MeterBank {
+    pub(super) channels: Vec<MeterAtomics>,
 }
 
-struct InputPeakBank {
-    peaks: [AtomicU32; MAX_INPUT_CHANNELS],
+pub(super) struct InputPeakBank {
+    pub(super) peaks: [AtomicU32; MAX_INPUT_CHANNELS],
 }
 
 impl InputPeakBank {
-    fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self {
             peaks: std::array::from_fn(|_| AtomicU32::new(0)),
         }
     }
 
-    fn observe(&self, channels: &[f32]) {
+    pub(super) fn observe(&self, channels: &[f32]) {
         for (peak, sample) in self.peaks.iter().zip(channels) {
             peak.fetch_max(sample.abs().to_bits(), Ordering::Relaxed);
         }
     }
 
-    fn take_all(&self, target: &mut [f32; MAX_INPUT_CHANNELS]) {
+    pub(super) fn take_all(&self, target: &mut [f32; MAX_INPUT_CHANNELS]) {
         for (target, peak) in target.iter_mut().zip(&self.peaks) {
             *target = f32::from_bits(peak.swap(0, Ordering::Relaxed));
         }
     }
 }
 
-struct AtomicSampleWindow {
-    samples: Box<[AtomicU32]>,
-    start_frame: AtomicU64,
-    frame_count: AtomicUsize,
-    generation: AtomicU64,
+pub(super) struct AtomicSampleWindow {
+    pub(super) samples: Box<[AtomicU32]>,
+    pub(super) start_frame: AtomicU64,
+    pub(super) frame_count: AtomicUsize,
+    pub(super) generation: AtomicU64,
 }
 
 impl AtomicSampleWindow {
-    fn new(capacity_frames: usize) -> Self {
+    pub(super) fn new(capacity_frames: usize) -> Self {
         Self {
             samples: (0..capacity_frames.saturating_mul(2))
                 .map(|_| AtomicU32::new(0))
@@ -175,12 +181,12 @@ impl AtomicSampleWindow {
         }
     }
 
-    fn store(&self, frame: usize, sample: StereoFrame) {
+    pub(super) fn store(&self, frame: usize, sample: StereoFrame) {
         self.samples[frame * 2].store(sample[0].to_bits(), Ordering::Relaxed);
         self.samples[frame * 2 + 1].store(sample[1].to_bits(), Ordering::Relaxed);
     }
 
-    fn load(&self, frame: usize) -> StereoFrame {
+    pub(super) fn load(&self, frame: usize) -> StereoFrame {
         [
             f32::from_bits(self.samples[frame * 2].load(Ordering::Relaxed)),
             f32::from_bits(self.samples[frame * 2 + 1].load(Ordering::Relaxed)),
@@ -188,17 +194,17 @@ impl AtomicSampleWindow {
     }
 }
 
-struct StreamControl {
-    windows: [AtomicSampleWindow; 2],
-    active_window: AtomicUsize,
-    reader_window: AtomicUsize,
-    requested_frame: AtomicU64,
-    generation: AtomicU64,
-    shutdown: AtomicBool,
+pub(super) struct StreamControl {
+    pub(super) windows: [AtomicSampleWindow; 2],
+    pub(super) active_window: AtomicUsize,
+    pub(super) reader_window: AtomicUsize,
+    pub(super) requested_frame: AtomicU64,
+    pub(super) generation: AtomicU64,
+    pub(super) shutdown: AtomicBool,
 }
 
 impl StreamControl {
-    fn new(capacity_frames: usize, initial_frame: usize) -> Self {
+    pub(super) fn new(capacity_frames: usize, initial_frame: usize) -> Self {
         Self {
             windows: [
                 AtomicSampleWindow::new(capacity_frames),

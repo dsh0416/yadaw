@@ -1,5 +1,7 @@
 use std::hint::black_box;
 
+use super::*;
+
 use heron_dsp_runtime::protocol::{AudioBenchmarkReport, AudioBenchmarkScenario};
 
 const BENCHMARK_SAMPLE_RATE: u32 = 48_000;
@@ -8,14 +10,14 @@ const MAX_VIRTUAL_FRAMES: usize = BENCHMARK_SAMPLE_RATE as usize * 120;
 
 #[derive(Clone, Copy)]
 struct AudioBenchmarkSpec {
-    id: &'static str,
-    label: &'static str,
-    description: &'static str,
-    block_frames: usize,
-    tracks: usize,
-    buses: usize,
-    sends: usize,
-    plugins: usize,
+    pub(super) id: &'static str,
+    pub(super) label: &'static str,
+    pub(super) description: &'static str,
+    pub(super) block_frames: usize,
+    pub(super) tracks: usize,
+    pub(super) buses: usize,
+    pub(super) sends: usize,
+    pub(super) plugins: usize,
 }
 
 const AUDIO_BENCHMARK_SPECS: [AudioBenchmarkSpec; 3] = [

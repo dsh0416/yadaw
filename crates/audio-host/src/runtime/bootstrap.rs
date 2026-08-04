@@ -1,4 +1,6 @@
-fn run_ipc() -> Result<(), Box<dyn std::error::Error>> {
+use super::*;
+
+pub(super) fn run_ipc() -> Result<(), Box<dyn std::error::Error>> {
     const UI_MAILBOX_CAPACITY: usize = 64;
     let mut arguments = env::args_os().skip(1);
     let mut ipc_token = None;

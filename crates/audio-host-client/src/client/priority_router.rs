@@ -1,4 +1,23 @@
-fn spawn_priority_router(
+use std::{
+    collections::HashMap,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, AtomicU64, Ordering},
+    },
+    thread::{self, JoinHandle},
+};
+
+use heron_dsp_runtime::protocol::PriorityResponse;
+use heron_ipc_transport::{WirePacket, decode_body};
+use ipc_channel::{TryRecvError, ipc::IpcReceiver};
+use napi::Result;
+
+use super::{
+    lease_release::{expire_pending, reject_all, resolve_pending, router_timeout},
+    state::{Pending, failure},
+};
+
+pub(super) fn spawn_priority_router(
     receiver: IpcReceiver<WirePacket>,
     pending: Arc<Mutex<HashMap<u64, Pending>>>,
     closing: Arc<AtomicBool>,

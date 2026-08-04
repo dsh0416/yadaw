@@ -1,3 +1,5 @@
+use super::*;
+
 fn audio_runtime(value: engine::NativeAudioRuntimeSnapshot) -> AudioRuntime {
     AudioRuntime {
         state: value.state,
@@ -32,7 +34,7 @@ fn round_trip_latency_measurement(
     }
 }
 
-fn live_graph(
+pub(super) fn live_graph(
     generation: u64,
     value: &LiveMixerGraph,
     processors: Option<&HashMap<String, vst3::Vst3ProcessorHandle>>,
@@ -179,7 +181,8 @@ fn live_graph(
                     }));
                 }
             }
-            let heron_dsp_runtime::protocol::MidiEventBatch::Inline { events } = &clip.events else {
+            let heron_dsp_runtime::protocol::MidiEventBatch::Inline { events } = &clip.events
+            else {
                 return Err("MIDI event batch must be materialized before graph build".to_owned());
             };
             let mut native_events = Vec::with_capacity(events.len());
@@ -308,7 +311,7 @@ fn recording_waveform(value: NativeWaveformSnapshot) -> RecordingWaveform {
     }
 }
 
-fn engine_command(
+pub(super) fn engine_command(
     audio_engine: &engine::AudioEngine,
     command: ControlCommand,
     processors: Option<&HashMap<String, vst3::Vst3ProcessorHandle>>,
@@ -411,7 +414,9 @@ fn engine_command(
         } => {
             let inline_arena = ArenaReceiver::new(1);
             match live_graph(revision, &graph, processors, &inline_arena).and_then(|graph| {
-                audio_engine.load_mixer_graph(graph).map_err(|error| error.to_string())
+                audio_engine
+                    .load_mixer_graph(graph)
+                    .map_err(|error| error.to_string())
             }) {
                 Ok(()) => ControlResult::GraphAccepted { revision },
                 Err(error) => control_error! { message: error },
@@ -519,16 +524,14 @@ fn engine_command(
                 message: error.to_string(),
             },
         },
-        ControlCommand::MidiInputSnapshot => {
-            match MIDI_INPUT.get() {
-                Some(actor) => ControlResult::MidiInputSnapshot {
-                    midi_input: actor.snapshot(),
-                },
-                None => control_error! {
-                    message: "MIDI input actor is unavailable".to_owned(),
-                },
-            }
-        }
+        ControlCommand::MidiInputSnapshot => match MIDI_INPUT.get() {
+            Some(actor) => ControlResult::MidiInputSnapshot {
+                midi_input: actor.snapshot(),
+            },
+            None => control_error! {
+                message: "MIDI input actor is unavailable".to_owned(),
+            },
+        },
         ControlCommand::ConfigureMidiInput { preferences } => {
             match MIDI_INPUT
                 .get()
@@ -564,7 +567,9 @@ fn engine_command(
         },
         ControlCommand::StartMidiRecording { config } => {
             match (|| {
-                let clock = audio_engine.transport_clock_handle().map_err(|error| error.to_string())?;
+                let clock = audio_engine
+                    .transport_clock_handle()
+                    .map_err(|error| error.to_string())?;
                 let actor = MIDI_INPUT
                     .get()
                     .ok_or_else(|| "MIDI input actor is unavailable".to_owned())?;
@@ -601,7 +606,7 @@ fn engine_command(
     Some(result)
 }
 
-fn run_legacy() -> Result<(), Box<dyn std::error::Error>> {
+pub(super) fn run_legacy() -> Result<(), Box<dyn std::error::Error>> {
     let audio_engine = engine::AudioEngine::new();
     let mut arguments = env::args_os().skip(1);
     let mut crash_marker_path: Option<PathBuf> = None;

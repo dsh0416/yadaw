@@ -1,0 +1,147 @@
+[
+  {
+    "name": "ping",
+    "producer": "typescript",
+    "wireType": "control-request",
+    "base64": "gqpyZXF1ZXN0X2lkKqdjb21tYW5kgaR0eXBlpHBpbmc=",
+    "normalized": {
+      "request_id": 42,
+      "command": { "type": "ping" }
+    }
+  },
+  {
+    "name": "typed-rpc-error",
+    "producer": "typescript",
+    "wireType": "control-response",
+    "base64": "gqpyZXF1ZXN0X2lkK6ZyZXN1bHSCpHR5cGWlZXJyb3KlZXJyb3KIpGNvZGWxcmV2aXNpb24tY29uZmxpY3SoY2F0ZWdvcnmoY29uZmxpY3Snb3V0Y29tZa1ub3QtY29tbWl0dGVkpXJldHJ5r2FmdGVyLXJlY29uY2lsZa1jb3JyZWxhdGlvbklks2ZpeHR1cmUtY29ycmVsYXRpb26udXNlck1lc3NhZ2VLZXm3ZXJyb3JzLnJldmlzaW9uQ29uZmxpY3SocmVzb3VyY2WEpGtpbmSsYXVkaW8tZW5naW5lomlkqGVuZ2luZS0xpWVwb2NorGhlbHBlci1lcG9jaKpnZW5lcmF0aW9uAqdkZXRhaWxzg6R0eXBlsXJldmlzaW9uLWNvbmZsaWN0sGV4cGVjdGVkUmV2aXNpb24HrmFjdHVhbFJldmlzaW9uCA==",
+    "normalized": {
+      "request_id": 43,
+      "result": {
+        "type": "error",
+        "error": {
+          "code": "revision-conflict",
+          "category": "conflict",
+          "outcome": "not-committed",
+          "retry": "after-reconcile",
+          "correlationId": "fixture-correlation",
+          "userMessageKey": "errors.revisionConflict",
+          "resource": {
+            "kind": "audio-engine",
+            "id": "engine-1",
+            "epoch": "helper-epoch",
+            "generation": 2
+          },
+          "details": {
+            "type": "revision-conflict",
+            "expectedRevision": 7,
+            "actualRevision": 8
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "plugin-event",
+    "producer": "typescript",
+    "wireType": "host-event",
+    "base64": "hKR0eXBlrnBsdWdpbi1ydW50aW1lq2luc3RhbmNlX2lkqHBsdWdpbi0xpGtpbmSvbGF0ZW5jeS1jaGFuZ2VkpXZhbHVlozEyOA==",
+    "normalized": {
+      "type": "plugin-runtime",
+      "instance_id": "plugin-1",
+      "kind": "latency-changed",
+      "value": "128"
+    }
+  },
+  {
+    "name": "heartbeat",
+    "producer": "rust",
+    "wireType": "priority-response",
+    "base64": "gqpyZXF1ZXN0X2lkLKZyZXN1bHTeABOkdHlwZaloZWFydGJlYXSuaXBjX2dlbmVyYXRpb24LsHRva2lvX2dlbmVyYXRpb24MsHdpbml0X2dlbmVyYXRpb24Ns2NhbGxiYWNrX2dlbmVyYXRpb24Or3RyYW5zcG9ydF9zdGF0ZadwbGF5aW5nrWVncmVzc19hY3RpdmUBsmVncmVzc19xdWV1ZV9kZXB0aAK3ZWdyZXNzX3F1ZXVlX2hpZ2hfd2F0ZXIDrmVncmVzc19iYXRjaGVzBK1ibG9ja2luZ19qb2JzBa1hcmVuYV9yZWdpb25zBrRhcmVuYV9jYXBhY2l0eV9ieXRlcwewYXJlbmFfdXNlZF9ieXRlcwi2YXJlbmFfaGlnaF93YXRlcl9ieXRlcwmsYXJlbmFfb2ZmZXJzCqphcmVuYV9idXN5C7lhcmVuYV9xdWFyYW50aW5lZF9yZWdpb25zDLJhcmVuYV9jb3BpZWRfYnl0ZXMN",
+    "normalized": {
+      "request_id": 44,
+      "result": {
+        "type": "heartbeat",
+        "ipc_generation": 11,
+        "tokio_generation": 12,
+        "winit_generation": 13,
+        "callback_generation": 14,
+        "transport_state": "playing",
+        "egress_active": 1,
+        "egress_queue_depth": 2,
+        "egress_queue_high_water": 3,
+        "egress_batches": 4,
+        "blocking_jobs": 5,
+        "arena_regions": 6,
+        "arena_capacity_bytes": 7,
+        "arena_used_bytes": 8,
+        "arena_high_water_bytes": 9,
+        "arena_offers": 10,
+        "arena_busy": 11,
+        "arena_quarantined_regions": 12,
+        "arena_copied_bytes": 13
+      }
+    }
+  },
+  {
+    "name": "graph-transaction-resource-ref",
+    "producer": "rust",
+    "wireType": "control-request",
+    "base64": "gqpyZXF1ZXN0X2lkLadjb21tYW5kg6R0eXBlrmFjdGl2YXRlLWdyYXBopG1ldGGFr3Byb3RvY29sVmVyc2lvbgKpcmVxdWVzdElkqnJlcXVlc3QtNDWmdGFyZ2V0hKRraW5krGF1ZGlvLWVuZ2luZaJpZKhlbmdpbmUtMaVlcG9jaLQxODQ0Njc0NDA3MzcwOTU1MTYxNapnZW5lcmF0aW9uArBleHBlY3RlZFJldmlzaW9uB6htdXRhdGlvboKrb3BlcmF0aW9uSWSsb3BlcmF0aW9uLTQ1rmlkZW1wb3RlbmN5S2V5sGdyYXBoOmFjdGl2YXRlOjincmVxdWVzdIOraGVscGVyRXBvY2i0MTg0NDY3NDQwNzM3MDk1NTE2MTWscHJvamVjdEdyYXBohKRraW5krXByb2plY3QtZ3JhcGiiaWSnZ3JhcGgtMaVlcG9jaK1wcm9qZWN0LWVwb2NoqmdlbmVyYXRpb24ErGJhc2VSZXZpc2lvbgc=",
+    "normalized": {
+      "request_id": 45,
+      "command": {
+        "type": "activate-graph",
+        "meta": {
+          "protocolVersion": 2,
+          "requestId": "request-45",
+          "target": {
+            "kind": "audio-engine",
+            "id": "engine-1",
+            "epoch": "18446744073709551615",
+            "generation": 2
+          },
+          "expectedRevision": 7,
+          "mutation": {
+            "operationId": "operation-45",
+            "idempotencyKey": "graph:activate:8"
+          }
+        },
+        "request": {
+          "helperEpoch": "18446744073709551615",
+          "projectGraph": {
+            "kind": "project-graph",
+            "id": "graph-1",
+            "epoch": "project-epoch",
+            "generation": 4
+          },
+          "baseRevision": 7
+        }
+      }
+    }
+  },
+  {
+    "name": "recording-binary-payload",
+    "producer": "rust",
+    "wireType": "control-response",
+    "base64": "gqpyZXF1ZXN0X2lkLqZyZXN1bHSCpHR5cGWycmVjb3JkaW5nLXdhdmVmb3JtqHdhdmVmb3JtiKtzYW1wbGVfcmF0Zc27gKhjaGFubmVscwKrZnJhbWVfY291bnTNEACrc3RhcnRfZnJhbWUAqWVuZF9mcmFtZc0QALFmcmFtZXNfcGVyX2J1Y2tldM0BAKxidWNrZXRfY291bnQQpXBlYWtzgqdzdG9yYWdlpmlubGluZaVieXRlc8QEAH+A/w==",
+    "normalized": {
+      "request_id": 46,
+      "result": {
+        "type": "recording-waveform",
+        "waveform": {
+          "sample_rate": 48000,
+          "channels": 2,
+          "frame_count": 4096,
+          "start_frame": 0,
+          "end_frame": 4096,
+          "frames_per_bucket": 256,
+          "bucket_count": 16,
+          "peaks": {
+            "storage": "inline",
+            "bytes": [0, 127, 128, 255]
+          }
+        }
+      }
+    }
+  }
+]

@@ -1,17 +1,19 @@
-struct AdaptiveResampler {
-    consumer: HeapCons<InputFrame>,
-    resampler: Async<f32>,
-    input_channels: usize,
-    input_buffer: Vec<f32>,
-    output_buffer: Vec<f32>,
-    output_cursor: usize,
-    output_frames: usize,
-    target_fill: usize,
-    capacity: usize,
+use super::*;
+
+pub(super) struct AdaptiveResampler {
+    pub(super) consumer: HeapCons<InputFrame>,
+    pub(super) resampler: Async<f32>,
+    pub(super) input_channels: usize,
+    pub(super) input_buffer: Vec<f32>,
+    pub(super) output_buffer: Vec<f32>,
+    pub(super) output_cursor: usize,
+    pub(super) output_frames: usize,
+    pub(super) target_fill: usize,
+    pub(super) capacity: usize,
 }
 
 impl AdaptiveResampler {
-    fn new(
+    pub(super) fn new(
         consumer: HeapCons<InputFrame>,
         input_sample_rate: u32,
         output_sample_rate: u32,
@@ -45,22 +47,22 @@ impl AdaptiveResampler {
         })
     }
 
-    fn occupied_len(&self) -> usize {
+    pub(super) fn occupied_len(&self) -> usize {
         self.consumer.occupied_len()
     }
 
-    fn output_delay(&self) -> usize {
+    pub(super) fn output_delay(&self) -> usize {
         self.resampler.output_delay()
     }
 
-    fn adaptive_relative_ratio(&self) -> f64 {
+    pub(super) fn adaptive_relative_ratio(&self) -> f64 {
         let fill_error = self.occupied_len() as f64 - self.target_fill as f64;
         let normalized_error = fill_error / self.capacity.max(1) as f64;
         let drift_correction = (normalized_error * 0.002).clamp(-0.001, 0.001);
         1.0 / (1.0 + drift_correction)
     }
 
-    fn refill(&mut self) -> bool {
+    pub(super) fn refill(&mut self) -> bool {
         let relative_ratio = self.adaptive_relative_ratio();
         if self
             .resampler
@@ -122,7 +124,7 @@ impl AdaptiveResampler {
         available < required
     }
 
-    fn next_frame(&mut self) -> (InputFrame, bool) {
+    pub(super) fn next_frame(&mut self) -> (InputFrame, bool) {
         let mut underrun = false;
         if self.output_cursor >= self.output_frames {
             underrun = self.refill();
@@ -139,26 +141,30 @@ impl AdaptiveResampler {
     }
 }
 
-struct SessionOutputResampler {
-    resampler: Async<f32>,
-    channels: usize,
-    session_buffer: Vec<HardwareOutputFrame>,
-    input_buffer: Vec<f32>,
-    output_buffer: Vec<f32>,
-    output_cursor: usize,
-    output_frames: usize,
+pub(super) struct SessionOutputResampler {
+    pub(super) resampler: Async<f32>,
+    pub(super) channels: usize,
+    pub(super) session_buffer: Vec<HardwareOutputFrame>,
+    pub(super) input_buffer: Vec<f32>,
+    pub(super) output_buffer: Vec<f32>,
+    pub(super) output_cursor: usize,
+    pub(super) output_frames: usize,
 }
 
 // Keeping the resampler inline avoids an extra indirection while filling each
 // output block; the converter and all scratch are allocated during startup.
 #[allow(clippy::large_enum_variant)]
-enum SessionOutputConverter {
+pub(super) enum SessionOutputConverter {
     Bypass,
     Resampled(SessionOutputResampler),
 }
 
 impl SessionOutputConverter {
-    fn new(session_sample_rate: u32, output_sample_rate: u32, channels: usize) -> Result<Self> {
+    pub(super) fn new(
+        session_sample_rate: u32,
+        output_sample_rate: u32,
+        channels: usize,
+    ) -> Result<Self> {
         if session_sample_rate == output_sample_rate {
             return Ok(Self::Bypass);
         }
@@ -173,8 +179,7 @@ impl SessionOutputConverter {
             FixedAsync::Output,
         )
         .map_err(|error| invalid_config(error.to_string()))?;
-        let session_buffer =
-            vec![[0.0; MAX_OUTPUT_CHANNELS]; resampler.input_frames_max()];
+        let session_buffer = vec![[0.0; MAX_OUTPUT_CHANNELS]; resampler.input_frames_max()];
         let input_buffer = vec![0.0; resampler.input_frames_max() * channels];
         let output_buffer = vec![0.0; resampler.output_frames_max() * channels];
         Ok(Self::Resampled(SessionOutputResampler {
@@ -188,14 +193,14 @@ impl SessionOutputConverter {
         }))
     }
 
-    fn output_delay(&self) -> usize {
+    pub(super) fn output_delay(&self) -> usize {
         match self {
             Self::Bypass => 0,
             Self::Resampled(resampler) => resampler.resampler.output_delay(),
         }
     }
 
-    fn render_block(
+    pub(super) fn render_block(
         &mut self,
         output: &mut [HardwareOutputFrame],
         mut render: impl FnMut(&mut [HardwareOutputFrame]) -> bool,
@@ -211,7 +216,7 @@ impl SessionOutputConverter {
 }
 
 impl SessionOutputResampler {
-    fn refill(
+    pub(super) fn refill(
         &mut self,
         mut render: impl FnMut(&mut [HardwareOutputFrame]) -> bool,
     ) -> (bool, usize) {
@@ -262,7 +267,7 @@ impl SessionOutputResampler {
         (underrun, required)
     }
 
-    fn render_block(
+    pub(super) fn render_block(
         &mut self,
         output: &mut [HardwareOutputFrame],
         mut render: impl FnMut(&mut [HardwareOutputFrame]) -> bool,
@@ -290,7 +295,7 @@ impl SessionOutputResampler {
     }
 }
 
-fn build_input_stream<T>(
+pub(super) fn build_input_stream<T>(
     device: &Device,
     config: &StreamConfig,
     mut producer: HeapProd<InputFrame>,
@@ -349,7 +354,7 @@ where
         .map_err(|error| audio_error("failed to build cpal input stream", error))
 }
 
-fn build_output_stream<T>(
+pub(super) fn build_output_stream<T>(
     device: &Device,
     config: &StreamConfig,
     consumer: HeapCons<InputFrame>,
@@ -392,8 +397,7 @@ where
     let mut round_trip_probe = RoundTripOutputProbe::new(round_trip_latency);
     let mut realtime_midi = crate::midi_input::realtime_consumer();
     let mut render_inputs = vec![[0.0; MAX_INPUT_CHANNELS]; MAX_PLUGIN_BLOCK_FRAMES];
-    let mut device_outputs =
-        vec![[0.0; MAX_OUTPUT_CHANNELS]; MAX_PLUGIN_BLOCK_FRAMES];
+    let mut device_outputs = vec![[0.0; MAX_OUTPUT_CHANNELS]; MAX_PLUGIN_BLOCK_FRAMES];
 
     device
         .build_output_stream(
@@ -550,3 +554,5 @@ macro_rules! build_stream_for_format {
         }
     };
 }
+
+pub(super) use build_stream_for_format;

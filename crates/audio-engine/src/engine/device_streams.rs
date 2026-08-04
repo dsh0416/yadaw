@@ -1,4 +1,6 @@
-fn find_device(host: &Host, id: &str, input: bool) -> Result<Device> {
+use super::*;
+
+pub(super) fn find_device(host: &Host, id: &str, input: bool) -> Result<Device> {
     let devices = if input {
         host.input_devices()
             .map_err(|error| audio_error("failed to enumerate input devices", error))?
@@ -19,7 +21,7 @@ fn find_device(host: &Host, id: &str, input: bool) -> Result<Device> {
         .ok_or_else(|| invalid_config(format!("audio device '{id}' is no longer available")))
 }
 
-fn resolve_stream_devices<T: Clone>(
+pub(super) fn resolve_stream_devices<T: Clone>(
     backend: &str,
     input_device_id: &str,
     output_device_id: &str,
@@ -41,13 +43,16 @@ fn resolve_stream_devices<T: Clone>(
     Ok((find(input_device_id, true)?, find(output_device_id, false)?))
 }
 
-struct BufferSelection {
-    buffer_size: BufferSize,
-    expected_frames: u32,
-    fell_back: bool,
+pub(super) struct BufferSelection {
+    pub(super) buffer_size: BufferSize,
+    pub(super) expected_frames: u32,
+    pub(super) fell_back: bool,
 }
 
-fn select_buffer_size(supported: &SupportedBufferSize, requested: u32) -> BufferSelection {
+pub(super) fn select_buffer_size(
+    supported: &SupportedBufferSize,
+    requested: u32,
+) -> BufferSelection {
     match supported {
         SupportedBufferSize::Range { min, max } => {
             // A clamped request is still opened as a fixed size. The device
@@ -74,7 +79,7 @@ fn select_buffer_size(supported: &SupportedBufferSize, requested: u32) -> Buffer
     }
 }
 
-fn stream_config(
+pub(super) fn stream_config(
     config: &SupportedStreamConfig,
     requested_buffer_size: u32,
 ) -> (StreamConfig, BufferSelection) {
@@ -84,42 +89,42 @@ fn stream_config(
     (stream_config, selection)
 }
 
-fn duration_to_micros(duration: Duration) -> u64 {
+pub(super) fn duration_to_micros(duration: Duration) -> u64 {
     duration.as_micros().min(u128::from(u64::MAX - 1)) as u64
 }
 
-fn optional_latency(value: u64) -> Option<u64> {
+pub(super) fn optional_latency(value: u64) -> Option<u64> {
     (value != UNKNOWN_LATENCY_US).then_some(value)
 }
 
-fn frames_to_ms(frames: u32, sample_rate: u32) -> f64 {
+pub(super) fn frames_to_ms(frames: u32, sample_rate: u32) -> f64 {
     f64::from(frames) / f64::from(sample_rate) * 1_000.0
 }
 
-fn frames_to_micros(frames: usize, sample_rate: u32) -> u64 {
+pub(super) fn frames_to_micros(frames: usize, sample_rate: u32) -> u64 {
     ((frames as u128).saturating_mul(1_000_000) / u128::from(sample_rate)).min(u128::from(u64::MAX))
         as u64
 }
 
-fn frames_to_nanos(frames: usize, sample_rate: u32) -> u64 {
+pub(super) fn frames_to_nanos(frames: usize, sample_rate: u32) -> u64 {
     ((frames as u128).saturating_mul(1_000_000_000) / u128::from(sample_rate))
         .min(u128::from(u64::MAX)) as u64
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum StreamDirection {
+pub(super) enum StreamDirection {
     Input,
     Output,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum StreamErrorImpact {
+pub(super) enum StreamErrorImpact {
     Ignore,
     CountXrun,
     Fault,
 }
 
-fn stream_error_impact(
+pub(super) fn stream_error_impact(
     direction: StreamDirection,
     error_kind: cpal::ErrorKind,
 ) -> StreamErrorImpact {
@@ -132,7 +137,7 @@ fn stream_error_impact(
     }
 }
 
-fn mark_stream_error(
+pub(super) fn mark_stream_error(
     metrics: &RuntimeMetrics,
     direction: StreamDirection,
     error: &cpal::Error,

@@ -1,10 +1,12 @@
-enum DeferredBinary {
+use super::*;
+
+pub(super) enum DeferredBinary {
     Inline(Vec<u8>),
     Shared(ResolvedBlob),
 }
 
 impl DeferredBinary {
-    fn as_slice(&self) -> &[u8] {
+    pub(super) fn as_slice(&self) -> &[u8] {
         match self {
             Self::Inline(bytes) => bytes,
             Self::Shared(blob) => blob.as_slice(),
@@ -12,7 +14,7 @@ impl DeferredBinary {
     }
 }
 
-fn resolve_deferred_binary(
+pub(super) fn resolve_deferred_binary(
     payload: BinaryPayload,
     arena: &Arc<Mutex<ArenaReceiver>>,
 ) -> Result<DeferredBinary, String> {
@@ -55,26 +57,30 @@ fn update_graph_midi_routes(graph: &LiveMixerGraph) {
     midi_input.update_routes(all_inputs, port_ids);
 }
 
-fn log_graph_transaction_failure(meta: &RpcRequestMeta, phase: &str, error: &dyn std::fmt::Display) {
+fn log_graph_transaction_failure(
+    meta: &RpcRequestMeta,
+    phase: &str,
+    error: &dyn std::fmt::Display,
+) {
     eprintln!(
         "audio-host graph transaction [{}] {phase} failed: {error}",
         graph_correlation(meta, phase)
     );
 }
 
-struct Vst3ActorDeps {
-    ui_proxy: EventLoopProxy<UiEvent>,
-    ui_sender: std_mpsc::SyncSender<ActorRequest>,
-    processors: Arc<Mutex<HashMap<String, vst3::Vst3ProcessorHandle>>>,
-    handles: Arc<Mutex<GraphParameterHandles>>,
-    request_arena: Arc<Mutex<ArenaReceiver>>,
-    background_sender: mpsc::Sender<ActorRequest>,
-    engine_sender: mpsc::Sender<ActorRequest>,
-    audio_engine: Arc<engine::AudioEngine>,
-    session_epoch: u64,
+pub(super) struct Vst3ActorDeps {
+    pub(super) ui_proxy: EventLoopProxy<UiEvent>,
+    pub(super) ui_sender: std_mpsc::SyncSender<ActorRequest>,
+    pub(super) processors: Arc<Mutex<HashMap<String, vst3::Vst3ProcessorHandle>>>,
+    pub(super) handles: Arc<Mutex<GraphParameterHandles>>,
+    pub(super) request_arena: Arc<Mutex<ArenaReceiver>>,
+    pub(super) background_sender: mpsc::Sender<ActorRequest>,
+    pub(super) engine_sender: mpsc::Sender<ActorRequest>,
+    pub(super) audio_engine: Arc<engine::AudioEngine>,
+    pub(super) session_epoch: u64,
 }
 
-async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps) {
+pub(super) async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps) {
     let Vst3ActorDeps {
         ui_proxy,
         ui_sender,
@@ -188,9 +194,9 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
                             .await;
                             continue;
                         }
-                        (Err(message), _, _)
-                        | (_, Err(message), _)
-                        | (_, _, Err(message)) => control_error! { message },
+                        (Err(message), _, _) | (_, Err(message), _) | (_, _, Err(message)) => {
+                            control_error! { message }
+                        }
                     }
                 }
                 command @ (ControlCommand::UnloadPlugin { .. }
@@ -231,9 +237,10 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
                         }
                     };
                     let Some(operation_id) = validated.operation_id else {
-                        let _ = message
-                            .reply
-                            .send(graph_failure(&meta, graph_validation_error(&meta, "mutation")));
+                        let _ = message.reply.send(graph_failure(
+                            &meta,
+                            graph_validation_error(&meta, "mutation"),
+                        ));
                         continue;
                     };
                     graph_transactions.observe_engine(validated.engine);
@@ -254,16 +261,14 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
                                 &meta,
                                 candidate.graph_revision,
                                 GraphTransactionValue::Prepared {
-                                    snapshot: graph_transactions.snapshot_with_engine(&audio_engine),
+                                    snapshot: graph_transactions
+                                        .snapshot_with_engine(&audio_engine),
                                 },
                             )
                         } else {
                             graph_failure(
                                 &meta,
-                                graph_busy_error(
-                                    &meta,
-                                    Some(candidate.operation_id.clone()),
-                                ),
+                                graph_busy_error(&meta, Some(candidate.operation_id.clone())),
                             )
                         };
                         let _ = message.reply.send(result);
@@ -280,7 +285,11 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
                     )
                     .await;
                     if let ControlResult::Error { error } = plugin_prepare {
-                        log_graph_transaction_failure(&meta, "plugin-prepare", &error.correlation_id);
+                        log_graph_transaction_failure(
+                            &meta,
+                            "plugin-prepare",
+                            &error.correlation_id,
+                        );
                         let _ = message.reply.send(graph_failure(
                             &meta,
                             graph_dependency_error(&meta, request.project_graph),
@@ -300,12 +309,7 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
                             .clone();
                         materialize_mixer_graph(&mut graph, &arena)
                             .map_err(|error| error.to_string())?;
-                        live_graph(
-                            request.graph_revision,
-                            &graph,
-                            Some(&processors),
-                            &arena,
-                        )
+                        live_graph(request.graph_revision, &graph, Some(&processors), &arena)
                     })();
                     let native = match native {
                         Ok(native) => native,
@@ -414,9 +418,10 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
                         }
                     };
                     let Some(operation_id) = validated.operation_id else {
-                        let _ = message
-                            .reply
-                            .send(graph_failure(&meta, graph_validation_error(&meta, "mutation")));
+                        let _ = message.reply.send(graph_failure(
+                            &meta,
+                            graph_validation_error(&meta, "mutation"),
+                        ));
                         continue;
                     };
                     graph_transactions.observe_engine(validated.engine);
@@ -460,7 +465,11 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
                     )
                     .await;
                     if let ControlResult::Error { error } = plugin_activate {
-                        log_graph_transaction_failure(&meta, "plugin-activate", &error.correlation_id);
+                        log_graph_transaction_failure(
+                            &meta,
+                            "plugin-activate",
+                            &error.correlation_id,
+                        );
                         graph_transactions.restore_candidate(candidate);
                         let _ = message.reply.send(graph_failure(
                             &meta,
@@ -537,7 +546,8 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
                                     &meta,
                                     candidate_revision,
                                     GraphTransactionValue::Activated {
-                                        snapshot: graph_transactions.snapshot_with_engine(&audio_engine),
+                                        snapshot: graph_transactions
+                                            .snapshot_with_engine(&audio_engine),
                                     },
                                 )
                             } else {
@@ -562,10 +572,8 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
                                 },
                             )
                             .await;
-                            graph_transactions.finish_not_committed(
-                                operation_id,
-                                candidate_revision,
-                            );
+                            graph_transactions
+                                .finish_not_committed(operation_id, candidate_revision);
                             if audio_engine.published_graph_generation() >= candidate_revision {
                                 graph_failure(
                                     &meta,
@@ -605,10 +613,8 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
                                 },
                             )
                             .await;
-                            graph_transactions.finish_not_committed(
-                                operation_id,
-                                candidate_revision,
-                            );
+                            graph_transactions
+                                .finish_not_committed(operation_id, candidate_revision);
                             graph_failure(
                                 &meta,
                                 graph_dependency_error(&meta, request.project_graph),
@@ -630,9 +636,10 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
                         }
                     };
                     let Some(operation_id) = validated.operation_id else {
-                        let _ = message
-                            .reply
-                            .send(graph_failure(&meta, graph_validation_error(&meta, "mutation")));
+                        let _ = message.reply.send(graph_failure(
+                            &meta,
+                            graph_validation_error(&meta, "mutation"),
+                        ));
                         continue;
                     };
                     graph_transactions.observe_engine(validated.engine);
@@ -663,7 +670,8 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
                                 &meta,
                                 graph_transactions.committed_revision,
                                 GraphTransactionValue::Snapshot {
-                                    snapshot: graph_transactions.snapshot_with_engine(&audio_engine),
+                                    snapshot: graph_transactions
+                                        .snapshot_with_engine(&audio_engine),
                                 },
                             )
                         }
@@ -724,30 +732,30 @@ async fn vst3_actor(mut inbox: mpsc::Receiver<ActorRequest>, deps: Vst3ActorDeps
                                 ara_result
                             } else {
                                 match dispatch_build_graph(&background_sender, graph).await {
-                                ControlResult::GraphAccepted {
-                                    revision: accepted_revision,
-                                } => {
-                                    update_graph_midi_routes(&candidate);
-                                    refresh_graph_handles(&handles, &candidate);
-                                    graph_revision = accepted_revision;
-                                    graph_snapshot = Some(candidate);
-                                    graph_transactions.observe_legacy_commit(accepted_revision);
                                     ControlResult::GraphAccepted {
                                         revision: accepted_revision,
+                                    } => {
+                                        update_graph_midi_routes(&candidate);
+                                        refresh_graph_handles(&handles, &candidate);
+                                        graph_revision = accepted_revision;
+                                        graph_snapshot = Some(candidate);
+                                        graph_transactions.observe_legacy_commit(accepted_revision);
+                                        ControlResult::GraphAccepted {
+                                            revision: accepted_revision,
+                                        }
+                                    }
+                                    other => {
+                                        let _ = dispatch_ui_actor_command(
+                                            &ui_sender,
+                                            &ui_proxy,
+                                            ActorCommand::SyncAraGraph {
+                                                graph: previous_graph,
+                                            },
+                                        )
+                                        .await;
+                                        other
                                     }
                                 }
-                                other => {
-                                    let _ = dispatch_ui_actor_command(
-                                        &ui_sender,
-                                        &ui_proxy,
-                                        ActorCommand::SyncAraGraph {
-                                            graph: previous_graph,
-                                        },
-                                    )
-                                    .await;
-                                    other
-                                }
-                            }
                             }
                         }
                     }
@@ -808,21 +816,15 @@ async fn dispatch_ui_actor_command(
     command: ActorCommand,
 ) -> ControlResult {
     let (reply, response) = oneshot::channel();
-    forward_to_ui(
-        sender,
-        proxy,
-        ActorRequest {
-            command,
-            reply,
-        },
-    )
-    .await;
-    response.await.unwrap_or_else(|_| control_error! {
-        message: "winit VST3 UI actor dropped its response".into(),
+    forward_to_ui(sender, proxy, ActorRequest { command, reply }).await;
+    response.await.unwrap_or_else(|_| {
+        control_error! {
+            message: "winit VST3 UI actor dropped its response".into(),
+        }
     })
 }
 
-async fn dispatch_actor(
+pub(super) async fn dispatch_actor(
     sender: &mpsc::Sender<ActorRequest>,
     command: ControlCommand,
 ) -> ControlResult {
@@ -839,12 +841,14 @@ async fn dispatch_actor(
             message: "audio-host actor stopped".into(),
         };
     }
-    response.await.unwrap_or_else(|_| control_error! {
-        message: "audio-host actor dropped its response".into(),
+    response.await.unwrap_or_else(|_| {
+        control_error! {
+            message: "audio-host actor dropped its response".into(),
+        }
     })
 }
 
-async fn dispatch_parameter(
+pub(super) async fn dispatch_parameter(
     sender: &mpsc::Sender<ActorRequest>,
     command: heron_dsp_runtime::protocol::ParameterCommand,
 ) -> ControlResult {
@@ -861,12 +865,14 @@ async fn dispatch_parameter(
             message: "audio-host parameter actor stopped".into(),
         };
     }
-    response.await.unwrap_or_else(|_| control_error! {
-        message: "audio-host parameter actor dropped its response".into(),
+    response.await.unwrap_or_else(|_| {
+        control_error! {
+            message: "audio-host parameter actor dropped its response".into(),
+        }
     })
 }
 
-fn is_vst3_command(command: &ControlCommand) -> bool {
+pub(super) fn is_vst3_command(command: &ControlCommand) -> bool {
     matches!(
         command,
         ControlCommand::Ping
@@ -888,14 +894,14 @@ fn is_vst3_command(command: &ControlCommand) -> bool {
     )
 }
 
-fn is_background_io_command(command: &ControlCommand) -> bool {
+pub(super) fn is_background_io_command(command: &ControlCommand) -> bool {
     matches!(
         command,
         ControlCommand::ListAudioBackends | ControlCommand::ListAudioDevices { .. }
     )
 }
 
-fn protocol_deadline(command: &ControlCommand) -> std::time::Duration {
+pub(super) fn protocol_deadline(command: &ControlCommand) -> std::time::Duration {
     // The audio benchmark builds three dense mixer graphs around up to 64 live
     // VST3 instances; on slow machines that legitimately exceeds the extended
     // 15 s command deadline, so give it its own generous budget.

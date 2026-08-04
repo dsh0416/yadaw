@@ -1,5 +1,7 @@
+use super::*;
+
 impl NativeMixerRuntime {
-    fn set_plugin_enabled(&mut self, instance_id: &str, enabled: bool) -> bool {
+    pub(super) fn set_plugin_enabled(&mut self, instance_id: &str, enabled: bool) -> bool {
         let Some(plugin) = self
             .plugins_by_channel
             .iter_mut()
@@ -12,7 +14,10 @@ impl NativeMixerRuntime {
         true
     }
 
-    fn handle_command(&mut self, command: EngineCommand) -> Option<Box<NativeMixerRuntime>> {
+    pub(super) fn handle_command(
+        &mut self,
+        command: EngineCommand,
+    ) -> Option<Box<NativeMixerRuntime>> {
         match command {
             EngineCommand::LoadMixer(mut runtime) => {
                 self.all_notes_off();
@@ -62,10 +67,9 @@ impl NativeMixerRuntime {
                         .graph
                         .send_index(preview.id())
                         .and_then(|index| self.graph.preview_send_level(index, preview.value).ok()),
-                    RealtimeParameter::PluginEnabled => {
-                        self.set_plugin_enabled(preview.id(), preview.value >= 0.5)
-                            .then_some(())
-                    }
+                    RealtimeParameter::PluginEnabled => self
+                        .set_plugin_enabled(preview.id(), preview.value >= 0.5)
+                        .then_some(()),
                 };
                 let _ = result;
             }
@@ -181,7 +185,7 @@ impl NativeMixerRuntime {
         None
     }
 
-    fn render_block(
+    pub(super) fn render_block(
         &mut self,
         inputs: &[InputFrame],
         outputs: &mut [HardwareOutputFrame],
@@ -341,9 +345,7 @@ impl NativeMixerRuntime {
     }
 
     fn playback_loop_frames(&self, state: u32) -> Option<(u64, u64)> {
-        if state != TRANSPORT_PLAYING
-            || self.transport.clock_source.load(Ordering::Relaxed) != 0
-        {
+        if state != TRANSPORT_PLAYING || self.transport.clock_source.load(Ordering::Relaxed) != 0 {
             return None;
         }
         self.configured_loop_frames()
@@ -478,27 +480,24 @@ impl NativeMixerRuntime {
         let input_widths = &self.channel_input_widths;
         let plugins = &mut self.plugins_by_channel;
         let generation = self.generation;
-        let mut process_plugins = |
-            channel_index: usize,
-            frames: &mut [StereoFrame],
-            post_pan: &[StereoFrame],
-        | {
-            let mut width = input_widths[channel_index];
-            for plugin in &mut plugins[channel_index] {
-                crate::crash_marker::mark(
-                    generation,
-                    plugin.marker_index,
-                    crate::crash_marker::STAGE_PROCESS,
-                );
-                plugin.process_block(frames, &mut width, &context, post_pan);
-                crate::crash_marker::clean(generation);
-            }
-            if matches!(width, SignalWidth::Mono) {
-                for frame in frames {
-                    frame[1] = frame[0];
+        let mut process_plugins =
+            |channel_index: usize, frames: &mut [StereoFrame], post_pan: &[StereoFrame]| {
+                let mut width = input_widths[channel_index];
+                for plugin in &mut plugins[channel_index] {
+                    crate::crash_marker::mark(
+                        generation,
+                        plugin.marker_index,
+                        crate::crash_marker::STAGE_PROCESS,
+                    );
+                    plugin.process_block(frames, &mut width, &context, post_pan);
+                    crate::crash_marker::clean(generation);
                 }
-            }
-        };
+                if matches!(width, SignalWidth::Mono) {
+                    for frame in frames {
+                        frame[1] = frame[0];
+                    }
+                }
+            };
         if self
             .graph
             .process_channel_source_block(
@@ -514,7 +513,7 @@ impl NativeMixerRuntime {
         stream_underrun
     }
 
-    fn frames_until_timing_boundary(&self, position: u64, maximum: usize) -> usize {
+    pub(super) fn frames_until_timing_boundary(&self, position: u64, maximum: usize) -> usize {
         let end = position.saturating_add(maximum as u64);
         self.tempo_map
             .tempo_events()
@@ -534,7 +533,7 @@ impl NativeMixerRuntime {
             .map_or(maximum, |boundary| (boundary - position) as usize)
     }
 
-    fn process_context(&self, frame: u64, state: u32) -> ProcessContext {
+    pub(super) fn process_context(&self, frame: u64, state: u32) -> ProcessContext {
         let external = self.transport.clock_source.load(Ordering::Relaxed) == 1;
         let tick = if external {
             self.transport.position_ticks.load(Ordering::Relaxed)
@@ -705,7 +704,7 @@ impl NativeMixerRuntime {
         }
     }
 
-    fn handle_external_sync(&mut self, message: crate::midi_input::RealtimeMidiMessage) {
+    pub(super) fn handle_external_sync(&mut self, message: crate::midi_input::RealtimeMidiMessage) {
         use crate::midi_input::RealtimeMidiMessage;
 
         match message {
@@ -948,7 +947,7 @@ impl NativeMixerRuntime {
             .reposition(&self.tempo_map, self.sample_rate, position, true);
     }
 
-    fn publish_peaks(&mut self, elapsed_frames: usize) {
+    pub(super) fn publish_peaks(&mut self, elapsed_frames: usize) {
         self.graph.write_meters(&mut self.peak_scratch);
         self.input_peaks.take_all(&mut self.input_peak_scratch);
         for (index, route) in self.input_meter_routes.iter().enumerate() {

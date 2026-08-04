@@ -1,4 +1,6 @@
-fn build_mixer_runtime(
+use super::*;
+
+pub(super) fn build_mixer_runtime(
     native: NativeMixerGraph,
     build_generation: u64,
     transport: Arc<TransportShared>,
@@ -249,7 +251,7 @@ fn build_mixer_runtime(
         sends,
         &dependencies,
     )
-        .map_err(|error| invalid_config(error.to_string()))?;
+    .map_err(|error| invalid_config(error.to_string()))?;
     let meter_bank = Arc::new(MeterBank {
         channels: native
             .channels
@@ -424,11 +426,8 @@ fn build_mixer_runtime(
                 {
                     Some(channel_latencies[*source])
                 }
-                InputEdge::Send(send) => {
-                    (!latency_sensitive).then_some(
-                        channel_latencies[native.sends[*send].source_index as usize],
-                    )
-                }
+                InputEdge::Send(send) => (!latency_sensitive)
+                    .then_some(channel_latencies[native.sends[*send].source_index as usize]),
                 InputEdge::Main(_) => None,
             })
             .max()
@@ -436,8 +435,7 @@ fn build_mixer_runtime(
         for edge in &input_edges[target] {
             match *edge {
                 InputEdge::Main(source) => {
-                    let delay = if latency_sensitive
-                        && low_latency_plan.sensitive_channels[source]
+                    let delay = if latency_sensitive && low_latency_plan.sensitive_channels[source]
                     {
                         0
                     } else {
@@ -467,9 +465,8 @@ fn build_mixer_runtime(
                     .map(|input| channel_latencies[input.source_index])
                     .fold(slot_arrival, u32::max)
             };
-            plugin.main_delay = StereoDelayLine::new(
-                convergence.saturating_sub(slot_arrival) as usize,
-            );
+            plugin.main_delay =
+                StereoDelayLine::new(convergence.saturating_sub(slot_arrival) as usize);
             for input in &mut plugin.aux_inputs {
                 input.delay = StereoDelayLine::new(
                     convergence.saturating_sub(channel_latencies[input.source_index]) as usize,

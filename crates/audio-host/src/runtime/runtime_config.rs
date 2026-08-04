@@ -1,12 +1,14 @@
+use super::*;
+
 #[derive(Debug, Clone, Copy)]
-struct RuntimeConfig {
-    worker_threads: usize,
-    max_blocking_threads: usize,
-    egress_concurrency: usize,
+pub(super) struct RuntimeConfig {
+    pub(super) worker_threads: usize,
+    pub(super) max_blocking_threads: usize,
+    pub(super) egress_concurrency: usize,
 }
 
 impl RuntimeConfig {
-    fn auto() -> Self {
+    pub(super) fn auto() -> Self {
         let logical = thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get);
         let worker_threads = logical.div_ceil(4).clamp(1, 4);
         let max_blocking_threads = (worker_threads * 2).clamp(2, 8);
@@ -17,7 +19,7 @@ impl RuntimeConfig {
         }
     }
 
-    fn validate(self) -> Result<Self, String> {
+    pub(super) fn validate(self) -> Result<Self, String> {
         if !(1..=8).contains(&self.worker_threads) {
             return Err("worker threads must be between 1 and 8".into());
         }
