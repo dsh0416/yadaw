@@ -101,6 +101,24 @@ fn transport_only_drain_preserves_aggregated_model_events() {
 }
 
 #[test]
+fn ara_model_backlog_survives_transport_only_polling_until_delivery_is_allowed() {
+    let sink = AraCallbackSink::default();
+    sink.activate();
+    sink.register(CallbackObjectKind::PlaybackRegion, 7, "clip-7".into())
+        .unwrap();
+    sink.content_changed(CallbackObjectKind::PlaybackRegion, 7, None, 1)
+        .unwrap();
+    sink.transport(AraTransportRequest::Start).unwrap();
+
+    assert_eq!(
+        sink.drain(false).unwrap(),
+        (Vec::new(), vec![AraTransportRequest::Start])
+    );
+    assert_eq!(sink.drain(false).unwrap(), (Vec::new(), Vec::new()));
+    assert_eq!(sink.drain(true).unwrap().0.len(), 1);
+}
+
+#[test]
 fn transport_overflow_quarantines_only_that_callback_sink() {
     let sink = AraCallbackSink::default();
     sink.activate();
