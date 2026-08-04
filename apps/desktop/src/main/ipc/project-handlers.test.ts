@@ -345,12 +345,17 @@ describe("registerProjectHandlers", () => {
 
   it("closes with an explicit disposition", async () => {
     const context = createContext()
-    vi.mocked(context.projectLifecycle.close).mockResolvedValue({
-      ok: true,
-      requestId: "request-1",
-      value: { closed: true },
-      warnings: []
-    } as never)
+    vi.mocked(context.projectLifecycle.close).mockImplementation(
+      async (_meta, _disposition, hooks) => {
+        await hooks?.stopTransport?.()
+        return {
+          ok: true,
+          requestId: "request-1",
+          value: { closed: true },
+          warnings: []
+        } as never
+      }
+    )
     registerProjectHandlers(context)
     installWorkspace(context.lifecycle)
 
@@ -358,6 +363,34 @@ describe("registerProjectHandlers", () => {
 
     expect(result).toMatchObject({ ok: true, value: { closed: true } })
     expect(context.transport.command).toHaveBeenCalledWith({ type: "stop" })
+    expect(context.synchronizePluginStates).not.toHaveBeenCalled()
+    expect(context.recordings.cleanupCommittedForProject).not.toHaveBeenCalled()
+  })
+
+  it("keeps save preparation and committed cleanup inside the close operation", async () => {
+    const context = createContext()
+    vi.mocked(context.projectLifecycle.close).mockImplementation(
+      async (_meta, _disposition, hooks) => {
+        await hooks?.preparePersistedState?.()
+        await hooks?.stopTransport?.()
+        await hooks?.cleanupCommittedState?.()
+        return {
+          ok: true,
+          requestId: "request-1",
+          value: { closed: true },
+          warnings: []
+        } as never
+      }
+    )
+    registerProjectHandlers(context)
+    installWorkspace(context.lifecycle)
+
+    const result = await invoke(electronMocks, IPC_CHANNELS.projectClose, meta(), "save")
+
+    expect(result).toMatchObject({ ok: true, value: { closed: true } })
+    expect(context.synchronizePluginStates).toHaveBeenCalledOnce()
+    expect(context.transport.command).toHaveBeenCalledWith({ type: "stop" })
+    expect(context.recordings.cleanupCommittedForProject).toHaveBeenCalledWith(projectSession.path)
   })
 
   it("requires a disposition for dirty projects", async () => {

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest"
 import { IPC_PROTOCOL_VERSION, rpcFailure, rpcSuccess } from "@heron/contracts"
 import type {
+  ProjectCloseDisposition,
   ProjectGraphSnapshot,
   ProjectSession,
   RpcRequestMeta,
@@ -97,6 +98,18 @@ function fixture() {
     abortCandidate: vi.fn(async () => {
       candidate = null
     }),
+    prepareClose: vi.fn(
+      async (
+        disposition: ProjectCloseDisposition,
+        onProgress?: (progress: { phase: "saving-archive" | "closing-project-database" }) => void
+      ) => {
+        if (disposition === "save") onProgress?.({ phase: "saving-archive" })
+        onProgress?.({ phase: "closing-project-database" })
+        return true
+      }
+    ),
+    abortPreparedClose: vi.fn(async () => undefined),
+    commitClose: vi.fn(async () => true),
     recordCurrentAsRecent: vi.fn(async () => undefined)
   }
   const prepared = {
@@ -112,7 +125,11 @@ function fixture() {
       (meta) => Promise.resolve(rpcSuccess(meta, structuredClone(graph)))
     ),
     abortCandidate: vi.fn(async () => undefined),
-    commitCandidate: vi.fn()
+    commitCandidate: vi.fn(),
+    prepareSilentCandidate: vi.fn<(meta: RpcRequestMeta) => Promise<RpcResult<typeof prepared>>>(
+      (meta) => Promise.resolve(rpcSuccess(meta, prepared))
+    ),
+    clearProject: vi.fn(async () => undefined)
   }
   const operations = new OperationService(
     new OperationRegistry(),
@@ -227,6 +244,103 @@ describe("ProjectLifecycleService", () => {
       },
       true
     )
+  })
+
+  it("publishes every close phase until committed cleanup finishes", async () => {
+    const { lifecycle, operations, projects, service } = fixture()
+    const desktop = lifecycle.applicationState.desktopSession
+    const opened = await service.open(mutation(desktop, "close-setup"), "Healthy.heron", false)
+    expect(opened.ok).toBe(true)
+    if (!opened.ok) return
+
+    const upsert = vi.spyOn(operations, "upsert")
+    const patch = vi.spyOn(operations, "patch")
+    const preparePersistedState = vi.fn(async () => undefined)
+    const stopTransport = vi.fn(async () => undefined)
+    const cleanupCommittedState = vi.fn(async () => undefined)
+
+    const result = await service.close(mutation(opened.value.project, "close-progress"), "save", {
+      preparePersistedState,
+      stopTransport,
+      cleanupCommittedState
+    })
+
+    expect(result).toMatchObject({ ok: true, value: { closed: true } })
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "operation-close-progress",
+        title: "Closing project",
+        description: "Healthy",
+        phase: "synchronizing-plugin-state",
+        state: "running",
+        completedUnits: 0,
+        totalUnits: 7,
+        cancellable: false
+      }),
+      true
+    )
+    expect(preparePersistedState).toHaveBeenCalledOnce()
+    expect(stopTransport).toHaveBeenCalledOnce()
+    expect(projects.prepareClose).toHaveBeenCalledWith("save", expect.any(Function))
+    expect(patch).toHaveBeenCalledWith(
+      "operation-close-progress",
+      { phase: "stopping-playback", completedUnits: 1, totalUnits: 7 },
+      true
+    )
+    expect(patch).toHaveBeenCalledWith(
+      "operation-close-progress",
+      { phase: "closing-project-database", completedUnits: 3, totalUnits: 7 },
+      true
+    )
+    expect(patch).toHaveBeenCalledWith(
+      "operation-close-progress",
+      { phase: "releasing-project-graph", completedUnits: 4, totalUnits: 7 },
+      true
+    )
+    expect(cleanupCommittedState).toHaveBeenCalledOnce()
+    expect(patch).toHaveBeenLastCalledWith(
+      "operation-close-progress",
+      {
+        state: "completed",
+        completedUnits: 7,
+        totalUnits: 7,
+        error: null
+      },
+      true
+    )
+  })
+
+  it("keeps a committed close successful when post-commit cleanup is quarantined", async () => {
+    const { lifecycle, operations, service } = fixture()
+    const desktop = lifecycle.applicationState.desktopSession
+    const opened = await service.open(mutation(desktop, "cleanup-setup"), "Healthy.heron", false)
+    expect(opened.ok).toBe(true)
+    if (!opened.ok) return
+    const patch = vi.spyOn(operations, "patch")
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined)
+
+    const result = await service.close(mutation(opened.value.project, "cleanup-failed"), "save", {
+      cleanupCommittedState: vi.fn(async () => {
+        throw new Error("cleanup failed")
+      })
+    })
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: { closed: true },
+      warnings: [{ code: "project-cleanup-quarantined" }]
+    })
+    expect(lifecycle.applicationState.workspaceSnapshot()).toBeNull()
+    expect(patch).toHaveBeenLastCalledWith(
+      "operation-cleanup-failed",
+      expect.objectContaining({ state: "completed", completedUnits: 7 }),
+      true
+    )
+    expect(consoleError).toHaveBeenCalledWith(
+      "[project-lifecycle] committed project cleanup failed",
+      expect.any(Error)
+    )
+    consoleError.mockRestore()
   })
 
   it("keeps a failed open isolated so the next healthy project can commit", async () => {

@@ -208,6 +208,7 @@
     "creatingProject": "正在创建工程",
     "openingProject": "正在打开工程",
     "savingProject": "正在保存工程",
+    "closingProject": "正在关闭工程",
     "finalizingRecording": "正在完成录音",
     "recoveringRecording": "正在恢复录音",
     "recordingDropoutsInput": "捕获期间丢弃了 {count} 个输入帧。",
@@ -235,6 +236,10 @@
       "loadingProjectAssets": "正在加载工程资源",
       "preparingProjectGraph": "正在准备工程图",
       "preparingWaveforms": "正在准备波形",
+      "synchronizingPluginState": "正在保存插件状态",
+      "stoppingPlayback": "正在停止播放",
+      "closingProjectDatabase": "正在关闭工程数据库",
+      "releasingProjectGraph": "正在释放工程图",
       "cleaningUp": "正在清理交换文件"
     }
   },

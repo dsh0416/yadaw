@@ -158,9 +158,14 @@ describe("ProjectService.create", () => {
     await service.markExternalStateDirty()
 
     await expect(service.prepareClose("cancel")).resolves.toBe(false)
-    await expect(service.prepareClose("save")).resolves.toBe(true)
+    const progress = vi.fn()
+    await expect(service.prepareClose("save", progress)).resolves.toBe(true)
     expect(service.current).toMatchObject({ path: projectPath, dirty: false })
     expect(closeProject).toHaveBeenCalledOnce()
+    expect(progress.mock.calls).toEqual([
+      [{ phase: "saving-archive" }],
+      [{ phase: "closing-project-database" }]
+    ])
 
     await service.abortPreparedClose()
     expect(openProject).toHaveBeenLastCalledWith(expect.stringContaining("pgdata"))

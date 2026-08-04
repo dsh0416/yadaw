@@ -17,6 +17,10 @@ export type OperationPhase =
   | "loading-project-assets"
   | "preparing-project-graph"
   | "preparing-waveforms"
+  | "synchronizing-plugin-state"
+  | "stopping-playback"
+  | "closing-project-database"
+  | "releasing-project-graph"
   | "cleaning-up"
 
 export type OperationState = "running" | "completed" | "failed" | "cancelled"

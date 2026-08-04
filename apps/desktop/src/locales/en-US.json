@@ -208,6 +208,7 @@
     "creatingProject": "Creating project",
     "openingProject": "Opening project",
     "savingProject": "Saving project",
+    "closingProject": "Closing project",
     "finalizingRecording": "Finalizing recording",
     "recoveringRecording": "Recovering recording",
     "recordingDropoutsInput": "{count} input frames were dropped during capture.",
@@ -235,6 +236,10 @@
       "loadingProjectAssets": "Loading project assets",
       "preparingProjectGraph": "Preparing project graph",
       "preparingWaveforms": "Preparing waveforms",
+      "synchronizingPluginState": "Saving plug-in state",
+      "stoppingPlayback": "Stopping playback",
+      "closingProjectDatabase": "Closing project database",
+      "releasingProjectGraph": "Releasing project graph",
       "cleaningUp": "Cleaning swap files"
     }
   },

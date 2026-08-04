@@ -8,6 +8,7 @@ import type {
   ProjectCloseDisposition,
   ProjectCommand,
   ProjectConfiguration,
+  OperationPhase,
   ProjectSession
 } from "@heron/contracts"
 import { PROJECT_SAMPLE_RATES } from "@heron/contracts"
@@ -41,6 +42,10 @@ interface ProjectLoadProgress {
     | "loading-project-database"
     | "restoring-project-state"
   completedUnits: number
+}
+
+interface ProjectCloseProgress {
+  phase: Extract<OperationPhase, "saving-archive" | "closing-project-database">
 }
 
 interface ProjectContext {
@@ -519,11 +524,18 @@ export class ProjectService {
     await this.settings.addRecent(session.path, session.configuration.name)
   }
 
-  async prepareClose(disposition: ProjectCloseDisposition): Promise<boolean> {
+  async prepareClose(
+    disposition: ProjectCloseDisposition,
+    onProgress?: (progress: ProjectCloseProgress) => void
+  ): Promise<boolean> {
     const context = this.workspaces.active
     if (!context) return true
     if (context.session.dirty && disposition === "cancel") return false
-    if (context.session.dirty && disposition === "save") await this.save()
+    if (context.session.dirty && disposition === "save") {
+      onProgress?.({ phase: "saving-archive" })
+      await this.save()
+    }
+    onProgress?.({ phase: "closing-project-database" })
     await context.worker.close()
     return true
   }
