@@ -288,7 +288,7 @@ impl AudioHostRuntime {
             (
                 self.runtime.pending_requests(),
                 256_u32,
-                self.runtime.request_timeouts(),
+                self.runtime.slow_requests(),
             ),
             0_u32,
             (

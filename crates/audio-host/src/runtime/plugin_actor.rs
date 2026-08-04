@@ -22,12 +22,14 @@ pub(super) struct Vst3ActorDeps {
 
 #[path = "plugin_actor/command_dispatch.rs"]
 mod command_dispatch;
-#[path = "plugin_actor/deadlines.rs"]
-mod deadlines;
 #[path = "plugin_actor/graph_deployment.rs"]
 mod graph_deployment;
 #[path = "plugin_actor/loading.rs"]
 mod loading;
+#[path = "plugin_actor/request_policy.rs"]
+mod request_policy;
 
 pub(super) use command_dispatch::{dispatch_actor, dispatch_parameter, vst3_actor};
-pub(super) use deadlines::{is_background_io_command, is_vst3_command, protocol_deadline};
+pub(super) use request_policy::{
+    is_background_io_command, is_vst3_command, slow_request_threshold,
+};

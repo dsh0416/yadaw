@@ -24,6 +24,14 @@ the runtime to stop, drains ordered host events, settles pending calls, and
 closes the addon. Runtime thread settings apply on the next launch rather than
 recreating the native runtime in place.
 
+Control requests do not have a semantic deadline after they enter the embedded
+runtime. Dropping a waiter cannot cancel actor or third-party plug-in work and
+could otherwise report failure before a stateful command commits. Per-command
+slow thresholds are diagnostic only: requests are counted and logged when they
+cross the threshold while callers continue waiting for a terminal result.
+User-visible long operations belong in background-operation UI with explicit
+progress or cancellation when the underlying operation supports it.
+
 VST3 editor operations require `pumpEvents()` from Electron's main thread.
 Keep the timer unref'd and stop it before closing the runtime.
 

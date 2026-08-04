@@ -89,9 +89,9 @@ function formatOccupancy(used: number, capacity: number): string {
         <dt>{{ t("performance.ipcSection.routerHealth") }}</dt>
         <dd>
           {{
-            t("performance.ipcSection.eventsTimeouts", {
+            t("performance.ipcSection.eventsSlowRequests", {
               events: audioRuntime.eventQueueDepth,
-              timeouts: audioRuntime.requests.timeouts
+              slowRequests: audioRuntime.requests.slowRequests
             })
           }}
         </dd>

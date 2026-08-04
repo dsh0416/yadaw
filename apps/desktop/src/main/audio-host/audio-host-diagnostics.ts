@@ -223,7 +223,7 @@ export class AudioHostDiagnostics {
         requests: {
           normalPending: diagnostics[1][0],
           capacity: diagnostics[1][1],
-          timeouts: diagnostics[1][2]
+          slowRequests: diagnostics[1][2]
         },
         runtime: {
           requested: structuredClone(this.state().runtimePreferences),

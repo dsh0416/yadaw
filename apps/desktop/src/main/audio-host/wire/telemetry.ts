@@ -21,7 +21,7 @@ export type TelemetryWire = [
 
 export type TransportDiagnosticsWire = [
   sessionEpoch: string,
-  requests: [pending: number, capacity: number, timeouts: number],
+  requests: [pending: number, capacity: number, slowRequests: number],
   eventQueueDepth: number,
   telemetry: [epoch: string, graphRevision: number, callbackGeneration: number, meterSlots: number],
   parameterRing: [capacity: number, hardFull: number, staleEpoch: number],

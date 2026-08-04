@@ -949,7 +949,7 @@
       "waiting": "等待中",
       "heartbeatDetail": "控制 {controlGeneration} · Tokio {tokioGeneration} · UI {winitGeneration}",
       "routerHealth": "队列健康",
-      "eventsTimeouts": "{events} 事件 · {timeouts} 超时",
+      "eventsSlowRequests": "{events} 个事件 · {slowRequests} 个慢请求",
       "callbackStale": "回调 {callbackGeneration} · 过期 {staleEpoch}"
     },
     "resourceSections": {

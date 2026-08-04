@@ -29,10 +29,10 @@ pub(in crate::runtime) fn is_background_io_command(command: &ControlCommand) -> 
     )
 }
 
-pub(in crate::runtime) fn protocol_deadline(command: &ControlCommand) -> std::time::Duration {
-    // The audio benchmark builds three dense mixer graphs around up to 64 live
-    // VST3 instances; on slow machines that legitimately exceeds the extended
-    // 15 s command deadline, so give it its own generous budget.
+pub(in crate::runtime) fn slow_request_threshold(command: &ControlCommand) -> std::time::Duration {
+    // These thresholds are diagnostic only. A request that crosses one still
+    // waits for its actor to produce a terminal result; timing out the waiter
+    // would not cancel work that has already been queued or started.
     if matches!(command, ControlCommand::RunAudioBenchmark { .. }) {
         std::time::Duration::from_secs(60)
     } else if matches!(
@@ -53,5 +53,24 @@ pub(in crate::runtime) fn protocol_deadline(command: &ControlCommand) -> std::ti
         std::time::Duration::from_secs(15)
     } else {
         std::time::Duration::from_secs(2)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn request_thresholds_are_observability_budgets() {
+        assert_eq!(
+            slow_request_threshold(&ControlCommand::Ping),
+            std::time::Duration::from_secs(2)
+        );
+        assert_eq!(
+            slow_request_threshold(&ControlCommand::BenchmarkEcho {
+                payload: Default::default(),
+            }),
+            std::time::Duration::from_secs(15)
+        );
     }
 }

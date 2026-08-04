@@ -74,7 +74,7 @@ use graph_transactions::{
 };
 use plugin_actor::{
     Vst3ActorDeps, dispatch_actor, dispatch_parameter, is_background_io_command, is_vst3_command,
-    protocol_deadline, vst3_actor,
+    slow_request_threshold, vst3_actor,
 };
 use runtime_config::RuntimeConfig;
 use ui_runtime::{UiEvent, WinitHost};

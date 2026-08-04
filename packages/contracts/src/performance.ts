@@ -48,7 +48,7 @@ export interface AudioRuntimePerformanceSnapshot {
   requests: {
     normalPending: number
     capacity: number
-    timeouts: number
+    slowRequests: number
   }
   runtime: {
     requested: AudioHostRuntimePreferences

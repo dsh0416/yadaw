@@ -18,7 +18,7 @@ function audioRuntime(
     requests: {
       normalPending: 0,
       capacity: 64,
-      timeouts: 0
+      slowRequests: 0
     },
     runtime: {
       requested: {
@@ -64,6 +64,19 @@ describe("PerformanceAudioRuntimeSection", () => {
     })
     expect(wrapper.find(".monitor-placeholder").exists()).toBe(true)
     expect(wrapper.text()).not.toContain("session-9")
+    wrapper.unmount()
+  })
+
+  it("reports slow requests without calling them timeouts", () => {
+    const wrapper = mount(PerformanceAudioRuntimeSection, {
+      props: {
+        audioRuntime: audioRuntime({
+          requests: { normalPending: 0, capacity: 64, slowRequests: 3 }
+        })
+      }
+    })
+    expect(wrapper.text()).toContain("3 slow requests")
+    expect(wrapper.text()).not.toContain("timeouts")
     wrapper.unmount()
   })
 })

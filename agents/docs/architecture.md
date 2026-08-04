@@ -52,6 +52,10 @@ leave a live renderer talking to a dead audio helper. Ordinary request errors
 remain typed results and do not destroy the runtime. Heartbeats provide
 diagnostics only and never trigger graph/plugin/transport reconstruction.
 
+Embedded control requests wait for terminal actor results. Slow-request
+thresholds drive logs and diagnostics but never cancel already-dispatched work
+or manufacture a timeout result with an unknown mutation outcome.
+
 Runtime worker limits are saved as preferences and applied on the next
 application launch. Heron deliberately does not tear down and recreate the
 embedded winit/audio runtime in a live process.

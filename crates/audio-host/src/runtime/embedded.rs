@@ -16,7 +16,7 @@ use std::{
         mpsc as std_mpsc,
     },
     thread,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 use heron_dsp_runtime::protocol::{
@@ -30,7 +30,7 @@ use super::{
     HashMap as RuntimeHashMap, MIDI_INPUT, Mutex as RuntimeMutex, NativeUiContext, RuntimeConfig,
     UiEvent, Vst3ActorDeps, WinitHost, WorkerSupervisor, background_io_actor, dispatch_actor,
     dispatch_parameter, editor_platform, engine, engine_actor, is_background_io_command,
-    is_vst3_command, mpsc, protocol_deadline, stable_runtime_handle, std_mpsc as runtime_mpsc,
+    is_vst3_command, mpsc, slow_request_threshold, stable_runtime_handle, std_mpsc as runtime_mpsc,
     vst3, vst3_actor,
 };
 
@@ -91,8 +91,6 @@ pub enum EmbeddedRuntimeError {
     Configuration(String),
     EventLoop(String),
     NativeUi(String),
-    RequestQueueFull,
-    RequestTimeout,
     RuntimeThread(String),
     Serialization(String),
 }
@@ -114,10 +112,6 @@ impl fmt::Display for EmbeddedRuntimeError {
             Self::NativeUi(message) => {
                 write!(formatter, "could not initialize native UI: {message}")
             }
-            Self::RequestQueueFull => {
-                formatter.write_str("the embedded audio request queue is full")
-            }
-            Self::RequestTimeout => formatter.write_str("the embedded audio request timed out"),
             Self::RuntimeThread(message) => {
                 write!(formatter, "embedded audio runtime thread failed: {message}")
             }
@@ -163,6 +157,8 @@ pub enum EmbeddedParameterEnqueue {
 struct DirectRequest {
     request: ControlRequest,
     reply: std_mpsc::SyncSender<ControlResponse>,
+    submitted_at: Instant,
+    slow_threshold: Duration,
 }
 
 enum DirectMessage {
@@ -181,7 +177,7 @@ struct EmbeddedState {
     winit_generation: Arc<AtomicU64>,
     control_generation: AtomicU64,
     pending_requests: AtomicUsize,
-    request_timeouts: AtomicU64,
+    slow_requests: Arc<AtomicU64>,
     parameter_sequence: AtomicU64,
     parameter_full: AtomicU64,
     parameter_stale: AtomicU64,
@@ -292,6 +288,8 @@ impl EmbeddedAudioHost {
         let protocol_processors = Arc::clone(&processors);
         let protocol_winit_generation = Arc::clone(&winit_generation);
         let protocol_proxy = proxy.clone();
+        let slow_requests = Arc::new(AtomicU64::new(0));
+        let protocol_slow_requests = Arc::clone(&slow_requests);
         let runtime_thread = thread::Builder::new()
             .name("heron-embedded-control".into())
             .spawn(move || {
@@ -322,6 +320,7 @@ impl EmbeddedAudioHost {
                         background_sender,
                         background_inbox,
                         session_epoch,
+                        protocol_slow_requests,
                     ),
                 );
             })
@@ -337,7 +336,7 @@ impl EmbeddedAudioHost {
             winit_generation,
             control_generation: AtomicU64::new(0),
             pending_requests: AtomicUsize::new(0),
-            request_timeouts: AtomicU64::new(0),
+            slow_requests,
             parameter_sequence: AtomicU64::new(1),
             parameter_full: AtomicU64::new(0),
             parameter_stale: AtomicU64::new(0),
@@ -375,8 +374,8 @@ impl EmbeddedAudioHost {
     }
 
     #[must_use]
-    pub fn request_timeouts(&self) -> u64 {
-        self.state.request_timeouts.load(Ordering::Relaxed)
+    pub fn slow_requests(&self) -> u64 {
+        self.state.slow_requests.load(Ordering::Relaxed)
     }
 
     #[must_use]
@@ -396,7 +395,7 @@ impl EmbeddedAudioHost {
         if self.state.closed.load(Ordering::Acquire) {
             return Err(EmbeddedRuntimeError::Closed);
         }
-        let timeout = protocol_deadline(&request.command) + Duration::from_secs(1);
+        let slow_threshold = slow_request_threshold(&request.command);
         let (reply, response) = std_mpsc::sync_channel(1);
         self.state.pending_requests.fetch_add(1, Ordering::AcqRel);
         let send = self
@@ -405,18 +404,14 @@ impl EmbeddedAudioHost {
             .blocking_send(DirectMessage::Request(Box::new(DirectRequest {
                 request,
                 reply,
+                submitted_at: Instant::now(),
+                slow_threshold,
             })));
         if send.is_err() {
             self.state.pending_requests.fetch_sub(1, Ordering::AcqRel);
             return Err(EmbeddedRuntimeError::Closed);
         }
-        let result = response.recv_timeout(timeout).map_err(|error| match error {
-            std_mpsc::RecvTimeoutError::Timeout => {
-                self.state.request_timeouts.fetch_add(1, Ordering::Relaxed);
-                EmbeddedRuntimeError::RequestTimeout
-            }
-            std_mpsc::RecvTimeoutError::Disconnected => EmbeddedRuntimeError::Closed,
-        });
+        let result = response.recv().map_err(|_| EmbeddedRuntimeError::Closed);
         self.state.pending_requests.fetch_sub(1, Ordering::AcqRel);
         result
     }
@@ -611,6 +606,7 @@ async fn run_direct_actor(
     background_sender: mpsc::Sender<ActorRequest>,
     background_inbox: mpsc::Receiver<ActorRequest>,
     session_epoch: u64,
+    slow_requests: Arc<AtomicU64>,
 ) {
     let handles = Arc::new(Mutex::new(GraphParameterHandles::default()));
     let (engine_sender, engine_inbox) = mpsc::channel(ACTOR_CAPACITY);
@@ -658,18 +654,23 @@ async fn run_direct_actor(
                 let _ = dispatch_parameter(sender, command).await;
             }
             DirectMessage::Request(request) => {
-                let DirectRequest { request, reply } = *request;
+                let DirectRequest {
+                    request,
+                    reply,
+                    submitted_at,
+                    slow_threshold,
+                } = *request;
                 let engine_sender = engine_sender.clone();
                 let vst3_sender = vst3_sender.clone();
                 let background_sender = background_sender.clone();
                 let audio_engine = Arc::clone(&audio_engine);
+                let slow_requests = Arc::clone(&slow_requests);
                 tokio::spawn(async move {
                     let ControlRequest {
                         request_id,
                         command,
                     } = request;
                     let shutdown = matches!(command, ControlCommand::Shutdown);
-                    let deadline = protocol_deadline(&command);
                     let work = async move {
                         if shutdown {
                             let _ = audio_engine.stop_audio_engine();
@@ -689,16 +690,90 @@ async fn run_direct_actor(
                             }
                         }
                     };
-                    let result = tokio::time::timeout(deadline, work)
-                        .await
-                        .unwrap_or_else(|_| {
-                            control_error! {
-                                message: "embedded audio request deadline exceeded".into(),
-                            }
-                        });
+                    let result = await_terminal_result(
+                        work,
+                        submitted_at,
+                        slow_threshold,
+                        &slow_requests,
+                        request_id,
+                    )
+                    .await;
                     let _ = reply.send(ControlResponse { request_id, result });
                 });
             }
         }
+    }
+}
+
+async fn await_terminal_result<F>(
+    work: F,
+    submitted_at: Instant,
+    slow_threshold: Duration,
+    slow_requests: &AtomicU64,
+    request_id: u64,
+) -> F::Output
+where
+    F: std::future::Future,
+{
+    tokio::pin!(work);
+    let elapsed = submitted_at.elapsed();
+    if elapsed >= slow_threshold {
+        record_slow_request(slow_requests, request_id, slow_threshold);
+        return work.await;
+    }
+    tokio::select! {
+        result = &mut work => result,
+        () = tokio::time::sleep(slow_threshold - elapsed) => {
+            record_slow_request(slow_requests, request_id, slow_threshold);
+            work.await
+        }
+    }
+}
+
+fn record_slow_request(counter: &AtomicU64, request_id: u64, threshold: Duration) {
+    counter.fetch_add(1, Ordering::Relaxed);
+    eprintln!(
+        "audio-host: embedded request {request_id} has been pending for {} ms; waiting for its terminal result",
+        threshold.as_millis()
+    );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn slow_observation_preserves_the_terminal_result() {
+        let slow_requests = AtomicU64::new(0);
+        let result = await_terminal_result(
+            async {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+                42
+            },
+            Instant::now(),
+            Duration::from_millis(1),
+            &slow_requests,
+            7,
+        )
+        .await;
+
+        assert_eq!(result, 42);
+        assert_eq!(slow_requests.load(Ordering::Relaxed), 1);
+    }
+
+    #[tokio::test]
+    async fn fast_request_does_not_increment_slow_observation() {
+        let slow_requests = AtomicU64::new(0);
+        let result = await_terminal_result(
+            async { 42 },
+            Instant::now(),
+            Duration::from_secs(1),
+            &slow_requests,
+            7,
+        )
+        .await;
+
+        assert_eq!(result, 42);
+        assert_eq!(slow_requests.load(Ordering::Relaxed), 0);
     }
 }

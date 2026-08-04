@@ -15,7 +15,7 @@ function audioRuntime(
       winitGeneration: 8,
       callbackGeneration: 7
     },
-    requests: { normalPending: 0, capacity: 256, timeouts: 0 },
+    requests: { normalPending: 0, capacity: 256, slowRequests: 0 },
     runtime: {
       requested: {
         workerThreads: "auto",
@@ -68,7 +68,7 @@ describe("system performance store embedded audio runtime health", () => {
           winitGeneration: 8,
           callbackGeneration: 7
         },
-        requests: { normalPending: 240, capacity: 256, timeouts: 3 },
+        requests: { normalPending: 240, capacity: 256, slowRequests: 3 },
         parameterRing: {
           used: 240,
           capacity: 256,
@@ -92,7 +92,7 @@ describe("system performance store embedded audio runtime health", () => {
     const store = useSystemPerformanceStore()
     store.snapshot = snapshot(
       audioRuntime({
-        requests: { normalPending: 0, capacity: 256, timeouts: 12 },
+        requests: { normalPending: 0, capacity: 256, slowRequests: 12 },
         parameterRing: {
           used: 0,
           capacity: 256,
