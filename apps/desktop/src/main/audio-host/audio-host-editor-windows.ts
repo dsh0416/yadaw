@@ -396,11 +396,13 @@ export class ElectronPluginEditorWindows implements AudioHostEditorWindows {
       topInset: nativeDimension(toolbarHeight, scaleFactor),
       displayScale: scaleFactor
     })
+    // applySnapshot calls back into this method after changing the Electron
+    // window so the native child receives its final geometry. Do not feed that
+    // nested resize back into applySnapshot: fractional Windows DPI rounding
+    // can keep the two snapshots one pixel apart and recurse synchronously.
+    if (entry.applyingPluginSize) return
     const accepted = entry.client.editorHostSnapshot(instanceId)
-    if (
-      !accepted?.attached ||
-      (accepted.width === width && accepted.height === requestedHeight)
-    ) {
+    if (!accepted?.attached || (accepted.width === width && accepted.height === requestedHeight)) {
       return
     }
     if (accepted.width > width) {
