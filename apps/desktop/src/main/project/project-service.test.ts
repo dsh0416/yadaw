@@ -9,6 +9,7 @@ const dump = vi.fn(async (outputPath: string) => {
   await writeFile(outputPath, "heron-archive")
 })
 const openProject = vi.fn().mockResolvedValue(undefined)
+const closeProject = vi.fn().mockResolvedValue(undefined)
 const terminatedWorkers: Array<ReturnType<typeof vi.fn>> = []
 
 vi.mock("./project-worker-client", () => ({
@@ -24,7 +25,7 @@ vi.mock("./project-worker-client", () => ({
       waveformDisplayMode: "separate"
     })
     dump = dump
-    close = vi.fn().mockResolvedValue(undefined)
+    close = closeProject
     onProgress = null
 
     constructor() {
@@ -41,6 +42,7 @@ describe("ProjectService.create", () => {
     service = null
     dump.mockClear()
     openProject.mockReset().mockResolvedValue(undefined)
+    closeProject.mockReset().mockResolvedValue(undefined)
     terminatedWorkers.length = 0
   })
 
@@ -139,5 +141,29 @@ describe("ProjectService.create", () => {
       { phase: "restoring-project-state", completedUnits: 1 },
       { phase: "restoring-project-state", completedUnits: 2 }
     ])
+  })
+
+  it("preserves the active workspace when a prepared close is aborted", async () => {
+    const userData = await mkdtemp(join(tmpdir(), "heron-project-close-recovery-"))
+    const projectPath = join(userData, "Recoverable.heron")
+    service = new ProjectService(userData, new ApplicationSettingsStore(userData))
+    await service.create({
+      path: projectPath,
+      name: "Recoverable",
+      sampleRate: 48_000,
+      timeSignatureNumerator: 4,
+      timeSignatureDenominator: 4,
+      waveformDisplayMode: "separate"
+    })
+    await service.markExternalStateDirty()
+
+    await expect(service.prepareClose("cancel")).resolves.toBe(false)
+    await expect(service.prepareClose("save")).resolves.toBe(true)
+    expect(service.current).toMatchObject({ path: projectPath, dirty: false })
+    expect(closeProject).toHaveBeenCalledOnce()
+
+    await service.abortPreparedClose()
+    expect(openProject).toHaveBeenLastCalledWith(expect.stringContaining("pgdata"))
+    expect(service.current).toMatchObject({ path: projectPath, dirty: false })
   })
 })

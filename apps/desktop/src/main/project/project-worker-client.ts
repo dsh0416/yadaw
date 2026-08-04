@@ -1,4 +1,3 @@
-import { Worker } from "node:worker_threads"
 import type {
   ProjectGraphSnapshot,
   ProjectAssetSummary,
@@ -24,6 +23,11 @@ import type {
   WorkerResult,
   WorkerResultMap
 } from "@heron/project-db/protocol"
+import {
+  createProjectWorkerPort,
+  type ProjectWorkerFactory,
+  type ProjectWorkerPort
+} from "./project-worker-port"
 
 interface PendingCall {
   settle(message: WorkerResponse): void
@@ -42,7 +46,7 @@ function workerError(response: Extract<WorkerResponse, { ok: false }>): Error {
 }
 
 export class ProjectWorkerClient {
-  private readonly worker: Worker
+  private readonly worker: ProjectWorkerPort
   private readonly pending = new Map<number, PendingCall>()
   private nextId = 1
   private state: WorkerState = "active"
@@ -50,11 +54,9 @@ export class ProjectWorkerClient {
   private databaseClosed = true
   onProgress: ((progress: WorkerProgress) => void) | null = null
 
-  constructor(workerUrl: URL) {
-    // Electron's Playwright/DevTools inspector flags are inherited by Node workers by
-    // default and can leave an ESM worker paused before its module body executes.
-    this.worker = new Worker(workerUrl, { execArgv: [] })
-    this.worker.on("message", (message: WorkerResponse | WorkerProgress) => {
+  constructor(workerUrl: URL, workerFactory: ProjectWorkerFactory = createProjectWorkerPort) {
+    this.worker = workerFactory(workerUrl)
+    this.worker.onMessage((message: WorkerResponse | WorkerProgress) => {
       if (!("id" in message)) {
         this.onProgress?.(message)
         return
@@ -64,10 +66,10 @@ export class ProjectWorkerClient {
       this.pending.delete(message.id)
       call.settle(message)
     })
-    this.worker.on("error", (error: unknown) => {
+    this.worker.onError((error: unknown) => {
       this.fail(error instanceof Error ? error : new Error(String(error)))
     })
-    this.worker.on("exit", (code) => {
+    this.worker.onExit((code) => {
       if (this.state === "terminating" || this.state === "terminated") return
       this.fail(new Error(`Project worker exited with code ${code}`))
     })

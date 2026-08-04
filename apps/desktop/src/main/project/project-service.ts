@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto"
-import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises"
+import { mkdir } from "node:fs/promises"
 import { basename, dirname, extname, join, resolve } from "node:path"
 import type {
   CreateProjectRequest,
@@ -28,15 +28,10 @@ import type { ApplicationSettingsStore } from "../settings"
 import type { ProjectAssetReader } from "./asset-materializer"
 import { ProjectArchiveJournal } from "./project-archive-journal"
 import { ProjectWorkerClient } from "./project-worker-client"
-
-interface WorkingCopyState {
-  id: string
-  projectPath: string
-  configuration: ProjectConfiguration
-  dirty: boolean
-  archiveMtimeMs: number | null
-  updatedAt: number
-}
+import type { ProjectWorkerFactory } from "./project-worker-port"
+import { createProjectWorkerPort } from "./project-worker-port"
+import { ProjectWorkspaceOwnership } from "./project-workspace-ownership"
+import { ProjectWorkingCopyStore } from "./project-working-copy-store"
 
 interface ProjectLoadProgress {
   phase:
@@ -106,46 +101,35 @@ function validateConfiguration(value: CreateProjectRequest): ProjectConfiguratio
   }
 }
 
-async function fileMtime(path: string): Promise<number | null> {
-  try {
-    return (await stat(path)).mtimeMs
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null
-    throw error
-  }
-}
-
 export class ProjectService {
   private readonly workerUrl = new URL(/* @vite-ignore */ "./project-worker.mjs", import.meta.url)
   private readonly archiveJournal: ProjectArchiveJournal
-  private active: ProjectContext | null = null
-  private candidate: ProjectContext | null = null
+  private readonly workspaces = new ProjectWorkspaceOwnership<ProjectContext>()
+  private readonly workingCopies: ProjectWorkingCopyStore
 
   constructor(
-    private readonly userData: string,
-    private readonly settings: ApplicationSettingsStore
+    userData: string,
+    private readonly settings: ApplicationSettingsStore,
+    private readonly workerFactory: ProjectWorkerFactory = createProjectWorkerPort
   ) {
     this.archiveJournal = new ProjectArchiveJournal(userData)
+    this.workingCopies = new ProjectWorkingCopyStore(userData)
   }
 
   get current(): ProjectSession | null {
-    return this.active ? structuredClone(this.active.session) : null
+    return this.workspaces.active ? structuredClone(this.workspaces.active.session) : null
   }
 
   private requireActive(): ProjectContext {
-    if (!this.active) throw new Error("No project is open")
-    return this.active
+    return this.workspaces.requireActive()
   }
 
   private requireCandidate(): ProjectContext {
-    if (!this.candidate) throw new Error("No project candidate is prepared")
-    return this.candidate
+    return this.workspaces.requireCandidate()
   }
 
-  private async writeState(context: ProjectContext, state: WorkingCopyState): Promise<void> {
-    const path = join(context.workingRoot, "session.json")
-    await writeFile(`${path}.tmp`, `${JSON.stringify(state, null, 2)}\n`, "utf8")
-    await rename(`${path}.tmp`, path)
+  private createWorker(): ProjectWorkerClient {
+    return new ProjectWorkerClient(this.workerUrl, this.workerFactory)
   }
 
   private async stateFromDatabase(
@@ -164,8 +148,7 @@ export class ProjectService {
   }
 
   private assertCanPrepare(): void {
-    if (this.active) throw new Error("Close the current project before opening another")
-    if (this.candidate) throw new Error("A project candidate is already being prepared")
+    this.workspaces.assertCanPrepare()
   }
 
   async prepareCreate(
@@ -178,8 +161,8 @@ export class ProjectService {
     const projectPath = resolveProjectFilePath(request.path)
     const id = workspaceId(projectPath)
     const context: ProjectContext = {
-      worker: new ProjectWorkerClient(this.workerUrl),
-      workingRoot: join(this.userData, "workspaces", id),
+      worker: this.createWorker(),
+      workingRoot: this.workingCopies.root(id),
       session: {
         id,
         path: projectPath,
@@ -188,11 +171,10 @@ export class ProjectService {
         recoveredWorkingCopy: false
       }
     }
-    this.candidate = context
+    this.workspaces.stage(context)
     try {
       onProgress?.({ phase: "committing-database", completedUnits: 0 })
-      await rm(context.workingRoot, { recursive: true, force: true })
-      await mkdir(context.workingRoot, { recursive: true })
+      await this.workingCopies.reset(context.workingRoot)
       await context.worker.create(join(context.workingRoot, "pgdata"), {
         name: configuration.name,
         sampleRate: configuration.sampleRate,
@@ -226,19 +208,7 @@ export class ProjectService {
     }
     const projectPath = resolve(projectPathValue)
     const id = workspaceId(projectPath)
-    try {
-      const previous = JSON.parse(
-        await readFile(join(this.userData, "workspaces", id, "session.json"), "utf8")
-      ) as WorkingCopyState
-      return (
-        previous.dirty &&
-        previous.projectPath === projectPath &&
-        previous.archiveMtimeMs === (await fileMtime(projectPath))
-      )
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return false
-      throw error
-    }
+    return this.workingCopies.isRecoverable(this.workingCopies.root(id), projectPath)
   }
 
   async prepareOpen(
@@ -253,39 +223,25 @@ export class ProjectService {
     this.assertCanPrepare()
     const projectPath = resolve(projectPathValue)
     const id = workspaceId(projectPath)
-    const workingRoot = join(this.userData, "workspaces", id)
-    const statePath = join(workingRoot, "session.json")
-    let previous: WorkingCopyState | null = null
-    try {
-      previous = JSON.parse(await readFile(statePath, "utf8")) as WorkingCopyState
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error
-    }
-    const archiveMtimeMs = await fileMtime(projectPath)
+    const workingRoot = this.workingCopies.root(id)
     const recover =
-      recoverWorkingCopy &&
-      Boolean(
-        previous?.dirty &&
-        previous.projectPath === projectPath &&
-        previous.archiveMtimeMs === archiveMtimeMs
-      )
+      recoverWorkingCopy && (await this.workingCopies.isRecoverable(workingRoot, projectPath))
     onProgress?.({
       phase: recover ? "loading-project-database" : "loading-project-archive",
       completedUnits: 0
     })
-    const worker = new ProjectWorkerClient(this.workerUrl)
+    const worker = this.createWorker()
     try {
       if (recover) {
         await worker.open(join(workingRoot, "pgdata"))
       } else {
-        await rm(workingRoot, { recursive: true, force: true })
-        await mkdir(workingRoot, { recursive: true })
+        await this.workingCopies.reset(workingRoot)
         await worker.open(join(workingRoot, "pgdata"), projectPath)
       }
       onProgress?.({ phase: "restoring-project-state", completedUnits: 1 })
       const session = await this.stateFromDatabase(worker, id, projectPath, recover)
       const context = { worker, session, workingRoot }
-      this.candidate = context
+      this.workspaces.stage(context)
       await this.persistContextState(context)
       onProgress?.({ phase: "restoring-project-state", completedUnits: 2 })
       return structuredClone(session)
@@ -305,21 +261,17 @@ export class ProjectService {
   }
 
   commitCandidate(): ProjectSession {
-    const candidate = this.requireCandidate()
-    this.active = candidate
-    this.candidate = null
+    const candidate = this.workspaces.commitCandidate()
     return structuredClone(candidate.session)
   }
 
   async abortCandidate(): Promise<void> {
-    const candidate = this.candidate
-    this.candidate = null
+    const candidate = this.workspaces.takeCandidate()
     if (candidate) await candidate.worker.terminate()
   }
 
   async quarantineActiveCandidate(): Promise<void> {
-    const active = this.active
-    this.active = null
+    const active = this.workspaces.takeActive()
     if (active) await active.worker.terminate()
   }
 
@@ -445,7 +397,7 @@ export class ProjectService {
   }
 
   private async refreshSessionConfiguration(): Promise<void> {
-    const context = this.active
+    const context = this.workspaces.active
     if (!context) return
     const refreshed = await this.stateFromDatabase(
       context.worker,
@@ -457,7 +409,7 @@ export class ProjectService {
   }
 
   private async completeMutation(refreshConfiguration: boolean): Promise<void> {
-    const context = this.active
+    const context = this.workspaces.active
     if (!context) return
     if (refreshConfiguration) await this.refreshSessionConfiguration()
     const wasDirty = context.session.dirty
@@ -510,27 +462,25 @@ export class ProjectService {
   }
 
   async markExternalStateDirty(): Promise<boolean> {
-    const context = this.active
+    const context = this.workspaces.active
     if (!context || context.session.dirty) return false
     await this.markDirty()
-    return this.active === context && context.session.dirty
+    return this.workspaces.active === context && context.session.dirty
   }
 
   private async markDirty(): Promise<void> {
-    const context = this.active
+    const context = this.workspaces.active
     if (!context || context.session.dirty) return
     context.session.dirty = true
     await this.persistContextState(context)
   }
 
   private async persistContextState(context: ProjectContext): Promise<void> {
-    await this.writeState(context, {
+    await this.workingCopies.write(context.workingRoot, {
       id: context.session.id,
       projectPath: context.session.path,
       configuration: context.session.configuration,
-      dirty: context.session.dirty,
-      archiveMtimeMs: await fileMtime(context.session.path),
-      updatedAt: Date.now()
+      dirty: context.session.dirty
     })
   }
 
@@ -570,7 +520,7 @@ export class ProjectService {
   }
 
   async prepareClose(disposition: ProjectCloseDisposition): Promise<boolean> {
-    const context = this.active
+    const context = this.workspaces.active
     if (!context) return true
     if (context.session.dirty && disposition === "cancel") return false
     if (context.session.dirty && disposition === "save") await this.save()
@@ -579,14 +529,14 @@ export class ProjectService {
   }
 
   async abortPreparedClose(): Promise<void> {
-    const context = this.active
+    const context = this.workspaces.active
     if (!context) return
     await context.worker.open(join(context.workingRoot, "pgdata"))
   }
 
   async commitClose(disposition: ProjectCloseDisposition): Promise<boolean> {
-    const context = this.requireActive()
-    this.active = null
+    const context = this.workspaces.takeActive()
+    if (!context) throw new Error("No project is open")
     let cleanupSucceeded = true
     try {
       await context.worker.terminate()
@@ -595,9 +545,7 @@ export class ProjectService {
     }
     if (disposition === "discard") {
       try {
-        await rm(join(context.workingRoot, "pgdata"), { recursive: true, force: true })
-        const statePath = join(context.workingRoot, "session.json")
-        await rm(statePath, { force: true })
+        await this.workingCopies.discard(context.workingRoot)
       } catch {
         cleanupSucceeded = false
       }
@@ -607,7 +555,7 @@ export class ProjectService {
 
   async close(disposition: ProjectCloseDisposition): Promise<boolean> {
     if (!(await this.prepareClose(disposition))) return false
-    if (!this.active) return true
+    if (!this.workspaces.active) return true
     await this.commitClose(disposition)
     return true
   }
@@ -617,11 +565,7 @@ export class ProjectService {
   }
 
   async shutdown(): Promise<void> {
-    const contexts = [this.candidate, this.active].filter(
-      (context): context is ProjectContext => context !== null
-    )
-    this.candidate = null
-    this.active = null
+    const contexts = this.workspaces.drain()
     await Promise.allSettled(contexts.map((context) => context.worker.terminate()))
   }
 }
