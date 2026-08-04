@@ -214,9 +214,23 @@ export class ElectronPluginEditorWindows implements AudioHostEditorWindows {
       if (!entry.closing) this.resizeNativeHost(instanceId, entry)
     })
     window.on("focus", () => {
-      if (!entry.closing && entry.toolbarState?.activeMode === "native") {
+      // On Windows, activating the owned toolbar can focus the parent first.
+      // Wait until focus settles so opening a native <select> is not cancelled
+      // by immediately moving focus back into the VST child HWND.
+      setImmediate(() => {
+        if (
+          this.entries.get(instanceId) !== entry ||
+          entry.closing ||
+          entry.window.isDestroyed() ||
+          !entry.window.isFocused() ||
+          entry.toolbarWindow.isDestroyed() ||
+          entry.toolbarWindow.isFocused() ||
+          entry.toolbarState?.activeMode !== "native"
+        ) {
+          return
+        }
         client.focusEditorHost(instanceId)
-      }
+      })
     })
     window.on("close", (event) => {
       if (entry.closing) return
@@ -369,7 +383,7 @@ export class ElectronPluginEditorWindows implements AudioHostEditorWindows {
         entry.window.setMinimumSize(1, toolbarHeight + 1)
       }
       this.layoutToolbar(entry, width, toolbarHeight)
-      entry.client.focusEditorHost(instanceId)
+      if (modeChanged) entry.client.focusEditorHost(instanceId)
     }
     // The route select updates and disables itself optimistically. Rendering
     // the intermediate pending state would reload the data URL with the old

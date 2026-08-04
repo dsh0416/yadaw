@@ -67,4 +67,62 @@ describe("native plug-in editor dimensions", () => {
     expect(editorHostSnapshot).not.toHaveBeenCalled()
     expect(entry.applyingPluginSize).toBe(false)
   })
+
+  it("does not steal focus from an open toolbar control during state refresh", async () => {
+    const windows = new ElectronPluginEditorWindows({} as never)
+    const state = {
+      activeMode: "native",
+      zoomPercent: 100,
+      compareSlot: "a",
+      canCompare: true,
+      canPaste: false,
+      canUndo: false,
+      canRedo: false,
+      sidechainBuses: [],
+      sidechainSources: [],
+      sidechainPending: false
+    }
+    const focusEditorHost = vi.fn()
+    const entry = {
+      window: {
+        isDestroyed: () => false,
+        getContentSize: () => [800, 660],
+        getContentBounds: () => ({ x: 10, y: 20, width: 800, height: 660 })
+      },
+      toolbarWindow: {
+        isDestroyed: () => false,
+        setBounds: vi.fn()
+      },
+      toolbar: {
+        setBounds: vi.fn(),
+        webContents: {
+          isDestroyed: () => false,
+          loadURL: vi.fn()
+        }
+      },
+      client: { focusEditorHost },
+      closing: false,
+      context: {
+        channelName: "Audio 1",
+        channelColor: "#58c6c2",
+        pluginName: "Compressor",
+        theme: "dark",
+        locale: "en-US"
+      },
+      toolbarState: state,
+      parameters: [],
+      loadingParameters: false,
+      toolbarKey: "",
+      minimumNativeWidth: 1,
+      minimumNativeHeight: 1
+    }
+    type ToolbarHarness = {
+      applyToolbarState(instanceId: string, target: unknown, next: typeof state): Promise<void>
+    }
+    const harness = windows as unknown as ToolbarHarness
+
+    await harness.applyToolbarState("plugin-1", entry, state)
+
+    expect(focusEditorHost).not.toHaveBeenCalled()
+  })
 })
