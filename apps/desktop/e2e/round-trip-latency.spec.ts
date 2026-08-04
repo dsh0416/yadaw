@@ -31,7 +31,7 @@ test("measures mock round-trip latency through the desktop boundary", async () =
         predicate: (candidate) => !candidate.url().includes("splash.html")
       }))
     await page.waitForLoadState("domcontentloaded")
-    await expect(page.getByRole("heading", { name: /Build a session/ })).toBeVisible()
+    await expect(page.getByRole("heading", { name: /Make sound/ })).toBeVisible()
 
     const runtime = await page.evaluate(async () => {
       const bootstrap = await window.heron.bootstrap({

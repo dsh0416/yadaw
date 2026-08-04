@@ -31,9 +31,9 @@ test("prompts before closing a project with a committed mutation", async () => {
         predicate: (candidate) => !candidate.url().includes("splash.html")
       }))
     await page.waitForLoadState("domcontentloaded")
-    await expect(page.getByRole("heading", { name: /Build a session/ })).toBeVisible()
+    await expect(page.getByRole("heading", { name: /Make sound/ })).toBeVisible()
 
-    await page.getByRole("button", { name: "Create project" }).click()
+    await page.getByRole("button", { name: "Start creating" }).click()
     await expect(page.locator(".studio-shell")).toBeVisible()
     await page.getByRole("button", { name: "Add audio track" }).click()
     await expect(page.getByLabel("Unsaved changes")).toBeVisible()

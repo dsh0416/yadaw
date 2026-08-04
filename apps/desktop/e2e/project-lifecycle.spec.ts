@@ -139,8 +139,8 @@ test("records into a Large Object and reopens the PGlite project archive", async
       await page.setViewportSize({ width: 1440, height: 900 })
     }
 
-    await expect(page.getByRole("heading", { name: /Build a session/ })).toBeVisible()
-    await page.getByRole("button", { name: "Create project" }).click()
+    await expect(page.getByRole("heading", { name: /Make sound/ })).toBeVisible()
+    await page.getByRole("button", { name: "Start creating" }).click()
     await expect(page.locator(".studio-shell")).toBeVisible()
     await expectStudioTopbarToFit()
     const selectionPolicy = await page.locator(".studio-shell").evaluate((shell) => {
@@ -556,7 +556,7 @@ test("records into a Large Object and reopens the PGlite project archive", async
       })
     ).toBe(true)
     await navigateTo("/")
-    await expect(page.getByRole("heading", { name: /Build a session/ })).toBeVisible()
+    await expect(page.getByRole("heading", { name: /Make sound/ })).toBeVisible()
     await page.getByRole("button", { name: "Lifecycle" }).click()
     await expect(page.locator(".studio-shell")).toBeVisible({ timeout: 20_000 })
     await page.getByRole("button", { name: "Add instrument track" }).click()
