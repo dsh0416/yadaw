@@ -37,13 +37,15 @@ const title = computed(() => (localeIndex.value === "zh" ? "ASIO® 兼容性" : 
 }
 
 .asio-logo-stage {
-  padding: 8px 10px;
+  padding: 8px;
   border-radius: 4px;
   background: var(--vp-c-black);
 }
 
 .asio-compatible-logo {
   --asio-compatible-logo-width: var(--trademark-logo-width, 24mm);
+
+  max-width: 20mm;
 }
 
 .asio-trademark-copy {
