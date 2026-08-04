@@ -42,7 +42,7 @@ libc = "0.2"
 # Standalone Rust tests and benchmarks link the N-API crates without a Node
 # host on macOS and Linux. Keep symbol lookup dynamic even with older napi 3.x
 # releases where `dyn-symbols` was not part of the default feature set.
-napi = { version = "3", features = ["napi8", "dyn-symbols"] }
+napi = { version = "3", features = ["napi8", "dyn-symbols", "tokio_rt"] }
 napi-build = "2"
 napi-derive = "3"
 raw-window-handle = "0.6.2"

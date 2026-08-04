@@ -173,15 +173,17 @@ pub(super) async fn engine_actor(
     audio_engine: Arc<engine::AudioEngine>,
 ) {
     while let Some(message) = inbox.recv().await {
-        let result = match message.command {
-            ActorCommand::Control(command) => engine_command(&audio_engine, command, None)
+        let engine = Arc::clone(&audio_engine);
+        let parameter_handles = Arc::clone(&handles);
+        let result = tokio::task::spawn_blocking(move || match message.command {
+            ActorCommand::Control(command) => engine_command(&engine, command, None)
                 .unwrap_or_else(|| {
                     control_error! {
                         message: "unsupported engine command".into(),
                     }
                 }),
             ActorCommand::Parameter(command) => {
-                mixer_parameter_command(&audio_engine, &handles, command)
+                mixer_parameter_command(&engine, &parameter_handles, command)
             }
             ActorCommand::SyncAraGraph { .. }
             | ActorCommand::PreparePluginGraph { .. }
@@ -192,7 +194,7 @@ pub(super) async fn engine_actor(
                 message: "engine actor does not own VST3 UI state".into(),
             },
             ActorCommand::PublishBuiltGraph { built } => {
-                match audio_engine.publish_mixer_runtime(built) {
+                match engine.publish_mixer_runtime(built) {
                     Ok(engine::PublishOutcome::Published) => ControlResult::Accepted,
                     Ok(engine::PublishOutcome::Superseded) => control_error! {
                         message: "graph build superseded".into(),
@@ -205,7 +207,13 @@ pub(super) async fn engine_actor(
             ActorCommand::BuildGraph { .. } => control_error! {
                 message: "engine actor does not own graph construction".into(),
             },
-        };
+        })
+        .await
+        .unwrap_or_else(|error| {
+            control_error! {
+                message: format!("engine blocking task failed: {error}"),
+            }
+        });
         let _ = message.reply.send(result);
     }
 }
@@ -265,12 +273,21 @@ pub(super) async fn background_io_actor(
             ActorCommand::BuildGraph { graph } => {
                 build_graph_on_worker(&supervisor, &engine_sender, graph, &audio_engine).await
             }
-            ActorCommand::Control(command) => engine_command(&audio_engine, command, None)
-                .unwrap_or_else(|| {
-                    control_error! {
-                        message: "unsupported background I/O command".into(),
-                    }
-                }),
+            ActorCommand::Control(command) => {
+                let engine = Arc::clone(&audio_engine);
+                tokio::task::spawn_blocking(move || engine_command(&engine, command, None))
+                    .await
+                    .unwrap_or_else(|error| {
+                        Some(control_error! {
+                            message: format!("background blocking task failed: {error}"),
+                        })
+                    })
+                    .unwrap_or_else(|| {
+                        control_error! {
+                            message: "unsupported background I/O command".into(),
+                        }
+                    })
+            }
             ActorCommand::Parameter(_) => control_error! {
                 message: "background I/O actor does not own parameters".into(),
             },

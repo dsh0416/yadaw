@@ -156,7 +156,7 @@ pub enum EmbeddedParameterEnqueue {
 
 struct DirectRequest {
     request: ControlRequest,
-    reply: std_mpsc::SyncSender<ControlResponse>,
+    reply: tokio::sync::oneshot::Sender<ControlResponse>,
     submitted_at: Instant,
     slow_threshold: Duration,
 }
@@ -185,6 +185,16 @@ struct EmbeddedState {
     closed: AtomicBool,
     runtime_thread: Mutex<Option<thread::JoinHandle<()>>>,
     config: EmbeddedRuntimeConfig,
+}
+
+struct PendingRequest {
+    state: Arc<EmbeddedState>,
+}
+
+impl Drop for PendingRequest {
+    fn drop(&mut self) {
+        self.state.pending_requests.fetch_sub(1, Ordering::AcqRel);
+    }
 }
 
 #[derive(Clone)]
@@ -388,7 +398,7 @@ impl EmbeddedAudioHost {
         self.state.parameter_stale.load(Ordering::Relaxed)
     }
 
-    pub fn request(
+    pub async fn request(
         &self,
         request: ControlRequest,
     ) -> Result<ControlResponse, EmbeddedRuntimeError> {
@@ -396,23 +406,26 @@ impl EmbeddedAudioHost {
             return Err(EmbeddedRuntimeError::Closed);
         }
         let slow_threshold = slow_request_threshold(&request.command);
-        let (reply, response) = std_mpsc::sync_channel(1);
+        let (reply, response) = tokio::sync::oneshot::channel();
         self.state.pending_requests.fetch_add(1, Ordering::AcqRel);
+        let pending = PendingRequest {
+            state: Arc::clone(&self.state),
+        };
         let send = self
             .state
             .messages
-            .blocking_send(DirectMessage::Request(Box::new(DirectRequest {
+            .send(DirectMessage::Request(Box::new(DirectRequest {
                 request,
                 reply,
                 submitted_at: Instant::now(),
                 slow_threshold,
-            })));
+            })))
+            .await;
         if send.is_err() {
-            self.state.pending_requests.fetch_sub(1, Ordering::AcqRel);
             return Err(EmbeddedRuntimeError::Closed);
         }
-        let result = response.recv().map_err(|_| EmbeddedRuntimeError::Closed);
-        self.state.pending_requests.fetch_sub(1, Ordering::AcqRel);
+        let result = response.await.map_err(|_| EmbeddedRuntimeError::Closed);
+        drop(pending);
         result
     }
 
@@ -458,10 +471,11 @@ impl EmbeddedAudioHost {
                     EmbeddedParameterEnqueue::StaleEpoch => PriorityResult::Busy,
                 }
             }
-            PriorityCommand::Shutdown => {
-                let _ = self.state.messages.blocking_send(DirectMessage::Close);
-                PriorityResult::Accepted
-            }
+            PriorityCommand::Shutdown => match self.state.messages.try_send(DirectMessage::Close) {
+                Ok(()) => PriorityResult::Accepted,
+                Err(mpsc::error::TrySendError::Full(_)) => PriorityResult::Busy,
+                Err(mpsc::error::TrySendError::Closed(_)) => PriorityResult::Accepted,
+            },
             PriorityCommand::ParameterWake
             | PriorityCommand::ReleaseLeases { .. }
             | PriorityCommand::TelemetryPageReady { .. } => PriorityResult::Accepted,
@@ -577,18 +591,32 @@ impl EmbeddedAudioHost {
         if self.state.closed.swap(true, Ordering::AcqRel) {
             return;
         }
-        let _ = self.state.messages.blocking_send(DirectMessage::Close);
-        if let Ok(mut thread) = self.state.runtime_thread.lock()
-            && let Some(thread) = thread.take()
-        {
-            let _ = thread.join();
+        let runtime_thread = self
+            .state
+            .runtime_thread
+            .lock()
+            .ok()
+            .and_then(|mut thread| thread.take());
+        if let Some(runtime_thread) = runtime_thread {
+            let messages = self.state.messages.clone();
+            if let Err(error) = thread::Builder::new()
+                .name("heron-embedded-close".into())
+                .spawn(move || {
+                    let _ = messages.blocking_send(DirectMessage::Close);
+                    let _ = runtime_thread.join();
+                })
+            {
+                eprintln!("audio-host: could not start runtime close task: {error}");
+            }
         }
         UI_RUNTIMES.with(|runtimes| {
-            if let Some(mut runtime) = runtimes.borrow_mut().remove(&self.state.runtime_id) {
-                runtime.pump();
+            if let Some(runtime) = runtimes.borrow_mut().remove(&self.state.runtime_id) {
                 // winit and native plug-in UI facilities are process-scoped on
                 // desktop platforms. The runtime is created once, so avoid
                 // third-party DLL and COM teardown during application exit.
+                // In particular, do not pump or close plug-in windows here:
+                // `close` is a non-blocking boundary and the OS owns final
+                // process teardown.
                 std::mem::forget(runtime);
             }
         });
@@ -640,7 +668,8 @@ async fn run_direct_actor(
     while let Some(message) = inbox.recv().await {
         match message {
             DirectMessage::Close => {
-                let _ = audio_engine.stop_audio_engine();
+                let engine = Arc::clone(&audio_engine);
+                let _ = tokio::task::spawn_blocking(move || engine.stop_audio_engine()).await;
                 let _ = ui_proxy.send_event(UiEvent::Exit);
                 break;
             }
@@ -651,7 +680,10 @@ async fn run_direct_actor(
                         &engine_sender
                     }
                 };
-                let _ = dispatch_parameter(sender, command).await;
+                let sender = sender.clone();
+                tokio::spawn(async move {
+                    let _ = dispatch_parameter(&sender, command).await;
+                });
             }
             DirectMessage::Request(request) => {
                 let DirectRequest {
@@ -673,7 +705,10 @@ async fn run_direct_actor(
                     let shutdown = matches!(command, ControlCommand::Shutdown);
                     let work = async move {
                         if shutdown {
-                            let _ = audio_engine.stop_audio_engine();
+                            let _ = tokio::task::spawn_blocking(move || {
+                                audio_engine.stop_audio_engine()
+                            })
+                            .await;
                             ControlResult::Accepted
                         } else {
                             match command {

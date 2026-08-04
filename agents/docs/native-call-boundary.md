@@ -11,7 +11,16 @@ renderer -> preload -> Electron main -> @heron/dsp-node -> EmbeddedAudioHost
 The final arrow is a same-process N-API call. `AudioHostRuntime` owns the Rust
 runtime and exposes asynchronous control requests, priority heartbeat,
 parameter enqueue, direct telemetry, host-event draining, winit event pumping,
-and explicit close.
+and explicit close. Control promises are Tokio futures backed by bounded
+channels and oneshot terminal replies; they must not occupy a libuv worker with
+`blocking_send`, `recv`, or `recv_timeout` while native work is pending.
+
+Potentially blocking engine and device operations run on Tokio's blocking pool.
+Actor lanes preserve the ordering required by a resource while isolating that
+resource from heartbeat, parameter ingress, background I/O, and unrelated
+control requests. Closing the runtime initiates shutdown and reaps the runtime
+thread in the background; it must not join the runtime thread from Electron's
+main thread.
 
 The MessagePack request/response envelope is retained as a local ABI so Rust
 protocol validation stays centralized. It must not grow process-lifecycle,

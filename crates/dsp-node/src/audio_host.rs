@@ -6,10 +6,7 @@ use heron_audio_host::runtime::embedded::{
 use heron_dsp_runtime::protocol::{
     ControlRequest, ParameterCommand, ParameterGesture, ParameterTargetKind, PriorityRequest,
 };
-use napi::{
-    Error, Result, Status, Task,
-    bindgen_prelude::{AsyncTask, Buffer},
-};
+use napi::{Error, Result, Status, bindgen_prelude::Buffer};
 use napi_derive::napi;
 
 fn failure(context: &str, error: impl std::fmt::Display) -> Error {
@@ -65,10 +62,6 @@ pub struct NativeHostResponse {
     pub attachments: Vec<Buffer>,
 }
 
-pub struct OwnedHostResponse {
-    body: Vec<u8>,
-}
-
 #[napi(object)]
 pub struct ParameterEnqueueResult {
     pub outcome: String,
@@ -84,62 +77,6 @@ pub struct ParameterEnqueueRequest {
     pub gesture: String,
     pub sequence: Option<String>,
     pub target_generation: Option<u32>,
-}
-
-pub struct HostRequestTask {
-    runtime: EmbeddedAudioHost,
-    request: ControlRequest,
-}
-
-#[napi]
-impl Task for HostRequestTask {
-    type Output = OwnedHostResponse;
-    type JsValue = NativeHostResponse;
-
-    fn compute(&mut self) -> Result<Self::Output> {
-        let response = self
-            .runtime
-            .request(self.request.clone())
-            .map_err(runtime_failure)?;
-        let body = rmp_serde::to_vec_named(&response)
-            .map_err(|error| failure("could not encode embedded audio response", error))?;
-        Ok(OwnedHostResponse { body })
-    }
-
-    fn resolve(&mut self, _env: napi::Env, output: Self::Output) -> Result<Self::JsValue> {
-        Ok(NativeHostResponse {
-            body: output.body.into(),
-            attachments: Vec::new(),
-        })
-    }
-}
-
-pub struct HostPriorityTask {
-    runtime: EmbeddedAudioHost,
-    request: PriorityRequest,
-}
-
-#[napi]
-impl Task for HostPriorityTask {
-    type Output = OwnedHostResponse;
-    type JsValue = NativeHostResponse;
-
-    fn compute(&mut self) -> Result<Self::Output> {
-        let response = self
-            .runtime
-            .priority(self.request.clone())
-            .map_err(runtime_failure)?;
-        let body = rmp_serde::to_vec_named(&response)
-            .map_err(|error| failure("could not encode embedded priority response", error))?;
-        Ok(OwnedHostResponse { body })
-    }
-
-    fn resolve(&mut self, _env: napi::Env, output: Self::Output) -> Result<Self::JsValue> {
-        Ok(NativeHostResponse {
-            body: output.body.into(),
-            attachments: Vec::new(),
-        })
-    }
 }
 
 #[napi]
@@ -169,11 +106,11 @@ impl AudioHostRuntime {
     }
 
     #[napi]
-    pub fn request(
+    pub async fn request(
         &self,
         message_pack_request: Buffer,
         attachments: Option<Vec<Buffer>>,
-    ) -> Result<AsyncTask<HostRequestTask>> {
+    ) -> Result<NativeHostResponse> {
         if attachments
             .as_ref()
             .is_some_and(|values| !values.is_empty())
@@ -185,20 +122,30 @@ impl AudioHostRuntime {
         }
         let request = rmp_serde::from_slice::<ControlRequest>(&message_pack_request)
             .map_err(|error| failure("invalid embedded audio request", error))?;
-        Ok(AsyncTask::new(HostRequestTask {
-            runtime: self.runtime.clone(),
-            request,
-        }))
+        let response = self
+            .runtime
+            .request(request)
+            .await
+            .map_err(runtime_failure)?;
+        let body = rmp_serde::to_vec_named(&response)
+            .map_err(|error| failure("could not encode embedded audio response", error))?;
+        Ok(NativeHostResponse {
+            body: body.into(),
+            attachments: Vec::new(),
+        })
     }
 
     #[napi]
-    pub fn heartbeat(&self, message_pack_request: Buffer) -> Result<AsyncTask<HostPriorityTask>> {
+    pub async fn heartbeat(&self, message_pack_request: Buffer) -> Result<NativeHostResponse> {
         let request = rmp_serde::from_slice::<PriorityRequest>(&message_pack_request)
             .map_err(|error| failure("invalid embedded heartbeat request", error))?;
-        Ok(AsyncTask::new(HostPriorityTask {
-            runtime: self.runtime.clone(),
-            request,
-        }))
+        let response = self.runtime.priority(request).map_err(runtime_failure)?;
+        let body = rmp_serde::to_vec_named(&response)
+            .map_err(|error| failure("could not encode embedded priority response", error))?;
+        Ok(NativeHostResponse {
+            body: body.into(),
+            attachments: Vec::new(),
+        })
     }
 
     #[napi]
