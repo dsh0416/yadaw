@@ -199,6 +199,7 @@ fn benchmark_graph(
     NativeMixerGraph {
         generation: 1,
         sample_rate: BENCHMARK_SAMPLE_RATE,
+        project_end_tick: 61_440,
         latency_policy: NativeLatencyPolicy::Normal,
         channels,
         sends,

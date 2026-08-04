@@ -127,7 +127,7 @@ fn metronome_frames_follow_step_tempo_changes() {
 }
 
 #[test]
-fn play_at_content_end_rewinds_before_starting() {
+fn play_at_project_end_rewinds_before_starting() {
     let mut runtime = transport_test_runtime(48_000, 1_000, 1_000, TRANSPORT_STOPPED);
 
     let _ = runtime.handle_command(EngineCommand::Transport(TransportAction::Play, 0));
@@ -140,7 +140,7 @@ fn play_at_content_end_rewinds_before_starting() {
 }
 
 #[test]
-fn play_before_content_end_keeps_current_position() {
+fn play_before_project_end_keeps_current_position() {
     let mut runtime = transport_test_runtime(48_000, 1_000, 250, TRANSPORT_STOPPED);
 
     let _ = runtime.handle_command(EngineCommand::Transport(TransportAction::Play, 0));
@@ -174,7 +174,7 @@ fn external_sync_mode_is_scoped_to_each_runtime() {
 }
 
 #[test]
-fn playback_loop_splits_a_block_and_suppresses_content_auto_stop() {
+fn playback_loop_splits_a_block_and_suppresses_project_end_auto_stop() {
     let mut runtime = transport_test_runtime(960, 920, 900, TRANSPORT_PLAYING);
     runtime
         .transport
@@ -338,7 +338,7 @@ fn mixer_reload_preserves_active_record_count_in() {
 }
 
 #[test]
-fn auto_stop_at_content_end_then_play_restarts_from_beginning() {
+fn auto_stop_at_project_end_then_play_restarts_from_beginning() {
     let mut runtime = transport_test_runtime(48_000, 1_000, 980, TRANSPORT_PLAYING);
     let inputs = vec![[0.0; MAX_INPUT_CHANNELS]; 64];
     let mut outputs = vec![[0.0; MAX_OUTPUT_CHANNELS]; 64];
@@ -640,7 +640,7 @@ fn external_continue_resumes_waiting_record_or_play() {
 }
 
 #[test]
-fn render_block_auto_stops_when_playhead_reaches_content_end() {
+fn render_block_auto_stops_when_playhead_reaches_project_end() {
     let mut runtime = transport_test_runtime(48_000, 32, 0, TRANSPORT_PLAYING);
     let inputs = vec![[0.0; MAX_INPUT_CHANNELS]; 64];
     let mut outputs = vec![[0.0; MAX_OUTPUT_CHANNELS]; 64];
@@ -651,4 +651,20 @@ fn render_block_auto_stops_when_playhead_reaches_content_end() {
         TRANSPORT_STOPPED
     );
     assert!(runtime.transport.position_frames.load(Ordering::Relaxed) >= 32);
+}
+
+#[test]
+fn soft_project_end_stops_playback_without_truncating_later_content() {
+    let mut runtime = transport_test_runtime(48_000, 128, 0, TRANSPORT_PLAYING);
+    runtime.project_end_frame = 32;
+    let inputs = vec![[0.0; MAX_INPUT_CHANNELS]; 64];
+    let mut outputs = vec![[0.0; MAX_OUTPUT_CHANNELS]; 64];
+
+    assert!(!runtime.render_block(&inputs, &mut outputs, None));
+    assert_eq!(runtime.content_end_frame, 128);
+    assert_eq!(runtime.project_end_frame, 32);
+    assert_eq!(
+        runtime.transport.state.load(Ordering::Relaxed),
+        TRANSPORT_STOPPED
+    );
 }

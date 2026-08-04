@@ -95,6 +95,12 @@ pub(super) fn build_mixer_runtime(
         native.time_signature_events.clone(),
     )
     .map_err(|error| invalid_config(error.to_string()))?;
+    let project_end_frame = tempo_map
+        .tick_to_frame(native.project_end_tick, native.sample_rate)
+        .map_err(|error| invalid_config(error.to_string()))?;
+    if project_end_frame == 0 {
+        return Err(invalid_config("project end must be after tick zero"));
+    }
     let metronome_channel_index = native
         .channels
         .iter()
@@ -173,6 +179,7 @@ pub(super) fn build_mixer_runtime(
         transport,
         sample_rate: native.sample_rate,
         content_end_frame: midi_build.content_end_frame,
+        project_end_frame,
         tail_end_frame,
         has_infinite_tail: plugin_build.has_infinite_tail,
         input_peaks,

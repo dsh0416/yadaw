@@ -103,6 +103,7 @@ fn compiled_snapshot_exposes_adapters_plugin_states_and_route_pdc() {
     let graph = NativeMixerGraph {
         generation: 17,
         sample_rate: 48_000,
+        project_end_tick: 61_440,
         latency_policy: NativeLatencyPolicy::Normal,
         channels: vec![
             channel("wet", Some(3), vec![1]),
@@ -618,6 +619,7 @@ fn build_mixer_runtime_routes_bus_sends_and_metronome_channels() {
     let graph = NativeMixerGraph {
         generation: 5,
         sample_rate: 48_000,
+        project_end_tick: 61_440,
         latency_policy: NativeLatencyPolicy::Normal,
         channels: vec![
             {
@@ -698,6 +700,7 @@ fn compiled_snapshot_covers_instrument_bus_master_and_active_plugin_paths() {
     let graph = NativeMixerGraph {
         generation: 11,
         sample_rate: 48_000,
+        project_end_tick: 61_440,
         latency_policy: NativeLatencyPolicy::Normal,
         channels: vec![
             mixer_channel(

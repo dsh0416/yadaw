@@ -99,7 +99,7 @@ const cycleTooltip = computed(() =>
       :pressed="cycleEnabled"
       :disabled="externalClock"
       compact-hidden
-      tone="accent"
+      tone="loop"
       @activate="emit('toggleCycle')"
     >
       <Repeat2 :size="15" />

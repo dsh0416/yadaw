@@ -8,6 +8,11 @@ export async function assertProjectCommandAllowed(
   command: ProjectCommand
 ): Promise<void> {
   switch (command.type) {
+    case "update-project-end":
+      if (!Number.isSafeInteger(command.endTick) || command.endTick < 1) {
+        throw new Error("Project end must be a positive safe-integer tick")
+      }
+      return
     case "delete-track": {
       const rows = await tx
         .select({ systemRole: mixerChannels.systemRole })

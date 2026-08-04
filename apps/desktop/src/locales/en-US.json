@@ -1408,6 +1408,8 @@
       "trackRenameLabel": "{name}; double-click to rename; Alt+Arrow Up or Down to reorder",
       "timelineRulerAria": "Timeline ruler",
       "cycleLaneAria": "Cycle range lane; drag to create a playback loop",
+      "projectEndAria": "Project end marker",
+      "projectEndTooltip": "Drag to set the project end; clips beyond it are preserved",
       "instrumentLaneAria": "Instrument lane; double-click empty space or press Enter to create a MIDI clip",
       "createMidiClipHint": "Double-click to create MIDI clip",
       "recordingAria": "Recording",

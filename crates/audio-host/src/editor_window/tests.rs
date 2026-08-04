@@ -1560,6 +1560,7 @@ mod tests {
     fn routing_graph() -> LiveMixerGraph {
         LiveMixerGraph {
             sample_rate: 48_000,
+            project_end_tick: 61_440,
             latency_policy: heron_dsp_runtime::protocol::LiveLatencyPolicy::Normal,
             channels: vec![
                 routing_channel("target", None),

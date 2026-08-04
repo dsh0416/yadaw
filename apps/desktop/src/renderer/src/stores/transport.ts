@@ -1,17 +1,20 @@
 import { useIntervalFn } from "@vueuse/core"
 import { acceptHMRUpdate, defineStore } from "pinia"
 import { computed, shallowRef } from "vue"
-import type { TransportLoopRange, TransportSnapshot } from "@heron/contracts"
+import {
+  DEFAULT_PROJECT_END_TICK,
+  type TransportLoopRange,
+  type TransportSnapshot
+} from "@heron/contracts"
 import type { ProjectAssetSummary as Asset } from "@heron/contracts"
 import { projectContentEndSeconds } from "@heron/project-model"
 import { mutationMeta, readMeta, rpcErrorMessage } from "../rpc"
 import { tickToSeconds } from "../utils/tempoMap"
 import { useAudioRuntimeStore } from "./audioRuntime"
 import { useMixerStore } from "./mixer"
-import { usePluginStore } from "./plugins"
 
 const MINIMUM_TIMELINE_SECONDS = 8
-const TIMELINE_TAIL_SECONDS = 2
+const TIMELINE_TAIL_SECONDS = 8
 
 export interface TimelineClip {
   id: string
@@ -69,7 +72,6 @@ const EMPTY_TRANSPORT: TransportSnapshot = {
 
 export const useTransportStore = defineStore("transport", () => {
   const mixerStore = useMixerStore()
-  const pluginStore = usePluginStore()
   const audioRuntimeStore = useAudioRuntimeStore()
   const snapshot = shallowRef<TransportSnapshot>({ ...EMPTY_TRANSPORT })
   const selectedClipId = shallowRef<string | null>(null)
@@ -115,28 +117,19 @@ export const useTransportStore = defineStore("transport", () => {
   const loopEnabled = computed(() => snapshot.value.loopEnabled)
   const loopRange = computed(() => snapshot.value.loopRange)
   const contentEndSeconds = computed(() => projectContentEndSeconds(mixerStore.graph))
+  const projectEndSeconds = computed(() =>
+    tickToSeconds(
+      mixerStore.graph.tempoMap,
+      mixerStore.graph.projectEndTick ?? DEFAULT_PROJECT_END_TICK
+    )
+  )
   const timelineDurationSeconds = computed(() =>
-    Math.max(MINIMUM_TIMELINE_SECONDS, contentEndSeconds.value + TIMELINE_TAIL_SECONDS)
+    Math.max(
+      MINIMUM_TIMELINE_SECONDS,
+      Math.max(projectEndSeconds.value, contentEndSeconds.value) + TIMELINE_TAIL_SECONDS
+    )
   )
-  // Mirror the engine's auto-stop window: finite plugin tails extend playback
-  // past the content end, and any plugin with an unbounded tail (`null`)
-  // disables auto-stop entirely, so the playhead never parks at the end.
-  const autoStopEndSeconds = computed<number | null>(() => {
-    let tailSamples = 0
-    for (const instance of mixerStore.graph.plugins) {
-      const tail = pluginStore.runtime[instance.id]?.tailSamples
-      if (tail === null) return null
-      tailSamples += tail ?? 0
-    }
-    const sampleRate = mixerStore.graph.sampleRate
-    return contentEndSeconds.value + (sampleRate > 0 ? tailSamples / sampleRate : 0)
-  })
-  const canPlay = computed(
-    () =>
-      clips.value.length > 0 ||
-      mixerStore.graph.midiClips.length > 0 ||
-      (mixerStore.metronome !== null && !mixerStore.metronome.muted)
-  )
+  const canPlay = computed(() => projectEndSeconds.value > 0)
 
   function command(value: Parameters<typeof window.heron.transportCommand>[1]): Promise<void> {
     const generation = ++requestGeneration
@@ -195,17 +188,9 @@ export const useTransportStore = defineStore("transport", () => {
       return
     loading.value = true
     try {
-      // Engine auto-stop leaves the playhead at the end of the content plus any
-      // finite plugin tail; restart from zero so Play after song-end is not a
-      // no-op even before the host applies Play. When Cycle is enabled, restart
-      // from the cycle start instead. A playhead paused inside the tail window
-      // keeps its position so the decaying tail can play out.
-      const autoStopEnd = autoStopEndSeconds.value
-      if (
-        contentEndSeconds.value > 0 &&
-        autoStopEnd !== null &&
-        playheadSeconds.value >= autoStopEnd
-      ) {
+      // Restart from zero after the soft project end so Play is never a no-op.
+      // An active Cycle restarts from its own start instead.
+      if (playheadSeconds.value >= projectEndSeconds.value) {
         const restartSeconds =
           loopEnabled.value && loopRange.value
             ? tickToSeconds(mixerStore.graph.tempoMap, loopRange.value.startTick)
@@ -295,6 +280,7 @@ export const useTransportStore = defineStore("transport", () => {
     loading,
     error,
     contentEndSeconds,
+    projectEndSeconds,
     timelineDurationSeconds,
     canPlay,
     refresh,

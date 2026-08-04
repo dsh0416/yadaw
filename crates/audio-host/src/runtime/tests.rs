@@ -180,6 +180,7 @@ fn engine_ref(epoch: &str, generation: u32) -> ResourceRef {
 fn empty_live_graph() -> LiveMixerGraph {
     LiveMixerGraph {
         sample_rate: 48_000,
+        project_end_tick: 61_440,
         latency_policy: LiveLatencyPolicy::Normal,
         channels: vec![],
         sends: vec![],
@@ -234,6 +235,7 @@ fn minimal_native_graph(generation: u64) -> engine::NativeMixerGraph {
     engine::NativeMixerGraph {
         generation,
         sample_rate: 48_000,
+        project_end_tick: 61_440,
         latency_policy: engine::NativeLatencyPolicy::Normal,
         channels: vec![
             NativeMixerChannel {

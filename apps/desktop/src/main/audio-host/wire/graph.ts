@@ -3,6 +3,7 @@ import type { BinaryPayloadWire } from "./binary"
 
 export interface AudioHostGraph {
   sample_rate: number
+  project_end_tick?: number
   latency_policy?:
     | { type: "normal" }
     | {

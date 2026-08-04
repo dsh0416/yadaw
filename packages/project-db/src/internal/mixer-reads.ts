@@ -91,7 +91,11 @@ export async function readMixerSnapshot(
     db.select().from(tempoEvents).orderBy(asc(tempoEvents.tick)),
     db.select().from(timeSignatureEvents).orderBy(asc(timeSignatureEvents.tick)),
     db.select().from(keySignatureEvents).orderBy(asc(keySignatureEvents.tick)),
-    db.select({ notes: project.notes }).from(project).where(eq(project.id, PROJECT_ID)).limit(1)
+    db
+      .select({ notes: project.notes, projectEndTick: project.projectEndTick })
+      .from(project)
+      .where(eq(project.id, PROJECT_ID))
+      .limit(1)
   ])
 
   const kindOrder = new Map([
@@ -150,6 +154,7 @@ export async function readMixerSnapshot(
   return {
     sampleRate: configuration.sampleRate,
     projectNotes: projectRows[0]?.notes ?? "",
+    projectEndTick: projectRows[0]?.projectEndTick,
     tracks: trackRows,
     channels: channelRows.map((channel) => ({
       id: channel.id,

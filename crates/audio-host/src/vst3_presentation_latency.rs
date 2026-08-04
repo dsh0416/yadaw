@@ -373,6 +373,7 @@ mod tests {
     fn graph(channels: Vec<LiveMixerChannel>, plugins: Vec<LivePluginInstance>) -> LiveMixerGraph {
         LiveMixerGraph {
             sample_rate: 48_000,
+            project_end_tick: 61_440,
             latency_policy: LiveLatencyPolicy::Normal,
             channels,
             sends: Vec::new(),

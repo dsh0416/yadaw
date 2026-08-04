@@ -1098,6 +1098,8 @@
       "trackRenameLabel": "{name}；双击重命名；Alt+上/下箭头重新排序",
       "timelineRulerAria": "时间线标尺",
       "cycleLaneAria": "循环范围轨道；拖动以创建播放循环",
+      "projectEndAria": "项目结束标记",
+      "projectEndTooltip": "拖动以设置项目结束位置；超出位置的片段会保留",
       "instrumentLaneAria": "乐器轨；双击空白处或按 Enter 创建 MIDI 片段",
       "createMidiClipHint": "双击以创建 MIDI 片段",
       "recordingAria": "正在录音",

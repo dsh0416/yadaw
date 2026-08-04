@@ -4,6 +4,10 @@ use super::{
     LiveMidiClip, LivePluginInstance, LiveTempoEvent, LiveTimeSignatureEvent, ResourceRef,
 };
 
+const fn default_project_end_tick() -> u64 {
+    61_440
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum LiveMixerSystemRole {
@@ -84,6 +88,8 @@ pub enum LiveLatencyPolicy {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LiveMixerGraph {
     pub sample_rate: u32,
+    #[serde(default = "default_project_end_tick")]
+    pub project_end_tick: u64,
     #[serde(default)]
     pub latency_policy: LiveLatencyPolicy,
     pub channels: Vec<LiveMixerChannel>,
@@ -135,6 +141,9 @@ impl LiveMixerGraph {
                 } => {
                     self.tempo_events = tempo_events;
                     self.time_signature_events = time_signature_events;
+                }
+                GraphOp::SetProjectEnd { project_end_tick } => {
+                    self.project_end_tick = project_end_tick;
                 }
             }
         }
@@ -302,6 +311,9 @@ pub enum GraphOp {
     ReplaceTempoMap {
         tempo_events: Vec<LiveTempoEvent>,
         time_signature_events: Vec<LiveTimeSignatureEvent>,
+    },
+    SetProjectEnd {
+        project_end_tick: u64,
     },
 }
 

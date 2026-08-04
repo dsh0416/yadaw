@@ -234,6 +234,8 @@
   --accent-strong: #6f929f;
   --signal-cyan: #72c3c7;
   --record: #ff6577;
+  --loop: #e4b93f;
+  --loop-ink: #221c08;
   --warning: #e8b75f;
   --mixer-mute: #2f9ed0;
   --mixer-solo: #e4b93f;
@@ -357,6 +359,8 @@
   --accent-strong: #365e6b;
   --signal-cyan: #287982;
   --record: #c13e50;
+  --loop: #c88e12;
+  --loop-ink: #221c08;
   --warning: #9a681d;
   --mixer-pan: #28744b;
   --meter-green: #33804b;

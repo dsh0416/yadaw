@@ -215,6 +215,7 @@ fn transport_test_runtime(
         }),
         sample_rate,
         content_end_frame,
+        project_end_frame: content_end_frame.max(1),
         tail_end_frame: Some(content_end_frame),
         has_infinite_tail: false,
         input_peaks: Arc::new(InputPeakBank::new()),
@@ -276,6 +277,7 @@ fn simple_native_graph() -> NativeMixerGraph {
     NativeMixerGraph {
         generation: 3,
         sample_rate: 48_000,
+        project_end_tick: 61_440,
         latency_policy: NativeLatencyPolicy::Normal,
         channels: vec![
             mixer_channel(

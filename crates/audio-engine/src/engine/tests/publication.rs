@@ -166,6 +166,7 @@ fn apply_plugin_timing_returns_replacement_only_when_values_change() {
     engine.set_last_native_graph_for_test(Some(NativeMixerGraph {
         generation: 1,
         sample_rate: 48_000,
+        project_end_tick: 61_440,
         latency_policy: NativeLatencyPolicy::Normal,
         channels: Vec::new(),
         sends: Vec::new(),

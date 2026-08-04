@@ -307,6 +307,7 @@ describe("ArrangementWorkspace editing", () => {
       startTick: 960,
       endTick: 4_800
     })
+    await wrapper.getComponent(TimelineRuler).vm.$emit("updateProjectEnd", 15_360)
     await wrapper.getComponent(AudioClipCard).vm.$emit("trim", "audio-1", "end", 36_000)
     await wrapper.getComponent(AudioClipCard).vm.$emit("fade", "audio-1", "in", 6_000)
     await wrapper.getComponent(AudioClipCard).vm.$emit("resetFades", "audio-1")
@@ -316,6 +317,7 @@ describe("ArrangementWorkspace editing", () => {
     await flushPromises()
 
     expect(setLoop).toHaveBeenCalledWith(true, { startTick: 960, endTick: 4_800 })
+    expect(execute).toHaveBeenCalledWith({ type: "update-project-end", endTick: 15_360 })
     expect(execute).toHaveBeenCalledWith({
       type: "update-audio-clip",
       clipId: "audio-1",

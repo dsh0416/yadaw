@@ -11,6 +11,7 @@ import type {
 import type { PluginInstanceRole, PluginInstanceState } from "./plugins"
 
 export const MIXER_BUS_COUNT = 256
+export const DEFAULT_PROJECT_END_TICK = 61_440
 
 export type MixerChannelKind = "audio" | "instrument" | "aux" | "master" | "output"
 export type MixerSystemRole = "metronome"
@@ -93,6 +94,7 @@ export interface MixerSendState {
 export interface ProjectGraphSnapshot {
   sampleRate: number
   projectNotes?: string
+  projectEndTick?: number
   tracks: TrackState[]
   channels: MixerChannelState[]
   audioClips: AudioClipState[]
@@ -218,6 +220,7 @@ export type PluginInstancePatch = Partial<
 
 export type ProjectCommand =
   | { type: "update-project-notes"; notes: string }
+  | { type: "update-project-end"; endTick: number }
   | { type: "create-track"; track: TrackState; channel: MixerChannelState }
   | { type: "delete-track"; trackId: string }
   | { type: "update-track"; trackId: string; patch: TrackPatch }

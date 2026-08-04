@@ -153,6 +153,7 @@ pub struct NativeMidiClip {
 pub struct NativeMixerGraph {
     pub generation: u64,
     pub sample_rate: u32,
+    pub project_end_tick: u64,
     pub latency_policy: NativeLatencyPolicy,
     pub channels: Vec<NativeMixerChannel>,
     pub sends: Vec<NativeMixerSend>,

@@ -128,6 +128,7 @@ fn wait_for_queued_event(events: &Mutex<VecDeque<Vec<u8>>>) -> Vec<u8> {
 fn empty_live_graph() -> LiveMixerGraph {
     LiveMixerGraph {
         sample_rate: 48_000,
+        project_end_tick: 61_440,
         latency_policy: heron_dsp_runtime::protocol::LiveLatencyPolicy::Normal,
         channels: vec![],
         sends: vec![],
