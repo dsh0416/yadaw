@@ -34,7 +34,7 @@ on:
       MAC_CSC_KEY_PASSWORD:
         description: Password for the Developer ID Application PKCS#12 archive.
         required: false
-      APPLE_API_KEY:
+      APPLE_API_KEY_P8:
         description: Base64-encoded App Store Connect API private key (.p8).
         required: false
       APPLE_API_KEY_ID:
@@ -212,7 +212,7 @@ jobs:
 
           api_key_path="$RUNNER_TEMP/heron-notarization-api-key.p8"
           if ! printf '%s' "$APPLE_API_KEY_P8" | /usr/bin/base64 -D > "$api_key_path"; then
-            echo "::error::APPLE_API_KEY is not valid Base64."
+            echo "::error::APPLE_API_KEY_P8 is not valid Base64."
             rm -f "$api_key_path"
             exit 1
           fi
@@ -220,7 +220,7 @@ jobs:
 
           if ! grep -q '^-----BEGIN PRIVATE KEY-----$' "$api_key_path" || \
             ! grep -q '^-----END PRIVATE KEY-----$' "$api_key_path"; then
-            echo "::error::APPLE_API_KEY does not decode to a PKCS#8 .p8 private key."
+            echo "::error::APPLE_API_KEY_P8 does not decode to a PKCS#8 .p8 private key."
             rm -f "$api_key_path"
             exit 1
           fi
@@ -261,10 +261,10 @@ jobs:
         if: ${{ always() && matrix.builder-arch == 'universal' && inputs.sign_macos }}
         shell: bash
         env:
-          APPLE_API_KEY: ${{ steps.macos_release_credentials.outputs.apple_api_key_path }}
+          APPLE_API_KEY_P8: ${{ steps.macos_release_credentials.outputs.apple_api_key_path }}
         run: |
-          if [[ -n "$APPLE_API_KEY" ]]; then
-            rm -f "$APPLE_API_KEY"
+          if [[ -n "$APPLE_API_KEY_P8" ]]; then
+            rm -f "$APPLE_API_KEY_P8"
           fi
 
       - name: Upload installer
