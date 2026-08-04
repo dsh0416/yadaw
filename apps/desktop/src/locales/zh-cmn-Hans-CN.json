@@ -262,16 +262,19 @@
     "pluginsReady": "{count} 个 VST3 插件已就绪"
   },
   "welcome": {
-    "headline": "构建经得起意外的会话。",
-    "body": "工程是独立的 PGlite 归档。录音在归档保存前都会保留在交换目录中，以便恢复。",
-    "newProjectLabel": "新建工程",
-    "newProjectTitle": "从干净的会话开始。",
-    "newProjectBody": "48 kHz · 4/4 · 速度轨起始为 120 BPM。名称与格式可稍后在工程设置中更改。",
-    "createProject": "创建工程",
+    "eyebrow": "从草稿，到舞台。",
+    "headline": "让声音",
+    "headlineAccent": "成为你自己。",
+    "body": "一款自由、开源的音乐工作空间，可在 Windows、macOS 和 Linux 上完成录音、编排与混音。",
+    "actionsLabel": "开始或继续一个工程",
+    "newProjectLabel": "从这里开始",
+    "newProjectTitle": "新建工程",
+    "newProjectBody": "打开一条空白时间线，落下第一个声音。",
+    "createProject": "开始创作",
     "creating": "正在创建…",
-    "recentProjects": "最近工程",
-    "openAnother": "打开其他…",
-    "noRecent": "暂无最近工程。",
+    "recentProjects": "继续创作",
+    "openAnother": "打开工程",
+    "noRecent": "开始创作后，最近打开的工程会出现在这里。",
     "untitledProject": "未命名工程"
   },
   "settings": {

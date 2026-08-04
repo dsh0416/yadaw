@@ -75,31 +75,18 @@ button,
 }
 
 /* The large DAW surfaces stay deliberately neutral; color is reserved for signal state. */
-:root[data-theme] :is(.settings-page, .welcome-shell) {
+:root[data-theme] .settings-page {
   color: var(--text-primary);
   background: var(--canvas);
 }
 
-:root[data-theme] :is(.welcome-brand, .new-project, .recent-projects) {
-  background: var(--surface-1);
-}
-
-:root[data-theme] .welcome-brand {
-  background: linear-gradient(155deg, var(--surface-2), var(--surface-panel));
-}
-
-:root[data-theme] .welcome-card {
-  background: var(--line-soft);
-  box-shadow: var(--ui-shadow-lg);
-}
-
-:root[data-theme] :is(.new-project button, .save-button, .primary-action) {
+:root[data-theme] :is(.save-button, .primary-action) {
   border-color: var(--accent-strong);
   color: var(--button-primary-text);
   background: var(--button-primary);
 }
 
-:root[data-theme] :is(.recent-item, .signal-card, .backend-card, .latency-card) {
+:root[data-theme] :is(.signal-card, .backend-card, .latency-card) {
   color: var(--text-secondary);
   background: var(--surface-sunken);
 }

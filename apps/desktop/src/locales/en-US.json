@@ -262,16 +262,19 @@
     "pluginsReady": "{count} VST3 plug-ins ready"
   },
   "welcome": {
-    "headline": "Build a session that survives the unexpected.",
-    "body": "Projects are self-contained PGlite archives. Recordings remain recoverable in swap until the archive is saved.",
-    "newProjectLabel": "NEW PROJECT",
-    "newProjectTitle": "Start with a clean session.",
-    "newProjectBody": "48 kHz · 4/4 · Tempo Track starts at 120 BPM. Name and format can be changed later in Project settings.",
-    "createProject": "Create project",
+    "eyebrow": "From sketch to stage.",
+    "headline": "Make sound",
+    "headlineAccent": "your own.",
+    "body": "A free, open-source workspace for recording, arranging, and mixing music on Windows, macOS, and Linux.",
+    "actionsLabel": "Start or continue a project",
+    "newProjectLabel": "Start here",
+    "newProjectTitle": "New project",
+    "newProjectBody": "Open an empty timeline and make the first sound.",
+    "createProject": "Start creating",
     "creating": "Creating…",
-    "recentProjects": "RECENT PROJECTS",
-    "openAnother": "Open another…",
-    "noRecent": "No recent projects yet.",
+    "recentProjects": "Continue creating",
+    "openAnother": "Open a project",
+    "noRecent": "Your recent projects will appear here when you start creating.",
     "untitledProject": "Untitled project"
   },
   "settings": {
