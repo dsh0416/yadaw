@@ -62,8 +62,12 @@ jobs:
     with:
       # Ship installers with Cargo.toml thin-LTO release settings.
       full_release_profile: true
+      sign_macos: true
     permissions:
       contents: read
+    secrets:
+      MAC_CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+      MAC_CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
 
   release:
     name: Create draft GitHub release

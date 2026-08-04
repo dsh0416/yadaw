@@ -9,8 +9,11 @@ asarUnpack:
   - "**/@electric-sql/pglite/dist/*.data"
 npmRebuild: false
 # Fuses and ASAR integrity harden loading but do not replace platform code signing.
-# CI artifacts remain unsigned until release signing is configured separately.
+# CI smoke artifacts use ad-hoc signing; tagged releases require Developer ID signing.
 electronFuses:
+  # Flipping fuses changes executable pages. Unsigned Apple Silicon builds need
+  # a fresh ad-hoc signature or macOS terminates them with CODESIGNING/Invalid Page.
+  resetAdHocDarwinSignature: true
   runAsNode: false
   enableCookieEncryption: true
   enableNodeOptionsEnvironmentVariable: false

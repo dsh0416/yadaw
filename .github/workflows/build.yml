@@ -9,6 +9,10 @@ on:
           Leave off for faster packaging smoke builds.
         type: boolean
         default: false
+      sign_macos:
+        description: Sign the macOS artifact with the configured Developer ID certificate.
+        type: boolean
+        default: false
   workflow_call:
     inputs:
       full_release_profile:
@@ -18,6 +22,18 @@ on:
         type: boolean
         required: false
         default: false
+      sign_macos:
+        description: Sign the macOS artifact with the configured Developer ID certificate.
+        type: boolean
+        required: false
+        default: false
+    secrets:
+      MAC_CSC_LINK:
+        description: Base64-encoded Developer ID Application PKCS#12 archive.
+        required: false
+      MAC_CSC_KEY_PASSWORD:
+        description: Password for the Developer ID Application PKCS#12 archive.
+        required: false
 
 permissions:
   contents: read
@@ -61,8 +77,6 @@ jobs:
             builder-arch: universal
             artifact: macos-universal
             package-glob: release/*.dmg
-    env:
-      CSC_IDENTITY_AUTO_DISCOVERY: "false"
     steps:
       - name: Check out source
         uses: actions/checkout@v7
@@ -159,13 +173,43 @@ jobs:
       - name: Build Electron bundles
         run: pnpm --filter @heron/desktop build
 
-      - name: Create installer
+      - name: Require macOS signing credentials
+        if: ${{ matrix.builder-arch == 'universal' && inputs.sign_macos }}
+        shell: bash
+        env:
+          MAC_CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          MAC_CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+        run: |
+          if [[ -z "$MAC_CSC_LINK" || -z "$MAC_CSC_KEY_PASSWORD" ]]; then
+            echo "::error::sign_macos requires MAC_CSC_LINK and MAC_CSC_KEY_PASSWORD."
+            exit 1
+          fi
+
+      - name: Create unsigned installer
+        if: ${{ matrix.builder-arch != 'universal' || !inputs.sign_macos }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: >-
           pnpm --filter @heron/desktop exec electron-builder
           --publish never
           --${{ matrix.builder-arch }}
 
+      - name: Create signed macOS installer
+        if: ${{ matrix.builder-arch == 'universal' && inputs.sign_macos }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "true"
+          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+        run: >-
+          pnpm --filter @heron/desktop exec electron-builder
+          --publish never
+          --universal
+          --config.forceCodeSigning=true
+
       - name: Verify packaged Electron security
+        env:
+          HERON_REQUIRE_DEVELOPER_ID_SIGNATURE: >-
+            ${{ matrix.builder-arch == 'universal' && inputs.sign_macos && 'true' || 'false' }}
         run: pnpm --filter @heron/desktop verify:package-security
 
       - name: Upload installer

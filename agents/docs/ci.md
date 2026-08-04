@@ -126,6 +126,10 @@ prerelease version such as `0.2.0-beta.1` creates a GitHub prerelease; other
 versions become the latest release. Rerunning `Publish` replaces the assets on
 an existing draft release.
 
-Installers are currently unsigned. Code-signing identities and notarization
-credentials should be configured before treating the packages as a general
-public distribution.
+Tagged releases require the macOS universal artifact to be signed with the
+Developer ID Application identity stored in the `MAC_CSC_LINK` and
+`MAC_CSC_KEY_PASSWORD` Actions secrets. Pull requests, ordinary CI builds, and
+manual Build runs leave `sign_macos` disabled so untrusted code never receives
+the signing identity; a manual Build run can opt in explicitly. The signed DMG
+is not yet notarized, so notarization credentials and Gatekeeper/stapling checks
+must still be added before treating it as a general public distribution.
