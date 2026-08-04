@@ -100,10 +100,57 @@ describe("RecordingService archive cleanup", () => {
     )
 
     const recovered = await service.recover(id)
+    const recoveredAgain = await service.recover(id)
 
-    expect(projects.assetContentHashes).toHaveBeenCalledOnce()
+    expect(projects.assetContentHashes).toHaveBeenCalledTimes(2)
     expect(projects.importLargeObject).not.toHaveBeenCalled()
     expect(operations.upsert).not.toHaveBeenCalled()
     expect(recovered).toMatchObject({ id, state: "committed", assetExists: true })
+    expect(recoveredAgain).toEqual(recovered)
+  })
+
+  it("keeps cleanup candidates whose committed asset cannot be proven", async () => {
+    const swapDirectory = await mkdtemp(join(tmpdir(), "heron-recording-protection-"))
+    const projectPath = join(swapDirectory, "project.heron")
+    const id = "uncommitted"
+    const audioPath = join(swapDirectory, `${id}.ready.bwf`)
+    const sidecarPath = join(swapDirectory, `${id}.recording.json`)
+    await writeFile(audioPath, "swap")
+    await writeFile(
+      sidecarPath,
+      JSON.stringify({
+        id,
+        state: "ready",
+        audioPath,
+        sidecarPath,
+        projectPath,
+        sampleRate: 48_000,
+        channels: 2,
+        startedAt: Date.now(),
+        dropoutFrames: 0,
+        assetExists: false,
+        finalPath: null,
+        bitDepth: "float32",
+        frameCount: 4_800,
+        contentHash: "not-imported"
+      })
+    )
+    const settings = { get: vi.fn().mockResolvedValue({ swapDirectory }) }
+    const projects = {
+      current: { path: projectPath },
+      assetContentHashes: vi.fn().mockResolvedValue([])
+    }
+    const service = new RecordingService(
+      settings as never,
+      projects as never,
+      {} as never,
+      {} as never,
+      {} as never
+    )
+
+    await service.cleanupCommittedForProject(projectPath)
+
+    await expect(stat(audioPath)).resolves.toBeDefined()
+    await expect(stat(sidecarPath)).resolves.toBeDefined()
   })
 })

@@ -1,270 +1,75 @@
 import { randomUUID } from "node:crypto"
-import { mkdir, readFile, readdir, rename, rm } from "node:fs/promises"
-import { basename, join } from "node:path"
+import { basename } from "node:path"
 import type {
   OperationSnapshot,
-  PendingMidiTake,
   PendingRecording,
-  RecordedTrackAsset,
   RecordingSession,
   RpcError,
   WaveformPeakWindow,
   WaveformWindowRequest
 } from "@heron/contracts"
-import { repairRecordingHeader, writeDeterministicTestRecording } from "@heron/dsp-node"
 import type { AudioHostService } from "../audio-host"
+import type { TransportService } from "../audio"
+import type { OperationService } from "../kernel"
+import type { ProjectCommandService, ProjectGraphService, ProjectService } from "../project"
 import type { ApplicationSettingsStore } from "../settings"
 import { t } from "../settings"
-import { commitMidiRecordingTakes } from "./midi-recording-commit"
-import type { OperationService } from "../kernel"
-import type { ProjectCommandService } from "../project"
-import type { ProjectGraphService } from "../project"
-import type { ProjectService } from "../project"
-import { RecordingFinalizer } from "./recording-finalizer"
+import { RecordingCaptureCoordinator } from "./recording-capture-coordinator"
+import { RecordingCommitter } from "./recording-committer"
+import { toPendingRecording } from "./recording-contracts"
+import { PendingRecordingService } from "./pending-recording-service"
 import { RecordingRecoveryRepository } from "./recording-recovery-repository"
-import { RecordingSessionController } from "./recording-session-controller"
-import type { TransportService } from "../audio"
-
-interface RecordingTrackSidecar {
-  assetId: string
-  trackId: string
-  trackName: string
-  inputChannels: number[]
-  finalPath: string | null
-  contentHash: string | null
-  sampleRate: number | null
-  channels: number | null
-  frameCount: number | null
-}
-
-interface RecordingSidecar extends PendingRecording {
-  finalPath: string | null
-  bitDepth: "float32" | "pcm24" | "pcm16"
-  frameCount: number
-  contentHash: string | null
-  startFrame: number
-  startTick: number
-  tracks: RecordingTrackSidecar[]
-  midiTakes: PendingMidiTake[]
-  resumePlaybackAfterRecording: boolean
-}
-
-function utcFields(date: Date): { date: string; time: string } {
-  return {
-    date: date.toISOString().slice(0, 10),
-    time: date.toISOString().slice(11, 19)
-  }
-}
 
 export class RecordingService {
-  private readonly sessions = new RecordingSessionController<RecordingSidecar>()
-  private readonly finalizer = new RecordingFinalizer()
-  private readonly recovery = new RecordingRecoveryRepository()
+  private readonly capture: RecordingCaptureCoordinator
+  private readonly committer: RecordingCommitter
+  private readonly pending: PendingRecordingService
 
   constructor(
-    private readonly settings: ApplicationSettingsStore,
-    private readonly projects: ProjectService,
-    private readonly operations: OperationService,
-    private readonly graphs: ProjectGraphService,
-    private readonly transport: TransportService,
-    private readonly audioHost: AudioHostService | null = null,
-    private readonly commands: ProjectCommandService | null = null
-  ) {}
+    settings: ApplicationSettingsStore,
+    projects: ProjectService,
+    operations: OperationService,
+    graphs: ProjectGraphService,
+    transport: TransportService,
+    audioHost: AudioHostService | null = null,
+    commands: ProjectCommandService | null = null
+  ) {
+    const recovery = new RecordingRecoveryRepository()
+    this.capture = new RecordingCaptureCoordinator(
+      settings,
+      projects,
+      graphs,
+      transport,
+      recovery,
+      audioHost
+    )
+    this.committer = new RecordingCommitter(projects, operations, graphs, recovery, commands)
+    this.pending = new PendingRecordingService(settings, projects, recovery, this.committer)
+    this.operations = operations
+  }
+
+  private readonly operations: OperationService
 
   get current(): RecordingSession | null {
-    return this.sessions.active ? this.toSession(this.sessions.active) : null
+    return this.capture.current
   }
 
-  private toSession(recording: RecordingSidecar): RecordingSession {
-    const audioTrackIds = recording.tracks.map((track) => track.trackId)
-    const midiTrackIds = recording.midiTakes.map((take) => take.trackId)
-    return {
-      id: recording.id,
-      startedAt: recording.startedAt,
-      swapPath: recording.audioPath,
-      startFrame: recording.startFrame,
-      startTick: recording.startTick,
-      trackIds: [...audioTrackIds, ...midiTrackIds],
-      audioTrackIds,
-      midiTrackIds
-    }
+  start(countIn = false): Promise<RecordingSession> {
+    return this.capture.start(countIn)
   }
 
-  private async writeSidecar(recording: RecordingSidecar): Promise<void> {
-    await this.recovery.write(recording)
-  }
-
-  async start(countIn = false): Promise<RecordingSession> {
-    if (this.sessions.active) throw new Error("A recording is already active")
-    this.sessions.lastWaveformSnapshot = null
-    const project = this.projects.current
-    if (!project) throw new Error("Open a project before recording")
-    const deterministicTestCapture = process.env.HERON_TEST_CAPTURE_SOURCE === "1"
-    const runtime = deterministicTestCapture
-      ? {
-          state: "running" as const,
-          inputSampleRate: 48_000
-        }
-      : await this.audioHost?.audioEngineSnapshot()
-    if (
-      !runtime ||
-      (!deterministicTestCapture && (runtime.state !== "running" || !runtime.inputSampleRate))
-    ) {
-      throw new Error("Start the audio engine before recording")
-    }
-    const applicationSettings = await this.settings.get()
-    const graph = await this.graphs.snapshot()
-    const audioTargets = graph.channels.filter(
-      (channel) => channel.kind === "audio" && channel.recordArmed
-    )
-    const midiTargets = graph.channels.filter(
-      (channel) =>
-        channel.kind === "instrument" && channel.systemRole === null && channel.recordArmed
-    )
-    if (audioTargets.length === 0 && midiTargets.length === 0) {
-      throw new Error("Arm an audio or instrument track before recording")
-    }
-    await mkdir(applicationSettings.swapDirectory, { recursive: true })
-    const id = randomUUID()
-    const startedAt = Date.now()
-    const transportBeforeRecording =
-      !deterministicTestCapture && this.audioHost
-        ? await this.audioHost.transportControlSnapshot()
-        : await this.transport.snapshot()
-    const startFrame = transportBeforeRecording.positionFrames
-    const startTick = Math.max(0, Math.floor(transportBeforeRecording.positionTicks ?? 0))
-    const hasAudio = audioTargets.length > 0
-    const partialPath = hasAudio
-      ? join(applicationSettings.swapDirectory, `${id}.partial.bwf`)
-      : join(applicationSettings.swapDirectory, `${id}.midi-only`)
-    const sidecarPath = join(applicationSettings.swapDirectory, `${id}.recording.json`)
-    const midiTakes: PendingMidiTake[] = midiTargets.map((channel) => {
-      const track = graph.tracks.find((candidate) => candidate.channelId === channel.id)
-      if (!track) {
-        throw new Error(`Armed instrument channel '${channel.id}' has no project track`)
-      }
-      const sourceId = randomUUID()
-      const clipId = randomUUID()
-      return {
-        trackId: track.id,
-        sourceId,
-        clipId,
-        journalPath: join(
-          applicationSettings.swapDirectory,
-          `${id}.${track.id}.partial.midijournal`
-        ),
-        eventCount: 0,
-        droppedEvents: 0
-      }
-    })
-    const sidecar: RecordingSidecar = {
-      id,
-      state: "partial",
-      audioPath: partialPath,
-      sidecarPath,
-      projectPath: project.path,
-      sampleRate: deterministicTestCapture ? 48_000 : runtime.inputSampleRate!,
-      channels: hasAudio ? 2 : 0,
-      startedAt,
-      dropoutFrames: 0,
-      assetExists: false,
-      finalPath: null,
-      bitDepth: applicationSettings.recordingBitDepth,
-      frameCount: 0,
-      contentHash: null,
-      startFrame,
-      startTick,
-      recordedTracks: [],
-      midiTakes,
-      audioTrackIds: audioTargets.map((track) => track.id),
-      midiTrackIds: midiTakes.map((take) => take.trackId),
-      resumePlaybackAfterRecording: transportBeforeRecording.state === "playing",
-      tracks: audioTargets.map((track, index) => ({
-        assetId: index === 0 ? id : randomUUID(),
-        trackId: track.id,
-        trackName: track.name,
-        inputChannels: [...track.inputChannels],
-        finalPath: null,
-        contentHash: null,
-        sampleRate: null,
-        channels: null,
-        frameCount: null
-      }))
-    }
-    await this.writeSidecar(sidecar)
-    const utc = utcFields(new Date(startedAt))
-    let midiRecordingStarted = false
-    try {
-      if (!deterministicTestCapture && hasAudio) {
-        await this.audioHost!.startRecording({
-          path: partialPath,
-          assetId: id,
-          originator: "Heron",
-          originationDate: utc.date,
-          originationTime: utc.time,
-          timeReference: Math.round(
-            (startFrame * sidecar.sampleRate) / project.configuration.sampleRate
-          )
-        })
-      }
-      if (!deterministicTestCapture && midiTakes.length > 0) {
-        await this.audioHost!.startMidiRecording({
-          takes: midiTakes.map((take, index) => {
-            const channel = midiTargets[index]!
-            return {
-              path: take.journalPath,
-              sourceId: take.sourceId,
-              clipId: take.clipId,
-              trackId: take.trackId,
-              portId: channel.midiInput?.portId ?? null,
-              channel: channel.midiInput?.channel ?? null
-            }
-          })
-        })
-        midiRecordingStarted = true
-      }
-      await this.transport.command({ type: countIn ? "record-count-in" : "record" })
-    } catch (error) {
-      await Promise.allSettled([
-        deterministicTestCapture || !hasAudio
-          ? Promise.resolve()
-          : (this.audioHost?.stopRecording() ?? Promise.resolve()),
-        midiRecordingStarted
-          ? (this.audioHost?.stopMidiRecording() ?? Promise.resolve())
-          : Promise.resolve(),
-        this.transport.command({ type: "pause" })
-      ])
-      await Promise.all(
-        midiTakes.map((take) => rm(take.journalPath, { force: true }).catch(() => undefined))
-      )
-      await rm(sidecarPath, { force: true })
-      throw error
-    }
-    this.sessions.begin(sidecar)
-    return this.toSession(sidecar)
-  }
-
-  async abortStart(): Promise<void> {
-    if (!this.sessions.active) return
-    const recording = this.sessions.take()
-    await Promise.allSettled([
-      process.env.HERON_TEST_CAPTURE_SOURCE === "1" || recording.tracks.length === 0
-        ? Promise.resolve()
-        : (this.audioHost?.stopRecording() ?? Promise.resolve()),
-      recording.midiTakes.length > 0
-        ? (this.audioHost?.stopMidiRecording() ?? Promise.resolve())
-        : Promise.resolve(),
-      this.transport.command({ type: "pause" })
-    ])
+  abortStart(): Promise<void> {
+    return this.capture.abortStart()
   }
 
   async stop(onFinalizing?: () => void): Promise<PendingRecording> {
-    const recording = this.sessions.take()
-    const operationId = `recording:${recording.id}`
+    const active = this.capture.activeSidecar()
+    if (!active) throw new Error("No recording is active")
+    const operationId = `recording:${active.id}`
     const operation: OperationSnapshot = {
       id: operationId,
       title: t("operation.finalizingRecording"),
-      description: basename(recording.audioPath),
+      description: basename(active.audioPath),
       phase: "closing-recording",
       state: "running",
       completedUnits: null,
@@ -275,69 +80,10 @@ export class RecordingService {
     }
     this.operations.upsert(operation, true)
     try {
-      const startedUtc = utcFields(new Date(recording.startedAt))
-      const deterministicFrameCount = Math.min(
-        0xffff_ffff,
-        Math.max(
-          4_800,
-          Math.round(((Date.now() - recording.startedAt) / 1_000) * recording.sampleRate)
-        )
-      )
-      const hasAudio = recording.tracks.length > 0
-      const hasMidi = recording.midiTakes.length > 0
-      try {
-        if (hasAudio) {
-          const captured =
-            process.env.HERON_TEST_CAPTURE_SOURCE === "1"
-              ? writeDeterministicTestRecording(
-                  {
-                    path: recording.audioPath,
-                    assetId: recording.id,
-                    originator: "Heron test",
-                    originationDate: startedUtc.date,
-                    originationTime: startedUtc.time,
-                    timeReference: recording.startFrame
-                  },
-                  recording.sampleRate,
-                  deterministicFrameCount
-                )
-              : await this.audioHost!.stopRecording()
-          recording.frameCount = captured.frameCount
-          recording.dropoutFrames = captured.dropoutFrames
-          recording.channels = captured.channels
-          const readyPath = recording.audioPath.replace(".partial.bwf", ".ready.bwf")
-          await rename(recording.audioPath, readyPath)
-          recording.audioPath = readyPath
-        } else {
-          recording.frameCount = 0
-          recording.dropoutFrames = 0
-          recording.channels = 0
-        }
-        if (hasMidi && process.env.HERON_TEST_CAPTURE_SOURCE !== "1") {
-          const midiStopped = await this.audioHost!.stopMidiRecording()
-          const byClipId = new Map(midiStopped.takes.map((take) => [take.clipId, take]))
-          recording.midiTakes = recording.midiTakes.map((take) => {
-            const stopped = byClipId.get(take.clipId)
-            return stopped
-              ? {
-                  ...take,
-                  journalPath: stopped.path,
-                  eventCount: stopped.eventCount,
-                  droppedEvents: stopped.droppedEvents
-                }
-              : take
-          })
-        }
-      } finally {
-        await this.transport.command({
-          type: recording.resumePlaybackAfterRecording ? "play" : "pause"
-        })
-      }
-      recording.state = "ready"
-      await this.writeSidecar(recording)
+      const recording = await this.capture.stop()
       onFinalizing?.()
-      await this.finalizeAndCommit(recording, operationId)
-      return this.toPending(recording)
+      await this.committer.commit(recording, operationId)
+      return toPendingRecording(recording)
     } catch (error) {
       const correlationId = `recording:${operationId}:${randomUUID()}`
       console.error(`[recording] finalization failed (${correlationId})`, error)
@@ -348,10 +94,7 @@ export class RecordingService {
         retry: "after-reconcile",
         correlationId,
         userMessageKey: "errors.recordingFinalizationFailed",
-        details: {
-          type: "invariant-violation",
-          component: "main"
-        }
+        details: { type: "invariant-violation", component: "main" }
       }
       this.operations.patch(
         operationId,
@@ -362,460 +105,23 @@ export class RecordingService {
     }
   }
 
-  async waveformSnapshot(request: WaveformWindowRequest): Promise<WaveformPeakWindow> {
-    const recording = this.sessions.active
-    if (!recording || recording.id !== request.id) {
-      if (this.sessions.lastWaveformSnapshot?.id === request.id) {
-        return structuredClone(this.sessions.lastWaveformSnapshot)
-      }
-      throw new Error("Recording is no longer active")
-    }
-    if (
-      request.startFrame < 0 ||
-      request.endFrame < request.startFrame ||
-      request.maxBuckets < 1 ||
-      request.maxBuckets > 4_096
-    ) {
-      throw new TypeError("Invalid recording waveform request")
-    }
-    if (process.env.HERON_TEST_CAPTURE_SOURCE === "1") {
-      const frameCount = Math.max(
-        1,
-        Math.floor(((Date.now() - recording.startedAt) / 1_000) * recording.sampleRate)
-      )
-      const start = Math.min(frameCount, request.startFrame)
-      const end = Math.min(frameCount, Math.max(start, request.endFrame))
-      let framesPerBucket = 64
-      while (Math.ceil((end - start) / framesPerBucket) > request.maxBuckets) framesPerBucket *= 4
-      const bucketCount = Math.ceil((end - start) / framesPerBucket)
-      const values = new Float32Array(bucketCount * 4)
-      for (let bucket = 0; bucket < bucketCount; bucket += 1) {
-        let minimum = 1
-        let maximum = -1
-        const bucketStart = start + bucket * framesPerBucket
-        const bucketEnd = Math.min(end, bucketStart + framesPerBucket)
-        for (let frame = bucketStart; frame < bucketEnd; frame += 1) {
-          const sample = Math.sin((Math.PI * 2 * 1_000 * frame) / recording.sampleRate) * 0.25
-          minimum = Math.min(minimum, sample)
-          maximum = Math.max(maximum, sample)
-        }
-        values.set([minimum, maximum, minimum, maximum], bucket * 4)
-      }
-      const result: WaveformPeakWindow = {
-        id: request.id,
-        sampleRate: recording.sampleRate,
-        channels: 2,
-        frameCount,
-        startFrame: start,
-        endFrame: end,
-        framesPerBucket,
-        bucketCount,
-        peaks: new Uint8Array(values.buffer)
-      }
-      this.sessions.lastWaveformSnapshot = result
-      return result
-    }
-    if (!this.audioHost) throw new Error("Audio host is not running")
-    const snapshot = await this.audioHost.recordingWaveform(
-      request.startFrame,
-      request.endFrame,
-      request.maxBuckets
-    )
-    const result: WaveformPeakWindow = {
-      id: request.id,
-      sampleRate: snapshot.sampleRate,
-      channels: snapshot.channels,
-      frameCount: snapshot.frameCount,
-      startFrame: snapshot.startFrame,
-      endFrame: snapshot.endFrame,
-      framesPerBucket: snapshot.framesPerBucket,
-      bucketCount: snapshot.bucketCount,
-      peaks: new Uint8Array(snapshot.peaks)
-    }
-    this.sessions.lastWaveformSnapshot = result
-    return result
+  waveformSnapshot(request: WaveformWindowRequest): Promise<WaveformPeakWindow> {
+    return this.capture.waveformSnapshot(request)
   }
 
-  private async finalizeAndCommit(recording: RecordingSidecar, operationId: string): Promise<void> {
-    const project = this.projects.current
-    if (!project || project.path !== recording.projectPath) {
-      throw new Error("Open the recording's project before recovering it")
-    }
-    recording.midiTakes ??= []
-    recording.startTick ??= 0
-    if (!recording.tracks?.length && recording.midiTakes.length === 0) {
-      const fallback = await this.projects.defaultRecordingTrack()
-      if (!fallback) throw new Error("The recording project has no audio track")
-      recording.startFrame ??= 0
-      recording.tracks = [
-        {
-          assetId: recording.id,
-          trackId: fallback.id,
-          trackName: fallback.name,
-          inputChannels: fallback.inputChannels,
-          finalPath: recording.finalPath,
-          contentHash: recording.contentHash,
-          sampleRate: null,
-          channels: null,
-          frameCount: null
-        }
-      ]
-    }
-    const started = new Date(recording.startedAt)
-    const utc = utcFields(started)
-    const finalizedTracks = []
-    if (recording.tracks.length > 0) {
-      this.operations.patch(
-        operationId,
-        {
-          phase: "resampling",
-          completedUnits: null,
-          totalUnits: null,
-          cancellable: false
-        },
-        true
-      )
-      for (const [index, track] of recording.tracks.entries()) {
-        const finalPath = recording.audioPath.replace(
-          ".ready.bwf",
-          `.track-${index + 1}.final-${recording.bitDepth}.bwf`
-        )
-        const finalized = await this.finalizer.finalize({
-          inputPath: recording.audioPath,
-          outputPath: finalPath,
-          targetSampleRate: project.configuration.sampleRate,
-          bitDepth: recording.bitDepth,
-          assetId: track.assetId,
-          originator: "Heron",
-          originationDate: utc.date,
-          originationTime: utc.time,
-          timeReference: recording.startFrame,
-          channelIndices: track.inputChannels
-        })
-        track.finalPath = finalPath
-        track.contentHash = finalized.contentHash
-        track.sampleRate = finalized.sampleRate
-        track.channels = finalized.channels
-        track.frameCount = finalized.frameCount
-        finalizedTracks.push({ track, finalized })
-      }
-      const primary = finalizedTracks[0]!
-      recording.finalPath = primary.track.finalPath
-      recording.contentHash = primary.finalized.contentHash
-      recording.frameCount = primary.finalized.frameCount
-      await this.writeSidecar(recording)
-
-      this.operations.patch(
-        operationId,
-        {
-          phase: "writing-large-object",
-          completedUnits: 0,
-          totalUnits: null,
-          cancellable: true
-        },
-        true
-      )
-      this.operations.setCancelHandler(operationId, () =>
-        this.projects.cancelOperation(operationId)
-      )
-      const imported: string[] = []
-      try {
-        for (const { track, finalized } of finalizedTracks) {
-          await this.projects.importLargeObject(
-            track.finalPath!,
-            operationId,
-            {
-              id: track.assetId,
-              name: `Recording ${track.trackName} ${new Date(recording.startedAt).toLocaleString()}.bwf`,
-              mimeType: "audio/x-bwf",
-              contentHash: finalized.contentHash,
-              sampleRate: finalized.sampleRate,
-              channels: finalized.channels,
-              bitDepth: finalized.bitDepth as RecordingSidecar["bitDepth"],
-              frameCount: BigInt(finalized.frameCount),
-              bwfTimeReference: BigInt(finalized.timeReference),
-              waveformLevels: finalized.waveformLevels.map((level) => ({
-                framesPerBucket: level.framesPerBucket,
-                bucketCount: level.bucketCount,
-                peaks: new Uint8Array(level.peaks)
-              }))
-            },
-            (completed, total) => {
-              if (total > 0 && completed >= total) {
-                this.operations.setCancelHandler(operationId, null)
-                this.operations.patch(
-                  operationId,
-                  {
-                    phase: "committing-database",
-                    completedUnits: null,
-                    totalUnits: null,
-                    cancellable: false
-                  },
-                  true
-                )
-              } else {
-                this.operations.patch(operationId, { completedUnits: completed, totalUnits: total })
-              }
-            }
-          )
-          imported.push(track.assetId)
-        }
-      } catch (error) {
-        if (imported.length > 0) {
-          await this.graphs.deleteUnusedAssets(imported)
-        }
-        throw error
-      }
-      this.operations.setCancelHandler(operationId, null)
-    }
-
-    if (recording.midiTakes.length > 0) {
-      if (!this.commands) {
-        throw new Error("MIDI recording commit requires the project command service")
-      }
-      this.operations.patch(
-        operationId,
-        {
-          phase: "committing-database",
-          completedUnits: null,
-          totalUnits: null,
-          cancellable: false
-        },
-        true
-      )
-      const workspace = this.commands.currentWorkspace()
-      if (!workspace) {
-        throw new Error("Open the recording's project before recovering it")
-      }
-      const trackNames = new Map(
-        workspace.graph.tracks.map((track) => {
-          const channel = workspace.graph.channels.find(
-            (candidate) => candidate.id === track.channelId
-          )
-          return [track.id, channel?.name ?? "Instrument"] as const
-        })
-      )
-      await commitMidiRecordingTakes(
-        this.commands,
-        workspace,
-        operationId,
-        recording.startTick,
-        recording.midiTakes,
-        trackNames
-      )
-    }
-
-    recording.state = "committed"
-    recording.assetExists = true
-    recording.recordedTracks = this.toPending(recording).recordedTracks
-    // The worker returning is the database commit boundary. Do not block completion
-    // on a second sidecar rewrite: swap may live on a slow/network-scanned volume.
-    // Keeping the durable sidecar as `ready` is intentional until the archive save;
-    // startup reconciliation checks the asset table and classifies it as committed.
-    this.operations.patch(
-      operationId,
-      {
-        state: "completed",
-        dropoutFrames: recording.dropoutFrames
-      },
-      true
-    )
+  listPending(): Promise<PendingRecording[]> {
+    return this.pending.listPending()
   }
 
-  private toPending(recording: RecordingSidecar): PendingRecording {
-    const {
-      id,
-      state,
-      audioPath,
-      sidecarPath,
-      projectPath,
-      sampleRate,
-      channels,
-      startedAt,
-      dropoutFrames,
-      assetExists,
-      startFrame,
-      startTick,
-      audioTrackIds,
-      midiTrackIds,
-      midiTakes
-    } = recording
-    const recordedTracks: RecordedTrackAsset[] = (recording.tracks ?? [])
-      .filter(
-        (track) => track.sampleRate !== null && track.channels !== null && track.frameCount !== null
-      )
-      .map((track) => ({
-        assetId: track.assetId,
-        trackId: track.trackId,
-        name: `Recording ${track.trackName}`,
-        sampleRate: track.sampleRate!,
-        channels: track.channels!,
-        frameCount: track.frameCount!
-      }))
-    return {
-      id,
-      state,
-      audioPath,
-      sidecarPath,
-      projectPath,
-      sampleRate,
-      channels,
-      startedAt,
-      startFrame,
-      startTick,
-      audioTrackIds,
-      midiTrackIds,
-      dropoutFrames,
-      assetExists,
-      recordedTracks,
-      midiTakes: midiTakes ?? []
-    }
+  recover(id: string): Promise<PendingRecording> {
+    return this.pending.recover(id)
   }
 
-  async listPending(): Promise<PendingRecording[]> {
-    const applicationSettings = await this.settings.get()
-    const pending: PendingRecording[] = []
-    for (const sidecar of await this.recovery.list<RecordingSidecar>(
-      applicationSettings.swapDirectory
-    )) {
-      try {
-        if (this.projects.current?.path === sidecar.projectPath) {
-          sidecar.assetExists = await this.assetAlreadyCommitted(sidecar)
-        }
-        pending.push(this.toPending(sidecar))
-      } catch {
-        // A malformed sidecar is left on disk for explicit manual inspection.
-      }
-    }
-    return pending.sort((a, b) => b.startedAt - a.startedAt)
+  deletePending(id: string): Promise<void> {
+    return this.pending.deletePending(id)
   }
 
-  private async readSidecar(id: string): Promise<RecordingSidecar> {
-    const settings = await this.settings.get()
-    return this.recovery.read<RecordingSidecar>(settings.swapDirectory, id)
-  }
-
-  private async assetAlreadyCommitted(recording: RecordingSidecar): Promise<boolean> {
-    const project = this.projects.current
-    if (!project || project.path !== recording.projectPath) return false
-    recording.midiTakes ??= []
-    if (recording.tracks?.length || !recording.midiTakes.length) {
-      const tracks = recording.tracks?.length
-        ? recording.tracks
-        : [{ assetId: recording.id, contentHash: recording.contentHash }]
-      const contentHashes = new Map(
-        (await this.projects.assetContentHashes(tracks.map((track) => track.assetId))).map(
-          (asset) => [asset.id, asset.contentHash]
-        )
-      )
-      for (const track of tracks) {
-        const contentHash = contentHashes.get(track.assetId)
-        if (!contentHash) return false
-        if (track.contentHash && contentHash !== track.contentHash) {
-          throw new Error("A recording asset ID exists with different audio content")
-        }
-      }
-    }
-    if (recording.midiTakes.length > 0) {
-      const graph = await this.graphs.snapshot()
-      for (const take of recording.midiTakes) {
-        if (!graph.midiClips.some((clip) => clip.id === take.clipId)) {
-          return false
-        }
-      }
-    }
-    recording.state = "committed"
-    recording.assetExists = true
-    return true
-  }
-
-  async recover(id: string): Promise<PendingRecording> {
-    const recording = await this.readSidecar(id)
-    if (
-      recording.assetExists ||
-      recording.state === "committed" ||
-      (await this.assetAlreadyCommitted(recording))
-    )
-      return this.toPending(recording)
-    recording.midiTakes ??= []
-    recording.startTick ??= 0
-    const recoverableIds = recording.tracks?.length
-      ? recording.tracks.map((track) => track.assetId)
-      : recording.midiTakes.length > 0
-        ? []
-        : [recording.id]
-    if (recoverableIds.length > 0) {
-      await this.graphs.deleteUnusedAssets(recoverableIds)
-    }
-    if (recording.state === "partial") {
-      this.operations.upsert(
-        {
-          id: `recording:${id}`,
-          title: t("operation.recoveringRecording"),
-          description: basename(recording.audioPath),
-          phase: "repairing-header",
-          state: "running",
-          completedUnits: null,
-          totalUnits: null,
-          cancellable: false,
-          error: null,
-          dropoutFrames: recording.dropoutFrames
-        },
-        true
-      )
-      if (recording.tracks?.length && recording.audioPath.endsWith(".partial.bwf")) {
-        recording.frameCount = repairRecordingHeader(recording.audioPath, recording.channels)
-        const readyPath = recording.audioPath.replace(".partial.bwf", ".ready.bwf")
-        await rename(recording.audioPath, readyPath)
-        recording.audioPath = readyPath
-      }
-      recording.state = "ready"
-      await this.writeSidecar(recording)
-    } else {
-      this.operations.upsert(
-        {
-          id: `recording:${id}`,
-          title: t("operation.recoveringRecording"),
-          description: basename(recording.audioPath),
-          phase: "hashing",
-          state: "running",
-          completedUnits: null,
-          totalUnits: null,
-          cancellable: false,
-          error: null,
-          dropoutFrames: recording.dropoutFrames
-        },
-        true
-      )
-    }
-    await this.finalizeAndCommit(recording, `recording:${id}`)
-    return this.toPending(recording)
-  }
-
-  async deletePending(id: string): Promise<void> {
-    const recording = await this.readSidecar(id)
-    await this.recovery.remove(recording)
-  }
-
-  async cleanupCommittedForProject(projectPath: string): Promise<void> {
-    const settings = await this.settings.get()
-    const files = await readdir(settings.swapDirectory).catch(() => [] as string[])
-    for (const file of files.filter((name) => name.endsWith(".recording.json"))) {
-      try {
-        const sidecar = JSON.parse(
-          await readFile(join(settings.swapDirectory, file), "utf8")
-        ) as RecordingSidecar
-        if (sidecar.projectPath !== projectPath) continue
-        let assetExists = sidecar.state === "committed"
-        if (!assetExists && this.projects.current?.path === projectPath) {
-          assetExists = await this.assetAlreadyCommitted(sidecar)
-        }
-        if (assetExists) {
-          await this.deletePending(sidecar.id)
-        }
-      } catch {
-        // Keep any recording whose state cannot be proven safe to delete.
-      }
-    }
+  cleanupCommittedForProject(projectPath: string): Promise<void> {
+    return this.pending.cleanupCommittedForProject(projectPath)
   }
 }

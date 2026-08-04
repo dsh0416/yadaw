@@ -17,9 +17,25 @@ const commitMidiRecordingTakes = vi.hoisted(() =>
     ) => workspace
   )
 )
+const finalizeRecording = vi.hoisted(() =>
+  vi.fn().mockResolvedValue({
+    contentHash: "recording-hash",
+    sampleRate: 48_000,
+    channels: 2,
+    bitDepth: "float32",
+    frameCount: 4_800,
+    timeReference: 480,
+    waveformLevels: []
+  })
+)
 
 vi.mock("./midi-recording-commit", () => ({
   commitMidiRecordingTakes
+}))
+vi.mock("./recording-finalizer", () => ({
+  RecordingFinalizer: class {
+    finalize = finalizeRecording
+  }
 }))
 
 describe("RecordingService MIDI orchestration", () => {
@@ -29,6 +45,16 @@ describe("RecordingService MIDI orchestration", () => {
   beforeEach(() => {
     delete process.env.HERON_TEST_CAPTURE_SOURCE
     commitMidiRecordingTakes.mockClear()
+    finalizeRecording.mockClear()
+    finalizeRecording.mockResolvedValue({
+      contentHash: "recording-hash",
+      sampleRate: 48_000,
+      channels: 2,
+      bitDepth: "float32",
+      frameCount: 4_800,
+      timeReference: 480,
+      waveformLevels: []
+    })
     commitMidiRecordingTakes.mockImplementation(async (_commands, workspace) => workspace)
   })
 
@@ -46,6 +72,7 @@ describe("RecordingService MIDI orchestration", () => {
   async function createHarness(options?: {
     midiClips?: Array<{ id: string }>
     armedAudio?: boolean
+    armedMidi?: boolean
     missingTrack?: boolean
   }) {
     const swapDirectory = await mkdtemp(join(tmpdir(), "heron-recording-midi-svc-"))
@@ -67,7 +94,7 @@ describe("RecordingService MIDI orchestration", () => {
         kind: "instrument",
         systemRole: null,
         name: "Keys",
-        recordArmed: true,
+        recordArmed: options?.armedMidi !== false,
         inputChannels: [],
         midiInput: { portId: "port-a", channel: 3 }
       },
@@ -154,7 +181,9 @@ describe("RecordingService MIDI orchestration", () => {
         positionFrames: 480,
         positionTicks: 960
       }),
-      startRecording: vi.fn().mockResolvedValue(undefined),
+      startRecording: vi.fn().mockImplementation(async (config: { path: string }) => {
+        await writeFile(config.path, new Uint8Array())
+      }),
       stopRecording: vi.fn().mockResolvedValue({
         frameCount: 4_800,
         dropoutFrames: 0,
@@ -251,6 +280,70 @@ describe("RecordingService MIDI orchestration", () => {
     })
     expect(sidecar.tracks).toEqual([])
     expect(sidecar.midiTakes).toHaveLength(1)
+  })
+
+  it("starts audio-only capture without arming a MIDI take", async () => {
+    const { service, audioHost } = await createHarness({ armedAudio: true, armedMidi: false })
+
+    const session = await service.start()
+
+    expect(session.audioTrackIds).toEqual(["ch:audio"])
+    expect(session.midiTrackIds).toEqual([])
+    expect(audioHost.startRecording).toHaveBeenCalledOnce()
+    expect(audioHost.startMidiRecording).not.toHaveBeenCalled()
+  })
+
+  it("starts and commits a mixed audio and MIDI recording", async () => {
+    const { service, audioHost } = await createHarness({ armedAudio: true })
+
+    const session = await service.start()
+    const pending = await service.stop()
+
+    expect(session.audioTrackIds).toEqual(["ch:audio"])
+    expect(session.midiTrackIds).toEqual(["track:keys"])
+    expect(audioHost.stopRecording).toHaveBeenCalledOnce()
+    expect(audioHost.stopMidiRecording).toHaveBeenCalledOnce()
+    expect(finalizeRecording).toHaveBeenCalledOnce()
+    expect(commitMidiRecordingTakes).toHaveBeenCalledOnce()
+    expect(pending).toMatchObject({ state: "committed", assetExists: true })
+  })
+
+  it("leaves a partial sidecar when host audio stop fails", async () => {
+    const { service, audioHost, swapDirectory, transport } = await createHarness({
+      armedAudio: true,
+      armedMidi: false
+    })
+    const session = await service.start()
+    audioHost.stopRecording.mockRejectedValueOnce(new Error("host stop failed"))
+
+    await expect(service.stop()).rejects.toThrow("host stop failed")
+
+    const sidecar = JSON.parse(
+      await readFile(join(swapDirectory, `${session.id}.recording.json`), "utf8")
+    )
+    expect(sidecar.state).toBe("partial")
+    expect(transport.command).toHaveBeenLastCalledWith({ type: "play" })
+  })
+
+  it("keeps a ready sidecar recoverable when finalization is interrupted", async () => {
+    const { service, operations, swapDirectory } = await createHarness({
+      armedAudio: true,
+      armedMidi: false
+    })
+    const session = await service.start()
+    finalizeRecording.mockRejectedValueOnce(new Error("disk full"))
+
+    await expect(service.stop()).rejects.toThrow("disk full")
+
+    const sidecar = JSON.parse(
+      await readFile(join(swapDirectory, `${session.id}.recording.json`), "utf8")
+    )
+    expect(sidecar.state).toBe("ready")
+    expect(operations.patch).toHaveBeenCalledWith(
+      expect.stringContaining("recording:"),
+      expect.objectContaining({ state: "failed" }),
+      true
+    )
   })
 
   it("rolls back MIDI start when transport arming fails", async () => {

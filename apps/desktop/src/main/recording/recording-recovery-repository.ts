@@ -1,14 +1,8 @@
 import { readFile, readdir, rename, rm, writeFile } from "node:fs/promises"
 import { join } from "node:path"
+import type { RecordingSidecarRecord } from "./recording-contracts"
 
-export interface RecordingSidecarRecord {
-  id: string
-  audioPath: string
-  sidecarPath: string
-  finalPath: string | null
-  tracks?: { finalPath: string | null }[]
-  midiTakes?: { journalPath: string }[]
-}
+export type { RecordingSidecarRecord } from "./recording-contracts"
 
 export class RecordingRecoveryRepository {
   async write(recording: RecordingSidecarRecord): Promise<void> {
