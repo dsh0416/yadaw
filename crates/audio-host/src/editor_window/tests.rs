@@ -201,6 +201,7 @@ mod tests {
 
         assert_eq!(geometry.x, 0);
         assert_eq!(geometry.y, 72);
+        assert_eq!(geometry.parent_height, geometry.frame_height + 72);
         assert_eq!((geometry.content_width, geometry.content_height), (400, 200));
         #[cfg(target_os = "macos")]
         assert_eq!((geometry.frame_width, geometry.frame_height), (600, 300));

@@ -1,5 +1,5 @@
 use super::{
-    Arc, ControlCommand, ControlResult, EventLoopProxy, HashMap, LiveMixerGraph, Mutex, UiEvent,
+    Arc, ControlCommand, ControlResult, HashMap, LiveMixerGraph, Mutex, UiEvent, UiMailboxWaker,
     WorkerSupervisor, engine, engine_command, mpsc, oneshot, std_mpsc,
 };
 
@@ -10,13 +10,13 @@ pub(super) struct ActorRequest {
 
 pub(super) async fn forward_to_ui(
     sender: &std_mpsc::SyncSender<ActorRequest>,
-    proxy: &EventLoopProxy<UiEvent>,
+    proxy: &UiMailboxWaker,
     mut request: ActorRequest,
 ) {
     loop {
         match sender.try_send(request) {
             Ok(()) => {
-                let _ = proxy.send_event(UiEvent::Wake);
+                proxy.send_event(UiEvent::Wake);
                 return;
             }
             Err(std_mpsc::TrySendError::Full(returned)) => {
@@ -25,7 +25,7 @@ pub(super) async fn forward_to_ui(
             }
             Err(std_mpsc::TrySendError::Disconnected(returned)) => {
                 let _ = returned.reply.send(control_error! {
-                    message: "winit VST3 UI mailbox stopped".into(),
+                    message: "VST3 main-thread mailbox stopped".into(),
                 });
                 return;
             }

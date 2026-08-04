@@ -39,6 +39,8 @@ does not restart the runtime. A fatal native crash follows Electron's normal
 application crash/relaunch behavior, eliminating the old half-alive
 renderer/helper combinations.
 
-VST3 editor events are pumped by Electron main through `pumpEvents()`.
+VST3 UI work is queued by Tokio and drained in bounded turns by Electron main.
+Electron owns native editor top-level windows while Rust owns the attached VST3
+child view; shutdown always detaches the child before destroying its parent.
 Audio-device callbacks remain isolated from JavaScript, UI, filesystem work,
 allocation, and blocking synchronization.

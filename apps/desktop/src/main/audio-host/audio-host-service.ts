@@ -54,6 +54,7 @@ import type {
 import { AudioHostGateway } from "./audio-host-gateway"
 import { AudioHostSessionCoordinator } from "./audio-host-session-coordinator"
 import { AudioHostEventDispatcher } from "./audio-host-event-dispatcher"
+import type { AudioHostEditorWindows } from "./audio-host-editor-windows"
 import type {
   AudioHostGraph,
   AudioHostMidiRecordingConfig,
@@ -83,7 +84,8 @@ export class AudioHostService {
   private readonly pendingPreferenceWrites = new Set<Promise<void>>()
   private client: AudioHostRuntime | null = null
   private stopping = false
-  private uiPump: ReturnType<typeof setInterval> | null = null
+  private uiDrainTimer: ReturnType<typeof setInterval> | null = null
+  private uiDrainScheduled = false
   private readonly session = new AudioHostSessionCoordinator()
   private readonly gateway: AudioHostGateway
   private readonly events = new AudioHostEventDispatcher({
@@ -176,14 +178,18 @@ export class AudioHostService {
       classId: string,
       preference: PluginEditorPreference
     ) => Promise<void>,
-    private readonly onEditorClosed: (instanceId: string) => void = () => {}
+    private readonly onEditorClosed: (instanceId: string) => void = () => {},
+    private readonly editorWindows?: AudioHostEditorWindows
   ) {
     this.gateway = new AudioHostGateway(
       () => this.client,
       () => (this.stopping ? "stopping" : null),
       onEditorPreferenceChanged,
       this.pendingPreferenceWrites,
-      onEditorClosed,
+      (instanceId) => {
+        this.editorWindows?.hostClosed(instanceId)
+        onEditorClosed(instanceId)
+      },
       (callback) => this.events.dispatchAra(callback),
       (notification) => this.events.dispatchVst3(notification),
       (request) => this.events.dispatchSidechain(request)
@@ -247,7 +253,8 @@ export class AudioHostService {
         this.runtimePreferences.maxBlockingThreads === "auto"
           ? undefined
           : this.runtimePreferences.maxBlockingThreads,
-        this.editorOwnerWindowHandle
+        this.editorOwnerWindowHandle,
+        () => this.scheduleUiDrain()
       )
       this.client = client
     } catch (error) {
@@ -255,7 +262,7 @@ export class AudioHostService {
       return
     }
     this.health.start(client)
-    this.startUiPump()
+    this.startUiDrain()
     if (restoreGraph && this.lastGraph)
       void this.restoreGraph().catch((error: unknown) => {
         const message = error instanceof Error ? error.message : String(error)
@@ -573,7 +580,27 @@ export class AudioHostService {
     preference: PluginEditorPreference,
     context: PluginEditorContextWire
   ): Promise<{ editorMode: PluginEditorMode; open: boolean }> {
-    return this.plugins.openPluginEditor(instanceId, preference, context)
+    const client = this.client
+    if (!client || !this.editorWindows) {
+      return this.plugins.openPluginEditor(instanceId, preference, context)
+    }
+    return this.editorWindows.open(
+      client,
+      instanceId,
+      {
+        channelName: context.channelName,
+        channelColor: context.channelColor,
+        pluginName: context.pluginName,
+        theme: context.appearance.theme,
+        locale: context.appearance.locale
+      },
+      () => this.plugins.openPluginEditor(instanceId, preference, context),
+      (action) => this.plugins.applyPluginEditorAction(instanceId, action),
+      () => this.plugins.pluginParameters(instanceId),
+      (parameterId, normalized, gesture) =>
+        this.plugins.setPluginParameter({ instanceId, parameterId, normalized, gesture }),
+      () => this.plugins.closePluginEditor(instanceId)
+    )
   }
 
   pluginEditorAppearanceSnapshot(): PluginEditorAppearanceWire {
@@ -585,8 +612,9 @@ export class AudioHostService {
     await this.plugins.configurePluginEditorAppearance(appearance)
   }
 
-  closePluginEditor(instanceId: string): Promise<void> {
-    return this.plugins.closePluginEditor(instanceId)
+  async closePluginEditor(instanceId: string): Promise<void> {
+    if (this.editorWindows && (await this.editorWindows.close(instanceId))) return
+    await this.plugins.closePluginEditor(instanceId)
   }
 
   setPluginParameter(change: PluginParameterChange): Promise<void> {
@@ -646,9 +674,10 @@ export class AudioHostService {
 
   private async shutdownCurrentClient(): Promise<void> {
     this.health.stop()
-    this.plugins.resetConnection()
     const client = this.client
     if (!client) return
+    await this.editorWindows?.closeAll()
+    this.plugins.resetConnection()
     try {
       await this.performPriority({ type: "shutdown" }, client)
     } catch {
@@ -674,25 +703,39 @@ export class AudioHostService {
 
   async stop(): Promise<void> {
     this.stopping = true
-    this.stopUiPump()
+    this.stopUiDrain()
     await this.shutdownCurrentClient()
   }
 
-  private startUiPump(): void {
-    if (this.uiPump) return
-    this.uiPump = setInterval(() => {
+  private scheduleUiDrain(): void {
+    if (this.uiDrainScheduled || this.stopping) return
+    this.uiDrainScheduled = true
+    setImmediate(() => {
+      this.uiDrainScheduled = false
+      const client = this.client
+      if (!client || this.stopping) return
       try {
-        this.client?.pumpEvents()
+        const pending = client.drainUiWork()
+        this.editorWindows?.drain(client)
+        if (pending) this.scheduleUiDrain()
       } catch (error) {
-        if (!this.stopping) console.error("Could not pump embedded audio UI events", error)
+        if (!this.stopping) console.error("Could not drain embedded audio UI work", error)
       }
-    }, 8)
-    this.uiPump.unref()
+    })
   }
 
-  private stopUiPump(): void {
-    if (!this.uiPump) return
-    clearInterval(this.uiPump)
-    this.uiPump = null
+  private startUiDrain(): void {
+    if (this.uiDrainTimer) return
+    this.scheduleUiDrain()
+    // Plug-in timers and ARA callbacks require periodic main-thread service
+    // even when Tokio has not enqueued a new command.
+    this.uiDrainTimer = setInterval(() => this.scheduleUiDrain(), 16)
+    this.uiDrainTimer.unref()
+  }
+
+  private stopUiDrain(): void {
+    if (!this.uiDrainTimer) return
+    clearInterval(this.uiDrainTimer)
+    this.uiDrainTimer = null
   }
 }

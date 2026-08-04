@@ -3,8 +3,9 @@ use serde::{Deserialize, Serialize};
 use super::{
     AudioBackend, AudioBenchmarkReport, AudioDeviceList, AudioRuntime, BinaryPayload,
     CompiledAudioGraphSnapshot, GraphTransactionValue, MidiInputSnapshot, MidiRecordingResult,
-    MixerChannelMeter, PluginEditorMode, PluginParameter, RecordingResult, RecordingWaveform,
-    RoundTripLatencyMeasurement, RpcError, RpcResult, TransportState,
+    MixerChannelMeter, PluginEditorMode, PluginEditorToolbarState, PluginParameter,
+    RecordingResult, RecordingWaveform, RoundTripLatencyMeasurement, RpcError, RpcResult,
+    TransportState,
 };
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -127,6 +128,9 @@ pub enum ControlResult {
     PluginEditor {
         active_mode: PluginEditorMode,
         open: bool,
+    },
+    PluginEditorToolbar {
+        state: PluginEditorToolbarState,
     },
     Error {
         error: RpcError,

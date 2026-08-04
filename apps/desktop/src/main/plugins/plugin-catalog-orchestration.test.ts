@@ -1,5 +1,25 @@
 import { describe, expect, it, vi } from "vitest"
+import type { PluginDescriptor } from "@heron/contracts"
 import { PluginCatalogService } from "./plugin-catalog-service"
+
+function externalDescriptor(buses: PluginDescriptor["buses"] = []): PluginDescriptor {
+  return {
+    source: { kind: "external" },
+    classId: "sidechain-effect",
+    modulePath: "/plugins/Sidechain.vst3",
+    name: "Sidechain",
+    vendor: "Acme",
+    version: "1",
+    categories: ["Fx"],
+    kind: "effect",
+    architecture: process.arch,
+    buses,
+    supportedAudioModes: ["stereo"],
+    hasEditor: true,
+    compatibility: "compatible",
+    compatibilityReason: null
+  }
+}
 
 describe("PluginCatalogService orchestration", () => {
   it("publishes built-in fallbacks when isolated probes fail", async () => {
@@ -48,5 +68,43 @@ describe("PluginCatalogService orchestration", () => {
 
     await expect(first).resolves.toMatchObject({ scannedAt: 1 })
     await expect(second).resolves.toMatchObject({ scannedAt: 1 })
+  })
+
+  it("deep-probes once per bundle immediately before runtime loading", async () => {
+    const deep = externalDescriptor([
+      {
+        index: 0,
+        direction: "input",
+        kind: "main",
+        name: "Stereo In",
+        channels: 2,
+        defaultActive: true
+      },
+      {
+        index: 1,
+        direction: "input",
+        kind: "aux",
+        name: "Stereo Side Chain",
+        channels: 2,
+        defaultActive: true
+      }
+    ])
+    const probeClient = { probe: vi.fn().mockResolvedValue([deep]) }
+    const service = new PluginCatalogService("user-data", "probe", "builtins", {
+      probeClient: probeClient as never
+    })
+    const startupDescriptor = externalDescriptor()
+
+    const [first, second] = await Promise.all([
+      service.resolveDescriptorForRuntime(startupDescriptor),
+      service.resolveDescriptorForRuntime(startupDescriptor)
+    ])
+
+    expect(probeClient.probe).toHaveBeenCalledOnce()
+    expect(probeClient.probe).toHaveBeenCalledWith(startupDescriptor.modulePath, "deep")
+    expect(first.buses).toContainEqual(
+      expect.objectContaining({ index: 1, direction: "input", kind: "aux" })
+    )
+    expect(second).toEqual(first)
   })
 })

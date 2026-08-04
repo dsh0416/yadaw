@@ -418,7 +418,9 @@ const fakeHostInternal = vi.hoisted(() => {
       return true
     }
 
-    pumpEvents(): void {}
+    drainUiWork(): boolean {
+      return false
+    }
 
     private graphTransactionSnapshot(): Record<string, unknown> {
       return {

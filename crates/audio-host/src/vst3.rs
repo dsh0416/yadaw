@@ -264,6 +264,7 @@ impl Vst3Runtime {
             } => self.editor_result(&instance_id, preference),
             ControlCommand::ClosePluginEditor { .. }
             | ControlCommand::ConfigurePluginEditorAppearance { .. }
+            | ControlCommand::ApplyPluginEditorAction { .. }
             | ControlCommand::ResolvePluginSidechainRoute { .. } => ControlResult::Accepted,
             _ => control_error("command is not a VST3 runtime command"),
         }

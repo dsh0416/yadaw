@@ -1,8 +1,8 @@
 use super::{
-    ActorCommand, ActorRequest, Arc, BinaryPayload, ControlCommand, ControlResult, EventLoopProxy,
+    ActorCommand, ActorRequest, Arc, BinaryPayload, ControlCommand, ControlResult,
     GraphParameterHandles, GraphTransactionRequest, GraphTransactionState, GraphTransactionValue,
     GraphUpdate, HashMap, LiveMixerGraph, MIDI_INPUT, Mutex, PreparedGraphCandidate,
-    RpcRequestMeta, UiEvent, dispatch_build_graph, engine, forward_to_ui, graph_busy_error,
+    RpcRequestMeta, UiMailboxWaker, dispatch_build_graph, engine, forward_to_ui, graph_busy_error,
     graph_conflict_error, graph_correlation, graph_dependency_error, graph_failure,
     graph_stale_error, graph_success, graph_timeout_error, graph_validation_error, live_graph,
     mpsc, oneshot, publish_built_graph, refresh_graph_handles, std_mpsc, validate_graph_meta,
@@ -10,7 +10,7 @@ use super::{
 };
 
 pub(super) struct Vst3ActorDeps {
-    pub(super) ui_proxy: EventLoopProxy<UiEvent>,
+    pub(super) ui_proxy: UiMailboxWaker,
     pub(super) ui_sender: std_mpsc::SyncSender<ActorRequest>,
     pub(super) processors: Arc<Mutex<HashMap<String, vst3::Vst3ProcessorHandle>>>,
     pub(super) handles: Arc<Mutex<GraphParameterHandles>>,

@@ -49,7 +49,7 @@ use winit::{
     application::ApplicationHandler,
     dpi::LogicalSize,
     event::WindowEvent,
-    event_loop::{ActiveEventLoop, ControlFlow, EventLoopProxy},
+    event_loop::{ActiveEventLoop, ControlFlow},
     window::{WindowAttributes, WindowId},
 };
 
@@ -77,7 +77,7 @@ use plugin_actor::{
     slow_request_threshold, vst3_actor,
 };
 use runtime_config::RuntimeConfig;
-use ui_runtime::{UiEvent, WinitHost};
+use ui_runtime::{UiEvent, UiMailboxWaker, WinitHost};
 use wire_adapters::{engine_command, live_graph};
 
 static MIDI_INPUT: OnceLock<MidiInputActor> = OnceLock::new();

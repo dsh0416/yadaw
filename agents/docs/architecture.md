@@ -41,9 +41,14 @@ The addon places control work on bounded in-process channels. N-API async tasks
 wait outside the JavaScript thread. Parameter automation uses a separate
 bounded direct queue, and telemetry is read directly from the engine snapshot.
 
-VST3 editor windows remain thread-affine. Electron main calls `pumpEvents()` on
-an unref'd short interval so winit work runs on the JavaScript/main thread
-without blocking Electron's event loop.
+VST3 controller and editor calls remain thread-affine. Tokio queues them on a
+bounded mailbox and wakes Electron main through a non-blocking N-API
+threadsafe function. Electron drains at most one bounded batch per turn and
+owns the platform application loop; the embedded runtime never creates or
+pumps a winit event loop. Electron `BaseWindow` owns each native plug-in editor
+surface and a sandboxed `WebContentsView` toolbar; Rust attaches only the
+platform child view below that toolbar and returns resize/state requests through
+a bounded queue drained by Electron main.
 
 ## Failure model
 
@@ -58,7 +63,7 @@ or manufacture a timeout result with an unknown mutation outcome.
 
 Runtime worker limits are saved as preferences and applied on the next
 application launch. Heron deliberately does not tear down and recreate the
-embedded winit/audio runtime in a live process.
+embedded audio runtime in a live process.
 
 ## Real-time rules
 

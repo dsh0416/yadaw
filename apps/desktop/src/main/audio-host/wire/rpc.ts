@@ -86,6 +86,7 @@ export interface ControlResponse {
       | "revision-mismatch"
       | "busy"
       | "plugin-editor"
+      | "plugin-editor-toolbar"
       | "error"
     error?: RpcError
     result?: RpcResult<GraphTransactionValue>
@@ -116,6 +117,26 @@ export interface ControlResponse {
     report?: AudioHostBenchmarkReport
     active_mode?: PluginEditorMode
     open?: boolean
+    state?: {
+      active_mode: PluginEditorMode
+      zoom_percent: number
+      compare_slot: "a" | "b"
+      can_compare: boolean
+      can_paste: boolean
+      can_undo: boolean
+      can_redo: boolean
+      sidechain_buses: Array<{
+        input_bus_index: number
+        name: string
+        source_channel_id: string | null
+      }>
+      sidechain_sources: Array<{
+        id: string
+        name: string
+        kind: "audio" | "instrument" | "aux"
+      }>
+      sidechain_pending: boolean
+    }
     backends?: AudioBackendDescriptor[]
     devices?: { inputs: AudioHostDevice[]; outputs: AudioHostDevice[] }
     runtime?: AudioHostRuntime

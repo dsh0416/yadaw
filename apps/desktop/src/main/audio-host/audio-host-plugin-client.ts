@@ -1,4 +1,4 @@
-import type { AudioHostRuntime } from "@heron/dsp-node"
+import type { AudioHostRuntime, NativeEditorToolbarState } from "@heron/dsp-node"
 import type {
   AppLocale,
   PluginEditorMode,
@@ -11,6 +11,7 @@ import type {
 } from "@heron/contracts"
 import { binaryBytes, inlineBinary } from "./wire"
 import type { ControlResponse } from "./wire"
+import type { PluginEditorToolbarAction } from "./audio-host-editor-windows"
 
 interface LoadedPlugin {
   classId: string
@@ -207,6 +208,41 @@ export class AudioHostPluginClient {
       type: "configure-plugin-editor-appearance",
       appearance
     })
+  }
+
+  async applyPluginEditorAction(
+    instanceId: string,
+    action: PluginEditorToolbarAction
+  ): Promise<NativeEditorToolbarState> {
+    const response = await this.request({
+      type: "apply-plugin-editor-action",
+      instance_id: instanceId,
+      action
+    })
+    if (response.result.type !== "plugin-editor-toolbar" || !response.result.state) {
+      throw new Error("audio host returned an invalid plug-in editor toolbar response")
+    }
+    const state = response.result.state
+    return {
+      activeMode: state.active_mode,
+      zoomPercent: state.zoom_percent,
+      compareSlot: state.compare_slot,
+      canCompare: state.can_compare,
+      canPaste: state.can_paste,
+      canUndo: state.can_undo,
+      canRedo: state.can_redo,
+      sidechainBuses: state.sidechain_buses.map((bus) => ({
+        inputBusIndex: bus.input_bus_index,
+        name: bus.name,
+        ...(bus.source_channel_id === null ? {} : { sourceChannelId: bus.source_channel_id })
+      })),
+      sidechainSources: state.sidechain_sources.map((source) => ({
+        id: source.id,
+        name: source.name,
+        kind: source.kind
+      })),
+      sidechainPending: state.sidechain_pending
+    }
   }
 
   async closePluginEditor(instanceId: string): Promise<void> {

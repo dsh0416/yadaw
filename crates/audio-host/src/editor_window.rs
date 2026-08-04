@@ -85,24 +85,24 @@ pub(crate) enum ToolbarMenu {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum SidechainSourceKind {
+pub(crate) enum SidechainSourceKind {
     Audio,
     Instrument,
     Aux,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct SidechainSource {
-    id: String,
-    name: String,
-    kind: SidechainSourceKind,
+pub(crate) struct SidechainSource {
+    pub(crate) id: String,
+    pub(crate) name: String,
+    pub(crate) kind: SidechainSourceKind,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct SidechainBus {
-    input_bus_index: u32,
-    name: String,
-    source_channel_id: Option<String>,
+pub(crate) struct SidechainBus {
+    pub(crate) input_bus_index: u32,
+    pub(crate) name: String,
+    pub(crate) source_channel_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

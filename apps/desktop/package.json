@@ -17,7 +17,7 @@
     "test:unit": "vitest run",
     "test:coverage": "node ../../scripts/run-vitest-coverage.ts",
     "test:vst3-runtime": "node scripts/vst3-runtime-smoke.ts",
-    "test:vst3-editor": "node scripts/vst3-editor-smoke.ts",
+    "test:vst3-editor": "node scripts/vst3-editor-smoke-launch.ts",
     "test:builtin-vst3": "node scripts/builtin-vst3-smoke.ts && node scripts/audio-benchmark-smoke.ts",
     "verify:package-security": "node scripts/verify-electron-security.ts",
     "test:e2e": "pnpm predev && pnpm build && playwright test",

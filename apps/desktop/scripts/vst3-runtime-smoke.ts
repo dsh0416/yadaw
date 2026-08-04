@@ -42,7 +42,7 @@ const resolvedSynth = resolve(
   "note-expression-synth.vst3"
 )
 const runtime = new AudioHostRuntime(2, 4)
-const uiPump = setInterval(() => runtime.pumpEvents(), 8)
+const uiPump = setInterval(() => runtime.drainUiWork(), 8)
 uiPump.unref()
 let nextRequestId = 1
 

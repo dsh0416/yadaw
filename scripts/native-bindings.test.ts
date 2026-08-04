@@ -141,3 +141,35 @@ await test("a pending UI request does not occupy the native async request path",
 
   assert.ok((await pendingUiRequest) instanceof Error)
 })
+
+await test("Tokio wakes Electron to drain bounded UI work", async () => {
+  let wakeCount = 0
+  const runtime = new AudioHostRuntime(2, 4, undefined, () => {
+    wakeCount += 1
+    setImmediate(() => runtime.drainUiWork())
+  })
+
+  try {
+    const response = await Promise.race([
+      runtime.request(
+        Buffer.from(
+          encode({
+            request_id: 1,
+            command: {
+              type: "configure-plugin-editor-appearance",
+              appearance: { theme: "dark", locale: "en-US" }
+            }
+          })
+        )
+      ),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("native UI wake did not drain the request")), 500)
+      )
+    ])
+    const decoded = decode(response.body) as { result: { type: string } }
+    assert.equal(decoded.result.type, "accepted")
+    assert.ok(wakeCount > 0)
+  } finally {
+    runtime.close()
+  }
+})

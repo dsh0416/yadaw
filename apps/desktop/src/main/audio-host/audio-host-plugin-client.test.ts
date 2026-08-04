@@ -220,6 +220,51 @@ describe("AudioHostPluginClient", () => {
     })
   })
 
+  it("routes editor toolbar actions through the async control request", async () => {
+    const { client, request } = createClient()
+    request.mockResolvedValue({
+      result: {
+        type: "plugin-editor-toolbar",
+        state: {
+          active_mode: "parameters",
+          zoom_percent: 125,
+          compare_slot: "b",
+          can_compare: true,
+          can_paste: true,
+          can_undo: false,
+          can_redo: true,
+          sidechain_buses: [
+            { input_bus_index: 1, name: "Side-chain", source_channel_id: "audio-2" }
+          ],
+          sidechain_sources: [{ id: "audio-2", name: "Audio 2", kind: "audio" }],
+          sidechain_pending: false
+        }
+      }
+    })
+
+    await expect(
+      client.applyPluginEditorAction("plugin-1", { type: "zoom", zoom_percent: 125 })
+    ).resolves.toEqual({
+      activeMode: "parameters",
+      zoomPercent: 125,
+      compareSlot: "b",
+      canCompare: true,
+      canPaste: true,
+      canUndo: false,
+      canRedo: true,
+      sidechainBuses: [
+        { inputBusIndex: 1, name: "Side-chain", sourceChannelId: "audio-2" }
+      ],
+      sidechainSources: [{ id: "audio-2", name: "Audio 2", kind: "audio" }],
+      sidechainPending: false
+    })
+    expect(request).toHaveBeenCalledWith({
+      type: "apply-plugin-editor-action",
+      instance_id: "plugin-1",
+      action: { type: "zoom", zoom_percent: 125 }
+    })
+  })
+
   it("falls back to request when enqueue has no live client/handle", async () => {
     const { client, request } = createClient({ client: null })
     request.mockResolvedValue({ result: { type: "ok" } })

@@ -7,6 +7,71 @@ pub enum PluginEditorMode {
     Parameters,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PluginEditorCompareSlot {
+    A,
+    B,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "kebab-case")]
+pub enum PluginEditorAction {
+    Mode {
+        mode: PluginEditorMode,
+    },
+    Compare {
+        slot: PluginEditorCompareSlot,
+    },
+    Copy,
+    Paste,
+    Undo,
+    Redo,
+    Zoom {
+        zoom_percent: u16,
+    },
+    SidechainRoute {
+        input_bus_index: u32,
+        source_channel_id: Option<String>,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PluginEditorSidechainSourceKind {
+    Audio,
+    Instrument,
+    Aux,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PluginEditorSidechainBus {
+    pub input_bus_index: u32,
+    pub name: String,
+    pub source_channel_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PluginEditorSidechainSource {
+    pub id: String,
+    pub name: String,
+    pub kind: PluginEditorSidechainSourceKind,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PluginEditorToolbarState {
+    pub active_mode: PluginEditorMode,
+    pub zoom_percent: u16,
+    pub compare_slot: PluginEditorCompareSlot,
+    pub can_compare: bool,
+    pub can_paste: bool,
+    pub can_undo: bool,
+    pub can_redo: bool,
+    pub sidechain_buses: Vec<PluginEditorSidechainBus>,
+    pub sidechain_sources: Vec<PluginEditorSidechainSource>,
+    pub sidechain_pending: bool,
+}
+
 /// Resolved theme for host-owned plug-in editor chrome.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]

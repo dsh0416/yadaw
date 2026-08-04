@@ -1,5 +1,5 @@
 
-fn sidechain_view_for_graph(
+pub(crate) fn sidechain_view_for_graph(
     graph: Option<&LiveMixerGraph>,
     instance_id: &str,
 ) -> Option<(Vec<SidechainBus>, Vec<SidechainSource>)> {
@@ -311,6 +311,7 @@ fn native_container_geometry(
     NativeContainerGeometry {
         x: 0,
         y: container_origin(toolbar),
+        parent_height: frame_height.saturating_add(toolbar),
         frame_width,
         frame_height,
         content_width,

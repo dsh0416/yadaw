@@ -142,6 +142,7 @@ impl WinitHost {
     }
 
     pub(super) fn close_all_editors(&mut self) {
+        self.close_all_embedded_editors();
         let instance_ids: Vec<String> = self.editor_instances.keys().cloned().collect();
         for instance_id in instance_ids {
             self.close_editor(&instance_id);
@@ -223,7 +224,7 @@ impl WinitHost {
 
     pub(super) fn execute_vst3_request(
         &mut self,
-        event_loop: &ActiveEventLoop,
+        event_loop: Option<&ActiveEventLoop>,
         request: ActorRequest,
     ) {
         let ActorRequest { command, reply } = request;
@@ -233,7 +234,13 @@ impl WinitHost {
                 preference,
                 context,
             }) => {
-                let _ = reply.send(self.open_editor(event_loop, instance_id, preference, context));
+                let result = match event_loop {
+                    Some(event_loop) => {
+                        self.open_editor(event_loop, instance_id, preference, context)
+                    }
+                    None => self.open_embedded_editor(instance_id, preference),
+                };
+                let _ = reply.send(result);
                 return;
             }
             ActorCommand::Control(ControlCommand::ConfigurePluginEditorAppearance {
@@ -244,6 +251,23 @@ impl WinitHost {
                     editor.update_appearance(appearance);
                 }
                 let _ = reply.send(ControlResult::Accepted);
+                return;
+            }
+            ActorCommand::Control(ControlCommand::ApplyPluginEditorAction {
+                instance_id,
+                action,
+            }) => {
+                let result = if event_loop.is_none() {
+                    match self.apply_embedded_editor_action(&instance_id, action) {
+                        Ok(state) => ControlResult::PluginEditorToolbar { state },
+                        Err(message) => control_error! { message },
+                    }
+                } else {
+                    control_error! {
+                        message: "toolbar actions require an Electron-owned plug-in editor".into(),
+                    }
+                };
+                let _ = reply.send(result);
                 return;
             }
             ActorCommand::Control(ControlCommand::ResolvePluginSidechainRoute {
@@ -257,16 +281,29 @@ impl WinitHost {
                 {
                     editor.resolve_sidechain_request(request_id, accepted, warning);
                 }
+                if let Some(host) = self.embedded_editor_hosts.get_mut(&instance_id)
+                    && host.pending_sidechain_request == Some(request_id)
+                {
+                    host.pending_sidechain_request = None;
+                }
                 let _ = reply.send(ControlResult::Accepted);
                 return;
             }
             ActorCommand::Control(ControlCommand::ClosePluginEditor { instance_id }) => {
-                self.close_editor(&instance_id);
+                if event_loop.is_some() {
+                    self.close_editor(&instance_id);
+                } else {
+                    self.close_embedded_editor(&instance_id, true);
+                }
                 let _ = reply.send(ControlResult::Accepted);
                 return;
             }
             ActorCommand::Control(ControlCommand::UnloadPlugin { instance_id }) => {
-                self.close_editor(&instance_id);
+                if event_loop.is_some() {
+                    self.close_editor(&instance_id);
+                } else {
+                    self.close_embedded_editor(&instance_id, true);
+                }
                 if let Ok(mut processors) = self.processors.lock() {
                     processors.remove(&instance_id);
                 }

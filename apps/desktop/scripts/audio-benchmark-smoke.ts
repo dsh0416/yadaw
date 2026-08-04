@@ -24,7 +24,7 @@ interface WireResponse {
 const repositoryRoot = resolve(import.meta.dirname, "..", "..", "..")
 const pluginPath = resolve(repositoryRoot, "target", "bundles", "Heron Gain.vst3")
 const client = new AudioHostRuntime(2, 4)
-const uiPump = setInterval(() => client.pumpEvents(), 8)
+const uiPump = setInterval(() => client.drainUiWork(), 8)
 uiPump.unref()
 
 let requestId = 1

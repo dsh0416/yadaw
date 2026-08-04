@@ -5,6 +5,18 @@ use super::{
 
 impl WinitHost {
     pub(super) fn drain_ui_mailbox(&mut self, event_loop: &ActiveEventLoop) {
+        self.drain_ui_mailbox_with(Some(event_loop));
+    }
+
+    pub(in crate::runtime) fn drain_embedded_ui_mailbox(&mut self) -> bool {
+        self.generation.fetch_add(1, Ordering::Release);
+        let pending = self.drain_ui_mailbox_with(None);
+        self.refresh_embedded_editor_gestures();
+        let _ = self.dispatch_embedded_editor_run_loops(Instant::now());
+        pending
+    }
+
+    fn drain_ui_mailbox_with(&mut self, event_loop: Option<&ActiveEventLoop>) -> bool {
         let started = std::time::Instant::now();
         let mut drained = 0;
         while should_drain_ui_request(drained, started.elapsed()) {
@@ -13,15 +25,17 @@ impl WinitHost {
                     self.execute_vst3_request(event_loop, request);
                     drained += 1;
                 }
-                Err(std_mpsc::TryRecvError::Empty) => return,
-                Err(std_mpsc::TryRecvError::Disconnected) => return,
+                Err(std_mpsc::TryRecvError::Empty) => return false,
+                Err(std_mpsc::TryRecvError::Disconnected) => return false,
             }
         }
-        let _ = self.proxy.send_event(UiEvent::Wake);
+        self.proxy.send_event(UiEvent::Wake);
+        true
     }
 
     pub(in crate::runtime) fn shutdown(&mut self) {
         self.close_all_editors();
+        self.embedded_editor_hosts.clear();
         if let Ok(mut processors) = self.processors.lock() {
             processors.clear();
         }

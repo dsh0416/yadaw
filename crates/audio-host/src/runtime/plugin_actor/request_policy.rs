@@ -16,6 +16,7 @@ pub(in crate::runtime) fn is_vst3_command(command: &ControlCommand) -> bool {
             | ControlCommand::SavePluginState { .. }
             | ControlCommand::OpenPluginEditor { .. }
             | ControlCommand::ConfigurePluginEditorAppearance { .. }
+            | ControlCommand::ApplyPluginEditorAction { .. }
             | ControlCommand::ResolvePluginSidechainRoute { .. }
             | ControlCommand::ClosePluginEditor { .. }
             | ControlCommand::RunAudioBenchmark { .. }
@@ -46,6 +47,7 @@ pub(in crate::runtime) fn slow_request_threshold(command: &ControlCommand) -> st
             | ControlCommand::SavePluginState { .. }
             | ControlCommand::OpenPluginEditor { .. }
             | ControlCommand::ConfigurePluginEditorAppearance { .. }
+            | ControlCommand::ApplyPluginEditorAction { .. }
             | ControlCommand::ResolvePluginSidechainRoute { .. }
             | ControlCommand::ClosePluginEditor { .. }
             | ControlCommand::BenchmarkEcho { .. }

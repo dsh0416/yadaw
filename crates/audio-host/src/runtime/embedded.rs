@@ -2,7 +2,7 @@
 //!
 //! This adapter deliberately stops at the native library boundary. Control
 //! requests use bounded in-process channels, telemetry reads the engine
-//! directly, and the host UI event loop is pumped by Electron's main thread.
+//! directly, and Electron's main thread drains bounded native UI work.
 //! No process bootstrap, OS IPC, shared-memory descriptor, or helper watchdog
 //! participates in this path.
 
@@ -19,19 +19,22 @@ use std::{
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
-use heron_dsp_runtime::protocol::{
-    ControlCommand, ControlRequest, ControlResponse, ControlResult, HostEvent, ParameterCommand,
-    ParameterTargetKind, PriorityCommand, PriorityRequest, PriorityResponse, PriorityResult,
-};
-use winit::{event_loop::EventLoop, platform::pump_events::EventLoopExtPumpEvents};
-
 use super::{
     ActorRequest, Arc as RuntimeArc, AtomicU64 as RuntimeAtomicU64, GraphParameterHandles,
     HashMap as RuntimeHashMap, MIDI_INPUT, Mutex as RuntimeMutex, NativeUiContext, RuntimeConfig,
-    UiEvent, Vst3ActorDeps, WinitHost, WorkerSupervisor, background_io_actor, dispatch_actor,
-    dispatch_parameter, editor_platform, engine, engine_actor, is_background_io_command,
-    is_vst3_command, mpsc, slow_request_threshold, stable_runtime_handle, std_mpsc as runtime_mpsc,
-    vst3, vst3_actor,
+    UiEvent, UiMailboxWaker, Vst3ActorDeps, WinitHost, WorkerSupervisor, background_io_actor,
+    dispatch_actor, dispatch_parameter, editor_platform, engine, engine_actor,
+    is_background_io_command, is_vst3_command, mpsc, slow_request_threshold, stable_runtime_handle,
+    std_mpsc as runtime_mpsc, vst3, vst3_actor,
+};
+use heron_dsp_runtime::protocol::{
+    ControlCommand, ControlRequest, ControlResponse, ControlResult, HostEvent, ParameterCommand,
+    ParameterTargetKind, PluginEditorToolbarState, PriorityCommand, PriorityRequest,
+    PriorityResponse, PriorityResult,
+};
+
+pub use super::ui_runtime::{
+    EmbeddedEditorHostEvent, EmbeddedEditorHostRegistration, EmbeddedEditorHostSnapshot,
 };
 
 const ACTOR_CAPACITY: usize = 64;
@@ -89,8 +92,8 @@ pub enum EmbeddedRuntimeError {
     AlreadyRunning,
     Closed,
     Configuration(String),
-    EventLoop(String),
     NativeUi(String),
+    EditorHost(String),
     RuntimeThread(String),
     Serialization(String),
 }
@@ -105,13 +108,10 @@ impl fmt::Display for EmbeddedRuntimeError {
             Self::Configuration(message) => {
                 write!(formatter, "invalid runtime configuration: {message}")
             }
-            Self::EventLoop(message) => write!(
-                formatter,
-                "could not create native UI event loop: {message}"
-            ),
             Self::NativeUi(message) => {
                 write!(formatter, "could not initialize native UI: {message}")
             }
+            Self::EditorHost(message) => write!(formatter, "native editor host failed: {message}"),
             Self::RuntimeThread(message) => {
                 write!(formatter, "embedded audio runtime thread failed: {message}")
             }
@@ -153,6 +153,8 @@ pub enum EmbeddedParameterEnqueue {
     Full,
     StaleEpoch,
 }
+
+pub type EmbeddedUiWake = Arc<dyn Fn() + Send + Sync + 'static>;
 
 struct DirectRequest {
     request: ControlRequest,
@@ -203,16 +205,13 @@ pub struct EmbeddedAudioHost {
 }
 
 struct EmbeddedUiRuntime {
-    event_loop: EventLoop<UiEvent>,
     application: WinitHost,
     _native_ui: NativeUiContext,
 }
 
 impl EmbeddedUiRuntime {
-    fn pump(&mut self) {
-        let _ = self
-            .event_loop
-            .pump_app_events(Some(Duration::ZERO), &mut self.application);
+    fn drain(&mut self) -> bool {
+        self.application.drain_embedded_ui_mailbox()
     }
 }
 
@@ -220,6 +219,7 @@ impl EmbeddedAudioHost {
     pub fn start(
         config: EmbeddedRuntimeConfig,
         editor_owner_window: Option<usize>,
+        ui_wake: Option<EmbeddedUiWake>,
     ) -> Result<Self, EmbeddedRuntimeError> {
         let runtime_config = config.validate()?;
         let already_running = UI_RUNTIMES.with(|runtimes| !runtimes.borrow().is_empty());
@@ -227,32 +227,22 @@ impl EmbeddedAudioHost {
             return Err(EmbeddedRuntimeError::AlreadyRunning);
         }
 
-        let _ = MIDI_INPUT.set(super::super::midi_input::MidiInputActor::start(
-            heron_dsp_runtime::protocol::MidiSyncPreferences {
-                enabled: false,
-                source_port_id: None,
-                source_port_name: None,
-                input_offsets_ms: std::collections::BTreeMap::new(),
-                control_port_ids: std::collections::BTreeSet::new(),
-                capture_all_controls: false,
-            },
-        ));
+        MIDI_INPUT.get_or_init(|| {
+            super::super::midi_input::MidiInputActor::start(
+                heron_dsp_runtime::protocol::MidiSyncPreferences {
+                    enabled: false,
+                    source_port_id: None,
+                    source_port_name: None,
+                    input_offsets_ms: std::collections::BTreeMap::new(),
+                    control_port_ids: std::collections::BTreeSet::new(),
+                    capture_all_controls: false,
+                },
+            )
+        });
         editor_platform::configure_process_application_identity()
             .map_err(EmbeddedRuntimeError::NativeUi)?;
         let native_ui = NativeUiContext::initialize().map_err(EmbeddedRuntimeError::NativeUi)?;
-        let mut event_loop_builder = EventLoop::<UiEvent>::with_user_event();
-        #[cfg(target_os = "macos")]
-        {
-            use winit::platform::macos::{ActivationPolicy, EventLoopBuilderExtMacOS};
-            event_loop_builder
-                .with_activation_policy(ActivationPolicy::Accessory)
-                .with_default_menu(false)
-                .with_activate_ignoring_other_apps(false);
-        }
-        let event_loop = event_loop_builder
-            .build()
-            .map_err(|error| EmbeddedRuntimeError::EventLoop(error.to_string()))?;
-        let proxy = event_loop.create_proxy();
+        let proxy = UiMailboxWaker::new(ui_wake.unwrap_or_else(|| Arc::new(|| {})));
         let application_proxy = proxy.clone();
         let (ui_sender, ui_inbox) = runtime_mpsc::sync_channel(UI_MAILBOX_CAPACITY);
         let (host_event_sender, host_event_inbox) = runtime_mpsc::sync_channel(EVENT_CAPACITY);
@@ -292,6 +282,9 @@ impl EmbeddedAudioHost {
             next_retirement_tick: None,
             output_parameter_error_reported: false,
             next_sidechain_request_id: 1,
+            embedded_editor_hosts: HashMap::new(),
+            embedded_editor_events: std::rc::Rc::new(std::cell::RefCell::new(VecDeque::new())),
+            embedded_editor_clipboard: None,
         };
 
         let protocol_engine = Arc::clone(&audio_engine);
@@ -313,7 +306,7 @@ impl EmbeddedAudioHost {
                     Ok(runtime) => runtime,
                     Err(error) => {
                         eprintln!("embedded audio runtime could not start Tokio: {error}");
-                        let _ = protocol_proxy.send_event(UiEvent::Exit);
+                        protocol_proxy.send_event(UiEvent::Exit);
                         return;
                     }
                 };
@@ -359,7 +352,6 @@ impl EmbeddedAudioHost {
             runtimes.borrow_mut().insert(
                 runtime_id,
                 EmbeddedUiRuntime {
-                    event_loop,
                     application,
                     _native_ui: native_ui,
                 },
@@ -511,19 +503,119 @@ impl EmbeddedAudioHost {
         }
     }
 
-    pub fn pump_events(&self) -> Result<(), EmbeddedRuntimeError> {
+    pub fn drain_ui_work(&self) -> Result<bool, EmbeddedRuntimeError> {
         if self.state.closed.load(Ordering::Acquire) {
             return Err(EmbeddedRuntimeError::Closed);
         }
         let found = UI_RUNTIMES.with(|runtimes| {
             let mut runtimes = runtimes.borrow_mut();
-            let Some(runtime) = runtimes.get_mut(&self.state.runtime_id) else {
-                return false;
-            };
-            runtime.pump();
-            true
+            let runtime = runtimes.get_mut(&self.state.runtime_id)?;
+            Some(runtime.drain())
         });
-        found.then_some(()).ok_or(EmbeddedRuntimeError::Closed)
+        found.ok_or(EmbeddedRuntimeError::Closed)
+    }
+
+    /// # Safety
+    ///
+    /// `registration.parent_window` must be a live Electron native window
+    /// handle owned by this main thread. It must remain live until the matching
+    /// editor host is unregistered.
+    pub unsafe fn register_editor_host(
+        &self,
+        registration: EmbeddedEditorHostRegistration,
+    ) -> Result<(), EmbeddedRuntimeError> {
+        if self.state.closed.load(Ordering::Acquire) {
+            return Err(EmbeddedRuntimeError::Closed);
+        }
+        UI_RUNTIMES.with(|runtimes| {
+            let mut runtimes = runtimes.borrow_mut();
+            let runtime = runtimes
+                .get_mut(&self.state.runtime_id)
+                .ok_or(EmbeddedRuntimeError::Closed)?;
+            runtime
+                .application
+                .register_embedded_editor_host(registration)
+                .map_err(EmbeddedRuntimeError::EditorHost)
+        })
+    }
+
+    pub fn resize_editor_host(
+        &self,
+        instance_id: &str,
+        width: u32,
+        height: u32,
+        top_inset: u32,
+        display_scale: f64,
+    ) -> Result<(), EmbeddedRuntimeError> {
+        if self.state.closed.load(Ordering::Acquire) {
+            return Err(EmbeddedRuntimeError::Closed);
+        }
+        UI_RUNTIMES.with(|runtimes| {
+            let mut runtimes = runtimes.borrow_mut();
+            let runtime = runtimes
+                .get_mut(&self.state.runtime_id)
+                .ok_or(EmbeddedRuntimeError::Closed)?;
+            runtime
+                .application
+                .resize_embedded_editor_host(instance_id, width, height, top_inset, display_scale)
+                .map_err(EmbeddedRuntimeError::EditorHost)
+        })
+    }
+
+    pub fn unregister_editor_host(&self, instance_id: &str) {
+        UI_RUNTIMES.with(|runtimes| {
+            if let Some(runtime) = runtimes.borrow_mut().get_mut(&self.state.runtime_id) {
+                runtime
+                    .application
+                    .unregister_embedded_editor_host(instance_id);
+            }
+        });
+    }
+
+    pub fn editor_host_snapshot(&self, instance_id: &str) -> Option<EmbeddedEditorHostSnapshot> {
+        UI_RUNTIMES.with(|runtimes| {
+            runtimes
+                .borrow()
+                .get(&self.state.runtime_id)
+                .and_then(|runtime| {
+                    runtime
+                        .application
+                        .embedded_editor_host_snapshot(instance_id)
+                })
+        })
+    }
+
+    pub fn focus_editor_host(&self, instance_id: &str) -> bool {
+        UI_RUNTIMES.with(|runtimes| {
+            runtimes
+                .borrow()
+                .get(&self.state.runtime_id)
+                .is_some_and(|runtime| runtime.application.focus_embedded_editor_host(instance_id))
+        })
+    }
+
+    pub fn drain_editor_host_events(&self) -> Vec<EmbeddedEditorHostEvent> {
+        UI_RUNTIMES.with(|runtimes| {
+            runtimes
+                .borrow_mut()
+                .get_mut(&self.state.runtime_id)
+                .map_or_else(Vec::new, |runtime| {
+                    runtime.application.drain_embedded_editor_events()
+                })
+        })
+    }
+
+    pub fn editor_toolbar_state(&self, instance_id: &str) -> Option<PluginEditorToolbarState> {
+        UI_RUNTIMES.with(|runtimes| {
+            runtimes
+                .borrow()
+                .get(&self.state.runtime_id)
+                .and_then(|runtime| {
+                    runtime
+                        .application
+                        .embedded_editor_toolbar_state(instance_id)
+                })
+        })
     }
 
     #[must_use]
@@ -611,8 +703,9 @@ impl EmbeddedAudioHost {
         }
         UI_RUNTIMES.with(|runtimes| {
             if let Some(runtime) = runtimes.borrow_mut().remove(&self.state.runtime_id) {
-                // winit and native plug-in UI facilities are process-scoped on
-                // desktop platforms. The runtime is created once, so avoid
+                runtime.application.disable_ui_wake();
+                // Native plug-in UI facilities are process-scoped on desktop
+                // platforms. The runtime is created once, so avoid
                 // third-party DLL and COM teardown during application exit.
                 // In particular, do not pump or close plug-in windows here:
                 // `close` is a non-blocking boundary and the OS owns final
@@ -627,7 +720,7 @@ impl EmbeddedAudioHost {
 async fn run_direct_actor(
     mut inbox: mpsc::Receiver<DirectMessage>,
     ui_sender: std_mpsc::SyncSender<ActorRequest>,
-    ui_proxy: winit::event_loop::EventLoopProxy<UiEvent>,
+    ui_proxy: UiMailboxWaker,
     processors: Arc<Mutex<HashMap<String, vst3::Vst3ProcessorHandle>>>,
     audio_engine: Arc<engine::AudioEngine>,
     _winit_generation: Arc<AtomicU64>,
@@ -670,7 +763,7 @@ async fn run_direct_actor(
             DirectMessage::Close => {
                 let engine = Arc::clone(&audio_engine);
                 let _ = tokio::task::spawn_blocking(move || engine.stop_audio_engine()).await;
-                let _ = ui_proxy.send_event(UiEvent::Exit);
+                ui_proxy.send_event(UiEvent::Exit);
                 break;
             }
             DirectMessage::Parameter(command) => {
