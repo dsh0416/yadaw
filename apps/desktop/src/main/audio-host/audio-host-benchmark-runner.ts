@@ -1,6 +1,6 @@
 import type {
   AudioBenchmarkScenario,
-  AudioIpcBenchmarkReport,
+  AudioNativeBenchmarkReport,
   PluginDescriptor,
   PluginInstanceState
 } from "@heron/contracts"
@@ -11,15 +11,16 @@ export interface AudioHostBenchmarkReport {
   overallRealtimeFactor: number
   worstP99DeadlineUtilizationPercent: number
   scenarios: AudioBenchmarkScenario[]
-  ipc: AudioIpcBenchmarkReport
+  nativeBridge: AudioNativeBenchmarkReport
 }
 
 interface AudioHostBenchmarkHost {
   start(): void
   stop(): Promise<void>
   loadPlugin(plugin: PluginInstanceState, sampleRate: number): Promise<unknown>
+  unloadPlugin(instanceId: string): Promise<unknown>
   request(command: Record<string, unknown>): Promise<ControlResponse>
-  runIpcBenchmark(): Promise<AudioIpcBenchmarkReport>
+  runNativeBenchmark(): Promise<AudioNativeBenchmarkReport>
   beginBenchmark(): number
   endBenchmark(generation: number): void
 }
@@ -46,21 +47,19 @@ export class AudioHostBenchmarkRunner {
     })
     host.start()
     try {
-      let dsp: Omit<AudioHostBenchmarkReport, "ipc">
+      let dsp: Omit<AudioHostBenchmarkReport, "nativeBridge">
       try {
         dsp = await this.runDspPhase(host, effect)
       } catch (error) {
         throw stageError("audio DSP benchmark", error, helperFailure)
       }
-      let ipc: AudioIpcBenchmarkReport
+      let nativeBridge: AudioNativeBenchmarkReport
       try {
-        // Keeping phases sequential prevents the saturating DSP workload from
-        // distorting the IPC latency distribution in the one-shot helper.
-        ipc = await host.runIpcBenchmark()
+        nativeBridge = await host.runNativeBenchmark()
       } catch (error) {
-        throw stageError("audio IPC benchmark", error, helperFailure)
+        throw stageError("native audio bridge benchmark", error, helperFailure)
       }
-      return { ...dsp, ipc }
+      return { ...dsp, nativeBridge }
     } finally {
       try {
         await host.stop()
@@ -73,7 +72,7 @@ export class AudioHostBenchmarkRunner {
   private async runDspPhase(
     host: AudioHostBenchmarkHost,
     effect: PluginDescriptor
-  ): Promise<Omit<AudioHostBenchmarkReport, "ipc">> {
+  ): Promise<Omit<AudioHostBenchmarkReport, "nativeBridge">> {
     if (
       effect.kind !== "effect" ||
       effect.compatibility !== "compatible" ||
@@ -143,7 +142,7 @@ export class AudioHostBenchmarkRunner {
         }))
       }
     } finally {
-      // Process shutdown owns plug-in teardown for this one-shot helper.
+      await Promise.allSettled(pluginInstanceIds.map((instanceId) => host.unloadPlugin(instanceId)))
       host.endBenchmark(generation)
     }
   }

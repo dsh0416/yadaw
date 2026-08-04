@@ -119,25 +119,13 @@ export function startApplication(
         completed: null,
         total: null
       })
-      const audioHostPath = app.isPackaged
-        ? join(process.resourcesPath, `heron-audio-host${executableSuffix}`)
-        : resolve(
-            app.getAppPath(),
-            "..",
-            "..",
-            "target",
-            "debug",
-            `heron-audio-host${executableSuffix}`
-          )
       const window = createMainWindow(false)
       let editorClosedSequence = 0
       const audioHostService = new AudioHostService(
-        audioHostPath,
-        join(app.getPath("userData"), "audio-host-crash-marker.bin"),
         applicationSettings.audioHostRuntime,
         process.platform === "win32" ? window.getNativeWindowHandle() : undefined,
         (message) => {
-          console.error(`Heron audio helper failure: ${message}`)
+          console.error(`Heron embedded audio runtime failure: ${message}`)
           for (const candidate of BrowserWindow.getAllWindows()) {
             if (candidate !== mainWindow && candidate !== splashWindow) candidate.close()
           }

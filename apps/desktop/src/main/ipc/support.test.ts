@@ -406,6 +406,6 @@ describe("sampleSystemPerformance", () => {
 
     const snapshot = await sampleSystemPerformance(settings, service(diagnostics))
 
-    expect(snapshot.audioIpc).toBe(diagnostics)
+    expect(snapshot.audioRuntime).toBe(diagnostics)
   })
 })

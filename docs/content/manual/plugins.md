@@ -7,9 +7,10 @@ vstTrademark: true
 # VST® 3 plug-ins
 
 Heron discovers VST 3 instruments and effects from standard system and user
-locations. Plug-ins run through an isolated audio-host process so a failed
-module can be reported and quarantined without loading native code directly
-into the interface.
+locations. Plug-ins run inside the embedded native audio runtime owned by the
+application. Load failures are reported to the interface, while fatal native
+plug-in faults terminate the application instead of leaving a disconnected UI
+and audio process behind.
 
 Audio Unit, CLAP, VST 2, and AAX plug-ins are not currently scanned. See
 [Supported backends and plug-in formats](supported-backends.md) for the full

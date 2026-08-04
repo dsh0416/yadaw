@@ -1,24 +1,23 @@
 import { describe, expect, it } from "vitest"
 import { classifyAudioBenchmark } from "./audio-benchmark-service"
-import type { AudioIpcBenchmarkReport } from "@heron/contracts"
+import type { AudioNativeBenchmarkReport } from "@heron/contracts"
 
-function ipcReport(
+function nativeReport(
   buildProfile: "debug" | "release",
-  sequential: number,
-  saturated: number,
+  concurrentRate: number,
   inlineP99Us: number
-): AudioIpcBenchmarkReport {
-  const scenario = (id: string, throughputMiBPerSecond: number, latencyP99Us: number) => ({
+): AudioNativeBenchmarkReport {
+  const scenario = (id: string, operationsPerSecond: number, latencyP99Us: number) => ({
     id,
     label: id,
     description: id,
-    kind: "shared-saturated" as const,
-    payloadBytes: 4 * 1024 * 1024,
+    kind: "request-round-trip" as const,
+    payloadBytes: 256,
     iterations: 1,
     concurrency: 1,
     elapsedMs: 1,
-    operationsPerSecond: 1,
-    throughputMiBPerSecond,
+    operationsPerSecond,
+    throughputMiBPerSecond: 1,
     latencyP50Us: latencyP99Us,
     latencyP95Us: latencyP99Us,
     latencyP99Us
@@ -26,13 +25,11 @@ function ipcReport(
   return {
     durationMs: 1,
     buildProfile,
-    runtime: { workerThreads: 2, maxBlockingThreads: 4, egressConcurrency: 2 },
-    arenaOffers: 1,
+    runtime: { workerThreads: 2, maxBlockingThreads: 4 },
     messagePackBodyBytes: 128,
     scenarios: [
-      scenario("shared-warm-sequential-4m", sequential, 100),
-      scenario("shared-saturated-4m-8", saturated, 100),
-      scenario("inline-control", 0, inlineP99Us)
+      scenario("concurrent-router", concurrentRate, 100),
+      scenario("inline-control", 1, inlineP99Us)
     ]
   }
 }
@@ -47,8 +44,8 @@ describe("classifyAudioBenchmark", () => {
     expect(classifyAudioBenchmark(utilization)).toBe(rating)
   })
 
-  it("uses the worse release IPC grade but ignores debug throughput", () => {
-    expect(classifyAudioBenchmark(10, ipcReport("release", 300, 600, 2_000))).toBe("limited")
-    expect(classifyAudioBenchmark(10, ipcReport("debug", 300, 600, 2_000))).toBe("excellent")
+  it("uses the worse release bridge grade but ignores debug timings", () => {
+    expect(classifyAudioBenchmark(10, nativeReport("release", 1_000, 2_000))).toBe("limited")
+    expect(classifyAudioBenchmark(10, nativeReport("debug", 1_000, 2_000))).toBe("excellent")
   })
 })

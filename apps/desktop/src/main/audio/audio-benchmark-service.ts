@@ -2,14 +2,14 @@ import { arch, cpus, platform, release } from "node:os"
 import type {
   AudioBenchmarkRating,
   AudioBenchmarkReport,
-  AudioIpcBenchmarkReport,
+  AudioNativeBenchmarkReport,
   PluginDescriptor
 } from "@heron/contracts"
 import type { AudioHostService } from "../audio-host"
 
 export function classifyAudioBenchmark(
   worstP99DeadlineUtilizationPercent: number,
-  ipc?: AudioIpcBenchmarkReport
+  nativeBridge?: AudioNativeBenchmarkReport
 ): AudioBenchmarkRating {
   const dsp =
     worstP99DeadlineUtilizationPercent <= 20
@@ -19,17 +19,15 @@ export function classifyAudioBenchmark(
         : worstP99DeadlineUtilizationPercent <= 70
           ? "basic"
           : "limited"
-  if (!ipc || ipc.buildProfile !== "release") return dsp
-  const sequential =
-    ipc.scenarios.find((scenario) => scenario.id === "shared-warm-sequential-4m")
-      ?.throughputMiBPerSecond ?? 0
-  const saturated =
-    ipc.scenarios.find((scenario) => scenario.id === "shared-saturated-4m-8")
-      ?.throughputMiBPerSecond ?? 0
+  if (!nativeBridge || nativeBridge.buildProfile !== "release") return dsp
   const inlineP99 =
-    ipc.scenarios.find((scenario) => scenario.id === "inline-control")?.latencyP99Us ?? Infinity
-  const ratio = Math.min(sequential / 750, saturated / 1_500, 1_000 / inlineP99)
-  const ipcRating: AudioBenchmarkRating =
+    nativeBridge.scenarios.find((scenario) => scenario.id === "inline-control")?.latencyP99Us ??
+    Infinity
+  const concurrentRate =
+    nativeBridge.scenarios.find((scenario) => scenario.id === "concurrent-router")
+      ?.operationsPerSecond ?? 0
+  const ratio = Math.min(1_000 / inlineP99, concurrentRate / 5_000)
+  const bridgeRating: AudioBenchmarkRating =
     ratio >= 1 ? "excellent" : ratio >= 0.75 ? "good" : ratio >= 0.5 ? "basic" : "limited"
   const rank: Record<AudioBenchmarkRating, number> = {
     limited: 0,
@@ -37,7 +35,7 @@ export function classifyAudioBenchmark(
     good: 2,
     excellent: 3
   }
-  return rank[ipcRating] < rank[dsp] ? ipcRating : dsp
+  return rank[bridgeRating] < rank[dsp] ? bridgeRating : dsp
 }
 
 export async function createAudioBenchmarkReport(
@@ -46,7 +44,7 @@ export async function createAudioBenchmarkReport(
 ): Promise<AudioBenchmarkReport> {
   const started = performance.now()
   const result = await audioHost.runAudioBenchmark(benchmarkEffect)
-  const ipc = result.ipc
+  const nativeBridge = result.nativeBridge
   const processors = cpus()
 
   return {
@@ -54,7 +52,7 @@ export async function createAudioBenchmarkReport(
     durationMs: performance.now() - started,
     overallRealtimeFactor: result.overallRealtimeFactor,
     worstP99DeadlineUtilizationPercent: result.worstP99DeadlineUtilizationPercent,
-    rating: classifyAudioBenchmark(result.worstP99DeadlineUtilizationPercent, ipc),
+    rating: classifyAudioBenchmark(result.worstP99DeadlineUtilizationPercent, nativeBridge),
     system: {
       cpuModel: processors[0]?.model.trim() || "Unknown processor",
       logicalCores: processors.length,
@@ -62,6 +60,6 @@ export async function createAudioBenchmarkReport(
       architecture: arch()
     },
     scenarios: result.scenarios,
-    ipc
+    nativeBridge
   }
 }

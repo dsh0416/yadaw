@@ -100,7 +100,7 @@ jobs:
           rustup target add "$ARM_TARGET" "$X64_TARGET"
           test "$(plutil -extract LSUIElement raw build/macos-agent-info.plist)" = "true"
 
-          for package in @heron/dsp-node @heron/audio-host-client; do
+          for package in @heron/dsp-node; do
             pnpm --filter "$package" exec napi build \
               --platform \
               --release \
@@ -114,22 +114,16 @@ jobs:
 
           rm -f \
             crates/dsp-node/*.darwin-arm64.node \
-            crates/dsp-node/*.darwin-x64.node \
-            crates/audio-host-client/*.darwin-arm64.node \
-            crates/audio-host-client/*.darwin-x64.node
+            crates/dsp-node/*.darwin-x64.node
 
           lipo crates/dsp-node/heron-dsp-node.darwin-universal.node \
             -verify_arch arm64 x86_64
-          lipo crates/audio-host-client/heron-audio-host-client.darwin-universal.node \
-            -verify_arch arm64 x86_64
-
           for target in "$ARM_TARGET" "$X64_TARGET"; do
             cargo build \
               --release \
               --target "$target" \
-              -p heron-audio-host \
               -p heron-vst3-host
-            for binary in heron-audio-host heron-vst3-probe; do
+            for binary in heron-vst3-probe; do
               otool -l "target/$target/release/$binary" | \
                 grep -q "sectname __info_plist"
             done
@@ -137,7 +131,7 @@ jobs:
           done
 
           mkdir -p target/release
-          for binary in heron-audio-host heron-vst3-probe; do
+          for binary in heron-vst3-probe; do
             lipo -create \
               "target/$ARM_TARGET/release/$binary" \
               "target/$X64_TARGET/release/$binary" \

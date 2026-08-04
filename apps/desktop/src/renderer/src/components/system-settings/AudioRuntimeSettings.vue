@@ -32,8 +32,7 @@ watch(
 const dirty = computed(
   () =>
     draft.workerThreads !== props.modelValue.workerThreads ||
-    draft.maxBlockingThreads !== props.modelValue.maxBlockingThreads ||
-    draft.egressConcurrency !== props.modelValue.egressConcurrency
+    draft.maxBlockingThreads !== props.modelValue.maxBlockingThreads
 )
 
 function resolvedCount(value: number | undefined): string {
@@ -73,12 +72,6 @@ function setNumber(
       <b>{{
         t("settings.audio.engine.resolvedBlocking", {
           count: resolvedCount(resolved?.maxBlockingThreads)
-        })
-      }}</b>
-      <i />
-      <b>{{
-        t("settings.audio.engine.resolvedEgress", {
-          count: resolvedCount(resolved?.egressConcurrency)
         })
       }}</b>
     </div>
@@ -136,35 +129,6 @@ function setNumber(
           @input="setNumber('maxBlockingThreads', $event, 2, 16)"
         />
         <small>{{ t("settings.audio.engine.blockingThreads.range") }}</small>
-      </div>
-    </SettingsSection>
-
-    <SettingsSection
-      :title="t('settings.audio.engine.egressConcurrency.title')"
-      :description="t('settings.audio.engine.egressConcurrency.description')"
-    >
-      <div class="thread-control">
-        <UiSelect
-          :aria-label="t('settings.audio.engine.egressConcurrency.modeAria')"
-          :model-value="draft.egressConcurrency === 'auto' ? 'auto' : 'manual'"
-          size="sm"
-          @update:model-value="
-            setMode('egressConcurrency', $event, resolved?.egressConcurrency ?? 2)
-          "
-        >
-          <option value="auto">{{ t("common.auto") }}</option>
-          <option value="manual">{{ t("common.manual") }}</option>
-        </UiSelect>
-        <input
-          v-if="draft.egressConcurrency !== 'auto'"
-          type="number"
-          min="1"
-          max="4"
-          :value="draft.egressConcurrency"
-          :aria-label="t('settings.audio.engine.egressConcurrency.countAria')"
-          @input="setNumber('egressConcurrency', $event, 1, 4)"
-        />
-        <small>{{ t("settings.audio.engine.egressConcurrency.range") }}</small>
       </div>
     </SettingsSection>
 

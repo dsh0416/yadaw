@@ -233,8 +233,7 @@ describe("MixerChannelStrip", () => {
       },
       audioHostRuntime: {
         workerThreads: "auto",
-        maxBlockingThreads: "auto",
-        egressConcurrency: "auto"
+        maxBlockingThreads: "auto"
       },
       pluginEditors: {},
       shortcuts: { keyboard: {}, midi: {} },

@@ -12,7 +12,7 @@ describe("AudioHostService benchmark", () => {
     vi.useRealTimers()
   })
 
-  it("runs the complete benchmark in an isolated one-shot helper", async () => {
+  it("runs the complete benchmark in the embedded runtime and cleans up temporary plugins", async () => {
     const effect = {
       kind: "effect",
       compatibility: "compatible",
@@ -22,12 +22,9 @@ describe("AudioHostService benchmark", () => {
     } as PluginDescriptor
 
     const service = new AudioHostService(
-      "audio-host",
-      "crash-marker",
       {
         workerThreads: "auto",
-        maxBlockingThreads: "auto",
-        egressConcurrency: "auto"
+        maxBlockingThreads: "auto"
       },
       undefined,
       () => {},
@@ -37,34 +34,33 @@ describe("AudioHostService benchmark", () => {
     const primary = fakeHost.Client.instances[0]!
 
     const result = await service.runAudioBenchmark(effect)
-    const benchmarkClient = fakeHost.Client.instances[1]!
-    const commandTypes = benchmarkClient.commands.map((command) => command.type)
+    const commandTypes = primary.commands.map((command) => command.type)
     const firstBenchmark = commandTypes.indexOf("run-audio-benchmark")
     expect(commandTypes.slice(0, firstBenchmark)).toEqual(Array(64).fill("load-plugin"))
     expect(commandTypes.slice(firstBenchmark, firstBenchmark + 1)).toEqual(["run-audio-benchmark"])
-    expect(commandTypes.filter((type) => type === "unload-plugin")).toHaveLength(0)
+    expect(commandTypes.filter((type) => type === "unload-plugin")).toHaveLength(64)
     expect(commandTypes.filter((type) => type === "benchmark-echo").length).toBeGreaterThan(0)
-    expect(result.ipc.scenarios.length).toBeGreaterThan(0)
-    expect(primary.commands.some((command) => command.type === "load-plugin")).toBe(false)
+    expect(result.nativeBridge.scenarios.length).toBeGreaterThan(0)
     expect(primary.closed).toBe(false)
-    expect(benchmarkClient.closed).toBe(true)
+    expect(fakeHost.Client.instances).toHaveLength(1)
 
-    fakeHost.Client.failNextAudioBenchmark = true
+    primary.failAudioBenchmark = true
     await expect(service.runAudioBenchmark(effect)).rejects.toThrow(
       "audio DSP benchmark failed: errors.audioBenchmarkFailed"
     )
-    expect(fakeHost.Client.instances[2]?.closed).toBe(true)
+    expect(primary.closed).toBe(false)
 
-    fakeHost.Client.failNextIpcBenchmark = true
+    primary.failAudioBenchmark = false
+    primary.failNativeBridgeBenchmark = true
     await expect(service.runAudioBenchmark(effect)).rejects.toThrow(
-      "audio IPC benchmark failed: errors.audioBenchmarkFailed"
+      "native audio bridge benchmark failed: errors.audioBenchmarkFailed"
     )
-    expect(fakeHost.Client.instances[3]?.closed).toBe(true)
+    expect(primary.closed).toBe(false)
 
     await service.stop()
   })
 
-  it("keeps project requests on the primary helper while the isolated benchmark runs", async () => {
+  it("keeps project requests available while the embedded benchmark runs", async () => {
     const effect = {
       kind: "effect",
       compatibility: "compatible",
@@ -73,12 +69,9 @@ describe("AudioHostService benchmark", () => {
       modulePath: "/tmp/gain.vst3"
     } as PluginDescriptor
     const service = new AudioHostService(
-      "audio-host",
-      "crash-marker",
       {
         workerThreads: "auto",
-        maxBlockingThreads: "auto",
-        egressConcurrency: "auto"
+        maxBlockingThreads: "auto"
       },
       undefined,
       () => {},
@@ -88,38 +81,31 @@ describe("AudioHostService benchmark", () => {
     const primary = fakeHost.Client.instances[0]!
     await service.audioEngineSnapshot()
 
-    fakeHost.Client.deferNextAudioBenchmark = true
+    primary.audioBenchmarkDeferred = new fakeHost.Deferred<void>()
     const benchmark = service.runAudioBenchmark(effect)
-    await vi.waitFor(() => expect(fakeHost.Client.instances).toHaveLength(2))
-    const benchmarkClient = fakeHost.Client.instances[1]!
     await vi.waitFor(() =>
-      expect(
-        benchmarkClient.commands.some((command) => command.type === "run-audio-benchmark")
-      ).toBe(true)
+      expect(primary.commands.some((command) => command.type === "run-audio-benchmark")).toBe(true)
     )
     const snapshotCommandCount = primary.commands.filter(
-      (command) => command.type === "audio-engine-snapshot"
+      (command) => command.type === "compiled-graph-snapshot"
     ).length
-    await service.audioEngineSnapshot()
+    await service.compiledAudioGraphSnapshot()
     expect(
-      primary.commands.filter((command) => command.type === "audio-engine-snapshot")
+      primary.commands.filter((command) => command.type === "compiled-graph-snapshot")
     ).toHaveLength(snapshotCommandCount + 1)
     expect(primary.closed).toBe(false)
 
-    benchmarkClient.audioBenchmarkDeferred!.resolve()
+    primary.audioBenchmarkDeferred.resolve()
     await benchmark
-    expect(benchmarkClient.closed).toBe(true)
+    expect(primary.closed).toBe(false)
     await service.stop()
   })
 
   it("round-trips physical latency channel selections and measurement results", async () => {
     const service = new AudioHostService(
-      "audio-host",
-      "crash-marker",
       {
         workerThreads: "auto",
-        maxBlockingThreads: "auto",
-        egressConcurrency: "auto"
+        maxBlockingThreads: "auto"
       },
       undefined,
       () => {},

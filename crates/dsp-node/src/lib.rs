@@ -2,6 +2,7 @@ use heron_dsp_core::apply_gain;
 use napi::{Error, Result, Status};
 use napi_derive::napi;
 
+mod audio_host;
 mod benchmark;
 mod midi;
 mod midi_journal;
@@ -15,6 +16,9 @@ pub mod bench_support {
     };
 }
 
+pub use audio_host::{
+    AudioHostRuntime, NativeHostResponse, ParameterEnqueueRequest, ParameterEnqueueResult,
+};
 pub use benchmark::run_audio_benchmark;
 pub use midi::parse_midi_file;
 pub use midi_journal::recover_midi_journal_take;

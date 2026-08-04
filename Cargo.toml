@@ -4,11 +4,8 @@ members = [
     "crates/dsp-node",
     "crates/dsp-runtime",
     "crates/dsp-render",
-    "crates/shared-memory",
-    "crates/ipc-transport",
     "crates/audio-engine",
     "crates/audio-host",
-    "crates/audio-host-client",
     "crates/vst3-host-sys",
     "crates/vst3-host",
     "crates/iced-ui",
@@ -41,7 +38,6 @@ iced_renderer = { version = "0.14.0", features = ["wgpu-bare"] }
 iced_wgpu = "0.14.0"
 iced_widget = "0.14.2"
 iced_winit = "0.14.0"
-ipc-channel = { version = "0.22.0", features = ["async"] }
 libc = "0.2"
 # Standalone Rust tests and benchmarks link the N-API crates without a Node
 # host on macOS and Linux. Keep symbol lookup dynamic even with older napi 3.x
@@ -75,10 +71,8 @@ zerocopy = { version = "0.8.55", features = ["derive"] }
 heron-dsp-core = { path = "crates/dsp-core" }
 heron-dsp-runtime = { path = "crates/dsp-runtime" }
 heron-dsp-render = { path = "crates/dsp-render" }
-heron-shared-memory = { path = "crates/shared-memory" }
-heron-ipc-transport = { path = "crates/ipc-transport" }
 heron-audio-engine = { path = "crates/audio-engine" }
-heron-audio-host-client = { path = "crates/audio-host-client" }
+heron-audio-host = { path = "crates/audio-host" }
 heron-vst3-host = { path = "crates/vst3-host" }
 heron-vst3-host-sys = { path = "crates/vst3-host-sys" }
 heron-iced-ui = { path = "crates/iced-ui" }

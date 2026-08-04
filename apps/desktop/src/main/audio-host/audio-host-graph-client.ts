@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs"
 import type { AudioHostGraph } from "./wire"
 
 export function graphDiff(
@@ -61,38 +60,4 @@ export function graphDiff(
     })
   }
   return operations
-}
-
-export function readCrashMarker(
-  path: string,
-  revision: number | undefined,
-  graph: AudioHostGraph | undefined
-): string | null {
-  try {
-    const marker = readFileSync(path)
-    if (marker.length < 40) return null
-    const magic = marker.readBigUInt64LE(0)
-    const generation = marker.readBigUInt64LE(8)
-    const pluginIndex = marker.readBigUInt64LE(16)
-    const stage = marker.readBigUInt64LE(24)
-    const checksum = marker.readBigUInt64LE(32)
-    const salt = 0x43524153484d4152n
-    if (
-      magic !== 0x5941444157565354n ||
-      checksum !== (magic ^ generation ^ pluginIndex ^ stage ^ salt) ||
-      stage === 0n ||
-      generation !== BigInt(revision ?? -1)
-    ) {
-      return null
-    }
-    const plugins = [...(graph?.plugins ?? [])].sort(
-      (left, right) =>
-        left.channel_id.localeCompare(right.channel_id) ||
-        Number(left.role !== "instrument") - Number(right.role !== "instrument") ||
-        left.slot_order - right.slot_order
-    )
-    return plugins[Number(pluginIndex)]?.instance_id ?? null
-  } catch {
-    return null
-  }
 }

@@ -13,8 +13,6 @@ export const generatedAndBuildPaths = [
   "**/target/",
   "**/test-results/",
   "**/third_party/",
-  "crates/audio-host-client/index.d.ts",
-  "crates/audio-host-client/index.js",
   "crates/dsp-node/index.d.ts",
   "crates/dsp-node/index.js",
   "packages/project-db/drizzle/meta/"

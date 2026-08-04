@@ -22,8 +22,7 @@ function settings(overrides: Partial<ApplicationSettings> = {}): ApplicationSett
     midiSync: { enabled: false, sourcePortId: null, sourcePortName: null, inputOffsetsMs: {} },
     audioHostRuntime: {
       workerThreads: "auto",
-      maxBlockingThreads: "auto",
-      egressConcurrency: "auto"
+      maxBlockingThreads: "auto"
     },
     pluginEditors: {},
     shortcuts: { keyboard: {}, midi: {} },
@@ -54,7 +53,7 @@ beforeEach(() => {
       rpcSuccess(settingsSnapshot(settings({ swapDirectory: "/new-swap" }), 2))
     ),
     openSwapDirectory: vi.fn(async () => rpcSuccess(undefined)),
-    systemPerformanceSnapshot: vi.fn(async () => rpcSuccess({ audioIpc: null }))
+    systemPerformanceSnapshot: vi.fn(async () => rpcSuccess({ audioRuntime: null }))
   })
 })
 
@@ -375,17 +374,16 @@ describe("software monitoring", () => {
 describe("audio host runtime", () => {
   const runtime = {
     workerThreads: 4,
-    maxBlockingThreads: "auto" as const,
-    egressConcurrency: 2
+    maxBlockingThreads: "auto" as const
   }
 
   it("applies the preferences and refreshes the resolved diagnostics", async () => {
     stubApi({
       systemPerformanceSnapshot: vi.fn(async () =>
         rpcSuccess({
-          audioIpc: {
+          audioRuntime: {
             runtime: {
-              resolved: { workerThreads: 4, maxBlockingThreads: 8, egressConcurrency: 2 }
+              resolved: { workerThreads: 4, maxBlockingThreads: 8 }
             }
           }
         })
@@ -398,13 +396,12 @@ describe("audio host runtime", () => {
     expect(window.heron.configureAudioHostRuntime).toHaveBeenCalledWith(expect.any(Object), runtime)
     expect(store.resolvedAudioHostRuntime).toEqual({
       workerThreads: 4,
-      maxBlockingThreads: 8,
-      egressConcurrency: 2
+      maxBlockingThreads: 8
     })
     expect(store.applyingAudioRuntime).toBe(false)
   })
 
-  it("clears the resolved diagnostics when the helper reports no audio IPC", async () => {
+  it("clears resolved diagnostics when the embedded runtime reports none", async () => {
     const store = useApplicationSettingsStore()
 
     await store.refreshAudioHostRuntimeDiagnostics()

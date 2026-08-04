@@ -1,11 +1,9 @@
 use super::{
-    ArenaReceiver, AudioBackend, AudioDevice, AudioDeviceList, AudioRuntime, BinaryPayload,
-    BufReader, BufWriter, ControlCommand, ControlRequest, ControlResponse, ControlResult,
-    GraphUpdate, HashMap, LiveLatencyPolicy, LiveMixerGraph, MIDI_INPUT, MidiNoteBatchView,
-    MixerChannelMeter, NativeRecordingResult, NativeRecordingStartConfig, NativeWaveformSnapshot,
-    PathBuf, RecordingResult, RecordingWaveform, RoundTripLatencyMeasurement, TempoEvent,
-    TimeSignatureEvent, TransportState, crash_marker, device, engine, env, io, read_message,
-    resolve_midi_note_batch, vst3, write_message,
+    AudioBackend, AudioDevice, AudioDeviceList, AudioRuntime, BinaryPayload, ControlCommand,
+    ControlResult, GraphUpdate, HashMap, LiveLatencyPolicy, LiveMixerGraph, MIDI_INPUT,
+    MidiNoteBatch, MixerChannelMeter, NativeRecordingResult, NativeRecordingStartConfig,
+    NativeWaveformSnapshot, RecordingResult, RecordingWaveform, RoundTripLatencyMeasurement,
+    TempoEvent, TimeSignatureEvent, TransportState, device, engine, vst3,
 };
 
 fn audio_runtime(value: engine::NativeAudioRuntimeSnapshot) -> AudioRuntime {
@@ -46,7 +44,6 @@ pub(super) fn live_graph(
     generation: u64,
     value: &LiveMixerGraph,
     processors: Option<&HashMap<String, vst3::Vst3ProcessorHandle>>,
-    request_arena: &ArenaReceiver,
 ) -> Result<engine::NativeMixerGraph, String> {
     let channel_indexes = value
         .channels
@@ -164,11 +161,9 @@ pub(super) fn live_graph(
         .midi_clips
         .iter()
         .map(|clip| {
-            let notes = resolve_midi_note_batch(&clip.notes, request_arena)
-                .map_err(|error| error.to_string())?;
-            let mut native_notes = Vec::with_capacity(notes.len());
-            match notes {
-                MidiNoteBatchView::Inline(notes) => {
+            let native_notes = match &clip.notes {
+                MidiNoteBatch::Inline { notes } => {
+                    let mut native_notes = Vec::with_capacity(notes.len());
                     native_notes.extend(notes.iter().map(|note| engine::NativeMidiNote {
                         start_tick: note.start_tick,
                         duration_ticks: note.duration_ticks,
@@ -177,18 +172,12 @@ pub(super) fn live_graph(
                         velocity: note.velocity,
                         release_velocity: note.release_velocity,
                     }));
+                    native_notes
                 }
-                MidiNoteBatchView::Shared(notes) => {
-                    native_notes.extend(notes.iter().copied().map(|note| engine::NativeMidiNote {
-                        start_tick: note.start_tick(),
-                        duration_ticks: note.duration_ticks(),
-                        channel: note.channel(),
-                        key: note.key(),
-                        velocity: note.velocity(),
-                        release_velocity: note.release_velocity(),
-                    }));
+                MidiNoteBatch::Shared { .. } => {
+                    return Err("mixer graph contains a removed shared-memory MIDI batch".into());
                 }
-            }
+            };
             let heron_dsp_runtime::protocol::MidiEventBatch::Inline { events } = &clip.events
             else {
                 return Err("MIDI event batch must be materialized before graph build".to_owned());
@@ -421,8 +410,7 @@ pub(super) fn engine_command(
         ControlCommand::UpdateGraph {
             update: GraphUpdate::Replace { revision, graph },
         } => {
-            let inline_arena = ArenaReceiver::new(1);
-            match live_graph(revision, &graph, processors, &inline_arena).and_then(|graph| {
+            match live_graph(revision, &graph, processors).and_then(|graph| {
                 audio_engine
                     .load_mixer_graph(graph)
                     .map_err(|error| error.to_string())
@@ -613,93 +601,4 @@ pub(super) fn engine_command(
         _ => return None,
     };
     Some(result)
-}
-
-pub(super) fn run_legacy() -> Result<(), Box<dyn std::error::Error>> {
-    let audio_engine = engine::AudioEngine::new();
-    let mut arguments = env::args_os().skip(1);
-    let mut crash_marker_path: Option<PathBuf> = None;
-    while let Some(argument) = arguments.next() {
-        if argument == "--crash-marker" {
-            crash_marker_path = arguments.next().map(PathBuf::from);
-        }
-    }
-    if let Some(path) = crash_marker_path.as_deref() {
-        crash_marker::initialize(path)
-            .map_err(|error| format!("could not initialize crash marker: {error}"))?;
-    }
-    let mut vst3 = Some(vst3::Vst3Runtime::new());
-    let mut input = BufReader::new(io::stdin().lock());
-    let mut output = BufWriter::new(io::stdout().lock());
-    loop {
-        let request: ControlRequest = read_message(&mut input)?;
-        let result = match request.command {
-            ControlCommand::BenchmarkEcho { payload } => ControlResult::BenchmarkEcho { payload },
-            ControlCommand::Ping => {
-                if let Some(runtime) = vst3.as_mut() {
-                    for (instance_id, latency, tail) in runtime.take_timing_changes() {
-                        if let Err(error) =
-                            audio_engine.update_plugin_timing(&instance_id, latency, tail)
-                        {
-                            eprintln!(
-                                "audio-host: could not rebuild dynamic plugin latency: {error}"
-                            );
-                        }
-                    }
-                    for (instance_id, error) in runtime.take_restart_failures() {
-                        eprintln!("audio-host: VST3 restart failed for {instance_id}: {error}");
-                    }
-                }
-                let (callback_generation, transport_state) = audio_engine.heartbeat_snapshot();
-                ControlResult::Heartbeat {
-                    ipc_generation: 0,
-                    tokio_generation: 0,
-                    winit_generation: 0,
-                    callback_generation,
-                    transport_state,
-                }
-            }
-            command @ (ControlCommand::LoadPlugin { .. }
-            | ControlCommand::UnloadPlugin { .. }
-            | ControlCommand::PluginParameters { .. }
-            | ControlCommand::SetPluginParameter { .. }
-            | ControlCommand::SavePluginState { .. }
-            | ControlCommand::OpenPluginEditor { .. }
-            | ControlCommand::ConfigurePluginEditorAppearance { .. }
-            | ControlCommand::ResolvePluginSidechainRoute { .. }
-            | ControlCommand::ClosePluginEditor { .. }) => match vst3.as_mut() {
-                Some(runtime) => runtime.execute(command),
-                None => control_error! {
-                    message: "VST3 runtime is not configured".into(),
-                },
-            },
-            ControlCommand::Shutdown => {
-                let _ = audio_engine.stop_audio_engine();
-                write_message(
-                    &mut output,
-                    &ControlResponse {
-                        request_id: request.request_id,
-                        result: ControlResult::Accepted,
-                    },
-                )?;
-                return Ok(());
-            }
-            command => {
-                let processors = vst3.as_ref().map(vst3::Vst3Runtime::processor_handles);
-                match engine_command(&audio_engine, command, processors.as_ref()) {
-                    Some(result) => result,
-                    None => control_error! {
-                        message: "unsupported audio-host command".into(),
-                    },
-                }
-            }
-        };
-        write_message(
-            &mut output,
-            &ControlResponse {
-                request_id: request.request_id,
-                result,
-            },
-        )?;
-    }
 }

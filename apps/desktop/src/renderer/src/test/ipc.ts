@@ -102,8 +102,7 @@ export function testSettings(overrides: Partial<ApplicationSettings> = {}): Appl
     midiSync: { enabled: false, sourcePortId: null, sourcePortName: null, inputOffsetsMs: {} },
     audioHostRuntime: {
       workerThreads: "auto",
-      maxBlockingThreads: "auto",
-      egressConcurrency: "auto"
+      maxBlockingThreads: "auto"
     },
     pluginEditors: {},
     shortcuts: { keyboard: {}, midi: {} },

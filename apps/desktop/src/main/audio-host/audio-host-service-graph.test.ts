@@ -20,12 +20,9 @@ describe("AudioHostService graph", () => {
 
   it("does not update the committed recovery graph until candidate activation", async () => {
     const service = new AudioHostService(
-      "audio-host",
-      "crash-marker",
       {
         workerThreads: "auto",
-        maxBlockingThreads: "auto",
-        egressConcurrency: "auto"
+        maxBlockingThreads: "auto"
       },
       undefined,
       () => {},
@@ -80,12 +77,9 @@ describe("AudioHostService graph", () => {
 
   it("does not unload removed plugins until graph activation", async () => {
     const service = new AudioHostService(
-      "audio-host",
-      "crash-marker",
       {
         workerThreads: "auto",
-        maxBlockingThreads: "auto",
-        egressConcurrency: "auto"
+        maxBlockingThreads: "auto"
       },
       undefined,
       () => {},
@@ -120,12 +114,9 @@ describe("AudioHostService graph", () => {
 
   it("unloads plugin instances removed from the committed graph after activation", async () => {
     const service = new AudioHostService(
-      "audio-host",
-      "crash-marker",
       {
         workerThreads: "auto",
-        maxBlockingThreads: "auto",
-        egressConcurrency: "auto"
+        maxBlockingThreads: "auto"
       },
       undefined,
       () => {},

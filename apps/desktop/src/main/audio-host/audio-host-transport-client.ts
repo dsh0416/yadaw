@@ -1,5 +1,5 @@
 import { decode } from "@msgpack/msgpack"
-import type { AudioHostIpcClient } from "@heron/audio-host-client"
+import type { AudioHostRuntime } from "@heron/dsp-node"
 import type {
   AudioBackendDescriptor,
   AudioDeviceList,
@@ -30,7 +30,7 @@ export class AudioHostTransportClient {
   private readonly channelIdsByHandle = new Map<number, string>()
 
   constructor(
-    private readonly getClient: () => AudioHostIpcClient | null,
+    private readonly getClient: () => AudioHostRuntime | null,
     private readonly request: (command: Record<string, unknown>) => Promise<ControlResponse>,
     private readonly readTelemetry: () => TelemetryWire,
     private readonly sessionSampleRate: () => number | null,
@@ -40,7 +40,7 @@ export class AudioHostTransportClient {
       parameterId: number
       normalized: number
     }) => void,
-    private readonly persistentSharedPages: () => boolean = () => true
+    private readonly directTelemetry: () => boolean = () => true
   ) {}
 
   audioPreferences(): AudioPreferences | null {
@@ -128,8 +128,7 @@ export class AudioHostTransportClient {
   }
 
   async stopAudioEngine(): Promise<AudioRuntimeSnapshot> {
-    // Stopping is user intent. Do not resurrect the engine if the stop reply
-    // races with a helper failure after the engine has already shut down.
+    // Stopping is user intent; record it before awaiting the native runtime.
     this.audioEngineExpectedRunning = false
     const runtime = this.runtimeResult(await this.request({ type: "stop-audio-engine" }))
     return runtime
@@ -253,7 +252,7 @@ export class AudioHostTransportClient {
   }
 
   async mixerSnapshot(): Promise<MixerRuntimeSnapshot> {
-    if (!this.persistentSharedPages()) {
+    if (!this.directTelemetry()) {
       const response = await this.request({ type: "mixer-snapshot" })
       if (response.result.type !== "mixer-snapshot") {
         throw new Error("audio host returned an invalid mixer snapshot")
@@ -351,7 +350,7 @@ export class AudioHostTransportClient {
   }
 
   async transportSnapshot(): Promise<TransportSnapshot> {
-    if (!this.persistentSharedPages()) return this.transportControlSnapshot()
+    if (!this.directTelemetry()) return this.transportControlSnapshot()
     const telemetry = this.readTelemetry()
     return this.rememberTransport({
       ...this.lastTransport,
@@ -413,8 +412,8 @@ export class AudioHostTransportClient {
     return this.rememberTransport(this.transportResult(response))
   }
 
-  captureTransport(client: AudioHostIpcClient): void {
-    if (!this.persistentSharedPages()) return
+  captureTransport(client: AudioHostRuntime): void {
+    if (!this.directTelemetry()) return
     try {
       const telemetry = decode(client.readTelemetry()) as TelemetryWire
       this.rememberTransport({

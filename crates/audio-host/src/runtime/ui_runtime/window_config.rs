@@ -123,14 +123,3 @@ pub(super) fn configure_editor_window_attributes(
     #[cfg(not(any(target_os = "windows", target_os = "linux")))]
     attributes
 }
-
-pub(in crate::runtime) fn parse_editor_owner_window(value: &str) -> Result<usize, &'static str> {
-    let handle = value
-        .parse::<usize>()
-        .map_err(|_| "invalid --editor-owner-window value")?;
-    if handle == 0 {
-        Err("--editor-owner-window must not be null")
-    } else {
-        Ok(handle)
-    }
-}

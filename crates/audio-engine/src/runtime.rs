@@ -86,7 +86,7 @@ const LOOPBACK_PROBE: [f32; 13] = [
 ];
 type InputFrame = [f32; MAX_INPUT_CHANNELS];
 
-/// Owned control-plane state for one audio-helper process.
+/// Owned control-plane state for the embedded audio runtime.
 ///
 /// The host creates exactly one instance and passes an explicit reference to
 /// actors that need engine snapshots or mutations. The object is intentionally

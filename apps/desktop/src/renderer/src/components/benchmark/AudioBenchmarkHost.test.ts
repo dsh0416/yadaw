@@ -40,15 +40,13 @@ describe("AudioBenchmarkHost", () => {
           architecture: "x64"
         },
         scenarios: [],
-        ipc: {
+        nativeBridge: {
           durationMs: 80,
           buildProfile: "debug",
           runtime: {
             workerThreads: 1,
-            maxBlockingThreads: 2,
-            egressConcurrency: 1
+            maxBlockingThreads: 2
           },
-          arenaOffers: 0,
           messagePackBodyBytes: 128,
           scenarios: []
         }

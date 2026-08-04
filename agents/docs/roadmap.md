@@ -39,16 +39,14 @@ Already usable for experimentation; keep these checked as the floor.
 
 Make the existing vertical slice reliable for daily experimentation.
 
-- [ ] Replace `ipc-channel::IpcSharedMemory` as the persistent mapping primitive
-      with capability-verified, process-shared mappings on macOS, Windows, and
-      Linux; migrate telemetry, parameter, and bulk-arena paths and retain a
-      bounded negotiated fallback (see `shared-memory-transport.md`)
+- [x] Embed the audio host in `@heron/dsp-node`, removing the helper process,
+      audio-host client addon, OS IPC transport, shared-memory arenas, watchdog,
+      and per-crash restart/reconciliation state machine
 
 - [x] Recording pending recovery across stop / crash / relaunch (swap sidecars,
       `partial` → `ready` repair, commit into the open project; covered by e2e)
-- [x] Plug-in failure / bypass / missing-module recovery (crash marker, helper
-      restart with suspect bypass, missing/quarantined/failed UI states, graph
-      keeps legal topology for missing slots)
+- [x] Plug-in missing-module and failed-load states keep legal graph topology;
+      fatal native failures follow the application crash/relaunch path
 - [x] Contributor-facing CI and multi-platform packaging (signed/notarized
       installers stay in M3)
 - [x] Graph construction moves to the supervised graph worker (see

@@ -1,8 +1,6 @@
-import { spawn } from "node:child_process"
-import { fileURLToPath } from "node:url"
 import { resolve } from "node:path"
-import { tmpdir } from "node:os"
 import { decode, encode } from "@msgpack/msgpack"
+import { AudioHostRuntime } from "@heron/dsp-node"
 
 interface PluginParameter {
   id: number
@@ -31,17 +29,8 @@ interface WireResponse {
   result: WireResult
 }
 
-interface PendingRequest {
-  commandType: string
-  resolve: (result: WireResult) => void
-  reject: (reason?: unknown) => void
-}
-
-const repositoryRoot = fileURLToPath(new URL("../../..", import.meta.url))
-const executableSuffix = process.platform === "win32" ? ".exe" : ""
-const [helperPath, pluginPath] = process.argv.slice(2)
-const resolvedHelper =
-  helperPath ?? resolve(repositoryRoot, "target", "debug", `heron-audio-host${executableSuffix}`)
+const repositoryRoot = resolve(import.meta.dirname, "..", "..", "..")
+const [pluginPath] = process.argv.slice(2)
 const resolvedPlugin =
   pluginPath ?? resolve(repositoryRoot, "target", "vst3-fixtures", "VST3", "Debug", "again.vst3")
 const resolvedSynth = resolve(
@@ -52,61 +41,27 @@ const resolvedSynth = resolve(
   "Debug",
   "note-expression-synth.vst3"
 )
-const crashMarker = resolve(tmpdir(), `heron-vst3-smoke-${process.pid}.marker`)
-const child = spawn(resolvedHelper, ["--crash-marker", crashMarker], {
-  stdio: ["pipe", "pipe", "inherit"]
-})
+const runtime = new AudioHostRuntime(2, 4)
+const uiPump = setInterval(() => runtime.pumpEvents(), 8)
+uiPump.unref()
 let nextRequestId = 1
-let received = Buffer.alloc(0)
-const pending = new Map<number, PendingRequest>()
-child.once("exit", (code, signal) => {
-  for (const waiter of pending.values()) {
-    waiter.reject(new Error(`audio-host exited (${signal ?? code ?? "unknown"})`))
-  }
-  pending.clear()
-})
 
-function send(command: unknown): Promise<WireResult> {
-  return new Promise((resolveResult, reject) => {
-    const requestId = nextRequestId++
-    const commandType =
-      typeof command === "object" && command !== null && "type" in command
-        ? String(command.type)
-        : "unknown"
-    pending.set(requestId, { commandType, resolve: resolveResult, reject })
-    const payload = Buffer.from(
-      encode({
-        request_id: requestId,
-        command
-      })
-    )
-    const frame = Buffer.alloc(payload.length + 4)
-    frame.writeUInt32BE(payload.length, 0)
-    payload.copy(frame, 4)
-    child.stdin.write(frame)
-  })
+async function send(command: unknown): Promise<WireResult> {
+  const requestId = nextRequestId++
+  const commandType =
+    typeof command === "object" && command !== null && "type" in command
+      ? String(command.type)
+      : "unknown"
+  const response = await runtime.request(Buffer.from(encode({ request_id: requestId, command })))
+  const decoded = decode(response.body) as WireResponse
+  if (decoded.request_id !== requestId) {
+    throw new Error(`received response for unknown request ${decoded.request_id}`)
+  }
+  if (decoded.result.type === "error") {
+    throw new Error(`${commandType} failed: ${decoded.result.message ?? "unknown error"}`)
+  }
+  return decoded.result
 }
-
-child.stdout.on("data", (chunk: Buffer) => {
-  received = Buffer.concat([received, chunk])
-  while (received.length >= 4 && received.length >= received.readUInt32BE(0) + 4) {
-    const length = received.readUInt32BE(0)
-    const response = decode(received.subarray(4, length + 4)) as WireResponse
-    received = received.subarray(length + 4)
-    const waiter = pending.get(response.request_id)
-    pending.delete(response.request_id)
-    if (!waiter) {
-      throw new Error(`received response for unknown request ${response.request_id}`)
-    }
-    if (response.result.type === "error") {
-      waiter.reject(
-        new Error(`${waiter.commandType} failed: ${response.result.message ?? "unknown error"}`)
-      )
-    } else {
-      waiter.resolve(response.result)
-    }
-  }
-})
 
 try {
   const inactiveSidechain = await send({
@@ -314,12 +269,12 @@ try {
   }
   await send({ type: "stop-audio-engine" })
   console.log(
-    `VST3 helper live graph passed (${listedParameters.length} parameters, ` +
+    `VST3 embedded runtime live graph passed (${listedParameters.length} parameters, ` +
       `${componentState.length} component bytes, meter ` +
       `${Math.max(instrumentMeter.held_left, instrumentMeter.held_right).toFixed(4)})`
   )
   await send({ type: "shutdown" })
-} catch (error) {
-  child.kill()
-  throw error
+} finally {
+  clearInterval(uiPump)
+  runtime.close()
 }

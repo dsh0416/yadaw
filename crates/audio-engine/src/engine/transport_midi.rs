@@ -14,7 +14,6 @@ pub(super) struct LivePlugin {
     pub(super) low_latency_bypassed: bool,
     pub(super) main_delay: StereoDelayLine,
     pub(super) bypass_delay: StereoDelayLine,
-    pub(super) marker_index: usize,
     pub(super) aux_inputs: Vec<LivePluginAuxInput>,
 }
 

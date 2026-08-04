@@ -420,7 +420,7 @@ test("records into a Large Object and reopens the PGlite project archive", async
           if (!result.ok) throw new Error(result.error.code)
           return result.value
         })
-        return snapshot.audioIpc?.runtime.resolved.workerThreads
+        return snapshot.audioRuntime?.runtime.resolved.workerThreads
       })
       .toBe(1)
     await page.getByRole("button", { name: "Back to studio" }).click()

@@ -21,50 +21,11 @@ export type TelemetryWire = [
 
 export type TransportDiagnosticsWire = [
   sessionEpoch: string,
-  requests: [normalPending: number, priorityPending: number, capacity: number, timeouts: number],
-  sharedMemory: [
-    outstandingLeases: number,
-    outstandingBytes: number,
-    maxLeases: number,
-    maxBytes: number,
-    inlinePackets: number,
-    inlineBytes: number,
-    sharedPackets: number,
-    sharedRegions: number,
-    sharedBytes: number
-  ],
+  requests: [pending: number, capacity: number, timeouts: number],
   eventQueueDepth: number,
-  telemetry: [
-    epoch: string,
-    capacity: number,
-    graphRevision: number,
-    callbackGeneration: number,
-    meterSlots: number,
-    fallbackReads: number
-  ],
-  parameterRing: [
-    used: number,
-    capacity: number,
-    softFull: number,
-    hardFull: number,
-    boundaryFallbacks: number,
-    staleEpoch: number
-  ],
-  closing: boolean,
-  runtimeAndArena: [
-    workerThreads: number,
-    maxBlockingThreads: number,
-    egressConcurrency: number,
-    arenaRegions: number,
-    arenaCapacityBytes: number,
-    arenaUsedBytes: number,
-    arenaHighWaterBytes: number,
-    arenaOffers: number,
-    arenaBusy: number,
-    arenaQuarantinedRegions: number,
-    copiedBytes: number
-  ],
-  persistentPages: [active: boolean, activationFailures: number]
+  telemetry: [epoch: string, graphRevision: number, callbackGeneration: number, meterSlots: number],
+  parameterRing: [capacity: number, hardFull: number, staleEpoch: number],
+  runtime: [workerThreads: number, maxBlockingThreads: number]
 ]
 
 export function stableRuntimeHandle(namespace: number, id: string): number {

@@ -1,13 +1,13 @@
 import { encode } from "@msgpack/msgpack"
-import type { AudioHostIpcClient } from "@heron/audio-host-client"
+import type { AudioHostRuntime } from "@heron/dsp-node"
 import { describe, expect, it } from "vitest"
 import { AraCallbackSequenceTracker, drainHostEvents } from "./audio-host-events"
 
-function clientWithEvents(events: unknown[]): AudioHostIpcClient {
+function clientWithEvents(events: unknown[]): AudioHostRuntime {
   return {
-    helperEpoch: "test-epoch",
+    runtimeEpoch: "test-epoch",
     drainEvents: () => events.map((event) => Buffer.from(encode(event)))
-  } as AudioHostIpcClient
+  } as AudioHostRuntime
 }
 
 describe("drainHostEvents", () => {

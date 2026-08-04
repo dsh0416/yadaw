@@ -127,7 +127,7 @@
     "unableToSaveMixerDisplaySettings": "无法保存混音台显示设置。",
     "unableToSaveMidiSettings": "无法保存 MIDI 设置。",
     "unableToSaveShortcutSettings": "无法保存快捷键设置。",
-    "unableToRestartAudioHelper": "无法重启音频助手。",
+    "unableToSaveAudioRuntime": "无法保存内嵌音频运行时设置。",
     "unableToChangeSoftwareMonitoring": "无法更改软件监听。",
     "nativeAudioEngineStopped": "原生音频引擎意外停止。",
     "unableToReadAudioEngineState": "无法读取音频引擎状态。",
@@ -150,7 +150,7 @@
     "audioEngineUnavailable": "音频引擎不可用。",
     "projectUnavailable": "工程不可用。",
     "pluginUnavailable": "插件运行时不可用，请重新打开编辑器或协调工程状态。",
-    "midiUnavailable": "MIDI 运行时不可用，请协调音频助手状态后重试。",
+    "midiUnavailable": "MIDI 运行时不可用，请协调音频会话状态后重试。",
     "projectQuarantined": "失败的工程候选会话已被隔离。",
     "graphDependencyFailed": "图依赖准备失败，请协调工程状态后重试。"
   },
@@ -560,11 +560,10 @@
         "category": "系统",
         "page": "引擎",
         "title": "运行时调度",
-        "description": "限制辅助并发而不改变实时回调。更改仅重启音频辅助进程，然后恢复设备、插件、图与走带。",
-        "resolvedAria": "已解析的音频辅助线程",
+        "description": "限制内嵌运行时的并发度，不改变实时音频回调。更改会在下次启动应用时生效。",
+        "resolvedAria": "已解析的内嵌音频运行时线程",
         "resolvedWorkers": "{count} 个工作线程",
         "resolvedBlocking": "{count} 阻塞",
-        "resolvedEgress": "{count} 出站",
         "workerThreads": {
           "title": "异步工作线程",
           "description": "运行协议、引擎、后台 I/O 与遥测任务。VST3 保持线程亲和。",
@@ -574,21 +573,14 @@
         },
         "blockingThreads": {
           "title": "阻塞线程上限",
-          "description": "限制同步 IPC 发送、arena 复制与其他受控阻塞任务。",
+          "description": "限制插件加载、文件 I/O 与其他受控阻塞任务。",
           "modeAria": "阻塞线程模式",
           "countAria": "阻塞线程数",
           "range": "2–16"
         },
-        "egressConcurrency": {
-          "title": "IPC 出站并发",
-          "description": "允许独立响应并发编码与发送；运行时事件保持有序。",
-          "modeAria": "出站并发模式",
-          "countAria": "出站并发数",
-          "range": "1–4"
-        },
         "apply": {
-          "restarting": "正在重启辅助进程…",
-          "label": "应用运行时设置"
+          "restarting": "正在保存…",
+          "label": "保存并在下次启动时应用"
         }
       },
       "recording": {
@@ -807,9 +799,9 @@
   },
   "benchmark": {
     "title": "音频性能基准测试",
-    "description": "测量 DSP 截止时间稳定性与进程边界传输。",
+    "description": "测量 DSP 截止时间稳定性与本地原生桥接。",
     "intro": {
-      "summary": "在本地对捆绑 VST3 效果与进程边界传输进行简短的 DSP 截止时间测试。不会使用您的音频设备，也不会更改工程。",
+      "summary": "在本地对捆绑 VST3 效果与内嵌原生桥接进行简短的 DSP 截止时间测试。不会使用您的音频设备，也不会更改工程。",
       "beforeStart": "开始之前",
       "guidance": "暂停播放并关闭占用 CPU 的应用，以获得有代表性的结果。",
       "runBenchmark": "运行基准测试"
@@ -817,7 +809,7 @@
     "running": {
       "kicker": "测量中",
       "title": "正在测量引擎路径…",
-      "description": "VST3 处理 · 块截止时间 · IPC 往返 · 共享页"
+      "description": "VST3 处理 · 块截止时间 · 原生请求 · 直接遥测"
     },
     "error": {
       "kicker": "基准测试中断",
@@ -864,9 +856,9 @@
       "late": "{misses} / {blocks} 超时",
       "realtimeFactor": "{factor}× 实时"
     },
-    "ipc": {
-      "kicker": "进程边界",
-      "title": "IPC 传输",
+    "nativeBridge": {
+      "kicker": "原生边界",
+      "title": "内嵌运行时桥接",
       "suiteDuration": "{ms} ms 套件",
       "table": {
         "path": "路径",
@@ -875,18 +867,14 @@
         "p99": "P99",
         "rate": "速率"
       },
-      "payload": {
-        "sharedPage": "共享页"
-      },
       "rate": {
         "readsPerSecond": "{rate}k 读/秒",
         "throughput": "{rate} MiB/秒"
       },
       "note": {
-        "workers": "{workers} 工作线程 / {blocking} 阻塞线程 / {egress} 出站",
-        "arenaOffers": "{count} 次 arena 提供",
+        "workers": "{workers} 工作线程 / {blocking} 阻塞线程",
         "messagePackBody": "{size} MessagePack 正文",
-        "debugOnly": "仅供诊断；正式带宽评级需使用 release 构建。"
+        "debugOnly": "仅供诊断；正式原生边界评级需使用 release 构建。"
       }
     },
     "footer": {
@@ -927,12 +915,12 @@
       "xrun": "XRUN"
     },
     "ipcSection": {
-      "title": "音频 IPC 传输",
+      "title": "内嵌音频运行时",
       "unavailable": "不可用",
-      "placeholder": "音频辅助进程诊断不可用。",
-      "requestRouter": "请求路由",
-      "normalPriority": "{normal} 普通 · {priority} 优先",
-      "slotsPerChannel": "每通道 {count} 个槽位",
+      "placeholder": "内嵌音频运行时诊断不可用。",
+      "requestRouter": "控制队列",
+      "normalPriority": "{normal} 个待处理",
+      "slotsPerChannel": "{count} 个有界槽位",
       "arenaLeases": "Arena 租约",
       "leases": "租约",
       "liveTotal": "{live} 活跃 · {packets} 包 / {total} 总计",
@@ -947,15 +935,15 @@
       "inlinePayload": "内联负载",
       "packets": "包",
       "serializedRegions": "{serialized} 已序列化 · {regions} 共享区域",
-      "telemetryPage": "遥测页",
+      "telemetryPage": "直接遥测",
       "meters": "表",
-      "telemetryDetail": "修订 {revision} · {fallbackReads} 次回退读取",
+      "telemetryDetail": "图修订 {revision}",
       "parameterSpsc": "参数 SPSC",
-      "ringDetail": "{softFull} 软满 · {hardFull} 满 · {boundary} 边界",
-      "priorityHeartbeat": "优先心跳",
+      "ringDetail": "{hardFull} 次已满 · {stale} 次过期",
+      "priorityHeartbeat": "运行时心跳",
       "waiting": "等待中",
-      "heartbeatDetail": "IPC {ipcGeneration} · Tokio {tokioGeneration} · UI {winitGeneration}",
-      "routerHealth": "路由健康",
+      "heartbeatDetail": "控制 {controlGeneration} · Tokio {tokioGeneration} · UI {winitGeneration}",
+      "routerHealth": "队列健康",
       "eventsTimeouts": "{events} 事件 · {timeouts} 超时",
       "callbackStale": "回调 {callbackGeneration} · 过期 {staleEpoch}"
     },

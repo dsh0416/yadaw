@@ -35,8 +35,8 @@ not rebuild `heron-audio-engine`, and a representative workflow regression over
 The packaged desktop application also exposes a short native DSP test from
 **Help → Audio Performance Benchmark…**. Unlike the Criterion suite, this test
 does not require a Rust toolchain or repository checkout. It renders three
-reference mixer graphs on a worker thread inside the audio helper, then runs an
-IPC suite against that helper. Each graph processes a deterministic stereo
+reference mixer graphs on a native worker thread, then measures the local N-API
+bridge. Each graph processes a deterministic stereo
 signal through independent instances of the bundled Heron Gain VST3: 8 instances
 for low-latency tracking, 32 for a production mix, and 64 for a dense session.
 Using a bundled effect keeps results reproducible while including the real VST3
@@ -47,21 +47,18 @@ sequentially so they do not distort each other. The report includes:
   misses for low-latency tracking, production mix, and dense-session scenarios,
   including the VST3 instance count for each;
 - real-time factor as a secondary diagnostic rather than the score;
-- inline sequential RTT;
-- cold 4 MiB shared-arena first-use latency, including mapping the first offer;
-- warm 4 MiB sequential effective throughput;
-- warm saturated 4 MiB duplex bandwidth at 1, 4, 8, and 16 requests in flight;
-- concurrent request-ID routing and synchronous telemetry-page read throughput;
-- debug/release profile, resolved Tokio runtime settings, arena offers, and the
-  actual MessagePack body size after attachments are removed;
+- inline sequential request/reply latency;
+- concurrent in-process request routing and direct telemetry read throughput;
+- debug/release profile, resolved Tokio runtime settings, and the actual
+  MessagePack body size;
 - the processor, logical-core count, platform, and measurement time.
 
 The headline rating uses the worse of p99 block-deadline stability and the
-release IPC targets. Debug IPC numbers are explicitly diagnostic and do not
+release native-bridge targets. Debug bridge numbers are explicitly diagnostic and do not
 lower the rating.
 Real-time factor alone can make a deliberately heavy graph look informative
 while hiding jitter that actually causes dropouts. This report helps users
-evaluate both practical buffer stability and process-boundary overhead. It does
+evaluate both practical buffer stability and local native-boundary overhead. It does
 not open an audio device and is not a substitute for the repeatable Criterion
 regression suite. The bundled gain workload measures realistic hosting overhead,
 not the algorithmic cost of arbitrary third-party synthesis, convolution, or

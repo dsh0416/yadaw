@@ -59,6 +59,6 @@ mod event_loop;
 mod window_config;
 
 pub(super) use window_config::{
-    parse_editor_owner_window, plugin_editor_window_attributes, remove_owned_popup,
-    replace_owned_popup, should_drain_ui_request, vst3_host_request_payload,
+    plugin_editor_window_attributes, remove_owned_popup, replace_owned_popup,
+    should_drain_ui_request, vst3_host_request_payload,
 };

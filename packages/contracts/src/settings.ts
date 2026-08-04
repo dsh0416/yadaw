@@ -17,13 +17,11 @@ export interface PluginEditorPreference {
 export interface AudioHostRuntimePreferences {
   workerThreads: AudioHostThreadSetting
   maxBlockingThreads: AudioHostThreadSetting
-  egressConcurrency: AudioHostThreadSetting
 }
 
 export interface ResolvedAudioHostRuntimePreferences {
   workerThreads: number
   maxBlockingThreads: number
-  egressConcurrency: number
 }
 
 export interface ApplicationSettings {

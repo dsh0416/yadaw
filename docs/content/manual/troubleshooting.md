@@ -72,7 +72,7 @@ avoid the software round trip.
 2. Open the Sound Browser and select **Rescan VST3**.
 3. Restart Heron after installing or updating the plug-in.
 4. Check startup messages for the failed module.
-5. Remove or bypass a plug-in that repeatedly stops the audio host.
+5. Remove or bypass a plug-in that repeatedly crashes the application while its audio graph is active.
 
 Heron preserves a legal route when a stored plug-in cannot load, so the rest of
 the project can remain usable.

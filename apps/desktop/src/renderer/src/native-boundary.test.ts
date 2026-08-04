@@ -27,7 +27,7 @@ describe("renderer native-call boundary", () => {
 
   it("keeps native audio host packages out of renderer and preload", () => {
     const roots = [rendererRoot, resolve(desktopSourceRoot, "preload")]
-    const forbiddenPackages = ["@heron/audio-host-client", "@heron/dsp-node"]
+    const forbiddenPackages = ["@heron/dsp-node"]
     const violations = roots.flatMap(sourceFiles).flatMap((path) => {
       const source = readFileSync(path, "utf8")
       return forbiddenPackages

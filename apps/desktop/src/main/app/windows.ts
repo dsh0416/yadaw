@@ -32,7 +32,7 @@ export function mainWindowPlatformOptions(
     return {
       titleBarStyle: "hiddenInset",
       trafficLightPosition: { x: 12, y: 11 },
-      // Native VST3 editors live in the accessory audio-host process. Once one
+      // Native VST3 editors are owned by the embedded audio runtime. Once one
       // becomes active, the next mixer click must both reactivate Electron and
       // reach its control instead of being consumed by AppKit activation.
       acceptFirstMouse: true

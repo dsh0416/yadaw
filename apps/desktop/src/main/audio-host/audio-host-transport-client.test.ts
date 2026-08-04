@@ -4,7 +4,7 @@ import type { ControlResponse } from "./wire"
 
 function createClient(request: (command: Record<string, unknown>) => Promise<ControlResponse>) {
   const readTelemetry = vi.fn(() => {
-    throw new Error("the macOS fallback must not read the incoherent shared page")
+    throw new Error("the fallback must not use unavailable direct telemetry")
   })
   const client = new AudioHostTransportClient(
     () => null,
@@ -17,7 +17,7 @@ function createClient(request: (command: Record<string, unknown>) => Promise<Con
   return { client, readTelemetry }
 }
 
-describe("AudioHostTransportClient negotiated shared-page fallback", () => {
+describe("AudioHostTransportClient direct-telemetry fallback", () => {
   it("sends plug-in bypass previews over the control path", async () => {
     const request = vi.fn(
       async () => ({ request_id: 1, result: { type: "accepted" } }) satisfies ControlResponse

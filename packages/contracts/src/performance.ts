@@ -33,53 +33,26 @@ export interface SystemPerformanceSnapshot {
   cpu: CpuSnapshot
   memory: MemorySnapshot
   storage: StorageSpaceSnapshot[]
-  audioIpc: AudioIpcPerformanceSnapshot | null
+  audioRuntime: AudioRuntimePerformanceSnapshot | null
 }
 
-export interface AudioIpcPerformanceSnapshot {
+export interface AudioRuntimePerformanceSnapshot {
   sessionEpoch: string
   heartbeat: {
     ageMs: number | null
-    ipcGeneration: number
+    controlGeneration: number
     tokioGeneration: number
     winitGeneration: number
     callbackGeneration: number
   }
   requests: {
     normalPending: number
-    priorityPending: number
     capacity: number
     timeouts: number
-  }
-  sharedMemory: {
-    persistentPagesActive: boolean
-    activationFailures: number
-    outstandingLeases: number
-    outstandingBytes: number
-    maxLeases: number
-    maxBytes: number
-    inlinePackets: number
-    inlineBytes: number
-    sharedPackets: number
-    sharedRegions: number
-    sharedBytes: number
-    arenaRegions: number
-    arenaCapacityBytes: number
-    arenaUsedBytes: number
-    arenaHighWaterBytes: number
-    arenaOffers: number
-    arenaBusy: number
-    arenaQuarantinedRegions: number
-    copiedBytes: number
   }
   runtime: {
     requested: AudioHostRuntimePreferences
     resolved: ResolvedAudioHostRuntimePreferences
-    egressActive: number
-    egressQueueDepth: number
-    egressQueueHighWater: number
-    egressBatches: number
-    blockingJobs: number
   }
   eventQueueDepth: number
   telemetry: {
@@ -125,19 +98,16 @@ export interface AudioBenchmarkScenario {
   realtimeFactor: number
 }
 
-export type AudioIpcBenchmarkKind =
-  | "inline-round-trip"
-  | "shared-cold"
-  | "shared-warm-sequential"
-  | "shared-saturated"
+export type AudioNativeBenchmarkKind =
+  | "request-round-trip"
   | "concurrent-routing"
   | "telemetry-read"
 
-export interface AudioIpcBenchmarkScenario {
+export interface AudioNativeBenchmarkScenario {
   id: string
   label: string
   description: string
-  kind: AudioIpcBenchmarkKind
+  kind: AudioNativeBenchmarkKind
   payloadBytes: number
   iterations: number
   concurrency: number
@@ -149,13 +119,12 @@ export interface AudioIpcBenchmarkScenario {
   latencyP99Us: number | null
 }
 
-export interface AudioIpcBenchmarkReport {
+export interface AudioNativeBenchmarkReport {
   durationMs: number
   buildProfile: "debug" | "release"
   runtime: ResolvedAudioHostRuntimePreferences
-  arenaOffers: number
   messagePackBodyBytes: number
-  scenarios: readonly AudioIpcBenchmarkScenario[]
+  scenarios: readonly AudioNativeBenchmarkScenario[]
 }
 
 export interface AudioBenchmarkSystemInfo {
@@ -173,5 +142,5 @@ export interface AudioBenchmarkReport {
   rating: AudioBenchmarkRating
   system: AudioBenchmarkSystemInfo
   scenarios: readonly AudioBenchmarkScenario[]
-  ipc: AudioIpcBenchmarkReport
+  nativeBridge: AudioNativeBenchmarkReport
 }

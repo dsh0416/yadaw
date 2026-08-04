@@ -19,15 +19,13 @@ const report: AudioBenchmarkReport = {
     architecture: "x64"
   },
   scenarios: [],
-  ipc: {
+  nativeBridge: {
     durationMs: 140,
     buildProfile: "release",
     runtime: {
       workerThreads: 2,
-      maxBlockingThreads: 4,
-      egressConcurrency: 2
+      maxBlockingThreads: 4
     },
-    arenaOffers: 1,
     messagePackBodyBytes: 128,
     scenarios: []
   }

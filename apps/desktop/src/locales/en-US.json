@@ -127,7 +127,7 @@
     "unableToSaveMixerDisplaySettings": "Unable to save mixer display settings.",
     "unableToSaveMidiSettings": "Unable to save MIDI settings.",
     "unableToSaveShortcutSettings": "Unable to save shortcut settings.",
-    "unableToRestartAudioHelper": "Unable to restart the audio helper.",
+    "unableToSaveAudioRuntime": "Unable to save embedded audio runtime settings.",
     "unableToChangeSoftwareMonitoring": "Unable to change software monitoring.",
     "nativeAudioEngineStopped": "The native audio engine stopped unexpectedly.",
     "unableToReadAudioEngineState": "Unable to read audio engine state.",
@@ -150,7 +150,7 @@
     "audioEngineUnavailable": "The audio engine is unavailable.",
     "projectUnavailable": "The project is unavailable.",
     "pluginUnavailable": "The plug-in runtime is unavailable. Reopen the editor or reconcile the project.",
-    "midiUnavailable": "The MIDI runtime is unavailable. Reconcile the audio helper and try again.",
+    "midiUnavailable": "The MIDI runtime is unavailable. Reconcile the audio session and try again.",
     "projectQuarantined": "The failed project candidate was isolated.",
     "graphDependencyFailed": "A graph dependency failed to prepare. Reconcile the project and try again."
   },
@@ -560,11 +560,10 @@
         "category": "System",
         "page": "Engine",
         "title": "Runtime scheduling",
-        "description": "Bound helper concurrency without changing the real-time callback. Changes restart only the audio helper, then restore devices, plug-ins, graph and transport.",
-        "resolvedAria": "Resolved audio helper threads",
+        "description": "Bound embedded runtime concurrency without changing the real-time callback. Changes take effect the next time the application starts.",
+        "resolvedAria": "Resolved embedded audio runtime threads",
         "resolvedWorkers": "{count} workers",
         "resolvedBlocking": "{count} blocking",
-        "resolvedEgress": "{count} egress",
         "workerThreads": {
           "title": "Async worker threads",
           "description": "Runs protocol, engine, background I/O and telemetry tasks. VST3 stays thread-affine.",
@@ -574,21 +573,14 @@
         },
         "blockingThreads": {
           "title": "Blocking thread ceiling",
-          "description": "Caps synchronous IPC sends, arena copies and other controlled blocking jobs.",
+          "description": "Caps plug-in loading, file I/O and other controlled blocking jobs.",
           "modeAria": "Blocking thread mode",
           "countAria": "Blocking threads",
           "range": "2–16"
         },
-        "egressConcurrency": {
-          "title": "IPC egress concurrency",
-          "description": "Allows independent responses to encode and send concurrently; runtime events stay ordered.",
-          "modeAria": "Egress concurrency mode",
-          "countAria": "Egress concurrency",
-          "range": "1–4"
-        },
         "apply": {
-          "restarting": "Restarting helper…",
-          "label": "Apply runtime settings"
+          "restarting": "Saving…",
+          "label": "Save for next launch"
         }
       },
       "recording": {
@@ -807,9 +799,9 @@
   },
   "benchmark": {
     "title": "Audio performance benchmark",
-    "description": "Measure DSP deadline stability and process-boundary transport.",
+    "description": "Measure DSP deadline stability and the local native bridge.",
     "intro": {
-      "summary": "Runs a short local test of DSP deadlines with bundled VST3 effects and process-boundary transfers. It does not use your audio devices or change the project.",
+      "summary": "Runs a short local test of DSP deadlines with bundled VST3 effects and the embedded native bridge. It does not use your audio devices or change the project.",
       "beforeStart": "Before you start",
       "guidance": "Pause playback and close CPU-heavy apps for a representative result.",
       "runBenchmark": "Run benchmark"
@@ -817,7 +809,7 @@
     "running": {
       "kicker": "MEASURING",
       "title": "Measuring engine paths…",
-      "description": "VST3 processing · Block deadlines · IPC round trips · Shared pages"
+      "description": "VST3 processing · Block deadlines · Native requests · Direct telemetry"
     },
     "error": {
       "kicker": "BENCHMARK INTERRUPTED",
@@ -864,9 +856,9 @@
       "late": "{misses} / {blocks} late",
       "realtimeFactor": "{factor}× real time"
     },
-    "ipc": {
-      "kicker": "PROCESS BOUNDARY",
-      "title": "IPC transport",
+    "nativeBridge": {
+      "kicker": "NATIVE BOUNDARY",
+      "title": "Embedded runtime bridge",
       "suiteDuration": "{ms} ms suite",
       "table": {
         "path": "Path",
@@ -875,18 +867,14 @@
         "p99": "P99",
         "rate": "Rate"
       },
-      "payload": {
-        "sharedPage": "shared page"
-      },
       "rate": {
         "readsPerSecond": "{rate}k reads/s",
         "throughput": "{rate} MiB/s"
       },
       "note": {
-        "workers": "{workers} workers / {blocking} blocking / {egress} egress",
-        "arenaOffers": "{count} arena offers",
+        "workers": "{workers} workers / {blocking} blocking",
         "messagePackBody": "{size} MessagePack body",
-        "debugOnly": "Diagnostic only; formal bandwidth grading uses a release build."
+        "debugOnly": "Diagnostic only; formal native-boundary grading uses a release build."
       }
     },
     "footer": {
@@ -927,12 +915,12 @@
       "xrun": "XRUN"
     },
     "ipcSection": {
-      "title": "Audio IPC transport",
+      "title": "Embedded audio runtime",
       "unavailable": "Unavailable",
-      "placeholder": "Audio helper diagnostics are unavailable.",
-      "requestRouter": "Request router",
-      "normalPriority": "{normal} normal · {priority} priority",
-      "slotsPerChannel": "{count} slots per channel",
+      "placeholder": "Embedded audio runtime diagnostics are unavailable.",
+      "requestRouter": "Control queue",
+      "normalPriority": "{normal} pending",
+      "slotsPerChannel": "{count} bounded slots",
       "arenaLeases": "Arena leases",
       "leases": "leases",
       "liveTotal": "{live} live · {packets} packets / {total} total",
@@ -947,15 +935,15 @@
       "inlinePayload": "Inline payload",
       "packets": "packets",
       "serializedRegions": "{serialized} serialized · {regions} shared regions",
-      "telemetryPage": "Telemetry page",
+      "telemetryPage": "Direct telemetry",
       "meters": "meters",
-      "telemetryDetail": "rev {revision} · {fallbackReads} fallback reads",
+      "telemetryDetail": "graph revision {revision}",
       "parameterSpsc": "Parameter SPSC",
-      "ringDetail": "{softFull} soft · {hardFull} full · {boundary} boundary",
-      "priorityHeartbeat": "Priority heartbeat",
+      "ringDetail": "{hardFull} full · {stale} stale",
+      "priorityHeartbeat": "Runtime heartbeat",
       "waiting": "Waiting",
-      "heartbeatDetail": "IPC {ipcGeneration} · Tokio {tokioGeneration} · UI {winitGeneration}",
-      "routerHealth": "Router health",
+      "heartbeatDetail": "control {controlGeneration} · Tokio {tokioGeneration} · UI {winitGeneration}",
+      "routerHealth": "Queue health",
       "eventsTimeouts": "{events} events · {timeouts} timeouts",
       "callbackStale": "callback {callbackGeneration} · stale {staleEpoch}"
     },

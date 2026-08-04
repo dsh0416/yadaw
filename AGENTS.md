@@ -14,7 +14,9 @@ under `.agents/skills/`.
 - Frontend: Vue 3, TypeScript, Pinia, Vue Router, Reka UI, Vitest, and
   Playwright.
 - Native audio: Rust workspace with `dsp-core` for runtime-agnostic DSP and
-  `dsp-node` for the napi-rs/cpal adapter loaded by Electron's main process.
+  `dsp-node` for the napi-rs addon loaded directly by Electron's main process.
+  The addon owns the embedded audio runtime, cpal device streams, plug-in host,
+  telemetry, and bounded control queues. There is no audio helper process.
 - Windows native builds must always include cpal's ASIO backend. Do not
   introduce an ASIO-free Windows build variant; Windows build hosts must provide
   LLVM/Clang, and runtime validation requires a 64-bit ASIO driver.
@@ -22,7 +24,7 @@ under `.agents/skills/`.
   a PGlite/Drizzle project database.
 - Process boundary: the renderer uses the narrow typed preload API exposed as
   `window.heron`; it must never import the native `.node` addon directly.
-- Cross-process calls use explicit resource handles and serializable
+- Renderer/main cross-process calls use explicit resource handles and serializable
   success/error unions. Stateful mutations require one commit point,
   prepare/abort cleanup, idempotency or operation-status reconciliation, and a
   documented recoverable or quarantined failure state. Do not use exceptions,
@@ -30,6 +32,10 @@ under `.agents/skills/`.
   error strings as cross-process protocol semantics.
 - Real-time boundary: keep Electron IPC, UI work, filesystem access, allocation,
   and blocking synchronization out of audio callbacks.
+- Native boundary: Electron main may call `@heron/dsp-node`; preload and renderer
+  must not import it. The local MessagePack request envelope is a N-API ABI, not
+  an inter-process transport. Do not add process supervision, OS shared memory,
+  or helper restart/reconciliation around the embedded runtime.
 - Runtime management: `mise` with locked Node.js, pnpm, Rust, and APM versions
   in `mise.toml` and `mise.lock`; pnpm manages the JavaScript monorepo.
 - Prefer TypeScript for hand-authored Node.js scripts and tool configuration.
@@ -96,7 +102,6 @@ mise exec -- pnpm lint
 - [Development environment](agents/docs/environment.md)
 - [Renderer/native-call boundary](agents/docs/native-call-boundary.md)
 - [Cross-process resource and error contract](agents/docs/cross-process-error-contract.md)
-- [Cross-process shared-memory transport](agents/docs/shared-memory-transport.md)
 - [Project database development rules](agents/docs/project-database.md)
 - [Agent development notes](agents/docs/README.md)
 - [Agent skill dependencies](apm.yml)

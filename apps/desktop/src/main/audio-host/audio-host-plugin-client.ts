@@ -1,4 +1,4 @@
-import type { AudioHostIpcClient } from "@heron/audio-host-client"
+import type { AudioHostRuntime } from "@heron/dsp-node"
 import type {
   AppLocale,
   PluginEditorMode,
@@ -46,7 +46,7 @@ export class AudioHostPluginClient {
   private parameterFlush: NodeJS.Timeout | null = null
 
   constructor(
-    private readonly getClient: () => AudioHostIpcClient | null,
+    private readonly getClient: () => AudioHostRuntime | null,
     private readonly request: (command: Record<string, unknown>) => Promise<ControlResponse>,
     private readonly requestImmediately: (
       command: Record<string, unknown>

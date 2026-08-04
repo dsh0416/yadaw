@@ -74,7 +74,7 @@ If the pull request author is the only person who has examined the change,
 prefer a second reviewer who knows the affected subsystem before merge—
 especially for high-risk areas:
 
-- Real-time audio callbacks and lock-free / shared-memory paths
+- Real-time audio callbacks and lock-free in-process native paths
 - `unsafe` Rust, FFI, and native addon boundaries
 - Device and driver integration
 - Security-sensitive surface (preload API, IPC validation, plug-in hosting)

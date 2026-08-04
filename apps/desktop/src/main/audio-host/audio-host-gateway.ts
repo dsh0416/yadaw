@@ -1,13 +1,8 @@
 import { decode, encode } from "@msgpack/msgpack"
-import type { AudioHostIpcClient } from "@heron/audio-host-client"
+import type { AudioHostRuntime } from "@heron/dsp-node"
 import type { RpcError } from "@heron/contracts"
 import { drainHostEvents } from "./audio-host-events"
-import {
-  extractLargeAttachments,
-  hydrateAttachments,
-  type ControlResponse,
-  type PriorityResponse
-} from "./wire"
+import { hydrateAttachments, type ControlResponse, type PriorityResponse } from "./wire"
 
 const MAX_LOGICAL_REQUEST_BYTES = 128 * 1024 * 1024
 
@@ -38,7 +33,7 @@ export class AudioHostGateway {
   private readonly pending = new Set<Promise<ControlResponse>>()
 
   constructor(
-    private readonly client: () => AudioHostIpcClient | null,
+    private readonly client: () => AudioHostRuntime | null,
     private readonly unavailable: () => "stopping" | Promise<void> | null,
     private readonly onEditorPreferenceChanged: Parameters<typeof drainHostEvents>[1],
     private readonly pendingPreferenceWrites: Set<Promise<void>>,
@@ -61,7 +56,7 @@ export class AudioHostGateway {
 
   requestImmediately(
     command: Record<string, unknown>,
-    expectedClient?: AudioHostIpcClient
+    expectedClient?: AudioHostRuntime
   ): Promise<ControlResponse> {
     const pending = this.performRequest(command, expectedClient)
     this.pending.add(pending)
@@ -71,7 +66,7 @@ export class AudioHostGateway {
 
   async priority(
     command: Record<string, unknown>,
-    expectedClient?: AudioHostIpcClient
+    expectedClient?: AudioHostRuntime
   ): Promise<PriorityResponse> {
     const client = expectedClient ?? this.client()
     if (!client) throw new Error("audio host is not running")
@@ -103,19 +98,17 @@ export class AudioHostGateway {
 
   private async performRequest(
     command: Record<string, unknown>,
-    expectedClient?: AudioHostIpcClient
+    expectedClient?: AudioHostRuntime
   ): Promise<ControlResponse> {
     const client = expectedClient ?? this.client()
     if (!client) throw new Error("audio host is not running")
     const requestId = this.nextRequestId++
     const request = { request_id: requestId, command }
-    const attachments: Buffer[] = []
-    extractLargeAttachments(request, attachments)
     const payload = Buffer.from(encode(request))
     if (payload.length > MAX_LOGICAL_REQUEST_BYTES) {
       throw new Error("audio host logical request exceeds 128 MiB")
     }
-    const wireResponse = await client.request(payload, attachments)
+    const wireResponse = await client.request(payload)
     const response = decode(wireResponse.body) as ControlResponse
     hydrateAttachments(response, wireResponse.attachments)
     if (response.request_id !== requestId) {

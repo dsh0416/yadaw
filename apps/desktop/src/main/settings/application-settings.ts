@@ -119,15 +119,7 @@ export function validateAudioHostRuntimePreferences(value: unknown): AudioHostRu
   const input = value as Partial<AudioHostRuntimePreferences>
   const preferences = {
     workerThreads: runtimeThreadSetting(input.workerThreads, 1, 8, "Worker threads"),
-    maxBlockingThreads: runtimeThreadSetting(input.maxBlockingThreads, 2, 16, "Blocking threads"),
-    egressConcurrency: runtimeThreadSetting(input.egressConcurrency, 1, 4, "Egress concurrency")
-  }
-  if (
-    typeof preferences.egressConcurrency === "number" &&
-    typeof preferences.maxBlockingThreads === "number" &&
-    preferences.egressConcurrency > preferences.maxBlockingThreads
-  ) {
-    throw new TypeError("Egress concurrency cannot exceed blocking threads")
+    maxBlockingThreads: runtimeThreadSetting(input.maxBlockingThreads, 2, 16, "Blocking threads")
   }
   return preferences
 }
@@ -276,8 +268,7 @@ export class ApplicationSettingsStore {
       },
       audioHostRuntime: {
         workerThreads: "auto",
-        maxBlockingThreads: "auto",
-        egressConcurrency: "auto"
+        maxBlockingThreads: "auto"
       },
       pluginEditors: {},
       shortcuts: { keyboard: {}, midi: {} },

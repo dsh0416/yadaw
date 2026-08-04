@@ -1,7 +1,6 @@
-import { tmpdir } from "node:os"
 import { resolve } from "node:path"
 import { decode, encode } from "@msgpack/msgpack"
-import { AudioHostIpcClient } from "@heron/audio-host-client"
+import { AudioHostRuntime } from "@heron/dsp-node"
 
 interface WireResponse {
   request_id: number
@@ -14,11 +13,7 @@ interface WireResponse {
 }
 
 const repositoryRoot = resolve(import.meta.dirname, "..", "..", "..")
-const executableSuffix = process.platform === "win32" ? ".exe" : ""
-const [helperArgument, pluginArgument, classIdArgument, pluginKindArgument] = process.argv.slice(2)
-const helperPath =
-  helperArgument ??
-  resolve(repositoryRoot, "target", "debug", `heron-audio-host${executableSuffix}`)
+const [pluginArgument, classIdArgument, pluginKindArgument] = process.argv.slice(2)
 const pluginPath =
   pluginArgument ??
   resolve(repositoryRoot, "target", "vst3-fixtures", "VST3", "Debug", "note-expression-synth.vst3")
@@ -32,13 +27,9 @@ const observationDelayMs = Number.parseInt(process.env.HERON_EDITOR_SMOKE_DELAY_
 if (!Number.isFinite(observationDelayMs) || observationDelayMs < 0 || observationDelayMs > 60_000) {
   throw new Error("HERON_EDITOR_SMOKE_DELAY_MS must be between 0 and 60000")
 }
-const client = new AudioHostIpcClient(
-  helperPath,
-  resolve(tmpdir(), `heron-vst3-editor-${process.pid}.marker`),
-  2,
-  4,
-  2
-)
+const client = new AudioHostRuntime(2, 4)
+const uiPump = setInterval(() => client.pumpEvents(), 8)
+uiPump.unref()
 let requestId = 1
 
 async function request(command: unknown): Promise<WireResponse["result"]> {
@@ -113,5 +104,6 @@ try {
   await request({ type: "shutdown" })
   console.log(`VST3 editor smoke passed (initial=${initial.active_mode}, parameter zoom=200%)`)
 } finally {
+  clearInterval(uiPump)
   client.close()
 }

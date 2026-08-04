@@ -13,12 +13,9 @@ describe("AudioHostService events", () => {
 
   it("rejects a native side-chain request when its application handler fails", async () => {
     const service = new AudioHostService(
-      "audio-host",
-      "crash-marker",
       {
         workerThreads: "auto",
-        maxBlockingThreads: "auto",
-        egressConcurrency: "auto"
+        maxBlockingThreads: "auto"
       },
       undefined,
       () => {},
@@ -70,12 +67,9 @@ describe("AudioHostService events", () => {
   it("waits for pending application event handlers before stopping", async () => {
     const handler = new fakeHost.Deferred<void>()
     const service = new AudioHostService(
-      "audio-host",
-      "crash-marker",
       {
         workerThreads: "auto",
-        maxBlockingThreads: "auto",
-        egressConcurrency: "auto"
+        maxBlockingThreads: "auto"
       },
       undefined,
       () => {},

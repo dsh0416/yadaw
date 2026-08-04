@@ -72,8 +72,7 @@ onMounted(async () => {
     :audio-host-runtime="
       applicationSettings?.audioHostRuntime ?? {
         workerThreads: 'auto',
-        maxBlockingThreads: 'auto',
-        egressConcurrency: 'auto'
+        maxBlockingThreads: 'auto'
       }
     "
     :resolved-audio-host-runtime="resolvedAudioHostRuntime"

@@ -39,23 +39,21 @@ const report: AudioBenchmarkReport = {
       realtimeFactor: 6.4
     }
   ],
-  ipc: {
+  nativeBridge: {
     durationMs: 140,
     buildProfile: "release",
     runtime: {
       workerThreads: 2,
-      maxBlockingThreads: 4,
-      egressConcurrency: 2
+      maxBlockingThreads: 4
     },
-    arenaOffers: 1,
     messagePackBodyBytes: 128,
     scenarios: [
       {
-        id: "shared-plugin-state",
-        label: "Large shared state",
-        description: "4 MiB payload representative of a large plug-in state",
-        kind: "shared-warm-sequential",
-        payloadBytes: 4 * 1024 * 1024,
+        id: "inline-control",
+        label: "Embedded control payload",
+        description: "256-byte payload through the native boundary",
+        kind: "request-round-trip",
+        payloadBytes: 256,
         iterations: 12,
         concurrency: 1,
         elapsedMs: 40,
@@ -105,7 +103,7 @@ describe("AudioBenchmarkDialog", () => {
     expect(wrapper.text()).toContain("82% headroom")
     expect(wrapper.text()).toContain("Production mix")
     expect(wrapper.text()).toContain("32 VST3 effects")
-    expect(wrapper.text()).toContain("Large shared state")
+    expect(wrapper.text()).toContain("Embedded control payload")
     expect(wrapper.text()).toContain("2400.0 MiB/s")
     expect(wrapper.text()).toContain("Reference CPU")
     expect(wrapper.find(".timing-fill").attributes("style")).toContain("width")

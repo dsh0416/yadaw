@@ -75,7 +75,7 @@ pub(super) fn build_plugin_graph(input: PluginGraphInput<'_>) -> Result<PluginGr
     });
     let mut maximum_tail = 0_u64;
     let mut has_infinite_tail = false;
-    for (marker_index, plugin) in plugin_specs.into_iter().enumerate() {
+    for plugin in plugin_specs {
         let channel_index = plugin.channel_index as usize;
         if channel_index >= channels.len() {
             return Err(invalid_config("plugin references an invalid mixer channel"));
@@ -101,7 +101,6 @@ pub(super) fn build_plugin_graph(input: PluginGraphInput<'_>) -> Result<PluginGr
             low_latency_bypassed: is_low_latency_bypassed,
             main_delay: StereoDelayLine::new(0),
             bypass_delay: StereoDelayLine::new(plugin.latency_samples as usize),
-            marker_index,
             aux_inputs: plugin
                 .aux_input_buses
                 .into_iter()

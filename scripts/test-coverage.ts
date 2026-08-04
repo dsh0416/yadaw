@@ -119,16 +119,10 @@ function prepareCoverage(target: string, environment: NodeJS.ProcessEnv): void {
   // report match the binaries copied into the JS packages and loaded by Node.
   // This also generates the gitignored loaders and typings required by typed lint.
   runPnpm(["--filter", "@heron/dsp-node", "build:debug"], environment)
-  runPnpm(["--filter", "@heron/audio-host-client", "build:debug"], environment)
 }
 
 function requirePreparedBindings(): void {
-  const requiredFiles = [
-    "crates/dsp-node/index.js",
-    "crates/dsp-node/index.d.ts",
-    "crates/audio-host-client/index.js",
-    "crates/audio-host-client/index.d.ts"
-  ]
+  const requiredFiles = ["crates/dsp-node/index.js", "crates/dsp-node/index.d.ts"]
   const missingFiles = requiredFiles.filter((path) => !existsSync(resolve(workspaceRoot, path)))
   if (missingFiles.length > 0) {
     fail(

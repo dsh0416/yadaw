@@ -1,5 +1,5 @@
 import { decode } from "@msgpack/msgpack"
-import type { AudioHostIpcClient } from "@heron/audio-host-client"
+import type { AudioHostRuntime } from "@heron/dsp-node"
 import type { AraCallbackEvent, PluginEditorPreference } from "@heron/contracts"
 
 export interface AraHostCallback {
@@ -157,7 +157,7 @@ function decodeAraCallbackEvent(value: unknown): AraCallbackEvent | null {
 }
 
 export function drainHostEvents(
-  client: AudioHostIpcClient,
+  client: AudioHostRuntime,
   onEditorPreferenceChanged: (classId: string, preference: PluginEditorPreference) => Promise<void>,
   pendingWrites: Set<Promise<void>>,
   onEditorClosed?: (instanceId: string) => void,
@@ -247,7 +247,7 @@ export function drainHostEvents(
       const araEvent = decodeAraCallbackEvent(decoded.event)
       if (araEvent) {
         onAraCallback?.({
-          helperEpoch: client.helperEpoch,
+          helperEpoch: client.runtimeEpoch,
           instanceId: decoded.instance_id,
           sequence: decoded.sequence as number,
           event: araEvent

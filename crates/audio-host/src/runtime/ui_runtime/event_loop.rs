@@ -20,12 +20,19 @@ impl WinitHost {
         let _ = self.proxy.send_event(UiEvent::Wake);
     }
 
-    pub(super) fn shutdown(&mut self) {
+    pub(in crate::runtime) fn shutdown(&mut self) {
         self.close_all_editors();
         if let Ok(mut processors) = self.processors.lock() {
             processors.clear();
         }
-        self.vst3.take();
+        if let Some(runtime) = self.vst3.take() {
+            // VST3 module entry points are process-global, and some modules are
+            // not safe to unload after their final instance is destroyed. The
+            // embedded host is created once and closed only during application
+            // shutdown, so retain the runtime until the OS tears down the
+            // process instead of running third-party DLL detach code here.
+            std::mem::forget(runtime);
+        }
         self.ara_graph = None;
         while let Ok(request) = self.inbox.try_recv() {
             let _ = request.reply.send(control_error! {

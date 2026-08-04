@@ -14,15 +14,17 @@ workspace = true
 
 [features]
 default = []
-bench-internals = []
+bench-internals = ["heron-audio-host/bench-internals"]
 
 [dependencies]
 bwavfile.workspace = true
 napi.workspace = true
 napi-derive.workspace = true
 ringbuf.workspace = true
+rmp-serde.workspace = true
 rubato.workspace = true
 sha2.workspace = true
+heron-audio-host.workspace = true
 heron-dsp-core.workspace = true
 heron-dsp-runtime.workspace = true
 
@@ -31,7 +33,6 @@ napi-build.workspace = true
 
 [dev-dependencies]
 criterion.workspace = true
-heron-audio-host = { path = "../audio-host", features = ["bench-internals"] }
 
 [[bench]]
 name = "media_streaming"

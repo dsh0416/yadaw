@@ -124,7 +124,7 @@ export async function sampleSystemPerformance(
       usagePercent: percentage(totalBytes - freeBytes, totalBytes)
     },
     storage: [workspace, swap],
-    audioIpc: audioHostService?.performanceDiagnostics() ?? null
+    audioRuntime: audioHostService?.performanceDiagnostics() ?? null
   }
 }
 

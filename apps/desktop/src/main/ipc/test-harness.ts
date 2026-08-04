@@ -77,8 +77,7 @@ export const defaultSettings: ApplicationSettings = {
   softwareMonitoringEnabled: false,
   audioHostRuntime: {
     workerThreads: "auto",
-    maxBlockingThreads: "auto",
-    egressConcurrency: "auto"
+    maxBlockingThreads: "auto"
   },
   shortcuts: { keyboard: {}, midi: {} },
   midiSync: {
