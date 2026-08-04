@@ -9,7 +9,7 @@ import type {
   RpcResult,
   WaveformWindowRequest
 } from "@heron/contracts"
-import type { BeginOperationResult } from "../kernel/operation-registry"
+import type { BeginOperationResult } from "../kernel"
 import type { IpcHandlerContext } from "./context"
 import { reconcileAudioHostEpoch } from "./audio-host-reconcile"
 import { registerRpcHandler } from "./rpc"

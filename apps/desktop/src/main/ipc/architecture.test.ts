@@ -45,7 +45,10 @@ describe("IPC v2 architecture gate", () => {
       join(repositoryRoot, "packages", "contracts", "src", "operations.ts"),
       "utf8"
     )
-    const service = await readFile(join(sourceRoot, "main", "operation-service.ts"), "utf8")
+    const service = await readFile(
+      join(sourceRoot, "main", "kernel", "operation-service.ts"),
+      "utf8"
+    )
     expect(contracts).toContain("error: RpcError | null")
     expect(contracts).not.toMatch(/\bmessage:\s*string\s*\|\s*null/)
     expect(service).not.toContain("legacy-desktop")

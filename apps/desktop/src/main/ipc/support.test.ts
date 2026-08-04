@@ -4,9 +4,9 @@ import { pathToFileURL } from "node:url"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { AUDIO_BACKENDS } from "@heron/contracts"
 import type { CreateProjectRequest } from "@heron/contracts"
-import type { ApplicationSettingsStore } from "../application-settings"
-import type { AudioHostService } from "../audio-host-service"
-import { rendererDirectory } from "../runtime-paths"
+import type { ApplicationSettingsStore } from "../settings"
+import type { AudioHostService } from "../audio-host"
+import { rendererDirectory } from "../app"
 import {
   assertTrustedSender,
   sampleSystemPerformance,

@@ -10,8 +10,8 @@ import type {
   RpcRequestMeta,
   RpcResult
 } from "@heron/contracts"
-import { validateMidiSyncPreferences } from "../application-settings"
-import { t } from "../i18n"
+import { validateMidiSyncPreferences } from "../settings"
+import { t } from "../settings"
 import type { IpcHandlerContext } from "./context"
 import { reconcileAudioHostEpoch } from "./audio-host-reconcile"
 import { registerRpcHandler } from "./rpc"

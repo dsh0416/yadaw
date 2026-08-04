@@ -224,6 +224,7 @@ unsafe extern "C" {
 }
 
 #[cfg(test)]
+#[allow(clippy::wildcard_imports)]
 mod tests {
     use super::*;
     use std::sync::Mutex;

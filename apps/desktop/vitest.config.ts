@@ -33,6 +33,10 @@ export default defineConfig({
       exclude: [
         "src/**/*.test.ts",
         "src/renderer/src/test/**",
+        // Bundle-only entry points are exercised by build and E2E checks. Keeping
+        // them out of uncovered-file remapping also avoids parsing raw TS as JS.
+        "src/renderer/src/main.ts",
+        "src/renderer/src/splash/main.ts",
         "src/main/**/*.d.ts",
         "src/renderer/src/**/*.d.ts"
       ]

@@ -10,6 +10,8 @@ const electronMocks = vi.hoisted(() => ({
   quit: vi.fn(),
   showAboutPanel: vi.fn(),
   getPath: vi.fn(() => "/tmp/heron-test"),
+  buildMenuFromTemplate: vi.fn(() => ({})),
+  setApplicationMenu: vi.fn(),
   shouldUseDarkColors: false
 }))
 
@@ -29,6 +31,10 @@ vi.mock("electron", () => ({
     getAllWindows: electronMocks.getAllWindows,
     fromWebContents: electronMocks.fromWebContents
   },
+  Menu: {
+    buildFromTemplate: electronMocks.buildMenuFromTemplate,
+    setApplicationMenu: electronMocks.setApplicationMenu
+  },
   nativeTheme: {
     get shouldUseDarkColors() {
       return electronMocks.shouldUseDarkColors
@@ -40,11 +46,9 @@ import { IPC_CHANNELS } from "@heron/contracts"
 import { createContext, defaultSettings, invoke, meta, mutationMeta } from "./test-harness"
 import { registerSettingsRpcHandlers } from "./settings-rpc-handlers"
 
-vi.mock("../application-menu", () => ({
-  installApplicationMenu: vi.fn()
-}))
-
-vi.mock("../i18n", () => ({
+vi.mock("../app", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../app")>()),
+  installApplicationMenu: vi.fn(),
   setMainLocale: vi.fn(),
   t: (key: string) => key
 }))

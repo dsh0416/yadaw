@@ -1,8 +1,9 @@
+use super::device::{MockDeviceKind, negotiate_frames};
 use super::{
     Arc, BACKEND_ID, BufferSize, CHANNELS, DEFAULT_BUFFER_FRAMES, DeviceTrait, Duration, ErrorKind,
-    HostTrait, Instant, MAX_BUFFER_FRAMES, MIN_BUFFER_FRAMES, MockDeviceKind, MockHost, Mutex,
-    Ordering, SAMPLE_FORMAT, SAMPLE_RATE, StreamConfig, StreamTrait, SupportedBufferSize, host,
-    is_mock_backend, negotiate_frames, thread,
+    HostTrait, Instant, MAX_BUFFER_FRAMES, MIN_BUFFER_FRAMES, MockHost, Mutex, Ordering,
+    SAMPLE_FORMAT, SAMPLE_RATE, StreamConfig, StreamTrait, SupportedBufferSize, host,
+    is_mock_backend, thread,
 };
 
 fn fixed_config(frames: u32) -> StreamConfig {

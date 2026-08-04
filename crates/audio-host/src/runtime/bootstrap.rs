@@ -1,4 +1,11 @@
-use super::*;
+use super::{
+    Arc, AtomicU64, EventLoop, HashMap, HostBootstrap, IpcSender, Mutex, NativeUiContext, PathBuf,
+    ProtocolActorDeps, RuntimeConfig, UiEvent, VecDeque, WinitHost, crash_marker, editor_platform,
+    engine, env, ipc, mpsc, parse_editor_owner_window, run_protocol_actor, std_mpsc, thread, vst3,
+};
+
+#[cfg(target_os = "macos")]
+use winit::platform::macos::{ActivationPolicy, EventLoopBuilderExtMacOS};
 
 pub(super) fn run_ipc() -> Result<(), Box<dyn std::error::Error>> {
     const UI_MAILBOX_CAPACITY: usize = 64;

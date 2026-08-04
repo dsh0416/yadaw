@@ -21,6 +21,24 @@ interface ArrangementViewportOptions {
   zoomAmplitude: (direction: -1 | 1) => void
 }
 
+export function clampTimelineViewportX(
+  clientX: number,
+  viewportLeft: number,
+  railWidth: number,
+  viewportWidth: number
+): number {
+  return Math.max(0, Math.min(viewportWidth, clientX - viewportLeft - railWidth))
+}
+
+export function zoomedViewportScrollLeft(
+  tempoMap: TempoMapSnapshot,
+  anchorSeconds: number,
+  pixelsPerQuarter: number,
+  viewportX: number
+): number {
+  return Math.max(0, secondsToTimelineX(tempoMap, anchorSeconds, pixelsPerQuarter) - viewportX)
+}
+
 export function useArrangementViewport(options: ArrangementViewportOptions) {
   const rail = useTemplateRef<HTMLElement>("rail")
   const viewport = useTemplateRef<HTMLElement>("viewport")
@@ -72,9 +90,11 @@ export function useArrangementViewport(options: ArrangementViewportOptions) {
       if (element) {
         const bounds = element.getBoundingClientRect()
         const width = timelineViewportWidth(element)
-        const viewportX = Math.max(
-          0,
-          Math.min(width, event.clientX - bounds.left - (rail.value?.offsetWidth ?? 0))
+        const viewportX = clampTimelineViewportX(
+          event.clientX,
+          bounds.left,
+          rail.value?.offsetWidth ?? 0,
+          width
         )
         timeZoomAnchor = {
           seconds: timelineXToSeconds(
@@ -108,9 +128,11 @@ export function useArrangementViewport(options: ArrangementViewportOptions) {
     }
     timeZoomAnchor = null
     void nextTick(() => {
-      element.scrollLeft = Math.max(
-        0,
-        secondsToTimelineX(options.tempoMap(), anchor.seconds, value) - anchor.viewportX
+      element.scrollLeft = zoomedViewportScrollLeft(
+        options.tempoMap(),
+        anchor.seconds,
+        value,
+        anchor.viewportX
       )
       scrollLeft.value = element.scrollLeft
     })

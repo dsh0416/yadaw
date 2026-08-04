@@ -1,4 +1,4 @@
-use super::*;
+use super::thread;
 
 #[derive(Debug, Clone, Copy)]
 pub(super) struct RuntimeConfig {

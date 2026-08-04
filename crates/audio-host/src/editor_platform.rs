@@ -130,7 +130,10 @@ fn nonzero_extent(value: u32) -> u32 {
 
 #[cfg(target_os = "windows")]
 mod platform {
-    use super::*;
+    use super::{
+        CStr, HasWindowHandle, NativeContainerGeometry, RawWindowHandle, Window, c_void,
+        nonzero_extent,
+    };
 
     mod dpi {
         include!("editor_platform/windows_dpi.rs");
@@ -304,7 +307,10 @@ mod platform {
 
 #[cfg(target_os = "macos")]
 mod platform {
-    use super::*;
+    use super::{
+        CStr, HasWindowHandle, NativeContainerGeometry, RawWindowHandle, Window, c_void,
+        nonzero_extent,
+    };
     use std::ffi::{c_char, c_double};
 
     #[repr(C)]
@@ -540,7 +546,10 @@ mod platform {
 
 #[cfg(target_os = "linux")]
 mod platform {
-    use super::*;
+    use super::{
+        CStr, HasDisplayHandle, HasWindowHandle, NativeContainerGeometry, RawWindowHandle, Window,
+        c_void, nonzero_extent,
+    };
     use std::ffi::{c_char, c_int, c_long, c_ulong};
 
     type Display = c_void;
@@ -766,7 +775,7 @@ mod platform {
 
 #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
 mod platform {
-    use super::*;
+    use super::{CStr, NativeContainerGeometry, Window, c_void};
 
     pub const PLATFORM_TYPE: &CStr = c"unsupported";
 

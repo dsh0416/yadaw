@@ -1,4 +1,6 @@
-use super::*;
+use super::{
+    Arc, AtomicUsize, Duration, Ordering, STREAM_WORKERS, StereoFrame, StreamControl, mpsc, thread,
+};
 
 pub(super) struct StreamingClip {
     pub(super) control: Arc<StreamControl>,

@@ -41,7 +41,8 @@ import {
 } from "./test-harness"
 import { registerMidiRpcHandlers } from "./midi-rpc-handlers"
 
-vi.mock("../i18n", () => ({
+vi.mock("../app", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../app")>()),
   t: (key: string) => key
 }))
 

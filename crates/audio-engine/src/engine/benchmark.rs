@@ -1,6 +1,12 @@
 use std::hint::black_box;
 
-use super::*;
+use super::{
+    Arc, AtomicBool, AtomicU32, AtomicU64, Duration, InputPeakBank, Instant, LiveMixerSendTap,
+    MAX_INPUT_CHANNELS, MAX_OUTPUT_CHANNELS, NativeLatencyPolicy, NativeMixerChannel,
+    NativeMixerGraph, NativeMixerRuntime, NativeMixerSend, NativePluginInstance, PluginAudioMode,
+    TRANSPORT_STOPPED, TempoEvent, TimeSignatureEvent, TransportShared, Vst3ProcessorHandle,
+    build_mixer_runtime,
+};
 
 use heron_dsp_runtime::protocol::{AudioBenchmarkReport, AudioBenchmarkScenario};
 
@@ -354,6 +360,7 @@ pub fn run_audio_benchmark(
 }
 
 #[cfg(test)]
+#[allow(clippy::wildcard_imports)]
 mod benchmark_tests {
     use super::*;
 

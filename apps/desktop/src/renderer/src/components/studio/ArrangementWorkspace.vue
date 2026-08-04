@@ -10,19 +10,13 @@ import { useMixerStore } from "../../stores/mixer"
 import { useMidiInputStore } from "../../stores/midiInput"
 import { usePianoRollStore } from "../../stores/pianoRoll"
 import { useStudioWorkspaceStore } from "../../stores/studioWorkspace"
-import type {
-  MidiClipState,
-  MidiSourceState,
-  MixerChannelMeter,
-  ProjectCommand
-} from "@heron/contracts"
 import ArrangementTimelineTrack from "./ArrangementTimelineTrack.vue"
 import ArrangementTrackRail from "./ArrangementTrackRail.vue"
 import ArrangementZoomControls from "./ArrangementZoomControls.vue"
 import GlobalTracksToggle from "./GlobalTracksToggle.vue"
 import KeySignatureDropdown from "./KeySignatureDropdown.vue"
 import TimelineRuler from "./TimelineRuler.vue"
-import { barLengthTicksAtTick, secondsToTick } from "../../utils/tempoMap"
+import { secondsToTick } from "../../utils/tempoMap"
 import GlobalLaneHeader from "./global-lanes/GlobalLaneHeader.vue"
 import GlobalEventLaneHeader from "./global-lanes/GlobalEventLaneHeader.vue"
 import KeyTrackLane from "./global-lanes/KeyTrackLane.vue"
@@ -32,19 +26,10 @@ import { secondsToTimelineX } from "../../utils/timelineCoordinates"
 import { useArrangementViewport } from "./useArrangementViewport"
 import { useArrangementClipDrag } from "./useArrangementClipDrag"
 import { useGlobalLaneSelection } from "./useGlobalLaneSelection"
-import { snapTicks } from "../../utils/pianoRoll"
-import {
-  type AudioFadeEdge,
-  type ClipTrimEdge,
-  planAudioClipFade,
-  planAudioClipSplit,
-  planAudioClipTrim,
-  planMidiClipSplits,
-  planMidiClipTrim
-} from "../../utils/clipEditing"
 import { useMidiClipDrag } from "./useMidiClipDrag"
 import { useArrangementRecordingProjection } from "./useArrangementRecordingProjection"
-import type { ArrangementTrackRow } from "./arrangementWorkspaceTypes"
+import { useArrangementTrackProjection } from "./useArrangementTrackProjection"
+import { useArrangementEditingCommands } from "./useArrangementEditingCommands"
 
 const props = defineProps<{
   recordingId: string | null
@@ -125,6 +110,51 @@ const {
   midiRecordingPreview: () => midiInputStore.snapshot.recordingPreview ?? null,
   recordingName: () => t("studio.arrangement.newRecording")
 })
+const playheadTick = computed(() => secondsToTick(mixerStore.graph.tempoMap, playheadSeconds.value))
+const playheadFrame = computed(() =>
+  Math.round(playheadSeconds.value * mixerStore.graph.sampleRate)
+)
+const { rows: trackRows } = useArrangementTrackProjection({
+  tracks: () => mixerStore.timelineTracks,
+  audioClips: () => clips.value,
+  midiClips: () => mixerStore.graph.midiClips,
+  trackScale: viewStore.trackScale,
+  trackHeight: viewStore.effectiveTrackHeight,
+  meterFor: mixerStore.meterFor
+})
+const {
+  moveAudioClip,
+  removeAudioClip,
+  trimAudioClip,
+  splitAudioClip,
+  updateAudioFade,
+  resetAudioFades,
+  reorderTrack,
+  removeMidiClip,
+  trimMidiClip,
+  splitMidiClip,
+  moveMidiClip,
+  selectAudioClip,
+  selectMidiClip,
+  openMidiClip,
+  createMidiClip
+} = useArrangementEditingCommands({
+  graph: () => mixerStore.graph,
+  tracks: () => mixerStore.timelineTracks,
+  playheadFrame: () => playheadFrame.value,
+  playheadTick: () => playheadTick.value,
+  snap: () => pianoRollStore.snap,
+  selectedAudioClipId: () => transportStore.selectedClipId,
+  selectedMidiClipIds: () => pianoRollStore.arrangementClipIds,
+  execute: mixerStore.execute,
+  clearAudioSelection: transportStore.clearSelection,
+  selectAudioClip: transportStore.selectClip,
+  clearMidiSelection: pianoRollStore.clearArrangementSelection,
+  selectMidiClip: pianoRollStore.selectArrangementClip,
+  openMidiClipSet: pianoRollStore.openClipSet,
+  openPianoRoll: workspaceStore.openPianoRollDock,
+  midiClipName: (index) => t("studio.arrangement.midiClipName", { index })
+})
 const { contentWidth, viewportStartSeconds, viewportEndSeconds, handleScroll, handleWheel } =
   useArrangementViewport({
     tempoMap: () => mixerStore.graph.tempoMap,
@@ -146,7 +176,9 @@ const {
   clips,
   tempoMap: () => mixerStore.graph.tempoMap,
   pixelsPerQuarter,
-  moveClip: handleMoveClip
+  moveClip: (clipId, trackId, startSeconds) => {
+    void moveAudioClip(clipId, trackId, startSeconds)
+  }
 })
 const midiClipList = computed(() => mixerStore.graph.midiClips)
 const {
@@ -162,20 +194,10 @@ const {
   tempoMap: () => mixerStore.graph.tempoMap,
   pixelsPerQuarter,
   snap: pianoRollSnap,
-  moveClip: moveMidiClip
+  moveClip: (clipId, trackId, startTick) => {
+    void moveMidiClip(clipId, trackId, startTick)
+  }
 })
-const trackRows = computed<ArrangementTrackRow[]>(() =>
-  mixerStore.timelineTracks.map((track) => ({
-    track,
-    audioClips: clips.value.filter((clip) => clip.trackId === track.trackId),
-    midiClips: mixerStore.graph.midiClips.filter((clip) => clip.trackId === track.trackId),
-    scale: viewStore.trackScale(track.trackId),
-    height: viewStore.effectiveTrackHeight(track.trackId)
-  }))
-)
-const trackMeters = computed<Record<string, MixerChannelMeter>>(() =>
-  Object.fromEntries(trackRows.value.map(({ track }) => [track.id, mixerStore.meterFor(track.id)]))
-)
 const trackGridRows = computed(() => {
   const rows = ["43px"]
   if (globalTracksExpanded.value) {
@@ -210,10 +232,6 @@ const playheadStyle = computed(() => ({
     pixelsPerQuarter.value
   )}px`
 }))
-const playheadTick = computed(() => secondsToTick(mixerStore.graph.tempoMap, playheadSeconds.value))
-const playheadFrame = computed(() =>
-  Math.round(playheadSeconds.value * mixerStore.graph.sampleRate)
-)
 
 watch(
   () => props.recordingStartedAt,
@@ -229,94 +247,9 @@ function handleSeek(seconds: number): void {
 function updateCycleRange(range: { startTick: number; endTick: number }): void {
   void transportStore.setLoop(true, range)
 }
-function selectAudioClip(clipId: string): void {
-  pianoRollStore.clearArrangementSelection()
-  transportStore.selectClip(clipId)
-}
 function handleWaveformFrameCount(frameCount: number, sampleRate: number): void {
   if (sampleRate > 0) liveDurationSeconds.value = frameCount / sampleRate
 }
-function handleMoveClip(clipId: string, trackId: string, startSeconds: number): void {
-  void mixerStore.execute({
-    type: "move-audio-clip",
-    clipId,
-    trackId,
-    startFrame: Math.round(startSeconds * mixerStore.graph.sampleRate)
-  })
-}
-function removeAudioClip(clipId: string): void {
-  void mixerStore.execute({ type: "delete-audio-clip", clipId }).then(() => {
-    if (transportStore.selectedClipId === clipId) transportStore.clearSelection()
-  })
-}
-function trimAudioClip(clipId: string, edge: ClipTrimEdge, frame: number): void {
-  const clip = mixerStore.graph.audioClips.find((candidate) => candidate.id === clipId)
-  if (!clip) return
-  const command = planAudioClipTrim(clip, edge, frame)
-  if (command) void mixerStore.execute(command)
-}
-function splitAudioClip(clipId: string): void {
-  const clip = mixerStore.graph.audioClips.find((candidate) => candidate.id === clipId)
-  if (!clip) return
-  const command = planAudioClipSplit(clip, playheadFrame.value)
-  if (command) void mixerStore.execute(command)
-}
-function updateAudioFade(clipId: string, edge: AudioFadeEdge, frames: number): void {
-  const clip = mixerStore.graph.audioClips.find((candidate) => candidate.id === clipId)
-  if (!clip) return
-  const command = planAudioClipFade(clip, edge, frames)
-  if (command) void mixerStore.execute(command)
-}
-function resetAudioFades(clipId: string): void {
-  const clip = mixerStore.graph.audioClips.find((candidate) => candidate.id === clipId)
-  if (!clip || (clip.fadeInFrames === 0 && clip.fadeOutFrames === 0)) return
-  void mixerStore.execute({
-    type: "update-audio-clip",
-    clipId,
-    patch: { fadeInFrames: 0, fadeOutFrames: 0 }
-  })
-}
-function reorderTrack(index: number, direction: -1 | 1): void {
-  const targetIndex = index + direction
-  const source = mixerStore.timelineTracks[index]
-  const target = mixerStore.timelineTracks[targetIndex]
-  if (!source || !target) return
-  void mixerStore.execute({
-    type: "batch",
-    commands: [
-      { type: "update-track", trackId: source.trackId, patch: { sortOrder: target.sortOrder } },
-      { type: "update-track", trackId: target.trackId, patch: { sortOrder: source.sortOrder } }
-    ]
-  })
-}
-function removeMidiClip(clipId: string): void {
-  void mixerStore.execute({ type: "delete-midi-clip", clipId }).then(() => {
-    pianoRollStore.clearArrangementSelection()
-  })
-}
-
-function trimMidiClip(clipId: string, edge: ClipTrimEdge, requestedTick: number): void {
-  const clip = mixerStore.graph.midiClips.find((candidate) => candidate.id === clipId)
-  if (!clip) return
-  const command = planMidiClipTrim(clip, edge, snapTicks(requestedTick, pianoRollStore.snap))
-  if (command) void mixerStore.execute(command)
-}
-
-function splitMidiClip(clipId: string): void {
-  const selectedIds = pianoRollStore.arrangementClipIds.includes(clipId)
-    ? new Set(pianoRollStore.arrangementClipIds)
-    : new Set([clipId])
-  const command = planMidiClipSplits(
-    mixerStore.graph.midiClips.filter((clip) => selectedIds.has(clip.id)),
-    playheadTick.value
-  )
-  if (command) void mixerStore.execute(command)
-}
-
-function moveMidiClip(clipId: string, trackId: string, startTick: number): void {
-  void mixerStore.execute({ type: "move-midi-clip", clipId, trackId, startTick })
-}
-
 function updateArrangementDrag(event: DragEvent): void {
   updateClipDrag(event)
   updateMidiClipDrag(event)
@@ -325,58 +258,6 @@ function updateArrangementDrag(event: DragEvent): void {
 function handleArrangementDrop(event: DragEvent): void {
   handleClipDrop(event)
   handleMidiClipDrop(event)
-}
-
-function selectMidiClip(clipId: string, additive: boolean): void {
-  transportStore.clearSelection()
-  pianoRollStore.selectArrangementClip(clipId, additive)
-}
-
-function openMidiClip(clipId: string, selectedClipIds: string[]): void {
-  pianoRollStore.openClipSet(selectedClipIds, clipId)
-  workspaceStore.openPianoRollDock()
-}
-
-function createMidiClip(trackId: string, requestedStartTick: number): void {
-  const sourceId = crypto.randomUUID()
-  const clipId = crypto.randomUUID()
-  const startTick = snapTicks(requestedStartTick, pianoRollStore.snap)
-  const name = t("studio.arrangement.midiClipName", {
-    index: mixerStore.graph.midiClips.length + 1
-  })
-  const source: MidiSourceState = {
-    id: sourceId,
-    name,
-    contentHash: `blank:${sourceId}`,
-    rawBytes: new Uint8Array()
-  }
-  const lengthTicks = barLengthTicksAtTick(mixerStore.graph.tempoMap, startTick)
-  const clip: MidiClipState = {
-    id: clipId,
-    sourceId,
-    trackId,
-    name,
-    startTick,
-    lengthTicks,
-    sourceOffsetTicks: 0,
-    sourceLengthTicks: lengthTicks,
-    notes: [],
-    events: []
-  }
-  const command: ProjectCommand = {
-    type: "batch",
-    commands: [
-      { type: "create-midi-source", source },
-      { type: "create-midi-clip", clip }
-    ]
-  }
-  void mixerStore.execute(command).then((created) => {
-    if (!created) return
-    transportStore.clearSelection()
-    pianoRollStore.selectArrangementClip(clipId)
-    pianoRollStore.openClipSet([clipId], clipId)
-    workspaceStore.openPianoRollDock()
-  })
 }
 </script>
 
@@ -482,7 +363,6 @@ function createMidiClip(trackId: string, requestedStartTick: number): void {
               :rows="trackRows"
               :selected-channel-id="mixerStore.selectedChannelId"
               :track-height="trackHeight"
-              :meters="trackMeters"
               @select="mixerStore.selectedChannelId = $event"
               @reorder="reorderTrack"
               @rename="(channelId, name) => mixerStore.updateChannel(channelId, { name })"

@@ -1,5 +1,7 @@
 //! Real-time audio engine, device-stream, MIDI, and recording ownership.
 
+#![deny(clippy::wildcard_imports)]
+
 use thiserror::Error;
 
 /// Errors surfaced by the real-time engine control plane.

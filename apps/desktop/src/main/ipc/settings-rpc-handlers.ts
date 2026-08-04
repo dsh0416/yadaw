@@ -14,11 +14,12 @@ import type { IpcHandlerContext } from "./context"
 import { registerRpcHandler } from "./rpc"
 import { validateMutationTarget, validateReadTarget } from "./resource-validation"
 import {
+  setMainLocale,
+  t,
   validateAudioHostRuntimePreferences,
   validateShortcutPreferences
-} from "../application-settings"
-import { installApplicationMenu } from "../application-menu"
-import { setMainLocale, t } from "../i18n"
+} from "../settings"
+import { installApplicationMenu } from "../app"
 import { validateSettingsPatch } from "./support"
 
 function operationFailure(

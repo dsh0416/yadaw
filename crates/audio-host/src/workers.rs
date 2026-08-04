@@ -196,6 +196,7 @@ fn worker_lane(queue: Arc<SharedQueue>) {
 }
 
 #[cfg(test)]
+#[allow(clippy::wildcard_imports)]
 mod tests {
     use super::*;
     use crate::engine::{

@@ -94,8 +94,9 @@ pub fn host() -> Host {
 mod device;
 mod stream;
 
-use device::*;
-use stream::*;
+use device::{MockBackend, MockHost};
+use stream::MockStream;
 
 #[cfg(test)]
+#[allow(clippy::wildcard_imports)]
 mod tests;
