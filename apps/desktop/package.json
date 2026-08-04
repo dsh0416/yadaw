@@ -15,7 +15,7 @@
     "build:renderer": "vite build --config vite.renderer.config.ts",
     "check": "vue-tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.scripts.json",
     "test:unit": "vitest run",
-    "test:coverage": "vitest run --coverage",
+    "test:coverage": "node ../../scripts/run-vitest-coverage.ts",
     "test:vst3-helper": "node scripts/vst3-helper-smoke.ts",
     "test:vst3-editor": "node scripts/vst3-editor-smoke.ts",
     "test:builtin-vst3": "node scripts/builtin-vst3-smoke.ts && node scripts/audio-benchmark-smoke.ts",
